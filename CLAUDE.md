@@ -26,11 +26,11 @@ Conventions live in `knowledge-vault/CLAUDE.md` and in a `CLAUDE.md` inside each
 
 ## Read this first
 
-**Until the project has specs, the agreed plan is the spec.** `knowledge-vault/Planning/aineo — v1 agent console.md` — its decisions D1–D11 and components C1–C9, converged with the user on 2026-09-23 — says what v1 must do. A packet that finds the plan, its brief and the code disagreeing reports a spec conflict; it does not choose.
+**Until the project has specs, the agreed plan is the spec.** `knowledge-vault/Planning/aineo — v1 agent console.md` — its decision and component rows (D#, C#), converged with the user on 2026-09-23 — says what v1 must do. Those rows change only through a converge round with the user, superseded by a new ID, never edited in place. A packet that finds the plan, its brief and the code disagreeing reports a spec conflict; it does not choose.
 
 - **Neovim ≥ 0.11 is the supported minimum** (D10): terminals are `jobstart(…, { term = true })`, arguments are checked with `vim.validate(name, value, validator)`, and nothing older is guarded for.
-- **StyLua formats and selene lints** (the user's choice, 2026-09-23); the commands that run them arrive with the tooling packet (T1) and are named here when it lands.
-- **The Neovim and Claude Code specialists' rules bind their domains** — `.claude/agents/neovim-lua-developer.md` and `neovim-claude-code-integrator.md`, *What bites here*.
+- **Tests run on mini.test with a fake `claude`; the real Claude never runs in the suite** (D10). **StyLua formats and selene lints** (D12, the user's choice). The commands that run them arrive with the tooling packet (T1) and are named here when it lands.
+- **The specialists' rules bind their domains** — `.claude/agents/neovim-lua-developer.md` (*What bites here*, *Tests*) and `.claude/agents/neovim-claude-code-integrator.md` (every section from *Three tiers of surface* to *Tests*).
 
 ## Skills that bind how code is written
 

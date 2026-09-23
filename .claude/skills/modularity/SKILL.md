@@ -20,14 +20,28 @@ Where a boundary sits, what crosses it, and how the clients of a module are foun
 
   | Path | Holds |
   |---|---|
-  | `lua/aineo/<concern>/` | one concern of the plugin, behind its `init.lua` — `config`, `layout`, `claude`, `send`, `mcp`, `report` (plan C1–C9) |
-  | `lua/aineo/init.lua` | the plugin's public Lua API (`require('aineo')`); it calls into homes, it never re-exports their symbols |
-  | `lua/aineo/health.lua` | the `:checkhealth aineo` entry — a file Neovim looks up by name, not a home |
-  | `plugin/aineo.lua`, `ftplugin/*.lua` | composition roots: commands, `<Plug>` mappings, autocommands; they `require()` a home only inside a callback |
-  | `tests/` | the mini.test suites; support shared by several suites lives in `tests/helpers/` |
+  | `lua/aineo/<concern>/` | one concern behind its `init.lua` — `config` (C1), `layout` (C2, C9), `claude` (C3), `send` (C4), `mcp` (C5), `report` (C6) |
+  | `lua/aineo/init.lua` | the plugin's public Lua API, `require('aineo')` (C1); it calls into homes, it never re-exports their symbols |
+  | `lua/aineo/health.lua` | the `:checkhealth aineo` entry (C7) — a file Neovim looks up by name, not a home |
+  | `plugin/aineo.lua` | the composition root (C1): commands, `<Plug>` mappings, autocommands; it `require()`s a home only inside a callback |
+  | `scripts/` | the test runner's minimal init — the suites' composition root — and tooling scripts (C8); not a home, nothing requires it |
+  | `tests/` | the mini.test suites (C8); support several suites share lives in `tests/helpers/` (the orchestrator's layout), the fake `claude` among it (C3) |
+  | `doc/` | the vimdoc (T8); not a home |
 
-- **Not yet enforced by a lint:** selene has no import-boundary rule, so the table is held by review until one exists. **The enforced list lives in the lint.** Once the project has a boundary rule in its linter, this table describes its patterns, and adding a module means adding it in both places, in the same change — or the boundary is decorative.
-- **The direction between homes is a table too, not a convention.** Which layer may import which — the kernel imports only the kernel; features import the kernel and their siblings' entry points; the composition root imports anything — is written down once, enforced by the lint, and changed only by an edit a reviewer sees.
+- **Not yet enforced by a lint:** selene 0.31.0 has no import-boundary rule — its `restricted_module_paths` lint does not check string `require` paths (the selene book at 0.31.0; measured with a positive control by the records review of PR #1). Until a lint exists, the table and the direction table below are held by review and by one check: `grep -rnE "require\(['\"]aineo\.[a-z_]+\." lua plugin tests scripts` prints nothing — no `require` reaches past a home's entry point (built by the same review; it caught 3 of 3 planted deep requires, with no false positive). **The enforced list lives in the lint.** Once the project has a boundary rule in its linter, this table describes its patterns, and adding a module means adding it in both places, in the same change — or the boundary is decorative.
+- **The direction between homes is a table too, not a convention.** Which layer may import which is written down once, enforced by the lint once there is one, and changed only by an edit a reviewer sees. aineo's, derived by the orchestrator from what each component of the v1 plan uses:
+
+  | Home | May `require` |
+  |---|---|
+  | `aineo.config` (the kernel) | no aineo home |
+  | `aineo.layout`, `aineo.report` | `aineo.config` |
+  | `aineo.mcp` | `aineo.config`, `aineo.report` (the relay renders into the Report buffer) |
+  | `aineo.claude` | `aineo.config`, `aineo.mcp` (the session registers the report server) |
+  | `aineo.send` | `aineo.config`, `aineo.claude`, `aineo.layout` (the Input buffer into the session's terminal) |
+  | `aineo` (`lua/aineo/init.lua`) | `aineo.config` |
+  | `plugin/aineo.lua`, `lua/aineo/health.lua`, `scripts/`, `tests/` | any home's entry point |
+
+  A packet that needs an edge this table lacks reports it as a spec conflict; the edge is added on an `ai/` branch, not in the packet.
 - **A bounded context is a group of homes that share one vocabulary and own one set of data.** A context is the level at which a table has one owner (§9) and at which a collaborator must be a port (§4); inside a context, homes are still modules and every rule here still applies to them.
 - **A module is the unit of containment.** When a task says which module it touches, that is the boundary of the work: files inside may change freely, files outside may be *read* but not edited without saying so.
 - **Do not create a module for a single function.** YAGNI applies to structure as much as to code. A module earns its entry point when it has a concern to name; until then the function lives in the module that uses it.
@@ -106,11 +120,11 @@ The question an agent has to answer before changing anything is *"who breaks if 
 
 ## Checklist
 
-- [ ] Every new or touched directory that is a module has exactly one entry point, with explicit named exports and no wildcard, and appears in §1's table and the lint's patterns once the project has them
-- [ ] No import reaches past another module's entry point; the lint passes
+- [ ] Every new or touched directory that is a module has exactly one entry point, with explicit named exports and no wildcard, and appears in §1's table (and the lint's patterns, once the project has a lint)
+- [ ] No import reaches past another module's entry point: §1's deep-require check prints nothing (the lint, once there is one)
 - [ ] Each module has one concern whose name carries no "and"
 - [ ] Collaborators are injected, typed as narrowly as the boundary allows; nothing ambient outside a composition root
-- [ ] No import cycle; direction between homes follows the table
+- [ ] No import cycle; every `require` between homes is an edge §1's direction table allows
 - [ ] Interfaces describe what, not the order to do it in; nothing imperative leaked to a caller
 - [ ] Every public symbol is unique repo-wide; nothing re-exported from another module
 - [ ] Tests import through the entry point; no surface was widened and no export added for a test
