@@ -20,9 +20,13 @@ Where a boundary sits, what crosses it, and how the clients of a module are foun
 
   | Path | Holds |
   |---|---|
-  | <to fill as the project's layout is decided — one row per kind of module home> | |
+  | `lua/aineo/<concern>/` | one concern of the plugin, behind its `init.lua` — `config`, `layout`, `claude`, `send`, `mcp`, `report` (plan C1–C9) |
+  | `lua/aineo/init.lua` | the plugin's public Lua API (`require('aineo')`); it calls into homes, it never re-exports their symbols |
+  | `lua/aineo/health.lua` | the `:checkhealth aineo` entry — a file Neovim looks up by name, not a home |
+  | `plugin/aineo.lua`, `ftplugin/*.lua` | composition roots: commands, `<Plug>` mappings, autocommands; they `require()` a home only inside a callback |
+  | `tests/` | the mini.test suites; support shared by several suites lives in `tests/helpers/` |
 
-- **The enforced list lives in the lint.** Once the project has a boundary rule in its linter, this table describes its patterns, and adding a module means adding it in both places, in the same change — or the boundary is decorative.
+- **Not yet enforced by a lint:** selene has no import-boundary rule, so the table is held by review until one exists. **The enforced list lives in the lint.** Once the project has a boundary rule in its linter, this table describes its patterns, and adding a module means adding it in both places, in the same change — or the boundary is decorative.
 - **The direction between homes is a table too, not a convention.** Which layer may import which — the kernel imports only the kernel; features import the kernel and their siblings' entry points; the composition root imports anything — is written down once, enforced by the lint, and changed only by an edit a reviewer sees.
 - **A bounded context is a group of homes that share one vocabulary and own one set of data.** A context is the level at which a table has one owner (§9) and at which a collaborator must be a port (§4); inside a context, homes are still modules and every rule here still applies to them.
 - **A module is the unit of containment.** When a task says which module it touches, that is the boundary of the work: files inside may change freely, files outside may be *read* but not edited without saying so.

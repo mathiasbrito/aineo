@@ -21,6 +21,12 @@
 !.vscode/settings.json
 !.vscode/extensions.json
 
+# --- Neovim plugin development ---------------------------------------------
+# Test dependencies fetched by the tooling, and the isolated XDG and Claude
+# directories the suites run under. Never committed.
+deps/
+.tests/
+
 # --- Claude Code -----------------------------------------------------------
 # `.claude/` IS tracked — skills, agents, hooks and settings are shared.
 # Personal and machine-local state is not.

@@ -26,7 +26,11 @@ Conventions live in `knowledge-vault/CLAUDE.md` and in a `CLAUDE.md` inside each
 
 ## Read this first
 
-<!-- The binding documents, once they exist. If the project adopts spec-kit (`specify init --here --ai claude`), `.specify/memory/constitution.md` governs everything and `specs/` says what the system must do; name the principles that bite most often here. -->
+**Until the project has specs, the agreed plan is the spec.** `knowledge-vault/Planning/aineo — v1 agent console.md` — its decisions D1–D11 and components C1–C9, converged with the user on 2026-09-23 — says what v1 must do. A packet that finds the plan, its brief and the code disagreeing reports a spec conflict; it does not choose.
+
+- **Neovim ≥ 0.11 is the supported minimum** (D10): terminals are `jobstart(…, { term = true })`, arguments are checked with `vim.validate(name, value, validator)`, and nothing older is guarded for.
+- **StyLua formats and selene lints** (the user's choice, 2026-09-23); the commands that run them arrive with the tooling packet (T1) and are named here when it lands.
+- **The Neovim and Claude Code specialists' rules bind their domains** — `.claude/agents/neovim-lua-developer.md` and `neovim-claude-code-integrator.md`, *What bites here*.
 
 ## Skills that bind how code is written
 
