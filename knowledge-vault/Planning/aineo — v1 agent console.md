@@ -47,6 +47,7 @@ Until the project has specs, this plan's **D# and C# rows are the spec for v1** 
 | D10 | Nvim ≥ 0.11; tests on mini.test with a fake `claude`; the real Claude never runs in the suite | 0.11 carries `jobstart` terminals and `vim.validate`'s current form; mini.test's `MiniTest.new_child_neovim()` gives each test a child Neovim it starts or restarts itself, and needs no luarocks — proposed as C8 and agreed by the user in round 1 |
 | D11 | Claude's permission prompts are answered by the user in the terminal | The interactive TUI is its own permission host. aineo pre-allows its own report tool (`--allowedTools mcp__aineo__report`, C3) and nothing else — proposed in round 1 with that reason (\"so reporting never prompts\") and agreed by the user with C1–C8. It raises no permission mode and answers no prompt |
 | D12 | StyLua formats and selene lints; lua-language-server type-checking is not in v1 | The user's choice (Q3), over StyLua alone and over deferring both; installed as StyLua 2.5.2 and selene 0.31.0 |
+| D13 | The v1 settings, read from `vim.g.aineo` and `require('aineo').setup()`: `prefix` — a string, or `false` to map nothing (default `\`); `autostart` — a boolean (default `true`); `claude.cmd` — the command run in the left terminal, a list of strings (default `{ "claude" }`); `layout.report_height` — the Report's share of the right column, strictly between 0 and 1 (default 2/3, D4) | Added by the user on 2026-09-23, after the brief review of wave 1 found three of these keys backed by no row; `prefix` comes from C1 ("configurable or off") |
 
 ## Architecture
 
@@ -87,6 +88,7 @@ Until the project has specs, this plan's **D# and C# rows are the spec for v1** 
 - **R1** — Claude exits (Ctrl-C, `/exit`): the terminal shows the exit; `\o` restarts the session.
 - **R2** — Quitting Neovim with Claude running: aineo stops it on quit, interrupting first (SIGINT) so the turn ends rather than being cut (the integrator's rule was measured for headless `-p`; the interactive behaviour is Q4).
 - **R3** — The user's own Neovim config sets `maplocalleader` to `\` (read 2026-09-23): a filetype plugin's `<LocalLeader>` mapping would shadow aineo's `\` commands in that buffer. Nothing in the config or its installed plugins uses `<LocalLeader>` today; C7 reports conflicts.
+- **Q5** — A startup dashboard (snacks.nvim's, alpha, dashboard-nvim, mini.starter) claims the same bare-`nvim` start as the autostart (D3). The user, 2026-09-23, after turning off snacks.nvim's dashboard in their own config: "the aineo should open". Whether aineo takes the screen from a dashboard or documents that it must be off changes C1 — converged with the user before T7 is dispatched.
 - **Q4** — How the interactive TUI answers SIGINT and the end of its input — whether a turn ends or is cut. Measured with Q1 and Q2 in T2.
 
 ## Implementation plan
