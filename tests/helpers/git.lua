@@ -33,8 +33,11 @@ local function run(directory, args)
   return vim.trim(result.stdout)
 end
 
---- Makes the empty directory `directory` a repository holding `count` empty
---- commits, one after another.
+--- The file each commit of a repository from `create_repository` rewrites.
+M.TRACKED_FILE = 'version'
+
+--- Makes the empty directory `directory` a repository holding `count` commits,
+--- one after another, each rewriting `TRACKED_FILE` with its own number.
 ---
 ---@param directory string an existing, empty directory
 ---@param count integer
@@ -44,7 +47,10 @@ function M.create_repository(directory, count)
   run(directory, { 'init', '--quiet' })
   local commits = {}
   for index = 1, count do
-    run(directory, { 'commit', '--quiet', '--allow-empty', '--message', 'commit ' .. index })
+    local tracked = vim.fs.joinpath(directory, M.TRACKED_FILE)
+    assert(vim.fn.writefile({ 'commit ' .. index }, tracked) == 0, 'cannot write ' .. tracked)
+    run(directory, { 'add', M.TRACKED_FILE })
+    run(directory, { 'commit', '--quiet', '--message', 'commit ' .. index })
     commits[index] = run(directory, { 'rev-parse', 'HEAD' })
   end
   return 'file://' .. directory, commits

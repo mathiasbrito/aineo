@@ -4,6 +4,9 @@ local children = dofile('tests/helpers/child.lua')
 local eq = MiniTest.expect.equality
 local expect = MiniTest.expect
 
+--- The options `setup()` recorded, read in the child from the configuration home.
+local RECORDED_OPTIONS = "require('aineo.config').recorded_setup_options()"
+
 local child = MiniTest.new_child_neovim()
 
 local T = MiniTest.new_set({
@@ -15,35 +18,36 @@ local T = MiniTest.new_set({
   },
 })
 
-T['setup_options()'] = MiniTest.new_set()
+T["require('aineo')"] = MiniTest.new_set()
 
-T['setup_options()']['is empty before setup() is called'] = function()
-  eq(child.lua_get("require('aineo').setup_options()"), {})
+T["require('aineo')"]['exposes setup() alone'] = function()
+  eq(child.lua_get("vim.tbl_keys(require('aineo'))"), { 'setup' })
 end
 
 T['setup()'] = MiniTest.new_set()
 
+T['setup()']['leaves no options recorded before it is called'] = function()
+  eq(child.lua_get(RECORDED_OPTIONS), {})
+end
+
 T['setup()']['records its options for the configuration to resolve'] = function()
   child.lua([[require('aineo').setup({ prefix = ',', claude = { cmd = { 'my-claude' } } })]])
 
-  eq(
-    child.lua_get("require('aineo').setup_options()"),
-    { prefix = ',', claude = { cmd = { 'my-claude' } } }
-  )
+  eq(child.lua_get(RECORDED_OPTIONS), { prefix = ',', claude = { cmd = { 'my-claude' } } })
 end
 
 T['setup()']['replaces what an earlier call recorded, without merging'] = function()
   child.lua([[require('aineo').setup({ prefix = ',', claude = { cmd = { 'my-claude' } } })]])
   child.lua([[require('aineo').setup({ autostart = false })]])
 
-  eq(child.lua_get("require('aineo').setup_options()"), { autostart = false })
+  eq(child.lua_get(RECORDED_OPTIONS), { autostart = false })
 end
 
 T['setup()']['records empty options when called without any'] = function()
   child.lua([[require('aineo').setup({ prefix = ',' })]])
   child.lua([[require('aineo').setup()]])
 
-  eq(child.lua_get("require('aineo').setup_options()"), {})
+  eq(child.lua_get(RECORDED_OPTIONS), {})
 end
 
 T['setup()']['records the options as they were when it was called'] = function()
@@ -53,7 +57,14 @@ T['setup()']['records the options as they were when it was called'] = function()
     opts.claude.cmd[1] = 'changed after setup'
   ]])
 
-  eq(child.lua_get("require('aineo').setup_options()"), { claude = { cmd = { 'my-claude' } } })
+  eq(child.lua_get(RECORDED_OPTIONS), { claude = { cmd = { 'my-claude' } } })
+end
+
+T['setup()']['keeps its record when a caller edits the options handed out'] = function()
+  child.lua([[require('aineo').setup({ prefix = ',' })]])
+  child.lua([[require('aineo.config').recorded_setup_options().prefix = 'changed without setup()']])
+
+  eq(child.lua_get(RECORDED_OPTIONS), { prefix = ',' })
 end
 
 T['setup()']['refuses options that are not a table, naming them'] = function()

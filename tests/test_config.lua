@@ -124,6 +124,13 @@ T['resolve_config()']['names an unknown key inside a section by its full path'] 
   eq(unknown_keys, { 'claude.command' })
 end
 
+T['resolve_config()']['returns a dotted top-level key as unknown, never as its setting'] = function()
+  local resolved, unknown_keys = config.resolve_config({ ['layout.report_height'] = 5 }, nil)
+
+  eq(resolved, DEFAULTS)
+  eq(unknown_keys, { 'layout.report_height' })
+end
+
 T['resolve_config()']['returns an unknown key of the setup() options too'] = function()
   local _, unknown_keys = config.resolve_config(nil, { autostrat = false })
 
@@ -131,9 +138,21 @@ T['resolve_config()']['returns an unknown key of the setup() options too'] = fun
 end
 
 T['resolve_config()']['lists each unknown key once, in sorted order'] = function()
-  local _, unknown_keys = config.resolve_config({ zeta = 1, alpha = 1 }, { alpha = 2 })
+  local _, unknown_keys = config.resolve_config(
+    { zeta = 1, alpha = 1, mu = 1, delta = 1, omega = 1 },
+    { alpha = 2, beta = 2 }
+  )
 
-  eq(unknown_keys, { 'alpha', 'zeta' })
+  eq(unknown_keys, { 'alpha', 'beta', 'delta', 'mu', 'omega', 'zeta' })
+end
+
+T['resolve_config()']['shares no table with the sources'] = function()
+  local setup_options = { claude = { cmd = { 'my-claude' } } }
+  local resolved = config.resolve_config(nil, setup_options)
+
+  resolved.claude.cmd[1] = 'changed by a caller'
+
+  eq(setup_options.claude.cmd, { 'my-claude' })
 end
 
 T['resolve_config()']['shares no table with the defaults between resolutions'] = function()
