@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# main and dev are never committed to directly.
+set -euo pipefail
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+case "$branch" in
+  main|master|dev)
+    cat >&2 <<MSG
+
+  ✗ Refusing to commit on '$branch'.
+
+    main and dev are integration branches. Commit on one of:
+      release/  bugfix/  hotfix/  feature/
+      refactor/  knowledge/  ai/
+    then open a pull request.
+
+      git checkout -b feature/<slug>
+
+    Emergency override (justify it in the PR):  git commit --no-verify
+
+MSG
+    exit 1 ;;
+esac

@@ -1,0 +1,5 @@
+# Gitignored files Claude Code copies into every worktree it creates, so an
+# agent's isolated checkout can reach what the suites need (env files, local
+# credentials for a test stack). One path per line, relative to the root.
+# Copies live only inside .claude/worktrees/, which is itself gitignored.
+# .claude/scripts/prepare-worktree.sh refuses to run when one is missing.

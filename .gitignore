@@ -1,0 +1,44 @@
+# ---------------------------------------------------------------------------
+# aineo — repository ignore rules
+# Grouped by origin. Keep additions in the right group.
+# ---------------------------------------------------------------------------
+
+# --- Environment & secrets -------------------------------------------------
+# Never commit real credentials. Commit .env.example instead.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- macOS -----------------------------------------------------------------
+.DS_Store
+._*
+
+# --- Editors ---------------------------------------------------------------
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# --- Claude Code -----------------------------------------------------------
+# `.claude/` IS tracked — skills, agents, hooks and settings are shared.
+# Personal and machine-local state is not.
+.claude/settings.local.json
+.claude/*.local.json
+.claude/local/
+.claude/.credentials*
+# Worktrees agents are given so they cannot disturb the main tree. Each is a
+# checkout of this repository, so git offers to add it as an embedded
+# repository if it is still on disk when something stages broadly.
+.claude/worktrees/
+
+# --- Obsidian workspace state (knowledge-vault is tracked, its UI state is not)
+# A vault opened at the repository root rather than at knowledge-vault/ puts
+# its state here instead. Anchored: an unanchored `.obsidian/` matches at any
+# depth and would swallow the vault's own shared settings.
+/.obsidian/
+knowledge-vault/.obsidian/workspace*
+knowledge-vault/.obsidian/cache
+knowledge-vault/.obsidian/plugins/*/data.json
+knowledge-vault/.trash/

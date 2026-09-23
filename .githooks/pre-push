@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# main and dev are never pushed to directly.
+set -euo pipefail
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  [ -z "${remote_ref:-}" ] && continue
+  case "${remote_ref#refs/heads/}" in
+    main|master|dev)
+      cat >&2 <<MSG
+
+  ✗ Refusing to push to '${remote_ref#refs/heads/}'.
+
+    Push a release/ bugfix/ hotfix/ feature/ refactor/ knowledge/ ai/
+    branch and open a
+    pull request. main and dev advance only through a merged PR.
+
+    Emergency override (justify it in the PR):  git push --no-verify
+
+MSG
+      exit 1 ;;
+  esac
+done
