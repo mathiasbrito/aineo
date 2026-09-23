@@ -18,43 +18,48 @@ The first and, for now, only spec: when Neovim starts, Claude Code runs in a ter
 - `R#` — risk · `Q#` — unknown
 - `T#` — task
 
+## Authority
+
+Until the project has specs, this plan's **D# and C# rows are the spec for v1** (the root `CLAUDE.md` says so). They change only through a converge round with the user: a changed row is struck and superseded by a new ID, never edited in place, and the note says who agreed. The orchestrator records such an agreement; it never changes a row on its own.
+
 ## Facts the design rests on
 
-- **F1** — `:h index` lists `\` as *not used* in Normal mode; it is also the default `mapleader`. `:h map-which-keys` suggests `_` or `,` plus a key; `<Space>` is a synonym for `l`.
+- **F1** — `:h index` lists `\` as *not used* in Normal mode — the only printable key it lists so; the others are control keys (CTRL-@, CTRL-K, CTRL-_ and more); it is also the default `mapleader`. `:h map-which-keys` suggests `_` or `,` plus a key; `<Space>` is a synonym for `l`.
 - **F2** — `termopen()` is deprecated in Nvim 0.11; a terminal is `jobstart(cmd, { term = true })`.
 - **F3** — `'winfixbuf'` pairs a window with its buffer; `:edit` there fails (E1513) rather than redirecting.
 - **F4** — `v:servername` is set at startup, so a child process can call back into the editor.
 - **F5** — `claude --help` (2.1.280) lists `--append-system-prompt`, `--mcp-config` and `--allowedTools` without a print-only restriction.
-- **F6** — *measured*: the first `claude` launch in this folder shows the workspace-trust dialog, defaulting to "No, exit".
+- **F6** — *measured by the orchestrator*, 2026-09-23: `claude` started in a headless Nvim terminal in this folder showed the workspace-trust dialog with "❯ No, exit" selected; `~/.claude.json` holds `hasTrustDialogAccepted = false` for this folder (read by the orchestrator, and again by the records review of #2).
 
 ## Decisions & reasoning
 
 | ID | Decision | Reasoning |
 |----|----------|-----------|
-| D1 | "Command mode" is Normal mode; the prefix is `\` | F1: the one Normal-mode key Vim's index lists as unused. The user's choice over `,` and `<Space>` |
-| D2 | "The agent" is the interactive Claude Code in the left terminal | The spec asks for Claude Code in a terminal; headless (A2) was rejected |
-| D3 | Autostart only on a bare interactive `nvim` | `nvim file`, `git commit`, `--headless` and stdin must not be taken over |
+| D1 | "Command mode" is Normal mode; the prefix is `\` | F1: the only printable Normal-mode key Vim's index lists as unused. The user's choice over `,` and `<Space>` |
+| D2 | "The agent" is the interactive Claude Code in the left terminal | The spec asks for Claude Code in a terminal; headless (A2) was rejected — the orchestrator's inference i2, agreed by the user in round 1 (\"Agree as written\") |
+| D3 | Autostart only on a bare interactive `nvim` | `nvim file`, `git commit`, `--headless` and stdin must not be taken over — inference i3, agreed by the user in round 1 |
 | D4 | Layout A: Claude terminal 50% left; Report ~2/3 over Input ~1/3 on the right | The user's choice; the startup empty buffer becomes Input |
 | D5 | Files open in a middle column between the terminal and the Report/Input column, created on first use and reused (C9) — superseding "files in a new tab" | The user's note on layout A, confirmed in round 2 |
 | D6 | With a file column open, the three columns take equal thirds | The user's choice over "Claude stays at 50%" and "files get the most" |
 | D7 | A file opened from an aineo window is redirected to the file column, the aineo window keeps its buffer | The user's choice over refusing with `winfixbuf` (F3) |
 | D8 | The agent writes reports through an MCP tool, not a file | The tool's input schema *is* the report format; no file permissions, no re-reading a growing file. The user's choice over A1 |
 | D9 | Model policy: Opus for the orchestrator and every agent | The user, 2026-09-23 (see [[Skills/Orchestrate]]) |
-| D10 | Nvim ≥ 0.11; tests on mini.test with a fake `claude`; the real Claude never runs in the suite | 0.11 carries `jobstart` terminals and `vim.validate`'s current form; mini.test runs a child Neovim per test and needs no luarocks |
-| D11 | Claude's permission prompts are answered by the user in the terminal | The interactive TUI is its own permission host; aineo pre-allows only its own report tool (C3) |
+| D10 | Nvim ≥ 0.11; tests on mini.test with a fake `claude`; the real Claude never runs in the suite | 0.11 carries `jobstart` terminals and `vim.validate`'s current form; mini.test's `MiniTest.new_child_neovim()` gives each test a child Neovim it starts or restarts itself, and needs no luarocks — proposed as C8 and agreed by the user in round 1 |
+| D11 | Claude's permission prompts are answered by the user in the terminal | The interactive TUI is its own permission host. aineo pre-allows its own report tool (`--allowedTools mcp__aineo__report`, C3) and nothing else — proposed in round 1 with that reason (\"so reporting never prompts\") and agreed by the user with C1–C8. It raises no permission mode and answers no prompt |
+| D12 | StyLua formats and selene lints; lua-language-server type-checking is not in v1 | The user's choice (Q3), over StyLua alone and over deferring both; installed as StyLua 2.5.2 and selene 0.31.0 |
 
 ## Architecture
 
 | ID | Component | Where | Specialist |
 |----|-----------|-------|------------|
-| C1 | Entry point: `:Aineo …`, `<Plug>(aineo-…)` mappings, the `\` prefix mapped only where the user has not mapped it (configurable or off through `vim.g.aineo`), and the `VimEnter` autostart under D3 — never inside aineo's own Claude terminal (`$AINEO_CHILD`) | `plugin/aineo.lua`, `lua/aineo/config/` | `neovim-lua-developer` |
+| C1 | Entry point: `:Aineo …`, `<Plug>(aineo-…)` mappings, the `\` prefix mapped only where the user has not mapped it (configurable or off through `vim.g.aineo`), and the `VimEnter` autostart under D3 — never inside aineo's own Claude terminal (`$AINEO_CHILD`) | `plugin/aineo.lua`, `lua/aineo/init.lua` (the public API, `setup()`), `lua/aineo/config/` | `neovim-lua-developer` |
 | C2 | Layout: the three windows, widths per D4/D6, Report read-only to the user, all three pinned against resizing; `\o` restores it | `lua/aineo/layout/` | `neovim-lua-developer` |
-| C3 | Claude session: `claude` in the left terminal with the report instructions appended to its system prompt, the aineo MCP server through `--mcp-config`, `--allowedTools mcp__aineo__report`, `AINEO_CHILD=1` and the editor's `v:servername` in its environment; readiness tracking; restart; a clean stop on quit | `lua/aineo/claude/` | `neovim-claude-code-integrator` |
+| C3 | Claude session: `claude` in the left terminal with the report instructions appended to its system prompt, the aineo MCP server through `--mcp-config`, `--allowedTools mcp__aineo__report`, `AINEO_CHILD=1` and the editor's `v:servername` in its environment; readiness tracking; restart; a clean stop on quit; the fake `claude` the suites run in the CLI's place | `lua/aineo/claude/`, the fake under `tests/helpers/` | `neovim-claude-code-integrator` |
 | C4 | Send (`\s`): the Input buffer as one bracketed paste plus Enter into the terminal, then Input cleared; refused while Claude is not ready (trust dialog, startup) or Input is empty | `lua/aineo/send/` | `neovim-claude-code-integrator` |
 | C5 | Report channel: a stdio MCP server run by Claude Code as `nvim --headless --clean -l …`, one tool `report`, each call relayed to the editor over its server socket | `lua/aineo/mcp/` | `neovim-claude-code-integrator` |
 | C6 | Report format and rendering: tool input `{ task, status: started\|progress\|blocked\|done\|failed, summary, details? }`, rendered `HH:MM [status] task — summary` with details indented; persisted under `stdpath('state')`; the appended prompt tells Claude when to report | `lua/aineo/report/` | `neovim-lua-developer` |
 | C7 | Health: `claude` and its version, the server socket, prefix-mapping conflicts, why autostart did or did not run | `lua/aineo/health.lua` | `neovim-lua-developer` |
-| C8 | Tooling: the mini.test harness, the fake `claude`, `prepare_project`, vimdoc | `tests/`, `scripts/`, `doc/aineo.txt`, `.claude/scripts/prepare-worktree.sh` | `neovim-lua-developer` |
+| C8 | Tooling: the mini.test harness and its make targets, the suites' isolation from the developer's editor and Claude state, formatting and linting (D12) | `Makefile`, `scripts/`, `tests/`, `.stylua.toml`, the selene configuration — `prepare_project` in `.claude/scripts/prepare-worktree.sh` is the orchestrator's `ai/` pass | `neovim-lua-developer` |
 | C9 | File column: a normal file buffer shown in any aineo window is moved to a middle column (created between the terminal and the right column on first use, reused after) and the aineo window gets its buffer back — a `BufWinEnter` redirect, not `'winfixbuf'`; `:q` in it returns to three windows | `lua/aineo/layout/` | `neovim-lua-developer` |
 
 **v1 commands:** `\s` send · `\o` open/restore · `\r` Report · `\i` Input · `\c` Claude · and `:Aineo send|open|report|input|claude`.
@@ -80,17 +85,19 @@ The first and, for now, only spec: when Neovim starts, Claude Code runs in a ter
 - **Q2** — Whether `--mcp-config` and `--allowedTools mcp__…` take effect in interactive mode — measured in the same step.
 - ~~**Q3** — The formatter and linter~~ — **resolved 2026-09-23 by the user: StyLua + selene**; installed on this Mac as StyLua 2.5.2 and selene 0.31.0. lua-language-server type-checking is not in v1.
 - **R1** — Claude exits (Ctrl-C, `/exit`): the terminal shows the exit; `\o` restarts the session.
-- **R2** — Quitting Neovim with Claude running: aineo stops it on quit, interrupting first (SIGINT) so the turn ends rather than being cut (see `neovim-claude-code-integrator`).
+- **R2** — Quitting Neovim with Claude running: aineo stops it on quit, interrupting first (SIGINT) so the turn ends rather than being cut (the integrator's rule was measured for headless `-p`; the interactive behaviour is Q4).
+- **R3** — The user's own Neovim config sets `maplocalleader` to `\` (read 2026-09-23): a filetype plugin's `<LocalLeader>` mapping would shadow aineo's `\` commands in that buffer. Nothing in the config or its installed plugins uses `<LocalLeader>` today; C7 reports conflicts.
+- **Q4** — How the interactive TUI answers SIGINT and the end of its input — whether a turn ends or is cut. Measured with Q1 and Q2 in T2.
 
 ## Implementation plan
 
 | ID | Task | Depends on | Status |
 |----|------|------------|--------|
-| T1 | Tooling foundation (C8), as a packet: the mini.test harness and its make targets (deps, test, lint, format), the suites' isolation from the developer's editor and Claude state, the fake `claude`, the `plugin/aineo.lua` and `lua/aineo/init.lua` skeletons, and `lua/aineo/config/` with `vim.g.aineo` validation. The agent-configuration part — `.gitignore`, the `modularity` table, the Nvim minimum in the root `CLAUDE.md` (before the packet), and the commands in `CLAUDE.md` and any `prepare_project` step (after it) — is the orchestrator's `ai/` pass, because no implementer edits those files | — | active |
-| T2 | Measure Q1 and Q2 against the real CLI in a folder the user trusts; record the transcripts as fixtures and the result as a Learning | — (needs the user for the trust dialog) | active |
+| T1 | Tooling foundation (C8) and the entry-point skeleton (C1), as a packet: the mini.test harness and its make targets (deps, test, lint, format), the suites' isolation from the developer's editor and Claude state, the `plugin/aineo.lua` and `lua/aineo/init.lua` skeletons, and `lua/aineo/config/` with `vim.g.aineo` validation. The agent-configuration part — `.gitignore`, the `modularity` table, the Nvim minimum in the root `CLAUDE.md` (before the packet), and the commands in `CLAUDE.md` and any `prepare_project` step (after it) — is the orchestrator's `ai/` pass, because no implementer edits those files | — | active |
+| T2 | Measure Q1, Q2 and Q4 against the real CLI in a folder the user trusts; record the transcripts as fixtures and the result as a Learning | — (needs the user for the trust dialog) | active |
 | T3 | Layout (C2) and the file column with its redirect (C9) | T1 | active |
-| T4 | Claude session (C3): start, flags, environment, readiness, restart, stop on quit | T1 | active |
-| T5 | MCP server and relay (C5), report rendering and persistence (C6) | T1 | active |
+| T4 | Claude session (C3): start, flags, environment, readiness, restart, stop on quit, and the fake `claude` its suites run | T1, T2, T5 | active |
+| T5 | MCP server and relay (C5), report rendering and persistence (C6) | T1, T2 | active |
 | T6 | Send (C4) | T2, T3, T4 | active |
 | T7 | Entry point (C1): prefix mapping, `<Plug>` mappings, `:Aineo`, autostart | T3, T4, T5, T6 | active |
 | T8 | Health (C7) and `doc/aineo.txt` | T7 | active |
