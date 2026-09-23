@@ -47,12 +47,13 @@ knowledge-vault/
 
 ## Relationship to the binding documents
 
-The vault is context, not law, and must not drift into the documents that are.
+The vault is context, not law, and must not drift into the documents that are — with the one exception the table names: a plan the root `CLAUDE.md` names as the spec.
 
 | | Holds | Authority |
 |---|---|---|
 | The constitution (`.specify/memory/constitution.md`, once the project adopts spec-kit) | The principles | **Binding.** Governs all code. |
 | The specs (`specs/`) | What the system must do — requirements | **Binding.** Drives implementation. |
+| A plan's D# and C# rows, while the root `CLAUDE.md` names that plan as the spec (v1: [[Planning/aineo — v1 agent console]]) | What the system must do, until specs exist | **Binding.** Changed only through a converge round with the user; superseded by a new ID, never edited in place. |
 | `knowledge-vault/` | Why we chose it, what we rejected, what bit us | **Context.** Explains, never overrides. |
 
 If the vault and a spec disagree, **the spec wins and the vault is wrong** — fix the vault. If the vault and the constitution disagree, the constitution wins.
