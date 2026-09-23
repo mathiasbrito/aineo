@@ -1,7 +1,10 @@
---- aineo's configuration home, `require('aineo.config')`. Pure: it reads no
---- editor state, and is handed every source of settings it resolves.
+--- aineo's configuration home, `require('aineo.config')`. It reads no editor
+--- state: it keeps the options `require('aineo').setup()` records, and
+--- resolves the configuration from the sources it is handed.
 
 local M = {}
+
+local recorded_setup_options = {}
 
 --- Whether `value` is a prefix: a string, or `false` for no prefix at all.
 ---
@@ -84,6 +87,15 @@ for _, setting in ipairs(SETTINGS) do
   IS_SETTING[setting.name] = true
 end
 
+--- Whether a top-level key, such as `prefix`, names a setting outside any
+--- section; `layout.report_height` written as one key does not.
+local IS_TOP_LEVEL_SETTING = {}
+for _, setting in ipairs(SETTINGS) do
+  if #path_of(setting.name) == 1 then
+    IS_TOP_LEVEL_SETTING[setting.name] = true
+  end
+end
+
 --- Whether a top-level key, such as `claude`, names a section.
 local IS_SECTION = {}
 for _, section in ipairs(SECTIONS) do
@@ -106,7 +118,7 @@ local function unknown_keys_in(source)
           table.insert(unknown, name)
         end
       end
-    elseif not IS_SETTING[key] then
+    elseif not IS_TOP_LEVEL_SETTING[key] then
       table.insert(unknown, tostring(key))
     end
   end
@@ -194,6 +206,23 @@ local function resolve_setting(setting, sources)
     end
   end
   return setting.default
+end
+
+--- Records a copy of the options `require('aineo').setup()` was given,
+--- replacing whatever was recorded before. Counterpart of
+--- `recorded_setup_options()`.
+---
+---@param setup_options table
+function M.record_setup_options(setup_options)
+  recorded_setup_options = vim.deepcopy(setup_options)
+end
+
+--- A copy of the options `require('aineo').setup()` recorded last; an empty
+--- table until it is called. Editing the copy changes no record.
+---
+---@return table
+function M.recorded_setup_options()
+  return vim.deepcopy(recorded_setup_options)
 end
 
 --- Resolves aineo's configuration from its two sources: each setting comes from

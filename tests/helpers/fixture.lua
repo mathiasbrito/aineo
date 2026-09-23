@@ -22,14 +22,15 @@ function M.directory(name)
   return path
 end
 
---- Writes `lines` to `.tests/fixtures/<name>`, replacing any earlier content.
+--- Writes `lines` to `.tests/fixtures/<name>`, replacing any earlier content
+--- and creating the directories `name` leads through.
 ---
----@param name string the file name, such as `passing.lua`
+---@param name string the file's path under `.tests/fixtures/`, such as `passing.lua`
 ---@param lines string[] the file's lines
 ---@return string path the file's absolute path
 function M.write(name, lines)
-  vim.fn.mkdir(FIXTURES, 'p')
   local path = vim.fs.joinpath(FIXTURES, name)
+  vim.fn.mkdir(vim.fs.dirname(path), 'p')
   assert(vim.fn.writefile(lines, path) == 0, 'cannot write ' .. path)
   return path
 end

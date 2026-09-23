@@ -2,5 +2,21 @@
 base: lua51
 name: neovim
 globals:
+  jit:
+    property: read-only
+  jit.arch:
+    property: read-only
+  jit.os:
+    property: read-only
+  jit.version:
+    property: read-only
+  jit.version_num:
+    property: read-only
   vim:
     any: true
+  vim.loop:
+    any: true
+    deprecated:
+      message: "`vim.loop` is deprecated; use `vim.uv`"
+      replace:
+        - "vim.uv"
