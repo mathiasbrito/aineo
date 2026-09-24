@@ -8,8 +8,9 @@
 ---
 --- - `AINEO_FAKE_CLAUDE_RECORD` — the record file; required.
 --- - `AINEO_FAKE_CLAUDE_MODE` — `ready` (the default) replays Claude Code's
----   startup to its ready prompt; `exit` replays it too, then exits with
----   `AINEO_FAKE_CLAUDE_EXIT_CODE` (default 0).
+---   startup to its ready prompt; `trust` shows the workspace-trust dialog
+---   instead, and never gets past it; `exit` replays the startup, then exits
+---   with `AINEO_FAKE_CLAUDE_EXIT_CODE` (default 0).
 --- - `AINEO_FAKE_CLAUDE_ENV` — the names, separated by commas, of the variables
 ---   whose values the record lists.
 ---
@@ -82,8 +83,15 @@ local stdin = vim.uv.new_tty(0, true)
 local stdout = vim.uv.new_tty(1, false)
 assert(stdin:set_mode(1) == 0, 'cannot put the terminal in raw mode')
 
+--- The fixture each mode replays when it starts.
+local SCREENS = {
+  ready = 'startup-2.1.281.bytes',
+  trust = 'trust-dialog-2.1.280.bytes',
+  exit = 'startup-2.1.281.bytes',
+}
+
 record({ argv = { unpack(arg) }, cwd = vim.uv.cwd(), env = requested_environment() })
-stdout:write(fixture_bytes('startup-2.1.281.bytes'))
+stdout:write(fixture_bytes(assert(SCREENS[MODE], 'no such mode: ' .. MODE)))
 
 if MODE == 'exit' then
   vim.wait(EXIT_AFTER_MS)

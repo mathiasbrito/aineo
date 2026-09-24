@@ -135,4 +135,135 @@ T['start_session()']['passes every other variable of the editor on unchanged'] =
   })
 end
 
+--- The expression, run in a Neovim, that counts its jobs.
+local JOB_COUNT = [[#vim.tbl_filter(function(channel)
+  return channel.stream == 'job'
+end, vim.api.nvim_list_chans())]]
+
+T['start_session()']['returns the running session instead of starting another'] = function()
+  local fake = claude.fake('running', 'ready')
+  local first = claude.start(child, fake)
+  claude.wait_for_start(fake)
+
+  local second = claude.start(child, fake)
+
+  eq(second, first)
+  eq(child.lua_get(JOB_COUNT), 1)
+end
+
+T['start_session()']['starts Claude again in a new terminal once it has exited'] = function()
+  local fake = claude.fake('restart', 'exit')
+  local first = claude.start(child, fake)
+  claude.wait_for_status(child, 'exited')
+
+  local second = claude.start_again(child)
+
+  MiniTest.expect.no_equality(second, first)
+  eq(child.api.nvim_get_option_value('buftype', { buf = second }), 'terminal')
+  eq(#claude.wait_for_starts(fake, 2), 2)
+end
+
+T['start_session()']['shows the new terminal in every window that showed the old one'] = function()
+  local fake = claude.fake('restart-windows', 'exit')
+  local first = claude.start(child, fake)
+  child.cmd('vsplit')
+  local windows = child.fn.win_findbuf(first)
+  claude.wait_for_status(child, 'exited')
+
+  local second = claude.start_again(child)
+
+  eq(child.fn.win_findbuf(second), windows)
+end
+
+T['start_session()']['wipes the terminal of the Claude that exited'] = function()
+  local fake = claude.fake('restart-wipe', 'exit')
+  local first = claude.start(child, fake)
+  claude.wait_for_status(child, 'exited')
+
+  claude.start_again(child)
+
+  eq(child.api.nvim_buf_is_valid(first), false)
+end
+
+T['start_session()']['starts Claude again after the old terminal was wiped'] = function()
+  local fake = claude.fake('restart-after-wipe', 'exit')
+  local first = claude.start(child, fake)
+  claude.wait_for_status(child, 'exited')
+  child.cmd('bwipeout! ' .. first)
+
+  local second = claude.start_again(child)
+
+  eq(child.api.nvim_get_option_value('buftype', { buf = second }), 'terminal')
+end
+
+T['session_status()'] = MiniTest.new_set()
+
+--- The expression, run in a Neovim, that lists what the session reports.
+local STATUS = "{ require('aineo.claude').session_status() }"
+
+T['session_status()']['reports nothing before a session starts'] = function()
+  eq(child.lua_get(STATUS), {})
+end
+
+T['session_status()']['is starting as soon as the session starts'] = function()
+  local fake = claude.fake('starting', 'ready')
+
+  claude.start(child, fake)
+
+  eq(child.lua_get(STATUS), { 'starting' })
+end
+
+T['session_status()']['is exited, with the exit code, once Claude exits'] = function()
+  local fake = claude.fake('exit-code', 'exit', { AINEO_FAKE_CLAUDE_EXIT_CODE = '3' })
+
+  claude.start(child, fake)
+
+  eq(claude.wait_for_status(child, 'exited'), { 'exited', 3 })
+end
+
+T['session_status()']['leaves the terminal showing Neovim’s exit line'] = function()
+  local fake = claude.fake('exit-line', 'exit', { AINEO_FAKE_CLAUDE_EXIT_CODE = '3' })
+  local buffer = claude.start(child, fake)
+
+  claude.wait_for_status(child, 'exited')
+
+  contains(claude.wait_for_screen(child, buffer, '[Process exited 3]'), '[Process exited 3]')
+end
+
+T['session_status()']['is ready once the prompt shows with no trust dialog'] = function()
+  local fake = claude.fake('ready', 'ready')
+
+  claude.start(child, fake)
+
+  eq(claude.wait_for_status(child, 'ready'), { 'ready' })
+end
+
+T['session_status()']['stays starting for a moment after the prompt shows'] = function()
+  local fake = claude.fake('settle', 'ready')
+  local buffer = claude.start(child, fake)
+
+  claude.wait_for_screen(child, buffer, '❯')
+
+  eq(child.lua_get(STATUS), { 'starting' })
+end
+
+T['session_status()']['never becomes ready behind the workspace-trust dialog'] = function()
+  local fake = claude.fake('trust', 'trust')
+  local buffer = claude.start(child, fake)
+
+  claude.wait_for_screen(child, buffer, 'Yes, I trust this folder')
+
+  eq(claude.wait_for_status(child, 'ready'), { 'starting' })
+end
+
+T['session_status()']['is not ready once Claude has exited, even right after its prompt'] = function()
+  local fake = claude.fake('exit-while-settling', 'exit')
+  local buffer = claude.start(child, fake)
+  claude.wait_for_screen(child, buffer, '❯')
+
+  claude.wait_for_status(child, 'exited')
+
+  eq(claude.wait_for_status(child, 'ready'), { 'exited', 0 })
+end
+
 return T
