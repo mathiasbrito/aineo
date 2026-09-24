@@ -1,0 +1,4 @@
+screen 80x24
+hidden, no size: { "5 80", "5 80" }
+hidden, 120x40: { "5 80", "5 80" }
+shown after start, 120x40: { "22 80", "22 80" }

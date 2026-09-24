@@ -1,12 +1,12 @@
 ---
 wave: 00002
-status: claimed
+status: landed
 planned_by: the orchestrator (Claude, Opus 5.5) for Mathias Santos de Brito — host Macbook-Mathias
 planned_at: 2026-09-24 05:48 CEST
 base: 798275d
 claimed_by: Macbook-Mathias (platform UUID prefix CF989BF4), session 619e5f9a-554c-4884-9695-132dccbcec45
 claimed_at: 2026-09-24 06:27 CEST
-landed_at:
+landed_at: 2026-09-24 17:32 CEST
 ---
 
 # Wave 2 — the layout, the Claude session and the report channel
@@ -83,4 +83,15 @@ Run by the orchestrator on each final head, each a literal edit shown applied wi
 
 ## Landed
 
-<!-- filled by the knowledge pass -->
+- **T3 — PR #9**, merged by rebase on 2026-09-24 as `b47be4e` … `c1e3962` (20 commits; per-file identity 9 of 9 with the final head `1f4806c`). Reviews on Opus: attack (`neovim-lua-developer`), test-integrity and records (`reviewer`); one fix round by the author; a re-measure with the attack question (`neovim-lua-developer`); one bounded correction by a fresh agent (`neovim-lua-developer`).
+- **T5 — PR #10**, merged by rebase as `adf4815` … `e006d58` (30 commits; per-file identity 25 of 25 with `2058eff`). Reviews: attack (`neovim-claude-code-integrator`), test-integrity (`neovim-lua-developer`), records (`reviewer`); the fix round begun by the author and finished by a fresh agent when the author's context reached 964,041 tokens; a re-measure (`neovim-claude-code-integrator`); one bounded correction by a fresh agent.
+- **T4 — PR #11**, merged by rebase as `f6b4beb` … `c7a9c99` (16 commits; per-file identity 20 of 20 with `db0832a`). Reviews: attack (`neovim-claude-code-integrator`), test-integrity (`neovim-lua-developer`), records (`reviewer`); the fix round by a fresh agent, the author's context being about 600 K; a re-measure (`neovim-claude-code-reviewer`, at `xhigh`); one bounded correction by a fresh agent.
+- **The effort pass — PR #12**, `fdb8ec0`, `08caf0e`: implementers at `high`, reviewers at `xhigh` (the user, 2026-09-24), the reviewer variants `neovim-lua-reviewer` and `neovim-claude-code-reviewer`; one records review.
+- **The orchestrator's verification**, each mutant a literal edit applied and shown with `git diff HEAD` before the run and restored after:
+  - T3 at `1f4806c`: `make test` 242 cases, `Fails (0)`, exit 0; M10, M11 and M12 killed (5, 32 and 14 failing cases), and three of the re-measure's findings reverted — non-file windows taken for the file column, `'bufhidden'` ignored, a restored `aineo://input` ignored — killed (2, 3, 2). Only the summary lines were kept, so whether each kill was by assertion was not recorded.
+  - T5 at `2058eff`: 258 cases, `Fails (0)`, exit 0; M7, M8 and M9 killed by assertion (1, 5, 2), and three reverted findings — the Report's loaded check, a user's typed text, the "will show" wording — killed by assertion (1, 2, 1).
+  - T4 at `db0832a`: 176 cases, `Fails (0)`, exit 0; and T4's 20 files laid over `origin/dev` — the tree the merge produced, T4 adding files only — **454 cases, `Fails (0)`**, exit 0, 256 s, `make lint` clean. M4 and M6 killed by assertion (2, 3); M5's trust-dialog condition no longer exists, since readiness reads the input box's structure, so its replacement `glyphalone` (the glyph alone reads ready) was run: 10. Six more, each reverting a correction or reading — the stop keyed on the terminal rather than the process, the rule checks, the enterable-`cwd` check, the screen read from scrollback, the settle's guard, the drop back to not-ready — killed by assertion (2, 3, 1, 2, 1, 4).
+  - The user's shada and Neovim log unchanged by every run; no orphan process.
+- **Evidence added by the knowledge pass:** the MCP-server approval dialog of Claude Code 2.1.281 (`evidence/t4-mcp-server-dialog-screen.txt`, recorded by the orchestrator on 2026-09-24, no key sent), and T4's probes behind its departures with the packet's mutant summary (`evidence/t4-probe-*`, `evidence/t4-mutants-summary-final.txt` — the records review of #11, finding 6), their paths replaced by `<scratchpad>` and `<worktree>`.
+- **Readings and limits for the user:** [[Review/2026-09-24 — v1 MVP readings review]].
+- **Retrospective:** [[Sessions/2026-09-24 — Wave 2 retrospective]].

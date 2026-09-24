@@ -4,7 +4,7 @@
 **Project:** [[Projects/aineo]]
 **Defined in session:** [[Sessions/2026-09-23 — Orchestration and knowledge vault scaffold]]
 **Defined by:** Mathias Santos de Brito, with Claude — converged in two rounds, 2026-09-23
-**Status:** in progress — wave 1 (T1) landed 2026-09-24; wave 2 (T3, T4, T5) planned 2026-09-24
+**Status:** in progress — wave 1 (T1) landed 2026-09-24; wave 2 (T3, T4, T5) landed 2026-09-24; wave 3 (T6) planned 2026-09-24
 
 ## Goal
 
@@ -48,6 +48,8 @@ Until the project has specs, this plan's **D# and C# rows are the spec for v1** 
 | D11 | Claude's permission prompts are answered by the user in the terminal | The interactive TUI is its own permission host. aineo pre-allows its own report tool (`--allowedTools mcp__aineo__report`, C3) and nothing else — proposed in round 1 with that reason (\"so reporting never prompts\") and agreed by the user with C1–C8. It raises no permission mode and answers no prompt |
 | D12 | StyLua formats and selene lints; lua-language-server type-checking is not in v1 | The user's choice (Q3), over StyLua alone and over deferring both; installed as StyLua 2.5.2 and selene 0.31.0 |
 | D13 | The v1 settings, read from `vim.g.aineo` and `require('aineo').setup()`: `prefix` — a string, or `false` to map nothing (default `\`); `autostart` — a boolean (default `true`); `claude.cmd` — the command run in the left terminal, a list of strings (default `{ "claude" }`); `layout.report_height` — the Report's share of the right column, strictly between 0 and 1 (default 2/3, D4) | Added by the user on 2026-09-23, after the brief review of wave 1 found three of these keys backed by no row; `prefix` comes from C1 ("configurable or off") |
+| D14 | Send works while Claude is in a turn: the paste and the Enter go to the terminal, and Claude Code queues the message and runs it after the turn | Measured 2026-09-24 on 2.1.281: during a turn the input box stays on screen, so the session reads ready, and a message submitted then is queued (`Implementation/Waves/00003-send/evidence/t6-summary.txt`). The user's choice, 2026-09-24, over refusing Send while a turn runs — with the risk stated in the option and accepted: a permission dialog drawn in the ~11–30 ms before the session notices it takes Send's Enter, which picks its highlighted choice, against D11; recorded as a limit. C4 is otherwise unchanged |
+| D15 | On a bare start (D3), aineo takes the screen from a startup dashboard: it opens its layout even when a dashboard (snacks.nvim's, alpha, dashboard-nvim, mini.starter) drew first, replacing the dashboard's window; with `autostart = false` the dashboard shows as before | Resolves Q5. The user's choice, 2026-09-24, over yielding to the dashboard (aineo then never opening by itself while one is enabled); the cost stated with it: T7 handles the startup order against dashboards that open on `VimEnter` or later, tested for the known ones, and an unknown one may show first |
 
 ## Architecture
 
@@ -88,7 +90,7 @@ Until the project has specs, this plan's **D# and C# rows are the spec for v1** 
 - **R1** — Claude exits (Ctrl-C, `/exit`): the terminal shows the exit; `\o` restarts the session.
 - **R2** — Quitting Neovim with Claude running: aineo stops it on quit, interrupting first (SIGINT) so the turn ends rather than being cut (the integrator's rule was measured for headless `-p`; the interactive behaviour is Q4). *Carried out, since Q4's resolution of 2026-09-24, as the Ctrl-C key written to the terminal — one press, then a double press — with `jobstop` as the fallback (T4's brief).*
 - **R3** — The user's own Neovim config sets `maplocalleader` to `\` (read 2026-09-23): a filetype plugin's `<LocalLeader>` mapping would shadow aineo's `\` commands in that buffer. Nothing in the config or its installed plugins uses `<LocalLeader>` today; C7 reports conflicts.
-- **Q5** — A startup dashboard (snacks.nvim's, alpha, dashboard-nvim, mini.starter) claims the same bare-`nvim` start as the autostart (D3). The user, 2026-09-23: "I have a plugin that starts a screen in full screen, it should not, the aineo should open" — after which the orchestrator turned off snacks.nvim's dashboard in the user's config at their request. *[Corrected 2026-09-24: this row first said the user had turned it off.]* Whether aineo takes the screen from a dashboard or documents that it must be off changes C1 — converged with the user before T7 is dispatched.
+- ~~**Q5**~~ — **resolved 2026-09-24 by the user: D15** (aineo takes the screen from a startup dashboard). Was: A startup dashboard (snacks.nvim's, alpha, dashboard-nvim, mini.starter) claims the same bare-`nvim` start as the autostart (D3). The user, 2026-09-23: "I have a plugin that starts a screen in full screen, it should not, the aineo should open" — after which the orchestrator turned off snacks.nvim's dashboard in the user's config at their request. *[Corrected 2026-09-24: this row first said the user had turned it off.]* Whether aineo takes the screen from a dashboard or documents that it must be off changes C1 — converged with the user before T7 is dispatched.
 - ~~**Q4**~~ — **resolved 2026-09-24 by the orchestrator's measurement** on 2.1.281: one Ctrl-C during a turn ends the turn and keeps the process; a double Ctrl-C 0.3 s apart exits 0 at idle but not during a turn; `/exit` exits 0; `jobstop` exits 129 (`…/evidence/t4-summary.txt`). Measured for Ctrl-C typed into the terminal — the byte `\3` written to its pty; whether the TUI reads it as a byte (raw mode) or the pty turns it into SIGINT was not measured, nor a SIGINT signal sent to the process; T4 stops Claude by keys. Was: How the interactive TUI answers SIGINT and the end of its input — whether a turn ends or is cut. Measured with Q1 and Q2 in T2.
 
 ## Implementation plan
@@ -97,9 +99,9 @@ Until the project has specs, this plan's **D# and C# rows are the spec for v1** 
 |----|------|------------|--------|
 | T1 | Tooling foundation (C8) and the entry-point skeleton (C1), as a packet: the mini.test harness and its make targets (deps, test, lint, format), the suites' isolation from the developer's editor and Claude state, the `plugin/aineo.lua` and `lua/aineo/init.lua` skeletons, and `lua/aineo/config/` with `vim.g.aineo` validation. The agent-configuration part — `.gitignore`, the `modularity` table, the Nvim minimum in the root `CLAUDE.md` (before the packet), and the commands in `CLAUDE.md` and any `prepare_project` step (after it) — is the orchestrator's `ai/` pass, because no implementer edits those files | — | done — PR #4, wave 1 |
 | T2 | Measure Q1, Q2 and Q4 against the real CLI in a folder the user trusts; record the transcripts as fixtures and the result as a Learning | — (needs the user for the trust dialog) | done — measured by the orchestrator; evidence and fixtures in `Implementation/Waves/00002-layout-session-report/evidence/`, the Learning [[Learnings/Claude Code's interactive CLI in a Neovim terminal]] |
-| T3 | Layout (C2) and the file column with its redirect (C9) | T1 | active |
-| T4 | Claude session (C3): start, flags, environment, readiness, restart, stop on quit, and the fake `claude` its suites run | T1, T2 — T5 only through T7's wiring, by injection (wave 2 plan, *Why T4 runs beside T5*) | active |
-| T5 | MCP server and relay (C5), report rendering and persistence (C6) | T1, T2 | active |
+| T3 | Layout (C2) and the file column with its redirect (C9) | T1 | done — PR #9, wave 2 |
+| T4 | Claude session (C3): start, flags, environment, readiness, restart, stop on quit, and the fake `claude` its suites run | T1, T2 — T5 only through T7's wiring, by injection (wave 2 plan, *Why T4 runs beside T5*) | done — PR #11, wave 2 |
+| T5 | MCP server and relay (C5), report rendering and persistence (C6) | T1, T2 | done — PR #10, wave 2 |
 | T6 | Send (C4) | T2, T3, T4 | active |
 | T7 | Entry point (C1): prefix mapping, `<Plug>` mappings, `:Aineo`, autostart | T3, T4, T5, T6 | active |
 | T8 | Health (C7) and `doc/aineo.txt` | T7 | active |
@@ -108,6 +110,9 @@ Until the project has specs, this plan's **D# and C# rows are the spec for v1** 
 <!-- ~~**T1 — <title>**~~ — **Done YYYY-MM-DD** (commit in session note) -->
 ~~**T1 — Tooling foundation and the entry-point skeleton**~~ — **Done 2026-09-24** (commits in [[Sessions/2026-09-23 — T1 tooling foundation]])
 ~~**T2 — Measure Q1, Q2 and Q4**~~ — **Done 2026-09-24** (wave 2 plan, *Measured before planning*)
+~~**T3 — Layout and the file column**~~ — **Done 2026-09-24** (commits in [[Sessions/2026-09-24 — T3 layout]])
+~~**T4 — Claude session**~~ — **Done 2026-09-24** (commits in [[Sessions/2026-09-24 — T4 Claude session]])
+~~**T5 — MCP server and relay, report rendering and persistence**~~ — **Done 2026-09-24** (commits in [[Sessions/2026-09-24 — T5 report channel]])
 
 **Done means:** a bare `nvim` in a trusted folder shows the layout; `\s` delivers Input to Claude and clears it; Claude's `report` calls render in Agent Report in the C6 format; opening a file from any window lands in the middle column at equal thirds; `:checkhealth aineo` passes; the suite is green under mini.test with the fake `claude`; vimdoc documents every command.
 
