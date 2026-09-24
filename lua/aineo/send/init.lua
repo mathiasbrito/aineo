@@ -63,6 +63,17 @@ local function without_control_sequences(text)
   return stripped
 end
 
+--- The text of `input` as Send pastes it: its lines joined by line feeds,
+--- without the bytes that can open a control sequence
+--- (`without_control_sequences()`).
+---
+---@param input integer the Input buffer
+---@return string
+local function pasteable_text(input)
+  local lines = vim.api.nvim_buf_get_lines(input, 0, -1, false)
+  return without_control_sequences(table.concat(lines, '\n'))
+end
+
 --- Writes the Input buffer's text — its lines joined by line feeds — to
 --- Claude Code's terminal as one bracketed paste followed by Enter, in one
 --- write, then empties Input. Claude Code 2.1.281 took that as one message,
@@ -72,15 +83,16 @@ end
 ---
 --- Sends nothing, and tells the user why with one `vim.notify()` warning,
 --- when there is no Input — before the layout has made it, or once it has
---- been wiped — when Input holds nothing but white space, and when Claude
---- Code is not ready for input as `claude.session_status()` reports it at
---- that moment: not started, starting or behind a dialog, or exited.
+--- been wiped — when the text it would paste holds nothing but white space,
+--- and when Claude Code is not ready for input as `claude.session_status()`
+--- reports it at that moment: not started, starting or behind a dialog, or
+--- exited.
 function M.send()
   local input = existing_input()
   if not input then
     return refuse('no_input')
   end
-  local text = table.concat(vim.api.nvim_buf_get_lines(input, 0, -1, false), '\n')
+  local text = pasteable_text(input)
   if not text:find('%S') then
     return refuse('empty')
   end
@@ -88,7 +100,7 @@ function M.send()
   if status ~= 'ready' then
     return refuse(status or 'not_started')
   end
-  claude.write_to_session(PASTE_START .. without_control_sequences(text) .. PASTE_END .. ENTER)
+  claude.write_to_session(PASTE_START .. text .. PASTE_END .. ENTER)
   vim.api.nvim_buf_set_lines(input, 0, -1, false, {})
 end
 
