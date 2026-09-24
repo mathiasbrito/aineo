@@ -1,12 +1,12 @@
 ---
 wave: 00003
-status: claimed
+status: landed
 planned_by: the orchestrator (Claude, Opus 5.5) for Mathias Santos de Brito — host Macbook-Mathias
 planned_at: 2026-09-24 17:37 CEST
 base: c7a9c99
 claimed_by: Macbook-Mathias (platform UUID prefix CF989BF4), session 619e5f9a-554c-4884-9695-132dccbcec45
 claimed_at: 2026-09-24 18:03 CEST
-landed_at:
+landed_at: 2026-09-25 01:47 CEST
 ---
 
 # Wave 3 — Send
@@ -57,7 +57,7 @@ Quoted in `t6-summary.txt` for T6 (the re-measure of PR #11, finding 8): the ses
 
 ## Decisions for the user
 
-1. **Send while a turn runs** — asked 2026-09-24 with the measurement above. (a) *Send; Claude queues it* (recommended): `\s` works while Claude works and Claude Code runs the message after the turn, as typing in its terminal does; the risk stated with it — a permission dialog drawn in the ~11–30 ms before the session notices it takes Send's Enter, which picks its highlighted "1. Yes", against D11 — recorded as a limit. *(As asked. The records review of PR #13 noted that the Enter answering the dialog is inferred from its footer, "Enter to confirm", not measured — the pasted bytes reach it first; R4 in the plan says so.)* (b) *Refuse while a turn runs*: closes that race, since a permission dialog appears only in a turn, at the cost of queueing from Input and one more screen signature. **The user chose (a)** → D14.
+1. **Send while a turn runs** — asked 2026-09-24 with the measurement above. (a) *Send; Claude queues it* (recommended): `\s` works while Claude works and Claude Code runs the message after the turn, as typing in its terminal does; the risk stated with it — a permission dialog drawn in the ~11–30 ms before the session notices it takes Send's Enter, which picks its highlighted "1. Yes", against D11 — recorded as a limit. *(As asked. The records review of PR #13 noted that the Enter answering the dialog is inferred, not measured — the pasted bytes reach it first; R4 in the plan says so. Corrected 2026-09-25: this note first said the inference came from a footer "Enter to confirm"; the permission dialog's footer reads "Esc to cancel · Tab to amend" — the attack review of PR #15, finding 6.)* (b) *Refuse while a turn runs*: closes that race, since a permission dialog appears only in a turn, at the cost of queueing from Input and one more screen signature. **The user chose (a)** → D14.
 2. **Q5, a startup dashboard against the autostart** — asked the same day, for T7 (wave 4). (a) *aineo takes the screen* (recommended): on a bare start aineo opens its layout even when a dashboard drew first; with `autostart = false` the dashboard shows as before; T7 handles the startup order against dashboards that open on `VimEnter` or later. (b) *Yield to the dashboard*: aineo never opens by itself while a dashboard is enabled. **The user chose (a)** → D15.
 
 ## Verification mutants
@@ -78,4 +78,23 @@ T6 — each a literal edit on the final head, applied and shown with `git diff H
 
 ## Landed
 
-<filled by the knowledge pass>
+- **T6 — PR #15**, merged by rebase on 2026-09-25 as `1826fe9` … `bb0e185` (8 commits; per-file identity 9 of 9 with the final head `9706947`).
+  - Reviews on Opus at `xhigh`: attack (`neovim-claude-code-reviewer`), test-integrity (`neovim-lua-reviewer`), records (`reviewer`).
+  - One fix round by the author.
+  - A re-measure with the attack question (`neovim-claude-code-reviewer`), since the round changed how Send writes: it found one failure the round had introduced — a write failing after the clear lost Input.
+  - One bounded correction by a fresh agent (`neovim-claude-code-integrator`), the author's context being past 400 K.
+- **What Send does, as landed:**
+  - one bracketed paste and Enter in one write;
+  - every C0 control but tab, line feed and carriage return, and every C1 control, removed from the text;
+  - Input cleared before the write, and put back if the write fails;
+  - refused, with one message, when there is no Input, when Input is empty, or when the session is not `'ready'`;
+  - sent during a turn (D14).
+- **The orchestrator's verification** of `9706947`, each mutant a literal edit applied, shown with `git diff HEAD`, run against `tests/test_send.lua` and restored:
+  - `make test` 491 cases, `Fails (0)`, exit 0 — at the head, and with T6's files laid over `dev` `0b52d7f`, which had not touched them since the branch point;
+  - `make lint` clean;
+  - 13 mutants, all killed by assertion: M13 (18 cases), M14 (4), M15 (3), M16 (12), a one-pass C1 removal (1), M18 (2), the correction's two half-fixes (1, 1), writing before clearing (2), DEL left out of the C0 range (2), the C1 range narrowed (1), the status checked first (3), a whitespace-only Input sent (2);
+  - the user's shada and Neovim log unchanged; no orphan process.
+- **The `ai/` pass — PR #14**, `643ebd8`, `0b52d7f`: a mutant runs by default against a copy of its test file narrowed to the group that exercises the edited unit, and every survivor is re-run on the whole suite. One records review, whose three findings the second commit corrected.
+- **Evidence added:** `evidence/t6-summary3.txt` and `evidence/t6-split-driver.lua`. With no model turn, Claude Code 2.1.281 read a paste whose closing marker falls at bytes 1,012–1,026 of the write as one paste at 15 of 15 lengths — the attack review of PR #15, finding 3.
+- **Readings and limits for the user:** [[Review/2026-09-24 — v1 MVP readings review]], MR51–MR62.
+- **Retrospective:** [[Sessions/2026-09-25 — Wave 3 retrospective]].

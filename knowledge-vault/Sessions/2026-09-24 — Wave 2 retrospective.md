@@ -28,7 +28,7 @@
 | 10:31–11:37 | T3: re-measure, bounded correction by a fresh agent, the orchestrator's verification, merged |
 | 11:42–12:42 | T5: re-measure, bounded correction by a fresh agent, verification, merged |
 | 12:36–12:53 | the user: "keep xhigh for reviewers, set implementers to high" — PR #12 (effort by role), reviewed and merged |
-| 15:06–16:56 | T4: fix round in (after a 90-minute whole-file mutant loop), re-measure, bounded correction by a fresh agent |
+| 15:06–16:56 | T4: fix round in (after two whole-file mutant loops of about 90 minutes each), re-measure, bounded correction by a fresh agent |
 | 17:08–17:32 | T4: the orchestrator's verification — on its head and on its files laid over `dev` — merged |
 
 **Findings, per review** (the verdicts are the reviewers', counted from each report's own headings; each report in the orchestrator's scratch directory, its findings in the pull request's rounds and the packet's session note). *The first version of this table took three records rows from the orchestrator's ledger rather than the reports and miscounted two integrity rows; the records review of PR #13 (finding 3) corrected them.*
@@ -87,7 +87,7 @@ The three packet authors are the three largest rows, as in wave 1: an implemente
 
 ## Deviations and disclosures
 
-- **A fix round ran for 90 minutes on mutants.** T4's fix-round agent re-ran its 48-row mutant table against the whole test file, one after another (16,654 s for the round). Nothing was stuck; the user asked whether it was. The next `ai/` pass says to run a mutant against the tests that target it.
+- **A fix round ran about three hours of mutants.** T4's fix-round agent ran its mutant table — 48 labels, 44 of them with a target — against the whole test file, one after another, twice: two loops of about 92 and 91 minutes (16,654 s for the round). *Corrected 2026-09-25: this line first said one 90-minute run of 48; the records review of PR #14 read the round's logs.* Nothing was stuck; the user asked whether it was. The next `ai/` pass says to run a mutant against the tests that target it.
 - **The T4 packet read its charter from `main`** (the records review of #11, finding 4): agent worktrees start from `main`, whose `.claude/` was then the bootstrap's. Every brief since says to check out the branch before reading `.claude/`.
 - **T4's branch predated T3 and T5 on `dev`**, so its head alone could not show the three together. The orchestrator laid T4's 20 files — all of them added, none changed — over `origin/dev` and ran the whole suite there before the merge (454 cases, `Fails (0)`).
 - **The orchestrator's working directory slipped into a worktree twice** — once at 01:04 while planning, once at 17:07 during T4's verification — each by a bare `cd`, each moved back at once with nothing written there. The rule against it is in the orchestrate skill since PR #5.
@@ -125,5 +125,5 @@ T5's other candidates stay in its session note, not extracted: "mutant kills thr
 - **For wave 3 (T6):** `'ready'` is not "no turn running"; the 11–30 ms readiness lag after a dialog is D14's accepted limit — [[Implementation/Waves/00003-send/plan]].
 - **For T7:** D15 (take the screen from a dashboard); `setup()` with a table that contains itself raises a stack overflow (T1's limits); show Claude's buffer at once — a hidden terminal gets five rows; whether Claude Code accepts `"type": ["string", "null"]` for `details` (MR33); an end-to-end test with the fake `claude` calling the report tool; the Report's E95 after a restored session.
 - **For T8:** name MR38 (an erroring earlier `VimLeavePre` handler skips aineo's stop) in the health check and the help.
-- **Mutant runs are the slow step of a round.** T4's fix round ran each of its 48 rows against the whole of `tests/test_claude.lua` (53 cases that drive real processes) — the 90 minutes; its correction ran each mutant against a copy of that file narrowed to the group the mutant targets, under `.tests/` ([[Sessions/2026-09-24 — T4 Claude session]] › *Correction*). The next `ai/` pass makes that the rule in the implementer and reviewer charters.
+- **Mutant runs are the slow step of a round.** T4's fix round ran 44 mutants twice against the whole of `tests/test_claude.lua` (53 cases that drive real processes), about 90 minutes a loop; its correction ran each mutant against a copy of that file narrowed to the group the mutant targets, under `.tests/` ([[Sessions/2026-09-24 — T4 Claude session]] › *Correction*). The next `ai/` pass makes that the rule in the implementer and reviewer charters.
 - **For the next knowledge and `ai/` passes:** the Learning *Claude Code's interactive CLI in a Neovim terminal* is split into claims (the records review of PR #6, finding 8) — adding wave 3's measurement that Claude Code queues a message submitted during a turn — and the trap links in `.claude/agents/neovim-claude-code-integrator.md` follow.
