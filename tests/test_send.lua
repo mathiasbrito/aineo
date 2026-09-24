@@ -154,6 +154,21 @@ T['send()']['refuses, saying so once, while Input holds only blank lines'] = fun
   })
 end
 
+T['send()']['refuses, saying so once, while Input holds only escape bytes and blanks'] = function()
+  local fake = claude.fake('send-escapes-only', 'ready')
+  start_ready_session(fake)
+  send.set_input(child, { '\27\27', ' ' })
+  local before = #claude.received(fake)
+
+  send.send(child)
+
+  eq(refusal(fake, before), {
+    sent = '',
+    input = { '\27\27', ' ' },
+    messages = { { message = 'aineo: nothing sent — Input is empty', level = WARN } },
+  })
+end
+
 T['send()']['refuses, saying so once and keeping Input, before Claude has started'] = function()
   send.open_layout_without_session(child)
   send.set_input(child, { 'a message' })
