@@ -24,9 +24,9 @@ end
 ---
 --- `:edit` in the Report empties it, as it does any buffer that is no file;
 --- `fill` is then called with the emptied buffer to show its reports again.
---- The autocommand doing so belongs to the buffer, in the group `aineo_report`,
---- which is never cleared: a Report's handler must outlive the next Report's
---- creation.
+--- The autocommand doing so belongs to the buffer, in the group
+--- `aineo_report`, created anew with each Report: the Report before it has
+--- been wiped out by then, its autocommand with it.
 ---
 ---@param fill fun(buffer: integer) shows the reports in the emptied buffer
 ---@return integer buffer
@@ -36,7 +36,7 @@ function M.create_report_buffer(fill)
   vim.api.nvim_buf_set_name(buffer, REPORT_BUFFER_NAME)
   vim.bo[buffer].modifiable = false
   vim.api.nvim_create_autocmd('BufReadCmd', {
-    group = vim.api.nvim_create_augroup('aineo_report', { clear = false }),
+    group = vim.api.nvim_create_augroup('aineo_report', {}),
     buffer = buffer,
     callback = function(event)
       fill(event.buf)
