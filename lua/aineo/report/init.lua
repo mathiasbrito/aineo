@@ -148,7 +148,9 @@ function M.report_buffer()
 end
 
 --- Shows `arguments`, a report, at the end of the Report buffer, moves every
---- window showing the Report to it, and keeps it as a record.
+--- window showing the Report to it, and keeps it as a record. When the
+--- records file could not be cut back to its newest records, the user is
+--- told why, once (`records.append_record()`).
 ---
 --- Raises an error naming the field at fault when `arguments` are not a
 --- report (`validate_report()`), and an error naming the records file when
@@ -163,9 +165,12 @@ local function show_and_keep(arguments)
   end
   local report_buffer = M.report_buffer()
   local record = { time = current_environment().clock(), report = valid_report }
-  records.append_record(report_view.records_file, record)
+  local cut_failure = records.append_record(report_view.records_file, record)
   buffer.append_lines(report_buffer, render.render_report(record.report, record.time))
   buffer.follow_last_line(report_buffer)
+  if cut_failure then
+    warn_later(cut_failure)
+  end
 end
 
 --- Shows `arguments`, a report, at the end of the Report buffer, moves every
