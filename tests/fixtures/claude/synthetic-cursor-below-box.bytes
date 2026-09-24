@@ -1,0 +1,6 @@
+# Synthetic bytes, drawn by no recorded Claude Code (built 2026-09-24): they move the cursor
+# to the terminal's bottom row, under the input box and its footer, and draw nothing - where a
+# Claude Code killed mid-frame, or crashing, could leave it. The bytes follow the first empty
+# line.
+
+[999;1H

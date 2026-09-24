@@ -1,0 +1,9 @@
+# A synthetic dialog, drawn by no recorded Claude Code (built 2026-09-24): its selected choice
+# carries the prompt's glyph at the first column, with a rule below the choices but none above
+# them. The screen follows the first empty line.
+
+ Do you want to proceed?
+❯ 1. Yes
+  2. No
+────────────────────────────────────────
+ Esc to cancel

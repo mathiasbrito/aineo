@@ -11,7 +11,7 @@ local M = {}
 --- from the configuration and from the homes that own each value.
 ---@class aineo.claude.Settings
 ---@field cmd string[] the command that runs Claude Code, as `claude.cmd`
----@field cwd string the directory Claude Code runs in, which must exist: the editor's working directory
+---@field cwd string the directory Claude Code runs in, which must exist and be enterable: the editor's working directory
 ---@field mcp_servers table<string, table> the MCP servers Claude Code starts, by name, each in its `--mcp-config` server format
 ---@field allowed_tools string[] the tools Claude Code may call without asking the user
 ---@field instructions string the text appended to Claude Code's system prompt
@@ -27,25 +27,35 @@ local CHILD_ENVIRONMENT = { AINEO_CHILD = '1' }
 ---@type { buffer: integer, job: integer, ready: boolean?, exit_code: integer? }?
 local session
 
+--- Whether a session's Claude Code process has not ended yet — whatever
+--- became of its terminal.
+---
+---@return boolean
+local function is_process_alive()
+  return session ~= nil and session.exit_code == nil
+end
+
 --- Whether a session's Claude Code is running: its process has not ended and
 --- its terminal has not been wiped, which hangs the process up.
 ---
 ---@return boolean
 local function is_running()
-  return session ~= nil and session.exit_code == nil and vim.api.nvim_buf_is_valid(session.buffer)
+  return is_process_alive() and vim.api.nvim_buf_is_valid(session.buffer)
 end
 
---- Makes quitting Neovim stop a running Claude Code by its keys first
---- (`stop.stop_by_keys()`), so that none outlives the editor. Registering it
---- again replaces it.
+--- Makes quitting Neovim stop Claude Code by its keys first
+--- (`stop.stop_by_keys()`) while its process has not ended, so that none
+--- outlives the editor — also when its terminal was wiped just before, and
+--- the stop can only wait for the hangup to end it. Registering it again
+--- replaces it.
 local function stop_on_quit()
   vim.api.nvim_create_autocmd('VimLeavePre', {
     group = vim.api.nvim_create_augroup('aineo.claude', {}),
     desc = 'Stop Claude Code by its keys before Neovim quits',
     callback = function()
-      if is_running() then
+      if is_process_alive() then
         stop.stop_by_keys(session.job, function()
-          return not is_running()
+          return not is_process_alive()
         end)
       end
     end,
@@ -82,7 +92,10 @@ local function is_word_list(value, least)
 end
 
 --- Raises an error naming the first setting of `settings` whose value is not
---- of its kind, or, for `cwd`, not a directory that exists.
+--- of its kind, or, for `cwd`, not a directory that exists and can be
+--- entered. One that cannot be entered is refused here because Neovim 0.11.6
+--- does not refuse it: its terminal job then runs a copy of the editor in
+--- place of the command.
 ---
 ---@param settings aineo.claude.Settings
 local function validate_settings(settings)
@@ -90,8 +103,10 @@ local function validate_settings(settings)
     return is_word_list(value, 1)
   end, 'a list of at least one string')
   vim.validate('settings.cwd', settings.cwd, function(value)
-    return type(value) == 'string' and vim.fn.isdirectory(value) == 1
-  end, 'a directory that exists')
+    return type(value) == 'string'
+      and vim.fn.isdirectory(value) == 1
+      and vim.uv.fs_access(value, 'X') == true
+  end, 'a directory that exists and can be entered')
   vim.validate('settings.mcp_servers', settings.mcp_servers, 'table')
   vim.validate('settings.allowed_tools', settings.allowed_tools, function(value)
     return is_word_list(value, 0)
@@ -100,7 +115,7 @@ local function validate_settings(settings)
 end
 
 --- Runs `command` as a terminal job in the new, empty `buffer` and returns the
---- job's id. When the command cannot run, wipes `buffer` and raises an error
+--- job's id. When `jobstart()` cannot run it, wipes `buffer` and raises an error
 --- naming the command: `jobstart()`'s own, or, when `:silent!` has silenced
 --- that and `jobstart()` has returned 0 or -1 instead, one of its own.
 ---
@@ -152,16 +167,20 @@ end
 --- Show a new buffer in a window before Claude Code draws its first screen:
 --- its terminal takes its size from the first window that shows it, and until
 --- then has the rows of a hidden window — 5, at 80 columns, in Neovim 0.11.6 —
---- where Claude Code's prompt does not fit. Shown in the same tick, or from a
---- `vim.schedule()` callback, the process saw the window's size.
+--- where Claude Code's prompt does not fit, and the session never reads as
+--- ready. Shown in the same tick, or from a `vim.schedule()` callback, the
+--- process saw the window's size.
 ---
 --- A session whose terminal has been wiped counts as ended, since the wipe
 --- hangs its Claude Code up: a start then launches a new one.
 ---
 --- Raises an error naming the setting that is malformed — for `cwd`, a
---- directory that does not exist — or, when the command cannot run, an error
---- naming the command; either way it starts nothing and leaves the session as
---- it was.
+--- directory that does not exist or cannot be entered — or, when `jobstart()`
+--- cannot run the command, an error naming the command; either way it starts
+--- nothing and leaves the session as it was. A command that `jobstart()`
+--- starts but the system then cannot execute — a script whose interpreter is
+--- missing — raises nothing: its session reports `'exited'` with 122, the
+--- code Neovim 0.11.6's terminal job exits with then.
 ---
 ---@param settings aineo.claude.Settings
 ---@return integer buffer the terminal buffer Claude Code runs in
@@ -182,8 +201,10 @@ end
 --- Where the session stands: `'ready'` while Claude Code's input box is on
 --- its screen, once it has shown for a moment (`readiness.watch()`);
 --- `'starting'` while it is not — as Claude Code starts, and again while a
---- dialog takes its place; and `'exited'` with the exit code once its process
---- has ended. Nothing before a session has started.
+--- dialog takes its place; and `'exited'` once the session has ended, as
+--- `start_session()` counts it: from the moment its terminal is wiped, which
+--- hangs Claude Code up, and once its process has ended, with the exit code
+--- from then on. Nothing before a session has started.
 ---
 ---@return string? state
 ---@return integer? exit_code
@@ -191,7 +212,7 @@ function M.session_status()
   if not session then
     return nil
   end
-  if session.exit_code then
+  if not is_running() then
     return 'exited', session.exit_code
   end
   if session.ready then
