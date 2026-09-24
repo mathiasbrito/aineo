@@ -503,11 +503,12 @@ end
 T['quitting Neovim']['lets later exit handlers run when Claude’s terminal has just closed'] = function()
   local fake = claude.fake('quit-closed', 'ready')
   local ran = vim.fs.joinpath(fixture.directory('claude-quit-closed-handler'), 'ran')
+  claude.add_job_stopping_exit_handler(child)
   claude.start(child, fake)
   claude.wait_for_start(fake)
   claude.add_exit_handler(child, ran)
 
-  claude.quit(child, 'bdelete! | qall')
+  claude.quit(child)
 
   eq(claude.wait_for_file(ran), { 'ran' })
 end
