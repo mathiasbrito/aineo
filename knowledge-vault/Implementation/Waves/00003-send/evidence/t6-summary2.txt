@@ -1,0 +1,44 @@
+T6 facts, second run — measured by the orchestrator on 2026-09-24, 17:55–17:56 CEST, after the brief review of wave 3
+(findings 4 and 6). Claude Code 2.1.281 · Nvim 0.11.6 headless (--clean -i NONE, state, data and log under a scratch
+directory) · terminal 120x40 · cwd the aineo checkout (trusted by the user) · every CLAUDE* variable removed · three
+model turns. Driver: t6-driver2.lua (this folder). Unlike the first run, this one read readiness through aineo's own
+watcher: dev at c7a9c99, the session started with require('aineo.claude').start_session() wired as T7 will wire it,
+and session_status() polled. The user's shada and Neovim log were stat'ed before and after: unchanged.
+Placeholders as in t6-summary.txt: the account tier PLAN, the checkout ~/project/aineo.
+
+RESULTS
+(a) A three-line text as one bracketed paste followed by Enter, in ONE write: submitted as one message — its three
+    lines under one ❯ above the box 1.2 s later, Claude working (screen A) — and the reply followed.
+(b) A 401-line text of 23,716 bytes as one bracketed paste followed by Enter, in ONE write: submitted as one message
+    (its last lines above the box 1.5 s later, the footer reading "paste again to expand" for that moment — screen B);
+    the reply was on screen and Claude idle about 9.2 s after the write (the write at 7.67 s of the run, idle at 16.83 s).
+(c) session_status() polled every 50 ms from the moment the screen showed "esc to interrupt" until it no longer did —
+    a turn of 4.2 s: 82 samples, every one 'ready'. The input box stays on screen during a turn, and aineo's watcher
+    reads it as ready.
+(d) /exit then Enter: 'exited' with code 0.
+
+SCREEN A — A 1.2 s after a three-line paste+Enter in one write (the filler lines left out)
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 (1M context) with xhigh effort · Claude PLAN
+  ▝▝ ▝▝    ~/project/aineo · /rc
+❯ aineo T6 measurement, line one
+  line two
+  Reply with the single word THREELINES and nothing else. Use no tool.
+✶ Sock-hopping…
+                                                             ◉ xhigh · /effort
+────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt · ← 5 agents
+
+SCREEN B — B 1.5 s after a 400-line paste+Enter in one write (the filler lines left out)
+  aineo T6 measurement: ignore the filler above and reply with the single word
+  BIGPASTE and nothing else. Use no tool.
+✽ Razzmatazzing…
+  ⎿  Tip: Use ctrl+v to paste images from your clipboard
+                                                             ◉ xhigh · /effort
+────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────
+  paste again to expand
+

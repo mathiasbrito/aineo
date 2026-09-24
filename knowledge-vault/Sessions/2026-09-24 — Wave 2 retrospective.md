@@ -31,23 +31,23 @@
 | 15:06–16:56 | T4: fix round in (after a 90-minute whole-file mutant loop), re-measure, bounded correction by a fresh agent |
 | 17:08–17:32 | T4: the orchestrator's verification — on its head and on its files laid over `dev` — merged |
 
-**Findings, per review** (the verdicts are the reviewers'; each report in the orchestrator's scratch directory, its findings in the pull request's rounds and the packet's session note):
+**Findings, per review** (the verdicts are the reviewers', counted from each report's own headings; each report in the orchestrator's scratch directory, its findings in the pull request's rounds and the packet's session note). *The first version of this table took three records rows from the orchestrator's ledger rather than the reports and miscounted two integrity rows; the records review of PR #13 (finding 3) corrected them.*
 
 | Review | Agent | Result |
 |---|---|---|
-| records, PR #6 (wave-1 close) | `reviewer` | 9 CONFIRMED, 2 MISSING, 1 UNVERIFIABLE — among them Q5 moved to the MVP review with no record of anyone deciding it |
+| records, PR #6 (wave-1 close) | `reviewer` | 10 CONFIRMED, 2 MISSING, 1 UNVERIFIABLE by its headings — among them Q5 moved to the MVP review with no record of anyone deciding it |
 | brief, wave 2 | `reviewer` | 16 CONFIRMED, 1 MISSING, 1 UNVERIFIABLE; every brief "dispatch after corrections"; finding 16 a claude.ai Remote Control link in committed bytes — PR #6 closed unmerged, replaced by #7 |
 | attack, #9 (T3) | `neovim-lua-developer` | 12 CONFIRMED and a note, with a measured prototype fix |
-| test-integrity, #9 | `reviewer` | I1–I8, seven measured test fixes |
-| records, #9 | `reviewer` | 6 CONFIRMED, 1 MISSING, 2 UNVERIFIABLE — the readings numbered `R#`, colliding with the plan's risks |
+| test-integrity, #9 | `reviewer` | I1–I8, eight measured test fixes (F1–F7 and F3b) |
+| records, #9 | `reviewer` | 7 CONFIRMED, 1 MISSING, 2 UNVERIFIABLE by its headings — the readings numbered `R#`, colliding with the plan's risks |
 | re-measure, #9 | `neovim-lua-developer` | 11 findings: one defect the round introduced (a user's window taken for the file column), one fix that held only under `'nohidden'`, a restored session's Input name, record and pin gaps, and three limits present before the round |
 | attack, #10 (T5) | `neovim-claude-code-integrator` | 8 CONFIRMED, 1 MISSING, 1 UNVERIFIABLE; the central guarantee (hostile fields rendered as text) held |
-| test-integrity, #10 | `neovim-lua-developer` | I1–I7, measured fixes |
+| test-integrity, #10 | `neovim-lua-developer` | 6 findings, with measured test fixes |
 | records, #10 | `reviewer` | 6 findings — the mutant ledger, tests hard-coding the relay's path, schema and validator disagreeing on `null` |
 | re-measure, #10 | `neovim-claude-code-integrator` | counts held; 11 findings, four of them introduced by the round — the answer reader not binary-safe among them — and one present before it |
 | attack, #11 (T4) | `neovim-claude-code-integrator` | 8 CONFIRMED, 1 MISSING — readiness checked once, the MCP-server dialog read as ready |
 | test-integrity, #11 | `neovim-lua-developer` | 8 CONFIRMED, 2 REFUTED groups |
-| records, #11 | `reviewer` | 8 CONFIRMED, 4 MISSING — the readings a different list in every record |
+| records, #11 | `reviewer` | 9 CONFIRMED, 3 MISSING by its headings — the readings a different list in every record |
 | re-measure, #11 | `neovim-claude-code-reviewer` | counts held; 10 CONFIRMED, 2 REFUTED — a wiped terminal skipping the stop, an unenterable `cwd` running a copy of the editor |
 | records, #12 (effort) | `reviewer` | 11 findings — the 400 K rule credited to the user when it is the orchestrator's |
 
@@ -106,7 +106,7 @@ The three packet authors are the three largest rows, as in wave 1: an implemente
 
 - **A fix round or a correction goes to a fresh agent once its author's context passes 400 K** — the orchestrator's threshold, set after the user's concern about a 966 K context; recorded in the orchestrate skill by PR #12.
 - **Implementers run at `high` effort, reviewers at `xhigh`** — the user, 2026-09-24 ("keep xhigh for reviewers, set implementers to high"); the reviewer variants `neovim-lua-reviewer` and `neovim-claude-code-reviewer` carry it, since an `Agent` call cannot set effort. Verified in the transcripts: a reviewer's requests carry `"effort":"xhigh"`, an implementer's `"high"`.
-- **Send works while a turn runs, and Claude Code queues the message (D14)** — the user, 2026-09-24, over refusing during a turn, with the risk stated in the option: a permission dialog drawn in the 11–30 ms before the session notices it would take Send's Enter. Recorded as a limit.
+- **Send works while a turn runs, and Claude Code queues the message (D14)** — the user, 2026-09-24, over refusing during a turn, with the risk stated in the option: a permission dialog drawn in the 11–30 ms before the session notices it would receive Send's paste and Enter — that the Enter then answers it is inferred from the dialog's footer, not measured. Recorded as a limit (R4, MR49).
 - **On a bare start, aineo takes the screen from a startup dashboard (D15, resolving Q5)** — the user, 2026-09-24, over yielding to it.
 
 ## Learnings extracted
@@ -115,6 +115,8 @@ The three packet authors are the three largest rows, as in wave 1: an implemente
 - [[Learnings/A deleted scratch buffer written to again blocks quitting]]
 - [[Learnings/nvim --clean still loads plugins from the system site directories]]
 - [[Learnings/A hidden terminal buffer starts at five rows]]
+
+T5's other candidates stay in its session note, not extracted: "mutant kills through a child process must be assertions" is the reviewer charter's kill-counting rule already; `mkdir(…, 'p')` failing with E739 on a directory another process made, and a per-chunk line limit holding up to one chunk past it, are narrow enough that their notes are their home.
 
 **What the process taught:** a re-measure paid for itself on every pull request of this wave — each found defects its fix round had introduced or left unfixed; the size of a context, not the quality of an agent, decided when to hand a round over; and a mutant run against a whole file is the slowest step of a round when the file drives real processes.
 

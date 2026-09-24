@@ -66,7 +66,7 @@ mutant clearenv rc=2
 Fails (22) and Notes (0)
   Failed expectation for a string containing a part
   Failed expectation for equality
-  Text: "E5113: Error while calling lua chunk: ...es/agent-ace2f471f4b6b66ad/tests/helper\ns/fake_claude.lua:36: AINEO_FAKE_CLAUDE_RECORD is unset\nstack traceback:\n        [C]: in function 'assert'\n        ...es/agent-ace2f471f4b6b66ad/tests/helpers/fake_claude.lua:36: in main \nchunk\n\n[Process exited 1]\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  Text: "E5113: Error while calling lua chunk: ...<worktree>/tests/helper\ns/fake_claude.lua:36: AINEO_FAKE_CLAUDE_RECORD is unset\nstack traceback:\n        [C]: in function 'assert'\n        ...<worktree>/tests/helpers/fake_claude.lua:36: in main \nchunk\n\n[Process exited 1]\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
 FAIL in tests/test_claude.lua | quitting Neovim | ends a turn with one Ctrl-C before the double Ctrl-C:
 FAIL in tests/test_claude.lua | quitting Neovim | leaves no Claude that ignores its keys and the hangup running: tests/helpers/claude_session.lua:288: bad argument #1 to 'kill' (number expected, got nil)
 FAIL in tests/test_claude.lua | quitting Neovim | stops an idle Claude by a double Ctrl-C:
@@ -139,7 +139,7 @@ restored lua/aineo/claude/init.lua
 mutant noguard rc=2
 Fails (1) and Notes (0)
   Failed expectation for *no* error
-  Observed error: Error executing lua: ...ktrees/agent-ace2f471f4b6b66ad/lua/aineo/claude/init.lua:65: Invalid buffer id: 2
+  Observed error: Error executing lua: ...<worktree>/lua/aineo/claude/init.lua:65: Invalid buffer id: 2
 FAIL in tests/test_claude.lua | start_session() | starts Claude again after the old terminal was wiped:
 === noquit (lua/aineo/claude/init.lua)
 restored lua/aineo/claude/init.lua
