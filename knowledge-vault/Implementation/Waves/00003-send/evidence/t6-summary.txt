@@ -11,9 +11,10 @@ RESULTS
 1. At idle, a bracketed paste and Enter written in ONE write (ESC[200~ text ESC[201~ \r) submitted one message:
    1 s after the write the message stood above the box, submitted, with Claude working (screen A), and the reply
    was on screen about 2 s after the write (the write at 2.8 s of the run, the reply seen at 4.8 s). T2 had
-   measured the paste and the Enter as two writes 800 ms apart (../00002-layout-session-report/evidence/t2-summary.txt, Q1).
-2. During a turn, the input box — a rule, the ❯ line, a rule — stays on screen (screen B), so T4's readiness reads
-   'ready' while Claude works. What marks the turn is the footer's "esc to interrupt" and the spinner line above
+   measured the paste and the Enter as two writes 1.5 s apart (../00002-layout-session-report/evidence/t2-summary.txt, Q1; its driver t2-driver.lua) — corrected after the brief review of wave 3 (finding 11): this line first said 800 ms, the gap of T4's driver (t4-driver.lua).
+2. During a turn, the input box — a rule, the ❯ line, a rule — stays on screen (screen B). That T4's readiness therefore
+   reads 'ready' while Claude works was this run's inference; the second run measured it through aineo's watcher
+   (t6-summary2.txt, (c): 82 samples of 82 'ready'). What marks the turn is the footer's "esc to interrupt" and the spinner line above
    the box ("✳ Whirring…").
 3. During that turn, a bracketed paste and Enter in one write was QUEUED: 0.3 s later the message was shown above
    the box with "ctrl+enter to send now", and the box read "❯ Press up to edit queued messages" (screen C); the turn

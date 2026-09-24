@@ -12,7 +12,7 @@
 
 ## Scope
 
-The behaviours aineo v1 has where the plan's rows (D1–D13, C1–C9) are silent: readings a brief, a packet, a fix round or a correction took, which the user never chose — and the limits the reviews recorded that a user can meet. Reviewed at `dev` after wave 2 (T3, T4, T5); the waves that follow add their own at the end. The user asked to review the MVP once T1–T8 are in (2026-09-23); this list is that review's agenda.
+The behaviours aineo v1 has where the plan's rows (D1–D15, C1–C9) are silent: readings a brief, a packet, a fix round or a correction took, which the user never chose — and the limits the packets' session notes record that a user can meet in the editor. Gathered at `dev` `c7a9c99`, after wave 2 (T3, T4, T5); the waves that follow add their own at the end. **Left out, by rule:** limits a user cannot meet — a mutant no portable test can kill, JSON-RPC edges Claude Code never sends, a peer at the editor's address that is not Neovim, `serverInfo.version` — which stay in their session notes. The first version of this list left out nine limits a user can meet; the records review of PR #13 (finding 1) named them, and they are MR40–MR48. The user asked to review the MVP once T1–T8 are in (2026-09-23); this list is that review's agenda.
 
 The IDs are `MR#`, so they collide with neither the plan's `R#` risks nor a review's findings; each names its source — a brief's behaviour (`L#`, `S#`, `RP#`, `MC#`), a packet's reading (`LR#`), a review's finding — and the item of the wave-2 plan's list of fourteen where it came from there (*plan 1*–*plan 14*).
 
@@ -44,12 +44,13 @@ The IDs are `MR#`, so they collide with neither the plan's `R#` risks nor a revi
 | MR15 | Claude Code inherits the editor's environment unchanged, plus `AINEO_CHILD`. | S3, plan 5 |
 | MR16 | A restart wipes the dead terminal buffer, after the new one has taken its place in every window. | S6, plan 6 |
 | MR17 | Claude Code counts as ready 1.5 s after its input box shows, unbroken — the wait every measured run used; no shorter one was tried. | S4, plan 14, T4 reading 1 |
-| MR18 | Ready means the screen shows Claude Code's input box — a rule, the `❯` line, a draft's lines, a rule — and no dialog in its place (trust, MCP-server approval, permission); a session that was ready reads `'starting'` while a dialog shows. Only the terminal's own rows are read, never its scrollback. **Ready is not "no turn running"**: the input box stays on screen during a turn (measured 2026-09-24 on 2.1.281, `Implementation/Waves/00003-send/evidence/t6-summary.txt`). | S4, T4 readings 2 and 3 |
+| MR18 | Ready means the screen shows Claude Code's input box — a rule, the `❯` line, a draft's lines, a rule — and no dialog in its place (trust, MCP-server approval, permission); a session that was ready reads `'starting'` while a dialog shows. Only the terminal's own rows are read, never its scrollback. **Ready is not "no turn running"**: the input box stays on screen during a turn (measured 2026-09-24 on 2.1.281 through aineo's own watcher: 82 samples of 82 read `'ready'` through a turn — `Implementation/Waves/00003-send/evidence/t6-summary2.txt`). | S4, T4 readings 2 and 3 |
 | MR19 | Quitting stops Claude Code by its keys: one Ctrl-C, 2.5 s; a double Ctrl-C 0.3 s apart, 4 s; `jobstop()`, 5 s — 11.8 s at most, and about 4.4–5.3 s with Claude idle, **computed** from the waits and the measured exit, not measured end to end. | S7, plan 7, T4 reading 4 |
 | MR20 | Claude's terminal buffer is unlisted. | T4 reading 5 |
 | MR21 | `--allowedTools` comes last, one word per tool. | T4 reading 6 |
 | MR22 | The session runs in a `cwd` its caller gives (T7 gives `getcwd()`), refused unless it names a directory that exists and can be entered. | T4 reading 7 |
 | MR23 | Wiping a running Claude terminal ends the session: the next start launches a new Claude Code, and the status reads `'exited'` from the wipe. | T4 reading 8 |
+| MR50 | The fake `claude`'s modes the suites run — test design, not a behaviour the user meets; listed so this list and T4's nine readings agree. | T4 reading 9 |
 
 ## Readings — the report channel (C5, C6; T5)
 
@@ -74,8 +75,18 @@ The IDs are `MR#`, so they collide with neither the plan's `R#` risks nor a revi
 | MR35 | `nvim_win_set_config()` can move Claude's window to another tab; the next file opened from Input pulls the cursor there. | re-measure of PR #9, finding 10 |
 | MR36 | `:e a.txt<CR>q:` typed as one input raises a raw E11. | re-measure of PR #9, finding 11 |
 | MR37 | A dialog that drew its selected choice at the first column between two rules would read as ready; no recorded dialog does. | re-measure of PR #11, finding 4 |
-| MR38 | An earlier `VimLeavePre` handler that raises makes Neovim 0.11.6 skip aineo's stop; Claude then gets Neovim's own hangup. T8's health check and help name it. | attack review of PR #11, A5 |
-| MR39 | Two editors in one working directory racing to cut the records file can lose records (the re-measure of PR #10 measured 1–4 per run). | re-measure of PR #10, finding 5 |
+| MR38 | An earlier `VimLeavePre` handler that raises makes Neovim 0.11.6 skip aineo's stop; Claude then gets Neovim's own hangup (129), and **a hung Claude outlives the editor**. T8's health check and help name it. | attack review of PR #11, A5 |
+| MR39 | Two editors in one working directory racing to cut the records file can lose records: the re-measure of PR #10 lost 4 and 1 in two runs of 5000 reports per editor; the correction's own runs of the same probe lost 1, 0, 0, 12 and 1. | re-measure of PR #10, finding 5; T5 note › *Limits recorded in the correction* |
+| MR40 | A file that reaches an aineo window without a `BufWinEnter` is not redirected — another plugin's non-nested `User` autocommand running `:edit`, or a scratch buffer in Input made a file with `:setlocal buftype=` and `:file notes.md`. | T3, A5 |
+| MR41 | While another window is open, a pinned window can shrink, until that window closes or `\o`: `:help` after a user's `wincmd L` leaves Claude 1 column; `:vertical botright help`, 20; `:topleft vnew` leaves the right column 18; `:copen` leaves the Report 3 rows. | T3, A10 |
+| MR42 | A bare `:edit` in Input empties it; `u` brings the text back. | T3 limits |
+| MR43 | After `:split` in Input and closing Input's own window, the copy left is not an aineo window: `:edit` there is not redirected, and `\o` reopens Input below the Report while the copy's file stays in the right column. | T3 limits (the test-integrity review of #9's cross-note) |
+| MR44 | A report to an editor the user holds — at a hit-enter prompt, say — costs up to 5 s, reports sent meanwhile queue behind it, 5 s each, and the relay answers nothing else while it waits, pings included. | T5, A2 (fix round) |
+| MR45 | A record longer than 2 MiB shows when it arrives but never in a later editor, and a cut drops it — reachable under the 1 MiB line limit only with details made mostly of DEL or raw control characters. | T5 limits |
+| MR46 | The user's own commands in the Report: `:doautocmd BufReadCmd` appends every record a second time; `:file x` and `:saveas x` rename the Report and later reports go to the renamed buffer (`:saveas` also leaves an ordinary buffer named `aineo://report`). | T5 correction, re-measure of #10 finding 11 |
+| MR47 | A Claude Code dialog never recorded — login, theme, an API-key question, or one a later version adds — reads as not ready only if it draws no input box of its own; unmeasured. | T4 open threads |
+| MR48 | A redraw of Claude's input box that reaches the terminal in two refreshes 20 ms or more apart reads as not ready for about 1.5 s — a paste's own redraw included — so a Send in that time is refused. | re-measure of #11, finding 8 |
+| MR49 | **D14's accepted limit:** a permission dialog drawn in the 11–30 ms before readiness notices it receives Send's paste and Enter. What the dialog does with the pasted bytes, and whether the Enter then picks its highlighted `❯ 1. Yes`, is inferred from the dialog's footer ("Enter to confirm"), not measured. | D14; re-measure of #11, finding 8 |
 
 ## Disposition
 

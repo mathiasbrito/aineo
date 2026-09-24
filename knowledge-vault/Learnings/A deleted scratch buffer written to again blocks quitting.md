@@ -10,7 +10,7 @@ In Neovim 0.11.6, a `nofile` scratch buffer that the user `:bdelete`s loses its 
 
 ## Example
 
-T5's Report (`aineo://report`) was written to by each delivered report. The attack review of PR #10 (A3) deleted it and showed it again: the next report went into an ordinary modifiable buffer, and `:qall` failed with E37. The fix round counts a Report as showing only while it is `nofile`; the correction added "and loaded" after the re-measure found that `:bunload` keeps `'buftype'` while the buffer is unloaded (`lua/aineo/report/buffer.lua:66-78`, commits `65811ea`, `10892e1`).
+T5's Report (`aineo://report`) was written to by each delivered report. The attack review of PR #10 (A3) deleted it and showed it again: the next report went into an ordinary modifiable buffer, and `:qall` failed with E37. The fix round counts a Report as showing only while it is `nofile` (`65811ea`), and later dropped the packet's "and loaded" check as one no test could ask for (`33974fc`); the correction restored it (`10892e1`) after the re-measure found that `:bunload` keeps `'buftype'` while the buffer is unloaded — without the check, the next report showed twice (`lua/aineo/report/buffer.lua:66-78`).
 
 ## Why it matters
 
