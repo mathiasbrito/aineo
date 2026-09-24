@@ -11,7 +11,7 @@ local decoded = mcp_relay.decoded
 --- What the relay answers when the editor has not confirmed a report in time.
 local NOT_CONFIRMED = 'aineo sent the report, but the editor did not confirm it within 5 s:'
   .. ' it may be waiting for the user, at a hit-enter prompt for one.'
-  .. ' The report will show when the editor is free; do not send it again.'
+  .. ' The report is sent, not confirmed; do not send it again.'
 
 --- Starts a user's editor with a UI, its clock at 09:05, the state directory
 --- `.tests/fixtures/<state>` and the working directory `/projects/alpha`.
