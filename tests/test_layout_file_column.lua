@@ -289,6 +289,20 @@ T['the file column']['with a window across the screen, takes a second file at th
   )
 end
 
+T['the file column']['holding a changed file under hidden, shows a second file in its place'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  local file_window = child.lua_get('vim.api.nvim_get_current_win()')
+  child.lua('vim.api.nvim_buf_set_lines(0, 0, 1, false, { "changed" })')
+  layout.enter_window_showing(child, buffers.input)
+
+  child.cmd('edit ' .. layout.file('second.txt'))
+
+  eq(layout.window_count(child), 4)
+  eq(child.lua_get('vim.api.nvim_get_current_win()'), file_window)
+end
+
 T['the file column']['holding a changed file under nohidden, shows a second file above it'] = function()
   local buffers = layout.open_with_stand_ins(child)
   child.cmd('set nohidden')
@@ -378,6 +392,7 @@ local NOT_A_FILE = {
 T['with some of the three windows closed, a file opened in one that remains'] = MiniTest.new_set({
   parametrize = {
     { { 'input' }, 'report' },
+    { { 'report' }, 'input' },
     { { 'claude' }, 'input' },
     { { 'report', 'input' }, 'claude' },
   },
@@ -399,6 +414,32 @@ T['with some of the three windows closed, a file opened in one that remains']['g
   eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { remaining_window }), buffers[remaining])
   eq(child.lua_get('vim.api.nvim_get_current_buf()'), child.lua_get('vim.fn.bufnr(...)', { path }))
   eq(layout.window_count(child), count + 1)
+end
+
+T['with the window of Claude closed, a file opened in Input'] = MiniTest.new_set()
+
+T['with the window of Claude closed, a file opened in Input']['opens a column left of the right one'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.close_windows(child, buffers, { 'claude' })
+  local input_window = layout.window_showing(child, buffers.input)
+  layout.enter_window_showing(child, buffers.input)
+
+  child.cmd('edit ' .. layout.file('first.txt'))
+
+  local file = layout.box(child, child.lua_get('vim.api.nvim_get_current_win()'))
+  local input = layout.box(child, input_window)
+  eq({ file.col, input.col }, { 0, file.width + 1 })
+end
+
+T['with the window of Claude closed, a file opened in Input']['opens its column in the tab of the layout when another tab is shown'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.close_windows(child, buffers, { 'claude' })
+  layout.enter_window_showing(child, buffers.input)
+
+  child.lua('vim.cmd.edit(...); vim.cmd.tabnew()', { layout.file('first.txt') })
+
+  eq(child.lua_get('vim.api.nvim_tabpage_get_number(0)'), 1)
+  eq(layout.window_count(child), 3)
 end
 
 T['with the layout closed'] = MiniTest.new_set()
