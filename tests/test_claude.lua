@@ -543,16 +543,31 @@ T['session_status()']['is exited once Claude exits with its cursor below the inp
   eq(status, { 'exited', 0 })
 end
 
-T['session_status()']['is never ready while no window has shown its terminal'] = function()
-  local fake = claude.fake('hidden', 'ready')
+T['session_status()']['is ready when its input box fits a terminal no window has shown'] = function()
+  local fake = claude.fake('hidden', 'input-box')
+
   local buffer = claude.start_hidden(child, fake)
   MiniTest.finally(function()
     claude.end_by_keys(child, fake, buffer)
   end)
 
-  claude.wait_for_screen(child, buffer, '❯')
+  eq(claude.wait_for_status(child, 'ready'), { 'ready' })
+end
 
-  eq(claude.wait_for_status(child, 'ready'), { 'starting' })
+T['session_status()']['is ready again once the prompt returns while no window shows it'] = function()
+  local fake = claude.fake('asks-hidden', 'asks')
+  local buffer = claude.start(child, fake)
+  MiniTest.finally(function()
+    claude.end_by_keys(child, fake, buffer)
+  end)
+  eq(claude.wait_for_status(child, 'ready'), { 'ready' })
+  claude.press_keys(child, buffer, '\r')
+  eq(claude.wait_for_status(child, 'starting'), { 'starting' })
+  child.cmd('enew')
+
+  claude.press_keys(child, buffer, '\27')
+
+  eq(claude.wait_for_status(child, 'ready'), { 'ready' })
 end
 
 T['session_status()']['is not ready once Claude has exited, even right after its prompt'] = function()

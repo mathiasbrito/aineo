@@ -66,6 +66,7 @@ local DRAFT = 'draft-2.1.281.bytes'
 --- recordings leave out, each named for what it holds.
 local BOX_IN_SCROLLBACK = 'synthetic-box-in-scrollback.bytes'
 local CURSOR_BELOW_BOX = 'synthetic-cursor-below-box.bytes'
+local INPUT_BOX = 'synthetic-input-box.screen'
 local NO_RULE_ABOVE = 'synthetic-no-rule-above.screen'
 local NO_RULE_BELOW = 'synthetic-no-rule-below.screen'
 
@@ -80,6 +81,7 @@ local MODES = {
   trust = { screens = { TRUST_DIALOG } },
   ['mcp-server'] = { screens = { MCP_SERVER_DIALOG } },
   ['box-in-scrollback'] = { screens = { BOX_IN_SCROLLBACK, TRUST_DIALOG } },
+  ['input-box'] = { screens = { INPUT_BOX } },
   ['no-rule-above'] = { screens = { NO_RULE_ABOVE } },
   ['no-rule-below'] = { screens = { NO_RULE_BELOW } },
   asks = { screens = { STARTUP }, on_enter = PERMISSION_DIALOG, on_escape = PERMISSION_DENIED },
