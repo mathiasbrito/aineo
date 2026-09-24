@@ -1,7 +1,7 @@
 # 2026-09-24 — T4 Claude session
 
 **Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-claude-code-integrator`)
-**Branch:** `feature/t4-claude-session` · **Pull request:** into `dev`, opened with this note
+**Branch:** `feature/t4-claude-session` · **Pull request:** #11, into `dev`
 
 ## Links
 
