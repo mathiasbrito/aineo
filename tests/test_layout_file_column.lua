@@ -240,6 +240,34 @@ T['the file column']['split in two, takes the next file in the window that remai
   eq(child.lua_get('vim.fn.bufname()'), layout.file('second.txt'))
 end
 
+--- Commands that open a window across the whole screen from Input: an empty
+--- window at the bottom, and help, which opens at the top because no aineo
+--- window is as wide as the screen.
+local OPEN_A_BOTTOM_WINDOW = 'botright 6new'
+local OPEN_HELP = 'help'
+
+T['the file column']['with a window across the screen, takes a second file at thirds'] =
+  MiniTest.new_set({ parametrize = { { OPEN_A_BOTTOM_WINDOW }, { OPEN_HELP } } })
+
+T['the file column']['with a window across the screen, takes a second file at thirds']['after'] = function(
+  command
+)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd(command)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  layout.enter_window_showing(child, buffers.report)
+
+  child.cmd('edit ' .. layout.file('second.txt'))
+
+  eq(layout.window_count(child), 5)
+  layout.expect_near(
+    layout.box(child, layout.window_showing(child, buffers.claude)).width,
+    (layout.COLUMNS - 2) / 3
+  )
+end
+
 T['the file column']['opens right of Claude with a window left of Claude'] = function()
   local buffers = layout.open_with_stand_ins(child)
   local claude_window = layout.window_showing(child, buffers.claude)
@@ -288,19 +316,46 @@ local NOT_A_FILE = {
   end,
 }
 
+T['with some of the three windows closed, a file opened in one that remains'] = MiniTest.new_set({
+  parametrize = {
+    { { 'input' }, 'report' },
+    { { 'claude' }, 'input' },
+    { { 'report', 'input' }, 'claude' },
+  },
+})
+
+T['with some of the three windows closed, a file opened in one that remains']['goes to a file column'] = function(
+  closed,
+  remaining
+)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.close_windows(child, buffers, closed)
+  local remaining_window = layout.window_showing(child, buffers[remaining])
+  local count = layout.window_count(child)
+  local path = layout.file('first.txt')
+  layout.enter_window_showing(child, buffers[remaining])
+
+  child.cmd('edit ' .. path)
+
+  eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { remaining_window }), buffers[remaining])
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), child.lua_get('vim.fn.bufnr(...)', { path }))
+  eq(layout.window_count(child), count + 1)
+end
+
 T['with the layout closed'] = MiniTest.new_set()
 
-T['with the layout closed']['a file opened in what was Input stays there, without an error'] = function()
+T['with the layout closed']['a file opened in the window left stays there, without an error'] = function()
   local buffers = layout.open_with_stand_ins(child)
-  layout.close_windows(child, buffers, { 'claude', 'report' })
-  local input_window = layout.window_showing(child, buffers.input)
-  local path = layout.file('first.txt')
   layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  child.cmd('only')
+  local window = child.lua_get('vim.api.nvim_get_current_win()')
+  local path = layout.file('second.txt')
 
   child.cmd('edit ' .. path)
 
   eq(
-    child.lua_get('vim.api.nvim_win_get_buf(...)', { input_window }),
+    child.lua_get('vim.api.nvim_win_get_buf(...)', { window }),
     child.lua_get('vim.fn.bufnr(...)', { path })
   )
   eq(layout.window_count(child), 1)
@@ -316,6 +371,24 @@ T['a file whose aineo window closes before the move']['is left alone, without an
   child.lua('vim.cmd.edit(...); vim.cmd.close()', { layout.file('first.txt') })
 
   eq(layout.window_count(child), 2)
+  eq(child.lua_get('vim.v.errmsg'), '')
+end
+
+T['a file whose aineo window closes and reopens before the move'] = MiniTest.new_set()
+
+T['a file whose aineo window closes and reopens before the move']['is left alone, without an error'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.report)
+
+  child.lua(
+    [[local path, arrangement = ...
+    vim.cmd.edit(path)
+    vim.cmd.close()
+    require('aineo.layout').open(arrangement)]],
+    { layout.file('first.txt'), layout.arrangement(buffers) }
+  )
+
+  eq(layout.window_count(child), 3)
   eq(child.lua_get('vim.v.errmsg'), '')
 end
 
@@ -349,6 +422,23 @@ T['a buffer that is not a file, shown in Input']['stays there'] = function(kind)
 
   eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { input_window }), buffer)
   eq(layout.window_count(child), 3)
+end
+
+T['the Report deleted with :bdelete and shown again'] = MiniTest.new_set()
+
+T['the Report deleted with :bdelete and shown again']['stays in its window'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  local help = NOT_A_FILE.help()
+  layout.enter_window_showing(child, buffers.report)
+  child.cmd('buffer ' .. help)
+  child.cmd('bdelete ' .. buffers.report)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(layout.window_count(child), 3)
+  eq(child.lua_get('vim.fn.win_findbuf(...)', { buffers.report }), {
+    layout.window_showing(child, buffers.report),
+  })
 end
 
 return T
