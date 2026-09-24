@@ -355,6 +355,98 @@ T['the file column']['holding a changed file under nohidden, shows a second file
   eq(above.row + above.height + 1, layout.box(child, changed_window).row)
 end
 
+T['the file column holding a changed file unloaded when hidden'] = MiniTest.new_set({
+  parametrize = { { 'wipe' }, { 'delete' }, { 'unload' } },
+})
+
+T['the file column holding a changed file unloaded when hidden']['takes a second file under hidden, without an error'] = function(
+  bufhidden
+)
+  local buffers = layout.open_with_stand_ins(child)
+  local input_window = layout.window_showing(child, buffers.input)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  child.lua(
+    'vim.bo.bufhidden = ...; vim.api.nvim_buf_set_lines(0, 0, 1, false, { "changed" })',
+    { bufhidden }
+  )
+  layout.enter_window_showing(child, buffers.input)
+
+  child.cmd('edit ' .. layout.file('second.txt'))
+
+  eq(child.lua_get('vim.v.errmsg'), '')
+  eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { input_window }), buffers.input)
+end
+
+T['the file column holding a changed file kept loaded when hidden'] = MiniTest.new_set({
+  parametrize = { { 'set hidden' }, { 'set nohidden' } },
+})
+
+T['the file column holding a changed file kept loaded when hidden']['shows a second file in its place, after'] = function(
+  command
+)
+  local buffers = layout.open_with_stand_ins(child)
+  child.cmd(command)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  local file_window = child.lua_get('vim.api.nvim_get_current_win()')
+  child.lua('vim.bo.bufhidden = "hide"; vim.api.nvim_buf_set_lines(0, 0, 1, false, { "changed" })')
+  layout.enter_window_showing(child, buffers.input)
+
+  child.cmd('edit ' .. layout.file('second.txt'))
+
+  eq(layout.window_count(child), 4)
+  eq(child.lua_get('vim.api.nvim_get_current_win()'), file_window)
+end
+
+T['the file column']['holding a changed file in two windows under nohidden, shows a second file in one'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  child.cmd('set nohidden')
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  local changed = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.lua('vim.api.nvim_buf_set_lines(0, 0, 1, false, { "changed" })')
+  child.cmd('split')
+  layout.enter_window_showing(child, buffers.input)
+
+  child.cmd('edit ' .. layout.file('second.txt'))
+
+  eq(layout.window_count(child), 5)
+  eq(#child.lua_get('vim.fn.win_findbuf(...)', { changed }), 1)
+end
+
+--- Changes the first line of the buffer in the current window of `child`.
+local function change_current_buffer()
+  child.lua('vim.api.nvim_buf_set_lines(0, 0, 1, false, { "changed" })')
+end
+
+T['the file column']['with no room above its changed files under nohidden, leaves the next file where it opened, with a warning'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  child.cmd('set nohidden')
+  child.o.lines = 5
+  local input_window = layout.window_showing(child, buffers.input)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  change_current_buffer()
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('second.txt'))
+  change_current_buffer()
+  local third = layout.file('third.txt')
+  layout.enter_window_showing(child, buffers.input)
+
+  child.cmd('edit ' .. third)
+
+  eq(child.lua_get('vim.v.errmsg'), '')
+  eq(
+    child.lua_get('vim.api.nvim_win_get_buf(...)', { input_window }),
+    child.lua_get('vim.fn.bufnr(...)', { third })
+  )
+  eq(
+    child.lua_get([[vim.api.nvim_exec2('messages', { output = true }).output]]),
+    'aineo: the file column has no room for third.txt, which stays where it was opened'
+  )
+end
+
 T['the file column']['holding no change under nohidden, shows a second file in its place'] = function()
   local buffers = layout.open_with_stand_ins(child)
   child.cmd('set nohidden')
