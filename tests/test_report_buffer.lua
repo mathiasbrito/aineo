@@ -310,6 +310,21 @@ end
 
 T['the records'] = MiniTest.new_set()
 
+--- A records line of exactly `bytes` bytes, its newline counted, holding a
+--- report received at 09:05 whose task is `Task <number>`.
+---
+---@param number integer
+---@param bytes integer
+---@return string
+local function record_line(number, bytes)
+  local record = {
+    time = '2026-09-24T09:05:00',
+    report = { task = ('Task %04d'):format(number), status = 'done', summary = 'Summary' },
+  }
+  record.report.details = ('x'):rep(bytes - 1 - #vim.json.encode(record) - #',"details":""')
+  return vim.json.encode(record)
+end
+
 --- The records file of `/projects/alpha` under `state_directory`, holding
 --- the records numbered `first` to `last`, each a line of exactly 1 KiB (its
 --- newline counted) whose task is `Task <number>`.
@@ -331,16 +346,17 @@ local function records_file_holding(child_editor, state_directory, first, last)
   end, { path = state_directory, type = 'file' })[1]
   local lines = {}
   for number = first, last do
-    local record = {
-      time = '2026-09-24T09:05:00',
-      report = { task = ('Task %04d'):format(number), status = 'done', summary = 'Summary' },
-    }
-    record.report.details = ('x'):rep(1023 - #vim.json.encode(record) - #',"details":""')
-    table.insert(lines, vim.json.encode(record))
+    table.insert(lines, record_line(number, 1024))
   end
   vim.fn.writefile(lines, file)
   return file
 end
+
+--- The expression, run in the child, that lists the header line of each
+--- report its Report shows, leaving out the lines of their details.
+local REPORT_HEADERS = [[vim.tbl_filter(function(line)
+  return line:find('^%d')
+end, vim.api.nvim_buf_get_lines(require('aineo.report').report_buffer(), 0, -1, false))]]
 
 T['the records']['show the newest 2 MiB of them'] = function()
   local state_directory = fixture.directory('report-state')
@@ -351,9 +367,7 @@ T['the records']['show the newest 2 MiB of them'] = function()
     working_directory = '/projects/alpha',
   })
 
-  local headers = child.lua_get([[vim.tbl_filter(function(line)
-    return line:find('^%d')
-  end, vim.api.nvim_buf_get_lines(require('aineo.report').report_buffer(), 0, -1, false))]])
+  local headers = child.lua_get(REPORT_HEADERS)
 
   eq({ vim.uv.fs_stat(file).size, #headers, headers[1], headers[#headers] }, {
     3 * 1024 * 1024,
@@ -361,6 +375,37 @@ T['the records']['show the newest 2 MiB of them'] = function()
     '09:05 [done] Task 1025 — Summary',
     '09:05 [done] Task 3072 — Summary',
   })
+end
+
+T['the records']['show whole records only, when the newest 2 MiB begin inside one'] = function()
+  local state_directory = fixture.directory('report-state')
+  local file = records_file_holding(child, state_directory, 1, 3072)
+  vim.fn.writefile({ record_line(3073, 1536) }, file, 'a')
+  report_editor.start(child, {
+    times = { '2026-09-24T10:00:00' },
+    state_directory = state_directory,
+    working_directory = '/projects/alpha',
+  })
+
+  local headers = child.lua_get(REPORT_HEADERS)
+  local messages = child.cmd_capture('messages')
+
+  eq(
+    { #headers, headers[1], headers[#headers], messages },
+    { 2047, '09:05 [done] Task 1027 — Summary', '09:05 [done] Task 3073 — Summary', '' }
+  )
+end
+
+--- The task of the report the records line `line` holds, or nil when the
+--- line holds no record: a test reading a broken line fails on its assertion.
+---
+---@param line string
+---@return string?
+local function recorded_task(line)
+  local read, task = pcall(function()
+    return vim.json.decode(line).report.task
+  end)
+  return read and task or nil
 end
 
 T['the records']['are cut to their newest 2 MiB once they have grown past 4 MiB'] = function()
@@ -375,11 +420,28 @@ T['the records']['are cut to their newest 2 MiB once they have grown past 4 MiB'
   report_editor.receive(child, { task = 'Newest', status = 'done', summary = 'Kept' })
 
   local lines = vim.fn.readfile(file)
-  eq({
-    #lines,
-    vim.json.decode(lines[1]).report.task,
-    vim.json.decode(lines[#lines]).report.task,
-  }, { 2049, 'Task 2050', 'Newest' })
+  eq(
+    { #lines, recorded_task(lines[1]), recorded_task(lines[#lines]) },
+    { 2049, 'Task 2050', 'Newest' }
+  )
+end
+
+T['the records']['are kept whole up to 4 MiB when a report is added'] = function()
+  local state_directory = fixture.directory('report-state')
+  local file = records_file_holding(child, state_directory, 1, 4096)
+  report_editor.start(child, {
+    times = { '2026-09-24T10:00:00' },
+    state_directory = state_directory,
+    working_directory = '/projects/alpha',
+  })
+
+  report_editor.receive(child, { task = 'Newest', status = 'done', summary = 'Kept' })
+
+  local lines = vim.fn.readfile(file)
+  eq(
+    { #lines, recorded_task(lines[1]), recorded_task(lines[#lines]) },
+    { 4097, 'Task 0001', 'Newest' }
+  )
 end
 
 T['the records']['show a report again, at its own time, in a new editor in the same directory'] = function()
