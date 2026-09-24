@@ -45,17 +45,15 @@ function M.create_report_buffer(fill)
   return buffer
 end
 
---- Whether `buffer` can still show reports: it exists, is loaded, and is
---- still no file. A deleted (`:bdelete`) Report is unloaded, and one the user
+--- Whether `buffer` can still show reports: it exists and is still no file.
+--- A deleted (`:bdelete`) Report loses its `'buftype'`, and one the user
 --- shows again (`:buffer #`) comes back as an ordinary buffer, which a report
 --- would leave modified and `:qall` would then refuse to leave (E37).
 ---
 ---@param buffer integer
 ---@return boolean
 function M.is_showing(buffer)
-  return vim.api.nvim_buf_is_valid(buffer)
-    and vim.api.nvim_buf_is_loaded(buffer)
-    and vim.bo[buffer].buftype == 'nofile'
+  return vim.api.nvim_buf_is_valid(buffer) and vim.bo[buffer].buftype == 'nofile'
 end
 
 --- Wipes `buffer` out when it still exists, freeing its name.
