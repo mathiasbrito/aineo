@@ -2,6 +2,7 @@
 name: neovim-lua-developer
 description: aineo's Lua specialist for Neovim plugin development — the runtime layout and lazy loading (plugin/, lua/, ftplugin/, doc/), configuration apart from initialization, the Nvim API and its three indexing conventions, the event loop and fast callbacks, health checks, vimdoc, and headless test isolation — bound by the implementer or reviewer charter as the brief names. Use for a packet or a review that touches Lua under lua/, plugin/, ftplugin/ or after/, a health check, vimdoc under doc/, or the plugin's test harness.
 model: opus
+effort: high
 isolation: worktree
 skills:
   - tdd

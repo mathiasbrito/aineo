@@ -4,7 +4,7 @@ Fill every slot. Draft it as `<scratchpad>/orch-brief-<slug>.md`, have it review
 
 ---
 
-**Your role: implement.** A specialist reads `.claude/agents/implementer.md` first; it binds unchanged.
+**Your role: implement.** Your worktree starts from `main`: check out your branch from `origin/dev` before you read anything under `.claude/`. A specialist reads `.claude/agents/implementer.md` first; it binds unchanged.
 
 You are dispatched by the orchestrator to implement **one packet** of `<path to the task list>`. Your definition tells you how to work; this brief tells you what.
 
