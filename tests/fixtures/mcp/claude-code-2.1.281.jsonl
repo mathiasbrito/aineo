@@ -1,0 +1,10 @@
+# What Claude Code 2.1.281 (interactive) sends a stdio MCP server, one JSON-RPC message per line; lines starting with # are comments.
+# initialize, notifications/initialized and tools/list: verbatim, recorded by the orchestrator on 2026-09-24 against the real CLI
+# (knowledge-vault/Implementation/Waves/00002-layout-session-report/evidence/t2-handshake.txt).
+# tools/call: reconstructed. Its params keep the shape recorded from Claude Code 2.1.281 on 2026-09-23 — name, arguments, and _meta
+# with claudecode/toolUseId and progressToken (evidence/t2-mcp-probe-log.txt, the tool-use id replaced) — around this server's tool
+# and a report of its own; the request's id was not recorded, so its id is this fixture's.
+{"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{"roots":{"listChanged":true},"elicitation":{}},"clientInfo":{"name":"claude-code","title":"Claude Code","version":"2.1.281","description":"Anthropic's agentic coding tool","websiteUrl":"https://claude.com/claude-code"}},"jsonrpc":"2.0","id":0}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"method":"tools/list","jsonrpc":"2.0","id":1}
+{"method":"tools/call","params":{"name":"report","arguments":{"task":"Refactor the parser","status":"done","summary":"All tests pass"},"_meta":{"claudecode/toolUseId":"toolu_<id-removed>","progressToken":2}},"jsonrpc":"2.0","id":2}
