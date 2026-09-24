@@ -158,10 +158,6 @@ local function press_ctrl_c(now_ms)
   keys.last_press_ms = now_ms
 end
 
-local stdin = vim.uv.new_tty(0, true)
-local stdout = vim.uv.new_tty(1, false)
-assert(stdin:set_mode(1) == 0, 'cannot put the terminal in raw mode')
-
 vim.uv.new_signal():start('sighup', function()
   finish('hangup', HANGUP_CODE)
 end)
@@ -171,6 +167,16 @@ end)
 vim.defer_fn(function()
   finish('lifetime', 1)
 end, LIFETIME_MS)
+
+-- `stty` on the inherited terminal, and a pipe on its descriptor, rather than
+-- `vim.uv.new_tty()`: libuv reopens a terminal by its path, and that `open()`
+-- can block, deaf to the hangup, when Neovim closes the terminal as the fake
+-- starts.
+assert(os.execute('stty raw -echo') == 0, 'cannot put the terminal in raw mode')
+local stdin = vim.uv.new_pipe(false)
+stdin:open(0)
+local stdout = vim.uv.new_pipe(false)
+stdout:open(1)
 
 record({
   argv = { unpack(arg) },
