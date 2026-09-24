@@ -88,15 +88,17 @@ local function write_to(file, flags, text)
 end
 
 --- Cuts `file` down to its newest records within `RECORDS_KEPT_BYTES`: they
---- are written to a file beside it, which then replaces it. When `file` is a
---- symbolic link, the file it leads to is cut, and the link stays.
+--- are written to a file beside it, which then replaces it. That file is
+--- named for this process, so that two editors cutting at once never write
+--- or move each other's. When `file` is a symbolic link, the file it leads
+--- to is cut, and the link stays.
 ---
 --- Raises an error naming `file` when it cannot be read, or cut.
 ---
 ---@param file string
 local function keep_newest_records(file)
   local target = vim.uv.fs_realpath(file) or file
-  local cut = target .. '.cut'
+  local cut = ('%s.%d.cut'):format(target, vim.uv.os_getpid())
   local failure = write_to(
     cut,
     'w',
