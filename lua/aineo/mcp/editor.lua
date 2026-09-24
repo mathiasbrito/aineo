@@ -15,7 +15,8 @@ local RECEIVE_REPORT = "require('aineo.report').receive_report(...)"
 --- done.
 local CONFIRMATION_TIMEOUT_MS = 5000
 
---- The message types and the one request id of msgpack-RPC (`:h rpc`).
+--- The message types of msgpack-RPC (`:h rpc`), and the id of the one
+--- request each connection to the editor carries.
 local REQUEST, RESPONSE = 0, 1
 local REQUEST_ID = 1
 
@@ -42,7 +43,9 @@ end
 
 --- A reader of what the editor writes back on `call`'s connection: it keeps
 --- the answer to the request and closes the connection then, and notes when
---- the editor closes it first. Anything else the editor sends is ignored.
+--- the editor closes it first. The connection carries one request, so the
+--- one response on it is that answer; anything else the editor sends, such
+--- as a notification a plugin broadcasts to every channel, is ignored.
 ---
 ---@param call aineo.mcp.Call
 ---@return fun(channel: integer, data: string[])
@@ -59,7 +62,7 @@ local function answer_reader(call)
       if message == nil then
         return
       end
-      if message[1] == RESPONSE and message[2] == REQUEST_ID then
+      if message[1] == RESPONSE then
         call.response = message
         vim.fn.chanclose(channel)
       end
