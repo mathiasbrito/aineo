@@ -78,13 +78,14 @@ T['a file opened in Input after the layout was reopened from another tab'] = Min
 
 T['a file opened in Input after the layout was reopened from another tab']['leaves that tab alone'] = function()
   local buffers = layout.open_with_stand_ins(child)
+  local input_window = layout.window_showing(child, buffers.input)
   layout.close_windows(child, buffers, { 'claude' })
   child.cmd('tabnew ' .. layout.file('second.txt'))
   child.cmd('vsplit ' .. layout.file('third.txt'))
   local tab_buffers =
     child.lua_get('vim.tbl_map(vim.api.nvim_win_get_buf, vim.api.nvim_tabpage_list_wins(0))')
   layout.open(child, layout.arrangement(buffers))
-  layout.enter_window_showing(child, buffers.input)
+  child.lua('vim.api.nvim_set_current_win(...)', { input_window })
 
   child.cmd('edit ' .. layout.file('first.txt'))
 

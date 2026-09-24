@@ -242,6 +242,30 @@ T['open()']['from a floating window, opens the layout with the cursor in Input']
   eq(layout.window_count(child), 4)
 end
 
+T['open()']['from a floating window over two files, keeps the first as the file column'] = function()
+  layout.start(child)
+  local first = layout.file('first.txt')
+  child.cmd('edit ' .. first)
+  child.cmd('rightbelow vsplit ' .. layout.file('second.txt'))
+  local float = child.lua_get(OPEN_A_FLOAT)
+  child.lua('vim.api.nvim_set_current_win(...)', { float.window })
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(#child.lua_get('vim.fn.win_findbuf(vim.fn.bufnr(...))', { first }), 1)
+end
+
+T['open()']['stays in Normal mode when entering a terminal starts Insert mode'] = function()
+  layout.start(child)
+  local buffers = layout.stand_ins(child)
+  child.cmd('autocmd BufEnter term://* startinsert')
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(child.api.nvim_get_mode().mode, 'n')
+end
+
 T['open()']['opens once the screen has room, after failing for the want of it'] = function()
   layout.start(child)
   local buffers = layout.stand_ins(child)

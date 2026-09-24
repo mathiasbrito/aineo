@@ -289,6 +289,21 @@ T['the file column']['with a window across the screen, takes a second file at th
   )
 end
 
+T['the file column']['with a window across the bottom and one down the left, takes a second file'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd(OPEN_A_BOTTOM_WINDOW)
+  child.cmd('topleft vnew')
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  local count = layout.window_count(child)
+  layout.enter_window_showing(child, buffers.report)
+
+  child.cmd('edit ' .. layout.file('second.txt'))
+
+  eq(layout.window_count(child), count)
+end
+
 T['the file column']['holding a changed file under hidden, shows a second file in its place'] = function()
   local buffers = layout.open_with_stand_ins(child)
   layout.enter_window_showing(child, buffers.input)
@@ -310,6 +325,7 @@ T['the file column']['holding a changed file under nohidden, shows a second file
   layout.enter_window_showing(child, buffers.input)
   child.cmd('edit ' .. layout.file('first.txt'))
   local changed = child.lua_get('vim.api.nvim_get_current_buf()')
+  local changed_window = child.lua_get('vim.api.nvim_get_current_win()')
   child.lua('vim.api.nvim_buf_set_lines(..., 0, 1, false, { "changed" })', { changed })
   local second = layout.file('second.txt')
   layout.enter_window_showing(child, buffers.input)
@@ -323,6 +339,22 @@ T['the file column']['holding a changed file under nohidden, shows a second file
     child.lua_get('vim.fn.bufnr(...)', { second })
   )
   eq(#child.lua_get('vim.fn.win_findbuf(...)', { changed }), 1)
+  local above = layout.box(child, child.lua_get('vim.api.nvim_get_current_win()'))
+  eq(above.row + above.height + 1, layout.box(child, changed_window).row)
+end
+
+T['the file column']['holding no change under nohidden, shows a second file in its place'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  child.cmd('set nohidden')
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  local file_window = child.lua_get('vim.api.nvim_get_current_win()')
+  layout.enter_window_showing(child, buffers.input)
+
+  child.cmd('edit ' .. layout.file('second.txt'))
+
+  eq(layout.window_count(child), 4)
+  eq(child.lua_get('vim.api.nvim_get_current_win()'), file_window)
 end
 
 T['the file column']['holding a changed file under nohidden, takes that file again in place'] = function()
@@ -490,6 +522,31 @@ T['a file whose aineo window closes and reopens before the move']['is left alone
 
   eq(layout.window_count(child), 3)
   eq(child.lua_get('vim.v.errmsg'), '')
+end
+
+T['a file shown in a window before it became Input'] = MiniTest.new_set()
+
+T['a file shown in a window before it became Input']['stays there when shown again without an event'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  layout.close_windows(child, buffers, { 'claude', 'report', 'input' })
+  local window = child.lua_get('vim.api.nvim_get_current_win()')
+  local second = layout.file('second.txt')
+
+  child.lua(
+    [[local path, arrangement = ...
+    vim.cmd.edit(path)
+    vim.cmd('enew | setlocal buftype=nofile')
+    require('aineo.layout').open(arrangement)
+    vim.cmd('noautocmd buffer ' .. vim.fn.fnameescape(path))]],
+    { second, layout.arrangement(buffers) }
+  )
+
+  eq(
+    child.lua_get('vim.api.nvim_win_get_buf(...)', { window }),
+    child.lua_get('vim.fn.bufnr(...)', { second })
+  )
 end
 
 T['a file that leaves its aineo window before the move'] = MiniTest.new_set()
