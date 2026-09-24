@@ -220,4 +220,21 @@ function M.session_status()
   return 'starting'
 end
 
+--- Writes `bytes` to the terminal Claude Code runs in, unchanged and in one
+--- write, as keys typed or pasted there reach it. It writes whatever
+--- `session_status()` reports, a dialog's screen included; when to write is
+--- the caller's to decide.
+---
+--- Raises an error when no session is running as `start_session()` counts
+--- it — before one has started, once its process has ended, and once its
+--- terminal has been wiped — and writes nothing then.
+---
+---@param bytes string
+function M.write_to_session(bytes)
+  if not is_running() then
+    error('aineo.claude: no Claude Code session is running to write to', 2)
+  end
+  vim.api.nvim_chan_send(session.job, bytes)
+end
+
 return M

@@ -61,6 +61,7 @@ local MCP_SERVER_DIALOG = 'mcp-server-dialog-2.1.281.bytes'
 local PERMISSION_DIALOG = 'permission-dialog-2.1.281.screen'
 local PERMISSION_DENIED = 'permission-denied-2.1.281.screen'
 local DRAFT = 'draft-2.1.281.bytes'
+local TURN = 'turn-2.1.281.screen'
 
 --- The synthetic screens, which no recorded Claude Code drew: shapes the
 --- recordings leave out, each named for what it holds.
@@ -89,6 +90,7 @@ local MODES = {
   draft = { screens = { STARTUP, DRAFT } },
   verbose = { printed_lines = 20000, screens = { STARTUP } },
   busy = { screens = { STARTUP }, in_turn = true },
+  turn = { screens = { TURN }, in_turn = true },
   exit = { screens = { STARTUP }, exits_after_ms = 200 },
   ['exit-below-box'] = { screens = { STARTUP, CURSOR_BELOW_BOX }, exits_after_ms = 2500 },
 }
