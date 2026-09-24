@@ -74,16 +74,26 @@ T['a report']['reaches the editor the relay was given, and renders in its Report
     { isError = false, content = { { type = 'text', text = 'Delivered to the Agent Report.' } } },
   })
   eq(report_editor.lines(editor), { '09:05 [done] Refactor the parser — All tests pass' })
+  eq(
+    editor.lua_get([[vim.wait(1000, function()
+      return #vim.tbl_filter(function(channel)
+        return channel.stream == 'socket'
+      end, vim.api.nvim_list_chans()) == 1
+    end, 10)]]),
+    true
+  )
 end
 
 T['a report']['reaches the editor as data: fields holding code render literally and run nothing'] = function()
   start_editor()
   local relay = mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = editor.job.address })
+  local witness = vim.fs.joinpath(fixture.directory('mcp-delivery-witness'), 'ran')
+  local shell_line = ('$(touch %s) `touch %s` ${HOME}'):format(witness, witness)
   local report = {
     task = "')) vim.g.aineo_ran = 'task' --",
     status = 'done',
     summary = "\"]] vim.g.aineo_ran = 'summary' [[",
-    details = "') os.exit(3) --\n$(touch ran) `id` ${HOME}",
+    details = "') os.exit(3) --\n" .. shell_line,
   }
 
   relay:send(mcp_messages.tools_call('report', report, 5))
@@ -92,9 +102,9 @@ T['a report']['reaches the editor as data: fields holding code render literally 
   eq(report_editor.lines(editor), {
     "09:05 [done] ')) vim.g.aineo_ran = 'task' -- — \"]] vim.g.aineo_ran = 'summary' [[",
     "      ') os.exit(3) --",
-    '      $(touch ran) `id` ${HOME}',
+    '      ' .. shell_line,
   })
-  eq(editor.lua_get('vim.g.aineo_ran == nil'), true)
+  eq({ editor.lua_get('vim.g.aineo_ran == nil'), vim.uv.fs_stat(witness) == nil }, { true, true })
 end
 
 T['a report']['whose details are null renders without details'] = function()

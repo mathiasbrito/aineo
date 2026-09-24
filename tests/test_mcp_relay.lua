@@ -33,11 +33,15 @@ T['initialize']['answers the recorded request with its protocol version, a tools
 
   local answer = relay:next_line()
   eq(holds(answer, '"tools":{}'), true)
-  eq({
-    get(decoded(answer), 'id'),
-    get(decoded(answer), 'result', 'protocolVersion'),
-    get(decoded(answer), 'result', 'serverInfo', 'name'),
-  }, { 0, '2025-11-25', 'aineo' })
+  eq(decoded(answer), {
+    jsonrpc = '2.0',
+    id = 0,
+    result = {
+      protocolVersion = '2025-11-25',
+      capabilities = { tools = {} },
+      serverInfo = { name = 'aineo', version = '0.0.0' },
+    },
+  })
 end
 
 T['initialize']['answers a protocol version it does not speak with the one it speaks'] = function()
@@ -83,7 +87,11 @@ T['a request']['is answered with its id unchanged']['for the id'] = function(id)
 
   relay:send(('{"jsonrpc":"2.0","id":%s,"method":"ping"}'):format(id))
 
-  eq(holds(relay:next_line(), ('"id":%s'):format(id)), true)
+  local answer = relay:next_line()
+  eq(
+    { holds(answer, ('"id":%s'):format(id)), get(decoded(answer), 'id') },
+    { true, vim.json.decode(id) }
+  )
 end
 
 T['tools/list'] = MiniTest.new_set()
@@ -176,7 +184,11 @@ T['a request for another method']['is answered with error -32601'] = function()
   relay:send('{"jsonrpc":"2.0","id":5,"method":"resources/list"}')
 
   local answer = decoded(relay:next_line())
-  eq({ get(answer, 'id'), get(answer, 'error', 'code'), get(answer, 'result') }, { 5, -32601, nil })
+  eq(answer, {
+    jsonrpc = '2.0',
+    id = 5,
+    error = { code = -32601, message = 'Method not found: resources/list' },
+  })
 end
 
 T['a line'] = MiniTest.new_set()
@@ -216,6 +228,8 @@ end
 
 T['a line']['written in two parts is answered once, when its newline arrives'] = function()
   local relay = mcp_relay.start_relay()
+  relay:send('{"jsonrpc":"2.0","id":0,"method":"ping"}')
+  relay:next_line()
 
   relay:write('{"jsonrpc":"2.0","id":11,')
   local silent = relay:is_silent_for(200)
@@ -227,6 +241,8 @@ end
 
 T['a line']['split inside a multibyte character is answered whole'] = function()
   local relay = mcp_relay.start_relay()
+  relay:send('{"jsonrpc":"2.0","id":0,"method":"ping"}')
+  relay:next_line()
 
   relay:write('{"jsonrpc":"2.0","id":"caf\195')
   local silent = relay:is_silent_for(200)
