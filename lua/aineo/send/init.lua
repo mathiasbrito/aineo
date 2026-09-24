@@ -94,6 +94,13 @@ end
 --- exited — checked in that order. When Input cannot be emptied — it is not
 --- modifiable, or a text lock holds, as in an `<expr>` mapping — raises
 --- Neovim's error and writes nothing, Input keeping its text.
+---
+--- The status is as fresh as the last event Neovim processed, so Claude Code
+--- may have died while it still reads `'ready'`. When the write then fails —
+--- the terminal's stream has closed — Send puts Input's lines back and
+--- raises the write's error as it is (`Can't send data to closed stream`).
+--- While the stream is still open the write succeeds into the dead terminal:
+--- Input is emptied and nothing is raised.
 function M.send()
   local input = existing_input()
   if not input then
@@ -107,8 +114,13 @@ function M.send()
   if status ~= 'ready' then
     return refuse(status or 'not_started')
   end
+  local lines = vim.api.nvim_buf_get_lines(input, 0, -1, false)
   vim.api.nvim_buf_set_lines(input, 0, -1, false, {})
-  claude.write_to_session(PASTE_START .. text .. PASTE_END .. ENTER)
+  local written, failure = pcall(claude.write_to_session, PASTE_START .. text .. PASTE_END .. ENTER)
+  if not written then
+    vim.api.nvim_buf_set_lines(input, 0, -1, false, lines)
+    error(failure, 0)
+  end
 end
 
 return M
