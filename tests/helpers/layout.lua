@@ -10,8 +10,13 @@
 --- The layout moves files and puts its sizes back from `vim.schedule`
 --- callbacks. A child runs a callback scheduled while it serves one request
 --- before it serves the next — both wait in its main loop's event queue, in
---- order — so a test reads their result with its next request and waits for
---- nothing.
+--- order — so a test that acts through requests (`child.cmd`, `child.lua`)
+--- reads their result with its next request and waits for nothing.
+---
+--- Keys typed into the child (`child.api.nvim_input`) are not a request: the
+--- child runs them when it reads its input, and a request sent after them can
+--- be served before the callback they schedule. A test that types keys waits
+--- for the outcome with `M.wait_until()`.
 
 local MiniTest = require('mini.test')
 local children = dofile('tests/helpers/child.lua')
@@ -32,6 +37,10 @@ M.TOLERANCE = 1
 --- The Report share of the right column when a test has no reason to choose
 --- another, as `layout.report_height` defaults to it.
 M.REPORT_HEIGHT = 2 / 3
+
+--- How long `M.wait_until()` waits, in milliseconds, and how often it asks.
+local WAIT_LIMIT_MS = 2000
+local WAIT_INTERVAL_MS = 10
 
 --- Starts `child` afresh at `M.COLUMNS` by `M.LINES`.
 ---
@@ -142,7 +151,27 @@ end
 ---@param buffer integer
 ---@return integer|nil window
 function M.window_showing(child, buffer)
-  return child.lua_get([[vim.fn.win_findbuf(...)[1] ]], { buffer })
+  return child.lua_get(
+    [[(function(buffer)
+      return vim.iter(vim.api.nvim_tabpage_list_wins(0)):find(function(window)
+        return vim.api.nvim_win_get_buf(window) == buffer
+      end)
+    end)(...)]],
+    { buffer }
+  )
+end
+
+--- Waits, at most two seconds, until `expression` is true in `child`, asking
+--- it again every ten milliseconds, and says whether it became true.
+---
+---@param child table
+---@param expression string a Lua expression, with `...` standing for `args`
+---@param args? table
+---@return boolean became_true
+function M.wait_until(child, expression, args)
+  return vim.wait(WAIT_LIMIT_MS, function()
+    return child.lua_get(expression, args or {})
+  end, WAIT_INTERVAL_MS)
 end
 
 --- Where `window` sits on the screen and how large it is, in cells: its row

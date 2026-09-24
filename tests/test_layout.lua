@@ -201,6 +201,47 @@ T['open()']['refuses an arrangement it cannot show, naming the setting']['given'
   end, refusal)
 end
 
+--- Opens a floating window of another plugin, holding a buffer wiped when
+--- hidden, and returns the window and its buffer without entering it.
+local OPEN_A_FLOAT = [[(function()
+  local buffer = vim.api.nvim_create_buf(false, true)
+  vim.bo[buffer].bufhidden = 'wipe'
+  local window = vim.api.nvim_open_win(buffer, false, {
+    relative = 'editor', row = 1, col = 1, width = 20, height = 3,
+  })
+  return { window = window, buffer = buffer }
+end)()]]
+
+T['open()']['leaves a floating window and its buffer alone'] = function()
+  layout.start(child)
+  local float = child.lua_get(OPEN_A_FLOAT)
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(
+    child.lua_get(
+      '(function(window, buffer) return { vim.api.nvim_win_is_valid(window), vim.api.nvim_buf_is_valid(buffer) } end)(...)',
+      { float.window, float.buffer }
+    ),
+    { true, true }
+  )
+end
+
+T['open()']['from a floating window, opens the layout with the cursor in Input'] = function()
+  layout.start(child)
+  local float = child.lua_get(OPEN_A_FLOAT)
+  child.lua('vim.api.nvim_set_current_win(...)', { float.window })
+  local buffers = layout.stand_ins(child)
+
+  MiniTest.expect.no_error(function()
+    layout.open(child, layout.arrangement(buffers))
+  end)
+
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), layout.input_buffer(child))
+  eq(layout.window_count(child), 4)
+end
+
 T['open()']['opens once the screen has room, after failing for the want of it'] = function()
   layout.start(child)
   local buffers = layout.stand_ins(child)

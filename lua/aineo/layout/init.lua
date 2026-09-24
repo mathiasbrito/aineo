@@ -78,6 +78,14 @@ local function existing_windows()
     :totable()
 end
 
+--- The tab page holding the layout: the tab of its windows that exist. All of
+--- them are in one tab, since the layout reopens its windows there.
+---
+---@return integer tab
+local function layout_tab()
+  return vim.api.nvim_win_get_tabpage(existing_windows()[1])
+end
+
 --- Whether `buffer` holds a file: a buffer with an empty `'buftype'`.
 ---
 ---@param buffer integer
@@ -171,10 +179,8 @@ end
 ---
 ---@return integer[] windows
 local function file_column_windows()
-  local anchors = existing_windows()
-  local tab = vim.api.nvim_win_get_tabpage(anchors[1])
-  local tree = vim.fn.winlayout(vim.api.nvim_tabpage_get_number(tab))
-  local row = deepest_row_holding(tree, anchors)
+  local tree = vim.fn.winlayout(vim.api.nvim_tabpage_get_number(layout_tab()))
+  local row = deepest_row_holding(tree, existing_windows())
   if not row then
     return {}
   end
@@ -255,6 +261,31 @@ local function open_file_column(file, window)
   return vim.api.nvim_open_win(file, true, { split = 'left', win = -1 })
 end
 
+--- Whether the buffer `window` shows can leave it without being lost: always
+--- under `'hidden'`, and otherwise only when it holds no unsaved change.
+---
+---@param window integer
+---@return boolean
+local function can_leave(window)
+  return vim.o.hidden or not vim.bo[vim.api.nvim_win_get_buf(window)].modified
+end
+
+--- Shows `file` in the file column's `column_window`, with the cursor there;
+--- above it, in a window of its own, when another buffer there cannot leave
+--- it.
+---
+---@param file integer
+---@param column_window integer
+---@return integer file_window
+local function show_in_file_column(file, column_window)
+  if vim.api.nvim_win_get_buf(column_window) ~= file and not can_leave(column_window) then
+    return vim.api.nvim_open_win(file, true, { split = 'above', win = column_window })
+  end
+  vim.api.nvim_win_set_buf(column_window, file)
+  vim.api.nvim_set_current_win(column_window)
+  return column_window
+end
+
 --- Moves `file` from the layout's `window` to the file column — opened when
 --- it is not open — with the cursor there on the position it had in
 --- `window`, gives `window` its own buffer back, and puts the proportions
@@ -270,13 +301,9 @@ local function redirect(window, file)
     return
   end
   local cursor = vim.api.nvim_win_get_cursor(window)
-  local file_window = file_column_windows()[1]
-  if file_window then
-    vim.api.nvim_win_set_buf(file_window, file)
-    vim.api.nvim_set_current_win(file_window)
-  else
-    file_window = open_file_column(file, window)
-  end
+  local column_window = file_column_windows()[1]
+  local file_window = column_window and show_in_file_column(file, column_window)
+    or open_file_column(file, window)
   vim.api.nvim_win_set_cursor(file_window, cursor)
   vim.api.nvim_win_set_buf(window, state.buffers[role])
   keep_proportions()
@@ -368,31 +395,55 @@ local function take_input_buffer(shown)
   return make_input(vim.api.nvim_create_buf(false, true))
 end
 
---- Closes every window of the current tab but `kept`, hiding their buffers,
---- which stay loaded.
+--- Whether `window` floats over the others rather than taking a place among
+--- them.
+---
+---@param window integer
+---@return boolean
+local function is_floating(window)
+  return vim.api.nvim_win_get_config(window).relative ~= ''
+end
+
+--- Closes every window of the current tab but `kept` and the floating ones,
+--- hiding their buffers, which stay loaded.
 ---
 ---@param kept integer the window to keep
 local function hide_other_windows(kept)
   for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if window ~= kept then
+    if window ~= kept and not is_floating(window) then
       vim.api.nvim_win_hide(window)
     end
   end
 end
 
+--- The window the layout is built from: the current one, or, when it floats,
+--- the first window of the current tab that does not.
+---
+---@return integer window
+local function starting_window()
+  local current = vim.api.nvim_get_current_win()
+  if not is_floating(current) then
+    return current
+  end
+  return vim.iter(vim.api.nvim_tabpage_list_wins(0)):find(function(window)
+    return not is_floating(window)
+  end)
+end
+
 --- Makes the layout's three windows in the current tab, closing its other
---- windows, with the cursor in Input. The current window becomes Input's,
---- unless it shows a file, which it keeps as the file column.
+--- windows but the floating ones, with the cursor in Input. The window it
+--- starts from (see `starting_window()`) becomes Input's, unless it shows a
+--- file, which it keeps as the file column.
 ---
 ---@param arrangement aineo.layout.Arrangement
 local function build(arrangement)
-  local current_window = vim.api.nvim_get_current_win()
-  local shown = vim.api.nvim_win_get_buf(current_window)
-  hide_other_windows(current_window)
+  local start = starting_window()
+  local shown = vim.api.nvim_win_get_buf(start)
+  hide_other_windows(start)
   local input = take_input_buffer(shown)
-  local input_window = current_window
+  local input_window = start
   if shown ~= input and is_file(shown) then
-    input_window = vim.api.nvim_open_win(input, true, { split = 'right', win = -1 })
+    input_window = vim.api.nvim_open_win(input, false, { split = 'right', win = -1 })
   else
     vim.api.nvim_win_set_buf(input_window, input)
   end
@@ -402,6 +453,7 @@ local function build(arrangement)
     vim.api.nvim_open_win(arrangement.claude, false, { split = 'left', win = -1 })
   state.windows = { claude = claude_window, report = report_window, input = input_window }
   state.buffers = { claude = arrangement.claude, report = arrangement.report, input = input }
+  vim.api.nvim_set_current_win(input_window)
 end
 
 --- Opens again, in their places, those of the layout's three windows that
@@ -455,6 +507,7 @@ local function watch_windows()
     end,
   })
   vim.api.nvim_create_autocmd('VimResized', { group = group, callback = keep_proportions })
+  vim.api.nvim_create_autocmd('TabEnter', { group = group, callback = keep_proportions })
 end
 
 --- Whether `value` is the number of an existing buffer.
@@ -494,21 +547,26 @@ end
 --- the left taking half the columns, `arrangement.report` above the Input
 --- buffer in a column on the right, the Report taking
 --- `arrangement.report_height` of its rows, and the cursor in Input. The tab's
---- other windows close; their buffers stay loaded. A file the current window
---- shows stays there, as the file column. Input is made once and kept: from
---- the unnamed, empty buffer the current window shows, such as the one Neovim
---- starts with, or else a new buffer.
+--- other windows close, but floating ones; their buffers stay loaded. A file
+--- the current window shows stays there, as the file column. Opened from a
+--- floating window, the layout is built from the first window of the tab
+--- that does not float. Input is a scratch buffer named `aineo://input`,
+--- made once: from the unnamed, empty buffer the current window shows, such
+--- as the one Neovim starts with, or else a new buffer; it is made anew when
+--- it was wiped, and made a scratch buffer again whenever it is shown.
 ---
 --- While any of the three windows exists, opening again restores the layout
---- instead: it creates only the windows that were closed, in their places,
---- shows in each window its buffer — the Claude and Report buffers it is
---- handed this time — and puts the proportions back; the cursor stays where
---- it is.
+--- instead, in the tab that holds it: it creates only the windows that were
+--- closed, in their places, shows in each window its buffer — the Claude and
+--- Report buffers it is handed this time — and puts the proportions back.
+--- The cursor stays where it is when the layout's tab is the current one,
+--- and moves to that tab otherwise.
 ---
 --- From then on a file shown in one of the three windows moves to a file
---- column between Claude's and the right one, and the three columns take a
---- third of the screen each while it is open; the proportions are put back
---- whenever a window closes or the editor is resized.
+--- column beside them, while any of them exists; with the three open, the
+--- columns take a third of the screen each while the file column is open,
+--- and the proportions are put back whenever a window closes, the editor is
+--- resized or the layout's tab is entered.
 ---
 --- Raises an error naming the setting, before changing anything, when
 --- `arrangement` is not a table, `claude` or `report` is not an existing
@@ -518,6 +576,7 @@ end
 function M.open(arrangement)
   validate_arrangement(arrangement)
   if has_any_window() then
+    vim.api.nvim_set_current_tabpage(layout_tab())
     state.buffers.claude = arrangement.claude
     state.buffers.report = arrangement.report
     if not has_input() then
