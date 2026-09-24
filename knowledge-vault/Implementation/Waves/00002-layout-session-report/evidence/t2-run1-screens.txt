@@ -1,0 +1,25 @@
+READY=false
+----- after start (23:45:37) -----
+
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 (1M context) with xhigh effort · Claude PLAN
+  ▝▝ ▝▝    ~/project/aineo · /rc
+
+▎ ※ You’ve been gifted a one-time $250 credit for cloud sessions · /claim-credit
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+❯ Try "how does <filepath> work?"
+────────────────────────────────────────────────────────────────────────────────
+  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · r…
+  ⏵⏵ auto mode on (shift+tab to cycle)
+Q4: jobstop on an idle TUI (ready=false): exited=true code=129 ms=1930

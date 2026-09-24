@@ -1,0 +1,26 @@
+# T4 facts — measured by the orchestrator against the real interactive CLI, 2026-09-24 00:58–00:59 CEST
+Claude Code 2.1.281 · Nvim 0.11.6 headless, terminal 120x40 · cwd the aineo checkout (trusted by the user) · --permission-mode manual
+Every CLAUDE* variable of the orchestrating session removed; AINEO_CHILD=1 set. Driver: t4-driver.lua · screens: t4-screens.txt
+(account tier and home path replaced in both files: "Claude PLAN", "~/project/aineo"; a usage notice elided).
+
+Fixture: t4-claude-2.1.281-startup-paste-exit.bytes.txt — the raw pty bytes (on_stdout of a jobstart term job) from start to exit:
+  startup to the ready prompt (ready after 1436 ms here; the input box line reads `❯ Try "fix lint errors"` — a placeholder
+  hint, not typed text), a bracketed paste of two lines left unsubmitted (shown as `❯ first line` / `  second line`), then a
+  double Ctrl-C 0.3 s apart -> exit 0 after 2843 ms. The bytes enable bracketed paste (ESC[?2004h) and alternate screen
+  (ESC[?1049h), and send terminal queries (DA ESC[c, ESC[16t, a kitty graphics query) that the replay may ignore.
+
+Q4, mid-turn (two model turns, each interrupted within seconds):
+  one Ctrl-C during a turn     -> the turn stops; the process stays; the message's text is put back into the input box;
+                                 then a double Ctrl-C 0.3 s apart at idle -> exit 0 after 1939 ms
+  double Ctrl-C 0.3 s apart during a turn -> NO exit within 10 s (the first press ends the turn, the second does not exit);
+                                 jobstop afterwards -> exit 129
+  During a turn the footer shows "esc to interrupt"; at idle it shows "? for shortcuts".
+
+Earlier (t2-summary.txt, 2026-09-23): /exit + Enter -> exit 0 (1766 ms); double Ctrl-C at an empty idle prompt -> exit 0
+(1759 ms); the double-press window is shorter than 1.2 s; jobstop (SIGHUP) -> exit 129 (~1.6–1.9 s).
+
+MCP (t2-handshake.txt, 2026-09-24 00:55 CEST, no model turn): at startup Claude Code sends initialize (protocolVersion
+"2025-11-25", id 0), notifications/initialized, tools/list (id 1). The stdio server's environment carried the editor's
+address as NVIM (inherited through claude from the jobstart terminal), AINEO_CHILD=1 (set on claude), and the variables
+given in the --mcp-config entry's "env". tools/call params (t2 run 2): {"name", "arguments", "_meta": {"claudecode/toolUseId",
+"progressToken"}}.

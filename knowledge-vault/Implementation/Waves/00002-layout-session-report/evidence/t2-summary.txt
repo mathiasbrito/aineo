@@ -1,0 +1,27 @@
+# T2 — measured by the orchestrator against the real interactive CLI, 2026-09-23 23:49 CEST
+Claude Code 2.1.281 · Nvim 0.11.6 headless, terminal 140x45 · cwd ~/project/aineo (trusted by the user at 23:4x)
+Every CLAUDE* variable of the orchestrating session removed from the child's environment (11 names; the first run, which removed 2, showed
+"Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker" — run 1 screens kept as t2-run1-screens.txt).
+Driver: t2-driver.lua · MCP server: t2-mcp_probe.py · screens: t2-run2-screens.txt
+
+Readiness: run 1 waited on the footer text "? for shortcuts" and timed out with the prompt ready — in run 1 the footer line was taken by the
+inherited-marker warning and "auto mode on" (t2-run1-screens.txt). In the clean run 2 the footer shows on every screen after start
+(t2-run2-screens.txt). [Corrected 2026-09-24 after the records review of PR #5: this line first said the footer is absent at startup
+in 2.1.281, which run 2 refutes.] Worked in both runs: the prompt glyph "❯" on a screen with no trust-dialog text, then a 1.5 s settle
+before any input was sent.
+
+Q1 — RESOLVED. A bracketed paste (ESC[200~ … ESC[201~) of two lines appears as two lines in Claude's input box and is not submitted;
+Enter (\r) submits both lines as ONE user message (both lines shown in the transcript above the reply).
+
+Q2 — RESOLVED, with a control. --mcp-config (a JSON string) and --append-system-prompt take effect in interactive mode.
+  control, --permission-mode manual, no --allowedTools: the tool call raised a permission prompt ("Do you want…"); the MCP log shows
+    initialize, notifications/initialized, tools/list and no tools/call; the prompt was denied with Esc.
+  --allowedTools mcp__probe__ping: no permission prompt; tools/call count 0 -> 1; Claude replied DONE.
+
+Q4 — PARTLY RESOLVED (idle prompt only; a stop in the middle of a turn is NOT measured):
+  /exit then Enter          -> exit 0, 1766 ms
+  Ctrl-C twice, 0.3 s apart -> exit 0, 1759 ms   (twice, 1.2 s apart: no exit within 10 s — the double-press window is shorter than 1.2 s)
+  Ctrl-D twice, 0.3 s apart -> exit 0, 1614 ms
+  jobstop (SIGHUP, a terminal job) -> exit 129, 1648 ms (1930 ms in run 1)
+
+Cost: two model turns (Opus 5.5, xhigh effort), one each for the control and the measurement.
