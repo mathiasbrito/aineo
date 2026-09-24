@@ -1,9 +1,9 @@
 # 2026-09-24 — T5 report channel
 
-**Author:** Mathias Santos de Brito, with Claude — implementer agents (`neovim-claude-code-integrator`): the packet's author, then, for the end of its fix round, the agent it handed over to
-**Branch:** `feature/t5-report-channel` · **Pull request:** #10 (packet round, then the fix round below)
+**Author:** Mathias Santos de Brito, with Claude — implementer agents (`neovim-claude-code-integrator`): the packet's author, then, for the end of its fix round, the agent it handed over to; then, for the correction of the re-measure, a fresh agent
+**Branch:** `feature/t5-report-channel` · **Pull request:** #10 (packet round, then the fix round and the correction below)
 
-The sections up to *Open threads* describe the packet round at `dcb8e36`. Where the reviews showed one of them wrong, it is corrected in place and says so; where the fix round changed what it describes, it points to the *Fix round* section below.
+The sections up to *Open threads* describe the packet round at `dcb8e36`. Where the reviews showed one of them wrong, it is corrected in place and says so; where the fix round changed what it describes, it points to the *Fix round* section below. The *Fix round* section describes the branch at `1a67263`; where the re-measure showed it wrong, it says so in place and points to *Correction*.
 
 ## Links
 
@@ -67,7 +67,7 @@ The sections up to *Open threads* describe the packet round at `dcb8e36`. Where 
 - **One protocol version.** The relay speaks `2025-11-25` only, the version Claude Code 2.1.281 sends, and answers it to any request. 2025-06-18 differs on error ids (required there) and on argument errors (protocol errors there, tool errors in 2025-11-25). Claiming it would have been an untested claim.
 - **Validation at both boundaries.** The relay validates before it delivers, so a refused report does not depend on the editor being up. The editor validates again, because its socket is a boundary too.
 - **Delivery as data.** The Lua the editor runs is a constant, and the report is its RPC argument. The relay connects per call, so an editor that restarts or vanishes is met by a fresh connect.
-- **A named Report.** Named from creation (brief review finding 1). Measured while building: a scratch buffer that is `:bdelete`d and written to again comes back with `'buftype'` empty and `'modified'` set, and `:qall` then fails with E37. So the home recreates an unloaded Report rather than writing to it. That was not enough: a deleted Report the user shows again (`:buffer #`) is loaded again as an ordinary buffer (the attack review's A3). Since the fix round, a Report counts as showing only while it is `nofile`.
+- **A named Report.** Named from creation (brief review finding 1). Measured while building: a scratch buffer that is `:bdelete`d and written to again comes back with `'buftype'` empty and `'modified'` set, and `:qall` then fails with E37. So the home recreates an unloaded Report rather than writing to it. That was not enough: a deleted Report the user shows again (`:buffer #`) is loaded again as an ordinary buffer (the attack review's A3). Since the fix round, a Report counts as showing only while it is `nofile`; since the correction, only while it is also loaded, since `:bunload` keeps `nofile` (see *Correction*).
 - **Records keyed by SHA-256.** A long working directory as a file name can pass a file-name length limit; its SHA-256 cannot.
 
 **The orchestrator's readings applied (for the MVP review):**
@@ -264,6 +264,7 @@ This wave holds its marks (plan, *Packets* rule 6), so the plan is untouched. Fo
 - The line limit is 1 MiB.
 - Records go in `<state>/aineo/reports/<sha256 of cwd>.jsonl`, created 0600. The Report shows the newest 2 MiB of them, and the file is cut back to its newest 2 MiB past 4 MiB (fix round, A5).
 - The relay waits at most 5 s for the editor to confirm a report (fix round, A2), and runs as `nvim --headless --clean --cmd 'set noloadplugins' -l <relay>` (A6).
+- Correction of the re-measure: the relay reads the editor's answer through `vim.uv` handles; an unconfirmed report is "sent, not confirmed", and the editor tells the user of a report it cannot keep; a failed cut keeps the report; cut files are per process.
 - For T7, the root calls `set_report_environment()` first, then:
   - `mcp_servers(vim.v.servername, vim.v.progpath)`;
   - `allowed_mcp_tools()`;
@@ -275,6 +276,9 @@ This wave holds its marks (plan, *Packets* rule 6), so the plan is untouched. Fo
 - **A `:bdelete`d scratch buffer written to again is an ordinary modified buffer that blocks `:qall` (E37).** A plugin-owned buffer is recreated when it is no longer `nofile`, not reused. Checking "unloaded" is not enough: `:buffer #` loads the deleted buffer again, as an ordinary buffer (the fix round, A3).
 - **`nvim -l` with `stdioopen()` is a clean stdio server once no plugin loads.** Messages go to `on_print` or stderr, never to stdout; EOF arrives as `{''}`; and `rpcrequest` works from inside `on_stdin`. `--clean` still loads plugins from `$XDG_CONFIG_DIRS` and `$XDG_DATA_DIRS`, which can write to stdout; `--cmd 'set noloadplugins'` keeps out `plugin/`, `pack/*/start` and `after/plugin` there (the fix round, A6).
 - **Mutant kills through a child process must be assertions.** A helper that raises on a timeout turns every "the process went silent" mutant into a crash. Return what arrived and let the test's assertion fail.
+- **`sockconnect()`'s `on_data` is not binary-safe.** Its list form hands a zero byte over as a newline, so msgpack read through it breaks whenever a length or a type is zero; read a binary protocol through a `vim.uv` handle (the correction, finding 2).
+- **`:bunload` keeps a `nofile` buffer's `'buftype'`, and writing into the unloaded buffer loads it, firing its `BufReadCmd`.** "Still `nofile`" does not mean "still showing" (the correction, finding 1).
+- **`vim.fn.mkdir(…, 'p')` fails with E739 on whichever directory of the path another process made first.** Retry, bounded by the path's depth (the correction, finding 10).
 - **A line limit checked per read chunk lets up to one chunk past the limit be held.** A test of "not buffered past the limit" needs a line longer than the limit plus the largest chunk.
 
 ## Open threads
@@ -310,7 +314,7 @@ The hashes below are branch states named as measurement points: `70ed857` (revie
    3. the schema admits a `null` in `details` (R4); a `null` id is refused; the relay serves only as the `-l` script; A7 and A8;
    4. a bounded wait on the editor (A2), and bounded records (A5);
    5. `noloadplugins` in the relay (A6), and R5. That commit's message says that the packet round's records of `--clean` as isolation were wrong;
-   6. the Report's loaded check removed, which the author's mutant run showed to be unobservable;
+   6. the Report's loaded check removed, which the author's mutant run showed to be unobservable — **wrong**: `:bunload` separates it, and the correction restores it (see *Correction*, finding 1);
    7. the relay's answer queue removed, for the same reason.
 2. **The handover's commits:**
    1. the relay's load test reaches the script through the entry point;
@@ -331,9 +335,9 @@ The hashes below are branch states named as measurement points: `70ed857` (revie
 
 | Finding | Outcome |
 |---|---|
-| A1 a Report name already taken | **Fixed** (the reviewer's F3): any buffer named `aineo://report` is wiped before the Report is created. Pinned by `:bwipeout` then `:edit aineo://report`, and by `:file aineo://report`, the line a restored session runs. Red on `70ed857`'s code: E95 on both reports, in both cases. |
+| A1 a Report name already taken | **Fixed** (the reviewer's F3): any buffer named `aineo://report` is wiped before the Report is created (since the correction, one whose text the user changed is kept, unnamed — finding 3). Pinned by `:bwipeout` then `:edit aineo://report`, and by `:file aineo://report`, the line a restored session runs. Red on `70ed857`'s code: E95 on both reports, in both cases. |
 | A2 a hit-enter prompt holds the report and everything after it | **Fixed where aineo causes it, and bounded.** aineo's warnings are scheduled. The relay sends its msgpack-RPC request itself and waits at most 5 s (the bound is explained under *Readings*). Pinned with a real TUI editor held at a hit-enter prompt: the report is answered "not confirmed" in time; a ping sent during the wait is answered next; the report shows after Enter. Also pinned: an editor killed mid-wait is a tool error at once, and aineo's own warning no longer holds the report. What remains is under *Limits*. |
-| A3 a deleted Report shown again | **Fixed** (the reviewer's F4): a Report counts as showing only while it is `nofile`. Pinned with `:buffer #` and `:buffer aineo://report`, after which `:qall` quits. Red on `70ed857`'s code: `'buftype'` empty and `jobwait` −1. A residue measured in the handover is under *Limits*. |
+| A3 a deleted Report shown again | **Fixed** (the reviewer's F4): a Report counts as showing only while it is `nofile` (since the correction, and loaded — finding 1). Pinned with `:buffer #` and `:buffer aineo://report`, after which `:qall` quits. Red on `70ed857`'s code: `'buftype'` empty and `jobwait` −1. A residue measured in the handover is under *Limits*. |
 | A4 `:edit` empties the Report | **Fixed**: a buffer-local `BufReadCmd` renders the records again. This was chosen over refusing the command, for which Neovim offers no hook on a `nofile` buffer (the author's measurement). Pinned with `:edit` and `:edit!`. Red: `{ "" }`. |
 | A5 records grow without bound | **Fixed, bounded in bytes**: the Report shows the newest 2 MiB, and a file past 4 MiB is cut back to its newest 2 MiB. The orchestrator's 1000 records were replaced, since one report can hold 1 MiB. Red on `70ed857`'s code: 3072 records shown; 4098 lines kept. The handover pinned the remaining paths: whole records only when the window begins mid-line, a file kept whole up to 4 MiB, and the cut test reading records without raising. |
 | A6 system site plugins load in the relay | **Fixed** (the reviewer's F5): `--cmd 'set noloadplugins'`. The orchestrator read C5's row as allowing this, so there is no spec change. Pinned by a plugin planted under a fixture `$XDG_DATA_DIRS`. Red: its marker was created. The handover also measured `pack/*/start` and `after/plugin` (below). |
@@ -375,7 +379,7 @@ The hashes below are branch states named as measurement points: `70ed857` (revie
 
 - **Open time at the bound**, one run each (the author measured 47, 78 and 45 ms):
   - the newest 2 MiB of a 4 MiB file (9320 of 18641 records): 45 ms;
-  - the worst case, 520004 Report lines: 93 ms;
+  - a case of 520004 Report lines: 93 ms — not the worst case: the re-measure measured 1 040 004 lines in 156 ms (see *Correction*, finding 9);
   - a 40 MiB file: 49 ms, since only its end is read.
 - **`noloadplugins` keeps every system site plugin out.** With `--headless --clean` alone, a `plugin/`, a `pack/*/start/*/plugin/` and an `after/plugin/` script under `$XDG_DATA_DIRS/nvim/site` all ran. With `--cmd 'set noloadplugins'` added, none did.
 - **Each test the round added fails by assertion against `70ed857`'s production code**, with the current tests. The failure messages are listed under *Red and green*.
@@ -388,7 +392,7 @@ The hashes below are branch states named as measurement points: `70ed857` (revie
   - A client asking for any other version gets an `initialize` result whose `protocolVersion` is `"2025-11-25"`, with the same capabilities and server. The test "answers a protocol version it does not speak with the one it speaks" pins this with `2024-11-05`.
   - By the Lifecycle page, such a client *should* disconnect; if it does, Claude has no report tool for that session.
   - **Which `claude` is the oldest supported remains the user's decision.** Claude Code 2.1.281 sends 2025-11-25.
-- **A report not confirmed within 5 s** (an editor at a hit-enter prompt, say) is answered as sent but not confirmed, and Claude is told not to send it again. The answer is not an error, and the report shows when the user is done.
+- **A report not confirmed within 5 s** (an editor at a hit-enter prompt, say) is answered as sent but not confirmed, and Claude is told not to send it again. The answer is not an error, and the report shows when the user is done. **Corrected by the correction:** that held only when keeping the report then succeeded; a report the editor could not keep was dropped silently (finding 6). See *Correction › Readings*.
   - Why 5 s: it is far above a delivery's time (the attack reviewer measured 80 ms for a report of 524 000 newlines, and 11 ms for one with 1 MiB of details). It is also well below the two minutes after which Claude Code moves a tool call to the background, a figure that is the reviewer's reading of the Claude Code docs, not a measurement.
 - **`:edit` in the Report renders its records again**, rather than refusing the command.
 - **The Report shows the newest 2 MiB of records**, and the file is cut back to its newest 2 MiB when it grows past 4 MiB. This is a bound in bytes, where the orchestrator's reading was 1000 records.
@@ -558,7 +562,7 @@ One killed run also has cases that fail by crash: "unnamed buffer" fails 5 cases
 
 Of the 5 surviving runs, four are N2a, N2c, N8a and N8b on `test_mcp_delivery.lua`, a second file that reads selected fields and was not expected to kill them; `test_mcp_relay.lua` kills each. The fifth is "rename failure unchecked", the one edit no file kills; it is under *Limits*.
 
-**Two survivors were removed from the code rather than kept**, beside the author's two (the Report's loaded check and the relay's answer queue):
+**Two survivors were removed from the code rather than kept**, beside the author's two (the Report's loaded check and the relay's answer queue; the loaded check was not equivalent, and the correction restored it):
 
 - the answer reader's id check, since a connection carries one request;
 - the Report group's `clear = false`, whose stated reason could not arise.
@@ -571,13 +575,165 @@ Of the 5 surviving runs, four are N2a, N2c, N8a and N8b on `test_mcp_delivery.lu
   - While a delivery waits, the relay answers nothing else: later lines, pings included, wait their turn.
   - A report to an editor held by the user costs up to 5 s, and reports sent meanwhile queue behind it, 5 s each.
   - Claude Code's own timeouts are the attack reviewer's reading of its docs, not a measurement.
-- **A deleted Report shown again before the next report is an ordinary buffer the user can edit.** Measured in the handover. The next report wipes it out and creates a new Report. An edit the user makes there leaves a modified buffer, which `:qall` refuses (E37).
-- **The cut's rename failure is unpinned.** No portable test makes `fs_rename` fail once the kept records have been read and written beside the file. Its mutant survives, and the branch stays, since clean-code forbids swallowing the error.
-- **A record longer than 2 MiB is shown when it arrives, but never in a later editor, and a cut drops it.** A report under the 1 MiB line limit can grow that far only when made mostly of raw DEL characters, which the records write six bytes each (measured).
-- **Trimming races other editors.** Two editors appending to one records file while one of them trims it can lose a record written between the trim's read and its rename. This is reasoned from the code, not measured.
+- **A deleted Report shown again before the next report is an ordinary buffer the user can edit.** Measured in the handover. The next report wipes it out and creates a new Report. An edit the user makes there leaves a modified buffer, which `:qall` refuses (E37). **Corrected by the correction:** that held only until a report came; the next report then discarded the edit without a prompt (finding 3), and now keeps it, unnamed.
+- **The cut's rename failure is unpinned.** No portable test makes `fs_rename` fail once the kept records have been read and written beside the file. Its mutant survives, and the branch stays, since clean-code forbids swallowing the error. (Since the correction a failed cut is a warning, the report kept; the re-anchored mutant still survives.)
+- **A record longer than 2 MiB is shown when it arrives, but never in a later editor, and a cut drops it.** A report under the 1 MiB line limit can grow that far only when made mostly of raw DEL characters, which the records write six bytes each (measured). **Corrected by the correction:** also raw control characters, from a client that does not escape them (finding 9).
+- **Trimming races other editors.** Two editors appending to one records file while one of them trims it can lose a record written between the trim's read and its rename. This is reasoned from the code, not measured. **Corrected by the correction:** the re-measure measured it, refused reports as well as lost records (finding 5); see *Correction › Limits*.
 - **`serverInfo.version` is `0.0.0`**, since aineo has no release version.
 - **Two JSON-RPC edges remain** (A10): a client response is answered −32601, and an object id is echoed. Claude Code sends neither.
 
+## Correction (2026-09-24)
+
+The re-measure of the fix round, at `1a67263`, found eleven things (findings 1–11 of the re-measure report, cited here by number). The orchestrator sent a fresh agent for one bounded correction, scoped to what the re-measure refuted or found missing; the fix round's other decisions stand. Everything the re-measure found holding stays as it was. The state measured below is the correction's last code commit, `17e034f` (the records commit after it changes this note only).
+
+**What the correction changed, in commit order** (each seen red first; the tests are named under *Red and green in the correction*):
+
+1. **The 5 s bound is pinned by time** (finding 7): the hit-enter test takes its two answers within 6 s. The reviewer's pin.
+2. **The Report's loaded check is back** (finding 1): `:bunload` kept `'buftype'` `nofile`, so an unloaded Report counted as showing, and the next report showed twice. The fix round's claim that the check was redundant (its commit "Drop the Report's loaded check that no test could ask for", and item 1.6 of *What the round changed*) was wrong: the survivor was not equivalent, the suite never unloaded the Report. The reviewer's fix and pin.
+3. **A records path that opens but cannot be read** (a directory) raises the named error the docstrings promise (finding 4). The reviewer's fix and pin.
+4. **Text the user typed into a buffer holding the Report's name is kept** (finding 3). Such a buffer, when modified, gives up the name (`:0file`) and keeps its text; any other is wiped out as before. The reviewer's design (as `let_go`), renamed `free_name_held_by()`.
+5. **The relay reads the editor's answer byte for byte** (finding 2), through a `vim.uv` pipe or TCP handle, where `sockconnect()`'s `on_data` had handed a zero byte over as a newline. A host name is resolved and its first address dialled.
+6. **The user is told of a report the editor cannot keep, and the tool result promises no showing** (finding 6). `receive_report()` warns the user once (scheduled) whenever it fails, and still raises. The unconfirmed answer now reads "… The report is sent, not confirmed; do not send it again."
+7. **A records file that cannot be cut back no longer refuses the report** (finding 8, and the refusal half of finding 5): the record is appended, the user is warned once for that report, and the next report tries the cut again.
+8. **A symlinked records file is cut behind its link** (finding 8): the cut resolves the path and replaces the file the link leads to; the link stays. Chosen over leaving it uncut with a warning.
+9. **Each editor cuts through its own temporary file**, `<file>.<pid>.cut` (finding 5). The reviewer's fix, measured by their probe.
+10. **A records directory another editor made at the same moment is taken** (finding 10), and a directory that cannot be made is named in the error. The first version took a failed `mkdir()` as success only when the records directory existed afterwards; re-running the re-measure's race probe on it still refused one report, lost on a directory higher up the path. `mkdir()` is now retried, at most once for each directory on the path, and a third case pins that bound.
+11. **The records** (findings 9 and 11, and the corrections this section lists), in this note and the pull request body.
+
+**Result at `17e034f`:**
+
+- `make test`: **258 cases, `Fails (0) and Notes (0)`, exit 0.** Per T5 file: `test_report.lua` 42, `test_report_buffer.lua` 49, `test_mcp.lua` 5, `test_mcp_relay.lua` 30, `test_mcp_delivery.lua` 18, `test_mcp_blocked_editor.lua` 3 — 147 in all; the other files hold 111.
+- `make lint`: StyLua `--check` clean; selene 0 errors, 0 warnings.
+- The deep-`require` check prints the same 14 lines as before, each a file of a home requiring a file of that same home.
+
+### Findings of the re-measure
+
+| Finding | Outcome |
+|---|---|
+| 1 `:bunload` shows the next report twice | **Fixed** (the reviewer's patch): `is_showing` checks `nvim_buf_is_loaded` again. Pinned by the `bunload` case of *comes back with every report after the user deletes it*. The fix round's reasoning is corrected above and in the commit that restores the check. |
+| 2 the answer reader is not binary-safe | **Fixed**: `vim.uv` handles, whose `read_start()` chunks are the bytes as they came. Pinned with editor refusals of 255, 256, 300, 512 and 513 bytes, each reaching Claude as the refusal within 2 s. |
+| 3 typed text discarded without a prompt | **Fixed** (the reviewer's design): kept, unnamed. Pinned with the reviewer's two cases, one per path (`bwipeout` then `:edit aineo://report`; `enew \| bdelete \| buffer aineo://report`). |
+| 4 a directory at the records path raises a raw error | **Fixed** (the reviewer's patch and pin). |
+| 5 the trim race | **Refusals fixed** (a failed cut no longer refuses, item 7, and the cut file is per process, item 9), pinned by a deterministic interleaving of two editors. **Losses recorded as a limit** with the reviewer's measurement. |
+| 6 an unconfirmed report that later fails is dropped silently | **Fixed**: the editor tells the user, once; the tool result says "sent, not confirmed". The *Readings* are corrected below. |
+| 7 the 5 s value unpinned | **Fixed** (the reviewer's pin): W9 dies by assertion, 2 of 2. |
+| 8 a read-only directory refuses every report past 4 MiB; a symlink becomes a file | **Fixed**, both, each pinned. |
+| 9 two recorded figures | **Corrected**: the worst case measured is the reviewer's 1 040 004 lines in 156 ms (RSS 104 MB), not 520004 lines; and a record grows past 2 MiB with raw control characters from a non-conforming client, not only with DEL. |
+| 10 E739 when two editors make the records directory at once (pre-existing) | **Fixed**, in more than the brief's line or two: a race lost on any directory of the path is retried, at most once per directory; a directory that cannot be made is named. Pinned by the race's outcome, fixed in a test by a stub of `vim.fn.mkdir` that loses one or two races: at the records directory, at its parent, and at the parent and then the directory. The race probe then refused nothing in 4 of 4 runs. |
+| 11 informational | **Recorded** under *Limits recorded in the correction*: the user's `:doautocmd BufReadCmd` in the Report, and `:file` / `:saveas` in it. The non-Neovim peers were re-measured against the new reader (below). |
+| Test-integrity: the notifying-editor test hangs against the old mechanism | **Fixed**: the stand-in editors answer requests only. The hang was a ping-pong (measured below). The test now ends against `70ed857`'s code, and passes there, as `vim.rpcrequest` does confirm that report; against "any message taken for the answer" it fails by assertion, 2 of 2. |
+| Test-integrity: W9, F0, D0, R0 | **W9 killed.** **F0**'s literal edit no longer applies: its site now calls `free_name_held_by()`, and the edit that replaces that call with the old wipe dies by assertion. **D0**'s literal edit now lands inside `free_name_held_by()`, where it **survives, equivalent**: only a buffer whose text is unchanged reaches that `nvim_buf_delete`, and for such a buffer `force` changes nothing (reasoned; a terminal buffer whose job still runs, named `aineo://report` by the user, is the one case not measured). The edit that replaces the Report's discard with the old wipe dies by assertion. **R0 survives, equivalent**: the new read check raises before `vim.split` whenever `data` is nil, so `data or ''` never takes its right side; the edit that removes that check dies by assertion. |
+
+### Measured in the correction (Nvim 0.11.6, on this Mac)
+
+- **`sockconnect()`'s zero byte, and the new reader.** Through the relay, a stand-in editor's refusal whose text holds a zero byte reached Claude as that text, zero byte included, in 18 ms; a 256-byte refusal in 20 ms (probe `t5c-p2-peers.lua`, run on the reader as committed in `39ea0aa`).
+- **A host name.** `serverstart('localhost:0')` listens on `::1` only — the first of `::1` and `127.0.0.1` that `getaddrinfo` gives — and `sockconnect()` reaches it. The new relay, given `localhost:<port>`, dials the first resolved address and delivered in 22 ms.
+- **TCP addresses that cannot be dialled.** `getaddrinfo('127.0.0.1', '99999')` fails; `tcp:connect('127.0.0.1', 0)` fails at once (`EADDRNOTAVAIL`); a closed port fails through the callback (`ECONNREFUSED`); a missing socket path too (`ENOENT`). At `1a67263`, the address `127.0.0.1:0` got no answer from the relay within 2 s.
+- **The old stand-in's hang.** Against `70ed857`'s relay (`vim.rpcrequest`), a stand-in that answered every message it decoded received 200 messages in 3 s — the request (`0 1`), then `2 nvim_error_event` over and over: the relay answers an unknown notification with an error event, and the stand-in answered that with another notification. Uncapped, the probe's own Neovim never returned from a 3 s `vim.wait` and was killed at 40 s.
+- **Non-Neovim peers against the new reader** (finding 11's table, re-run): a response followed by garbage is delivered, now without a traceback, since the reader stops at the response; the byte `0xc1` and the msgpack integer `5` give "not confirmed" at 5.2 s, with the unpacker's error on stderr; `[1]` gets no answer, with `attempt to index local 'failure'` on stderr. In every case the next ping was answered. Neovim writes none of these.
+- **The late failure, end to end** (finding 6; probe `t5c-p5-late.lua`, with the re-measure's probe library, on a copy of `17e034f`'s code): a TUI editor whose records path is a directory, held at a hit-enter prompt, got a report. The relay answered at 5147 ms: "aineo sent the report, but the editor did not confirm it within 5 s: … The report is sent, not confirmed; do not send it again." After Enter, the editor ran the request, and `:messages` held the Report's own warning (its records cannot be read, `EISDIR`) and, once, "aineo cannot keep the report in <file>: EISDIR …". Three Enters were needed: the original prompt and one for each warning.
+- **The two-editor race, re-run** (the re-measure's probe `remeasure10-p23-race.lua`, 5000 reports of 4000 bytes per editor, from a new state directory, on copies of the code): on `faf16db` (the first mkdir fix), 1 report refused by E739 on `.remeasure10`, the probe's state root, and 1 record lost; on a version with the retry that still checked `isdirectory`, 4 runs: 0 refused, 0, 0, 12 and 1 lost; on `17e034f`, 4 runs: 0 refused, 0 lost. No run left a `.cut` file or an undecodable line.
+- **Each new test against `1a67263`'s production code**, with the final tests (the copy tree `t5c-oldcode`): every test listed as seen red below fails there by assertion.
+
+### Readings for the MVP review (corrected by the correction)
+
+- **A report not confirmed within 5 s** is answered "sent, not confirmed", and Claude is told not to send it again. It is not an error. The editor runs the request when the user is done; if it cannot keep the report then, it tells the user, once. Nothing is promised to Claude about the report showing. (The fix round's reading said "the report shows when the user is done", which was true only when keeping it succeeded.)
+- **A buffer holding the Report's name** gives it up when a Report is made: wiped out, or, when the user changed its text, kept unnamed.
+- **A records file that cannot be cut back** is appended to all the same, and the user is warned with each report until the cut succeeds; the Report still reads only its newest 2 MiB.
+
+### Red and green in the correction
+
+10 new tests, 19 new cases: the suite went from 239 to 258 cases.
+
+**Seen red (every test the correction added or changed, except those under *Arrived green*).** Each was run against `1a67263`'s production code with the final tests, and failed there by assertion:
+
+- *comes back with every report after the user deletes it* [`bunload`] — `{ …, "09:06 [done] First — Ended", "09:06 [done] First — Ended" }`, the last report twice.
+- *never discards text the user typed into a buffer holding its name* (2 cases) — `{ vim.NIL, {} }` where `{ vim.NIL, { "my own notes" } }` was expected.
+- *the records that are no file are reported, naming the file, and the Report opens without them* — `false` where `true` was expected.
+- *a report that the editor refuses is a tool error with the reason, at once, whatever its length* [256] and [512] — no answer within 2 s.
+- *a report for a TCP address that cannot be dialled is a tool error saying so* [`127.0.0.1:0`] — no answer within 2 s at `1a67263`; also red against this correction's first version of the reader, which passed the resolved entry's missing port to `connect()`.
+- *a report for an editor at a hit-enter prompt is answered in time…* (changed: the wording) — the "will show" text.
+- *the records that cannot keep a report tell the user why, once* — `:messages` empty.
+- *the records that cannot be cut keep the report, and tell the user why* — the report refused with `… .cut: EACCES`.
+- *the records kept through a symbolic link are cut behind it, and the link stays* — `{ "file", 4097, "Task 4097" }`.
+- *the records cut by another editor while this one cuts them are still cut, without a warning* — the report refused with `ENOENT` at `1a67263`; on the code just before the per-process name, the cut's `ENOENT` warning.
+- *the records keep a report when another editor makes their directory at the same moment* [0], [1] and [1, 0] — the `E739` refusal at `1a67263`; [1] was also red on `faf16db` (the named E739 refusal), the correction's first fix, which the race probe had shown incomplete.
+- *the records whose directory cannot be made refuse a report, naming the directory* — `false` where `true` was expected (the raw Vim message).
+- The hit-enter test's 6 s window (changed) — green on unchanged code; red on W9 by assertion (`left = nil, right = 2` at key 3).
+
+**Arrived green:**
+
+- the refusal lengths 255, 300 and 513 — green by nature at `1a67263` too: their answers hold one zero byte, the error type, which the old reader read as 10 and still decoded. Killer: "NUL read as newline" fails 256 and 512 only, by assertion;
+- *a report for a TCP address that cannot be dialled* [`127.0.0.1:99999`] — its guard was written with the reader, ahead of the test; green at `1a67263` as well. Killer: "resolution unchecked", by assertion;
+- *a report is confirmed by an editor that writes a notification before its answer* (its stand-in changed to answer requests only) — killer "any message taken for the answer", by assertion, 2 of 2;
+- *the records keep a report when another editor makes their directory at the same moment* [1, 0] — red at `1a67263`, but green where it was added: the bound was written with the retry, one commit earlier. Killer: "one retry only", by assertion.
+
+### Mutants on the correction's last code commit
+
+Head `17e034f`. Every edit literal (the exact strings are in `t5c-mutants.json`; the table trims leading spaces), applied from the committed file, run, restored and the restore checked (`t5c-mutate.py`, a copy of the re-measure's runner). K = killed, A = by assertion, E = by crash. The rows named for the re-measure's survivors come first; then one or more per numbered item that changed code; then the fix round's rows on code this correction touched, re-anchored where the old text is gone. The fix round's rows on files the correction did not touch stand as measured on `d01bea8`.
+
+| Mutant | Literal edit (old → new; ⏎ is a newline) | Run | Result | Killing cases |
+|---|---|---|---|---|
+| W9 (the re-measure's) | `editor.lua`: `vim.wait(CONFIRMATION_TIMEOUT_MS, function()` → `vim.wait(9000, function()` | `test_mcp_blocked_editor.lua` | K: 1 A | A a report for an editor at a hit-enter prompt › is answered in time, the relay keeps serving, and the report shows once the user is done |
+| W9 (the re-measure's) | `editor.lua`: `vim.wait(CONFIRMATION_TIMEOUT_MS, function()` → `vim.wait(9000, function()` | `test_mcp_blocked_editor.lua` | K: 1 A | A a report for an editor at a hit-enter prompt › is answered in time, the relay keeps serving, and the report shows once the user is done |
+| F0 (the re-measure's) | `buffer.lua`: `nvim_buf_delete(other, { force = true })` → `nvim_buf_delete(other, { force = false })` | — | not applied: the text no longer occurs | |
+| D0 (the re-measure's) | `buffer.lua`: `nvim_buf_delete(buffer, { force = true })` → `nvim_buf_delete(buffer, { force = false })` | `test_report_buffer.lua` | survived |  |
+| R0 (the re-measure's) | `records.lua`: `vim.split(data, '\n', { plain = true })` → `vim.split(data or '', '\n', { plain = true })` | `test_report_buffer.lua` | survived |  |
+| M7 | `protocol.lua`: `capabilities = { tools = vim.empty_dict() },` → `capabilities = { tools = {} },` | `test_mcp_relay.lua` | K: 1 A | A initialize › answers the recorded request with its protocol version, a tools object and the server |
+| M8 | `format.lua`: `{ name = 'blocked', moment = "when you cannot go on without the user's answer or action" }, ⏎` → `(nothing)` | `test_report.lua` | K: 5 A | A the three status refusals of `validate_report()`; A accepts each status of the format [blocked]; A tells when to report each status of the format [blocked] |
+| M8 | `format.lua`: `{ name = 'blocked', moment = "when you cannot go on without the user's answer or action" }, ⏎` → `(nothing)` | `test_mcp_relay.lua` | K: 2 A | A tools/list › lists one tool, report, whose input schema is the report format; A tools/call › of a refused report is a tool error naming the field |
+| M9 | `records.lua`: `vim.fn.sha256(working_directory) .. '.jsonl'` → `'reports.jsonl'` | `test_report_buffer.lua` | K: 2 A | A the records › that are no file are reported, naming the file, and the Report opens without them; A the records › of another working directory never show |
+| 1 loaded check removed again | `buffer.lua`: `and vim.api.nvim_buf_is_loaded(buffer) ⏎` → `(nothing)` | `test_report_buffer.lua` | K: 1 A | A the Report buffer › comes back with every report after the user deletes it › with the command + args { "bunload" } |
+| 2 NUL read as newline | `editor.lua`: `local position = 1 ⏎` → `chunk = chunk:gsub('%z', '\n') ⏎     local position = 1 ⏎` | `test_mcp_delivery.lua` | K: 2 A | A a report › that the editor refuses is a tool error with the reason, at once, whatever its length › of + args { 256 }; A a report › that the editor refuses is a tool error with the reason, at once, whatever its length › of + args { 512 } |
+| 2 TCP dialled as a pipe | `editor.lua`: `local host, port = address:match('^([^/]+):(%d+)$')` → `local host, port = nil, nil` | `test_mcp_delivery.lua` | K: 1 A | A a report › reaches an editor listening on a TCP address |
+| 2 resolution unchecked | `editor.lua`: `if not resolved then ⏎     return nil, resolve_failure ⏎   end ⏎` → `(nothing)` | `test_mcp_delivery.lua` | K: 1 A | A a report › for a TCP address that cannot be dialled is a tool error saying so › such as + args { "127.0.0.1:99999" } |
+| 2 port from the resolution | `editor.lua`: `tcp:connect(resolved[1].addr, tonumber(port), on_connect)` → `tcp:connect(resolved[1].addr, resolved[1].port, on_connect)` | `test_mcp_delivery.lua` | K: 1 A | A a report › for a TCP address that cannot be dialled is a tool error saying so › such as + args { "127.0.0.1:0" } |
+| 2 connect start failure ignored | `editor.lua`: `if not started then ⏎     close(connection) ⏎     return nil, failure ⏎   end ⏎` → `(nothing)` | `test_mcp_delivery.lua` | K: 1 A | A a report › for a TCP address that cannot be dialled is a tool error saying so › such as + args { "127.0.0.1:0" } |
+| 2 connect failure not noted | `editor.lua`: `call.unreachable = connect_failure ⏎` → `(nothing)` | `test_mcp_delivery.lua` | K: 1 A | A a report › for an editor that is gone is a tool error saying so, and the relay keeps serving |
+| 2 connection kept after the answer (N9 re-anchored) | `editor.lua`: `call.response = message ⏎         close(connection) ⏎` → `call.response = message ⏎` | `test_mcp_delivery.lua` | K: 1 A | A a report › reaches the editor the relay was given, and renders in its Report |
+| 2 any message taken for the answer (and item 11) | `editor.lua`: `if message[1] == RESPONSE then` → `if true then` | `test_mcp_delivery.lua` | K: 1 A | A a report › is confirmed by an editor that writes a notification before its answer |
+| 2 any message taken for the answer (and item 11) | `editor.lua`: `if message[1] == RESPONSE then` → `if true then` | `test_mcp_delivery.lua` | K: 1 A | A a report › is confirmed by an editor that writes a notification before its answer |
+| 2 report through a shell (P2 re-anchored) | `editor.lua`: `local call = { closed = false } ⏎` → `vim.fn.system('echo "' .. (report.details or '') .. '" > /dev/null') ⏎   local call = { closed = false } ⏎` | `test_mcp_delivery.lua` | K: 1 A | A a report › reaches the editor as data: fields holding code render literally and run nothing |
+| 2 close ignored while waiting (re-anchored) | `editor.lua`: `return call.unreachable ~= nil or call.response ~= nil or call.closed ⏎` → `return call.unreachable ~= nil or call.response ~= nil ⏎` | `test_mcp_blocked_editor.lua` | K: 1 A | A a report for an editor at a hit-enter prompt › is a tool error at once when the editor dies before it answers |
+| 2 close ignored while waiting (re-anchored) | `editor.lua`: `return call.unreachable ~= nil or call.response ~= nil or call.closed ⏎` → `return call.unreachable ~= nil or call.response ~= nil ⏎` | `test_mcp_blocked_editor.lua` | K: 1 A | A a report for an editor at a hit-enter prompt › is a tool error at once when the editor dies before it answers |
+| 2 EOF not noted (re-anchored) | `editor.lua`: `call.closed = true ⏎       close(connection) ⏎       return ⏎` → `close(connection) ⏎       return ⏎` | `test_mcp_blocked_editor.lua` | K: 1 A | A a report for an editor at a hit-enter prompt › is a tool error at once when the editor dies before it answers |
+| 2 EOF not noted (re-anchored) | `editor.lua`: `call.closed = true ⏎       close(connection) ⏎       return ⏎` → `close(connection) ⏎       return ⏎` | `test_mcp_blocked_editor.lua` | K: 1 A | A a report for an editor at a hit-enter prompt › is a tool error at once when the editor dies before it answers |
+| 3 typed text wiped again | `buffer.lua`: `if vim.bo[buffer].modified then` → `if false then` | `test_report_buffer.lua` | K: 2 A | A the Report buffer › never discards text the user typed into a buffer holding its name › after + args { "bwipeout %d \| edit aineo://report" }; A the Report buffer › never discards text the user typed into a buffer holding its name › after + args { "enew \| bdelete %d \| buffer aineo://report" } |
+| 3 name freed by a wipe (F0 site) | `buffer.lua`: `free_name_held_by(other)` → `vim.api.nvim_buf_delete(other, { force = true })` | `test_report_buffer.lua` | K: 1 A | A the Report buffer › never discards text the user typed into a buffer holding its name › after + args { "bwipeout %d \| edit aineo://report" } |
+| 3 Report discarded by a wipe (D0 site) | `buffer.lua`: `free_name_held_by(buffer)` → `vim.api.nvim_buf_delete(buffer, { force = true })` | `test_report_buffer.lua` | K: 1 A | A the Report buffer › never discards text the user typed into a buffer holding its name › after + args { "enew \| bdelete %d \| buffer aineo://report" } |
+| 4 read check removed | `records.lua`: `if not data then ⏎     error(('aineo cannot read the report records in %s: %s'):format(file, read_failure), 0) ⏎   end ⏎` → `(nothing)` | `test_report_buffer.lua` | K: 1 A | A the records › that are no file are reported, naming the file, and the Report opens without them |
+| 5 shared cut name | `records.lua`: `local cut = ('%s.%d.cut'):format(target, vim.uv.os_getpid())` → `local cut = target .. '.cut'` | `test_report_buffer.lua` | K: 1 A | A the records › cut by another editor while this one cuts them are still cut, without a warning |
+| 6 user not told | `init.lua`: `warn_later(failure) ⏎     error(failure, 0)` → `error(failure, 0)` | `test_report_buffer.lua` | K: 1 A | A the records › that cannot keep a report tell the user why, once |
+| 6 will-show wording back | `editor.lua`: `' The report is sent, not confirmed; do not send it again.'` → `' The report will show when the editor is free; do not send it again.'` | `test_mcp_blocked_editor.lua` | K: 1 A | A a report for an editor at a hit-enter prompt › is answered in time, the relay keeps serving, and the report shows once the user is done |
+| 8 cut failure refuses | `records.lua`: `local cut, failure = pcall(keep_newest_records, file) ⏎     if not cut then ⏎       return failure ⏎     end ⏎` → `keep_newest_records(file) ⏎` | `test_report_buffer.lua` | K: 1 A | A the records › that cannot be cut keep the report, and tell the user why |
+| 8 cut failure not told | `init.lua`: `if cut_failure then ⏎     warn_later(cut_failure) ⏎   end ⏎` → `(nothing)` | `test_report_buffer.lua` | K: 1 A | A the records › that cannot be cut keep the report, and tell the user why |
+| 8 link replaced | `records.lua`: `local target = vim.uv.fs_realpath(file) or file` → `local target = file` | `test_report_buffer.lua` | K: 1 A | A the records › kept through a symbolic link are cut behind it, and the link stays |
+| 10 no retry | `records.lua`: `local tries_left = #vim.split(directory, '/', { trimempty = true })` → `local tries_left = 0` | `test_report_buffer.lua` | K: 3 A | A the records › keep a report when another editor makes their directory at the same moment › levels up + args { { 0 } }; A the records › keep a report when another editor makes their directory at the same moment › levels up + args { { 1 } }; A the records › keep a report when another editor makes their directory at the same moment › levels up + args { { 1, 0 } } |
+| 10 one retry only | `records.lua`: `local tries_left = #vim.split(directory, '/', { trimempty = true })` → `local tries_left = 1` | `test_report_buffer.lua` | K: 1 A | A the records › keep a report when another editor makes their directory at the same moment › levels up + args { { 1, 0 } } |
+| 10 directory failure swallowed | `records.lua`: `error( ⏎         ('aineo cannot make the directory of the report records %s: %s'):format(directory, failure), ⏎         0 ⏎       ) ⏎` → `return ⏎` | `test_report_buffer.lua` | K: 1 A | A the records › whose directory cannot be made refuse a report, naming the directory |
+| 1-3 buffer-side rows still applying: unnamed buffer | `buffer.lua`: `vim.api.nvim_buf_set_name(buffer, REPORT_BUFFER_NAME) ⏎` → `(nothing)` | `test_report_buffer.lua` | K: 6 A, 5 E | A the Report buffer › is named aineo://report, is no file, has no swap file, is kept hidden and unlisted; A the Report buffer › stays the Report when a file is edited from its window while it is empty; C the Report buffer › keeps every report when the user edits it again › with + args { "edit" }: nvim_exec2(), line 1: Vim(edit):E32: No file name; C the Report buffer › keeps every report when the user edits it again › |
+| 1-3 name not taken back (A1) | `buffer.lua`: `free_report_buffer_name() ⏎` → `(nothing)` | `test_report_buffer.lua` | K: 3 A | A the Report buffer › takes its name back from a buffer holding it, and leaks none › after + args { { "lua require('aineo.report').report_buffer()", "bwipeout aineo://report", "edit a; A the Report buffer › takes its name back from a buffer holding it, and leaks none › after + args { { "file aineo://report" } }; A the Report buffer › never discards text the user typed into a buffer holding its name › after + args { " |
+| 1-3 reopened counts as showing (A3) | `buffer.lua`: `and vim.bo[buffer].buftype == 'nofile' ⏎` → `(nothing)` | `test_report_buffer.lua` | K: 3 A | A the Report buffer › deleted then shown again by the user takes no report, and the editor quits › with + args { "buffer #" }; A the Report buffer › deleted then shown again by the user takes no report, and the editor quits › with + args { "buffer aineo://report" }; A the Report buffer › never discards text the user typed into a buffer holding its name › after + args { "enew \| bdelete %d \| buffer aineo://report" } |
+| 8 never cut back (A5) | `records.lua`: `if stat and stat.size > 2 * RECORDS_KEPT_BYTES then` → `if false then` | `test_report_buffer.lua` | K: 3 A | A the records › are cut to their newest 2 MiB once they have grown past 4 MiB; A the records › kept through a symbolic link are cut behind it, and the link stays; A the records › that cannot be cut keep the report, and tell the user why |
+| 8 records overwritten (re-anchored) | `records.lua`: `local append_failure = write_to(file, 'a', vim.json.encode(record) .. '\n')` → `local append_failure = write_to(file, 'w', vim.json.encode(record) .. '\n')` | `test_report_buffer.lua` | K: 7 A | A the Report buffer › keeps every report when the user edits it again › with + args { "edit" }; A the Report buffer › keeps every report when the user edits it again › with + args { "edit!" }; A the records › are cut to their newest 2 MiB once they have grown past 4 MiB; A the records › are kept whole up to 4 MiB when a report is added; A the records › kept through a symbolic link are cut behind it, and the link stay |
+| 8 append failure unchecked (re-anchored N10) | `records.lua`: `if append_failure then ⏎     error(('aineo cannot keep the report in %s: %s'):format(file, append_failure), 0) ⏎   end ⏎` → `(nothing)` | `test_report_buffer.lua` | K: 2 A | A the records › refuse a report they cannot keep, naming the file, and show nothing; A the records › that cannot keep a report tell the user why, once |
+| 8 rename failure unchecked (re-anchored) | `records.lua`: `failure = not renamed and rename_failure or nil ⏎` → `(nothing)` | `test_report_buffer.lua` | survived |  |
+| 2 wait unbounded (A2) | `editor.lua`: `local CONFIRMATION_TIMEOUT_MS = 5000` → `local CONFIRMATION_TIMEOUT_MS = 600000` | `test_mcp_blocked_editor.lua` | K: 1 A | A a report for an editor at a hit-enter prompt › is answered in time, the relay keeps serving, and the report shows once the user is done |
+
+**40 literal edits, 39 applied** (F0's text no longer occurs) **in 44 runs** (the timing-sensitive ones twice, M8 on two files). **36 of the 39 applied edits were killed by assertion**, none by a crash only; "unnamed buffer" also fails 5 cases by crash, beside 6 by assertion. **3 survive:** D0 and R0, each equivalent for the reason given under *Findings of the re-measure*, and "rename failure unchecked", the limit the fix round recorded.
+
+### Limits recorded in the correction
+
+These replace the fix round's *Limits* where they say otherwise.
+
+- **The trim race still loses records.** Two editors appending to one records file while one cuts it can lose a record appended between the cut's read and its rename. The reviewer measured 4 and 1 records lost in two runs of 5000 reports per editor with the per-process cut name, and ENOENT refusals went to 0. The correction's runs of the same probe lost 1 (on `faf16db`), then 0, 0, 12 and 1 (with the mkdir retry and its `isdirectory` check), then 0 in each of 4 runs on `17e034f` — a race, so a run without loss proves nothing. Preventing the loss needs a lock.
+- **A records file that cannot be cut back grows** until its directory can be written; the user is warned with each report meanwhile.
+- **The cut's rename failure** is now a cut failure (a warning, the report kept). Its mutant is reported below; no portable test makes the rename fail once the cut file is written.
+- **A record longer than 2 MiB** is shown when it arrives, but never in a later editor, and a cut drops it. A report under the 1 MiB line limit grows that far only when its details hold mostly characters the records write as six bytes: DEL from any client, or raw control characters from a client that does not escape them as JSON requires (lua-cjson's decoder accepts them raw).
+- **The worst case measured** at the bound: a Report of 1 040 004 lines, opened in 156 ms with 104 MB resident (the re-measure's run of the attack reviewer's flood probe). The fix round's "520004 lines, 93 ms" was not the worst case.
+- **The user's own commands in the Report** (finding 11, the reviewer's measurement at `1a67263`, not re-run): `:doautocmd BufReadCmd` appends every record a second time; `:file x` and `:saveas x` rename the Report, and `:saveas` also leaves an ordinary buffer named `aineo://report` while reports keep going to the renamed Report.
+- **A peer at the editor's address that is not Neovim** can hold a report for 5 s or get no answer (above). Neovim writes none of these.
+
 ## Commits
 
-*Recorded after the merge.* The packet round carries four code commits and this note's commit; the fix round, the commits named in its section and the commit that adds that section. Their hashes change on rebase.
+*Recorded after the merge.* The packet round carries four code commits and this note's commit; the fix round, the commits named in its section and the commit that adds that section; the correction, the commits named in its section and the commit that adds it. Their hashes change on rebase.
