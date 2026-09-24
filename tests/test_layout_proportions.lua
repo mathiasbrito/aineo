@@ -18,6 +18,36 @@ T['the layout']['keeps its sizes through :wincmd ='] = function()
   eq(layout.boxes(child, buffers), before)
 end
 
+T['the layout']['keeps each column width through :wincmd = with the file column split'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  local before = layout.boxes(child, buffers)
+  child.cmd('vsplit')
+
+  child.cmd('wincmd =')
+
+  local after = layout.boxes(child, buffers)
+  eq(
+    { after.claude.width, after.report.width, after.input.width },
+    { before.claude.width, before.report.width, before.input.width }
+  )
+end
+
+T['the layout']['keeps the Report and Input heights through :wincmd = with a small split'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  local report_window = layout.window_showing(child, buffers.report)
+  local input_window = layout.window_showing(child, buffers.input)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('split')
+  child.cmd('resize 2')
+  local before = { layout.box(child, report_window).height, layout.box(child, input_window).height }
+
+  child.cmd('wincmd =')
+
+  eq({ layout.box(child, report_window).height, layout.box(child, input_window).height }, before)
+end
+
 T['the layout']['puts its sizes back when a window split from Input closes'] = MiniTest.new_set({
   parametrize = { { 'split' }, { 'vsplit' }, { 'topleft vnew' }, { 'vertical botright new' } },
 })

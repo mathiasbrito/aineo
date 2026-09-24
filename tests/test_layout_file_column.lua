@@ -117,11 +117,13 @@ T['a file opened on line 3 in Input']['shows line 3 under the cursor in the file
   command
 )
   local buffers = layout.open_with_stand_ins(child)
+  local input_window = layout.window_showing(child, buffers.input)
   local path = layout.file('first.txt')
   layout.enter_window_showing(child, buffers.input)
 
   child.cmd((command:gsub('{file}', path)))
 
+  eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { input_window }), buffers.input)
   eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 3, 0 })
 end
 
@@ -236,6 +238,35 @@ T['the file column']['split in two, takes the next file in the window that remai
   eq(layout.window_count(child), 4)
   eq(child.lua_get('vim.api.nvim_get_current_win()'), remaining_window)
   eq(child.lua_get('vim.fn.bufname()'), layout.file('second.txt'))
+end
+
+T['the file column']['opens right of Claude with a window left of Claude'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  local claude_window = layout.window_showing(child, buffers.claude)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('topleft vnew')
+  layout.enter_window_showing(child, buffers.input)
+
+  child.cmd('edit ' .. layout.file('first.txt'))
+
+  local claude = layout.box(child, claude_window)
+  local file = layout.box(child, child.lua_get('vim.api.nvim_get_current_win()'))
+  eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { claude_window }), buffers.claude)
+  eq(file.col, claude.col + claude.width + 1)
+end
+
+T['the file column']['shows a file it already shows when Input shows it too'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  local input_window = layout.window_showing(child, buffers.input)
+  local path = layout.file('first.txt')
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. path)
+  layout.enter_window_showing(child, buffers.input)
+
+  child.cmd('buffer ' .. path)
+
+  eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { input_window }), buffers.input)
+  eq(layout.window_count(child), 4)
 end
 
 --- Makers of buffers that hold no file, by kind: a help buffer, whose

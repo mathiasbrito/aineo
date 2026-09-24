@@ -122,8 +122,14 @@ T['open()']['makes Input a named scratch buffer, never a file']['after'] = funct
   )
 end
 
-T['open()']['closes the other windows of the tab and keeps their buffers loaded'] = function()
+T['open()']['closes the other windows of the tab and keeps their buffers loaded'] =
+  MiniTest.new_set({ parametrize = { { 'set hidden' }, { 'set nohidden' } } })
+
+T['open()']['closes the other windows of the tab and keeps their buffers loaded']['with'] = function(
+  option
+)
   layout.start(child)
+  child.cmd(option)
   local startup_window = child.lua_get('vim.api.nvim_get_current_win()')
   child.cmd('vsplit ' .. layout.file('other.txt'))
   local file_buffer = child.lua_get('vim.api.nvim_get_current_buf()')
@@ -142,12 +148,18 @@ T['open()']['closes the other windows of the tab and keeps their buffers loaded'
 end
 
 --- Commands that leave a file in the current window, `{file}` standing for a
---- path: a named file, and text typed into the unnamed buffer.
+--- path: a named file, text typed into the unnamed buffer, and text typed
+--- below an empty first line of it.
 local EDIT_A_FILE = 'edit {file}'
 local TYPE_INTO_THE_UNNAMED_BUFFER = [[call setline(1, 'typed')]]
+local TYPE_BELOW_AN_EMPTY_LINE = [[call setline(1, ['', 'typed'])]]
 
 T['open()']['keeps the file the current window shows, in the file column'] = MiniTest.new_set({
-  parametrize = { { EDIT_A_FILE }, { TYPE_INTO_THE_UNNAMED_BUFFER } },
+  parametrize = {
+    { EDIT_A_FILE },
+    { TYPE_INTO_THE_UNNAMED_BUFFER },
+    { TYPE_BELOW_AN_EMPTY_LINE },
+  },
 })
 
 T['open()']['keeps the file the current window shows, in the file column']['after'] = function(
@@ -189,6 +201,18 @@ T['open()']['refuses an arrangement it cannot show, naming the setting']['given'
   end, refusal)
 end
 
+T['open()']['refuses a Report share of 1 before changing any window'] = function()
+  layout.start(child)
+  local arrangement = layout.arrangement(layout.stand_ins(child))
+  arrangement.report_height = 1
+
+  MiniTest.expect.error(function()
+    layout.open(child, arrangement)
+  end, 'arrangement%.report_height: expected a number strictly between')
+
+  eq(layout.window_count(child), 1)
+end
+
 T['open()']['refuses an arrangement that is not a table'] = function()
   layout.start(child)
 
@@ -217,6 +241,19 @@ T['focus()']['reopens the closed window of'] = function(role)
 
   eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers[role])
   eq(layout.window_count(child), 3)
+end
+
+T['focus() with its window open changes no window and no size'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.claude)
+  child.cmd('vertical resize 20')
+  local windows = child.lua_get('vim.api.nvim_tabpage_list_wins(0)')
+  local before = layout.boxes(child, buffers)
+
+  layout.focus(child, 'input', layout.arrangement(buffers))
+
+  eq(child.lua_get('vim.api.nvim_tabpage_list_wins(0)'), windows)
+  eq(layout.boxes(child, buffers), before)
 end
 
 T['focus() refuses a window the layout does not have'] = function()
