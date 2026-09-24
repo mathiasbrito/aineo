@@ -15,8 +15,8 @@ local M = {}
 --- arrived, without the newline. The limit is checked as each chunk
 --- arrives: a line that a chunk takes past `limit` is dropped and
 --- `on_too_long` told then, before its newline arrives, so at most `limit`
---- bytes and one chunk of it are ever held; the rest of that line, up to its
---- newline, is dropped as it arrives.
+--- bytes and one chunk of it are ever held. The rest of that line is not
+--- kept as it arrives: when its newline comes, `on_line` gets an empty line.
 ---
 ---@param options aineo.mcp.LineReaderOptions
 ---@return fun(data: string[])
@@ -26,9 +26,7 @@ function M.new_line_reader(options)
   return function(data)
     for index, piece in ipairs(data) do
       if index > 1 then
-        if not dropping then
-          options.on_line(partial)
-        end
+        options.on_line(partial)
         partial, dropping = '', false
       end
       if not dropping then
