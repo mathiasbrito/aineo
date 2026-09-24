@@ -7,7 +7,7 @@
 --- names.
 ---
 --- It serves only when it is the script `-l` runs (`arg[0]`, `:h lua-args`):
---- required inside an editor, it does nothing.
+--- loaded inside an editor, by `require` or `dofile`, it does nothing.
 
 local this_script = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p')
 local script_run = arg and arg[0] and vim.fn.fnamemodify(arg[0], ':p')
