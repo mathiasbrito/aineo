@@ -72,13 +72,21 @@ T['a report for an editor at a hit-enter prompt']['is answered in time, the rela
   local relay = mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = editor.address })
 
   relay:send(mcp_messages.recorded('tools/call'))
-  local answer = decoded(relay:next_line())
+  local waited = relay:is_silent_for(500)
   relay:send('{"jsonrpc":"2.0","id":3,"method":"ping"}')
-  local pong = decoded(relay:next_line())
+  local answers = relay:next_lines(2)
   editor:type('\r')
 
-  eq({ waiting, get(answer, 'result'), get(pong, 'id') }, {
+  eq({
+    waiting,
+    waited,
+    get(decoded(answers[1]), 'id'),
+    get(decoded(answers[1]), 'result'),
+    get(decoded(answers[2]), 'id'),
+  }, {
     true,
+    true,
+    2,
     { isError = false, content = { { type = 'text', text = NOT_CONFIRMED } } },
     3,
   })
