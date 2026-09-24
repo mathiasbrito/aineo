@@ -38,6 +38,16 @@ Provenance: documentation facts were read raw (not summarised) on 2026-09-23 fro
 - **WebSocket is yours to implement** — Neovim has none. RFC 6455: the handshake's `Sec-WebSocket-Accept` is `base64(SHA-1(key .. "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))`; *measured*: Neovim has `vim.base64` and `sha256` but **no SHA-1**, so SHA-1 is written in Lua over `bit` and pinned by the RFC's own example (key `dGhlIHNhbXBsZSBub25jZQ==` → `s3pPLMBiTxaQ9kYGzzhZRbK+xOo=`). Client frames are masked and an unmasked one closes the connection; lengths come in 7-, 16- and 64-bit forms; fragments, ping/pong and the close handshake are all handled; a frame or message past a stated size limit closes the connection rather than growing a buffer. A request carrying a browser `Origin` is refused — a web page can reach `127.0.0.1`.
 - **Over the socket runs MCP: JSON-RPC 2.0** — `initialize`, `notifications/initialized`, `tools/list`, `tools/call`, and notifications from the editor. A tool whose answer waits on the user — a diff the user accepts or rejects — replies later, from a callback, and never blocks the editor while it waits.
 
+## Running the interactive CLI in a Neovim terminal — what aineo v1 does (D2)
+
+*Measured* by the orchestrator on Claude Code 2.1.281 in a Neovim 0.11.6 terminal, in a folder the user trusted, with the orchestrating session's `CLAUDE*` variables removed (T2, 2026-09-23 and 2026-09-24; `knowledge-vault/Implementation/Waves/00002-layout-session-report/evidence/`, landing with wave 2). Tier 2 all of it — screen text and key behaviour are not a contract, and each fact carries its version.
+
+- **Ready means the prompt glyph `❯` with no trust-dialog text on the screen.** The footer `? for shortcuts` is absent at startup; the trust dialog's selected line (`❯ No, exit`) carries the same glyph. Never answer the trust dialog for the user.
+- **A bracketed paste (`ESC[200~ … ESC[201~`) lands unsubmitted; Enter sends it as one message.**
+- **Stopping is keys first.** One Ctrl-C during a turn ends the turn and keeps the process (the message returns to the input box); a double Ctrl-C 0.3 s apart at idle exits 0; a double Ctrl-C during a turn does not exit; presses 1.2 s apart do not exit; `/exit` exits 0; `jobstop` (SIGHUP) exits 129.
+- **`--mcp-config` (a JSON string), `--allowedTools` and `--append-system-prompt` take effect interactively** — with a control run in which the unlisted tool asked for permission. At startup Claude Code sends a stdio server `initialize` (protocol `2025-11-25`, `id` 0), `notifications/initialized` and `tools/list`; the server saw `NVIM` and `AINEO_CHILD` inherited through `claude` (the two variables the probe looked for), plus the entry's own `env`.
+- **Inherited session markers change the child.** A `claude` that inherited another Claude session's `CLAUDE_CODE_*` variables showed "Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker"; tests and probes remove them (the suite does — T1), while aineo's own session passes the user's environment through.
+
 ## Both directions
 
 - **JSON null is truthy in Lua.** *Measured*: `vim.json.decode` turns `null` into `vim.NIL`, and `vim.NIL` is true in a condition — `if msg.parent_tool_use_id then` is true for the main thread. Decode with `{ luanil = { object = true, array = true } }`, or compare with `vim.NIL` explicitly; a codec test feeds a `null` for every nullable field it reads.
@@ -46,14 +56,18 @@ Provenance: documentation facts were read raw (not summarised) on 2026-09-23 fro
 
 ## Tests
 
-- **No test calls the real Claude.** It costs money, needs the developer's credentials and is not deterministic. The default suite runs a fake `claude` placed first on `PATH` inside the worktree — a script that replays a recorded NDJSON transcript line by line and reads its stdin. Transcripts are recorded from the real CLI, with the version and date in the fixture's header; a contract suite that re-records them runs only when the user starts it, never inside a packet.
-- **No test touches the developer's Claude state.** `CLAUDE_CONFIG_DIR` (and `HOME` where a code path ignores it) point into the worktree, so lock files, sessions and settings are the test's own; a test never reads `~/.claude/`. This is the charter's shared-state rule, and `prepare_project` provides it.
+- **No test calls the real Claude.** It costs money, needs the developer's credentials and is not deterministic. The default suite runs a fake `claude` in the CLI's place — for aineo's terminal session through `claude.cmd` (D13), so no test depends on `PATH` order — a script that replays a recording of the real CLI (an NDJSON transcript line by line for headless use, the raw terminal bytes for the interactive TUI) and reads its stdin. Transcripts are recorded from the real CLI, with the version and date in the fixture's header; a contract suite that re-records them runs only when the user starts it, never inside a packet.
+- **No test touches the developer's Claude state.** `CLAUDE_CONFIG_DIR` (and `HOME` where a code path ignores it) point into the worktree, so lock files, sessions and settings are the test's own; a test never reads `~/.claude/`. This is the charter's shared-state rule, and the suite provides it: `make test` sets `CLAUDE_CONFIG_DIR` under the checkout's `.tests/` and `scripts/minimal_init.lua` removes every other inherited `CLAUDE*` variable (T1); `prepare_project` stays empty.
 - **The socket server is tested from a client in the test** over `vim.uv` TCP: the RFC 6455 handshake vector, a missing or wrong token refused, an unmasked frame refused, every length form, fragmentation, close, a browser `Origin` refused, and the lock file's mode and removal.
 - **Every codec path has a malformed-input test** — a partial line, a line split mid-character, invalid JSON, an unknown `type`, a `null` where a value was expected.
 
 ## Traps this repository has already paid for
 
-None yet. The adjustment pass (orchestrate §7) adds each trap here as it is paid for — one line, bolded, with the `knowledge-vault/Learnings/` note that records it and the task that found it.
+The adjustment pass (orchestrate §7) adds each trap here as it is paid for — one line, bolded, with the `knowledge-vault/Learnings/` note that records it and the task that found it.
+
+- **Readiness keyed on footer text timed out with the prompt ready** — `? for shortcuts` is not shown at startup in 2.1.281; the prompt glyph with no trust text is the signal. [[Learnings/Claude Code's interactive CLI in a Neovim terminal]] — T2.
+- **A double Ctrl-C during a turn does not stop the interactive CLI** — the first press ends the turn, the second does not exit; a stop sends one Ctrl-C, then a double Ctrl-C, then falls back to `jobstop`. Same note — T2, measured for T4.
+- **A probe that inherits the orchestrating session's `CLAUDE*` variables measures a different Claude** — transcript saving turned off under an inherited `CLAUDE_CODE_CHILD_SESSION` marker; every probe and test removes them. Same note — T2.
 
 ## What you add to a review
 

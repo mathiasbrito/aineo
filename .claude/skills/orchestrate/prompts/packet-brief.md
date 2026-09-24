@@ -30,7 +30,7 @@ Read first: <the spec, plan and data-model sections, by heading>; `knowledge-vau
 
 - **Branch:** `feature/<slug>` from `origin/dev`.
 - **Model:** `opus` — every role in this project runs on Opus (SKILL §1).
-- **Resources:** `impl_<slug>` — pass it to `.claude/scripts/prepare-worktree.sh`.
+- **Resources:** `impl_<slug>`, the slug's hyphens written as underscores (`prepare-worktree.sh` refuses a hyphen) — pass it to `.claude/scripts/prepare-worktree.sh`.
 - **You may touch:** <files and modules, explicitly; include the entry point you may add exports to, every registration list and every pin that counts what you add, every list a new module home changes, the test files, the task list — **your own lines only**, or **no marks** when the wave holds its marks (SKILL §3 rule 6), in which case: *a `## Task lines` section in your session note, one paragraph per task in the closed lines' style* — and the session note you will create> — and the documentation this change invalidates: <the README paragraph, the plan's tree entry, the data-model row — named by file and section; correct them in the same commit and say in your report what you corrected>.
 - **You must not touch:** <files other packets in this wave own; the project note; the schema if another packet holds it this wave; the dependency manifest and lockfile unless this packet is a dependency change> — and never `.claude/`, `.githooks/`, `CLAUDE.md`, `.worktreeinclude` or `.gitignore`, which change every agent and belong on an `ai/` branch.
 - **Session note:** `knowledge-vault/Sessions/<YYYY-MM-DD>[-<letter>] — <topic>.md` — this exact filename, chosen by the orchestrator so it collides with no other packet's.
