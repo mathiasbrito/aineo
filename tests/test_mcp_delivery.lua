@@ -40,34 +40,62 @@ local stand_in_handles = {}
 --- so that the relay reads them apart.
 local ANSWER_DELAY_MS = 50
 
---- Listens at a new socket path in place of the user's editor, and answers
---- the one msgpack-RPC request it receives there with success — after first
---- writing a notification, what an editor sends when a plugin broadcasts to
---- every channel (`rpcnotify(0, …)`) while a report is received.
+--- The msgpack-RPC message types a stand-in editor reads and writes (`:h rpc`).
+local REQUEST, RESPONSE, NOTIFICATION = 0, 1, 2
+
+--- Listens at a new socket path in place of the user's editor, and hands
+--- each msgpack-RPC request it receives there to `answer`, with the
+--- connection to write to; any other message it receives is ignored, as an
+--- editor answers requests only.
 ---
+---@param answer fun(connection: uv.uv_pipe_t, request: table)
 ---@return string address
-local function start_editor_notifying_first()
+local function start_stand_in_editor(answer)
   local address = vim.fn.tempname() .. '.sock'
   local server = assert(vim.uv.new_pipe(false))
   table.insert(stand_in_handles, server)
   server:bind(address)
   server:listen(1, function()
     local connection = assert(vim.uv.new_pipe(false))
-    local answer_later = assert(vim.uv.new_timer())
-    vim.list_extend(stand_in_handles, { connection, answer_later })
+    table.insert(stand_in_handles, connection)
     server:accept(connection)
     local unpack = vim.mpack.Unpacker()
     connection:read_start(function(_, data)
-      local request = data and unpack(data)
-      if request then
-        connection:write(vim.mpack.encode({ 2, 'aineo_test_broadcast', {} }))
-        answer_later:start(ANSWER_DELAY_MS, 0, function()
-          connection:write(vim.mpack.encode({ 1, request[2], vim.NIL, vim.NIL }))
-        end)
+      local message = data and unpack(data)
+      if message and message[1] == REQUEST then
+        answer(connection, message)
       end
     end)
   end)
   return address
+end
+
+--- A stand-in editor (`start_stand_in_editor()`) that answers the request
+--- with success — after first writing a notification, what an editor sends
+--- when a plugin broadcasts to every channel (`rpcnotify(0, …)`) while a
+--- report is received.
+---
+---@return string address
+local function start_editor_notifying_first()
+  local answer_later = assert(vim.uv.new_timer())
+  table.insert(stand_in_handles, answer_later)
+  return start_stand_in_editor(function(connection, request)
+    connection:write(vim.mpack.encode({ NOTIFICATION, 'aineo_test_broadcast', {} }))
+    answer_later:start(ANSWER_DELAY_MS, 0, function()
+      connection:write(vim.mpack.encode({ RESPONSE, request[2], vim.NIL, vim.NIL }))
+    end)
+  end)
+end
+
+--- A stand-in editor (`start_stand_in_editor()`) that refuses the request
+--- with `reason`, as an editor answers a request that raised an error.
+---
+---@param reason string
+---@return string address
+local function start_editor_refusing(reason)
+  return start_stand_in_editor(function(connection, request)
+    connection:write(vim.mpack.encode({ RESPONSE, request[2], { 0, reason }, vim.NIL }))
+  end)
 end
 
 --- Closes every socket and timer a stand-in editor opened.
@@ -173,6 +201,23 @@ T['a report']['is confirmed by an editor that writes a notification before its a
   })
 end
 
+T['a report']['that the editor refuses is a tool error with the reason, at once, whatever its length'] =
+  MiniTest.new_set({ parametrize = { { 255 }, { 256 }, { 300 }, { 512 }, { 513 } } })
+
+T['a report']['that the editor refuses is a tool error with the reason, at once, whatever its length']['of'] = function(
+  length
+)
+  local reason = 'E' .. ('x'):rep(length - 1)
+  local relay = mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = start_editor_refusing(reason) })
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq(get(decoded(relay:next_line(2000)), 'result'), {
+    isError = true,
+    content = { { type = 'text', text = 'the editor did not take the report: ' .. reason } },
+  })
+end
+
 T['a report']['reaches an editor listening on a TCP address'] = function()
   start_editor()
   local address = editor.lua_get([[vim.fn.serverstart('127.0.0.1:0')]])
@@ -241,6 +286,26 @@ T['a report']['for an editor that is gone is a tool error saying so, and the rel
     ),
     get(decoded(answers[2]), 'id'),
   }, { true, true, 3 })
+end
+
+T['a report']['for a TCP address that cannot be dialled is a tool error saying so'] =
+  MiniTest.new_set({ parametrize = { { '127.0.0.1:99999' }, { '127.0.0.1:0' } } })
+
+T['a report']['for a TCP address that cannot be dialled is a tool error saying so']['such as'] = function(
+  address
+)
+  local relay = mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = address })
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  local answer = decoded(relay:next_line(2000))
+  eq({
+    get(answer, 'result', 'isError'),
+    begins_with(
+      get(answer, 'result', 'content', 1, 'text'),
+      'aineo could not reach the editor at ' .. address .. ': '
+    ),
+  }, { true, true })
 end
 
 T['a report']['that the editor does not take is a tool error with the reason it gave'] = function()
