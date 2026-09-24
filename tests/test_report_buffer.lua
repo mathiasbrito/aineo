@@ -671,6 +671,53 @@ T['the records']['that cannot keep a report tell the user why, once'] = function
   eq(messages, refusal)
 end
 
+T['the records']['keep a report when another editor makes their directory at the same moment'] = function()
+  report_editor.start(child, {
+    times = { '2026-09-24T09:05:00' },
+    state_directory = fixture.directory('report-state'),
+    working_directory = '/projects/alpha',
+  })
+  child.lua([[
+    local make_directory = vim.fn.mkdir
+    vim.fn.mkdir = function(directory, flags)
+      vim.fn.mkdir = make_directory
+      make_directory(directory, flags)
+      error('Vim:E739: Cannot create directory ' .. directory .. ': file already exists', 0)
+    end
+  ]])
+
+  local failure = child.lua(
+    [[return select(2, pcall(require('aineo.report').receive_report, ...))]],
+    { { task = 'Task', status = 'done', summary = 'Summary' } }
+  )
+
+  eq({ failure, report_editor.lines(child) }, { vim.NIL, { '09:05 [done] Task — Summary' } })
+end
+
+T['the records']['whose directory cannot be made refuse a report, naming the directory'] = function()
+  local state_directory = fixture.directory('report-state')
+  local records_directory = vim.fs.joinpath(state_directory, 'aineo', 'reports')
+  vim.fn.writefile({}, vim.fs.joinpath(state_directory, 'aineo'))
+  report_editor.start(child, {
+    times = { '2026-09-24T09:05:00' },
+    state_directory = state_directory,
+    working_directory = '/projects/alpha',
+  })
+
+  local refusal = child.lua(
+    [[return select(2, pcall(require('aineo.report').receive_report, ...))]],
+    { { task = 'Task', status = 'done', summary = 'Summary' } }
+  )
+
+  eq(
+    vim.startswith(
+      tostring(refusal),
+      'aineo cannot make the directory of the report records ' .. records_directory .. ': '
+    ),
+    true
+  )
+end
+
 T['the records']['keep no refused report'] = function()
   local state_directory = fixture.directory('report-state')
   report_editor.start(child, {
