@@ -47,3 +47,5 @@ The dimensions are not decoration. Attack finds defeats nobody told the author a
 
 - [[Skills/Orchestrate]]
 - `Learnings/` about verification proving less than it claims — link each here as it is written.
+  - [[Learnings/A test case can end a mini.test run green]] — an exit status the runner did not decide from the cases it counted.
+  - [[Learnings/mini.test v0.18.0 hangs instead of failing]] — a broken suite that reads as a hang, never as a failure.

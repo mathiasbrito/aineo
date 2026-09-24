@@ -1,0 +1,27 @@
+# Output of t2-handshake-driver.lua, 2026-09-24 00:55 CEST, Claude Code 2.1.281: ready, the handshake seen, then /exit + Enter.
+ready=true
+tools/list seen=true
+exited=true code=0
+--- screen ---
+
+[Process exited 0]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,12 +1,12 @@
 ---
 wave: 00001
-status: claimed
+status: landed
 planned_by: the orchestrator (Claude, Opus 5.5) for Mathias Santos de Brito — host Macbook-Mathias
 planned_at: 2026-09-23 22:37 CEST
 base: 17b8edf (origin/dev, after #2 and #1)
 claimed_by: Macbook-Mathias (platform UUID prefix CF989BF4), session 619e5f9a-554c-4884-9695-132dccbcec45
 claimed_at: 2026-09-23 23:24 CEST
-landed_at:
+landed_at: 2026-09-24 05:50 CEST
 ---
 
 # Wave 1 — tooling foundation
@@ -67,4 +67,8 @@ Run by the orchestrator on the final head, each as a literal edit shown applied 
 
 ## Landed
 
-<!-- filled by the knowledge pass -->
+- **T1 — PR #4**, merged by rebase on 2026-09-24 as `5edf69f` … `7284c00` (nine commits: packet, fix round, correction; per-file identity 21 of 21 with the final head `5b323d8`). Reviews on Opus: attack (`neovim-lua-developer`), test-integrity and records (`reviewer`); one fix round by the author; a re-measure with the attack question (`neovim-lua-developer`) that refuted the new runner's exit status; one bounded correction by a fresh agent (`neovim-lua-developer`).
+- **The orchestrator's verification** of `5b323d8`: `make test` 111 cases, `Fails (0)`, exit 0; M1, M2 and M3 killed by assertion (9, 2 and 4 failing cases), and three of the re-measure's findings reverted as literal edits — the leave guard on `is_executing()`, `make deps` ignoring git's status, `TEST_HOME` without `override` — killed by assertion (10, 2, 2).
+- **The `ai/` pass — PR #5**, `12353b2`, `83c263e`, `798275d`: the make commands in the root `CLAUDE.md`, the specialists' isolation lines, six traps, the interactive-CLI section, the resource-name and no-`cd` rules; one records review, whose ten CONFIRMED findings the second commit corrected.
+- **Limits recorded** (T1's session note, *Open threads*): a case that keeps the runner busy is bounded only from outside; a SIGKILL of make's group leaves children; an un-stopped `vim.system` process outlives the run; plain-table test groups are not collected; a parent's `VIMRUNTIME` reaches the suite.
+- **Retrospective:** [[Sessions/2026-09-24 — Wave 1 retrospective]].

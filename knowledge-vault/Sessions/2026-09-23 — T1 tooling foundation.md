@@ -348,7 +348,21 @@ Measured first, with `-i NONE`: the plain TESTING.md invocation resolves every s
 
 ## Commits
 
-*Recorded after the merge.*
+Merged by rebase into `dev` on 2026-09-24 (PR #4, final head `5b323d8`; per-file identity 21 of 21), recorded by the orchestrator's knowledge pass:
+
+| `dev` | was | round |
+|---|---|---|
+| `5edf69f` | `711fcc5` | packet — Add the mini.test harness and the entry-point skeleton |
+| `35a5fab` | `f4a6e8b` | packet — Resolve aineo's configuration from vim.g.aineo and setup() |
+| `09684d5` | `c199936` | packet — Record the T1 packet's session and put T1 in review |
+| `d10b6a5` | `2a9be2e` | fix round — Let the test runner own its exit status and close the review's gaps |
+| `c63fecb` | `f36a06f` | fix round — Correct the T1 records after the review of PR #4 |
+| `1b0a578` | `c961ac4` | correction — Close the gaps the re-measure of PR #4 found in T1 |
+| `a8e901d` | `ae0c84e` | correction — Pin that a stalled or timed-out run blames no test case |
+| `4eaf389` | `8bebc90` | correction — Copy setup()'s options plainly once, when they are recorded |
+| `7284c00` | `5b323d8` | correction — Record the T1 correction and correct the fix round's records |
+
+The *For the `ai/` pass* items below landed with PR #5 (`12353b2`, `83c263e`, `798275d`).
 
 ## Open threads
 
