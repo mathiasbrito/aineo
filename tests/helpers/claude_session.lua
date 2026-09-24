@@ -320,13 +320,11 @@ function M.press_keys(child, buffer, keys)
   })
 end
 
---- Quits `child` with `quit_command` — `:qa` unless given — as a user would,
---- without waiting for it to end.
+--- Quits `child` with `:qa`, as a user would, without waiting for it to end.
 ---
 ---@param child table
----@param quit_command? string an Ex command line that quits, such as `'bdelete! | qall'`
-function M.quit(child, quit_command)
-  child.lua_notify('vim.cmd(...)', { quit_command or 'qall' })
+function M.quit(child)
+  child.lua_notify('vim.cmd.qall()')
 end
 
 --- Registers in `child`, as another plugin would, a handler of Neovim's quit
@@ -346,6 +344,26 @@ function M.add_exit_handler(child, path)
     ]],
     { path }
   )
+end
+
+--- Registers in `child`, as another plugin might, a handler of Neovim's quit
+--- (`VimLeavePre`) that stops every job — Claude Code's terminal among them —
+--- so that a handler after it finds that terminal closed while its exit is
+--- not yet seen.
+---
+---@param child table
+function M.add_job_stopping_exit_handler(child)
+  child.lua([[
+    vim.api.nvim_create_autocmd('VimLeavePre', {
+      callback = function()
+        for _, channel in ipairs(vim.api.nvim_list_chans()) do
+          if channel.stream == 'job' then
+            vim.fn.jobstop(channel.id)
+          end
+        end
+      end,
+    })
+  ]])
 end
 
 --- The lines of the file `path` once it exists — waiting for that at most
