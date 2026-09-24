@@ -7,25 +7,6 @@ local child = MiniTest.new_child_neovim()
 
 local T = MiniTest.new_set({ hooks = { post_once = child.stop } })
 
---- Starts the child, opens the layout in it and returns the buffers of its
---- three windows by name: `claude`, `report` and `input`.
----
----@return { claude: integer, report: integer, input: integer } buffers
-local function open_layout()
-  layout.start(child)
-  local buffers = layout.stand_ins(child)
-  layout.open(child, layout.arrangement(buffers))
-  buffers.input = layout.input_buffer(child)
-  return buffers
-end
-
---- Puts the cursor in the window showing `buffer`.
----
----@param buffer integer
-local function enter_window_showing(buffer)
-  child.lua('vim.api.nvim_set_current_win(...)', { layout.window_showing(child, buffer) })
-end
-
 local AINEO_WINDOWS = { { 'claude' }, { 'report' }, { 'input' } }
 
 T['a file opened in an aineo window'] = MiniTest.new_set()
@@ -36,11 +17,11 @@ T['a file opened in an aineo window']['opens in a new column between Claude and 
 T['a file opened in an aineo window']['opens in a new column between Claude and the right column']['from'] = function(
   window
 )
-  local buffers = open_layout()
+  local buffers = layout.open_with_stand_ins(child)
   local claude_window = layout.window_showing(child, buffers.claude)
   local report_window = layout.window_showing(child, buffers.report)
   local path = layout.file('first.txt')
-  enter_window_showing(buffers[window])
+  layout.enter_window_showing(child, buffers[window])
 
   child.cmd('edit ' .. path)
 
@@ -68,14 +49,14 @@ T['a file opened in an aineo window']['leaves that window showing its own buffer
   window,
   content
 )
-  local buffers = open_layout()
+  local buffers = layout.open_with_stand_ins(child)
   child.lua(
     'vim.api.nvim_buf_set_lines(..., 0, -1, false, { "typed into Input" })',
     { buffers.input }
   )
   local aineo_window = layout.window_showing(child, buffers[window])
   local content_before = child.lua_get(content, { buffers[window] })
-  enter_window_showing(buffers[window])
+  layout.enter_window_showing(child, buffers[window])
 
   child.cmd('edit ' .. layout.file('first.txt'))
 
@@ -84,10 +65,10 @@ T['a file opened in an aineo window']['leaves that window showing its own buffer
 end
 
 T['a file opened in an aineo window']['leaves an empty Input its number, name and buftype'] = function()
-  local buffers = open_layout()
+  local buffers = layout.open_with_stand_ins(child)
   local input_window = layout.window_showing(child, buffers.input)
   local path = layout.file('first.txt')
-  enter_window_showing(buffers.input)
+  layout.enter_window_showing(child, buffers.input)
 
   child.cmd('edit ' .. path)
 
@@ -114,12 +95,12 @@ T['a loaded file shown in Input'] = MiniTest.new_set({
 })
 
 T['a loaded file shown in Input']['goes to the file column, and Input stays'] = function(command)
-  local buffers = open_layout()
+  local buffers = layout.open_with_stand_ins(child)
   local input_window = layout.window_showing(child, buffers.input)
   local path = layout.file('first.txt')
   local file_buffer = child.lua_get('vim.fn.bufadd(...)', { path })
   child.lua('vim.fn.bufload(...)', { file_buffer })
-  enter_window_showing(buffers.input)
+  layout.enter_window_showing(child, buffers.input)
 
   child.cmd((command:gsub('{file}', path)))
 
@@ -135,9 +116,9 @@ T['a file opened on line 3 in Input'] = MiniTest.new_set({
 T['a file opened on line 3 in Input']['shows line 3 under the cursor in the file column'] = function(
   command
 )
-  local buffers = open_layout()
+  local buffers = layout.open_with_stand_ins(child)
   local path = layout.file('first.txt')
-  enter_window_showing(buffers.input)
+  layout.enter_window_showing(child, buffers.input)
 
   child.cmd((command:gsub('{file}', path)))
 
@@ -147,8 +128,8 @@ end
 T['the file column'] = MiniTest.new_set()
 
 T['the file column']['makes three columns of a third each, the right one keeping its split'] = function()
-  local buffers = open_layout()
-  enter_window_showing(buffers.input)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
 
   child.cmd('edit ' .. layout.file('first.txt'))
 
@@ -165,11 +146,11 @@ T['the file column']['makes three columns of a third each, the right one keeping
 end
 
 T['the file column']['takes a second file opened in an aineo window'] = function()
-  local buffers = open_layout()
-  enter_window_showing(buffers.input)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
   child.cmd('edit ' .. layout.file('first.txt'))
   local file_window = child.lua_get('vim.api.nvim_get_current_win()')
-  enter_window_showing(buffers.report)
+  layout.enter_window_showing(child, buffers.report)
 
   child.cmd('edit ' .. layout.file('second.txt'))
 
@@ -179,8 +160,8 @@ T['the file column']['takes a second file opened in an aineo window'] = function
 end
 
 T['the file column']['keeps a file opened in it, without an error'] = function()
-  local buffers = open_layout()
-  enter_window_showing(buffers.input)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
   child.cmd('edit ' .. layout.file('first.txt'))
   local file_window = child.lua_get('vim.api.nvim_get_current_win()')
 
@@ -198,9 +179,9 @@ T['the file column']['closed with :q, gives back three windows with Claude at ha
 T['the file column']['closed with :q, gives back three windows with Claude at half the columns']['after'] = function(
   option
 )
-  local buffers = open_layout()
+  local buffers = layout.open_with_stand_ins(child)
   child.cmd(option)
-  enter_window_showing(buffers.input)
+  layout.enter_window_showing(child, buffers.input)
   child.cmd('edit ' .. layout.file('first.txt'))
 
   child.cmd('quit')
@@ -213,6 +194,48 @@ T['the file column']['closed with :q, gives back three windows with Claude at ha
     layout.COLUMNS / 2
   )
   layout.expect_near(report.height, layout.REPORT_HEIGHT * (report.height + input.height))
+end
+
+--- Closes one of the file column's two windows after `:split` in it: the
+--- window the split made, which has the cursor, or the one below it, which
+--- the file opened in.
+local CLOSE_THE_SPLIT = 'quit'
+local CLOSE_THE_FIRST_WINDOW = 'wincmd j | quit'
+
+T['the file column']['split in two, keeps its third when either window closes'] = MiniTest.new_set({
+  parametrize = { { CLOSE_THE_SPLIT }, { CLOSE_THE_FIRST_WINDOW } },
+})
+
+T['the file column']['split in two, keeps its third when either window closes']['with'] = function(
+  close
+)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  child.cmd('split')
+
+  child.cmd(close)
+
+  local third = (layout.COLUMNS - 2) / 3
+  eq(layout.window_count(child), 4)
+  layout.expect_near(layout.box(child, layout.window_showing(child, buffers.claude)).width, third)
+  layout.expect_near(layout.box(child, layout.window_showing(child, buffers.report)).width, third)
+end
+
+T['the file column']['split in two, takes the next file in the window that remains'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  child.cmd('split')
+  child.cmd(CLOSE_THE_FIRST_WINDOW)
+  local remaining_window = child.lua_get('vim.api.nvim_get_current_win()')
+  layout.enter_window_showing(child, buffers.input)
+
+  child.cmd('edit ' .. layout.file('second.txt'))
+
+  eq(layout.window_count(child), 4)
+  eq(child.lua_get('vim.api.nvim_get_current_win()'), remaining_window)
+  eq(child.lua_get('vim.fn.bufname()'), layout.file('second.txt'))
 end
 
 return T

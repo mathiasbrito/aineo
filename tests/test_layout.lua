@@ -141,4 +141,40 @@ T['open()']['closes the other windows of the tab and keeps their buffers loaded'
   )
 end
 
+--- Commands that leave a file in the current window, `{file}` standing for a
+--- path: a named file, and text typed into the unnamed buffer.
+local EDIT_A_FILE = 'edit {file}'
+local TYPE_INTO_THE_UNNAMED_BUFFER = [[call setline(1, 'typed')]]
+
+T['open()']['keeps the file the current window shows, in the file column'] = MiniTest.new_set({
+  parametrize = { { EDIT_A_FILE }, { TYPE_INTO_THE_UNNAMED_BUFFER } },
+})
+
+T['open()']['keeps the file the current window shows, in the file column']['after'] = function(
+  command
+)
+  layout.start(child)
+  child.cmd((command:gsub('{file}', layout.file('first.txt'))))
+  local file_buffer = child.lua_get('vim.api.nvim_get_current_buf()')
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(layout.window_count(child), 4)
+  local claude = layout.box(child, layout.window_showing(child, buffers.claude))
+  local file = layout.box(child, layout.window_showing(child, file_buffer))
+  eq({ file.row, file.col }, { 0, claude.width + 1 })
+  eq(layout.input_buffer(child) ~= file_buffer, true)
+end
+
+T['open()']['puts the cursor in Input when the current window showed a file'] = function()
+  layout.start(child)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), layout.input_buffer(child))
+end
+
 return T
