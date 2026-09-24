@@ -497,6 +497,37 @@ function M.wait_for_process_end(pid)
   end, 50)
 end
 
+--- The chunks of input the fake has received so far, in order.
+---
+---@param fake { record: string }
+---@return string[]
+function M.received_chunks(fake)
+  return vim
+    .iter(M.record(fake))
+    :map(function(entry)
+      return entry.received
+    end)
+    :totable()
+end
+
+--- The chunks of input the fake has received after its first `count`
+--- chunks, once they hold at least `length` bytes — waiting for that at most
+--- `patience_ms` — or when the wait runs out.
+---
+---@param fake { record: string }
+---@param count integer how many chunks came before
+---@param length integer
+---@param patience_ms integer
+---@return string[]
+function M.wait_for_chunks_after(fake, count, length, patience_ms)
+  local chunks
+  vim.wait(patience_ms, function()
+    chunks = vim.list_slice(M.received_chunks(fake), count + 1)
+    return #table.concat(chunks) >= length
+  end, 20)
+  return chunks
+end
+
 --- The input the fake has received so far, every chunk joined in order.
 ---
 ---@param fake { record: string }
@@ -523,6 +554,24 @@ function M.wait_for_received_after(fake, offset, length, patience_ms)
     return #input >= length
   end, 20)
   return input
+end
+
+--- How many turns the fake has recorded as interrupted by a Ctrl-C, once
+--- there is one — waiting for that at most `patience_ms` — or when the wait
+--- runs out.
+---
+---@param fake { record: string }
+---@param patience_ms integer
+---@return integer
+function M.wait_for_interrupted_turns(fake, patience_ms)
+  local count = 0
+  vim.wait(patience_ms, function()
+    count = #vim.tbl_filter(function(entry)
+      return entry.turn == 'interrupted'
+    end, M.record(fake))
+    return count > 0
+  end, 20)
+  return count
 end
 
 --- How many Ctrl-C presses — `\3` bytes — the fake has received.

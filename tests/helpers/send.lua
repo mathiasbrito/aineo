@@ -11,7 +11,8 @@ local CHECKOUT = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h
 local CLAUDE_SESSION = vim.fs.joinpath(CHECKOUT, 'tests', 'helpers', 'claude_session.lua')
 
 --- The child's screen: wide and tall enough that Claude's column holds the
---- fake's screens, which were recorded 80 columns wide, whole.
+--- fake's screens, which Claude Code drew 80 columns wide, whole — Claude's
+--- column takes half the width. The recordings were made at 120x40.
 local COLUMNS = 240
 local LINES = 42
 
@@ -102,6 +103,30 @@ function M.input(child)
   ]])
 end
 
+--- Makes `child` keep every write to a channel (`nvim_chan_send()`) for
+--- `writes()`, and still make it.
+---
+---@param child table
+function M.watch_writes(child)
+  child.lua([[
+    local chan_send = vim.api.nvim_chan_send
+    _G.aineo_test_writes = {}
+    vim.api.nvim_chan_send = function(channel, bytes)
+      table.insert(_G.aineo_test_writes, bytes)
+      return chan_send(channel, bytes)
+    end
+  ]])
+end
+
+--- The bytes of every write to a channel `child` has made since
+--- `watch_writes()`, one entry per write.
+---
+---@param child table
+---@return string[]
+function M.writes(child)
+  return child.lua_get('_G.aineo_test_writes')
+end
+
 --- Sends Input in `child`, as `\s` will, keeping an error it raises for
 --- `messages()` rather than raising it in the test.
 ---
@@ -115,6 +140,23 @@ function M.send(child)
   ]])
 end
 
+--- Sends Input in `child` from an `<expr>` mapping, whose callback runs
+--- under a text lock, keeping an error `send()` raises for `messages()`.
+---
+---@param child table
+function M.send_from_expression_mapping(child)
+  child.lua([[
+    vim.keymap.set('n', '<Plug>(aineo-test-send)', function()
+      local sent, error_message = pcall(require('aineo.send').send)
+      if not sent then
+        table.insert(_G.aineo_test_messages, { error = error_message })
+      end
+      return ''
+    end, { expr = true })
+    vim.api.nvim_feedkeys(vim.keycode('<Plug>(aineo-test-send)'), 'x', false)
+  ]])
+end
+
 --- What `child` has told the user since `restart()`, in order: each
 --- notification as its message and level, and each error `send()` raised as
 --- that error.
@@ -123,6 +165,21 @@ end
 ---@return { message: string?, level: integer?, error: string? }[]
 function M.messages(child)
   return child.lua_get('_G.aineo_test_messages')
+end
+
+--- The errors `send()` has raised in `child` since `restart()`, joined by
+--- line feeds: empty when it raised none.
+---
+---@param child table
+---@return string
+function M.raised(child)
+  return child.lua([[
+    local errors = {}
+    for _, message in ipairs(_G.aineo_test_messages) do
+      table.insert(errors, message.error)
+    end
+    return table.concat(errors, '\n')
+  ]])
 end
 
 return M
