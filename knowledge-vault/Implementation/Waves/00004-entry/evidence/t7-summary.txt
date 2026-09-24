@@ -1,0 +1,40 @@
+T7 fact (MR33) — measured by the orchestrator on 2026-09-24 at 17:41 CEST, before T7 was planned.
+Claude Code 2.1.281 · Nvim 0.11.6 headless (--clean -i NONE, state, data and log under a scratch directory),
+terminal 120x40 · cwd the aineo checkout (trusted by the user) · every CLAUDE* variable removed · one model turn.
+Driver: t7-driver.lua (this folder). The code was dev at c7a9c99, wired by hand as T7 will wire it:
+aineo.report's environment set, its Report buffer made, then aineo.claude.start_session() with
+cmd { 'claude' }, mcp_servers = aineo.mcp.mcp_servers(v:servername, v:progpath),
+allowed_tools = aineo.mcp.allowed_mcp_tools(), and instructions = aineo.report.report_instructions(<tool name>).
+The terminal buffer was shown in the current window in the same tick. The user's shada and Neovim log
+were stat'ed before and after: unchanged.
+Placeholders: the account tier is written PLAN and the checkout's path ~/project/aineo; scratch paths are <scratchpad>.
+
+RESULTS
+- The report tool's input schema, as the relay served it, gives "details": {"type": ["string", "null"]}.
+- The session read 'ready' 2.7 s after the start.
+- Asked to call the report tool once, with details set to JSON null, Claude Code 2.1.281 called it:
+  the Report showed the report 9.8 s after the start, about 7 s after the message was sent:
+      17:41 [done] schema probe — details null accepted
+  The records file holds it without details — a null counts as absent (RP1) — so whether Claude sent
+  details: null or left the key out is not visible here. What is: Claude Code accepted the tool, whose
+  schema carries a type array, and called it through aineo's relay.
+- /exit then Enter: the session read 'exited' with code 0 (20.3 s after the start).
+
+THE RECORD
+----- <sha256 of the working directory>.jsonl -----
+{"time":"2026-09-24T17:41:59","report":{"status":"done","task":"schema probe","summary":"details null accepted"}}
+
+CLAUDE'S SCREEN AT THE END
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 (1M context) with xhigh effort · Claude PLAN
+  ▝▝ ▝▝    ~/project/aineo · /rc
+❯ aineo T7 measurement. Call the mcp__aineo__report tool exactly once with task
+  "schema probe", status "done", summary "details null accepted", and details
+  set to JSON null. Then reply with the single word DONE. Use no other tool.
+  Called aineo
+⏺ DONE
+✻ Crunched for 14s · done 5:42 PM
+────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 5 agents

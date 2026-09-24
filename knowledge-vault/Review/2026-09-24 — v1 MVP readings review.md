@@ -52,6 +52,23 @@ The IDs are `MR#`, so they collide with neither the plan's `R#` risks nor a revi
 | MR23 | Wiping a running Claude terminal ends the session: the next start launches a new Claude Code, and the status reads `'exited'` from the wipe. | T4 reading 8 |
 | MR50 | The fake `claude`'s modes the suites run — test design, not a behaviour the user meets; listed so this list and T4's nine readings agree. | T4 reading 9 |
 
+## Readings — Send (C4; T6)
+
+| ID | Reading | Source |
+|---|---|---|
+| MR51 | Input counts as empty when the text Send would paste — lines joined by `\n`, control bytes removed — holds only Lua `%s` white space; a non-breaking space, U+3000 or a zero-width space counts as text. | T6 reading 1 |
+| MR52 | With no Input — before the layout first opened, or after Input was wiped — Send refuses: "there is no Input; open aineo's layout to make one". | T6 reading 2 |
+| MR53 | Every refusal is one `vim.notify` at `WARN`, worded "aineo: nothing sent — …" (Input is empty; Claude has not started; Claude is not ready: it is starting, or a dialog awaits your answer; Claude has exited; there is no Input). | T6 reading 3 |
+| MR54 | Send onto a draft already in Claude's box leaves the draft and adds its paste after it; Claude Code submitting both as one message is inferred, not measured on the real CLI. | T6 reading 4 |
+| MR55 | Send removes every C0 control but tab, line feed and carriage return, and every C1 control (U+0080–U+009F), because a control byte in a paste may reach Claude Code as a key (the fake shows it; the real CLI was not measured); every other byte is kept, blank lines and surrounding white space included. | T6 reading 5, changed by the fix round |
+| MR56 | Whether Claude Code ends a paste on the one-byte C1 form (`C2 9B` then `201~`) was not measured; Send removes it with every C1 control. | T6 reading 6 |
+| MR57 | Send sends while Claude is in a turn — decided by the user as D14, listed so this list and T6's nine readings agree. | T6 reading 7 |
+| MR58 | If Claude Code dies before Neovim has processed its exit, the status still reads ready: with the terminal's stream still open, Send empties Input into the dead terminal without an error (`u` restores it); with the stream closed, Send puts Input back and raises. | T6 reading 8 |
+| MR59 | A write that fails is re-raised as the terminal's own error ("Can't send data to closed stream"), not turned into the "Claude has exited" refusal. | T6 reading 9 (the correction) |
+| MR60 | The fake reads a write in pieces of at most 1,022 bytes, so a closing marker or the Enter can reach it in a read of its own; Claude Code 2.1.281 read a paste whose marker fell at bytes 1,012–1,026 as one paste, at 15 lengths of 15 (no model turn: `Implementation/Waves/00003-send/evidence/t6-summary3.txt`), but whether its pty split the marker is not observable. | T6 limits (attack of #15, finding 3; re-measure finding 2) |
+| MR61 | A lone `9B` byte, overlong encodings, and the bytes `80`–`FF` outside `C2 80`–`C2 9F` pass into the paste; harmless if Claude Code decodes its input as UTF-8, which is unmeasured. | T6 limits (re-measure of #15, finding 5) |
+| MR62 | The refusal "not ready" also covers a session whose box a split redraw tore — Send may then be refused for about 1.5 s (MR48); a tear never lets Send through. | T6 limits (attack of #15, refuted path) |
+
 ## Readings — the report channel (C5, C6; T5)
 
 | ID | Reading | Source |
@@ -65,7 +82,7 @@ The IDs are `MR#`, so they collide with neither the plan's `R#` risks nor a revi
 | MR30 | `:edit` in the Report renders its records again, rather than refusing. | T5 fix round |
 | MR31 | A buffer already holding the Report's name gives it up when a Report is made: wiped out, or kept unnamed when the user changed its text. | T5 correction |
 | MR32 | A records file that cannot be cut back is appended to all the same, with a warning at each report until the cut succeeds. | T5 correction |
-| MR33 | The report tool's schema says `"details": {"type": ["string", "null"]}`; whether Claude Code accepts a type array there is T7's end-to-end check, since the real `claude` never runs in the suite. | T5 fix round (records R4) |
+| MR33 | The report tool's schema says `"details": {"type": ["string", "null"]}`. *Measured 2026-09-24 by the orchestrator:* Claude Code 2.1.281 accepted the tool with that schema and called it through aineo's relay into the Report (`Implementation/Waves/00004-entry/evidence/t7-summary.txt`). | T5 fix round (records R4) |
 
 ## Limits a user can meet — recorded, not fixed
 
@@ -86,7 +103,7 @@ The IDs are `MR#`, so they collide with neither the plan's `R#` risks nor a revi
 | MR46 | The user's own commands in the Report: `:doautocmd BufReadCmd` appends every record a second time; `:file x` and `:saveas x` rename the Report and later reports go to the renamed buffer (`:saveas` also leaves an ordinary buffer named `aineo://report`). | T5 correction, re-measure of #10 finding 11 |
 | MR47 | A Claude Code dialog never recorded — login, theme, an API-key question, or one a later version adds — reads as not ready only if it draws no input box of its own; unmeasured. | T4 open threads |
 | MR48 | A redraw of Claude's input box that reaches the terminal in two refreshes 20 ms or more apart reads as not ready for about 1.5 s — a paste's own redraw included — so a Send in that time is refused. | re-measure of #11, finding 8 |
-| MR49 | **D14's accepted limit:** a permission dialog drawn in the 11–30 ms before readiness notices it receives Send's paste and Enter. What the dialog does with the pasted bytes, and whether the Enter then picks its highlighted `❯ 1. Yes`, is inferred from the dialog's footer ("Enter to confirm"), not measured. | D14; re-measure of #11, finding 8 |
+| MR49 | **D14's accepted limit:** a permission dialog drawn in the 11–30 ms before readiness notices it receives Send's paste and Enter. What the dialog does with the pasted bytes, and whether the Enter then picks its highlighted `❯ 1. Yes`, is inferred, not measured. *Corrected 2026-09-25:* this row first said the inference came from the dialog's footer "Enter to confirm" — that footer is the trust and MCP-server dialogs'; the recorded permission dialog's reads "Esc to cancel · Tab to amend" (the attack review of PR #15, finding 6). The 11–30 ms is a lower bound: Claude Code's own input and render latency are not in it, nor are dialogs drawn in several writes; a pasted digit reaching a dialog whose choices are numbered is unmeasured. | D14; re-measure of #11, finding 8; attack review of #15, finding 6 |
 
 ## Disposition
 

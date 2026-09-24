@@ -13,7 +13,7 @@
 
 - **Per clone, once:** `./.githooks/install.sh` — sets `core.hooksPath` and `remote.origin.prune`. Without it the git-level branch guard is inert.
 - **Agent worktrees:** `.claude/scripts/prepare-worktree.sh`'s `prepare_project` is empty and needs no step — `make test` isolates itself and fetches mini.nvim on first use (T1); `.worktreeinclude` lists the gitignored files every worktree needs.
-- **The suite** (T1): `make deps`, `make test`, `make test_file FILE=<path>`, `make lint`, `make format` — the root `CLAUDE.md` says what each does. About 87 s for the whole suite on Macbook-Mathias at the end of wave 1; 454 cases in 256 s at the end of wave 2, most of it the Claude session's tests, which drive real processes.
+- **The suite** (T1): `make deps`, `make test`, `make test_file FILE=<path>`, `make lint`, `make format` — the root `CLAUDE.md` says what each does. About 87 s for the whole suite on Macbook-Mathias at the end of wave 1; 454 cases in 256 s at the end of wave 2; 491 cases in 365 s at the end of wave 3 — most of it the Claude session's and Send's tests, which drive real processes. `make format` can abort intermittently ([[Learnings/StyLua 2.5.2 in-place formatting aborts intermittently]]); `make lint` decides.
 - **Hooks:** `.claude/hooks/test-hooks.sh` after touching any hook.
 - **The user's Neovim loads aineo from `~/Development/Personal/aineo-dev`** — a clone of `dev` holding merged pull requests only, through the lazy.nvim spec `~/.config/nvim/lua/plugins/aineo.lua` (2026-09-23, the user's request). The orchestrator fast-forwards it after every merge: `git -C ~/Development/Personal/aineo-dev pull --ff-only`.
 
@@ -42,11 +42,11 @@
 ## Where the work stands
 <!-- What is done, what is in flight, and the queue the orchestrator composes the next wave from. -->
 
-**Done:** wave 1 — T1, the tooling foundation (PR #4, 2026-09-24; [[Implementation/Waves/00001-tooling/plan]]). T2 — measured by the orchestrator in the folder the user trusted, recorded in the wave-2 plan's *Measured before planning*. Wave 2 — T3 the layout (PR #9), T5 the report channel (PR #10), T4 the Claude session (PR #11), all 2026-09-24 ([[Implementation/Waves/00002-layout-session-report/plan]]); each home stands alone, and nothing wires them together yet.
+**Done:** wave 1 — T1, the tooling foundation (PR #4, 2026-09-24; [[Implementation/Waves/00001-tooling/plan]]). T2 — measured by the orchestrator in the folder the user trusted, recorded in the wave-2 plan's *Measured before planning*. Wave 2 — T3 the layout (PR #9), T5 the report channel (PR #10), T4 the Claude session (PR #11), all 2026-09-24 ([[Implementation/Waves/00002-layout-session-report/plan]]); each home stands alone. Wave 3 — T6 Send (PR #15, 2026-09-25; [[Implementation/Waves/00003-send/plan]]). Nothing wires the homes together yet: that is T7.
 
-**Planned:** wave 3 — T6, Send ([[Implementation/Waves/00003-send/plan]]).
+**Planned:** wave 4 — T7, the entry point ([[Implementation/Waves/00004-entry/plan]]).
 
-**Queue after it:** T7 (the entry point: the prefix and `<Plug>` mappings, `:Aineo`, the autostart with D15 — the composition root that wires the homes together), then T8 (health and vimdoc). The user reviews the MVP when T1–T8 are in (the user, 2026-09-23), with [[Review/2026-09-24 — v1 MVP readings review]] as its agenda.
+**Queue after it:** T8 (health and vimdoc). The user reviews the MVP when T1–T8 are in (the user, 2026-09-23), with [[Review/2026-09-24 — v1 MVP readings review]] as its agenda.
 
 **Host limits for orchestration:** Macbook-Mathias — 3 agents at once (10 CPUs, 64 GiB; the orchestrate skill's default of 3 parallel implementers, applied to all agents).
 
@@ -61,3 +61,4 @@
 | 2026-09-23 | [[Sessions/2026-09-23 — Orchestration and knowledge vault scaffold]] | v1 converged with the user in two rounds — [[Planning/aineo — v1 agent console]]; bootstrap `511e289` on `main` and `dev` |
 | 2026-09-24 | [[Sessions/2026-09-24 — Wave 1 retrospective]] | Wave 1 landed: T1 (PR #4, `5edf69f` … `7284c00`), the ai pass (PR #5, `12353b2` … `798275d`); T2 measured; wave 2 planned |
 | 2026-09-24 | [[Sessions/2026-09-24 — Wave 2 retrospective]] | Wave 2 landed: T3 (PR #9, `b47be4e` … `c1e3962`), T5 (PR #10, `adf4815` … `e006d58`), T4 (PR #11, `f6b4beb` … `c7a9c99`), the effort pass (PR #12); D14 and D15 decided by the user; wave 3 (T6) planned |
+| 2026-09-25 | [[Sessions/2026-09-25 — Wave 3 retrospective]] | Wave 3 landed: T6 Send (PR #15, `1826fe9` … `bb0e185`); the `ai/` pass on narrowed mutant runs (PR #14); wave 4 (T7) planned |

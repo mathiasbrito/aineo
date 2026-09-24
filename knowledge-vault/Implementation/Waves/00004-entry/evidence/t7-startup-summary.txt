@@ -1,0 +1,17 @@
+T7 facts — how Neovim 0.11.6 starts, measured by the orchestrator on 2026-09-24 (~17:50 CEST) on host Macbook-Mathias.
+No Claude ran. Every probe Neovim ran with --clean -i NONE; state, data and log under a scratch directory; the user's
+shada and Neovim log stat'ed before and after: unchanged. Drivers: t7-startup-driver.lua (the probe it writes is
+t7-startup-probe.lua) and t7-embed-probe.lua, in this folder.
+
+1. Four starts, each in a terminal job of a headless Neovim (100x30), the probe noting each event:
+   bare `nvim`          VimEnter: uis=1 argc=0, no stdin; then UIEnter: uis=1. The server's v:argv begins
+                        <nvim> --embed … — the TUI runs the editor as an embedded process and attaches before VimEnter.
+   `echo piped | nvim`  StdinReadPost fired before VimEnter; VimEnter: uis=1 argc=0, the buffer holds "piped".
+   `nvim <file>`        VimEnter: uis=1 argc=1.
+   `nvim --headless`    VimEnter: uis=0 argc=0; no UIEnter.
+   So at VimEnter an interactive start has a UI attached already, and --headless has none.
+
+2. A UI-attached start a test can make without a terminal: `nvim --embed` started as an RPC job (jobstart
+   with rpc = true) runs no autocommand until the test calls nvim_ui_attach(80, 24, { ext_linegrid = true });
+   then VimEnter fires with uis=1 and UIEnter follows. mini.test's own child always passes --headless
+   (deps/mini.nvim/lua/mini/test.lua, the child's start arguments), so its VimEnter sees no UI.
