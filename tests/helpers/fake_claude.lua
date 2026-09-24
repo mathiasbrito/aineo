@@ -4,8 +4,9 @@
 --- key reaches it as the byte `\3` rather than as a signal — whether the real
 --- CLI reads its terminal raw was not measured, but the byte ended its turns;
 --- appends what it saw and did to a record file, one JSON object per line;
---- draws the screens of a recorded `claude` from `tests/fixtures/claude/`;
---- and echoes the text it receives.
+--- draws the screens of a recorded `claude` from `tests/fixtures/claude/`,
+--- and the synthetic ones there that no recording holds; and echoes the text
+--- it receives.
 ---
 --- Its environment steers it:
 ---
@@ -13,8 +14,8 @@
 --- - `AINEO_FAKE_CLAUDE_MODE` — which screens it draws and how it answers keys
 ---   (`MODES`); `ready` by default. A `claude` deaf to every key is
 ---   `tests/helpers/fake_claude_deaf.sh`.
---- - `AINEO_FAKE_CLAUDE_EXIT_CODE` — the code the `exit` mode exits with; 0 by
----   default.
+--- - `AINEO_FAKE_CLAUDE_EXIT_CODE` — the code the modes that exit by
+---   themselves exit with; 0 by default.
 --- - `AINEO_FAKE_CLAUDE_FOLDER` — the folder its screens name, in place of the
 ---   recordings' `~/project/aineo`.
 --- - `AINEO_FAKE_CLAUDE_ENV` — the names, separated by commas, of the variables
@@ -61,35 +62,40 @@ local PERMISSION_DIALOG = 'permission-dialog-2.1.281.screen'
 local PERMISSION_DENIED = 'permission-denied-2.1.281.screen'
 local DRAFT = 'draft-2.1.281.bytes'
 
+--- The synthetic screens, which no recorded Claude Code drew: shapes the
+--- recordings leave out, each named for what it holds.
+local BOX_IN_SCROLLBACK = 'synthetic-box-in-scrollback.bytes'
+local CURSOR_BELOW_BOX = 'synthetic-cursor-below-box.bytes'
+local NO_RULE_ABOVE = 'synthetic-no-rule-above.screen'
+local NO_RULE_BELOW = 'synthetic-no-rule-below.screen'
+
 --- Each mode: how many lines of other output it prints first, as a verbose
 --- wrapper around `claude` would; the screens it draws when it starts,
---- `SCREEN_GAP_MS` apart; whether it draws each in two writes, cut just after
---- the prompt's glyph; whether it starts in the middle of a turn; after how
+--- `SCREEN_GAP_MS` apart; whether it starts in the middle of a turn; after how
 --- long it exits by itself; and the screens the Enter and Esc keys bring up —
 --- Enter a permission dialog, as a message that calls a tool does, and Esc, in
 --- that dialog, the prompt again.
 local MODES = {
   ready = { screens = { STARTUP } },
   trust = { screens = { TRUST_DIALOG } },
-  ['trust-in-two-writes'] = { screens = { TRUST_DIALOG }, in_two_writes = true },
   ['mcp-server'] = { screens = { MCP_SERVER_DIALOG } },
+  ['box-in-scrollback'] = { screens = { BOX_IN_SCROLLBACK, TRUST_DIALOG } },
+  ['no-rule-above'] = { screens = { NO_RULE_ABOVE } },
+  ['no-rule-below'] = { screens = { NO_RULE_BELOW } },
   asks = { screens = { STARTUP }, on_enter = PERMISSION_DIALOG, on_escape = PERMISSION_DENIED },
   ['asks-at-once'] = { screens = { STARTUP, PERMISSION_DIALOG } },
   draft = { screens = { STARTUP, DRAFT } },
   verbose = { printed_lines = 20000, screens = { STARTUP } },
   busy = { screens = { STARTUP }, in_turn = true },
   exit = { screens = { STARTUP }, exits_after_ms = 200 },
+  ['exit-below-box'] = { screens = { STARTUP, CURSOR_BELOW_BOX }, exits_after_ms = 2500 },
 }
 
 local MODE_NAME = os.getenv('AINEO_FAKE_CLAUDE_MODE') or 'ready'
 local MODE = assert(MODES[MODE_NAME], 'no such mode: ' .. MODE_NAME)
 
---- How long the fake waits between two writes of what it draws.
+--- How long the fake waits between two screens it draws.
 local SCREEN_GAP_MS = 30
-
---- The glyph of Claude Code's prompt, which a dialog's selected choice carries
---- too.
-local PROMPT = '❯'
 
 --- The bytes that clear a terminal and put its cursor top left.
 local CLEAR_SCREEN = '\27[2J\27[H'
@@ -200,21 +206,11 @@ stdin:open(0)
 local stdout = vim.uv.new_pipe(false)
 stdout:open(1)
 
---- Draws the fixture `name` on the terminal: in one write, or, when the mode
---- says so, in two writes `SCREEN_GAP_MS` apart, cut just after the first
---- prompt glyph.
+--- Draws the fixture `name` on the terminal, in one write.
 ---
 ---@param name string
 local function draw(name)
-  local bytes = fixture_bytes(name)
-  local cut = MODE.in_two_writes and select(2, bytes:find(PROMPT, 1, true))
-  if not cut then
-    stdout:write(bytes)
-    return
-  end
-  stdout:write(bytes:sub(1, cut))
-  vim.wait(SCREEN_GAP_MS)
-  stdout:write(bytes:sub(cut + 1))
+  stdout:write(fixture_bytes(name))
 end
 
 --- Where the fake stands with its keys: in a turn or not, until when presses

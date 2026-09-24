@@ -250,6 +250,23 @@ T['start_session()']['names the setting that is malformed']['and starts nothing'
   eq(child.lua_get(STATUS), {})
 end
 
+T['start_session()']['refuses a directory it cannot enter, naming cwd, and starts nothing'] = function()
+  local fake = claude.fake('cwd-unenterable', 'ready')
+  local directory = fixture.directory('claude-cwd-unenterable')
+  vim.uv.fs_chmod(directory, tonumber('000', 8))
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(directory, tonumber('755', 8))
+  end)
+  local buffers = child.lua_get(BUFFER_COUNT)
+
+  MiniTest.expect.error(function()
+    claude.start(child, fake, { cwd = directory })
+  end, 'settings%.cwd')
+
+  eq(child.lua_get(BUFFER_COUNT), buffers)
+  eq(child.lua_get(STATUS), {})
+end
+
 T['start_session()']['starts Claude again in a new terminal once it has exited'] = function()
   local fake = claude.fake('restart', 'exit')
   local first = claude.start(child, fake)
@@ -323,6 +340,16 @@ T['session_status()']['is exited, with the exit code, once Claude exits'] = func
   claude.start(child, fake)
 
   eq(claude.wait_for_status(child, 'exited'), { 'exited', 3 })
+end
+
+T['session_status()']['is exited with 122 when the system cannot execute the command'] = function()
+  local fake = claude.fake('exec-failure', 'ready')
+  local command = fixture.write('claude-exec-failure/claude', { '#!/nonexistent/interpreter' })
+  vim.uv.fs_chmod(command, tonumber('755', 8))
+
+  claude.start(child, fake, { cmd = { command } })
+
+  eq(claude.wait_for_status(child, 'exited'), { 'exited', 122 })
 end
 
 T['session_status()']['leaves the terminal showing Neovim’s exit line'] = function()
@@ -416,6 +443,20 @@ T['session_status()']['is not ready while a permission dialog asks the user'] = 
   eq(claude.wait_for_status(child, 'starting'), { 'starting' })
 end
 
+T['session_status()']['is not ready while a permission dialog asks in a terminal tall enough for it'] = function()
+  local fake = claude.fake('asks-tall', 'asks')
+  child.o.lines = 42
+  local buffer = claude.start(child, fake)
+  MiniTest.finally(function()
+    claude.end_by_keys(child, fake, buffer)
+  end)
+  eq(claude.wait_for_status(child, 'ready'), { 'ready' })
+
+  claude.press_keys(child, buffer, '\r')
+
+  eq(claude.wait_for_status(child, 'starting'), { 'starting' })
+end
+
 T['session_status()']['is ready again once the prompt returns after a dialog'] = function()
   local fake = claude.fake('asks-then-prompt', 'asks')
   local buffer = claude.start(child, fake)
@@ -443,18 +484,6 @@ T['session_status()']['never becomes ready behind the MCP-server approval dialog
   eq(claude.wait_for_status(child, 'ready'), { 'starting' })
 end
 
-T['session_status()']['never becomes ready behind a dialog drawn in two writes'] = function()
-  local fake = claude.fake('trust-in-two-writes', 'trust-in-two-writes')
-  local buffer = claude.start(child, fake)
-  MiniTest.finally(function()
-    claude.end_by_keys(child, fake, buffer)
-  end)
-
-  claude.wait_for_screen(child, buffer, 'Yes, I trust this folder')
-
-  eq(claude.wait_for_status(child, 'ready'), { 'starting' })
-end
-
 T['session_status()']['never becomes ready when a dialog replaces the prompt at once'] = function()
   local fake = claude.fake('asks-at-once', 'asks-at-once')
   local buffer = claude.start(child, fake)
@@ -467,6 +496,65 @@ T['session_status()']['never becomes ready when a dialog replaces the prompt at 
   eq(claude.wait_for_status(child, 'ready'), { 'starting' })
 end
 
+T['session_status()']['reads only the terminal’s rows, not the input box in its scrollback'] = function()
+  local fake = claude.fake('box-in-scrollback', 'box-in-scrollback')
+  child.cmd('split')
+  local buffer = claude.start(child, fake)
+  MiniTest.finally(function()
+    claude.end_by_keys(child, fake, buffer)
+  end)
+
+  claude.wait_for_screen(child, buffer, 'Yes, I trust this folder')
+
+  eq(claude.wait_for_status(child, 'ready'), { 'starting' })
+end
+
+T['session_status()']['never becomes ready on a choice with no rule above it'] = function()
+  local fake = claude.fake('no-rule-above', 'no-rule-above')
+  local buffer = claude.start(child, fake)
+  MiniTest.finally(function()
+    claude.end_by_keys(child, fake, buffer)
+  end)
+
+  claude.wait_for_screen(child, buffer, 'Esc to cancel')
+
+  eq(claude.wait_for_status(child, 'ready'), { 'starting' })
+end
+
+T['session_status()']['never becomes ready on a choice with no rule below it'] = function()
+  local fake = claude.fake('no-rule-below', 'no-rule-below')
+  local buffer = claude.start(child, fake)
+  MiniTest.finally(function()
+    claude.end_by_keys(child, fake, buffer)
+  end)
+
+  claude.wait_for_screen(child, buffer, 'Esc to cancel')
+
+  eq(claude.wait_for_status(child, 'ready'), { 'starting' })
+end
+
+T['session_status()']['is exited once Claude exits with its cursor below the input box'] = function()
+  local fake = claude.fake('exit-below-box', 'exit-below-box')
+  claude.start(child, fake)
+  eq(claude.wait_for_status(child, 'ready'), { 'ready' })
+
+  local status = claude.wait_for_status(child, 'exited')
+
+  eq(status, { 'exited', 0 })
+end
+
+T['session_status()']['is never ready while no window has shown its terminal'] = function()
+  local fake = claude.fake('hidden', 'ready')
+  local buffer = claude.start_hidden(child, fake)
+  MiniTest.finally(function()
+    claude.end_by_keys(child, fake, buffer)
+  end)
+
+  claude.wait_for_screen(child, buffer, '❯')
+
+  eq(claude.wait_for_status(child, 'ready'), { 'starting' })
+end
+
 T['session_status()']['is not ready once Claude has exited, even right after its prompt'] = function()
   local fake = claude.fake('exit-while-settling', 'exit')
   local buffer = claude.start(child, fake)
@@ -475,6 +563,16 @@ T['session_status()']['is not ready once Claude has exited, even right after its
   claude.wait_for_status(child, 'exited')
 
   eq(claude.wait_for_status(child, 'ready'), { 'exited', 0 })
+end
+
+T['session_status()']['is exited as soon as its running terminal is wiped'] = function()
+  local fake = claude.fake('wiped-status', 'ready')
+  local buffer = claude.start(child, fake)
+  eq(claude.wait_for_status(child, 'ready'), { 'ready' })
+
+  local status = claude.status_after_wiping(child, buffer)
+
+  eq(status, { 'exited' })
 end
 
 T['quitting Neovim'] = MiniTest.new_set()
@@ -542,6 +640,27 @@ T['quitting Neovim']['leaves no Claude that ignores its keys and the hangup runn
 
   eq(claude.wait_for_process_end(pid), true)
   eq(claude.ctrl_c_count(fake), 3)
+end
+
+T['quitting Neovim']['leaves no deaf Claude running when its terminal is wiped as Neovim quits'] = function()
+  local fake = claude.fake('quit-deaf-wiped', 'deaf')
+  local buffer = claude.start(child, fake, { cmd = claude.deaf_fake_command() })
+  local pid = claude.wait_for_start(fake).pid
+
+  claude.wipe_terminal_and_quit(child, buffer)
+
+  eq(claude.wait_for_process_end(pid), true)
+end
+
+T['quitting Neovim']['leaves no deaf Claude running when an earlier exit handler wipes its terminal'] = function()
+  local fake = claude.fake('quit-deaf-wiped-by-handler', 'deaf')
+  claude.add_terminal_wiping_exit_handler(child)
+  claude.start(child, fake, { cmd = claude.deaf_fake_command() })
+  local pid = claude.wait_for_start(fake).pid
+
+  claude.quit(child)
+
+  eq(claude.wait_for_process_end(pid), true)
 end
 
 return T

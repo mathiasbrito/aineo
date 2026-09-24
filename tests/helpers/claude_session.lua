@@ -109,6 +109,25 @@ function M.start(child, fake, overrides)
   )
 end
 
+--- Starts the session in `child` as `start()` does, but shows its buffer in
+--- no window, and returns that buffer.
+---
+---@param child table
+---@param fake { environment: table<string, string> }
+---@return integer
+function M.start_hidden(child, fake)
+  return child.lua(
+    [[
+      local helper, environment = dofile(...), select(2, ...)
+      for name, value in pairs(environment) do
+        vim.env[name] = value
+      end
+      return require('aineo.claude').start_session(helper.stand_in_settings())
+    ]],
+    { THIS_FILE, fake.environment }
+  )
+end
+
 --- Starts the session in `child` as `start()` does, but under `:silent!`,
 --- which silences the errors of `jobstart()` and of `start_session()` alike,
 --- and shows nothing.
@@ -158,6 +177,23 @@ function M.start_again_after_wiping(child, buffer)
       return require('aineo.claude').start_session(helper.stand_in_settings())
     ]],
     { THIS_FILE, buffer }
+  )
+end
+
+--- Wipes the terminal `buffer` in `child` and, in the same tick — before the
+--- editor has seen its process end — returns what `session_status()` reports,
+--- as a list.
+---
+---@param child table
+---@param buffer integer
+---@return any[]
+function M.status_after_wiping(child, buffer)
+  return child.lua(
+    [[
+      vim.cmd.bwipeout({ tostring(...), bang = true })
+      return { require('aineo.claude').session_status() }
+    ]],
+    { buffer }
   )
 end
 
@@ -327,6 +363,15 @@ function M.quit(child)
   child.lua_notify('vim.cmd.qall()')
 end
 
+--- Wipes the terminal `buffer` in `child` and quits it with `:qa` in the same
+--- tick, as `:bwipeout! | qa` would, without waiting for it to end.
+---
+---@param child table
+---@param buffer integer
+function M.wipe_terminal_and_quit(child, buffer)
+  child.lua_notify('vim.cmd.bwipeout({ tostring(...), bang = true }); vim.cmd.qall()', { buffer })
+end
+
 --- Registers in `child`, as another plugin would, a handler of Neovim's quit
 --- (`VimLeavePre`) that writes the line `ran` to the file `path`.
 ---
@@ -359,6 +404,26 @@ function M.add_job_stopping_exit_handler(child)
         for _, channel in ipairs(vim.api.nvim_list_chans()) do
           if channel.stream == 'job' then
             vim.fn.jobstop(channel.id)
+          end
+        end
+      end,
+    })
+  ]])
+end
+
+--- Registers in `child`, as another plugin might, a handler of Neovim's quit
+--- (`VimLeavePre`) that wipes every terminal buffer — Claude Code's among them
+--- — so that a handler after it finds that terminal gone while its process
+--- still runs.
+---
+---@param child table
+function M.add_terminal_wiping_exit_handler(child)
+  child.lua([[
+    vim.api.nvim_create_autocmd('VimLeavePre', {
+      callback = function()
+        for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+          if vim.bo[buffer].buftype == 'terminal' then
+            vim.api.nvim_buf_delete(buffer, { force = true })
           end
         end
       end,

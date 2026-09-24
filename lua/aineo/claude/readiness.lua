@@ -36,7 +36,8 @@ end
 
 --- Whether `lines`, from the top of a screen down, hold Claude Code's input
 --- box: a rule, the prompt's line, the lines a longer draft continues on, and
---- a rule.
+--- a rule. A dialog drawing its selected choice at the first column between
+--- two rules would hold one too; no recorded dialog does.
 ---
 ---@param lines string[]
 ---@return boolean
@@ -55,28 +56,47 @@ local function holds_input_box(lines)
   return false
 end
 
---- The lines of the screen of the terminal `buffer`: its last rows, as many
---- as the editor has, which leaves out the scrollback above them.
+--- How many rows the terminal `buffer` has while windows show it, as Neovim
+--- 0.11.6 sizes a terminal: the height of the tallest of them, in any tab
+--- page. None while no window shows it, when the terminal keeps its rows.
 ---
 ---@param buffer integer a terminal buffer
+---@return integer?
+local function shown_rows(buffer)
+  local rows = 0
+  for _, window in ipairs(vim.fn.win_findbuf(buffer)) do
+    rows = math.max(rows, vim.fn.getwininfo(window)[1].height)
+  end
+  return rows > 0 and rows or nil
+end
+
+--- The lines of the screen of the terminal `buffer`: its last `rows` lines,
+--- which leaves out the scrollback above them.
+---
+---@param buffer integer a terminal buffer
+---@param rows integer
 ---@return string[]
-local function screen_lines(buffer)
-  return vim.api.nvim_buf_get_lines(buffer, -vim.o.lines - 1, -1, false)
+local function screen_lines(buffer, rows)
+  return vim.api.nvim_buf_get_lines(buffer, -rows - 1, -1, false)
 end
 
 --- Watches the screen of `buffer` from the moment it is called — so it is
 --- called before the terminal starts — and calls `on_change(true)` once
 --- Claude Code's input box has shown for `SETTLE_MS` with no change taking it
 --- away, and `on_change(false)` when a change takes it away again, as a dialog
---- does. Reads the screen again at every change of the buffer.
+--- does. Reads the screen again at every change of the buffer: as many of its
+--- last lines as the terminal has rows (`shown_rows()`), the rows it had when
+--- last shown while no window shows it, and none before a window first has —
+--- so a terminal never shown is never ready.
 ---
 ---@param buffer integer the buffer Claude Code's terminal runs in
 ---@param on_change fun(ready: boolean)
 function M.watch(buffer, on_change)
-  local ready, settle = false, nil
+  local ready, settle, rows = false, nil, 0
   vim.api.nvim_buf_attach(buffer, false, {
     on_lines = function()
-      if not holds_input_box(screen_lines(buffer)) then
+      rows = shown_rows(buffer) or rows
+      if not holds_input_box(screen_lines(buffer, rows)) then
         settle = nil
         if ready then
           ready = false
