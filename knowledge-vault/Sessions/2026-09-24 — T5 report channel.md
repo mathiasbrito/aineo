@@ -1,7 +1,9 @@
 # 2026-09-24 — T5 report channel
 
-**Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-claude-code-integrator`)
-**Branch:** `feature/t5-report-channel` · **Pull request:** #10 (packet round)
+**Author:** Mathias Santos de Brito, with Claude — implementer agents (`neovim-claude-code-integrator`): the packet's author, then, for the end of its fix round, the agent it handed over to
+**Branch:** `feature/t5-report-channel` · **Pull request:** #10 (packet round, then the fix round below)
+
+The sections up to *Open threads* describe the packet round at `dcb8e36`. Where the reviews showed one of them wrong, it is corrected in place and says so; where the fix round changed what it describes, it points to the *Fix round* section below.
 
 ## Links
 
@@ -41,11 +43,11 @@
 
 - **`init.lua`** (MC3): `mcp_servers(editor_address, editor_program)`, `report_tool_name()` and `allowed_mcp_tools()`.
 - **`names.lua`:** the server name, the tool name and the environment variable, shared by the editor's side and the relay.
-- **`relay.lua`:** the script Claude Code runs as `nvim --headless --clean -l`. It is that process's composition root: it puts the plugin found from its own path on `'runtimepath'` and reads `AINEO_EDITOR_ADDRESS`.
+- **`relay.lua`:** the script Claude Code runs as `nvim --headless --clean -l`. It is that process's composition root: it puts the plugin found from its own path on `'runtimepath'` and reads `AINEO_EDITOR_ADDRESS`. `--clean` does not isolate it: plugins under `$XDG_CONFIG_DIRS` and `$XDG_DATA_DIRS` still load (the attack review's A6); the fix round adds `--cmd 'set noloadplugins'`.
 - **`server.lua`:** the stdio transport over `stdioopen()`, with `LINE_LIMIT` at 1 MiB.
 - **`lines.lua`:** the line reader, which applies the limit as each chunk arrives.
 - **`protocol.lua`:** the answer to each line (MC1), with the delivery as a port.
-- **`editor.lua`** (MC2): delivery over `sockconnect` and `nvim_exec_lua`, with the report as the argument.
+- **`editor.lua`** (MC2): delivery over `sockconnect` and `nvim_exec_lua`, with the report as the argument. The fix round bounds the wait for the editor's answer (A2).
 
 **Tests:**
 
@@ -65,7 +67,7 @@
 - **One protocol version.** The relay speaks `2025-11-25` only, the version Claude Code 2.1.281 sends, and answers it to any request. 2025-06-18 differs on error ids (required there) and on argument errors (protocol errors there, tool errors in 2025-11-25). Claiming it would have been an untested claim.
 - **Validation at both boundaries.** The relay validates before it delivers, so a refused report does not depend on the editor being up. The editor validates again, because its socket is a boundary too.
 - **Delivery as data.** The Lua the editor runs is a constant, and the report is its RPC argument. The relay connects per call, so an editor that restarts or vanishes is met by a fresh connect.
-- **A named Report.** Named from creation (brief review finding 1). Measured while building: a scratch buffer that is `:bdelete`d and written to again comes back with `'buftype'` empty and `'modified'` set, and `:qall` then fails with E37. So the home recreates an unloaded Report rather than writing to it.
+- **A named Report.** Named from creation (brief review finding 1). Measured while building: a scratch buffer that is `:bdelete`d and written to again comes back with `'buftype'` empty and `'modified'` set, and `:qall` then fails with E37. So the home recreates an unloaded Report rather than writing to it. That was not enough: a deleted Report the user shows again (`:buffer #`) is loaded again as an ordinary buffer (the attack review's A3). Since the fix round, a Report counts as showing only while it is `nofile`.
 - **Records keyed by SHA-256.** A long working directory as a file name can pass a file-name length limit; its SHA-256 cannot.
 
 **The orchestrator's readings applied (for the MVP review):**
@@ -162,7 +164,7 @@
 - *`test_mcp_relay.lua` › exits 0 when its input closes* — the EOF check was written ahead, in the first relay unit. Killer: "close never noticed" (`{ 124, 9 }`).
 - *answers a protocol version it does not speak* — one version, always answered. Killer: "version echoed". Its first run failed on a harness defect, fixed.
 - *is answered with its id unchanged* (4 cases) — the id has been echoed since the first relay unit. Killer: "id echoed as a string".
-- *split inside a multibyte character is answered whole* — spent by the line reader. Killer: "every chunk a line", 3 of 3 runs.
+- *split inside a multibyte character is answered whole* — spent by the line reader. Killer: "every chunk a line", 3 of 3 runs. That kill held only while the relay was already reading when the first part arrived; under a slow relay start both partial-line tests went green (the test-integrity review's I3). The fix round sends a ping first.
 - *that is empty gets no answer* — the guard was written ahead, in the first relay unit. Killer: "empty line answered".
 - *three times 1 MiB long is refused once, its rest not kept* — spent by the dropping logic. Killer: "tail kept while dropping". At 2 × 1 MiB + 2 bytes the same edit survived, because the limit is checked per chunk; hence 3 × 1 MiB.
 - *of exactly 1 MiB is read and answered* — spent by the `>` of the refusal unit. Killer: "limit >=".
@@ -177,14 +179,21 @@
 
 ## Mutants
 
-54 literal edits. Each was applied to the committed file at `dcb8e36`, run with `make test_file`, and restored, and the restore was checked. **54 killed, all by assertion.** The runner and its per-mutant logs lived in the session's scratchpad (`t5-mutants.lua`); the table holds every edit whole. One survivor was found in the run on `fec11e6`: the line reader's guard holding back the end of a dropped line. `dcb8e36` removed the guard, since no test could ask for it, and it is not in the table.
+**53 distinct literal edits in 55 runs** — corrected by the records review (R1). The packet round recorded "54 literal edits … 54 killed, all by assertion"; that was wrong in three ways:
+
+- M8's one edit ran on two files, so 54 rows held 53 edits.
+- The run of "null not absent" on `test_mcp_delivery.lua`, which the arrived-green account names as a killer, had no row. The records review ran it on `70ed857`, whose code is `dcb8e36`'s: `Fails (1)`, by assertion. Its row is added below, credited.
+- Every run was killed by at least one assertion, but not every failing case failed by assertion. The `[bwipeout]` case of "never recreated" failed only by a crash (`Invalid buffer id: 2`), as its row says (the test-integrity review's I4).
+
+Each edit was applied to the committed file at `dcb8e36`, run with `make test_file`, and restored, and the restore was checked. The runner and its per-mutant logs lived in the session's scratchpad (`t5-mutants.lua`); the table holds every edit whole. One survivor was found in the run on `fec11e6`: the line reader's guard holding back the end of a dropped line. `dcb8e36` removed the guard, since no test could ask for it, and it is not in the table.
 
 | Mutant | File | Literal edit (old → new; ⏎ is a newline) | Run | Result on `dcb8e36` |
 |---|---|---|---|---|
 | M8 | `lua/aineo/report/format.lua` | `  { name = 'blocked', moment = "when you cannot go on without the user's answer or action" },` → (nothing) | `tests/test_report.lua` | killed (assertion): 5 failing case(s), 5 by assertion, 0 crash |
-| M8 (tools/list) | `lua/aineo/report/format.lua` | `  { name = 'blocked', moment = "when you cannot go on without the user's answer or action" },` → (nothing) | `tests/test_mcp_relay.lua` | killed (assertion): 2 failing case(s), 2 by assertion, 0 crash |
+| M8 (tools/list, tools/call) | `lua/aineo/report/format.lua` | `  { name = 'blocked', moment = "when you cannot go on without the user's answer or action" },` → (nothing) | `tests/test_mcp_relay.lua` | killed (assertion): 2 failing case(s), 2 by assertion, 0 crash |
 | details dropped | `lua/aineo/report/format.lua` | `    details = not is_absent(arguments.details) and arguments.details or nil,` → `    details = nil,` | `tests/test_report.lua` | killed (assertion): 1 failing case(s), 1 by assertion, 0 crash |
 | null not absent | `lua/aineo/report/format.lua` | `  return value == nil or value == vim.NIL` → `  return value == nil` | `tests/test_report.lua` | killed (assertion): 1 failing case(s), 1 by assertion, 0 crash |
+| null not absent (delivery; the records review's run, on `70ed857`) | `lua/aineo/report/format.lua` | `  return value == nil or value == vim.NIL` → `  return value == nil` | `tests/test_mcp_delivery.lua` | killed (assertion): 1 failing case(s), 1 by assertion, 0 crash — "whose details are null renders without details" |
 | unknown field allowed | `lua/aineo/report/format.lua` | `  local unknown = first_unknown_field(arguments)` → `  local unknown = nil` | `tests/test_report.lua` | killed (assertion): 1 failing case(s), 1 by assertion, 0 crash |
 | any status | `lua/aineo/report/format.lua` | `  if not vim.list_contains(M.STATUS_NAMES, arguments.status) then` → `  if arguments.status == nil then` | `tests/test_report.lua` | killed (assertion): 2 failing case(s), 2 by assertion, 0 crash |
 | environment table unchecked | `lua/aineo/report/init.lua` | `  vim.validate('environment', report_environment, 'table')` → (nothing) | `tests/test_report.lua` | killed (assertion): 1 failing case(s), 1 by assertion, 0 crash |
@@ -243,7 +252,7 @@ The brief's verification mutants:
   - `test_report.lua` › "accepts each status of the format" [`blocked`];
   - `test_report.lua` › "tells when to report each status of the format" [`blocked`], which names C6's statuses literally;
   - `test_report.lua`: the three status refusals;
-  - `test_mcp_relay.lua` › `tools/list`: the enum.
+  - `test_mcp_relay.lua` › `tools/list` › "lists one tool, report, whose input schema is the report format" (the enum) and `tools/call` › "of a refused report is a tool error naming the field" (the refusal's list of statuses). The packet round named `tools/list` alone for both kills; `tools/list` has one case (R1, measured by the records review).
 - **M9:** `test_report_buffer.lua` › the records › "of another working directory never show".
 
 ## Task lines
@@ -253,7 +262,8 @@ This wave holds its marks (plan, *Packets* rule 6), so the plan is untouched. Fo
 - **T5 — MCP server and relay (C5), report rendering and persistence (C6):** done in PR #10 — RP1–RP5 and MC1–MC3 as the brief reads them.
 - The relay speaks MCP 2025-11-25 only.
 - The line limit is 1 MiB.
-- Records go in `<state>/aineo/reports/<sha256 of cwd>.jsonl`, created 0600.
+- Records go in `<state>/aineo/reports/<sha256 of cwd>.jsonl`, created 0600. The Report shows the newest 2 MiB of them, and the file is cut back to its newest 2 MiB past 4 MiB (fix round, A5).
+- The relay waits at most 5 s for the editor to confirm a report (fix round, A2), and runs as `nvim --headless --clean --cmd 'set noloadplugins' -l <relay>` (A6).
 - For T7, the root calls `set_report_environment()` first, then:
   - `mcp_servers(vim.v.servername, vim.v.progpath)`;
   - `allowed_mcp_tools()`;
@@ -262,20 +272,312 @@ This wave holds its marks (plan, *Packets* rule 6), so the plan is untouched. Fo
 
 ## Candidate learnings (for the knowledge pass; this packet writes no Learnings note)
 
-- **A `:bdelete`d scratch buffer written to again is an ordinary modified buffer that blocks `:qall` (E37).** A plugin-owned buffer is recreated when unloaded, not reused.
-- **`nvim -l` with `stdioopen()` is a clean stdio server.** Messages go to `on_print` or stderr, never to stdout; EOF arrives as `{''}`; and `rpcrequest` works from inside `on_stdin`.
+- **A `:bdelete`d scratch buffer written to again is an ordinary modified buffer that blocks `:qall` (E37).** A plugin-owned buffer is recreated when it is no longer `nofile`, not reused. Checking "unloaded" is not enough: `:buffer #` loads the deleted buffer again, as an ordinary buffer (the fix round, A3).
+- **`nvim -l` with `stdioopen()` is a clean stdio server once no plugin loads.** Messages go to `on_print` or stderr, never to stdout; EOF arrives as `{''}`; and `rpcrequest` works from inside `on_stdin`. `--clean` still loads plugins from `$XDG_CONFIG_DIRS` and `$XDG_DATA_DIRS`, which can write to stdout; `--cmd 'set noloadplugins'` keeps out `plugin/`, `pack/*/start` and `after/plugin` there (the fix round, A6).
 - **Mutant kills through a child process must be assertions.** A helper that raises on a timeout turns every "the process went silent" mutant into a crash. Return what arrived and let the test's assertion fail.
 - **A line limit checked per read chunk lets up to one chunk past the limit be held.** A test of "not buffered past the limit" needs a line longer than the limit plus the largest chunk.
 
 ## Open threads
 
 - **The oldest `claude` version supported is still the user's decision.** A Claude Code that sends 2025-06-18 is answered 2025-11-25 and may disconnect; the report tool would then be missing.
-- **The relay's `rpcrequest` has no timeout.** An editor that accepts the socket but never answers holds the tool call until Claude Code's own timeout.
+- **The relay's `rpcrequest` has no timeout** — understated, corrected by the attack review (A2): not only an editor that never answers, but any editor at a hit-enter prompt held the call and every message after it, and aineo's own warning could raise that prompt. The fix round bounds the wait (see *Fix round*).
 - **What Neovim writes to stdout at the relay's exit after a callback error was not measured.** The relay registers no `on_print`.
 - **`serverInfo.version` is `0.0.0`.** aineo has no release version yet.
 - **After `set_report_environment()` is called with a new working directory, an existing Report keeps its first directory's records file until the editor restarts.** Documented on `report_buffer()`.
 - **The end-to-end check, a real Claude calling `mcp__aineo__report`, is T7's** (wave plan, *Why T4 runs beside T5*).
 
+## Fix round (2026-09-24)
+
+The three reviews of PR #10 at `70ed857` were worked as one round, under the orchestrator's fix-round brief and its fifteen decisions. They are attack A1–A10, test-integrity I1–I7 and records R1–R6, plus the reviewers' cross-notes, and the findings are cited here by those IDs.
+
+The packet's author did the round up to `668a3a7`. It stopped when its context reached the model's limit, not because its work was wrong. The agent it handed over to then:
+
+- committed the author's last test change;
+- checked each decision against the commits;
+- ran each new test against the reviewed head's code;
+- pinned what the final mutant run found unpinned;
+- ran the final table and wrote this section.
+
+A claim that rests on the author's account alone says so.
+
+The hashes below are branch states named as measurement points: `70ed857` (reviewed), `668a3a7` (where the author stopped), `d01bea8` (the final code, and the state the mutant table ran on). The *Commits* section is recorded after the merge.
+
+**What the round changed, in commit order:**
+
+1. **The author's commits:**
+   1. the reviewers' test pins (I1–I6), and relay tests that start the relay from the entry point (R2);
+   2. the Report's lifecycle (A1, A3, A4), and R6;
+   3. the schema admits a `null` in `details` (R4); a `null` id is refused; the relay serves only as the `-l` script; A7 and A8;
+   4. a bounded wait on the editor (A2), and bounded records (A5);
+   5. `noloadplugins` in the relay (A6), and R5. That commit's message says that the packet round's records of `--clean` as isolation were wrong;
+   6. the Report's loaded check removed, which the author's mutant run showed to be unobservable;
+   7. the relay's answer queue removed, for the same reason.
+2. **The handover's commits:**
+   1. the relay's load test reaches the script through the entry point;
+   2. every path of the records' bound pinned by assertion;
+   3. the answer reader pinned against an editor that notifies first, and its unobservable id check dropped;
+   4. the Report's autocommand group created with the default, and two docstrings corrected;
+   5. this section.
+
+**Result at `d01bea8`** (measured in the handover):
+
+- `make test`: 239 cases, `Fails (0) and Notes (0)`, exit 0. Per T5 file: `test_report.lua` 42, `test_report_buffer.lua` 37, `test_mcp.lua` 5, `test_mcp_relay.lua` 30, `test_mcp_delivery.lua` 11, `test_mcp_blocked_editor.lua` 3.
+- `make lint`: clean.
+- The deep-`require` check prints 14 lines, each a file of a home requiring a file of that same home:
+  - in `aineo.mcp`: `init` and `protocol` require `names`; `server` requires `editor`, `lines` and `protocol`; `relay` requires `names` and `server`;
+  - in `aineo.report`: `init` requires `buffer`, `format`, `instructions`, `records` and `render`; `instructions` and `records` require `format`.
+
+### Findings
+
+| Finding | Outcome |
+|---|---|
+| A1 a Report name already taken | **Fixed** (the reviewer's F3): any buffer named `aineo://report` is wiped before the Report is created. Pinned by `:bwipeout` then `:edit aineo://report`, and by `:file aineo://report`, the line a restored session runs. Red on `70ed857`'s code: E95 on both reports, in both cases. |
+| A2 a hit-enter prompt holds the report and everything after it | **Fixed where aineo causes it, and bounded.** aineo's warnings are scheduled. The relay sends its msgpack-RPC request itself and waits at most 5 s (the bound is explained under *Readings*). Pinned with a real TUI editor held at a hit-enter prompt: the report is answered "not confirmed" in time; a ping sent during the wait is answered next; the report shows after Enter. Also pinned: an editor killed mid-wait is a tool error at once, and aineo's own warning no longer holds the report. What remains is under *Limits*. |
+| A3 a deleted Report shown again | **Fixed** (the reviewer's F4): a Report counts as showing only while it is `nofile`. Pinned with `:buffer #` and `:buffer aineo://report`, after which `:qall` quits. Red on `70ed857`'s code: `'buftype'` empty and `jobwait` −1. A residue measured in the handover is under *Limits*. |
+| A4 `:edit` empties the Report | **Fixed**: a buffer-local `BufReadCmd` renders the records again. This was chosen over refusing the command, for which Neovim offers no hook on a `nofile` buffer (the author's measurement). Pinned with `:edit` and `:edit!`. Red: `{ "" }`. |
+| A5 records grow without bound | **Fixed, bounded in bytes**: the Report shows the newest 2 MiB, and a file past 4 MiB is cut back to its newest 2 MiB. The orchestrator's 1000 records were replaced, since one report can hold 1 MiB. Red on `70ed857`'s code: 3072 records shown; 4098 lines kept. The handover pinned the remaining paths: whole records only when the window begins mid-line, a file kept whole up to 4 MiB, and the cut test reading records without raising. |
+| A6 system site plugins load in the relay | **Fixed** (the reviewer's F5): `--cmd 'set noloadplugins'`. The orchestrator read C5's row as allowing this, so there is no spec change. Pinned by a plugin planted under a fixture `$XDG_DATA_DIRS`. Red: its marker was created. The handover also measured `pack/*/start` and `after/plugin` (below). |
+| A7 an answer that fails to encode breaks the reader | **Fixed** (the reviewer's F1): each line is answered under `pcall`, and the failure goes to stderr through `vim.uv.fs_write`, since selene refuses `io.stderr:write`. Pinned with `1e999`. Red: `{}` where `{ 31 }` was expected. |
+| A8 a TCP editor address | **Fixed** (the reviewer's F2). Pinned with `serverstart('127.0.0.1:0')`. Red: a tool error. |
+| A9 a `tools/call` over 1 MiB is answered −32600 without an id | **Recorded as a limit**, as the reviewer states it: the client cannot match the answer to its request. It follows from MC1. |
+| A10 JSON-RPC edge answers | The `null` id is **fixed**: refused with −32600 and no id (decision 14). A client response is still answered −32601, and an object id is still echoed; both are **recorded**, as the reviewer states them. |
+| I1 the wire format only spot-checked | **Fixed** (the reviewer's patch): whole decoded answers for `initialize` and −32601, with the raw `"tools":{}` check kept. N2a, N2c, N8a and N8b die by assertion on `test_mcp_relay.lua`. They still survive `test_mcp_delivery.lua`, which reads selected fields, as the reviewer measured there before the fix. |
+| I2 the shell payload unchecked | **Fixed**: a witness file. P2 dies by assertion. |
+| I3 the partial-line tests are timing-dependent | **Fixed**: a ping is answered first. Slow start plus "every chunk a line" fails 6 cases by assertion, both partial-line tests among them, 3 of 3 runs. |
+| I4 crash-only kills | **Fixed**. `decoded()` never raises, and N12 fails 29 cases by assertion. "Cannot keep" uses `tostring`, and N10 dies by assertion. "Comes back" asserts the outcome first, and "never recreated" fails 5 cases by assertion, `[bwipeout]` among them. The handover made one more crash-only kill an assertion kill: the cut test on "partial first line kept". |
+| I5 the channel close unpinned | **Fixed**: one socket is left in the editor after a delivery. N9 dies by assertion. |
+| I6 "unlisted" unpinned | **Fixed**: `buflisted` false is pinned. N17 dies by assertion. |
+| I7 (REFUTED: what the reviewer found true) | No action. |
+| R1 the mutant ledger | **Corrected** in *Mutants* above, in the pull request body and in the report: 53 distinct edits in 55 runs, M8's relay killers named, and the "null not absent" run on `test_mcp_delivery.lua` given its row. |
+| R2 tests bound to the relay's file path | **Fixed** (the reviewer's measured patch, in the author's first commit). In the handover, the last test that still required `aineo.mcp.relay` by name was changed to load the script the entry names. The rename probe's 27 of 27 passing is the author's measurement, not re-run in the handover. |
+| R3 code written before its test (disclosed) | No code change, as the reviewer says. The round's tests that arrived green are named below, each with its killer run. |
+| R4 schema and validator disagree on `details: null` | **Fixed**: the schema admits `["string", "null"]`, with an agreement test over six JSON types. Red on `null`. |
+| R5 "disconnects" stated as fact | **Fixed**: "should then disconnect (a SHOULD)". |
+| R6 `kept` holds an error message | **Fixed**: `records_or_failure`. |
+| Cross-notes, attack → test-integrity | A hit-enter editor, a taken name and a reopened deleted Report are each driven by a test now (A2, A1, A3). |
+| Cross-notes, attack → records | Both **corrected**: the understated timeout limit and the overstated `--clean`. The corrections are in the message of the commit that adds `noloadplugins`, the pull request body, and this note (*What was done*, *Open threads*). |
+| Cross-note, test-integrity → records | The "unlisted" docstring is pinned (I6). |
+| Cross-notes, records | **Fixed**, each with a pin: the relay loaded inside an editor serves nothing; a `null` id is refused; the `[bwipeout]` case now dies by assertion. |
+| Test-integrity's note "the wave brief lists 24 files, gh 23" | **No T5 record states 24.** The packet report lists 23 files, and the records review counted 23 inside the boundary. After this round the pull request changes 25 files, every one inside the brief's boundary. |
+
+### Measured in the fix round (Nvim 0.11.6, on this Mac)
+
+**The author's measurements** (from its progress note; the handover re-measured only where marked):
+
+- `:edit` and `:edit!` on the named `nofile` Report fire a buffer-local `BufUnload`, `BufReadCmd` and `BufEnter`. A `BufReadCmd` that fills the buffer leaves it `nofile`, not modifiable and not modified.
+- **The open time was per record.** One `nvim_buf_set_lines` call per record took about 90 µs, so a 4 MiB file of ordinary records opened in 1722 ms; with one write it opened in 104 ms.
+- **A queued request survives the client.** Once the editor has read a request, it runs it even after the client has closed the socket.
+- **The TUI is a separate client process.** Stopping it or killing it lets the editor's server answer the queued request first. An editor that dies without answering has to be simulated by killing the server process.
+- **`vim.mpack.Unpacker` is stateful across chunks.** It returns nil on a partial message and resumes with the next chunk.
+- **The relay's stdin callback does not re-enter** while one call of it waits in `vim.wait`. The evidence is the survival of "answered inside the stdin callback" against a ping sent 500 ms into the wait.
+
+**Re-measured or new in the handover:**
+
+- **Open time at the bound**, one run each (the author measured 47, 78 and 45 ms):
+  - the newest 2 MiB of a 4 MiB file (9320 of 18641 records): 45 ms;
+  - the worst case, 520004 Report lines: 93 ms;
+  - a 40 MiB file: 49 ms, since only its end is read.
+- **`noloadplugins` keeps every system site plugin out.** With `--headless --clean` alone, a `plugin/`, a `pack/*/start/*/plugin/` and an `after/plugin/` script under `$XDG_DATA_DIRS/nvim/site` all ran. With `--cmd 'set noloadplugins'` added, none did.
+- **Each test the round added fails by assertion against `70ed857`'s production code**, with the current tests. The failure messages are listed under *Red and green*.
+- **A deleted Report shown again before the next report** (`:bdelete`, then `:buffer #`) is loaded again through its own `BufReadCmd`. It comes back as an ordinary buffer showing the records: `'buftype'` empty, modifiable, not modified. `:qall` quits.
+- **`vim.json.encode` writes DEL (0x7f) as the six bytes `\u007f`.** A client can send it raw, as one byte. Of the other characters probed, `/` and U+2028 are not grown: `\u00e9` shrinks to `é`, and `\u0001` stays six bytes.
+
+### Readings for the MVP review
+
+- **One protocol version.** The relay speaks MCP 2025-11-25 only.
+  - A client asking for any other version gets an `initialize` result whose `protocolVersion` is `"2025-11-25"`, with the same capabilities and server. The test "answers a protocol version it does not speak with the one it speaks" pins this with `2024-11-05`.
+  - By the Lifecycle page, such a client *should* disconnect; if it does, Claude has no report tool for that session.
+  - **Which `claude` is the oldest supported remains the user's decision.** Claude Code 2.1.281 sends 2025-11-25.
+- **A report not confirmed within 5 s** (an editor at a hit-enter prompt, say) is answered as sent but not confirmed, and Claude is told not to send it again. The answer is not an error, and the report shows when the user is done.
+  - Why 5 s: it is far above a delivery's time (the attack reviewer measured 80 ms for a report of 524 000 newlines, and 11 ms for one with 1 MiB of details). It is also well below the two minutes after which Claude Code moves a tool call to the background, a figure that is the reviewer's reading of the Claude Code docs, not a measurement.
+- **`:edit` in the Report renders its records again**, rather than refusing the command.
+- **The Report shows the newest 2 MiB of records**, and the file is cut back to its newest 2 MiB when it grows past 4 MiB. This is a bound in bytes, where the orchestrator's reading was 1000 records.
+- **The tool's input schema says `"details": {"type": ["string", "null"]}`.** Whether Claude Code accepts a type array there is not measured, since the real `claude` never runs here. It is T7's end-to-end check.
+
+### Red and green in the fix round
+
+17 new tests, 25 new cases: the suite went from 214 to 239 cases.
+
+**Seen red (13, the author's).** The author recorded each red in its progress note; the *Findings* table above quotes them. The message shown here is from the handover's run of each test against `70ed857`'s production code, where every one failed by assertion:
+
+- *`report_schema()` admits the same details as `validate_report()`* [`null`] — `false` where `true` was expected.
+- *takes its name back from a buffer holding it, and leaks none* (2 cases) — E95 on both reports.
+- *deleted then shown again by the user takes no report, and the editor quits* (2) — `{ vim.NIL, "", -1 }` where `{ vim.NIL, "nofile", 0 }` was expected.
+- *keeps every report when the user edits it again* (2) — `{ "" }`.
+- *show the newest 2 MiB of them* — 3072 records shown, where 2048 were expected.
+- *are cut to their newest 2 MiB once they have grown past 4 MiB* — 4098 lines kept, where 2049 were expected.
+- *the relay loads no plugin from the system site directories* — the marker was created.
+- *a request whose id is null is refused with error -32600 and no id* — it was answered, echoing `"id":null`.
+- *a request whose answer cannot be written does not take the next one down* — `{}` where `{ 31 }` was expected.
+- *the relay script loaded inside an editor serves nothing* — one stdio channel where none was expected. The author wrote it as "required inside an editor"; the handover's first commit loads the script the entry names, and its killer still dies by assertion.
+- *a report reaches an editor listening on a TCP address* — a tool error.
+- *a report for an editor at a hit-enter prompt is answered in time, the relay keeps serving, and the report shows once the user is done* — no answer.
+- *a report that opens a Report with a warning is confirmed before the warning can hold the editor* — no answer within 4 s.
+
+**Arrived green (4):**
+
+- *is a tool error at once when the editor dies before it answers* (the author's). Its branch was written with the bounded wait, ahead of the test. Against `70ed857`'s code it failed only on the wording of the error. Killers: "close ignored while waiting" and "EOF not noted", each killed by assertion, 3 of 3 runs.
+- *the records show whole records only, when the newest 2 MiB begin inside one* (the handover's) — the code came with the author's bounded records. Killers: "partial first line kept" and "first line dropped only when empty", each killed by assertion on the spurious "skipped 1 unreadable report record(s)" warning.
+- *the records are kept whole up to 4 MiB when a report is added* (the handover's). Killers: "cut past 2 MiB, not 4" and "cut at 4 MiB exactly", each killed by assertion.
+- *a report is confirmed by an editor that writes a notification before its answer* (the handover's) — the type check came with the author's bounded wait. Killer: "any message taken for the answer", killed by assertion, 3 of 3 runs. It was first written with both messages in one write, and that version let the killer survive: the answer, read after the notification, overwrote it. Hence the 50 ms delay.
+
+**Tests changed, each re-measured on its reviewer's literal mutant:**
+
+- the `initialize` and −32601 whole answers (N2a, N2c, N8a, N8b);
+- the witness file (P2);
+- a ping first in the two partial-line tests (I3);
+- `decoded()` never raises, and the id test also decodes (N12);
+- "cannot keep" via `tostring` (N10);
+- "comes back" asserts the outcome first ("never recreated");
+- one socket left in the editor after a delivery (N9);
+- `buflisted` (N17);
+- the MC3 pin and the `tools/list` schema, for A6 and R4;
+- the cut test reads records through `recorded_task()` (the handover's), so "partial first line kept" dies by assertion there.
+
+### Mutants on the final head
+
+Head `d01bea8`. K = killed, A = by assertion, E = by crash; a row run several times gives the ratio.
+
+**The reviewers' literal edits:**
+
+| Mutant | Literal edit (old → new; ⏎ is a newline) | Run | Result | Killing cases |
+|---|---|---|---|---|
+| N2a | `protocol.lua`: `capabilities = { tools = vim.empty_dict() },` → `capabilities = { tools = vim.empty_dict(), logging = {} },` | `test_mcp_relay.lua` | K: 1 A | A initialize › answers the recorded request with its protocol version, a tools object and the server |
+| N2a | `protocol.lua`: `capabilities = { tools = vim.empty_dict() },` → `capabilities = { tools = vim.empty_dict(), logging = {} },` | `test_mcp_delivery.lua` | survived — this file reads selected fields; the relay file kills it |  |
+| N2c | `protocol.lua`: `serverInfo = { name = 'aineo', version = '0.0.0' },` → `serverInfo = { name = 'aineo' },` | `test_mcp_relay.lua` | K: 1 A | A initialize › answers the recorded request with its protocol version, a tools object and the server |
+| N2c | `protocol.lua`: `serverInfo = { name = 'aineo', version = '0.0.0' },` → `serverInfo = { name = 'aineo' },` | `test_mcp_delivery.lua` | survived — this file reads selected fields; the relay file kills it |  |
+| N8a | `protocol.lua`: `  return { jsonrpc = '2.0', id = message.id, result = result }` → `  return { id = message.id, result = result }` | `test_mcp_relay.lua` | K: 1 A | A initialize › answers the recorded request with its protocol version, a tools object and the server |
+| N8a | `protocol.lua`: `  return { jsonrpc = '2.0', id = message.id, result = result }` → `  return { id = message.id, result = result }` | `test_mcp_delivery.lua` | survived — this file reads selected fields; the relay file kills it |  |
+| N8b | `protocol.lua`: `  return { jsonrpc = '2.0', id = id, error = { code = code, message = message } }` → `  return { id = id, error = { code = code, message = message } }` | `test_mcp_relay.lua` | K: 1 A | A a request for another method › is answered with error -32601 |
+| N8b | `protocol.lua`: `  return { jsonrpc = '2.0', id = id, error = { code = code, message = message } }` → `  return { id = id, error = { code = code, message = message } }` | `test_mcp_delivery.lua` | survived — this file reads selected fields; the relay file kills it |  |
+| N9 | `editor.lua`: `  vim.fn.chanclose(channel) ⏎ ` → (nothing) | `test_mcp_delivery.lua` | K: 1 A | A a report › reaches the editor the relay was given, and renders in its Report |
+| N17 | `buffer.lua`: `vim.api.nvim_create_buf(false, true)` → `vim.api.nvim_create_buf(true, true)` | `test_report_buffer.lua` | K: 1 A | A the Report buffer › is named aineo://report, is no file, has no swap file, is kept hidden and unlisted |
+| P2 shell log (its inserted line; anchor: the current connect call) | `editor.lua`: `  local connected, channel = ⏎ ` → `  vim.fn.system('echo "' .. (report.details or '') .. '" > /dev/null') ⏎   local connected, channel = ⏎ ` | `test_mcp_delivery.lua` | K: 1 A | A a report › reaches the editor as data: fields holding code render literally and run nothing |
+| N10 | `records.lua`: `    error(('aineo cannot keep the report in %s: %s'):format(file, open_failure), 0)` → `    return` | `test_report_buffer.lua` | K: 1 A | A the records › refuse a report they cannot keep, naming the file, and show nothing |
+| N11 | `init.lua`: `    report_view.buffer = open_report_buffer(report_view.records_file)` → `    report_view.buffer = buffer.create_report_buffer()` | `test_report_buffer.lua` | K: 2 A | A the Report buffer › comes back with every report after the user deletes it › with the command + args { "bdelete" }; A the Report buffer › comes back with every report after the user deletes it › with the command + args { "bwipeout" } |
+| N12 | `server.lua`: `    vim.fn.chansend(stdio, vim.json.encode(answer) .. '\n')` → `    vim.fn.chansend(stdio, 'answer ' .. vim.json.encode(answer) .. '\n')` | `test_mcp_relay.lua` | K: 29 A | A the relay › loads no plugin from the system site directories; A initialize › answers the recorded request with its protocol version, a tools object and the server; … 27 more |
+| never recreated (the author's edit; its [bwipeout] case was crash-only) | `init.lua`: `  elseif not buffer.is_showing(report_view.buffer) then` → `  elseif false then` | `test_report_buffer.lua` | K: 5 A | A the Report buffer › comes back with every report after the user deletes it › with the command + args { "bdelete" }; A the Report buffer › comes back with every report after the user deletes it › with the command + args { "bwipeout" }; … 3 more |
+| I3 slow start + every chunk a line (the reviewer's sleep, anchored at the current prepend) | `relay.lua`: `vim.opt.runtimepath:prepend(vim.fn.fnamemodify(this_script, ':h:h:h:h'))` → `vim.opt.runtimepath:prepend(vim.fn.fnamemodify(this_script, ':h:h:h:h')) ⏎ vim.uv.sleep(400)`; `lines.lua`: `    for index, piece in ipairs(data) do` → `    for _, whole in ipairs(data) do ⏎       options.on_line(whole) ⏎     end ⏎     for index, piece in ipairs({}) do` | `test_mcp_relay.lua` | K: 6 A (3 of 3 runs) | A a line › written in two parts is answered once, when its newline arrives; A a line › split inside a multibyte character is answered whole; … 4 more |
+
+**The wave plan's M7, M8, M9:**
+
+| Mutant | Literal edit (old → new; ⏎ is a newline) | Run | Result | Killing cases |
+|---|---|---|---|---|
+| M7 | `protocol.lua`: `      capabilities = { tools = vim.empty_dict() },` → `      capabilities = { tools = {} },` | `test_mcp_relay.lua` | K: 1 A | A initialize › answers the recorded request with its protocol version, a tools object and the server |
+| M8 | `format.lua`: `  { name = 'blocked', moment = "when you cannot go on without the user's answer or action" }, ⏎ ` → (nothing) | `test_report.lua` | K: 5 A | A validate_report() › refuses anything else, naming the field › with no report + args { {summary = "Summary",task = "Task"}, "status: expected one of started, progress, blocked, done, failed; A validate_report() › refuses anything else, naming the field › with no report + args { {status = "finished",summary = "Summary",task = "Task"}, "status: expected one of started, progress, b; … 3 more |
+| M8 | `format.lua`: `  { name = 'blocked', moment = "when you cannot go on without the user's answer or action" }, ⏎ ` → (nothing) | `test_mcp_relay.lua` | K: 2 A | A tools/list › lists one tool, report, whose input schema is the report format; A tools/call › of a refused report is a tool error naming the field |
+| M9 | `records.lua`: `    vim.fn.sha256(working_directory) .. '.jsonl'` → `    'reports.jsonl'` | `test_report_buffer.lua` | K: 1 A | A the records › of another working directory never show |
+
+**The author's table, re-run on this head:**
+
+| Mutant | Literal edit (old → new; ⏎ is a newline) | Run | Result | Killing cases |
+|---|---|---|---|---|
+| details dropped | `format.lua`: `    details = not is_absent(arguments.details) and arguments.details or nil,` → `    details = nil,` | `test_report.lua` | K: 1 A | A validate_report() › keeps details that are a string |
+| null not absent | `format.lua`: `  return value == nil or value == vim.NIL` → `  return value == nil` | `test_report.lua` | K: 2 A | A validate_report() › treats details that are a JSON null as absent; A report_schema() › admits the same details as validate_report() › as a + args { "null", vim.NIL } |
+| null not absent | `format.lua`: `  return value == nil or value == vim.NIL` → `  return value == nil` | `test_mcp_delivery.lua` | K: 1 A | A a report › whose details are null renders without details |
+| schema says string only (R4) | `format.lua`: `      details = { type = { 'string', 'null' } },` → `      details = { type = 'string' },` | `test_report.lua` | K: 1 A | A report_schema() › admits the same details as validate_report() › as a + args { "null", vim.NIL } |
+| unknown field allowed | `format.lua`: `  local unknown = first_unknown_field(arguments)` → `  local unknown = nil` | `test_report.lua` | K: 1 A | A validate_report() › refuses anything else, naming the field › with no report + args { {priority = "high",status = "done",summary = "Summary",task = "Task"}, "priority: not a report field" |
+| any status | `format.lua`: `  if not vim.list_contains(M.STATUS_NAMES, arguments.status) then` → `  if arguments.status == nil then` | `test_report.lua` | K: 2 A | A validate_report() › refuses anything else, naming the field › with no report + args { {status = "finished",summary = "Summary",task = "Task"}, "status: expected one of started, progress, b; A validate_report() › refuses anything else, naming the field › with no report + args { {status = "Done",summary = "Summary",task = "Task"}, "status: expected one of started, progress, block |
+| environment table unchecked | `init.lua`: `  vim.validate('environment', report_environment, 'table') ⏎ ` → (nothing) | `test_report.lua` | K: 1 A | A set_report_environment() › refuses an environment it cannot use, naming what is wrong › as the environment + args { "an environment", "environment: expected table, got string" } |
+| instructions ignore the tool name | `instructions.lua`: `      tool_name ⏎     ),` → `      'mcp__aineo__report' ⏎     ),` | `test_report.lua` | K: 1 A | A report_instructions() › names the tool it is given › as the tool to call + args { "mcp__renamed__report" } |
+| environment not required | `init.lua`: `  if not environment then` → `  if false then` | `test_report_buffer.lua` | K: 2 A | A a report › is refused until the report home has its environment; A the Report buffer › is refused until the report home has its environment |
+| new buffer every call | `init.lua`: `  if not report_view then ⏎     local records_file` → `  if report_view then ⏎     buffer.discard(report_view.buffer) ⏎   end ⏎   if true then ⏎     local records_file` | `test_report_buffer.lua` | K: 3 A | A the Report buffer › is the same buffer on every use; A the Report buffer › stays the Report when a file is edited from its window while it is empty; A the Report buffer › moves every window showing it to the newest report |
+| unnamed buffer | `buffer.lua`: `  vim.api.nvim_buf_set_name(buffer, REPORT_BUFFER_NAME) ⏎ ` → (nothing) | `test_report_buffer.lua` | K: 5 A, 4 E | A the Report buffer › is named aineo://report, is no file, has no swap file, is kept hidden and unlisted; A the Report buffer › stays the Report when a file is edited from its window while it is empty; … 7 more |
+| name not taken back (A1) | `buffer.lua`: `  free_report_buffer_name() ⏎ ` → (nothing) | `test_report_buffer.lua` | K: 2 A | A the Report buffer › takes its name back from a buffer holding it, and leaks none › after + args { { "lua require('aineo.report').report_buffer()", "bwipeout aineo://report", "edit a; A the Report buffer › takes its name back from a buffer holding it, and leaks none › after + args { { "file aineo://report" } } |
+| buffer modifiable | `buffer.lua`: `  vim.bo[buffer].modifiable = false ⏎ ` → (nothing) | `test_report_buffer.lua` | K: 1 A | A the Report buffer › refuses the user an edit, and still takes the next report |
+| modifiable left on | `buffer.lua`: `  vim.bo[buffer].modifiable = modifiable` → `  vim.bo[buffer].modifiable = true` | `test_report_buffer.lua` | K: 1 A | A the Report buffer › refuses the user an edit, and still takes the next report |
+| reopened counts as showing (A3) | `buffer.lua`: ` and vim.bo[buffer].buftype == 'nofile'` → (nothing) | `test_report_buffer.lua` | K: 3 A | A the Report buffer › comes back with every report after the user deletes it › with the command + args { "bdelete" }; A the Report buffer › deleted then shown again by the user takes no report, and the editor quits › with + args { "buffer #" }; A the Report buffer › deleted then shown again by the user takes no report, and the editor quits › with + args { "buffer aineo://report" } |
+| no re-render on :edit (A4) | `buffer.lua`: `      fill(event.buf)` → `      local _ = event` | `test_report_buffer.lua` | K: 2 A | A the Report buffer › keeps every report when the user edits it again › with + args { "edit" }; A the Report buffer › keeps every report when the user edits it again › with + args { "edit!" } |
+| windows do not follow | `init.lua`: `  buffer.follow_last_line(report_buffer) ⏎ ` → (nothing) | `test_report_buffer.lua` | K: 1 A | A the Report buffer › moves every window showing it to the newest report |
+| editor does not validate | `init.lua`: `  local valid_report, refusal = format.validate_report(arguments)` → `  local valid_report, refusal = arguments, nil` | `test_report_buffer.lua` | K: 2 A | A a report › that is invalid is refused, naming the field, and not rendered; A the records › keep no refused report |
+| kept before the Report opens | `init.lua`: `  local report_buffer = M.report_buffer() ⏎   local record = { time = current_environment().clock(), report = valid_report } ⏎   records.append_record(report_view.records_file, record)` → `  local record = { time = current_environment().clock(), report = valid_report } ⏎   records.append_record( ⏎     records.records_file(current_environment().state_directory, current_environment().working_directory), ⏎     record ⏎   ) ⏎   local report_buffer = M.report_buffer()` | `test_report_buffer.lua` | K: 9 A | A a report › renders as its time, status, task and summary; A a report › renders each line of its details below it, indented; … 7 more |
+| newline kept | `render.lua`: `  return (text:gsub('\n', ' '))` → `  return text` | `test_report_buffer.lua` | K: 1 A | A a report › renders a newline in its task or summary as a space |
+| empty details rendered | `render.lua`: `  if details == nil or details == '' then` → `  if details == nil then` | `test_report_buffer.lua` | K: 1 A | A a report › renders no details line when its details are empty |
+| details indented by two | `render.lua`: `local DETAILS_INDENT = (' '):rep(#'HH:MM ')` → `local DETAILS_INDENT = '  '` | `test_report_buffer.lua` | K: 1 A | A a report › renders each line of its details below it, indented |
+| records overwritten | `records.lua`: `  write_to(file, 'a', vim.json.encode(record) .. '\n')` → `  write_to(file, 'w', vim.json.encode(record) .. '\n')` | `test_report_buffer.lua` | K: 5 A | A the Report buffer › keeps every report when the user edits it again › with + args { "edit" }; A the Report buffer › keeps every report when the user edits it again › with + args { "edit!" }; … 3 more |
+| records 0644 | `records.lua`: `local OWNER_ONLY = tonumber('600', 8)` → `local OWNER_ONLY = tonumber('644', 8)` | `test_report_buffer.lua` | K: 1 A | A the records › are readable and writable by their owner only |
+| open failure unchecked | `records.lua`: `  if not descriptor then ⏎     error(('aineo cannot keep the report in %s: %s'):format(file, open_failure), 0) ⏎   end ⏎ ` → (nothing) | `test_report_buffer.lua` | K: 1 A | A the records › refuse a report they cannot keep, naming the file, and show nothing |
+| record shape unchecked | `records.lua`: `  if not decoded or type(record) ~= 'table' or not is_record_time(record.time) then` → `  if not decoded then` | `test_report_buffer.lua` | K: 1 A | A the records › that cannot be read are skipped and counted › as a line + args { '{"time":"08:00","report":{"task":"T","status":"done","summary":"S"}}' } |
+| whole file read (A5) | `records.lua`: `  for _, line in ipairs(last_lines(file, RECORDS_KEPT_BYTES)) do` → `  for _, line in ipairs(last_lines(file, math.huge)) do` | `test_report_buffer.lua` | K: 2 A | A the records › show the newest 2 MiB of them; A the records › show whole records only, when the newest 2 MiB begin inside one |
+| kept part off by one (A5) | `records.lua`: `  local start = math.max(0, size - bytes - 1)` → `  local start = math.max(0, size - bytes)` | `test_report_buffer.lua` | K: 2 A | A the records › show the newest 2 MiB of them; A the records › are cut to their newest 2 MiB once they have grown past 4 MiB |
+| never cut back (A5) | `records.lua`: `  if stat and stat.size > 2 * RECORDS_KEPT_BYTES then` → `  if false then` | `test_report_buffer.lua` | K: 1 A | A the records › are cut to their newest 2 MiB once they have grown past 4 MiB |
+| skipped records not told | `init.lua`: `  if skipped > 0 then` → `  if false then` | `test_report_buffer.lua` | K: 4 A | A the records › that cannot be read are skipped and counted › as a line + args { "not JSON" }; A the records › that cannot be read are skipped and counted › as a line + args { '{"time":"2026-09-24T08:00:00"}' }; … 2 more |
+| unreadable records not told | `init.lua`: `    warn_later(records_or_failure) ⏎ ` → (nothing) | `test_report_buffer.lua` | K: 1 A | A the records › that cannot be read are reported, and the Report opens without them |
+| warnings not scheduled (A2) | `init.lua`: `  vim.schedule(function() ⏎     vim.notify(message, vim.log.levels.WARN) ⏎   end)` → `  vim.notify(message, vim.log.levels.WARN)` | `test_mcp_blocked_editor.lua` | K: 1 A (3 of 3 runs) | A a report that opens a Report with a warning › is confirmed before the warning can hold the editor |
+| version echoed | `protocol.lua`: `  initialize = function() ⏎     return { ⏎       protocolVersion = PROTOCOL_VERSION,` → `  initialize = function(params) ⏎     return { ⏎       protocolVersion = params.protocolVersion,` | `test_mcp_relay.lua` | K: 1 A | A initialize › answers a protocol version it does not speak with the one it speaks |
+| notifications answered | `protocol.lua`: `  if message.id == nil then ⏎     return nil ⏎   end ⏎ ` → (nothing) | `test_mcp_relay.lua` | K: 1 A | A a notification › gets no answer |
+| null id echoed | `protocol.lua`: `  if message.id == vim.NIL then` → `  if false then` | `test_mcp_relay.lua` | K: 1 A | A a request › whose id is null is refused with error -32600 and no id |
+| ping result an array | `protocol.lua`: `    return vim.empty_dict() ⏎   end, ⏎   ['tools/list']` → `    return {} ⏎   end, ⏎   ['tools/list']` | `test_mcp_relay.lua` | K: 1 A | A ping › is answered with an empty object |
+| -32601 as -32600 | `protocol.lua`: `local METHOD_NOT_FOUND = -32601` → `local METHOD_NOT_FOUND = -32600` | `test_mcp_relay.lua` | K: 1 A | A a request for another method › is answered with error -32601 |
+| any tool is report | `protocol.lua`: `  if params.name ~= names.REPORT_TOOL then` → `  if false then` | `test_mcp_relay.lua` | K: 3 A | A tools/call › of another tool is answered with error -32602; A tools/call › whose params are no object names no tool, and is answered with error -32602 › as + args { "42" }; A tools/call › whose params are no object names no tool, and is answered with error -32602 › as + args { "null" } |
+| refusal as RPC error | `protocol.lua`: `    return tool_result('aineo refused the report: ' .. refusal, true)` → `    return nil, { code = INVALID_PARAMS, message = refusal }` | `test_mcp_relay.lua` | K: 1 A | A tools/call › of a refused report is a tool error naming the field |
+| parse error with an id | `protocol.lua`: `    return error_response(nil, PARSE_ERROR, 'Parse error: the message is not JSON')` → `    return error_response(0, PARSE_ERROR, 'Parse error: the message is not JSON')` | `test_mcp_relay.lua` | K: 1 A | A a line › that is not JSON is answered with error -32700 and no id, and the relay keeps serving |
+| array taken as object | `protocol.lua`: `  if type(message) ~= 'table' or vim.islist(message) then` → `  if type(message) ~= 'table' then` | `test_mcp_relay.lua` | K: 1 A | A a line › that is JSON but no object is answered with error -32600 and no id › as + args { "[1,2]" } |
+| params unguarded | `protocol.lua`: `  local params = type(message.params) == 'table' and message.params or {}` → `  local params = message.params` | `test_mcp_relay.lua` | K: 2 A | A tools/call › whose params are no object names no tool, and is answered with error -32602 › as + args { "42" }; A tools/call › whose params are no object names no tool, and is answered with error -32602 › as + args { "null" } |
+| id echoed as a string | `protocol.lua`: `  return { jsonrpc = '2.0', id = message.id, result = result }` → `  return { jsonrpc = '2.0', id = tostring(message.id), result = result }` | `test_mcp_relay.lua` | K: 20 A | A the relay › loads no plugin from the system site directories; A initialize › answers the recorded request with its protocol version, a tools object and the server; … 18 more |
+| every chunk a line | `lines.lua`: `    for index, piece in ipairs(data) do` → `    for _, whole in ipairs(data) do ⏎       options.on_line(whole) ⏎     end ⏎     for index, piece in ipairs({}) do` | `test_mcp_relay.lua` | K: 6 A | A a line › written in two parts is answered once, when its newline arrives; A a line › split inside a multibyte character is answered whole; … 4 more |
+| limit >= | `lines.lua`: `      if #partial > options.limit then` → `      if #partial >= options.limit then` | `test_mcp_relay.lua` | K: 1 A | A a line › of exactly 1 MiB is read and answered |
+| tail kept while dropping | `lines.lua`: `      if not dropping then ⏎         partial = partial .. piece ⏎       end` → `      partial = partial .. piece` | `test_mcp_relay.lua` | K: 2 A | A a line › longer than 1 MiB is dropped up to its newline, and the next message answered; A a line › three times 1 MiB long is refused once, its rest not kept |
+| limit doubled | `server.lua`: `local LINE_LIMIT = 1024 * 1024` → `local LINE_LIMIT = 2 * 1024 * 1024` | `test_mcp_relay.lua` | K: 2 A | A a line › longer than 1 MiB is refused with error -32600 and no id, before its newline arrives; A a line › longer than 1 MiB is dropped up to its newline, and the next message answered |
+| empty line answered | `server.lua`: `local answer = line ~= '' and protocol.answer_line(line, deliver_report)` → `local answer = protocol.answer_line(line, deliver_report)` | `test_mcp_relay.lua` | K: 3 A | A a line › that is empty gets no answer; A a line › longer than 1 MiB is dropped up to its newline, and the next message answered; A a line › three times 1 MiB long is refused once, its rest not kept |
+| close never noticed | `server.lua`: `        closed = true ⏎ ` → (nothing) | `test_mcp_relay.lua` | K: 1 A | A the relay › exits 0 when its input closes |
+| answers unguarded (A7) | `server.lua`: `  local answered, failure = pcall(answer)` → `  local answered, failure = true, answer()` | `test_mcp_relay.lua` | K: 1 A | A a request › whose answer cannot be written does not take the next one down |
+| failure not written to stderr (A7) | `server.lua`: `    vim.uv.fs_write(STDERR, ('aineo relay: %s\n'):format(tostring(failure)))` → `    local _ = failure` | `test_mcp_relay.lua` | K: 1 A | A a request › whose answer cannot be written does not take the next one down |
+| delivery result ignored | `protocol.lua`: `  local outcome, explanation = deliver_report(valid_report)` → `  local outcome, explanation = 'delivered', deliver_report(valid_report)` | `test_mcp_delivery.lua` | K: 4 A | A a report › for an editor that is gone is a tool error saying so, and the relay keeps serving; A a report › that the editor does not take is a tool error with the reason it gave; … 2 more |
+| no-address guard removed | `editor.lua`: `  if address == nil then ⏎     return 'failed', 'aineo has no editor address to deliver the report to' ⏎   end ⏎ ` → (nothing) | `test_mcp_delivery.lua` | K: 2 A | A a report › with no editor address is a tool error saying so, and the relay keeps serving › in the environment + args { {} }; A a report › with no editor address is a tool error saying so, and the relay keeps serving › in the environment + args { {AINEO_EDITOR_ADDRESS = ""} } |
+| traceback kept | `editor.lua`: `first_line(tostring(failure[2]))` → `tostring(failure[2])` | `test_mcp_delivery.lua` | K: 1 A | A a report › that the editor does not take is a tool error with the reason it gave |
+| report sent as code | `editor.lua`: `{ RECEIVE_REPORT, { report } }` → `{ ("require('aineo.report').receive_report({ task = '%s', status = '%s', summary = '%s', details = [[%s]] })"):format(report.task, report.status, report.summary, report.details or ''), {} }` | `test_mcp_delivery.lua` | K: 1 A | A a report › reaches the editor as data: fields holding code render literally and run nothing |
+| TCP dialled as a pipe (A8) | `editor.lua`: `  return address:match('^[^/]+:%d+$') and 'tcp' or 'pipe'` → `  return 'pipe'` | `test_mcp_delivery.lua` | K: 1 A | A a report › reaches an editor listening on a TCP address |
+| wait unbounded (A2) | `editor.lua`: `local CONFIRMATION_TIMEOUT_MS = 5000` → `local CONFIRMATION_TIMEOUT_MS = 600000` | `test_mcp_blocked_editor.lua` | K: 1 A (3 of 3 runs) | A a report for an editor at a hit-enter prompt › is answered in time, the relay keeps serving, and the report shows once the user is done |
+| close ignored while waiting (A2) | `editor.lua`: `    return call.response ~= nil or call.closed` → `    return call.response ~= nil` | `test_mcp_blocked_editor.lua` | K: 1 A (3 of 3 runs) | A a report for an editor at a hit-enter prompt › is a tool error at once when the editor dies before it answers |
+| relay serves when required | `relay.lua`: `if script_run ~= this_script then ⏎   return ⏎ end ⏎ ` → (nothing) | `test_mcp_delivery.lua` | K: 1 A | A the relay script › loaded inside an editor serves nothing |
+| relay not on runtimepath | `relay.lua`: `vim.opt.runtimepath:prepend(vim.fn.fnamemodify(this_script, ':h:h:h:h'))` → `local _ = this_script` | `test_mcp_delivery.lua` | K: 10 A | A the server entry › started as Claude Code starts it, completes the recorded handshake and relays a report; A a report › reaches the editor the relay was given, and renders in its Report; … 8 more |
+| system plugins load (A6) | `init.lua`: `'--cmd', 'set noloadplugins', ` → (nothing) | `test_mcp_relay.lua` | K: 1 A | A the relay › loads no plugin from the system site directories |
+| entry without --clean | `init.lua`: `'--headless', '--clean', ` → `'--headless', ` | `test_mcp.lua` | K: 1 A | A mcp_servers() › describes the report server the way Claude Code starts a stdio server |
+| another tool allowed | `init.lua`: `  return { M.report_tool_name() }` → `  return { M.report_tool_name(), 'Bash' }` | `test_mcp.lua` | K: 1 A | A allowed_mcp_tools() › pre-allows the report tool and nothing else |
+| address unchecked | `init.lua`: `  vim.validate('editor_address', editor_address, 'string') ⏎ ` → (nothing) | `test_mcp.lua` | K: 1 A | A mcp_servers() › refuses an address or a program that is not a string, naming it › given + args { 42, "/opt/nvim/bin/nvim", "editor_address: expected string, got number" } |
+| tool name misspelt | `init.lua`: `  return ('mcp__%s__%s'):format(names.SERVER_NAME, names.REPORT_TOOL)` → `  return ('mcp__%s_%s'):format(names.SERVER_NAME, names.REPORT_TOOL)` | `test_mcp.lua` | K: 2 A | A report_tool_name() › is the name Claude Code gives the report tool of the aineo server; A allowed_mcp_tools() › pre-allows the report tool and nothing else |
+
+**The handover's rows: code the round wrote that no row above reached:**
+
+| Mutant | Literal edit (old → new; ⏎ is a newline) | Run | Result | Killing cases |
+|---|---|---|---|---|
+| EOF not noted | `editor.lua`: `      call.closed = true ⏎       return ⏎ ` → `      return ⏎ ` | `test_mcp_blocked_editor.lua` | K: 1 A (3 of 3 runs) | A a report for an editor at a hit-enter prompt › is a tool error at once when the editor dies before it answers |
+| any message taken for the answer | `editor.lua`: `      if message[1] == RESPONSE then` → `      if true then` | `test_mcp_delivery.lua` | K: 1 A (3 of 3 runs) | A a report › is confirmed by an editor that writes a notification before its answer |
+| unconfirmed as an error | `protocol.lua`: `  return tool_result(explanation, outcome == 'failed')` → `  return tool_result(explanation, true)` | `test_mcp_blocked_editor.lua` | K: 1 A | A a report for an editor at a hit-enter prompt › is answered in time, the relay keeps serving, and the report shows once the user is done |
+| partial first line kept | `records.lua`: `  if start > 0 then ⏎     table.remove(lines, 1) ⏎   end ⏎ ` → (nothing) | `test_report_buffer.lua` | K: 2 A | A the records › show whole records only, when the newest 2 MiB begin inside one; A the records › are cut to their newest 2 MiB once they have grown past 4 MiB |
+| first line dropped only when empty | `records.lua`: `  if start > 0 then ⏎     table.remove(lines, 1)` → `  if start > 0 and lines[1] == '' then ⏎     table.remove(lines, 1)` | `test_report_buffer.lua` | K: 1 A | A the records › show whole records only, when the newest 2 MiB begin inside one |
+| trailing empty line kept | `records.lua`: `  if lines[#lines] == '' then ⏎     table.remove(lines) ⏎   end ⏎ ` → (nothing) | `test_report_buffer.lua` | K: 6 A | A the records › show whole records only, when the newest 2 MiB begin inside one; A the records › are cut to their newest 2 MiB once they have grown past 4 MiB; … 4 more |
+| cut past 2 MiB, not 4 | `records.lua`: `  if stat and stat.size > 2 * RECORDS_KEPT_BYTES then` → `  if stat and stat.size > RECORDS_KEPT_BYTES then` | `test_report_buffer.lua` | K: 1 A | A the records › are kept whole up to 4 MiB when a report is added |
+| cut at 4 MiB exactly | `records.lua`: `  if stat and stat.size > 2 * RECORDS_KEPT_BYTES then` → `  if stat and stat.size >= 2 * RECORDS_KEPT_BYTES then` | `test_report_buffer.lua` | K: 1 A | A the records › are kept whole up to 4 MiB when a report is added |
+| rename failure unchecked | `records.lua`: `  if not renamed then ⏎     error(('aineo cannot keep the report in %s: %s'):format(file, rename_failure), 0) ⏎   end ⏎ ` → (nothing) | `test_report_buffer.lua` | survived |  |
+
+**88 literal edits in 106 runs: some edits ran on two files, and the timing-sensitive ones three times. 87 of the 88 edits were killed by assertion; the one survivor is "rename failure unchecked". 101 of the 106 runs were killed, none by a crash only, and 5 runs survived. Every file was restored and checked after each run.**
+
+One killed run also has cases that fail by crash: "unnamed buffer" fails 5 cases by assertion and 4 by crash. The crashes are the tests' own commands, which find no buffer of the name: `:edit` (E32), `:bwipeout aineo://report` and `:buffer aineo://report` (E94).
+
+Of the 5 surviving runs, four are N2a, N2c, N8a and N8b on `test_mcp_delivery.lua`, a second file that reads selected fields and was not expected to kill them; `test_mcp_relay.lua` kills each. The fifth is "rename failure unchecked", the one edit no file kills; it is under *Limits*.
+
+**Two survivors were removed from the code rather than kept**, beside the author's two (the Report's loaded check and the relay's answer queue):
+
+- the answer reader's id check, since a connection carries one request;
+- the Report group's `clear = false`, whose stated reason could not arise.
+
+**Not mutated: `serve_stdio`'s poll interval, changed from 50 to 10 ms with the bounded wait.** It only sets how quickly the relay notices that stdin has closed, and no test can see it.
+
+### Limits recorded in the fix round
+
+- **A2, what the bound leaves.**
+  - While a delivery waits, the relay answers nothing else: later lines, pings included, wait their turn.
+  - A report to an editor held by the user costs up to 5 s, and reports sent meanwhile queue behind it, 5 s each.
+  - Claude Code's own timeouts are the attack reviewer's reading of its docs, not a measurement.
+- **A deleted Report shown again before the next report is an ordinary buffer the user can edit.** Measured in the handover. The next report wipes it out and creates a new Report. An edit the user makes there leaves a modified buffer, which `:qall` refuses (E37).
+- **The cut's rename failure is unpinned.** No portable test makes `fs_rename` fail once the kept records have been read and written beside the file. Its mutant survives, and the branch stays, since clean-code forbids swallowing the error.
+- **A record longer than 2 MiB is shown when it arrives, but never in a later editor, and a cut drops it.** A report under the 1 MiB line limit can grow that far only when made mostly of raw DEL characters, which the records write six bytes each (measured).
+- **Trimming races other editors.** Two editors appending to one records file while one of them trims it can lose a record written between the trim's read and its rename. This is reasoned from the code, not measured.
+- **`serverInfo.version` is `0.0.0`**, since aineo has no release version.
+- **Two JSON-RPC edges remain** (A10): a client response is answered −32601, and an object id is echoed. Claude Code sends neither.
+
 ## Commits
 
-*Recorded after the merge.* The branch carries four code commits and this note's commit; their hashes change on rebase.
+*Recorded after the merge.* The packet round carries four code commits and this note's commit; the fix round, the commits named in its section and the commit that adds that section. Their hashes change on rebase.
