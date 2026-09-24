@@ -53,8 +53,11 @@ local function last_lines(file, bytes)
   -- One byte before the kept part is read too: it says whether the kept part
   -- starts a line, or starts inside one that must be dropped.
   local start = math.max(0, size - bytes - 1)
-  local data = vim.uv.fs_read(descriptor, size - start, start)
+  local data, read_failure = vim.uv.fs_read(descriptor, size - start, start)
   vim.uv.fs_close(descriptor)
+  if not data then
+    error(('aineo cannot read the report records in %s: %s'):format(file, read_failure), 0)
+  end
   local lines = vim.split(data, '\n', { plain = true })
   if start > 0 then
     table.remove(lines, 1)
