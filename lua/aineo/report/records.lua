@@ -130,6 +130,22 @@ local function cut_when_grown(file)
   end
 end
 
+--- Makes `directory`, and the directories leading to it, unless it exists —
+--- also when another editor makes it at the same moment.
+---
+--- Raises an error naming `directory` when it cannot be made.
+---
+---@param directory string
+local function make_directory(directory)
+  local made, failure = pcall(vim.fn.mkdir, directory, 'p')
+  if not made and vim.fn.isdirectory(directory) == 0 then
+    error(
+      ('aineo cannot make the directory of the report records %s: %s'):format(directory, failure),
+      0
+    )
+  end
+end
+
 --- Adds `record` to the end of `file` as one line, creating the file (with
 --- `OWNER_ONLY` permissions) and its directory when they are missing. When the
 --- file has grown past twice `RECORDS_KEPT_BYTES`, it is first cut down to its
@@ -138,13 +154,14 @@ end
 --- same, the reason is returned, and the cut is tried again with the next
 --- record. The Report reads only the newest records whatever the file's size.
 ---
---- Raises an error naming the file when the record cannot be added.
+--- Raises an error naming the file, or its directory, when the record
+--- cannot be added.
 ---
 ---@param file string
 ---@param record aineo.report.Record
 ---@return string? cut_failure why the grown file could not be cut
 function M.append_record(file, record)
-  vim.fn.mkdir(vim.fs.dirname(file), 'p')
+  make_directory(vim.fs.dirname(file))
   local cut_failure = cut_when_grown(file)
   local append_failure = write_to(file, 'a', vim.json.encode(record) .. '\n')
   if append_failure then
