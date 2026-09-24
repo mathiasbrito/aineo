@@ -20,8 +20,9 @@ MINI_NVIM_DIR := $(ROOT)/deps/mini.nvim
 
 NVIM_TEST := nvim --headless --noplugin -u '$(ROOT)/scripts/minimal_init.lua'
 
-# Everything the suites' Neovims read or write as user state lives here.
-TEST_HOME := $(ROOT)/.tests
+# Everything the suites' Neovims read or write as user state lives here, even
+# when make's command line or MAKEFLAGS names another TEST_HOME.
+override TEST_HOME := $(ROOT)/.tests
 
 LUA_SOURCES := lua plugin scripts tests
 
@@ -39,10 +40,19 @@ test test_file: override XDG_CACHE_HOME := $(TEST_HOME)/cache
 test test_file: override CLAUDE_CONFIG_DIR := $(TEST_HOME)/claude
 test test_file: override NVIM_LOG_FILE := $(TEST_HOME)/state/nvim/log
 
+# A Neovim or Claude Code session that starts make hands these down: the parent
+# editor's server address, application name, init file and init commands, and a
+# Claude Code marker. No target passes them on, whether they come from the
+# environment, make's command line or MAKEFLAGS, so neither the test runner nor
+# any child Neovim sees them. VIMRUNTIME is still passed on: a development build
+# of Neovim needs it.
+unexport NVIM NVIM_APPNAME MYVIMRC VIMINIT AI_AGENT
+
 # Fetches mini.nvim at MINI_NVIM_COMMIT into MINI_NVIM_DIR. Does nothing, and
 # reaches for no remote, when that commit is already checked out there; a
 # missing or foreign checkout reads as "not at the pin". Fails when the
-# checkout's files differ from the commit, an edit left in deps/ included.
+# checkout's files differ from the commit, an edit left in deps/ included, and
+# when git cannot read the checkout at all.
 deps:
 	@if [ "$$(git --git-dir='$(MINI_NVIM_DIR)/.git' rev-parse HEAD 2>/dev/null)" != '$(MINI_NVIM_COMMIT)' ]; then \
 		mkdir -p '$(MINI_NVIM_DIR)' && \
@@ -50,14 +60,15 @@ deps:
 		git -C '$(MINI_NVIM_DIR)' fetch --quiet --depth 1 '$(MINI_NVIM_URL)' '$(MINI_NVIM_COMMIT)' && \
 		git -C '$(MINI_NVIM_DIR)' -c advice.detachedHead=false checkout --quiet FETCH_HEAD; \
 	fi
-	@if [ -n "$$(git --git-dir='$(MINI_NVIM_DIR)/.git' --work-tree='$(MINI_NVIM_DIR)' status --porcelain)" ]; then \
-		echo '$(MINI_NVIM_DIR) differs from commit $(MINI_NVIM_COMMIT); remove it and run make deps' >&2; \
+	@changes=$$(git --git-dir='$(MINI_NVIM_DIR)/.git' --work-tree='$(MINI_NVIM_DIR)' status --porcelain) && [ -z "$$changes" ] || { \
+		echo '$(MINI_NVIM_DIR) differs from commit $(MINI_NVIM_COMMIT), or git cannot read it; remove it and run make deps' >&2; \
 		exit 1; \
-	fi
+	}
 
 # Exits 0 only when every case ran and passed, and non-zero otherwise — also
 # when a test file does not load or contributes no case, when test code ends
-# Neovim, or when mini.test stalls (scripts/run_tests.lua).
+# Neovim, when mini.test stalls, or when the run outlasts its time limit, which
+# AINEO_TEST_RUN_LIMIT_MS=<milliseconds> replaces (scripts/run_tests.lua).
 test: deps
 	$(NVIM_TEST) -l '$(ROOT)/scripts/run_tests.lua'
 
