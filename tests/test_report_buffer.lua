@@ -54,12 +54,15 @@ end
 T['a report']['renders a newline in its task or summary as a space'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
-  report_editor.receive(
-    child,
-    { task = 'Refactor\nthe parser', status = 'done', summary = 'All\ntests pass' }
+  local failure = child.lua(
+    [[return select(2, pcall(require('aineo.report').receive_report, ...))]],
+    { { task = 'Refactor\nthe parser', status = 'done', summary = 'All\ntests pass' } }
   )
 
-  eq(report_editor.lines(child), { '09:05 [done] Refactor the parser — All tests pass' })
+  eq(
+    { failure, report_editor.lines(child) },
+    { vim.NIL, { '09:05 [done] Refactor the parser — All tests pass' } }
+  )
 end
 
 T['a report']['renders no details line when its details are empty'] = function()
