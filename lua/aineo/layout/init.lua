@@ -4,6 +4,8 @@
 --- The layout shows the Claude and Report buffers it is handed and never
 --- creates, writes or deletes them; the Input buffer is its own.
 
+local columns = require('aineo.layout.columns')
+
 local M = {}
 
 ---@class aineo.layout.Arrangement
@@ -94,72 +96,6 @@ local function is_file(buffer)
   return vim.bo[buffer].buftype == ''
 end
 
---- The windows of a node of `winlayout()`'s tree, left to right and top to
---- bottom.
----
----@param node table a `{ 'leaf', window }`, `{ 'row', nodes }` or `{ 'col', nodes }` node
----@return integer[] windows
-local function windows_of(node)
-  if node[1] == 'leaf' then
-    return { node[2] }
-  end
-  local windows = {}
-  for _, child in ipairs(node[2]) do
-    vim.list_extend(windows, windows_of(child))
-  end
-  return windows
-end
-
---- Whether `node` holds every window of `windows`.
----
----@param node table a node of `winlayout()`'s tree
----@param windows integer[]
----@return boolean
-local function holds_all(node, windows)
-  local held = windows_of(node)
-  return vim.iter(windows):all(function(window)
-    return vim.list_contains(held, window)
-  end)
-end
-
---- The deepest row of `tree` that holds every window of `windows`, or `nil`
---- when no row does. A window across the whole screen, such as one opened
---- with `:botright split`, puts the layout's row below a column, not at the
---- top of the tree.
----
----@param tree table `winlayout()`'s tree of the tab holding `windows`
----@param windows integer[]
----@return table|nil row a `{ 'row', nodes }` node of `tree`
-local function deepest_row_holding(tree, windows)
-  local row = nil
-  local node = tree
-  while node do
-    if node[1] == 'row' then
-      row = node
-    end
-    node = node[1] ~= 'leaf'
-        and vim.iter(node[2]):find(function(child)
-          return holds_all(child, windows)
-        end)
-      or nil
-  end
-  return row
-end
-
---- The position among `columns` of the column holding `window`.
----
----@param columns table[] the nodes of a row
----@param window integer
----@return integer|nil position
-local function column_holding(columns, window)
-  for position, column in ipairs(columns) do
-    if vim.list_contains(windows_of(column), window) then
-      return position
-    end
-  end
-  return nil
-end
-
 --- The window standing for the right column: the Report's, or Input's when
 --- the Report's is closed; `nil` when both are.
 ---
@@ -180,19 +116,11 @@ end
 ---@return integer[] windows
 local function file_column_windows()
   local tree = vim.fn.winlayout(vim.api.nvim_tabpage_get_number(layout_tab()))
-  local row = deepest_row_holding(tree, existing_windows())
-  if not row then
-    return {}
-  end
-  local columns = row[2]
-  local claude = has_window('claude') and column_holding(columns, state.windows.claude)
-  local right_window = right_column_window()
-  local right = right_window and column_holding(columns, right_window)
-  local windows = {}
-  for position = claude and claude + 1 or 1, right and right - 1 or #columns do
-    vim.list_extend(windows, windows_of(columns[position]))
-  end
-  return windows
+  return columns.windows_between(tree, {
+    held = existing_windows(),
+    left = has_window('claude') and state.windows.claude or nil,
+    right = right_column_window(),
+  })
 end
 
 --- Whether the file column is open.
