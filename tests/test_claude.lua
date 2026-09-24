@@ -599,7 +599,7 @@ T['session_status()']['is ready while a turn runs, its input box on screen'] = f
     claude.wait_for_end(fake)
   end)
 
-  claude.wait_for_screen(child, buffer, 'esc to interrupt')
+  contains(claude.wait_for_screen(child, buffer, 'esc to interrupt'), 'esc to interrupt')
 
   eq(claude.wait_for_status(child, 'ready'), { 'ready' })
 end

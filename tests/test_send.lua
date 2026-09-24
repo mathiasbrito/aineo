@@ -4,11 +4,22 @@ local send = dofile('tests/helpers/send.lua')
 
 local eq = MiniTest.expect.equality
 
+--- Expects `text` to be a string holding `part`, character for character.
+local contains = MiniTest.new_expectation('a string containing a part', function(text, part)
+  return type(text) == 'string' and text:find(part, 1, true) ~= nil
+end, function(text, part)
+  return string.format('Text: %s\nPart: %s', vim.inspect(text), vim.inspect(part))
+end)
+
 local WARN = vim.log.levels.WARN
 
 --- What Send tells the user while Claude is not ready for input.
 local NOT_READY =
   'aineo: nothing sent — Claude is not ready: it is starting, or a dialog in its window awaits your answer'
+
+--- Longer than the fake takes to exit on a double Ctrl-C at an idle prompt:
+--- 1.6 s after the second press.
+local DOUBLE_CTRL_C_EXIT_MS = 2500
 
 local child = MiniTest.new_child_neovim()
 
@@ -50,6 +61,10 @@ end
 --- writes in the call itself, and the fake records what it receives within
 --- milliseconds.
 local NOTHING_SENT_PATIENCE_MS = 300
+
+--- How long a case watches the fake's input for a write that comes after
+--- Send's own: longer than any delay a later write could plausibly take.
+local ONE_WRITE_PATIENCE_MS = 1000
 
 --- What `fake` receives, after its first `before` bytes of input, within
 --- `NOTHING_SENT_PATIENCE_MS`: empty when Send wrote nothing.
@@ -217,9 +232,12 @@ T['send()']['refuses while a permission dialog asks, though Claude was ready at 
   local fake = claude.fake('send-asks', 'asks')
   local buffer = start_ready_session(fake)
   send.set_input(child, { 'a first message' })
+  local first_before = #claude.received(fake)
+  local first = '\27[200~a first message\27[201~\r'
   send.send(child)
+  eq(claude.wait_for_received_after(fake, first_before, #first), first)
   claude.press_keys(child, buffer, '\r')
-  claude.wait_for_status(child, 'starting')
+  eq(claude.wait_for_status(child, 'starting'), { 'starting' })
   send.set_input(child, { 'a message' })
   local before = #claude.received(fake)
 
@@ -234,11 +252,12 @@ end
 
 T['send()']['writes Input while Claude works on a turn, for Claude to queue it'] = function()
   local fake = claude.fake('send-turn', 'turn')
-  send.start_with_layout(child, fake)
+  local buffer = send.start_with_layout(child, fake)
   MiniTest.finally(function()
     claude.quit(child)
     claude.wait_for_end(fake)
   end)
+  contains(claude.wait_for_screen(child, buffer, 'esc to interrupt'), 'esc to interrupt')
   claude.wait_for_status(child, 'ready')
   send.set_input(child, { 'a queued message' })
   local before = #claude.received(fake)
@@ -344,6 +363,154 @@ T['send()']['writes Input after a draft in Claude’s prompt, leaving the draft 
   send.send(child)
 
   eq(claude.wait_for_received_after(fake, before, more_than_expected), expected)
+end
+
+T['send()']['keeps Ctrl-C bytes in Input from reaching an idle Claude as keys'] = function()
+  local fake = claude.fake('send-ctrl-c-idle', 'ready')
+  start_ready_session(fake)
+  send.set_input(child, { 'a\3\3b' })
+  local before = #claude.received(fake)
+  local expected = '\27[200~ab\27[201~\r'
+
+  send.send(child)
+
+  eq({
+    sent = claude.wait_for_received_after(fake, before, #expected),
+    status = claude.wait_for_status(child, 'exited', DOUBLE_CTRL_C_EXIT_MS),
+  }, { sent = expected, status = { 'ready' } })
+end
+
+T['send()']['keeps every byte but the control ones, blank lines and indentation included'] = function()
+  local fake = claude.fake('send-every-byte', 'ready')
+  start_ready_session(fake)
+  send.set_input(child, { '', '  indented\t\1\127\194\144 kept\rtoo', '' })
+  local before = #claude.received(fake)
+  local expected = '\27[200~\n  indented\t kept\rtoo\n\27[201~\r'
+
+  send.send(child)
+
+  eq(claude.wait_for_received_after(fake, before, #expected), expected)
+end
+
+T['send()']['keeps a Ctrl-C byte in Input from interrupting Claude’s turn'] = function()
+  local fake = claude.fake('send-ctrl-c-turn', 'turn')
+  local buffer = send.start_with_layout(child, fake)
+  MiniTest.finally(function()
+    claude.quit(child)
+    claude.wait_for_end(fake)
+  end)
+  contains(claude.wait_for_screen(child, buffer, 'esc to interrupt'), 'esc to interrupt')
+  claude.wait_for_status(child, 'ready')
+  send.set_input(child, { 'x\3y' })
+  local before = #claude.received(fake)
+  local expected = '\27[200~xy\27[201~\r'
+
+  send.send(child)
+
+  eq({
+    sent = claude.wait_for_received_after(fake, before, #expected),
+    interrupted_turns = claude.wait_for_interrupted_turns(fake, NOTHING_SENT_PATIENCE_MS),
+  }, { sent = expected, interrupted_turns = 0 })
+end
+
+T['send()']['refuses, saying so once, while Input holds only a NUL byte'] = function()
+  local fake = claude.fake('send-nul-only', 'ready')
+  start_ready_session(fake)
+  send.set_input(child, { '\0' })
+  local before = #claude.received(fake)
+
+  send.send(child)
+
+  eq(refusal(fake, before), {
+    sent = '',
+    input = { '\0' },
+    messages = { { message = 'aineo: nothing sent — Input is empty', level = WARN } },
+  })
+end
+
+T['send()']['keeps an escape byte inside a one-character end marker from hiding it'] = function()
+  local fake = claude.fake('send-c1-split-by-escape', 'ready')
+  start_ready_session(fake)
+  send.set_input(child, { 'before\194\27\155201~\rafter' })
+  local before = #claude.received(fake)
+  local expected = '\27[200~before201~\rafter\27[201~\r'
+
+  send.send(child)
+
+  eq(claude.wait_for_received_after(fake, before, #expected), expected)
+end
+
+T['send()']['writes nothing when Input cannot be emptied, keeping its text'] = function()
+  local fake = claude.fake('send-unmodifiable', 'ready')
+  start_ready_session(fake)
+  send.set_input(child, { 'a message' })
+  child.lua("vim.bo[require('aineo.layout').input_buffer()].modifiable = false")
+  local before = #claude.received(fake)
+
+  send.send(child)
+
+  eq({ sent = sent_after(fake, before), input = send.input(child).lines }, {
+    sent = '',
+    input = { 'a message' },
+  })
+  contains(send.raised(child), "Buffer is not 'modifiable'")
+end
+
+T['send()']['writes nothing when a text lock keeps Input from being emptied'] = function()
+  local fake = claude.fake('send-textlock', 'ready')
+  start_ready_session(fake)
+  send.set_input(child, { 'a message' })
+  local before = #claude.received(fake)
+
+  send.send_from_expression_mapping(child)
+
+  eq({ sent = sent_after(fake, before), input = send.input(child).lines }, {
+    sent = '',
+    input = { 'a message' },
+  })
+  contains(send.raised(child), 'E565')
+end
+
+T['send()']['writes the paste and its Enter in one write'] = function()
+  local fake = claude.fake('send-one-write', 'ready')
+  start_ready_session(fake)
+  send.set_input(child, { 'a message' })
+  send.watch_writes(child)
+
+  send.send(child)
+
+  eq(send.writes(child), { '\27[200~a message\27[201~\r' })
+end
+
+T['send()']['writes no Enter on its own, which a dialog would read as an answer'] = function()
+  local fake = claude.fake('send-no-lone-enter', 'asks')
+  start_ready_session(fake)
+  send.set_input(child, { 'a message' })
+  local before = #claude.received_chunks(fake)
+  local expected = '\27[200~a message\27[201~\r'
+  local more_than_expected = #expected + 1
+
+  send.send(child)
+
+  eq(
+    claude.wait_for_chunks_after(fake, before, more_than_expected, ONE_WRITE_PATIENCE_MS),
+    { expected }
+  )
+end
+
+T['send()']['says Input is empty before saying Claude is not ready'] = function()
+  local fake = claude.fake('send-empty-behind-trust', 'trust')
+  local buffer = start_session(fake)
+  claude.wait_for_screen(child, buffer, 'Yes, I trust this folder')
+  local before = #claude.received(fake)
+
+  send.send(child)
+
+  eq(refusal(fake, before), {
+    sent = '',
+    input = { '' },
+    messages = { { message = 'aineo: nothing sent — Input is empty', level = WARN } },
+  })
 end
 
 return T
