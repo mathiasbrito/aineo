@@ -7,9 +7,7 @@ A subagent's transcript is `~/.claude/projects/<project>/<session>/subagents/age
 One row per transcript: the API requests it made (deduplicated by request id,
 since a request's content blocks repeat its usage), the context of its last
 request (input plus cache tokens — what the next request will carry), and the
-totals of uncached input, cache writes, cache reads and output. The orchestrate
-skill (§6) gives a fix round to a fresh agent when the author's last context is
-past 400 K tokens.
+totals of uncached input, cache writes, cache reads and output.
 """
 import json
 import os
@@ -34,6 +32,7 @@ def usage_rows(path):
 
 
 def main(paths):
+    """Prints a Markdown table with one row per transcript in `paths`."""
     print("| transcript | requests | last request's context | input (uncached) | cache write | cache read | output |")
     print("|---|---|---|---|---|---|---|")
     for path in paths:

@@ -1,6 +1,6 @@
 # Fix round — template
 
-Sent with `SendMessage` to the implementer that owns the pull request, after **every** reviewer has reported. One message, one round. Assemble it as `<scratchpad>/orch-fixround-<n>.md` and send the path with your decisions.
+Sent with `SendMessage` to the implementer that owns the pull request, after **every** reviewer has reported — or, when that implementer's context is past 400 K tokens (SKILL §6), as the brief of a fresh agent of the same type, headed with the branch to check out, the author's report to read, and the line "Your worktree starts from `main`: check out the branch before you read anything under `.claude/`". One message, one round. Assemble it as `<scratchpad>/orch-fixround-<n>.md` and send the path with your decisions.
 
 ---
 
