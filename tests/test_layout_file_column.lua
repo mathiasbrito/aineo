@@ -492,6 +492,19 @@ T['the file column']['opens right of Claude with a window left of Claude'] = fun
   eq(file.col, claude.col + claude.width + 1)
 end
 
+T['the file column']['is not a window left of Claude, so opening again keeps Claude at half the columns'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('topleft vnew')
+
+  layout.open(child, layout.arrangement(buffers))
+
+  layout.expect_near(
+    layout.box(child, layout.window_showing(child, buffers.claude)).width,
+    layout.COLUMNS / 2
+  )
+end
+
 T['the file column']['shows a file it already shows when Input shows it too'] = function()
   local buffers = layout.open_with_stand_ins(child)
   local input_window = layout.window_showing(child, buffers.input)
