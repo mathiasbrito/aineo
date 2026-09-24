@@ -1,0 +1,13 @@
+# The T2 MCP probe's log (t2-mcp_probe.py), run 2 of 2026-09-23 23:47–23:48 CEST, Claude Code 2.1.281 — one line per message the
+# probe received; the tools/call line's params as received, the tool-use id replaced. Three sessions: CONTROL (no call), ALLOWED (one call), JOBSTOP.
+{"method": "initialize"}
+{"method": "notifications/initialized"}
+{"method": "tools/list"}
+{"method": "initialize"}
+{"method": "notifications/initialized"}
+{"method": "tools/list"}
+{"method": "tools/call"}
+{"call": {"name": "ping", "arguments": {"note": "t2"}, "_meta": {"claudecode/toolUseId": "toolu_<id-removed>", "progressToken": 2}}}
+{"method": "initialize"}
+{"method": "notifications/initialized"}
+{"method": "tools/list"}

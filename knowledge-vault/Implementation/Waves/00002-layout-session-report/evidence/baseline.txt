@@ -1,0 +1,21 @@
+# Baseline for wave 2 — measured by the orchestrator, 2026-09-24
+
+## make test at 5b323d8 (PR #4's final head), in .claude/worktrees/orch-verify-t1, 2026-09-24 05:43 CEST (the output file's modification time)
+# code-identical to 798275d: git diff --stat 5b323d8 798275d -- lua plugin scripts tests Makefile neovim.yml selene.toml .stylua.toml prints nothing
+nvim --headless --noplugin -u '<checkout>/.claude/worktrees/orch-verify-t1/scripts/minimal_init.lua' -l '<checkout>/.claude/worktrees/orch-verify-t1/scripts/run_tests.lua'
+Total number of cases: 111
+Total number of groups: 6
+
+tests/test_aineo.lua: oooooooooo
+tests/test_config.lua: oooooooooooooooooooooooooooooo
+tests/test_deps.lua: ooooooo
+tests/test_isolation.lua: oooooooooooooooooooo
+tests/test_plugin.lua: ooo
+tests/test_runner.lua: ooooooooooooooooooooooooooooooooooooooooo
+
+Fails (0) and Notes (0)
+rc=0
+
+## .claude/hooks/test-hooks.sh at 798275d (origin/dev), 2026-09-24 05:47 CEST
+78 passed
+rc=0

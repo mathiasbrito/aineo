@@ -1,0 +1,149 @@
+===== FIXTURE: ready=true after ms=1436 raw bytes so far=1326
+----- FIXTURE ready (00:58:53) -----
+
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 (1M context) with xhigh effort · Claude PLAN
+  ▝▝ ▝▝    ~/project/aineo · /rc
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                             ◉ xhigh · /effort
+────────────────────────────────────────────────────────────────────────────────
+❯ Try "fix lint errors"
+────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← 5 agents
+----- FIXTURE after paste (not submitted) (00:58:54) -----
+
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 (1M context) with xhigh effort · Claude PLAN
+  ▝▝ ▝▝    ~/project/aineo · /rc
+
+
+
+
+
+
+
+
+
+
+
+
+                                                         ctrl+g to edit in Vim
+────────────────────────────────────────────────────────────────────────────────
+❯ first line
+  second line
+────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on
+FIXTURE idle with text in the prompt: double Ctrl-C 0.3 s apart -> exited=true code=0 ms=2843
+----- FIXTURE after exit (00:58:57) -----
+
+===== MIDTURN-ONE: ready=true after ms=1550 raw bytes so far=1325
+MIDTURN-ONE: turn started=true
+----- MIDTURN-ONE during the turn (00:59:01) -----
+
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 (1M context) with xhigh effort · Claude PLAN
+  ▝▝ ▝▝    ~/project/aineo · /rc
+
+
+❯ aineo T4 measurement. Write the integers from 1 to 400, one per line, as      
+  plain text. Use no tool.                                                      
+
+
+
+
+
+
+
+
+✶ Topsy-turvying… 
+                                                             ◉ xhigh · /effort
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · esc to interrupt · ← 5 agents
+MIDTURN-ONE: alive after one Ctrl-C=true
+----- MIDTURN-ONE after one Ctrl-C (00:59:04) -----
+
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 (1M context) with xhigh effort · Claude PLAN
+  ▝▝ ▝▝    ~/project/aineo · /rc
+
+
+
+
+
+
+
+
+
+
+
+
+                                                             ◉ xhigh · /effort
+────────────────────────────────────────────────────────────────────────────────
+❯ aineo T4 measurement. Write the integers from 1 to 400, one per line, as
+  plain text. Use no tool.
+────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on
+MIDTURN-ONE then at idle: double Ctrl-C 0.3 s apart -> exited=true code=0 ms=1939
+===== MIDTURN-DOUBLE: ready=true after ms=844 raw bytes so far=1325
+MIDTURN-DOUBLE: turn started=true
+----- MIDTURN-DOUBLE during the turn (00:59:09) -----
+
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 (1M context) with xhigh effort · Claude PLAN
+  ▝▝ ▝▝    ~/project/aineo · /rc
+
+
+❯ aineo T4 measurement. Write the integers from 1 to 400, one per line, as      
+  plain text. Use no tool.                                                      
+
+
+
+
+
+
+
+
+✽ Whatchamacalliting… 
+                                                             ◉ xhigh · /effort
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · esc to interrupt · ← 5 agents
+MIDTURN-DOUBLE during the turn: double Ctrl-C 0.3 s apart -> exited=false code=nil ms=-
+----- MIDTURN-DOUBLE after (00:59:21) -----
+
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 (1M context) with xhigh effort · Claude PLAN
+  ▝▝ ▝▝    ~/project/aineo · /rc
+
+
+
+
+
+
+
+
+
+
+
+
+                      
+   (usage notice elided)
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+[Process exited 129]────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← 5 agents
