@@ -1,16 +1,12 @@
 --- Runs a stdio MCP server the way Claude Code does — a process with piped
---- standard streams — and talks to it line by line. `start_relay()` runs this
---- checkout's report relay; `start()` runs any command, such as the entry
---- `require('aineo.mcp').mcp_servers()` describes.
+--- standard streams — and talks to it line by line. `start_relay()` runs the
+--- report relay with the command `require('aineo.mcp').mcp_servers()`
+--- describes; `start()` runs any command.
 
 local MiniTest = require('mini.test')
+local mcp = require('aineo.mcp')
 
 local M = {}
-
-local CHECKOUT = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h:h')
-
---- The relay script of this checkout.
-M.RELAY = vim.fs.joinpath(CHECKOUT, 'lua', 'aineo', 'mcp', 'relay.lua')
 
 --- How long a test waits for a line, or for the process to exit, before it
 --- fails.
@@ -82,16 +78,15 @@ function M.holds(line, text)
   return line ~= nil and line:find(text, 1, true) ~= nil
 end
 
---- `line` decoded from JSON; an empty table when there is no line, so that a
---- test reading a field of a missing answer fails on its assertion.
+--- `line` decoded from JSON: an empty table when there is no line, and
+--- `{ unreadable = line }` when it is not JSON, so that a test reading a
+--- field of a missing or broken answer fails on its assertion.
 ---
 ---@param line string?
 ---@return table
 function M.decoded(line)
-  if line == nil then
-    return {}
-  end
-  return vim.json.decode(line)
+  local read, value = pcall(vim.json.decode, line or '{}')
+  return read and value or { unreadable = line }
 end
 
 --- Whether the process writes nothing to stdout within `milliseconds`.
@@ -138,13 +133,16 @@ function M.start(command, env)
   return relay
 end
 
---- Starts this checkout's relay as Claude Code would: `nvim --headless
---- --clean -l <relay>`, with `env` added to this process's environment.
+--- Starts the report relay as Claude Code would: with the command and
+--- arguments `require('aineo.mcp').mcp_servers()` gives, run by this Neovim's
+--- own program, and `env` added to this process's environment (the entry's
+--- own `env` is not used: each test names the editor address it wants).
 ---
 ---@param env? table<string, string>
 ---@return aineo.test.Relay
 function M.start_relay(env)
-  return M.start({ vim.v.progpath, '--headless', '--clean', '-l', M.RELAY }, env)
+  local entry = mcp.mcp_servers('', vim.v.progpath).aineo
+  return M.start(vim.list_extend({ entry.command }, entry.args), env)
 end
 
 --- Stops every process `start()` started that is still running.

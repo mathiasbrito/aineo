@@ -99,17 +99,18 @@ local REPORT_BUFFER_IDENTITY = [[(function()
     buftype = vim.bo[buffer].buftype,
     swapfile = vim.bo[buffer].swapfile,
     bufhidden = vim.bo[buffer].bufhidden,
+    buflisted = vim.bo[buffer].buflisted,
   }
 end)()]]
 
-T['the Report buffer']['is named aineo://report, is no file, has no swap file and is kept hidden'] = function()
+T['the Report buffer']['is named aineo://report, is no file, has no swap file, is kept hidden and unlisted'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
   local identity = child.lua_get(REPORT_BUFFER_IDENTITY)
 
   eq(
-    { identity.name, identity.buftype, identity.swapfile, identity.bufhidden },
-    { 'aineo://report', 'nofile', false, 'hide' }
+    { identity.name, identity.buftype, identity.swapfile, identity.bufhidden, identity.buflisted },
+    { 'aineo://report', 'nofile', false, 'hide', false }
   )
 end
 
@@ -191,8 +192,12 @@ T['the Report buffer']['comes back with every report after the user deletes it']
   report_editor.receive(child, { task = 'First', status = 'started', summary = 'Began' })
   child.cmd(('%s %d'):format(command, child.lua_get([[require('aineo.report').report_buffer()]])))
 
-  report_editor.receive(child, { task = 'First', status = 'done', summary = 'Ended' })
+  local failure = child.lua(
+    [[return select(2, pcall(require('aineo.report').receive_report, ...))]],
+    { { task = 'First', status = 'done', summary = 'Ended' } }
+  )
 
+  eq(failure, vim.NIL)
   local identity = child.lua_get(REPORT_BUFFER_IDENTITY)
   eq({ identity.name, identity.buftype }, { 'aineo://report', 'nofile' })
   eq(
@@ -285,7 +290,10 @@ T['the records']['refuse a report they cannot keep, naming the file, and show no
   )
   vim.fn.setfperm(records_directory, 'rwx------')
 
-  eq(refusal:find('aineo cannot keep the report in ' .. records_directory, 1, true), 1)
+  eq(
+    vim.startswith(tostring(refusal), 'aineo cannot keep the report in ' .. records_directory),
+    true
+  )
   eq(report_editor.lines(child), { '' })
 end
 

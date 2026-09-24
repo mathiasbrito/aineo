@@ -4,9 +4,6 @@ local mcp = require('aineo.mcp')
 local eq = MiniTest.expect.equality
 local expect = MiniTest.expect
 
---- Where the relay script sits in this checkout.
-local RELAY = vim.fs.joinpath(vim.uv.cwd(), 'lua', 'aineo', 'mcp', 'relay.lua')
-
 local T = MiniTest.new_set()
 
 T['mcp_servers()'] = MiniTest.new_set()
@@ -14,14 +11,15 @@ T['mcp_servers()'] = MiniTest.new_set()
 T['mcp_servers()']['describes the report server the way Claude Code starts a stdio server'] = function()
   local servers = mcp.mcp_servers('/tmp/nvim.editor.sock', '/opt/nvim/bin/nvim')
 
-  eq(servers, {
-    aineo = {
-      type = 'stdio',
-      command = '/opt/nvim/bin/nvim',
-      args = { '--headless', '--clean', '-l', RELAY },
-      env = { AINEO_EDITOR_ADDRESS = '/tmp/nvim.editor.sock' },
-    },
-  })
+  local entry = servers.aineo
+  local script = entry.args[#entry.args]
+  eq(vim.tbl_keys(servers), { 'aineo' })
+  eq(
+    { entry.type, entry.command, entry.env },
+    { 'stdio', '/opt/nvim/bin/nvim', { AINEO_EDITOR_ADDRESS = '/tmp/nvim.editor.sock' } }
+  )
+  eq(vim.list_slice(entry.args, 1, #entry.args - 1), { '--headless', '--clean', '-l' })
+  eq({ vim.fn.isabsolutepath(script), vim.fn.filereadable(script) }, { 1, 1 })
 end
 
 T['mcp_servers()']['refuses an address or a program that is not a string, naming it'] =
