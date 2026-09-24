@@ -1,44 +1,101 @@
---- When Claude Code, starting in a terminal buffer, is ready for input.
+--- When Claude Code, running in a terminal buffer, is ready for input: while
+--- its screen shows its input box, and no dialog in its place.
+---
+--- The screens this reads are Claude Code's own, recorded in Neovim 0.11.6
+--- terminals and replayed by the suites from `tests/fixtures/claude/`:
+--- 2.1.281's startup, input box, two-line draft, MCP-server approval dialog
+--- and permission dialog, and 2.1.280's workspace-trust dialog.
 
 local M = {}
 
---- The glyph that opens Claude Code's input box.
+--- The glyph that opens the input box's first line. A dialog's selected
+--- choice carries it too (the trust dialog's `❯ No, exit`, the MCP-server
+--- dialog's `❯ Continue without using this MCP server`, the permission
+--- dialog's `❯ 1. Yes`), indented and between no rules.
 local PROMPT = '❯'
 
---- Words of the workspace-trust dialog, whose selected choice carries the
---- prompt's glyph too: "Yes, I trust this folder". Narrower than "trust", which
---- a folder's own name on the startup screen may hold.
-local TRUST_DIALOG = 'trust this folder'
+--- The character the rules above and below the input box are drawn with.
+local RULE = '─'
 
---- How long the input box must have shown before Claude Code counts as ready:
---- the shortest wait known to be enough for Claude Code to take the input sent
---- after it.
+--- How the lines a draft continues on, under the prompt's line, begin.
+local DRAFT_INDENT = '  '
+
+--- How long the input box must have shown, unbroken, before Claude Code
+--- counts as ready: the wait before input that every measured run used, with
+--- Claude Code 2.1.281 taking the input sent after it; no shorter wait was
+--- tried.
 local SETTLE_MS = 1500
 
---- Whether the screen of `buffer` shows Claude Code's input box, and not the
---- workspace-trust dialog.
+--- Whether `line` is one of the input box's rules.
 ---
----@param buffer integer a terminal buffer
+---@param line string?
 ---@return boolean
-local function shows_ready_prompt(buffer)
-  local screen = table.concat(vim.api.nvim_buf_get_lines(buffer, 0, -1, false), '\n')
-  return screen:find(PROMPT, 1, true) ~= nil and screen:find(TRUST_DIALOG, 1, true) == nil
+local function is_rule(line)
+  return line ~= nil and vim.startswith(line, RULE)
 end
 
---- Calls `on_ready` once, `SETTLE_MS` after the screen of `buffer` first shows
---- Claude Code's input box with no workspace-trust dialog: never while the
---- dialog waits for the user's answer. Watches the buffer's changes from the
---- moment it is called, so it is called before the terminal starts.
+--- Whether `lines`, from the top of a screen down, hold Claude Code's input
+--- box: a rule, the prompt's line, the lines a longer draft continues on, and
+--- a rule.
 ---
----@param buffer integer the buffer Claude Code's terminal runs in
----@param on_ready fun()
-function M.when_ready(buffer, on_ready)
-  vim.api.nvim_buf_attach(buffer, false, {
-    on_lines = function()
-      if shows_ready_prompt(buffer) then
-        vim.defer_fn(on_ready, SETTLE_MS)
+---@param lines string[]
+---@return boolean
+local function holds_input_box(lines)
+  for index = 2, #lines do
+    if vim.startswith(lines[index], PROMPT) and is_rule(lines[index - 1]) then
+      local below = index + 1
+      while lines[below] and vim.startswith(lines[below], DRAFT_INDENT) do
+        below = below + 1
+      end
+      if is_rule(lines[below]) then
         return true
       end
+    end
+  end
+  return false
+end
+
+--- The lines of the screen of the terminal `buffer`: its last rows, as many
+--- as the editor has, which leaves out the scrollback above them.
+---
+---@param buffer integer a terminal buffer
+---@return string[]
+local function screen_lines(buffer)
+  return vim.api.nvim_buf_get_lines(buffer, -vim.o.lines - 1, -1, false)
+end
+
+--- Watches the screen of `buffer` from the moment it is called — so it is
+--- called before the terminal starts — and calls `on_change(true)` once
+--- Claude Code's input box has shown for `SETTLE_MS` with no change taking it
+--- away, and `on_change(false)` when a change takes it away again, as a dialog
+--- does. Reads the screen again at every change of the buffer.
+---
+---@param buffer integer the buffer Claude Code's terminal runs in
+---@param on_change fun(ready: boolean)
+function M.watch(buffer, on_change)
+  local ready, settle = false, nil
+  vim.api.nvim_buf_attach(buffer, false, {
+    on_lines = function()
+      if not holds_input_box(screen_lines(buffer)) then
+        settle = nil
+        if ready then
+          ready = false
+          on_change(false)
+        end
+        return
+      end
+      if ready or settle then
+        return
+      end
+      local this_settle = {}
+      settle = this_settle
+      vim.defer_fn(function()
+        if settle == this_settle then
+          settle = nil
+          ready = true
+          on_change(true)
+        end
+      end, SETTLE_MS)
     end,
   })
 end

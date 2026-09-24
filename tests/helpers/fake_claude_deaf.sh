@@ -1,17 +1,18 @@
 #!/bin/sh
 # A stand-in for a hung `claude`, which the suites run in its place through
 # `claude.cmd` as `sh tests/helpers/fake_claude_deaf.sh [arguments]` in a
-# terminal: it puts its terminal in raw mode, as the real CLI does, then
-# ignores every key, the hangup and SIGTERM, as a process whose event loop is
-# stuck would, so only a SIGKILL ends it — or itself, after LIFETIME seconds,
-# so that none outlives a failed test for long. It is POSIX sh because a
-# Neovim running a script (`nvim -l`) exits on a hangup whatever the script's
-# own handler does.
+# terminal: it puts its terminal in raw mode, as tests/helpers/fake_claude.lua
+# does, then ignores every key, the hangup and SIGTERM, as a process whose
+# event loop is stuck would, so only a SIGKILL ends it — or itself, after
+# LIFETIME seconds, so that none outlives a failed test for long. It is POSIX
+# sh because a Neovim running a script (`nvim -l`) exits on a hangup whatever
+# the script's own handler does.
 #
 # It appends to the record file AINEO_FAKE_CLAUDE_RECORD, one JSON object per
-# line, as tests/helpers/fake_claude.lua does: `{"argv":[],"pid":<pid>}` when it
-# starts, and `{"received":"\u0003"}` for each Ctrl-C it receives; the other
-# bytes it reads and drops.
+# line, less than tests/helpers/fake_claude.lua records: `{"argv":[],"pid":<pid>}`
+# when it starts — an empty list, not its arguments — and
+# `{"received":"\u0003"}` for each Ctrl-C it receives; the other bytes it
+# reads and drops unrecorded.
 
 record=${AINEO_FAKE_CLAUDE_RECORD:?AINEO_FAKE_CLAUDE_RECORD is unset}
 LIFETIME=60
