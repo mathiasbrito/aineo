@@ -12,10 +12,17 @@ local M = {}
 --- make the server hold.
 local LINE_LIMIT = 1024 * 1024
 
+--- The standard error stream's file descriptor, where the server writes
+--- what it cannot answer: stdout carries MCP messages only.
+local STDERR = 2
+
 --- Serves MCP on this process's stdin and stdout until stdin closes,
 --- delivering each valid report to the editor at `editor_address`. A line
 --- longer than `LINE_LIMIT` is answered, and dropped, as soon as the chunk
---- that takes it past the limit is read (`lines.new_line_reader()`).
+--- that takes it past the limit is read (`lines.new_line_reader()`). A line
+--- whose answer fails — one that cannot be encoded, such as an `id` of
+--- `1e999` — gets no answer; the failure is written to stderr and the next
+--- line is answered as usual.
 ---
 ---@param editor_address string? the editor's server address
 function M.serve_stdio(editor_address)
@@ -27,12 +34,18 @@ function M.serve_stdio(editor_address)
   local function deliver_report(report)
     return editor.deliver_report(editor_address, report)
   end
+  local function answer_line(line)
+    local answer = line ~= '' and protocol.answer_line(line, deliver_report)
+    if answer then
+      send(answer)
+    end
+  end
   local read_lines = lines.new_line_reader({
     limit = LINE_LIMIT,
     on_line = function(line)
-      local answer = line ~= '' and protocol.answer_line(line, deliver_report)
-      if answer then
-        send(answer)
+      local answered, failure = pcall(answer_line, line)
+      if not answered then
+        vim.uv.fs_write(STDERR, ('aineo relay: %s\n'):format(tostring(failure)))
       end
     end,
     on_too_long = function()

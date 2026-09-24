@@ -83,8 +83,8 @@ end
 
 --- The report format as a JSON Schema (2020-12): an object of `task` and
 --- `summary`, non-empty strings, `status`, one of `STATUS_NAMES`, and
---- optionally `details`, a string; no other property. It describes the
---- reports `validate_report()` accepts.
+--- optionally `details`, a string or null; no other property. It describes
+--- the reports `validate_report()` accepts.
 ---
 ---@return table
 function M.report_schema()
@@ -94,7 +94,7 @@ function M.report_schema()
       task = { type = 'string', minLength = 1 },
       status = { type = 'string', enum = vim.list_slice(M.STATUS_NAMES) },
       summary = { type = 'string', minLength = 1 },
-      details = { type = 'string' },
+      details = { type = { 'string', 'null' } },
     },
     required = { 'task', 'status', 'summary' },
     additionalProperties = false,

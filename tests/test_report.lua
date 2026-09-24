@@ -91,6 +91,46 @@ T['validate_report()']['treats details that are a JSON null as absent'] = functi
   eq(accepted, { task = 'Task', status = 'done', summary = 'Summary' })
 end
 
+T['report_schema()'] = MiniTest.new_set()
+
+--- Whether a JSON Schema `type` keyword, one type name or a list of them,
+--- admits the JSON type `json_type`.
+---
+---@param schema_type string|string[]
+---@param json_type string
+---@return boolean
+local function admits(schema_type, json_type)
+  return schema_type == json_type
+    or (type(schema_type) == 'table' and vim.list_contains(schema_type, json_type))
+end
+
+T['report_schema()']['admits the same details as validate_report()'] = MiniTest.new_set({
+  parametrize = {
+    { 'string', 'Line' },
+    { 'null', vim.NIL },
+    { 'number', 3 },
+    { 'boolean', true },
+    { 'array', { 'Line' } },
+    { 'object', { line = 'Line' } },
+  },
+})
+
+T['report_schema()']['admits the same details as validate_report()']['as a'] = function(
+  json_type,
+  details
+)
+  local schema_type = report.report_schema().properties.details.type
+
+  local accepted = report.validate_report({
+    task = 'Task',
+    status = 'done',
+    summary = 'Summary',
+    details = details,
+  })
+
+  eq(admits(schema_type, json_type), accepted ~= nil)
+end
+
 T['report_instructions()'] = MiniTest.new_set()
 
 T['report_instructions()']['tells when to report each status of the format'] = MiniTest.new_set({

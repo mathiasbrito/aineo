@@ -60,6 +60,21 @@ T['the server entry']['started as Claude Code starts it, completes the recorded 
   eq(report_editor.lines(editor), { '09:05 [done] Refactor the parser — All tests pass' })
 end
 
+T['the relay script'] = MiniTest.new_set()
+
+T['the relay script']['required inside an editor serves nothing'] = function()
+  children.restart(editor)
+
+  vim.rpcnotify(editor.job.channel, 'nvim_exec_lua', [[require('aineo.mcp.relay')]], {})
+
+  eq(
+    editor.lua_get([[#vim.tbl_filter(function(channel)
+      return channel.stream == 'stdio'
+    end, vim.api.nvim_list_chans())]]),
+    0
+  )
+end
+
 T['a report'] = MiniTest.new_set()
 
 T['a report']['reaches the editor the relay was given, and renders in its Report'] = function()
@@ -82,6 +97,17 @@ T['a report']['reaches the editor the relay was given, and renders in its Report
     end, 10)]]),
     true
   )
+end
+
+T['a report']['reaches an editor listening on a TCP address'] = function()
+  start_editor()
+  local address = editor.lua_get([[vim.fn.serverstart('127.0.0.1:0')]])
+  local relay = mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = address })
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq(get(decoded(relay:next_line()), 'result', 'isError'), false)
+  eq(report_editor.lines(editor), { '09:05 [done] Refactor the parser — All tests pass' })
 end
 
 T['a report']['reaches the editor as data: fields holding code render literally and run nothing'] = function()

@@ -94,6 +94,31 @@ T['a request']['is answered with its id unchanged']['for the id'] = function(id)
   )
 end
 
+T['a request']['whose id is null is refused with error -32600 and no id'] = function()
+  local relay = mcp_relay.start_relay()
+
+  relay:send('{"jsonrpc":"2.0","id":null,"method":"ping"}')
+  relay:send('{"jsonrpc":"2.0","id":8,"method":"ping"}')
+
+  local answers = relay:next_lines(2)
+  eq({
+    get(decoded(answers[1]), 'error', 'code'),
+    holds(answers[1], '"id"'),
+    get(decoded(answers[2]), 'id'),
+  }, { -32600, false, 8 })
+end
+
+T['a request']['whose answer cannot be written does not take the next one down'] = function()
+  local relay = mcp_relay.start_relay()
+
+  relay:send('{"jsonrpc":"2.0","id":1e999,"method":"ping"}')
+  relay:send('{"jsonrpc":"2.0","id":31,"method":"ping"}')
+
+  local answer = decoded(relay:next_line())
+  eq({ get(answer, 'id'), get(answer, 'error') }, { 31, nil })
+  eq(relay:writes_to_stderr('aineo relay: '), true)
+end
+
 T['tools/list'] = MiniTest.new_set()
 
 T['tools/list']['lists one tool, report, whose input schema is the report format'] = function()
@@ -116,7 +141,7 @@ T['tools/list']['lists one tool, report, whose input schema is the report format
             enum = { 'started', 'progress', 'blocked', 'done', 'failed' },
           },
           summary = { type = 'string', minLength = 1 },
-          details = { type = 'string' },
+          details = { type = { 'string', 'null' } },
         },
         required = { 'task', 'status', 'summary' },
         additionalProperties = false,
