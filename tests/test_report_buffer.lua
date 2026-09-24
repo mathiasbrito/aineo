@@ -671,20 +671,33 @@ T['the records']['that cannot keep a report tell the user why, once'] = function
   eq(messages, refusal)
 end
 
-T['the records']['keep a report when another editor makes their directory at the same moment'] = function()
+--- The Lua, run in the child, that makes its next `vim.fn.mkdir()` call fail
+--- as it does for an editor that loses a race to make a directory: another
+--- editor has just made the directory `...` levels up the path (0 for the
+--- directory itself), and mkdir fails on it with E739.
+local LOSE_ONE_MKDIR_RACE = [[
+  local levels_up = ...
+  local make_directory = vim.fn.mkdir
+  vim.fn.mkdir = function(directory, flags)
+    vim.fn.mkdir = make_directory
+    local made_by_another = vim.fn.fnamemodify(directory, (':h'):rep(levels_up))
+    make_directory(made_by_another, flags)
+    error('Vim:E739: Cannot create directory ' .. made_by_another .. ': file already exists', 0)
+  end
+]]
+
+T['the records']['keep a report when another editor makes their directory at the same moment'] =
+  MiniTest.new_set({ parametrize = { { 0 }, { 1 } } })
+
+T['the records']['keep a report when another editor makes their directory at the same moment']['levels up'] = function(
+  levels_up
+)
   report_editor.start(child, {
     times = { '2026-09-24T09:05:00' },
     state_directory = fixture.directory('report-state'),
     working_directory = '/projects/alpha',
   })
-  child.lua([[
-    local make_directory = vim.fn.mkdir
-    vim.fn.mkdir = function(directory, flags)
-      vim.fn.mkdir = make_directory
-      make_directory(directory, flags)
-      error('Vim:E739: Cannot create directory ' .. directory .. ': file already exists', 0)
-    end
-  ]])
+  child.lua(LOSE_ONE_MKDIR_RACE, { levels_up })
 
   local failure = child.lua(
     [[return select(2, pcall(require('aineo.report').receive_report, ...))]],

@@ -130,19 +130,26 @@ local function cut_when_grown(file)
   end
 end
 
---- Makes `directory`, and the directories leading to it, unless it exists —
---- also when another editor makes it at the same moment.
+--- Makes `directory`, and the directories leading to it, unless it exists.
+--- Another editor making one of them at the same moment makes `mkdir()`
+--- fail here, so it is tried again, at most once for each directory on the
+--- path: a try that lost such a race leaves one more of them made.
 ---
 --- Raises an error naming `directory` when it cannot be made.
 ---
 ---@param directory string
 local function make_directory(directory)
+  local tries_left = #vim.split(directory, '/', { trimempty = true })
   local made, failure = pcall(vim.fn.mkdir, directory, 'p')
-  if not made and vim.fn.isdirectory(directory) == 0 then
-    error(
-      ('aineo cannot make the directory of the report records %s: %s'):format(directory, failure),
-      0
-    )
+  while not made do
+    if tries_left == 0 then
+      error(
+        ('aineo cannot make the directory of the report records %s: %s'):format(directory, failure),
+        0
+      )
+    end
+    tries_left = tries_left - 1
+    made, failure = pcall(vim.fn.mkdir, directory, 'p')
   end
 end
 
