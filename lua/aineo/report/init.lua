@@ -72,22 +72,21 @@ end
 ---@return aineo.report.Record[] kept
 ---@return integer skipped
 local function readable_records(records_file)
-  local read, kept, skipped = pcall(records.read_records, records_file)
+  local read, records_or_failure, skipped = pcall(records.read_records, records_file)
   if not read then
-    vim.notify(kept, vim.log.levels.WARN)
+    vim.notify(records_or_failure, vim.log.levels.WARN)
     return {}, 0
   end
-  return kept, skipped
+  return records_or_failure, skipped
 end
 
---- A new Report buffer showing the records kept in `records_file`. Tells the
---- user, once, how many of its lines held no record and were skipped, or why
---- the file could not be read.
+--- Shows the records kept in `records_file` in `report_buffer`, an empty
+--- Report. Tells the user, once, how many of its lines held no record and
+--- were skipped, or why the file could not be read.
 ---
+---@param report_buffer integer
 ---@param records_file string
----@return integer
-local function open_report_buffer(records_file)
-  local report_buffer = buffer.create_report_buffer()
+local function show_records(report_buffer, records_file)
   local kept, skipped = readable_records(records_file)
   for _, record in ipairs(kept) do
     buffer.append_lines(report_buffer, render.render_report(record.report, record.time))
@@ -98,6 +97,18 @@ local function open_report_buffer(records_file)
       vim.log.levels.WARN
     )
   end
+end
+
+--- A new Report buffer showing the records kept in `records_file`, and
+--- showing them again when the user edits it anew (`:edit`).
+---
+---@param records_file string
+---@return integer
+local function open_report_buffer(records_file)
+  local report_buffer = buffer.create_report_buffer(function(emptied)
+    show_records(emptied, records_file)
+  end)
+  show_records(report_buffer, records_file)
   return report_buffer
 end
 
