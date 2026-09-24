@@ -33,13 +33,13 @@ Conventions live in `knowledge-vault/CLAUDE.md` and in a `CLAUDE.md` inside each
 
   | Command | Does |
   |---|---|
-  | `make deps` | fetches mini.nvim at its pinned commit into `deps/`; refuses a `deps/mini.nvim` that differs from the pin |
-  | `make test` | runs every `tests/**/test_*.lua` under mini.test; exits non-zero when a case fails, a file does not load or adds no case, test code ends Neovim, or the run stalls |
+  | `make deps` | fetches mini.nvim at its pinned commit into `deps/`, moving a checkout at another commit to the pin; refuses one whose files were edited |
+  | `make test` | runs every `tests/**/test_*.lua` under mini.test; exits non-zero when a case fails, a file does not load or adds no case, test code ends Neovim, or mini.test's queue stalls — a case that blocks Neovim itself is not bounded (`scripts/run_tests.lua`) |
   | `make test_file FILE=<path>` | runs one test file |
   | `make lint` | `stylua --check` and `selene` over `lua plugin scripts tests` |
   | `make format` | StyLua in place over the same paths |
 
-  `make test` and `make test_file` isolate every Neovim they start, the runner included, under the checkout's `.tests/` — `XDG_*`, `CLAUDE_CONFIG_DIR` and `NVIM_LOG_FILE` set there, every other `CLAUDE*` variable removed — so no suite touches your editor's or Claude's state; `prepare-worktree.sh`'s `prepare_project` has nothing to add. Read the summary's `Fails` line as well as the exit status.
+  `make test` and `make test_file` isolate every Neovim they start, the runner included, under the checkout's `.tests/` — `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME`, `CLAUDE_CONFIG_DIR` and `NVIM_LOG_FILE` set there, every other `CLAUDE*` variable removed — so no suite touches your editor's or Claude's state; `prepare-worktree.sh`'s `prepare_project` has nothing to add. Read the summary's `Fails` line as well as the exit status.
 - **The specialists' rules bind their domains** — `.claude/agents/neovim-lua-developer.md` (*What bites here*, *Tests*) and `.claude/agents/neovim-claude-code-integrator.md` (every section from *Three tiers of surface* to *Tests*).
 
 ## Skills that bind how code is written
