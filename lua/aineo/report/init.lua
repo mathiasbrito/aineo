@@ -127,9 +127,9 @@ end
 
 --- The Report buffer, created on first use, when it shows every record kept
 --- for the environment's working directory. Reports received later are kept
---- for that same directory. When the user has deleted or wiped out the
---- Report, or shown a deleted one again as an ordinary buffer, it is created
---- again, with every record; a buffer holding its name is wiped out.
+--- for that same directory. When the user has unloaded, deleted or wiped out
+--- the Report, or shown a deleted one again as an ordinary buffer, it is
+--- created again, with every record; a buffer holding its name is wiped out.
 ---
 --- Raises an error until `set_report_environment()` was called.
 ---

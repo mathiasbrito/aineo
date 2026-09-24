@@ -202,7 +202,7 @@ end
 
 T['the Report buffer']['comes back with every report after the user deletes it'] =
   MiniTest.new_set({
-    parametrize = { { 'bdelete' }, { 'bwipeout' } },
+    parametrize = { { 'bdelete' }, { 'bwipeout' }, { 'bunload' } },
   })
 
 T['the Report buffer']['comes back with every report after the user deletes it']['with the command'] = function(
