@@ -472,6 +472,27 @@ T['the records']['are kept whole up to 4 MiB when a report is added'] = function
   )
 end
 
+T['the records']['kept through a symbolic link are cut behind it, and the link stays'] = function()
+  local state_directory = fixture.directory('report-state')
+  local file = records_file_holding(child, state_directory, 1, 4097)
+  local target = vim.fs.joinpath(fixture.directory('report-records-target'), 'records.jsonl')
+  vim.uv.fs_rename(file, target)
+  vim.uv.fs_symlink(target, file)
+  report_editor.start(child, {
+    times = { '2026-09-24T10:00:00' },
+    state_directory = state_directory,
+    working_directory = '/projects/alpha',
+  })
+
+  report_editor.receive(child, { task = 'Newest', status = 'done', summary = 'Kept' })
+
+  local lines = vim.fn.readfile(target)
+  eq(
+    { vim.uv.fs_lstat(file).type, #lines, recorded_task(lines[#lines]) },
+    { 'link', 2049, 'Newest' }
+  )
+end
+
 T['the records']['that cannot be cut keep the report, and tell the user why'] = function()
   local state_directory = fixture.directory('report-state')
   local file = records_file_holding(child, state_directory, 1, 4097)

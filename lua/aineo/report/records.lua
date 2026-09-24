@@ -88,22 +88,24 @@ local function write_to(file, flags, text)
 end
 
 --- Cuts `file` down to its newest records within `RECORDS_KEPT_BYTES`: they
---- are written to a file beside it, which then replaces it.
+--- are written to a file beside it, which then replaces it. When `file` is a
+--- symbolic link, the file it leads to is cut, and the link stays.
 ---
 --- Raises an error naming `file` when it cannot be read, or cut.
 ---
 ---@param file string
 local function keep_newest_records(file)
-  local cut = file .. '.cut'
+  local target = vim.uv.fs_realpath(file) or file
+  local cut = target .. '.cut'
   local failure = write_to(
     cut,
     'w',
     table.concat(vim.tbl_map(function(line)
       return line .. '\n'
-    end, last_lines(file, RECORDS_KEPT_BYTES)))
+    end, last_lines(target, RECORDS_KEPT_BYTES)))
   )
   if not failure then
-    local renamed, rename_failure = vim.uv.fs_rename(cut, file)
+    local renamed, rename_failure = vim.uv.fs_rename(cut, target)
     failure = not renamed and rename_failure or nil
   end
   if failure then
