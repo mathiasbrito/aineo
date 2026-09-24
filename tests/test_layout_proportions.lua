@@ -123,6 +123,19 @@ T['opening the layout again']['gives a restarted Claude buffer back after a file
   eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { claude_window }), restarted)
 end
 
+T['opening the layout again']['after its three windows closed, keeps Input and its text'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  child.lua('vim.api.nvim_buf_set_lines(..., 0, -1, false, { "typed" })', { buffers.input })
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  child.cmd('only')
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(layout.input_buffer(child), buffers.input)
+  eq(child.lua_get('vim.api.nvim_buf_get_lines(..., 0, -1, false)', { buffers.input }), { 'typed' })
+end
+
 T['opening the layout again']['leaves the cursor where it is'] = function()
   local buffers = layout.open_with_stand_ins(child)
   layout.enter_window_showing(child, buffers.claude)
