@@ -12,9 +12,14 @@ local M = {}
 local CHECKOUT = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h:h')
 local THIS_FILE = vim.fs.joinpath(CHECKOUT, 'tests', 'helpers', 'claude_session.lua')
 local FAKE_CLAUDE = vim.fs.joinpath(CHECKOUT, 'tests', 'helpers', 'fake_claude.lua')
+local DEAF_FAKE_CLAUDE = vim.fs.joinpath(CHECKOUT, 'tests', 'helpers', 'fake_claude_deaf.sh')
 
 --- How long a test waits for the fake to do what it is waiting for.
 M.PATIENCE_MS = 5000
+
+--- How long a test waits for the fake to end once its editor quits: longer
+--- than the session's whole stop.
+M.STOP_PATIENCE_MS = 15000
 
 --- The command that runs the fake `claude` in the CLI's place — this Neovim's
 --- own executable running the fake as a script — followed by `extra_words`.
@@ -23,6 +28,14 @@ M.PATIENCE_MS = 5000
 ---@return string[]
 function M.fake_command(extra_words)
   return vim.list_extend({ vim.v.progpath, '--clean', '-l', FAKE_CLAUDE }, extra_words or {})
+end
+
+--- The command that runs the fake `claude` deaf to every key and to the
+--- hangup (`tests/helpers/fake_claude_deaf.sh`).
+---
+---@return string[]
+function M.deaf_fake_command()
+  return { 'sh', DEAF_FAKE_CLAUDE }
 end
 
 --- The session's settings a test starts it with: the fake's command, the
@@ -211,6 +224,66 @@ function M.record(fake)
     return {}
   end
   return vim.tbl_map(vim.json.decode, vim.fn.readfile(fake.record))
+end
+
+--- Once `fake` has started, and so reads its keys raw, presses a double Ctrl-C
+--- in the terminal `buffer` of `child`, as a user ending Claude Code would,
+--- and waits for the session to report `exited` — so that the test's teardown
+--- does not spend the whole stop on quit.
+---
+---@param child table
+---@param fake { record: string }
+---@param buffer integer the session's terminal buffer
+function M.end_by_keys(child, fake, buffer)
+  M.wait_for_start(fake)
+  child.lua("vim.api.nvim_chan_send(vim.bo[...].channel, '\\3\\3')", { buffer })
+  M.wait_for_status(child, 'exited')
+end
+
+--- Quits `child` with `:qa`, as a user would, without waiting for it to end.
+---
+---@param child table
+function M.quit(child)
+  child.lua_notify('vim.cmd.qall()')
+end
+
+--- What the fake did besides starting and receiving input — a turn it ended,
+--- a signal, how it ended — in order, once it has ended, waiting for that at
+--- most `STOP_PATIENCE_MS`, or when the wait runs out.
+---
+---@param fake { record: string }
+---@return table[]
+function M.wait_for_end(fake)
+  local events
+  vim.wait(M.STOP_PATIENCE_MS, function()
+    events = vim.tbl_filter(function(entry)
+      return entry.argv == nil and entry.received == nil
+    end, M.record(fake))
+    return #events > 0 and events[#events].ended ~= nil
+  end, 50)
+  return events
+end
+
+--- Whether the process `pid` has ended, once it has — waiting for that at
+--- most `STOP_PATIENCE_MS` — or when the wait runs out.
+---
+---@param pid integer
+---@return boolean
+function M.wait_for_process_end(pid)
+  return vim.wait(M.STOP_PATIENCE_MS, function()
+    return vim.uv.kill(pid, 0) ~= 0
+  end, 50)
+end
+
+--- How many Ctrl-C presses — `\3` bytes — the fake has received.
+---
+---@param fake { record: string }
+---@return integer
+function M.ctrl_c_count(fake)
+  local input = table.concat(vim.tbl_map(function(entry)
+    return entry.received or ''
+  end, M.record(fake)))
+  return select(2, input:gsub('\3', ''))
 end
 
 --- The record entries in which a fake started — its arguments, working
