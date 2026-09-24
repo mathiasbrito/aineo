@@ -62,10 +62,18 @@ end
 
 T['the relay script'] = MiniTest.new_set()
 
-T['the relay script']['required inside an editor serves nothing'] = function()
+T['the relay script']['loaded inside an editor serves nothing'] = function()
   children.restart(editor)
 
-  vim.rpcnotify(editor.job.channel, 'nvim_exec_lua', [[require('aineo.mcp.relay')]], {})
+  vim.rpcnotify(
+    editor.job.channel,
+    'nvim_exec_lua',
+    [[
+      local entry = require('aineo.mcp').mcp_servers('', vim.v.progpath).aineo
+      dofile(entry.args[#entry.args])
+    ]],
+    {}
+  )
 
   eq(
     editor.lua_get([[#vim.tbl_filter(function(channel)
