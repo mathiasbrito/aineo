@@ -13,15 +13,14 @@ local M = {}
 
 ---@alias aineo.layout.Role 'claude'|'report'|'input'
 
---- The layout's windows and the buffers they show, by role.
+--- The layout's windows and the buffers they show, by role, and the
+--- Report's share of the right column's height.
 local state = {
   ---@type table<aineo.layout.Role, integer>
   windows = {},
   ---@type table<aineo.layout.Role, integer>
   buffers = {},
-  ---@type integer|nil
-  input_buffer = nil,
-  ---@type number|nil the Report's share of the right column's height
+  ---@type number|nil
   report_height = nil,
 }
 
@@ -173,6 +172,9 @@ end
 ---@param window integer
 ---@param file integer
 local function redirect(window, file)
+  if not is_open() or vim.api.nvim_win_get_buf(window) ~= file then
+    return
+  end
   local cursor = vim.api.nvim_win_get_cursor(window)
   local file_window = file_column_windows()[1]
   if file_window then
@@ -186,13 +188,13 @@ local function redirect(window, file)
   apply_proportions()
 end
 
---- Redirects a file shown in one of the layout's windows, once the command
---- that showed it has finished with that window.
+--- Redirects a file shown in one of the layout's windows while the layout is
+--- open, once the command that showed it has finished with that window.
 ---
 ---@param event { buf: integer }
 local function redirect_when_file(event)
   local window = vim.api.nvim_get_current_win()
-  if not role_of(window) or not is_file(event.buf) then
+  if not is_open() or not role_of(window) or not is_file(event.buf) then
     return
   end
   vim.schedule(function()
@@ -215,13 +217,19 @@ local function is_unnamed_and_empty(buffer)
     and vim.api.nvim_buf_get_lines(buffer, 0, 1, true)[1] == ''
 end
 
---- `buffer` when it has no name and holds no text, or else a new buffer, made
+--- The Input buffer: the one the layout made before, while it exists; else
+--- `shown` when it has no name and holds no text, or else a new buffer, made
 --- Input: a named scratch buffer, unlisted, kept when hidden, with no swap
 --- file.
 ---
----@param buffer integer
+---@param shown integer the buffer of the window the layout opens from
 ---@return integer input
-local function take_input_buffer(buffer)
+local function take_input_buffer(shown)
+  local existing = state.buffers.input
+  if existing and vim.api.nvim_buf_is_valid(existing) then
+    return existing
+  end
+  local buffer = shown
   if not is_unnamed_and_empty(buffer) then
     buffer = vim.api.nvim_create_buf(false, true)
   end
@@ -254,20 +262,19 @@ local function build(arrangement)
   local current_window = vim.api.nvim_get_current_win()
   local shown = vim.api.nvim_win_get_buf(current_window)
   hide_other_windows(current_window)
-  state.input_buffer = take_input_buffer(shown)
+  local input = take_input_buffer(shown)
   local input_window = current_window
-  if shown ~= state.input_buffer and is_file(shown) then
-    input_window = vim.api.nvim_open_win(state.input_buffer, true, { split = 'right', win = -1 })
+  if shown ~= input and is_file(shown) then
+    input_window = vim.api.nvim_open_win(input, true, { split = 'right', win = -1 })
   else
-    vim.api.nvim_win_set_buf(input_window, state.input_buffer)
+    vim.api.nvim_win_set_buf(input_window, input)
   end
   local report_window =
     vim.api.nvim_open_win(arrangement.report, false, { split = 'above', win = input_window })
   local claude_window =
     vim.api.nvim_open_win(arrangement.claude, false, { split = 'left', win = -1 })
   state.windows = { claude = claude_window, report = report_window, input = input_window }
-  state.buffers =
-    { claude = arrangement.claude, report = arrangement.report, input = state.input_buffer }
+  state.buffers = { claude = arrangement.claude, report = arrangement.report, input = input }
 end
 
 --- Opens again, in their places, those of the layout's three windows that
@@ -320,12 +327,47 @@ local function watch_windows()
   vim.api.nvim_create_autocmd('VimResized', { group = group, callback = keep_proportions })
 end
 
+--- Whether `value` is the number of an existing buffer.
+---
+---@param value any
+---@return boolean
+local function is_buffer(value)
+  return type(value) == 'number' and vim.api.nvim_buf_is_valid(value)
+end
+
+--- Whether `value` is a share: a number strictly between 0 and 1.
+---
+---@param value any
+---@return boolean
+local function is_share(value)
+  return type(value) == 'number' and value > 0 and value < 1
+end
+
+--- Raises an error naming the first setting of `arrangement` the layout
+--- cannot show.
+---
+---@param arrangement any
+local function validate_arrangement(arrangement)
+  vim.validate('arrangement', arrangement, 'table')
+  vim.validate('arrangement.claude', arrangement.claude, is_buffer, false, 'a buffer')
+  vim.validate('arrangement.report', arrangement.report, is_buffer, false, 'a buffer')
+  vim.validate(
+    'arrangement.report_height',
+    arrangement.report_height,
+    is_share,
+    false,
+    'a number strictly between 0 and 1'
+  )
+end
+
 --- Opens the layout in the current tab: `arrangement.claude` in a column on
 --- the left taking half the columns, `arrangement.report` above the Input
 --- buffer in a column on the right, the Report taking
 --- `arrangement.report_height` of its rows, and the cursor in Input. The tab's
---- other windows close; their buffers stay loaded. An unnamed buffer in the
---- current window, such as the empty one Neovim starts with, becomes Input.
+--- other windows close; their buffers stay loaded. A file the current window
+--- shows stays there, as the file column. Input is made once and kept: from
+--- the unnamed, empty buffer the current window shows, such as the one Neovim
+--- starts with, or else a new buffer.
 ---
 --- While any of the three windows exists, opening again restores the layout
 --- instead: it creates only the windows that were closed, in their places,
@@ -338,8 +380,13 @@ end
 --- third of the screen each while it is open; the proportions are put back
 --- whenever a window closes or the editor is resized.
 ---
+--- Raises an error naming the setting, before changing anything, when
+--- `arrangement` is not a table, `claude` or `report` is not an existing
+--- buffer, or `report_height` is not a number strictly between 0 and 1.
+---
 ---@param arrangement aineo.layout.Arrangement
 function M.open(arrangement)
+  validate_arrangement(arrangement)
   if has_any_window() then
     state.buffers.claude = arrangement.claude
     state.buffers.report = arrangement.report
@@ -354,11 +401,28 @@ function M.open(arrangement)
   watch_windows()
 end
 
+--- Moves the cursor to the layout's window for `role`, opening the layout
+--- with `arrangement` first when that window is gone (see `open()`).
+---
+--- Raises an error naming `role` when it is not one of the three windows.
+---
+---@param role aineo.layout.Role
+---@param arrangement aineo.layout.Arrangement
+function M.focus(role, arrangement)
+  vim.validate('role', role, function(value)
+    return vim.list_contains(ROLES, value)
+  end, false, "'claude', 'report' or 'input'")
+  if not has_window(role) then
+    M.open(arrangement)
+  end
+  vim.api.nvim_set_current_win(state.windows[role])
+end
+
 --- The Input buffer, or `nil` before the layout was first opened.
 ---
 ---@return integer|nil buffer
 function M.input_buffer()
-  return state.input_buffer
+  return state.buffers.input
 end
 
 return M

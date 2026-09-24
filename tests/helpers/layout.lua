@@ -92,6 +92,15 @@ function M.open(child, arrangement)
   child.lua([[require('aineo.layout').open(...)]], { arrangement })
 end
 
+--- Moves the cursor of `child` to the layout's window for `role`.
+---
+---@param child table
+---@param role string `'claude'`, `'report'` or `'input'`
+---@param arrangement table what to open the layout with when that window is gone
+function M.focus(child, role, arrangement)
+  child.lua([[require('aineo.layout').focus(...)]], { role, arrangement })
+end
+
 --- The Input buffer, as the layout's entry point reports it.
 ---
 ---@param child table

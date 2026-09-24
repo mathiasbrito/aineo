@@ -238,4 +238,86 @@ T['the file column']['split in two, takes the next file in the window that remai
   eq(child.lua_get('vim.fn.bufname()'), layout.file('second.txt'))
 end
 
+--- Makers of buffers that hold no file, by kind: a help buffer, whose
+--- window is closed again, a terminal, and a named scratch buffer.
+local NOT_A_FILE = {
+  help = function()
+    return child.lua_get([[(function()
+      vim.cmd('help')
+      local buffer = vim.api.nvim_get_current_buf()
+      vim.cmd('close')
+      return buffer
+    end)()]])
+  end,
+  terminal = function()
+    return layout.terminal(child)
+  end,
+  scratch = function()
+    return layout.named_scratch(child, 'a scratch buffer')
+  end,
+}
+
+T['with the layout closed'] = MiniTest.new_set()
+
+T['with the layout closed']['a file opened in what was Input stays there, without an error'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.close_windows(child, buffers, { 'claude', 'report' })
+  local input_window = layout.window_showing(child, buffers.input)
+  local path = layout.file('first.txt')
+  layout.enter_window_showing(child, buffers.input)
+
+  child.cmd('edit ' .. path)
+
+  eq(
+    child.lua_get('vim.api.nvim_win_get_buf(...)', { input_window }),
+    child.lua_get('vim.fn.bufnr(...)', { path })
+  )
+  eq(layout.window_count(child), 1)
+  eq(child.lua_get('vim.v.errmsg'), '')
+end
+
+T['a file whose aineo window closes before the move'] = MiniTest.new_set()
+
+T['a file whose aineo window closes before the move']['is left alone, without an error'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.report)
+
+  child.lua('vim.cmd.edit(...); vim.cmd.close()', { layout.file('first.txt') })
+
+  eq(layout.window_count(child), 2)
+  eq(child.lua_get('vim.v.errmsg'), '')
+end
+
+T['a file that leaves its aineo window before the move'] = MiniTest.new_set()
+
+T['a file that leaves its aineo window before the move']['stays out of the file column'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  local report_window = layout.window_showing(child, buffers.report)
+  layout.enter_window_showing(child, buffers.report)
+
+  child.lua(
+    'local path, report = ...; vim.cmd.edit(path); vim.cmd.buffer(report)',
+    { layout.file('first.txt'), buffers.report }
+  )
+
+  eq(layout.window_count(child), 3)
+  eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { report_window }), buffers.report)
+end
+
+T['a buffer that is not a file, shown in Input'] = MiniTest.new_set({
+  parametrize = { { 'help' }, { 'terminal' }, { 'scratch' } },
+})
+
+T['a buffer that is not a file, shown in Input']['stays there'] = function(kind)
+  local buffers = layout.open_with_stand_ins(child)
+  local buffer = NOT_A_FILE[kind]()
+  local input_window = layout.window_showing(child, buffers.input)
+  layout.enter_window_showing(child, buffers.input)
+
+  child.cmd('buffer ' .. buffer)
+
+  eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { input_window }), buffer)
+  eq(layout.window_count(child), 3)
+end
+
 return T

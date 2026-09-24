@@ -167,6 +167,66 @@ T['open()']['keeps the file the current window shows, in the file column']['afte
   eq(layout.input_buffer(child) ~= file_buffer, true)
 end
 
+T['open()']['refuses an arrangement it cannot show, naming the setting'] = MiniTest.new_set({
+  parametrize = {
+    { { claude = false }, 'arrangement%.claude: expected a buffer' },
+    { { claude = 9999 }, 'arrangement%.claude: expected a buffer' },
+    { { report = 'aineo://report' }, 'arrangement%.report: expected a buffer' },
+    { { report_height = 1 }, 'arrangement%.report_height: expected a number strictly between' },
+    { { report_height = '2/3' }, 'arrangement%.report_height: expected a number strictly between' },
+  },
+})
+
+T['open()']['refuses an arrangement it cannot show, naming the setting']['given'] = function(
+  wrong,
+  refusal
+)
+  layout.start(child)
+  local arrangement = vim.tbl_extend('force', layout.arrangement(layout.stand_ins(child)), wrong)
+
+  MiniTest.expect.error(function()
+    layout.open(child, arrangement)
+  end, refusal)
+end
+
+T['open()']['refuses an arrangement that is not a table'] = function()
+  layout.start(child)
+
+  MiniTest.expect.error(function()
+    layout.open(child, 'the layout')
+  end, 'arrangement: expected table')
+end
+
+T['focus()'] = MiniTest.new_set({ parametrize = { { 'claude' }, { 'report' }, { 'input' } } })
+
+T['focus()']['puts the cursor in the window of'] = function(role)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+
+  layout.focus(child, role, layout.arrangement(buffers))
+
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers[role])
+end
+
+T['focus()']['reopens the closed window of'] = function(role)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.close_windows(child, buffers, { role })
+
+  layout.focus(child, role, layout.arrangement(buffers))
+
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers[role])
+  eq(layout.window_count(child), 3)
+end
+
+T['focus() refuses a window the layout does not have'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+
+  MiniTest.expect.error(function()
+    layout.focus(child, 'files', layout.arrangement(buffers))
+  end, "role: expected 'claude', 'report' or 'input'")
+end
+
 T['open()']['puts the cursor in Input when the current window showed a file'] = function()
   layout.start(child)
   child.cmd('edit ' .. layout.file('first.txt'))
