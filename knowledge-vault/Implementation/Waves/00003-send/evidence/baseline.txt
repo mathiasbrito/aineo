@@ -1,0 +1,11 @@
+Baseline for wave 3 — measured by the orchestrator on host Macbook-Mathias, Nvim 0.11.6.
+
+make test — 2026-09-24, run 17:13-17:17 CEST, on T4's 20 files (PR #11 head db0832a) laid over origin/dev 08caf0e;
+after PR #11 merged, 'git diff --stat origin/dev' on that tree printed nothing, so the tree is c7a9c99's.
+Total number of cases: 454
+Total number of groups: 18
+Fails (0) and Notes (0)
+rc=0 secs=256
+
+.claude/hooks/test-hooks.sh — at c7a9c99, 2026-09-24 17:34 CEST, exit 0:
+78 passed

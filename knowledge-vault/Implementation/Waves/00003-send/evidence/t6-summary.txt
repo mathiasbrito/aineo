@@ -1,0 +1,93 @@
+T6 facts — measured by the orchestrator on 2026-09-24, 17:14–17:15 CEST (the screens' own clock), for wave 3 (T6, Send).
+Claude Code 2.1.281 · Nvim 0.11.6 headless (--clean -i NONE, state and log under a scratch directory), terminal 120x40 ·
+cwd the aineo checkout (trusted by the user) · every CLAUDE* variable removed, AINEO_CHILD=1 · no --permission-mode
+(aineo passes none, D11) · three model turns. Driver: t6-driver.lua (this folder). The user's shada and Neovim log were
+stat'ed before and after: unchanged.
+
+Placeholders: the account tier is written PLAN and the checkout's path ~/project/aineo, as in tests/fixtures/claude/.
+The footer's "← 5 agents" is the host's own state at the time, not something aineo does.
+
+RESULTS
+1. At idle, a bracketed paste and Enter written in ONE write (ESC[200~ text ESC[201~ \r) submitted one message:
+   1 s after the write the message stood above the box, submitted, with Claude working (screen A), and the reply
+   was on screen about 2 s after the write (the write at 2.8 s of the run, the reply seen at 4.8 s). T2 had
+   measured the paste and the Enter as two writes 800 ms apart (../00002-layout-session-report/evidence/t2-summary.txt, Q1).
+2. During a turn, the input box — a rule, the ❯ line, a rule — stays on screen (screen B), so T4's readiness reads
+   'ready' while Claude works. What marks the turn is the footer's "esc to interrupt" and the spinner line above
+   the box ("✳ Whirring…").
+3. During that turn, a bracketed paste and Enter in one write was QUEUED: 0.3 s later the message was shown above
+   the box with "ctrl+enter to send now", and the box read "❯ Press up to edit queued messages" (screen C); the turn
+   went on, and the queued message ran after it — its reply on screen 6.8 s after the send (screen D).
+4. The idle footer read "⏵⏵ auto mode on (shift+tab to cycle)" — the user's own Claude Code setting — and never
+   "? for shortcuts": a wait for that text timed out after 30 s. The footer is no readiness signal (as T2 found).
+
+QUOTED, for T6 (the re-measure of PR #11, finding 8, by neovim-claude-code-reviewer on a stand-in replaying
+2.1.281's recorded screens in Nvim 0.11.6):
+- "Latency (10 cycles over two runs: the recorded permission dialog written 2.2 s after the prompt, and the prompt
+  again 0.3 s later): ready turned starting 10.8, 12.9, 15.8, 11.5, 12.1, 12.3, 29.5, 11.9, 11.1, 12.0 ms after the
+  stand-in's write. Send reading ready inside that window pastes into the dialog."
+- "Flap (2.1.281's recorded draft frame written in two writes): gap 0 and 5 ms — no change; gap 20 ms — starting at
+  +10.3 ms, ready at +1535.6 ms; gap 50 ms — starting at +11.9 ms, ready at +1562 ms."
+
+SCREEN A — IDLE 1 s after paste+Enter in one write
+----- IDLE 1 s after paste+Enter in one write (t=3804 ms) -----
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 (1M context) with xhigh effort · Claude PLAN
+  ▝▝ ▝▝    ~/project/aineo · /rc
+❯ aineo T6 measurement. Reply with the single word ALPHAONE and nothing else.
+  Use no tool.
+✽ Sprouting…
+                                                             ◉ xhigh · /effort
+────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt · ← 5 agents
+
+SCREEN B — TURN during, before the mid-turn send
+----- TURN during, before the mid-turn send (t=38224 ms) -----
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 (1M context) with xhigh effort · Claude PLAN
+  ▝▝ ▝▝    ~/project/aineo · /rc
+❯ aineo T6 measurement. Reply with the single word ALPHAONE and nothing else.
+  Use no tool.
+⏺ ALPHAONE
+✻ Cooked for 1s · done 5:15 PM
+❯ aineo T6 measurement. Write the integers from 1 to 250, one per line, as
+  plain text. Use no tool.
+✳ Whirring…
+  ⎿  Tip: Use /memory to view and manage Claude memory
+────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt · ← 5 agents
+
+SCREEN C — TURN 0.3 s after the mid-turn paste+Enter
+----- TURN 0.3 s after the mid-turn paste+Enter (t=38527 ms) -----
+❯ aineo T6 measurement. Reply with the single word ALPHAONE and nothing else.
+  Use no tool.
+⏺ ALPHAONE
+✻ Cooked for 1s · done 5:15 PM
+❯ aineo T6 measurement. Write the integers from 1 to 250, one per line, as
+  plain text. Use no tool.
+❯ aineo T6 measurement. Reply with the single word BRAVOTWO and nothing else.
+  Use no tool.
+  ctrl+enter to send now
+· Whirring…
+  ⎿  Tip: Use /memory to view and manage Claude memory
+────────────────────────────────────────────────────────────────────────────────
+❯ Press up to edit queued messages
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt · ← 5 agents
+
+SCREEN D — TURN end
+----- TURN end (t=46515 ms) -----
+✻ Crunched for 5s · done 5:15 PM
+❯ aineo T6 measurement. Reply with the single word BRAVOTWO and nothing else.
+  Use no tool.
+⏺ BRAVOTWO
+✻ Worked for 3s · done 5:15 PM
+────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 5 agents
+

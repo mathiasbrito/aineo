@@ -1,0 +1,7 @@
+jobstop: exited=true code=1 ms=2
+{"cwd":"<scratchpad>","env":{},"pid":19149,"argv":[]}
+{"received":"\u001bP>|libvterm(0.3)\u001b\\\u001b[?5u\u001b[?1;2c\u001b[?2026;0$y"}
+{"received":"\u001b[?1016;0$y\u001b[?1;2c"}
+{"received":"\u001bP>|libvterm(0.3)\u001b\\\u001b[?1;2c\u001b[?5;3R\u001b[?2026;0$y"}
+{"received":"\u001b[?1;2c\u001b[?5;3R\u001b[?5;3R\u001b[?5;3R"}
+{"signal":"sighup"}

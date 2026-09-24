@@ -736,4 +736,37 @@ These replace the fix round's *Limits* where they say otherwise.
 
 ## Commits
 
-*Recorded after the merge.* The packet round carries four code commits and this note's commit; the fix round, the commits named in its section and the commit that adds that section; the correction, the commits named in its section and the commit that adds it. Their hashes change on rebase.
+Merged by rebase into `dev` on 2026-09-24 (PR #10, final head `2058eff`; 30 commits; per-file identity 25 of 25), recorded by the orchestrator's knowledge pass:
+
+| `dev` | was | round |
+|---|---|---|
+| `adf4815` | `7f910a8` | packet — Add the report channel: the MCP relay and the Agent Report |
+| `dffcd96` | `a1a1f26` | packet — Pin that an over-long line is not kept while it is dropped |
+| `19d18b3` | `fec11e6` | packet — Make the newline rendering test fail on its assertion |
+| `6f023fa` | `dcb8e36` | packet — Drop a guard in the line reader that no test could ask for |
+| `b12a93c` | `70ed857` | packet — Record the T5 report channel session |
+| `da5315b` | `989d34b` | fix round — Adopt the reviewers' test pins for the relay and the Report |
+| `65811ea` | `1f0c81b` | fix round — Keep the Report the Report across the user's buffer commands |
+| `f838522` | `d2926a6` | fix round — Harden the relay's protocol edges and make the schema say null |
+| `02cc0c1` | `977beec` | fix round — Bound the relay's wait on the editor and the records it keeps |
+| `2e7d189` | `aabf131` | fix round — Keep plugins from the system site directories out of the relay |
+| `33974fc` | `f22d8aa` | fix round — Drop the Report's loaded check that no test could ask for |
+| `b090cbc` | `668a3a7` | fix round — Answer each line in the stdin callback, as the queue changed nothing |
+| `d9a5337` | `c26ea30` | fix round — Reach the relay script through the entry point in its load test |
+| `c3e4867` | `13759c3` | fix round — Pin every path of the records' bound, each by assertion |
+| `8fc6af1` | `e8a6df3` | fix round — Pin the relay's answer reader against a notifying editor |
+| `b6ada26` | `d01bea8` | fix round — Create the Report's autocommand group anew, as its docstring now says |
+| `faf1214` | `1a67263` | fix round — Record the T5 fix round and correct the packet round's ledger |
+| `a0adb3d` | `f80413b` | correction — Pin the relay's 5 s bound by the time its answer takes |
+| `10892e1` | `b8a4df7` | correction — Restore the Report's loaded check, which :bunload needs |
+| `ad02beb` | `ee63e9d` | correction — Name the records file when it opens but cannot be read |
+| `12522ed` | `33b78d1` | correction — Keep the text a user typed into a buffer holding the Report's name |
+| `bc4d9ed` | `39ea0aa` | correction — Read the editor's answer byte for byte, through a libuv handle |
+| `08c7d0c` | `66ef7e0` | correction — Tell the user of a report the editor cannot keep; promise no showing |
+| `b680e47` | `299fdc1` | correction — Keep a report whose records file cannot be cut back |
+| `eb3e068` | `5147c0d` | correction — Cut a symlinked records file behind its link |
+| `42c5180` | `e61c375` | correction — Name each editor's cut file for its own process |
+| `a3c2162` | `faf16db` | correction — Take a records directory another editor made at the same moment |
+| `4775cd6` | `30c4ba1` | correction — Take a race lost on any directory of the records' path |
+| `6c4da1e` | `17e034f` | correction — Pin the records directory's retry bound with two lost races |
+| `e006d58` | `2058eff` | correction — Record the T5 correction and correct the fix round's refuted records |
