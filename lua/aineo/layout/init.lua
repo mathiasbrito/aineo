@@ -203,36 +203,89 @@ local function open_file_column(file, window)
   return vim.api.nvim_open_win(file, true, { split = 'left', win = -1 })
 end
 
---- Whether the buffer `window` shows can leave it without being lost: always
---- under `'hidden'`, and otherwise only when it holds no unsaved change.
+--- Whether the buffer `window` shows can leave it without being lost: when it
+--- holds no unsaved change, when another window shows it too, or when it is
+--- kept loaded once hidden — its `'bufhidden'` is `hide`, or empty under
+--- `'hidden'`.
 ---
 ---@param window integer
 ---@return boolean
 local function can_leave(window)
-  return vim.o.hidden or not vim.bo[vim.api.nvim_win_get_buf(window)].modified
+  local buffer = vim.api.nvim_win_get_buf(window)
+  local bufhidden = vim.bo[buffer].bufhidden
+  return not vim.bo[buffer].modified
+    or #vim.fn.win_findbuf(buffer) > 1
+    or bufhidden == 'hide'
+    or (vim.o.hidden and bufhidden == '')
+end
+
+--- Opens a window showing `file` above `window`, with the cursor in it, or
+--- returns `nil`, changing nothing, when the screen has no room for another
+--- window there (E36). Raises any other error the split raises.
+---
+---@param file integer
+---@param window integer
+---@return integer|nil file_window
+local function open_window_above(file, window)
+  local opened, result = pcall(vim.api.nvim_open_win, file, true, { split = 'above', win = window })
+  if opened then
+    return result
+  end
+  if not tostring(result):find('E36:', 1, true) then
+    error(result, 0)
+  end
+  return nil
 end
 
 --- Shows `file` in the file column's `column_window`, with the cursor there;
 --- above it, in a window of its own, when another buffer there cannot leave
---- it.
+--- it; nowhere, returning `nil`, when the screen has no room for that window.
 ---
 ---@param file integer
 ---@param column_window integer
----@return integer file_window
+---@return integer|nil file_window
 local function show_in_file_column(file, column_window)
   if vim.api.nvim_win_get_buf(column_window) ~= file and not can_leave(column_window) then
-    return vim.api.nvim_open_win(file, true, { split = 'above', win = column_window })
+    return open_window_above(file, column_window)
   end
   vim.api.nvim_win_set_buf(column_window, file)
   vim.api.nvim_set_current_win(column_window)
   return column_window
 end
 
---- Moves `file` from the layout's `window` to the file column — a new one
---- when none of its windows may take a file (see `window_taking_files()`) —
---- with the cursor there on the position it had in `window`, gives `window`
---- its own buffer back, and puts the proportions back while the layout's
---- three windows are open. Does nothing when
+--- Shows `file` in the file column, with the cursor there: in a window of it
+--- that may take a file (see `show_in_file_column()`), or in a new file column
+--- beside the layout's `window` when it has none. `nil` when the file column
+--- has no room for `file`.
+---
+---@param file integer
+---@param window integer one of the layout's windows
+---@return integer|nil file_window
+local function place_in_file_column(file, window)
+  local column_window = window_taking_files()
+  if column_window then
+    return show_in_file_column(file, column_window)
+  end
+  return open_file_column(file, window)
+end
+
+--- Warns that `file` stays in the layout's window it was opened in, since the
+--- file column has no room for it.
+---
+---@param file integer
+local function warn_no_room_for(file)
+  local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(file), ':t')
+  vim.notify(
+    ('aineo: the file column has no room for %s, which stays where it was opened'):format(name),
+    vim.log.levels.WARN
+  )
+end
+
+--- Moves `file` from the layout's `window` to the file column (see
+--- `place_in_file_column()`), with the cursor there on the position it had in
+--- `window`, gives `window` its own buffer back, and puts the proportions back
+--- while the layout's three windows are open. When the file column has no
+--- room for `file`, leaves it in `window` and warns. Does nothing when
 --- `window` is no longer one of the layout's windows — closed, or replaced
 --- by a window the layout reopened — or no longer shows `file`.
 ---
@@ -244,9 +297,11 @@ local function redirect(window, file)
     return
   end
   local cursor = vim.api.nvim_win_get_cursor(window)
-  local column_window = window_taking_files()
-  local file_window = column_window and show_in_file_column(file, column_window)
-    or open_file_column(file, window)
+  local file_window = place_in_file_column(file, window)
+  if not file_window then
+    warn_no_room_for(file)
+    return
+  end
   vim.api.nvim_win_set_cursor(file_window, cursor)
   vim.api.nvim_win_set_buf(window, state.buffers[role])
   keep_proportions()
