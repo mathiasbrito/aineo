@@ -4,15 +4,31 @@ local make = dofile('tests/helpers/make.lua')
 
 local eq = MiniTest.expect.equality
 
+--- How a failed expectation about `fragment` in `text` shows both.
+---
+---@param text any
+---@param fragment string
+---@return string
+local function describe_mention(text, fragment)
+  return ('Fragment: %s\nText:     %s'):format(fragment, vim.inspect(text))
+end
+
 --- Expects `text` to contain `fragment`, taken literally.
 local expect_mentions = MiniTest.new_expectation(
   'text mentioning a fragment',
   function(text, fragment)
     return type(text) == 'string' and text:find(fragment, 1, true) ~= nil
   end,
+  describe_mention
+)
+
+--- Expects `text` not to contain `fragment`, taken literally.
+local expect_no_mention = MiniTest.new_expectation(
+  'text not mentioning a fragment',
   function(text, fragment)
-    return ('Fragment: %s\nText:     %s'):format(fragment, vim.inspect(text))
-  end
+    return type(text) == 'string' and text:find(fragment, 1, true) == nil
+  end,
+  describe_mention
 )
 
 local PASSING_FILE = {
@@ -197,6 +213,9 @@ local OUTLASTS_A_STALL_MS = 30000
 --- The environment of a run whose time limit is three seconds, far below its default.
 local THREE_SECOND_RUN_LIMIT = { AINEO_TEST_RUN_LIMIT_MS = '3000' }
 
+--- What the runner says when test code ended Neovim, which no other ending may say.
+local BLAMES_A_TEST_CASE = 'a test case ended Neovim'
+
 --- A Lua statement that waits for longer than any run may take.
 local WAIT_FOREVER = 'vim.wait(1e9, function() return false end)'
 
@@ -352,6 +371,7 @@ T['make test_file']['fails, saying so, when mini.test stops making progress'] = 
 
   eq(result.code, RECIPE_FAILED)
   expect_mentions(result.stderr, 'made no progress')
+  expect_no_mention(result.stderr, BLAMES_A_TEST_CASE)
 end
 
 T['make test_file']['fails, saying so, when mini.test stops after a case froze vim.uv.now'] = function()
@@ -424,6 +444,7 @@ T['the run time limit']['ends a run, saying so, while a case waits']['on'] = fun
 
   eq(result.code, RECIPE_FAILED)
   expect_mentions(result.stderr, 'did not finish within 3 s')
+  expect_no_mention(result.stderr, BLAMES_A_TEST_CASE)
 end
 
 T['the run time limit']['ends a run, saying so, while a case waits on a child'] = MiniTest.new_set({
