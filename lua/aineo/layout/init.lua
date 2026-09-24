@@ -130,6 +130,20 @@ local function has_file_column()
   return #file_column_windows() > 0
 end
 
+--- The file column's first window that may take a file: one showing a file,
+--- not one of the layout's windows and without `'winfixbuf'`, so that neither
+--- another plugin's window in the file column's place, such as a sidebar, nor
+--- a layout window moved there is ever taken. `nil` when there is none.
+---
+---@return integer|nil window
+local function window_taking_files()
+  return vim.iter(file_column_windows()):find(function(window)
+    return not role_of(window)
+      and is_file(vim.api.nvim_win_get_buf(window))
+      and not vim.wo[window].winfixbuf
+  end)
+end
+
 --- Sizes the columns. With the file column open, Claude's column and the right
 --- one take a third each of the screen's columns, the two separators taken
 --- out, and the file column the rest; without it, Claude's column takes half
@@ -214,10 +228,11 @@ local function show_in_file_column(file, column_window)
   return column_window
 end
 
---- Moves `file` from the layout's `window` to the file column — opened when
---- it is not open — with the cursor there on the position it had in
---- `window`, gives `window` its own buffer back, and puts the proportions
---- back while the layout's three windows are open. Does nothing when
+--- Moves `file` from the layout's `window` to the file column — a new one
+--- when none of its windows may take a file (see `window_taking_files()`) —
+--- with the cursor there on the position it had in `window`, gives `window`
+--- its own buffer back, and puts the proportions back while the layout's
+--- three windows are open. Does nothing when
 --- `window` is no longer one of the layout's windows — closed, or replaced
 --- by a window the layout reopened — or no longer shows `file`.
 ---
@@ -229,7 +244,7 @@ local function redirect(window, file)
     return
   end
   local cursor = vim.api.nvim_win_get_cursor(window)
-  local column_window = file_column_windows()[1]
+  local column_window = window_taking_files()
   local file_window = column_window and show_in_file_column(file, column_window)
     or open_file_column(file, window)
   vim.api.nvim_win_set_cursor(file_window, cursor)
