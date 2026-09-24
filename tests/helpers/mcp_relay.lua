@@ -89,6 +89,16 @@ function M.decoded(line)
   return read and value or { unreadable = line }
 end
 
+--- Whether the process writes `text` to stderr within the usual wait.
+---
+---@param text string
+---@return boolean
+function Relay:writes_to_stderr(text)
+  return vim.wait(WAIT_MS, function()
+    return table.concat(self.errors):find(text, 1, true) ~= nil
+  end, 10)
+end
+
 --- Whether the process writes nothing to stdout within `milliseconds`.
 ---
 ---@param milliseconds integer

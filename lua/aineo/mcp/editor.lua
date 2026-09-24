@@ -6,6 +6,15 @@ local M = {}
 --- argument, as data: nothing of it becomes code.
 local RECEIVE_REPORT = "require('aineo.report').receive_report(...)"
 
+--- How `sockconnect()` dials `address`: over TCP when it is `host:port`, as
+--- `--listen 127.0.0.1:6666` gives, else as a local pipe (a socket path).
+---
+---@param address string
+---@return 'tcp'|'pipe'
+local function connection_mode(address)
+  return address:match('^[^/]+:%d+$') and 'tcp' or 'pipe'
+end
+
 --- The first line of `text`: an editor's error without its stack traceback.
 ---
 ---@param text string
@@ -28,7 +37,8 @@ function M.deliver_report(address, report)
   if address == nil then
     return false, 'aineo has no editor address to deliver the report to'
   end
-  local connected, channel = pcall(vim.fn.sockconnect, 'pipe', address, { rpc = true })
+  local connected, channel =
+    pcall(vim.fn.sockconnect, connection_mode(address), address, { rpc = true })
   if not connected then
     return false, ('aineo could not reach the editor at %s: %s'):format(address, channel)
   end

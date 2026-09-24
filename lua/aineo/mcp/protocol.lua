@@ -139,8 +139,9 @@ end
 --- The answer to `line`, one JSON-RPC message as Claude Code sent it, or nil
 --- when it takes none: a notification (a message without an `id`) is never
 --- answered. A line that is not JSON is answered with error -32700 and no
---- `id`, and JSON that is not an object with error -32600 and no `id`; a
---- method the server does not have with error -32601; a `tools/call` of a
+--- `id`; JSON that is not an object, and a request whose `id` is null (MCP
+--- 2025-11-25 forbids a null id), with error -32600 and no `id`; a method the
+--- server does not have with error -32601; a `tools/call` of a
 --- tool other than `report` with error -32602; a `report` whose arguments
 --- are refused with a tool error naming the field; and a valid `report` is
 --- handed to `deliver_report`. `params` that are not an object count as none.
@@ -159,6 +160,9 @@ function M.answer_line(line, deliver_report)
   end
   if type(message) ~= 'table' or vim.islist(message) then
     return error_response(nil, INVALID_REQUEST, 'Invalid Request: the message is not an object')
+  end
+  if message.id == vim.NIL then
+    return error_response(nil, INVALID_REQUEST, 'Invalid Request: the id is null')
   end
   return answer_message(message, deliver_report)
 end

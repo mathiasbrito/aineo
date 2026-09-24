@@ -4,9 +4,17 @@
 --- plugin found from its own path there, then serves Claude Code on stdin and
 --- stdout, delivering reports to the editor whose address its environment
 --- names.
+---
+--- It serves only when it is the script `-l` runs (`arg[0]`, `:h lua-args`):
+--- required inside an editor, it does nothing.
 
-local plugin_root = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h:h:h')
-vim.opt.runtimepath:prepend(plugin_root)
+local this_script = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p')
+local script_run = arg and arg[0] and vim.fn.fnamemodify(arg[0], ':p')
+if script_run ~= this_script then
+  return
+end
+
+vim.opt.runtimepath:prepend(vim.fn.fnamemodify(this_script, ':h:h:h:h'))
 
 local names = require('aineo.mcp.names')
 require('aineo.mcp.server').serve_stdio(vim.env[names.EDITOR_ADDRESS_VARIABLE])
