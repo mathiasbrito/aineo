@@ -93,9 +93,11 @@ end
 T['start_session()']['writes an empty env for a server that names no env'] = function()
   local fake = claude.fake('server-without-env', 'exit')
 
-  claude.start(child, fake, {
-    mcp_servers = { quiet = { type = 'stdio', command = 'true', args = { 'x' } } },
-  })
+  MiniTest.expect.no_error(function()
+    claude.start(child, fake, {
+      mcp_servers = { quiet = { type = 'stdio', command = 'true', args = { 'x' } } },
+    })
+  end)
 
   contains(claude.words_after(claude.arguments(fake), '--mcp-config')[1], '"env":{}')
 end
