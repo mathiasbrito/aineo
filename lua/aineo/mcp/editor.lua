@@ -155,7 +155,7 @@ local function outcome(call, address)
   return 'unconfirmed',
     ('aineo sent the report, but the editor did not confirm it within %d s:'):format(
       CONFIRMATION_TIMEOUT_MS / 1000
-    ) .. ' it may be waiting for the user, at a hit-enter prompt for one.' .. ' The report will show when the editor is free; do not send it again.'
+    ) .. ' it may be waiting for the user, at a hit-enter prompt for one.' .. ' The report is sent, not confirmed; do not send it again.'
 end
 
 --- Hands `report` to the report home of the editor listening at `address`,

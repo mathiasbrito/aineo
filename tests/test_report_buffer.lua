@@ -553,6 +553,27 @@ T['the records']['refuse a report they cannot keep, naming the file, and show no
   eq(report_editor.lines(child), { '' })
 end
 
+T['the records']['that cannot keep a report tell the user why, once'] = function()
+  local state_directory = fixture.directory('report-state')
+  local records_directory = vim.fs.joinpath(state_directory, 'aineo', 'reports')
+  vim.fn.mkdir(records_directory, 'p')
+  vim.fn.setfperm(records_directory, 'r-x------')
+  report_editor.start(child, {
+    times = { '2026-09-24T09:05:00' },
+    state_directory = state_directory,
+    working_directory = '/projects/alpha',
+  })
+
+  local refusal = child.lua(
+    [[return select(2, pcall(require('aineo.report').receive_report, ...))]],
+    { { task = 'Task', status = 'done', summary = 'Summary' } }
+  )
+  local messages = child.cmd_capture('messages')
+  vim.fn.setfperm(records_directory, 'rwx------')
+
+  eq(messages, refusal)
+end
+
 T['the records']['keep no refused report'] = function()
   local state_directory = fixture.directory('report-state')
   report_editor.start(child, {

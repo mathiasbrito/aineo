@@ -156,7 +156,7 @@ end
 --- error until `set_report_environment()` was called.
 ---
 ---@param arguments table
-function M.receive_report(arguments)
+local function show_and_keep(arguments)
   local valid_report, refusal = format.validate_report(arguments)
   if not valid_report then
     error('aineo refused the report: ' .. refusal, 0)
@@ -166,6 +166,24 @@ function M.receive_report(arguments)
   records.append_record(report_view.records_file, record)
   buffer.append_lines(report_buffer, render.render_report(record.report, record.time))
   buffer.follow_last_line(report_buffer)
+end
+
+--- Shows `arguments`, a report, at the end of the Report buffer, moves every
+--- window showing the Report to it, and keeps it as a record
+--- (`show_and_keep()`).
+---
+--- When it cannot, raises the error saying why, and tells the user why too,
+--- once: the relay that sent the report may have stopped waiting for this
+--- answer (an editor held at a hit-enter prompt answers late), and then only
+--- the user can learn that the report is not shown.
+---
+---@param arguments table
+function M.receive_report(arguments)
+  local received, failure = pcall(show_and_keep, arguments)
+  if not received then
+    warn_later(failure)
+    error(failure, 0)
+  end
 end
 
 return M
