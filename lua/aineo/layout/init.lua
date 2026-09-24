@@ -327,6 +327,16 @@ end
 --- buffer for one.
 local INPUT_NAME = 'aineo://input'
 
+--- The buffer already named `aineo://input`, such as one a restored session
+--- made, or `nil`.
+---
+---@return integer|nil buffer
+local function buffer_named_input()
+  return vim.iter(vim.api.nvim_list_bufs()):find(function(buffer)
+    return vim.api.nvim_buf_get_name(buffer) == INPUT_NAME
+  end)
+end
+
 --- Whether `buffer` has no name and holds no text, as the buffer Neovim
 --- starts with.
 ---
@@ -378,14 +388,19 @@ local function make_input(buffer)
 end
 
 --- The Input buffer: the one the layout made before, while it exists; else
---- `shown` made Input when it has no name and holds no text, or else a new
---- buffer made Input.
+--- the buffer already named `aineo://input` made Input, else `shown` made
+--- Input when it has no name and holds no text, or else a new buffer made
+--- Input.
 ---
 ---@param shown integer the buffer of the window the layout opens from
 ---@return integer input
 local function take_input_buffer(shown)
   if has_input() then
     return state.buffers.input
+  end
+  local named = buffer_named_input()
+  if named then
+    return make_input(named)
   end
   if is_unnamed_and_empty(shown) then
     return make_input(shown)
@@ -550,9 +565,11 @@ end
 --- the current window shows stays there, as the file column. Opened from a
 --- floating window, the layout is built from the first window of the tab
 --- that does not float. Input is a scratch buffer named `aineo://input`,
---- made once: from the unnamed, empty buffer the current window shows, such
---- as the one Neovim starts with, or else a new buffer; it is made anew when
---- it was wiped, and made a scratch buffer again whenever it is shown.
+--- made once: from a buffer already named so, such as one a restored session
+--- made, else from the unnamed, empty buffer the current window shows, such
+--- as the one Neovim starts with, or else a new buffer; it is made anew, from
+--- a buffer named so when there is one, when it was wiped, and made a scratch
+--- buffer again whenever it is shown.
 ---
 --- While any of the three windows exists, opening again restores the layout
 --- instead, in the tab that holds it: it creates only the windows that were
@@ -579,7 +596,7 @@ function M.open(arrangement)
     state.buffers.claude = arrangement.claude
     state.buffers.report = arrangement.report
     if not has_input() then
-      make_input(vim.api.nvim_create_buf(false, true))
+      make_input(buffer_named_input() or vim.api.nvim_create_buf(false, true))
     end
     reopen_closed_windows()
     show_buffers()

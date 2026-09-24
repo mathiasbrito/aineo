@@ -92,6 +92,43 @@ T['Input wiped with :bwipeout']['is made anew when focus() asks for Input'] = fu
   eq(child.lua_get('vim.api.nvim_buf_get_name(0)'), 'aineo://input')
 end
 
+T['a buffer named aineo://input before the layout, as a restored session makes'] =
+  MiniTest.new_set()
+
+T['a buffer named aineo://input before the layout, as a restored session makes']['becomes Input when the layout opens'] = function()
+  layout.start(child)
+  child.cmd('edit aineo://input')
+  local named = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.cmd('edit ' .. layout.file('first.txt'))
+  local buffers = layout.stand_ins(child)
+
+  MiniTest.expect.no_error(function()
+    layout.open(child, layout.arrangement(buffers))
+  end)
+
+  eq(layout.window_count(child), 4)
+  eq(layout.input_buffer(child), named)
+  eq(child.lua_get(SCRATCH_OPTIONS, { named }), INPUT_SCRATCH_OPTIONS)
+end
+
+T['a buffer named aineo://input after Input was wiped'] = MiniTest.new_set()
+
+T['a buffer named aineo://input after Input was wiped']['becomes Input when the layout opens again'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('bwipeout')
+  local named = child.lua_get('vim.fn.bufadd(...)', { 'aineo://input' })
+  child.lua('vim.fn.bufload(...)', { named })
+
+  MiniTest.expect.no_error(function()
+    layout.open(child, layout.arrangement(buffers))
+  end)
+
+  eq(layout.window_count(child), 3)
+  eq(layout.input_buffer(child), named)
+  eq(child.lua_get(SCRATCH_OPTIONS, { named }), INPUT_SCRATCH_OPTIONS)
+end
+
 T['Input edited again with a bare :edit'] = MiniTest.new_set()
 
 T['Input edited again with a bare :edit']['stays its named scratch buffer'] = function()
