@@ -32,8 +32,62 @@ local function start_editor()
   })
 end
 
+--- The sockets and timers of the stand-in editors, closed after each case.
+---@type (uv.uv_pipe_t|uv.uv_timer_t)[]
+local stand_in_handles = {}
+
+--- How long a stand-in editor waits between its notification and its answer,
+--- so that the relay reads them apart.
+local ANSWER_DELAY_MS = 50
+
+--- Listens at a new socket path in place of the user's editor, and answers
+--- the one msgpack-RPC request it receives there with success — after first
+--- writing a notification, what an editor sends when a plugin broadcasts to
+--- every channel (`rpcnotify(0, …)`) while a report is received.
+---
+---@return string address
+local function start_editor_notifying_first()
+  local address = vim.fn.tempname() .. '.sock'
+  local server = assert(vim.uv.new_pipe(false))
+  table.insert(stand_in_handles, server)
+  server:bind(address)
+  server:listen(1, function()
+    local connection = assert(vim.uv.new_pipe(false))
+    local answer_later = assert(vim.uv.new_timer())
+    vim.list_extend(stand_in_handles, { connection, answer_later })
+    server:accept(connection)
+    local unpack = vim.mpack.Unpacker()
+    connection:read_start(function(_, data)
+      local request = data and unpack(data)
+      if request then
+        connection:write(vim.mpack.encode({ 2, 'aineo_test_broadcast', {} }))
+        answer_later:start(ANSWER_DELAY_MS, 0, function()
+          connection:write(vim.mpack.encode({ 1, request[2], vim.NIL, vim.NIL }))
+        end)
+      end
+    end)
+  end)
+  return address
+end
+
+--- Closes every socket and timer a stand-in editor opened.
+local function close_stand_in_handles()
+  for _, handle in ipairs(stand_in_handles) do
+    if not handle:is_closing() then
+      handle:close()
+    end
+  end
+  stand_in_handles = {}
+end
+
 local T = MiniTest.new_set({
-  hooks = { post_case = mcp_relay.stop_all, post_once = editor.stop },
+  hooks = {
+    post_case = function()
+      mcp_relay.stop_all()
+      close_stand_in_handles()
+    end,
+    post_once = editor.stop,
+  },
 })
 
 T['the server entry'] = MiniTest.new_set()
@@ -105,6 +159,18 @@ T['a report']['reaches the editor the relay was given, and renders in its Report
     end, 10)]]),
     true
   )
+end
+
+T['a report']['is confirmed by an editor that writes a notification before its answer'] = function()
+  local address = start_editor_notifying_first()
+  local relay = mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = address })
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq(get(decoded(relay:next_line()), 'result'), {
+    isError = false,
+    content = { { type = 'text', text = 'Delivered to the Agent Report.' } },
+  })
 end
 
 T['a report']['reaches an editor listening on a TCP address'] = function()
