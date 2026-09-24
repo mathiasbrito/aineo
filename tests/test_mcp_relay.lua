@@ -1,4 +1,5 @@
 local MiniTest = require('mini.test')
+local fixture = dofile('tests/helpers/fixture.lua')
 local mcp_messages = dofile('tests/helpers/mcp_messages.lua')
 local mcp_relay = dofile('tests/helpers/mcp_relay.lua')
 
@@ -22,6 +23,20 @@ T['the relay']['exits 0 when its input closes'] = function()
   local exit = relay:close()
 
   eq({ exit.code, exit.signal }, { 0, 0 })
+end
+
+T['the relay']['loads no plugin from the system site directories'] = function()
+  local site = fixture.directory('mcp-system-data')
+  local marker = vim.fs.joinpath(site, 'plugin-ran')
+  fixture.write('mcp-system-data/nvim/site/plugin/polluter.lua', {
+    ('vim.fn.writefile({ "ran" }, %q)'):format(marker),
+    'io.stdout:write("POLLUTED\\n")',
+  })
+  local relay = mcp_relay.start_relay({ XDG_DATA_DIRS = site })
+
+  relay:send(mcp_messages.recorded('initialize'))
+
+  eq({ get(decoded(relay:next_line()), 'id'), vim.uv.fs_stat(marker) == nil }, { 0, true })
 end
 
 T['initialize'] = MiniTest.new_set()

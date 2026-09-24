@@ -18,7 +18,10 @@ T['mcp_servers()']['describes the report server the way Claude Code starts a std
     { entry.type, entry.command, entry.env },
     { 'stdio', '/opt/nvim/bin/nvim', { AINEO_EDITOR_ADDRESS = '/tmp/nvim.editor.sock' } }
   )
-  eq(vim.list_slice(entry.args, 1, #entry.args - 1), { '--headless', '--clean', '-l' })
+  eq(
+    vim.list_slice(entry.args, 1, #entry.args - 1),
+    { '--headless', '--clean', '--cmd', 'set noloadplugins', '-l' }
+  )
   eq({ vim.fn.isabsolutepath(script), vim.fn.filereadable(script) }, { 1, 1 })
 end
 

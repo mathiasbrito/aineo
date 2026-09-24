@@ -1,5 +1,6 @@
 --- The report relay: the stdio MCP server Claude Code runs as
---- `nvim --headless --clean -l <this file>`, and the composition root of that
+--- `nvim --headless --clean --cmd 'set noloadplugins' -l <this file>`
+--- (`require('aineo.mcp').mcp_servers()`), and the composition root of that
 --- process. `--clean` leaves aineo off 'runtimepath', so this file puts the
 --- plugin found from its own path there, then serves Claude Code on stdin and
 --- stdout, delivering reports to the editor whose address its environment
