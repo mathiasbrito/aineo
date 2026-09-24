@@ -419,11 +419,12 @@ local function show_buffers()
 end
 
 --- Keeps Input a scratch buffer and redirects the files shown in the layout's
---- windows, and puts the proportions back whenever a window closes or the
---- editor is resized, replacing what an earlier call set up. Input is made a
---- scratch buffer first, so the redirect never takes it for a file. A window
---- is still in the layout while `WinClosed` runs, so the proportions are put
---- back after it.
+--- windows, and puts the proportions back whenever a window closes, the
+--- editor is resized or a tab is entered, replacing what an earlier call set
+--- up. Input is made a scratch buffer first, so the redirect never takes it
+--- for a file. A window is still in the layout while `WinClosed` runs, so the
+--- proportions are put back after it; a tab that is not shown is resized when
+--- it is entered, so the proportions are put back then.
 local function watch_windows()
   local group = vim.api.nvim_create_augroup('aineo.layout', {})
   vim.api.nvim_create_autocmd('BufWinEnter', { group = group, callback = keep_input_scratch })
