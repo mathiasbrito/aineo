@@ -12,6 +12,15 @@ local TEST_HOME = vim.fs.joinpath(vim.uv.cwd(), '.tests')
 local OTHER_CLAUDE_VARIABLES = "vim.tbl_filter(function(name) return vim.startswith(name, 'CLAUDE')"
   .. " and name ~= 'CLAUDE_CONFIG_DIR' end, vim.tbl_keys(vim.fn.environ()))"
 
+--- The mark every value a test plants in make's environment carries.
+local PLANTED = 'aineo-planted'
+
+--- The expression, run in a Neovim, that lists the values of its environment
+--- that carry `PLANTED`.
+local PLANTED_VALUES = ('vim.tbl_filter(function(value) return value:find(%q, 1, true) ~= nil end, vim.fn.environ())'):format(
+  PLANTED
+)
+
 --- A test file whose cases pass only in a runner isolated inside `.tests/`,
 --- whose child Neovims are isolated too.
 local ISOLATION_PROBE_FILE = {
@@ -27,6 +36,12 @@ local ISOLATION_PROBE_FILE = {
   'T["no other Claude Code variable in a child"] = function()',
   '  children.restart(child)',
   ('  eq(child.lua_get(%q), {})'):format(OTHER_CLAUDE_VARIABLES),
+  '  child.stop()',
+  'end',
+  ('T["no planted value"] = function() eq(%s, {}) end'):format(PLANTED_VALUES),
+  'T["no planted value in a child"] = function()',
+  '  children.restart(child)',
+  ('  eq(child.lua_get(%q), {})'):format(PLANTED_VALUES),
   '  child.stop()',
   'end',
   "T['config'] = function() eq(vim.fn.stdpath('config'), HOME .. '/config/nvim') end",
@@ -66,6 +81,15 @@ local function probe_isolation(run)
     })
   )
 end
+
+--- A `TEST_HOME` a test names outside the Makefile.
+local DECOY_TEST_HOME = vim.fs.joinpath(TEST_HOME, 'fixtures', 'decoy', 'test-home')
+
+--- Ways of handing make a `TEST_HOME` of its own, by name.
+local TEST_HOME_ROUTES = {
+  ['on the command line'] = { assignments = { 'TEST_HOME=' .. DECOY_TEST_HOME } },
+  ['in MAKEFLAGS'] = { environment = { MAKEFLAGS = 'TEST_HOME=' .. DECOY_TEST_HOME } },
+}
 
 --- The developer's own Neovim configuration, where Neovim looks without XDG_CONFIG_HOME.
 local DEVELOPER_CONFIG = vim.fs.joinpath(vim.uv.os_homedir(), '.config', 'nvim')
@@ -181,9 +205,34 @@ T['make test_file']['keeps its isolation when the command line names other direc
   eq(result.code, 0)
 end
 
+T['make test_file']['keeps its isolation when TEST_HOME is named outside the Makefile'] =
+  MiniTest.new_set({ parametrize = { { 'on the command line' }, { 'in MAKEFLAGS' } } })
+
+T['make test_file']['keeps its isolation when TEST_HOME is named outside the Makefile']['named'] = function(
+  route
+)
+  local result = probe_isolation(TEST_HOME_ROUTES[route])
+
+  eq(result.code, 0)
+end
+
 T['make test_file']["keeps a Claude Code session's variables out of its runner and children"] = function()
   local result = probe_isolation({
     environment = { CLAUDECODE = '1', CLAUDE_CODE_PLANTED_BY_A_TEST = '1' },
+  })
+
+  eq(result.code, 0)
+end
+
+T['make test_file']["keeps a parent editor's variables out of its runner and children"] = function()
+  local result = probe_isolation({
+    environment = {
+      NVIM = vim.fs.joinpath(vim.uv.os_tmpdir(), PLANTED, 'nvim.sock'),
+      NVIM_APPNAME = PLANTED,
+      MYVIMRC = vim.fs.joinpath(vim.uv.os_tmpdir(), PLANTED, 'init.lua'),
+      VIMINIT = ('let g:planted = %q'):format(PLANTED),
+      AI_AGENT = PLANTED,
+    },
   })
 
   eq(result.code, 0)

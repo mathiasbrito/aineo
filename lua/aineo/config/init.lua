@@ -208,21 +208,41 @@ local function resolve_setting(setting, sources)
   return setting.default
 end
 
---- Records a copy of the options `require('aineo').setup()` was given,
---- replacing whatever was recorded before. Counterpart of
---- `recorded_setup_options()`.
+--- A plain copy of `value`, sharing nothing with it: every table is copied at
+--- every depth, keys and values alike, and no copy carries a metatable — so a
+--- copied table holds its own keys and values only, as `vim.g.aineo` would.
+--- Raises an error, a stack overflow, for a table that contains itself.
+---
+---@param value any
+---@return any
+local function plain_copy(value)
+  if type(value) ~= 'table' then
+    return value
+  end
+  local copy = {}
+  for key, inner_value in pairs(value) do
+    copy[plain_copy(key)] = plain_copy(inner_value)
+  end
+  return copy
+end
+
+--- Records a plain copy of the options `require('aineo').setup()` was given —
+--- their own keys and values, never what a metatable reaches — replacing
+--- whatever was recorded before. Counterpart of `recorded_setup_options()`.
+--- Raises an error when `setup_options` contains itself.
 ---
 ---@param setup_options table
 function M.record_setup_options(setup_options)
-  recorded_setup_options = vim.deepcopy(setup_options)
+  recorded_setup_options = plain_copy(setup_options)
 end
 
---- A copy of the options `require('aineo').setup()` recorded last; an empty
---- table until it is called. Editing the copy changes no record.
+--- A plain copy of the options `require('aineo').setup()` recorded last,
+--- sharing no table and no metatable with the record; an empty table until it
+--- is called. Editing the copy changes no record.
 ---
 ---@return table
 function M.recorded_setup_options()
-  return vim.deepcopy(recorded_setup_options)
+  return plain_copy(recorded_setup_options)
 end
 
 --- Resolves aineo's configuration from its two sources: each setting comes from

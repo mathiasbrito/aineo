@@ -60,6 +60,22 @@ T['setup()']['records the options as they were when it was called'] = function()
   eq(child.lua_get(RECORDED_OPTIONS), { claude = { cmd = { 'my-claude' } } })
 end
 
+T['setup()']["records the options' own keys, never what their metatable reaches"] = function()
+  child.lua([[
+    local live = { prefix = ',' }
+    require('aineo').setup(setmetatable({ autostart = false }, { __index = live }))
+    live.prefix = 'changed after setup()'
+  ]])
+
+  eq(child.lua_get(RECORDED_OPTIONS .. '.prefix'), vim.NIL)
+end
+
+T['setup()']['hands out its record without a metatable'] = function()
+  child.lua([[require('aineo').setup(setmetatable({ prefix = ',' }, { __index = {} }))]])
+
+  eq(child.lua_get('getmetatable(' .. RECORDED_OPTIONS .. ')'), vim.NIL)
+end
+
 T['setup()']['keeps its record when a caller edits the options handed out'] = function()
   child.lua([[require('aineo').setup({ prefix = ',' })]])
   child.lua([[require('aineo.config').recorded_setup_options().prefix = 'changed without setup()']])
