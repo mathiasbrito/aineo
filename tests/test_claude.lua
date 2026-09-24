@@ -230,6 +230,7 @@ T['start_session()']['names the setting that is malformed'] = MiniTest.new_set({
     { 'cmd', { 'claude', 1 } },
     { 'cwd', 1 },
     { 'cwd', '/nonexistent/aineo/directory' },
+    { 'cwd', '/bin/sh' },
     { 'mcp_servers', 'aineo' },
     { 'allowed_tools', 'mcp__aineo__report' },
     { 'allowed_tools', { 1 } },
