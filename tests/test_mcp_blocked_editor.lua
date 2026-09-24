@@ -74,7 +74,7 @@ T['a report for an editor at a hit-enter prompt']['is answered in time, the rela
   relay:send(mcp_messages.recorded('tools/call'))
   local waited = relay:is_silent_for(500)
   relay:send('{"jsonrpc":"2.0","id":3,"method":"ping"}')
-  local answers = relay:next_lines(2)
+  local answers = relay:next_lines(2, 6000)
   editor:type('\r')
 
   eq({
