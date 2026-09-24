@@ -2,6 +2,7 @@
 name: reviewer
 description: Reviews one pull request along one dimension — attack, test integrity, or records & skills — inside its own git worktree and isolated resources, re-measuring every claim rather than accepting it; or reviews a wave's packet briefs before they are dispatched. Dispatched by the orchestrate skill with a dimension brief; two or three run in parallel per pull request, one per wave for the briefs.
 model: opus
+effort: xhigh
 isolation: worktree
 ---
 
@@ -50,6 +51,7 @@ Before anything else:
 - **When you can build the fix, build it and measure it.** Report it measured; the author adopts it red-first.
 - **The scratchpad is shared** with the other reviewers. Prefix any file you create there with your dimension.
 - **Batch what is independent; keep what is evidence as its own step.** Independent read-only checks go in one tool call; a mutant's apply → run → restore stays sequential. Load what your dimension needs: the records dimension reads the rules, not the coding skills; every dimension reads the spec *section* the brief names, not the artefact whole.
+- **Read back only what decides your next step.** A run's summary line and the names of its failing tests, never its whole output — runs go to files; a report or a long file by the section you need (`grep`, `sed -n` ranges), not whole. Everything you read stays in your context for every later turn, and a context past about 400 K tokens degrades the work.
 - **A session note's `## Commits` table is empty until the merge.** The vault fills it after the rebase (`knowledge-vault/Sessions/CLAUDE.md`): an empty table under "recorded after the merge" is the correct record, and a hash written before the merge is the defect — a brief that asks you for one is wrong, and you say so.
 - **A re-measure is a review with a narrower question**: does every claim of the fix round hold on the new head, and did the round introduce the failure it was correcting — a label that no longer matches the code it names, a count taken from an intermediate file, a citation carried without being read. Run the first round's survivors first, as literal edits: "all of them now die" is the negative claim to distrust most. Where a claim holds, say so.
 - **Never a process-wide kill, and never a self-matching wait loop.** Stop only what you started, by pid; wait on your own child's pid or bound the loop. A run's output goes to a file, never into `head`.

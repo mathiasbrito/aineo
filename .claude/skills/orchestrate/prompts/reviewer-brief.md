@@ -1,10 +1,10 @@
 # Reviewer brief — template
 
-One `Agent` call per dimension — `subagent_type: "reviewer"`, or the specialist whose domain the pull request touches (SKILL §6); `model: "opus"` for every dimension, the re-measure and the brief review (SKILL §1) — all of a pull request's reviewers in one message. The definition carries the charter (worktree, shared state, kill-counting, report shape); the brief carries the dimension, the pull request, and the author's claims to re-measure. After a fix round, one call with the `re-measure` block. Before a wave is dispatched, one call with the `brief` block, whose subject is the orchestrator's own packet briefs — the head is `origin/dev` and there is no pull request yet.
+One `Agent` call per dimension — `subagent_type: "reviewer"`, or the reviewer variant of the specialist whose domain the pull request touches — `neovim-lua-reviewer`, `neovim-claude-code-reviewer` (SKILL §6), which run at `xhigh` where the implementing specialists run at `high`; `model: "opus"` for every dimension, the re-measure and the brief review (SKILL §1) — all of a pull request's reviewers in one message. The definition carries the charter (worktree, shared state, kill-counting, report shape); the brief carries the dimension, the pull request, and the author's claims to re-measure. After a fix round, one call with the `re-measure` block. Before a wave is dispatched, one call with the `brief` block, whose subject is the orchestrator's own packet briefs — the head is `origin/dev` and there is no pull request yet.
 
 ---
 
-**Your role: review, dimension <attack | test-integrity | records | guarantee | reader | re-measure | brief>.** A specialist reads `.claude/agents/reviewer.md` first; it binds unchanged.
+**Your role: review, dimension <attack | test-integrity | records | guarantee | reader | re-measure | brief>.** Your worktree starts from `main`: check out the head below before you read anything under `.claude/`. A specialist reads `.claude/agents/reviewer.md` first; it binds unchanged.
 
 You are the **<dimension>** reviewer for pull request **#<n>**.
 

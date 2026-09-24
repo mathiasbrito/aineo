@@ -2,6 +2,7 @@
 name: neovim-claude-code-integrator
 description: aineo's Lua specialist for integrating Neovim with Claude Code — driving the CLI headless over stream-json (process, NDJSON codec, sessions, interrupts, permission hosting) and hosting Claude Code's IDE connection (a loopback WebSocket MCP server, its lock file and auth token, diffs, selection and diagnostics) — bound by the implementer or reviewer charter as the brief names, and by neovim-lua-developer's Neovim rules. Use for a packet or a review that touches the code that runs or talks to `claude`, the IDE server, lock files, the protocol codecs, or their fakes and recorded fixtures.
 model: opus
+effort: high
 isolation: worktree
 skills:
   - tdd
