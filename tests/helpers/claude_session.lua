@@ -1,9 +1,12 @@
---- Starts aineo's Claude session in a child Neovim against the fake `claude`
---- (`tests/helpers/fake_claude.lua`), and reads back what the fake recorded.
+--- Starts aineo's Claude session in a child Neovim against a fake `claude`
+--- (`tests/helpers/fake_claude.lua`, or `tests/helpers/fake_claude_deaf.sh`),
+--- drives and quits that child as a user would, and reads back what the fake
+--- recorded.
 ---
---- Loaded in the test runner and, by `start()`, in the child too: the child
---- builds the session's settings itself, so that the tables in them reach the
---- session as Lua wrote them rather than as the RPC channel converts them.
+--- Loaded in the test runner and, by `start()` and `start_again()`, in the
+--- child too: the child builds the session's settings itself, so that the
+--- tables in them reach the session as Lua wrote them rather than as the RPC
+--- channel converts them.
 
 local fixture = dofile('tests/helpers/fixture.lua')
 
@@ -229,14 +232,25 @@ end
 --- Once `fake` has started, and so reads its keys raw, presses a double Ctrl-C
 --- in the terminal `buffer` of `child`, as a user ending Claude Code would,
 --- and waits for the session to report `exited` — so that the test's teardown
---- does not spend the whole stop on quit.
+--- does not spend the whole stop on quit. Presses nothing when the session has
+--- exited already or `buffer` is gone: it runs from `MiniTest.finally()`, where
+--- an error would stop the whole run rather than fail the test.
 ---
 ---@param child table
 ---@param fake { record: string }
 ---@param buffer integer the session's terminal buffer
 function M.end_by_keys(child, fake, buffer)
   M.wait_for_start(fake)
-  child.lua("vim.api.nvim_chan_send(vim.bo[...].channel, '\\3\\3')", { buffer })
+  child.lua(
+    [[
+      local buffer = ...
+      local running = require('aineo.claude').session_status() ~= 'exited'
+      if running and vim.api.nvim_buf_is_valid(buffer) then
+        vim.api.nvim_chan_send(vim.bo[buffer].channel, '\3\3')
+      end
+    ]],
+    { buffer }
+  )
   M.wait_for_status(child, 'exited')
 end
 

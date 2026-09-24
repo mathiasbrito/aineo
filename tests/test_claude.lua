@@ -236,7 +236,10 @@ T['start_session()']['starts Claude again after the old terminal was wiped'] = f
   claude.wait_for_status(child, 'exited')
   child.cmd('bwipeout! ' .. first)
 
-  local second = claude.start_again(child)
+  local second
+  MiniTest.expect.no_error(function()
+    second = claude.start_again(child)
+  end)
 
   eq(child.api.nvim_get_option_value('buftype', { buf = second }), 'terminal')
 end
