@@ -167,7 +167,8 @@ end
 --- Moves `file` from the layout's `window` to the file column — opened right
 --- of Claude's column when it is not open — with the cursor there on the
 --- position it had in `window`, gives `window` its own buffer back, and puts
---- the proportions back.
+--- the proportions back. Does nothing when the layout is not open, or
+--- `window` no longer shows `file`.
 ---
 ---@param window integer
 ---@param file integer
@@ -188,13 +189,13 @@ local function redirect(window, file)
   apply_proportions()
 end
 
---- Redirects a file shown in one of the layout's windows while the layout is
---- open, once the command that showed it has finished with that window.
+--- Redirects a file shown in one of the layout's windows, once the command
+--- that showed it has finished with that window.
 ---
 ---@param event { buf: integer }
 local function redirect_when_file(event)
   local window = vim.api.nvim_get_current_win()
-  if not is_open() or not role_of(window) or not is_file(event.buf) then
+  if not role_of(window) or not is_file(event.buf) then
     return
   end
   vim.schedule(function()

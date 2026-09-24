@@ -130,7 +130,9 @@ T['opening the layout again']['after its three windows closed, keeps Input and i
   child.cmd('edit ' .. layout.file('first.txt'))
   child.cmd('only')
 
-  layout.open(child, layout.arrangement(buffers))
+  MiniTest.expect.no_error(function()
+    layout.open(child, layout.arrangement(buffers))
+  end)
 
   eq(layout.input_buffer(child), buffers.input)
   eq(child.lua_get('vim.api.nvim_buf_get_lines(..., 0, -1, false)', { buffers.input }), { 'typed' })
