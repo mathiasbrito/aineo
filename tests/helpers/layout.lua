@@ -6,6 +6,12 @@
 --- running `cat`, which prints nothing and waits for input, for the Claude
 --- session's buffer, and a named scratch buffer holding one line for the
 --- Report's.
+---
+--- The layout moves files and puts its sizes back from `vim.schedule`
+--- callbacks. A child runs a callback scheduled while it serves one request
+--- before it serves the next — both wait in its main loop's event queue, in
+--- order — so a test reads their result with its next request and waits for
+--- nothing.
 
 local MiniTest = require('mini.test')
 local children = dofile('tests/helpers/child.lua')
