@@ -304,6 +304,18 @@ T['the file column']['with a window across the bottom and one down the left, tak
   eq(layout.window_count(child), count)
 end
 
+T['the file column']["is never a 'winfixbuf' window, which takes no file and raises no error"] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.claude)
+  child.cmd('rightbelow vertical 10new')
+  child.lua('vim.wo.winfixbuf = true')
+  layout.enter_window_showing(child, buffers.input)
+
+  child.cmd('edit ' .. layout.file('first.txt'))
+
+  eq(child.lua_get('vim.v.errmsg'), '')
+end
+
 T['the file column']['holding a changed file under hidden, shows a second file in its place'] = function()
   local buffers = layout.open_with_stand_ins(child)
   layout.enter_window_showing(child, buffers.input)
@@ -448,6 +460,47 @@ T['with some of the three windows closed, a file opened in one that remains']['g
   eq(layout.window_count(child), count + 1)
 end
 
+--- Opens, in `child`, a sidebar of another plugin down the edge of the tab
+--- that `side` names, `'topleft'` or `'botright'`: a scratch buffer wiped
+--- when hidden, as file trees make them.
+---
+---@param side string
+---@return { window: integer, buffer: integer } sidebar
+local function open_a_sidebar(side)
+  return child.lua_get(
+    [[(function(side)
+      vim.cmd(side .. ' vertical 20new')
+      local buffer = vim.api.nvim_get_current_buf()
+      vim.bo[buffer].buftype = 'nofile'
+      vim.bo[buffer].bufhidden = 'wipe'
+      return { window = vim.api.nvim_get_current_win(), buffer = buffer }
+    end)(...)]],
+    { side }
+  )
+end
+
+T['with one side of the layout closed, a sidebar at that edge of the tab'] = MiniTest.new_set({
+  parametrize = {
+    { { 'claude' }, 'topleft', 'input' },
+    { { 'report', 'input' }, 'botright', 'claude' },
+  },
+})
+
+T['with one side of the layout closed, a sidebar at that edge of the tab']['keeps its buffer when a file is opened in a window that remains'] = function(
+  closed,
+  side,
+  remaining
+)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.close_windows(child, buffers, closed)
+  local sidebar = open_a_sidebar(side)
+  layout.enter_window_showing(child, buffers[remaining])
+
+  child.cmd('edit ' .. layout.file('first.txt'))
+
+  eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { sidebar.window }), sidebar.buffer)
+end
+
 T['with the window of Claude closed, a file opened in Input'] = MiniTest.new_set()
 
 T['with the window of Claude closed, a file opened in Input']['opens a column left of the right one'] = function()
@@ -472,6 +525,18 @@ T['with the window of Claude closed, a file opened in Input']['opens its column 
 
   eq(child.lua_get('vim.api.nvim_tabpage_get_number(0)'), 1)
   eq(layout.window_count(child), 3)
+end
+
+T['with the window of Claude closed, a file opened in Input']['is shown when Input was moved left of the Report'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.close_windows(child, buffers, { 'claude' })
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('wincmd H')
+  local path = layout.file('first.txt')
+
+  child.cmd('edit ' .. path)
+
+  eq(#child.lua_get('vim.fn.win_findbuf(vim.fn.bufnr(...))', { path }), 1)
 end
 
 T['with the layout closed'] = MiniTest.new_set()
