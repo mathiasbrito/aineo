@@ -134,6 +134,26 @@ T['the Report buffer']['stays the Report when a file is edited from its window w
   eq(child.lua_get(REPORT_BUFFER_IDENTITY), before)
 end
 
+T['the Report buffer']['keeps every report when the user edits it again'] = MiniTest.new_set({
+  parametrize = { { 'edit' }, { 'edit!' } },
+})
+
+T['the Report buffer']['keeps every report when the user edits it again']['with'] = function(
+  command
+)
+  start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  report_editor.receive(child, { task = 'First', status = 'started', summary = 'Began' })
+  report_editor.receive(child, { task = 'First', status = 'done', summary = 'Ended' })
+  child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
+
+  child.cmd(command)
+
+  eq(
+    report_editor.lines(child),
+    { '09:05 [started] First — Began', '09:06 [done] First — Ended' }
+  )
+end
+
 T['the Report buffer']['shows reports in the order they arrive'] = function()
   start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
 
@@ -203,6 +223,80 @@ T['the Report buffer']['comes back with every report after the user deletes it']
   eq(
     report_editor.lines(child),
     { '09:05 [started] First — Began', '09:06 [done] First — Ended' }
+  )
+end
+
+--- The expression, run in the child, that lists the `'buftype'` of each
+--- buffer named `aineo://report`, and counts the `nofile` buffers.
+local REPORT_NAME_HOLDERS = [[{
+  named = vim.tbl_map(function(buffer)
+    return vim.bo[buffer].buftype
+  end, vim.tbl_filter(function(buffer)
+    return vim.api.nvim_buf_get_name(buffer) == 'aineo://report'
+  end, vim.api.nvim_list_bufs())),
+  scratch = #vim.tbl_filter(function(buffer)
+    return vim.bo[buffer].buftype == 'nofile'
+  end, vim.api.nvim_list_bufs()),
+}]]
+
+T['the Report buffer']['takes its name back from a buffer holding it, and leaks none'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        {
+          [[lua require('aineo.report').report_buffer()]],
+          'bwipeout aineo://report',
+          'edit aineo://report',
+        },
+      },
+      { { 'file aineo://report' } },
+    },
+  })
+
+T['the Report buffer']['takes its name back from a buffer holding it, and leaks none']['after'] = function(
+  commands
+)
+  start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  child.lua([[for _, command in ipairs(...) do vim.cmd(command) end]], { commands })
+
+  local failures = child.lua(
+    [[return {
+    select(2, pcall(require('aineo.report').receive_report, ...)),
+    select(2, pcall(require('aineo.report').receive_report, ...)),
+  }]],
+    { { task = 'First', status = 'done', summary = 'Ended' } }
+  )
+
+  eq(failures, {})
+  eq(child.lua_get(REPORT_NAME_HOLDERS), { named = { 'nofile' }, scratch = 1 })
+end
+
+T['the Report buffer']['deleted then shown again by the user takes no report, and the editor quits'] =
+  MiniTest.new_set({ parametrize = { { 'buffer #' }, { 'buffer aineo://report' } } })
+
+T['the Report buffer']['deleted then shown again by the user takes no report, and the editor quits']['with'] = function(
+  command
+)
+  start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  report_editor.receive(child, { task = 'First', status = 'started', summary = 'Began' })
+  child.lua([[
+    local report = require('aineo.report').report_buffer()
+    vim.api.nvim_set_current_buf(report)
+    vim.cmd.enew()
+    vim.cmd.bdelete(report)
+  ]])
+  child.cmd(command)
+
+  local failure = child.lua(
+    [[return select(2, pcall(require('aineo.report').receive_report, ...))]],
+    { { task = 'First', status = 'done', summary = 'Ended' } }
+  )
+  local identity = child.lua_get(REPORT_BUFFER_IDENTITY)
+  pcall(child.cmd, 'qall')
+
+  eq(
+    { failure, identity.buftype, vim.fn.jobwait({ child.job.id }, 2000)[1] },
+    { vim.NIL, 'nofile', 0 }
   )
 end
 
