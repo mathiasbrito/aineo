@@ -6,13 +6,28 @@ local M = {}
 --- by `:edit` the way an unnamed, empty one is.
 local REPORT_BUFFER_NAME = 'aineo://report'
 
---- Wipes out every buffer named `REPORT_BUFFER_NAME`: one a restored session
---- or the user made (`:edit aineo://report`) is not the Report, and holds the
---- name the Report needs.
+--- Frees the name `buffer` holds: wipes `buffer` out, unless the user
+--- changed its text, which is then kept in `buffer`, unnamed (`:0file`).
+---
+---@param buffer integer
+local function free_name_held_by(buffer)
+  if vim.bo[buffer].modified then
+    vim.api.nvim_buf_call(buffer, function()
+      vim.cmd('0file')
+    end)
+  else
+    vim.api.nvim_buf_delete(buffer, { force = true })
+  end
+end
+
+--- Frees `REPORT_BUFFER_NAME` from every buffer holding it
+--- (`free_name_held_by()`): one a restored session or the user made
+--- (`:edit aineo://report`) is not the Report, and holds the name the Report
+--- needs.
 local function free_report_buffer_name()
   for _, other in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_get_name(other) == REPORT_BUFFER_NAME then
-      vim.api.nvim_buf_delete(other, { force = true })
+      free_name_held_by(other)
     end
   end
 end
@@ -20,13 +35,15 @@ end
 --- A new Report buffer: unlisted, named `REPORT_BUFFER_NAME` from the start,
 --- no file (`'buftype'` `nofile`), no swap file, kept when hidden, and
 --- read-only to the user (`'modifiable'` off; `append_lines()` still writes).
---- Any other buffer holding the name is wiped out first.
+--- Any other buffer holding the name gives it up first: it is wiped out, or
+--- kept unnamed when the user changed its text.
 ---
 --- `:edit` in the Report empties it, as it does any buffer that is no file;
 --- `fill` is then called with the emptied buffer to show its reports again.
 --- The autocommand doing so belongs to the buffer, in the group
---- `aineo_report`, created anew with each Report: the Report before it has
---- been wiped out by then, its autocommand with it.
+--- `aineo_report`, created anew with each Report: that clears the
+--- autocommand of any Report before it, which by then is wiped out, or kept
+--- unnamed for the text the user typed into it.
 ---
 ---@param fill fun(buffer: integer) shows the reports in the emptied buffer
 ---@return integer buffer
@@ -61,12 +78,13 @@ function M.is_showing(buffer)
     and vim.bo[buffer].buftype == 'nofile'
 end
 
---- Wipes `buffer` out when it still exists, freeing its name.
+--- Frees the name `buffer` holds when it still exists: wipes it out, or
+--- keeps it unnamed when the user changed its text (`free_name_held_by()`).
 ---
 ---@param buffer integer
 function M.discard(buffer)
   if vim.api.nvim_buf_is_valid(buffer) then
-    vim.api.nvim_buf_delete(buffer, { force = true })
+    free_name_held_by(buffer)
   end
 end
 
