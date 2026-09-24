@@ -472,6 +472,33 @@ T['the records']['are kept whole up to 4 MiB when a report is added'] = function
   )
 end
 
+T['the records']['that cannot be cut keep the report, and tell the user why'] = function()
+  local state_directory = fixture.directory('report-state')
+  local file = records_file_holding(child, state_directory, 1, 4097)
+  local records_directory = vim.fs.dirname(file)
+  report_editor.start(child, {
+    times = { '2026-09-24T10:00:00' },
+    state_directory = state_directory,
+    working_directory = '/projects/alpha',
+  })
+  vim.fn.setfperm(records_directory, 'r-x------')
+
+  local failure = child.lua(
+    [[return select(2, pcall(require('aineo.report').receive_report, ...))]],
+    { { task = 'Newest', status = 'done', summary = 'Kept' } }
+  )
+  local messages = child.cmd_capture('messages')
+  vim.fn.setfperm(records_directory, 'rwx------')
+
+  local lines = vim.fn.readfile(file)
+  eq({
+    failure,
+    #lines,
+    recorded_task(lines[#lines]),
+    vim.startswith(messages, 'aineo cannot cut the report records in ' .. file),
+  }, { vim.NIL, 4098, 'Newest', true })
+end
+
 T['the records']['show a report again, at its own time, in a new editor in the same directory'] = function()
   local state_directory = fixture.directory('report-state')
   report_editor.start(child, {

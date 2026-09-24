@@ -71,61 +71,82 @@ end
 --- Writes `text` to `file`, opened with `flags` (`'a'` to append, `'w'` to
 --- replace) and created with `OWNER_ONLY` permissions when missing.
 ---
---- Raises an error naming `file` when it cannot be opened or written.
----
 ---@param file string
 ---@param flags 'a'|'w'
 ---@param text string
+---@return string? failure why `file` could not be opened or written, as libuv says it; nil once written
 local function write_to(file, flags, text)
   local descriptor, open_failure = vim.uv.fs_open(file, flags, OWNER_ONLY)
   if not descriptor then
-    error(('aineo cannot keep the report in %s: %s'):format(file, open_failure), 0)
+    return open_failure
   end
   local written, write_failure = vim.uv.fs_write(descriptor, text)
   vim.uv.fs_close(descriptor)
   if not written then
-    error(('aineo cannot keep the report in %s: %s'):format(file, write_failure), 0)
+    return write_failure
   end
 end
 
 --- Cuts `file` down to its newest records within `RECORDS_KEPT_BYTES`: they
 --- are written to a file beside it, which then replaces it.
 ---
---- Raises an error naming the file that cannot be read, written or renamed.
+--- Raises an error naming `file` when it cannot be read, or cut.
 ---
 ---@param file string
 local function keep_newest_records(file)
   local cut = file .. '.cut'
-  write_to(
+  local failure = write_to(
     cut,
     'w',
     table.concat(vim.tbl_map(function(line)
       return line .. '\n'
     end, last_lines(file, RECORDS_KEPT_BYTES)))
   )
-  local renamed, rename_failure = vim.uv.fs_rename(cut, file)
-  if not renamed then
-    error(('aineo cannot keep the report in %s: %s'):format(file, rename_failure), 0)
+  if not failure then
+    local renamed, rename_failure = vim.uv.fs_rename(cut, file)
+    failure = not renamed and rename_failure or nil
+  end
+  if failure then
+    error(('aineo cannot cut the report records in %s: %s'):format(file, failure), 0)
+  end
+end
+
+--- Cuts `file` down to its newest records (`keep_newest_records()`) when it
+--- has grown past twice `RECORDS_KEPT_BYTES`, and says why when that fails.
+---
+---@param file string
+---@return string? failure why the grown file could not be cut
+local function cut_when_grown(file)
+  local stat = vim.uv.fs_stat(file)
+  if stat and stat.size > 2 * RECORDS_KEPT_BYTES then
+    local cut, failure = pcall(keep_newest_records, file)
+    if not cut then
+      return failure
+    end
   end
 end
 
 --- Adds `record` to the end of `file` as one line, creating the file (with
 --- `OWNER_ONLY` permissions) and its directory when they are missing. When the
 --- file has grown past twice `RECORDS_KEPT_BYTES`, it is first cut down to its
---- newest records within `RECORDS_KEPT_BYTES`.
+--- newest records within `RECORDS_KEPT_BYTES` (`cut_when_grown()`); when that
+--- fails (its directory cannot be written, say), the record is added all the
+--- same, the reason is returned, and the cut is tried again with the next
+--- record. The Report reads only the newest records whatever the file's size.
 ---
---- Raises an error naming the file when it cannot be read, written or
---- replaced.
+--- Raises an error naming the file when the record cannot be added.
 ---
 ---@param file string
 ---@param record aineo.report.Record
+---@return string? cut_failure why the grown file could not be cut
 function M.append_record(file, record)
   vim.fn.mkdir(vim.fs.dirname(file), 'p')
-  local stat = vim.uv.fs_stat(file)
-  if stat and stat.size > 2 * RECORDS_KEPT_BYTES then
-    keep_newest_records(file)
+  local cut_failure = cut_when_grown(file)
+  local append_failure = write_to(file, 'a', vim.json.encode(record) .. '\n')
+  if append_failure then
+    error(('aineo cannot keep the report in %s: %s'):format(file, append_failure), 0)
   end
-  write_to(file, 'a', vim.json.encode(record) .. '\n')
+  return cut_failure
 end
 
 --- Whether `time` is a time as a record keeps it: `YYYY-MM-DDTHH:MM:SS`.
