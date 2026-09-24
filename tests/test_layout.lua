@@ -201,6 +201,22 @@ T['open()']['refuses an arrangement it cannot show, naming the setting']['given'
   end, refusal)
 end
 
+T['open()']['opens once the screen has room, after failing for the want of it'] = function()
+  layout.start(child)
+  local buffers = layout.stand_ins(child)
+  child.o.lines = 4
+  MiniTest.expect.error(function()
+    layout.open(child, layout.arrangement(buffers))
+  end, 'E36')
+  child.o.lines = layout.LINES
+
+  MiniTest.expect.no_error(function()
+    layout.open(child, layout.arrangement(buffers))
+  end)
+
+  eq(layout.window_count(child), 3)
+end
+
 T['open()']['refuses a Report share of 1 before changing any window'] = function()
   layout.start(child)
   local arrangement = layout.arrangement(layout.stand_ins(child))

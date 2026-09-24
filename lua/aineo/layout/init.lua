@@ -64,6 +64,20 @@ local function has_any_window()
   return vim.iter(ROLES):any(has_window)
 end
 
+--- Those of the layout's three windows that exist, Claude's first, then the
+--- Report's and Input's.
+---
+---@return integer[] windows
+local function existing_windows()
+  return vim
+    .iter(ROLES)
+    :filter(has_window)
+    :map(function(role)
+      return state.windows[role]
+    end)
+    :totable()
+end
+
 --- Whether `buffer` holds a file: a buffer with an empty `'buftype'`.
 ---
 ---@param buffer integer
@@ -88,27 +102,89 @@ local function windows_of(node)
   return windows
 end
 
---- The file column's windows: those of the columns between Claude's column
---- and the right one, top to bottom; none when the file column is not open.
+--- Whether `node` holds every window of `windows`.
+---
+---@param node table a node of `winlayout()`'s tree
+---@param windows integer[]
+---@return boolean
+local function holds_all(node, windows)
+  local held = windows_of(node)
+  return vim.iter(windows):all(function(window)
+    return vim.list_contains(held, window)
+  end)
+end
+
+--- The deepest row of `tree` that holds every window of `windows`, or `nil`
+--- when no row does. A window across the whole screen, such as one opened
+--- with `:botright split`, puts the layout's row below a column, not at the
+--- top of the tree.
+---
+---@param tree table `winlayout()`'s tree of the tab holding `windows`
+---@param windows integer[]
+---@return table|nil row a `{ 'row', nodes }` node of `tree`
+local function deepest_row_holding(tree, windows)
+  local row = nil
+  local node = tree
+  while node do
+    if node[1] == 'row' then
+      row = node
+    end
+    node = node[1] ~= 'leaf'
+        and vim.iter(node[2]):find(function(child)
+          return holds_all(child, windows)
+        end)
+      or nil
+  end
+  return row
+end
+
+--- The position among `columns` of the column holding `window`.
+---
+---@param columns table[] the nodes of a row
+---@param window integer
+---@return integer|nil position
+local function column_holding(columns, window)
+  for position, column in ipairs(columns) do
+    if vim.list_contains(windows_of(column), window) then
+      return position
+    end
+  end
+  return nil
+end
+
+--- The window standing for the right column: the Report's, or Input's when
+--- the Report's is closed; `nil` when both are.
+---
+---@return integer|nil window
+local function right_column_window()
+  if has_window('report') then
+    return state.windows.report
+  end
+  return has_window('input') and state.windows.input or nil
+end
+
+--- The file column's windows, top to bottom: those of the columns right of
+--- Claude's column and left of the right one, in the row that holds the
+--- layout's windows; with Claude's window closed, those left of the right
+--- column, and with both of the right column's closed, those right of
+--- Claude's. None when the file column is not open.
 ---
 ---@return integer[] windows
 local function file_column_windows()
-  local tab = vim.api.nvim_win_get_tabpage(state.windows.claude)
-  local screen = vim.fn.winlayout(vim.api.nvim_tabpage_get_number(tab))
-  if screen[1] ~= 'row' then
+  local anchors = existing_windows()
+  local tab = vim.api.nvim_win_get_tabpage(anchors[1])
+  local tree = vim.fn.winlayout(vim.api.nvim_tabpage_get_number(tab))
+  local row = deepest_row_holding(tree, anchors)
+  if not row then
     return {}
   end
+  local columns = row[2]
+  local claude = has_window('claude') and column_holding(columns, state.windows.claude)
+  local right_window = right_column_window()
+  local right = right_window and column_holding(columns, right_window)
   local windows = {}
-  local past_claude = false
-  for _, column in ipairs(screen[2]) do
-    local column_windows = windows_of(column)
-    if vim.list_contains(column_windows, state.windows.report) then
-      break
-    end
-    if past_claude then
-      vim.list_extend(windows, column_windows)
-    end
-    past_claude = past_claude or vim.list_contains(column_windows, state.windows.claude)
+  for position = claude and claude + 1 or 1, right and right - 1 or #columns do
+    vim.list_extend(windows, windows_of(columns[position]))
   end
   return windows
 end
@@ -164,16 +240,33 @@ local function keep_proportions()
   end
 end
 
---- Moves `file` from the layout's `window` to the file column — opened right
---- of Claude's column when it is not open — with the cursor there on the
---- position it had in `window`, gives `window` its own buffer back, and puts
---- the proportions back. Does nothing when the layout is not open, or
---- `window` no longer shows `file`.
+--- Opens a file column showing `file`, with the cursor in it: right of
+--- Claude's column, or, with Claude's window closed, at the left of the tab
+--- holding the layout's `window`.
+---
+---@param file integer
+---@param window integer one of the layout's windows
+---@return integer file_window
+local function open_file_column(file, window)
+  if has_window('claude') then
+    return vim.api.nvim_open_win(file, true, { split = 'right', win = state.windows.claude })
+  end
+  vim.api.nvim_set_current_win(window)
+  return vim.api.nvim_open_win(file, true, { split = 'left', win = -1 })
+end
+
+--- Moves `file` from the layout's `window` to the file column — opened when
+--- it is not open — with the cursor there on the position it had in
+--- `window`, gives `window` its own buffer back, and puts the proportions
+--- back while the layout's three windows are open. Does nothing when
+--- `window` is no longer one of the layout's windows — closed, or replaced
+--- by a window the layout reopened — or no longer shows `file`.
 ---
 ---@param window integer
 ---@param file integer
 local function redirect(window, file)
-  if not is_open() or vim.api.nvim_win_get_buf(window) ~= file then
+  local role = role_of(window)
+  if not role or not has_window(role) or vim.api.nvim_win_get_buf(window) ~= file then
     return
   end
   local cursor = vim.api.nvim_win_get_cursor(window)
@@ -182,20 +275,22 @@ local function redirect(window, file)
     vim.api.nvim_win_set_buf(file_window, file)
     vim.api.nvim_set_current_win(file_window)
   else
-    file_window = vim.api.nvim_open_win(file, true, { split = 'right', win = state.windows.claude })
+    file_window = open_file_column(file, window)
   end
   vim.api.nvim_win_set_cursor(file_window, cursor)
-  vim.api.nvim_win_set_buf(window, state.buffers[role_of(window)])
-  apply_proportions()
+  vim.api.nvim_win_set_buf(window, state.buffers[role])
+  keep_proportions()
 end
 
 --- Redirects a file shown in one of the layout's windows, once the command
---- that showed it has finished with that window.
+--- that showed it has finished with that window. A window's own buffer is
+--- never taken for a file there, whatever its options.
 ---
 ---@param event { buf: integer }
 local function redirect_when_file(event)
   local window = vim.api.nvim_get_current_win()
-  if not role_of(window) or not is_file(event.buf) then
+  local role = role_of(window)
+  if not role or event.buf == state.buffers[role] or not is_file(event.buf) then
     return
   end
   vim.schedule(function()
@@ -218,28 +313,59 @@ local function is_unnamed_and_empty(buffer)
     and vim.api.nvim_buf_get_lines(buffer, 0, 1, true)[1] == ''
 end
 
---- The Input buffer: the one the layout made before, while it exists; else
---- `shown` when it has no name and holds no text, or else a new buffer, made
---- Input: a named scratch buffer, unlisted, kept when hidden, with no swap
---- file.
+--- Makes `buffer` a scratch buffer: never a file, unlisted, kept when hidden,
+--- with no swap file.
 ---
----@param shown integer the buffer of the window the layout opens from
----@return integer input
-local function take_input_buffer(shown)
-  local existing = state.buffers.input
-  if existing and vim.api.nvim_buf_is_valid(existing) then
-    return existing
-  end
-  local buffer = shown
-  if not is_unnamed_and_empty(buffer) then
-    buffer = vim.api.nvim_create_buf(false, true)
-  end
+---@param buffer integer
+local function make_scratch(buffer)
   vim.bo[buffer].buftype = 'nofile'
   vim.bo[buffer].bufhidden = 'hide'
   vim.bo[buffer].buflisted = false
   vim.bo[buffer].swapfile = false
+end
+
+--- Makes Input a scratch buffer again whenever it is shown: deleting a buffer
+--- (`:bdelete`) resets its options, so Input would come back as a file.
+---
+---@param event { buf: integer }
+local function keep_input_scratch(event)
+  if event.buf == state.buffers.input then
+    make_scratch(event.buf)
+  end
+end
+
+--- Whether the Input buffer the layout made still exists.
+---
+---@return boolean
+local function has_input()
+  return state.buffers.input ~= nil and vim.api.nvim_buf_is_valid(state.buffers.input)
+end
+
+--- Makes `buffer` Input: a scratch buffer named `aineo://input`.
+---
+---@param buffer integer
+---@return integer input
+local function make_input(buffer)
+  make_scratch(buffer)
   vim.api.nvim_buf_set_name(buffer, INPUT_NAME)
+  state.buffers.input = buffer
   return buffer
+end
+
+--- The Input buffer: the one the layout made before, while it exists; else
+--- `shown` made Input when it has no name and holds no text, or else a new
+--- buffer made Input.
+---
+---@param shown integer the buffer of the window the layout opens from
+---@return integer input
+local function take_input_buffer(shown)
+  if has_input() then
+    return state.buffers.input
+  end
+  if is_unnamed_and_empty(shown) then
+    return make_input(shown)
+  end
+  return make_input(vim.api.nvim_create_buf(false, true))
 end
 
 --- Closes every window of the current tab but `kept`, hiding their buffers,
@@ -312,12 +438,15 @@ local function show_buffers()
   end
 end
 
---- Redirects the files shown in the layout's windows, and puts the
---- proportions back whenever a window closes or the editor is resized,
---- replacing what an earlier call set up. A window is still in the layout
---- while `WinClosed` runs, so the proportions are put back after it.
+--- Keeps Input a scratch buffer and redirects the files shown in the layout's
+--- windows, and puts the proportions back whenever a window closes or the
+--- editor is resized, replacing what an earlier call set up. Input is made a
+--- scratch buffer first, so the redirect never takes it for a file. A window
+--- is still in the layout while `WinClosed` runs, so the proportions are put
+--- back after it.
 local function watch_windows()
   local group = vim.api.nvim_create_augroup('aineo.layout', {})
+  vim.api.nvim_create_autocmd('BufWinEnter', { group = group, callback = keep_input_scratch })
   vim.api.nvim_create_autocmd('BufWinEnter', { group = group, callback = redirect_when_file })
   vim.api.nvim_create_autocmd('WinClosed', {
     group = group,
@@ -391,6 +520,9 @@ function M.open(arrangement)
   if has_any_window() then
     state.buffers.claude = arrangement.claude
     state.buffers.report = arrangement.report
+    if not has_input() then
+      make_input(vim.api.nvim_create_buf(false, true))
+    end
     reopen_closed_windows()
     show_buffers()
   else
