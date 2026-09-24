@@ -1,5 +1,5 @@
 --- The report server's stdio transport: one JSON-RPC message per line on
---- stdin, one answer per line on stdout.
+--- stdin, one answer per line on stdout, in the order the lines came.
 
 local editor = require('aineo.mcp.editor')
 local lines = require('aineo.mcp.lines')
@@ -16,17 +16,35 @@ local LINE_LIMIT = 1024 * 1024
 --- what it cannot answer: stdout carries MCP messages only.
 local STDERR = 2
 
---- Serves MCP on this process's stdin and stdout until stdin closes,
---- delivering each valid report to the editor at `editor_address`. A line
---- longer than `LINE_LIMIT` is answered, and dropped, as soon as the chunk
---- that takes it past the limit is read (`lines.new_line_reader()`). A line
---- whose answer fails — one that cannot be encoded, such as an `id` of
---- `1e999` — gets no answer; the failure is written to stderr and the next
+--- Runs `answer`, one line's answering; when it fails — an answer that cannot
+--- be encoded, such as one to an `id` of `1e999` — writes why to stderr, and
+--- nothing is answered.
+---
+---@param answer fun()
+local function answer_safely(answer)
+  local answered, failure = pcall(answer)
+  if not answered then
+    vim.uv.fs_write(STDERR, ('aineo relay: %s\n'):format(tostring(failure)))
+  end
+end
+
+--- Serves MCP on this process's stdin and stdout until stdin closes and every
+--- line read is answered, delivering each valid report to the editor at
+--- `editor_address`.
+---
+--- Reading only queues the answers; they are given one at a time, in order,
+--- outside the reading, so a delivery waiting on the editor
+--- (`editor.deliver_report()`, bounded) holds up the lines after it but
+--- never interleaves with them. A line longer than `LINE_LIMIT` is refused,
+--- and dropped, as soon as the chunk that takes it past the limit is read
+--- (`lines.new_line_reader()`). A line whose answer fails gets none; the next
 --- line is answered as usual.
 ---
 ---@param editor_address string? the editor's server address
 function M.serve_stdio(editor_address)
   local closed = false
+  ---@type (fun())[]
+  local pending = {}
   local stdio
   local function send(answer)
     vim.fn.chansend(stdio, vim.json.encode(answer) .. '\n')
@@ -34,22 +52,20 @@ function M.serve_stdio(editor_address)
   local function deliver_report(report)
     return editor.deliver_report(editor_address, report)
   end
-  local function answer_line(line)
-    local answer = line ~= '' and protocol.answer_line(line, deliver_report)
-    if answer then
-      send(answer)
-    end
-  end
   local read_lines = lines.new_line_reader({
     limit = LINE_LIMIT,
     on_line = function(line)
-      local answered, failure = pcall(answer_line, line)
-      if not answered then
-        vim.uv.fs_write(STDERR, ('aineo relay: %s\n'):format(tostring(failure)))
-      end
+      table.insert(pending, function()
+        local answer = line ~= '' and protocol.answer_line(line, deliver_report)
+        if answer then
+          send(answer)
+        end
+      end)
     end,
     on_too_long = function()
-      send(protocol.answer_line_too_long(LINE_LIMIT))
+      table.insert(pending, function()
+        send(protocol.answer_line_too_long(LINE_LIMIT))
+      end)
     end,
   })
   stdio = vim.fn.stdioopen({
@@ -61,10 +77,13 @@ function M.serve_stdio(editor_address)
       read_lines(data)
     end,
   })
-  while not closed do
+  while not closed or #pending > 0 do
     vim.wait(60000, function()
-      return closed
-    end, 50)
+      return closed or #pending > 0
+    end, 10)
+    while #pending > 0 do
+      answer_safely(table.remove(pending, 1))
+    end
   end
 end
 

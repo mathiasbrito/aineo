@@ -38,14 +38,16 @@ function Relay:send(line)
   self.process:write(line .. '\n')
 end
 
---- The next `count` lines the process writes to stdout, waiting for them;
---- fewer when they do not come in time, and then what the process wrote to
---- stderr is added to the test's notes.
+--- The next `count` lines the process writes to stdout, waiting for them up
+--- to `milliseconds` (the usual wait when not given); fewer when they do not
+--- come in time, and then what the process wrote to stderr is added to the
+--- test's notes.
 ---
 ---@param count integer
+---@param milliseconds? integer
 ---@return string[]
-function Relay:next_lines(count)
-  local arrived = vim.wait(WAIT_MS, function()
+function Relay:next_lines(count, milliseconds)
+  local arrived = vim.wait(milliseconds or WAIT_MS, function()
     return #self.lines >= self.read + count
   end, 10)
   if not arrived then
@@ -62,11 +64,13 @@ function Relay:next_lines(count)
   return next_lines
 end
 
---- The next line the process writes to stdout, or nil when none comes in time.
+--- The next line the process writes to stdout, or nil when none comes within
+--- `milliseconds` (the usual wait when not given).
 ---
+---@param milliseconds? integer
 ---@return string?
-function Relay:next_line()
-  return self:next_lines(1)[1]
+function Relay:next_line(milliseconds)
+  return self:next_lines(1, milliseconds)[1]
 end
 
 --- Whether the raw `line` holds `text` as it is; false when there is no line.
