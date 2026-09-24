@@ -236,13 +236,13 @@ function M.record_setup_options(setup_options)
   recorded_setup_options = plain_copy(setup_options)
 end
 
---- A plain copy of the options `require('aineo').setup()` recorded last,
---- sharing no table and no metatable with the record; an empty table until it
---- is called. Editing the copy changes no record.
+--- A copy of the options `require('aineo').setup()` recorded last; an empty
+--- table until it is called. Like the record, it carries no metatable, and
+--- editing it changes no record.
 ---
 ---@return table
 function M.recorded_setup_options()
-  return plain_copy(recorded_setup_options)
+  return vim.deepcopy(recorded_setup_options)
 end
 
 --- Resolves aineo's configuration from its two sources: each setting comes from
