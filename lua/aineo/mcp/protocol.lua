@@ -148,8 +148,9 @@ end
 --- handed to `deliver_report`. `params` that are not an object count as none.
 ---
 --- `initialize` is answered with the protocol version the server speaks,
---- 2025-11-25, whatever the client asks for: the client disconnects when it
---- cannot speak it (MCP 2025-11-25, *Lifecycle*, "Version Negotiation").
+--- 2025-11-25, whatever the client asks for: a client that cannot speak it
+--- should then disconnect (MCP 2025-11-25, *Lifecycle*, "Version
+--- Negotiation", a SHOULD).
 ---
 ---@param line string
 ---@param deliver_report aineo.mcp.DeliverReport
