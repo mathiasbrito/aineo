@@ -28,23 +28,19 @@ local function answer_safely(answer)
   end
 end
 
---- Serves MCP on this process's stdin and stdout until stdin closes and every
---- line read is answered, delivering each valid report to the editor at
---- `editor_address`.
+--- Serves MCP on this process's stdin and stdout until stdin closes,
+--- delivering each valid report to the editor at `editor_address`.
 ---
---- Reading only queues the answers; they are given one at a time, in order,
---- outside the reading, so a delivery waiting on the editor
---- (`editor.deliver_report()`, bounded) holds up the lines after it but
---- never interleaves with them. A line longer than `LINE_LIMIT` is refused,
---- and dropped, as soon as the chunk that takes it past the limit is read
---- (`lines.new_line_reader()`). A line whose answer fails gets none; the next
---- line is answered as usual.
+--- Lines are answered in the order they came: while a delivery waits on the
+--- editor (`editor.deliver_report()`, bounded), Neovim does not run the stdin
+--- callback again, so the lines after it wait their turn. A line longer than
+--- `LINE_LIMIT` is refused, and dropped, as soon as the chunk that takes it
+--- past the limit is read (`lines.new_line_reader()`). A line whose answer
+--- fails gets none; the next line is answered as usual.
 ---
 ---@param editor_address string? the editor's server address
 function M.serve_stdio(editor_address)
   local closed = false
-  ---@type (fun())[]
-  local pending = {}
   local stdio
   local function send(answer)
     vim.fn.chansend(stdio, vim.json.encode(answer) .. '\n')
@@ -55,7 +51,7 @@ function M.serve_stdio(editor_address)
   local read_lines = lines.new_line_reader({
     limit = LINE_LIMIT,
     on_line = function(line)
-      table.insert(pending, function()
+      answer_safely(function()
         local answer = line ~= '' and protocol.answer_line(line, deliver_report)
         if answer then
           send(answer)
@@ -63,9 +59,7 @@ function M.serve_stdio(editor_address)
       end)
     end,
     on_too_long = function()
-      table.insert(pending, function()
-        send(protocol.answer_line_too_long(LINE_LIMIT))
-      end)
+      send(protocol.answer_line_too_long(LINE_LIMIT))
     end,
   })
   stdio = vim.fn.stdioopen({
@@ -77,13 +71,10 @@ function M.serve_stdio(editor_address)
       read_lines(data)
     end,
   })
-  while not closed or #pending > 0 do
+  while not closed do
     vim.wait(60000, function()
-      return closed or #pending > 0
+      return closed
     end, 10)
-    while #pending > 0 do
-      answer_safely(table.remove(pending, 1))
-    end
   end
 end
 
