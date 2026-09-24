@@ -300,6 +300,34 @@ T['the Report buffer']['deleted then shown again by the user takes no report, an
   )
 end
 
+T['the Report buffer']['never discards text the user typed into a buffer holding its name'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'bwipeout %d | edit aineo://report' },
+      { 'enew | bdelete %d | buffer aineo://report' },
+    },
+  })
+
+T['the Report buffer']['never discards text the user typed into a buffer holding its name']['after'] = function(
+  commands
+)
+  start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  report_editor.receive(child, { task = 'First', status = 'started', summary = 'Began' })
+  child.cmd(commands:format(child.lua_get([[require('aineo.report').report_buffer()]])))
+  local typed = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.lua([[vim.api.nvim_buf_set_lines(0, -1, -1, false, { 'my own notes' })]])
+
+  local failure = child.lua(
+    [[return select(2, pcall(require('aineo.report').receive_report, ...))]],
+    { { task = 'First', status = 'done', summary = 'Ended' } }
+  )
+
+  eq(
+    { failure, child.lua_get(('vim.fn.getbufline(%d, "$")'):format(typed)) },
+    { vim.NIL, { 'my own notes' } }
+  )
+end
+
 T['the Report buffer']['is refused until the report home has its environment'] = function()
   children.restart(child)
 
