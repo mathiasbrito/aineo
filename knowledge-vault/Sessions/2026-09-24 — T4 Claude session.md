@@ -23,7 +23,7 @@
 - `readiness.lua` — ready when the screen shows `❯` and not "trust this folder", after a settle of 1.5 s; watched with `nvim_buf_attach`'s `on_lines`.
 - `stop.lua` — one Ctrl-C, wait 2.5 s; Ctrl-C, 0.3 s, Ctrl-C, wait 4 s; `jobstop()`, wait 5 s. Returns as soon as Claude has exited; bounded at 11.8 s.
 
-**Tests** — `tests/test_claude.lua` (34 cases), the helper `tests/helpers/claude_session.lua`, the fakes `tests/helpers/fake_claude.lua` (`nvim --clean -l`, modes `ready`, `trust`, `busy`, `exit`) and `tests/helpers/fake_claude_deaf.sh` (POSIX sh), the fixtures `tests/fixtures/claude/startup-2.1.281.bytes` (the first 1540 bytes of the recording, cut before the frame with the Remote Control link) and `trust-dialog-2.1.280.bytes`.
+**Tests** — `tests/test_claude.lua` (34 cases), the helper `tests/helpers/claude_session.lua`, the fakes `tests/helpers/fake_claude.lua` (`nvim --clean -l`, raw mode by `stty`, modes `ready`, `trust`, `busy`, `exit`) and `tests/helpers/fake_claude_deaf.sh` (POSIX sh), the fixtures `tests/fixtures/claude/startup-2.1.281.bytes` (the first 1540 bytes of the recording, cut before the frame with the Remote Control link) and `trust-dialog-2.1.280.bytes`.
 
 **Suite:** 111 cases before, 145 after, `Fails (0)`, 120 s on this Mac; `tests/test_claude.lua` alone about 35 s; `make lint` clean. The modularity deep-require check prints three lines, all `lua/aineo/claude/init.lua` requiring its own `arguments`, `readiness` and `stop`.
 
@@ -41,6 +41,7 @@ The brief left these to the packet; each is a reading for the MVP review unless 
 - **Show the new buffer at once.** A terminal started in a hidden buffer gets the size of Neovim's autocommand window — 5 rows at 80 columns, measured — where the recorded screen loses its prompt; `jobstart()`'s `width` and `height` are ignored for a terminal. Shown in the same tick, the process first sees the window's size (22 rows, measured). The docstring says so; T7 must show it before yielding.
 - **`--allowedTools` comes last, one word per tool**: the CLI reference (code.claude.com, `cli-reference.md`, read 2026-09-24) documents it as taking the following words up to the next flag.
 - **The terminal buffer is unlisted** (`nvim_create_buf(false, true)`): `:bnext` does not land on it.
+- **The Lua fake never reopens its terminal.** After the mutant runs three fakes were found alive as orphans (PPID 1), up to an hour old; sampled, each sat in `luv_new_tty` → `uv_tty_init` → `open()`, the reopen libuv makes of a terminal by its path, blocked because Neovim had closed the terminal while the fake started. Neovim's own handlers in the fake catch the hangup and SIGTERM, so only a SIGKILL ends such a process, and all three came from runs with no stop registered (before S7, and the `noquit` mutant). Hanging a fake up at every 4 ms of its first 120 ms: the fake with `vim.uv.new_tty()` needed about 2 s (Neovim's SIGTERM) after 7 of 217 hang-ups, 20–32 ms after its start; the fake that sets raw mode with `stty` and uses pipes on descriptors 0 and 1 ended within 9 ms after each of 93 (`t4-probe-race.sh` in the wave's scratchpad). No suite test pins it: the window is a race a test would hit only some of the time. Node's terminal streams go through the same libuv call, so a real Claude hung up in its first milliseconds may behave alike (an inference, not measured); the 5 s fallback wait leaves room for Neovim's SIGKILL.
 
 ## Red, green and mutants
 
@@ -81,7 +82,7 @@ Arrived green, each with the mutant that kills it (run on the final head, below)
 - leaves the terminal showing Neovim's exit line — Neovim's own — `wipeonexit`
 - is not ready once Claude has exited, even right after its prompt — spent by unit 11's order — `order`
 
-**Mutant table** — literal edits, one at a time, each file copied aside and restored byte for byte, each run as `make test_file FILE=tests/test_claude.lua` on the final code head (the commit "Keep a failed session test from stopping the whole run", the last before this note); kinds read from mini.test's output. The scripts and logs are `t4-make-mutants.lua`, `t4-mutant.sh`, `t4-run-mutants.sh` and `t4-mutant-<label>.txt` in the wave's shared scratchpad.
+**Mutant table** — literal edits, one at a time, each file copied aside and restored byte for byte, each run as `make test_file FILE=tests/test_claude.lua` on the final code head (the commit "Stop the fake claude from hanging when its terminal closes early"; the summary is `t4-mutants-summary-final.txt`); kinds read from mini.test's output. The scripts and logs are `t4-make-mutants.lua`, `t4-mutant.sh`, `t4-run-mutants.sh` and `t4-mutant-<label>.txt` in the wave's shared scratchpad.
 
 | Label | File | Literal edit | Killed by (kind) |
 |---|---|---|---|
@@ -105,7 +106,7 @@ Arrived green, each with the mutant that kills it (run on the final head, below)
 | deadreturn | `init.lua` | `if is_running() then` → `if session then` in `start_session()` | starts Claude again in a new terminal … (assertion); wipes the terminal … (assertion) |
 | trustword | `readiness.lua` | `TRUST_DIALOG = 'trust this folder'` → `'no such dialog text'` | never becomes ready behind the workspace-trust dialog (assertion) |
 
-**Tally:** 19 mutants, 19 killed by an assertion. The first run of the table, one commit earlier, found two weak spots, fixed in that commit before this run: under `shell` and `clearenv` the teardown's Ctrl-C raised inside `MiniTest.finally()`, which stalled the run instead of failing a test; and `noguard` was killed by a crash.
+**Tally:** 19 mutants, 19 killed by an assertion — as on the table's second run, before the fake's fix. Its first run found two weak spots, fixed in "Keep a failed session test from stopping the whole run" before the second: under `shell` and `clearenv` the teardown's Ctrl-C raised inside `MiniTest.finally()`, which stalled the run instead of failing a test; and `noguard` was killed by a crash.
 
 ## Task lines
 
