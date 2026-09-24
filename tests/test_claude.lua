@@ -12,6 +12,17 @@ end, function(text, part)
   return string.format('Text: %s\nPart: %s', vim.inspect(text), vim.inspect(part))
 end)
 
+--- The expression, run in a Neovim, that lists what the session reports.
+local STATUS = "{ require('aineo.claude').session_status() }"
+
+--- The expression, run in a Neovim, that counts its jobs.
+local JOB_COUNT = [[#vim.tbl_filter(function(channel)
+  return channel.stream == 'job'
+end, vim.api.nvim_list_chans())]]
+
+--- The expression, run in a Neovim, that counts its buffers.
+local BUFFER_COUNT = '#vim.api.nvim_list_bufs()'
+
 local child = MiniTest.new_child_neovim()
 
 local T = MiniTest.new_set({
@@ -135,20 +146,54 @@ T['start_session()']['passes every other variable of the editor on unchanged'] =
   })
 end
 
---- The expression, run in a Neovim, that counts its jobs.
-local JOB_COUNT = [[#vim.tbl_filter(function(channel)
-  return channel.stream == 'job'
-end, vim.api.nvim_list_chans())]]
-
 T['start_session()']['returns the running session instead of starting another'] = function()
   local fake = claude.fake('running', 'ready')
   local first = claude.start(child, fake)
+  MiniTest.finally(function()
+    claude.end_by_keys(child, fake, first)
+  end)
   claude.wait_for_start(fake)
 
   local second = claude.start(child, fake)
 
   eq(second, first)
   eq(child.lua_get(JOB_COUNT), 1)
+end
+
+T['start_session()']['leaves nothing behind but the error when the command cannot run'] = function()
+  local fake = claude.fake('not-executable', 'ready')
+  local buffers = child.lua_get(BUFFER_COUNT)
+
+  MiniTest.expect.error(function()
+    claude.start(child, fake, { cmd = { 'aineo-no-such-claude' } })
+  end, 'aineo%-no%-such%-claude')
+
+  eq(child.lua_get(BUFFER_COUNT), buffers)
+  eq(child.lua_get(STATUS), {})
+end
+
+T['start_session()']['names the setting that is malformed'] = MiniTest.new_set({
+  parametrize = {
+    { 'cmd', 'claude' },
+    { 'cmd', {} },
+    { 'cwd', 1 },
+    { 'mcp_servers', 'aineo' },
+    { 'allowed_tools', 'mcp__aineo__report' },
+    { 'instructions', false },
+  },
+})
+
+T['start_session()']['names the setting that is malformed']['and starts nothing'] = function(
+  name,
+  value
+)
+  local fake = claude.fake('malformed', 'ready')
+
+  MiniTest.expect.error(function()
+    claude.start(child, fake, { [name] = value })
+  end, 'settings%.' .. name)
+
+  eq(child.lua_get(STATUS), {})
 end
 
 T['start_session()']['starts Claude again in a new terminal once it has exited'] = function()
@@ -198,9 +243,6 @@ end
 
 T['session_status()'] = MiniTest.new_set()
 
---- The expression, run in a Neovim, that lists what the session reports.
-local STATUS = "{ require('aineo.claude').session_status() }"
-
 T['session_status()']['reports nothing before a session starts'] = function()
   eq(child.lua_get(STATUS), {})
 end
@@ -208,7 +250,10 @@ end
 T['session_status()']['is starting as soon as the session starts'] = function()
   local fake = claude.fake('starting', 'ready')
 
-  claude.start(child, fake)
+  local buffer = claude.start(child, fake)
+  MiniTest.finally(function()
+    claude.end_by_keys(child, fake, buffer)
+  end)
 
   eq(child.lua_get(STATUS), { 'starting' })
 end
@@ -233,7 +278,10 @@ end
 T['session_status()']['is ready once the prompt shows with no trust dialog'] = function()
   local fake = claude.fake('ready', 'ready')
 
-  claude.start(child, fake)
+  local buffer = claude.start(child, fake)
+  MiniTest.finally(function()
+    claude.end_by_keys(child, fake, buffer)
+  end)
 
   eq(claude.wait_for_status(child, 'ready'), { 'ready' })
 end
@@ -241,6 +289,9 @@ end
 T['session_status()']['stays starting for a moment after the prompt shows'] = function()
   local fake = claude.fake('settle', 'ready')
   local buffer = claude.start(child, fake)
+  MiniTest.finally(function()
+    claude.end_by_keys(child, fake, buffer)
+  end)
 
   claude.wait_for_screen(child, buffer, '❯')
 
@@ -250,6 +301,9 @@ end
 T['session_status()']['never becomes ready behind the workspace-trust dialog'] = function()
   local fake = claude.fake('trust', 'trust')
   local buffer = claude.start(child, fake)
+  MiniTest.finally(function()
+    claude.end_by_keys(child, fake, buffer)
+  end)
 
   claude.wait_for_screen(child, buffer, 'Yes, I trust this folder')
 
@@ -264,6 +318,39 @@ T['session_status()']['is not ready once Claude has exited, even right after its
   claude.wait_for_status(child, 'exited')
 
   eq(claude.wait_for_status(child, 'ready'), { 'exited', 0 })
+end
+
+T['quitting Neovim'] = MiniTest.new_set()
+
+T['quitting Neovim']['stops an idle Claude by a double Ctrl-C'] = function()
+  local fake = claude.fake('quit-idle', 'ready')
+  claude.start(child, fake)
+  claude.wait_for_start(fake)
+
+  claude.quit(child)
+
+  eq(claude.wait_for_end(fake), { { ended = 'keys', code = 0 } })
+end
+
+T['quitting Neovim']['ends a turn with one Ctrl-C before the double Ctrl-C'] = function()
+  local fake = claude.fake('quit-busy', 'busy')
+  claude.start(child, fake)
+  claude.wait_for_start(fake)
+
+  claude.quit(child)
+
+  eq(claude.wait_for_end(fake), { { turn = 'interrupted' }, { ended = 'keys', code = 0 } })
+end
+
+T['quitting Neovim']['leaves no Claude that ignores its keys and the hangup running'] = function()
+  local fake = claude.fake('quit-deaf', 'deaf')
+  claude.start(child, fake, { cmd = claude.deaf_fake_command() })
+  local pid = claude.wait_for_start(fake).pid
+
+  claude.quit(child)
+
+  eq(claude.wait_for_process_end(pid), true)
+  eq(claude.ctrl_c_count(fake), 3)
 end
 
 return T
