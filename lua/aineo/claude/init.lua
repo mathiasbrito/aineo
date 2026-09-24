@@ -227,7 +227,9 @@ end
 ---
 --- Raises an error when no session is running as `start_session()` counts
 --- it — before one has started, once its process has ended, and once its
---- terminal has been wiped — and writes nothing then.
+--- terminal has been wiped — and writes nothing then. Raises
+--- `nvim_chan_send()`'s own error when the terminal's stream has closed
+--- before Neovim has seen the process end.
 ---
 ---@param bytes string
 function M.write_to_session(bytes)

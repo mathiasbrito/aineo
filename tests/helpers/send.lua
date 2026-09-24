@@ -140,6 +140,29 @@ function M.send(child)
   ]])
 end
 
+--- Closes the stream of the terminal `buffer` in `child` and sends Input in
+--- the same tick, before Neovim has seen the session exit, keeping an error
+--- `send()` raises for `messages()`; returns the session's status, read
+--- between the two.
+---
+---@param child table
+---@param buffer integer the session's terminal buffer
+---@return string? status
+function M.send_after_closing_stream(child, buffer)
+  return child.lua(
+    [[
+      vim.fn.jobstop(vim.bo[...].channel)
+      local status = require('aineo.claude').session_status()
+      local sent, error_message = pcall(require('aineo.send').send)
+      if not sent then
+        table.insert(_G.aineo_test_messages, { error = error_message })
+      end
+      return status
+    ]],
+    { buffer }
+  )
+end
+
 --- Sends Input in `child` from an `<expr>` mapping, whose callback runs
 --- under a text lock, keeping an error `send()` raises for `messages()`.
 ---

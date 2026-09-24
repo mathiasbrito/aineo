@@ -21,6 +21,16 @@ local NOT_READY =
 --- 1.6 s after the second press.
 local DOUBLE_CTRL_C_EXIT_MS = 2500
 
+--- Every C0 control byte but tab, line feed and carriage return, and DEL.
+local EVERY_C0_CONTROL_BUT_TAB_LF_CR =
+  '\0\1\2\3\4\5\6\7\8\11\12\14\15\16\17\18\19\20\21\22\23\24\25\26\27\28\29\30\31\127'
+
+--- Every C1 control character, U+0080 to U+009F, in UTF-8.
+local EVERY_C1_CONTROL = '\194\128\194\129\194\130\194\131\194\132\194\133\194\134\194\135'
+  .. '\194\136\194\137\194\138\194\139\194\140\194\141\194\142\194\143'
+  .. '\194\144\194\145\194\146\194\147\194\148\194\149\194\150\194\151'
+  .. '\194\152\194\153\194\154\194\155\194\156\194\157\194\158\194\159'
+
 local child = MiniTest.new_child_neovim()
 
 local T = MiniTest.new_set({
@@ -392,6 +402,21 @@ T['send()']['keeps every byte but the control ones, blank lines and indentation 
   eq(claude.wait_for_received_after(fake, before, #expected), expected)
 end
 
+T['send()']['removes every control byte and keeps the characters just past each range'] = function()
+  local fake = claude.fake('send-every-control', 'ready')
+  start_ready_session(fake)
+  send.set_input(
+    child,
+    { ' ~<' .. EVERY_C0_CONTROL_BUT_TAB_LF_CR .. EVERY_C1_CONTROL .. '>\194\160\194\191' }
+  )
+  local before = #claude.received(fake)
+  local expected = '\27[200~ ~<>\194\160\194\191\27[201~\r'
+
+  send.send(child)
+
+  eq(claude.wait_for_received_after(fake, before, #expected + 1, ONE_WRITE_PATIENCE_MS), expected)
+end
+
 T['send()']['keeps a Ctrl-C byte in Input from interrupting Claude’s turn'] = function()
   local fake = claude.fake('send-ctrl-c-turn', 'turn')
   local buffer = send.start_with_layout(child, fake)
@@ -469,6 +494,22 @@ T['send()']['writes nothing when a text lock keeps Input from being emptied'] = 
     input = { 'a message' },
   })
   contains(send.raised(child), 'E565')
+end
+
+T['send()']['keeps Input and raises when the write fails after Input is emptied'] = function()
+  local fake = claude.fake('send-write-fails', 'ready')
+  local buffer = start_ready_session(fake)
+  send.set_input(child, { 'a message', 'second line' })
+  local before = #claude.received(fake)
+
+  local status = send.send_after_closing_stream(child, buffer)
+
+  eq({ status = status, sent = sent_after(fake, before), input = send.input(child).lines }, {
+    status = 'ready',
+    sent = '',
+    input = { 'a message', 'second line' },
+  })
+  contains(send.raised(child), "Can't send data to closed stream")
 end
 
 T['send()']['writes the paste and its Enter in one write'] = function()
