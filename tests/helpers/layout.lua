@@ -36,21 +36,43 @@ function M.start(child)
   child.o.lines = M.LINES
 end
 
+--- Makes, in `child`, a terminal buffer running `cat`.
+---
+---@param child table
+---@return integer buffer
+function M.terminal(child)
+  return child.lua_get([[(function()
+    local buffer = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_call(buffer, function()
+      vim.fn.jobstart({ 'cat' }, { term = true })
+    end)
+    return buffer
+  end)()]])
+end
+
+--- Makes, in `child`, a scratch buffer named `name` holding one line.
+---
+---@param child table
+---@param name string
+---@return integer buffer
+function M.named_scratch(child, name)
+  return child.lua_get(
+    [[(function(name)
+      local buffer = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_set_name(buffer, name)
+      vim.api.nvim_buf_set_lines(buffer, 0, -1, false, { 'a report line' })
+      return buffer
+    end)(...)]],
+    { name }
+  )
+end
+
 --- Makes the stand-ins for the buffers the layout is shown, in `child`.
 ---
 ---@param child table
 ---@return { claude: integer, report: integer } buffers the terminal standing in for Claude's, and the named scratch buffer standing in for the Report
 function M.stand_ins(child)
-  return child.lua_get([[(function()
-    local claude = vim.api.nvim_create_buf(true, false)
-    vim.api.nvim_buf_call(claude, function()
-      vim.fn.jobstart({ 'cat' }, { term = true })
-    end)
-    local report = vim.api.nvim_create_buf(false, true)
-    vim.api.nvim_buf_set_name(report, 'aineo://report')
-    vim.api.nvim_buf_set_lines(report, 0, -1, false, { 'a report line' })
-    return { claude = claude, report = report }
-  end)()]])
+  return { claude = M.terminal(child), report = M.named_scratch(child, 'aineo://report') }
 end
 
 --- The arrangement `require('aineo.layout').open()` takes, showing
@@ -76,6 +98,27 @@ end
 ---@return integer|nil buffer
 function M.input_buffer(child)
   return child.lua_get([[require('aineo.layout').input_buffer()]])
+end
+
+--- Starts `child`, opens the layout in it with the stand-ins and returns the
+--- buffers of its three windows by name.
+---
+---@param child table
+---@return { claude: integer, report: integer, input: integer } buffers
+function M.open_with_stand_ins(child)
+  M.start(child)
+  local buffers = M.stand_ins(child)
+  M.open(child, M.arrangement(buffers))
+  buffers.input = M.input_buffer(child)
+  return buffers
+end
+
+--- Puts the cursor of `child` in the first window showing `buffer`.
+---
+---@param child table
+---@param buffer integer
+function M.enter_window_showing(child, buffer)
+  child.lua('vim.api.nvim_set_current_win(...)', { M.window_showing(child, buffer) })
 end
 
 --- The first window of the current tab showing `buffer`, or `nil`.
@@ -106,6 +149,30 @@ function M.box(child, window)
     end)(...)]],
     { window }
   )
+end
+
+--- The boxes of the first windows showing the layout's three buffers.
+---
+---@param child table
+---@param buffers { claude: integer, report: integer, input: integer }
+---@return { claude: table, report: table, input: table } boxes as `M.box` gives them
+function M.boxes(child, buffers)
+  return {
+    claude = M.box(child, M.window_showing(child, buffers.claude)),
+    report = M.box(child, M.window_showing(child, buffers.report)),
+    input = M.box(child, M.window_showing(child, buffers.input)),
+  }
+end
+
+--- Closes, in `child`, the first window showing the buffer of each of `roles`.
+---
+---@param child table
+---@param buffers { claude: integer, report: integer, input: integer }
+---@param roles string[] names of `buffers`, such as `{ 'report', 'input' }`
+function M.close_windows(child, buffers, roles)
+  for _, role in ipairs(roles) do
+    child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)', { buffers[role] })
+  end
 end
 
 --- The number of windows in the current tab of `child`.
