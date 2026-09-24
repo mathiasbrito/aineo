@@ -167,9 +167,8 @@ end
 --- Show a new buffer in a window before Claude Code draws its first screen:
 --- its terminal takes its size from the first window that shows it, and until
 --- then has the rows of a hidden window — 5, at 80 columns, in Neovim 0.11.6 —
---- where Claude Code's prompt does not fit, and the session never reads as
---- ready. Shown in the same tick, or from a `vim.schedule()` callback, the
---- process saw the window's size.
+--- where Claude Code's prompt does not fit. Shown in the same tick, or from a
+--- `vim.schedule()` callback, the process saw the window's size.
 ---
 --- A session whose terminal has been wiped counts as ended, since the wipe
 --- hangs its Claude Code up: a start then launches a new one.

@@ -58,7 +58,9 @@ end
 
 --- How many rows the terminal `buffer` has while windows show it, as Neovim
 --- 0.11.6 sizes a terminal: the height of the tallest of them, in any tab
---- page. None while no window shows it, when the terminal keeps its rows.
+--- page — among them the autocommand window `jobstart()` runs a hidden
+--- buffer's terminal in, which gives it its first size. None while no window
+--- shows it, when the terminal keeps its rows.
 ---
 ---@param buffer integer a terminal buffer
 ---@return integer?
@@ -85,9 +87,8 @@ end
 --- Claude Code's input box has shown for `SETTLE_MS` with no change taking it
 --- away, and `on_change(false)` when a change takes it away again, as a dialog
 --- does. Reads the screen again at every change of the buffer: as many of its
---- last lines as the terminal has rows (`shown_rows()`), the rows it had when
---- last shown while no window shows it, and none before a window first has —
---- so a terminal never shown is never ready.
+--- last lines as the terminal has rows (`shown_rows()`), and, while no window
+--- shows it, as many as it had when one last did.
 ---
 ---@param buffer integer the buffer Claude Code's terminal runs in
 ---@param on_change fun(ready: boolean)
