@@ -129,6 +129,22 @@ T['a buffer named aineo://input after Input was wiped']['becomes Input when the 
   eq(child.lua_get(SCRATCH_OPTIONS, { named }), INPUT_SCRATCH_OPTIONS)
 end
 
+T['Input renamed with :file'] = MiniTest.new_set()
+
+T['Input renamed with :file']['stays Input, with its text, when the layout opens after its three windows closed'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  child.lua('vim.api.nvim_buf_set_lines(..., 0, -1, false, { "typed" })', { buffers.input })
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('file notes')
+  child.cmd('edit ' .. layout.file('first.txt'))
+  child.cmd('only')
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(layout.input_buffer(child), buffers.input)
+  eq(child.lua_get('vim.api.nvim_buf_get_lines(..., 0, -1, false)', { buffers.input }), { 'typed' })
+end
+
 T['Input edited again with a bare :edit'] = MiniTest.new_set()
 
 T['Input edited again with a bare :edit']['stays its named scratch buffer'] = function()

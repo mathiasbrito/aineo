@@ -606,6 +606,22 @@ T['with one side of the layout closed, a sidebar at that edge of the tab']['keep
   eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { sidebar.window }), sidebar.buffer)
 end
 
+T['with the window of the Report closed, a file window right of Input'] = MiniTest.new_set()
+
+T['with the window of the Report closed, a file window right of Input']['keeps its file when a file is opened in Input'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.close_windows(child, buffers, { 'report' })
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('botright vsplit ' .. layout.file('second.txt'))
+  local user_window = child.lua_get('vim.api.nvim_get_current_win()')
+  local second = child.lua_get('vim.api.nvim_get_current_buf()')
+  layout.enter_window_showing(child, buffers.input)
+
+  child.cmd('edit ' .. layout.file('first.txt'))
+
+  eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { user_window }), second)
+end
+
 T['with the window of Claude closed, a file opened in Input'] = MiniTest.new_set()
 
 T['with the window of Claude closed, a file opened in Input']['opens a column left of the right one'] = function()
