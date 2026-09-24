@@ -612,6 +612,28 @@ T['the records']['that cannot be read are reported, and the Report opens without
   eq(vim.startswith(messages, 'aineo cannot read the report records in ' .. file), true)
 end
 
+T['the records']['that are no file are reported, naming the file, and the Report opens without them'] = function()
+  local state_directory = fixture.directory('report-state')
+  local file = vim.fs.joinpath(
+    state_directory,
+    'aineo',
+    'reports',
+    vim.fn.sha256('/projects/alpha') .. '.jsonl'
+  )
+  vim.fn.mkdir(file, 'p')
+  report_editor.start(child, {
+    times = { '2026-09-24T09:05:00' },
+    state_directory = state_directory,
+    working_directory = '/projects/alpha',
+  })
+
+  local lines = report_editor.lines(child)
+  local messages = child.cmd_capture('messages')
+
+  eq(lines, { '' })
+  eq(vim.startswith(messages, 'aineo cannot read the report records in ' .. file), true)
+end
+
 T['the records']['of another working directory never show'] = function()
   local state_directory = fixture.directory('report-state')
   report_editor.start(child, {
