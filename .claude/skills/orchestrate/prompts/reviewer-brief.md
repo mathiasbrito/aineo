@@ -13,7 +13,7 @@ You are the **<dimension>** reviewer for pull request **#<n>**.
 - Head: `<sha>` on `<branch>`. Read `gh pr view <n> --json body -q .body` and `git log --format=%B <base>..<sha>`.
 - Files: <list from `gh pr view <n> --json files`>.
 - The author's report: `<absolute path to the report file>` — every claim in it is yours to re-measure.
-- Your resources: `review_<dimension>_<slug>`.
+- Your resources: `review_<dimension>_<slug>` — lower case, digits and underscores only: `.claude/scripts/prepare-worktree.sh` refuses a hyphen, so `test-integrity` is `review_integrity_<slug>` and a slug `t1-tooling` becomes `t1_tooling`.
 - Baseline: `dev` at the packet's branch point, `<sha>`, measured — never a branch's verification count.
 
 ## Your dimension

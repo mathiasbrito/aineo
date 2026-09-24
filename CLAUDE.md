@@ -29,7 +29,17 @@ Conventions live in `knowledge-vault/CLAUDE.md` and in a `CLAUDE.md` inside each
 **Until the project has specs, the agreed plan is the spec.** `knowledge-vault/Planning/aineo — v1 agent console.md` — its decision and component rows (D#, C#), converged with the user on 2026-09-23 — says what v1 must do. Those rows change only through a converge round with the user, superseded by a new ID, never edited in place. A packet that finds the plan, its brief and the code disagreeing reports a spec conflict; it does not choose.
 
 - **Neovim ≥ 0.11 is the supported minimum** (D10): terminals are `jobstart(…, { term = true })`, arguments are checked with `vim.validate(name, value, validator)`, and nothing older is guarded for.
-- **Tests run on mini.test with a fake `claude`; the real Claude never runs in the suite** (D10). **StyLua formats and selene lints** (D12, the user's choice). The commands that run them arrive with the tooling packet (T1) and are named here when it lands.
+- **Tests run on mini.test with a fake `claude`; the real Claude never runs in the suite** (D10). **StyLua formats and selene lints** (D12, the user's choice). The commands, from the checkout's root (T1):
+
+  | Command | Does |
+  |---|---|
+  | `make deps` | fetches mini.nvim at its pinned commit into `deps/`; refuses a `deps/mini.nvim` that differs from the pin |
+  | `make test` | runs every `tests/**/test_*.lua` under mini.test; exits non-zero when a case fails, a file does not load or adds no case, test code ends Neovim, or the run stalls |
+  | `make test_file FILE=<path>` | runs one test file |
+  | `make lint` | `stylua --check` and `selene` over `lua plugin scripts tests` |
+  | `make format` | StyLua in place over the same paths |
+
+  `make test` and `make test_file` isolate every Neovim they start, the runner included, under the checkout's `.tests/` — `XDG_*`, `CLAUDE_CONFIG_DIR` and `NVIM_LOG_FILE` set there, every other `CLAUDE*` variable removed — so no suite touches your editor's or Claude's state; `prepare-worktree.sh`'s `prepare_project` has nothing to add. Read the summary's `Fails` line as well as the exit status.
 - **The specialists' rules bind their domains** — `.claude/agents/neovim-lua-developer.md` (*What bites here*, *Tests*) and `.claude/agents/neovim-claude-code-integrator.md` (every section from *Three tiers of surface* to *Tests*).
 
 ## Skills that bind how code is written
