@@ -17,9 +17,10 @@ local INVALID_PARAMS = -32602
 
 ---@alias aineo.mcp.Error { code: integer, message: string }
 
---- How the server hands a valid report on: whether it was delivered, and
---- when not, why.
----@alias aineo.mcp.DeliverReport fun(report: table): boolean, string?
+--- How the server hands a valid report on: whether the editor confirmed it
+--- (`'delivered'`), has it but did not confirm it in time (`'unconfirmed'`),
+--- or did not get it (`'failed'`), and, unless delivered, the words for Claude.
+---@alias aineo.mcp.DeliverReport fun(report: table): 'delivered'|'unconfirmed'|'failed', string?
 
 --- The server's one tool, as `tools/list` describes it: its input schema is
 --- the report format.
@@ -43,9 +44,9 @@ local function tool_result(text, is_error)
 end
 
 --- The result of a `tools/call`: a report whose arguments are valid is
---- delivered, and a delivery that fails is a tool error saying why; refused
---- arguments are a tool error naming the field; any tool but `report` is an
---- error -32602.
+--- delivered; a delivery the editor did not confirm in time says so, and one
+--- that fails is a tool error saying why; refused arguments are a tool error
+--- naming the field; any tool but `report` is an error -32602.
 ---
 ---@param params table
 ---@param deliver_report aineo.mcp.DeliverReport
@@ -59,11 +60,11 @@ local function call_tool(params, deliver_report)
   if not valid_report then
     return tool_result('aineo refused the report: ' .. refusal, true)
   end
-  local delivered, failure = deliver_report(valid_report)
-  if not delivered then
-    return tool_result(failure, true)
+  local outcome, explanation = deliver_report(valid_report)
+  if outcome == 'delivered' then
+    return tool_result('Delivered to the Agent Report.', false)
   end
-  return tool_result('Delivered to the Agent Report.', false)
+  return tool_result(explanation, outcome == 'failed')
 end
 
 --- The result of each method the server answers, by method name, or the

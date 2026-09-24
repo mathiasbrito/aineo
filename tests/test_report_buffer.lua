@@ -310,6 +310,78 @@ end
 
 T['the records'] = MiniTest.new_set()
 
+--- The records file of `/projects/alpha` under `state_directory`, holding
+--- the records numbered `first` to `last`, each a line of exactly 1 KiB (its
+--- newline counted) whose task is `Task <number>`.
+---
+---@param child_editor table the child the records are made through
+---@param state_directory string
+---@param first integer
+---@param last integer
+---@return string file
+local function records_file_holding(child_editor, state_directory, first, last)
+  report_editor.start(child_editor, {
+    times = { '2026-09-24T09:05:00' },
+    state_directory = state_directory,
+    working_directory = '/projects/alpha',
+  })
+  report_editor.receive(child_editor, { task = 'Task', status = 'done', summary = 'Summary' })
+  local file = vim.fs.find(function()
+    return true
+  end, { path = state_directory, type = 'file' })[1]
+  local lines = {}
+  for number = first, last do
+    local record = {
+      time = '2026-09-24T09:05:00',
+      report = { task = ('Task %04d'):format(number), status = 'done', summary = 'Summary' },
+    }
+    record.report.details = ('x'):rep(1023 - #vim.json.encode(record) - #',"details":""')
+    table.insert(lines, vim.json.encode(record))
+  end
+  vim.fn.writefile(lines, file)
+  return file
+end
+
+T['the records']['show the newest 2 MiB of them'] = function()
+  local state_directory = fixture.directory('report-state')
+  local file = records_file_holding(child, state_directory, 1, 3072)
+  report_editor.start(child, {
+    times = { '2026-09-24T10:00:00' },
+    state_directory = state_directory,
+    working_directory = '/projects/alpha',
+  })
+
+  local headers = child.lua_get([[vim.tbl_filter(function(line)
+    return line:find('^%d')
+  end, vim.api.nvim_buf_get_lines(require('aineo.report').report_buffer(), 0, -1, false))]])
+
+  eq({ vim.uv.fs_stat(file).size, #headers, headers[1], headers[#headers] }, {
+    3 * 1024 * 1024,
+    2048,
+    '09:05 [done] Task 1025 — Summary',
+    '09:05 [done] Task 3072 — Summary',
+  })
+end
+
+T['the records']['are cut to their newest 2 MiB once they have grown past 4 MiB'] = function()
+  local state_directory = fixture.directory('report-state')
+  local file = records_file_holding(child, state_directory, 1, 4097)
+  report_editor.start(child, {
+    times = { '2026-09-24T10:00:00' },
+    state_directory = state_directory,
+    working_directory = '/projects/alpha',
+  })
+
+  report_editor.receive(child, { task = 'Newest', status = 'done', summary = 'Kept' })
+
+  local lines = vim.fn.readfile(file)
+  eq({
+    #lines,
+    vim.json.decode(lines[1]).report.task,
+    vim.json.decode(lines[#lines]).report.task,
+  }, { 2049, 'Task 2050', 'Newest' })
+end
+
 T['the records']['show a report again, at its own time, in a new editor in the same directory'] = function()
   local state_directory = fixture.directory('report-state')
   report_editor.start(child, {

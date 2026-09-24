@@ -64,6 +64,18 @@ local function current_environment()
   return environment
 end
 
+--- Warns the user with `message` once the editor is done with what it is
+--- doing: a report arrives over RPC, and a warning too long for the command
+--- line waits at a hit-enter prompt, which would hold that request (and the
+--- relay waiting on it) until the user answered.
+---
+---@param message string
+local function warn_later(message)
+  vim.schedule(function()
+    vim.notify(message, vim.log.levels.WARN)
+  end)
+end
+
 --- The records kept in `records_file`, and how many of its lines were
 --- skipped. When the file cannot be read, the user is told why, once, and
 --- there are none.
@@ -74,7 +86,7 @@ end
 local function readable_records(records_file)
   local read, records_or_failure, skipped = pcall(records.read_records, records_file)
   if not read then
-    vim.notify(records_or_failure, vim.log.levels.WARN)
+    warn_later(records_or_failure)
     return {}, 0
   end
   return records_or_failure, skipped
@@ -88,13 +100,14 @@ end
 ---@param records_file string
 local function show_records(report_buffer, records_file)
   local kept, skipped = readable_records(records_file)
+  local lines = {}
   for _, record in ipairs(kept) do
-    buffer.append_lines(report_buffer, render.render_report(record.report, record.time))
+    vim.list_extend(lines, render.render_report(record.report, record.time))
   end
+  buffer.append_lines(report_buffer, lines)
   if skipped > 0 then
-    vim.notify(
-      ('aineo: skipped %d unreadable report record(s) in %s'):format(skipped, records_file),
-      vim.log.levels.WARN
+    warn_later(
+      ('aineo: skipped %d unreadable report record(s) in %s'):format(skipped, records_file)
     )
   end
 end
