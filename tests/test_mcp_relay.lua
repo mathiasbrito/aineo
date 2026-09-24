@@ -264,6 +264,16 @@ T['a line']['longer than 1 MiB is dropped up to its newline, and the next messag
   eq(get(decoded(relay:next_line()), 'id'), 14)
 end
 
+T['a line']['three times 1 MiB long is refused once, its rest not kept'] = function()
+  local relay = mcp_relay.start_relay()
+
+  relay:write(('x'):rep(3 * LINE_LIMIT) .. '\n')
+  relay:send('{"jsonrpc":"2.0","id":15,"method":"ping"}')
+
+  local answers = relay:next_lines(2)
+  eq({ get(decoded(answers[1]), 'error', 'code'), get(decoded(answers[2]), 'id') }, { -32600, 15 })
+end
+
 T['a line']['of exactly 1 MiB is read and answered'] = function()
   local relay = mcp_relay.start_relay()
   local head, tail = '{"jsonrpc":"2.0","id":13,"method":"ping","params":{"padding":"', '"}}'

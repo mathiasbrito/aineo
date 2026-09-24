@@ -14,7 +14,8 @@ local LINE_LIMIT = 1024 * 1024
 
 --- Serves MCP on this process's stdin and stdout until stdin closes,
 --- delivering each valid report to the editor at `editor_address`. A line
---- longer than `LINE_LIMIT` is answered as soon as it passes the limit.
+--- longer than `LINE_LIMIT` is answered, and dropped, as soon as the chunk
+--- that takes it past the limit is read (`lines.new_line_reader()`).
 ---
 ---@param editor_address string? the editor's server address
 function M.serve_stdio(editor_address)
