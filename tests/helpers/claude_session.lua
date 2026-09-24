@@ -497,6 +497,34 @@ function M.wait_for_process_end(pid)
   end, 50)
 end
 
+--- The input the fake has received so far, every chunk joined in order.
+---
+---@param fake { record: string }
+---@return string
+function M.received(fake)
+  return table.concat(vim.tbl_map(function(entry)
+    return entry.received or ''
+  end, M.record(fake)))
+end
+
+--- The input the fake has received after its first `offset` bytes of input,
+--- once that holds at least `length` bytes — waiting for that at most
+--- `patience_ms`, `PATIENCE_MS` unless given — or when the wait runs out.
+---
+---@param fake { record: string }
+---@param offset integer how many bytes of input came before
+---@param length integer
+---@param patience_ms? integer
+---@return string
+function M.wait_for_received_after(fake, offset, length, patience_ms)
+  local input
+  vim.wait(patience_ms or M.PATIENCE_MS, function()
+    input = M.received(fake):sub(offset + 1)
+    return #input >= length
+  end, 20)
+  return input
+end
+
 --- How many Ctrl-C presses — `\3` bytes — the fake has received.
 ---
 ---@param fake { record: string }

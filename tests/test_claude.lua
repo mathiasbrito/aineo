@@ -591,6 +591,19 @@ T['session_status()']['is exited as soon as its running terminal is wiped'] = fu
   eq(status, { 'exited' })
 end
 
+T['session_status()']['is ready while a turn runs, its input box on screen'] = function()
+  local fake = claude.fake('turn', 'turn')
+  local buffer = claude.start(child, fake)
+  MiniTest.finally(function()
+    claude.quit(child)
+    claude.wait_for_end(fake)
+  end)
+
+  claude.wait_for_screen(child, buffer, 'esc to interrupt')
+
+  eq(claude.wait_for_status(child, 'ready'), { 'ready' })
+end
+
 T['quitting Neovim'] = MiniTest.new_set()
 
 T['quitting Neovim']['stops an idle Claude by a double Ctrl-C'] = function()
@@ -677,6 +690,56 @@ T['quitting Neovim']['leaves no deaf Claude running when an earlier exit handler
   claude.quit(child)
 
   eq(claude.wait_for_process_end(pid), true)
+end
+
+T['write_to_session()'] = MiniTest.new_set()
+
+T['write_to_session()']['writes its bytes to Claude’s terminal unchanged'] = function()
+  local fake = claude.fake('write', 'ready')
+  local buffer = claude.start(child, fake)
+  MiniTest.finally(function()
+    claude.end_by_keys(child, fake, buffer)
+  end)
+  claude.wait_for_status(child, 'ready')
+  local before = #claude.received(fake)
+  local bytes = 'some bytes \27[A é\r'
+
+  child.lua("require('aineo.claude').write_to_session(...)", { bytes })
+
+  eq(claude.wait_for_received_after(fake, before, #bytes), bytes)
+end
+
+T['write_to_session()']['raises an error before a session has started'] = function()
+  local write = function()
+    child.lua("require('aineo.claude').write_to_session('text')")
+  end
+
+  MiniTest.expect.error(write, 'no Claude Code session is running')
+end
+
+T['write_to_session()']['raises an error once Claude has exited'] = function()
+  local fake = claude.fake('write-exited', 'exit')
+  claude.start(child, fake)
+  claude.wait_for_status(child, 'exited')
+  local write = function()
+    child.lua("require('aineo.claude').write_to_session('text')")
+  end
+
+  MiniTest.expect.error(write, 'no Claude Code session is running')
+end
+
+T['write_to_session()']['raises an error once Claude’s terminal is wiped'] = function()
+  local fake = claude.fake('write-wiped', 'ready')
+  local buffer = claude.start(child, fake)
+  claude.wait_for_start(fake)
+  local write_after_wiping = function()
+    child.lua(
+      "vim.cmd.bwipeout({ tostring(...), bang = true }); require('aineo.claude').write_to_session('text')",
+      { buffer }
+    )
+  end
+
+  MiniTest.expect.error(write_after_wiping, 'no Claude Code session is running')
 end
 
 return T
