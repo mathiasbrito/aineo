@@ -19,7 +19,18 @@ local function start_editor(times)
   })
 end
 
-local T = MiniTest.new_set({ hooks = { post_once = child.stop } })
+--- A second editor in the same working directory, for the tests of two
+--- editors keeping records in one file.
+local other_editor = MiniTest.new_child_neovim()
+
+local T = MiniTest.new_set({
+  hooks = {
+    post_once = function()
+      child.stop()
+      other_editor.stop()
+    end,
+  },
+})
 
 T['a report'] = MiniTest.new_set()
 
@@ -470,6 +481,44 @@ T['the records']['are kept whole up to 4 MiB when a report is added'] = function
     { #lines, recorded_task(lines[1]), recorded_task(lines[#lines]) },
     { 4097, 'Task 0001', 'Newest' }
   )
+end
+
+T['the records']['cut by another editor while this one cuts them are still cut, without a warning'] = function()
+  local state_directory = fixture.directory('report-state')
+  local environment = {
+    times = { '2026-09-24T10:00:00' },
+    state_directory = state_directory,
+    working_directory = '/projects/alpha',
+  }
+  records_file_holding(child, state_directory, 1, 4097)
+  report_editor.start(other_editor, environment)
+  report_editor.start(child, environment)
+  child.lua(
+    [[
+      local other_address, other_report = ...
+      local rename = vim.uv.fs_rename
+      vim.uv.fs_rename = function(...)
+        vim.uv.fs_rename = rename
+        local channel = vim.fn.sockconnect('pipe', other_address, { rpc = true })
+        vim.rpcrequest(
+          channel,
+          'nvim_exec_lua',
+          "require('aineo.report').receive_report(...)",
+          { other_report }
+        )
+        vim.fn.chanclose(channel)
+        return rename(...)
+      end
+    ]],
+    { other_editor.job.address, { task = 'Other', status = 'done', summary = 'Cut first' } }
+  )
+
+  local failure = child.lua(
+    [[return select(2, pcall(require('aineo.report').receive_report, ...))]],
+    { { task = 'Newest', status = 'done', summary = 'Kept' } }
+  )
+
+  eq({ failure, child.cmd_capture('messages') }, { vim.NIL, '' })
 end
 
 T['the records']['kept through a symbolic link are cut behind it, and the link stays'] = function()
