@@ -87,7 +87,7 @@ end
 
 --- Starts the session in `child` with `fake`'s environment and the stand-in
 --- settings overridden by `overrides`, shows the buffer `start_session()`
---- returns in the current window at once, as the layout does, and returns
+--- returns in the current window at once, as the layout will, and returns
 --- that buffer.
 ---
 ---@param child table a child from `MiniTest.new_child_neovim()`
@@ -109,6 +109,27 @@ function M.start(child, fake, overrides)
   )
 end
 
+--- Starts the session in `child` as `start()` does, but under `:silent!`,
+--- which silences the errors of `jobstart()` and of `start_session()` alike,
+--- and shows nothing.
+---
+---@param child table
+---@param fake { environment: table<string, string> }
+---@param overrides? table
+function M.start_silently(child, fake, overrides)
+  child.lua(
+    [[
+      local helper, environment, overrides = dofile(...), select(2, ...)
+      for name, value in pairs(environment) do
+        vim.env[name] = value
+      end
+      _G.aineo_test_settings = helper.stand_in_settings(overrides)
+      vim.cmd('silent! lua require("aineo.claude").start_session(_G.aineo_test_settings)')
+    ]],
+    { THIS_FILE, fake.environment, overrides or vim.empty_dict() }
+  )
+end
+
 --- Calls `start_session()` in `child` once more, with the stand-in settings,
 --- and returns what it returns without showing it anywhere: which windows show
 --- a new terminal is the session's to decide.
@@ -122,16 +143,35 @@ function M.start_again(child)
   )
 end
 
+--- Wipes the terminal `buffer` in `child` and, in the same tick — before the
+--- editor has seen its process end — calls `start_session()` with the
+--- stand-in settings; returns what that returns.
+---
+---@param child table
+---@param buffer integer
+---@return integer
+function M.start_again_after_wiping(child, buffer)
+  return child.lua(
+    [[
+      local helper, buffer = dofile(...), select(2, ...)
+      vim.cmd.bwipeout({ tostring(buffer), bang = true })
+      return require('aineo.claude').start_session(helper.stand_in_settings())
+    ]],
+    { THIS_FILE, buffer }
+  )
+end
+
 --- What `session_status()` reports in `child`, as a list, once its first value
---- is `state` — waiting for that at most `PATIENCE_MS` — or when the wait runs
---- out.
+--- is `state` — waiting for that at most `patience_ms`, `PATIENCE_MS` unless
+--- given — or when the wait runs out.
 ---
 ---@param child table
 ---@param state string
+---@param patience_ms? integer
 ---@return any[]
-function M.wait_for_status(child, state)
+function M.wait_for_status(child, state, patience_ms)
   local status
-  vim.wait(M.PATIENCE_MS, function()
+  vim.wait(patience_ms or M.PATIENCE_MS, function()
     status = child.lua_get("{ require('aineo.claude').session_status() }")
     return status[1] == state
   end, 20)
@@ -162,6 +202,19 @@ function M.wait_for_screen(child, buffer, part)
     return screen:find(part, 1, true) ~= nil
   end, 20)
   return screen
+end
+
+--- The `'buftype'` of `buffer` in `child`, or `vim.NIL` when `buffer` is no
+--- longer valid — so that a test given a wiped buffer fails on its assertion.
+---
+---@param child table
+---@param buffer integer
+---@return string|userdata
+function M.buftype(child, buffer)
+  return child.lua(
+    'local buffer = ...; return vim.api.nvim_buf_is_valid(buffer) and vim.bo[buffer].buftype or nil',
+    { buffer }
+  )
 end
 
 --- The arguments the fake was started with, after its own script, once it has
@@ -254,11 +307,78 @@ function M.end_by_keys(child, fake, buffer)
   M.wait_for_status(child, 'exited')
 end
 
---- Quits `child` with `:qa`, as a user would, without waiting for it to end.
+--- Presses `keys` in the terminal `buffer` of `child`, as a user typing in
+--- Claude Code's window would.
 ---
 ---@param child table
-function M.quit(child)
-  child.lua_notify('vim.cmd.qall()')
+---@param buffer integer the session's terminal buffer
+---@param keys string the bytes the keys send, such as `'\r'` for Enter
+function M.press_keys(child, buffer, keys)
+  child.lua('local buffer, keys = ...; vim.api.nvim_chan_send(vim.bo[buffer].channel, keys)', {
+    buffer,
+    keys,
+  })
+end
+
+--- Quits `child` with `quit_command` — `:qa` unless given — as a user would,
+--- without waiting for it to end.
+---
+---@param child table
+---@param quit_command? string an Ex command line that quits, such as `'bdelete! | qall'`
+function M.quit(child, quit_command)
+  child.lua_notify('vim.cmd(...)', { quit_command or 'qall' })
+end
+
+--- Registers in `child`, as another plugin would, a handler of Neovim's quit
+--- (`VimLeavePre`) that writes the line `ran` to the file `path`.
+---
+---@param child table
+---@param path string
+function M.add_exit_handler(child, path)
+  child.lua(
+    [[
+      local path = ...
+      vim.api.nvim_create_autocmd('VimLeavePre', {
+        callback = function()
+          vim.fn.writefile({ 'ran' }, path)
+        end,
+      })
+    ]],
+    { path }
+  )
+end
+
+--- The lines of the file `path` once it exists — waiting for that at most
+--- `STOP_PATIENCE_MS` — or none when the wait runs out.
+---
+---@param path string
+---@return string[]
+function M.wait_for_file(path)
+  vim.wait(M.STOP_PATIENCE_MS, function()
+    return vim.fn.filereadable(path) == 1
+  end, 50)
+  return vim.fn.filereadable(path) == 1 and vim.fn.readfile(path) or {}
+end
+
+--- How often `quit_pressing_ctrl_c()` presses Ctrl-C in the editor.
+local CTRL_C_EVERY_MS = 100
+
+--- Quits `child` with `:qa` and, while it quits, presses Ctrl-C in the editor
+--- every `CTRL_C_EVERY_MS`, as a user waiting on a slow quit might, until the
+--- editor has exited or `STOP_PATIENCE_MS` has passed. A press that reaches an
+--- editor already exiting fails, and is dropped: the exit is what the presses
+--- wait for.
+---
+---@param child table
+function M.quit_pressing_ctrl_c(child)
+  M.quit(child)
+  vim.wait(M.STOP_PATIENCE_MS, function()
+    if vim.fn.jobwait({ child.job.id }, 0)[1] ~= -1 then
+      return true
+    end
+    pcall(child.api_notify.nvim_input, '<C-c>')
+    return false
+  end, CTRL_C_EVERY_MS)
 end
 
 --- What the fake did besides starting and receiving input — a turn it ended,
@@ -278,14 +398,19 @@ function M.wait_for_end(fake)
   return events
 end
 
---- Whether the process `pid` has ended, once it has — waiting for that at
---- most `STOP_PATIENCE_MS` — or when the wait runs out.
+--- Whether every process of the group that `pid` leads — a terminal job and
+--- whatever it started — has ended, once they have, waiting for that at most
+--- `STOP_PATIENCE_MS`, or when the wait runs out; false when there is no `pid`
+--- because the fake never started.
 ---
----@param pid integer
+---@param pid integer?
 ---@return boolean
 function M.wait_for_process_end(pid)
+  if not pid then
+    return false
+  end
   return vim.wait(M.STOP_PATIENCE_MS, function()
-    return vim.uv.kill(pid, 0) ~= 0
+    return vim.uv.kill(-pid, 0) ~= 0
   end, 50)
 end
 

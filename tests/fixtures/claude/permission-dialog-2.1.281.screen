@@ -1,0 +1,28 @@
+# Claude Code 2.1.281 asking permission for an MCP tool call, as the screen of a Neovim terminal
+# showed it: the CONTROL session's screen "after Enter" in t2-run2-screens.txt (T2, recorded by the
+# orchestrator on 2026-09-23, wave 2's evidence): its text, not its bytes. The path and the account
+# tier are placeholders. Its selected choice, "1. Yes", carries the ready prompt's glyph. The screen
+# follows the first empty line.
+
+
+❯ aineo probe line one                                                          
+  PROBE                                                                         
+
+⏺ Calling probe…
+
+────────────────────────────────────────────────────────────────────────────────
+ Tool use
+
+   probe — Ping Tool: (MCP)
+
+   note: "t2"
+
+   About the probe — Ping Tool:
+   │ Records a note for the aineo T2 measurement.
+
+ Do you want to proceed?
+ ❯ 1. Yes                                                    
+   2. Yes, and don't ask again for probe — Ping commands in ~/project/…
+   3. No
+
+ Esc to cancel · Tab to amend

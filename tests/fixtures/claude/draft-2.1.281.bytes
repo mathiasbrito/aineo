@@ -1,0 +1,7 @@
+# Claude Code 2.1.281 redrawing its input box after a bracketed paste of two lines, in a Neovim
+# terminal at 120x40: bytes 1697 to 2104 of the terminal output the orchestrator recorded on 2026-09-24
+# (t4-claude-2.1.281-startup-paste-exit.bytes.txt in wave 2's evidence), the frame that follows the
+# Remote Control link's and precedes the first Ctrl-C's. It draws over the screen of
+# startup-2.1.281.bytes. The bytes follow the first empty line.
+
+[?25l[H[57C[16B[38;2;153;153;153mctrl+g to edit in Vim[1B[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────[1B[39m❯ first line[K[1B  second line[K[18C[2B[K[22;1H[20;14H[?25h

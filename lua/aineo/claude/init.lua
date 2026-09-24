@@ -11,7 +11,7 @@ local M = {}
 --- from the configuration and from the homes that own each value.
 ---@class aineo.claude.Settings
 ---@field cmd string[] the command that runs Claude Code, as `claude.cmd`
----@field cwd string the directory Claude Code runs in: the editor's working directory
+---@field cwd string the directory Claude Code runs in, which must exist: the editor's working directory
 ---@field mcp_servers table<string, table> the MCP servers Claude Code starts, by name, each in its `--mcp-config` server format
 ---@field allowed_tools string[] the tools Claude Code may call without asking the user
 ---@field instructions string the text appended to Claude Code's system prompt
@@ -22,16 +22,17 @@ local M = {}
 local CHILD_ENVIRONMENT = { AINEO_CHILD = '1' }
 
 --- The one Claude Code session, once one has started: its terminal buffer and
---- job, whether Claude Code has become ready and, once its process has ended,
---- the process's exit code.
+--- job, whether Claude Code is ready for input now and, once its process has
+--- ended, the process's exit code.
 ---@type { buffer: integer, job: integer, ready: boolean?, exit_code: integer? }?
 local session
 
---- Whether a session's Claude Code is running.
+--- Whether a session's Claude Code is running: its process has not ended and
+--- its terminal has not been wiped, which hangs the process up.
 ---
 ---@return boolean
 local function is_running()
-  return session ~= nil and session.exit_code == nil
+  return session ~= nil and session.exit_code == nil and vim.api.nvim_buf_is_valid(session.buffer)
 end
 
 --- Makes quitting Neovim stop a running Claude Code by its keys first
@@ -81,14 +82,16 @@ local function is_word_list(value, least)
 end
 
 --- Raises an error naming the first setting of `settings` whose value is not
---- of its kind.
+--- of its kind, or, for `cwd`, not a directory that exists.
 ---
 ---@param settings aineo.claude.Settings
 local function validate_settings(settings)
   vim.validate('settings.cmd', settings.cmd, function(value)
     return is_word_list(value, 1)
   end, 'a list of at least one string')
-  vim.validate('settings.cwd', settings.cwd, 'string')
+  vim.validate('settings.cwd', settings.cwd, function(value)
+    return type(value) == 'string' and vim.fn.isdirectory(value) == 1
+  end, 'a directory that exists')
   vim.validate('settings.mcp_servers', settings.mcp_servers, 'table')
   vim.validate('settings.allowed_tools', settings.allowed_tools, function(value)
     return is_word_list(value, 0)
@@ -97,8 +100,9 @@ local function validate_settings(settings)
 end
 
 --- Runs `command` as a terminal job in the new, empty `buffer` and returns the
---- job's id. When the command cannot run, wipes `buffer` and raises
---- `jobstart()`'s error, which names the command.
+--- job's id. When the command cannot run, wipes `buffer` and raises an error
+--- naming the command: `jobstart()`'s own, or, when `:silent!` has silenced
+--- that and `jobstart()` has returned 0 or -1 instead, one of its own.
 ---
 ---@param buffer integer
 ---@param command string[]
@@ -108,9 +112,9 @@ local function run_in_terminal(buffer, command, options)
   local started, job = pcall(vim.api.nvim_buf_call, buffer, function()
     return vim.fn.jobstart(command, options)
   end)
-  if not started then
+  if not started or job <= 0 then
     vim.api.nvim_buf_delete(buffer, { force = true })
-    error(job, 0)
+    error(started and ('jobstart() cannot run ' .. command[1]) or job, 0)
   end
   return job
 end
@@ -125,8 +129,8 @@ local function launch(settings)
   local command =
     vim.list_extend(vim.list_slice(settings.cmd), arguments.claude_arguments(settings))
   local launched = { buffer = vim.api.nvim_create_buf(false, true) }
-  readiness.when_ready(launched.buffer, function()
-    launched.ready = true
+  readiness.watch(launched.buffer, function(ready)
+    launched.ready = ready
   end)
   launched.job = run_in_terminal(launched.buffer, command, {
     term = true,
@@ -145,13 +149,19 @@ end
 --- terminal takes the old one's place in every window that showed it.
 --- Quitting Neovim stops a running Claude Code by its keys first.
 ---
---- Show a new buffer in a window at once: its terminal takes its size from
---- the first window that shows it, and until then has the few rows of a
---- hidden window, where Claude Code's prompt does not fit.
+--- Show a new buffer in a window before Claude Code draws its first screen:
+--- its terminal takes its size from the first window that shows it, and until
+--- then has the rows of a hidden window — 5, at 80 columns, in Neovim 0.11.6 —
+--- where Claude Code's prompt does not fit. Shown in the same tick, or from a
+--- `vim.schedule()` callback, the process saw the window's size.
 ---
---- Raises an error naming the setting that is malformed, or, when the command
---- cannot run, `jobstart()`'s error naming it; either way it starts nothing
---- and leaves the session as it was.
+--- A session whose terminal has been wiped counts as ended, since the wipe
+--- hangs its Claude Code up: a start then launches a new one.
+---
+--- Raises an error naming the setting that is malformed — for `cwd`, a
+--- directory that does not exist — or, when the command cannot run, an error
+--- naming the command; either way it starts nothing and leaves the session as
+--- it was.
 ---
 ---@param settings aineo.claude.Settings
 ---@return integer buffer the terminal buffer Claude Code runs in
@@ -169,9 +179,11 @@ function M.start_session(settings)
   return session.buffer
 end
 
---- Where the session stands: `'starting'` until Claude Code is ready for
---- input, then `'ready'`, and `'exited'` with the exit code once its process
---- has ended; nothing before a session has started.
+--- Where the session stands: `'ready'` while Claude Code's input box is on
+--- its screen, once it has shown for a moment (`readiness.watch()`);
+--- `'starting'` while it is not — as Claude Code starts, and again while a
+--- dialog takes its place; and `'exited'` with the exit code once its process
+--- has ended. Nothing before a session has started.
 ---
 ---@return string? state
 ---@return integer? exit_code
