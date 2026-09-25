@@ -335,7 +335,7 @@ else
 end
 
 vim.api.nvim_create_user_command('Aineo', function(command)
-  local action = ACTIONS[vim.trim(command.args)]
+  local action = ACTIONS[command.args]
   if action then
     run(action)
     return
