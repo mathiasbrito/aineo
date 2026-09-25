@@ -1,6 +1,7 @@
 ---
 wave: <NNNNN>
 status: planned
+rolling: false
 planned_by: <who, and the session's host>
 planned_at: <YYYY-MM-DD HH:MM TZ — read from the clock>
 base: <the dev sha the facts were checked on>
