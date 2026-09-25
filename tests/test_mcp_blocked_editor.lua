@@ -38,7 +38,19 @@ local T = MiniTest.new_set({
 T['a user’s editor'] = MiniTest.new_set()
 
 T['a user’s editor']['loads aineo’s report home as it starts'] = function()
-  MiniTest.expect.no_error(start_editor, 'mcp-tui-loads')
+  local editor
+  MiniTest.expect.no_error(function()
+    editor = start_editor('mcp-tui-loads')
+  end)
+
+  local loaded = vim.rpcrequest(
+    editor.channel,
+    'nvim_exec_lua',
+    [[return package.loaded['aineo.report'] ~= nil]],
+    {}
+  )
+
+  eq(loaded, true)
 end
 
 T['a user’s editor']['starts with no message, as in a terminal that answers its queries'] = function()

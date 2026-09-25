@@ -8,8 +8,11 @@ local config = require('aineo.config')
 local M = {}
 
 --- The position Lua puts before an error it raises: `<file>.lua:<line>: `
---- for Lua code loaded from a file, `vim/<module>:<line>: ` for Neovim's own
---- Lua from 0.12 on, whose modules are named without the `.lua`.
+--- for Lua code loaded from a file, and `vim/<module>:<line>: ` for those of
+--- Neovim's own modules that 0.12 names without the `.lua`
+--- (`vim/_core/system`). The `[string "vim/<module>"]:<line>: ` form other
+--- modules of 0.12 give (`vim/keymap`) is not stripped: none of them raises
+--- inside the check.
 local ERROR_POSITIONS = { '^.-%.lua:%d+: ', '^vim/[%w_/]+:%d+: ' }
 
 --- The error `message` tells, on one line: its first line, without the
