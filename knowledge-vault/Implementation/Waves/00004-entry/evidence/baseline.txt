@@ -1,0 +1,14 @@
+Baseline for wave 4 — measured by the orchestrator on host Macbook-Mathias, Nvim 0.11.6.
+
+make test — 2026-09-25, 01:13-01:20 CEST (both ended 01:19:52), two runs side by side:
+  at PR #15's final head 9706947, and on T6's 9 files laid over origin/dev 0b52d7f (dev had not touched them since
+  the branch point); the merge of PR #15 gave bb0e185, per-file identical to 9706947 on those files (9 of 9).
+  [t6] Total number of cases: 491
+  [t6] Fails (0) and Notes (0)
+  [t6] rc=0 secs=365
+  [t6c] Total number of cases: 491
+  [t6c] Fails (0) and Notes (0)
+  [t6c] rc=0 secs=365
+
+.claude/hooks/test-hooks.sh — at bb0e185 (.claude unchanged since), 2026-09-25 01:51 CEST, exit 0:
+78 passed

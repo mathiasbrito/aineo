@@ -1,0 +1,12 @@
+# A synthetic screen, drawn by no recorded Claude Code (built 2026-09-24): Claude Code's input
+# box - a rule, the prompt's line, a rule - drawn at the top of a cleared primary screen, then
+# pushed into the terminal's scrollback by three line feeds on its bottom row, whatever the
+# terminal's height. It stands for what a terminal without the alternate screen keeps above its
+# rows: 2.1.281's MCP-server dialog, unlike its startup screen, is drawn on the primary screen.
+# The bytes follow the first empty line.
+
+[2J[H────────────────────────────────────────
+❯ 
+────────────────────────────────────────[999;1H
+
+

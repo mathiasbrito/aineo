@@ -26,7 +26,21 @@ Conventions live in `knowledge-vault/CLAUDE.md` and in a `CLAUDE.md` inside each
 
 ## Read this first
 
-<!-- The binding documents, once they exist. If the project adopts spec-kit (`specify init --here --ai claude`), `.specify/memory/constitution.md` governs everything and `specs/` says what the system must do; name the principles that bite most often here. -->
+**Until the project has specs, the agreed plan is the spec.** `knowledge-vault/Planning/aineo — v1 agent console.md` — its decision and component rows (D#, C#), converged with the user on 2026-09-23 — says what v1 must do. Those rows change only through a converge round with the user, superseded by a new ID, never edited in place. A packet that finds the plan, its brief and the code disagreeing reports a spec conflict; it does not choose.
+
+- **Neovim ≥ 0.11 is the supported minimum** (D10): terminals are `jobstart(…, { term = true })`, arguments are checked with `vim.validate(name, value, validator)`, and nothing older is guarded for.
+- **Tests run on mini.test with a fake `claude`; the real Claude never runs in the suite** (D10). **StyLua formats and selene lints** (D12, the user's choice). The commands, from the checkout's root (T1):
+
+  | Command | Does |
+  |---|---|
+  | `make deps` | fetches mini.nvim at its pinned commit into `deps/`, moving a checkout at another commit to the pin; refuses one whose files were edited or that git cannot read |
+  | `make test` | runs every `tests/**/test_*.lua` under mini.test; exits non-zero when a case fails, a file does not load or adds no case, test code ends Neovim, mini.test's queue stalls, or the run outlasts its time limit (16 min by default; `AINEO_TEST_RUN_LIMIT_MS=<ms>` replaces it) — a case that keeps Neovim itself busy is not bounded (`scripts/run_tests.lua`) |
+  | `make test_file FILE=<path>` | runs one test file |
+  | `make lint` | `stylua --check` and `selene` over `lua plugin scripts tests` |
+  | `make format` | StyLua in place over the same paths |
+
+  `make test` and `make test_file` isolate every Neovim they start, the runner included, under the checkout's `.tests/` — `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME`, `CLAUDE_CONFIG_DIR` and `NVIM_LOG_FILE` set there, every other `CLAUDE*` variable removed, `AINEO_CHILD` removed, `tests/helpers/entry_guard/` first on `PATH` (its `claude` runs nothing and exits 127, so a test that runs `claude` by name, aineo's default `claude.cmd` included, never reaches the real Claude Code; a `claude.cmd` given as an absolute path passes the guard), and `NVIM`, `NVIM_APPNAME`, `MYVIMRC`, `VIMINIT` and `AI_AGENT` kept from the runner (a child then sees the runner's own `NVIM`, which Neovim gives every job; a parent's `VIMRUNTIME` is kept, for development builds of Neovim) — so no suite touches your editor's or Claude's state. Every Neovim that loads the suites' init (`-u scripts/minimal_init.lua`: the runner, and each child a test starts) also gets `vim.g.aineo = { autostart = false }` unless the test set `vim.g.aineo` before the init (`--cmd`); a test that sets it for any key replaces the preset whole, so aineo's own default, `autostart = true`, applies unless the test says otherwise. A Neovim that does not load the init (`nvim --clean -l …`) inherits the `PATH` guard and the removed variables, not the preset; `prepare-worktree.sh`'s `prepare_project` has nothing to add. Read the summary's `Fails` line as well as the exit status.
+- **The specialists' rules bind their domains** — `.claude/agents/neovim-lua-developer.md` (*What bites here*, *Tests*) and `.claude/agents/neovim-claude-code-integrator.md` (every section from *Three tiers of surface* to *Tests*).
 
 ## Skills that bind how code is written
 
@@ -127,6 +141,8 @@ Both Claude hooks also refuse a commit or push hidden behind a shell wrapper or 
 `--no-verify` bypasses layer 2. Using it is an emergency action that must be justified in the pull request.
 
 **The hooks have a regression suite: `.claude/hooks/test-hooks.sh`.** Run it after touching any hook. A guard that refuses nothing is indistinguishable from a guard that is not installed, so the suite asserts refusals as carefully as it asserts permissions.
+
+A third hook, `.claude/hooks/guard-worktree-cd.sh`, keeps a session in its own checkout: it refuses a `cd` or `pushd` written with `.claude/worktrees` in its argument at command position — which would move the session, and every agent dispatched after it, into that worktree — and leaves a subshell's `(cd <path> && …)`, `git -C`, `make -C`, heredoc bodies and quoted prose alone. It cannot follow a variable, a symlink, `CDPATH` or `..`. Subagents are not checked; each works in its own worktree.
 
 ## Review before every commit
 

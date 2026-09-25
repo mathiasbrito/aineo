@@ -1,0 +1,493 @@
+local MiniTest = require('mini.test')
+local layout = dofile('tests/helpers/layout.lua')
+
+local eq = MiniTest.expect.equality
+
+local child = MiniTest.new_child_neovim()
+
+local T = MiniTest.new_set({ hooks = { post_once = child.stop } })
+
+T['open()'] = MiniTest.new_set()
+
+T['open()']['shows Claude in the left column and the Report above Input in the right one'] = function()
+  layout.start(child)
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  local claude = layout.box(child, layout.window_showing(child, buffers.claude))
+  local report = layout.box(child, layout.window_showing(child, buffers.report))
+  local input = layout.box(child, layout.window_showing(child, layout.input_buffer(child)))
+  eq(layout.window_count(child), 3)
+  eq({ claude.row, claude.col }, { 0, 0 })
+  eq({ report.row, report.col }, { 0, claude.width + 1 })
+  eq({ input.row, input.col }, { report.height + 1, report.col })
+  eq(claude.height, report.height + 1 + input.height)
+end
+
+T['open()']['gives Claude half the columns'] = function()
+  layout.start(child)
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  local claude = layout.box(child, layout.window_showing(child, buffers.claude))
+  layout.expect_near(claude.width, layout.COLUMNS / 2)
+end
+
+T['open()']['gives the Report its share of the right column'] = MiniTest.new_set({
+  parametrize = { { 2 / 3 }, { 1 / 2 } },
+})
+
+T['open()']['gives the Report its share of the right column']['as report_height'] = function(share)
+  layout.start(child)
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, { claude = buffers.claude, report = buffers.report, report_height = share })
+
+  local report = layout.box(child, layout.window_showing(child, buffers.report))
+  local input = layout.box(child, layout.window_showing(child, layout.input_buffer(child)))
+  layout.expect_near(report.height, share * (report.height + input.height))
+end
+
+T['open()']['puts the cursor in Input'] = function()
+  layout.start(child)
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), layout.input_buffer(child))
+end
+
+--- The number of buffers without a name, as `:ls` shows `[No Name]`.
+local UNNAMED_BUFFER_COUNT = [[#vim.tbl_filter(function(buffer)
+  return vim.api.nvim_buf_get_name(buffer) == ''
+end, vim.api.nvim_list_bufs())]]
+
+T['open()']['turns the empty buffer Neovim starts with into Input'] = function()
+  layout.start(child)
+  local startup_buffer = child.lua_get('vim.api.nvim_get_current_buf()')
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(layout.input_buffer(child), startup_buffer)
+  eq(child.lua_get(UNNAMED_BUFFER_COUNT), 0)
+end
+
+--- Makes the current buffer of the child a startup dashboard's, as
+--- dashboard-nvim f787e34 makes the buffer it draws in (`buf_local()` in
+--- `lua/dashboard/init.lua`): wiped once hidden, unlisted, of the filetype
+--- `dashboard`, with no `'buftype'`.
+local MAKE_DASHBOARD_BUFFER = [[
+  vim.bo.bufhidden = 'wipe'
+  vim.bo.buflisted = false
+  vim.bo.filetype = 'dashboard'
+]]
+
+--- Draws a dashboard into the child's current buffer and leaves it as
+--- dashboard-nvim f787e34's themes leave theirs (`lua/dashboard/utils.lua`,
+--- `lua/dashboard/theme/doom.lua`): not modifiable, and not modified.
+local DRAW_DASHBOARD = [[
+  vim.api.nvim_buf_set_lines(0, 0, -1, true, { 'a dashboard' })
+  vim.bo.modifiable = false
+  vim.bo.modified = false
+]]
+
+T['open()']["replaces a buffer wiped once hidden, as a startup dashboard's, rather than keep it as a file"] = function()
+  layout.start(child)
+  local dashboard = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.lua(MAKE_DASHBOARD_BUFFER)
+  child.lua(DRAW_DASHBOARD)
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(layout.window_count(child), 3)
+  eq(child.lua_get('vim.api.nvim_buf_is_valid(...)', { dashboard }), false)
+end
+
+T['open()']["makes a new Input when the empty buffer Neovim starts with is a startup dashboard's"] = function()
+  layout.start(child)
+  local dashboard = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.lua(MAKE_DASHBOARD_BUFFER)
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(layout.input_buffer(child) ~= dashboard, true)
+  eq(child.lua_get('vim.bo[...].filetype', { layout.input_buffer(child) }), '')
+end
+
+--- Wipes the child's current buffer once it is hidden and changes it, as a
+--- user may change a file some plugin has set to be wiped.
+local CHANGE_A_FILE_WIPED_ONCE_HIDDEN = [[
+  vim.bo.bufhidden = 'wipe'
+  vim.api.nvim_buf_set_lines(0, 0, -1, true, { 'changed' })
+]]
+
+T['open()']['keeps a changed file that is wiped once hidden, in the file column'] = function()
+  layout.start(child)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  local file_buffer = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.lua(CHANGE_A_FILE_WIPED_ONCE_HIDDEN)
+  child.cmd('vsplit ' .. layout.file('other.txt'))
+  child.cmd('wincmd p')
+  local buffers = layout.stand_ins(child)
+
+  child.lua([[pcall(require('aineo.layout').open, ...)]], { layout.arrangement(buffers) })
+
+  eq(layout.window_count(child), 4)
+  eq(layout.window_showing(child, file_buffer) ~= nil, true)
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), layout.input_buffer(child))
+end
+
+T['open()']['turns the empty buffer Neovim starts with into Input when the user gave it a filetype'] = function()
+  layout.start(child)
+  local empty = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.cmd('setlocal filetype=text')
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(layout.input_buffer(child), empty)
+  eq(layout.window_count(child), 3)
+end
+
+T['open()']['makes a new Input when the current window shows help, which stays loaded'] = function()
+  layout.start(child)
+  child.cmd('help')
+  child.cmd('only')
+  local help_buffer = child.lua_get('vim.api.nvim_get_current_buf()')
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(layout.input_buffer(child) ~= help_buffer, true)
+  eq(child.lua_get('vim.api.nvim_buf_is_loaded(...)', { help_buffer }), true)
+end
+
+T['open()']['makes Input a named scratch buffer, never a file'] = MiniTest.new_set({
+  parametrize = { { 'enew' }, { 'help | only' } },
+})
+
+T['open()']['makes Input a named scratch buffer, never a file']['after'] = function(command)
+  layout.start(child)
+  child.cmd(command)
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(
+    child.lua_get(
+      [[(function(buffer)
+        return {
+          name = vim.api.nvim_buf_get_name(buffer),
+          buftype = vim.bo[buffer].buftype,
+          bufhidden = vim.bo[buffer].bufhidden,
+          buflisted = vim.bo[buffer].buflisted,
+          swapfile = vim.bo[buffer].swapfile,
+        }
+      end)(...)]],
+      { layout.input_buffer(child) }
+    ),
+    {
+      name = 'aineo://input',
+      buftype = 'nofile',
+      bufhidden = 'hide',
+      buflisted = false,
+      swapfile = false,
+    }
+  )
+end
+
+T['open()']['closes the other windows of the tab and keeps their buffers loaded'] =
+  MiniTest.new_set({ parametrize = { { 'set hidden' }, { 'set nohidden' } } })
+
+T['open()']['closes the other windows of the tab and keeps their buffers loaded']['with'] = function(
+  option
+)
+  layout.start(child)
+  child.cmd(option)
+  local startup_window = child.lua_get('vim.api.nvim_get_current_win()')
+  child.cmd('vsplit ' .. layout.file('other.txt'))
+  local file_buffer = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.cmd('help')
+  local help_buffer = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.lua('vim.api.nvim_set_current_win(...)', { startup_window })
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(layout.window_count(child), 3)
+  eq(
+    child.lua_get('vim.tbl_map(vim.api.nvim_buf_is_loaded, { ... })', { file_buffer, help_buffer }),
+    { true, true }
+  )
+end
+
+--- Commands that leave a file in the current window, `{file}` standing for a
+--- path: a named file, text typed into the unnamed buffer, and text typed
+--- below an empty first line of it.
+local EDIT_A_FILE = 'edit {file}'
+local TYPE_INTO_THE_UNNAMED_BUFFER = [[call setline(1, 'typed')]]
+local TYPE_BELOW_AN_EMPTY_LINE = [[call setline(1, ['', 'typed'])]]
+
+T['open()']['keeps the file the current window shows, in the file column'] = MiniTest.new_set({
+  parametrize = {
+    { EDIT_A_FILE },
+    { TYPE_INTO_THE_UNNAMED_BUFFER },
+    { TYPE_BELOW_AN_EMPTY_LINE },
+  },
+})
+
+T['open()']['keeps the file the current window shows, in the file column']['after'] = function(
+  command
+)
+  layout.start(child)
+  child.cmd((command:gsub('{file}', layout.file('first.txt'))))
+  local file_buffer = child.lua_get('vim.api.nvim_get_current_buf()')
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(layout.window_count(child), 4)
+  local claude = layout.box(child, layout.window_showing(child, buffers.claude))
+  local file = layout.box(child, layout.window_showing(child, file_buffer))
+  eq({ file.row, file.col }, { 0, claude.width + 1 })
+  eq(layout.input_buffer(child) ~= file_buffer, true)
+end
+
+T['open()']['refuses an arrangement it cannot show, naming the setting'] = MiniTest.new_set({
+  parametrize = {
+    { { claude = false }, 'arrangement%.claude: expected a buffer' },
+    { { claude = 9999 }, 'arrangement%.claude: expected a buffer' },
+    { { report = 'aineo://report' }, 'arrangement%.report: expected a buffer' },
+    { { report_height = 1 }, 'arrangement%.report_height: expected a number strictly between' },
+    { { report_height = '2/3' }, 'arrangement%.report_height: expected a number strictly between' },
+  },
+})
+
+T['open()']['refuses an arrangement it cannot show, naming the setting']['given'] = function(
+  wrong,
+  refusal
+)
+  layout.start(child)
+  local arrangement = vim.tbl_extend('force', layout.arrangement(layout.stand_ins(child)), wrong)
+
+  MiniTest.expect.error(function()
+    layout.open(child, arrangement)
+  end, refusal)
+end
+
+--- Opens a floating window of another plugin, holding a buffer wiped when
+--- hidden, and returns the window and its buffer without entering it.
+local OPEN_A_FLOAT = [[(function()
+  local buffer = vim.api.nvim_create_buf(false, true)
+  vim.bo[buffer].bufhidden = 'wipe'
+  local window = vim.api.nvim_open_win(buffer, false, {
+    relative = 'editor', row = 1, col = 1, width = 20, height = 3,
+  })
+  return { window = window, buffer = buffer }
+end)()]]
+
+T['open()']['leaves a floating window and its buffer alone'] = function()
+  layout.start(child)
+  local float = child.lua_get(OPEN_A_FLOAT)
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(
+    child.lua_get(
+      '(function(window, buffer) return { vim.api.nvim_win_is_valid(window), vim.api.nvim_buf_is_valid(buffer) } end)(...)',
+      { float.window, float.buffer }
+    ),
+    { true, true }
+  )
+end
+
+T['open()']['from a floating window, opens the layout with the cursor in Input'] = function()
+  layout.start(child)
+  local float = child.lua_get(OPEN_A_FLOAT)
+  child.lua('vim.api.nvim_set_current_win(...)', { float.window })
+  local buffers = layout.stand_ins(child)
+
+  MiniTest.expect.no_error(function()
+    layout.open(child, layout.arrangement(buffers))
+  end)
+
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), layout.input_buffer(child))
+  eq(layout.window_count(child), 4)
+end
+
+T['open()']['from a floating window over two files, keeps the first as the file column'] = function()
+  layout.start(child)
+  local first = layout.file('first.txt')
+  child.cmd('edit ' .. first)
+  child.cmd('rightbelow vsplit ' .. layout.file('second.txt'))
+  local float = child.lua_get(OPEN_A_FLOAT)
+  child.lua('vim.api.nvim_set_current_win(...)', { float.window })
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(#child.lua_get('vim.fn.win_findbuf(vim.fn.bufnr(...))', { first }), 1)
+end
+
+T['open()']['stays in Normal mode when entering a terminal starts Insert mode'] = function()
+  layout.start(child)
+  local buffers = layout.stand_ins(child)
+  child.cmd('autocmd BufEnter term://* startinsert')
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(child.api.nvim_get_mode().mode, 'n')
+end
+
+T['open()']['opens once the screen has room, after failing for the want of it'] = function()
+  layout.start(child)
+  local buffers = layout.stand_ins(child)
+  child.o.lines = 4
+  MiniTest.expect.error(function()
+    layout.open(child, layout.arrangement(buffers))
+  end, 'E36')
+  child.o.lines = layout.LINES
+
+  MiniTest.expect.no_error(function()
+    layout.open(child, layout.arrangement(buffers))
+  end)
+
+  eq(layout.window_count(child), 3)
+end
+
+T['open()']['refuses a Report share of 1 before changing any window'] = function()
+  layout.start(child)
+  local arrangement = layout.arrangement(layout.stand_ins(child))
+  arrangement.report_height = 1
+
+  MiniTest.expect.error(function()
+    layout.open(child, arrangement)
+  end, 'arrangement%.report_height: expected a number strictly between')
+
+  eq(layout.window_count(child), 1)
+end
+
+T['open()']['refuses an arrangement that is not a table'] = function()
+  layout.start(child)
+
+  MiniTest.expect.error(function()
+    layout.open(child, 'the layout')
+  end, 'arrangement: expected table')
+end
+
+T['focus()'] = MiniTest.new_set({ parametrize = { { 'claude' }, { 'report' }, { 'input' } } })
+
+T['focus()']['puts the cursor in the window of'] = function(role)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+
+  layout.focus(child, role, layout.arrangement(buffers))
+
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers[role])
+end
+
+T['focus()']['reopens the closed window of'] = function(role)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.close_windows(child, buffers, { role })
+
+  layout.focus(child, role, layout.arrangement(buffers))
+
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers[role])
+  eq(layout.window_count(child), 3)
+end
+
+T['focus() with its window open changes no window and no size'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.claude)
+  child.cmd('vertical resize 20')
+  local windows = child.lua_get('vim.api.nvim_tabpage_list_wins(0)')
+  local before = layout.boxes(child, buffers)
+
+  layout.focus(child, 'input', layout.arrangement(buffers))
+
+  eq(child.lua_get('vim.api.nvim_tabpage_list_wins(0)'), windows)
+  eq(layout.boxes(child, buffers), before)
+end
+
+T['focus() with its window open never calls the function it is given for the arrangement'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+
+  child.lua(
+    [[
+      local arrangement = ...
+      _G.arrangement_calls = 0
+      require('aineo.layout').focus('report', function()
+        _G.arrangement_calls = _G.arrangement_calls + 1
+        return arrangement
+      end)
+    ]],
+    { layout.arrangement(buffers) }
+  )
+
+  eq(child.lua_get('_G.arrangement_calls'), 0)
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers.report)
+end
+
+T['focus() with its window closed opens the layout with the arrangement a function returns'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.close_windows(child, buffers, { 'report' })
+
+  child.lua(
+    [[
+      local arrangement = ...
+      pcall(require('aineo.layout').focus, 'report', function()
+        return arrangement
+      end)
+    ]],
+    { layout.arrangement(buffers) }
+  )
+
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers.report)
+  eq(layout.window_count(child), 3)
+end
+
+T['focus() with its window closed names what the function it is given returned'] =
+  MiniTest.new_set({
+    parametrize = { { 'nil', 'got nil' }, { 'false', 'got boolean' } },
+  })
+
+T['focus() with its window closed names what the function it is given returned']['when it returns'] = function(
+  returned,
+  message
+)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.close_windows(child, buffers, { 'report' })
+
+  MiniTest.expect.error(function()
+    child.lua(([[require('aineo.layout').focus('report', function()
+        return %s
+      end)]]):format(returned))
+  end, 'arrangement: expected table, ' .. message)
+end
+
+T['focus() refuses a window the layout does not have'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+
+  MiniTest.expect.error(function()
+    layout.focus(child, 'files', layout.arrangement(buffers))
+  end, "role: expected 'claude', 'report' or 'input'")
+end
+
+T['open()']['puts the cursor in Input when the current window showed a file'] = function()
+  layout.start(child)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), layout.input_buffer(child))
+end
+
+return T

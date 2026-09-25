@@ -1,0 +1,14 @@
+Baseline for wave 5 — measured by the orchestrator on host Macbook-Mathias, Nvim 0.11.6.
+
+make test — 2026-09-25, two runs side by side, ended 08:00:58 CEST (the result files' own time), 431 s each: at PR #17's final head a036ada, and on T7's
+26 files laid over origin/dev 516b5c0 (dev had not touched them since the branch point); the merge of PR #17 gave
+201873b, per-file identical to a036ada on those files (26 of 26).
+  [t7] Total number of cases: 613
+  [t7] Fails (0) and Notes (0)
+  [t7] rc=0 secs=431
+  [t7c] Total number of cases: 613
+  [t7c] Fails (0) and Notes (0)
+  [t7c] rc=0 secs=431
+
+.claude/hooks/test-hooks.sh — at 201873b, 2026-09-25 08:11 CEST, exit 0:
+105 passed

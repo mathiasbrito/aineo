@@ -1,0 +1,8 @@
+`claude --version` — measured by the orchestrator on 2026-09-25 at 08:07:55 CEST (the session transcript's time), host Macbook-Mathias, every
+CLAUDE* variable removed; no session started, no model turn.
+
+$ claude --version
+2.1.282 (Claude Code)
+exit 0; stdout exactly "2.1.282 (Claude Code)\n", stderr empty, 20 ms.
+
+Claude Code had updated itself: waves 2-4 measured 2.1.281 (their evidence files name it), and 2.1.280 before that.

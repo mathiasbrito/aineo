@@ -1,0 +1,173 @@
+tree: 1123943, status: 0 changed files under lua tests
+=== M4 (lua/aineo/claude/arguments.lua)
+restored lua/aineo/claude/arguments.lua
+mutant M4 rc=2
+Fails (1) and Notes (0)
+  Failed expectation for a string containing a part
+FAIL in tests/test_claude.lua | start_session() | writes the env of a server without variables as a JSON object:
+=== M5 (lua/aineo/claude/readiness.lua)
+restored lua/aineo/claude/readiness.lua
+mutant M5 rc=2
+Fails (1) and Notes (0)
+  Failed expectation for equality
+FAIL in tests/test_claude.lua | session_status() | never becomes ready behind the workspace-trust dialog:
+=== M6 (lua/aineo/claude/stop.lua)
+restored lua/aineo/claude/stop.lua
+mutant M6 rc=2
+Fails (2) and Notes (0)
+  Failed expectation for equality
+FAIL in tests/test_claude.lua | quitting Neovim | ends a turn with one Ctrl-C before the double Ctrl-C:
+FAIL in tests/test_claude.lua | quitting Neovim | leaves no Claude that ignores its keys and the hangup running:
+=== shell (lua/aineo/claude/init.lua)
+restored lua/aineo/claude/init.lua
+mutant shell rc=2
+Fails (23) and Notes (0)
+  Failed expectation for a string containing a part
+  Failed expectation for equality
+  Failed expectation for error matching pattern "aineo%-no%-such%-claude"
+FAIL in tests/test_claude.lua | quitting Neovim | ends a turn with one Ctrl-C before the double Ctrl-C:
+FAIL in tests/test_claude.lua | quitting Neovim | leaves no Claude that ignores its keys and the hangup running: tests/helpers/claude_session.lua:288: bad argument #1 to 'kill' (number expected, got nil)
+FAIL in tests/test_claude.lua | quitting Neovim | stops an idle Claude by a double Ctrl-C:
+FAIL in tests/test_claude.lua | session_status() | is exited, with the exit code, once Claude exits:
+FAIL in tests/test_claude.lua | session_status() | is not ready once Claude has exited, even right after its prompt:
+FAIL in tests/test_claude.lua | session_status() | is ready once the prompt shows with no trust dialog:
+FAIL in tests/test_claude.lua | session_status() | leaves the terminal showing Neovim’s exit line:
+FAIL in tests/test_claude.lua | session_status() | never becomes ready behind the workspace-trust dialog:
+FAIL in tests/test_claude.lua | session_status() | stays starting for a moment after the prompt shows:
+FAIL in tests/test_claude.lua | start_session() | appends the instructions to the system prompt byte for byte:
+FAIL in tests/test_claude.lua | start_session() | gives Claude the MCP servers as one --mcp-config:
+FAIL in tests/test_claude.lua | start_session() | gives the process the editor’s server address as NVIM:
+FAIL in tests/test_claude.lua | start_session() | leaves nothing behind but the error when the command cannot run:
+FAIL in tests/test_claude.lua | start_session() | marks the process as aineo’s child with AINEO_CHILD=1:
+FAIL in tests/test_claude.lua | start_session() | passes each word of the command to the process unchanged:
+FAIL in tests/test_claude.lua | start_session() | passes every other variable of the editor on unchanged:
+FAIL in tests/test_claude.lua | start_session() | passes no flag beyond the servers, the instructions and the tools:
+FAIL in tests/test_claude.lua | start_session() | pre-allows each tool it is given with --allowedTools:
+FAIL in tests/test_claude.lua | start_session() | returns the running session instead of starting another:
+FAIL in tests/test_claude.lua | start_session() | runs the command in a new terminal buffer:
+FAIL in tests/test_claude.lua | start_session() | runs the command in the directory it is given:
+FAIL in tests/test_claude.lua | start_session() | starts Claude again in a new terminal once it has exited:
+FAIL in tests/test_claude.lua | start_session() | writes the env of a server without variables as a JSON object:
+=== flag (lua/aineo/claude/arguments.lua)
+restored lua/aineo/claude/arguments.lua
+mutant flag rc=2
+Fails (1) and Notes (0)
+  Failed expectation for equality
+FAIL in tests/test_claude.lua | start_session() | passes no flag beyond the servers, the instructions and the tools:
+=== nvim (lua/aineo/claude/init.lua)
+restored lua/aineo/claude/init.lua
+mutant nvim rc=2
+Fails (1) and Notes (0)
+  Failed expectation for equality
+FAIL in tests/test_claude.lua | start_session() | gives the process the editor’s server address as NVIM:
+=== clearenv (lua/aineo/claude/init.lua)
+restored lua/aineo/claude/init.lua
+mutant clearenv rc=2
+Fails (22) and Notes (0)
+  Failed expectation for a string containing a part
+  Failed expectation for equality
+  Text: "E5113: Error while calling lua chunk: ...<worktree>/tests/helper\ns/fake_claude.lua:36: AINEO_FAKE_CLAUDE_RECORD is unset\nstack traceback:\n        [C]: in function 'assert'\n        ...<worktree>/tests/helpers/fake_claude.lua:36: in main \nchunk\n\n[Process exited 1]\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+FAIL in tests/test_claude.lua | quitting Neovim | ends a turn with one Ctrl-C before the double Ctrl-C:
+FAIL in tests/test_claude.lua | quitting Neovim | leaves no Claude that ignores its keys and the hangup running: tests/helpers/claude_session.lua:288: bad argument #1 to 'kill' (number expected, got nil)
+FAIL in tests/test_claude.lua | quitting Neovim | stops an idle Claude by a double Ctrl-C:
+FAIL in tests/test_claude.lua | session_status() | is exited, with the exit code, once Claude exits:
+FAIL in tests/test_claude.lua | session_status() | is not ready once Claude has exited, even right after its prompt:
+FAIL in tests/test_claude.lua | session_status() | is ready once the prompt shows with no trust dialog:
+FAIL in tests/test_claude.lua | session_status() | leaves the terminal showing Neovim’s exit line:
+FAIL in tests/test_claude.lua | session_status() | never becomes ready behind the workspace-trust dialog:
+FAIL in tests/test_claude.lua | session_status() | stays starting for a moment after the prompt shows:
+FAIL in tests/test_claude.lua | start_session() | appends the instructions to the system prompt byte for byte:
+FAIL in tests/test_claude.lua | start_session() | gives Claude the MCP servers as one --mcp-config:
+FAIL in tests/test_claude.lua | start_session() | gives the process the editor’s server address as NVIM:
+FAIL in tests/test_claude.lua | start_session() | marks the process as aineo’s child with AINEO_CHILD=1:
+FAIL in tests/test_claude.lua | start_session() | passes each word of the command to the process unchanged:
+FAIL in tests/test_claude.lua | start_session() | passes every other variable of the editor on unchanged:
+FAIL in tests/test_claude.lua | start_session() | passes no flag beyond the servers, the instructions and the tools:
+FAIL in tests/test_claude.lua | start_session() | pre-allows each tool it is given with --allowedTools:
+FAIL in tests/test_claude.lua | start_session() | returns the running session instead of starting another:
+FAIL in tests/test_claude.lua | start_session() | runs the command in a new terminal buffer:
+FAIL in tests/test_claude.lua | start_session() | runs the command in the directory it is given:
+FAIL in tests/test_claude.lua | start_session() | starts Claude again in a new terminal once it has exited:
+FAIL in tests/test_claude.lua | start_session() | writes the env of a server without variables as a JSON object:
+=== wipeonexit (lua/aineo/claude/init.lua)
+restored lua/aineo/claude/init.lua
+mutant wipeonexit rc=2
+Fails (3) and Notes (0)
+  Failed expectation for a string containing a part
+  Failed expectation for equality
+FAIL in tests/test_claude.lua | session_status() | leaves the terminal showing Neovim’s exit line:
+FAIL in tests/test_claude.lua | start_session() | shows the new terminal in every window that showed the old one:
+FAIL in tests/test_claude.lua | start_session() | starts Claude again after the old terminal was wiped: nvim_exec2(), line 1: Vim(bwipeout):E517: No buffers were wiped out: bwipeout! 2
+=== order (lua/aineo/claude/init.lua)
+restored lua/aineo/claude/init.lua
+mutant order rc=2
+Fails (1) and Notes (0)
+  Failed expectation for equality
+FAIL in tests/test_claude.lua | session_status() | is not ready once Claude has exited, even right after its prompt:
+=== wipefirst (lua/aineo/claude/init.lua)
+restored lua/aineo/claude/init.lua
+mutant wipefirst rc=2
+Fails (1) and Notes (0)
+  Failed expectation for equality
+FAIL in tests/test_claude.lua | start_session() | shows the new terminal in every window that showed the old one:
+=== nofallback (lua/aineo/claude/stop.lua)
+restored lua/aineo/claude/stop.lua
+mutant nofallback rc=2
+Fails (1) and Notes (0)
+  Failed expectation for equality
+FAIL in tests/test_claude.lua | quitting Neovim | leaves no Claude that ignores its keys and the hangup running:
+=== shortwait (lua/aineo/claude/stop.lua)
+restored lua/aineo/claude/stop.lua
+mutant shortwait rc=2
+Fails (1) and Notes (0)
+  Failed expectation for equality
+FAIL in tests/test_claude.lua | quitting Neovim | leaves no Claude that ignores its keys and the hangup running:
+=== nosettle (lua/aineo/claude/readiness.lua)
+restored lua/aineo/claude/readiness.lua
+mutant nosettle rc=2
+Fails (1) and Notes (0)
+  Failed expectation for equality
+FAIL in tests/test_claude.lua | session_status() | stays starting for a moment after the prompt shows:
+=== nocleanup (lua/aineo/claude/init.lua)
+restored lua/aineo/claude/init.lua
+mutant nocleanup rc=2
+Fails (1) and Notes (0)
+  Failed expectation for equality
+FAIL in tests/test_claude.lua | start_session() | leaves nothing behind but the error when the command cannot run:
+=== noguard (lua/aineo/claude/init.lua)
+restored lua/aineo/claude/init.lua
+mutant noguard rc=2
+Fails (1) and Notes (0)
+  Failed expectation for *no* error
+  Observed error: Error executing lua: ...<worktree>/lua/aineo/claude/init.lua:65: Invalid buffer id: 2
+FAIL in tests/test_claude.lua | start_session() | starts Claude again after the old terminal was wiped:
+=== noquit (lua/aineo/claude/init.lua)
+restored lua/aineo/claude/init.lua
+mutant noquit rc=2
+Fails (3) and Notes (0)
+  Failed expectation for equality
+FAIL in tests/test_claude.lua | quitting Neovim | ends a turn with one Ctrl-C before the double Ctrl-C:
+FAIL in tests/test_claude.lua | quitting Neovim | leaves no Claude that ignores its keys and the hangup running:
+FAIL in tests/test_claude.lua | quitting Neovim | stops an idle Claude by a double Ctrl-C:
+=== novalidate (lua/aineo/claude/init.lua)
+restored lua/aineo/claude/init.lua
+mutant novalidate rc=2
+Fails (1) and Notes (0)
+  Failed expectation for error matching pattern "settings%.instructions"
+FAIL in tests/test_claude.lua | start_session() | names the setting that is malformed | and starts nothing + args { "instructions", false }:
+=== deadreturn (lua/aineo/claude/init.lua)
+restored lua/aineo/claude/init.lua
+mutant deadreturn rc=2
+Fails (3) and Notes (0)
+  Failed expectation for *no* equality
+  Failed expectation for equality
+FAIL in tests/test_claude.lua | start_session() | starts Claude again after the old terminal was wiped: Invalid buffer id: 2
+FAIL in tests/test_claude.lua | start_session() | starts Claude again in a new terminal once it has exited:
+FAIL in tests/test_claude.lua | start_session() | wipes the terminal of the Claude that exited:
+=== trustword (lua/aineo/claude/readiness.lua)
+restored lua/aineo/claude/readiness.lua
+mutant trustword rc=2
+Fails (1) and Notes (0)
+  Failed expectation for equality
+FAIL in tests/test_claude.lua | session_status() | never becomes ready behind the workspace-trust dialog:
+done

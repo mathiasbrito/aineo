@@ -14,6 +14,7 @@ set -uo pipefail
 HOOKS=$(cd "$(dirname "$0")" && pwd)
 GUARD="$HOOKS/guard-protected-branch.sh"
 REVIEW="$HOOKS/require-review-before-commit.sh"
+CDGUARD="$HOOKS/guard-worktree-cd.sh"
 
 passed=0
 failed=0
@@ -200,8 +201,43 @@ echo "── branch guard: a subagent never merges ──"
 expect "$GUARD" allow "gh pr merge 36 --rebase --delete-branch"
 [ "$(verdict_as_agent "$GUARD" "gh pr merge 36 --rebase --delete-branch")" = deny ] && passed=$((passed + 1)) || { failed=$((failed + 1)); echo "FAIL  expected deny  got allow  (agent) gh pr merge 36 --rebase --delete-branch"; }
 [ "$(verdict_as_agent "$GUARD" "gh pr merge --squash 36")" = deny ] && passed=$((passed + 1)) || { failed=$((failed + 1)); echo "FAIL  expected deny  got allow  (agent) gh pr merge --squash 36"; }
+[ "$(verdict_as_agent "$GUARD" "false && gh pr merge 0 --rebase")" = deny ] && passed=$((passed + 1)) || { failed=$((failed + 1)); echo "FAIL  expected deny  got allow  (agent) false && gh pr merge 0 --rebase"; }
 [ "$(verdict_as_agent "$GUARD" "gh pr view 36 --json files")" = allow ] && passed=$((passed + 1)) || { failed=$((failed + 1)); echo "FAIL  expected allow got deny   (agent) gh pr view 36 --json files"; }
 [ "$(verdict_as_agent "$GUARD" "git commit -m 'x'")" = allow ] && passed=$((passed + 1)) || { failed=$((failed + 1)); echo "FAIL  expected allow got deny   (agent) git commit on a feature branch"; }
+
+echo "── worktree cd guard: the session never moves into an agent worktree ──"
+expect "$CDGUARD" deny  "cd .claude/worktrees/orch-verify-t6 && git status"
+expect "$CDGUARD" deny  "cd /Users/x/aineo/.claude/worktrees/orch-verify-t4 && ls deps"
+expect "$CDGUARD" deny  "cd \"/Users/x/my repo/.claude/worktrees/a\" && make test"
+expect "$CDGUARD" deny  "ls; cd .claude/worktrees/a"
+expect "$CDGUARD" deny  "true && pushd .claude/worktrees/a"
+expect "$CDGUARD" deny  "cd .claude/worktrees"
+expect "$CDGUARD" allow "(cd .claude/worktrees/a && make test)"
+expect "$CDGUARD" allow "(cd /Users/x/aineo/.claude/worktrees/a && make deps >/dev/null; echo rc=\$?)"
+expect "$CDGUARD" allow "ls && (cd .claude/worktrees/a && (make test))"
+expect "$CDGUARD" allow "git -C .claude/worktrees/a status"
+expect "$CDGUARD" allow "make -C .claude/worktrees/a test"
+expect "$CDGUARD" allow "cd /Users/x/aineo && git status"
+expect "$CDGUARD" allow "cd .claude && ls"
+expect "$CDGUARD" allow "echo 'then cd .claude/worktrees/a'"
+expect "$CDGUARD" allow "git worktree add --detach .claude/worktrees/a origin/dev"
+# The mechanisms, each separated from its absence (the review of PR #18):
+# a quoted string is prose, a subshell group moves nothing, a heredoc body is
+# prose, and the shell's prefix words still leave a cd at command position.
+expect "$CDGUARD" allow "echo \"x; cd .claude/worktrees/a\""
+expect "$CDGUARD" allow "(ls && cd .claude/worktrees/a)"
+expect "$CDGUARD" allow $'git commit -F - <<\'EOF\'\nWhy: a session ran\ncd .claude/worktrees/x && make test\nEOF'
+expect "$CDGUARD" allow $'gh pr create --body "first line\ncd .claude/worktrees/x\nlast line"'
+expect "$CDGUARD" deny  "echo \"don't\" && cd .claude/worktrees/x && git log --format='%h'"
+expect "$CDGUARD" deny  "{ cd .claude/worktrees/a; make test; }"
+expect "$CDGUARD" deny  "builtin cd .claude/worktrees/a"
+expect "$CDGUARD" deny  "if true; then cd .claude/worktrees/a; fi"
+expect "$CDGUARD" deny  $'cat <<EOF\nprose\nEOF\ncd .claude/worktrees/a'
+# A caller is a subagent by its agent_id alone: a main session started with
+# `claude --agent` carries an agent_type and is still checked.
+got=$(jq -cn --arg c "cd .claude/worktrees/a" '{tool_input:{command:$c},agent_type:"implementer"}' | "$CDGUARD")
+printf '%s' "$got" | grep -q '"permissionDecision":"deny"' && passed=$((passed + 1)) || { failed=$((failed + 1)); echo "FAIL  expected deny  got allow  (agent_type only) cd .claude/worktrees/a"; }
+[ "$(verdict_as_agent "$CDGUARD" "cd .claude/worktrees/agent-x && make test")" = allow ] && passed=$((passed + 1)) || { failed=$((failed + 1)); echo "FAIL  expected allow got deny   (agent) cd into its own worktree"; }
 
 echo "── review hook ──"
 

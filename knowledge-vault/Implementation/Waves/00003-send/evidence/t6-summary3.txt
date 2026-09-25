@@ -1,0 +1,45 @@
+T6 fact, third run (the attack review of PR #15, finding 3: a bracketed paste's closing ESC[201~ can reach a
+reader split across two reads; the suite's fake reads at most 1,022 bytes at a time) — measured by the orchestrator on
+2026-09-24, 20:00–20:02 CEST (the files' own times). Claude Code 2.1.281 · Nvim 0.11.6 headless (--clean -i NONE, state, data and log under a
+scratch directory) · terminal 120x40 · cwd the aineo checkout (trusted by the user) · every CLAUDE* variable removed ·
+NO model turn: no Enter was sent. Driver: t6-split-driver.lua (this folder). The user's shada and Neovim log were
+stat'ed before and after: unchanged.
+
+For each text length L from 1,006 to 1,020 bytes, a fresh claude, once ready, was written ONE write:
+ESC[200~ + a text of L bytes + ESC[201~ — so the closing marker began at byte 6 + L = 1,012 … 1,026 of the write,
+spanning the 1,022- and 1,024-byte boundaries. 1.5 s later its input box was read; then a double Ctrl-C (0.3 s apart).
+
+RESULT, all 15 lengths alike: the box read "❯ [Pasted text #1]" — one paste, no stray "[201~" or "201~" — and the
+double Ctrl-C then exited 0, as keys, so the paste had ended. Whether the pty split the marker between two of Claude
+Code's reads in any of these runs is not observable from Neovim; the lengths bracket the boundaries the fake shows.
+
+len=1006 marker_at=1012 box=❯ [Pasted text #1]
+  exit=0
+len=1007 marker_at=1013 box=❯ [Pasted text #1]
+  exit=0
+len=1008 marker_at=1014 box=❯ [Pasted text #1]
+  exit=0
+len=1009 marker_at=1015 box=❯ [Pasted text #1]
+  exit=0
+len=1010 marker_at=1016 box=❯ [Pasted text #1]
+  exit=0
+len=1011 marker_at=1017 box=❯ [Pasted text #1]
+  exit=0
+len=1012 marker_at=1018 box=❯ [Pasted text #1]
+  exit=0
+len=1013 marker_at=1019 box=❯ [Pasted text #1]
+  exit=0
+len=1014 marker_at=1020 box=❯ [Pasted text #1]
+  exit=0
+len=1015 marker_at=1021 box=❯ [Pasted text #1]
+  exit=0
+len=1016 marker_at=1022 box=❯ [Pasted text #1]
+  exit=0
+len=1017 marker_at=1023 box=❯ [Pasted text #1]
+  exit=0
+len=1018 marker_at=1024 box=❯ [Pasted text #1]
+  exit=0
+len=1019 marker_at=1025 box=❯ [Pasted text #1]
+  exit=0
+len=1020 marker_at=1026 box=❯ [Pasted text #1]
+  exit=0

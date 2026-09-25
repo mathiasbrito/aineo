@@ -1,0 +1,22 @@
+# Claude Code 2.1.281 in a turn, its input box on screen below the turn's spinner line, as the
+# screen of a Neovim terminal at 120x40 showed it: screen B of t6-summary.txt ("TURN during, before
+# the mid-turn send", recorded by the orchestrator on 2026-09-24, wave 3's evidence): its text, not
+# its bytes. The path and the account tier are placeholders; the footer's "← 5 agents" was the
+# host's own state. What marks the turn is the spinner line ("✳ Whirring…") and the footer's
+# "esc to interrupt". The screen follows the first empty line.
+
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 (1M context) with xhigh effort · Claude PLAN
+  ▝▝ ▝▝    ~/project/aineo · /rc
+❯ aineo T6 measurement. Reply with the single word ALPHAONE and nothing else.
+  Use no tool.
+⏺ ALPHAONE
+✻ Cooked for 1s · done 5:15 PM
+❯ aineo T6 measurement. Write the integers from 1 to 250, one per line, as
+  plain text. Use no tool.
+✳ Whirring…
+  ⎿  Tip: Use /memory to view and manage Claude memory
+────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt · ← 5 agents

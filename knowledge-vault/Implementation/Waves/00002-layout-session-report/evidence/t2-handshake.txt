@@ -1,0 +1,9 @@
+# MCP startup handshake recorded by the orchestrator, 2026-09-24 00:55 CEST
+# Claude Code 2.1.281, interactive, --permission-mode manual, --mcp-config with one stdio server; every CLAUDE* var removed; AINEO_CHILD=1 set on claude; no model turn; stopped by /exit (exit 0).
+# ENV = the server's environment, filtered to AINEO* and NVIM; C->S = what Claude Code sent; S->C = the probe's replies.
+ENV {"NVIM": "<TMPDIR>/nvim.<user>/<id>/nvim.34407.0", "AINEO_CHILD": "1", "AINEO_PROBE": "from-mcp-config-env"}
+C->S {"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{"roots":{"listChanged":true},"elicitation":{}},"clientInfo":{"name":"claude-code","title":"Claude Code","version":"2.1.281","description":"Anthropic's agentic coding tool","websiteUrl":"https://claude.com/claude-code"}},"jsonrpc":"2.0","id":0}
+S->C {"jsonrpc": "2.0", "id": 0, "result": {"protocolVersion": "2025-11-25", "capabilities": {"tools": {}}, "serverInfo": {"name": "aineo-probe", "version": "0"}}}
+C->S {"jsonrpc":"2.0","method":"notifications/initialized"}
+C->S {"method":"tools/list","jsonrpc":"2.0","id":1}
+S->C {"jsonrpc": "2.0", "id": 1, "result": {"tools": [{"name": "report", "description": "Probe.", "inputSchema": {"type": "object", "properties": {"task": {"type": "string"}}, "required": ["task"]}}]}}

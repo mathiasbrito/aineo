@@ -1,0 +1,20 @@
+# Claude Code 2.1.281 asking whether to use an MCP server that a project's .mcp.json names, in a
+# Neovim terminal at 120x40: every byte of terminal output the orchestrator recorded on 2026-09-24
+# (09:37 CEST, no key sent; w2-mcpdialog/raw.bytes, t4-mcp-server-dialog-screen.txt), in a folder
+# inside the trusted aineo checkout. The server's name is the probe's own. Its selected choice,
+# "Continue without using this MCP server", carries the ready prompt's glyph. The bytes follow the
+# first empty line.
+
+7[r8[?25h[?25l[?2004h[?2031h[?1004h[<u[>5u[>4;2m[?2026h
+[38;2;255;193;7m────────────────────────────────────────────────────────────────────────────────[39m
+[3G[38;2;255;193;7m[1mNew[7GMCP[11Gserver[18Gfound[24Gin[27Gthis[32Gproject:[41Gprobe-project-server[22m[39m
+
+[3GMCP[7Gservers[15Gmay[19Gexecute[27Gcode[32Gor[35Gaccess[42Gsystem[49Gresources.[60GAll[64Gtool[69Gcalls
+[3Grequire[11Gapproval.[21GLearn[27Gmore[32Gin[35Gthe[39G]8;id=c415zw;https://code.claude.com/docs/en/mcpMCP documentation]8;;.
+
+[5GUse[9Gthis[14GMCP[18Gserver
+[5GUse[9Gthis[14Gand[18Gall[22Gfuture[29GMCP[33Gservers[41Gin[44Gthis[49Gproject
+[3G[38;2;177;185;249m❯[5GContinue[14Gwithout[22Gusing[28Gthis[33GMCP[37Gserver[39m
+
+[3G[38;2;153;153;153m[3mEnter[9Gto[12Gconfirm[20G·[22GEsc[26Gto[29Gcancel[23m[39m
+[2C[3A[?2026l[>0q[?u[c[?2026$p_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\[16t[?1016$p[c

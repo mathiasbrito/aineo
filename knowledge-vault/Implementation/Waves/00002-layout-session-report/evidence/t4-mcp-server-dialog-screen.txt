@@ -1,0 +1,11 @@
+# The startup dialog Claude Code 2.1.281 shows for an unapproved project MCP server (.mcp.json naming one stdio server),
+# recorded by the orchestrator on 2026-09-24 09:37 CEST in a gitignored folder inside the trusted aineo checkout; every CLAUDE* variable removed;
+# no key sent to the dialog; stopped by jobstop (129). Screen text as Neovim's terminal showed it (120x40).
+────────────────────────────────────────────────────────────────────────────────
+  New MCP server found in this project: probe-project-server
+  MCP servers may execute code or access system resources. All tool calls
+  require approval. Learn more in the MCP documentation.
+    Use this MCP server
+    Use this and all future MCP servers in this project
+  ❯ Continue without using this MCP server
+  Enter to confirm · Esc to cancel

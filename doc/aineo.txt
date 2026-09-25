@@ -1,0 +1,394 @@
+*aineo.txt*	Claude Code in Neovim, as an agent console
+
+==============================================================================
+CONTENTS                                                      *aineo-contents*
+
+  1. Introduction ................................................ |aineo|
+  2. Requirements and installation ....................... |aineo-install|
+  3. The layout ............................................ |aineo-layout|
+  4. Commands ............................................ |aineo-commands|
+  5. Mappings ............................................ |aineo-mappings|
+  6. Configuration .................................. |aineo-configuration|
+  7. Send .................................................... |aineo-send|
+  8. The Agent Report ...................................... |aineo-report|
+  9. The autostart ...................................... |aineo-autostart|
+ 10. Health check ........................................ |aineo-health|
+ 11. Limits .............................................. |aineo-limits|
+
+==============================================================================
+1. INTRODUCTION                                                        *aineo*
+
+aineo turns Neovim into a console for Claude Code. Claude Code's own
+interactive CLI runs in a terminal on the left; on the right, the Agent
+Report shows what Claude says it is doing, above an Input buffer where you
+write your next message. Files you open land in a column between the two.
+
+Every command sits behind one prefix key, `\` by default, in Normal mode:
+`\s` sends Input to Claude, `\o` opens or restores the layout, and `\r`, `\i`
+and `\c` move to the Report, Input and Claude.
+
+aineo answers none of Claude Code's questions: its permission prompts, its
+trust dialog and every other dialog are yours to answer, in its terminal.
+aineo allows one tool of its own without asking, the report tool
+(|aineo-report|), and nothing else.
+
+==============================================================================
+2. REQUIREMENTS AND INSTALLATION                               *aineo-install*
+
+Requirements:
+- Neovim 0.11 or later.
+- Claude Code, the `claude` command, installed and signed in. aineo's
+  behaviour was measured on Claude Code 2.1.281.
+
+With lazy.nvim, load aineo at startup, so that its autostart can run
+(|aineo-autostart|): >lua
+    { 'mathiasbrito/aineo', lazy = false }
+<
+aineo works without a `setup()` call. To configure it, see
+|aineo-configuration|; then run `:checkhealth aineo` (|aineo-health|).
+
+==============================================================================
+3. THE LAYOUT                                                   *aineo-layout*
+
+The layout fills one tab page with three windows:
+
+    +--------------------+--------------------+
+    |                    |    Agent Report    |
+    |    Claude Code     |                    |
+    |    (terminal)      +--------------------+
+    |                    |       Input        |
+    +--------------------+--------------------+
+
+- Claude Code's terminal takes the left half of the columns.
+- The Agent Report, `aineo://report`, takes the top of the right column:
+  two thirds of its rows by default (|aineo-config-layout.report_height|).
+  It is read-only to you.
+- Input, `aineo://input`, takes the rest: a scratch buffer, left out of
+  `:ls` and `:bnext`, where you write what Send gives Claude (|aineo-send|).
+
+Opening the layout closes the tab's other windows (floating ones stay); their
+buffers stay loaded. The cursor starts in Input. The Neovim startup buffer
+becomes Input; a file the current window shows stays, as the file column.
+
+The file column ~
+A file you open from one of the three windows — `:edit`, a picker, a jump —
+moves to a column between Claude's and the right column, created on first
+use and reused afterwards; the aineo window keeps its own buffer. While the
+file column is open, the three columns take a third of the screen each.
+Only file buffers move: help, terminals and scratch buffers stay where they
+were opened until `\o` restores the layout.
+
+Restoring ~
+The three windows keep their sizes: the layout puts its proportions back
+when a window closes, when the editor is resized and when you enter its tab.
+`\o` (|:Aineo-open|) restores the layout while any of its windows is left:
+it recreates the windows that were closed, in their places. The layout
+lives in one tab; from another tab, `\o` moves you to it.
+
+==============================================================================
+4. COMMANDS                                                   *aineo-commands*
+
+                                                                      *:Aineo*
+:Aineo {subcommand}	Runs one of aineo's five actions. Completion offers
+			the subcommands. Without one of them, or with
+			anything else, it tells you, with one error, which
+			ones it takes.
+
+                                                                 *:Aineo-send*
+:Aineo send		Sends Input to Claude (|aineo-send|).
+
+                                                                 *:Aineo-open*
+:Aineo open		Opens the layout around Claude's terminal, starting
+			Claude Code when it is not running — again after it
+			has exited — or restores the layout while it is open.
+
+                                                               *:Aineo-report*
+:Aineo report		Moves the cursor to the Agent Report.
+
+                                                                *:Aineo-input*
+:Aineo input		Moves the cursor to Input.
+
+                                                               *:Aineo-claude*
+:Aineo claude		Moves the cursor to Claude's terminal.
+
+`report`, `input` and `claude` open the layout first when their window is
+gone, around Claude's terminal as it is — its exit on screen when Claude Code
+has exited. They start Claude Code only when there is no terminal to show:
+before the first start, or once the terminal was wiped. Only `open` restarts
+an exited Claude Code.
+
+When an action fails — `claude.cmd` is not executable, say — aineo tells you
+once, with one error message starting with `aineo:`, and opens nothing.
+
+==============================================================================
+5. MAPPINGS                                                   *aineo-mappings*
+
+aineo defines one Normal-mode `<Plug>` mapping per action. Map them to keys
+of your own when you turn the prefix off, or when a prefix key is yours: >lua
+    vim.keymap.set('n', '<Leader>as', '<Plug>(aineo-send)')
+<
+                                                        *<Plug>(aineo-send)*
+<Plug>(aineo-send)	Does what |:Aineo-send| does.
+
+                                                        *<Plug>(aineo-open)*
+<Plug>(aineo-open)	Does what |:Aineo-open| does.
+
+                                                      *<Plug>(aineo-report)*
+<Plug>(aineo-report)	Does what |:Aineo-report| does.
+
+                                                       *<Plug>(aineo-input)*
+<Plug>(aineo-input)	Does what |:Aineo-input| does.
+
+                                                      *<Plug>(aineo-claude)*
+<Plug>(aineo-claude)	Does what |:Aineo-claude| does.
+
+Prefix keys ~
+                                                                  *aineo-keys*
+Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
+followed by one key to each `<Plug>` mapping, globally, in Normal mode:
+
+                                                                    *aineo-\s*
+\s		|<Plug>(aineo-send)|
+                                                                    *aineo-\o*
+\o		|<Plug>(aineo-open)|
+                                                                    *aineo-\r*
+\r		|<Plug>(aineo-report)|
+                                                                    *aineo-\i*
+\i		|<Plug>(aineo-input)|
+                                                                    *aineo-\c*
+\c		|<Plug>(aineo-claude)|
+
+A key sequence you mapped yourself — a global Normal-mode mapping, when the
+editor has started — stays yours, and aineo maps the others. A mapping local
+to a buffer is not counted: it wins in its own buffer only. A mapping you
+make later replaces aineo's. A mapping that only overlaps aineo's key is not
+yours in this sense: with your own `\sa`, aineo still maps `\s`, and `\sa`
+then waits for 'timeoutlen' after `\s`.
+
+The prefix is read once, when the editor has started (|VimEnter|): a
+`setup()` or `vim.g.aineo` that changes it later maps nothing until the next
+start. When a plugin manager loads aineo after startup, the keys are mapped
+in the next event-loop tick.
+
+`\` is also the leader when |mapleader| is unset or empty, and the local
+leader when |maplocalleader| is: a filetype plugin's `<Leader>` or
+`<LocalLeader>` mapping local to a buffer then shadows aineo's key there —
+Neovim's own ChangeLog plugin maps `<Leader>o`. `:checkhealth aineo` warns
+of both (|aineo-health|).
+
+==============================================================================
+6. CONFIGURATION                                         *aineo-configuration*
+
+aineo reads its settings from two places, and works with neither:
+
+                                                                     *g:aineo*
+vim.g.aineo		A table, set before aineo loads: >lua
+			    vim.g.aineo = { prefix = ',' }
+<
+                                                               *aineo.setup()*
+require('aineo').setup({opts})
+			Records {opts}, a table shaped as `vim.g.aineo`, and
+			does nothing else. Each call replaces the options
+			the last recorded. A setting `setup()` gives wins
+			over the same setting in `vim.g.aineo`.
+
+The settings are checked when aineo uses them — when the editor has started,
+and at each action but Send, which uses no setting. A wrong value is one
+error naming the setting, such as
+`aineo: layout.report_height: expected a number strictly between 0 and 1,
+got 2`; at startup it also means no prefix keys and no autostart. A key
+aineo does not know is ignored, and `:checkhealth aineo` names it.
+
+                                                         *aineo-config-prefix*
+prefix			A non-empty string, or `false`. Default: `'\'`
+			The key sequence before each of aineo's keys
+			(|aineo-keys|). `false` maps no key; |:Aineo| and the
+			`<Plug>` mappings remain. The empty string is
+			refused.
+
+                                                      *aineo-config-autostart*
+autostart		A boolean. Default: `true`
+			Whether a bare `nvim` opens the layout by itself
+			(|aineo-autostart|).
+
+                                                     *aineo-config-claude.cmd*
+claude.cmd		A list of at least one string. Default: `{ 'claude' }`
+			The command run in the left terminal, as a list of
+			words, never through a shell. aineo appends its own
+			arguments (|aineo-report|). A wrapper works: >lua
+			    vim.g.aineo = {
+			      claude = { cmd = { 'npx', '-y',
+			        '@anthropic-ai/claude-code' } },
+			    }
+<
+                                           *aineo-config-layout.report_height*
+layout.report_height	A number strictly between 0 and 1.
+			Default: `2/3`
+			The Agent Report's share of the right column's
+			rows; Input takes the rest.
+
+==============================================================================
+7. SEND                                                           *aineo-send*
+
+Send (`\s`, |:Aineo-send|) gives Claude what you wrote in Input, as one
+message: Input's lines, joined by line feeds, go to Claude's terminal as one
+bracketed paste followed by Enter, and Input is emptied. `u` in Input brings
+the text back. Control characters but tab, line feed and carriage return are
+removed first, so nothing in the text reaches Claude Code as a key.
+
+Send also works while Claude is in a turn: Claude Code queues the message and
+runs it after the turn. A draft already in Claude's prompt stays, and the
+paste joins it.
+
+Send sends nothing, and tells you why with one warning starting with
+`aineo: nothing sent —`, when there is no Input yet (open the layout), when
+Input holds only white space, and when Claude Code is not ready: not
+started, still starting, behind a dialog that awaits your answer, or exited.
+
+Claude Code counts as ready once its input box has shown, unbroken, for 1.5
+seconds. A permission dialog drawn in the few tens of milliseconds before
+aineo notices it could receive the paste and the Enter (|aineo-limits|).
+
+==============================================================================
+8. THE AGENT REPORT                                             *aineo-report*
+
+aineo starts Claude Code with three additions of its own:
+- instructions appended to its system prompt, telling Claude when to call
+  the report tool;
+- aineo's MCP server, which Claude Code runs as a headless `nvim`, given
+  through `--mcp-config`;
+- the report tool allowed without asking: `--allowedTools
+  mcp__aineo__report`.
+The server is given this editor's address, |v:servername|, and relays each
+report to the editor there. Claude Code also gets `AINEO_CHILD=1` in its
+environment, so a Neovim started inside it never autostarts.
+
+A report holds a `task`, a `status` — `started`, `progress`, `blocked`,
+`done` or `failed` — a one-line `summary` and, optionally, `details`. The
+Agent Report shows each as: >
+    HH:MM [status] task — summary
+          details, indented under the status
+<
+A line break in the task or the summary becomes a space. The Report follows
+the newest report.
+
+Reports are kept per working directory, under `stdpath('state')` in
+`aineo/reports/`, and shown again when aineo opens in that directory. The
+Report shows the newest 2 MiB of them; the file is cut back to its newest
+2 MiB once it passes 4 MiB. The working directory is the one of the first
+time the layout opened, for the editor's life; each new Claude Code starts in
+the working directory of its own moment.
+
+==============================================================================
+9. THE AUTOSTART                                             *aineo-autostart*
+
+A bare, interactive `nvim` opens the layout and starts Claude Code by itself,
+in the directory Neovim started in. Two scheduled callbacks after |VimEnter|,
+so a startup dashboard drawn at `VimEnter` or `UIEnter` — snacks.nvim's,
+alpha-nvim, dashboard-nvim, mini.starter — has shown, and the layout
+replaces it.
+
+The autostart does not run, and the editor starts as usual, when, in the
+order aineo looks for them:
+- a setting is wrong (|aineo-configuration|);
+- `autostart` is `false` (|aineo-config-autostart|);
+- no user interface is attached: `nvim --headless`, `nvim -es`;
+- Neovim was given a file to edit: `nvim file`, `git commit`;
+- Neovim read its standard input: `echo text | nvim -`;
+- Neovim was given something to do besides edit: `-c`, `-S`, `-e`, `-s`,
+  `-E`, alone or among other short options (`-Rc`), or a `+` command;
+- it runs inside aineo's own Claude terminal (`$AINEO_CHILD` set and not
+  empty);
+- a session was restored at startup, by a plugin such as auto-session
+  from its own `VimEnter` (|v:this_session| set) — `-S` is a startup task
+  above;
+and, apart from the others, when aineo was loaded after startup, as a
+plugin manager loading it lazily does: the keys are mapped then, but
+nothing opens. `--cmd`, `-t` and `-q` alone still autostart.
+
+`:checkhealth aineo` tells which of these held, the first in this order
+(|aineo-health|).
+
+==============================================================================
+10. HEALTH CHECK                                                *aineo-health*
+
+`:checkhealth aineo` reads the configuration and the editor's state and
+reports on them. It starts no Claude session, opens no layout and maps no
+key; the one command it runs is `claude.cmd` with `--version` appended.
+
+Configuration ~
+  An error naming a wrong setting; a warning naming each unknown key.
+
+Claude Code ~
+  An error when the first word of `claude.cmd` is not executable. Else
+  `claude.cmd --version`, run whole — a wrapper reports Claude Code's
+  version, not its own — and killed after 3 seconds, or when Ctrl-C ends
+  the check early, with every process in its process group: the first line
+  it prints, or a warning when it cannot start, runs longer, fails or
+  prints nothing. A command that prints its version and exits but leaves a
+  process of its own holding its output open counts as running longer. A
+  process it starts that leaves the group, by starting a session or a
+  group of its own, is not killed and can outlive the check.
+
+Server socket ~
+  The address the editor listens at (|v:servername|); an error when it
+  listens nowhere, since Claude's reports could not reach it.
+
+Prefix mappings ~
+  For each prefix key, whether it runs aineo's `<Plug>` mapping; a warning
+  when it runs something of yours, or nothing. While aineo's |VimEnter|
+  handler, which maps the keys, has not run — the editor is still
+  starting, as when `nvim +checkhealth` runs the check before `VimEnter`,
+  or a `VimEnter` autocommand before aineo's threw an exception — one line
+  says so in place of the keys; so does one in the tick a plugin manager
+  loads aineo after startup, since the keys are mapped in the next. A
+  warning when the leader or the local leader is the prefix: with the
+  default prefix and |mapleader| or |maplocalleader| unset or `\`, these
+  warnings show. Neovim reads a leader that is a List, a Dictionary or
+  longer than 48 bytes as a backslash, and so does the check.
+
+Autostart ~
+  Whether the autostart opened the layout at startup, or which reason kept
+  it from running (|aineo-autostart|); while aineo's `VimEnter` handler has
+  not run, that it has not decided; once it has decided to open the layout,
+  that it will. A warning when a setting was wrong at startup, and when the
+  autostart tried to open the layout and failed, with the error it met.
+
+                                                             *g:aineo_startup*
+  aineo records its decision in `vim.g.aineo_startup`, a table whose
+  `reason` is one of, in the order aineo reaches them: `starting` (sourced,
+  the editor not started yet), `wrong-setting`, `autostart-off`, `no-ui`,
+  `file-argument`, `stdin`, `startup-task`, `inside-claude`, `opening`
+  (the open decided, not tried yet), `session-restored`, `opened`,
+  `open-failed` — with the error in `failure`. When aineo is loaded after
+  startup: `mapping-late` (its keys not mapped yet), then `sourced-late`.
+  The health check reads it; aineo never does.
+
+Limits ~
+  The stop on quit of |aineo-limits|, which a check cannot detect.
+
+The check passes when it shows no error; warnings are advice.
+
+==============================================================================
+11. LIMITS                                                      *aineo-limits*
+
+Stopping Claude Code on quit ~
+When Neovim quits, aineo stops a running Claude Code from its own
+|VimLeavePre| handler, by its keys: one Ctrl-C, then a double Ctrl-C, then
+`jobstop()` — up to about 12 seconds. A `VimLeavePre` handler registered
+before aineo's that raises an error makes Neovim skip aineo's: Claude Code
+then only gets Neovim's hangup, and a Claude Code that hangs outlives the
+editor. aineo cannot detect this.
+
+The 80-column start ~
+At startup, a message longer than |v:echospace| — 68 columns on an 80-column
+screen — holds Neovim at a hit-enter prompt. aineo's line for a
+`claude.cmd` that is not executable fits for a command name of up to 29
+characters; a longer one, such as an absolute path, still prompts.
+
+Send and a dialog ~
+A permission dialog drawn in the few tens of milliseconds before aineo
+notices it receives Send's paste and Enter. What the dialog does with them
+was not measured.
+
+ vim:tw=78:ts=8:ft=help:norl:

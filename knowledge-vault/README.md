@@ -21,4 +21,4 @@ Some contributors keep a personal Obsidian vault and have global instructions to
 
 ## What is binding and what is not
 
-The constitution and the specs, once the project has them, are **binding** — they govern the code. This vault is **context**: why we chose what we chose, what we rejected, and what bit us. If the vault contradicts a spec, the spec wins and the vault needs fixing.
+The constitution and the specs, once the project has them, are **binding** — they govern the code. This vault is **context**: why we chose what we chose, what we rejected, and what bit us. If the vault contradicts a spec, the spec wins and the vault needs fixing. One exception, until specs exist: the plan the root `CLAUDE.md` names as the spec is binding too — its decision and component rows change only with the user's agreement.
