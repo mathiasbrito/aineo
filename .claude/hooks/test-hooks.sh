@@ -14,6 +14,7 @@ set -uo pipefail
 HOOKS=$(cd "$(dirname "$0")" && pwd)
 GUARD="$HOOKS/guard-protected-branch.sh"
 REVIEW="$HOOKS/require-review-before-commit.sh"
+CDGUARD="$HOOKS/guard-worktree-cd.sh"
 
 passed=0
 failed=0
@@ -202,6 +203,24 @@ expect "$GUARD" allow "gh pr merge 36 --rebase --delete-branch"
 [ "$(verdict_as_agent "$GUARD" "gh pr merge --squash 36")" = deny ] && passed=$((passed + 1)) || { failed=$((failed + 1)); echo "FAIL  expected deny  got allow  (agent) gh pr merge --squash 36"; }
 [ "$(verdict_as_agent "$GUARD" "gh pr view 36 --json files")" = allow ] && passed=$((passed + 1)) || { failed=$((failed + 1)); echo "FAIL  expected allow got deny   (agent) gh pr view 36 --json files"; }
 [ "$(verdict_as_agent "$GUARD" "git commit -m 'x'")" = allow ] && passed=$((passed + 1)) || { failed=$((failed + 1)); echo "FAIL  expected allow got deny   (agent) git commit on a feature branch"; }
+
+echo "── worktree cd guard: the session never moves into an agent worktree ──"
+expect "$CDGUARD" deny  "cd .claude/worktrees/orch-verify-t6 && git status"
+expect "$CDGUARD" deny  "cd /Users/x/aineo/.claude/worktrees/orch-verify-t4 && ls deps"
+expect "$CDGUARD" deny  "cd \"/Users/x/my repo/.claude/worktrees/a\" && make test"
+expect "$CDGUARD" deny  "ls; cd .claude/worktrees/a"
+expect "$CDGUARD" deny  "true && pushd .claude/worktrees/a"
+expect "$CDGUARD" deny  "cd .claude/worktrees"
+expect "$CDGUARD" allow "(cd .claude/worktrees/a && make test)"
+expect "$CDGUARD" allow "(cd /Users/x/aineo/.claude/worktrees/a && make deps >/dev/null; echo rc=\$?)"
+expect "$CDGUARD" allow "ls && (cd .claude/worktrees/a && (make test))"
+expect "$CDGUARD" allow "git -C .claude/worktrees/a status"
+expect "$CDGUARD" allow "make -C .claude/worktrees/a test"
+expect "$CDGUARD" allow "cd /Users/x/aineo && git status"
+expect "$CDGUARD" allow "cd .claude && ls"
+expect "$CDGUARD" allow "echo 'then cd .claude/worktrees/a'"
+expect "$CDGUARD" allow "git worktree add --detach .claude/worktrees/a origin/dev"
+[ "$(verdict_as_agent "$CDGUARD" "cd .claude/worktrees/agent-x && make test")" = allow ] && passed=$((passed + 1)) || { failed=$((failed + 1)); echo "FAIL  expected allow got deny   (agent) cd into its own worktree"; }
 
 echo "── review hook ──"
 
