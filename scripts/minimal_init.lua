@@ -15,6 +15,11 @@
 --- which runs nothing, is the one every process a test starts finds: no test
 --- runs the real Claude Code, even through aineo's default `claude.cmd`.
 ---
+--- Sets `vim.g.aineo` to `{ autostart = false }` unless something set it
+--- before this init ran (`--cmd`): an interactive Neovim a test starts is a
+--- bare start, where aineo would otherwise open its layout and start Claude
+--- Code by itself; a test of that sets `vim.g.aineo` itself.
+---
 --- Removes `AINEO_CHILD`, which aineo's own Claude terminal sets: a suite run
 --- from there would otherwise hand it to every Neovim a test starts, and none
 --- of them would start aineo by itself.
@@ -33,3 +38,7 @@ for name in pairs(vim.fn.environ()) do
 end
 
 vim.env.AINEO_CHILD = nil
+
+if vim.g.aineo == nil then
+  vim.g.aineo = { autostart = false }
+end
