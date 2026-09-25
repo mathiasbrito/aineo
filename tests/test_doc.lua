@@ -107,6 +107,59 @@ local TAGS = {
   'aineo-limits',
 }
 
+--- The tags the running plugin says the help must hold, sorted: one per
+--- subcommand `:Aineo` completes, per `<Plug>(aineo-…)` mapping, per prefix
+--- key mapped to one, and per setting the configuration resolves.
+local TAGS_THE_PLUGIN_DEFINES = [[
+  local tags = {}
+  for _, subcommand in ipairs(vim.fn.getcompletion('Aineo ', 'cmdline')) do
+    table.insert(tags, ':Aineo-' .. subcommand)
+  end
+  for _, mapping in ipairs(vim.api.nvim_get_keymap('n')) do
+    if vim.startswith(mapping.lhs, '<Plug>(aineo-') then
+      table.insert(tags, mapping.lhs)
+    elseif mapping.rhs and vim.startswith(mapping.rhs, '<Plug>(aineo-') then
+      table.insert(tags, 'aineo-' .. mapping.lhs)
+    end
+  end
+  local function add_settings(path, value)
+    for key, inner in pairs(value) do
+      local name = path == '' and key or (path .. '.' .. key)
+      if type(inner) == 'table' and not vim.islist(inner) then
+        add_settings(name, inner)
+      else
+        table.insert(tags, 'aineo-config-' .. name)
+      end
+    end
+  end
+  add_settings('', require('aineo.config').resolve_config(nil, nil))
+  table.sort(tags)
+  return tags
+]]
+
+--- The tags of `tags` that `:help` does not take to a line of the help
+--- holding them, in `child`.
+local TAGS_MISSING = [[
+  local missing = {}
+  for _, tag in ipairs(...) do
+    local found = pcall(vim.cmd.help, tag)
+    if not found or not vim.api.nvim_get_current_line():find('*' .. tag .. '*', 1, true) then
+      table.insert(missing, tag)
+    end
+  end
+  return missing
+]]
+
+T['the help']['has a tag for every command, mapping, key and setting the plugin defines'] = function()
+  start_with_help()
+  local tags = child.lua(TAGS_THE_PLUGIN_DEFINES)
+
+  local missing = child.lua(TAGS_MISSING, { tags })
+
+  eq(#tags >= 19, true)
+  eq(missing, {})
+end
+
 T['the help']['has the tag'] = MiniTest.new_set({
   parametrize = vim.tbl_map(function(tag)
     return { tag }

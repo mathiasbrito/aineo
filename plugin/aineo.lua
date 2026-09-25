@@ -326,9 +326,12 @@ end
 
 --- Records what the autostart decided at startup, and why, in the editor
 --- variable `vim.g.aineo_startup`, which `:checkhealth aineo` reads:
---- `{ reason = reason, failure = failure }`. The reasons: `opened`,
---- `open-failed`, `autostart-off`, `wrong-setting`, `sourced-late`,
---- `session-restored`, and those of `NOT_BARE_INTERACTIVE`.
+--- `{ reason = reason, failure = failure }`. The reasons: `starting`, from
+--- the moment this file is sourced until the editor has started; `opening`,
+--- once the autostart has decided to open the layout, until it has tried;
+--- then `opened`, `open-failed`, `autostart-off`, `wrong-setting`,
+--- `session-restored`, or one of `NOT_BARE_INTERACTIVE`; and `sourced-late`
+--- when this file is sourced after the editor has started.
 ---
 ---@param reason string
 ---@param failure? string the error line an open that failed told the user
@@ -368,9 +371,10 @@ end
 
 --- What the editor does once it has started: maps the prefix the
 --- configuration names, and opens the layout when `autostart` is set and the
---- start is bare and interactive (`open_after_dashboards()`); else records
---- why it does not (`record_startup()`). Raises the configuration's error,
---- recorded as `wrong-setting`, when a setting is wrong.
+--- start is bare and interactive (`open_after_dashboards()`), recording
+--- its decision, or why it does not open (`record_startup()`). Raises the
+--- configuration's error, recorded as `wrong-setting`, when a setting is
+--- wrong.
 local function start_up()
   local resolved, config = pcall(resolved_config)
   if not resolved then
@@ -387,6 +391,7 @@ local function start_up()
     record_startup(refusal)
     return
   end
+  record_startup('opening')
   open_after_dashboards()
 end
 
@@ -398,6 +403,7 @@ if vim.v.vim_did_enter == 1 then
     end)
   end)
 else
+  record_startup('starting')
   local group = vim.api.nvim_create_augroup('aineo', {})
   vim.api.nvim_create_autocmd('StdinReadPost', {
     group = group,

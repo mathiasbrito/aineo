@@ -36,7 +36,8 @@ end
 T['the check'] = MiniTest.new_set()
 
 --- What a check could change in a Neovim: the aineo modules it has loaded,
---- its terminal buffers, its windows and its Normal-mode mappings.
+--- its terminal buffers, its windows, its Normal-mode mappings and aineo's
+--- record of the autostart.
 local EDITOR_STATE = [[(function()
   local modules = vim.tbl_filter(function(name)
     return vim.startswith(name, 'aineo')
@@ -54,6 +55,7 @@ local EDITOR_STATE = [[(function()
     terminals = #terminals,
     windows = #vim.api.nvim_tabpage_list_wins(1),
     mappings = mappings,
+    startup = vim.g.aineo_startup,
   }
 end)()]]
 
@@ -214,24 +216,125 @@ T['Claude Code']['warns when claude.cmd cannot be run, although it is executable
   })
 end
 
+--- The report's Claude Code section when `claude.cmd --version` was stopped at
+--- the bound.
+local TIMED_OUT_SECTION = {
+  '- ⚠️ WARNING claude.cmd --version did not finish within 3 s',
+  "- aineo's behaviour was measured on Claude Code 2.1.281",
+}
+
+--- How long the check may take when `claude.cmd --version` is stopped at its
+--- 3 s bound: the bound, and what the rest of the check and a loaded host
+--- add to it — less than the bound again, so a check that waits twice the
+--- bound fails.
+local BOUND_WITH_MARGIN_MS = 4000
+
+--- Whether a check that took `elapsed_ms` kept to the bound.
+---
+---@param elapsed_ms number
+---@return boolean
+local function kept_to_bound(elapsed_ms)
+  return elapsed_ms < BOUND_WITH_MARGIN_MS
+end
+
 T['Claude Code']['warns when claude.cmd --version runs past 3 s, and its output stays open'] = function()
   start_with_stand_in('holding')
 
-  local report = health.report(child)
+  local check = health.timed_report(child)
 
-  eq(health.section(report, 'Claude Code'), {
-    '- ⚠️ WARNING claude.cmd --version did not finish within 3 s',
-    "- aineo's behaviour was measured on Claude Code 2.1.281",
-  })
+  eq(health.section(check.report, 'Claude Code'), TIMED_OUT_SECTION)
+  eq(kept_to_bound(check.elapsed_ms), true)
 end
 
 T['Claude Code']['warns when claude.cmd --version runs past 3 s'] = function()
   start_with_stand_in('hanging')
 
+  local check = health.timed_report(child)
+
+  eq(health.section(check.report, 'Claude Code'), TIMED_OUT_SECTION)
+  eq(kept_to_bound(check.elapsed_ms), true)
+end
+
+T['Claude Code']['stops claude.cmd --version at 3 s while it writes without end'] = function()
+  start_with_stand_in('flooding')
+
+  local check = health.timed_report(child)
+
+  eq(health.section(check.report, 'Claude Code'), TIMED_OUT_SECTION)
+  eq(kept_to_bound(check.elapsed_ms), true)
+end
+
+T['Claude Code']['leaves no process of a wrapper that ignores TERM behind once it is stopped'] = function()
+  local child_pid_file = vim.fs.joinpath(fixture.directory('health-wrapping'), 'child-pid')
+  start_with_stand_in('wrapping')
+  child.lua('vim.env.AINEO_HEALTH_CLAUDE_CHILD_PID = ...', { child_pid_file })
+
+  local check = health.timed_report(child)
+
+  local wrapped_pid = tonumber(vim.fn.readfile(child_pid_file)[1])
+  eq(health.section(check.report, 'Claude Code'), TIMED_OUT_SECTION)
+  eq(kept_to_bound(check.elapsed_ms), true)
+  eq(
+    vim.wait(1000, function()
+      return vim.uv.kill(wrapped_pid, 0) == nil
+    end, 20),
+    true
+  )
+end
+
+T['Claude Code']['reads an exit status of 124 as an exit, not as a time-out'] = function()
+  start_with_stand_in('exiting-124')
+
   local report = health.report(child)
 
   eq(health.section(report, 'Claude Code'), {
-    '- ⚠️ WARNING claude.cmd --version did not finish within 3 s',
+    '- ⚠️ WARNING claude.cmd --version exited with 124',
+    "- aineo's behaviour was measured on Claude Code 2.1.281",
+  })
+end
+
+T['Claude Code']['hands claude.cmd its words as they are, never to a shell'] = function()
+  local record = vim.fs.joinpath(fixture.directory('health-words'), 'arguments')
+  start_with({
+    autostart = false,
+    claude = { cmd = { HEALTH_CLAUDE, 'two words', '$(echo shell); "quoted" *' } },
+  })
+  child.lua('vim.env.AINEO_HEALTH_CLAUDE_RECORD = ...', { record })
+
+  health.report(child)
+
+  eq(vim.fn.readfile(record), { 'two words', '$(echo shell); "quoted" *', '--version' })
+end
+
+T['Claude Code']['reports the first line that holds more than white space'] = function()
+  start_with_stand_in('several-lines')
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Claude Code'), {
+    '- ✅ OK claude.cmd --version: 9.9.9 (health stand-in)',
+    "- aineo's behaviour was measured on Claude Code 2.1.281",
+  })
+end
+
+T['Claude Code']['reports the first line without the carriage return a CR LF line ends in'] = function()
+  start_with_stand_in('crlf')
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Claude Code'), {
+    '- ✅ OK claude.cmd --version: 9.9.9 (health stand-in)',
+    "- aineo's behaviour was measured on Claude Code 2.1.281",
+  })
+end
+
+T['Claude Code']['keeps the first 1024 bytes of what claude.cmd --version prints'] = function()
+  start_with_stand_in('long-line')
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Claude Code'), {
+    '- ✅ OK claude.cmd --version: ' .. string.rep('x', 1024),
     "- aineo's behaviour was measured on Claude Code 2.1.281",
   })
 end
@@ -280,6 +383,13 @@ local function start_with_local_leader(settings, local_leader)
   )
 end
 
+--- The warning a prefix equal to the leader gives, the leader unset.
+local LEADER_WARNING = '- ⚠️ WARNING the leader is the prefix, \\'
+
+--- The advice under `LEADER_WARNING`.
+local LEADER_ADVICE =
+  "A filetype plugin's <Leader> mapping shadows aineo's key in its buffer, as Neovim's own ChangeLog plugin does with <Leader>o; set mapleader to another key: :help |aineo-config-prefix|"
+
 T['the prefix mappings']['are reported in place when aineo mapped each key'] = function()
   start_with_local_leader({ autostart = false }, ',')
 
@@ -291,6 +401,118 @@ T['the prefix mappings']['are reported in place when aineo mapped each key'] = f
     '- ✅ OK \\r runs <Plug>(aineo-report)',
     '- ✅ OK \\i runs <Plug>(aineo-input)',
     '- ✅ OK \\c runs <Plug>(aineo-claude)',
+    LEADER_WARNING,
+  })
+end
+
+T['the prefix mappings']['warn that the leader, unset and so a backslash, is the prefix'] = function()
+  start_with_local_leader({ autostart = false }, ',')
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Prefix mappings')[6], LEADER_WARNING)
+  eq(health.advice(report, 'Prefix mappings'), { LEADER_ADVICE })
+end
+
+T['the prefix mappings']['warn that the leader, a Number, is the prefix'] = function()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({ autostart = false, prefix = '1' }), {
+      '--cmd',
+      'let g:maplocalleader = ","',
+      '--cmd',
+      'let g:mapleader = 1',
+    })
+  )
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Prefix mappings')[6], '- ⚠️ WARNING the leader is the prefix, 1')
+end
+
+T['the prefix mappings']['report the keys plugin/aineo.lua mapped to aineo, no more and no fewer'] = function()
+  start_with_local_leader({ autostart = false }, ',')
+  local mapped = health.keys_mapped_to_aineo(child)
+
+  local report = health.report(child)
+
+  eq(health.keys_reported_in_place(report), mapped)
+end
+
+T['the prefix mappings']['warn that the local leader, the same key as a prefix in key notation, is the prefix'] = function()
+  start_with_local_leader({ autostart = false, prefix = '<space>' }, ' ')
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Prefix mappings'), {
+    '- ✅ OK <space>s runs <Plug>(aineo-send)',
+    '- ✅ OK <space>o runs <Plug>(aineo-open)',
+    '- ✅ OK <space>r runs <Plug>(aineo-report)',
+    '- ✅ OK <space>i runs <Plug>(aineo-input)',
+    '- ✅ OK <space>c runs <Plug>(aineo-claude)',
+    '- ⚠️ WARNING the local leader is the prefix, <space>',
+  })
+end
+
+T['the prefix mappings']['take a local leader written in key notation as the characters Neovim maps it to'] = function()
+  start_with_local_leader({ autostart = false, prefix = '<Space>' }, '<Space>')
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Prefix mappings'), {
+    '- ✅ OK <Space>s runs <Plug>(aineo-send)',
+    '- ✅ OK <Space>o runs <Plug>(aineo-open)',
+    '- ✅ OK <Space>r runs <Plug>(aineo-report)',
+    '- ✅ OK <Space>i runs <Plug>(aineo-input)',
+    '- ✅ OK <Space>c runs <Plug>(aineo-claude)',
+  })
+end
+
+T['the prefix mappings']['warn that the local leader, a Number, is the prefix'] = function()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({ autostart = false, prefix = '1' }), {
+      '--cmd',
+      'let g:maplocalleader = 1',
+    })
+  )
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Prefix mappings')[6],
+    '- ⚠️ WARNING the local leader is the prefix, 1'
+  )
+  eq(#health.section(report, 'Limits'), 1)
+end
+
+T['the prefix mappings']['take a local leader that is neither text nor a Number as no key'] = function()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({ autostart = false }), {
+      '--cmd',
+      'let g:maplocalleader = [1]',
+    })
+  )
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Prefix mappings')[6], LEADER_WARNING)
+  eq(#health.section(report, 'Limits'), 1)
+end
+
+T['the prefix mappings']['say the keys are mapped once the editor has started, when checked before'] = function()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({ autostart = false }), { '-c', health.CAPTURE })
+  )
+
+  local report = child.lua_get('vim.g.health_report')
+
+  eq(health.section(report, 'Prefix mappings'), {
+    health.STILL_STARTING_KEYS,
+    '- ⚠️ WARNING the local leader is the prefix, \\',
+    LEADER_WARNING,
   })
 end
 
@@ -313,9 +535,11 @@ T['the prefix mappings']['warn of a key the user mapped, naming what it runs'] =
     '- ✅ OK \\r runs <Plug>(aineo-report)',
     '- ✅ OK \\i runs <Plug>(aineo-input)',
     '- ✅ OK \\c runs <Plug>(aineo-claude)',
+    LEADER_WARNING,
   })
   eq(health.advice(report, 'Prefix mappings'), {
     'aineo leaves a key you mapped alone; map <Plug>(aineo-send) to a key of your own: :help |aineo-mappings|',
+    LEADER_ADVICE,
   })
 end
 
@@ -387,6 +611,7 @@ T['the prefix mappings']['warn that the local leader, unset and so a backslash, 
   )
   eq(health.advice(report, 'Prefix mappings'), {
     "A filetype plugin's <LocalLeader> mapping shadows aineo's key in its buffer; set maplocalleader to another key: :help |aineo-config-prefix|",
+    LEADER_ADVICE,
   })
 end
 
@@ -451,8 +676,49 @@ T['the autostart']['has no record when vim.g.aineo_startup holds something aineo
   local report = health.report(child)
 
   eq(health.section(report, 'Autostart'), {
-    '- no record of the autostart: plugin/aineo.lua did not run at startup (vim.g.loaded_aineo set before it, or --noplugin)',
+    '- no record of the autostart: vim.g.aineo_startup holds something aineo did not write',
   })
+end
+
+T['the autostart']['reports a failed open without its error when the error is not text'] = function()
+  start_with({ autostart = false })
+  child.lua([[vim.g.aineo_startup = { reason = 'open-failed', failure = { 'x' } }]])
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Autostart'), {
+    '- ⚠️ WARNING the autostart tried to open the layout and failed',
+  })
+  eq(#health.section(report, 'Limits'), 1)
+end
+
+--- The line the Autostart section shows while the editor is still starting.
+local STILL_STARTING = '- the autostart has not decided yet: the editor is still starting'
+
+T['the autostart']['has not decided yet when the check runs from -c'] = function()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({ autostart = false }), { '-c', health.CAPTURE })
+  )
+
+  local report = child.lua_get('vim.g.health_report')
+
+  eq(health.section(report, 'Autostart'), { STILL_STARTING })
+end
+
+T['the autostart']['has not decided yet when a VimEnter autocommand before aineo runs the check'] = function()
+  children.restart(
+    child,
+    vim.list_extend(
+      settings_arguments({ autostart = false }),
+      { '--cmd', 'autocmd VimEnter * ++once ' .. health.CAPTURE }
+    )
+  )
+
+  local report = child.lua_get('vim.g.health_report')
+
+  eq(health.section(report, 'Autostart'), { STILL_STARTING })
+  eq(health.section(report, 'Prefix mappings')[1], health.STILL_STARTING_KEYS)
 end
 
 T['the autostart']['did not run because autostart is false'] = function()
@@ -569,6 +835,85 @@ T['the autostart']['names why a start was not bare']['in its report'] = function
   local report = health.editor_report(editor)
 
   eq(health.section(report, 'Autostart'), { line })
+end
+
+--- A file to start an editor with.
+local FILE_ARGUMENT = vim.fs.joinpath(vim.uv.cwd(), '.tests', 'fixtures', 'health-file.txt')
+
+--- Interactive starts where several reasons hold, each dropping the first
+--- reason of the one before, with the line the health check reports.
+local STARTS_WITH_SEVERAL_REASONS = {
+  {
+    'file-stdin-task-child',
+    {
+      args = { FILE_ARGUMENT, '-c', 'let g:health_command = 1' },
+      stdin = 'piped text',
+      environment = { AINEO_ENTRY_AINEO_CHILD = '1' },
+    },
+    '- the autostart did not run: Neovim was given a file to edit',
+  },
+  {
+    'stdin-task-child',
+    {
+      args = { '-c', 'let g:health_command = 1' },
+      stdin = 'piped text',
+      environment = { AINEO_ENTRY_AINEO_CHILD = '1' },
+    },
+    '- the autostart did not run: Neovim read its standard input',
+  },
+  {
+    'task-child',
+    {
+      args = { '-c', 'let g:health_command = 1' },
+      environment = { AINEO_ENTRY_AINEO_CHILD = '1' },
+    },
+    '- the autostart did not run: Neovim was given something to do besides edit (-c, -S, -e, -s, -E or a + command)',
+  },
+}
+
+T['the autostart']['names the first reason when several hold'] = MiniTest.new_set({
+  parametrize = STARTS_WITH_SEVERAL_REASONS,
+})
+
+T['the autostart']['names the first reason when several hold']['in its report'] = function(
+  name,
+  start,
+  line
+)
+  local editor = start_editor(name, start)
+
+  local report = health.editor_report(editor)
+
+  eq(health.section(report, 'Autostart'), { line })
+end
+
+T['the autostart']['names no user interface before a file and a startup task'] = function()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({}), { FILE_ARGUMENT, '-c', 'let g:health_command = 1' })
+  )
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Autostart'), {
+    '- the autostart did not run: no user interface was attached (a headless start)',
+  })
+end
+
+T['the autostart']['has decided to open, when checked before the layout opens'] = function()
+  local editor = start_editor('opening', {
+    args = {
+      '--cmd',
+      'set runtimepath+='
+        .. vim.fs.joinpath(vim.uv.cwd(), 'tests', 'fixtures', 'health', 'check_at_vim_enter'),
+    },
+  })
+
+  local report = entry_editor.get(editor, 'vim.g.health_report')
+
+  eq(health.section(report, 'Autostart'), {
+    '- the autostart decided to open the layout, which opens once startup has settled',
+  })
 end
 
 T['the autostart']['did not run because a plugin restored a session'] = function()
