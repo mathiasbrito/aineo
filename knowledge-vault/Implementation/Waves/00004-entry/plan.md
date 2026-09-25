@@ -33,13 +33,13 @@ By the orchestrator on 2026-09-24, on host Macbook-Mathias:
   - at `VimEnter` an interactive start already has a UI attached, and `--headless` has none;
   - a file argument makes `argc()` 1;
   - piped stdin fires `StdinReadPost` before `VimEnter`;
-  - an `nvim --embed` RPC job waits for `nvim_ui_attach` and then sees a UI at `VimEnter` — a UI-attached start a test can make without a terminal, since mini.test's own child is always `--headless`.
+  - mini.test's own child is always `--headless`. *Corrected by the brief review:* the orchestrator first recorded an `nvim --embed` RPC job the test attaches a UI to as a test route — it exits 1 about 10 ms after the attach (the orchestrator's own output showed it and was misread). The route that works, measured by the brief review, is an interactive `nvim` in a terminal job of a mini.test child, queried over `--listen`.
 
 ## Packets — the six-rules table
 
 | packet | tasks | type / model | files | schema? | dependency change? | decision open? | task-line marks |
 |---|---|---|---|---|---|---|---|
-| `t7-entry` | T7 | `neovim-lua-developer` / opus (effort `high`) | `plugin/aineo.lua`, `lua/aineo/init.lua`, `lua/aineo/config/` (EP11 only), `tests/test_plugin.lua`, `tests/test_aineo.lua`, `tests/test_config.lua`, `tests/test_entry*.lua` (new), new modes and helpers in `tests/helpers/fake_claude.lua` and `tests/helpers/claude_session.lua`, new `tests/helpers/entry*`, new files under `tests/fixtures/claude/`, `tests/fixtures/entry/**`, its session note | none | no | none — D15 decided by the user; readings stated (EP7's unnamed starts, EP8's dashboard moments) | held |
+| `t7-entry` | T7 | `neovim-lua-developer` / opus (effort `high`) | `plugin/aineo.lua`, `lua/aineo/init.lua`, `lua/aineo/config/` (EP11 only), the `Makefile` and `scripts/minimal_init.lua` (the guard against the real `claude`, and `AINEO_CHILD` removed, only), `tests/test_plugin.lua`, `tests/test_aineo.lua`, `tests/test_config.lua`, `tests/test_entry*.lua` (new), new modes and helpers in `tests/helpers/fake_claude.lua` and `tests/helpers/claude_session.lua`, new `tests/helpers/entry*`, new files under `tests/fixtures/claude/`, `tests/fixtures/entry/**`, its session note | none | no | none — D15 decided by the user; readings stated (EP7's unnamed starts, EP8's dashboard moments) | held |
 
 1. **Dependencies.** T7 depends on T3, T4, T5 and T6 (the plan's row), all landed. T8 depends on T7, so it waits for wave 5.
 2. **File sets.** One packet. `tests/test_plugin.lua` › *defines no autocommand, command or mapping* is a pin T7 moves by design, and it is inside the boundary.
@@ -65,7 +65,7 @@ None open before dispatch. Q5 was settled on 2026-09-24 as D15. T8 runs after T7
 
 T7 — literal edits on the final head, each killed by assertion:
 
-- **M19** — autostart without the UI check;
+- **M19** — autostart without the UI check (run narrowed, and only once the guard against the real `claude` is pinned);
 - **M20** — the prefix mapping made over a user's mapping;
 - **M21** — `mcp_servers('', v:progpath)` in place of `v:servername`;
 - **M22** — autostart without the `$AINEO_CHILD` check;
@@ -74,7 +74,7 @@ T7 — literal edits on the final head, each killed by assertion:
 ## Briefs
 
 - `brief-t7-entry.md` — the T7 packet.
-- `brief-review.md` — the brief reviewer's report, verbatim.
+- `brief-review.md` — the brief reviewer's report, verbatim (Opus, at PR #16's head `b02ecba`): **dispatch after corrections**, above all findings 1 and 2; the six rules hold; the baseline re-measured exactly (491, `Fails (0)`; hooks 78). Every CONFIRMED and MISSING item is corrected in `brief-t7-entry.md`, this plan and `evidence/`: the test route (1, 9) — the orchestrator's `--embed` route dies after the attach, and the terminal-job route replaces it; a guard so no suite Neovim can run the real `claude`, and `AINEO_CHILD` removed from the suites (2, 3); M22's one-condition cases (4); what EP10 lets load at `VimEnter` (5); C1/D13 over the specialist's "no global keymaps", unknown keys to the health check (6); the real mini.starter (7); `origin/dev` at dispatch (8); EP11's cases in `setup()`'s group (10); EP9's claim scoped (11); EP6's E565 and the readings named (12).
 
 ## Landed
 
