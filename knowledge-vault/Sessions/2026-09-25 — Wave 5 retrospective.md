@@ -30,7 +30,7 @@
 | 15:38 | the conversation handed back: the duplicate re-measure stopped, the correction dispatched to a fresh agent |
 | 15:41 | GitHub branch protection found absent on `main` and `dev`; turned on at the user's word |
 | 16:17 | the correction in (727 cases) |
-| 16:19–16:40 | the orchestrator's verification; #21 and #22 merged |
+| 16:16–16:40 | the orchestrator's verification; #21 and #22 merged |
 | 16:42 | release `v0.1.0`: PR #26 squash-merged into `main`, tagged; the user's Neovim moved to the release checkout |
 
 **Findings, per review** (the verdicts are the reviewers'):
@@ -74,17 +74,18 @@ The re-measure's row holds two runs of one agent: the second process resumed it 
 - **The leader warning is the orchestrator's reading** of the plan's trade-off, not converged with the user: MR92.
 - **HB4 was wrong in the brief:** it asked to normalise the local leader, which Neovim does not. The fix round corrected it; the brief was not edited after dispatch.
 - **An equivalence was argued and was false:** the fix round called B4 equivalent; the re-measure separated it, and the correction pinned it. At the verification, one survivor — the timer's kill of the group — was called equivalent by the orchestrator on the code's structure, with its whole-suite run as evidence.
-- **Corrections merged checked only by the orchestrator:** PR #20's (`401a57e`); PR #22's (`22ce027`); PR #23's (`f13d3db`), which applied its review's eleven findings in the reviewer's wording; PR #24's (`025d5d2`), by the second process.
-- **The release was squash-merged, not rebased:** GitHub refused to rebase PR #26's 139 commits. `main`'s tree equals `dev` at `22ce027`; later releases cherry-pick onto `main`.
-- **Branch protection had never been on GitHub.** The root `CLAUDE.md` described it as the third layer; the Claude hook and the git hooks had been the only guards since the first wave. Found while planning the release; turned on for `main` and `dev` at the user's word.
-- **The orchestrator loaded the user's Neovim configuration once** to check the edited lazy spec, without `-u NONE`. No state file was written in those minutes (checked by modification time); the shada was excluded with `-i NONE`.
+- **Corrections merged checked only by the orchestrator:** PR #20's (`401a57e`); PR #22's (`22ce027`); PR #23's (`f13d3db`), which applied its review's eleven findings in the reviewer's wording; PR #24's (`025d5d2`) and PR #25's (`4d05f84`, finding 3 of the same review), both by the second process.
+- **The release was squash-merged, not rebased:** GitHub refused to rebase PR #26's 139 commits. `main`'s tree equals `dev` at `22ce027`; later releases cherry-pick onto `main`. The squash, and the cherry-pick method for later releases, were the orchestrator's decision, taken without asking the user; they are among the decisions awaiting the user in [[Projects/aineo]].
+- **GitHub had no branch protection on `main` or `dev` when the orchestrator looked, at 15:41,** and nothing records it ever being set, although the root `CLAUDE.md` described it as the third layer. Found while planning the release; turned on for `main` and `dev` at the user's word.
+- **The orchestrator also wrote the release procedure into the user's Claude memory** (`aineo-release-process`, outside the repository); the project note is the record.
+- **The orchestrator loaded the user's Neovim configuration once, at 16:43** (`nvim --headless -i NONE`, without `-u NONE`), to check the edited lazy spec. It wrote two byte-code cache files of `vim.loader` under `~/.cache/nvim/luac/` (the lazy spec's, rewritten, and the release's `plugin/aineo.lua`, created; both 16:43:18). Nothing under `~/.local/state/nvim` or `~/.local/share/nvim` changed in those minutes (checked by modification time); the shada was excluded with `-i NONE`. The orchestrator's first check left out `~/.cache` and recorded no write; the records review of PR #27 found the two.
 - **The orchestrator's commit route for its own branches:** from a scratch worktree the branch guard reads the session's branch, which is `dev`, and refuses; the session cannot move into the scratch worktree, which the harness resets. The orchestrator commits on its branch in the main checkout and returns to `dev` before the next dispatch.
 
 ## Open threads
 
 - **The MVP review with the user**, on MR1–MR95; MR77 and MR92 are the orchestrator's readings.
 - **Wave 6, `00006-fixes`**, a rolling wave opened with the first fix the user names. Its plan's pull request also amends `Implementation/Waves/CLAUDE.md` and the plan template, as the rolling-wave rule requires.
-- **Candidates for it:** the MCP `serverInfo.version` still `'0.0.0'`; the redundant timer kill; MR94 (an interrupted check says "did not finish within 3 s"); MR95's `VimLeavePre` wording; the 4-byte branch of the UTF-8 cut unpinned; T5's `v:null` file.
+- **Candidates for it:** the MCP `serverInfo.version` still `'0.0.0'`; the timer's own group kill, redundant and, in a same-pass race, able to make a command the check killed read as a failed one (the records review of PR #27; a timer that only sets the flag stays bounded); the prefix keys' subcommand table kept twice; MR94 (an interrupted check says "did not finish within 3 s"); MR95's `VimLeavePre` wording; the 4-byte branch of the UTF-8 cut unpinned; T5's `v:null` file.
 - **The Learning *Claude Code's interactive CLI in a Neovim terminal*** split into claims, carried from wave 2.
 
 ## Commits
@@ -98,9 +99,9 @@ The re-measure's row holds two runs of one agent: the second process resumed it 
 
 ## Decisions & reasoning
 
-- **A bound on a child process is a timer that kills it**, not a wait with a timeout — [[Learnings/vim.wait does not time out under an event flood]].
+- **A bound on a child process is a timer of one's own whose flag ends the wait, then a kill of its process group** — not a wait with a timeout — [[Learnings/vim.wait does not time out under an event flood]].
 - **A duplicate agent is stopped, not raced:** when the second process's re-measure had reported, the one still running here only repeated it and could overwrite its report.
-- **Squash for releases into `main`:** one commit per release keeps `main` linear under protection, and cherry-picks from `dev` keep the next release clean.
+- **Squash for releases into `main`** (the orchestrator's, not yet put to the user): one commit per release keeps `main` linear under protection, and cherry-picks from `dev` keep the next release clean.
 
 ## Learnings extracted
 

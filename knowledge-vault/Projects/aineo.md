@@ -13,10 +13,10 @@
 
 - **Per clone, once:** `./.githooks/install.sh` — sets `core.hooksPath` and `remote.origin.prune`. Without it the git-level branch guard is inert.
 - **Agent worktrees:** `.claude/scripts/prepare-worktree.sh`'s `prepare_project` is empty and needs no step — `make test` isolates itself and fetches mini.nvim on first use (T1); `.worktreeinclude` lists the gitignored files every worktree needs.
-- **The suite** (T1): `make deps`, `make test`, `make test_file FILE=<path>`, `make lint`, `make format` — the root `CLAUDE.md` says what each does. About 87 s for the whole suite on Macbook-Mathias at the end of wave 1; 454 cases in 256 s at the end of wave 2; 491 cases in 365 s at the end of wave 3; 613 cases in 431 s at the end of wave 4 — most of it the Claude session's and Send's tests, which drive real processes. `make format` can abort intermittently ([[Learnings/StyLua 2.5.2 in-place formatting aborts intermittently]]); `make lint` decides.
+- **The suite** (T1): `make deps`, `make test`, `make test_file FILE=<path>`, `make lint`, `make format` — the root `CLAUDE.md` says what each does. About 87 s for the whole suite on Macbook-Mathias at the end of wave 1; 454 cases in 256 s at the end of wave 2; 491 cases in 365 s at the end of wave 3; 613 cases in 431 s at the end of wave 4; 727 cases in 463 s at the end of wave 5 (the orchestrator's verification of `a9f8027`) — most of it the Claude session's and Send's tests, which drive real processes. `make format` can abort intermittently ([[Learnings/StyLua 2.5.2 in-place formatting aborts intermittently]]); `make lint` decides.
 - **Hooks:** `.claude/hooks/test-hooks.sh` after touching any hook.
 - **The user's Neovim loads aineo from a release: `~/Development/Personal/aineo-release`**, a clone detached at the latest release tag — `v0.1.0` since 2026-09-25 — through the lazy.nvim spec `~/.config/nvim/lua/plugins/aineo.lua`, which is the user's own and is not committed by the orchestrator. It moves only when the user asks for a new release (the user, 2026-09-25: "it keeps stable while we develop. until I ask for a new release"). `~/Development/Personal/aineo-dev` stays a clone of `dev` for trying merged work, and is no longer fast-forwarded after each merge.
-- **How a release is cut:** a `release/vX.Y.Z` branch into `main` by pull request, **squash-merged** — GitHub refused to rebase v0.1.0's 139 commits, and branch protection forbids merge commits — then an annotated tag `vX.Y.Z` on `main` whose message names the `dev` commit it was cut from. `main` holds one commit per release. The next release branches from `origin/main` and cherry-picks `dev`'s commits after the previous tag's `dev` commit; `git diff <dev commit> origin/main` must then be empty.
+- **How a release is cut** (the orchestrator's method, 2026-09-25, when GitHub refused to rebase v0.1.0 — not yet put to the user): a `release/vX.Y.Z` branch into `main` by pull request, **squash-merged** — GitHub refused to rebase v0.1.0's 139 commits, and branch protection forbids merge commits — then an annotated tag `vX.Y.Z` on `main` whose message names the `dev` commit it was cut from. `main` holds its bootstrap commit, `511e289`, and then one commit per release. The next release branches from `origin/main` and cherry-picks `dev`'s commits after the previous tag's `dev` commit; `git diff <dev commit> origin/main` must then be empty.
 
 
 ## Key decisions
@@ -37,7 +37,7 @@
 - **The user's `maplocalleader` is `\`**, aineo's prefix (R3): nothing uses `<LocalLeader>` today, and aineo never overwrites a mapping.
 - **Claude Code auto-updates**: 2.1.280 in the afternoon of 2026-09-23, 2.1.281 by 21:50, 2.1.282 by the morning of 2026-09-25 (`claude --version`: `2.1.282 (Claude Code)`). Waves 2–4 measured 2.1.281; a version-sensitive fact names the version it was measured on.
 - **A bare `nvim` now starts aineo and the real Claude Code** in the folder it opens (T7, 2026-09-25) — the user's own editor included, through `~/Development/Personal/aineo-release`. Opt out with `vim.g.aineo = { autostart = false }`.
-- **GitHub had no branch protection on `main` or `dev` until 2026-09-25**, although the root `CLAUDE.md` described it: the Claude hook and the git hooks were the only guards. The user had it turned on that day — a pull request required, linear history, no force push or deletion, admins included.
+- **GitHub had no branch protection on `main` or `dev` when the orchestrator looked on 2026-09-25 at 15:41, and nothing records it ever being set**, although the root `CLAUDE.md` described it: the Claude hook and the git hooks were the only guards. The user had it turned on that day — a pull request required, linear history, no force push or deletion, admins included.
 - **Neovim 0.11.6's `vim.wait()` does not time out while a child floods its output**, so `SystemObj:wait(ms)` bounds nothing then: [[Learnings/vim.wait does not time out under an event flood]].
 - **The interactive CLI's behaviour in a terminal is measured, not documented** — readiness, paste, how it stops: [[Learnings/Claude Code's interactive CLI in a Neovim terminal]]. Its input box stays on screen during a turn, and a message submitted then is queued (wave 3's evidence); its footer shows the user's own settings, so it is no readiness signal.
 - **Neovim traps the wave-2 packets met** — [[Learnings/A hidden terminal buffer starts at five rows]], [[Learnings/sockconnect's on_data hands a zero byte over as a newline]], [[Learnings/A deleted scratch buffer written to again blocks quitting]], [[Learnings/nvim --clean still loads plugins from the system site directories]].
@@ -57,7 +57,8 @@ Wave 5 — T8, `:checkhealth aineo` and `doc/aineo.txt` (PRs #21 and #22, 2026-0
 - T5's `tests/test_mcp_blocked_editor.lua` writes a `v:null` file into the checkout's root when its editor autostarts — latent while the suites' preset holds; a fix belongs to T5's home.
 - The terminal of the last session is kept twice, by the Claude home and by the composition root.
 - The MCP server reports `serverInfo.version = '0.0.0'` (`lua/aineo/mcp/protocol.lua`, pinned by `tests/test_mcp_relay.lua`) while the release is `v0.1.0`.
-- The version check's timer kills the process group although the early return always does too (an equivalent mutant at the wave-5 verification); its own kill is redundant.
+- The version check's timer kills the process group although the early return always does too (an equivalent mutant at the wave-5 verification); its own kill is redundant, and in a same-pass race it can make a command the check killed read as a failed one (the records review of PR #27). A timer that only sets the flag stays bounded.
+- The prefix keys' subcommand table (`s o r i c`) is kept twice, in `plugin/aineo.lua` and `lua/aineo/health.lua` (T8); a change to one without the other fails the prefix group's keys comparison.
 - The Learning *Claude Code's interactive CLI in a Neovim terminal* split into claims, carried from wave 2.
 
 **Host limits for orchestration:** Macbook-Mathias — 3 agents at once (10 CPUs, 64 GiB; the orchestrate skill's default of 3 parallel implementers, applied to all agents).
@@ -65,6 +66,7 @@ Wave 5 — T8, `:checkhealth aineo` and `doc/aineo.txt` (PRs #21 and #22, 2026-0
 **Decisions awaiting the user:**
 - The oldest `claude` version supported (2.1.281 is installed) — MR28 of the MVP readings.
 - The readings and limits of [[Review/2026-09-24 — v1 MVP readings review]], at the MVP review — among them MR77 (`prefix = ''` refused) and MR92 (the leader warning), both the orchestrator's readings.
+- The release method — squash-merge into `main`, later releases cherry-picked from `dev` (the orchestrator's, 2026-09-25).
 
 ## Changelog
 | Date | Session | Summary |
