@@ -243,9 +243,17 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 - the time's colour span left at columns 0 to 5;
 - the details' indent left at the width of `HH:MM `;
 - the details' indent counted in the icon's bytes;
-- the icon's width taken as 1 always — killed only by a `progress` report under `'ambiwidth'` `double`.
+- the icon's width taken as 1 always — killed by a report whose icon is two cells: `progress` under `'ambiwidth'` `double`, or any icon under `setcellwidths()`;
+- the indent derived from `'ambiwidth'` rather than measured (the brief review's M8) — killed by the `setcellwidths()` case;
+- the indent kept per status from its first rendering (the brief review's M9) — killed by the later-`'ambiwidth'` sequence with `:edit`.
 
-**Brief:** `brief-t11-report-icon.md`.
+**Brief:** `brief-t11-report-icon.md`, corrected after its brief review, `brief-review-t11-report-icon.md`: dispatch after corrections, 11 findings, all answered.
+- The pin list was completed: four colour-pin statements, the `REPORT_HEADERS` pattern and two details pins.
+- IC4 was restated as a width measured at each rendering, with a `setcellwidths()` case and a later-`'ambiwidth'` sequence; the brief review's M8 and M9 survived every test the brief had asked for.
+- IC5's test is seen red before the render changes.
+- The post-T13 facts go into a dated amendment of the brief, not the dispatch message.
+
+**T14's and T12's dated amendments** name T11, not T9, as the packet that edits `*aineo-report*`, with T11's quoted fence: from `8. THE AGENT REPORT                                             *aineo-report*` to `the working directory of its own moment.`.
 
 ## Landed
 
