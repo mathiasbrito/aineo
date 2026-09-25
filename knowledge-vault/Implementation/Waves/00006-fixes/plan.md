@@ -255,6 +255,81 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 
 **T14's and T12's dated amendments** name T11, not T9, as the packet that edits `*aineo-report*`, with T11's quoted fence: from `8. THE AGENT REPORT                                             *aineo-report*` to `the working directory of its own moment.`.
 
+## Packet T15 — 2026-09-26
+
+**The request, and the answer.**
+- The user asked on 2026-09-26: "for the agent it must be clear that the report window is to report in a human language, with description of what is being reported, if it is a plan to be implemented, to list the features planned, if it is a done, to list what was done, which features, references to docs, must appear at the end between () only citing numbers. We do not want explanations about decisions and whys, the report window are the whats and how. This is just an adjustment to what should be asked to the agent in the session."
+- The orchestrator restated it: a plan is a `started` report, whose `details` list the planned features one per line; a `done` lists what was done; references go at the very end, like `(D18, C12, #31)`.
+- **Answer: "Right, as a small fix".** No row: it adds *how to write* to C6's appended prompt, as T9 added colours to C6's Report.
+
+**The six rules for T15**, recomputed on 2026-09-26 against every open packet and every claimed wave (only this one):
+- T13 is in its bounded correction (PR #31).
+- T11, T14, T12 and T16 are planned.
+
+| rule | T15 |
+|---|---|
+| 1 dependencies | T8, done ✓ |
+| 2 files | `lua/aineo/report/instructions.lua`; `tests/test_report.lua`, new cases; `doc/aineo.txt` › `*aineo-report*`. By `comm -12` against PR #31's files: only `doc/aineo.txt`, whose `*aineo-install*` is T13's. With T16: only `doc/aineo.txt`, in `*aineo-layout*`. **With T11:** `doc/aineo.txt` in the same section, `*aineo-report*`, so T11 is dispatched only after T15 merges. With T14 and T12: other sections of the help ✓ |
+| 3 schema | none: the report format is unchanged ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | decided by the user ("Right, as a small fix") ✓ |
+| 6 task lines | T15's row is adjacent to T14's and T16's, so it holds its mark ✓ |
+
+**Baseline:** `dev` at `2596241`, code-identical to `dbc96c9` (`evidence/baseline-dbc96c9.txt`): 0.11.6 747 cases, `Fails (0)`; 0.12.5 747 cases, `Fails (8)`, the eight T13 fixes.
+
+**Reviewers**, as a small fix: guarantee by `neovim-lua-developer` at `high`, on the reviewer charter; records by `reviewer`.
+
+**Order:** now, beside T13's correction and T16. T11 follows T15's merge as well as T13's.
+
+**Verification mutants:**
+- the plan clause dropped;
+- the `done` clause dropped;
+- the references' clause dropped, or its "by number only" removed;
+- the no-whys clause dropped;
+- the instructions' first line changed (RI5, killed by the existing pins).
+
+**Brief:** `brief-t15-report-instructions.md`.
+
+## Packet T16 — 2026-09-26
+
+**The request, and the answer.**
+- The user asked on 2026-09-26: "and the windows to the right, must have wrap lines by default activated, since many text are landing out of the screen."
+- Asked how, the user chose **"Word wrap, small fix"** over plain `'wrap'` and over a regular packet: `'wrap'`, `'linebreak'` and `'breakindent'` in the Report's and Input's windows. The same applies to wave 7's changes pane, which is wave 7's.
+- The orchestrator measured that options set for a window are copied into every window split from it, while options set for its buffer (`:setlocal`) are not (`evidence/window-option-scope.txt`, both versions). The brief's RW3 keeps them on aineo's buffers.
+- `\o` sets them again (RW2): the orchestrator's reading of "by default", for the MVP review.
+
+**The six rules for T16**, recomputed on 2026-09-26 against the same packets:
+
+| rule | T16 |
+|---|---|
+| 1 dependencies | T8, done ✓ |
+| 2 files | `lua/aineo/layout/`; `tests/test_layout*.lua`, new cases; `doc/aineo.txt` › `*aineo-layout*`. With T13 (by `comm -12`): only `doc/aineo.txt`, another section. With T15 and T11: only `doc/aineo.txt`, other sections. **With T14:** `doc/aineo.txt` in the same section, `*aineo-layout*`, so T14 is dispatched only after T16 merges. **With T12:** `lua/aineo/layout/` and `tests/test_layout*.lua`; T12 already follows T14 ✓ |
+| 3 schema | none ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | decided by the user ("Word wrap, small fix"). RW2 is a reading of "by default" ✓ |
+| 6 task lines | T16's row is adjacent to T15's, so it holds its mark ✓ |
+
+**Baseline:** as T15's.
+
+**Reviewers**, as a small fix: guarantee by `neovim-lua-developer` at `high`, on the reviewer charter; records by `reviewer`.
+
+**Order:** now, beside T13's correction and T15. T14 follows T16's merge as well as T13's.
+
+**Verification mutants:**
+- the options set for the window (`vim.wo[win]`) instead of its buffer — killed by a file split from the Report;
+- `'linebreak'` dropped;
+- `'breakindent'` dropped;
+- the options set only on the first open — killed by `\o` after closing the Report;
+- the options set on the Report only, not Input.
+
+**Brief:** `brief-t16-right-column-wrap.md`.
+
+**The order of wave 6 from here:**
+1. T13, T15 and T16 now.
+2. T14 once T13 and T16 have merged; T11 once T13 and T15 have. The two run side by side.
+3. T12 after T14.
+4. T10 after T11.
+
 ## Landed
 
 - **T9 — PR #30, a small fix**, merged by rebase on 2026-09-26 as `a86a69c` … `3d67b05` (9 commits). Every file of the pull request is identical to the verified head `40bc378`; `git diff 40bc378 dev` shows only T14's files from PR #32.
