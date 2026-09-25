@@ -289,8 +289,9 @@ local function answer(input)
   stdout:write(printable_text(input))
 end
 
---- What Claude Code 2.1.281 sends a stdio MCP server — its handshake, then
---- one call of the report tool — one JSON-RPC message per line.
+--- What Claude Code 2.1.281 sends a stdio MCP server, one JSON-RPC message
+--- per line: its handshake, recorded from it, then one call of the report
+--- tool, reconstructed in the shape of its recorded messages.
 local MCP_MESSAGES = vim.fs.joinpath(vim.fs.dirname(FIXTURES), 'mcp', 'claude-code-2.1.281.jsonl')
 
 --- How long the fake waits for the MCP server to answer a request.
@@ -316,7 +317,7 @@ end
 --- The messages `MCP_MESSAGES` holds, each as its line of JSON.
 ---
 ---@return string[]
-local function recorded_mcp_messages()
+local function fixture_mcp_messages()
   return vim.tbl_filter(function(line)
     return line ~= '' and not vim.startswith(line, '#')
   end, vim.fn.readfile(MCP_MESSAGES))
@@ -347,7 +348,7 @@ local function call_report_tool()
       end
     end
   end
-  for _, line in ipairs(recorded_mcp_messages()) do
+  for _, line in ipairs(fixture_mcp_messages()) do
     process:write(line .. '\n')
     local id = vim.json.decode(line).id
     if id ~= nil then

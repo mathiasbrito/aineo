@@ -404,15 +404,17 @@ T['focus() with its window closed opens the layout with the arrangement a functi
   local buffers = layout.open_with_stand_ins(child)
   layout.close_windows(child, buffers, { 'report' })
 
-  child.lua(
-    [[
-      local arrangement = ...
-      require('aineo.layout').focus('report', function()
-        return arrangement
-      end)
-    ]],
-    { layout.arrangement(buffers) }
-  )
+  MiniTest.expect.no_error(function()
+    child.lua(
+      [[
+        local arrangement = ...
+        require('aineo.layout').focus('report', function()
+          return arrangement
+        end)
+      ]],
+      { layout.arrangement(buffers) }
+    )
+  end)
 
   eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers.report)
   eq(layout.window_count(child), 3)
