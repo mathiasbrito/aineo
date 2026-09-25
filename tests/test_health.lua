@@ -282,6 +282,80 @@ T['Claude Code']['leaves no process of a wrapper that ignores TERM behind once i
   )
 end
 
+T['Claude Code']['leaves no process of claude.cmd --version behind when Ctrl-C ends the check early'] = function()
+  local child_pid_file = vim.fs.joinpath(fixture.directory('health-interrupted'), 'child-pid')
+  start_with_stand_in('wrapping')
+  child.lua('vim.env.AINEO_HEALTH_CLAUDE_CHILD_PID = ...', { child_pid_file })
+  child.lua_notify([[
+    vim.cmd('checkhealth aineo')
+    vim.g.health_checked = true
+  ]])
+  vim.wait(1000, function()
+    return vim.uv.fs_stat(child_pid_file) ~= nil
+  end, 20)
+
+  child.api.nvim_input('<C-c>')
+
+  eq(
+    vim.wait(BOUND_WITH_MARGIN_MS, function()
+      return child.lua_get('vim.g.health_checked') == true
+    end, 50),
+    true
+  )
+  local wrapped_pid = tonumber(vim.fn.readfile(child_pid_file)[1])
+  eq(
+    vim.wait(1000, function()
+      return vim.uv.kill(wrapped_pid, 0) == nil
+    end, 20),
+    true
+  )
+end
+
+T['Claude Code']['leaves the editor free to wait when Ctrl-C ends a check of a command that writes without end'] = function()
+  local record = vim.fs.joinpath(fixture.directory('health-interrupted-flood'), 'arguments')
+  start_with_stand_in('pouring')
+  child.lua('vim.env.AINEO_HEALTH_CLAUDE_RECORD = ...', { record })
+  child.lua_notify([[
+    vim.cmd('checkhealth aineo')
+    vim.g.health_checked = true
+  ]])
+  vim.wait(1000, function()
+    return vim.uv.fs_stat(record) ~= nil
+  end, 20)
+  child.api.nvim_input('<C-c>')
+  vim.wait(BOUND_WITH_MARGIN_MS, function()
+    return child.lua_get('vim.g.health_checked') == true
+  end, 50)
+
+  local waited_ms = child.lua([[
+    local started = vim.uv.hrtime()
+    vim.wait(100)
+    return (vim.uv.hrtime() - started) / 1e6
+  ]])
+
+  eq(waited_ms < 1000, true)
+end
+
+T['Claude Code']['reports the version of a command that finished within 3 s while the loop was busy past it'] = function()
+  start_with_stand_in('finishing-late')
+  child.lua([[
+    local busy = vim.uv.new_timer()
+    busy:start(2800, 0, function()
+      local started = vim.uv.hrtime()
+      while vim.uv.hrtime() - started < 400e6 do
+      end
+      busy:close()
+    end)
+  ]])
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Claude Code'), {
+    '- ✅ OK claude.cmd --version: 9.9.9 (health stand-in)',
+    "- aineo's behaviour was measured on Claude Code 2.1.281",
+  })
+end
+
 T['Claude Code']['reads an exit status of 124 as an exit, not as a time-out'] = function()
   start_with_stand_in('exiting-124')
 
@@ -337,6 +411,32 @@ T['Claude Code']['keeps the first 1024 bytes of what claude.cmd --version prints
     '- ✅ OK claude.cmd --version: ' .. string.rep('x', 1024),
     "- aineo's behaviour was measured on Claude Code 2.1.281",
   })
+end
+
+T['Claude Code']['keeps no part of a character the 1024-byte cut falls inside'] = MiniTest.new_set({
+  parametrize = { { 'wide-at-1024', 1023 }, { 'wider-at-1024', 1022 } },
+})
+
+T['Claude Code']['keeps no part of a character the 1024-byte cut falls inside']['of'] = function(
+  mode,
+  kept_x
+)
+  start_with_stand_in(mode)
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Claude Code')[1],
+    '- ✅ OK claude.cmd --version: ' .. string.rep('x', kept_x)
+  )
+end
+
+T['Claude Code']['keeps the first 1024 bytes of what claude.cmd --version writes on stderr'] = function()
+  start_with_stand_in('failing-at-length')
+
+  local report = health.report(child)
+
+  eq(health.advice(report, 'Claude Code'), { string.rep('x', 1024) })
 end
 
 T['the server socket'] = MiniTest.new_set()
@@ -430,6 +530,73 @@ T['the prefix mappings']['warn that the leader, a Number, is the prefix'] = func
   eq(health.section(report, 'Prefix mappings')[6], '- ⚠️ WARNING the leader is the prefix, 1')
 end
 
+T['the prefix mappings']['warn that a leader longer than 48 bytes, which Neovim maps as a backslash, is the prefix'] = function()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({ autostart = false }), {
+      '--cmd',
+      'let g:maplocalleader = ","',
+      '--cmd',
+      'let g:mapleader = ' .. vim.fn.string(string.rep('a', 49)),
+    })
+  )
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Prefix mappings')[6], LEADER_WARNING)
+end
+
+T['the prefix mappings']['take a leader of 48 bytes as the characters Neovim maps it to'] = function()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({ autostart = false }), {
+      '--cmd',
+      'let g:maplocalleader = ","',
+      '--cmd',
+      'let g:mapleader = ' .. vim.fn.string(string.rep('a', 48)),
+    })
+  )
+
+  local report = health.report(child)
+
+  eq(#health.section(report, 'Prefix mappings'), 5)
+end
+
+T['the prefix mappings']['warn that the leader, the same key as a prefix in key notation, is the prefix'] = function()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({ autostart = false, prefix = '<space>' }), {
+      '--cmd',
+      'let g:maplocalleader = ","',
+      '--cmd',
+      'let g:mapleader = " "',
+    })
+  )
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Prefix mappings')[6],
+    '- ⚠️ WARNING the leader is the prefix, <space>'
+  )
+end
+
+T['the prefix mappings']['take a leader written in key notation as the characters Neovim maps it to'] = function()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({ autostart = false, prefix = '<Space>' }), {
+      '--cmd',
+      'let g:maplocalleader = ","',
+      '--cmd',
+      'let g:mapleader = "<Space>"',
+    })
+  )
+
+  local report = health.report(child)
+
+  eq(#health.section(report, 'Prefix mappings'), 5)
+end
+
 T['the prefix mappings']['report the keys plugin/aineo.lua mapped to aineo, no more and no fewer'] = function()
   start_with_local_leader({ autostart = false }, ',')
   local mapped = health.keys_mapped_to_aineo(child)
@@ -486,10 +653,12 @@ T['the prefix mappings']['warn that the local leader, a Number, is the prefix'] 
   eq(#health.section(report, 'Limits'), 1)
 end
 
-T['the prefix mappings']['take a local leader that is neither text nor a Number as no key'] = function()
+T['the prefix mappings']['warn that a List local leader, which Neovim maps as a backslash, is the prefix'] = function()
   children.restart(
     child,
     vim.list_extend(settings_arguments({ autostart = false }), {
+      '--cmd',
+      'let g:mapleader = ","',
       '--cmd',
       'let g:maplocalleader = [1]',
     })
@@ -497,7 +666,10 @@ T['the prefix mappings']['take a local leader that is neither text nor a Number 
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[6], LEADER_WARNING)
+  eq(
+    health.section(report, 'Prefix mappings')[6],
+    '- ⚠️ WARNING the local leader is the prefix, \\'
+  )
   eq(#health.section(report, 'Limits'), 1)
 end
 
@@ -510,10 +682,63 @@ T['the prefix mappings']['say the keys are mapped once the editor has started, w
   local report = child.lua_get('vim.g.health_report')
 
   eq(health.section(report, 'Prefix mappings'), {
-    health.STILL_STARTING_KEYS,
+    health.VIM_ENTER_PENDING_KEYS,
     '- ⚠️ WARNING the local leader is the prefix, \\',
     LEADER_WARNING,
   })
+end
+
+--- Starts `child` afresh with the local leader `,` and aineo not loaded,
+--- then loads aineo, as a plugin manager that loads it lazily does, and runs
+--- the check in the same tick; returns the report.
+---
+---@return string[]
+local function check_in_the_tick_aineo_is_loaded_late()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({ autostart = false }), {
+      '--cmd',
+      'let g:maplocalleader = ","',
+      '--cmd',
+      'let g:loaded_aineo = 1',
+    })
+  )
+  return child.lua([[
+    vim.g.loaded_aineo = nil
+    vim.cmd.runtime('plugin/aineo.lua')
+    vim.cmd('checkhealth aineo')
+    return vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  ]])
+end
+
+T['the prefix mappings']['say the keys are mapped in the next tick, when checked in the tick aineo is loaded late'] = function()
+  local report = check_in_the_tick_aineo_is_loaded_late()
+
+  eq(health.section(report, 'Prefix mappings'), {
+    '- the prefix keys are not mapped yet: aineo was loaded after startup, and maps them in the next event-loop tick',
+    LEADER_WARNING,
+  })
+end
+
+T['the prefix mappings']['are reported in place once the tick after aineo is loaded late has run'] = function()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({ autostart = false }), {
+      '--cmd',
+      'let g:maplocalleader = ","',
+      '--cmd',
+      'let g:loaded_aineo = 1',
+    })
+  )
+  child.lua([[
+    vim.g.loaded_aineo = nil
+    vim.cmd.runtime('plugin/aineo.lua')
+  ]])
+  child.lua('vim.wait(0)')
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Prefix mappings')[1], '- ✅ OK \\s runs <Plug>(aineo-send)')
 end
 
 T['the prefix mappings']['warn of a key the user mapped, naming what it runs'] = function()
@@ -680,6 +905,17 @@ T['the autostart']['has no record when vim.g.aineo_startup holds something aineo
   })
 end
 
+T['the autostart']['has no record when vim.g.aineo_startup holds a reason aineo does not write'] = function()
+  start_with({ autostart = false })
+  child.lua([[vim.g.aineo_startup = { reason = 'bogus' }]])
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Autostart'), {
+    '- no record of the autostart: vim.g.aineo_startup holds something aineo did not write',
+  })
+end
+
 T['the autostart']['reports a failed open without its error when the error is not text'] = function()
   start_with({ autostart = false })
   child.lua([[vim.g.aineo_startup = { reason = 'open-failed', failure = { 'x' } }]])
@@ -692,8 +928,10 @@ T['the autostart']['reports a failed open without its error when the error is no
   eq(#health.section(report, 'Limits'), 1)
 end
 
---- The line the Autostart section shows while the editor is still starting.
-local STILL_STARTING = '- the autostart has not decided yet: the editor is still starting'
+--- The line the Autostart section shows while aineo's `VimEnter` handler
+--- has not run.
+local VIM_ENTER_PENDING =
+  "- the autostart has not decided: aineo's VimEnter handler, which decides it, has not run — the editor is still starting, or a VimEnter autocommand before it threw an exception"
 
 T['the autostart']['has not decided yet when the check runs from -c'] = function()
   children.restart(
@@ -703,7 +941,7 @@ T['the autostart']['has not decided yet when the check runs from -c'] = function
 
   local report = child.lua_get('vim.g.health_report')
 
-  eq(health.section(report, 'Autostart'), { STILL_STARTING })
+  eq(health.section(report, 'Autostart'), { VIM_ENTER_PENDING })
 end
 
 T['the autostart']['has not decided yet when a VimEnter autocommand before aineo runs the check'] = function()
@@ -717,8 +955,24 @@ T['the autostart']['has not decided yet when a VimEnter autocommand before aineo
 
   local report = child.lua_get('vim.g.health_report')
 
-  eq(health.section(report, 'Autostart'), { STILL_STARTING })
-  eq(health.section(report, 'Prefix mappings')[1], health.STILL_STARTING_KEYS)
+  eq(health.section(report, 'Autostart'), { VIM_ENTER_PENDING })
+  eq(health.section(report, 'Prefix mappings')[1], health.VIM_ENTER_PENDING_KEYS)
+end
+
+T['the autostart']['has not decided once the editor started, when a VimEnter autocommand before aineo threw'] = function()
+  children.restart(
+    child,
+    vim.list_extend(
+      settings_arguments({ autostart = false }),
+      { '--cmd', "autocmd VimEnter * throw 'an earlier VimEnter handler threw'" }
+    )
+  )
+
+  local report = health.report(child)
+
+  eq(child.lua_get('vim.v.vim_did_enter'), 1)
+  eq(health.section(report, 'Autostart'), { VIM_ENTER_PENDING })
+  eq(health.section(report, 'Prefix mappings')[1], health.VIM_ENTER_PENDING_KEYS)
 end
 
 T['the autostart']['did not run because autostart is false'] = function()
@@ -759,6 +1013,14 @@ T['the autostart']['did not run because aineo was loaded after startup'] = funct
   ]])
 
   local report = health.report(child)
+
+  eq(health.section(report, 'Autostart'), {
+    '- the autostart did not run: aineo was loaded after startup, as a plugin manager that loads it lazily does',
+  })
+end
+
+T['the autostart']['did not run because aineo was loaded after startup, when checked in the same tick'] = function()
+  local report = check_in_the_tick_aineo_is_loaded_late()
 
   eq(health.section(report, 'Autostart'), {
     '- the autostart did not run: aineo was loaded after startup, as a plugin manager that loads it lazily does',

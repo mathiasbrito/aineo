@@ -30,9 +30,10 @@ M.CAPTURE = "lua vim.cmd('checkhealth aineo'); "
   .. 'vim.g.health_report = vim.api.nvim_buf_get_lines(0, 0, -1, false)'
 
 --- The line the Prefix mappings section shows, in place of one per key,
---- while the editor is still starting.
-M.STILL_STARTING_KEYS =
-  '- the prefix keys are mapped once the editor has started; the editor is still starting'
+--- while aineo's `VimEnter` handler has not run: while the editor is still
+--- starting, or once a `VimEnter` autocommand before it threw.
+M.VIM_ENTER_PENDING_KEYS =
+  '- the prefix keys are not mapped: aineo maps them from its VimEnter handler, which has not run — the editor is still starting, or a VimEnter autocommand before it threw an exception'
 
 --- The lines of the report `:checkhealth aineo` shows in `child`.
 ---

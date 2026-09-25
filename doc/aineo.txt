@@ -322,11 +322,13 @@ Configuration ~
 Claude Code ~
   An error when the first word of `claude.cmd` is not executable. Else
   `claude.cmd --version`, run whole — a wrapper reports Claude Code's
-  version, not its own — and killed after 3 seconds with every process it
-  started: the first line it prints, or a warning when it cannot start,
-  runs longer, fails or prints nothing. A command that prints its version
-  and exits but leaves a process of its own holding its output open counts
-  as running longer.
+  version, not its own — and killed after 3 seconds, or when Ctrl-C ends
+  the check early, with every process in its process group: the first line
+  it prints, or a warning when it cannot start, runs longer, fails or
+  prints nothing. A command that prints its version and exits but leaves a
+  process of its own holding its output open counts as running longer. A
+  process it starts that leaves the group, by starting a session or a
+  group of its own, is not killed and can outlive the check.
 
 Server socket ~
   The address the editor listens at (|v:servername|); an error when it
@@ -334,18 +336,23 @@ Server socket ~
 
 Prefix mappings ~
   For each prefix key, whether it runs aineo's `<Plug>` mapping; a warning
-  when it runs something of yours, or nothing. While the editor is still
-  starting — `nvim +checkhealth` runs the check before |VimEnter| — one
-  line says the keys are mapped once it has started. A warning when the
-  leader or the local leader is the prefix: with the default prefix and
-  |mapleader| or |maplocalleader| unset or `\`, these warnings show.
+  when it runs something of yours, or nothing. While aineo's |VimEnter|
+  handler, which maps the keys, has not run — the editor is still
+  starting, as when `nvim +checkhealth` runs the check before `VimEnter`,
+  or a `VimEnter` autocommand before aineo's threw an exception — one line
+  says so in place of the keys; so does one in the tick a plugin manager
+  loads aineo after startup, since the keys are mapped in the next. A
+  warning when the leader or the local leader is the prefix: with the
+  default prefix and |mapleader| or |maplocalleader| unset or `\`, these
+  warnings show. Neovim reads a leader that is a List, a Dictionary or
+  longer than 48 bytes as a backslash, and so does the check.
 
 Autostart ~
   Whether the autostart opened the layout at startup, or which reason kept
-  it from running (|aineo-autostart|); while the editor is still starting,
-  that it has not decided yet, or that it will open the layout. A warning
-  when a setting was wrong at startup, and when the autostart tried to
-  open the layout and failed, with the error it met.
+  it from running (|aineo-autostart|); while aineo's `VimEnter` handler has
+  not run, that it has not decided; once it has decided to open the layout,
+  that it will. A warning when a setting was wrong at startup, and when the
+  autostart tried to open the layout and failed, with the error it met.
 
                                                              *g:aineo_startup*
   aineo records its decision in `vim.g.aineo_startup`, a table whose
@@ -353,8 +360,9 @@ Autostart ~
   the editor not started yet), `wrong-setting`, `autostart-off`, `no-ui`,
   `file-argument`, `stdin`, `startup-task`, `inside-claude`, `opening`
   (the open decided, not tried yet), `session-restored`, `opened`,
-  `open-failed` — with the error in `failure` — or `sourced-late`. The
-  health check reads it; aineo never does.
+  `open-failed` — with the error in `failure`. When aineo is loaded after
+  startup: `mapping-late` (its keys not mapped yet), then `sourced-late`.
+  The health check reads it; aineo never does.
 
 Limits ~
   The stop on quit of |aineo-limits|, which a check cannot detect.

@@ -54,7 +54,7 @@ local function first_line(text)
 end
 
 --- How long `claude.cmd --version` may run before it is killed, with every
---- process it started.
+--- process in its process group.
 local VERSION_BOUND_MS = 3000
 
 --- How much of what `claude.cmd --version` writes the check keeps, of its
@@ -62,9 +62,34 @@ local VERSION_BOUND_MS = 3000
 --- dropped.
 local KEPT_OUTPUT_BYTES = 1024
 
+--- `text` without the bytes of a UTF-8 character its end cuts short: a lead
+--- byte followed by fewer continuation bytes than it announces (RFC 3629
+--- §3).
+---
+---@param text string
+---@return string
+local function without_cut_character(text)
+  for back = 0, 3 do
+    local position = #text - back
+    local byte = text:byte(position)
+    if byte == nil or byte < 0x80 then
+      return text
+    end
+    if byte >= 0xC0 then
+      local length = byte >= 0xF0 and 4 or byte >= 0xE0 and 3 or 2
+      if back + 1 < length then
+        return text:sub(1, position - 1)
+      end
+      return text
+    end
+  end
+  return text
+end
+
 --- A sink for one of a process's outputs, in the form `vim.system()` calls,
---- that keeps its first `KEPT_OUTPUT_BYTES`; and a function returning what
---- it kept.
+--- that keeps its first `KEPT_OUTPUT_BYTES`, less a character they end
+--- partway through (`without_cut_character()`); and a function returning
+--- what it kept.
 ---
 ---@return fun(err: string|nil, data: string|nil) keep
 ---@return fun(): string kept
@@ -78,16 +103,23 @@ local function bounded_output()
     end
   end
   return keep, function()
-    return table.concat(pieces)
+    return without_cut_character(table.concat(pieces))
   end
 end
 
 --- Runs `command` as a list of words, never through a shell, leading a
 --- process group of its own, and returns how it ended. A timer of the
 --- check's own kills the whole group at `VERSION_BOUND_MS` — the command and
---- every process it started, such as a wrapper's child — so the wait keeps
+--- every process in its group, such as a wrapper's child — so the wait keeps
 --- its bound even while the command writes without end, when Neovim's own
---- `vim.wait()` time-out does not run out; the result is then `nil`.
+--- `vim.wait()` time-out does not run out. A descendant that starts a process
+--- group or a session of its own is not in the group: it escapes the kill
+--- and can outlive the check.
+---
+--- Whenever the wait ends before the command has finished — at the bound, or
+--- early, on Ctrl-C — the group is killed and the result is `nil`. A command
+--- that finished is reported by its result, even when the timer came due in
+--- the same event-loop iteration.
 ---
 --- Raises the error `vim.system()` raises when the command cannot start.
 ---
@@ -115,7 +147,8 @@ local function run_within_bound(command)
   end, 10, true)
   timer:stop()
   timer:close()
-  if timed_out or completed == nil then
+  if completed == nil then
+    vim.uv.kill(-process.pid, 'sigkill')
     return nil
   end
   return { code = completed.code, stdout = kept_stdout(), stderr = kept_stderr() }
@@ -276,21 +309,29 @@ local function check_prefix_key(prefix, prefix_key)
   end
 end
 
+--- The longest leader, in bytes, Neovim copies into a mapping; it maps a
+--- backslash for a longer one.
+local LONGEST_LEADER_BYTES = 48
+
 --- The characters a mapping's `<Leader>` or `<LocalLeader>` stands for,
 --- from `value`, the `mapleader` or `maplocalleader` that sets it: a
---- backslash when it is not set or empty, a Number's digits, and any other
---- value as it is — a string's characters as written, never read as key
---- notation, since Neovim copies them into a mapping literally (`:h
---- <Leader>`; `'<Space>'` maps `<lt>Space>`).
+--- backslash when it is not set, empty, a List or a Dictionary, or a string
+--- longer than `LONGEST_LEADER_BYTES`; a Number's digits; and any other value
+--- as it is — a string's characters as written, never read as key notation,
+--- since Neovim copies them into a mapping literally (`:h <Leader>`;
+--- `'<Space>'` maps `<lt>Space>`).
 ---
 ---@param value any
 ---@return any keys
 local function leader_keys(value)
-  if value == nil or value == '' then
+  if value == nil or value == '' or type(value) == 'table' then
     return '\\'
   end
   if type(value) == 'number' then
     return tostring(value)
+  end
+  if type(value) == 'string' and #value > LONGEST_LEADER_BYTES then
+    return '\\'
   end
   return value
 end
@@ -316,6 +357,13 @@ local function check_leaders(prefix)
   end
 end
 
+--- What the health check says of the autostart when aineo was loaded after
+--- the editor had started.
+local SOURCED_LATE_FINDING = {
+  level = 'info',
+  text = 'the autostart did not run: aineo was loaded after startup, as a plugin manager that loads it lazily does',
+}
+
 --- What the health check says of each reason `plugin/aineo.lua` records for
 --- the autostart's decision: the `vim.health` function it reports with, and
 --- its words.
@@ -323,7 +371,7 @@ end
 local AUTOSTART_FINDINGS = {
   starting = {
     level = 'info',
-    text = 'the autostart has not decided yet: the editor is still starting',
+    text = "the autostart has not decided: aineo's VimEnter handler, which decides it, has not run — the editor is still starting, or a VimEnter autocommand before it threw an exception",
   },
   opening = {
     level = 'info',
@@ -352,10 +400,8 @@ local AUTOSTART_FINDINGS = {
     level = 'info',
     text = 'the autostart did not run: a session was restored at startup (v:this_session is set)',
   },
-  ['sourced-late'] = {
-    level = 'info',
-    text = 'the autostart did not run: aineo was loaded after startup, as a plugin manager that loads it lazily does',
-  },
+  ['mapping-late'] = SOURCED_LATE_FINDING,
+  ['sourced-late'] = SOURCED_LATE_FINDING,
   ['open-failed'] = {
     level = 'warn',
     text = 'the autostart tried to open the layout and failed',
@@ -383,9 +429,17 @@ local function startup_record()
   return false
 end
 
+--- What the Prefix mappings section says in place of a line per key while
+--- aineo's record (`startup_record()`) says it has not mapped them yet, by
+--- the record's reason.
+local PREFIX_KEYS_PENDING = {
+  starting = 'the prefix keys are not mapped: aineo maps them from its VimEnter handler, which has not run — the editor is still starting, or a VimEnter autocommand before it threw an exception',
+  ['mapping-late'] = 'the prefix keys are not mapped yet: aineo was loaded after startup, and maps them in the next event-loop tick',
+}
+
 --- Reports on the prefix mappings `resolved_config`'s `prefix` names: each
---- key, once the editor has started and mapped them — while it is still
---- starting, one line saying so — and the leaders.
+--- key — or, while aineo's record says it has not mapped them yet, one line
+--- saying why (`PREFIX_KEYS_PENDING`) — and the leaders.
 ---
 ---@param resolved_config table|nil the configuration, `nil` when it is wrong
 local function check_prefix_mappings(resolved_config)
@@ -401,10 +455,9 @@ local function check_prefix_mappings(resolved_config)
     return
   end
   local record = startup_record()
-  if record and record.reason == 'starting' then
-    vim.health.info(
-      'the prefix keys are mapped once the editor has started; the editor is still starting'
-    )
+  local pending = record and PREFIX_KEYS_PENDING[record.reason]
+  if pending then
+    vim.health.info(pending)
   else
     for _, prefix_key in ipairs(PREFIX_KEYS) do
       check_prefix_key(resolved_config.prefix, prefix_key)

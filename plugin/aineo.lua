@@ -330,8 +330,9 @@ end
 --- the moment this file is sourced until the editor has started; `opening`,
 --- once the autostart has decided to open the layout, until it has tried;
 --- then `opened`, `open-failed`, `autostart-off`, `wrong-setting`,
---- `session-restored`, or one of `NOT_BARE_INTERACTIVE`; and `sourced-late`
---- when this file is sourced after the editor has started.
+--- `session-restored`, or one of `NOT_BARE_INTERACTIVE`. When this file is
+--- sourced after the editor has started: `mapping-late`, until the scheduled
+--- callback that maps the prefix has run, then `sourced-late`.
 ---
 ---@param reason string
 ---@param failure? string the error line an open that failed told the user
@@ -396,11 +397,12 @@ local function start_up()
 end
 
 if vim.v.vim_did_enter == 1 then
-  record_startup('sourced-late')
+  record_startup('mapping-late')
   vim.schedule(function()
     run(function()
       map_prefix(resolved_config().prefix)
     end)
+    record_startup('sourced-late')
   end)
 else
   record_startup('starting')
