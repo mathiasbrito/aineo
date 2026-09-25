@@ -141,7 +141,10 @@ The wave holds its marks (rule 6). The line T9 would take:
 - **Candidate Learnings for the adjustment pass:**
   - `:edit` on a `nofile` buffer with a `BufReadCmd` empties its text but not its extmarks, which collapse to the end of the refilled buffer. Measured by unit 5's red on 0.12.5 and by mutant M9 on both 0.11.6 and 0.12.5.
   - `nvim_set_hl(…, { default = true })` records no default link over a group that already has settings, and `:highlight default link` does. Measured by the guarantee review and the fix round's probe, on both versions.
-- **The shared help's merge check with T13:** it was not possible at the fix round's push, because `origin/bugfix/t13-neovim-0-12` did not exist. T13 re-runs it against this branch's head when it pushes. The records reviewer's provisional check against T13's unpushed branch merged cleanly, with `tests/test_doc.lua` 36/0.
+- **The shared help's merge check with T13:** `origin/bugfix/t13-neovim-0-12` appeared during the fix round, at `84fb0e1`.
+  - Merging it with this branch's fix-round head gives one tree and no conflict. T13's only help change is at `*aineo-install*`.
+  - `tests/test_doc.lua` on the merged `doc/aineo.txt`: 36 cases, `Fails (0)`.
+  - Whichever of T9 and T13 lands second re-runs the check against the other's head. `origin/feature/t12-claude-numbers` did not exist yet.
 
 ## Commits
 
