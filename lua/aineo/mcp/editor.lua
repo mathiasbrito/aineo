@@ -20,22 +20,36 @@ local CONFIRMATION_TIMEOUT_MS = 5000
 local REQUEST, RESPONSE = 0, 1
 local REQUEST_ID = 1
 
---- The words an editor wraps an error raised in Lua in before it answers a
---- request with it: `Lua: ` from Neovim 0.12 on, `Error executing lua: `
---- before.
-local ERROR_FRAMING = { '^Lua: ', '^Error executing lua: ' }
+--- What an editor puts before an error raised in Lua when it answers a
+--- request with it: the words it wraps the error in (`Lua: ` from Neovim 0.12
+--- on, `Error executing lua: ` before), and the position of the Lua code that
+--- raised it — `<file>.lua:<line>: `, or for Neovim's own modules from 0.12
+--- on `vim/<module>:<line>: ` or `[string "vim/<module>"]:<line>: `.
+local ERROR_FRAMING = {
+  '^Lua: ',
+  '^Error executing lua: ',
+  '^.-%.lua:%d+: ',
+  '^vim/[%w_/]+:%d+: ',
+  '^%[string "vim/[^"]*"%]:%d+: ',
+}
 
 --- The reason an editor's error `text` gives: its first line, without the
---- stack traceback that may follow it and without the words the editor
---- wrapped it in (`ERROR_FRAMING`).
+--- stack traceback that may follow it and without what the editor put before
+--- it (`ERROR_FRAMING`), stripped until none is left at its start — an editor
+--- frames an error again after the position of the Lua that called the API
+--- function which raised it. A reason that itself begins with such words
+--- loses them too.
 ---
 ---@param text string
 ---@return string
 local function editor_reason(text)
   local line = text:match('^[^\n]*')
-  for _, framing in ipairs(ERROR_FRAMING) do
-    line = line:gsub(framing, '')
-  end
+  repeat
+    local before = line
+    for _, framing in ipairs(ERROR_FRAMING) do
+      line = line:gsub(framing, '')
+    end
+  until line == before
   return line
 end
 

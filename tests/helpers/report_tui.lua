@@ -8,7 +8,8 @@ local M = {}
 local CHECKOUT = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h:h')
 local MINIMAL_INIT = vim.fs.joinpath(CHECKOUT, 'scripts', 'minimal_init.lua')
 
---- How long the helper waits for the editor to listen, or to reach a mode.
+--- How long the helper waits for the editor to listen, to finish starting,
+--- to reach a mode, or to exit.
 local WAIT_MS = 5000
 
 --- The Device Status Report query (`CSI 5 n`) Neovim's TUI writes to its
@@ -78,15 +79,20 @@ function TuiEditor:stop()
   vim.fn.jobwait({ self.job }, WAIT_MS)
 end
 
---- Waits until the editor on `channel` has finished starting (`VimEnter`),
---- so that its init has put the checkout on `'runtimepath'`: while it
---- starts, the editor may serve requests from inside a wait of its own.
+--- Waits, at most `WAIT_MS`, until the editor on `channel` has finished
+--- starting (`VimEnter`), so that its init has put the checkout on
+--- `'runtimepath'`: while it starts, the editor may serve requests from
+--- inside a wait of its own. Raises an error naming this wait when the
+--- editor has not finished starting by then.
 ---
 ---@param channel integer
 local function wait_for_startup(channel)
-  vim.wait(WAIT_MS, function()
+  local started = vim.wait(WAIT_MS, function()
     return vim.rpcrequest(channel, 'nvim_get_vvar', 'vim_did_enter') == 1
   end, 20)
+  if not started then
+    error(('the editor did not finish starting (VimEnter) within %d ms'):format(WAIT_MS), 0)
+  end
 end
 
 --- The editor's `on_stdout` handler: answers each status query in the

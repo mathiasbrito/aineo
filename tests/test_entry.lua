@@ -1,4 +1,5 @@
 local MiniTest = require('mini.test')
+local children = dofile('tests/helpers/child.lua')
 local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
@@ -208,6 +209,78 @@ T[':Aineo open']['when a TermOpen autocommand of the user fails tells the user t
 
   eq(entry.messages(child), {
     { message = TERMOPEN_FAILURE, level = vim.log.levels.ERROR },
+  })
+end
+
+--- What the user is told when a TermOpen autocommand of theirs fails with
+--- words that only look like Neovim's framing: every one of them.
+local TERMOPEN_FAILURE_QUOTING_FRAMING = vim.fn.has('nvim-0.12') == 1
+    and 'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:3: the user autocommand quotes Lua: here'
+  or 'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Error executing lua callback: [string "<nvim>"]:3: the user autocommand quotes Lua: here'
+
+T[':Aineo open']['when a TermOpen autocommand fails with words that only look like framing tells the user them all'] = function()
+  local fake = claude_session.fake('entry-open-termopen-quotes', 'ready')
+  entry.use_fake(child, fake)
+  child.lua([[
+    vim.api.nvim_create_autocmd('TermOpen', {
+      callback = function()
+        error('the user autocommand quotes Lua: here')
+      end,
+    })
+  ]])
+
+  entry.command(child, 'Aineo open')
+
+  eq(
+    entry.messages(child),
+    { { message = TERMOPEN_FAILURE_QUOTING_FRAMING, level = vim.log.levels.ERROR } }
+  )
+end
+
+--- The child code that leaves a buffer the user edited holding the Report's
+--- name, and a BufFilePre autocommand of the user that fails for that name:
+--- aineo's Report then frees the name from a Lua function, through
+--- `nvim_buf_call()`, whose error Neovim frames after that function's
+--- position.
+local EDITED_REPORT_AND_FAILING_BUFFILEPRE = [[
+  local edited = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_name(edited, 'aineo://report')
+  vim.api.nvim_buf_set_lines(edited, 0, -1, false, { 'the user typed this' })
+  vim.api.nvim_create_autocmd('BufFilePre', {
+    callback = function(event)
+      if event.file == 'aineo://report' then
+        error('the user autocommand fails')
+      end
+    end,
+  })
+]]
+
+--- What the user is told when that BufFilePre autocommand fails as aineo
+--- opens: the first line of the error, in each Neovim's words for an error
+--- raised in a Lua callback.
+local BUFFILEPRE_FAILURE = vim.fn.has('nvim-0.12') == 1
+    and 'aineo: nvim_exec2()[1]..nvim_exec2() called at nvim_exec2():1[1]..BufFilePre Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:7: the user autocommand fails'
+  or 'aineo: nvim_exec2()[1]..nvim_exec2() called at nvim_exec2():1[1]..BufFilePre Autocommands for "*": Vim(append):Error executing lua callback: [string "<nvim>"]:7: the user autocommand fails'
+
+T[':Aineo open']['when the user edited a buffer named as the Report and their BufFilePre autocommand fails tells the user the first line of its error'] = function()
+  local fake = claude_session.fake('entry-open-buffilepre-fails', 'ready')
+  entry.use_fake(child, fake)
+  child.lua(EDITED_REPORT_AND_FAILING_BUFFILEPRE)
+
+  entry.command(child, 'Aineo open')
+
+  eq(entry.messages(child), { { message = BUFFILEPRE_FAILURE, level = vim.log.levels.ERROR } })
+end
+
+T[':Aineo open']['with setup() options Neovim cannot copy tells the user without the position of its own Lua'] = function()
+  local fake = claude_session.fake('entry-open-setup-userdata', 'ready')
+  entry.use_fake(child, fake)
+  child.lua([[require('aineo').setup({ extra = io.stdout })]])
+
+  entry.command(child, 'Aineo open')
+
+  eq(entry.messages(child), {
+    { message = 'aineo: Cannot deepcopy object of type userdata', level = vim.log.levels.ERROR },
   })
 end
 
@@ -424,6 +497,19 @@ T['<Plug>(aineo-send)']["sends Input's text to Claude"] = function()
 
   eq(claude_session.wait_for_received_after(fake, received_before, #SENT_HELLO), SENT_HELLO)
   eq(entry.messages(child), {})
+end
+
+T['a prefix too long for a mapping, at startup'] = MiniTest.new_set()
+
+T['a prefix too long for a mapping, at startup']['is told to the user without the position of Neovim’s own Lua'] = function()
+  local prefix = string.rep('x', 60)
+
+  children.restart(
+    child,
+    { '--cmd', ("lua vim.g.aineo = { prefix = '%s', autostart = false }"):format(prefix) }
+  )
+
+  eq(child.cmd_capture('messages'), 'aineo: LHS exceeds maximum map length: ' .. prefix .. 's')
 end
 
 T[':Aineo send'] = MiniTest.new_set()
