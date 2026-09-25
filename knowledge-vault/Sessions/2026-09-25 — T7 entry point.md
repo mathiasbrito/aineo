@@ -1,7 +1,7 @@
 # 2026-09-25 — T7 entry point
 
 **Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `feature/t7-entry` · **Pull request:** into `dev` (number in the pull request's own page)
+**Branch:** `feature/t7-entry` · **Pull request:** #17, into `dev`
 
 ## Links
 
