@@ -18,6 +18,12 @@
             "if": "Bash(git *)",
             "timeout": 10,
             "statusMessage": "Checking the staged changes were reviewed"
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-worktree-cd.sh\"",
+            "timeout": 10,
+            "statusMessage": "Checking the session stays in its checkout"
           }
         ]
       }
