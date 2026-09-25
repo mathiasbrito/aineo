@@ -19,17 +19,17 @@
 **`lua/aineo/health.lua`** — `:checkhealth aineo`, requiring `aineo.config` alone. Six sections:
 
 - *Configuration* — ok, or an error naming the wrong setting (the Lua position stripped), and one warning per unknown key, sorted (MR73).
-- *Claude Code* — an error when `claude.cmd`'s first word is not executable, in the Claude home's words (`claude.cmd: '<word>' is not executable`); else `claude.cmd` whole with `--version` appended, as a list through `vim.system()`, killed after 3 s: ok with the first line of its output, or a warning when it cannot start (`vim.system()` raised), runs past the bound (exit 124, or `wait()` returning `nil` when a child holds the pipes), exits non-zero (stderr's first line as advice) or prints nothing. An info line names 2.1.281, the version aineo was measured on. With a wrong configuration: "not checked".
+- *Claude Code* — an error when `claude.cmd`'s first word is not executable, in the Claude home's words (`claude.cmd: '<word>' is not executable`); else `claude.cmd` whole with `--version` appended, as a list through `vim.system()`, leading a process group of its own, which a timer of the check's own kills at 3 s; 1024 bytes of each output kept: ok with the first line of its output, or a warning when it cannot start (`vim.system()` raised), runs past the bound (the timer's flag), exits non-zero (stderr's first line as advice) or prints nothing. An info line names 2.1.281, the version aineo was measured on. With a wrong configuration: "not checked". *[Corrected in the fix round: the packet bounded it by `SystemObj:wait(3000)` and read exit 124 or a `nil` result as the time-out; the attack review showed neither held — see Fix round.]*
 - *Server socket* — `v:servername`, or an error when empty.
-- *Prefix mappings* — per key ok (runs `<Plug>(aineo-…)`), a warning naming what a user's global mapping runs (its keys, or a Lua function by its description), or a warning when nothing maps it; a warning when the effective local leader (`maplocalleader`, or `\` when unset or empty) equals the prefix, compared through `nvim_replace_termcodes()`; `prefix = false` is info; "not checked" with a wrong configuration.
-- *Autostart* — the record's reason in words (below); "no record" when there is none or it is not aineo's.
+- *Prefix mappings* — per key ok (runs `<Plug>(aineo-…)`), a warning naming what a user's global mapping runs (its keys, or a Lua function by its description), or a warning when nothing maps it — one line in their place while the editor is still starting; a warning when the local leader or the leader (`maplocalleader`, `mapleader`: `\` when unset or empty, a Number as its digits, a string as written) equals the prefix as typed keys; `prefix = false` is info; "not checked" with a wrong configuration. *[Corrected in the fix round: the packet passed the local leader through `nvim_replace_termcodes()`, which Neovim does not, and did not check the leader.]*
+- *Autostart* — the record's reason in words (below); while the editor is still starting, that nothing is decided or that the open is pending; "no record" when the variable is absent, and its own line when it holds something aineo did not write.
 - *Limits* — MR38 named, not detected (HB7).
 
 **`plugin/aineo.lua`** (HB5's record only) — `vim.g.aineo_startup = { reason, failure }`. The five conditions of a bare start became one ordered list, each named by its reason (`no-ui`, `file-argument`, `stdin`, `startup-task`, `inside-claude`), so the first that holds is recorded; `start_up()` records `wrong-setting` (and re-raises the same error, which `run()` tells as before), `autostart-off`, or the not-bare reason; the deferred open records `session-restored`, `opened` or `open-failed` with the line the user was told; a late source records `sourced-late`. `run()` now returns whether the action succeeded and the line it told. No module is required and no autocommand added: T1's two pins pass unchanged.
 
 **`doc/aineo.txt`** — every command, `<Plug>` mapping, prefix key and D13 setting with its own tag; the layout, Send (D14 and R4), the report tool and C6's format, the autostart (D3, D15, MR67, MR72, MR76), the health check, and *Limits* (MR38, MR78, R4). Written from the homes' docstrings and the MVP readings, not from the plan's wishes.
 
-**Tests** — `tests/test_health.lua` (40 cases: 7 in interactive editors through T7's `entry_editor`, 33 headless), `tests/test_doc.lua` (35: `:helptags` over a copy under `.tests/`, `:help aineo`, 31 tags, 78 columns, the first line and the modeline). Helpers `tests/helpers/health.lua` (runs the check, reads a section and its advice) and `tests/helpers/health_claude` (a stand-in `claude.cmd` with modes, recording its argv); fixture `tests/fixtures/health/claude_without_interpreter`.
+**Tests** — `tests/test_health.lua` (40 cases in the packet, 63 after the fix round; in the packet 7 in interactive editors through T7's `entry_editor`, 33 headless), `tests/test_doc.lua` (35, then 36: `:helptags` over a copy under `.tests/`, `:help aineo`, 31 tags, 78 columns, the first line and the modeline). Helpers `tests/helpers/health.lua` (runs the check, reads a section and its advice) and `tests/helpers/health_claude` (a stand-in `claude.cmd` with modes, recording its argv); fixture `tests/fixtures/health/claude_without_interpreter`.
 
 ## Decisions & reasoning
 
@@ -40,17 +40,19 @@
 
 ## Readings for the MVP review
 
-1. **The version bound is 3 s**: `claude.cmd --version` is killed at 3 s; when a child it started holds its output open, `wait()` waits up to 3 s more (6 s in all) and the warning is the same.
-2. **Errors** only where aineo cannot work: a wrong setting, a `claude.cmd` that is not executable, an empty `v:servername`. **Warnings**: unknown keys; `--version` that cannot start, runs past the bound, exits non-zero or prints nothing; a prefix key mapped by the user or by nobody; the local leader equal to the prefix (always shown in the user's editor, R3); the autostart's `wrong-setting` and `open-failed`. **Info**: the measured-on version, "not checked" under a wrong configuration, `prefix = false`, every D3 reason, a late load, no record, MR38. "Passes" means no error.
-3. **HB5's reasons**, in the code's order: `wrong-setting` (the configuration is resolved first), `autostart-off`, `no-ui`, `file-argument`, `stdin`, `startup-task`, `inside-claude`, then, in the deferred open, `session-restored`, `opened`, `open-failed`; and `sourced-late`. Their health lines are in `AUTOSTART_FINDINGS`.
-4. **Between `VimEnter` and the deferred open** (two scheduled callbacks) nothing is recorded yet: a check run there reads "no record".
-5. **A record aineo did not write** — not a table, or an unknown reason — reads as "no record".
-6. **The version shown** is the first non-blank line of stdout, trimmed; on failure the advice is stderr's first line, none when stderr is blank.
+1. **The version bound is 3 s**: a timer of the check's own kills `claude.cmd --version` and every process in its group at 3 s, whatever it writes; the check took 3007–3023 ms in the bounded cases (three runs, this host). *[Corrected in the fix round: the packet's reading said "killed at 3 s … 6 s in all"; under a flood of output it was not bounded at all.]* A command that prints its version, exits 0 and leaves a child holding its output reads as "did not finish" (the attack measured it; kept as a reading, not fixed).
+2. **Errors** only where aineo cannot work: a wrong setting, a `claude.cmd` that is not executable, an empty `v:servername`. **Warnings**: unknown keys; `--version` that cannot start, runs past the bound, exits non-zero (124 included) or prints nothing; a prefix key mapped by the user or by nobody; the local leader or the leader equal to the prefix (both shown on a default install and the local-leader one in the user's editor, R3); the autostart's `wrong-setting` and `open-failed`. **Info**: the measured-on version, "not checked" under a wrong configuration, `prefix = false`, the keys pending while the editor starts, every D3 reason, `starting`, `opening`, a late load, no record, a foreign record, MR38. "Passes" means no error.
+3. **HB5's reasons**, in the code's order: `starting` (sourced, before `VimEnter`), `wrong-setting` (the configuration is resolved first), `autostart-off`, `no-ui`, `file-argument`, `stdin`, `startup-task`, `inside-claude`, `opening` (the open decided), then, in the deferred open, `session-restored`, `opened`, `open-failed`; and `sourced-late`. Their health lines are in `AUTOSTART_FINDINGS`; the order is pinned by a chain of starts holding several reasons (fix round).
+4. **While the editor starts** the check says so: before `VimEnter` (`nvim +checkhealth`, `-c`, a `VimEnter` autocommand defined before aineo's) the Prefix section says the keys are mapped once the editor has started and the Autostart section that nothing is decided yet; between `VimEnter` and the deferred open, that the open is decided. *[Corrected in the fix round: the packet read "no record" there, blaming causes that did not hold.]*
+5. **A record aineo did not write** — not a table, or an unknown reason — reads "no record of the autostart: vim.g.aineo_startup holds something aineo did not write"; "plugin/aineo.lua did not run at startup" is kept for an absent record. A forged `{ reason = 'opened' }` still reads ok: an editor variable cannot be authenticated (attack finding 5).
+6. **The version shown** is the first non-blank line of the first 1024 bytes of stdout, trimmed, without a CR a CR LF line ends in; on failure the advice is stderr's first line, none when stderr is blank.
 7. **A prefix key counts as aineo's** when its global mapping's `rhs` is `<Plug>(aineo-<subcommand>)` — a user's own mapping to aineo's `<Plug>` reads ok too.
-8. **The local-leader check** is equality of the whole prefix with the effective local leader, not overlap (`,` against `,,` is not reported).
+8. **The leader checks** are equality of the whole prefix, as typed keys, with the leader as Neovim copies it into a mapping — a string as written (`'<Space>'` is seven characters, not a space), a Number as its digits, `\` when unset or empty — not overlap (`,` against `,,` is not reported); any other value (a List) is compared as it is and never matches. This corrects HB4's "compare both normalised" (the attack measured `'<Space>'` mapping `<lt>Space>`).
 9. **The measured-on version line** always shows, 2.1.281, whatever `--version` printed.
 10. **Help tags**: `:Aineo-<sub>`, `<Plug>(aineo-<sub>)`, `aineo-\s` … `aineo-\c`, `g:aineo`, `aineo.setup()`, `aineo-config-<setting>`, `g:aineo_startup`, and a tag per section. The install line is `{ 'mathiasbrito/aineo', lazy = false }` (the remote's name).
 11. **`run()` in `plugin/aineo.lua` returns its outcome** — whether the action ran and the line told — so the deferred open can record `open-failed`; its callers that ignore it are unchanged.
+12. **The leader is checked too** — the orchestrator's reading of the plan's trade-off ("`\` collides with the `<Leader>` mappings … lists conflicts in `:checkhealth aineo`"), **for the user to confirm**: `mapleader` equal to the prefix is a warning, so a default install (no `mapleader`, prefix `\`) shows it; its advice names Neovim's own ChangeLog plugin, which maps `<Leader>o` buffer-locally.
+13. **What `claude.cmd --version` writes is kept to 1024 bytes** of stdout and of stderr each; the rest is read and dropped.
 
 ## Spec conflicts and widenings
 
@@ -107,22 +109,74 @@
 | H4 | the modeline removed | first and last line |
 | T-… | each of the 31 `*tag*` removed, one at a time | that tag's case |
 
-No survivor.
+No survivor among these. *[Corrected in the fix round: "no survivor" held only for the packet's own rows. The reviewers found twelve edits that survived the whole suite — attack MA1b, MA2, MA3, MA4; test-integrity W1, W2, W3, W3b, W3c, W4, W5, W10 — each killed in the fix round (below).]*
 
 ## Limits
 
 - The real `claude` never ran — not in a test, not in a probe. `claude.cmd --version` was run only against the stand-in, the no-interpreter fixture, the suites' guard and the fake.
 - In an editor running the fake, the Claude Code line is a warning: `--version` runs the fake, which exits 1 over a pipe. The HB5 tests assert the Autostart section only.
-- The past-3 s cases take 3 s and 6 s; the stand-in's `holding` mode leaves a `sleep 7` for up to 7 s after its case.
+- The past-3 s cases take 3 s and 6 s; the stand-in's `holding` mode leaves a `sleep 7` for up to 7 s after its case. *[Corrected in the fix round: that orphan was the defect of attack finding 3, not an expected cost; with the group kill every bounded case takes 3007–3023 ms and leaves no process.]*
+
+## Fix round — the review of `6cf76b4`
+
+Three reviews at `6cf76b4` — attack (findings A1–A8, surviving mutants MA1b, MA2, MA3, MA4), test-integrity (I1–I7, and I8 on T7's `entry_editor`), records (R1–R10) — and the orchestrator's thirteen decisions on them, worked as one round by the same implementer agent. Commit `af2b476`.
+
+**What changed, and why**
+
+- **The version check's bound** (A2–A4, I3, MA4, R10; decision 1). `SystemObj:wait(3000)` was the only bound, and Neovim 0.11.6's `vim.wait()` does not time out under a stream of output events: the attack measured a check on `/usr/bin/yes` running 171 s and growing to 2.16 GB (the attack's measurement); this round's own `flooding` stand-in, run against `6cf76b4`'s code, was reported `OK` once its 8 s flood ended. A wrapper's child also outlived the check (the attack measured an orphan `sleep 20`), and an exit status of 124 read as a time-out. The check now runs `claude.cmd` leading a process group of its own (`detach`), a `vim.uv` timer of its own SIGKILLs the group at 3 s, the timer's flag decides "did not finish", and 1024 bytes of stdout and of stderr are kept — the attack's measured mechanism, adopted red-first. `TIMED_OUT` is gone. Measured here: 3007–3023 ms for the four bounded cases over three runs; their limit, 4000 ms, is less than twice the bound.
+- **Startup, told truly** (A1, R2; decision 2). `plugin/aineo.lua` records `starting` when it is sourced before `VimEnter` and `opening` once the open is decided; the check reads them. Pinned in the three windows the decision names: `-c`, a `VimEnter` autocommand defined before aineo's, and one after aineo's (fixture `tests/fixtures/health/check_at_vim_enter/`), before the deferred open. "No record" is now said only of an absent variable.
+- **The leaders** (A6–A8, I2, I5; decisions 4–6). Neovim copies a leader into a mapping literally — measured here: `'<Space>'` maps `<lt>Space>`, `1` maps `1`, a 49-byte string and a List map `\` — so the raw leader is compared with the prefix as typed keys, correcting HB4's "compare both normalised". `mapleader` is checked too (reading 12). A Number leader is read; a List no longer crashes the check; nor does a record whose `failure` is not text (A5).
+- **Pins the reviews built** (I1, I4, I6, I7, MA1b; decisions 3, 7–10), adopted as built: the HB5 order chain, the stricter `section` helper and a `several-lines` stand-in, tags derived from the running plugin, the record in `EDITOR_STATE`, words with spaces and shell characters; and a case comparing the keys the check reports with those `plugin/aineo.lua` mapped (integrity's D1 probe — a sixth subcommand — now fails both the help and the prefix group). A CRLF version line, a 1024-byte cap and a List local leader were added as units of this round.
+- **Records** (R1, R3–R8; decision 12). The help lists the autostart reasons in the code's order, `wrong-setting` first; "each action but Send"; the health *Limits* entry names the stop on quit; every `reason` of `g:aineo_startup`; MR71 (an overlapping `\sa`) and MR67 (an empty `$AINEO_CHILD`); the heading "Autostart ~" matches the report. `af2b476`'s message says what `506b871` left out: `run()` returns `(succeeded, failure)`. R9 needed nothing (the orchestrator's miscount).
+
+**Seen red on `6cf76b4`'s code: 20** — 18 in one run of the new `tests/test_health.lua` (`t8f-red`): holding past 3 s (elapsed `false`), flooding (`OK claude.cmd --version: 9.9.9` after the flood), wrapping (the child still alive), exit 124 (read as a time-out), 1024 bytes (2000 x), the in-place and user-mapping cases and the unset-leader, Number-leader and local-leader-advice cases (the leader warning missing), literal `<Space>` (a false local-leader warning), Number local leader (the check raised), `-c` prefix (five "not mapped"), foreign record (the "did not run" text), non-text failure (the check raised), `-c`, the early `VimEnter` and the pending open (each "no record … did not run"); and 2 more, each seen red on its own: CRLF (with the old `'^[^\n]*'`, the line kept its `\r`) and a List local leader (on `6cf76b4`'s `health.lua`, the check raised).
+
+**Arrived green on `6cf76b4`'s code: 11** — each killed by the reviewer's mutant or my analog, run on the final tree: hanging past 3 s, now timed (MA4/W1 analog), words as they are (MA1b), several lines (W4 analog), `<space>` with `' '` (W2 analog, W5), the keys comparison (the D1 probe), the three-row order chain and the headless `no-ui` row (MA2, MA3 = W3c, W3, W3b), the record in `EDITOR_STATE` (W10), the derived tags (the D1 probe, M27, H5). `tests/test_health.lua` grew from 40 cases to 63 (21 + CRLF + List), `tests/test_doc.lua` from 35 to 36.
+
+**Mutants of the round** — run on `af2b476`, each its literal edit, against its group's copy under `.tests/` (`t8f-mutants.py`, results `.tests/t8f-mutants.txt`); every kill an assertion:
+
+| id | edit | result |
+|---|---|---|
+| MA1b | the reviewer's literal edit of the argument expression: `vim.list_extend(vim.list_slice(command), { '--version' })` → words re-split on spaces | killed, 1 (words as they are) |
+| MA2 | `startup-task` and `inside-claude` entries swapped (the reviewer's edit) | killed, 1 (task-child row) |
+| MA3 = W3c | `no-ui` moved last (the reviewers' edit) | killed, 1 (headless `no-ui` row) |
+| W3 | `inside-claude` moved first | killed, 3 (the chain) |
+| W3b | `stdin` and `startup-task` swapped | killed, 1 (stdin-task-child row) |
+| W5 | `mapping.lhsraw == typed or mapping.lhsrawalt == typed` → `mapping.lhs == keys` (literal) | killed, 2 |
+| W10 | `vim.g.aineo_startup = nil` after reading it (literal) | killed, 1 (starts nothing) |
+| MA4 / W1 | not applicable as written: `process:wait(VERSION_BOUND_MS)` is gone; analog `timer:start(VERSION_BOUND_MS` → `timer:start(2 * VERSION_BOUND_MS` | killed, 4 (the bounded cases' elapsed time) |
+| W2 | not applicable as written; analog: the local leader compared with the raw prefix | killed, 2 |
+| W4 | analog: `return trimmed:match('^[^\r\n]*')` → `return trimmed` | killed, 2 |
+| B1 | group kill → `vim.uv.kill(process.pid, …)` | killed, 1 (wrapper's child) |
+| B2 | `detach = true` → `false` | killed, 1 (wrapper's child) |
+| B3 | the timer removed | killed, 4 |
+| B4 | `if timed_out or completed == nil then` → `if completed == nil then` | **survived**, 17/0 and the whole suite 712/0 — equivalent: the timer's callback and the killed command's exit fall in different loop iterations, the exit reaching `on_exit` only once its pipes have closed, so `completed` is still `nil` when the wait returns on the flag |
+| B5 / B6 | the cap removed / raised to 2048 | killed, 1 each |
+| B7 | bound 3000 → 8000 | killed, 4 |
+| B8 / B9 / B10 | exit ignored / blank stdout ok / `pcall` removed | killed, 3 / 1 / 1 |
+| K1 / K2 / K3 | empty leader not `\` / Number not read / local leader read as key notation | killed, 1 / 2 / 2 |
+| K4 / K5 | leader check / local-leader check removed | killed, 7 / 6 |
+| R1 / R2 | `starting` / `opening` not recorded | killed, 2 / 1 |
+| R3 | the prefix section's `starting` gate removed | killed, 1 |
+| R4 | every record read as absent | killed, 20 |
+| R5 | `failure` concatenated unguarded | killed, 1 |
+| R6 | `no-ui` renamed `file-argument` | killed, 2 |
+| N1 / L1 / C1 / M26 / S1 | carried from the packet | killed, 1 each |
+| M27 | `*:Aineo-send*` removed | killed, 2 (the derived and the listed tag) |
+| H5 | `*aineo-config-layout.report_height*` removed | killed, 2 |
+
+**I8** — see *Open threads*.
 
 ## Open threads
 
-- `.gitignore` and `doc/tags` (above) — the orchestrator's `ai/` call.
-- The key ↔ subcommand table (`s o r i c`) is kept twice, in `plugin/aineo.lua` and `lua/aineo/health.lua`, since the composition root exports nothing; a change to one needs the other.
+- `.gitignore` and `doc/tags` (above) — the orchestrator's `ai/` call, raised as #22; #21 merges first.
+- The key ↔ subcommand table (`s o r i c`) is kept twice, in `plugin/aineo.lua` and `lua/aineo/health.lua`, since the composition root exports nothing and a shared module would load at startup, which T1's pin forbids; a change to one without the other now fails the prefix group's keys comparison.
+- **I8, T7's `entry_editor` connect race — not reproduced, helper unchanged.** Integrity saw `connection refused` once in 13 runs of the autostart group. This round: 0 failures in 800 connect-once probes (a listening Neovim started, its socket file awaited at 1 ms, one `sockconnect`; four probes at once, 200 each), and 0 in 13 runs of the autostart group — 143 editor connects — with the whole suite running alongside in a copy of the tree (712 cases, `Fails (0)`). Left for a packet that owns T7's helper, with integrity's reading (a bind-before-listen window).
+- A forged record reads as aineo's (attack finding 5): an editor variable cannot be authenticated.
 
 ## Task lines
 
-- [X] T8 — Health (C7) and `doc/aineo.txt` — `lua/aineo/health.lua` (configuration with unknown keys, Claude Code and its version, server socket, prefix conflicts with the local leader, the autostart's recorded reason, MR38 named); HB5's record `vim.g.aineo_startup` in `plugin/aineo.lua`; `doc/aineo.txt` with a tag per command, mapping, key and setting. Readings 1–11 above for the MVP review.
+- [X] T8 — Health (C7) and `doc/aineo.txt` — `lua/aineo/health.lua` (configuration with unknown keys, Claude Code and its version, server socket, prefix conflicts with the local leader, the autostart's recorded reason, MR38 named); HB5's record `vim.g.aineo_startup` in `plugin/aineo.lua`; `doc/aineo.txt` with a tag per command, mapping, key and setting. Readings 1–11 above for the MVP review. Fix round (review of `6cf76b4`): the version check bounded by its own timer and group kill, the startup states `starting` and `opening`, the leader checked and both leaders read raw, two crashes closed, the reviewers' twelve survivors killed; readings 12–13 added.
 
 ## Commits
 
