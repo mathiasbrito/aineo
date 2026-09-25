@@ -134,8 +134,9 @@ end
 
 --- Starts the editor in a terminal of `child`, which it restarts first with
 --- `children_restart` at `start.columns` by `start.lines` (`COLUMNS` by
---- `LINES` when not given), and returns it once it listens, without waiting
---- for it to start or settle.
+--- `LINES` when not given), and returns it once it has accepted the test's
+--- connection — retried until it listens — without waiting for it to start
+--- or settle.
 ---
 ---@param child table a child from `MiniTest.new_child_neovim()`
 ---@param children_restart fun(child: table) how the suite restarts a child
@@ -162,14 +163,20 @@ function M.launch(child, children_restart, start)
     ]],
     { editor_command(address, start.args or {}, start.stdin), environment }
   )
+  local channel
   assert(
     vim.wait(PATIENCE_MS, function()
-      return vim.uv.fs_stat(address) ~= nil
+      if vim.uv.fs_stat(address) == nil then
+        return false
+      end
+      local connected, id = pcall(vim.fn.sockconnect, 'pipe', address, { rpc = true })
+      channel = connected and id or nil
+      return connected
     end, 20),
     'the editor did not listen on ' .. address
   )
   return {
-    channel = vim.fn.sockconnect('pipe', address, { rpc = true }),
+    channel = channel,
     screen = function()
       return child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, false)')
     end,
