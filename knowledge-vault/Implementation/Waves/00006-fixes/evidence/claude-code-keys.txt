@@ -1,0 +1,25 @@
+# Claude Code 2.1.282: the default key table's ctrl and meta keys, read from the binary's strings (2026-09-25)
+$ strings -n 5 <claude 2.1.282> | grep -o -E '"ctrl\+[np]"[^,}]{0,60}' | sort | uniq -c
+   1 "ctrl+n":"footer:down"
+   1 "ctrl+n":"messageSelector:down"
+   1 "ctrl+n":"scroll:lineDown"
+   2 "ctrl+n":"select:next"
+   1 "ctrl+p":"footer:up"
+   1 "ctrl+p":"messageSelector:up"
+   1 "ctrl+p":"scroll:lineUp"
+   2 "ctrl+p":"select:previous"
+
+$ strings ... | grep -o -E '"ctrl\+[a-z...]"' | sort -u
+"ctrl+_" "ctrl+[" "ctrl+]" "ctrl+a" "ctrl+b" "ctrl+c" "ctrl+d" "ctrl+e" "ctrl+f" "ctrl+g" "ctrl+h" "ctrl+i" "ctrl+j" "ctrl+k" "ctrl+l" "ctrl+m" "ctrl+n" "ctrl+o" "ctrl+p" "ctrl+r" "ctrl+s" "ctrl+t" "ctrl+u" "ctrl+v" "ctrl+w" "ctrl+x" "ctrl+z" 
+
+strings containing ctrl+y: 0
+strings containing ctrl+q: 0
+strings containing ctrl+n: 4
+
+prompt suggestions: setting and variable names in the binary
+   8 CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION
+  22 promptSuggestionEnabled
+
+hyperlink detection names in the binary
+   4 FORCE_HYPERLINK
+   5 supportsHyperlinks
