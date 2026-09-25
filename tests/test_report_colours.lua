@@ -1,6 +1,7 @@
 local MiniTest = require('mini.test')
 local fixture = dofile('tests/helpers/fixture.lua')
 local report_editor = dofile('tests/helpers/report_editor.lua')
+local children = dofile('tests/helpers/child.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -251,14 +252,46 @@ T['the groups']['need no ColorScheme autocommand, however many reports came'] = 
   eq(child.lua_get([[#vim.api.nvim_get_autocmds({ event = 'ColorScheme' })]]), 0)
 end
 
---- Puts two colour schemes on the child's 'runtimepath': `colours_done`,
---- which colours `AineoReportDone`, and `colours_none`, which colours none of
---- aineo's groups. Each clears every group first, as colour schemes do.
+--- The expression, run in the child, that counts its autocommands that are
+--- not local to a buffer, of every event.
+local GLOBAL_AUTOCOMMANDS = [[#vim.tbl_filter(function(autocommand)
+  return not autocommand.buflocal
+end, vim.api.nvim_get_autocmds({}))]]
+
+T['the groups']['add no autocommand of any event until the Report shows a report'] = function()
+  children.restart(child)
+  local without_the_report_home = child.lua_get(GLOBAL_AUTOCOMMANDS)
+  start_editor({ '2026-09-24T09:05:00' })
+
+  child.lua([[require('aineo.report').report_buffer()]])
+
+  eq(child.lua_get(GLOBAL_AUTOCOMMANDS), without_the_report_home)
+end
+
+T['the groups']['add no autocommand of any event as more reports come'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+  local after_one = child.lua_get([[#vim.api.nvim_get_autocmds({})]])
+
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+
+  eq(child.lua_get([[#vim.api.nvim_get_autocmds({})]]), after_one)
+end
+
+--- Puts three colour schemes on the child's 'runtimepath': `colours_done`,
+--- which colours `AineoReportDone`, `colours_done_linked`, which gives it a
+--- default link of its own to `Title`, and `colours_none`, which colours none
+--- of aineo's groups. Each clears every group first, as colour schemes do.
 local function add_colour_schemes()
   fixture.write('report-colour-schemes/colors/colours_done.vim', {
     'highlight clear',
     'highlight AineoReportDone guifg=#ff0000',
     "let g:colors_name = 'colours_done'",
+  })
+  fixture.write('report-colour-schemes/colors/colours_done_linked.vim', {
+    'highlight clear',
+    'highlight default link AineoReportDone Title',
+    "let g:colors_name = 'colours_done_linked'",
   })
   local schemes_file = fixture.write('report-colour-schemes/colors/colours_none.vim', {
     'highlight clear',
@@ -279,6 +312,24 @@ T['the groups']['link to their defaults again when a colour scheme that colours 
   eq(
     child.lua_get([[vim.api.nvim_get_hl(0, { name = 'AineoReportDone' })]]),
     { link = 'DiagnosticOk' }
+  )
+end
+
+T['the groups']["go back to a colour scheme's default link made before the first report whenever :highlight clear runs"] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  add_colour_schemes()
+  child.cmd('colorscheme colours_done_linked')
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+
+  child.cmd('colorscheme colours_none')
+  local after_the_colour_scheme = link_of('AineoReportDone')
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+  local after_the_next_report = link_of('AineoReportDone')
+  child.cmd('highlight clear')
+
+  eq(
+    { after_the_colour_scheme, after_the_next_report, link_of('AineoReportDone') },
+    { 'Title', 'DiagnosticOk', 'Title' }
   )
 end
 
