@@ -174,6 +174,39 @@ T[':Aineo open']['with a command that cannot run tells the user once, on one lin
   eq(entry.windows(child), { '' })
 end
 
+T[':Aineo open']['on a screen with no room tells the user Neovim’s error without its Vim: mark'] = function()
+  local fake = claude_session.fake('entry-open-no-room', 'ready')
+  entry.use_fake(child, fake)
+  child.o.lines = 4
+
+  entry.command(child, 'Aineo open')
+
+  eq(entry.messages(child), {
+    { message = 'aineo: E36: Not enough room', level = vim.log.levels.ERROR },
+  })
+end
+
+T[':Aineo open']['when a TermOpen autocommand of the user fails tells the user the first line of its error'] = function()
+  local fake = claude_session.fake('entry-open-termopen-fails', 'ready')
+  entry.use_fake(child, fake)
+  child.lua([[
+    vim.api.nvim_create_autocmd('TermOpen', {
+      callback = function()
+        error('the user autocommand fails')
+      end,
+    })
+  ]])
+
+  entry.command(child, 'Aineo open')
+
+  eq(entry.messages(child), {
+    {
+      message = 'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Error executing lua callback: [string "<nvim>"]:3: the user autocommand fails',
+      level = vim.log.levels.ERROR,
+    },
+  })
+end
+
 T[':Aineo open']['with a key no setting knows opens without a word'] = function()
   local fake = claude_session.fake('entry-open-unknown-key', 'ready')
   entry.use_fake(child, fake, { claude = { command = 'claude' }, autostrat = false })
