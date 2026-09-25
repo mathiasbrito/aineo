@@ -36,7 +36,8 @@ aineo allows one tool of its own without asking, the report tool
 2. REQUIREMENTS AND INSTALLATION                               *aineo-install*
 
 Requirements:
-- Neovim 0.11 or later.
+- Neovim 0.11 or later. aineo's behaviour was measured on Neovim 0.11.6
+  and 0.12.5.
 - Claude Code, the `claude` command, installed and signed in. aineo's
   behaviour was measured on Claude Code 2.1.281.
 
