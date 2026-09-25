@@ -142,7 +142,7 @@ Both Claude hooks also refuse a commit or push hidden behind a shell wrapper or 
 
 **The hooks have a regression suite: `.claude/hooks/test-hooks.sh`.** Run it after touching any hook. A guard that refuses nothing is indistinguishable from a guard that is not installed, so the suite asserts refusals as carefully as it asserts permissions.
 
-A third hook, `.claude/hooks/guard-worktree-cd.sh`, keeps a session in its own checkout: it refuses a bare `cd` or `pushd` into `.claude/worktrees/` — which would move the session, and every agent dispatched after it, into that worktree — and leaves a subshell's `(cd <path> && …)`, `git -C` and `make -C` alone. Subagents are not checked; each works in its own worktree.
+A third hook, `.claude/hooks/guard-worktree-cd.sh`, keeps a session in its own checkout: it refuses a `cd` or `pushd` written with `.claude/worktrees` in its argument at command position — which would move the session, and every agent dispatched after it, into that worktree — and leaves a subshell's `(cd <path> && …)`, `git -C`, `make -C`, heredoc bodies and quoted prose alone. It cannot follow a variable, a symlink, `CDPATH` or `..`. Subagents are not checked; each works in its own worktree.
 
 ## Review before every commit
 
