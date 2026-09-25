@@ -134,6 +134,17 @@ local function run_in_terminal(buffer, command, options)
   return job
 end
 
+--- Raises an error naming `claude.cmd` and `program` when `program` is not
+--- executable (`executable()`), the check `jobstart()` makes before it runs
+--- a command, worded briefly so that it fits on one line of a narrow screen.
+---
+---@param program string the first word of `claude.cmd`
+local function ensure_executable(program)
+  if vim.fn.executable(program) == 0 then
+    error(("claude.cmd: '%s' is not executable"):format(program), 0)
+  end
+end
+
 --- Runs Claude Code with `settings` in a new terminal buffer, and returns the
 --- session that tracks it: its buffer and job, whether it is ready, and its
 --- exit code once it has exited.
@@ -141,6 +152,7 @@ end
 ---@param settings aineo.claude.Settings
 ---@return { buffer: integer, job: integer, ready: boolean?, exit_code: integer? }
 local function launch(settings)
+  ensure_executable(settings.cmd[1])
   local command =
     vim.list_extend(vim.list_slice(settings.cmd), arguments.claude_arguments(settings))
   local launched = { buffer = vim.api.nvim_create_buf(false, true) }
@@ -174,8 +186,10 @@ end
 --- hangs its Claude Code up: a start then launches a new one.
 ---
 --- Raises an error naming the setting that is malformed — for `cwd`, a
---- directory that does not exist or cannot be entered — or, when `jobstart()`
---- cannot run the command, an error naming the command; either way it starts
+--- directory that does not exist or cannot be entered — or, when the
+--- command's first word is not executable, `claude.cmd: '<word>' is not
+--- executable`, or, when `jobstart()` cannot run the command otherwise, an
+--- error naming the command; either way it starts
 --- nothing and leaves the session as it was. A command that `jobstart()`
 --- starts but the system then cannot execute — a script whose interpreter is
 --- missing — raises nothing: its session reports `'exited'` with 122, the

@@ -170,8 +170,7 @@ local ERROR_FRAMING = { '^Error executing lua: ', '^.-%.lua:%d+: ', '^Vim:' }
 
 --- The error `message` tells, on one line: its first line, without the
 --- stack traceback that may follow it and without what Neovim put before it
---- (`ERROR_FRAMING`), such as `E475: Invalid value for argument cmd:
---- 'claude' is not executable`.
+--- (`ERROR_FRAMING`).
 ---
 ---@param message string
 ---@return string
@@ -213,14 +212,16 @@ local PREFIX_KEYS = { send = 's', open = 'o', report = 'r', input = 'i', claude 
 
 --- Whether `keys`, written as in a mapping, have a global Normal-mode
 --- mapping. A mapping local to a buffer does not count: it wins in its own
---- buffer only.
+--- buffer only. A mapping's keys are compared in both the forms Neovim
+--- records: `lhsraw`, and `lhsrawalt`, where a Ctrl key such as `<C-a>` has
+--- the one byte `nvim_replace_termcodes()` gives it.
 ---
 ---@param keys string
 ---@return boolean
 local function has_global_mapping(keys)
   local typed = vim.api.nvim_replace_termcodes(keys, true, true, true)
   return vim.iter(vim.api.nvim_get_keymap('n')):any(function(mapping)
-    return mapping.lhsraw == typed
+    return mapping.lhsraw == typed or mapping.lhsrawalt == typed
   end)
 end
 
@@ -248,8 +249,9 @@ local read_stdin = false
 --- A short option that gives the editor something to do besides edit, alone
 --- or after other short options in one argument, its value attached or not
 --- (`-c`, `-clet x = 1`, `-Rc`): `-c` a command to run, `-S` a session to
---- restore, `-e` Ex mode, `-s` keys to type from a script.
-local TASK_OPTION = '^%-%a*[cSes]'
+--- restore, `-e` Ex mode, `-E` improved Ex mode, `-s` keys to type from a
+--- script.
+local TASK_OPTION = '^%-%a*[cSesE]'
 
 --- Whether the editor was started with something to do besides edit: a
 --- `TASK_OPTION`, or a command given as `+…`. The value of an option such

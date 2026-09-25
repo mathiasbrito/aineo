@@ -167,7 +167,7 @@ T[':Aineo open']['with a command that cannot run tells the user once, on one lin
 
   eq(entry.messages(child), {
     {
-      message = "aineo: E475: Invalid value for argument cmd: 'aineo-no-such-claude' is not executable",
+      message = "aineo: claude.cmd: 'aineo-no-such-claude' is not executable",
       level = vim.log.levels.ERROR,
     },
   })

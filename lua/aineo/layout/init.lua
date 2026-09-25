@@ -337,15 +337,15 @@ local function buffer_named_input()
   end)
 end
 
---- Whether `buffer` has no name, no filetype and holds no text, as the
---- buffer Neovim starts with — not one a plugin has given a filetype, such
---- as a startup dashboard's before it has drawn.
+--- Whether `buffer` has no name and holds no text, as the buffer Neovim
+--- starts with, whatever filetype the user's configuration gave it — and is
+--- not wiped once hidden, as a startup dashboard's is before it has drawn.
 ---
 ---@param buffer integer
 ---@return boolean
 local function is_unnamed_and_empty(buffer)
   return vim.api.nvim_buf_get_name(buffer) == ''
-    and vim.bo[buffer].filetype == ''
+    and vim.bo[buffer].bufhidden ~= 'wipe'
     and vim.api.nvim_buf_line_count(buffer) == 1
     and vim.api.nvim_buf_get_lines(buffer, 0, 1, true)[1] == ''
 end
@@ -447,12 +447,13 @@ end
 
 --- Whether `buffer` is a file the layout keeps beside it when it opens: a
 --- file (`is_file()`) that is not wiped once hidden, as a startup
---- dashboard's buffer is.
+--- dashboard's buffer is, or one that is but holds changes, which Neovim
+--- refuses to wipe (E37).
 ---
 ---@param buffer integer
 ---@return boolean
 local function is_file_to_keep(buffer)
-  return is_file(buffer) and vim.bo[buffer].bufhidden ~= 'wipe'
+  return is_file(buffer) and (vim.bo[buffer].bufhidden ~= 'wipe' or vim.bo[buffer].modified)
 end
 
 --- Makes the layout's three windows in the current tab, closing its other
@@ -575,15 +576,15 @@ end
 --- `arrangement.report_height` of its rows, and the cursor in Input. The tab's
 --- other windows close, but floating ones; their buffers stay loaded. A file
 --- the current window shows stays there, as the file column, unless it is
---- wiped once hidden, as a startup dashboard's buffer is, which Input
---- replaces. Opened from a floating window, the layout is built from the
---- first window of the tab that does not float. Input is a scratch buffer
---- named `aineo://input`, made once: from a buffer already named so, such as
---- one a restored session made, else from the unnamed, empty buffer with no
---- filetype the current window shows, such as the one Neovim starts with, or
---- else a new buffer; it is made anew, from
---- a buffer named so when there is one, when it was wiped, and made a scratch
---- buffer again whenever it is shown.
+--- wiped once hidden and holds no changes, as a startup dashboard's buffer
+--- is, which Input replaces. Opened from a floating window, the layout is
+--- built from the first window of the tab that does not float. Input is a
+--- scratch buffer named `aineo://input`, made once: from a buffer already
+--- named so, such as one a restored session made, else from the unnamed,
+--- empty buffer the current window shows, such as the one Neovim starts
+--- with, when it is not wiped once hidden, or else a new buffer; it is made
+--- anew, from a buffer named so when there is one, when it was wiped, and
+--- made a scratch buffer again whenever it is shown.
 ---
 --- While any of the three windows exists, opening again restores the layout
 --- instead, in the tab that holds it: it creates only the windows that were
@@ -638,7 +639,10 @@ function M.focus(role, arrangement)
     return vim.list_contains(ROLES, value)
   end, false, "'claude', 'report' or 'input'")
   if not has_window(role) then
-    M.open(type(arrangement) == 'function' and arrangement() or arrangement)
+    if type(arrangement) == 'function' then
+      arrangement = arrangement()
+    end
+    M.open(arrangement)
   end
   vim.api.nvim_set_current_win(state.windows[role])
 end

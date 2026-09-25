@@ -24,26 +24,47 @@ local function settings_arguments(settings)
   return { '--cmd', 'lua vim.g.aineo = ' .. vim.inspect(settings, { newline = '', indent = '' }) }
 end
 
---- Starts an editor in a terminal of `child` as a user starts `nvim`, with
---- aineo set to run `fake` as Claude, and `start`'s arguments, variables,
---- piped input and settings on top; returns it once it has settled
---- (`entry_editor.start()`).
+--- How `entry_editor` starts an editor as a user starts `nvim`, with aineo
+--- set to run `fake` as Claude, and `start`'s arguments, variables, piped
+--- input, settings and terminal size on top.
 ---
 ---@param fake { environment: table<string, string> }
----@param start? { args?: string[], environment?: table<string, string>, stdin?: string, settings?: table }
----@return aineo.test.Editor
-local function start_editor(fake, start)
+---@param start? { args?: string[], environment?: table<string, string>, stdin?: string, settings?: table, columns?: integer, lines?: integer }
+---@return aineo.test.EditorStart
+local function editor_start(fake, start)
   start = start or {}
   local settings = vim.tbl_deep_extend(
     'force',
     { claude = { cmd = claude_session.fake_command() } },
     start.settings or {}
   )
-  return entry_editor.start(child, children.restart, {
+  return {
     args = vim.list_extend(settings_arguments(settings), start.args or {}),
     environment = vim.tbl_extend('force', fake.environment, start.environment or {}),
     stdin = start.stdin,
-  })
+    columns = start.columns,
+    lines = start.lines,
+  }
+end
+
+--- Starts an editor in a terminal of `child` (`editor_start()`), and returns
+--- it once it has settled (`entry_editor.start()`).
+---
+---@param fake { environment: table<string, string> }
+---@param start? table as `editor_start()` takes it
+---@return aineo.test.Editor
+local function start_editor(fake, start)
+  return entry_editor.start(child, children.restart, editor_start(fake, start))
+end
+
+--- Starts an editor in a terminal of `child` (`editor_start()`), and returns
+--- it once it listens, asking it nothing (`entry_editor.launch()`).
+---
+---@param fake { environment: table<string, string> }
+---@param start? table as `editor_start()` takes it
+---@return aineo.test.Editor
+local function launch_editor(fake, start)
+  return entry_editor.launch(child, children.restart, editor_start(fake, start))
 end
 
 T['a bare interactive start'] = MiniTest.new_set()
@@ -67,8 +88,21 @@ T['a bare interactive start']['with a command that cannot run tells the user on 
   eq(entry_editor.get(editor, 'vim.api.nvim_get_mode()'), { mode = 'n', blocking = false })
   eq(
     entry_editor.get(editor, "vim.fn.execute('messages')"),
-    "\naineo: E475: Invalid value for argument cmd: 'aineo-no-such-claude' is not executable"
+    "\naineo: claude.cmd: 'aineo-no-such-claude' is not executable"
   )
+end
+
+T['a bare interactive start']['with a command that is not executable tells the user without a prompt at 80 columns'] = function()
+  local fake = claude_session.fake('entry-autostart-80-columns', 'ready')
+
+  local editor = launch_editor(fake, {
+    settings = { claude = { cmd = { 'claudx' } } },
+    columns = 80,
+    lines = 24,
+  })
+
+  eq(entry_editor.wait_for_screen(editor, "'claudx' is not executable"), true)
+  eq(entry_editor.mode(editor), { mode = 'n', blocking = false })
 end
 
 T['a bare interactive start']['starts no Claude when setup() turns autostart off over vim.g.aineo'] = function()
@@ -114,6 +148,7 @@ local NOT_BARE_STARTS = {
     },
   },
   { 'ex-mode', { args = { '-e' } } },
+  { 'improved-ex-mode', { args = { '-E' } } },
   {
     'keys-from-a-script',
     { args = { '-s', vim.fs.joinpath(vim.uv.cwd(), 'tests', 'fixtures', 'entry', 'keys.txt') } },
