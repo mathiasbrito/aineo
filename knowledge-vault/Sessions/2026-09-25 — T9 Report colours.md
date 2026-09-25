@@ -1,12 +1,13 @@
 # 2026-09-25 — T9 Report colours
 
 **Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `bugfix/t9-report-colours` · **Pull request:** into `dev` (a small fix, orchestrate §3)
+**Branch:** `bugfix/t9-report-colours` · **Pull request:** #30 into `dev` (a small fix, orchestrate §3)
 
 ## Links
 
 - [[Projects/aineo]] · [[Planning/aineo — v1 agent console]] (C6; C10 as context; D10)
 - [[Implementation/Waves/00006-fixes/plan]], its brief `brief-t9-report-colours.md`, its brief review `brief-review.md`, the evidence `baseline-0.11.6.txt` and `baseline-0.12.5.txt`
+- The fix round's inputs: the guarantee review (findings G1–G4) and the records review (findings R1–R5) of pull request #30
 
 ## Context
 
@@ -14,14 +15,26 @@
 
 ## What was done
 
-- **`lua/aineo/report/colours.lua`** (new, inside the report home): the group names, meaning `AineoReportTime` and one group per status, and their default links. `define_report_colours()` links each group with `default = true`. It also creates a `ColorScheme` autocommand in the augroup `aineo_report_colours`, which it creates anew on every call so the autocommand is never defined twice. That autocommand links the groups again after every `:colorscheme`.
-- **`render.lua`**: `render_records(records)` returns an `aineo.report.Rendering`, which holds `lines` and `colours`. The colours are spans placed from the columns the render wrote the `HH:MM` and the `[status]` into, never found by matching text afterwards (RC3). `render_report` is now private. The header's text is unchanged (RC6).
-- **`buffer.lua`**: `append_rendering(buffer, rendering)` adds the lines and places each colour as an extmark in the namespace `aineo_report_colours`. When the buffer is empty, it first clears that namespace. `append_lines` is now private; it has no other caller.
+- **`lua/aineo/report/colours.lua`** (new, inside the report home) holds the group names: `AineoReportTime` and one group per status, each with its default link.
+  - `define_report_colours()` defines each group with `:highlight default link`.
+  - A group a user or a colour scheme has coloured keeps its colour.
+  - `:highlight clear`, which a colour scheme runs first, links every group to its default again, whoever coloured it before. So aineo defines no `ColorScheme` autocommand.
+- **`render.lua`**: `render_records(records)` returns an `aineo.report.Rendering`, which holds `lines` and `colours`.
+  - The colours are spans placed from the columns the render wrote the `HH:MM` and the `[status]` into, never found by matching text afterwards (RC3).
+  - `render_report` is now private.
+  - The header's text is unchanged (RC6).
+- **`buffer.lua`**: `append_rendering(buffer, rendering)` adds the lines and places each colour as an extmark in the namespace `aineo_report_colours`.
+  - When the buffer is empty, it first clears that namespace.
+  - `append_lines` is now private; it has no other caller.
 - **`init.lua`**: `show_rendering()` defines the groups only when a rendering has colours. Both `show_records()` (the Report opening, and `BufReadCmd` after `:edit`) and `show_and_keep()` (a live report) go through it.
-- **`tests/test_report_colours.lua`**: new, 14 cases.
-- **`doc/aineo.txt`**: changed inside `*aineo-report*` only. A *Colours* paragraph, and the six groups, each with its own tag (`*hl-AineoReportTime*` … `*hl-AineoReportFailed*`). This is the documentation the change invalidated. `CONTENTS` and every other section are untouched.
+- **`tests/test_report_colours.lua`**: new, 17 cases in 12 tests.
+- **`doc/aineo.txt`**: changed inside `*aineo-report*` only. This is the documentation the change invalidated; `CONTENTS` and every other section are untouched.
+  - A *Colours* paragraph, which names `:colorscheme` and `:highlight clear`.
+  - The six groups, each with its own tag (`*hl-AineoReportTime*` … `*hl-AineoReportFailed*`).
 
 ## Unit list and red/green
+
+Every red was seen on the host's 0.12.5, through `make test_file`. In the packet, 7 tests (12 cases) were seen red and 2 arrived green. In the fix round, 3 more were seen red and 1 test was strengthened.
 
 | # | Behaviour | Test | Status |
 |---|---|---|---|
@@ -31,13 +44,23 @@
 | 4 | RC5 | *the records › show their time and status coloured when the Report opens* | red: `Left: { {}, {}, {} }` |
 | 5 | RC5 | *the records › show their colours once again when the user edits the Report again* (`edit`, `edit!`) | red, both: stale marks `{ 2, 0, 0 }` in every group |
 | 6 | RC4 | *the groups › link to their defaults again when a colour scheme that colours none of them follows one that did* | red: `Left: vim.empty_dict()` |
-| 7 | RC3 | *the colours › cover only the time and the status the render placed, not their like in the text* | arrived green: unit 1–2's seam places colours from render columns; killed by M6 |
-| 8 | RC7 | *the groups › are not defined, nor their autocommand, until the Report shows a report* | red: `Left: { { 1, 1, 1, 1, 1, 1 }, 1 }` (an empty Report defined them) |
+| 7 | RC3 | *the colours › cover only the time and the status the render placed, not their like in the text* | arrived green: units 1–2's seam places colours from the render's columns; killed by M6 |
+| 8 | RC7 | *the groups › are not defined, nor any ColorScheme autocommand, until the Report shows a report* | red: `Left: { { 1, 1, 1, 1, 1, 1 }, 1 }` (an empty Report defined them). Renamed in the fix round: it counts `ColorScheme` autocommands in place of the augroup (G2) |
 | 9 | RC5 | *the colours › of a report that follows another are on its own header* | arrived green: pins code written with unit 1 (the non-empty offset in `append_rendering`), added after M10 was killed only by a crash; killed by M10b |
+| 10 | RC5 (fix round, G1) | *the records › show in groups linked to their defaults when the Report opens* | the guarantee reviewer's pin, adopted. Green on the code; red against the reviewer's MP: `left = vim.NIL, right = "Comment"` |
+| 11 | RC4 (fix round, G4) | *the groups › link to their defaults again when :highlight clear drops a user's colour made before the first report* | red on the packet's code: `Left: vim.empty_dict()` |
+| 12 | RC4 (fix round) | *the groups › need no ColorScheme autocommand, however many reports came* | red while the autocommand existed: `Left: 1, Right: 0` |
+
+**One assertion changed in the fix round.** Unit 6 now expects `{ link = 'DiagnosticOk' }` in place of `{ link = 'DiagnosticOk', default = true }`.
+- The `default` key was a detail of the removed `nvim_set_hl` mechanism. RC4's behaviour is "linked to its default again".
+- It is still an exact whole-table assertion.
 
 ## Mutants
 
-Final table, run on the committed tree `de2ce3d` with the host's Neovim 0.12.5 (`make test_file` on the default `PATH`, as were the red runs above), one at a time, from a pristine copy, each against a copy of its test file narrowed to the targeted group (`.tests/t9-<group>.lua`). M9, M14p and M15p were run again on 0.11.6, with the same results.
+The final table was run on the pull request's final code (the fix round's code commit), one mutant at a time, from a pristine copy.
+- **Where it ran:** on the host's 0.12.5, each mutant against a copy of its test file narrowed to the targeted group (`.tests/t9-<group>.lua`).
+- **M11 and M12 are retired:** they edited the `nvim_set_hl` call and the autocommand's callback, which the fix round removed.
+- **The packet's table:** measured on the packet's code, it had the same results for every row still present, with two exceptions: M8b killed 3 of 3 there, and M16p killed 3 of 4 (the third through the autocommand it added).
 
 | # | Literal edit | Test | Result |
 |---|---|---|---|
@@ -48,53 +71,77 @@ Final table, run on the committed tree `de2ce3d` with the host's Neovim 0.12.5 (
 | M5 | render: `group = colours.STATUS_GROUPS[report.status]` → `colours.STATUS_GROUPS.done` | status | killed, assertion (4/5) |
 | M6 | render: status columns from the last text match, `header:match('.*()' .. vim.pesc(bracketed_status)) - 1` and `header:match('.*' .. vim.pesc(bracketed_status) .. '()') - 1` | colours | killed, assertion |
 | M6s | the same edit | status | survived (RC2 has one match); rerun on `tests/test_report_colours.lua`: killed, assertion (RC3) |
-| M7 | render: `local line = #rendering.lines + colour.line` → `colour.line` | records | killed, assertion (3/3) |
-| M8b | init: `show_rendering(report_buffer, render.render_records(kept))` → `buffer.append_rendering(report_buffer, { lines = render.render_records(kept).lines, colours = {} })` | records | killed, assertion (3/3) |
-| M9 | buffer: delete `vim.api.nvim_buf_clear_namespace(buffer, REPORT_COLOURS, 0, -1)` | records | killed, assertion (2/3, the `:edit` cases) |
+| M7 | render: `local line = #rendering.lines + colour.line` → `colour.line` | records | killed, assertion (3 of the group's 4; the G1 pin asserts links, not places) |
+| M8b | init: `show_rendering(report_buffer, render.render_records(kept))` → `buffer.append_rendering(report_buffer, { lines = render.render_records(kept).lines, colours = {} })` | records | killed, assertion (4/4) |
+| M9 | buffer: delete `vim.api.nvim_buf_clear_namespace(buffer, REPORT_COLOURS, 0, -1)` | records | killed, assertion (2, the `:edit` cases) |
 | M10 | buffer: delete `first_line = 0` | time | **crash** (`Invalid 'end_col': out of range`), not counted |
 | M10b | buffer: `local first_line = vim.api.nvim_buf_line_count(buffer)` → `… - 1` | colours | killed, assertion |
-| M11 | colours: `{ link = link, default = true }` → `{ link = link }` | groups | killed, assertion (2/3) |
-| M12 | colours: `callback = link_groups_to_defaults,` → `callback = function() end,` | groups | killed, assertion |
+| MH | colours: `vim.cmd.highlight({ 'default', 'link', group, link })` → `vim.cmd.highlight({ 'link', group, link, bang = true })` | groups | killed, assertion (3) |
+| MI | colours: the same line → `vim.api.nvim_set_hl(0, group, { link = link, default = true })` (the packet's mechanism, without its autocommand) | groups | killed, assertion (2: the `:highlight clear` case and the colour-scheme case) |
+| MC2 | colours: `vim.api.nvim_create_autocmd('ColorScheme', { callback = M.define_report_colours })` before `return M` | groups | killed, assertion (2) |
+| MAB2 | colours: `vim.api.nvim_create_autocmd('ColorScheme', { callback = function() end })` as the first line of `define_report_colours()` | groups | killed, assertion (1: *need no ColorScheme autocommand*) |
 | M13 | init: `if #rendering.colours > 0 then` → `if true then` | groups | killed, assertion |
 | M14 | init: `colours.define_report_colours()` before `return M` (at `require('aineo.report')`) | groups | killed, assertion |
-| M14p | the same edit | `tests/test_plugin.lua` (frozen) | **survived**; killed by the file this PR adds, assertion (M14) |
+| M14p | the same edit | `tests/test_plugin.lua` (frozen) | **survived**; killed by the file this PR adds, assertion |
 | M15 | `plugin/aineo.lua`: `vim.api.nvim_set_hl(0, 'AineoReportTime', { link = 'Comment', default = true })` before `vim.g.loaded_aineo = true` | groups | killed, assertion |
 | M15p | the same edit | `tests/test_plugin.lua` (frozen) | **survived**; killed by the file this PR adds, assertion |
-| M16p | `plugin/aineo.lua`: `require('aineo.report.colours').define_report_colours()` before `vim.g.loaded_aineo = true` | `tests/test_plugin.lua` (frozen) | killed, assertion (3/4) |
+| M16p | `plugin/aineo.lua`: `require('aineo.report.colours').define_report_colours()` before `vim.g.loaded_aineo = true` | `tests/test_plugin.lua` (frozen) | killed, assertion (2/4) |
 | M17 | render: `'%s %s %s — %s'` → `'%s %s %s - %s'` (RC6) | `test_report_buffer.lua` › *a report* | killed, assertion (4/6) |
 
 An earlier M8, which called the now-private `buffer.append_lines`, crashed and was replaced by M8b.
+
+**The guarantee reviewer's four survivors**, re-run as its literal edits against `tests/test_report_colours.lua`:
+
+| # | Literal edit | On the packet's code | On the final code |
+|---|---|---|---|
+| MP | init: `  show_rendering(report_buffer, render.render_records(kept))` → `  buffer.append_rendering(report_buffer, render.render_records(kept))` | survived | killed, assertion (the G1 pin) |
+| MC | colours: `vim.api.nvim_create_autocmd('ColorScheme', { callback = link_groups_to_defaults })` before `return M` | survived | crash (`Required: 'command' or 'callback'`: the function no longer exists); MC2 is its form on the final code |
+| MA | colours: `nvim_create_augroup('aineo_report_colours', {})` → `…, { clear = false })` | survived | not applicable: the augroup is gone; MAB2 is its form on the final code |
+| MB | colours: delete `group = vim.api.nvim_create_augroup('aineo_report_colours', {}),` | survived | not applicable, as MA |
 
 ## Decisions & reasoning
 
 - **The render returns its colours beside its lines.** This was the brief's suggested seam (RC3). Matching the text afterwards was rejected: it colours `[done]` inside a task, which M6 shows.
 - **Groups are defined only when a rendering has colours.** RC7 says "when the Report first shows a report, or later". An empty Report opening, for example the layout opening with no records, is earlier, so it defines nothing (unit 8's red).
-- **Groups are defined again on every coloured rendering, and the augroup is re-created each time.** This avoids a module-level "defined" flag. The cost is six `nvim_set_hl` calls and one autocommand per report.
+- **`:highlight default link`, not `nvim_set_hl(…, { default = true })`** (the fix round; the orchestrator's decision 2, on the guarantee reviewer's G4).
+  - **What `nvim_set_hl` missed:** it records no default link over a group that already has settings. So a user's colour made before the first report, then `:highlight clear`, left the group empty.
+  - **What the Ex form does:** it records the default link anyway, and `:highlight clear` restores it.
+  - **Measured by a probe on 0.11.6 and 0.12.5, identical on both:**
+    - a user's colour, or a user's `:highlight! link`, is kept;
+    - a scheme's colour made before aineo's definition is kept;
+    - `:highlight clear` then links the group to its default again;
+    - a second definition changes nothing.
+  - **The `ColorScheme` autocommand was dropped.** Every RC4 case passes without it on both versions. MI shows the old mechanism needed it.
+- **Groups are defined again on every coloured rendering.** Six idempotent `:highlight default link` commands per report. This avoids a module-level "defined" flag.
 - **Clearing colours in an empty buffer.** `:edit` on the Report (`BufReadCmd`) empties its text but keeps its extmarks, collapsed at the buffer's end (unit 5's red: `{ 2, 0, 0 }`). `append_rendering` treats an empty buffer as a fresh start.
 
 ## Verification
 
-- 0.11.6 (`<builds>/nvim-0.11.6`, first on `PATH`), final tree: 741 cases, `Fails (0)`, exit 0.
-- Host 0.12.5, final tree: 741 cases, `Fails (8)`. These are the same eight, by name, as `evidence/baseline-0.12.5.txt`. None is T9's.
+Measured on the pull request's final tree, after the fix round.
+
+- 0.11.6 (`<builds>/nvim-0.11.6`, first on `PATH`): 744 cases, `Fails (0)`, exit 0.
+- Host 0.12.5: 744 cases, `Fails (8)`. These are the same eight, by name, as `evidence/baseline-0.12.5.txt`. None is T9's.
+- `tests/test_report_colours.lua` alone: 17 cases, `Fails (0)` on both versions.
 - `make lint`: StyLua check and selene, 0 errors, 0 warnings.
 - The deep-require check prints only requires inside a home. T9 adds two, `lua/aineo/report/init.lua` and `lua/aineo/report/render.lua` requiring `aineo.report.colours`, both inside `aineo.report`.
 
 ## Readings for the MVP review
 
 - **The colour of each status** (RC2) is the orchestrator's reading, for the user to confirm: started → `DiagnosticInfo`, progress → `DiagnosticHint`, blocked → `DiagnosticWarn`, done → `DiagnosticOk`, failed → `DiagnosticError`. The time → `Comment` is the user's own.
-- The groups are defined when a report is first shown, and not when an empty Report opens.
 
 ## Task lines
 
 The wave holds its marks (rule 6). The line T9 would take:
 
-> T9 — [X] Report colours: `AineoReportTime` (→ `Comment`) and one group per status (→ `Diagnostic*`), `default = true`, re-linked on `ColorScheme`, placed from the render's columns; defined only once a report is shown.
+- [X] T9 — Report colours (C6): `AineoReportTime` (→ `Comment`) and one group per status (→ `Diagnostic*`), defined with `:highlight default link` so a user's or a colour scheme's colour wins and `:highlight clear` restores them, with no autocommand; placed from the render's columns; defined only once a report is shown. A small fix.
 
 ## Open threads
 
-- **The frozen RC7 pins do not catch every mutant the brief said they would.** `tests/test_plugin.lua` passes when the groups are defined at `require('aineo.report')` (M14p) or by a plain `nvim_set_hl` in `plugin/aineo.lua` (M15p). Only a `require` of a report file from `plugin/aineo.lua` turns them red (M16p). T9's own pin in `tests/test_report_colours.lua` catches M14 and M15.
-- **A candidate Learning for the adjustment pass:** `:edit` on a `nofile` buffer with a `BufReadCmd` empties its text but not its extmarks, which collapse to the end of the refilled buffer. Measured by unit 5's red on 0.12.5 and by mutant M9 on both 0.11.6 and 0.12.5.
-- The merge checks with T13's and T12's branches found neither branch on the remote at the time of the push; see the pull request.
+- **The frozen RC7 pins do not catch every mutant the brief said they would.** `tests/test_plugin.lua` passes when the groups are defined at `require('aineo.report')` (M14p) or by a plain `nvim_set_hl` in `plugin/aineo.lua` (M15p). Only a `require` of a report file from `plugin/aineo.lua` turns them red (M16p). T9's own pin in `tests/test_report_colours.lua` catches M14 and M15. The records review traced the claim to the brief review's finding 13, which was written unmeasured.
+- **Candidate Learnings for the adjustment pass:**
+  - `:edit` on a `nofile` buffer with a `BufReadCmd` empties its text but not its extmarks, which collapse to the end of the refilled buffer. Measured by unit 5's red on 0.12.5 and by mutant M9 on both 0.11.6 and 0.12.5.
+  - `nvim_set_hl(…, { default = true })` records no default link over a group that already has settings, and `:highlight default link` does. Measured by the guarantee review and the fix round's probe, on both versions.
+- **The shared help's merge check with T13:** it was not possible at the fix round's push, because `origin/bugfix/t13-neovim-0-12` did not exist. T13 re-runs it against this branch's head when it pushes. The records reviewer's provisional check against T13's unpushed branch merged cleanly, with `tests/test_doc.lua` 36/0.
 
 ## Commits
 
