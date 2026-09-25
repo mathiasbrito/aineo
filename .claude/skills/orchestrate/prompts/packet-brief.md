@@ -28,7 +28,8 @@ Read first: <the spec, plan and data-model sections, by heading>; `knowledge-vau
 
 ## Boundary
 
-- **Branch:** `feature/<slug>` from `origin/dev`.
+- **Branch:** `feature/<slug>` from `origin/dev` — `bugfix/<slug>` for a packet that corrects code against a D# or C# row, every small fix among them.
+- **Class:** regular — or **small fix** (SKILL §3), called by the user on <date>: "<their words>". It changes one behaviour in `<home>` with its tests. If it needs a file outside *You may touch*, or reaches <the §3 exclusions, by path>, stop at a green, pushed state and report a true partial. Title the pull request `Small fix: <subject>`; no commit subject says "small" (root `CLAUDE.md`). Re-run every mutant survivor on the test files the pull request adds or modifies.
 - **Model:** `opus` — every role in this project runs on Opus (SKILL §1).
 - **Resources:** `impl_<slug>`, the slug's hyphens written as underscores (`prepare-worktree.sh` refuses a hyphen) — pass it to `.claude/scripts/prepare-worktree.sh`.
 - **You may touch:** <files and modules, explicitly; include the entry point you may add exports to, every registration list and every pin that counts what you add, every list a new module home changes, the test files, the task list — **your own lines only**, or **no marks** when the wave holds its marks (SKILL §3 rule 6), in which case: *a `## Task lines` section in your session note, one paragraph per task in the closed lines' style* — and the session note you will create> — and the documentation this change invalidates: <the README paragraph, the plan's tree entry, the data-model row — named by file and section; correct them in the same commit and say in your report what you corrected>.
@@ -43,7 +44,7 @@ Read first: <the spec, plan and data-model sections, by heading>; `knowledge-vau
 
 ## Budget
 
-This packet is <small: one test/implementation pair | medium: a cluster of N tasks | large: a new entity or subsystem with its tests>. If you find it larger than that, stop at a green, reviewed, pushed state and report why.
+This packet is <one test/implementation pair | medium: a cluster of N tasks | large: a new entity or subsystem with its tests>. If you find it larger than that, stop at a green, reviewed, pushed state and report why.
 
 ## Report
 
