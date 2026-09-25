@@ -161,16 +161,20 @@ followed by one key to each `<Plug>` mapping, globally, in Normal mode:
 A key sequence you mapped yourself — a global Normal-mode mapping, when the
 editor has started — stays yours, and aineo maps the others. A mapping local
 to a buffer is not counted: it wins in its own buffer only. A mapping you
-make later replaces aineo's.
+make later replaces aineo's. A mapping that only overlaps aineo's key is not
+yours in this sense: with your own `\sa`, aineo still maps `\s`, and `\sa`
+then waits for 'timeoutlen' after `\s`.
 
 The prefix is read once, when the editor has started (|VimEnter|): a
 `setup()` or `vim.g.aineo` that changes it later maps nothing until the next
 start. When a plugin manager loads aineo after startup, the keys are mapped
 in the next event-loop tick.
 
-`\` is also the local leader when |maplocalleader| is unset or empty: a
-filetype plugin's `<LocalLeader>` mapping then shadows aineo's key in its
-buffer. `:checkhealth aineo` warns of it (|aineo-health|).
+`\` is also the leader when |mapleader| is unset or empty, and the local
+leader when |maplocalleader| is: a filetype plugin's `<Leader>` or
+`<LocalLeader>` mapping local to a buffer then shadows aineo's key there —
+Neovim's own ChangeLog plugin maps `<Leader>o`. `:checkhealth aineo` warns
+of both (|aineo-health|).
 
 ==============================================================================
 6. CONFIGURATION                                         *aineo-configuration*
@@ -189,7 +193,8 @@ require('aineo').setup({opts})
 			over the same setting in `vim.g.aineo`.
 
 The settings are checked when aineo uses them — when the editor has started,
-and at each action. A wrong value is one error naming the setting, such as
+and at each action but Send, which uses no setting. A wrong value is one
+error naming the setting, such as
 `aineo: layout.report_height: expected a number strictly between 0 and 1,
 got 2`; at startup it also means no prefix keys and no autostart. A key
 aineo does not know is ignored, and `:checkhealth aineo` names it.
@@ -283,20 +288,23 @@ so a startup dashboard drawn at `VimEnter` or `UIEnter` — snacks.nvim's,
 alpha-nvim, dashboard-nvim, mini.starter — has shown, and the layout
 replaces it.
 
-The autostart does not run, and the editor starts as usual, when:
+The autostart does not run, and the editor starts as usual, when, in the
+order aineo looks for them:
+- a setting is wrong (|aineo-configuration|);
 - `autostart` is `false` (|aineo-config-autostart|);
 - no user interface is attached: `nvim --headless`, `nvim -es`;
 - Neovim was given a file to edit: `nvim file`, `git commit`;
 - Neovim read its standard input: `echo text | nvim -`;
 - Neovim was given something to do besides edit: `-c`, `-S`, `-e`, `-s`,
   `-E`, alone or among other short options (`-Rc`), or a `+` command;
-- it runs inside aineo's own Claude terminal (`$AINEO_CHILD` set);
-- a session was restored at startup, by `-S` or by a plugin such as
-  auto-session from its own `VimEnter` (|v:this_session| set);
-- a setting is wrong (|aineo-configuration|);
-- aineo was loaded after startup, as a plugin manager loading it lazily
-  does: the keys are mapped then, but nothing opens.
-`--cmd`, `-t` and `-q` alone still autostart.
+- it runs inside aineo's own Claude terminal (`$AINEO_CHILD` set and not
+  empty);
+- a session was restored at startup, by a plugin such as auto-session
+  from its own `VimEnter` (|v:this_session| set) — `-S` is a startup task
+  above;
+and, apart from the others, when aineo was loaded after startup, as a
+plugin manager loading it lazily does: the keys are mapped then, but
+nothing opens. `--cmd`, `-t` and `-q` alone still autostart.
 
 `:checkhealth aineo` tells which of these held, the first in this order
 (|aineo-health|).
@@ -314,8 +322,11 @@ Configuration ~
 Claude Code ~
   An error when the first word of `claude.cmd` is not executable. Else
   `claude.cmd --version`, run whole — a wrapper reports Claude Code's
-  version, not its own — and killed after 3 seconds: what it prints, or a
-  warning when it cannot start, runs longer, fails or prints nothing.
+  version, not its own — and killed after 3 seconds with every process it
+  started: the first line it prints, or a warning when it cannot start,
+  runs longer, fails or prints nothing. A command that prints its version
+  and exits but leaves a process of its own holding its output open counts
+  as running longer.
 
 Server socket ~
   The address the editor listens at (|v:servername|); an error when it
@@ -323,23 +334,30 @@ Server socket ~
 
 Prefix mappings ~
   For each prefix key, whether it runs aineo's `<Plug>` mapping; a warning
-  when it runs something of yours, or nothing. A warning when the local
-  leader is the prefix: with the default prefix and |maplocalleader| unset
-  or `\`, this warning always shows.
+  when it runs something of yours, or nothing. While the editor is still
+  starting — `nvim +checkhealth` runs the check before |VimEnter| — one
+  line says the keys are mapped once it has started. A warning when the
+  leader or the local leader is the prefix: with the default prefix and
+  |mapleader| or |maplocalleader| unset or `\`, these warnings show.
 
-The autostart ~
+Autostart ~
   Whether the autostart opened the layout at startup, or which reason kept
-  it from running (|aineo-autostart|). A warning when a setting was wrong
-  at startup, and when the autostart tried to open the layout and failed,
-  with the error it met.
+  it from running (|aineo-autostart|); while the editor is still starting,
+  that it has not decided yet, or that it will open the layout. A warning
+  when a setting was wrong at startup, and when the autostart tried to
+  open the layout and failed, with the error it met.
 
                                                              *g:aineo_startup*
-  aineo records its decision at startup in `vim.g.aineo_startup`, a table
-  whose `reason` names it, with the error in `failure` when the open
-  failed. The health check reads it; aineo never does.
+  aineo records its decision in `vim.g.aineo_startup`, a table whose
+  `reason` is one of, in the order aineo reaches them: `starting` (sourced,
+  the editor not started yet), `wrong-setting`, `autostart-off`, `no-ui`,
+  `file-argument`, `stdin`, `startup-task`, `inside-claude`, `opening`
+  (the open decided, not tried yet), `session-restored`, `opened`,
+  `open-failed` — with the error in `failure` — or `sourced-late`. The
+  health check reads it; aineo never does.
 
 Limits ~
-  The limits of |aineo-limits| a check cannot detect.
+  The stop on quit of |aineo-limits|, which a check cannot detect.
 
 The check passes when it shows no error; warnings are advice.
 

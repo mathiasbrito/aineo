@@ -4,24 +4,52 @@
 # $AINEO_HEALTH_CLAUDE_RECORD when that is set, then behaves as
 # $AINEO_HEALTH_CLAUDE_MODE says:
 #   (unset)      prints a version of its own and exits 0
+#   several-lines  prints a blank line, its version, then a second line
+#   crlf         prints its version, then a second line, each ending in CR LF
+#   long-line    prints a line of 2000 x and exits 0
 #   failing      prints a line on stderr and exits 3
 #   failing-silently  prints nothing and exits 3
+#   exiting-124  prints nothing and exits 124
 #   silent       prints nothing and exits 0
 #   hanging      sleeps for 7 s in its own process
 #   holding      sleeps for 7 s in a child that keeps its output open, and
 #                for 7 s itself
+#   wrapping     ignores TERM, INT and HUP, starts a child that sleeps for
+#                20 s, writes the child's pid to the file
+#                $AINEO_HEALTH_CLAUDE_CHILD_PID, and waits for it
+#   flooding     writes lines without pause for 8 s, then exits 0
 
 if [ -n "$AINEO_HEALTH_CLAUDE_RECORD" ]; then
   printf '%s\n' "$@" > "$AINEO_HEALTH_CLAUDE_RECORD"
 fi
 
 case "$AINEO_HEALTH_CLAUDE_MODE" in
+  several-lines)
+    printf '\n9.9.9 (health stand-in)\nsecond line\n'
+    exit 0
+    ;;
+  crlf)
+    printf '9.9.9 (health stand-in)\r\nsecond line\r\n'
+    exit 0
+    ;;
+  long-line)
+    i=0
+    while [ $i -lt 2000 ]; do
+      printf 'x'
+      i=$((i + 1))
+    done
+    printf '\n'
+    exit 0
+    ;;
   failing)
     echo "health stand-in: no version today" >&2
     exit 3
     ;;
   failing-silently)
     exit 3
+    ;;
+  exiting-124)
+    exit 124
     ;;
   silent)
     exit 0
@@ -32,6 +60,24 @@ case "$AINEO_HEALTH_CLAUDE_MODE" in
   holding)
     sleep 7 &
     exec sleep 7
+    ;;
+  wrapping)
+    trap '' TERM INT HUP
+    sleep 20 &
+    echo $! > "$AINEO_HEALTH_CLAUDE_CHILD_PID"
+    wait
+    exit 0
+    ;;
+  flooding)
+    end=$(($(date +%s) + 8))
+    while [ "$(date +%s)" -lt "$end" ]; do
+      i=0
+      while [ $i -lt 2000 ]; do
+        printf '9.9.9 (health stand-in)\n'
+        i=$((i + 1))
+      done
+    done
+    exit 0
     ;;
 esac
 
