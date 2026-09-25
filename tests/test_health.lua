@@ -1,5 +1,7 @@
 local MiniTest = require('mini.test')
 local children = dofile('tests/helpers/child.lua')
+local claude_session = dofile('tests/helpers/claude_session.lua')
+local entry_editor = dofile('tests/helpers/entry_editor.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local health = dofile('tests/helpers/health.lua')
 
@@ -29,6 +31,44 @@ end
 ---@param settings table
 local function start_with(settings)
   children.restart(child, settings_arguments(settings))
+end
+
+T['the check'] = MiniTest.new_set()
+
+--- What a check could change in a Neovim: the aineo modules it has loaded,
+--- its terminal buffers, its windows and its Normal-mode mappings.
+local EDITOR_STATE = [[(function()
+  local modules = vim.tbl_filter(function(name)
+    return vim.startswith(name, 'aineo')
+  end, vim.tbl_keys(package.loaded))
+  table.sort(modules)
+  local terminals = vim.tbl_filter(function(buffer)
+    return vim.bo[buffer].buftype == 'terminal'
+  end, vim.api.nvim_list_bufs())
+  local mappings = vim.tbl_map(function(mapping)
+    return mapping.lhs
+  end, vim.api.nvim_get_keymap('n'))
+  table.sort(mappings)
+  return {
+    modules = modules,
+    terminals = #terminals,
+    windows = #vim.api.nvim_tabpage_list_wins(1),
+    mappings = mappings,
+  }
+end)()]]
+
+T['the check']['starts nothing, maps nothing and loads only the configuration'] = function()
+  start_with({ autostart = false })
+  local before = child.lua_get(EDITOR_STATE)
+
+  health.report(child)
+
+  eq(
+    child.lua_get(EDITOR_STATE),
+    vim.tbl_extend('force', before, {
+      modules = { 'aineo.config', 'aineo.health' },
+    })
+  )
 end
 
 T['the configuration'] = MiniTest.new_set()
@@ -389,6 +429,188 @@ T['the prefix mappings']['are not checked while the configuration is wrong'] = f
 
   eq(health.section(report, 'Prefix mappings'), {
     '- the prefix mappings are not checked while the configuration is wrong',
+  })
+end
+
+T['the autostart'] = MiniTest.new_set()
+
+T['the autostart']['has no record when aineo did not load at startup'] = function()
+  children.restart(child, { '--cmd', 'let g:loaded_aineo = 1' })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Autostart'), {
+    '- no record of the autostart: plugin/aineo.lua did not run at startup (vim.g.loaded_aineo set before it, or --noplugin)',
+  })
+end
+
+T['the autostart']['has no record when vim.g.aineo_startup holds something aineo did not write'] = function()
+  start_with({ autostart = false })
+  child.lua([[vim.g.aineo_startup = 42]])
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Autostart'), {
+    '- no record of the autostart: plugin/aineo.lua did not run at startup (vim.g.loaded_aineo set before it, or --noplugin)',
+  })
+end
+
+T['the autostart']['did not run because autostart is false'] = function()
+  start_with({ autostart = false })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Autostart'), {
+    '- the autostart did not run: autostart is false',
+  })
+end
+
+T['the autostart']['did not run because no user interface was attached'] = function()
+  start_with({})
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Autostart'), {
+    '- the autostart did not run: no user interface was attached (a headless start)',
+  })
+end
+
+T['the autostart']['did not run because a setting was wrong'] = function()
+  start_with({ prefix = 1 })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Autostart'), {
+    '- ⚠️ WARNING the autostart did not run: a setting was wrong at startup',
+  })
+end
+
+T['the autostart']['did not run because aineo was loaded after startup'] = function()
+  children.restart(child, { '--cmd', 'let g:loaded_aineo = 1' })
+  child.lua([[
+    vim.g.loaded_aineo = nil
+    vim.cmd.runtime('plugin/aineo.lua')
+  ]])
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Autostart'), {
+    '- the autostart did not run: aineo was loaded after startup, as a plugin manager that loads it lazily does',
+  })
+end
+
+--- Starts an editor as a user starts `nvim`, in a terminal of `child`
+--- (`tests/helpers/entry_editor.lua`), with aineo set to run the fake
+--- `claude` and `start`'s settings, arguments, variables and piped input on
+--- top, and returns it once it has settled. `claude.cmd --version` runs the
+--- fake too, which exits 1 over a pipe: the editor's Claude Code line is a
+--- warning.
+---
+---@param name string the test's own name for the fake's files
+---@param start? { settings?: table, args?: string[], environment?: table<string, string>, stdin?: string }
+---@return aineo.test.Editor
+local function start_editor(name, start)
+  start = start or {}
+  local fake = claude_session.fake('health-' .. name, 'ready')
+  local settings = vim.tbl_deep_extend(
+    'force',
+    { claude = { cmd = claude_session.fake_command() } },
+    start.settings or {}
+  )
+  return entry_editor.start(child, children.restart, {
+    args = vim.list_extend(settings_arguments(settings), start.args or {}),
+    environment = vim.tbl_extend('force', fake.environment, start.environment or {}),
+    stdin = start.stdin,
+  })
+end
+
+T['the autostart']['is reported to have opened the layout at a bare start'] = function()
+  local editor = start_editor('opened')
+
+  local report = health.editor_report(editor)
+
+  eq(health.section(report, 'Autostart'), {
+    '- ✅ OK the autostart opened the layout at startup',
+  })
+end
+
+--- Interactive starts that are not bare, each with the line the health
+--- check reports for it.
+local NOT_BARE_STARTS = {
+  {
+    'file-argument',
+    { args = { vim.fs.joinpath(vim.uv.cwd(), '.tests', 'fixtures', 'health-file.txt') } },
+    '- the autostart did not run: Neovim was given a file to edit',
+  },
+  {
+    'stdin',
+    { stdin = 'piped text' },
+    '- the autostart did not run: Neovim read its standard input',
+  },
+  {
+    'startup-task',
+    { args = { '-c', 'let g:health_command = 1' } },
+    '- the autostart did not run: Neovim was given something to do besides edit (-c, -S, -e, -s, -E or a + command)',
+  },
+  {
+    'inside-claude',
+    { environment = { AINEO_ENTRY_AINEO_CHILD = '1' } },
+    "- the autostart did not run: this Neovim runs inside aineo's own Claude terminal ($AINEO_CHILD is set)",
+  },
+}
+
+T['the autostart']['names why a start was not bare'] = MiniTest.new_set({
+  parametrize = NOT_BARE_STARTS,
+})
+
+T['the autostart']['names why a start was not bare']['in its report'] = function(name, start, line)
+  local editor = start_editor(name, start)
+
+  local report = health.editor_report(editor)
+
+  eq(health.section(report, 'Autostart'), { line })
+end
+
+T['the autostart']['did not run because a plugin restored a session'] = function()
+  local editor = start_editor('session-restored', {
+    args = {
+      '--cmd',
+      'let g:entry_session_file = '
+        .. vim.fn.string(vim.fs.joinpath(vim.uv.cwd(), 'tests', 'fixtures', 'entry', 'session.vim')),
+      '--cmd',
+      'set runtimepath+='
+        .. vim.fs.joinpath(vim.uv.cwd(), 'tests', 'fixtures', 'entry', 'session_restore'),
+    },
+  })
+
+  local report = health.editor_report(editor)
+
+  eq(health.section(report, 'Autostart'), {
+    '- the autostart did not run: a session was restored at startup (v:this_session is set)',
+  })
+end
+
+T['the autostart']['is reported to have failed, with its error, when the open raised'] = function()
+  local editor = start_editor('open-failed', {
+    settings = { claude = { cmd = { 'aineo-no-such-claude' } } },
+  })
+
+  local report = health.editor_report(editor)
+
+  eq(health.section(report, 'Autostart'), {
+    "- ⚠️ WARNING the autostart tried to open the layout and failed: claude.cmd: 'aineo-no-such-claude' is not executable",
+  })
+end
+
+T['the limits'] = MiniTest.new_set()
+
+T['the limits']['name the stop on quit an earlier VimLeavePre handler can skip'] = function()
+  start_with({ autostart = false })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Limits'), {
+    "- aineo stops Claude Code from its own VimLeavePre handler when Neovim quits; a VimLeavePre handler registered before it that raises an error makes Neovim skip aineo's, and a Claude Code that hangs then outlives the editor; aineo cannot detect this: :help |aineo-limits|",
   })
 end
 

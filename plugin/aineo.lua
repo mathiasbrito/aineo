@@ -12,6 +12,9 @@
 --- it, once the plugin manager that sourced it has run `setup()` in the same
 --- tick, as lazy.nvim does, and nothing starts by itself.
 ---
+--- What the autostart decided, and why, is recorded in the editor variable
+--- `vim.g.aineo_startup` for `:checkhealth aineo` to report.
+---
 --- It runs once. Setting `vim.g.loaded_aineo` before startup turns it off, and
 --- sourcing it again does nothing.
 
@@ -183,14 +186,20 @@ local function error_line(message)
 end
 
 --- Runs `action`, and tells the user once, with one error notification, the
---- error it raises.
+--- error it raises. Returns whether `action` ran without an error and, when
+--- it did not, the line the user was told.
 ---
 ---@param action fun()
+---@return boolean succeeded
+---@return string|nil failure
 local function run(action)
   local succeeded, failure = pcall(action)
-  if not succeeded then
-    vim.notify('aineo: ' .. error_line(tostring(failure)), vim.log.levels.ERROR)
+  if succeeded then
+    return true
   end
+  local line = error_line(tostring(failure))
+  vim.notify('aineo: ' .. line, vim.log.levels.ERROR)
+  return false, line
 end
 
 --- The `<Plug>` mapping that does what the subcommand `subcommand` does.
@@ -265,27 +274,83 @@ local function has_startup_task(argv)
   end)
 end
 
---- Whether the editor has started as a bare, interactive `nvim`: with a user
---- interface attached, no file to edit, its standard input not read and
---- nothing else to do (`has_startup_task()`) — and not inside aineo's own
---- Claude terminal, which sets `$AINEO_CHILD`.
+--- What makes a start other than a bare, interactive `nvim`, in the order
+--- they are looked for, each named by the reason the autostart records: no
+--- user interface attached, a file to edit, its standard input read,
+--- something else to do (`has_startup_task()`), and running inside aineo's
+--- own Claude terminal, which sets `$AINEO_CHILD`.
+---@type { reason: string, holds: fun(): boolean }[]
+local NOT_BARE_INTERACTIVE = {
+  {
+    reason = 'no-ui',
+    holds = function()
+      return #vim.api.nvim_list_uis() == 0
+    end,
+  },
+  {
+    reason = 'file-argument',
+    holds = function()
+      return vim.fn.argc() > 0
+    end,
+  },
+  {
+    reason = 'stdin',
+    holds = function()
+      return read_stdin
+    end,
+  },
+  {
+    reason = 'startup-task',
+    holds = function()
+      return has_startup_task(vim.v.argv)
+    end,
+  },
+  {
+    reason = 'inside-claude',
+    holds = function()
+      return vim.env.AINEO_CHILD ~= nil
+    end,
+  },
+}
+
+--- Why the editor has not started as a bare, interactive `nvim` — the first
+--- of `NOT_BARE_INTERACTIVE` that holds — or `nil` when it has.
 ---
----@return boolean
-local function is_bare_interactive_start()
-  return #vim.api.nvim_list_uis() > 0
-    and vim.fn.argc() == 0
-    and not read_stdin
-    and not has_startup_task(vim.v.argv)
-    and vim.env.AINEO_CHILD == nil
+---@return string|nil reason
+local function why_not_bare_interactive()
+  local found = vim.iter(NOT_BARE_INTERACTIVE):find(function(condition)
+    return condition.holds()
+  end)
+  return found and found.reason
+end
+
+--- Records what the autostart decided at startup, and why, in the editor
+--- variable `vim.g.aineo_startup`, which `:checkhealth aineo` reads:
+--- `{ reason = reason, failure = failure }`. The reasons: `opened`,
+--- `open-failed`, `autostart-off`, `wrong-setting`, `sourced-late`,
+--- `session-restored`, and those of `NOT_BARE_INTERACTIVE`.
+---
+---@param reason string
+---@param failure? string the error line an open that failed told the user
+local function record_startup(reason, failure)
+  vim.g.aineo_startup = { reason = reason, failure = failure }
 end
 
 --- Opens the layout as `open()` does, unless a session has been restored
 --- (`v:this_session` is set), as a plugin such as auto-session or
 --- persistence.nvim restores one from its own `VimEnter` autocommand: the
---- session's windows are the user's to keep.
+--- session's windows are the user's to keep. Records which it was, and
+--- whether the open failed (`record_startup()`).
 local function open_unless_session_restored()
-  if vim.v.this_session == '' then
-    run(open)
+  if vim.v.this_session ~= '' then
+    record_startup('session-restored')
+    return
+  end
+  local opened, failure = run(open)
+  if opened then
+    record_startup('opened')
+  else
+    record_startup('open-failed', failure)
   end
 end
 
@@ -303,16 +368,30 @@ end
 
 --- What the editor does once it has started: maps the prefix the
 --- configuration names, and opens the layout when `autostart` is set and the
---- start is bare and interactive (`open_after_dashboards()`).
+--- start is bare and interactive (`open_after_dashboards()`); else records
+--- why it does not (`record_startup()`). Raises the configuration's error,
+--- recorded as `wrong-setting`, when a setting is wrong.
 local function start_up()
-  local config = resolved_config()
-  map_prefix(config.prefix)
-  if config.autostart and is_bare_interactive_start() then
-    open_after_dashboards()
+  local resolved, config = pcall(resolved_config)
+  if not resolved then
+    record_startup('wrong-setting')
+    error(config, 0)
   end
+  map_prefix(config.prefix)
+  if not config.autostart then
+    record_startup('autostart-off')
+    return
+  end
+  local refusal = why_not_bare_interactive()
+  if refusal then
+    record_startup(refusal)
+    return
+  end
+  open_after_dashboards()
 end
 
 if vim.v.vim_did_enter == 1 then
+  record_startup('sourced-late')
   vim.schedule(function()
     run(function()
       map_prefix(resolved_config().prefix)

@@ -265,12 +265,79 @@ local function check_prefix_mappings(resolved_config)
   check_local_leader(resolved_config.prefix)
 end
 
+--- What the health check says of each reason `plugin/aineo.lua` records for
+--- the autostart's decision: the `vim.health` function it reports with, and
+--- its words.
+---@type table<string, { level: 'ok'|'info'|'warn', text: string }>
+local AUTOSTART_FINDINGS = {
+  opened = { level = 'ok', text = 'the autostart opened the layout at startup' },
+  ['autostart-off'] = { level = 'info', text = 'the autostart did not run: autostart is false' },
+  ['no-ui'] = {
+    level = 'info',
+    text = 'the autostart did not run: no user interface was attached (a headless start)',
+  },
+  ['file-argument'] = {
+    level = 'info',
+    text = 'the autostart did not run: Neovim was given a file to edit',
+  },
+  stdin = { level = 'info', text = 'the autostart did not run: Neovim read its standard input' },
+  ['startup-task'] = {
+    level = 'info',
+    text = 'the autostart did not run: Neovim was given something to do besides edit (-c, -S, -e, -s, -E or a + command)',
+  },
+  ['inside-claude'] = {
+    level = 'info',
+    text = "the autostart did not run: this Neovim runs inside aineo's own Claude terminal ($AINEO_CHILD is set)",
+  },
+  ['session-restored'] = {
+    level = 'info',
+    text = 'the autostart did not run: a session was restored at startup (v:this_session is set)',
+  },
+  ['sourced-late'] = {
+    level = 'info',
+    text = 'the autostart did not run: aineo was loaded after startup, as a plugin manager that loads it lazily does',
+  },
+  ['open-failed'] = {
+    level = 'warn',
+    text = 'the autostart tried to open the layout and failed',
+  },
+  ['wrong-setting'] = {
+    level = 'warn',
+    text = 'the autostart did not run: a setting was wrong at startup',
+  },
+}
+
+--- Reports what the autostart decided when the editor started, and why, from
+--- the record `plugin/aineo.lua` keeps in `vim.g.aineo_startup`.
+local function check_autostart()
+  vim.health.start('Autostart')
+  local record = vim.g.aineo_startup
+  local finding = type(record) == 'table' and AUTOSTART_FINDINGS[record.reason]
+  if not finding then
+    vim.health.info(
+      'no record of the autostart: plugin/aineo.lua did not run at startup (vim.g.loaded_aineo set before it, or --noplugin)'
+    )
+    return
+  end
+  vim.health[finding.level](finding.text .. (record.failure and ': ' .. record.failure or ''))
+end
+
+--- Names the limits of aineo that no check can detect.
+local function name_limits()
+  vim.health.start('Limits')
+  vim.health.info(
+    "aineo stops Claude Code from its own VimLeavePre handler when Neovim quits; a VimLeavePre handler registered before it that raises an error makes Neovim skip aineo's, and a Claude Code that hangs then outlives the editor; aineo cannot detect this: :help aineo-limits"
+  )
+end
+
 --- Runs aineo's health check (`:h health-dev`).
 function M.check()
   local resolved_config = check_configuration()
   check_claude(resolved_config)
   check_server_socket()
   check_prefix_mappings(resolved_config)
+  check_autostart()
+  name_limits()
 end
 
 return M
