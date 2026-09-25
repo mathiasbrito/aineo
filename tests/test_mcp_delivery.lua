@@ -390,6 +390,20 @@ local BUFFILEPRE_REASON = vim.fn.has('nvim-0.12') == 1
     and 'nvim_exec2()[1]..BufFilePre Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:7: the user autocommand fails'
   or 'nvim_exec2()[1]..BufFilePre Autocommands for "*": Vim(append):Error executing lua callback: [string "<nvim>"]:7: the user autocommand fails'
 
+T['a report']['that the editor refuses with words naming a position keeps them all'] = function()
+  local reason = 'nvim_exec2()[1]..BufFilePost Autocommands for "*": Vim(append):Lua callback:'
+    .. ' user/bufs.lua:7: the user hook failed: user/util.lua:4: the setting is missing'
+  local relay =
+    mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = start_editor_refusing('Lua: ' .. reason) })
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq(get(decoded(relay:next_line(2000)), 'result'), {
+    isError = true,
+    content = { { type = 'text', text = 'the editor did not take the report: ' .. reason } },
+  })
+end
+
 T['a report']['whose refusal the editor framed after a position is a tool error with the reason alone'] = function()
   start_editor()
   editor.lua([[
