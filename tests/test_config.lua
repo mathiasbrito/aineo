@@ -99,6 +99,12 @@ T['resolve_config()']['refuses a wrong value, naming its full path']['from eithe
   end, case.refusal)
 end
 
+T['resolve_config()']['refuses an empty prefix, which would map the keys it prefixes themselves'] = function()
+  expect.error(function()
+    config.resolve_config({ prefix = '' }, nil)
+  end, 'prefix: expected a non%-empty string, or false')
+end
+
 T['resolve_config()']['refuses a report height not strictly between 0 and 1'] = MiniTest.new_set({
   parametrize = { { 0 }, { 1 }, { 1.5 }, { -0.25 } },
 })

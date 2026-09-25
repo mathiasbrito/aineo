@@ -337,13 +337,15 @@ local function buffer_named_input()
   end)
 end
 
---- Whether `buffer` has no name and holds no text, as the buffer Neovim
---- starts with.
+--- Whether `buffer` has no name, no filetype and holds no text, as the
+--- buffer Neovim starts with — not one a plugin has given a filetype, such
+--- as a startup dashboard's before it has drawn.
 ---
 ---@param buffer integer
 ---@return boolean
 local function is_unnamed_and_empty(buffer)
   return vim.api.nvim_buf_get_name(buffer) == ''
+    and vim.bo[buffer].filetype == ''
     and vim.api.nvim_buf_line_count(buffer) == 1
     and vim.api.nvim_buf_get_lines(buffer, 0, 1, true)[1] == ''
 end
@@ -389,8 +391,8 @@ end
 
 --- The Input buffer: the one the layout made before, while it exists; else
 --- the buffer already named `aineo://input` made Input, else `shown` made
---- Input when it has no name and holds no text, or else a new buffer made
---- Input.
+--- Input when it is unnamed and empty (`is_unnamed_and_empty()`), or else a
+--- new buffer made Input.
 ---
 ---@param shown integer the buffer of the window the layout opens from
 ---@return integer input
@@ -443,10 +445,20 @@ local function starting_window()
   end)
 end
 
+--- Whether `buffer` is a file the layout keeps beside it when it opens: a
+--- file (`is_file()`) that is not wiped once hidden, as a startup
+--- dashboard's buffer is.
+---
+---@param buffer integer
+---@return boolean
+local function is_file_to_keep(buffer)
+  return is_file(buffer) and vim.bo[buffer].bufhidden ~= 'wipe'
+end
+
 --- Makes the layout's three windows in the current tab, closing its other
 --- windows but the floating ones, with the cursor in Input. The window it
 --- starts from (see `starting_window()`) becomes Input's, unless it shows a
---- file, which it keeps as the file column.
+--- file (`is_file_to_keep()`), which it keeps as the file column.
 ---
 ---@param arrangement aineo.layout.Arrangement
 local function build(arrangement)
@@ -455,7 +467,7 @@ local function build(arrangement)
   hide_other_windows(start)
   local input = take_input_buffer(shown)
   local input_window = start
-  if shown ~= input and is_file(shown) then
+  if shown ~= input and is_file_to_keep(shown) then
     input_window = vim.api.nvim_open_win(input, false, { split = 'right', win = -1 })
   else
     vim.api.nvim_win_set_buf(input_window, input)
@@ -562,12 +574,14 @@ end
 --- buffer in a column on the right, the Report taking
 --- `arrangement.report_height` of its rows, and the cursor in Input. The tab's
 --- other windows close, but floating ones; their buffers stay loaded. A file
---- the current window shows stays there, as the file column. Opened from a
---- floating window, the layout is built from the first window of the tab
---- that does not float. Input is a scratch buffer named `aineo://input`,
---- made once: from a buffer already named so, such as one a restored session
---- made, else from the unnamed, empty buffer the current window shows, such
---- as the one Neovim starts with, or else a new buffer; it is made anew, from
+--- the current window shows stays there, as the file column, unless it is
+--- wiped once hidden, as a startup dashboard's buffer is, which Input
+--- replaces. Opened from a floating window, the layout is built from the
+--- first window of the tab that does not float. Input is a scratch buffer
+--- named `aineo://input`, made once: from a buffer already named so, such as
+--- one a restored session made, else from the unnamed, empty buffer with no
+--- filetype the current window shows, such as the one Neovim starts with, or
+--- else a new buffer; it is made anew, from
 --- a buffer named so when there is one, when it was wiped, and made a scratch
 --- buffer again whenever it is shown.
 ---
@@ -611,17 +625,20 @@ end
 
 --- Moves the cursor to the layout's window for `role`, opening the layout
 --- with `arrangement` first when that window is gone (see `open()`).
+--- `arrangement` may be a function that returns it, which is called only
+--- then, so that what it makes — a session's terminal, say — is made only
+--- when the layout opens.
 ---
 --- Raises an error naming `role` when it is not one of the three windows.
 ---
 ---@param role aineo.layout.Role
----@param arrangement aineo.layout.Arrangement
+---@param arrangement aineo.layout.Arrangement|fun(): aineo.layout.Arrangement
 function M.focus(role, arrangement)
   vim.validate('role', role, function(value)
     return vim.list_contains(ROLES, value)
   end, false, "'claude', 'report' or 'input'")
   if not has_window(role) then
-    M.open(arrangement)
+    M.open(type(arrangement) == 'function' and arrangement() or arrangement)
   end
   vim.api.nvim_set_current_win(state.windows[role])
 end

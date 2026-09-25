@@ -21,19 +21,22 @@ T['plugin/aineo.lua']['is sourced at startup and loads no aineo module'] = funct
 end
 
 T['plugin/aineo.lua']['loads the configuration alone in a headless start'] = function()
-  children.restart(child)
+  children.restart(child, { '--cmd', 'lua vim.g.aineo = {}' })
 
   eq(child.lua_get(LOADED_AINEO_MODULES), { 'aineo.config' })
 end
 
---- What a Neovim has defined: the names of its user commands, the left-hand
---- sides of its Normal-mode mappings, and its autocommands as `<group> <event>`,
---- each list sorted.
+--- What a Neovim has defined: the names of its user commands, its mappings
+--- in every mode as `<mode> <lhs>`, and its autocommands as
+--- `<group> <event>`, each list sorted.
 local DEFINITIONS = [[(function()
   local commands = vim.tbl_keys(vim.api.nvim_get_commands({}))
-  local keymaps = vim.tbl_map(function(keymap)
-    return keymap.lhs
-  end, vim.api.nvim_get_keymap('n'))
+  local keymaps = {}
+  for _, mode in ipairs({ 'n', 'x', 's', 'o', 'i', 'c', 't', 'l' }) do
+    for _, keymap in ipairs(vim.api.nvim_get_keymap(mode)) do
+      table.insert(keymaps, mode .. ' ' .. keymap.lhs)
+    end
+  end
   local autocmds = vim.tbl_map(function(autocmd)
     return (autocmd.group_name or '') .. ' ' .. autocmd.event
   end, vim.api.nvim_get_autocmds({}))
@@ -65,16 +68,16 @@ T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings 
   eq(added(child.lua_get(DEFINITIONS), without_the_file), {
     commands = { 'Aineo' },
     keymaps = {
-      '<Plug>(aineo-claude)',
-      '<Plug>(aineo-input)',
-      '<Plug>(aineo-open)',
-      '<Plug>(aineo-report)',
-      '<Plug>(aineo-send)',
-      '\\c',
-      '\\i',
-      '\\o',
-      '\\r',
-      '\\s',
+      'n <Plug>(aineo-claude)',
+      'n <Plug>(aineo-input)',
+      'n <Plug>(aineo-open)',
+      'n <Plug>(aineo-report)',
+      'n <Plug>(aineo-send)',
+      'n \\c',
+      'n \\i',
+      'n \\o',
+      'n \\r',
+      'n \\s',
     },
     autocmds = { 'aineo StdinReadPost' },
   })

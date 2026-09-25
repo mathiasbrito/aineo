@@ -75,12 +75,28 @@ T["the user's own mapping"]['of a key sequence stays, and the other keys are map
   eq(child.fn.maparg('\\s', 'n'), '<Plug>(aineo-send)')
 end
 
+T["the user's own mapping"]['local to the buffer the editor starts in stays there, and the key is mapped in every other buffer'] = function()
+  children.restart(child, {
+    '--cmd',
+    'let maplocalleader = "\\\\"',
+    '--cmd',
+    'autocmd FileType lua nnoremap <buffer> <LocalLeader>s <Cmd>let g:mine = 1<CR>',
+    'entry-prefix-local.lua',
+  })
+  local own_mapping = child.fn.maparg('\\s', 'n')
+
+  child.cmd('enew')
+
+  eq(own_mapping, '<Cmd>let g:mine = 1<CR>')
+  eq(child.fn.maparg('\\s', 'n'), '<Plug>(aineo-send)')
+end
+
 T['a wrong setting at startup'] = MiniTest.new_set()
 
 T['a wrong setting at startup']['is told to the user, naming it, and nothing is mapped'] = function()
   children.restart(child, { '--cmd', 'lua vim.g.aineo = { prefix = 1 }' })
 
-  eq(child.cmd_capture('messages'), 'aineo: prefix: expected a string, or false, got 1')
+  eq(child.cmd_capture('messages'), 'aineo: prefix: expected a non-empty string, or false, got 1')
   eq(child.fn.maparg('\\o', 'n'), '')
 end
 

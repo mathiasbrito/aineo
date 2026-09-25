@@ -75,6 +75,50 @@ T['open()']['turns the empty buffer Neovim starts with into Input'] = function()
   eq(child.lua_get(UNNAMED_BUFFER_COUNT), 0)
 end
 
+--- Makes the current buffer of the child a startup dashboard's, as
+--- dashboard-nvim f787e34 makes the buffer it draws in (`buf_local()` in
+--- `lua/dashboard/init.lua`): wiped once hidden, unlisted, of the filetype
+--- `dashboard`, with no `'buftype'`.
+local MAKE_DASHBOARD_BUFFER = [[
+  vim.bo.bufhidden = 'wipe'
+  vim.bo.buflisted = false
+  vim.bo.filetype = 'dashboard'
+]]
+
+--- Draws a dashboard into the child's current buffer and leaves it as
+--- dashboard-nvim f787e34's themes leave theirs (`lua/dashboard/utils.lua`,
+--- `lua/dashboard/theme/doom.lua`): not modifiable, and not modified.
+local DRAW_DASHBOARD = [[
+  vim.api.nvim_buf_set_lines(0, 0, -1, true, { 'a dashboard' })
+  vim.bo.modifiable = false
+  vim.bo.modified = false
+]]
+
+T['open()']["replaces a buffer wiped once hidden, as a startup dashboard's, rather than keep it as a file"] = function()
+  layout.start(child)
+  local dashboard = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.lua(MAKE_DASHBOARD_BUFFER)
+  child.lua(DRAW_DASHBOARD)
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(layout.window_count(child), 3)
+  eq(child.lua_get('vim.api.nvim_buf_is_valid(...)', { dashboard }), false)
+end
+
+T['open()']["makes a new Input when the empty buffer Neovim starts with is a startup dashboard's"] = function()
+  layout.start(child)
+  local dashboard = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.lua(MAKE_DASHBOARD_BUFFER)
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(layout.input_buffer(child) ~= dashboard, true)
+  eq(child.lua_get('vim.bo[...].filetype', { layout.input_buffer(child) }), '')
+end
+
 T['open()']['makes a new Input when the current window shows help, which stays loaded'] = function()
   layout.start(child)
   child.cmd('help')
@@ -335,6 +379,43 @@ T['focus() with its window open changes no window and no size'] = function()
 
   eq(child.lua_get('vim.api.nvim_tabpage_list_wins(0)'), windows)
   eq(layout.boxes(child, buffers), before)
+end
+
+T['focus() with its window open never calls the function it is given for the arrangement'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+
+  child.lua(
+    [[
+      local arrangement = ...
+      _G.arrangement_calls = 0
+      require('aineo.layout').focus('report', function()
+        _G.arrangement_calls = _G.arrangement_calls + 1
+        return arrangement
+      end)
+    ]],
+    { layout.arrangement(buffers) }
+  )
+
+  eq(child.lua_get('_G.arrangement_calls'), 0)
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers.report)
+end
+
+T['focus() with its window closed opens the layout with the arrangement a function returns'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.close_windows(child, buffers, { 'report' })
+
+  child.lua(
+    [[
+      local arrangement = ...
+      require('aineo.layout').focus('report', function()
+        return arrangement
+      end)
+    ]],
+    { layout.arrangement(buffers) }
+  )
+
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers.report)
+  eq(layout.window_count(child), 3)
 end
 
 T['focus() refuses a window the layout does not have'] = function()

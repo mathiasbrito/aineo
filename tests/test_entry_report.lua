@@ -50,9 +50,15 @@ end
 
 T['the report tool']["stamps Claude's report with the editor's local time"] = function()
   child.lua('vim.env.XDG_STATE_HOME = ...', { fixture.directory('entry-report-time-state') })
-  child.lua([[os.date = function()
-    return '2026-09-25T09:05:00'
-  end]])
+  child.lua([[
+    local real_date = os.date
+    os.date = function(format, ...)
+      if format == '%Y-%m-%dT%H:%M:%S' then
+        return '2026-09-25T09:05:00'
+      end
+      return real_date(format, ...)
+    end
+  ]])
   local fake = claude_session.fake('entry-report-time', 'mcp-client')
   entry.use_fake(child, fake)
 
@@ -82,6 +88,25 @@ T['the report tool']["keeps Claude's report under the editor's state directory, 
       'reports',
       vim.fn.sha256(child.fn.getcwd()) .. '.jsonl'
     ),
+  })
+end
+
+T['the report tool']["keeps Claude's report for the working directory of the first Open, after a :cd"] = function()
+  local state = fixture.directory('entry-report-first-cwd-state')
+  child.lua('vim.env.XDG_STATE_HOME = ...', { state })
+  local first_fake = claude_session.fake('entry-report-first-cwd-exit', 'exit')
+  entry.use_fake(child, first_fake)
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'exited')
+  local first_directory = child.fn.getcwd()
+  child.fn.chdir(fixture.directory('entry-report-first-cwd-later'))
+  entry.use_fake(child, claude_session.fake('entry-report-first-cwd', 'mcp-client'))
+
+  child.cmd('Aineo open')
+
+  wait_for_report()
+  eq(vim.fn.glob(vim.fs.joinpath(state, '**', '*.jsonl'), true, true), {
+    vim.fs.joinpath(state, 'nvim', 'aineo', 'reports', vim.fn.sha256(first_directory) .. '.jsonl'),
   })
 end
 

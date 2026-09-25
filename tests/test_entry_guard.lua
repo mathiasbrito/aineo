@@ -33,6 +33,17 @@ T['the suites']['run the guard as claude'] = function()
   eq(vim.fn.exepath('claude'), GUARD_CLAUDE)
 end
 
+T['the suites']['run the guard as claude, which refuses on stderr with 127, in a child'] = function()
+  children.restart(child)
+
+  eq(child.lua_get("vim.system({ 'claude', '--version' }, { text = true }):wait(5000)"), {
+    code = 127,
+    signal = 0,
+    stderr = "aineo's suites never run the real claude: set claude.cmd to the fake\n",
+    stdout = '',
+  })
+end
+
 T['the suites']['run the guard as claude in a child whose PATH starts with another claude'] = function()
   local other = fixture.directory('entry-guard-other-claude')
   local other_claude = fixture.write('entry-guard-other-claude/claude', { '#!/bin/sh', 'exit 0' })
