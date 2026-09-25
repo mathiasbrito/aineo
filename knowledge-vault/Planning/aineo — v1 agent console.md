@@ -4,7 +4,7 @@
 **Project:** [[Projects/aineo]]
 **Defined in session:** [[Sessions/2026-09-23 — Orchestration and knowledge vault scaffold]]
 **Defined by:** Mathias Santos de Brito, with Claude — converged in two rounds, 2026-09-23
-**Status:** in progress — wave 1 (T1) landed 2026-09-24; wave 2 (T3, T4, T5) landed 2026-09-24; wave 3 (T6) landed 2026-09-25; wave 4 (T7) planned 2026-09-25
+**Status:** in progress — wave 1 (T1) landed 2026-09-24; wave 2 (T3, T4, T5) landed 2026-09-24; wave 3 (T6) landed 2026-09-25; wave 4 (T7) landed 2026-09-25; wave 5 (T8) planned 2026-09-25
 
 ## Goal
 
@@ -105,7 +105,7 @@ Until the project has specs, this plan's **D# and C# rows are the spec for v1** 
 | T4 | Claude session (C3): start, flags, environment, readiness, restart, stop on quit, and the fake `claude` its suites run | T1, T2 — T5 only through T7's wiring, by injection (wave 2 plan, *Why T4 runs beside T5*) | done — PR #11, wave 2 |
 | T5 | MCP server and relay (C5), report rendering and persistence (C6) | T1, T2 | done — PR #10, wave 2 |
 | T6 | Send (C4) | T2, T3, T4 | done — PR #15, wave 3 |
-| T7 | Entry point (C1): prefix mapping, `<Plug>` mappings, `:Aineo`, autostart | T3, T4, T5, T6 | active |
+| T7 | Entry point (C1): prefix mapping, `<Plug>` mappings, `:Aineo`, autostart | T3, T4, T5, T6 | done — PR #17, wave 4 |
 | T8 | Health (C7) and `doc/aineo.txt` | T7 | active |
 
 ## Done
@@ -116,6 +116,7 @@ Until the project has specs, this plan's **D# and C# rows are the spec for v1** 
 ~~**T4 — Claude session**~~ — **Done 2026-09-24** (commits in [[Sessions/2026-09-24 — T4 Claude session]])
 ~~**T5 — MCP server and relay, report rendering and persistence**~~ — **Done 2026-09-24** (commits in [[Sessions/2026-09-24 — T5 report channel]])
 ~~**T6 — Send**~~ — **Done 2026-09-25** (commits in [[Sessions/2026-09-24 — T6 Send]])
+~~**T7 — Entry point**~~ — **Done 2026-09-25** (commits in [[Sessions/2026-09-25 — T7 entry point]])
 
 **Done means:** a bare `nvim` in a trusted folder shows the layout; `\s` delivers Input to Claude and clears it; Claude's `report` calls render in Agent Report in the C6 format; opening a file from any window lands in the middle column at equal thirds; `:checkhealth aineo` passes; the suite is green under mini.test with the fake `claude`; vimdoc documents every command.
 
