@@ -1,0 +1,79 @@
+# Whether a window's wrap, linebreak and breakindent reach other windows, measured by the orchestrator on 2026-09-26.
+# Each probe runs as: nvim --clean -u NONE -i NONE --headless -l <probe>, first on the host's Homebrew Neovim, then on the downloaded 0.11.6 build. The global 'wrap' is off in both, as in a config that sets nowrap.
+
+## Probe 1: the options set for the window (vim.wo[win])
+#   local out = { 'nvim ' .. tostring(vim.version()) }
+#   vim.o.wrap = false
+#   local a = vim.api.nvim_get_current_win()
+#   vim.wo[a].wrap = true
+#   vim.wo[a].linebreak = true
+#   vim.wo[a].breakindent = true
+#   local function opts(w) return ('wrap=%s lbr=%s bri=%s'):format(tostring(vim.wo[w].wrap), tostring(vim.wo[w].linebreak), tostring(vim.wo[w].breakindent)) end
+#   local file = vim.api.nvim_create_buf(true, false)
+#   -- 1: split from the current window (A), win = -1
+#   local w1 = vim.api.nvim_open_win(file, false, { split = 'left', win = -1 })
+#   table.insert(out, 'split left, win=-1, current=A: ' .. opts(w1))
+#   -- 2: split above A while the current window is another plain window
+#   vim.api.nvim_set_current_win(w1)
+#   vim.wo[w1].wrap = false; vim.wo[w1].linebreak = false; vim.wo[w1].breakindent = false
+#   local w2 = vim.api.nvim_open_win(file, false, { split = 'above', win = a })
+#   table.insert(out, 'split above, win=A, current=plain: ' .. opts(w2))
+#   -- 3: :vsplit from A
+#   vim.api.nvim_set_current_win(a)
+#   vim.cmd('vsplit')
+#   table.insert(out, ':vsplit from A: ' .. opts(vim.api.nvim_get_current_win()))
+#   -- 4: a buffer entered into A later (wo = window value, applies to the new buffer)
+#   local other = vim.api.nvim_create_buf(true, false)
+#   vim.api.nvim_win_set_buf(a, other)
+#   table.insert(out, 'A after win_set_buf(other): ' .. opts(a))
+#   io.stdout:write(table.concat(out, '\n') .. '\n')
+# Output:
+nvim 0.12.5
+split left, win=-1, current=A: wrap=true lbr=true bri=true
+split above, win=A, current=plain: wrap=true lbr=true bri=true
+:vsplit from A: wrap=true lbr=true bri=true
+A after win_set_buf(other): wrap=true lbr=true bri=true
+nvim 0.11.6+ge8b87a554f
+split left, win=-1, current=A: wrap=true lbr=true bri=true
+split above, win=A, current=plain: wrap=true lbr=true bri=true
+:vsplit from A: wrap=true lbr=true bri=true
+A after win_set_buf(other): wrap=true lbr=true bri=true
+
+## Probe 2: the options set for the buffer in the window (vim.wo[win][0], as :setlocal)
+#   local out = { 'nvim ' .. tostring(vim.version()) .. ' — options set with vim.wo[win][0] (:setlocal)' }
+#   vim.o.wrap = false
+#   local a = vim.api.nvim_get_current_win()
+#   local report = vim.api.nvim_create_buf(false, true)
+#   vim.api.nvim_win_set_buf(a, report)
+#   vim.wo[a][0].wrap = true
+#   vim.wo[a][0].linebreak = true
+#   vim.wo[a][0].breakindent = true
+#   local function opts(w) return ('wrap=%s lbr=%s bri=%s'):format(tostring(vim.wo[w].wrap), tostring(vim.wo[w].linebreak), tostring(vim.wo[w].breakindent)) end
+#   table.insert(out, 'A showing its buffer: ' .. opts(a))
+#   local file = vim.api.nvim_create_buf(true, false)
+#   local w1 = vim.api.nvim_open_win(file, false, { split = 'left', win = -1 })
+#   table.insert(out, 'file split left from A (win=-1): ' .. opts(w1))
+#   local w2 = vim.api.nvim_open_win(file, false, { split = 'above', win = a })
+#   table.insert(out, 'file split above A (win=A): ' .. opts(w2))
+#   local w3 = vim.api.nvim_open_win(report, false, { split = 'below', win = a })
+#   table.insert(out, 'its own buffer split below A: ' .. opts(w3))
+#   vim.api.nvim_win_set_buf(a, file)
+#   table.insert(out, 'A after win_set_buf(file): ' .. opts(a))
+#   vim.api.nvim_win_set_buf(a, report)
+#   table.insert(out, 'A given its buffer back: ' .. opts(a))
+#   io.stdout:write(table.concat(out, '\n') .. '\n')
+# Output:
+nvim 0.12.5 — options set with vim.wo[win][0] (:setlocal)
+A showing its buffer: wrap=true lbr=true bri=true
+file split left from A (win=-1): wrap=false lbr=false bri=false
+file split above A (win=A): wrap=false lbr=false bri=false
+its own buffer split below A: wrap=true lbr=true bri=true
+A after win_set_buf(file): wrap=false lbr=false bri=false
+A given its buffer back: wrap=true lbr=true bri=true
+nvim 0.11.6+ge8b87a554f — options set with vim.wo[win][0] (:setlocal)
+A showing its buffer: wrap=true lbr=true bri=true
+file split left from A (win=-1): wrap=false lbr=false bri=false
+file split above A (win=A): wrap=false lbr=false bri=false
+its own buffer split below A: wrap=true lbr=true bri=true
+A after win_set_buf(file): wrap=false lbr=false bri=false
+A given its buffer back: wrap=true lbr=true bri=true
