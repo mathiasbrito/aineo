@@ -26,6 +26,9 @@
 # directories the suites run under. Never committed.
 /deps/
 /.tests/
+# The help's tag index, which a plugin manager (lazy.nvim) or `:helptags`
+# generates next to doc/aineo.txt in every checkout that loads aineo.
+/doc/tags
 
 # --- Claude Code -----------------------------------------------------------
 # `.claude/` IS tracked — skills, agents, hooks and settings are shared.
