@@ -34,11 +34,29 @@ function M.restart(child, extra_args)
   ]])
 end
 
---- What `child` has told the user through `vim.notify()` since `restart()`,
---- in order, each notification as its message and level.
+--- Runs the Ex command `command` in `child`, keeping an error it raises for
+--- `messages()` rather than raising it in the test.
 ---
 ---@param child table
----@return { message: string, level: integer }[]
+---@param command string
+function M.command(child, command)
+  child.lua(
+    [[
+      local succeeded, failure = pcall(vim.cmd, ...)
+      if not succeeded then
+        table.insert(_G.entry_test_messages, { error = failure })
+      end
+    ]],
+    { command }
+  )
+end
+
+--- What `child` has told the user through `vim.notify()` since `restart()`,
+--- in order, each notification as its message and level, and each error a
+--- command run by `command()` raised as that error.
+---
+---@param child table
+---@return { message: string?, level: integer?, error: string? }[]
 function M.messages(child)
   return child.lua_get('_G.entry_test_messages')
 end

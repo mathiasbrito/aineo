@@ -48,6 +48,23 @@ T['the report tool']['called by Claude shows its report in the Report'] = functi
   eq(child.lua_get(REPORT_LINES), { 'HH:MM [done] Refactor the parser — All tests pass' })
 end
 
+T['the report tool']["stamps Claude's report with the editor's local time"] = function()
+  child.lua('vim.env.XDG_STATE_HOME = ...', { fixture.directory('entry-report-time-state') })
+  child.lua([[os.date = function()
+    return '2026-09-25T09:05:00'
+  end]])
+  local fake = claude_session.fake('entry-report-time', 'mcp-client')
+  entry.use_fake(child, fake)
+
+  child.cmd('Aineo open')
+
+  wait_for_report()
+  eq(
+    child.lua_get("vim.api.nvim_buf_get_lines(vim.fn.bufnr('aineo://report'), 0, -1, true)"),
+    { '09:05 [done] Refactor the parser — All tests pass' }
+  )
+end
+
 T['the report tool']["keeps Claude's report under the editor's state directory, for its working directory"] = function()
   local state = fixture.directory('entry-report-kept-state')
   child.lua('vim.env.XDG_STATE_HOME = ...', { state })

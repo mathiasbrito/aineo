@@ -121,11 +121,12 @@ T['setup()']['keeps its record when it refuses options that contain themselves']
 end
 
 T['setup()']['records a table the options reach twice'] = function()
-  child.lua([[
+  local recorded = child.lua([[
     local cmd = { 'my-claude' }
-    require('aineo').setup({ claude = { cmd = cmd }, shared = { cmd = cmd } })
+    return (pcall(require('aineo').setup, { claude = { cmd = cmd }, shared = { cmd = cmd } }))
   ]])
 
+  eq(recorded, true)
   eq(child.lua_get(RECORDED_OPTIONS), {
     claude = { cmd = { 'my-claude' } },
     shared = { cmd = { 'my-claude' } },

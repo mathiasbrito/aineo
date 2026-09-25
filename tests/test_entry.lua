@@ -118,7 +118,7 @@ T[':Aineo open']['with a wrong setting tells the user once, naming it, and opens
   local fake = claude_session.fake('entry-open-wrong-setting', 'ready')
   entry.use_fake(child, fake, { layout = { report_height = 2 } })
 
-  child.cmd('Aineo open')
+  entry.command(child, 'Aineo open')
 
   eq(entry.messages(child), {
     {
