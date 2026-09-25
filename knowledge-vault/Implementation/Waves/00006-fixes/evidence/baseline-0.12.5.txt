@@ -6,7 +6,7 @@ $ make test_file FILE=tests/test_entry_guard.lua
 Total number of cases: 5
 Fails (0) and Notes (0)
 
-$ make test   (rc=2, 460 s)
+$ make test   (the runner's shell printed: rc=2 secs=460)
 Total number of cases: 727
 Fails (8) and Notes (0)
 

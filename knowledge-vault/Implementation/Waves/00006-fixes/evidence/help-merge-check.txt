@@ -3,5 +3,5 @@
 # c = one line under *aineo-commands* and one under *aineo-keys*
 $ git merge-file -p a.txt base.txt c.txt > merged.txt; echo $?
 0
-$ grep -c 'FROM THE (REPORT|KEYS) PACKET' merged.txt
+$ grep -c -E 'FROM THE (REPORT|KEYS) PACKET' merged.txt
 3
