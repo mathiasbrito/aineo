@@ -1,6 +1,6 @@
 # Reviewer brief — template
 
-One `Agent` call per dimension — `subagent_type: "reviewer"`, or the reviewer variant of the specialist whose domain the pull request touches — `neovim-lua-reviewer`, `neovim-claude-code-reviewer` (SKILL §6), which run at `xhigh` where the implementing specialists run at `high`; `model: "opus"` for every dimension, the re-measure and the brief review (SKILL §1) — all of a pull request's reviewers in one message. The definition carries the charter (worktree, shared state, kill-counting, report shape); the brief carries the dimension, the pull request, and the author's claims to re-measure. After a fix round, one call with the `re-measure` block. Before a wave is dispatched, one call with the `brief` block, whose subject is the orchestrator's own packet briefs — the head is `origin/dev` and there is no pull request yet.
+One `Agent` call per dimension — `subagent_type: "reviewer"`, or the reviewer variant of the specialist whose domain the pull request touches — `neovim-lua-reviewer`, `neovim-claude-code-reviewer` (SKILL §6) — or, for a small fix's `guarantee`, the implementing specialist itself (SKILL §3), at its `high` — which run at `xhigh` where the implementing specialists run at `high`; `model: "opus"` for every dimension, the re-measure and the brief review (SKILL §1) — all of a pull request's reviewers in one message. The definition carries the charter (worktree, shared state, kill-counting, report shape); the brief carries the dimension, the pull request, and the author's claims to re-measure. After a fix round, one call with the `re-measure` block. Before a wave is dispatched, one call with the `brief` block, whose subject is the orchestrator's own packet briefs — the head is `origin/dev` and there is no pull request yet.
 
 ---
 
@@ -15,6 +15,7 @@ You are the **<dimension>** reviewer for pull request **#<n>**.
 - The author's report: `<absolute path to the report file>` — every claim in it is yours to re-measure.
 - Your resources: `review_<dimension>_<slug>` — lower case, digits and underscores only: `.claude/scripts/prepare-worktree.sh` refuses a hyphen, so `test-integrity` is `review_integrity_<slug>` and a slug `t1-tooling` becomes `t1_tooling`.
 - Baseline: `dev` at the packet's branch point, `<sha>`, measured — never a branch's verification count.
+- Class: <regular | small fix (SKILL §3)>. In a small fix, re-run a survivor on the test files the pull request adds or modifies, not the whole suite.
 
 ## Your dimension
 
@@ -36,7 +37,7 @@ No suite run is needed for this dimension; run `.claude/scripts/prepare-worktree
 
 ### guarantee
 
-**Two dimensions collapsed into one, for a test-only change (SKILL §6): your subject is the guarantee, your instrument is the tests.** Answer the attack block's question and the test-integrity block's question in one review, as the identity the guarantee binds over the real interface, and label yourself `guarantee` in the report.
+**Two dimensions collapsed into one — for a test-only change (SKILL §6) or a small fix (SKILL §3): your subject is the guarantee, your instrument is the tests.** Answer the attack and test-integrity blocks below in one review, following both as written, as the identity the guarantee binds over the real interface, and label yourself `guarantee` in the report.
 
 ### reader
 
