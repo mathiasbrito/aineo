@@ -167,22 +167,35 @@ local ACTIONS = {
 
 --- What Neovim puts before an error it passes on, outermost first: the
 --- words it wraps an error raised in Lua in (`Lua: ` from Neovim 0.12 on,
---- `Error executing lua: ` before), the `<file>.lua:<line>: ` position of
---- the Lua code that raised it, and the mark of an error a Vim function
---- raised.
-local ERROR_FRAMING = { '^Lua: ', '^Error executing lua: ', '^.-%.lua:%d+: ', '^Vim:' }
+--- `Error executing lua: ` before), the position of the Lua code that raised
+--- it — `<file>.lua:<line>: `, or for Neovim's own modules from 0.12 on
+--- `vim/<module>:<line>: ` or `[string "vim/<module>"]:<line>: ` — and the
+--- mark of an error a Vim function raised.
+local ERROR_FRAMING = {
+  '^Lua: ',
+  '^Error executing lua: ',
+  '^.-%.lua:%d+: ',
+  '^vim/[%w_/]+:%d+: ',
+  '^%[string "vim/[^"]*"%]:%d+: ',
+  '^Vim:',
+}
 
 --- The error `message` tells, on one line: its first line, without the
 --- stack traceback that may follow it and without what Neovim put before it
---- (`ERROR_FRAMING`).
+--- (`ERROR_FRAMING`), stripped until none is left at its start — Neovim
+--- frames an error again after the position of the Lua that called the API
+--- function which raised it.
 ---
 ---@param message string
 ---@return string
 local function error_line(message)
   local line = message:match('^[^\n]*')
-  for _, framing in ipairs(ERROR_FRAMING) do
-    line = line:gsub(framing, '')
-  end
+  repeat
+    local before = line
+    for _, framing in ipairs(ERROR_FRAMING) do
+      line = line:gsub(framing, '')
+    end
+  until line == before
   return line
 end
 
