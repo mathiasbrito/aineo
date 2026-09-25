@@ -58,7 +58,7 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 
 **Next:**
 - The MVP review with the user, with [[Review/2026-09-24 — v1 MVP readings review]] (MR1–MR95) as its agenda.
-- Wave 7, converged with the user on 2026-09-25 and not yet planned: a changes pane beside the agent pane, and sending only Input's selection. Its rows are written with its plan; the IDs are reserved: D18–D20, C12 and C13.
+- Wave 7, converged with the user on 2026-09-25 and not yet planned: a changes pane beside the agent pane, and sending only Input's selection. Its rows are D18–D20, C12 and C13 in [[Planning/aineo — v1 agent console]]. Its plan follows T14 and T12, which change the same layout and entry code.
 
 **Open threads:**
 - T5's `tests/test_mcp_blocked_editor.lua` writes a `v:null` file into the checkout's root when its editor autostarts — latent while the suites' preset holds; a fix belongs to T5's home.
