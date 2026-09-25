@@ -3,6 +3,7 @@
 --- records that keep them.
 
 local buffer = require('aineo.report.buffer')
+local colours = require('aineo.report.colours')
 local format = require('aineo.report.format')
 local instructions = require('aineo.report.instructions')
 local records = require('aineo.report.records')
@@ -92,6 +93,19 @@ local function readable_records(records_file)
   return records_or_failure, skipped
 end
 
+--- Shows `rendering` at the end of `report_buffer`, in the Report's colours
+--- (`colours.define_report_colours()`), defined whenever a rendering has any:
+--- none is defined before the Report shows a report.
+---
+---@param report_buffer integer
+---@param rendering aineo.report.Rendering
+local function show_rendering(report_buffer, rendering)
+  if #rendering.colours > 0 then
+    colours.define_report_colours()
+  end
+  buffer.append_rendering(report_buffer, rendering)
+end
+
 --- Shows the records kept in `records_file` in `report_buffer`, an empty
 --- Report. Tells the user, once, how many of its lines held no record and
 --- were skipped, or why the file could not be read.
@@ -100,11 +114,7 @@ end
 ---@param records_file string
 local function show_records(report_buffer, records_file)
   local kept, skipped = readable_records(records_file)
-  local lines = {}
-  for _, record in ipairs(kept) do
-    vim.list_extend(lines, render.render_report(record.report, record.time))
-  end
-  buffer.append_lines(report_buffer, lines)
+  show_rendering(report_buffer, render.render_records(kept))
   if skipped > 0 then
     warn_later(
       ('aineo: skipped %d unreadable report record(s) in %s'):format(skipped, records_file)
@@ -166,7 +176,7 @@ local function show_and_keep(arguments)
   local report_buffer = M.report_buffer()
   local record = { time = current_environment().clock(), report = valid_report }
   local cut_failure = records.append_record(report_view.records_file, record)
-  buffer.append_lines(report_buffer, render.render_report(record.report, record.time))
+  show_rendering(report_buffer, render.render_records({ record }))
   buffer.follow_last_line(report_buffer)
   if cut_failure then
     warn_later(cut_failure)
