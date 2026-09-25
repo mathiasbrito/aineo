@@ -7,8 +7,13 @@
 #   several-lines  prints a blank line, its version, then a second line
 #   crlf         prints its version, then a second line, each ending in CR LF
 #   long-line    prints a line of 2000 x and exits 0
+#   wide-at-1024  prints a line of 1023 x and an é, whose two bytes are the
+#                1024th and the 1025th, and exits 0
+#   wider-at-1024  prints a line of 1022 x and an em dash, whose three bytes
+#                are the 1023rd to the 1025th, and exits 0
 #   failing      prints a line on stderr and exits 3
 #   failing-silently  prints nothing and exits 3
+#   failing-at-length  prints a line of 2000 x on stderr and exits 3
 #   exiting-124  prints nothing and exits 124
 #   silent       prints nothing and exits 0
 #   hanging      sleeps for 7 s in its own process
@@ -18,6 +23,10 @@
 #                20 s, writes the child's pid to the file
 #                $AINEO_HEALTH_CLAUDE_CHILD_PID, and waits for it
 #   flooding     writes lines without pause for 8 s, then exits 0
+#   pouring      writes one line without pause, as fast as yes(1) does,
+#                for 8 s, then exits 0
+#   finishing-late  prints its version, closes its output, sleeps for
+#                2.85 s and exits 0
 
 if [ -n "$AINEO_HEALTH_CLAUDE_RECORD" ]; then
   printf '%s\n' "$@" > "$AINEO_HEALTH_CLAUDE_RECORD"
@@ -41,8 +50,35 @@ case "$AINEO_HEALTH_CLAUDE_MODE" in
     printf '\n'
     exit 0
     ;;
+  wide-at-1024)
+    i=0
+    while [ $i -lt 1023 ]; do
+      printf 'x'
+      i=$((i + 1))
+    done
+    printf '\303\251\n'
+    exit 0
+    ;;
+  wider-at-1024)
+    i=0
+    while [ $i -lt 1022 ]; do
+      printf 'x'
+      i=$((i + 1))
+    done
+    printf '\342\200\224\n'
+    exit 0
+    ;;
   failing)
     echo "health stand-in: no version today" >&2
+    exit 3
+    ;;
+  failing-at-length)
+    i=0
+    while [ $i -lt 2000 ]; do
+      printf 'x' >&2
+      i=$((i + 1))
+    done
+    printf '\n' >&2
     exit 3
     ;;
   failing-silently)
@@ -66,6 +102,18 @@ case "$AINEO_HEALTH_CLAUDE_MODE" in
     sleep 20 &
     echo $! > "$AINEO_HEALTH_CLAUDE_CHILD_PID"
     wait
+    exit 0
+    ;;
+  pouring)
+    yes '9.9.9 (health stand-in)' &
+    sleep 8
+    kill $!
+    exit 0
+    ;;
+  finishing-late)
+    echo "9.9.9 (health stand-in)"
+    exec >&- 2>&-
+    sleep 2.85
     exit 0
     ;;
   flooding)
