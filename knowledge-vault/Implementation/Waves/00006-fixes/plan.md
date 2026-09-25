@@ -200,4 +200,41 @@ T14's own baseline is T13's merge, re-checked before dispatch.
 
 ## Landed
 
-<filled by the knowledge pass after each packet's merge>
+- **T9 — PR #30, a small fix**, merged by rebase on 2026-09-26 as `a86a69c` … `3d67b05` (9 commits). Every file of the pull request is identical to the verified head `40bc378`; `git diff 40bc378 dev` shows only T14's files from PR #32.
+  - **Reviews** on Opus, by the small-fix class:
+    - guarantee, by `neovim-lua-developer` at `high` on the reviewer charter;
+    - records, by `reviewer`.
+  - **What the guarantee review found:**
+    - the saved records shown when the Report opens, without the groups defined (G1, fix before merge);
+    - three properties unpinned (G2, G3);
+    - `AineoReportDone` left empty after a user's colour made before the first report and a standalone `:highlight clear` (G4).
+  - **The fix round** went to the author, whose context was about 222 K.
+    - The groups became `:highlight default link`, with no `ColorScheme` autocommand, in place of `nvim_set_hl(…, { default = true })` and an autocommand.
+    - A moved mechanism takes a re-measure under the small-fix class. It ran with the attack question (`neovim-lua-reviewer`).
+  - **What the re-measure found:**
+    - one limit the round introduced: a colour scheme's own default link for an aineo group, set before aineo's first definition, is kept across later scheme switches and `:highlight clear`, because `sg_deflink` records only the first default link;
+    - two surviving mutants, MC3 and MAB3.
+  - **The orchestrator accepted the limit:** a scheme that names aineo's groups chose that colour on purpose.
+  - **The bounded correction** went to a fresh agent:
+    - the claims narrowed to what the code does;
+    - the limit pinned;
+    - MC3 and MAB3 pinned.
+- **Corrections to T9's brief, made in the rounds and not in the brief:**
+  - RC7's claim that the frozen pins catch M14p and M15p was wrong; T9 added its own pin.
+  - "8 tests" was "7 tests, 12 cases". The orchestrator's brief to the records review carried the same error.
+- **The orchestrator's verification** of `40bc378`, in a detached worktree:
+  - `tests/test_entry_guard.lua`: 5 cases, `Fails (0)`, on both versions;
+  - `make test`: 747 cases. 0.11.6 gave `Fails (0)`. 0.12.5 gave `Fails (8)`, the eight T13 fixes;
+  - `make lint`: clean.
+- **Six literal mutants**, each shown applied, run on the whole suite under 0.11.6, then restored:
+
+  | mutant | cases failing | reason |
+  |---|---|---|
+  | MP, the guarantee review's | 1 | |
+  | the time's group dropped | 2 | |
+  | done coloured as failed | 5 | |
+  | a plain link in place of a default one | 3 | each is the `E414` a plain link raises over a user's colour, which is this fault's own failure |
+  | MC3, the re-measure's | 1 | |
+  | the groups defined at require | 2 | |
+
+  All six were killed.

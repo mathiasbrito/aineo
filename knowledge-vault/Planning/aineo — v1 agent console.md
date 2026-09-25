@@ -111,7 +111,7 @@ Until the project has specs, this plan's **D# and C# rows are the spec for v1** 
 | T6 | Send (C4) | T2, T3, T4 | done — PR #15, wave 3 |
 | T7 | Entry point (C1): prefix mapping, `<Plug>` mappings, `:Aineo`, autostart | T3, T4, T5, T6 | done — PR #17, wave 4 |
 | T8 | Health (C7) and `doc/aineo.txt` | T7 | done — PR #21 (and #22), wave 5 |
-| T9 | Report colours (C6): the time in `Comment`'s colour and `[status]` in a colour of its status, as highlight groups a user can override — a small fix (the user, 2026-09-25) | T8 | active |
+| T9 | Report colours (C6): the time in `Comment`'s colour and `[status]` in a colour of its status, as highlight groups a user can override — a small fix (the user, 2026-09-25) | T8 | done — PR #30, wave 6 |
 | T12 | `\tcn` toggles the line numbers of Claude's window (D16), with its `:Aineo` subcommand, `<Plug>` mapping, health check and help | T8 | active |
 | T13 | Neovim 0.12 compatibility (D10): the suite green on 0.12.5 and on 0.11.6 — Neovim's error framing stripped as 0.11's is, the `vim.system` error text, the terminal's exit line, the test editor that cannot load aineo | T8 | active |
 | T14 | Input keeps unsent text as a draft (D17): saved per working directory beside the Reports shortly after each change and at quit, restored into an empty Input when aineo opens there, cleared with Input when Send clears it | T8 | active |

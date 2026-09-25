@@ -170,4 +170,18 @@ The wave holds its marks (rule 6). The line T9 would take:
 
 ## Commits
 
-*Recorded after the merge.*
+Merged by rebase into `dev` on 2026-09-26, PR #30. The knowledge pass maps each commit of the branch to its hash on `dev`:
+
+| on the branch | on `dev` | subject |
+|---|---|---|
+| `1818a17` | `a86a69c` | Colour the Report's time and status as groups a user can override |
+| `de2ce3d` | `dbdac74` | Pin the colours of a report that follows another in the Report |
+| `245d030` | `c51a490` | Record the T9 Report colours session |
+| `72827be` | `27b327d` | Link the Report's colours with :highlight default link, no autocommand |
+| `73f4116` | `6eca773` | Correct the T9 session record after the review of PR #30 |
+| `e5d0a76` | `e45e977` | Record the shared help's merge check against T13's branch |
+| `0388206` | `4e52a18` | Pin every autocommand and the colour-scheme default-link limit |
+| `0f705e1` | `8b3c664` | Narrow the Report colours' claims to the limit the re-measure found |
+| `40bc378` | `3d67b05` | Record the shared help's merge check after the T9 correction |
+
+The pull request's final code is the fix round's `27b327d`, with the correction's pins in `4e52a18` and its narrowed help and docstring in `8b3c664`.
