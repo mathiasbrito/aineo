@@ -20,12 +20,23 @@ local CONFIRMATION_TIMEOUT_MS = 5000
 local REQUEST, RESPONSE = 0, 1
 local REQUEST_ID = 1
 
---- The first line of `text`: an editor's error without its stack traceback.
+--- The words an editor wraps an error raised in Lua in before it answers a
+--- request with it: `Lua: ` from Neovim 0.12 on, `Error executing lua: `
+--- before.
+local ERROR_FRAMING = { '^Lua: ', '^Error executing lua: ' }
+
+--- The reason an editor's error `text` gives: its first line, without the
+--- stack traceback that may follow it and without the words the editor
+--- wrapped it in (`ERROR_FRAMING`).
 ---
 ---@param text string
 ---@return string
-local function first_line(text)
-  return (text:match('^[^\n]*'))
+local function editor_reason(text)
+  local line = text:match('^[^\n]*')
+  for _, framing in ipairs(ERROR_FRAMING) do
+    line = line:gsub(framing, '')
+  end
+  return line
 end
 
 --- Closes `connection` unless it is already closing.
@@ -145,7 +156,7 @@ local function outcome(call, address)
   if call.response then
     local failure = call.response[3]
     if failure ~= vim.NIL then
-      return 'failed', 'the editor did not take the report: ' .. first_line(tostring(failure[2]))
+      return 'failed', 'the editor did not take the report: ' .. editor_reason(tostring(failure[2]))
     end
     return 'delivered'
   end

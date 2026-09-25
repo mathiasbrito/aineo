@@ -23,6 +23,46 @@ end, vim.api.nvim_list_chans())]]
 --- The expression, run in a Neovim, that counts its buffers.
 local BUFFER_COUNT = '#vim.api.nvim_list_bufs()'
 
+--- The words a child Neovim wraps an error raised in Lua in when it answers
+--- a request with it, as the start of a pattern: `Lua: ` from Neovim 0.12
+--- on, `Error executing lua: ` before.
+local REQUEST_ERROR_FRAMING = vim.fn.has('nvim-0.12') == 1 and '^Lua: ' or '^Error executing lua: '
+
+--- The expression, run in a Neovim 0.12 or later, that lists the virtual
+--- texts of the terminal buffer `...`'s exit line, which Neovim shows as an
+--- extmark in its `nvim.terminal.exitmsg` namespace.
+local EXIT_LINE_TEXTS = [[
+  local buffer = ...
+  local namespace = vim.api.nvim_get_namespaces()['nvim.terminal.exitmsg']
+  if not namespace or not vim.api.nvim_buf_is_valid(buffer) then
+    return {}
+  end
+  return vim.tbl_map(function(mark)
+    return mark[4].virt_text[1][1]
+  end, vim.api.nvim_buf_get_extmarks(buffer, namespace, 0, -1, { details = true }))
+]]
+
+--- What the terminal `buffer` of `child` shows where Neovim puts the exit
+--- line of its process, once it shows `part` or the usual wait is over: the
+--- virtual text of the exit line's extmark from Neovim 0.12 on, the buffer's
+--- own text before.
+---
+---@param child table
+---@param buffer integer
+---@param part string
+---@return string
+local function wait_for_exit_line(child, buffer, part)
+  if vim.fn.has('nvim-0.12') == 0 then
+    return claude.wait_for_screen(child, buffer, part)
+  end
+  local shown
+  vim.wait(claude.PATIENCE_MS, function()
+    shown = table.concat(child.lua(EXIT_LINE_TEXTS, { buffer }), '\n')
+    return shown:find(part, 1, true) ~= nil
+  end, 20)
+  return shown
+end
+
 local child = MiniTest.new_child_neovim()
 
 local T = MiniTest.new_set({
@@ -206,7 +246,7 @@ T['start_session()']['names claude.cmd and the command that is not executable, a
 
   MiniTest.expect.error(function()
     claude.start(child, fake, { cmd = { 'aineo-no-such-claude', '--flag' } })
-  end, "^Error executing lua: claude%.cmd: 'aineo%-no%-such%-claude' is not executable\n")
+  end, REQUEST_ERROR_FRAMING .. "claude%.cmd: 'aineo%-no%-such%-claude' is not executable\n")
 end
 
 T['start_session()']['returns a live terminal when the running one was just wiped'] = function()
@@ -367,7 +407,7 @@ T['session_status()']['leaves the terminal showing Neovim’s exit line'] = func
 
   claude.wait_for_status(child, 'exited')
 
-  contains(claude.wait_for_screen(child, buffer, '[Process exited 3]'), '[Process exited 3]')
+  contains(wait_for_exit_line(child, buffer, '[Process exited 3]'), '[Process exited 3]')
 end
 
 T['session_status()']['is ready once its input box shows'] = function()

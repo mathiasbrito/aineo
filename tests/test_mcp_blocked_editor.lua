@@ -35,6 +35,16 @@ local T = MiniTest.new_set({
   },
 })
 
+T['a user’s editor'] = MiniTest.new_set()
+
+T['a user’s editor']['starts with no message, as in a terminal that answers its queries'] = function()
+  local editor = start_editor('mcp-tui-messages')
+
+  local messages = vim.rpcrequest(editor.channel, 'nvim_exec2', 'messages', { output = true })
+
+  eq(messages.output, '')
+end
+
 T['a report that opens a Report with a warning'] = MiniTest.new_set()
 
 T['a report that opens a Report with a warning']['is confirmed before the warning can hold the editor'] = function()

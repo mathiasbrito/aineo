@@ -11,6 +11,11 @@ local MINIMAL_INIT = vim.fs.joinpath(CHECKOUT, 'scripts', 'minimal_init.lua')
 --- How long the helper waits for the editor to listen, or to reach a mode.
 local WAIT_MS = 5000
 
+--- The Device Status Report query (`CSI 5 n`) Neovim's TUI writes to its
+--- terminal as it starts, and the answer of a terminal in good order
+--- (`CSI 0 n`).
+local STATUS_QUERY, STATUS_ANSWER = '\27[5n', '\27[0n'
+
 ---@type integer[]
 local running = {}
 
@@ -73,6 +78,35 @@ function TuiEditor:stop()
   vim.fn.jobwait({ self.job }, WAIT_MS)
 end
 
+--- Waits until the editor on `channel` has finished starting (`VimEnter`),
+--- so that its init has put the checkout on `'runtimepath'`: while it
+--- starts, the editor may serve requests from inside a wait of its own.
+---
+---@param channel integer
+local function wait_for_startup(channel)
+  vim.wait(WAIT_MS, function()
+    return vim.rpcrequest(channel, 'nvim_get_vvar', 'vim_did_enter') == 1
+  end, 20)
+end
+
+--- An `on_stdout` handler for the editor's job that answers each status
+--- query its TUI writes, as the user's terminal would, so that the editor
+--- does not wait for an answer and then warn that none came. A query split
+--- across two reads is answered once both have arrived.
+---
+---@return fun(job: integer, data: string[])
+local function status_answerer()
+  local unmatched = ''
+  return function(job, data)
+    local output = unmatched .. table.concat(data, '\n')
+    local _, queries = output:gsub(vim.pesc(STATUS_QUERY), '')
+    for _ = 1, queries do
+      vim.fn.chansend(job, STATUS_ANSWER)
+    end
+    unmatched = output:sub(-(#STATUS_QUERY - 1))
+  end
+end
+
 --- Starts an editor with a UI, the suites' minimal init and a report home
 --- whose clock always says `time`, and the state and working directories.
 ---
@@ -82,7 +116,7 @@ function M.start(environment)
   local address = vim.fn.tempname() .. '.sock'
   local job = vim.fn.jobstart(
     { vim.v.progpath, '--clean', '-n', '-u', MINIMAL_INIT, '--listen', address },
-    { pty = true, width = 80, height = 24 }
+    { pty = true, width = 80, height = 24, on_stdout = status_answerer() }
   )
   table.insert(running, job)
   vim.wait(WAIT_MS, function()
@@ -93,6 +127,7 @@ function M.start(environment)
     address = address,
     channel = vim.fn.sockconnect('pipe', address, { rpc = true }),
   }, TuiEditor)
+  wait_for_startup(editor.channel)
   editor.server_pid = vim.rpcrequest(editor.channel, 'nvim_call_function', 'getpid', {})
   vim.rpcrequest(
     editor.channel,
