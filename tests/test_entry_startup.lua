@@ -57,6 +57,36 @@ T['a bare interactive start']['opens the layout around a new Claude'] = function
   eq(#claude_session.wait_for_starts(fake, 1), 1)
 end
 
+T['a bare interactive start']['with a command that cannot run tells the user on one line, without a prompt'] = function()
+  local fake = claude_session.fake('entry-autostart-no-such-command', 'ready')
+
+  local editor = start_editor(fake, {
+    settings = { claude = { cmd = { 'aineo-no-such-claude' } } },
+  })
+
+  eq(entry_editor.get(editor, 'vim.api.nvim_get_mode()'), { mode = 'n', blocking = false })
+  eq(
+    entry_editor.get(editor, "vim.fn.execute('messages')"),
+    "\naineo: E475: Invalid value for argument cmd: 'aineo-no-such-claude' is not executable"
+  )
+end
+
+T['a bare interactive start']['starts no Claude when setup() turns autostart off over vim.g.aineo'] = function()
+  local fake = claude_session.fake('entry-autostart-off-by-setup', 'ready')
+
+  local editor = start_editor(fake, {
+    settings = { autostart = true },
+    args = {
+      '--cmd',
+      'lua vim.g.entry_setup_options = { autostart = false }',
+      '--cmd',
+      'set runtimepath+=' .. vim.fs.joinpath(vim.uv.cwd(), 'tests', 'fixtures', 'entry', 'setup'),
+    },
+  })
+
+  eq(entry_editor.get(editor, TERMINAL_COUNT), 0)
+end
+
 --- Starts that differ from a bare interactive one in exactly one way, each
 --- named for it.
 local NOT_BARE_STARTS = {
@@ -66,6 +96,28 @@ local NOT_BARE_STARTS = {
   { 'in-aineos-claude', { environment = { AINEO_ENTRY_AINEO_CHILD = '1' } } },
   { 'autostart-off', { settings = { autostart = false } } },
   { 'command', { args = { '-c', 'let g:entry_command = 1' } } },
+  { 'command-in-one-argument', { args = { '-clet g:entry_command = 1' } } },
+  { 'command-among-short-options', { args = { '-Rc', 'let g:entry_command = 1' } } },
+  {
+    'session-restored-by-a-plugin',
+    {
+      args = {
+        '--cmd',
+        'let g:entry_session_file = '
+          .. vim.fn.string(
+            vim.fs.joinpath(vim.uv.cwd(), 'tests', 'fixtures', 'entry', 'session.vim')
+          ),
+        '--cmd',
+        'set runtimepath+='
+          .. vim.fs.joinpath(vim.uv.cwd(), 'tests', 'fixtures', 'entry', 'session_restore'),
+      },
+    },
+  },
+  { 'ex-mode', { args = { '-e' } } },
+  {
+    'keys-from-a-script',
+    { args = { '-s', vim.fs.joinpath(vim.uv.cwd(), 'tests', 'fixtures', 'entry', 'keys.txt') } },
+  },
   { 'plus-command', { args = { '+let g:entry_command = 1' } } },
   {
     'session',
@@ -98,7 +150,7 @@ local DASHBOARD_PLUGIN = vim.fs.joinpath(vim.uv.cwd(), 'tests', 'fixtures', 'ent
 --- The start arguments that load the stand-in dashboard `dashboard` after
 --- aineo (`tests/fixtures/entry/dashboard/plugin/entry_dashboard.lua`).
 ---
----@param dashboard { filetype: string, moment: string, autocommands: boolean, buffer: string }
+---@param dashboard { filetype: string, moment: string, autocommands: boolean, options: table, drawn: boolean }
 ---@return string[]
 local function dashboard_arguments(dashboard)
   return {
@@ -109,33 +161,88 @@ local function dashboard_arguments(dashboard)
   }
 end
 
+--- The buffer options of the stand-ins modelled on snacks.nvim and
+--- alpha-nvim: a scratch buffer's.
+local SCRATCH_OPTIONS = { buftype = 'nofile' }
+
+--- The buffer options dashboard-nvim f787e34 sets (`buf_local()` in
+--- `lua/dashboard/init.lua`), its filetype apart: no `'buftype'`.
+local DASHBOARD_NVIM_OPTIONS = { bufhidden = 'wipe', buflisted = false, swapfile = false }
+
 --- Stand-in dashboards, each named for the one it is modelled on and when it
 --- shows; together they show at `VimEnter`, at `UIEnter` and from a callback
---- scheduled at `VimEnter`, each with and without autocommands.
+--- scheduled at `VimEnter`, each with and without autocommands, and
+--- dashboard-nvim with its theme drawn, as after `setup()`, and without.
 local DASHBOARDS = {
   {
     'snacks-at-UIEnter-without-autocommands',
-    { filetype = 'snacks_dashboard', moment = 'UIEnter', autocommands = false, buffer = 'first' },
+    {
+      filetype = 'snacks_dashboard',
+      moment = 'UIEnter',
+      autocommands = false,
+      options = SCRATCH_OPTIONS,
+      drawn = true,
+    },
   },
   {
     'alpha-at-VimEnter',
-    { filetype = 'alpha', moment = 'VimEnter', autocommands = true, buffer = 'first' },
+    {
+      filetype = 'alpha',
+      moment = 'VimEnter',
+      autocommands = true,
+      options = SCRATCH_OPTIONS,
+      drawn = true,
+    },
   },
   {
     'alpha-at-VimEnter-without-autocommands',
-    { filetype = 'alpha', moment = 'VimEnter', autocommands = false, buffer = 'first' },
+    {
+      filetype = 'alpha',
+      moment = 'VimEnter',
+      autocommands = false,
+      options = SCRATCH_OPTIONS,
+      drawn = true,
+    },
   },
   {
     'dashboard-nvim-at-UIEnter',
-    { filetype = 'dashboard', moment = 'UIEnter', autocommands = true, buffer = 'new' },
+    {
+      filetype = 'dashboard',
+      moment = 'UIEnter',
+      autocommands = true,
+      options = DASHBOARD_NVIM_OPTIONS,
+      drawn = true,
+    },
   },
   {
     'dashboard-nvim-scheduled',
-    { filetype = 'dashboard', moment = 'scheduled', autocommands = true, buffer = 'new' },
+    {
+      filetype = 'dashboard',
+      moment = 'scheduled',
+      autocommands = true,
+      options = DASHBOARD_NVIM_OPTIONS,
+      drawn = true,
+    },
+  },
+  {
+    'dashboard-nvim-without-setup-at-UIEnter',
+    {
+      filetype = 'dashboard',
+      moment = 'UIEnter',
+      autocommands = true,
+      options = DASHBOARD_NVIM_OPTIONS,
+      drawn = false,
+    },
   },
   {
     'snacks-scheduled-without-autocommands',
-    { filetype = 'snacks_dashboard', moment = 'scheduled', autocommands = false, buffer = 'first' },
+    {
+      filetype = 'snacks_dashboard',
+      moment = 'scheduled',
+      autocommands = false,
+      options = SCRATCH_OPTIONS,
+      drawn = true,
+    },
   },
 }
 

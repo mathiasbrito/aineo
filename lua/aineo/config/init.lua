@@ -6,12 +6,14 @@ local M = {}
 
 local recorded_setup_options = {}
 
---- Whether `value` is a prefix: a string, or `false` for no prefix at all.
+--- Whether `value` is a prefix: a non-empty string, or `false` for no
+--- prefix at all. An empty prefix would map the keys that follow it, such
+--- as `i` and `o`, themselves.
 ---
 ---@param value any
 ---@return boolean
 local function is_prefix(value)
-  return type(value) == 'string' or value == false
+  return (type(value) == 'string' and value ~= '') or value == false
 end
 
 --- Whether `value` is a command: a list of at least one string.
@@ -38,7 +40,12 @@ end
 --- default and the check its value must pass (`vim.validate`'s validator and,
 --- for a function, the words that describe what it expects).
 local SETTINGS = {
-  { name = 'prefix', default = '\\', validator = is_prefix, expected = 'a string, or false' },
+  {
+    name = 'prefix',
+    default = '\\',
+    validator = is_prefix,
+    expected = 'a non-empty string, or false',
+  },
   { name = 'autostart', default = true, validator = 'boolean' },
   {
     name = 'claude.cmd',
