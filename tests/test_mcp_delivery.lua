@@ -319,7 +319,7 @@ T['a report']['that the editor does not take is a tool error with the reason it 
     content = {
       {
         type = 'text',
-        text = 'the editor did not take the report: Error executing lua: aineo.report has no environment: call set_report_environment() first',
+        text = 'the editor did not take the report: aineo.report has no environment: call set_report_environment() first',
       },
     },
   })

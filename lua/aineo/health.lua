@@ -7,13 +7,22 @@ local config = require('aineo.config')
 
 local M = {}
 
+--- The position Lua puts before an error it raises: `<file>.lua:<line>: `
+--- for Lua code loaded from a file, `vim/<module>:<line>: ` for Neovim's own
+--- Lua from 0.12 on, whose modules are named without the `.lua`.
+local ERROR_POSITIONS = { '^.-%.lua:%d+: ', '^vim/[%w_/]+:%d+: ' }
+
 --- The error `message` tells, on one line: its first line, without the
---- `<file>.lua:<line>: ` position of the Lua code that raised it.
+--- position of the Lua code that raised it (`ERROR_POSITIONS`).
 ---
 ---@param message any
 ---@return string
 local function error_line(message)
-  return (tostring(message):match('^[^\n]*'):gsub('^.-%.lua:%d+: ', ''))
+  local line = tostring(message):match('^[^\n]*')
+  for _, position in ipairs(ERROR_POSITIONS) do
+    line = line:gsub(position, '')
+  end
+  return line
 end
 
 --- Reports whether aineo's configuration — `vim.g.aineo` and the options

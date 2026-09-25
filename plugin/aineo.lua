@@ -166,10 +166,11 @@ local ACTIONS = {
 }
 
 --- What Neovim puts before an error it passes on, outermost first: the
---- words it wraps an error raised in a Lua callback in, the
---- `<file>.lua:<line>: ` position of the Lua code that raised it, and the
---- mark of an error a Vim function raised.
-local ERROR_FRAMING = { '^Error executing lua: ', '^.-%.lua:%d+: ', '^Vim:' }
+--- words it wraps an error raised in Lua in (`Lua: ` from Neovim 0.12 on,
+--- `Error executing lua: ` before), the `<file>.lua:<line>: ` position of
+--- the Lua code that raised it, and the mark of an error a Vim function
+--- raised.
+local ERROR_FRAMING = { '^Lua: ', '^Error executing lua: ', '^.-%.lua:%d+: ', '^Vim:' }
 
 --- The error `message` tells, on one line: its first line, without the
 --- stack traceback that may follow it and without what Neovim put before it

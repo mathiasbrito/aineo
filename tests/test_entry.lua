@@ -186,6 +186,13 @@ T[':Aineo open']['on a screen with no room tells the user Neovim’s error witho
   })
 end
 
+--- What the user is told when a TermOpen autocommand of theirs fails: the
+--- first line of the error, in the words each Neovim wraps an error raised
+--- in a Lua callback in.
+local TERMOPEN_FAILURE = vim.fn.has('nvim-0.12') == 1
+    and 'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:3: the user autocommand fails'
+  or 'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Error executing lua callback: [string "<nvim>"]:3: the user autocommand fails'
+
 T[':Aineo open']['when a TermOpen autocommand of the user fails tells the user the first line of its error'] = function()
   local fake = claude_session.fake('entry-open-termopen-fails', 'ready')
   entry.use_fake(child, fake)
@@ -200,10 +207,7 @@ T[':Aineo open']['when a TermOpen autocommand of the user fails tells the user t
   entry.command(child, 'Aineo open')
 
   eq(entry.messages(child), {
-    {
-      message = 'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Error executing lua callback: [string "<nvim>"]:3: the user autocommand fails',
-      level = vim.log.levels.ERROR,
-    },
+    { message = TERMOPEN_FAILURE, level = vim.log.levels.ERROR },
   })
 end
 
