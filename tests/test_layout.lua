@@ -119,6 +119,41 @@ T['open()']["makes a new Input when the empty buffer Neovim starts with is a sta
   eq(child.lua_get('vim.bo[...].filetype', { layout.input_buffer(child) }), '')
 end
 
+--- Wipes the child's current buffer once it is hidden and changes it, as a
+--- user may change a file some plugin has set to be wiped.
+local CHANGE_A_FILE_WIPED_ONCE_HIDDEN = [[
+  vim.bo.bufhidden = 'wipe'
+  vim.api.nvim_buf_set_lines(0, 0, -1, true, { 'changed' })
+]]
+
+T['open()']['keeps a changed file that is wiped once hidden, in the file column'] = function()
+  layout.start(child)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  local file_buffer = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.lua(CHANGE_A_FILE_WIPED_ONCE_HIDDEN)
+  child.cmd('vsplit ' .. layout.file('other.txt'))
+  child.cmd('wincmd p')
+  local buffers = layout.stand_ins(child)
+
+  child.lua([[pcall(require('aineo.layout').open, ...)]], { layout.arrangement(buffers) })
+
+  eq(layout.window_count(child), 4)
+  eq(layout.window_showing(child, file_buffer) ~= nil, true)
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), layout.input_buffer(child))
+end
+
+T['open()']['turns the empty buffer Neovim starts with into Input when the user gave it a filetype'] = function()
+  layout.start(child)
+  local empty = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.cmd('setlocal filetype=text')
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(layout.input_buffer(child), empty)
+  eq(layout.window_count(child), 3)
+end
+
 T['open()']['makes a new Input when the current window shows help, which stays loaded'] = function()
   layout.start(child)
   child.cmd('help')
@@ -404,20 +439,37 @@ T['focus() with its window closed opens the layout with the arrangement a functi
   local buffers = layout.open_with_stand_ins(child)
   layout.close_windows(child, buffers, { 'report' })
 
-  MiniTest.expect.no_error(function()
-    child.lua(
-      [[
-        local arrangement = ...
-        require('aineo.layout').focus('report', function()
-          return arrangement
-        end)
-      ]],
-      { layout.arrangement(buffers) }
-    )
-  end)
+  child.lua(
+    [[
+      local arrangement = ...
+      pcall(require('aineo.layout').focus, 'report', function()
+        return arrangement
+      end)
+    ]],
+    { layout.arrangement(buffers) }
+  )
 
   eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers.report)
   eq(layout.window_count(child), 3)
+end
+
+T['focus() with its window closed names what the function it is given returned'] =
+  MiniTest.new_set({
+    parametrize = { { 'nil', 'got nil' }, { 'false', 'got boolean' } },
+  })
+
+T['focus() with its window closed names what the function it is given returned']['when it returns'] = function(
+  returned,
+  message
+)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.close_windows(child, buffers, { 'report' })
+
+  MiniTest.expect.error(function()
+    child.lua(([[require('aineo.layout').focus('report', function()
+        return %s
+      end)]]):format(returned))
+  end, 'arrangement: expected table, ' .. message)
 end
 
 T['focus() refuses a window the layout does not have'] = function()

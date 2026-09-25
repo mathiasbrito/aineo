@@ -201,6 +201,14 @@ T['start_session()']['leaves nothing behind but the error when the command canno
   eq(child.lua_get(STATUS), {})
 end
 
+T['start_session()']['names claude.cmd and the command that is not executable, and nothing else'] = function()
+  local fake = claude.fake('not-executable-named', 'ready')
+
+  MiniTest.expect.error(function()
+    claude.start(child, fake, { cmd = { 'aineo-no-such-claude', '--flag' } })
+  end, "^Error executing lua: claude%.cmd: 'aineo%-no%-such%-claude' is not executable\n")
+end
+
 T['start_session()']['returns a live terminal when the running one was just wiped'] = function()
   local fake = claude.fake('wiped-running', 'ready')
   local first = claude.start(child, fake)

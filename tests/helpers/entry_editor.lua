@@ -33,6 +33,16 @@ local SETTLING_DEPTH = 4
 ---@field channel integer the test's RPC channel to the editor
 ---@field screen fun(): string[] the lines of the terminal the editor draws in
 
+--- How to start the editor: its arguments, the variables it gets on top of
+--- the child's, the text piped to its standard input, and the size of the
+--- terminal it draws in.
+---@class aineo.test.EditorStart
+---@field args? string[]
+---@field environment? table<string, string>
+---@field stdin? string
+---@field columns? integer the terminal's columns, `COLUMNS` when not given
+---@field lines? integer the terminal's lines, `LINES` when not given
+
 --- The command that starts the editor with `args`, reading `stdin` from a pipe
 --- when given, as `printf <stdin> | nvim <args>` does.
 ---
@@ -123,18 +133,19 @@ function M.settle(editor)
 end
 
 --- Starts the editor in a terminal of `child`, which it restarts first with
---- `children_restart` at `COLUMNS` by `LINES`, and returns it once it has
---- started and settled.
+--- `children_restart` at `start.columns` by `start.lines` (`COLUMNS` by
+--- `LINES` when not given), and returns it once it listens, without waiting
+--- for it to start or settle.
 ---
 ---@param child table a child from `MiniTest.new_child_neovim()`
 ---@param children_restart fun(child: table) how the suite restarts a child
----@param start? { args?: string[], environment?: table<string, string>, stdin?: string }
+---@param start? aineo.test.EditorStart
 ---@return aineo.test.Editor
-function M.start(child, children_restart, start)
+function M.launch(child, children_restart, start)
   start = start or {}
   children_restart(child)
-  child.o.columns = COLUMNS
-  child.o.lines = LINES
+  child.o.columns = start.columns or COLUMNS
+  child.o.lines = start.lines or LINES
   local address = vim.fn.tempname()
   local environment = vim.tbl_extend(
     'force',
@@ -157,14 +168,49 @@ function M.start(child, children_restart, start)
     end, 20),
     'the editor did not listen on ' .. address
   )
-  local editor = {
+  return {
     channel = vim.fn.sockconnect('pipe', address, { rpc = true }),
     screen = function()
       return child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, false)')
     end,
   }
+end
+
+--- Starts the editor as `M.launch()` does, and returns it once it has
+--- started and settled (`M.settle()`).
+---
+---@param child table a child from `MiniTest.new_child_neovim()`
+---@param children_restart fun(child: table) how the suite restarts a child
+---@param start? aineo.test.EditorStart
+---@return aineo.test.Editor
+function M.start(child, children_restart, start)
+  local editor = M.launch(child, children_restart, start)
   M.settle(editor)
   return editor
+end
+
+--- The editor's mode, as `nvim_get_mode()` gives it: a query the editor
+--- answers even while it is blocked, at a hit-enter prompt, say.
+---
+---@param editor aineo.test.Editor
+---@return { mode: string, blocking: boolean }
+function M.mode(editor)
+  return vim.rpcrequest(editor.channel, 'nvim_get_mode')
+end
+
+--- Waits, at most `PATIENCE_MS`, until a line of the editor's screen holds
+--- `text`, read from the terminal it draws in rather than asked of the
+--- editor; returns whether one did.
+---
+---@param editor aineo.test.Editor
+---@param text string
+---@return boolean shown
+function M.wait_for_screen(editor, text)
+  return vim.wait(PATIENCE_MS, function()
+    return vim.iter(editor.screen()):any(function(line)
+      return line:find(text, 1, true) ~= nil
+    end)
+  end, 20)
 end
 
 return M

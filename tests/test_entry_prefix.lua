@@ -75,6 +75,18 @@ T["the user's own mapping"]['of a key sequence stays, and the other keys are map
   eq(child.fn.maparg('\\s', 'n'), '<Plug>(aineo-send)')
 end
 
+T["the user's own mapping"]['of a key sequence with a Ctrl key in the prefix stays, and the other keys are mapped'] = function()
+  children.restart(child, {
+    '--cmd',
+    "lua vim.g.aineo = { prefix = '<C-a>' }",
+    '--cmd',
+    'nnoremap <C-a>s <Cmd>let g:mine = 1<CR>',
+  })
+
+  eq(child.fn.maparg('<C-a>s', 'n'), '<Cmd>let g:mine = 1<CR>')
+  eq(child.fn.maparg('<C-a>o', 'n'), '<Plug>(aineo-open)')
+end
+
 T["the user's own mapping"]['local to the buffer the editor starts in stays there, and the key is mapped in every other buffer'] = function()
   children.restart(child, {
     '--cmd',
