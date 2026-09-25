@@ -10,14 +10,26 @@
 --- Removes every Claude Code variable except `CLAUDE_CONFIG_DIR`, which the
 --- Makefile points into `.tests/`: a Claude Code session that starts the suite
 --- would otherwise hand its own session markers to every process a test starts.
+---
+--- Puts `tests/helpers/entry_guard/` first on `PATH`, so that its `claude`,
+--- which runs nothing, is the one every process a test starts finds: no test
+--- runs the real Claude Code, even through aineo's default `claude.cmd`.
+---
+--- Removes `AINEO_CHILD`, which aineo's own Claude terminal sets: a suite run
+--- from there would otherwise hand it to every Neovim a test starts, and none
+--- of them would start aineo by itself.
 
 local checkout = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h')
 
 vim.opt.runtimepath:prepend(vim.fs.joinpath(checkout, 'deps', 'mini.nvim'))
 vim.opt.runtimepath:prepend(checkout)
 
+vim.env.PATH = vim.fs.joinpath(checkout, 'tests', 'helpers', 'entry_guard') .. ':' .. vim.env.PATH
+
 for name in pairs(vim.fn.environ()) do
   if vim.startswith(name, 'CLAUDE') and name ~= 'CLAUDE_CONFIG_DIR' then
     vim.env[name] = nil
   end
 end
+
+vim.env.AINEO_CHILD = nil

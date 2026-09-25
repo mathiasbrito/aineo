@@ -1,0 +1,10 @@
+#!/bin/sh
+# The `claude` every Neovim the suites start finds first on its PATH, put there
+# by scripts/minimal_init.lua, so that no test runs the real Claude Code: a
+# session started with aineo's default `claude.cmd`, { "claude" }, runs this
+# instead. It runs nothing, says so on stderr and exits 127, the status of a
+# command the shell cannot find. A test that means to start Claude Code sets
+# `claude.cmd` to the fake, tests/helpers/fake_claude.lua.
+
+echo "aineo's suites never run the real claude: set claude.cmd to the fake" >&2
+exit 127

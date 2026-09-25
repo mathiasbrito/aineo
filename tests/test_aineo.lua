@@ -89,4 +89,47 @@ T['setup()']['refuses options that are not a table, naming them'] = function()
   end, 'opts: expected table, got string')
 end
 
+T['setup()']['refuses options that contain themselves, naming them'] = function()
+  expect.error(function()
+    child.lua([[
+      local opts = { claude = {} }
+      opts.claude.back = opts
+      require('aineo').setup(opts)
+    ]])
+  end, 'opts: contains itself')
+end
+
+T['setup()']['refuses options that contain themselves as a key, naming them'] = function()
+  expect.error(function()
+    child.lua([[
+      local opts = {}
+      opts[opts] = true
+      require('aineo').setup(opts)
+    ]])
+  end, 'opts: contains itself')
+end
+
+T['setup()']['keeps its record when it refuses options that contain themselves'] = function()
+  child.lua([[require('aineo').setup({ prefix = ',' })]])
+  child.lua([[
+    local opts = { autostart = false }
+    opts.back = opts
+    pcall(require('aineo').setup, opts)
+  ]])
+
+  eq(child.lua_get(RECORDED_OPTIONS), { prefix = ',' })
+end
+
+T['setup()']['records a table the options reach twice'] = function()
+  child.lua([[
+    local cmd = { 'my-claude' }
+    require('aineo').setup({ claude = { cmd = cmd }, shared = { cmd = cmd } })
+  ]])
+
+  eq(child.lua_get(RECORDED_OPTIONS), {
+    claude = { cmd = { 'my-claude' } },
+    shared = { cmd = { 'my-claude' } },
+  })
+end
+
 return T

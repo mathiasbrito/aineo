@@ -211,25 +211,37 @@ end
 --- A plain copy of `value`, sharing nothing with it: every table is copied at
 --- every depth, keys and values alike, and no copy carries a metatable — so a
 --- copied table holds its own keys and values only, as `vim.g.aineo` would.
---- Raises an error, a stack overflow, for a table that contains itself.
+--- A table reached twice, but not from inside itself, is copied twice.
+---
+--- Raises an error naming `opts`, as `require('aineo').setup()` calls the
+--- options, when a table contains itself, at any depth, as a key or a value.
 ---
 ---@param value any
+---@param enclosing? table<table, true> the tables `value` was reached from
 ---@return any
-local function plain_copy(value)
+local function plain_copy(value, enclosing)
   if type(value) ~= 'table' then
     return value
   end
+  enclosing = enclosing or {}
+  if enclosing[value] then
+    error('opts: contains itself', 0)
+  end
+  enclosing[value] = true
   local copy = {}
   for key, inner_value in pairs(value) do
-    copy[plain_copy(key)] = plain_copy(inner_value)
+    copy[plain_copy(key, enclosing)] = plain_copy(inner_value, enclosing)
   end
+  enclosing[value] = nil
   return copy
 end
 
 --- Records a plain copy of the options `require('aineo').setup()` was given —
 --- their own keys and values, never what a metatable reaches — replacing
 --- whatever was recorded before. Counterpart of `recorded_setup_options()`.
---- Raises an error when `setup_options` contains itself.
+---
+--- Raises an error naming `opts` when `setup_options` contain themselves, and
+--- keeps the record it held then.
 ---
 ---@param setup_options table
 function M.record_setup_options(setup_options)
