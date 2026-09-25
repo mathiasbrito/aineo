@@ -1,0 +1,45 @@
+# The whole suite at dev 9af91a6 on Neovim 0.12.5 (2026-09-25 17:44-17:51 CEST)
+# nvim: the official nvim-macos-arm64.tar.gz of v0.12.5, sha256 65fb000099e47ca1b762584c484cc833f40e30851a0ec450d4174e16317c1f9b (matches the release's digest), first on PATH
+# worktree: detached at 9af91a6; make deps at the pin
+
+$ make test_file FILE=tests/test_entry_guard.lua
+Total number of cases: 5
+Fails (0) and Notes (0)
+
+$ make test   (rc=2, 460 s)
+Total number of cases: 727
+Fails (8) and Notes (0)
+
+## The failing cases, each with the first lines of its report
+FAIL in tests/test_claude.lua | start_session() | names claude.cmd and the command that is not executable, and nothing else:
+  Failed expectation for error matching pattern "^Error executing lua: claude%.cmd: 'aineo%-no%-such%-claude' is not executable\n"
+  Observed error: Lua: claude.cmd: 'aineo-no-such-claude' is not executable
+  stack traceback:
+FAIL in tests/test_claude.lua | session_status() | leaves the terminal showing Neovim’s exit line:
+  Failed expectation for a string containing a part
+  Text: '\n ▐▛███▛█   Claude Code v2.1.281\n▝▜██████▀  Opus 5.5 (1M context) with xhigh effort · Claude PLAN\n  ▝▝ ▝▝    ~/project/aineo · /rc connecting…\n\n\n\n\n\n\n\n\n\n\n\n\n\n                                                          
+  Part: "[Process exited 3]"
+FAIL in tests/test_entry.lua | :Aineo open | when a TermOpen autocommand of the user fails tells the user the first line of its error:
+  Failed expectation for equality
+  Cause: different values at key branch 1->"message", left = 'aineo: Lua: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:3: the user autocommand fails', right = 'aineo: nvim_exec2()[1]..TermOpen 
+  Left:  { {
+FAIL in tests/test_health.lua | Claude Code | warns when claude.cmd cannot be run, although it is executable:
+  Failed expectation for equality
+  Cause: different values at key 1, left = "- ⚠️ WARNING claude.cmd --version could not run: vim/_core/system:326: ENOENT: no such file or directory", right = "- ⚠️ WARNING claude.cmd --version could not run: ENOENT: no such file or directo
+  Left:  { "- ⚠️ WARNING claude.cmd --version could not run: vim/_core/system:326: ENOENT: no such file or directory", "- aineo's behaviour was measured on Claude Code 2.1.281" }
+FAIL in tests/test_mcp_blocked_editor.lua | a report that opens a Report with a warning | is confirmed before the warning can hold the editor: Lua: [string "<nvim>"]:2: module 'aineo.report' not found:
+  	no field package.preload['aineo.report']
+  	no file './aineo/report.lua'
+  	no file '/Users/runner/work/neovim/neovim/.deps/usr/share/luajit-2.1/aineo/report.lua'
+FAIL in tests/test_mcp_blocked_editor.lua | a report for an editor at a hit-enter prompt | is answered in time, the relay keeps serving, and the report shows once the user is done: Lua: [string "<nvim>"]:2: module 'aineo.report' not found:
+  	no field package.preload['aineo.report']
+  	no file './aineo/report.lua'
+  	no file '/Users/runner/work/neovim/neovim/.deps/usr/share/luajit-2.1/aineo/report.lua'
+FAIL in tests/test_mcp_blocked_editor.lua | a report for an editor at a hit-enter prompt | is a tool error at once when the editor dies before it answers: Lua: [string "<nvim>"]:2: module 'aineo.report' not found:
+  	no field package.preload['aineo.report']
+  	no file './aineo/report.lua'
+  	no file '/Users/runner/work/neovim/neovim/.deps/usr/share/luajit-2.1/aineo/report.lua'
+FAIL in tests/test_mcp_delivery.lua | a report | that the editor does not take is a tool error with the reason it gave:
+  Failed expectation for equality
+  Cause: different values at key branch "content"->1->"text", left = "the editor did not take the report: Lua: aineo.report has no environment: call set_report_environment() first", right = "the editor did not take the report: Error executi
+  Left:  {

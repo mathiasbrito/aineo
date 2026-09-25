@@ -12,7 +12,7 @@ A plan that exists only in the session that wrote it cannot be read by a second 
 
 - `plan.md` — the plan, from `[[Templates/Wave Plan Template]]`: frontmatter with the status, the composition, the six-rules table, the baseline, what was measured before planning, the decisions put to the user and their answers, the reviewer allocation, the verification mutants.
 - `brief-<slug>.md` — one packet brief per packet, exactly as dispatched (the `Agent` call names this path).
-- `brief-review.md` — the brief reviewer's report, verbatim.
+- `brief-review.md` — the brief reviewer's report, verbatim; in a rolling wave, each later packet's is `brief-review-<slug>.md`.
 - `evidence/` — the measurements the briefs cite as plain-text files (`*.txt`, `*.sh`): the planning probe and its output, the baseline's measurement output. Text, never binaries — binaries go to `Attachments/`.
 
 ## Status — the lock between sessions
@@ -22,7 +22,7 @@ The frontmatter's `status` is the only thing that says whether a wave is free to
 | status | meaning | who sets it |
 |---|---|---|
 | `planned` | briefs written and reviewed; not dispatched | the orchestrator that planned it, in the pull request that adds the folder |
-| `claimed` | dispatched; implementers running or reviews under way — with `claimed_by` (host, per-host mark, session id) and `claimed_at` | the orchestrator that dispatches, in a `knowledge/` commit merged before the first `Agent` call |
+| `claimed` | dispatched; implementers running or reviews under way — or, in a rolling wave (`rolling: true`), between packets with nothing running — with `claimed_by` (host, per-host mark, session id) and `claimed_at` | the orchestrator that dispatches, in a `knowledge/` commit merged before the first `Agent` call |
 | `landed` | every packet merged and the knowledge pass done — with `landed_at` and the pull requests | the knowledge pass |
 | `superseded` | not run; replaced by a later wave, which the note names | whoever replaces it |
 
@@ -33,7 +33,7 @@ The frontmatter's `status` is the only thing that says whether a wave is free to
 ## Rules
 
 - **Merged before dispatch.** The plan's pull request lands on `dev` before any implementer is dispatched, and the briefs the implementers read are the merged ones — a brief is a claim like any other, and a claim on `dev` has a hash.
-- **Nothing here is edited in place after dispatch** except the frontmatter's status and the closing section (`## Landed`): a correction to a brief mid-wave is a fix-round message in the ledger, recorded in the retrospective, never a rewrite of what was sent. A brief amended *before* its packet is dispatched gets a dated section, reviewed like the original.
+- **Nothing here is edited in place after dispatch** except the frontmatter's status and claim — a later session continuing a rolling wave re-claims it, rewriting `claimed_by` and `claimed_at` once no agent of the old session runs — the closing section (`## Landed`), and, in a rolling wave, a later packet's dated `## Packet <T#> — <date>` section inserted directly above `## Landed` with its brief and `brief-review-<slug>.md` (the orchestrate skill, §3): a correction to a brief mid-wave is a fix-round message in the ledger, recorded in the retrospective, never a rewrite of what was sent. A brief amended *before* its packet is dispatched gets a dated section, reviewed like the original.
 - **The ledger stays out.** `orchestration-ledger.md` is one session's working state and lives in its scratch directory; the retrospective in `Sessions/` is the record of what happened. The plan says what was intended.
 - **Paths cited in a brief are repository paths or paths under this folder**, so a brief resolves on any host. A report an agent writes goes to the session's scratch directory, as the charters say; a brief names that by its role (`<scratchpad>/<slug>-report-<stage>.md`), not by an absolute path.
 - Link `[[Projects/aineo]]`, the retrospective that closes the wave, and the plan the composition came from (`Planning/` or the project note's queue).

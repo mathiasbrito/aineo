@@ -1,0 +1,23 @@
+# Neovim's terminal: faint (SGR 2) and OSC 8 hyperlinks, read from the sources at the tags (gh api repos/neovim/neovim/contents/<path>?ref=<tag>, 2026-09-25)
+
+## v0.11.6 — no dim or faint in the terminal or libvterm:
+$ grep -n -i -E 'dim|faint' terminal.c vterm_defs.h pen.c
+(no match)
+
+## v0.11.6 — OSC 8 parsed into a URL attribute:
+296:static int parse_osc8(const char *str, int *attr)
+322:  *attr = hl_add_url(0, str + i);
+352:      if (parse_osc8(term->termrequest_buffer.items + off, &attr)) {
+
+## v0.12.0 — src/nvim/vterm/vterm_defs.h and src/nvim/terminal.c:
+68:  unsigned dim       : 1;
+324:  unsigned dim       : 1;
+1458:                   | (cell.attrs.dim ? HL_DIM : 0)
+
+## v0.12.5 — src/nvim/vterm/vterm_defs.h and src/nvim/terminal.c:
+68:  unsigned dim       : 1;
+324:  unsigned dim       : 1;
+1477:                   | (cell.attrs.dim ? HL_DIM : 0)
+
+## the commit that added it:
+2026-02-27 feat(terminal): support SGR dim, overline attributes #37997
