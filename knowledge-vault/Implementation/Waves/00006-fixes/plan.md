@@ -1,12 +1,12 @@
 ---
 wave: 00006
-status: planned
+status: claimed
 rolling: true
 planned_by: the orchestrator (Claude, Opus 5.5) for Mathias Santos de Brito — host Macbook-Mathias
 planned_at: 2026-09-25 17:52 CEST
 base: 9af91a6
-claimed_by:
-claimed_at:
+claimed_by: Macbook-Mathias (platform UUID prefix CF989BF4), session 938616f1-5ff6-4507-97aa-65611ff715c0
+claimed_at: 2026-09-25 20:34 CEST
 landed_at:
 ---
 
