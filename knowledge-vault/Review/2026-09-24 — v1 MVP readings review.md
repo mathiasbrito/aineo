@@ -7,12 +7,12 @@
 ## Links
 
 - [[Projects/aineo]] · [[Planning/aineo — v1 agent console]] · [[Implementation/Waves/00002-layout-session-report/plan]]
-- The packets' own lists: [[Sessions/2026-09-24 — T3 layout]] › *Readings for the MVP review*, [[Sessions/2026-09-24 — T4 Claude session]] › *Readings for the MVP review*, [[Sessions/2026-09-24 — T5 report channel]] › *Readings for the MVP review* and *Correction › Readings for the MVP review*, [[Sessions/2026-09-24 — T6 Send]] › *Readings for the MVP review* and *Limits*
+- The packets' own lists: [[Sessions/2026-09-24 — T3 layout]] › *Readings for the MVP review*, [[Sessions/2026-09-24 — T4 Claude session]] › *Readings for the MVP review*, [[Sessions/2026-09-24 — T5 report channel]] › *Readings for the MVP review* and *Correction › Readings for the MVP review*, [[Sessions/2026-09-24 — T6 Send]] › *Readings for the MVP review* and *Limits*, [[Sessions/2026-09-25 — T7 entry point]] › *Readings for the MVP review* and *Limits*
 - Retrospective: [[Sessions/2026-09-24 — Wave 2 retrospective]]
 
 ## Scope
 
-The behaviours aineo v1 has where the plan's rows (D1–D15, C1–C9) are silent: readings a brief, a packet, a fix round or a correction took, which the user never chose — and the limits the packets' session notes record that a user can meet in the editor. Gathered at `dev` `c7a9c99`, after wave 2 (T3, T4, T5), and at `bb0e185` for wave 3 (T6); each wave that follows adds its own sections at the end. **Left out, by rule:** limits a user cannot meet — a mutant no portable test can kill, JSON-RPC edges Claude Code never sends, a peer at the editor's address that is not Neovim, `serverInfo.version` — which stay in their session notes. The first version of this list left out nine limits a user can meet; the records review of PR #13 (finding 1) named them, and they are MR40–MR48. The user asked to review the MVP once T1–T8 are in (2026-09-23); this list is that review's agenda.
+The behaviours aineo v1 has where the plan's rows (D1–D15, C1–C9) are silent: readings a brief, a packet, a fix round or a correction took, which the user never chose — and the limits the packets' session notes record that a user can meet in the editor. Gathered at `dev` `c7a9c99`, after wave 2 (T3, T4, T5), and at `bb0e185` for wave 3 (T6), and at `201873b` for wave 4 (T7); each wave that follows adds its own sections at the end. **Left out, by rule:** limits a user cannot meet — a mutant no portable test can kill, JSON-RPC edges Claude Code never sends, a peer at the editor's address that is not Neovim, `serverInfo.version` — which stay in their session notes. The first version of this list left out nine limits a user can meet; the records review of PR #13 (finding 1) named them, and they are MR40–MR48. The user asked to review the MVP once T1–T8 are in (2026-09-23); this list is that review's agenda.
 
 The IDs are `MR#`, so they collide with neither the plan's `R#` risks nor a review's findings; each names its source — a brief's behaviour (`L#`, `S#`, `RP#`, `MC#`), a packet's reading (`LR#`), a review's finding — and the item of the wave-2 plan's list of fourteen where it came from there (*plan 1*–*plan 14*).
 
@@ -109,6 +109,33 @@ The IDs are `MR#`, so they collide with neither the plan's `R#` risks nor a revi
 | MR60 | The fake reads a write in pieces of at most 1,022 bytes (this Mac), so a closing marker or the Enter can reach it in a read of its own. Claude Code 2.1.281, sent no Enter, read a paste whose closing marker fell at bytes 1,012–1,026 as one paste at 15 lengths of 15 (`Implementation/Waves/00003-send/evidence/t6-summary3.txt`); whether its pty split the marker is not observable, and how it takes an Enter arriving in a read of its own is unmeasured. | T6 limits (attack of #15, finding 3; re-measure finding 2) |
 | MR61 | A lone `9B` byte, overlong encodings, and the bytes `80`–`FF` outside `C2 80`–`C2 9F` pass into the paste; harmless if Claude Code decodes its input as UTF-8, which is unmeasured. | T6 limits (re-measure of #15, finding 5) |
 | MR62 | A redraw that tears Claude's input box makes Send refuse for about 1.5 s (MR48) rather than let it through — measured on the fake by the attack review of PR #15, not on the real CLI. | attack review of #15 (its refuted torn-redraw path) |
+
+## Readings — the entry point (C1; T7)
+
+| ID | Reading | Source |
+|---|---|---|
+| MR63 | `:Aineo` without one of `send`, `open`, `report`, `input`, `claude` — or with anything else, `:Aineo send extra` included — gives one `ERROR` notification naming the five; the argument is trimmed, `|` separates commands, and completion offers the subcommands. | T7 reading 1 |
+| MR64 | Every error an action raises reaches the user once as `aineo: <its first line>`, at `ERROR`, without Neovim's framing or a traceback — for example `aineo: claude.cmd: 'claude' is not executable`, raised by the Claude home before `jobstart()` — and nothing opens. | T7 reading 2 |
+| MR65 | The Report takes its working directory once, at the first Open (or the first focus that opens the layout), and keeps it for the editor's life; each new session runs in the `getcwd()` of its moment. | T7 reading 3 |
+| MR66 | Only `\o` restarts an exited Claude (R1): `\r`, `\i` and `\c` move to their window, or reopen the layout around the terminal as it is, its exit on screen; they start a session only before the first start or once the terminal was wiped. | T7 reading 4 |
+| MR67 | A start with something to do besides edit does not autostart: `-c`, `-S`, `-e`, `-s`, `-E`, alone or after other short options (`-Rc cmd`), and any `+` argument; `--cmd` alone, `-t tag` and `-q file` still autostart. | T7 reading 5 |
+| MR68 | A wrong setting at startup gives one error notification, no prefix mapping and no autostart. | T7 reading 6 |
+| MR69 | The autostart waits two scheduled callbacks after `VimEnter`, so a dashboard shown from `VimEnter` or `UIEnter`, directly or from one `vim.schedule()`, is replaced; a startup buffer that is wiped once hidden is replaced unless it holds changes (then kept as the file column). | T7 reading 7 |
+| MR70 | Sourcing aineo loads no module; `VimEnter` loads `aineo.config` alone. | T7 reading 8 |
+| MR71 | A key sequence counts as "mapped already" only for a global Normal-mode mapping at `VimEnter`, compared in both forms Neovim records; a buffer-local mapping keeps winning in its buffer only; a mapping made after `VimEnter` replaces aineo's. | T7 reading 9 |
+| MR72 | A plugin manager that sources aineo after `VimEnter` gets the prefix mappings but never the autostart. | T7 reading 10 |
+| MR73 | Unknown configuration keys are silent when aineo opens; the health check reports them (T8). | T7 reading 11 |
+| MR74 | Every interactive Neovim the suites start has `vim.g.aineo = { autostart = false }` preset; a test of the autostart sets its own — test design, listed so this list and T7's agree. | T7 reading 12 |
+| MR75 | The suites' stand-in `claude` exits 127 with one line on stderr — test design, listed for agreement. | T7 reading 13 |
+| MR76 | A session restored at startup is kept: `-S` refuses the autostart, and a session a plugin restores from its own `VimEnter` (`v:this_session` set) keeps its windows. | T7 reading 14 |
+| MR77 | **`prefix = ''` is refused** — the orchestrator's reading of D13 ("a string, or `false`"): a prefix is at least one key, since an empty prefix would remap `s`, `o`, `r`, `i` and `c` themselves. **The user confirms or changes it.** | T7 reading 15 |
+
+## Limits a user can meet — the entry point (T7)
+
+| ID | Limit | Source |
+|---|---|---|
+| MR78 | At 80 columns a message longer than `v:echospace` (68) holds a bare start at a hit-enter prompt: the not-executable line fits for a command name of up to 29 characters; a longer `claude.cmd`, such as an absolute path, still prompts. | T7 limits |
+| MR79 | A user's `TermOpen` autocommand that fails stops Claude Code from starting. Observed by T7's correction and left as it is. | T7 correction, *Open* |
 
 ## Disposition
 

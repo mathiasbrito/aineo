@@ -301,4 +301,19 @@ The re-measure (`neovim-claude-code-reviewer`) confirmed findings 1–8 on `1740
 
 ## Commits
 
-*Recorded after the merge.*
+Merged by rebase into `dev` on 2026-09-25 (PR #17, final head `a036ada`; 12 commits; per-file identity 26 of 26), recorded by the orchestrator's knowledge pass:
+
+| `dev` | was | round |
+|---|---|---|
+| `fa6b28c` | `ed1eeba` | packet — Guard the suites against the real claude and refuse self-containing opts |
+| `3f4a365` | `e6462d5` | packet — Wire :Aineo, the <Plug> mappings and the prefix to the homes |
+| `9be0f36` | `6476e44` | packet — Start aineo by itself on a bare nvim, after any startup dashboard |
+| `36113d3` | `5e2d6c4` | packet — Turn three crash kills into assertions and pin the report clock |
+| `46eefbe` | `5dc3fc0` | packet — Record the T7 entry point session |
+| `cbc451f` | `7774724` | packet — Name pull request #17 in the T7 session note |
+| `cf88418` | `b5e594c` | fix round — Answer the attack and integrity findings on the entry point |
+| `cdbd1a2` | `b50c145` | fix round — Drop the redundant trim and make a layout kill an assertion |
+| `b5c935f` | `1740e8e` | fix round — Record the T7 fix round and correct the packet's records |
+| `151221a` | `91208ee` | correction — Correct the entry point's regressions the re-measure found |
+| `4956301` | `bb1b3ff` | correction — Pin the error line's framing through inputs that still reach it |
+| `201873b` | `a036ada` | correction — Record the T7 correction and the counts 1740e8e got wrong |

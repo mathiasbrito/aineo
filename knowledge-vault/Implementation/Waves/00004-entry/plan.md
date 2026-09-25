@@ -1,12 +1,12 @@
 ---
 wave: 00004
-status: claimed
+status: landed
 planned_by: the orchestrator (Claude, Opus 5.5) for Mathias Santos de Brito — host Macbook-Mathias
 planned_at: 2026-09-25 01:51 CEST
 base: bb0e185
 claimed_by: Macbook-Mathias (platform UUID prefix CF989BF4), session 619e5f9a-554c-4884-9695-132dccbcec45
 claimed_at: 2026-09-25 02:17 CEST
-landed_at:
+landed_at: 2026-09-25 08:05 CEST
 ---
 
 # Wave 4 — the entry point
@@ -78,4 +78,23 @@ T7 — literal edits on the final head, each killed by assertion:
 
 ## Landed
 
-<filled by the knowledge pass>
+- **T7 — PR #17**, merged by rebase on 2026-09-25 as `fa6b28c` … `201873b` (12 commits; per-file identity 26 of 26 with the final head `a036ada`).
+  - Reviews on Opus at `xhigh`: attack (`neovim-claude-code-reviewer`), test-integrity (`neovim-lua-reviewer`), records (`reviewer`).
+  - The fix round went to a fresh agent, the author's context being 462 K; so did the bounded correction after the re-measure (`neovim-claude-code-reviewer`, with the attack question). The re-measure found two defects the round had introduced: an E37 after closing the user's windows, and a Ctrl-key mapping overwritten.
+- **Boundaries the orchestrator widened, each stated in its round's brief:**
+  - `scripts/minimal_init.lua`, by the packet and declared: the suites' `autostart = false` preset, without which T5's interactive test editors autostart;
+  - `lua/aineo/layout/` for D15's real dashboard-nvim and R1's "only `\o` restarts";
+  - `lua/aineo/config/` for `prefix = ''`;
+  - `lua/aineo/claude/` for a not-executable line short enough for 80 columns.
+- **The orchestrator's reading of D13:** `prefix = ''` is refused. It goes to the user as MR77.
+- **The orchestrator's verification** of `a036ada`, each mutant a literal edit applied, shown and restored:
+  - the guard first — `tests/test_entry_guard.lua` 5 cases, `Fails (0)`, and no `.tests/claude` created;
+  - `make test` 613 cases, `Fails (0)`, exit 0 (431 s) at the head, and the same on T7's files laid over `dev` `516b5c0`, which had not touched them since the branch point;
+  - `make lint` clean;
+  - 10 mutants, each killed by assertion, run against the test file that targets it: M19 (a `--headless` start ran a session), M20, M21 (4 cases), M22, `-E` removed from the refusals, `v:this_session` ignored, one scheduled callback in place of two (2), the `lhsrawalt` comparison dropped, the modified-buffer keep dropped, the executable check dropped;
+  - the user's shada and Neovim log unchanged; no orphan process.
+- **The `ai/` passes of this wave:**
+  - PR #18 (`87d6c41`, `516b5c0`): a hook refusing a bare `cd` into an agent worktree from the session, reviewed and corrected, which also closed an older gap — a subagent's `gh pr merge` without `git` in the command;
+  - PR #19: the suites' isolation documented in the three places that describe it.
+- **Readings and limits for the user:** [[Review/2026-09-24 — v1 MVP readings review]], MR63–MR79.
+- **Retrospective:** [[Sessions/2026-09-25 — Wave 4 retrospective]].
