@@ -2,6 +2,9 @@
 
 local M = {}
 
+--- The namespace of the colours the Report shows.
+local REPORT_COLOURS = vim.api.nvim_create_namespace('aineo_report_colours')
+
 --- The Report buffer's name. Not a file path: a named buffer is never reused
 --- by `:edit` the way an unnamed, empty one is.
 local REPORT_BUFFER_NAME = 'aineo://report'
@@ -34,7 +37,8 @@ end
 
 --- A new Report buffer: unlisted, named `REPORT_BUFFER_NAME` from the start,
 --- no file (`'buftype'` `nofile`), no swap file, kept when hidden, and
---- read-only to the user (`'modifiable'` off; `append_lines()` still writes).
+--- read-only to the user (`'modifiable'` off; `append_rendering()` still
+--- writes).
 --- Any other buffer holding the name gives it up first: it is wiped out, or
 --- kept unnamed when the user changed its text.
 ---
@@ -103,12 +107,39 @@ end
 ---
 ---@param buffer integer
 ---@param lines string[] lines holding no newline
-function M.append_lines(buffer, lines)
+local function append_lines(buffer, lines)
   local start = is_empty(buffer) and 0 or -1
   local modifiable = vim.bo[buffer].modifiable
   vim.bo[buffer].modifiable = true
   vim.api.nvim_buf_set_lines(buffer, start, -1, false, lines)
   vim.bo[buffer].modifiable = modifiable
+end
+
+--- Adds `rendering` to the end of `buffer`: its lines, as `append_lines()`
+--- does, and its colours on them. An empty `buffer` first loses every colour
+--- still on it: `:edit` empties the Report of its text, not of its colours.
+---
+---@param buffer integer
+---@param rendering aineo.report.Rendering
+function M.append_rendering(buffer, rendering)
+  local first_line = vim.api.nvim_buf_line_count(buffer)
+  if is_empty(buffer) then
+    first_line = 0
+    vim.api.nvim_buf_clear_namespace(buffer, REPORT_COLOURS, 0, -1)
+  end
+  append_lines(buffer, rendering.lines)
+  for _, colour in ipairs(rendering.colours) do
+    vim.api.nvim_buf_set_extmark(
+      buffer,
+      REPORT_COLOURS,
+      first_line + colour.line,
+      colour.first_column,
+      {
+        end_col = colour.end_column,
+        hl_group = colour.group,
+      }
+    )
+  end
 end
 
 --- Moves the cursor of every window showing `buffer` to its last line.
