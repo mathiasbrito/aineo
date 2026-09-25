@@ -151,6 +151,50 @@ Branches: `bugfix/t9-report-colours`, `bugfix/t13-neovim-0-12`, `feature/t12-cla
 - `brief-t12-claude-numbers.md` — T12, dispatched after T13's merge.
 - `brief-review.md` — the brief reviewer's report, verbatim.
 
+## Packet T14 — 2026-09-25
+
+**The question put to the user, and the answer.** The user asked how to fix "Unsent Input is lost … completly undesired behavior". The orchestrator measured on the host's Neovim 0.12.5 that a `nofile` buffer holding text quits with exit 0, while a normal buffer gives `E37`, and offered three options:
+- keep it as a draft;
+- refuse to quit;
+- both.
+
+**Answer: "Keep it as a draft"** — D17, the task row T14.
+
+**The six rules for T14**, recomputed against every open packet (T9 in its correction, T13 in review, T12 planned) and every claimed wave (only this one):
+
+| rule | T14 |
+|---|---|
+| 1 dependencies | T8, done ✓ |
+| 2 files | A new draft home and its tests, new `tests/test_entry_*.lua` files, `plugin/aineo.lua` (the open path and the report environment), and `doc/aineo.txt` lines 51–86 (`*aineo-layout*`). **It shares `plugin/aineo.lua` with T13 (open) and with T12 (planned).** So T14 is dispatched after T13 merges, and T12 after T14 merges. With T9, only the help is shared: lines 51–86 against 253–280, fenced, with the merge and `tests/test_doc.lua` on the merged file before pushing. |
+| 3 schema | none ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | D17 decided; the save delay and the file layout are readings ✓ |
+| 6 task lines | T14 is adjacent to T13, so it holds its mark ✓ |
+
+**Baseline:** `dev` at `d35dc4f`.
+- 0.11.6: 727 cases, `Fails (0)` (`evidence/baseline-0.11.6.txt`).
+- 0.12.5: `Fails (8)` (`evidence/baseline-0.12.5.txt`).
+
+T14's own baseline is T13's merge, re-checked before dispatch.
+
+**Reviewers**, three:
+- attack by `neovim-lua-reviewer`;
+- test-integrity by `reviewer`;
+- records by `reviewer`.
+
+**Order:** T13 → T14 → T12.
+
+**Verification mutants:**
+- the delayed save dropped (only the quit saves);
+- the quit save dropped;
+- the draft restored over an Input that holds text;
+- the draft not cleared when Send clears Input;
+- the draft written in the working directory;
+- a non-atomic write;
+- the draft home loaded at startup.
+
+**Brief:** `brief-t14-input-draft.md`. Its brief review: `brief-review-t14-input-draft.md`.
+
 ## Landed
 
 <filled by the knowledge pass after each packet's merge>
