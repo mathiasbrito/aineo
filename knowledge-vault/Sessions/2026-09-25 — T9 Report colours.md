@@ -166,6 +166,7 @@ The wave holds its marks (rule 6). The line T9 would take:
   - Merging it with this branch's fix-round head gives one tree and no conflict. T13's only help change is at `*aineo-install*`.
   - `tests/test_doc.lua` on the merged `doc/aineo.txt`: 36 cases, `Fails (0)`.
   - Whichever of T9 and T13 lands second re-runs the check against the other's head. `origin/feature/t12-claude-numbers` did not exist yet.
+  - Re-run in the correction, T13 still unmerged at `84fb0e1`: `git merge-tree --write-tree` of the correction's records commit and T13's head gives one tree and no conflict. The merged help differs from T9's only at line 39 (`*aineo-install*`), and `tests/test_doc.lua` on it gives 36 cases, `Fails (0)`.
 
 ## Commits
 
