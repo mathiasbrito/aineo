@@ -51,7 +51,14 @@
 
 Wave 5 — T8, `:checkhealth aineo` and `doc/aineo.txt` (PRs #21 and #22, 2026-09-25; [[Implementation/Waves/00005-health/plan]]). **v1 is complete (T1–T8) and released as `v0.1.0`** (PR #26, `main` at `b59a54e`, 2026-09-25).
 
-**Next:** the MVP review with the user, with [[Review/2026-09-24 — v1 MVP readings review]] (MR1–MR95) as its agenda. Then wave 6, `00006-fixes`, a rolling wave opened with the first fix the user names.
+Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25 ([[Implementation/Waves/00006-fixes/plan]]; retrospective begun in [[Sessions/2026-09-26 — Wave 6 retrospective]]):
+- **Landed:** T9, the Report's colours, a small fix (PR #30, 2026-09-26). The time links to `Comment`, and `[status]` to a diagnostic group of its status, as `:highlight default link` groups a user can override.
+- **In review:** T13, Neovim 0.12 compatibility (PR #31).
+- **Next, in order:** T14, Input kept as a draft (D17), then T12, `\tcn` (D16). T10 (Report links, a small fix) and T11 (the report icon, C10) are to be planned later in the wave.
+
+**Next:**
+- The MVP review with the user, with [[Review/2026-09-24 — v1 MVP readings review]] (MR1–MR95) as its agenda.
+- Wave 7, converged with the user on 2026-09-25 and not yet planned: a changes pane beside the agent pane, and sending only Input's selection. Its rows are written with its plan; the IDs are reserved: D18–D20, C12 and C13.
 
 **Open threads:**
 - T5's `tests/test_mcp_blocked_editor.lua` writes a `v:null` file into the checkout's root when its editor autostarts — latent while the suites' preset holds; a fix belongs to T5's home.
@@ -78,3 +85,4 @@ Wave 5 — T8, `:checkhealth aineo` and `doc/aineo.txt` (PRs #21 and #22, 2026-0
 | 2026-09-25 | [[Sessions/2026-09-25 — Wave 3 retrospective]] | Wave 3 landed: T6 Send (PR #15, `1826fe9` … `bb0e185`); the `ai/` pass on narrowed mutant runs (PR #14); wave 4 (T7) planned |
 | 2026-09-25 | [[Sessions/2026-09-25 — Wave 4 retrospective]] | Wave 4 landed: T7 the entry point (PR #17, `fa6b28c` … `201873b`); `ai/` passes #18 (worktree cd guard) and #19 (suites' isolation documented); wave 5 (T8) planned |
 | 2026-09-25 | [[Sessions/2026-09-25 — Wave 5 retrospective]] | Wave 5 landed: T8 health and help (PR #21, `bf0bfad` … `1916dee`; PR #22, `7c9a12f`, `22ce027`) — v1 complete. `ai/` passes #23 (the rolling wave, `0f83767`, `f13d3db`) and #24/#25 (the small-fix class, `0ed0bbe`, `025d5d2`, `4d05f84`). Release `v0.1.0` (PR #26, `b59a54e`); GitHub branch protection turned on for `main` and `dev`. |
+| 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6 (rolling): T9, the Report's colours, landed as a small fix (PR #30, `a86a69c` … `3d67b05`) |
