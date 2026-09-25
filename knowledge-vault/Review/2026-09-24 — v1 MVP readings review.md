@@ -152,7 +152,7 @@ The IDs are `MR#`, so they collide with neither the plan's `R#` risks nor a revi
 | MR88 | The leader checks compare the leader as Neovim copies it — a string as written, a Number as its digits, `\` when unset, empty, a List, a Dictionary or a string over 48 bytes — with the prefix as typed keys; an overlap such as `\s` against `\` is not checked. | T8 reading 8 |
 | MR89 | The Claude Code section always shows the version aineo was measured against (2.1.281). | T8 reading 9 |
 | MR90 | The help's tag names, and its install line `{ 'mathiasbrito/aineo', lazy = false }`. | T8 reading 10 |
-| MR91 | `:Aineo`'s dispatcher returns its outcome, `(succeeded, failure)`, which T7's did not. Internal; listed because it changed a function's contract. | T8 reading 11 |
+| MR91 | `run()` in `plugin/aineo.lua` — the runner every `:Aineo` subcommand, `<Plug>` mapping and the autostart's open go through — now returns its outcome, `(succeeded, failure)`; T7's returned nothing. Internal; listed because it changed a function's contract. | T8 reading 11 |
 | MR92 | **The health check warns when `<Leader>` is the prefix** — the orchestrator's reading of the plan's trade-off ("aineo … lists conflicts in `:checkhealth aineo`"). A default install, with no `mapleader` and the prefix `\`, shows the warning. **The user confirms or changes it.** | T8 reading 12 |
 
 ## Limits a user can meet — health (T8)
@@ -160,8 +160,8 @@ The IDs are `MR#`, so they collide with neither the plan's `R#` risks nor a revi
 | ID | Limit | Source |
 |---|---|---|
 | MR93 | The kill reaches the command's process group only: a descendant that starts a group or a session of its own escapes it and can outlive the check. | the re-measure of PR #21, finding 3 |
-| MR94 | A check interrupted by Ctrl-C still says "did not finish within 3 s". | the T8 correction's open threads |
-| MR95 | The help's *Limits* and the check's Limits line say any earlier `VimLeavePre` handler that errors skips aineo's stop at quit (MR38); only an Ex-command autocommand's uncaught `throw` was measured doing so. | the T8 correction's open threads |
+| MR94 | A check interrupted by Ctrl-C still says "did not finish within 3 s". | the T8 note › *Correction* › *Left open* |
+| MR95 | The help's *Limits* and the check's Limits line say any earlier `VimLeavePre` handler that errors skips aineo's stop at quit (MR38); only an Ex-command autocommand's uncaught `throw` was measured doing so. | the T8 note › *Correction* › *Left open* |
 
 ## Disposition
 
