@@ -37,6 +37,10 @@ local T = MiniTest.new_set({
 
 T['a user’s editor'] = MiniTest.new_set()
 
+T['a user’s editor']['loads aineo’s report home as it starts'] = function()
+  MiniTest.expect.no_error(start_editor, 'mcp-tui-loads')
+end
+
 T['a user’s editor']['starts with no message, as in a terminal that answers its queries'] = function()
   local editor = start_editor('mcp-tui-messages')
 
