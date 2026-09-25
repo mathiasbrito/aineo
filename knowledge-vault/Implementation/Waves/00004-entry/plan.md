@@ -92,9 +92,9 @@ T7 — literal edits on the final head, each killed by assertion:
   - `make test` 613 cases, `Fails (0)`, exit 0 (431 s) at the head, and the same on T7's files laid over `dev` `516b5c0`, which had not touched them since the branch point;
   - `make lint` clean;
   - 10 mutants, each killed by assertion, run against the test file that targets it: M19 (a `--headless` start ran a session), M20, M21 (4 cases), M22, `-E` removed from the refusals, `v:this_session` ignored, one scheduled callback in place of two (2), the `lhsrawalt` comparison dropped, the modified-buffer keep dropped, the executable check dropped;
-  - the user's shada and Neovim log unchanged; no orphan process.
+  - the user's shada and Neovim log unchanged — `stat` before the verification (1790196947/48551 and 1746530923/0) and after the mutants, the same values, read in the orchestrator's session and not kept in a file; no orphan process.
 - **The `ai/` passes of this wave:**
   - PR #18 (`87d6c41`, `516b5c0`): a hook refusing a bare `cd` into an agent worktree from the session, reviewed and corrected, which also closed an older gap — a subagent's `gh pr merge` without `git` in the command;
-  - PR #19: the suites' isolation documented in the three places that describe it.
+  - PR #19 (`34b164e`, `a9e2d4e`): the suites' isolation documented in the three places that describe it; its records review found four gaps, which the second commit corrected, checked by the orchestrator.
 - **Readings and limits for the user:** [[Review/2026-09-24 — v1 MVP readings review]], MR63–MR79.
 - **Retrospective:** [[Sessions/2026-09-25 — Wave 4 retrospective]].

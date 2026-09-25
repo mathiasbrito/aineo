@@ -28,7 +28,7 @@ landed_at:
 
 | packet | tasks | type / model | files | schema? | dependency change? | decision open? | task-line marks |
 |---|---|---|---|---|---|---|---|
-| `t8-health` | T8 | `neovim-lua-developer` / opus (effort `high`) | `lua/aineo/health.lua` (new), `doc/aineo.txt` (new), `plugin/aineo.lua` (HB5's record only), `tests/test_health.lua` and `tests/test_doc.lua` (new), new `tests/helpers/health*`, new modes in `tests/helpers/fake_claude.lua`, `tests/fixtures/health/**`, its session note | none | no | none — readings stated (the version bound, warning or error per line, HB5's reasons) | held |
+| `t8-health` | T8 | `neovim-lua-developer` / opus (effort `high`) | `lua/aineo/health.lua` (new), `doc/aineo.txt` (new), `plugin/aineo.lua` (HB5's record only, in an editor variable), `tests/test_health.lua` and `tests/test_doc.lua` (new), new `tests/helpers/health*`, new modes in `tests/helpers/fake_claude.lua`, `tests/fixtures/health/**`, its session note | none | no | none — readings stated (the version bound, warning or error per line, HB5's reasons) | held |
 
 1. **Dependencies.** T8 depends on T7 (the plan's row), which has landed.
 2. **File sets.** One packet. PR #19, an `ai/` pass, touches only agent documentation and the root `CLAUDE.md`.
@@ -62,7 +62,7 @@ T8 — literal edits on the final head, each killed by assertion:
 ## Briefs
 
 - `brief-t8-health.md` — the T8 packet.
-- `brief-review.md` — the brief reviewer's report, verbatim.
+- `brief-review.md` — the brief reviewer's report, verbatim but for paths (Opus, at PR #20's head `f63b2dc`; cut off once by a stream timeout and resumed): **dispatch after corrections**, findings 1–3 required. Every CONFIRMED and MISSING item is corrected in `brief-t8-health.md`: one reading of the version check, the whole `claude.cmd` with `--version`, tested with a script of its own (1); HB5's record in an editor variable, T1's two `test_plugin.lua` pins frozen (2); the effective local leader, unset meaning `\` (3); HB5's missing reasons and their order (4); `wait()` returning `nil` (5); "passes" meaning no error (6); HB1's wording (7); HB4's fifth case (8); the pins, the documentation to keep true, and the Claude home's private check (9).
 
 ## Landed
 

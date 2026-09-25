@@ -21,14 +21,14 @@
 |---|---|
 | 01:53–02:18 | PR #16 (wave 3's close, wave 4's plan): a records review and a brief review; the brief review found the orchestrator's test route dead and no guard against the real `claude`; corrected, claimed, merged |
 | 02:18 | T7 dispatched (`neovim-lua-developer`) |
-| 03:52 | PR #17 in: 573 cases, 50 mutants; three reviews |
+| 03:52 | PR #17 in: 573 cases, 50 mutant runs (48 distinct edits); three reviews |
 | 04:15–05:11 | records, attack and test-integrity in; the attack review ran the real dashboards and broke five guarantees |
 | 05:11 | the fix round to a fresh agent (the author at 462 K), its boundary widened to the layout and the configuration |
 | 05:14–05:30 | beside it, PR #18: the worktree `cd` guard, reviewed, corrected and merged — the review also found an older gap in the merge refusal |
 | 06:26 | the round in; the re-measure with the attack question |
 | 06:56 | the re-measure found two defects the round had introduced; the bounded correction to a fresh agent, its boundary widened to the Claude home for the 80-column line |
 | 08:01–08:05 | the correction in; the orchestrator's verification; merged |
-| 08:07 | PR #19: the suites' isolation documented, under review |
+| 08:06–10:20 | PR #19, the suites' isolation documented (opened 08:06 by GitHub's time): reviewed, corrected by `a9e2d4e`, merged |
 
 **Findings, per review** (the verdicts are the reviewers'):
 
@@ -40,7 +40,7 @@
 | test-integrity, #17 | `neovim-lua-reviewer` | no test typed a prefix key; the EP10 pin ran only under the suites' preset; 8 surviving mutants, each with a probe |
 | records, #17 | `reviewer` | 9 CONFIRMED, 3 MISSING — the isolation now undocumented in three places |
 | review, #18 | `reviewer` | 6 CONFIRMED — the guard refused multi-line prose and missed common shapes; an older gap in the merge refusal |
-| re-measure, #17 | `neovim-claude-code-reviewer` | two defects the round introduced, four smaller, the 80-column line measured |
+| re-measure, #17 | `neovim-claude-code-reviewer` | two defects the round introduced, the round's records regression (R6's miscount back: 35 → 32 distinct edits), four smaller, the 80-column line measured |
 
 **Rounds on #17:** the packet (573 cases), a fix round by a fresh agent (603), a bounded correction by a fresh agent (613). The orchestrator's verification is in [[Implementation/Waves/00004-entry/plan]] › *Landed*.
 
@@ -58,14 +58,16 @@
 | re-measure, #17 — `neovim-claude-code-reviewer` | 154 | 340,155 | 308 | 319,893 | 31,481,114 | 14,385 |
 | bounded correction, #17 — `neovim-lua-developer` | 148 | 300,425 | 296 | 1,077,386 | 27,592,814 | 5,105 |
 | review, #18 (cd guard) — `reviewer` | 47 | 136,088 | 94 | 120,182 | 3,808,102 | 2,026 |
+| `claude-code-guide`, spawned by the PR #18 reviewer to read the hooks documentation — **Claude Haiku 4.5** | 9 | 22,851 | 76 | 22,841 | 159,884 | 554 |
 
 ## Deviations and disclosures
 
 - **Three boundaries widened by the orchestrator, one declared by the packet:** `scripts/minimal_init.lua`'s autostart preset (declared); the layout for D15 and R1; the configuration for `prefix = ''`; the Claude home for the 80-column line. Each is stated in its round's brief and in the plan's *Landed*.
 - **`prefix = ''` is refused on the orchestrator's reading of D13** — "a string" read as at least one key. It is not converged with the user: it is MR77, for the user to confirm.
-- **PR #16's corrections, PR #18's correction and PR #19 merged, or will merge, checked by the orchestrator and one reviewer at most:** #16's corrections were not re-reviewed; #18's correction adopted the reviewer's measured hook and was checked by the orchestrator.
+- **Corrections merged checked only by the orchestrator:** PR #16's (`1af3af9`); PR #18's (`516b5c0`), which adopted the reviewer's measured hook; PR #19's (`a9e2d4e`), which answered its records review's four findings.
+- **One context of the wave ran on another model:** the PR #18 reviewer spawned a `claude-code-guide` agent, on Claude Haiku 4.5, to read the hooks documentation (the cost row above). The Opus rule binds what the orchestrator dispatches; whether it binds an agent's own helpers is a question for the adjustment pass.
 - **The orchestrator misread its own measurement:** it recorded an `nvim --embed` test route whose output showed the child dying. The brief review caught it before dispatch.
-- **The orchestrator combined a push with `git checkout dev` once more** (08:07); the branch guard refused the whole call and nothing ran.
+- **The orchestrator combined a push with `git checkout dev` once more** (08:06); the branch guard refused the whole call and nothing ran.
 - **Claude Code updated itself to 2.1.282** during the wave; waves 2–4 measured 2.1.281.
 - **The real Claude Code ran for no measurement this wave** beyond `claude --version` (no session, no model turn).
 
@@ -74,7 +76,8 @@
 - T7, PR #17: `fa6b28c` … `201873b` (12 commits) — [[Sessions/2026-09-25 — T7 entry point]] › *Commits*.
 - The wave-3 close and wave-4 plan, PR #16: `af62a1d`, `1af3af9`, `2c39d31`.
 - The `ai/` pass, PR #18: `87d6c41`, `516b5c0`.
-- This knowledge pass, and PR #19: recorded after their merges by the next one.
+- The `ai/` pass, PR #19: `34b164e`, `a9e2d4e`.
+- This knowledge pass: recorded after its merge by the next one.
 
 ## Decisions & reasoning
 
@@ -84,6 +87,8 @@
 ## Learnings extracted
 
 - [[Learnings/An RPC request to a Neovim at a hit-enter prompt waits until it is answered]]
+
+The T7 note's other candidates, declined: the `v:echospace` hit-enter point is part of that Learning's *Why it matters*; "a suite's interactive editor autostarts unless preset" is MR74 and the root `CLAUDE.md` since PR #19; "in the TUI the server's `v:argv` is `nvim --embed <user args>`, and `-c`/`+` commands run before `VimEnter`" and "with `bar`, a user command's argument loses its trailing space" are single facts T7's code and note already hold, too narrow to stand alone.
 
 **What the process taught:**
 - The attack reviewer ran the real third-party plugins the packet had only read, and found the one stand-in that modelled them wrongly.
