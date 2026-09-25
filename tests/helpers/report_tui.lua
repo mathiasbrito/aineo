@@ -8,8 +8,11 @@ local M = {}
 local CHECKOUT = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h:h')
 local MINIMAL_INIT = vim.fs.joinpath(CHECKOUT, 'scripts', 'minimal_init.lua')
 
---- How long the helper waits for the editor to listen, to finish starting,
---- to reach a mode, or to exit.
+--- How long the helper waits for the editor: to listen and to finish
+--- starting, each of which raises an error naming its wait when the time
+--- runs out (`wait_for_server`, `wait_for_startup`); to reach a hit-enter
+--- prompt or to show a Report, which answer with what they saw by then; and
+--- to exit, after which the helper goes on.
 local WAIT_MS = 5000
 
 --- The Device Status Report query (`CSI 5 n`) Neovim's TUI writes to its
@@ -79,20 +82,64 @@ function TuiEditor:stop()
   vim.fn.jobwait({ self.job }, WAIT_MS)
 end
 
---- Waits, at most `WAIT_MS`, until the editor on `channel` has finished
---- starting (`VimEnter`), so that its init has put the checkout on
---- `'runtimepath'`: while it starts, the editor may serve requests from
---- inside a wait of its own. Raises an error naming this wait when the
---- editor has not finished starting by then.
+--- Waits, at most `WAIT_MS`, until the editor listens on its socket
+--- `address`. Raises an error naming this wait when it does not listen by
+--- then.
+---
+---@param address string
+local function wait_for_server(address)
+  local listening = vim.wait(WAIT_MS, function()
+    return vim.uv.fs_stat(address) ~= nil
+  end, 20)
+  if not listening then
+    error(('the editor did not listen on %s within %d ms'):format(address, WAIT_MS), 0)
+  end
+end
+
+--- The `--cmd` that makes an editor write the empty file `mark` once it has
+--- finished starting and waits for the user's keys: at `VimEnter`, after its
+--- init has run, it schedules the write (`vim.schedule`), which the editor
+--- runs from its event loop — not while it waits at a hit-enter prompt,
+--- where it shows the messages of its startup after `VimEnter`.
+---
+---@param mark string
+---@return string
+local function command_marking_startup(mark)
+  local write_mark = ('vim.schedule(function() vim.fn.writefile({}, %q) end)'):format(mark)
+  return ("lua vim.api.nvim_create_autocmd('VimEnter', { once = true, callback = function() %s end })"):format(
+    write_mark
+  )
+end
+
+--- Waits, at most `WAIT_MS`, until the editor on `channel` has written its
+--- startup `mark` (`command_marking_startup`): its init has then put the
+--- checkout on `'runtimepath'`, and it does not wait at a prompt. The wait
+--- asks the editor nothing, since a starting editor may serve a request
+--- before its init has run, and one waiting at a hit-enter prompt holds a
+--- request until the user answers. Raises an error naming this wait when the
+--- mark is not written by then, which says that the editor waits for the
+--- user when `nvim_get_mode()`, answered even at a prompt, says so.
 ---
 ---@param channel integer
-local function wait_for_startup(channel)
+---@param mark string
+local function wait_for_startup(channel, mark)
   local started = vim.wait(WAIT_MS, function()
-    return vim.rpcrequest(channel, 'nvim_get_vvar', 'vim_did_enter') == 1
+    return vim.uv.fs_stat(mark) ~= nil
   end, 20)
-  if not started then
-    error(('the editor did not finish starting (VimEnter) within %d ms'):format(WAIT_MS), 0)
+  if started then
+    return
   end
+  local mode = vim.rpcrequest(channel, 'nvim_get_mode')
+  if mode.blocking then
+    error(
+      ('the editor waits for the user (mode %s) and did not finish starting (VimEnter) within %d ms'):format(
+        mode.mode,
+        WAIT_MS
+      ),
+      0
+    )
+  end
+  error(('the editor did not finish starting (VimEnter) within %d ms'):format(WAIT_MS), 0)
 end
 
 --- The editor's `on_stdout` handler: answers each status query in the
@@ -115,20 +162,26 @@ end
 ---@return aineo.test.TuiEditor
 function M.start(environment)
   local address = vim.fn.tempname() .. '.sock'
-  local job = vim.fn.jobstart(
-    { vim.v.progpath, '--clean', '-n', '-u', MINIMAL_INIT, '--listen', address },
-    { pty = true, width = 80, height = 24, on_stdout = answer_status_queries }
-  )
+  local startup_mark = address .. '.started'
+  local job = vim.fn.jobstart({
+    vim.v.progpath,
+    '--clean',
+    '-n',
+    '-u',
+    MINIMAL_INIT,
+    '--cmd',
+    command_marking_startup(startup_mark),
+    '--listen',
+    address,
+  }, { pty = true, width = 80, height = 24, on_stdout = answer_status_queries })
   table.insert(running, job)
-  vim.wait(WAIT_MS, function()
-    return vim.uv.fs_stat(address) ~= nil
-  end, 20)
+  wait_for_server(address)
   local editor = setmetatable({
     job = job,
     address = address,
     channel = vim.fn.sockconnect('pipe', address, { rpc = true }),
   }, TuiEditor)
-  wait_for_startup(editor.channel)
+  wait_for_startup(editor.channel, startup_mark)
   editor.server_pid = vim.rpcrequest(editor.channel, 'nvim_call_function', 'getpid', {})
   vim.rpcrequest(
     editor.channel,
