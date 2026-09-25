@@ -1,9 +1,90 @@
-# The report icons' bytes and display widths, measured by the orchestrator on 2026-09-26
-# Command: nvim --clean -u NONE -i NONE --headless -l <probe>, the probe setting vim.o.ambiwidth and printing #icon and vim.fn.strdisplaywidth(icon) for each icon.
-# First the host's Homebrew Neovim, then the downloaded 0.11.6 build.
+# The report icons' bytes and display widths, measured by the orchestrator on 2026-09-26.
+# Each probe runs as: nvim --clean -u NONE -i NONE --headless -l <probe>, first on the host's Homebrew Neovim, then on the downloaded 0.11.6 build.
+
+## The orchestrator's probe
+#   local icons = { started = '▸', progress = '◐', blocked = '⊘', done = '✓', failed = '✗' }
+#   local out = { 'nvim ' .. tostring(vim.version()) }
+#   for _, aw in ipairs({ 'single', 'double' }) do
+#     vim.o.ambiwidth = aw
+#     local row = { 'ambiwidth=' .. aw }
+#     for _, s in ipairs({ 'started', 'progress', 'blocked', 'done', 'failed' }) do
+#       local i = icons[s]
+#       table.insert(row, ('%s %s bytes=%d width=%d'):format(s, i, #i, vim.fn.strdisplaywidth(i)))
+#     end
+#     table.insert(out, table.concat(row, ' | '))
+#   end
+#   io.stdout:write(table.concat(out, '\n') .. '\n')
+# Output:
 nvim 0.12.5
 ambiwidth=single | started ▸ bytes=3 width=1 | progress ◐ bytes=3 width=1 | blocked ⊘ bytes=3 width=1 | done ✓ bytes=3 width=1 | failed ✗ bytes=3 width=1
 ambiwidth=double | started ▸ bytes=3 width=1 | progress ◐ bytes=3 width=2 | blocked ⊘ bytes=3 width=1 | done ✓ bytes=3 width=1 | failed ✗ bytes=3 width=1
 nvim 0.11.6+ge8b87a554f
 ambiwidth=single | started ▸ bytes=3 width=1 | progress ◐ bytes=3 width=1 | blocked ⊘ bytes=3 width=1 | done ✓ bytes=3 width=1 | failed ✗ bytes=3 width=1
 ambiwidth=double | started ▸ bytes=3 width=1 | progress ◐ bytes=3 width=2 | blocked ⊘ bytes=3 width=1 | done ✓ bytes=3 width=1 | failed ✗ bytes=3 width=1
+
+## The brief reviewer's probe, re-run by the orchestrator after the brief review
+# It adds setcellwidths() rows. 'sdw' is strdisplaywidth(icon); 'prefix' is the display width of '<icon> 09:05 '.
+#   local icons = {
+#     { 'started', '▸' },
+#     { 'progress', '◐' },
+#     { 'blocked', '⊘' },
+#     { 'done', '✓' },
+#     { 'failed', '✗' },
+#   }
+#   local function row(label)
+#     local parts = { label }
+#     for _, pair in ipairs(icons) do
+#       local icon = pair[2]
+#       table.insert(
+#         parts,
+#         ('%s %s U+%04X bytes=%d sdw=%d prefix=%d'):format(
+#           pair[1],
+#           icon,
+#           vim.fn.char2nr(icon),
+#           #icon,
+#           vim.fn.strdisplaywidth(icon),
+#           vim.fn.strdisplaywidth(icon .. ' 09:05 ')
+#         )
+#       )
+#     end
+#     io.stdout:write(table.concat(parts, ' | ') .. '\n')
+#   end
+#   io.stdout:write(vim.fn.execute('version'):match('NVIM [^\n]+') .. '\n')
+#   vim.o.ambiwidth = 'single'
+#   row('ambiwidth=single')
+#   local ok, err = pcall(function()
+#     vim.o.ambiwidth = 'double'
+#   end)
+#   io.stdout:write('set ambiwidth=double: ' .. tostring(ok) .. ' ' .. tostring(err) .. '\n')
+#   row('ambiwidth=double')
+#   vim.o.ambiwidth = 'single'
+#   local ok2, err2 = pcall(vim.fn.setcellwidths, { { 0x2713, 0x2713, 2 } })
+#   io.stdout:write('setcellwidths(U+2713 -> 2): ' .. tostring(ok2) .. ' ' .. tostring(err2) .. '\n')
+#   row('single + setcellwidths(done=2)')
+#   vim.fn.setcellwidths({})
+#   vim.o.ambiwidth = 'double'
+#   local ok3, err3 = pcall(vim.fn.setcellwidths, { { 0x25D0, 0x25D0, 1 } })
+#   io.stdout:write('setcellwidths(U+25D0 -> 1) under double: ' .. tostring(ok3) .. ' ' .. tostring(err3) .. '\n')
+#   row('double + setcellwidths(progress=1)')
+#   vim.fn.setcellwidths({})
+#   vim.o.ambiwidth = 'single'
+#   io.stdout:write('fillchars=[' .. vim.o.fillchars .. '] listchars=[' .. vim.o.listchars .. ']\n')
+# Output:
+NVIM v0.12.5
+ambiwidth=single | started ▸ U+25B8 bytes=3 sdw=1 prefix=8 | progress ◐ U+25D0 bytes=3 sdw=1 prefix=8 | blocked ⊘ U+2298 bytes=3 sdw=1 prefix=8 | done ✓ U+2713 bytes=3 sdw=1 prefix=8 | failed ✗ U+2717 bytes=3 sdw=1 prefix=8
+set ambiwidth=double: true nil
+ambiwidth=double | started ▸ U+25B8 bytes=3 sdw=1 prefix=8 | progress ◐ U+25D0 bytes=3 sdw=2 prefix=9 | blocked ⊘ U+2298 bytes=3 sdw=1 prefix=8 | done ✓ U+2713 bytes=3 sdw=1 prefix=8 | failed ✗ U+2717 bytes=3 sdw=1 prefix=8
+setcellwidths(U+2713 -> 2): true 0
+single + setcellwidths(done=2) | started ▸ U+25B8 bytes=3 sdw=1 prefix=8 | progress ◐ U+25D0 bytes=3 sdw=1 prefix=8 | blocked ⊘ U+2298 bytes=3 sdw=1 prefix=8 | done ✓ U+2713 bytes=3 sdw=2 prefix=9 | failed ✗ U+2717 bytes=3 sdw=1 prefix=8
+setcellwidths(U+25D0 -> 1) under double: true 0
+double + setcellwidths(progress=1) | started ▸ U+25B8 bytes=3 sdw=1 prefix=8 | progress ◐ U+25D0 bytes=3 sdw=1 prefix=8 | blocked ⊘ U+2298 bytes=3 sdw=1 prefix=8 | done ✓ U+2713 bytes=3 sdw=1 prefix=8 | failed ✗ U+2717 bytes=3 sdw=1 prefix=8
+fillchars=[] listchars=[tab:> ,trail:-,nbsp:+]
+NVIM v0.11.6
+ambiwidth=single | started ▸ U+25B8 bytes=3 sdw=1 prefix=8 | progress ◐ U+25D0 bytes=3 sdw=1 prefix=8 | blocked ⊘ U+2298 bytes=3 sdw=1 prefix=8 | done ✓ U+2713 bytes=3 sdw=1 prefix=8 | failed ✗ U+2717 bytes=3 sdw=1 prefix=8
+set ambiwidth=double: true nil
+ambiwidth=double | started ▸ U+25B8 bytes=3 sdw=1 prefix=8 | progress ◐ U+25D0 bytes=3 sdw=2 prefix=9 | blocked ⊘ U+2298 bytes=3 sdw=1 prefix=8 | done ✓ U+2713 bytes=3 sdw=1 prefix=8 | failed ✗ U+2717 bytes=3 sdw=1 prefix=8
+setcellwidths(U+2713 -> 2): true 0
+single + setcellwidths(done=2) | started ▸ U+25B8 bytes=3 sdw=1 prefix=8 | progress ◐ U+25D0 bytes=3 sdw=1 prefix=8 | blocked ⊘ U+2298 bytes=3 sdw=1 prefix=8 | done ✓ U+2713 bytes=3 sdw=2 prefix=9 | failed ✗ U+2717 bytes=3 sdw=1 prefix=8
+setcellwidths(U+25D0 -> 1) under double: true 0
+double + setcellwidths(progress=1) | started ▸ U+25B8 bytes=3 sdw=1 prefix=8 | progress ◐ U+25D0 bytes=3 sdw=1 prefix=8 | blocked ⊘ U+2298 bytes=3 sdw=1 prefix=8 | done ✓ U+2713 bytes=3 sdw=1 prefix=8 | failed ✗ U+2717 bytes=3 sdw=1 prefix=8
+fillchars=[] listchars=[tab:> ,trail:-,nbsp:+]
