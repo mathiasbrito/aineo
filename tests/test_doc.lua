@@ -44,10 +44,13 @@ local function start_with_help()
 end
 
 --- Where `:help <tag>` lands in `child`: the help file's name and the line
---- the cursor is on.
+--- the cursor is on; when `:help` finds nothing, no file but its error.
 local HELP_LANDING = [[
   local tag = ...
-  vim.cmd.help(tag)
+  local found, failure = pcall(vim.cmd.help, tag)
+  if not found then
+    return { file = 'no help: ' .. tostring(failure), line = '' }
+  end
   return { file = vim.fn.expand('%:t'), line = vim.api.nvim_get_current_line() }
 ]]
 
