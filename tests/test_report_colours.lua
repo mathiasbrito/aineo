@@ -162,6 +162,24 @@ T['the records']['show their time and status coloured when the Report opens'] = 
   )
 end
 
+T['the records']['show in groups linked to their defaults when the Report opens'] = function()
+  local state_directory = fixture.directory('report-colours-state')
+  local environment = { state_directory = state_directory, working_directory = '/projects/alpha' }
+  report_editor.start(
+    child,
+    vim.tbl_extend('error', environment, { times = { '2026-09-24T09:05:00' } })
+  )
+  report_editor.receive(child, { task = 'First', status = 'done', summary = 'Ended' })
+  report_editor.start(
+    child,
+    vim.tbl_extend('error', environment, { times = { '2026-09-24T10:00:00' } })
+  )
+
+  child.lua([[require('aineo.report').report_buffer()]])
+
+  eq({ link_of('AineoReportTime'), link_of('AineoReportDone') }, { 'Comment', 'DiagnosticOk' })
+end
+
 T['the records']['show their colours once again when the user edits the Report again'] =
   MiniTest.new_set({
     parametrize = { { 'edit' }, { 'edit!' } },
@@ -194,7 +212,20 @@ T['the groups']["keep a user's colour made before the first report"] = function(
   eq(child.lua_get([[vim.api.nvim_get_hl(0, { name = 'AineoReportDone' })]]), { fg = 0xff0000 })
 end
 
-T['the groups']['are not defined, nor their autocommand, until the Report shows a report'] = function()
+T['the groups']["link to their defaults again when :highlight clear drops a user's colour made before the first report"] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  child.cmd('highlight AineoReportDone guifg=#ff0000')
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+
+  child.cmd('highlight clear')
+
+  eq(
+    child.lua_get([[vim.api.nvim_get_hl(0, { name = 'AineoReportDone' })]]),
+    { link = 'DiagnosticOk' }
+  )
+end
+
+T['the groups']['are not defined, nor any ColorScheme autocommand, until the Report shows a report'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
   child.lua([[require('aineo.report').report_buffer()]])
@@ -205,10 +236,19 @@ T['the groups']['are not defined, nor their autocommand, until the Report shows 
         'AineoReportTime', 'AineoReportStarted', 'AineoReportProgress',
         'AineoReportBlocked', 'AineoReportDone', 'AineoReportFailed',
       }),
-      vim.fn.exists('#aineo_report_colours'),
+      #vim.api.nvim_get_autocmds({ event = 'ColorScheme' }),
     }]]),
     { { 0, 0, 0, 0, 0, 0 }, 0 }
   )
+end
+
+T['the groups']['need no ColorScheme autocommand, however many reports came'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+
+  eq(child.lua_get([[#vim.api.nvim_get_autocmds({ event = 'ColorScheme' })]]), 0)
 end
 
 --- Puts two colour schemes on the child's 'runtimepath': `colours_done`,
@@ -238,7 +278,7 @@ T['the groups']['link to their defaults again when a colour scheme that colours 
 
   eq(
     child.lua_get([[vim.api.nvim_get_hl(0, { name = 'AineoReportDone' })]]),
-    { link = 'DiagnosticOk', default = true }
+    { link = 'DiagnosticOk' }
   )
 end
 
