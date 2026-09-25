@@ -8,9 +8,9 @@ The task, verbatim from the task list:
 
 > | T9 | Report colours (C6): the time in `Comment`'s colour and `[status]` in a colour of its status, as highlight groups a user can override — a small fix (the user, 2026-09-25) | T8 | active |
 
-It rests on C6 (the Report's format and rendering) and C10 (which supersedes C6's rendered line and colours the icon like the status — a later packet, T11, adds the icon; this packet adds no icon and does not change a line's text).
+It rests on C6, the Report's format and rendering. C10 is context only: it supersedes C6's rendered line and colours the icon like the status. A later packet (the icon, C10) adds the icon; this packet adds no icon and does not change a line's text.
 
-### The behaviours — one test each, each seen red first
+### The behaviours — RC1 to RC5 one test each, each seen red first; RC6 and RC7 are invariants
 
 - **RC1 — the time.** In every Report line that starts a report, the `HH:MM` is shown in the highlight group `AineoReportTime`, which links by default to `Comment`.
 - **RC2 — the status.** The `[status]`, brackets included, is shown in a group of its status:
@@ -24,10 +24,13 @@ It rests on C6 (the Report's format and rendering) and C10 (which supersedes C6'
   | `failed` | `AineoReportFailed` | `DiagnosticError` |
 
 - **RC3 — only what the render placed.** The colours cover exactly the columns the render wrote the time and the status into. A task, summary or details line that contains text like `[done]` or `12:34` gets no colour.
-- **RC4 — a user's colours win, and survive a colour scheme.** The groups are defined as defaults (`default = true`), so a user's own `:highlight` of a group, or a colour scheme that defines it, wins. They are still linked after `:colorscheme` changes the scheme.
-- **RC5 — every path shows them.** Reports shown again from the saved records when the Report opens get the same colours as a report that arrives while it is open.
-- **RC6 — the text is unchanged.** Every line's text is what it was: the existing tests of the rendered lines stay green unchanged.
-- **RC7 — nothing at startup.** Loading aineo defines no highlight group and adds no autocommand. The frozen pins `tests/test_plugin.lua` › *loads the configuration alone in a headless start* and *defines :Aineo, its <Plug> mappings, the prefix mappings and, once started, the StdinReadPost autocommand alone* stay as they are and green. The groups are defined when the Report first shows a report, or later.
+- **RC4 — a user's colours win, and survive a colour scheme.** The groups are defined as defaults (`default = true`).
+  - A user's `:highlight`, or a colour scheme's, made before the Report first shows a report, wins.
+  - After `:colorscheme` switches to a scheme that does not define a group, the group is linked to its default again. That includes a group the earlier scheme had defined before aineo first defined it.
+  - Measured by the brief review on 0.11.6 and 0.12.5: a default link aineo sets first survives `:colorscheme` and `:highlight clear` without being defined again. So only a test in which a scheme defined the group *before* aineo's first definition, then a scheme without it is loaded, shows whether aineo defines the groups again.
+- **RC5 — every path shows them.** A report that arrives while the Report is open is coloured. So are reports shown again from the saved records, both when the Report opens and when `:edit` in the Report empties it and `BufReadCmd` fills it again through `show_records()` (`lua/aineo/report/buffer.lua`, lines 41–61). No refill leaves stale colour behind.
+- **RC6 — the text is unchanged (an invariant).** Every line's text is what it was: the existing tests of the rendered lines stay green unchanged. Show that they can fail: a mutant that changes one character of the rendered header turns them red.
+- **RC7 — nothing at startup.** Loading aineo defines no highlight group and adds no autocommand. The frozen pins `tests/test_plugin.lua` › *loads the configuration alone in a headless start* and *defines :Aineo, its <Plug> mappings, the prefix mappings and, once started, the StdinReadPost autocommand alone* stay as they are and green. The groups are defined when the Report first shows a report, or later. This is an invariant, green on `dev` today. Show that its pins can fail: a mutant that defines the groups at `require('aineo.report')`, or in `plugin/aineo.lua`, turns a pin red.
 
 The seam is yours under `tdd`. For example, the render could return its highlight spans beside its lines, where the `HH:MM` and `[status]` columns are known, rather than matching the text afterwards (RC3).
 
@@ -41,11 +44,17 @@ The seam is yours under `tdd`. For example, the render could return its highligh
 
 ### Baseline
 
-- **On 0.11.6** (D10's minimum): the code at `9af91a6` is identical to `a9f8027`, which ran 727 cases, `Fails (0)` (the wave-5 verification).
-- **On 0.12.5**, the host's `nvim` since 2026-09-25: 727 cases, `Fails (8)` (`evidence/baseline-0.12.5.txt`). None of the eight is yours; T13 fixes them in parallel.
+- **On 0.11.6** (D10's minimum), the downloaded build: 727 cases, `Fails (0)` at `9af91a6` (`evidence/baseline-0.11.6.txt`).
+- **On 0.12.5**: 727 cases, `Fails (8)`, measured on the downloaded 0.12.5 build (`evidence/baseline-0.12.5.txt`). The brief review reproduced the eight on the host's Homebrew 0.12.5, file by file. None of the eight is yours; T13 fixes them in parallel.
 - **So run the whole suite on both versions:**
-  - with `<scratchpad>/nvim-0.11.6/nvim-macos-arm64/bin/nvim` first on `PATH`, where it must be green;
-  - with the host's 0.12.5, where it must show those eight failures and no other.
+  - **On 0.11.6, where it must be green.** Put the downloaded build first on `PATH` in this literal form; the worktree guard refuses `PATH=…:$PATH make`:
+
+    ```
+    env PATH=<builds>/nvim-0.11.6/nvim-macos-arm64/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin make test
+    ```
+
+    Children started through `vim.v.progpath` then run 0.11.6 too.
+  - **On the host's 0.12.5**, where it must show those eight failures and no other.
 
   Report both counts.
 
@@ -74,9 +83,14 @@ Read first:
   - The task list: this wave holds its marks (rule 6). Write a `## Task lines` section in your session note instead.
   - The project note.
   - `.claude/`, `.githooks/`, `CLAUDE.md`, `.worktreeinclude`, `.gitignore`.
-- **The help is shared under rule 2's section exception.** Before you push, re-run the merge check against each branch that exists of T13 and T12: `git fetch origin && git merge-tree --write-tree <your head> origin/bugfix/t13-neovim-0-12`, and likewise with `origin/feature/t12-claude-numbers` (exit 0 and no conflict listed means clean). Report the result.
+- **A document shared under rule 2's section exception:** `doc/aineo.txt`.
+  - **Your section** runs from its first line, `8. THE AGENT REPORT                                             *aineo-report*` (line 253 at `9af91a6`), to its last, `the working directory of its own moment.` (line 280).
+  - **The other packets:** T13 edits the section from `2. REQUIREMENTS AND INSTALLATION                               *aineo-install*` to ``|aineo-configuration|; then run `:checkhealth aineo` (|aineo-health|).`` (lines 36–48). T12, dispatched after T13's merge, edits `4. COMMANDS …*aineo-commands*` to `of both (|aineo-health|).` (lines 89–177).
+  - Every hunk stays inside your section.
+  - **Before you push:** merge with each branch that exists — `git fetch origin && git merge-tree --write-tree <your head> origin/bugfix/t13-neovim-0-12`, and likewise with `origin/feature/t12-claude-numbers` (exit 0 and no conflict listed means clean). Then run `make test_file FILE=tests/test_doc.lua` on the merged `doc/aineo.txt`, which catches a tag both sides added (E154). Report both results.
 - **Session note:** `knowledge-vault/Sessions/2026-09-25 — T9 Report colours.md`.
-- **Scratch prefix:** `t9-`, under `<scratchpad>` — the orchestrator's scratch directory, which your dispatch message names.
+- **Where you write:** `<scratchpad>` is `.claude/local/orchestrator/` inside **your own worktree** (gitignored). The harness refuses writes outside your worktree. Prefix every file there with `t9-`.
+- **Where you read builds:** `<builds>` is the orchestrator's scratch directory, which your dispatch message names. You read and run its Neovim builds there, and write nothing.
 - Anything outside the boundary is a **spec conflict** for your report.
 
 ## What was decided already
@@ -84,7 +98,7 @@ Read first:
 - The user asked for "Time as comment color, [<status/state>] some color" (2026-09-25).
 - The user called this a small fix ("Small fixes where allowed").
 - The colour of each status (RC2) is the orchestrator's reading, for the user to confirm. Name it in your session note's *Readings for the MVP review*.
-- The icon at the line's start is C10 and packet T11, which is not yours.
+- The icon at the line's start is C10, a later packet's, not yours.
 
 ## Budget
 

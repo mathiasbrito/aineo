@@ -27,7 +27,7 @@ landed_at:
 
   Three reach the user: an action's error reads `aineo: Lua: …`, a tool error Claude gets carries `Lua: `, and a health warning names `vim/_core/system:326:`. **T13** makes the suite green on 0.12.5.
 
-On 0.11.6, D10's minimum, the same code ran 727 cases, `Fails (0)` (the wave-5 verification of `a9f8027`). The orchestrator's verification in this wave runs the suite on both 0.12.5 and a downloaded 0.11.6.
+**Neovim 0.11.6**, D10's minimum, from the downloaded `nvim-macos-arm64.tar.gz` of v0.11.6 (sha256 `d5ee93b6…c1dd`, matching the release's digest), first on `PATH`, at `9af91a6`: 727 cases, `Fails (0)`, in 489 s (`evidence/baseline-0.11.6.txt`). The 0.12.5 figure above is also the downloaded build's; the brief review reproduced its eight failures on the host's Homebrew 0.12.5, file by file. The orchestrator's verification in this wave runs the suite on the host's 0.12.5 and on the downloaded 0.11.6.
 
 ## Measured before planning
 
@@ -49,29 +49,35 @@ On 0.11.6, D10's minimum, the same code ran 727 cases, `Fails (0)` (the wave-5 v
 | 1 | Ctrl+N to leave Terminal mode in Claude's terminal | **Dropped** — Claude Code binds `ctrl+n`; offered a free key or Ctrl+N anyway, the user chose "No new key" |
 | 2 | `\tcn` toggles line numbers in Claude's window | **T12**, regular (D16): it changes `lua/aineo/health.lua`'s key table, which a small fix may not reach |
 | 3 | Claude's suggestions look like typed text | **No code:** Neovim 0.12 renders faint text. The user upgraded. The orchestrator measured aineo on 0.12.5, and it was not green (the baseline), which opened **T13** |
-| 4 | Links clickable in the terminal and the Report | **The Report: T10**, a small fix. **The terminal:** very likely works already — Claude Code emits OSC 8 under iTerm2, Neovim keeps it, and iTerm2 opens it on ⌘-click; the user is asked to try |
-| 5 | Report colours and an icon | **The colours: T9**, a small fix. **The icon: T11**, regular — it changes C6's rendered line, now C10 |
+| 4 | Links clickable in the terminal and the Report | **The Report: a later packet**, a small fix. **The terminal:** very likely works already — Claude Code emits OSC 8 under iTerm2, Neovim keeps it, and iTerm2 opens it on ⌘-click; the user is asked to try |
+| 5 | Report colours and an icon | **The colours: T9**, a small fix. **The icon: a later packet**, regular — it changes C6's rendered line, now C10 |
 
-**Classes:** the user answered "Small fixes where allowed": T9 and T10 run as small fixes, T11 and T12 as regular packets.
+**Classes:** the user answered "Small fixes where allowed". T9 and the Report-links packet run as small fixes. The icon packet, T12 and T13 run as regular packets.
 
 ## Packets — the six-rules table
 
 The first plan holds T9, T13 and T12.
 - **T9 and T13 are dispatched together.**
 - **T12 waits for T13's merge**, since both change `plugin/aineo.lua`, `lua/aineo/health.lua` and `tests/test_health.lua`. Before T12's dispatch its facts are re-checked on the new `dev`.
-- **T10 and T11** follow T9 in the Report's home, each as a dated section added before its dispatch.
+- **The Report-links packet and the icon packet** follow T9 in the Report's home. Each takes its task row with its dated section, added before its dispatch.
+- The rolling-wave rule says a first plan lands with its first packet. This one lands with three, all converged with the user in one round.
 
 | packet | tasks | type / model | files | schema? | dependency change? | decision open? | task-line marks |
 |---|---|---|---|---|---|---|---|
-| t9-report-colours | T9 | small fix · `neovim-lua-developer` · opus | `lua/aineo/report/`, the Report's tests, `doc/aineo.txt` › `*aineo-report*` | no | no | no | held |
+| t9-report-colours | T9 | small fix · `neovim-lua-developer` · opus | `lua/aineo/report/`, `tests/test_report_buffer.lua`, `tests/test_entry_report.lua`, a new `tests/test_report_colours.lua`, `doc/aineo.txt` from `8. THE AGENT REPORT … *aineo-report*` to `the working directory of its own moment.` | no | no | no | held |
 | t13-neovim-0-12 | T13 | regular · `neovim-claude-code-integrator` · opus | `plugin/aineo.lua` (error framing), `lua/aineo/mcp/` (tool-error text), `lua/aineo/health.lua` (the "could not run" warning), `lua/aineo/claude/` (if NC5 needs it), `tests/helpers/report_tui.lua`, `tests/test_claude.lua`, `tests/test_entry.lua`, `tests/test_health.lua`, `tests/test_mcp_blocked_editor.lua`, `tests/test_mcp_delivery.lua`, `doc/aineo.txt` › `*aineo-install*` | no | no | no | held |
-| t12-claude-numbers | T12 | regular · `neovim-lua-developer` · opus | `plugin/aineo.lua` (tables), `lua/aineo/layout/`, `lua/aineo/health.lua` (key table), `tests/test_layout*`, `tests/test_entry_*`, `tests/test_health.lua`, `tests/test_plugin.lua` (one list), `doc/aineo.txt` › `*aineo-commands*`, `*aineo-mappings*`, `*aineo-keys*` | no | no | no | held |
+| t12-claude-numbers | T12 | regular · `neovim-lua-developer` · opus | `plugin/aineo.lua` (tables and `:Aineo`'s description), `lua/aineo/layout/`, `lua/aineo/health.lua` (key table), `tests/test_layout*.lua` (new cases), `tests/test_entry_prefix.lua` or a new `tests/test_entry_claude_numbers.lua`, `tests/test_entry.lua` (completion pin and case names), `tests/helpers/entry.lua` (`M.USAGE`), `tests/test_health.lua`, `tests/test_plugin.lua` (one list), `doc/aineo.txt` from `4. COMMANDS … *aineo-commands*` to `of both (|aineo-health|).` | no | no | no | held |
 
 1. **Dependencies:** each needs T8 only, which is done. T12 waits for T13 by rule 2, not rule 1.
 2. **Files:**
-   - **T9 and T13** are disjoint but for `doc/aineo.txt`. That file is shared under rule 2's section exception for vimdoc (PR #28, merged before dispatch): T9 owns `*aineo-report*`, and T13 owns `*aineo-install*`. The nearest hunks are sections apart, and each brief orders a re-run of the merge check against the other branch before pushing.
-   - **T13 and T12** share `plugin/aineo.lua`, `lua/aineo/health.lua` and `tests/test_health.lua`, so T12 waits for T13's merge.
-   - **T12's help sections** are `*aineo-commands*`, `*aineo-mappings*` and `*aineo-keys*`. No registration file is shared:
+   - **T9 and T13** are disjoint but for `doc/aineo.txt`, shared under rule 2's section exception for vimdoc as merged (PR #28 and its correction, `f6c7c6b`).
+     - T9 owns lines 253–280 at `9af91a6`, from `8. THE AGENT REPORT … *aineo-report*` to `the working directory of its own moment.`.
+     - T13 owns lines 36–48, from `2. REQUIREMENTS AND INSTALLATION … *aineo-install*` to ``|aineo-configuration|; then run `:checkhealth aineo` (|aineo-health|).``.
+     - Each brief quotes its fence, and orders a merge with the other branch plus `make test_file FILE=tests/test_doc.lua` on the merged file before pushing.
+     - The brief review merged all three packets' sections clean, in every pairing and three-way, and `test_doc.lua` passed 36/0 on the merged file.
+   - **T13 and T12** share `plugin/aineo.lua`, `lua/aineo/health.lua`, `tests/test_health.lua` and `tests/test_entry.lua`, so T12 waits for T13's merge.
+   - **T12 and T9** share only the help, where T12 owns lines 89–177, from `4. COMMANDS … *aineo-commands*` to `of both (|aineo-health|).`. Their test files are named and disjoint.
+   - **No registration file is shared:**
    - `tests/test_doc.lua` derives its tags and is not edited;
    - `tests/test_plugin.lua` is T12's alone;
    - no packet changes the help's `CONTENTS`.
@@ -111,7 +117,9 @@ Branches: `bugfix/t9-report-colours`, `bugfix/t13-neovim-0-12`, `feature/t12-cla
 - T9's colour for each status;
 - T12's subcommand and `<Plug>` names;
 - `'relativenumber'` cleared together with `'number'`, and the earlier values restored;
-- the warning when Claude's window is not shown;
+- T12's warning of its own, at `WARN`, when the layout has no Claude window, rather than an error through `run()`;
+- T12's toggle from another tab, which acts on the layout's tab;
+- T13: the tool error Claude receives loses Neovim's framing on 0.11 too. That changes v0.1.0's text, pinned today at `tests/test_mcp_delivery.lua:322`;
 - a window `\o` rebuilds takes the user's defaults.
 
 ## Verification mutants
@@ -120,7 +128,8 @@ Branches: `bugfix/t9-report-colours`, `bugfix/t13-neovim-0-12`, `feature/t12-cla
   - the time's group dropped;
   - `done` coloured as `failed`;
   - `default = true` dropped from one group's definition;
-  - the groups not defined again after `:colorscheme`;
+  - the groups not defined again after `:colorscheme`, killed only by RC4's test in which a scheme defined a group before aineo's first definition (the brief review measured that a default link aineo sets first survives `:colorscheme`);
+  - the groups defined at `require('aineo.report')` (RC7's pins);
   - saved records shown without colours.
 - **T13** — each run on both versions:
   - `^Lua: ` removed from the error framing;
