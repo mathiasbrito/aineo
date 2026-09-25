@@ -26,8 +26,9 @@
 # directories the suites run under. Never committed.
 /deps/
 /.tests/
-# The help's tag index, which a plugin manager (lazy.nvim) or `:helptags`
-# generates next to doc/aineo.txt in every checkout that loads aineo.
+# The help's tag index, which `:helptags` writes next to doc/aineo.txt in a
+# checkout whose loader runs it — lazy.nvim does, for a `dir` plugin, on
+# install and update.
 /doc/tags
 
 # --- Claude Code -----------------------------------------------------------
