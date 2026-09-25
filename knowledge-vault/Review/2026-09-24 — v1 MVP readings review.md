@@ -7,7 +7,7 @@
 ## Links
 
 - [[Projects/aineo]] · [[Planning/aineo — v1 agent console]] · [[Implementation/Waves/00002-layout-session-report/plan]]
-- The packets' own lists: [[Sessions/2026-09-24 — T3 layout]] › *Readings for the MVP review*, [[Sessions/2026-09-24 — T4 Claude session]] › *Readings for the MVP review*, [[Sessions/2026-09-24 — T5 report channel]] › *Readings for the MVP review* and *Correction › Readings for the MVP review*, [[Sessions/2026-09-24 — T6 Send]] › *Readings for the MVP review* and *Limits*, [[Sessions/2026-09-25 — T7 entry point]] › *Readings for the MVP review* and *Limits*
+- The packets' own lists: [[Sessions/2026-09-24 — T3 layout]] › *Readings for the MVP review*, [[Sessions/2026-09-24 — T4 Claude session]] › *Readings for the MVP review*, [[Sessions/2026-09-24 — T5 report channel]] › *Readings for the MVP review* and *Correction › Readings for the MVP review*, [[Sessions/2026-09-24 — T6 Send]] › *Readings for the MVP review* and *Limits*, [[Sessions/2026-09-25 — T7 entry point]] › *Readings for the MVP review* and *Limits*, [[Sessions/2026-09-25 — T8 health and help]] › *Readings for the MVP review*
 - Retrospective: [[Sessions/2026-09-24 — Wave 2 retrospective]]
 
 ## Scope
@@ -137,6 +137,31 @@ The IDs are `MR#`, so they collide with neither the plan's `R#` risks nor a revi
 | MR78 | At 80 columns a message longer than `v:echospace` (68) holds a bare start at a hit-enter prompt: the not-executable line fits for a command name of up to 29 characters; a longer `claude.cmd`, such as an absolute path, still prompts. | T7 limits |
 | MR79 | A user's `TermOpen` autocommand that fails stops Claude Code from starting. Observed by T7's correction agent, left as it is, and pinned by no test. | the T7 correction agent's report (orchestrator's scratch, not in the vault); the note's *Correction* names a failing `TermOpen` autocommand only as an input to the error line |
 | MR80 | A startup dashboard the autostart does not replace: one shown from a timer (`vim.defer_fn`), from two nested schedules or on a later event stays on screen beside the layout; a floating dashboard is kept (none of the four known dashboards opens a float at startup, by their sources). | T7 reading 7, *Not covered* |
+
+## Readings — health and help (C7; T8)
+
+| ID | Reading | Source |
+|---|---|---|
+| MR81 | `:checkhealth aineo` runs `claude.cmd` whole with `--version` appended, never through a shell, and bounds it at **3 s** by a timer of its own that kills the command's process group — or earlier, when Ctrl-C ends the wait. A command that prints its version, exits 0 and leaves a child holding its output reads "did not finish". | T8 reading 1 |
+| MR82 | **Levels.** Errors only for a wrong setting, a `claude.cmd` that is not executable, or an empty `v:servername`. Warnings: unknown keys, every `--version` failure (exit 124 included), a prefix key mapped by the user or by nothing, a leader or local leader equal to the prefix, the autostart's `wrong-setting` and `open-failed`. Info for the rest. "Passes" means no error. | T8 reading 2 |
+| MR83 | **Why the autostart did or did not run** is recorded in `vim.g.aineo_startup`, one reason, in the code's order: `starting`, `wrong-setting`, `autostart-off`, `no-ui`, `file-argument`, `stdin`, `startup-task`, `inside-claude`, `opening`, then in the deferred open `session-restored`, `opened`, `open-failed`; a late load records `mapping-late`, then `sourced-late`. When several hold, the first is reported; the order is pinned. | T8 reading 3 |
+| MR84 | **While aineo's `VimEnter` handler has not run** — `nvim +checkhealth`, `-c`, a `VimEnter` autocommand before aineo's, or one that threw — the check says so for the keys and the autostart, in place of per-key warnings; in the tick a plugin manager loads aineo late, that the keys are mapped in the next; between `VimEnter` and the deferred open, that the open is decided. | T8 reading 4 |
+| MR85 | A record aineo did not write reads as such, and "did not run at startup" is kept for an absent record. A forged record cannot be told from aineo's. | T8 reading 5 and the correction's limit |
+| MR86 | The version shown is the first non-blank line of the first 1024 bytes, without a trailing CR; a failure's advice is stderr's first line. Output past 1024 bytes of stdout and of stderr is dropped, cut at a character boundary. | T8 readings 6 and 13 |
+| MR87 | A prefix key is aineo's when its right-hand side is `<Plug>(aineo-<subcommand>)`, so a user's own mapping to it reads ok. | T8 reading 7 |
+| MR88 | The leader checks compare the leader as Neovim copies it — a string as written, a Number as its digits, `\` when unset, empty, a List, a Dictionary or a string over 48 bytes — with the prefix as typed keys; an overlap such as `\s` against `\` is not checked. | T8 reading 8 |
+| MR89 | The Claude Code section always shows the version aineo was measured against (2.1.281). | T8 reading 9 |
+| MR90 | The help's tag names, and its install line `{ 'mathiasbrito/aineo', lazy = false }`. | T8 reading 10 |
+| MR91 | `:Aineo`'s dispatcher returns its outcome, `(succeeded, failure)`, which T7's did not. Internal; listed because it changed a function's contract. | T8 reading 11 |
+| MR92 | **The health check warns when `<Leader>` is the prefix** — the orchestrator's reading of the plan's trade-off ("aineo … lists conflicts in `:checkhealth aineo`"). A default install, with no `mapleader` and the prefix `\`, shows the warning. **The user confirms or changes it.** | T8 reading 12 |
+
+## Limits a user can meet — health (T8)
+
+| ID | Limit | Source |
+|---|---|---|
+| MR93 | The kill reaches the command's process group only: a descendant that starts a group or a session of its own escapes it and can outlive the check. | the re-measure of PR #21, finding 3 |
+| MR94 | A check interrupted by Ctrl-C still says "did not finish within 3 s". | the T8 correction's open threads |
+| MR95 | The help's *Limits* and the check's Limits line say any earlier `VimLeavePre` handler that errors skips aineo's stop at quit (MR38); only an Ex-command autocommand's uncaught `throw` was measured doing so. | the T8 correction's open threads |
 
 ## Disposition
 

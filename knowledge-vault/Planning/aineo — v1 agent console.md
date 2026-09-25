@@ -106,7 +106,7 @@ Until the project has specs, this plan's **D# and C# rows are the spec for v1** 
 | T5 | MCP server and relay (C5), report rendering and persistence (C6) | T1, T2 | done — PR #10, wave 2 |
 | T6 | Send (C4) | T2, T3, T4 | done — PR #15, wave 3 |
 | T7 | Entry point (C1): prefix mapping, `<Plug>` mappings, `:Aineo`, autostart | T3, T4, T5, T6 | done — PR #17, wave 4 |
-| T8 | Health (C7) and `doc/aineo.txt` | T7 | active |
+| T8 | Health (C7) and `doc/aineo.txt` | T7 | done — PR #21 (and #22), wave 5 |
 
 ## Done
 <!-- ~~**T1 — <title>**~~ — **Done YYYY-MM-DD** (commit in session note) -->
