@@ -1,4 +1,4 @@
-T7 facts — how Neovim 0.11.6 starts, measured by the orchestrator on 2026-09-24 (~17:50 CEST) on host Macbook-Mathias.
+T7 facts — how Neovim 0.11.6 starts, measured by the orchestrator on 2026-09-24, 17:44–17:46 CEST (the output files' own times), on host Macbook-Mathias.
 No Claude ran. Every probe Neovim ran with --clean -i NONE; state, data and log under a scratch directory; the user's
 shada and Neovim log stat'ed before and after: unchanged. Drivers: t7-startup-driver.lua (the probe it writes is
 t7-startup-probe.lua) and t7-embed-probe.lua, in this folder.
@@ -11,7 +11,12 @@ t7-startup-probe.lua) and t7-embed-probe.lua, in this folder.
    `nvim --headless`    VimEnter: uis=0 argc=0; no UIEnter.
    So at VimEnter an interactive start has a UI attached already, and --headless has none.
 
-2. A UI-attached start a test can make without a terminal: `nvim --embed` started as an RPC job (jobstart
-   with rpc = true) runs no autocommand until the test calls nvim_ui_attach(80, 24, { ext_linegrid = true });
-   then VimEnter fires with uis=1 and UIEnter follows. mini.test's own child always passes --headless
-   (deps/mini.nvim/lua/mini/test.lua, the child's start arguments), so its VimEnter sees no UI.
+2. `nvim --embed` started as an RPC job (jobstart with rpc = true) runs no autocommand until the caller calls
+   nvim_ui_attach(80, 24, { ext_linegrid = true }); then VimEnter fires with uis=1 and UIEnter follows. mini.test's
+   own child always passes --headless (deps/mini.nvim/lua/mini/test.lua, the child's start arguments), so its
+   VimEnter sees no UI.
+   CORRECTED 2026-09-25 by the brief review of wave 4 (finding 1): this item first called the --embed job "a
+   UI-attached start a test can make without a terminal". It is not: the child exits 1 about 10 ms after the
+   attach, since the caller does not take its redraw notifications — t7-embed-out.txt above has no VimEnter+1s
+   line, which every terminal start has, and that was misread. The route that works, measured by the review, is
+   an interactive nvim in a terminal job of a mini.test child, queried over its --listen address.

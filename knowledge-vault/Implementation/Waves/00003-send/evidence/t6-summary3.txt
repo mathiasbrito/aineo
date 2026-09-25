@@ -1,6 +1,6 @@
 T6 fact, third run (the attack review of PR #15, finding 3: a bracketed paste's closing ESC[201~ can reach a
 reader split across two reads; the suite's fake reads at most 1,022 bytes at a time) — measured by the orchestrator on
-2026-09-24 (~19:40 CEST). Claude Code 2.1.281 · Nvim 0.11.6 headless (--clean -i NONE, state, data and log under a
+2026-09-24, 20:00–20:02 CEST (the files' own times). Claude Code 2.1.281 · Nvim 0.11.6 headless (--clean -i NONE, state, data and log under a
 scratch directory) · terminal 120x40 · cwd the aineo checkout (trusted by the user) · every CLAUDE* variable removed ·
 NO model turn: no Enter was sent. Driver: t6-split-driver.lua (this folder). The user's shada and Neovim log were
 stat'ed before and after: unchanged.
