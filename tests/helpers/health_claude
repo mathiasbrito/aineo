@@ -1,0 +1,38 @@
+#!/bin/sh
+# A stand-in for Claude Code in the health check's tests, run as claude.cmd.
+# It writes the arguments it was given, one per line, to the file
+# $AINEO_HEALTH_CLAUDE_RECORD when that is set, then behaves as
+# $AINEO_HEALTH_CLAUDE_MODE says:
+#   (unset)      prints a version of its own and exits 0
+#   failing      prints a line on stderr and exits 3
+#   failing-silently  prints nothing and exits 3
+#   silent       prints nothing and exits 0
+#   hanging      sleeps for 7 s in its own process
+#   holding      sleeps for 7 s in a child that keeps its output open, and
+#                for 7 s itself
+
+if [ -n "$AINEO_HEALTH_CLAUDE_RECORD" ]; then
+  printf '%s\n' "$@" > "$AINEO_HEALTH_CLAUDE_RECORD"
+fi
+
+case "$AINEO_HEALTH_CLAUDE_MODE" in
+  failing)
+    echo "health stand-in: no version today" >&2
+    exit 3
+    ;;
+  failing-silently)
+    exit 3
+    ;;
+  silent)
+    exit 0
+    ;;
+  hanging)
+    exec sleep 7
+    ;;
+  holding)
+    sleep 7 &
+    exec sleep 7
+    ;;
+esac
+
+echo "9.9.9 (health stand-in)"
