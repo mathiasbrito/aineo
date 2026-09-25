@@ -35,7 +35,8 @@
 --- when unset, and the process id. Every chunk of input follows as
 --- `{ received }` — a Ctrl-C as `{"received":"\u0003"}` — a turn ended by
 --- Ctrl-C as `{ turn = 'interrupted' }`, a SIGINT as `{ signal = 'sigint' }`,
---- and the last line says how it ended: `{ ended, code }`, where `ended` is
+--- an MCP server's answer as `{ mcp }` (the `mcp-client` mode), and the last
+--- line says how it ended: `{ ended, code }`, where `ended` is
 --- `keys`, `hangup`, `exit` or `lifetime`.
 
 local RECORD_PATH =
@@ -74,9 +75,11 @@ local NO_RULE_BELOW = 'synthetic-no-rule-below.screen'
 --- Each mode: how many lines of other output it prints first, as a verbose
 --- wrapper around `claude` would; the screens it draws when it starts,
 --- `SCREEN_GAP_MS` apart; whether it starts in the middle of a turn; after how
---- long it exits by itself; and the screens the Enter and Esc keys bring up —
+--- long it exits by itself; the screens the Enter and Esc keys bring up —
 --- Enter a permission dialog, as a message that calls a tool does, and Esc, in
---- that dialog, the prompt again.
+--- that dialog, the prompt again; and whether, once it has drawn its screens,
+--- it calls the report tool as Claude Code's MCP client (`call_report_tool()`)
+--- and then exits.
 local MODES = {
   ready = { screens = { STARTUP } },
   trust = { screens = { TRUST_DIALOG } },
@@ -92,6 +95,7 @@ local MODES = {
   busy = { screens = { STARTUP }, in_turn = true },
   turn = { screens = { TURN }, in_turn = true },
   exit = { screens = { STARTUP }, exits_after_ms = 200 },
+  ['mcp-client'] = { screens = { STARTUP }, calls_report_tool = true },
   ['exit-below-box'] = { screens = { STARTUP, CURSOR_BELOW_BOX }, exits_after_ms = 2500 },
 }
 
@@ -285,6 +289,78 @@ local function answer(input)
   stdout:write(printable_text(input))
 end
 
+--- What Claude Code 2.1.281 sends a stdio MCP server — its handshake, then
+--- one call of the report tool — one JSON-RPC message per line.
+local MCP_MESSAGES = vim.fs.joinpath(vim.fs.dirname(FIXTURES), 'mcp', 'claude-code-2.1.281.jsonl')
+
+--- How long the fake waits for the MCP server to answer a request.
+local MCP_ANSWER_MS = 10000
+
+--- The MCP server `--mcp-config` names among the fake's arguments — the first
+--- by name when it names several.
+---
+---@return { command: string, args: string[], env: table<string, string>? }
+local function configured_mcp_server()
+  local flag_at = assert(
+    vim.iter(ipairs(arg)):find(function(_, word)
+      return word == '--mcp-config'
+    end),
+    'no --mcp-config among the arguments'
+  )
+  local servers = vim.json.decode(arg[flag_at + 1]).mcpServers
+  local names = vim.tbl_keys(servers)
+  table.sort(names)
+  return servers[names[1]]
+end
+
+--- The messages `MCP_MESSAGES` holds, each as its line of JSON.
+---
+---@return string[]
+local function recorded_mcp_messages()
+  return vim.tbl_filter(function(line)
+    return line ~= '' and not vim.startswith(line, '#')
+  end, vim.fn.readfile(MCP_MESSAGES))
+end
+
+--- Acts as the MCP client Claude Code is: starts the server `--mcp-config`
+--- names — its command, arguments and environment — as a process with piped
+--- standard streams, sends it each of `MCP_MESSAGES` in order, waiting for
+--- the answer to each request, records each answer as `{ mcp = <answer> }`,
+--- and closes the server's input once the report tool's call is answered.
+--- An answer that does not come within `MCP_ANSWER_MS` is recorded as
+--- `{ mcp = 'no answer to <id>' }`, and the fake goes on.
+local function call_report_tool()
+  local server = configured_mcp_server()
+  local output = ''
+  local process = vim.system(vim.list_extend({ server.command }, server.args), {
+    env = server.env,
+    stdin = true,
+    stdout = function(_, data)
+      output = output .. (data or '')
+    end,
+  })
+  local function answer_to(id)
+    for line in output:gmatch('([^\n]*)\n') do
+      local message = vim.json.decode(line)
+      if message.id == id then
+        return message
+      end
+    end
+  end
+  for _, line in ipairs(recorded_mcp_messages()) do
+    process:write(line .. '\n')
+    local id = vim.json.decode(line).id
+    if id ~= nil then
+      local answered = vim.wait(MCP_ANSWER_MS, function()
+        return answer_to(id) ~= nil
+      end, 10)
+      record({ mcp = answered and answer_to(id) or ('no answer to %d'):format(id) })
+    end
+  end
+  process:write(nil)
+  process:wait(MCP_ANSWER_MS)
+end
+
 vim.uv.new_signal():start('sighup', function()
   finish('hangup', HANGUP_CODE)
 end)
@@ -316,6 +392,11 @@ stdin:read_start(function(_, input)
   record({ received = input })
   answer(input)
 end)
+
+if MODE.calls_report_tool then
+  call_report_tool()
+  finish('exit', EXIT_CODE)
+end
 
 if MODE.exits_after_ms then
   vim.defer_fn(function()

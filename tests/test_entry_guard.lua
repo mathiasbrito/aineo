@@ -1,5 +1,7 @@
 local MiniTest = require('mini.test')
 local children = dofile('tests/helpers/child.lua')
+local entry = dofile('tests/helpers/entry.lua')
+local entry_editor = dofile('tests/helpers/entry_editor.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 
 local eq = MiniTest.expect.equality
@@ -40,6 +42,12 @@ T['the suites']['run the guard as claude in a child whose PATH starts with anoth
   children.restart(child)
 
   eq(child.lua_get("vim.fn.exepath('claude')"), GUARD_CLAUDE)
+end
+
+T['the suites']['start aineo in no interactive editor whose test left vim.g.aineo unset'] = function()
+  local editor = entry_editor.start(child, children.restart)
+
+  eq(entry_editor.get(editor, entry.WINDOWS), { '' })
 end
 
 T['the suites']['remove AINEO_CHILD from a child'] = function()

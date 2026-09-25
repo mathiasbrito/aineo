@@ -1,0 +1,71 @@
+local MiniTest = require('mini.test')
+local claude_session = dofile('tests/helpers/claude_session.lua')
+local entry = dofile('tests/helpers/entry.lua')
+local fixture = dofile('tests/helpers/fixture.lua')
+
+local eq = MiniTest.expect.equality
+
+--- How long the test waits for a report to travel from the fake `claude`,
+--- through the relay it starts, into the Report.
+local REPORT_PATIENCE_MS = 10000
+
+--- The expression, run in the child, that gives the Report's lines, each
+--- time of day written `HH:MM`.
+local REPORT_LINES = [[vim.tbl_map(function(line)
+  return (line:gsub('^%d%d:%d%d ', 'HH:MM '))
+end, vim.api.nvim_buf_get_lines(vim.fn.bufnr('aineo://report'), 0, -1, true))]]
+
+local child = MiniTest.new_child_neovim()
+
+--- Waits, at most `REPORT_PATIENCE_MS`, until the child's Report shows the
+--- report the fake sends.
+local function wait_for_report()
+  vim.wait(REPORT_PATIENCE_MS, function()
+    return table.concat(child.lua_get(REPORT_LINES), '\n'):find('Refactor the parser', 1, true)
+      ~= nil
+  end, 50)
+end
+
+local T = MiniTest.new_set({
+  hooks = {
+    pre_case = function()
+      entry.restart(child)
+    end,
+    post_once = child.stop,
+  },
+})
+
+T['the report tool'] = MiniTest.new_set()
+
+T['the report tool']['called by Claude shows its report in the Report'] = function()
+  child.lua('vim.env.XDG_STATE_HOME = ...', { fixture.directory('entry-report-state') })
+  local fake = claude_session.fake('entry-report', 'mcp-client')
+  entry.use_fake(child, fake)
+
+  child.cmd('Aineo open')
+
+  wait_for_report()
+  eq(child.lua_get(REPORT_LINES), { 'HH:MM [done] Refactor the parser — All tests pass' })
+end
+
+T['the report tool']["keeps Claude's report under the editor's state directory, for its working directory"] = function()
+  local state = fixture.directory('entry-report-kept-state')
+  child.lua('vim.env.XDG_STATE_HOME = ...', { state })
+  local fake = claude_session.fake('entry-report-kept', 'mcp-client')
+  entry.use_fake(child, fake)
+
+  child.cmd('Aineo open')
+
+  wait_for_report()
+  eq(vim.fn.glob(vim.fs.joinpath(state, '**', '*.jsonl'), true, true), {
+    vim.fs.joinpath(
+      state,
+      'nvim',
+      'aineo',
+      'reports',
+      vim.fn.sha256(child.fn.getcwd()) .. '.jsonl'
+    ),
+  })
+end
+
+return T

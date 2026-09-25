@@ -1,14 +1,16 @@
 --- aineo's composition root, sourced by Neovim at every startup: `:Aineo`, the
 --- `<Plug>(aineo-…)` mappings, and, once the editor has started, the prefix
---- mappings. It stays cheap: sourcing it requires no aineo module; once the
---- editor has started it loads the configuration alone, to read the prefix,
---- and the other homes load when a command or mapping first needs them.
+--- mappings and the autostart. It stays cheap: sourcing it requires no aineo
+--- module; once the editor has started it loads the configuration alone, to
+--- read the prefix and `autostart`, and the other homes load when a command,
+--- a mapping or the autostart first needs them.
 ---
---- The prefix is mapped from the configuration as it stands when the editor
---- has started (`VimEnter`) — after the user's init, and so after a plugin
---- manager has run `setup()` — or, when this file is sourced later, in the
---- first scheduled callback after it, once the plugin manager that sourced it
---- has run `setup()` in the same tick, as lazy.nvim does.
+--- The prefix is mapped, and the autostart decided, from the configuration
+--- as it stands when the editor has started (`VimEnter`) — after the user's
+--- init, and so after a plugin manager has run `setup()`. When this file is
+--- sourced later, the prefix is mapped in the first scheduled callback after
+--- it, once the plugin manager that sourced it has run `setup()` in the same
+--- tick, as lazy.nvim does, and nothing starts by itself.
 ---
 --- It runs once. Setting `vim.g.loaded_aineo` before startup turns it off, and
 --- sourcing it again does nothing.
@@ -176,19 +178,78 @@ local function map_prefix(prefix)
   end
 end
 
+--- Whether Neovim read its standard input into a buffer as it started
+--- (`StdinReadPost`), as `echo text | nvim` does.
+local read_stdin = false
+
+--- Whether the editor was started with commands to run: an argument `-c` or
+--- `-S`, a session to restore, or one that begins with `+`. The value of an
+--- option such as `--cmd` counts too when it looks like one.
+---
+---@param argv string[] the editor's start arguments, `v:argv`
+---@return boolean
+local function has_startup_commands(argv)
+  return vim.iter(argv):skip(1):any(function(argument)
+    return argument == '-c' or argument == '-S' or vim.startswith(argument, '+')
+  end)
+end
+
+--- Whether the editor has started as a bare, interactive `nvim` (D3): with a
+--- user interface attached, no file to edit, its standard input not read and
+--- no commands to run — and not inside aineo's own Claude terminal, which
+--- sets `$AINEO_CHILD` (C1).
+---
+---@return boolean
+local function is_bare_interactive_start()
+  return #vim.api.nvim_list_uis() > 0
+    and vim.fn.argc() == 0
+    and not read_stdin
+    and not has_startup_commands(vim.v.argv)
+    and vim.env.AINEO_CHILD == nil
+end
+
+--- Opens the layout as `open()` does, once a startup dashboard has shown
+--- (D15): two scheduled callbacks after the one that calls this at
+--- `VimEnter`, so after whatever the `VimEnter` and `UIEnter` autocommands
+--- show, directly or from a callback they schedule — snacks.nvim's, alpha's,
+--- dashboard-nvim's and mini.starter's dashboards among them. The layout then
+--- replaces the dashboard's window.
+local function open_after_dashboards()
+  vim.schedule(function()
+    vim.schedule(function()
+      run(open)
+    end)
+  end)
+end
+
 --- What the editor does once it has started: maps the prefix the
---- configuration names.
+--- configuration names, and opens the layout when `autostart` is set and the
+--- start is bare and interactive (`open_after_dashboards()`).
 local function start_up()
-  map_prefix(resolved_config().prefix)
+  local config = resolved_config()
+  map_prefix(config.prefix)
+  if config.autostart and is_bare_interactive_start() then
+    open_after_dashboards()
+  end
 end
 
 if vim.v.vim_did_enter == 1 then
   vim.schedule(function()
-    run(start_up)
+    run(function()
+      map_prefix(resolved_config().prefix)
+    end)
   end)
 else
+  local group = vim.api.nvim_create_augroup('aineo', {})
+  vim.api.nvim_create_autocmd('StdinReadPost', {
+    group = group,
+    once = true,
+    callback = function()
+      read_stdin = true
+    end,
+  })
   vim.api.nvim_create_autocmd('VimEnter', {
-    group = vim.api.nvim_create_augroup('aineo', {}),
+    group = group,
     once = true,
     callback = function()
       run(start_up)

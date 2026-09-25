@@ -56,7 +56,7 @@ local function added(definitions, before)
   end, { commands = 'commands', keymaps = 'keymaps', autocmds = 'autocmds' })
 end
 
-T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings and the prefix mappings, and no autocommand once started'] = function()
+T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings and, once started, the StdinReadPost autocommand alone'] = function()
   children.restart(child, { '--cmd', 'let g:loaded_aineo = 1' })
   local without_the_file = child.lua_get(DEFINITIONS)
 
@@ -76,7 +76,7 @@ T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings and the prefix mappin
       '\\r',
       '\\s',
     },
-    autocmds = {},
+    autocmds = { 'aineo StdinReadPost' },
   })
 end
 
