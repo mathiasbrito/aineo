@@ -158,17 +158,17 @@ Branches: `bugfix/t9-report-colours`, `bugfix/t13-neovim-0-12`, `feature/t12-cla
 - refuse to quit;
 - both.
 
-**Answer: "Keep it as a draft"** — D17, the task row T14.
+**Answer: "Keep it as a draft"** — D17, the task row T14. The draft home is C11. The orchestrator's readings of D17, after the brief review, are recorded in the brief: the draft empties at once when Input does; the quit saves a pending change only; it restores only into a new or emptied Input.
 
 **The six rules for T14**, recomputed against every open packet (T9 in its correction, T13 in review, T12 planned) and every claimed wave (only this one):
 
 | rule | T14 |
 |---|---|
 | 1 dependencies | T8, done ✓ |
-| 2 files | A new draft home and its tests, new `tests/test_entry_*.lua` files, `plugin/aineo.lua` (the open path and the report environment), and `doc/aineo.txt` lines 51–86 (`*aineo-layout*`). **It shares `plugin/aineo.lua` with T13 (open) and with T12 (planned).** So T14 is dispatched after T13 merges, and T12 after T14 merges. With T9, only the help is shared: lines 51–86 against 253–280, fenced, with the merge and `tests/test_doc.lua` on the merged file before pushing. |
+| 2 files | A new draft home, `lua/aineo/draft/`, and its tests; new `tests/test_entry_*.lua` files; `plugin/aineo.lua` (the open and focus paths, and the report environment); and `doc/aineo.txt` from `3. THE LAYOUT … *aineo-layout*` to ``lives in one tab; from another tab, `\o` moves you to it.``. **It shares `plugin/aineo.lua` with T13 (open) and with T12 (planned).** So T14 is dispatched after T13 merges, and T12 after T14 merges. With T9, only the help is shared, in different sections: the quoted fences, and the merge plus `tests/test_doc.lua` on the merged file before pushing. The brief review merged a test edit at both edges of T14's section with T9's `40bc378` and T13's `84fb0e1`, alone and all three together, and `test_doc` passed 36/0 on both versions. |
 | 3 schema | none ✓ |
 | 4 dependencies | none ✓ |
-| 5 decisions | D17 decided; the save delay and the file layout are readings ✓ |
+| 5 decisions | D17 decided. The brief review found two points D17 left open — the quit write, and when a restore may happen — and the orchestrator decided both as readings recorded in the brief ✓ |
 | 6 task lines | T14 is adjacent to T13, so it holds its mark ✓ |
 
 **Baseline:** `dev` at `d35dc4f`.
@@ -186,14 +186,17 @@ T14's own baseline is T13's merge, re-checked before dispatch.
 
 **Verification mutants:**
 - the delayed save dropped (only the quit saves);
-- the quit save dropped;
+- the quit writing the whole Input rather than a pending change;
+- the immediate emptying delayed like any change;
+- a restore into an Input the draft has seen;
 - the draft restored over an Input that holds text;
-- the draft not cleared when Send clears Input;
+- the hand-off after `focus()` dropped;
 - the draft written in the working directory;
-- a non-atomic write;
-- the draft home loaded at startup.
+- a shared temporary name;
+- a non-atomic write, killed through the injected write failure;
+- the draft home loaded at startup, killed by `tests/test_plugin.lua`'s pins.
 
-**Brief:** `brief-t14-input-draft.md`. Its brief review: `brief-review-t14-input-draft.md`.
+**Brief:** `brief-t14-input-draft.md`, corrected after its brief review, `brief-review-t14-input-draft.md` — 16 findings, all answered. T12 now follows T14; its dated amendment re-checks its facts after both merges.
 
 ## Landed
 
