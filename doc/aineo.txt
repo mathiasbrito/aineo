@@ -278,8 +278,11 @@ brackets included, in the group of its status; only these, never text like
 them in a task, a summary or details. Each group links to one of Neovim's
 own, unless a colour scheme or a `:highlight` of your own colours it. After
 `:colorscheme` or `:highlight clear`, a group nothing colours any more links
-to its default again. aineo defines the groups when the Report first shows a
-report.
+to its default again, with one exception: a group given a default link of
+its own (`:highlight default link`, as some colour schemes do) before aineo
+first defined it goes back to that link, until the Report shows reports
+again — a new report, or `:edit` in the Report. aineo defines the groups
+when the Report first shows a report.
 
                                                           *hl-AineoReportTime*
 AineoReportTime      the time, `HH:MM`, linked to `Comment`

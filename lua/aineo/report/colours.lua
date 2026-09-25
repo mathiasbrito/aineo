@@ -29,9 +29,12 @@ local DEFAULT_LINKS = {
 --- Defines aineo's Report groups, each linked to its default as a default
 --- (`:highlight default link`). A group a user or a colour scheme has
 --- coloured keeps its colour. `:highlight clear`, which a colour scheme runs
---- first, links each group to its default again, whoever coloured it before,
---- so no autocommand is needed to restore them. Defining them again changes
---- nothing.
+--- first, restores each group's default link, and Neovim keeps only the first
+--- default link a group is given: aineo's, unless a user or a colour scheme
+--- gave the group one of its own before aineo first defined it. Such a group
+--- goes back to that link at each `:highlight clear`, and defining the groups
+--- again links it to aineo's default until the next one. No autocommand
+--- restores the groups.
 function M.define_report_colours()
   for group, link in pairs(DEFAULT_LINKS) do
     vim.cmd.highlight({ 'default', 'link', group, link })
