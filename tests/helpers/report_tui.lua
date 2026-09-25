@@ -89,21 +89,16 @@ local function wait_for_startup(channel)
   end, 20)
 end
 
---- An `on_stdout` handler for the editor's job that answers each status
---- query its TUI writes, as the user's terminal would, so that the editor
---- does not wait for an answer and then warn that none came. A query split
---- across two reads is answered once both have arrived.
+--- The editor's `on_stdout` handler: answers each status query in the
+--- output `data` of its TUI's `job`, as the user's terminal would, so that
+--- the editor does not wait for an answer and then warn that none came.
 ---
----@return fun(job: integer, data: string[])
-local function status_answerer()
-  local unmatched = ''
-  return function(job, data)
-    local output = unmatched .. table.concat(data, '\n')
-    local _, queries = output:gsub(vim.pesc(STATUS_QUERY), '')
-    for _ = 1, queries do
-      vim.fn.chansend(job, STATUS_ANSWER)
-    end
-    unmatched = output:sub(-(#STATUS_QUERY - 1))
+---@param job integer
+---@param data string[]
+local function answer_status_queries(job, data)
+  local _, queries = table.concat(data, '\n'):gsub(vim.pesc(STATUS_QUERY), '')
+  for _ = 1, queries do
+    vim.fn.chansend(job, STATUS_ANSWER)
   end
 end
 
@@ -116,7 +111,7 @@ function M.start(environment)
   local address = vim.fn.tempname() .. '.sock'
   local job = vim.fn.jobstart(
     { vim.v.progpath, '--clean', '-n', '-u', MINIMAL_INIT, '--listen', address },
-    { pty = true, width = 80, height = 24, on_stdout = status_answerer() }
+    { pty = true, width = 80, height = 24, on_stdout = answer_status_queries }
   )
   table.insert(running, job)
   vim.wait(WAIT_MS, function()
