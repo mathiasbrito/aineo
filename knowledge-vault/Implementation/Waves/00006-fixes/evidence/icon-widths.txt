@@ -1,0 +1,9 @@
+# The report icons' bytes and display widths, measured by the orchestrator on 2026-09-26
+# Command: nvim --clean -u NONE -i NONE --headless -l <probe>, the probe setting vim.o.ambiwidth and printing #icon and vim.fn.strdisplaywidth(icon) for each icon.
+# First the host's Homebrew Neovim, then the downloaded 0.11.6 build.
+nvim 0.12.5
+ambiwidth=single | started ▸ bytes=3 width=1 | progress ◐ bytes=3 width=1 | blocked ⊘ bytes=3 width=1 | done ✓ bytes=3 width=1 | failed ✗ bytes=3 width=1
+ambiwidth=double | started ▸ bytes=3 width=1 | progress ◐ bytes=3 width=2 | blocked ⊘ bytes=3 width=1 | done ✓ bytes=3 width=1 | failed ✗ bytes=3 width=1
+nvim 0.11.6+ge8b87a554f
+ambiwidth=single | started ▸ bytes=3 width=1 | progress ◐ bytes=3 width=1 | blocked ⊘ bytes=3 width=1 | done ✓ bytes=3 width=1 | failed ✗ bytes=3 width=1
+ambiwidth=double | started ▸ bytes=3 width=1 | progress ◐ bytes=3 width=2 | blocked ⊘ bytes=3 width=1 | done ✓ bytes=3 width=1 | failed ✗ bytes=3 width=1

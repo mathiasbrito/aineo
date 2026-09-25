@@ -198,6 +198,55 @@ T14's own baseline is T13's merge, re-checked before dispatch.
 
 **Brief:** `brief-t14-input-draft.md`, corrected after its brief review, `brief-review-t14-input-draft.md` — 16 findings, all answered. T12 now follows T14; its dated amendment re-checks its facts after both merges.
 
+## Packet T11 — 2026-09-26
+
+**The question put to the user, and the answer.**
+- The user asked on 2026-09-25 for "an icon in the beginning (icons from unicode, but only the ones terminal styled)".
+- The orchestrator offered sets of icons, each as the line `<icon> HH:MM [status] task — summary` with the icon coloured like the status.
+- **Answer: "Unicode set"** — `▸` started, `◐` progress, `⊘` blocked, `✓` done, `✗` failed. This is C10, superseding C6's rendered line. T11 is a regular packet, although the user asked for small fixes where allowed: a small fix adds no C# row (SKILL §3), and C10 is one.
+- The option said "each one column wide". The orchestrator measured afterwards that this holds only under the default `'ambiwidth'`: under `double`, `◐` takes two cells (`evidence/icon-widths.txt`).
+  - The brief's IC4 keeps the details under the status by display width.
+  - This is the orchestrator's reading of C10, for the MVP review.
+
+**The task ID.** T11. T10 stays reserved for the Report's links, the user's fix 4. It was named to the user on 2026-09-25 and awaits its behaviour.
+
+**The six rules for T11**, recomputed on 2026-09-26 against every open packet and every claimed wave (only this one):
+- T13 is in review (PR #31).
+- T14 and T12 are planned.
+
+| rule | T11 |
+|---|---|
+| 1 dependencies | T9, done (PR #30) ✓ |
+| 2 files | `lua/aineo/report/render.lua` and `colours.lua`; `tests/test_report_buffer.lua`, `tests/test_report_colours.lua`, `tests/test_entry_report.lua`; the rendered-line pins of `tests/test_mcp_delivery.lua` and `tests/test_mcp_blocked_editor.lua`; `doc/aineo.txt` › `*aineo-report*`. **Shared with T13**, by `comm -12` against `gh pr view 31`'s files: `tests/test_mcp_delivery.lua`, `tests/test_mcp_blocked_editor.lua`, `doc/aineo.txt`. **T11 waits for T13's merge.** With T14: only `doc/aineo.txt`, in another section (`*aineo-layout*`); T14 must not touch `lua/aineo/report/` and adds only new `tests/test_entry_*.lua` files. With T12: only `doc/aineo.txt`, in other sections; T12's brief lists the three report test files under *must not touch*. So T11 and T14 may run together once T13 has merged |
+| 3 schema | none. The saved records' format is unchanged: `records.lua` is outside the boundary ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | C10 decided by the user. The details' indent under `'ambiwidth'` `double` is the orchestrator's reading of "indented under the status", which the brief states as IC4 ✓ |
+| 6 task lines | T11's row is adjacent to T9's and T12's, so it holds its mark ✓ |
+
+**Baseline:** `dev` at `dbc96c9`, code-identical to PR #30's verified head `40bc378` (`evidence/baseline-dbc96c9.txt`).
+- 0.11.6: 747 cases, `Fails (0)`.
+- 0.12.5: 747 cases, `Fails (8)`, the eight T13 fixes.
+
+T11's own baseline is T13's merge, measured before dispatch and given in the dispatch message.
+
+**Reviewers**, three:
+- attack by `neovim-lua-reviewer`;
+- test-integrity by `reviewer`;
+- records by `reviewer`, which also compares each changed pin with its old line (IC6).
+
+**Order:** after T13's merge, beside T14. T12 follows T14.
+
+**Verification mutants:**
+- two icons swapped, `done`'s and `failed`'s;
+- the icon's colour span dropped;
+- the icon coloured in the time's group;
+- the time's colour span left at columns 0 to 5;
+- the details' indent left at the width of `HH:MM `;
+- the details' indent counted in the icon's bytes;
+- the icon's width taken as 1 always — killed only by a `progress` report under `'ambiwidth'` `double`.
+
+**Brief:** `brief-t11-report-icon.md`.
+
 ## Landed
 
 - **T9 — PR #30, a small fix**, merged by rebase on 2026-09-26 as `a86a69c` … `3d67b05` (9 commits). Every file of the pull request is identical to the verified head `40bc378`; `git diff 40bc378 dev` shows only T14's files from PR #32.
