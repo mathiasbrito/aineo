@@ -115,6 +115,23 @@ T['the colours']['cover only the time and the status the render placed, not thei
   eq(all_colours(), { { 0, 0, 5, 'AineoReportTime' }, { 0, 6, 12, 'AineoReportDone' } })
 end
 
+T['the colours']['of a report that follows another are on its own header'] = function()
+  start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  report_editor.receive(
+    child,
+    { task = 'First', status = 'started', summary = 'Began', details = 'One detail' }
+  )
+
+  report_editor.receive(child, { task = 'First', status = 'done', summary = 'Ended' })
+
+  eq(all_colours(), {
+    { 0, 0, 5, 'AineoReportTime' },
+    { 0, 6, 15, 'AineoReportStarted' },
+    { 2, 0, 5, 'AineoReportTime' },
+    { 2, 6, 12, 'AineoReportDone' },
+  })
+end
+
 T['the records'] = MiniTest.new_set()
 
 T['the records']['show their time and status coloured when the Report opens'] = function()
