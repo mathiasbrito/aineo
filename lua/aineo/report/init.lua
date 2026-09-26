@@ -14,7 +14,7 @@ local M = {}
 ---@class aineo.report.Environment
 ---@field clock fun(): string the local time, as `YYYY-MM-DDTHH:MM:SS`
 ---@field state_directory string where the records are kept
----@field working_directory string the editor's working directory
+---@field working_directory string the editor's working directory, which a report's relative paths are in
 
 ---@type aineo.report.Environment?
 local environment
@@ -38,8 +38,10 @@ M.report_instructions = instructions.report_instructions
 
 --- Gives the report home what it reads from the editor: the clock, called
 --- for each report received, and the state and working directories, read
---- when the Report buffer is first created. The composition root calls it
---- before anything else in the home is used.
+--- when the Report buffer is first created. The working directory is read
+--- again whenever the Report shows reports, to find the files their relative
+--- paths name. The composition root calls it before anything else in the home
+--- is used.
 ---
 --- Raises an error naming the field when `report_environment` is not an
 --- environment.
@@ -93,6 +95,45 @@ local function readable_records(records_file)
   return records_or_failure, skipped
 end
 
+--- The file `path`, as a report writes it, names: `path` itself when it is
+--- absolute, else `path` in the environment's working directory. A `~` is
+--- not expanded.
+---
+---@param path string
+---@return string
+local function file_named_by(path)
+  if vim.startswith(path, '/') then
+    return path
+  end
+  return vim.fs.joinpath(current_environment().working_directory, path)
+end
+
+--- Whether `path`, as a report writes it, names a regular file
+--- (`file_named_by()`).
+---
+---@param path string
+---@return boolean
+local function names_file(path)
+  local stat = vim.uv.fs_stat(file_named_by(path))
+  return stat ~= nil and stat.type == 'file'
+end
+
+--- A new check of whether a path names a regular file (`names_file()`), for
+--- one rendering: it asks the file system once for each distinct path,
+--- however often it is asked about it, so a rendering takes one check per
+--- path, and a file made or removed after it counts at the next rendering.
+---
+---@return fun(path: string): boolean
+local function file_check_for_one_rendering()
+  local answers = {}
+  return function(path)
+    if answers[path] == nil then
+      answers[path] = names_file(path)
+    end
+    return answers[path]
+  end
+end
+
 --- Shows `rendering` at the end of `report_buffer`, in the Report's colours
 --- (`colours.define_report_colours()`), defined whenever a rendering has any:
 --- none is defined before the Report shows a report.
@@ -114,7 +155,7 @@ end
 ---@param records_file string
 local function show_records(report_buffer, records_file)
   local kept, skipped = readable_records(records_file)
-  show_rendering(report_buffer, render.render_records(kept))
+  show_rendering(report_buffer, render.render_records(kept, file_check_for_one_rendering()))
   if skipped > 0 then
     warn_later(
       ('aineo: skipped %d unreadable report record(s) in %s'):format(skipped, records_file)
@@ -176,7 +217,7 @@ local function show_and_keep(arguments)
   local report_buffer = M.report_buffer()
   local record = { time = current_environment().clock(), report = valid_report }
   local cut_failure = records.append_record(report_view.records_file, record)
-  show_rendering(report_buffer, render.render_records({ record }))
+  show_rendering(report_buffer, render.render_records({ record }, file_check_for_one_rendering()))
   buffer.follow_last_line(report_buffer)
   if cut_failure then
     warn_later(cut_failure)
