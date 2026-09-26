@@ -139,7 +139,7 @@ T['the server entry']['started as Claude Code starts it, completes the recorded 
     get(decoded(answers[3]), 'id'),
     get(decoded(answers[3]), 'result', 'isError'),
   }, { 0, '2025-11-25', 1, 'report', 2, false })
-  eq(report_editor.lines(editor), { '09:05 [done] Refactor the parser — All tests pass' })
+  eq(report_editor.lines(editor), { '✓ 09:05 [done] Refactor the parser — All tests pass' })
 end
 
 T['the relay script'] = MiniTest.new_set()
@@ -178,7 +178,7 @@ T['a report']['reaches the editor the relay was given, and renders in its Report
     2,
     { isError = false, content = { { type = 'text', text = 'Delivered to the Agent Report.' } } },
   })
-  eq(report_editor.lines(editor), { '09:05 [done] Refactor the parser — All tests pass' })
+  eq(report_editor.lines(editor), { '✓ 09:05 [done] Refactor the parser — All tests pass' })
   eq(
     editor.lua_get([[vim.wait(1000, function()
       return #vim.tbl_filter(function(channel)
@@ -226,7 +226,7 @@ T['a report']['reaches an editor listening on a TCP address'] = function()
   relay:send(mcp_messages.recorded('tools/call'))
 
   eq(get(decoded(relay:next_line()), 'result', 'isError'), false)
-  eq(report_editor.lines(editor), { '09:05 [done] Refactor the parser — All tests pass' })
+  eq(report_editor.lines(editor), { '✓ 09:05 [done] Refactor the parser — All tests pass' })
 end
 
 T['a report']['reaches the editor as data: fields holding code render literally and run nothing'] = function()
@@ -245,9 +245,9 @@ T['a report']['reaches the editor as data: fields holding code render literally 
 
   eq(get(decoded(relay:next_line()), 'result', 'isError'), false)
   eq(report_editor.lines(editor), {
-    "09:05 [done] ')) vim.g.aineo_ran = 'task' -- — \"]] vim.g.aineo_ran = 'summary' [[",
-    "      ') os.exit(3) --",
-    '      ' .. shell_line,
+    "✓ 09:05 [done] ')) vim.g.aineo_ran = 'task' -- — \"]] vim.g.aineo_ran = 'summary' [[",
+    "        ') os.exit(3) --",
+    '        ' .. shell_line,
   })
   eq({ editor.lua_get('vim.g.aineo_ran == nil'), vim.uv.fs_stat(witness) == nil }, { true, true })
 end
@@ -265,7 +265,7 @@ T['a report']['whose details are null renders without details'] = function()
   )
 
   eq(get(decoded(relay:next_line()), 'result', 'isError'), false)
-  eq(report_editor.lines(editor), { '09:05 [done] Task — Summary' })
+  eq(report_editor.lines(editor), { '✓ 09:05 [done] Task — Summary' })
 end
 
 T['a report']['for an editor that is gone is a tool error saying so, and the relay keeps serving'] = function()

@@ -274,11 +274,15 @@ environment, so a Neovim started inside it never autostarts.
 A report holds a `task`, a `status` — `started`, `progress`, `blocked`,
 `done` or `failed` — a one-line `summary` and, optionally, `details`. The
 Agent Report shows each as: >
-    HH:MM [status] task — summary
-          details, indented under the status
+    <icon> HH:MM [status] task — summary
+                 details, indented under the status
 <
-A line break in the task or the summary becomes a space. The Report follows
-the newest report.
+The icon is that of its status: `▸` started, `◐` progress, `⊘` blocked, `✓`
+done, `✗` failed. A line break in the task or the summary becomes a space.
+The details start under the `[status]` however wide the icon shows, as
+|'ambiwidth'| and |setcellwidths()| make it at the moment the report is
+shown; reports already shown keep their indent until `:edit` in the Report
+shows them all again. The Report follows the newest report.
 
 The instructions ask Claude to write each report for a person, in plain
 language: what was done or planned, and how, never the reasons for its
@@ -292,29 +296,29 @@ no details. These rules are for reports only, not for Claude's other replies.
 A running Claude Code keeps the instructions it started with.
 
 Colours ~
-The Report shows the time in |hl-AineoReportTime| and the `[status]`,
-brackets included, in the group of its status; only these, never text like
-them in a task, a summary or details. Each group links to one of Neovim's
-own, unless a colour scheme or a `:highlight` of your own colours it. After
-`:colorscheme` or `:highlight clear`, a group nothing colours any more links
-to its default again, with one exception: a group given a default link of
-its own (`:highlight default link`, as some colour schemes do) before aineo
+The Report shows the time in |hl-AineoReportTime|, and the icon and the
+`[status]`, brackets included, in the group of its status; only these, never
+text like them in a task, a summary or details. Each group links to one of
+Neovim's own, unless a colour scheme or a `:highlight` of your own colours it.
+After `:colorscheme` or `:highlight clear`, a group nothing colours any more
+links to its default again, with one exception: a group given a default link
+of its own (`:highlight default link`, as some colour schemes do) before aineo
 first defined it goes back to that link, until the Report shows reports
-again — a new report, or `:edit` in the Report. aineo defines the groups
-when the Report first shows a report.
+again — a new report, or `:edit` in the Report. aineo defines the groups when
+the Report first shows a report.
 
                                                           *hl-AineoReportTime*
 AineoReportTime      the time, `HH:MM`, linked to `Comment`
                                                        *hl-AineoReportStarted*
-AineoReportStarted   `[started]`, linked to `DiagnosticInfo`
+AineoReportStarted   `▸` and `[started]`, linked to `DiagnosticInfo`
                                                       *hl-AineoReportProgress*
-AineoReportProgress  `[progress]`, linked to `DiagnosticHint`
+AineoReportProgress  `◐` and `[progress]`, linked to `DiagnosticHint`
                                                        *hl-AineoReportBlocked*
-AineoReportBlocked   `[blocked]`, linked to `DiagnosticWarn`
+AineoReportBlocked   `⊘` and `[blocked]`, linked to `DiagnosticWarn`
                                                           *hl-AineoReportDone*
-AineoReportDone      `[done]`, linked to `DiagnosticOk`
+AineoReportDone      `✓` and `[done]`, linked to `DiagnosticOk`
                                                         *hl-AineoReportFailed*
-AineoReportFailed    `[failed]`, linked to `DiagnosticError`
+AineoReportFailed    `✗` and `[failed]`, linked to `DiagnosticError`
 
 Reports are kept per working directory, under `stdpath('state')` in
 `aineo/reports/`, and shown again when aineo opens in that directory. The
