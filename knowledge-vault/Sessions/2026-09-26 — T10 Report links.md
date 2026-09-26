@@ -272,15 +272,15 @@ X8 survived both PR test files before the correction, as did X1–X7 and X11 (th
 
 ## Readings for the MVP review
 
-The orchestrator's readings, from the brief:
+The orchestrator's readings, from the brief — numbered MR126–MR130 in [[Review/2026-09-24 — v1 MVP readings review]] by the knowledge pass, with this packet's own as MR131 and the limits MR132–MR133:
 
-- RL2's rule and table, which the user saw only as "trailing punctuation such as a final '.' or ')'".
-- An em dash, a curly quote or an ellipsis right after a URL, with no space, is taken into the link (`see https://x.y/a—it` → `https://x.y/a—it`), as Neovim's own `gx` does. The em dash row pins the em dash; since the fix round, a row each pins the curly quote (`“https://x.y/a”` → `https://x.y/a”`) and the ellipsis (records review's Mq kills both).
-- **A link never holds a byte that is not part of well-formed UTF-8** (the orchestrator's decision on G2): it ends at the first such byte, as it ends at a control character.
-- A control character ends a link, so a planted escape sequence never reaches the terminal (RL1).
-- One group for every link, `AineoReportLink`, linked to `Underlined`.
+- MR126: RL2's rule and table, which the user saw only as "trailing punctuation such as a final '.' or ')'".
+- MR127: an em dash, a curly quote or an ellipsis right after a URL, with no space, is taken into the link (`see https://x.y/a—it` → `https://x.y/a—it`), as Neovim's own `gx` does. The em dash row pins the em dash; since the fix round, a row each pins the curly quote (`“https://x.y/a”` → `https://x.y/a”`) and the ellipsis (records review's Mq kills both).
+- MR129: **a link never holds a byte that is not part of well-formed UTF-8** (the orchestrator's decision on G2): it ends at the first such byte, as it ends at a control character.
+- MR128: a control character ends a link, so a planted escape sequence never reaches the terminal (RL1).
+- MR130: one group for every link, `AineoReportLink`, linked to `Underlined`.
 
-And this packet's own reading: **letters, digits, spaces and control characters are read as ASCII bytes, with C1 added.** So a link may start right after a non-ASCII letter (`caféhttps://x.y/a` → `https://x.y/a`), and a non-ASCII space (U+00A0, U+3000) does not end one, as `dev`'s `gx` does on U+00A0. Controls are exactly the brief's C0, DEL and C1. The help says so since the fix round, and the no-break space row pins it.
+And this packet's own reading, MR131: **letters, digits, spaces and control characters are read as ASCII bytes, with C1 added.** So a link may start right after a non-ASCII letter (`caféhttps://x.y/a` → `https://x.y/a`), and a non-ASCII space (U+00A0, U+3000) does not end one, as `dev`'s `gx` does on U+00A0. Controls are exactly the brief's C0, DEL and C1. The help says so since the fix round, and the no-break space row pins it.
 
 ## Task lines
 
@@ -290,7 +290,7 @@ The wave holds its marks (rule 6). The line T10 would take:
 
 ## Limits
 
-- **⌘-click is the terminal's.** The suite pins the extmark's `url`, not the click; `report-links.txt` §2 measured the TUI writing it as OSC 8 on both versions.
+- **⌘-click is the terminal's** (MR132). The suite pins the extmark's `url`, not the click; `report-links.txt` §2 measured the TUI writing it as OSC 8 on both versions.
 - **A failing case of the details table prints its text to the runner's output.** `vim.inspect` escapes C0 controls, but prints bytes of 0x80 and above raw: the C1 rows' and the ill-formed byte rows' text reaches the terminal of whoever runs a failing suite. The rows only print when they fail.
 - **Only `http` and `https`.** File paths are T17's.
 
@@ -298,8 +298,23 @@ The wave holds its marks (rule 6). The line T10 would take:
 
 - The merge check against T14 is recorded under *Verification*, at T14's `0caf889`; whichever of T10 and T14 lands second re-runs it.
 - **The brief's "no regression" rows:** `dev`'s own `gx` is wrong on `See ~~https://x.y/a~~ now` and on the U+009D row (*What was done*), so those rows are fixes, not kept behaviour. The orchestrator records the brief's error in the wave's retrospective; the brief is left as dispatched.
-- **`lua/aineo/mcp/editor.lua:10–16`'s docstring**, outside this packet's boundary, says a report shows in "tens of milliseconds, even for a report at the line limit". With this finder, one report at the line limit takes up to 0.5 s on arrival and 0.6 s on `:edit` (the re-measure of PR #52: 0.49 s and 0.61 s on 0.12.5, `http://a<` repeated), and redrawing the 2 MiB of records the Report keeps takes 1.3 s on `:edit` (1.27 s); a link followed by 1 MB of `)` takes 0.15 s. That is hundreds of milliseconds, not tens: a later packet corrects that docstring.
+- **`lua/aineo/mcp/editor.lua:10–16`'s docstring**, outside this packet's boundary, says a report shows in "tens of milliseconds, even for a report at the line limit". With this finder, one report at the line limit takes up to 0.5 s on arrival and 0.6 s on `:edit` (the re-measure of PR #52: 0.49 s and 0.61 s on 0.12.5, `http://a<` repeated), and redrawing the 2 MiB of records the Report keeps takes 1.3 s on `:edit` (1.27 s); a link followed by 1 MB of `)` takes 0.15 s. That is hundreds of milliseconds, not tens: a later packet corrects that docstring. The delay is MR133.
 
 ## Commits
 
-*Recorded after the merge.*
+Merged by rebase into `dev` on 2026-09-26, PR #52. The knowledge pass maps each commit of the branch to its hash on `dev`:
+
+| on the branch | on `dev` | subject |
+|---|---|---|
+| `104a03d` | `12a37fe` | Underline the Report's web links and give each its address |
+| `d7b676d` | `1e1a4a2` | Pin the rest of the Report's link rule, drop a dead quote |
+| `73db23c` | `93b473f` | Give the header-link case a line of details to land on |
+| `ff58448` | `a2d2fcc` | Record T10's session: Report links, red/green, mutants |
+| `86f590e` | `932aa3e` | Find the Report's links in linear time, stop at bad UTF-8 |
+| `cb1c58c` | `602a251` | Record T10's fix round and correct the session's counts |
+| `2bfef60` | `0ecc4e6` | Pin a third or fourth byte of 0xC0 or more ending a link |
+| `908ba76` | `9271473` | Pin the characters at the edges of well-formed UTF-8 in a link |
+| `bbd7107` | `08f3ced` | Bound a link and a line limit of brackets, and name what it shows |
+| `0ec7ef5` | `d30ff4d` | Record T10's correction and the worst case at the line limit |
+
+Released in `v0.2.4` (PR #56, `main` at `89e6c87`).
