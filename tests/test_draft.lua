@@ -726,6 +726,30 @@ local KEEP_INPUT = [[
   return pcall(draft.keep_draft, _G.input)
 ]]
 
+--- Makes the child's `_G.input` a new, empty scratch buffer with an
+--- 'undolevels' of its own, 7, shown in the current window.
+local NEW_BUFFER_WITH_ITS_OWN_UNDOLEVELS = [[
+  _G.input = vim.api.nvim_create_buf(false, true)
+  vim.bo[_G.input].undolevels = 7
+  vim.api.nvim_win_set_buf(0, _G.input)
+]]
+
+T['the draft']["put into a buffer leaves the buffer's own 'undolevels' as they were"] = function()
+  local state = fixture.directory('draft-undolevels-state')
+  fixture.write(
+    'draft-undolevels-state/aineo/drafts/' .. vim.fs.basename(draft_file(state)),
+    { 'Refactor the parser' }
+  )
+  child.lua(NEW_BUFFER_WITH_ITS_OWN_UNDOLEVELS)
+
+  child.lua(KEEP_INPUT, { state, WORKING_DIRECTORY })
+
+  eq({
+    input = child.lua_get(INPUT_LINES),
+    undolevels = child.lua_get('vim.bo[_G.input].undolevels'),
+  }, { input = { 'Refactor the parser' }, undolevels = 7 })
+end
+
 T['a buffer that is not modifiable'] = MiniTest.new_set()
 
 T['a buffer that is not modifiable']['is told once as a warning that the draft cannot be put in, and raises nothing'] = function()

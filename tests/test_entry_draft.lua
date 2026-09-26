@@ -213,6 +213,45 @@ T[':bdelete of Input']['while the layout is open brings the draft back and keeps
   })
 end
 
+T[':bdelete of Input while its window is closed'] =
+  MiniTest.new_set({ parametrize = { { 'r' }, { 'c' } } })
+
+T[':bdelete of Input while its window is closed']['then \\r or \\c, then \\i, brings the draft back and keeps what is typed after it'] = function(
+  key
+)
+  local draft = own_state_directory('entry-draft-bdelete-closed-' .. key .. '-state')
+  entry.use_fake(child, claude_session.fake('entry-draft-bdelete-closed-' .. key, 'ready'))
+  child.cmd('Aineo open')
+  entry.set_input(child, { 'Refactor the parser' })
+  wait_for_draft(draft, 'Refactor the parser\n')
+  local input = child.lua_get("require('aineo.layout').input_buffer()")
+  child.lua('vim.api.nvim_win_close(vim.fn.bufwinid(...), true)', { input })
+  child.cmd('bdelete ' .. input)
+  local loaded_after_bdelete = child.lua_get('vim.api.nvim_buf_is_loaded(...)', { input })
+  entry.press(child, '\\' .. key)
+  entry.press(child, '\\i')
+  local input_after_focus = child.lua_get(INPUT_LINES)
+
+  entry.set_input(child, { 'Rename the lexer' })
+
+  wait_for_draft(draft, 'Rename the lexer\n')
+  eq({
+    loaded_after_bdelete = loaded_after_bdelete,
+    same_input = child.lua_get("require('aineo.layout').input_buffer()") == input,
+    current = entry.current_window(child),
+    input_after_focus = input_after_focus,
+    draft_after_typing = read_draft(draft),
+    messages = entry.messages(child),
+  }, {
+    loaded_after_bdelete = false,
+    same_input = true,
+    current = 'aineo://input',
+    input_after_focus = { 'Refactor the parser' },
+    draft_after_typing = 'Rename the lexer\n',
+    messages = {},
+  })
+end
+
 T['a bare interactive start'] = MiniTest.new_set()
 
 T['a bare interactive start']['restores the draft into the Input it opens'] = function()
