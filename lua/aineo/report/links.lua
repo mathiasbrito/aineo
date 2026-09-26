@@ -22,8 +22,9 @@ local RUN = '^[^%z\1-\32\127<>"|`]*'
 local C1_CONTROL = '\194[\128-\159]'
 
 --- The characters a link never ends in: punctuation that closes the
---- sentence or the emphasis around it.
-local TRAILING_PUNCTUATION = '[.,;:!?\'"*~]$'
+--- sentence or the emphasis around it. A `"` never reaches the end of a
+--- link: it ends the run (`RUN`).
+local TRAILING_PUNCTUATION = "[.,;:!?'*~]$"
 
 --- Each closing bracket, by the opening bracket it pairs with.
 local OPENING_BRACKETS = { [')'] = '(', [']'] = '[', ['}'] = '{' }
