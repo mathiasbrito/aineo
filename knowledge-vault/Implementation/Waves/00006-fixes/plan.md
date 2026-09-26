@@ -355,7 +355,7 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 **The request, and the answers.**
 - The user asked on 2026-09-25, fix 4: "It would be good to detect links and make them clickable in the terminal, as well in the agent report window". The wave's first plan made the Report's part a later small fix, reserved T10 for it, and left its behaviour open (*Packet T11*, *The task ID*).
 - **The terminal needs no code.** Asked on 2026-09-26 whether ⌘-click on a link in Claude's pane opened it in the browser, the user answered "Yes, it opens".
-- **The Report's links.** Asked how they should work, the user chose "⌘-click, underlined (Recommended)", described as: "Every http:// or https:// address in the Report (task, summary or details) is underlined, and ⌘-click opens it in your browser, the same way links in Claude's pane work in iTerm2. Trailing punctuation such as a final '.' or ')' is left out of the link. `gx` on a link keeps working too. Small fix, after the icons merge." The user added a note: "but keyboard also". `gx` is that keyboard path, and T10 pins it (RL3).
+- **The Report's links.** Asked how they should work, the user chose "⌘-click, underlined (Recommended)", described as: "Every http:// or https:// address in the Report (task, summary or details) is underlined, and ⌘-click opens it in your browser, the same way links in Claude's pane work in iTerm2. Trailing punctuation such as a final '.' or ')' is left out of the link. `gx` on a link keeps working too. Small fix, after the icons merge." The user added a note: "but keyboard also". Asked whether Neovim's own `gx` is enough, the user chose "gx is enough (Recommended)", described as: "`gx` on a web link opens it in the browser; T10 makes it open the whole link. For file paths, `gf` and `gF` already open them in the middle column." T10 pins it (RL3).
 - **Measured before planning** (`evidence/report-links.txt`, both versions): an extmark takes a `url`; the TUI draws it as an OSC 8 hyperlink, with or without `TERM_PROGRAM`; `gx` on it opens exactly its url; the web-link rule's table (§5) is consistent. Without an extmark, Neovim's own `gx` already leaves out trailing punctuation, and cuts only the Wikipedia row short (§6): that row is RL3's red case.
 
 **The six rules for T10**, recomputed on 2026-09-26 against every open packet and every claimed wave (only this one):
@@ -365,7 +365,7 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 | rule | T10 |
 |---|---|
 | 1 dependencies | T11, done ✓ |
-| 2 files | `lua/aineo/report/` (`render.lua`, `colours.lua`, `buffer.lua`, or a new file of the home); `tests/test_report*.lua`, new cases, or a new `tests/test_report_links.lua`; `doc/aineo.txt` › `*aineo-report*`. With T14's fix round: T14 owns `lua/aineo/draft/`, `plugin/aineo.lua`, its own tests, the test runner's start of a run, and `doc/aineo.txt` › `*aineo-layout*`, where `*aineo-draft*` sits: other sections of the help ✓. With #47: `.claude/` only ✓. T12 and T17 are not dispatched ✓ |
+| 2 files | `lua/aineo/report/` (`render.lua`, `colours.lua`, `buffer.lua`, `init.lua`, or a new file of the home); `tests/test_report*.lua`, new cases, or a new `tests/test_report_links.lua`; `doc/aineo.txt` › `*aineo-report*`. With T14's fix round: T14 owns `lua/aineo/draft/`, `plugin/aineo.lua`, its own tests, the test runner's start of a run, and `doc/aineo.txt` › `*aineo-layout*`, where `*aineo-draft*` sits: other sections of the help ✓. With #47: `.claude/` only ✓. T12 and T17 are not dispatched ✓ |
 | 3 schema | none: the report format and the saved records are unchanged ✓ |
 | 4 dependencies | none ✓ |
 | 5 decisions | decided by the user ("⌘-click, underlined") ✓ |
@@ -378,6 +378,9 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 **Order:** now, beside T14's fix round. T17 follows T10's merge.
 
 **Verification mutants:**
+- a control character admitted into a link (the brief review's finding 1: the `url` reaches the terminal unescaped);
+- links set in a namespace `append_rendering()` does not clear;
+- the trailing characters left out once, not repeatedly;
 - the url left off the extmark, the group kept;
 - the trailing punctuation kept;
 - every trailing `)` dropped, balanced or not;
@@ -387,7 +390,12 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 - `AineoReportLink` linked to another group, or defined without `default`;
 - the links drawn when a report arrives but not when the Report shows its records again (`:edit`, the Report made anew).
 
-**Brief:** `brief-t10-report-links.md`.
+**Brief:** `brief-t10-report-links.md`, corrected after its brief review, `brief-review-t10-report-links.md`: dispatch after corrections.
+- **A link ends at every control character.** The review measured, on both versions, that the TUI writes an extmark's `url` to the terminal byte for byte, and that a report's text may hold any control character: a planted `ESC \` ended the OSC 8 and ran an OSC 0; a planted OSC 52 wrote the clipboard. RL1 now states it, and RL2's table pins it.
+- RL2 leaves out `*` and `~` and ends at `|`, since otherwise `gx` would regress on `**url**`; it leaves trailing characters out repeatedly; links never overlap; RL3 requires no regression of `gx` on any row it gets right today.
+- RL1 compares the whole list of `url` extmarks on each path.
+- The merge check also takes the merged tree's `tests/test_doc.lua`; four line ranges; the summary's offset; `init.lua` in the boundary; `bugfix/`, as the template gives small fixes; the colours test's new name; the em dash as a reading.
+- The review found that "iTerm2 opens such links" claimed a mechanism the user's answer does not show; the brief now says only that ⌘-click opens a link in Claude's pane.
 
 ## Packet T17 — 2026-09-26
 
@@ -395,7 +403,7 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 - While T10 was being planned, the user asked on 2026-09-26: "but I woul like to have file paths detected and have the file opened in the center window that we use to open files... is this also planned right?" It was not.
 - **Measured first** (`evidence/report-links.txt`, §4, 0.12.5): `gf` on a path in the Report already opens the file in the middle column, through C9's redirect, and `gF` on `notes.txt:3` opens it at line 3; the Report keeps its buffer. So the keyboard part exists; the underline and a mouse action do not. ⌘-click cannot serve here: iTerm2 handles it, and would open the file outside Neovim.
 - Asked how file paths should work, the user chose "Double-click opens (Recommended)", described as: "A path to a file that exists (relative to the working directory or absolute, optionally with :line) is underlined like a link. Double-clicking it, or gf / gF on the keyboard (they already work), opens the file in the middle column, at the line if given. ⌘-click stays for web links." Then: "add an underline to file paths detect if it is not available currently".
-- **Its own packet.** The option offered to add file paths to T10. A small fix changes one behaviour in one home (orchestrate §3), so the file paths run as their own small fix after T10, in the same home. The class rests on the user's answer for the fixes of 2026-09-25, "Small fixes where allowed", and on fix 4's Report part being called a small fix.
+- **Its own packet.** The question offered to add file paths to T10, and the user did not choose its "Later, not in T10". A small fix changes one behaviour in one home (orchestrate §3), so the orchestrator split them into their own packet, and first labelled it a small fix itself, which §3 does not allow. The records review of PR #50 and the brief review of PR #49 found it. Asked, the user called it one: "Small fix, after T10 (Recommended)", described as: "Two reviews (one combined attack and test check, one records check). No separate deep attack review, and a re-measure only if a mechanism changes. Faster."
 
 **Order:** after T10 merges, since both change the Report's rendering. Its brief is written then, against T10's merged code, and reviewed before dispatch.
 
