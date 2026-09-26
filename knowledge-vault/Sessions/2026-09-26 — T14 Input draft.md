@@ -20,13 +20,13 @@
   - Changes are seen through `nvim_buf_attach`'s `on_lines`. A non-empty change is saved `SAVE_DELAY_MS` (1000 ms) later. A change that empties the buffer empties the draft at once.
   - A change still pending is saved at the buffer's `BufUnload`, and nothing else is written then; since the fix round, first at `QuitPre` too. A restore happens before the buffer is attached, so it is no change; since the fix round, it is not undoable either.
   - The draft is restored only into an empty buffer that is not kept already. `on_detach`, which fires when `:bdelete`, `:edit!` or a wipe drops the text, ends the keeping; since the fix round, a buffer-local `BufWinEnter` hands the buffer over again the next time a window shows it.
-  - Writes follow three patterns copied from `lua/aineo/report/records.lua`: a temporary file named `<draft>.<pid>.cut`, renamed over the draft and following a symlink through `fs_realpath`; `0600`; and `mkdir()` tried again after a race. The file writes (`write_file`, `make_directory`) are a declared dependency, `aineo.draft.Files`, that no production caller overrides.
+  - Writes follow three patterns copied from `lua/aineo/report/records.lua`: a temporary file named `<draft>.<pid>.cut`, renamed over the draft and following a symlink through `fs_realpath`; `0600`; and `mkdir()` tried again after a race. The file writes are a declared dependency, `aineo.draft.Files`, that no production caller overrides: since the fix round `open_file`, `write`, `close` and `make_directory` (`write_file` is a local of the home, built on them); at the packet, `write_file` and `make_directory`.
   - A failed read or write is a `WARN` starting `aineo: `, once per editor for each. Nothing raises: since the fix round, a draft that cannot be put into Input (an Input that is not `'modifiable'`, as `nvim -M` makes it) is a read failure too, and no longer raises `nvim_buf_set_lines()`'s `Buffer is not 'modifiable'` out of `open()`.
 - **`plugin/aineo.lua`:**
   - `kept_places()` takes `stdpath('state')` and `getcwd()` once, and both the report home and the draft home get them from it. So the Reports and the draft are kept for the same working directory.
-  - `keep_input_draft()` gives the draft home its environment the first time, and hands it `layout.input_buffer()`. `open()` calls it after `layout.open()`. `focus()` calls it only when its arrangement callback ran, which is when the layout opened.
+  - `keep_input_draft()` gives the draft home its environment the first time, and hands it `layout.input_buffer()`. `open()` calls it after `layout.open()`. `focus()` calls it only when its arrangement callback ran, which is when it reopened the role's window — the layout's first opening among them, not only it (the attack review of PR #46; `focus()`'s docstring says so since the fix round).
   - Nothing is required at startup.
-- **`tests/test_draft.lua`** (22 cases) drives the home directly in a child. **`tests/test_entry_draft.lua`** (12 cases) drives it through `:Aineo open`, `\i`, `\r`, `\c`, `\s`, `\o`, `:Aineo send` and the autostart. Every case that writes or restores a draft has a state directory of its own.
+- **`tests/test_draft.lua`** (22 cases at the packet's `e0929f0`; 37 after the fix round, 41 after the correction) drives the home directly in a child. **`tests/test_entry_draft.lua`** (12 cases at `e0929f0`; 15 after the fix round, 17 after the correction) drives it through `:Aineo open`, `\i`, `\r`, `\c`, `\s`, `\o`, `:Aineo send` and the autostart. Every case that writes or restores a draft has a state directory of its own.
 - **`doc/aineo.txt`, inside `*aineo-layout*` only:**
   - the Input bullet points at the new subsection;
   - a new subsection, `Input's draft ~` `*aineo-draft*`, says where the draft is kept and when, when it is restored and cleared, ID6's sharing, and the quit-handler limit.
@@ -157,7 +157,7 @@ Every mutant is its literal edit, applied from a pristine copy and run alone aga
 - **I1 and F7, text dropped while Input's window stays** (`:bdelete` with the layout open, `:edit!`). A buffer-local `BufWinEnter` hands the buffer over again the next time a window shows it; the draft comes back (ID3) and later typing is saved. The attack's `on_detach` reschedule was measured and rejected: after `:bdelete` its callback runs before the layout puts Input back into its window, so it found Input unloaded and the integrity's entry pin stayed red (`draft_after_typing = "Refactor the parser\n"`). `focus()`'s `opened` flag stays; its docstring now says "reopened the role's window".
 - **F5, `u` after a restore.** The restore runs with `'undolevels'` at -1 and puts the buffer's value back.
 - **F4, the quit save skipped by an earlier handler.** A `QuitPre` save, in `aineo.draft`, created at the first `keep_draft()` (ID8 holds: S1 and S2 still killed). It is quiet; a failure leaves the change pending for the `BufUnload` save, which retries and warns. `QuitPre` fires for `:q`, `:qa`, `:qa!`, `:wqa`, `:xa`, `:x`, `ZZ` and `ZQ`, and not for `:cquit` (`t14f-quitpre.sh`, 0.12.5 and 0.11.6).
-- **F6, a warning that took a typed key.** In Insert or Replace mode `warn_once` waits for `InsertLeave`.
+- **F6, a warning that took a typed key.** In Insert or Replace mode `warn_once` waits for `InsertLeave`. (The correction replaces this with a `ModeChanged` wait that covers `<C-c>` and Terminal mode; see *Correction*.)
 - **F3, a signal.** No code fix: the help, *Limits* and the PR body now say that a Neovim ended by a signal saves nothing at quit.
 - **I2, a draft leaking between runs.** `make test` and `make test_file` remove `.tests/state/nvim/aineo/drafts` before the runner starts.
 - **The help** (`*aineo-draft*`): the heading split onto two lines (R4; all 14 `~` headings now captured as `markup.heading.4` on both versions, with the records review's `records46-heading2.lua`), the restore after `:edit!`/`:bdelete`, the undo, the `QuitPre`/`:cquit` account, the signal, and the warning deferred in Insert mode.
@@ -203,7 +203,7 @@ Every mutant is its literal edit, applied from a pristine copy and run alone aga
 | # | Literal edit | Against | Result |
 |---|---|---|---|
 | N1 | the buffer-local `BufUnload` autocommand deleted | TD | killed, 3: `not saved yet is saved when :bdelete drops the text` (`Left: nil`), `is watched once…`, `told as a warning as Neovim quits` |
-| N2 | `if opened then keep_input_draft() end` → `keep_input_draft()` | TE; the whole suite | **survives both.** Equivalent on every state where Input's window stays: text dropped while it stays is re-kept at `BufWinEnter` before any `\i`, `\r` or `\c` can run, and a focus that finds the window gone sets `opened` |
+| N2 | `if opened then keep_input_draft() end` → `keep_input_draft()` | TE; the whole suite | **survives both.** This row called it equivalent; **that was false** (the re-measure of PR #46, finding 3): a `\r` or `\c` while Input is unloaded — its window closed, then `:bdelete` — hands `keep_draft()` an unloaded Input, which is marked kept with nothing restored or attached, so the `BufWinEnter` re-keep at the next `\i` returns early. The correction's `:bdelete of Input while its window is closed` case kills it (see *Correction*) |
 | N3 | `SAVE_DELAY_MS = 1000` → `4000` | TD; the whole suite | **survives both**, accepted (decision 10): the save is waited for up to 5 s |
 | N6 | `is_empty` without its `nvim_buf_line_count(buffer) == 1 and` | TD | killed, 2: the blank-first-line cases |
 | N10 | `vim.bo[buffer].buftype = 'acwrite'` after the restore | TD | killed, 2: `after a restore writes nothing`, `share one draft…` (`Left: { -1 }`) |
@@ -234,6 +234,50 @@ Every mutant is its literal edit, applied from a pristine copy and run alone aga
 
 **Suites of the round** are in *Verification of the fix round* below.
 
+## Correction
+
+**Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-lua-developer`), a fresh agent. **Worked:** the re-measure of PR #46 at `0caf889` (findings 1–6 and its survivor U1) and the orchestrator's seven decisions on them. No fix-round decision was reopened; no rebase.
+
+**What changed**
+- **Finding 1, the warning lost at `<C-c>` and still prompting in Terminal mode.** `warn_once` arms, in any mode matching `^[iRt]`, a one-shot `ModeChanged` with the pattern `*:[^iRt]*`, in place of `InsertLeave`: `<C-c>` fires no `InsertLeave` (`:h i_CTRL-C`), and Claude's terminal was not deferred at all. The re-measure's measured fix. The help and the docstrings of `warn_once()` and `keep_draft()` say when the warning shows.
+- **Finding 2, a failing `QuitPre` handler.** Records only: an earlier `QuitPre` handler that fails (a `throw`, or any error when the quit runs from Lua) skips both saves on every quit that fires `QuitPre`. The help, `keep_draft()`'s docstring, *Limits*, this note's decision on the quit hook and the PR body say so; `c1705c4`'s message names `4e1cdb8`'s "so `:cquit` keeps the old limit" as incomplete.
+- **Finding 3, N2 not equivalent.** The re-measure's case goes in as a pin of correct code; the N2 row above, the PR body and `c1705c4`'s message correct `4e1cdb8`'s "equivalent".
+- **Finding 4, a failed rename.** `replace_file` removes the cut file when `fs_rename` fails too. The re-measure's measured fix.
+- **Finding 5, the `Makefile`.** `override TEST_DRAFTS := …`, as `TEST_HOME` is. `make -n test TEST_DRAFTS=/tmp/elsewhere` printed `rm -rf '/tmp/elsewhere'` before and `rm -rf '<checkout>/.tests/state/nvim/aineo/drafts'` after; the `MAKEFLAGS` form names the checkout's directory after too. No case, as the brief allowed.
+- **Finding 6, records.** This note's *What was done* (the `Files` fields, `focus()`, the case counts), *Verification*'s heading, and the PR body's `focus()` sentence and its packet-time counts, now labelled.
+- **U1.** A pin that a buffer's own `'undolevels'` is put back after a restore.
+
+**Unit list**, in the order worked: finding 5 (the dry runs); finding 1's `<C-c>` pin, then its Terminal pin, then the fix in two steps (`ModeChanged` for `^[iR]`, then `t`); finding 4's pin, then its fix; the N2 and U1 pins; the records.
+
+**Seen red: 3 new cases**, each by assertion, on `0caf889`'s home, on 0.12.5 and on 0.11.6, before its fix:
+
+| Case | Red |
+|---|---|
+| `a draft that cannot be written` › `is told once Insert mode is left with <C-c>, before a quit` | `Left: nil` (no warning written before the quit) |
+| `a draft that cannot be written` › `is told once Terminal mode is left, not while typing in a terminal` | `while_in_terminal`, `left = 1, right = 0`; still red after the first step (`^[iR]` with `ModeChanged`), green after `t` |
+| `a change` › `whose file cannot replace the draft leaves no file beside it` | the listing held `….txt.<pid>.cut` at key 2 |
+
+The first two are the re-measure's `rm46_pins.lua`; the first adds a quit after `<C-c>`, as the brief words it. The fix round's `is told once Insert mode is left, not while typing` stays green.
+
+**Arrived green: 3 new cases** (2 definitions; one parametrised), each pinning code written ahead of it (`4e1cdb8`), each killed by assertion by its mutant on 0.12.5 and 0.11.6:
+- `:bdelete of Input while its window is closed` › `then \r or \c, then \i, brings the draft back and keeps what is typed after it` × `r`, `c` (the re-measure's `rm46_n2.lua`): N2, 2 of 2 (`input_after_focus = { "" }`, `draft_after_typing = "Refactor the parser\n"`).
+- `the draft` › `put into a buffer leaves the buffer's own 'undolevels' as they were`: U1 (`left = -123456, right = 7`).
+
+**Mutants of the correction**, each its literal edit applied to a pristine copy of `c1705c4`'s file (the correction's last code commit; later commits touch only this note), run alone against a copy of the test file narrowed to the group named, on 0.12.5 and on 0.11.6, the file compared with its pristine copy after each (`.claude/local/orchestrator/t14c-mut.py`). Every kill is by assertion (`Failed expectation`, no `Error` block), and every row gives the same result on both versions.
+
+| # | Literal edit | Against | Result |
+|---|---|---|---|
+| N2 | `plugin/aineo.lua`: `  if opened then\n    keep_input_draft()\n  end` → `  keep_input_draft()` | TE, `:bdelete of Input` (3 cases) | killed, 2: the new case × `r`, `c` |
+| U1 | `  vim.bo[buffer].undolevels = undolevels\n` → `  vim.bo[buffer].undolevels = -123456\n` | TD, `the draft` (10) | killed, 1: the `'undolevels'` case |
+| F6 (the round's row, on this line) | `  if vim.api.nvim_get_mode().mode:find('^[iRt]') then\n` → `  if false then\n` | TD, `cannot be written › is told once` (4) | killed, 2: the Insert-mode case (`while_typing` held it) and the Terminal case |
+| F1x (finding 1's fix out: `0caf889`'s code) | `…find('^[iRt]') then` + `create_autocmd('ModeChanged', {` + `pattern = '*:[^iRt]*',` → `…find('^[iR]') then` + `create_autocmd('InsertLeave', {` | the same (4) | killed, 2: `<C-c>` (`Left: nil`) and Terminal (`while_in_terminal` 1) |
+| F1x-t | the same three lines → `^[iR]` and `*:[^iR]*`, `ModeChanged` kept | the same (4) | killed, 1: Terminal |
+| F1x-IL | `create_autocmd('ModeChanged', {` + `pattern = '*:[^iRt]*',` → `create_autocmd('InsertLeave', {` | the same (4) | killed, 2: `<C-c>` (`Left: nil`) and Terminal (`once_left`, `left = 0`) |
+| F4x (finding 4's fix out: `0caf889`'s code) | `  if not renamed then\n    vim.uv.fs_unlink(cut)\n    return rename_failure\n  end\n` → `  return not renamed and rename_failure or nil\n` | TD, `a change › whose` (5) | killed, 1: the rename case |
+| F4x-b | `  if not renamed then\n    vim.uv.fs_unlink(cut)\n` → `  if not renamed then\n` | the same (5) | killed, 1: the rename case |
+
+No survivor, so no whole-suite re-run of a mutant.
+
 ## Decisions & reasoning
 
 - **The quit hook is the buffer-local `BufUnload`, not `VimLeavePre`.**
@@ -243,7 +287,7 @@ Every mutant is its literal edit, applied from a pristine copy and run alone aga
     - A Vimscript `throw` in an earlier `BufUnload` or `BufWinLeave` handler skipped both the draft's save and `VimLeavePre`. A Lua error in an earlier `BufUnload` handler skipped nothing — for a quit typed at top level, as this probe's `-c` ran it. The attack review of PR #46 (F4) measured that a quit run from Lua (`vim.cmd('qa!')`) is skipped by a Lua error too; the fix round added a `QuitPre` save before it.
   - So aineo's own `VimLeavePre` stop, of up to 11.8 s, never runs before the save, and the order of `VimLeavePre` handlers does not matter.
   - The same handler saves a pending change when `:bdelete` or a wipe drops Input's text.
-  - The limit is in the help: a `BufWinLeave` handler, or a `BufUnload` handler run before aineo's, that throws. Since the fix round it holds for `:cquit` alone, which fires no `QuitPre`.
+  - The limit is in the help: a `BufWinLeave` handler, or a `BufUnload` handler run before aineo's, that throws. Since the fix round it holds for `:cquit` alone, which fires no `QuitPre`; and a `QuitPre` handler run before aineo's that fails skips both saves on every other quit (see *Limits*).
 - **The delay is 1000 ms, one delayed save per change.** That saves every change within a second, so a crash loses at most that last second. No throttle: it would only cut the number of writes during continuous typing, and only a timing-dependent count could tell the two apart (YAGNI).
 - **The draft file is text, each line ending in a newline** (`writefile()`'s format), and empty once Input is empty. The empty file is what Send leaves.
 - **The file writes are a declared dependency, `aineo.draft.Files`, as plain dependency inversion** (since the fix round at the descriptor level: `open_file`, `write`, `close`, `make_directory`, so that a short write and a failed close can be injected). A torn write is red only through an injected failure (ID5). `make_directory` is in the dependency too, so that the retry is red through an injected race.
@@ -251,7 +295,7 @@ Every mutant is its literal edit, applied from a pristine copy and run alone aga
 
 ## Verification
 
-Measured on the branch's final tree:
+Measured on the packet's tree, `e0929f0` (the fix round's and the correction's are below):
 - **0.12.5 (the host's):**
   - `make test`: 842 cases, `Fails (0)`. That is 808 at the base plus 22 in `tests/test_draft.lua` and 12 in `tests/test_entry_draft.lua`.
   - `make lint`: StyLua clean; selene 0 errors, 0 warnings.
@@ -276,6 +320,18 @@ Measured on the round's tested tree (`90ef9b3`; the records commit after it touc
 - **The merge check** with `origin/feature/t11-report-icon` (`b8ef398`): see the PR body; clean, and its merged `doc/aineo.txt` passes `tests/test_doc.lua` on both versions.
 - **A trap met on the way:** the first `make test_file` in a fresh worktree failed one case by a notification Neovim gives when `.tests/state/nvim/` does not exist yet (`log: … not accessible`); the second run was green. Not this round's to fix.
 
+### Verification of the correction
+
+Measured on the correction's last code commit, `c1705c4` (the commit after it touches only this note), after its last code edit:
+- **`make test`, 0.12.5:** 866 cases, `Fails (0) and Notes (0)`, exit 0. **0.11.6** (`NVIM v0.11.6`): 866 cases, `Fails (0) and Notes (0)`, exit 0. Both with `AINEO_TEST_RUN_LIMIT_MS=2700000`, at a load average of 80–170. That is 860 at `0caf889` plus 6.
+- **Alone, 0.12.5:** `tests/test_draft.lua` 41 cases, `tests/test_entry_draft.lua` 17, each `Fails (0)`.
+- **`make lint`:** StyLua clean; selene 0 errors, 0 warnings.
+- **Deep-require check:** every line it prints is inside its own home; none is this PR's.
+- **The help's merge checks**, each merged tree's `doc/aineo.txt` and `tests/test_doc.lua` checked out, tested, then restored from `HEAD`:
+  - `git merge-tree --write-tree origin/bugfix/t10-report-links c1705c4` (T10, PR #52, at `ff58448`): clean, tree `3d384cf7`; `tests/test_doc.lua` 36 cases, `Fails (0)`, on 0.12.5 and 0.11.6.
+  - `git merge-tree --write-tree origin/dev c1705c4` (`6e5c14b`): clean, tree `3b56be2e`; `tests/test_doc.lua` 36 cases, `Fails (0)`, on both versions.
+- The fix round's first-run trap came back once here too: the first narrowed run in this fresh worktree failed by the `log: … not accessible` notification; the second, on the same tree, gave the intended red.
+
 ## Readings for the MVP review
 
 **The orchestrator's readings of D17**, MR105–MR108 of [[Review/2026-09-24 — v1 MVP readings review]]:
@@ -292,6 +348,7 @@ Measured on the round's tested tree (`90ef9b3`; the records commit after it touc
 - From the fix round: the draft is restored after `:edit!` and after `:bdelete` of Input, as soon as Input is shown again, with no hand-off from `\o` or `:Aineo open` (decision 3 of the round).
 - From the fix round: the restore is not the user's edit, so `u` does not take it out (decision 4 of the round).
 - From the fix round: a pending change is saved at `QuitPre` as well as at Input's `BufUnload` (decision 5 of the round).
+- From the correction: a warning raised in Insert, Replace or Terminal mode waits until that mode is left by any key — `<Esc>`, `<C-c>`, `<C-\><C-n>`, `<C-o>` — so it never prompts in Claude's terminal (decision 1 of the correction).
 
 ## Task lines
 
@@ -300,7 +357,11 @@ This wave holds its marks. The line to mark:
 
 ## Limits
 
-- **An earlier handler can skip the quit save, for `:cquit` alone.** Since the fix round a pending change is saved at `QuitPre` (`:quit`, `:qall`, `:wqall`, `:xall`, `ZZ`, `ZQ`; measured on 0.12.5 and 0.11.6) and again at Input's `BufUnload` when that save failed. `:cquit` fires no `QuitPre`, so it has only the `BufUnload` save, which an earlier `BufWinLeave` or `BufUnload` handler can skip: a Vimscript `throw`, or any error when the quit runs from Lua (the attack review of PR #46, F4). The draft then holds what the delayed save kept. The help says so. (Before the fix round this line said a Lua error does not skip the save; that held only for a typed quit.)
+- **An earlier handler that fails can skip the quit saves.** Since the fix round a pending change is saved at `QuitPre` (`:quit`, `:qall`, `:wqall`, `:xall`, `ZZ`, `ZQ`; measured on 0.12.5 and 0.11.6) and again at Input's `BufUnload` when that save failed. Two ways past them, each a Vimscript `throw` or any error when the quit runs from Lua:
+  - `:cquit` fires no `QuitPre`, so it has only the `BufUnload` save, which an earlier `BufWinLeave` or `BufUnload` handler can skip (the attack review of PR #46, F4).
+  - A `QuitPre` handler defined before aineo's — any handler defined at startup, since aineo's is created at the first `keep_draft()` (ID8) — skips both saves, on every quit that fires `QuitPre`: the exception stays pending through `getout()`. Neovim exits 0. Not a regression from `e0929f0`, and no autocommand can fix it: `BufUnload` and `VimLeavePre` are skipped too (the re-measure of PR #46, finding 2, `rm46_probe_quit.lua`, both versions).
+
+  The draft then holds what the delayed save kept. The help says so. (Before the fix round this line said a Lua error does not skip the save; that held only for a typed quit. The fix round's line said `:cquit` alone; that missed the `QuitPre` case.)
 - **A Neovim ended by a signal saves nothing at quit.** Its terminal window closed, `kill`, a killed TUI client: Neovim drops Input's lines before any autocommand can read them (the attack review of PR #46, F3). Like a crash, it loses at most the last second's typing. The help says so. (This line said a NUL byte comes back as a line break; that was false: NUL round-trips, measured by the attack review.)
 - **An unreadable draft prompts at startup.** Its one warning names the draft's path twice and spans more than one screen line, so the autostart holds at a hit-enter prompt until a key. It fires only for a draft that exists and cannot be read. (This line said a restore is undoable; since the fix round it is not.)
 - **A draft for every working directory is kept, never removed.** An emptied Input leaves an empty file, as the Reports leave theirs.
