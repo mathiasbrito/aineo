@@ -191,7 +191,7 @@ Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t
 | MR107 | The draft is restored only into a new or emptied Input, never over text. | T14, ID3 | kept |
 | MR108 | The draft home copies the report home's patterns rather than importing them. | T14, ID5 | open — named only as one of "T14's four readings", never described |
 | MR109 | The report instructions' "no whys" holds for every status: a `blocked` or `failed` report states what blocks or stopped the task, as facts, and leaves out the reasoning behind Claude's choices. | T15, RI1 | open |
-| MR110 | `\o` sets the right column's wrapping again, so a user's `:setlocal nowrap` there lasts until the next `\o`. | T16, RW2 | open |
+| MR110 | Opening or restoring the layout sets the right column's wrapping again: a user's `:setlocal nowrap` there lasts until the next `\o`, or the next `\r`, `\i` or `\c` that reopens a closed window. | T16, RW2, corrected by its records review | open |
 | MR111 | `\tcn`'s subcommand and `<Plug>` names: `:Aineo claude-numbers` and `<Plug>(aineo-claude-numbers)`. | D16; T12's brief › *What was decided already* | open — on no list |
 | MR112 | `\tcn` clears `'relativenumber'` together with `'number'` in Claude's window. | T12, CN1 | open — on no list |
 | MR113 | `\tcn` pressed again restores the values Claude's window had when they were hidden; a window that never had line numbers gets `'number'`. | T12, CN2 | open — on no list |

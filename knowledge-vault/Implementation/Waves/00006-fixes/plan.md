@@ -415,3 +415,56 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
   - The mark written at `VimEnter` without `vim.schedule`, under the startup errors: the run hangs until its 90 s limit. So the scheduling is what keeps the wait from passing at a prompt.
 - **A defect that predates T13:** `lua/aineo/health.lua` evaluates `config.recorded_setup_options()` as an argument to its `pcall`, outside it, so `:checkhealth aineo` fails whole when `setup()` options hold a userdata. It is recorded for a later packet.
 - **Released:** `v0.2.0`, which carries T9 and T13 (PR #37, `main` at `e26838f`).
+- **T15 — PR #39, a small fix**, merged by rebase on 2026-09-26 as `ba7d688` … `d86a0f9` (4 commits). The code of `dev` is identical to the verified tree (`20a8fae` laid over `dev` `2502334`, merge-tree `b496f5c`).
+  - **Reviews** on Opus, by the small-fix class: guarantee by `neovim-lua-developer` at `high` on the reviewer charter, and records by `reviewer`.
+  - **What the guarantee review found:** the instructions were sound, but the tests pinned only key phrases. A text that negated a rule, or put the references at the start, passed every test (G1–G8, G10, G11).
+  - **What the records review found:**
+    - the help and the docstring left out the `blocked`/`failed` rule and said "never why";
+    - a commit gave the brief's "or ID" to the user;
+    - the note lacked sections;
+    - a false claim that new instructions reach Claude "when aineo next starts it", while a running editor keeps the module it loaded.
+  - **The fix round** went to the author:
+    - the writing block and the first line pinned whole;
+    - the reviewer's tighter pins adopted;
+    - "only at the very end" added, test-first;
+    - the help and the records corrected.
+- **The orchestrator's verification** of `20a8fae` laid over `dev`:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`: 776 cases, `Fails (0)`, on 0.12.5 and on 0.11.6;
+  - lint clean.
+- **Six literal mutants** on the whole suite under 0.11.6, all killed by assertion:
+  - references at the start: 2 cases failing;
+  - the plan clause dropped: 2;
+  - "instead of your usual replies": 1;
+  - a why added to the `blocked`/`failed` line: 1;
+  - the no-whys line dropped: 2;
+  - the `done` line dropped: 2.
+
+  The first run of the references mutant found its site twice; it was re-run on a unique one. G2–G6 and G8 were not re-run on the whole suite: text mutants the author killed on the narrowed file.
+- **T16 — PR #40, a small fix**, merged by rebase on 2026-09-26 as `bb46c2e` … `7af0d47` (4 commits). The code of `dev` is identical to the verified tree (`be7af89` laid over `dev` `d86a0f9`, merge-tree `eae53e3`).
+  - **Reviews** as T15's.
+  - **What the guarantee review found:** the guarantee held on both versions. One gap: Claude's window was left alone only under the user's `nowrap`, not under `set wrap` (G9).
+  - **What the records review found:**
+    - "a `:setlocal nowrap` lasts until the next `\o`" was false, since `\r`, `\i` or `\c` reopening a closed window re-wrap too;
+    - a *Rejected* clause was false;
+    - the 774-case runs had been credited to the wrong commit;
+    - a docstring said "window number".
+  - **The fix round** went to the author:
+    - the pin for Claude's window under `set wrap`;
+    - pins for the `focus()` reopening and for `:buffer` in a new window;
+    - the wording corrected everywhere;
+    - a user's `BufWinEnter` `nowrap` recorded as a limit.
+- **The orchestrator's verification** of `be7af89` laid over `dev`:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`: 808 cases, `Fails (0)`, on 0.12.5 and on 0.11.6;
+  - lint clean on a second run. The first run's StyLua aborted under load.
+- **Six literal mutants** on the whole suite under 0.11.6, all killed by assertion:
+  - the options set for the window: 7 cases failing;
+  - `'linebreak'` dropped: 21;
+  - `'breakindent'` dropped: 21;
+  - the options set on the first open only: 7;
+  - Claude's window wrapped too: 1;
+  - the Report only: 13.
+
+  A filter in the orchestrator's script skipped them on the first pass; they were run again.
+- **Released:** `v0.2.1`, which carries T15 and T16, at the user's request to have them at once (PR #42, `main` at `270743b`).
