@@ -75,16 +75,42 @@ T['the time']['shows in AineoReportTime, which links to Comment'] = function()
 
   report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
 
-  eq({ spans_of('AineoReportTime'), link_of('AineoReportTime') }, { { { 0, 0, 5 } }, 'Comment' })
+  eq({ spans_of('AineoReportTime'), link_of('AineoReportTime') }, { { { 0, 4, 9 } }, 'Comment' })
+end
+
+T['the icon'] = MiniTest.new_set({
+  parametrize = {
+    { 'started', 'AineoReportStarted', 19 },
+    { 'progress', 'AineoReportProgress', 20 },
+    { 'blocked', 'AineoReportBlocked', 19 },
+    { 'done', 'AineoReportDone', 16 },
+    { 'failed', 'AineoReportFailed', 18 },
+  },
+})
+
+T['the icon']['shows in the group of its status, and the space after it in none'] = function(
+  status,
+  group,
+  status_end_column
+)
+  start_editor({ '2026-09-24T09:05:00' })
+
+  report_editor.receive(child, { task = 'Task', status = status, summary = 'Summary' })
+
+  eq(all_colours(), {
+    { 0, 0, 3, group },
+    { 0, 4, 9, 'AineoReportTime' },
+    { 0, 10, status_end_column, group },
+  })
 end
 
 T['the status'] = MiniTest.new_set({
   parametrize = {
-    { 'started', 'AineoReportStarted', 15, 'DiagnosticInfo' },
-    { 'progress', 'AineoReportProgress', 16, 'DiagnosticHint' },
-    { 'blocked', 'AineoReportBlocked', 15, 'DiagnosticWarn' },
-    { 'done', 'AineoReportDone', 12, 'DiagnosticOk' },
-    { 'failed', 'AineoReportFailed', 14, 'DiagnosticError' },
+    { 'started', 'AineoReportStarted', 19, 'DiagnosticInfo' },
+    { 'progress', 'AineoReportProgress', 20, 'DiagnosticHint' },
+    { 'blocked', 'AineoReportBlocked', 19, 'DiagnosticWarn' },
+    { 'done', 'AineoReportDone', 16, 'DiagnosticOk' },
+    { 'failed', 'AineoReportFailed', 18, 'DiagnosticError' },
   },
 })
 
@@ -98,12 +124,12 @@ T['the status']['shows, brackets included, in the group of its status, linked to
 
   report_editor.receive(child, { task = 'Task', status = status, summary = 'Summary' })
 
-  eq({ spans_of(group), link_of(group) }, { { { 0, 6, end_column } }, link })
+  eq({ spans_of(group), link_of(group) }, { { { 0, 0, 3 }, { 0, 10, end_column } }, link })
 end
 
 T['the colours'] = MiniTest.new_set()
 
-T['the colours']['cover only the time and the status the render placed, not their like in the text'] = function()
+T['the colours']['cover only the icon, the time and the status the render placed, not their like in the text'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
   report_editor.receive(child, {
@@ -113,7 +139,28 @@ T['the colours']['cover only the time and the status the render placed, not thei
     details = '09:05 [done]',
   })
 
-  eq(all_colours(), { { 0, 0, 5, 'AineoReportTime' }, { 0, 6, 12, 'AineoReportDone' } })
+  eq(all_colours(), {
+    { 0, 0, 3, 'AineoReportDone' },
+    { 0, 4, 9, 'AineoReportTime' },
+    { 0, 10, 16, 'AineoReportDone' },
+  })
+end
+
+T['the colours']['cover no icon in the text'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+
+  report_editor.receive(child, {
+    task = '✓ Task',
+    status = 'done',
+    summary = 'Summary ✓',
+    details = '✓ Detail',
+  })
+
+  eq(all_colours(), {
+    { 0, 0, 3, 'AineoReportDone' },
+    { 0, 4, 9, 'AineoReportTime' },
+    { 0, 10, 16, 'AineoReportDone' },
+  })
 end
 
 T['the colours']['of a report that follows another are on its own header'] = function()
@@ -126,16 +173,18 @@ T['the colours']['of a report that follows another are on its own header'] = fun
   report_editor.receive(child, { task = 'First', status = 'done', summary = 'Ended' })
 
   eq(all_colours(), {
-    { 0, 0, 5, 'AineoReportTime' },
-    { 0, 6, 15, 'AineoReportStarted' },
-    { 2, 0, 5, 'AineoReportTime' },
-    { 2, 6, 12, 'AineoReportDone' },
+    { 0, 0, 3, 'AineoReportStarted' },
+    { 0, 4, 9, 'AineoReportTime' },
+    { 0, 10, 19, 'AineoReportStarted' },
+    { 2, 0, 3, 'AineoReportDone' },
+    { 2, 4, 9, 'AineoReportTime' },
+    { 2, 10, 16, 'AineoReportDone' },
   })
 end
 
 T['the records'] = MiniTest.new_set()
 
-T['the records']['show their time and status coloured when the Report opens'] = function()
+T['the records']['show their icon, time and status coloured when the Report opens'] = function()
   local state_directory = fixture.directory('report-colours-state')
   local environment = { state_directory = state_directory, working_directory = '/projects/alpha' }
   report_editor.start(
@@ -159,7 +208,7 @@ T['the records']['show their time and status coloured when the Report opens'] = 
 
   eq(
     { spans_of('AineoReportTime'), spans_of('AineoReportStarted'), spans_of('AineoReportDone') },
-    { { { 0, 0, 5 }, { 2, 0, 5 } }, { { 0, 6, 15 } }, { { 2, 6, 12 } } }
+    { { { 0, 4, 9 }, { 2, 4, 9 } }, { { 0, 0, 3 }, { 0, 10, 19 } }, { { 2, 0, 3 }, { 2, 10, 16 } } }
   )
 end
 
@@ -198,7 +247,7 @@ T['the records']['show their colours once again when the user edits the Report a
 
   eq(
     { spans_of('AineoReportTime'), spans_of('AineoReportStarted'), spans_of('AineoReportDone') },
-    { { { 0, 0, 5 }, { 1, 0, 5 } }, { { 0, 6, 15 } }, { { 1, 6, 12 } } }
+    { { { 0, 4, 9 }, { 1, 4, 9 } }, { { 0, 0, 3 }, { 0, 10, 19 } }, { { 1, 0, 3 }, { 1, 10, 16 } } }
   )
 end
 

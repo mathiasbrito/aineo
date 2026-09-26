@@ -15,7 +15,7 @@
 - **Agent worktrees:** `.claude/scripts/prepare-worktree.sh`'s `prepare_project` is empty and needs no step — `make test` isolates itself and fetches mini.nvim on first use (T1); `.worktreeinclude` lists the gitignored files every worktree needs.
 - **The suite** (T1): `make deps`, `make test`, `make test_file FILE=<path>`, `make lint`, `make format` — the root `CLAUDE.md` says what each does. About 87 s for the whole suite on Macbook-Mathias at the end of wave 1; 454 cases in 256 s at the end of wave 2; 491 cases in 365 s at the end of wave 3; 613 cases in 431 s at the end of wave 4; 727 cases in 463 s at the end of wave 5 (the orchestrator's verification of `a9f8027`) — most of it the Claude session's and Send's tests, which drive real processes. `make format` can abort intermittently ([[Learnings/StyLua 2.5.2 in-place formatting aborts intermittently]]); `make lint` decides.
 - **Hooks:** `.claude/hooks/test-hooks.sh` after touching any hook.
-- **The user's Neovim loads aineo from a release: `~/Development/Personal/aineo-release`**, a clone detached at the latest release tag — `v0.1.0` from 2026-09-25, `v0.2.0` since 2026-09-26 — through the lazy.nvim spec `~/.config/nvim/lua/plugins/aineo.lua`, which is the user's own and is not committed by the orchestrator. It moves only when the user asks for a new release (the user, 2026-09-25: "it keeps stable while we develop. until I ask for a new release"). `~/Development/Personal/aineo-dev` stays a clone of `dev` for trying merged work, and is no longer fast-forwarded after each merge.
+- **The user's Neovim loads aineo from a release: `~/Development/Personal/aineo-release`**, a clone detached at the latest release tag — `v0.1.0` from 2026-09-25, `v0.2.0` and then `v0.2.1` on 2026-09-26 — through the lazy.nvim spec `~/.config/nvim/lua/plugins/aineo.lua`, which is the user's own and is not committed by the orchestrator. It moves only when the user asks for a new release (the user, 2026-09-25: "it keeps stable while we develop. until I ask for a new release"). `~/Development/Personal/aineo-dev` stays a clone of `dev` for trying merged work, and is no longer fast-forwarded after each merge.
 - **How a release is cut** (the orchestrator's method, 2026-09-25, when GitHub refused to rebase v0.1.0; the user kept it on 2026-09-26): a `release/vX.Y.Z` branch into `main` by pull request, **squash-merged** — GitHub refused to rebase v0.1.0's 139 commits, and branch protection forbids merge commits — then an annotated tag `vX.Y.Z` on `main` whose message names the `dev` commit it was cut from. `main` holds its bootstrap commit, `511e289`, and then one commit per release. The next release branches from `origin/main` and cherry-picks `dev`'s commits after the previous tag's `dev` commit; `git diff <dev commit> origin/main` must then be empty.
 
 
@@ -55,11 +55,10 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 - **Landed:**
   - T9, the Report's colours, a small fix (PR #30, 2026-09-26). The time links to `Comment`, and `[status]` to a diagnostic group of its status, as `:highlight default link` groups a user can override.
   - T13, Neovim 0.12 compatibility (PR #31, 2026-09-26). The suite is green on 0.12.5 and on 0.11.6, and aineo's error texts drop Neovim 0.12's framing.
-- **Released:** `v0.2.0`, with T9 and T13 (PR #37, `main` at `e26838f`, 2026-09-26).
-- **Running:** T15, the report instructions, and T16, the right column's word wrap, both small fixes the user called on 2026-09-26.
+  - T15, the report instructions (PR #39), and T16, the right column's word wrap (PR #40), small fixes (2026-09-26).
+- **Released:** `v0.2.0`, with T9 and T13 (PR #37, `main` at `e26838f`); `v0.2.1`, with T15 and T16 (PR #42, `main` at `270743b`), both 2026-09-26.
+- **Being amended before dispatch:** T11 (PR #41) and T14 (PR #43), which then run side by side. `v0.2.2` follows T11, whose icons the user is waiting for.
 - **Next, in order:**
-  - T14, Input kept as a draft (D17), after T16;
-  - T11, the report icon (C10), after T15, beside T14;
   - T12, `\tcn` (D16), after T14;
   - T10, the Report's links, a small fix, after T11.
 
@@ -95,3 +94,4 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 | 2026-09-25 | [[Sessions/2026-09-25 — Wave 5 retrospective]] | Wave 5 landed: T8 health and help (PR #21, `bf0bfad` … `1916dee`; PR #22, `7c9a12f`, `22ce027`) — v1 complete. `ai/` passes #23 (the rolling wave, `0f83767`, `f13d3db`) and #24/#25 (the small-fix class, `0ed0bbe`, `025d5d2`, `4d05f84`). Release `v0.1.0` (PR #26, `b59a54e`); GitHub branch protection turned on for `main` and `dev`. |
 | 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6 (rolling): T9, the Report's colours, landed as a small fix (PR #30, `a86a69c` … `3d67b05`) |
 | 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T13, Neovim 0.12 compatibility, landed (PR #31, `39d9cb0` … `f8317d8`); release `v0.2.0` (PR #37, `e26838f`); D21 and D22 decided by the user; most MVP readings kept |
+| 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T15, the report instructions (PR #39, `ba7d688` … `d86a0f9`), and T16, the right column's wrap (PR #40, `bb46c2e` … `7af0d47`), landed as small fixes; release `v0.2.1` (PR #42, `270743b`) |

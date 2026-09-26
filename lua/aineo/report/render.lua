@@ -1,5 +1,5 @@
 --- How a report reads in the Report buffer: its lines, and the colours of
---- its time and status.
+--- its icon, time and status.
 
 local colours = require('aineo.report.colours')
 
@@ -15,9 +15,17 @@ local M = {}
 ---@field lines string[] lines holding no newline
 ---@field colours aineo.report.Colour[]
 
---- What each line of a report's details starts with: as wide as the `HH:MM `
---- that starts its header, so the details line up under the status.
-local DETAILS_INDENT = (' '):rep(#'HH:MM ')
+--- The icon a report's header starts with, by status.
+local STATUS_ICONS = {
+  started = '▸',
+  progress = '◐',
+  blocked = '⊘',
+  done = '✓',
+  failed = '✗',
+}
+
+--- How many bytes a report's time, `HH:MM`, takes in its header.
+local CLOCK_TIME_LENGTH = #'HH:MM'
 
 --- `text` on one line: each newline in it becomes a space.
 ---
@@ -38,39 +46,72 @@ local function details_lines(details)
   return vim.split(details, '\n', { plain = true })
 end
 
---- The lines a report shows: `HH:MM [status] task — summary`, then each line
---- of its details, indented. A newline in the task or the summary becomes a
---- space, so the header stays one line. Its colours: the `HH:MM` in
---- `colours.TIME_GROUP`, and the `[status]`, brackets included, in the group
---- of its status (`colours.STATUS_GROUPS`).
+--- What each line of a report's details starts with, so that it lines up
+--- under the report's `[status]`: as many spaces as `status_prefix`, the
+--- header up to its `[status]`, is wide on screen, in cells
+--- (`nvim_strwidth()`), whatever window is current and however it wraps.
+--- Measured at each call, since `'ambiwidth'` and `setcellwidths()` change
+--- how wide an icon is.
+---
+---@param status_prefix string
+---@return string
+local function details_indent(status_prefix)
+  return (' '):rep(vim.api.nvim_strwidth(status_prefix))
+end
+
+--- The colours of the header of a report of `status`,
+--- `<icon> HH:MM [status] …`: the icon and the `[status]`, brackets
+--- included, in the group of `status` (`colours.STATUS_GROUPS`), and the
+--- `HH:MM` in `colours.TIME_GROUP`. The spaces between them, and the rest of
+--- the header, show in none.
+---
+---@param status string a report's status
+---@return aineo.report.Colour[]
+local function header_colours(status)
+  local icon = STATUS_ICONS[status]
+  local status_group = colours.STATUS_GROUPS[status]
+  local time_column = #icon + 1
+  local status_column = time_column + CLOCK_TIME_LENGTH + 1
+  return {
+    { line = 0, first_column = 0, end_column = #icon, group = status_group },
+    {
+      line = 0,
+      first_column = time_column,
+      end_column = time_column + CLOCK_TIME_LENGTH,
+      group = colours.TIME_GROUP,
+    },
+    {
+      line = 0,
+      first_column = status_column,
+      end_column = status_column + #('[%s]'):format(status),
+      group = status_group,
+    },
+  }
+end
+
+--- The lines a report shows: `<icon> HH:MM [status] task — summary`, the icon
+--- that of its status (`STATUS_ICONS`), then each line of its details,
+--- indented to start under the `[status]` (`details_indent()`). A newline in
+--- the task or the summary becomes a space, so the header stays one line. Its
+--- colours are `header_colours()`.
 ---
 ---@param report { task: string, status: string, summary: string, details: string? } a valid report
 ---@param time string when the report arrived, as `YYYY-MM-DDTHH:MM:SS`
 ---@return aineo.report.Rendering
 local function render_report(report, time)
-  local clock_time = time:sub(12, 16)
-  local bracketed_status = ('[%s]'):format(report.status)
-  local header = ('%s %s %s — %s'):format(
-    clock_time,
-    bracketed_status,
+  local status_prefix = ('%s %s '):format(STATUS_ICONS[report.status], time:sub(12, 16))
+  local header = ('%s[%s] %s — %s'):format(
+    status_prefix,
+    report.status,
     on_one_line(report.task),
     on_one_line(report.summary)
   )
   local lines = { header }
+  local indent = details_indent(status_prefix)
   for _, line in ipairs(details_lines(report.details)) do
-    table.insert(lines, DETAILS_INDENT .. line)
+    table.insert(lines, indent .. line)
   end
-  local status_column = #clock_time + 1
-  local header_colours = {
-    { line = 0, first_column = 0, end_column = #clock_time, group = colours.TIME_GROUP },
-    {
-      line = 0,
-      first_column = status_column,
-      end_column = status_column + #bracketed_status,
-      group = colours.STATUS_GROUPS[report.status],
-    },
-  }
-  return { lines = lines, colours = header_colours }
+  return { lines = lines, colours = header_colours(report.status) }
 end
 
 --- The lines and colours of `records`, one report after another, each as

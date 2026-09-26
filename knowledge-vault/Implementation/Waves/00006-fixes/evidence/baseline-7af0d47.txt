@@ -1,0 +1,17 @@
+# Suite counts at dev 7af0d47's code, measured by the orchestrator's verification of PR #40 (T16) on 2026-09-26, one suite at a time.
+# The verified tree is be7af89 laid over dev d86a0f9 (git merge-tree: eae53e3). After the merge, 'git diff --stat eae53e3 7af0d47 -- lua plugin tests doc scripts Makefile' prints nothing.
+# The 0.11.6 run used the downloaded build first on PATH; the 0.12.5 run the host's Homebrew Neovim.
+== guard 0.12.5 rc=0 secs=0 load= 122.49 87.70 65.91
+Total number of cases: 5
+Fails (0) and Notes (0)
+== guard 0.11.6 rc=0 secs=0 load= 122.49 87.70 65.91
+Total number of cases: 5
+Fails (0) and Notes (0)
+== suite 0.12.5 rc=0 secs=468 load= 77.07 99.10 84.75
+Total number of cases: 808
+Fails (0) and Notes (0)
+== suite 0.11.6 rc=0 secs=465 load= 48.02 67.13 75.54
+Total number of cases: 808
+Fails (0) and Notes (0)
+== identity
+(empty above: identical)

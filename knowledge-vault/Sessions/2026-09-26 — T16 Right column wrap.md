@@ -189,4 +189,13 @@ The wave holds its marks (rule 6). The line T16 would take:
 
 ## Commits
 
-*Recorded after the merge.*
+Merged by rebase into `dev` on 2026-09-26, PR #40. The knowledge pass maps each commit of the branch to its hash on `dev`:
+
+| on the branch | on `dev` | subject |
+|---|---|---|
+| `690ebfb` | `bb46c2e` | Wrap long lines between words in the Report and Input |
+| `f03b826` | `970b438` | Record T16's session: right column wrap, red/green, mutants |
+| `327f66f` | `3129b71` | Pin the right column's wrap on focus() and Claude's under set wrap |
+| `be7af89` | `7af0d47` | Correct T16's session note after its review |
+
+Released in `v0.2.1` (PR #42, `main` at `270743b`).

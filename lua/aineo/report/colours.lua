@@ -1,13 +1,13 @@
---- The Report's colours: the highlight groups a report's time and status
---- show in, and the groups each links to unless a user or a colour scheme
---- colours it.
+--- The Report's colours: the highlight groups a report's icon, time and
+--- status show in, and the groups each links to unless a user or a colour
+--- scheme colours it.
 
 local M = {}
 
 --- The group a report's `HH:MM` shows in.
 M.TIME_GROUP = 'AineoReportTime'
 
---- The group a report's `[status]` shows in, by status.
+--- The group a report's icon and `[status]` show in, by status.
 M.STATUS_GROUPS = {
   started = 'AineoReportStarted',
   progress = 'AineoReportProgress',
