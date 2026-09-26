@@ -356,9 +356,13 @@ The Report shows the time in |hl-AineoReportTime|, and the `[status]`,
 brackets included, bold, in the group of its status, only where it placed
 them, never text like them in a task, a summary or details; and web links in
 |hl-AineoReportLink|. The bold is |hl-AineoReportStatusBold|, beneath the
-group of the status, so the `[status]` shows in its status's colour whatever
-colour the bold's group has. To turn the bold off and keep the colour: >
-    :highlight AineoReportStatusBold gui=NONE cterm=NONE
+group of the status, linked to Markdown bold, `@markup.strong`: the bold, and
+whatever else a colour scheme gives Markdown bold — a background, italic,
+underline, or no bold at all — shows on the `[status]`. Its colour does not,
+unless the status's own group has no text colour, such as
+`AineoReportDone` given only a background (`guibg=`). To turn the bold off
+and keep the colour, in your config or at any time: >
+    :highlight link AineoReportStatusBold NONE
 <
 Each group links to one of Neovim's own, unless a colour scheme or a
 `:highlight` of your own colours it.
