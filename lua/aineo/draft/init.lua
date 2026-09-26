@@ -17,31 +17,25 @@ local OWNER_ONLY = tonumber('600', 8)
 --- How the draft home writes files: the dependency a test replaces to make
 --- a write fail. Plain dependency inversion; no other way is foreseen.
 ---@class aineo.draft.Files
----@field write_file fun(path: string, text: string): string? writes `text` as the whole of the file at `path`, created `OWNER_ONLY` when missing; returns why it could not, or nil once written
+---@field open_file fun(path: string): integer?, string? opens the file at `path` for writing, emptied, created `OWNER_ONLY` when missing; returns its descriptor, or nil and why it could not
+---@field write fun(descriptor: integer, text: string): integer?, string? writes `text` to the open file `descriptor`; returns how many bytes it wrote, or nil and why it could write none
+---@field close fun(descriptor: integer): boolean?, string? closes the open file `descriptor`; returns true, or nil and why it could not
 ---@field make_directory fun(path: string): string? makes the directory `path` and the directories leading to it, unless it exists; returns why it could not, or nil once made
 
 --- Where the draft is kept, and how its files are written.
 ---@class aineo.draft.Environment
 ---@field state_directory string the editor's state directory, `stdpath('state')`
 ---@field working_directory string the directory the draft is kept for
----@field files? aineo.draft.Files the file writes, each one not given the default
+---@field files? aineo.draft.Files the file writes; each one it leaves out is the default (`FILES`)
 
---- Writes `text` as the whole of the file at `path`, created with
---- `OWNER_ONLY` permissions when missing.
+--- Opens the file at `path` for writing, emptied, created with `OWNER_ONLY`
+--- permissions when missing.
 ---
 ---@param path string
----@param text string
----@return string? failure why the file could not be opened or written, as libuv says it; nil once written
-local function write_file(path, text)
-  local descriptor, open_failure = vim.uv.fs_open(path, 'w', OWNER_ONLY)
-  if not descriptor then
-    return open_failure
-  end
-  local written, write_failure = vim.uv.fs_write(descriptor, text)
-  vim.uv.fs_close(descriptor)
-  if not written then
-    return write_failure
-  end
+---@return integer? descriptor
+---@return string? failure why it could not be opened, as libuv says it
+local function open_file(path)
+  return vim.uv.fs_open(path, 'w', OWNER_ONLY)
 end
 
 --- Makes the directory `path` and the directories leading to it, unless it
@@ -58,7 +52,12 @@ end
 
 --- The file writes the draft home makes when its environment gives none.
 ---@type aineo.draft.Files
-local FILES = { write_file = write_file, make_directory = make_directory }
+local FILES = {
+  open_file = open_file,
+  write = vim.uv.fs_write,
+  close = vim.uv.fs_close,
+  make_directory = make_directory,
+}
 
 ---@type aineo.draft.Environment|nil
 local environment = nil
@@ -123,7 +122,10 @@ end
 local warned = {}
 
 --- Tells the user `failure`, an error the draft home raised, as a warning,
---- unless it has told them of a failure of the same `kind` already.
+--- unless it has told them of a failure of the same `kind` already. In
+--- Insert or Replace mode the warning waits until that mode is left: a
+--- message longer than the screen's last line prompts, and the prompt would
+--- take the next key typed.
 ---
 ---@param kind 'read'|'write'
 ---@param failure string
@@ -132,13 +134,24 @@ local function warn_once(kind, failure)
     return
   end
   warned[kind] = true
-  vim.notify('aineo: ' .. failure, vim.log.levels.WARN)
+  local message = 'aineo: ' .. failure
+  if vim.api.nvim_get_mode().mode:find('^[iR]') then
+    vim.api.nvim_create_autocmd('InsertLeave', {
+      once = true,
+      callback = function()
+        vim.notify(message, vim.log.levels.WARN)
+      end,
+    })
+    return
+  end
+  vim.notify(message, vim.log.levels.WARN)
 end
 
 --- The draft kept for the working directory, or nil when none is kept.
 ---
---- Raises an error naming the draft's file when it exists but cannot be
---- read.
+--- Raises an error naming the draft's file when it cannot be opened for any
+--- reason but its absence — a directory named `drafts` that is a file
+--- included — or cannot be read.
 ---
 ---@return string|nil
 local function read_draft()
@@ -159,7 +172,8 @@ local function read_draft()
 end
 
 --- Puts the kept draft into `buffer`, when there is one; tells the user
---- once when it cannot be read (`warn_once()`), and raises nothing then.
+--- once when it cannot be read, or cannot be put into `buffer` — one that is
+--- not 'modifiable' — (`warn_once()`), and raises nothing then.
 ---
 ---@param buffer integer
 local function restore_draft(buffer)
@@ -168,8 +182,16 @@ local function restore_draft(buffer)
     warn_once('read', draft)
     return
   end
-  if draft and draft ~= '' then
-    vim.api.nvim_buf_set_lines(buffer, 0, -1, false, lines_of(draft))
+  if not draft or draft == '' then
+    return
+  end
+  local undolevels = vim.bo[buffer].undolevels
+  vim.bo[buffer].undolevels = -1
+  local put, failure = pcall(vim.api.nvim_buf_set_lines, buffer, 0, -1, false, lines_of(draft))
+  vim.bo[buffer].undolevels = undolevels
+  if not put then
+    local file = draft_file(environment.state_directory, environment.working_directory)
+    warn_once('read', ("cannot put Input's draft in %s into Input: %s"):format(file, failure))
   end
 end
 
@@ -192,10 +214,37 @@ local function make_directory_racing(files, directory)
   return failure
 end
 
+--- Writes `text` as the whole of the file at `path`, through `files`,
+--- created with `OWNER_ONLY` permissions when missing.
+---
+---@param files aineo.draft.Files
+---@param path string
+---@param text string
+---@return string? failure why the file could not be opened, written or closed, as libuv says it, or how many of the bytes a write cut short wrote; nil once written whole
+local function write_file(files, path, text)
+  local descriptor, open_failure = files.open_file(path)
+  if not descriptor then
+    return open_failure
+  end
+  local written, write_failure = files.write(descriptor, text)
+  local closed, close_failure = files.close(descriptor)
+  if not written then
+    return write_failure
+  end
+  if written < #text then
+    return ('wrote %d of %d bytes'):format(written, #text)
+  end
+  if not closed then
+    return close_failure
+  end
+end
+
 --- Replaces the whole of `file` with `text`, through `files`: `text` is
 --- written to a file beside it named for this editor, which then replaces
 --- it, so that a write cut short leaves `file` as it was, and two editors
---- writing at once never write or move each other's. When `file` is a
+--- writing at once never write or move each other's. A write that fails
+--- removes that file again; the write's failure is the one returned, so a
+--- removal that fails too leaves the file, unreported. When `file` is a
 --- symbolic link, the file it leads to is replaced, and the link stays.
 ---
 ---@param files aineo.draft.Files
@@ -205,8 +254,9 @@ end
 local function replace_file(files, file, text)
   local target = vim.uv.fs_realpath(file) or file
   local cut = ('%s.%d.cut'):format(target, vim.uv.os_getpid())
-  local write_failure = files.write_file(cut, text)
+  local write_failure = write_file(files, cut, text)
   if write_failure then
+    vim.uv.fs_unlink(cut)
     return write_failure
   end
   local renamed, rename_failure = vim.uv.fs_rename(cut, target)
@@ -251,6 +301,19 @@ local function save_pending_change(buffer, watch)
   end
 end
 
+--- Saves the text of every kept buffer that has a change not saved yet, as
+--- Neovim starts to quit. A save that fails leaves its change pending and
+--- is not told: the buffer's own save as Neovim unloads it tries again and
+--- warns, since a warning given here would hold an editor with a screen at
+--- a hit-enter prompt.
+local function save_pending_changes_before_quit()
+  for buffer, watch in pairs(kept) do
+    if watch.pending and pcall(write_draft, draft_of(buffer)) then
+      watch.pending = false
+    end
+  end
+end
+
 --- Takes in a change to `buffer`'s text: an emptied buffer empties the draft
 --- at once, and other text is saved `SAVE_DELAY_MS` later.
 ---
@@ -280,24 +343,32 @@ function M.set_draft_environment(draft_environment)
   environment = draft_environment
 end
 
---- Keeps `buffer`'s text as the draft from now until its text is dropped —
---- the buffer wiped, or unloaded, as `:bdelete` does — and does nothing
---- while it keeps it already. `plugin/aineo.lua` hands it the layout's
---- Input.
+--- Keeps `buffer`'s text as the draft from now on, and does nothing while
+--- it keeps it already. `plugin/aineo.lua` hands it the layout's Input.
+---
+--- A buffer whose text is dropped — `:edit!`, `:bdelete` — is kept again,
+--- as if handed over anew, the next time a window shows it: `:edit!` shows
+--- it again at once, and a layout that puts it back into its window after
+--- `:bdelete` does too. A wiped buffer is kept no longer.
 ---
 --- When `buffer` is empty the draft is first put into it, which is no
---- change; a buffer that holds text is never overwritten. From then on each
---- change is saved `SAVE_DELAY_MS` after it, a change that empties the buffer
---- empties the draft at once, and a change not saved yet is saved when the
---- buffer is unloaded — as Neovim does to every loaded buffer when it quits,
---- before its `VimLeavePre` handlers run; an earlier `BufWinLeave` or
---- `BufUnload` handler that throws a Vim exception skips that save. Nothing
---- else is written, so a draft another editor wrote since the last change
---- here stays.
+--- change, and which no undo takes out; a buffer that holds text is never
+--- overwritten. From then on each change is saved `SAVE_DELAY_MS` after it,
+--- a change that empties the buffer empties the draft at once, and a change
+--- not saved yet is saved at `QuitPre` — `:quit`, `:qall`, `:wqall`, `:xall`,
+--- `ZZ` — and again, when that save failed or did not run, as with
+--- `:cquit`, which has no `QuitPre`, when the buffer is unloaded:
+--- as Neovim does to every loaded buffer when it quits, before its
+--- `VimLeavePre` handlers run, and as `:bdelete` does. An earlier
+--- `BufWinLeave` or `BufUnload` handler that fails can skip the unload's
+--- save. A Neovim ended by a signal saves nothing then. Nothing else is
+--- written, so a draft another editor wrote since the last change here
+--- stays.
 ---
---- A draft that cannot be read, or written, is told to the user as a
---- warning, once per editor for reading and once for writing. Nothing is
---- raised: not here, not into the changes, not as Neovim quits.
+--- A draft that cannot be read, put into `buffer`, or written, is told to
+--- the user as a warning, once per editor for reading and once for writing;
+--- in Insert or Replace mode, once that mode is left. Nothing is raised: not
+--- here, not into the changes, not as Neovim quits.
 ---
 ---@param buffer integer
 function M.keep_draft(buffer)
@@ -326,6 +397,21 @@ function M.keep_draft(buffer)
       save_pending_change(buffer, watch)
     end,
   })
+  vim.api.nvim_create_autocmd('BufWinEnter', {
+    group = group,
+    buffer = buffer,
+    callback = function()
+      M.keep_draft(buffer)
+    end,
+  })
+  if #vim.api.nvim_get_autocmds({ group = group, event = 'QuitPre' }) == 0 then
+    vim.api.nvim_create_autocmd('QuitPre', {
+      group = group,
+      callback = function()
+        save_pending_changes_before_quit()
+      end,
+    })
+  end
 end
 
 return M

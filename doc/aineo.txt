@@ -87,7 +87,8 @@ file column is open, the three columns take a third of the screen each.
 Only file buffers move: help, terminals and scratch buffers stay where they
 were opened until `\o` restores the layout.
 
-Input's draft ~                                                  *aineo-draft*
+Input's draft ~
+                                                                 *aineo-draft*
 What you write in Input is kept as a draft, one per working directory,
 beside the Reports: under `stdpath('state')` in `aineo/drafts/`, in a file
 only you can read and write. It is saved a second after each change, at
@@ -96,20 +97,28 @@ saved yet, when Neovim quits. Nothing asks you anything at quit, and a crash
 loses at most the last second's typing. The working directory is the one of
 the first time the layout opened, for the editor's life.
 
-The draft comes back into an empty Input as the layout opens: the first time
-in this editor, and again after Input was wiped or deleted (`:bwipeout`,
-`:bdelete`), which drops its text. It never replaces text you have written,
-and an Input that Send emptied stays empty.
+The draft comes back into an empty Input: the first time the layout opens
+in this editor, and again once Input's text was dropped — `:bwipeout`,
+`:bdelete`, `:edit!` — as soon as Input is shown again. Its coming back is
+not a change of yours: `u` does not take it out. It never replaces text you
+have written, and an Input that Send emptied stays empty.
 
 Two Neovims in one working directory share one draft, and the last change
 in either wins: a Neovim that quits with no change unsaved leaves the draft
 as the other left it.
 
-At quit, a |BufWinLeave| handler, or a |BufUnload| handler run before
-aineo's, that throws a Vim exception makes Neovim skip the handlers after
-it, and with them the quit's save: the draft then holds what was saved a
-second after each change, and at most the last second's typing is lost. A
-draft that cannot be read, or written, is told once as a warning.
+A change not saved yet is saved as you quit with `:quit`, `:qall`,
+`:wqall`, `:xall` or `ZZ`, and again, when that save failed or did not
+run, as Neovim unloads Input on its way out. `:cquit` has only that second
+save, which a |BufWinLeave| or |BufUnload| handler that fails before
+aineo's can skip; the draft then holds what was saved a second after each
+change. A Neovim ended by a signal — its terminal window closed, `kill` —
+saves nothing as it ends: like a crash, it loses at most the last second's
+typing.
+
+A draft that cannot be read, put into Input or written is told once as a
+warning; while you type in Insert mode, the warning waits until you leave
+it.
 
 Restoring ~
 The three windows keep their sizes: the layout puts its proportions back

@@ -125,6 +125,25 @@ T[':Aineo open']['with a draft it cannot read opens the layout and warns once, r
   })
 end
 
+T[':Aineo open']['in a Neovim started with -M opens the layout and warns once, reporting no error'] = function()
+  entry.restart(child, { '-M' })
+  local draft = own_state_directory('entry-draft-unmodifiable-state')
+  leave_draft(draft, { 'Refactor the parser' })
+  entry.use_fake(child, claude_session.fake('entry-draft-unmodifiable', 'ready'))
+
+  child.cmd('Aineo open')
+
+  eq(entry.windows(child), { 'terminal', 'aineo://report', 'aineo://input' })
+  eq(entry.messages(child), {
+    {
+      level = vim.log.levels.WARN,
+      message = ("aineo: cannot put Input's draft in %s into Input: Buffer is not 'modifiable'"):format(
+        draft
+      ),
+    },
+  })
+end
+
 T[':Aineo open']['after Input was wiped brings its text back in the new Input'] = function()
   local draft = own_state_directory('entry-draft-wiped-state')
   entry.use_fake(child, claude_session.fake('entry-draft-wiped', 'ready'))
@@ -136,6 +155,62 @@ T[':Aineo open']['after Input was wiped brings its text back in the new Input'] 
   child.cmd('Aineo open')
 
   eq(child.lua_get(INPUT_LINES), { 'Refactor the parser' })
+end
+
+T[':Aineo open']["keeps the draft for the Reports' working directory though a :cd runs as the layout opens"] = function()
+  local draft = own_state_directory('entry-draft-cd-state')
+  local elsewhere = fixture.directory('entry-draft-cd-elsewhere')
+  child.lua(
+    [[
+      local elsewhere = ...
+      vim.api.nvim_create_autocmd('BufWinEnter', {
+        once = true,
+        callback = function()
+          vim.cmd.cd(elsewhere)
+        end,
+      })
+    ]],
+    { elsewhere }
+  )
+  entry.use_fake(child, claude_session.fake('entry-draft-cd', 'ready'))
+  child.cmd('Aineo open')
+
+  entry.set_input(child, { 'Refactor the parser' })
+
+  wait_for_draft(draft, 'Refactor the parser\n')
+  eq({ working_directory = child.fn.getcwd(), draft = read_draft(draft) }, {
+    working_directory = elsewhere,
+    draft = 'Refactor the parser\n',
+  })
+end
+
+T[':bdelete of Input'] = MiniTest.new_set()
+
+T[':bdelete of Input']['while the layout is open brings the draft back and keeps what is typed after it'] = function()
+  local draft = own_state_directory('entry-draft-bdelete-state')
+  entry.use_fake(child, claude_session.fake('entry-draft-bdelete', 'ready'))
+  child.cmd('Aineo open')
+  entry.set_input(child, { 'Refactor the parser' })
+  wait_for_draft(draft, 'Refactor the parser\n')
+  local input = child.lua_get("require('aineo.layout').input_buffer()")
+  child.cmd('bdelete ' .. input)
+  entry.press(child, '\\i')
+  local input_after_focus = child.lua_get(INPUT_LINES)
+
+  entry.set_input(child, { 'Rename the lexer' })
+
+  wait_for_draft(draft, 'Rename the lexer\n')
+  eq({
+    same_input = child.lua_get("require('aineo.layout').input_buffer()") == input,
+    current = entry.current_window(child),
+    input_after_focus = input_after_focus,
+    draft_after_typing = read_draft(draft),
+  }, {
+    same_input = true,
+    current = 'aineo://input',
+    input_after_focus = { 'Refactor the parser' },
+    draft_after_typing = 'Rename the lexer\n',
+  })
 end
 
 T['a bare interactive start'] = MiniTest.new_set()
