@@ -401,7 +401,7 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
   - **The re-measure**, with the attack question (`neovim-claude-code-reviewer`), found one failure the round introduced: in the loop, the lazy position pattern `^.-%.lua:%d+: ` cut up to the last position in the line. A user's error from a Lua-file autocommand lost its event, its file and its own words, and a multi-line one showed as `aineo: `.
   - **The bounded correction** went to a fresh agent:
     - `^%S-%.lua:%d+: ` in both lists, with three pins;
-    - the startup wait of `tests/helpers/report_tui.lua`, bounded on every path. A mark file is written at `VimEnter` through `vim.schedule`, which a hit-enter prompt does not run, and the wait sends no request.
+    - the startup wait of `tests/helpers/report_tui.lua`, bounded on every path the probes reach. A mark file is written at `VimEnter` through `vim.schedule`, which a hit-enter prompt does not run. The wait sends no request while it waits; on timeout, `nvim_get_mode()` picks the error.
     - The orchestrator's leaning, `nvim_get_mode()` first, was refuted by measurement: the startup prompt comes after `VimEnter`.
 - **The orchestrator's verification** of `079d632` laid over `dev`:
   - `tests/test_entry_guard.lua`: 5 cases, `Fails (0)`, on both versions;
@@ -409,7 +409,7 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
   - `make lint`: clean.
 - **Literal mutants and probes:**
   - `%S-` back to `.-` in the plugin: 2 cases failing; in the relay: 1. Each ran on the whole suite under 0.11.6.
-  - `tests/test_mcp_blocked_editor.lua` unchanged: 5 of 5 runs green, three on 0.12.5 and two on 0.11.6, at a load average of 80–160.
+  - `tests/test_mcp_blocked_editor.lua` unchanged: 5 of 5 runs green, three on 0.12.5 and two on 0.11.6, at a load average of 81–90 over one minute (106–109 over five).
   - Two startup errors added to the helper's editor: 5 of 5 runs fail every case with "the editor waits for the user (mode r) and did not finish starting (VimEnter) within 5000 ms".
   - The socket moved: every case fails with "the editor did not listen on …".
   - The mark written at `VimEnter` without `vim.schedule`, under the startup errors: the run hangs until its 90 s limit. So the scheduling is what keeps the wait from passing at a prompt.
