@@ -107,7 +107,7 @@ T['\\c']['enters Terminal mode while Claude Code shows a dialog as it starts'] =
   eq(child.lua_get(MODE), 't')
 end
 
-T['\\c']["enters Terminal mode on the new Claude it starts once the ended one's terminal was wiped"] = function()
+T['\\c']["enters Terminal mode on the new Claude it starts once :bwipeout! wiped the ended one's terminal"] = function()
   local ended = claude_session.fake('entry-claude-mode-ended', 'exit')
   entry.use_fake(child, ended)
   child.cmd('Aineo open')
@@ -131,6 +131,39 @@ T['\\c']["stays in Normal mode in Claude's window once Claude's session has ende
   child.type_keys('\\c')
 
   eq(entry.current_window(child), 'terminal')
+  eq(child.lua_get(MODE), 'nt')
+end
+
+T['\\c']["leaves a buffer other than Claude's terminal, shown in Claude's window, in Normal mode"] = function()
+  local fake = claude_session.fake('entry-claude-mode-scratch', 'ready')
+  entry.use_fake(child, fake)
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  child.lua('vim.api.nvim_win_set_buf(vim.fn.win_getid(1), vim.api.nvim_create_buf(true, true))')
+  child.cmd('Aineo report')
+
+  child.type_keys('\\c', 'jk')
+
+  eq(child.lua_get(MODE), 'n')
+  eq(child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, false)'), { '' })
+end
+
+T['\\c']["leaves a terminal of the user's own, shown in Claude's window, in Normal mode"] = function()
+  local fake = claude_session.fake('entry-claude-mode-user-terminal', 'ready')
+  entry.use_fake(child, fake)
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  child.lua([[
+    vim.api.nvim_set_current_win(vim.fn.win_getid(1))
+    vim.api.nvim_win_set_buf(0, vim.api.nvim_create_buf(true, true))
+    vim.fn.jobstart({ 'cat' }, { term = true })
+    _G.user_terminal = vim.api.nvim_get_current_buf()
+  ]])
+  child.cmd('Aineo report')
+
+  child.type_keys('\\c')
+
+  eq(child.lua_get('vim.api.nvim_get_current_buf() == _G.user_terminal'), true)
   eq(child.lua_get(MODE), 'nt')
 end
 
