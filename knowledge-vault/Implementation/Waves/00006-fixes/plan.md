@@ -259,8 +259,8 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 
 **The request, and the answer.**
 - The user asked on 2026-09-26: "for the agent it must be clear that the report window is to report in a human language, with description of what is being reported, if it is a plan to be implemented, to list the features planned, if it is a done, to list what was done, which features, references to docs, must appear at the end between () only citing numbers. We do not want explanations about decisions and whys, the report window are the whats and how. This is just an adjustment to what should be asked to the agent in the session."
-- The orchestrator restated it: a plan is a `started` report, whose `details` list the planned features one per line; a `done` lists what was done; references go at the very end, like `(D18, C12, #31)`.
-- **Answer: "Right, as a small fix".** No row: it adds *how to write* to C6's appended prompt, as T9 added colours to C6's Report.
+- The orchestrator restated it, as put to the user: a plan is a `started` report, whose `details` list the planned features one per line; a `done` lists what was done; references go at the very end, like `(D18, C12, #31)`. The restatement is quoted in full in the brief's *What was decided already*.
+- **Answer: "Right, as a small fix (Recommended)"**, the orchestrator's recommended option. No row: it adds *how to write* to C6's appended prompt, as T9 added colours to C6's Report.
 
 **The six rules for T15**, recomputed on 2026-09-26 against every open packet and every claimed wave (only this one):
 - T13 is in its bounded correction (PR #31).
@@ -284,17 +284,27 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 **Verification mutants:**
 - the plan clause dropped;
 - the `done` clause dropped;
-- the references' clause dropped, or its "by number only" removed;
+- the references' clause dropped, or its "by number or ID only" removed;
+- the references placed at the very start rather than the very end — killed by a test that pins "very end";
 - the no-whys clause dropped;
-- the instructions' first line changed (RI5, killed by the existing pins).
+- a new line that does not name a report or one of its fields (RI1's scope);
+- the tool's name fixed in the first line: `:format(tool_name)` → `:format('mcp__aineo__report')` (RI5, killed by the existing *names the tool it is given*).
 
-**Brief:** `brief-t15-report-instructions.md`.
+**Brief:** `brief-t15-report-instructions.md`, corrected after the brief review of T15 and T16, `brief-review-t15-t16.md`: dispatch after corrections.
+- RI1's rules are scoped to reports, since the text joins Claude's whole system prompt.
+- RI1 holds for every status. A `blocked` or `failed` report states its facts, and leaves out only the reasoning (a reading).
+- RI4's "very end" is a line of its own, and references are by number or ID.
+- The `details` description may change, since its "files you changed" contradicted RI3.
+
+**The facts T15's merge moves:** T15 adds lines near the top of `*aineo-report*`. T11's dated amendment re-checks its help line numbers after T15's merge.
+
+**Agents:** the host takes three at once. A small fix's two reviews go out in one message, so each waits for two free slots.
 
 ## Packet T16 — 2026-09-26
 
 **The request, and the answer.**
 - The user asked on 2026-09-26: "and the windows to the right, must have wrap lines by default activated, since many text are landing out of the screen."
-- Asked how, the user chose **"Word wrap, small fix"** over plain `'wrap'` and over a regular packet: `'wrap'`, `'linebreak'` and `'breakindent'` in the Report's and Input's windows. The same applies to wave 7's changes pane, which is wave 7's.
+- Asked how, the user chose **"Word wrap, small fix (Recommended)"**, the orchestrator's recommended option, over plain `'wrap'` and over a regular packet: `'wrap'`, `'linebreak'` and `'breakindent'` in the Report's and Input's windows. The question is quoted in the brief. The same applies to wave 7's changes pane, which is wave 7's.
 - The orchestrator measured that options set for a window are copied into every window split from it, while options set for its buffer (`:setlocal`) are not (`evidence/window-option-scope.txt`, both versions). The brief's RW3 keeps them on aineo's buffers.
 - `\o` sets them again (RW2): the orchestrator's reading of "by default", for the MVP review.
 
@@ -319,10 +329,20 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 - the options set for the window (`vim.wo[win]`) instead of its buffer — killed by a file split from the Report;
 - `'linebreak'` dropped;
 - `'breakindent'` dropped;
-- the options set only on the first open — killed by `\o` after closing the Report;
+- the options set only on the first open — killed by RW2's `:setlocal nowrap` then `\o`, and by `\o` after Input's buffer was wiped. It is **not** killed by `\o` after closing a window: Neovim gives the window made again the closed one's options (`evidence/window-option-scope.txt`, probe 3);
+- Claude's window wrapped too (RW4's mutant);
 - the options set on the Report only, not Input.
 
-**Brief:** `brief-t16-right-column-wrap.md`.
+**Brief:** `brief-t16-right-column-wrap.md`, corrected after the same brief review.
+- RW3 and RW4 are invariants, shown able to fail under their mutants.
+- The global values are read with `vim.go`.
+- RW1's paths include `show_buffers()`, and say what a closed window's reopening proves.
+
+**The facts T16's merge moves:**
+- T14's and T12's dated amendments re-check `lua/aineo/layout/init.lua` and `*aineo-layout*` after T16's merge.
+- T14's brief line 88 ("When T13 (PR #31) merges, only the help's line numbers move") names T16 there.
+
+**Agents:** as T15's.
 
 **The order of wave 6 from here:**
 1. T13, T15 and T16 now.

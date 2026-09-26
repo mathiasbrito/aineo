@@ -77,3 +77,40 @@ file split above A (win=A): wrap=false lbr=false bri=false
 its own buffer split below A: wrap=true lbr=true bri=true
 A after win_set_buf(file): wrap=false lbr=false bri=false
 A given its buffer back: wrap=true lbr=true bri=true
+
+## Probe 3: a window closed and made again for the same buffer (the brief reviewer's probe, re-run by the orchestrator after the brief review)
+#   -- Whether a window made again for a buffer, after the window that showed it
+#   -- closed, takes the options that window had set with vim.wo[win][0].
+#   -- Run: nvim --clean -u NONE -i NONE --headless -l <this file>
+#   local out = { 'nvim ' .. tostring(vim.version()) }
+#   vim.o.wrap = false
+#   local input_window = vim.api.nvim_get_current_win()
+#   local report = vim.api.nvim_create_buf(false, true)
+#   local function opts(w)
+#     return ('wrap=%s lbr=%s bri=%s'):format(
+#       tostring(vim.wo[w].wrap),
+#       tostring(vim.wo[w].linebreak),
+#       tostring(vim.wo[w].breakindent)
+#     )
+#   end
+#   local first = vim.api.nvim_open_win(report, false, { split = 'above', win = input_window })
+#   for _, option in ipairs({ 'wrap', 'linebreak', 'breakindent' }) do
+#     vim.wo[first][0][option] = true
+#   end
+#   table.insert(out, 'first window, set: ' .. opts(first))
+#   vim.api.nvim_win_close(first, false)
+#   local again = vim.api.nvim_open_win(report, false, { split = 'above', win = input_window })
+#   table.insert(out, 'made again after the close, nothing set: ' .. opts(again))
+#   local other = vim.api.nvim_create_buf(false, true)
+#   local fresh = vim.api.nvim_open_win(other, false, { split = 'above', win = input_window })
+#   table.insert(out, 'a buffer never shown before, in a new window: ' .. opts(fresh))
+#   io.stdout:write(table.concat(out, '\n') .. '\n')
+# Output:
+nvim 0.12.5
+first window, set: wrap=true lbr=true bri=true
+made again after the close, nothing set: wrap=true lbr=true bri=true
+a buffer never shown before, in a new window: wrap=false lbr=false bri=false
+nvim 0.11.6+ge8b87a554f
+first window, set: wrap=true lbr=true bri=true
+made again after the close, nothing set: wrap=true lbr=true bri=true
+a buffer never shown before, in a new window: wrap=false lbr=false bri=false
