@@ -144,7 +144,7 @@ Measured on the host, one run at a time. Each whole-run log starts with `nvim --
 
 ## Readings for the MVP review
 
-For the user to confirm:
+For the user to confirm — numbered MR135–MR137 in [[Review/2026-09-24 — v1 MVP readings review]] by the knowledge pass (MR137 is the fix round's guard: `\c` stays in Normal mode when Claude's window shows another buffer), with the limits MR138–MR140:
 - **CT3 — one action, three ways in.** `\c`, `<Plug>(aineo-claude)` and `:Aineo claude` all run `ACTIONS.claude`, so all three enter Terminal mode. The user asked for `\c`; the other two follow because they are one action.
   - **From a user's callback** (G3, R5): Terminal mode starts when the outermost mapping or command ends, in the window current then.
   - So a user mapping that runs `:Aineo claude` and then `wincmd p` leaves the user in Insert mode in Input. Measured by the guarantee's P3 and the records review's probe B, on both versions.
@@ -189,4 +189,13 @@ The wave holds its marks (rule 6). The line T20 would take:
 
 ## Commits
 
-*Recorded after the merge* — hashes change on rebase.
+Merged by rebase into `dev` on 2026-09-26, PR #58. The knowledge pass maps each commit of the branch to its hash on `dev`:
+
+| on the branch | on `dev` | subject |
+|---|---|---|
+| `af5a887` | `5b625a5` | Enter Terminal mode in Claude's window on \c |
+| `f187132` | `e1f182d` | Record T20's session: Claude terminal mode, red/green, mutants |
+| `a2bd21a` | `309a532` | Enter Terminal mode on \c only in Claude's own terminal |
+| `617e4a5` | `ac42fd3` | Correct T20's session note after its guarantee and records reviews |
+
+Released in `v0.2.5` (PR #63, `main` at `0d4c8b4`).
