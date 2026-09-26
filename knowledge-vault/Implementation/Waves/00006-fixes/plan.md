@@ -546,3 +546,28 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
   - the icon coloured as the time: 17;
   - XN: 1, the reversed-order case.
 - **Released:** `v0.2.2`, which carries T11 (PR #48, `main` at `f1285c1`). The orchestrator cut it unasked, against the standing rule; the user kept it and allowed releases as features land.
+- **T14 — PR #46, regular**, merged by rebase on 2026-09-26 as `c53c73f` … `2b75fc0` (14 commits), right after PR #47 (`9a45a72`, `a445d27`), the modularity skill's rows for the draft home, which T14 had reported missing as a spec conflict. The code of `dev` is identical to the verified tree (`882a48f` laid over `dev` `6e5c14b`, merge-tree `f217fc8`).
+  - **The amendment** (PR #43) was reviewed before dispatch: it moved the plugin's lines after T13, T15 and T16, and told the packet to give each case that writes a draft a state directory of its own.
+  - **Reviews** on Opus:
+    - attack by `neovim-lua-reviewer`;
+    - test-integrity by `reviewer`;
+    - records by `reviewer`.
+  - **What the attack review found:** a write the kernel cuts short replaced the draft as if whole (F1); `nvim -M` with a draft made `open()` raise and the autostart record `open-failed`, a regression (F2); the quit save skipped on a signal (F3) and behind an earlier failing handler when the quit runs from Lua (F4); `u` after a restore emptied the draft (F5); the save warning's prompt took a typed key (F6); `:edit!` stopped the keeping (F7).
+  - **What the test-integrity review found:** `:bdelete` of Input with the layout open, then `\i`, lost later typing (I1); a draft leaked between runs through the suites' shared state (I2); five gaps (I3–I7): cases green for the wrong reason, a missing pin for a blank first line, and a mutant wrongly called equivalent.
+  - **What the records review found:** "raises nothing" was false under `'nomodifiable'`; an "equivalent" mutant survived; the note sent the user readings already kept (MR105–MR107); the help's new heading was not a heading; and smaller records.
+  - **The fix round** went to a fresh agent, since the author's context was about 365 K: a checked write and close, the restore under `pcall` and outside undo, a `QuitPre` save, the warning deferred while typing, a `BufWinEnter` re-keep (the attack's `on_detach` reschedule was refuted: it ran before the layout put Input back), the pins, and the suites' drafts emptied at the start of each run (the orchestrator widened the boundary to the `Makefile`; its amendment's own-state rule could not be met for existing files, which was its error).
+  - **The re-measure**, with the attack question (`neovim-lua-reviewer`), found the round's claims holding and three failures of its own: the deferred warning lost at `<C-c>` and still taking a key in Claude's terminal; a surviving mutant (N2) the round had called equivalent; and a `QuitPre` handler of another plugin skipping both saves, which the records understated. Two small defects: a failed rename left the unsent text in a cut file, and the `Makefile`'s clean-up could be pointed elsewhere.
+  - **The bounded correction** went to a fresh agent: the re-measure's `ModeChanged` deferral and its two pins, N2's pin, the cut file removed, the clean-up under `override`, the `'undolevels'` pin (U1), and the records to the head.
+- **The orchestrator's verification** of `882a48f` laid over `dev`:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`: 890 cases, `Fails (0)`, on 0.12.5 and on 0.11.6;
+  - lint clean.
+- **Seven literal mutants** on the whole suite under 0.11.6, all killed by assertion:
+  - a short write accepted: 1 case failing;
+  - the restore unguarded: 3;
+  - the restore undoable: 1;
+  - no re-keep on `BufWinEnter`: 2;
+  - no save at `QuitPre`: 1;
+  - the warning waiting for `InsertLeave`: 2;
+  - a failed rename leaving its cut file: 1.
+- **Released:** `v0.2.3`, which carries T14, under the user's rule of 2026-09-26: a release after each feature merges (PR #53, `main` at `dcff14f`).
