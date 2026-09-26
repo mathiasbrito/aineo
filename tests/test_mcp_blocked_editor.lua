@@ -73,8 +73,8 @@ T['a report that opens a Report with a warning']['is confirmed before the warnin
   local first_relay = mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = first.address })
   first_relay:send(mcp_messages.recorded('tools/call'))
   eq(
-    first:report_lines({ '✓ 09:05 [done] Refactor the parser — All tests pass' }),
-    { '✓ 09:05 [done] Refactor the parser — All tests pass' }
+    first:report_lines({ '09:05 [done] Refactor the parser — All tests pass' }),
+    { '09:05 [done] Refactor the parser — All tests pass' }
   )
   first:stop()
   local records = vim.fs.find(function()
@@ -120,8 +120,8 @@ T['a report for an editor at a hit-enter prompt']['is answered in time, the rela
     3,
   })
   eq(
-    editor:report_lines({ '✓ 09:05 [done] Refactor the parser — All tests pass' }),
-    { '✓ 09:05 [done] Refactor the parser — All tests pass' }
+    editor:report_lines({ '09:05 [done] Refactor the parser — All tests pass' }),
+    { '09:05 [done] Refactor the parser — All tests pass' }
   )
 end
 
