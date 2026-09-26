@@ -218,4 +218,13 @@ Its open threads are above.
 
 ## Commits
 
-*Recorded after the merge.*
+Merged by rebase into `dev` on 2026-09-26, PR #39. The knowledge pass maps each commit of the branch to its hash on `dev`:
+
+| on the branch | on `dev` | subject |
+|---|---|---|
+| `6ac74cf` | `ba7d688` | Tell Claude how to write a report for the user to read |
+| `44f2c06` | `5777708` | Record T15's session: report instructions, red/green, mutants |
+| `7dfdec6` | `79b770e` | Pin the report instructions whole and keep references at the end |
+| `20a8fae` | `d86a0f9` | Record T15's fix round: pins, mutants, merge checks, open threads |
+
+Released in `v0.2.1` (PR #42, `main` at `270743b`).

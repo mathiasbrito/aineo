@@ -1,12 +1,12 @@
 # Wave 6 retrospective
 
 **Author:** Mathias Santos de Brito, with Claude — the orchestrator (Opus 5.5, session `938616f1`)
-**Branch:** begun on `knowledge/w6-t9-landed`, the first packet's knowledge pass; extended on `knowledge/w6-t13-landed`. Each later packet's pass extends this note.
+**Branch:** begun on `knowledge/w6-t9-landed`, the first packet's knowledge pass; extended on `knowledge/w6-t13-landed` and `knowledge/w6-t15-t16-landed`. Each later packet's pass extends this note.
 
 ## Links
 
 - [[Projects/aineo]] · [[Planning/aineo — v1 agent console]] · [[Implementation/Waves/00006-fixes/plan]]
-- The packets' own records: [[Sessions/2026-09-25 — T9 Report colours]], [[Sessions/2026-09-25 — T13 Neovim 0.12]]
+- The packets' own records: [[Sessions/2026-09-25 — T9 Report colours]], [[Sessions/2026-09-25 — T13 Neovim 0.12]], [[Sessions/2026-09-26 — T15 Report instructions]], [[Sessions/2026-09-26 — T16 Right column wrap]]
 - Before it: [[Sessions/2026-09-25 — Wave 5 retrospective]] · The MVP agenda: [[Review/2026-09-24 — v1 MVP readings review]]
 
 ## Context
@@ -61,6 +61,15 @@ During the wave, the user decided more changes:
 | 09-26 02:36 | The T15/T16 brief review in: 14 findings, corrected; PR #36 merged; T15 and T16 dispatched |
 | 09-26 02:53 | PR #31 merged after the verification (763 cases on both versions) |
 | 09-26 02:55 | Release `v0.2.0` (PR #37) |
+| 09-26 03:03–03:22 | T15 in (PR #39) and T16 in (PR #40); each small fix's two reviews dispatched as slots freed |
+| 09-26 03:16 | The records review of PR #38 in: the pass had recorded as the user's more than the user was shown; corrected, merged |
+| 09-26 03:27–03:30 | The user asked for T15 and T16 in their Neovim at once, and noted that the icons were missing (T11) |
+| 09-26 03:29–04:37 | T15's and T16's guarantee and records reviews in; each fix round sent to its author |
+| 09-26 04:59 | PR #39 merged after the orchestrator's verification (776 cases on both versions) |
+| 09-26 05:01 | T11's dated amendment (PR #41) and its brief review |
+| 09-26 06:02 | PR #40 merged after the orchestrator's verification (808 cases on both versions) |
+| 09-26 06:04 | Release `v0.2.1` (PR #42) |
+| 09-26 06:14 | T14's dated amendment (PR #43) and its brief review |
 
 **Findings, per review** (the verdicts are the reviewers'):
 
@@ -78,6 +87,11 @@ During the wave, the user decided more changes:
 | brief, T14 | `reviewer` | 16 findings, answered in the brief; the orchestrator decided two as readings — a pending change only at quit, the draft emptied at once, a restore only into a new or emptied Input |
 | brief, T11 | `reviewer` | 11 findings: the pin inventory incomplete; IC4 met by two wrong implementations no requested test caught; IC5 red first; the post-T13 facts to a dated amendment |
 | records, #35 (wave 7's rows) | `reviewer` | 9 CONFIRMED (one on the orchestrator's source extract), 4 MISSING: D20 gave the user clauses that were the orchestrator's, and dropped undo's scope; three D19 wordings; markers; `\o` and a commit-only refresh unsettled — Q6, Q7 |
+| guarantee, #39 (T15) | `neovim-lua-developer` at `high` | the text sound; the tests pinned phrases only, so negations and the references at the start passed (G1–G8, G10, G11 survived); "only" missing |
+| records, #39 (T15) | `reviewer` | 7: the help left out the `blocked`/`failed` rule; "or ID" given to the user; note sections; a merge tree from the wrong commit; a placeholder; two garbled rows; "when aineo next starts it" false |
+| guarantee, #40 (T16) | `neovim-lua-developer` at `high` | the guarantee held; Claude's window untested under `set wrap` (G9); the help's `\o`-only wording; a limit for a user's `BufWinEnter` |
+| records, #40 (T16) | `reviewer` | 4 CONFIRMED, 2 MISSING: the `\o`-only wording false; a *Rejected* clause false; the 774-case runs credited to the wrong commit; a docstring |
+| records, #38 (T13's pass) | `reviewer` | 13 CONFIRMED, 3 MISSING: the pass recorded as kept readings the user was not shown (MR28's version, MR98, MR108); MR101's reason; T12's four readings on no list |
 | brief, T15 and T16 | `reviewer` | 14 findings: T16's mutant 4 unkillable by the test named, RW3 and RW4 invariants, `vim.go` for the globals; T15's rules scoped to reports, the `details` description, every status |
 
 **Rounds on #30, a small fix:**
@@ -91,6 +105,10 @@ During the wave, the user decided more changes:
 - a fix round by the author, 740 cases;
 - a re-measure with the attack question;
 - a bounded correction by a fresh agent, 743 cases — 763 with T9 laid over it.
+
+**Rounds on #39 and #40, small fixes:** each had the packet, the two reviews and one fix round by its author. No mechanism moved, so neither had a re-measure.
+- #39: 757 cases, then 760 after the fix round; 776 laid over `dev`.
+- #40: 790 cases, then 795 after the fix round; 808 laid over `dev`.
 
 The orchestrator's verifications are in [[Implementation/Waves/00006-fixes/plan]] › *Landed*.
 
@@ -115,9 +133,16 @@ The orchestrator's verifications are in [[Implementation/Waves/00006-fixes/plan]
 | brief review, T15 and T16 — `reviewer` | 124 | 296,235 | 248 | 825,181 | 21,246,025 | 8,151 |
 | records review, #35 — `reviewer` | 38 | 141,413 | 76 | 120,474 | 3,444,082 | 389 |
 | records review, #28, an `ai/` pass — `reviewer` | 62 | 127,593 | 124 | 127,591 | 5,346,205 | 5,178 |
+| records review, #38 — `reviewer` | 67 | 226,496 | 134 | 209,088 | 9,591,397 | 1,628 |
+| T15 implementer, packet and fix round — `neovim-lua-developer` | 123 | 263,972 | 248 | 1,111,420 | 19,188,127 | 13,700 |
+| guarantee review, #39 — `neovim-lua-developer` | 52 | 151,884 | 108 | 248,823 | 5,900,981 | 2,232 |
+| records review, #39 — `reviewer` | 98 | 191,457 | 196 | 170,518 | 11,953,639 | 2,048 |
+| T16 implementer, packet and fix round — `neovim-lua-developer` | 156 | 331,646 | 324 | 1,698,119 | 31,519,629 | 25,515 |
+| guarantee review, #40 — `neovim-lua-developer` | 60 | 184,842 | 120 | 308,831 | 7,947,920 | 8,419 |
+| records review, #40 — `reviewer` | 121 | 244,394 | 242 | 1,455,197 | 17,448,270 | 6,727 |
 
 Not in the table:
-- T15's and T16's contexts, which come with their passes;
+- the T11 and T14 amendment reviews, which come with those packets' passes;
 - the orchestrator's own context.
 
 The test-integrity review of #31 made 366 requests, more than any other context here, for 3 CONFIRMED findings and one REFUTED group; the attack review made 128 for 4 CONFIRMED (two of them the author's own claims) and 5 REFUTED.
@@ -139,17 +164,19 @@ The test-integrity review of #31 made 366 requests, more than any other context 
 - **The branch guard refused the `v0.2.0` tag push** while the session was on `dev`. The tag was pushed from a detached HEAD at the release commit.
 - **`v0.2.0` was cut while T15 and T16 ran**, as the user chose ("After T13 merges (Recommended)", the orchestrator's recommended option).
 - **T13's verification ran beside other agents' suites**, at load averages of 19 to 163 over one minute: the suites at about 30, the blocked-editor runs at 81–90, the probes up to 163. `tests/test_mcp_blocked_editor.lua` stayed green in all five runs.
+- **Two faults in the orchestrator's verification scripts, both caught before a merge:**
+  - a mutant whose site occurred twice was skipped as not unique, and run again on a unique site;
+  - a filter meant for re-runs skipped every T16 mutant on the first pass, and they were run again.
+- **The host ran at load averages up to about 200 while three agents and a verification shared it.** One StyLua run aborted, and passed on a second run. One reviewer's first 0.12.5 run hit the run limit, and passed on a second run.
+- **`v0.2.1` was cut at the user's request** ("could you make it available in the nvim installation in this host?"), once T15 and T16 had both merged.
 - **The shared help:**
   - T9 and T13 each edit a section of `doc/aineo.txt`, under rule 2's exception.
   - Each packet ran the merge check against the other's head, and T13 ran it again against T9's final head `40bc378`: `git merge-tree` gave no conflict, and `tests/test_doc.lua` passed, 36 cases, on both versions.
 
 ## Open threads
 
-- **T15 and T16**, small fixes, are running.
-- **T14, T11, T12 and T10:**
-  - T14 follows T16, and T11 follows T15, each by a dated amendment of its brief reviewed before dispatch. The two then run side by side.
-  - T12 follows T14.
-  - T10, the Report's links, is planned after T11.
+- **T11 and T14:** each is being amended before dispatch (PRs #41 and #43), then they run side by side. `v0.2.2` follows T11.
+- **T12 and T10:** T12 follows T14. T10, the Report's links, is planned after T11.
 - **A defect that predates T13**, found by T13's attack review, left for a later packet. `lua/aineo/health.lua` calls `config.recorded_setup_options()` as an argument to its `pcall`, so it is evaluated outside it. `:checkhealth aineo` then fails whole when `setup()` options hold a userdata.
 - **Readings still open:** MR28's oldest `claude`, MR98, MR101, MR108 and MR109–MR114 ([[Review/2026-09-24 — v1 MVP readings review]]).
 - **The ⌘-click check in Claude's pane**, asked on 2026-09-26 and not yet answered. It decides whether T10 needs a terminal part.
@@ -167,6 +194,10 @@ The test-integrity review of #31 made 366 requests, more than any other context 
 - T15's and T16's sections, briefs and brief review, PR #36: `809d786`, `4dd5cf4`.
 - T13, PR #31: `39d9cb0` … `f8317d8` (7 commits) — [[Sessions/2026-09-25 — T13 Neovim 0.12]].
 - Release `v0.2.0`, PR #37: `e26838f` on `main`, tag `v0.2.0`.
+- T13's knowledge pass, PR #38: `1850f21`, `2502334`.
+- T15, PR #39: `ba7d688` … `d86a0f9` (4 commits) — [[Sessions/2026-09-26 — T15 Report instructions]].
+- T16, PR #40: `bb46c2e` … `7af0d47` (4 commits) — [[Sessions/2026-09-26 — T16 Right column wrap]].
+- Release `v0.2.1`, PR #42: `270743b` on `main`, tag `v0.2.1`.
 - This knowledge pass: recorded after its merge by the next one.
 
 ## Decisions & reasoning
