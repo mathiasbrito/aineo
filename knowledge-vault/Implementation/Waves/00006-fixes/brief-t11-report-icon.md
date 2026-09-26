@@ -174,36 +174,40 @@ Exactly the shape in your definition, written to `<scratchpad>/t11-report-packet
 
 ## Amendment — 2026-09-26, before dispatch
 
-T13 (PR #31) and T15 (PR #39) have merged. This section re-checks every fact above against `origin/dev` at `d86a0f9`, and where this section and the text above differ, this section holds.
+T13 (PR #31), T15 (PR #39) and T16 (PR #40) have merged. This section re-checks every fact above against `origin/dev` at `3c3a1c4`, whose code is identical to `7af0d47`, T16's merge. Where this section and the text above differ, this section holds.
 
 ### Base and baseline
 
-- **Your base is `origin/dev` at `d86a0f9`** or later.
-- **Its suite is green on both versions:** 776 cases, `Fails (0)`, on 0.12.5 and on 0.11.6 (`evidence/baseline-d86a0f9.txt`, the orchestrator's verification of the code `d86a0f9` holds). "Both versions must be green" now holds from the start.
+- **Your base is `origin/dev` at `3c3a1c4`** or later.
+- **Its suite is green on both versions:** 808 cases, `Fails (0)`, on 0.12.5 and on 0.11.6. The evidence is `evidence/baseline-7af0d47.txt`: the orchestrator's verification of the code `3c3a1c4` holds, re-measured at the same code by this amendment's brief review. `evidence/baseline-d86a0f9.txt` records the 776 cases before T16.
+- "Both versions must be green" now holds from the start.
+- **A run that stops at the 960 s limit is not a result.** Re-run it, and run `tests/test_mcp_blocked_editor.lua` alone. This amendment's brief review saw whole runs on 0.12.5 stop at the limit, one under light load, and one stuck in that file for over 25 minutes. You edit that file's pins.
 
 ### Facts that moved
 
 - **`tests/test_mcp_blocked_editor.lua`:** the header pins are at lines 75, 120 and 121, not 49, 94 and 95. Line 75, `first:report_lines({ … })`, is the wait's target that IC6 names.
-- **The help, `*aineo-report*`:** lines 254–317, not 253–305. The fence's first and last lines are unchanged, quoted as in *Boundary*.
-  - The line and its details: 270–271.
-  - *Colours*: 287–297.
-  - The groups: 299–310.
+- **The help, `*aineo-report*`:** lines 261–324, not 253–305. The fence's first and last lines are unchanged, quoted as in *Boundary*.
+  - The line and its details: 277–278.
+  - *Colours*: 294–304.
+  - The groups: 306–317.
   - T15 added, inside the section, what the appended instructions ask of a report. Leave it as it is.
 
 ### Facts that held
 
-`git diff --stat dbc96c9 d86a0f9` prints nothing for each of these:
+`git diff --stat dbc96c9 3c3a1c4` prints nothing for each of these:
 - `lua/aineo/report/render.lua`;
 - `lua/aineo/report/colours.lua`;
 - `tests/test_report_buffer.lua`;
 - `tests/test_entry_report.lua`;
 - `tests/test_report_colours.lua`.
 
-Every line cited above for them holds. `tests/test_mcp_delivery.lua` keeps its headers at 142, 181, 229, 248 and 268, and its details pins at 249–250.
+Every line cited above for them holds, and so do `REPORT_HEADERS` and `REPORT_LINES`. `tests/test_mcp_delivery.lua` keeps its headers at 142, 181, 229, 248 and 268, and its details pins at 249–250.
+
+A reference render (the icon first, the details indented by display width), run by this amendment's brief review, fails exactly the 41 cases of the brief's list at `d86a0f9` and at the code `3c3a1c4` holds. T13, T15 and T16 added no pin over a rendered line.
 
 ### The other packets now
 
-- **T16** (PR #40, open) edits `*aineo-layout*`, from `3. THE LAYOUT                                                   *aineo-layout*` to ``lives in one tab; from another tab, `\o` moves you to it.``.
-- **T14** runs beside you once T16 has merged, and edits the same section, `*aineo-layout*`.
-- **T12** follows T14, and edits from `4. COMMANDS                                                   *aineo-commands*` to `of both (|aineo-health|).`.
-- **Before you push**, run the merge check of *Boundary* against each of `origin/bugfix/t16-right-column-wrap` and `origin/feature/t14-input-draft` that exists and is unmerged. Run `test_doc.lua` on both versions.
+- **T16 has merged.** It edited `*aineo-layout*`.
+- **T14** runs beside you. It edits `*aineo-layout*`, from `3. THE LAYOUT                                                   *aineo-layout*` to ``lives in one tab; from another tab, `\o` moves you to it.``.
+- **T12** follows T14. It edits from `4. COMMANDS                                                   *aineo-commands*` to `of both (|aineo-health|).`.
+- **Before you push**, run the merge check of *Boundary* against each of `origin/feature/t14-input-draft` and `origin/feature/t12-claude-numbers` that exists and is unmerged. Run `test_doc.lua` on both versions.
