@@ -238,6 +238,23 @@ T['a change']['whose write is cut short leaves no file beside the draft'] = func
   eq(vim.fn.glob(vim.fs.joinpath(vim.fs.dirname(file), '*'), true, true), { file })
 end
 
+T['a change']['whose file cannot replace the draft leaves no file beside it'] = function()
+  local state = fixture.directory('draft-rename-fails-state')
+  vim.fn.mkdir(draft_file(state), 'p')
+  child.lua(KEEP_NOTIFICATIONS)
+  keep_new_buffer(state)
+
+  set_input({ 'Refactor the parser' })
+
+  vim.wait(SAVE_PATIENCE_MS, function()
+    return #child.lua_get('_G.notifications') >= 2
+  end, 20)
+  eq(#child.lua_get('_G.notifications'), 2)
+  eq(vim.fn.glob(vim.fs.joinpath(vim.fs.dirname(draft_file(state)), '*'), true, true), {
+    draft_file(state),
+  })
+end
+
 --- Makes the closing of the draft home's files in the child,
 --- `_G.draft_files`, close the file and then fail, as a close that reports
 --- a delayed write error does, counting them in `_G.failed_closes`.
