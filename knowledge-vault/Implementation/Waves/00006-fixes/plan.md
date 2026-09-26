@@ -479,6 +479,56 @@ The first plan listed "the mode entered before the layout's focus"; the brief re
 
 **Brief:** `brief-t18-report-line.md`, corrected after its brief review, `brief-review-t18-report-line.md`: dispatch after corrections. RL2 now requires the status's colour to win over the bold's, names the bold's group and link, and says how to read the screen (`nvim__inspect_cell` after a discarded call and a redraw); the pins and the help lines are listed whole, the `gx` rows among them; the fence's last line is quoted. The screen measurements are `evidence/report-line-bold.txt`.
 
+## Packet T19 — 2026-09-26
+
+**The request, and the answers.** D23 holds them whole: the user asked on 2026-09-26 for aineo to "remmeber the last session that was opened, and when reopening to load the session", chose "aineo's own last one", then "the last one, but it must be per project", and, asked which session aineo resumes in a folder, "aineo's own last one there (Recommended)".
+
+**Q8, measured before this brief** (`evidence/claude-resume-q8.txt`), by the orchestrator, with the user's leave ("Scratch folder (Recommended)"), on Claude Code 2.1.283 and the user's login, in a folder trusted through the checkout: `--resume` of a missing id prints "No conversation found with session ID: <id>" and exits 1; `--session-id` of a used id prints "…is already in use." and exits 1; `--resume` continues the same id; a start with no message leaves nothing to resume; two Claude Codes may resume one id at once. Two one-word prompts were sent.
+
+## Packet T21 — 2026-09-26
+
+**The request, and the answer.** T20's guarantee review measured a fault older than T20 (its findings 1 and 4): a key typed after Claude Code exits wipes its terminal, and from the layout's tab the layout then raises `Invalid buffer id`, adds a window, and `\c` starts no session. Asked how the follow-up should fix it, the user chose "Both, regular (Recommended)": D25.
+
+**Where it lives.** Both of D25's behaviours are kept in the layout home, which knows Claude's window and buffer, so that T19 can change the Claude home beside it. A behaviour that cannot be met there comes back as a spec conflict.
+
+**The six rules for T19 and T21**, recomputed on 2026-09-26 against every open packet (T18 in its fix round, PR #60) and every claimed wave (only this one), with T20 merged:
+
+| rule | T19 | T21 |
+|---|---|---|
+| 1 dependencies | T14 merged, Q8 measured ✓ | T20 merged ✓ |
+| 2 files | `lua/aineo/claude/`; `plugin/aineo.lua`, `started_claude_terminal()` only; `tests/test_claude*.lua`; `tests/helpers/fake_claude.lua`, `claude_session.lua`; the `Makefile`'s clean-up line, if chosen; `doc/aineo.txt` › a new `Claude's session ~` in `*aineo-layout*` | `lua/aineo/layout/`; new cases in `tests/test_layout*.lua` and `tests/test_entry*.lua`; `doc/aineo.txt` › `*aineo-commands*`, from `*:Aineo-claude*` to `an exited Claude Code.` |
+| | Disjoint from T21, and from T18's `lua/aineo/report/` and `*aineo-report*`. The help is shared under the section exception, T19's subsection and T21's lines about 80 lines apart ✓ | T21 adds no test file T19 counts. `tests/test_entry*.lua` is T21's for new cases; T19 adds none there ✓ |
+| 3 schema | none; T19's kept ids are a new state file per directory, its own | none ✓ |
+| 4 dependencies | none ✓ | none ✓ |
+| 5 decisions | D23 decided; Q8 measured. SR3's fallback, the moment the id is kept and the two-editors limit are the orchestrator's readings, for the MVP review ✓ | D25 decided. EX1 for Claude's window only is the orchestrator's reading ✓ |
+| 6 task lines | T19's row is adjacent to T18's and T20's; it holds its mark ✓ | T21's row is adjacent to T20's; it holds its mark ✓ |
+
+T12 follows both: it changes `plugin/aineo.lua` (T19's one function aside) and `lua/aineo/layout/` (T21's).
+
+**Baseline:** `dev` once PR #58 (T20) merges: its code is the tree `525b22b`, which the orchestrator's verification of PR #58 measured: 985 cases, `Fails (0)`, on 0.12.5 and 0.11.6, and lint clean (`evidence/baseline-525b22b.txt`).
+
+**Reviewers:**
+- T19, regular, a Claude Code integration packet: attack by `neovim-claude-code-reviewer`, test-integrity by `neovim-lua-reviewer`, records by `reviewer`.
+- T21, regular, the layout home: attack by `neovim-lua-reviewer`, test-integrity by `reviewer`, records by `reviewer`.
+
+**Order:** T19 and T21 beside each other, once this plan merges. T12 after both; T17 after T18.
+
+**Verification mutants:**
+- T19:
+  - the id not kept;
+  - never resumed, a new id each start;
+  - the fallback never taken;
+  - the fallback taken on every exit with code 1;
+  - the id kept for the editor's first directory, not Claude Code's;
+  - `--allowedTools` not last.
+- T21:
+  - Terminal mode kept at the exit;
+  - Normal mode forced on every terminal's exit;
+  - `redirect()` putting a wiped buffer back, as before;
+  - Claude's window kept on the empty buffer after a wipe.
+
+**Briefs:** `brief-t19-claude-resume.md` and `brief-t21-claude-exit.md`, with their brief review `brief-review-t19-t21.md`.
+
 ## Landed
 
 - **T9 — PR #30, a small fix**, merged by rebase on 2026-09-26 as `a86a69c` … `3d67b05` (9 commits). Every file of the pull request is identical to the verified head `40bc378`; `git diff 40bc378 dev` shows only T14's files from PR #32.
