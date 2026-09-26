@@ -1,0 +1,23 @@
+# Baseline for T10: dev 2cb3cbb (T11 merged), measured by the orchestrator's verification of PR #45
+
+dev 2cb3cbb has the same code as the tree the verification ran on: git diff --stat 516267a dev -- lua plugin tests
+doc scripts Makefile prints nothing (516267a = git merge-tree --write-tree of dev 2ede64c and PR #45's head b8ef398).
+Whole suite, one version at a time, 2026-09-26 10:08-10:24 CEST; 0.11.6 is the downloaded build, first on PATH.
+
+== guard 0.12.5 rc=0 secs=1 load= 94.11 119.85 136.62
+Total number of cases: 5
+Fails (0) and Notes (0)
+== guard 0.11.6 rc=0 secs=0 load= 94.11 119.85 136.62
+Total number of cases: 5
+Fails (0) and Notes (0)
+== suite 0.12.5 rc=0 secs=473 load= 62.66 67.88 101.40
+Total number of cases: 832
+Fails (0) and Notes (0)
+== suite 0.11.6 rc=0 secs=470 load= 196.17 174.75 138.50
+Total number of cases: 832
+Fails (0) and Notes (0)
+== lint rc=0
+Results:
+0 errors
+0 warnings
+0 parse errors

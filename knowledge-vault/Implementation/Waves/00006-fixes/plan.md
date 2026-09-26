@@ -350,6 +350,55 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 3. T12 after T14.
 4. T10 after T11.
 
+## Packet T10 — 2026-09-26
+
+**The request, and the answers.**
+- The user asked on 2026-09-25, fix 4: "It would be good to detect links and make them clickable in the terminal, as well in the agent report window". The wave's first plan made the Report's part a later small fix, reserved T10 for it, and left its behaviour open (*Packet T11*, *The task ID*).
+- **The terminal needs no code.** Asked on 2026-09-26 whether ⌘-click on a link in Claude's pane opened it in the browser, the user answered "Yes, it opens".
+- **The Report's links.** Asked how they should work, the user chose "⌘-click, underlined (Recommended)", described as: "Every http:// or https:// address in the Report (task, summary or details) is underlined, and ⌘-click opens it in your browser, the same way links in Claude's pane work in iTerm2. Trailing punctuation such as a final '.' or ')' is left out of the link. `gx` on a link keeps working too. Small fix, after the icons merge." The user added a note: "but keyboard also". `gx` is that keyboard path, and T10 pins it (RL3).
+- **Measured before planning** (`evidence/report-links.txt`, both versions): an extmark takes a `url`; the TUI draws it as an OSC 8 hyperlink, with or without `TERM_PROGRAM`; `gx` on it opens exactly its url; the web-link rule's table (§5) is consistent. Without an extmark, Neovim's own `gx` already leaves out trailing punctuation, and cuts only the Wikipedia row short (§6): that row is RL3's red case.
+
+**The six rules for T10**, recomputed on 2026-09-26 against every open packet and every claimed wave (only this one):
+- T14 is in its fix round (PR #46); ai PR #47 merges just before it.
+- T12 is planned, after T14. T17 follows T10.
+
+| rule | T10 |
+|---|---|
+| 1 dependencies | T11, done ✓ |
+| 2 files | `lua/aineo/report/` (`render.lua`, `colours.lua`, `buffer.lua`, or a new file of the home); `tests/test_report*.lua`, new cases, or a new `tests/test_report_links.lua`; `doc/aineo.txt` › `*aineo-report*`. With T14's fix round: T14 owns `lua/aineo/draft/`, `plugin/aineo.lua`, its own tests, the test runner's start of a run, and `doc/aineo.txt` › `*aineo-layout*`, where `*aineo-draft*` sits: other sections of the help ✓. With #47: `.claude/` only ✓. T12 and T17 are not dispatched ✓ |
+| 3 schema | none: the report format and the saved records are unchanged ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | decided by the user ("⌘-click, underlined") ✓ |
+| 6 task lines | T10's row sits between T9's and T11's, so it holds its mark ✓ |
+
+**Baseline:** `dev` at `2cb3cbb`, T11 merged: 832 cases, `Fails (0)`, on 0.12.5 and 0.11.6 (`evidence/baseline-2cb3cbb.txt`, the orchestrator's verification of PR #45, whose tree has the same code).
+
+**Reviewers**, as a small fix: guarantee by `neovim-lua-developer` at `high`, on the reviewer charter; records by `reviewer`.
+
+**Order:** now, beside T14's fix round. T17 follows T10's merge.
+
+**Verification mutants:**
+- the url left off the extmark, the group kept;
+- the trailing punctuation kept;
+- every trailing `)` dropped, balanced or not;
+- a link inside a word admitted (`nothttps://a.b`);
+- the scheme matched in lower case only;
+- links found in the details only, or in the header only;
+- `AineoReportLink` linked to another group, or defined without `default`;
+- the links drawn when a report arrives but not when the Report shows its records again (`:edit`, the Report made anew).
+
+**Brief:** `brief-t10-report-links.md`.
+
+## Packet T17 — 2026-09-26
+
+**The request, and the answer.**
+- While T10 was being planned, the user asked on 2026-09-26: "but I woul like to have file paths detected and have the file opened in the center window that we use to open files... is this also planned right?" It was not.
+- **Measured first** (`evidence/report-links.txt`, §4, 0.12.5): `gf` on a path in the Report already opens the file in the middle column, through C9's redirect, and `gF` on `notes.txt:3` opens it at line 3; the Report keeps its buffer. So the keyboard part exists; the underline and a mouse action do not. ⌘-click cannot serve here: iTerm2 handles it, and would open the file outside Neovim.
+- Asked how file paths should work, the user chose "Double-click opens (Recommended)", described as: "A path to a file that exists (relative to the working directory or absolute, optionally with :line) is underlined like a link. Double-clicking it, or gf / gF on the keyboard (they already work), opens the file in the middle column, at the line if given. ⌘-click stays for web links." Then: "add an underline to file paths detect if it is not available currently".
+- **Its own packet.** The option offered to add file paths to T10. A small fix changes one behaviour in one home (orchestrate §3), so the file paths run as their own small fix after T10, in the same home. The class rests on the user's answer for the fixes of 2026-09-25, "Small fixes where allowed", and on fix 4's Report part being called a small fix.
+
+**Order:** after T10 merges, since both change the Report's rendering. Its brief is written then, against T10's merged code, and reviewed before dispatch.
+
 ## Landed
 
 - **T9 — PR #30, a small fix**, merged by rebase on 2026-09-26 as `a86a69c` … `3d67b05` (9 commits). Every file of the pull request is identical to the verified head `40bc378`; `git diff 40bc378 dev` shows only T14's files from PR #32.
