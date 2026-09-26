@@ -145,11 +145,11 @@ Measured on the host, one run at a time. Each whole-run log starts with `nvim --
 ## Readings for the MVP review
 
 For the user to confirm — numbered MR135–MR137 in [[Review/2026-09-24 — v1 MVP readings review]] by the knowledge pass (MR137 is the fix round's guard: `\c` stays in Normal mode when Claude's window shows another buffer), with the limits MR138–MR140:
-- **CT3 — one action, three ways in.** `\c`, `<Plug>(aineo-claude)` and `:Aineo claude` all run `ACTIONS.claude`, so all three enter Terminal mode. The user asked for `\c`; the other two follow because they are one action.
-  - **From a user's callback** (G3, R5): Terminal mode starts when the outermost mapping or command ends, in the window current then.
+- **CT3 — one action, three ways in (MR135).** `\c`, `<Plug>(aineo-claude)` and `:Aineo claude` all run `ACTIONS.claude`, so all three enter Terminal mode. The user asked for `\c`; the other two follow because they are one action.
+  - **From a user's callback** (G3, R5; MR136): Terminal mode starts when the outermost mapping or command ends, in the window current then.
   - So a user mapping that runs `:Aineo claude` and then `wincmd p` leaves the user in Insert mode in Input. Measured by the guarantee's P3 and the records review's probe B, on both versions.
   - The help's `*:Aineo-claude*` describes the command as typed, which is always outermost, so the help is not changed.
-- **CT2's bound (the brief review's F6, widened by G4).** `\c` reads the session as the editor knows it when the key runs.
+- **CT2's bound (the brief review's F6, widened by G4; MR138).** `\c` reads the session as the editor knows it when the key runs.
   - **A busy editor:** a `\c` typed while the editor is busy as Claude Code exits is handled before Neovim sees the exit, so it enters Terminal mode. The brief review measured it 6 of 6 times on each version, and the guarantee review 1 of 1; `jobwait()` does not help.
   - **Or Claude Code exits after `\c` entered Terminal mode — at its start, too:** the next key erases the exit message, and then meets the layout's error (G1). Measured by the guarantee's P9b, on both versions:
     - the first `\c` opens the layout on a session that exits 200 ms later, as a Claude Code failing at startup would;
@@ -157,7 +157,7 @@ For the user to confirm — numbered MR135–MR137 in [[Review/2026-09-24 — v1
     - `x` then wipes the terminal and its exit message.
   - **This is a change T20 makes:** on `dev` the same key gives only `E21`, and the terminal and its exit stay on screen.
   - Not tested: the race is intrinsic, and what follows the wipe is the layout's (see *Limits*).
-- **An unreadable draft (the brief review's F7, with MR124).** When `\c` opens the layout and the draft cannot be read, its warning holds a hit-enter prompt.
+- **An unreadable draft (the brief review's F7, with MR124; MR139).** When `\c` opens the layout and the draft cannot be read, its warning holds a hit-enter prompt.
   - The key that answers it, other than Enter, Space or CTRL-C, now reaches Claude Code instead of running as a Normal-mode command.
   - A fix would reach the draft home, which this small fix may not touch.
 
@@ -178,7 +178,7 @@ The wave holds its marks (rule 6). The line T20 would take:
   - On `dev`, `\c` then `i` on the exited terminal gives the same result. T20 makes Terminal mode in Claude's window the usual state, so the path is now the common one.
   - The fix belongs in the layout home, outside this small fix.
 - **The draft's hit-enter prompt (F7):** above, in *Readings*.
-- **Focus reporting (the brief review's F8).** The recorded Claude Code enables it (`ESC[?1004h`), so entering Terminal mode sends Claude `ESC[I` and leaving it sends `ESC[O`. A test that reads what the fake received after `\c` sees them.
+- **Focus reporting (the brief review's F8; MR140).** The recorded Claude Code enables it (`ESC[?1004h`), so entering Terminal mode sends Claude `ESC[I` and leaving it sends `ESC[O`. A test that reads what the fake received after `\c` sees them.
 
 ## Open threads
 
