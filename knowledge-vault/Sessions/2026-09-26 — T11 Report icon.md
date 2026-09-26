@@ -250,4 +250,15 @@ This wave holds its marks. The line for the orchestrator to mark:
 
 ## Commits
 
-*Recorded after the merge*: hashes change on rebase.
+Merged by rebase into `dev` on 2026-09-26, PR #45. The knowledge pass maps each commit of the branch to its hash on `dev`:
+
+| on the branch | on `dev` | subject |
+|---|---|---|
+| `1b34f07` | `30b466e` | Start each report with its status icon, indented by width |
+| `e1a5bea` | `d101fa0` | Record T11's session: the report icon and its measured indent |
+| `2e84083` | `7b4e428` | Measure the details indent apart from the current window |
+| `4fd7987` | `a7a4052` | Correct T11's records after the review of PR #45 |
+| `db623b4` | `2fd9971` | Pin the details indent with a done report before a progress one |
+| `b8ef398` | `2cb3cbb` | Correct T11's records after the re-measure of PR #45 |
+
+Released in `v0.2.2` (PR #48, `main` at `f1285c1`).
