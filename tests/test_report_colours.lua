@@ -60,6 +60,42 @@ local function link_of(group)
   return child.lua_get(('vim.api.nvim_get_hl(0, { name = %q }).link'):format(group))
 end
 
+--- The foreground `group` gives the child's text, as RGB, the links it
+--- follows resolved.
+---
+---@param group string
+---@return integer?
+local function foreground_of(group)
+  return child.lua_get(('vim.api.nvim_get_hl(0, { name = %q, link = false }).fg'):format(group))
+end
+
+--- The expression, run in the child, that reads the cell of its screen at
+--- the row and column it is given, as `{ foreground, bold }`: the RGB
+--- foreground, and whether it is bold.
+local SCREEN_CELL = [[(function(row, column)
+  local attributes = vim.api.nvim__inspect_cell(1, row, column)[2]
+  return { foreground = attributes.foreground, bold = attributes.bold == true }
+end)(...)]]
+
+--- Shows the child's Report in its only window, from its first line, and
+--- reads on the screen the `[` and the `]` of the `[status]` of its first
+--- report, a `[status]` ending before `end_column`: each as `SCREEN_CELL`
+--- reads it. A child's first `nvim__inspect_cell()` misreads every cell read
+--- in the same request, and cells read after the next redraw are right, so
+--- one read is made and dropped, and the screen redrawn, first.
+---
+---@param end_column integer the byte the `[status]` ends before, from 0
+---@return { foreground: integer?, bold: boolean }[]
+local function first_status_on_screen(end_column)
+  child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
+  child.lua([[vim.api.nvim__inspect_cell(1, 0, 0)]])
+  child.cmd('redraw')
+  return {
+    child.lua_get(SCREEN_CELL, { 0, 6 }),
+    child.lua_get(SCREEN_CELL, { 0, end_column - 1 }),
+  }
+end
+
 local T = MiniTest.new_set({
   hooks = {
     post_once = function()
@@ -75,20 +111,20 @@ T['the time']['shows in AineoReportTime, which links to Comment'] = function()
 
   report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
 
-  eq({ spans_of('AineoReportTime'), link_of('AineoReportTime') }, { { { 0, 4, 9 } }, 'Comment' })
+  eq({ spans_of('AineoReportTime'), link_of('AineoReportTime') }, { { { 0, 0, 5 } }, 'Comment' })
 end
 
-T['the icon'] = MiniTest.new_set({
+T['the header'] = MiniTest.new_set({
   parametrize = {
-    { 'started', 'AineoReportStarted', 19 },
-    { 'progress', 'AineoReportProgress', 20 },
-    { 'blocked', 'AineoReportBlocked', 19 },
-    { 'done', 'AineoReportDone', 16 },
-    { 'failed', 'AineoReportFailed', 18 },
+    { 'started', 'AineoReportStarted', 15 },
+    { 'progress', 'AineoReportProgress', 16 },
+    { 'blocked', 'AineoReportBlocked', 15 },
+    { 'done', 'AineoReportDone', 12 },
+    { 'failed', 'AineoReportFailed', 14 },
   },
 })
 
-T['the icon']['shows in the group of its status, and the space after it in none'] = function(
+T['the header']['colours its time and its status, the status bold beneath its colour, and no icon nor the space between them'] = function(
   status,
   group,
   status_end_column
@@ -98,19 +134,19 @@ T['the icon']['shows in the group of its status, and the space after it in none'
   report_editor.receive(child, { task = 'Task', status = status, summary = 'Summary' })
 
   eq(all_colours(), {
-    { 0, 0, 3, group },
-    { 0, 4, 9, 'AineoReportTime' },
-    { 0, 10, status_end_column, group },
+    { 0, 0, 5, 'AineoReportTime' },
+    { 0, 6, status_end_column, 'AineoReportStatusBold' },
+    { 0, 6, status_end_column, group },
   })
 end
 
 T['the status'] = MiniTest.new_set({
   parametrize = {
-    { 'started', 'AineoReportStarted', 19, 'DiagnosticInfo' },
-    { 'progress', 'AineoReportProgress', 20, 'DiagnosticHint' },
-    { 'blocked', 'AineoReportBlocked', 19, 'DiagnosticWarn' },
-    { 'done', 'AineoReportDone', 16, 'DiagnosticOk' },
-    { 'failed', 'AineoReportFailed', 18, 'DiagnosticError' },
+    { 'started', 'AineoReportStarted', 15, 'DiagnosticInfo' },
+    { 'progress', 'AineoReportProgress', 16, 'DiagnosticHint' },
+    { 'blocked', 'AineoReportBlocked', 15, 'DiagnosticWarn' },
+    { 'done', 'AineoReportDone', 12, 'DiagnosticOk' },
+    { 'failed', 'AineoReportFailed', 14, 'DiagnosticError' },
   },
 })
 
@@ -124,12 +160,60 @@ T['the status']['shows, brackets included, in the group of its status, linked to
 
   report_editor.receive(child, { task = 'Task', status = status, summary = 'Summary' })
 
-  eq({ spans_of(group), link_of(group) }, { { { 0, 0, 3 }, { 0, 10, end_column } }, link })
+  eq({ spans_of(group), link_of(group) }, { { { 0, 6, end_column } }, link })
+end
+
+T['the status']['shows, brackets included, in AineoReportStatusBold as well, linked to @markup.strong'] = function(
+  status,
+  _,
+  end_column
+)
+  start_editor({ '2026-09-24T09:05:00' })
+
+  report_editor.receive(child, { task = 'Task', status = status, summary = 'Summary' })
+
+  eq(
+    { spans_of('AineoReportStatusBold'), link_of('AineoReportStatusBold') },
+    { { { 0, 6, end_column } }, '@markup.strong' }
+  )
+end
+
+T['the status']['shows bold on the screen, brackets included, in the colour of its status'] = function(
+  status,
+  _,
+  end_column,
+  link
+)
+  start_editor({ '2026-09-24T09:05:00' })
+
+  report_editor.receive(child, { task = 'Task', status = status, summary = 'Summary' })
+
+  eq(first_status_on_screen(end_column), {
+    { foreground = foreground_of(link), bold = true },
+    { foreground = foreground_of(link), bold = true },
+  })
+end
+
+T['the status']['keeps the colour of its status, bold, when a colour scheme colours @markup.strong'] = function(
+  status,
+  _,
+  end_column,
+  link
+)
+  start_editor({ '2026-09-24T09:05:00' })
+  child.cmd('highlight @markup.strong guifg=#ff00ff')
+
+  report_editor.receive(child, { task = 'Task', status = status, summary = 'Summary' })
+
+  eq(first_status_on_screen(end_column), {
+    { foreground = foreground_of(link), bold = true },
+    { foreground = foreground_of(link), bold = true },
+  })
 end
 
 T['the colours'] = MiniTest.new_set()
 
-T['the colours']['cover the icon, the time and the status only where the render placed them, not their like in the text'] = function()
+T['the colours']['cover the time and the status only where the render placed them, not their like in the text'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
   report_editor.receive(child, {
@@ -140,9 +224,9 @@ T['the colours']['cover the icon, the time and the status only where the render 
   })
 
   eq(all_colours(), {
-    { 0, 0, 3, 'AineoReportDone' },
-    { 0, 4, 9, 'AineoReportTime' },
-    { 0, 10, 16, 'AineoReportDone' },
+    { 0, 0, 5, 'AineoReportTime' },
+    { 0, 6, 12, 'AineoReportStatusBold' },
+    { 0, 6, 12, 'AineoReportDone' },
   })
 end
 
@@ -157,9 +241,9 @@ T['the colours']['cover no icon in the text'] = function()
   })
 
   eq(all_colours(), {
-    { 0, 0, 3, 'AineoReportDone' },
-    { 0, 4, 9, 'AineoReportTime' },
-    { 0, 10, 16, 'AineoReportDone' },
+    { 0, 0, 5, 'AineoReportTime' },
+    { 0, 6, 12, 'AineoReportStatusBold' },
+    { 0, 6, 12, 'AineoReportDone' },
   })
 end
 
@@ -173,18 +257,18 @@ T['the colours']['of a report that follows another are on its own header'] = fun
   report_editor.receive(child, { task = 'First', status = 'done', summary = 'Ended' })
 
   eq(all_colours(), {
-    { 0, 0, 3, 'AineoReportStarted' },
-    { 0, 4, 9, 'AineoReportTime' },
-    { 0, 10, 19, 'AineoReportStarted' },
-    { 2, 0, 3, 'AineoReportDone' },
-    { 2, 4, 9, 'AineoReportTime' },
-    { 2, 10, 16, 'AineoReportDone' },
+    { 0, 0, 5, 'AineoReportTime' },
+    { 0, 6, 15, 'AineoReportStatusBold' },
+    { 0, 6, 15, 'AineoReportStarted' },
+    { 2, 0, 5, 'AineoReportTime' },
+    { 2, 6, 12, 'AineoReportStatusBold' },
+    { 2, 6, 12, 'AineoReportDone' },
   })
 end
 
 T['the records'] = MiniTest.new_set()
 
-T['the records']['show their icon, time and status coloured when the Report opens'] = function()
+T['the records']['show their time and status coloured when the Report opens'] = function()
   local state_directory = fixture.directory('report-colours-state')
   local environment = { state_directory = state_directory, working_directory = '/projects/alpha' }
   report_editor.start(
@@ -206,10 +290,17 @@ T['the records']['show their icon, time and status coloured when the Report open
     vim.tbl_extend('error', environment, { times = { '2026-09-24T10:00:00' } })
   )
 
-  eq(
-    { spans_of('AineoReportTime'), spans_of('AineoReportStarted'), spans_of('AineoReportDone') },
-    { { { 0, 4, 9 }, { 2, 4, 9 } }, { { 0, 0, 3 }, { 0, 10, 19 } }, { { 2, 0, 3 }, { 2, 10, 16 } } }
-  )
+  eq({
+    spans_of('AineoReportTime'),
+    spans_of('AineoReportStarted'),
+    spans_of('AineoReportDone'),
+    spans_of('AineoReportStatusBold'),
+  }, {
+    { { 0, 0, 5 }, { 2, 0, 5 } },
+    { { 0, 6, 15 } },
+    { { 2, 6, 12 } },
+    { { 0, 6, 15 }, { 2, 6, 12 } },
+  })
 end
 
 T['the records']['show in groups linked to their defaults when the Report opens'] = function()
@@ -227,7 +318,10 @@ T['the records']['show in groups linked to their defaults when the Report opens'
 
   child.lua([[require('aineo.report').report_buffer()]])
 
-  eq({ link_of('AineoReportTime'), link_of('AineoReportDone') }, { 'Comment', 'DiagnosticOk' })
+  eq(
+    { link_of('AineoReportTime'), link_of('AineoReportDone'), link_of('AineoReportStatusBold') },
+    { 'Comment', 'DiagnosticOk', '@markup.strong' }
+  )
 end
 
 T['the records']['show their colours once again when the user edits the Report again'] =
@@ -245,13 +339,141 @@ T['the records']['show their colours once again when the user edits the Report a
 
   child.cmd(command)
 
-  eq(
-    { spans_of('AineoReportTime'), spans_of('AineoReportStarted'), spans_of('AineoReportDone') },
-    { { { 0, 4, 9 }, { 1, 4, 9 } }, { { 0, 0, 3 }, { 0, 10, 19 } }, { { 1, 0, 3 }, { 1, 10, 16 } } }
-  )
+  eq({
+    spans_of('AineoReportTime'),
+    spans_of('AineoReportStarted'),
+    spans_of('AineoReportDone'),
+    spans_of('AineoReportStatusBold'),
+  }, {
+    { { 0, 0, 5 }, { 1, 0, 5 } },
+    { { 0, 6, 15 } },
+    { { 1, 6, 12 } },
+    { { 0, 6, 15 }, { 1, 6, 12 } },
+  })
+end
+
+T['the records']['show their colours once again when the Report is made anew after the user deletes it'] =
+  MiniTest.new_set({
+    parametrize = { { 'bdelete' }, { 'bwipeout' }, { 'bunload' } },
+  })
+
+T['the records']['show their colours once again when the Report is made anew after the user deletes it']['with the command'] = function(
+  command
+)
+  start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  report_editor.receive(child, { task = 'First', status = 'started', summary = 'Began' })
+  child.cmd(('%s %d'):format(command, child.lua_get([[require('aineo.report').report_buffer()]])))
+
+  report_editor.receive(child, { task = 'First', status = 'done', summary = 'Ended' })
+
+  eq({
+    spans_of('AineoReportTime'),
+    spans_of('AineoReportStarted'),
+    spans_of('AineoReportDone'),
+    spans_of('AineoReportStatusBold'),
+  }, {
+    { { 0, 0, 5 }, { 1, 0, 5 } },
+    { { 0, 6, 15 } },
+    { { 1, 6, 12 } },
+    { { 0, 6, 15 }, { 1, 6, 12 } },
+  })
+end
+
+T['the records']['keep the colour of their status, bold, when a colour scheme colours @markup.strong and the Report shows them again'] =
+  MiniTest.new_set({
+    parametrize = { { 'edit' }, { 'bdelete' }, { 'bwipeout' }, { 'bunload' } },
+  })
+
+T['the records']['keep the colour of their status, bold, when a colour scheme colours @markup.strong and the Report shows them again']['after'] = function(
+  command
+)
+  start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  report_editor.receive(child, { task = 'First', status = 'started', summary = 'Began' })
+  report_editor.receive(child, { task = 'First', status = 'done', summary = 'Ended' })
+  child.cmd('highlight @markup.strong guifg=#ff00ff')
+  child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
+
+  child.cmd(command)
+
+  eq(first_status_on_screen(15), {
+    { foreground = foreground_of('DiagnosticInfo'), bold = true },
+    { foreground = foreground_of('DiagnosticInfo'), bold = true },
+  })
 end
 
 T['the groups'] = MiniTest.new_set()
+
+T['the groups']["show a user's colour for a status made before the first report on its [status], bold"] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  child.cmd('highlight AineoReportDone guifg=#ff0000')
+
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+
+  eq(first_status_on_screen(12), {
+    { foreground = 0xff0000, bold = true },
+    { foreground = 0xff0000, bold = true },
+  })
+end
+
+T['the groups']["show a user's colour for a status made after a report on its [status], bold"] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+
+  child.cmd('highlight AineoReportDone guifg=#ff0000')
+
+  eq(first_status_on_screen(12), {
+    { foreground = 0xff0000, bold = true },
+    { foreground = 0xff0000, bold = true },
+  })
+end
+
+T['the groups']["show a [status] bold, in its status's default colour, once :highlight clear drops a user's colour"] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  child.cmd('highlight AineoReportDone guifg=#ff0000')
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+
+  child.cmd('highlight clear')
+
+  eq(first_status_on_screen(12), {
+    { foreground = foreground_of('DiagnosticOk'), bold = true },
+    { foreground = foreground_of('DiagnosticOk'), bold = true },
+  })
+end
+
+T['the groups']["let the user turn a [status]'s bold off, its colour kept, through the next report"] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'highlight AineoReportStatusBold gui=NONE cterm=NONE' },
+      { 'highlight link AineoReportStatusBold NONE' },
+    },
+  })
+
+T['the groups']["let the user turn a [status]'s bold off, its colour kept, through the next report"]['with'] = function(
+  command
+)
+  start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+  child.cmd(command)
+
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+
+  eq(first_status_on_screen(12), {
+    { foreground = foreground_of('DiagnosticOk'), bold = false },
+    { foreground = foreground_of('DiagnosticOk'), bold = false },
+  })
+end
+
+T['the groups']["let the user turn a [status]'s bold off before the first report, its colour kept, with :highlight link … NONE"] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  child.cmd('highlight link AineoReportStatusBold NONE')
+
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+
+  eq(first_status_on_screen(12), {
+    { foreground = foreground_of('DiagnosticOk'), bold = false },
+    { foreground = foreground_of('DiagnosticOk'), bold = false },
+  })
+end
 
 T['the groups']["keep a user's colour made before the first report"] = function()
   start_editor({ '2026-09-24T09:05:00' })
@@ -285,10 +507,11 @@ T['the groups']['are not defined, nor any ColorScheme autocommand, until the Rep
       vim.tbl_map(vim.fn.hlexists, {
         'AineoReportTime', 'AineoReportStarted', 'AineoReportProgress',
         'AineoReportBlocked', 'AineoReportDone', 'AineoReportFailed',
+        'AineoReportStatusBold',
       }),
       #vim.api.nvim_get_autocmds({ event = 'ColorScheme' }),
     }]]),
-    { { 0, 0, 0, 0, 0, 0 }, 0 }
+    { { 0, 0, 0, 0, 0, 0, 0 }, 0 }
   )
 end
 

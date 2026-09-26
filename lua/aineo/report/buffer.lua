@@ -118,8 +118,10 @@ end
 --- Adds `rendering` to the end of `buffer`: its lines, as `append_lines()`
 --- does, and its colours on them, a web link's carrying its address (an
 --- extmark's `url`, which the terminal is given as a hyperlink and `gx`
---- opens). An empty `buffer` first loses every colour still on it: `:edit`
---- empties the Report of its text, not of its colours.
+--- opens). The colours are placed in their order, at one priority, so where
+--- two cover the same text the later shows over the earlier. An empty
+--- `buffer` first loses every colour still on it: `:edit` empties the Report
+--- of its text, not of its colours.
 ---
 ---@param buffer integer
 ---@param rendering aineo.report.Rendering

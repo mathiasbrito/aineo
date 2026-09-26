@@ -34,7 +34,7 @@ local T = MiniTest.new_set({
 
 T['a report'] = MiniTest.new_set()
 
-T['a report']['renders as its icon, time, status, task and summary'] = function()
+T['a report']['renders as its time, status, task and summary'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
   report_editor.receive(
@@ -42,20 +42,23 @@ T['a report']['renders as its icon, time, status, task and summary'] = function(
     { task = 'Refactor the parser', status = 'done', summary = 'All tests pass' }
   )
 
-  eq(report_editor.lines(child), { '✓ 09:05 [done] Refactor the parser — All tests pass' })
+  eq(report_editor.lines(child), { '09:05 [done] Refactor the parser — All tests pass' })
 end
 
-T['a report']['renders the icon of its status first'] = MiniTest.new_set({
+T['a report']['renders its time first, whatever its status'] = MiniTest.new_set({
   parametrize = {
-    { 'started', '▸ 09:05 [started] Task — Summary' },
-    { 'progress', '◐ 09:05 [progress] Task — Summary' },
-    { 'blocked', '⊘ 09:05 [blocked] Task — Summary' },
-    { 'done', '✓ 09:05 [done] Task — Summary' },
-    { 'failed', '✗ 09:05 [failed] Task — Summary' },
+    { 'started', '09:05 [started] Task — Summary' },
+    { 'progress', '09:05 [progress] Task — Summary' },
+    { 'blocked', '09:05 [blocked] Task — Summary' },
+    { 'done', '09:05 [done] Task — Summary' },
+    { 'failed', '09:05 [failed] Task — Summary' },
   },
 })
 
-T['a report']['renders the icon of its status first']['for the status'] = function(status, header)
+T['a report']['renders its time first, whatever its status']['for the status'] = function(
+  status,
+  header
+)
   start_editor({ '2026-09-24T09:05:00' })
 
   report_editor.receive(child, { task = 'Task', status = status, summary = 'Summary' })
@@ -63,7 +66,7 @@ T['a report']['renders the icon of its status first']['for the status'] = functi
   eq(report_editor.lines(child), { header })
 end
 
-T['a report']['shows its icon among the records when the Report opens in a new editor'] = function()
+T['a report']['shows with no icon among the records when the Report opens in a new editor'] = function()
   local state_directory = fixture.directory('report-state')
   local environment = { state_directory = state_directory, working_directory = '/projects/alpha' }
   report_editor.start(
@@ -77,20 +80,20 @@ T['a report']['shows its icon among the records when the Report opens in a new e
     vim.tbl_extend('error', environment, { times = { '2026-09-24T10:00:00' } })
   )
 
-  eq(report_editor.lines(child), { '✗ 09:05 [failed] Task — Summary' })
+  eq(report_editor.lines(child), { '09:05 [failed] Task — Summary' })
 end
 
-T['a report']['shows its icon again when the user edits the Report again'] = function()
+T['a report']['shows with no icon when the user edits the Report again'] = function()
   start_editor({ '2026-09-24T09:05:00' })
   report_editor.receive(child, { task = 'Task', status = 'progress', summary = 'Summary' })
   child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
 
   child.cmd('edit')
 
-  eq(report_editor.lines(child), { '◐ 09:05 [progress] Task — Summary' })
+  eq(report_editor.lines(child), { '09:05 [progress] Task — Summary' })
 end
 
-T['a report']['renders each line of its details below it, indented'] = function()
+T['a report']['renders each line of its details below it, indented under its status'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
   report_editor.receive(child, {
@@ -101,13 +104,13 @@ T['a report']['renders each line of its details below it, indented'] = function(
   })
 
   eq(report_editor.lines(child), {
-    '✓ 09:05 [done] Refactor the parser — All tests pass',
-    '        Changed three files',
-    '        Removed the old tokenizer',
+    '09:05 [done] Refactor the parser — All tests pass',
+    '      Changed three files',
+    '      Removed the old tokenizer',
   })
 end
 
-T['a report']["indents its details by its icon's width under 'ambiwidth' double"] = function()
+T['a report']["indents its details six cells under 'ambiwidth' double"] = function()
   start_editor({ '2026-09-24T09:05:00' })
   child.o.ambiwidth = 'double'
 
@@ -117,14 +120,14 @@ T['a report']["indents its details by its icon's width under 'ambiwidth' double"
   )
 
   eq(report_editor.lines(child), {
-    '◐ 09:05 [progress] Task — Summary',
-    '         Detail',
+    '09:05 [progress] Task — Summary',
+    '      Detail',
   })
 end
 
-T['a report']["indents its details by its icon's width under setcellwidths()"] = function()
+T['a report']['indents its details six cells whatever setcellwidths() gives its characters'] = function()
   start_editor({ '2026-09-24T09:05:00' })
-  child.fn.setcellwidths({ { 0x2713, 0x2713, 2 } })
+  child.fn.setcellwidths({ { 0x2014, 0x2014, 2 } })
 
   report_editor.receive(
     child,
@@ -132,17 +135,17 @@ T['a report']["indents its details by its icon's width under setcellwidths()"] =
   )
 
   eq(report_editor.lines(child), {
-    '✓ 09:05 [done] Task — Summary',
-    '         Detail',
+    '09:05 [done] Task — Summary',
+    '      Detail',
   })
 end
 
-T['a report']['indents its details by their width alone, however the current window wraps'] =
+T['a report']['indents its details six cells, however the current window wraps'] =
   MiniTest.new_set({
     parametrize = { { 'setlocal linebreak' }, { 'set showbreak=↪\\ ' } },
   })
 
-T['a report']['indents its details by their width alone, however the current window wraps']['with'] = function(
+T['a report']['indents its details six cells, however the current window wraps']['with'] = function(
   wrapping
 )
   start_editor({ '2026-09-24T09:05:00' })
@@ -156,12 +159,12 @@ T['a report']['indents its details by their width alone, however the current win
   )
 
   eq(report_editor.lines(child), {
-    '✓ 09:05 [done] Task — Summary',
-    '        Detail',
+    '09:05 [done] Task — Summary',
+    '      Detail',
   })
 end
 
-T['a report']["indents each report's details by its own icon when reports of different widths show together"] = function()
+T['a report']["indents every report's details six cells when reports of different statuses show together"] = function()
   start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
   child.o.ambiwidth = 'double'
   report_editor.receive(
@@ -179,21 +182,21 @@ T['a report']["indents each report's details by its own icon when reports of dif
 
   eq({ before_the_edit, report_editor.lines(child) }, {
     {
-      '◐ 09:05 [progress] First — Began',
-      '         One',
-      '✓ 09:06 [done] Second — Ended',
-      '        Two',
+      '09:05 [progress] First — Began',
+      '      One',
+      '09:06 [done] Second — Ended',
+      '      Two',
     },
     {
-      '◐ 09:05 [progress] First — Began',
-      '         One',
-      '✓ 09:06 [done] Second — Ended',
-      '        Two',
+      '09:05 [progress] First — Began',
+      '      One',
+      '09:06 [done] Second — Ended',
+      '      Two',
     },
   })
 end
 
-T['a report']["indents each report's details by its own icon when a done report shows before a progress report"] = function()
+T['a report']["indents every report's details six cells when a done report shows before a progress report"] = function()
   start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
   child.o.ambiwidth = 'double'
   report_editor.receive(
@@ -209,36 +212,39 @@ T['a report']["indents each report's details by its own icon when a done report 
   child.cmd('edit')
 
   eq(report_editor.lines(child), {
-    '✓ 09:05 [done] First — Ended',
-    '        One',
-    '◐ 09:06 [progress] Second — Began',
-    '         Two',
+    '09:05 [done] First — Ended',
+    '      One',
+    '09:06 [progress] Second — Began',
+    '      Two',
   })
 end
 
 --- The expression, run in the child, that hands its report home one report
---- of each status the report tool accepts, and lists what went wrong: each
---- error a report raised, and each header that does not start with an icon
---- before its time.
+--- of each status the report tool accepts, each with one line of details,
+--- and lists what went wrong: each error a report raised, and each line that
+--- is neither a header starting with its time and `[status]` nor the details
+--- starting six cells in, under the `[status]`.
 local EVERY_STATUS_FAULTS = [[(function()
   local report = require('aineo.report')
   local faults = {}
   for _, status in ipairs(report.report_schema().properties.status.enum) do
-    local shown, failure =
-      pcall(report.receive_report, { task = 'Task', status = status, summary = 'Summary' })
+    local shown, failure = pcall(
+      report.receive_report,
+      { task = 'Task', status = status, summary = 'Summary', details = 'Detail' }
+    )
     if not shown then
       table.insert(faults, failure)
     end
   end
   for _, line in ipairs(vim.api.nvim_buf_get_lines(report.report_buffer(), 0, -1, false)) do
-    if not line:find('^[^%s%d]+ %d%d:%d%d %[') then
+    if not (line:find('^%d%d:%d%d %[%l+%] Task — Summary$') or line == '      Detail') then
       table.insert(faults, line)
     end
   end
   return faults
 end)()]]
 
-T['a report']['of every status the report tool accepts shows with an icon'] = function()
+T['a report']['of every status the report tool accepts shows with no icon, its details under its status'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
   local faults = child.lua_get(EVERY_STATUS_FAULTS)
@@ -246,7 +252,7 @@ T['a report']['of every status the report tool accepts shows with an icon'] = fu
   eq(faults, {})
 end
 
-T['a report']['keeps the indent it was drawn with until the user edits the Report again'] = function()
+T['a report']["keeps its details six cells in when 'ambiwidth' changes before the user edits the Report again"] = function()
   start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
   report_editor.receive(
     child,
@@ -264,26 +270,26 @@ T['a report']['keeps the indent it was drawn with until the user edits the Repor
 
   eq({ before_the_edit, report_editor.lines(child) }, {
     {
-      '◐ 09:05 [progress] First — Began',
-      '        One',
-      '◐ 09:06 [progress] Second — Began',
-      '         Two',
+      '09:05 [progress] First — Began',
+      '      One',
+      '09:06 [progress] Second — Began',
+      '      Two',
     },
     {
-      '◐ 09:05 [progress] First — Began',
-      '         One',
-      '◐ 09:06 [progress] Second — Began',
-      '         Two',
+      '09:05 [progress] First — Began',
+      '      One',
+      '09:06 [progress] Second — Began',
+      '      Two',
     },
   })
 end
 
-T['a report']['keeps the indent it was drawn with until the Report is made anew after the user deletes it'] =
+T['a report']["keeps its details six cells in when 'ambiwidth' changes before the Report is made anew after the user deletes it"] =
   MiniTest.new_set({
     parametrize = { { 'bdelete' }, { 'bwipeout' }, { 'bunload' } },
   })
 
-T['a report']['keeps the indent it was drawn with until the Report is made anew after the user deletes it']['with the command'] = function(
+T['a report']["keeps its details six cells in when 'ambiwidth' changes before the Report is made anew after the user deletes it"]['with the command'] = function(
   command
 )
   start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
@@ -301,12 +307,12 @@ T['a report']['keeps the indent it was drawn with until the Report is made anew 
   )
 
   eq({ before_the_delete, report_editor.lines(child) }, {
-    { '◐ 09:05 [progress] First — Began', '        One' },
+    { '09:05 [progress] First — Began', '      One' },
     {
-      '◐ 09:05 [progress] First — Began',
-      '         One',
-      '◐ 09:06 [progress] Second — Began',
-      '         Two',
+      '09:05 [progress] First — Began',
+      '      One',
+      '09:06 [progress] Second — Began',
+      '      Two',
     },
   })
 end
@@ -321,7 +327,7 @@ T['a report']['renders a newline in its task or summary as a space'] = function(
 
   eq(
     { failure, report_editor.lines(child) },
-    { vim.NIL, { '✓ 09:05 [done] Refactor the parser — All tests pass' } }
+    { vim.NIL, { '09:05 [done] Refactor the parser — All tests pass' } }
   )
 end
 
@@ -333,7 +339,7 @@ T['a report']['renders no details line when its details are empty'] = function()
     { task = 'Task', status = 'done', summary = 'Summary', details = '' }
   )
 
-  eq(report_editor.lines(child), { '✓ 09:05 [done] Task — Summary' })
+  eq(report_editor.lines(child), { '09:05 [done] Task — Summary' })
 end
 
 T['a report']['that is invalid is refused, naming the field, and not rendered'] = function()
@@ -410,7 +416,7 @@ T['the Report buffer']['keeps every report when the user edits it again']['with'
 
   eq(
     report_editor.lines(child),
-    { '▸ 09:05 [started] First — Began', '✓ 09:06 [done] First — Ended' }
+    { '09:05 [started] First — Began', '09:06 [done] First — Ended' }
   )
 end
 
@@ -422,7 +428,7 @@ T['the Report buffer']['shows reports in the order they arrive'] = function()
 
   eq(
     report_editor.lines(child),
-    { '▸ 09:05 [started] First — Began', '✓ 09:06 [done] First — Ended' }
+    { '09:05 [started] First — Began', '09:06 [done] First — Ended' }
   )
 end
 
@@ -437,7 +443,7 @@ T['the Report buffer']['refuses the user an edit, and still takes the next repor
   eq(tostring(refusal):match('E21:'), 'E21:')
   eq(
     report_editor.lines(child),
-    { '▸ 09:05 [started] First — Began', '✓ 09:06 [done] First — Ended' }
+    { '09:05 [started] First — Began', '09:06 [done] First — Ended' }
   )
 end
 
@@ -482,7 +488,7 @@ T['the Report buffer']['comes back with every report after the user deletes it']
   eq({ identity.name, identity.buftype }, { 'aineo://report', 'nofile' })
   eq(
     report_editor.lines(child),
-    { '▸ 09:05 [started] First — Began', '✓ 09:06 [done] First — Ended' }
+    { '09:05 [started] First — Began', '09:06 [done] First — Ended' }
   )
 end
 
@@ -642,7 +648,7 @@ end
 
 --- The expression, run in the child, that lists the header line of each
 --- report its Report shows, leaving out the lines of their details: a
---- header starts with its icon, a details line with its indent.
+--- header starts with its time, a details line with its indent.
 local REPORT_HEADERS = [[vim.tbl_filter(function(line)
   return line:find('^%S')
 end, vim.api.nvim_buf_get_lines(require('aineo.report').report_buffer(), 0, -1, false))]]
@@ -661,8 +667,8 @@ T['the records']['show the newest 2 MiB of them'] = function()
   eq({ vim.uv.fs_stat(file).size, #headers, headers[1], headers[#headers] }, {
     3 * 1024 * 1024,
     2048,
-    '✓ 09:05 [done] Task 1025 — Summary',
-    '✓ 09:05 [done] Task 3072 — Summary',
+    '09:05 [done] Task 1025 — Summary',
+    '09:05 [done] Task 3072 — Summary',
   })
 end
 
@@ -681,7 +687,7 @@ T['the records']['show whole records only, when the newest 2 MiB begin inside on
 
   eq(
     { #headers, headers[1], headers[#headers], messages },
-    { 2047, '✓ 09:05 [done] Task 1027 — Summary', '✓ 09:05 [done] Task 3073 — Summary', '' }
+    { 2047, '09:05 [done] Task 1027 — Summary', '09:05 [done] Task 3073 — Summary', '' }
   )
 end
 
@@ -834,7 +840,7 @@ T['the records']['show a report again, at its own time, in a new editor in the s
     working_directory = '/projects/alpha',
   })
 
-  eq(report_editor.lines(child), { '✓ 09:05 [done] Task — Summary' })
+  eq(report_editor.lines(child), { '09:05 [done] Task — Summary' })
 end
 
 --- Every file under `directory`, at any depth.
@@ -958,7 +964,7 @@ T['the records']['keep a report when another editor makes their directory at the
     { { task = 'Task', status = 'done', summary = 'Summary' } }
   )
 
-  eq({ failure, report_editor.lines(child) }, { vim.NIL, { '✓ 09:05 [done] Task — Summary' } })
+  eq({ failure, report_editor.lines(child) }, { vim.NIL, { '09:05 [done] Task — Summary' } })
 end
 
 T['the records']['whose directory cannot be made refuse a report, naming the directory'] = function()
@@ -1019,7 +1025,7 @@ T['the records']['show before a new report, and each only once'] = function()
 
   eq(
     report_editor.lines(child),
-    { '✓ 09:05 [done] First — Kept', '▸ 10:00 [started] Second — New' }
+    { '09:05 [done] First — Kept', '10:00 [started] Second — New' }
   )
 end
 
@@ -1047,7 +1053,7 @@ T['the records']['that cannot be read are skipped and counted']['as a line'] = f
 
   local lines = report_editor.lines(child)
 
-  eq(lines, { '✓ 09:05 [done] Task — Summary' })
+  eq(lines, { '09:05 [done] Task — Summary' })
   eq(child.cmd_capture('messages'), 'aineo: skipped 1 unreadable report record(s) in ' .. file)
 end
 

@@ -1,13 +1,13 @@
---- The Report's colours: the highlight groups a report's icon, time, status
---- and web links show in, and the groups each links to unless a user or a
---- colour scheme colours it.
+--- The Report's colours: the highlight groups a report's time, status and web
+--- links show in, and the groups each links to unless a user or a colour
+--- scheme colours it.
 
 local M = {}
 
 --- The group a report's `HH:MM` shows in.
 M.TIME_GROUP = 'AineoReportTime'
 
---- The group a report's icon and `[status]` show in, by status.
+--- The group a report's `[status]` shows in, by status.
 M.STATUS_GROUPS = {
   started = 'AineoReportStarted',
   progress = 'AineoReportProgress',
@@ -16,6 +16,9 @@ M.STATUS_GROUPS = {
   failed = 'AineoReportFailed',
 }
 
+--- The group that makes a report's `[status]` bold.
+M.STATUS_BOLD_GROUP = 'AineoReportStatusBold'
+
 --- The group a web link in a report shows in.
 M.LINK_GROUP = 'AineoReportLink'
 
@@ -23,6 +26,7 @@ M.LINK_GROUP = 'AineoReportLink'
 local DEFAULT_LINKS = {
   [M.TIME_GROUP] = 'Comment',
   [M.LINK_GROUP] = 'Underlined',
+  [M.STATUS_BOLD_GROUP] = '@markup.strong',
   [M.STATUS_GROUPS.started] = 'DiagnosticInfo',
   [M.STATUS_GROUPS.progress] = 'DiagnosticHint',
   [M.STATUS_GROUPS.blocked] = 'DiagnosticWarn',
