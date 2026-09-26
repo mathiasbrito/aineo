@@ -714,7 +714,7 @@ T19 and T12 follow T21, one at a time: T19 needs the layout and `plugin/aineo.lu
   - **Reviews** on Opus, by the small-fix class: guarantee by `neovim-lua-developer` on the reviewer charter, and records by `reviewer`.
   - **What the guarantee review found:** a key typed in Terminal mode after Claude Code exits wipes its terminal, and from the layout's tab the layout raises `Invalid buffer id` and adds a window, after which `\c` starts no session — older than T20, which makes it more common (G1); `\c` entered Insert or Terminal mode in whatever buffer Claude's window showed (G2); a callback's `wincmd p` after `:Aineo claude` left Insert mode in Input (G3); an exit right after `\c` erased the exit message at the next key (G4).
   - **What the records review found:** the task line presented CT3 as delivered; the group count; scratch left in `/tmp`; two docstrings; the help's introduction without the exited-session exception; citation ranges; the PR body.
-  - **The fix round** went to the author, whose context was about 211 K: G2's guard, adopted red-first from the review's measured fix (the current buffer must be Claude's terminal); the wipe case narrowed to `:bwipeout!`; the records. No mechanism moved, so no re-measure ran.
+  - **The fix round** went to the author, whose context was about 211 K: G2's guard, adopted red-first from the review's measured fix (the current buffer must be Claude's terminal); the wipe case narrowed to `:bwipeout!`; the records. The round added a read to `can_type_to_claude()`, G2's guard: the current buffer compared with `claude_terminal`. Orchestrate §3 names this as a trigger for a re-measure. The orchestrator skipped it, since the added read was the guarantee review's own measured fix, and the verification ran its removal (V2).
   - **G1 and G4 went to the user**, who chose "Both, regular (Recommended)": D25 and T21.
 - **The orchestrator's verification** of `617e4a5` laid over `dev`:
   - guard 5 cases, `Fails (0)`, both versions;
@@ -730,7 +730,7 @@ T19 and T12 follow T21, one at a time: T19 needs the layout and `plugin/aineo.lu
 - **T18 — PR #60, a small fix**, merged by rebase on 2026-09-26 as `f975b4c` … `e84ce9f` (5 commits), after T20. The code of `dev` is identical to the verified tree (`d7906dd` laid over `dev` `ac42fd3`, merge-tree `8c49a1e`).
   - **The brief review** found that RL2 let the bold be drawn over the status's colour, which a colour scheme's colour for `@markup.strong` would then replace; the orchestrator re-measured it on both versions before dispatch (`evidence/report-line-bold.txt`).
   - **Reviews** as T20's.
-  - **What both reviews found:** the help's recipe for turning the bold off, `:highlight AineoReportStatusBold gui=NONE`, fails from a config, before the first report (G1, R1); the guarantee review also found the bold's order unpinned on the records path (G2), and the help's "whatever colour" true of the foreground only (G3); the records review, counts and wording (R2–R12).
+  - **What both reviews found:** the help's recipe for turning the bold off, `:highlight AineoReportStatusBold gui=NONE`, fails from a config, before the first report (G1, R1); the guarantee review also found the bold's order unpinned on the records path (G2), and the help's "whatever colour" true of the foreground only (G3); the records review, the Markdown-bold sentence (R2), counts and records (R3–R11) and the learnings (R12).
   - **The fix round** went to the author: the help's recipe became `:highlight link AineoReportStatusBold NONE`, pinned before and after the first report; the review's records-path pin adopted; the records corrected. Only a docstring changed in the code, so no re-measure ran.
 - **The orchestrator's verification** of `d7906dd` laid over `dev`:
   - guard 5 cases, `Fails (0)`, both versions;
@@ -743,4 +743,5 @@ T19 and T12 follow T21, one at a time: T19 needs the layout and `plugin/aineo.lu
   - the bold spread to the time: 20;
   - the details indented 8: 77;
   - the bold's group linked to `Normal`: 23.
+- **G7, the guarantee review's survivor,** was left out of those six, and PR #67's records review found it. The orchestrator then ran it on the whole suite under 0.11.6, on `dev` `2673719` (code identical to `e84ce9f`). It was killed: 5 cases failing, all by assertion. Four were the records-path pin the fix round adopted, one for each of `:edit`, `bdelete`, `bwipeout` and `bunload`. The fifth, in `tests/test_health.lua`, was a timing case at a load average near 200, and has nothing to do with the edit: the file alone then gave 78 cases, `Fails (0)`.
 - **Released:** `v0.2.6`, which carries T18 (PR #65, `main` at `164265b`).

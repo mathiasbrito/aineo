@@ -62,9 +62,9 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
   - T20, `\c` into Claude's prompt, a small fix (PR #58, 2026-09-26): `\c`, `<Plug>(aineo-claude)` and `:Aineo claude` move to Claude's window and enter Terminal mode there, unless Claude Code has exited or the window shows another buffer.
   - T18, the Report line without its icon, a small fix (PR #60, 2026-09-26, D24, C14): `HH:MM [status] task — summary`, `[status]` bold in its status's colour through `AineoReportStatusBold`, a default link to `@markup.strong`.
 - **Released:** `v0.2.0`, with T9 and T13 (PR #37, `main` at `e26838f`); `v0.2.1`, with T15 and T16 (PR #42, `main` at `270743b`); `v0.2.2`, with T11 (PR #48, `main` at `f1285c1`); `v0.2.3`, with T14 (PR #53, `main` at `dcff14f`); `v0.2.4`, with T10 (PR #56, `main` at `89e6c87`); `v0.2.5`, with T20 (PR #63, `main` at `0d4c8b4`); `v0.2.6`, with T18 (PR #65, `main` at `164265b`), all 2026-09-26.
-- **Running:** T21, Claude's exit keeping the layout (D25), regular (PR #64), in review: Normal mode returns when Claude Code exits under the user's typing, Terminal mode is refused on the ended terminal, and a wiped Claude terminal closes Claude's window so that `\c` starts Claude Code again. T17's brief (PR #66) waits for its brief review.
+- **Running:** T21, Claude's exit keeping the layout (D25), regular (PR #64), in its fix round. T17, the Report's file paths, a small fix, dispatched at 23:00 on its brief, corrected after its brief review (PR #66, `76d0b20`, `2673719`).
 - **Next, in two lanes:**
-  - the Report's code: T17, the Report's file paths, a small fix: underlined, opened in the middle column by a double-click or `gf`/`gF`;
+  - the Report's code: T17 (running);
   - Claude's session, the layout and the entry code, one packet at a time: T21; then T19, aineo resuming its own last Claude session per folder (D23), regular, with a brief rewritten after T21 so that the composition root and the layout follow a terminal its fallback replaces (its first brief's review, T19-1); then T12, `\tcn` (D16), which shares the layout home and the help's `*aineo-commands*` with T21 and `plugin/aineo.lua` with T19.
 
 **Next:**
@@ -85,7 +85,7 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 
 **Decisions awaiting the user:**
 - The oldest `claude` version supported (2.1.281 is installed) — MR28.
-- MR98, MR101, MR108 and MR111–MR114 of [[Review/2026-09-24 — v1 MVP readings review]], which were not put to the user; MR109 and MR110, which came after the user's answer of 2026-09-26; T14's readings and limits, MR115–MR125; T10's, MR126–MR134; T20's, MR135–MR140; and T18's, MR141–MR143.
+- MR98, MR101, MR108 and MR111–MR114 of [[Review/2026-09-24 — v1 MVP readings review]], which were not put to the user; MR109 and MR110, which came after the user's answer of 2026-09-26; T14's readings and limits, MR115–MR125; T10's, MR126–MR134; T20's, MR135–MR137, MR139 and MR140, with MR138 decided by D25 until T21 lands; and T18's, MR141–MR143.
 
 ## Changelog
 | Date | Session | Summary |
