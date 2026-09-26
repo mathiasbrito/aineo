@@ -341,14 +341,14 @@ Measured on the correction's last code commit, `c1705c4` (the commit after it to
 - MR108 (ID5): the three patterns are copied from `lua/aineo/report/records.lua`, not imported. Open, not yet shown to the user.
 
 **The implementer's own and the rounds', for the user to confirm** — numbered MR115–MR121 in [[Review/2026-09-24 — v1 MVP readings review]] by the knowledge pass, with the limits MR122–MR125:
-- The save delay, 1000 ms, one delayed save per change.
-- The draft's file layout: `<state>/aineo/drafts/<sha256>.txt`, lines each ending in a newline.
-- The quit hook, `BufUnload` on Input.
-- `mkdir()`'s `Vim:` dropped from the warning.
-- From the fix round: the draft is restored after `:edit!` and after `:bdelete` of Input, as soon as Input is shown again, with no hand-off from `\o` or `:Aineo open` (decision 3 of the round).
-- From the fix round: the restore is not the user's edit, so `u` does not take it out (decision 4 of the round).
-- From the fix round: a pending change is saved at `QuitPre` as well as at Input's `BufUnload` (decision 5 of the round).
-- From the correction: a warning raised in Insert, Replace or Terminal mode waits until that mode is left by any key — `<Esc>`, `<C-c>`, `<C-\><C-n>`, `<C-o>` — so it never prompts in Claude's terminal (decision 1 of the correction).
+- MR115: the save delay, 1000 ms, one delayed save per change.
+- MR116: the draft's file layout: `<state>/aineo/drafts/<sha256>.txt`, lines each ending in a newline.
+- MR117 (with the `QuitPre` bullet below): the quit hook, `BufUnload` on Input.
+- MR118: `mkdir()`'s `Vim:` dropped from the warning.
+- MR119, from the fix round: the draft is restored after `:edit!` and after `:bdelete` of Input, as soon as Input is shown again, with no hand-off from `\o` or `:Aineo open` (decision 3 of the round).
+- MR120, from the fix round: the restore is not the user's edit, so `u` does not take it out (decision 4 of the round).
+- MR117, from the fix round: a pending change is saved at `QuitPre` as well as at Input's `BufUnload` (decision 5 of the round).
+- MR121, from the correction: a warning raised in Insert, Replace or Terminal mode waits until that mode is left by any key — `<Esc>`, `<C-c>`, `<C-\><C-n>`, `<C-o>` — so it never prompts in Claude's terminal (decision 1 of the correction).
 
 ## Task lines
 
@@ -357,14 +357,14 @@ This wave holds its marks. The line to mark:
 
 ## Limits
 
-- **An earlier handler that fails can skip the quit saves.** Since the fix round a pending change is saved at `QuitPre` (`:quit`, `:qall`, `:wqall`, `:xall`, `ZZ`, `ZQ`; measured on 0.12.5 and 0.11.6) and again at Input's `BufUnload` when that save failed. Two ways past them, each a Vimscript `throw` or any error when the quit runs from Lua:
+- **An earlier handler that fails can skip the quit saves** (MR122). Since the fix round a pending change is saved at `QuitPre` (`:quit`, `:qall`, `:wqall`, `:xall`, `ZZ`, `ZQ`; measured on 0.12.5 and 0.11.6) and again at Input's `BufUnload` when that save failed. Two ways past them, each a Vimscript `throw` or any error when the quit runs from Lua:
   - `:cquit` fires no `QuitPre`, so it has only the `BufUnload` save, which an earlier `BufWinLeave` or `BufUnload` handler can skip (the attack review of PR #46, F4).
   - A `QuitPre` handler defined before aineo's — any handler defined at startup, since aineo's is created at the first `keep_draft()` (ID8) — skips both saves, on every quit that fires `QuitPre`: the exception stays pending through `getout()`. Neovim exits 0. Not a regression from `e0929f0`, and no autocommand can fix it: `BufUnload` and `VimLeavePre` are skipped too (the re-measure of PR #46, finding 2, `rm46_probe_quit.lua`, both versions).
 
   The draft then holds what the delayed save kept. The help says so. (Before the fix round this line said a Lua error does not skip the save; that held only for a typed quit. The fix round's line said `:cquit` alone; that missed the `QuitPre` case.)
-- **A Neovim ended by a signal saves nothing at quit.** Its terminal window closed, `kill`, a killed TUI client: Neovim drops Input's lines before any autocommand can read them (the attack review of PR #46, F3). Like a crash, it loses at most the last second's typing. The help says so. (This line said a NUL byte comes back as a line break; that was false: NUL round-trips, measured by the attack review.)
-- **An unreadable draft prompts at startup.** Its one warning names the draft's path twice and spans more than one screen line, so the autostart holds at a hit-enter prompt until a key. It fires only for a draft that exists and cannot be read. (This line said a restore is undoable; since the fix round it is not.)
-- **A draft for every working directory is kept, never removed.** An emptied Input leaves an empty file, as the Reports leave theirs.
+- **A Neovim ended by a signal saves nothing at quit** (MR123). Its terminal window closed, `kill`, a killed TUI client: Neovim drops Input's lines before any autocommand can read them (the attack review of PR #46, F3). Like a crash, it loses at most the last second's typing. The help says so. (This line said a NUL byte comes back as a line break; that was false: NUL round-trips, measured by the attack review.)
+- **An unreadable draft prompts at startup** (MR124). Its one warning names the draft's path twice and spans more than one screen line, so the autostart holds at a hit-enter prompt until a key. It fires only for a draft that exists and cannot be read. (This line said a restore is undoable; since the fix round it is not.)
+- **A draft for every working directory is kept, never removed** (MR125). An emptied Input leaves an empty file, as the Reports leave theirs.
 - **A case that fails mid-run can leave a draft for a later case of the same run.** `make test` and `make test_file` empty the suites' shared `drafts` directory at the start of each run, not between cases; a plugin-level case in another file that opens Input in the checkout's directory can then find it restored.
 - **`N3` survives:** a delay of 4000 ms in place of 1000 ms passes, since the save is waited for up to 5 s. A tighter bound would be timing-dependent under load; accepted by the test-integrity review and the orchestrator (decision 10 of the round).
 
@@ -389,7 +389,7 @@ Merged by rebase into `dev` on 2026-09-26, PR #46, right after PR #47 (the modul
 | `90ef9b3` | `2dba110` | Make the two-editor paths case fail when only one editor wrote |
 | `0caf889` | `d2cb0b5` | Record T14's fix round and correct the packet's false records |
 | `4e9db4f` | `acd8b70` | Keep the drafts clean-up under .tests/ whatever make is given |
-| `59a72c7` | `cc53724` | Hold the draft warning past Terminal mode and <C-c>, not InsertLeave |
+| `59a72c7` | `cc53724` | Hold the draft warning past Terminal mode and `<C-c>`, not InsertLeave |
 | `14c5e51` | `d2653d2` | Remove the draft's cut file when it cannot replace the draft |
 | `0610d46` | `bb703be` | Pin focus()'s opened flag and the restore's own 'undolevels' |
 | `c1705c4` | `9c1833c` | Say that a failing QuitPre handler skips both of the draft's saves |
