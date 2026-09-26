@@ -407,7 +407,7 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 
 **Order:** after T10 merges, since both change the Report's rendering. Its brief is written then, against T10's merged code, and reviewed before dispatch.
 
-**Brief, 2026-09-26:** `brief-t17-report-paths.md`, written once T18 had merged (`e84ce9f`), since T18 changed the same rendering after T10; its brief review is `brief-review-t17-report-paths.md`. The orchestrator's readings are its candidate rule (a `/` or an inner `.`, so a bare `Makefile` is not a path), `:<line>:<column>` naming the line, the Report's working directory for relative paths against `gf`'s own resolution, the check made when a report is drawn, a group of its own, `AineoReportPath`, and no address on a path.
+**Brief, 2026-09-26:** `brief-t17-report-paths.md`, written once T18 had merged (`e84ce9f`), since T18 changed the same rendering after T10; its brief review is `brief-review-t17-report-paths.md`. It was corrected after its brief review: the double-click in Insert mode and on every Report, the checks counted, `*` a stop character, and the readings the rule applies. The orchestrator's readings are its candidate rule (a `/` or an inner `.`, so a bare `Makefile` is not a path), `:<line>:<column>` naming the line, the Report's working directory for relative paths against `gf`'s own resolution, the check made when a report is drawn, a group of its own, `AineoReportPath`, and no address on a path.
 
 **The six rules for T17**, recomputed on 2026-09-26 against every open packet (T21, PR #64, in review) and every claimed wave (only this one):
 
@@ -430,7 +430,11 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 - the existence check dropped;
 - a path found inside a web link;
 - the double-click opening the word under the cursor, not the path;
-- the paths drawn on arrival but not when the Report shows its records again.
+- the paths drawn on arrival but not when the Report shows its records again;
+- the double-click mapped in Normal mode only;
+- the double-click mapped once, on the first Report;
+- a check per occurrence, not per distinct candidate;
+- a relative path resolved against Neovim's current directory, not the Report's working directory.
 
 ## Packet T20 — 2026-09-26
 

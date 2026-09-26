@@ -13,19 +13,27 @@ It rests on C6 (the Report), C9 (the file column), the user's words of 2026-09-2
 ### The behaviours — RP1 to RP4 tested, each test seen red first; RP5 and RP6 are invariants
 
 - **RP1 — a path to a file that exists is underlined.** In a report's task, summary or details, a path that names a regular file that exists is drawn in a group of its own, `AineoReportPath`, a default link to `Underlined`, defined as T9's groups are and listed in the help. It is found by this rule, the orchestrator's reading (below):
-  - a **candidate** is a run of characters up to an ASCII space, a control character, `<`, `>`, `"`, `'`, `|`, a backtick, `(`, `)`, `[`, `]`, `{`, `}` or `,`, with the trailing `.` `:` `;` `!` `?` left out, as T10's links leave them;
+  - a **candidate** is a run of characters up to an ASCII space, an ASCII control character (U+0000–U+001F, U+007F), `<`, `>`, `"`, `'`, `|`, a backtick, `(`, `)`, `[`, `]`, `{`, `}`, `,` or `*`, with a trailing `.` `:` `;` `!` `?` left out; a trailing `~` is kept (`foo.lua~` is a backup file's name). `*` stops a candidate so that a path in Markdown emphasis, `**lua/x.lua**`, is found;
   - it is a path only if it holds a `/`, or a `.` that is neither its first nor its last character: `lua/aineo/report/render.lua`, `./Makefile`, `/etc/hosts` and `README.md` are candidates; a bare `Makefile` or `the` is not;
   - a `:<line>` at its end, or `:<line>:<column>`, is part of the path's drawing and names the line: `render.lua:112` underlines all of it;
   - a relative path is resolved against the Report's working directory (`set_report_environment()`'s `working_directory`), an absolute one as it is; `~` is not expanded;
   - it is underlined only when it names a regular file (`vim.uv.fs_stat()`'s `type == 'file'`) when the report is drawn; a directory is not;
-  - a candidate inside a web link (T10) is not a path: a web link keeps its group and its address, and no path mark overlaps it.
-- **RP2 — double-click opens it in the middle column.** A double-click (`<2-LeftMouse>`) on an underlined path in the Report opens its file in the file column (C9), at its line when it has one, as `gF` does today (`evidence/report-links.txt` §4: the file opens in the Report's window and C9's redirect moves it to the middle column; the Report keeps its buffer). A double-click anywhere else in the Report does what it did before.
+  - a candidate that overlaps a web link (T10) is not a path: a web link keeps its group and its address, and no path mark overlaps it.
+- **RP2 — double-click opens it in the middle column.** A double-click (`<2-LeftMouse>`) on an underlined path in the Report opens its file in the file column (C9), at its line when it has one, as `gF` does today (`evidence/report-links.txt` §4: the file opens in the Report's window and C9's redirect moves it to the middle column; the Report keeps its buffer). A line past the file's end lands on its last line and `:0` on its first, as `gF` does.
+  - **From every mode the click arrives in:** from Normal mode; from Insert mode, when the first click brought Insert mode from Input into the Report (Insert mode ends as the file opens); and from Claude's terminal. The brief review measured that from Input in Insert mode the first click keeps Insert mode in the Report, so a mapping in Normal mode alone never fires there. One test for each.
+  - **On every Report:** the double-click works in the Report made anew after `:bdelete`, `:bwipeout` or `:bunload` (RP3's list). A buffer-local mapping survives `:edit` but is gone from a Report made anew, so set it where each Report buffer is made (`buffer.create_report_buffer()` or `init.lua`'s `open_report_buffer()`).
+  - **Elsewhere in the Report,** a double-click does what Neovim's own does: it selects the word in Visual mode.
 - **RP3 — drawn on every path.** The paths are drawn wherever the Report draws a report: a report received, the Report opened on saved records, `:edit` in the Report, the Report made anew after `:bdelete`, `:bwipeout` or `:bunload` — as T10's links are.
-- **RP4 — bounded.** Finding paths takes time linear in the line, with at most one file-system check per distinct candidate in a rendering. A report at the relay's 1 MiB line limit whose details are candidates is drawn, on arrival and after `:edit`, within 2 s on this host, on both versions (T10's re-measure measured its worst at 0.49 s and 0.61 s; say what yours adds).
+- **RP4 — bounded.** Finding paths takes time linear in the line, with **one file-system check per distinct candidate** in a rendering.
+  - **A test counts the checks**, by wrapping `vim.uv.fs_stat` in the child, and finds one per distinct candidate, however often each occurs.
+  - **The worst input:** details of about 210 000 distinct 4-byte candidates one space apart, such as `xy/z` over base 62, at the relay's 1 MiB line limit (`lua/aineo/mcp/server.lua:13`, less the report's envelope), drawn on arrival and after `:edit` within 2 s on this host, on both versions. The brief review measured one check at 1.8–3.8 µs and that input at 0.71–0.77 s for finding and checking alone; T10's links add 0.01–0.03 s.
+  - **Measure and report, with no bound,** the `:edit` of the 2 MiB of records the Report keeps, filled with such candidates; T10's note measured 1.27 s for its links alone (MR133).
 - **RP5 — `gf` and `gF` unchanged (an invariant).** They resolve as Neovim does (the current directory and `'path'`), and still open the file in the middle column.
-- **RP6 — nothing else changes (an invariant).** T10's links (their rule, group and addresses, `gx`), T18's line and its bold, the saved records, the report format, and every existing case of the suite: green, with only the pins that count every extmark gaining the path rows their cases now draw.
+- **RP6 — nothing else changes (an invariant).** T10's links (their rule, group and addresses, `gx`), T18's line and its bold, the saved records, the report format, and every existing case of the suite: green and unchanged. No case of today's suite draws a path: every report test's working directory, `/projects/alpha`, does not exist, and no report text holds an absolute path to a file. So every pin stays as it is, and a pin that gains a row is a finding. The pins that count autocommands, `tests/test_report_colours.lua:532–551`, move if the double-click is wired through an autocommand; `REPORT_LINKS` (`tests/test_report_links.lua:33`) keeps only marks with a `url`, so path marks leave it as it is.
 
-The seam is yours under `tdd`, inside `lua/aineo/report/`: a finder beside `links.lua`, its colours in `render.lua`, the group in `colours.lua`, the double-click on the Report's buffer. Measure how a child test double-clicks (`nvim_input_mouse()`, or `nvim_input()` with `<2-LeftMouse><col,row>`), and whether `'mouse'` must be on in the child, on both versions, and say so in your note.
+The seam is yours under `tdd`, inside `lua/aineo/report/`: a finder beside `links.lua`, its colours in `render.lua`, the group in `colours.lua`, the double-click on each Report buffer. RP1's tests include a case whose child's current directory is not the Report's working directory, with the file in only one of them.
+
+**How a test double-clicks** (measured by the brief review, the same on both versions): in a child started with `-u scripts/minimal_init.lua`, `'mouse'` is `nvi` and `'mousetime'` 500. `nvim_input_mouse('left', 'press'|'release', '', 0, row, col)` sent twice fires a buffer-local `<2-LeftMouse>`, with the cursor on the clicked byte and `getmousepos()` agreeing; `nvim_input('<LeftMouse><c,r><LeftRelease><c,r><2-LeftMouse><c,r>…')` does the same. `nvim_input('<2-LeftMouse><c,r>')` alone fires the mapping but leaves the cursor where it was; only `getmousepos()` is right then. So read the click's place with `getmousepos()` in the mapping, and click with `nvim_input_mouse` press and release twice in the tests. With `'mouse'` empty the injected events still fire the mapping, so no test can pin the dependency on `'mouse'`: the help says it (below).
 
 ### The orchestrator's readings, for your note's *Readings for the MVP review*
 
@@ -34,13 +42,21 @@ The seam is yours under `tdd`, inside `lua/aineo/report/`: a finder beside `link
 - a relative path is the Report's working directory's, while `gf` and `gF` keep Neovim's own resolution: after a `:cd`, the two may name different files, and a double-click opens what is underlined;
 - a path is checked when the report is drawn: a file made later is underlined at the next drawing, one removed stays underlined until then;
 - the group `AineoReportPath`, apart from T10's `AineoReportLink`, so that a user can style each;
-- paths carry no address: ⌘-click stays for web links (the user's answer).
+- paths carry no address: ⌘-click stays for web links (the user's answer);
+- `~` is not expanded: `~/x` is looked up as `<working directory>/~/x`;
+- a name that starts with a dot is not a path: `.gitignore` and `.env` are refused, `./.gitignore` and `.luarc.json` admitted;
+- a file name holding a space is never found: in `my file.lua`, only `file.lua` is checked;
+- a line range, `lua/x.lua:12-20`, and `lua/x.lua#L12` are not paths: the whole candidate is checked, and names no file;
+- a path glued to non-ASCII punctuation, `lua/x.lua—see`, is one candidate that names no file; a path in `~~` strikethrough is not found;
+- after a `:cd`, a new Claude Code starts in the new directory while the Report resolves paths against the directory of the first layout, so paths Claude writes then may not be underlined;
+- the Report's buffer-local double-click takes the place of a global `<2-LeftMouse>` mapping of the user's, in the Report only;
+- a double-click needs `'mouse'` on in Normal and Insert mode, as Neovim's default `nvi` has it: the help says so.
 
 ### Facts, checked against `origin/dev` (`e84ce9f`, T18 merged)
 
 - **T10's finder, `lua/aineo/report/links.lua`:** `find_web_links(text)` (line 192) returns each link as `{ first_column, end_column, url }`, in time linear in the line; its stop characters are `STOP` (line 20), its trailing punctuation `TRAILING_PUNCTUATION` (line 35). Leave it as it is.
 - **`lua/aineo/report/render.lua`:** `link_colours(lines)` (lines 87–101) turns each link into a colour `{ line, first_column, end_column, group, url }`; `render_report()` (line 112) lists `header_colours()`, then `link_colours()`; `render_records()` (line 134). The renderer reads no file and no environment today: the existence check of RP1 needs the working directory and the file system, which `lua/aineo/report/init.lua` holds (`set_report_environment()`, line 48; `current_environment()`, line 61).
-- **`lua/aineo/report/init.lua`:** `show_rendering()` (lines 102–107) defines the groups when there are colours, then appends the rendering; `show_records()` (lines 115–124) and `open_report_buffer()` (line 130) show the saved records again on open and on `:edit`; `receive_report()` (line 196) draws a report on arrival.
+- **`lua/aineo/report/init.lua`:** `show_rendering()` (lines 102–107) defines the groups when there are colours, then appends the rendering; `show_records()` (lines 115–123) and `open_report_buffer()` (line 130) show the saved records again on open and on `:edit`; `receive_report()` (line 196) draws a report on arrival.
 - **`lua/aineo/report/buffer.lua`:** `append_rendering()` (line 128) places each colour as an extmark in the namespace `aineo_report_colours` (line 6), in the order given, at one priority, with the colour's `url` when it has one.
 - **`lua/aineo/report/colours.lua`:** the groups `TIME_GROUP` (line 8), `STATUS_GROUPS` (11), `STATUS_BOLD_GROUP` (20), `LINK_GROUP` (23), their `DEFAULT_LINKS` (26), and `define_report_colours()` (46).
 - **The pins that list every extmark:** `tests/test_report_colours.lua`'s `REPORT_COLOURS` (lines 25–31) and `tests/test_report_links.lua`'s `REPORT_MARKS` (line 124). A path in one of their reports adds a row. `tests/test_report_links.lua`'s `gx` rows (lines 399–413) hold paths such as `https://x.y/a` inside links only.
@@ -80,7 +96,7 @@ Read first:
   - `tests/test_report*.lua`, new cases and the pins that count every extmark; a new `tests/test_report_paths.lua`;
   - `doc/aineo.txt`, **only inside `*aineo-report*`**;
   - your session note.
-  - The documentation this change invalidates is that help section and the Report home's docstrings. Correct them in the same change and say so in your report.
+  - The documentation this change invalidates is that help section and the Report home's docstrings. Correct them in the same change and say so in your report. The help's paths paragraph says that a double-click needs `'mouse'` on in Normal and Insert mode, as Neovim's default `nvi` has it. `lua/aineo/mcp/editor.lua:10–16`'s timing, already false since T10 (MR133), grows further: it is outside your boundary, so report it and do not edit it.
 - **You must not touch:**
   - T10's rule (`lua/aineo/report/links.lua`), the report format and the saved records;
   - `lua/aineo/layout/` (T21, in review), `plugin/aineo.lua` and `lua/aineo/claude/` (T19 and T12 follow);
@@ -109,7 +125,8 @@ Read first:
 
 - **The user, 2026-09-26, while T10 was planned:** "but I woul like to have file paths detected and have the file opened in the center window that we use to open files... is this also planned right?"
 - **Asked how file paths should work,** the user chose "Double-click opens (Recommended)", described as: "A path to a file that exists (relative to the working directory or absolute, optionally with :line) is underlined like a link. Double-clicking it, or gf / gF on the keyboard (they already work), opens the file in the middle column, at the line if given. ⌘-click stays for web links." Then: "add an underline to file paths detect if it is not available currently".
-- **Asked the class,** the user chose "Small fix, after T10 (Recommended)".
+- **The options the user did not choose:** for how paths work, "Single click opens", "Underline, keyboard only" and "Later, not in T10", the question having said "…I'd add it to T10 beside the web links. How should they work?". In the same message, for the keyboard, the user chose "gx is enough (Recommended)" over "One aineo key for both", which was "Enter on an underlined link or path in the Report opens it… It would be added to T17": so add no Enter mapping.
+- **Asked the class,** the user chose "Small fix, after T10 (Recommended)", over "Regular packet, after T10", described as "worth it because it adds a mouse mapping and checks files on disk", and "Fold it into T10, regular".
 
 ## Budget
 
