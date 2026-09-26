@@ -69,7 +69,7 @@ deps:
 # state directory. Every child in the checkout's directory that opens the
 # layout shares the checkout's draft there, so each run starts with none: a
 # draft an earlier run left would come back in the next Input a case opens.
-TEST_DRAFTS := $(TEST_HOME)/state/nvim/aineo/drafts
+override TEST_DRAFTS := $(TEST_HOME)/state/nvim/aineo/drafts
 
 # Exits 0 only when every case ran and passed, and non-zero otherwise — also
 # when a test file does not load or contributes no case, when test code ends
