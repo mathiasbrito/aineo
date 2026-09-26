@@ -1,4 +1,6 @@
 local MiniTest = require('mini.test')
+local claude_session = dofile('tests/helpers/claude_session.lua')
+local entry = dofile('tests/helpers/entry.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local report_editor = dofile('tests/helpers/report_editor.lua')
 
@@ -27,6 +29,7 @@ local function make_project()
   fixture.directory(PROJECT)
   fixture.write(PROJECT .. '/lua/x.lua', { 'return {}' })
   fixture.write(PROJECT .. '/lua/foo.lua~', { 'return {}' })
+  fixture.write(PROJECT .. '/notes.txt', { 'one', 'two', 'three', 'four' })
   fixture.write(PROJECT .. '/lua/x.lua:https:/x.y/a', { 'a line' })
   for _, name in ipairs({ 'Makefile', 'README.md', '.gitignore', '.luarc.json' }) do
     fixture.write(PROJECT .. '/' .. name, { 'a line' })
@@ -444,6 +447,236 @@ T['a line']['after a path is drawn with it'] = function(text)
   receive_details('At ' .. text .. ' now')
 
   eq(drawn_paths(), { text })
+end
+
+--- Starts the child as a user's editor in the Report's working directory,
+--- `PROJECT`, with a fresh state directory, and opens aineo's layout there
+--- around the fake `claude` (`:Aineo open`): the Report's working directory
+--- is the editor's current directory when the layout first opens.
+local function open_layout()
+  entry.restart(child)
+  child.lua('vim.env.XDG_STATE_HOME = ...', { fixture.directory('report-paths-layout-state') })
+  entry.use_fake(child, claude_session.fake('report-paths', 'ready'))
+  child.fn.chdir(in_project(''))
+  child.cmd('Aineo open')
+end
+
+--- Double-clicks, in the child, with the left button, on byte `byte`, from
+--- 0, of line `line`, from 1, of the first window showing the Report: two
+--- presses and releases on its screen cell, as a mouse sends them.
+---
+---@param line integer
+---@param byte integer
+local function double_click_in_report(line, byte)
+  local cell = child.lua_get(
+    [[(function(line, byte)
+      local window = vim.fn.win_findbuf(require('aineo.report').report_buffer())[1]
+      local position = vim.fn.screenpos(window, line, byte + 1)
+      return { row = position.row - 1, col = position.col - 1 }
+    end)(...)]],
+    { line, byte }
+  )
+  for _ = 1, 2 do
+    child.api.nvim_input_mouse('left', 'press', '', 0, cell.row, cell.col)
+    child.api.nvim_input_mouse('left', 'release', '', 0, cell.row, cell.col)
+  end
+end
+
+--- How long a test waits for what a double-click does: typed keys run when
+--- the child reads its input, and the file column is arranged from a
+--- scheduled callback.
+local CLICK_PATIENCE_MS = 5000
+
+--- Waits, at most `CLICK_PATIENCE_MS`, until the child's current window
+--- shows the file `file`.
+---
+---@param file string
+local function wait_until_current_file_is(file)
+  vim.wait(CLICK_PATIENCE_MS, function()
+    return entry.current_window(child) == file
+  end, 20)
+end
+
+--- What the child shows once a file opened: what each window shows, left to
+--- right (`entry.windows()`), what the current window shows, its cursor's
+--- line, and the mode.
+---
+---@return { windows: string[], current: string, line: integer, mode: string }
+local function where_the_file_opened()
+  return {
+    windows = entry.windows(child),
+    current = entry.current_window(child),
+    line = child.lua_get([[vim.fn.line('.')]]),
+    mode = child.lua_get([[vim.fn.mode()]]),
+  }
+end
+
+--- The file `file` open in the layout's file column and current, at line
+--- `line`, in Normal mode, as `where_the_file_opened()` tells it.
+---
+---@param file string
+---@param line integer
+---@return { windows: string[], current: string, line: integer, mode: string }
+local function opened_in_file_column(file, line)
+  return {
+    windows = { 'terminal', file, 'aineo://report', 'aineo://input' },
+    current = file,
+    line = line,
+    mode = 'n',
+  }
+end
+
+--- Runs `command` in the child's current window, such as `startinsert`, and
+--- waits, at most `CLICK_PATIENCE_MS`, until the child is in `mode`
+--- (`mode()`). Raises an error when it is not by then.
+---
+---@param command string
+---@param mode string
+local function enter_mode(command, mode)
+  child.cmd(command)
+  local entered = vim.wait(CLICK_PATIENCE_MS, function()
+    return child.lua_get([[vim.fn.mode()]]) == mode
+  end, 20)
+  assert(entered, ('the child did not enter mode %s'):format(mode))
+end
+
+--- Where a double-click can come from, each by the name a case gives it:
+--- puts the child's cursor there, in the mode named.
+local PLACES_A_CLICK_COMES_FROM = {
+  ['the Report in Normal mode'] = function()
+    child.lua(
+      [[vim.api.nvim_set_current_win(vim.fn.win_findbuf(require('aineo.report').report_buffer())[1])]]
+    )
+  end,
+  ['Input in Insert mode'] = function()
+    child.lua(
+      [[vim.api.nvim_set_current_win(vim.fn.win_findbuf(require('aineo.layout').input_buffer())[1])]]
+    )
+    enter_mode('startinsert', 'i')
+  end,
+  ["Claude's terminal in Terminal mode"] = function()
+    claude_session.wait_for_status(child, 'ready')
+    child.lua([[vim.api.nvim_set_current_win(vim.fn.win_findbuf(vim.fn.bufnr('term://*'))[1])]])
+    enter_mode('startinsert', 't')
+  end,
+}
+
+--- Waits, at most `CLICK_PATIENCE_MS`, until the child is in Visual mode,
+--- then tells what it selects: the mode, the first and last column of the
+--- selection, from 1, and its line.
+---
+---@return { [1]: string, [2]: integer, [3]: integer, [4]: integer }
+local function selection()
+  vim.wait(CLICK_PATIENCE_MS, function()
+    return child.lua_get([[vim.fn.mode()]]) == 'v'
+  end, 20)
+  return child.lua_get(
+    [[{ vim.fn.mode(), vim.fn.getpos('v')[3], vim.fn.col('.'), vim.fn.line('.') }]]
+  )
+end
+
+T['a double-click'] = MiniTest.new_set()
+
+T['a double-click']['on a path with a line'] = MiniTest.new_set({
+  parametrize = {
+    { 'the Report in Normal mode' },
+    { 'Input in Insert mode' },
+    { "Claude's terminal in Terminal mode" },
+  },
+})
+
+T['a double-click']['on a path with a line']['opens its file in the file column, at the line, in Normal mode, from'] = function(
+  place
+)
+  open_layout()
+  receive_details('See notes.txt:3 now')
+  PLACES_A_CLICK_COMES_FROM[place]()
+
+  double_click_in_report(2, 12)
+
+  wait_until_current_file_is(in_project('notes.txt'))
+  eq(where_the_file_opened(), opened_in_file_column(in_project('notes.txt'), 3))
+end
+
+T['a double-click']['on a path with no line opens its file in the file column'] = function()
+  open_layout()
+  receive_details('See lua/x.lua now')
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  double_click_in_report(2, 12)
+
+  wait_until_current_file_is(in_project('lua/x.lua'))
+  eq(where_the_file_opened(), opened_in_file_column(in_project('lua/x.lua'), 1))
+end
+
+T['a double-click']['on a path with a line outside the file'] = MiniTest.new_set({
+  parametrize = {
+    { 'notes.txt:0', 1 },
+    { 'notes.txt:99', 4 },
+    { 'notes.txt:99999999999999999999', 4 },
+  },
+})
+
+T['a double-click']['on a path with a line outside the file']['opens it at its nearest line'] = function(
+  path,
+  line
+)
+  open_layout()
+  receive_details('See ' .. path .. ' now')
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  double_click_in_report(2, 12)
+
+  wait_until_current_file_is(in_project('notes.txt'))
+  eq(where_the_file_opened(), opened_in_file_column(in_project('notes.txt'), line))
+end
+
+T['a double-click']['on the Report made anew after the user deletes it'] = MiniTest.new_set({
+  parametrize = { { 'bdelete' }, { 'bwipeout' }, { 'bunload' } },
+})
+
+T['a double-click']['on the Report made anew after the user deletes it']['opens the file'] = function(
+  command
+)
+  open_layout()
+  receive_details('See notes.txt:3 now')
+  child.cmd(('%s %d'):format(command, child.lua_get([[require('aineo.report').report_buffer()]])))
+  child.cmd('Aineo report')
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  double_click_in_report(2, 12)
+
+  wait_until_current_file_is(in_project('notes.txt'))
+  eq(where_the_file_opened(), opened_in_file_column(in_project('notes.txt'), 3))
+end
+
+T['a double-click']["opens the file in the Report's working directory, after Neovim's current directory changed"] = function()
+  open_layout()
+  receive_details('See notes.txt:3 now')
+  child.fn.chdir(fixture.directory('report-paths-elsewhere'))
+  fixture.write('report-paths-elsewhere/notes.txt', { 'elsewhere' })
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  double_click_in_report(2, 12)
+
+  wait_until_current_file_is(in_project('notes.txt'))
+  eq(entry.current_window(child), in_project('notes.txt'))
+end
+
+T['a double-click']['elsewhere in the Report'] = MiniTest.new_set({
+  parametrize = { { 'the Report in Normal mode' }, { 'Input in Insert mode' } },
+})
+
+T['a double-click']['elsewhere in the Report']['selects the word, as Neovim does, from'] = function(
+  place
+)
+  open_layout()
+  receive_details('See notes.txt:3 now')
+  PLACES_A_CLICK_COMES_FROM[place]()
+
+  double_click_in_report(2, 7)
+
+  eq(selection(), { 'v', 7, 9, 2 })
 end
 
 return T

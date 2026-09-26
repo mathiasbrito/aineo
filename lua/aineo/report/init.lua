@@ -6,6 +6,7 @@ local buffer = require('aineo.report.buffer')
 local colours = require('aineo.report.colours')
 local format = require('aineo.report.format')
 local instructions = require('aineo.report.instructions')
+local paths = require('aineo.report.paths')
 local records = require('aineo.report.records')
 local render = require('aineo.report.render')
 
@@ -134,6 +135,22 @@ local function file_check_for_one_rendering()
   end
 end
 
+--- Opens, in the current window, the file `path`, a path as the Report
+--- draws it, names (`file_named_by()`), at the line it names when it names
+--- one: a line past the file's end at its last line, line 0 at its first.
+--- The file is the one the Report underlined, whatever Neovim's current
+--- directory is now.
+---
+---@param path string
+local function open_drawn_path(path)
+  local candidate = paths.find_path_candidates(path)[1]
+  vim.cmd('edit ' .. vim.fn.fnameescape(file_named_by(candidate.path)))
+  if candidate.line then
+    local last_line = vim.api.nvim_buf_line_count(0)
+    vim.api.nvim_win_set_cursor(0, { math.min(math.max(candidate.line, 1), last_line), 0 })
+  end
+end
+
 --- Shows `rendering` at the end of `report_buffer`, in the Report's colours
 --- (`colours.define_report_colours()`), defined whenever a rendering has any:
 --- none is defined before the Report shows a report.
@@ -163,15 +180,17 @@ local function show_records(report_buffer, records_file)
   end
 end
 
---- A new Report buffer showing the records kept in `records_file`, and
---- showing them again when the user edits it anew (`:edit`).
+--- A new Report buffer showing the records kept in `records_file`, showing
+--- them again when the user edits it anew (`:edit`), and opening the file a
+--- path it draws names when the user double-clicks the path
+--- (`open_drawn_path()`).
 ---
 ---@param records_file string
 ---@return integer
 local function open_report_buffer(records_file)
   local report_buffer = buffer.create_report_buffer(function(emptied)
     show_records(emptied, records_file)
-  end)
+  end, open_drawn_path)
   show_records(report_buffer, records_file)
   return report_buffer
 end
