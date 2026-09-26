@@ -65,13 +65,13 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 
 **Next:**
 - Wave 7, converged with the user and not yet planned: a changes pane beside the agent pane, and sending only Input's selection. Its rows are D18–D22, C12 and C13 in [[Planning/aineo — v1 agent console]]. Its plan comes once T14 and T12 are underway, and its packets start after them, since they change the same layout and entry code.
-- The MVP review: the user kept MR1–MR100 and MR102–MR108 on 2026-09-26 ([[Review/2026-09-24 — v1 MVP readings review]]). MR101, MR109 and MR110 remain.
+- The MVP review: the user kept MR1–MR97, MR99, MR100 and MR102–MR107 on 2026-09-26 ([[Review/2026-09-24 — v1 MVP readings review]]). The readings below remain.
 
 **Open threads:**
 - `lua/aineo/health.lua` evaluates `config.recorded_setup_options()` as an argument to its `pcall`, outside it, so `:checkhealth aineo` fails whole when `setup()` options hold a userdata — found by T13's attack review, older than T13.
 - T5's `tests/test_mcp_blocked_editor.lua` writes a `v:null` file into the checkout's root when its editor autostarts — latent while the suites' preset holds; a fix belongs to T5's home.
 - The terminal of the last session is kept twice, by the Claude home and by the composition root.
-- The MCP server reports `serverInfo.version = '0.0.0'` (`lua/aineo/mcp/protocol.lua`, pinned by `tests/test_mcp_relay.lua`) while the release is `v0.1.0`.
+- The MCP server reports `serverInfo.version = '0.0.0'` (`lua/aineo/mcp/protocol.lua`, pinned by `tests/test_mcp_relay.lua`) while the release is `v0.2.0`.
 - The version check's timer kills the process group although the early return always does too (an equivalent mutant at the wave-5 verification); its own kill is redundant, and in a same-pass race it can make a command the check killed read as a failed one (the records review of PR #27). A timer that only sets the flag stays bounded.
 - The prefix keys' subcommand table (`s o r i c`) is kept twice, in `plugin/aineo.lua` and `lua/aineo/health.lua` (T8); a change to one without the other fails the prefix group's keys comparison.
 - The Learning *Claude Code's interactive CLI in a Neovim terminal* split into claims, carried from wave 2.
@@ -79,7 +79,9 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 **Host limits for orchestration:** Macbook-Mathias — 3 agents at once (10 CPUs, 64 GiB; the orchestrate skill's default of 3 parallel implementers, applied to all agents).
 
 **Decisions awaiting the user:**
-- MR101, MR109 and MR110 of [[Review/2026-09-24 — v1 MVP readings review]], which came after the user kept the others on 2026-09-26.
+- The oldest `claude` version supported (2.1.281 is installed) — MR28.
+- MR98, MR101, MR108 and MR111–MR114 of [[Review/2026-09-24 — v1 MVP readings review]], which were not put to the user, and MR109 and MR110, which came after the user's answer of 2026-09-26.
+- The ⌘-click check in Claude's pane: asked on 2026-09-26 and not yet answered. It decides whether T10 needs a terminal part.
 
 ## Changelog
 | Date | Session | Summary |
@@ -92,4 +94,4 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 | 2026-09-25 | [[Sessions/2026-09-25 — Wave 4 retrospective]] | Wave 4 landed: T7 the entry point (PR #17, `fa6b28c` … `201873b`); `ai/` passes #18 (worktree cd guard) and #19 (suites' isolation documented); wave 5 (T8) planned |
 | 2026-09-25 | [[Sessions/2026-09-25 — Wave 5 retrospective]] | Wave 5 landed: T8 health and help (PR #21, `bf0bfad` … `1916dee`; PR #22, `7c9a12f`, `22ce027`) — v1 complete. `ai/` passes #23 (the rolling wave, `0f83767`, `f13d3db`) and #24/#25 (the small-fix class, `0ed0bbe`, `025d5d2`, `4d05f84`). Release `v0.1.0` (PR #26, `b59a54e`); GitHub branch protection turned on for `main` and `dev`. |
 | 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6 (rolling): T9, the Report's colours, landed as a small fix (PR #30, `a86a69c` … `3d67b05`) |
-| 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T13, Neovim 0.12 compatibility, landed (PR #31, `39d9cb0` … `f8317d8`); release `v0.2.0` (PR #37, `e26838f`); D21 and D22 decided by the user; the MVP readings kept |
+| 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T13, Neovim 0.12 compatibility, landed (PR #31, `39d9cb0` … `f8317d8`); release `v0.2.0` (PR #37, `e26838f`); D21 and D22 decided by the user; most MVP readings kept |

@@ -2,7 +2,7 @@
 
 **Author:** Mathias Santos de Brito, with Claude — the orchestrator (Opus 5.5, session `619e5f9a`)
 **Branch:** `knowledge/wave2-close-wave3-plan`
-**Status:** closed 2026-09-26 for MR1–MR100 and MR102–MR108 — the user kept them ("ok, your decisions are fine"); MR101, MR109 and MR110 came after that answer and stay open
+**Status:** open. On 2026-09-26 the user kept MR1–MR97, MR99, MR100 and MR102–MR107 ("ok, your decisions are fine"), MR28's relay behaviour among them. Still awaiting the user: MR28's oldest supported `claude`, MR98, MR101, MR108 and MR109–MR114
 
 ## Links
 
@@ -165,28 +165,40 @@ The IDs are `MR#`, so they collide with neither the plan's `R#` risks nor a revi
 
 ## Readings — wave 6 (T9, T11–T16)
 
-Added 2026-09-26. The user saw MR96, MR97, MR99, MR100 and MR102–MR108 in the list the orchestrator put to them, and answered "ok, your decisions are fine". MR98 was not listed separately; that answer, a general one, covers it by its words. MR101, MR109 and MR110 came after the answer.
+Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t13-landed`), from the wave-6 briefs and session notes at `dev` `f8317d8`.
+
+- **Kept.** The list the orchestrator put to the user on 2026-09-26 described MR96, MR97, MR99, MR100 and MR102–MR107. The user answered "ok, your decisions are fine". For MR99 and MR100 the list showed only the `Lua: ` word, not the file position.
+- **Open, not shown to the user:**
+  - MR98, which the list omitted; the message before it named only "T13's error-prefix stripping";
+  - MR108, named only as one of "T14's four readings", never described;
+  - MR101, which the re-measure measured and the orchestrator adopted before the answer, but which was not in the list;
+  - MR111–MR114, T12's other readings, on no list.
+- **Open, later than the answer:** MR109 and MR110.
 
 | ID | Reading | Source | Disposition |
 |---|---|---|---|
 | MR96 | The colour of each status: started → `DiagnosticInfo`, progress → `DiagnosticHint`, blocked → `DiagnosticWarn`, done → `DiagnosticOk`, failed → `DiagnosticError`. | T9, RC2 | kept |
-| MR97 | A colour scheme's own default link for an aineo group, made before aineo's first definition, is kept across later scheme switches and `:highlight clear` until the Report shows reports again. | the T9 note › *Limits* | kept |
-| MR98 | NC3 changes v0.1.0's tool-error text on 0.11 too: a report the editor does not take no longer carries `Error executing lua: ` before its reason. | the T13 note › *Readings* | kept, by the general answer |
-| MR99 | The relay strips a reason's own leading `Lua: ` or `Error executing lua: `: a reason that itself begins with them loses those words. | the T13 note › *Readings* | kept |
-| MR100 | The plugin strips an error's own leading `Lua: ` or `Error executing lua: ` in the same way, on the user's side. | the T13 note › *Readings* | kept |
-| MR101 | A file position whose shown path holds a space is no longer stripped from an error: the pattern stops at white space, so a user's words before a position are kept. | T13's correction | open |
+| MR97 | A colour scheme's own default link for an aineo group, made before aineo's first definition, comes back at every later scheme switch and `:highlight clear`; a report, or `:edit` in the Report, links the group to its status colour only until the next one. | the T9 note › *Limits* | kept |
+| MR98 | NC3 changes v0.1.0's tool-error text on 0.11 too: a report the editor does not take no longer carries `Error executing lua: ` before its reason. | the T13 note › *Readings* | open — not shown to the user: the list omitted it, and the message before it named only "T13's error-prefix stripping" |
+| MR99 | The relay strips a reason's own leading framing: a reason that itself begins with `Lua: `, `Error executing lua: ` or a file position loses those words. | the T13 note › *Readings* | kept — the list showed the `Lua: ` word |
+| MR100 | The plugin strips an error's own leading framing in the same way, on the user's side: an error whose first line begins with `Lua: ` or `Error executing lua: `, or with a file's position followed by them, loses those words. | the T13 note › *Readings* | kept — the list showed the `Lua: ` word |
+| MR101 | A file position whose shown path holds a space is no longer stripped from an error: the pattern stops at white space, so a user's words before a position are kept. | T13's correction | open — adopted before the user's answer, not in the list |
 | MR102 | A report's details stay under `[status]` by the icon's display width, measured at each rendering: `◐` under `'ambiwidth'` `double`, or an icon `setcellwidths()` widens, indents them one more column. | T11, IC4 | kept |
 | MR103 | `\tcn` with no Claude window warns at `WARN` and changes nothing. | T12, CN4 | kept |
 | MR104 | `\tcn` from another tab toggles Claude's window in the layout's tab. | T12, CN4b | kept |
 | MR105 | The Input draft empties at once when Input empties. | T14, ID1 | kept |
 | MR106 | At quit, only a change not yet saved is written to the draft. | T14, ID2 | kept |
 | MR107 | The draft is restored only into a new or emptied Input, never over text. | T14, ID3 | kept |
-| MR108 | The draft home copies the report home's patterns rather than importing them. | T14, ID5 | kept |
+| MR108 | The draft home copies the report home's patterns rather than importing them. | T14, ID5 | open — named only as one of "T14's four readings", never described |
 | MR109 | The report instructions' "no whys" holds for every status: a `blocked` or `failed` report states what blocks or stopped the task, as facts, and leaves out the reasoning behind Claude's choices. | T15, RI1 | open |
 | MR110 | `\o` sets the right column's wrapping again, so a user's `:setlocal nowrap` there lasts until the next `\o`. | T16, RW2 | open |
+| MR111 | `\tcn`'s subcommand and `<Plug>` names: `:Aineo claude-numbers` and `<Plug>(aineo-claude-numbers)`. | D16; T12's brief › *What was decided already* | open — on no list |
+| MR112 | `\tcn` clears `'relativenumber'` together with `'number'` in Claude's window. | T12, CN1 | open — on no list |
+| MR113 | `\tcn` pressed again restores the values Claude's window had when they were hidden; a window that never had line numbers gets `'number'`. | T12, CN2 | open — on no list |
+| MR114 | A Claude window `\o` rebuilds takes the user's defaults, not the toggled state. | T12's brief › *What was decided already* | open — on no list |
 
 ## Disposition
 
-**2026-09-26: the user kept MR1–MR100 and MR102–MR108** ("ok, your decisions are fine"), among them MR28's oldest `claude`, 2.1.281, and the orchestrator's MR77 and MR92. MR101, MR109 and MR110 stay open for the next review.
+**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108 and MR109–MR114 stay open for the next review.
 
 Before that, every item was **open** until the MVP review. A reading the user keeps is closed *kept*; one the user changes becomes a plan row through a converge round (a new `D#`, never an edit in place) and a task.
