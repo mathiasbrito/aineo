@@ -1,7 +1,8 @@
---- How a report reads in the Report buffer: its lines, and the colours of
---- its icon, time and status.
+--- How a report reads in the Report buffer: its lines, the colours of its
+--- icon, time and status, and its web links.
 
 local colours = require('aineo.report.colours')
+local links = require('aineo.report.links')
 
 local M = {}
 
@@ -10,6 +11,7 @@ local M = {}
 ---@field first_column integer the byte it starts at, from 0
 ---@field end_column integer the byte it ends before, from 0
 ---@field group string the highlight group it shows in
+---@field url string? the address it opens, when it is a web link
 
 ---@class aineo.report.Rendering
 ---@field lines string[] lines holding no newline
@@ -89,11 +91,33 @@ local function header_colours(status)
   }
 end
 
+--- The colours of the web links in `lines` (`links.find_web_links()`), each
+--- in `colours.LINK_GROUP` and carrying its address.
+---
+---@param lines string[]
+---@return aineo.report.Colour[]
+local function link_colours(lines)
+  local found = {}
+  for index, line in ipairs(lines) do
+    for _, link in ipairs(links.find_web_links(line)) do
+      table.insert(found, {
+        line = index - 1,
+        first_column = link.first_column,
+        end_column = link.end_column,
+        group = colours.LINK_GROUP,
+        url = link.url,
+      })
+    end
+  end
+  return found
+end
+
 --- The lines a report shows: `<icon> HH:MM [status] task — summary`, the icon
 --- that of its status (`STATUS_ICONS`), then each line of its details,
 --- indented to start under the `[status]` (`details_indent()`). A newline in
 --- the task or the summary becomes a space, so the header stays one line. Its
---- colours are `header_colours()`.
+--- colours are `header_colours()`, then the web links of its lines
+--- (`link_colours()`).
 ---
 ---@param report { task: string, status: string, summary: string, details: string? } a valid report
 ---@param time string when the report arrived, as `YYYY-MM-DDTHH:MM:SS`
@@ -111,7 +135,10 @@ local function render_report(report, time)
   for _, line in ipairs(details_lines(report.details)) do
     table.insert(lines, indent .. line)
   end
-  return { lines = lines, colours = header_colours(report.status) }
+  return {
+    lines = lines,
+    colours = vim.list_extend(header_colours(report.status), link_colours(lines)),
+  }
 end
 
 --- The lines and colours of `records`, one report after another, each as

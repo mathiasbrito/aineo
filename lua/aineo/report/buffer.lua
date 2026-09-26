@@ -2,7 +2,7 @@
 
 local M = {}
 
---- The namespace of the colours the Report shows.
+--- The namespace of the colours the Report shows, its web links' included.
 local REPORT_COLOURS = vim.api.nvim_create_namespace('aineo_report_colours')
 
 --- The Report buffer's name. Not a file path: a named buffer is never reused
@@ -116,8 +116,10 @@ local function append_lines(buffer, lines)
 end
 
 --- Adds `rendering` to the end of `buffer`: its lines, as `append_lines()`
---- does, and its colours on them. An empty `buffer` first loses every colour
---- still on it: `:edit` empties the Report of its text, not of its colours.
+--- does, and its colours on them, a web link's carrying its address (an
+--- extmark's `url`, which the terminal is given as a hyperlink and `gx`
+--- opens). An empty `buffer` first loses every colour still on it: `:edit`
+--- empties the Report of its text, not of its colours.
 ---
 ---@param buffer integer
 ---@param rendering aineo.report.Rendering
@@ -137,6 +139,7 @@ function M.append_rendering(buffer, rendering)
       {
         end_col = colour.end_column,
         hl_group = colour.group,
+        url = colour.url,
       }
     )
   end
