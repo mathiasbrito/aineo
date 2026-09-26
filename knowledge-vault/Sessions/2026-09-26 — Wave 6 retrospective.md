@@ -22,9 +22,11 @@ The user named five fixes:
 
 The user classed them "Small fixes where allowed".
 
-During the wave, the user decided three more changes:
+During the wave, the user decided more changes:
 - unsent Input is kept as a draft — D17, T14;
-- wave 7, the changes pane and sending only Input's selection, converged and not yet planned.
+- wave 7, the changes pane and sending only Input's selection, converged and not yet planned (D18–D22);
+- the report instructions — T15 — and the right column's word wrap — T16, small fixes (2026-09-26);
+- `v0.2.0`, cut after T13.
 
 ## What was done
 
@@ -44,8 +46,8 @@ During the wave, the user decided three more changes:
 | 09-25 22:46 | T9's re-measure in: one limit introduced, two surviving mutants. The limit accepted, and the bounded correction sent to a fresh agent |
 | 09-25 23:05 | The user decided D17 → T14 |
 | 09-25 23:12 | T9's correction in (747 cases) |
-| 09-25 23:20–23:29 | T13's attack, test-integrity and records reviews in. The fix round sent to the author. Wave 7's panes converged with the user (D18, D19) |
-| 09-25 23:36 | The user settled sending only Input's selection (D20) |
+| 09-25 23:07–23:29 | T13's test-integrity (23:07), attack (23:20) and records (23:29) reviews in. The fix round sent to the author. Wave 7's panes converged with the user (D18, D19) |
+| 09-25 23:36 | The user answered on sending only Input's selection; the orchestrator's settlement, which the user did not answer, completed D20 |
 | 09-25 23:47 | PR #32 (T14's section, brief and brief review) merged |
 | 09-26 00:16 | PR #30 merged after the orchestrator's verification |
 | 09-26 00:27 | T11, the report icon, planned (PR #34); its brief review dispatched |
@@ -72,8 +74,10 @@ During the wave, the user decided three more changes:
 | test-integrity, #31 | `neovim-lua-reviewer` | each relay strip pinned on its own version only (M2, M3); the `^` anchors unpinned (O1, O2, O10); the loads-aineo case green when the helper loads nothing (R1). Pins P1–P4 built |
 | records, #31 | `reviewer` | 7 CONFIRMED, 1 MISSING: the red count, M11's crashes, "final tree" overclaims, a docstring, the silent 5 s wait, the PR number, "the user confirms", scratch pointers |
 | re-measure, #31, with the attack question | `neovim-claude-code-reviewer` | one failure the round introduced: the loop over the lazy position pattern ate a user's error. The red count was 7 cases in 12 runs; a *Limits* line false; the startup wait unbounded at a prompt; two equivalence claims false. A measured fix |
+| records, #28 (an `ai/` pass) | `reviewer` | 3 CONFIRMED, 1 MISSING: a duplicated help tag invisible to `git merge-file`, the verification's overlay of a shared file, the fence's ambiguity, no brief slot. 4 REFUTED |
+| brief, T14 | `reviewer` | 16 findings, answered in the brief; the orchestrator decided two as readings — a pending change only at quit, the draft emptied at once, a restore only into a new or emptied Input |
 | brief, T11 | `reviewer` | 11 findings: the pin inventory incomplete; IC4 met by two wrong implementations no requested test caught; IC5 red first; the post-T13 facts to a dated amendment |
-| records, #35 (wave 7's rows) | `reviewer` | 8 CONFIRMED, 4 MISSING: D20 gave the user clauses that were the orchestrator's, and dropped undo's scope; three D19 wordings; markers; `\o` and a commit-only refresh unsettled — Q6, Q7 |
+| records, #35 (wave 7's rows) | `reviewer` | 9 CONFIRMED (one on the orchestrator's source extract), 4 MISSING: D20 gave the user clauses that were the orchestrator's, and dropped undo's scope; three D19 wordings; markers; `\o` and a commit-only refresh unsettled — Q6, Q7 |
 | brief, T15 and T16 | `reviewer` | 14 findings: T16's mutant 4 unkillable by the test named, RW3 and RW4 invariants, `vim.go` for the globals; T15's rules scoped to reports, the `details` description, every status |
 
 **Rounds on #30, a small fix:**
@@ -116,7 +120,7 @@ Not in the table:
 - T15's and T16's contexts, which come with their passes;
 - the orchestrator's own context.
 
-The test-integrity review of #31 made 366 requests, more than any other context here, for its 3 findings; the attack review made 128 for its 9.
+The test-integrity review of #31 made 366 requests, more than any other context here, for 3 CONFIRMED findings and one REFUTED group; the attack review made 128 for 4 CONFIRMED (two of them the author's own claims) and 5 REFUTED.
 
 ## Deviations and disclosures
 
@@ -129,12 +133,12 @@ The test-integrity review of #31 made 366 requests, more than any other context 
   Both were corrected in the rounds, not in the brief.
 - **The limit T9 ships with was accepted by the orchestrator, not the user:** a colour scheme's own default link for an aineo group, set before aineo's first definition, is kept. It is pinned, and it is in the T9 note's *Limits*.
 - **The orchestrator's conversation was compacted mid-wave, at the user's request.** The state was carried across by the ledger's handover block.
-- **The orchestrator's leaning for T13's startup wait was refuted.** The fix round's decision asked the wait to call `nvim_get_mode()` first. The correction measured that Neovim shows its startup prompt after `VimEnter`, so that shape still hung, and it adopted a mark file written through `vim.schedule` at `VimEnter`. The orchestrator's verification probed that shape (plan › *Landed*).
+- **The orchestrator's leaning for T13's startup wait was refuted.** The correction's brief leaned to the wait asking `nvim_get_mode()` first, leaving the shape to the implementer. The correction measured that Neovim shows its startup prompt after `VimEnter`, so that shape still hung, and it adopted a mark file written through `vim.schedule` at `VimEnter`. The orchestrator's verification probed that shape (plan › *Landed*).
 - **D20 attributed the orchestrator's clauses to the user.** Wave 7's rows were written before wave 7's plan, from the conversation. Their records review found that D20's "as one message", `u` as the key, undo for whole-Input Sends and the measurement first came from the orchestrator's settlement, which the user never answered. They are now attributed.
-- **The user's "your decisions are fine" answered a list.** MR98, NC3's change to the 0.11 tool-error text, was not in it separately. The MVP review note records it as kept by the general answer.
+- **The user's "your decisions are fine" answered a list.** The orchestrator first recorded more than the list held as kept: MR28's oldest `claude`, which the plan leaves to the user; MR98 and MR108, which the list did not describe. The records review of this pass caught it, and those readings are open again. MR101 was open for the right reason but a wrong one given: it was adopted before the answer, not after.
 - **The branch guard refused the `v0.2.0` tag push** while the session was on `dev`. The tag was pushed from a detached HEAD at the release commit.
-- **`v0.2.0` was cut while T15 and T16 ran**, as the user chose ("After T13 merges").
-- **T13's verification ran beside other agents' suites**, at a load average of 80–160. `tests/test_mcp_blocked_editor.lua` stayed green in all five runs.
+- **`v0.2.0` was cut while T15 and T16 ran**, as the user chose ("After T13 merges (Recommended)", the orchestrator's recommended option).
+- **T13's verification ran beside other agents' suites**, at load averages of 19 to 163 over one minute: the suites at about 30, the blocked-editor runs at 81–90, the probes up to 163. `tests/test_mcp_blocked_editor.lua` stayed green in all five runs.
 - **The shared help:**
   - T9 and T13 each edit a section of `doc/aineo.txt`, under rule 2's exception.
   - Each packet ran the merge check against the other's head, and T13 ran it again against T9's final head `40bc378`: `git merge-tree` gave no conflict, and `tests/test_doc.lua` passed, 36 cases, on both versions.
@@ -147,7 +151,8 @@ The test-integrity review of #31 made 366 requests, more than any other context 
   - T12 follows T14.
   - T10, the Report's links, is planned after T11.
 - **A defect that predates T13**, found by T13's attack review, left for a later packet. `lua/aineo/health.lua` calls `config.recorded_setup_options()` as an argument to its `pcall`, so it is evaluated outside it. `:checkhealth aineo` then fails whole when `setup()` options hold a userdata.
-- **Readings still open:** MR101, MR109 and MR110 ([[Review/2026-09-24 — v1 MVP readings review]]).
+- **Readings still open:** MR28's oldest `claude`, MR98, MR101, MR108 and MR109–MR114 ([[Review/2026-09-24 — v1 MVP readings review]]).
+- **The ⌘-click check in Claude's pane**, asked on 2026-09-26 and not yet answered. It decides whether T10 needs a terminal part.
 - **`lua/aineo/health.lua` still strips with the lazy position pattern in one pass** — a candidate for the same bound at white space (the T13 correction's report).
 
 ## Commits
@@ -175,4 +180,4 @@ The test-integrity review of #31 made 366 requests, more than any other context 
 - **T13's strip loops over Neovim's framing and positions, and stops a file's position at white space.** The attack review measured the loop and the positions of Neovim 0.12's own Lua; the re-measure measured the white-space bound after the loop ate a user's words. Both fixes were adopted as measured.
 - **The TUI editor's startup is marked by a file** written through `vim.schedule` at `VimEnter`, not asked for by a request: a starting editor may serve a request before its init has run, and one at a hit-enter prompt holds it.
 - **D21 and D22** — the user: `\o` keeps the pane shown; the commits window updates on every commit.
-- **`v0.2.0` after T13** — the user: "After T13 merges".
+- **`v0.2.0` after T13** — the user: "After T13 merges (Recommended)", the orchestrator's recommended option.
