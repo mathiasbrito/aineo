@@ -193,6 +193,29 @@ T['a report']["indents each report's details by its own icon when reports of dif
   })
 end
 
+T['a report']["indents each report's details by its own icon when a done report shows before a progress report"] = function()
+  start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  child.o.ambiwidth = 'double'
+  report_editor.receive(
+    child,
+    { task = 'First', status = 'done', summary = 'Ended', details = 'One' }
+  )
+  report_editor.receive(
+    child,
+    { task = 'Second', status = 'progress', summary = 'Began', details = 'Two' }
+  )
+  child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
+
+  child.cmd('edit')
+
+  eq(report_editor.lines(child), {
+    '✓ 09:05 [done] First — Ended',
+    '        One',
+    '◐ 09:06 [progress] Second — Began',
+    '         Two',
+  })
+end
+
 --- The expression, run in the child, that hands its report home one report
 --- of each status the report tool accepts, and lists what went wrong: each
 --- error a report raised, and each header that does not start with an icon
