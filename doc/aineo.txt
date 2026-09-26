@@ -254,7 +254,7 @@ aineo notices it could receive the paste and the Enter (|aineo-limits|).
 
 aineo starts Claude Code with three additions of its own:
 - instructions appended to its system prompt, telling Claude when to call
-  the report tool;
+  the report tool and how to write a report (below);
 - aineo's MCP server, which Claude Code runs as a headless `nvim`, given
   through `--mcp-config`;
 - the report tool allowed without asking: `--allowedTools
@@ -271,6 +271,16 @@ Agent Report shows each as: >
 <
 A line break in the task or the summary becomes a space. The Report follows
 the newest report.
+
+The instructions ask Claude to write each report for a person, in plain
+language: what was done or planned, and how, never why. A `started` report
+of a plan lists the features planned in its details, one per line; a `done`
+report lists what was done, the features, one per line. References go at the
+very end of a report, in parentheses, by number or ID only, such as
+`(D18, C12, #31)`: on a line of their own, the last of its details, or at the
+end of its summary when it has no details. These rules are for reports only,
+not for Claude's other replies. A running Claude Code keeps the instructions
+it started with.
 
 Colours ~
 The Report shows the time in |hl-AineoReportTime| and the `[status]`,
