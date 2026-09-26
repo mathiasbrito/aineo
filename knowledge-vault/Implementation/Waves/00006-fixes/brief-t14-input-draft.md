@@ -183,13 +183,12 @@ T13 (PR #31), T15 (PR #39) and T16 (PR #40) have merged. This section re-checks 
 ### Facts that moved
 
 - **"When T13 (PR #31) merges, only the help's line numbers move" is no longer true.**
-  - T13 grew `plugin/aineo.lua`'s error framing.
+  - T13 grew `plugin/aineo.lua`'s error framing, from line 166 on. That moved `run()` and the autostart's record.
   - T16 changed `lua/aineo/layout/init.lua` and your section of the help.
 - **`plugin/aineo.lua` at `7af0d47`:**
-  - `give_report_environment()`, lines 58–70;
-  - `open()`, lines 131–134, and `focus()`, lines 143–148;
-  - `run()`, lines 212–220. It reports at `ERROR` through `error_line()` (line 194).
-  - On the autostart, `open_unless_session_restored()` (lines 365–377) records `open-failed` at line 374.
+  - `give_report_environment()` (lines 58–70), `open()` (131–134) and `focus()` (143–148) have not moved. The brief's 56–70 counts the function's two docstring lines.
+  - `run()` has moved, from 195–203 to lines 212–220. It reports at `ERROR` through `error_line()` (line 194).
+  - On the autostart, `open_unless_session_restored()` (lines 365–376) records `open-failed` at line 374, where it was 357.
 - **`lua/aineo/layout/init.lua` (T16):**
   - `open()` now also makes the Report's and Input's windows wrap long lines, for their own buffers (`wrap_right_column()`, called after `pin_windows()`).
   - Input is still made as before, and the draft still reaches it through `M.input_buffer()` (line 680).
@@ -204,6 +203,12 @@ T13 (PR #31), T15 (PR #39) and T16 (PR #40) have merged. This section re-checks 
 ### Facts that held
 
 - `lua/aineo/claude/init.lua` (`VimLeavePre` at lines 51–63), `lua/aineo/send/init.lua` (lines 118 and 121), `lua/aineo/report/records.lua` (`records_file()`, line 30) and `tests/helpers/send.lua` are unchanged since `d35dc4f`: `git diff --stat` prints nothing for them.
+
+### Your tests' own state directory
+
+Every child Neovim of `make test` shares `.tests/state` (`Makefile:38`). No run cleans it, and every child runs in the checkout's directory. So a draft that one case leaves behind would come back in the next empty Input opened through `plugin/aineo.lua`: in another case, in another file, or in the next run.
+
+Give every case that can write or restore a draft a state directory of its own. Set `vim.env.XDG_STATE_HOME` to a `fixture.directory(…)` in the child before the first open, as `tests/test_entry_report.lua:41` does for the Reports. (The brief review of this amendment, finding 1.)
 
 ### Before you push
 
