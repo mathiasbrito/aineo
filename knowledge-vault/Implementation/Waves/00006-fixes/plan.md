@@ -444,6 +444,40 @@ The first plan listed "the mode entered before the layout's focus"; the brief re
 
 **Brief:** `brief-t20-claude-terminal-mode.md`, corrected after its brief review, `brief-review-t20-claude-terminal-mode.md`: dispatch after corrections. CT1 gains the wiped-terminal path and says how to observe the mode; CT2 reads the status after the focus and records the busy-exit bound; the tests and the help's fence are named exactly; the question to the user is quoted whole, with the options not chosen.
 
+## Packet T18 — 2026-09-26
+
+**The request, and the answers.**
+- The user, 2026-09-26, after seeing T11's icon in `v0.2.2`: "the icon position is not as I imagined... it is not good... <time> [ <icon> <message_type ] is what I imagine, refactor as an small fix..."; then, declining the question on the line's form to clarify: "remove the Icon, just make the banned [<type>] bold then...".
+- Asked how it should run, the user chose "Small fix, after T10", over the orchestrator's recommendation "Regular, before T10" and its stated concern that replacing C10 needs a new row, which the small-fix rules exclude. The rows are D24 and C14, merged in PR #51.
+
+**The six rules for T18**, recomputed on 2026-09-26 against every open packet and every claimed wave (only this one):
+- T20 is being implemented (PR to come). T17 follows T18 in the Report's home; T12 follows T20; T19 waits for Q8.
+
+| rule | T18 |
+|---|---|
+| 1 dependencies | T10, merged ✓ |
+| 2 files | `lua/aineo/report/` (`render.lua`, `colours.lua`, `buffer.lua`, `init.lua`); `tests/test_report*.lua`, `tests/test_entry_report.lua`; the expected Report lines of `tests/test_mcp_delivery.lua` and `tests/test_mcp_blocked_editor.lua`; `doc/aineo.txt` › `*aineo-report*`. With T20: T20 owns `plugin/aineo.lua`, its entry tests, and the help's introduction sentence and `*aineo-commands*` entry ✓ |
+| 3 schema | none: the report format and the saved records are unchanged ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | decided by the user ("remove the Icon, just make the banned [<type>] bold"; "Small fix, after T10") ✓ |
+| 6 task lines | T18's row is adjacent to T17's and T19's, so it holds its mark ✓ |
+
+**Baseline:** `dev` at `d30ff4d`, T10 merged: 973 cases, `Fails (0)`, on 0.12.5 and 0.11.6 (`evidence/baseline-d30ff4d.txt`, the orchestrator's verification of PR #52, whose tree has the same code).
+
+**Reviewers**, as a small fix: guarantee by `neovim-lua-developer` at `high`, on the reviewer charter; records by `reviewer`.
+
+**Order:** now, beside T20. T17 follows T18.
+
+**Verification mutants:**
+- the icon kept in the header;
+- the bold dropped from `[status]`;
+- the bold spread to the time or the task;
+- the status's colour dropped, the bold kept;
+- the details indented 8, as before;
+- the bold drawn when a report arrives but not when the Report shows its records again.
+
+**Brief:** `brief-t18-report-line.md`.
+
 ## Landed
 
 - **T9 — PR #30, a small fix**, merged by rebase on 2026-09-26 as `a86a69c` … `3d67b05` (9 commits). Every file of the pull request is identical to the verified head `40bc378`; `git diff 40bc378 dev` shows only T14's files from PR #32.

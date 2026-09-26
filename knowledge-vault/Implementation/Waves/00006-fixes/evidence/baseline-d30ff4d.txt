@@ -1,0 +1,23 @@
+# Baseline for T18: dev d30ff4d (T10 merged), measured by the orchestrator's verification of PR #52
+
+dev d30ff4d has the same code as the tree the verification ran on: git diff --stat c8fa752 dev -- lua plugin tests doc
+scripts Makefile prints nothing (c8fa752 = git merge-tree --write-tree of dev 2b75fc0 and PR #52's head 0ec7ef5).
+Whole suite, one version at a time, 2026-09-26; 0.11.6 is the downloaded build, first on PATH.
+
+== guard 0.12.5 rc=0 secs=0 load= 73.62 77.55 88.09
+Total number of cases: 5
+Fails (0) and Notes (0)
+== guard 0.11.6 rc=0 secs=0 load= 73.62 77.55 88.09
+Total number of cases: 5
+Fails (0) and Notes (0)
+== suite 0.12.5 rc=0 secs=581 load= 62.25 96.68 97.72
+Total number of cases: 973
+Fails (0) and Notes (0)
+== suite 0.11.6 rc=0 secs=577 load= 29.94 51.76 73.34
+Total number of cases: 973
+Fails (0) and Notes (0)
+== lint rc=0
+Results:
+0 errors
+0 warnings
+0 parse errors
