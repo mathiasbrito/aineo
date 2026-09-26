@@ -50,11 +50,27 @@ local function resolved_config()
   return (config.resolve_config(vim.g.aineo, config.recorded_setup_options()))
 end
 
+--- Where aineo keeps what it keeps for a working directory — the Reports
+--- and Input's draft — once `kept_places()` has taken it.
+---@type { state_directory: string, working_directory: string }|nil
+local places = nil
+
+--- The editor's state directory and working directory, as they are the
+--- first time this is called: the Reports and Input's draft are kept there,
+--- for that directory, whatever `:cd` does later.
+---
+---@return { state_directory: string, working_directory: string }
+local function kept_places()
+  places = places
+    or { state_directory = vim.fn.stdpath('state'), working_directory = vim.fn.getcwd() }
+  return places
+end
+
 --- Whether the report home has been given its environment yet.
 local report_environment_given = false
 
---- Gives the report home the editor's clock, state directory and working
---- directory, the first time only.
+--- Gives the report home the editor's clock, and the state directory and
+--- working directory of `kept_places()`, the first time only.
 local function give_report_environment()
   if report_environment_given then
     return
@@ -63,10 +79,26 @@ local function give_report_environment()
     clock = function()
       return os.date('%Y-%m-%dT%H:%M:%S')
     end,
-    state_directory = vim.fn.stdpath('state'),
-    working_directory = vim.fn.getcwd(),
+    state_directory = kept_places().state_directory,
+    working_directory = kept_places().working_directory,
   })
   report_environment_given = true
+end
+
+--- Whether the draft home has been given its environment yet.
+local draft_environment_given = false
+
+--- Hands the layout's Input to the draft home, which keeps its text as the
+--- draft of the working directory of `kept_places()` and restores that
+--- draft into it when it is new and empty (`aineo.draft`'s `keep_draft()`);
+--- gives the draft home that environment the first time. Raises nothing.
+local function keep_input_draft()
+  local draft = require('aineo.draft')
+  if not draft_environment_given then
+    draft.set_draft_environment(kept_places())
+    draft_environment_given = true
+  end
+  draft.keep_draft(require('aineo.layout').input_buffer())
 end
 
 --- The terminal of the Claude session aineo started last, or `nil` before
@@ -127,24 +159,33 @@ end
 --- Opens aineo's layout around the Claude session, starting it when none
 --- runs — a new one once the last has exited — or restores the layout while
 --- it is open. The session's terminal is shown in the tick it starts in
---- (`aineo.claude`'s `start_session()`).
+--- (`aineo.claude`'s `start_session()`). Input is then handed to the draft
+--- home (`keep_input_draft()`).
 local function open()
   local config = resolved_config()
   require('aineo.layout').open(arrangement(config, started_claude_terminal(config)))
+  keep_input_draft()
 end
 
 --- Moves the cursor to the layout's window for `role`. When that window is
 --- gone it opens the layout first, as `open()` does, but around the Claude
 --- session's terminal as it is, the exit on screen when Claude Code has
 --- exited: a focus starts a session only when the layout must open and
---- there is no terminal to show (`current_claude_terminal()`).
+--- there is no terminal to show (`current_claude_terminal()`). When it
+--- reopened the role's window, Input is then handed to the draft home
+--- (`keep_input_draft()`).
 ---
 ---@param role aineo.layout.Role
 local function focus(role)
   local config = resolved_config()
+  local opened = false
   require('aineo.layout').focus(role, function()
+    opened = true
     return arrangement(config, current_claude_terminal(config))
   end)
+  if opened then
+    keep_input_draft()
+  end
 end
 
 --- What each of `:Aineo`'s subcommands does.

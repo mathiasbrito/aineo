@@ -15,7 +15,7 @@
 - **Agent worktrees:** `.claude/scripts/prepare-worktree.sh`'s `prepare_project` is empty and needs no step — `make test` isolates itself and fetches mini.nvim on first use (T1); `.worktreeinclude` lists the gitignored files every worktree needs.
 - **The suite** (T1): `make deps`, `make test`, `make test_file FILE=<path>`, `make lint`, `make format` — the root `CLAUDE.md` says what each does. About 87 s for the whole suite on Macbook-Mathias at the end of wave 1; 454 cases in 256 s at the end of wave 2; 491 cases in 365 s at the end of wave 3; 613 cases in 431 s at the end of wave 4; 727 cases in 463 s at the end of wave 5 (the orchestrator's verification of `a9f8027`) — most of it the Claude session's and Send's tests, which drive real processes. `make format` can abort intermittently ([[Learnings/StyLua 2.5.2 in-place formatting aborts intermittently]]); `make lint` decides.
 - **Hooks:** `.claude/hooks/test-hooks.sh` after touching any hook.
-- **The user's Neovim loads aineo from a release: `~/Development/Personal/aineo-release`**, a clone detached at the latest release tag — `v0.1.0` from 2026-09-25, `v0.2.0` and then `v0.2.1` on 2026-09-26 — through the lazy.nvim spec `~/.config/nvim/lua/plugins/aineo.lua`, which is the user's own and is not committed by the orchestrator. It moves only when the user asks for a new release (the user, 2026-09-25: "it keeps stable while we develop. until I ask for a new release"). `~/Development/Personal/aineo-dev` stays a clone of `dev` for trying merged work, and is no longer fast-forwarded after each merge.
+- **The user's Neovim loads aineo from a release: `~/Development/Personal/aineo-release`**, a clone detached at the latest release tag — `v0.1.0` from 2026-09-25, `v0.2.0`, `v0.2.1` and then `v0.2.2` on 2026-09-26 — through the lazy.nvim spec `~/.config/nvim/lua/plugins/aineo.lua`, which is the user's own and is not committed by the orchestrator. It moved only when the user asked for a new release (the user, 2026-09-25: "it keeps stable while we develop. until I ask for a new release") until 2026-09-26, when the user chose "Keep it; release as features land": the orchestrator now cuts and installs a release after each feature merges, without asking. `~/Development/Personal/aineo-dev` stays a clone of `dev` for trying merged work, and is no longer fast-forwarded after each merge.
 - **How a release is cut** (the orchestrator's method, 2026-09-25, when GitHub refused to rebase v0.1.0; the user kept it on 2026-09-26): a `release/vX.Y.Z` branch into `main` by pull request, **squash-merged** — GitHub refused to rebase v0.1.0's 139 commits, and branch protection forbids merge commits — then an annotated tag `vX.Y.Z` on `main` whose message names the `dev` commit it was cut from. `main` holds its bootstrap commit, `511e289`, and then one commit per release. The next release branches from `origin/main` and cherry-picks `dev`'s commits after the previous tag's `dev` commit; `git diff <dev commit> origin/main` must then be empty.
 
 
@@ -56,11 +56,12 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
   - T9, the Report's colours, a small fix (PR #30, 2026-09-26). The time links to `Comment`, and `[status]` to a diagnostic group of its status, as `:highlight default link` groups a user can override.
   - T13, Neovim 0.12 compatibility (PR #31, 2026-09-26). The suite is green on 0.12.5 and on 0.11.6, and aineo's error texts drop Neovim 0.12's framing.
   - T15, the report instructions (PR #39), and T16, the right column's word wrap (PR #40), small fixes (2026-09-26).
-- **Released:** `v0.2.0`, with T9 and T13 (PR #37, `main` at `e26838f`); `v0.2.1`, with T15 and T16 (PR #42, `main` at `270743b`), both 2026-09-26.
-- **Being amended before dispatch:** T11 (PR #41) and T14 (PR #43), which then run side by side. `v0.2.2` follows T11, whose icons the user is waiting for.
-- **Next, in order:**
-  - T12, `\tcn` (D16), after T14;
-  - T10, the Report's links, a small fix, after T11.
+  - T11, the Report's status icon (PR #45, 2026-09-26). Each header starts with the icon of its status, coloured like it, and the details stay under the `[status]`, indented by the width of the header's prefix in cells, whatever window is current.
+- **Released:** `v0.2.0`, with T9 and T13 (PR #37, `main` at `e26838f`); `v0.2.1`, with T15 and T16 (PR #42, `main` at `270743b`); `v0.2.2`, with T11 (PR #48, `main` at `f1285c1`), all 2026-09-26.
+- **Running:** T14, the Input draft (PR #46), after its fix round, in its re-measure; the `ai/` pass #47 merges just before it. T10, the Report's web links, a small fix (planned in PR #49): underlined, ⌘-click and `gx` open them.
+- **Next, in two lanes:**
+  - the Report's code: T18, the Report line without the icon, `[status]` bold, a small fix after T10 (the user, 2026-09-26); then T17, the Report's file paths, a small fix: underlined, opened in the middle column by a double-click or `gf`/`gF`;
+  - the entry code, once T14 merges: T20, `\c` into Claude's prompt in Terminal mode, a small fix right after T14 (the user, 2026-09-26); then T12, `\tcn` (D16). T19, aineo resuming its own last Claude session per folder (D23), asked for by the user on 2026-09-26, a regular packet since it changes the Claude integration, once Q8 is measured.
 
 **Next:**
 - Wave 7, converged with the user and not yet planned: a changes pane beside the agent pane, and sending only Input's selection. Its rows are D18–D22, C12 and C13 in [[Planning/aineo — v1 agent console]]. Its plan comes once T14 and T12 are underway, and its packets start after them, since they change the same layout and entry code.
@@ -70,7 +71,7 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 - `lua/aineo/health.lua` evaluates `config.recorded_setup_options()` as an argument to its `pcall`, outside it, so `:checkhealth aineo` fails whole when `setup()` options hold a userdata — found by T13's attack review, older than T13.
 - T5's `tests/test_mcp_blocked_editor.lua` writes a `v:null` file into the checkout's root when its editor autostarts — latent while the suites' preset holds; a fix belongs to T5's home.
 - The terminal of the last session is kept twice, by the Claude home and by the composition root.
-- The MCP server reports `serverInfo.version = '0.0.0'` (`lua/aineo/mcp/protocol.lua`, pinned by `tests/test_mcp_relay.lua`) while the release is `v0.2.0`.
+- The MCP server reports `serverInfo.version = '0.0.0'` (`lua/aineo/mcp/protocol.lua`, pinned by `tests/test_mcp_relay.lua`) while the release is `v0.2.2`.
 - The version check's timer kills the process group although the early return always does too (an equivalent mutant at the wave-5 verification); its own kill is redundant, and in a same-pass race it can make a command the check killed read as a failed one (the records review of PR #27). A timer that only sets the flag stays bounded.
 - The prefix keys' subcommand table (`s o r i c`) is kept twice, in `plugin/aineo.lua` and `lua/aineo/health.lua` (T8); a change to one without the other fails the prefix group's keys comparison.
 - The Learning *Claude Code's interactive CLI in a Neovim terminal* split into claims, carried from wave 2.
@@ -80,7 +81,6 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 **Decisions awaiting the user:**
 - The oldest `claude` version supported (2.1.281 is installed) — MR28.
 - MR98, MR101, MR108 and MR111–MR114 of [[Review/2026-09-24 — v1 MVP readings review]], which were not put to the user, and MR109 and MR110, which came after the user's answer of 2026-09-26.
-- The ⌘-click check in Claude's pane: asked on 2026-09-26 and not yet answered. It decides whether T10 needs a terminal part.
 
 ## Changelog
 | Date | Session | Summary |
@@ -95,3 +95,4 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 | 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6 (rolling): T9, the Report's colours, landed as a small fix (PR #30, `a86a69c` … `3d67b05`) |
 | 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T13, Neovim 0.12 compatibility, landed (PR #31, `39d9cb0` … `f8317d8`); release `v0.2.0` (PR #37, `e26838f`); D21 and D22 decided by the user; most MVP readings kept |
 | 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T15, the report instructions (PR #39, `ba7d688` … `d86a0f9`), and T16, the right column's wrap (PR #40, `bb46c2e` … `7af0d47`), landed as small fixes; release `v0.2.1` (PR #42, `270743b`) |
+| 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T11, the Report's status icon, landed (PR #45, `30b466e` … `2cb3cbb`); release `v0.2.2` (PR #48, `f1285c1`), cut unasked and kept; releases now as features land; the behaviours of T10 and T17 and T17's class decided by the user; ⌘-click already opens links in Claude's pane; T18 and T19 asked for |

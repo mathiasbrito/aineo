@@ -350,6 +350,63 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 3. T12 after T14.
 4. T10 after T11.
 
+## Packet T10 — 2026-09-26
+
+**The request, and the answers.**
+- The user asked on 2026-09-25, fix 4: "It would be good to detect links and make them clickable in the terminal, as well in the agent report window". The wave's first plan made the Report's part a later small fix, reserved T10 for it, and left its behaviour open (*Packet T11*, *The task ID*).
+- **The terminal needs no code.** Asked on 2026-09-26 whether ⌘-click on a link in Claude's pane opened it in the browser, the user answered "Yes, it opens".
+- **The Report's links.** Asked how they should work, the user chose "⌘-click, underlined (Recommended)", described as: "Every http:// or https:// address in the Report (task, summary or details) is underlined, and ⌘-click opens it in your browser, the same way links in Claude's pane work in iTerm2. Trailing punctuation such as a final '.' or ')' is left out of the link. `gx` on a link keeps working too. Small fix, after the icons merge." The user added a note: "but keyboard also". Asked whether Neovim's own `gx` is enough, the user chose "gx is enough (Recommended)", described as: "`gx` on a web link opens it in the browser; T10 makes it open the whole link. For file paths, `gf` and `gF` already open them in the middle column." T10 pins it (RL3).
+- **Measured before planning** (`evidence/report-links.txt`, both versions): an extmark takes a `url`; the TUI draws it as an OSC 8 hyperlink, with or without `TERM_PROGRAM`; `gx` on it opens exactly its url; the web-link rule's table (§5) is consistent. Without an extmark, Neovim's own `gx` already leaves out trailing punctuation, and cuts only the Wikipedia row short (§6): that row is RL3's red case.
+
+**The six rules for T10**, recomputed on 2026-09-26 against every open packet and every claimed wave (only this one):
+- T14 is in its fix round (PR #46); ai PR #47 merges just before it.
+- T12 is planned, after T14. T17 follows T10.
+
+| rule | T10 |
+|---|---|
+| 1 dependencies | T11, done ✓ |
+| 2 files | `lua/aineo/report/` (`render.lua`, `colours.lua`, `buffer.lua`, `init.lua`, or a new file of the home); `tests/test_report*.lua`, new cases, or a new `tests/test_report_links.lua`; `doc/aineo.txt` › `*aineo-report*`. With T14's fix round: T14 owns `lua/aineo/draft/`, `plugin/aineo.lua`, its own tests, the test runner's start of a run, and `doc/aineo.txt` › `*aineo-layout*`, where `*aineo-draft*` sits: other sections of the help ✓. With #47: `.claude/` only ✓. T12 and T17 are not dispatched ✓ |
+| 3 schema | none: the report format and the saved records are unchanged ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | decided by the user ("⌘-click, underlined") ✓ |
+| 6 task lines | T10's row sits between T9's and T11's, so it holds its mark ✓ |
+
+**Baseline:** `dev` at `2cb3cbb`, T11 merged: 832 cases, `Fails (0)`, on 0.12.5 and 0.11.6 (`evidence/baseline-2cb3cbb.txt`, the orchestrator's verification of PR #45, whose tree has the same code).
+
+**Reviewers**, as a small fix: guarantee by `neovim-lua-developer` at `high`, on the reviewer charter; records by `reviewer`.
+
+**Order:** now, beside T14's fix round. T17 follows T10's merge.
+
+**Verification mutants:**
+- a control character admitted into a link (the brief review's finding 1: the `url` reaches the terminal unescaped);
+- links set in a namespace `append_rendering()` does not clear;
+- the trailing characters left out once, not repeatedly;
+- the url left off the extmark, the group kept;
+- the trailing punctuation kept;
+- every trailing `)` dropped, balanced or not;
+- a link inside a word admitted (`nothttps://a.b`);
+- the scheme matched in lower case only;
+- links found in the details only, or in the header only;
+- `AineoReportLink` linked to another group, or defined without `default`;
+- the links drawn when a report arrives but not when the Report shows its records again (`:edit`, the Report made anew).
+
+**Brief:** `brief-t10-report-links.md`, corrected after its brief review, `brief-review-t10-report-links.md`: dispatch after corrections.
+- **A link ends at every control character.** The review measured, on both versions, that the TUI writes an extmark's `url` to the terminal byte for byte, and that a report's text may hold any control character: a planted `ESC \` ended the OSC 8 and ran an OSC 0; a planted OSC 52 wrote the clipboard. RL1 now states it, and RL2's table pins it.
+- RL2 leaves out `*` and `~` and ends at `|`, since otherwise `gx` would regress on `**url**`; it leaves trailing characters out repeatedly; links never overlap; RL3 requires no regression of `gx` on any row it gets right today.
+- RL1 compares the whole list of `url` extmarks on each path.
+- The merge check also takes the merged tree's `tests/test_doc.lua`; four line ranges; the summary's offset; `init.lua` in the boundary; `bugfix/`, as the template gives small fixes; the colours test's new name; the em dash as a reading.
+- The review found that "iTerm2 opens such links" claimed a mechanism the user's answer does not show; the brief now says only that ⌘-click opens a link in Claude's pane.
+
+## Packet T17 — 2026-09-26
+
+**The request, and the answer.**
+- While T10 was being planned, the user asked on 2026-09-26: "but I woul like to have file paths detected and have the file opened in the center window that we use to open files... is this also planned right?" It was not.
+- **Measured first** (`evidence/report-links.txt`, §4, 0.12.5): `gf` on a path in the Report already opens the file in the middle column, through C9's redirect, and `gF` on `notes.txt:3` opens it at line 3; the Report keeps its buffer. So the keyboard part exists; the underline and a mouse action do not. ⌘-click cannot serve here: iTerm2 handles it, and would open the file outside Neovim.
+- Asked how file paths should work, the user chose "Double-click opens (Recommended)", described as: "A path to a file that exists (relative to the working directory or absolute, optionally with :line) is underlined like a link. Double-clicking it, or gf / gF on the keyboard (they already work), opens the file in the middle column, at the line if given. ⌘-click stays for web links." Then: "add an underline to file paths detect if it is not available currently".
+- **Its own packet.** The question offered to add file paths to T10, and the user did not choose its "Later, not in T10". A small fix changes one behaviour in one home (orchestrate §3), so the orchestrator split them into their own packet, and first labelled it a small fix itself, which §3 does not allow. The records review of PR #50 and the brief review of PR #49 found it. Asked, the user called it one: "Small fix, after T10 (Recommended)", described as: "Two reviews (one combined attack and test check, one records check). No separate deep attack review, and a re-measure only if a mechanism changes. Faster."
+
+**Order:** after T10 merges, since both change the Report's rendering. Its brief is written then, against T10's merged code, and reviewed before dispatch.
+
 ## Landed
 
 - **T9 — PR #30, a small fix**, merged by rebase on 2026-09-26 as `a86a69c` … `3d67b05` (9 commits). Every file of the pull request is identical to the verified head `40bc378`; `git diff 40bc378 dev` shows only T14's files from PR #32.
@@ -468,3 +525,24 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 
   A filter in the orchestrator's script skipped them on the first pass; they were run again.
 - **Released:** `v0.2.1`, which carries T15 and T16, at the user's request to have them at once (PR #42, `main` at `270743b`).
+- **T11 — PR #45, regular**, merged by rebase on 2026-09-26 as `30b466e` … `2cb3cbb` (6 commits). The code of `dev` is identical to the verified tree (`b8ef398` laid over `dev` `2ede64c`, merge-tree `516267a`).
+  - **Reviews** on Opus:
+    - attack by `neovim-lua-reviewer`;
+    - test-integrity by `reviewer`;
+    - records by `reviewer`.
+  - **What the attack review found:** `details_indent()` measured with `vim.fn.strdisplaywidth()`, which counts the current window's break padding. From a narrow window with `'linebreak'` or `'showbreak'`, the details were indented 9 cells or more in place of 8. Also: two surviving mutants (MA1, MA2), the wait at `tests/test_mcp_blocked_editor.lua:75` left unasserted, and a status with no icon would raise.
+  - **What the test-integrity review found:** reports of mixed widths in one redraw unpinned (X1), no pin that icons in the text stay uncoloured (X2), a test name that no longer said what it checked.
+  - **What the records review found:** MR96 and MR102 recorded as awaiting the user, though the user kept them; three test names; the help's "until `:edit`" left out that deleting the Report redraws too; the task line's form; the note's M11 and M12; the time of a new report said to be validated.
+  - **The fix round** went to the author, whose context was about 211 K: `vim.api.nvim_strwidth()`, red first on both versions; pins for mixed widths, every status, the Report made anew and X2; the wait wrapped in `eq()`.
+  - **The re-measure**, with the attack question (`neovim-lua-reviewer`), found the mechanism right on every path it tried: the child's screen grid, a real terminal's grid in tmux, narrow numbered and wrapping windows, `:edit` and the Report made anew, on both versions. In one measured case, the first round's code indented saved records by 240 784 cells. One survivor remained, XN, an indent kept from the first report when narrower: the mixed-widths pin rendered one order only.
+  - **The bounded correction** went to a fresh agent: the test-integrity review's reversed-order case, adopted and credited, and three records corrected.
+- **The orchestrator's verification** of `b8ef398` laid over `dev`:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`: 832 cases, `Fails (0)`, on 0.12.5 and on 0.11.6;
+  - lint clean.
+- **Four literal mutants** on the whole suite under 0.11.6, all killed by assertion:
+  - the indent measured by the current window (`strdisplaywidth`): 2 cases failing;
+  - `progress`'s and `blocked`'s icons swapped: 10. The same run lost one case of `tests/test_mcp_blocked_editor.lua` to "connection refused" at a load average near 170; that case does not read those icons;
+  - the icon coloured as the time: 17;
+  - XN: 1, the reversed-order case.
+- **Released:** `v0.2.2`, which carries T11 (PR #48, `main` at `f1285c1`). The orchestrator cut it unasked, against the standing rule; the user kept it and allowed releases as features land.
