@@ -72,15 +72,16 @@ end
 --- Runs `command` in `child`'s Claude's window once Claude Code has exited at
 --- its start (`type_to_claude_code_exiting_at_start()`): the window shows its
 --- terminal and is the current one, and no other buffer is listed. Empties
---- `v:errmsg` first, so that what it holds after tells the error the wipe
---- raised, if any.
+--- `v:errmsg` first, so that what it holds after tells an error raised once
+--- the command had run, if any; an error the command raises is kept for
+--- `entry.messages()` (`entry.command()`).
 ---
 ---@param child table
 ---@param command string
 local function wipe_ended_terminal_from_its_window(child, command)
   type_to_claude_code_exiting_at_start(child, 'entry-claude-exit-wiped')
   child.v.errmsg = ''
-  child.cmd(command)
+  entry.command(child, command)
 end
 
 local child = MiniTest.new_child_neovim()
@@ -172,6 +173,7 @@ T['a wiped Claude terminal'] = MiniTest.new_set({
 T['a wiped Claude terminal']["closes Claude's window, raising no error, after"] = function(command)
   wipe_ended_terminal_from_its_window(child, command)
 
+  eq(entry.messages(child), {})
   eq(child.v.errmsg, '')
   eq(entry.windows(child), { 'aineo://report', 'aineo://input' })
 end
@@ -181,6 +183,7 @@ T['a wiped Claude terminal']["raises no error when the command that wipes it clo
 )
   wipe_ended_terminal_from_its_window(child, command .. ' | close')
 
+  eq(entry.messages(child), {})
   eq(child.v.errmsg, '')
   eq(entry.windows(child), { 'aineo://report', 'aineo://input' })
 end
@@ -227,8 +230,9 @@ T['a wiped Claude terminal']["raises no error and adds no window when Claude's w
   child.cmd('only')
   child.v.errmsg = ''
 
-  child.cmd(command)
+  entry.command(child, command)
 
+  eq(entry.messages(child), {})
   eq(child.v.errmsg, '')
   eq(entry.windows(child), { '' })
 end
@@ -240,15 +244,34 @@ T['a wiped Claude terminal']['lets \\c start Claude Code again, raising no error
   local terminal = child.lua_get('vim.api.nvim_get_current_buf()')
   child.cmd('tabnew')
   child.v.errmsg = ''
-  child.cmd(command .. ' ' .. terminal)
+  entry.command(child, command .. ' ' .. terminal)
   entry.use_fake(child, claude_session.fake('entry-claude-exit-other-tab-restarted', 'trust'))
 
   child.type_keys('\\c')
 
+  eq(entry.messages(child), {})
   eq(child.v.errmsg, '')
   eq(child.lua_get(SESSION_STATE), 'starting')
   eq(entry.windows(child), WHOLE_LAYOUT)
   eq(child.lua_get(MODE), 't')
+end
+
+T["another buffer wiped in Claude's window"] = MiniTest.new_set()
+
+T["another buffer wiped in Claude's window"]["gives Claude's window its terminal back when Neovim keeps the window open, Claude's terminal unlisted"] = function()
+  entry.use_fake(child, claude_session.fake('entry-claude-exit-other-buffer', 'ready'))
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  child.lua([[
+    local claude_window = vim.fn.win_getid(1)
+    vim.bo[vim.api.nvim_win_get_buf(claude_window)].buflisted = false
+    vim.api.nvim_set_current_win(claude_window)
+    vim.api.nvim_win_set_buf(claude_window, vim.api.nvim_create_buf(true, true))
+  ]])
+
+  entry.command(child, 'bwipeout!')
+
+  eq(entry.windows(child)[1], 'terminal')
 end
 
 T["another terminal's exit"] = MiniTest.new_set()
