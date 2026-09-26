@@ -739,3 +739,37 @@ T19 and T12 follow T21, one at a time: T19 needs the layout and `plugin/aineo.lu
   - a link found inside a word: 2;
   - links allowed to overlap: 1.
 - **Released:** `v0.2.4`, which carries T10 (PR #56, `main` at `89e6c87`).
+- **T20 — PR #58, a small fix**, merged by rebase on 2026-09-26 as `5b625a5` … `ac42fd3` (4 commits). The code of `dev` is identical to the verified tree (`617e4a5` laid over `dev` `6e5e6ce`, merge-tree `525b22b`).
+  - **Reviews** on Opus, by the small-fix class: guarantee by `neovim-lua-developer` on the reviewer charter, and records by `reviewer`.
+  - **What the guarantee review found:** a key typed in Terminal mode after Claude Code exits wipes its terminal, and from the layout's tab the layout raises `Invalid buffer id` and adds a window, after which `\c` starts no session — older than T20, which makes it more common (G1); `\c` entered Insert or Terminal mode in whatever buffer Claude's window showed (G2); a callback's `wincmd p` after `:Aineo claude` left Insert mode in Input (G3); an exit right after `\c` erased the exit message at the next key (G4).
+  - **What the records review found:** the task line presented CT3 as delivered; the group count; scratch left in `/tmp`; two docstrings; the help's introduction without the exited-session exception; citation ranges; the PR body.
+  - **The fix round** went to the author, whose context was about 211 K: G2's guard, adopted red-first from the review's measured fix (the current buffer must be Claude's terminal); the wipe case narrowed to `:bwipeout!`; the records. No mechanism moved, so no re-measure ran.
+  - **G1 and G4 went to the user**, who chose "Both, regular (Recommended)": D25 and T21.
+- **The orchestrator's verification** of `617e4a5` laid over `dev`:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`: 985 cases, `Fails (0)`, on 0.12.5 and on 0.11.6;
+  - lint clean.
+- **Five literal mutants** on the whole suite under 0.11.6, all killed:
+  - no Terminal mode: 7 cases failing;
+  - the buffer check removed: 2;
+  - the exited check removed: 1;
+  - the status read before the move: 7;
+  - Terminal mode for every role: 8, three by assertion (`\r`, `\i` among them) and five with `E21`.
+- **Released:** `v0.2.5`, which carries T20 (PR #63, `main` at `0d4c8b4`).
+- **T18 — PR #60, a small fix**, merged by rebase on 2026-09-26 as `f975b4c` … `e84ce9f` (5 commits), after T20. The code of `dev` is identical to the verified tree (`d7906dd` laid over `dev` `ac42fd3`, merge-tree `8c49a1e`).
+  - **The brief review** found that RL2 let the bold be drawn over the status's colour, which a colour scheme's colour for `@markup.strong` would then replace; the orchestrator re-measured it on both versions before dispatch (`evidence/report-line-bold.txt`).
+  - **Reviews** as T20's.
+  - **What both reviews found:** the help's recipe for turning the bold off, `:highlight AineoReportStatusBold gui=NONE`, fails from a config, before the first report (G1, R1); the guarantee review also found the bold's order unpinned on the records path (G2), and the help's "whatever colour" true of the foreground only (G3); the records review, counts and wording (R2–R12).
+  - **The fix round** went to the author: the help's recipe became `:highlight link AineoReportStatusBold NONE`, pinned before and after the first report; the review's records-path pin adopted; the records corrected. Only a docstring changed in the code, so no re-measure ran.
+- **The orchestrator's verification** of `d7906dd` laid over `dev`:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`: 1013 cases, `Fails (0)`, on 0.12.5 and on 0.11.6;
+  - lint clean.
+- **Six literal mutants** on the whole suite under 0.11.6, all killed by assertion:
+  - the icon kept: 71 cases failing;
+  - the bold dropped: 42;
+  - the bold over the status's colour: 18;
+  - the bold spread to the time: 20;
+  - the details indented 8: 77;
+  - the bold's group linked to `Normal`: 23.
+- **Released:** `v0.2.6`, which carries T18 (PR #65, `main` at `164265b`).
