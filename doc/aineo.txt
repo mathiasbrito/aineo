@@ -296,11 +296,25 @@ their own, the last of its details, or at the end of its summary when it has
 no details. These rules are for reports only, not for Claude's other replies.
 A running Claude Code keeps the instructions it started with.
 
+Links ~
+Every web link in a task, a summary or details is underlined, in
+|hl-AineoReportLink|, and carries its address: ⌘-click opens it in a
+terminal that opens OSC 8 hyperlinks, as iTerm2 does, and |gx| opens it
+from the keyboard. A link starts with `http://` or `https://`, in any case,
+at the start of the text or after a character that is not a letter or a
+digit. It runs up to a space, a control character, `<`, `>`, `"`, `|` or a
+backtick. It leaves out the `.` `,` `;` `:` `!` `?` `'` `"` `*` `~` it ends
+in, and a `)`, `]` or `}` with no opening partner inside it, one after
+another until it ends in none of them: `(see https://example.com/a).` links
+to `https://example.com/a`. What is left holds at least one character after
+the `://`, or is no link.
+
 Colours ~
 The Report shows the time in |hl-AineoReportTime|, and the icon and the
-`[status]`, brackets included, in the group of its status; only these, never
-text like them in a task, a summary or details. Each group links to one of
-Neovim's own, unless a colour scheme or a `:highlight` of your own colours it.
+`[status]`, brackets included, in the group of its status, only where it
+placed them, never text like them in a task, a summary or details; and web
+links in |hl-AineoReportLink|. Each group links to one of Neovim's own,
+unless a colour scheme or a `:highlight` of your own colours it.
 After `:colorscheme` or `:highlight clear`, a group nothing colours any more
 links to its default again, with one exception: a group given a default link
 of its own (`:highlight default link`, as some colour schemes do) before aineo
@@ -320,6 +334,8 @@ AineoReportBlocked   `⊘` and `[blocked]`, linked to `DiagnosticWarn`
 AineoReportDone      `✓` and `[done]`, linked to `DiagnosticOk`
                                                         *hl-AineoReportFailed*
 AineoReportFailed    `✗` and `[failed]`, linked to `DiagnosticError`
+                                                          *hl-AineoReportLink*
+AineoReportLink      a web link, linked to `Underlined`
 
 Reports are kept per working directory, under `stdpath('state')` in
 `aineo/reports/`, and shown again when aineo opens in that directory. The

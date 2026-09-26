@@ -129,7 +129,7 @@ end
 
 T['the colours'] = MiniTest.new_set()
 
-T['the colours']['cover only the icon, the time and the status the render placed, not their like in the text'] = function()
+T['the colours']['cover the icon, the time and the status only where the render placed them, not their like in the text'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
   report_editor.receive(child, {
