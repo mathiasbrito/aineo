@@ -52,9 +52,11 @@ end
 --- The colours of the header of a report of `status`, `HH:MM [status] …`:
 --- the `HH:MM` in `colours.TIME_GROUP`, and the `[status]`, brackets
 --- included, in `colours.STATUS_BOLD_GROUP`, then over it in the group of
---- `status` (`colours.STATUS_GROUPS`): the `[status]` shows bold, and in its
---- status's colour whatever colour the bold's group gives. The space between
---- them, and the rest of the header, show in none.
+--- `status` (`colours.STATUS_GROUPS`): the `[status]` shows as the bold's
+--- group draws it — bold, and any background, italic or underline it has —
+--- with the foreground of its status's group over the bold's, whenever the
+--- status's group has one. The space between them, and the rest of the
+--- header, show in none.
 ---
 ---@param status string a report's status
 ---@return aineo.report.Colour[]
