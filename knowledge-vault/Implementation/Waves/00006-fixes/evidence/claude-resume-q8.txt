@@ -1,0 +1,180 @@
+# Q8: what Claude Code does with --resume and --session-id, started interactively
+
+Measured by the orchestrator on 2026-09-26, with the user's leave ("Scratch folder (Recommended)"),
+on Claude Code 2.1.283 and the user's own configuration and login, in a scratch folder inside the
+aineo checkout (.claude/local/orchestrator/q8/, gitignored). No trust dialog showed: the folder is
+trusted through the checkout. Nothing answered a dialog.
+
+Method: the driver below runs `claude <args>` in a pseudo-terminal (120x40), every CLAUDE* and
+AI_AGENT variable removed, answers the cursor-position and device-attribute queries, and records
+the screen text with escapes stripped. It stops the process by its pid when its time is up.
+Session ids are shown as <id-1> (a random id never used), <id-2> (the id of case B) and <id-3>
+(the id of case F).
+Two one-word prompts were sent in all: "hi" (B) and "ok" (D). F, G and H were run later the
+same evening, after the records review of the pull request that first held this file.
+
+## Results
+
+A  claude --resume <id-1>          (an id Claude Code never had)
+   screen: "No conversation found with session ID: <id-1>"
+   process: exited by itself, exit code 1, after 2.1 s; no screen of its own was drawn
+
+B  claude --session-id <id-2>      (a new id), then "hi", then /exit
+   process: exited by itself on /exit, exit code 0, after 40.3 s
+   screen at exit: "Resume this session with:" / "claude --resume <id-2>"
+   conversation: ~/.claude/projects/<the folder, escaped>/<id-2>.jsonl, holding "hi" and the answer
+
+C  claude --session-id <id-2>      (the id B used)
+   screen: "Error: Session ID <id-2> is already in use."
+   process: exited by itself, exit code 1, after 0.3 s
+
+D  claude --resume <id-2>, then "ok", then /exit
+   process: exited by itself on /exit, exit code 0, after 40.5 s
+   conversation: the same file; "ok" and its answer appended with sessionId <id-2>:
+     user <id-2> "hi" / assistant <id-2> / user <id-2> "ok" / assistant <id-2>
+   so --resume continues the same session id; it does not fork one.
+
+E  claude --resume <id-2> twice at once (the second started 8 s after the first)
+   neither refused: both drew their screen and ran until the driver stopped them
+   (exit code 143, SIGTERM), after 23.6 s and 11.3 s. No message was sent to either. The second
+   printed: "Remote Control not started here · another Claude Code on this machine (started 8s ago)
+   already has Remote Control for this conversation".
+
+F  claude --session-id <id-3>      (a new id), no message, /exit after 10 s
+   process: exited by itself on /exit, exit code 0, after 12.3 s
+   conversation: none; the folder's project directory still held only <id-2>.jsonl
+
+G  claude --resume <id-3>          (the untyped session of F)
+   screen: "No conversation found with session ID: <id-3>"
+   process: exited by itself, exit code 1, after 1.4 s; no screen of its own was drawn
+
+H  claude --session-id <id-3>      (F's id again), no message, /exit after 10 s
+   process: started as a new session, exited by itself on /exit, exit code 0, after 12.3 s
+   conversation: none, as in F
+
+Not measured: --resume of an id whose conversation existed and is gone; two Claude Codes both
+writing to one conversation.
+
+A plain start that sent no message left no conversation file: after a plain `claude` (no
+--session-id; stopped by the driver's SIGTERM after 13.8 s, its limit 12 s) and A, the folder's
+project directory held only <id-2>.jsonl. F measures the same for a --session-id start.
+
+Side effect: the driver's first version hung at exit (it stopped reading the terminal while the
+process ended) and was stopped by its pid. The next launch printed "Claude Code's fullscreen
+renderer didn't finish starting last time on this machine, so this launch is using the classic
+renderer. It will try fullscreen again next launch"; the launches after it did not.
+
+## The driver
+
+The version below ran B to H. The plain start and A ran on the version before it, whose prompt
+check (line 67 here) read `("? for shortcuts" in text or ">" in text[-400:])`; only --type
+reaches that check, and neither run used it.
+
+"""Drive the real Claude Code in a pseudo-terminal for Q8, and log what it shows.
+
+Usage: q8drive.py <cwd> <logfile> <seconds> [--type TEXT] [--exit] -- <claude args...>
+
+Starts `claude <args>` in <cwd> with every CLAUDE* and AI_AGENT variable
+removed, answers the terminal's cursor-position and device-attribute
+queries, and records the screen text (escapes stripped) for <seconds>.
+Stops at once, without answering, if the workspace trust dialog shows.
+--type sends TEXT then Enter once the prompt looks ready; --exit sends
+/exit at the end. The process is stopped by its own pid.
+"""
+
+import fcntl
+import os
+import pty
+import re
+import select
+import signal
+import struct
+import sys
+import termios
+import time
+
+ESCAPES = re.compile(rb"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b[@-_]")
+TRUST = re.compile(r"trust (the files|this folder)|Do you trust", re.I)
+
+
+def main():
+    argv = sys.argv[1:]
+    split = argv.index("--")
+    options, claude_args = argv[:split], argv[split + 1:]
+    cwd, logfile, seconds = options[0], options[1], float(options[2])
+    to_type = options[options.index("--type") + 1] if "--type" in options else None
+    send_exit = "--exit" in options
+    env = {k: v for k, v in os.environ.items() if "CLAUDE" not in k and k != "AI_AGENT"}
+    env["TERM"] = "xterm-256color"
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.chdir(cwd)
+        os.execvpe("claude", ["claude", *claude_args], env)
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+    raw = b""
+    typed = False
+    status = "running"
+    start = time.time()
+    exit_sent = False
+    while time.time() - start < seconds:
+        ready, _, _ = select.select([fd], [], [], 0.2)
+        if ready:
+            try:
+                chunk = os.read(fd, 65536)
+            except OSError:
+                status = "eof"
+                break
+            if not chunk:
+                status = "eof"
+                break
+            raw += chunk
+            if b"\x1b[6n" in chunk:
+                os.write(fd, b"\x1b[1;1R")
+            if b"\x1b[c" in chunk or b"\x1b[0c" in chunk:
+                os.write(fd, b"\x1b[?62;c")
+        text = ESCAPES.sub(b"", raw).decode("utf-8", "replace")
+        if TRUST.search(text):
+            status = "trust-dialog: stopped without answering"
+            break
+        if to_type and not typed and time.time() - start > 8 and ("❯" in text):
+            os.write(fd, to_type.encode() + b"\r")
+            typed = True
+            typed_at = time.time()
+        if send_exit and not exit_sent and (not to_type or (typed and time.time() - typed_at > 25)) and time.time() - start > seconds - 6:
+            os.write(fd, b"/exit\r")
+            exit_sent = True
+    def drain_until_exit(limit):
+        nonlocal raw
+        deadline = time.time() + limit
+        while time.time() < deadline:
+            done, code = os.waitpid(pid, os.WNOHANG)
+            if done:
+                return code
+            ready, _, _ = select.select([fd], [], [], 0.1)
+            if ready:
+                try:
+                    raw += os.read(fd, 65536)
+                except OSError:
+                    pass
+        return None
+
+    code = drain_until_exit(0.5)
+    if code is not None:
+        exit_note = "exited by itself"
+    else:
+        os.kill(pid, signal.SIGTERM)
+        code = drain_until_exit(5)
+        exit_note = "stopped by the driver (SIGTERM)"
+        if code is None:
+            os.kill(pid, signal.SIGKILL)
+            os.close(fd)
+            _, code = os.waitpid(pid, 0)
+            exit_note = "stopped by the driver (SIGKILL)"
+    text = ESCAPES.sub(b"", raw).decode("utf-8", "replace")
+    with open(logfile, "w") as log:
+        log.write(f"args: {claude_args}\nstatus: {status}\nprocess: {exit_note}, wait status {code}, exit code {os.waitstatus_to_exitcode(code) if code >= 0 else code}\nelapsed: {time.time() - start:.1f}s\n---- screen text ----\n")
+        log.write(text)
+    print(f"{logfile}: {status}; {exit_note}")
+
+
+main()

@@ -444,6 +444,83 @@ The first plan listed "the mode entered before the layout's focus"; the brief re
 
 **Brief:** `brief-t20-claude-terminal-mode.md`, corrected after its brief review, `brief-review-t20-claude-terminal-mode.md`: dispatch after corrections. CT1 gains the wiped-terminal path and says how to observe the mode; CT2 reads the status after the focus and records the busy-exit bound; the tests and the help's fence are named exactly; the question to the user is quoted whole, with the options not chosen.
 
+## Packet T18 — 2026-09-26
+
+**The request, and the answers.**
+- The user, 2026-09-26, after seeing T11's icon in `v0.2.2`: "the icon position is not as I imagined... it is not good... <time> [ <icon> <message_type ] is what I imagine, refactor as an small fix..."; then, declining the question on the line's form to clarify: "remove the Icon, just make the banned [<type>] bold then...".
+- Asked how it should run, the user chose "Small fix, after T10", over the orchestrator's recommendation "Regular, before T10" and its stated concern that replacing C10 needs a new row, which the small-fix rules exclude. The rows are D24 and C14, merged in PR #51.
+
+**The six rules for T18**, recomputed on 2026-09-26 against every open packet and every claimed wave (only this one):
+- T20 is in review (PR #58, opened after this section was first written). T17 follows T18 in the Report's home; T12 follows T20; T19 waits for Q8.
+
+| rule | T18 |
+|---|---|
+| 1 dependencies | T10, merged ✓ |
+| 2 files | `lua/aineo/report/` (`render.lua`, `colours.lua`, `buffer.lua`, `init.lua`); `tests/test_report*.lua`, `tests/test_entry_report.lua`; the expected Report lines of `tests/test_mcp_delivery.lua` and `tests/test_mcp_blocked_editor.lua`; `doc/aineo.txt` › `*aineo-report*`. With T20: T20 owns `plugin/aineo.lua`, the help's introduction sentence and `*aineo-commands*` entry, and new cases in `tests/test_entry*.lua`. That declared pattern includes `tests/test_entry_report.lua`; T20 adds its cases in `tests/test_entry_claude_mode.lua` only (PR #58), and T18 alone edits `tests/test_entry_report.lua` ✓ (the brief review's finding 7). Whichever of T18 and T20 lands second, the orchestrator's verification runs `tests/test_doc.lua`, in the whole suite, on its head laid over `dev` |
+| 3 schema | none: the report format and the saved records are unchanged ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | decided by the user ("remove the Icon, just make the banned [<type>] bold"; "Small fix, after T10"). The bold's group, `AineoReportStatusBold`, and its default link to `@markup.strong` are the orchestrator's reading, for the MVP review: the one mechanism the brief review measured meeting every clause of RL2 (its finding 3) ✓ |
+| 6 task lines | T18's row is adjacent to T17's and T19's, so it holds its mark ✓ |
+
+**Baseline:** `dev` at `d30ff4d`, T10 merged: 973 cases, `Fails (0)`, on 0.12.5 and 0.11.6 (`evidence/baseline-d30ff4d.txt`, the orchestrator's verification of PR #52, whose tree has the same code).
+
+**Reviewers**, as a small fix: guarantee by `neovim-lua-developer` at `high`, on the reviewer charter; records by `reviewer`.
+
+**Order:** now, beside T20. T17 follows T18.
+
+**Verification mutants:**
+- the icon kept in the header;
+- the bold dropped from `[status]`;
+- the bold spread to the time or the task;
+- the status's colour dropped, the bold kept;
+- the bold laid over the status's colour, so a colour scheme's colour for `@markup.strong` shows on `[status]`;
+- the details indented 8, as before;
+- the bold drawn when a report arrives but not when the Report shows its records again.
+
+**Brief:** `brief-t18-report-line.md`, corrected after its brief review, `brief-review-t18-report-line.md`: dispatch after corrections. RL2 now requires the status's colour to win over the bold's, names the bold's group and link, and says how to read the screen (`nvim__inspect_cell` after a discarded call and a redraw); the pins and the help lines are listed whole, the `gx` rows among them; the fence's last line is quoted. The screen measurements are `evidence/report-line-bold.txt`.
+
+## Packet T19 — 2026-09-26
+
+**The request, and the answers.** D23 holds them whole: the user asked on 2026-09-26 for aineo to "remmeber the last session that was opened, and when reopening to load the session", chose "aineo's own last one", then "the last one, but it must be per project", and, asked which session aineo resumes in a folder, "aineo's own last one there (Recommended)".
+
+**Q8, measured before this brief** (`evidence/claude-resume-q8.txt`), by the orchestrator, with the user's leave ("Scratch folder (Recommended)"), on Claude Code 2.1.283 and the user's login, in a folder trusted through the checkout: `--resume` of a missing or untyped id prints "No conversation found with session ID: <id>" and exits 1; `--session-id` of a used id prints "…is already in use." and exits 1; `--resume` continues the same id; two Claude Codes may be started on one id at once. Two one-word prompts were sent.
+
+**Brief withdrawn before dispatch.** The first brief, `brief-t19-claude-resume.md` at `15c7e20`, planned T19 beside T21. Its brief review (`brief-review-t19-t21.md`, finding T19-1) found that SR3's fallback, the Claude home replacing Claude's terminal on its own, leaves the composition root's `claude_terminal` and the layout's `state.buffers.claude` holding the wiped terminal: `\c` then stays in Normal mode, and `:edit` in Claude's window raises `Invalid buffer id` — D25's fault and T20's lost Terminal mode again, with each packet's suite green. `started_claude_terminal()` can repair only the composition root's side. So T19 follows T21, with a brief rewritten to make both follow the new terminal through a named entry point, and a brief review of its own. Its other findings (T19-2 to T19-11) are answered there.
+
+## Packet T21 — 2026-09-26
+
+**The request, and the answer.** T20's guarantee review measured a fault older than T20 (its findings 1 and 4): a key typed in Terminal mode after Claude Code exits wipes its terminal, and from the layout's tab the layout then raises `Invalid buffer id`, adds a window, and `\c` starts no session. Asked how the follow-up should fix it, the user chose "Both, regular (Recommended)": D25.
+
+**Where it lives.** Both of D25's behaviours are kept in the layout home, which knows Claude's window and buffer; the brief review measured that both can be built there. EX1, which C3's row records, is written in the layout home by the orchestrator's choice: C3's note names the behaviour, not its module. A behaviour that cannot be met there comes back as a spec conflict.
+
+**The six rules for T21**, recomputed on 2026-09-26 against every open packet (T18 in its fix round, PR #60; T20 in the orchestrator's verification, PR #58) and every claimed wave (only this one):
+
+| rule | T21 |
+|---|---|
+| 1 dependencies | T20 (PR #58): dispatched only once it merges ✓ |
+| 2 files | `lua/aineo/layout/`; `tests/test_layout*.lua`; new cases in `tests/test_entry_claude_mode.lua`, or new `tests/test_entry_*.lua` files, not `tests/test_entry_report.lua` (T18); `doc/aineo.txt` › `*aineo-commands*`, from `*:Aineo-claude*` to `an exited Claude Code.`, against T18's `*aineo-report*` ✓ (the brief review's T21-6) |
+| 3 schema | none ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | D25 decided. EX1 for Claude's window only, Terminal mode refused on the ended terminal, and EX1's placement in the layout home are the orchestrator's readings ✓ |
+| 6 task lines | T21's row is adjacent to T20's; it holds its mark ✓ |
+
+T19 and T12 follow T21, one at a time: T19 needs the layout and `plugin/aineo.lua` (T19-1), and T12 the layout home, the help's `*aineo-commands*` and `plugin/aineo.lua`.
+
+**Baseline:** `dev` once PR #58 (T20) merges: its code is the tree `525b22b`, which the orchestrator's verification of PR #58 measured: 985 cases, `Fails (0)`, on 0.12.5 and 0.11.6, and lint clean (`evidence/baseline-525b22b.txt`).
+
+**Reviewers**, regular, the layout home: attack by `neovim-lua-reviewer`, test-integrity by `reviewer`, records by `reviewer`.
+
+**Order:** T21 once PR #58 merges; T17 after T18, beside it.
+
+**Verification mutants:**
+- Terminal mode kept at the exit;
+- `:stopinsert` on Claude's exit wherever the cursor is;
+- Normal mode forced on every terminal's exit;
+- Terminal mode allowed again on the ended terminal;
+- `redirect()` putting a wiped buffer back, as before;
+- Claude's window kept on the empty buffer after a wipe.
+
+**Brief:** `brief-t21-claude-exit.md`, corrected after its brief review, `brief-review-t19-t21.md`: dispatch after corrections. EX1 now refuses Terminal mode on the ended terminal and has its negative cases; EX2 names the condition its fault needs; the placement is named as a reading; the test files and the merge check leave T18's alone.
 ## Landed
 
 - **T9 — PR #30, a small fix**, merged by rebase on 2026-09-26 as `a86a69c` … `3d67b05` (9 commits). Every file of the pull request is identical to the verified head `40bc378`; `git diff 40bc378 dev` shows only T14's files from PR #32.
@@ -608,3 +685,28 @@ The first plan listed "the mode entered before the layout's focus"; the brief re
   - the warning waiting for `InsertLeave`: 2;
   - a failed rename leaving its cut file: 1.
 - **Released:** `v0.2.3`, which carries T14, under the user's rule of 2026-09-26: a release after each feature merges (PR #53, `main` at `dcff14f`).
+
+- **T10 — PR #52, a small fix**, merged by rebase on 2026-09-26 as `12a37fe` … `d30ff4d` (10 commits). The code of `dev` is identical to the verified tree (`0ec7ef5` laid over `dev` `2b75fc0`, merge-tree `c8fa752`).
+  - **Reviews** on Opus, by the small-fix class: guarantee by `neovim-lua-developer` on the reviewer charter, and records by `reviewer`.
+  - **What the guarantee review found:** no ASCII or UTF-8-encoded control character reached the terminal — ESC, `ESC \`, BEL, OSC 52, U+009C, U+009D, measured in a pty on both versions. But:
+    - the finder took time quadratic in the line: one report of a link followed by 20 000 `)` froze the editor 9 s on arrival and 12 s at each `:edit`, past the relay's 5 s confirmation (G1, fix before merge);
+    - the same sequences in their 8-bit form — raw 0x9C, 0x9D and 0x9B bytes: an ST, an OSC 0 and a CSI — reached the terminal raw inside a link's address, on both versions, reachable over RPC though not from the real Claude (G2);
+    - the control-character rows pinned only ESC, NUL, DEL and U+009D, so six of its mutants admitting other controls survived (G3);
+    - RL5 unpinned on a report that holds a link (G4), the scheme's `:` unpinned (G5), and the help's letters, digits and spaces not said to be ASCII (G6).
+  - **What the records review found:** the help's rule untrue for a non-ASCII letter or space (R1); the ASCII reading missing from the note's readings (R2); the brief's "`gx` gets one row wrong" false on two rows, `~~` and U+009D — a brief error the code handles, not a spec conflict (R3); two counts in the PR body (R4, R5); the em dash reading's curly quote and ellipsis unpinned (R6); a docstring (R7); the options the user turned down missing from the note (R8).
+  - **The fix round** went to the author, whose context was about 268 K (267,661 by `agent-context.py`, at the packet's last request): a finder linear in the line, a link ended at the first byte that is not well-formed UTF-8, the control rows, the pins, and the records. The orchestrator's decision to adopt the guarantee review's measured finder was partly refuted: that candidate was still slow on runs of links each cut by U+0080 or by a lone 0x80 byte (4.3 s and 5.8 s at 8000 links). The author kept its trimming and early rejection, credited, and made the run's end one pass (`run_end()`).
+  - **The re-measure**, with the attack question (`neovim-lua-reviewer`), found the round's code right: linear on 26 families of text up to 1 MB, the UTF-8 rule right on 33 685 760 sequences against the Unicode standard's Table 3-7, no C1 or ill-formed byte reaching the terminal in a pty, and no disagreement on 1 000 000 well-formed texts. Three test gaps survived: a third or fourth byte of 0xC0 or more (X8), the edges of each well-formed range (X1–X7), and a quadratic finder at 1 MB (X11). It measured the worst report at the relay's line limit: 0.49 s on arrival and 0.61 s at `:edit`, on 0.12.5.
+  - **The bounded correction** went to a fresh agent: the re-measure's rows for X8, X1–X7 and X11, a test renamed, and the records.
+- **The orchestrator's verification** of `0ec7ef5` laid over `dev`:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`: 973 cases, `Fails (0)`, on 0.12.5 and on 0.11.6;
+  - lint clean.
+- **Seven literal mutants** on the whole suite under 0.11.6, all killed by assertion:
+  - control characters admitted: 7 cases failing;
+  - C1 characters admitted: 4;
+  - ill-formed continuation bytes admitted: 3;
+  - the url left off the extmark: 65;
+  - trailing punctuation kept: 16;
+  - a link found inside a word: 2;
+  - links allowed to overlap: 1.
+- **Released:** `v0.2.4`, which carries T10 (PR #56, `main` at `89e6c87`).

@@ -173,7 +173,9 @@ end
 --- exited: a focus starts a session only when the layout must open and
 --- there is no terminal to show (`current_claude_terminal()`). When it
 --- reopened the role's window, Input is then handed to the draft home
---- (`keep_input_draft()`).
+--- (`keep_input_draft()`). It enters no mode itself, and Terminal mode ends
+--- as the cursor leaves Claude's window: `focus_claude()` enters Terminal
+--- mode in Claude's window.
 ---
 ---@param role aineo.layout.Role
 local function focus(role)
@@ -185,6 +187,32 @@ local function focus(role)
   end)
   if opened then
     keep_input_draft()
+  end
+end
+
+--- Whether the current buffer is the Claude session's terminal and that
+--- session has not ended: where a key typed in Terminal mode reaches Claude
+--- Code. A key typed in Terminal mode on an ended session's terminal closes
+--- it; another buffer shown in Claude's window is not Claude's to type to.
+---
+---@return boolean
+local function can_type_to_claude()
+  return vim.api.nvim_get_current_buf() == claude_terminal
+    and require('aineo.claude').session_status() ~= 'exited'
+end
+
+--- Moves the cursor to Claude's window, as `focus()` does, and asks for
+--- Terminal mode when the keys typed there would reach Claude Code: its
+--- prompt, or the dialog it shows as it starts (`can_type_to_claude()`).
+--- Neovim enters Terminal mode once the outermost mapping or command around
+--- it has ended, in the window current then: Claude's, unless a caller moves
+--- the cursor on. Otherwise it stays in Normal mode. What the cursor landed
+--- on is read after the move, which starts a new session when the layout
+--- must reopen and the ended session's terminal is gone.
+local function focus_claude()
+  focus('claude')
+  if can_type_to_claude() then
+    vim.cmd.startinsert()
   end
 end
 
@@ -201,9 +229,7 @@ local ACTIONS = {
   input = function()
     focus('input')
   end,
-  claude = function()
-    focus('claude')
-  end,
+  claude = focus_claude,
 }
 
 --- What Neovim puts before an error it passes on, outermost first: the
