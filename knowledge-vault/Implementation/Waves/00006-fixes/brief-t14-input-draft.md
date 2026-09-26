@@ -169,3 +169,46 @@ Medium: a new small home, its wiring in the composition root, and the help. If i
 ## Report
 
 Exactly the shape in your definition, written to `<scratchpad>/t14-report-packet.md`, with the suite counts on both versions. Open the pull request into `dev` before you report, and put in its body every verification claim a reviewer can re-measure. Name the report's absolute path in your final message.
+
+## Amendment — 2026-09-26, before dispatch
+
+T13 (PR #31), T15 (PR #39) and T16 (PR #40) have merged. This section re-checks every fact above against `origin/dev` at `7af0d47`. Where this section and the text above differ, this section holds.
+
+### Base and baseline
+
+- **Your base is `origin/dev` at `7af0d47`** or later.
+- **Its suite is green on both versions:** 808 cases, `Fails (0)`, on 0.12.5 and on 0.11.6 (`evidence/baseline-7af0d47.txt`, from the orchestrator's verification of the code `7af0d47` holds).
+- The whole suite must stay green on both versions.
+
+### Facts that moved
+
+- **"When T13 (PR #31) merges, only the help's line numbers move" is no longer true.**
+  - T13 grew `plugin/aineo.lua`'s error framing.
+  - T16 changed `lua/aineo/layout/init.lua` and your section of the help.
+- **`plugin/aineo.lua` at `7af0d47`:**
+  - `give_report_environment()`, lines 58–70;
+  - `open()`, lines 131–134, and `focus()`, lines 143–148;
+  - `run()`, lines 212–220. It reports at `ERROR` through `error_line()` (line 194).
+  - On the autostart, `open_unless_session_restored()` (lines 365–377) records `open-failed` at line 374.
+- **`lua/aineo/layout/init.lua` (T16):**
+  - `open()` now also makes the Report's and Input's windows wrap long lines, for their own buffers (`wrap_right_column()`, called after `pin_windows()`).
+  - Input is still made as before, and the draft still reaches it through `M.input_buffer()` (line 680).
+  - T16's `tests/test_layout_wrap.lua` stays green unchanged.
+- **The help, your section `*aineo-layout*`:** lines 52–94, not 51–86.
+  - Its first and last lines are unchanged, quoted as in *Boundary*.
+  - T16 added a paragraph on wrapping inside it. Leave it as it is, and keep your hunks apart from it by at least one unchanged line.
+- **The Report's section is now T11's, not T9's.**
+  - T11 runs beside you and edits from `8. THE AGENT REPORT                                             *aineo-report*` to `the working directory of its own moment.`, together with `lua/aineo/report/render.lua` and the report tests. None of these is in your boundary.
+  - T9 and T15, which edited that section before, have merged.
+
+### Facts that held
+
+- `lua/aineo/claude/init.lua` (`VimLeavePre` at lines 51–63), `lua/aineo/send/init.lua` (lines 118 and 121), `lua/aineo/report/records.lua` (`records_file()`, line 30) and `tests/helpers/send.lua` are unchanged since `d35dc4f`: `git diff --stat` prints nothing for them.
+
+### Before you push
+
+Run the merge check of *Boundary* against each of these that exists and is unmerged:
+- `origin/feature/t11-report-icon`;
+- `origin/feature/t12-claude-numbers`.
+
+Run `test_doc.lua` on both versions.
