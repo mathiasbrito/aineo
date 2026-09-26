@@ -15,7 +15,7 @@ local M = {}
 
 ---@class aineo.report.Rendering
 ---@field lines string[] lines holding no newline
----@field colours aineo.report.Colour[]
+---@field colours aineo.report.Colour[] where two cover the same text, the later shows over the earlier
 
 --- How many bytes a report's time, `HH:MM`, takes in its header.
 local CLOCK_TIME_LENGTH = #'HH:MM'
@@ -51,18 +51,27 @@ end
 
 --- The colours of the header of a report of `status`, `HH:MM [status] …`:
 --- the `HH:MM` in `colours.TIME_GROUP`, and the `[status]`, brackets
---- included, in the group of `status` (`colours.STATUS_GROUPS`). The space
---- between them, and the rest of the header, show in none.
+--- included, in `colours.STATUS_BOLD_GROUP`, then over it in the group of
+--- `status` (`colours.STATUS_GROUPS`): the `[status]` shows bold, and in its
+--- status's colour whatever colour the bold's group gives. The space between
+--- them, and the rest of the header, show in none.
 ---
 ---@param status string a report's status
 ---@return aineo.report.Colour[]
 local function header_colours(status)
+  local status_end_column = STATUS_COLUMN + #('[%s]'):format(status)
   return {
     { line = 0, first_column = 0, end_column = CLOCK_TIME_LENGTH, group = colours.TIME_GROUP },
     {
       line = 0,
       first_column = STATUS_COLUMN,
-      end_column = STATUS_COLUMN + #('[%s]'):format(status),
+      end_column = status_end_column,
+      group = colours.STATUS_BOLD_GROUP,
+    },
+    {
+      line = 0,
+      first_column = STATUS_COLUMN,
+      end_column = status_end_column,
       group = colours.STATUS_GROUPS[status],
     },
   }

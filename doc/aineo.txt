@@ -347,10 +347,15 @@ until it ends in none of them: `(see https://example.com/a).` links to
 
 Colours ~
 The Report shows the time in |hl-AineoReportTime|, and the `[status]`,
-brackets included, in the group of its status, only where it placed them,
-never text like them in a task, a summary or details; and web links in
-|hl-AineoReportLink|. Each group links to one of Neovim's own,
-unless a colour scheme or a `:highlight` of your own colours it.
+brackets included, bold, in the group of its status, only where it placed
+them, never text like them in a task, a summary or details; and web links in
+|hl-AineoReportLink|. The bold is |hl-AineoReportStatusBold|, beneath the
+group of the status, so the `[status]` shows in its status's colour whatever
+colour the bold's group has. To turn the bold off and keep the colour: >
+    :highlight AineoReportStatusBold gui=NONE cterm=NONE
+<
+Each group links to one of Neovim's own, unless a colour scheme or a
+`:highlight` of your own colours it.
 After `:colorscheme` or `:highlight clear`, a group nothing colours any more
 links to its default again, with one exception: a group given a default link
 of its own (`:highlight default link`, as some colour schemes do) before aineo
@@ -370,6 +375,8 @@ AineoReportBlocked   `[blocked]`, linked to `DiagnosticWarn`
 AineoReportDone      `[done]`, linked to `DiagnosticOk`
                                                         *hl-AineoReportFailed*
 AineoReportFailed    `[failed]`, linked to `DiagnosticError`
+                                                    *hl-AineoReportStatusBold*
+AineoReportStatusBold  the bold of a `[status]`, linked to `@markup.strong`
                                                           *hl-AineoReportLink*
 AineoReportLink      a web link, linked to `Underlined`
 

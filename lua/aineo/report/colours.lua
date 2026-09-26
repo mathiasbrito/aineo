@@ -16,6 +16,9 @@ M.STATUS_GROUPS = {
   failed = 'AineoReportFailed',
 }
 
+--- The group that makes a report's `[status]` bold.
+M.STATUS_BOLD_GROUP = 'AineoReportStatusBold'
+
 --- The group a web link in a report shows in.
 M.LINK_GROUP = 'AineoReportLink'
 
@@ -23,6 +26,7 @@ M.LINK_GROUP = 'AineoReportLink'
 local DEFAULT_LINKS = {
   [M.TIME_GROUP] = 'Comment',
   [M.LINK_GROUP] = 'Underlined',
+  [M.STATUS_BOLD_GROUP] = '@markup.strong',
   [M.STATUS_GROUPS.started] = 'DiagnosticInfo',
   [M.STATUS_GROUPS.progress] = 'DiagnosticHint',
   [M.STATUS_GROUPS.blocked] = 'DiagnosticWarn',
