@@ -25,7 +25,8 @@ write your next message. Files you open land in a column between the two.
 
 Every command sits behind one prefix key, `\` by default, in Normal mode:
 `\s` sends Input to Claude, `\o` opens or restores the layout, and `\r`, `\i`
-and `\c` move to the Report, Input and Claude.
+and `\c` move to the Report, Input and Claude — `\c` in Terminal mode, so
+that what you type next goes to Claude.
 
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
@@ -155,7 +156,12 @@ lives in one tab; from another tab, `\o` moves you to it.
 :Aineo input		Moves the cursor to Input.
 
                                                                *:Aineo-claude*
-:Aineo claude		Moves the cursor to Claude's terminal.
+:Aineo claude		Moves the cursor to Claude's terminal and enters
+			Terminal mode there, so that the keys you type next
+			reach Claude Code: its prompt, or the dialog it shows.
+			Once Claude Code has exited it stays in Normal mode,
+			since a key typed in Terminal mode would close the
+			terminal and its exit with it.
 
 `report`, `input` and `claude` open the layout first when their window is
 gone, around Claude's terminal as it is — its exit on screen when Claude Code
