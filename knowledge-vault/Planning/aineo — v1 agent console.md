@@ -121,12 +121,14 @@ Until the project has specs, this plan's **D# and C# rows are the spec for v1** 
 | T7 | Entry point (C1): prefix mapping, `<Plug>` mappings, `:Aineo`, autostart | T3, T4, T5, T6 | done — PR #17, wave 4 |
 | T8 | Health (C7) and `doc/aineo.txt` | T7 | done — PR #21 (and #22), wave 5 |
 | T9 | Report colours (C6): the time in `Comment`'s colour and `[status]` in a colour of its status, as highlight groups a user can override — a small fix (the user, 2026-09-25) | T8 | done — PR #30, wave 6 |
-| T11 | Report icon (C10): each report's header starts with the icon of its status — `▸` started, `◐` progress, `⊘` blocked, `✓` done, `✗` failed — coloured like the status, with the details still under the status | T9 | active |
+| T10 | Report links (C6): every `http://` or `https://` address in the Report — task, summary or details — is underlined and carries its address, so ⌘-click opens it in a terminal that opens OSC 8 links, as iTerm2 does, and `gx` opens it from the keyboard; trailing punctuation, such as a final `.` or `)`, is not part of it — a small fix (the user, 2026-09-25 and 2026-09-26) | T11 | active |
+| T11 | Report icon (C10): each report's header starts with the icon of its status — `▸` started, `◐` progress, `⊘` blocked, `✓` done, `✗` failed — coloured like the status, with the details still under the status | T9 | done — PR #45, wave 6 |
 | T12 | `\tcn` toggles the line numbers of Claude's window (D16), with its `:Aineo` subcommand, `<Plug>` mapping, health check and help | T8 | active |
 | T13 | Neovim 0.12 compatibility (D10): the suite green on 0.12.5 and on 0.11.6 — Neovim's error framing stripped as 0.11's is, the `vim.system` error text, the terminal's exit line, the test editor that cannot load aineo | T8 | done — PR #31, wave 6 |
 | T14 | Input keeps unsent text as a draft (D17): saved per working directory beside the Reports shortly after each change and at quit, restored into an empty Input when aineo opens there, cleared with Input when Send clears it | T8 | active |
 | T15 | Report instructions (C6): Claude is asked to write each report for a person, in plain language — what is reported and how, never why; a plan (`started`) lists the features planned, a `done` what was done; references at the end, in parentheses, by number or ID only — a small fix (the user, 2026-09-26) | T8 | done — PR #39, wave 6 |
 | T16 | The Report's and Input's windows wrap long lines between words, a wrapped line keeping its indent (`'wrap'`, `'linebreak'`, `'breakindent'`), whatever the user's own setting — a small fix (the user, 2026-09-26) | T8 | done — PR #40, wave 6 |
+| T17 | Report file paths (C6): a path in the Report to a file that exists, relative to the working directory or absolute, optionally with `:line`, is underlined like a link; double-clicking it, or `gf`/`gF`, opens the file in the middle column (C9), at the line when given — a small fix (the user, 2026-09-26) | T10 | active |
 
 ## Done
 <!-- ~~**T1 — <title>**~~ — **Done YYYY-MM-DD** (commit in session note) -->
