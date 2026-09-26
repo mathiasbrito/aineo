@@ -303,11 +303,11 @@ terminal that opens OSC 8 hyperlinks, as iTerm2 does, and |gx| opens it
 from the keyboard. A link starts with `http://` or `https://`, in any case,
 at the start of the text or after a character that is not a letter or a
 digit. It runs up to a space, a control character, `<`, `>`, `"`, `|` or a
-backtick. It leaves out the `.` `,` `;` `:` `!` `?` `'` `"` `*` `~` it ends
-in, and a `)`, `]` or `}` with no opening partner inside it, one after
-another until it ends in none of them: `(see https://example.com/a).` links
-to `https://example.com/a`. What is left holds at least one character after
-the `://`, or is no link.
+backtick. It leaves out the `.` `,` `;` `:` `!` `?` `'` `*` `~` it ends in,
+and a `)`, `]` or `}` with no opening partner inside it, one after another
+until it ends in none of them: `(see https://example.com/a).` links to
+`https://example.com/a`. What is left holds at least one character after the
+`://`, or is no link.
 
 Colours ~
 The Report shows the time in |hl-AineoReportTime|, and the icon and the
