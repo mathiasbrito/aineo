@@ -26,7 +26,7 @@ write your next message. Files you open land in a column between the two.
 Every command sits behind one prefix key, `\` by default, in Normal mode:
 `\s` sends Input to Claude, `\o` opens or restores the layout, and `\r`, `\i`
 and `\c` move to the Report, Input and Claude — `\c` in Terminal mode, so
-that what you type next goes to Claude.
+that what you type next goes to Claude, unless Claude Code has exited.
 
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
