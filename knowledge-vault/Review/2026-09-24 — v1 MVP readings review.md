@@ -2,7 +2,7 @@
 
 **Author:** Mathias Santos de Brito, with Claude — the orchestrator (Opus 5.5, session `619e5f9a`)
 **Branch:** `knowledge/wave2-close-wave3-plan`
-**Status:** open. On 2026-09-26 the user kept MR1–MR97, MR99, MR100 and MR102–MR107 ("ok, your decisions are fine"), MR28's relay behaviour among them. Still awaiting the user: MR28's oldest supported `claude`, MR98, MR101, MR108 and MR109–MR143
+**Status:** open. On 2026-09-26 the user kept MR1–MR97, MR99, MR100 and MR102–MR107 ("ok, your decisions are fine"), MR28's relay behaviour among them. Still awaiting the user: MR28's oldest supported `claude`, MR98, MR101, MR108, MR109–MR137 and MR139–MR143; MR138 decided (D25), until T21 lands
 
 ## Links
 
@@ -236,7 +236,7 @@ Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t
 
 ## Readings — `\c` into Claude's prompt (T20)
 
-Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t20-t18-landed`), from T20's brief and session note at `dev` `ac42fd3`. None was shown to the user: the user asked for `\c` ("'\c' must move to the claude window in insert mode, cursor on the prompt") and chose its class.
+Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t20-t18-landed`), from T20's brief and session note at `dev` `ac42fd3`. None of the readings was shown to the user, and of the limits only MR138's case was, in D25's question: the user asked for `\c` ("'\c' must move to the claude window in insert mode, cursor on the prompt") and chose its class.
 
 | ID | Reading | Source | Disposition |
 |---|---|---|---|
@@ -248,9 +248,11 @@ Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t
 
 | ID | Limit | Source |
 |---|---|---|
-| MR138 | A `\c` typed while the editor is busy as Claude Code exits, or one that Claude Code exits right after — at its start, too — leaves Terminal mode on the ended terminal: the next key closes it and its exit message. T21 (D25) is to return Normal mode at the exit. | T20's brief review (F6) and guarantee review (G4) |
+| MR138 | A `\c` typed while the editor is busy as Claude Code exits, or one that Claude Code exits right after — at its start, too — leaves Terminal mode on the ended terminal: the next key closes it and its exit message. The user decided its fix on 2026-09-26, when D25's question described it: D25, implemented by T21 (PR #64, not yet merged). | T20's brief review (F6) and guarantee review (G4) |
 | MR139 | When `\c` opens the layout and the draft cannot be read, the key that answers the draft's hit-enter prompt, other than Enter, Space or CTRL-C, reaches Claude Code (with MR124). | T20's brief review (F7) |
 | MR140 | Entering and leaving Claude's prompt sends Claude Code the focus reports it asked for (`ESC[I`, `ESC[O`). | T20's brief review (F8) |
+
+MR138's second case, and the key-wipe's layout fault that the T20 note › *Limits* records (G1), were put to the user in D25's question. The user chose to fix both (D25, T21). G1 is not numbered for that reason. MR138 stays until T21 lands.
 
 ## Readings — the Report line without its icon (T18)
 
@@ -264,6 +266,6 @@ Added 2026-09-26 by the orchestrator, from T18's brief and session note at `dev`
 
 ## Disposition
 
-**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108 and MR109–MR143 stay open for the next review.
+**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR137 and MR139–MR143 stay open for the next review; MR138 is decided (D25), until T21 lands.
 
 Before that, every item was **open** until the MVP review. A reading the user keeps is closed *kept*; one the user changes becomes a plan row through a converge round (a new `D#`, never an edit in place) and a task.

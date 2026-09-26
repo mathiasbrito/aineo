@@ -178,7 +178,7 @@ During the wave, the user decided more changes:
 | records, #58 (T20) | `reviewer` | the task line claimed CT3 delivered; the group count; scratch in `/tmp`; two docstrings; the help's introduction; ranges; the PR body |
 | brief, T18 | `reviewer` | dispatch after corrections: the bold laid after the status's colour loses it to a colour scheme's `@markup.strong` (re-measured by the orchestrator); how to read the screen (`nvim__inspect_cell` after a discarded call); the bold's group as a reading; pins and help lines missing |
 | guarantee, #60 (T18) | `neovim-lua-developer` | G1: the help's bold-off recipe fails from a config; G2: the bold's order unpinned on the records path; G3: "whatever colour" true of the foreground only |
-| records, #60 (T18) | `reviewer` | the same recipe (R1); the Markdown-bold sentence missing (R2); counts, ranges and quotes (R3–R12) |
+| records, #60 (T18) | `reviewer` | the same recipe (R1); the Markdown-bold sentence missing (R2); counts, a code-point floor, the PR body, a tree id and a pushed commit's quotes (R3–R9); the author's suites unverifiable (R10); the M7 evidence and the learnings missing (R11, R12) |
 | records, #61 (the rows D25, T21, Q8) | `reviewer` | merge after corrections: the queue broke rule 2; three of Q8's answers reached past what was run; C2's note decided more than D25 |
 | brief, T19 and T21 | `reviewer` | T19 not to be dispatched: its fallback replaces Claude's terminal behind the composition root and the layout (T19-1), and ten more; T21 after corrections: EX1 left a key able to close the ended terminal, no negative cases, EX2's condition unnamed |
 | re-measure, #46, with the attack question | `neovim-lua-reviewer` | the round held on its paths; the deferred warning lost at `<C-c>` and still taking a key in Claude's terminal; N2 not equivalent; an earlier plugin's failing `QuitPre` handler skipping both saves, understated in the records; a failed rename leaving the text in a cut file; the `Makefile`'s clean-up pointable elsewhere |
@@ -217,7 +217,7 @@ During the wave, the user decided more changes:
 - a re-measure with the attack question, since the mechanism moved;
 - a bounded correction by a fresh agent, 915 cases: rows and records; 973 laid over `dev`.
 
-**Rounds on #58 and #60, small fixes:** each had the packet, its two reviews and one fix round by its author — #58 983 then 985 cases, #60 996 then 1001. Neither round moved a mechanism, so neither had a re-measure; 985 and 1013 laid over `dev`.
+**Rounds on #58 and #60, small fixes:** each had the packet, its two reviews and one fix round by its author — #58 983 then 985 cases, #60 996 then 1001; 985 and 1013 laid over `dev`. #60's round changed only a docstring in the code, so it had no re-measure. #58's added a read to a guard; the orchestrator skipped the re-measure §3 then asks, for the reason in *Landed*.
 
 The orchestrator's verifications are in [[Implementation/Waves/00006-fixes/plan]] › *Landed*.
 
@@ -332,10 +332,10 @@ The test-integrity review of #31 made 366 requests, more than any other context 
 - **The orchestrator lost the logs of T10's re-measure.** It removed the reviewer's worktree before copying its probe folder. The report quotes every row it built verbatim, and the correction took them from there.
 - **The orchestrator's calls moved the session's working directory** several times, by a `cd` at the top level of a command; each time it moved back.
 - **Q8 was measured by the orchestrator with the real `claude`**, the user's login and two one-word prompts, as the user allowed ("Scratch folder (Recommended)"). The driver's first version hung at exit and was stopped by its pid; the next launch used the classic renderer once and said it would try fullscreen again. PR #61's records review found three of Q8's answers reaching past the runs; the orchestrator then measured the untyped-session cases, with no prompt, and corrected them.
-- **The orchestrator's queue broke rule 2 twice.** PR #61 put T12 beside T21, though both change the layout home; PR #62 put T19 beside T21, disjoint by file but not in need, since T19's fallback replaces the terminal the layout holds. Both were caught by reviews before dispatch. T19's brief was withdrawn, to be rewritten after T21.
+- **The orchestrator's queue broke rule 2 twice.** PR #61 put T12 beside T21, though both change the layout home. The orchestrator's ledger noted it at 19:19, and PR #61's records review found it. That review's correction was to run T21, T12 and T19 one at a time, and not to put T19 beside T21. The orchestrator's correction of PR #61 (`d4eacdf`) instead kept T21 to the layout home by its brief and put it beside T19, and PR #62 planned them so. The two were disjoint by file, but not in need, since T19's fallback replaces the terminal the layout holds. The brief review of T19 and T21 caught it before dispatch (T19-1). T19's brief was withdrawn, to be rewritten after T21.
 - **PR #59 recorded a security finding from the ledger's summary**, not from the review's verdict: that no planted escape sequence reached the terminal, when G2's 8-bit OSC 0 did on T10's first head. Its records review caught it.
 - **T20's author could not create its scratchpad** (the auto-mode classifier refused it as a shared resource) and wrote its report in its worktree's `.tests/`; it also left scratch in `/tmp`, which the fix round removed after the orchestrator copied it.
-- **T20 and T18 moved no mechanism in their fix rounds**, so, as small fixes, neither had a re-measure; the orchestrator's verification ran five and six literal mutants on the whole suite.
+- **T20's fix round added a read to a guard and had no re-measure**, the orchestrator's departure from §3. The read was the guarantee review's measured fix, and the verification ran its removal (V2) among five literal mutants. T18's round changed only a docstring in the code, and by the rule had none.
 - **One ledger stamp was written from an estimate** (17:58 for 17:47) and corrected in the same minute.
 - **The shared help:**
   - T9 and T13 each edit a section of `doc/aineo.txt`, under rule 2's exception.
@@ -343,13 +343,17 @@ The test-integrity review of #31 made 366 requests, more than any other context 
 
 ## Open threads
 
-- **T21** (PR #64) is in review; **T17**'s brief (PR #66) waits for its brief review. **T19** follows T21 with a rewritten brief, and **T12** follows both.
+- **T21** (PR #64) is in its fix round. **T17**'s brief (PR #66, `76d0b20`, `2673719`) merged after its brief review (dispatch after corrections), and T17 was dispatched at 23:00. **T19** follows T21 with a rewritten brief, and **T12** follows both.
+- **Learnings carried to the wave's close:**
+  - T20's: a `ready` fake is still `'starting'` right after `:Aineo open`, so a case meant for a ready session waits for `'ready'`.
+  - T18's two: a `:highlight` whose attributes are all `NONE` is linked again by a later `:highlight default link`, while `:highlight link … NONE` holds; and in a headless child, the first `nvim__inspect_cell()` misreads cells read in the same request.
+  - Their source: [[Sessions/2026-09-26 — T20 Claude terminal mode]] and [[Sessions/2026-09-26 — T18 Report line]] › *Open threads*.
 - **`lua/aineo/mcp/editor.lua:10–16`'s docstring** says a report shows in "tens of milliseconds, even for a report at the line limit"; since T10 it takes up to about half a second there (MR133). A later packet corrects it.
 - **The root `CLAUDE.md`'s make table** does not say that `make test` and `make test_file` empty `.tests/state/nvim/aineo/drafts` first (T14) — an `ai/` pass.
 - **`lua/aineo/report/records.lua:83–84` ignores the count `fs_write` returns**, the pattern T14's attack review found in the draft's write (its F1). A short write would keep a cut record.
 - **Whole 0.12.5 runs can stop at the 960 s limit** — in `tests/test_mcp_blocked_editor.lua` under load, and once in `tests/test_health.lua` at a load near 11 (T11's amendment review). The files pass alone. Every wait of `tests/helpers/report_tui.lua` is bounded by `WAIT_MS`; which request blocks has not been isolated — a candidate task.
 - **A defect that predates T13**, found by T13's attack review, left for a later packet. `lua/aineo/health.lua` calls `config.recorded_setup_options()` as an argument to its `pcall`, so it is evaluated outside it. `:checkhealth aineo` then fails whole when `setup()` options hold a userdata.
-- **Readings still open:** MR28's oldest `claude`, MR98, MR101, MR108 and MR109–MR143 ([[Review/2026-09-24 — v1 MVP readings review]]).
+- **Readings still open:** MR28's oldest `claude`, MR98, MR101, MR108, MR109–MR137 and MR139–MR143, with MR138 decided by D25 until T21 lands ([[Review/2026-09-24 — v1 MVP readings review]]).
 - **`lua/aineo/health.lua` still strips with the lazy position pattern in one pass** — a candidate for the same bound at white space (the T13 correction's report).
 
 ## Commits
@@ -421,3 +425,4 @@ The test-integrity review of #31 made 366 requests, more than any other context 
 - **T18's bold is drawn beneath the status's colour** — from its brief review, re-measured by the orchestrator before dispatch; **its help's recipe is `:highlight link AineoReportStatusBold NONE`** — the orchestrator's fix-round decision on both reviews' finding.
 - **D25, Claude's exit** — the user: "Both, regular (Recommended)", over "Layout fix only, small fix" and "Leave it for now".
 - **T21 in the layout home, and T19 after it** — the orchestrator, on the brief review's T19-1: T19 makes the composition root and the layout follow a terminal its fallback replaces, through a named entry point. Rejected: the layout adopting any terminal shown in Claude's window, which would take a terminal of the user's own; a check of Claude Code's conversation files before a start, an undocumented layout that does not cover a conversation that existed and is gone.
+- **T21 beside T19, T21 kept to the layout home by its brief:** the orchestrator, in PR #61's correction (`d4eacdf`), over that pull request's records review, which asked for T21, T12 and T19 one at a time. Reversed at 20:06 on the brief review's T19-1.
