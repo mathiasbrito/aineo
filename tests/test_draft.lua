@@ -621,15 +621,22 @@ T['the draft']['put into a buffer leaves the changes made after it undoable'] = 
   eq(child.lua_get(INPUT_LINES), { 'Refactor the parser' })
 end
 
-T['the draft']['raises nothing once the buffer is wiped'] = function()
+T['the draft']['lets the buffer be wiped, and raises nothing then'] = function()
   local state = fixture.directory('draft-wiped-state')
   keep_new_buffer(state)
   set_input({ 'Refactor the parser' })
   wait_for_text(draft_file(state), 'Refactor the parser\n')
 
-  child.lua('vim.cmd.bwipeout(_G.input)')
+  local wiped = child.lua_get('pcall(vim.cmd.bwipeout, _G.input)')
 
-  eq(child.lua_get('vim.v.errmsg'), '')
+  eq(
+    {
+      wiped = wiped,
+      valid = child.lua_get('vim.api.nvim_buf_is_valid(_G.input)'),
+      error = child.lua_get('vim.v.errmsg'),
+    },
+    { wiped = true, valid = false, error = '' }
+  )
 end
 
 --- Hands the draft home in the child a new, empty scratch buffer, as
