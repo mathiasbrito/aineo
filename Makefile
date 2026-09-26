@@ -65,17 +65,25 @@ deps:
 		exit 1; \
 	}
 
+# The drafts aineo keeps of Input for each working directory under the suites'
+# state directory. Every child in the checkout's directory that opens the
+# layout shares the checkout's draft there, so each run starts with none: a
+# draft an earlier run left would come back in the next Input a case opens.
+TEST_DRAFTS := $(TEST_HOME)/state/nvim/aineo/drafts
+
 # Exits 0 only when every case ran and passed, and non-zero otherwise — also
 # when a test file does not load or contributes no case, when test code ends
 # Neovim, when mini.test stalls, or when the run outlasts its time limit, which
 # AINEO_TEST_RUN_LIMIT_MS=<milliseconds> replaces (scripts/run_tests.lua).
 test: deps
+	rm -rf '$(TEST_DRAFTS)'
 	$(NVIM_TEST) -l '$(ROOT)/scripts/run_tests.lua'
 
 # FILE reaches the runner through the environment, so the shell reads it as one
 # word and never as shell text, whatever quotes or spaces the path holds.
 test_file: export AINEO_TEST_FILE = $(FILE)
 test_file: deps
+	rm -rf '$(TEST_DRAFTS)'
 	$(NVIM_TEST) -l '$(ROOT)/scripts/run_tests.lua' "$$AINEO_TEST_FILE"
 
 lint:
