@@ -36,7 +36,8 @@ aineo allows one tool of its own without asking, the report tool
 2. REQUIREMENTS AND INSTALLATION                               *aineo-install*
 
 Requirements:
-- Neovim 0.11 or later.
+- Neovim 0.11 or later. aineo's behaviour was measured on Neovim 0.11.6
+  and 0.12.5.
 - Claude Code, the `claude` command, installed and signed in. aineo's
   behaviour was measured on Claude Code 2.1.281.
 
@@ -271,6 +272,31 @@ Agent Report shows each as: >
 <
 A line break in the task or the summary becomes a space. The Report follows
 the newest report.
+
+Colours ~
+The Report shows the time in |hl-AineoReportTime| and the `[status]`,
+brackets included, in the group of its status; only these, never text like
+them in a task, a summary or details. Each group links to one of Neovim's
+own, unless a colour scheme or a `:highlight` of your own colours it. After
+`:colorscheme` or `:highlight clear`, a group nothing colours any more links
+to its default again, with one exception: a group given a default link of
+its own (`:highlight default link`, as some colour schemes do) before aineo
+first defined it goes back to that link, until the Report shows reports
+again — a new report, or `:edit` in the Report. aineo defines the groups
+when the Report first shows a report.
+
+                                                          *hl-AineoReportTime*
+AineoReportTime      the time, `HH:MM`, linked to `Comment`
+                                                       *hl-AineoReportStarted*
+AineoReportStarted   `[started]`, linked to `DiagnosticInfo`
+                                                      *hl-AineoReportProgress*
+AineoReportProgress  `[progress]`, linked to `DiagnosticHint`
+                                                       *hl-AineoReportBlocked*
+AineoReportBlocked   `[blocked]`, linked to `DiagnosticWarn`
+                                                          *hl-AineoReportDone*
+AineoReportDone      `[done]`, linked to `DiagnosticOk`
+                                                        *hl-AineoReportFailed*
+AineoReportFailed    `[failed]`, linked to `DiagnosticError`
 
 Reports are kept per working directory, under `stdpath('state')` in
 `aineo/reports/`, and shown again when aineo opens in that directory. The

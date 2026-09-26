@@ -1,0 +1,10 @@
+# The whole suite at dev 9af91a6 on Neovim 0.11.6, D10's minimum (2026-09-25, 18:0x CEST)
+# nvim: the official nvim-macos-arm64.tar.gz of v0.11.6, sha256 d5ee93b67630d5a87f3d336d0f7e8b2fe6973aa653d3cc93b82b820e6538c1dd (matches the release's digest),
+#       unpacked to <scratchpad>/nvim-0.11.6/nvim-macos-arm64/bin/nvim and first on PATH; children run vim.v.progpath
+$ <scratchpad>/nvim-0.11.6/nvim-macos-arm64/bin/nvim --version | head -1
+NVIM v0.11.6
+# worktree: detached at 9af91a6; make deps at the pin
+
+$ make test   (the runner's shell printed: rc=0 secs=489)
+Total number of cases: 727
+Fails (0) and Notes (0)

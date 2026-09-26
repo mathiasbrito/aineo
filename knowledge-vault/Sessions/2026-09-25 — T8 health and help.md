@@ -1,7 +1,7 @@
 # 2026-09-25 — T8 health and help
 
 **Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `feature/t8-health` · **Pull request:** into `dev` (number in the PR body's thread)
+**Branch:** `feature/t8-health` · **Pull request:** #21 into `dev`
 
 ## Links
 
@@ -228,4 +228,18 @@ No survivor. The three timing-dependent cases (the B4 pin and both Ctrl-C cases)
 
 ## Commits
 
-*Recorded after the merge.*
+Merged by rebase into `dev` on 2026-09-25 (PR #21, final head `a9f8027`; 9 commits; per-file identity 11 of 11), recorded by the orchestrator's knowledge pass:
+
+| `dev` | was | round |
+|---|---|---|
+| `bf0bfad` | `443846f` | packet — Report aineo's configuration, Claude Code, socket and keys in health |
+| `2cd4bef` | `506b871` | packet — Record why the autostart ran or not, and write aineo's help |
+| `1a0f117` | `60c3e86` | packet — Fail a missing help tag by assertion, not by an error |
+| `5fe0959` | `6cf76b4` | packet — Record T8's session: health, the autostart record and the help |
+| `47ac9e5` | `af2b476` | fix round — Bound the version check by its own timer, and report startup truly |
+| `90ce000` | `08a0ae1` | fix round — Record the T8 fix round and correct the packet's false claims |
+| `2687933` | `c50ea94` | correction — Kill the version check's group whenever its wait ends early |
+| `04e01de` | `a4da7ba` | correction — Retry the entry editor's connect until the editor listens |
+| `1916dee` | `a9f8027` | correction — Correct the T8 records the re-measure refuted |
+
+PR #22 (companion): `7c9a12f` (was `de651a8`), `22ce027` (was `b71bfe7`).

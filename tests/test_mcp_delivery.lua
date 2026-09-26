@@ -319,8 +319,113 @@ T['a report']['that the editor does not take is a tool error with the reason it 
     content = {
       {
         type = 'text',
-        text = 'the editor did not take the report: Error executing lua: aineo.report has no environment: call set_report_environment() first',
+        text = 'the editor did not take the report: aineo.report has no environment: call set_report_environment() first',
       },
+    },
+  })
+end
+
+--- The reason the stand-in editors in the framing cases refuse a report with.
+local REFUSAL_REASON = 'aineo.report has no environment: call set_report_environment() first'
+
+T['a report']['that the editor refuses is a tool error with its reason, without either Neovim’s framing'] =
+  MiniTest.new_set({ parametrize = { { 'Lua: ' }, { 'Error executing lua: ' } } })
+
+T['a report']['that the editor refuses is a tool error with its reason, without either Neovim’s framing']['framed as'] = function(
+  framing
+)
+  local refusal = framing .. REFUSAL_REASON .. '\nstack traceback:\n\t[C]: in ?'
+  local relay = mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = start_editor_refusing(refusal) })
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq(get(decoded(relay:next_line(2000)), 'result'), {
+    isError = true,
+    content = { { type = 'text', text = 'the editor did not take the report: ' .. REFUSAL_REASON } },
+  })
+end
+
+T['a report']['that the editor refuses after the position of the Lua that raised it is a tool error with its reason alone'] =
+  MiniTest.new_set({
+    parametrize = {
+      { '/home/user/aineo/lua/aineo/report/buffer.lua:15: Lua: ' },
+      { 'Lua: vim/_core/shared:21: ' },
+      { 'Lua: [string "vim/_core/editor"]:353: ' },
+    },
+  })
+
+T['a report']['that the editor refuses after the position of the Lua that raised it is a tool error with its reason alone']['framed as'] = function(
+  framing
+)
+  local relay = mcp_relay.start_relay({
+    AINEO_EDITOR_ADDRESS = start_editor_refusing(framing .. REFUSAL_REASON),
+  })
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq(get(decoded(relay:next_line(2000)), 'result'), {
+    isError = true,
+    content = { { type = 'text', text = 'the editor did not take the report: ' .. REFUSAL_REASON } },
+  })
+end
+
+T['a report']['that the editor refuses keeps words of its reason that only look like framing'] = function()
+  local reason = 'the reason quotes Lua: and Error executing lua: in its own words'
+  local relay =
+    mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = start_editor_refusing('Lua: ' .. reason) })
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq(get(decoded(relay:next_line(2000)), 'result'), {
+    isError = true,
+    content = { { type = 'text', text = 'the editor did not take the report: ' .. reason } },
+  })
+end
+
+--- The reason an editor gives when the user edited a buffer named as its
+--- Report and their BufFilePre autocommand fails as the Report takes the
+--- name: the first line of the error, in each Neovim's words for an error
+--- raised in a Lua callback.
+local BUFFILEPRE_REASON = vim.fn.has('nvim-0.12') == 1
+    and 'nvim_exec2()[1]..BufFilePre Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:7: the user autocommand fails'
+  or 'nvim_exec2()[1]..BufFilePre Autocommands for "*": Vim(append):Error executing lua callback: [string "<nvim>"]:7: the user autocommand fails'
+
+T['a report']['that the editor refuses with words naming a position keeps them all'] = function()
+  local reason = 'nvim_exec2()[1]..BufFilePost Autocommands for "*": Vim(append):Lua callback:'
+    .. ' user/bufs.lua:7: the user hook failed: user/util.lua:4: the setting is missing'
+  local relay =
+    mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = start_editor_refusing('Lua: ' .. reason) })
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq(get(decoded(relay:next_line(2000)), 'result'), {
+    isError = true,
+    content = { { type = 'text', text = 'the editor did not take the report: ' .. reason } },
+  })
+end
+
+T['a report']['whose refusal the editor framed after a position is a tool error with the reason alone'] = function()
+  start_editor()
+  editor.lua([[
+    local edited = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_set_name(edited, 'aineo://report')
+    vim.api.nvim_buf_set_lines(edited, 0, -1, false, { 'the user typed this' })
+    vim.api.nvim_create_autocmd('BufFilePre', {
+      callback = function(event)
+        if event.file == 'aineo://report' then
+          error('the user autocommand fails')
+        end
+      end,
+    })
+  ]])
+  local relay = mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = editor.job.address })
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq(get(decoded(relay:next_line()), 'result'), {
+    isError = true,
+    content = {
+      { type = 'text', text = 'the editor did not take the report: ' .. BUFFILEPRE_REASON },
     },
   })
 end

@@ -1,0 +1,12 @@
+# A nofile buffer holding text quits without a word; a file buffer refuses with E37 (2026-09-25)
+
+## Neovim 0.12.5 (host)
+$ nvim --clean --headless -i NONE -n -c 'enew | setlocal buftype=nofile bufhidden=hide | call setline(1, "an unsent draft") | set modified' -c 'qa'; echo exit=$?
+exit=0
+$ nvim --clean --headless -i NONE -n -c 'enew | call setline(1, "an unsaved file buffer") | set modified' -c 'try | qa | catch | echo v:exception | endtry' -c 'qa!'
+Vim(qall):E37: No write since last change
+## Neovim 0.11.6 (downloaded)
+$ nvim --clean --headless -i NONE -n -c 'enew | setlocal buftype=nofile bufhidden=hide | call setline(1, "an unsent draft") | set modified' -c 'qa'; echo exit=$?
+exit=0
+$ nvim --clean --headless -i NONE -n -c 'enew | call setline(1, "an unsaved file buffer") | set modified' -c 'try | qa | catch | echo v:exception | endtry' -c 'qa!'
+Vim(qall):E37: No write since last change
