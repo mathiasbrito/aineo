@@ -451,15 +451,15 @@ The first plan listed "the mode entered before the layout's focus"; the brief re
 - Asked how it should run, the user chose "Small fix, after T10", over the orchestrator's recommendation "Regular, before T10" and its stated concern that replacing C10 needs a new row, which the small-fix rules exclude. The rows are D24 and C14, merged in PR #51.
 
 **The six rules for T18**, recomputed on 2026-09-26 against every open packet and every claimed wave (only this one):
-- T20 is being implemented (PR to come). T17 follows T18 in the Report's home; T12 follows T20; T19 waits for Q8.
+- T20 is in review (PR #58, opened after this section was first written). T17 follows T18 in the Report's home; T12 follows T20; T19 waits for Q8.
 
 | rule | T18 |
 |---|---|
 | 1 dependencies | T10, merged ✓ |
-| 2 files | `lua/aineo/report/` (`render.lua`, `colours.lua`, `buffer.lua`, `init.lua`); `tests/test_report*.lua`, `tests/test_entry_report.lua`; the expected Report lines of `tests/test_mcp_delivery.lua` and `tests/test_mcp_blocked_editor.lua`; `doc/aineo.txt` › `*aineo-report*`. With T20: T20 owns `plugin/aineo.lua`, its entry tests, and the help's introduction sentence and `*aineo-commands*` entry ✓ |
+| 2 files | `lua/aineo/report/` (`render.lua`, `colours.lua`, `buffer.lua`, `init.lua`); `tests/test_report*.lua`, `tests/test_entry_report.lua`; the expected Report lines of `tests/test_mcp_delivery.lua` and `tests/test_mcp_blocked_editor.lua`; `doc/aineo.txt` › `*aineo-report*`. With T20: T20 owns `plugin/aineo.lua`, the help's introduction sentence and `*aineo-commands*` entry, and new cases in `tests/test_entry*.lua`. That declared pattern includes `tests/test_entry_report.lua`; T20 adds its cases in `tests/test_entry_claude_mode.lua` only (PR #58), and T18 alone edits `tests/test_entry_report.lua` ✓ (the brief review's finding 7). Whichever of T18 and T20 lands second, the orchestrator's verification runs `tests/test_doc.lua`, in the whole suite, on its head laid over `dev` |
 | 3 schema | none: the report format and the saved records are unchanged ✓ |
 | 4 dependencies | none ✓ |
-| 5 decisions | decided by the user ("remove the Icon, just make the banned [<type>] bold"; "Small fix, after T10") ✓ |
+| 5 decisions | decided by the user ("remove the Icon, just make the banned [<type>] bold"; "Small fix, after T10"). The bold's group, `AineoReportStatusBold`, and its default link to `@markup.strong` are the orchestrator's reading, for the MVP review: the one mechanism the brief review measured meeting every clause of RL2 (its finding 3) ✓ |
 | 6 task lines | T18's row is adjacent to T17's and T19's, so it holds its mark ✓ |
 
 **Baseline:** `dev` at `d30ff4d`, T10 merged: 973 cases, `Fails (0)`, on 0.12.5 and 0.11.6 (`evidence/baseline-d30ff4d.txt`, the orchestrator's verification of PR #52, whose tree has the same code).
@@ -473,10 +473,11 @@ The first plan listed "the mode entered before the layout's focus"; the brief re
 - the bold dropped from `[status]`;
 - the bold spread to the time or the task;
 - the status's colour dropped, the bold kept;
+- the bold laid over the status's colour, so a colour scheme's colour for `@markup.strong` shows on `[status]`;
 - the details indented 8, as before;
 - the bold drawn when a report arrives but not when the Report shows its records again.
 
-**Brief:** `brief-t18-report-line.md`.
+**Brief:** `brief-t18-report-line.md`, corrected after its brief review, `brief-review-t18-report-line.md`: dispatch after corrections. RL2 now requires the status's colour to win over the bold's, names the bold's group and link, and says how to read the screen (`nvim__inspect_cell` after a discarded call and a redraw); the pins and the help lines are listed whole, the `gx` rows among them; the fence's last line is quoted. The screen measurements are `evidence/report-line-bold.txt`.
 
 ## Landed
 

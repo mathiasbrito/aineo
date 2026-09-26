@@ -1,0 +1,263 @@
+# T18: what the screen shows for [done] under each way of making it bold
+#
+# Measured by the orchestrator on 2026-09-26 with the brief review's probe (below), which the review wrote.
+# Each case runs an editor whose own TUI runs in a pseudo-terminal (truecolor) and decodes the SGR
+# the TUI writes before "09:05" (time) and "[done]" (status): fg as #rrggbb, +B for bold.
+# #b3f6c0 is DiagnosticOk, #ff0000 a user's colour, #ff00ff a colour scheme's colour for @markup.strong,
+# #e0e2ea Normal, #9b9ea4 Comment. Run: nvim --clean --headless -l <probe>, XDG directories in a scratch folder.
+
+## Neovim 0.11.6
+0.11.6+ge8b87a554f
+screen (TUI SGR): time before "09:05", status before "[done]"; inspect_cell of "[" for contrast
+S0  dev as it is: status mark only                                         time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+A1  + bold group (default link @markup.strong), 2nd mark, same priority    time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A1b + bold mark set BEFORE the status mark, same priority                  time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A2  A1, scheme gives @markup.strong fg #ff00ff; bold mark prio 4097        time=#9b9ea4   status=#ff00ff+B    inspect_cell=#ff00ff+B 
+A2s A1, scheme gives @markup.strong fg #ff00ff; same prio, bold mark AFTER time=#9b9ea4   status=#ff00ff+B    inspect_cell=#ff00ff+B 
+A2t A1, scheme gives @markup.strong fg #ff00ff; same prio, bold mark BEFORE time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A2u A2t, then user :hi clear AineoReportDone -> colourless status group    time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A3  A2 but bold mark prio 4095 (below the status mark)                     time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A4  A1, user AineoReportDone guifg=#ff0000 BEFORE aineo defines            time=#9b9ea4   status=#ff0000+B    inspect_cell=#ff0000+B 
+A4b A1, user AineoReportDone guifg=#ff0000 AFTER aineo defines             time=#9b9ea4   status=#ff0000+B    inspect_cell=#ff0000+B 
+A4c A1, colorscheme: hi clear + hi AineoReportDone guifg=#ff0000           time=#9b9ea4   status=#ff0000+B    inspect_cell=#ff0000+B 
+A5  A4 then :highlight clear                                               time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A6  A1, user hi AineoReportStatusBold gui=NONE cterm=NONE; aineo defines again time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+A7  A1, user hi link AineoReportStatusBold NONE; aineo defines again       time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+A7b A1, user hi clear AineoReportStatusBold; aineo defines again           time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A8  A1, user hi! link AineoReportStatusBold Normal; aineo defines again    time=#9b9ea4   status=#e0e2ea      inspect_cell=#e0e2ea   
+A8b A1, user hi AineoReportStatusBold gui=NONE, then :highlight clear      time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A9  bold group = :hi default gui=bold (attrs, no link); drawn              time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A9b A9 then :highlight clear                                               time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+A9c bold group = nvim_set_hl {bold, default}; then :highlight clear        time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+A10 A1 with hl_mode=replace on the bold mark                               time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A10b A1 with hl_mode=combine on the bold mark                              time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+B1  nvim_set_hl(AineoReportDone, {default, link=DiagnosticOk, bold})       time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+B2  B1, user AineoReportDone guifg=#ff0000 before                          time=#9b9ea4   status=#ff0000      inspect_cell=#ff0000   
+B3  B1 then :highlight clear                                               time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+C1  :hi default AineoReportDone gui=bold, then :hi default link ...        time=#9b9ea4   status=#e0e2ea+B    inspect_cell=-+B       
+C2  :hi default link first, then :hi default AineoReportDone gui=bold      time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+D1  one mark, hl_group = { AineoReportStatusBold, AineoReportDone }        time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B   details hl_group="AineoReportDone"
+
+## Neovim 0.12.5
+0.12.5+v0.12.5
+screen (TUI SGR): time before "09:05", status before "[done]"; inspect_cell of "[" for contrast
+S0  dev as it is: status mark only                                         time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+A1  + bold group (default link @markup.strong), 2nd mark, same priority    time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A1b + bold mark set BEFORE the status mark, same priority                  time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A2  A1, scheme gives @markup.strong fg #ff00ff; bold mark prio 4097        time=#9b9ea4   status=#ff00ff+B    inspect_cell=#ff00ff+B 
+A2s A1, scheme gives @markup.strong fg #ff00ff; same prio, bold mark AFTER time=#9b9ea4   status=#ff00ff+B    inspect_cell=#ff00ff+B 
+A2t A1, scheme gives @markup.strong fg #ff00ff; same prio, bold mark BEFORE time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A2u A2t, then user :hi clear AineoReportDone -> colourless status group    time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A3  A2 but bold mark prio 4095 (below the status mark)                     time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A4  A1, user AineoReportDone guifg=#ff0000 BEFORE aineo defines            time=#9b9ea4   status=#ff0000+B    inspect_cell=#ff0000+B 
+A4b A1, user AineoReportDone guifg=#ff0000 AFTER aineo defines             time=#9b9ea4   status=#ff0000+B    inspect_cell=#ff0000+B 
+A4c A1, colorscheme: hi clear + hi AineoReportDone guifg=#ff0000           time=#9b9ea4   status=#ff0000+B    inspect_cell=#ff0000+B 
+A5  A4 then :highlight clear                                               time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A6  A1, user hi AineoReportStatusBold gui=NONE cterm=NONE; aineo defines again time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+A7  A1, user hi link AineoReportStatusBold NONE; aineo defines again       time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+A7b A1, user hi clear AineoReportStatusBold; aineo defines again           time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A8  A1, user hi! link AineoReportStatusBold Normal; aineo defines again    time=#9b9ea4   status=#e0e2ea      inspect_cell=#e0e2ea   
+A8b A1, user hi AineoReportStatusBold gui=NONE, then :highlight clear      time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A9  bold group = :hi default gui=bold (attrs, no link); drawn              time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A9b A9 then :highlight clear                                               time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+A9c bold group = nvim_set_hl {bold, default}; then :highlight clear        time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+A10 A1 with hl_mode=replace on the bold mark                               time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+A10b A1 with hl_mode=combine on the bold mark                              time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B 
+B1  nvim_set_hl(AineoReportDone, {default, link=DiagnosticOk, bold})       time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+B2  B1, user AineoReportDone guifg=#ff0000 before                          time=#9b9ea4   status=#ff0000      inspect_cell=#ff0000   
+B3  B1 then :highlight clear                                               time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+C1  :hi default AineoReportDone gui=bold, then :hi default link ...        time=#9b9ea4   status=#e0e2ea+B    inspect_cell=-+B       
+C2  :hi default link first, then :hi default AineoReportDone gui=bold      time=#9b9ea4   status=#b3f6c0      inspect_cell=#b3f6c0   
+D1  one mark, hl_group = { AineoReportStatusBold, AineoReportDone }        time=#9b9ea4   status=#b3f6c0+B    inspect_cell=#b3f6c0+B   details hl_group="AineoReportDone"
+
+## The probe
+-- What the screen shows for `[done]` under each way of making it bold: each
+-- scenario runs in an editor whose own TUI runs in a pseudo-terminal
+-- (truecolor), and the SGR the TUI writes before `[done]` on a full redraw
+-- is decoded (fg as #rrggbb, B for bold). For contrast, `nvim__inspect_cell`
+-- on the same cell. The time cell is checked the same way before `09:05`.
+
+local nvim = vim.v.progpath
+
+local function start()
+  local address = vim.fn.tempname()
+  local state = { out = '' }
+  if os.getenv('PROBE_HEADLESS') == '1' then
+    state.job = vim.fn.jobstart({ nvim, '--clean', '-n', '--listen', address, '--headless', '--cmd', 'set lines=8 columns=60' })
+    vim.wait(5000, function()
+      local ok, c = pcall(vim.fn.sockconnect, 'pipe', address, { rpc = true })
+      state.ch = ok and c or nil
+      return state.ch ~= nil
+    end, 10)
+    return state
+  end
+  state.job = vim.fn.jobstart({ nvim, '--clean', '-n', '--listen', address }, {
+    pty = true,
+    width = 60,
+    height = 8,
+    env = { TERM = 'xterm-256color', COLORTERM = 'truecolor' },
+    on_stdout = function(_, d)
+      local chunk = table.concat(d, '\n')
+      state.out = state.out .. chunk
+      local _, n = chunk:gsub('\27%[5n', '')
+      for _ = 1, n do
+        vim.fn.chansend(state.job, '\27[0n')
+      end
+    end,
+  })
+  vim.wait(5000, function()
+    local ok, c = pcall(vim.fn.sockconnect, 'pipe', address, { rpc = true })
+    state.ch = ok and c or nil
+    return state.ch ~= nil
+  end, 10)
+  vim.wait(5000, function()
+    return state.out:find('~', 1, true) ~= nil
+  end, 10)
+  return state
+end
+
+local SETUP = [[
+  vim.o.termguicolors = true
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { '09:05 [done] Task - Summary' })
+  _G.ns = vim.api.nvim_create_namespace('probe')
+  _G.mark = function(first, last, opts)
+    opts.end_col = last
+    return vim.api.nvim_buf_set_extmark(0, _G.ns, 0, first, opts)
+  end
+  _G.define = function()
+    vim.cmd('highlight default link AineoReportTime Comment')
+    vim.cmd('highlight default link AineoReportDone DiagnosticOk')
+  end
+  _G.bold_group = function()
+    vim.cmd('highlight default link AineoReportStatusBold @markup.strong')
+  end
+  _G.marks = function(bold_opts)
+    mark(0, 5, { hl_group = 'AineoReportTime' })
+    mark(6, 12, { hl_group = 'AineoReportDone' })
+    if bold_opts then
+      bold_opts.hl_group = bold_opts.hl_group or 'AineoReportStatusBold'
+      mark(6, 12, bold_opts)
+    end
+  end
+]]
+
+--- The SGR state in force before the last occurrence of `text` in `out`:
+--- fg and bold, the whole stream up to it parsed.
+local function sgr_before(out, text)
+  local at, from = nil, 1
+  while true do
+    local found = out:find(text, from, true)
+    if not found then break end
+    at, from = found, found + 1
+  end
+  if not at then
+    return 'not drawn'
+  end
+  local fg, bold = '-', false
+  for params in out:sub(1, at - 1):gmatch('\27%[([%d;]*)m') do
+    local list = vim.split(params, ';', { plain = true })
+    local i = 1
+    while i <= #list do
+      local p = list[i]
+      if p == '' or p == '0' then
+        fg, bold = '-', false
+      elseif p == '1' then
+        bold = true
+      elseif p == '22' then
+        bold = false
+      elseif p == '39' then
+        fg = '-'
+      elseif (p == '48' or p == '58') and list[i + 1] == '2' then
+        i = i + 4
+      elseif (p == '48' or p == '58') and list[i + 1] == '5' then
+        i = i + 2
+      elseif p == '38' and list[i + 1] == '2' then
+        fg = ('#%02x%02x%02x'):format(tonumber(list[i + 2]), tonumber(list[i + 3]), tonumber(list[i + 4]))
+        i = i + 4
+      end
+      i = i + 1
+    end
+  end
+  return fg .. (bold and '+B' or '')
+end
+
+local scenarios = {
+  { 'S0  dev as it is: status mark only', [[define(); marks()]] },
+  { 'A1  + bold group (default link @markup.strong), 2nd mark, same priority', [[define(); bold_group(); marks({})]] },
+  { 'A1b + bold mark set BEFORE the status mark, same priority', [[define(); bold_group()
+      mark(0,5,{hl_group='AineoReportTime'}); mark(6,12,{hl_group='AineoReportStatusBold'}); mark(6,12,{hl_group='AineoReportDone'})]] },
+  { 'A2  A1, scheme gives @markup.strong fg #ff00ff; bold mark prio 4097', [[define(); bold_group()
+      vim.cmd('highlight @markup.strong guifg=#ff00ff gui=bold'); marks({ priority = 4097 })]] },
+  { 'A2s A1, scheme gives @markup.strong fg #ff00ff; same prio, bold mark AFTER', [[define(); bold_group()
+      vim.cmd('highlight @markup.strong guifg=#ff00ff gui=bold'); marks({})]] },
+  { 'A2t A1, scheme gives @markup.strong fg #ff00ff; same prio, bold mark BEFORE', [[define(); bold_group()
+      vim.cmd('highlight @markup.strong guifg=#ff00ff gui=bold')
+      mark(0,5,{hl_group='AineoReportTime'}); mark(6,12,{hl_group='AineoReportStatusBold'}); mark(6,12,{hl_group='AineoReportDone'})]] },
+  { 'A2u A2t, then user :hi clear AineoReportDone -> colourless status group', [[define(); bold_group()
+      vim.cmd('highlight @markup.strong guifg=#ff00ff gui=bold')
+      mark(0,5,{hl_group='AineoReportTime'}); mark(6,12,{hl_group='AineoReportStatusBold'}); mark(6,12,{hl_group='AineoReportDone'})
+      vim.cmd('highlight AineoReportDone NONE')]] },
+  { 'A3  A2 but bold mark prio 4095 (below the status mark)', [[define(); bold_group()
+      vim.cmd('highlight @markup.strong guifg=#ff00ff gui=bold'); marks({ priority = 4095 })]] },
+  { 'A4  A1, user AineoReportDone guifg=#ff0000 BEFORE aineo defines', [[vim.cmd('highlight AineoReportDone guifg=#ff0000'); define(); bold_group(); marks({})]] },
+  { 'A4b A1, user AineoReportDone guifg=#ff0000 AFTER aineo defines', [[define(); bold_group(); marks({}); vim.cmd('highlight AineoReportDone guifg=#ff0000')]] },
+  { 'A4c A1, colorscheme: hi clear + hi AineoReportDone guifg=#ff0000', [[define(); bold_group(); marks({}); vim.cmd('highlight clear'); vim.cmd('highlight AineoReportDone guifg=#ff0000')]] },
+  { 'A5  A4 then :highlight clear', [[vim.cmd('highlight AineoReportDone guifg=#ff0000'); define(); bold_group(); marks({}); vim.cmd('highlight clear')]] },
+  { 'A6  A1, user hi AineoReportStatusBold gui=NONE cterm=NONE; aineo defines again', [[define(); bold_group(); marks({})
+      vim.cmd('highlight AineoReportStatusBold gui=NONE cterm=NONE'); define(); bold_group()]] },
+  { 'A7  A1, user hi link AineoReportStatusBold NONE; aineo defines again', [[define(); bold_group(); marks({})
+      vim.cmd('highlight link AineoReportStatusBold NONE'); define(); bold_group()]] },
+  { 'A7b A1, user hi clear AineoReportStatusBold; aineo defines again', [[define(); bold_group(); marks({})
+      vim.cmd('highlight clear AineoReportStatusBold'); define(); bold_group()]] },
+  { 'A8  A1, user hi! link AineoReportStatusBold Normal; aineo defines again', [[define(); bold_group(); marks({})
+      vim.cmd('highlight! link AineoReportStatusBold Normal'); define(); bold_group()]] },
+  { 'A8b A1, user hi AineoReportStatusBold gui=NONE, then :highlight clear', [[define(); bold_group(); marks({})
+      vim.cmd('highlight AineoReportStatusBold gui=NONE cterm=NONE'); vim.cmd('highlight clear')]] },
+  { 'A9  bold group = :hi default gui=bold (attrs, no link); drawn', [[define(); vim.cmd('highlight default AineoReportStatusBold gui=bold cterm=bold'); marks({})]] },
+  { 'A9b A9 then :highlight clear', [[define(); vim.cmd('highlight default AineoReportStatusBold gui=bold cterm=bold'); marks({}); vim.cmd('highlight clear')]] },
+  { 'A9c bold group = nvim_set_hl {bold, default}; then :highlight clear', [[define(); vim.api.nvim_set_hl(0, 'AineoReportStatusBold', { bold = true, default = true }); marks({}); vim.cmd('highlight clear')]] },
+  { 'A10 A1 with hl_mode=replace on the bold mark', [[define(); bold_group(); marks({ hl_mode = 'replace' })]] },
+  { 'A10b A1 with hl_mode=combine on the bold mark', [[define(); bold_group(); marks({ hl_mode = 'combine' })]] },
+  { 'B1  nvim_set_hl(AineoReportDone, {default, link=DiagnosticOk, bold})', [[vim.cmd('highlight default link AineoReportTime Comment')
+      vim.api.nvim_set_hl(0, 'AineoReportDone', { default = true, link = 'DiagnosticOk', bold = true }); marks()]] },
+  { 'B2  B1, user AineoReportDone guifg=#ff0000 before', [[vim.cmd('highlight AineoReportDone guifg=#ff0000'); vim.cmd('highlight default link AineoReportTime Comment')
+      vim.api.nvim_set_hl(0, 'AineoReportDone', { default = true, link = 'DiagnosticOk', bold = true }); marks()]] },
+  { 'B3  B1 then :highlight clear', [[vim.cmd('highlight default link AineoReportTime Comment')
+      vim.api.nvim_set_hl(0, 'AineoReportDone', { default = true, link = 'DiagnosticOk', bold = true }); marks(); vim.cmd('highlight clear')]] },
+  { 'C1  :hi default AineoReportDone gui=bold, then :hi default link ...', [[vim.cmd('highlight default link AineoReportTime Comment')
+      vim.cmd('highlight default AineoReportDone gui=bold cterm=bold'); vim.cmd('highlight default link AineoReportDone DiagnosticOk'); marks()]] },
+  { 'C2  :hi default link first, then :hi default AineoReportDone gui=bold', [[define(); vim.cmd('highlight default AineoReportDone gui=bold cterm=bold'); marks()]] },
+  { 'D1  one mark, hl_group = { AineoReportStatusBold, AineoReportDone }', [[define(); bold_group()
+      mark(0,5,{hl_group='AineoReportTime'})
+      local ok, err = pcall(mark, 6, 12, { hl_group = { 'AineoReportStatusBold', 'AineoReportDone' } })
+      _G.info = ok and ('details hl_group=' .. vim.inspect(vim.api.nvim_buf_get_extmarks(0, _G.ns, 0, -1, { details = true })[2][4].hl_group, { newline = '' })) or ('error: ' .. tostring(err))]] },
+}
+
+io.stdout:write(tostring(vim.version()) .. '\n')
+io.stdout:write('screen (TUI SGR): time before "09:05", status before "[done]"; inspect_cell of "[" for contrast\n')
+for _, s in ipairs(scenarios) do
+  local only = os.getenv('PROBE_ONLY')
+  if only and s[1]:sub(1, #only) ~= only then goto continue end
+  do
+  local st = start()
+  vim.rpcrequest(st.ch, 'nvim_exec_lua', SETUP, {})
+  local ok, err = pcall(vim.rpcrequest, st.ch, 'nvim_exec_lua', s[2], {})
+  vim.wait(200)
+  if os.getenv('PROBE_DUMP') == '1' then io.stdout:write('#before=' .. #st.out .. ' ' .. (st.out:sub(-400):gsub('\27', '<E>')) .. '\n') end
+  vim.wait(600)
+  local inspect = vim.rpcrequest(st.ch, 'nvim_exec_lua', [[
+    local c = vim.api.nvim__inspect_cell(1, 0, 6)
+    return (c[2].foreground and ('#%06x'):format(c[2].foreground) or '-') .. (c[2].bold and '+B' or '')
+  ]], {})
+  local info = vim.rpcrequest(st.ch, 'nvim_exec_lua', 'return _G.info', {})
+  if os.getenv('PROBE_DUMP') == '1' then io.stdout:write('#out=' .. #st.out .. ' ' .. (st.out:sub(1, 600):gsub('\27', '<E>')) .. '\n') end
+  io.stdout:write(('%-74s time=%-9s status=%-12s inspect_cell=%-10s%s%s\n'):format(
+    s[1], sgr_before(st.out, '09:05'), sgr_before(st.out, '[done]'), inspect,
+    ok and '' or (' SCENARIO ERROR: ' .. tostring(err)),
+    (info ~= vim.NIL and info) and ('  ' .. info) or ''))
+  pcall(vim.rpcrequest, st.ch, 'nvim_command', 'qa!')
+  vim.fn.jobwait({ st.job }, 3000)
+  vim.fn.jobstop(st.job)
+  end
+  ::continue::
+end
