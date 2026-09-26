@@ -238,6 +238,8 @@ T['a link in the details'] = MiniTest.new_set({
     { 'https://x.y/a\237\160\128z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
     { 'https://x.y/a\244\144\128\128z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
     { 'https://x.y/a\255z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\226\128\192z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\240\144\128\194 z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
     { 'ftp://x.y', {} },
     { 'file:///etc/hosts', {} },
     { 'mailto:a@b.c', {} },
