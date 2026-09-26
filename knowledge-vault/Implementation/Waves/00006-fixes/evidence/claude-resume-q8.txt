@@ -8,8 +8,10 @@ trusted through the checkout. Nothing answered a dialog.
 Method: the driver below runs `claude <args>` in a pseudo-terminal (120x40), every CLAUDE* and
 AI_AGENT variable removed, answers the cursor-position and device-attribute queries, and records
 the screen text with escapes stripped. It stops the process by its pid when its time is up.
-Session ids are shown as <id-1> (a random id never used) and <id-2> (the id of case B).
-Two one-word prompts were sent in all: "hi" (B) and "ok" (D).
+Session ids are shown as <id-1> (a random id never used), <id-2> (the id of case B) and <id-3>
+(the id of case F).
+Two one-word prompts were sent in all: "hi" (B) and "ok" (D). F, G and H were run later the
+same evening, after the records review of the pull request that first held this file.
 
 ## Results
 
@@ -34,10 +36,28 @@ D  claude --resume <id-2>, then "ok", then /exit
 
 E  claude --resume <id-2> twice at once (the second started 8 s after the first)
    neither refused: both drew their screen and ran until the driver stopped them
-   (exit code 143, SIGTERM), after 23.6 s and 11.3 s.
+   (exit code 143, SIGTERM), after 23.6 s and 11.3 s. No message was sent to either. The second
+   printed: "Remote Control not started here · another Claude Code on this machine (started 8s ago)
+   already has Remote Control for this conversation".
 
-A start that sent no message left no conversation: after a plain `claude` (stopped at 12 s) and A,
-the folder's project directory held only <id-2>.jsonl.
+F  claude --session-id <id-3>      (a new id), no message, /exit after 10 s
+   process: exited by itself on /exit, exit code 0, after 12.3 s
+   conversation: none; the folder's project directory still held only <id-2>.jsonl
+
+G  claude --resume <id-3>          (the untyped session of F)
+   screen: "No conversation found with session ID: <id-3>"
+   process: exited by itself, exit code 1, after 1.4 s; no screen of its own was drawn
+
+H  claude --session-id <id-3>      (F's id again), no message, /exit after 10 s
+   process: started as a new session, exited by itself on /exit, exit code 0, after 12.3 s
+   conversation: none, as in F
+
+Not measured: --resume of an id whose conversation existed and is gone; two Claude Codes both
+writing to one conversation.
+
+A plain start that sent no message left no conversation file: after a plain `claude` (no
+--session-id; stopped by the driver's SIGTERM after 13.8 s, its limit 12 s) and A, the folder's
+project directory held only <id-2>.jsonl. F measures the same for a --session-id start.
 
 Side effect: the driver's first version hung at exit (it stopped reading the terminal while the
 process ended) and was stopped by its pid. The next launch printed "Claude Code's fullscreen
@@ -45,6 +65,11 @@ renderer didn't finish starting last time on this machine, so this launch is usi
 renderer. It will try fullscreen again next launch"; the launches after it did not.
 
 ## The driver
+
+The version below ran B to H. The plain start and A ran on the version before it, whose prompt
+check (line 67 here) read `("? for shortcuts" in text or ">" in text[-400:])`; only --type
+reaches that check, and neither run used it.
+
 """Drive the real Claude Code in a pseudo-terminal for Q8, and log what it shows.
 
 Usage: q8drive.py <cwd> <logfile> <seconds> [--type TEXT] [--exit] -- <claude args...>
