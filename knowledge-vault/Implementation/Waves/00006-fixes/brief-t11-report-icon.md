@@ -171,3 +171,39 @@ One behaviour — the icon, its colour and the details' indent — with its pins
 ## Report
 
 Exactly the shape in your definition, written to `<scratchpad>/t11-report-packet.md`. Open the pull request into `dev` before you report, and put in its body every verification claim a reviewer can re-measure.
+
+## Amendment — 2026-09-26, before dispatch
+
+T13 (PR #31) and T15 (PR #39) have merged. This section re-checks every fact above against `origin/dev` at `d86a0f9`, and where this section and the text above differ, this section holds.
+
+### Base and baseline
+
+- **Your base is `origin/dev` at `d86a0f9`** or later.
+- **Its suite is green on both versions:** 776 cases, `Fails (0)`, on 0.12.5 and on 0.11.6 (`evidence/baseline-d86a0f9.txt`, the orchestrator's verification of the code `d86a0f9` holds). "Both versions must be green" now holds from the start.
+
+### Facts that moved
+
+- **`tests/test_mcp_blocked_editor.lua`:** the header pins are at lines 75, 120 and 121, not 49, 94 and 95. Line 75, `first:report_lines({ … })`, is the wait's target that IC6 names.
+- **The help, `*aineo-report*`:** lines 254–317, not 253–305. The fence's first and last lines are unchanged, quoted as in *Boundary*.
+  - The line and its details: 270–271.
+  - *Colours*: 287–297.
+  - The groups: 299–310.
+  - T15 added, inside the section, what the appended instructions ask of a report. Leave it as it is.
+
+### Facts that held
+
+`git diff --stat dbc96c9 d86a0f9` prints nothing for each of these:
+- `lua/aineo/report/render.lua`;
+- `lua/aineo/report/colours.lua`;
+- `tests/test_report_buffer.lua`;
+- `tests/test_entry_report.lua`;
+- `tests/test_report_colours.lua`.
+
+Every line cited above for them holds. `tests/test_mcp_delivery.lua` keeps its headers at 142, 181, 229, 248 and 268, and its details pins at 249–250.
+
+### The other packets now
+
+- **T16** (PR #40, open) edits `*aineo-layout*`, from `3. THE LAYOUT                                                   *aineo-layout*` to ``lives in one tab; from another tab, `\o` moves you to it.``.
+- **T14** runs beside you once T16 has merged, and edits the same section, `*aineo-layout*`.
+- **T12** follows T14, and edits from `4. COMMANDS                                                   *aineo-commands*` to `of both (|aineo-health|).`.
+- **Before you push**, run the merge check of *Boundary* against each of `origin/bugfix/t16-right-column-wrap` and `origin/feature/t14-input-draft` that exists and is unmerged. Run `test_doc.lua` on both versions.
