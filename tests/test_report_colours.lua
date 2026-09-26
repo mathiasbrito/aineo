@@ -379,6 +379,28 @@ T['the records']['show their colours once again when the Report is made anew aft
   })
 end
 
+T['the records']['keep the colour of their status, bold, when a colour scheme colours @markup.strong and the Report shows them again'] =
+  MiniTest.new_set({
+    parametrize = { { 'edit' }, { 'bdelete' }, { 'bwipeout' }, { 'bunload' } },
+  })
+
+T['the records']['keep the colour of their status, bold, when a colour scheme colours @markup.strong and the Report shows them again']['after'] = function(
+  command
+)
+  start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  report_editor.receive(child, { task = 'First', status = 'started', summary = 'Began' })
+  report_editor.receive(child, { task = 'First', status = 'done', summary = 'Ended' })
+  child.cmd('highlight @markup.strong guifg=#ff00ff')
+  child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
+
+  child.cmd(command)
+
+  eq(first_status_on_screen(15), {
+    { foreground = foreground_of('DiagnosticInfo'), bold = true },
+    { foreground = foreground_of('DiagnosticInfo'), bold = true },
+  })
+end
+
 T['the groups'] = MiniTest.new_set()
 
 T['the groups']["show a user's colour for a status made before the first report on its [status], bold"] = function()
@@ -432,6 +454,18 @@ T['the groups']["let the user turn a [status]'s bold off, its colour kept, throu
   start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
   report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
   child.cmd(command)
+
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+
+  eq(first_status_on_screen(12), {
+    { foreground = foreground_of('DiagnosticOk'), bold = false },
+    { foreground = foreground_of('DiagnosticOk'), bold = false },
+  })
+end
+
+T['the groups']["let the user turn a [status]'s bold off before the first report, its colour kept, with :highlight link … NONE"] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  child.cmd('highlight link AineoReportStatusBold NONE')
 
   report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
 
