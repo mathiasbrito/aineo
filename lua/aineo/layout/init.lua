@@ -308,13 +308,19 @@ end
 --- while the layout's three windows are open. When the file column has no
 --- room for `file`, leaves it in `window` and warns. Does nothing when
 --- `window` is no longer one of the layout's windows — closed, or replaced
---- by a window the layout reopened — or no longer shows `file`.
+--- by a window the layout reopened — no longer shows `file`, or has no
+--- buffer of its own to take back, its own having been wiped.
 ---
 ---@param window integer
 ---@param file integer
 local function redirect(window, file)
   local role = role_of(window)
-  if not role or not has_window(role) or vim.api.nvim_win_get_buf(window) ~= file then
+  if
+    not role
+    or not has_window(role)
+    or vim.api.nvim_win_get_buf(window) ~= file
+    or not vim.api.nvim_buf_is_valid(state.buffers[role])
+  then
     return
   end
   local cursor = vim.api.nvim_win_get_cursor(window)
@@ -537,13 +543,91 @@ local function show_buffers()
   end
 end
 
+--- Leaves Terminal mode as the process of Claude's terminal ends while that
+--- terminal is the current buffer, so that the next key, which would close
+--- the ended terminal and its exit with it, is a Normal-mode command. The
+--- mode stays in any other buffer: Insert mode in Input, Terminal mode in
+--- another terminal.
+---
+---@param event { buf: integer }
+local function leave_terminal_mode_as_claude_exits(event)
+  if event.buf == state.buffers.claude and event.buf == vim.api.nvim_get_current_buf() then
+    vim.cmd.stopinsert()
+  end
+end
+
+--- The value `jobwait()` gives for a job still running once its timeout has
+--- passed.
+local JOB_RUNNING = -1
+
+--- Whether the process of the terminal `buffer` has ended: `jobwait()` no
+--- longer counts its job as running.
+---
+---@param buffer integer
+---@return boolean
+local function has_ended(buffer)
+  return vim.fn.jobwait({ vim.bo[buffer].channel }, 0)[1] ~= JOB_RUNNING
+end
+
+--- Leaves the Terminal mode just entered in Claude's terminal once its
+--- process has ended, as `i`, `a` or `:startinsert` enter it: a key typed in
+--- Terminal mode on an ended terminal closes it. Another terminal keeps
+--- Neovim's own behaviour.
+---
+---@param event { buf: integer }
+local function refuse_terminal_mode_once_claude_exited(event)
+  if event.buf == state.buffers.claude and has_ended(event.buf) then
+    vim.cmd.stopinsert()
+  end
+end
+
+--- Closes `window`, hiding its buffer, unless it is Neovim's last window,
+--- which cannot close (E444) and is left as it is. Raises any other error
+--- the close raises.
+---
+---@param window integer
+local function close_unless_last(window)
+  local closed, failure = pcall(vim.api.nvim_win_hide, window)
+  if not closed and not tostring(failure):find('E444:', 1, true) then
+    error(failure, 0)
+  end
+end
+
+--- Closes Claude's window once Claude's terminal, wiped while that window
+--- shows it, is gone: Neovim puts an empty buffer there instead when the
+--- terminal was the current buffer and no other buffer is listed. A window
+--- that shows another buffer as the terminal is wiped, such as the
+--- terminal of the session that replaces it, stays; so does Neovim's last
+--- window (`close_unless_last()`).
+---
+---@param event { buf: integer }
+local function close_claude_window_when_wiped(event)
+  if
+    event.buf ~= state.buffers.claude
+    or not has_window('claude')
+    or vim.api.nvim_win_get_buf(state.windows.claude) ~= event.buf
+  then
+    return
+  end
+  local window = state.windows.claude
+  vim.schedule(function()
+    if vim.api.nvim_win_is_valid(window) then
+      close_unless_last(window)
+    end
+  end)
+end
+
 --- Keeps Input a scratch buffer and redirects the files shown in the layout's
---- windows, and puts the proportions back whenever a window closes, the
---- editor is resized or a tab is entered, replacing what an earlier call set
---- up. Input is made a scratch buffer first, so the redirect never takes it
---- for a file. A window is still in the layout while `WinClosed` runs, so the
---- proportions are put back after it; a tab that is not shown is resized when
---- it is entered, so the proportions are put back then.
+--- windows; keeps Claude's terminal in Normal mode once its process has ended
+--- (`leave_terminal_mode_as_claude_exits()`,
+--- `refuse_terminal_mode_once_claude_exited()`) and closes Claude's window
+--- when its terminal is wiped there (`close_claude_window_when_wiped()`);
+--- and puts the proportions back whenever a window closes, the editor is
+--- resized or a tab is entered, replacing what an earlier call set up.
+--- Input is made a scratch buffer first, so the redirect never takes it for
+--- a file. A window is still in the layout while `WinClosed` runs, so the
+--- proportions are put back after it; a tab that is not shown is resized
+--- when it is entered, so the proportions are put back then.
 local function watch_windows()
   local group = vim.api.nvim_create_augroup('aineo.layout', {})
   vim.api.nvim_create_autocmd('BufWinEnter', { group = group, callback = keep_input_scratch })
@@ -556,6 +640,18 @@ local function watch_windows()
   })
   vim.api.nvim_create_autocmd('VimResized', { group = group, callback = keep_proportions })
   vim.api.nvim_create_autocmd('TabEnter', { group = group, callback = keep_proportions })
+  vim.api.nvim_create_autocmd(
+    'TermClose',
+    { group = group, callback = leave_terminal_mode_as_claude_exits }
+  )
+  vim.api.nvim_create_autocmd(
+    'TermEnter',
+    { group = group, callback = refuse_terminal_mode_once_claude_exited }
+  )
+  vim.api.nvim_create_autocmd('BufWipeout', {
+    group = group,
+    callback = close_claude_window_when_wiped,
+  })
 end
 
 --- Whether `value` is the number of an existing buffer.
@@ -624,6 +720,15 @@ end
 --- columns take a third of the screen each while the file column is open,
 --- and the proportions are put back whenever a window closes, the editor is
 --- resized or the layout's tab is entered.
+---
+--- From then on, too, Claude's terminal, once its process has ended, stays
+--- in Normal mode, so that no key closes it and its exit stays on screen:
+--- Terminal mode ends there as the process ends while that terminal is the
+--- current buffer, and is not entered on it again. Once the terminal is
+--- wiped while Claude's window shows it, that window closes rather than
+--- stay on the empty buffer Neovim may put there, so that focusing Claude
+--- (`focus()`) opens the layout again; Neovim's last window stays, on that
+--- empty buffer.
 ---
 --- Raises an error naming the setting, before changing anything, when
 --- `arrangement` is not a table, `claude` or `report` is not an existing
