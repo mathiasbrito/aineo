@@ -420,7 +420,7 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 
 | rule | T20 |
 |---|---|
-| 1 dependencies | T14, done ✓ |
+| 1 dependencies | T14, merged ✓ |
 | 2 files | `plugin/aineo.lua`, the `claude` action; `tests/test_entry*.lua`, new cases, or a new file; `doc/aineo.txt` › `*aineo-commands*`, `*aineo-mappings*`, `*aineo-keys*` and the introduction's line 28. With T10: T10 owns `lua/aineo/report/`, its tests and `*aineo-report*` ✓. T12 is not dispatched ✓ |
 | 3 schema | none ✓ |
 | 4 dependencies | none ✓ |
@@ -436,11 +436,13 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 **Verification mutants:**
 - Terminal mode entered on an ended session too;
 - Terminal mode never entered;
-- Terminal mode entered for `\r` or `\i` as well;
-- the mode entered before the layout's focus, so it lands in the window the cursor left;
+- Terminal mode entered for `\r` or `\i` as well — killed only by a test whose keys stay pending (`child.type_keys()`), not through `entry.press()`;
+- the session's status read before `focus('claude')`, so a `\c` that starts a new session after a wiped terminal stays in Normal mode;
 - Terminal mode entered only when the window was already open, not when `\c` reopens it.
 
-**Brief:** `brief-t20-claude-terminal-mode.md`.
+The first plan listed "the mode entered before the layout's focus"; the brief review found it equivalent (`:startinsert` takes effect when the callback ends, in the window current then) and it is dropped.
+
+**Brief:** `brief-t20-claude-terminal-mode.md`, corrected after its brief review, `brief-review-t20-claude-terminal-mode.md`: dispatch after corrections. CT1 gains the wiped-terminal path and says how to observe the mode; CT2 reads the status after the focus and records the busy-exit bound; the tests and the help's fence are named exactly; the question to the user is quoted whole, with the options not chosen.
 
 ## Landed
 
