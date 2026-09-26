@@ -281,8 +281,9 @@ The icon is that of its status: `▸` started, `◐` progress, `⊘` blocked, `�
 done, `✗` failed. A line break in the task or the summary becomes a space.
 The details start under the `[status]` however wide the icon shows, as
 |'ambiwidth'| and |setcellwidths()| make it at the moment the report is
-shown; reports already shown keep their indent until `:edit` in the Report
-shows them all again. The Report follows the newest report.
+shown; reports already shown keep their indent until the Report shows them
+all again: `:edit` in the Report, or the Report made anew after you delete
+it. The Report follows the newest report.
 
 The instructions ask Claude to write each report for a person, in plain
 language: what was done or planned, and how, never the reasons for its
