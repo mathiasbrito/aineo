@@ -171,10 +171,12 @@ mode too. Any other terminal of yours keeps Neovim's own behaviour.
 
 `report`, `input` and `claude` open the layout first when their window is
 gone, around Claude's terminal as it is — its exit on screen when Claude Code
-has exited. They start Claude Code again, in a new terminal, only when there
-is no terminal to show: before the first start, or once the terminal was wiped
-(|:bwipeout|), which closes Claude's window unless it was Neovim's last one.
-Only `open` restarts an exited Claude Code.
+has exited. They start Claude Code only when there is no terminal to show:
+before the first start, or again, in a new terminal, once the terminal was
+wiped (|:bwipeout|). Wiping it from Claude's window closes that window; a
+window Neovim cannot close, such as its last one, stays on an empty buffer
+until one of them opens the layout there again. Only `open` restarts
+an exited Claude Code.
 
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
