@@ -132,7 +132,7 @@ The guarantee review of PR #60 measured it wider: 9 user actions (`:hi … NONE`
 
 ## Readings for the MVP review
 
-The orchestrator's readings, from the brief:
+The orchestrator's readings, from the brief — numbered MR141–MR143 in [[Review/2026-09-24 — v1 MVP readings review]] by the knowledge pass:
 
 - the brackets are bold with the word, as C6 and T9 colour them with it;
 - the bold can be turned off apart from the colour (RL2): `:highlight link AineoReportStatusBold NONE`, whenever it is given, pinned on the screen before the first report and through the next one. Attributes set on the group before the first report do not hold: `:highlight AineoReportStatusBold gui=NONE cterm=NONE` works only once the Report has shown a report, since aineo's first definition links a group given it earlier to `@markup.strong` again (measured on both versions by both reviews of PR #60);
@@ -153,4 +153,14 @@ The wave holds its marks (rule 6). The line T18 would take:
 
 ## Commits
 
-*Recorded after the merge* — hashes change on rebase.
+Merged by rebase into `dev` on 2026-09-26, PR #60. The knowledge pass maps each commit of the branch to its hash on `dev`:
+
+| on the branch | on `dev` | subject |
+|---|---|---|
+| `f95480c` | `f975b4c` | Start the Report line with its time, the icon removed |
+| `8884da4` | `370bdaa` | Show the Report's [status] bold, in its status's colour |
+| `467e192` | `a2148fe` | Record T18's session: the Report line, red/green, mutants |
+| `60714cf` | `eac342e` | Give the help a bold-off recipe that holds from a config |
+| `d7906dd` | `e84ce9f` | Correct T18's session record after PR #60's reviews |
+
+Released in `v0.2.6` (PR #65, `main` at `164265b`).
