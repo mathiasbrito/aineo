@@ -39,11 +39,13 @@ local function status_lines()
 end
 
 --- How Claude is told to write a report, one rule a line: for a person, in
---- plain language, what was done or planned and how, never why; a plan's
---- features or what was done in `details`, one per line; references at the
---- very end, in parentheses, by number or ID only. Every line names a report
---- or one of its fields, since the text joins Claude's whole system prompt and
---- its rules are for reports, not for Claude's other replies.
+--- plain language, what was done or planned and how, never the reasons for
+--- Claude's decisions; what blocks or stopped a `blocked` or `failed` task, as
+--- a fact; a plan's features or what was done in `details`, one per line;
+--- references only at the very end, in parentheses, by number or ID only.
+--- Every line names a report or one of its fields, since the text joins
+--- Claude's whole system prompt and its rules are for reports, not for
+--- Claude's other replies.
 ---
 ---@return string[]
 local function writing_lines()
@@ -54,7 +56,7 @@ local function writing_lines()
     '- In a `blocked` or `failed` report, state as a fact what blocks the task or what stopped it.',
     '- In a `started` report of a plan to implement, `details` lists the features planned, one per line.',
     '- In a `done` report, `details` lists what was done, the features, one per line.',
-    '- In a report, put references to decisions, components, tasks, issues, pull requests and docs at the very end, in parentheses, by number or ID only, with no explanation, such as `(D18, C12, #31)`.',
+    '- In a report, put references to decisions, components, tasks, issues, pull requests and docs at the very end, in parentheses, by number or ID only, with no explanation, such as `(D18, C12, #31)`: only there, nowhere else in the report.',
     '- The very end of a report is a line of its own, the last line of `details`; or, when a report has no `details`, the end of `summary`.',
   }
 end
