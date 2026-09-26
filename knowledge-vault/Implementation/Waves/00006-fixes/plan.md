@@ -474,10 +474,10 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
     - test-integrity by `reviewer`;
     - records by `reviewer`.
   - **What the attack review found:** `details_indent()` measured with `vim.fn.strdisplaywidth()`, which counts the current window's break padding. From a narrow window with `'linebreak'` or `'showbreak'`, the details were indented 9 cells or more in place of 8. Also: two surviving mutants (MA1, MA2), the wait at `tests/test_mcp_blocked_editor.lua:75` left unasserted, and a status with no icon would raise.
-  - **What the test-integrity review found:** reports of mixed widths in one redraw unpinned (X1), icons in the text coloured (X2), three test names that no longer said what they checked.
-  - **What the records review found:** MR96 and MR102 recorded as awaiting the user, though the user kept them; the help's "until `:edit`" left out that deleting the Report redraws too; the task line's form; the note's M11 and M12; the time of a new report said to be validated.
+  - **What the test-integrity review found:** reports of mixed widths in one redraw unpinned (X1), no pin that icons in the text stay uncoloured (X2), a test name that no longer said what it checked.
+  - **What the records review found:** MR96 and MR102 recorded as awaiting the user, though the user kept them; three test names; the help's "until `:edit`" left out that deleting the Report redraws too; the task line's form; the note's M11 and M12; the time of a new report said to be validated.
   - **The fix round** went to the author, whose context was about 211 K: `vim.api.nvim_strwidth()`, red first on both versions; pins for mixed widths, every status, the Report made anew and X2; the wait wrapped in `eq()`.
-  - **The re-measure**, with the attack question (`neovim-lua-reviewer`), found the mechanism right on every path it tried: the child's screen grid, a real terminal's grid in tmux, narrow numbered and wrapping windows, `:edit` and the Report made anew, on both versions. The first round's code had indented saved records by up to 240 784 cells. One survivor remained, XN, an indent kept from the first report when narrower: the mixed-widths pin rendered one order only.
+  - **The re-measure**, with the attack question (`neovim-lua-reviewer`), found the mechanism right on every path it tried: the child's screen grid, a real terminal's grid in tmux, narrow numbered and wrapping windows, `:edit` and the Report made anew, on both versions. In one measured case, the first round's code indented saved records by 240 784 cells. One survivor remained, XN, an indent kept from the first report when narrower: the mixed-widths pin rendered one order only.
   - **The bounded correction** went to a fresh agent: the test-integrity review's reversed-order case, adopted and credited, and three records corrected.
 - **The orchestrator's verification** of `b8ef398` laid over `dev`:
   - guard 5 cases, `Fails (0)`, both versions;
@@ -488,4 +488,4 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
   - `progress`'s and `blocked`'s icons swapped: 10. The same run lost one case of `tests/test_mcp_blocked_editor.lua` to "connection refused" at a load average near 170; that case does not read those icons;
   - the icon coloured as the time: 17;
   - XN: 1, the reversed-order case.
-- **Released:** `v0.2.2`, which carries T11, promised to the user when the icons landed (PR #48, `main` at `f1285c1`).
+- **Released:** `v0.2.2`, which carries T11 (PR #48, `main` at `f1285c1`). The orchestrator cut it unasked, against the standing rule; the user kept it and allowed releases as features land.
