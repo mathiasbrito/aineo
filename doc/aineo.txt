@@ -67,6 +67,13 @@ The layout fills one tab page with three windows:
 - Input, `aineo://input`, takes the rest: a scratch buffer, left out of
   `:ls` and `:bnext`, where you write what Send gives Claude (|aineo-send|).
 
+The Report and Input wrap long lines between words, a wrapped line keeping
+its indent ('wrap', 'linebreak', 'breakindent'), whatever your own settings.
+Opening or restoring the layout sets this again: `\o`, or `\r`, `\i` or `\c`
+when their window is gone. A `:setlocal nowrap` in either lasts until then.
+Claude's terminal, and a file shown in or split from those two windows, keep
+yours.
+
 Opening the layout closes the tab's other windows (floating ones stay); their
 buffers stay loaded. The cursor starts in Input. The Neovim startup buffer
 becomes Input; a file the current window shows stays, as the file column.
@@ -255,7 +262,7 @@ aineo notices it could receive the paste and the Enter (|aineo-limits|).
 
 aineo starts Claude Code with three additions of its own:
 - instructions appended to its system prompt, telling Claude when to call
-  the report tool;
+  the report tool and how to write a report (below);
 - aineo's MCP server, which Claude Code runs as a headless `nvim`, given
   through `--mcp-config`;
 - the report tool allowed without asking: `--allowedTools
@@ -272,6 +279,17 @@ Agent Report shows each as: >
 <
 A line break in the task or the summary becomes a space. The Report follows
 the newest report.
+
+The instructions ask Claude to write each report for a person, in plain
+language: what was done or planned, and how, never the reasons for its
+decisions. A `blocked` or `failed` report states, as a fact, what blocks the
+task or what stopped it. A `started` report of a plan lists the features
+planned in its details, one per line; a `done` report lists what was done,
+the features, one per line. References go only at the very end of a report,
+in parentheses, by number or ID only, such as `(D18, C12, #31)`: on a line of
+their own, the last of its details, or at the end of its summary when it has
+no details. These rules are for reports only, not for Claude's other replies.
+A running Claude Code keeps the instructions it started with.
 
 Colours ~
 The Report shows the time in |hl-AineoReportTime| and the `[status]`,

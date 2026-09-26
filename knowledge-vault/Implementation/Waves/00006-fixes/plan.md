@@ -390,3 +390,28 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
   | the groups defined at require | 2 | |
 
   All six were killed.
+- **T13 — PR #31, regular**, merged by rebase on 2026-09-26 as `39d9cb0` … `f8317d8` (7 commits). Every code and help file of the pull request is identical to the verified tree (`079d632` laid over `dev` `2596241`, merge-tree `2e7126d`).
+  - **Reviews** on Opus:
+    - attack by `neovim-claude-code-reviewer`;
+    - test-integrity by `neovim-lua-reviewer`;
+    - records by `reviewer`.
+  - **What the attack review found:** Neovim 0.12 frames an error again after a position (`nvim_buf_call` in `lua/aineo/report/buffer.lua:15` with a failing `BufFilePre`), which defeated the one-pass strip. The claim "no action is known to raise from Neovim's runtime Lua" was false.
+  - **What the test-integrity review found:** each relay strip was pinned only on its own version, the `^` anchors were unpinned, and the loads-aineo case was green when the helper loaded nothing (pins P1–P4).
+  - **The fix round** went to the author, whose context was about 229 K: a looping strip with the positions of Neovim 0.12's own Lua, and the pins.
+  - **The re-measure**, with the attack question (`neovim-claude-code-reviewer`), found one failure the round introduced: in the loop, the lazy position pattern `^.-%.lua:%d+: ` cut up to the last position in the line. A user's error from a Lua-file autocommand lost its event, its file and its own words, and a multi-line one showed as `aineo: `.
+  - **The bounded correction** went to a fresh agent:
+    - `^%S-%.lua:%d+: ` in both lists, with three pins;
+    - the startup wait of `tests/helpers/report_tui.lua`, bounded on every path the probes reach. A mark file is written at `VimEnter` through `vim.schedule`, which a hit-enter prompt does not run. The wait sends no request while it waits; on timeout, `nvim_get_mode()` picks the error.
+    - The orchestrator's leaning, `nvim_get_mode()` first, was refuted by measurement: the startup prompt comes after `VimEnter`.
+- **The orchestrator's verification** of `079d632` laid over `dev`:
+  - `tests/test_entry_guard.lua`: 5 cases, `Fails (0)`, on both versions;
+  - `make test`: 763 cases, `Fails (0)`, on 0.12.5 and on 0.11.6;
+  - `make lint`: clean.
+- **Literal mutants and probes:**
+  - `%S-` back to `.-` in the plugin: 2 cases failing; in the relay: 1. Each ran on the whole suite under 0.11.6.
+  - `tests/test_mcp_blocked_editor.lua` unchanged: 5 of 5 runs green, three on 0.12.5 and two on 0.11.6, at a load average of 81–90 over one minute (106–109 over five).
+  - Two startup errors added to the helper's editor: 5 of 5 runs fail every case with "the editor waits for the user (mode r) and did not finish starting (VimEnter) within 5000 ms".
+  - The socket moved: every case fails with "the editor did not listen on …".
+  - The mark written at `VimEnter` without `vim.schedule`, under the startup errors: the run hangs until its 90 s limit. So the scheduling is what keeps the wait from passing at a prompt.
+- **A defect that predates T13:** `lua/aineo/health.lua` evaluates `config.recorded_setup_options()` as an argument to its `pcall`, outside it, so `:checkhealth aineo` fails whole when `setup()` options hold a userdata. It is recorded for a later packet.
+- **Released:** `v0.2.0`, which carries T9 and T13 (PR #37, `main` at `e26838f`).

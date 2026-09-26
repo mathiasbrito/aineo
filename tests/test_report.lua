@@ -167,6 +167,198 @@ T['report_instructions()']['names each field of the format']['as a field'] = fun
   eq(instructions:find(('`%s`:'):format(field), 1, true) ~= nil, true)
 end
 
+--- The first line of `text` that holds every one of `phrases`, in any order,
+--- or nil when no line holds them all.
+---
+---@param text string
+---@param phrases string[]
+---@return string?
+local function line_with(text, phrases)
+  return vim.iter(vim.split(text, '\n')):find(function(line)
+    return vim.iter(phrases):all(function(phrase)
+      return line:find(phrase, 1, true) ~= nil
+    end)
+  end)
+end
+
+T['report_instructions()']['asks for each report to be written for a person, in plain language, saying what is reported'] = function()
+  local instructions = report.report_instructions('mcp__aineo__report')
+
+  eq(
+    line_with(
+      instructions,
+      { 'each report for a person', 'plain language', 'what is being reported' }
+    ) ~= nil,
+    true
+  )
+end
+
+T['report_instructions()']['asks each report to say what was done or planned, and how'] = function()
+  local instructions = report.report_instructions('mcp__aineo__report')
+
+  eq(line_with(instructions, { 'In a report, say what was done or planned, and how' }) ~= nil, true)
+end
+
+T['report_instructions()']['asks each report never to explain the reasons for decisions'] = function()
+  local instructions = report.report_instructions('mcp__aineo__report')
+
+  eq(
+    line_with(instructions, { 'report', 'never explain the reasons', 'decisions', 'why' }) ~= nil,
+    true
+  )
+end
+
+T['report_instructions()']['asks a blocked or failed report to state what blocks or stopped the task as a fact'] = function()
+  local instructions = report.report_instructions('mcp__aineo__report')
+
+  eq(
+    line_with(
+      instructions,
+      { '`blocked`', '`failed`', 'report', 'what blocks', 'what stopped', 'fact' }
+    ) ~= nil,
+    true
+  )
+end
+
+T['report_instructions()']['asks a started report of a plan to list the features planned in its details, one per line'] = function()
+  local instructions = report.report_instructions('mcp__aineo__report')
+
+  eq(
+    line_with(
+      instructions,
+      { '`started` report of a plan', '`details`', 'features planned, one per line' }
+    ) ~= nil,
+    true
+  )
+end
+
+T['report_instructions()']['asks a done report to list what was done, the features, in its details, one per line'] = function()
+  local instructions = report.report_instructions('mcp__aineo__report')
+
+  eq(
+    line_with(
+      instructions,
+      { '`done`', 'report', '`details`', 'what was done', 'features', 'one per line' }
+    ) ~= nil,
+    true
+  )
+end
+
+T['report_instructions()']['asks a report to cite documents at its very end, in parentheses, by number or ID only, with an example'] = function()
+  local instructions = report.report_instructions('mcp__aineo__report')
+
+  eq(line_with(instructions, {
+    'report',
+    'references to decisions, components, tasks, issues, pull requests and docs',
+    'docs at the very end',
+    'in parentheses',
+    'by number or ID only',
+    'no explanation',
+    '`(D18, C12, #31)`',
+  }) ~= nil, true)
+end
+
+T['report_instructions()']['places the very end of a report on a last line of details, or at the end of a summary without details'] = function()
+  local instructions = report.report_instructions('mcp__aineo__report')
+
+  eq(line_with(instructions, {
+    'very end of a report',
+    'a line of its own, the last line of `details`',
+    'no `details`',
+    'the end of `summary`',
+  }) ~= nil, true)
+end
+
+T['report_instructions()']['offers the features planned or done as the details of a report'] = function()
+  local instructions = report.report_instructions('mcp__aineo__report')
+
+  eq(line_with(instructions, { '`details`:', 'the features planned or done' }) ~= nil, true)
+end
+
+--- The heading above the instructions on how to write a report.
+local WRITING_HEADING = 'Write a report for the user to read:'
+
+--- The lines of `instructions` from the line `heading` to the first empty
+--- line after it, or to their end. Raises an error when the instructions have
+--- no such heading.
+---
+---@param instructions string
+---@param heading string
+---@return string[]
+local function block_under(instructions, heading)
+  local lines = vim.split(instructions, '\n')
+  local first = vim.fn.index(lines, heading) + 1
+  assert(first > 0, 'no heading: ' .. heading)
+  local after_last = vim.fn.index(lines, '', first)
+  return vim.list_slice(lines, first, after_last < 0 and #lines or after_last)
+end
+
+--- The lines of `instructions` under `WRITING_HEADING`, the heading included.
+---
+---@param instructions string
+---@return string[]
+local function writing_block(instructions)
+  return block_under(instructions, WRITING_HEADING)
+end
+
+--- The lines among `lines` that name neither a report nor its `summary` or
+--- `details`.
+---
+---@param lines string[]
+---@return string[]
+local function lines_naming_no_report(lines)
+  return vim.tbl_filter(function(line)
+    return not (
+      line:find('report', 1, true)
+      or line:find('`summary`', 1, true)
+      or line:find('`details`', 1, true)
+    )
+  end, lines)
+end
+
+T['report_instructions()']['states every rule on writing for a report or one of its fields'] = function()
+  local instructions = report.report_instructions('mcp__aineo__report')
+
+  eq(lines_naming_no_report(writing_block(instructions)), {})
+end
+
+T['report_instructions()']['asks for reports in addition to the usual replies, word for word, in its first line'] = function()
+  local instructions = report.report_instructions('mcp__aineo__report')
+
+  eq(
+    vim.split(instructions, '\n')[1],
+    'aineo shows the user an Agent Report beside this terminal. Keep it current by calling the `mcp__aineo__report` tool, in addition to your usual replies.'
+  )
+end
+
+T['report_instructions()']['describes the fields of a report word for word'] = function()
+  local instructions = report.report_instructions('mcp__aineo__report')
+
+  eq(block_under(instructions, 'Call it with:'), {
+    'Call it with:',
+    '- `task`: a short name for the task, the same in every report about it',
+    '- `status`: one of `started`, `progress`, `blocked`, `done`, `failed`',
+    '- `summary`: one line saying what happened',
+    '- `details`: optional further lines, such as the features planned or done, or the question the user must answer',
+  })
+end
+
+T['report_instructions()']['states the rules on writing a report word for word'] = function()
+  local instructions = report.report_instructions('mcp__aineo__report')
+
+  eq(writing_block(instructions), {
+    'Write a report for the user to read:',
+    '- Write each report for a person, in plain language: its `summary` and `details` describe what is being reported.',
+    '- In a report, say what was done or planned, and how.',
+    '- In a report, never explain the reasons for your decisions: no whys.',
+    '- In a `blocked` or `failed` report, state as a fact what blocks the task or what stopped it.',
+    '- In a `started` report of a plan to implement, `details` lists the features planned, one per line.',
+    '- In a `done` report, `details` lists what was done, the features, one per line.',
+    '- In a report, put references to decisions, components, tasks, issues, pull requests and docs at the very end, in parentheses, by number or ID only, with no explanation, such as `(D18, C12, #31)`: only there, nowhere else in the report.',
+    '- The very end of a report is a line of its own, the last line of `details`; or, when a report has no `details`, the end of `summary`.',
+  })
+end
+
 T['set_report_environment()'] = MiniTest.new_set()
 
 --- The clock of an environment the refusals below leave otherwise valid.

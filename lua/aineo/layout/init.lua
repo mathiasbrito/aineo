@@ -174,6 +174,27 @@ local function pin_windows()
   end
 end
 
+--- The options that make a window wrap long lines between words, a wrapped
+--- line keeping its indent.
+local WORD_WRAP = { 'wrap', 'linebreak', 'breakindent' }
+
+--- The roles of the right column's windows, which wrap words.
+---@type aineo.layout.Role[]
+local WORD_WRAPPED_ROLES = { 'report', 'input' }
+
+--- Makes the Report's and Input's windows wrap long lines between words, a
+--- wrapped line keeping its indent, for the buffer each shows, as `:setlocal`
+--- does: another buffer shown in either window, or in a window split from
+--- it, keeps the user's own settings, and the Report and Input wrap again
+--- when they return to their windows.
+local function wrap_right_column()
+  for _, role in ipairs(WORD_WRAPPED_ROLES) do
+    for _, option in ipairs(WORD_WRAP) do
+      vim.wo[state.windows[role]][0][option] = true
+    end
+  end
+end
+
 --- Puts the layout's proportions back.
 local function apply_proportions()
   size_columns()
@@ -584,12 +605,17 @@ end
 --- empty buffer the current window shows, such as the one Neovim starts
 --- with, when it is not wiped once hidden, or else a new buffer; it is made
 --- anew, from a buffer named so when there is one, when it was wiped, and
---- made a scratch buffer again whenever it is shown.
+--- made a scratch buffer again whenever it is shown. The Report's and Input's
+--- windows wrap long lines between words, a wrapped line keeping its indent
+--- (`'wrap'`, `'linebreak'`, `'breakindent'`), whatever the user's settings;
+--- Claude's window, and any other buffer shown in or split from those two,
+--- keep the user's own.
 ---
 --- While any of the three windows exists, opening again restores the layout
 --- instead, in the tab that holds it: it creates only the windows that were
 --- closed, in their places, shows in each window its buffer — the Claude and
---- Report buffers it is handed this time — and puts the proportions back.
+--- Report buffers it is handed this time — makes the Report and Input wrap
+--- again, and puts the proportions back.
 --- The cursor stays where it is when the layout's tab is the current one,
 --- and moves to that tab otherwise.
 ---
@@ -620,6 +646,7 @@ function M.open(arrangement)
   end
   state.report_height = arrangement.report_height
   pin_windows()
+  wrap_right_column()
   apply_proportions()
   watch_windows()
 end
