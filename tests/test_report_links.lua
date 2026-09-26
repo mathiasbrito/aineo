@@ -368,12 +368,13 @@ local TIME_LIMIT_SECONDS = 2
 T['a long line'] = MiniTest.new_set({
   parametrize = {
     { 'https://a', ')', 20000 },
+    { 'https://a', ')', 1000000 },
     { '', 'https://a\194\128', 8000 },
     { '', 'https://a\128', 8000 },
   },
 })
 
-T['a long line']['shows in the Report, and again on :edit, in a time that grows with its length'] = function(
+T['a long line']['shows in the Report, and again on :edit, within the time limit'] = function(
   prefix,
   piece,
   count
