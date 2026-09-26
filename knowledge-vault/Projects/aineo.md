@@ -83,7 +83,7 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 
 **Decisions awaiting the user:**
 - The oldest `claude` version supported (2.1.281 is installed) — MR28.
-- MR98, MR101, MR108 and MR111–MR114 of [[Review/2026-09-24 — v1 MVP readings review]], which were not put to the user; MR109 and MR110, which came after the user's answer of 2026-09-26; T14's readings and limits, MR115–MR125; and T10's, MR126–MR133.
+- MR98, MR101, MR108 and MR111–MR114 of [[Review/2026-09-24 — v1 MVP readings review]], which were not put to the user; MR109 and MR110, which came after the user's answer of 2026-09-26; T14's readings and limits, MR115–MR125; and T10's, MR126–MR134.
 
 ## Changelog
 | Date | Session | Summary |
@@ -100,4 +100,4 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 | 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T15, the report instructions (PR #39, `ba7d688` … `d86a0f9`), and T16, the right column's wrap (PR #40, `bb46c2e` … `7af0d47`), landed as small fixes; release `v0.2.1` (PR #42, `270743b`) |
 | 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T11, the Report's status icon, landed (PR #45, `30b466e` … `2cb3cbb`); release `v0.2.2` (PR #48, `f1285c1`), cut unasked and kept; releases now as features land; the behaviours of T10 and T17 and T17's class decided by the user; ⌘-click already opens links in Claude's pane; T18 and T19 asked for |
 | 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T14, the Input draft, landed (PR #46, `c53c73f` … `2b75fc0`) with the modularity skill's draft-home rows (PR #47, `9a45a72`, `a445d27`); release `v0.2.3` (PR #53, `dcff14f`); T14's readings and limits numbered MR115–MR125 |
-| 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T10, the Report's web links, landed (PR #52, `12a37fe` … `d30ff4d`); release `v0.2.4` (PR #56, `89e6c87`); T10's readings and limits numbered MR126–MR133 |
+| 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T10, the Report's web links, landed (PR #52, `12a37fe` … `d30ff4d`); release `v0.2.4` (PR #56, `89e6c87`); T10's readings and limits numbered MR126–MR134 |
