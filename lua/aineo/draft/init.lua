@@ -123,9 +123,10 @@ local warned = {}
 
 --- Tells the user `failure`, an error the draft home raised, as a warning,
 --- unless it has told them of a failure of the same `kind` already. In
---- Insert or Replace mode the warning waits until that mode is left: a
---- message longer than the screen's last line prompts, and the prompt would
---- take the next key typed.
+--- Insert, Replace or Terminal mode the warning waits until that mode is
+--- left, by whatever key leaves it — `<C-c>`, which fires no `InsertLeave`,
+--- included: a message longer than the screen's last line prompts, and the
+--- prompt would take the next key typed.
 ---
 ---@param kind 'read'|'write'
 ---@param failure string
@@ -135,8 +136,9 @@ local function warn_once(kind, failure)
   end
   warned[kind] = true
   local message = 'aineo: ' .. failure
-  if vim.api.nvim_get_mode().mode:find('^[iR]') then
-    vim.api.nvim_create_autocmd('InsertLeave', {
+  if vim.api.nvim_get_mode().mode:find('^[iRt]') then
+    vim.api.nvim_create_autocmd('ModeChanged', {
+      pattern = '*:[^iRt]*',
       once = true,
       callback = function()
         vim.notify(message, vim.log.levels.WARN)
@@ -367,8 +369,8 @@ end
 ---
 --- A draft that cannot be read, put into `buffer`, or written, is told to
 --- the user as a warning, once per editor for reading and once for writing;
---- in Insert or Replace mode, once that mode is left. Nothing is raised: not
---- here, not into the changes, not as Neovim quits.
+--- in Insert, Replace or Terminal mode, once that mode is left. Nothing is
+--- raised: not here, not into the changes, not as Neovim quits.
 ---
 ---@param buffer integer
 function M.keep_draft(buffer)
