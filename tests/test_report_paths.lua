@@ -679,4 +679,40 @@ T['a double-click']['elsewhere in the Report']['selects the word, as Neovim does
   eq(selection(), { 'v', 7, 9, 2 })
 end
 
+T['a double-click']['on the first or the last byte of a path'] = MiniTest.new_set({
+  parametrize = { { 10 }, { 20 } },
+})
+
+T['a double-click']['on the first or the last byte of a path']['opens its file, on byte'] = function(
+  byte
+)
+  open_layout()
+  receive_details('See notes.txt:3 now')
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  double_click_in_report(2, byte)
+
+  wait_until_current_file_is(in_project('notes.txt'))
+  eq(where_the_file_opened(), opened_in_file_column(in_project('notes.txt'), 3))
+end
+
+T['a double-click']['on the space just before or after a path'] = MiniTest.new_set({
+  parametrize = { { 9 }, { 21 } },
+})
+
+T['a double-click']['on the space just before or after a path']['opens nothing, on byte'] = function(
+  byte
+)
+  open_layout()
+  receive_details('See notes.txt:3 now')
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  double_click_in_report(2, byte)
+
+  eq(
+    { selection()[1], entry.windows(child) },
+    { 'v', { 'terminal', 'aineo://report', 'aineo://input' } }
+  )
+end
+
 return T
