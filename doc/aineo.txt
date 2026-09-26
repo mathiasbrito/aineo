@@ -351,14 +351,44 @@ until it ends in none of them: `(see https://example.com/a).` links to
 `https://example.com/a`. What is left holds at least one character after the
 `://`, or is no link.
 
+Paths ~
+A path in a task, a summary or details that names a file that exists is
+underlined, in |hl-AineoReportPath|. Double-click it to open the file in the
+middle column, at its line when it names one: `render.lua:112` opens
+`render.lua` at line 112, a line past the file's end at its last line, and
+`:0` at its first. A double-click works from Normal mode, from Insert mode,
+as when you click from Input, and from Claude's terminal; it needs 'mouse'
+on in Normal and Insert mode, as Neovim's default, `nvi`, has it. Anywhere
+else in the Report, a double-click selects the word, as Neovim's own does;
+in the Report, it takes the place of a `<2-LeftMouse>` mapping of your own.
+|gf| and |gF| open a path too, in the middle column, but find its file as
+Neovim does, in the current directory and 'path'.
+
+A path runs up to an ASCII space, an ASCII control character, `<`, `>`,
+`"`, `'`, `|`, a backtick, `(`, `)`, `[`, `]`, `{`, `}`, `,` or `*`, so a path
+in quotes, brackets or Markdown emphasis, `**lua/x.lua**`, is found; it
+leaves out the `.` `:` `;` `!` `?` it ends in, one after another, and keeps
+a `~`. It holds a `/`, or a `.` that is neither its first nor its last
+character: `lua/x.lua`, `./Makefile`, `/etc/hosts`, `README.md` and
+`.luarc.json` are paths, `Makefile` and `.gitignore` are not. A `:<line>` or
+`:<line>:<column>` at its end is part of it and names the line; a range,
+`x.lua:12-20`, or `x.lua#L12` names no file. A relative path is looked up in
+the working directory (below), an absolute one as it is, and `~` is not
+expanded: after a `:cd`, the relative paths a new Claude Code writes may not
+be found. A file name holding a space is never found whole, and text inside
+a web link is never a path. A path is looked up when the Report shows its
+report: a file made later is underlined the next time the Report shows it,
+after `:edit` in the Report, and one removed stays underlined until then.
+
 Colours ~
 The Report shows the time in |hl-AineoReportTime|, and the `[status]`,
 brackets included, bold, in the group of its status, only where it placed
-them, never text like them in a task, a summary or details; and web links in
-|hl-AineoReportLink|. The bold is |hl-AineoReportStatusBold|, beneath the
-group of the status, linked to Markdown bold, `@markup.strong`: the bold, and
-whatever else a colour scheme gives Markdown bold — a background, italic,
-underline, or no bold at all — shows on the `[status]`. Its colour does not,
+them, never text like them in a task, a summary or details; web links in
+|hl-AineoReportLink|; and paths to files in |hl-AineoReportPath|. The bold
+is |hl-AineoReportStatusBold|, beneath the group of the status, linked to
+Markdown bold, `@markup.strong`: the bold, and whatever else a colour scheme
+gives Markdown bold — a background, italic, underline, or no bold at all —
+shows on the `[status]`. Its colour does not,
 unless the status's own group has no text colour, such as
 `AineoReportDone` given only a background (`guibg=`). To turn the bold off
 and keep the colour, in your config or at any time: >
@@ -389,6 +419,8 @@ AineoReportFailed    `[failed]`, linked to `DiagnosticError`
 AineoReportStatusBold  the bold of a `[status]`, linked to `@markup.strong`
                                                           *hl-AineoReportLink*
 AineoReportLink      a web link, linked to `Underlined`
+                                                          *hl-AineoReportPath*
+AineoReportPath      a path to a file, linked to `Underlined`
 
 Reports are kept per working directory, under `stdpath('state')` in
 `aineo/reports/`, and shown again when aineo opens in that directory. The
