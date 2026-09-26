@@ -1,6 +1,6 @@
---- The Report's colours: the highlight groups a report's time, status and web
---- links show in, and the groups each links to unless a user or a colour
---- scheme colours it.
+--- The Report's colours: the highlight groups a report's time, status, web
+--- links and file paths show in, and the groups each links to unless a user
+--- or a colour scheme colours it.
 
 local M = {}
 
@@ -22,10 +22,14 @@ M.STATUS_BOLD_GROUP = 'AineoReportStatusBold'
 --- The group a web link in a report shows in.
 M.LINK_GROUP = 'AineoReportLink'
 
+--- The group a path to a file in a report shows in.
+M.PATH_GROUP = 'AineoReportPath'
+
 --- The group each of aineo's groups links to by default.
 local DEFAULT_LINKS = {
   [M.TIME_GROUP] = 'Comment',
   [M.LINK_GROUP] = 'Underlined',
+  [M.PATH_GROUP] = 'Underlined',
   [M.STATUS_BOLD_GROUP] = '@markup.strong',
   [M.STATUS_GROUPS.started] = 'DiagnosticInfo',
   [M.STATUS_GROUPS.progress] = 'DiagnosticHint',

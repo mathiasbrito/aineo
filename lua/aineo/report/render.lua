@@ -1,8 +1,9 @@
 --- How a report reads in the Report buffer: its lines, the colours of its
---- time and status, and its web links.
+--- time and status, its web links, and its paths to files.
 
 local colours = require('aineo.report.colours')
 local links = require('aineo.report.links')
+local paths = require('aineo.report.paths')
 
 local M = {}
 
@@ -100,16 +101,81 @@ local function link_colours(lines)
   return found
 end
 
+--- `line_colours` grouped by the line they colour, counted from 0, each
+--- line's in the order given.
+---
+---@param line_colours aineo.report.Colour[]
+---@return table<integer, aineo.report.Colour[]>
+local function by_line(line_colours)
+  local grouped = {}
+  for _, colour in ipairs(line_colours) do
+    grouped[colour.line] = grouped[colour.line] or {}
+    table.insert(grouped[colour.line], colour)
+  end
+  return grouped
+end
+
+--- The candidates of `candidates`, found in one line in order, that share no
+--- byte with any of `web_links`, the colours of that line's web links in
+--- order. Each list is walked once.
+---
+---@param candidates aineo.report.PathCandidate[]
+---@param web_links aineo.report.Colour[]
+---@return aineo.report.PathCandidate[]
+local function outside_web_links(candidates, web_links)
+  local outside = {}
+  local next_link = 1
+  for _, candidate in ipairs(candidates) do
+    while web_links[next_link] and web_links[next_link].end_column <= candidate.first_column do
+      next_link = next_link + 1
+    end
+    local link = web_links[next_link]
+    if not link or link.first_column >= candidate.end_column then
+      table.insert(outside, candidate)
+    end
+  end
+  return outside
+end
+
+--- The colours of the file paths in `lines` (`paths.find_path_candidates()`)
+--- that share no byte with a web link of `web_links` (`link_colours()`) and
+--- name a file (`names_file`), each in `colours.PATH_GROUP`.
+---
+---@param lines string[]
+---@param web_links aineo.report.Colour[] the colours of the web links in `lines`, in order
+---@param names_file fun(path: string): boolean whether a path, as a report writes it, names a regular file
+---@return aineo.report.Colour[]
+local function path_colours(lines, web_links, names_file)
+  local links_by_line = by_line(web_links)
+  local found = {}
+  for index, line in ipairs(lines) do
+    local candidates = paths.find_path_candidates(line)
+    for _, candidate in ipairs(outside_web_links(candidates, links_by_line[index - 1] or {})) do
+      if names_file(candidate.path) then
+        table.insert(found, {
+          line = index - 1,
+          first_column = candidate.first_column,
+          end_column = candidate.end_column,
+          group = colours.PATH_GROUP,
+        })
+      end
+    end
+  end
+  return found
+end
+
 --- The lines a report shows: `HH:MM [status] task — summary`, then each line
 --- of its details, indented to start under the `[status]` (`DETAILS_INDENT`).
 --- A newline in the task or the summary becomes a space, so the header stays
 --- one line. Its colours are `header_colours()`, then the web links of its
---- lines (`link_colours()`).
+--- lines (`link_colours()`), then the paths in its lines that name a file
+--- (`path_colours()`).
 ---
 ---@param report { task: string, status: string, summary: string, details: string? } a valid report
 ---@param time string when the report arrived, as `YYYY-MM-DDTHH:MM:SS`
+---@param names_file fun(path: string): boolean whether a path, as a report writes it, names a regular file
 ---@return aineo.report.Rendering
-local function render_report(report, time)
+local function render_report(report, time, names_file)
   local header = ('%s [%s] %s — %s'):format(
     time:sub(12, 16),
     report.status,
@@ -120,21 +186,26 @@ local function render_report(report, time)
   for _, line in ipairs(details_lines(report.details)) do
     table.insert(lines, DETAILS_INDENT .. line)
   end
+  local web_links = link_colours(lines)
+  local found = vim.list_extend(header_colours(report.status), web_links)
   return {
     lines = lines,
-    colours = vim.list_extend(header_colours(report.status), link_colours(lines)),
+    colours = vim.list_extend(found, path_colours(lines, web_links, names_file)),
   }
 end
 
 --- The lines and colours of `records`, one report after another, each as
---- `render_report()` renders it.
+--- `render_report()` renders it. `names_file` is asked about each path the
+--- reports hold, as they write it, however often it occurs: the renderer
+--- itself reads no file.
 ---
 ---@param records aineo.report.Record[] records of valid reports
+---@param names_file fun(path: string): boolean whether a path, as a report writes it, names a regular file
 ---@return aineo.report.Rendering
-function M.render_records(records)
+function M.render_records(records, names_file)
   local rendering = { lines = {}, colours = {} }
   for _, record in ipairs(records) do
-    local report_rendering = render_report(record.report, record.time)
+    local report_rendering = render_report(record.report, record.time, names_file)
     for _, colour in ipairs(report_rendering.colours) do
       local line = #rendering.lines + colour.line
       table.insert(rendering.colours, vim.tbl_extend('force', colour, { line = line }))
