@@ -244,10 +244,11 @@ end
 --- Replaces the whole of `file` with `text`, through `files`: `text` is
 --- written to a file beside it named for this editor, which then replaces
 --- it, so that a write cut short leaves `file` as it was, and two editors
---- writing at once never write or move each other's. A write that fails
---- removes that file again; the write's failure is the one returned, so a
---- removal that fails too leaves the file, unreported. When `file` is a
---- symbolic link, the file it leads to is replaced, and the link stays.
+--- writing at once never write or move each other's. A write, or a
+--- replacement, that fails removes that file again; its failure is the one
+--- returned, so a removal that fails too leaves the file, unreported. When
+--- `file` is a symbolic link, the file it leads to is replaced, and the link
+--- stays.
 ---
 ---@param files aineo.draft.Files
 ---@param file string
@@ -262,7 +263,10 @@ local function replace_file(files, file, text)
     return write_failure
   end
   local renamed, rename_failure = vim.uv.fs_rename(cut, target)
-  return not renamed and rename_failure or nil
+  if not renamed then
+    vim.uv.fs_unlink(cut)
+    return rename_failure
+  end
 end
 
 --- Writes `text` as the draft, making its directory when missing.
