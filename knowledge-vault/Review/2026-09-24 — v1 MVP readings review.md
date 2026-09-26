@@ -2,7 +2,7 @@
 
 **Author:** Mathias Santos de Brito, with Claude — the orchestrator (Opus 5.5, session `619e5f9a`)
 **Branch:** `knowledge/wave2-close-wave3-plan`
-**Status:** open. On 2026-09-26 the user kept MR1–MR97, MR99, MR100 and MR102–MR107 ("ok, your decisions are fine"), MR28's relay behaviour among them. Still awaiting the user: MR28's oldest supported `claude`, MR98, MR101, MR108 and MR109–MR114
+**Status:** open. On 2026-09-26 the user kept MR1–MR97, MR99, MR100 and MR102–MR107 ("ok, your decisions are fine"), MR28's relay behaviour among them. Still awaiting the user: MR28's oldest supported `claude`, MR98, MR101, MR108 and MR109–MR125
 
 ## Links
 
@@ -183,7 +183,7 @@ Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t
 | MR99 | The relay strips a reason's own leading framing: a reason that itself begins with `Lua: `, `Error executing lua: ` or a file position loses those words. | the T13 note › *Readings* | kept — the list showed the `Lua: ` word |
 | MR100 | The plugin strips an error's own leading framing in the same way, on the user's side: an error whose first line begins with `Lua: ` or `Error executing lua: `, or with a file's position followed by them, loses those words. | the T13 note › *Readings* | kept — the list showed the `Lua: ` word |
 | MR101 | A file position whose shown path holds a space is no longer stripped from an error: the pattern stops at white space, so a user's words before a position are kept. | T13's correction | open — adopted before the user's answer, not in the list |
-| MR102 | A report's details stay under `[status]` by the icon's display width, measured at each rendering: `◐` under `'ambiwidth'` `double`, or an icon `setcellwidths()` widens, indents them one more column. | T11, IC4 | kept |
+| MR102 | A report's details stay under `[status]` by the icon's display width, measured at each rendering: `◐` under `'ambiwidth'` `double`, or an icon `setcellwidths()` widens, indents them one more column. | T11, IC4 | kept — moot once T18 lands: D24 removes the icon (2026-09-26) |
 | MR103 | `\tcn` with no Claude window warns at `WARN` and changes nothing. | T12, CN4 | kept |
 | MR104 | `\tcn` from another tab toggles Claude's window in the layout's tab. | T12, CN4b | kept |
 | MR105 | The Input draft empties at once when Input empties. | T14, ID1 | kept |
@@ -196,6 +196,22 @@ Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t
 | MR112 | `\tcn` clears `'relativenumber'` together with `'number'` in Claude's window. | T12, CN1 | open — on no list |
 | MR113 | `\tcn` pressed again restores the values Claude's window had when they were hidden; a window that never had line numbers gets `'number'`. | T12, CN2 | open — on no list |
 | MR114 | A Claude window `\o` rebuilds takes the user's defaults, not the toggled state. | T12's brief › *What was decided already* | open — on no list |
+| MR115 | The draft is saved 1000 ms after a change, one delayed save per change. | T14, the implementer's reading | open |
+| MR116 | The draft's file is `<stdpath('state')>/aineo/drafts/<SHA-256 of the working directory>.txt`, its lines each ending in a newline. | T14, the implementer's reading | open |
+| MR117 | A change not yet saved is saved at quit by two hooks: `QuitPre`, and Input's `BufUnload` when that save failed. | T14, the implementer's reading and the fix round's decision 5 | open |
+| MR118 | A draft warning leaves out the `Vim:` that `mkdir()`'s error begins with. | T14, the implementer's reading | open |
+| MR119 | The draft is restored after `:edit!` or `:bdelete` of Input as soon as Input shows again, with no `\o` or `:Aineo open`. | T14's fix round, decision 3 | open |
+| MR120 | A restore is not the user's edit: `u` does not take it out. | T14's fix round, decision 4 | open |
+| MR121 | A draft warning raised in Insert, Replace or Terminal mode waits until that mode is left, by any key, so it never prompts while the user types or in Claude's terminal. | T14's correction, decision 1 | open |
+
+## Limits a user can meet — the Input draft (T14)
+
+| ID | Limit | Source |
+|---|---|---|
+| MR122 | A `QuitPre` handler defined before aineo's that fails — a Vimscript `throw`, or any error when the quit runs from Lua — skips both quit saves; `:cquit` fires no `QuitPre`, so an earlier failing `BufWinLeave` or `BufUnload` handler skips its one save. The draft then holds what the delayed save kept. | the attack review of PR #46 (F4) and its re-measure (finding 2) |
+| MR123 | A Neovim ended by a signal — its terminal closed, `kill` — saves nothing at quit: like a crash, it loses at most the last second's typing. | the attack review of PR #46 (F3) |
+| MR124 | An unreadable draft holds the autostart at a hit-enter prompt until a key. | the attack review of PR #46 (F6) |
+| MR125 | A draft for every working directory is kept, never removed. | the T14 note › *Limits* |
 
 ## Disposition
 
