@@ -173,7 +173,8 @@ end
 --- exited: a focus starts a session only when the layout must open and
 --- there is no terminal to show (`current_claude_terminal()`). When it
 --- reopened the role's window, Input is then handed to the draft home
---- (`keep_input_draft()`).
+--- (`keep_input_draft()`). It leaves the mode as it is: `focus_claude()`
+--- enters Terminal mode in Claude's window.
 ---
 ---@param role aineo.layout.Role
 local function focus(role)
@@ -185,6 +186,20 @@ local function focus(role)
   end)
   if opened then
     keep_input_draft()
+  end
+end
+
+--- Moves the cursor to Claude's window, as `focus()` does, and enters
+--- Terminal mode there once this callback or command has ended, so that the
+--- keys typed next reach Claude Code: its prompt, or the dialog it shows as
+--- it starts. When Claude's session has ended it stays in Normal mode, since
+--- a key typed in Terminal mode on an ended session's terminal closes it.
+--- The session is read after the move, which starts a new one when the
+--- layout must reopen and the ended session's terminal is gone.
+local function focus_claude()
+  focus('claude')
+  if require('aineo.claude').session_status() ~= 'exited' then
+    vim.cmd.startinsert()
   end
 end
 
@@ -201,9 +216,7 @@ local ACTIONS = {
   input = function()
     focus('input')
   end,
-  claude = function()
-    focus('claude')
-  end,
+  claude = focus_claude,
 }
 
 --- What Neovim puts before an error it passes on, outermost first: the
