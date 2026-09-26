@@ -118,6 +118,35 @@ T['a link']['in the task or the summary is drawn at its place in the header'] = 
   })
 end
 
+--- The expression, run in the child, that lists every extmark in its Report,
+--- of every namespace, as `{ line, first column, end column, group, url }`,
+--- the url `vim.NIL` when it has none, in buffer order.
+local REPORT_MARKS = [[(function()
+  local buffer = require('aineo.report').report_buffer()
+  local marks = vim.api.nvim_buf_get_extmarks(buffer, -1, 0, -1, { details = true })
+  return vim.tbl_map(function(mark)
+    return { mark[2], mark[3], mark[4].end_col, mark[4].hl_group, mark[4].url or vim.NIL }
+  end, marks)
+end)()]]
+
+T['a link']['in the header leaves the icon, the time and the status their colours'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+
+  report_editor.receive(child, {
+    task = 'See https://x.y/t now',
+    status = 'done',
+    summary = 'at https://x.y/s',
+  })
+
+  eq(child.lua_get(REPORT_MARKS), {
+    { 0, 0, 3, 'AineoReportDone', vim.NIL },
+    { 0, 4, 9, 'AineoReportTime', vim.NIL },
+    { 0, 10, 16, 'AineoReportDone', vim.NIL },
+    { 0, 21, 34, 'AineoReportLink', 'https://x.y/t' },
+    { 0, 46, 59, 'AineoReportLink', 'https://x.y/s' },
+  })
+end
+
 --- A link in the details of a report of 09:05 starts 8 bytes into its line,
 --- after the indent that puts it under the `[status]`: each row gives the
 --- details, then the links the Report shows on that line.
@@ -189,6 +218,26 @@ T['a link in the details'] = MiniTest.new_set({
       'xhttps://a.b/https://c.d',
       { { 1, 21, 32, 'https://c.d', 'AineoReportLink' } },
     },
+    { 'https://x.y/a\7z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\1z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\tz', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\194\128z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\194\156z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\194\159z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { '“https://x.y/a”', { { 1, 11, 27, 'https://x.y/a”', 'AineoReportLink' } } },
+    { 'https://x.y/a…', { { 1, 8, 24, 'https://x.y/a…', 'AineoReportLink' } } },
+    { 'https://x.y/a\194\160b', { { 1, 8, 24, 'https://x.y/a\194\160b', 'AineoReportLink' } } },
+    { 'https//x.y', {} },
+    { 'https://x.y/a\157z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\156\1570;pwned\156z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\155' .. '31mRED', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\194 z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\226\128\27\\', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\192\155z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\224\128\155z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\237\160\128z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\244\144\128\128z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\255z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
     { 'ftp://x.y', {} },
     { 'file:///etc/hosts', {} },
     { 'mailto:a@b.c', {} },
@@ -276,6 +325,55 @@ T['the links']['show once again when the Report is made anew after the user dele
   report_editor.receive(child, TWO_REPORTS[2])
 
   eq(report_links(), LINKS_OF_TWO_REPORTS)
+end
+
+--- The expression, run in the child, that hands its report home a report
+--- whose details are `prefix` then `piece` repeated `count` times, then edits
+--- the Report again (`:edit`), and says of each step whether it took at most
+--- `limit` seconds, or else how long it took.
+local TIMED_ARRIVAL_AND_EDIT = [[
+  local prefix, piece, count, limit = ...
+  local details = prefix .. piece:rep(count)
+  local report = require('aineo.report')
+  local function timed(step)
+    local start = vim.uv.hrtime()
+    step()
+    local seconds = (vim.uv.hrtime() - start) / 1e9
+    return seconds <= limit and 'within the limit' or ('%.1f s'):format(seconds)
+  end
+  local arrival = timed(function()
+    report.receive_report({ task = 'Task', status = 'done', summary = 'Summary', details = details })
+  end)
+  vim.api.nvim_set_current_buf(report.report_buffer())
+  local edit = timed(function()
+    vim.cmd('edit')
+  end)
+  return { arrival = arrival, edit = edit }
+]]
+
+--- How long a report may take to show, and to show again on `:edit`: far
+--- above the milliseconds it takes, so that a loaded host stays under it.
+local TIME_LIMIT_SECONDS = 2
+
+--- Each row: the details' start, then the piece repeated, and how often.
+T['a long line'] = MiniTest.new_set({
+  parametrize = {
+    { 'https://a', ')', 20000 },
+    { '', 'https://a\194\128', 8000 },
+    { '', 'https://a\128', 8000 },
+  },
+})
+
+T['a long line']['shows in the Report, and again on :edit, in a time that grows with its length'] = function(
+  prefix,
+  piece,
+  count
+)
+  start_editor({ '2026-09-24T09:05:00' })
+
+  local timings = child.lua(TIMED_ARRIVAL_AND_EDIT, { prefix, piece, count, TIME_LIMIT_SECONDS })
+
+  eq(timings, { arrival = 'within the limit', edit = 'within the limit' })
 end
 
 --- The expression, run in the child, that makes `vim.ui.open` record what it
