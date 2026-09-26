@@ -31,7 +31,7 @@
 - **`init.lua`:** unchanged. `show_rendering()` defines the groups whenever a rendering has colours, which every report does.
 - **`doc/aineo.txt`, inside `*aineo-report*` only:** a `Links ~` paragraph (what a link is, underlined in `AineoReportLink`, ⌘-click in a terminal that opens OSC 8 links as iTerm2 does, `gx`); the *Colours* paragraph no longer says the icon, time and status are the only coloured text; a `*hl-AineoReportLink*` entry.
 - **Docstrings** of `render.lua`, `buffer.lua` (the namespace and `append_rendering()`) and `colours.lua` corrected for the links.
-- **`tests/test_report_links.lua`** (new, 55 cases in the packet, 79 after the fix round); `tests/test_report_colours.lua`: the case renamed as RL5 asks, its assertions unchanged.
+- **`tests/test_report_links.lua`** (new, 55 cases in the packet, 79 after the fix round, 83 after the correction); `tests/test_report_colours.lua`: the case renamed as RL5 asks, its assertions unchanged.
 - **Two rows where the brief's facts are wrong, handled by the code.** The brief says `dev`'s `gx` "gets one row wrong", the Wikipedia link, and lists the emphasis rows among those it gets right. Measured on `dev`'s code (M0, the three files from `origin/dev`, in the Report, cursor on the link's first byte, on 0.12.5 and 0.11.6), it is wrong on two more:
   - `See ~~https://x.y/a~~ now`: `dev`'s `gx` opens `~~https://x.y/a~~`; T10 opens `https://x.y/a`. The records review measured the same with the cursor on every column from 4 to 20.
   - The U+009D row (`https://x.y/a` U+009D `52;c;x` U+009C `z`): `dev`'s `gx` opens `https://x.y/a` U+009D `52` (the records review's measurement, both versions); T10 opens `https://x.y/a`.
@@ -42,7 +42,7 @@
 - **The finder takes time that grows with the line (G1).** The packet's finder trimmed a link one byte at a time, rescanning the whole candidate at each step, and copied the rest of the line before rejecting a start. A report whose details were a link and 20 000 `)` held the editor for 8.8 s on arrival and 8.9 s on `:edit` (0.12.5; 7.5 s on 0.11.6).
   - The trimming is the guarantee review's (`guarantee-links-fix.lua`), adopted with credit: each closing bracket is counted once, and the end is trimmed by index. A start that may not open a link is rejected before anything is copied.
   - The review's candidate still matched the whole run, then cut it at a C1 or an ill-formed byte. So a run of links each cut short was scanned to its end once per link: 8000 × `https://a` U+0080 took 4.3 s, and 8000 × `https://a` `\x80` took 5.8 s (`t10-perf-probe.lua` on 0.12.5). `run_end()` now walks the run's characters once, stopping at the first that ends a link: 0.017 s for both.
-  - Near the relay's 1 MiB line limit, through `receive_report()` (`t10-e2e-perf.lua`), 1 000 000-byte details take 0.03–0.40 s on 0.12.5 and 0.03–0.38 s on 0.11.6. The slowest is a line of links each cut by U+0080.
+  - Near the relay's 1 MiB line limit, one report of about 1 040 000 bytes of details takes up to 0.49 s on arrival through `receive_report()` and 0.61 s on `:edit` on 0.12.5 (0.46 s and 0.52 s on 0.11.6); the slowest input the re-measure of PR #52 built is `http://a<` repeated, the most links a line holds. Redrawing the 2 MiB of records the Report keeps takes 1.27 s on `:edit` (1.24 s on 0.11.6). Each grows linearly and stays far under the relay's 5 s. These are the re-measure's numbers (its finding 4); the author's five inputs gave 0.03–0.40 s, a range, not the worst.
   - The review's differential check (`guarantee-fixcheck.lua`'s alphabet, `t10-differential.lua`) compares the pushed finder with `ff58448`'s: 200 000 random texts of well-formed UTF-8, 0 disagreements.
 - **A link never holds a byte that is not part of well-formed UTF-8 (G2).** The run also ends at the first byte that does not begin a well-formed character (Unicode, Table 3-7): a lone continuation byte, a raw 8-bit C1 byte, a sequence cut short, an overlong form (`\xC0`, `\xC1`, `\xE0\x80…`), a surrogate (`\xED\xA0…`), a code point past U+10FFFF (`\xF4\x90…`), or `\xF5`–`\xFF`. The review's candidate took overlong forms and surrogates as well-formed; a lenient decoder can read `\xE0\x80\x9B` as ESC, so this rule refuses them. `sequence_of()` and `character_length()` hold the table.
 - **`count_of()`** counts its character as itself (`vim.pesc`), as its docstring says (R7).
@@ -55,6 +55,16 @@
   - a no-break space taken into the link, as the help now says;
   - `https//x.y`, no link (G5);
   - a report with links in its header whose every extmark is compared, icon, time and status included (G4, RL5).
+
+### The correction (the re-measure of PR #52, findings 1–5)
+
+A fresh agent took the branch at `cb1c58c` for one bounded correction: four test rows and records, no production code. The re-measure built and measured each row; this correction adds them as built.
+
+- **Finding 1 (G2's refusing side).** Two rows in *a link in the details*: `https://x.y/a` then E2 80 C0 `z`, and then F0 90 80 C2, a space and `z`, each giving `https://x.y/a`. No row had checked a third or fourth byte of 0xC0 or more; with that bound dropped (X8), the second text's url ended in an incomplete lead byte, which the TUI writes right before the OSC 8's ST.
+- **Finding 2 (Table 3-7's accepting side).** One row whose url is the whole text: U+07FF, U+0800, U+D7FF, U+FFFD, U+10000, U+40000 and U+10FFFF, then `z`, held in `LINK_OF_WELL_FORMED_EDGES`. Every earlier row keeping a non-ASCII character used a C2, C3 or E2 lead, so refusing every emoji (X1) left the suite green.
+- **Finding 3 (G1's bound).** *a long line* gains the row of a link and 1 000 000 `)`, the relay's line limit; the 20 000 row stays, since `ff58448` fails it in seconds rather than hours. The case is renamed "shows in the Report, and again on :edit, within the time limit": one size bounds a time, it never shows how time grows.
+- **Finding 4.** The 1 MiB numbers above and under *Open threads* are the re-measure's worst case, not the author's five inputs' range, and the claim that links cut by U+0080 were the slowest input is withdrawn: `http://a<` repeated is slower.
+- **Finding 5.** The pull request's *What changes* gives the test file's count and states the rule as the help does: "an ASCII space", and the stop at a byte that is not well-formed UTF-8.
 
 ## Unit list and red/green
 
@@ -177,6 +187,13 @@ On `73db23c`, one version at a time, under a load average of 150–230:
 - **`make lint`:** exit 0, selene 0 errors, 0 warnings, 0 parse errors.
 - **The merge check against T14** at its new head `882a48f`: `git merge-tree --write-tree 86f590e origin/feature/t14-input-draft` gave tree `8908fa8`, no conflict. `tests/test_doc.lua` on that tree's help and test file: 36 cases, `Fails (0)`, on both versions. Both files restored.
 
+**After the correction**, on `bbd7107`'s tests (the correction's records commit changes no code or test), one version at a time:
+
+- **0.12.5** (`make test`, 15:16–15:24 CEST): 915 cases, `Fails (0)`, exit 0. 911 plus the correction's 4.
+- **0.11.6** (the same `env PATH=…` form, `nvim --version` on it `NVIM v0.11.6`; 15:24–15:32 CEST, load 87–110 at its end): 915 cases, `Fails (0)`, exit 0.
+- **`make lint`:** exit 0, selene 0 errors, 0 warnings, 0 parse errors. The deep-require check prints only requires inside their own homes, as before; the correction adds none.
+- **The help** is untouched, so no merge check was re-run.
+
 ## The fix round's red/green and mutants
 
 **Seen red on `ff58448`, by assertion:**
@@ -238,6 +255,21 @@ The first N15 (`>= 0`) killed only by crashes (53, an arithmetic on `nil`) and w
 
 **In all:** this round's 38 edits (N1–N38) and the reviewers' 9 (G2–G8, G11, Mq). 46 are killed by an assertion; N18 is equivalent.
 
+## The correction's rows and mutants
+
+Four new cases, on `bbd7107`'s test file. No production code changed, so none was seen red before code: each **arrived green**, pinning the head's finder, and each is listed with the re-measure's literal edit that kills it. Every mutant was applied to `links.lua` from a pristine copy, one at a time, against `tests/test_report_links.lua` narrowed to its group (`t10c-mutants.py`), on 0.12.5 and on 0.11.6; every kill is an assertion, none a crash. Unmutated, the narrowed groups give 62 cases and 4 cases, `Fails (0)`, on both versions.
+
+| New case | Why it arrived green | Killer (literal edit of `links.lua`) | 0.12.5 | 0.11.6 |
+|---|---|---|---|---|
+| details `https://x.y/a` E2 80 C0 `z` → `https://x.y/a` | the head refuses a continuation byte above 0xBF | X8: `continuation == nil or continuation < 0x80 or continuation > 0xBF then` → `continuation == nil or continuation < 0x80 then` | killed, 2 of 62 (both rows: the url runs to 25) | killed, 2 of 62 |
+| details `https://x.y/a` F0 90 80 C2, space, `z` → `https://x.y/a` | the same | X8 | (above) | (above) |
+| details `LINK_OF_WELL_FORMED_EDGES` → the whole text | the head takes every well-formed character; `ff58448` took these too (the re-measure) | X1: `    return 4, 0x90, 0xBF` → `    return nil`; X2: in the `0xF1`–`0xF3` branch, `return 4, 0x80, 0xBF` → `return nil`; X3: `return 4, 0x80, 0x8F` → `return 4, 0x80, 0x8E`; X4: `return 3, 0xA0, 0xBF` → `return 3, 0xA1, 0xBF`; X5: `return 3, 0x80, 0x9F` → `return 3, 0x80, 0x9E`; X6: `lead <= 0xEF` → `lead <= 0xEE`; X7: `lead <= 0xDF` → `lead <= 0xDE` | each killed, 1 of 62 | each killed, 1 of 62 |
+| a long line › `{ "https://a", ")", 1000000 }` | the head trims each bracket by index, once | X11: after the bracket branch's `last = last - 1`, `candidate = candidate:sub(1, last)` | killed, 1 of 4: arrival `72.4 s`, edit `73.4 s` | killed, 1 of 4: arrival `74.1 s`, edit `63.8 s` |
+
+X8 survived both PR test files before the correction, as did X1–X7 and X11 (the re-measure's table). The case *a long line* is renamed "shows in the Report, and again on :edit, within the time limit"; its three older rows keep their status from the fix round's table.
+
+**In all, the correction's mutants:** 9 literal edits (X1–X8, X11), each run on both versions, 18 runs, 18 killed by an assertion.
+
 ## Readings for the MVP review
 
 The orchestrator's readings, from the brief:
@@ -266,7 +298,7 @@ The wave holds its marks (rule 6). The line T10 would take:
 
 - The merge check against T14 is recorded under *Verification*, at T14's `0caf889`; whichever of T10 and T14 lands second re-runs it.
 - **The brief's "no regression" rows:** `dev`'s own `gx` is wrong on `See ~~https://x.y/a~~ now` and on the U+009D row (*What was done*), so those rows are fixes, not kept behaviour. The orchestrator records the brief's error in the wave's retrospective; the brief is left as dispatched.
-- **`lua/aineo/mcp/editor.lua:10–16`'s docstring**, outside this packet's boundary, says a report shows in "tens of milliseconds, even for a report at the line limit". With this finder, 1 000 000-byte details take 0.03–0.40 s through `receive_report()` on 0.12.5 and 0.03–0.38 s on 0.11.6 (`t10-e2e-perf.lua`, load average 110–140). The slowest is a line of links each cut by U+0080 (0.40 s); a link followed by 1 MB of `)` takes 0.15 s. That is hundreds of milliseconds, not tens: a later packet corrects that docstring.
+- **`lua/aineo/mcp/editor.lua:10–16`'s docstring**, outside this packet's boundary, says a report shows in "tens of milliseconds, even for a report at the line limit". With this finder, one report at the line limit takes up to 0.5 s on arrival and 0.6 s on `:edit` (the re-measure of PR #52: 0.49 s and 0.61 s on 0.12.5, `http://a<` repeated), and redrawing the 2 MiB of records the Report keeps takes 1.3 s on `:edit` (1.27 s); a link followed by 1 MB of `)` takes 0.15 s. That is hundreds of milliseconds, not tens: a later packet corrects that docstring.
 
 ## Commits
 
