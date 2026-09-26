@@ -608,3 +608,28 @@ The first plan listed "the mode entered before the layout's focus"; the brief re
   - the warning waiting for `InsertLeave`: 2;
   - a failed rename leaving its cut file: 1.
 - **Released:** `v0.2.3`, which carries T14, under the user's rule of 2026-09-26: a release after each feature merges (PR #53, `main` at `dcff14f`).
+
+- **T10 — PR #52, a small fix**, merged by rebase on 2026-09-26 as `12a37fe` … `d30ff4d` (10 commits). The code of `dev` is identical to the verified tree (`0ec7ef5` laid over `dev` `2b75fc0`, merge-tree `c8fa752`).
+  - **Reviews** on Opus, by the small-fix class: guarantee by `neovim-lua-developer` on the reviewer charter, and records by `reviewer`.
+  - **What the guarantee review found:** no planted escape sequence reached the terminal — ESC, ST, BEL and OSC 52, measured in a pty on both versions. But:
+    - the finder took time quadratic in the line: one report of a link followed by 20 000 `)` froze the editor 9 s on arrival and 12 s at each `:edit`, past the relay's 5 s confirmation (G1, fix before merge);
+    - a byte of 0x80 or more that is not part of well-formed UTF-8 reached the terminal raw inside a link's address (G2);
+    - the control-character rows pinned only ESC, NUL, DEL and U+009D, so six of its mutants admitting other controls survived (G3);
+    - RL5 unpinned on a report that holds a link (G4), the scheme's `:` unpinned (G5), and the help's letters, digits and spaces not said to be ASCII (G6).
+  - **What the records review found:** the help's rule untrue for a non-ASCII letter or space (R1); the ASCII reading missing from the note's readings (R2); the brief's "`gx` gets one row wrong" false on two rows, `~~` and U+009D — a brief error the code handles, not a spec conflict (R3); two counts in the PR body (R4, R5); the em dash reading's curly quote and ellipsis unpinned (R6); a docstring (R7); the options the user turned down missing from the note (R8).
+  - **The fix round** went to the author, whose context was about 273 K: a finder linear in the line, a link ended at the first byte that is not well-formed UTF-8, the control rows, the pins, and the records. The orchestrator's decision to adopt the guarantee review's measured finder was partly refuted: that candidate was still slow on runs of U+0080 and of cut sequences, and the author made the run's end one pass (`run_end()`).
+  - **The re-measure**, with the attack question (`neovim-lua-reviewer`), found the round's code right: linear on 26 families of text up to 1 MB, the UTF-8 rule right on 33 685 760 sequences against the Unicode standard's Table 3-7, no C1 or ill-formed byte reaching the terminal in a pty, and no disagreement on 1 000 000 well-formed texts. Three test gaps survived: a third or fourth byte of 0xC0 or more (X8), the edges of each well-formed range (X1–X7), and a quadratic finder at 1 MB (X11). It measured the worst report at the relay's line limit: 0.49 s on arrival and 0.61 s at `:edit`, on 0.12.5.
+  - **The bounded correction** went to a fresh agent: the re-measure's rows for X8, X1–X7 and X11, a test renamed, and the records.
+- **The orchestrator's verification** of `0ec7ef5` laid over `dev`:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`: 973 cases, `Fails (0)`, on 0.12.5 and on 0.11.6;
+  - lint clean.
+- **Seven literal mutants** on the whole suite under 0.11.6, all killed by assertion:
+  - control characters admitted: 7 cases failing;
+  - C1 characters admitted: 4;
+  - ill-formed continuation bytes admitted: 3;
+  - the url left off the extmark: 65;
+  - trailing punctuation kept: 16;
+  - a link found inside a word: 2;
+  - links allowed to overlap: 1.
+- **Released:** `v0.2.4`, which carries T10 (PR #56, `main` at `89e6c87`).

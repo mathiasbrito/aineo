@@ -2,7 +2,7 @@
 
 **Author:** Mathias Santos de Brito, with Claude — the orchestrator (Opus 5.5, session `619e5f9a`)
 **Branch:** `knowledge/wave2-close-wave3-plan`
-**Status:** open. On 2026-09-26 the user kept MR1–MR97, MR99, MR100 and MR102–MR107 ("ok, your decisions are fine"), MR28's relay behaviour among them. Still awaiting the user: MR28's oldest supported `claude`, MR98, MR101, MR108 and MR109–MR125
+**Status:** open. On 2026-09-26 the user kept MR1–MR97, MR99, MR100 and MR102–MR107 ("ok, your decisions are fine"), MR28's relay behaviour among them. Still awaiting the user: MR28's oldest supported `claude`, MR98, MR101, MR108 and MR109–MR133
 
 ## Links
 
@@ -213,8 +213,28 @@ Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t
 | MR124 | An unreadable draft holds the autostart at a hit-enter prompt until a key. | the attack review of PR #46 (F6) |
 | MR125 | A draft for every working directory is kept, never removed. | the T14 note › *Limits* |
 
+## Readings — the Report's links (T10)
+
+Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t10-landed`), from T10's brief and session note at `dev` `d30ff4d`. None was shown to the user: the user chose "⌘-click, underlined (Recommended)", whose option named only "trailing punctuation such as a final '.' or ')'".
+
+| ID | Reading | Source | Disposition |
+|---|---|---|---|
+| MR126 | A web link starts with `http://` or `https://`, in any case, at the start of the text or after a character that is not an ASCII letter or digit. It runs up to an ASCII space, a control character, `<`, `>`, `"`, `\|`, a backtick or a byte that is not part of well-formed UTF-8. It leaves out the `.` `,` `;` `:` `!` `?` `'` `*` `~` it ends in, and a `)`, `]` or `}` with no opening partner inside it, until it ends in none of them. What is left holds at least one character after the `://`, or is no link. | T10, RL2: the orchestrator's rule and table, in the brief | open |
+| MR127 | An em dash, a curly quote or an ellipsis right after a link, with no space, is part of it: `see https://x.y/a—it` links to `https://x.y/a—it`, as Neovim's own `gx` reads it. | T10's brief, the orchestrator's reading | open |
+| MR128 | A control character ends a link, so no escape sequence written in a report reaches the terminal. | T10, RL1 | open |
+| MR129 | A byte that is not part of well-formed UTF-8 ends a link. | T10's fix round: the orchestrator's decision on the guarantee review's G2 | open |
+| MR130 | Every link has one colour group, `AineoReportLink`, linked to `Underlined`. | T10, RL4 | open |
+| MR131 | Letters, digits and spaces are read as ASCII: a link may start right after a non-ASCII letter (`caféhttps://x.y/a` links to `https://x.y/a`), and a non-ASCII space, such as U+00A0 or U+3000, does not end one. | T10, the implementer's reading, kept by the orchestrator's fix-round decision 6 | open |
+
+## Limits a user can meet — the Report's links (T10)
+
+| ID | Limit | Source |
+|---|---|---|
+| MR132 | ⌘-click opens a link only in a terminal that opens OSC 8 hyperlinks, as iTerm2 does. `gx` opens it in any terminal. | the T10 note › *Limits* |
+| MR133 | A report at the relay's 1 MiB line limit takes up to about half a second to show, and about 0.6 s at each `:edit` of the Report; redrawing the 2 MiB of records the Report keeps takes about 1.3 s at `:edit`. Measured on the orchestrator's host, on 0.12.5. | the re-measure of PR #52 (finding 4); the T10 note › *Open threads* |
+
 ## Disposition
 
-**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108 and MR109–MR125 stay open for the next review.
+**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108 and MR109–MR133 stay open for the next review.
 
 Before that, every item was **open** until the MVP review. A reading the user keeps is closed *kept*; one the user changes becomes a plan row through a converge round (a new `D#`, never an edit in place) and a task.
