@@ -340,7 +340,7 @@ Measured on the correction's last code commit, `c1705c4` (the commit after it to
 - MR107 (ID3): the draft is restored only into a new or emptied Input: the first open, or after a wipe or `:bdelete`. Kept on 2026-09-26.
 - MR108 (ID5): the three patterns are copied from `lua/aineo/report/records.lua`, not imported. Open, not yet shown to the user.
 
-**The implementer's own, for the user to confirm** (not yet numbered):
+**The implementer's own and the rounds', for the user to confirm** — numbered MR115–MR121 in [[Review/2026-09-24 — v1 MVP readings review]] by the knowledge pass, with the limits MR122–MR125:
 - The save delay, 1000 ms, one delayed save per change.
 - The draft's file layout: `<state>/aineo/drafts/<sha256>.txt`, lines each ending in a newline.
 - The quit hook, `BufUnload` on Input.
@@ -376,4 +376,23 @@ This wave holds its marks. The line to mark:
 
 ## Commits
 
-*Recorded after the merge.*
+Merged by rebase into `dev` on 2026-09-26, PR #46, right after PR #47 (the modularity skill's draft-home rows, `9a45a72`, `a445d27`). The knowledge pass maps each commit of the branch to its hash on `dev`:
+
+| on the branch | on `dev` | subject |
+|---|---|---|
+| `ad638c3` | `c53c73f` | Keep a buffer's unsent text as a draft per working directory |
+| `2df010d` | `62924e0` | Hand Input to the draft home whenever the layout opens |
+| `e0929f0` | `02274da` | Record T14's session: the Input draft, its tests and mutants |
+| `4e1cdb8` | `8f10efb` | Keep Input's draft whole through short writes, -M, reloads and quits |
+| `4e18291` | `a5b8dea` | Empty the suites' shared drafts at the start of every run |
+| `322e389` | `6936bcf` | Pin a wiped Input by assertion, not by the case crashing |
+| `90ef9b3` | `2dba110` | Make the two-editor paths case fail when only one editor wrote |
+| `0caf889` | `d2cb0b5` | Record T14's fix round and correct the packet's false records |
+| `4e9db4f` | `acd8b70` | Keep the drafts clean-up under .tests/ whatever make is given |
+| `59a72c7` | `cc53724` | Hold the draft warning past Terminal mode and <C-c>, not InsertLeave |
+| `14c5e51` | `d2653d2` | Remove the draft's cut file when it cannot replace the draft |
+| `0610d46` | `bb703be` | Pin focus()'s opened flag and the restore's own 'undolevels' |
+| `c1705c4` | `9c1833c` | Say that a failing QuitPre handler skips both of the draft's saves |
+| `882a48f` | `2b75fc0` | Record T14's correction and bring the note's records to the head |
+
+Released in `v0.2.3` (PR #53, `main` at `dcff14f`).
