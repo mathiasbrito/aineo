@@ -140,6 +140,7 @@ T['a link']['in the header leaves the time and the status their colours'] = func
 
   eq(child.lua_get(REPORT_MARKS), {
     { 0, 0, 5, 'AineoReportTime', vim.NIL },
+    { 0, 6, 12, 'AineoReportStatusBold', vim.NIL },
     { 0, 6, 12, 'AineoReportDone', vim.NIL },
     { 0, 17, 30, 'AineoReportLink', 'https://x.y/t' },
     { 0, 42, 55, 'AineoReportLink', 'https://x.y/s' },
