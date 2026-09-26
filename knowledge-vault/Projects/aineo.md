@@ -61,9 +61,10 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
   - T10, the Report's web links, a small fix (PR #52, 2026-09-26): every `http://` or `https://` link in a report is underlined and carries its address, so ⌘-click opens it in a terminal that opens OSC 8 links and `gx` opens it from the keyboard; no control character or ill-formed UTF-8 byte enters a link's address.
 - **Released:** `v0.2.0`, with T9 and T13 (PR #37, `main` at `e26838f`); `v0.2.1`, with T15 and T16 (PR #42, `main` at `270743b`); `v0.2.2`, with T11 (PR #48, `main` at `f1285c1`); `v0.2.3`, with T14 (PR #53, `main` at `dcff14f`); `v0.2.4`, with T10 (PR #56, `main` at `89e6c87`), all 2026-09-26.
 - **Running:** T20, `\c` into Claude's prompt in Terminal mode, a small fix (PR #58), in review. T18 is planned (PR #57), its brief in review.
-- **Next, in two lanes:**
+- **Next, in three lanes:**
   - the Report's code: T18, the Report line without the icon, `[status]` bold, a small fix (the user, 2026-09-26); then T17, the Report's file paths, a small fix: underlined, opened in the middle column by a double-click or `gf`/`gF`;
-  - the entry code: T12, `\tcn` (D16), once T20 merges. T19, aineo resuming its own last Claude session per folder (D23), asked for by the user on 2026-09-26, a regular packet since it changes the Claude integration, once Q8 is measured.
+  - the entry code, once T20 merges: T12, `\tcn` (D16);
+  - Claude's session and the layout, once T20 merges: T21, Claude's exit keeping the layout (D25), regular (the user, 2026-09-26); then T19, aineo resuming its own last Claude session per folder (D23), regular, Q8 measured on 2026-09-26. T19 also needs one line of `plugin/aineo.lua`, so it follows T12 there.
 
 **Next:**
 - Wave 7, converged with the user and not yet planned: a changes pane beside the agent pane, and sending only Input's selection. Its rows are D18–D22, C12 and C13 in [[Planning/aineo — v1 agent console]]. Its plan comes once T14 and T12 are underway, and its packets start after them, since they change the same layout and entry code.
