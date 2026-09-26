@@ -105,10 +105,12 @@ end
 T['a link']['in the task or the summary is drawn at its place in the header'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
-  report_editor.receive(
-    child,
-    { task = 'See https://x.y/t now', status = 'done', summary = 'at https://x.y/s' }
-  )
+  report_editor.receive(child, {
+    task = 'See https://x.y/t now',
+    status = 'done',
+    summary = 'at https://x.y/s',
+    details = 'A line of details as long as the header, which holds no link',
+  })
 
   eq(report_links(), {
     { 0, 21, 34, 'https://x.y/t', 'AineoReportLink' },
