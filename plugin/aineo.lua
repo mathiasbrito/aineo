@@ -172,7 +172,7 @@ end
 --- session's terminal as it is, the exit on screen when Claude Code has
 --- exited: a focus starts a session only when the layout must open and
 --- there is no terminal to show (`current_claude_terminal()`). When it
---- opened the layout, Input is then handed to the draft home
+--- reopened the role's window, Input is then handed to the draft home
 --- (`keep_input_draft()`).
 ---
 ---@param role aineo.layout.Role
