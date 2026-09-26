@@ -68,10 +68,11 @@ The layout fills one tab page with three windows:
   `:ls` and `:bnext`, where you write what Send gives Claude (|aineo-send|).
 
 The Report and Input wrap long lines between words, a wrapped line keeping
-its indent ('wrap', 'linebreak', 'breakindent'), whatever your own settings;
-`\o` sets this again, so a `:setlocal nowrap` in either lasts until the next
-`\o`. Claude's terminal, and a file shown in or split from those two windows,
-keep yours.
+its indent ('wrap', 'linebreak', 'breakindent'), whatever your own settings.
+Opening or restoring the layout sets this again: `\o`, or `\r`, `\i` or `\c`
+when their window is gone. A `:setlocal nowrap` in either lasts until then.
+Claude's terminal, and a file shown in or split from those two windows, keep
+yours.
 
 Opening the layout closes the tab's other windows (floating ones stay); their
 buffers stay loaded. The cursor starts in Input. The Neovim startup buffer

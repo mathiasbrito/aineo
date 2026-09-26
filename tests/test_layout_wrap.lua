@@ -10,7 +10,7 @@ local T = MiniTest.new_set({ hooks = { post_once = child.stop } })
 --- The roles of the right column's windows, as a set's `parametrize`.
 local RIGHT_COLUMN = { { 'report' }, { 'input' } }
 
---- How the window whose number is the argument wraps long lines: its
+--- How the window whose ID is the argument wraps long lines: its
 --- `'wrap'`, `'linebreak'` and `'breakindent'`.
 local WRAPPING = [[(function(window)
   return {
@@ -190,6 +190,19 @@ T["opening the layout again after the user's :setlocal nowrap"]['wraps again, on
   eq(wrapping_of_window_showing(buffers[role]), WRAPPED)
 end
 
+T["opening the layout again after the user's :setlocal nowrap"]["wraps again, once focus() reopens Claude's closed window, the window of"] = function(
+  role
+)
+  local buffers = open_under_nowrap()
+  layout.enter_window_showing(child, buffers[role])
+  child.cmd('setlocal nowrap nolinebreak nobreakindent')
+  layout.close_windows(child, buffers, { 'claude' })
+
+  layout.focus(child, 'claude', layout.arrangement(buffers))
+
+  eq(wrapping_of_window_showing(buffers[role]), WRAPPED)
+end
+
 T["a file opened in a right-column window under the user's nowrap"] = MiniTest.new_set({
   parametrize = RIGHT_COLUMN,
 })
@@ -244,6 +257,18 @@ T["the user's own nowrap, around the window of"]["holds for the file column open
   eq(wrapping_of_window_showing(child.lua_get('vim.fn.bufnr(...)', { path })), UNWRAPPED)
 end
 
+T["the user's own nowrap, around the window of"]["holds for its buffer shown with :buffer in a new window beside Claude's"] = function(
+  role
+)
+  local buffers = open_under_nowrap()
+  layout.enter_window_showing(child, buffers.claude)
+  child.cmd('vnew')
+
+  child.cmd('buffer ' .. buffers[role])
+
+  eq(child.lua_get(WRAPPING, { 0 }), UNWRAPPED)
+end
+
 T["the user's own nowrap"] = MiniTest.new_set()
 
 T["the user's own nowrap"]['holds for a file that stays in Input for want of room'] = function()
@@ -259,6 +284,18 @@ T["the user's own nowrap"]["holds for Claude's window"] = function()
   local buffers = open_under_nowrap()
 
   eq(wrapping_of_window_showing(buffers.claude), UNWRAPPED)
+end
+
+T["the user's own wrap"] = MiniTest.new_set()
+
+T["the user's own wrap"]["holds for Claude's window"] = function()
+  layout.start(child)
+  child.cmd('set wrap linebreak breakindent')
+  local buffers = layout.stand_ins(child)
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(wrapping_of_window_showing(buffers.claude), WRAPPED)
 end
 
 return T
