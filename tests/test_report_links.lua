@@ -147,6 +147,12 @@ T['a link']['in the header leaves the icon, the time and the status their colour
   })
 end
 
+--- A link holding characters of two, three and four bytes at the edges of
+--- the ranges of well-formed UTF-8 (Unicode, Table 3-7): U+07FF, U+0800,
+--- U+D7FF, U+FFFD, U+10000, U+40000 and U+10FFFF, then `z`.
+local LINK_OF_WELL_FORMED_EDGES =
+  'https://x.y/\223\191\224\160\128\237\159\191\239\191\189\240\144\128\128\241\128\128\128\244\143\191\191z'
+
 --- A link in the details of a report of 09:05 starts 8 bytes into its line,
 --- after the indent that puts it under the `[status]`: each row gives the
 --- details, then the links the Report shows on that line.
@@ -227,6 +233,7 @@ T['a link in the details'] = MiniTest.new_set({
     { '“https://x.y/a”', { { 1, 11, 27, 'https://x.y/a”', 'AineoReportLink' } } },
     { 'https://x.y/a…', { { 1, 8, 24, 'https://x.y/a…', 'AineoReportLink' } } },
     { 'https://x.y/a\194\160b', { { 1, 8, 24, 'https://x.y/a\194\160b', 'AineoReportLink' } } },
+    { LINK_OF_WELL_FORMED_EDGES, { { 1, 8, 44, LINK_OF_WELL_FORMED_EDGES, 'AineoReportLink' } } },
     { 'https//x.y', {} },
     { 'https://x.y/a\157z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
     { 'https://x.y/a\156\1570;pwned\156z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
