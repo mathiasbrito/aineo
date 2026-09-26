@@ -1,0 +1,113 @@
+# Report links (T10) and file paths (T17): measured by the orchestrator, 2026-09-26, on dev 2cb3cbb
+
+Neovim: the host's Homebrew 0.12.5 and the downloaded 0.11.6 (<builds>/nvim-0.11.6). Every probe ran with
+--clean -u NONE -i NONE (or --clean -i NONE for gx, which needs Neovim's default mappings), XDG_* and
+NVIM_LOG_FILE under a scratch directory (<tmp>). Paths below are rewritten to <tmp>.
+
+## 1. An extmark accepts a url, on both versions (url.lua)
+
+nvim_buf_set_extmark(b, ns, 0, 4, { end_col = 30, url = 'https://example.com/a_(b)', hl_group = 'Underlined' })
+then nvim_buf_get_extmarks(b, ns, 0, -1, { details = true })[1][4].url:
+{ err = 1, ok = true, url = "https://example.com/a_(b)", version = "0.12.5" } 
+{ err = 1, ok = true, url = "https://example.com/a_(b)", version = "0.11.6+ge8b87a554f" } 
+
+## 2. The TUI draws that extmark as an OSC 8 hyperlink, on both versions (tui.py)
+
+A Neovim TUI in a pty (TERM=xterm-256color, with and without TERM_PROGRAM=iTerm.app), the same buffer and
+extmark; the first OSC 8 sequence in its output:
+NVIM v0.12.5 TERM_PROGRAM=iTerm.app: osc8 b'\x1b]8;id=3790209024;https://example.com/a_(b)\x1b\\https://example'
+NVIM v0.12.5 TERM_PROGRAM=unset: osc8 b'\x1b]8;id=3790209024;https://example.com/a_(b)\x1b\\https://example'
+NVIM v0.11.6 TERM_PROGRAM=iTerm.app: osc8 b'\x1b]8;id=3790209024;https://example.com/a_(b)\x1b\\https://example'
+NVIM v0.11.6 TERM_PROGRAM=unset: osc8 b'\x1b]8;id=3790209024;https://example.com/a_(b)\x1b\\https://example'
+
+## 3. gx on a url extmark opens exactly its url, on both versions (gx.lua)
+
+Line: 'See https://example.com/docs. then (https://x.y/a) end'; an extmark with url https://example.com/docs over
+[4, 28); vim.ui.open replaced to record its argument; normal gx with the cursor at column 10, then at 40 (no extmark):
+{ gx_mapped = true, version = "0.12.5", with_extmark = "https://example.com/docs", without_extmark_in_parens = "https://x.y/a" } 
+{ gx_mapped = true, version = "0.11.6+ge8b87a554f", with_extmark = "https://example.com/docs", without_extmark_in_parens = "https://x.y/a" } 
+
+## 4. gf and gF on a path in the Report open it in the middle column, today (gf.lua, 0.12.5)
+
+aineo from this checkout at 2cb3cbb, vim.g.aineo = { autostart = false, claude = { cmd = { '/bin/cat' } } } (a
+stand-in, never the real claude), :cd <tmp>/proj holding hello.lua and notes.txt (4 lines), :Aineo open, the
+Report's line set to 'see hello.lua and notes.txt:3 now'; normal! gf on hello.lua, then normal! gF on notes.txt:3:
+{
+  after_gF = {
+    cur = "notes.txt",
+    line = 3,
+    report_still = true
+  },
+  after_gf = {
+    cur = "<tmp>/proj/hello.lua",
+    report_still = true,
+    wins = 4
+  },
+  err = "",
+  gF = { true, "" },
+  gf = { true, "" },
+  open = true,
+  report_win = 1002,
+  windows = { "cat", "hello.lua", "report", "input" }
+}
+Reading: the file opens in the Report's window and C9's redirect moves it to the middle column; the Report keeps
+its buffer. gf resolves the path against Neovim's current directory and 'path', not the Report's.
+
+## 5. The web-link rule's table, run through a throwaway reference (rule.lua; not aineo code)
+
+A link starts with http:// or https://, the scheme in any case, at the start of the text or after a character
+that is not a letter or digit; it runs to whitespace, <, >, " or a backtick; trailing . , ; : ! ? ' " are left
+out, and a trailing ), ] or } that has no opening partner inside the link; a link is at least one character
+after the ://. Result per line (the link, [first byte, end byte)):
+https://example.com                                          -> https://example.com [0,19)
+See https://example.com/docs.                                -> https://example.com/docs [4,28)
+(https://x.y/a)                                              -> https://x.y/a [1,14)
+https://en.wikipedia.org/wiki/Lua_(programming_language)     -> https://en.wikipedia.org/wiki/Lua_(programming_language) [0,56)
+[docs](https://x.y/z)                                        -> https://x.y/z [7,20)
+<https://x.y/z>                                              -> https://x.y/z [1,14)
+http://localhost:8080/a?b=c&d=e#f                            -> http://localhost:8080/a?b=c&d=e#f [0,33)
+https://x.y/a, https://x.y/b;                                -> https://x.y/a [0,13) | https://x.y/b [15,28)
+"https://x.y/q"                                              -> https://x.y/q [1,14)
+HTTPS://X.Y/A                                                -> HTTPS://X.Y/A [0,13)
+https://x.y/café                                            -> https://x.y/café [0,17)
+Done: https://x.y/p! Next?                                   -> https://x.y/p [6,19)
+it's https://x.y/r'                                          -> https://x.y/r [5,18)
+`https://x.y/code`                                           -> https://x.y/code [1,17)
+ftp://x.y                                                    -> none
+file:///etc/hosts                                            -> none
+mailto:a@b.c                                                 -> none
+www.example.com                                              -> none
+https://                                                     -> none
+nothttps://a.b                                               -> none
+https://x.y/a—b                                            -> https://x.y/a—b [0,17)
+
+## 6. Neovim's own gx on the table's rows, with no extmark (gx3.lua)
+
+Each line alone in a buffer, the cursor on the link (column given in the probe), vim.ui.open replaced to record
+its argument, normal gx:
+0.12.5
+See https://example.com/docs. end                              -> https://example.com/docs
+x https://en.wikipedia.org/wiki/Lua_(programming_language) y   -> https://en.wikipedia.org/wiki/Lua_
+[docs](https://x.y/z) end                                      -> https://x.y/z
+said "https://x.y/q" end                                       -> https://x.y/q
+it is https://x.y/r' end                                       -> https://x.y/r
+Done: https://x.y/p! Next?                                     -> https://x.y/p
+a https://x.y/a, https://x.y/b; z                              -> https://x.y/a
+q `https://x.y/code` z                                         -> https://x.y/code
+HTTPS://X.Y/A z                                                -> HTTPS://X.Y/A
+x https://x.y/a—b z                                          -> https://x.y/a—b
+x <https://x.y/z> y                                            -> https://x.y/z
+0.11.6+ge8b87a554f
+See https://example.com/docs. end                              -> https://example.com/docs
+x https://en.wikipedia.org/wiki/Lua_(programming_language) y   -> https://en.wikipedia.org/wiki/Lua_
+[docs](https://x.y/z) end                                      -> https://x.y/z
+said "https://x.y/q" end                                       -> https://x.y/q
+it is https://x.y/r' end                                       -> https://x.y/r
+Done: https://x.y/p! Next?                                     -> https://x.y/p
+a https://x.y/a, https://x.y/b; z                              -> https://x.y/a
+q `https://x.y/code` z                                         -> https://x.y/code
+HTTPS://X.Y/A z                                                -> HTTPS://X.Y/A
+x https://x.y/a—b z                                          -> https://x.y/a—b
+x <https://x.y/z> y                                            -> https://x.y/z
+Reading: without an extmark, gx already leaves out trailing punctuation and brackets; it cuts the Wikipedia link
+at its '(' and opens https://en.wikipedia.org/wiki/Lua_.
