@@ -105,8 +105,9 @@ During the wave, the user decided more changes:
 | 09-26 15:35 | T10's correction in (915 cases) |
 | 09-26 15:42 | PRs #47 and #46 merged after the verification (890 cases on both versions) |
 | 09-26 15:43 | Release `v0.2.3` (PR #53) |
-| 09-26 15:45 | The orchestrator's verification of T10 started, over the new `dev`. T20 planned (PR #54); its brief review dispatched |
+| 09-26 15:45 | The orchestrator's verification of T10 running over the new `dev` (started 15:43, `verify52.txt`). T20 planned (PR #54); its brief review dispatched |
 | 09-26 15:49 | T14's knowledge pass (PR #55); its records review dispatched |
+| 09-26 16:08 | PR #55's records review in: merge after corrections; corrected and merged |
 | 09-26 16:37 | T20's brief review in: dispatch after corrections. T20 dispatched |
 | 09-26 17:09 | PR #52 merged after the verification (973 cases on both versions); release `v0.2.4` (PR #56) |
 | 09-26 17:12 | T18 planned (PR #57); its brief review dispatched |
@@ -146,7 +147,7 @@ During the wave, the user decided more changes:
 | brief, T10 | `reviewer` | dispatch after corrections, 13 findings: a link's url could carry control characters to the terminal (an OSC 0 and an OSC 52 injected, measured) — every control character now ends a link; `**url**` would have regressed `gx`; three rule readings the table could not tell apart; T17's class recorded as the user's |
 | records, #50 (T11's pass) | `reviewer` | merge after corrections: `v0.2.2` and T17's class recorded as the user's, though the user decided neither; the 960 s thread's cause; the timeline and stale lines |
 | records, #51 (the rows D23, D24, C14) | `reviewer` | merge after corrections: D23 cut the start of the user's per-folder message and settled its reading without asking — the user was then asked; `--resume`'s form; C14's carried-over clauses; the queue |
-| guarantee, #52 (T10) | `neovim-lua-developer` | no planted escape sequence reached the terminal, in a pty, on both versions; G1: a finder quadratic in the line froze the editor 9 s per report, 12 s per `:edit` (fix before merge); G2: a byte that is not well-formed UTF-8 reached the terminal raw inside a link's address; G3: six control-character mutants survived; G4, G5: RL5 with a link and the scheme's `:` unpinned; G6: the help's ASCII classes unsaid |
+| guarantee, #52 (T10) | `neovim-lua-developer` | every ASCII and UTF-8-encoded control character stopped, in a pty, on both versions (ESC, `ESC \`, BEL, OSC 52, U+009C, U+009D); G1: a finder quadratic in the line froze the editor 9 s per report, 12 s per `:edit` (fix before merge); G2: the same sequences in their 8-bit form — raw 0x9C, 0x9D and 0x9B bytes, an OSC 0 among them — reached the terminal raw inside a link's address, over RPC though not from the real Claude; G3: six control-character mutants survived; G4, G5: RL5 with a link and the scheme's `:` unpinned; G6: the help's ASCII classes unsaid |
 | records, #52 (T10) | `reviewer` | R1: the help's rule untrue for a non-ASCII letter or space; R2: the ASCII reading missing from the readings; R3: the brief's `gx` claim false on two rows, a brief error the code handles; R4, R5: two counts; R6: the em dash reading's other characters unpinned; R7: a docstring; R8: the options the user turned down |
 | re-measure, #52, with the attack question | `neovim-lua-reviewer` | the round's finder linear on 26 families of text up to 1 MB, its UTF-8 rule right on 33 685 760 sequences, no C1 or ill-formed byte reaching the terminal; three test gaps survived (X8, X1–X7, X11); the worst report at the line limit 0.49 s on arrival, 0.61 s at `:edit` |
 | records, #55 (T14's pass) | `reviewer` | merge after corrections: every number held; the fresh agent for T14's fix round was the orchestrator's choice, not the rule's; stale lists and lines; three missing cost rows; the timeline's sources |
@@ -246,7 +247,7 @@ The orchestrator's verifications are in [[Implementation/Waves/00006-fixes/plan]
 
 Not in the table:
 - the orchestrator's own context;
-- T20's and T18's contexts, which come with their passes.
+- T20's implementer and reviews, and T18's brief review, which come with their passes.
 
 The test-integrity review of #31 made 366 requests, more than any other context here, for 3 CONFIRMED findings and one REFUTED group; the attack review made 128 for 4 CONFIRMED (two of them the author's own claims) and 5 REFUTED.
 
@@ -285,8 +286,8 @@ The test-integrity review of #31 made 366 requests, more than any other context 
 - **T14's amendment set a rule the packet could not keep.** It asked every case that writes a draft for a state directory of its own; existing test files outside T14's boundary open the layout in the shared state, so a draft leaked between runs. It should have come back as a spec conflict. The orchestrator widened the fix round's boundary to the `Makefile`, whose `make test` and `make test_file` now empty the suites' drafts at the start of each run.
 - **T14's fix round went to a fresh agent by the orchestrator's choice**: the author's context was about 365 K, under the 400 K line below which the rule keeps a round with its author, and near it. The bounded correction went to a fresh agent, as the rule gives every correction. Two of the author's test editors and a stuck probe outlived it; they were idle, and were stopped by pid.
 - **T14 reported the modularity skill's missing rows as a spec conflict.** It was not put to the user: the plan's C11 already names the draft home, and the rows add no dependency edge. PR #47 added them, checked again on T14's final head, and merged just before it.
-- **T10's brief was wrong about `dev`'s `gx`.** It said `gx` gets one row of its table wrong; it gets three wrong: the balanced-paren row the brief named, `See ~~https://x.y/a~~ now` and the U+009D row. The author reported the `~~` row as a spec conflict; the records review classed both as a brief error the code handles, since T10 fixes those rows. The brief is left as dispatched; the T10 note records the correction.
-- **The orchestrator's first fix-round decision on T10 was partly refuted.** It told the author to adopt the guarantee review's measured finder. The author measured that finder still slow on runs of U+0080 and of cut sequences, and made the run's end one pass instead.
+- **T10's brief was wrong about `dev`'s `gx`.** It said `gx` gets one row of its table wrong; it gets three wrong: the balanced-paren row the brief named, `See ~~https://x.y/a~~ now` and the U+009D row. The author reported the `~~` row as a brief claim refuted by measurement, with no spec conflict; the records review agreed, found the U+009D row wrong too, and classed both as a brief error the code handles, since T10 fixes those rows. The brief is left as dispatched; the T10 note records the correction. The error entered at the orchestrator: the brief review's probe had measured `dev`'s `gx` on the `~~` row before dispatch (`~~https://x.y/a~~`), its committed table left that row out, and the orchestrator's correction `84df4c2` added the row to RL2 with "pin the emphasis rows".
+- **The orchestrator's first fix-round decision on T10 was partly refuted.** It told the author to adopt the guarantee review's measured finder. The author measured that finder still slow on runs of links each cut by U+0080 or by a lone 0x80 byte (4.3 s and 5.8 s at 8000 links), kept its trimming and early rejection, credited, and made the run's end one pass (`run_end()`).
 - **The orchestrator lost the logs of T10's re-measure.** It removed the reviewer's worktree before copying its probe folder. The report quotes every row it built verbatim, and the correction took them from there.
 - **The orchestrator's calls moved the session's working directory** several times, by a `cd` at the top level of a command; each time it moved back.
 - **The shared help:**
@@ -301,7 +302,7 @@ The test-integrity review of #31 made 366 requests, more than any other context 
 - **`lua/aineo/report/records.lua:83–84` ignores the count `fs_write` returns**, the pattern T14's attack review found in the draft's write (its F1). A short write would keep a cut record.
 - **Whole 0.12.5 runs can stop at the 960 s limit** — in `tests/test_mcp_blocked_editor.lua` under load, and once in `tests/test_health.lua` at a load near 11 (T11's amendment review). The files pass alone. Every wait of `tests/helpers/report_tui.lua` is bounded by `WAIT_MS`; which request blocks has not been isolated — a candidate task.
 - **A defect that predates T13**, found by T13's attack review, left for a later packet. `lua/aineo/health.lua` calls `config.recorded_setup_options()` as an argument to its `pcall`, so it is evaluated outside it. `:checkhealth aineo` then fails whole when `setup()` options hold a userdata.
-- **Readings still open:** MR28's oldest `claude`, MR98, MR101, MR108 and MR109–MR133 ([[Review/2026-09-24 — v1 MVP readings review]]).
+- **Readings still open:** MR28's oldest `claude`, MR98, MR101, MR108 and MR109–MR134 ([[Review/2026-09-24 — v1 MVP readings review]]).
 - **`lua/aineo/health.lua` still strips with the lazy position pattern in one pass** — a candidate for the same bound at white space (the T13 correction's report).
 
 ## Commits
@@ -358,6 +359,6 @@ The test-integrity review of #31 made 366 requests, more than any other context 
 - **T14's re-keep on `BufWinEnter`**, over the attack review's `on_detach` reschedule — the fix round's choice, by measurement: the reschedule ran before the layout put Input back after `:bdelete`, and the entry pin stayed red.
 - **T14's restore is not the user's edit** (`u` does not take it out) and **a pending change is saved at `QuitPre` too** — the orchestrator's fix-round decisions, from the attack review's measured fixes; both are open readings, MR120 and MR117.
 - **T14's warning waits while the user types**, until the mode is left by any key (`ModeChanged`) — the re-measure's measured fix, adopted in the correction over the fix round's `InsertLeave`, which `<C-c>` skips.
-- **T10's finder takes time linear in the line** — the orchestrator's fix-round decision on the guarantee review's G1, which measured one report freezing the editor 9 s. The fix round's own form replaced the review's candidate, which the author measured still slow on some runs.
+- **T10's finder takes time linear in the line** — the orchestrator's fix-round decision on the guarantee review's G1, which measured one report freezing the editor 9 s. The fix round kept the review's trimming and early rejection and added a one-pass `run_end()`, since the review's candidate was still slow on runs of cut links.
 - **A link ends at the first byte that is not part of well-formed UTF-8** — the orchestrator's fix-round decision on G2 (MR129).
-- **T10's letters, digits and spaces stay ASCII**, and the help says so — the author's reading, kept by the orchestrator's fix-round decision 6, which leaned to it because RL2's table was built on bytes (MR131).
+- **T10's letters, digits and spaces stay ASCII**, and the help says so — the implementer's reading, chosen by the author under the orchestrator's fix-round decision 6, which leaned to it because RL2's table was built on bytes (MR131).

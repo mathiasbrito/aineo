@@ -272,15 +272,17 @@ X8 survived both PR test files before the correction, as did X1–X7 and X11 (th
 
 ## Readings for the MVP review
 
-The orchestrator's readings, from the brief — numbered MR126–MR130 in [[Review/2026-09-24 — v1 MVP readings review]] by the knowledge pass, with this packet's own as MR131 and the limits MR132–MR133:
+The orchestrator's readings, from the brief and, for MR129, from its fix-round decision on G2 — numbered MR126–MR130 in [[Review/2026-09-24 — v1 MVP readings review]] by the knowledge pass, with this packet's own as MR131, the re-measure's as MR134, and the limits MR132–MR133:
 
 - MR126: RL2's rule and table, which the user saw only as "trailing punctuation such as a final '.' or ')'".
 - MR127: an em dash, a curly quote or an ellipsis right after a URL, with no space, is taken into the link (`see https://x.y/a—it` → `https://x.y/a—it`), as Neovim's own `gx` does. The em dash row pins the em dash; since the fix round, a row each pins the curly quote (`“https://x.y/a”` → `https://x.y/a”`) and the ellipsis (records review's Mq kills both).
-- MR129: **a link never holds a byte that is not part of well-formed UTF-8** (the orchestrator's decision on G2): it ends at the first such byte, as it ends at a control character.
 - MR128: a control character ends a link, so a planted escape sequence never reaches the terminal (RL1).
+- MR129: **a link never holds a byte that is not part of well-formed UTF-8** (the orchestrator's decision on G2): it ends at the first such byte, as it ends at a control character.
 - MR130: one group for every link, `AineoReportLink`, linked to `Underlined`.
 
 And this packet's own reading, MR131: **letters, digits, spaces and control characters are read as ASCII bytes, with C1 added.** So a link may start right after a non-ASCII letter (`caféhttps://x.y/a` → `https://x.y/a`), and a non-ASCII space (U+00A0, U+3000) does not end one, as `dev`'s `gx` does on U+00A0. Controls are exactly the brief's C0, DEL and C1. The help says so since the fix round, and the no-break space row pins it.
+
+The re-measure's, MR134: **a format character (Unicode Cf), such as U+202E, is part of a link**, as any other non-ASCII character is: `https://x.y/a` U+202E `txt.exe` links to the whole text. The help's "control character" does not cover it. Whether a terminal that applies bidi then shows one address and opens another was not measured.
 
 ## Task lines
 
