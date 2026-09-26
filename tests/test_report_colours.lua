@@ -129,7 +129,7 @@ end
 
 T['the colours'] = MiniTest.new_set()
 
-T['the colours']['cover only the time and the status the render placed, not their like in the text'] = function()
+T['the colours']['cover only the icon, the time and the status the render placed, not their like in the text'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
   report_editor.receive(child, {
@@ -137,6 +137,23 @@ T['the colours']['cover only the time and the status the render placed, not thei
     status = 'done',
     summary = '[failed] at 10:00',
     details = '09:05 [done]',
+  })
+
+  eq(all_colours(), {
+    { 0, 0, 3, 'AineoReportDone' },
+    { 0, 4, 9, 'AineoReportTime' },
+    { 0, 10, 16, 'AineoReportDone' },
+  })
+end
+
+T['the colours']['cover no icon in the text'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+
+  report_editor.receive(child, {
+    task = '✓ Task',
+    status = 'done',
+    summary = 'Summary ✓',
+    details = '✓ Detail',
   })
 
   eq(all_colours(), {
@@ -167,7 +184,7 @@ end
 
 T['the records'] = MiniTest.new_set()
 
-T['the records']['show their time and status coloured when the Report opens'] = function()
+T['the records']['show their icon, time and status coloured when the Report opens'] = function()
   local state_directory = fixture.directory('report-colours-state')
   local environment = { state_directory = state_directory, working_directory = '/projects/alpha' }
   report_editor.start(

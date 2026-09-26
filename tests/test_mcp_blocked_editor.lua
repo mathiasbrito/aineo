@@ -72,7 +72,10 @@ T['a report that opens a Report with a warning']['is confirmed before the warnin
   local first = report_tui.start(environment)
   local first_relay = mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = first.address })
   first_relay:send(mcp_messages.recorded('tools/call'))
-  first:report_lines({ '✓ 09:05 [done] Refactor the parser — All tests pass' })
+  eq(
+    first:report_lines({ '✓ 09:05 [done] Refactor the parser — All tests pass' }),
+    { '✓ 09:05 [done] Refactor the parser — All tests pass' }
+  )
   first:stop()
   local records = vim.fs.find(function()
     return true
