@@ -63,8 +63,9 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
   - T10, the Report's web links, a small fix, planned in PR #49: underlined, ⌘-click and `gx` open them;
   - T18, the Report line without the icon, `[status]` bold, a small fix after T10 (the user, 2026-09-26);
   - T17, the Report's file paths, a small fix: underlined, opened in the middle column by a double-click or `gf`/`gF`;
-  - T12, `\tcn` (D16), after T14;
-  - T19, aineo resuming its own last Claude session per folder, a regular packet (the user, 2026-09-26).
+  - T20, `\c` into Claude's prompt in Terminal mode, a small fix right after T14 (the user, 2026-09-26);
+  - T12, `\tcn` (D16), after T20;
+  - T19, aineo resuming its own last Claude session per folder (D23), asked for by the user on 2026-09-26; a regular packet, since it changes the Claude integration; once Q8 is measured.
 
 **Next:**
 - Wave 7, converged with the user and not yet planned: a changes pane beside the agent pane, and sending only Input's selection. Its rows are D18–D22, C12 and C13 in [[Planning/aineo — v1 agent console]]. Its plan comes once T14 and T12 are underway, and its packets start after them, since they change the same layout and entry code.
