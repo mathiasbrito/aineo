@@ -367,9 +367,10 @@ end
 --- as Neovim does to every loaded buffer when it quits, before its
 --- `VimLeavePre` handlers run, and as `:bdelete` does. An earlier
 --- `BufWinLeave` or `BufUnload` handler that fails can skip the unload's
---- save. A Neovim ended by a signal saves nothing then. Nothing else is
---- written, so a draft another editor wrote since the last change here
---- stays.
+--- save, and an earlier `QuitPre` handler that fails — a Vimscript `throw`,
+--- or any error when the quit runs from Lua — skips both saves. A Neovim
+--- ended by a signal saves nothing then. Nothing else is written, so a
+--- draft another editor wrote since the last change here stays.
 ---
 --- A draft that cannot be read, put into `buffer`, or written, is told to
 --- the user as a warning, once per editor for reading and once for writing;
