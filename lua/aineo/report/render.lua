@@ -48,13 +48,15 @@ end
 
 --- What each line of a report's details starts with, so that it lines up
 --- under the report's `[status]`: as many spaces as `status_prefix`, the
---- header up to its `[status]`, is wide on screen. Measured at each call,
---- since `'ambiwidth'` and `setcellwidths()` change how wide an icon is.
+--- header up to its `[status]`, is wide on screen, in cells
+--- (`nvim_strwidth()`), whatever window is current and however it wraps.
+--- Measured at each call, since `'ambiwidth'` and `setcellwidths()` change
+--- how wide an icon is.
 ---
 ---@param status_prefix string
 ---@return string
 local function details_indent(status_prefix)
-  return (' '):rep(vim.fn.strdisplaywidth(status_prefix))
+  return (' '):rep(vim.api.nvim_strwidth(status_prefix))
 end
 
 --- The colours of the header of a report of `status`,

@@ -34,7 +34,7 @@ local T = MiniTest.new_set({
 
 T['a report'] = MiniTest.new_set()
 
-T['a report']['renders as its time, status, task and summary'] = function()
+T['a report']['renders as its icon, time, status, task and summary'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
   report_editor.receive(
@@ -137,6 +137,92 @@ T['a report']["indents its details by its icon's width under setcellwidths()"] =
   })
 end
 
+T['a report']['indents its details by their width alone, however the current window wraps'] =
+  MiniTest.new_set({
+    parametrize = { { 'setlocal linebreak' }, { 'set showbreak=↪\\ ' } },
+  })
+
+T['a report']['indents its details by their width alone, however the current window wraps']['with'] = function(
+  wrapping
+)
+  start_editor({ '2026-09-24T09:05:00' })
+  child.cmd('vsplit')
+  child.lua('vim.api.nvim_win_set_width(0, 6)')
+  child.cmd(wrapping)
+
+  report_editor.receive(
+    child,
+    { task = 'Task', status = 'done', summary = 'Summary', details = 'Detail' }
+  )
+
+  eq(report_editor.lines(child), {
+    '✓ 09:05 [done] Task — Summary',
+    '        Detail',
+  })
+end
+
+T['a report']["indents each report's details by its own icon when reports of different widths show together"] = function()
+  start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  child.o.ambiwidth = 'double'
+  report_editor.receive(
+    child,
+    { task = 'First', status = 'progress', summary = 'Began', details = 'One' }
+  )
+  report_editor.receive(
+    child,
+    { task = 'Second', status = 'done', summary = 'Ended', details = 'Two' }
+  )
+  local before_the_edit = report_editor.lines(child)
+  child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
+
+  child.cmd('edit')
+
+  eq({ before_the_edit, report_editor.lines(child) }, {
+    {
+      '◐ 09:05 [progress] First — Began',
+      '         One',
+      '✓ 09:06 [done] Second — Ended',
+      '        Two',
+    },
+    {
+      '◐ 09:05 [progress] First — Began',
+      '         One',
+      '✓ 09:06 [done] Second — Ended',
+      '        Two',
+    },
+  })
+end
+
+--- The expression, run in the child, that hands its report home one report
+--- of each status the report tool accepts, and lists what went wrong: each
+--- error a report raised, and each header that does not start with an icon
+--- before its time.
+local EVERY_STATUS_FAULTS = [[(function()
+  local report = require('aineo.report')
+  local faults = {}
+  for _, status in ipairs(report.report_schema().properties.status.enum) do
+    local shown, failure =
+      pcall(report.receive_report, { task = 'Task', status = status, summary = 'Summary' })
+    if not shown then
+      table.insert(faults, failure)
+    end
+  end
+  for _, line in ipairs(vim.api.nvim_buf_get_lines(report.report_buffer(), 0, -1, false)) do
+    if not line:find('^[^%s%d]+ %d%d:%d%d %[') then
+      table.insert(faults, line)
+    end
+  end
+  return faults
+end)()]]
+
+T['a report']['of every status the report tool accepts shows with an icon'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+
+  local faults = child.lua_get(EVERY_STATUS_FAULTS)
+
+  eq(faults, {})
+end
+
 T['a report']['keeps the indent it was drawn with until the user edits the Report again'] = function()
   start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
   report_editor.receive(
@@ -160,6 +246,39 @@ T['a report']['keeps the indent it was drawn with until the user edits the Repor
       '◐ 09:06 [progress] Second — Began',
       '         Two',
     },
+    {
+      '◐ 09:05 [progress] First — Began',
+      '         One',
+      '◐ 09:06 [progress] Second — Began',
+      '         Two',
+    },
+  })
+end
+
+T['a report']['keeps the indent it was drawn with until the Report is made anew after the user deletes it'] =
+  MiniTest.new_set({
+    parametrize = { { 'bdelete' }, { 'bwipeout' }, { 'bunload' } },
+  })
+
+T['a report']['keeps the indent it was drawn with until the Report is made anew after the user deletes it']['with the command'] = function(
+  command
+)
+  start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  report_editor.receive(
+    child,
+    { task = 'First', status = 'progress', summary = 'Began', details = 'One' }
+  )
+  child.o.ambiwidth = 'double'
+  local before_the_delete = report_editor.lines(child)
+  child.cmd(('%s %d'):format(command, child.lua_get([[require('aineo.report').report_buffer()]])))
+
+  report_editor.receive(
+    child,
+    { task = 'Second', status = 'progress', summary = 'Began', details = 'Two' }
+  )
+
+  eq({ before_the_delete, report_editor.lines(child) }, {
+    { '◐ 09:05 [progress] First — Began', '        One' },
     {
       '◐ 09:05 [progress] First — Began',
       '         One',
