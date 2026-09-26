@@ -20,7 +20,7 @@ Where a boundary sits, what crosses it, and how the clients of a module are foun
 
   | Path | Holds |
   |---|---|
-  | `lua/aineo/<concern>/` | one concern behind its `init.lua` — `config` (C1), `layout` (C2, C9), `claude` (C3), `send` (C4), `mcp` (C5), `report` (C6), `draft` (C11) |
+  | `lua/aineo/<concern>/` | one concern behind its `init.lua` — `config` (C1), `layout` (C2, C9, C12), `claude` (C3), `send` (C4), `mcp` (C5), `report` (C6, C10), `draft` (C11) |
   | `lua/aineo/init.lua` | the plugin's public Lua API, `require('aineo')` (C1); it calls into homes, it never re-exports their symbols |
   | `lua/aineo/health.lua` | the `:checkhealth aineo` entry (C7) — a file Neovim looks up by name, not a home |
   | `plugin/aineo.lua` | the composition root (C1): commands, `<Plug>` mappings, autocommands; it `require()`s a home only inside a callback |
@@ -35,7 +35,7 @@ Where a boundary sits, what crosses it, and how the clients of a module are foun
   |---|---|
   | `aineo.config` (the kernel) | no aineo home |
   | `aineo.layout`, `aineo.report` | `aineo.config` |
-  | `aineo.draft` | no aineo home (it keeps Input's text through `nvim_buf_*`, and its state directory is given to it) |
+  | `aineo.draft` | no aineo home (it is handed Input's buffer, and given its state and working directories) |
   | `aineo.mcp` | `aineo.config`, `aineo.report` (the relay renders into the Report buffer) |
   | `aineo.claude` | `aineo.config`, `aineo.mcp` (the session registers the report server) |
   | `aineo.send` | `aineo.config`, `aineo.claude`, `aineo.layout` (the Input buffer into the session's terminal) |
