@@ -629,14 +629,11 @@ T['the draft']['lets the buffer be wiped, and raises nothing then'] = function()
 
   local wiped = child.lua_get('pcall(vim.cmd.bwipeout, _G.input)')
 
-  eq(
-    {
-      wiped = wiped,
-      valid = child.lua_get('vim.api.nvim_buf_is_valid(_G.input)'),
-      error = child.lua_get('vim.v.errmsg'),
-    },
-    { wiped = true, valid = false, error = '' }
-  )
+  eq({
+    wiped = wiped,
+    valid = child.lua_get('vim.api.nvim_buf_is_valid(_G.input)'),
+    error = child.lua_get('vim.v.errmsg'),
+  }, { wiped = true, valid = false, error = '' })
 end
 
 --- Hands the draft home in the child a new, empty scratch buffer, as
@@ -942,8 +939,7 @@ T['two editors in one working directory']['never write through the same file'] =
 
   local child_path = child.lua_get('_G.written_paths[1]')
   local other_path = other.lua_get('_G.written_paths[1]')
-  no_eq(child_path, nil)
-  no_eq(other_path, nil)
+  eq({ type(child_path), type(other_path) }, { 'string', 'string' })
   no_eq(child_path, other_path)
 end
 
