@@ -365,6 +365,18 @@ T['a wiped Claude terminal']["keeps the window Claude's window reopened in the s
   eq(entry.windows(child), WHOLE_LAYOUT)
 end
 
+T['a wiped Claude terminal']["keeps an empty buffer the same command line opens in Claude's window once it reopened, after"] = function(
+  command
+)
+  type_to_claude_code_exiting_at_start(child, 'entry-claude-exit-reopened-enew')
+  entry.use_fake(child, claude_session.fake('entry-claude-exit-reopened-enew-new', 'trust'))
+
+  entry.command(child, command .. ' | close | Aineo claude | enew')
+
+  eq(entry.messages(child), {})
+  eq(entry.windows(child), { 'terminal', '', 'aineo://report', 'aineo://input' })
+end
+
 T['a wiped Claude terminal']["keeps in view the file the same command line opens in Claude's window, after"] = function(
   command
 )
@@ -455,6 +467,23 @@ T["a user's TermClose autocommand that wipes Claude's terminal"]['lets \\c start
   eq(child.lua_get(SESSION_STATE), 'starting')
   eq(entry.windows(child), WHOLE_LAYOUT)
   eq(child.lua_get(MODE), 't')
+end
+
+T["a Claude terminal wiped while Claude's window shows another buffer"] = MiniTest.new_set()
+
+T["a Claude terminal wiped while Claude's window shows another buffer"]['keeps the empty buffer the same command line opens there'] = function()
+  type_to_claude_code_exiting_at_start(child, 'entry-claude-exit-hidden-wipe')
+  local terminal = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.lua([[
+    local notes = vim.api.nvim_create_buf(true, true)
+    vim.api.nvim_buf_set_lines(notes, 0, -1, true, { 'notes' })
+    vim.api.nvim_win_set_buf(0, notes)
+  ]])
+
+  entry.command(child, 'bwipeout! ' .. terminal .. ' | enew')
+
+  eq(entry.messages(child), {})
+  eq(entry.windows(child), { '', 'aineo://report', 'aineo://input' })
 end
 
 T["another buffer wiped in Claude's window"] = MiniTest.new_set()
