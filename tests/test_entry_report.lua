@@ -10,9 +10,9 @@ local eq = MiniTest.expect.equality
 local REPORT_PATIENCE_MS = 10000
 
 --- The expression, run in the child, that gives the Report's lines, each
---- time of day written `HH:MM`.
+--- time of day, which follows the icon, written `HH:MM`.
 local REPORT_LINES = [[vim.tbl_map(function(line)
-  return (line:gsub('^%d%d:%d%d ', 'HH:MM '))
+  return (line:gsub('^(%S+ )%d%d:%d%d ', '%1HH:MM '))
 end, vim.api.nvim_buf_get_lines(vim.fn.bufnr('aineo://report'), 0, -1, true))]]
 
 local child = MiniTest.new_child_neovim()
@@ -45,7 +45,7 @@ T['the report tool']['called by Claude shows its report in the Report'] = functi
   child.cmd('Aineo open')
 
   wait_for_report()
-  eq(child.lua_get(REPORT_LINES), { 'HH:MM [done] Refactor the parser — All tests pass' })
+  eq(child.lua_get(REPORT_LINES), { '✓ HH:MM [done] Refactor the parser — All tests pass' })
 end
 
 T['the report tool']["stamps Claude's report with the editor's local time"] = function()
@@ -67,7 +67,7 @@ T['the report tool']["stamps Claude's report with the editor's local time"] = fu
   wait_for_report()
   eq(
     child.lua_get("vim.api.nvim_buf_get_lines(vim.fn.bufnr('aineo://report'), 0, -1, true)"),
-    { '09:05 [done] Refactor the parser — All tests pass' }
+    { '✓ 09:05 [done] Refactor the parser — All tests pass' }
   )
 end
 
