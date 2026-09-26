@@ -10,23 +10,26 @@ The task, verbatim from the task list:
 
 It rests on C2, the layout, and on the user's words of 2026-09-26 (*What was decided already*).
 
-### The behaviours — RW1 to RW4 tested, each test seen red first; RW5 is an invariant
+### The behaviours — RW1 and RW2 tested, each test seen red first; RW3, RW4 and RW5 are invariants
 
-- **RW1 — the right column wraps.** Whenever the layout is open, the Report's window and Input's window, each showing its own buffer, have `'wrap'`, `'linebreak'` and `'breakindent'` on.
+- **RW1 — the right column wraps.** Whenever the layout opens or is restored, the Report's window and Input's window, each showing its own buffer, have `'wrap'`, `'linebreak'` and `'breakindent'` on.
   - This holds when the user's configuration turns them off (`vim.o.wrap = false`, as many do), which is the case to test.
   - It holds on every path that makes one of those windows, or puts its buffer back in it:
     - the first `open()`;
     - `\o` after the user closed the Report, Input or both;
     - `\o` after Input's buffer was wiped and made again;
+    - `\o` after another buffer took the Report's or Input's window — help, a terminal, a scratch buffer, or a file the file column had no room for (`show_buffers()`);
     - the Report's or Input's buffer given back to its window after a file was redirected out of it (C9).
+  - **A closed window's options come back with its buffer.** Neovim keeps a closed window's options with its buffer and gives them to the window made again for it (`evidence/window-option-scope.txt`, probe 3, both versions). So the close-and-reopen paths are red on `dev`, but they do not show that `open()` sets the options again: RW2's test does, and so does the wiped-Input path, whose new buffer has no saved options.
 - **RW2 — `\o` puts them back.** `open()` sets them again, as it puts the proportions back. A user's `:setlocal nowrap` in the Report lasts until the next `\o`. This is the orchestrator's reading of "by default"; name it in your session note's *Readings for the MVP review*.
-- **RW3 — only aineo's buffers.** The options belong to the Report's and Input's buffers in those windows, not to the windows themselves:
+- **RW3 — only aineo's buffers (an invariant).** The options belong to the Report's and Input's buffers in those windows, not to the windows themselves:
   - a file shown in, or split from, a right-column window keeps the user's own settings — this includes the file column when it opens from the Report or Input;
-  - the user's global values (`vim.o.wrap` and the others) are unchanged.
+  - the user's global values are unchanged. Read them with `vim.go.wrap`, `vim.go.linebreak` and `vim.go.breakindent`: `vim.o` reads the current window's value, which is `true` in a wrapped window.
   - Measured (`evidence/window-option-scope.txt`, both versions):
     - options set for the window (`vim.wo[win]`) are copied into every window split from it, a file's included, and stay on any buffer later shown in it;
     - set for the buffer in the window (`vim.wo[win][0]`, like `:setlocal`), they stay with that buffer. A file split from the window, or shown in it, gets the global values, and the window's own buffer gets them back when it returns.
-- **RW4 — Claude's window is untouched.** Claude's terminal window keeps whatever it had: the terminal wraps its own output.
+  - These tests pass on `dev`, where nothing sets the options. **Show that they can fail** by running them against the options set for the window (`vim.wo[win]`).
+- **RW4 — Claude's window is untouched (an invariant).** Claude's terminal window keeps whatever it had: the terminal wraps its own output. Its test passes on `dev`; show that it can fail by running it against Claude's window wrapped too.
 - **RW5 — nothing else changes (an invariant).** Every existing case of `tests/test_layout*.lua` stays green unchanged:
   - the windows' places;
   - their proportions;
@@ -42,7 +45,7 @@ The seam is yours under `tdd`. For example, the layout could set the options whe
   - `build()` (lines 459–483) makes the three windows on the first open. Input takes the window the user started from, unless that window shows a file to keep.
   - `reopen_closed_windows()` (lines 485–506) makes a closed window again.
   - `show_buffers()` (lines 508–517) puts a buffer back in its window.
-  - `open()` (lines 607–625) runs one of the first two, then `pin_windows()` and the proportions.
+  - `open()` (lines 607–625) runs `build()`, or `reopen_closed_windows()` then `show_buffers()` (lines 616–617), then `pin_windows()` and the proportions.
 - **The tests:** the layout's tests are:
   - `tests/test_layout.lua`;
   - `tests/test_layout_file_column.lua`;
@@ -104,7 +107,7 @@ Read first:
   - **Before you push**, for each of `origin/bugfix/t15-report-instructions` and `origin/bugfix/t13-neovim-0-12` that exists and is unmerged:
     1. `git fetch origin && git merge-tree --write-tree <your head> <branch>`. Exit 0 and no conflict listed means clean; it prints the merged tree's id.
     2. `git show <tree id>:doc/aineo.txt > doc/aineo.txt`.
-    3. `make test_file FILE=tests/test_doc.lua`.
+    3. `make test_file FILE=tests/test_doc.lua`, on both versions.
     4. `git checkout HEAD -- doc/aineo.txt`.
 
     Report the results.
@@ -117,7 +120,8 @@ Read first:
 ## What was decided already
 
 - **The user asked, on 2026-09-26:** "and the windows to the right, must have wrap lines by default activated, since many text are landing out of the screen."
-- **Asked how**, the user chose "Word wrap, small fix": `'wrap'`, `'linebreak'` (break between words) and `'breakindent'` (a wrapped details line continues under its indent).
+- **Asked how**, as put to the user: "The Report and Input windows (and, in wave 7, the changes pane's windows) will set 'wrap' for themselves, whatever your global setting. How should they wrap?"
+- **The user chose "Word wrap, small fix (Recommended)"**, the orchestrator's recommended option, over "Plain wrap, small fix" and "Word wrap, regular packet". It was described as: "'wrap' plus 'linebreak' (break between words, not mid-word) and 'breakindent' (a wrapped details line continues under its indent). A small fix in the layout, before T14."
 - **Wave 7's changes pane** will wrap its windows the same way. That is wave 7's, not yours.
 
 ## Budget

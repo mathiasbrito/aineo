@@ -6,7 +6,7 @@ You are dispatched by the orchestrator to implement **one packet** of the task l
 
 The task, verbatim from the task list:
 
-> | T15 | Report instructions (C6): Claude is asked to write each report for a person, in plain language — what is reported and how, never why; a plan (`started`) lists the features planned, a `done` what was done; references at the end, in parentheses, by number only — a small fix (the user, 2026-09-26) | T8 | active |
+> | T15 | Report instructions (C6): Claude is asked to write each report for a person, in plain language — what is reported and how, never why; a plan (`started`) lists the features planned, a `done` what was done; references at the end, in parentheses, by number or ID only — a small fix (the user, 2026-09-26) | T8 | active |
 
 It rests on:
 - **C6**: "the appended prompt tells Claude when to report". This packet adds *how to write* a report to that prompt.
@@ -20,15 +20,20 @@ Each is a property of the text `report_instructions()` returns (`lua/aineo/repor
   - to write every report for a person, in plain language, describing what is being reported;
   - to say what was done or planned, and how;
   - never to explain the reasons for decisions — no whys.
+  - **Scope.** The instructions are part of Claude's whole system prompt (`--append-system-prompt`, `lua/aineo/claude/arguments.lua:37–38`). So every rule of RI1–RI4 is stated for a report — its `summary` and `details` — and each line says so. Claude's replies in the terminal are unchanged; the first line already says "in addition to your usual replies". This is testable as a property: every line of the new text names a report or one of its fields.
+  - **Every status.** RI1 holds for all five statuses. What blocks a task (`blocked`), and what stopped it (`failed`), are stated as facts, among the whats. What is left out is the reasoning behind Claude's choices. This is the orchestrator's reading; name it in your session note's *Readings for the MVP review*.
 - **RI2 — a plan lists its features.** When Claude reports a plan to be implemented, with status `started`, `details` lists the features planned, one per line.
 - **RI3 — a `done` lists what was done.** When Claude reports `done`, `details` lists what was done — the features — one per line.
-- **RI4 — references at the end, by number only.** References to documents go at the very end of the report, in parentheses, by number or ID only, with no explanation. The documents are decisions, components, tasks, issues, pull requests and docs. For example: `(D18, C12, #31)`.
-  - "The very end" is the last line of `details`, or the end of `summary` when a report has no details.
+- **RI4 — references at the very end, by number or ID only.** References to documents go at the very end of the report, in parentheses, by number or ID only, with no explanation. The documents are decisions, components, tasks, issues, pull requests and docs. For example: `(D18, C12, #31)`.
+  - "The very end" is a line of its own, the last line of `details`; or, when a report has no details, the end of `summary`.
   - Give the example in the instructions.
+  - A test pins "very end", so that references placed at the start fail it.
 - **RI5 — the rest stands (an invariant).** These stay as they are, and every existing case of `tests/test_report.lua` › `report_instructions()` stays green unchanged:
   - the tool's name;
-  - the four fields;
+  - the four field names;
   - the statuses and the moment to report each (`lua/aineo/report/format.lua`, `STATUSES`, lines 9–13).
+
+  **The `details` description changes to agree with RI2–RI4.** Today it offers "the files you changed", which contradicts RI3's features. Say so in your report.
 - **RI6 — nothing else changes (an invariant).** None of these changes:
   - the report format and its validation;
   - the MCP tool's schema and description (`lua/aineo/mcp/protocol.lua:32`);
@@ -44,7 +49,7 @@ The seam is yours under `tdd`. For example, `report_instructions()` could gain a
   - `field_lines()` (lines 20–30) tells `summary` "one line saying what happened", and `details` "optional further lines, such as the files you changed or the question the user must answer";
   - `status_lines()` (lines 32–39) gives each status's moment from `format.STATUSES`;
   - `report_instructions(tool_name)` (lines 41–58) joins them.
-- **The pins:** `tests/test_report.lua` lines 134–170 check that the instructions:
+- **The pins:** `tests/test_report.lua` lines 134–168 check that the instructions:
   - name the tool;
   - name each field;
   - give each status's moment.
@@ -103,7 +108,7 @@ Read first:
   - **Before you push**, for each of `origin/bugfix/t16-right-column-wrap` and `origin/bugfix/t13-neovim-0-12` that exists and is unmerged:
     1. `git fetch origin && git merge-tree --write-tree <your head> <branch>`. Exit 0 and no conflict listed means clean; it prints the merged tree's id.
     2. `git show <tree id>:doc/aineo.txt > doc/aineo.txt`.
-    3. `make test_file FILE=tests/test_doc.lua`.
+    3. `make test_file FILE=tests/test_doc.lua`, on both versions.
     4. `git checkout HEAD -- doc/aineo.txt`.
 
     Report the results.
@@ -116,7 +121,9 @@ Read first:
 ## What was decided already
 
 - **The user asked, on 2026-09-26:** "for the agent it must be clear that the report window is to report in a human language, with description of what is being reported, if it is a plan to be implemented, to list the features planned, if it is a done, to list what was done, which features, references to docs, must appear at the end between () only citing numbers. We do not want explanations about decisions and whys, the report window are the whats and how. This is just an adjustment to what should be asked to the agent in the session."
-- **The orchestrator restated it** as RI1–RI4: a plan is a `started` report, its features one per line in `details`, and references are given like `(D18, C12, #31)` at the very end. The user answered "Right, as a small fix".
+- **The orchestrator restated it**, as put to the user: "The report instructions Claude gets at start (`lua/aineo/report/instructions.lua`) would say: every report is written for a person in plain language, the whats and hows, never the whys. A plan (`started`) lists the planned features in `details`, one per line. A `done` lists what was done, the features, one per line. References go at the very end, in parentheses, by number only, e.g. `(D18, C12, #31)`. Only the instructions change; the report format and how the Report shows it stay. Is that right, and how should it run?"
+- **The user answered "Right, as a small fix (Recommended)"**, the orchestrator's recommended option.
+- The example's IDs, such as `D18`, are "numbers" in the user's "only citing numbers". Hence "by number or ID".
 - **Unchanged:**
   - the other statuses keep their moments;
   - the report format;
