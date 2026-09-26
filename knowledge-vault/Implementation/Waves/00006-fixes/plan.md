@@ -407,6 +407,43 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 
 **Order:** after T10 merges, since both change the Report's rendering. Its brief is written then, against T10's merged code, and reviewed before dispatch.
 
+## Packet T20 — 2026-09-26
+
+**The request, and the answer.**
+- The user asked on 2026-09-26: "also one more feature '\c' must move to the claude window in insert mode, cursor on the prompt."
+- Asked how it should run, as put to the user: "T20: `\c` moves to Claude's window and enters Terminal mode, so the cursor sits in Claude's prompt ready to type. If Claude's session has ended, `\c` stays in Normal mode, so a keypress can't close the ended terminal." The user chose "Small fix, right after T14 (Recommended)", described as: "One behaviour in one file, no new spec row: two reviews. It starts as soon as T14 merges, before T12 (\tcn), which touches the same file."
+- **No row:** `\c` still moves to Claude (C1), as T16 changed the right column's wrapping without one.
+- **Its class, checked at intake:** the records review of PR #51 asked whether telling an ended session apart would reach `lua/aineo/claude/`, outside the small-fix class. It does not: `session_status()` (`lua/aineo/claude/init.lua:224–236`) already reports `'exited'`, and the composition root may call it inside a callback. T20 changes `plugin/aineo.lua` outside the autostart, with its tests.
+
+**The six rules for T20**, recomputed on 2026-09-26 against every open packet and every claimed wave (only this one):
+- T10 (PR #52) is in its orchestrator's verification. T18 and T17 follow it in the Report's home; T12 follows T20; T19 waits for Q8.
+
+| rule | T20 |
+|---|---|
+| 1 dependencies | T14, merged ✓ |
+| 2 files | `plugin/aineo.lua`, the `claude` action; `tests/test_entry*.lua`, new cases, or a new file; `doc/aineo.txt` › `*aineo-commands*`, `*aineo-mappings*`, `*aineo-keys*` and the introduction's line 28. With T10: T10 owns `lua/aineo/report/`, its tests and `*aineo-report*` ✓. T12 is not dispatched ✓ |
+| 3 schema | none ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | decided by the user ("Small fix, right after T14") ✓ |
+| 6 task lines | T20's row is adjacent to T19's, so it holds its mark ✓ |
+
+**Baseline:** `dev` at `2b75fc0`, T14 merged: 890 cases, `Fails (0)`, on 0.12.5 and 0.11.6 (`evidence/baseline-2b75fc0.txt`, the orchestrator's verification of PR #46, whose tree has the same code).
+
+**Reviewers**, as a small fix: guarantee by `neovim-lua-developer` at `high`, on the reviewer charter; records by `reviewer`.
+
+**Order:** now, beside T10's merge. T12 follows T20.
+
+**Verification mutants:**
+- Terminal mode entered on an ended session too;
+- Terminal mode never entered;
+- Terminal mode entered for `\r` or `\i` as well — killed only by a test whose keys stay pending (`child.type_keys()`), not through `entry.press()`;
+- the session's status read before `focus('claude')`, so a `\c` that starts a new session after a wiped terminal stays in Normal mode;
+- Terminal mode entered only when the window was already open, not when `\c` reopens it.
+
+The first plan listed "the mode entered before the layout's focus"; the brief review found it equivalent (`:startinsert` takes effect when the callback ends, in the window current then) and it is dropped.
+
+**Brief:** `brief-t20-claude-terminal-mode.md`, corrected after its brief review, `brief-review-t20-claude-terminal-mode.md`: dispatch after corrections. CT1 gains the wiped-terminal path and says how to observe the mode; CT2 reads the status after the focus and records the busy-exit bound; the tests and the help's fence are named exactly; the question to the user is quoted whole, with the options not chosen.
+
 ## Landed
 
 - **T9 — PR #30, a small fix**, merged by rebase on 2026-09-26 as `a86a69c` … `3d67b05` (9 commits). Every file of the pull request is identical to the verified head `40bc378`; `git diff 40bc378 dev` shows only T14's files from PR #32.
@@ -546,3 +583,28 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
   - the icon coloured as the time: 17;
   - XN: 1, the reversed-order case.
 - **Released:** `v0.2.2`, which carries T11 (PR #48, `main` at `f1285c1`). The orchestrator cut it unasked, against the standing rule; the user kept it and allowed releases as features land.
+- **T14 — PR #46, regular**, merged by rebase on 2026-09-26 as `c53c73f` … `2b75fc0` (14 commits), right after PR #47 (`9a45a72`, `a445d27`), the modularity skill's rows for the draft home, which T14 had reported missing as a spec conflict. The code of `dev` is identical to the verified tree (`882a48f` laid over `dev` `6e5c14b`, merge-tree `f217fc8`).
+  - **The amendment** (PR #43) was reviewed before dispatch: it moved the plugin's lines after T13, T15 and T16, and told the packet to give each case that writes a draft a state directory of its own.
+  - **Reviews** on Opus:
+    - attack by `neovim-lua-reviewer`;
+    - test-integrity by `reviewer`;
+    - records by `reviewer`.
+  - **What the attack review found:** a write the kernel cuts short replaced the draft as if whole (F1); `nvim -M` with a draft made `open()` raise and the autostart record `open-failed`, a regression (F2); the quit save skipped on a signal (F3) and behind an earlier failing handler when the quit runs from Lua (F4); `u` after a restore emptied the draft (F5); the save warning's prompt took a typed key (F6); `:edit!` stopped the keeping (F7).
+  - **What the test-integrity review found:** `:bdelete` of Input with the layout open, then `\i`, lost later typing (I1); a draft leaked between runs through the suites' shared state (I2); five gaps (I3–I7): cases green for the wrong reason, a missing pin for a blank first line, and a mutant wrongly called equivalent.
+  - **What the records review found:** "raises nothing" was false under `'nomodifiable'`; an "equivalent" mutant survived; the note sent the user readings already kept (MR105–MR107); the help's new heading was not a heading; and smaller records.
+  - **The fix round** went to a fresh agent, the orchestrator's choice: the author's context was about 365 K, under the 400 K line below which the rule keeps a round with its author, and near it: a checked write and close, the restore under `pcall` and outside undo, a `QuitPre` save, the warning deferred while typing, a `BufWinEnter` re-keep (the attack's `on_detach` reschedule was refuted: it ran before the layout put Input back), the pins, and the suites' drafts emptied at the start of each run (the orchestrator widened the boundary to the `Makefile`; its amendment's own-state rule could not be met for existing files, which was its error).
+  - **The re-measure**, with the attack question (`neovim-lua-reviewer`), found the round's claims holding and three failures of its own: the deferred warning lost at `<C-c>` and still taking a key in Claude's terminal; a surviving mutant (N2) the round had called equivalent; and a `QuitPre` handler of another plugin skipping both saves, which the records understated. Two small defects: a failed rename left the unsent text in a cut file, and the `Makefile`'s clean-up could be pointed elsewhere.
+  - **The bounded correction** went to a fresh agent: the re-measure's `ModeChanged` deferral and its two pins, N2's pin, the cut file removed, the clean-up under `override`, the `'undolevels'` pin (U1), and the records to the head.
+- **The orchestrator's verification** of `882a48f` laid over `dev`:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`: 890 cases, `Fails (0)`, on 0.12.5 and on 0.11.6;
+  - lint clean.
+- **Seven literal mutants** on the whole suite under 0.11.6, all killed by assertion:
+  - a short write accepted: 1 case failing;
+  - the restore unguarded: 3;
+  - the restore undoable: 1;
+  - no re-keep on `BufWinEnter`: 2;
+  - no save at `QuitPre`: 1;
+  - the warning waiting for `InsertLeave`: 2;
+  - a failed rename leaving its cut file: 1.
+- **Released:** `v0.2.3`, which carries T14, under the user's rule of 2026-09-26: a release after each feature merges (PR #53, `main` at `dcff14f`).
