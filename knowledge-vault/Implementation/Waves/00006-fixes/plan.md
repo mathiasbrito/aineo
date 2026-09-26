@@ -407,6 +407,31 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 
 **Order:** after T10 merges, since both change the Report's rendering. Its brief is written then, against T10's merged code, and reviewed before dispatch.
 
+**Brief, 2026-09-26:** `brief-t17-report-paths.md`, written once T18 had merged (`e84ce9f`), since T18 changed the same rendering after T10; its brief review is `brief-review-t17-report-paths.md`. The orchestrator's readings are its candidate rule (a `/` or an inner `.`, so a bare `Makefile` is not a path), `:<line>:<column>` naming the line, the Report's working directory for relative paths against `gf`'s own resolution, the check made when a report is drawn, a group of its own, `AineoReportPath`, and no address on a path.
+
+**The six rules for T17**, recomputed on 2026-09-26 against every open packet (T21, PR #64, in review) and every claimed wave (only this one):
+
+| rule | T17 |
+|---|---|
+| 1 dependencies | T10 and T18 merged ✓ |
+| 2 files | `lua/aineo/report/` (not `links.lua`, `format.lua`, `records.lua`); `tests/test_report*.lua`; `doc/aineo.txt` › `*aineo-report*`. T21 changes `lua/aineo/layout/`, `tests/test_entry_claude_exit.lua` and `*aineo-commands*`: disjoint. T17 opens files through the layout's `redirect()`, which T21 changes only for a wiped role buffer ✓ |
+| 3 schema | none: the records and the report format are unchanged ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | the behaviour is the user's ("Double-click opens (Recommended)"); the rule's details are the orchestrator's readings, for the MVP review ✓ |
+| 6 task lines | T17's row is adjacent to T16's and T18's; it holds its mark ✓ |
+
+**Baseline:** `dev` at `e84ce9f`: 1013 cases, `Fails (0)`, on 0.12.5 and 0.11.6, lint clean (`evidence/baseline-e84ce9f.txt`).
+
+**Reviewers**, as a small fix: guarantee by `neovim-lua-developer` on the reviewer charter, records by `reviewer`.
+
+**Verification mutants:**
+- a directory underlined as a path;
+- a path found only when it holds a `/`;
+- the existence check dropped;
+- a path found inside a web link;
+- the double-click opening the word under the cursor, not the path;
+- the paths drawn on arrival but not when the Report shows its records again.
+
 ## Packet T20 — 2026-09-26
 
 **The request, and the answer.**
