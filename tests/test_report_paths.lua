@@ -31,7 +31,7 @@ local function make_project()
   fixture.write(PROJECT .. '/lua/foo.lua~', { 'return {}' })
   fixture.write(PROJECT .. '/notes.txt', { 'one', 'two', 'three', 'four' })
   fixture.write(PROJECT .. '/lua/x.lua:https:/x.y/a', { 'a line' })
-  for _, name in ipairs({ 'Makefile', 'README.md', '.gitignore', '.luarc.json' }) do
+  for _, name in ipairs({ 'Makefile', 'Makefile.', 'README.md', '.gitignore', '.luarc.json' }) do
     fixture.write(PROJECT .. '/' .. name, { 'a line' })
   end
 end
@@ -266,6 +266,7 @@ T['a name'] = MiniTest.new_set({
     { './Makefile', { './Makefile' } },
     { 'Makefile', {} },
     { 'Makefile.', {} },
+    { 'Makefile.:3', {} },
     { '.gitignore', {} },
   },
 })
@@ -499,30 +500,33 @@ end
 
 --- What the child shows once a file opened: what each window shows, left to
 --- right (`entry.windows()`), what the current window shows, its cursor's
---- line, and the mode.
+--- line, the mode, and the last error message it gave (`v:errmsg`).
 ---
----@return { windows: string[], current: string, line: integer, mode: string }
+---@return { windows: string[], current: string, line: integer, mode: string, error: string }
 local function where_the_file_opened()
   return {
     windows = entry.windows(child),
     current = entry.current_window(child),
     line = child.lua_get([[vim.fn.line('.')]]),
     mode = child.lua_get([[vim.fn.mode()]]),
+    error = child.lua_get([[vim.v.errmsg]]),
   }
 end
 
 --- The file `file` open in the layout's file column and current, at line
---- `line`, in Normal mode, as `where_the_file_opened()` tells it.
+--- `line`, in Normal mode, with no error given, as `where_the_file_opened()`
+--- tells it.
 ---
 ---@param file string
 ---@param line integer
----@return { windows: string[], current: string, line: integer, mode: string }
+---@return { windows: string[], current: string, line: integer, mode: string, error: string }
 local function opened_in_file_column(file, line)
   return {
     windows = { 'terminal', file, 'aineo://report', 'aineo://input' },
     current = file,
     line = line,
     mode = 'n',
+    error = '',
   }
 end
 
@@ -713,6 +717,62 @@ T['a double-click']['on the space just before or after a path']['opens nothing, 
     { selection()[1], entry.windows(child) },
     { 'v', { 'terminal', 'aineo://report', 'aineo://input' } }
   )
+end
+
+--- What the child shows after a double-click that opens nothing: what each
+--- window shows, left to right (`entry.windows()`), and the last error
+--- message it gave (`v:errmsg`).
+---
+---@return { windows: string[], error: string }
+local function what_the_layout_shows()
+  return { windows = entry.windows(child), error = child.lua_get([[vim.v.errmsg]]) }
+end
+
+--- The layout as `what_the_layout_shows()` tells it when a double-click
+--- opened nothing and gave no error.
+local NOTHING_OPENED = { windows = { 'terminal', 'aineo://report', 'aineo://input' }, error = '' }
+
+T['a double-click']['past the end of a line that ends in a path opens nothing'] = function()
+  open_layout()
+  receive_details('See notes.txt:3')
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  double_click_in_report(2, 30)
+
+  selection()
+  eq(what_the_layout_shows(), NOTHING_OPENED)
+end
+
+T['a double-click']['on a web link opens no file'] = function()
+  open_layout()
+  receive_details('See https://x.y/a now')
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  double_click_in_report(2, 14)
+
+  selection()
+  eq(what_the_layout_shows(), NOTHING_OPENED)
+end
+
+T['a double-click']["on the Report's status line opens nothing"] = function()
+  open_layout()
+  receive_details('See notes.txt:3')
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+  local status_line = child.lua_get([[(function()
+    local window = vim.fn.win_findbuf(require('aineo.report').report_buffer())[1]
+    local position = vim.api.nvim_win_get_position(window)
+    return { row = position[1] + vim.api.nvim_win_get_height(window), col = position[2] + 12 }
+  end)()]])
+
+  for _ = 1, 2 do
+    child.api.nvim_input_mouse('left', 'press', '', 0, status_line.row, status_line.col)
+    child.api.nvim_input_mouse('left', 'release', '', 0, status_line.row, status_line.col)
+  end
+
+  vim.wait(CLICK_PATIENCE_MS, function()
+    return child.lua_get([[vim.api.nvim_get_mode().blocking]]) == false
+  end, 20)
+  eq(what_the_layout_shows(), NOTHING_OPENED)
 end
 
 return T
