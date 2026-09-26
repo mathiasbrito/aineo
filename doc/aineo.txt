@@ -117,8 +117,10 @@ saves nothing as it ends: like a crash, it loses at most the last second's
 typing.
 
 A draft that cannot be read, put into Input or written is told once as a
-warning; while you type in Insert mode, the warning waits until you leave
-it.
+warning. While you type in Insert, Replace or Terminal mode — in Input or
+in Claude's terminal — the warning waits until you leave that mode, with
+`<Esc>`, `CTRL-C` or `CTRL-\ CTRL-N`, so that its prompt never takes a key
+you type there.
 
 Restoring ~
 The three windows keep their sizes: the layout puts its proportions back

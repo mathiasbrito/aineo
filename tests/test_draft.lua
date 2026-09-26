@@ -824,6 +824,60 @@ T['a draft that cannot be written']['with a change pending is told as a warning 
   )
 end
 
+T['a draft that cannot be written']['is told once Insert mode is left with <C-c>, before a quit'] = function()
+  local state = fixture.directory('draft-unwritable-ctrl-c-state')
+  local told = vim.fs.joinpath(state, 'told')
+  child.lua(NOTIFICATIONS_KEPT_IN, { told })
+  child.lua(MAKING_THAT_FAILS)
+  keep_new_buffer(state)
+  child.type_keys('i', 'Refactor the parser')
+  vim.wait(SAVE_PATIENCE_MS, function()
+    return child.lua_get('_G.failed_makings') > 0
+  end, 20)
+  child.type_keys('<C-c>')
+
+  quit()
+
+  eq(
+    read_text(told),
+    ("%d aineo: cannot keep Input's draft in %s: E739: Cannot create directory: the disk is full\n"):format(
+      vim.log.levels.WARN,
+      draft_file(state)
+    )
+  )
+end
+
+--- Opens in the child, beside the kept buffer, a terminal running `cat`, as
+--- Claude's terminal runs beside Input, and enters Terminal mode in it.
+local TERMINAL_BESIDE_INPUT = [[
+  vim.cmd('rightbelow vsplit | enew')
+  vim.fn.jobstart({ 'cat' }, { term = true })
+  vim.cmd.startinsert()
+]]
+
+T['a draft that cannot be written']['is told once Terminal mode is left, not while typing in a terminal'] = function()
+  local state = fixture.directory('draft-unwritable-terminal-state')
+  child.lua(KEEP_NOTIFICATIONS)
+  child.lua(MAKING_THAT_FAILS)
+  keep_new_buffer(state)
+  child.lua(TERMINAL_BESIDE_INPUT)
+  vim.wait(SAVE_PATIENCE_MS, function()
+    return child.api.nvim_get_mode().mode == 't'
+  end, 20)
+  set_input({ 'Refactor the parser' })
+  vim.wait(SAVE_PATIENCE_MS, function()
+    return child.lua_get('_G.failed_makings') > 0
+  end, 20)
+  local while_in_terminal = child.lua_get('#_G.notifications')
+
+  child.type_keys([[<C-\><C-n>]])
+
+  eq({ while_in_terminal = while_in_terminal, once_left = child.lua_get('#_G.notifications') }, {
+    while_in_terminal = 0,
+    once_left = 1,
+  })
+end
+
 T['a draft that cannot be written']['is told once as a warning and raises nothing into the typing'] = function()
   local state = fixture.directory('draft-unwritable-state')
   child.lua(KEEP_NOTIFICATIONS)
