@@ -111,10 +111,12 @@ A change not saved yet is saved as you quit with `:quit`, `:qall`,
 `:wqall`, `:xall` or `ZZ`, and again, when that save failed or did not
 run, as Neovim unloads Input on its way out. `:cquit` has only that second
 save, which a |BufWinLeave| or |BufUnload| handler that fails before
-aineo's can skip; the draft then holds what was saved a second after each
-change. A Neovim ended by a signal — its terminal window closed, `kill` —
-saves nothing as it ends: like a crash, it loses at most the last second's
-typing.
+aineo's can skip. A |QuitPre| handler that fails before aineo's — a
+Vimscript `:throw`, or any error when the quit runs from Lua — skips both
+saves, for every quit that fires |QuitPre|. Either way, the draft then
+holds what was saved a second after each change. A Neovim ended by a
+signal — its terminal window closed, `kill` — saves nothing as it ends:
+like a crash, it loses at most the last second's typing.
 
 A draft that cannot be read, put into Input or written is told once as a
 warning. While you type in Insert, Replace or Terminal mode — in Input or
