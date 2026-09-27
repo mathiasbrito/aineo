@@ -68,12 +68,11 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 - **In review, 2026-09-27 (late):**
   - T22, the suite's files run side by side (D26), PR #85: 856 s → about 170 s.
   - T12, `\tcn` (D16), PR #84, with D27: the toggle stays as the user left it across new Claude terminals.
-  - T23, the git home, PR #79: corrected after its re-measure, in the orchestrator's verification.
 - **How the suite runs — D26** (the user, 2026-09-27): test files while working, the whole suite once before each push and in the orchestrator's verification, mutants on their covering files. It is in the root `CLAUDE.md`, the agents' charters and the orchestrate skill (PR #74).
 
 **Next:**
 - **Wave 7** (`Implementation/Waves/00007-panes/`, claimed 2026-09-27): a changes pane beside the agent pane, and sending only Input's selection, from D18–D22, C12 and C13.
-  - **Paused at the user's word** (2026-09-27): "we will not continue towards wave 7, finish the current work and wait my go to start wave 7". T23, already in flight, is finished (PR #79). Nothing else of wave 7 starts until the user says go.
+  - **Paused at the user's word** (2026-09-27): "we will not continue towards wave 7, finish the current work and wait my go to start wave 7". T23, the git home, was already in flight and has landed (PR #79, `2f44c73` … `da18aa6`); it has no caller yet, so no release carries it alone. Nothing else of wave 7 starts until the user says go.
   - T24 (panes) follows T12; T25 (the changes pane) and T26 (Visual Send) follow T24.
   - D20's four clauses, told to the user without a reply, are to be settled before T26's dispatch or at the MVP review.
 - The MVP review: the user kept MR1–MR97, MR99, MR100 and MR102–MR107 on 2026-09-26 ([[Review/2026-09-24 — v1 MVP readings review]]). The readings below remain.
@@ -115,3 +114,4 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 | 2026-09-26 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T20, `\c` into Claude's prompt, landed (PR #58, `5b625a5` … `ac42fd3`), release `v0.2.5` (PR #63, `0d4c8b4`); T18, the Report line without its icon, landed (PR #60, `f975b4c` … `e84ce9f`), release `v0.2.6` (PR #65, `164265b`); D25 and T21 decided by the user, Q8 measured; readings MR135–MR143 |
 | 2026-09-27 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T21, Claude's exit keeping the layout, landed (PR #64, `94f1228` … `e0582e0`), release `v0.2.7` (PR #70, `e1b55ee`); T17, the Report's file paths, landed (PR #68, `bf91fde` … `8386aed`), release `v0.2.8` (PR #71, `e202c1b`); T19's brief rewritten (PR #69) and dispatched; readings MR144–MR159 |
 | 2026-09-27 | [[Sessions/2026-09-26 — Wave 6 retrospective]] | Wave 6: T19, Claude's session resumed per directory, landed (PR #73, `8819340` … `384c084`), release `v0.2.9` (PR #81, `ece0cdb`); D26, the suite run less (PR #74) and side by side (T22 planned, PR #75); T12's brief amended with D27 (PRs #80, #82); wave 7 planned and claimed (PR #78), T23 dispatched (PR #79); readings MR160–MR180 |
+| 2026-09-27 | [[Sessions/2026-09-27 — Wave 7 retrospective]] | Wave 7: T23, the git home, landed (PR #79, `2f44c73` … `da18aa6`), no release; wave 7 paused at the user's word; readings MR181–MR196 |

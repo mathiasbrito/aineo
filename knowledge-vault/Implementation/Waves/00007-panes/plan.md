@@ -120,3 +120,45 @@ One for T26, to settle before its dispatch or at the MVP review. D20 records fou
 T26's row carries all four.
 
 ## Landed
+
+- **Wave 7 paused after T23**, at the user's word on 2026-09-27: "we will not continue towards wave 7, finish the current work and wait my go to start wave 7". T23 was already in its fix round, and was finished. T24–T26 wait for the user's go. The wave stays claimed.
+- **T23 — PR #79, regular**, merged by rebase on 2026-09-27 as `2f44c73` … `da18aa6` (19 commits). The code of `dev` is identical to the verified tree: `b38bdd8` laid over `dev` `cfa91ee`, merge-tree `8295e23`, which also holds T19.
+  - **The brief review** (dispatch after corrections, 18 findings) found, among others:
+    - `git diff` takes `index.lock` despite `GIT_OPTIONAL_LOCKS=0`, and made a concurrent commit fail;
+    - a watch on `logs/HEAD` alone dies after `git gc`;
+    - Linux ignores the recursive flag;
+    - fixtures under `.tests/` sit inside the checkout's repository;
+    - the tests' git isolation already existed;
+    - GH7's list of settings was incomplete;
+    - the modularity tables list every home (PR #77).
+  - **Reviews** on Opus: attack by `neovim-lua-reviewer`, test-integrity by `reviewer`, records by `reviewer`.
+  - **What they found:**
+    - the private index copy hid an edit made in the same second as `add` (5 of 5);
+    - the bound killed git but not its children;
+    - paths were read as pathspecs;
+    - a git ended by a signal counted as an answer;
+    - carriage returns were stripped;
+    - the watch could be starved;
+    - index-only changes were never reported;
+    - the editor's `GIT_*` variables reached git;
+    - seven cases were green for the wrong reasons;
+    - the arrived-green table named killers that did not kill.
+  - **The fix round** went to a fresh agent: the author's context was 522 K by `agent-context.py`. It adopted the reviews' measured fixes and pins; 110 mutants, 109 killed, DF11 equivalent. The shape of attack finding 7 was the orchestrator's decision: an index write counts as a change of the list.
+  - **The re-measure**, with the attack question (`neovim-lua-reviewer`), held every claim of the round. It found:
+    - the bound still waited for a process git leaves running;
+    - every read could run a `post-index-change` hook;
+    - the round's `GIT_LITERAL_PATHSPECS` broke on an editor's `GIT_ICASE_PATHSPECS`;
+    - M2 unpinned.
+    Its finding 4, the user's attributes turning diffs binary, the orchestrator decided as a reading: the attributes stay in force.
+  - **The bounded correction**, by a fresh agent, adopted the re-measure's fixes and pins: 1265 cases on both versions.
+- **The orchestrator's verification** of the merged tree, under D26:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`, 1328 cases, `Fails (0)`, on 0.12.5 (917 s) and 0.11.6 (925 s);
+  - lint clean.
+- **23 literal mutants**, all killed by assertion:
+  - the plan's ten: the bound; `done` in the fast event; the untracked files left out; `-z` dropped; the range reversed; `core.quotePath` let through; the diff on the repository's own index; the recursive watch trusted on Linux; the watch not debounced; its handles not released;
+  - a missing `git` raised;
+  - the rounds' guards: the group killed only while git runs; the copy not stamped; hooks; pathspecs; signals; carriage returns; no longest burst; an index-only change; the editor's `GIT_DIR`;
+  - the survivors: M2, W13, X1.
+  - Every one was killed on its covering test files on both versions except M2. The orchestrator's list of covering files missed `test_git_process.lua`, where the correction pinned it, so M2 was killed by assertion in the whole suite on 0.12.5.
+- **No release:** T23 adds no command, key or window.

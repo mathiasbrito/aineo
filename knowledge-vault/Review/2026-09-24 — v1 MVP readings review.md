@@ -337,8 +337,36 @@ Added 2026-09-27 by the orchestrator, from T19's brief and session note at `dev`
 | MR179 | Not measured on the real CLI: an id whose conversation existed and is gone; what 2.1.283 draws below 36 columns; what it does with keys in the half second before its exit; `--resume` with aineo's other flags together. | T19's session note |
 | MR180 | A new Claude Code whose id cannot be kept warns from a scheduled callback, which may land while the user is typing. | the author's open item |
 
+## Readings — the git home (T23)
+
+Added 2026-09-27 by the orchestrator, from T23's brief and session note at `dev` `da18aa6` (PR #79). The home has no caller yet: T25, the changes pane, will show what these decide. None was shown to the user.
+
+| ID | Reading | Source | Disposition |
+|---|---|---|---|
+| MR181 | The changes pane will list a working-tree change made by any process, the user's own included; T25 marks the user's saves. | T23's brief | open |
+| MR182 | Paths are relative to the repository's top level, even when the editor's directory is below it. | T23's brief | open |
+| MR183 | A base that is no longer an ancestor of `HEAD` (after a reset, or a checkout of another branch) is reported, not repaired. | T23's brief | open |
+| MR184 | The git home keeps no session base; its caller does. C13 says the home "holds the session's base commit". | T23's brief | open |
+| MR185 | A new file is one that is untracked and not excluded by `.gitignore`, `.git/info/exclude` or the user's `core.excludesFile`. | T23's brief | open |
+| MR186 | A file counts as renamed only once the rename is staged or committed; an unstaged `mv` shows a deletion and a new file. | T23's brief (measured by its brief review) | open |
+| MR187 | The minimum git is 2.36, which `-c core.fsmonitor=false` needs. | T23's brief; the fix round, on the records review's finding 5 | open |
+| MR188 | A copy that the user's `diff.renames=copies` asks git to find is listed as added, not copied. | the author's departure, accepted by the orchestrator as a conflict in its own brief | open |
+| MR189 | A commit that changes no file of the working tree reports a change of the list, since an index write counts. | the orchestrator's decision on the attack review's finding 7 | open |
+| MR190 | A file that the user's or the repository's attributes mark binary shows as "Binary files … differ": the attributes stay in force. | the orchestrator's decision on the re-measure's finding 4 | open |
+| MR191 | Not a repository is git's exit 128 at discovery, whatever its words: a missing directory, a bare repository and one git refuses for its ownership are reported alike, each in git's own words. | the author | open |
+
+## Limits a user can meet — the git home (T23)
+
+| ID | Limit | Source |
+|---|---|---|
+| MR192 | Not run on Linux. Measured through libuv's non-recursive path on macOS, the watch there misses a file changed in a subdirectory, and a branch moved from another worktree with `update-ref`. | attack review (finding 10); records review (finding 6) |
+| MR193 | A change made at the moment a watch starts can be missed: 2 of 50 writes on macOS. | the fix round |
+| MR194 | A diff's size is not bounded: a commit adding a 100 MB file gives a 100 MB diff. | attack review (finding 16) |
+| MR195 | A repository whose tracked files were all rewritten with the same content makes every read hash every file again, until a git of the user's or Claude's refreshes the index. The attack review measured 60 000 such files timing out. | attack review (finding 17) |
+| MR196 | A process git starts in a group or a session of its own escapes the time limit, and holds the answer back while it holds git's output. | re-measure (finding 1) |
+
 ## Disposition
 
-**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR137 and MR139–MR180 stay open for the next review; MR138 is decided (D25), landed with T21 (PR #64, `v0.2.7`).
+**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR137 and MR139–MR196 stay open for the next review; MR138 is decided (D25), landed with T21 (PR #64, `v0.2.7`).
 
 Before that, every item was **open** until the MVP review. A reading the user keeps is closed *kept*; one the user changes becomes a plan row through a converge round (a new `D#`, never an edit in place) and a task.
