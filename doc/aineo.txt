@@ -104,13 +104,16 @@ only you can read and write, and are never removed.
 A session in which nothing was sent leaves no conversation, and Claude Code
 cannot resume it: it prints "No conversation found with session ID: …" and
 exits. aineo then starts a new session in its place, in the windows that
-showed it, and keeps its id instead. The message shows for a second or two
-(Claude Code 2.1.283), at each start that follows a session in which
-nothing was sent, and if you were typing in Claude's window you are left in
+showed it, and keeps its id instead. At each start that follows a session
+in which nothing was sent, Claude Code 2.1.283 shows nothing for about a
+second, then the message for about half a second before the new session
+takes its place. If you were typing in Claude's window you are left in
 Normal mode there: `\c` puts you in the new prompt. A resumed Claude Code
-that exits any other way shows its exit as usual, and its id stays kept, so
-that each start there fails the same way: removing `aineo/claude-sessions/`
-under `stdpath('state')` makes every directory start a new session.
+that exits any other way shows its exit as usual, and its id stays kept. A
+resume that fails some other way — a Claude Code that words the message
+otherwise, or exits with another code — then fails the same way at each
+start there: removing `aineo/claude-sessions/` under `stdpath('state')`
+makes every directory start a new session.
 
 aineo resumes the session it started, not one you switch to inside Claude
 Code (`/clear`, `/resume`), and ignores a conversation you ran in a plain
