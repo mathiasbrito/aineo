@@ -195,8 +195,9 @@ end
 
 --- Whether `ended`, a session whose process has ended, resumed an id Claude
 --- Code had no conversation for: it exited 1 with `NO_CONVERSATION` and its
---- id on its terminal. The terminal is read with every blank left out, since
---- it wraps that line at its width; one already wiped tells nothing.
+--- id on its terminal. The terminal's lines are read joined, since it wraps
+--- that line at its width, each row keeping the blank it ends on; a terminal
+--- already wiped tells nothing.
 ---
 ---@param ended { buffer: integer, choice: aineo.claude.SessionChoice, exit_code: integer? }
 ---@return boolean
@@ -209,8 +210,7 @@ local function found_no_conversation(ended)
     return false
   end
   local screen = table.concat(vim.api.nvim_buf_get_lines(ended.buffer, 0, -1, false))
-  local message = NO_CONVERSATION .. ended.choice.id
-  return (screen:gsub('%s', '')):find((message:gsub('%s', '')), 1, true) ~= nil
+  return screen:find(NO_CONVERSATION .. ended.choice.id, 1, true) ~= nil
 end
 
 --- Runs Claude Code with `settings` on the session `choice` names, in a new
