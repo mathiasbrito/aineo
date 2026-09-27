@@ -278,21 +278,21 @@ Added 2026-09-27 by the orchestrator (session `938616f1`, branch `knowledge/w6-t
 | ID | Limit | Source |
 |---|---|---|
 | MR146 | A window Neovim will not close after a wipe — Neovim's last window, or the window the command-line window was opened from — stays on an empty buffer until `\c` opens the layout again; in the command-line-window state only `\c` recovers. | T21's fix round and its re-measure (finding 3) |
-| MR147 | A user's own `TermClose` autocommand that runs `:Aineo open` makes aineo's exit handlers miss that exit: the user stays in Terminal mode on the ended terminal, and the next key closes it. `i` is refused once they leave Terminal mode. | T21's re-measure (finding 1, third path) and correction |
+| MR147 | A user's own `TermClose` autocommand that runs `:Aineo open` makes aineo's exit handlers miss that exit: the user stays in Terminal mode on the ended terminal, and the next key closes it. `i` is refused once they leave Terminal mode — unless another process has taken Claude Code's process id by then. | T21's re-measure (finding 1, third path) and correction |
 | MR148 | A file shown in a layout window as the layout reopens, when the file column has no room for it, is covered by the role's buffer with no warning. Read from the code, not measured. | T21's correction › *Limits* |
 
 ## Readings — file paths in the Report (T17)
 
-Added 2026-09-27 by the orchestrator, from T17's brief and session note at `dev` `8386aed`. The user chose "Double-click opens (Recommended)"; the rule and the rest are readings, none shown to the user.
+Added 2026-09-27 by the orchestrator, from T17's brief and session note at `dev` `8386aed`. The user chose "Double-click opens (Recommended)"; the rule and the rest are readings, none shown to the user, except that paths carry no address, ⌘-click staying for web links, which the chosen option said.
 
 | ID | Reading | Source | Disposition |
 |---|---|---|---|
 | MR149 | A path is a run of characters up to an ASCII space, an ASCII control character, `<` `>` `"` `'` `\|` a backtick, a bracket, `,` or `*`, with a trailing `.` `:` `;` `!` `?` left out, that holds a `/` or a `.` neither first nor last: a bare `Makefile` is not a path. `:line` and `:line:column` are drawn with it and name the line. | T17's brief, RP1 | open |
-| MR150 | A relative path is the Report's working directory's; `gf` and `gF` keep Neovim's own resolution, so after a `:cd` they may name different files, and a double-click opens what is underlined. | T17's brief | open |
-| MR151 | Only a regular file is underlined, checked when a report is drawn — once per distinct path, so `x.lua:3` and `x.lua:4` share a check — and checked again at the double-click. | T17's brief; the author's reading; the fix round, on the guarantee review's G1 | open |
-| MR152 | A double-click on a path that no longer names a regular file opens nothing and warns: `aineo: <path> names no file now`, or `aineo: cannot look <path> up now: <reason>` when the lookup fails otherwise. | T17's fix round (the implementer's addition) and correction | open |
-| MR153 | Paths are drawn in `AineoReportPath`, a group apart from `AineoReportLink`, and carry no address: ⌘-click stays for web links. | T17's brief | open |
-| MR154 | Not found as paths: `~/x` (`~` is not expanded), a name starting with a dot (`.gitignore`; `./.gitignore` is found), a name holding a space, a range (`x.lua:12-20`, `x.lua#L12`), a path glued to non-ASCII punctuation, and a path in `~~` or `__` emphasis. | T17's brief; the guarantee review's G9 | open |
+| MR150 | A relative path is the Report's working directory's; `gf` and `gF` keep Neovim's own resolution, so after a `:cd` they may name different files, and a double-click opens what is underlined. After a `:cd`, the paths a new Claude Code writes may not be underlined. | T17's brief | open |
+| MR151 | Only a regular file is underlined, checked when a report is drawn — once per distinct path, so `x.lua:3` and `x.lua:4` share a check — and checked again at the double-click: a file made later is underlined at the next drawing, one removed stays underlined until then. | T17's brief; the author's reading; the fix round, on the guarantee review's finding 1 | open |
+| MR152 | A double-click on a path that no longer names a regular file opens nothing and warns: `aineo: <path> names no file now`, or `aineo: cannot look <path> up now: <reason>` when the lookup fails otherwise. | the guarantee review's built fix (finding 1), kept by the fix round; its reasons from the re-measure's measured fix (finding 3), adopted in the correction | open |
+| MR153 | Paths are drawn in `AineoReportPath`, a group apart from `AineoReportLink`. | T17's brief | open |
+| MR154 | Not found as paths: a name starting with a dot and holding no other (`.gitignore`, `.env`; `./.gitignore` and `.luarc.json` are found), a name holding a space, a range (`x.lua:12-20`, `x.lua#L12`), a path glued to non-ASCII punctuation, and a path in `~~` or `__` emphasis. `~` is not expanded: `~/x` is looked up as `<working directory>/~/x`. | T17's brief; the guarantee review's finding 9 | open |
 | MR155 | The Report's double-click takes the place of a user's own global `<2-LeftMouse>` mapping, in the Report only, and needs `'mouse'` on in Normal and Insert mode. | T17's brief | open |
 | MR156 | A double-click from Input in Insert mode ends Insert mode, whether it opens a file, is refused, or selects a word. | T17's re-measure (finding 4) | open |
 
@@ -301,8 +301,8 @@ Added 2026-09-27 by the orchestrator, from T17's brief and session note at `dev`
 | ID | Limit | Source |
 |---|---|---|
 | MR157 | Between the check at the double-click and `:edit`'s open, a window of 0.2–0.5 ms remains: a FIFO swapped in there still holds Neovim. An outside process swapping a link got past the check in 3–7 of 30 double-clicks. | T17's re-measure (finding 2) |
-| MR158 | The file checks are synchronous: a report naming paths on a hung network mount would hold the editor. Not measured; no such mount on the host. | T17's guarantee review (G5) |
-| MR159 | A report at the relay's 1 MiB line limit, full of distinct paths, takes about 1 s to show and at `:edit`; the 2 MiB of records the Report keeps, about 2 s at `:edit` (measured on this host, at loads up to about 190). | T17's packet, fix round and re-measure |
+| MR158 | The file checks are synchronous: a report naming paths on a hung network mount would hold the editor. Not measured; no such mount on the host. | T17's guarantee review (finding 5) |
+| MR159 | A report at the relay's 1 MiB line limit, full of distinct paths, takes about 1–1.2 s to show and at `:edit`; the 2 MiB of records the Report keeps, about 1.8–2.7 s at `:edit` (measured on this host, at loads up to about 196). | T17's packet, fix round and re-measure |
 
 ## Disposition
 
