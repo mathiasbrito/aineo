@@ -22,16 +22,23 @@ function M.directory(name)
   return path
 end
 
---- Writes `lines` to `.tests/fixtures/<name>`, replacing any earlier content
---- and creating the directories `name` leads through.
+--- Writes `lines` to `.tests/fixtures/<name>`, replacing any earlier file
+--- there and creating the directories `name` leads through.
+---
+--- The lines go to a file of this Neovim's own beside it first, which then
+--- takes the name at once: test files run side by side, and some write the
+--- same fixture, so a Neovim reading it while another writes it sees the one
+--- file or the other whole, never one cut short.
 ---
 ---@param name string the file's path under `.tests/fixtures/`, such as `passing.lua`
 ---@param lines string[] the file's lines
 ---@return string path the file's absolute path
 function M.write(name, lines)
   local path = vim.fs.joinpath(FIXTURES, name)
+  local written = ('%s.%d.writing'):format(path, vim.fn.getpid())
   vim.fn.mkdir(vim.fs.dirname(path), 'p')
-  assert(vim.fn.writefile(lines, path) == 0, 'cannot write ' .. path)
+  assert(vim.fn.writefile(lines, written) == 0, 'cannot write ' .. written)
+  assert(vim.uv.fs_rename(written, path))
   return path
 end
 

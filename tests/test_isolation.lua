@@ -21,12 +21,21 @@ local PLANTED_VALUES = ('vim.tbl_filter(function(value) return value:find(%q, 1,
   PLANTED
 )
 
---- A test file whose cases pass only in a runner isolated inside `.tests/`,
---- whose child Neovims are isolated too.
+--- The Lua chunk, run in the test runner, that returns where its user
+--- directories, Claude Code's settings and its log are.
+local RUNNER_USER_STATE = "return { vim.fn.stdpath('config'), vim.fn.stdpath('data'),"
+  .. " vim.fn.stdpath('state'), vim.fn.stdpath('cache'), vim.env.CLAUDE_CONFIG_DIR,"
+  .. ' vim.env.NVIM_LOG_FILE }'
+
+--- Where a run keeps the homes of its test files.
+local HOMES = vim.fs.joinpath(TEST_HOME, 'homes')
+
+--- A test file whose cases pass only in a Neovim isolated in a home of its
+--- own inside `.tests/`, whose child Neovims are isolated too.
 local ISOLATION_PROBE_FILE = {
   "local MiniTest = require('mini.test')",
   'local eq = MiniTest.expect.equality',
-  ('local HOME = %q'):format(TEST_HOME),
+  'local HOME = vim.fs.dirname(vim.env.XDG_CONFIG_HOME)',
   ('local children = dofile(%q)'):format(
     vim.fs.joinpath(vim.uv.cwd(), 'tests', 'helpers', 'child.lua')
   ),
@@ -44,12 +53,31 @@ local ISOLATION_PROBE_FILE = {
   ('  eq(child.lua_get(%q), {})'):format(PLANTED_VALUES),
   '  child.stop()',
   'end',
+  ("T['home'] = function() eq(vim.startswith(HOME, %q), true) end"):format(HOMES .. '/'),
   "T['config'] = function() eq(vim.fn.stdpath('config'), HOME .. '/config/nvim') end",
   "T['data'] = function() eq(vim.fn.stdpath('data'), HOME .. '/data/nvim') end",
   "T['state'] = function() eq(vim.fn.stdpath('state'), HOME .. '/state/nvim') end",
   "T['cache'] = function() eq(vim.fn.stdpath('cache'), HOME .. '/cache/nvim') end",
   "T['claude'] = function() eq(vim.env.CLAUDE_CONFIG_DIR, HOME .. '/claude') end",
   "T['log'] = function() eq(vim.env.NVIM_LOG_FILE, HOME .. '/state/nvim/log') end",
+  "T['the runner'] = function()",
+  "  local runner = vim.fn.sockconnect('pipe', vim.env.NVIM, { rpc = true })",
+  ('  eq(vim.rpcrequest(runner, "nvim_exec_lua", %q, {}), {'):format(RUNNER_USER_STATE),
+  ('    %q,'):format(TEST_HOME .. '/config/nvim'),
+  ('    %q,'):format(TEST_HOME .. '/data/nvim'),
+  ('    %q,'):format(TEST_HOME .. '/state/nvim'),
+  ('    %q,'):format(TEST_HOME .. '/cache/nvim'),
+  ('    %q,'):format(TEST_HOME .. '/claude'),
+  ('    %q,'):format(TEST_HOME .. '/state/nvim/log'),
+  '  })',
+  '  vim.fn.chanclose(runner)',
+  'end',
+  "T['no log fallback'] = function() eq(vim.env.__NVIM_LOG_FILE_WANT, nil) end",
+  "T['no log fallback in a child'] = function()",
+  '  children.restart(child)',
+  "  eq(child.lua_get('vim.env.__NVIM_LOG_FILE_WANT'), vim.NIL)",
+  '  child.stop()',
+  'end',
   'return T',
 }
 
@@ -110,6 +138,17 @@ end, function(path, directory)
   return ('Path:      %s\nDirectory: %s'):format(vim.inspect(path), directory)
 end)
 
+--- Expects `text` not to contain `fragment`, taken literally.
+local expect_no_mention = MiniTest.new_expectation(
+  'text not mentioning a fragment',
+  function(text, fragment)
+    return type(text) == 'string' and text:find(fragment, 1, true) == nil
+  end,
+  function(text, fragment)
+    return ('Fragment: %s\nText:     %s'):format(fragment, vim.inspect(text))
+  end
+)
+
 --- Expects no path of `paths` to be `directory` or to lie inside it.
 local expect_none_within = MiniTest.new_expectation(
   'no path within directory',
@@ -125,21 +164,21 @@ local expect_none_within = MiniTest.new_expectation(
 
 local T = MiniTest.new_set()
 
-T['the runner'] = MiniTest.new_set()
+T["a test file's Neovim"] = MiniTest.new_set()
 
-T['the runner']['resolves each user directory inside .tests/'] = MiniTest.new_set({
+T["a test file's Neovim"]['resolves each user directory inside .tests/'] = MiniTest.new_set({
   parametrize = { { 'config' }, { 'data' }, { 'state' }, { 'cache' } },
 })
 
-T['the runner']['resolves each user directory inside .tests/']['stdpath'] = function(kind)
+T["a test file's Neovim"]['resolves each user directory inside .tests/']['stdpath'] = function(kind)
   expect_inside(vim.fn.stdpath(kind), TEST_HOME)
 end
 
-T['the runner']['points Claude Code at a configuration inside .tests/'] = function()
+T["a test file's Neovim"]['points Claude Code at a configuration inside .tests/'] = function()
   expect_inside(vim.env.CLAUDE_CONFIG_DIR, TEST_HOME)
 end
 
-T['the runner']["has no part of the developer's configuration on 'runtimepath'"] = function()
+T["a test file's Neovim"]["has no part of the developer's configuration on 'runtimepath'"] = function()
   expect_none_within(vim.opt.runtimepath:get(), DEVELOPER_CONFIG)
 end
 
@@ -261,6 +300,17 @@ T['make test_file']['keeps the log a parent Neovim hands down out of its runner'
   })
 
   eq(result.code, 0)
+end
+
+T['make test_file']["keeps a parent Neovim's log fallback out of its runner and children"] = function()
+  local decoy = fixture.directory('decoy')
+
+  local result = probe_isolation({
+    environment = { __NVIM_LOG_FILE_WANT = vim.fs.joinpath(decoy, 'unreachable', 'log') },
+  })
+
+  eq(result.code, 0)
+  expect_no_mention(result.stderr, 'not accessible')
 end
 
 return T
