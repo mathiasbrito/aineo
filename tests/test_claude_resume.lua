@@ -707,6 +707,35 @@ T['a resume with no conversation']['leaves a user typing in Insert mode in a win
   }, { 'i', window, { 'abcdd' } })
 end
 
+T['a resume with no conversation']['leaves a user typing in Replace mode in a window of their own typing there'] = function()
+  local fake = fake_keeping_conversations('resume-refused-replace', 'ready')
+  child.o.columns = SIDE_BY_SIDE_COLUMNS
+  local resumed = resume_with_no_conversation(child, fake, kept_in('resume-refused-replace-state'))
+  child.lua(OPEN_USER_WINDOW)
+  child.type_keys('R')
+
+  eq(wait_until_wiped(child, resumed), true)
+  child.type_keys('X')
+
+  eq(
+    { child.lua_get(MODE), child.api.nvim_buf_get_lines(0, 0, -1, false) },
+    { 'R', { 'Xne', 'two' } }
+  )
+end
+
+T['a resume with no conversation']['leaves a user typing in Terminal mode in a terminal of their own typing there'] = function()
+  local fake = fake_keeping_conversations('resume-refused-terminal', 'ready')
+  child.o.columns = SIDE_BY_SIDE_COLUMNS
+  local resumed = resume_with_no_conversation(child, fake, kept_in('resume-refused-terminal-state'))
+  local terminal = child.lua(OPEN_USER_TERMINAL)
+  child.type_keys('i')
+
+  eq(wait_until_wiped(child, resumed), true)
+  child.type_keys('abc')
+
+  eq({ child.lua_get(MODE), wait_for_joined_screen(child, terminal, 'abc') }, { 't', 'abc' })
+end
+
 T['a resume with no conversation']['lets a user in a command of Insert mode’s CTRL-O go on typing in a window of their own'] = function()
   local fake = fake_keeping_conversations('resume-refused-insert-ctrl-o', 'ready')
   child.o.columns = SIDE_BY_SIDE_COLUMNS
