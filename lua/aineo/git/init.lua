@@ -4,9 +4,13 @@
 ---
 --- Every operation returns at once, runs git asynchronously with each process
 --- bounded in time, and calls its `done` exactly once, on the main loop, with
---- a failure or an answer; it never raises. Its answers do not depend on the
---- user's git settings, and its reads never take the repository's lock. The
---- home keeps no state but its watches: the base is its caller's.
+--- a failure or an answer; it never raises, called from a fast event
+--- included. Its answers do not depend on the user's git settings, nor on
+--- the `GIT_*` variables of the editor's environment that name another
+--- repository, and its reads never take the repository's lock. A diff is
+--- exactly what git printed, carriage returns included, and is not bounded
+--- in size: a commit that adds a 100 MB file gives a 100 MB diff. The home
+--- keeps no state but its watches: the base is its caller's.
 
 local changes = require('aineo.git.changes')
 local diffs = require('aineo.git.diffs')
@@ -84,13 +88,18 @@ function M.commit_diff(found, commit, done, options)
 end
 
 --- Starts watching `found`, and calls `on_change(nil, change)` on the main
---- loop once per burst of changes: when the branch moves — a commit, even
---- one that changes no file, an amend, a reset, a checkout, a merge, a
---- rebase, a move from another worktree — or a file of the working tree is
---- written, created, removed or renamed, by any process; or
---- `on_change(failure)` when the branch cannot be read. Returns the watch,
---- which says whether it sees changes in subdirectories — on Linux it does
---- not — or nil and why it could not start; it never raises.
+--- loop once per burst of changes — a burst ends 200 ms after its last event
+--- or 1 s after its first: when the branch moves — a commit, even one that
+--- changes no file, an amend, a reset, a checkout, a merge, a rebase, a move
+--- from another worktree — or when the list of files changed may differ: a
+--- file of the working tree is written, created, removed or renamed, by any
+--- process, or an index or a submodule changes, as every commit also does;
+--- or `on_change(failure)` when the branch cannot be read or a file system
+--- watch fails. A change made as the watch starts can be missed, so a caller
+--- reads what it shows once the watch has started. Returns the watch, which
+--- says whether it sees changes in subdirectories — on Linux it does not,
+--- and misses a branch moved by `git update-ref` from another worktree too
+--- — or nil and why it could not start; it never raises.
 ---
 ---@param found aineo.git.Repository as `M.find_repository()` gave it
 ---@param on_change fun(failure: aineo.git.Failure|nil, change: aineo.git.RepositoryChange|nil)

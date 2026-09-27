@@ -28,7 +28,9 @@ local ASK = [[
 --- log unless the command says otherwise: colours, prefixes, an external
 --- diff program and a text conversion that print their own words, no rename
 --- detection, relative paths, no context, short ids, other formats, dates
---- and encodings, and signatures shown.
+--- and encodings, signatures shown, every file taken as binary, empty
+--- context lines without their space, hunks joined across ten lines, files
+--- in an order of the user's, and no diff for a first commit.
 ---
 ---@param name string the fixture the repository is in
 ---@param top string
@@ -37,6 +39,11 @@ local function make_hostile(name, top)
   local textconv = git_repo.script(name, 'textconv', { 'echo CONVERTED' })
   local attributes = vim.fs.joinpath(vim.fs.dirname(top), 'attributes')
   assert(vim.fn.writefile({ '* diff=converted' }, attributes) == 0, 'cannot write ' .. attributes)
+  local order = vim.fs.joinpath(vim.fs.dirname(top), 'order')
+  assert(
+    vim.fn.writefile({ 'sub/moved-here.txt', 'sub/b.txt' }, order) == 0,
+    'cannot write ' .. order
+  )
   local settings = {
     { 'color.ui', 'always' },
     { 'diff.noprefix', 'true' },
@@ -54,6 +61,11 @@ local function make_hostile(name, top)
     { 'log.date', 'relative' },
     { 'log.showSignature', 'true' },
     { 'i18n.logOutputEncoding', 'ISO-8859-1' },
+    { 'core.bigFileThreshold', '1' },
+    { 'diff.suppressBlankEmpty', 'true' },
+    { 'diff.interHunkContext', '10' },
+    { 'diff.orderFile', order },
+    { 'log.showRoot', 'false' },
   }
   for _, setting in ipairs(settings) do
     git_repo.git(top, { 'config', setting[1], setting[2] })
@@ -141,9 +153,10 @@ T['a user’s git configuration']['that asks for copies does not change the file
 end
 
 T['a user’s git configuration']['does not change a file’s diff'] = function()
-  local top, base =
-    git_repo.create('configuration-file', { ['sub/a.txt'] = { '1', '2', '3', '4', '5', '6', '7' } })
-  git_repo.write(top, 'sub/a.txt', { '1', '2', '3', 'four', '5', '6', '7' })
+  local lines = { '1', '', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15' }
+  local top, base = git_repo.create('configuration-file', { ['sub/a.txt'] = lines })
+  lines[3], lines[13] = 'three', 'thirteen'
+  git_repo.write(top, 'sub/a.txt', lines)
   make_hostile('configuration-file', top)
 
   local seen = child.lua(
@@ -161,15 +174,22 @@ T['a user’s git configuration']['does not change a file’s diff'] = function(
       ),
       '--- a/sub/a.txt',
       '+++ b/sub/a.txt',
-      '@@ -1,7 +1,7 @@',
+      '@@ -1,6 +1,6 @@',
       ' 1',
-      ' 2',
-      ' 3',
-      '-4',
-      '+four',
+      ' ',
+      '-3',
+      '+three',
+      ' 4',
       ' 5',
       ' 6',
-      ' 7',
+      '@@ -10,6 +10,6 @@',
+      ' 10',
+      ' 11',
+      ' 12',
+      '-13',
+      '+thirteen',
+      ' 14',
+      ' 15',
       '',
     }, '\n')
   )
@@ -239,11 +259,14 @@ T['a user’s git configuration']['does not change the commits since a base'] = 
 end
 
 T['a user’s git configuration']['does not change a commit’s diff'] = function()
-  local top, base =
-    git_repo.create('configuration-commit', { ['sub/a.txt'] = { '1', '2', '3', '4', '5' } })
+  local top, base = git_repo.create(
+    'configuration-commit',
+    { ['sub/a.txt'] = { '1', '2', '3', '4', '5' }, ['sub/b.txt'] = { 'b' } }
+  )
   make_hostile('configuration-commit', top)
   git_repo.write(top, 'sub/a.txt', { '1', '2', 'three', '4', '5' })
-  git_repo.git(top, { 'add', 'sub/a.txt' })
+  git_repo.write(top, 'sub/b.txt', { 'b, changed' })
+  git_repo.git(top, { 'add', 'sub/a.txt', 'sub/b.txt' })
   local signed = commit_signed('configuration-commit', top, 'Café, signed')
   git_repo.git(top, { 'notes', 'add', '--message=A note of the user’s', signed })
 
@@ -272,9 +295,37 @@ T['a user’s git configuration']['does not change a commit’s diff'] = functio
       '+three',
       ' 4',
       ' 5',
+      'diff --git a/sub/b.txt b/sub/b.txt',
+      ('index %s..%s 100644'):format(
+        git_repo.git(top, { 'rev-parse', base .. ':sub/b.txt' }),
+        blob_on_disk(top, 'sub/b.txt')
+      ),
+      '--- a/sub/b.txt',
+      '+++ b/sub/b.txt',
+      '@@ -1 +1 @@',
+      '-b',
+      '+b, changed',
       '',
     }, '\n')
   )
+end
+
+T['a user’s git configuration']['does not change the diff of a repository’s first commit'] = function()
+  local top, base = git_repo.create('configuration-root', { ['a.txt'] = { 'a' } })
+  make_hostile('configuration-root', top)
+
+  local seen = child.lua(ASK, { top, 'commit_diff', { base } })
+
+  eq(vim.list_slice(vim.split(seen.result, '\n'), 7), {
+    'diff --git a/a.txt b/a.txt',
+    'new file mode 100644',
+    ('index %s..%s'):format(('0'):rep(40), blob_on_disk(top, 'a.txt')),
+    '--- /dev/null',
+    '+++ b/a.txt',
+    '@@ -0,0 +1 @@',
+    '+a',
+    '',
+  })
 end
 
 T['a user’s git configuration']['that asks for a file system monitor starts no daemon'] = function()

@@ -15,18 +15,52 @@ local DEFAULT_LIMIT_MS = 10000
 --- The settings every git the home runs is given, over the user's own, so
 --- that what it answers does not depend on them and nothing it starts
 --- outlives it: file names are given as on disk, a non-ASCII letter
---- included; and no file system monitor daemon is started.
+--- included; no file system monitor daemon is started; a text file is
+--- diffed as text up to 512 MiB, where a user's lower threshold would show it
+--- as a binary file; and an empty line of context keeps its leading space.
 local CONFIGURATION_OVERRIDES = {
   '-c',
   'core.quotePath=false',
   '-c',
   'core.fsmonitor=false',
+  '-c',
+  'core.bigFileThreshold=512m',
+  '-c',
+  'diff.suppressBlankEmpty=false',
 }
 
 --- The environment every git the home runs is given, over the editor's own:
---- a read that could skip a lock skips it.
+--- a read that could skip a lock skips it, and a path is the file of that
+--- name, never a pattern (`:`, `*`, `?` and `[` read literally).
 local ENVIRONMENT = {
   GIT_OPTIONAL_LOCKS = '0',
+  GIT_LITERAL_PATHSPECS = '1',
+}
+
+--- The variables of the editor's environment no git the home runs sees:
+--- those that make git read a repository, a working tree, an index or an
+--- object store other than the one it finds from its directory (the names
+--- `git rev-parse --local-env-vars` gives, less the two that carry `-c`
+--- settings, which the home's own `-c` and flags override where they would
+--- change an answer), and `GIT_NAMESPACE` and `GIT_DIFF_OPTS`, which change
+--- what it answers. An editor can carry any of them: git gives the editor it
+--- starts `GIT_INDEX_FILE`, and `git --git-dir` exports `GIT_DIR`.
+local EDITOR_VARIABLES_LEFT_OUT = {
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_COMMON_DIR',
+  'GIT_IMPLICIT_WORK_TREE',
+  'GIT_GRAFT_FILE',
+  'GIT_NO_REPLACE_OBJECTS',
+  'GIT_REPLACE_REF_BASE',
+  'GIT_PREFIX',
+  'GIT_SHALLOW_FILE',
+  'GIT_CONFIG',
+  'GIT_NAMESPACE',
+  'GIT_DIFF_OPTS',
 }
 
 --- How the home runs git; every field it leaves out is the home's default.
@@ -44,7 +78,8 @@ local ENVIRONMENT = {
 --- How a git process ended when it answered.
 ---@class aineo.git.Output
 ---@field code integer its exit code, one of the request's answers
----@field stdout string what it wrote to its standard output
+---@field stdout string what it wrote to its standard output, byte for byte
+---@field stderr string what it wrote to its standard error
 
 --- Why git gave no answer.
 ---@class aineo.git.Failure
@@ -53,7 +88,7 @@ local ENVIRONMENT = {
 ---@field code? integer the code git exited with, when it `failed` with one
 
 --- Runs one git request, and calls `done` as `run_git()` does; returns the
---- function that cancels it.
+--- function that cancels it, which holds back every `done` but `no_git`'s.
 ---@alias aineo.git.Run fun(request: aineo.git.Request, done: fun(failure: aineo.git.Failure|nil, output: aineo.git.Output|nil)): fun()
 
 --- Whether `code` is one of `answers`, `{ 0 }` when not given.
@@ -91,26 +126,53 @@ local function outcome(executable, limit_ms, request, result, timed_out)
       message = ('git ran past its limit of %d ms: %s'):format(limit_ms, executable),
     }
   end
+  if result.signal ~= 0 then
+    return {
+      reason = 'failed',
+      message = ('git was ended by signal %d: %s'):format(result.signal, executable),
+    }
+  end
   if not is_answer(result.code, request.answers) then
     return { reason = 'failed', message = vim.trim(result.stderr), code = result.code }
   end
-  return nil, { code = result.code, stdout = result.stdout }
+  return nil, { code = result.code, stdout = result.stdout, stderr = result.stderr }
 end
 
---- Kills `process` unless it has ended already.
+--- The whole environment git runs with for `request`: the editor's own,
+--- less `EDITOR_VARIABLES_LEFT_OUT`, then `ENVIRONMENT`, then the request's.
+---
+---@param request aineo.git.Request
+---@return table<string, string>
+local function environment_for(request)
+  local environment = vim.uv.os_environ()
+  for _, name in ipairs(EDITOR_VARIABLES_LEFT_OUT) do
+    environment[name] = nil
+  end
+  return vim.tbl_extend('force', environment, ENVIRONMENT, request.environment or {})
+end
+
+--- Kills `process`, which leads a process group of its own, and every
+--- process in that group — a `git fetch` git started for a partial clone's
+--- missing objects, and what it started in turn — unless it has ended
+--- already. A descendant that starts a group or a session of its own is not
+--- in the group and escapes the kill.
 ---
 ---@param process vim.SystemObj
 local function kill(process)
   if not process:is_closing() then
-    process:kill('sigkill')
+    vim.uv.kill(-process.pid, 'sigkill')
   end
 end
 
 --- Runs `executable` for `request` and, once it ends, calls on the main loop
 --- either `done(nil, output)` or `done(failure)`; never before it returns,
---- and never raising. A process still running at `limit_ms` is killed, and
---- reported `timed_out`. Returns a function that cancels the run: it kills
---- the process, and `done` is not called.
+--- and never raising. git runs leading a process group of its own; at
+--- `limit_ms`, a git still running is killed with every process of its
+--- group, and reported `timed_out`. A git ended by a signal is `failed`,
+--- never an answer. Returns a function that cancels the run: it kills the
+--- process and its group, and `done` is not called — save when git could
+--- not be started at all, where the cancel does nothing and `done(no_git)`
+--- still runs.
 ---
 ---@param executable string
 ---@param limit_ms integer
@@ -125,8 +187,10 @@ local function run_git(executable, limit_ms, request, done)
   local timer = assert(vim.uv.new_timer())
   local timed_out, cancelled = false, false
   local started, process = pcall(vim.system, command, {
-    text = true,
-    env = vim.tbl_extend('force', ENVIRONMENT, request.environment or {}),
+    text = false,
+    env = environment_for(request),
+    clear_env = true,
+    detach = true,
   }, function(result)
     timer:stop()
     timer:close()
