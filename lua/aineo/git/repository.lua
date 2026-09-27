@@ -16,6 +16,11 @@ local M = {}
 --- directory it is given.
 local NOT_A_REPOSITORY_CODE = 128
 
+--- The code `git rev-parse --verify --quiet` and `git symbolic-ref --quiet`
+--- exit with, silently, when `HEAD` names no commit yet or no branch: an
+--- answer, not a failure.
+local NONE_CODE = 1
+
 --- Splits `output` into its lines, the last newline dropped.
 ---
 ---@param output string
@@ -76,11 +81,15 @@ function M.read_head(run, top, done)
     {
       directory = top,
       arguments = { 'rev-parse', '--verify', '--quiet', 'HEAD' },
-      answers = { 0, 1 },
+      answers = { 0, NONE_CODE },
     },
     process.or_fail(done, function(head)
       run(
-        { directory = top, arguments = { 'symbolic-ref', '--quiet', 'HEAD' }, answers = { 0, 1 } },
+        {
+          directory = top,
+          arguments = { 'symbolic-ref', '--quiet', 'HEAD' },
+          answers = { 0, NONE_CODE },
+        },
         process.or_fail(done, function(reference)
           done(
             nil,
