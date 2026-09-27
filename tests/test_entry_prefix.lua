@@ -69,6 +69,16 @@ end
 
 T["the user's own mapping"] = MiniTest.new_set()
 
+T["the user's own mapping"]['of a whole key sequence stays'] = MiniTest.new_set({
+  parametrize = PREFIX_KEYS,
+})
+
+T["the user's own mapping"]['of a whole key sequence stays']['for'] = function(key)
+  children.restart(child, { '--cmd', ('nnoremap \\%s <Cmd>let g:mine = 1<CR>'):format(key) })
+
+  eq(child.fn.maparg('\\' .. key, 'n'), '<Cmd>let g:mine = 1<CR>')
+end
+
 T["the user's own mapping"]['of a key sequence stays, and the other keys are mapped'] = function()
   children.restart(child, { '--cmd', 'nnoremap \\o <Cmd>let g:mine = 1<CR>' })
 

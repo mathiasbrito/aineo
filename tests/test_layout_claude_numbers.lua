@@ -89,14 +89,6 @@ local T = MiniTest.new_set({ hooks = { post_once = child.stop } })
 
 T["toggling Claude's line numbers"] = MiniTest.new_set()
 
-T["toggling Claude's line numbers"]["hides 'number' and 'relativenumber' in Claude's window"] = function()
-  local buffers = open_with_numbers(child, { number = true, relativenumber = true })
-
-  toggle(child)
-
-  eq(numbers_of_window_showing(child, buffers.claude), { number = false, relativenumber = false })
-end
-
 T["toggling Claude's line numbers"]["gives 'number' to Claude's window when it never had line numbers"] = function()
   local buffers = open_with_numbers(child, { number = false, relativenumber = false })
 
@@ -134,6 +126,24 @@ T["toggling Claude's line numbers"]['leaves the current window, its cursor and t
   )
 end
 
+T["toggling Claude's line numbers when Claude's window shows them"] = MiniTest.new_set({
+  parametrize = {
+    { { number = true, relativenumber = false } },
+    { { number = false, relativenumber = true } },
+    { { number = true, relativenumber = true } },
+  },
+})
+
+T["toggling Claude's line numbers when Claude's window shows them"]["hides 'number' and 'relativenumber' in Claude's window"] = function(
+  numbers
+)
+  local buffers = open_with_numbers(child, numbers)
+
+  toggle(child)
+
+  eq(numbers_of_window_showing(child, buffers.claude), { number = false, relativenumber = false })
+end
+
 T["toggling Claude's line numbers again"] = MiniTest.new_set({
   parametrize = {
     { { number = true, relativenumber = false } },
@@ -147,6 +157,7 @@ T["toggling Claude's line numbers again"]["shows the line numbers Claude's windo
 )
   local buffers = open_with_numbers(child, numbers)
   toggle(child)
+  eq(numbers_of_window_showing(child, buffers.claude), { number = false, relativenumber = false })
 
   toggle(child)
 
@@ -195,16 +206,52 @@ end
 
 T["Claude's line numbers, once hidden,"] = MiniTest.new_set()
 
-T["Claude's line numbers, once hidden,"]["are not given to another buffer Claude's window shows when the layout follows a new Claude terminal"] = function()
+T["Claude's line numbers, once hidden,"]["are not given to another terminal Claude's window shows when the layout follows a new Claude terminal"] = function()
   local buffers = open_with_numbers(child, { number = true, relativenumber = false })
   toggle(child)
-  local other = child.api.nvim_create_buf(false, true)
+  local other = layout.terminal(child)
   child.api.nvim_win_set_buf(layout.window_showing(child, buffers.claude), other)
+  eq(numbers_of_window_showing(child, other), { number = true, relativenumber = false })
   local terminal = layout.terminal(child)
 
   child.lua([[require('aineo.layout').follow_claude_terminal(...)]], { terminal })
 
   eq(numbers_of_window_showing(child, other), { number = true, relativenumber = false })
+end
+
+T["Claude's line numbers, once hidden,"]["are not given to a terminal of the user's own in another tab when the layout opens again"] = function()
+  local buffers = open_with_numbers(child, { number = true, relativenumber = false })
+  toggle(child)
+  child.cmd('tabnew')
+  local mine = layout.terminal(child)
+  child.api.nvim_win_set_buf(0, mine)
+  child.cmd('setlocal number norelativenumber')
+  eq(numbers_of_window_showing_anywhere(child, mine), { number = true, relativenumber = false })
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq({
+    claude = numbers_of_window_showing_anywhere(child, buffers.claude),
+    mine = numbers_of_window_showing_anywhere(child, mine),
+  }, {
+    claude = { number = false, relativenumber = false },
+    mine = { number = true, relativenumber = false },
+  })
+end
+
+T["Claude's line numbers, toggled while Claude's window showed another buffer,"] =
+  MiniTest.new_set()
+
+T["Claude's line numbers, toggled while Claude's window showed another buffer,"]["are given to Claude's terminal when it comes back to that window"] = function()
+  local buffers = open_with_numbers(child, { number = true, relativenumber = false })
+  local claude_window = layout.window_showing(child, buffers.claude)
+  local other = child.api.nvim_create_buf(false, true)
+  child.api.nvim_win_set_buf(claude_window, other)
+  toggle(child)
+
+  child.api.nvim_win_set_buf(claude_window, buffers.claude)
+
+  eq(numbers_of_window_showing(child, buffers.claude), { number = false, relativenumber = false })
 end
 
 T['with no Claude window, toggling the line numbers'] = MiniTest.new_set()

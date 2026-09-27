@@ -22,7 +22,8 @@ local M = {}
 --- The layout's windows and the buffers they show, by role, the Report's
 --- share of the right column's height, Claude's terminal once Neovim has
 --- seen its process end, the line numbers `M.toggle_claude_numbers()` last
---- set in Claude's window, and those it showed before it hid them.
+--- set in Claude's window, those it showed before it hid them, and the
+--- window and buffer those line numbers were last shown for.
 local state = {
   ---@type table<aineo.layout.Role, integer>
   windows = {},
@@ -36,6 +37,8 @@ local state = {
   claude_numbers = nil,
   ---@type aineo.layout.LineNumbers|nil
   claude_numbers_before_hiding = nil,
+  ---@type { window: integer, buffer: integer }|nil
+  claude_numbers_shown_in = nil,
 }
 
 --- The role of `window` in the layout, or `nil` when it is not one of its
@@ -65,12 +68,12 @@ local function has_window(role)
 end
 
 --- Whether the layout's window for `role` exists and the buffer it was
---- handed for that window was not wiped: a window left on an empty buffer
---- after its buffer was wiped counts as gone.
+--- handed for that window was not wiped, whatever buffer the window shows:
+--- a window left on another buffer after its own was wiped counts as gone.
 ---
 ---@param role aineo.layout.Role
 ---@return boolean
-local function shows_own_buffer(role)
+local function has_window_and_buffer(role)
   return has_window(role) and vim.api.nvim_buf_is_valid(state.buffers[role])
 end
 
@@ -221,7 +224,8 @@ end
 ---@type aineo.layout.LineNumbers
 local NO_LINE_NUMBERS = { number = false, relativenumber = false }
 
---- The line numbers a Claude window that never showed any is given.
+--- The line numbers Claude's window is given when the toggle shows line
+--- numbers it never hid.
 ---@type aineo.layout.LineNumbers
 local ABSOLUTE_LINE_NUMBERS = { number = true, relativenumber = false }
 
@@ -244,17 +248,52 @@ local function show_line_numbers(window, numbers)
   vim.wo[window][0].relativenumber = numbers.relativenumber
 end
 
---- Makes Claude's window show again, for Claude's terminal, the line
---- numbers `M.toggle_claude_numbers()` last set there; does nothing before
---- the first toggle, nor when Claude's window is closed or shows another
---- buffer.
-local function keep_claude_numbers()
-  if
-    state.claude_numbers
+--- Makes `window` show the line numbers `M.toggle_claude_numbers()` last
+--- set, for the buffer it shows (`show_line_numbers()`), and remembers that
+--- window and that buffer as where they were last shown.
+---
+---@param window integer
+local function show_claude_numbers(window)
+  show_line_numbers(window, state.claude_numbers)
+  state.claude_numbers_shown_in = { window = window, buffer = vim.api.nvim_win_get_buf(window) }
+end
+
+--- Whether Claude's window shows Claude's terminal, after a toggle, and
+--- the toggle's line numbers were not yet shown there for that window and
+--- that terminal: the terminal is new, or the window is.
+---
+---@return boolean
+local function misses_claude_numbers()
+  local shown_in = state.claude_numbers_shown_in
+  return state.claude_numbers ~= nil
     and has_window('claude')
     and vim.api.nvim_win_get_buf(state.windows.claude) == state.buffers.claude
-  then
-    show_line_numbers(state.windows.claude, state.claude_numbers)
+    and not (
+      shown_in
+      and shown_in.window == state.windows.claude
+      and shown_in.buffer == state.buffers.claude
+    )
+end
+
+--- Makes Claude's window show, for Claude's terminal, the line numbers
+--- `M.toggle_claude_numbers()` last set, when they were not yet shown there
+--- for that window and that terminal (`misses_claude_numbers()`). Line
+--- numbers the user set by hand for the same terminal in the same window
+--- stay as they are.
+local function keep_claude_numbers()
+  if misses_claude_numbers() then
+    show_claude_numbers(state.windows.claude)
+  end
+end
+
+--- Keeps Claude's line numbers (`keep_claude_numbers()`) when Claude's
+--- terminal enters a window, as it does when the user brings it back into
+--- Claude's window by hand.
+---
+---@param event { buf: integer }
+local function keep_claude_numbers_on_entry(event)
+  if event.buf == state.buffers.claude then
+    keep_claude_numbers()
   end
 end
 
@@ -728,8 +767,10 @@ end
 --- (`leave_terminal_mode_as_claude_exits()`, `remember_claude_exit()`,
 --- `refuse_terminal_mode_once_claude_exited()`) and closes Claude's window
 --- when its terminal is wiped there (`close_claude_window_when_wiped()`);
---- and puts the proportions back whenever a window closes, the editor is
---- resized or a tab is entered, replacing what an earlier call set up.
+--- keeps Claude's line numbers as Claude's terminal enters a window
+--- (`keep_claude_numbers_on_entry()`); and puts the proportions back
+--- whenever a window closes, the editor is resized or a tab is entered,
+--- replacing what an earlier call set up.
 --- Input is made a scratch buffer first, so the redirect never takes it for
 --- a file. A window is still in the layout while `WinClosed` runs, so the
 --- proportions are put back after it; a tab that is not shown is resized
@@ -738,6 +779,10 @@ local function watch_windows()
   local group = vim.api.nvim_create_augroup('aineo.layout', {})
   vim.api.nvim_create_autocmd('BufWinEnter', { group = group, callback = keep_input_scratch })
   vim.api.nvim_create_autocmd('BufWinEnter', { group = group, callback = redirect_when_file })
+  vim.api.nvim_create_autocmd(
+    'BufWinEnter',
+    { group = group, callback = keep_claude_numbers_on_entry }
+  )
   vim.api.nvim_create_autocmd('WinClosed', {
     group = group,
     callback = function()
@@ -813,7 +858,10 @@ end
 --- (`'wrap'`, `'linebreak'`, `'breakindent'`), whatever the user's settings;
 --- Claude's window, and any other buffer shown in or split from those two,
 --- keep the user's own. Once `M.toggle_claude_numbers()` has set Claude's
---- line numbers, Claude's window shows them for Claude's terminal.
+--- line numbers, Claude's window shows them for a Claude terminal new to
+--- it, and when the window itself is new (`keep_claude_numbers()`); line
+--- numbers the user set by hand for the same terminal in the same window
+--- stay as they are.
 ---
 --- While any of the three windows exists, opening again restores the layout
 --- instead, in the tab that holds it: it creates only the windows that were
@@ -881,7 +929,7 @@ function M.focus(role, arrangement)
   vim.validate('role', role, function(value)
     return vim.list_contains(ROLES, value)
   end, false, "'claude', 'report' or 'input'")
-  if not shows_own_buffer(role) then
+  if not has_window_and_buffer(role) then
     if type(arrangement) == 'function' then
       arrangement = arrangement()
     end
@@ -898,7 +946,8 @@ end
 --- once it has, its window closed once it is wiped — then applies to
 --- `terminal`. It shows `terminal` in no window itself; Claude's window,
 --- when it shows `terminal` already, shows the line numbers
---- `M.toggle_claude_numbers()` last set there.
+--- `M.toggle_claude_numbers()` last set (`keep_claude_numbers()`), and so
+--- does it when `terminal` enters it later.
 ---
 --- Raises an error naming `terminal` when it is not an existing buffer.
 ---
@@ -916,22 +965,29 @@ local NO_CLAUDE_WINDOW =
 
 --- Hides the line numbers of the layout's Claude window, 'number' and
 --- 'relativenumber', when it shows either, and shows those it showed before
---- they were hidden otherwise, or 'number' alone when it never showed any.
---- The options are set for the buffer Claude's window shows, as `:setlocal`
---- does: a file opened from that window keeps the user's own. Acts on
---- Claude's window in the layout's tab from any tab, changing no other
---- window and moving neither the cursor nor the tab.
+--- they were last hidden otherwise, or 'number' alone when it has hidden
+--- none before. The options are set for the buffer Claude's window shows,
+--- whichever it is, as `:setlocal` does: a file opened from that window
+--- keeps the user's own. Acts on Claude's window in the layout's tab from
+--- any tab, changing no other window and moving neither the cursor nor the
+--- tab.
 ---
---- The line numbers it sets are kept for as long as the editor runs:
---- Claude's window shows them again for each new Claude terminal, whenever
---- `M.open()` shows one there or reopens the window, and whenever
---- `M.follow_claude_terminal()` follows one it shows.
+--- The line numbers it sets are kept for as long as the editor runs, and
+--- Claude's window shows them for Claude's terminal whenever the terminal
+--- or the window is one they were not yet shown for: a new Claude terminal
+--- `M.open()` shows there or `M.follow_claude_terminal()` follows, a window
+--- `M.open()` makes anew, and a terminal that enters Claude's window by
+--- hand (`keep_claude_numbers()`). Line numbers the user set by hand for the
+--- same terminal in the same window stay as they are. Toggled while
+--- Claude's window shows another buffer, the line numbers it set are the
+--- ones Claude's terminal is given there next.
 ---
 --- Without a Claude window — the layout never opened, Claude's window
---- closed, or left on an empty buffer once its terminal was wiped, as
---- `M.focus()` counts it — it changes nothing and warns the user once.
+--- closed, or left without its terminal once the terminal was wiped, on an
+--- empty buffer or on a file Neovim showed there, as `M.focus()` counts it
+--- — it changes nothing and warns the user once.
 function M.toggle_claude_numbers()
-  if not shows_own_buffer('claude') then
+  if not has_window_and_buffer('claude') then
     vim.notify(NO_CLAUDE_WINDOW, vim.log.levels.WARN)
     return
   end
@@ -942,7 +998,7 @@ function M.toggle_claude_numbers()
   else
     state.claude_numbers = state.claude_numbers_before_hiding or ABSOLUTE_LINE_NUMBERS
   end
-  show_line_numbers(state.windows.claude, state.claude_numbers)
+  show_claude_numbers(state.windows.claude)
 end
 
 --- The Input buffer, or `nil` before the layout was first opened.
