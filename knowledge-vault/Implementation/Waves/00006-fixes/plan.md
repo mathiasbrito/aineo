@@ -407,6 +407,35 @@ T11's own baseline is T13's merge, measured before dispatch and given in the dis
 
 **Order:** after T10 merges, since both change the Report's rendering. Its brief is written then, against T10's merged code, and reviewed before dispatch.
 
+**Brief, 2026-09-26:** `brief-t17-report-paths.md`, written once T18 had merged (`e84ce9f`), since T18 changed the same rendering after T10; its brief review is `brief-review-t17-report-paths.md`. It was corrected after its brief review: the double-click in Insert mode and on every Report, the checks counted, `*` a stop character, and the readings the rule applies. The orchestrator's readings are its candidate rule (a `/` or an inner `.`, so a bare `Makefile` is not a path), `:<line>:<column>` naming the line, the Report's working directory for relative paths against `gf`'s own resolution, the check made when a report is drawn, a group of its own, `AineoReportPath`, and no address on a path.
+
+**The six rules for T17**, recomputed on 2026-09-26 against every open packet (T21, PR #64, in review) and every claimed wave (only this one):
+
+| rule | T17 |
+|---|---|
+| 1 dependencies | T10 and T18 merged ✓ |
+| 2 files | `lua/aineo/report/` (not `links.lua`, `format.lua`, `records.lua`); `tests/test_report*.lua`; `doc/aineo.txt` › `*aineo-report*`. T21 changes `lua/aineo/layout/`, `tests/test_entry_claude_exit.lua` and `*aineo-commands*`: disjoint. T17 opens files through the layout's `redirect()`, which T21 changes only for a wiped role buffer ✓ |
+| 3 schema | none: the records and the report format are unchanged ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | the behaviour is the user's ("Double-click opens (Recommended)"); the rule's details are the orchestrator's readings, for the MVP review ✓ |
+| 6 task lines | T17's row is adjacent to T16's and T18's; it holds its mark ✓ |
+
+**Baseline:** `dev` at `e84ce9f`: 1013 cases, `Fails (0)`, on 0.12.5 and 0.11.6, lint clean (`evidence/baseline-e84ce9f.txt`).
+
+**Reviewers**, as a small fix: guarantee by `neovim-lua-developer` on the reviewer charter, records by `reviewer`.
+
+**Verification mutants:**
+- a directory underlined as a path;
+- a path found only when it holds a `/`;
+- the existence check dropped;
+- a path found inside a web link;
+- the double-click opening the word under the cursor, not the path;
+- the paths drawn on arrival but not when the Report shows its records again;
+- the double-click mapped in Normal mode only;
+- the double-click mapped once, on the first Report;
+- a check per occurrence, not per distinct candidate;
+- a relative path resolved against Neovim's current directory, not the Report's working directory.
+
 ## Packet T20 — 2026-09-26
 
 **The request, and the answer.**
@@ -486,6 +515,47 @@ The first plan listed "the mode entered before the layout's focus"; the brief re
 **Q8, measured before this brief** (`evidence/claude-resume-q8.txt`), by the orchestrator, with the user's leave ("Scratch folder (Recommended)"), on Claude Code 2.1.283 and the user's login, in a folder trusted through the checkout: `--resume` of a missing or untyped id prints "No conversation found with session ID: <id>" and exits 1; `--session-id` of a used id prints "…is already in use." and exits 1; `--resume` continues the same id; two Claude Codes may be started on one id at once. Two one-word prompts were sent.
 
 **Brief withdrawn before dispatch.** The first brief, `brief-t19-claude-resume.md` at `15c7e20`, planned T19 beside T21. Its brief review (`brief-review-t19-t21.md`, finding T19-1) found that SR3's fallback, the Claude home replacing Claude's terminal on its own, leaves the composition root's `claude_terminal` and the layout's `state.buffers.claude` holding the wiped terminal: `\c` then stays in Normal mode, and `:edit` in Claude's window raises `Invalid buffer id` — D25's fault and T20's lost Terminal mode again, with each packet's suite green. `started_claude_terminal()` can repair only the composition root's side. So T19 follows T21, with a brief rewritten to make both follow the new terminal through a named entry point, and a brief review of its own. Its other findings (T19-2 to T19-11) are answered there.
+
+**Brief, rewritten 2026-09-27:** `brief-t19-claude-resume.md`, against the code `dev` holds once T21 (PR #64) merges, the tree `0a6b5bd`, with a brief review of its own, `brief-review-t19-claude-resume.md`.
+- **T19-1:** SR3's new terminal reaches every holder. The boundary grows to the composition root's holding of Claude's terminal, and to one named entry point of the layout home that gives it a new Claude terminal.
+- **T19-2 to T19-11:**
+  - the kept ids leak between cases no more (four measures);
+  - the id file is not `.jsonl`;
+  - the id comes from `vim.uv.random(16)`;
+  - the help's list of Claude Code's additions is T19's;
+  - D23's options are quoted as D23 records them;
+  - SR3's message wraps;
+  - the timings are 2.1 s and 1.4 s, one run each;
+  - the line ranges are corrected, and the merge check runs against T17;
+  - two more readings.
+
+**The six rules for T19**, recomputed on 2026-09-27 against every open packet: T21 in the orchestrator's verification (PR #64), and T17 in its bounded correction (PR #68).
+
+| rule | T19 |
+|---|---|
+| 1 dependencies | T14 merged; Q8 measured; T21, merged before dispatch ✓ |
+| 2 files | `lua/aineo/claude/`; `plugin/aineo.lua`: `started_claude_terminal()` and the holding of Claude's terminal, not the tables T12 changes; `lua/aineo/layout/`: one entry point; `tests/test_claude*.lua`, `tests/helpers/fake_claude.lua`, `tests/helpers/claude_session.lua`; new cases in `tests/test_layout*.lua` and `tests/test_entry*.lua`, not `tests/test_entry_report.lua`; the `Makefile`'s clean-up at the start of a run; `doc/aineo.txt`: a new `Claude's session ~` in `*aineo-layout*`, and the list of Claude Code's additions in `*aineo-report*`. T17 changes `lua/aineo/report/`, `tests/test_report*.lua` and `*aineo-report*`'s `Links ~` and colour groups: disjoint by file; the help is shared under the section exception ✓ |
+| 3 schema | T19 alone keeps something new: a session id per directory ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | D23 and Q8 decide the behaviour; SR3's fallback, the moment the id is kept, the two-editors limit, the visible fallback and the session following `settings.cwd` are the orchestrator's readings ✓ |
+| 6 task lines | T19's row is adjacent to T18's and T20's, both done; it holds its mark ✓ |
+
+**Baseline:** the tree `0a6b5bd`: 1074 cases, `Fails (0)`, on 0.12.5 and 0.11.6, lint clean (`evidence/baseline-0a6b5bd.txt`).
+
+**Reviewers**, regular, the Claude Code integration: attack by `neovim-claude-code-reviewer`, test-integrity by `neovim-lua-reviewer`, records by `reviewer`.
+
+**Verification mutants:**
+- the id not kept;
+- never resumed, a new id each start;
+- the fallback never taken;
+- the fallback taken on every exit with code 1;
+- the id from an unseeded `math.random`, or one fixed id;
+- the id kept for the editor's first directory, not Claude Code's;
+- `--allowedTools` not last;
+- the composition root's or the layout's holder left on the failed terminal after SR3.
+- a kept file holding an empty or malformed id passed to `--resume`.
+
+The brief was corrected after its second brief review, `brief-review-t19-claude-resume.md` (T19b-1 to T19b-9): the hand-off's measured consequences on T21's tree, tests red before the hand-off, the boundary's function list, a kept id that is not an id, the wrap's widths, one more reading, and the records.
 
 ## Packet T21 — 2026-09-26
 
@@ -710,3 +780,38 @@ T19 and T12 follow T21, one at a time: T19 needs the layout and `plugin/aineo.lu
   - a link found inside a word: 2;
   - links allowed to overlap: 1.
 - **Released:** `v0.2.4`, which carries T10 (PR #56, `main` at `89e6c87`).
+- **T20 — PR #58, a small fix**, merged by rebase on 2026-09-26 as `5b625a5` … `ac42fd3` (4 commits). The code of `dev` is identical to the verified tree (`617e4a5` laid over `dev` `6e5e6ce`, merge-tree `525b22b`).
+  - **Reviews** on Opus, by the small-fix class: guarantee by `neovim-lua-developer` on the reviewer charter, and records by `reviewer`.
+  - **What the guarantee review found:** a key typed in Terminal mode after Claude Code exits wipes its terminal, and from the layout's tab the layout raises `Invalid buffer id` and adds a window, after which `\c` starts no session — older than T20, which makes it more common (G1); `\c` entered Insert or Terminal mode in whatever buffer Claude's window showed (G2); a callback's `wincmd p` after `:Aineo claude` left Insert mode in Input (G3); an exit right after `\c` erased the exit message at the next key (G4).
+  - **What the records review found:** the task line presented CT3 as delivered; the group count; scratch left in `/tmp`; two docstrings; the help's introduction without the exited-session exception; citation ranges; the PR body.
+  - **The fix round** went to the author, whose context was about 211 K: G2's guard, adopted red-first from the review's measured fix (the current buffer must be Claude's terminal); the wipe case narrowed to `:bwipeout!`; the records. The round added a read to `can_type_to_claude()`, G2's guard: the current buffer compared with `claude_terminal`. Orchestrate §3 names this as a trigger for a re-measure. The orchestrator skipped it, since the added read was the guarantee review's own measured fix, and the verification ran its removal (V2).
+  - **G1 and G4 went to the user**, who chose "Both, regular (Recommended)": D25 and T21.
+- **The orchestrator's verification** of `617e4a5` laid over `dev`:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`: 985 cases, `Fails (0)`, on 0.12.5 and on 0.11.6;
+  - lint clean.
+- **Five literal mutants** on the whole suite under 0.11.6, all killed:
+  - no Terminal mode: 7 cases failing;
+  - the buffer check removed: 2;
+  - the exited check removed: 1;
+  - the status read before the move: 7;
+  - Terminal mode for every role: 8, three by assertion (`\r`, `\i` among them) and five with `E21`.
+- **Released:** `v0.2.5`, which carries T20 (PR #63, `main` at `0d4c8b4`).
+- **T18 — PR #60, a small fix**, merged by rebase on 2026-09-26 as `f975b4c` … `e84ce9f` (5 commits), after T20. The code of `dev` is identical to the verified tree (`d7906dd` laid over `dev` `ac42fd3`, merge-tree `8c49a1e`).
+  - **The brief review** found that RL2 let the bold be drawn over the status's colour, which a colour scheme's colour for `@markup.strong` would then replace; the orchestrator re-measured it on both versions before dispatch (`evidence/report-line-bold.txt`).
+  - **Reviews** as T20's.
+  - **What both reviews found:** the help's recipe for turning the bold off, `:highlight AineoReportStatusBold gui=NONE`, fails from a config, before the first report (G1, R1); the guarantee review also found the bold's order unpinned on the records path (G2), and the help's "whatever colour" true of the foreground only (G3); the records review, the Markdown-bold sentence (R2), counts and records (R3–R11) and the learnings (R12).
+  - **The fix round** went to the author: the help's recipe became `:highlight link AineoReportStatusBold NONE`, pinned before and after the first report; the review's records-path pin adopted; the records corrected. Only a docstring changed in the code, so no re-measure ran.
+- **The orchestrator's verification** of `d7906dd` laid over `dev`:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`: 1013 cases, `Fails (0)`, on 0.12.5 and on 0.11.6;
+  - lint clean.
+- **Six literal mutants** on the whole suite under 0.11.6, all killed by assertion:
+  - the icon kept: 71 cases failing;
+  - the bold dropped: 42;
+  - the bold over the status's colour: 18;
+  - the bold spread to the time: 20;
+  - the details indented 8: 77;
+  - the bold's group linked to `Normal`: 23.
+- **G7, the guarantee review's survivor,** was left out of those six, and PR #67's records review found it. The orchestrator then ran it on the whole suite under 0.11.6, on `dev` `2673719` (code identical to `e84ce9f`). It was killed: 5 cases failing, all by assertion. Four were the records-path pin the fix round adopted, one for each of `:edit`, `bdelete`, `bwipeout` and `bunload`. The fifth, in `tests/test_health.lua`, was a timing case at a load average near 200, and has nothing to do with the edit: the file alone then gave 78 cases, `Fails (0)`.
+- **Released:** `v0.2.6`, which carries T18 (PR #65, `main` at `164265b`).

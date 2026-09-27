@@ -2,7 +2,7 @@
 
 **Author:** Mathias Santos de Brito, with Claude — the orchestrator (Opus 5.5, session `619e5f9a`)
 **Branch:** `knowledge/wave2-close-wave3-plan`
-**Status:** open. On 2026-09-26 the user kept MR1–MR97, MR99, MR100 and MR102–MR107 ("ok, your decisions are fine"), MR28's relay behaviour among them. Still awaiting the user: MR28's oldest supported `claude`, MR98, MR101, MR108 and MR109–MR134
+**Status:** open. On 2026-09-26 the user kept MR1–MR97, MR99, MR100 and MR102–MR107 ("ok, your decisions are fine"), MR28's relay behaviour among them. Still awaiting the user: MR28's oldest supported `claude`, MR98, MR101, MR108, MR109–MR137 and MR139–MR143; MR138 decided (D25), until T21 lands
 
 ## Links
 
@@ -173,7 +173,7 @@ Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t
   - MR108, named only as one of "T14's four readings", never described;
   - MR101, which the re-measure measured and the orchestrator adopted before the answer, but which was not in the list;
   - MR111–MR114, T12's other readings, on no list.
-- **Open, later than the answer:** MR109 and MR110, and T14's readings and limits, MR115–MR125; T10's, MR126–MR134, in their own section below.
+- **Open, later than the answer:** MR109 and MR110, and T14's readings and limits, MR115–MR125; T10's, MR126–MR134, T20's, MR135–MR140, and T18's, MR141–MR143, in their own sections below.
 
 | ID | Reading | Source | Disposition |
 |---|---|---|---|
@@ -183,7 +183,7 @@ Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t
 | MR99 | The relay strips a reason's own leading framing: a reason that itself begins with `Lua: `, `Error executing lua: ` or a file position loses those words. | the T13 note › *Readings* | kept — the list showed the `Lua: ` word |
 | MR100 | The plugin strips an error's own leading framing in the same way, on the user's side: an error whose first line begins with `Lua: ` or `Error executing lua: `, or with a file's position followed by them, loses those words. | the T13 note › *Readings* | kept — the list showed the `Lua: ` word |
 | MR101 | A file position whose shown path holds a space is no longer stripped from an error: the pattern stops at white space, so a user's words before a position are kept. | T13's correction | open — adopted before the user's answer, not in the list |
-| MR102 | A report's details stay under `[status]` by the icon's display width, measured at each rendering: `◐` under `'ambiwidth'` `double`, or an icon `setcellwidths()` widens, indents them one more column. | T11, IC4 | kept — moot once T18 lands: D24 removes the icon (2026-09-26) |
+| MR102 | A report's details stay under `[status]` by the icon's display width, measured at each rendering: `◐` under `'ambiwidth'` `double`, or an icon `setcellwidths()` widens, indents them one more column. | T11, IC4 | kept — moot since T18 (PR #60, `v0.2.6`) removed the icon (D24) |
 | MR103 | `\tcn` with no Claude window warns at `WARN` and changes nothing. | T12, CN4 | kept |
 | MR104 | `\tcn` from another tab toggles Claude's window in the layout's tab. | T12, CN4b | kept |
 | MR105 | The Input draft empties at once when Input empties. | T14, ID1 | kept |
@@ -234,8 +234,38 @@ Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t
 | MR132 | ⌘-click opens a link by RL2's bounds only in a terminal that opens OSC 8 hyperlinks, as iTerm2 does; a terminal that finds URLs in plain text may open one on ⌘-click by its own bounds. `gx` opens it by RL2's bounds from the keyboard, in any terminal. | the T10 note › *Limits* |
 | MR133 | A report at the relay's 1 MiB line limit takes up to about half a second to show, and about 0.6 s at each `:edit` of the Report; redrawing the 2 MiB of records the Report keeps takes about 1.3 s at `:edit`. Measured on the orchestrator's host, on 0.12.5. | the re-measure of PR #52 (finding 4); the T10 note › *Open threads* |
 
+## Readings — `\c` into Claude's prompt (T20)
+
+Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t20-t18-landed`), from T20's brief and session note at `dev` `ac42fd3`. None of the readings was shown to the user, and of the limits only MR138's case was, in D25's question: the user asked for `\c` ("'\c' must move to the claude window in insert mode, cursor on the prompt") and chose its class.
+
+| ID | Reading | Source | Disposition |
+|---|---|---|---|
+| MR135 | `<Plug>(aineo-claude)` and `:Aineo claude` enter Terminal mode too: the three run one action. | T20, CT3 | open |
+| MR136 | From a mapping or callback of the user's, Terminal mode starts when the outermost mapping or command ends, in the window current then: `:Aineo claude` followed by `wincmd p` leaves the user in Insert mode in Input. | T20's guarantee review (G3) and records review (R5) | open |
+| MR137 | `\c` stays in Normal mode when Claude's window shows a buffer other than Claude's terminal — a scratch buffer, a terminal of the user's. | T20's fix round, from the guarantee review's G2 | open |
+
+## Limits a user can meet — `\c` into Claude's prompt (T20)
+
+| ID | Limit | Source |
+|---|---|---|
+| MR138 | A `\c` typed while the editor is busy as Claude Code exits, or one that Claude Code exits right after — at its start, too — leaves Terminal mode on the ended terminal: the next key closes it and its exit message. The user decided its fix on 2026-09-26, when D25's question described it: D25, implemented by T21 (PR #64, not yet merged). | T20's brief review (F6) and guarantee review (G4) |
+| MR139 | When `\c` opens the layout and the draft cannot be read, the key that answers the draft's hit-enter prompt, other than Enter, Space or CTRL-C, reaches Claude Code (with MR124). | T20's brief review (F7) |
+| MR140 | Entering and leaving Claude's prompt sends Claude Code the focus reports it asked for (`ESC[I`, `ESC[O`). | T20's brief review (F8) |
+
+MR138's second case, and the key-wipe's layout fault that the T20 note › *Limits* records (G1), were put to the user in D25's question. The user chose to fix both (D25, T21). G1 is not numbered for that reason. MR138 stays until T21 lands.
+
+## Readings — the Report line without its icon (T18)
+
+Added 2026-09-26 by the orchestrator, from T18's brief and session note at `dev` `e84ce9f`. The user asked: "remove the Icon, just make the banned [<type>] bold then"; none of these was shown to the user.
+
+| ID | Reading | Source | Disposition |
+|---|---|---|---|
+| MR141 | The brackets of `[status]` are bold with the word, as C6 and T9 colour them with it. | T18's brief, the orchestrator's reading | open |
+| MR142 | The bold can be turned off apart from the colour: `:highlight link AineoReportStatusBold NONE`, whenever it is given. Attributes set on the group before the first report (`gui=NONE`) do not hold, since aineo's first definition links it again. | T18's brief; the recipe from both reviews of PR #60 | open |
+| MR143 | The bold is a group of its own, `AineoReportStatusBold`, a default link to `@markup.strong`: a colour scheme's Markdown bold style — its background, italic, underline, or no bold — shows on `[status]`; its colour does not, unless the status's own group has no foreground. | T18's brief review (finding 3), measured by PR #60's reviews and fix round | open |
+
 ## Disposition
 
-**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108 and MR109–MR134 stay open for the next review.
+**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR137 and MR139–MR143 stay open for the next review; MR138 is decided (D25), until T21 lands.
 
 Before that, every item was **open** until the MVP review. A reading the user keeps is closed *kept*; one the user changes becomes a plan row through a converge round (a new `D#`, never an edit in place) and a task.

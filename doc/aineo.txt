@@ -163,11 +163,22 @@ lives in one tab; from another tab, `\o` moves you to it.
 			since a key typed in Terminal mode would close the
 			terminal and its exit with it.
 
+When Claude Code exits while you are in its terminal in Terminal mode — after
+`/exit`, say, or as it fails at its start — aineo puts you back in Normal mode
+there, so that its exit stays on screen and the next key you type is a
+Normal-mode command. `i`, `a` and |:startinsert| leave that terminal in Normal
+mode too. Any other terminal of yours keeps Neovim's own behaviour.
+
 `report`, `input` and `claude` open the layout first when their window is
 gone, around Claude's terminal as it is — its exit on screen when Claude Code
 has exited. They start Claude Code only when there is no terminal to show:
-before the first start, or once the terminal was wiped. Only `open` restarts
-an exited Claude Code.
+before the first start, or again, in a new terminal, once the terminal was
+wiped (|:bwipeout|). Wiping it from Claude's window closes that window; a
+window Neovim cannot close, such as its last one, stays on an empty buffer
+until `claude` opens the layout there again — `report` and `input` do so
+only when their own window is gone too. A file opened in Claude's window as
+the terminal is wiped stays in view, and moves to the file column when the
+layout opens again. Only `open` restarts an exited Claude Code.
 
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
