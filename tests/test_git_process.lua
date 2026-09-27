@@ -15,6 +15,18 @@ local FIND_REPOSITORY = [[
   end)
 ]]
 
+--- The Lua that does what `FIND_REPOSITORY` does, and also returns, as
+--- `elapsed_ms`, how long the child waited for the answer.
+local TIMED_FIND_REPOSITORY = [[
+  local directory, options = ...
+  local started = vim.uv.hrtime()
+  local seen = _G.await(function(done)
+    require('aineo.git').find_repository(directory, done, options)
+  end)
+  seen.elapsed_ms = (vim.uv.hrtime() - started) / 1e6
+  return seen
+]]
+
 local T = MiniTest.new_set({
   hooks = {
     pre_case = function()
@@ -70,23 +82,71 @@ T['a git that fails']['is reported with its exit code, in its own words'] = func
   )
 end
 
+T['a git that fails']['by a signal is reported as a failure, never as an answer'] = function()
+  local directory = git_repo.directory('process-signal')
+  local crashing = git_repo.script('process-signal', 'git', { 'kill -SEGV $$' })
+
+  local seen = child.lua(FIND_REPOSITORY, { directory, { executable = crashing } })
+
+  eq({ failure = seen.failure, result = seen.result }, {
+    failure = {
+      reason = 'failed',
+      message = ('git was ended by signal 11: %s'):format(crashing),
+    },
+  })
+end
+
 T['a git that runs too long'] = MiniTest.new_set()
 
 T['a git that runs too long']['is stopped at the limit it is given, and reported'] = function()
   local directory = git_repo.directory('process-slow')
   local pid_file = vim.fs.joinpath(directory, 'pid')
-  local slow =
-    git_repo.script('process-slow', 'git', { ('echo $$ > %s'):format(pid_file), 'exec sleep 30' })
+  local slow = git_repo.script(
+    'process-slow',
+    'git',
+    { "trap '' TERM", ('echo $$ > %s'):format(pid_file), 'exec sleep 30' }
+  )
+  MiniTest.finally(function()
+    vim.uv.kill(tonumber(vim.fn.readfile(pid_file)[1]), 'sigkill')
+  end)
 
-  local seen = child.lua(FIND_REPOSITORY, { directory, { executable = slow, limit_ms = 1000 } })
+  local seen =
+    child.lua(TIMED_FIND_REPOSITORY, { directory, { executable = slow, limit_ms = 1000 } })
 
-  eq({ failure = seen.failure, result = seen.result }, {
+  eq({
+    failure = seen.failure,
+    result = seen.result,
+    in_time = seen.elapsed_ms < 5000,
+    left = vim.uv.kill(tonumber(vim.fn.readfile(pid_file)[1]), 0),
+  }, {
     failure = {
       reason = 'timed_out',
       message = ('git ran past its limit of 1000 ms: %s'):format(slow),
     },
+    in_time = true,
   })
-  eq(vim.uv.kill(tonumber(vim.fn.readfile(pid_file)[1]), 0), nil)
+end
+
+T['a git that runs too long']['is stopped at its limit with every process it started'] = function()
+  local directory = git_repo.directory('process-descendant')
+  local descendant_file = vim.fs.joinpath(directory, 'descendant')
+  local starting = git_repo.script(
+    'process-descendant',
+    'git',
+    { 'sleep 30 &', ('echo $! > %s'):format(descendant_file), 'exec sleep 30' }
+  )
+  MiniTest.finally(function()
+    vim.uv.kill(tonumber(vim.fn.readfile(descendant_file)[1]), 'sigkill')
+  end)
+
+  local seen =
+    child.lua(TIMED_FIND_REPOSITORY, { directory, { executable = starting, limit_ms = 1000 } })
+
+  eq({
+    reason = vim.tbl_get(seen, 'failure', 'reason'),
+    in_time = seen.elapsed_ms < 5000,
+    descendant_left = vim.uv.kill(tonumber(vim.fn.readfile(descendant_file)[1]), 0),
+  }, { reason = 'timed_out', in_time = true })
 end
 
 T['a git that runs too long']['is stopped at the home’s own limit when it is given none'] = function()
@@ -95,7 +155,10 @@ T['a git that runs too long']['is stopped at the home’s own limit when it is g
 
   local seen = child.lua(FIND_REPOSITORY, { directory, { executable = slow } })
 
-  eq(vim.tbl_get(seen, 'failure', 'reason'), 'timed_out')
+  eq(seen.failure, {
+    reason = 'timed_out',
+    message = ('git ran past its limit of 10000 ms: %s'):format(slow),
+  })
 end
 
 --- The Lua that returns what the child holds that an operation could leave

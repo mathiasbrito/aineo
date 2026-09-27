@@ -59,38 +59,52 @@ local function parse_untracked(output)
 end
 
 --- Lists the files of `found` that differ from `tree_ish`, and calls `done`
---- as `M.changed_files()` does. The diff runs on a private copy of the index
---- (`private_index`), so it never takes the repository's lock.
+--- as `M.changed_files()` does. The diff and the untracked files are both
+--- read from one private copy of the index (`private_index`), so the list
+--- is the state of one moment, even when a file is staged between the two,
+--- and neither read takes the repository's lock.
 ---
 ---@param run aineo.git.Run
 ---@param found aineo.git.Repository
 ---@param tree_ish string
 ---@param done fun(failure: aineo.git.Failure|nil, changes: aineo.git.Change[]|nil)
 local function list_changes(run, found, tree_ish, done)
-  private_index.with_private_index(
-    found.git_directory,
-    function(environment, finish)
-      run({
+  private_index.with_private_index(found.git_directory, function(environment, finish)
+    run(
+      {
         directory = found.top,
-        arguments = { 'diff', '--name-status', '-z', '-M', '--end-of-options', tree_ish, '--' },
-        environment = environment,
-      }, finish)
-    end,
-    process.or_fail(done, function(differing)
-      run(
-        {
-          directory = found.top,
-          arguments = { 'ls-files', '--others', '--exclude-standard', '-z' },
+        arguments = {
+          'diff',
+          '--name-status',
+          '-z',
+          '-M',
+          '-O/dev/null',
+          '--end-of-options',
+          tree_ish,
+          '--',
         },
-        process.or_fail(done, function(untracked)
-          done(
-            nil,
-            vim.list_extend(parse_name_status(differing.stdout), parse_untracked(untracked.stdout))
-          )
-        end)
-      )
-    end)
-  )
+        environment = environment,
+      },
+      process.or_fail(finish, function(differing)
+        run(
+          {
+            directory = found.top,
+            arguments = { 'ls-files', '--others', '--exclude-standard', '-z' },
+            environment = environment,
+          },
+          process.or_fail(finish, function(untracked)
+            finish(
+              nil,
+              vim.list_extend(
+                parse_name_status(differing.stdout),
+                parse_untracked(untracked.stdout)
+              )
+            )
+          end)
+        )
+      end)
+    )
+  end, done)
 end
 
 --- Lists the files of `found` that differ from the commit `base`, and calls

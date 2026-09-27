@@ -6,14 +6,16 @@ local repository = require('aineo.git.repository')
 
 local M = {}
 
---- The code `git diff --no-index` exits with when the files differ: the
---- diff is its answer.
+--- The code `git diff --no-index` exits with when the files differ, the diff
+--- its answer; and also when it cannot read a file, with no diff printed.
 local FILES_DIFFER_CODE = 1
 
 --- The options that make `git diff` and `git show` print a plain unified
 --- diff whatever the user's settings: no colours; git's own diff, not an
 --- external program or a text conversion; `a/` and `b/` before the paths;
---- three lines of context; renames found; and whole object ids.
+--- three lines of context, and hunks joined only where their context meets;
+--- renames found; whole object ids; and files in git's own order, not a
+--- user's order file.
 local UNIFIED_DIFF = {
   '--no-color',
   '--no-ext-diff',
@@ -21,15 +23,18 @@ local UNIFIED_DIFF = {
   '--src-prefix=a/',
   '--dst-prefix=b/',
   '--unified=3',
+  '--inter-hunk-context=0',
   '--find-renames',
   '--full-index',
+  '-O/dev/null',
 }
 
 --- The options that make `git show` print a commit's header in git's
 --- default format whatever the user's settings: the medium format, the
 --- whole id, no branch names or notes, the default date, the message in
---- UTF-8, and no signature check.
+--- UTF-8, no signature check, and a first commit's diff shown in full.
 local COMMIT_HEADER = {
+  '--root',
   '--pretty=medium',
   '--no-abbrev-commit',
   '--no-decorate',
@@ -52,22 +57,33 @@ local function joined(lists)
 end
 
 --- Gives the diff of an untracked file `change` names in `found`, compared
---- with nothing, since neither the base nor the index has it.
+--- with nothing, since neither the base nor the index has it; or a failure,
+--- in git's words, when git cannot read the file — gone since it was listed,
+--- say, or a directory.
 ---
 ---@param run aineo.git.Run
 ---@param found aineo.git.Repository
 ---@param change aineo.git.Change
 ---@param done fun(failure: aineo.git.Failure|nil, output: aineo.git.Output|nil)
 local function untracked_diff(run, found, change, done)
-  run({
-    directory = found.top,
-    arguments = joined({
-      { 'diff' },
-      UNIFIED_DIFF,
-      { '--no-index', '--', '/dev/null', change.path },
-    }),
-    answers = { 0, FILES_DIFFER_CODE },
-  }, done)
+  run(
+    {
+      directory = found.top,
+      arguments = joined({
+        { 'diff' },
+        UNIFIED_DIFF,
+        { '--no-index', '--', '/dev/null', change.path },
+      }),
+      answers = { 0, FILES_DIFFER_CODE },
+    },
+    process.or_fail(done, function(output)
+      if output.code == FILES_DIFFER_CODE and output.stdout == '' then
+        done({ reason = 'failed', message = vim.trim(output.stderr), code = output.code })
+        return
+      end
+      done(nil, output)
+    end)
+  )
 end
 
 --- Gives the diff of the file `change` names in `found`, from `tree_ish` to

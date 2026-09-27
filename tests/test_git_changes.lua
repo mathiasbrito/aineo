@@ -129,6 +129,53 @@ T['the files changed since a base']['are every file, as new, when there is no ba
   })
 end
 
+T['the files changed since a base']['are read from one index, even when a file is staged meanwhile'] = function()
+  local top, base = git_repo.create('changes-staged-meanwhile', { ['a.txt'] = { 'a' } })
+  git_repo.write(top, 'new.txt', { 'new' })
+  local staging = git_repo.script('changes-staged-meanwhile', 'git', {
+    'case "$*" in',
+    ('  *--name-status*) env -u GIT_INDEX_FILE git -C %s add new.txt ;;'):format(top),
+    'esac',
+    'exec git "$@"',
+  })
+
+  local seen = child.lua(CHANGED_FILES, { top, base, { executable = staging } })
+
+  eq({ failure = seen.failure, changes = seen.result }, {
+    changes = { { path = 'new.txt', kind = 'untracked' } },
+  })
+end
+
+--- The Lua that asks the git home in the child for the repository of the
+--- directory `...`, then, from a timer's callback — a fast event — for the
+--- files changed there since the base that follows it; returns what
+--- `_G.await` saw of the second, and what the call raised, if it did.
+local CHANGED_FILES_FROM_A_FAST_EVENT = [[
+  local directory, base = ...
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end)
+  local raised
+  local seen = _G.await(function(done)
+    local timer = assert(vim.uv.new_timer())
+    timer:start(0, 0, function()
+      timer:close()
+      raised = select(2, pcall(git.changed_files, found.result, base, done))
+    end)
+  end)
+  return { failure = seen.failure, changes = seen.result, raised = raised }
+]]
+
+T['the files changed since a base']['can be asked for from a fast event'] = function()
+  local top, base = git_repo.create('changes-fast-event', { ['a.txt'] = { 'a' } })
+  git_repo.write(top, 'a.txt', { 'a, changed' })
+
+  local seen = child.lua(CHANGED_FILES_FROM_A_FAST_EVENT, { top, base })
+
+  eq(seen, { changes = { { path = 'a.txt', kind = 'modified' } } })
+end
+
 T['the files changed since a base']['since a base named like an option are refused, and write nothing'] = function()
   local top = git_repo.create('changes-option', { ['a.txt'] = { 'a' } })
   git_repo.write(top, 'a.txt', { 'a, changed' })

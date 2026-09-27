@@ -92,6 +92,16 @@ T['a file’s diff']['shows an untracked file wholly added'] = function()
   )
 end
 
+T['a file’s diff']['of an untracked file git cannot read is reported, in git’s words'] = function()
+  local top, base = git_repo.create('diffs-untracked-gone', { ['a.txt'] = { 'a' } })
+
+  local seen = child.lua(FILE_DIFF, { top, base, { path = 'gone.txt', kind = 'untracked' } })
+
+  eq({ failure = seen.failure, result = seen.result }, {
+    failure = { reason = 'failed', message = "error: Could not access 'gone.txt'", code = 1 },
+  })
+end
+
 T['a file’s diff']['shows a deleted file wholly removed'] = function()
   local top, base = git_repo.create('diffs-deleted', { ['gone.txt'] = { 'gone' } })
   local blob = git_repo.git(top, { 'rev-parse', base .. ':gone.txt' })
@@ -151,6 +161,76 @@ T['a file’s diff']['names a file with other letters unquoted'] = function()
     '--- a/ünï.txt',
     '+++ b/ünï.txt',
   })
+end
+
+T['a file named like a pattern'] = MiniTest.new_set({
+  parametrize = { { ':x.txt' }, { '*.txt' } },
+})
+
+T['a file named like a pattern']['has a diff of its own, not of the files the pattern names'] = function(
+  name
+)
+  local top, base = git_repo.create('diffs-pattern', { [name] = { 'before' }, ['x.txt'] = { 'x' } })
+  git_repo.write(top, name, { 'after' })
+  git_repo.write(top, 'x.txt', { 'x, changed' })
+
+  local seen = child.lua(FILE_DIFF, { top, base, { path = name, kind = 'modified' } })
+
+  eq(
+    seen.result,
+    table.concat({
+      ('diff --git a/%s b/%s'):format(name, name),
+      ('index %s..%s 100644'):format(
+        git_repo.git(top, { 'rev-parse', base .. ':' .. name }),
+        blob_on_disk(top, name)
+      ),
+      '--- a/' .. name,
+      '+++ b/' .. name,
+      '@@ -1 +1 @@',
+      '-before',
+      '+after',
+      '',
+    }, '\n')
+  )
+end
+
+T['a file’s diff']['keeps three lines of context whatever the editor’s GIT_DIFF_OPTS says'] = function()
+  local top, base = git_repo.create('diffs-diff-opts', { ['a.txt'] = { '1', '2', '3' } })
+  git_repo.write(top, 'a.txt', { '1', 'two', '3' })
+  child.lua('vim.env.GIT_DIFF_OPTS = "--unified=0"')
+
+  local seen = child.lua(FILE_DIFF, { top, base, { path = 'a.txt', kind = 'modified' } })
+
+  eq(
+    vim.list_slice(vim.split(seen.result, '\n'), 5),
+    { '@@ -1,3 +1,3 @@', ' 1', '-2', '+two', ' 3', '' }
+  )
+end
+
+T['a file’s diff']['keeps the carriage returns of lines that now end in them'] = function()
+  local top, base = git_repo.create('diffs-crlf', { ['a.txt'] = { 'one', 'two' } })
+  git_repo.write(top, 'a.txt', { 'one\r', 'two\r' })
+
+  local seen = child.lua(FILE_DIFF, { top, base, { path = 'a.txt', kind = 'modified' } })
+
+  eq(
+    seen.result,
+    table.concat({
+      'diff --git a/a.txt b/a.txt',
+      ('index %s..%s 100644'):format(
+        git_repo.git(top, { 'rev-parse', base .. ':a.txt' }),
+        blob_on_disk(top, 'a.txt')
+      ),
+      '--- a/a.txt',
+      '+++ b/a.txt',
+      '@@ -1,2 +1,2 @@',
+      '-one',
+      '-two',
+      '+one\r',
+      '+two\r',
+      '',
+    }, '\n')
+  )
 end
 
 T['a file’s diff']['shows a committed file wholly added when there is no base'] = function()
