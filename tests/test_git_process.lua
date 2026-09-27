@@ -32,7 +32,7 @@ T['a git that cannot run']['is reported, in the words it could not start with'] 
 
   local seen = child.lua(FIND_REPOSITORY, { directory, { executable = missing } })
 
-  eq({ failure = seen.failure, result = seen.result }, {
+  eq({ failure = seen.failure, result = seen.result, raised = seen.raised }, {
     failure = {
       reason = 'no_git',
       message = ("ENOENT: no such file or directory (cmd): '%s'"):format(missing),
@@ -95,7 +95,7 @@ T['a git that runs too long']['is stopped at the home’s own limit when it is g
 
   local seen = child.lua(FIND_REPOSITORY, { directory, { executable = slow } })
 
-  eq(seen.failure.reason, 'timed_out')
+  eq(vim.tbl_get(seen, 'failure', 'reason'), 'timed_out')
 end
 
 --- The Lua that returns what the child holds that an operation could leave
