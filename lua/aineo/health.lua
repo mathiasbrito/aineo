@@ -248,7 +248,7 @@ local function check_server_socket()
   vim.health.ok('the editor listens at ' .. vim.v.servername)
 end
 
---- The key that follows the prefix for each of `:Aineo`'s subcommands, in
+--- The keys that follow the prefix for each of `:Aineo`'s subcommands, in
 --- the order `plugin/aineo.lua` maps them.
 local PREFIX_KEYS = {
   { key = 's', subcommand = 'send' },
@@ -256,6 +256,7 @@ local PREFIX_KEYS = {
   { key = 'r', subcommand = 'report' },
   { key = 'i', subcommand = 'input' },
   { key = 'c', subcommand = 'claude' },
+  { key = 'tcn', subcommand = 'claude-numbers' },
 }
 
 --- The keys `keys`, written as in a mapping, stand for when typed.
