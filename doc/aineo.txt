@@ -363,17 +363,18 @@ until it ends in none of them: `(see https://example.com/a).` links to
 `://`, or is no link.
 
 Paths ~
-A path in a task, a summary or details that names a file that exists is
-underlined, in |hl-AineoReportPath|. Double-click it to open the file in the
-middle column, at its line when it names one: `render.lua:112` opens
-`render.lua` at line 112, a line past the file's end at its last line, and
-`:0` at its first. A double-click works from Normal mode, from Insert mode,
-as when you click from Input, and from Claude's terminal; it needs 'mouse'
-on in Normal and Insert mode, as Neovim's default, `nvi`, has it. Anywhere
-else in the Report, a double-click selects the word, as Neovim's own does;
-in the Report, it takes the place of a `<2-LeftMouse>` mapping of your own.
-|gf| and |gF| open a path too, in the middle column, but find its file as
-Neovim does, in the current directory and 'path'.
+A path in a task, a summary or details that names a file that exists, not a
+directory, is underlined, in |hl-AineoReportPath|. Double-click it to open
+the file in the middle column, at its line when it names one:
+`render.lua:112` opens `render.lua` at line 112, a line past the file's end
+at its last line, and `:0` at its first. A double-click works from Normal
+mode, from Insert mode, as when you click from Input, and from Claude's
+terminal; it needs 'mouse' on in Normal and Insert mode, as Neovim's
+default, `nvi`, has it. Anywhere else in the Report, a double-click selects
+the word, as Neovim's own does; in the Report, it takes the place of a
+`<2-LeftMouse>` mapping of your own. A path carries no address: ⌘-click
+opens only web links. |gf| and |gF| open a path too, in the middle column,
+but find its file as Neovim does, in the current directory and 'path'.
 
 A path runs up to an ASCII space, an ASCII control character, `<`, `>`,
 `"`, `'`, `|`, a backtick, `(`, `)`, `[`, `]`, `{`, `}`, `,` or `*`, so a path
@@ -384,12 +385,14 @@ character: `lua/x.lua`, `./Makefile`, `/etc/hosts`, `README.md` and
 `.luarc.json` are paths, `Makefile` and `.gitignore` are not. A `:<line>` or
 `:<line>:<column>` at its end is part of it and names the line; a range,
 `x.lua:12-20`, or `x.lua#L12` names no file. A relative path is looked up in
-the working directory (below), an absolute one as it is, and `~` is not
-expanded: after a `:cd`, the relative paths a new Claude Code writes may not
+the working directory (below), an absolute one as it is; `~` is not
+expanded. After a `:cd`, the relative paths a new Claude Code writes may not
 be found. A file name holding a space is never found whole, and text inside
 a web link is never a path. A path is looked up when the Report shows its
 report: a file made later is underlined the next time the Report shows it,
-after `:edit` in the Report, and one removed stays underlined until then.
+after `:edit` in the Report, and one removed stays underlined until then. A
+double-click looks the path up again: when it names no file any more, the
+double-click opens nothing and tells you so.
 
 Colours ~
 The Report shows the time in |hl-AineoReportTime|, and the `[status]`,
