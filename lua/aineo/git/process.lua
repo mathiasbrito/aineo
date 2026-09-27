@@ -52,8 +52,9 @@ local ENVIRONMENT = {
 ---@field message string the words for it: git's own, from its standard error, when git gave them
 ---@field code? integer the code git exited with, when it `failed` with one
 
---- Runs one git request, and calls `done` as `run_git()` does.
----@alias aineo.git.Run fun(request: aineo.git.Request, done: fun(failure: aineo.git.Failure|nil, output: aineo.git.Output|nil))
+--- Runs one git request, and calls `done` as `run_git()` does; returns the
+--- function that cancels it.
+---@alias aineo.git.Run fun(request: aineo.git.Request, done: fun(failure: aineo.git.Failure|nil, output: aineo.git.Output|nil)): fun()
 
 --- Whether `code` is one of `answers`, `{ 0 }` when not given.
 ---
@@ -96,22 +97,33 @@ local function outcome(executable, limit_ms, request, result, timed_out)
   return nil, { code = result.code, stdout = result.stdout }
 end
 
+--- Kills `process` unless it has ended already.
+---
+---@param process vim.SystemObj
+local function kill(process)
+  if not process:is_closing() then
+    process:kill('sigkill')
+  end
+end
+
 --- Runs `executable` for `request` and, once it ends, calls on the main loop
 --- either `done(nil, output)` or `done(failure)`; never before it returns,
 --- and never raising. A process still running at `limit_ms` is killed, and
---- reported `timed_out`.
+--- reported `timed_out`. Returns a function that cancels the run: it kills
+--- the process, and `done` is not called.
 ---
 ---@param executable string
 ---@param limit_ms integer
 ---@param request aineo.git.Request
 ---@param done fun(failure: aineo.git.Failure|nil, output: aineo.git.Output|nil)
+---@return fun() cancel
 local function run_git(executable, limit_ms, request, done)
   local command = vim.list_extend(
     vim.list_extend({ executable, '-C', request.directory }, CONFIGURATION_OVERRIDES),
     request.arguments
   )
   local timer = assert(vim.uv.new_timer())
-  local timed_out = false
+  local timed_out, cancelled = false, false
   local started, process = pcall(vim.system, command, {
     text = true,
     env = vim.tbl_extend('force', ENVIRONMENT, request.environment or {}),
@@ -119,7 +131,9 @@ local function run_git(executable, limit_ms, request, done)
     timer:stop()
     timer:close()
     vim.schedule(function()
-      done(outcome(executable, limit_ms, request, result, timed_out))
+      if not cancelled then
+        done(outcome(executable, limit_ms, request, result, timed_out))
+      end
     end)
   end)
   if not started then
@@ -127,15 +141,16 @@ local function run_git(executable, limit_ms, request, done)
     vim.schedule(function()
       done({ reason = 'no_git', message = without_position(process) })
     end)
-    return
+    return function() end
   end
   timer:start(limit_ms, 0, function()
-    if process:is_closing() then
-      return
-    end
-    timed_out = true
-    process:kill('sigkill')
+    timed_out = not process:is_closing()
+    kill(process)
   end)
+  return function()
+    cancelled = true
+    kill(process)
+  end
 end
 
 --- How to run git as `options` say, each field it leaves out the home's
@@ -148,7 +163,7 @@ function M.runner(options)
   local executable = options.executable or DEFAULT_EXECUTABLE
   local limit_ms = options.limit_ms or DEFAULT_LIMIT_MS
   return function(request, done)
-    run_git(executable, limit_ms, request, done)
+    return run_git(executable, limit_ms, request, done)
   end
 end
 
