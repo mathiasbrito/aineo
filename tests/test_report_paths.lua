@@ -1007,4 +1007,62 @@ T['a double-click']['on a path whose file was removed since it was drawn opens n
   })
 end
 
+--- Ways the file `file`, drawn in the Report, stops being found since it was
+--- drawn, each by the name a case gives it. A directory made unsearchable is
+--- made searchable again when the case ends, so the fixture can be removed.
+local LOOKUPS_BROKEN_SINCE_THE_DRAWING = {
+  ['its directory made unsearchable'] = function(file)
+    local directory = vim.fs.dirname(file)
+    assert(vim.uv.fs_chmod(directory, 0))
+    MiniTest.finally(function()
+      assert(vim.uv.fs_chmod(directory, tonumber('755', 8)))
+    end)
+  end,
+  ['it made a symbolic link to itself'] = function(file)
+    assert(os.remove(file))
+    assert(vim.uv.fs_symlink(vim.fs.basename(file), file))
+  end,
+  ['its directory replaced by a file'] = function(file)
+    local directory = vim.fs.dirname(file)
+    assert(vim.fn.delete(directory, 'rf') == 0, 'cannot remove ' .. directory)
+    assert(vim.fn.writefile({ 'a line' }, directory) == 0, 'cannot write ' .. directory)
+  end,
+}
+
+T['a double-click']['on a path whose lookup broke since it was drawn'] = MiniTest.new_set({
+  parametrize = {
+    {
+      'its directory made unsearchable',
+      'locked/k.lua',
+      'aineo: cannot look locked/k.lua up now: permission denied',
+    },
+    {
+      'it made a symbolic link to itself',
+      'loop.lua',
+      'aineo: cannot look loop.lua up now: too many symbolic links encountered',
+    },
+    { 'its directory replaced by a file', 'moved/k.lua', 'aineo: moved/k.lua names no file now' },
+  },
+})
+
+T['a double-click']['on a path whose lookup broke since it was drawn']['opens nothing and says why, when'] = function(
+  how,
+  path,
+  warning
+)
+  open_layout()
+  fixture.write(PROJECT .. '/' .. path, { 'a line' })
+  receive_details(('See %s now'):format(path))
+  LOOKUPS_BROKEN_SINCE_THE_DRAWING[how](in_project(path))
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  double_click_in_report(2, 12)
+
+  wait_until_told()
+  eq({ shown = what_the_layout_shows(), told = entry.messages(child) }, {
+    shown = NOTHING_OPENED,
+    told = { { message = warning, level = vim.log.levels.WARN } },
+  })
+end
+
 return T
