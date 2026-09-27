@@ -115,12 +115,16 @@ T['a watch']['calls back once for a burst of writes'] = function()
   assert(vim.uv.fs_rename(top .. '/b.txt', top .. '/sub/b.txt'))
   vim.uv.sleep(WITHIN_A_BURST_MS)
   assert(vim.uv.fs_unlink(top .. '/a.txt'))
+  local calls_during_the_burst = child.lua_get('#_G.changes')
   wait_for_changes(1)
   git_repo.git(top, { 'commit', '--quiet', '--allow-empty', '--message=The next burst' })
 
-  eq(wait_for_changes(2), {
-    { change = { files_changed = true, branch_moved = false }, fast = false },
-    { change = { files_changed = true, branch_moved = true }, fast = false },
+  eq({ during = calls_during_the_burst, changes = wait_for_changes(2) }, {
+    during = 0,
+    changes = {
+      { change = { files_changed = true, branch_moved = false }, fast = false },
+      { change = { files_changed = true, branch_moved = true }, fast = false },
+    },
   })
 end
 
