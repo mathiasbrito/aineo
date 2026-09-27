@@ -1,8 +1,11 @@
 --- The Report buffer: where reports are shown.
 
+local colours = require('aineo.report.colours')
+
 local M = {}
 
---- The namespace of the colours the Report shows, its web links' included.
+--- The namespace of the colours the Report shows, its web links' and its
+--- paths' included.
 local REPORT_COLOURS = vim.api.nvim_create_namespace('aineo_report_colours')
 
 --- The Report buffer's name. Not a file path: a named buffer is never reused
@@ -35,6 +38,66 @@ local function free_report_buffer_name()
   end
 end
 
+--- The text of the path the Report draws, in `colours.PATH_GROUP`, over byte
+--- `column` of line `line` of `buffer`, both from 0, or nil when it draws
+--- none there.
+---
+---@param buffer integer
+---@param line integer
+---@param column integer
+---@return string?
+local function path_drawn_at(buffer, line, column)
+  local marks = vim.api.nvim_buf_get_extmarks(
+    buffer,
+    REPORT_COLOURS,
+    { line, column },
+    { line, column },
+    { details = true, overlap = true }
+  )
+  for _, mark in ipairs(marks) do
+    local first_column, details = mark[3], mark[4]
+    if
+      details.hl_group == colours.PATH_GROUP
+      and first_column <= column
+      and column < details.end_col
+    then
+      return vim.api.nvim_buf_get_text(buffer, line, first_column, line, details.end_col, {})[1]
+    end
+  end
+  return nil
+end
+
+--- The text of the path the Report `buffer` draws where the mouse was last
+--- clicked (`getmousepos()`), or nil when it draws none there or the click
+--- was not on it.
+---
+---@param buffer integer
+---@return string?
+local function path_under_mouse(buffer)
+  local mouse = vim.fn.getmousepos()
+  if mouse.winid == 0 or mouse.line == 0 or vim.api.nvim_win_get_buf(mouse.winid) ~= buffer then
+    return nil
+  end
+  return path_drawn_at(buffer, mouse.line - 1, mouse.column - 1)
+end
+
+--- What a double-click does in the Report `buffer`: on a path it draws, ends
+--- Insert mode and hands `open_path` the path's text; anywhere else, it does
+--- what Neovim's own double-click does (`<2-LeftMouse>`, typed as if no
+--- mapping had it), which selects the word under the mouse.
+---
+---@param buffer integer
+---@param open_path fun(path: string)
+local function double_click(buffer, open_path)
+  local path = path_under_mouse(buffer)
+  if not path then
+    vim.api.nvim_feedkeys(vim.keycode('<2-LeftMouse>'), 'ni', false)
+    return
+  end
+  vim.cmd.stopinsert()
+  open_path(path)
+end
+
 --- A new Report buffer: unlisted, named `REPORT_BUFFER_NAME` from the start,
 --- no file (`'buftype'` `nofile`), no swap file, kept when hidden, and
 --- read-only to the user (`'modifiable'` off; `append_rendering()` still
@@ -49,9 +112,15 @@ end
 --- autocommand of any Report before it, which by then is wiped out, or kept
 --- unnamed for the text the user typed into it.
 ---
+--- A double-click (`<2-LeftMouse>`), in Normal or Insert mode, does what
+--- `double_click()` says: on a path the Report draws, it hands `open_path`
+--- the path's text, as the Report shows it. The mapping belongs to the
+--- buffer, so each new Report gets its own.
+---
 ---@param fill fun(buffer: integer) shows the reports in the emptied buffer
+---@param open_path fun(path: string) opens the file a path the Report draws names
 ---@return integer buffer
-function M.create_report_buffer(fill)
+function M.create_report_buffer(fill, open_path)
   free_report_buffer_name()
   local buffer = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_name(buffer, REPORT_BUFFER_NAME)
@@ -63,6 +132,9 @@ function M.create_report_buffer(fill)
       fill(event.buf)
     end,
   })
+  vim.keymap.set({ 'n', 'i' }, '<2-LeftMouse>', function()
+    double_click(buffer, open_path)
+  end, { buffer = buffer, desc = 'aineo: open the file a path in the Report names' })
   return buffer
 end
 

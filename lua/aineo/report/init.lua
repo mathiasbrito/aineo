@@ -6,6 +6,7 @@ local buffer = require('aineo.report.buffer')
 local colours = require('aineo.report.colours')
 local format = require('aineo.report.format')
 local instructions = require('aineo.report.instructions')
+local paths = require('aineo.report.paths')
 local records = require('aineo.report.records')
 local render = require('aineo.report.render')
 
@@ -14,7 +15,7 @@ local M = {}
 ---@class aineo.report.Environment
 ---@field clock fun(): string the local time, as `YYYY-MM-DDTHH:MM:SS`
 ---@field state_directory string where the records are kept
----@field working_directory string the editor's working directory
+---@field working_directory string the editor's working directory, which a report's relative paths are in
 
 ---@type aineo.report.Environment?
 local environment
@@ -38,8 +39,10 @@ M.report_instructions = instructions.report_instructions
 
 --- Gives the report home what it reads from the editor: the clock, called
 --- for each report received, and the state and working directories, read
---- when the Report buffer is first created. The composition root calls it
---- before anything else in the home is used.
+--- when the Report buffer is first created. The working directory is read
+--- again whenever the Report shows reports, to find the files their relative
+--- paths name, and at each double-click on a path, to open its file. The
+--- composition root calls it before anything else in the home is used.
 ---
 --- Raises an error naming the field when `report_environment` is not an
 --- environment.
@@ -93,6 +96,97 @@ local function readable_records(records_file)
   return records_or_failure, skipped
 end
 
+--- The file `path`, as a report writes it, names: `path` itself when it is
+--- absolute, else `path` in the environment's working directory. A `~` is
+--- not expanded.
+---
+---@param path string
+---@return string
+local function file_named_by(path)
+  if vim.startswith(path, '/') then
+    return path
+  end
+  return vim.fs.joinpath(current_environment().working_directory, path)
+end
+
+--- Whether `path`, as a report writes it, names a regular file
+--- (`file_named_by()`).
+---
+---@param path string
+---@return boolean
+local function names_file(path)
+  local stat = vim.uv.fs_stat(file_named_by(path))
+  return stat ~= nil and stat.type == 'file'
+end
+
+--- A new check of whether a path names a regular file (`names_file()`), for
+--- one rendering: it asks the file system once for each distinct path,
+--- however often it is asked about it, so a rendering takes one check per
+--- path, and a file made or removed after it counts at the next rendering.
+---
+---@return fun(path: string): boolean
+local function file_check_for_one_rendering()
+  local answers = {}
+  return function(path)
+    if answers[path] == nil then
+      answers[path] = names_file(path)
+    end
+    return answers[path]
+  end
+end
+
+--- The reason in an error message of `vim.uv`, `<CODE>: <reason>: <name>`.
+local UV_ERROR_REASON = '^%u+: ([^:]*)'
+
+--- Why the file `path`, as a report writes it, names (`file_named_by()`)
+--- must not be opened now, as the warning the user is given, or nil when it
+--- is a regular file. `path` names no file now when its file was removed
+--- since the Report drew it, or replaced by something else, such as a FIFO,
+--- whose opening would wait for a writer and hold the editor; it cannot be
+--- looked up now when the lookup fails for another reason, such as a
+--- directory on the way that is not searchable or a symbolic link that
+--- loops.
+---
+---@param path string
+---@return string?
+local function refusal_to_open(path)
+  local stat, failure, code = vim.uv.fs_stat(file_named_by(path))
+  if stat and stat.type == 'file' then
+    return nil
+  end
+  if stat or code == 'ENOENT' or code == 'ENOTDIR' then
+    return ('aineo: %s names no file now'):format(path)
+  end
+  return ('aineo: cannot look %s up now: %s'):format(
+    path,
+    failure:match(UV_ERROR_REASON) or failure
+  )
+end
+
+--- Opens, in the current window, the file `path`, a path as the Report
+--- draws it, names (`file_named_by()`), at the line it names when it names
+--- one: a line past the file's end at its last line, line 0 at its first.
+--- The file is the one the Report underlined, whatever Neovim's current
+--- directory is now.
+---
+--- Opens nothing, and warns the user why, when that file is no regular file
+--- any more or cannot be looked up now (`refusal_to_open()`).
+---
+---@param path string
+local function open_drawn_path(path)
+  local candidate = paths.find_path_candidates(path)[1]
+  local refusal = refusal_to_open(candidate.path)
+  if refusal then
+    vim.notify(refusal, vim.log.levels.WARN)
+    return
+  end
+  vim.cmd('edit ' .. vim.fn.fnameescape(file_named_by(candidate.path)))
+  if candidate.line then
+    local last_line = vim.api.nvim_buf_line_count(0)
+    vim.api.nvim_win_set_cursor(0, { math.min(math.max(candidate.line, 1), last_line), 0 })
+  end
+end
+
 --- Shows `rendering` at the end of `report_buffer`, in the Report's colours
 --- (`colours.define_report_colours()`), defined whenever a rendering has any:
 --- none is defined before the Report shows a report.
@@ -114,7 +208,7 @@ end
 ---@param records_file string
 local function show_records(report_buffer, records_file)
   local kept, skipped = readable_records(records_file)
-  show_rendering(report_buffer, render.render_records(kept))
+  show_rendering(report_buffer, render.render_records(kept, file_check_for_one_rendering()))
   if skipped > 0 then
     warn_later(
       ('aineo: skipped %d unreadable report record(s) in %s'):format(skipped, records_file)
@@ -122,15 +216,17 @@ local function show_records(report_buffer, records_file)
   end
 end
 
---- A new Report buffer showing the records kept in `records_file`, and
---- showing them again when the user edits it anew (`:edit`).
+--- A new Report buffer showing the records kept in `records_file`, showing
+--- them again when the user edits it anew (`:edit`), and opening the file a
+--- path it draws names when the user double-clicks the path
+--- (`open_drawn_path()`).
 ---
 ---@param records_file string
 ---@return integer
 local function open_report_buffer(records_file)
   local report_buffer = buffer.create_report_buffer(function(emptied)
     show_records(emptied, records_file)
-  end)
+  end, open_drawn_path)
   show_records(report_buffer, records_file)
   return report_buffer
 end
@@ -176,7 +272,7 @@ local function show_and_keep(arguments)
   local report_buffer = M.report_buffer()
   local record = { time = current_environment().clock(), report = valid_report }
   local cut_failure = records.append_record(report_view.records_file, record)
-  show_rendering(report_buffer, render.render_records({ record }))
+  show_rendering(report_buffer, render.render_records({ record }, file_check_for_one_rendering()))
   buffer.follow_last_line(report_buffer)
   if cut_failure then
     warn_later(cut_failure)
