@@ -130,3 +130,70 @@ Medium: one command through its three doors, a layout function, the health key a
 ## Report
 
 Exactly the shape in your definition, written to `<scratchpad>/t12-report-packet.md`. Open the pull request into `dev` before you report, and put in its body every verification claim a reviewer can re-measure.
+
+## Amendment — 2026-09-27, against `dev` once PR #73 (T19) merges
+
+This section amends the brief above. Where they differ, this section wins. Every fact above was checked on `9af91a6` (2026-09-25). Since then T13, T9, T14, T15, T16, T11, T10, T20, T18, T21, T17 and T19 have merged, and D26 has changed how the suite runs. The facts below were re-read on the tree PR #73 lands, `acc62d0` (`git merge-tree --write-tree origin/dev 6d5a013`), whose code is PR #73's head's.
+
+### Facts, re-read
+
+- **`plugin/aineo.lua`** (533 lines):
+  - `SUBCOMMANDS` is at line 27 and `USAGE` at 30, unchanged;
+  - `ACTIONS` is at line 232 (was 152), and `run(action)` at 290, whose `ERROR` notify is at 296 (was 195 and 201);
+  - `PREFIX_KEYS` is at line 315 (was 220);
+  - the prefix mapping builds `prefix .. PREFIX_KEYS[subcommand]` at line 342 (was 247);
+  - `start_up` is at line 474;
+  - `:Aineo`'s `desc = 'aineo: send, open, report, input or claude'` is at line 532 (was 437).
+- **`tests/test_entry.lua`:** the four case names that say "five" are at lines 38, 45, 53 and 60 (were 37, 44, 52 and 59). The completion pin is at 46 (was 45).
+- **`tests/helpers/entry.lua:18`** `M.USAGE`, and **`tests/test_entry_prefix.lua`**'s `PREFIX_KEYS` at lines 7–13: unchanged.
+- **`tests/test_plugin.lua`:** the pin is still at line 62; `'n <Plug>(aineo-claude)'` is at line 71.
+- **`lua/aineo/health.lua`:** its key table `PREFIX_KEYS` is at line 253, now a list of `{ key = 's', subcommand = 'send' }` records (was a map at 241). T12's key is the first longer than one character: check every reader of `key` there.
+  - `PREFIX_KEYS_PENDING` (line 447) says, while aineo's startup record says the keys are not mapped yet, why. Its text says "the prefix keys", and stays true.
+- **`tests/test_health.lua`:**
+  - the per-key lists are at lines 499–503, 615–619, 630–634 and 758–762. The brief's "816–820" no longer exists;
+  - the two counts of 5 are at lines 562 and 597;
+  - the comparison with `plugin/aineo.lua`'s mappings is at line 600;
+  - line 741 checks the first line only.
+- **`lua/aineo/layout/`:**
+  - `init.lua` (854 lines): `---@alias aineo.layout.Role 'claude'|'report'|'input'` at line 16, and `role_of(window)` at 37;
+  - the public functions are `M.open` (786), `M.focus` (818), `M.follow_claude_terminal` (842, T19) and `M.input_buffer` (850);
+  - `columns.lua` (T17) reads a tab's window tree;
+  - the file column (C9) and T17's middle column are windows of the layout's tab but no role: CN3's "no other window's options change" covers them.
+- **`doc/aineo.txt`:** your section runs from `4. COMMANDS … *aineo-commands*` (line 168; was 89) to `of both (|aineo-health|).` (line 274; was 177). It holds:
+  - `*aineo-mappings*` at line 221;
+  - `Prefix keys ~` at 242;
+  - `*aineo-keys*` at 243.
+
+  Inside it, T19's sentence "Of the actions, only `open` restarts an exited Claude Code" (line 213) must stay true.
+
+### What changed around the behaviours
+
+- **A new terminal in Claude's window.** Since T19 and T21, Claude's window gets a new terminal buffer on its own when:
+  - T19's fallback replaces a terminal whose resume found no conversation;
+  - `\o` or `\c` starts Claude Code again after an exit.
+
+  Window options such as `'number'` are taken again when a buffer never shown in a window enters it. The user's own `TermOpen` autocommands, a common `setlocal nonumber` among them, run for each new terminal.
+  - **CN9 — measure it.** Pin what a toggled Claude window shows after a new terminal enters it: with no `TermOpen` autocommand, and with `autocmd TermOpen * setlocal nonumber norelativenumber`. aineo does not re-apply the toggle.
+  - Name the result in your note's *Readings for the MVP review*: the toggle belongs to the window as Neovim keeps its options, and a new terminal may undo it.
+- **The layout's tab.** T14 and T21 changed `open()` and `focus()`. CN4b's "from another tab" is re-measured on them.
+
+### Boundary, amended
+
+- **Branch:** `feature/t12-claude-numbers` from `origin/dev` after PR #73 merges.
+- **Session note:** `knowledge-vault/Sessions/<the day you are dispatched> — T12 Claude line numbers.md`, not the 2026-09-25 name above.
+- **Builds:** `<builds>/nvim-0.11.6/nvim-macos-arm64/bin/nvim` is in the orchestrator's scratch directory, which your dispatch message names. The *Baseline*'s `<scratchpad>/nvim-0.11.6/…` above is wrong.
+- **The shared help:** T9 merged long ago (PR #30). No packet running beside you edits `doc/aineo.txt`: T22 and T23's boundaries exclude it. The merge check against `bugfix/t9-report-colours` is dropped. Every hunk stays inside your section.
+- **Packets beside you,** all disjoint from your files by rule 2:
+  - T22, the parallel test runner: `scripts/`, the `Makefile`, `tests/test_runner*.lua`, `tests/test_isolation.lua`, `tests/helpers/make.lua`, `tests/helpers/fixture.lua`;
+  - T23, the git home: `lua/aineo/git/`, `tests/test_git_*.lua`, `tests/helpers/git_repo.lua`.
+- **How you run the suite (D26, the root `CLAUDE.md`):**
+  - run the test files your change touches while you work;
+  - a mutant runs on its narrowed group, then on the test files that exercise the code it breaks, and on the whole suite only if it survives those;
+  - run the whole suite once, on both versions, on the tree you push.
+- **Before your first run,** `mkdir -p .tests/state/nvim`. On 0.12.5 a fresh `.tests/` fails readiness and message cases without it, until T22 lands.
+
+### Baseline, amended
+
+`dev` once PR #73 merges, whose code is PR #73's head's. The orchestrator's verification of PR #73 measured the tree `acc62d0`: 1227 cases on both versions:
+- 0.12.5: `Fails (0)`, 869 s, at load 38–83.
+- 0.11.6: `Fails (1)`, 890 s, at load 131. The one failure is `tests/test_report_paths.lua` › *the file checks* › *of a line of distinct paths take at most the time limit, on arrival and on :edit*: `arrival = "3.7 s"`. That is T17's timing case, which T19 does not touch. Re-run alone on 0.11.6 it failed at load 115 (3.5 s) and passed at load 95. It is load-sensitive: if it fails in your runs, re-run it alone and report the load; it is not yours to change.
