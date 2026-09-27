@@ -66,7 +66,7 @@ local EDITOR_VARIABLES_LEFT_OUT = {
 --- How the home runs git; every field it leaves out is the home's default.
 ---@class aineo.git.Options
 ---@field executable? string the git program, `DEFAULT_EXECUTABLE` when not given
----@field limit_ms? integer how long each git process may run before it is stopped, `DEFAULT_LIMIT_MS` when not given
+---@field limit_ms? integer how long each git run may last before it is stopped, `DEFAULT_LIMIT_MS` when not given
 
 --- One git process an operation asks for.
 ---@class aineo.git.Request
@@ -151,28 +151,31 @@ local function environment_for(request)
   return vim.tbl_extend('force', environment, ENVIRONMENT, request.environment or {})
 end
 
---- Kills `process`, which leads a process group of its own, and every
---- process in that group — a `git fetch` git started for a partial clone's
---- missing objects, and what it started in turn — unless it has ended
---- already. A descendant that starts a group or a session of its own is not
---- in the group and escapes the kill.
+--- Kills every process in the group `process` leads: git, while it runs,
+--- and what it started that is still there — a `git fetch` git started for
+--- a partial clone's missing objects, a user's clean filter or a hook that
+--- left a job behind — even once git itself has exited. A descendant that
+--- starts a group or a session of its own is not in the group and escapes
+--- the kill.
 ---
 ---@param process vim.SystemObj
-local function kill(process)
-  if not process:is_closing() then
-    vim.uv.kill(-process.pid, 'sigkill')
-  end
+local function kill_group(process)
+  vim.uv.kill(-process.pid, 'sigkill')
 end
 
 --- Runs `executable` for `request` and, once it ends, calls on the main loop
 --- either `done(nil, output)` or `done(failure)`; never before it returns,
---- and never raising. git runs leading a process group of its own; at
---- `limit_ms`, a git still running is killed with every process of its
---- group, and reported `timed_out`. A git ended by a signal is `failed`,
---- never an answer. Returns a function that cancels the run: it kills the
---- process and its group, and `done` is not called — save when git could
---- not be started at all, where the cancel does nothing and `done(no_git)`
---- still runs.
+--- and never raising. git runs leading a process group of its own, and the
+--- run ends once git has exited and its standard output and error are
+--- closed. At `limit_ms`, a run that has not ended has every process of its
+--- group killed: git, reported `timed_out` when it was still running, and
+--- any process it started that still holds its output. A process git
+--- started in a group or a session of its own escapes the kill, and one that
+--- holds git's output holds `done` back, past the limit, until it closes it.
+--- A git ended by a signal is `failed`, never an answer. Returns a function
+--- that cancels the run: it kills the group, unless the run has ended, and
+--- `done` is not called — save when git could not be started at all, where
+--- the cancel does nothing and `done(no_git)` still runs.
 ---
 ---@param executable string
 ---@param limit_ms integer
@@ -185,13 +188,14 @@ local function run_git(executable, limit_ms, request, done)
     request.arguments
   )
   local timer = assert(vim.uv.new_timer())
-  local timed_out, cancelled = false, false
+  local timed_out, cancelled, ended = false, false, false
   local started, process = pcall(vim.system, command, {
     text = false,
     env = environment_for(request),
     clear_env = true,
     detach = true,
   }, function(result)
+    ended = true
     timer:stop()
     timer:close()
     vim.schedule(function()
@@ -207,13 +211,18 @@ local function run_git(executable, limit_ms, request, done)
     end)
     return function() end
   end
+  local function stop()
+    if not ended then
+      kill_group(process)
+    end
+  end
   timer:start(limit_ms, 0, function()
     timed_out = not process:is_closing()
-    kill(process)
+    stop()
   end)
   return function()
     cancelled = true
-    kill(process)
+    stop()
   end
 end
 
