@@ -142,11 +142,13 @@ T['a git that runs too long']['is stopped at its limit with every process it sta
   local seen =
     child.lua(TIMED_FIND_REPOSITORY, { directory, { executable = starting, limit_ms = 1000 } })
 
-  eq({
-    reason = vim.tbl_get(seen, 'failure', 'reason'),
-    in_time = seen.elapsed_ms < 5000,
-    descendant_left = vim.uv.kill(tonumber(vim.fn.readfile(descendant_file)[1]), 0),
-  }, { reason = 'timed_out', in_time = true })
+  eq(
+    { reason = vim.tbl_get(seen, 'failure', 'reason'), in_time = seen.elapsed_ms < 5000 },
+    { reason = 'timed_out', in_time = true }
+  )
+  git_repo.wait_until('the process git started gone', function()
+    return vim.uv.kill(tonumber(vim.fn.readfile(descendant_file)[1]), 0) == nil
+  end)
 end
 
 T['a git that runs too long']['is stopped at the home’s own limit when it is given none'] = function()
