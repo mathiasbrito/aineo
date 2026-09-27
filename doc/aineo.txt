@@ -196,26 +196,6 @@ lives in one tab; from another tab, `\o` moves you to it.
 			since a key typed in Terminal mode would close the
 			terminal and its exit with it.
 
-                                                       *:Aineo-claude-numbers*
-:Aineo claude-numbers	Hides the line numbers of Claude's window, 'number'
-			and 'relativenumber', when it shows them, and shows
-			them again as they were when it does not: 'number'
-			when the window never had any. It changes no other
-			window, and the cursor and the mode stay where they
-			are; from another tab it acts on Claude's window in
-			the layout's tab. Without a Claude window — the
-			layout or Claude's window closed, or Claude's window
-			left on an empty buffer once its terminal was wiped
-			— it changes nothing and warns you once.
-
-			aineo keeps your choice until the editor quits: a
-			new terminal in Claude's window — Claude Code
-			restarted by `open`, the new session that takes the
-			place of a resume with no conversation, a wiped
-			terminal started again — and Claude's window opened
-			again show the numbers as you left them. A file
-			opened from Claude's window keeps your own numbers.
-
 When Claude Code exits while you are in its terminal in Terminal mode — after
 `/exit`, say, or as it fails at its start — aineo puts you back in Normal mode
 there, so that its exit stays on screen and the next key you type is a
@@ -234,6 +214,36 @@ the terminal is wiped stays in view, and moves to the file column when the
 layout opens again. Of the actions, only `open` restarts an exited Claude
 Code; aineo restarts one by itself only in place of a resume Claude Code
 has no conversation for (|aineo-claude-session|).
+
+                                                       *:Aineo-claude-numbers*
+:Aineo claude-numbers	Hides the line numbers of Claude's window, 'number'
+			and 'relativenumber', when it shows either, and shows
+			them again as they were when it shows none: 'number'
+			alone when aineo has hidden none before. It acts on
+			the buffer Claude's window shows, whichever it is,
+			changes no other window, and leaves the cursor and
+			the mode where they are; from another tab it acts on
+			Claude's window in the layout's tab. Without a Claude
+			window — the layout or Claude's window closed, or
+			Claude's window left without its terminal once the
+			terminal was wiped, on an empty buffer or on a file
+			Neovim showed there — it changes nothing and warns
+			you once.
+
+			aineo keeps your choice until the editor quits, and
+			gives it to every Claude terminal new to Claude's
+			window — Claude Code restarted by `open`, the new
+			session that takes the place of a resume with no
+			conversation, a wiped terminal started again, a
+			terminal you bring back there yourself — and to
+			Claude's window when it is opened anew. Numbers you
+			set yourself in Claude's window afterwards stay as
+			you set them, until another terminal or a new window
+			comes. Pressed while Claude's window shows another
+			buffer, it hides or shows that buffer's numbers, and
+			Claude's terminal gets the same when it next comes
+			back there. A file opened from Claude's window keeps
+			your own numbers.
 
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
