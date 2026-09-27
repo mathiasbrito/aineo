@@ -53,7 +53,7 @@ local function open_after_a_resume_with_no_conversation(child, name)
   claude_session.wait_for_start(fake)
   end_claude_code(child)
   child.cmd('Aineo open')
-  claude_session.wait_for_starts(fake, 3)
+  eq(#claude_session.wait_for_starts(fake, 3), 3)
   eq(claude_session.wait_for_status(child, 'ready'), { 'ready' })
   return fake
 end
@@ -86,6 +86,7 @@ T["Claude's session"]['resumes, in a new Neovim, the session aineo kept for the 
   child.cmd('Aineo open')
 
   local starts = claude_session.wait_for_starts(fake, 2)
+  eq(#claude_session.words_after(starts[1].argv, '--session-id'), 1)
   eq(
     claude_session.words_after(starts[2].argv, '--resume'),
     claude_session.words_after(starts[1].argv, '--session-id')
@@ -110,6 +111,7 @@ T["Claude's session"]['follows :cd, each directory resuming its own session'] = 
 
   local starts = claude_session.wait_for_starts(fake, 3)
   eq(starts[2].cwd, elsewhere)
+  eq(#claude_session.words_after(starts[2].argv, '--session-id'), 1)
   MiniTest.expect.no_equality(
     claude_session.words_after(starts[2].argv, '--session-id'),
     claude_session.words_after(starts[1].argv, '--session-id')
@@ -136,6 +138,7 @@ T["Claude's session"]["keeps the session's id under the editor's state directory
     'claude-sessions',
     vim.fn.sha256(vim.fn.getcwd()) .. '.txt'
   )
+  eq(vim.fn.filereadable(kept), 1)
   eq(vim.fn.readfile(kept, 'b'), id)
 end
 
@@ -221,7 +224,7 @@ T['after a resume with no conversation']['leaves the user in the tab they moved 
   child.cmd('Aineo open')
   child.cmd('tabnew')
 
-  claude_session.wait_for_starts(fake, 3)
+  eq(#claude_session.wait_for_starts(fake, 3), 3)
 
   eq(claude_session.wait_for_status(child, 'ready'), { 'ready' })
   eq(child.fn.tabpagenr(), 2)

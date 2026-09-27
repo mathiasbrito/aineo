@@ -22,13 +22,16 @@
 ---   whose values the record lists.
 --- - `AINEO_FAKE_CLAUDE_CONVERSATIONS` — a directory holding the conversations
 ---   the fake has, one file per session id, named by it. Set, the fake answers
----   `--resume` and `--session-id` as Claude Code 2.1.283 did (Q8): `--resume`
----   of an id that has no conversation prints `No conversation found with
----   session ID: <id>` and exits 1, drawing no screen of its own, after
----   `NO_CONVERSATION_EXIT_MS`; and a session, new or resumed, has a
----   conversation once Enter has sent a message in it, as one in which
----   nothing was sent had none. Unset, it records those flags and nothing
----   more.
+---   `--resume` and `--session-id` as Claude Code 2.1.283 did: `--resume` of
+---   an id that has no conversation draws no screen of its own, prints `No
+---   conversation found with session ID: <id>` after
+---   `NO_CONVERSATION_MESSAGE_MS`, broken at its terminal's width as Claude
+---   Code broke it (`rows_broken_at_blanks()`), and exits 1
+---   `EXIT_AFTER_NO_CONVERSATION_MS` later, reading no key meanwhile — what
+---   Claude Code does with keys then was not measured; and a session, new or
+---   resumed, has a conversation once Enter has sent a message in it, as one
+---   in which nothing was sent had none. Unset, it records those flags and
+---   nothing more.
 ---
 --- It answers Ctrl-C as Claude Code 2.1.281 did in a Neovim terminal: idle, a
 --- second press within `DOUBLE_PRESS_MS` of the first exits 0,
@@ -112,10 +115,16 @@ local MODES = {
 --- none (`AINEO_FAKE_CLAUDE_CONVERSATIONS`).
 local CONVERSATIONS = os.getenv('AINEO_FAKE_CLAUDE_CONVERSATIONS')
 
---- How long the fake takes to exit on a `--resume` it has no conversation
---- for: the shorter of the two times Claude Code 2.1.283 took, 1.4 s (the
---- other, 2.1 s), each measured once.
-local NO_CONVERSATION_EXIT_MS = 1400
+--- How long the fake draws nothing on a `--resume` it has no conversation
+--- for before it says so: Claude Code 2.1.283 drew nothing before that
+--- message, which it printed 0.9, 1.1 and 1.4 s after it started, in three
+--- runs in a Neovim 0.12.5 terminal at a load of 83 to 152 on the host; the
+--- fake takes the shortest.
+local NO_CONVERSATION_MESSAGE_MS = 900
+
+--- How long after that message the fake exits 1: Claude Code 2.1.283 exited
+--- 510 to 520 ms after it in the same three runs.
+local EXIT_AFTER_NO_CONVERSATION_MS = 510
 
 local MODE_NAME = os.getenv('AINEO_FAKE_CLAUDE_MODE') or 'ready'
 local MODE = assert(MODES[MODE_NAME], 'no such mode: ' .. MODE_NAME)
@@ -323,6 +332,46 @@ local function keep_conversation(input)
   end
 end
 
+--- What Claude Code 2.1.283 printed, before the id, when it had no
+--- conversation for the id it was asked to resume.
+local NO_CONVERSATION = 'No conversation found with session ID: '
+
+--- The width of the fake's terminal now, in columns, as `stty size` reads it.
+---
+---@return integer
+local function terminal_columns()
+  local stty = assert(io.popen('stty size'))
+  local size = stty:read('*a')
+  stty:close()
+  return assert(tonumber(size:match('^%d+%s+(%d+)')), 'stty size: ' .. size)
+end
+
+--- The rows Claude Code 2.1.283 printed `text` in on a terminal `columns`
+--- wide: all of it on one row where it fits, and otherwise broken at its
+--- blanks, each row holding the words up to the last blank that fits, without
+--- that blank — measured with `NO_CONVERSATION` and an id at 39, 60 and 78
+--- columns in a Neovim terminal, where it printed one row at 78 and, at 39
+--- and 60, the words before the id on one row and the id on the next. What it
+--- prints where a word is wider than the terminal — the id, below 36 columns
+--- — was not measured: the fake gives such a word a row of its own, which the
+--- terminal wraps.
+---
+---@param text string
+---@param columns integer
+---@return string[]
+local function rows_broken_at_blanks(text, columns)
+  local rows = {}
+  for word in text:gmatch('%S+') do
+    local last = rows[#rows]
+    if last and #last + 1 + #word <= columns then
+      rows[#rows] = last .. ' ' .. word
+    else
+      table.insert(rows, word)
+    end
+  end
+  return rows
+end
+
 --- Whether the fake was started with `--resume` of an id it has no
 --- conversation for, while it keeps conversations (`CONVERSATIONS`).
 ---
@@ -440,10 +489,13 @@ record({
   pid = vim.fn.getpid(),
 })
 if resumes_no_conversation() then
-  stdout:write(('No conversation found with session ID: %s\r\n'):format(SESSION_ID))
   vim.defer_fn(function()
-    finish('exit', 1)
-  end, NO_CONVERSATION_EXIT_MS)
+    local rows = rows_broken_at_blanks(NO_CONVERSATION .. SESSION_ID, terminal_columns())
+    stdout:write(table.concat(rows, '\r\n') .. '\r\n')
+    vim.defer_fn(function()
+      finish('exit', 1)
+    end, EXIT_AFTER_NO_CONVERSATION_MS)
+  end, NO_CONVERSATION_MESSAGE_MS)
   while true do
     vim.wait(60000)
   end

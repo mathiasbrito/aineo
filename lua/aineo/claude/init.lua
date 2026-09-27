@@ -195,9 +195,11 @@ end
 
 --- Whether `ended`, a session whose process has ended, resumed an id Claude
 --- Code had no conversation for: it exited 1 with `NO_CONVERSATION` and its
---- id on its terminal. The terminal's lines are read joined, since it wraps
---- that line at its width, each row keeping the blank it ends on; a terminal
---- already wiped tells nothing.
+--- id on its terminal. The terminal's lines and the message are compared with
+--- every white space removed, since Claude Code 2.1.283 breaks the message at
+--- a blank where the terminal is narrower than it, dropping that blank, and a
+--- terminal row may also end on a blank of its own; a terminal already wiped
+--- tells nothing.
 ---
 ---@param ended { buffer: integer, choice: aineo.claude.SessionChoice, exit_code: integer? }
 ---@return boolean
@@ -209,8 +211,9 @@ local function found_no_conversation(ended)
   then
     return false
   end
-  local screen = table.concat(vim.api.nvim_buf_get_lines(ended.buffer, 0, -1, false))
-  return screen:find(NO_CONVERSATION .. ended.choice.id, 1, true) ~= nil
+  local screen = table.concat(vim.api.nvim_buf_get_lines(ended.buffer, 0, -1, false)):gsub('%s', '')
+  local message = (NO_CONVERSATION .. ended.choice.id):gsub('%s', '')
+  return screen:find(message, 1, true) ~= nil
 end
 
 --- Runs Claude Code with `settings` on the session `choice` names, in a new
@@ -252,12 +255,58 @@ end
 ---@type fun(settings: aineo.claude.Settings, choice: aineo.claude.SessionChoice): integer
 local start_in_place
 
+--- Calls `callback` from a callback scheduled now or, while the command-line
+--- window is open then — where starting a terminal is refused (E11) — from
+--- one scheduled once it has closed.
+---
+---@param callback fun()
+local function schedule_outside_command_line_window(callback)
+  vim.schedule(function()
+    if vim.fn.getcmdwintype() ~= '' then
+      vim.api.nvim_create_autocmd('CmdwinLeave', {
+        once = true,
+        desc = 'Run what waited for the command-line window to close',
+        callback = function()
+          schedule_outside_command_line_window(callback)
+        end,
+      })
+      return
+    end
+    callback()
+  end)
+end
+
+--- Starts a new session on a new id in place of the last (`start_in_place()`)
+--- and hands its terminal to `settings.on_terminal_replaced`. A start that
+--- fails is told the user once, as an error starting with `aineo:`, and
+--- leaves the last session as it was. A user in Normal mode stays in it,
+--- wherever they are, although a `TermOpen` autocommand of theirs enters
+--- Insert mode as the new terminal opens. Raises nothing.
+---
+---@param settings aineo.claude.Settings
+local function start_new_session_in_place(settings)
+  local in_normal_mode = vim.api.nvim_get_mode().mode:sub(1, 1) == 'n'
+  local started, terminal =
+    pcall(start_in_place, settings, { id = session_ids.new_session_id(), resumed = false })
+  if in_normal_mode then
+    vim.cmd.stopinsert()
+  end
+  if not started then
+    vim.notify('aineo: ' .. tostring(terminal), vim.log.levels.ERROR)
+    return
+  end
+  if settings.on_terminal_replaced then
+    settings.on_terminal_replaced(terminal)
+  end
+end
+
 --- When `ended`, a session whose process has ended, resumed an id Claude
 --- Code found no conversation for (`found_no_conversation()`), starts a new
---- session on a new id in its place, from a scheduled callback, as
---- `start_session()` would, and hands its terminal to
---- `settings.on_terminal_replaced`. It starts none once Neovim is quitting
---- (`v:exiting` set), as it is while `VimLeavePre` handlers wait.
+--- session on a new id in its place (`start_new_session_in_place()`) from a
+--- scheduled callback — once the command-line window has closed, when it is
+--- open. It starts none once Neovim is quitting (`v:exiting` set), as it is
+--- while `VimLeavePre` handlers wait, nor once another start has made a
+--- session of its own before the callback ran.
 ---
 ---@param settings aineo.claude.Settings
 ---@param ended table
@@ -265,15 +314,11 @@ local function start_in_place_of_no_conversation(settings, ended)
   if not found_no_conversation(ended) then
     return
   end
-  vim.schedule(function()
-    if vim.v.exiting ~= vim.NIL then
+  schedule_outside_command_line_window(function()
+    if vim.v.exiting ~= vim.NIL or session ~= ended then
       return
     end
-    local terminal =
-      start_in_place(settings, { id = session_ids.new_session_id(), resumed = false })
-    if settings.on_terminal_replaced then
-      settings.on_terminal_replaced(terminal)
-    end
+    start_new_session_in_place(settings)
   end)
 end
 
@@ -308,8 +353,11 @@ end
 --- as Claude Code 2.1.283 does for a session in which nothing was sent — a
 --- new session on a new id takes its place, as a start once it has exited
 --- would, and `settings.on_terminal_replaced` is handed its terminal; once
---- per start, and none while Neovim quits. Any other exit leaves the session
---- exited and its id kept.
+--- per start, none while Neovim quits or once another start has taken its
+--- place, and not before the command-line window has closed. A user in
+--- Normal mode stays in it, and a new session that cannot start is told the
+--- user once, as an error. Any other exit leaves the session exited and its
+--- id kept.
 ---
 --- Show a new buffer in a window before Claude Code draws its first screen:
 --- its terminal takes its size from the first window that shows it, and until
