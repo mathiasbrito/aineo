@@ -15,8 +15,9 @@ local MAKEFILE = vim.fs.joinpath(CHECKOUT, 'Makefile')
 local EMPTY_DIRECTORY = vim.fs.joinpath(CHECKOUT, '.tests', 'empty')
 
 --- How long a target may run before it is stopped, unless the run says
---- otherwise; far above any healthy run.
-local DEFAULT_TIME_LIMIT_MS = 10000
+--- otherwise: it only stops a run that hangs, so it stays far above any
+--- healthy run, even one started while the suite's other files load the host.
+local DEFAULT_TIME_LIMIT_MS = 60000
 
 --- How often the wait checks whether `make` has exited.
 local POLL_INTERVAL_MS = 20
@@ -88,7 +89,7 @@ end
 --- How a target is run.
 ---@class aineo_tests.MakeRun
 ---@field assignments? string[] variable assignments on make's command line, such as `FILE=<path>`
----@field time_limit_ms? integer how long the run may take; ten seconds when absent
+---@field time_limit_ms? integer how long the run may take; a minute when absent
 ---@field directory? string where make runs; an empty directory under `.tests/` when absent
 ---@field environment? table<string, string> variables set in make's environment, over the helper's own
 ---@field makefile? string the Makefile to run; this checkout's when absent
