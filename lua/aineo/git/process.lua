@@ -15,14 +15,18 @@ local DEFAULT_LIMIT_MS = 10000
 --- The settings every git the home runs is given, over the user's own, so
 --- that what it answers does not depend on them and nothing it starts
 --- outlives it: file names are given as on disk, a non-ASCII letter
---- included; no file system monitor daemon is started; a text file is
---- diffed as text up to 512 MiB, where a user's lower threshold would show it
---- as a binary file; and an empty line of context keeps its leading space.
+--- included; no file system monitor daemon is started; no hook of the
+--- repository's runs, where writing the private index would run
+--- `post-index-change`; a text file is diffed as text up to 512 MiB, where a
+--- user's lower threshold would show it as a binary file; and an empty line
+--- of context keeps its leading space.
 local CONFIGURATION_OVERRIDES = {
   '-c',
   'core.quotePath=false',
   '-c',
   'core.fsmonitor=false',
+  '-c',
+  'core.hooksPath=/dev/null',
   '-c',
   'core.bigFileThreshold=512m',
   '-c',
