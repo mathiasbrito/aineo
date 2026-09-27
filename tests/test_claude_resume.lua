@@ -12,6 +12,10 @@ end, function(text, part)
   return string.format('Text: %s\nPart: %s', vim.inspect(text), vim.inspect(part))
 end)
 
+--- Columns enough that Claude's window, beside a window of the user's, fits
+--- the no-conversation message and its id, 75 columns, on one row.
+local SIDE_BY_SIDE_COLUMNS = 160
+
 --- The expression, run in the child, that tells the mode it is in, as
 --- `nvim_get_mode()` names it.
 local MODE = 'vim.api.nvim_get_mode().mode'
@@ -646,6 +650,7 @@ end
 
 T['a resume with no conversation']['leaves a user in Normal mode in a window of their own, whose config enters Insert mode as a terminal opens'] = function()
   local fake = fake_keeping_conversations('resume-refused-startinsert', 'ready')
+  child.o.columns = SIDE_BY_SIDE_COLUMNS
   child.cmd('autocmd TermOpen * startinsert')
   local resumed =
     resume_with_no_conversation(child, fake, kept_in('resume-refused-startinsert-state'))
@@ -667,6 +672,7 @@ end
 
 T['a resume with no conversation']['leaves a user typing in Insert mode in a window of their own typing there'] = function()
   local fake = fake_keeping_conversations('resume-refused-insert', 'ready')
+  child.o.columns = SIDE_BY_SIDE_COLUMNS
   local resumed = resume_with_no_conversation(child, fake, kept_in('resume-refused-insert-state'))
   child.cmd('rightbelow vnew')
   local window = child.api.nvim_get_current_win()
