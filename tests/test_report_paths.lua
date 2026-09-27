@@ -809,15 +809,17 @@ T['a double-click']['past the end of a line that ends in a path opens nothing'] 
   eq(what_the_layout_shows(), NOTHING_OPENED)
 end
 
-T['a double-click']['on a web link opens no file'] = function()
+T['a double-click']['on a web link opens no file and selects the word, as Neovim does'] = function()
   open_layout()
   receive_details('See https://x.y/a now')
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
   double_click_in_report(2, 14)
 
-  selection()
-  eq(what_the_layout_shows(), NOTHING_OPENED)
+  eq(
+    { mode = selection()[1], shown = what_the_layout_shows(), told = entry.messages(child) },
+    { mode = 'v', shown = NOTHING_OPENED, told = {} }
+  )
 end
 
 T['a double-click']["on the Report's status line opens nothing"] = function()
