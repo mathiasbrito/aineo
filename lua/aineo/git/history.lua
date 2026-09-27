@@ -66,7 +66,7 @@ function M.commits_since(run, found, base, done)
       run(
         {
           directory = found.top,
-          arguments = { 'merge-base', '--is-ancestor', '--end-of-options', base, 'HEAD' },
+          arguments = { 'merge-base', '--is-ancestor', base, 'HEAD' },
           answers = { IS_ANCESTOR_CODE, NOT_ANCESTOR_CODE },
         },
         process.or_fail(done, function(ancestry)
