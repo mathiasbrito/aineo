@@ -40,27 +40,38 @@ end
 
 local CHECKOUT = vim.uv.cwd()
 
---- A test file whose cases pass only when neither its Neovim nor a child it
---- starts fell back from the log file it was given.
-local LOG_PROBE_FILE = {
-  "local MiniTest = require('mini.test')",
-  'local eq = MiniTest.expect.equality',
-  ('local children = dofile(%q)'):format(
-    vim.fs.joinpath(CHECKOUT, 'tests', 'helpers', 'child.lua')
-  ),
-  'local child = MiniTest.new_child_neovim()',
-  'local T = MiniTest.new_set()',
-  "T['log'] = function()",
-  "  eq(vim.env.NVIM_LOG_FILE, vim.fs.joinpath(vim.env.XDG_STATE_HOME, 'nvim', 'log'))",
-  'end',
-  "T['no log fallback'] = function() eq(vim.env.__NVIM_LOG_FILE_WANT, nil) end",
-  "T['no log fallback in a child'] = function()",
-  '  children.restart(child)',
-  "  eq(child.lua_get('vim.env.__NVIM_LOG_FILE_WANT'), vim.NIL)",
-  '  child.stop()',
-  'end',
-  'return T',
-}
+--- A test file whose cases pass only when it runs in a home inside
+--- `checkout`'s `.tests/`, and neither its Neovim nor a child it starts fell
+--- back from the log file it was given.
+---
+---@param checkout string
+---@return string[]
+local function log_probe_file(checkout)
+  return {
+    "local MiniTest = require('mini.test')",
+    'local eq = MiniTest.expect.equality',
+    ('local children = dofile(%q)'):format(
+      vim.fs.joinpath(CHECKOUT, 'tests', 'helpers', 'child.lua')
+    ),
+    'local child = MiniTest.new_child_neovim()',
+    'local T = MiniTest.new_set()',
+    "T['home'] = function()",
+    ('  eq(vim.startswith(vim.env.XDG_STATE_HOME, %q), true)'):format(
+      vim.fs.joinpath(checkout, '.tests') .. '/'
+    ),
+    'end',
+    "T['log'] = function()",
+    "  eq(vim.env.NVIM_LOG_FILE, vim.fs.joinpath(vim.env.XDG_STATE_HOME, 'nvim', 'log'))",
+    'end',
+    "T['no log fallback'] = function() eq(vim.env.__NVIM_LOG_FILE_WANT, nil) end",
+    "T['no log fallback in a child'] = function()",
+    '  children.restart(child)',
+    "  eq(child.lua_get('vim.env.__NVIM_LOG_FILE_WANT'), vim.NIL)",
+    '  child.stop()',
+    'end',
+    'return T',
+  }
+end
 
 --- Expects `text` not to contain `fragment`, taken literally.
 local expect_no_mention = MiniTest.new_expectation(
@@ -162,7 +173,7 @@ end
 
 T['a run']['in a checkout with no .tests/ yet tells no Neovim of a missing log'] = function()
   local checkout = checkout_without_test_home()
-  local probe = fixture.write('fresh_checkout_log/probe.lua', LOG_PROBE_FILE)
+  local probe = fixture.write('fresh_checkout_log/probe.lua', log_probe_file(checkout))
 
   local result = make.run('test_file', {
     makefile = vim.fs.joinpath(checkout, 'Makefile'),
