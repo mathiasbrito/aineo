@@ -1,6 +1,6 @@
 # 2026-09-27 — T19 Claude resume
 
-**Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-claude-code-integrator`); the fix round by a second implementer agent of the same kind, which took the pull request over from its author
+**Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-claude-code-integrator`); the fix round by a second implementer agent of the same kind, which took the pull request over from its author; the correction after the re-measure by a third
 **Branch:** `feature/t19-claude-resume` · **Pull request:** #73 into `dev` (a regular packet)
 
 ## Links
@@ -38,7 +38,7 @@ Chosen: exit code 1 **and** the message with the kept id on the failed terminal,
 
 What it gets wrong:
 - **A later Claude Code that words the message otherwise, or exits with another code**: the fallback never happens. Every start in that directory then resumes the same id and fails the same way; `\o` shows the exit each time. The user's way out is to remove the folder `aineo/claude-sessions/` under `stdpath('state')`, which the help names and, since the fix round, gives as the way out (A9); it makes every directory start a new session. No start is lost silently: the exit is on screen.
-- **A failure that looks like this one**: another program printing that exact text, with this id, and exiting 1 — only a `claude.cmd` wrapper could; aineo would then start a new session and forget the old id. With white space removed, a text that differs from the message only in its blanks matches too.
+- **A failure that looks like this one**: that text, with this id, on the terminal of a resume that exits 1 — printed by a `claude.cmd` wrapper, or shown by Claude Code's own screen as a pasted prompt or as a resumed transcript that quotes it (plausible for anyone debugging aineo inside aineo); aineo would then start a new session and forget the old id. With white space removed, a text that differs from the message only in its blanks matches too. The exit of 1 is still needed. **Corrected by the correction (the re-measure's finding 4):** this said "only a `claude.cmd` wrapper could".
 - **Output not yet in the terminal at `on_exit`**: the brief review measured the message present at `on_exit` 8 of 8 runs, and the orchestrator's width runs saw it there too; a Claude Code that printed it and exited within Neovim's terminal refresh would be taken for another exit. While Neovim quits, the terminal is not refreshed, and the packet's probe saw the buffer empty at `VimLeavePre`.
 - **A terminal wiped before `on_exit`** (a user's `TermClose` autocommand): nothing can be read, so it counts as another exit — no fallback, no error.
 
@@ -213,6 +213,46 @@ The fix round did not re-run M1–M10b, M19–M22 and M24–M31: the lines they 
 
 Every row ran once per version listed, at host loads of 15 to 190 at the runs' starts (each log headed with the sha `149b939`, the tree's changes, `nvim --version` and `uptime`).
 
+## The correction (after the re-measure)
+
+A third implementer agent took PR #73 over for one bounded correction: the re-measure of head `9119a10` (reviewer `neovim-claude-code-reviewer`) confirmed findings 1 to 7, and the orchestrator's brief `orch-correction-t19.md` scoped the correction to 1–5 and 7 (6, the `Makefile` never creating `.tests/state/nvim/`, is the harness's). The fix round's decisions stand, except where the findings refute them.
+
+**Unit list** (stated before the first test): (1) a user in Insert mode's CTRL-O (`niI`) goes on typing; (2) a user in Terminal mode's CTRL-\ CTRL-O (`ntT`) in a terminal of their own goes on typing; (3) under `TermOpen * startinsert`, a user who leaves Visual mode, Select mode or the command line after the fallback is in Normal mode; (4) the same for `q:` left with CTRL-C, CTRL-C; (5) the fallback takes the place of its terminal in a window pinned with `'winfixbuf'`, whose pin stays as the user set it; (6) `\o` after an exit starts in Claude's pinned window; (7) Replace mode and (8) Terminal mode in a terminal of the user's own each go on typing — the branches of `is_typing()` the suite did not hold.
+
+**Adopted fixes**, credited to the re-measure, which built and measured both:
+- **FIX-A4b** (findings 1 and 2) as `is_typing()`: no `stopinsert` when the mode matches `^[iRt]`, `^ni` or is `ntT`.
+- **FIX-winfixbuf** (finding 3) in `replace_terminal()`: the pin is lifted for the swap alone. One deviation from its literal edit: the pin is read and restored on the window's own value (`nvim_get_option_value`/`nvim_set_option_value` with `scope = 'local'`), since `vim.wo[window]` sets like `:set` and leaves the global value pinned too; the pin case asserts the global value unchanged, and the literal edit is a mutant it kills. `\o` after an exit takes the same path and was broken there too (E1513, a Claude Code left running unshown): pinned in the entry file.
+- The docstrings of `replace_terminal()`, `start_new_session_in_place()` and `start_session()` now say what the code does. "Leaves the last session as it was" is corrected rather than made true: it holds for a start that fails before Claude Code has launched; one that fails after — an autocommand of the user's raising as the terminals are swapped — leaves the new Claude Code running as the one session, perhaps unshown, its id perhaps not kept, `on_terminal_replaced` not called.
+
+**Seen red** — 8 cases, each by assertion, on `9119a10`'s code, on 0.12.5 and 0.11.6 alike (written together as the pins of two adopted fixes, each red in its own row of one run):
+- *lets a user in a command of Insert mode's CTRL-O go on typing in a window of their own* — `Left: { "i", { "obcne", "two" } }`, `Right: { "i", { "abcone", "two" } }`;
+- *lets a user in a command of Terminal mode's CTRL-\ CTRL-O go on typing in a terminal of their own* — `Left: { "t", "bc" }`, `Right: { "t", "abc" }`;
+- *leaves a user who leaves a mode in Normal mode in a window of their own, whose config enters Insert mode as a terminal opens*, rows `visual` (`v`), `select` (`gh`), `command-line` (`:`) — each `Left: { "i", { "xone", "two" } }`, `Right: { "n", { "ne", "two" } }`;
+- *leaves a user who leaves the command-line window by CTRL-C in Normal mode, whose config enters Insert mode as a terminal opens* — the same;
+- *takes the place of its terminal in a window the user pinned with winfixbuf, leaving the pin as the user set it* — `Left: false`, `Right: true` (`wait_until_wiped`);
+- entry, *starts on \o after an exit in Claude's window, which the user pinned with winfixbuf* — `Left:` one message, `aineo: E1513: Cannot switch buffer. 'winfixbuf' is enabled`, `Right: {}`.
+
+**Arrived green** — 2 cases, since the round's `mode:sub(1, 1) == 'n'` also left these modes alone; each killed by its mutant on both versions: *leaves a user typing in Replace mode in a window of their own typing there* — `no-R`; *leaves a user typing in Terminal mode in a terminal of their own typing there* — `no-t`.
+
+**Mutants** — each its literal edit to `lua/aineo/claude/init.lua` at `3bddaec`, applied from a pristine copy (each edit matching exactly once), run against its narrowed group, restored and compared byte for byte; one at a time, on 0.12.5 then 0.11.6. Groups: **M** — the ten mode cases of *a resume with no conversation*; **P** — the pin case; **EP** — the entry pin case; **R** — every case of *a resume with no conversation*, 27. All kills are assertions, read from Left/Right.
+
+| # | Literal edit | Group | 0.12.5 | 0.11.6 |
+|---|---|---|---|---|
+| A4-back (the round's condition put back) | `  local was_typing = is_typing(vim.api.nvim_get_mode().mode)\n` → `  local was_typing = vim.api.nvim_get_mode().mode:sub(1, 1) ~= 'n'\n` | M | killed (6): `niI`, `ntT`, the three left-mode rows, `q:` | the same |
+| no-ni | `mode:find('^ni') ~= nil or ` → `` | M | killed: `niI` | the same |
+| no-ntT | ` or mode == 'ntT'` → `` | M | killed: `ntT` | the same |
+| no-R | `'^[iRt]'` → `'^[it]'` | M | killed: Replace (`{ "n", { "one", "two" } }`) | the same |
+| no-t | `'^[iRt]'` → `'^[iR]'` | M | killed: Terminal mode (`{ "t", "bc" }`) | the same |
+| winfixbuf-out (FIX-winfixbuf taken out) | `    local pin = { win = window, scope = 'local' }\n    local pinned = vim.api.nvim_get_option_value('winfixbuf', pin)\n    vim.api.nvim_set_option_value('winfixbuf', false, pin)\n    vim.api.nvim_win_set_buf(window, replacement)\n    vim.api.nvim_set_option_value('winfixbuf', pinned, pin)\n` → `    vim.api.nvim_win_set_buf(window, replacement)\n` | P; EP | killed: P `false`; EP the E1513 message | the same |
+| winfixbuf-literal (the re-measure's own edit) | the same five lines → `    local pinned = vim.wo[window].winfixbuf\n    vim.wo[window].winfixbuf = false\n    vim.api.nvim_win_set_buf(window, replacement)\n    vim.wo[window].winfixbuf = pinned\n` | P | killed: `{ "terminal", true, true }` (the global value pinned) | the same |
+| no-restore | `    vim.api.nvim_set_option_value('winfixbuf', pinned, pin)\n` → `` | P | killed: `{ "terminal", false, false }` | the same |
+| P14 (the round's re-take, re-run) | `local function schedule_outside_command_line_window(callback)\n  vim.schedule(function()\n` → `local function schedule_outside_command_line_window(callback)\n  (function()\n`, and `    callback()\n  end)\nend\n` → `    callback()\n  end)()\nend\n` | R | killed (3): the gap case; the command-line window case and the new `q:` CTRL-C case (`wait_until_wiped` false) — both only through the second edit, the re-arm run at once while the window is open | the same |
+| P14b (the re-measure's) | `  schedule_outside_command_line_window(function()\n    if vim.v.exiting ~= vim.NIL or session ~= ended then\n      return\n    end\n    start_new_session_in_place(settings)\n  end)\n` → `  local function fallback()\n    if vim.v.exiting ~= vim.NIL or session ~= ended then\n      return\n    end\n    start_new_session_in_place(settings)\n  end\n  if vim.fn.getcmdwintype() ~= '' then\n    schedule_outside_command_line_window(fallback)\n  else\n    fallback()\n  end\n` | R | killed (1), only by the gap case, whose premise the edit removes: `Left: { <checkout>, {} }` | the same |
+
+**The residual, measured** (`.tests/t19c-residual.lua`, a probe, not a case): a fallback that lands on a command line begun from Insert mode's CTRL-O. After `i<C-o>:` then `<Esc>` with a `startinsert` config, `i<C-o>:` then `<Esc>` without one, and `i<C-o>:let g:ran = 1` then `<CR>` without one, the keys `abc` gave `obcne` on the correction's code — the user was back in Normal mode — and `abcone` with the round's condition put back (A4-back-residual), on both versions. The re-measure read it under a `startinsert` config only; it holds without one, and on `<CR>` as on `<Esc>`, so `<C-o>:w<CR>` typed as the fallback lands leaves any user in Normal mode. Recorded as a limit; the re-measure's `ModeChanged` variant, which would close it, was not built.
+
+**Records corrected**: the SR3 lookalike (finding 4), the mode reading (findings 1, 2), the orchestrator's timing reading (finding 7), the P14 thread (finding 5); the help's two sentences (finding 7) — its "a second or two" was the round's decision 16, the orchestrator's, taken from the `w*.txt` elapsed times before the timing runs, and wrong.
+
 ## Verification
 
 - **The packet, before the rebase**, at `a3a740f` on `e0582e0` (the tree `0a6b5bd`'s code): `make test` 1110 cases, `Fails (0)`, exit 0, on 0.12.5 (load 75 at the start) and 0.11.6 (load 81), each log headed with `uptime` and `nvim --version`. The baseline 1074 (`evidence/baseline-0a6b5bd.txt`) plus 36 new cases.
@@ -221,6 +261,8 @@ Every row ran once per version listed, at host loads of 15 to 190 at the runs' s
 - `make lint`: clean. The deep-require check prints only lines inside their own homes; this change adds one, `lua/aineo/claude/init.lua` requiring `aineo.claude.session_ids`.
 - The `Makefile` clean-up: a probe file put in `.tests/state/nvim/aineo/claude-sessions/` was gone after `make test_file` (by hand).
 - **The fix round**, at `149b939`, whose code, tests and help are the pushed head's (the commit after it changes only this note): `make test` 1217 cases, `Fails (0)`, exit 0, on 0.12.5 (load 90 at the start) and on 0.11.6 (load 41), one after the other, each log headed with the sha, `nvim --version` and `uptime`. 1217 = the packet's 1200 + the round's 17 new cases in `tests/test_claude_resume.lua` (23 → 40); `tests/test_entry_claude_resume.lua` stays at 10. `make lint`: StyLua and selene clean (0 errors, 0 warnings). The deep-require check prints 25 lines, each inside its own home; the round adds none. `tests/test_doc.lua` (36 cases) is among the suite's cases, on the widened help.
+
+- **The correction**, at `3bddaec`, whose code, tests and help are the pushed head's (the note's commit after it changes only this note): `make test` 1227 cases, `Fails (0)`, exit 0, on 0.12.5 (load 32 at the start) and on 0.11.6 (load 36), one after the other, each log headed with the sha, the tree's changes, `nvim --version` and `uptime`. 1227 = the round's 1217 + 9 new cases in `tests/test_claude_resume.lua` (40 → 49) + 1 in `tests/test_entry_claude_resume.lua` (10 → 11). `make lint`: StyLua and selene clean. The deep-require check prints 25 lines, each inside its own home; the correction adds none. `.tests/state/nvim/` was made before the first run (the re-measure's finding 6).
 
 ## Decisions & reasoning
 
@@ -249,7 +291,7 @@ The orchestrator's readings, as the brief gives them:
 - the id is kept from the moment the session starts, whether or not anything is typed;
 - a directory's kept id is never removed, as the drafts are not (MR125);
 - two editors in one directory resume the same session: Q8 measured two Claude Codes started on one id at once, neither refused, with no message sent to either (a limit);
-- SR3's fallback is visible: the user sees "No conversation found with session ID: …" for 1–2 s at every start that follows an untyped session, before the new one replaces it;
+- SR3's fallback is visible: the user sees "No conversation found with session ID: …" for 1–2 s at every start that follows an untyped session, before the new one replaces it (as the orchestrator's timing runs on 2.1.283 measured it: nothing for 0.9–1.4 s, then the message for about half a second; the whole failed start takes 1.4–2.3 s — the help says so since the correction);
 - Claude's session follows the directory Claude Code starts in (`settings.cwd`), while the Reports and the draft stay with the editor's first working directory (`kept_places()`): after a `:cd` the two can differ;
 - after SR3's fallback the user is in Normal mode in the new terminal, even when they were typing in the one that failed (T21's EX1 at its exit); `\c` puts them in the new prompt;
 - D23's own: a session switched inside Claude (`/clear`, `/resume`) is not followed.
@@ -259,7 +301,7 @@ The author's:
 
 The fix round's:
 - **A fallback while the command-line window is open waits until it closes**; the failed terminal and its message stay on screen meanwhile (decision 10).
-- **The fallback leaves the user's mode as it was**: a user in Normal mode in any window stays in Normal mode, even under a `TermOpen` `startinsert`; one typing in Insert mode elsewhere goes on typing there (decision 11).
+- **The fallback keeps a typing user typing, and keeps any other user out of Insert mode** (decision 11, as the correction left it): a user typing in Insert, Replace or Terminal mode, or giving a command from Insert mode's CTRL-O or Terminal mode's CTRL-\ CTRL-O, goes on typing where they are; a user in Normal, Visual or Select mode, on the command line or in the command-line window is out of Insert mode once back in Normal mode, even under a `TermOpen` `startinsert`. One exception, a limit below: a command line begun from Insert mode's CTRL-O ends in Normal mode. **Corrected by the correction (the re-measure's findings 1 and 2):** this said "The fallback leaves the user's mode as it was … one typing in Insert mode elsewhere goes on typing there"; the round's code threw a user out of Insert mode's CTRL-O and Terminal mode's CTRL-\ CTRL-O, and, under a `startinsert` config, left a user in Visual or Select mode or on the command line in Insert mode.
 - **A start that lands between Claude Code's exit and the fallback wins**: the fallback then starts nothing, and the start that won falls back by itself if it too finds no conversation (decision 9).
 - **A replacement whose failed terminal is in no window starts at 5 rows × 80 columns until it is shown** (A5, the orchestrator's decision 6): Claude's window closed during the second or two before the fallback, or a `TermClose` handler wiping the terminal from a scheduled callback, leaves readiness at `starting`, and Send refuses, until `\c` shows the terminal.
 
@@ -279,6 +321,8 @@ The wave holds its marks (rule 6). The line T19 would take:
 - **A replacement whose failed terminal is in no window starts at 5 rows × 80 columns** until it is shown (A5; the reading above).
 - **A `claude.cmd` holding `--continue` or `--resume` never starts Claude Code** (A7): Claude Code 2.1.283 refuses `--session-id` beside either and exits 1; the help says so, the health check does not.
 - **The whole-or-nothing write**: the packet's note said "a cut-short write is not driven"; the fix round drives it, stubbing `vim.uv.fs_write` in the child to write 10 bytes of the new id (I5), and pins that no `.cut` file is left behind a replacement that fails.
+- **A fallback on a command line begun from Insert mode's CTRL-O ends in Normal mode** (FIX-A4b's residual, the correction): `i<C-o>:` then `<Esc>` or `<CR>`, with or without a `TermOpen` `startinsert`, leaves the user in Normal mode, their next keys run as commands; the round's code returned them to Insert mode. `nvim_get_mode()` reports such a command line as `c`, like any other. Measured on both versions; the re-measure's `ModeChanged` variant was not built.
+- **A start that fails after Claude Code has launched** (an autocommand of the user's raising as the terminals are swapped) is told once, but leaves the new Claude Code running as the one session, perhaps in no window, its id perhaps not kept; `start_new_session_in_place()`'s docstring says so. Not driven by a test.
 - **The Makefile clean-up** is verified by hand (a probe file in `claude-sessions/` gone after `make test_file`), not by a test. A mutant that keeps ids elsewhere — M23, under `.tests/cache` — leaks them into later runs; the fix round cleared `.tests/cache/nvim/aineo/` before and after its M23 runs, and the `Makefile` is not changed for a mutant's leak.
 
 ## Open threads
@@ -286,7 +330,7 @@ The wave holds its marks (rule 6). The line T19 would take:
 - **The `\o` race the author named** — a start landing between Claude Code's exit and the scheduled fallback — is closed by the fix round's decision 9 (A6).
 - **The warning a scheduled fallback shows while the user types** (a new id that cannot be kept, told from the fallback's callback) stays open, as the author left it.
 - **`:checkhealth aineo` does not warn about session flags in `claude.cmd`** (A7): `lua/aineo/health.lua` is outside T19's boundary.
-- **P14**, the fallback run at once rather than scheduled, survived everything the test-integrity review built on the packet's code, where no tested state told the schedule apart. On the round's code the command-line window's wait separates it: run at once from `CmdwinLeave`, the window is still open and the new session never starts, and the round's case kills it by assertion on both versions (the round's mutant table). It is pinned, not open.
+- **P14**, the fallback run at once rather than scheduled, survived everything the test-integrity review built on the packet's code, where no tested state told the schedule apart. On the round's code the command-line window's wait separates it: run at once from `CmdwinLeave`, the window is still open and the new session never starts, and the round's case kills it by assertion on both versions (the round's mutant table). It is pinned, not open. **Corrected by the correction (the re-measure's finding 5):** the round's P14 changes two things — the first check and the `CmdwinLeave` re-arm both run unscheduled — and the command-line window case kills it only through the second, the re-arm run at once while the window is still open. **P14b**, the review's meaning alone (the first check run directly in `on_exit`, the re-arm left scheduled), is killed only by the gap case, whose premise — a start between the exit and the fallback — the edit removes. So the schedule's only observable effect is the gap that A6's guard covers, and no behaviour the spec asks for pins it. Both are rows of the correction's mutant table, as literal edits.
 
 ## Commits
 
