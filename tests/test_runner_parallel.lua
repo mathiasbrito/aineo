@@ -132,15 +132,6 @@ local SIDE_BY_SIDE_WAIT_MS = 8000
 --- others: long enough for the files that may run together to overlap.
 local AT_MOST_WAIT_MS = 3000
 
---- Expects no count of `counts` to exceed `most`.
-local expect_at_most = MiniTest.new_expectation('no count above the most', function(counts, most)
-  return #vim.tbl_filter(function(count)
-    return count > most
-  end, counts) == 0
-end, function(counts, most)
-  return ('Counts: %s\nMost:   %d'):format(vim.inspect(counts), most)
-end)
-
 --- Long enough for a small suite whose files wait for one another in turn.
 local SUITE_TIME_LIMIT_MS = 60000
 
@@ -153,6 +144,9 @@ local THREE_SECOND_RUN_LIMIT = { AINEO_TEST_RUN_LIMIT_MS = '3000' }
 --- A Lua statement that keeps its Neovim busy for good: no timer, callback or
 --- SIGTERM gets a turn.
 local KEEP_BUSY = 'while true do end'
+
+--- A Lua statement that waits for half of a three-second run limit.
+local WAIT_A_HALF_OF_THE_LIMIT = 'vim.wait(1500, function() return false end)'
 
 --- A test file whose one case runs `statement`.
 ---
@@ -249,6 +243,28 @@ T['make test']['fails when a case of one file fails while every other passes'] =
   eq(result.code, RECIPE_FAILED)
 end
 
+T['make test']['fails when a case of its last file fails while every other passes'] = function()
+  local directory = suite('last_file_failing', {
+    ['test_a.lua'] = TWO_PASSING_CASES_FILE,
+    ['test_b.lua'] = FAILING_FILE,
+  })
+
+  local result = make.run('test', { directory = directory })
+
+  eq(result.code, RECIPE_FAILED)
+end
+
+T['make test']['exits zero when every case of several files passes'] = function()
+  local directory = suite('all_passing', {
+    ['test_a.lua'] = TWO_PASSING_CASES_FILE,
+    ['test_b.lua'] = TWO_PASSING_CASES_FILE,
+  })
+
+  local result = make.run('test', { directory = directory })
+
+  eq(result.code, 0)
+end
+
 T['make test']['runs its test files side by side'] = function()
   local directory, counts = suite_counting_files_at_once('side_by_side', 2, SIDE_BY_SIDE_WAIT_MS)
 
@@ -293,6 +309,22 @@ T['the run time limit']['ends a run, saying so, while a case keeps its Neovim bu
   expect_mentions(result.stderr, 'did not finish within 3 s')
 end
 
+T['the run time limit']['bounds the whole run, not each file'] = function()
+  local directory = suite('limit_of_the_whole_run', {
+    ['test_a.lua'] = file_with_a_case_running(WAIT_A_HALF_OF_THE_LIMIT),
+    ['test_b.lua'] = file_with_a_case_running(WAIT_A_HALF_OF_THE_LIMIT),
+    ['test_c.lua'] = file_with_a_case_running(WAIT_A_HALF_OF_THE_LIMIT),
+  })
+
+  local result = make.run('test', {
+    directory = directory,
+    environment = vim.tbl_extend('force', THREE_SECOND_RUN_LIMIT, { AINEO_TEST_JOBS = '1' }),
+  })
+
+  eq(result.code, RECIPE_FAILED)
+  expect_mentions(result.stderr, 'did not finish within 3 s')
+end
+
 T['the run time limit']["leaves no test file's Neovim running when it ends a run"] = function()
   local pid_path = fixture.write('limited_busy/pid', {})
   local path = fixture.write(
@@ -327,7 +359,7 @@ end
 
 T['AINEO_TEST_JOBS'] = MiniTest.new_set()
 
-T['AINEO_TEST_JOBS']['bounds how many test files run at once'] = function()
+T['AINEO_TEST_JOBS']['of 2 runs two test files at once, and no more'] = function()
   local directory, counts = suite_counting_files_at_once('two_at_once', 3, AT_MOST_WAIT_MS)
 
   make.run('test', {
@@ -336,7 +368,8 @@ T['AINEO_TEST_JOBS']['bounds how many test files run at once'] = function()
     time_limit_ms = SUITE_TIME_LIMIT_MS,
   })
 
-  expect_at_most(counts_written(counts), 2)
+  local written = counts_written(counts)
+  eq({ #written, vim.list_slice(written, 2) }, { 3, { 2, 2 } })
 end
 
 T['AINEO_TEST_JOBS']['of 1 runs one test file at a time'] = function()
