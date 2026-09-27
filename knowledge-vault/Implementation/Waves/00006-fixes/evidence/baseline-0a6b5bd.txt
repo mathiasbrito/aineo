@@ -1,0 +1,23 @@
+# Baseline for T19: the code dev holds once PR #64 (T21) merges, measured by the orchestrator's verification of PR #64
+
+The tree 0a6b5bd = git merge-tree --write-tree of dev 8879268 and PR #64's head eea246c. dev has moved since only by
+knowledge-vault/ commits, so the code dev holds once PR #64 merges is this tree's.
+Whole suite, one version at a time, 2026-09-27; 0.11.6 is the downloaded build, first on PATH.
+
+== guard 0.12.5 rc=0 secs=1 load= 140.59 166.92 166.86
+Total number of cases: 5
+Fails (0) and Notes (0)
+== guard 0.11.6 rc=0 secs=0 load= 140.59 166.92 166.86
+Total number of cases: 5
+Fails (0) and Notes (0)
+== suite 0.12.5 rc=0 secs=678 load= 162.12 159.38 161.12
+Total number of cases: 1074
+Fails (0) and Notes (0)
+== suite 0.11.6 rc=0 secs=677 load= 160.33 157.76 157.10
+Total number of cases: 1074
+Fails (0) and Notes (0)
+== lint rc=0
+Results:
+0 errors
+0 warnings
+0 parse errors

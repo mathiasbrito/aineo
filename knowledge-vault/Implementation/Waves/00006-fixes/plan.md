@@ -516,6 +516,44 @@ The first plan listed "the mode entered before the layout's focus"; the brief re
 
 **Brief withdrawn before dispatch.** The first brief, `brief-t19-claude-resume.md` at `15c7e20`, planned T19 beside T21. Its brief review (`brief-review-t19-t21.md`, finding T19-1) found that SR3's fallback, the Claude home replacing Claude's terminal on its own, leaves the composition root's `claude_terminal` and the layout's `state.buffers.claude` holding the wiped terminal: `\c` then stays in Normal mode, and `:edit` in Claude's window raises `Invalid buffer id` — D25's fault and T20's lost Terminal mode again, with each packet's suite green. `started_claude_terminal()` can repair only the composition root's side. So T19 follows T21, with a brief rewritten to make both follow the new terminal through a named entry point, and a brief review of its own. Its other findings (T19-2 to T19-11) are answered there.
 
+**Brief, rewritten 2026-09-27:** `brief-t19-claude-resume.md`, against the code `dev` holds once T21 (PR #64) merges, the tree `0a6b5bd`, with a brief review of its own, `brief-review-t19-claude-resume.md`.
+- **T19-1:** SR3's new terminal reaches every holder. The boundary grows to the composition root's holding of Claude's terminal, and to one named entry point of the layout home that gives it a new Claude terminal.
+- **T19-2 to T19-11:**
+  - the kept ids leak between cases no more (four measures);
+  - the id file is not `.jsonl`;
+  - the id comes from `vim.uv.random(16)`;
+  - the help's list of Claude Code's additions is T19's;
+  - D23 is quoted whole, with its options not chosen;
+  - SR3's message wraps;
+  - the timings are 2.1 s and 1.4 s, one run each;
+  - the line ranges are corrected, and the merge check runs against T17;
+  - two more readings.
+
+**The six rules for T19**, recomputed on 2026-09-27 against every open packet: T21 in the orchestrator's verification (PR #64), and T17 in its bounded correction (PR #68).
+
+| rule | T19 |
+|---|---|
+| 1 dependencies | T14 merged; Q8 measured; T21, merged before dispatch ✓ |
+| 2 files | `lua/aineo/claude/`; `plugin/aineo.lua`: `started_claude_terminal()` and the holding of Claude's terminal, not the tables T12 changes; `lua/aineo/layout/`: one entry point; `tests/test_claude*.lua`, `tests/helpers/fake_claude.lua`, `tests/helpers/claude_session.lua`; new cases in `tests/test_layout*.lua` and `tests/test_entry*.lua`, not `tests/test_entry_report.lua`; the `Makefile`'s clean-up at the start of a run; `doc/aineo.txt`: a new `Claude's session ~` in `*aineo-layout*`, and the list of Claude Code's additions in `*aineo-report*`. T17 changes `lua/aineo/report/`, `tests/test_report*.lua` and `*aineo-report*`'s `Links ~` and colour groups: disjoint by file; the help is shared under the section exception ✓ |
+| 3 schema | T19 alone keeps something new: a session id per directory ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | D23 and Q8 decide the behaviour; SR3's fallback, the moment the id is kept, the two-editors limit, the visible fallback and the session following `settings.cwd` are the orchestrator's readings ✓ |
+| 6 task lines | T19's row is adjacent to T18's and T20's, both done; it holds its mark ✓ |
+
+**Baseline:** the tree `0a6b5bd`: 1074 cases, `Fails (0)`, on 0.12.5 and 0.11.6, lint clean (`evidence/baseline-0a6b5bd.txt`).
+
+**Reviewers**, regular, the Claude Code integration: attack by `neovim-claude-code-reviewer`, test-integrity by `neovim-lua-reviewer`, records by `reviewer`.
+
+**Verification mutants:**
+- the id not kept;
+- never resumed, a new id each start;
+- the fallback never taken;
+- the fallback taken on every exit with code 1;
+- the id from an unseeded `math.random`, or one fixed id;
+- the id kept for the editor's first directory, not Claude Code's;
+- `--allowedTools` not last;
+- the composition root's or the layout's holder left on the failed terminal after SR3.
+
 ## Packet T21 — 2026-09-26
 
 **The request, and the answer.** T20's guarantee review measured a fault older than T20 (its findings 1 and 4): a key typed in Terminal mode after Claude Code exits wipes its terminal, and from the layout's tab the layout then raises `Invalid buffer id`, adds a window, and `\c` starts no session. Asked how the follow-up should fix it, the user chose "Both, regular (Recommended)": D25.
