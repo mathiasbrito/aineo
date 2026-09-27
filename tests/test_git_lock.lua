@@ -157,6 +157,22 @@ T['a read']['of the files changed lists a file rewritten in the second its index
   })
 end
 
+T['a read']['of the files changed runs none of the repository’s hooks'] = function()
+  local top, base = git_repo.create('lock-hook', { ['a.txt'] = { 'a' } })
+  local ran = vim.fs.joinpath(vim.fs.dirname(top), 'hook-ran')
+  local hook = '.git/hooks/post-index-change'
+  git_repo.write(top, hook, { '#!/bin/sh', ('echo ran > %s'):format(ran) })
+  assert(vim.uv.fs_chmod(vim.fs.joinpath(top, hook), tonumber('755', 8)))
+  assert(vim.uv.fs_utime(vim.fs.joinpath(top, 'a.txt'), 2000000000, 2000000000))
+
+  local seen = child.lua(ASK, { top, 'changed_files', { base } })
+
+  eq(
+    { changes = seen.result, hook_ran = vim.uv.fs_stat(ran) ~= nil },
+    { changes = {}, hook_ran = false }
+  )
+end
+
 T['a read']['of the files changed leaves a submodule’s index alone'] = function()
   local library = git_repo.create('lock-submodule-library', { ['library.txt'] = { 'library' } })
   local top = git_repo.create('lock-submodule', { ['a.txt'] = { 'a' } })

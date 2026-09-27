@@ -10,7 +10,7 @@
 --- holds git's output, holds `done` back. Its answers do not depend on the
 --- user's git settings, nor on the `GIT_*` variables of the editor's
 --- environment that name another repository, and its reads never take the
---- repository's lock. A diff is
+--- repository's lock nor run its hooks. A diff is
 --- exactly what git printed, carriage returns included, and is not bounded
 --- in size: a commit that adds a 100 MB file gives a 100 MB diff. The home
 --- keeps no state but its watches: the base is its caller's.
