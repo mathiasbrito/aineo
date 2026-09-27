@@ -247,7 +247,9 @@ T['start_session()']['starts Claude Code on a new session id it cannot keep, and
     end
   ]])
 
-  claude.start(child, fake, { state_directory = state_file })
+  MiniTest.expect.no_error(function()
+    claude.start(child, fake, { state_directory = state_file })
+  end)
 
   is_one_session_id(claude.words_after(claude.arguments(fake), '--session-id'))
   local notified = child.lua_get('_G.notified')
@@ -298,7 +300,9 @@ T['start_session()']['starts Claude Code on a new session id where a directory s
     'p'
   )
 
-  claude.start(child, fake, settings)
+  MiniTest.expect.no_error(function()
+    claude.start(child, fake, settings)
+  end)
 
   is_one_session_id(words_of_start(fake, 1, '--session-id'))
 end
