@@ -20,6 +20,10 @@ local DEAF_FAKE_CLAUDE = vim.fs.joinpath(CHECKOUT, 'tests', 'helpers', 'fake_cla
 --- How long a test waits for the fake to do what it is waiting for.
 M.PATIENCE_MS = 5000
 
+--- How many scheduled callbacks `start_again_after_next_exit()` looks at the
+--- session in, at most, for its exit.
+M.POLLS_AFTER_TERM_CLOSE = 1000
+
 --- How long a test waits for the fake to end once its editor quits: longer
 --- than the session's whole stop.
 M.STOP_PATIENCE_MS = 15000
@@ -188,6 +192,42 @@ function M.start_again_noting_replacements(child, overrides)
       return require('aineo.claude').start_session(settings)
     ]],
     { THIS_FILE, overrides or vim.empty_dict() }
+  )
+end
+
+--- Makes `child` call `start_session()` once more, with the stand-in settings
+--- overridden by `overrides`, from the first callback scheduled after the next
+--- `TermClose` that finds the session exited — as queued code, or a user's
+--- `\o`, might between Claude Code's exit and what its exit schedules — and
+--- keep what it returns in the child's `_G.terminal_started_after_exit`. It
+--- looks at most `POLLS_AFTER_TERM_CLOSE` times.
+---
+---@param child table
+---@param overrides? table
+function M.start_again_after_next_exit(child, overrides)
+  child.lua(
+    [[
+      local helper, overrides, polls = dofile(...), select(2, ...)
+      local function start_once_exited(polls_left)
+        if require('aineo.claude').session_status() == 'exited' then
+          _G.terminal_started_after_exit =
+            require('aineo.claude').start_session(helper.stand_in_settings(overrides))
+        elseif polls_left > 0 then
+          vim.schedule(function()
+            start_once_exited(polls_left - 1)
+          end)
+        end
+      end
+      vim.api.nvim_create_autocmd('TermClose', {
+        once = true,
+        callback = function()
+          vim.schedule(function()
+            start_once_exited(polls)
+          end)
+        end,
+      })
+    ]],
+    { THIS_FILE, overrides or vim.empty_dict(), M.POLLS_AFTER_TERM_CLOSE }
   )
 end
 

@@ -100,12 +100,19 @@ function M.kept_session_id(state_directory, working_directory)
 end
 
 --- Makes the directory `path` and the directories leading to it, unless it
---- exists.
+--- exists. Another editor making one of them at the same moment makes
+--- `mkdir()` fail, so it tries again, up to once for each of the path's
+--- directories.
 ---
 ---@param path string
 ---@return string? failure why it could not be made, as `mkdir()` says it, without the `Vim:` Neovim puts before it; nil once made
 local function make_directory(path)
+  local tries_left = #vim.split(path, '/', { trimempty = true })
   local made, failure = pcall(vim.fn.mkdir, path, 'p')
+  while not made and tries_left > 0 do
+    tries_left = tries_left - 1
+    made, failure = pcall(vim.fn.mkdir, path, 'p')
+  end
   if not made then
     return (tostring(failure):gsub('^Vim:', ''))
   end
