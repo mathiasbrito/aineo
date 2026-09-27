@@ -69,6 +69,7 @@ T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings 
     commands = { 'Aineo' },
     keymaps = {
       'n <Plug>(aineo-claude)',
+      'n <Plug>(aineo-claude-numbers)',
       'n <Plug>(aineo-input)',
       'n <Plug>(aineo-open)',
       'n <Plug>(aineo-report)',
@@ -78,6 +79,7 @@ T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings 
       'n \\o',
       'n \\r',
       'n \\s',
+      'n \\tcn',
     },
     autocmds = { 'aineo StdinReadPost' },
   })
