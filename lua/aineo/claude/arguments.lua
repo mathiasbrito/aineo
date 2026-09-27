@@ -1,4 +1,5 @@
---- The arguments aineo gives Claude Code after its command.
+--- The arguments aineo gives Claude Code after its command and the words
+--- that pick its session.
 
 local M = {}
 

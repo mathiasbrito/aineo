@@ -71,19 +71,25 @@ deps:
 # draft an earlier run left would come back in the next Input a case opens.
 override TEST_DRAFTS := $(TEST_HOME)/state/nvim/aineo/drafts
 
+# The Claude Code session ids aineo keeps for each working directory under the
+# suites' state directory. Every start of Claude Code through the composition
+# root keeps one, so each run starts with none: an id an earlier run kept would
+# make every start in the checkout's directory resume it.
+override TEST_CLAUDE_SESSIONS := $(TEST_HOME)/state/nvim/aineo/claude-sessions
+
 # Exits 0 only when every case ran and passed, and non-zero otherwise — also
 # when a test file does not load or contributes no case, when test code ends
 # Neovim, when mini.test stalls, or when the run outlasts its time limit, which
 # AINEO_TEST_RUN_LIMIT_MS=<milliseconds> replaces (scripts/run_tests.lua).
 test: deps
-	rm -rf '$(TEST_DRAFTS)'
+	rm -rf '$(TEST_DRAFTS)' '$(TEST_CLAUDE_SESSIONS)'
 	$(NVIM_TEST) -l '$(ROOT)/scripts/run_tests.lua'
 
 # FILE reaches the runner through the environment, so the shell reads it as one
 # word and never as shell text, whatever quotes or spaces the path holds.
 test_file: export AINEO_TEST_FILE = $(FILE)
 test_file: deps
-	rm -rf '$(TEST_DRAFTS)'
+	rm -rf '$(TEST_DRAFTS)' '$(TEST_CLAUDE_SESSIONS)'
 	$(NVIM_TEST) -l '$(ROOT)/scripts/run_tests.lua' "$$AINEO_TEST_FILE"
 
 lint:

@@ -20,6 +20,15 @@
 ---   recordings' `~/project/aineo`.
 --- - `AINEO_FAKE_CLAUDE_ENV` — the names, separated by commas, of the variables
 ---   whose values the record lists.
+--- - `AINEO_FAKE_CLAUDE_CONVERSATIONS` — a directory holding the conversations
+---   the fake has, one file per session id, named by it. Set, the fake answers
+---   `--resume` and `--session-id` as Claude Code 2.1.283 did (Q8): `--resume`
+---   of an id that has no conversation prints `No conversation found with
+---   session ID: <id>` and exits 1, drawing no screen of its own, after
+---   `NO_CONVERSATION_EXIT_MS`; and a session, new or resumed, has a
+---   conversation once Enter has sent a message in it, as one in which
+---   nothing was sent had none. Unset, it records those flags and nothing
+---   more.
 ---
 --- It answers Ctrl-C as Claude Code 2.1.281 did in a Neovim terminal: idle, a
 --- second press within `DOUBLE_PRESS_MS` of the first exits 0,
@@ -98,6 +107,15 @@ local MODES = {
   ['mcp-client'] = { screens = { STARTUP }, calls_report_tool = true },
   ['exit-below-box'] = { screens = { STARTUP, CURSOR_BELOW_BOX }, exits_after_ms = 2500 },
 }
+
+--- The directory of the conversations the fake has, or nil when it keeps
+--- none (`AINEO_FAKE_CLAUDE_CONVERSATIONS`).
+local CONVERSATIONS = os.getenv('AINEO_FAKE_CLAUDE_CONVERSATIONS')
+
+--- How long the fake takes to exit on a `--resume` it has no conversation
+--- for. Chosen, not measured: shorter than the 1.4 and 2.1 s Claude Code
+--- 2.1.283 took, so that a suite waits less.
+local NO_CONVERSATION_EXIT_MS = 500
 
 local MODE_NAME = os.getenv('AINEO_FAKE_CLAUDE_MODE') or 'ready'
 local MODE = assert(MODES[MODE_NAME], 'no such mode: ' .. MODE_NAME)
@@ -272,11 +290,54 @@ local function screen_for_key(input)
   end
 end
 
+--- The word that follows `flag` among the fake's arguments, or nil when
+--- `flag` is not among them.
+---
+---@param flag string
+---@return string?
+local function word_after(flag)
+  local flag_at = vim.iter(ipairs(arg)):find(function(_, word)
+    return word == flag
+  end)
+  return flag_at and arg[flag_at + 1]
+end
+
+--- The session id the fake was started on, by `--resume` or `--session-id`,
+--- or nil when it was given neither.
+local SESSION_ID = word_after('--resume') or word_after('--session-id')
+
+--- The file of the conversation `SESSION_ID` names under `CONVERSATIONS`.
+---
+---@return string
+local function conversation_file()
+  return vim.fs.joinpath(CONVERSATIONS, SESSION_ID)
+end
+
+--- Gives the session a conversation when `input` sends a message — holds
+--- Enter — and the fake keeps conversations (`CONVERSATIONS`).
+---
+---@param input string
+local function keep_conversation(input)
+  if CONVERSATIONS and SESSION_ID and input:find(ENTER, 1, true) then
+    assert(io.open(conversation_file(), 'a')):close()
+  end
+end
+
+--- Whether the fake was started with `--resume` of an id it has no
+--- conversation for, while it keeps conversations (`CONVERSATIONS`).
+---
+---@return boolean
+local function resumes_no_conversation()
+  local resumed = word_after('--resume')
+  return CONVERSATIONS ~= nil and resumed ~= nil and vim.uv.fs_stat(conversation_file()) == nil
+end
+
 --- Answers one chunk of input: draws the screen a key brings up, or else
 --- answers each Ctrl-C in it and echoes its text.
 ---
 ---@param input string
 local function answer(input)
+  keep_conversation(input)
   local screen = screen_for_key(input)
   if screen then
     draw(screen)
@@ -378,6 +439,15 @@ record({
   env = requested_environment(),
   pid = vim.fn.getpid(),
 })
+if resumes_no_conversation() then
+  stdout:write(('No conversation found with session ID: %s\r\n'):format(SESSION_ID))
+  vim.defer_fn(function()
+    finish('exit', 1)
+  end, NO_CONVERSATION_EXIT_MS)
+  while true do
+    vim.wait(60000)
+  end
+end
 stdout:write(string.rep('a line of output printed before the prompt\r\n', MODE.printed_lines or 0))
 for index, screen in ipairs(MODE.screens) do
   if index > 1 then
