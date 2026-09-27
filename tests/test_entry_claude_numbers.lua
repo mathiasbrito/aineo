@@ -262,6 +262,10 @@ T["Claude's line numbers, set by hand after \\tcn,"] = MiniTest.new_set({
     { '\\o', 'echo "the layout stays whole"' },
     { '\\i', '3close' },
     { '\\r', '2close' },
+    {
+      '\\o',
+      'lua vim.api.nvim_win_set_buf(vim.fn.win_getid(1), vim.api.nvim_create_buf(false, true))',
+    },
   },
 })
 
