@@ -233,6 +233,35 @@ T["Claude Code's exit"]['leaves Insert mode in Input as it is'] = function()
   eq(child.lua_get(MODE), 'i')
 end
 
+T['an exit Neovim ran no TermClose autocommand for'] = MiniTest.new_set({
+  parametrize = {
+    { "vim.o.eventignore = 'TermClose'; vim.fn.jobstop(vim.bo[...].channel)" },
+    {
+      'local terminal = ...; '
+        .. 'vim.defer_fn(function() vim.fn.jobstop(vim.bo[terminal].channel) end, 100); '
+        .. "vim.cmd('noautocmd sleep 1500m')",
+    },
+  },
+})
+
+T['an exit Neovim ran no TermClose autocommand for']["keeps Claude's ended terminal in Normal mode as i and typing follow, after"] = function(
+  exit_unseen
+)
+  entry.use_fake(child, claude_session.fake('entry-claude-exit-unseen', 'ready'))
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  child.lua(exit_unseen, { child.lua_get(CLAUDE_WINDOW_BUFFER) })
+  eq(claude_session.wait_for_status(child, 'exited')[1], 'exited')
+  child.o.eventignore = ''
+  child.type_keys('\\c')
+
+  child.type_keys('i')
+  child.api.nvim_input('fix this')
+
+  eq(entry.windows(child), WHOLE_LAYOUT)
+  eq(child.lua_get(MODE), 'nt')
+end
+
 T['a wiped Claude terminal'] = MiniTest.new_set({
   parametrize = { { 'bwipeout!' }, { 'bdelete!' } },
 })
@@ -389,6 +418,38 @@ T['a wiped Claude terminal']["keeps in view the file the same command line opens
   eq(entry.windows(child), { file, 'aineo://report', 'aineo://input' })
 end
 
+T['a wiped Claude terminal']["keeps in view the file the same command line opens in Claude's window once \\c started Claude Code again, after"] = function(
+  command
+)
+  local file = fixture.write('entry-claude-exit-edit-restarted/file.txt', { 'text' })
+  type_to_claude_code_exiting_at_start(child, 'entry-claude-exit-edit-restarted')
+  entry.command(child, command .. ' | edit ' .. file)
+  entry.use_fake(child, claude_session.fake('entry-claude-exit-edit-restarted-new', 'trust'))
+
+  child.type_keys('\\c')
+
+  eq(child.lua_get(SESSION_STATE), 'starting')
+  eq(entry.windows(child), { 'terminal', file, 'aineo://report', 'aineo://input' })
+  eq(entry.current_window(child), 'terminal')
+end
+
+T['a wiped Claude terminal']["keeps in view the file Neovim shows in Claude's window when it was Neovim's last once \\c started Claude Code again, after"] = function(
+  command
+)
+  local file = fixture.write('entry-claude-exit-last-window-file/file.txt', { 'text' })
+  type_to_claude_code_exiting_at_start(child, 'entry-claude-exit-last-window-file')
+  child.cmd('badd ' .. file)
+  child.cmd('only')
+  entry.command(child, command)
+  entry.use_fake(child, claude_session.fake('entry-claude-exit-last-window-file-new', 'trust'))
+
+  child.type_keys('\\c')
+
+  eq(child.lua_get(SESSION_STATE), 'starting')
+  eq(entry.windows(child), { 'terminal', file, 'aineo://report', 'aineo://input' })
+  eq(entry.current_window(child), 'terminal')
+end
+
 T['a wiped Claude terminal']['raises no error when the command-line window opens right after it, after'] = function(
   command
 )
@@ -467,6 +528,24 @@ T["a user's TermClose autocommand that wipes Claude's terminal"]['lets \\c start
   eq(child.lua_get(SESSION_STATE), 'starting')
   eq(entry.windows(child), WHOLE_LAYOUT)
   eq(child.lua_get(MODE), 't')
+end
+
+T["a user's TermClose autocommand that opens the layout"] = MiniTest.new_set()
+
+T["a user's TermClose autocommand that opens the layout"]["keeps Claude's ended terminal in Normal mode as i and typing follow, once Terminal mode is left"] = function()
+  child.cmd('autocmd TermClose * Aineo open')
+  entry.use_fake(child, claude_session.fake('entry-claude-exit-user-open', 'ready'))
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  child.type_keys('\\c')
+  end_claude_code(child)
+  child.type_keys([[<C-\><C-n>]])
+
+  child.type_keys('i')
+  child.api.nvim_input('fix this')
+
+  eq(entry.windows(child), WHOLE_LAYOUT)
+  eq(child.lua_get(MODE), 'nt')
 end
 
 T["a Claude terminal wiped while Claude's window shows another buffer"] = MiniTest.new_set()

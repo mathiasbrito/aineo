@@ -535,15 +535,37 @@ local function reopen_closed_windows()
   end
 end
 
+--- Whether `buffer`, shown in one of the layout's windows in place of the
+--- layout's own buffer, is a file that moves to the file column rather than
+--- leave the screen: a file to keep (`is_file_to_keep()`), not the unnamed,
+--- empty buffer Neovim puts in a window (`is_unnamed_and_empty()`), and shown
+--- in no other window.
+---
+---@param buffer integer
+---@return boolean
+local function is_file_to_move(buffer)
+  return is_file_to_keep(buffer)
+    and not is_unnamed_and_empty(buffer)
+    and #vim.fn.win_findbuf(buffer) == 1
+end
+
 --- Shows each of the layout's buffers in its window, where another took its
---- place.
+--- place; a file that took it (`is_file_to_move()`) moves to the file column
+--- first, when the column has room for it (`place_in_file_column()`). The
+--- cursor stays in the window it was in.
 local function show_buffers()
+  local current = vim.api.nvim_get_current_win()
   for _, role in ipairs(ROLES) do
     local window = state.windows[role]
-    if vim.api.nvim_win_get_buf(window) ~= state.buffers[role] then
+    local shown = vim.api.nvim_win_get_buf(window)
+    if shown ~= state.buffers[role] then
+      if is_file_to_move(shown) then
+        place_in_file_column(shown, window)
+      end
       vim.api.nvim_win_set_buf(window, state.buffers[role])
     end
   end
+  vim.api.nvim_set_current_win(current)
 end
 
 --- Leaves Terminal mode as the process of Claude's terminal ends while that
@@ -570,15 +592,30 @@ local function remember_claude_exit(event)
   end
 end
 
+--- Whether the process of the terminal `buffer` has ended, read without
+--- waiting on it: its process id names no process any more. A process that
+--- was stopped but still runs has not ended.
+---
+---@param buffer integer
+---@return boolean
+local function has_ended(buffer)
+  return vim.uv.kill(vim.b[buffer].terminal_job_pid, 0) == nil
+end
+
 --- Leaves the Terminal mode just entered in Claude's terminal once its
---- process has ended (`remember_claude_exit()`), as `i`, `a` or
---- `:startinsert` enter it: a key typed in Terminal mode on an ended terminal
---- closes it. Another terminal keeps Neovim's own behaviour, and so does
---- Claude's until Neovim has seen its process end.
+--- process has ended, as `i`, `a` or `:startinsert` enter it: a key typed in
+--- Terminal mode on an ended terminal closes it. The end is known from
+--- `remember_claude_exit()`, or, where no `TermClose` autocommand of aineo's
+--- ran for it, from the process being gone (`has_ended()`). Another terminal
+--- keeps Neovim's own behaviour, and so does Claude's while its process
+--- still runs, stopped or not.
 ---
 ---@param event { buf: integer }
 local function refuse_terminal_mode_once_claude_exited(event)
-  if event.buf == state.ended_claude_terminal then
+  if
+    event.buf == state.ended_claude_terminal
+    or (event.buf == state.buffers.claude and has_ended(event.buf))
+  then
     vim.cmd.stopinsert()
   end
 end
@@ -587,7 +624,9 @@ end
 --- it as it is otherwise, raising nothing: Neovim's last window cannot close
 --- (E444), nor can the window the command-line window was opened from
 --- (E11). A window of the layout left so, on an empty buffer, counts as gone
---- to `M.focus()`, which opens the layout again around it.
+--- only to the focus of the role whose buffer was wiped (`M.focus()`), which
+--- opens the layout again around it; focusing another role whose window is
+--- open only moves the cursor there.
 ---
 ---@param window integer
 local function close_when_possible(window)
@@ -718,8 +757,9 @@ end
 --- While any of the three windows exists, opening again restores the layout
 --- instead, in the tab that holds it: it creates only the windows that were
 --- closed, in their places, shows in each window its buffer — the Claude and
---- Report buffers it is handed this time — makes the Report and Input wrap
---- again, and puts the proportions back.
+--- Report buffers it is handed this time — a file shown there in its place
+--- moving to the file column first (`show_buffers()`), makes the Report and
+--- Input wrap again, and puts the proportions back.
 --- The cursor stays where it is when the layout's tab is the current one,
 --- and moves to that tab otherwise.
 ---
