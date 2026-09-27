@@ -21,6 +21,11 @@ local NOT_A_REPOSITORY_CODE = 128
 --- answer, not a failure.
 local NONE_CODE = 1
 
+--- The paths `git rev-parse` prints for `locate()`, one per line: the top
+--- level, the git directory and the common one. A path that holds a
+--- newline makes more lines than this, and cannot be read from them.
+local LOCATED_PATHS = 3
+
 --- Splits `output` into its lines, the last newline dropped.
 ---
 ---@param output string
@@ -41,7 +46,7 @@ end
 --- Finds the top level and the git directories of the repository
 --- `directory` is in, and calls `done(nil, top, git_directory,
 --- common_directory)`, or `done(failure)` — a `not_a_repository` one when
---- git finds none.
+--- git finds none, a `failed` one when a path holds a newline.
 ---
 ---@param run aineo.git.Run
 ---@param directory string
@@ -65,7 +70,18 @@ local function locate(run, directory, done)
       done(failure)
       return
     end
-    done(nil, unpack(lines_of(output.stdout)))
+    local paths = lines_of(output.stdout)
+    if #paths ~= LOCATED_PATHS then
+      done({
+        reason = 'failed',
+        message = ('git gave %d lines for the %d paths of the repository: a path holds a newline'):format(
+          #paths,
+          LOCATED_PATHS
+        ),
+      })
+      return
+    end
+    done(nil, unpack(paths))
   end)
 end
 

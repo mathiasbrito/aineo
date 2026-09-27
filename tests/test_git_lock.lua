@@ -47,6 +47,36 @@ local function create_stat_dirty(name)
   return top, base
 end
 
+--- The second, since the epoch, a case gives a file and an index as their
+--- modification time when it needs the two to be the same.
+local ONE_SECOND = 1000000000
+
+--- Makes a repository in the fixture `name` whose base holds `a.txt`, then
+--- rewrites `a.txt` with other content of the same size, in a way that
+--- leaves its stat as git recorded it in the index: as when a file is
+--- rewritten within the second its index was written. The repository
+--- compares only sizes and whole seconds (`core.checkStat=minimal`,
+--- `core.trustctime=false`), and `a.txt`, its index entry and the index
+--- itself are all given `ONE_SECOND`. Only git's check for such racily clean
+--- entries, which compares an entry's time with the index's, then finds the
+--- change.
+---
+---@param name string
+---@return string top
+---@return string base
+local function create_racily_clean(name)
+  local top, base = git_repo.create(name, { ['a.txt'] = { 'value = 1' } })
+  git_repo.git(top, { 'config', 'core.checkStat', 'minimal' })
+  git_repo.git(top, { 'config', 'core.trustctime', 'false' })
+  local file = vim.fs.joinpath(top, 'a.txt')
+  assert(vim.uv.fs_utime(file, ONE_SECOND, ONE_SECOND))
+  git_repo.git(top, { 'update-index', '--refresh' })
+  git_repo.write(top, 'a.txt', { 'value = 2' })
+  assert(vim.uv.fs_utime(file, ONE_SECOND, ONE_SECOND))
+  assert(vim.uv.fs_utime(vim.fs.joinpath(top, '.git', 'index'), ONE_SECOND, ONE_SECOND))
+  return top, base
+end
+
 --- What identifies the file at `path` as the one written last: its inode,
 --- its size and its modification time.
 ---
@@ -115,6 +145,33 @@ T['a read']['of the files changed lists only those whose content changed, and le
     changes = { { path = 'changed.txt', kind = 'modified' } },
     index = before,
   })
+end
+
+T['a read']['of the files changed lists a file rewritten in the second its index was written'] = function()
+  local top, base = create_racily_clean('lock-racy')
+
+  local seen = child.lua(ASK, { top, 'changed_files', { base } })
+
+  eq({ failure = seen.failure, changes = seen.result }, {
+    changes = { { path = 'a.txt', kind = 'modified' } },
+  })
+end
+
+T['a read']['of the files changed leaves a submodule’s index alone'] = function()
+  local library = git_repo.create('lock-submodule-library', { ['library.txt'] = { 'library' } })
+  local top = git_repo.create('lock-submodule', { ['a.txt'] = { 'a' } })
+  git_repo.git(
+    top,
+    { '-c', 'protocol.file.allow=always', 'submodule', 'add', '--quiet', library, 'library' }
+  )
+  local base = git_repo.commit_all(top, 'Add the library')
+  assert(vim.uv.fs_utime(top .. '/library/library.txt', 1000000000, 1000000000))
+  local index = vim.fs.joinpath(top, '.git', 'modules', 'library', 'index')
+  local before = identity(index)
+
+  local seen = child.lua(ASK, { top, 'changed_files', { base } })
+
+  eq({ changes = seen.result, index = identity(index) }, { changes = {}, index = before })
 end
 
 T['a read']['of the diff of a file changed back since it was listed leaves the index alone'] = function()
