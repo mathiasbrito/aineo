@@ -304,8 +304,41 @@ Added 2026-09-27 by the orchestrator, from T17's brief and session note at `dev`
 | MR158 | The file checks are synchronous: a report naming paths on a hung network mount would hold the editor. Not measured; no such mount on the host. | T17's guarantee review (finding 5) |
 | MR159 | A report at the relay's 1 MiB line limit, full of distinct paths, takes about 1–1.2 s to show and at `:edit`; the 2 MiB of records the Report keeps, about 1.8–2.7 s at `:edit` (measured on this host, at loads up to about 196). | T17's packet, fix round and re-measure |
 
+## Readings — Claude resumes its session (T19)
+
+Added 2026-09-27 by the orchestrator, from T19's brief and session note at `dev` `384c084` (PR #73, `v0.2.9`). D23 is the user's decision; what follows are readings and choices made in the packet and its rounds, none shown to the user.
+
+| ID | Reading | Source | Disposition |
+|---|---|---|---|
+| MR160 | A kept session Claude Code no longer has a conversation for is replaced by a new session, in every window that showed it. D23 says only that a directory with none gets a new one. | T19's brief | open |
+| MR161 | The session's id is kept from the moment it starts, whether or not anything is typed. | T19's brief | open |
+| MR162 | A directory's kept id is never removed, as the drafts are not (MR125). | T19's brief | open |
+| MR163 | Claude's session follows the directory Claude Code starts in, while the Reports and the draft stay with the editor's first working directory: after a `:cd` the two can differ. | T19's brief | open |
+| MR164 | Two editors in one directory resume the same session. Claude Code 2.1.283 starts both, refusing neither (Q8). | T19's brief | open |
+| MR165 | The fallback is visible. After a session in which nothing was typed, the next start shows nothing for about a second, then "No conversation found with session ID: …" for about half a second, before the new session replaces it: 1.4–2.3 s in all, measured on 2.1.283. | T19's brief; the orchestrator's measurement, corrected in the help by the correction | open |
+| MR166 | After the fallback the user is in Normal mode in the new terminal, even when they were typing in the one that failed; `\c` puts them in the new prompt. | T19's brief | open |
+| MR167 | An id that cannot be kept warns once per start, and the session starts anyway; the next start then starts another new session. | the author | open |
+| MR168 | A fallback while the command-line window is open waits until it closes; the failed terminal and its message stay on screen meanwhile. | the fix round (attack review, finding 3) | open |
+| MR169 | The fallback keeps a typing user typing: in Insert, Replace or Terminal mode, or in a command from Insert mode's CTRL-O or Terminal mode's CTRL-\ CTRL-O. Any other user is out of Insert mode once back in Normal mode, even under a `TermOpen` `startinsert`. | the fix round (attack review, finding 4), as the correction left it (re-measure, findings 1 and 2) | open |
+| MR170 | A start that lands between Claude Code's exit and the fallback wins: the fallback then starts nothing. | the fix round (attack review, finding 6) | open |
+| MR171 | A Claude window pinned with `'winfixbuf'` takes the new terminal and keeps its pin: replacing Claude's terminal in Claude's window is aineo's own act. | the correction (re-measure, finding 3); the orchestrator's decision | open |
+
+## Limits a user can meet — the resumed session (T19)
+
+| ID | Limit | Source |
+|---|---|---|
+| MR172 | The fallback tells a lost session only by Claude Code 2.1.283's message. A later version that words it otherwise, or a resume that fails another way ("Failed to resume session", a background-session holder), keeps the dead id, and every start in that directory fails the same way. The way out, which the help names: remove `aineo/claude-sessions/` under `stdpath('state')`. | attack review (finding 9); the help |
+| MR173 | A `claude.cmd` holding `--continue` or `--resume` never starts Claude Code: 2.1.283 refuses `--session-id` beside either, exit 1 after 0.3–0.4 s (measured). The help says so; `:checkhealth` does not. | attack review (finding 7); the orchestrator's measurement |
+| MR174 | A fallback that lands on a command line begun from Insert mode's CTRL-O leaves the user in Normal mode, and their next keys run as commands. Kept as a limit by the orchestrator, over building the re-measure's `ModeChanged` variant. | the correction's measured residual |
+| MR175 | A replacement whose failed terminal is in no window starts at 5 rows × 80 columns until it is shown: readiness stays `starting`, and Send refuses, until `\c` shows it. | attack review (finding 5); the orchestrator's decision |
+| MR176 | Text on Claude's screen that differs from the message only in blanks, with the session's own id and an exit 1 — a pasted prompt, or a resumed transcript quoting it — is taken for the message. | re-measure (finding 4) |
+| MR177 | A directory standing where the kept file goes makes every start there warn and start a new session, which is never resumed. | records review (finding 3) |
+| MR178 | A start that fails after Claude Code has launched (a user's autocommand raising as the terminals are swapped) is told once, but leaves the new Claude Code running as the session, perhaps in no window, its id perhaps not kept. | the correction |
+| MR179 | Not measured on the real CLI: an id whose conversation existed and is gone; what 2.1.283 draws below 36 columns; what it does with keys in the half second before its exit; `--resume` with aineo's other flags together. | T19's session note |
+| MR180 | A new Claude Code whose id cannot be kept warns from a scheduled callback, which may land while the user is typing. | the author's open item |
+
 ## Disposition
 
-**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR137 and MR139–MR159 stay open for the next review; MR138 is decided (D25), landed with T21 (PR #64, `v0.2.7`).
+**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR137 and MR139–MR180 stay open for the next review; MR138 is decided (D25), landed with T21 (PR #64, `v0.2.7`).
 
 Before that, every item was **open** until the MVP review. A reading the user keeps is closed *kept*; one the user changes becomes a plan row through a converge round (a new `D#`, never an edit in place) and a task.

@@ -909,3 +909,40 @@ Asked "How should I cut the time the tests cost?", the user chose "Run less + pa
   - M34, the mouse-place guard removed: 2.
 - **The guarantee review's six survivors and M41** were left out of those seven. PR #72's records review ran the six as literal edits on `tests/test_report_paths.lua` under 0.11.6, on `dev` `8386aed`'s code: each was killed by assertion (G3 1, G4 1, G5 1, G6 1, G7 3, G11 1). M41 was not run; it is recorded as equivalent.
 - **Released:** `v0.2.8`, which carries T17 (PR #71, `main` at `e202c1b`).
+- **T19 — PR #73, regular** (the Claude Code integration), merged by rebase on 2026-09-27 as `8819340` … `384c084` (13 commits). The code of `dev` is identical to the verified tree (`6d5a013` laid over `dev` `5c6481e`, merge-tree `acc62d0`).
+  - **The brief:** a first brief was withdrawn after its review (T19-1: the fallback's terminal would not reach the composition root and the layout); the rewrite was corrected after its second review (T19b-1 to T19b-9).
+    - **The orchestrator's error, found by the attack review:** the brief said the terminal wraps the no-conversation message at the window's width. That was measured with a stand-in, not the real CLI. Claude Code 2.1.283 breaks the line itself and drops the blank at the row's end, measured by the orchestrator at 39 and 60 columns (`evidence/claude-resume-q8.txt`, follow-up).
+  - **Reviews** on Opus:
+    - attack by `neovim-claude-code-reviewer`;
+    - test-integrity by `neovim-lua-reviewer`;
+    - records by `reviewer`.
+  - **What the reviews found:**
+    - the head never recognised a lost session at Claude's default 60 columns (confirmed on the real CLI);
+    - two editors keeping an id at once lost one (`E739`);
+    - a fallback in the command-line window raised a traceback;
+    - a user's `TermOpen startinsert` put the user in Insert mode in their own file;
+    - queued code in the gap started a second `--resume`;
+    - a `claude.cmd` holding `--continue` never starts (confirmed on the real CLI);
+    - twelve cases were green on `dev`'s code;
+    - M12 was not equivalent;
+    - the records were untrue in four places.
+  - **The fix round** went to a fresh agent (the author's context 418 K by `agent-context.py`). It adopted:
+    - the match with blanks removed, and a fake that draws and times the message as 2.1.283 does;
+    - the `mkdir` retry;
+    - the wait for the command-line window;
+    - the mode kept;
+    - the gap guard;
+    - the reviews' pins.
+    Its help sentence "a second or two" came from the orchestrator's decision 16, taken from elapsed times before the timing runs; it was wrong.
+  - **The re-measure**, with the attack question (`neovim-claude-code-reviewer`), held every claim of the round, and found one failure of the round's own: its mode fix threw a user out of Insert mode's CTRL-O and Terminal mode's CTRL-\ CTRL-O. It also found a pinned `'winfixbuf'` window hiding a failed start, and the help's timing.
+  - **The bounded correction**, by a fresh agent, adopted the re-measure's two fixes and corrected the help. Its measured residual — a fallback on a command line begun from Insert mode's CTRL-O ends in Normal mode — the orchestrator kept as a limit (MR174).
+- **The orchestrator's verification** of `6d5a013` laid over `dev`, under D26 (the whole suite once per version on the merged tree; mutants on their covering files):
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`, 1227 cases: `Fails (0)` on 0.12.5 (869 s);
+  - on 0.11.6 `Fails (1)` (890 s, load 131): T17's timing case in `tests/test_report_paths.lua`, which T19 does not touch. Re-run alone it failed at load 115 and passed at load 95. T12's brief review then saw it fail at load 29, so it is intermittent, not load-bound;
+  - lint clean.
+- **26 literal mutants**, each run on its covering test files on both versions, all killed by assertion on both:
+  - the plan's ten: the id not kept; never resumed; the fallback never taken; the fallback on every exit 1; one fixed id; the first directory; `--allowedTools` not last; each holder left; a malformed kept id resumed;
+  - the reviews' survivors: M12, P4, P13, P7–P12, M23;
+  - the round's guards: the mkdir retry, the gap guard, the `v:exiting` guard, the round's mode condition, the command-line window wait, `winfixbuf` not cleared.
+- **Released:** `v0.2.9`, which carries T19 (PR #81, `main` at `ece0cdb`).
