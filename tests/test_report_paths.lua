@@ -843,6 +843,69 @@ T['a double-click']["on the Report's status line opens nothing"] = function()
   eq(what_the_layout_shows(), NOTHING_OPENED)
 end
 
+--- Fills the child's Input with two lines and returns the screen cell, from
+--- 0, of byte 12 of its second line: in Input, the line and byte at which
+--- `See notes.txt:3 now`'s path lies in the Report.
+---
+---@return { row: integer, col: integer }
+local function input_cell_where_the_report_draws_a_path()
+  entry.set_input(child, { 'first line', 'second line of Input, long enough' })
+  return child.lua_get([[(function()
+    local window = vim.fn.win_findbuf(require('aineo.layout').input_buffer())[1]
+    local position = vim.fn.screenpos(window, 2, 13)
+    return { row = position.row - 1, col = position.col - 1 }
+  end)()]])
+end
+
+--- Ways a double-click on Input's screen cell `cell` reaches the Report's own
+--- double-click while the Report is current, each by the name a case gives
+--- it: the Report's mapping is buffer-local, so it fires while the Report is
+--- current, wherever the mouse is.
+local DOUBLE_CLICKS_THAT_STAY_IN_THE_REPORT = {
+  ['typed as one key'] = function(cell)
+    child.api.nvim_input(('<2-LeftMouse><%d,%d>'):format(cell.col, cell.row))
+  end,
+  ["clicked, under a <LeftMouse> of the user's that keeps the cursor"] = function(cell)
+    child.cmd('nnoremap <LeftMouse> <Nop>')
+    for _ = 1, 2 do
+      child.api.nvim_input_mouse('left', 'press', '', 0, cell.row, cell.col)
+      child.api.nvim_input_mouse('left', 'release', '', 0, cell.row, cell.col)
+    end
+  end,
+}
+
+--- Waits, at most `CLICK_PATIENCE_MS`, until the child's current window no
+--- longer shows the Report.
+local function wait_until_the_report_is_left()
+  vim.wait(CLICK_PATIENCE_MS, function()
+    return entry.current_window(child) ~= 'aineo://report'
+  end, 20)
+end
+
+T['a double-click']['on Input while the Report is current'] = MiniTest.new_set({
+  parametrize = {
+    { 'typed as one key' },
+    { "clicked, under a <LeftMouse> of the user's that keeps the cursor" },
+  },
+})
+
+T['a double-click']['on Input while the Report is current']['opens nothing and is left to Neovim, which enters Input, when'] = function(
+  how
+)
+  open_layout()
+  receive_details('See notes.txt:3 now')
+  local cell = input_cell_where_the_report_draws_a_path()
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  DOUBLE_CLICKS_THAT_STAY_IN_THE_REPORT[how](cell)
+
+  wait_until_the_report_is_left()
+  eq(
+    { current = entry.current_window(child), shown = what_the_layout_shows() },
+    { current = 'aineo://input', shown = NOTHING_OPENED }
+  )
+end
+
 --- Whether a reader holds the FIFO `fifo` open: tries, without waiting, to
 --- open it for writing, which succeeds only then, and writes it a line and
 --- closes it, so the reader reads that line and the end of the file and
