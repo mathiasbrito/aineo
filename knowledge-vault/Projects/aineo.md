@@ -93,7 +93,7 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 
 **Decisions awaiting the user:**
 - The oldest `claude` version supported (2.1.281 is installed) — MR28.
-- MR98, MR101, MR108 and MR111–MR114 of [[Review/2026-09-24 — v1 MVP readings review]], which were not put to the user; MR109 and MR110, which came after the user's answer of 2026-09-26; T14's readings and limits, MR115–MR125; T10's, MR126–MR134; T20's, MR135–MR137, MR139 and MR140, with MR138 decided by D25 and landed with T21 (PR #64, `v0.2.7`); T18's, MR141–MR143; T21's, MR144–MR148; and T17's, MR149–MR159.
+- MR98, MR101, MR108 and MR111–MR114 of [[Review/2026-09-24 — v1 MVP readings review]], which were not put to the user; MR109 and MR110, which came after the user's answer of 2026-09-26; T14's readings and limits, MR115–MR125; T10's, MR126–MR134; T20's, MR135–MR137, MR139 and MR140, with MR138 decided by D25 and landed with T21 (PR #64, `v0.2.7`); T18's, MR141–MR143; T21's, MR144–MR148; T17's, MR149–MR159; T19's, MR160–MR180, of which MR165 and MR174 were told to the user without a reply; and T23's, MR181–MR198, of which MR188–MR190 were told to the user without a reply.
 
 ## Changelog
 | Date | Session | Summary |
