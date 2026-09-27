@@ -30,6 +30,18 @@ local function blob_on_disk(top, path)
   return git_repo.git(top, { 'hash-object', '--', path })
 end
 
+--- The lines of the unified diff `diff` after its four header lines, or nil
+--- when there is no diff.
+---
+---@param diff string|nil
+---@return string[]|nil
+local function after_the_header(diff)
+  if not diff then
+    return nil
+  end
+  return vim.list_slice(vim.split(diff, '\n'), 5)
+end
+
 local T = MiniTest.new_set({
   hooks = {
     pre_case = function()
@@ -205,6 +217,42 @@ T['a file’s diff']['keeps three lines of context whatever the editor’s GIT_D
     vim.list_slice(vim.split(seen.result, '\n'), 5),
     { '@@ -1,3 +1,3 @@', ' 1', '-2', '+two', ' 3', '' }
   )
+end
+
+T['an editor whose environment sets a global pathspec setting'] = MiniTest.new_set({
+  parametrize = { { 'GIT_ICASE_PATHSPECS' }, { 'GIT_GLOB_PATHSPECS' } },
+})
+
+T['an editor whose environment sets a global pathspec setting']['still gets a file’s diff'] = function(
+  name
+)
+  local top, base = git_repo.create('diffs-pathspecs', { ['a.txt'] = { '1', '2', '3' } })
+  git_repo.write(top, 'a.txt', { '1', 'two', '3' })
+  child.lua('vim.env[...] = "1"', { name })
+
+  local seen = child.lua(FILE_DIFF, { top, base, { path = 'a.txt', kind = 'modified' } })
+
+  eq({
+    failure = seen.failure,
+    hunk = after_the_header(seen.result),
+  }, { hunk = { '@@ -1,3 +1,3 @@', ' 1', '-2', '+two', ' 3', '' } })
+end
+
+T['a file’s diff']['is text whatever attribute source the editor’s environment names'] = function()
+  local top, base = git_repo.create(
+    'diffs-attr-source',
+    { ['a.txt'] = { '1', '2', '3' }, ['.gitattributes'] = { '* -diff' } }
+  )
+  git_repo.git(top, { 'rm', '--quiet', '.gitattributes' })
+  git_repo.write(top, 'a.txt', { '1', 'two', '3' })
+  child.lua('vim.env.GIT_ATTR_SOURCE = ...', { base })
+
+  local seen = child.lua(FILE_DIFF, { top, base, { path = 'a.txt', kind = 'modified' } })
+
+  eq({
+    failure = seen.failure,
+    hunk = after_the_header(seen.result),
+  }, { hunk = { '@@ -1,3 +1,3 @@', ' 1', '-2', '+two', ' 3', '' } })
 end
 
 T['a file’s diff']['keeps the carriage returns of lines that now end in them'] = function()
