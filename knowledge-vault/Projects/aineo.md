@@ -75,8 +75,8 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 - `lua/aineo/health.lua` evaluates `config.recorded_setup_options()` as an argument to its `pcall`, outside it, so `:checkhealth aineo` fails whole when `setup()` options hold a userdata — found by T13's attack review, older than T13.
 - T5's `tests/test_mcp_blocked_editor.lua` writes a `v:null` file into the checkout's root when its editor autostarts — latent while the suites' preset holds; a fix belongs to T5's home.
 - The terminal of the last session is kept twice, by the Claude home and by the composition root.
-- `lua/aineo/mcp/editor.lua:10–16`'s docstring says a report shows in "tens of milliseconds, even for a report at the line limit"; since T10 a report at the line limit takes up to about half a second (MR133).
-- A fresh `.tests/` warns in its first child that logs: the `Makefile` never creates the log's directory, so a narrowed run's first exact-message assertion can fail (T21's and T17's re-measures).
+- `lua/aineo/mcp/editor.lua:10–16`'s docstring says a report shows in "tens of milliseconds, even for a report at the line limit"; since T10 a report at the line limit takes up to about half a second (MR133), and since T17 about 1 s for a line of distinct paths (MR159).
+- A fresh `.tests/` warns in its first child that logs: the `Makefile` never creates the log's directory, so the first run in a fresh `.tests/`, whole or narrowed, can fail cases asserting what a child told (T21's and T17's re-measures).
 - A mode-000 file opened through the file column's redirect replaces the Report's column (C9), and a Report made `modifiable` and edited inside a path raises `E5108` on a double-click (T17's re-measure; both older than T17).
 - The MCP server reports `serverInfo.version = '0.0.0'` (`lua/aineo/mcp/protocol.lua`, pinned by `tests/test_mcp_relay.lua`) while the release is `v0.2.8`.
 - The version check's timer kills the process group although the early return always does too (an equivalent mutant at the wave-5 verification); its own kill is redundant, and in a same-pass race it can make a command the check killed read as a failed one (the records review of PR #27). A timer that only sets the flag stays bounded.
@@ -87,7 +87,7 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 
 **Decisions awaiting the user:**
 - The oldest `claude` version supported (2.1.281 is installed) — MR28.
-- MR98, MR101, MR108 and MR111–MR114 of [[Review/2026-09-24 — v1 MVP readings review]], which were not put to the user; MR109 and MR110, which came after the user's answer of 2026-09-26; T14's readings and limits, MR115–MR125; T10's, MR126–MR134; T20's, MR135–MR137, MR139 and MR140, with MR138 decided by D25 until T21 lands; T18's, MR141–MR143; T21's, MR144–MR148; and T17's, MR149–MR159.
+- MR98, MR101, MR108 and MR111–MR114 of [[Review/2026-09-24 — v1 MVP readings review]], which were not put to the user; MR109 and MR110, which came after the user's answer of 2026-09-26; T14's readings and limits, MR115–MR125; T10's, MR126–MR134; T20's, MR135–MR137, MR139 and MR140, with MR138 decided by D25 and landed with T21 (PR #64, `v0.2.7`); T18's, MR141–MR143; T21's, MR144–MR148; and T17's, MR149–MR159.
 
 ## Changelog
 | Date | Session | Summary |
