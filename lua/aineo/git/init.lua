@@ -13,8 +13,13 @@ local diffs = require('aineo.git.diffs')
 local history = require('aineo.git.history')
 local process = require('aineo.git.process')
 local repository = require('aineo.git.repository')
+local watch = require('aineo.git.watch')
 
 local M = {}
+
+--- How a watch runs; every field it leaves out is the home's default.
+---@class aineo.git.WatchOptions: aineo.git.Options
+---@field system_name? string the platform, as `vim.uv.os_uname().sysname` names it; the editor's own when not given
 
 --- Finds the repository `directory` is in, and calls `done(nil, repository)`,
 --- or `done(failure)`: `not_a_repository`, in git's words, when there is
@@ -76,6 +81,25 @@ end
 ---@param options? aineo.git.Options
 function M.commit_diff(found, commit, done, options)
   diffs.commit_diff(process.runner(options), found, commit, done)
+end
+
+--- Starts watching `found`, and calls `on_change(nil, change)` on the main
+--- loop once per burst of changes: when the branch moves — a commit, even
+--- one that changes no file, an amend, a reset, a checkout, a merge, a
+--- rebase, a move from another worktree — or a file of the working tree is
+--- written, created, removed or renamed, by any process; or
+--- `on_change(failure)` when the branch cannot be read. Returns the watch,
+--- which says whether it sees changes in subdirectories — on Linux it does
+--- not — or nil and why it could not start; it never raises.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param on_change fun(failure: aineo.git.Failure|nil, change: aineo.git.RepositoryChange|nil)
+---@param options? aineo.git.WatchOptions
+---@return aineo.git.Watch|nil watch
+---@return aineo.git.Failure|nil failure
+function M.watch_repository(found, on_change, options)
+  local system_name = (options or {}).system_name or vim.uv.os_uname().sysname
+  return watch.watch_repository(process.runner(options), found, on_change, system_name)
 end
 
 return M
