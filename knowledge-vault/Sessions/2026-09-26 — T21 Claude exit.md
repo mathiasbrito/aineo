@@ -247,6 +247,8 @@ R9 and R15 stay as the re-measure left them: R9 not equivalent (a `'nohidden'` s
 
 ## Readings for the MVP review
 
+Numbered by the knowledge pass in [[Review/2026-09-24 — v1 MVP readings review]]: the readings as MR144 and MR145, the limits a user can meet as MR146–MR148.
+
 - **EX1 applies to Claude's window only: another terminal of the user's keeps Neovim's own behaviour** (the orchestrator's reading 1, as the brief gives it).
 - **EX1 keys on Claude's terminal, not on Claude's window** (the author's reading; EX1 and reading 1 say "only Claude's window"). Normal mode returns, and Terminal mode is refused after the exit, wherever Claude's terminal is the current buffer: a window of another tab that shows it counts too, measured (pin A; the records review's probe). Input's Insert mode and any other terminal keep Neovim's behaviour.
 - **EX1 leaves the user in Normal mode even when they were typing when Claude Code exited:** a key they type then is a Normal-mode command, and Terminal mode is not entered again on the ended terminal.
@@ -277,4 +279,19 @@ The wave holds its marks (rule 6). The line T21 would take:
 
 ## Commits
 
-*Recorded after the merge.*
+Merged by rebase into `dev` on 2026-09-27, PR #64. The knowledge pass maps each commit of the branch to its hash on `dev`:
+
+| on the branch | on `dev` | subject |
+|---|---|---|
+| `437212d` | `94f1228` | Keep Claude's exit on screen, and the layout whole after a wipe |
+| `214a005` | `0c53b00` | Pin T21's wipe guards with assertions, not crashes |
+| `70a43c7` | `c4ea29c` | Record T21's session: Claude's exit, red/green, mutants |
+| `e0a89e1` | `3371260` | Close Claude's window after any wipe, and never wait on a stopped job |
+| `7c9f6cd` | `5272709` | Pin the close's re-check and its check at the wipe |
+| `ad5d6dd` | `6dba602` | Record T21's fix round, and correct the packet's false records |
+| `9585fc8` | `9db0e4d` | Refuse Terminal mode on an ended exit no TermClose saw |
+| `2c84693` | `1f418b1` | Pin the reopen's cursor and its file shown in another tab |
+| `f559a73` | `7f46777` | Record T21's correction after PR #64's re-measure |
+| `eea246c` | `e0582e0` | Record the help's merge check against T17's moved head |
+
+Released in `v0.2.7` (PR #70, `main` at `e1b55ee`).

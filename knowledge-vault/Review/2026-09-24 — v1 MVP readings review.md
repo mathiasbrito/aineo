@@ -2,7 +2,7 @@
 
 **Author:** Mathias Santos de Brito, with Claude — the orchestrator (Opus 5.5, session `619e5f9a`)
 **Branch:** `knowledge/wave2-close-wave3-plan`
-**Status:** open. On 2026-09-26 the user kept MR1–MR97, MR99, MR100 and MR102–MR107 ("ok, your decisions are fine"), MR28's relay behaviour among them. Still awaiting the user: MR28's oldest supported `claude`, MR98, MR101, MR108, MR109–MR137 and MR139–MR143; MR138 decided (D25), until T21 lands
+**Status:** open. On 2026-09-26 the user kept MR1–MR97, MR99, MR100 and MR102–MR107 ("ok, your decisions are fine"), MR28's relay behaviour among them. Still awaiting the user: MR28's oldest supported `claude`, MR98, MR101, MR108, MR109–MR137 and MR139–MR159; MR138 decided (D25) and landed with T21
 
 ## Links
 
@@ -173,7 +173,7 @@ Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t
   - MR108, named only as one of "T14's four readings", never described;
   - MR101, which the re-measure measured and the orchestrator adopted before the answer, but which was not in the list;
   - MR111–MR114, T12's other readings, on no list.
-- **Open, later than the answer:** MR109 and MR110, and T14's readings and limits, MR115–MR125; T10's, MR126–MR134, T20's, MR135–MR140, and T18's, MR141–MR143, in their own sections below.
+- **Open, later than the answer:** MR109 and MR110, and T14's readings and limits, MR115–MR125; T10's, MR126–MR134, T20's, MR135–MR140, T18's, MR141–MR143, T21's, MR144–MR148, and T17's, MR149–MR159, in their own sections below.
 
 | ID | Reading | Source | Disposition |
 |---|---|---|---|
@@ -248,11 +248,11 @@ Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t
 
 | ID | Limit | Source |
 |---|---|---|
-| MR138 | A `\c` typed while the editor is busy as Claude Code exits, or one that Claude Code exits right after — at its start, too — leaves Terminal mode on the ended terminal: the next key closes it and its exit message. The user decided its fix on 2026-09-26, when D25's question described it: D25, implemented by T21 (PR #64, not yet merged). | T20's brief review (F6) and guarantee review (G4) |
+| MR138 | A `\c` typed while the editor is busy as Claude Code exits, or one that Claude Code exits right after — at its start, too — leaves Terminal mode on the ended terminal: the next key closes it and its exit message. The user decided its fix on 2026-09-26, when D25's question described it: D25, implemented by T21 (PR #64, `v0.2.7`). | T20's brief review (F6) and guarantee review (G4) |
 | MR139 | When `\c` opens the layout and the draft cannot be read, the key that answers the draft's hit-enter prompt, other than Enter, Space or CTRL-C, reaches Claude Code (with MR124). | T20's brief review (F7) |
 | MR140 | Entering and leaving Claude's prompt sends Claude Code the focus reports it asked for (`ESC[I`, `ESC[O`). | T20's brief review (F8) |
 
-MR138's second case, and the key-wipe's layout fault that the T20 note › *Limits* records (G1), were put to the user in D25's question. The user chose to fix both (D25, T21). G1 is not numbered for that reason. MR138 stays until T21 lands.
+MR138's second case, and the key-wipe's layout fault that the T20 note › *Limits* records (G1), were put to the user in D25's question. The user chose to fix both (D25, T21). G1 is not numbered for that reason. T21 landed on 2026-09-27 (PR #64, `v0.2.7`).
 
 ## Readings — the Report line without its icon (T18)
 
@@ -264,8 +264,48 @@ Added 2026-09-26 by the orchestrator, from T18's brief and session note at `dev`
 | MR142 | The bold can be turned off apart from the colour: `:highlight link AineoReportStatusBold NONE`, whenever it is given. Attributes set on the group before the first report (`gui=NONE`) do not hold, since aineo's first definition links it again. | T18's brief; the recipe from both reviews of PR #60 | open |
 | MR143 | The bold is a group of its own, `AineoReportStatusBold`, a default link to `@markup.strong`: a colour scheme's Markdown bold style — its background, italic, underline, or no bold — shows on `[status]`; its colour does not, unless the status's own group has no foreground. | T18's brief review (finding 3), measured by PR #60's reviews and fix round | open |
 
+## Readings — Claude's exit keeps the layout (T21)
+
+Added 2026-09-27 by the orchestrator (session `938616f1`, branch `knowledge/w6-t21-t17-landed`), from T21's brief and session note at `dev` `e0582e0`. The behaviour is D25, the user's; these are the readings around it, none shown to the user.
+
+| ID | Reading | Source | Disposition |
+|---|---|---|---|
+| MR144 | Normal mode returns, and Terminal mode is refused after the exit, wherever Claude's terminal is the current buffer — a window of another tab that shows it too; another terminal of the user's, and Input's Insert mode, keep Neovim's own behaviour. | T21's brief (reading 1) and its author's reading, pinned | open |
+| MR145 | A user typing when Claude Code exits is left in Normal mode: the key typed then is a Normal-mode command, and Terminal mode is not entered again on the ended terminal. | T21's brief (reading 2, and T21-1 of its brief review) | open |
+
+## Limits a user can meet — Claude's exit (T21)
+
+| ID | Limit | Source |
+|---|---|---|
+| MR146 | A window Neovim will not close after a wipe — Neovim's last window, or the window the command-line window was opened from — stays on an empty buffer until `\c` opens the layout again; in the command-line-window state only `\c` recovers. | T21's fix round and its re-measure (finding 3) |
+| MR147 | A user's own `TermClose` autocommand that runs `:Aineo open` makes aineo's exit handlers miss that exit: the user stays in Terminal mode on the ended terminal, and the next key closes it. `i` is refused once they leave Terminal mode. | T21's re-measure (finding 1, third path) and correction |
+| MR148 | A file shown in a layout window as the layout reopens, when the file column has no room for it, is covered by the role's buffer with no warning. Read from the code, not measured. | T21's correction › *Limits* |
+
+## Readings — file paths in the Report (T17)
+
+Added 2026-09-27 by the orchestrator, from T17's brief and session note at `dev` `8386aed`. The user chose "Double-click opens (Recommended)"; the rule and the rest are readings, none shown to the user.
+
+| ID | Reading | Source | Disposition |
+|---|---|---|---|
+| MR149 | A path is a run of characters up to an ASCII space, an ASCII control character, `<` `>` `"` `'` `\|` a backtick, a bracket, `,` or `*`, with a trailing `.` `:` `;` `!` `?` left out, that holds a `/` or a `.` neither first nor last: a bare `Makefile` is not a path. `:line` and `:line:column` are drawn with it and name the line. | T17's brief, RP1 | open |
+| MR150 | A relative path is the Report's working directory's; `gf` and `gF` keep Neovim's own resolution, so after a `:cd` they may name different files, and a double-click opens what is underlined. | T17's brief | open |
+| MR151 | Only a regular file is underlined, checked when a report is drawn — once per distinct path, so `x.lua:3` and `x.lua:4` share a check — and checked again at the double-click. | T17's brief; the author's reading; the fix round, on the guarantee review's G1 | open |
+| MR152 | A double-click on a path that no longer names a regular file opens nothing and warns: `aineo: <path> names no file now`, or `aineo: cannot look <path> up now: <reason>` when the lookup fails otherwise. | T17's fix round (the implementer's addition) and correction | open |
+| MR153 | Paths are drawn in `AineoReportPath`, a group apart from `AineoReportLink`, and carry no address: ⌘-click stays for web links. | T17's brief | open |
+| MR154 | Not found as paths: `~/x` (`~` is not expanded), a name starting with a dot (`.gitignore`; `./.gitignore` is found), a name holding a space, a range (`x.lua:12-20`, `x.lua#L12`), a path glued to non-ASCII punctuation, and a path in `~~` or `__` emphasis. | T17's brief; the guarantee review's G9 | open |
+| MR155 | The Report's double-click takes the place of a user's own global `<2-LeftMouse>` mapping, in the Report only, and needs `'mouse'` on in Normal and Insert mode. | T17's brief | open |
+| MR156 | A double-click from Input in Insert mode ends Insert mode, whether it opens a file, is refused, or selects a word. | T17's re-measure (finding 4) | open |
+
+## Limits a user can meet — file paths (T17)
+
+| ID | Limit | Source |
+|---|---|---|
+| MR157 | Between the check at the double-click and `:edit`'s open, a window of 0.2–0.5 ms remains: a FIFO swapped in there still holds Neovim. An outside process swapping a link got past the check in 3–7 of 30 double-clicks. | T17's re-measure (finding 2) |
+| MR158 | The file checks are synchronous: a report naming paths on a hung network mount would hold the editor. Not measured; no such mount on the host. | T17's guarantee review (G5) |
+| MR159 | A report at the relay's 1 MiB line limit, full of distinct paths, takes about 1 s to show and at `:edit`; the 2 MiB of records the Report keeps, about 2 s at `:edit` (measured on this host, at loads up to about 190). | T17's packet, fix round and re-measure |
+
 ## Disposition
 
-**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR137 and MR139–MR143 stay open for the next review; MR138 is decided (D25), until T21 lands.
+**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR137 and MR139–MR159 stay open for the next review; MR138 is decided (D25), landed with T21 (PR #64, `v0.2.7`).
 
 Before that, every item was **open** until the MVP review. A reading the user keeps is closed *kept*; one the user changes becomes a plan row through a converge round (a new `D#`, never an edit in place) and a task.
