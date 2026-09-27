@@ -219,7 +219,7 @@ T["Claude's line numbers, once hidden,"]["are not given to another terminal Clau
   eq(numbers_of_window_showing(child, other), { number = true, relativenumber = false })
 end
 
-T["Claude's line numbers, once hidden,"]["are not given to a terminal of the user's own in another tab when the layout opens again"] = function()
+T["Claude's line numbers, once hidden,"]["are not given to a terminal of the user's own in another tab when the layout opens again with a new Claude terminal"] = function()
   local buffers = open_with_numbers(child, { number = true, relativenumber = false })
   toggle(child)
   child.cmd('tabnew')
@@ -227,11 +227,12 @@ T["Claude's line numbers, once hidden,"]["are not given to a terminal of the use
   child.api.nvim_win_set_buf(0, mine)
   child.cmd('setlocal number norelativenumber')
   eq(numbers_of_window_showing_anywhere(child, mine), { number = true, relativenumber = false })
+  local terminal = layout.terminal(child)
 
-  layout.open(child, layout.arrangement(buffers))
+  layout.open(child, layout.arrangement({ claude = terminal, report = buffers.report }))
 
   eq({
-    claude = numbers_of_window_showing_anywhere(child, buffers.claude),
+    claude = numbers_of_window_showing_anywhere(child, terminal),
     mine = numbers_of_window_showing_anywhere(child, mine),
   }, {
     claude = { number = false, relativenumber = false },
