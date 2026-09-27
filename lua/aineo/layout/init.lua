@@ -260,7 +260,8 @@ end
 
 --- Whether Claude's window shows Claude's terminal, after a toggle, and
 --- the toggle's line numbers were not yet shown there for that window and
---- that terminal: the terminal is new, or the window is.
+--- that terminal: the terminal is new, the window is, or the toggle was
+--- last shown there for another buffer.
 ---
 ---@return boolean
 local function misses_claude_numbers()

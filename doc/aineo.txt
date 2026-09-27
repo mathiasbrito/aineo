@@ -218,17 +218,18 @@ has no conversation for (|aineo-claude-session|).
                                                        *:Aineo-claude-numbers*
 :Aineo claude-numbers	Hides the line numbers of Claude's window, 'number'
 			and 'relativenumber', when it shows either, and shows
-			them again as they were when it shows none: 'number'
-			alone when aineo has hidden none before. It acts on
-			the buffer Claude's window shows, whichever it is,
-			changes no other window, and leaves the cursor and
-			the mode where they are; from another tab it acts on
-			Claude's window in the layout's tab. Without a Claude
-			window — the layout or Claude's window closed, or
-			Claude's window left without its terminal once the
-			terminal was wiped, on an empty buffer or on a file
-			Neovim showed there — it changes nothing and warns
-			you once.
+			them again as they were when aineo last hid them,
+			whichever buffer Claude's window showed then, when it
+			shows none: 'number' alone when aineo has hidden none
+			before. It acts on the buffer Claude's window shows,
+			whichever it is, changes no other window, and leaves
+			the cursor and the mode where they are; from another
+			tab it acts on Claude's window in the layout's tab.
+			Without a Claude window — the layout or Claude's
+			window closed, or Claude's window left without its
+			terminal once the terminal was wiped, on an empty
+			buffer or on a file Neovim showed there — it changes
+			nothing and warns you once.
 
 			aineo keeps your choice until the editor quits, and
 			gives it to every Claude terminal new to Claude's
@@ -242,8 +243,10 @@ has no conversation for (|aineo-claude-session|).
 			comes. Pressed while Claude's window shows another
 			buffer, it hides or shows that buffer's numbers, and
 			Claude's terminal gets the same when it next comes
-			back there. A file opened from Claude's window keeps
-			your own numbers.
+			back there; numbers it hides there are also those the
+			next toggle shows Claude's terminal again, in place of
+			the terminal's own. A file opened from Claude's window
+			keeps your own numbers.
 
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
