@@ -55,13 +55,18 @@ test test_file: override CLAUDE_CONFIG_DIR := $(TEST_HOME)/claude
 test test_file: override NVIM_LOG_FILE := $(TEST_LOG_DIRECTORY)/log
 
 # A Neovim or Claude Code session that starts make hands these down: the parent
-# editor's server address, application name, init file and init commands, the
-# log file it could not open (which Neovim 0.12 would tell every Neovim of the
-# run about), and a Claude Code marker. No target passes them on, whether they
-# come from the environment, make's command line or MAKEFLAGS, so neither the
-# test runner nor any Neovim it starts sees them. VIMRUNTIME is still passed
-# on: a development build of Neovim needs it.
-unexport NVIM NVIM_APPNAME MYVIMRC VIMINIT __NVIM_LOG_FILE_WANT AI_AGENT
+# editor's server address, application name, init file and init commands, and a
+# Claude Code marker. No target passes them on, whether they come from the
+# environment, make's command line or MAKEFLAGS, so neither the test runner nor
+# any Neovim it starts sees them. VIMRUNTIME is still passed on: a development
+# build of Neovim needs it.
+unexport NVIM NVIM_APPNAME MYVIMRC VIMINIT AI_AGENT
+
+# A Neovim 0.12 that could not open its log file hands the file it wanted down
+# in this variable, and every Neovim that inherits it tells of a log it cannot
+# open, in a message the tests would read. The test targets empty it, whatever
+# its origin, and Neovim reads an empty variable as absent.
+test test_file: override __NVIM_LOG_FILE_WANT :=
 
 # Fetches mini.nvim at MINI_NVIM_COMMIT into MINI_NVIM_DIR. Does nothing, and
 # reaches for no remote, when that commit is already checked out there; a
@@ -84,9 +89,11 @@ deps:
 # at once (8 when it is absent), and prints one summary over all of them.
 # Exits 0 only when every case ran and passed, and non-zero otherwise — also
 # when a test file does not load or contributes no case, when test code ends
-# Neovim, when mini.test stalls, when the run outlasts its time limit, which
-# AINEO_TEST_RUN_LIMIT_MS=<milliseconds> replaces, and when either setting
-# names no number above zero (scripts/run_tests.lua).
+# Neovim, when mini.test stalls, when a test file's Neovim ends on a signal,
+# when the run outlasts its time limit, which
+# AINEO_TEST_RUN_LIMIT_MS=<milliseconds> replaces, and when AINEO_TEST_JOBS
+# names no whole number above zero or AINEO_TEST_RUN_LIMIT_MS no finite number
+# above zero (scripts/run_tests.lua).
 test: deps
 	mkdir -p '$(TEST_LOG_DIRECTORY)'
 	$(NVIM_TEST) -l '$(ROOT)/scripts/run_tests.lua' '$(TEST_HOMES)'

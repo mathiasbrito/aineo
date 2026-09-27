@@ -5,31 +5,47 @@
 --- every case ran and passed; 1 when a case failed or never ran, a file could
 --- not be collected or contributed no case, no file was named where one was
 --- expected, no test file was collected, test code ended Neovim or called
---- `os.exit`, mini.test stopped making progress, or the run outlasted its time
---- limit.
+--- `os.exit`, mini.test stopped making progress, a file's Neovim ended on a
+--- signal, or the run outlasted its time limit.
+---
+--- A file passes only when its Neovim exited 0, not on a signal, and the
+--- records it wrote show every one of its cases run and passed: either alone
+--- can be forged by test code — a `VimLeavePre` of the test file's own that
+--- raises or runs `0cquit` turns its Neovim's failure into exit 0, and a
+--- Neovim killed after its records were written leaves no failing case.
 ---
 --- Run with `nvim -l`, which ends Neovim with exit code 1 on any Lua error. It
 --- refuses, that way and before it starts any file, an `AINEO_TEST_JOBS` that
 --- names no whole number above zero and an `AINEO_TEST_RUN_LIMIT_MS` that names
---- no number of milliseconds above zero.
+--- no finite number of milliseconds above zero.
 ---
 --- Each file's Neovim keeps its user state, its log and Claude Code's settings
 --- in a home of its own, made for this run in a directory no other run has,
---- and inherits everything else from the runner. The runner removes the homes
---- when it ends.
+--- and inherits everything else from the runner, the runner's server address
+--- as `NVIM` among it. The runner removes the homes when it ends.
+---
+--- What it prints: each file's own output, stdout and stderr together, on
+--- stderr as the file ends; then, on stdout, the summary over every file's
+--- recorded cases — one `Total number of cases` line, one progress line per
+--- file, one `Fails (` line and a `FAIL in` line for each failing case — and a
+--- line `FAIL in <file>: …` for each file that did not pass although none of
+--- its cases failed, saying why. A file's output never comes before the
+--- summary on stdout, so no line a test prints can be read in its place.
 ---
 --- Bounded: the whole run, by its time limit. The runner runs no test code, so
 --- the limit holds even while a case keeps its file's Neovim busy, such as
 --- `while true do end`. At the limit, or when the runner itself ends early, on
---- an error or a signal, it stops the Neovim of every file still running with
---- SIGKILL, which a busy Neovim cannot ignore, together with every process
---- descended from it — child Neovims, which lead process groups of their own,
---- and processes a test started with `vim.system` — and counts that file's
---- cases that had not finished as not run. Not bounded: a process a test
---- starts with `vim.system` and never stops, once its file's Neovim has ended
---- by itself: it is no longer that Neovim's descendant, and outlives the run.
---- SIGKILL of the runner from outside skips its ending, and leaves every
---- file's Neovim running.
+--- an error, a signal or a command sent to its server, it stops the Neovim of
+--- every file still running with SIGKILL, which a busy Neovim cannot ignore,
+--- together with every process descended from it — child Neovims, which lead
+--- process groups of their own, and processes a test started with
+--- `vim.system` — and counts that file's cases that had not finished as not
+--- run. A file ends when its Neovim exits, whatever process it started still
+--- holds its output. Not bounded: a process a test starts and never stops,
+--- once its file's Neovim has ended, by itself or on a signal from outside:
+--- it is no longer that Neovim's descendant, and outlives the run. SIGKILL of
+--- the runner from outside skips its ending, and leaves every file's Neovim
+--- running and the run's homes in place.
 ---
 --- Arguments: `arg[1]`, the directory to make this run's homes in; `arg[2]`,
 --- the path of one test file to run — `make test_file` passes an empty one
@@ -44,8 +60,9 @@ local FILE_RUNNER = vim.fs.joinpath(CHECKOUT, 'scripts', 'run_test_file.lua')
 
 --- How many test files may run at once unless `AINEO_TEST_JOBS` says otherwise.
 --- The suite's cases mostly wait on the processes they start, so more files
---- than the host has cores run well side by side; from eight on, the whole
---- run takes about as long as its slowest file alone.
+--- than the host has cores run well side by side; at eight, a run of the full
+--- suite ends with the last of its long files to start, a little after its
+--- slowest file alone would.
 local DEFAULT_JOBS = 8
 
 --- How long a whole run may take unless `AINEO_TEST_RUN_LIMIT_MS` sets a
@@ -54,6 +71,10 @@ local RUN_TIME_LIMIT_MS = 16 * 60 * 1000
 
 --- How often the wait checks whether the files have finished.
 local POLL_INTERVAL_MS = 50
+
+--- The permissions of the file a test file's output goes to: read and write
+--- for its owner, read for everyone else.
+local OUTPUT_FILE_MODE = tonumber('644', 8)
 
 --- How many test files may run at once: the whole number `jobs_setting`
 --- names, or `DEFAULT_JOBS` when it is absent. Raises an error when it is
@@ -74,7 +95,8 @@ end
 
 --- The run's time limit: the milliseconds `limit_setting` names, or
 --- `RUN_TIME_LIMIT_MS` when it is absent. Raises an error when it is present
---- but names no number of milliseconds above zero.
+--- but names no finite number of milliseconds above zero — `nan` and `inf`
+--- among them, which would leave the run unbounded.
 ---
 ---@param limit_setting? string the value of `AINEO_TEST_RUN_LIMIT_MS`
 ---@return number
@@ -83,7 +105,7 @@ local function run_time_limit_ms(limit_setting)
     return RUN_TIME_LIMIT_MS
   end
   local limit_ms = tonumber(limit_setting)
-  if limit_ms == nil or limit_ms <= 0 then
+  if limit_ms == nil or not (limit_ms > 0 and limit_ms < math.huge) then
     error(
       ('AINEO_TEST_RUN_LIMIT_MS must be a number of milliseconds above zero, not %q'):format(
         limit_setting
@@ -140,13 +162,19 @@ local function stop_process_tree(root_pid)
   end
 end
 
+--- How a test file's Neovim ended.
+---@class aineo_tests.FileEnding
+---@field code integer its exit code
+---@field signal integer the signal that ended it, 0 when none did
+
 --- One test file's run: its Neovim, while it runs, then how it ended.
 ---@class aineo_tests.FileRun
 ---@field file string the test file's path
 ---@field home string the directory its Neovim keeps its user state in
 ---@field record_path string where its Neovim records its cases
----@field process? vim.SystemObj its Neovim, once started
----@field completed? vim.SystemCompleted how its Neovim ended, once it has
+---@field output_path string where its Neovim's stdout and stderr go
+---@field pid? integer its Neovim's process id, once started
+---@field ending? aineo_tests.FileEnding how its Neovim ended, once it has
 
 --- Writes `text` to `stream`, ending it with a line break when it has none.
 ---
@@ -158,6 +186,20 @@ local function relay(stream, text)
   end
   stream:write(text:sub(-1) == '\n' and text or text .. '\n')
   stream:flush()
+end
+
+--- The whole of the file at `path`, or nothing when it cannot be read.
+---
+---@param path string
+---@return string
+local function contents(path)
+  local file = io.open(path, 'rb')
+  if not file then
+    return ''
+  end
+  local text = file:read('*a')
+  file:close()
+  return text
 end
 
 --- The log file of a Neovim whose home is `home`.
@@ -178,46 +220,64 @@ local function make_home(home)
   vim.fn.mkdir(vim.fs.dirname(log_file(home)), 'p')
 end
 
---- The environment variables that put a Neovim's user state, and Claude
---- Code's, in `home`.
+--- The environment of a test file's Neovim whose home is `home`, as
+--- `NAME=value` entries: the runner's own, with its server address as `NVIM`,
+--- as `vim.system()` gives every process it starts, and the variables that
+--- put the Neovim's user state, and Claude Code's, in `home`.
 ---
 ---@param home string
----@return table<string, string>
-local function home_environment(home)
-  return {
-    XDG_CONFIG_HOME = vim.fs.joinpath(home, 'config'),
-    XDG_DATA_HOME = vim.fs.joinpath(home, 'data'),
-    XDG_STATE_HOME = vim.fs.joinpath(home, 'state'),
-    XDG_CACHE_HOME = vim.fs.joinpath(home, 'cache'),
-    CLAUDE_CONFIG_DIR = vim.fs.joinpath(home, 'claude'),
-    NVIM_LOG_FILE = log_file(home),
-  }
+---@return string[]
+local function file_environment(home)
+  local environment = vim.fn.environ()
+  environment.NVIM = vim.v.servername
+  environment.NVIM_LISTEN_ADDRESS = nil
+  environment.XDG_CONFIG_HOME = vim.fs.joinpath(home, 'config')
+  environment.XDG_DATA_HOME = vim.fs.joinpath(home, 'data')
+  environment.XDG_STATE_HOME = vim.fs.joinpath(home, 'state')
+  environment.XDG_CACHE_HOME = vim.fs.joinpath(home, 'cache')
+  environment.CLAUDE_CONFIG_DIR = vim.fs.joinpath(home, 'claude')
+  environment.NVIM_LOG_FILE = log_file(home)
+  local entries = {}
+  for name, value in pairs(environment) do
+    table.insert(entries, ('%s=%s'):format(name, value))
+  end
+  return entries
 end
 
---- Starts `file_run`'s Neovim, which calls `on_exit` once it has ended and
---- its output has been relayed.
+--- Starts `file_run`'s Neovim, its stdout and stderr going to the file at
+--- `output_path`: a process a test starts that keeps them open then holds a
+--- file, never the runner's wait. Once the Neovim has exited, relays that
+--- output to stderr and calls `on_exit`. Its ending is recorded the moment
+--- libuv reports the exit, so nothing is sent to its pid once reaped.
 ---
 ---@param file_run aineo_tests.FileRun
 ---@param on_exit fun()
 local function start_file(file_run, on_exit)
-  file_run.process = vim.system({
-    vim.v.progpath,
-    '--headless',
-    '--noplugin',
-    '-u',
-    MINIMAL_INIT,
-    '-l',
-    FILE_RUNNER,
-    file_run.file,
-    file_run.record_path,
-  }, { env = home_environment(file_run.home), text = true }, function(completed)
+  local output = assert(vim.uv.fs_open(file_run.output_path, 'w', OUTPUT_FILE_MODE))
+  local process, pid_or_failure
+  process, pid_or_failure = vim.uv.spawn(vim.v.progpath, {
+    args = {
+      '--headless',
+      '--noplugin',
+      '-u',
+      MINIMAL_INIT,
+      '-l',
+      FILE_RUNNER,
+      file_run.file,
+      file_run.record_path,
+    },
+    env = file_environment(file_run.home),
+    stdio = { nil, output, output },
+  }, function(code, signal)
+    file_run.ending = { code = code, signal = signal }
+    process:close()
     vim.schedule(function()
-      file_run.completed = completed
-      relay(io.stdout, completed.stdout or '')
-      relay(io.stderr, completed.stderr or '')
+      relay(io.stderr, contents(file_run.output_path))
       on_exit()
     end)
   end)
+  vim.uv.fs_close(output)
+  file_run.pid = assert(process and pid_or_failure, pid_or_failure)
 end
 
 --- Stops the Neovim of every file of `file_runs` that was started and has
@@ -226,8 +286,8 @@ end
 ---@param file_runs aineo_tests.FileRun[]
 local function stop_running_files(file_runs)
   for _, file_run in ipairs(file_runs) do
-    if file_run.process and not file_run.completed then
-      stop_process_tree(file_run.process.pid)
+    if file_run.pid and not file_run.ending then
+      stop_process_tree(file_run.pid)
     end
   end
 end
@@ -282,23 +342,78 @@ local function recorded_cases(record_path)
   return cases
 end
 
---- Whether `file_run` ended well: its Neovim, which decides that for the
---- file as this runner does for the run, ended and exited 0.
+--- Whether `case`, as `recorded_cases()` gives it, ran and passed.
+---
+---@param case table
+---@return boolean
+local function case_passed(case)
+  return case.exec ~= nil
+    and vim.startswith(case.exec.state or '', 'Pass')
+    and #(case.exec.fails or {}) == 0
+end
+
+--- Whether `case`, as `recorded_cases()` gives it, ran and failed.
+---
+---@param case table
+---@return boolean
+local function case_failed(case)
+  return case.exec ~= nil and #(case.exec.fails or {}) > 0
+end
+
+--- Whether `file_run` ended well: its Neovim exited 0, not on a signal, and
+--- recorded at least one case, every one of which ran and passed.
 ---
 ---@param file_run aineo_tests.FileRun
 ---@return boolean
 local function file_passed(file_run)
-  return file_run.completed ~= nil and file_run.completed.code == 0
+  local ending = file_run.ending
+  if not (ending and ending.code == 0 and ending.signal == 0) then
+    return false
+  end
+  local cases = recorded_cases(file_run.record_path)
+  return #cases > 0 and vim.iter(cases):all(case_passed)
+end
+
+--- Why `file_run`, which did not pass, did not.
+---
+---@param file_run aineo_tests.FileRun
+---@return string
+local function why_not_passed(file_run)
+  local ending = file_run.ending
+  if not file_run.pid then
+    return 'it never started'
+  end
+  if not ending then
+    return 'it was still running when the run ended'
+  end
+  if ending.signal ~= 0 then
+    return ('its Neovim ended on signal %d'):format(ending.signal)
+  end
+  if ending.code == 0 then
+    return 'its Neovim exited 0, but not every case it recorded ran and passed'
+  end
+  return ('its Neovim exited %d'):format(ending.code)
 end
 
 --- Prints the summary mini.test's stdout reporter prints for one run, over
---- the cases every file of `file_runs` recorded.
+--- the cases every file of `file_runs` recorded, then a `FAIL in` line for
+--- each file that did not pass although no case of its own failed.
 ---
 ---@param file_runs aineo_tests.FileRun[]
 local function summarize(file_runs)
-  local all_cases = {}
+  local all_cases, unnamed_failures = {}, {}
   for _, file_run in ipairs(file_runs) do
-    vim.list_extend(all_cases, recorded_cases(file_run.record_path))
+    local cases = recorded_cases(file_run.record_path)
+    vim.list_extend(all_cases, cases)
+    if not (file_passed(file_run) or vim.iter(cases):any(case_failed)) then
+      table.insert(
+        unnamed_failures,
+        ('FAIL in %s: the test file did not pass: %s'):format(
+          file_run.file,
+          why_not_passed(file_run)
+        )
+      )
+    end
   end
   local reporter = MiniTest.gen_reporter.stdout({ quit_on_finish = false })
   reporter.start(all_cases)
@@ -306,6 +421,7 @@ local function summarize(file_runs)
     reporter.update(case_num)
   end
   reporter.finish()
+  relay(io.stdout, table.concat(unnamed_failures, '\n'))
 end
 
 --- Whether every file of `file_runs` passed.
@@ -321,13 +437,32 @@ local function every_file_passed(file_runs)
   return true
 end
 
+--- Makes `directory`, and the directories leading to it, unless it exists.
+--- Another run making one of them at the same moment makes `mkdir()` fail
+--- here, so it is tried again, at most once for each directory on the path:
+--- a try that lost such a race leaves one more of them made. Raises the last
+--- failure when it cannot be made.
+---
+---@param directory string
+local function make_directory(directory)
+  local tries_left = #vim.split(directory, '/', { trimempty = true })
+  local made, failure = pcall(vim.fn.mkdir, directory, 'p')
+  while not made and tries_left > 0 do
+    tries_left = tries_left - 1
+    made, failure = pcall(vim.fn.mkdir, directory, 'p')
+  end
+  if not made then
+    error(failure, 0)
+  end
+end
+
 --- A new, empty directory under `homes` for the homes of this run's files,
 --- named so that no other run, before, beside or inside this one, has it.
 ---
 ---@param homes string
 ---@return string path
 local function homes_of_a_new_run(homes)
-  vim.fn.mkdir(homes, 'p')
+  make_directory(homes)
   return assert(vim.uv.fs_mkdtemp(vim.fs.joinpath(homes, 'run-XXXXXX')))
 end
 
@@ -340,14 +475,26 @@ local file_runs = {}
 for index, file in ipairs(files) do
   local home = vim.fs.joinpath(run_homes, ('%d-%s'):format(index, vim.fn.fnamemodify(file, ':t:r')))
   make_home(home)
-  file_runs[index] = { file = file, home = home, record_path = vim.fs.joinpath(home, 'records') }
+  file_runs[index] = {
+    file = file,
+    home = home,
+    record_path = vim.fs.joinpath(home, 'records'),
+    output_path = vim.fs.joinpath(home, 'output'),
+  }
 end
+
+--- Whether the runner has reached its verdict. Until it has, the runner
+--- ending — on a command a test file sent to its server, say — is a failure.
+local verdict_reached = false
 
 vim.api.nvim_create_autocmd('VimLeavePre', {
   desc = 'However the run ends, it leaves no test file running and no home behind',
   callback = function()
     stop_running_files(file_runs)
     vim.fn.delete(run_homes, 'rf')
+    if not verdict_reached then
+      vim.cmd('cquit 1')
+    end
   end,
 })
 
@@ -356,6 +503,8 @@ summarize(file_runs)
 if not finished then
   relay(io.stderr, ('the test run did not finish within %g s'):format(limit_ms / 1000))
 end
-if not (finished and every_file_passed(file_runs)) then
+local passed = finished and every_file_passed(file_runs)
+verdict_reached = true
+if not passed then
   vim.cmd('cquit 1')
 end
