@@ -1,0 +1,181 @@
+Follow-up measurements of Q8, 2026-09-27 — the orchestrator, under its reading of the user's Q8 leave, in the same scratch folder as Q8 (`claude-resume-q8.txt`, which this file does not change: that file is cited by T19's dispatched brief).
+
+Differences from Q8's own runs, which the records review of PR #83 found:
+- the probes ran from the orchestrator's shell, so the `CLAUDE*` and `AI_AGENT` variables Q8 row A removed were inherited;
+- the flag probe ran `claude --continue --session-id <new>` in the folder that holds Q8 B's conversation. Claude Code refused it before starting (exit 1 after 0.4 s); that conversation's file is unchanged (mtime 2026-09-26 19:02, the review measured).
+Nothing was sent in any run, and no conversation was made.
+
+==== Follow-up measurements, 2026-09-27 (the orchestrator, under the user's Q8 leave; same scratch folder, the same kind of command as row A, nothing sent) ====
+
+Real Claude Code 2.1.283, run inside a headless Neovim 0.12.5 terminal window (nvim --clean --headless -l <probe>), so the rows are the terminal buffer's lines as aineo reads them. Each id is a fresh random one Claude Code never had. They were measured for PR #73's attack review (finding 1: the message wraps by Claude Code's own renderer) and finding 7 (claude.cmd with --continue/--resume).
+
+---- probe: rows at a window width (q8w.lua) ----
+local width, id, out = tonumber(arg[1]), arg[2], arg[3]
+vim.o.columns = 200
+vim.o.lines = 40
+vim.cmd('vsplit')
+vim.cmd('enew')
+vim.api.nvim_win_set_width(0, width)
+local buf = vim.api.nvim_get_current_buf()
+local done, result = false, {}
+local function dump(tag)
+  table.insert(result, '---- ' .. tag .. ' ----')
+  for i, l in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+    if l ~= '' then
+      table.insert(result, string.format('%02d|%s|', i, l))
+    end
+  end
+end
+local started = vim.uv.hrtime()
+local job = vim.fn.jobstart({ 'claude', '--resume', id }, {
+  term = true,
+  on_exit = function(_, code)
+    table.insert(result, string.format('exit %d, window width %d, elapsed %.1fs', code, vim.api.nvim_win_get_width(0), (vim.uv.hrtime() - started) / 1e9))
+    dump('at on_exit')
+    vim.schedule(function()
+      dump('scheduled after on_exit')
+      done = true
+    end)
+  end,
+})
+vim.wait(20000, function() return done end, 50)
+if not done then
+  dump('timeout')
+  vim.fn.jobstop(job)
+end
+vim.fn.writefile(result, out)
+vim.cmd('qa!')
+
+---- width 39 ----
+exit 1, window width 39, elapsed 2.2s
+---- at on_exit ----
+01|No conversation found with session ID:|
+02|ae0c2ca3-8344-4531-9c9d-a606b424b332|
+---- scheduled after on_exit ----
+01|No conversation found with session ID:|
+02|ae0c2ca3-8344-4531-9c9d-a606b424b332|
+
+---- width 60 ----
+exit 1, window width 60, elapsed 2.3s
+---- at on_exit ----
+01|No conversation found with session ID:|
+02|93942214-f65b-48f3-9e17-c516d3772f45|
+---- scheduled after on_exit ----
+01|No conversation found with session ID:|
+02|93942214-f65b-48f3-9e17-c516d3772f45|
+
+---- width 78 ----
+exit 1, window width 78, elapsed 1.5s
+---- at on_exit ----
+01|No conversation found with session ID: 38ec2162-0956-4686-9f49-0c39bdfa77f2|
+---- scheduled after on_exit ----
+01|No conversation found with session ID: 38ec2162-0956-4686-9f49-0c39bdfa77f2|
+
+---- width 120 ----
+exit 1, window width 78, elapsed 1.6s
+---- at on_exit ----
+01|No conversation found with session ID: ec68258e-7dd1-46cd-a3b1-39eee2bb4a6a|
+---- scheduled after on_exit ----
+01|No conversation found with session ID: ec68258e-7dd1-46cd-a3b1-39eee2bb4a6a|
+
+(The width-120 run's window was given 120 columns but got 78 in the headless editor; its row is a single line.)
+
+---- probe: an argument list, 15 s bound (q8a.lua) ----
+local out = arg[1]
+local args = { 'claude' }
+for i = 2, #arg do
+  table.insert(args, arg[i])
+end
+vim.o.columns = 200
+vim.o.lines = 40
+vim.cmd('enew')
+local buf = vim.api.nvim_get_current_buf()
+local done, result = false, { 'args: ' .. table.concat(args, ' ') }
+local function dump(tag)
+  table.insert(result, '---- ' .. tag .. ' ----')
+  for i, l in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+    if l ~= '' then
+      table.insert(result, string.format('%02d|%s|', i, l))
+    end
+  end
+end
+local started = vim.uv.hrtime()
+local job = vim.fn.jobstart(args, {
+  term = true,
+  on_exit = function(_, code)
+    table.insert(result, string.format('exit %d, elapsed %.1fs', code, (vim.uv.hrtime() - started) / 1e9))
+    dump('at on_exit')
+    done = true
+  end,
+})
+vim.wait(15000, function() return done end, 50)
+if not done then
+  dump('still running after 15 s; hung up by jobstop')
+  vim.fn.jobstop(job)
+  vim.wait(5000, function() return done end, 50)
+end
+vim.fn.writefile(result, out)
+vim.cmd('qa!')
+
+---- continue-session-id ----
+args: claude --continue --session-id 759d43c3-e261-44ab-a924-faba4d49b5f1
+exit 1, elapsed 0.4s
+---- at on_exit ----
+01|Error: --session-id can only be used with --continue or --resume if --fork-sessi|
+02|on is also specified.|
+
+---- resume-session-id ----
+args: claude --resume 5e83de16-7888-42f7-be9c-d6d0194eb40a --session-id 78db6b8b-c16a-4cb4-a8fb-18f7473d1691
+exit 1, elapsed 0.3s
+---- at on_exit ----
+01|Error: --session-id can only be used with --continue or --resume if --fork-sessi|
+02|on is also specified.|
+
+---- probe: when the message is drawn (q8t.lua), 60 columns, polled every 10 ms; load averages 83-152 ----
+local width, id, out = tonumber(arg[1]), arg[2], arg[3]
+vim.cmd('vsplit')
+vim.cmd('enew')
+vim.api.nvim_win_set_width(0, width)
+local buf = vim.api.nvim_get_current_buf()
+local done, result = false, {}
+local started = vim.uv.hrtime()
+local function now() return (vim.uv.hrtime() - started) / 1e6 end
+local seen_first, seen_message
+local timer = vim.uv.new_timer()
+timer:start(0, 10, vim.schedule_wrap(function()
+  local text = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), '')
+  if not seen_first and text:find('%S') then
+    seen_first = now()
+    table.insert(result, string.format('first non-blank text at %.0f ms: %s', seen_first, text:sub(1, 80)))
+  end
+  if not seen_message and text:find('No conversation', 1, true) then
+    seen_message = now()
+    table.insert(result, string.format('message first seen at %.0f ms', seen_message))
+  end
+end))
+vim.fn.jobstart({ 'claude', '--resume', id }, {
+  term = true,
+  on_exit = function(_, code)
+    table.insert(result, string.format('on_exit at %.0f ms, exit %d', now(), code))
+    timer:stop()
+    done = true
+  end,
+})
+vim.wait(20000, function() return done end, 5)
+vim.fn.writefile(result, out)
+vim.cmd('qa!')
+
+---- timing run 1 ----
+first non-blank text at 1061 ms: No conversation found with session ID:1c681c20-d53b-4df7-9450-4fa0db29f94b
+message first seen at 1061 ms
+on_exit at 1581 ms, exit 1
+
+---- timing run 2 ----
+first non-blank text at 1416 ms: No conversation found with session ID:a896520c-b114-449e-9335-78cc2efefb4f
+message first seen at 1416 ms
+on_exit at 1931 ms, exit 1
+
+---- timing run 3 ----
+first non-blank text at 904 ms: No conversation found with session ID:d6aef4d8-a537-4549-9882-188202a2eb21
+message first seen at 904 ms
+on_exit at 1414 ms, exit 1

@@ -306,7 +306,7 @@ Added 2026-09-27 by the orchestrator, from T17's brief and session note at `dev`
 
 ## Readings — Claude resumes its session (T19)
 
-Added 2026-09-27 by the orchestrator, from T19's brief and session note at `dev` `384c084` (PR #73, `v0.2.9`). D23 is the user's decision; what follows are readings and choices made in the packet and its rounds, none shown to the user.
+Added 2026-09-27 by the orchestrator, from T19's brief and session note at `dev` `384c084` (PR #73, `v0.2.9`). D23 is the user's decision; what follows are readings and choices made in the packet and its rounds, two told to the user on 2026-09-27 without a reply — MR174 (17:01) and MR165 (19:43) — and the rest not shown.
 
 | ID | Reading | Source | Disposition |
 |---|---|---|---|
@@ -329,7 +329,7 @@ Added 2026-09-27 by the orchestrator, from T19's brief and session note at `dev`
 |---|---|---|
 | MR172 | The fallback tells a lost session only by Claude Code 2.1.283's message. A later version that words it otherwise, or a resume that fails another way ("Failed to resume session", a background-session holder), keeps the dead id, and every start in that directory fails the same way. The way out, which the help names: remove `aineo/claude-sessions/` under `stdpath('state')`. | attack review (finding 9); the help |
 | MR173 | A `claude.cmd` holding `--continue` or `--resume` never starts Claude Code: 2.1.283 refuses `--session-id` beside either, exit 1 after 0.3–0.4 s (measured). The help says so; `:checkhealth` does not. | attack review (finding 7); the orchestrator's measurement |
-| MR174 | A fallback that lands on a command line begun from Insert mode's CTRL-O leaves the user in Normal mode, and their next keys run as commands. Kept as a limit by the orchestrator, over building the re-measure's `ModeChanged` variant. | the correction's measured residual |
+| MR174 | A fallback that lands on a command line begun from Insert mode's CTRL-O leaves the user in Normal mode, and their next keys run as commands. Recorded as a limit by the orchestrator, over building the re-measure's `ModeChanged` variant. | the correction's measured residual |
 | MR175 | A replacement whose failed terminal is in no window starts at 5 rows × 80 columns until it is shown: readiness stays `starting`, and Send refuses, until `\c` shows it. | attack review (finding 5); the orchestrator's decision |
 | MR176 | Text on Claude's screen that differs from the message only in blanks, with the session's own id and an exit 1 — a pasted prompt, or a resumed transcript quoting it — is taken for the message. | re-measure (finding 4) |
 | MR177 | A directory standing where the kept file goes makes every start there warn and start a new session, which is never resumed. | records review (finding 3) |
