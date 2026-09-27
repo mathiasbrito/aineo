@@ -27,6 +27,41 @@ local TIMED_FIND_REPOSITORY = [[
   return seen
 ]]
 
+--- The pid a stand-in git wrote to the file `pid_file`, or nil when it
+--- wrote none, as when it was stopped before it could.
+---
+---@param pid_file string
+---@return integer|nil
+local function recorded_pid(pid_file)
+  local lines = vim.fn.filereadable(pid_file) == 1 and vim.fn.readfile(pid_file) or {}
+  return tonumber(lines[1])
+end
+
+--- What became of the process whose pid a stand-in git wrote to the file
+--- `pid_file`: `'unrecorded'` when it wrote none, else `'running'` or
+--- `'gone'`.
+---
+---@param pid_file string
+---@return 'unrecorded'|'running'|'gone'
+local function recorded_process(pid_file)
+  local pid = recorded_pid(pid_file)
+  if not pid then
+    return 'unrecorded'
+  end
+  return vim.uv.kill(pid, 0) == 0 and 'running' or 'gone'
+end
+
+--- Kills the process whose pid a stand-in git wrote to the file `pid_file`,
+--- when it wrote one.
+---
+---@param pid_file string
+local function kill_recorded(pid_file)
+  local pid = recorded_pid(pid_file)
+  if pid then
+    vim.uv.kill(pid, 'sigkill')
+  end
+end
+
 local T = MiniTest.new_set({
   hooks = {
     pre_case = function()
@@ -107,7 +142,7 @@ T['a git that runs too long']['is stopped at the limit it is given, and reported
     { "trap '' TERM", ('echo $$ > %s'):format(pid_file), 'exec sleep 30' }
   )
   MiniTest.finally(function()
-    vim.uv.kill(tonumber(vim.fn.readfile(pid_file)[1]), 'sigkill')
+    kill_recorded(pid_file)
   end)
 
   local seen =
@@ -117,13 +152,14 @@ T['a git that runs too long']['is stopped at the limit it is given, and reported
     failure = seen.failure,
     result = seen.result,
     in_time = seen.elapsed_ms < 5000,
-    left = vim.uv.kill(tonumber(vim.fn.readfile(pid_file)[1]), 0),
+    git = recorded_process(pid_file),
   }, {
     failure = {
       reason = 'timed_out',
       message = ('git ran past its limit of 1000 ms: %s'):format(slow),
     },
     in_time = true,
+    git = 'gone',
   })
 end
 
@@ -136,7 +172,7 @@ T['a git that runs too long']['is stopped at its limit with every process it sta
     { 'sleep 30 &', ('echo $! > %s'):format(descendant_file), 'exec sleep 30' }
   )
   MiniTest.finally(function()
-    vim.uv.kill(tonumber(vim.fn.readfile(descendant_file)[1]), 'sigkill')
+    kill_recorded(descendant_file)
   end)
 
   local seen =
@@ -147,8 +183,31 @@ T['a git that runs too long']['is stopped at its limit with every process it sta
     { reason = 'timed_out', in_time = true }
   )
   git_repo.wait_until('the process git started gone', function()
-    return vim.uv.kill(tonumber(vim.fn.readfile(descendant_file)[1]), 0) == nil
+    return recorded_process(descendant_file) ~= 'running'
   end)
+  eq(recorded_process(descendant_file), 'gone')
+end
+
+T['a git that runs too long']['is stopped at its limit when git ended before a process it started'] = function()
+  local directory = git_repo.directory('process-stray')
+  local stray_file = vim.fs.joinpath(directory, 'stray')
+  local leaving = git_repo.script(
+    'process-stray',
+    'git',
+    { 'sleep 12 >&2 &', ('echo $! > %s'):format(stray_file), 'exit 3' }
+  )
+  MiniTest.finally(function()
+    kill_recorded(stray_file)
+  end)
+
+  local seen =
+    child.lua(TIMED_FIND_REPOSITORY, { directory, { executable = leaving, limit_ms = 1000 } })
+
+  eq({ calls = seen.calls, in_time = seen.elapsed_ms < 5000 }, { calls = 1, in_time = true })
+  git_repo.wait_until('the process git started gone', function()
+    return recorded_process(stray_file) ~= 'running'
+  end)
+  eq(recorded_process(stray_file), 'gone')
 end
 
 T['a git that runs too long']['is stopped at the home’s own limit when it is given none'] = function()

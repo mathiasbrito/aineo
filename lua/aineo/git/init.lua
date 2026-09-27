@@ -5,9 +5,12 @@
 --- Every operation returns at once, runs git asynchronously with each process
 --- bounded in time, and calls its `done` exactly once, on the main loop, with
 --- a failure or an answer; it never raises, called from a fast event
---- included. Its answers do not depend on the user's git settings, nor on
---- the `GIT_*` variables of the editor's environment that name another
---- repository, and its reads never take the repository's lock. A diff is
+--- included. The bound stops git with every process it started, save one
+--- started in a process group of its own, which escapes it and, while it
+--- holds git's output, holds `done` back. Its answers do not depend on the
+--- user's git settings, nor on the `GIT_*` variables of the editor's
+--- environment that name another repository, and its reads never take the
+--- repository's lock. A diff is
 --- exactly what git printed, carriage returns included, and is not bounded
 --- in size: a commit that adds a 100 MB file gives a 100 MB diff. The home
 --- keeps no state but its watches: the base is its caller's.
