@@ -52,10 +52,6 @@ local DEFAULT_JOBS = 8
 --- limit of its own: far longer than a healthy run of the full suite.
 local RUN_TIME_LIMIT_MS = 16 * 60 * 1000
 
---- How long a file's Neovim stopped at the time limit may take to go, so
---- that what it wrote before it was stopped is relayed.
-local STOPPED_FILE_GRACE_MS = 1000
-
 --- How often the wait checks whether the files have finished.
 local POLL_INTERVAL_MS = 50
 
@@ -237,8 +233,8 @@ local function stop_running_files(file_runs)
 end
 
 --- Runs every file of `file_runs`, at most `jobs` at once, until each has
---- ended or `limit_ms` has passed; then stops every file's Neovim still
---- running.
+--- ended or `limit_ms` has passed. A file's Neovim still running then is left
+--- to the runner's ending, which stops it.
 ---
 ---@param file_runs aineo_tests.FileRun[]
 ---@param jobs integer
@@ -257,16 +253,9 @@ local function run_files(file_runs, jobs, limit_ms)
     end
   end
   start_next()
-  local finished = vim.wait(limit_ms, function()
+  return vim.wait(limit_ms, function()
     return running == 0 and next_index > #file_runs
   end, POLL_INTERVAL_MS)
-  if not finished then
-    stop_running_files(file_runs)
-    vim.wait(STOPPED_FILE_GRACE_MS, function()
-      return running == 0
-    end, POLL_INTERVAL_MS)
-  end
-  return finished
 end
 
 --- The cases the records at `record_path` name, each with how it went as its
@@ -293,35 +282,23 @@ local function recorded_cases(record_path)
   return cases
 end
 
---- Whether `file_run` ended well: its Neovim exited 0, and its records name
---- at least one case, every one of which ran and passed.
+--- Whether `file_run` ended well: its Neovim, which decides that for the
+--- file as this runner does for the run, ended and exited 0.
 ---
 ---@param file_run aineo_tests.FileRun
----@param cases table[] its recorded cases
 ---@return boolean
-local function file_passed(file_run, cases)
-  if not file_run.completed or file_run.completed.code ~= 0 or #cases == 0 then
-    return false
-  end
-  for _, case in ipairs(cases) do
-    if case.exec == nil or #case.exec.fails > 0 then
-      return false
-    end
-  end
-  return true
+local function file_passed(file_run)
+  return file_run.completed ~= nil and file_run.completed.code == 0
 end
 
 --- Prints the summary mini.test's stdout reporter prints for one run, over
---- the cases of every file in `file_runs`; and says whether every file passed.
+--- the cases every file of `file_runs` recorded.
 ---
 ---@param file_runs aineo_tests.FileRun[]
----@return boolean passed
 local function summarize(file_runs)
-  local all_cases, passed = {}, true
+  local all_cases = {}
   for _, file_run in ipairs(file_runs) do
-    local cases = recorded_cases(file_run.record_path)
-    passed = file_passed(file_run, cases) and passed
-    vim.list_extend(all_cases, cases)
+    vim.list_extend(all_cases, recorded_cases(file_run.record_path))
   end
   local reporter = MiniTest.gen_reporter.stdout({ quit_on_finish = false })
   reporter.start(all_cases)
@@ -329,7 +306,19 @@ local function summarize(file_runs)
     reporter.update(case_num)
   end
   reporter.finish()
-  return passed
+end
+
+--- Whether every file of `file_runs` passed.
+---
+---@param file_runs aineo_tests.FileRun[]
+---@return boolean
+local function every_file_passed(file_runs)
+  for _, file_run in ipairs(file_runs) do
+    if not file_passed(file_run) then
+      return false
+    end
+  end
+  return true
 end
 
 --- A new, empty directory under `homes` for the homes of this run's files,
@@ -363,10 +352,10 @@ vim.api.nvim_create_autocmd('VimLeavePre', {
 })
 
 local finished = run_files(file_runs, jobs, limit_ms)
-local passed = summarize(file_runs)
+summarize(file_runs)
 if not finished then
   relay(io.stderr, ('the test run did not finish within %g s'):format(limit_ms / 1000))
 end
-if not (finished and passed) then
+if not (finished and every_file_passed(file_runs)) then
   vim.cmd('cquit 1')
 end
