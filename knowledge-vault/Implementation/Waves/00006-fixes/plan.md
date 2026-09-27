@@ -911,7 +911,7 @@ Asked "How should I cut the time the tests cost?", the user chose "Run less + pa
 - **Released:** `v0.2.8`, which carries T17 (PR #71, `main` at `e202c1b`).
 - **T19 — PR #73, regular** (the Claude Code integration), merged by rebase on 2026-09-27 as `8819340` … `384c084` (13 commits). The code of `dev` is identical to the verified tree (`6d5a013` laid over `dev` `5c6481e`, merge-tree `acc62d0`).
   - **The brief:** a first brief was withdrawn after its review (T19-1: the fallback's terminal would not reach the composition root and the layout); the rewrite was corrected after its second review (T19b-1 to T19b-9).
-    - **The orchestrator's error, found by the attack review:** the brief said the terminal wraps the no-conversation message at the window's width. That was measured with a stand-in, not the real CLI. Claude Code 2.1.283 breaks the line itself and drops the blank at the row's end, measured by the orchestrator at 39 and 60 columns (`evidence/claude-resume-q8.txt`, follow-up).
+    - **The orchestrator's error, found by the attack review:** the brief said the terminal wraps the no-conversation message at the window's width. That was measured with a stand-in, not the real CLI. Claude Code 2.1.283 breaks the line itself and drops the blank at the row's end, measured by the orchestrator at 39 and 60 columns (`evidence/claude-resume-q8-followup.txt`).
   - **Reviews** on Opus:
     - attack by `neovim-claude-code-reviewer`;
     - test-integrity by `neovim-lua-reviewer`;
@@ -930,7 +930,7 @@ Asked "How should I cut the time the tests cost?", the user chose "Run less + pa
     - the match with blanks removed, and a fake that draws and times the message as 2.1.283 does;
     - the `mkdir` retry;
     - the wait for the command-line window;
-    - the mode kept;
+    - the mode kept, in a form the re-measure then refuted (the correction's);
     - the gap guard;
     - the reviews' pins.
     Its help sentence "a second or two" came from the orchestrator's decision 16, taken from elapsed times before the timing runs; it was wrong.
@@ -943,6 +943,6 @@ Asked "How should I cut the time the tests cost?", the user chose "Run less + pa
   - lint clean.
 - **26 literal mutants**, each run on its covering test files on both versions, all killed by assertion on both:
   - the plan's ten: the id not kept; never resumed; the fallback never taken; the fallback on every exit 1; one fixed id; the first directory; `--allowedTools` not last; each holder left; a malformed kept id resumed;
-  - the reviews' survivors: M12, P4, P13, P7–P12, M23;
+  - the reviews' survivors: M12, P4, P13, P7–P12, M23. P14 was not among them: the fix round's re-take and the correction ran it, killed only through its second edit, and P14b only by the gap case;
   - the round's guards: the mkdir retry, the gap guard, the `v:exiting` guard, the round's mode condition, the command-line window wait, `winfixbuf` not cleared.
 - **Released:** `v0.2.9`, which carries T19 (PR #81, `main` at `ece0cdb`).

@@ -65,16 +65,17 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
   - T17, the Report's file paths, a small fix (PR #68, 2026-09-27): a path to a regular file is underlined in `AineoReportPath`; a double-click opens it in the middle column at its line, from Normal mode, Insert mode or Claude's terminal, after looking it up again, and says why when it cannot.
   - T19, Claude's session resumed per directory (PR #73, 2026-09-27, D23): each session aineo starts gets an id of its own, kept per working directory; the next start there resumes it, and a session Claude Code has no conversation for is replaced by a new one.
 - **Released:** `v0.2.0`, with T9 and T13 (PR #37, `main` at `e26838f`); `v0.2.1`, with T15 and T16 (PR #42, `main` at `270743b`); `v0.2.2`, with T11 (PR #48, `main` at `f1285c1`); `v0.2.3`, with T14 (PR #53, `main` at `dcff14f`); `v0.2.4`, with T10 (PR #56, `main` at `89e6c87`); `v0.2.5`, with T20 (PR #63, `main` at `0d4c8b4`); `v0.2.6`, with T18 (PR #65, `main` at `164265b`), all 2026-09-26; `v0.2.7`, with T21 (PR #70, `main` at `e1b55ee`), and `v0.2.8`, with T17 (PR #71, `main` at `e202c1b`), 2026-09-27; `v0.2.9`, with T19 (PR #81, `main` at `ece0cdb`), 2026-09-27.
-- **Running, 2026-09-27:**
-  - T22, the suite's files run side by side (D26), a tooling packet;
-  - T12, `\tcn` (D16), on its amended brief (PRs #80 and #82), with D27: the toggle stays as the user left it across new Claude terminals.
+- **In review, 2026-09-27 (late):**
+  - T22, the suite's files run side by side (D26), PR #85: 856 s → about 170 s.
+  - T12, `\tcn` (D16), PR #84, with D27: the toggle stays as the user left it across new Claude terminals.
+  - T23, the git home, PR #79: corrected after its re-measure, in the orchestrator's verification.
 - **How the suite runs — D26** (the user, 2026-09-27): test files while working, the whole suite once before each push and in the orchestrator's verification, mutants on their covering files. It is in the root `CLAUDE.md`, the agents' charters and the orchestrate skill (PR #74).
 
 **Next:**
 - **Wave 7** (`Implementation/Waves/00007-panes/`, claimed 2026-09-27): a changes pane beside the agent pane, and sending only Input's selection, from D18–D22, C12 and C13.
-  - T23, the git home, is in its fix round (PR #79). All its files are new, so it runs beside wave 6.
+  - **Paused at the user's word** (2026-09-27): "we will not continue towards wave 7, finish the current work and wait my go to start wave 7". T23, already in flight, is finished (PR #79). Nothing else of wave 7 starts until the user says go.
   - T24 (panes) follows T12; T25 (the changes pane) and T26 (Visual Send) follow T24.
-  - D20's four clauses, told to the user without a reply, are to be settled before T26.
+  - D20's four clauses, told to the user without a reply, are to be settled before T26's dispatch or at the MVP review.
 - The MVP review: the user kept MR1–MR97, MR99, MR100 and MR102–MR107 on 2026-09-26 ([[Review/2026-09-24 — v1 MVP readings review]]). The readings below remain.
 
 **Open threads:**
