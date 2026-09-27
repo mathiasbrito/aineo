@@ -334,4 +334,20 @@ The wave holds its marks (rule 6). The line T19 would take:
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by the orchestrator's knowledge pass. PR #73 merged by rebase on 2026-09-27 (17:33 UTC); `dev` `384c084`, released as `v0.2.9`.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `c1c0f46` | `8819340` | Resume aineo's own last Claude session per working directory |
+| `2a50708` | `e4c6370` | Match the no-conversation message on the joined rows as they are |
+| `d7b5249` | `d5c6208` | Pin the fallback's refusal while Neovim quits on every run |
+| `58d8320` | `09a157c` | Assert that a start on an id it cannot keep raises nothing |
+| `57a740e` | `77a286e` | Record T19's session: the Claude session resumed per directory |
+| `2568764` | `d173b86` | Match the no-conversation message as Claude Code breaks it |
+| `163298a` | `7d0c948` | Say in the help what the resume needs, shows and how to leave it |
+| `149b939` | `0bfe605` | Keep the mode cases' message on one row of Claude's window |
+| `9119a10` | `77d98f1` | Correct T19's session record after PR #73's reviews |
+| `aaacc49` | `ce6d4d4` | Keep typing users typing and take pinned windows in the fallback |
+| `8b15194` | `63c8f5f` | Say in the help how long the failed resume shows and what repeats |
+| `3bddaec` | `1aab7d9` | Pin the fallback's Replace and Terminal typing on their own |
+| `6d5a013` | `384c084` | Record T19's correction after PR #73's re-measure |
