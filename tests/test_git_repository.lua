@@ -1,0 +1,99 @@
+local MiniTest = require('mini.test')
+local git_repo = dofile('tests/helpers/git_repo.lua')
+
+local eq = MiniTest.expect.equality
+
+local child = MiniTest.new_child_neovim()
+
+--- The Lua that asks the git home in the child for the repository of the
+--- directory `...`, with the options that follow it, and returns what
+--- `_G.await` saw.
+local FIND_REPOSITORY = [[
+  local directory, options = ...
+  return _G.await(function(done)
+    require('aineo.git').find_repository(directory, done, options)
+  end)
+]]
+
+local T = MiniTest.new_set({
+  hooks = {
+    pre_case = function()
+      git_repo.start_editor(child)
+    end,
+    post_once = child.stop,
+  },
+})
+
+T['a repository'] = MiniTest.new_set()
+
+T['a repository']['gives its top level, its git directories, its head commit and its branch'] = function()
+  local top, base = git_repo.create('repository-main', { ['a.txt'] = { 'a' } })
+
+  local seen = child.lua(FIND_REPOSITORY, { top })
+
+  eq(seen.result, {
+    top = top,
+    git_directory = top .. '/.git',
+    common_directory = top .. '/.git',
+    head = base,
+    branch = 'main',
+  })
+end
+
+T['a repository']['before its first commit has no head commit, and is on its branch'] = function()
+  local top = git_repo.create_unborn('repository-unborn')
+
+  local seen = child.lua(FIND_REPOSITORY, { top })
+
+  eq({ head = seen.result.head, branch = seen.result.branch }, { branch = 'main' })
+end
+
+T['a repository']['with a detached head is on no branch'] = function()
+  local top, base = git_repo.create('repository-detached', { ['a.txt'] = { 'a' } })
+  git_repo.git(top, { 'checkout', '--quiet', '--detach' })
+
+  local seen = child.lua(FIND_REPOSITORY, { top })
+
+  eq({ head = seen.result.head, branch = seen.result.branch }, { head = base })
+end
+
+T['a repository']['is found from a directory below its top level'] = function()
+  local top = git_repo.create('repository-below', { ['deep/er/a.txt'] = { 'a' } })
+
+  local seen = child.lua(FIND_REPOSITORY, { top .. '/deep/er' })
+
+  eq(seen.result.top, top)
+end
+
+T['a repository']['in a linked worktree has its own git directory and its main one in common'] = function()
+  local top = git_repo.create('repository-linked', { ['a.txt'] = { 'a' } })
+  local linked = vim.fs.joinpath(vim.fs.dirname(top), 'linked')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'side', linked })
+
+  local seen = child.lua(FIND_REPOSITORY, { linked })
+
+  eq(seen.result, {
+    top = linked,
+    git_directory = top .. '/.git/worktrees/linked',
+    common_directory = top .. '/.git',
+    head = git_repo.git(top, { 'rev-parse', 'HEAD' }),
+    branch = 'side',
+  })
+end
+
+T['a directory'] = MiniTest.new_set()
+
+T['a directory']['outside every repository is told apart, in git’s words'] = function()
+  local directory = git_repo.directory('repository-none')
+
+  local seen = child.lua(FIND_REPOSITORY, { directory })
+
+  eq({ failure = seen.failure, result = seen.result }, {
+    failure = {
+      reason = 'not_a_repository',
+      message = 'fatal: not a git repository (or any of the parent directories): .git',
+    },
+  })
+end
+
+return T
