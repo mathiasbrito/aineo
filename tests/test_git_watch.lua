@@ -77,6 +77,30 @@ end
 --- to end.
 local WITHIN_A_BURST_MS = 60
 
+--- The Lua that defines, in the child, `_G.active_timers()`, which counts
+--- the timers of its event loop that are running, and returns that count.
+local ACTIVE_TIMERS = [[
+  _G.active_timers = function()
+    local active = 0
+    vim.uv.walk(function(handle)
+      active = active + ((handle:get_type() == 'timer' and handle:is_active()) and 1 or 0)
+    end)
+    return active
+  end
+  return _G.active_timers()
+]]
+
+--- Waits until more timers run in the child than `timers_before`, the count
+--- `ACTIVE_TIMERS` gave before a burst began: the watch's timer, once the
+--- burst's first event has reached it.
+---
+---@param timers_before integer
+local function wait_for_the_first_event(timers_before)
+  git_repo.wait_until('the burst’s first event', function()
+    return child.lua_get('_G.active_timers()') > timers_before
+  end)
+end
+
 local T = MiniTest.new_set({
   hooks = {
     pre_case = function()
@@ -105,8 +129,10 @@ end
 T['a watch']['calls back once for a burst of writes'] = function()
   local top = git_repo.create('watch-burst', { ['a.txt'] = { 'a' } })
   start_live_watch(top)
+  local timers_before = child.lua(ACTIVE_TIMERS)
 
   git_repo.write(top, 'a.txt', { 'a, written' })
+  wait_for_the_first_event(timers_before)
   vim.uv.sleep(WITHIN_A_BURST_MS)
   git_repo.write(top, 'b.txt', { 'b' })
   vim.uv.sleep(WITHIN_A_BURST_MS)
@@ -221,20 +247,19 @@ T['a watch that sees the list change through the index']['calls back for it'] = 
   })
 end
 
-T['a watch']['calls back when a submodule’s commit changes the list'] = function()
+T['a watch']['calls back when a submodule’s branch moves, which changes the list'] = function()
   local library = git_repo.create('watch-submodule-library', { ['library.txt'] = { 'library' } })
   local top = git_repo.create('watch-submodule', { ['a.txt'] = { 'a' } })
   git_repo.git(
     top,
     { '-c', 'protocol.file.allow=always', 'submodule', 'add', '--quiet', library, 'library' }
   )
+  local in_top = vim.fs.joinpath(top, 'library')
+  git_repo.commit_all(in_top, 'In the library')
   git_repo.commit_all(top, 'Add the library')
   start_live_watch(top)
 
-  git_repo.git(
-    vim.fs.joinpath(top, 'library'),
-    { 'commit', '--quiet', '--allow-empty', '--message=In the library' }
-  )
+  git_repo.git(in_top, { 'update-ref', 'refs/heads/main', 'HEAD~1' })
 
   eq(wait_for_changes(1), {
     { change = { files_changed = true, branch_moved = false }, fast = false },
@@ -401,19 +426,6 @@ T['a stopped watch']['calls back no more'] = function()
 
   eq(child.lua_get('_G.stopped_changes'), {})
 end
-
---- The Lua that defines, in the child, `_G.active_timers()`, which counts
---- the timers of its event loop that are running, and returns that count.
-local ACTIVE_TIMERS = [[
-  _G.active_timers = function()
-    local active = 0
-    vim.uv.walk(function(handle)
-      active = active + ((handle:get_type() == 'timer' and handle:is_active()) and 1 or 0)
-    end)
-    return active
-  end
-  return _G.active_timers()
-]]
 
 --- The Lua that, in the child, waits until more timers are running than
 --- the number `...` gives (`ACTIVE_TIMERS`) — the watch's timer, once a
