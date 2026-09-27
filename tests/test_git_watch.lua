@@ -7,17 +7,19 @@ local child = MiniTest.new_child_neovim()
 
 --- The Lua that asks the git home in the child for the repository of the
 --- directory `...` and starts a watch on it, with the options that follow,
---- as `_G.watch`; every call the watch makes is kept in `_G.changes`, with
---- whether it came in a fast event. Returns what starting the watch gave.
+--- as `_G.watch`; every call the watch makes is kept, with whether it came in
+--- a fast event, in a table of its own, which `_G.changes` names until the
+--- next watch starts. Returns what starting the watch gave.
 local START_WATCH = [[
   local directory, options = ...
   local git = require('aineo.git')
   local found = _G.await(function(done)
     git.find_repository(directory, done)
   end)
-  _G.changes = {}
+  local changes = {}
+  _G.changes = changes
   local watch, failure = git.watch_repository(found.result, function(change_failure, change)
-    table.insert(_G.changes, { failure = change_failure, change = change, fast = vim.in_fast_event() })
+    table.insert(changes, { failure = change_failure, change = change, fast = vim.in_fast_event() })
   end, options)
   _G.watch = watch
   return { watches_subdirectories = watch and watch.watches_subdirectories, failure = failure }
