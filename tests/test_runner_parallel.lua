@@ -33,7 +33,8 @@ local TWO_PASSING_CASES_FILE = {
 local FAILING_FILE = {
   "local MiniTest = require('mini.test')",
   'local T = MiniTest.new_set()',
-  "T['fails'] = function() MiniTest.expect.equality(1, 2) end",
+  "T['fails'] = MiniTest.new_set({ parametrize = { { 1 } } })",
+  "T['fails']['with'] = function(number) MiniTest.expect.equality(number, 2) end",
   'return T',
 }
 
@@ -232,7 +233,7 @@ T['make test']['prints one summary over all its files'] = function()
   eq(summary_lines(output), {
     'Total number of cases: 3',
     'Fails (1) and Notes (0)',
-    'FAIL in tests/test_b.lua | fails',
+    'FAIL in tests/test_b.lua | fails | with + args { 1 }',
   })
   eq(progress_lines(output), { 'tests/test_a.lua: oo', 'tests/test_b.lua: x' })
 end
