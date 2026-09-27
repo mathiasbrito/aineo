@@ -594,7 +594,7 @@ T19 and T12 follow T21, one at a time: T19 needs the layout and `plugin/aineo.lu
 ## Packet T22 — 2026-09-27
 
 **The request, and the answer.** The user, 2026-09-27: "the structure of how the tests were designed is making everything too slow, this is slowing down the whole proccess simple features take half to one day to land." The orchestrator measured the suite (`evidence/suite-times-aaa326a.txt`):
-- 35 whole runs took 600–739 s each, at host loads from 15 to 165. The time goes to waiting, not computing.
+- 36 whole runs took 600–739 s each, at host loads from 16 to 209. The time goes to waiting, not computing.
 - Seven of the 34 files hold 579 of the 681 s a file-by-file run took.
 
 Asked "How should I cut the time the tests cost?", the user chose "Run less + parallel runner (Recommended)": D26. Its first half is the agents' rule change, PR #74 (`ai/run-less-tests`). T22 is its second half, a tooling packet.
@@ -603,7 +603,7 @@ Asked "How should I cut the time the tests cost?", the user chose "Run less + pa
 
 | rule | T22 |
 |---|---|
-| 1 dependencies | T1's runner ✓; T19 changes the `Makefile`'s clean-up, so T22 is dispatched only once PR #73 merges ✓ |
+| 1 dependencies | T1's runner ✓; T19 changes the `Makefile`'s clean-up, so T22 is dispatched only once PR #73 merges ✓; the brief's way of running the suite is D26's, which `implementer.md` states once PR #74 merges: #75, then #74, then T22's dispatch after #73 ✓ |
 | 2 files | `scripts/run_tests.lua` and new `scripts/` files; the `Makefile`'s `test` and `test_file`; `tests/test_runner.lua`, `tests/test_isolation.lua`, new `tests/test_runner_*.lua`; `tests/helpers/make.lua`, `tests/helpers/fixture.lua`. T12's files are `plugin/aineo.lua`, `lua/aineo/layout/`, `lua/aineo/health.lua`, `tests/test_health.lua`, `tests/test_plugin.lua`, `tests/test_entry.lua`, `tests/test_entry_prefix.lua`, `tests/helpers/entry.lua`, `tests/test_layout*.lua` and `doc/aineo.txt`. The two sets are disjoint ✓ |
 | 3 schema | none ✓ |
 | 4 dependencies | none: mini.nvim stays at its pin ✓ |
@@ -623,9 +623,21 @@ Asked "How should I cut the time the tests cost?", the user chose "Run less + pa
 - the time limit applied per file, not to the run;
 - the files still running not stopped when the run ends early;
 - the summary's total counting one file only;
-- `AINEO_TEST_JOBS` ignored.
+- `AINEO_TEST_JOBS` ignored;
+- the runner's log directory not created, or `__NVIM_LOG_FILE_WANT` passed on;
+- the run clearing every home at its start.
 
-**Brief:** `brief-t22-parallel-runner.md`, reviewed in `brief-review-t22-parallel-runner.md`.
+**Brief:** `brief-t22-parallel-runner.md`, corrected after its brief review, `brief-review-t22-parallel-runner.md`: dispatch after corrections. The corrections cover F1–F11. Among them:
+- F1: 0.12.5's `__NVIM_LOG_FILE_WANT`, and the runner's own log directory;
+- F2: the nested `make` runs;
+- F3: `layout.file()`'s shared fixtures;
+- F4: how the verification reads the output;
+- F5: every ending;
+- F6: 36 runs;
+- F7: PR7's rules;
+- F8: PR #74 first;
+- F9: the sentences made false;
+- F10: `NVIM`.
 
 ## Landed
 

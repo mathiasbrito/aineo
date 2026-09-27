@@ -1,6 +1,6 @@
 Suite times — measured by the orchestrator, 2026-09-27
 
-1. Whole-suite runs (make test, sequential), from the orchestrator's verifications of PRs #58, #60, #64 and #68 — the suite run and every mutant run, each a whole suite on 0.11.6 or 0.12.5, with the host's load averages (1, 5, 15 min) at the run's end:
+1. Whole-suite runs (make test, sequential), from the orchestrator's verifications of PRs #58, #60 (with its re-verification of G7, verify60g7), #64 and #68 — the suite run and every mutant run, each a whole suite on 0.11.6 or 0.12.5, with the host's load averages (1, 5, 15 min) at the run's end:
 
 verify58  suite 0.12.5  rc=0  616 s  load 120.03 130.45 113.36
 verify58  suite 0.11.6  rc=0  604 s  load 28.20 58.78 83.38
@@ -17,6 +17,7 @@ verify60  Y3 the bold over the status colour  rc=2  600 s  load 33.38 44.29 47.1
 verify60  Y4 the bold spread to the time  rc=2  600 s  load 21.44 42.90 48.38
 verify60  Y5 the details indented 8  rc=2  607 s  load 119.93 91.35 75.24
 verify60  Y6 the bold group linked to Normal  rc=2  609 s  load 63.81 71.91 75.62
+verify60g7  Y7 G7 the records' colours reversed  rc=2  618 s  load 209.40 194.36 152.35
 verify64  suite 0.12.5  rc=0  678 s  load 162.12 159.38 161.12
 verify64  suite 0.11.6  rc=0  677 s  load 160.33 157.76 157.10
 verify64  Z1 Terminal mode kept at the exit  rc=2  686 s  load 106.67 126.94 141.88
@@ -38,7 +39,7 @@ verify68  X5 the double-click mapped in Normal mode only  rc=2  719 s  load 149.
 verify68  X6 no check again before the open  rc=2  739 s  load 151.44 117.88 105.90
 verify68  X7 M34 the mouse-place guard removed  rc=2  692 s  load 140.84 120.39 115.00
 
-Range: 600–739 s over 35 runs.
+Range: 600–739 s over 36 runs, at 1-minute loads from 15.80 to 209.40 (added after the brief review of PR #75, which found verify60g7's run missing).
 
 2. Each test file alone (make test_file FILE=<file>, 0.12.5, one after another), at dev aaa326a (code = 8386aed), 12:09:57–12:21:18 CEST, load  151.29 145.67 112.28 at the start and  43.45 41.11 66.61 at the end. Seconds (wall clock, whole seconds), file, cases, result:
 
