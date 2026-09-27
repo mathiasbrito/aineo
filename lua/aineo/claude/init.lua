@@ -67,7 +67,9 @@ end
 
 --- Puts `replacement` in every window that shows `buffer`, then wipes
 --- `buffer` — in that order, since wiping a buffer closes the windows that
---- still show it. Does nothing to a `buffer` already wiped.
+--- still show it. A window pinned with `'winfixbuf'` takes `replacement` too
+--- and stays pinned: its pin is lifted for the swap alone, on that window's
+--- own value. Does nothing to a `buffer` already wiped.
 ---
 ---@param buffer integer the terminal of a Claude Code that has exited
 ---@param replacement integer
@@ -76,7 +78,11 @@ local function replace_terminal(buffer, replacement)
     return
   end
   for _, window in ipairs(vim.fn.win_findbuf(buffer)) do
+    local pin = { win = window, scope = 'local' }
+    local pinned = vim.api.nvim_get_option_value('winfixbuf', pin)
+    vim.api.nvim_set_option_value('winfixbuf', false, pin)
     vim.api.nvim_win_set_buf(window, replacement)
+    vim.api.nvim_set_option_value('winfixbuf', pinned, pin)
   end
   vim.api.nvim_buf_delete(buffer, { force = true })
 end
@@ -276,19 +282,40 @@ local function schedule_outside_command_line_window(callback)
   end)
 end
 
+--- Whether a user in `mode`, as `nvim_get_mode()` names it, is typing, or
+--- goes back to typing once the command they are giving ends: in Insert,
+--- Replace or Terminal mode, or in a command given from Insert mode's CTRL-O
+--- (`niI`, `niR`, `niV`) or from Terminal mode's CTRL-\ CTRL-O (`ntT`).
+---
+---@param mode string
+---@return boolean
+local function is_typing(mode)
+  return mode:find('^[iRt]') ~= nil or mode:find('^ni') ~= nil or mode == 'ntT'
+end
+
 --- Starts a new session on a new id in place of the last (`start_in_place()`)
---- and hands its terminal to `settings.on_terminal_replaced`. A start that
---- fails is told the user once, as an error starting with `aineo:`, and
---- leaves the last session as it was. A user in Normal mode stays in it,
---- wherever they are, although a `TermOpen` autocommand of theirs enters
---- Insert mode as the new terminal opens. Raises nothing.
+--- and hands its terminal to `settings.on_terminal_replaced`. Raises nothing.
+---
+--- A user who is typing (`is_typing()`) goes on typing where they are. Any
+--- other user — in Normal, Visual or Select mode, on the command line, with
+--- an operator pending — is left out of Insert mode (`:stopinsert`), which a
+--- `TermOpen` autocommand of theirs would otherwise enter once they are back
+--- in Normal mode; that also ends the return to Insert mode of a command
+--- line begun from Insert mode's CTRL-O.
+---
+--- A start that fails is told the user once, as an error starting with
+--- `aineo:`. One that fails before Claude Code has launched leaves the last
+--- session as it was; one that fails after — an autocommand of the user's
+--- raising as the terminals are swapped — leaves the new Claude Code running
+--- as the one session, though no window may show it, its id may not be kept,
+--- and `settings.on_terminal_replaced` is not called.
 ---
 ---@param settings aineo.claude.Settings
 local function start_new_session_in_place(settings)
-  local in_normal_mode = vim.api.nvim_get_mode().mode:sub(1, 1) == 'n'
+  local was_typing = is_typing(vim.api.nvim_get_mode().mode)
   local started, terminal =
     pcall(start_in_place, settings, { id = session_ids.new_session_id(), resumed = false })
-  if in_normal_mode then
+  if not was_typing then
     vim.cmd.stopinsert()
   end
   if not started then
@@ -354,10 +381,11 @@ end
 --- new session on a new id takes its place, as a start once it has exited
 --- would, and `settings.on_terminal_replaced` is handed its terminal; once
 --- per start, none while Neovim quits or once another start has taken its
---- place, and not before the command-line window has closed. A user in
---- Normal mode stays in it, and a new session that cannot start is told the
---- user once, as an error. Any other exit leaves the session exited and its
---- id kept.
+--- place, and not before the command-line window has closed. A user who is
+--- typing goes on typing, one who is not is kept out of Insert mode
+--- (`start_new_session_in_place()`), and a new session that cannot start is
+--- told the user once, as an error. Any other exit leaves the session exited
+--- and its id kept.
 ---
 --- Show a new buffer in a window before Claude Code draws its first screen:
 --- its terminal takes its size from the first window that shows it, and until

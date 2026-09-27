@@ -20,6 +20,25 @@ local SIDE_BY_SIDE_COLUMNS = 160
 --- `nvim_get_mode()` names it.
 local MODE = 'vim.api.nvim_get_mode().mode'
 
+--- The Lua, run in the child, that leaves Insert mode and opens a window of
+--- the user's own beside Claude's, holding the lines `one` and `two`, the
+--- cursor on the first.
+local OPEN_USER_WINDOW = [[
+  vim.cmd.stopinsert()
+  vim.cmd('rightbelow vnew')
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'one', 'two' })
+  vim.api.nvim_win_set_cursor(0, { 1, 0 })
+]]
+
+--- The Lua, run in the child, that leaves Insert mode, opens a terminal of
+--- the user's own beside Claude's, running `cat`, and returns its buffer.
+local OPEN_USER_TERMINAL = [[
+  vim.cmd.stopinsert()
+  vim.cmd('rightbelow vnew')
+  vim.fn.jobstart({ 'cat' }, { term = true })
+  return vim.api.nvim_get_current_buf()
+]]
+
 --- The form of a session id aineo makes: a version-4 UUID (RFC 9562 §5.4),
 --- its variant `10xx`, in lower-case hexadecimal, `8-4-4-4-12`.
 local SESSION_ID_PATTERN =
@@ -686,6 +705,100 @@ T['a resume with no conversation']['leaves a user typing in Insert mode in a win
     child.api.nvim_get_current_win(),
     child.api.nvim_buf_get_lines(0, 0, -1, false),
   }, { 'i', window, { 'abcdd' } })
+end
+
+T['a resume with no conversation']['lets a user in a command of Insert mode’s CTRL-O go on typing in a window of their own'] = function()
+  local fake = fake_keeping_conversations('resume-refused-insert-ctrl-o', 'ready')
+  child.o.columns = SIDE_BY_SIDE_COLUMNS
+  local resumed =
+    resume_with_no_conversation(child, fake, kept_in('resume-refused-insert-ctrl-o-state'))
+  child.lua(OPEN_USER_WINDOW)
+  child.type_keys('i', '<C-o>')
+
+  eq(wait_until_wiped(child, resumed), true)
+  child.type_keys('0', 'abc')
+
+  eq(
+    { child.lua_get(MODE), child.api.nvim_buf_get_lines(0, 0, -1, false) },
+    { 'i', { 'abcone', 'two' } }
+  )
+end
+
+T['a resume with no conversation']['lets a user in a command of Terminal mode’s CTRL-\\ CTRL-O go on typing in a terminal of their own'] = function()
+  local fake = fake_keeping_conversations('resume-refused-terminal-ctrl-o', 'ready')
+  child.o.columns = SIDE_BY_SIDE_COLUMNS
+  local resumed =
+    resume_with_no_conversation(child, fake, kept_in('resume-refused-terminal-ctrl-o-state'))
+  local terminal = child.lua(OPEN_USER_TERMINAL)
+  child.type_keys('i', '<C-\\>', '<C-o>')
+
+  eq(wait_until_wiped(child, resumed), true)
+  child.type_keys('0', 'abc')
+
+  eq({ child.lua_get(MODE), wait_for_joined_screen(child, terminal, 'abc') }, { 't', 'abc' })
+end
+
+T['a resume with no conversation']['leaves a user who leaves a mode in Normal mode in a window of their own, whose config enters Insert mode as a terminal opens'] =
+  MiniTest.new_set({
+    parametrize = { { 'visual', 'v' }, { 'select', 'gh' }, { 'command-line', ':' } },
+  })
+
+T['a resume with no conversation']['leaves a user who leaves a mode in Normal mode in a window of their own, whose config enters Insert mode as a terminal opens']['entered by'] = function(
+  mode,
+  keys
+)
+  local name = 'resume-refused-left-' .. mode
+  local fake = fake_keeping_conversations(name, 'ready')
+  child.o.columns = SIDE_BY_SIDE_COLUMNS
+  child.cmd('autocmd TermOpen * startinsert')
+  local resumed = resume_with_no_conversation(child, fake, kept_in(name .. '-state'))
+  child.lua(OPEN_USER_WINDOW)
+  child.type_keys(keys)
+
+  eq(wait_until_wiped(child, resumed), true)
+  child.type_keys('<Esc>', 'x')
+
+  eq(
+    { child.lua_get(MODE), child.api.nvim_buf_get_lines(0, 0, -1, false) },
+    { 'n', { 'ne', 'two' } }
+  )
+end
+
+T['a resume with no conversation']['leaves a user who leaves the command-line window by CTRL-C in Normal mode, whose config enters Insert mode as a terminal opens'] = function()
+  local fake = fake_keeping_conversations('resume-refused-cmdwin-ctrl-c', 'ready')
+  child.o.columns = SIDE_BY_SIDE_COLUMNS
+  child.cmd('autocmd TermOpen * startinsert')
+  local resumed =
+    resume_with_no_conversation(child, fake, kept_in('resume-refused-cmdwin-ctrl-c-state'))
+  child.lua(OPEN_USER_WINDOW)
+  child.type_keys('q:')
+  eq(claude.wait_for_status(child, 'exited'), { 'exited', 1 })
+  wait_for_scheduled_callbacks(child)
+  child.type_keys('<C-c>')
+
+  eq(wait_until_wiped(child, resumed), true)
+  child.type_keys('<C-c>', 'x')
+
+  eq(
+    { child.lua_get(MODE), child.api.nvim_buf_get_lines(0, 0, -1, false) },
+    { 'n', { 'ne', 'two' } }
+  )
+end
+
+T['a resume with no conversation']['takes the place of its terminal in a window the user pinned with winfixbuf, leaving the pin as the user set it'] = function()
+  local fake = fake_keeping_conversations('resume-refused-winfixbuf', 'ready')
+  local resumed =
+    resume_with_no_conversation(child, fake, kept_in('resume-refused-winfixbuf-state'))
+  local window = child.fn.win_findbuf(resumed)[1]
+  child.api.nvim_set_option_value('winfixbuf', true, { win = window, scope = 'local' })
+
+  eq(wait_until_wiped(child, resumed), true)
+
+  eq({
+    claude.buftype(child, child.api.nvim_win_get_buf(window)),
+    child.api.nvim_get_option_value('winfixbuf', { win = window }),
+    child.api.nvim_get_option_value('winfixbuf', { scope = 'global' }),
+  }, { 'terminal', true, false })
 end
 
 T['a resume with no conversation']['starts no new session as Neovim quits'] = function()
