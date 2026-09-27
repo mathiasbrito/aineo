@@ -352,9 +352,10 @@ until it ends in none of them: `(see https://example.com/a).` links to
 `://`, or is no link.
 
 Paths ~
-A path in a task, a summary or details that names a file that exists, not a
-directory, is underlined, in |hl-AineoReportPath|. Double-click it to open
-the file in the middle column, at its line when it names one:
+A path in a task, a summary or details that names a regular file that
+exists — not a directory, a FIFO or a device — is underlined, in
+|hl-AineoReportPath|. Double-click it to open the file in the middle column,
+at its line when it names one:
 `render.lua:112` opens `render.lua` at line 112, a line past the file's end
 at its last line, and `:0` at its first. A double-click works from Normal
 mode, from Insert mode, as when you click from Input, and from Claude's
@@ -380,8 +381,9 @@ be found. A file name holding a space is never found whole, and text inside
 a web link is never a path. A path is looked up when the Report shows its
 report: a file made later is underlined the next time the Report shows it,
 after `:edit` in the Report, and one removed stays underlined until then. A
-double-click looks the path up again: when it names no file any more, the
-double-click opens nothing and tells you so.
+double-click looks the path up again: when it names no regular file any
+more, or cannot be looked up, the double-click opens nothing and tells you
+why.
 
 Colours ~
 The Report shows the time in |hl-AineoReportTime|, and the `[status]`,

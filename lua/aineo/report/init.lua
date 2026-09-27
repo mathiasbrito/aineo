@@ -135,22 +135,49 @@ local function file_check_for_one_rendering()
   end
 end
 
+--- The reason in an error message of `vim.uv`, `<CODE>: <reason>: <name>`.
+local UV_ERROR_REASON = '^%u+: ([^:]*)'
+
+--- Why the file `path`, as a report writes it, names (`file_named_by()`)
+--- must not be opened now, as the warning the user is given, or nil when it
+--- is a regular file. `path` names no file now when its file was removed
+--- since the Report drew it, or replaced by something else, such as a FIFO,
+--- whose opening would wait for a writer and hold the editor; it cannot be
+--- looked up now when the lookup fails for another reason, such as a
+--- directory on the way that is not searchable or a symbolic link that
+--- loops.
+---
+---@param path string
+---@return string?
+local function refusal_to_open(path)
+  local stat, failure, code = vim.uv.fs_stat(file_named_by(path))
+  if stat and stat.type == 'file' then
+    return nil
+  end
+  if stat or code == 'ENOENT' or code == 'ENOTDIR' then
+    return ('aineo: %s names no file now'):format(path)
+  end
+  return ('aineo: cannot look %s up now: %s'):format(
+    path,
+    failure:match(UV_ERROR_REASON) or failure
+  )
+end
+
 --- Opens, in the current window, the file `path`, a path as the Report
 --- draws it, names (`file_named_by()`), at the line it names when it names
 --- one: a line past the file's end at its last line, line 0 at its first.
 --- The file is the one the Report underlined, whatever Neovim's current
 --- directory is now.
 ---
---- Opens nothing, and warns the user, when `path` names no regular file any
---- more (`names_file()`): its file was removed since the Report drew it, or
---- replaced by something else, such as a FIFO, whose opening would wait for
---- a writer and hold the editor.
+--- Opens nothing, and warns the user why, when that file is no regular file
+--- any more or cannot be looked up now (`refusal_to_open()`).
 ---
 ---@param path string
 local function open_drawn_path(path)
   local candidate = paths.find_path_candidates(path)[1]
-  if not names_file(candidate.path) then
-    vim.notify(('aineo: %s names no file now'):format(candidate.path), vim.log.levels.WARN)
+  local refusal = refusal_to_open(candidate.path)
+  if refusal then
+    vim.notify(refusal, vim.log.levels.WARN)
     return
   end
   vim.cmd('edit ' .. vim.fn.fnameescape(file_named_by(candidate.path)))
