@@ -1,4 +1,11 @@
 --- Gives the unified diffs of a repository's changed files and commits.
+---
+--- The attributes in force stay in force: the repository's own
+--- (`.gitattributes`, `.git/info/attributes`) and the user's
+--- (`core.attributesFile`). A file they mark binary — `binary`, `-diff`, or a
+--- diff driver the user's configuration makes `binary` — shows as git shows
+--- it, `Binary files a/<path> and b/<path> differ`, and their `text` and
+--- `eol` decide which line endings count as a change.
 
 local private_index = require('aineo.git.private_index')
 local process = require('aineo.git.process')
