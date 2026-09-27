@@ -591,6 +591,42 @@ T19 and T12 follow T21, one at a time: T19 needs the layout and `plugin/aineo.lu
 - Claude's window kept on the empty buffer after a wipe.
 
 **Brief:** `brief-t21-claude-exit.md`, corrected after its brief review, `brief-review-t19-t21.md`: dispatch after corrections. EX1 now refuses Terminal mode on the ended terminal and has its negative cases; EX2 names the condition its fault needs; the placement is named as a reading; the test files and the merge check leave T18's alone.
+## Packet T22 — 2026-09-27
+
+**The request, and the answer.** The user, 2026-09-27: "the structure of how the tests were designed is making everything too slow, this is slowing down the whole proccess simple features take half to one day to land." The orchestrator measured the suite (`evidence/suite-times-aaa326a.txt`):
+- 35 whole runs took 600–739 s each, at host loads from 15 to 165. The time goes to waiting, not computing.
+- Seven of the 34 files hold 579 of the 681 s a file-by-file run took.
+
+Asked "How should I cut the time the tests cost?", the user chose "Run less + parallel runner (Recommended)": D26. Its first half is the agents' rule change, PR #74 (`ai/run-less-tests`). T22 is its second half, a tooling packet.
+
+**The six rules for T22**, recomputed on 2026-09-27 against every open packet and every claimed wave (only this one). The open packets are T19 (PR #73, in its fix round) and T12 (its brief amendment waits for T19's merge):
+
+| rule | T22 |
+|---|---|
+| 1 dependencies | T1's runner ✓; T19 changes the `Makefile`'s clean-up, so T22 is dispatched only once PR #73 merges ✓ |
+| 2 files | `scripts/run_tests.lua` and new `scripts/` files; the `Makefile`'s `test` and `test_file`; `tests/test_runner.lua`, `tests/test_isolation.lua`, new `tests/test_runner_*.lua`; `tests/helpers/make.lua`, `tests/helpers/fixture.lua`. T12's files are `plugin/aineo.lua`, `lua/aineo/layout/`, `lua/aineo/health.lua`, `tests/test_health.lua`, `tests/test_plugin.lua`, `tests/test_entry.lua`, `tests/test_entry_prefix.lua`, `tests/helpers/entry.lua`, `tests/test_layout*.lua` and `doc/aineo.txt`. The two sets are disjoint ✓ |
+| 3 schema | none ✓ |
+| 4 dependencies | none: mini.nvim stays at its pin ✓ |
+| 5 decisions | D26 decided. The default job count is the packet's, by measurement; how a flaky case outside the boundary is handled is the orchestrator's decision, on the packet's report ✓ |
+| 6 task lines | T22's row is below T21's, and T19's and T12's rows are held; it holds its mark ✓ |
+
+**Baseline:** `dev` once PR #73 merges, measured by the orchestrator's verification of it. The dispatch message pastes its counts. The sequential wall clock is the packet's own first measurement (PR6).
+
+**Reviewers**, regular, the shared test harness: attack by `neovim-lua-reviewer`, test-integrity by `reviewer`, records by `reviewer`.
+
+**Order:** once PR #73 merges, beside T12.
+
+**Verification mutants:**
+- one file's failing case dropped from the exit status;
+- a file that does not load counted as passing;
+- two files given one home;
+- the time limit applied per file, not to the run;
+- the files still running not stopped when the run ends early;
+- the summary's total counting one file only;
+- `AINEO_TEST_JOBS` ignored.
+
+**Brief:** `brief-t22-parallel-runner.md`, reviewed in `brief-review-t22-parallel-runner.md`.
+
 ## Landed
 
 - **T9 — PR #30, a small fix**, merged by rebase on 2026-09-26 as `a86a69c` … `3d67b05` (9 commits). Every file of the pull request is identical to the verified head `40bc378`; `git diff 40bc378 dev` shows only T14's files from PR #32.
