@@ -125,6 +125,24 @@ T['a test file whose Neovim ends by a signal']['fails the run'] = function(signa
   eq(result.code, RECIPE_FAILED)
 end
 
+T['a test file whose Neovim ends by a signal']['once every case passed fails the run'] = function(
+  signal
+)
+  local directory = suite('signal_after_passing_' .. signal, {
+    ['test_a.lua'] = PASSING_FILE,
+    ['test_b.lua'] = vim.list_extend({
+      (
+        "vim.api.nvim_create_autocmd('VimLeavePre', { callback = function()"
+        .. ' vim.uv.kill(vim.uv.os_getpid(), %q) end })'
+      ):format(signal),
+    }, PASSING_FILE),
+  })
+
+  local result = make.run('test', { directory = directory })
+
+  eq(result.code, RECIPE_FAILED)
+end
+
 T['a test file whose own VimLeavePre defeats its runner'] = MiniTest.new_set({
   parametrize = {
     { "error('a handler of the test raises')", "vim.cmd('qall!')" },
