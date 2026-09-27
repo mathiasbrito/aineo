@@ -77,6 +77,11 @@ end
 --- to end.
 local WITHIN_A_BURST_MS = 60
 
+--- Longer than the longest a watch's burst lasts, 1 s from its first event:
+--- a burst begun this long after the last one began shares nothing with it,
+--- its time included.
+local AFTER_THE_LONGEST_BURST_MS = 1200
+
 --- The Lua that defines, in the child, `_G.active_timers()`, which counts
 --- the timers of its event loop that are running, and returns that count.
 local ACTIVE_TIMERS = [[
@@ -129,6 +134,7 @@ end
 T['a watch']['calls back once for a burst of writes'] = function()
   local top = git_repo.create('watch-burst', { ['a.txt'] = { 'a' } })
   start_live_watch(top)
+  vim.uv.sleep(AFTER_THE_LONGEST_BURST_MS)
   local timers_before = child.lua(ACTIVE_TIMERS)
 
   git_repo.write(top, 'a.txt', { 'a, written' })
