@@ -821,8 +821,8 @@ T19 and T12 follow T21, one at a time: T19 needs the layout and `plugin/aineo.lu
   - **What the attack review found:** EX1 held on every path; EX2 broke on two, one a regression from `dev` — a running Claude Code wiped from its own window left an empty buffer, and the scheduled close shut whatever the window showed, so `:bwipeout! | Aineo open` left the new Claude Code with no window. It measured a fix (fixA, fixB); M12 was not equivalent; `jobwait()` froze the editor 4 s on a stopped job.
   - **What the test-integrity review found:** M12 separable in the command-line-window state, four vacuous right-column cases, two unguarded guards (pins A and B), negative cases that never checked the exit.
   - **What the records review found:** reading 1 rewritten and the author's reading missing, the help's wipe paragraph, and six smaller records.
-  - **The fix round** went to the author, whose context was about 312 K: fixA and fixB adopted red-first, the close raising nothing, a flag in place of `jobwait()`, the pins, the records.
-  - **The re-measure**, with the attack question (`neovim-lua-reviewer`), found the round's claims holding on 88 probe paths and one failure of the round's own: the flag missed exits whose `TermClose` never reached aineo. It built FIXC (the process read) and FIXD (a file left in Claude's window kept in view).
+  - **The fix round** went to the author, whose context was about 307 K by `agent-context.py`: fixA and fixB adopted red-first, the close raising nothing, a flag in place of `jobwait()`, the pins, the records.
+  - **The re-measure**, with the attack question (`neovim-lua-reviewer`), stopped once by the API's weekly limit and resumed where it stopped, found fixA holding on 88 probe cases and the round's other claims re-measured, and one failure of the round's own: the flag missed exits whose `TermClose` never reached aineo. It built FIXC (the process read) and FIXD (a file left in Claude's window kept in view).
   - **The bounded correction** went to a fresh agent: FIXC and FIXD red-first, and the records.
 - **The orchestrator's verification** of `eea246c` laid over `dev`:
   - guard 5 cases, `Fails (0)`, both versions;
@@ -842,9 +842,9 @@ T19 and T12 follow T21, one at a time: T19 needs the layout and `plugin/aineo.lu
 - **T17 — PR #68, a small fix**, merged by rebase on 2026-09-27 as `bf91fde` … `8386aed` (11 commits), after T21. The code of `dev` is identical to the verified tree (`2598e7d` laid over `dev` `e0582e0`, merge-tree `3f10792`).
   - **The brief review** found the double-click failing from Insert mode and after the Report is made anew, a time bound that could not tell a check per occurrence from one per distinct path, and readings unnamed; the brief was corrected before dispatch.
   - **Reviews** on Opus, by the small-fix class: guarantee by `neovim-lua-developer` on the reviewer charter, records by `reviewer`. The API's weekly limit stopped the guarantee review once; it resumed where it stopped.
-  - **What the guarantee review found:** no report text made a double-click open another file or run a command (22 hostile names); but a file replaced by a FIFO after drawing hung the editor in `open(2)` (G1), and six mutants survived (G2).
+  - **What the guarantee review found:** no report text made a double-click open another file or run a command (22 hostile names); but a file replaced by a FIFO after drawing hung the editor in `open(2)` (finding 1), and six mutants survived (finding 2).
   - **What the records review found:** the readings misattributed and incomplete, the help not stating readings the note said it did, and counts.
-  - **The fix round** went to a fresh agent, the orchestrator's choice: the Agent tool counted the author's context at 403 K; `agent-context.py` gives 397 K, under the 400 K line. It adopted the check again before the open, and six pins; it added a warning when the double-click opens nothing.
+  - **The fix round** went to a fresh agent, the orchestrator's choice: the Agent tool counted the author's context at 403 K; `agent-context.py` gives 397 K, under the 400 K line. It adopted the review's check again before the open, with its warning, and six pins.
   - **The re-measure**, with the attack question, since the round added a read to a guard (`neovim-lua-reviewer`), found no failure of the round's own. M34 was not equivalent, a sub-millisecond window remains between the check and the open, and the warning's words were wrong for an unsearchable directory.
   - **The bounded correction** went to a fresh agent: M34's two pins, the warning's reasons red-first, the limit and readings recorded.
 - **The orchestrator's verification** of `2598e7d` laid over `dev`:
@@ -859,4 +859,5 @@ T19 and T12 follow T21, one at a time: T19 needs the layout and `plugin/aineo.lu
   - the double-click mapped in Normal mode only: 1;
   - no check again before the open: 6;
   - M34, the mouse-place guard removed: 2.
+- **The guarantee review's six survivors and M41** were left out of those seven. PR #72's records review ran the six as literal edits on `tests/test_report_paths.lua` under 0.11.6, on `dev` `8386aed`'s code: each was killed by assertion (G3 1, G4 1, G5 1, G6 1, G7 3, G11 1). M41 was not run; it is recorded as equivalent.
 - **Released:** `v0.2.8`, which carries T17 (PR #71, `main` at `e202c1b`).
