@@ -145,20 +145,22 @@ This section amends the brief above. Where they differ, this section wins. Every
   - `start_up` is at line 474;
   - `:Aineo`'s `desc = 'aineo: send, open, report, input or claude'` is at line 532 (was 437).
 - **`tests/test_entry.lua`:** the four case names that say "five" are at lines 38, 45, 53 and 60 (were 37, 44, 52 and 59). The completion pin is at 46 (was 45).
+- **`tests/test_entry.lua`** asserts `entry.USAGE` at lines 41, 56 and 66 (were 40, 55 and 65).
 - **`tests/helpers/entry.lua:18`** `M.USAGE`, and **`tests/test_entry_prefix.lua`**'s `PREFIX_KEYS` at lines 7–13: unchanged.
 - **`tests/test_plugin.lua`:** the pin is still at line 62; `'n <Plug>(aineo-claude)'` is at line 71.
-- **`lua/aineo/health.lua`:** its key table `PREFIX_KEYS` is at line 253, now a list of `{ key = 's', subcommand = 'send' }` records (was a map at 241). T12's key is the first longer than one character: check every reader of `key` there.
+- **`lua/aineo/health.lua`:** its key table `PREFIX_KEYS` is at line 253, a list of `{ key = 's', subcommand = 'send' }` records (was line 241, already the same list). T12's key is the first longer than one character: check every reader of `key` there.
   - `PREFIX_KEYS_PENDING` (line 447) says, while aineo's startup record says the keys are not mapped yet, why. Its text says "the prefix keys", and stays true.
 - **`tests/test_health.lua`:**
-  - the per-key lists are at lines 499–503, 615–619, 630–634 and 758–762. The brief's "816–820" no longer exists;
+  - the per-key lists are at lines 499–503, 615–619, 630–634, 758–762 and 816–820. The file is unchanged since `9af91a6`: the amendment's first draft said 816–820 no longer existed, and was wrong;
   - the two counts of 5 are at lines 562 and 597;
-  - the comparison with `plugin/aineo.lua`'s mappings is at line 600;
-  - line 741 checks the first line only.
+  - nine reads of the leader warning as line `[6]` become `[7]`: lines 513, 530, 546, 579, 650, 670, 834, 849 and 860;
+  - the comparison at line 600, and line 741's check of the first line, stay green.
+  - With the key tables changed alone, 16 of the file's 78 cases fail on 0.12.5, as the brief review measured, not the 7 the brief names. CN7's list above is read with these.
 - **`lua/aineo/layout/`:**
   - `init.lua` (854 lines): `---@alias aineo.layout.Role 'claude'|'report'|'input'` at line 16, and `role_of(window)` at 37;
   - the public functions are `M.open` (786), `M.focus` (818), `M.follow_claude_terminal` (842, T19) and `M.input_buffer` (850);
-  - `columns.lua` (T17) reads a tab's window tree;
-  - the file column (C9) and T17's middle column are windows of the layout's tab but no role: CN3's "no other window's options change" covers them.
+  - `columns.lua` (T3) reads a tab's window tree;
+  - the file column (C9, D5's "middle column", into which T17 opens paths) is a window of the layout's tab with no role. CN3's "no other window's options change" covers it.
 - **`doc/aineo.txt`:** your section runs from `4. COMMANDS … *aineo-commands*` (line 168; was 89) to `of both (|aineo-health|).` (line 274; was 177). It holds:
   - `*aineo-mappings*` at line 221;
   - `Prefix keys ~` at 242;
@@ -168,32 +170,50 @@ This section amends the brief above. Where they differ, this section wins. Every
 
 ### What changed around the behaviours
 
-- **A new terminal in Claude's window.** Since T19 and T21, Claude's window gets a new terminal buffer on its own when:
-  - T19's fallback replaces a terminal whose resume found no conversation;
-  - `\o` or `\c` starts Claude Code again after an exit.
-
-  Window options such as `'number'` are taken again when a buffer never shown in a window enters it. The user's own `TermOpen` autocommands, a common `setlocal nonumber` among them, run for each new terminal.
-  - **CN9 — measure it.** Pin what a toggled Claude window shows after a new terminal enters it: with no `TermOpen` autocommand, and with `autocmd TermOpen * setlocal nonumber norelativenumber`. aineo does not re-apply the toggle.
-  - Name the result in your note's *Readings for the MVP review*: the toggle belongs to the window as Neovim keeps its options, and a new terminal may undo it.
-- **The layout's tab.** T14 and T21 changed `open()` and `focus()`. CN4b's "from another tab" is re-measured on them.
+- **A new terminal in Claude's window.** Claude's window gets a new terminal buffer without `\tcn` being pressed again:
+  - `\o` restarts an exited Claude Code, its new terminal taking the old one's place in Claude's window;
+  - T19's fallback replaces a terminal whose resume found no conversation (`follow_claude_terminal()`);
+  - `\c`, `\r` and `\i` start one only once the terminal was wiped, into a Claude window Neovim could not close (help lines 204–215).
+- **No `TermOpen` autocommand reaches Claude's window.** aineo starts each terminal in a hidden buffer (`nvim_buf_call()` around `jobstart()`). So neither Neovim's own `nvim.terminal` handler, which turns the numbers off, nor a user's `setlocal nonumber` acts there. The brief review measured it on both versions.
+- **CN9 — the toggle stays as the user left it (D27, the user's decision of 2026-09-27).** aineo remembers the toggle for as long as the editor runs, and applies it to every new Claude terminal in that window, by each of the three routes above. The user presses `\tcn` once per editor session.
+  - Set the options window-locally, as `:setlocal` does and as the layout already does for `'wrap'` (T16). A file opened from Claude's window then keeps the user's own numbers (CN3). As `:set` does, every buffer that later entered the window, and every file opened from it into the file column, would show them hidden too (the brief review).
+  - The layout applies the remembered state wherever it puts a new terminal in Claude's window. Pin each of the three routes by its real path, in `tests/test_entry_claude_numbers.lua`:
+    - `\o` after the fake exits;
+    - T19's fallback;
+    - a wiped terminal, then `\c`.
+  - Also pin that a file opened from Claude's window after `\tcn` shows the user's numbers (CN3).
+- **`\o`'s rebuilt window.** The brief's reading, "the rebuilt window takes the user's defaults", was wrong: Neovim gives a rebuilt Claude window the options the terminal last had, so its numbers stay hidden (the brief review measured it). By D27 that is the behaviour: pin it.
+- **The layout's tab.** T14 and T21 changed `open()` and `focus()`. The toggle sets the options on the layout's Claude window from any tab. It goes through neither `M.open()`, which moves to the layout's tab and rebuilds closed windows, nor `M.focus()`, which moves the cursor. CN4b is re-measured on today's code.
+- **CN4, one more case.** A Claude window left on an empty buffer after its terminal was wiped counts as no Claude window, as `focus()` counts it. Pin it.
+- **One more reading:** a user's own mapping of `\t` or `\tc` now waits for `'timeoutlen'`. The help says so beside the `\sa` example.
 
 ### Boundary, amended
 
 - **Branch:** `feature/t12-claude-numbers` from `origin/dev` after PR #73 merges.
 - **Session note:** `knowledge-vault/Sessions/<the day you are dispatched> — T12 Claude line numbers.md`, not the 2026-09-25 name above.
 - **Builds:** `<builds>/nvim-0.11.6/nvim-macos-arm64/bin/nvim` is in the orchestrator's scratch directory, which your dispatch message names. The *Baseline*'s `<scratchpad>/nvim-0.11.6/…` above is wrong.
-- **The shared help:** T9 merged long ago (PR #30). No packet running beside you edits `doc/aineo.txt`: T22 and T23's boundaries exclude it. The merge check against `bugfix/t9-report-colours` is dropped. Every hunk stays inside your section.
+- **The help is yours whole.** T9 merged long ago (PR #30), and no packet running beside you edits `doc/aineo.txt`: T22 and T23's boundaries exclude it. The merge check against `bugfix/t9-report-colours` is dropped. The documentation this change invalidates includes, beyond the three sections:
+  - the introduction's key list (lines 25–28);
+  - inside the section, line 171 ("five actions"), lines 244–245 ("one key") and lines 258–263.
+
+  CN8's three tags work: `test_doc.lua` passed 36 of 36 with them added (the brief review).
 - **Packets beside you,** all disjoint from your files by rule 2:
   - T22, the parallel test runner: `scripts/`, the `Makefile`, `tests/test_runner*.lua`, `tests/test_isolation.lua`, `tests/helpers/make.lua`, `tests/helpers/fixture.lua`;
   - T23, the git home: `lua/aineo/git/`, `tests/test_git_*.lua`, `tests/helpers/git_repo.lua`.
+- **Fixture names:** give every fixture your cases make (`fixture.directory('…')`, `claude_session.fake('…')`) a name no other test file uses, prefixed `claude-numbers-`. Once T22 lands, files run side by side over one `.tests/fixtures/`.
 - **How you run the suite (D26, the root `CLAUDE.md`):**
   - run the test files your change touches while you work;
   - a mutant runs on its narrowed group, then on the test files that exercise the code it breaks, and on the whole suite only if it survives those;
   - run the whole suite once, on both versions, on the tree you push.
-- **Before your first run,** `mkdir -p .tests/state/nvim`. On 0.12.5 a fresh `.tests/` fails readiness and message cases without it, until T22 lands.
+- **Before your first run,** `mkdir -p .tests/state/nvim`. On 0.12.5 a fresh `.tests/` fails readiness and message cases without it, until T22 lands (measured by T22's brief review at `aaa326a`).
+- **"Your Neovim config maps nothing under `\t`"** (the brief's *Facts*) was read on 2026-09-25 and not re-checked.
 
 ### Baseline, amended
 
-`dev` once PR #73 merges, whose code is PR #73's head's. The orchestrator's verification of PR #73 measured the tree `acc62d0`: 1227 cases on both versions:
-- 0.12.5: `Fails (0)`, 869 s, at load 38–83.
-- 0.11.6: `Fails (1)`, 890 s, at load 131. The one failure is `tests/test_report_paths.lua` › *the file checks* › *of a line of distinct paths take at most the time limit, on arrival and on :edit*: `arrival = "3.7 s"`. That is T17's timing case, which T19 does not touch. Re-run alone on 0.11.6 it failed at load 115 (3.5 s) and passed at load 95. It is load-sensitive: if it fails in your runs, re-run it alone and report the load; it is not yours to change.
+`dev` `384c084`, where PR #73 merged (2026-09-27), whose code is the tree `acc62d0` the orchestrator's verification of PR #73 measured: 1227 cases on both versions:
+- 0.12.5: `Fails (0)`, 869 s; the load averages at the run's end were 38, 75 and 83.
+- 0.11.6: `Fails (1)`, 890 s, at load 131. The one failure is `tests/test_report_paths.lua` › *the file checks* › *of a line of distinct paths take at most the time limit, on arrival and on :edit*: `arrival = "3.7 s"`. That is T17's timing case, and T19 does not touch it. It fails intermittently on 0.11.6: the brief review saw it fail alone at load 29 (3.6 s) and pass five times at 38–48. If it fails in your run:
+  - re-run its file alone, `env PATH=<builds>/nvim-0.11.6/nvim-macos-arm64/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin make test_file FILE=tests/test_report_paths.lua`, up to three times;
+  - report each result with `sysctl -n vm.loadavg` before and after.
+
+  It is not yours to change, and it does not hold your push.
