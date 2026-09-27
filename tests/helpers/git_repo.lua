@@ -129,13 +129,14 @@ end
 --- The Lua that waits, in the child, for one git home operation: `_G.await(start)`
 --- calls `start(done)` and waits for `done`, then for one more turn of the
 --- main loop, and returns what it saw — how many times `done` ran, with what,
---- whether in a fast event, and whether `start` had returned first.
+--- whether in a fast event, whether `start` had returned first, and what
+--- `start` raised, if it did.
 local AWAIT = [[
   local patience = ...
   _G.await = function(start)
     local seen = { calls = 0 }
     local returned = false
-    start(function(failure, result)
+    local started, raised = pcall(start, function(failure, result)
       seen.calls = seen.calls + 1
       seen.failure = failure
       seen.result = result
@@ -143,7 +144,8 @@ local AWAIT = [[
       seen.after_return = returned
     end)
     returned = true
-    vim.wait(patience, function() return seen.calls > 0 end, 5)
+    seen.raised = not started and tostring(raised) or nil
+    vim.wait(patience, function() return seen.calls > 0 or seen.raised ~= nil end, 5)
     local turned = false
     vim.schedule(function() turned = true end)
     vim.wait(patience, function() return turned end, 5)

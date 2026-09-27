@@ -35,6 +35,11 @@ local function wait_for_changes(count)
   return child.lua_get('_G.changes')
 end
 
+--- The time between two writes of one burst: long enough that the child sees
+--- them as separate events, well within the time a watch waits for a burst
+--- to end.
+local WITHIN_A_BURST_MS = 60
+
 local T = MiniTest.new_set({
   hooks = {
     pre_case = function()
@@ -65,9 +70,13 @@ T['a watch']['calls back once for a burst of writes'] = function()
   child.lua(START_WATCH, { top })
 
   git_repo.write(top, 'a.txt', { 'a, written' })
+  vim.uv.sleep(WITHIN_A_BURST_MS)
   git_repo.write(top, 'b.txt', { 'b' })
+  vim.uv.sleep(WITHIN_A_BURST_MS)
   git_repo.write(top, 'sub/c.txt', { 'c' })
+  vim.uv.sleep(WITHIN_A_BURST_MS)
   assert(vim.uv.fs_rename(top .. '/b.txt', top .. '/sub/b.txt'))
+  vim.uv.sleep(WITHIN_A_BURST_MS)
   assert(vim.uv.fs_unlink(top .. '/a.txt'))
   wait_for_changes(1)
   git_repo.write(top, 'after.txt', { 'the next burst' })
@@ -294,7 +303,7 @@ T['a stopped watch']['stops the git it was reading the branch with, and holds no
     { ('echo $$ > %s'):format(pid_file), 'exec sleep 30' }
   )
   local before = child.lua(OPEN_HANDLES)
-  child.lua(START_WATCH, { top, { executable = slow } })
+  child.lua(START_WATCH, { top, { executable = slow, limit_ms = 60000 } })
   git_repo.commit_all(top, 'Read slowly')
   git_repo.wait_until('the slow read', function()
     return vim.uv.fs_stat(pid_file) ~= nil and #vim.fn.readfile(pid_file) == 1

@@ -119,6 +119,8 @@ end
 
 T['a read']['of a file’s diff leaves the index alone'] = function()
   local top, base = create_stat_dirty('lock-diff')
+  git_repo.git(top, { 'add', 'changed.txt' })
+  assert(vim.uv.fs_utime(vim.fs.joinpath(top, 'changed.txt'), 1000000000, 1000000000))
   local index = vim.fs.joinpath(top, '.git', 'index')
   local before = identity(index)
 
@@ -165,10 +167,14 @@ T['a read']['whose index cannot be copied is reported'] = function()
 
   local seen = child.lua(ASK, { top, 'changed_files', { base } })
 
-  eq(
-    { reason = vim.tbl_get(seen, 'failure', 'reason'), result = seen.result },
-    { reason = 'failed' }
-  )
+  eq({
+    reason = vim.tbl_get(seen, 'failure', 'reason'),
+    message = (tostring(vim.tbl_get(seen, 'failure', 'message')):gsub(' %-> .*$', '')),
+    result = seen.result,
+  }, {
+    reason = 'failed',
+    message = 'cannot copy the index: EACCES: permission denied: ' .. index,
+  })
 end
 
 return T
