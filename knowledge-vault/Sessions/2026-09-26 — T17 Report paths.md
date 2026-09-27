@@ -286,6 +286,10 @@ Of the correction's code, one fallback has no pin: `or failure`, taken when libu
 
 ## Readings for the MVP review
 
+In this note, G1 and G2 name the guarantee review's findings 1 and 2 (the orchestrator's fix-round labels); G3–G11 name that review's mutants.
+
+Numbered by the knowledge pass in [[Review/2026-09-24 — v1 MVP readings review]]: the readings as MR149–MR156, the limits a user can meet as MR157–MR159.
+
 The orchestrator's readings, from the brief. The help states each of them, with four exceptions that only this note holds: the examples `lua/x.lua—see` (the help says only that the stop characters are ASCII), `~~lua/x.lua~~`, `.env` and `./.gitignore`. That a path carries no address, ⌘-click opening only web links, the help states since the fix round.
 
 - the candidate rule, its stop characters, and the `/`-or-inner-`.` condition, which leaves out a bare `Makefile`;
@@ -307,7 +311,7 @@ The readings of the implementer and the reviews, not the brief's. The help state
 
 - RP4's one check per distinct candidate is met per distinct path: `x.lua:3` and `x.lua:4` share one check;
 - a double-click checks the file again before opening it: on a path whose file was removed since the drawing, or is no longer a regular file (a FIFO swapped in), it opens nothing and warns (the fix round, the guarantee review's G1). Before the fix round a removed file opened as a new, empty buffer of that name, and a FIFO held the editor in `open(2)`;
-- the warning itself, which the fix round added beyond the brief and the guarantee review's fix: a `vim.notify()` at `WARN`, given at once. It says `aineo: <path> names no file now` when the file is gone or is no regular file, and, since the correction, `aineo: cannot look <path> up now: <reason>` when the lookup fails for another reason, such as a directory that is not searchable or a symbolic link that loops (the re-measure, finding 3);
+- the warning itself, which the guarantee review's fix carried and the fix round kept, beyond the brief: a `vim.notify()` at `WARN`, given at once. It says `aineo: <path> names no file now` when the file is gone or is no regular file, and, since the correction, `aineo: cannot look <path> up now: <reason>` when the lookup fails for another reason, such as a directory that is not searchable or a symbolic link that loops (the re-measure, finding 3);
 - a path in `__` bold, `__lua/x.lua__`, is not found: `_` stops nothing, so it is one candidate naming no file (the guarantee review, G9);
 - a refused double-click from Input in Insert mode ends Insert mode: the warning, nothing opened, the Report current in Normal mode, as every double-click in the Report from Insert mode leaves Insert mode (on a path that opens, Normal mode in the file column; off a path, Neovim's own selection, Visual mode). `stopinsert` runs before the file is looked up. Measured by the re-measure (finding 4) on 0.12.5 and 0.11.6; no case pins it.
 
@@ -336,4 +340,20 @@ The wave holds its marks (rule 6). The line T17 would take:
 
 ## Commits
 
-*Recorded after the merge* — hashes change on rebase.
+Merged by rebase into `dev` on 2026-09-27, PR #68. The knowledge pass maps each commit of the branch to its hash on `dev`:
+
+| on the branch | on `dev` | subject |
+|---|---|---|
+| `defcc28` | `bf91fde` | Underline paths to files in the Report |
+| `95f0e00` | `b2ec87f` | Open a path in the Report on a double-click |
+| `601a1a7` | `b4459e4` | Pin the edges of a path a double-click opens |
+| `c4f67cf` | `5e42105` | Pin what a double-click must not do in the Report |
+| `d298ade` | `278243a` | Record T17's session: Report paths, red/green, mutants |
+| `0af7103` | `19f9b50` | Look a Report path up again before a double-click opens it |
+| `c909a78` | `5675197` | Pin that a double-click on a web link selects, as Neovim does |
+| `5552de2` | `fbe996d` | Correct T17's session record after PR #68's reviews |
+| `6545be0` | `0b08e76` | Pin that a double-click over Input leaves the Report's path alone |
+| `93b604f` | `24ab93c` | Say why a double-click cannot look a Report path up |
+| `2598e7d` | `8386aed` | Record T17's correction after PR #68's re-measure |
+
+Released in `v0.2.8` (PR #71, `main` at `e202c1b`).

@@ -40,7 +40,9 @@ Requirements:
 - Neovim 0.11 or later. aineo's behaviour was measured on Neovim 0.11.6
   and 0.12.5.
 - Claude Code, the `claude` command, installed and signed in. aineo's
-  behaviour was measured on Claude Code 2.1.281.
+  behaviour was measured on Claude Code 2.1.281; the resume of Claude's
+  session, and the new session that takes the place of a resume Claude
+  Code has no conversation for (|aineo-claude-session|), on 2.1.283.
 
 With lazy.nvim, load aineo at startup, so that its autostart can run
 (|aineo-autostart|): >lua
@@ -87,6 +89,36 @@ use and reused afterwards; the aineo window keeps its own buffer. While the
 file column is open, the three columns take a third of the screen each.
 Only file buffers move: help, terminals and scratch buffers stay where they
 were opened until `\o` restores the layout.
+
+Claude's session ~
+                                                        *aineo-claude-session*
+Each Claude Code session aineo starts gets an id of its own, which aineo
+keeps for the directory Claude Code starts in: the working directory of that
+start, which `:cd` changes. The next start there — in a new Neovim, or `\o`
+once Claude Code has exited — resumes that session (`--resume`), and the
+conversation goes on where it stopped. A directory where aineo has started
+no session gets a new one (`--session-id`). The ids are kept under
+`stdpath('state')` in `aineo/claude-sessions/`, one file per directory that
+only you can read and write, and are never removed.
+
+A session in which nothing was sent leaves no conversation, and Claude Code
+cannot resume it: it prints "No conversation found with session ID: …" and
+exits. aineo then starts a new session in its place, in the windows that
+showed it, and keeps its id instead. At each start that follows a session
+in which nothing was sent, Claude Code 2.1.283 shows nothing for about a
+second, then the message for about half a second before the new session
+takes its place. If you were typing in Claude's window you are left in
+Normal mode there: `\c` puts you in the new prompt. A resumed Claude Code
+that exits any other way shows its exit as usual, and its id stays kept. A
+resume that fails some other way — a Claude Code that words the message
+otherwise, or exits with another code — then fails the same way at each
+start there: removing `aineo/claude-sessions/` under `stdpath('state')`
+makes every directory start a new session.
+
+aineo resumes the session it started, not one you switch to inside Claude
+Code (`/clear`, `/resume`), and ignores a conversation you ran in a plain
+terminal in the same directory. Two Neovims in one directory resume the
+same session.
 
 Input's draft ~
                                                                  *aineo-draft*
@@ -178,7 +210,9 @@ window Neovim cannot close, such as its last one, stays on an empty buffer
 until `claude` opens the layout there again — `report` and `input` do so
 only when their own window is gone too. A file opened in Claude's window as
 the terminal is wiped stays in view, and moves to the file column when the
-layout opens again. Only `open` restarts an exited Claude Code.
+layout opens again. Of the actions, only `open` restarts an exited Claude
+Code; aineo restarts one by itself only in place of a resume Claude Code
+has no conversation for (|aineo-claude-session|).
 
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
@@ -278,7 +312,14 @@ autostart		A boolean. Default: `true`
 claude.cmd		A list of at least one string. Default: `{ 'claude' }`
 			The command run in the left terminal, as a list of
 			words, never through a shell. aineo appends its own
-			arguments (|aineo-report|). A wrapper works: >lua
+			arguments (|aineo-report|). It must not hold
+			`--continue`, `--resume` or `--session-id`, since
+			aineo picks the session (|aineo-claude-session|):
+			Claude Code 2.1.283 refuses `--session-id` beside
+			`--continue` or `--resume`, printing "Error:
+			--session-id can only be used with --continue or
+			--resume if --fork-session is also specified.", and
+			exits 1. A wrapper works: >lua
 			    vim.g.aineo = {
 			      claude = { cmd = { 'npx', '-y',
 			        '@anthropic-ai/claude-code' } },
@@ -315,7 +356,9 @@ aineo notices it could receive the paste and the Enter (|aineo-limits|).
 ==============================================================================
 8. THE AGENT REPORT                                             *aineo-report*
 
-aineo starts Claude Code with three additions of its own:
+aineo starts Claude Code with four additions of its own:
+- the session it resumes, or the id of a new one: `--resume` or
+  `--session-id` (|aineo-claude-session|);
 - instructions appended to its system prompt, telling Claude when to call
   the report tool and how to write a report (below);
 - aineo's MCP server, which Claude Code runs as a headless `nvim`, given

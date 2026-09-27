@@ -1,0 +1,109 @@
+Wave 7 planning probe — measured by the orchestrator, 2026-09-27 ~13:20 CEST, macOS (Darwin 25.1.0, arm64), git 2.50.1 (Apple Git-155).
+Each script ran with nvim --clean --headless -l <script> <scratch repo> <out>, on Neovim 0.12.5 (Homebrew) and 0.11.6 (the release build), in a scratch folder outside the checkout. Home paths below are replaced by <tmp>. In the outputs, Lua's %q wrote a newline as a backslash and a newline, which writefile() stored as a NUL; they are shown here as \n.
+
+==== script probe.lua ====
+local root = arg[1]
+local out = {}
+local function log(s) out[#out + 1] = s end
+local function sh(cmd) return vim.system(cmd, { cwd = root, text = true }):wait() end
+vim.fn.delete(root, 'rf'); vim.fn.mkdir(root .. '/sub', 'p')
+sh({ 'git', 'init', '-q', '-b', 'main' })
+sh({ 'git', 'config', 'user.email', 'p@example.invalid' }); sh({ 'git', 'config', 'user.name', 'probe' })
+vim.fn.writefile({ 'a' }, root .. '/a.txt'); sh({ 'git', 'add', '.' }); sh({ 'git', 'commit', '-qm', 'base' })
+local base = vim.trim(sh({ 'git', 'rev-parse', 'HEAD' }).stdout)
+-- 1. vim.system timeout
+local t0 = vim.uv.hrtime(); local res
+vim.system({ 'sleep', '5' }, { timeout = 300 }, function(r) res = r end)
+vim.wait(3000, function() return res ~= nil end, 10)
+log(('timeout: code=%s signal=%s after %.0f ms'):format(res and res.code, res and res.signal, (vim.uv.hrtime() - t0) / 1e6))
+-- 2. fs_event on .git/logs/HEAD and recursive on the tree
+local events = {}
+local function watch(path, flags, tag)
+  local h = vim.uv.new_fs_event()
+  local ok, err = h:start(path, flags, function(e, name, ev) events[#events + 1] = ('%s %s %s'):format(tag, tostring(name), vim.inspect(ev):gsub('%s+', ' ')) end)
+  log(('watch %s: %s %s'):format(tag, tostring(ok), tostring(err or '')))
+  return h
+end
+local h1 = watch(root .. '/.git/logs/HEAD', {}, 'logsHEAD')
+local h2 = watch(root, { recursive = true }, 'tree')
+vim.wait(300)
+vim.fn.writefile({ 'b' }, root .. '/sub/b.txt')
+vim.wait(500); log('after writing sub/b.txt: ' .. #events .. ' events: ' .. table.concat(events, ' | ')); events = {}
+sh({ 'git', 'commit', '-q', '--allow-empty', '-m', 'empty' })
+vim.wait(500); log('after an empty commit: ' .. #events .. ' events: ' .. table.concat(events, ' | ')); events = {}
+-- 3. what git reports
+vim.fn.writefile({ 'a2' }, root .. '/a.txt'); sh({ 'git', 'commit', '-qam', 'change a' })
+vim.fn.writefile({ 'c' }, root .. '/c.txt'); sh({ 'git', 'add', 'c.txt' })
+vim.fn.writefile({ 'a3' }, root .. '/a.txt')
+log('diff --name-status base: ' .. vim.inspect(sh({ 'git', 'diff', '--name-status', base }).stdout))
+log('untracked: ' .. vim.inspect(sh({ 'git', 'ls-files', '--others', '--exclude-standard' }).stdout))
+log('log base..HEAD: ' .. vim.inspect(sh({ 'git', 'log', '--format=%h %s', base .. '..HEAD' }).stdout))
+h1:stop(); h2:stop()
+vim.fn.writefile(out, arg[2])
+
+---- output probe, NVIM v0.12.5 ----
+timeout: code=124 signal=15 after 300 ms
+watch logsHEAD: 0 
+watch tree: 0 
+after writing sub/b.txt: 1 events: tree sub/b.txt { rename = true }
+after an empty commit: 19 events: logsHEAD HEAD { change = true } | tree .git/index.lock { rename = true } | tree .git/index { rename = true } | tree .git/index { rename = true } | tree .git/COMMIT_EDITMSG { rename = true } | tree .git/objects/f2/c9643bdbfcb6c492034d8e571eb7f043007aec { rename = true } | tree .git/objects/f2 { rename = true } | tree .git/objects/f2/tmp_obj_tDpBrG { rename = true } | tree .git/HEAD.lock { rename = true } | tree .git/refs/heads/main.lock { rename = true } | tree .git/logs/HEAD { rename = true } | tree .git/logs/refs/heads/main { rename = true } | tree .git/refs/heads/main.lock { rename = true } | tree .git/refs/heads/main { rename = true } | tree .git/refs/heads/main { rename = true } | tree .git/HEAD.lock { rename = true } | tree .git/AUTO_MERGE.lock { rename = true } | tree .git/packed-refs.lock { rename = true } | tree .git/objects/maintenance.lock { rename = true }
+diff --name-status base: "M\ta.txt\nA\tc.txt\n"
+untracked: "sub/b.txt\n"
+log base..HEAD: "81362c8 change a\nf2c9643 empty\n"
+
+---- output probe, NVIM v0.11.6 ----
+timeout: code=124 signal=15 after 302 ms
+watch logsHEAD: 0 
+watch tree: 0 
+after writing sub/b.txt: 1 events: tree sub/b.txt { rename = true }
+after an empty commit: 17 events: logsHEAD HEAD { change = true } | tree .git/index.lock { rename = true } | tree .git/index { rename = true } | tree .git/index { rename = true } | tree .git/COMMIT_EDITMSG { rename = true } | tree .git/objects/d2/805f65c7ca8b827726b8a3ccc4c07788166c8f { rename = true } | tree .git/objects/d2 { rename = true } | tree .git/objects/d2/tmp_obj_1Xx9gm { rename = true } | tree .git/HEAD.lock { rename = true } | tree .git/refs/heads/main.lock { rename = true } | tree .git/logs/HEAD { rename = true } | tree .git/logs/refs/heads/main { rename = true } | tree .git/refs/heads/main { rename = true } | tree .git/refs/heads/main { rename = true } | tree .git/AUTO_MERGE.lock { rename = true } | tree .git/packed-refs.lock { rename = true } | tree .git/objects/maintenance.lock { rename = true }
+diff --name-status base: "M\ta.txt\nA\tc.txt\n"
+untracked: "sub/b.txt\n"
+log base..HEAD: "c43c080 change a\nd2805f6 empty\n"
+
+==== script probe2.lua ====
+local root = arg[1]
+local out = {}
+local function log(s) out[#out + 1] = s end
+local function sh(cmd, cwd) return vim.system(cmd, { cwd = cwd or root, text = true }):wait() end
+vim.fn.delete(root, 'rf'); vim.fn.mkdir(root, 'p')
+local ok, err = pcall(vim.system, { 'no-such-git-xyz', 'status' }, {}, function() end)
+log(('missing executable: pcall ok=%s err=%s'):format(tostring(ok), tostring(err)))
+local r = sh({ 'git', 'rev-parse', 'HEAD' })
+log(('not a repository: code=%d stderr=%q'):format(r.code, r.stderr))
+sh({ 'git', 'init', '-q', '-b', 'main' }); sh({ 'git', 'config', 'user.email', 'p@example.invalid' }); sh({ 'git', 'config', 'user.name', 'probe' })
+r = sh({ 'git', 'rev-parse', '--verify', '-q', 'HEAD' })
+log(('unborn HEAD: code=%d stdout=%q stderr=%q'):format(r.code, r.stdout, r.stderr))
+vim.fn.writefile({ 'x' }, root .. '/old name.txt'); sh({ 'git', 'add', '.' }); sh({ 'git', 'commit', '-qm', 'base' })
+local base = vim.trim(sh({ 'git', 'rev-parse', 'HEAD' }).stdout)
+sh({ 'git', 'mv', 'old name.txt', 'new name.txt' })
+vim.fn.writefile({ 'n' }, root .. '/line\nbreak.txt'); vim.fn.writefile({ 'u' }, root .. '/ünï.txt')
+log('name-status -z: ' .. vim.inspect(sh({ 'git', 'diff', '--name-status', '-z', base }).stdout))
+log('others -z: ' .. vim.inspect(sh({ 'git', 'ls-files', '--others', '--exclude-standard', '-z' }).stdout))
+r = sh({ 'git', 'diff', '--no-index', '--', '/dev/null', 'ünï.txt' })
+log(('no-index diff: code=%d stdout=%q'):format(r.code, r.stdout))
+sh({ 'git', 'worktree', 'add', '-q', root .. '-wt' })
+log('worktree git-dir: ' .. vim.trim(sh({ 'git', 'rev-parse', '--git-dir' }, root .. '-wt').stdout) .. ' | top: ' .. vim.trim(sh({ 'git', 'rev-parse', '--show-toplevel' }, root .. '-wt').stdout))
+vim.fn.mkdir(root .. '/deep/er', 'p')
+log('subdir diff paths relative to root: ' .. vim.inspect(sh({ 'git', 'diff', '--name-status', base }, root .. '/deep/er').stdout))
+vim.fn.writefile(out, arg[2])
+
+---- output probe2, NVIM v0.12.5 ----
+missing executable: pcall ok=false err=vim/_core/system:324: ENOENT: no such file or directory (cmd): 'no-such-git-xyz'
+not a repository: code=128 stderr="fatal: not a git repository (or any of the parent directories): .git\n"
+unborn HEAD: code=1 stdout="" stderr=""
+name-status -z: "R100\0old name.txt\0new name.txt\0"
+others -z: "line\nbreak.txt\0ünï.txt\0"
+no-index diff: code=1 stdout="diff --git \"a/\\303\\274n\\303\\257.txt\" \"b/\\303\\274n\\303\\257.txt\"\nnew file mode 100644\nindex 0000000..4ae8ef0\n--- /dev/null\n+++ \"b/\\303\\274n\\303\\257.txt\"\n@@ -0,0 +1 @@\n+u\n"
+worktree git-dir: <tmp>/r2-0125/.git/worktrees/r2-0125-wt | top: <tmp>/r2-0125-wt
+subdir diff paths relative to root: "R100\told name.txt\tnew name.txt\n"
+
+---- output probe2, NVIM v0.11.6 ----
+missing executable: pcall ok=false err=.../nvim-macos-arm64/share/nvim/runtime/lua/vim/_system.lua:254: ENOENT: no such file or directory (cmd): 'no-such-git-xyz'
+not a repository: code=128 stderr="fatal: not a git repository (or any of the parent directories): .git\n"
+unborn HEAD: code=1 stdout="" stderr=""
+name-status -z: "R100\0old name.txt\0new name.txt\0"
+others -z: "line\nbreak.txt\0ünï.txt\0"
+no-index diff: code=1 stdout="diff --git \"a/\\303\\274n\\303\\257.txt\" \"b/\\303\\274n\\303\\257.txt\"\nnew file mode 100644\nindex 0000000..4ae8ef0\n--- /dev/null\n+++ \"b/\\303\\274n\\303\\257.txt\"\n@@ -0,0 +1 @@\n+u\n"
+worktree git-dir: <tmp>/r2-0116/.git/worktrees/r2-0116-wt | top: <tmp>/r2-0116-wt
+subdir diff paths relative to root: "R100\told name.txt\tnew name.txt\n"

@@ -591,6 +591,54 @@ T19 and T12 follow T21, one at a time: T19 needs the layout and `plugin/aineo.lu
 - Claude's window kept on the empty buffer after a wipe.
 
 **Brief:** `brief-t21-claude-exit.md`, corrected after its brief review, `brief-review-t19-t21.md`: dispatch after corrections. EX1 now refuses Terminal mode on the ended terminal and has its negative cases; EX2 names the condition its fault needs; the placement is named as a reading; the test files and the merge check leave T18's alone.
+## Packet T22 — 2026-09-27
+
+**The request, and the answer.** The user, 2026-09-27: "the structure of how the tests were designed is making everything too slow, this is slowing down the whole proccess simple features take half to one day to land." The orchestrator measured the suite (`evidence/suite-times-aaa326a.txt`):
+- 36 whole runs took 600–739 s each, at host loads from 16 to 209. The time goes to waiting, not computing.
+- Seven of the 34 files hold 579 of the 681 s a file-by-file run took.
+
+Asked "How should I cut the time the tests cost?", the user chose "Run less + parallel runner (Recommended)": D26. Its first half is the agents' rule change, PR #74 (`ai/run-less-tests`). T22 is its second half, a tooling packet.
+
+**The six rules for T22**, recomputed on 2026-09-27 against every open packet and every claimed wave (only this one). The open packets are T19 (PR #73, in its fix round) and T12 (its brief amendment waits for T19's merge):
+
+| rule | T22 |
+|---|---|
+| 1 dependencies | T1's runner ✓; T19 changes the `Makefile`'s clean-up, so T22 is dispatched only once PR #73 merges ✓; the brief's way of running the suite is D26's, which `implementer.md` states once PR #74 merges: #75, then #74, then T22's dispatch after #73 ✓ |
+| 2 files | `scripts/run_tests.lua` and new `scripts/` files; the `Makefile`'s `test` and `test_file`; `tests/test_runner.lua`, `tests/test_isolation.lua`, new `tests/test_runner_*.lua`; `tests/helpers/make.lua`, `tests/helpers/fixture.lua`. T12's files are `plugin/aineo.lua`, `lua/aineo/layout/`, `lua/aineo/health.lua`, `tests/test_health.lua`, `tests/test_plugin.lua`, `tests/test_entry.lua`, `tests/test_entry_prefix.lua`, `tests/helpers/entry.lua`, `tests/test_layout*.lua` and `doc/aineo.txt`. The two sets are disjoint ✓ |
+| 3 schema | none ✓ |
+| 4 dependencies | none: mini.nvim stays at its pin ✓ |
+| 5 decisions | D26 decided. The default job count is the packet's, by measurement; how a flaky case outside the boundary is handled is the orchestrator's decision, on the packet's report ✓ |
+| 6 task lines | T22's row is below T21's, and T19's and T12's rows are held; it holds its mark ✓ |
+
+**Baseline:** `dev` once PR #73 merges, measured by the orchestrator's verification of it. The dispatch message pastes its counts. The sequential wall clock is the packet's own first measurement (PR6).
+
+**Reviewers**, regular, the shared test harness: attack by `neovim-lua-reviewer`, test-integrity by `reviewer`, records by `reviewer`.
+
+**Order:** once PR #73 merges, beside T12.
+
+**Verification mutants:**
+- one file's failing case dropped from the exit status;
+- a file that does not load counted as passing;
+- two files given one home;
+- the time limit applied per file, not to the run;
+- the files still running not stopped when the run ends early;
+- the summary's total counting one file only;
+- `AINEO_TEST_JOBS` ignored;
+- the runner's log directory not created, or `__NVIM_LOG_FILE_WANT` passed on;
+- the run clearing every home at its start.
+
+**Brief:** `brief-t22-parallel-runner.md`, corrected after its brief review, `brief-review-t22-parallel-runner.md`: dispatch after corrections. The corrections cover F1–F11. Among them:
+- F1: 0.12.5's `__NVIM_LOG_FILE_WANT`, and the runner's own log directory;
+- F2: the nested `make` runs;
+- F3: `layout.file()`'s shared fixtures;
+- F4: how the verification reads the output;
+- F5: every ending;
+- F6: 36 runs;
+- F7: PR7's rules;
+- F8: PR #74 first;
+- F9: the sentences made false;
+- F10: `NVIM`.
+
 ## Landed
 
 - **T9 — PR #30, a small fix**, merged by rebase on 2026-09-26 as `a86a69c` … `3d67b05` (9 commits). Every file of the pull request is identical to the verified head `40bc378`; `git diff 40bc378 dev` shows only T14's files from PR #32.
@@ -815,3 +863,49 @@ T19 and T12 follow T21, one at a time: T19 needs the layout and `plugin/aineo.lu
   - the bold's group linked to `Normal`: 23.
 - **G7, the guarantee review's survivor,** was left out of those six, and PR #67's records review found it. The orchestrator then ran it on the whole suite under 0.11.6, on `dev` `2673719` (code identical to `e84ce9f`). It was killed: 5 cases failing, all by assertion. Four were the records-path pin the fix round adopted, one for each of `:edit`, `bdelete`, `bwipeout` and `bunload`. The fifth, in `tests/test_health.lua`, was a timing case at a load average near 200, and has nothing to do with the edit: the file alone then gave 78 cases, `Fails (0)`.
 - **Released:** `v0.2.6`, which carries T18 (PR #65, `main` at `164265b`).
+- **T21 — PR #64, regular**, merged by rebase on 2026-09-27 as `94f1228` … `e0582e0` (10 commits). The code of `dev` is identical to the verified tree (`eea246c` laid over `dev` `8879268`, merge-tree `0a6b5bd`).
+  - **The brief review** (with T19's) found that EX1 left a key able to close the ended terminal, that EX1 had no negative cases, and that EX2's fault needs Claude's window current and no other listed buffer; the brief was corrected before dispatch.
+  - **Reviews** on Opus: attack by `neovim-lua-reviewer`, test-integrity by `reviewer`, records by `reviewer`.
+  - **What the attack review found:** EX1 held on every path; EX2 broke on two, one a regression from `dev` — a running Claude Code wiped from its own window left an empty buffer, and the scheduled close shut whatever the window showed, so `:bwipeout! | Aineo open` left the new Claude Code with no window. It measured a fix (fixA, fixB); M12 was not equivalent; `jobwait()` froze the editor 4 s on a stopped job.
+  - **What the test-integrity review found:** M12 separable in the command-line-window state, four vacuous right-column cases, two unguarded guards (pins A and B), negative cases that never checked the exit.
+  - **What the records review found:** reading 1 rewritten and the author's reading missing, the help's wipe paragraph, and six smaller records.
+  - **The fix round** went to the author, whose context was about 307 K by `agent-context.py`: fixA and fixB adopted red-first, the close raising nothing, a flag in place of `jobwait()`, the pins, the records.
+  - **The re-measure**, with the attack question (`neovim-lua-reviewer`), stopped once by the API's weekly limit and resumed where it stopped, found fixA holding on 88 probe cases and the round's other claims re-measured, and one failure of the round's own: the flag missed exits whose `TermClose` never reached aineo. It built FIXC (the process read) and FIXD (a file left in Claude's window kept in view).
+  - **The bounded correction** went to a fresh agent: FIXC and FIXD red-first, and the records.
+- **The orchestrator's verification** of `eea246c` laid over `dev`:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`: 1074 cases, `Fails (0)`, on 0.12.5 and on 0.11.6;
+  - lint clean.
+- **Nine literal mutants** on the whole suite under 0.11.6, all killed by assertion:
+  - Terminal mode kept at the exit: 13 cases failing;
+  - `:stopinsert` wherever the cursor is: 1;
+  - Normal mode on every terminal's exit: 2;
+  - Terminal mode allowed on the ended terminal: 8;
+  - the process read removed: 3;
+  - Claude's window kept on the empty buffer: 4;
+  - the file left in Claude's window not moved: 6;
+  - `M.focus()` keeping a window whose buffer was wiped: 11;
+  - `redirect()` putting a wiped buffer back: 17.
+- **Released:** `v0.2.7`, which carries T21 (PR #70, `main` at `e1b55ee`).
+- **T17 — PR #68, a small fix**, merged by rebase on 2026-09-27 as `bf91fde` … `8386aed` (11 commits), after T21. The code of `dev` is identical to the verified tree (`2598e7d` laid over `dev` `e0582e0`, merge-tree `3f10792`).
+  - **The brief review** found the double-click failing from Insert mode and after the Report is made anew, a time bound that could not tell a check per occurrence from one per distinct path, and readings unnamed; the brief was corrected before dispatch.
+  - **Reviews** on Opus, by the small-fix class: guarantee by `neovim-lua-developer` on the reviewer charter, records by `reviewer`. The API's weekly limit stopped the guarantee review once; it resumed where it stopped.
+  - **What the guarantee review found:** no report text made a double-click open another file or run a command (22 hostile names); but a file replaced by a FIFO after drawing hung the editor in `open(2)` (finding 1), and six mutants survived (finding 2).
+  - **What the records review found:** the readings misattributed and incomplete, the help not stating readings the note said it did, and counts.
+  - **The fix round** went to a fresh agent, the orchestrator's choice: the Agent tool counted the author's context at 403 K; `agent-context.py` gives 397 K, under the 400 K line. It adopted the review's check again before the open, with its warning, and six pins.
+  - **The re-measure**, with the attack question, since the round added a read to a guard (`neovim-lua-reviewer`), found no failure of the round's own. M34 was not equivalent, a sub-millisecond window remains between the check and the open, and the warning's words were wrong for an unsearchable directory.
+  - **The bounded correction** went to a fresh agent: M34's two pins, the warning's reasons red-first, the limit and readings recorded.
+- **The orchestrator's verification** of `2598e7d` laid over `dev`:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`: 1164 cases, `Fails (0)`, on 0.12.5 and on 0.11.6;
+  - lint clean.
+- **Seven literal mutants** on the whole suite under 0.11.6, all killed by assertion:
+  - the existence check dropped: 6 cases failing;
+  - any kind of file underlined: 3;
+  - a check per occurrence: 2;
+  - relative paths resolved against `getcwd()`: 47;
+  - the double-click mapped in Normal mode only: 1;
+  - no check again before the open: 6;
+  - M34, the mouse-place guard removed: 2.
+- **The guarantee review's six survivors and M41** were left out of those seven. PR #72's records review ran the six as literal edits on `tests/test_report_paths.lua` under 0.11.6, on `dev` `8386aed`'s code: each was killed by assertion (G3 1, G4 1, G5 1, G6 1, G7 3, G11 1). M41 was not run; it is recorded as equivalent.
+- **Released:** `v0.2.8`, which carries T17 (PR #71, `main` at `e202c1b`).

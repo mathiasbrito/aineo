@@ -20,6 +20,10 @@ local DEAF_FAKE_CLAUDE = vim.fs.joinpath(CHECKOUT, 'tests', 'helpers', 'fake_cla
 --- How long a test waits for the fake to do what it is waiting for.
 M.PATIENCE_MS = 5000
 
+--- How many scheduled callbacks `start_again_after_next_exit()` looks at the
+--- session in, at most, for its exit.
+M.POLLS_AFTER_TERM_CLOSE = 1000
+
 --- How long a test waits for the fake to end once its editor quits: longer
 --- than the session's whole stop.
 M.STOP_PATIENCE_MS = 15000
@@ -42,9 +46,10 @@ function M.deaf_fake_command()
 end
 
 --- The session's settings a test starts it with: the fake's command, the
---- editor's working directory, and stand-ins for the MCP servers, the tools to
---- pre-allow and the instructions the composition root hands over — one server
---- with variables and one with none — overridden key by key by `overrides`.
+--- editor's working directory and state directory, and stand-ins for the MCP
+--- servers, the tools to pre-allow and the instructions the composition root
+--- hands over — one server with variables and one with none — overridden key
+--- by key by `overrides`.
 ---
 ---@param overrides? table
 ---@return table
@@ -52,6 +57,7 @@ function M.stand_in_settings(overrides)
   return vim.tbl_extend('force', {
     cmd = M.fake_command(),
     cwd = vim.fn.getcwd(),
+    state_directory = vim.fn.stdpath('state'),
     mcp_servers = {
       aineo = {
         type = 'stdio',
@@ -149,16 +155,79 @@ function M.start_silently(child, fake, overrides)
   )
 end
 
---- Calls `start_session()` in `child` once more, with the stand-in settings,
---- and returns what it returns without showing it anywhere: which windows show
---- a new terminal is the session's to decide.
+--- Calls `start_session()` in `child` once more, with the stand-in settings
+--- overridden by `overrides`, and returns what it returns without showing it
+--- anywhere: which windows show a new terminal is the session's to decide.
 ---
 ---@param child table
+---@param overrides? table
 ---@return integer
-function M.start_again(child)
+function M.start_again(child, overrides)
   return child.lua(
-    "return require('aineo.claude').start_session(dofile(...).stand_in_settings())",
-    { THIS_FILE }
+    [[
+      local helper, overrides = dofile(...), select(2, ...)
+      return require('aineo.claude').start_session(helper.stand_in_settings(overrides))
+    ]],
+    { THIS_FILE, overrides or vim.empty_dict() }
+  )
+end
+
+--- Calls `start_session()` in `child` once more, as `start_again()` does,
+--- with an `on_terminal_replaced` that appends each terminal it is given to
+--- the child's `_G.replaced_terminals`, emptied first; returns what
+--- `start_session()` returns.
+---
+---@param child table
+---@param overrides? table
+---@return integer
+function M.start_again_noting_replacements(child, overrides)
+  return child.lua(
+    [[
+      local helper, overrides = dofile(...), select(2, ...)
+      _G.replaced_terminals = {}
+      local settings = helper.stand_in_settings(overrides)
+      settings.on_terminal_replaced = function(terminal)
+        table.insert(_G.replaced_terminals, terminal)
+      end
+      return require('aineo.claude').start_session(settings)
+    ]],
+    { THIS_FILE, overrides or vim.empty_dict() }
+  )
+end
+
+--- Makes `child` call `start_session()` once more, with the stand-in settings
+--- overridden by `overrides`, from the first callback scheduled after the next
+--- `TermClose` that finds the session exited — as queued code, or a user's
+--- `\o`, might between Claude Code's exit and what its exit schedules — and
+--- keep what it returns in the child's `_G.terminal_started_after_exit`. It
+--- looks at most `POLLS_AFTER_TERM_CLOSE` times.
+---
+---@param child table
+---@param overrides? table
+function M.start_again_after_next_exit(child, overrides)
+  child.lua(
+    [[
+      local helper, overrides, polls = dofile(...), select(2, ...)
+      local function start_once_exited(polls_left)
+        if require('aineo.claude').session_status() == 'exited' then
+          _G.terminal_started_after_exit =
+            require('aineo.claude').start_session(helper.stand_in_settings(overrides))
+        elseif polls_left > 0 then
+          vim.schedule(function()
+            start_once_exited(polls_left - 1)
+          end)
+        end
+      end
+      vim.api.nvim_create_autocmd('TermClose', {
+        once = true,
+        callback = function()
+          vim.schedule(function()
+            start_once_exited(polls)
+          end)
+        end,
+      })
+    ]],
+    { THIS_FILE, overrides or vim.empty_dict(), M.POLLS_AFTER_TERM_CLOSE }
   )
 end
 
@@ -601,6 +670,18 @@ function M.wait_for_starts(fake, count)
     return #starts >= count
   end, 20)
   return starts
+end
+
+--- The arguments of the fake's `count`th start, after its own script, once
+--- it has started that many times (`wait_for_starts()`); none when it has
+--- not.
+---
+---@param fake { record: string }
+---@param count integer
+---@return string[]
+function M.start_arguments(fake, count)
+  local start = M.wait_for_starts(fake, count)[count]
+  return start and start.argv or {}
 end
 
 --- The fake's first start entry (`wait_for_starts()`) once it has started; an

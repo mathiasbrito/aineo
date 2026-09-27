@@ -490,4 +490,16 @@ T['open()']['puts the cursor in Input when the current window showed a file'] = 
   eq(child.lua_get('vim.api.nvim_get_current_buf()'), layout.input_buffer(child))
 end
 
+T['follow_claude_terminal()'] = MiniTest.new_set()
+
+T['follow_claude_terminal()']['refuses a terminal that is not an existing buffer'] = function()
+  layout.start(child)
+  local wiped = child.api.nvim_create_buf(false, true)
+  child.api.nvim_buf_delete(wiped, { force = true })
+
+  MiniTest.expect.error(function()
+    child.lua("require('aineo.layout').follow_claude_terminal(...)", { wiped })
+  end, 'terminal: expected a buffer')
+end
+
 return T

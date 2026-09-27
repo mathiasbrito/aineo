@@ -1,0 +1,81 @@
+Suite times — measured by the orchestrator, 2026-09-27
+
+1. Whole-suite runs (make test, sequential), from the orchestrator's verifications of PRs #58, #60 (with its re-verification of G7, verify60g7), #64 and #68 — the suite run and every mutant run, each a whole suite on 0.11.6 or 0.12.5, with the host's load averages (1, 5, 15 min) at the run's end:
+
+verify58  suite 0.12.5  rc=0  616 s  load 120.03 130.45 113.36
+verify58  suite 0.11.6  rc=0  604 s  load 28.20 58.78 83.38
+verify58  V1 no Terminal mode  rc=2  600 s  load 68.60 52.38 64.79
+verify58  V2 buffer check removed  rc=2  600 s  load 32.07 49.97 59.31
+verify58  V3 exited check removed  rc=2  602 s  load 52.10 46.90 51.16
+verify58  V4 status read before the move  rc=2  605 s  load 113.69 86.24 65.43
+verify58  V5 Terminal mode for every role  rc=2  607 s  load 55.51 100.41 88.44
+verify60  suite 0.12.5  rc=0  609 s  load 153.25 119.58 99.20
+verify60  suite 0.11.6  rc=0  602 s  load 30.92 62.18 80.97
+verify60  Y1 the icon kept  rc=2  613 s  load 17.87 45.12 66.84
+verify60  Y2 the bold dropped  rc=2  603 s  load 29.42 35.13 49.10
+verify60  Y3 the bold over the status colour  rc=2  600 s  load 33.38 44.29 47.18
+verify60  Y4 the bold spread to the time  rc=2  600 s  load 21.44 42.90 48.38
+verify60  Y5 the details indented 8  rc=2  607 s  load 119.93 91.35 75.24
+verify60  Y6 the bold group linked to Normal  rc=2  609 s  load 63.81 71.91 75.62
+verify60g7  Y7 G7 the records' colours reversed  rc=2  618 s  load 209.40 194.36 152.35
+verify64  suite 0.12.5  rc=0  678 s  load 162.12 159.38 161.12
+verify64  suite 0.11.6  rc=0  677 s  load 160.33 157.76 157.10
+verify64  Z1 Terminal mode kept at the exit  rc=2  686 s  load 106.67 126.94 141.88
+verify64  Z2 stopinsert wherever the cursor is  rc=2  706 s  load 49.64 79.09 107.04
+verify64  Z3 Normal mode on every terminal's exit  rc=2  684 s  load 102.13 123.73 118.60
+verify64  Z4 Terminal mode allowed on the ended terminal  rc=2  674 s  load 56.02 72.48 92.96
+verify64  Z5 the process read removed  rc=2  668 s  load 40.38 53.92 70.45
+verify64  Z6 Claude's window kept on the empty buffer  rc=2  682 s  load 82.29 112.66 103.21
+verify64  Z7 the file left in Claude's window not moved  rc=2  688 s  load 165.05 165.03 140.99
+verify64  Z8 focus keeps a window whose buffer was wiped  rc=2  676 s  load 147.52 142.76 140.43
+verify64  Z9 redirect puts a wiped buffer back  rc=2  698 s  load 43.25 67.23 100.85
+verify68  suite 0.12.5  rc=0  686 s  load 72.14 83.53 89.32
+verify68  suite 0.11.6  rc=0  695 s  load 89.30 94.48 92.22
+verify68  X1 the existence check dropped  rc=2  711 s  load 129.06 134.19 119.42
+verify68  X2 any kind of file underlined  rc=2  696 s  load 130.79 113.24 112.09
+verify68  X3 a check per occurrence  rc=2  692 s  load 15.80 42.72 75.15
+verify68  X4 relative paths resolved against getcwd  rc=2  706 s  load 29.35 26.80 46.25
+verify68  X5 the double-click mapped in Normal mode only  rc=2  719 s  load 149.06 119.42 84.68
+verify68  X6 no check again before the open  rc=2  739 s  load 151.44 117.88 105.90
+verify68  X7 M34 the mouse-place guard removed  rc=2  692 s  load 140.84 120.39 115.00
+
+Range: 600–739 s over 36 runs, at 1-minute loads from 15.80 to 209.40 (added after the brief review of PR #75, which found verify60g7's run missing).
+
+2. Each test file alone (make test_file FILE=<file>, 0.12.5, one after another), at dev aaa326a (code = 8386aed), 12:09:57–12:21:18 CEST, load  151.29 145.67 112.28 at the start and  43.45 41.11 66.61 at the end. Seconds (wall clock, whole seconds), file, cases, result:
+
+ 157 s  tests/test_claude.lua                      71 cases  Fails (0)
+ 105 s  tests/test_send.lua                        32 cases  Fails (0)
+  80 s  tests/test_runner.lua                      41 cases  Fails (0)
+  66 s  tests/test_entry.lua                       47 cases  Fails (0)
+  66 s  tests/test_entry_draft.lua                 17 cases  Fails (0)
+  58 s  tests/test_entry_claude_exit.lua           61 cases  Fails (0)
+  47 s  tests/test_entry_claude_mode.lua           12 cases  Fails (0)
+  27 s  tests/test_draft.lua                       41 cases  Fails (0)
+  26 s  tests/test_health.lua                      78 cases  Fails (0)
+  12 s  tests/test_report_paths.lua                90 cases  Fails (0)
+   7 s  tests/test_mcp_blocked_editor.lua           5 cases  Fails (0)
+   4 s  tests/test_report_buffer.lua               67 cases  Fails (0)
+   3 s  tests/test_report_links.lua                83 cases  Fails (0)
+   3 s  tests/test_layout_file_column.lua          57 cases  Fails (0)
+   3 s  tests/test_deps.lua                         7 cases  Fails (0)
+   2 s  tests/test_report_colours.lua              54 cases  Fails (0)
+   2 s  tests/test_mcp_relay.lua                   30 cases  Fails (0)
+   2 s  tests/test_entry_startup.lua               28 cases  Fails (0)
+   2 s  tests/test_entry_prefix.lua                29 cases  Fails (0)
+   2 s  tests/test_doc.lua                         36 cases  Fails (0)
+   1 s  tests/test_mcp_delivery.lua                26 cases  Fails (0)
+   1 s  tests/test_layout.lua                      43 cases  Fails (0)
+   1 s  tests/test_layout_wrap.lua                 32 cases  Fails (0)
+   1 s  tests/test_layout_tabs.lua                  5 cases  Fails (0)
+   1 s  tests/test_layout_proportions.lua          25 cases  Fails (0)
+   1 s  tests/test_isolation.lua                   20 cases  Fails (0)
+   1 s  tests/test_entry_guard.lua                  5 cases  Fails (0)
+   0 s  tests/test_report.lua                      55 cases  Fails (0)
+   0 s  tests/test_plugin.lua                       4 cases  Fails (0)
+   0 s  tests/test_mcp.lua                          5 cases  Fails (0)
+   0 s  tests/test_layout_input.lua                 9 cases  Fails (0)
+   0 s  tests/test_entry_report.lua                 4 cases  Fails (0)
+   0 s  tests/test_config.lua                      31 cases  Fails (0)
+   0 s  tests/test_aineo.lua                       14 cases  Fails (0)
+
+total 681 s, 1164 cases, 34 files

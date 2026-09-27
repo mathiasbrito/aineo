@@ -828,6 +828,22 @@ function M.focus(role, arrangement)
   vim.api.nvim_set_current_win(state.windows[role])
 end
 
+--- Makes `terminal` the layout's Claude terminal from now on, in place of
+--- the one it was handed last: a new session's terminal that has taken the
+--- old one's place in its windows without the layout opening again. What
+--- the layout does for Claude's terminal — a file shown in its window moved
+--- to the file column, Terminal mode ended as its process ends and refused
+--- once it has, its window closed once it is wiped — then applies to
+--- `terminal`. It shows `terminal` in no window itself.
+---
+--- Raises an error naming `terminal` when it is not an existing buffer.
+---
+---@param terminal integer
+function M.follow_claude_terminal(terminal)
+  vim.validate('terminal', terminal, is_buffer, false, 'a buffer')
+  state.buffers.claude = terminal
+end
+
 --- The Input buffer, or `nil` before the layout was first opened.
 ---
 ---@return integer|nil buffer
