@@ -263,21 +263,25 @@ end
 
 T['an operation that ended']['by running past its limit leaves no process, handle, timer or file behind'] = function()
   local top, base = git_repo.create('process-left-slow', { ['a.txt'] = { 'a' } })
-  local slow = git_repo.script('process-left-slow', 'git', { 'exec sleep 30' })
+  local writing =
+    git_repo.script('process-left-slow', 'git', { ': > "$GIT_INDEX_FILE.lock"', 'exec sleep 30' })
   local found = child.lua(FIND_REPOSITORY, { top })
   local before = child.lua(LEFT_OPEN)
 
-  child.lua(
+  local seen = child.lua(
     [[
     local found, base, options = ...
     return _G.await(function(done)
       require('aineo.git').file_diff(found, base, { path = 'a.txt', kind = 'modified' }, done, options)
     end)
   ]],
-    { found.result, base, { executable = slow, limit_ms = 500 } }
+    { found.result, base, { executable = writing, limit_ms = 500 } }
   )
 
-  eq(child.lua(LEFT_OPEN), before)
+  eq(
+    { reason = vim.tbl_get(seen, 'failure', 'reason'), left = child.lua(LEFT_OPEN) },
+    { reason = 'timed_out', left = before }
+  )
 end
 
 return T
