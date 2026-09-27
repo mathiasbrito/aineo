@@ -499,7 +499,7 @@ T['the run time limit']['ends a run, saying so, while a test file is sourced'] =
 end
 
 T['the run time limit']['is refused unless it is a number of milliseconds above zero'] =
-  MiniTest.new_set({ parametrize = { { 'soon' }, { '0' } } })
+  MiniTest.new_set({ parametrize = { { 'soon' }, { '0' }, { 'nan' }, { 'inf' } } })
 
 T['the run time limit']['is refused unless it is a number of milliseconds above zero']['as'] = function(
   limit

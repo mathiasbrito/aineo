@@ -149,6 +149,64 @@ local function file_keeping_its_home_through_a_run_of(inner)
   }
 end
 
+--- A test file whose one case writes its Neovim's state directory to
+--- `outer_record`, then runs `make test_file` on `inner` with this checkout's
+--- Makefile.
+---
+---@param outer_record string
+---@param inner string the path of a test file
+---@return string[]
+local function file_recording_its_home_then_running(outer_record, inner)
+  return {
+    "local MiniTest = require('mini.test')",
+    'local T = MiniTest.new_set()',
+    "T['records its home, then runs a file of its own'] = function()",
+    ("  vim.fn.writefile({ vim.fn.stdpath('state') }, %q)"):format(outer_record),
+    ('  vim.system({ "make", "--no-print-directory", "-f", %q, "test_file", %q }, {'):format(
+      vim.fs.joinpath(CHECKOUT, 'Makefile'),
+      'FILE=' .. inner
+    ),
+    '    env = { MAKEFLAGS = "", MFLAGS = "", MAKELEVEL = "" },',
+    ('  }):wait(%d)'):format(RUN_INSIDE_A_RUN_TIME_LIMIT_MS),
+    'end',
+    'return T',
+  }
+end
+
+--- A copy of this checkout's test runner, as `checkout_without_test_home()`
+--- makes it, whose Neovims lose a race to make `.tests/homes/`: the first
+--- `vim.fn.mkdir()` of that directory finds it made by another run at the
+--- same moment, and fails with E739 as `mkdir()` does then.
+---
+---@return string path the copy's directory
+local function checkout_losing_the_race_to_make_its_homes()
+  local copy = checkout_without_test_home()
+  local scripts = vim.fs.joinpath(copy, 'scripts')
+  local init = vim.fs.joinpath(scripts, 'minimal_init.lua')
+  local checkout_init = vim.fs.joinpath(scripts, 'checkout_minimal_init.lua')
+  assert(vim.uv.fs_rename(init, checkout_init))
+  fixture.write('checkout_without_test_home/scripts/minimal_init.lua', {
+    ('local homes = %q'):format(vim.fs.joinpath(copy, '.tests', 'homes')),
+    'local make_directory = vim.fn.mkdir',
+    'vim.fn.mkdir = function(directory, ...)',
+    '  if directory == homes then',
+    '    vim.fn.mkdir = make_directory',
+    '    make_directory(directory, ...)',
+    "    error('Vim:E739: Cannot create directory ' .. directory .. ': file already exists', 0)",
+    '  end',
+    '  return make_directory(directory, ...)',
+    'end',
+    ('dofile(%q)'):format(checkout_init),
+  })
+  return copy
+end
+
+--- A Lua statement that waits for longer than any run may take.
+local WAIT_FOREVER = 'vim.wait(1e9, function() return false end)'
+
+--- How long a test lets a run go before it stops the run itself.
+local STOPPED_BY_THE_TEST_AFTER_MS = 3000
+
 --- The line a file from `file_recording` wrote to `path`.
 ---
 ---@param path string
@@ -213,16 +271,67 @@ T['a run']['in a checkout with no .tests/ yet tells no Neovim of a missing log']
   expect_no_mention(result.stderr, 'not accessible')
 end
 
+T['a run']['of make test in a checkout with no .tests/ yet tells no Neovim of a missing log'] = function()
+  local checkout = checkout_without_test_home()
+  fixture.write('checkout_without_test_home/tests/test_probe.lua', log_probe_file(checkout))
+
+  local result = make.run('test', {
+    makefile = vim.fs.joinpath(checkout, 'Makefile'),
+    directory = checkout,
+  })
+
+  eq(result.code, 0)
+  expect_no_mention(result.stderr, 'not accessible')
+end
+
+T['a run']['whose homes directory another run makes at the same moment runs its files'] = function()
+  local checkout = checkout_losing_the_race_to_make_its_homes()
+  fixture.write('checkout_without_test_home/tests/test_passing.lua', PASSING_FILE)
+
+  local result = make.run('test', {
+    makefile = vim.fs.joinpath(checkout, 'Makefile'),
+    directory = checkout,
+  })
+
+  eq(result.code, 0)
+end
+
+T['a run']['stopped by a test at its time limit leaves no home behind'] = function()
+  local record = vim.fs.joinpath(fixture.directory('stopped_run_record'), 'run')
+  local file = fixture.write('stopped_run/waiting.lua', {
+    "local MiniTest = require('mini.test')",
+    'local T = MiniTest.new_set()',
+    "T['records its run, then waits'] = function()",
+    ('  vim.fn.writefile({ vim.fs.dirname(vim.fs.dirname(vim.env.XDG_STATE_HOME)) }, %q)'):format(
+      record
+    ),
+    '  ' .. WAIT_FOREVER,
+    'end',
+    'return T',
+  })
+
+  make.run(
+    'test_file',
+    { assignments = { 'FILE=' .. file }, time_limit_ms = STOPPED_BY_THE_TEST_AFTER_MS }
+  )
+
+  eq(vim.uv.fs_stat(recorded(record)), nil)
+end
+
 T['a run started inside another'] = MiniTest.new_set()
 
 T['a run started inside another']['gives its file a home apart from the outer file'] = function()
-  local record = vim.fs.joinpath(fixture.directory('inner_home_record'), 'state')
-  local inner =
-    fixture.write('inner_home/recording.lua', file_recording("vim.fn.stdpath('state')", record))
+  local records = fixture.directory('inner_home_records')
+  local outer, inner = vim.fs.joinpath(records, 'outer'), vim.fs.joinpath(records, 'inner')
+  local inner_file =
+    fixture.write('inner_home/test_outer.lua', file_recording("vim.fn.stdpath('state')", inner))
+  local directory = suite('inner_home_suite', {
+    ['test_outer.lua'] = file_recording_its_home_then_running(outer, inner_file),
+  })
 
-  make.run('test_file', { assignments = { 'FILE=' .. inner } })
+  make.run('test', { directory = directory, time_limit_ms = RUN_INSIDE_A_RUN_TIME_LIMIT_MS })
 
-  neq(recorded(record), vim.fn.stdpath('state'))
+  neq(recorded(inner), recorded(outer))
 end
 
 T['a run started inside another']["leaves the outer file's home as it was"] = function()
