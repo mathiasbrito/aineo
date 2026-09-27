@@ -24,7 +24,7 @@ end
 vim.g.loaded_aineo = true
 
 --- `:Aineo`'s subcommands, in the order it offers them.
-local SUBCOMMANDS = { 'send', 'open', 'report', 'input', 'claude' }
+local SUBCOMMANDS = { 'send', 'open', 'report', 'input', 'claude', 'claude-numbers' }
 
 --- What `:Aineo` tells the user when it is not given one of its subcommands.
 local USAGE = 'aineo: :Aineo takes one of ' .. table.concat(SUBCOMMANDS, ', ')
@@ -241,6 +241,9 @@ local ACTIONS = {
     focus('input')
   end,
   claude = focus_claude,
+  ['claude-numbers'] = function()
+    require('aineo.layout').toggle_claude_numbers()
+  end,
 }
 
 --- What Neovim puts before an error it passes on, outermost first: the
@@ -311,8 +314,15 @@ for _, subcommand in ipairs(SUBCOMMANDS) do
   end, { desc = 'aineo: ' .. subcommand })
 end
 
---- The key that follows the prefix for each subcommand.
-local PREFIX_KEYS = { send = 's', open = 'o', report = 'r', input = 'i', claude = 'c' }
+--- The keys that follow the prefix for each subcommand.
+local PREFIX_KEYS = {
+  send = 's',
+  open = 'o',
+  report = 'r',
+  input = 'i',
+  claude = 'c',
+  ['claude-numbers'] = 'tcn',
+}
 
 --- Whether `keys`, written as in a mapping, have a global Normal-mode
 --- mapping. A mapping local to a buffer does not count: it wins in its own
@@ -329,9 +339,10 @@ local function has_global_mapping(keys)
   end)
 end
 
---- Maps `prefix` followed by each subcommand's key, in Normal mode, to the
+--- Maps `prefix` followed by each subcommand's keys, in Normal mode, to the
 --- subcommand's `<Plug>` mapping, but for each key sequence the user has
---- mapped globally already; maps nothing when `prefix` is `false`.
+--- mapped globally already — a mapping of only the start of a sequence, or
+--- of a longer one, does not count; maps nothing when `prefix` is `false`.
 ---
 ---@param prefix string|false
 local function map_prefix(prefix)
@@ -529,5 +540,5 @@ end, {
   nargs = '?',
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input or claude',
+  desc = 'aineo: send, open, report, input, claude or claude-numbers',
 })
