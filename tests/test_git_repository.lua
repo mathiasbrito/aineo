@@ -45,7 +45,11 @@ T['a repository']['before its first commit has no head commit, and is on its bra
 
   local seen = child.lua(FIND_REPOSITORY, { top })
 
-  eq({ head = seen.result.head, branch = seen.result.branch }, { branch = 'main' })
+  eq({
+    failure = seen.failure,
+    head = vim.tbl_get(seen, 'result', 'head'),
+    branch = vim.tbl_get(seen, 'result', 'branch'),
+  }, { branch = 'main' })
 end
 
 T['a repository']['with a detached head is on no branch'] = function()
@@ -54,7 +58,11 @@ T['a repository']['with a detached head is on no branch'] = function()
 
   local seen = child.lua(FIND_REPOSITORY, { top })
 
-  eq({ head = seen.result.head, branch = seen.result.branch }, { head = base })
+  eq({
+    failure = seen.failure,
+    head = vim.tbl_get(seen, 'result', 'head'),
+    branch = vim.tbl_get(seen, 'result', 'branch'),
+  }, { head = base })
 end
 
 T['a repository']['is found from a directory below its top level'] = function()
@@ -62,7 +70,7 @@ T['a repository']['is found from a directory below its top level'] = function()
 
   local seen = child.lua(FIND_REPOSITORY, { top .. '/deep/er' })
 
-  eq(seen.result.top, top)
+  eq(vim.tbl_get(seen, 'result', 'top'), top)
 end
 
 T['a repository']['in a linked worktree has its own git directory and its main one in common'] = function()
