@@ -120,6 +120,35 @@ local function suite(name, files)
   return directory
 end
 
+--- How long a run may take whose one file runs a run of its own.
+local RUN_INSIDE_A_RUN_TIME_LIMIT_MS = 30000
+
+--- A test file whose one case leaves a mark in its own home, runs
+--- `make test_file` on `inner` with this checkout's Makefile, and passes only
+--- when the mark is still there.
+---
+---@param inner string the path of a test file
+---@return string[]
+local function file_keeping_its_home_through_a_run_of(inner)
+  return {
+    "local MiniTest = require('mini.test')",
+    'local T = MiniTest.new_set()',
+    "T['keeps its home through a run inside it'] = function()",
+    "  local mark = vim.fs.joinpath(vim.fn.stdpath('state'), 'left-by-the-outer-file')",
+    "  vim.fn.mkdir(vim.fn.stdpath('state'), 'p')",
+    '  vim.fn.writefile({}, mark)',
+    ('  vim.system({ "make", "--no-print-directory", "-f", %q, "test_file", %q }, {'):format(
+      vim.fs.joinpath(CHECKOUT, 'Makefile'),
+      'FILE=' .. inner
+    ),
+    '    env = { MAKEFLAGS = "", MFLAGS = "", MAKELEVEL = "" },',
+    ('  }):wait(%d)'):format(RUN_INSIDE_A_RUN_TIME_LIMIT_MS),
+    '  MiniTest.expect.no_equality(vim.uv.fs_stat(mark), nil)',
+    'end',
+    'return T',
+  }
+end
+
 --- The line a file from `file_recording` wrote to `path`.
 ---
 ---@param path string
@@ -197,14 +226,15 @@ T['a run started inside another']['gives its file a home apart from the outer fi
 end
 
 T['a run started inside another']["leaves the outer file's home as it was"] = function()
-  local mark = vim.fs.joinpath(vim.fn.stdpath('state'), 'left-by-the-outer-file')
-  vim.fn.mkdir(vim.fn.stdpath('state'), 'p')
-  vim.fn.writefile({}, mark)
   local inner = fixture.write('inner_run/passing.lua', PASSING_FILE)
+  local directory = suite('inner_run_suite', {
+    ['test_outer.lua'] = file_keeping_its_home_through_a_run_of(inner),
+  })
 
-  make.run('test_file', { assignments = { 'FILE=' .. inner } })
+  local result =
+    make.run('test', { directory = directory, time_limit_ms = RUN_INSIDE_A_RUN_TIME_LIMIT_MS })
 
-  neq(vim.uv.fs_stat(mark), nil)
+  eq(result.code, 0)
 end
 
 return T
