@@ -142,6 +142,28 @@ T["Claude's session"]["keeps the session's id under the editor's state directory
   eq(vim.fn.readfile(kept, 'b'), id)
 end
 
+T["Claude's session"]["starts on \\o after an exit in Claude's window, which the user pinned with winfixbuf"] = function()
+  local fake = claude_session.fake('entry-resume-pinned', 'ready')
+  use_state_directory(child, fixture.directory('entry-resume-pinned-state'))
+  entry.use_fake(child, fake)
+  child.cmd('Aineo open')
+  claude_session.wait_for_start(fake)
+  end_claude_code(child)
+  local ended = child.lua_get(CLAUDE_WINDOW_BUFFER)
+  local window = child.fn.win_getid(1)
+  child.api.nvim_set_option_value('winfixbuf', true, { win = window, scope = 'local' })
+
+  entry.command(child, 'Aineo open')
+
+  eq(entry.messages(child), {})
+  eq(claude_session.wait_for_status(child, 'ready'), { 'ready' })
+  eq({
+    child.api.nvim_buf_is_valid(ended),
+    child.lua_get(('vim.bo[%s].buftype'):format(CLAUDE_WINDOW_BUFFER)),
+    child.api.nvim_get_option_value('winfixbuf', { win = window }),
+  }, { false, 'terminal', true })
+end
+
 T['after a resume with no conversation'] = MiniTest.new_set()
 
 T['after a resume with no conversation, before any \\c'] = MiniTest.new_set()
