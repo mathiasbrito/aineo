@@ -117,17 +117,18 @@ T['a read']['of the files changed lists only those whose content changed, and le
   })
 end
 
-T['a read']['of a file’s diff leaves the index alone'] = function()
+T['a read']['of the diff of a file changed back since it was listed leaves the index alone'] = function()
   local top, base = create_stat_dirty('lock-diff')
-  git_repo.git(top, { 'add', 'changed.txt' })
-  assert(vim.uv.fs_utime(vim.fs.joinpath(top, 'changed.txt'), 1000000000, 1000000000))
   local index = vim.fs.joinpath(top, '.git', 'index')
   local before = identity(index)
 
   local seen =
-    child.lua(ASK, { top, 'file_diff', { base, { path = 'changed.txt', kind = 'modified' } } })
+    child.lua(ASK, { top, 'file_diff', { base, { path = TOUCHED[1], kind = 'modified' } } })
 
-  eq({ failure = seen.failure, index = identity(index) }, { index = before })
+  eq(
+    { failure = seen.failure, diff = seen.result, index = identity(index) },
+    { diff = '', index = before }
+  )
 end
 
 T['a read']['never holds the lock a commit started meanwhile needs'] = function()
