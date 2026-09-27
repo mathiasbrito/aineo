@@ -433,6 +433,35 @@ T['a wiped Claude terminal']["keeps in view the file the same command line opens
   eq(entry.current_window(child), 'terminal')
 end
 
+T['a wiped Claude terminal']["keeps the cursor in Claude's window, the file the same command line opens there in view, once \\o started Claude Code again, after"] = function(
+  command
+)
+  local file = fixture.write('entry-claude-exit-edit-opened/file.txt', { 'text' })
+  type_to_claude_code_exiting_at_start(child, 'entry-claude-exit-edit-opened')
+  entry.command(child, command .. ' | edit ' .. file)
+  entry.use_fake(child, claude_session.fake('entry-claude-exit-edit-opened-new', 'trust'))
+
+  child.type_keys('\\o')
+
+  eq(child.lua_get(SESSION_STATE), 'starting')
+  eq(entry.windows(child), { 'terminal', file, 'aineo://report', 'aineo://input' })
+  eq(entry.current_window(child), 'terminal')
+end
+
+T['a wiped Claude terminal']["opens no file column for the file the same command line opens in Claude's window while another tab shows it, once \\c started Claude Code again, after"] = function(
+  command
+)
+  local file = fixture.write('entry-claude-exit-edit-other-tab/file.txt', { 'text' })
+  type_to_claude_code_exiting_at_start(child, 'entry-claude-exit-edit-other-tab')
+  entry.command(child, command .. ' | edit ' .. file .. ' | tab split | tabprevious')
+  entry.use_fake(child, claude_session.fake('entry-claude-exit-edit-other-tab-new', 'trust'))
+
+  child.type_keys('\\c')
+
+  eq(child.lua_get(SESSION_STATE), 'starting')
+  eq(entry.windows(child), WHOLE_LAYOUT)
+end
+
 T['a wiped Claude terminal']["keeps in view the file Neovim shows in Claude's window when it was Neovim's last once \\c started Claude Code again, after"] = function(
   command
 )
