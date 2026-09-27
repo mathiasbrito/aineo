@@ -214,6 +214,28 @@ T["Claude's line numbers, once hidden,"]["stay hidden in the terminal \\o restar
   eq(numbers_of_window(child, 1), HIDDEN)
 end
 
+T["Claude's line numbers, once hidden,"]["stay hidden in the new session's terminal the user brings back by hand to Claude's window, after the fallback started it while another buffer showed there"] = function()
+  local name = 'claude-numbers-fallback-by-hand'
+  local fake = open_with_number(child, name, {
+    AINEO_FAKE_CLAUDE_CONVERSATIONS = fixture.directory(name .. '-conversations'),
+  })
+  entry.press(child, '\\tcn')
+  end_claude_code(child)
+  child.cmd('Aineo open')
+  eq(#claude_session.wait_for_starts(fake, 2), 2)
+  child.lua(OTHER_BUFFER_IN_CLAUDE_WINDOW)
+  eq(#claude_session.wait_for_starts(fake, 3), 3)
+  local terminals = child.lua_get(TERMINALS)
+  eq({ #terminals, child.fn.win_findbuf(terminals[1]) }, { 1, {} })
+
+  child.lua(
+    'local terminal = ...; vim.api.nvim_win_call(vim.fn.win_getid(1), function() vim.cmd.buffer(terminal) end)',
+    { terminals[1] }
+  )
+
+  eq(numbers_of_window(child, 1), HIDDEN)
+end
+
 T["Claude's line numbers, once shown in a Claude window that had none,"] = MiniTest.new_set()
 
 T["Claude's line numbers, once shown in a Claude window that had none,"]['stay shown in the terminal \\o restarts Claude Code in'] = function()
@@ -255,28 +277,6 @@ T["Claude's line numbers, set by hand after \\tcn,"]['stay as the user set them,
   entry.press(child, keys)
 
   eq(numbers_of_window(child, 1), { number = true, relativenumber = false })
-end
-
-T["Claude's line numbers, once hidden,"]["stay hidden in the new session's terminal the user brings back by hand to Claude's window, after the fallback started it while another buffer showed there"] = function()
-  local name = 'claude-numbers-fallback-by-hand'
-  local fake = open_with_number(child, name, {
-    AINEO_FAKE_CLAUDE_CONVERSATIONS = fixture.directory(name .. '-conversations'),
-  })
-  entry.press(child, '\\tcn')
-  end_claude_code(child)
-  child.cmd('Aineo open')
-  eq(#claude_session.wait_for_starts(fake, 2), 2)
-  child.lua(OTHER_BUFFER_IN_CLAUDE_WINDOW)
-  eq(#claude_session.wait_for_starts(fake, 3), 3)
-  local terminals = child.lua_get(TERMINALS)
-  eq({ #terminals, child.fn.win_findbuf(terminals[1]) }, { 1, {} })
-
-  child.lua(
-    'local terminal = ...; vim.api.nvim_win_call(vim.fn.win_getid(1), function() vim.cmd.buffer(terminal) end)',
-    { terminals[1] }
-  )
-
-  eq(numbers_of_window(child, 1), HIDDEN)
 end
 
 T["Claude's line numbers, with no layout,"] = MiniTest.new_set()
