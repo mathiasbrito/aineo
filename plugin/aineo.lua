@@ -107,8 +107,8 @@ end
 ---@type integer|nil
 local claude_terminal = nil
 
---- Starts the Claude session with `config` when none runs — a new one once
---- the last has exited — and returns its terminal, which it keeps as
+--- Starts Claude Code with `config` when none runs — again once the last
+--- has exited — and returns its terminal, which it keeps as
 --- `claude_terminal`. While one runs it starts nothing and returns that
 --- session's terminal (`aineo.claude`'s `start_session()`). Claude Code
 --- starts in the editor's working directory, resuming the session kept for
