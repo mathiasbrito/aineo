@@ -23,15 +23,16 @@ T23 opened it beside wave 6's open packets, since all its files were new. Later 
 
 | When | Step |
 |---|---|
-| 09-27 13:27 | Wave 7 planned (PR #76, opened 13:30); the planning probe on both versions |
+| 09-27 13:27 | Wave 7 planned (the plan's `planned_at`; PR #76 opened 13:30, first ledgered 13:33); the planning probe on both versions |
 | 09-27 13:59 | T23's brief review in: dispatch after corrections, 18 findings |
 | 09-27 14:02 | The plan corrected on a new branch (PR #78, replacing #76, whose pushed branch conflicted with `dev`) and claimed; the modularity rows (PR #77); both merged; T23 dispatched |
-| 09-27 16:06 | T23 in: PR #79, 1238 cases. The author's context was 522 K, so the fix round goes to a fresh agent. Two reviews dispatched; records queued for a slot |
+| 09-27 16:06 | T23 in: PR #79, 1238 cases. The author's context was 522 K, so the fix round goes to a fresh agent |
+| 09-27 16:07 | Two reviews dispatched; records queued for a slot |
 | 09-27 17:16–17:29 | The attack, test-integrity and records reviews in |
 | 09-27 17:30 | The fix round sent to a fresh agent |
 | 09-27 20:16 | The user paused wave 7. The fix round came in the same minute |
 | 09-27 20:16 | The fix round in (1260 cases): mechanisms replaced, so the re-measure ran with the attack question |
-| 09-27 21:25 | The re-measure in: the round held; four findings. The bounded correction sent to a fresh agent at 21:43 |
+| 09-27 21:25 | The re-measure in: the round held; seven findings. The bounded correction sent to a fresh agent at 21:43 |
 | 09-27 22:49 | The correction in (1265 cases); the orchestrator's verification started |
 | 09-27 23:57 | PR #79 merged after the verification (1328 cases on both versions, 23 mutants killed). No release |
 
@@ -41,7 +42,7 @@ T23 opened it beside wave 6's open packets, since all its files were new. Later 
 |---|---|---|
 | brief, T23 | `reviewer` | dispatch after corrections, 18 findings. `git diff` takes `index.lock` despite `GIT_OPTIONAL_LOCKS=0`; a `logs/HEAD` watch dies after `git gc`; Linux ignores the recursive flag; fixtures under `.tests/` sit inside the checkout's repository; the tests' git isolation already existed; GH7's list was incomplete; the modularity tables list every home |
 | attack, #79 | `neovim-lua-reviewer` | defeatable on its central claims. The private copy hid a same-second edit (5 of 5); the bound killed git only; paths read as pathspecs; a signal counted as an answer; carriage returns stripped; the watch could be starved; index-only changes unreported (a spec gap); the editor's `GIT_*` variables reached git |
-| test-integrity, #79 | `reviewer` | seven cases green for the wrong reasons: the watch and process cases, and the gc case, which passed under the very mutant it was written for. Eleven survivors; pins built for eight |
+| test-integrity, #79 | `reviewer` | the non-watch cases largely prove their names; the watch and process cases do not. The gc case passed under the very mutant it was written for. Seven findings; eleven survivors of the eight files, pins built for eight |
 | records, #79 | `reviewer` | the arrived-green table named killers that did not kill; 31 of 75 mutants were descriptions; mutant labels reused the project's ID prefixes; the minimum git (2.31) rested on a false recall |
 | re-measure, #79, with the attack question | `neovim-lua-reviewer` | the round held. The bound still waited for a process git leaves running; reads could run a repository hook; the round's `GIT_LITERAL_PATHSPECS` broke on an editor's `GIT_ICASE_PATHSPECS`; M2 unpinned |
 
@@ -70,11 +71,13 @@ Not in the table: the orchestrator's own context.
 ## Deviations and disclosures
 
 - **A conflict inside the orchestrator's brief:** GH2 asked for a `copied` kind, and GH7 for `-M`, which turns copy detection off. The author kept GH7, and the orchestrator accepted it as its own brief's conflict (MR188).
-- **The brief's first "measured" facts were not all measured where they mattered.** Its brief review found `git diff`'s lock and the `logs/HEAD` watch's death after `git gc`. The probe had measured only an empty commit.
+- **The brief's facts were not all measured where they mattered.** Its brief review found `git diff`'s lock despite `GIT_OPTIONAL_LOCKS=0`, a claim the brief had cited from git's documentation and asked the implementer to measure, not measured itself. It also found the `logs/HEAD` watch's death after `git gc`, where the probe had measured only an empty commit.
 - **The fix round wrote outside its worktree once.** A `Write` created a placeholder file in a new folder beside the developer's projects; it removed the file and its folder at once, and the orchestrator confirmed the folder was gone.
 - **The fix round's first 0.11.6 mutant run was invalid:** 0.12.5's `VIMRUNTIME` leaked into it. It was re-run.
 - **The re-measure's host load reached 921**, while T22's side-by-side runs measured beside it. Its timings name their loads.
-- **The orchestrator's verification missed a covering file for M2:** its list gave `test_git_lock.lua`, but the correction pinned M2 in `test_git_process.lua`. M2 was killed by assertion in the whole suite instead.
+- **The packet read the checkout's own repository twice**, which the brief forbids: the author's first red and its mutant R8 (the records review's finding 13). The review's X24 stood in for R8.
+- **The test-integrity review's 0.11.6 set was invalid** at first, from the same `VIMRUNTIME` leak as the fix round's.
+- **The orchestrator's verification left out one of the plan's twelve mutants,** W8; the re-measure had killed it. It also missed a covering file for M2: its list gave `test_git_lock.lua`, but the correction pinned M2 in `test_git_process.lua`. M2 was killed by assertion in the whole suite instead.
 - **T23 landed with the wave paused.** The user's instruction came while its fix round ran. The orchestrator read "finish the current work" as including T23, said so to the user, and started nothing else of wave 7.
 
 ## Decisions & reasoning
@@ -82,7 +85,8 @@ Not in the table: the orchestrator's own context.
 - **T23 beside wave 6** — the orchestrator: all its files were new, and a session may hold two claimed waves whose files are disjoint (orchestrate §2).
 - **An index write counts as a change of the list** — the orchestrator's decision on the attack review's finding 7. A commit that changes no file then reports one too (MR189); T25 re-reads the list, and nothing is lost.
 - **The user's and the repository's attributes stay in force** — the orchestrator's decision on the re-measure's finding 4. GH7 makes the home independent by flags, not by switching the user's files off, and attributes also decide what counts as changed (MR190).
-- **Wave 7 paused after T23** — the user, 2026-09-27.
+- **Wave 7 paused** — the user, 2026-09-27 (20:16). That T23 counted as current work, and was finished, is the orchestrator's reading, told to the user at 20:17.
+- **MR188, MR189 and MR190 were told to the user without a reply** (16:07, 17:16, 21:25). PR #86's first commit said none of T23's readings had been shown; it was wrong.
 
 ## Open threads
 
