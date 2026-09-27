@@ -121,7 +121,7 @@ T26's row carries all four.
 
 ## Landed
 
-- **Wave 7 paused after T23**, at the user's word on 2026-09-27: "we will not continue towards wave 7, finish the current work and wait my go to start wave 7". T23 was already in its fix round, and was finished. T24–T26 wait for the user's go. The wave stays claimed.
+- **Wave 7 paused** at the user's word on 2026-09-27 (20:16): "we will not continue towards wave 7, finish the current work and wait my go to start wave 7". That T23, already in its fix round, counted as current work and was finished is the orchestrator's reading, told to the user at 20:17. T24–T26 wait for the user's go. The wave stays claimed.
 - **T23 — PR #79, regular**, merged by rebase on 2026-09-27 as `2f44c73` … `da18aa6` (19 commits). The code of `dev` is identical to the verified tree: `b38bdd8` laid over `dev` `cfa91ee`, merge-tree `8295e23`, which also holds T19.
   - **The brief review** (dispatch after corrections, 18 findings) found, among others:
     - `git diff` takes `index.lock` despite `GIT_OPTIONAL_LOCKS=0`, and made a concurrent commit fail;
@@ -149,16 +149,15 @@ T26's row carries all four.
     - every read could run a `post-index-change` hook;
     - the round's `GIT_LITERAL_PATHSPECS` broke on an editor's `GIT_ICASE_PATHSPECS`;
     - M2 unpinned.
-    Its finding 4, the user's attributes turning diffs binary, the orchestrator decided as a reading: the attributes stay in force.
+    Seven findings in all. Its finding 4, the user's attributes turning diffs binary, the orchestrator decided as a reading: the attributes stay in force. Its finding 6, pid-file reads crashing under load, the correction fixed.
   - **The bounded correction**, by a fresh agent, adopted the re-measure's fixes and pins: 1265 cases on both versions.
 - **The orchestrator's verification** of the merged tree, under D26:
   - guard 5 cases, `Fails (0)`, both versions;
   - `make test`, 1328 cases, `Fails (0)`, on 0.12.5 (917 s) and 0.11.6 (925 s);
   - lint clean.
 - **23 literal mutants**, all killed by assertion:
-  - the plan's ten: the bound; `done` in the fast event; the untracked files left out; `-z` dropped; the range reversed; `core.quotePath` let through; the diff on the repository's own index; the recursive watch trusted on Linux; the watch not debounced; its handles not released;
-  - a missing `git` raised;
+  - eleven of the plan's twelve: the bound; `done` in the fast event; the untracked files left out; `-z` dropped; the range reversed; `core.quotePath` let through; the diff on the repository's own index; the recursive watch trusted on Linux; the watch not debounced; its handles not released; a missing `git` raised. The twelfth, W8 (the watch on `logs/HEAD` not re-armed after the file is replaced), was left out of the verification; the re-measure had killed it by assertion on both versions at `0f1a0f8`;
   - the rounds' guards: the group killed only while git runs; the copy not stamped; hooks; pathspecs; signals; carriage returns; no longest burst; an index-only change; the editor's `GIT_DIR`;
-  - the survivors: M2, W13, X1.
+  - three of the reviews' survivors: M2, W13, X1.
   - Every one was killed on its covering test files on both versions except M2. The orchestrator's list of covering files missed `test_git_process.lua`, where the correction pinned it, so M2 was killed by assertion in the whole suite on 0.12.5.
 - **No release:** T23 adds no command, key or window.

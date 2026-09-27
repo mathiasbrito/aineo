@@ -339,11 +339,11 @@ Added 2026-09-27 by the orchestrator, from T19's brief and session note at `dev`
 
 ## Readings — the git home (T23)
 
-Added 2026-09-27 by the orchestrator, from T23's brief and session note at `dev` `da18aa6` (PR #79). The home has no caller yet: T25, the changes pane, will show what these decide. None was shown to the user.
+Added 2026-09-27 by the orchestrator, from T23's brief and session note at `dev` `da18aa6` (PR #79). The home has no caller yet: T25, the changes pane, will show what these decide. Three were told to the user on 2026-09-27 without a reply — MR188 (16:07), MR189 (17:16) and MR190 (21:25); the rest were not shown.
 
 | ID | Reading | Source | Disposition |
 |---|---|---|---|
-| MR181 | The changes pane will list a working-tree change made by any process, the user's own included; T25 marks the user's saves. | T23's brief | open |
+| MR181 | The watch fires for a working-tree change made by any process, the user's own included; T25 marks the user's saves. | T23's brief | open |
 | MR182 | Paths are relative to the repository's top level, even when the editor's directory is below it. | T23's brief | open |
 | MR183 | A base that is no longer an ancestor of `HEAD` (after a reset, or a checkout of another branch) is reported, not repaired. | T23's brief | open |
 | MR184 | The git home keeps no session base; its caller does. C13 says the home "holds the session's base commit". | T23's brief | open |
@@ -364,9 +364,11 @@ Added 2026-09-27 by the orchestrator, from T23's brief and session note at `dev`
 | MR194 | A diff's size is not bounded: a commit adding a 100 MB file gives a 100 MB diff. | attack review (finding 16) |
 | MR195 | A repository whose tracked files were all rewritten with the same content makes every read hash every file again, until a git of the user's or Claude's refreshes the index. The attack review measured 60 000 such files timing out. | attack review (finding 17) |
 | MR196 | A process git starts in a group or a session of its own escapes the time limit, and holds the answer back while it holds git's output. | re-measure (finding 1) |
+| MR197 | Two answers the changes pane will meet: `git rm --cached` of an unchanged file lists it as deleted and as untracked; a clean merge commit's diff is its header alone, since `git show`'s default combined diff is empty for it. | attack review (finding 18) |
+| MR198 | When every process of git's group has exited but one outside it still holds git's output, the time limit signals the group id git had, which the system could in principle have given to a new group. Reasoned, not measured. | re-measure (finding 1's caveat) |
 
 ## Disposition
 
-**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR137 and MR139–MR196 stay open for the next review; MR138 is decided (D25), landed with T21 (PR #64, `v0.2.7`).
+**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR137 and MR139–MR198 stay open for the next review; MR138 is decided (D25), landed with T21 (PR #64, `v0.2.7`).
 
 Before that, every item was **open** until the MVP review. A reading the user keeps is closed *kept*; one the user changes becomes a plan row through a converge round (a new `D#`, never an edit in place) and a task.
