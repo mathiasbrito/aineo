@@ -1,0 +1,81 @@
+--- The git home: what a repository holds, asked of git — the files changed
+--- since a base commit, the commits since it, their diffs — and a watch that
+--- calls back when the branch moves or a working-tree file changes.
+---
+--- Every operation returns at once, runs git asynchronously with each process
+--- bounded in time, and calls its `done` exactly once, on the main loop, with
+--- a failure or an answer; it never raises. Its answers do not depend on the
+--- user's git settings, and its reads never take the repository's lock. The
+--- home keeps no state but its watches: the base is its caller's.
+
+local changes = require('aineo.git.changes')
+local diffs = require('aineo.git.diffs')
+local history = require('aineo.git.history')
+local process = require('aineo.git.process')
+local repository = require('aineo.git.repository')
+
+local M = {}
+
+--- Finds the repository `directory` is in, and calls `done(nil, repository)`,
+--- or `done(failure)`: `not_a_repository`, in git's words, when there is
+--- none.
+---
+---@param directory string
+---@param done fun(failure: aineo.git.Failure|nil, repository: aineo.git.Repository|nil)
+---@param options? aineo.git.Options
+function M.find_repository(directory, done, options)
+  repository.find_repository(process.runner(options), directory, done)
+end
+
+--- Lists the files of `found` that differ from the commit `base` — committed
+--- since or not, staged or not — and the untracked files its ignore rules
+--- leave in, with paths relative to its top level; calls `done(nil,
+--- changes)`, or `done(failure)`.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param base string|nil the full id of the commit the changes are counted from; nil, for a session begun before the first commit, counts every file as new
+---@param done fun(failure: aineo.git.Failure|nil, changes: aineo.git.Change[]|nil)
+---@param options? aineo.git.Options
+function M.changed_files(found, base, done, options)
+  changes.changed_files(process.runner(options), found, base, done)
+end
+
+--- Lists the commits of `found` reachable from `HEAD` and not from the
+--- commit `base`, newest first, and whether `base` is still an ancestor of
+--- `HEAD`; calls `done(nil, commits_since)`, or `done(failure)`.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param base string|nil the full id of the commit the commits are counted from; nil counts every commit
+---@param done fun(failure: aineo.git.Failure|nil, commits_since: aineo.git.CommitsSince|nil)
+---@param options? aineo.git.Options
+function M.commits_since(found, base, done, options)
+  history.commits_since(process.runner(options), found, base, done)
+end
+
+--- Gives the unified diff of the file `change` names in `found`, from the
+--- commit `base` to the working tree — an untracked file wholly added, a
+--- deleted one wholly removed, a renamed one as its rename — and calls
+--- `done(nil, diff)`, or `done(failure)`.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param base string|nil the base `change` was listed for by `M.changed_files()`
+---@param change aineo.git.Change one of the changes `M.changed_files()` gave
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+---@param options? aineo.git.Options
+function M.file_diff(found, base, change, done, options)
+  diffs.file_diff(process.runner(options), found, base, change, done)
+end
+
+--- Gives the unified diff of the commit `commit` in `found`, after its
+--- header — its id, author, date and message — as `git show` gives it in
+--- its default format, and calls `done(nil, diff)`, or `done(failure)`.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param commit string the commit's id
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+---@param options? aineo.git.Options
+function M.commit_diff(found, commit, done, options)
+  diffs.commit_diff(process.runner(options), found, commit, done)
+end
+
+return M
