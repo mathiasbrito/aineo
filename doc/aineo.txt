@@ -88,6 +88,30 @@ file column is open, the three columns take a third of the screen each.
 Only file buffers move: help, terminals and scratch buffers stay where they
 were opened until `\o` restores the layout.
 
+Claude's session ~
+                                                        *aineo-claude-session*
+Each Claude Code session aineo starts gets an id of its own, which aineo
+keeps for the directory Claude Code starts in: the working directory of that
+start, which `:cd` changes. The next start there — in a new Neovim, or `\o`
+once Claude Code has exited — resumes that session (`--resume`), and the
+conversation goes on where it stopped. A directory where aineo has started
+no session gets a new one (`--session-id`). The ids are kept under
+`stdpath('state')` in `aineo/claude-sessions/`, one file per directory that
+only you can read and write, and are never removed.
+
+A session in which nothing was sent leaves no conversation, and Claude Code
+cannot resume it: it prints "No conversation found with session ID: …" and
+exits. aineo then starts a new session in its place, in the windows that
+showed it, and keeps its id instead. The message shows for a moment, and if
+you were typing in Claude's window you are left in Normal mode there: `\c`
+puts you in the new prompt. A resumed Claude Code that exits any other way
+shows its exit as usual, and its id stays kept.
+
+aineo resumes the session it started, not one you switch to inside Claude
+Code (`/clear`, `/resume`), and ignores a conversation you ran in a plain
+terminal in the same directory. Two Neovims in one directory resume the
+same session.
+
 Input's draft ~
                                                                  *aineo-draft*
 What you write in Input is kept as a draft, one per working directory,
@@ -315,7 +339,9 @@ aineo notices it could receive the paste and the Enter (|aineo-limits|).
 ==============================================================================
 8. THE AGENT REPORT                                             *aineo-report*
 
-aineo starts Claude Code with three additions of its own:
+aineo starts Claude Code with four additions of its own:
+- the session it resumes, or the id of a new one: `--resume` or
+  `--session-id` (|aineo-claude-session|);
 - instructions appended to its system prompt, telling Claude when to call
   the report tool and how to write a report (below);
 - aineo's MCP server, which Claude Code runs as a headless `nvim`, given

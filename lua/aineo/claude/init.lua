@@ -3,6 +3,7 @@
 
 local arguments = require('aineo.claude.arguments')
 local readiness = require('aineo.claude.readiness')
+local session_ids = require('aineo.claude.session_ids')
 local stop = require('aineo.claude.stop')
 
 local M = {}
@@ -15,6 +16,8 @@ local M = {}
 ---@field mcp_servers table<string, table> the MCP servers Claude Code starts, by name, each in its `--mcp-config` server format
 ---@field allowed_tools string[] the tools Claude Code may call without asking the user
 ---@field instructions string the text appended to Claude Code's system prompt
+---@field on_terminal_replaced? fun(terminal: integer) called with the new terminal when the session replaces its terminal on its own, as it does when Claude Code finds no conversation to resume (`start_session()`); never for a terminal `start_session()` returns
+---@field state_directory string the directory under which the session id of each working directory is kept, in `aineo/claude-sessions/`: the editor's state directory
 
 --- The variables Claude Code's process gets on top of the editor's own, which
 --- it inherits unchanged: `AINEO_CHILD` tells aineo, should Claude Code start a
@@ -22,9 +25,9 @@ local M = {}
 local CHILD_ENVIRONMENT = { AINEO_CHILD = '1' }
 
 --- The one Claude Code session, once one has started: its terminal buffer and
---- job, whether Claude Code is ready for input now and, once its process has
---- ended, the process's exit code.
----@type { buffer: integer, job: integer, ready: boolean?, exit_code: integer? }?
+--- job, the session id it is on, whether Claude Code is ready for input now
+--- and, once its process has ended, the process's exit code.
+---@type { buffer: integer, job: integer, choice: aineo.claude.SessionChoice, ready: boolean?, exit_code: integer? }?
 local session
 
 --- Whether a session's Claude Code process has not ended yet — whatever
@@ -112,6 +115,8 @@ local function validate_settings(settings)
     return is_word_list(value, 0)
   end, 'a list of strings')
   vim.validate('settings.instructions', settings.instructions, 'string')
+  vim.validate('settings.state_directory', settings.state_directory, 'string')
+  vim.validate('settings.on_terminal_replaced', settings.on_terminal_replaced, 'function', true)
 end
 
 --- Runs `command` as a terminal job in the new, empty `buffer` and returns the
@@ -145,17 +150,85 @@ local function ensure_executable(program)
   end
 end
 
---- Runs Claude Code with `settings` in a new terminal buffer, and returns the
---- session that tracks it: its buffer and job, whether it is ready, and its
---- exit code once it has exited.
+--- The session a start of Claude Code is on: its id, and whether that id
+--- is resumed or a new session is started on it.
+---@alias aineo.claude.SessionChoice { id: string, resumed: boolean }
+
+--- What Claude Code 2.1.283 printed, before the id, when it was asked to
+--- resume a session id it had no conversation for; it then exited 1.
+local NO_CONVERSATION = 'No conversation found with session ID: '
+
+--- The session kept for `settings.cwd`, resumed, or, where none is kept, a
+--- new session on a new id.
 ---
 ---@param settings aineo.claude.Settings
----@return { buffer: integer, job: integer, ready: boolean?, exit_code: integer? }
-local function launch(settings)
+---@return aineo.claude.SessionChoice
+local function kept_or_new_session(settings)
+  local kept = session_ids.kept_session_id(settings.state_directory, settings.cwd)
+  if kept then
+    return { id = kept, resumed = true }
+  end
+  return { id = session_ids.new_session_id(), resumed = false }
+end
+
+--- The words that start Claude Code on `choice`: `--resume` and its id, or
+--- `--session-id` and its id.
+---
+---@param choice aineo.claude.SessionChoice
+---@return string[]
+local function session_arguments(choice)
+  return { choice.resumed and '--resume' or '--session-id', choice.id }
+end
+
+--- Keeps `id` as the session id of `settings.cwd`, and tells the user, as a
+--- warning, when it cannot; raises nothing.
+---
+---@param settings aineo.claude.Settings
+---@param id string
+local function keep_session_id(settings, id)
+  local kept, failure =
+    pcall(session_ids.keep_session_id, settings.state_directory, settings.cwd, id)
+  if not kept then
+    vim.notify('aineo: ' .. failure, vim.log.levels.WARN)
+  end
+end
+
+--- Whether `ended`, a session whose process has ended, resumed an id Claude
+--- Code had no conversation for: it exited 1 with `NO_CONVERSATION` and its
+--- id on its terminal. The terminal is read with every blank left out, since
+--- it wraps that line at its width; one already wiped tells nothing.
+---
+---@param ended { buffer: integer, choice: aineo.claude.SessionChoice, exit_code: integer? }
+---@return boolean
+local function found_no_conversation(ended)
+  if
+    not ended.choice.resumed
+    or ended.exit_code ~= 1
+    or not vim.api.nvim_buf_is_valid(ended.buffer)
+  then
+    return false
+  end
+  local screen = table.concat(vim.api.nvim_buf_get_lines(ended.buffer, 0, -1, false))
+  local message = NO_CONVERSATION .. ended.choice.id
+  return (screen:gsub('%s', '')):find((message:gsub('%s', '')), 1, true) ~= nil
+end
+
+--- Runs Claude Code with `settings` on the session `choice` names, in a new
+--- terminal buffer, and returns the session that tracks it: its buffer and
+--- job, the session it is on, whether it is ready, and its exit code once it
+--- has exited. `on_exit` is called with that session once its process has
+--- ended.
+---
+---@param settings aineo.claude.Settings
+---@param choice aineo.claude.SessionChoice
+---@param on_exit fun(ended: table)
+---@return { buffer: integer, job: integer, choice: aineo.claude.SessionChoice, ready: boolean?, exit_code: integer? }
+local function launch(settings, choice, on_exit)
   ensure_executable(settings.cmd[1])
-  local command =
-    vim.list_extend(vim.list_slice(settings.cmd), arguments.claude_arguments(settings))
-  local launched = { buffer = vim.api.nvim_create_buf(false, true) }
+  local command = vim.list_slice(settings.cmd)
+  vim.list_extend(command, session_arguments(choice))
+  vim.list_extend(command, arguments.claude_arguments(settings))
+  local launched = { buffer = vim.api.nvim_create_buf(false, true), choice = choice }
   readiness.watch(launched.buffer, function(ready)
     launched.ready = ready
   end)
@@ -165,9 +238,58 @@ local function launch(settings)
     env = CHILD_ENVIRONMENT,
     on_exit = function(_, exit_code)
       launched.exit_code = exit_code
+      on_exit(launched)
     end,
   })
   return launched
+end
+
+--- Starts Claude Code with `settings` on the session `choice` names, as the
+--- one session, its terminal taking the last session's place in every window
+--- that showed it, and returns that terminal; keeps the id of a new session
+--- for `settings.cwd`. When Claude Code then finds no conversation to resume,
+--- a new session takes its place (`start_in_place_of_no_conversation()`).
+---@type fun(settings: aineo.claude.Settings, choice: aineo.claude.SessionChoice): integer
+local start_in_place
+
+--- When `ended`, a session whose process has ended, resumed an id Claude
+--- Code found no conversation for (`found_no_conversation()`), starts a new
+--- session on a new id in its place, from a scheduled callback, as
+--- `start_session()` would, and hands its terminal to
+--- `settings.on_terminal_replaced`. It starts none once Neovim is quitting
+--- (`v:exiting` set), as it is while `VimLeavePre` handlers wait.
+---
+---@param settings aineo.claude.Settings
+---@param ended table
+local function start_in_place_of_no_conversation(settings, ended)
+  if not found_no_conversation(ended) then
+    return
+  end
+  vim.schedule(function()
+    if vim.v.exiting ~= vim.NIL then
+      return
+    end
+    local terminal =
+      start_in_place(settings, { id = session_ids.new_session_id(), resumed = false })
+    if settings.on_terminal_replaced then
+      settings.on_terminal_replaced(terminal)
+    end
+  end)
+end
+
+start_in_place = function(settings, choice)
+  local previous = session
+  session = launch(settings, choice, function(ended)
+    start_in_place_of_no_conversation(settings, ended)
+  end)
+  stop_on_quit()
+  if previous then
+    replace_terminal(previous.buffer, session.buffer)
+  end
+  if not choice.resumed then
+    keep_session_id(settings, choice.id)
+  end
+  return session.buffer
 end
 
 --- Starts Claude Code in a new terminal buffer and returns that buffer. While
@@ -175,6 +297,19 @@ end
 --- Claude Code at a time. Once it has exited, it starts a new one, whose
 --- terminal takes the old one's place in every window that showed it.
 --- Quitting Neovim stops a running Claude Code by its keys first.
+---
+--- Claude Code resumes the session id kept for `settings.cwd` under
+--- `settings.state_directory` (`--resume`). Where none is kept — or the kept
+--- file holds anything but an id of the form aineo makes — it starts on a
+--- new id (`--session-id`), kept for that directory from then on, in place
+--- of what was kept; an id that cannot be kept is told the user as a
+--- warning, and the session starts all the same. When Claude Code exits 1
+--- on a resume, having printed that it found no conversation for the id —
+--- as Claude Code 2.1.283 does for a session in which nothing was sent — a
+--- new session on a new id takes its place, as a start once it has exited
+--- would, and `settings.on_terminal_replaced` is handed its terminal; once
+--- per start, and none while Neovim quits. Any other exit leaves the session
+--- exited and its id kept.
 ---
 --- Show a new buffer in a window before Claude Code draws its first screen:
 --- its terminal takes its size from the first window that shows it, and until
@@ -202,13 +337,7 @@ function M.start_session(settings)
   if is_running() then
     return session.buffer
   end
-  local previous = session
-  session = launch(settings)
-  stop_on_quit()
-  if previous then
-    replace_terminal(previous.buffer, session.buffer)
-  end
-  return session.buffer
+  return start_in_place(settings, kept_or_new_session(settings))
 end
 
 --- Where the session stands: `'ready'` while Claude Code's input box is on

@@ -101,15 +101,21 @@ local function keep_input_draft()
   draft.keep_draft(require('aineo.layout').input_buffer())
 end
 
---- The terminal of the Claude session aineo started last, or `nil` before
---- it has started one.
+--- The terminal of the Claude session aineo started last — the new
+--- session's once one took the place of a resume Claude Code found no
+--- conversation for — or `nil` before it has started one.
 ---@type integer|nil
 local claude_terminal = nil
 
 --- Starts the Claude session with `config` when none runs — a new one once
 --- the last has exited — and returns its terminal, which it keeps as
 --- `claude_terminal`. While one runs it starts nothing and returns that
---- session's terminal (`aineo.claude`'s `start_session()`).
+--- session's terminal (`aineo.claude`'s `start_session()`). Claude Code
+--- starts in the editor's working directory, resuming the session kept for
+--- it under the state directory of `kept_places()`. When the session puts a
+--- new terminal in place of one whose resume found no conversation, that
+--- terminal becomes `claude_terminal` and the layout's Claude terminal
+--- (`aineo.layout`'s `follow_claude_terminal()`).
 ---
 ---@param config table the resolved configuration
 ---@return integer terminal
@@ -122,6 +128,11 @@ local function started_claude_terminal(config)
     mcp_servers = mcp.mcp_servers(vim.v.servername, vim.v.progpath),
     allowed_tools = mcp.allowed_mcp_tools(),
     instructions = report.report_instructions(mcp.report_tool_name()),
+    state_directory = kept_places().state_directory,
+    on_terminal_replaced = function(terminal)
+      claude_terminal = terminal
+      require('aineo.layout').follow_claude_terminal(terminal)
+    end,
   })
   return claude_terminal
 end
