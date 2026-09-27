@@ -41,8 +41,8 @@ M.report_instructions = instructions.report_instructions
 --- for each report received, and the state and working directories, read
 --- when the Report buffer is first created. The working directory is read
 --- again whenever the Report shows reports, to find the files their relative
---- paths name. The composition root calls it before anything else in the home
---- is used.
+--- paths name, and at each double-click on a path, to open its file. The
+--- composition root calls it before anything else in the home is used.
 ---
 --- Raises an error naming the field when `report_environment` is not an
 --- environment.
@@ -141,9 +141,18 @@ end
 --- The file is the one the Report underlined, whatever Neovim's current
 --- directory is now.
 ---
+--- Opens nothing, and warns the user, when `path` names no regular file any
+--- more (`names_file()`): its file was removed since the Report drew it, or
+--- replaced by something else, such as a FIFO, whose opening would wait for
+--- a writer and hold the editor.
+---
 ---@param path string
 local function open_drawn_path(path)
   local candidate = paths.find_path_candidates(path)[1]
+  if not names_file(candidate.path) then
+    vim.notify(('aineo: %s names no file now'):format(candidate.path), vim.log.levels.WARN)
+    return
+  end
   vim.cmd('edit ' .. vim.fn.fnameescape(file_named_by(candidate.path)))
   if candidate.line then
     local last_line = vim.api.nvim_buf_line_count(0)

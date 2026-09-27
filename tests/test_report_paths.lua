@@ -34,6 +34,11 @@ local function make_project()
   for _, name in ipairs({ 'Makefile', 'Makefile.', 'README.md', '.gitignore', '.luarc.json' }) do
     fixture.write(PROJECT .. '/' .. name, { 'a line' })
   end
+  fixture.write(PROJECT .. '/inj/p%q.lua', { 'a line' })
+  fixture.write(PROJECT .. '/~/x.lua', { 'a line' })
+  assert(vim.uv.fs_symlink(in_project('notes.txt'), in_project('link.lua')))
+  local made = vim.system({ 'mkfifo', in_project('pipe.lua') }):wait()
+  assert(made.code == 0, made.stderr)
 end
 
 --- Starts the child's report home with the clock at `times`, a fresh state
@@ -195,6 +200,30 @@ T['a path']['that names a directory is not drawn'] = function()
   eq(report_paths(), {})
 end
 
+T['a path']['that names a FIFO is not drawn'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+
+  receive_details('See pipe.lua now')
+
+  eq(report_paths(), {})
+end
+
+T['a path']['that names a symbolic link to a file is drawn'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+
+  receive_details('See link.lua now')
+
+  eq(drawn_paths(), { 'link.lua' })
+end
+
+T['a path']['that starts with ~ is looked up in a directory named ~ in the working directory'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+
+  receive_details('See ~/x.lua now')
+
+  eq(drawn_paths(), { '~/x.lua' })
+end
+
 T['a stop'] = MiniTest.new_set({
   parametrize = {
     { '\1' },
@@ -335,6 +364,21 @@ T['the file checks']['are one for each distinct path, however often it occurs'] 
   })
 
   eq(child.lua_get('_G.checks'), 4)
+end
+
+T['the file checks']['on :edit are one for each distinct path, however often it occurs'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(
+    child,
+    { task = 'a/1 a/1', status = 'done', summary = 'a/1', details = 'a/1 a/1' }
+  )
+  report_editor.receive(child, { task = 'a/1', status = 'done', summary = 'a/1', details = 'a/1' })
+  count_checks_under(in_project(''))
+  child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
+
+  child.cmd('edit')
+
+  eq(child.lua_get('_G.checks'), 1)
 end
 
 --- The expression, run in the child, that hands its report home a report
@@ -613,6 +657,28 @@ T['a double-click']['on a path with no line opens its file in the file column'] 
   eq(where_the_file_opened(), opened_in_file_column(in_project('lua/x.lua'), 1))
 end
 
+T['a double-click']['on a path after a comma opens that path, not the one before it'] = function()
+  open_layout()
+  receive_details('lua/x.lua,notes.txt:3')
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  double_click_in_report(2, 20)
+
+  wait_until_current_file_is(in_project('notes.txt'))
+  eq(where_the_file_opened(), opened_in_file_column(in_project('notes.txt'), 3))
+end
+
+T['a double-click']['on a path holding a % opens the file it names'] = function()
+  open_layout()
+  receive_details('See inj/p%q.lua now')
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  double_click_in_report(2, 12)
+
+  wait_until_current_file_is(in_project('inj/p%q.lua'))
+  eq(where_the_file_opened(), opened_in_file_column(in_project('inj/p%q.lua'), 1))
+end
+
 T['a double-click']['on a path with a line outside the file'] = MiniTest.new_set({
   parametrize = {
     { 'notes.txt:0', 1 },
@@ -773,6 +839,107 @@ T['a double-click']["on the Report's status line opens nothing"] = function()
     return child.lua_get([[vim.api.nvim_get_mode().blocking]]) == false
   end, 20)
   eq(what_the_layout_shows(), NOTHING_OPENED)
+end
+
+--- Whether a reader holds the FIFO `fifo` open: tries, without waiting, to
+--- open it for writing, which succeeds only then, and writes it a line and
+--- closes it, so the reader reads that line and the end of the file and
+--- goes on.
+---
+---@param fifo string
+---@return boolean
+local function release_reader_of(fifo)
+  local writer = vim.uv.fs_open(
+    fifo,
+    require('bit').bor(vim.uv.constants.O_WRONLY, vim.uv.constants.O_NONBLOCK),
+    tonumber('644', 8)
+  )
+  if not writer then
+    return false
+  end
+  vim.uv.fs_write(writer, 'written by the test\n')
+  vim.uv.fs_close(writer)
+  return true
+end
+
+--- How often a case releases the readers of a FIFO.
+local RELEASE_INTERVAL_MS = 20
+
+--- Releases any reader of the FIFO `fifo` (`release_reader_of()`) every
+--- `RELEASE_INTERVAL_MS`, from now until the case ends, while the test waits
+--- on the child too: a child that opened the FIFO is held in `open(2)` until
+--- a writer comes, and would hold the test with it. Returns a function that
+--- tells whether a reader was released so far.
+---
+---@param fifo string
+---@return fun(): boolean
+local function keep_releasing_readers_of(fifo)
+  local released = false
+  local timer = assert(vim.uv.new_timer())
+  timer:start(0, RELEASE_INTERVAL_MS, function()
+    released = release_reader_of(fifo) or released
+  end)
+  MiniTest.finally(function()
+    timer:stop()
+    timer:close()
+  end)
+  return function()
+    return released
+  end
+end
+
+--- Replaces the file `file` with a FIFO of the same name.
+---
+---@param file string
+local function replace_with_fifo(file)
+  assert(os.remove(file))
+  local made = vim.system({ 'mkfifo', file }):wait()
+  assert(made.code == 0, made.stderr)
+end
+
+--- Waits, at most `CLICK_PATIENCE_MS`, until the child has told the user
+--- something (`entry.messages()`).
+local function wait_until_told()
+  vim.wait(CLICK_PATIENCE_MS, function()
+    return #entry.messages(child) > 0
+  end, 20)
+end
+
+T['a double-click']['on a path whose file became a FIFO since it was drawn opens nothing and says why'] = function()
+  open_layout()
+  fixture.write(PROJECT .. '/swap.lua', { 'a line' })
+  receive_details('See swap.lua now')
+  replace_with_fifo(in_project('swap.lua'))
+  local fifo_was_read = keep_releasing_readers_of(in_project('swap.lua'))
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  double_click_in_report(2, 12)
+
+  wait_until_told()
+  eq(
+    { fifo_read = fifo_was_read(), shown = what_the_layout_shows(), told = entry.messages(child) },
+    {
+      fifo_read = false,
+      shown = NOTHING_OPENED,
+      told = { { message = 'aineo: swap.lua names no file now', level = vim.log.levels.WARN } },
+    }
+  )
+end
+
+T['a double-click']['on a path whose file was removed since it was drawn opens nothing and says why'] = function()
+  open_layout()
+  fixture.write(PROJECT .. '/gone.lua', { 'a line' })
+  receive_details('See gone.lua now')
+  assert(os.remove(in_project('gone.lua')))
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  double_click_in_report(2, 12)
+
+  wait_until_told()
+  eq({ shown = what_the_layout_shows(), told = entry.messages(child) }, {
+    shown = NOTHING_OPENED,
+    told = { { message = 'aineo: gone.lua names no file now', level = vim.log.levels.WARN } },
+  })
 end
 
 return T
