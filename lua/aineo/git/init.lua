@@ -8,13 +8,14 @@
 --- included. The bound stops git with every process it started, save one
 --- started in a process group of its own, which escapes it and, while it
 --- holds git's output, holds `done` back. Its answers do not depend on the
---- user's git settings, nor on the `GIT_*` variables of the editor's
---- environment that name another repository or change how git reads a path
---- or where it reads attributes from, and its reads never take the
---- repository's lock nor run its hooks. A diff is
---- exactly what git printed, carriage returns included, and is not bounded
---- in size: a commit that adds a 100 MB file gives a 100 MB diff. The home
---- keeps no state but its watches: the base is its caller's.
+--- user's git settings, save the attributes the user and the repository give
+--- files, which say what is text (`diffs`), nor on the `GIT_*` variables of
+--- the editor's environment that name another repository or change how git
+--- reads a path or where it reads attributes from, and its reads never take
+--- the repository's lock nor run its hooks. A diff is exactly what git
+--- printed, carriage returns included, and is not bounded in size: a commit
+--- that adds a 100 MB file gives a 100 MB diff. The home keeps no state but
+--- its watches: the base is its caller's.
 
 local changes = require('aineo.git.changes')
 local diffs = require('aineo.git.diffs')
