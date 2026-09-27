@@ -523,7 +523,7 @@ The first plan listed "the mode entered before the layout's focus"; the brief re
   - the id file is not `.jsonl`;
   - the id comes from `vim.uv.random(16)`;
   - the help's list of Claude Code's additions is T19's;
-  - D23 is quoted whole, with its options not chosen;
+  - D23's options are quoted as D23 records them;
   - SR3's message wraps;
   - the timings are 2.1 s and 1.4 s, one run each;
   - the line ranges are corrected, and the merge check runs against T17;
@@ -553,6 +553,9 @@ The first plan listed "the mode entered before the layout's focus"; the brief re
 - the id kept for the editor's first directory, not Claude Code's;
 - `--allowedTools` not last;
 - the composition root's or the layout's holder left on the failed terminal after SR3.
+- a kept file holding an empty or malformed id passed to `--resume`.
+
+The brief was corrected after its second brief review, `brief-review-t19-claude-resume.md` (T19b-1 to T19b-9): the hand-off's measured consequences on T21's tree, tests red before the hand-off, the boundary's function list, a kept id that is not an id, the wrap's widths, one more reading, and the records.
 
 ## Packet T21 — 2026-09-26
 
