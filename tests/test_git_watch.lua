@@ -141,7 +141,7 @@ T['a watch that sees the branch move']['calls back once for it'] = function(comm
   git_repo.write(top, 'after.txt', { 'the next burst' })
   local changes = wait_for_changes(2)
 
-  eq({ first = changes[1].change.branch_moved, second = changes[2].change }, {
+  eq({ first = vim.tbl_get(changes, 1, 'change', 'branch_moved'), second = changes[2].change }, {
     first = true,
     second = { files_changed = true, branch_moved = false },
   })
