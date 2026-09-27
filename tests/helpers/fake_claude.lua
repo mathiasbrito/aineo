@@ -113,9 +113,9 @@ local MODES = {
 local CONVERSATIONS = os.getenv('AINEO_FAKE_CLAUDE_CONVERSATIONS')
 
 --- How long the fake takes to exit on a `--resume` it has no conversation
---- for. Chosen, not measured: shorter than the 1.4 and 2.1 s Claude Code
---- 2.1.283 took, so that a suite waits less.
-local NO_CONVERSATION_EXIT_MS = 500
+--- for: the shorter of the two times Claude Code 2.1.283 took, 1.4 s (the
+--- other, 2.1 s), each measured once.
+local NO_CONVERSATION_EXIT_MS = 1400
 
 local MODE_NAME = os.getenv('AINEO_FAKE_CLAUDE_MODE') or 'ready'
 local MODE = assert(MODES[MODE_NAME], 'no such mode: ' .. MODE_NAME)

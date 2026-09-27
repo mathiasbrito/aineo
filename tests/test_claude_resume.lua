@@ -390,8 +390,8 @@ end
 T['a resume with no conversation']['starts no new session as Neovim quits'] = function()
   local fake = fake_keeping_conversations('resume-refused-quit', 'ready')
   local settings = kept_in('resume-refused-quit-state')
-  resume_with_no_conversation(child, fake, settings)
-  claude.wait_for_starts(fake, 2)
+  local resumed = resume_with_no_conversation(child, fake, settings)
+  claude.wait_for_screen(child, resumed, 'No conversation found with session ID')
   child.lua([[
     vim.api.nvim_create_autocmd('VimLeavePre', {
       desc = 'Wait as Neovim quits, as another plugin might',
