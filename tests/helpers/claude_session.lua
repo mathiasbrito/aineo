@@ -42,9 +42,10 @@ function M.deaf_fake_command()
 end
 
 --- The session's settings a test starts it with: the fake's command, the
---- editor's working directory, and stand-ins for the MCP servers, the tools to
---- pre-allow and the instructions the composition root hands over — one server
---- with variables and one with none — overridden key by key by `overrides`.
+--- editor's working directory and state directory, and stand-ins for the MCP
+--- servers, the tools to pre-allow and the instructions the composition root
+--- hands over — one server with variables and one with none — overridden key
+--- by key by `overrides`.
 ---
 ---@param overrides? table
 ---@return table
@@ -52,6 +53,7 @@ function M.stand_in_settings(overrides)
   return vim.tbl_extend('force', {
     cmd = M.fake_command(),
     cwd = vim.fn.getcwd(),
+    state_directory = vim.fn.stdpath('state'),
     mcp_servers = {
       aineo = {
         type = 'stdio',
@@ -149,16 +151,43 @@ function M.start_silently(child, fake, overrides)
   )
 end
 
---- Calls `start_session()` in `child` once more, with the stand-in settings,
---- and returns what it returns without showing it anywhere: which windows show
---- a new terminal is the session's to decide.
+--- Calls `start_session()` in `child` once more, with the stand-in settings
+--- overridden by `overrides`, and returns what it returns without showing it
+--- anywhere: which windows show a new terminal is the session's to decide.
 ---
 ---@param child table
+---@param overrides? table
 ---@return integer
-function M.start_again(child)
+function M.start_again(child, overrides)
   return child.lua(
-    "return require('aineo.claude').start_session(dofile(...).stand_in_settings())",
-    { THIS_FILE }
+    [[
+      local helper, overrides = dofile(...), select(2, ...)
+      return require('aineo.claude').start_session(helper.stand_in_settings(overrides))
+    ]],
+    { THIS_FILE, overrides or vim.empty_dict() }
+  )
+end
+
+--- Calls `start_session()` in `child` once more, as `start_again()` does,
+--- with an `on_terminal_replaced` that appends each terminal it is given to
+--- the child's `_G.replaced_terminals`, emptied first; returns what
+--- `start_session()` returns.
+---
+---@param child table
+---@param overrides? table
+---@return integer
+function M.start_again_noting_replacements(child, overrides)
+  return child.lua(
+    [[
+      local helper, overrides = dofile(...), select(2, ...)
+      _G.replaced_terminals = {}
+      local settings = helper.stand_in_settings(overrides)
+      settings.on_terminal_replaced = function(terminal)
+        table.insert(_G.replaced_terminals, terminal)
+      end
+      return require('aineo.claude').start_session(settings)
+    ]],
+    { THIS_FILE, overrides or vim.empty_dict() }
   )
 end
 
@@ -601,6 +630,18 @@ function M.wait_for_starts(fake, count)
     return #starts >= count
   end, 20)
   return starts
+end
+
+--- The arguments of the fake's `count`th start, after its own script, once
+--- it has started that many times (`wait_for_starts()`); none when it has
+--- not.
+---
+---@param fake { record: string }
+---@param count integer
+---@return string[]
+function M.start_arguments(fake, count)
+  local start = M.wait_for_starts(fake, count)[count]
+  return start and start.argv or {}
 end
 
 --- The fake's first start entry (`wait_for_starts()`) once it has started; an
