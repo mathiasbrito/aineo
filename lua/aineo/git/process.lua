@@ -46,9 +46,13 @@ local ENVIRONMENT = {
 --- object store other than the one it finds from its directory (the names
 --- `git rev-parse --local-env-vars` gives, less the two that carry `-c`
 --- settings, which the home's own `-c` and flags override where they would
---- change an answer), and `GIT_NAMESPACE` and `GIT_DIFF_OPTS`, which change
---- what it answers. An editor can carry any of them: git gives the editor it
---- starts `GIT_INDEX_FILE`, and `git --git-dir` exports `GIT_DIR`.
+--- change an answer); `GIT_NAMESPACE` and `GIT_DIFF_OPTS`, which change
+--- what it answers; the global pathspec settings, which git refuses beside
+--- the home's `GIT_LITERAL_PATHSPECS`, failing every diff of a tracked file;
+--- and `GIT_ATTR_SOURCE`, which reads the attributes from another tree, so
+--- that one saying `-diff` shows every file as binary. An editor can carry
+--- any of them: git gives the editor it starts `GIT_INDEX_FILE`, and
+--- `git --git-dir` exports `GIT_DIR`.
 local EDITOR_VARIABLES_LEFT_OUT = {
   'GIT_DIR',
   'GIT_WORK_TREE',
@@ -65,6 +69,10 @@ local EDITOR_VARIABLES_LEFT_OUT = {
   'GIT_CONFIG',
   'GIT_NAMESPACE',
   'GIT_DIFF_OPTS',
+  'GIT_GLOB_PATHSPECS',
+  'GIT_NOGLOB_PATHSPECS',
+  'GIT_ICASE_PATHSPECS',
+  'GIT_ATTR_SOURCE',
 }
 
 --- How the home runs git; every field it leaves out is the home's default.
