@@ -15,3 +15,5 @@ The attack review of PR #4 (T1) measured it: a scratch-isolated `nvim --headless
 ## Why it matters
 
 Isolation is the list of every variable that carries state, not the four `XDG_*` names: here `NVIM_LOG_FILE`, `CLAUDE_CONFIG_DIR`, the parent's `CLAUDE*` session markers, and `NVIM`, `NVIM_APPNAME`, `MYVIMRC`, `VIMINIT` and `AI_AGENT`, which T1's correction keeps from the runner (`Makefile:49`). An isolation test run only from a plain shell cannot catch a leak that happens only under a parent editor; the pin sets the outside value and asserts it does not arrive. Still open at T1's merge: `VIMRUNTIME` from a parent Neovim (left alone, since unsetting it breaks development builds).
+
+Neovim 0.12 adds one more such variable: a log file it could not open is handed down in `__NVIM_LOG_FILE_WANT` ([[Learnings/Neovim 0.12 hands a log file it could not open to its children in __NVIM_LOG_FILE_WANT]]).
