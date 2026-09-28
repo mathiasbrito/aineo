@@ -947,7 +947,7 @@ Asked "How should I cut the time the tests cost?", the user chose "Run less + pa
   - the round's guards: the mkdir retry, the gap guard, the `v:exiting` guard, the round's mode condition, the command-line window wait, `winfixbuf` not cleared.
 - **Released:** `v0.2.9`, which carries T19 (PR #81, `main` at `ece0cdb`).
 - **T12 — PR #84, regular**, merged by rebase on 2026-09-28 as `8cf2840` … `97d9ea0` (8 commits), after T19. The code of `dev` is identical to the verified tree: `ac3e458` laid over `dev` `d7714d6`, merge-tree `276fc42`, which also holds T19 and T23.
-  - **The brief** of 2026-09-25 was amended on 2026-09-27 against the code T19 lands (PRs #80 and #82). The amendment's brief review found CN9's premise wrong: no `TermOpen` reaches Claude's window. The user then decided D27: the toggle stays as the user left it, across every new Claude terminal in that window. The plan's own reading above ("the rebuilt window takes the user's defaults") is superseded by the amendment and D27.
+  - **The brief** of 2026-09-25 was amended on 2026-09-27 against the code T19 lands (PRs #80 and #82). The amendment's brief review found CN9's premise wrong: no `TermOpen` reaches Claude's window. The user then decided D27: the toggle stays as the user left it, across every new Claude terminal in that window. The reading that a window `\o` rebuilds takes the user's defaults (the plan's row above; "the rebuilt window takes the user's defaults" in the brief; MR114) is superseded. The amendment read D27 as covering it, and the fix round's fix A re-applies the toggle to a new window. D27's row names new terminals only, so the new-window half is the orchestrator's reading (MR204).
   - **Reviews** on Opus: attack by `neovim-lua-reviewer`; test-integrity and records by `reviewer`. They found:
     - the re-apply ran on every `open()`, and undid numbers the user set by hand;
     - a terminal put back by hand missed the toggle;
@@ -979,7 +979,15 @@ Asked "How should I cut the time the tests cost?", the user chose "Run less + pa
   - guard 5 cases, `Fails (0)`, both versions;
   - `make test`, 1434 cases in 197 s on each version: `Fails (0)` on 0.12.5. On 0.11.6 `Fails (1)`, T17's intermittent timing case, which passed 3 of 3 alone;
   - lint clean.
-- **14 literal mutants**, each killed by assertion on its covering test files, on both versions except the log directory's, which 0.11.6 makes itself:
+- **14 literal mutants** on their covering test files:
   - the plan's nine: a failure dropped; a file with no case passed; one home; the limit per file; files left running; one file's summary; `AINEO_TEST_JOBS` ignored; the log directory; every home cleared;
   - the rounds' five: the signal; the records; the `export`; the output relay; the homes' retry.
+
+  Twelve were killed by assertion on both versions. The other two:
+  - **The log directory** was run as each file's home made without its log directory. It was killed by assertion on 0.12.5 only: 0.11.6 does not hand a log it cannot open down to the Neovims it starts, and 0.12.5 does, in `__NVIM_LOG_FILE_WANT` (measured on 2026-09-28).
+
+    The plan's mutant is the runner's own directory, which the recipes make. The orchestrator ran it on 2026-09-28, both recipes' `mkdir -p` deleted:
+    - on 0.12.5, it was killed by assertion in `tests/test_runner_homes.lua`;
+    - on 0.11.6, it survived the whole suite, 1434 cases, since there it has nothing to break.
+  - **Every home cleared** ended its covering file with 0 cases and "its Neovim exited 1", with no assertion shown. The cause: the mutated runner, run by a nested `make`, deleted the verifying run's own homes (the records review of PR #88). Re-run on 2026-09-28 with a pristine outer runner whose homes lay elsewhere, it was killed by assertion on both versions: *a run started inside another › leaves the outer file's home as it was*.
 - **No release:** T22 changes only the test harness.

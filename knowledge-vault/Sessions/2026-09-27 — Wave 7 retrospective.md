@@ -35,7 +35,8 @@ T23 opened it beside wave 6's open packets, since all its files were new. Later 
 | 09-27 21:25 | The re-measure in: the round held; seven findings. The bounded correction sent to a fresh agent at 21:43 |
 | 09-27 22:49 | The correction in (1265 cases); the orchestrator's verification started |
 | 09-27 23:57 | PR #79 merged after the verification (1328 cases on both versions, 23 mutants killed). No release |
-| 09-28 00:00 | T23's knowledge pass (PR #86); its records review in, corrected, and merged (the correction at 56b082d) |
+| 09-28 00:00 | T23's knowledge pass (PR #86, opened at 00:00) |
+| 09-28 00:30 | Its records review in; corrected, and merged at 00:31 (`e8047e9`, `d7714d6` on `dev`) |
 
 **Findings, per review** (the verdicts are the reviewers'):
 
@@ -46,6 +47,7 @@ T23 opened it beside wave 6's open packets, since all its files were new. Later 
 | test-integrity, #79 | `reviewer` | the non-watch cases largely prove their names; the watch and process cases do not. The gc case passed under the very mutant it was written for. Seven findings; eleven survivors of the eight files, pins built for eight |
 | records, #79 | `reviewer` | the arrived-green table named killers that did not kill; 31 of 75 mutants were descriptions; mutant labels reused the project's ID prefixes; the minimum git (2.31) rested on a false recall |
 | re-measure, #79, with the attack question | `neovim-lua-reviewer` | the round held. The bound still waited for a process git leaves running; reads could run a repository hook; the round's `GIT_LITERAL_PATHSPECS` broke on an editor's `GIT_ICASE_PATHSPECS`; M2 unpinned |
+| records, #86 (T23's pass) | `reviewer` | the arithmetic sound, the attributions not: MR188–MR190 had been told to the user; the pause's "after T23" was the orchestrator's reading, recorded as the user's; three counts were the orchestrator's paraphrases of the reviewers'; the verification had left out one of the plan's twelve mutants. Every hash, the merge tree, the cost rows and the counts held. Twelve findings |
 
 **Rounds on #79, regular:**
 - the packet, 1238 cases;
