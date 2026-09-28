@@ -27,6 +27,7 @@ Every command sits behind one prefix key, `\` by default, in Normal mode:
 `\s` sends Input to Claude, `\o` opens or restores the layout, and `\r`, `\i`
 and `\c` move to the Report, Input and Claude — `\c` in Terminal mode, so
 that what you type next goes to Claude, unless Claude Code has exited.
+`\tcn` hides or shows the line numbers of Claude's window.
 
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
@@ -168,7 +169,7 @@ lives in one tab; from another tab, `\o` moves you to it.
 4. COMMANDS                                                   *aineo-commands*
 
                                                                       *:Aineo*
-:Aineo {subcommand}	Runs one of aineo's five actions. Completion offers
+:Aineo {subcommand}	Runs one of aineo's six actions. Completion offers
 			the subcommands. Without one of them, or with
 			anything else, it tells you, with one error, which
 			ones it takes.
@@ -214,6 +215,39 @@ layout opens again. Of the actions, only `open` restarts an exited Claude
 Code; aineo restarts one by itself only in place of a resume Claude Code
 has no conversation for (|aineo-claude-session|).
 
+                                                       *:Aineo-claude-numbers*
+:Aineo claude-numbers	Hides the line numbers of Claude's window, 'number'
+			and 'relativenumber', when it shows either, and shows
+			them again as they were when aineo last hid them,
+			whichever buffer Claude's window showed then, when it
+			shows none: 'number' alone when aineo has hidden none
+			before. It acts on the buffer Claude's window shows,
+			whichever it is, changes no other window, and leaves
+			the cursor and the mode where they are; from another
+			tab it acts on Claude's window in the layout's tab.
+			Without a Claude window — the layout or Claude's
+			window closed, or Claude's window left without its
+			terminal once the terminal was wiped, on an empty
+			buffer or on a file Neovim showed there — it changes
+			nothing and warns you once.
+
+			aineo keeps your choice until the editor quits, and
+			gives it to every Claude terminal new to Claude's
+			window — Claude Code restarted by `open`, the new
+			session that takes the place of a resume with no
+			conversation, a wiped terminal started again, a
+			terminal you bring back there yourself — and to
+			Claude's window when it is opened anew. Numbers you
+			set yourself in Claude's window afterwards stay as
+			you set them, until another terminal or a new window
+			comes. Pressed while Claude's window shows another
+			buffer, it hides or shows that buffer's numbers, and
+			Claude's terminal gets the same when it next comes
+			back there; numbers it hides there are also those the
+			next toggle shows Claude's terminal again, in place of
+			the terminal's own. A file opened from Claude's window
+			keeps your own numbers.
+
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
 
@@ -239,10 +273,14 @@ of your own when you turn the prefix off, or when a prefix key is yours: >lua
                                                       *<Plug>(aineo-claude)*
 <Plug>(aineo-claude)	Does what |:Aineo-claude| does.
 
+                                                *<Plug>(aineo-claude-numbers)*
+<Plug>(aineo-claude-numbers)
+			Does what |:Aineo-claude-numbers| does.
+
 Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
-followed by one key to each `<Plug>` mapping, globally, in Normal mode:
+followed by these keys to each `<Plug>` mapping, globally, in Normal mode:
 
                                                                     *aineo-\s*
 \s		|<Plug>(aineo-send)|
@@ -254,13 +292,16 @@ followed by one key to each `<Plug>` mapping, globally, in Normal mode:
 \i		|<Plug>(aineo-input)|
                                                                     *aineo-\c*
 \c		|<Plug>(aineo-claude)|
+                                                                  *aineo-\tcn*
+\tcn		|<Plug>(aineo-claude-numbers)|
 
 A key sequence you mapped yourself — a global Normal-mode mapping, when the
 editor has started — stays yours, and aineo maps the others. A mapping local
 to a buffer is not counted: it wins in its own buffer only. A mapping you
 make later replaces aineo's. A mapping that only overlaps aineo's key is not
 yours in this sense: with your own `\sa`, aineo still maps `\s`, and `\sa`
-then waits for 'timeoutlen' after `\s`.
+then waits for 'timeoutlen' after `\s`; with your own `\t` or `\tc`, aineo
+still maps `\tcn`, and yours then waits for 'timeoutlen'.
 
 The prefix is read once, when the editor has started (|VimEnter|): a
 `setup()` or `vim.g.aineo` that changes it later maps nothing until the next
