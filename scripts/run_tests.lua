@@ -5,8 +5,8 @@
 --- every case ran and passed; 1 when a case failed or never ran, a file could
 --- not be collected or contributed no case, no file was named where one was
 --- expected, no test file was collected, test code ended Neovim or called
---- `os.exit`, mini.test stopped making progress, a file's Neovim ended on a
---- signal, or the run outlasted its time limit.
+--- `os.exit`, mini.test stopped making progress, a file's Neovim could not be
+--- started or ended on a signal, or the run outlasted its time limit.
 ---
 --- A file passes only when its Neovim exited 0, not on a signal, and the
 --- records it wrote show every one of its cases run and passed: either alone
@@ -174,6 +174,7 @@ end
 ---@field record_path string where its Neovim records its cases
 ---@field output_path string where its Neovim's stdout and stderr go
 ---@field pid? integer its Neovim's process id, once started
+---@field start_failure? string why its Neovim could not be started, when it could not
 ---@field ending? aineo_tests.FileEnding how its Neovim ended, once it has
 
 --- Writes `text` to `stream`, ending it with a line break when it has none.
@@ -244,16 +245,33 @@ local function file_environment(home)
   return entries
 end
 
+--- Records that `file_run`'s Neovim could not be started, for `failure`,
+--- and calls `on_exit` from the event loop, as the Neovim's exit would have.
+---
+---@param file_run aineo_tests.FileRun
+---@param failure string
+---@param on_exit fun()
+local function record_start_failure(file_run, failure, on_exit)
+  file_run.start_failure = failure
+  vim.schedule(on_exit)
+end
+
 --- Starts `file_run`'s Neovim, its stdout and stderr going to the file at
 --- `output_path`: a process a test starts that keeps them open then holds a
 --- file, never the runner's wait. Once the Neovim has exited, relays that
 --- output to stderr and calls `on_exit`. Its ending is recorded the moment
---- libuv reports the exit, so nothing is sent to its pid once reaped.
+--- libuv reports the exit, so nothing is sent to its pid once reaped. When
+--- the output file cannot be opened or the Neovim cannot be spawned, records
+--- why and calls `on_exit` all the same, so the run goes on to its next file.
 ---
 ---@param file_run aineo_tests.FileRun
 ---@param on_exit fun()
 local function start_file(file_run, on_exit)
-  local output = assert(vim.uv.fs_open(file_run.output_path, 'w', OUTPUT_FILE_MODE))
+  local output, open_failure = vim.uv.fs_open(file_run.output_path, 'w', OUTPUT_FILE_MODE)
+  if not output then
+    record_start_failure(file_run, open_failure, on_exit)
+    return
+  end
   local process, pid_or_failure
   process, pid_or_failure = vim.uv.spawn(vim.v.progpath, {
     args = {
@@ -277,7 +295,11 @@ local function start_file(file_run, on_exit)
     end)
   end)
   vim.uv.fs_close(output)
-  file_run.pid = assert(process and pid_or_failure, pid_or_failure)
+  if not process then
+    record_start_failure(file_run, pid_or_failure, on_exit)
+    return
+  end
+  file_run.pid = pid_or_failure
 end
 
 --- Stops the Neovim of every file of `file_runs` that was started and has
@@ -380,6 +402,9 @@ end
 ---@return string
 local function why_not_passed(file_run)
   local ending = file_run.ending
+  if file_run.start_failure then
+    return 'it could not be started: ' .. file_run.start_failure
+  end
   if not file_run.pid then
     return 'it never started'
   end
