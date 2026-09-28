@@ -1,7 +1,15 @@
-Probes for the Learnings of waves 6 and 7, measured by the knowledge pass on 2026-09-28
-(branch knowledge/w6-learnings, dev at 176fd21), macOS arm64 (Darwin 25.1.0).
+Probes behind the Learnings that PR #90 (branch knowledge/w6-learnings) drew from wave 6. The notes it drew
+from wave 7 rest on Implementation/Waves/00007-panes/evidence/git-probe.txt, not on this file. Every note
+that cites a probe here links this file.
+
+Two passes measured here, both on 2026-09-28, macOS arm64 (Darwin 25.1.0), on this branch, whose base is
+dev's 176fd21:
+- the knowledge pass that wrote the notes (PR #90's first commit, c25bb30): the eight probes from
+  probe-modes.lua to probe-kitty-ctrl-c.lua;
+- the correction of PR #90, after that PR's records review: the log-fallback probe's missing directory
+  (in its section), and every probe under "The correction's probes" at the end.
 Neovim: 0.12.5 (Homebrew, NVIM v0.12.5) and 0.11.6 (the release build nvim-macos-arm64, at <builds>/nvim-0.11.6).
-Each probe ran as
+Each probe of the knowledge pass ran as
 
   env -i HOME=<home> TERM=xterm-256color LANG=en_US.UTF-8 PATH=<that Neovim's bin>:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin \
     XDG_CONFIG_HOME=<scratch>/xdg-<version>/config XDG_DATA_HOME=<scratch>/xdg-<version>/data \
@@ -386,6 +394,7 @@ local function child(label, env)
   vim.fn.jobstop(chan)
 end
 
+vim.fn.mkdir(here .. '/child-log', 'p')
 child('child, environment inherited', nil)
 child('child, its own NVIM_LOG_FILE in a directory that exists', { NVIM_LOG_FILE = here .. '/child-log/log' })
 
@@ -404,6 +413,28 @@ child, its own NVIM_LOG_FILE in a directory that exists: NVIM_LOG_FILE=<scratch>
 parent: NVIM_LOG_FILE=<scratch>/xdg-0.11.6/state/nvim/log __NVIM_LOG_FILE_WANT=unset
 child, environment inherited: NVIM_LOG_FILE=<scratch>/xdg-0.11.6/state/nvim/log __NVIM_LOG_FILE_WANT=unset messages=(none)
 child, its own NVIM_LOG_FILE in a directory that exists: NVIM_LOG_FILE=<scratch>/child-log/log __NVIM_LOG_FILE_WANT=unset messages=(none)
+
+---- the third row's directory, measured again by the correction of PR #90 ----
+The knowledge pass first recorded this probe without its mkdir line. Its folder already held child-log/
+from an earlier run, so the third rows above came from a child whose directory existed. PR #90's records
+review found that the probe as recorded, run from a folder without child-log/, gives another third row
+(its finding 6). The correction added the mkdir line and ran the probe both ways, each in a fresh folder,
+on both versions. With the line, the output above came out line for line on both versions. Without it,
+the third child's own log cannot be opened either, and the output is as below. The first line of the
+0.12.5 output is the parent's own notice, on its stderr.
+
+---- output without the mkdir line, NVIM v0.12.5 ----
+log: "<scratch>/no-such-dir/log" not accessible, logging to: "<scratch>/xdg-0.12.5/state/nvim/nvim.log"
+0.12.5
+parent: NVIM_LOG_FILE=<scratch>/xdg-0.12.5/state/nvim/nvim.log __NVIM_LOG_FILE_WANT=<scratch>/no-such-dir/log
+child, environment inherited: NVIM_LOG_FILE=<scratch>/xdg-0.12.5/state/nvim/nvim.log __NVIM_LOG_FILE_WANT=<scratch>/no-such-dir/log messages='log: "<scratch>/no-such-dir/log" not accessible, logging to: "<scratch>/xdg-0.12.5/state/nvim/nvim.log"'
+child, its own NVIM_LOG_FILE in a directory that exists: NVIM_LOG_FILE=<scratch>/xdg-0.12.5/state/nvim/nvim.log __NVIM_LOG_FILE_WANT=<scratch>/child-log/log messages='log: "<scratch>/child-log/log" not accessible, logging to: "<scratch>/xdg-0.12.5/state/nvim/nvim.log"'
+
+---- output without the mkdir line, NVIM v0.11.6 ----
+0.11.6+ge8b87a554f
+parent: NVIM_LOG_FILE=<scratch>/xdg-0.11.6/state/nvim/log __NVIM_LOG_FILE_WANT=unset
+child, environment inherited: NVIM_LOG_FILE=<scratch>/xdg-0.11.6/state/nvim/log __NVIM_LOG_FILE_WANT=unset messages=(none)
+child, its own NVIM_LOG_FILE in a directory that exists: NVIM_LOG_FILE=<scratch>/xdg-0.11.6/state/nvim/log __NVIM_LOG_FILE_WANT=unset messages=(none)
 
 ==== script probe-jobs.lua ====
 -- 1. jobwait({id}, 0) and vim.uv.kill(pid, 0) on a job jobstop() has stopped
@@ -645,3 +676,287 @@ flags none mode before the key: t; the program received b'\x03'
 flags 1    mode before the key: t; the program received b'\x1b[?1u\x1b[99;5u'
 flags 5    mode before the key: t; the program received b'\x1b[?5u\x1b[99;5u'
 
+==== The correction's probes ====
+Measured by the correction of PR #90 on 2026-09-28, on the branch at c25bb30 (aineo's code as on dev at
+176fd21), macOS arm64 (Darwin 25.1.0), with the same two Neovims. Each probe ran as
+
+  env -i HOME=<scratch>/home TERM=xterm-256color LANG=en_US.UTF-8 PATH=<that Neovim's bin>:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+    XDG_CONFIG_HOME=<scratch>/xdg-<version>/config XDG_DATA_HOME=<scratch>/xdg-<version>/data \
+    XDG_STATE_HOME=<scratch>/xdg-<version>/state XDG_CACHE_HOME=<scratch>/xdg-<version>/cache \
+    NVIM_LOG_FILE=<scratch>/xdg-<version>/state/nvim/log \
+    perl -e 'alarm 60; exec @ARGV' nvim --clean --headless -l <probe> [<argument>]
+
+with <scratch> a folder under the correction's worktree's .tests/. No run reached its alarm, and no process
+of the correction's was left running. The real claude never ran.
+
+Who wrote each probe:
+- probe-feedkeys-deferral.lua and probe-markup-strong.lua: the correction;
+- hlprobe-aineo-status-bold.lua: the orchestrator, who ran it on 2026-09-28 on both versions; PR #90's
+  records review and the correction ran it again, and all three runs gave the same results. Copied here
+  unchanged. It ran as `nvim --clean --headless -l hlprobe-aineo-status-bold.lua <checkout>`, with
+  <checkout> the correction's aineo checkout, whose code is 176fd21's. It prints no version; each of its
+  runs used the Neovim its heading names;
+- probe-highlight-none.lua: PR #90's records review (its r90-highlight.lua), copied unchanged;
+- probe-system-signal.lua: PR #90's records review (its r90-signal.lua), with the two timeout cases added
+  by the correction;
+- probe-softwrap.lua: PR #90's records review (its r90-softwrap.lua), with its session id replaced by a
+  made-up id of the same length.
+
+==== script probe-feedkeys-deferral.lua ====
+-- When a child Neovim enters Insert or Terminal mode for keys fed with
+-- nvim_feedkeys(): inside the call, or after the request that made it.
+-- Each case runs in a fresh child: nvim --clean --headless --embed. One
+-- request feeds the keys and reads the mode before it returns ("same
+-- request"); the next request reads the mode again ("next request"). A
+-- ModeChanged autocommand logs every change as old>new, marked "(in call)"
+-- when it fired while nvim_feedkeys() was running.
+
+local function child()
+  local chan = vim.fn.jobstart({ vim.v.progpath, '--clean', '--headless', '--embed' }, { rpc = true })
+  vim.rpcrequest(chan, 'nvim_exec_lua', [[
+    vim.keymap.set('n', '<Space>i', function() vim.cmd.startinsert() end)
+    _G.changes = {}
+    _G.in_call = false
+    vim.api.nvim_create_autocmd('ModeChanged', {
+      callback = function()
+        local e = vim.v.event
+        _G.changes[#_G.changes + 1] = e.old_mode .. '>' .. e.new_mode .. (_G.in_call and '(in call)' or '')
+      end,
+    })
+  ]], {})
+  return chan
+end
+
+local function terminal(chan)
+  vim.rpcrequest(chan, 'nvim_exec_lua', [[
+    vim.cmd.enew()
+    vim.fn.jobstart({ 'cat' }, { term = true })
+    _G.changes = {}
+  ]], {})
+end
+
+local FEED_AND_READ = [[
+  local keys, flags = ...
+  _G.in_call = true
+  vim.api.nvim_feedkeys(vim.keycode(keys), flags, false)
+  _G.in_call = false
+  return vim.api.nvim_get_mode().mode
+]]
+
+local cases = {
+  { 'terminal buffer, <Space>i, "mx"', true, '<Space>i', 'mx' },
+  { 'terminal buffer, i, "nx"', true, 'i', 'nx' },
+  { 'terminal buffer, i, "n" (no x)', true, 'i', 'n' },
+  { 'normal buffer, <Space>i, "mx"', false, '<Space>i', 'mx' },
+  { 'normal buffer, i, "nx"', false, 'i', 'nx' },
+}
+
+io.stdout:write(tostring(vim.version()) .. '\n')
+for _, case in ipairs(cases) do
+  local c = child()
+  if case[2] then
+    terminal(c)
+  end
+  local same = vim.rpcrequest(c, 'nvim_exec_lua', FEED_AND_READ, { case[3], case[4] })
+  local next_mode = vim.rpcrequest(c, 'nvim_get_mode').mode
+  vim.wait(200)
+  local later = vim.rpcrequest(c, 'nvim_exec_lua', 'return { vim.api.nvim_get_mode().mode, table.concat(_G.changes, ",") }', {})
+  io.stdout:write(('%-34s same request: %-3s next request: %-3s 200 ms later: %-3s changes: %s\n'):format(case[1], same, next_mode, later[1], later[2]))
+  vim.fn.jobstop(c)
+end
+
+---- output, NVIM v0.12.5 ----
+0.12.5
+terminal buffer, <Space>i, "mx"    same request: nt  next request: t   200 ms later: t   changes: n>nt,nt>t
+terminal buffer, i, "nx"           same request: nt  next request: t   200 ms later: t   changes: n>nt,nt>t
+terminal buffer, i, "n" (no x)     same request: nt  next request: t   200 ms later: t   changes: n>nt,nt>t
+normal buffer, <Space>i, "mx"      same request: n   next request: n   200 ms later: n   changes: n>i(in call),i>n(in call)
+normal buffer, i, "nx"             same request: n   next request: n   200 ms later: n   changes: n>i(in call),i>n(in call)
+
+---- output, NVIM v0.11.6 ----
+0.11.6+ge8b87a554f
+terminal buffer, <Space>i, "mx"    same request: nt  next request: t   200 ms later: t   changes: n>nt,nt>t
+terminal buffer, i, "nx"           same request: nt  next request: t   200 ms later: t   changes: n>nt,nt>t
+terminal buffer, i, "n" (no x)     same request: nt  next request: t   200 ms later: t   changes: n>nt,nt>t
+normal buffer, <Space>i, "mx"      same request: n   next request: n   200 ms later: n   changes: n>i(in call),i>n(in call)
+normal buffer, i, "nx"             same request: n   next request: n   200 ms later: n   changes: n>i(in call),i>n(in call)
+
+==== script hlprobe-aineo-status-bold.lua ====
+vim.opt.runtimepath:prepend(arg[1])
+local colours = require('aineo.report.colours')
+local function show(label)
+  local hl = vim.api.nvim_get_hl(0, { name = 'AineoReportStatusBold', link = true })
+  io.stdout:write(('%-44s %s\n'):format(label, vim.inspect(hl, { newline = ' ', indent = '' })))
+end
+vim.cmd('highlight link AineoReportStatusBold NONE') ; show('config: hi link ... NONE')
+colours.define_report_colours() ; show('aineo defines its groups')
+vim.cmd('colorscheme habamax') ; show(':colorscheme habamax after both')
+colours.define_report_colours() ; show('aineo defines again (next report)')
+vim.cmd('highlight link AineoReportStatusBold NONE') ; show('user again: hi link ... NONE')
+vim.cmd('colorscheme default') ; show(':colorscheme default')
+
+---- output, NVIM v0.12.5 ----
+config: hi link ... NONE                     vim.empty_dict()
+aineo defines its groups                     vim.empty_dict()
+:colorscheme habamax after both              { link = "@markup.strong" }
+aineo defines again (next report)            { link = "@markup.strong" }
+user again: hi link ... NONE                 vim.empty_dict()
+:colorscheme default                         { link = "@markup.strong" }
+
+---- output, NVIM v0.11.6 ----
+config: hi link ... NONE                     vim.empty_dict()
+aineo defines its groups                     vim.empty_dict()
+:colorscheme habamax after both              { link = "@markup.strong" }
+aineo defines again (next report)            { link = "@markup.strong" }
+user again: hi link ... NONE                 vim.empty_dict()
+:colorscheme default                         { link = "@markup.strong" }
+
+==== script probe-markup-strong.lua ====
+-- What @markup.strong is under Neovim's default colour scheme and habamax.
+local out = { tostring(vim.version()) }
+for _, scheme in ipairs({ 'default', 'habamax' }) do
+  vim.cmd.colorscheme(scheme)
+  local hl = vim.api.nvim_get_hl(0, { name = '@markup.strong', link = false })
+  out[#out + 1] = ('%s: %s'):format(scheme, vim.inspect(hl, { newline = ' ', indent = '' }))
+end
+io.stdout:write(table.concat(out, '\n') .. '\n')
+
+---- output, NVIM v0.12.5 ----
+0.12.5
+default: { bold = true, cterm = { bold = true } }
+habamax: { bold = true, cterm = { bold = true } }
+
+---- output, NVIM v0.11.6 ----
+0.11.6+ge8b87a554f
+default: { bold = true, cterm = { bold = true } }
+habamax: { bold = true, cterm = { bold = true } }
+
+==== script probe-highlight-none.lua ====
+-- Records probe: the nvim_set_hl forms note 5 lists, in bare Neovim, then a
+-- later :highlight default link G Title, then :highlight clear.
+local function child()
+  return vim.fn.jobstart({ vim.v.progpath, '--clean', '--headless', '--embed' }, { rpc = true })
+end
+local function definition(chan)
+  return vim.inspect(vim.rpcrequest(chan, 'nvim_get_hl', 0, { name = 'G' }), { newline = ' ', indent = '' })
+end
+local out = { tostring(vim.version()) }
+local cases = {
+  'vim.api.nvim_set_hl(0, "G", {})',
+  'vim.api.nvim_set_hl(0, "G", { bold = false })',
+  'vim.api.nvim_set_hl(0, "G", { link = "NONE" })',
+  'vim.cmd("highlight G NONE")',
+  'vim.cmd("highlight G gui=bold") vim.cmd("highlight G gui=NONE cterm=NONE")',
+}
+for _, code in ipairs(cases) do
+  local chan = child()
+  vim.rpcrequest(chan, 'nvim_exec_lua', code, {})
+  local before = definition(chan)
+  vim.rpcrequest(chan, 'nvim_command', 'highlight default link G Title')
+  local after = definition(chan)
+  vim.rpcrequest(chan, 'nvim_command', 'highlight clear')
+  out[#out + 1] = ('%s -> %s; default link G Title -> %s; clear -> %s'):format(code, before, after, definition(chan))
+  vim.fn.jobstop(chan)
+end
+io.stdout:write(table.concat(out, '\n') .. '\n')
+
+---- output, NVIM v0.12.5 ----
+0.12.5
+vim.api.nvim_set_hl(0, "G", {}) -> vim.empty_dict(); default link G Title -> { link = "Title" }; clear -> { link = "Title" }
+vim.api.nvim_set_hl(0, "G", { bold = false }) -> vim.empty_dict(); default link G Title -> { link = "Title" }; clear -> { link = "Title" }
+vim.api.nvim_set_hl(0, "G", { link = "NONE" }) -> { link = "NONE" }; default link G Title -> { link = "NONE" }; clear -> { link = "Title" }
+vim.cmd("highlight G NONE") -> vim.empty_dict(); default link G Title -> { link = "Title" }; clear -> { link = "Title" }
+vim.cmd("highlight G gui=bold") vim.cmd("highlight G gui=NONE cterm=NONE") -> vim.empty_dict(); default link G Title -> { link = "Title" }; clear -> { link = "Title" }
+
+---- output, NVIM v0.11.6 ----
+0.11.6+ge8b87a554f
+vim.api.nvim_set_hl(0, "G", {}) -> vim.empty_dict(); default link G Title -> { link = "Title" }; clear -> { link = "Title" }
+vim.api.nvim_set_hl(0, "G", { bold = false }) -> vim.empty_dict(); default link G Title -> { link = "Title" }; clear -> { link = "Title" }
+vim.api.nvim_set_hl(0, "G", { link = "NONE" }) -> { link = "NONE" }; default link G Title -> { link = "NONE" }; clear -> { link = "Title" }
+vim.cmd("highlight G NONE") -> vim.empty_dict(); default link G Title -> { link = "Title" }; clear -> { link = "Title" }
+vim.cmd("highlight G gui=bold") vim.cmd("highlight G gui=NONE cterm=NONE") -> vim.empty_dict(); default link G Title -> { link = "Title" }; clear -> { link = "Title" }
+
+==== script probe-system-signal.lua ====
+-- vim.system()'s code and signal for a process ended by a signal: one that
+-- signals itself, and one that vim.system's own timeout ends (:wait's, which
+-- sends SIGKILL, and the timeout option's, which sends SIGTERM).
+local out = { tostring(vim.version()) }
+for _, sig in ipairs({ 'KILL', 'TERM', 'SEGV' }) do
+  local r = vim.system({ 'sh', '-c', 'kill -' .. sig .. ' $$' }):wait(5000)
+  out[#out + 1] = ('sh kills itself with %s: code=%s signal=%s'):format(sig, tostring(r and r.code), tostring(r and r.signal))
+end
+local waited = vim.system({ 'sleep', '5' }):wait(200)
+out[#out + 1] = ('sleep 5, ended by :wait(200): code=%s signal=%s'):format(tostring(waited and waited.code), tostring(waited and waited.signal))
+local timed = vim.system({ 'sleep', '5' }, { timeout = 200 }):wait(5000)
+out[#out + 1] = ('sleep 5, ended by { timeout = 200 }: code=%s signal=%s'):format(tostring(timed and timed.code), tostring(timed and timed.signal))
+io.stdout:write(table.concat(out, '\n') .. '\n')
+
+---- output, NVIM v0.12.5 ----
+0.12.5
+sh kills itself with KILL: code=0 signal=9
+sh kills itself with TERM: code=0 signal=15
+sh kills itself with SEGV: code=0 signal=11
+sleep 5, ended by :wait(200): code=124 signal=9
+sleep 5, ended by { timeout = 200 }: code=124 signal=15
+
+---- output, NVIM v0.11.6 ----
+0.11.6+ge8b87a554f
+sh kills itself with KILL: code=0 signal=9
+sh kills itself with TERM: code=0 signal=15
+sh kills itself with SEGV: code=0 signal=11
+sleep 5, ended by :wait(200): code=124 signal=9
+sleep 5, ended by { timeout = 200 }: code=124 signal=15
+
+==== script probe-softwrap.lua ====
+-- Records probe: rows a Neovim terminal holds when a program prints the
+-- no-conversation message as one line and the terminal soft-wraps it.
+-- The real claude is never run; printf stands in for a program that does not
+-- break its own lines.
+local message = 'No conversation found with session ID: 11111111-2222-4333-8444-555555555555'
+local out = { tostring(vim.version()) }
+for _, width in ipairs({ 39, 60 }) do
+  vim.cmd('silent! only')
+  vim.o.columns = 200
+  vim.cmd('vsplit')
+  vim.cmd('enew')
+  vim.api.nvim_win_set_width(0, width)
+  local buf = vim.api.nvim_get_current_buf()
+  local done = false
+  vim.fn.jobstart({ 'printf', '%s', message }, {
+    term = true,
+    on_exit = function()
+      done = true
+    end,
+  })
+  vim.wait(3000, function()
+    return done
+  end, 20)
+  vim.wait(200)
+  out[#out + 1] = ('width %d, window %d:'):format(width, vim.api.nvim_win_get_width(0))
+  for i, l in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+    if l ~= '' then
+      out[#out + 1] = ('%02d|%s|'):format(i, l)
+    end
+  end
+end
+io.stdout:write(table.concat(out, '\n') .. '\n')
+
+---- output, NVIM v0.12.5 ----
+0.12.5
+width 39, window 39:
+01|No conversation found with session ID: |
+02|11111111-2222-4333-8444-555555555555|
+width 60, window 60:
+01|No conversation found with session ID: 11111111-2222-4333-84|
+02|44-555555555555|
+
+---- output, NVIM v0.11.6 ----
+0.11.6+ge8b87a554f
+width 39, window 39:
+01|No conversation found with session ID: |
+02|11111111-2222-4333-8444-555555555555|
+03|[Process exited 0]|
+width 60, window 60:
+01|No conversation found with session ID: 11111111-2222-4333-84|
+02|44-555555555555|
+03|[Process exited 0]|

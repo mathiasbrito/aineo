@@ -32,7 +32,7 @@ In A2 and A3 the status mark keeps the default priority.
 
 - **T18 lays the bold by order**, the status's group last, so the status's colour wins (`370bdaa` on `dev`). The pieces are `header_colours()` in `lua/aineo/report/render.lua`, and `append_rendering()` in `buffer.lua`, whose docstring states the order it relies on.
 - **The case that reads it on the screen** is *keeps the colour of its status, bold, when a colour scheme colours @markup.strong*. A Neovim that changed the rule would fail it. Mutant M3, the bold mark placed after the status's, killed it 5 of 5 times.
-- **The records path.** The guarantee review of PR #60 (at `467e192`, G7) found that the path which shows the records again could reverse the order with every test green. The fix round pinned it (`60714cf`).
+- **The records path.** The guarantee review of PR #60 (at `467e192`, G7) found that the path which shows the records again could reverse the order with every test green. The fix round pinned it (`eac342e` on `dev`).
 
 **Why.** This pass did not read the rule in Neovim's source. It rests on the measurements above, on both versions. `:help nvim_buf_set_extmark()`'s `priority` item says only that for virtual text the highest priority is drawn last, and that treesitter uses 100. It says nothing about ties (read in both versions' `api.txt`).
 

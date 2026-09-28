@@ -14,7 +14,7 @@ On **Claude Code 2.1.283**, in a Neovim 0.12.5 terminal, two more facts hold.
   - At 78 columns it is one row.
   - The rows are the same at `on_exit` and after a `vim.schedule()`.
 
-  A soft wrap by the terminal would have kept the blank at the row's end. Here, joining the rows gives `…session ID:<id>`, so a match must drop white space on both sides.
+  A soft wrap by the terminal breaks at the column, not at a blank: at 39 columns the blank ends the first row, and at 60 the id is split across the two rows. PR #90's records review measured that at `c25bb30` in Neovim 0.12.5 and 0.11.6, with `printf` standing in for a program that does not break its own lines, and its correction re-ran it (`probe-softwrap.lua` in [[Attachments/learnings-probes-2026-09-28.txt]]). Claude Code 2.1.283 breaks at the blank itself and drops it, so joining its rows gives `…session ID:<id>`, and a match must drop white space on both sides.
 - **`--session-id` with `--continue` or `--resume`.** Claude Code refuses the pair and exits 1 after 0.3–0.4 s, with `Error: --session-id can only be used with --continue or --resume if --fork-session is also specified.`
 
 The version is part of each claim.
@@ -23,7 +23,7 @@ The version is part of each claim.
 
 Measured by the orchestrator in the aineo folder after the user trusted it, with the orchestrating session's `CLAUDE*` variables removed — evidence in `knowledge-vault/Implementation/Waves/00002-layout-session-report/evidence/`: `t2-summary.txt` (2026-09-23; Q1, Q2 with a control run in which the unlisted tool asked for permission, Q4 at idle), `t2-handshake.txt` (2026-09-24; the stdio MCP startup handshake, no model turn), `t4-summary.txt` (2026-09-24; Q4 during a turn, two turns interrupted within seconds), `t4-trust-dialog-screen.txt` (2026-09-23, Claude Code 2.1.280, before the user trusted the folder). The runs that removed the variables are T2 run 2 and the 2026-09-24 runs; run 1 did not. The first T2 run keyed readiness on the footer and timed out with the prompt ready, because an inherited-marker warning and "auto mode on" took the footer line; that run had inherited the session's variables and showed "Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker".
 
-**The 2.1.283 facts.** The orchestrator measured them on 2026-09-27, under the user's leave for Q8 (`Implementation/Waves/00006-fixes/evidence/claude-resume-q8-followup.txt`).
+**The 2.1.283 facts.** The orchestrator measured them on 2026-09-27, under the orchestrator's reading of the user's Q8 leave (`Implementation/Waves/00006-fixes/evidence/claude-resume-q8-followup.txt`).
 - **Where.** In a headless Neovim 0.12.5 terminal (`nvim --clean --headless -l <probe>`), in Q8's scratch folder.
 - **The runs.** Each used a fresh random id, and nothing was sent.
 - **The environment.** These runs inherited the orchestrating session's `CLAUDE*` and `AI_AGENT` variables, which Q8's row A had removed; the evidence file says so.

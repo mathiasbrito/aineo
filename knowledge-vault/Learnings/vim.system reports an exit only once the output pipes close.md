@@ -1,7 +1,7 @@
 # vim.system reports an exit only once the output pipes close
 
 **Tags:** #neovim #processes #timeouts #testing #measured
-**Discovered:** [[Sessions/2026-09-27 — T22 parallel runner]] (the attack review of PR #85, findings 1 and 6) · [[Sessions/2026-09-26 — Wave 6 retrospective]]
+**Discovered:** [[Sessions/2026-09-27 — T22 parallel runner]] (the attack review of PR #85, finding 6) · [[Sessions/2026-09-26 — Wave 6 retrospective]]
 **Applies to:** [[Projects/aineo]]
 
 ## The insight
@@ -16,15 +16,12 @@ Two ways around it:
 - with `stdout = false, stderr = false`, no pipe is made, and the exit is reported at once;
 - `vim.uv.spawn()` with the output sent to a file reports the exit from libuv's exit callback.
 
-A related trap: `vim.system` reports a process killed by a signal as `code = 0`, with the signal in `signal`.
-
 ## Example
 
 - **A process holding the pipes.** The attack review of PR #85 (T22, at `5239471`, 0.12.5, finding 6) ran a passing test file that started `vim.uv.spawn('sleep', { args = { '40' }, stdio = { nil, 1, 2 } })`.
   - The file counted as "running" after its Neovim had exited, and the runner stalled to its 15 s limit (`rc=2`). The base runner finished in 0.2 s.
   - T22's fix round starts each file's Neovim with `vim.uv.spawn`, its output to a file, and records the ending in libuv's exit callback (`scripts/run_tests.lua`, `8a6cb84` on `dev`).
-- **A signal read as success.** The same review (finding 1, 0.12.5) measured `code=0` for processes ended by KILL, TERM, SEGV, ABRT, HUP and INT. So `code == 0` alone read a crashed test file as passed. T22's verdict now also requires `signal == 0`.
-- **This pass, in bare Neovim** (2026-09-28, `probe-system-exit.lua` in `Implementation/Waves/00006-fixes/evidence/learnings-probes.txt`). The command was `sh -c 'sleep 3 & exit 3'`: `sh` exits at once with 3, and its `sleep 3` keeps sh's stdout and stderr.
+- **This pass, in bare Neovim** (2026-09-28, `probe-system-exit.lua` in [[Attachments/learnings-probes-2026-09-28.txt]]). The command was `sh -c 'sleep 3 & exit 3'`: `sh` exits at once with 3, and its `sleep 3` keeps sh's stdout and stderr.
 
   ```
   0.12.5
@@ -39,7 +36,7 @@ A related trap: `vim.system` reports a process killed by a signal as `code = 0`,
   vim.uv.spawn, output to a file: exit callback after 7 ms, code=3
   ```
 
-**Why.** The code is `_on_exit()` in `runtime/lua/vim/_core/system.lua` at `v0.12.5` (l.349–391), and in `runtime/lua/vim/_system.lua` at `v0.11.6` (l.279–320).
+**Why.** The code is `_on_exit()` in `runtime/lua/vim/_core/system.lua` at `v0.12.5` (l.349–391), and in `runtime/lua/vim/_system.lua` at `v0.11.6` (l.279–321).
 - On exit it closes the process handle, stdin and the timer. It leaves stdout and stderr open ("#30846: Do not close stdout/stderr here, as they may still have data to read. They will be closed in uv.read_start on EOF.").
 - It then starts a libuv check handle. The handle builds the result and calls `on_exit` only once every pipe `is_closing()`.
 - A pipe that was never made, as with `stdout = false`, is `nil`, and the loop skips it.
@@ -51,8 +48,6 @@ This pass read both releases' own runtimes.
 
 - **An exit code that must come in time**, when the process may leave descendants, cannot come from `vim.system`'s `on_exit`. That covers a test runner, a formatter run on save, and a health check.
 - **`:wait(ms)` does not bound the time spent**: it waits up to twice `ms` and returns no result.
-- **`code == 0` does not mean success** unless `signal == 0` too.
-- See also [[Learnings/vim.wait does not time out under an event flood]], another way such a wait is not bounded.
+- See also [[Learnings/vim.wait does not time out under an event flood]], another way such a wait is not bounded, and [[Learnings/vim.system reports a process ended by a signal as code 0]], another way `vim.system`'s exit report misleads.
 - **Limits:**
-  - the pipe behaviour was measured on 0.11.6 and 0.12.5, macOS;
-  - the signal's `code = 0` was measured by the attack review on 0.12.5 only.
+  - measured on 0.11.6 and 0.12.5, macOS.

@@ -31,7 +31,7 @@ On 0.12.5 at `dev` `9af91a6`, the case *session_status() › leaves the terminal
 ## Why it matters
 
 Anything that reads a terminal's end from its text must look in both places, or branch on the version. That covers a plugin that tells the user why a job ended, and a test that waits for the line.
-- On 0.12 the line is an autocommand's, so a user can remove it: `:autocmd! nvim.terminal TermClose` does, and the same command on 0.11 changes nothing (M8).
+- On 0.12 the line is an autocommand's, so a user can remove it: `:autocmd! nvim.terminal TermClose` does, and the same command on 0.11 leaves the line in place (M8). There it removes only the autocommand that deletes the buffer of a shell that exited 0.
 - **Limits:**
   - measured on 0.11.6 and 0.12.5 only; 0.12.0–0.12.4 were not measured;
   - measured for a job that exits by itself with a code; a job ended by a signal was not measured.
