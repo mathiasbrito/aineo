@@ -10,6 +10,7 @@
 - `Implementation/Waves/00007-panes/plan.md`
 - [[Sessions/2026-09-27 — T23 git home]]
 - [[Sessions/2026-09-26 — Wave 6 retrospective]], the wave it ran beside
+- What T23 measured, as Learnings (PR #90): [[Learnings/GIT_OPTIONAL_LOCKS=0 does not keep git diff from taking index.lock]], [[Learnings/A watch on a file git replaces goes silent after the replacement]], [[Learnings/libuv ignores fs_event's recursive flag on Linux]]
 
 ## Context
 
