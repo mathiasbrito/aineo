@@ -150,9 +150,9 @@ PR7 is met: five in a row on 0.12.5 and three on 0.11.6, each past a failing run
 |---|---|---|---|---|
 | `tests/test_runner.lua` › the run time limit › ends a run, saying so, while a case waits › on `vim.wait(1e9, …)` | 0.12.5 | 1/10 (run 2, load ~190) | 0/10 | `make.run`'s own 10 s bound (`DEFAULT_TIME_LIMIT_MS`) stopped a nested run whose limit is 3 s: `Left: 124`. The same run by itself took 3.16–3.20 s in 10 of 10 (`t22-limit-probe.sh`, load ~230). What took the other 7 s was not found |
 | `tests/test_runner_parallel.lua` › the run time limit › ends a run, saying so, while a case keeps its Neovim busy | 0.12.5 | 0/10 here; 1 of 3 in the records review's whole runs at `5239471` (load ~200) | 0/5 (records review, loads 127–161) | the same `make.run` 10 s bound on a nested run whose limit is 3 s: `Left: 124`. Missed by this table at first |
-| `tests/test_health.lua` › Claude Code › leaves the editor free to wait when Ctrl-C ends a check of a command that writes without end | 0.11.6 | 1/10 (run 2) | 0/10 | its own timing: `vim.wait(100)` in the child must return in under 1000 ms (`test_health.lua:336`) |
-| `tests/test_report_links.lua` › a long line › shows in the Report, and again on :edit, within the time limit (`https://a`, `)`, 1000000) | 0.11.6 | 1/10 (run 2) | 0/10 | its own timing: a limit of 2 s, measured 5.1 s |
-| `tests/test_report_paths.lua` › the file checks › of a line of distinct paths take at most the time limit, on arrival and on :edit (T17's) | 0.11.6 | 0/10 | 0/10 | — |
+| `tests/test_health.lua` › Claude Code › leaves the editor free to wait when Ctrl-C ends a check of a command that writes without end | 0.11.6 | 1/10 (run 2) | 0/10; the re-measure: 7/7 at loads 32–67 and **10/10 at loads 80–193**, beside five or six suites | its own timing: `vim.wait(100)` in the child must return in under 1000 ms (`test_health.lua:336`) |
+| `tests/test_report_links.lua` › a long line › shows in the Report, and again on :edit, within the time limit (`https://a`, `)`, 1000000) | 0.11.6 | 1/10 (run 2) | 0/10; the re-measure: 10/10 at loads 80–124, then **2 of 10 red at loads 128–253** (red at 138 and 192, `arrival = "5.2 s"`) | its own timing: a limit of 2 s, measured 5.1 s: the host's load, since it fails alone at the load its whole-run failure had |
+| `tests/test_report_paths.lua` › the file checks › of a line of distinct paths take at most the time limit, on arrival and on :edit (T17's) | 0.11.6 | 0/10 | 0/10 | — *The re-measure: failed in every one of its 10 runs made with five or six whole suites side by side (`edit = "2.4 s"`, its own limit), against 0/3 in its single whole runs — five suites together are not one suite at a high load.* |
 
 The two outside the boundary are timing cases whose own limits the host's load exceeded; they are reported, not changed. The first is inside it; it is reported rather than changed, because its cause is not established (see Open threads).
 
@@ -163,7 +163,7 @@ The two outside the boundary are timing cases whose own limits the host's load e
 - **The records feed the summary; each file's Neovim decides its file.** The worker keeps every guard T1 built, so its exit status is the file's verdict; a second verdict from the records could not be told apart from the first by any test. *Wrong, as the attack review measured (A1, A4): a signal, or a test file's own `VimLeavePre`, tells the two apart. The fix round decides a file from both.*
 - **The summary is printed once, at the end,** through mini.test's own reporter, so its lines are mini.test's exactly: one `Total number of cases`, one progress line per file in collection order, one `Fails (`. Rejected: relaying each file's own summary with an aggregate after (F4). The cost: no live progress while the run goes.
 - **Homes are made new for each run and removed at its end; nothing is cleared at a start.** The suite's own tests run the recipes while other files run (F2); `fs_mkdtemp` gives every run, beside or inside another, a directory of its own.
-- **`__NVIM_LOG_FILE_WANT` is unexported by the Makefile, and the runner's log directory made by the recipes** (F1). The runner itself strips nothing: the two measures leave it no way to have the variable — through `make`; a runner whose own log file cannot be opened in an existing directory would still export it (not measured). The fix round moved the variable from the global `unexport` line to a `test test_file: override` that empties it.
+- **`__NVIM_LOG_FILE_WANT` is unexported by the Makefile, and the runner's log directory made by the recipes** (F1). The runner itself strips nothing: the two measures leave it no way to have the variable — through `make`; a runner whose own log file cannot be opened in an existing directory would still export it (not measured). The fix round moved the variable from the global `unexport` line to a `test test_file: override` that empties it. *That override held the environment route only: GNU Make 3.81 gives a recipe the command line's or `MAKEFLAGS`' value of a variable it does not export. The correction adds `export __NVIM_LOG_FILE_WANT` beside it (see Correction).*
 - **The default is 8.** Measured on this host (10 cores), on the working tree before the first commit: 4 jobs 287 s, 8 jobs 178 s, 12 jobs 172 s, at loads 126–185 (see Verification). At 8, `tests/test_send.lua` ends every run (167–174 s): it starts late, when a slot frees at 64–71 s, and runs about 100 s; `tests/test_claude.lua`, the slowest file alone, ends at 154–156 s.
 - **No list of files by name** to start the slowest first (the brief review's guard: T12 adds a file concurrently). What it would save: `tests/test_send.lua` starts at 64–71 s and ends the run at 167–174 s; started first it would end near 105 s, and the run near 157 s, when `tests/test_claude.lua` ends.
 
@@ -202,8 +202,8 @@ This wave holds its marks (rule 6). For the orchestrator: T22 — the runner run
 - **The runner's own guard** (A5): its `VimLeavePre` runs `cquit 1` until the verdict is reached. The attack review's form, with the flag set just before the final decision rather than right after the files end.
 - **Refused limits** (A2): `nan` and `inf` are refused with every limit that is not a finite number above zero. `1e18` stays accepted: a finite limit is honoured as given (a limit, below).
 - **Homes** (A7, R12, decision 8): `make.run` stops a run at its limit with SIGTERM first — the runner, which runs no test code, answers by stopping its files and removing their homes — and SIGKILLs what is left after 5 s. The runner makes `.tests/homes` as the report records and the draft home do, retrying a `mkdir()` that lost a race.
-- **`make.run`'s default bound** (decision 16, R1): 10 s → 60 s. Measured first: two whole runs with `make.run` instrumented (0.12.5, load 34 → 56; 0.11.6, 64 → 56) timed all 88 nested runs on the default bound; the longest took 3.1 s. A minute is six times the 10 s a nested run exceeded at load ~200. Cost: a nested run that truly hangs is stopped after 60 s instead of 10 s.
-- **The widening undone** (R4, decision 17): `__NVIM_LOG_FILE_WANT` left the global `unexport` line for `test test_file: override __NVIM_LOG_FILE_WANT :=`.
+- **`make.run`'s default bound** (decision 16, R1): 10 s → 60 s. Measured first: two whole runs with `make.run` instrumented (0.12.5, load 34 → 56; 0.11.6, 64 → 56) timed all 88 nested runs on the default bound; the longest took 3.1 s. *The 88 rows and the 3.1 s are the 0.11.6 run's (`t22f-make-times-instrumented-2-0116.txt`, longest 3146 ms): the 0.12.5 run's log has no limit column, and matched to the 0.11.6 run's rows 54 of its rows are default-bound only (longest 3158 ms) and 36 cannot be told apart (the re-measure).* A minute is six times the 10 s a nested run exceeded at load ~200. Cost: a nested run that truly hangs is stopped after 60 s instead of 10 s.
+- **The widening undone** (R4, decision 17): `__NVIM_LOG_FILE_WANT` left the global `unexport` line for `test test_file: override __NVIM_LOG_FILE_WANT :=`. *Wrong on two routes of three, as the re-measure measured: the command line and `MAKEFLAGS` reached every Neovim of the run, where `5239471`'s `unexport` had held; the records review had measured the environment route only, so `5ec1d7d`'s "as the records review measured" was wrong too. Fixed in the correction.*
 - **Records**: R2, R5, R6, R7, R8, R10, R12, R13, R14 corrected above, in place; R9 in the `Makefile`; R3's five places added to *Open threads*.
 
 **Fixture names** (R13): the names the touched test files pass to `fixture.write`, `fixture.directory`, `suite()` and `suite_counting_files_at_once()` — the packet's 22, as the records review checked, and the round's new ones — are each used by one test file only (grep).
@@ -235,6 +235,8 @@ This wave holds its marks (rule 6). For the orchestrator: T22 — the runner run
 | a run started inside another › gives its file a home apart from the outer file (I6, rewritten as a run inside a run whose inner file shares the outer's name) | H1, outer runner pristine | *no* equality on `…/homes/run/1-test_outer/state/nvim` | the same |
 | a test file's output › is relayed (I9) | V8, adapted: the relay removed | `Fragment: printed by a case` | the same |
 
+*I9 was not fixed by this pin, as the re-measure measured: I9 named the relay of a file's **stdout**, and the pin prints with `print()`, which a headless `nvim -l` writes to stderr, so dropping a file's stdout (Ma2) survived the whole suite. The correction renames it "printed is relayed" and adds "written to stdout is relayed".*
+
 Under H1 with the mutated runner as the outer runner too, the whole narrowed run ended rc 2 with `Total number of cases: 0` — the nested run truncating the outer file's records, a crash, not a kill; the pristine-outer run is the kill.
 
 **Mutants of the round's own code** (0.12.5):
@@ -253,11 +255,62 @@ Under H1 with the mutated runner as the outer runner too, the whole narrowed run
 | N9 | `make.lua`: `signal_process_tree(process.pid, 'sigterm')` → `'sigkill'` | killed, assertion: `Left: { … }` (it left one `run-*`, removed by hand) |
 | N10 | the `test test_file: override __NVIM_LOG_FILE_WANT :=` line removed | killed, assertion, on both versions: `test_isolation.lua` › keeps a parent Neovim's log fallback out, `Left: 2` |
 
-**Whole suite at `1083de2`** (the code pushed; the pushed head adds this note), default 8 jobs, `t22f-whole-final.txt`: 0.12.5, 10 runs, all rc 0, 1276 cases, `Fails (0)`, 171–174 s, loads 67–182 at the starts, no `run-*` left by any; 0.11.6, 3 runs, the same, 172–174 s, loads 66–132. 1276 = 1249 + the round's 27 new cases. The two cases that met `make.run`'s 10 s bound — `test_runner.lua`'s `vim.wait(1e9, …)` case and `test_runner_parallel.lua`'s busy case — failed in 0 of these 10 0.12.5 runs each (and 0 of 3 on 0.11.6); so did `test_health.lua`'s Ctrl-C case and `test_report_links.lua`'s long line.
+**Whole suite at `1083de2`** (the code pushed; the pushed head adds this note), default 8 jobs, `t22f-whole-final.txt`: 0.12.5, 10 runs, all rc 0, 1276 cases, `Fails (0)`, 171–174 s, loads 67–182 at the starts, no `run-*` left by any; *not so: run 1's listing, which names every `run-*` present after the run and not only those it made, shows `run-ZkRSjA`. The only run recorded to leave one before it is the N9 mutant, at 0:58, in the same `.tests/homes` (the fix round's report: "N9's mutant left one run-* (1-waiting)"); the six runs between (the 0.11.6 instrumented whole run, two `green60` files, S1, W1, R1) are not recorded to leave any, and run 2's listing shows none, so it was removed by hand during run 2. Most probably N9's; the logs cannot name it. Runs 2–13 left none;* 0.11.6, 3 runs, the same, 172–174 s, loads 66–132. 1276 = 1249 + the round's 27 new cases. The two cases that met `make.run`'s 10 s bound — `test_runner.lua`'s `vim.wait(1e9, …)` case and `test_runner_parallel.lua`'s busy case — failed in 0 of these 10 0.12.5 runs each (and 0 of 3 on 0.11.6); so did `test_health.lua`'s Ctrl-C case and `test_report_links.lua`'s long line.
 
 **With `origin/dev` merged** (`d7714d6`, in a scratch worktree, never into the branch): one whole run on 0.12.5, rc 0, 1377 cases, `Fails (0)`, 187 s, load 22 at the start; T23's eight `tests/test_git_*.lua` files all passed under this runner. `git merge-tree --write-tree origin/dev HEAD` reports no conflict.
 
-**Limits recorded.** A file's Neovim SIGKILLed from outside leaves its child Neovims and `vim.system` processes running: by the time its exit is seen they are no longer its descendants. `AINEO_TEST_RUN_LIMIT_MS=1e18` (or any finite number) is honoured as given. A runner SIGKILLed from outside, or a nested run `make.run` has to SIGKILL after its 5 s, leaves its `run-*` home. A test file that has the runner run `os.exit()` over its server would end it without its `VimLeavePre` (not measured; nothing in the suite but the isolation probe connects to the runner).
+**Limits recorded.** A file's Neovim SIGKILLed from outside leaves its child Neovims and `vim.system` processes running: by the time its exit is seen they are no longer its descendants. `AINEO_TEST_RUN_LIMIT_MS=1e18` (or any finite number) is honoured as given. A runner SIGKILLed from outside, or a nested run `make.run` has to SIGKILL after its 5 s, leaves its `run-*` home. A test file that has the runner run `os.exit()` over its server would end it without its `VimLeavePre` (not measured; nothing in the suite but the isolation probe connects to the runner). *Measured by the re-measure, with two more routes: `os.exit(0)` over the server, or its `VimLeavePre` cleared then `qall!`, ends the run with exit 0 and no summary, leaving that file's Neovim and the run's `run-*`; `io.stdout:write` over the server puts forged `Total`/`Fails` lines ahead of the real ones. And SIGSEGV or SIGABRT of a file's Neovim from outside leave its children as SIGKILL does. The correction records these as limits (see Correction).*
+
+## Correction (2026-09-28)
+
+**Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-lua-developer`), a fresh agent taking over PR #85 for one bounded correction. **Branch:** `feature/t22-parallel-runner`, from `3eac789`. It works the re-measure's findings 1–9 (`remeasure85-report.md`) under the orchestrator's decisions, and reopens none of the fix round's.
+
+**What changed.**
+
+- **The log fallback on every route** (finding 1): `export __NVIM_LOG_FILE_WANT` beside the `test test_file: override`, the re-measure's fix. The `Makefile`'s "whatever its origin" was false and now names the three routes; `5ec1d7d`'s "as the records review measured" was wrong, and `17bf19b`'s message says so.
+- **A file that cannot be started** (finding 2): a failed `fs_open` of its output or a failed `uv.spawn` is recorded and handed to `on_exit` from the event loop, so the run goes on; its line says `it could not be started: <error>`. The re-measure's fix.
+- **Four checks pinned** (findings 4 and 6): the re-measure's pins, adopted. I9's case is renamed "printed is relayed"; "written to stdout is relayed" is I9's stdout pin.
+- **Limits recorded in the runner's docstring** (findings 3, 5, 8): its two over-claiming sentences narrowed, and a *Not guarded* paragraph. The orchestrator's decision: a limit, not a fix — unsetting `NVIM` for each file closes the channel, but turns 8 of `test_isolation.lua`'s cases red.
+
+**Seen red on `3eac789`'s code, by assertion, on 0.12.5 and 0.11.6** (`t22c-red-*.log`):
+
+| test | red |
+|---|---|
+| `test_isolation.lua` › make test_file › keeps a parent Neovim's log fallback out of its runner and children › handed (on the command line; in MAKEFLAGS) | `Left: 2` each; the environment row green, as at `3eac789` |
+| `test_runner_verdict.lua` › a test file whose output cannot be opened › does not keep the run going | `Left: { 2, { "Total number of cases: 1", …, "FAIL in tests/test_c.lua", "…in main chunkthe test run did not finish within 20 s" } }` |
+| › a test file whose output cannot be opened › is named, saying why | no line beginning `…: it could not be started: ` (the head said `it never started`) |
+| › a test file whose Neovim cannot be started › does not keep the run going (built here: the first case replaces `vim.uv.spawn` in the runner over `$NVIM`) | the same stall, `…did not finish within 20 s` |
+
+**Pins of correct code, arrived green, each red under its literal mutant on both versions** (narrowed copies under `.tests/`, `t22c-mutants.txt`):
+
+| test | mutant (literal edit) | kill, 0.12.5 and 0.11.6 |
+|---|---|---|
+| `test_runner.lua` › a run stopped at its time limit › ends soon after it, even when its recipe ignores SIGTERM | Mf: `make.lua`'s `  if not ended then\n    signal_process_tree(process.pid, 'sigkill')\n  end\n` removed | `Left: { 124, false }` |
+| `test_runner_verdict.lua` › a test file whose records are gone › fails the run | Mi: `return #cases > 0 and vim.iter(cases):all(case_passed)` → `return vim.iter(cases):all(case_passed)` | `Left: 0` |
+| › a test file whose own VimLeavePre defeats its runner in its last case › fails the run | Mj: `    and vim.startswith(case.exec.state or '', 'Pass')\n` removed | `Left: 0` |
+| › a test file's output › written to stdout is relayed | Ma2: `    stdio = { nil, output, output },` → `    stdio = { nil, nil, output },` | `Fragment: written to stdout by a case` |
+
+**Mutants of the correction's own code**, both versions, each killed by an assertion:
+
+| id | literal edit | killed by |
+|---|---|---|
+| EXP | `export __NVIM_LOG_FILE_WANT\n` removed | the command-line and `MAKEFLAGS` rows, `Left: 2` |
+| AS1 | the `fs_open` failure branch → `  local output = assert(vim.uv.fs_open(file_run.output_path, 'w', OUTPUT_FILE_MODE))` | both output cases (`Start: …it could not be started: `; `Left: { 2, { "Total number of cases: 1", … } }`) |
+| AS2 | the spawn failure branch → `  file_run.pid = assert(process and pid_or_failure, pid_or_failure)` | the Neovim case, the stall |
+| AS3 | `why_not_passed`'s `start_failure` branch removed | is named, saying why |
+| AS4 | `vim.schedule(on_exit)` removed from `record_start_failure` | both "does not keep the run going" cases (`…did not finish within 20 s`) |
+
+**Mc, reasoned rather than pinned.** `if file_run.pid and not file_run.ending then` → `if file_run.pid then` signals the pid of a file whose Neovim was reaped; the input that separates the two is that pid reused by another process inside one run, which neither the re-measure nor this correction could build. Mk (the ending recorded in the scheduled callback) rests on the same property.
+
+**Records corrected** (finding 7), in place above: the `__NVIM_LOG_FILE_WANT` decision and fix-round bullets; the 88 nested runs and their 3.1 s, which are the 0.11.6 run's; I9, which the fix round's pin did not fix; `run-ZkRSjA` in run 1's listing, most probably the N9 mutant's; the limits the re-measure measured. The fix round's report (`t22f-report-fix-round.md`) counted "30 reds, `test_runner_verdict.lua` (19)": measured by the re-measure, it is **22 reds** on `5239471`, 18 of them in `test_runner_verdict.lua` (its "is relayed" case, I9's pin, was green there), plus **8 pins of correct code that arrived green** (I1, I5, I2, I4, I3, I6, I9 and W1's naming case). This note and the pull request listed the 22 and stated no total.
+
+**Limits** (findings 3, 5, 8, 9 — the docstring's *Not guarded* and *What it prints* for the first three):
+- Through the runner's server (`$NVIM`), a test can end the run with exit 0 and no summary — `os.exit(0)`, or its `VimLeavePre` cleared then `qall!` — leaving that file's Neovim running and the run's `run-*`; it can write forged `Total`/`Fails` lines to the runner's stdout ahead of the real ones. Measured by the re-measure on both versions; each needs test code that means to.
+- A case that writes a passing record for every case of its file to `arg[2]` and ends its Neovim through a raising `VimLeavePre` of its own passes its file, at `5239471` as at the head.
+- A file named by a failing case gets no `FAIL in <file>:` line, so a signal that ended it, or its still running at the limit, is not said; the output of a file still running at the limit is never relayed.
+- `make.run`'s 60 s bound: a mutant that hangs every nested run takes `test_runner.lua` (38 nested runs on the default bound, the 0.11.6 instrumented run) past the outer run's 16-minute limit, where 10 s cost 380 s; `test_deps` has 13 such runs, `test_runner_parallel` 12, `test_isolation` 9, `test_runner_verdict` 9, `test_runner_homes` 7.
+
+**Whole suite at `b935a99`** (the code pushed; the pushed head adds this note), default 8 jobs, one run per version, one after the other (`t22c-whole.txt`): 0.12.5 rc 0, **1285** cases, `Fails (0)`, 173 s, load 23.6 → 29.7; 0.11.6 rc 0, 1285, `Fails (0)`, 171 s, load 29.7 → 33.1; no `run-*` in `.tests/homes` before or after either. 1285 = 1276 + 9: `test_isolation.lua` 23 (+2), `test_runner_verdict.lua` 25 (+6), `test_runner.lua` 44 (+1). `git merge-tree --write-tree origin/dev HEAD` (`d7714d6`) printed a tree id only: no conflict.
 
 ## Commits
 
