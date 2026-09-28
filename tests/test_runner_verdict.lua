@@ -228,6 +228,101 @@ T['a test file that did not pass']['is named on a line that begins FAIL in'] = f
   expect_line_beginning(result.stdout, 'FAIL in tests/test_b.lua')
 end
 
+--- A run's settings: one file at a time, so each file after the first starts
+--- as the file before it ends, and a run limit of 20 s, so a run that waits
+--- for a file that never started ends within `OUTLASTS_A_STALL_MS`.
+local ONE_FILE_AT_A_TIME = { AINEO_TEST_JOBS = '1', AINEO_TEST_RUN_LIMIT_MS = '20000' }
+
+--- A suite of three files, run one at a time, whose first file's case makes
+--- the file the second file's output would go to a directory: `tests/test_b.lua`
+--- then cannot be started, and `tests/test_c.lua` passes.
+---
+---@param name string the suite's directory name under `.tests/fixtures/`
+---@return string path
+local function suite_whose_second_output_is_a_directory(name)
+  return suite(name, {
+    ['test_a.lua'] = {
+      "local MiniTest = require('mini.test')",
+      'local T = MiniTest.new_set()',
+      "T['makes the output of the next file a directory'] = function()",
+      '  local run = vim.fs.dirname(vim.fs.dirname(vim.env.XDG_CONFIG_HOME))',
+      "  vim.fn.mkdir(vim.fs.joinpath(run, '2-test_b', 'output'), 'p')",
+      'end',
+      'return T',
+    },
+    ['test_b.lua'] = PASSING_FILE,
+    ['test_c.lua'] = PASSING_FILE,
+  })
+end
+
+T['a test file whose output cannot be opened'] = MiniTest.new_set()
+
+T['a test file whose output cannot be opened']['is named, saying why'] = function()
+  local directory = suite_whose_second_output_is_a_directory('output_unopenable_named')
+
+  local result = make.run('test', {
+    directory = directory,
+    environment = ONE_FILE_AT_A_TIME,
+    time_limit_ms = OUTLASTS_A_STALL_MS,
+  })
+
+  expect_line_beginning(
+    result.stdout,
+    'FAIL in tests/test_b.lua: the test file did not pass: it could not be started: '
+  )
+end
+
+T['a test file whose output cannot be opened']['does not keep the run going'] = function()
+  local directory = suite_whose_second_output_is_a_directory('output_unopenable_run_goes_on')
+
+  local result = make.run('test', {
+    directory = directory,
+    environment = ONE_FILE_AT_A_TIME,
+    time_limit_ms = OUTLASTS_A_STALL_MS,
+  })
+
+  eq({ result.code, summary_lines(result.stdout .. result.stderr) }, {
+    RECIPE_FAILED,
+    { 'Total number of cases: 2', 'Fails (0) and Notes (0)', 'FAIL in tests/test_b.lua' },
+  })
+end
+
+T['a test file whose Neovim cannot be started'] = MiniTest.new_set()
+
+T['a test file whose Neovim cannot be started']['does not keep the run going'] = function()
+  local directory = suite('neovim_unstartable', {
+    ['test_a.lua'] = {
+      "local MiniTest = require('mini.test')",
+      'local T = MiniTest.new_set()',
+      "T['makes every later start of a Neovim fail'] = function()",
+      "  local runner = vim.fn.sockconnect('pipe', vim.env.NVIM, { rpc = true })",
+      '  vim.rpcrequest(runner, "nvim_exec_lua",'
+        .. ' "vim.uv.spawn = function() return nil, \'EAGAIN: no process can be made\' end", {})',
+      '  vim.fn.chanclose(runner)',
+      'end',
+      'return T',
+    },
+    ['test_b.lua'] = PASSING_FILE,
+    ['test_c.lua'] = PASSING_FILE,
+  })
+
+  local result = make.run('test', {
+    directory = directory,
+    environment = ONE_FILE_AT_A_TIME,
+    time_limit_ms = OUTLASTS_A_STALL_MS,
+  })
+
+  eq({ result.code, summary_lines(result.stdout .. result.stderr) }, {
+    RECIPE_FAILED,
+    {
+      'Total number of cases: 1',
+      'Fails (0) and Notes (0)',
+      'FAIL in tests/test_b.lua',
+      'FAIL in tests/test_c.lua',
+    },
+  })
+end
+
 T["a test file's output"] = MiniTest.new_set()
 
 T["a test file's output"]['is relayed'] = function()
