@@ -946,3 +946,40 @@ Asked "How should I cut the time the tests cost?", the user chose "Run less + pa
   - the reviews' survivors: M12, P4, P13, P7–P12, M23. P14 was not among them: the fix round's re-take and the correction ran it, killed only through its second edit, and P14b only by the gap case;
   - the round's guards: the mkdir retry, the gap guard, the `v:exiting` guard, the round's mode condition, the command-line window wait, `winfixbuf` not cleared.
 - **Released:** `v0.2.9`, which carries T19 (PR #81, `main` at `ece0cdb`).
+- **T12 — PR #84, regular**, merged by rebase on 2026-09-28 as `8cf2840` … `97d9ea0` (8 commits), after T19. The code of `dev` is identical to the verified tree: `ac3e458` laid over `dev` `d7714d6`, merge-tree `276fc42`, which also holds T19 and T23.
+  - **The brief** of 2026-09-25 was amended on 2026-09-27 against the code T19 lands (PRs #80 and #82). The amendment's brief review found CN9's premise wrong: no `TermOpen` reaches Claude's window. The user then decided D27: the toggle stays as the user left it, across every new Claude terminal in that window. The plan's own reading above ("the rebuilt window takes the user's defaults") is superseded by the amendment and D27.
+  - **Reviews** on Opus: attack by `neovim-lua-reviewer`; test-integrity and records by `reviewer`. They found:
+    - the re-apply ran on every `open()`, and undid numbers the user set by hand;
+    - a terminal put back by hand missed the toggle;
+    - six mutants survived the whole suite, D27 tested only for a hide among them;
+    - which readings were measured was misrecorded, and a helper was misnamed.
+  - **The fix round** went to the author, whose context was 339 K. The orchestrator had removed the author's worktree at collection, and recreated it at the same path first. The round adopted the attack review's fixes A (re-apply only to a new terminal or window) and B (a `BufWinEnter` for Claude's terminal), and the reviews' pins. The orchestrator's decision A3 was no code: a toggle pressed over another buffer is remembered for Claude's terminal (MR206).
+  - **The re-measure**, with the attack question, held every claim. It found one promise with no test (G16). The **bounded correction**, by a fresh agent, adopted its pin.
+- **The orchestrator's verification** of the merged tree:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`, 1376 cases, `Fails (0)`, on 0.12.5 (1013 s) and 0.11.6 (1006 s), with `AINEO_TEST_RUN_LIMIT_MS` at 30 minutes. At the default 16 minutes both runs stopped at the limit in `test_send.lua`, the last file. The sequential suite had outgrown it; T22 fixes that;
+  - lint clean.
+- **12 literal mutants**, each killed by assertion on its covering test files on both versions:
+  - the plan's six: the current window; `'relativenumber'` left; the earlier values not restored; `tcn` missing from the health table; the prefix mapped over a user's mapping; no warning;
+  - the re-apply undone on every route: fix A, fix B, `open()`, T19's fallback;
+  - `:set` for `:setlocal`;
+  - G16.
+- **Released:** `v0.2.10`, which carries T12, and T23 with no caller yet (PR #87, `main` at `2af6b56`).
+- **T22 — PR #85, regular** (the shared test harness), merged by rebase on 2026-09-28 as `143f464` … `176fd21` (14 commits), after T12. The code of `dev` is identical to the verified tree: `c5c077d` laid over `dev` `97d9ea0`, merge-tree `57edc9b`.
+  - **The brief review** (dispatch after corrections, F1–F11) found that 0.12.5's `__NVIM_LOG_FILE_WANT` fails 73 cases in a fresh `.tests/`, among ten other points.
+  - **Reviews** on Opus: attack by `neovim-lua-reviewer`; test-integrity and records by `reviewer`. They found:
+    - a test file whose Neovim crashed or was killed counted as passed;
+    - failing endings printed a clean `Fails (0)`;
+    - a file's output could forge the summary;
+    - the exit status was tested only with the failing file first;
+    - a widening of the `Makefile`'s global `unexport` was unrecorded.
+  - **The fix round** went to a fresh agent (the author's context was 463 K). It adopted the reviews' fixes and pins. It started each file's Neovim with `vim.uv.spawn`, output to a file, since `vim.system` gives the exit code only once its pipes close. It also raised `make.run`'s default bound, the orchestrator's decision.
+  - **The re-measure**, with the attack question, held every claim but one: the stdout-relay pin tested stderr. It found two failures the round introduced: the per-target override lost to make's command line; a start failure stalled the run. The **bounded correction**, by a fresh agent, fixed both, pinned the rest, and recorded as limits what test code acting against the runner through `$NVIM` can still do.
+- **The orchestrator's verification** of the merged tree, with the new runner:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`, 1434 cases in 197 s on each version: `Fails (0)` on 0.12.5. On 0.11.6 `Fails (1)`, T17's intermittent timing case, which passed 3 of 3 alone;
+  - lint clean.
+- **14 literal mutants**, each killed by assertion on its covering test files, on both versions except the log directory's, which 0.11.6 makes itself:
+  - the plan's nine: a failure dropped; a file with no case passed; one home; the limit per file; files left running; one file's summary; `AINEO_TEST_JOBS` ignored; the log directory; every home cleared;
+  - the rounds' five: the signal; the records; the `export`; the output relay; the homes' retry.
+- **No release:** T22 changes only the test harness.
