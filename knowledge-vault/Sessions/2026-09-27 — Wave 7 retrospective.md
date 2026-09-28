@@ -1,7 +1,7 @@
 # Wave 7 retrospective
 
 **Author:** Mathias Santos de Brito, with Claude — the orchestrator (Opus 5.5, session `938616f1`)
-**Branch:** begun on `knowledge/w7-t23-landed`, T23's knowledge pass. Each later packet's pass extends this note.
+**Branch:** begun on `knowledge/w7-t23-landed`, T23's knowledge pass; extended on `knowledge/w6-t12-t22-landed`. Each later packet's pass extends this note.
 
 ## Links
 
@@ -35,6 +35,7 @@ T23 opened it beside wave 6's open packets, since all its files were new. Later 
 | 09-27 21:25 | The re-measure in: the round held; seven findings. The bounded correction sent to a fresh agent at 21:43 |
 | 09-27 22:49 | The correction in (1265 cases); the orchestrator's verification started |
 | 09-27 23:57 | PR #79 merged after the verification (1328 cases on both versions, 23 mutants killed). No release |
+| 09-28 00:00 | T23's knowledge pass (PR #86); its records review in, corrected, and merged (the correction at 56b082d) |
 
 **Findings, per review** (the verdicts are the reviewers'):
 
@@ -65,6 +66,7 @@ T23 opened it beside wave 6's open packets, since all its files were new. Later 
 | fix round, #79 — `neovim-lua-developer` | 271 | 602,628 | 542 | 5,062,366 | 98,274,997 | 27,027 |
 | re-measure, #79 — `neovim-lua-reviewer` | 200 | 460,343 | 400 | 734,112 | 54,373,798 | 9,506 |
 | bounded correction, #79 — `neovim-lua-developer` | 147 | 289,809 | 294 | 1,017,805 | 27,661,962 | 16,029 |
+| records review, #86 — `reviewer` | 103 | 277,299 | 206 | 256,097 | 16,555,498 | 1,968 |
 
 Not in the table: the orchestrator's own context.
 
@@ -100,4 +102,5 @@ Not in the table: the orchestrator's own context.
 - The wave-7 plan and its claim, PR #78: `9666cb0`, `5c6481e`.
 - The modularity rows for the git home, PR #77 (`ai/`): `1c931c8`.
 - T23, PR #79: `2f44c73` … `da18aa6` (19 commits) — [[Sessions/2026-09-27 — T23 git home]].
+- T23's knowledge pass, PR #86: `e8047e9`, `d7714d6`.
 - This knowledge pass: recorded after its merge by the next one.

@@ -367,8 +367,30 @@ Added 2026-09-27 by the orchestrator, from T23's brief and session note at `dev`
 | MR197 | Two answers the changes pane will meet: `git rm --cached` of an unchanged file lists it as deleted and as untracked; a clean merge commit's diff is its header alone, since `git show`'s default combined diff is empty for it. | attack review (finding 18) |
 | MR198 | When every process of git's group has exited but one outside it still holds git's output, the time limit signals the group id git had, which the system could in principle have given to a new group. Reasoned, not measured. | re-measure (finding 1's caveat) |
 
+## Readings — `\tcn` (T12)
+
+Added 2026-09-28 by the orchestrator, from T12's brief, its amendment and its session note at `dev` `97d9ea0` (PR #84, `v0.2.10`). D16 and D27 are the user's decisions; what follows are readings. MR206 was told to the user on 2026-09-27 without a reply; the rest were not shown.
+
+| ID | Reading | Source | Disposition |
+|---|---|---|---|
+| MR199 | The subcommand is `:Aineo claude-numbers`, and the mapping `<Plug>(aineo-claude-numbers)`. | T12's brief | open |
+| MR200 | Hiding clears `'relativenumber'` together with `'number'`. | T12's brief | open |
+| MR201 | Showing them again restores what the window had when they were hidden. A window whose numbers aineo never hid gets `'number'`. | T12's brief; the fix round (attack review, finding 4) | open |
+| MR202 | With no Claude window, `\tcn` warns (`WARN`) and changes nothing; a Claude window left on an empty buffer after its terminal was wiped counts as none. | T12's brief and amendment | open |
+| MR203 | From another tab, `\tcn` toggles Claude's window in the layout's tab, and moves the user nowhere. | T12's brief and amendment | open |
+| MR204 | Numbers the user sets by hand stay until a new Claude terminal or a new Claude window arrives; only then is the toggle applied again (D27). | the fix round (attack review, finding 1, fix A) | open |
+| MR205 | A user's own mapping of `\t` or `\tc` now waits for `'timeoutlen'`; the help says so. | T12's amendment | open |
+| MR206 | A toggle pressed while Claude's window shows another buffer acts on that buffer, and is remembered for Claude's terminal when it comes back; the next toggle then gives that buffer's earlier numbers to the terminal. | the orchestrator's decision (A3), with the re-measure's finding 2 | open |
+| MR207 | A window split from Claude's window, while it shows the terminal, shows the numbers hidden too; another buffer in that split shows the user's own. | the author, as the fix round corrected it | open |
+
+## Limits a user can meet — `\tcn` (T12)
+
+| ID | Limit | Source |
+|---|---|---|
+| MR208 | The toggle is remembered for the editor's life only: a new Neovim starts with the user's own numbers. | D27; T12's note |
+
 ## Disposition
 
-**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR137 and MR139–MR198 stay open for the next review; MR138 is decided (D25), landed with T21 (PR #64, `v0.2.7`).
+**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR137 and MR139–MR208 stay open for the next review; MR138 is decided (D25), landed with T21 (PR #64, `v0.2.7`).
 
 Before that, every item was **open** until the MVP review. A reading the user keeps is closed *kept*; one the user changes becomes a plan row through a converge round (a new `D#`, never an edit in place) and a task.
