@@ -13,10 +13,10 @@ A program, or a test's stand-in for one, that waits for `0x03` never sees the in
 ## Example
 
 - **T21 (PR #64).** Claude Code's recorded screen switches the protocol on with `ESC[>5u`, and the suite's fake `claude` replays that screen. So a double Ctrl-C typed through Neovim reached the fake as two `ESC[99;5u`. The fake reads only `\3`, so it did not exit.
-  - The records review measured it at `70a43c7` on 0.12.5.
-  - The test-integrity review measured it at the same head on 0.12.5 **and** 0.11.6, its finding 5.
+  - T21's spike recorded it on 0.12.5 (`t21-spike2`), which the records review read (R3, R7).
+  - The test-integrity review measured it at the pull request's head, `70a43c7`, on 0.12.5 **and** 0.11.6 (I5).
   - T21 drove the self-exit by writing `\3\3` straight to the pseudo-terminal instead (`claude_session.end_by_keys()`). The typed path through Neovim is not driven (T21's session note, *Decisions* 6 and *Limits*).
-- **This pass, in bare Neovim** (2026-09-28, `probe-kitty-ctrl-c.lua` and `keys-reader.py` in `Implementation/Waves/00006-fixes/evidence/learnings-probes.txt`).
+- **This pass, in bare Neovim** (2026-09-28, `probe-kitty-ctrl-c.lua` and `keys-reader.py` in [[Attachments/learnings-probes-2026-09-28.txt]]).
   - A small Python program ran in a terminal job of a fresh child, `nvim --clean --headless --embed`. It set its tty raw, pushed the flags if given, asked for them with `CSI ? u`, then recorded every byte it received for 4 s.
   - The child entered Terminal mode (`:startinsert`), and Ctrl-C was typed with `nvim_input('<C-c>')`.
   - The output is identical on 0.12.5 and 0.11.6:

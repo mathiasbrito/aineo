@@ -20,7 +20,7 @@ When the job of a terminal buffer ends by itself, Neovim runs `TermClose` for th
   - a `TermClose` handler saw mode `t` with the terminal current. After its `:stopinsert` the mode was `nt`, and the next `x` gave only `E21`, the terminal kept.
 - **T21** leaves Terminal mode as Claude Code exits, from a `TermClose` handler (`leave_terminal_mode_as_claude_exits()`; `3371260`, `9db0e4d` on `dev`).
 - **T19** reads Claude Code's failed resume from the terminal's lines at `on_exit` (`found_no_conversation()`).
-- **This pass, in bare Neovim** (2026-09-28, `probe-jobs.lua` in `Implementation/Waves/00006-fixes/evidence/learnings-probes.txt`): a terminal job `sh -c 'exit 3'`, with a buffer-local `TermClose` autocommand and an `on_exit`. It gave `TermClose then on_exit` in 5 runs of 5, on 0.12.5 and on 0.11.6.
+- **This pass, in bare Neovim** (2026-09-28, `probe-jobs.lua` in [[Attachments/learnings-probes-2026-09-28.txt]]): a terminal job `sh -c 'exit 3'`, with a buffer-local `TermClose` autocommand and an `on_exit`. It gave `TermClose then on_exit` in 5 runs of 5, on 0.12.5 and on 0.11.6.
 
 **Why.** Not read in Neovim's source; the order was measured.
 

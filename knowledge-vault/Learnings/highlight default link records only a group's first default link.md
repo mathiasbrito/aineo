@@ -18,7 +18,7 @@ So the first default link wins for good. Suppose a colour scheme or a config giv
 
 - **T9 (PR #30) first used `nvim_set_hl(…, { default = true })`.** The guarantee review found (G4) that this lost a group. A user's colour given before the first report, then `:highlight clear`, left the group empty, because `nvim_set_hl` had recorded no default link. The fix round moved to `:highlight default link` (`27b327d` on `dev`). The Ex form records the default link even over a group that has a colour.
 - **The re-measure of PR #30** (at `e5d0a76`, code `72827be`, identical on 0.11.6 and 0.12.5) then found the limit. A colour scheme ran `highlight clear`, then `highlight default link AineoReportDone Title`, before the Report's first report. After a report, a `:colorscheme` that does not name the group left it linked to `Title`, not `DiagnosticOk`. Its Q3 read `Title`, `Title`, `DiagnosticOk`, `Title` across the steps. T9 recorded this as a limit and pinned it (T9's session note, *Limits*).
-- **This pass, in bare Neovim** (2026-09-28): `probe-highlight.lua` in `Implementation/Waves/00006-fixes/evidence/learnings-probes.txt`. Each case ran in a fresh child, `nvim --clean --headless --embed`. The output is identical on 0.12.5 and 0.11.6:
+- **This pass, in bare Neovim** (2026-09-28): `probe-highlight.lua` in [[Attachments/learnings-probes-2026-09-28.txt]]. Each case ran in a fresh child, `nvim --clean --headless --embed`. The output is identical on 0.12.5 and 0.11.6:
 
   ```
   given first (lua) :highlight default link G DiagnosticOk -> { link = "DiagnosticOk" }; then default link G Title -> { link = "DiagnosticOk" }; then :highlight clear -> { link = "DiagnosticOk" }

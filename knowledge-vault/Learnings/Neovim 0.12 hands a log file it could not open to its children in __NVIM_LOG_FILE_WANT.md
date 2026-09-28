@@ -31,7 +31,7 @@ It says so even when it was given a log file of its own that opens fine: the che
   - it makes the log directory before the runner starts (`mkdir -p '$(TEST_LOG_DIRECTORY)'`);
   - it empties the variable for the test recipes: `test test_file: override __NVIM_LOG_FILE_WANT :=`, with `export __NVIM_LOG_FILE_WANT` beside it (`5dd3928` on `dev`).
   - The `export` is needed because GNU Make 3.81 passes a recipe the command line's or `MAKEFLAGS`' value of a variable it does not export, whatever a target's `override` says. T22's re-measure measured that.
-- **This pass, in bare Neovim** (2026-09-28, `probe-log-fallback.lua` in `Implementation/Waves/00006-fixes/evidence/learnings-probes.txt`). It was run with `NVIM_LOG_FILE=<scratch>/no-such-dir/log`, a directory that did not exist. Each child is `nvim --clean --headless --embed`, and its `:messages` were read 400 ms after it started:
+- **This pass, in bare Neovim** (2026-09-28, `probe-log-fallback.lua` in [[Attachments/learnings-probes-2026-09-28.txt]]). It was run with `NVIM_LOG_FILE=<scratch>/no-such-dir/log`, a directory that did not exist. The probe makes `child-log/` before it starts the children; its first recording lacked that line, which the correction of PR #90 added and re-ran, at `c25bb30` on both versions, with the same output. Each child is `nvim --clean --headless --embed`, and its `:messages` were read 400 ms after it started:
 
   ```
   log: "<scratch>/no-such-dir/log" not accessible, logging to: "<scratch>/xdg-0.12.5/state/nvim/nvim.log"
@@ -49,11 +49,13 @@ It says so even when it was given a log file of its own that opens fine: the che
   The first line is the 0.12.5 parent's own notice, on its stderr.
 
 **Why.** Read by this pass: the C source at both tags (fetched with `gh api`), and the Lua in the release's own runtime.
-- **0.12.5's fallback.** `src/nvim/log.c` › `log_path_init()` at `v0.12.5` (l.63–109) handles a user-set `NVIM_LOG_FILE` that is empty, a directory or cannot be created:
+- **0.12.5's fallback.** `src/nvim/log.c` › `log_path_init()` at `v0.12.5` (l.64–110) handles a user-set `NVIM_LOG_FILE` that is empty, a directory or cannot be created:
   1. it sets `__NVIM_LOG_FILE_WANT` to that path;
   2. it falls back to `stdpath('state')/nvim.log`, then to `nvim.log` in the current directory, then to stderr;
   3. it sets `NVIM_LOG_FILE` to the fallback.
-- **0.11.6's fallback.** At `v0.11.6` (l.66–100), the fallbacks are `stdpath('state')/log`, then `.nvimlog`, and no such variable is set.
+
+  A Neovim given no `NVIM_LOG_FILE` exports `__NVIM_LOG_FILE_WANT` too, holding the default path, when `stdpath('state')/nvim.log` cannot be created; it then falls back to `nvim.log` in the current directory (`v0.12.5` l.92–95, read by the correction of PR #90).
+- **0.11.6's fallback.** At `v0.11.6` (l.66–102), the fallbacks are `stdpath('state')/log`, then `.nvimlog`, and no such variable is set.
 - **The notice.** `runtime/lua/vim/_core/log.lua` › `check_log_file()` at 0.12.5 is called at `VimEnter` from `_core/defaults.lua` (l.556–565, "Warn if $NVIM_LOG_FILE or $XDG_STATE_HOME are inaccessible. #38039"). It returns in Ex mode, or when `__NVIM_LOG_FILE_WANT` is unset. Otherwise it warns, through `vim.defer_fn(…, 100)`, when the Neovim's own `NVIM_LOG_FILE` is empty or differs from the wanted path.
 
 ## Why it matters
