@@ -140,7 +140,7 @@ The author's:
 - **A window split from Claude's window, showing the terminal, shows the numbers hidden too**: Neovim copies a window's local options on a split. Another buffer in that split shows the user's own. **Corrected by the fix round (R1):** "Measured on 0.12.5 and 0.11.6 by a throwaway probe run through `make test_file`" named a probe whose results were written to a file that went with the author's worktree; the probe logs on record are byte-identical and hold no value, and the script left in the scratchpad is another file, a print script that never tested this reading. The records review measured it with `records84-probe.lua` on `430937e`, green on both versions (`{ split_terminal = false, split_other = true }`), and the fix round re-ran that probe on its own code: green on both versions.
 
 The orchestrator's, from the fix round (A3), which the user may change at the review:
-- **A toggle pressed while Claude's window shows another buffer** (a help buffer, a `:terminal` of the user's) acts on that buffer, and is the remembered choice: Claude's terminal gets the same numbers when it next comes back to that window, by hand or by aineo, and so does every new Claude terminal there. A terminal whose numbers were `'number'` and `'relativenumber'` then loses its `'relativenumber'` if the toggle, pressed on a buffer with none, gave `'number'` alone (the attack review's LP3).
+- **A toggle pressed while Claude's window shows another buffer** (a help buffer, a `:terminal` of the user's) acts on that buffer, and is the remembered choice: Claude's terminal gets the same numbers when it next comes back to that window, by hand or by aineo, and so does every new Claude terminal there. A terminal whose numbers were `'number'` and `'relativenumber'` then loses its `'relativenumber'` if the toggle, pressed on a buffer with none, gave `'number'` alone (the attack review's LP3). It loses it too when the toggle hid that buffer's numbers: they are recorded as the ones to show again (`claude_numbers_before_hiding`), so the next toggle gives Claude's terminal that buffer's numbers, not its own — a buffer showing `'number'` alone gives it `'number'` alone (the re-measure's finding 2, its probe RP8, on both versions). **So a toggle on another buffer does two things:** it sets the numbers Claude's terminal gets when it next comes back, and, when it hides, the numbers every later toggle shows again. The help says both since the correction.
 
 ## The fix round (PR #84's three reviews)
 
@@ -223,6 +223,25 @@ Whole suite, `make test`, on the code of `5c1ee7c`; the commit after it touches 
   - The failure is T17's timing case in `tests/test_report_paths.lua`, *of a line of distinct paths take at most the time limit, on arrival and on :edit*: `arrival = "3.5 s"`, `edit = "3.5 s"`. The amended brief names it as intermittent on 0.11.6, not this packet's to change, and not holding the push.
   - Re-run alone on 0.11.6 (`t12f-paths-011-run1.log`), it passed 90/90 on the first try. Load averages were `158.09 148.24 162.03` before and `160.81 149.30 162.16` after.
 - **The count:** 1274 = the packet's 1257, plus 4 layout cases, 7 entry cases and 6 prefix cases.
+- **Lint:** `make lint` passes: StyLua is clean, and selene reports `0 errors`.
+
+## The correction (the re-measure of PR #84, findings 1–3)
+
+A fresh implementer agent, on `feature/t12-claude-numbers` from `6f7e6cf`, under the orchestrator's correction brief. Scope: the re-measure's findings 1 to 3, nothing else.
+
+- **Finding 1 — fixed.** The help's "numbers you set yourself … stay" was pinned only while Claude's terminal never left Claude's window: mutant G16 survived the whole suite. The set-by-hand group now has a fourth row, the re-measure's pin (`remeasure-pin-byhand.lua`), adopted unchanged and credited: a scratch buffer shown in Claude's window, then `\o` brings the same terminal back through `show_buffers()`.
+  - It **arrived green** at the head, 4/4 on both versions: the behaviour exists since fix A and fix B.
+  - **G16**, the literal edit: in `keep_claude_numbers_on_entry()`, `  if event.buf == state.buffers.claude then\n    keep_claude_numbers()\n  end` → `  if event.buf == state.buffers.claude then\n    state.claude_numbers_shown_in = nil\n    keep_claude_numbers()\n  end`. Run on the group narrowed to set-by-hand (4 cases), on `85967df`: **killed 1/4 by assertion on 0.12.5 and on 0.11.6**, the new row only, `different values at key "number", left = false, right = true` (`t12c-mutant-G16-0.12.log`, `t12c-mutant-G16-0.11.log`).
+- **Finding 2 — recorded.** The orchestrator's decision A3 stands: no code. The help's first sentence now says the toggle shows the numbers "as they were when aineo last hid them, whichever buffer Claude's window showed then", and its other-buffer sentence says that numbers hidden there are those the next toggle shows Claude's terminal again, in place of its own. The A3 reading above names both effects.
+- **Finding 3 — fixed.** `misses_claude_numbers()`'s gloss now names its third case: the toggle last shown there for another buffer.
+
+### Verification of the correction
+
+On the code of `85967df`; the commit after it touches only this note, the one tracked change at the start of each run, which no test reads. Logs `t12c-*.log` in the correction's scratchpad, each headed by `nvim --version`, `uptime` and the sha.
+- **The touched files, both versions:** `tests/test_entry_claude_numbers.lua` 17 cases (16 before, and the new row), `Fails (0)`; `tests/test_doc.lua` 36 cases, `Fails (0)`.
+- **Whole suite, `make test`, 0.12.5:** `Total number of cases: 1275`, `Fails (0) and Notes (0)`, exit 0, from 01:35 to 01:51 (load averages `88.62 127.01 128.52` at the start).
+- **Whole suite, 0.11.6:** `Total number of cases: 1275`, `Fails (0) and Notes (0)`, exit 0, from 01:51 to 02:07 (load averages `19.34 30.09 64.18` at the start, `39.59 38.61 48.05` at the end). T17's timing case passed.
+- **The count:** 1275 = the fix round's 1274, plus the new row.
 - **Lint:** `make lint` passes: StyLua is clean, and selene reports `0 errors`.
 
 ## Task lines
