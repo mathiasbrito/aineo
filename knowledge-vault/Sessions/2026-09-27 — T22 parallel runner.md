@@ -314,4 +314,21 @@ Under H1 with the mutated runner as the outer runner too, the whole narrowed run
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by the orchestrator's knowledge pass. PR #85 merged by rebase on 2026-09-28 (01:50 UTC); `dev` `176fd21`; no release, since it changes only the test harness.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `43f6660` | `143f464` | Run the suite's test files side by side, each in a home of its own |
+| `413c827` | `a35a3aa` | Let each test file's Neovim decide its file, and pin case names |
+| `6cc0486` | `89f7d77` | Pin that the fresh-checkout log test runs the copy |
+| `c86db4c` | `a772756` | Test that a run inside a file keeps that file's home, one level down |
+| `5239471` | `9044ba8` | Record T22's session: the parallel runner, its mutants and runs |
+| `5ec1d7d` | `8a6cb84` | Decide a test file from its exit, its signal and its records |
+| `c060b2d` | `2f9af5d` | Pin a signal that ends a test file after its cases passed |
+| `1083de2` | `4ece1f8` | Raise make.run's default bound from ten seconds to a minute |
+| `3eac789` | `e1d41f4` | Record T22's fix round and correct the session note's records |
+| `17bf19b` | `5dd3928` | Export the emptied log fallback to the test recipes on every route |
+| `f77ce3d` | `88789f3` | Go on to the next test file when one cannot be started |
+| `a965914` | `d33586f` | Pin four checks of the runner that no test reached |
+| `b935a99` | `5b7c8be` | Record in the runner what test code bent on it can still do |
+| `c5c077d` | `176fd21` | Record T22's correction and fix the fix round's records |
