@@ -6,7 +6,7 @@
 
 ## The insight
 
-`vim.fn.strdisplaywidth()` measures a string the way the current window would lay it out. When that window is narrower than the string and has `'linebreak'` or `'showbreak'`, the padding a line break would add is counted too. The result is then larger than the string's cells, and it changes with the window, not with the string.
+`vim.fn.strdisplaywidth()` measures a string the way the current window would lay it out. When that window's text area, its width less the `'number'`, sign and fold columns, is narrower than the string, and the window has `'linebreak'` or `'showbreak'`, the padding a line break would add is counted too. The result is then larger than the string's cells, and it changes with the window, not with the string.
 
 `vim.api.nvim_strwidth()` counts cells only. It follows `'ambiwidth'` and `setcellwidths()` exactly as `strdisplaywidth()` does. To size text for a buffer that will show in some other window, or in several, use `nvim_strwidth()`.
 

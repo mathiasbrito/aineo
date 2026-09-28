@@ -20,7 +20,7 @@ A process that ignores the signals therefore holds the editor until Neovim's kil
 - **The attack review of PR #64** (at `70a43c7`, A5) stopped the deaf fake, which ignores the hangup, with `jobstop()`, then typed `i` in its terminal. The editor answered after 4001 ms on 0.12.5 and 4002 ms on 0.11.6, where `dev` answered in 0 ms.
 - **The fix round** replaced the wait by a record kept at `TermClose` (`3371260` on `dev`).
 - **The correction** added `vim.uv.kill(b:terminal_job_pid, 0)` for an exit that no `TermClose` handler saw (`9db0e4d` on `dev`). A stopped process still counts as running until its SIGKILL.
-- **This pass, in bare Neovim** (2026-09-28, `probe-jobs.lua` in `Implementation/Waves/00006-fixes/evidence/learnings-probes.txt`). A job ran `sh -c 'trap "" HUP TERM; while :; do sleep 1; done'` and got `jobstop()` after 300 ms. The output on 0.12.5 was:
+- **This pass, in bare Neovim** (2026-09-28, `probe-jobs.lua` in [[Attachments/learnings-probes-2026-09-28.txt]]). A job ran `sh -c 'trap "" HUP TERM; while :; do sleep 1; done'` and got `jobstop()` after 300 ms. The output on 0.12.5 was:
 
   ```
   pipe job: vim.uv.kill(pid, 0) right after jobstop() returned 0 in 0 ms

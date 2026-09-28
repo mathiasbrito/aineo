@@ -21,7 +21,7 @@ A `BufWipeout` handler that asks "does this window show the wiped buffer?" gets 
   - The next `\c` then moved to that buffer and started nothing.
   - `:bdelete!`, and a Terminal-mode mapping running `bwipeout!`, did the same.
 - **The fix round** closes the window in either case (fixA; `3371260` on `dev`). The window must show the wiped terminal or an unnamed, empty buffer at the wipe, and still an unnamed, empty buffer when the scheduled close runs.
-- **This pass, in bare Neovim** (2026-09-28, `probe-bwipeout.lua` in `Implementation/Waves/00006-fixes/evidence/learnings-probes.txt`).
+- **This pass, in bare Neovim** (2026-09-28, `probe-bwipeout.lua` in [[Attachments/learnings-probes-2026-09-28.txt]]).
   - The setup: two windows, one showing an unlisted `nofile` buffer and the current one showing a listed terminal. The terminal runs `cat`, or `sh -c 'exit 0'` waited out first.
   - Each event is logged with the buffer the window shows at that moment.
   - The output is identical on 0.12.5 and 0.11.6:

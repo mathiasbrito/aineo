@@ -6,7 +6,7 @@
 
 ## The insight
 
-Take a Neovim whose UIs do not use hlstate; a headless test child has no UI at all. The first call of the internal `nvim__inspect_cell()` in it reads its own cell correctly, then rebuilds the highlight attribute tables. Every later read before the next redraw decodes the cell's old attribute id against the new tables, and returns a wrong foreground, or loses bold.
+Take a Neovim whose UIs do not use hlstate; a headless test child has no UI at all. The first call of the internal `nvim__inspect_cell()` in it reads its own cell correctly, then rebuilds the highlight attribute tables. Every later read of a highlighted cell before the next redraw decodes the cell's old attribute id against the new tables, and returns a wrong foreground, or loses bold. A cell drawn with no highlight, attribute 0, reads right.
 
 Reads made after a redraw are right. A new RPC request is enough, since the child redraws between requests.
 
@@ -20,7 +20,7 @@ Reads made after a redraw are right. A new RPC request is enough, since the chil
   It gave the likely cause as "not verified in Neovim's source (none was at hand)".
 - **T18's helper** (`370bdaa` on `dev`). `first_status_on_screen()` in `tests/test_report_colours.lua` makes one call and drops its result, runs `:redraw`, then reads each cell in a request of its own.
 - **The guarantee review of PR #60** (at `467e192`, G8) removed the dropped call and the redraw: 0 of 49 cases failed. Each read already had its own request.
-- **This pass, in bare Neovim** (2026-09-28, `probe-inspect-cell.lua` in `Implementation/Waves/00006-fixes/evidence/learnings-probes.txt`).
+- **This pass, in bare Neovim** (2026-09-28, `probe-inspect-cell.lua` in [[Attachments/learnings-probes-2026-09-28.txt]]).
   - The setup: a fresh child, `nvim --clean --headless --embed`, with the line `09:05 [done] Task`. Extmarks colour `09:05` `#9b9ea4` and `[done]` `#b3f6c0` bold.
   - Each numbered block below is a new child. Each line is one request.
   - The output is identical on 0.12.5 and 0.11.6:
