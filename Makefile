@@ -64,8 +64,13 @@ unexport NVIM NVIM_APPNAME MYVIMRC VIMINIT AI_AGENT
 
 # A Neovim 0.12 that could not open its log file hands the file it wanted down
 # in this variable, and every Neovim that inherits it tells of a log it cannot
-# open, in a message the tests would read. The test targets empty it, whatever
-# its origin, and Neovim reads an empty variable as absent.
+# open, in a message the tests would read. The test targets empty it, whether
+# it comes from the environment, make's command line or MAKEFLAGS, and Neovim
+# reads an empty variable as absent. `export` is what hands the emptied value to
+# their recipes: GNU Make 3.81 gives a recipe the command line's value of a
+# variable it does not export, whatever a target's `override` says. Other
+# targets see the caller's value, as before.
+export __NVIM_LOG_FILE_WANT
 test test_file: override __NVIM_LOG_FILE_WANT :=
 
 # Fetches mini.nvim at MINI_NVIM_COMMIT into MINI_NVIM_DIR. Does nothing, and
