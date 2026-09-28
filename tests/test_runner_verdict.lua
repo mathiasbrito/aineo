@@ -168,6 +168,40 @@ T['a test file whose own VimLeavePre defeats its runner']['fails the run'] = fun
   eq(result.code, RECIPE_FAILED)
 end
 
+T['a test file whose own VimLeavePre defeats its runner in its last case'] = MiniTest.new_set()
+
+T['a test file whose own VimLeavePre defeats its runner in its last case']['fails the run'] = function()
+  local directory = suite('leaving_handler_last_case', {
+    ['test_a.lua'] = PASSING_FILE,
+    ['test_b.lua'] = {
+      "vim.api.nvim_create_autocmd('VimLeavePre', { callback = function() error('a handler of the test raises') end })",
+      "local MiniTest = require('mini.test')",
+      'local T = MiniTest.new_set()',
+      "T['ends Neovim'] = function() vim.cmd('qall!') end",
+      'return T',
+    },
+  })
+
+  local result = make.run('test', { directory = directory })
+
+  eq(result.code, RECIPE_FAILED)
+end
+
+T['a test file whose records are gone'] = MiniTest.new_set()
+
+T['a test file whose records are gone']['fails the run'] = function()
+  local directory = suite('records_gone', {
+    ['test_a.lua'] = PASSING_FILE,
+    ['test_b.lua'] = vim.list_extend({
+      "vim.api.nvim_create_autocmd('VimLeavePre', { callback = function() error('a handler of the test raises') end })",
+    }, file_running_then_failing("os.remove(arg[2]); vim.cmd('qall!')")),
+  })
+
+  local result = make.run('test', { directory = directory })
+
+  eq(result.code, RECIPE_FAILED)
+end
+
 T['a test file that ends the runner over its server'] = MiniTest.new_set()
 
 T['a test file that ends the runner over its server']['fails the run'] = function()
@@ -325,7 +359,7 @@ end
 
 T["a test file's output"] = MiniTest.new_set()
 
-T["a test file's output"]['is relayed'] = function()
+T["a test file's output"]['printed is relayed'] = function()
   local directory = suite('output_relayed', {
     ['test_a.lua'] = PASSING_FILE,
     ['test_b.lua'] = file_running_then_failing("print('printed by a case')"),
@@ -334,6 +368,17 @@ T["a test file's output"]['is relayed'] = function()
   local result = make.run('test', { directory = directory })
 
   expect_mentions(result.stdout .. result.stderr, 'printed by a case')
+end
+
+T["a test file's output"]['written to stdout is relayed'] = function()
+  local directory = suite('stdout_relayed', {
+    ['test_a.lua'] = PASSING_FILE,
+    ['test_b.lua'] = file_running_then_failing("io.stdout:write('written to stdout by a case\\n')"),
+  })
+
+  local result = make.run('test', { directory = directory })
+
+  expect_mentions(result.stdout .. result.stderr, 'written to stdout by a case')
 end
 
 T["a test file's output"]['cannot take the place of the summary'] = function()
