@@ -119,6 +119,17 @@ local TEST_HOME_ROUTES = {
   ['in MAKEFLAGS'] = { environment = { MAKEFLAGS = 'TEST_HOME=' .. DECOY_TEST_HOME } },
 }
 
+--- A log file no Neovim can open: nothing makes its directory.
+local UNREACHABLE_LOG = vim.fs.joinpath(TEST_HOME, 'fixtures', 'decoy', 'unreachable', 'log')
+
+--- Ways of handing make the log file a parent Neovim 0.12 could not open, as
+--- it hands it down in `__NVIM_LOG_FILE_WANT`, by name.
+local LOG_FALLBACK_ROUTES = {
+  ['in the environment'] = { environment = { __NVIM_LOG_FILE_WANT = UNREACHABLE_LOG } },
+  ['on the command line'] = { assignments = { '__NVIM_LOG_FILE_WANT=' .. UNREACHABLE_LOG } },
+  ['in MAKEFLAGS'] = { environment = { MAKEFLAGS = '__NVIM_LOG_FILE_WANT=' .. UNREACHABLE_LOG } },
+}
+
 --- The developer's own Neovim configuration, where Neovim looks without XDG_CONFIG_HOME.
 local DEVELOPER_CONFIG = vim.fs.joinpath(vim.uv.os_homedir(), '.config', 'nvim')
 
@@ -302,12 +313,15 @@ T['make test_file']['keeps the log a parent Neovim hands down out of its runner'
   eq(result.code, 0)
 end
 
-T['make test_file']["keeps a parent Neovim's log fallback out of its runner and children"] = function()
-  local decoy = fixture.directory('decoy')
-
-  local result = probe_isolation({
-    environment = { __NVIM_LOG_FILE_WANT = vim.fs.joinpath(decoy, 'unreachable', 'log') },
+T['make test_file']["keeps a parent Neovim's log fallback out of its runner and children"] =
+  MiniTest.new_set({
+    parametrize = { { 'in the environment' }, { 'on the command line' }, { 'in MAKEFLAGS' } },
   })
+
+T['make test_file']["keeps a parent Neovim's log fallback out of its runner and children"]['handed'] = function(
+  route
+)
+  local result = probe_isolation(LOG_FALLBACK_ROUTES[route])
 
   eq(result.code, 0)
   expect_no_mention(result.stderr, 'not accessible')
