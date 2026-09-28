@@ -13,6 +13,8 @@
 --- can be forged by test code — a `VimLeavePre` of the test file's own that
 --- raises or runs `0cquit` turns its Neovim's failure into exit 0, and a
 --- Neovim killed after its records were written leaves no failing case.
+--- Together they still hold only against test code that does not mean to
+--- defeat them (see Not guarded).
 ---
 --- Run with `nvim -l`, which ends Neovim with exit code 1 on any Lua error. It
 --- refuses, that way and before it starts any file, an `AINEO_TEST_JOBS` that
@@ -29,23 +31,37 @@
 --- recorded cases — one `Total number of cases` line, one progress line per
 --- file, one `Fails (` line and a `FAIL in` line for each failing case — and a
 --- line `FAIL in <file>: …` for each file that did not pass although none of
---- its cases failed, saying why. A file's output never comes before the
---- summary on stdout, so no line a test prints can be read in its place.
+--- its cases failed, saying why. A file's own output never comes before the
+--- summary on stdout, so no line a test prints to it can be read in the
+--- summary's place. A file named by a failing case gets no `FAIL in <file>:`
+--- line, so its Neovim ending on a signal, or still running at the limit, is
+--- not said; and the output of a file still running at the limit is not
+--- relayed.
 ---
 --- Bounded: the whole run, by its time limit. The runner runs no test code, so
 --- the limit holds even while a case keeps its file's Neovim busy, such as
 --- `while true do end`. At the limit, or when the runner itself ends early, on
---- an error, a signal or a command sent to its server, it stops the Neovim of
---- every file still running with SIGKILL, which a busy Neovim cannot ignore,
---- together with every process descended from it — child Neovims, which lead
---- process groups of their own, and processes a test started with
---- `vim.system` — and counts that file's cases that had not finished as not
---- run. A file ends when its Neovim exits, whatever process it started still
+--- an error, a signal, or a command sent to its server that ends it through
+--- its `VimLeavePre`, it stops the Neovim of every file still running with
+--- SIGKILL, which a busy Neovim cannot ignore, together with every process
+--- descended from it — child Neovims, which lead process groups of their own,
+--- and processes a test started with `vim.system` — and counts that file's
+--- cases that had not finished as not run. A file ends when its Neovim exits, whatever process it started still
 --- holds its output. Not bounded: a process a test starts and never stops,
 --- once its file's Neovim has ended, by itself or on a signal from outside:
 --- it is no longer that Neovim's descendant, and outlives the run. SIGKILL of
 --- the runner from outside skips its ending, and leaves every file's Neovim
 --- running and the run's homes in place.
+---
+--- Not guarded: test code that means to defeat the runner. Through the
+--- runner's server, which every file's Neovim can reach as `NVIM`, a test can
+--- have the runner call `os.exit(0)`, or clear its `VimLeavePre` and quit:
+--- the run then ends with exit 0 and no summary, leaving that file's Neovim
+--- running and the run's homes in place. It can also write to the runner's
+--- stdout, ahead of the summary. And a case that writes a passing record for
+--- every case of its file to the record path its Neovim was given (`arg[2]`
+--- of `scripts/run_test_file.lua`), then ends that Neovim through a
+--- `VimLeavePre` of its own that raises, passes its file.
 ---
 --- Arguments: `arg[1]`, the directory to make this run's homes in; `arg[2]`,
 --- the path of one test file to run — `make test_file` passes an empty one
