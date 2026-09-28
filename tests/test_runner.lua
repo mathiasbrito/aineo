@@ -423,6 +423,24 @@ T['a run stopped at its time limit']['leaves no child Neovim running'] = functio
   eq(ended_soon(tonumber(vim.fn.readfile(pid_path)[1])), true)
 end
 
+--- A Makefile whose `test` recipe ignores SIGTERM and sleeps for half a minute.
+local IGNORING_SIGTERM_RECIPE = { 'test:', "\ttrap '' TERM; sleep 30" }
+
+--- Well under the half minute `IGNORING_SIGTERM_RECIPE` sleeps, and well over
+--- the time a run takes to be stopped past a one-second limit.
+local SOON_AFTER_A_ONE_SECOND_LIMIT_MS = 15000
+
+T['a run stopped at its time limit']['ends soon after it, even when its recipe ignores SIGTERM'] = function()
+  local directory = fixture.directory('ignores_sigterm')
+  local makefile = fixture.write('ignores_sigterm/Makefile', IGNORING_SIGTERM_RECIPE)
+  local started = vim.uv.now()
+
+  local result =
+    make.run('test', { makefile = makefile, directory = directory, time_limit_ms = 1000 })
+
+  eq({ result.code, vim.uv.now() - started < SOON_AFTER_A_ONE_SECOND_LIMIT_MS }, { 124, true })
+end
+
 T['the run time limit'] = MiniTest.new_set()
 
 T['the run time limit']['ends a run, saying so, while a case waits'] = MiniTest.new_set({
