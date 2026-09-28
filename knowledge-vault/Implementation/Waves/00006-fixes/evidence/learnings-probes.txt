@@ -1,0 +1,647 @@
+Probes for the Learnings of waves 6 and 7, measured by the knowledge pass on 2026-09-28
+(branch knowledge/w6-learnings, dev at 176fd21), macOS arm64 (Darwin 25.1.0).
+Neovim: 0.12.5 (Homebrew, NVIM v0.12.5) and 0.11.6 (the release build nvim-macos-arm64, at <builds>/nvim-0.11.6).
+Each probe ran as
+
+  env -i HOME=<home> TERM=xterm-256color LANG=en_US.UTF-8 PATH=<that Neovim's bin>:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+    XDG_CONFIG_HOME=<scratch>/xdg-<version>/config XDG_DATA_HOME=<scratch>/xdg-<version>/data \
+    XDG_STATE_HOME=<scratch>/xdg-<version>/state XDG_CACHE_HOME=<scratch>/xdg-<version>/cache \
+    NVIM_LOG_FILE=<scratch>/xdg-<version>/state/nvim/log \
+    nvim --clean --headless -l <probe>
+
+with <scratch> a folder under the worktree's .tests/, and nothing inherited from the editor that ran the
+session (NVIM, MYVIMRC, VIMRUNTIME and the CLAUDE* variables were not passed). The log-fallback probe
+replaced NVIM_LOG_FILE with <scratch>/no-such-dir/log, a directory that did not exist.
+The real claude never ran. Paths below are rewritten to <scratch>.
+==== script probe-modes.lua ====
+-- Which mode a child Neovim is in right after keys that enter Insert or
+-- Terminal mode, by how the keys were given: pending (nvim_input, as
+-- mini.test's child.type_keys gives them) or executed at once
+-- (nvim_feedkeys with 'x', as a helper's press() gives them).
+-- Each case runs in a fresh child: nvim --clean --headless --embed.
+
+local function child()
+  local chan = vim.fn.jobstart({ vim.v.progpath, '--clean', '--headless', '--embed' }, { rpc = true })
+  vim.rpcrequest(chan, 'nvim_exec_lua', [[
+    vim.keymap.set('n', '<Space>i', function() vim.cmd.startinsert() end)
+    vim.keymap.set('n', '<Space>m', function()
+      vim.cmd.startinsert()
+      _G.mode_inside = vim.api.nvim_get_mode().mode
+    end)
+    vim.keymap.set('n', '<Space>w', function()
+      vim.cmd.startinsert()
+      vim.cmd.wincmd('w')
+    end)
+  ]], {})
+  return chan
+end
+
+local function terminal(chan)
+  vim.rpcrequest(chan, 'nvim_exec_lua', [[
+    vim.cmd.enew()
+    vim.fn.jobstart({ 'cat' }, { term = true })
+  ]], {})
+end
+
+local function state(chan)
+  return vim.rpcrequest(chan, 'nvim_exec_lua', [[
+    local buf = vim.api.nvim_get_current_buf()
+    return ('mode=%s buftype=%s'):format(vim.api.nvim_get_mode().mode, vim.bo[buf].buftype == '' and 'normal' or vim.bo[buf].buftype)
+  ]], {})
+end
+
+local function feed(chan, keys, flags)
+  vim.rpcrequest(chan, 'nvim_exec_lua', 'vim.api.nvim_feedkeys(vim.keycode(...), select(2, ...), false)', { keys, flags })
+end
+
+local function input(chan, keys)
+  vim.rpcrequest(chan, 'nvim_input', keys)
+  vim.wait(200)
+end
+
+local cases = {
+  { 'A normal buffer, <Space>i (startinsert in a mapping) typed as pending keys', function(c) input(c, '<Space>i') end },
+  { 'B normal buffer, <Space>i fed with feedkeys "mx"', function(c) feed(c, '<Space>i', 'mx') end },
+  { 'D normal buffer, i fed with feedkeys "nx"', function(c) feed(c, 'i', 'nx') end },
+  { 'E terminal buffer, <Space>i typed as pending keys', function(c) terminal(c); input(c, '<Space>i') end },
+  { 'F terminal buffer, <Space>i fed with feedkeys "mx"', function(c) terminal(c); feed(c, '<Space>i', 'mx') end },
+  { 'G terminal buffer, i fed with feedkeys "nx"', function(c) terminal(c); feed(c, 'i', 'nx') end },
+  { 'H terminal buffer, :startinsert run by nvim_command', function(c) terminal(c); vim.rpcrequest(c, 'nvim_command', 'startinsert'); vim.wait(200) end },
+}
+
+io.stdout:write(tostring(vim.version()) .. '\n')
+for _, case in ipairs(cases) do
+  local c = child()
+  case[2](c)
+  io.stdout:write(('%-78s -> %s\n'):format(case[1], state(c)))
+  vim.fn.jobstop(c)
+end
+
+-- The mode read inside the callback that ran :startinsert.
+local c = child()
+input(c, '<Space>m')
+io.stdout:write(('%-78s -> inside=%s after: %s\n'):format('I normal buffer, mode read inside the callback after :startinsert', vim.rpcrequest(c, 'nvim_exec_lua', 'return _G.mode_inside', {}), state(c)))
+vim.fn.jobstop(c)
+
+-- :startinsert, then the callback moves to another window: which window takes the mode?
+c = child()
+vim.rpcrequest(c, 'nvim_exec_lua', [[
+  vim.cmd.vsplit()
+  vim.cmd.enew()
+  vim.fn.jobstart({ 'cat' }, { term = true })
+  vim.cmd.wincmd('w')
+]], {})
+local before = state(c)
+input(c, '<Space>w')
+io.stdout:write(('%-78s -> before: %s; after: %s\n'):format('J from a normal window, :startinsert then wincmd w to a terminal window', before, state(c)))
+vim.fn.jobstop(c)
+
+---- output, NVIM v0.12.5 ----
+0.12.5
+A normal buffer, <Space>i (startinsert in a mapping) typed as pending keys     -> mode=i buftype=normal
+B normal buffer, <Space>i fed with feedkeys "mx"                               -> mode=n buftype=normal
+D normal buffer, i fed with feedkeys "nx"                                      -> mode=n buftype=normal
+E terminal buffer, <Space>i typed as pending keys                              -> mode=t buftype=terminal
+F terminal buffer, <Space>i fed with feedkeys "mx"                             -> mode=t buftype=terminal
+G terminal buffer, i fed with feedkeys "nx"                                    -> mode=t buftype=terminal
+H terminal buffer, :startinsert run by nvim_command                            -> mode=t buftype=terminal
+I normal buffer, mode read inside the callback after :startinsert              -> inside=n after: mode=i buftype=normal
+J from a normal window, :startinsert then wincmd w to a terminal window        -> before: mode=n buftype=normal; after: mode=t buftype=terminal
+
+---- output, NVIM v0.11.6 ----
+0.11.6+ge8b87a554f
+A normal buffer, <Space>i (startinsert in a mapping) typed as pending keys     -> mode=i buftype=normal
+B normal buffer, <Space>i fed with feedkeys "mx"                               -> mode=n buftype=normal
+D normal buffer, i fed with feedkeys "nx"                                      -> mode=n buftype=normal
+E terminal buffer, <Space>i typed as pending keys                              -> mode=t buftype=terminal
+F terminal buffer, <Space>i fed with feedkeys "mx"                             -> mode=t buftype=terminal
+G terminal buffer, i fed with feedkeys "nx"                                    -> mode=t buftype=terminal
+H terminal buffer, :startinsert run by nvim_command                            -> mode=t buftype=terminal
+I normal buffer, mode read inside the callback after :startinsert              -> inside=n after: mode=i buftype=normal
+J from a normal window, :startinsert then wincmd w to a terminal window        -> before: mode=n buftype=normal; after: mode=t buftype=terminal
+
+==== script probe-inspect-cell.lua ====
+-- What nvim__inspect_cell() reads in a headless child with no UI, by when
+-- it is called: several reads in the request that makes the first call,
+-- then reads in later requests. The cell under test is "[" of "[done]",
+-- drawn by an extmark in a group with a foreground and bold.
+
+local function child()
+  local chan = vim.fn.jobstart({ vim.v.progpath, '--clean', '--headless', '--embed' }, { rpc = true })
+  vim.rpcrequest(chan, 'nvim_exec_lua', [[
+    vim.o.termguicolors = true
+    vim.cmd('highlight ProbeStatus guifg=#b3f6c0 gui=bold')
+    vim.cmd('highlight ProbeTime guifg=#9b9ea4')
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { '09:05 [done] Task' })
+    local ns = vim.api.nvim_create_namespace('probe')
+    vim.api.nvim_buf_set_extmark(0, ns, 0, 0, { end_col = 5, hl_group = 'ProbeTime' })
+    vim.api.nvim_buf_set_extmark(0, ns, 0, 6, { end_col = 12, hl_group = 'ProbeStatus' })
+  ]], {})
+  vim.rpcrequest(chan, 'nvim_command', 'redraw')
+  return chan
+end
+
+local READ = [[
+  local out = {}
+  for _, col in ipairs({ ... }) do
+    local cell = vim.api.nvim__inspect_cell(1, 0, col)
+    local attrs = cell[2]
+    out[#out + 1] = ('%s:%s%s'):format(cell[1], attrs.foreground and ('#%06x'):format(attrs.foreground) or '-', attrs.bold and '+B' or '')
+  end
+  return table.concat(out, ' ')
+]]
+
+local function read(chan, ...)
+  return vim.rpcrequest(chan, 'nvim_exec_lua', READ, { ... })
+end
+
+io.stdout:write(tostring(vim.version()) .. '\n')
+io.stdout:write('drawn: "0" #9b9ea4, "[" and "d" #b3f6c0+B, " " (col 5) no group\n')
+
+local c = child()
+io.stdout:write('1 first call ever, one request reading cols 6, 6, 7, 0, 5: ' .. read(c, 6, 6, 7, 0, 5) .. '\n')
+io.stdout:write('1 next request, cols 6, 7, 0:                            ' .. read(c, 6, 7, 0) .. '\n')
+vim.rpcrequest(c, 'nvim_command', 'redraw')
+io.stdout:write('1 after a :redraw request, cols 6, 7, 0:                 ' .. read(c, 6, 7, 0) .. '\n')
+vim.fn.jobstop(c)
+
+c = child()
+io.stdout:write('2 first call ever reads col 0 alone:                     ' .. read(c, 0) .. '\n')
+io.stdout:write('2 next request, cols 6, 7, 0:                            ' .. read(c, 6, 7, 0) .. '\n')
+vim.fn.jobstop(c)
+
+c = child()
+io.stdout:write('3 first call ever reads col 6 alone:                     ' .. read(c, 6) .. '\n')
+io.stdout:write('3 next request, col 6 alone:                             ' .. read(c, 6) .. '\n')
+vim.fn.jobstop(c)
+
+---- output, NVIM v0.12.5 ----
+0.12.5
+drawn: "0" #9b9ea4, "[" and "d" #b3f6c0+B, " " (col 5) no group
+1 first call ever, one request reading cols 6, 6, 7, 0, 5: [:#b3f6c0+B [:#b3f6c0 d:#b3f6c0 0:#e0e2ea  :-
+1 next request, cols 6, 7, 0:                            [:#b3f6c0+B d:#b3f6c0+B 0:#9b9ea4
+1 after a :redraw request, cols 6, 7, 0:                 [:#b3f6c0+B d:#b3f6c0+B 0:#9b9ea4
+2 first call ever reads col 0 alone:                     0:#9b9ea4
+2 next request, cols 6, 7, 0:                            [:#b3f6c0+B d:#b3f6c0+B 0:#9b9ea4
+3 first call ever reads col 6 alone:                     [:#b3f6c0+B
+3 next request, col 6 alone:                             [:#b3f6c0+B
+
+---- output, NVIM v0.11.6 ----
+0.11.6+ge8b87a554f
+drawn: "0" #9b9ea4, "[" and "d" #b3f6c0+B, " " (col 5) no group
+1 first call ever, one request reading cols 6, 6, 7, 0, 5: [:#b3f6c0+B [:#b3f6c0 d:#b3f6c0 0:#e0e2ea  :-
+1 next request, cols 6, 7, 0:                            [:#b3f6c0+B d:#b3f6c0+B 0:#9b9ea4
+1 after a :redraw request, cols 6, 7, 0:                 [:#b3f6c0+B d:#b3f6c0+B 0:#9b9ea4
+2 first call ever reads col 0 alone:                     0:#9b9ea4
+2 next request, cols 6, 7, 0:                            [:#b3f6c0+B d:#b3f6c0+B 0:#9b9ea4
+3 first call ever reads col 6 alone:                     [:#b3f6c0+B
+3 next request, col 6 alone:                             [:#b3f6c0+B
+
+==== script probe-highlight.lua ====
+-- What `:highlight default link G Title` does to a group G that something
+-- was given first, and which default link `:highlight clear` restores.
+-- Each case runs in a fresh child (--clean --headless --embed); the "given
+-- first" command reaches it typed on the command line (nvim_input), as an
+-- API command (nvim_command) or from Lua (vim.cmd in nvim_exec_lua).
+
+local function child()
+  return vim.fn.jobstart({ vim.v.progpath, '--clean', '--headless', '--embed' }, { rpc = true })
+end
+
+local function definition(chan)
+  return vim.inspect(vim.rpcrequest(chan, 'nvim_get_hl', 0, { name = 'G' }), { newline = ' ', indent = '' })
+end
+
+local function given(chan, how, command)
+  if how == 'typed' then
+    vim.rpcrequest(chan, 'nvim_input', ':' .. command .. '<CR>')
+    vim.wait(200)
+  elseif how == 'api' then
+    vim.rpcrequest(chan, 'nvim_command', command)
+  else
+    vim.rpcrequest(chan, 'nvim_exec_lua', 'vim.cmd(...)', { command })
+  end
+end
+
+local out = { tostring(vim.version()) }
+local cases = {
+  { 'G gui=NONE cterm=NONE', 'lua' },
+  { 'G gui=NONE cterm=NONE', 'api' },
+  { 'G guifg=#ff0000', 'lua' },
+  { 'link G NONE', 'lua' },
+  { 'link G NONE', 'api' },
+  { 'link G NONE', 'typed' },
+  { 'default link G DiagnosticOk', 'lua' },
+}
+for _, case in ipairs(cases) do
+  local chan = child()
+  given(chan, case[2], 'highlight ' .. case[1])
+  local before = definition(chan)
+  vim.rpcrequest(chan, 'nvim_command', 'highlight default link G Title')
+  local after = definition(chan)
+  vim.rpcrequest(chan, 'nvim_command', 'highlight clear')
+  local cleared = definition(chan)
+  out[#out + 1] = ('given first (%s) :highlight %s -> %s; then default link G Title -> %s; then :highlight clear -> %s'):format(
+    case[2],
+    case[1],
+    before,
+    after,
+    cleared
+  )
+  vim.fn.jobstop(chan)
+end
+io.stdout:write(table.concat(out, '\n') .. '\n')
+
+---- output, NVIM v0.12.5 ----
+0.12.5
+given first (lua) :highlight G gui=NONE cterm=NONE -> vim.empty_dict(); then default link G Title -> { link = "Title" }; then :highlight clear -> { link = "Title" }
+given first (api) :highlight G gui=NONE cterm=NONE -> vim.empty_dict(); then default link G Title -> { link = "Title" }; then :highlight clear -> { link = "Title" }
+given first (lua) :highlight G guifg=#ff0000 -> { fg = 16711680 }; then default link G Title -> { fg = 16711680 }; then :highlight clear -> { link = "Title" }
+given first (lua) :highlight link G NONE -> vim.empty_dict(); then default link G Title -> vim.empty_dict(); then :highlight clear -> { link = "Title" }
+given first (api) :highlight link G NONE -> vim.empty_dict(); then default link G Title -> vim.empty_dict(); then :highlight clear -> { link = "Title" }
+given first (typed) :highlight link G NONE -> vim.empty_dict(); then default link G Title -> vim.empty_dict(); then :highlight clear -> { link = "Title" }
+given first (lua) :highlight default link G DiagnosticOk -> { link = "DiagnosticOk" }; then default link G Title -> { link = "DiagnosticOk" }; then :highlight clear -> { link = "DiagnosticOk" }
+
+---- output, NVIM v0.11.6 ----
+0.11.6+ge8b87a554f
+given first (lua) :highlight G gui=NONE cterm=NONE -> vim.empty_dict(); then default link G Title -> { link = "Title" }; then :highlight clear -> { link = "Title" }
+given first (api) :highlight G gui=NONE cterm=NONE -> vim.empty_dict(); then default link G Title -> { link = "Title" }; then :highlight clear -> { link = "Title" }
+given first (lua) :highlight G guifg=#ff0000 -> { fg = 16711680 }; then default link G Title -> { fg = 16711680 }; then :highlight clear -> { link = "Title" }
+given first (lua) :highlight link G NONE -> vim.empty_dict(); then default link G Title -> vim.empty_dict(); then :highlight clear -> { link = "Title" }
+given first (api) :highlight link G NONE -> vim.empty_dict(); then default link G Title -> vim.empty_dict(); then :highlight clear -> { link = "Title" }
+given first (typed) :highlight link G NONE -> vim.empty_dict(); then default link G Title -> vim.empty_dict(); then :highlight clear -> { link = "Title" }
+given first (lua) :highlight default link G DiagnosticOk -> { link = "DiagnosticOk" }; then default link G Title -> { link = "DiagnosticOk" }; then :highlight clear -> { link = "DiagnosticOk" }
+
+==== script probe-system-exit.lua ====
+-- When vim.system() reports the exit of a process that leaves a descendant
+-- holding its output: `sh -c 'sleep 3 & exit 3'` exits at once with code 3,
+-- while its `sleep 3` inherits sh's stdout and stderr.
+-- Compared with vim.uv.spawn, whose output goes to a file.
+
+local here = vim.fn.fnamemodify(arg[0], ':p:h')
+local COMMAND = { 'sh', '-c', 'sleep 3 & exit 3' }
+local out = { tostring(vim.version()) }
+local function log(s)
+  out[#out + 1] = s
+end
+local function ms_since(t0)
+  return ('%.0f'):format((vim.uv.hrtime() - t0) / 1e6)
+end
+
+-- 1. vim.system with its output captured (the default).
+local t0 = vim.uv.hrtime()
+local result
+vim.system(COMMAND, {}, function(r)
+  result = r
+  result.at = ms_since(t0)
+end)
+vim.wait(10000, function()
+  return result ~= nil
+end, 10)
+log(('vim.system, output captured: on_exit after %s ms, code=%s'):format(result.at, result.code))
+
+-- 2. vim.system with stdout and stderr not captured.
+t0 = vim.uv.hrtime()
+result = nil
+vim.system(COMMAND, { stdout = false, stderr = false }, function(r)
+  result = r
+  result.at = ms_since(t0)
+end)
+vim.wait(10000, function()
+  return result ~= nil
+end, 10)
+log(('vim.system, stdout = false, stderr = false: on_exit after %s ms, code=%s'):format(result.at, result.code))
+
+-- 3. SystemObj:wait(500) on the captured form.
+t0 = vim.uv.hrtime()
+local waited = vim.system(COMMAND):wait(500)
+log(('vim.system(...):wait(500): returned after %s ms, result=%s'):format(ms_since(t0), waited and ('code=' .. waited.code) or 'nil'))
+vim.wait(4000)
+
+-- 4. vim.uv.spawn, stdout and stderr to a file.
+local path = here .. '/system-exit-spawn-output.txt'
+local fd = assert(vim.uv.fs_open(path, 'w', 420))
+t0 = vim.uv.hrtime()
+local spawned
+local handle = vim.uv.spawn('sh', { args = { '-c', 'sleep 3 & exit 3' }, stdio = { nil, fd, fd } }, function(code, signal)
+  spawned = { at = ms_since(t0), code = code, signal = signal }
+end)
+vim.uv.fs_close(fd)
+vim.wait(10000, function()
+  return spawned ~= nil
+end, 10)
+handle:close()
+log(('vim.uv.spawn, output to a file: exit callback after %s ms, code=%s'):format(spawned.at, spawned.code))
+vim.wait(3500)
+
+io.stdout:write(table.concat(out, '\n') .. '\n')
+
+---- output, NVIM v0.12.5 ----
+0.12.5
+vim.system, output captured: on_exit after 3016 ms, code=3
+vim.system, stdout = false, stderr = false: on_exit after 8 ms, code=3
+vim.system(...):wait(500): returned after 1006 ms, result=nil
+vim.uv.spawn, output to a file: exit callback after 9 ms, code=3
+
+---- output, NVIM v0.11.6 ----
+0.11.6+ge8b87a554f
+vim.system, output captured: on_exit after 3009 ms, code=3
+vim.system, stdout = false, stderr = false: on_exit after 7 ms, code=3
+vim.system(...):wait(500): returned after 1006 ms, result=nil
+vim.uv.spawn, output to a file: exit callback after 7 ms, code=3
+
+==== script probe-log-fallback.lua ====
+-- What a Neovim whose NVIM_LOG_FILE cannot be opened hands to the Neovims it
+-- starts. Run with NVIM_LOG_FILE naming a file in a directory that does not
+-- exist. Each child is nvim --clean --headless --embed; its messages are read
+-- 400 ms after it started (the notice is deferred by 100 ms after VimEnter).
+
+local here = vim.fn.fnamemodify(arg[0], ':p:h')
+local function short(value)
+  if value == nil or value == vim.NIL then
+    return 'unset'
+  end
+  return (tostring(value):gsub(vim.pesc(here), '<scratch>'))
+end
+
+local out = { tostring(vim.version()) }
+out[#out + 1] = ('parent: NVIM_LOG_FILE=%s __NVIM_LOG_FILE_WANT=%s'):format(short(vim.env.NVIM_LOG_FILE), short(vim.env.__NVIM_LOG_FILE_WANT))
+
+local function child(label, env)
+  local chan = vim.fn.jobstart({ vim.v.progpath, '--clean', '--headless', '--embed' }, { rpc = true, env = env })
+  vim.wait(400)
+  local seen = vim.rpcrequest(chan, 'nvim_exec_lua', [[
+    return {
+      log = vim.env.NVIM_LOG_FILE,
+      want = vim.env.__NVIM_LOG_FILE_WANT,
+      messages = vim.api.nvim_exec2('messages', { output = true }).output,
+    }
+  ]], {})
+  out[#out + 1] = ('%s: NVIM_LOG_FILE=%s __NVIM_LOG_FILE_WANT=%s messages=%s'):format(
+    label,
+    short(seen.log),
+    short(seen.want),
+    seen.messages == '' and '(none)' or vim.inspect(short(seen.messages))
+  )
+  vim.fn.jobstop(chan)
+end
+
+child('child, environment inherited', nil)
+child('child, its own NVIM_LOG_FILE in a directory that exists', { NVIM_LOG_FILE = here .. '/child-log/log' })
+
+io.stdout:write(table.concat(out, '\n') .. '\n')
+
+---- output, NVIM v0.12.5 ----
+log: "<scratch>/no-such-dir/log" not accessible, logging to: "<scratch>/xdg-0.12.5/state/nvim/nvim.log"
+0.12.5
+parent: NVIM_LOG_FILE=<scratch>/xdg-0.12.5/state/nvim/nvim.log __NVIM_LOG_FILE_WANT=<scratch>/no-such-dir/log
+child, environment inherited: NVIM_LOG_FILE=<scratch>/xdg-0.12.5/state/nvim/nvim.log __NVIM_LOG_FILE_WANT=<scratch>/no-such-dir/log messages='log: "<scratch>/no-such-dir/log" not accessible, logging to: "<scratch>/xdg-0.12.5/state/nvim/nvim.log"'
+child, its own NVIM_LOG_FILE in a directory that exists: NVIM_LOG_FILE=<scratch>/child-log/log __NVIM_LOG_FILE_WANT=<scratch>/no-such-dir/log messages='log: "<scratch>/no-such-dir/log" not accessible, logging to: "<scratch>/child-log/log"'
+
+
+---- output, NVIM v0.11.6 ----
+0.11.6+ge8b87a554f
+parent: NVIM_LOG_FILE=<scratch>/xdg-0.11.6/state/nvim/log __NVIM_LOG_FILE_WANT=unset
+child, environment inherited: NVIM_LOG_FILE=<scratch>/xdg-0.11.6/state/nvim/log __NVIM_LOG_FILE_WANT=unset messages=(none)
+child, its own NVIM_LOG_FILE in a directory that exists: NVIM_LOG_FILE=<scratch>/child-log/log __NVIM_LOG_FILE_WANT=unset messages=(none)
+
+==== script probe-jobs.lua ====
+-- 1. jobwait({id}, 0) and vim.uv.kill(pid, 0) on a job jobstop() has stopped
+--    but that still runs: it ignores SIGHUP and SIGTERM.
+-- 2. The order of TermClose and the job's on_exit when a terminal job ends.
+
+local DEAF = { 'sh', '-c', 'trap "" HUP TERM; while :; do sleep 1; done' }
+local out = { tostring(vim.version()) }
+local function log(s)
+  out[#out + 1] = s
+end
+local function ms_since(t0)
+  return ('%.0f'):format((vim.uv.hrtime() - t0) / 1e6)
+end
+
+local function stopped_job(label, start)
+  local id = start()
+  local pid = vim.fn.jobpid(id)
+  vim.wait(300)
+  vim.fn.jobstop(id)
+  local t0 = vim.uv.hrtime()
+  local alive = vim.uv.kill(pid, 0)
+  log(('%s: vim.uv.kill(pid, 0) right after jobstop() returned %s in %s ms'):format(label, tostring(alive), ms_since(t0)))
+  t0 = vim.uv.hrtime()
+  local status = vim.fn.jobwait({ id }, 0)[1]
+  log(('%s: jobwait({id}, 0) returned %d after %s ms'):format(label, status, ms_since(t0)))
+  local gone, err = vim.uv.kill(pid, 0)
+  log(('%s: vim.uv.kill(pid, 0) afterwards returned %s %s'):format(label, tostring(gone), tostring(err)))
+end
+
+stopped_job('pipe job', function()
+  return vim.fn.jobstart(DEAF)
+end)
+stopped_job('terminal job', function()
+  vim.cmd.enew()
+  return vim.fn.jobstart(DEAF, { term = true })
+end)
+
+for run = 1, 5 do
+  local order = {}
+  vim.cmd.enew()
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_create_autocmd('TermClose', {
+    buffer = buf,
+    once = true,
+    callback = function()
+      order[#order + 1] = 'TermClose'
+    end,
+  })
+  vim.fn.jobstart({ 'sh', '-c', 'exit 3' }, {
+    term = true,
+    on_exit = function()
+      order[#order + 1] = 'on_exit'
+    end,
+  })
+  vim.wait(3000, function()
+    return #order == 2
+  end, 10)
+  log(('terminal job exiting by itself, run %d: %s'):format(run, table.concat(order, ' then ')))
+end
+
+io.stdout:write(table.concat(out, '\n') .. '\n')
+
+---- output, NVIM v0.12.5 ----
+0.12.5
+pipe job: vim.uv.kill(pid, 0) right after jobstop() returned 0 in 0 ms
+pipe job: jobwait({id}, 0) returned -3 after 2002 ms
+pipe job: vim.uv.kill(pid, 0) afterwards returned nil ESRCH: no such process
+terminal job: vim.uv.kill(pid, 0) right after jobstop() returned 0 in 0 ms
+terminal job: jobwait({id}, 0) returned -3 after 4005 ms
+terminal job: vim.uv.kill(pid, 0) afterwards returned nil ESRCH: no such process
+terminal job exiting by itself, run 1: TermClose then on_exit
+terminal job exiting by itself, run 2: TermClose then on_exit
+terminal job exiting by itself, run 3: TermClose then on_exit
+terminal job exiting by itself, run 4: TermClose then on_exit
+terminal job exiting by itself, run 5: TermClose then on_exit
+
+---- output, NVIM v0.11.6 ----
+0.11.6+ge8b87a554f
+pipe job: vim.uv.kill(pid, 0) right after jobstop() returned 0 in 0 ms
+pipe job: jobwait({id}, 0) returned -3 after 2002 ms
+pipe job: vim.uv.kill(pid, 0) afterwards returned nil ESRCH: no such process
+terminal job: vim.uv.kill(pid, 0) right after jobstop() returned 0 in 0 ms
+terminal job: jobwait({id}, 0) returned -3 after 4004 ms
+terminal job: vim.uv.kill(pid, 0) afterwards returned nil ESRCH: no such process
+terminal job exiting by itself, run 1: TermClose then on_exit
+terminal job exiting by itself, run 2: TermClose then on_exit
+terminal job exiting by itself, run 3: TermClose then on_exit
+terminal job exiting by itself, run 4: TermClose then on_exit
+terminal job exiting by itself, run 5: TermClose then on_exit
+
+==== script probe-bwipeout.lua ====
+-- When :bwipeout! of a terminal buffer shown in the current window puts
+-- another buffer in that window: before BufWipeout or after it, for a
+-- terminal whose job still runs and for one whose job has ended. The other
+-- window shows an unlisted scratch buffer, so no listed buffer is left.
+
+local out = { tostring(vim.version()) }
+
+local function trace(label, job_ends_first)
+  vim.cmd('silent! %bwipeout!')
+  vim.cmd.enew()
+  local scratch = vim.api.nvim_get_current_buf()
+  vim.bo[scratch].buflisted = false
+  vim.bo[scratch].buftype = 'nofile'
+  vim.cmd.vsplit()
+  vim.cmd.enew()
+  local win = vim.api.nvim_get_current_win()
+  local job = vim.fn.jobstart(job_ends_first and { 'sh', '-c', 'exit 0' } or { 'cat' }, { term = true })
+  local term = vim.api.nvim_get_current_buf()
+  vim.bo[term].buflisted = true
+  if job_ends_first then
+    vim.fn.jobwait({ job }, 2000)
+    vim.wait(200)
+  end
+  local events = {}
+  local group = vim.api.nvim_create_augroup('probe_bwipeout', {})
+  for _, event in ipairs({ 'TermClose', 'BufUnload', 'BufWipeout', 'BufWinEnter', 'BufEnter' }) do
+    vim.api.nvim_create_autocmd(event, {
+      group = group,
+      callback = function(args)
+        local shown = vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win)
+        events[#events + 1] = ('%s(buf %s; the window shows %s)'):format(
+          event,
+          args.buf == term and 'term' or tostring(args.buf),
+          shown == term and 'term' or (shown and ('buf ' .. shown) or 'nothing: closed')
+        )
+      end,
+    })
+  end
+  vim.cmd('bwipeout!')
+  vim.api.nvim_del_augroup_by_id(group)
+  out[#out + 1] = ('%s: %s'):format(label, table.concat(events, ' -> '))
+  out[#out + 1] = ('%s: afterwards the window %s'):format(
+    label,
+    vim.api.nvim_win_is_valid(win)
+        and ('shows buf %d, name %q, listed %s'):format(
+          vim.api.nvim_win_get_buf(win),
+          vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)),
+          tostring(vim.bo[vim.api.nvim_win_get_buf(win)].buflisted)
+        )
+      or 'is closed'
+  )
+  vim.cmd('silent! only')
+end
+
+trace('running terminal', false)
+trace('ended terminal', true)
+io.stdout:write(table.concat(out, '\n') .. '\n')
+
+---- output, NVIM v0.12.5 ----
+0.12.5
+running terminal: BufEnter(buf 3; the window shows buf 3) -> BufWinEnter(buf 3; the window shows buf 3) -> TermClose(buf term; the window shows buf 3) -> BufUnload(buf term; the window shows buf 3) -> BufWipeout(buf term; the window shows buf 3)
+running terminal: afterwards the window shows buf 3, name "", listed true
+ended terminal: BufUnload(buf term; the window shows term) -> BufWipeout(buf term; the window shows term) -> BufEnter(buf 5; the window shows buf 5) -> BufWinEnter(buf 5; the window shows buf 5)
+ended terminal: afterwards the window shows buf 5, name "", listed true
+
+---- output, NVIM v0.11.6 ----
+0.11.6+ge8b87a554f
+running terminal: BufEnter(buf 3; the window shows buf 3) -> BufWinEnter(buf 3; the window shows buf 3) -> TermClose(buf term; the window shows buf 3) -> BufUnload(buf term; the window shows buf 3) -> BufWipeout(buf term; the window shows buf 3)
+running terminal: afterwards the window shows buf 3, name "", listed true
+ended terminal: BufUnload(buf term; the window shows term) -> BufWipeout(buf term; the window shows term) -> BufEnter(buf 5; the window shows buf 5) -> BufWinEnter(buf 5; the window shows buf 5)
+ended terminal: afterwards the window shows buf 5, name "", listed true
+
+==== script probe-kitty-ctrl-c.lua ====
+-- What a program in a Neovim terminal receives when Ctrl-C is typed in
+-- Terminal mode, without the kitty keyboard protocol and with it enabled by
+-- the program (CSI > 1 u, CSI > 5 u). The key is typed into a child Neovim
+-- (--clean --headless --embed) with nvim_input(), as mini.test's
+-- child.type_keys() types keys.
+
+local here = vim.fn.fnamemodify(arg[0], ':p:h')
+local out = { tostring(vim.version()) }
+
+for _, flags in ipairs({ 'none', '1', '5' }) do
+  local received_path = ('%s/kitty-received-%s-%s.txt'):format(here, flags, tostring(vim.version()))
+  vim.fn.delete(received_path)
+  local chan = vim.fn.jobstart({ vim.v.progpath, '--clean', '--headless', '--embed' }, { rpc = true })
+  vim.rpcrequest(chan, 'nvim_exec_lua', [[
+    vim.cmd.enew()
+    vim.fn.jobstart({ '/usr/bin/python3', ... }, { term = true })
+  ]], { here .. '/keys-reader.py', received_path, flags })
+  vim.wait(3000, function()
+    local lines = vim.rpcrequest(chan, 'nvim_buf_get_lines', 0, 0, -1, false)
+    return table.concat(lines, '\n'):find('ready', 1, true) ~= nil
+  end, 20)
+  vim.rpcrequest(chan, 'nvim_command', 'startinsert')
+  vim.wait(200)
+  local mode = vim.rpcrequest(chan, 'nvim_get_mode').mode
+  vim.rpcrequest(chan, 'nvim_input', '<C-c>')
+  vim.wait(5000, function()
+    return vim.uv.fs_stat(received_path) ~= nil
+  end, 50)
+  vim.wait(100)
+  local received = table.concat(vim.fn.readfile(received_path), '\n')
+  out[#out + 1] = ('flags %-4s mode before the key: %s; the program received %s'):format(flags, mode, received)
+  vim.fn.jobstop(chan)
+end
+
+io.stdout:write(table.concat(out, '\n') .. '\n')
+
+==== script keys-reader.py (the program in the terminal) ====
+"""Runs inside a Neovim terminal: optionally enables the kitty keyboard
+protocol with the given flags (CSI > flags u), asks for the flags in force
+(CSI ? u), then records every byte its terminal sends for a few seconds.
+Usage: keys-reader.py <out file> <flags or 'none'>"""
+import os
+import select
+import sys
+import termios
+import time
+import tty
+
+out_path, flags = sys.argv[1], sys.argv[2]
+fd = sys.stdin.fileno()
+tty.setraw(fd)
+if flags != 'none':
+    os.write(sys.stdout.fileno(), ('\x1b[>%su' % flags).encode())
+    os.write(sys.stdout.fileno(), b'\x1b[?u')
+os.write(sys.stdout.fileno(), b'ready\r\n')
+received = b''
+deadline = time.time() + 4
+while time.time() < deadline:
+    ready, _, _ = select.select([fd], [], [], 0.1)
+    if ready:
+        received += os.read(fd, 1024)
+with open(out_path, 'w') as out:
+    out.write(repr(received))
+
+---- output, NVIM v0.12.5 ----
+0.12.5
+flags none mode before the key: t; the program received b'\x03'
+flags 1    mode before the key: t; the program received b'\x1b[?1u\x1b[99;5u'
+flags 5    mode before the key: t; the program received b'\x1b[?5u\x1b[99;5u'
+
+---- output, NVIM v0.11.6 ----
+0.11.6+ge8b87a554f
+flags none mode before the key: t; the program received b'\x03'
+flags 1    mode before the key: t; the program received b'\x1b[?1u\x1b[99;5u'
+flags 5    mode before the key: t; the program received b'\x1b[?5u\x1b[99;5u'
+
