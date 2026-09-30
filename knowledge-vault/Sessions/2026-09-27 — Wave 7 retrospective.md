@@ -1,7 +1,7 @@
 # Wave 7 retrospective
 
 **Author:** Mathias Santos de Brito, with Claude — the orchestrator (Opus 5.5, session `938616f1`)
-**Branch:** begun on `knowledge/w7-t23-landed`, T23's knowledge pass; extended on `knowledge/w6-t12-t22-landed`. Each later packet's pass extends this note.
+**Branch:** begun on `knowledge/w7-t23-landed`, T23's knowledge pass; extended on `knowledge/w6-t12-t22-landed` and `knowledge/w6-close`. Each later packet's pass extends this note.
 
 ## Links
 
@@ -10,7 +10,7 @@
 - `Implementation/Waves/00007-panes/plan.md`
 - [[Sessions/2026-09-27 — T23 git home]]
 - [[Sessions/2026-09-26 — Wave 6 retrospective]], the wave it ran beside
-- What T23 measured, as Learnings (PR #90): [[Learnings/GIT_OPTIONAL_LOCKS=0 does not keep git diff from taking index.lock]], [[Learnings/A watch on a file git replaces goes silent after the replacement]], [[Learnings/libuv ignores fs_event's recursive flag on Linux]]
+- What T23 found, as Learnings (PR #90): [[Learnings/GIT_OPTIONAL_LOCKS=0 does not keep git diff from taking index.lock]], [[Learnings/A watch on a file git replaces goes silent after the replacement]], [[Learnings/libuv ignores fs_event's recursive flag on Linux]]
 
 ## Context
 
