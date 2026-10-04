@@ -1,5 +1,6 @@
 --- The init file of every Neovim the suites start: the test runner (`make test`,
---- `make test_file`) and each child Neovim a test starts with `-u`.
+--- `make test_file`), the Neovim it starts for each test file, which runs that
+--- file's test code, and each child Neovim a test starts with `-u`.
 ---
 --- Puts this checkout, then the pinned mini.nvim (`make deps`), first on
 --- 'runtimepath', ahead of every system site directory, so `require('aineo')`,
@@ -8,8 +9,10 @@
 --- works from any working directory.
 ---
 --- Removes every Claude Code variable except `CLAUDE_CONFIG_DIR`, which the
---- Makefile points into `.tests/`: a Claude Code session that starts the suite
---- would otherwise hand its own session markers to every process a test starts.
+--- Makefile points into `.tests/` for the test runner, and the runner into the
+--- home it makes for each test file's Neovim, whose children inherit it: a
+--- Claude Code session that starts the suite would otherwise hand its own
+--- session markers to every process a test starts.
 ---
 --- Puts `tests/helpers/entry_guard/` first on `PATH`, so that its `claude`,
 --- which runs nothing, is the one every process a test starts finds: no test
