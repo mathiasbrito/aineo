@@ -1,0 +1,16 @@
+The orchestrator's verification of PR #85 (2026-09-28), on tree 57edc9b = 176fd21^{tree}; dev 40324f7 is code-identical (git diff --stat 176fd21 40324f7 -- lua plugin tests scripts doc Makefile prints nothing). Lines 1-14 of verify85.txt:
+
+== base: tree 57edc9b19021bfd282bc7e7a9385250c5fcc1d2f; NVIM v0.12.5 / NVIM v0.11.6
+== guard 0.12.5 rc=0 secs=1 load= 72.75 55.48 53.44
+Total number of cases: 5
+Fails (0) and Notes (0)
+== guard 0.11.6 rc=0 secs=0 load= 72.75 55.48 53.44
+Total number of cases: 5
+Fails (0) and Notes (0)
+== suite 0.12.5 rc=0 secs=197 load= 59.86 60.44 56.23
+Total number of cases: 1434
+Fails (0) and Notes (0)
+== suite 0.11.6 rc=2 secs=197 load= 30.80 45.33 50.59
+Total number of cases: 1434
+Fails (1) and Notes (0)
+FAIL in tests/test_report_paths.lua | the file checks | of a line of distinct paths take at most the time limit, on arrival and on :edit:

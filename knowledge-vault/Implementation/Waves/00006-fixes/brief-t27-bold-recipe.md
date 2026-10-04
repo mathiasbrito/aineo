@@ -12,18 +12,26 @@ It rests on D24 and C14 (the Report line: the `[status]` bold, in its status's c
 
 ### Facts, checked against `origin/dev` `40324f7`
 
-- **The help's recipe today** (`doc/aineo.txt:492–496`, *Colours*): "To turn the bold off and keep the colour, in your config or at any time: `:highlight link AineoReportStatusBold NONE`".
+- **The help's recipe today** (`doc/aineo.txt:493–496`, *Colours*): "To turn the bold off and keep the colour, in your config or at any time: `:highlight link AineoReportStatusBold NONE`".
 - **It does not survive a colour scheme that clears.** Measured by the orchestrator on 2026-09-28, with aineo on the runtimepath, on 0.12.5 and 0.11.6:
   - after `:highlight link AineoReportStatusBold NONE` and aineo's `define_report_colours()`, the group links to nothing;
   - after a later `:colorscheme habamax`, or `default`, it links to `@markup.strong` again.
 
   A config line placed before the user's colour scheme therefore does nothing. The records review of PR #91 measured a scheme that does not run `:highlight clear`: the user's link survives it. The probe and its output are in `knowledge-vault/Attachments/learnings-probes-2026-09-28.txt` (the aineo probe). The mechanism is in [[Learnings/highlight default link records only a group's first default link]] and [[Learnings/highlight default link overrides attributes set to NONE, not a link to NONE]].
 - **How aineo defines its groups** (`lua/aineo/report/colours.lua`, `define_report_colours()`): `:highlight default link` for each group, when the Report first shows a report and again at each report. It installs no `ColorScheme` autocommand, and two pins say so (`tests/test_report_colours.lua`, *the groups* › *are not defined, nor any ColorScheme autocommand, until the Report shows a report* and *need no ColorScheme autocommand, however many reports came*). Those pins are about aineo's own code. A `ColorScheme` autocommand that the **user's** recipe creates is not aineo's. The pins must stay green and unchanged.
-- **The existing case for the recipe** is `tests/test_report_colours.lua`, *the groups* › *let the user turn a [status]'s bold off before the first report, its colour kept, with :highlight link … NONE*. It does not run `:colorscheme`.
+- **Two existing cases run the recipe,** and neither runs `:colorscheme`:
+  - `tests/test_report_colours.lua`, *the groups* › *let the user turn a [status]'s bold off before the first report, its colour kept, with :highlight link … NONE*;
+  - the parametrized case *let the user turn a [status]'s bold off, its colour kept, through the next report* (`:443–464`).
+- **A bare `:highlight clear` fires no `ColorScheme` event** (the brief review, both versions). So a `ColorScheme` autocommand cannot survive it. The help must not suggest the recipe does: the paragraph after the recipe (`doc/aineo.txt:499–504`) speaks of "`:colorscheme` or `:highlight clear`".
+- **The form measured by the brief review holds** on both versions: `autocmd ColorScheme * highlight link AineoReportStatusBold NONE`, plus the link itself. It survived `:colorscheme habamax`, a report, a next report, `:colorscheme default` and a report after that, with no `lua/` change. The `ColorScheme` pins run in a child restarted for each case (`tests/helpers/report_editor.lua:16`), so a recipe case cannot leak into them.
+- **Records this makes false,** corrected by the orchestrator's knowledge pass: do not edit them, and do not report them missing.
+  - `Learnings/highlight default link overrides attributes set to NONE, not a link to NONE.md` › *Why it matters*;
+  - `Projects/aineo.md`'s open thread;
+  - the wave 6 retrospective's open thread.
 
 ### Baseline
 
-`dev` `40324f7` is code-identical to `176fd21`: `git diff --stat 176fd21 40324f7 -- lua plugin tests scripts doc Makefile` prints nothing. The orchestrator's verification of `176fd21`'s tree ran 1434 cases in 197 s on each version: `Fails (0)` on 0.12.5, and `Fails (1)` on 0.11.6, T17's intermittent timing case (`Implementation/Waves/00006-fixes/plan.md` › *Landed*, T22). Your own baseline is your touched files on `origin/dev`, run before your first edit.
+`dev` `40324f7` is code-identical to `176fd21`: `git diff --stat 176fd21 40324f7 -- lua plugin tests scripts doc Makefile` prints nothing. The orchestrator's verification of `176fd21`'s tree ran 1434 cases in 197 s on each version: `Fails (0)` on 0.12.5, and `Fails (1)` on 0.11.6, T17's intermittent timing case (`Implementation/Waves/00006-fixes/evidence/baseline-176fd21.txt`). Your own baseline is your touched files on `origin/dev`, run before your first edit.
 
 Read first: the plan's D24 and C14 rows; the T18 session note, `Sessions/2026-09-26 — T18 Report line.md`; the two Learnings above; `knowledge-vault/Projects/aineo.md`.
 
@@ -64,16 +72,17 @@ Read first: the plan's D24 and C14 rows; the T18 session note, `Sessions/2026-09
   2. run `:colorscheme habamax`, a scheme that runs `:highlight clear`;
   3. show a report.
 
-  Assert that `AineoReportStatusBold` gives the `[status]` no bold, and that the status's colour remains. Do the same with the recipe run before any report, and with a report shown first.
+  Assert that `AineoReportStatusBold` gives the `[status]` no bold, and that the status's colour remains. Do the same with the recipe run before any report, with a report shown first, and after `:edit` in the Report.
 - **See it red on `origin/dev`'s recipe,** on both versions, by assertion.
 
-## How the suites run in this packet — the orchestrator's decision of 2026-10-04
+## How the suites run in this packet
 
-The user asked, on 2026-10-04: "Please be carefull with the testing strategy, since each run is taking too long, try to optimize." Under D26, for this packet:
+The user asked, on 2026-10-04: "Please be carefull with the testing strategy, since each run is taking too long, try to optimize." D26 applies unchanged. The saving is in how often the whole suite runs, and that is what the orchestrator changed:
 
 - **While you work:** run only `tests/test_report_colours.lua` and `tests/test_doc.lua` (`make test_file FILE=…`), on 0.12.5 and 0.11.6.
-- **Before you push: those two files again, on both versions. Not the whole suite.** Each test file runs in its own Neovim and home since T22, and nothing outside `doc/` and these test files changes. So no other file's outcome can change. The orchestrator's verification runs the whole suite once per version, on all three of this wave's last packets merged together.
-- **Mutants:** run each on `tests/test_report_colours.lua` alone, never on the whole suite. Record each kill's assertion.
+- **Before you push: the whole suite once per version, on the tree you push** (D26, binding). The brief's first draft dropped it; the brief review showed that D26, the root `CLAUDE.md` and `implementer.md` require it.
+- **The orchestrator's verification** then runs the whole suite once per version, on all three of this wave's last packets merged together, not once per packet.
+- **Mutants:** run each on `tests/test_report_colours.lua` first. Only a survivor goes on to the whole suite. Record each kill's assertion.
 - **A failing case outside your change:** re-run that file alone once, and report both runs. Never re-run the whole suite for it.
 - **For 0.11.6** (the dispatch message names `<0.11.6 bin>`, the host's 0.11.6 build): `env -u VIMRUNTIME PATH=<0.11.6 bin>:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin make …`.
 - **Pushing:** if `git push` fails with `Permission denied (publickey)`, push over HTTPS with `gh`'s credentials, for that command only:
