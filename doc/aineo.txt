@@ -516,7 +516,7 @@ The bold stays off through every report, `:edit` in the Report, and every
 later `:colorscheme`, even one that makes `AineoReportStatusBold` bold: the
 `ColorScheme` autocommand turns it off again. A bare `:highlight clear`
 fires no `ColorScheme` event, so the bold comes back until the next
-`:colorscheme`, or until you turn it off again.
+`:colorscheme`, or until you run the recipe again.
 Each group links to one of Neovim's own, unless a colour scheme or a
 `:highlight` of your own colours it.
 After `:colorscheme` or `:highlight clear`, a group nothing colours any more
