@@ -3,8 +3,8 @@
 --- drives and quits that child as a user would, and reads back what the fake
 --- recorded.
 ---
---- Loaded in the test runner and, by `start()` and `start_again()`, in the
---- child too: the child builds the session's settings itself, so that the
+--- Loaded in the test file's Neovim and, by `start()` and `start_again()`, in
+--- the child too: the child builds the session's settings itself, so that the
 --- tables in them reach the session as Lua wrote them rather than as the RPC
 --- channel converts them.
 
