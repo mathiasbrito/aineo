@@ -708,17 +708,18 @@ T['the groups']["turn a [status]'s bold off at once, its colour kept, with the h
   })
 end
 
-T['the groups']["keep a [status]'s bold off, its colour kept, with the help's recipe given after a report, through a colour scheme and :edit in the Report"] =
+T['the groups']["keep a [status]'s bold off, its colour kept, with the help's recipe given after a report, through two colour schemes and :edit in the Report"] =
   MiniTest.new_set({
     parametrize = { { 'lua' }, { 'vim' } },
   })
 
-T['the groups']["keep a [status]'s bold off, its colour kept, with the help's recipe given after a report, through a colour scheme and :edit in the Report"]['in'] = function(
+T['the groups']["keep a [status]'s bold off, its colour kept, with the help's recipe given after a report, through two colour schemes and :edit in the Report"]['in'] = function(
   language
 )
   start_editor({ '2026-09-24T09:05:00' })
   report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
   RUN_BOLD_OFF_RECIPE[language]()
+  child.cmd('colorscheme default')
   child.cmd('colorscheme habamax')
   child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
 
@@ -728,6 +729,44 @@ T['the groups']["keep a [status]'s bold off, its colour kept, with the help's re
     { foreground = foreground_of('DiagnosticOk'), bold = false },
     { foreground = foreground_of('DiagnosticOk'), bold = false },
   })
+end
+
+--- The expression, run in the child, that gives the colour scheme's name and
+--- every highlight group but `AineoReportStatusBold`, as `nvim_get_hl()`
+--- gives them.
+local OTHER_GROUPS = [[(function()
+  local groups = vim.api.nvim_get_hl(0, {})
+  groups.AineoReportStatusBold = nil
+  return { colors_name = vim.g.colors_name, groups = groups }
+end)()]]
+
+T['the groups']["stay as the colour scheme left them, AineoReportStatusBold aside, with the help's recipe run twice, which adds its ColorScheme autocommands once, at once and through a colour scheme"] =
+  MiniTest.new_set({
+    parametrize = { { 'lua' }, { 'vim' } },
+  })
+
+T['the groups']["stay as the colour scheme left them, AineoReportStatusBold aside, with the help's recipe run twice, which adds its ColorScheme autocommands once, at once and through a colour scheme"]['in'] = function(
+  language
+)
+  start_editor({ '2026-09-24T09:05:00' })
+  child.cmd('colorscheme habamax')
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+  local before = child.lua_get(OTHER_GROUPS)
+  RUN_BOLD_OFF_RECIPE[language]()
+  local at_once = child.lua_get(OTHER_GROUPS)
+  local autocommands = child.lua_get([[#vim.api.nvim_get_autocmds({ event = 'ColorScheme' })]])
+  RUN_BOLD_OFF_RECIPE[language]()
+  local autocommands_twice =
+    child.lua_get([[#vim.api.nvim_get_autocmds({ event = 'ColorScheme' })]])
+
+  child.cmd('colorscheme habamax')
+
+  eq({
+    at_once,
+    child.lua_get(OTHER_GROUPS),
+    autocommands_twice,
+    child.lua_get([[vim.api.nvim_get_hl(0, { name = 'AineoReportStatusBold' })]]),
+  }, { before, before, autocommands, {} })
 end
 
 return T
