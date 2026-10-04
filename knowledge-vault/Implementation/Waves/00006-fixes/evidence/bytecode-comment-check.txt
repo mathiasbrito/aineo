@@ -1,0 +1,18 @@
+Stripped-bytecode check for a comment-only change (the orchestrator, 2026-10-04, dev 40324f7).
+a.lua = tests/helpers/child.lua; b = two docstring lines added and one reworded;
+d = one string constant changed ('scripts' -> 'script'); e = one statement added.
+
+--- cmp.lua
+local function dump(p) return string.dump(assert(loadfile(p)), true) end
+local a = dump(arg[1])
+for i = 2, #arg do io.stdout:write(arg[i]:match('[^/]*$'), ' identical=', tostring(dump(arg[i]) == a), '\n') end
+
+--- 0.12.5 (b, d, e) then 0.11.6 (b, d, e):
+NVIM v0.12.5
+b.lua identical=true
+d.lua identical=false
+e.lua identical=false
+NVIM v0.11.6
+b.lua identical=true
+d.lua identical=false
+e.lua identical=false
