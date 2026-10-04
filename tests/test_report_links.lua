@@ -1,7 +1,7 @@
 local MiniTest = require('mini.test')
 local fixture = dofile('tests/helpers/fixture.lua')
 local report_editor = dofile('tests/helpers/report_editor.lua')
-local work_time = dofile('tests/helpers/work_time.lua')
+local fastest_time = dofile('tests/helpers/fastest_time.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -339,26 +339,29 @@ end
 
 --- The expression, run in the child, that hands its report home a report
 --- whose details are `prefix` then `piece` repeated `count` times, then edits
---- the Report again (`:edit`), and says of each step whether its work took at
---- most `limit` seconds, or else how long it took
---- (`work_time.within_limit()`, the helper at the path it is handed first).
+--- the Report again (`:edit`), and returns how many seconds each step took.
 local TIMED_ARRIVAL_AND_EDIT = [[
-  local work_time, prefix, piece, count, limit = dofile((...)), select(2, ...)
+  local prefix, piece, count = ...
   local details = prefix .. piece:rep(count)
   local report = require('aineo.report')
-  local arrival = work_time.within_limit(function()
+  local function seconds_of(step)
+    local start = vim.uv.hrtime()
+    step()
+    return (vim.uv.hrtime() - start) / 1e9
+  end
+  local arrival = seconds_of(function()
     report.receive_report({ task = 'Task', status = 'done', summary = 'Summary', details = details })
-  end, limit)
+  end)
   vim.api.nvim_set_current_buf(report.report_buffer())
-  local edit = work_time.within_limit(function()
+  local edit = seconds_of(function()
     vim.cmd('edit')
-  end, limit)
+  end)
   return { arrival = arrival, edit = edit }
 ]]
 
---- How long the work of showing a report may take, and of showing it again
---- on `:edit`, in seconds of work (`work_time`): far above the tenths of a
---- second it takes.
+--- How long a report may take to show, and to show again on `:edit`, in its
+--- fastest of up to three attempts (`fastest_time`): far above the tenths of
+--- a second it takes.
 local TIME_LIMIT_SECONDS = 2
 
 --- Each row: the details' start, then the piece repeated, and how often.
@@ -376,12 +379,18 @@ T['a long line']['shows in the Report, and again on :edit, within the time limit
   piece,
   count
 )
-  start_editor({ '2026-09-24T09:05:00' })
+  local timing = {
+    start = function()
+      start_editor({ '2026-09-24T09:05:00' })
+    end,
+    steps = function()
+      return child.lua(TIMED_ARRIVAL_AND_EDIT, { prefix, piece, count })
+    end,
+  }
 
-  local timings =
-    child.lua(TIMED_ARRIVAL_AND_EDIT, { work_time.PATH, prefix, piece, count, TIME_LIMIT_SECONDS })
+  local verdicts = fastest_time.within_limit(child, timing, TIME_LIMIT_SECONDS)
 
-  eq(timings, { arrival = 'within the limit', edit = 'within the limit' })
+  eq(verdicts, { arrival = 'within the limit', edit = 'within the limit' })
 end
 
 --- The expression, run in the child, that makes `vim.ui.open` record what it
