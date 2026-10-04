@@ -1,6 +1,7 @@
 local MiniTest = require('mini.test')
 local fixture = dofile('tests/helpers/fixture.lua')
 local report_editor = dofile('tests/helpers/report_editor.lua')
+local work_time = dofile('tests/helpers/work_time.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -338,30 +339,26 @@ end
 
 --- The expression, run in the child, that hands its report home a report
 --- whose details are `prefix` then `piece` repeated `count` times, then edits
---- the Report again (`:edit`), and says of each step whether it took at most
---- `limit` seconds, or else how long it took.
+--- the Report again (`:edit`), and says of each step whether its work took at
+--- most `limit` seconds, or else how long it took
+--- (`work_time.within_limit()`, the helper at the path it is handed first).
 local TIMED_ARRIVAL_AND_EDIT = [[
-  local prefix, piece, count, limit = ...
+  local work_time, prefix, piece, count, limit = dofile((...)), select(2, ...)
   local details = prefix .. piece:rep(count)
   local report = require('aineo.report')
-  local function timed(step)
-    local start = vim.uv.hrtime()
-    step()
-    local seconds = (vim.uv.hrtime() - start) / 1e9
-    return seconds <= limit and 'within the limit' or ('%.1f s'):format(seconds)
-  end
-  local arrival = timed(function()
+  local arrival = work_time.within_limit(function()
     report.receive_report({ task = 'Task', status = 'done', summary = 'Summary', details = details })
-  end)
+  end, limit)
   vim.api.nvim_set_current_buf(report.report_buffer())
-  local edit = timed(function()
+  local edit = work_time.within_limit(function()
     vim.cmd('edit')
-  end)
+  end, limit)
   return { arrival = arrival, edit = edit }
 ]]
 
---- How long a report may take to show, and to show again on `:edit`: far
---- above the milliseconds it takes, so that a loaded host stays under it.
+--- How long the work of showing a report may take, and of showing it again
+--- on `:edit`, in seconds of work (`work_time`): far above the tenths of a
+--- second it takes.
 local TIME_LIMIT_SECONDS = 2
 
 --- Each row: the details' start, then the piece repeated, and how often.
@@ -381,7 +378,8 @@ T['a long line']['shows in the Report, and again on :edit, within the time limit
 )
   start_editor({ '2026-09-24T09:05:00' })
 
-  local timings = child.lua(TIMED_ARRIVAL_AND_EDIT, { prefix, piece, count, TIME_LIMIT_SECONDS })
+  local timings =
+    child.lua(TIMED_ARRIVAL_AND_EDIT, { work_time.PATH, prefix, piece, count, TIME_LIMIT_SECONDS })
 
   eq(timings, { arrival = 'within the limit', edit = 'within the limit' })
 end
