@@ -2,7 +2,7 @@
 
 ## Overview
 **Path:** `~/Development/Personal/aineo`
-**Stack:** Lua — a Neovim plugin for Nvim ≥ 0.11 (D10); tests on mini.test; StyLua and selene (D12)
+**Stack:** Lua — a Neovim plugin for Nvim ≥ 0.12, tested on the newest release only (D29, the user, 2026-10-05; D10 said ≥ 0.11); tests on mini.test; StyLua and selene (D12)
 **Description:** <!-- what aineo is, for whom, and what it deliberately is not -->
 
 ## Architecture
