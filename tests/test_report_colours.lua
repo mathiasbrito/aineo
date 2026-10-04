@@ -550,10 +550,12 @@ T['the groups']['add no autocommand of any event as more reports come'] = functi
   eq(child.lua_get([[#vim.api.nvim_get_autocmds({})]]), after_one)
 end
 
---- Puts three colour schemes on the child's 'runtimepath': `colours_done`,
+--- Puts four colour schemes on the child's 'runtimepath': `colours_done`,
 --- which colours `AineoReportDone`, `colours_done_linked`, which gives it a
 --- default link of its own to `Title`, and `colours_none`, which colours none
---- of aineo's groups. Each clears every group first, as colour schemes do.
+--- of aineo's groups, each clearing every group first, as colour schemes do;
+--- and `colours_status_bold`, which clears nothing and makes
+--- `AineoReportStatusBold` bold.
 local function add_colour_schemes()
   fixture.write('report-colour-schemes/colors/colours_done.vim', {
     'highlight clear',
@@ -568,6 +570,10 @@ local function add_colour_schemes()
   local schemes_file = fixture.write('report-colour-schemes/colors/colours_none.vim', {
     'highlight clear',
     "let g:colors_name = 'colours_none'",
+  })
+  fixture.write('report-colour-schemes/colors/colours_status_bold.vim', {
+    'highlight AineoReportStatusBold gui=bold cterm=bold',
+    "let g:colors_name = 'colours_status_bold'",
   })
   local schemes_directory = vim.fn.fnamemodify(schemes_file, ':h:h')
   child.lua('vim.opt.runtimepath:prepend(...)', { schemes_directory })
@@ -603,6 +609,115 @@ T['the groups']["go back to a colour scheme's default link made before the first
     { after_the_colour_scheme, after_the_next_report, link_of('AineoReportDone') },
     { 'Title', 'DiagnosticOk', 'Title' }
   )
+end
+
+--- The help's recipe for turning the `[status]`'s bold off, in `language`:
+--- the code of the help's first code block opened by a line ending in
+--- `>lua` or `>vim`, as `language` says, that names `AineoReportStatusBold`,
+--- its indent removed. Raises an error naming `language` when the help has
+--- no such block.
+---
+---@param language 'lua'|'vim'
+---@return string
+local function bold_off_recipe(language)
+  local opening = '>' .. language
+  local block
+  for _, line in ipairs(vim.fn.readfile('doc/aineo.txt')) do
+    if block and line:match('^<') then
+      local code = table.concat(block, '\n')
+      if code:find('AineoReportStatusBold', 1, true) then
+        return code
+      end
+      block = nil
+    elseif block then
+      table.insert(block, (line:gsub('^    ', '')))
+    elseif vim.endswith(line, opening) then
+      block = {}
+    end
+  end
+  error(('the help gives no %s recipe for AineoReportStatusBold'):format(language))
+end
+
+--- By language, `lua` or `vim`: the function that runs the help's recipe in
+--- that language for turning the `[status]`'s bold off (`bold_off_recipe()`)
+--- in the child, as a config written in it would.
+local RUN_BOLD_OFF_RECIPE = {
+  lua = function()
+    child.lua(bold_off_recipe('lua'))
+  end,
+  vim = function()
+    child.cmd(bold_off_recipe('vim'))
+  end,
+}
+
+T['the groups']["keep a [status]'s bold off, its colour kept, with the help's recipe given before a colour scheme and the first report"] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'lua', 'habamax' },
+      { 'vim', 'habamax' },
+      { 'lua', 'colours_status_bold' },
+      { 'vim', 'colours_status_bold' },
+    },
+  })
+
+T['the groups']["keep a [status]'s bold off, its colour kept, with the help's recipe given before a colour scheme and the first report"]['in'] = function(
+  language,
+  colour_scheme
+)
+  start_editor({ '2026-09-24T09:05:00' })
+  add_colour_schemes()
+  RUN_BOLD_OFF_RECIPE[language]()
+  child.cmd('colorscheme ' .. colour_scheme)
+
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+
+  eq(first_status_on_screen(12), {
+    { foreground = foreground_of('DiagnosticOk'), bold = false },
+    { foreground = foreground_of('DiagnosticOk'), bold = false },
+  })
+end
+
+T['the groups']["keep a [status]'s bold off, its colour kept, with the help's recipe given after a report, through a colour scheme and the next report"] =
+  MiniTest.new_set({
+    parametrize = { { 'lua' }, { 'vim' } },
+  })
+
+T['the groups']["keep a [status]'s bold off, its colour kept, with the help's recipe given after a report, through a colour scheme and the next report"]['in'] = function(
+  language
+)
+  start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+  RUN_BOLD_OFF_RECIPE[language]()
+  child.cmd('colorscheme habamax')
+
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+
+  eq(first_status_on_screen(12), {
+    { foreground = foreground_of('DiagnosticOk'), bold = false },
+    { foreground = foreground_of('DiagnosticOk'), bold = false },
+  })
+end
+
+T['the groups']["keep a [status]'s bold off, its colour kept, with the help's recipe given after a report, through a colour scheme and :edit in the Report"] =
+  MiniTest.new_set({
+    parametrize = { { 'lua' }, { 'vim' } },
+  })
+
+T['the groups']["keep a [status]'s bold off, its colour kept, with the help's recipe given after a report, through a colour scheme and :edit in the Report"]['in'] = function(
+  language
+)
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
+  RUN_BOLD_OFF_RECIPE[language]()
+  child.cmd('colorscheme habamax')
+  child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
+
+  child.cmd('edit')
+
+  eq(first_status_on_screen(12), {
+    { foreground = foreground_of('DiagnosticOk'), bold = false },
+    { foreground = foreground_of('DiagnosticOk'), bold = false },
+  })
 end
 
 return T
