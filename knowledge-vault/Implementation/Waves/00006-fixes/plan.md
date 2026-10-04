@@ -639,6 +639,68 @@ Asked "How should I cut the time the tests cost?", the user chose "Run less + pa
 - F9: the sentences made false;
 - F10: `NVIM`.
 
+## Packet T27 — 2026-10-04
+
+**The request, and the answer.** On 2026-10-01 the orchestrator put three fixes to the user, from wave 6's open threads, with wave 6's close; on 2026-10-04 the user answered: "check 1 to 3 and close 6. Please be carefull with the testing strategy, since each run is taking too long, try to optimize. than we will start the wave 7." Item 1 is T27, item 2 T28, item 3 T29. They are dispatched together, and wave 6 closes once all three land.
+
+**T27:** the help's recipe to turn the `[status]`'s bold off (`doc/aineo.txt` › *Colours*) is undone by a later colour scheme that runs `:highlight clear`. Measured by the orchestrator on 2026-09-28 on both versions, with aineo on the runtimepath; reproduced by the records review of PR #90. The records review of PR #91 measured that a scheme which does not clear leaves the link in place.
+
+**How the suites run in T27–T29 — the orchestrator's decision under the user's "try to optimize".** D26 applies unchanged: each implementer runs the whole suite once per version before it pushes. The savings are elsewhere:
+- **One verification for all three.** The orchestrator's verification runs the whole suite once per version on the three packets merged together over `dev`, not once per packet. Their file sets are disjoint, so their merge is the tree `dev` will hold.
+- **T28 adds a measured proof.** Its "no executable change" is shown by stripped bytecode (`evidence/bytecode-comment-check.txt`) and a diff filter.
+- **Mutants** run on their covering files first; only a survivor goes on to the whole suite.
+- **Reviewers** run no whole suite.
+
+The first draft of the briefs went further: the implementers would run only the touched test files, even before pushing. The brief review found that this contradicts D26, the root `CLAUDE.md` and `implementer.md`, which bind the briefs. It also showed that the reasoning behind it was false in general: `.tests/fixtures/` is shared across a run, helpers are shared, and the files share the host. The first draft's commit called that "D26 itself stands"; it was wrong. Skipping the pre-push whole suite would need a new decision row from the user.
+
+**The six rules for T27–T29**, recomputed on 2026-10-04 against every open packet (none) and every claimed wave (wave 7, paused, no packet open):
+
+| rule | T27 | T28 | T29 |
+|---|---|---|---|
+| 1 dependencies | T18 landed ✓ | T22 landed ✓ | T10, T17 landed ✓ |
+| 2 files | `doc/aineo.txt` › *Colours*; `tests/test_report_colours.lua`; `tests/test_doc.lua` if a pin counts the change | comment lines of `scripts/minimal_init.lua`, `tests/helpers/child.lua`, `tests/helpers/entry_editor.lua`, `tests/helpers/claude_session.lua`, `tests/test_entry_guard.lua` | `tests/test_report_paths.lua`, `tests/test_report_links.lua`, one new `tests/helpers/` file at most |
+| 3 schema | none ✓ | none ✓ | none ✓ |
+| 4 dependencies | none ✓ | none ✓ | none ✓ |
+| 5 decisions | the user's item 1; the recipe's form by measurement ✓ | none ✓ | the user's item 3; what to measure by measurement; the links case added by the orchestrator ✓ |
+| 6 task lines | T27–T29 are adjacent rows: every mark is held, and the knowledge pass marks them ✓ | | |
+
+The three file sets are disjoint, and wave 7 has no open packet ✓.
+
+**Baseline:** `dev` `40324f7`, code-identical to `176fd21` (`git diff --stat 176fd21 40324f7 -- lua plugin tests scripts doc Makefile` prints nothing), whose verification ran 1434 cases in 197 s per version (`evidence/baseline-176fd21.txt`).
+
+**Reviewers**, two per packet, in slots of three:
+- T27: guarantee by `neovim-lua-reviewer`, records by `reviewer`;
+- T28: records and reader by `reviewer`;
+- T29: guarantee by `neovim-lua-reviewer`, records by `reviewer`.
+
+**Branches, resources, session notes:**
+- `bugfix/t27-bold-recipe`, `impl_t27_bold_recipe`, `2026-10-04 — T27 Report bold recipe`;
+- `refactor/t28-harness-docstrings`, `impl_t28_harness_docstrings`, `2026-10-04 — T28 Harness docstrings`;
+- `bugfix/t29-timing-cases`, `impl_t29_timing_cases`, `2026-10-04 — T29 Timing cases`.
+
+All three go to `neovim-lua-developer`, on Opus.
+
+**Verification mutants:**
+- T27: the help's recipe restored to `:highlight link … NONE` alone, and the test's `:colorscheme` step removed;
+- T28: a changed constant and an added statement in one of the five files, which the bytecode check must catch, and a renamed local, which the diff filter must catch;
+- T29: T17's M10 and T10's X11, as their session notes record them. One file-system check per occurrence is equivalent on these cases' input, whose paths are all distinct, so the counting cases kill it, not these.
+
+**Briefs:** `brief-t27-bold-recipe.md`, `brief-t28-harness-docstrings.md` and `brief-t29-timing-cases.md`, corrected after their brief review, `brief-review-t27-t29.md`. Its verdict: dispatch all three after corrections. The corrections:
+- D26 restored;
+- T27: `:highlight clear` and `:edit`, the records made false, and the line range;
+- T28: the diff command and the mutants;
+- T29: M10 and X11, the efficiency cores and `taskpolicy -b`, waiting, and no host-wide load.
+
+The baseline's output is now `evidence/baseline-176fd21.txt`.
+
+## Packet T28 — 2026-10-04
+
+Specified, with T27 and T29, in *Packet T27* above: the user's item 2, the test harness's docstrings made stale by T22. They were found by T22's author, its fix round, and the records reviews of PRs #85 (R3) and #89 (finding 2).
+
+## Packet T29 — 2026-10-04
+
+Specified, with T27 and T28, in *Packet T27* above: the user's item 3, T17's timing case, and T10's long-line case of the same shape.
+
 ## Landed
 
 - **T9 — PR #30, a small fix**, merged by rebase on 2026-09-26 as `a86a69c` … `3d67b05` (9 commits). Every file of the pull request is identical to the verified head `40bc378`; `git diff 40bc378 dev` shows only T14's files from PR #32.
@@ -946,3 +1008,48 @@ Asked "How should I cut the time the tests cost?", the user chose "Run less + pa
   - the reviews' survivors: M12, P4, P13, P7–P12, M23. P14 was not among them: the fix round's re-take and the correction ran it, killed only through its second edit, and P14b only by the gap case;
   - the round's guards: the mkdir retry, the gap guard, the `v:exiting` guard, the round's mode condition, the command-line window wait, `winfixbuf` not cleared.
 - **Released:** `v0.2.9`, which carries T19 (PR #81, `main` at `ece0cdb`).
+- **T12 — PR #84, regular**, merged by rebase on 2026-09-28 as `8cf2840` … `97d9ea0` (8 commits), after T19. The code of `dev` is identical to the verified tree: `ac3e458` laid over `dev` `d7714d6`, merge-tree `276fc42`, which also holds T19 and T23.
+  - **The brief** of 2026-09-25 was amended on 2026-09-27 against the code T19 lands (PRs #80 and #82). The amendment's brief review found CN9's premise wrong: no `TermOpen` reaches Claude's window. The user then decided D27: the toggle stays as the user left it, across every new Claude terminal in that window. The reading that a window `\o` rebuilds takes the user's defaults (the plan's row above; "the rebuilt window takes the user's defaults" in the brief; MR114) is superseded. The amendment read D27 as covering it, and the fix round's fix A re-applies the toggle to a new window. D27's row names new terminals only, so the new-window half is the orchestrator's reading (MR204).
+  - **Reviews** on Opus: attack by `neovim-lua-reviewer`; test-integrity and records by `reviewer`. They found:
+    - the re-apply ran on every `open()`, and undid numbers the user set by hand;
+    - a terminal put back by hand missed the toggle;
+    - six mutants survived the whole suite, D27 tested only for a hide among them;
+    - which readings were measured was misrecorded, and a helper was misnamed.
+  - **The fix round** went to the author, whose context was 339 K. The orchestrator had removed the author's worktree at collection, and recreated it at the same path first. The round adopted the attack review's fixes A (re-apply only to a new terminal or window) and B (a `BufWinEnter` for Claude's terminal), and the reviews' pins. The orchestrator's decision A3 was no code: a toggle pressed over another buffer is remembered for Claude's terminal (MR206).
+  - **The re-measure**, with the attack question, held every claim. It found one promise with no test (G16). The **bounded correction**, by a fresh agent, adopted its pin.
+- **The orchestrator's verification** of the merged tree:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`, 1376 cases, `Fails (0)`, on 0.12.5 (1013 s) and 0.11.6 (1006 s), with `AINEO_TEST_RUN_LIMIT_MS` at 30 minutes. At the default 16 minutes both runs stopped at the limit in `test_send.lua`, the last file. The sequential suite had outgrown it; T22 fixes that;
+  - lint clean.
+- **12 literal mutants**, each killed by assertion on its covering test files on both versions:
+  - the plan's six: the current window; `'relativenumber'` left; the earlier values not restored; `tcn` missing from the health table; the prefix mapped over a user's mapping; no warning;
+  - the re-apply undone on every route: fix A, fix B, `open()`, T19's fallback;
+  - `:set` for `:setlocal`;
+  - G16.
+- **Released:** `v0.2.10`, which carries T12, and T23 with no caller yet (PR #87, `main` at `2af6b56`).
+- **T22 — PR #85, regular** (the shared test harness), merged by rebase on 2026-09-28 as `143f464` … `176fd21` (14 commits), after T12. The code of `dev` is identical to the verified tree: `c5c077d` laid over `dev` `97d9ea0`, merge-tree `57edc9b`.
+  - **The brief review** (dispatch after corrections, F1–F11) found that 0.12.5's `__NVIM_LOG_FILE_WANT` fails 73 cases in a fresh `.tests/`, among ten other points.
+  - **Reviews** on Opus: attack by `neovim-lua-reviewer`; test-integrity and records by `reviewer`. They found:
+    - a test file whose Neovim crashed or was killed counted as passed;
+    - failing endings printed a clean `Fails (0)`;
+    - a file's output could forge the summary;
+    - the exit status was tested only with the failing file first;
+    - a widening of the `Makefile`'s global `unexport` was unrecorded.
+  - **The fix round** went to a fresh agent (the author's context was 463 K). It adopted the reviews' fixes and pins. It started each file's Neovim with `vim.uv.spawn`, output to a file, since `vim.system` gives the exit code only once its pipes close. It also raised `make.run`'s default bound, the orchestrator's decision.
+  - **The re-measure**, with the attack question, held every claim but one: the stdout-relay pin tested stderr. It found two failures the round introduced: the per-target override lost to make's command line; a start failure stalled the run. The **bounded correction**, by a fresh agent, fixed both, pinned the rest, and recorded as limits what test code acting against the runner through `$NVIM` can still do.
+- **The orchestrator's verification** of the merged tree, with the new runner:
+  - guard 5 cases, `Fails (0)`, both versions;
+  - `make test`, 1434 cases in 197 s on each version: `Fails (0)` on 0.12.5. On 0.11.6 `Fails (1)`, T17's intermittent timing case, which passed 3 of 3 alone;
+  - lint clean.
+- **14 literal mutants** on their covering test files:
+  - the plan's nine: a failure dropped; a file with no case passed; one home; the limit per file; files left running; one file's summary; `AINEO_TEST_JOBS` ignored; the log directory; every home cleared;
+  - the rounds' five: the signal; the records; the `export`; the output relay; the homes' retry.
+
+  Twelve were killed by assertion on both versions. The other two:
+  - **The log directory** was run as each file's home made without its log directory. It was killed by assertion on 0.12.5 only: 0.11.6 does not hand a log it cannot open down to the Neovims it starts, and 0.12.5 does, in `__NVIM_LOG_FILE_WANT` (measured on 2026-09-28).
+
+    The plan's mutant is the runner's own directory, which the recipes make. The orchestrator ran it on 2026-09-28, both recipes' `mkdir -p` deleted:
+    - on 0.12.5, it was killed by assertion in `tests/test_runner_homes.lua`;
+    - on 0.11.6, it survived the whole suite, 1434 cases, since there it has nothing to break.
+  - **Every home cleared** ended its covering file with 0 cases and "its Neovim exited 1", with no assertion shown. The cause: the mutated runner, run by a nested `make`, deleted the verifying run's own homes (the records review of PR #88). Re-run on 2026-09-28 with a pristine outer runner whose homes lay elsewhere, it was killed by assertion on both versions: *a run started inside another › leaves the outer file's home as it was*.
+- **No release:** T22 changes only the test harness.

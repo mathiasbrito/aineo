@@ -1,13 +1,14 @@
 # Wave 6 retrospective
 
 **Author:** Mathias Santos de Brito, with Claude — the orchestrator (Opus 5.5, session `938616f1`)
-**Branch:** begun on `knowledge/w6-t9-landed`, the first packet's knowledge pass; extended on `knowledge/w6-t13-landed`, `knowledge/w6-t15-t16-landed`, `knowledge/w6-t11-landed`, `knowledge/w6-t14-landed`, `knowledge/w6-t10-landed`, `knowledge/w6-t20-t18-landed` `knowledge/w6-t21-t17-landed`, and `knowledge/w6-t19-landed`. Each later packet's pass extends this note.
+**Branch:** begun on `knowledge/w6-t9-landed`, the first packet's knowledge pass; extended on `knowledge/w6-t13-landed`, `knowledge/w6-t15-t16-landed`, `knowledge/w6-t11-landed`, `knowledge/w6-t14-landed`, `knowledge/w6-t10-landed`, `knowledge/w6-t20-t18-landed`, `knowledge/w6-t21-t17-landed`, `knowledge/w6-t19-landed`, `knowledge/w6-t12-t22-landed`, and `knowledge/w6-close`. Each later packet's pass extends this note.
 
 ## Links
 
 - [[Projects/aineo]] · [[Planning/aineo — v1 agent console]] · [[Implementation/Waves/00006-fixes/plan]]
 - The packets' own records: [[Sessions/2026-09-25 — T9 Report colours]], [[Sessions/2026-09-25 — T13 Neovim 0.12]], [[Sessions/2026-09-26 — T15 Report instructions]], [[Sessions/2026-09-26 — T16 Right column wrap]], [[Sessions/2026-09-26 — T11 Report icon]], [[Sessions/2026-09-26 — T14 Input draft]]
 - Before it: [[Sessions/2026-09-25 — Wave 5 retrospective]] · The MVP agenda: [[Review/2026-09-24 — v1 MVP readings review]]
+- The Learnings it taught (PR #90), also linked from [[Projects/aineo]] › *Known gotchas*: [[Learnings/Neovim 0.12 shows a terminal's exit line as an extmark, not as buffer text]], [[Learnings/Neovim 0.12 words and places errors raised in Lua differently from 0.11]], [[Learnings/A Neovim 0.12 TUI waits for a DSR answer at startup and serves requests meanwhile]], [[Learnings/Neovim 0.12 hands a log file it could not open to its children in __NVIM_LOG_FILE_WANT]], [[Learnings/feedkeys with x ends Insert mode, and enters Terminal mode only after it returns]], [[Learnings/startinsert takes effect only when the command or mapping ends]], [[Learnings/TermClose fires before the job's on_exit]], [[Learnings/bwipeout of a running terminal shows the next buffer before BufWipeout]], [[Learnings/jobwait on a stopped job waits for it to die, whatever its timeout]], [[Learnings/A typed Ctrl-C reaches a kitty-keyboard program in a Neovim terminal as CSI 99;5u]], [[Learnings/highlight default link records only a group's first default link]], [[Learnings/highlight default link overrides attributes set to NONE, not a link to NONE]], [[Learnings/Among extmarks of equal priority the one placed later wins the foreground]], [[Learnings/After the first nvim__inspect_cell, cells read before a redraw decode wrongly]], [[Learnings/Neovim's TUI writes an extmark's url into OSC 8 byte for byte]], [[Learnings/gx opens the url extmarks under the cursor before the text]], [[Learnings/strdisplaywidth follows the current window, nvim_strwidth does not]], [[Learnings/vim.system reports an exit only once the output pipes close]], [[Learnings/vim.system reports a process ended by a signal as code 0]]; and, updated, [[Learnings/A test case can end a mini.test run green]], which carries PR #89's finding 4, and [[Learnings/Claude Code's interactive CLI in a Neovim terminal]].
 
 ## Context
 
@@ -172,6 +173,42 @@ During the wave, the user decided more changes:
 | 09-27 17:01 | T19's correction in (1227 cases); the orchestrator's verification started |
 | 09-27 17:33 | T12's brief amended (PR #80); its brief review dispatched |
 | 09-27 19:3x | The user decided D27. PR #73 merged after the verification (1227 cases); release `v0.2.9` (PR #81). PR #80 merged with its first commit alone; its corrections landed as PR #82. T22 and T12 dispatched |
+| 09-27 20:34 | T12 in: PR #84 (opened 20:32), 1257 cases; its attack review dispatched |
+| 09-27 21:26 | T12's attack review in: the re-apply undid numbers the user set by hand |
+| 09-27 21:43 | T12's records review in |
+| 09-27 23:08 | PR #83's records review in (T19's knowledge pass); corrected, and merged at 23:10 |
+| 09-27 23:03 | T22 in: PR #85 (opened 23:01), 1249 cases; the suite from about 860 s to about 170 s; its attack review dispatched |
+| 09-27 23:21 | T12's test-integrity review in: six survivors of the whole suite. The fix round sent to its author at 23:22, in a worktree recreated at the same path |
+| 09-28 00:00 | T22's attack review in: a crashed test file counted as passed |
+| 09-28 00:14 | T22's test-integrity review in |
+| 09-28 00:27 | T22's records review in |
+| 09-28 00:28 | T12's fix round in (1274 cases); T22's fix round sent to a fresh agent; then T12's re-measure dispatched, with the attack question |
+| 09-28 01:26 | T12's re-measure in: one promise untested (G16); the bounded correction sent to a fresh agent |
+| 09-28 01:53 | T22's fix round in (1276 cases); the re-measure dispatched, with the attack question |
+| 09-28 02:08 | T12's correction in (1275 cases); the orchestrator's verification started |
+| 09-28 02:25 | The verification's 0.12.5 whole run stopped at the 16-minute limit |
+| 09-28 02:41 | Its 0.11.6 run stopped there too; both re-run with 30 minutes |
+| 09-28 02:49 | T22's re-measure in: two failures of the round's own; the bounded correction sent to a fresh agent |
+| 09-28 03:16 | T22's correction in (1285 cases) |
+| 09-28 03:29 | PR #84 merged after the verification (1376 cases, 12 mutants); release `v0.2.10` (PR #87) at 03:30 |
+| 09-28 03:50 | PR #85 merged after the verification (1434 cases in 197 s, 14 mutants). No release |
+| 09-28 03:54 | T12's and T22's knowledge pass (PR #88); its records review dispatched |
+| 09-28 03:59 | The `ai/` pass for the sentences T22 made false (PR #89) |
+| 09-28 04:01 | The Learnings of waves 6 and 7 sent to a drafting agent |
+| 09-28 04:15 | PR #88's records review in: T12's readings recorded as not shown, a third time; one mutant's kill not shown by assertion; `v0.2.10`'s installation never told to the user |
+| 09-28 04:16–04:21 | The orchestrator re-ran T22's mutant T10 and the plan's log-directory mutant |
+| 09-28 04:27 | PR #88 corrected and merged |
+| 09-28 04:28 | PR #89's records review dispatched |
+| 09-28 04:36 | PR #90 opened by the drafting agent; its report in at 04:37, 21 new notes and three updated |
+| 09-28 04:39 | The orchestrator measured the help's bold-off recipe undone by a later `:colorscheme`; PR #90's records review dispatched |
+| 09-28 04:43 | PR #89's records review in; corrected, and merged at 04:44 |
+| 09-28 04:45 | The user told what would come to them: wave 6's close, three candidate packets, and MR114 and MR204 |
+| 09-28 05:06 | PR #90's records review in: 14 findings and one missing. The correction sent to a fresh agent at 05:06 |
+| 09-28 05:27 | PR #90's correction in: every finding fixed but one sub-point, refuted; merged at 05:28 |
+| 09-28 05:30 | This pass (PR #91); its records review dispatched, in at 05:46 |
+| 09-28 05:31 | Wave 6's close and three candidate packets put to the user as a question |
+| 09-30 11:12 | The user declined the question and stopped the orchestrator; told that `v0.2.10` is installed |
+| 09-30 11:33 | The orchestrator's resume prompt came again; read as the user's go to finish this pass |
 
 **Findings, per review** (the verdicts are the reviewers'):
 
@@ -239,6 +276,18 @@ During the wave, the user decided more changes:
 | records, #74 (D26's rules) | `reviewer` | "Mostly yes", with corrections ("not ready" was the orchestrator's own summary). One rule went beyond D26 (the head-alone run dropped, the orchestrator's own rule), three rules contradicted it, and figures were overstated. |
 | brief, T22 | `reviewer` | dispatch after corrections, F1–F11. On 0.12.5, `__NVIM_LOG_FILE_WANT` fails 73 cases in a fresh `.tests/`. Also: nested `make` runs; shared fixtures; the output's readers; every ending; 36 runs. |
 | brief, T12 (amended) | `reviewer` | dispatch after corrections, 15 findings. CN9's premise was wrong: no `TermOpen` reaches Claude's window, which led to D27. Also: the `\o` rebuild reading; `test_health.lua`'s lines. |
+| records, #83 (T19's pass) | `reviewer` | merge after corrections: four timeline rows gave the ledger's times; MR174 and MR165 had been told to the user; the project note lacked the pause; P14 and the Q8 follow-ups' differences. Every hash, count and cost row held |
+| attack, #84 (T12) | `neovim-lua-reviewer` | the toggle touched only Claude's window and raised nothing. The re-apply undid numbers set by hand on every `open()` (fix A); a terminal put back by hand missed it (fix B); a toggle over another buffer was later given to Claude's terminal |
+| test-integrity, #84 (T12) | `reviewer` | every added case proved its name. Six mutants survived the whole suite (R4, R5, R7, R10, R18, R19); D27 was tested only for a hide; pins built for all six |
+| records, #84 (T12) | `reviewer` | comply, with corrections: which readings were measured; `shows_own_buffer()` misnamed; 18 reds, not 20 |
+| re-measure, #84, with the attack question | `neovim-lua-reviewer` | the round held, with no failure of its own; one promise untested (G16), pin built |
+| attack, #85 (T22) | `neovim-lua-reviewer` | the guarantee could be defeated: a file killed by a signal counted as passed; failing endings printed `Fails (0)`; a file's output could forge the summary; a `nan` limit was accepted |
+| test-integrity, #85 (T22) | `reviewer` | mostly sound. The exit status was tested only with the failing file first (V1); five cases built |
+| records, #85 (T22) | `reviewer` | most records held. The packet's own time-limit case was flaky too; the unrecorded widening; five sentences made false left unlisted |
+| re-measure, #85, with the attack question | `neovim-lua-reviewer` | the round held but for I9's pin. Two low failures the round introduced: the per-target override lost to make's command line; a start failure stalled the run |
+| records, #88 (T12's and T22's pass) | `reviewer` | not ready, merge after corrections: T12's readings recorded as not shown, a third time (seven of ten had been told, kept or chosen); T22's T10 killed with no assertion shown; the T17 disclosure; a closed thread left open; MR114 left open though reversed. Every hash, tree, count and cost row held |
+| records, #89 (the `ai/` pass) | `reviewer` | 13 of 14 claims held. The `VimLeavePre` sentence claimed more than the runner does: forged records still pass. The duration was over-rounded; two stale docstrings and one list were missed |
+| records, #90 (the Learnings) | `reviewer` | not ready: 14 CONFIRMED, 1 MISSING. The `feedkeys` note's mechanism was wrong: Terminal mode is deferred under `'x'`, not left unentered. The evidence file belonged in `Attachments/`; a branch hash was cited as `dev`'s; one note held two concepts. Every probe reproduced on both versions, one once its directory existed |
 | re-measure, #46, with the attack question | `neovim-lua-reviewer` | the round held on its paths; the deferred warning lost at `<C-c>` and still taking a key in Claude's terminal; N2 not equivalent; an earlier plugin's failing `QuitPre` handler skipping both saves, understated in the records; a failed rename leaving the text in a cut file; the `Makefile`'s clean-up pointable elsewhere |
 
 **Rounds on #30, a small fix:**
@@ -287,6 +336,20 @@ During the wave, the user decided more changes:
 - a re-measure with the attack question;
 - a bounded correction by a fresh agent, 1227 cases;
 - 1227 laid over `dev`, verified under D26: the whole suite once per version, and mutants on their covering files.
+
+**Rounds on #84, regular:**
+- the packet, 1257 cases;
+- a fix round by its author (339 K), 1274 cases, which replaced the re-apply;
+- a re-measure with the attack question;
+- a bounded correction by a fresh agent, 1275 cases;
+- 1376 laid over `dev`, with a 30-minute run limit.
+
+**Rounds on #85, regular:**
+- the packet, 1249 cases;
+- a fix round by a fresh agent (the author's context was 463 K), 1276 cases, which replaced how a file is started and judged;
+- a re-measure with the attack question;
+- a bounded correction by a fresh agent, 1285 cases;
+- 1434 laid over `dev`, with the new runner, in 197 s.
 
 The orchestrator's verifications are in [[Implementation/Waves/00006-fixes/plan]] › *Landed*.
 
@@ -380,10 +443,28 @@ The orchestrator's verifications are in [[Implementation/Waves/00006-fixes/plan]
 | records review, #74 — `reviewer` | 87 | 248,786 | 174 | 231,378 | 12,947,293 | 2,259 |
 | brief review, T22 — `reviewer` | 165 | 350,622 | 330 | 966,695 | 33,883,528 | 3,014 |
 | brief review, T12 amended — `reviewer` | 117 | 284,650 | 234 | 263,448 | 19,889,973 | 3,568 |
+| records review, #83 — `reviewer` | 94 | 296,824 | 188 | 279,416 | 16,680,179 | 1,843 |
+| T12 implementer, packet and fix round — `neovim-lua-developer` | 195 | 492,187 | 392 | 3,521,942 | 57,002,101 | 11,835 |
+| attack review, #84 — `neovim-lua-reviewer` | 95 | 286,682 | 190 | 468,869 | 18,051,816 | 18,602 |
+| test-integrity review, #84 — `reviewer` | 152 | 280,043 | 326 | 2,454,168 | 26,691,568 | 8,073 |
+| records review, #84 — `reviewer` | 103 | 244,306 | 206 | 223,104 | 15,269,284 | 2,620 |
+| re-measure, #84 — `neovim-lua-reviewer` | 109 | 340,485 | 218 | 898,480 | 24,362,246 | 16,128 |
+| bounded correction, #84 — `neovim-lua-developer` | 56 | 136,313 | 112 | 322,038 | 5,490,705 | 3,176 |
+| T22 implementer, packet — `neovim-lua-developer` | 203 | 463,337 | 406 | 5,925,465 | 55,182,303 | 27,144 |
+| attack review, #85 — `neovim-lua-reviewer` | 144 | 338,054 | 288 | 320,646 | 29,110,090 | 6,918 |
+| test-integrity review, #85 — `reviewer` | 126 | 355,177 | 252 | 1,243,150 | 27,419,460 | 4,923 |
+| records review, #85 — `reviewer` | 134 | 319,643 | 268 | 298,441 | 28,734,486 | 3,047 |
+| fix round, #85 — `neovim-lua-developer` | 204 | 400,360 | 442 | 1,696,059 | 57,772,285 | 35,947 |
+| re-measure, #85 — `neovim-lua-reviewer` | 205 | 531,566 | 410 | 514,158 | 64,005,706 | 4,457 |
+| bounded correction, #85 — `neovim-lua-developer` | 103 | 261,400 | 210 | 243,992 | 18,732,591 | 5,254 |
+| records review, #88 — `reviewer` | 118 | 347,027 | 236 | 347,025 | 24,457,540 | 2,500 |
+| records review, #89 — `reviewer` | 84 | 220,795 | 168 | 203,387 | 11,622,787 | 6,771 |
+| Learnings draft, PR #90 — `general-purpose` | 196 | 484,787 | 392 | 467,379 | 53,787,779 | 78,079 |
+| records review, #90 — `reviewer` | 176 | 386,991 | 352 | 365,789 | 37,236,678 | 5,161 |
+| bounded correction, #90 — `general-purpose` | 134 | 323,460 | 268 | 306,052 | 26,489,639 | 26,486 |
 
 Not in the table:
 - the orchestrator's own context;
-- T22's and T12's, which come with their passes;
 - wave 7's (T23's brief review and packet), which go in wave 7's retrospective.
 
 The test-integrity review of #31 made 366 requests, more than any other context here, for 3 CONFIRMED findings and one REFUTED group; the attack review made 128 for 4 CONFIRMED (two of them the author's own claims) and 5 REFUTED.
@@ -458,34 +539,65 @@ The test-integrity review of #31 made 366 requests, more than any other context 
   - the user's message logged at 12:21 came at 12:08.
 
   The timeline gives the events' own times: the reports' arrival, the chat's, and the PRs' `createdAt`.
-- **The session's working directory moved once more** by a top-level `cd` (2026-09-27, 17:29); it moved back. PR #83's first commit said "twice more", which was wrong.
+- **The session's working directory moved once more** by a top-level `cd` (2026-09-27, 17:29); it moved back. It moved again on 2026-09-28, into `knowledge-vault/`, while this pass checked its links, and was moved back at once, before any dispatch. PR #83's first commit said "twice more", which was wrong.
 - **A records reviewer's proposal set aside:** PR #74's records review proposed either keeping the verification's run of the head alone or putting its removal to the user. The orchestrator did neither: it recorded the removal as its own rule, its practice since PR #31.
 - **PR #83's records reviewer read `~/.claude`** for one file's modification time: Q8 B's conversation, to show that the flag probe left it unchanged. It read nothing else there and wrote nothing.
+- **T12's author's worktree was removed at collection**, before its fix round was decided; the orchestrator recreated it at the same path, on the branch, with the scratch copied back, before resuming the author.
+- **The orchestrator relayed the T12 author's "20 seen red"**; the records show 18.
+- **The one-file-at-a-time suite outgrew its 16-minute limit** at 1376 cases (T19, T23 and T12 together): the orchestrator's verification of T12 re-ran both whole suites with `AINEO_TEST_RUN_LIMIT_MS` at 30 minutes. T22 brought the whole suite to 197 s.
+- **T17's timing case** (`tests/test_report_paths.lua`, the file checks' time limit) failed on 0.11.6 in the verifications of T19 and T22, and in T12's fix round; T12's verification passed it in all four whole runs. Alone, it failed once at load 115 and passed at 95 (T19's), and passed 3 of 3 at loads 37–44 (T22's). Five whole suites run at once fail it every time, and single whole runs under T22's runner passed it 10 of 10 and 3 of 3 (T22's re-measure): several suites at once are not one suite at a high load. PR #88's first commit said it failed in T12's verification and passed alone each time; both were wrong.
 - **PR #80 merged with its first commit alone.** The push of its correction was refused by the branch guard, in the same call as a checkout of `dev`, while the merge ran in a parallel call. The correction landed as PR #82, with the same content.
 - **PR #76 was closed, not rewritten:** its pushed branch conflicted with `dev` once PR #75 merged. The plan came back, corrected, as PR #78.
 - **T12's brief called T17's timing case load-sensitive**, from two runs of the orchestrator's. Its brief review saw it fail at load 29, so it is intermittent. The amendment's correction says so.
+- **T12's readings were recorded as not shown, a third time** (the records review of PR #88). PR #88's first commit said only MR206 had been told to the user. In fact:
+  - MR199–MR201 restated MR111–MR113, told on 2026-09-26;
+  - MR202's and MR203's first halves were MR103 and MR104, which the user had kept;
+  - MR204's terminal half had been told;
+  - MR208 was the option the user chose for D27.
+
+  PRs #83 and #86 had made the same error. The readings review now gives each reading's status, found by searching this session's messages to the user.
+- **The orchestrator told the user fix A incompletely.** On 2026-09-27 at 21:26 it said the toggle is re-applied "only when a new Claude terminal arrives, as D27 says". Fix A also re-applies it to a new Claude window, which reverses MR114. That half is the orchestrator's reading, not D27's (MR204).
+- **`v0.2.10`'s installation was not told to the user when it happened** (03:30). The records review of PR #88 found no message saying it, and the orchestrator's own handover had recorded that one was sent. The orchestrator then recorded it as told just before 04:16, but that sentence was in its reasoning, not in a message (the records review of PR #91). The user was told on 2026-09-30 (11:12).
+- **One mutant of T22's verification, T10, was killed without an assertion shown.** The run clearing every home at its start ended its covering file with 0 cases and "its Neovim exited 1", on both versions. The cause: the mutated runner, started by a nested `make`, deleted the verifying run's own homes (the records review of PR #88). The orchestrator re-ran it on 2026-09-28 with a pristine outer runner and its homes in another directory. It was killed by assertion on both versions: *a run started inside another › leaves the outer file's home as it was*. The unmutated control passed, 9 cases.
+- **The verification's "log directory" mutant (T8) was not the plan's.** It changed each file's home, where the plan names the runner's own directory, which the recipes make. The orchestrator ran the plan's mutant on 2026-09-28: both recipes' `mkdir -p '$(TEST_LOG_DIRECTORY)'` deleted.
+  - On 0.12.5, it was killed by assertion in `tests/test_runner_homes.lua` (two cases: *in a checkout with no .tests/ yet tells no Neovim of a missing log*).
+  - On 0.11.6, it survived the whole suite (1434 cases, 0 failures, 197 s). There 0.11.6 does not hand an unopened log down: `__NVIM_LOG_FILE_WANT` stays unset, where 0.12.5 sets it (measured the same day). The mutant has nothing to break on 0.11.6.
+  - The author's H7 had killed the same mutant on 0.12.5.
+- **The Learnings were drafted by an agent, not by the orchestrator.** The orchestrator dispatched a `general-purpose` agent on Opus to write them, to spare its own context. No charter binds that type; its brief set the rules instead. A records review and a correction by a fresh agent followed (PR #90).
+  - Two facts in the orchestrator's list of candidates were wrong, and the drafter corrected them: `feedkeys` with `'x'`, and the first `nvim__inspect_cell` read. A third, 0.12.5's fallback log path, is T22's brief's wording, which the drafter called nuanced; this pass's first commit counted it as the list's.
+  - The drafter's correction of the first was itself half right. Under `'x'`, Terminal mode is entered after the call returns, not left unentered (the records review of PR #90, finding 1).
+- **The T20 and T21 briefs said a `feedkeys` with `'x'` ends Terminal mode.** Under `'x'`, Terminal mode is entered only after the call returns; T20's brief review had written "deferred, not ended" (F3). The briefs are the orchestrator's, and they were dispatched with the error. The packets' tests type their keys with `child.type_keys()`, so no test rests on it ([[Learnings/feedkeys with x ends Insert mode, and enters Terminal mode only after it returns]]).
+- **The `ai/` pass overclaimed once** (the records review of PR #89). It wrote that T22 closed the fault where a test file's own `VimLeavePre` turns a failing run green. A file that forges its records still passes, as the runner's docstring records. Corrected before merge.
 - **The shared help:**
   - T9 and T13 each edit a section of `doc/aineo.txt`, under rule 2's exception.
   - Each packet ran the merge check against the other's head, and T13 ran it again against T9's final head `40bc378`: `git merge-tree` gave no conflict, and `tests/test_doc.lua` passed, 36 cases, on both versions.
 
 ## Open threads
 
-- **T22** (the parallel runner) and **T12** (`\tcn`, with D27) are running.
-- **`tests/test_report_paths.lua`'s timing case** (*the file checks … of a line of distinct paths take at most the time limit*) is intermittent on 0.11.6. It failed at loads 131, 115 and 29 and passed at 95 and 38–48. T22's side-by-side runs will meet it more often.
+- **The wave's close is the user's.** Its rule for a rolling wave: "the user closes the wave when no packet is open" (orchestrate §3). No packet is open. The `ai/` pass on the sentences T22 made false has landed (PR #89), and so have the Learnings (PR #90).
+- **Stale docstrings in the test harness, made so by T22.** A packet, if the user agrees to one: each still describes the suite before T22, where each test file's Neovim now has a home of its own and runs the test code.
+  - `scripts/minimal_init.lua:1–2` and `:10–12`;
+  - `tests/helpers/child.lua:4–6`;
+  - `tests/helpers/entry_editor.lua:9–10`;
+  - `tests/helpers/claude_session.lua:6`;
+  - `tests/test_entry_guard.lua:14`.
+
+  Sources: T22's author and fix round, and the records reviews of PRs #85 (R3) and #89 (finding 2).
+- **The help's recipe to turn the status's bold off does not survive most colour schemes.** `:highlight link AineoReportStatusBold NONE` is given "in your config or at any time" (`doc/aineo.txt`, *Colours*). A later colour scheme that runs `:highlight clear`, as `habamax` and `default` do, links the group to `@markup.strong` again, so a config line placed before such a scheme does nothing. Measured by the orchestrator on 2026-09-28, with aineo on the runtimepath, on 0.12.5 and 0.11.6; the records review of PR #90 reproduced it. A scheme that does not clear leaves the user's link in place (the records review of PR #91). A help fix, or a behaviour to decide, for the user.
+- **A fresh `.tests/`'s missing log directory** is closed by T22.
+- **`tests/test_report_paths.lua`'s timing case** (*the file checks … of a line of distinct paths take at most the time limit*) is intermittent on 0.11.6. It failed at loads 131, 115 and 29 and passed at 95 and 38–48. Under T22's runner it failed once in the orchestrator's verification (0.11.6, 1 of 1434) and passed 3 of 3 alone; five suites at once fail it every time (T22's re-measure).
 - **`:checkhealth aineo` does not warn about session flags in `claude.cmd`** (T19's attack review, finding 7).
-- **A fresh `.tests/` warns in its first child that logs** (T21's and T17's re-measures): the `Makefile` sets `NVIM_LOG_FILE` under `.tests/state/nvim/` but never creates that directory, so the first run in a fresh `.tests/`, whole or narrowed, can fail cases asserting what a child told — a harness fix.
 - **Found by T17's re-measure, older than T17:** a mode-000 file opened through the file column's redirect replaces the Report's column (C9); a Report made `modifiable` and edited inside a path raises `E5108` on a double-click.
-- **Learnings carried to the wave's close:**
-  - T20's: a `ready` fake is still `'starting'` right after `:Aineo open`, so a case meant for a ready session waits for `'ready'`.
-  - T18's two: a `:highlight` whose attributes are all `NONE` is linked again by a later `:highlight default link`, while `:highlight link … NONE` holds; and in a headless child, the first `nvim__inspect_cell()` misreads cells read in the same request.
-  - T21's two: a typed Ctrl-C reaches a kitty-keyboard-enabled terminal (`ESC[>5u`) as `ESC[99;5u` on 0.12.5 and 0.11.6, which the fake `claude` does not decode; and for a running terminal `:bwipeout` puts Neovim's empty buffer in the window before `BufWipeout`, for an ended one after.
-  - Their source: [[Sessions/2026-09-26 — T20 Claude terminal mode]], [[Sessions/2026-09-26 — T18 Report line]] and [[Sessions/2026-09-26 — T21 Claude exit]] › *Open threads*.
+- ~~**Learnings carried to the wave's close**~~ — written in PR #90:
+  - T18's two: [[Learnings/highlight default link overrides attributes set to NONE, not a link to NONE]] and [[Learnings/After the first nvim__inspect_cell, cells read before a redraw decode wrongly]];
+  - T21's two: [[Learnings/A typed Ctrl-C reaches a kitty-keyboard program in a Neovim terminal as CSI 99;5u]] and [[Learnings/bwipeout of a running terminal shows the next buffer before BufWipeout]].
+  - T20's, a `ready` fake still `'starting'` right after `:Aineo open`, was left out: it describes aineo's fake, not Neovim.
 - **`lua/aineo/mcp/editor.lua:10–16`'s docstring** says a report shows in "tens of milliseconds, even for a report at the line limit"; since T10 up to about half a second (MR133), and since T17 about 1 s for a line of distinct paths (MR159). A later packet corrects it.
-- **The root `CLAUDE.md`'s make table** does not say that `make test` and `make test_file` empty `.tests/state/nvim/aineo/drafts` first (T14) — an `ai/` pass.
+- ~~**The root `CLAUDE.md`'s make table** does not say that `make test` and `make test_file` empty `.tests/state/nvim/aineo/drafts` first (T14)~~ — moot since T22: the recipes clear nothing, and each run's files get homes no earlier run used.
 - **`lua/aineo/report/records.lua:83–84` ignores the count `fs_write` returns**, the pattern T14's attack review found in the draft's write (its F1). A short write would keep a cut record.
-- **Whole 0.12.5 runs can stop at the 960 s limit** — in `tests/test_mcp_blocked_editor.lua` under load, and once in `tests/test_health.lua` at a load near 11 (T11's amendment review). The files pass alone. Every wait of `tests/helpers/report_tui.lua` is bounded by `WAIT_MS`; which request blocks has not been isolated — a candidate task.
+- **A hang can still stop a whole run at the 960 s limit.** T22 shortened healthy runs to 197 s (the orchestrator's verification of PR #85), not the hang: the `rpcrequest` inside `tests/helpers/report_tui.lua`'s `vim.wait` is still unbounded (the records review of PR #91). The runs stopped in `tests/test_mcp_blocked_editor.lua` under load, and once in `tests/test_health.lua` at a load near 11 (T11's amendment review). The files pass alone. Every wait of `tests/helpers/report_tui.lua` is bounded by `WAIT_MS`; which request blocks has not been isolated — a candidate task.
 - **A defect that predates T13**, found by T13's attack review, left for a later packet. `lua/aineo/health.lua` calls `config.recorded_setup_options()` as an argument to its `pcall`, so it is evaluated outside it. `:checkhealth aineo` then fails whole when `setup()` options hold a userdata.
-- **Readings still open:** MR28's oldest `claude`, MR98, MR101, MR108, MR109–MR137 and MR139–MR159, with MR138 decided by D25 and landed with T21 ([[Review/2026-09-24 — v1 MVP readings review]]).
+- **Readings still open:** MR28's oldest `claude`, and those the readings review's *Disposition* lists ([[Review/2026-09-24 — v1 MVP readings review]]): MR98, MR101, MR108, MR109–MR113, MR115–MR137, MR139–MR198 and MR201–MR207. MR138 is decided by D25 and landed with T21.
 - **`lua/aineo/health.lua` still strips with the lazy position pattern in one pass** — a candidate for the same bound at white space (the T13 correction's report).
 
 ## Commits
@@ -540,6 +652,13 @@ The test-integrity review of #31 made 366 requests, more than any other context 
 - T19, PR #73: `8819340` … `384c084` (13 commits) — [[Sessions/2026-09-27 — T19 Claude resume]].
 - Release `v0.2.9`, PR #81: `ece0cdb` on `main`, tag `v0.2.9`.
 - T12's amended brief, PRs #80 and #82: `bdc0df5`, `cfa91ee` (with D27).
+- T19's knowledge pass, PR #83: `5d0d2ee`, `697b592`.
+- T12, PR #84: `8cf2840` … `97d9ea0` (8 commits) — [[Sessions/2026-09-27 — T12 Claude line numbers]].
+- Release `v0.2.10`, PR #87: `2af6b56` on `main`, tag `v0.2.10`.
+- T22, PR #85: `143f464` … `176fd21` (14 commits) — [[Sessions/2026-09-27 — T22 parallel runner]].
+- T12's and T22's knowledge pass, PR #88: `757fc70`, `fe6a475`.
+- The `ai/` pass on the sentences T22 made false, PR #89: `2c7628b`, `ac51888`.
+- The Learnings of waves 6 and 7, PR #90: `ed78962`, `4f537e4`.
 - This knowledge pass: recorded after its merge by the next one.
 
 ## Decisions & reasoning
@@ -581,3 +700,6 @@ The test-integrity review of #31 made 366 requests, more than any other context 
 - **T19's A5 (a hidden replacement at 5 × 80) and the correction's CTRL-O residual are recorded as limits, not fixed** — the orchestrator's decisions (MR175, MR174). The residual was kept over building the re-measure's `ModeChanged` variant.
 - **T19's fallback takes a `'winfixbuf'` window and keeps its pin** — the orchestrator's correction decision, on the re-measure's finding 3: the swap is aineo's own act.
 - **T23 runs beside wave 6** — the orchestrator: all its files are new, and wave 7 is claimed beside wave 6 (orchestrate §2).
+- **T12's re-apply only to a new terminal or a new window** (fix A), and on a terminal put back by hand (fix B) — the orchestrator's fix-round decisions, from the attack review's measured fixes: by D27's letter for a new terminal; for a new window, the orchestrator's reading, which reverses MR114 and which the user was not told (MR204). **A toggle pressed over another buffer is remembered for Claude's terminal** (A3) — the orchestrator's decision, no code (MR206), told to the user.
+- **T22's verdict of a file needs exit 0, signal 0 and every recorded case passed** — the orchestrator's fix-round decision, from the attack review's measured fix. **`make.run`'s default bound raised** — the orchestrator's, over two flaky cases. **What test code acting against the runner through `$NVIM` can still do is a limit**, not a fix — the orchestrator's, since `NVIM=nil` breaks 8 of `test_isolation.lua`'s 21 cases.
+- **No release for T22 or T23** — the orchestrator: neither changes what the user runs; T23 shipped inside `v0.2.10`.

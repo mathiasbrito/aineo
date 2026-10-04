@@ -24,29 +24,54 @@ NVIM_TEST := nvim --headless --noplugin -u '$(ROOT)/scripts/minimal_init.lua'
 # when make's command line or MAKEFLAGS names another TEST_HOME.
 override TEST_HOME := $(ROOT)/.tests
 
+# The directory of the test runner's log file, which the recipes make before
+# they start the runner: Neovim 0.12 does not make it, and a Neovim that
+# cannot open its log file tells every Neovim it starts so, in a message the
+# tests would read.
+override TEST_LOG_DIRECTORY := $(TEST_HOME)/state/nvim
+
+# Where the test runner makes, for each run, a directory of its own holding a
+# home for each test file (scripts/run_tests.lua). A run starts with homes no
+# earlier run used and removes them when it ends, so neither of the recipes
+# clears anything: a run started while another runs, as the suite's own tests
+# of these recipes start them, leaves the other's homes alone.
+override TEST_HOMES := $(TEST_HOME)/homes
+
 LUA_SOURCES := lua plugin scripts tests
 
 .PHONY: deps test test_file lint format
 
-# The test runner and every child Neovim it starts inherit these, and so never
-# see the developer's own configuration, data, state, cache, Neovim log or
-# Claude Code settings. `override` keeps them even against the same names on
-# make's command line; other targets see the caller's values, as before.
+# The test runner inherits these, and so never sees the developer's own
+# configuration, data, state, cache, Neovim log or Claude Code settings; it
+# gives each test file's Neovim a home of its own under $(TEST_HOMES) in their
+# place. `override` keeps them even against the same names on make's command
+# line; other targets see the caller's values, as before.
 export XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME CLAUDE_CONFIG_DIR NVIM_LOG_FILE
 test test_file: override XDG_CONFIG_HOME := $(TEST_HOME)/config
 test test_file: override XDG_DATA_HOME := $(TEST_HOME)/data
 test test_file: override XDG_STATE_HOME := $(TEST_HOME)/state
 test test_file: override XDG_CACHE_HOME := $(TEST_HOME)/cache
 test test_file: override CLAUDE_CONFIG_DIR := $(TEST_HOME)/claude
-test test_file: override NVIM_LOG_FILE := $(TEST_HOME)/state/nvim/log
+test test_file: override NVIM_LOG_FILE := $(TEST_LOG_DIRECTORY)/log
 
 # A Neovim or Claude Code session that starts make hands these down: the parent
 # editor's server address, application name, init file and init commands, and a
 # Claude Code marker. No target passes them on, whether they come from the
 # environment, make's command line or MAKEFLAGS, so neither the test runner nor
-# any child Neovim sees them. VIMRUNTIME is still passed on: a development build
-# of Neovim needs it.
+# any Neovim it starts sees them. VIMRUNTIME is still passed on: a development
+# build of Neovim needs it.
 unexport NVIM NVIM_APPNAME MYVIMRC VIMINIT AI_AGENT
+
+# A Neovim 0.12 that could not open its log file hands the file it wanted down
+# in this variable, and every Neovim that inherits it tells of a log it cannot
+# open, in a message the tests would read. The test targets empty it, whether
+# it comes from the environment, make's command line or MAKEFLAGS, and Neovim
+# reads an empty variable as absent. `export` is what hands the emptied value to
+# their recipes: GNU Make 3.81 gives a recipe the command line's value of a
+# variable it does not export, whatever a target's `override` says. Other
+# targets see the caller's value, as before.
+export __NVIM_LOG_FILE_WANT
+test test_file: override __NVIM_LOG_FILE_WANT :=
 
 # Fetches mini.nvim at MINI_NVIM_COMMIT into MINI_NVIM_DIR. Does nothing, and
 # reaches for no remote, when that commit is already checked out there; a
@@ -65,32 +90,25 @@ deps:
 		exit 1; \
 	}
 
-# The drafts aineo keeps of Input for each working directory under the suites'
-# state directory. Every child in the checkout's directory that opens the
-# layout shares the checkout's draft there, so each run starts with none: a
-# draft an earlier run left would come back in the next Input a case opens.
-override TEST_DRAFTS := $(TEST_HOME)/state/nvim/aineo/drafts
-
-# The Claude Code session ids aineo keeps for each working directory under the
-# suites' state directory. Every start of Claude Code through the composition
-# root keeps one, so each run starts with none: an id an earlier run kept would
-# make every start in the checkout's directory resume it.
-override TEST_CLAUDE_SESSIONS := $(TEST_HOME)/state/nvim/aineo/claude-sessions
-
+# Runs each test file in a Neovim of its own, AINEO_TEST_JOBS=<number> of them
+# at once (8 when it is absent), and prints one summary over all of them.
 # Exits 0 only when every case ran and passed, and non-zero otherwise — also
 # when a test file does not load or contributes no case, when test code ends
-# Neovim, when mini.test stalls, or when the run outlasts its time limit, which
-# AINEO_TEST_RUN_LIMIT_MS=<milliseconds> replaces (scripts/run_tests.lua).
+# Neovim, when mini.test stalls, when a test file's Neovim ends on a signal,
+# when the run outlasts its time limit, which
+# AINEO_TEST_RUN_LIMIT_MS=<milliseconds> replaces, and when AINEO_TEST_JOBS
+# names no whole number above zero or AINEO_TEST_RUN_LIMIT_MS no finite number
+# above zero (scripts/run_tests.lua).
 test: deps
-	rm -rf '$(TEST_DRAFTS)' '$(TEST_CLAUDE_SESSIONS)'
-	$(NVIM_TEST) -l '$(ROOT)/scripts/run_tests.lua'
+	mkdir -p '$(TEST_LOG_DIRECTORY)'
+	$(NVIM_TEST) -l '$(ROOT)/scripts/run_tests.lua' '$(TEST_HOMES)'
 
 # FILE reaches the runner through the environment, so the shell reads it as one
 # word and never as shell text, whatever quotes or spaces the path holds.
 test_file: export AINEO_TEST_FILE = $(FILE)
 test_file: deps
-	rm -rf '$(TEST_DRAFTS)' '$(TEST_CLAUDE_SESSIONS)'
-	$(NVIM_TEST) -l '$(ROOT)/scripts/run_tests.lua' "$$AINEO_TEST_FILE"
+	mkdir -p '$(TEST_LOG_DIRECTORY)'
+	$(NVIM_TEST) -l '$(ROOT)/scripts/run_tests.lua' '$(TEST_HOMES)' "$$AINEO_TEST_FILE"
 
 lint:
 	cd '$(ROOT)' && stylua --check $(LUA_SOURCES)

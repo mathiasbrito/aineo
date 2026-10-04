@@ -1,7 +1,7 @@
 # Wave 7 retrospective
 
 **Author:** Mathias Santos de Brito, with Claude — the orchestrator (Opus 5.5, session `938616f1`)
-**Branch:** begun on `knowledge/w7-t23-landed`, T23's knowledge pass. Each later packet's pass extends this note.
+**Branch:** begun on `knowledge/w7-t23-landed`, T23's knowledge pass; extended on `knowledge/w6-t12-t22-landed` and `knowledge/w6-close`. Each later packet's pass extends this note.
 
 ## Links
 
@@ -10,6 +10,7 @@
 - `Implementation/Waves/00007-panes/plan.md`
 - [[Sessions/2026-09-27 — T23 git home]]
 - [[Sessions/2026-09-26 — Wave 6 retrospective]], the wave it ran beside
+- What T23 found, as Learnings (PR #90): [[Learnings/GIT_OPTIONAL_LOCKS=0 does not keep git diff from taking index.lock]], [[Learnings/A watch on a file git replaces goes silent after the replacement]], [[Learnings/libuv ignores fs_event's recursive flag on Linux]]
 
 ## Context
 
@@ -35,6 +36,8 @@ T23 opened it beside wave 6's open packets, since all its files were new. Later 
 | 09-27 21:25 | The re-measure in: the round held; seven findings. The bounded correction sent to a fresh agent at 21:43 |
 | 09-27 22:49 | The correction in (1265 cases); the orchestrator's verification started |
 | 09-27 23:57 | PR #79 merged after the verification (1328 cases on both versions, 23 mutants killed). No release |
+| 09-28 00:00 | T23's knowledge pass (PR #86, opened at 00:00) |
+| 09-28 00:30 | Its records review in; corrected, and merged at 00:31 (`e8047e9`, `d7714d6` on `dev`) |
 
 **Findings, per review** (the verdicts are the reviewers'):
 
@@ -45,6 +48,7 @@ T23 opened it beside wave 6's open packets, since all its files were new. Later 
 | test-integrity, #79 | `reviewer` | the non-watch cases largely prove their names; the watch and process cases do not. The gc case passed under the very mutant it was written for. Seven findings; eleven survivors of the eight files, pins built for eight |
 | records, #79 | `reviewer` | the arrived-green table named killers that did not kill; 31 of 75 mutants were descriptions; mutant labels reused the project's ID prefixes; the minimum git (2.31) rested on a false recall |
 | re-measure, #79, with the attack question | `neovim-lua-reviewer` | the round held. The bound still waited for a process git leaves running; reads could run a repository hook; the round's `GIT_LITERAL_PATHSPECS` broke on an editor's `GIT_ICASE_PATHSPECS`; M2 unpinned |
+| records, #86 (T23's pass) | `reviewer` | the arithmetic sound, the attributions not: MR188–MR190 had been told to the user; the pause's "after T23" was the orchestrator's reading, recorded as the user's; three counts were the orchestrator's paraphrases of the reviewers'; the verification had left out one of the plan's twelve mutants. Every hash, the merge tree, the cost rows and the counts held. Twelve findings |
 
 **Rounds on #79, regular:**
 - the packet, 1238 cases;
@@ -65,6 +69,7 @@ T23 opened it beside wave 6's open packets, since all its files were new. Later 
 | fix round, #79 — `neovim-lua-developer` | 271 | 602,628 | 542 | 5,062,366 | 98,274,997 | 27,027 |
 | re-measure, #79 — `neovim-lua-reviewer` | 200 | 460,343 | 400 | 734,112 | 54,373,798 | 9,506 |
 | bounded correction, #79 — `neovim-lua-developer` | 147 | 289,809 | 294 | 1,017,805 | 27,661,962 | 16,029 |
+| records review, #86 — `reviewer` | 103 | 277,299 | 206 | 256,097 | 16,555,498 | 1,968 |
 
 Not in the table: the orchestrator's own context.
 
@@ -100,4 +105,5 @@ Not in the table: the orchestrator's own context.
 - The wave-7 plan and its claim, PR #78: `9666cb0`, `5c6481e`.
 - The modularity rows for the git home, PR #77 (`ai/`): `1c931c8`.
 - T23, PR #79: `2f44c73` … `da18aa6` (19 commits) — [[Sessions/2026-09-27 — T23 git home]].
+- T23's knowledge pass, PR #86: `e8047e9`, `d7714d6`.
 - This knowledge pass: recorded after its merge by the next one.

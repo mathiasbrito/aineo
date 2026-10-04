@@ -179,23 +179,23 @@ Added 2026-09-26 by the orchestrator (session `938616f1`, branch `knowledge/w6-t
 |---|---|---|---|
 | MR96 | The colour of each status: started → `DiagnosticInfo`, progress → `DiagnosticHint`, blocked → `DiagnosticWarn`, done → `DiagnosticOk`, failed → `DiagnosticError`. | T9, RC2 | kept |
 | MR97 | A colour scheme's own default link for an aineo group, made before aineo's first definition, comes back at every later scheme switch and `:highlight clear`; a report, or `:edit` in the Report, links the group to its status colour only until the next one. | the T9 note › *Limits* | kept |
-| MR98 | NC3 changes v0.1.0's tool-error text on 0.11 too: a report the editor does not take no longer carries `Error executing lua: ` before its reason. | the T13 note › *Readings* | open — not shown to the user: the list omitted it, and the message before it named only "T13's error-prefix stripping" |
+| MR98 | NC3 changes v0.1.0's tool-error text on 0.11 too: a report the editor does not take no longer carries `Error executing lua: ` before its reason. | the T13 note › *Readings* | open — not shown to the user before their answer: the list omitted it, and the message before it named only "T13's error-prefix stripping"; told to the user on 2026-09-26 (03:16), after it, without a reply |
 | MR99 | The relay strips a reason's own leading framing: a reason that itself begins with `Lua: `, `Error executing lua: ` or a file position loses those words. | the T13 note › *Readings* | kept — the list showed the `Lua: ` word |
 | MR100 | The plugin strips an error's own leading framing in the same way, on the user's side: an error whose first line begins with `Lua: ` or `Error executing lua: `, or with a file's position followed by them, loses those words. | the T13 note › *Readings* | kept — the list showed the `Lua: ` word |
-| MR101 | A file position whose shown path holds a space is no longer stripped from an error: the pattern stops at white space, so a user's words before a position are kept. | T13's correction | open — adopted before the user's answer, not in the list |
+| MR101 | A file position whose shown path holds a space is no longer stripped from an error: the pattern stops at white space, so a user's words before a position are kept. | T13's correction | open — adopted before the user's answer, not in the list; told to the user on 2026-09-26 (03:16) without a reply |
 | MR102 | A report's details stay under `[status]` by the icon's display width, measured at each rendering: `◐` under `'ambiwidth'` `double`, or an icon `setcellwidths()` widens, indents them one more column. | T11, IC4 | kept — moot since T18 (PR #60, `v0.2.6`) removed the icon (D24) |
 | MR103 | `\tcn` with no Claude window warns at `WARN` and changes nothing. | T12, CN4 | kept |
 | MR104 | `\tcn` from another tab toggles Claude's window in the layout's tab. | T12, CN4b | kept |
 | MR105 | The Input draft empties at once when Input empties. | T14, ID1 | kept |
 | MR106 | At quit, only a change not yet saved is written to the draft. | T14, ID2 | kept |
 | MR107 | The draft is restored only into a new or emptied Input, never over text. | T14, ID3 | kept |
-| MR108 | The draft home copies the report home's patterns rather than importing them. | T14, ID5 | open — named only as one of "T14's four readings", never described |
+| MR108 | The draft home copies the report home's patterns rather than importing them. | T14, ID5 | open — named only as one of "T14's four readings" before the user's answer; described to the user on 2026-09-26 (03:16), without a reply |
 | MR109 | The report instructions' "no whys" holds for every status: a `blocked` or `failed` report states what blocks or stopped the task, as facts, and leaves out the reasoning behind Claude's choices. | T15, RI1 | open |
 | MR110 | Opening or restoring the layout sets the right column's wrapping again: a user's `:setlocal nowrap` there lasts until the next `\o`, or the next `\r`, `\i` or `\c` that reopens a closed window. | T16, RW2, corrected by its records review | open |
-| MR111 | `\tcn`'s subcommand and `<Plug>` names: `:Aineo claude-numbers` and `<Plug>(aineo-claude-numbers)`. | D16; T12's brief › *What was decided already* | open — on no list |
-| MR112 | `\tcn` clears `'relativenumber'` together with `'number'` in Claude's window. | T12, CN1 | open — on no list |
-| MR113 | `\tcn` pressed again restores the values Claude's window had when they were hidden; a window that never had line numbers gets `'number'`. | T12, CN2 | open — on no list |
-| MR114 | A Claude window `\o` rebuilds takes the user's defaults, not the toggled state. | T12's brief › *What was decided already* | open — on no list |
+| MR111 | `\tcn`'s subcommand and `<Plug>` names: `:Aineo claude-numbers` and `<Plug>(aineo-claude-numbers)`. | D16; T12's brief › *What was decided already* | open — told to the user on 2026-09-26 (03:16) without a reply, and the names again on 2026-09-27 (19:51, 20:34) |
+| MR112 | `\tcn` clears `'relativenumber'` together with `'number'` in Claude's window. | T12, CN1 | open — told to the user on 2026-09-26 (03:16) without a reply |
+| MR113 | `\tcn` pressed again restores the values Claude's window had when they were hidden; a window that never had line numbers gets `'number'`. | T12, CN2 | open — told to the user on 2026-09-26 (03:16) without a reply; its last clause is corrected by MR201 |
+| MR114 | A Claude window `\o` rebuilds takes the user's defaults, not the toggled state. | T12's brief › *What was decided already* | superseded — T12's amendment and its fix round (attack review, finding 1, fix A) re-apply the toggle to a new Claude window, and `v0.2.10` does. That is the orchestrator's reading: D27 names a new Claude terminal only (MR204). This reading was told to the user on 2026-09-26 (03:16) without a reply; its reversal was not |
 | MR115 | The draft is saved 1000 ms after a change, one delayed save per change. | T14, the implementer's reading | open |
 | MR116 | The draft's file is `<stdpath('state')>/aineo/drafts/<SHA-256 of the working directory>.txt`, its lines each ending in a newline. | T14, the implementer's reading | open |
 | MR117 | A change not yet saved is saved at quit by two hooks: `QuitPre`, and Input's `BufUnload` when that save failed or no `QuitPre` ran (`:cquit`). | T14, the implementer's reading and the fix round's decision 5 | open |
@@ -367,8 +367,44 @@ Added 2026-09-27 by the orchestrator, from T23's brief and session note at `dev`
 | MR197 | Two answers the changes pane will meet: `git rm --cached` of an unchanged file lists it as deleted and as untracked; a clean merge commit's diff is its header alone, since `git show`'s default combined diff is empty for it. | attack review (finding 18) |
 | MR198 | When every process of git's group has exited but one outside it still holds git's output, the time limit signals the group id git had, which the system could in principle have given to a new group. Reasoned, not measured. | re-measure (finding 1's caveat) |
 
+## Readings — `\tcn` (T12)
+
+Added 2026-09-28 by the orchestrator, from T12's brief, its amendment and its session note at `dev` `97d9ea0` (PR #84, `v0.2.10`). D16 and D27 are the user's decisions; what follows are readings.
+
+- **Told to the user without a reply:**
+  - MR199–MR201 restate MR111–MR113, told on 2026-09-26 (03:16);
+  - MR203's second half, MR204's terminal half and MR206's first effect, told on 2026-09-27 (21:26);
+  - MR204's terminal half again, on 2026-09-28 (01:26).
+- **Kept:** MR202's and MR203's first halves are MR103 and MR104, which the user kept on 2026-09-26.
+- **Chosen by the user:** MR208 is the option the user chose for D27.
+- **Not shown:**
+  - MR201's second sentence;
+  - MR202's second half;
+  - MR204's new-window half;
+  - MR205;
+  - MR206's second effect;
+  - MR207.
+
+| ID | Reading | Source | Disposition |
+|---|---|---|---|
+| MR199 | ~~The subcommand is `:Aineo claude-numbers`, and the mapping `<Plug>(aineo-claude-numbers)`.~~ A duplicate of MR111, which carries this reading. | T12's brief | see MR111 |
+| MR200 | ~~Hiding clears `'relativenumber'` together with `'number'`.~~ A duplicate of MR112, which carries this reading. | T12's brief | see MR112 |
+| MR201 | A window whose numbers aineo never hid gets `'number'` when they are shown again: MR113's "a window that never had line numbers", as the fix round corrected it. The rest of MR113 is unchanged. | the fix round (attack review, finding 4) | open — not shown |
+| MR202 | A Claude window left on an empty buffer, or on a file Neovim showed there, after its terminal was wiped counts as no Claude window: `\tcn` warns there and changes nothing, as MR103, kept, says for no window. | T12's amendment; the fix round (attack review, finding 5) | open — not shown |
+| MR203 | From another tab, `\tcn` moves the user nowhere; that it toggles Claude's window in the layout's tab is MR104, kept. | T12's amendment | open — told to the user on 2026-09-27 (21:26) without a reply |
+| MR204 | Numbers the user sets by hand stay until a new Claude terminal arrives (D27) or a new Claude window is made (the orchestrator's reading, which reverses MR114); only then is the toggle applied again. | the fix round (attack review, finding 1, fix A) | open — the terminal half told to the user on 2026-09-27 (21:26) and 2026-09-28 (01:26) without a reply; the new-window half not shown |
+| MR205 | A user's own mapping of `\t` or `\tc` now waits for `'timeoutlen'`; the help says so. | T12's amendment | open — not shown |
+| MR206 | A toggle pressed while Claude's window shows another buffer acts on that buffer, and is remembered for Claude's terminal when it comes back; the next toggle then gives that buffer's earlier numbers to the terminal. | the orchestrator's decision (A3), with the re-measure's finding 2 | open — the first effect told to the user on 2026-09-27 (21:26) without a reply; the second not shown |
+| MR207 | A window split from Claude's window, while it shows the terminal, shows the numbers hidden too; another buffer in that split shows the user's own. | the author, as the fix round corrected it | open — not shown |
+
+## Limits a user can meet — `\tcn` (T12)
+
+| ID | Limit | Source |
+|---|---|---|
+| MR208 | The toggle is remembered for the editor's life only: a new Neovim starts with the user's own numbers. | D27: the option the user chose on 2026-09-27; T12's note |
+
 ## Disposition
 
-**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR137 and MR139–MR198 stay open for the next review; MR138 is decided (D25), landed with T21 (PR #64, `v0.2.7`).
+**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR113, MR115–MR137, MR139–MR198 and MR201–MR207 stay open for the next review; MR138 is decided (D25), landed with T21 (PR #64, `v0.2.7`). MR114 is superseded (T12's amendment, the orchestrator's reading), MR199 and MR200 are duplicates of MR111 and MR112, and MR208 is D27, the user's.
 
 Before that, every item was **open** until the MVP review. A reading the user keeps is closed *kept*; one the user changes becomes a plan row through a converge round (a new `D#`, never an edit in place) and a task.

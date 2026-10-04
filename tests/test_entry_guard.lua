@@ -11,7 +11,7 @@ local GUARD_CLAUDE = vim.fs.joinpath(vim.uv.cwd(), 'tests', 'helpers', 'entry_gu
 
 local child = MiniTest.new_child_neovim()
 
---- The runner's environment as the case found it, put back after it.
+--- `PATH` and `AINEO_CHILD` of this file's Neovim as the case found them, put back after it.
 local saved_environment = {}
 
 local T = MiniTest.new_set({

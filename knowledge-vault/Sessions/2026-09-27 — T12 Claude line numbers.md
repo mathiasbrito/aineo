@@ -262,4 +262,15 @@ The wave holds its marks (rule 6). The line T12 would take:
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by the orchestrator's knowledge pass. PR #84 merged by rebase on 2026-09-28 (01:29 UTC); `dev` `97d9ea0`, released as `v0.2.10`.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `64116f2` | `8cf2840` | Toggle the line numbers of Claude's window with \tcn |
+| `430937e` | `78d6c8f` | Record T12's session: the toggle, its reds, mutants and suites |
+| `9a12815` | `2679b31` | Re-apply Claude's line numbers only to a new terminal or window |
+| `f4036cc` | `237d06e` | Keep the fallback-by-hand case with its once-hidden group |
+| `5c1ee7c` | `eb8565d` | Hand the layout a new terminal in the other-tab terminal pin |
+| `6f7e6cf` | `6ba17fb` | Record T12's fix round and correct the packet's false records |
+| `85967df` | `32fb905` | Pin numbers set by hand when Claude's terminal comes back |
+| `ac3e458` | `97d9ea0` | Record T12's correction and both effects of A3 in its note |

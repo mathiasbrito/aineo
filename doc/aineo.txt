@@ -38,8 +38,8 @@ aineo allows one tool of its own without asking, the report tool
 2. REQUIREMENTS AND INSTALLATION                               *aineo-install*
 
 Requirements:
-- Neovim 0.11 or later. aineo's behaviour was measured on Neovim 0.11.6
-  and 0.12.5.
+- Neovim 0.12 or later. aineo is tested on the newest Neovim release,
+  0.12.5.
 - Claude Code, the `claude` command, installed and signed in. aineo's
   behaviour was measured on Claude Code 2.1.281; the resume of Claude's
   session, and the new session that takes the place of a resume Claude
@@ -491,9 +491,32 @@ gives Markdown bold — a background, italic, underline, or no bold at all —
 shows on the `[status]`. Its colour does not,
 unless the status's own group has no text colour, such as
 `AineoReportDone` given only a background (`guibg=`). To turn the bold off
-and keep the colour, in your config or at any time: >
-    :highlight link AineoReportStatusBold NONE
+and keep the colour, put this in your config, before or after your colour
+scheme, or run it at any time. In Lua: >lua
+    local function aineo_bold_off()
+      vim.cmd('highlight clear AineoReportStatusBold')
+      vim.cmd('highlight link AineoReportStatusBold NONE')
+    end
+    aineo_bold_off()
+    vim.api.nvim_create_autocmd('ColorScheme', {
+      group = vim.api.nvim_create_augroup('aineo_bold_off', {}),
+      callback = aineo_bold_off,
+    })
 <
+In Vimscript: >vim
+    highlight clear AineoReportStatusBold
+    highlight link AineoReportStatusBold NONE
+    augroup aineo_bold_off
+      autocmd!
+      autocmd ColorScheme * highlight clear AineoReportStatusBold
+      autocmd ColorScheme * highlight link AineoReportStatusBold NONE
+    augroup END
+<
+The bold stays off through every report, `:edit` in the Report, and every
+later `:colorscheme`, even one that makes `AineoReportStatusBold` bold: the
+`ColorScheme` autocommand turns it off again. A bare `:highlight clear`
+fires no `ColorScheme` event, so the bold comes back until the next
+`:colorscheme`, or until you run the recipe again.
 Each group links to one of Neovim's own, unless a colour scheme or a
 `:highlight` of your own colours it.
 After `:colorscheme` or `:highlight clear`, a group nothing colours any more
