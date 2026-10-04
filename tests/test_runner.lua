@@ -207,13 +207,13 @@ end
 --- The exit code of `make` when a recipe fails.
 local RECIPE_FAILED = 2
 
---- Long enough for the runner to notice a stall, which it does after ten seconds.
+--- Long enough for a file's runner to notice a stall, which it does after ten seconds.
 local OUTLASTS_A_STALL_MS = 30000
 
 --- The environment of a run whose time limit is three seconds, far below its default.
 local THREE_SECOND_RUN_LIMIT = { AINEO_TEST_RUN_LIMIT_MS = '3000' }
 
---- What the runner says when test code ended Neovim, which no other ending may say.
+--- What a file's runner says when test code ended its Neovim, which no other ending may say.
 local BLAMES_A_TEST_CASE = 'a test case ended Neovim'
 
 --- A Lua statement that waits for longer than any run may take.
