@@ -3,7 +3,7 @@ local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local report_editor = dofile('tests/helpers/report_editor.lua')
-local fastest_time = dofile('tests/helpers/fastest_time.lua')
+local timed_attempts = dofile('tests/helpers/timed_attempts.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -420,7 +420,7 @@ local TIMED_DISTINCT_PATHS = [[
 local DISTINCT_PATHS_IN_A_LINE = 209674
 
 --- How long a report may take to show, and to show again on `:edit`, in its
---- fastest of up to three attempts (`fastest_time`).
+--- second-fastest of up to three attempts (`timed_attempts`).
 local TIME_LIMIT_SECONDS = 2
 
 T['the file checks']['of a line of distinct paths take at most the time limit, on arrival and on :edit'] = function()
@@ -433,7 +433,7 @@ T['the file checks']['of a line of distinct paths take at most the time limit, o
     end,
   }
 
-  local verdicts = fastest_time.within_limit(child, timing, TIME_LIMIT_SECONDS)
+  local verdicts = timed_attempts.within_limit(child, timing, TIME_LIMIT_SECONDS)
 
   eq(verdicts, { arrival = 'within the limit', edit = 'within the limit' })
 end
