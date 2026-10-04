@@ -21,10 +21,11 @@
 
 local MiniTest = require('mini.test')
 
---- Neovim's functions the runner ends the run, times it and writes its
+--- Neovim's functions the file's runner ends the run, times it and writes its
 --- records with, taken before the test file is sourced, so a stub test code
 --- leaves in place cannot change how the run ends, when, or what it records.
---- Once the test file is sourced, the runner calls no other Neovim function.
+--- Once the test file is sourced, the file's runner calls no other Neovim
+--- function.
 local neovim = {
   command = vim.api.nvim_command,
   echo = vim.api.nvim_echo,
@@ -53,8 +54,8 @@ local POLL_INTERVAL_MS = 50
 --- everyone else.
 local RECORD_FILE_MODE = tonumber('644', 8)
 
---- Whether the runner has reached its verdict. Until it has, Neovim ending is
---- a failure, whatever mini.test reports.
+--- Whether the file's runner has reached its verdict. Until it has, Neovim
+--- ending is a failure, whatever mini.test reports.
 local verdict_reached = false
 
 --- Ends the run as a failure, saying why on stderr.

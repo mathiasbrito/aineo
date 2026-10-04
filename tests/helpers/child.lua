@@ -2,8 +2,9 @@
 --- arguments (`--clean`, headless, listening for the test's requests) and the
 --- suites' minimal init, so a child finds this checkout and the pinned mini.nvim
 --- on 'runtimepath' and sources `plugin/` as a user's editor would. A child
---- inherits its test file's Neovim's environment, and with it the isolation
---- the test runner sets up for that file, in a home of its own.
+--- inherits its test file's Neovim's environment, and with it the home the
+--- test runner (`scripts/run_tests.lua`) made for that file: every child of
+--- the file starts in that one home.
 
 local M = {}
 

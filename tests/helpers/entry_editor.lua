@@ -6,9 +6,9 @@
 --- (`tests/helpers/entry_editor_init.lua`), and
 --- listening on an address of its own, which the test connects to.
 ---
---- The editor inherits the child's environment, and with it the isolation the
---- test runner sets up for each test file in a home of its own, which the
---- suites' init adds to. It ends when its child is stopped, which closes its
+--- The editor inherits the child's environment, and with it the home the test
+--- runner (`scripts/run_tests.lua`) made for the test's file and the isolation
+--- the suites' init adds. It ends when its child is stopped, which closes its
 --- terminal.
 
 local M = {}
