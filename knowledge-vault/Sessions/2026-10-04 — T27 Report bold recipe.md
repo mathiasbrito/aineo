@@ -118,6 +118,10 @@ All eighteen were made again from the final help and run on the final `tests/tes
 
 None survived.
 
+## 2026-10-05 — The help's minimum, by D29
+
+A fresh implementer agent, dispatched by the orchestrator, changed the help's requirements (`doc/aineo.txt`, *REQUIREMENTS AND INSTALLATION*) from "Neovim 0.11 or later", measured on 0.11.6 and 0.12.5, to "Neovim 0.12 or later", tested on the newest release, 0.12.5 — D29's minimum, the orchestrator's reading of the user's words of 2026-10-05. No test pins that text, and help prose has no behaviour to test; `tests/test_doc.lua` (36 cases, 0 fails), `make lint` (0 errors) and the whole suite (1444 cases, 0 fails) ran on 0.12.5 only, by D29. Docstrings under `lua/aineo/claude/` that cite measurements on 0.11.6 were left alone: they record where a fact was measured, and they are outside this addition's boundary.
+
 ## Limits
 
 - The recipe does not survive a bare `:highlight clear`, which fires no `ColorScheme` event; the help says so.
