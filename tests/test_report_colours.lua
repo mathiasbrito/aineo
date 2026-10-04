@@ -677,24 +677,34 @@ T['the groups']["keep a [status]'s bold off, its colour kept, with the help's re
   })
 end
 
-T['the groups']["keep a [status]'s bold off, its colour kept, with the help's recipe given after a report, through a colour scheme and the next report"] =
+T['the groups']["turn a [status]'s bold off at once, its colour kept, with the help's recipe given after a report in a colour scheme that makes it bold, and through a colour scheme and the next report"] =
   MiniTest.new_set({
     parametrize = { { 'lua' }, { 'vim' } },
   })
 
-T['the groups']["keep a [status]'s bold off, its colour kept, with the help's recipe given after a report, through a colour scheme and the next report"]['in'] = function(
+T['the groups']["turn a [status]'s bold off at once, its colour kept, with the help's recipe given after a report in a colour scheme that makes it bold, and through a colour scheme and the next report"]['in'] = function(
   language
 )
   start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  add_colour_schemes()
+  child.cmd('colorscheme colours_status_bold')
   report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
   RUN_BOLD_OFF_RECIPE[language]()
+  local at_once = first_status_on_screen(12)
+  local colour_at_once = foreground_of('DiagnosticOk')
   child.cmd('colorscheme habamax')
 
   report_editor.receive(child, { task = 'Task', status = 'done', summary = 'Summary' })
 
-  eq(first_status_on_screen(12), {
-    { foreground = foreground_of('DiagnosticOk'), bold = false },
-    { foreground = foreground_of('DiagnosticOk'), bold = false },
+  eq({ at_once, first_status_on_screen(12) }, {
+    {
+      { foreground = colour_at_once, bold = false },
+      { foreground = colour_at_once, bold = false },
+    },
+    {
+      { foreground = foreground_of('DiagnosticOk'), bold = false },
+      { foreground = foreground_of('DiagnosticOk'), bold = false },
+    },
   })
 end
 
