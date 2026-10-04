@@ -3,6 +3,7 @@ local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local report_editor = dofile('tests/helpers/report_editor.lua')
+local work_time = dofile('tests/helpers/work_time.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -384,10 +385,11 @@ end
 --- The expression, run in the child, that hands its report home a report
 --- whose details are `count` distinct paths of four bytes, `xy/z` with `x`,
 --- `y` and `z` each one of 62 letters and digits, one space apart, then
---- edits the Report again (`:edit`), and says of each step whether it took
---- at most `limit` seconds, or else how long it took.
+--- edits the Report again (`:edit`), and says of each step whether its work
+--- took at most `limit` seconds, or else how long it took
+--- (`work_time.within_limit()`, the helper at the path it is handed first).
 local TIMED_DISTINCT_PATHS = [[
-  local count, limit = ...
+  local work_time, count, limit = dofile((...)), select(2, ...)
   local symbols = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
   local function symbol(index)
     return symbols:sub(index % 62 + 1, index % 62 + 1)
@@ -398,19 +400,13 @@ local TIMED_DISTINCT_PATHS = [[
   end
   local details = table.concat(paths, ' ')
   local report = require('aineo.report')
-  local function timed(step)
-    local start = vim.uv.hrtime()
-    step()
-    local seconds = (vim.uv.hrtime() - start) / 1e9
-    return seconds <= limit and 'within the limit' or ('%.1f s'):format(seconds)
-  end
-  local arrival = timed(function()
+  local arrival = work_time.within_limit(function()
     report.receive_report({ task = 'Task', status = 'done', summary = 'Summary', details = details })
-  end)
+  end, limit)
   vim.api.nvim_set_current_buf(report.report_buffer())
-  local edit = timed(function()
+  local edit = work_time.within_limit(function()
     vim.cmd('edit')
-  end)
+  end, limit)
   return { arrival = arrival, edit = edit }
 ]]
 
@@ -419,13 +415,17 @@ local TIMED_DISTINCT_PATHS = [[
 --- envelope, in five bytes a path.
 local DISTINCT_PATHS_IN_A_LINE = 209674
 
---- How long a report may take to show, and to show again on `:edit`.
+--- How long the work of showing a report may take, and of showing it again
+--- on `:edit`, in seconds of work (`work_time`).
 local TIME_LIMIT_SECONDS = 2
 
 T['the file checks']['of a line of distinct paths take at most the time limit, on arrival and on :edit'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
-  local timings = child.lua(TIMED_DISTINCT_PATHS, { DISTINCT_PATHS_IN_A_LINE, TIME_LIMIT_SECONDS })
+  local timings = child.lua(
+    TIMED_DISTINCT_PATHS,
+    { work_time.PATH, DISTINCT_PATHS_IN_A_LINE, TIME_LIMIT_SECONDS }
+  )
 
   eq(timings, { arrival = 'within the limit', edit = 'within the limit' })
 end
