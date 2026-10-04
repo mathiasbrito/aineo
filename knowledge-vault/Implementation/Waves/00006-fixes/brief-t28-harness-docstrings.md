@@ -34,9 +34,9 @@ Re-read each place against `scripts/run_tests.lua` and `scripts/run_test_file.lu
 
 ### Baseline
 
-`dev` `40324f7` is code-identical to `176fd21`, whose tree the orchestrator's verification ran: 1434 cases in 197 s per version (`Implementation/Waves/00006-fixes/plan.md` › *Landed*, T22).
+`dev` `40324f7` is code-identical to `176fd21`, whose tree the orchestrator's verification ran: 1434 cases in 197 s per version (`Implementation/Waves/00006-fixes/evidence/baseline-176fd21.txt`).
 
-Read first: `scripts/run_tests.lua`'s and `scripts/run_test_file.lua`'s module docstrings; the root `CLAUDE.md`'s isolation paragraph, which PR #89 corrected for T22; the T22 session note, `Sessions/2026-09-27 — T22 parallel runner.md`.
+Read first: `knowledge-vault/Projects/aineo.md`; `scripts/run_tests.lua`'s and `scripts/run_test_file.lua`'s module docstrings; the root `CLAUDE.md`'s isolation paragraph, which PR #89 corrected for T22; the T22 session note, `Sessions/2026-09-27 — T22 parallel runner.md`.
 
 ## Boundary
 
@@ -49,15 +49,25 @@ Read first: `scripts/run_tests.lua`'s and `scripts/run_test_file.lua`'s module d
 - **Session note:** `knowledge-vault/Sessions/2026-10-04 — T28 Harness docstrings.md`.
 - **Scratch prefix:** `t28-`.
 
-## How this packet is checked — the orchestrator's decision of 2026-10-04
+## What was decided already
 
-The user asked, on 2026-10-04: "Please be carefull with the testing strategy, since each run is taking too long, try to optimize." This packet changes no executable byte, and that is proved by measurement, not by running the suite. **Run no test file and no suite.** Instead, before you push:
+The user, 2026-10-04: "check 1 to 3 and close 6". Item 2 was put to the user on 2026-10-01 as stale test-harness comments, comment-only, "so it would get two reviews but no failing test".
+
+## How this packet is checked
+
+The user asked, on 2026-10-04: "Please be carefull with the testing strategy, since each run is taking too long, try to optimize." This packet changes no executable byte, and that is proved by measurement. D26 still applies: run the whole suite once per version before you push. Before you push, also run:
 
 1. **Bytecode.** For each of the five files, compare `string.dump(loadfile(<file>), true)`, which strips debug information, between `origin/dev` and your head. Use the script in `knowledge-vault/Implementation/Waves/00006-fixes/evidence/bytecode-comment-check.txt`, with `nvim --clean --headless -l`, on 0.12.5 and 0.11.6. Every file must print `identical=true`. Paste the output into the pull request.
 
    The orchestrator measured that this check ignores comments and is changed by a single constant or statement (same evidence file).
 2. **Lint.** Run `make lint`.
-3. **The diff.** Check that `git diff origin/dev -- scripts tests` touches only lines that begin with `--` once the leading white space is removed. Paste the command and its empty result.
+3. **The diff.** Show that every changed line is a comment. This command prints nothing then. Paste it and its empty result:
+
+   ```
+   git diff -U0 origin/dev -- scripts tests | grep -E '^[-+]' | grep -Ev '^(\+\+\+|---) (a/|b/|/dev/null)' | grep -Ev '^[-+][[:space:]]*--'
+   ```
+
+   The two checks need each other. The brief review measured that a renamed local or a reflowed line leaves the stripped bytecode identical, and this command catches them. A changed constant or statement, which this command could miss inside a comment-looking line, the bytecode check catches.
 
 The orchestrator's verification runs the whole suite once per version, on this wave's last three packets merged together.
 

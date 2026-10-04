@@ -643,13 +643,15 @@ Asked "How should I cut the time the tests cost?", the user chose "Run less + pa
 
 **The request, and the answer.** On 2026-10-01 the orchestrator put three fixes to the user, from wave 6's open threads, with wave 6's close; on 2026-10-04 the user answered: "check 1 to 3 and close 6. Please be carefull with the testing strategy, since each run is taking too long, try to optimize. than we will start the wave 7." Item 1 is T27, item 2 T28, item 3 T29. They are dispatched together, and wave 6 closes once all three land.
 
-**T27:** the help's recipe to turn the `[status]`'s bold off (`doc/aineo.txt` › *Colours*) is undone by a later colour scheme that runs `:highlight clear`. Measured by the orchestrator on 2026-09-28 on both versions, with aineo on the runtimepath; reproduced by the records reviews of PRs #90 and #91.
+**T27:** the help's recipe to turn the `[status]`'s bold off (`doc/aineo.txt` › *Colours*) is undone by a later colour scheme that runs `:highlight clear`. Measured by the orchestrator on 2026-09-28 on both versions, with aineo on the runtimepath; reproduced by the records review of PR #90. The records review of PR #91 measured that a scheme which does not clear leaves the link in place.
 
-**How the suites run in T27–T29 — the orchestrator's decision under the user's "try to optimize"** (D26 stands; this is how it applies to these packets):
-- **Before each push, the implementer runs only the test files the packet touches** (and `tests/test_doc.lua` for a help change), on both versions; not the whole suite. Since T22 each test file runs in its own Neovim and home, so a change confined to test files and the help cannot change another file's outcome. T28, which changes no executable byte, runs no test at all: it proves the claim with stripped bytecode (`evidence/bytecode-comment-check.txt`).
-- **Mutants run on the touched test files only.**
-- **The orchestrator's verification runs the whole suite once per version, on the three packets merged together** over `dev`, not once per packet. The packets' file sets are disjoint, so their merge is the tree `dev` will hold.
-- **A failure outside a packet's change is re-run alone once**, never the whole suite.
+**How the suites run in T27–T29 — the orchestrator's decision under the user's "try to optimize".** D26 applies unchanged: each implementer runs the whole suite once per version before it pushes. The savings are elsewhere:
+- **One verification for all three.** The orchestrator's verification runs the whole suite once per version on the three packets merged together over `dev`, not once per packet. Their file sets are disjoint, so their merge is the tree `dev` will hold.
+- **T28 adds a measured proof.** Its "no executable change" is shown by stripped bytecode (`evidence/bytecode-comment-check.txt`) and a diff filter.
+- **Mutants** run on their covering files first; only a survivor goes on to the whole suite.
+- **Reviewers** run no whole suite.
+
+The first draft of the briefs went further: the implementers would run only the touched test files, even before pushing. The brief review found that this contradicts D26, the root `CLAUDE.md` and `implementer.md`, which bind the briefs. It also showed that the reasoning behind it was false in general: `.tests/fixtures/` is shared across a run, helpers are shared, and the files share the host. The first draft's commit called that "D26 itself stands"; it was wrong. Skipping the pre-push whole suite would need a new decision row from the user.
 
 **The six rules for T27–T29**, recomputed on 2026-10-04 against every open packet (none) and every claimed wave (wave 7, paused, no packet open):
 
@@ -664,7 +666,7 @@ Asked "How should I cut the time the tests cost?", the user chose "Run less + pa
 
 The three file sets are disjoint, and wave 7 has no open packet ✓.
 
-**Baseline:** `dev` `40324f7`, code-identical to `176fd21` (`git diff --stat 176fd21 40324f7 -- lua plugin tests scripts doc Makefile` prints nothing), whose verification ran 1434 cases in 197 s per version (*Landed*, T22).
+**Baseline:** `dev` `40324f7`, code-identical to `176fd21` (`git diff --stat 176fd21 40324f7 -- lua plugin tests scripts doc Makefile` prints nothing), whose verification ran 1434 cases in 197 s per version (`evidence/baseline-176fd21.txt`).
 
 **Reviewers**, two per packet, in slots of three:
 - T27: guarantee by `neovim-lua-reviewer`, records by `reviewer`;
@@ -680,10 +682,16 @@ All three go to `neovim-lua-developer`, on Opus.
 
 **Verification mutants:**
 - T27: the help's recipe restored to `:highlight link … NONE` alone, and the test's `:colorscheme` step removed;
-- T28: one code line changed in each of the five files, which the bytecode check must catch;
-- T29: one file-system check per occurrence, not per distinct candidate; a busy-wait in the drawing step.
+- T28: a changed constant and an added statement in one of the five files, which the bytecode check must catch, and a renamed local, which the diff filter must catch;
+- T29: T17's M10 and T10's X11, as their session notes record them. One file-system check per occurrence is equivalent on these cases' input, whose paths are all distinct, so the counting cases kill it, not these.
 
-**Briefs:** `brief-t27-bold-recipe.md`, `brief-t28-harness-docstrings.md` and `brief-t29-timing-cases.md`, corrected after their brief review, `brief-review-t27-t29.md`.
+**Briefs:** `brief-t27-bold-recipe.md`, `brief-t28-harness-docstrings.md` and `brief-t29-timing-cases.md`, corrected after their brief review, `brief-review-t27-t29.md`. Its verdict: dispatch all three after corrections. The corrections:
+- D26 restored;
+- T27: `:highlight clear` and `:edit`, the records made false, and the line range;
+- T28: the diff command and the mutants;
+- T29: M10 and X11, the efficiency cores and `taskpolicy -b`, waiting, and no host-wide load.
+
+The baseline's output is now `evidence/baseline-176fd21.txt`.
 
 ## Packet T28 — 2026-10-04
 
