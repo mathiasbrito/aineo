@@ -639,6 +639,60 @@ Asked "How should I cut the time the tests cost?", the user chose "Run less + pa
 - F9: the sentences made false;
 - F10: `NVIM`.
 
+## Packet T27 — 2026-10-04
+
+**The request, and the answer.** On 2026-10-01 the orchestrator put three fixes to the user, from wave 6's open threads, with wave 6's close; on 2026-10-04 the user answered: "check 1 to 3 and close 6. Please be carefull with the testing strategy, since each run is taking too long, try to optimize. than we will start the wave 7." Item 1 is T27, item 2 T28, item 3 T29. They are dispatched together, and wave 6 closes once all three land.
+
+**T27:** the help's recipe to turn the `[status]`'s bold off (`doc/aineo.txt` › *Colours*) is undone by a later colour scheme that runs `:highlight clear`. Measured by the orchestrator on 2026-09-28 on both versions, with aineo on the runtimepath; reproduced by the records reviews of PRs #90 and #91.
+
+**How the suites run in T27–T29 — the orchestrator's decision under the user's "try to optimize"** (D26 stands; this is how it applies to these packets):
+- **Before each push, the implementer runs only the test files the packet touches** (and `tests/test_doc.lua` for a help change), on both versions; not the whole suite. Since T22 each test file runs in its own Neovim and home, so a change confined to test files and the help cannot change another file's outcome. T28, which changes no executable byte, runs no test at all: it proves the claim with stripped bytecode (`evidence/bytecode-comment-check.txt`).
+- **Mutants run on the touched test files only.**
+- **The orchestrator's verification runs the whole suite once per version, on the three packets merged together** over `dev`, not once per packet. The packets' file sets are disjoint, so their merge is the tree `dev` will hold.
+- **A failure outside a packet's change is re-run alone once**, never the whole suite.
+
+**The six rules for T27–T29**, recomputed on 2026-10-04 against every open packet (none) and every claimed wave (wave 7, paused, no packet open):
+
+| rule | T27 | T28 | T29 |
+|---|---|---|---|
+| 1 dependencies | T18 landed ✓ | T22 landed ✓ | T10, T17 landed ✓ |
+| 2 files | `doc/aineo.txt` › *Colours*; `tests/test_report_colours.lua`; `tests/test_doc.lua` if a pin counts the change | comment lines of `scripts/minimal_init.lua`, `tests/helpers/child.lua`, `tests/helpers/entry_editor.lua`, `tests/helpers/claude_session.lua`, `tests/test_entry_guard.lua` | `tests/test_report_paths.lua`, `tests/test_report_links.lua`, one new `tests/helpers/` file at most |
+| 3 schema | none ✓ | none ✓ | none ✓ |
+| 4 dependencies | none ✓ | none ✓ | none ✓ |
+| 5 decisions | the user's item 1; the recipe's form by measurement ✓ | none ✓ | the user's item 3; what to measure by measurement; the links case added by the orchestrator ✓ |
+| 6 task lines | T27–T29 are adjacent rows: every mark is held, and the knowledge pass marks them ✓ | | |
+
+The three file sets are disjoint, and wave 7 has no open packet ✓.
+
+**Baseline:** `dev` `40324f7`, code-identical to `176fd21` (`git diff --stat 176fd21 40324f7 -- lua plugin tests scripts doc Makefile` prints nothing), whose verification ran 1434 cases in 197 s per version (*Landed*, T22).
+
+**Reviewers**, two per packet, in slots of three:
+- T27: guarantee by `neovim-lua-reviewer`, records by `reviewer`;
+- T28: records and reader by `reviewer`;
+- T29: guarantee by `neovim-lua-reviewer`, records by `reviewer`.
+
+**Branches, resources, session notes:**
+- `bugfix/t27-bold-recipe`, `impl_t27_bold_recipe`, `2026-10-04 — T27 Report bold recipe`;
+- `refactor/t28-harness-docstrings`, `impl_t28_harness_docstrings`, `2026-10-04 — T28 Harness docstrings`;
+- `bugfix/t29-timing-cases`, `impl_t29_timing_cases`, `2026-10-04 — T29 Timing cases`.
+
+All three go to `neovim-lua-developer`, on Opus.
+
+**Verification mutants:**
+- T27: the help's recipe restored to `:highlight link … NONE` alone, and the test's `:colorscheme` step removed;
+- T28: one code line changed in each of the five files, which the bytecode check must catch;
+- T29: one file-system check per occurrence, not per distinct candidate; a busy-wait in the drawing step.
+
+**Briefs:** `brief-t27-bold-recipe.md`, `brief-t28-harness-docstrings.md` and `brief-t29-timing-cases.md`, corrected after their brief review, `brief-review-t27-t29.md`.
+
+## Packet T28 — 2026-10-04
+
+Specified, with T27 and T29, in *Packet T27* above: the user's item 2, the test harness's docstrings made stale by T22. They were found by T22's author, its fix round, and the records reviews of PRs #85 (R3) and #89 (finding 2).
+
+## Packet T29 — 2026-10-04
+
+Specified, with T27 and T28, in *Packet T27* above: the user's item 3, T17's timing case, and T10's long-line case of the same shape.
+
 ## Landed
 
 - **T9 — PR #30, a small fix**, merged by rebase on 2026-09-26 as `a86a69c` … `3d67b05` (9 commits). Every file of the pull request is identical to the verified head `40bc378`; `git diff 40bc378 dev` shows only T14's files from PR #32.
