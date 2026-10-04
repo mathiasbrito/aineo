@@ -1,7 +1,7 @@
 local MiniTest = require('mini.test')
 local fixture = dofile('tests/helpers/fixture.lua')
 local report_editor = dofile('tests/helpers/report_editor.lua')
-local fastest_time = dofile('tests/helpers/fastest_time.lua')
+local timed_attempts = dofile('tests/helpers/timed_attempts.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -360,8 +360,8 @@ local TIMED_ARRIVAL_AND_EDIT = [[
 ]]
 
 --- How long a report may take to show, and to show again on `:edit`, in its
---- fastest of up to three attempts (`fastest_time`): far above the tenths of
---- a second it takes.
+--- second-fastest of up to three attempts (`timed_attempts`): far above the
+--- tenths of a second it takes.
 local TIME_LIMIT_SECONDS = 2
 
 --- Each row: the details' start, then the piece repeated, and how often.
@@ -388,7 +388,7 @@ T['a long line']['shows in the Report, and again on :edit, within the time limit
     end,
   }
 
-  local verdicts = fastest_time.within_limit(child, timing, TIME_LIMIT_SECONDS)
+  local verdicts = timed_attempts.within_limit(child, timing, TIME_LIMIT_SECONDS)
 
   eq(verdicts, { arrival = 'within the limit', edit = 'within the limit' })
 end
