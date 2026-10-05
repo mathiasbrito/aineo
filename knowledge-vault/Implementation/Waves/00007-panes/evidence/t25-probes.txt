@@ -1,0 +1,509 @@
+T25 (the changes pane) — the probes behind its brief
+=====================================================
+
+Measured 2026-10-05 on macOS arm64 (Darwin 27.0.0, 10 CPUs), NVIM v0.12.5
+(Homebrew), git 2.50.1 (Apple Git-155). Nothing ran on 0.11. The code measured
+is T24's head, 8e520f5 (origin/feature/t24-panes, PR #105), which holds T23's
+git home unchanged; it was extracted with `git archive` into a scratch folder
+and every probe loads it through its own scripts/minimal_init.lua, so
+tests/helpers/entry_guard/ is first on PATH and the real `claude` never ran
+(p_column's `\o` started the guard's `claude`, which exits 127). Each probe ran
+headless in a home of its own (run.sh), with GIT_CONFIG_GLOBAL=/dev/null,
+GIT_CONFIG_NOSYSTEM=1 and GIT_CEILING_DIRECTORIES at the probes' folder, and
+quit by itself; no process was left. The timings are this host's, under the
+load other agents put on it then; they are orders of magnitude, not bounds.
+
+What they show, in short (the outputs below are the record):
+- L a repository of 20 001 tracked files (index 1.6 MB): find_repository
+  ~60 ms; changed_files ~90 ms clean, ~200–290 ms with 2000 modified and
+  with 2000 more untracked; commits_since ~60–70 ms for 201 commits.
+- L5 every tracked file rewritten with the same content (stat-dirty): one
+  changed_files call took 1.9–3.1 s, and again 1.5–1.6 s, since the private
+  index copy keeps no refresh (lua/aineo/git/private_index.lua says so); once
+  a git of the repository's own refreshed the index, ~90–240 ms. One read can
+  outlast the watch's longest burst (1 s, lua/aineo/git/watch.lua).
+- L7 a writer in an ignored directory (build/, in .gitignore) every 50 ms
+  for 3 s: the watch called back 4 times, once a second, each saying
+  files_changed — the watch does not read ignore rules.
+- L8 `git switch` changing 2000 files: one call, branch_moved and
+  files_changed both true.
+- F T24's file column with a buffer that is no file in it (a diff): a file
+  then opened from the Report's window opens a SECOND window between Claude's
+  column and the right column (two.txt w40 beside the diff w39), since
+  window_taking_files() takes only a window showing a file; `\o` keeps both.
+- S BufWritePost fires for `:write`, `:write {other}`, `:1,1write {part}`,
+  `:saveas` and `:update`; its `match` is the written file's absolute path
+  whatever the working directory (S6, after `:cd sub`), and its buffer name
+  can differ from it (S2, S3). One `:write` in a subdirectory: one watch call,
+  files_changed, ~260 ms later; one `git commit -am`: one call with both.
+- N nvim_buf_set_lines() refuses a line holding a newline ("'replacement
+  string' item contains newlines"); a tab and an escape byte go in as they
+  are; strtrans() shows them as ^@, ^I and ^[.
+
+==================== run.sh ====================
+#!/bin/sh
+# Runs one probe headless on the newest Neovim, isolated under this folder.
+# usage: run.sh <probe.lua> <home-name> [extra nvim args...]
+HERE=$(cd "$(dirname "$0")" && pwd)
+TREE=$(cd "$HERE/../../t24tree" && pwd)
+PROBE=$1; NAME=$2; shift 2
+H="$HERE/home-$NAME"
+rm -rf "$H"; mkdir -p "$H/config" "$H/data" "$H/state" "$H/cache" "$H/claude" "$H/tmp" "$H/work"
+for v in $(env | sed -n 's/^\(CLAUDE[A-Z_]*\)=.*/\1/p'); do unset "$v"; done
+unset AINEO_CHILD
+export XDG_CONFIG_HOME="$H/config" XDG_DATA_HOME="$H/data" XDG_STATE_HOME="$H/state" XDG_CACHE_HOME="$H/cache"
+export CLAUDE_CONFIG_DIR="$H/claude" NVIM_LOG_FILE="$H/nvim.log" TMPDIR="$H/tmp"
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_CEILING_DIRECTORIES="$HERE"
+export GIT_AUTHOR_NAME=probe GIT_AUTHOR_EMAIL=probe@example.invalid GIT_COMMITTER_NAME=probe GIT_COMMITTER_EMAIL=probe@example.invalid
+export AINEO_PROBE_TREE="$TREE" AINEO_PROBE_HOME="$H" AINEO_PROBE_OUT="$HERE/$NAME.out"
+cd "$H/work" || exit 1
+exec nvim --headless -u "$TREE/scripts/minimal_init.lua" "$@" -c "luafile $HERE/$PROBE"
+
+==================== lib.lua ====================
+-- Shared helpers for the T25/T26 brief probes.
+local M = {}
+local out = {}
+
+function M.log(...)
+  local parts = {}
+  for i = 1, select('#', ...) do
+    local v = select(i, ...)
+    parts[#parts + 1] = type(v) == 'string' and v or vim.inspect(v)
+  end
+  out[#out + 1] = table.concat(parts, ' ')
+end
+
+function M.finish()
+  vim.fn.writefile(out, vim.env.AINEO_PROBE_OUT)
+  vim.cmd('qall!')
+end
+
+-- No probe outlives 80 s: it writes what it has and quits.
+vim.defer_fn(function()
+  M.log('TIMEOUT: the probe ran past its limit')
+  M.finish()
+end, tonumber(vim.env.AINEO_PROBE_LIMIT_MS) or 80000)
+
+function M.keys(k)
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(k, true, false, true), 'mtx', false)
+end
+
+function M.lines(buf)
+  return vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+end
+
+M.messages = {}
+vim.notify = function(message, level)
+  table.insert(M.messages, { message = message, level = level })
+end
+
+function M.take_messages()
+  local m = M.messages
+  M.messages = {}
+  return m
+end
+
+--- Runs `fn` once the editor has started and aineo's VimEnter handler has
+--- mapped the prefix, then writes the log and quits.
+function M.main(fn)
+  local function run()
+    vim.schedule(function()
+      local ok, err = xpcall(fn, debug.traceback)
+      if not ok then
+        M.log('PROBE ERROR:', err)
+      end
+      M.finish()
+    end)
+  end
+  if vim.v.vim_did_enter == 1 then
+    run()
+  else
+    vim.api.nvim_create_autocmd('VimEnter', { once = true, callback = run })
+  end
+end
+
+--- Points aineo at the suites' fake claude in ready mode.
+function M.use_fake(mode)
+  local tree = vim.env.AINEO_PROBE_TREE
+  vim.env.AINEO_FAKE_CLAUDE_RECORD = vim.env.AINEO_PROBE_HOME .. '/record.jsonl'
+  vim.env.AINEO_FAKE_CLAUDE_MODE = mode or 'ready'
+  vim.g.aineo = {
+    autostart = false,
+    claude = { cmd = { vim.v.progpath, '--clean', '-l', tree .. '/tests/helpers/fake_claude.lua' } },
+  }
+end
+
+function M.received()
+  local ok, lines = pcall(vim.fn.readfile, vim.env.AINEO_FAKE_CLAUDE_RECORD)
+  if not ok then
+    return {}
+  end
+  local got = {}
+  for _, line in ipairs(lines) do
+    local decoded = vim.json.decode(line)
+    if decoded.received then
+      got[#got + 1] = decoded.received
+    end
+  end
+  return got
+end
+
+function M.wait_ready()
+  return vim.wait(15000, function()
+    return require('aineo.claude').session_status() == 'ready'
+  end, 50)
+end
+
+return M
+
+==================== p_large.lua ====================
+-- T25 probe L: how T23's git home behaves on a large repository, as a
+-- refresh of the changes pane would call it. Run with run.sh p_large.lua large.
+local P = dofile(vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':h') .. '/lib.lua')
+
+local DIRECTORIES, FILES_EACH = 200, 100
+
+local function git(top, ...)
+  local result = vim.system({ 'git', '-C', top, ... }, { text = true }):wait()
+  assert(result.code == 0, table.concat({ ... }, ' ') .. ': ' .. (result.stderr or ''))
+  return vim.trim(result.stdout or '')
+end
+
+local function ms_since(start)
+  return math.floor((vim.uv.hrtime() - start) / 1e6)
+end
+
+--- Calls `operation(done)` and waits for `done`, returning the time in ms and
+--- what it gave.
+local function timed(operation)
+  local start, finished, failure, answer = vim.uv.hrtime(), false, nil, nil
+  operation(function(f, a)
+    failure, answer, finished = f, a, true
+  end)
+  vim.wait(60000, function()
+    return finished
+  end, 5)
+  return ms_since(start), failure, answer
+end
+
+P.main(function()
+  P.log('nvim', tostring(vim.version()), 'git', vim.trim(vim.system({ 'git', '--version' }, { text = true }):wait().stdout))
+  local gh = require('aineo.git')
+  local top = vim.fn.getcwd() .. '/big'
+  local start = vim.uv.hrtime()
+  for d = 1, DIRECTORIES do
+    local dir = ('%s/dir%03d'):format(top, d)
+    vim.fn.mkdir(dir, 'p')
+    for f = 1, FILES_EACH do
+      vim.fn.writefile({ ('file %d of dir %d'):format(f, d) }, ('%s/f%03d.txt'):format(dir, f), 'S')
+    end
+  end
+  vim.fn.writefile({ 'build/' }, top .. '/.gitignore')
+  git(top, 'init', '-q', '-b', 'main')
+  git(top, 'add', '-A')
+  git(top, 'commit', '-q', '-m', 'base')
+  P.log(('L0 made %d tracked files in %d ms'):format(DIRECTORIES * FILES_EACH + 1, ms_since(start)))
+  P.log('L0 index size, bytes:', vim.fn.getfsize(top .. '/.git/index'))
+
+  local t, failure, found = timed(function(done)
+    gh.find_repository(top, done)
+  end)
+  P.log('L1 find_repository ms:', t, failure, found and { head = found.head, branch = found.branch })
+  local base = found.head
+
+  t, failure, found_changes = timed(function(done)
+    gh.changed_files(found, base, done)
+  end)
+  P.log('L2 changed_files, clean tree, ms:', t, failure, found_changes and #found_changes)
+
+  for d = 1, 20 do
+    for f = 1, FILES_EACH do
+      vim.fn.writefile({ 'changed' }, ('%s/dir%03d/f%03d.txt'):format(top, d, f), 'S')
+    end
+  end
+  t, failure, found_changes = timed(function(done)
+    gh.changed_files(found, base, done)
+  end)
+  P.log('L3 changed_files, 2000 files modified, ms:', t, failure, found_changes and #found_changes)
+  t, failure = timed(function(done)
+    gh.changed_files(found, base, done)
+  end)
+  P.log('L3b the same again, ms:', t, failure)
+
+  for f = 1, 2000 do
+    vim.fn.writefile({ 'new' }, ('%s/dir001/new%04d.txt'):format(top, f), 'S')
+  end
+  t, failure, found_changes = timed(function(done)
+    gh.changed_files(found, base, done)
+  end)
+  P.log('L4 changed_files, 2000 modified + 2000 untracked, ms:', t, failure, found_changes and #found_changes)
+
+  -- Every tracked file rewritten with its own content: stat-dirty, content clean.
+  git(top, 'add', '-A')
+  git(top, 'commit', '-q', '-m', 'second')
+  local touch_start = vim.uv.hrtime()
+  vim.system({ 'sh', '-c', 'find . -path ./.git -prune -o -type f -exec touch {} +' }, { cwd = top }):wait()
+  P.log('L5 touched every file in ms:', ms_since(touch_start))
+  t, failure, found_changes = timed(function(done)
+    gh.changed_files(found, base, done)
+  end)
+  P.log('L5 changed_files, every file stat-dirty, ms:', t, failure, found_changes and #found_changes)
+  t, failure = timed(function(done)
+    gh.changed_files(found, base, done)
+  end)
+  P.log('L5b the same again (the private index keeps no refresh), ms:', t, failure)
+  git(top, 'status', '--porcelain')
+  t, failure = timed(function(done)
+    gh.changed_files(found, base, done)
+  end)
+  P.log('L5c after the repository refreshed its own index (git status), ms:', t, failure)
+
+  for i = 1, 200 do
+    vim.fn.writefile({ tostring(i) }, top .. '/counter.txt')
+    git(top, 'add', 'counter.txt')
+    git(top, 'commit', '-q', '-m', 'commit ' .. i)
+  end
+  local commits
+  t, failure, commits = timed(function(done)
+    gh.commits_since(found, base, done)
+  end)
+  P.log('L6 commits_since, 202 commits, ms:', t, failure, commits and #commits.commits, commits and commits.base_is_ancestor)
+
+  -- The watch: calls during a writer in an ignored directory, and a checkout.
+  local calls = {}
+  local watch_start = vim.uv.hrtime()
+  local watch = gh.watch_repository(found, function(f, change)
+    table.insert(calls, { ms = ms_since(watch_start), failure = f, change = change })
+  end)
+  vim.wait(500)
+  calls = {}
+  watch_start = vim.uv.hrtime()
+  vim.fn.mkdir(top .. '/build', 'p')
+  local writes = 0
+  local writer = vim.uv.new_timer()
+  writer:start(0, 50, function()
+    writes = writes + 1
+    local fd = vim.uv.fs_open(top .. '/build/out.log', 'a', 420)
+    vim.uv.fs_write(fd, 'line\n')
+    vim.uv.fs_close(fd)
+  end)
+  vim.wait(3000)
+  writer:stop()
+  writer:close()
+  vim.wait(600)
+  P.log(('L7 a writer in the ignored build/ every 50 ms for 3 s (%d writes): %d calls at ms'):format(writes, #calls), vim.tbl_map(function(c)
+    return c.ms
+  end, calls), 'first change', calls[1] and calls[1].change)
+
+  git(top, 'switch', '-q', '-c', 'other')
+  for d = 21, 40 do
+    for f = 1, FILES_EACH do
+      vim.fn.writefile({ 'other branch' }, ('%s/dir%03d/f%03d.txt'):format(top, d, f), 'S')
+    end
+  end
+  git(top, 'commit', '-q', '-am', 'other')
+  vim.wait(1500)
+  calls = {}
+  watch_start = vim.uv.hrtime()
+  local switch_start = vim.uv.hrtime()
+  git(top, 'switch', '-q', 'main')
+  local switch_ms = ms_since(switch_start)
+  vim.wait(2000)
+  P.log(('L8 git switch changing 2000 files took %d ms: %d calls at ms'):format(switch_ms, #calls), vim.tbl_map(function(c)
+    return c.ms
+  end, calls), vim.tbl_map(function(c)
+    return c.change
+  end, calls))
+  watch.stop()
+  P.log('L9 watch sees subdirectories:', watch.watches_subdirectories)
+end)
+
+-------------------- output of p_large.lua (sh run.sh p_large.lua large) --------------------
+nvim 0.12.5 git git version 2.50.1 (Apple Git-155)
+L0 made 20001 tracked files in 15660 ms
+L0 index size, bytes: 1606751
+L1 find_repository ms: 63 nil {   branch = "main",   head = "7944443b2a969d2718efef5ff5fa73986faf6e44" }
+L2 changed_files, clean tree, ms: 88 nil 0
+L3 changed_files, 2000 files modified, ms: 292 nil 2000
+L3b the same again, ms: 198 nil
+L4 changed_files, 2000 modified + 2000 untracked, ms: 231 nil 4000
+L5 touched every file in ms: 707
+L5 changed_files, every file stat-dirty, ms: 3088 nil 4000
+L5b the same again (the private index keeps no refresh), ms: 1562 nil
+L5c after the repository refreshed its own index (git status), ms: 92 nil
+L6 commits_since, 202 commits, ms: 71 nil 201 true
+L7 a writer in the ignored build/ every 50 ms for 3 s (61 writes): 4 calls at ms { 1011, 2029, 3042, 3263 } first change {   branch_moved = false,   files_changed = true }
+L8 git switch changing 2000 files took 388 ms: 1 calls at ms { 662 } { {     branch_moved = true,     files_changed = true   } }
+L9 watch sees subdirectories: true
+
+==================== p_column.lua ====================
+-- T25 probe F: T24's file column with a buffer that is no file (a diff) in it,
+-- then a file opened from the Report's window; and what `\o` does with it.
+-- Run with run.sh p_column.lua column.
+local P = dofile(vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':h') .. '/lib.lua')
+
+local function describe()
+  local row = {}
+  for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local buffer = vim.api.nvim_win_get_buf(window)
+    local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buffer), ':t')
+    table.insert(row, ('%s[%s,w%d,h%d]'):format(name ~= '' and name or ('#' .. buffer), vim.bo[buffer].buftype, vim.api.nvim_win_get_width(window), vim.api.nvim_win_get_height(window)))
+  end
+  return table.concat(row, ' ')
+end
+
+P.main(function()
+  P.log('nvim', tostring(vim.version()))
+  vim.o.columns = 240
+  vim.o.lines = 42
+  local work = vim.fn.getcwd()
+  vim.fn.writefile({ 'one' }, work .. '/one.txt')
+  vim.fn.writefile({ 'two' }, work .. '/two.txt')
+  local layout = require('aineo.layout')
+  local report = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_name(report, 'aineo://report')
+  vim.api.nvim_buf_set_lines(report, 0, -1, false, { 'a report' })
+  local claude = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_name(claude, 'claude-stand-in')
+  layout.open({ claude = claude, report = report, report_height = 2 / 3 })
+  P.log('F0 opened:', describe())
+  vim.api.nvim_set_current_win(vim.fn.bufwinid(report))
+  P.keys(':edit ' .. work .. '/one.txt<CR>')
+  vim.wait(300, function() return false end, 10)
+  P.log('F1 one.txt opened from the Report window:', describe())
+  -- a diff: a scratch buffer that is no file, shown in the file column's window.
+  local diff = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_name(diff, 'aineo://diff/one.txt')
+  vim.api.nvim_buf_set_lines(diff, 0, -1, false, { 'diff --git a/one.txt b/one.txt' })
+  vim.bo[diff].modifiable = false
+  vim.api.nvim_win_set_buf(vim.fn.bufwinid(work .. '/one.txt'), diff)
+  P.log('F2 the diff in the file column:', describe())
+  vim.api.nvim_set_current_win(vim.fn.bufwinid(report))
+  P.keys(':edit ' .. work .. '/two.txt<CR>')
+  vim.wait(300, function() return false end, 10)
+  P.log('F3 two.txt opened from the Report window with the diff in the file column:', describe())
+  P.keys('\\o') -- the real :Aineo open: claude.cmd is the PATH guard's, which exits 127
+  vim.wait(300, function() return false end, 10)
+  P.log('F4 after \\o:', describe())
+end)
+
+-------------------- output of p_column.lua (sh run.sh p_column.lua column) --------------------
+nvim 0.12.5
+F0 opened: claude-stand-in[nofile,w120,h40] report[nofile,w119,h26] input[nofile,w119,h13]
+F1 one.txt opened from the Report window: claude-stand-in[nofile,w79,h40] one.txt[,w80,h40] report[nofile,w79,h26] input[nofile,w79,h13]
+F2 the diff in the file column: claude-stand-in[nofile,w79,h40] one.txt[nofile,w80,h40] report[nofile,w79,h26] input[nofile,w79,h13]
+F3 two.txt opened from the Report window with the diff in the file column: claude-stand-in[nofile,w79,h40] two.txt[,w40,h40] one.txt[nofile,w39,h40] report[nofile,w79,h26] input[nofile,w79,h13]
+F4 after \o: claude[terminal,w79,h40] two.txt[,w40,h40] one.txt[nofile,w39,h40] report[nofile,w79,h26] input[nofile,w79,h13]
+
+==================== p_saves.lua ====================
+-- T25 probe S: what the editor tells of a save (BufWritePost) for each way
+-- of writing, and how many calls T23's watch makes for one `:w`.
+-- Run with run.sh p_saves.lua saves.
+local P = dofile(vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':h') .. '/lib.lua')
+
+P.main(function()
+  P.log('nvim', tostring(vim.version()))
+  local top = vim.fn.getcwd() .. '/repo'
+  vim.fn.mkdir(top .. '/sub', 'p')
+  vim.fn.writefile({ 'a' }, top .. '/a.txt')
+  vim.fn.writefile({ 'b' }, top .. '/sub/b.txt')
+  for _, args in ipairs({ { 'init', '-q', '-b', 'main' }, { 'add', '-A' }, { 'commit', '-q', '-m', 'base' } }) do
+    vim.system(vim.list_extend({ 'git', '-C', top }, args)):wait()
+  end
+  local events = {}
+  vim.api.nvim_create_autocmd({ 'BufWritePost', 'FileWritePost' }, {
+    callback = function(e)
+      table.insert(events, { event = e.event, buf_name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(e.buf), ':.'), match = e.match, file = e.file })
+    end,
+  })
+  local function took(label)
+    P.log(label, events)
+    events = {}
+  end
+  vim.cmd.cd(top)
+  vim.cmd('edit a.txt')
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'a changed' })
+  vim.cmd('write')
+  took('S1 :write')
+  vim.cmd('write copy.txt')
+  took('S2 :write copy.txt (another name)')
+  vim.cmd('1,1write part.txt')
+  took('S3 :1,1write part.txt (part of the buffer)')
+  vim.cmd('saveas renamed.txt')
+  took('S4 :saveas renamed.txt')
+  vim.cmd('edit sub/b.txt')
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'b changed' })
+  vim.cmd('update')
+  took('S5 :update in sub/')
+  vim.cmd('cd sub')
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'b again' })
+  vim.cmd('write')
+  took('S6 :write after :cd sub')
+  vim.cmd('cd ' .. top)
+  vim.cmd('silent! write /dev/null')
+  took('S7 :write /dev/null')
+
+  -- T23's watch: calls for one :write of a tracked file.
+  local gh = require('aineo.git')
+  local found
+  gh.find_repository(top, function(_, r)
+    found = r
+  end)
+  vim.wait(2000, function()
+    return found ~= nil
+  end)
+  local calls = {}
+  local start = vim.uv.hrtime()
+  local watch = gh.watch_repository(found, function(f, change)
+    table.insert(calls, { ms = math.floor((vim.uv.hrtime() - start) / 1e6), change = change, failure = f })
+  end)
+  vim.wait(400)
+  calls = {}
+  start = vim.uv.hrtime()
+  vim.cmd('edit ' .. top .. '/sub/b.txt')
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'b third' })
+  vim.cmd('write')
+  vim.wait(1500)
+  P.log('S8 watch calls for one :write in sub/:', calls)
+  calls = {}
+  start = vim.uv.hrtime()
+  vim.system({ 'git', '-C', top, 'commit', '-q', '-am', 'second' }):wait()
+  vim.wait(1500)
+  P.log('S9 watch calls for one git commit -am:', calls)
+  watch.stop()
+end)
+
+-------------------- output of p_saves.lua (sh run.sh p_saves.lua saves) --------------------
+nvim 0.12.5
+S1 :write { {     buf_name = "a.txt",     event = "BufWritePost",     file = "a.txt",     match = "<probes>/home-saves/work/repo/a.txt"   } }
+S2 :write copy.txt (another name) { {     buf_name = "a.txt",     event = "BufWritePost",     file = "copy.txt",     match = "<probes>/home-saves/work/repo/copy.txt"   } }
+S3 :1,1write part.txt (part of the buffer) { {     buf_name = "a.txt",     event = "BufWritePost",     file = "part.txt",     match = "<probes>/home-saves/work/repo/part.txt"   } }
+S4 :saveas renamed.txt { {     buf_name = "renamed.txt",     event = "BufWritePost",     file = "renamed.txt",     match = "<probes>/home-saves/work/repo/renamed.txt"   } }
+S5 :update in sub/ { {     buf_name = "sub/b.txt",     event = "BufWritePost",     file = "sub/b.txt",     match = "<probes>/home-saves/work/repo/sub/b.txt"   } }
+S6 :write after :cd sub { {     buf_name = "b.txt",     event = "BufWritePost",     file = "b.txt",     match = "<probes>/home-saves/work/repo/sub/b.txt"   } }
+S7 :write /dev/null {}
+S8 watch calls for one :write in sub/: { {     change = {       branch_moved = false,       files_changed = true     },     ms = 264   } }
+S9 watch calls for one git commit -am: { {     change = {       branch_moved = true,       files_changed = true     },     ms = 316   } }
+
+==================== p_names.lua ====================
+-- T25 probe N: a path holding a newline or a control character, as T23's
+-- home gives it, written into a buffer line. Run with run.sh p_names.lua names.
+local P = dofile(vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':h') .. '/lib.lua')
+
+P.main(function()
+  P.log('nvim', tostring(vim.version()))
+  local buffer = vim.api.nvim_create_buf(false, true)
+  local ok, err = pcall(vim.api.nvim_buf_set_lines, buffer, 0, -1, false, { 'line\nbreak.txt' })
+  P.log('N1 set_lines with a newline in a line:', ok, err)
+  ok, err = pcall(vim.api.nvim_buf_set_lines, buffer, 0, -1, false, { 'tab\there.txt', 'esc\27x.txt' })
+  P.log('N2 set_lines with a tab and an escape:', ok, err, P.lines(buffer))
+  P.log('N3 strtrans of each:', vim.fn.strtrans('line\nbreak.txt'), vim.fn.strtrans('esc\27x.txt'), vim.fn.strtrans('tab\there.txt'))
+  P.log('N4 string.format %q of the newline name:', ('%q'):format('line\nbreak.txt'))
+end)
+
+-------------------- output of p_names.lua (sh run.sh p_names.lua names) --------------------
+nvim 0.12.5
+N1 set_lines with a newline in a line: false 'replacement string' item contains newlines
+N2 set_lines with a tab and an escape: true nil { "tab\there.txt", "esc\27x.txt" }
+N3 strtrans of each: line^@break.txt esc^[x.txt tab^Ihere.txt
+N4 string.format %q of the newline name: "line\ break.txt"
