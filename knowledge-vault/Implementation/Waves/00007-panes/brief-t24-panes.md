@@ -67,19 +67,23 @@ The shapes are yours under `tdd` and `modularity`; the properties below are not.
   - `\pa` with the agent pane shown, and `\pc` with the changes pane shown, change nothing.
   - The cursor: PD5.
   - With the layout not open: PD4.
+  - **A layout a pane door opens is handed to the draft home**, as `focus()` hands it (`plugin/aineo.lua:199–201`, `keep_input_draft()`) and `open()` does (`:178`): with autostart off, `\pc` then `\pa` shows the draft saved earlier in Input, and text typed then is saved (D17).
+  - **With one of the right column's two windows gone** (`:q` in Input's window, say), `\pa` and `\pc` open the layout first, as `M.open()`'s restore does, then show the pane — as `\i` reopens Input's window today (`M.focus()`, `lua/aineo/layout/init.lua:933–938`). The orchestrator's reading of PD4 (a)'s "as `\r`, `\i` and `\c` do".
 - **PN3 — `\o` keeps the pane (D21).** While the changes pane shows, `\o` (and `:Aineo open`) restores the layout as it does today, keeping the changes pane. That covers:
   - a closed right-column window reopened in its place, showing the changes pane's buffer;
   - another buffer shown in one of the two windows replaced by the pane's own;
   - the proportions put back.
   - On `dev` today this fails: `show_buffers()` (`lua/aineo/layout/init.lua:656–669`) and `reopen_closed_windows()` (`619–636`) put back `state.buffers.report` and `state.buffers.input`.
   - A layout built anew: PD6.
+  - **`\o` with the changes pane shown sets no window option on the changes buffers.** `M.open()` calls `wrap_right_column()` on every open and restore (`lua/aineo/layout/init.lua:912`), which sets `vim.wo[win][0]` on whatever each right-column window shows (`215–221`). It must set the wrap only on the Report and Input. With `set nowrap`, `\pc` then `\o` leaves the placeholders unwrapped; at `\pa` the Report and Input wrap.
 - **PN4 — the file column under the changes pane (C9).** A file opened from either changes window moves to the file column, and that window gets the changes pane's buffer back, not the Report or Input. On `dev` today, `redirect()` gives the window `state.buffers[role]` (`lua/aineo/layout/init.lua:436`).
 - **PN5 — the agent pane comes back whole.** After `\pc` and `\pa`:
   - the Report and Input are the same buffers, Input's text and the draft unchanged (`aineo.draft` keeps Input's buffer, not its window);
   - the Report and Input still wrap (T16). Measured on 0.12.5 and 0.11.6, `Implementation/Waves/00006-fixes/evidence/window-option-scope.txt`, probe 2: options set with `vim.wo[win][0]` come back with the buffer;
   - the Report keeps every report: it is "kept when hidden" (`lua/aineo/report/buffer.lua:102–103`, made at `125`);
-  - a report that arrived meanwhile: PD3.
-- **PN6 — the other keys while the changes pane shows.** `\r` and `\i`: PD1. Send: PD2. `\c` and `\tcn` act on Claude's window as today, the pane unchanged.
+  - a report that arrived meanwhile: PD3. **With no report arrived** since `\pc`, `\pa` brings the Report back where it was, its cursor unmoved: the orchestrator's reading of PD3 (b)'s "as an arrival would have put it". One case for each.
+  - **Where PD3 is built:** in the layout home, from what it sees of the Report buffer at the switch — its line count or `b:changedtick` when `\pc` hid it, against its own at `\pa`. The report home (`lua/aineo/report/`) is not touched: its `follow_last_line()` (`lua/aineo/report/buffer.lua:225–230`) moves only the windows that show the Report. Measured (P3): a plain swap brings the Report back on line 100 of 130, so the case is red against a plain switch.
+- **PN6 — the other keys while the changes pane shows.** `\r` and `\i`: PD1. Send: PD2. PD1 (a) is no spec conflict with D21's "switching panes stays with `\pa` and `\pc`": D21 answered Q6, which asked about `\o` alone, and the user chose PD1 (a) on 2026-10-05 with that said in its option (D18's annotation records PD1–PD6). `\c` and `\tcn` act on Claude's window as today, the pane unchanged.
 - **PN7 — `:Aineo`'s argument.**
   - Completion offers `pane` among the subcommands, and after `:Aineo pane ` offers `agent` and `changes`, filtered by what is typed. Measured on `dev` (P2): `getcompletion('Aineo pane ', 'cmdline')` gives the six subcommands, because `complete_subcommand()` (`plugin/aineo.lua:37–41`) reads only the argument lead.
   - `:Aineo pane` with no pane, an unknown one, or more words after it, tells the user once, with one error, what it takes, and does nothing else. That is C1's pattern for `:Aineo` itself (`tests/test_entry.lua:38–66`).
@@ -91,7 +95,7 @@ The shapes are yours under `tdd` and `modularity`; the properties below are not.
   - The same holds for `<Leader>p` with `mapleader` unset, a common mapping (1066 ms).
   - Under `'notimeout'`, `\p` waits until another key comes.
   - Pin it with a case beside `tests/test_entry_prefix.lua:89–103`'s `\t` and `\tc`.
-- **PN9 — the health check.** `:checkhealth aineo`'s *Prefix mappings* reports `\pa` and `\pc` as it reports every key: ok when the key runs its `<Plug>` mapping, a warning when it runs the user's or nothing.
+- **PN9 — the health check.** `pane` goes **last** in `SUBCOMMANDS`, so the keys keep their positions: `tests/test_health.lua:744` (`[1]`, `\s`) and `:797` and `:808` (`[2]`, `\o`) index keys by position. `:checkhealth aineo`'s *Prefix mappings* reports `\pa` and `\pc` as it reports every key: ok when the key runs its `<Plug>` mapping, a warning when it runs the user's or nothing.
   - `lua/aineo/health.lua:253–260` lists the keys, and `check_prefix_key()` builds the `<Plug>` name from the subcommand (`306`). The pane's two mappings take an argument's name, so the table must give each key its own `<Plug>` name.
 - **PN10 — the help.** `doc/aineo.txt` documents the panes, `:Aineo pane`, both `<Plug>` mappings and both keys, with their tags. `tests/test_doc.lua:110–161` derives the tags it requires from the running plugin: one per completed subcommand (`:Aineo-pane`), per `<Plug>(aineo-…)` mapping, and per prefix key mapped to one (`aineo-\pa`, `aineo-\pc`). Measured (P4): `:helptags` accepts `*aineo-\pa*` and `*aineo-\pc*`, and `:help aineo-\pa` lands on its tag.
 - **PN11 — nothing is left behind.** A switch adds no window, no buffer after the first and no autocommand: switching ten times leaves the same windows, buffers and `aineo.layout` autocommands as switching twice. A changes buffer wiped by the user (`:bwipeout`) is shown again by the next `\pc`, with no error, as Input is made anew (`lua/aineo/layout/init.lua:522–541`).
@@ -116,7 +120,7 @@ Until T25 fills it, the changes pane shows **the minimal honest content**:
 
   If you add a required field to `aineo.layout.Arrangement`, every one of them changes. Prefer a seam that leaves them as they are, and say in your report which you chose.
 
-### Facts, checked against `origin/dev` (`d1b9225`)
+### Facts, checked against `origin/dev` (`d1b9225`; `5db771e` has the same code)
 
 - **The base.** `d1b9225`'s tree is `cd292445be66cbf2eeaad1695ace466ecedefc11` (`git rev-parse 'd1b9225^{tree}'`): the tree of the orchestrator's last verification of wave 6 (*Baseline*).
 - **No pane exists.** `git grep -n pane origin/dev -- tests lua plugin doc` prints nothing.
@@ -163,10 +167,12 @@ Until T25 fills it, the changes pane shows **the minimal honest content**:
   - `4. COMMANDS *aineo-commands*`, from `169`:
     - "Runs one of aineo's six actions", `172`;
     - a new `*:Aineo-pane*`;
-    - the paragraph on what opens the layout first, `205–216`, if PD4 is (a);
+    - the `:Aineo report` and `:Aineo input` entries, `185–189` ("Moves the cursor to …"): under PD1 (a) they show the agent pane first;
+    - the paragraph on what opens the layout first, `205–216` (PD4 (a));
   - `5. MAPPINGS *aineo-mappings*`, from `255`:
     - the `<Plug>` list;
     - `Prefix keys ~ *aineo-keys*`, `280–303`: the keys and the overlap paragraph `298–304`, which gains `\p` beside `\t` and `\tc`;
+  - `7. SEND`, `376–395`: one sentence, that Send sends Input while the changes pane hides it (PD2 (a)). Nothing else in that section;
   - `10. HEALTH CHECK *aineo-health*`, `Prefix mappings ~`, `610–622`: re-read it. "For each prefix key" stays true as written.
 - **Measured for this brief:** `evidence/t24-probes.txt`, on Neovim 0.12.5 (Homebrew, macOS arm64), with each probe's source:
   - P1: a user's `\p` against `\pa` and `\pc`;
@@ -203,6 +209,7 @@ Read first:
     - `PREFIX_KEYS`, `map_prefix()`;
     - `:Aineo`'s definition;
     - `arrangement()`, if your seam needs it;
+    - a new local function for the pane action, beside `focus()`, that opens the layout as `focus()` does — `resolved_config()`, `arrangement(config, current_claude_terminal(config))` and `keep_input_draft()` — before it shows the pane;
     - not the autostart, `start_up()` and what it reaches;
   - `lua/aineo/health.lua`: `PREFIX_KEYS` and `check_prefix_key()`, and their docstrings;
   - `doc/aineo.txt`: the sections listed under *Facts*. Correct each one T24 makes false, and say in your report what you corrected;
@@ -244,7 +251,11 @@ Read first:
   - the placeholder's names, `aineo://changes-files` and `aineo://changes-commits`, and its property: honest, no claim about the repository;
   - `\pa` with the agent pane shown, and `\pc` with the changes pane, change nothing and say nothing;
   - a user's own `\p`, or `<Leader>p` while `\` is the leader, now waits for `'timeoutlen'` (P1). The help says so beside `\t` and `\tc`;
-  - T16's wrap stays the Report's and Input's, set for their buffers (`vim.wo[win][0]`). The changes pane's buffers keep the user's own settings until T25 says otherwise;
+  - T16's wrap stays the Report's and Input's, set for their buffers (`vim.wo[win][0]`). The changes pane's buffers keep the user's own settings until T25 says otherwise, `\o` included (PN3);
+  - PD3 (b) with no report arrived: `\pa` brings the Report back where it was (PN5);
+  - PD4 (a) with one of the right column's windows gone: `\pa` and `\pc` open the layout first, then show the pane (PN2);
+  - `pane` goes last in `SUBCOMMANDS` (PN9);
+  - the help's *SEND* gains one sentence for PD2 (a);
   - the health check's keys follow `:Aineo`'s completion order.
 - **Not in scope:**
   - the changes pane's content, its refresh, its Enter, the middle column's diff, the session's base (T25);

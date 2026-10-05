@@ -51,7 +51,7 @@ Five packets. Each has a task row in the plan note. Only T23's brief was written
 | T24 | panes (C12, D18, D21) | `neovim-lua-developer` | `lua/aineo/layout/`, `plugin/aineo.lua`'s tables, `lua/aineo/health.lua`'s keys, the help | T12 (the same tables, keys and help sections) |
 | T26 | Visual Send and undo (D20, C4) | `neovim-claude-code-integrator` (`lua/aineo/send/`) | `lua/aineo/send/`, the Input buffer, `plugin/aineo.lua`'s tables, the help | T24 (the same tables) |
 | T25 | the changes pane (D19, D22) | `neovim-lua-developer` | the changes pane's windows, the middle column's diff, T23's home, the composition root's first Claude start | T23, T24 |
-| T30 | drop Neovim 0.11 (D29) | `neovim-claude-code-integrator` | `plugin/aineo.lua`'s `ERROR_FRAMING`, `lua/aineo/mcp/editor.lua`'s, docstrings in `lua/aineo/claude/`, `tests/test_entry.lua`, `tests/test_claude.lua`, `tests/test_mcp_delivery.lua`, `tests/helpers/timed_attempts.lua`, `tests/test_timed_attempts.lua` | T24 (`plugin/aineo.lua`, `tests/test_entry.lua`) |
+| T30 | drop Neovim 0.11 (D29) | `neovim-claude-code-integrator` | `plugin/aineo.lua`'s `ERROR_FRAMING`, `lua/aineo/mcp/editor.lua`'s, docstrings in `lua/aineo/claude/` and `lua/aineo/health.lua`'s `run_within_bound()`, `tests/test_entry.lua`, `tests/test_claude.lua`, `tests/test_mcp_delivery.lua`, `tests/helpers/timed_attempts.lua`, `tests/test_timed_attempts.lua` | T24 (`plugin/aineo.lua`, `lua/aineo/health.lua`, `tests/test_entry.lua`) |
 
 T26 and T25 both follow T24, and share `plugin/aineo.lua`. Whichever is dispatched first, the other waits for its merge. The order is fixed in their dated sections. T30 shares `plugin/aineo.lua` with all three, and `tests/test_entry.lua` with T24: it runs after T24's merge, and T25 and T26 after T30's.
 
@@ -120,7 +120,7 @@ D20's four clauses, the orchestrator's settlement of 2026-09-25, were told to th
 
 T26's row carries all four.
 
-**T24's release** is open: until T25 lands, a release cut with T24 shows a changes pane that holds only its placeholder (*Packet T24*). The user's rule of 2026-09-26 is a release after each feature merges.
+**T24's release:** until T25 lands, a release cut with T24 shows a changes pane that holds only its placeholder (*Packet T24*). The user's rule of 2026-09-26 is a release after each feature merges. Asked on 2026-10-05, the user chose "Wait for T25 (Recommended)": no release for T24 alone.
 
 ## Packet T24 — 2026-10-05
 
@@ -145,7 +145,7 @@ T26's row carries all four.
 | 5 decisions | D18, D21 and C12 are decided. Six behaviours were left open, PD1–PD6 below. The user answered them on 2026-10-05, each with the recommended option; the brief's dated amendment records the answer verbatim ✓ |
 | 6 task lines | T24's row (plan note, line 151) sits between T23's (done) and T25's (not dispatched). #101 edits T27–T29's rows (lines 154–156), two unchanged lines away. T24 holds its mark (rolling wave) ✓ |
 
-**Recomputed on 2026-10-05, after the user's answers.** #101 merged as `b423158` and `5db771e`; `dev` `5db771e` has `d1b9225`'s code. The only open pull request is #102, this plan's own. T30, added the same day, shares `plugin/aineo.lua` and `tests/test_entry.lua` with T24 and runs after it. Rules 1–6 hold ✓.
+**Recomputed on 2026-10-05, after the user's answers.** #101 merged as `b423158` and `5db771e`; `dev` `5db771e` has `d1b9225`'s code. #102 was closed, superseded by #103, which carries its commit on `5db771e`; #103, this plan's own, is the only open pull request. T30, added the same day, shares `plugin/aineo.lua` and `tests/test_entry.lua` with T24 and runs after it. Rules 1–6 hold ✓.
 
 **The baseline.**
 - `dev` `d1b9225`. Its tree is `cd292445be66cbf2eeaad1695ace466ecedefc11` (`git rev-parse 'd1b9225^{tree}'`), the tree of the orchestrator's last verification of wave 6.
@@ -208,7 +208,18 @@ The brief gives each question its evidence. **The answers**, the user's on 2026-
 - **M9 — the health check forgets a key.** `pc`'s row is dropped from `lua/aineo/health.lua`'s `PREFIX_KEYS`. PN9 must kill it.
 - **M10 — every switch makes new placeholders.** `\pc` creates its two buffers each time. PN11 must kill it.
 
-**Brief:** `brief-t24-panes.md`, amended with the user's answers to PD1–PD6 and reviewed by the brief dimension (`brief-review-t24-panes.md`), with T30's.
+Added after the brief review, one per option the user did not choose, and two for the review's findings:
+- **M11 — PD1 (b).** `M.focus()` moves to `state.windows[role]` without showing the agent pane. PN6 must kill it.
+- **M12 — PD3 (a).** `\pa` leaves the Report's cursor where it was, a report having arrived while it was hidden. PN5 must kill it.
+- **M13 — PD4 (b).** `\pa` and `\pc` with the layout not open warn and open nothing. PN2 must kill it.
+- **M13b — the draft forgotten.** The pane action opens the layout without `keep_input_draft()`. PN2's draft case must kill it.
+- **M14 — PD5 (b).** A switch moves the cursor to the Report's place. PN2 must kill it.
+- **M15 — PD6 (b).** `build()` shows the agent pane whatever was shown last. PN3 must kill it.
+- **M16 — the placeholders wrapped.** `wrap_right_column()` sets the wrap on whatever the right column shows. PN3's wrap case must kill it.
+
+**Brief:** `brief-t24-panes.md`, amended with the user's answers to PD1–PD6 and reviewed by the brief dimension (`brief-review-t24-panes.md`), with T30's. The review found nine items for T24 (dispatch after corrections), all corrected in the brief before merge: the draft on a pane door's open, PD3 with no arrival, a mutant per rejected option, a half-closed right column, the wrap under `\o`, D18's record of PD1–PD6, two help places, `pane`'s place in the order, and stale records.
+
+**T24's release** (the user, 2026-10-05, asked whether a release follows T24 alone, its changes pane holding only placeholders): "Wait for T25 (Recommended)". No release is cut for T24; the next ships it with T25.
 
 ## Packet T30 — 2026-10-05
 
@@ -221,7 +232,7 @@ The brief gives each question its evidence. **The answers**, the user's on 2026-
 | rule | T30 |
 |---|---|
 | 1 dependencies | T24, by rule 2. Dispatched after T24's merge ✗ until then |
-| 2 files | `plugin/aineo.lua` and `tests/test_entry.lua` are T24's too, and `plugin/aineo.lua` T25's and T26's. T30 runs after T24, before T25 and T26. The other files are no open packet's ✓ once T24 lands |
+| 2 files | `plugin/aineo.lua`, `lua/aineo/health.lua` and `tests/test_entry.lua` are T24's too, and `plugin/aineo.lua` T25's and T26's. T30 runs after T24, before T25 and T26. The other files are no open packet's ✓ once T24 lands |
 | 3 schema | none ✓ |
 | 4 dependencies | none ✓ |
 | 5 decisions | D29's minimum is the user's (2026-10-05). The brief leaves the user nothing: a removal the user would see is a finding for the orchestrator, who puts it to the user ✓ |
@@ -229,17 +240,20 @@ The brief gives each question its evidence. **The answers**, the user's on 2026-
 
 **The baseline.** `dev` `5db771e` has `d1b9225`'s code: `git diff --stat d1b9225 5db771e -- . ':!knowledge-vault'` prints nothing, and `evidence/baseline-cd29244.txt` holds. At dispatch, the orchestrator's verification of T24's merge is T30's baseline.
 
-**Reviewers**, regular: attack by `neovim-claude-code-reviewer`; test integrity and records together by `reviewer`, at the user's "optimize" of 2026-10-04. The implementer is `neovim-claude-code-integrator`, on Opus.
+**Reviewers**, regular (SKILL §6): attack by `neovim-claude-code-reviewer`, test integrity by `reviewer`, records by `reviewer`. The implementer is `neovim-claude-code-integrator`, on Opus.
 
-**Branch, resource, session note:** `refactor/t30-drop-nvim-011`, `impl_t30_drop_011`, `<the date it starts> — T30 Drop Neovim 0.11`.
+**Branch, resource, session note:** `refactor/t30-drop-nvim-011`, `impl_t30_drop_011`, `2026-10-05 — T30 Drop Neovim 0.11`.
 
-**Verification mutants:** V1–V4, in the brief.
+**Verification mutants:** V1–V5, in the brief.
+
+**The brief review** found eight items for T30 (dispatch after corrections), all corrected in the brief before merge: the `cwd` check's measured 0.12.5 outcome (a job that exits 122, so the check stays), `health.lua`'s `run_within_bound()` docstring added, D's two cases and MR212, three boundary gaps, two measuring pitfalls, three reviews as SKILL §6 gives them, the exact session note, and the stale records of D29's minimum. If D's check goes, MR212's clause on the LuaJIT check becomes false: the knowledge pass corrects it and the orchestrator tells the user.
 
 **Brief:** `brief-t30-drop-011.md`, reviewed with T24's in `brief-review-t24-panes.md`.
 
 ## Landed
 
 - **Wave 7 paused** at the user's word on 2026-09-27 (20:16): "we will not continue towards wave 7, finish the current work and wait my go to start wave 7". That T23, already in its fix round, counted as current work and was finished is the orchestrator's reading, told to the user at 20:17. T24–T26 wait for the user's go. The wave stays claimed.
+- **Wave 7 resumed** on 2026-10-05. The user's words of 2026-10-04, "than we will start the wave 7", came with wave 6's close. On 2026-10-05 the orchestrator asked "Start wave 7? I'm treating your 10-04 'then we will start the wave 7' as the go … Confirm it." The user answered the same message's other questions and asked for the context to be compacted first, and after the compact said "go ahead". That this is the go is the orchestrator's reading. T30 joined the wave the same day.
 - **T23 — PR #79, regular**, merged by rebase on 2026-09-27 as `2f44c73` … `da18aa6` (19 commits). The code of `dev` is identical to the verified tree: `b38bdd8` laid over `dev` `cfa91ee`, merge-tree `8295e23`, which also holds T19.
   - **The brief review** (dispatch after corrections, 18 findings) found, among others:
     - `git diff` takes `index.lock` despite `GIT_OPTIONAL_LOCKS=0`, and made a concurrent commit fail;
