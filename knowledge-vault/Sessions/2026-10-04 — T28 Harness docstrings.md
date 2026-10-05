@@ -58,16 +58,23 @@ No test was written and none was seen red. This is a comment-only change, as the
 
 ## Task lines
 
+The plan's T28 row is marked `done — PR #93, wave 6` by wave 6's closing knowledge pass, with the count of places corrected in its status cell.
+
 - T28 — [X] The ten stale comment places say what T22's runner does: the brief's six, `tests/test_runner.lua:210` and `:216`, and `scripts/run_test_file.lua`'s three "the runner". The change is comment-only. The empty comment-diff filter and identical stripped bytecode on 0.12.5 and 0.11.6 prove it. The suite ran 1434 cases with 0 failures on both versions.
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by wave 6's closing knowledge pass. PR #93 merged by rebase on 2026-10-04 (22:55 UTC; 00:55 CEST on 2026-10-05); `dev` `d318d60`. It shipped inside `v0.2.11` (PR #100), which T27 called for; a comment-only change calls for no release of its own.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `e281624` | `c4420ae` | Describe T22's per-file Neovims in the harness docstrings |
+| `965ce2b` | `d318d60` | Correct T28's harness docstrings after PR #93's review |
 
 ## Open threads
 
 - **A case name still uses the old sense of "the runner":** `tests/test_runner.lua:330` and `:338`, "fails when a case leaves a stub on a function the runner ends it with". The functions it names are now `run_test_file.lua`'s `neovim` table, so it should say "the file's runner". It is a string, so changing it changes bytecode, and it falls outside a documentation packet. It needs a packet that may change test code.
-- **The plan's T28 row is incomplete.** It says "six places in five files", but the packet corrected ten places in seven files. The row is the orchestrator's to correct.
+- ~~**The plan's T28 row is incomplete.** It says "six places in five files", but the packet corrected ten places in seven files. The row is the orchestrator's to correct.~~ Its status cell now says so (wave 6's closing knowledge pass).
 - **"The runner" now has two terms.** The following use "the runner" or "the test runner" for `run_tests.lua`, and "the file's runner" now names `run_test_file.lua`:
   - `scripts/run_tests.lua:1`
   - `scripts/minimal_init.lua:1` and `:12`
