@@ -103,6 +103,7 @@ local TAGS = {
   'aineo-config-layout.report_height',
   'aineo-layout',
   'aineo-panes',
+  'aineo-changes',
   'aineo-mappings',
   'aineo-keys',
   'aineo-send',
