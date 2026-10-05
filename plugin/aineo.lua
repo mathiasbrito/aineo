@@ -49,20 +49,19 @@ end
 
 --- `:Aineo`'s arguments that each run an action, in `SUBCOMMANDS`' order:
 --- each subcommand alone, or followed by each of its words
---- (`SUBCOMMAND_WORDS`), as `pane agent`.
-local ACTION_ARGUMENTS = vim
-  .iter(SUBCOMMANDS)
-  :map(function(subcommand)
-    local words = SUBCOMMAND_WORDS[subcommand]
-    if not words then
-      return { subcommand }
+--- (`SUBCOMMAND_WORDS`), as `pane agent`. Built with plain loops, so that
+--- sourcing this file loads no module Neovim has not loaded (`vim.iter`).
+local ACTION_ARGUMENTS = {}
+for _, subcommand in ipairs(SUBCOMMANDS) do
+  local words = SUBCOMMAND_WORDS[subcommand]
+  if words then
+    for _, word in ipairs(words) do
+      table.insert(ACTION_ARGUMENTS, subcommand .. ' ' .. word)
     end
-    return vim.tbl_map(function(word)
-      return subcommand .. ' ' .. word
-    end, words)
-  end)
-  :flatten()
-  :totable()
+  else
+    table.insert(ACTION_ARGUMENTS, subcommand)
+  end
+end
 
 --- The words `:Aineo` offers after `typed`, the words before the one the
 --- cursor is in, the command's name first: its subcommands after the name
@@ -81,10 +80,35 @@ local function offered_words(typed)
   return {}
 end
 
+--- Whether `word`, a word of the command line, is `:Aineo`'s name, whole or
+--- shortened (`:Ain`), after any range written before it (`5Aineo`).
+---
+---@param word string
+---@return boolean
+local function names_the_command(word)
+  local name = word:match('(A%a*)$')
+  return name ~= nil and vim.startswith('Aineo', name)
+end
+
+--- The words of `typed` from `:Aineo`'s name on (`names_the_command()`): the
+--- command modifiers before it, such as `:silent` or `:vertical`, left out.
+---
+---@param typed string[]
+---@return string[]
+local function words_from_the_name(typed)
+  for index, word in ipairs(typed) do
+    if names_the_command(word) then
+      return vim.list_slice(typed, index)
+    end
+  end
+  return typed
+end
+
 --- What `:Aineo` completes the word the cursor is in to: the words it offers
 --- there (`offered_words()`) that begin with `argument_lead`, what the user
 --- has typed of that word. The words before it are read from `command_line`
---- up to `cursor_position`.
+--- up to `cursor_position`, from the command's name on, so that a command
+--- modifier or a range before the name changes nothing.
 ---
 ---@param argument_lead string
 ---@param command_line string
@@ -92,7 +116,7 @@ end
 ---@return string[]
 local function complete_subcommand(argument_lead, command_line, cursor_position)
   local before = command_line:sub(1, cursor_position - #argument_lead)
-  local typed = vim.split(before, '%s+', { trimempty = true })
+  local typed = words_from_the_name(vim.split(before, '%s+', { trimempty = true }))
   return vim.tbl_filter(function(word)
     return vim.startswith(word, argument_lead)
   end, offered_words(typed))
@@ -227,40 +251,84 @@ local CHANGES_PLACEHOLDERS = {
 ---@type { files: integer|nil, commits: integer|nil }
 local changes_buffers = {}
 
---- A new buffer holding `placeholder`'s line under its name: a scratch
---- buffer, as the Report is — no file, unlisted, kept when hidden, no swap
---- file — and not modifiable, written whatever `'modifiable'` a new buffer
---- gets, as under `nvim -M`.
+--- Frees `name` from every buffer holding it, such as one a restored session
+--- made: wipes the buffer out, unless the user changed its text, which is
+--- then kept in that buffer, unnamed (`:0file`).
+---
+---@param name string
+local function free_buffer_name(name)
+  for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_get_name(buffer) == name then
+      if vim.bo[buffer].modified then
+        vim.api.nvim_buf_call(buffer, function()
+          vim.cmd('0file')
+        end)
+      else
+        vim.api.nvim_buf_delete(buffer, { force = true })
+      end
+    end
+  end
+end
+
+--- Makes `buffer` a scratch buffer, as the Report is — no file, unlisted,
+--- kept when hidden, no swap file — holding `placeholder`'s line alone, and
+--- not modifiable; the line is written whatever `'modifiable'` the buffer
+--- had, as under `nvim -M`.
+---
+---@param buffer integer
+---@param placeholder { name: string, line: string }
+local function write_placeholder(buffer, placeholder)
+  vim.bo[buffer].buftype = 'nofile'
+  vim.bo[buffer].bufhidden = 'hide'
+  vim.bo[buffer].buflisted = false
+  vim.bo[buffer].swapfile = false
+  vim.bo[buffer].modifiable = true
+  vim.api.nvim_buf_set_lines(buffer, 0, -1, true, { placeholder.line })
+  vim.bo[buffer].modifiable = false
+end
+
+--- A new buffer under `placeholder`'s name, which any other buffer holding
+--- it gives up first (`free_buffer_name()`), written as the placeholder
+--- (`write_placeholder()`). It is written again whenever Neovim reads it
+--- (`BufReadCmd`): `:edit` and `:edit!` empty a buffer that is no file, and
+--- a buffer `:bdelete` unloaded, shown again, comes back empty, its options
+--- reset.
 ---
 ---@param placeholder { name: string, line: string }
 ---@return integer buffer
 local function placeholder_buffer(placeholder)
+  free_buffer_name(placeholder.name)
   local buffer = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_name(buffer, placeholder.name)
-  vim.bo[buffer].modifiable = true
-  vim.api.nvim_buf_set_lines(buffer, 0, -1, true, { placeholder.line })
-  vim.bo[buffer].modifiable = false
+  write_placeholder(buffer, placeholder)
+  vim.api.nvim_create_autocmd('BufReadCmd', {
+    buffer = buffer,
+    desc = 'aineo: write the changes pane placeholder again',
+    callback = function()
+      write_placeholder(buffer, placeholder)
+    end,
+  })
   return buffer
 end
 
---- Whether `buffer`, a placeholder `changes_pane()` made, still holds its
---- line: it was neither wiped nor unloaded, as `:bdelete` unloads it,
---- emptied and no longer a scratch buffer.
+--- Whether `buffer`, a placeholder `changes_pane()` made, is loaded: it was
+--- neither wiped nor unloaded, as `:bdelete` unloads it. The layout shows a
+--- pane's buffers in place only while they are loaded.
 ---
 ---@param buffer integer|nil
 ---@return boolean
-local function holds_placeholder(buffer)
+local function is_loaded_placeholder(buffer)
   return buffer ~= nil and vim.api.nvim_buf_is_loaded(buffer)
 end
 
 --- The changes pane's two buffers, each made once (`placeholder_buffer()`)
---- and made anew once it no longer holds its line (`holds_placeholder()`).
---- The new one takes an unloaded one's name, which Neovim then wipes.
+--- and made anew once it is no longer loaded (`is_loaded_placeholder()`),
+--- taking the name from the unloaded one, which is wiped.
 ---
 ---@return aineo.layout.ChangesPane
 local function changes_pane()
   for window, placeholder in pairs(CHANGES_PLACEHOLDERS) do
-    if not holds_placeholder(changes_buffers[window]) then
+    if not is_loaded_placeholder(changes_buffers[window]) then
       changes_buffers[window] = placeholder_buffer(placeholder)
     end
   end
