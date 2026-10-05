@@ -947,6 +947,106 @@ T['a switch refused, the Report’s window refusing the Report back, a report ar
   eq({ entry.windows(child), cursor }, { AGENT_PANE, last_line })
 end
 
+--- Makes a switch to the agent pane fail in the child at Input's window,
+--- after the Report's window took the Report and, by the user's own
+--- autocommand, `'winfixbuf'`: that window then refuses the files buffer
+--- back, and keeps the Report under the changes pane.
+local function refuse_switch_and_report_kept()
+  child.lua(
+    [[
+      vim.api.nvim_create_autocmd('BufWinEnter', {
+        group = vim.api.nvim_create_augroup(..., { clear = false }),
+        pattern = 'aineo://report',
+        callback = function(event)
+          vim.wo[vim.fn.bufwinid(event.buf)].winfixbuf = true
+        end,
+      })
+    ]],
+    { FAILING_GROUP }
+  )
+  fail_as_shown('aineo://input', USER_AUTOCOMMAND_FAILED)
+end
+
+--- Ends, in the child, what `refuse_switch_and_report_kept()` made refuse.
+local function stop_refusing_report_kept()
+  child.api.nvim_del_augroup_by_name(FAILING_GROUP)
+  child.lua([[vim.wo[vim.fn.bufwinid('aineo://report')].winfixbuf = false]])
+end
+
+T['a switch to the agent pane refused, the Report’s window keeping the Report, the changes pane hiding it again,'] =
+  MiniTest.new_set({ parametrize = { { 'pc' }, { 'o' } } })
+
+T['a switch to the agent pane refused, the Report’s window keeping the Report, the changes pane hiding it again,']['is on the Report’s last line once a report arrives and \\pa shows the agent pane, hidden by'] = function(
+  key
+)
+  own_state('panes-refused-report-kept-state')
+  open_layout('panes-refused-report-kept')
+  receive_reports(2)
+  entry.press(child, '\\r')
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+  entry.press(child, '\\pc')
+  refuse_switch_and_report_kept()
+  entry.press(child, '\\pa')
+  local refused = entry.windows(child)
+  stop_refusing_report_kept()
+  entry.press(child, '\\' .. key)
+  local hidden = entry.windows(child)
+  receive_reports(1)
+
+  entry.press(child, '\\pa')
+
+  local cursor, last_line = unpack(child.lua_get(REPORT_CURSOR_AND_LAST_LINE))
+  eq({ refused, hidden, entry.windows(child), cursor }, {
+    { 'terminal', 'aineo://report', 'aineo://changes-commits' },
+    CHANGES_PANE,
+    AGENT_PANE,
+    last_line,
+  })
+end
+
+--- Shows, in the child, the Report by hand in the Report's window under the
+--- changes pane, a report having arrived since `\pc` hid it, with the
+--- cursor on its third line, then has a switch to the changes pane refused
+--- in the command-line window.
+local function refuse_switch_with_report_shown_by_hand()
+  receive_reports(2)
+  entry.press(child, '\\r')
+  entry.press(child, '\\pc')
+  receive_reports(1)
+  child.api.nvim_set_current_win(child.fn.bufwinid('aineo://changes-files'))
+  child.cmd('buffer aineo://report')
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+  child.type_keys('q:', '\\pc')
+  child.type_keys('<C-c>', '<Esc>')
+end
+
+T['the Report shown by hand under the changes pane, a switch to the changes pane refused,'] =
+  MiniTest.new_set()
+
+T['the Report shown by hand under the changes pane, a switch to the changes pane refused,']['leaves the Report’s cursor to the user'] = function()
+  own_state('panes-by-hand-refused-state')
+  open_layout('panes-by-hand-refused')
+
+  refuse_switch_with_report_shown_by_hand()
+
+  local cursor = child.lua_get(REPORT_CURSOR_AND_LAST_LINE)[1]
+  eq({ #entry.messages(child), cursor }, { 1, 3 })
+end
+
+T['the Report shown by hand under the changes pane, a switch to the changes pane refused,']['is on the Report’s last line once \\pc hides it, a report arrives and \\pa shows the agent pane'] = function()
+  own_state('panes-by-hand-refused-follow-state')
+  open_layout('panes-by-hand-refused-follow')
+  refuse_switch_with_report_shown_by_hand()
+  entry.press(child, '\\pc')
+  local hidden = entry.windows(child)
+  receive_reports(1)
+
+  entry.press(child, '\\pa')
+
+  local cursor, last_line = unpack(child.lua_get(REPORT_CURSOR_AND_LAST_LINE))
+  eq({ hidden, entry.windows(child), cursor }, { CHANGES_PANE, AGENT_PANE, last_line })
+end
+
 --- What Claude's terminal receives when Send sends an Input holding `hello`:
 --- one bracketed paste, then Enter.
 local SENT_HELLO = '\27[200~hello\27[201~\r'
