@@ -280,11 +280,35 @@ T['the pane shown']['asked for again changes nothing, a buffer shown in its wind
   local report_window = layout.window_showing(child, buffers.report)
   show_pane(pane)
   child.api.nvim_win_set_buf(report_window, layout.named_scratch(child, 'panes://other'))
-  local before = child.lua_get(SHOWN_BY_WINDOW)
+  local before = { child.lua_get(SHOWN_BY_WINDOW), child.api.nvim_get_current_win() }
 
   show_pane(pane)
 
-  eq(child.lua_get(SHOWN_BY_WINDOW), before)
+  eq({ child.lua_get(SHOWN_BY_WINDOW), child.api.nvim_get_current_win() }, before)
+end
+
+--- Every window-local option of the child's window that is the argument,
+--- by name.
+local WINDOW_OPTIONS = [[(function(window)
+  local values = {}
+  for name, info in pairs(vim.api.nvim_get_all_options_info()) do
+    if info.scope == 'win' then
+      values[name] = vim.api.nvim_get_option_value(name, { win = window })
+    end
+  end
+  return values
+end)(...)]]
+
+T['a switch to the changes pane and back']['leaves every option of Claude’s window as it was'] = function()
+  local buffers = open_with_panes()
+  local claude_window = layout.window_showing(child, buffers.claude)
+  local before = child.lua_get(WINDOW_OPTIONS, { claude_window })
+
+  show_pane('changes')
+  local between = child.lua_get(WINDOW_OPTIONS, { claude_window })
+  show_pane('agent')
+
+  eq({ between, child.lua_get(WINDOW_OPTIONS, { claude_window }) }, { before, before })
 end
 
 --- The arrangement the child's layout was opened with by `open_with_panes()`,
@@ -611,6 +635,19 @@ T['the agent pane shown again']['wraps a Report new to its window'] = function()
   show_pane('agent', arrangement_with_panes(buffers))
 
   eq(wrapping_of_window_showing(buffers.report), WRAPPED)
+end
+
+T['the agent pane shown again']['once it has shown an arrival, leaves the Report’s cursor to the user when the layout is restored'] = function()
+  local buffers = open_with_panes()
+  read_the_report_halfway(buffers)
+  show_pane('changes')
+  receive_reports(buffers)
+  show_pane('agent')
+  child.api.nvim_win_set_cursor(layout.window_showing(child, buffers.report), { 50, 0 })
+
+  layout.open(child, arrangement_with_panes(buffers))
+
+  eq(cursor_line_in_window_showing(buffers.report), 50)
 end
 
 return T
