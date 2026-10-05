@@ -248,15 +248,17 @@ local function check_server_socket()
   vim.health.ok('the editor listens at ' .. vim.v.servername)
 end
 
---- The keys that follow the prefix for each of `:Aineo`'s subcommands, in
---- the order `plugin/aineo.lua` maps them.
+--- The keys that follow the prefix for each of aineo's actions, with the
+--- `<Plug>` mapping each runs, in the order `plugin/aineo.lua` maps them.
 local PREFIX_KEYS = {
-  { key = 's', subcommand = 'send' },
-  { key = 'o', subcommand = 'open' },
-  { key = 'r', subcommand = 'report' },
-  { key = 'i', subcommand = 'input' },
-  { key = 'c', subcommand = 'claude' },
-  { key = 'tcn', subcommand = 'claude-numbers' },
+  { key = 's', plug = '<Plug>(aineo-send)' },
+  { key = 'o', plug = '<Plug>(aineo-open)' },
+  { key = 'r', plug = '<Plug>(aineo-report)' },
+  { key = 'i', plug = '<Plug>(aineo-input)' },
+  { key = 'c', plug = '<Plug>(aineo-claude)' },
+  { key = 'tcn', plug = '<Plug>(aineo-claude-numbers)' },
+  { key = 'pa', plug = '<Plug>(aineo-pane-agent)' },
+  { key = 'pc', plug = '<Plug>(aineo-pane-changes)' },
 }
 
 --- The keys `keys`, written as in a mapping, stand for when typed.
@@ -296,14 +298,14 @@ local function what_mapping_runs(mapping)
 end
 
 --- Reports what the key sequence `prefix` followed by `prefix_key.key`
---- runs: ok when it runs the subcommand's `<Plug>` mapping, a warning when
---- it runs anything else or is not mapped at all.
+--- runs: ok when it runs its `<Plug>` mapping, `prefix_key.plug`, a warning
+--- when it runs anything else or is not mapped at all.
 ---
 ---@param prefix string
----@param prefix_key { key: string, subcommand: string }
+---@param prefix_key { key: string, plug: string }
 local function check_prefix_key(prefix, prefix_key)
   local keys = prefix .. prefix_key.key
-  local plug_mapping = ('<Plug>(aineo-%s)'):format(prefix_key.subcommand)
+  local plug_mapping = prefix_key.plug
   local mapping = global_mapping(keys)
   if mapping == nil then
     vim.health.warn(

@@ -11,6 +11,8 @@ local PREFIX_KEYS = {
   { 'i', '<Plug>(aineo-input)' },
   { 'c', '<Plug>(aineo-claude)' },
   { 'tcn', '<Plug>(aineo-claude-numbers)' },
+  { 'pa', '<Plug>(aineo-pane-agent)' },
+  { 'pc', '<Plug>(aineo-pane-changes)' },
 }
 
 local child = MiniTest.new_child_neovim()
@@ -100,6 +102,16 @@ T["the user's own mapping"]['of the start of a key sequence stays, and aineo map
     { child.fn.maparg(keys, 'n'), child.fn.maparg('\\tcn', 'n') },
     { '<Cmd>let g:mine = 1<CR>', '<Plug>(aineo-claude-numbers)' }
   )
+end
+
+T["the user's own mapping"]['of \\p stays, and aineo maps \\pa and \\pc too'] = function()
+  children.restart(child, { '--cmd', 'nnoremap \\p <Cmd>let g:mine = 1<CR>' })
+
+  eq({ child.fn.maparg('\\p', 'n'), child.fn.maparg('\\pa', 'n'), child.fn.maparg('\\pc', 'n') }, {
+    '<Cmd>let g:mine = 1<CR>',
+    '<Plug>(aineo-pane-agent)',
+    '<Plug>(aineo-pane-changes)',
+  })
 end
 
 T["the user's own mapping"]['of a key sequence with a Ctrl key in the prefix stays, and the other keys are mapped'] = function()

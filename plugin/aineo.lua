@@ -24,20 +24,78 @@ end
 vim.g.loaded_aineo = true
 
 --- `:Aineo`'s subcommands, in the order it offers them.
-local SUBCOMMANDS = { 'send', 'open', 'report', 'input', 'claude', 'claude-numbers' }
+local SUBCOMMANDS = { 'send', 'open', 'report', 'input', 'claude', 'claude-numbers', 'pane' }
+
+--- The words each subcommand that takes one is followed by, in the order
+--- `:Aineo` offers them: `pane` takes the pane to show.
+local SUBCOMMAND_WORDS = { pane = { 'agent', 'changes' } }
 
 --- What `:Aineo` tells the user when it is not given one of its subcommands.
 local USAGE = 'aineo: :Aineo takes one of ' .. table.concat(SUBCOMMANDS, ', ')
 
---- The subcommands that begin with `argument_lead`, what the user has typed
---- of `:Aineo`'s argument.
+--- What `:Aineo` tells the user when `words`, its arguments, run no action:
+--- for a subcommand that takes words (`SUBCOMMAND_WORDS`), which ones it
+--- takes, and `USAGE` otherwise.
+---
+---@param words string[]
+---@return string
+local function usage(words)
+  local subcommand_words = SUBCOMMAND_WORDS[words[1]]
+  if not subcommand_words then
+    return USAGE
+  end
+  return ('aineo: :Aineo %s takes one of %s'):format(words[1], table.concat(subcommand_words, ', '))
+end
+
+--- `:Aineo`'s arguments that each run an action, in `SUBCOMMANDS`' order:
+--- each subcommand alone, or followed by each of its words
+--- (`SUBCOMMAND_WORDS`), as `pane agent`.
+local ACTION_ARGUMENTS = vim
+  .iter(SUBCOMMANDS)
+  :map(function(subcommand)
+    local words = SUBCOMMAND_WORDS[subcommand]
+    if not words then
+      return { subcommand }
+    end
+    return vim.tbl_map(function(word)
+      return subcommand .. ' ' .. word
+    end, words)
+  end)
+  :flatten()
+  :totable()
+
+--- The words `:Aineo` offers after `typed`, the words before the one the
+--- cursor is in, the command's name first: its subcommands after the name
+--- alone, the words of a subcommand that takes them (`SUBCOMMAND_WORDS`)
+--- after that subcommand, and nothing otherwise.
+---
+---@param typed string[]
+---@return string[]
+local function offered_words(typed)
+  if #typed == 1 then
+    return SUBCOMMANDS
+  end
+  if #typed == 2 then
+    return SUBCOMMAND_WORDS[typed[2]] or {}
+  end
+  return {}
+end
+
+--- What `:Aineo` completes the word the cursor is in to: the words it offers
+--- there (`offered_words()`) that begin with `argument_lead`, what the user
+--- has typed of that word. The words before it are read from `command_line`
+--- up to `cursor_position`.
 ---
 ---@param argument_lead string
+---@param command_line string
+---@param cursor_position integer
 ---@return string[]
-local function complete_subcommand(argument_lead)
-  return vim.tbl_filter(function(subcommand)
-    return vim.startswith(subcommand, argument_lead)
-  end, SUBCOMMANDS)
+local function complete_subcommand(argument_lead, command_line, cursor_position)
+  local before = command_line:sub(1, cursor_position - #argument_lead)
+  local typed = vim.split(before, '%s+', { trimempty = true })
+  return vim.tbl_filter(function(word)
+    return vim.startswith(word, argument_lead)
+  end, offered_words(typed))
 end
 
 --- aineo's configuration, resolved from `vim.g.aineo` and the options
@@ -150,10 +208,58 @@ local function current_claude_terminal(config)
   return started_claude_terminal(config)
 end
 
+--- What the changes pane's two windows show until aineo lists the
+--- session's changes there: for each, the name of its buffer, which is no
+--- file path, and the one line it holds, which says the window shows
+--- nothing yet and claims nothing about the repository.
+local CHANGES_PLACEHOLDERS = {
+  files = {
+    name = 'aineo://changes-files',
+    line = "aineo does not list the session's changed files here yet",
+  },
+  commits = {
+    name = 'aineo://changes-commits',
+    line = "aineo does not list the session's commits here yet",
+  },
+}
+
+--- The changes pane's buffers `changes_pane()` made, by window.
+---@type { files: integer|nil, commits: integer|nil }
+local changes_buffers = {}
+
+--- A new buffer holding `placeholder`'s line under its name: a scratch
+--- buffer, as the Report is — no file, unlisted, kept when hidden, no swap
+--- file — and not modifiable.
+---
+---@param placeholder { name: string, line: string }
+---@return integer buffer
+local function placeholder_buffer(placeholder)
+  local buffer = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_name(buffer, placeholder.name)
+  vim.api.nvim_buf_set_lines(buffer, 0, -1, true, { placeholder.line })
+  vim.bo[buffer].modifiable = false
+  return buffer
+end
+
+--- The changes pane's two buffers, each made once (`placeholder_buffer()`)
+--- and made anew once it was wiped.
+---
+---@return aineo.layout.ChangesPane
+local function changes_pane()
+  for window, placeholder in pairs(CHANGES_PLACEHOLDERS) do
+    local buffer = changes_buffers[window]
+    if not (buffer and vim.api.nvim_buf_is_valid(buffer)) then
+      changes_buffers[window] = placeholder_buffer(placeholder)
+    end
+  end
+  return { files = changes_buffers.files, commits = changes_buffers.commits }
+end
+
 --- The buffers aineo's layout shows: `claude_buffer`, the Claude session's
---- terminal, and the Report, taken from the report home, which this gives
---- its environment the first time it is called (`give_report_environment()`);
---- with the Report's share from `config`.
+--- terminal, the Report, taken from the report home, which this gives its
+--- environment the first time it is called (`give_report_environment()`),
+--- and the changes pane's (`changes_pane()`); with the Report's share from
+--- `config`.
 ---
 ---@param config table the resolved configuration
 ---@param claude_buffer integer
@@ -164,6 +270,7 @@ local function arrangement(config, claude_buffer)
     claude = claude_buffer,
     report = require('aineo.report').report_buffer(),
     report_height = config.layout.report_height,
+    changes = changes_pane(),
   }
 end
 
@@ -201,6 +308,24 @@ local function focus(role)
   end
 end
 
+--- Shows `pane` in the layout's right column (`aineo.layout`'s
+--- `show_pane()`). When the layout must open first, it opens as `focus()`
+--- opens it, around the Claude session's terminal as it is, and Input is
+--- then handed to the draft home (`keep_input_draft()`).
+---
+---@param pane aineo.layout.Pane
+local function show_pane(pane)
+  local config = resolved_config()
+  local opened = false
+  require('aineo.layout').show_pane(pane, function()
+    opened = true
+    return arrangement(config, current_claude_terminal(config))
+  end)
+  if opened then
+    keep_input_draft()
+  end
+end
+
 --- Whether the current buffer is the Claude session's terminal and that
 --- session has not ended: where a key typed in Terminal mode reaches Claude
 --- Code. A key typed in Terminal mode on an ended session's terminal closes
@@ -227,7 +352,7 @@ local function focus_claude()
   end
 end
 
---- What each of `:Aineo`'s subcommands does.
+--- What each of `:Aineo`'s arguments in `ACTION_ARGUMENTS` does.
 ---@type table<string, fun()>
 local ACTIONS = {
   send = function()
@@ -243,6 +368,12 @@ local ACTIONS = {
   claude = focus_claude,
   ['claude-numbers'] = function()
     require('aineo.layout').toggle_claude_numbers()
+  end,
+  ['pane agent'] = function()
+    show_pane('agent')
+  end,
+  ['pane changes'] = function()
+    show_pane('changes')
   end,
 }
 
@@ -300,21 +431,24 @@ local function run(action)
   return false, line
 end
 
---- The `<Plug>` mapping that does what the subcommand `subcommand` does.
+--- The `<Plug>` mapping that does what `:Aineo` with the argument
+--- `argument` does, its words joined by `-`: `<Plug>(aineo-pane-agent)` for
+--- `pane agent`.
 ---
----@param subcommand string
+---@param argument string
 ---@return string
-local function plug_mapping(subcommand)
-  return ('<Plug>(aineo-%s)'):format(subcommand)
+local function plug_mapping(argument)
+  return ('<Plug>(aineo-%s)'):format((argument:gsub(' ', '-')))
 end
 
-for _, subcommand in ipairs(SUBCOMMANDS) do
-  vim.keymap.set('n', plug_mapping(subcommand), function()
-    run(ACTIONS[subcommand])
-  end, { desc = 'aineo: ' .. subcommand })
+for _, argument in ipairs(ACTION_ARGUMENTS) do
+  vim.keymap.set('n', plug_mapping(argument), function()
+    run(ACTIONS[argument])
+  end, { desc = 'aineo: ' .. argument })
 end
 
---- The keys that follow the prefix for each subcommand.
+--- The keys that follow the prefix for each of `:Aineo`'s arguments in
+--- `ACTION_ARGUMENTS`.
 local PREFIX_KEYS = {
   send = 's',
   open = 'o',
@@ -322,6 +456,8 @@ local PREFIX_KEYS = {
   input = 'i',
   claude = 'c',
   ['claude-numbers'] = 'tcn',
+  ['pane agent'] = 'pa',
+  ['pane changes'] = 'pc',
 }
 
 --- Whether `keys`, written as in a mapping, have a global Normal-mode
@@ -339,20 +475,21 @@ local function has_global_mapping(keys)
   end)
 end
 
---- Maps `prefix` followed by each subcommand's keys, in Normal mode, to the
---- subcommand's `<Plug>` mapping, but for each key sequence the user has
---- mapped globally already — a mapping of only the start of a sequence, or
---- of a longer one, does not count; maps nothing when `prefix` is `false`.
+--- Maps `prefix` followed by each action's keys (`PREFIX_KEYS`), in Normal
+--- mode, to the action's `<Plug>` mapping, but for each key sequence the
+--- user has mapped globally already — a mapping of only the start of a
+--- sequence, or of a longer one, does not count; maps nothing when `prefix`
+--- is `false`.
 ---
 ---@param prefix string|false
 local function map_prefix(prefix)
   if prefix == false then
     return
   end
-  for _, subcommand in ipairs(SUBCOMMANDS) do
-    local keys = prefix .. PREFIX_KEYS[subcommand]
+  for _, argument in ipairs(ACTION_ARGUMENTS) do
+    local keys = prefix .. PREFIX_KEYS[argument]
     if not has_global_mapping(keys) then
-      vim.keymap.set('n', keys, plug_mapping(subcommand), { desc = 'aineo: ' .. subcommand })
+      vim.keymap.set('n', keys, plug_mapping(argument), { desc = 'aineo: ' .. argument })
     end
   end
 end
@@ -530,15 +667,15 @@ else
 end
 
 vim.api.nvim_create_user_command('Aineo', function(command)
-  local action = ACTIONS[command.args]
+  local action = ACTIONS[table.concat(command.fargs, ' ')]
   if action then
     run(action)
     return
   end
-  vim.notify(USAGE, vim.log.levels.ERROR)
+  vim.notify(usage(command.fargs), vim.log.levels.ERROR)
 end, {
-  nargs = '?',
+  nargs = '*',
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude or claude-numbers',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers or pane agent|changes',
 })
