@@ -46,6 +46,8 @@ Requirements:
   behaviour was measured on Claude Code 2.1.281; the resume of Claude's
   session, and the new session that takes the place of a resume Claude
   Code has no conversation for (|aineo-claude-session|), on 2.1.283.
+- git 2.36 or later, the `git` command, for the changes pane
+  (|aineo-changes|). aineo is tested with git 2.50.1.
 
 With lazy.nvim, load aineo at startup, so that its autostart can run
 (|aineo-autostart|): >lua
@@ -98,11 +100,11 @@ same two windows, at the same sizes, show the other pane's buffers.
 
 - The agent pane: the Agent Report over Input, as the layout opens.
 - The changes pane: `aineo://changes-files` in the Report's place, over
-  `aineo://changes-commits` in Input's. Each is a scratch buffer, read-only
-  to you, that says aineo lists nothing there yet; `:edit` there writes
-  that line again. A buffer of yours under either name, such as one a
-  restored session made, gives the name up: it is wiped out, or kept
-  unnamed when you changed its text.
+  `aineo://changes-commits` in Input's, listing the session's changed files
+  and its commits (|aineo-changes|). Each is a scratch buffer, read-only to
+  you; `:edit` there writes its list again. A buffer of yours under either
+  name, such as one a restored session made, gives the name up: it is wiped
+  out, or kept unnamed when you changed its text.
 
 `\pa` (|:Aineo-pane|) shows the agent pane and `\pc` the changes pane; the
 pane already shown stays as it is, unless one of its windows shows the
@@ -129,6 +131,63 @@ Report in its window — by `\pa`, `\r`, `\i` or `\o`.
 aineo keeps the pane shown until the editor quits: `\o` restores the layout
 with it, and so does the layout opened anew once its windows were closed.
 
+The changes pane ~
+                                                               *aineo-changes*
+The changes pane lists what changed in your repository since aineo first
+started Claude Code in this editor: the session, which lasts the editor's
+life. Its repository is the one Claude Code's working directory was in at
+that start, and its base is the commit `HEAD` named then. A restart of
+Claude Code keeps both; a start that failed takes neither.
+
+The files window, `aineo://changes-files`, lists every file that differs
+from the base, committed since or not, staged or not, and every new file
+your ignore rules leave in, one per line, in git's order: >
+    * M lua/aineo/init.lua
+      ? notes.txt
+      R old.txt → new.txt
+<
+The letter is the kind of change: `A` added, `M` modified, `D` deleted, `R`
+renamed, after its old path, `T` turned into a link or back, `?` new and
+untracked; a copy shows as added. The `*` marks a file you saved from this
+editor since the base was taken — `:write`, `:update`, `:wall`, a part of a
+buffer written to a file or appended to one, the file written whatever its
+buffer is named, a file opened through a symbolic link included. A file you
+and Claude both changed is marked too: aineo cannot tell who changed what.
+A path holding a line break or a control character is shown between double
+quotes, escaped as git escapes it. With nothing changed, the window says
+"No files changed on this session".
+
+The commits window, `aineo://changes-commits`, lists the session's commits,
+newest first, by abbreviated id and subject, or says "No commits on this
+session".
+
+Enter on a file's line shows its unified diff from the base, and on a
+commit's line that commit's diff, in the middle column (the file column,
+below). The diff is read-only: a buffer named `aineo://diff/{path}` or
+`aineo://commit/{id}`, with 'filetype' `diff`, wiped once hidden. The cursor
+stays in the pane, so `j` and Enter step through the list. Enter on any
+other line does nothing. When the middle column has no room for the diff,
+aineo says so and shows nothing.
+
+The pane is read again whenever it is shown — `\pc`, `:Aineo pane changes`,
+`\o`, or the layout built anew showing it — and, from its first showing
+until the editor quits, when a file is saved, when a file of the working
+tree changes, and when the branch moves: a commit, even one that changes no
+file, an amend, a reset, a checkout. One read of each window runs at a time,
+and the cursor stays on the line it was on while that line is listed. A
+diff already shown stays as it was until you press Enter on its line again.
+
+Until git has answered, each window says aineo is reading the repository.
+When Claude Code's working directory is in no repository, both windows say
+so, naming the directory; when `git` is not found, both say that. aineo then
+looks again whenever the pane is shown or a file is saved, and a repository
+made since — by `git init`, say — becomes the session's, its `HEAD` then the
+base. When the base is no longer behind `HEAD` — after a reset to before it,
+or a checkout of another branch — the commits window says so above what git
+lists, and the base stays. A read that fails keeps the list shown, under one
+line giving git's words. When aineo's watch of the repository fails, both
+windows say so until the pane is shown again, which starts it again.
+
 The file column ~
 A file you open from one of the three windows — `:edit`, a picker, a jump —
 moves to a column between Claude's and the right column, created on first
@@ -136,6 +195,11 @@ use and reused afterwards; the aineo window keeps its own buffer. While the
 file column is open, the three columns take a third of the screen each.
 Only file buffers move: help, terminals and scratch buffers stay where they
 were opened until `\o` restores the layout.
+
+A diff Enter shows from the changes pane (|aineo-changes|) takes the file
+column's window as a file does, and the next file or diff takes its place:
+the column keeps one window for both. A changed file that cannot leave that
+window keeps it, and the diff opens above it.
 
 Claude's session ~
                                                         *aineo-claude-session*
@@ -738,5 +802,28 @@ Send and a dialog ~
 A permission dialog drawn in the few tens of milliseconds before aineo
 notices it receives Send's paste and Enter. What the dialog does with them
 was not measured.
+
+The changes pane ~
+- A large diff: a diff shows at most 1 MiB of what git gave, cut at the
+  last line break within it, or a first line longer than that cut there,
+  under one line saying how much of it is shown. git still gives the whole
+  diff first, which takes its time and memory.
+- A large repository: each read runs git over the whole working tree. On a
+  repository of 20 001 files whose every file had changed on disk, one read
+  took 1.5 to 3.1 seconds. A git that runs past 10 seconds is stopped, and
+  the read said to have failed.
+- A pull, a merge, or a rebase onto newer upstream commits during the
+  session lists those commits, and their files, as the session's: the
+  commits window lists every commit reachable from `HEAD` and not from the
+  base.
+- A restart of Claude Code in another working directory keeps the first
+  repository and its base.
+- Where aineo cannot watch the working tree's subdirectories (Linux), the
+  files window says so first: a change in a subdirectory shows at the next
+  showing of the pane, save or commit, and a branch moved by
+  `git update-ref` from another worktree is missed too. No timer reads the
+  repository.
+- When the editor quits, aineo stops its watch, but a git it is running
+  then runs to its end, outliving the editor.
 
  vim:tw=78:ts=8:ft=help:norl:
