@@ -261,7 +261,7 @@ Added 2026-09-26 by the orchestrator, from T18's brief and session note at `dev`
 | ID | Reading | Source | Disposition |
 |---|---|---|---|
 | MR141 | The brackets of `[status]` are bold with the word, as C6 and T9 colour them with it. | T18's brief, the orchestrator's reading | open |
-| MR142 | The bold can be turned off apart from the colour: `:highlight link AineoReportStatusBold NONE`, whenever it is given. Attributes set on the group before the first report (`gui=NONE`) do not hold, since aineo's first definition links it again. | T18's brief; the recipe from both reviews of PR #60 | open |
+| MR142 | The bold can be turned off apart from the colour: `:highlight link AineoReportStatusBold NONE`, whenever it is given. Attributes set on the group before the first report (`gui=NONE`) do not hold, since aineo's first definition links it again. | T18's brief; the recipe from both reviews of PR #60 | superseded in part: its recipe by MR209 (T27, PR #94, `v0.2.11`), since a later colour scheme that runs `:highlight clear` undid it; its second sentence stands |
 | MR143 | The bold is a group of its own, `AineoReportStatusBold`, a default link to `@markup.strong`: a colour scheme's Markdown bold style — its background, italic, underline, or no bold — shows on `[status]`; its colour does not, unless the status's own group has no foreground. | T18's brief review (finding 3), measured by PR #60's reviews and fix round | open |
 
 ## Readings — Claude's exit keeps the layout (T21)
@@ -403,8 +403,36 @@ Added 2026-09-28 by the orchestrator, from T12's brief, its amendment and its se
 |---|---|---|
 | MR208 | The toggle is remembered for the editor's life only: a new Neovim starts with the user's own numbers. | D27: the option the user chose on 2026-09-27; T12's note |
 
+## Readings — the bold-off recipe (T27)
+
+Added 2026-10-05 by the orchestrator's closing knowledge pass for wave 6, from T27's brief, brief review and session note at `dev` `c6172e5` (PR #94, `v0.2.11`). The user asked for the fix ("check 1 to 3", item 1, 2026-10-04); the recipe's form is a reading.
+
+- **Told to the user without a reply:**
+  - MR209's form — the bold turned off for that one group, and a `ColorScheme` autocommand — on 2026-10-04 (18:30), and with `v0.2.11` on 2026-10-05 (00:57);
+  - MR210 on 2026-10-04: that no `ColorScheme` autocommand survives a bare `:highlight clear` (18:12), that the help says so (18:30), and that the help will say to run the recipe again (19:36).
+- **Not shown:** MR209's details, the `highlight clear` of the group and the Lua form's `vim.cmd`; MR211.
+
+| ID | Reading | Source | Disposition |
+|---|---|---|---|
+| MR209 | The help's recipe to turn the `[status]`'s bold off is code in the user's own config, given in Lua and in Vimscript. It runs `highlight clear AineoReportStatusBold` and `highlight link AineoReportStatusBold NONE`, at once and again from a `ColorScheme` autocommand in an augroup of its own, `aineo_bold_off`. aineo itself still installs no `ColorScheme` autocommand. The Lua form calls `vim.cmd('highlight …')`, since `nvim_set_hl(0, 'AineoReportStatusBold', { link = 'NONE' })` creates a highlight group named `NONE`. | T27's brief (the autocommand), its author (the clear, `vim.cmd`), measured on 0.12.5 and 0.11.6 | open — its form told to the user on 2026-10-04 (18:30) and 2026-10-05 (00:57) without a reply; its details not shown |
+
+## Limits a user can meet — the bold-off recipe (T27)
+
+| ID | Limit | Source |
+|---|---|---|
+| MR210 | A bare `:highlight clear` fires no `ColorScheme` event, so the bold comes back until the next `:colorscheme` or until the recipe is run again; the help says so. | T27's brief review; its author; the review of PR #94 (finding 6) and the fix round |
+| MR211 | Another `ColorScheme` autocommand, defined after the user's, that styles `AineoReportStatusBold` itself runs after the recipe's, and its bold shows. Read from `:h :autocmd`, not measured. | T27's session note, *Limits* |
+
+## Readings — the Report's time bound (T29)
+
+Added 2026-10-05 by the same pass, from T29's session note at `dev` `d1b9225` (PR #97). The 2 s bound is RP4, from T17's brief (MR159 records the times measured); T10's long-line case is bound the same way.
+
+| ID | Reading | Source | Disposition |
+|---|---|---|---|
+| MR212 | The Report's 2 s time bound (RP4), for a line of distinct paths on arrival and at `:edit`, and for T10's long line of links, means: the step's second-fastest wall time over three fresh processes is within 2 s on this host. Each process has a home of its own and, where five starts give one, a LuaJIT that compiles code. A drawing over the bound in one process of three passes. | T29's correction, on the re-measure of PR #97 (finding 1) | kept — put to the user on 2026-10-05 (01:08); the user: "ok on the reading, skip the five-suite run" (01:14) |
+
 ## Disposition
 
-**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR113, MR115–MR137, MR139–MR198 and MR201–MR207 stay open for the next review; MR138 is decided (D25), landed with T21 (PR #64, `v0.2.7`). MR114 is superseded (T12's amendment, the orchestrator's reading), MR199 and MR200 are duplicates of MR111 and MR112, and MR208 is D27, the user's.
+**2026-09-26: the user kept MR1–MR97, MR99, MR100 and MR102–MR107** ("ok, your decisions are fine"), among them the orchestrator's MR77 and MR92. MR28's relay behaviour is kept, but which `claude` is the oldest supported is still the user's decision: it was not put to them. MR98, MR101, MR108, MR109–MR113, MR115–MR137, MR139–MR198, MR201–MR207 and MR209–MR211 stay open for the next review; MR138 is decided (D25), landed with T21 (PR #64, `v0.2.7`). MR114 is superseded (T12's amendment, the orchestrator's reading), MR142's recipe by MR209 (T27), MR199 and MR200 are duplicates of MR111 and MR112, and MR208 is D27, the user's. MR212 is kept: the user accepted it on 2026-10-05.
 
 Before that, every item was **open** until the MVP review. A reading the user keeps is closed *kept*; one the user changes becomes a plan row through a converge round (a new `D#`, never an edit in place) and a task.

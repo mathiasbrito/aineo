@@ -130,12 +130,21 @@ A fresh implementer agent, dispatched by the orchestrator, changed the help's re
 
 ## Task lines
 
-This wave holds its marks. T27's line, for the knowledge pass: `T27 … | T18 | done` — the help's recipe, in Lua and Vimscript, clears `AineoReportStatusBold`, links it to `NONE` and does both again from a `ColorScheme` autocommand of the user's; a test runs it as the help gives it, through `habamax`, `default`, a scheme that makes the group bold, the next report and `:edit`, and pins that it touches no other group and adds its autocommands once when run twice; open: a bare `:highlight clear` still brings the bold back, as the help says.
+The plan's T27 row is marked `done — PR #94, wave 6` by wave 6's closing knowledge pass. This wave held its marks. T27's line, for the knowledge pass: `T27 … | T18 | done` — the help's recipe, in Lua and Vimscript, clears `AineoReportStatusBold`, links it to `NONE` and does both again from a `ColorScheme` autocommand of the user's; a test runs it as the help gives it, through `habamax`, `default`, a scheme that makes the group bold, the next report and `:edit`, and pins that it touches no other group and adds its autocommands once when run twice; open: a bare `:highlight clear` still brings the bold back, as the help says.
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by wave 6's closing knowledge pass. PR #94 merged by rebase on 2026-10-04 (22:55 UTC; 00:55 CEST on 2026-10-05); `dev` `c6172e5`. Released as `v0.2.11` (PR #100, `main` `10c330f`, tag `v0.2.11`).
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `0e530bf` | `0a7cc71` | Give the help a bold-off recipe that survives a colour scheme |
+| `f496d34` | `76171cf` | Pin that the help's bold-off recipe turns the bold off at once |
+| `85e418b` | `255c528` | Record T27's session: the bold-off recipe and its measurements |
+| `fb8bd58` | `25fad90` | Pin that the bold-off recipe leaves everything else alone |
+| `10721dd` | `88dd2e8` | Record T27's fix round in its session note |
+| `e3a5a30` | `c6172e5` | Say Neovim 0.12 is the minimum in the help's requirements |
 
 ## Open threads
 
-- The records the brief names as made false by T27 (the Learning's *Why it matters*, the project note's open thread, the wave 6 retrospective's open thread) are the orchestrator's knowledge pass, not this packet's.
+- ~~The records the brief names as made false by T27 (the Learning's *Why it matters*, the project note's open thread, the wave 6 retrospective's open thread) are the orchestrator's knowledge pass, not this packet's.~~ Corrected by wave 6's closing knowledge pass.

@@ -284,7 +284,7 @@ The re-measure's finding 2: the new form was never measured *inside* five side-b
 
 ## Task lines
 
-The wave holds its marks; the knowledge pass applies this one:
+The wave held its marks. Wave 6's closing knowledge pass marks the plan's T29 row `done — PR #97, wave 6`. The line, as written for it:
 
 - [X] T29 — both timing cases judge each step by its second-fastest wall time over three attempts, each in a fresh child with a home of its own and a LuaJIT that compiles code where five starts give one (`tests/helpers/timed_attempts.lua`, pinned by `tests/test_timed_attempts.lua`), the 2 s bound kept; RP4 now reads "the step's second-fastest wall time over three fresh processes is within 2 s on this host", accepted by the user on 2026-10-05 ("ok on the reading"). M10, X11, N21, MK2, MK5, W3 and PROC were killed 10 of 10 on 0.12.5 by the fix round's form; the correction killed INT (5 of 8, exactly its runs with two slow processes), WARM and H12, and N21, MK2, M10 and W3 once more, by assertion. The correct drawing passes 10/10 narrowed and 10/10 whole on each file. It was not measured inside five side-by-side suites, which the user skipped; it fails under `taskpolicy -b`, which was dropped as a requirement.
 
@@ -302,4 +302,13 @@ The wave holds its marks; the knowledge pass applies this one:
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by wave 6's closing knowledge pass. PR #97 merged by rebase on 2026-10-05 (00:27 UTC; 02:27 CEST); `dev` `d1b9225`. No release: the packet changes only tests.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `418c271` | `bd194da` | Bound the Report's timing cases by work, not wall time |
+| `df4fd81` | `e213390` | Record T29's session: the timing cases' form and its kills |
+| `2d5722f` | `83948a3` | Judge the timing cases by their fastest of three wall times |
+| `4ed9549` | `b4573c4` | Correct T29's session note and record its fix round |
+| `64eb574` | `7d762c5` | Judge the timing cases by their second-fastest of three homes |
+| `0e55599` | `d1b9225` | Correct T29's records after the re-measure, with the user's reading |
