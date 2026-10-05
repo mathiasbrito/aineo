@@ -27,7 +27,9 @@ Every command sits behind one prefix key, `\` by default, in Normal mode:
 `\s` sends Input to Claude, `\o` opens or restores the layout, and `\r`, `\i`
 and `\c` move to the Report, Input and Claude — `\c` in Terminal mode, so
 that what you type next goes to Claude, unless Claude Code has exited.
-`\tcn` hides or shows the line numbers of Claude's window.
+`\tcn` hides or shows the line numbers of Claude's window. `\pa` and `\pc`
+switch the right column between the agent pane, the Report over Input, and
+the changes pane (|aineo-panes|).
 
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
@@ -55,7 +57,8 @@ aineo works without a `setup()` call. To configure it, see
 ==============================================================================
 3. THE LAYOUT                                                   *aineo-layout*
 
-The layout fills one tab page with three windows:
+The layout fills one tab page with three windows; the right column's two
+show one pane at a time, here the agent pane:
 
     +--------------------+--------------------+
     |                    |    Agent Report    |
@@ -71,17 +74,44 @@ The layout fills one tab page with three windows:
 - Input, `aineo://input`, takes the rest: a scratch buffer, left out of
   `:ls` and `:bnext`, where you write what Send gives Claude (|aineo-send|),
   kept as a draft until you send it (|aineo-draft|).
+- The changes pane shows in the same two windows in their place
+  (|aineo-panes|).
 
 The Report and Input wrap long lines between words, a wrapped line keeping
 its indent ('wrap', 'linebreak', 'breakindent'), whatever your own settings.
 Opening or restoring the layout sets this again: `\o`, or `\r`, `\i` or `\c`
-when their window is gone. A `:setlocal nowrap` in either lasts until then.
-Claude's terminal, and a file shown in or split from those two windows, keep
-yours.
+when their window is gone, and so does `\pa`, `\r` or `\i` showing the agent
+pane again. A `:setlocal nowrap` in either lasts until then. Claude's
+terminal, the changes pane, and a file shown in or split from those two
+windows, keep yours.
 
 Opening the layout closes the tab's other windows (floating ones stay); their
 buffers stay loaded. The cursor starts in Input. The Neovim startup buffer
 becomes Input; a file the current window shows stays, as the file column.
+
+Panes ~
+                                                                 *aineo-panes*
+The right column's two windows show one of two panes, switched in place: the
+same two windows, at the same sizes, show the other pane's buffers.
+
+- The agent pane: the Agent Report over Input, as the layout opens.
+- The changes pane: `aineo://changes-files` in the Report's place, over
+  `aineo://changes-commits` in Input's. Each is a scratch buffer, read-only
+  to you, that says aineo lists nothing there yet.
+
+`\pa` (|:Aineo-pane|) shows the agent pane and `\pc` the changes pane; the
+pane already shown stays as it is. The cursor stays in the window it was
+in. `\r` and `\i` show the agent pane first, then move to the Report or
+Input; `\c` and `\tcn` leave the pane as it is. Send sends Input while the
+changes pane hides it (|aineo-send|).
+
+The Report and Input are kept while hidden, with Input's text and its draft.
+When the agent pane shows again, the Report's cursor is where it was, unless
+a report arrived meanwhile: then it is on the Report's last line, where an
+arriving report puts it.
+
+aineo keeps the pane shown until the editor quits: `\o` restores the layout
+with it, and so does the layout opened anew once its windows were closed.
 
 The file column ~
 A file you open from one of the three windows — `:edit`, a picker, a jump —
@@ -162,17 +192,18 @@ Restoring ~
 The three windows keep their sizes: the layout puts its proportions back
 when a window closes, when the editor is resized and when you enter its tab.
 `\o` (|:Aineo-open|) restores the layout while any of its windows is left:
-it recreates the windows that were closed, in their places. The layout
-lives in one tab; from another tab, `\o` moves you to it.
+it recreates the windows that were closed, in their places, and keeps the
+pane the right column shows (|aineo-panes|). The layout lives in one tab;
+from another tab, `\o` moves you to it.
 
 ==============================================================================
 4. COMMANDS                                                   *aineo-commands*
 
                                                                       *:Aineo*
-:Aineo {subcommand}	Runs one of aineo's six actions. Completion offers
-			the subcommands. Without one of them, or with
-			anything else, it tells you, with one error, which
-			ones it takes.
+:Aineo {subcommand}	Runs one of aineo's actions. Completion offers the
+			subcommands, and the panes after `pane`. Without one
+			of them, or with anything else, it tells you, with
+			one error, which ones it takes.
 
                                                                  *:Aineo-send*
 :Aineo send		Sends Input to Claude (|aineo-send|).
@@ -183,10 +214,11 @@ lives in one tab; from another tab, `\o` moves you to it.
 			has exited — or restores the layout while it is open.
 
                                                                *:Aineo-report*
-:Aineo report		Moves the cursor to the Agent Report.
+:Aineo report		Shows the agent pane, then moves the cursor to the
+			Agent Report.
 
                                                                 *:Aineo-input*
-:Aineo input		Moves the cursor to Input.
+:Aineo input		Shows the agent pane, then moves the cursor to Input.
 
                                                                *:Aineo-claude*
 :Aineo claude		Moves the cursor to Claude's terminal and enters
@@ -202,18 +234,19 @@ there, so that its exit stays on screen and the next key you type is a
 Normal-mode command. `i`, `a` and |:startinsert| leave that terminal in Normal
 mode too. Any other terminal of yours keeps Neovim's own behaviour.
 
-`report`, `input` and `claude` open the layout first when their window is
-gone, around Claude's terminal as it is — its exit on screen when Claude Code
-has exited. They start Claude Code only when there is no terminal to show:
-before the first start, or again, in a new terminal, once the terminal was
-wiped (|:bwipeout|). Wiping it from Claude's window closes that window; a
-window Neovim cannot close, such as its last one, stays on an empty buffer
-until `claude` opens the layout there again — `report` and `input` do so
-only when their own window is gone too. A file opened in Claude's window as
+`report`, `input`, `claude` and `pane` open the layout first when their window
+is gone (for `pane`, either window of the right column, or a buffer of the
+pane wiped), around Claude's terminal as it is — its exit on screen when
+Claude Code has exited. They start Claude Code only when there is no terminal
+to show: before the first start, or again, in a new terminal, once the
+terminal was wiped (|:bwipeout|). Wiping it from Claude's window closes that
+window; a window Neovim cannot close, such as its last one, stays on an empty
+buffer until `claude` opens the layout there again — `report` and `input` do
+so only when their own window is gone too. A file opened in Claude's window as
 the terminal is wiped stays in view, and moves to the file column when the
 layout opens again. Of the actions, only `open` restarts an exited Claude
-Code; aineo restarts one by itself only in place of a resume Claude Code
-has no conversation for (|aineo-claude-session|).
+Code; aineo restarts one by itself only in place of a resume Claude Code has
+no conversation for (|aineo-claude-session|).
 
                                                        *:Aineo-claude-numbers*
 :Aineo claude-numbers	Hides the line numbers of Claude's window, 'number'
@@ -248,6 +281,12 @@ has no conversation for (|aineo-claude-session|).
 			the terminal's own. A file opened from Claude's window
 			keeps your own numbers.
 
+                                                                 *:Aineo-pane*
+:Aineo pane {pane}	Shows {pane} in the right column, `agent` or
+			`changes` (|aineo-panes|), and changes nothing when it
+			shows already. Without a pane, or with anything else,
+			it tells you, with one error, which ones it takes.
+
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
 
@@ -277,6 +316,14 @@ of your own when you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-claude-numbers)
 			Does what |:Aineo-claude-numbers| does.
 
+                                                    *<Plug>(aineo-pane-agent)*
+<Plug>(aineo-pane-agent)
+			Does what `:Aineo pane agent` does (|:Aineo-pane|).
+
+                                                  *<Plug>(aineo-pane-changes)*
+<Plug>(aineo-pane-changes)
+			Does what `:Aineo pane changes` does (|:Aineo-pane|).
+
 Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
@@ -294,6 +341,10 @@ followed by these keys to each `<Plug>` mapping, globally, in Normal mode:
 \c		|<Plug>(aineo-claude)|
                                                                   *aineo-\tcn*
 \tcn		|<Plug>(aineo-claude-numbers)|
+                                                                   *aineo-\pa*
+\pa		|<Plug>(aineo-pane-agent)|
+                                                                   *aineo-\pc*
+\pc		|<Plug>(aineo-pane-changes)|
 
 A key sequence you mapped yourself — a global Normal-mode mapping, when the
 editor has started — stays yours, and aineo maps the others. A mapping local
@@ -301,7 +352,8 @@ to a buffer is not counted: it wins in its own buffer only. A mapping you
 make later replaces aineo's. A mapping that only overlaps aineo's key is not
 yours in this sense: with your own `\sa`, aineo still maps `\s`, and `\sa`
 then waits for 'timeoutlen' after `\s`; with your own `\t` or `\tc`, aineo
-still maps `\tcn`, and yours then waits for 'timeoutlen'.
+still maps `\tcn`, and with your own `\p` — or `<Leader>p` while the leader
+is `\` — it still maps `\pa` and `\pc`: yours then waits for 'timeoutlen'.
 
 The prefix is read once, when the editor has started (|VimEnter|): a
 `setup()` or `vim.g.aineo` that changes it later maps nothing until the next
@@ -383,7 +435,7 @@ removed first, so nothing in the text reaches Claude Code as a key.
 
 Send also works while Claude is in a turn: Claude Code queues the message and
 runs it after the turn. A draft already in Claude's prompt stays, and the
-paste joins it.
+paste joins it. It sends Input while the changes pane hides it, too.
 
 Send sends nothing, and tells you why with one warning starting with
 `aineo: nothing sent —`, when there is no Input yet (open the layout), when
