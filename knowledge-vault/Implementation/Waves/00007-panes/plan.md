@@ -43,7 +43,7 @@ The brief review of T23 measured more, all in `brief-review-t23-git-home.md`:
 
 ## Packets — the six-rules table
 
-Four packets. Each has a task row in the plan note. Only T23's brief is written now; the rest are added as dated sections when they can be dispatched. T23 comes first, then T24. The order of T25 and T26 is not yet fixed.
+Five packets. Each has a task row in the plan note. Only T23's brief was written at first; the rest are added as dated sections when they can be dispatched. T23 comes first, then T24, then T30. The order of T25 and T26 is not yet fixed. T30 was added on 2026-10-05 (*Packet T30*).
 
 | packet | task | type | files | depends on |
 |---|---|---|---|---|
@@ -51,8 +51,9 @@ Four packets. Each has a task row in the plan note. Only T23's brief is written 
 | T24 | panes (C12, D18, D21) | `neovim-lua-developer` | `lua/aineo/layout/`, `plugin/aineo.lua`'s tables, `lua/aineo/health.lua`'s keys, the help | T12 (the same tables, keys and help sections) |
 | T26 | Visual Send and undo (D20, C4) | `neovim-claude-code-integrator` (`lua/aineo/send/`) | `lua/aineo/send/`, the Input buffer, `plugin/aineo.lua`'s tables, the help | T24 (the same tables) |
 | T25 | the changes pane (D19, D22) | `neovim-lua-developer` | the changes pane's windows, the middle column's diff, T23's home, the composition root's first Claude start | T23, T24 |
+| T30 | drop Neovim 0.11 (D29) | `neovim-claude-code-integrator` | `plugin/aineo.lua`'s `ERROR_FRAMING`, `lua/aineo/mcp/editor.lua`'s, docstrings in `lua/aineo/claude/`, `tests/test_entry.lua`, `tests/test_claude.lua`, `tests/test_mcp_delivery.lua`, `tests/helpers/timed_attempts.lua`, `tests/test_timed_attempts.lua` | T24 (`plugin/aineo.lua`, `tests/test_entry.lua`) |
 
-T26 and T25 both follow T24, and share `plugin/aineo.lua`. Whichever is dispatched first, the other waits for its merge. The order is fixed in their dated sections.
+T26 and T25 both follow T24, and share `plugin/aineo.lua`. Whichever is dispatched first, the other waits for its merge. The order is fixed in their dated sections. T30 shares `plugin/aineo.lua` with all three, and `tests/test_entry.lua` with T24: it runs after T24's merge, and T25 and T26 after T30's.
 
 ## Packet T23 — 2026-09-27
 
@@ -111,13 +112,15 @@ One orchestrator session on this host (`Macbook-Mathias`), which also holds wave
 
 None open for T23. D18–D22 were decided on 2026-09-25 and 2026-09-26 (Q6 and Q7 resolved as D21 and D22). D26 (2026-09-27) sets how often the suite runs.
 
-One for T26, to settle before its dispatch or at the MVP review. D20 records four clauses of the orchestrator's settlement, which was told to the user without a reply:
-- "as one message";
-- `u` as the key;
-- undo for whole-Input Sends too;
-- the measurement first.
+D20's four clauses, the orchestrator's settlement of 2026-09-25, were told to the user without a reply. On 2026-10-05 the orchestrator put each to the user as a question with options, and the user chose the recommended option for all four:
+- **one message:** the selection's lines joined by line feeds, one bracketed paste and one Enter, for a charwise, linewise or blockwise selection alike;
+- **`u`, Neovim's own undo,** as the key, with no new key. Before asking, the orchestrator checked on 0.12.5, in `nvim --clean`, that `u` brings back text removed by `nvim_buf_set_lines()` and by `nvim_buf_set_text()`;
+- **undo for every Send,** a whole-Input Send's text too, pinned by a test;
+- **the measurement first:** T26 measures undo in aineo's real Input before building it — Input's saved draft and a failed write's put-back are not yet measured — and reports to the user where undo cannot work, rather than building a way around it.
 
 T26's row carries all four.
+
+**T24's release** is open: until T25 lands, a release cut with T24 shows a changes pane that holds only its placeholder (*Packet T24*). The user's rule of 2026-09-26 is a release after each feature merges.
 
 ## Packet T24 — 2026-10-05
 
@@ -139,8 +142,10 @@ T26's row carries all four.
 | 2 files | `lua/aineo/layout/`, `plugin/aineo.lua`'s tables and `:Aineo`, `lua/aineo/health.lua`'s keys, `doc/aineo.txt`'s sections (the brief's *Facts*), new `tests/test_*panes*.lua`, and the pins listed in the brief. No other packet is open. #101's twelve files (`git diff origin/dev FETCH_HEAD --stat`, its head `2dcb17b`) are all under `knowledge-vault/`. T24's only files there are its own session note and, at the knowledge pass, this folder. ✓ |
 | 3 schema | none ✓ |
 | 4 dependencies | none ✓ |
-| 5 decisions | D18, D21 and C12 are decided. **Six behaviours are left open, PD1–PD6 below.** T24 is dispatchable only once the user has answered them, recorded in a dated amendment to the brief. ✗ until then |
+| 5 decisions | D18, D21 and C12 are decided. Six behaviours were left open, PD1–PD6 below. The user answered them on 2026-10-05, each with the recommended option; the brief's dated amendment records the answer verbatim ✓ |
 | 6 task lines | T24's row (plan note, line 151) sits between T23's (done) and T25's (not dispatched). #101 edits T27–T29's rows (lines 154–156), two unchanged lines away. T24 holds its mark (rolling wave) ✓ |
+
+**Recomputed on 2026-10-05, after the user's answers.** #101 merged as `b423158` and `5db771e`; `dev` `5db771e` has `d1b9225`'s code. The only open pull request is #102, this plan's own. T30, added the same day, shares `plugin/aineo.lua` and `tests/test_entry.lua` with T24 and runs after it. Rules 1–6 hold ✓.
 
 **The baseline.**
 - `dev` `d1b9225`. Its tree is `cd292445be66cbf2eeaad1695ace466ecedefc11` (`git rev-parse 'd1b9225^{tree}'`), the tree of the orchestrator's last verification of wave 6.
@@ -183,7 +188,7 @@ T26's row carries all four.
   - (b) the agent pane.
   - Recommended: (a).
 
-The brief gives each question its evidence. **The answers:** not yet asked. The orchestrator records them, verbatim, in a dated amendment to `brief-t24-panes.md`, reviewed with it.
+The brief gives each question its evidence. **The answers**, the user's on 2026-10-05, verbatim: "PD1, (a), PD2 (a), PD3 (b), PD4 (a), PD5 (a), PD6 (a)" — each the recommended option. They are recorded in the brief's *Amendment — 2026-10-05*, reviewed with it.
 
 **One more for the user, not a packet behaviour.** Until T25 lands, a release cut with T24 shows the user a changes pane that holds only its placeholder. Whether a release follows T24 alone or waits for T25 is the user's.
 
@@ -203,7 +208,34 @@ The brief gives each question its evidence. **The answers:** not yet asked. The 
 - **M9 — the health check forgets a key.** `pc`'s row is dropped from `lua/aineo/health.lua`'s `PREFIX_KEYS`. PN9 must kill it.
 - **M10 — every switch makes new placeholders.** `\pc` creates its two buffers each time. PN11 must kill it.
 
-**Brief:** `brief-t24-panes.md`, to be reviewed by the brief dimension (`brief-review-t24-panes.md`) and amended with the user's answers to PD1–PD6 before dispatch.
+**Brief:** `brief-t24-panes.md`, amended with the user's answers to PD1–PD6 and reviewed by the brief dimension (`brief-review-t24-panes.md`), with T30's.
+
+## Packet T30 — 2026-10-05
+
+**Why now.** On 2026-10-05 the user confirmed D29's minimum, asked "Say if you meant to keep 0.11 working untested": "drop support for 0.11 and the dangling code and tests, since we are still in greenfield area, this is the right time for the clean up." The project note's *Open threads* lists the debt: the docstrings that cite 0.11.6 behaviour, the 0.11 error framing in two tables, and eight `vim.fn.has('nvim-0.12')` test branches whose 0.11 side no run executes.
+
+**What it does.** It removes what exists only for 0.11, or restates it for 0.12.5, each after a measurement on 0.12.5. It adds no behaviour. A removal the user would see is reported to the orchestrator, not made. The brief lists every place, found by grep on `5db771e`, and what stays: the recorded provenance of Claude Code's measurements, and the comments that already speak of 0.12.
+
+**The six rules for T30**, against every open packet and claimed wave on 2026-10-05:
+
+| rule | T30 |
+|---|---|
+| 1 dependencies | T24, by rule 2. Dispatched after T24's merge ✗ until then |
+| 2 files | `plugin/aineo.lua` and `tests/test_entry.lua` are T24's too, and `plugin/aineo.lua` T25's and T26's. T30 runs after T24, before T25 and T26. The other files are no open packet's ✓ once T24 lands |
+| 3 schema | none ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | D29's minimum is the user's (2026-10-05). The brief leaves the user nothing: a removal the user would see is a finding for the orchestrator, who puts it to the user ✓ |
+| 6 task lines | T30's row follows T29's in the plan note. It holds its mark ✓ |
+
+**The baseline.** `dev` `5db771e` has `d1b9225`'s code: `git diff --stat d1b9225 5db771e -- . ':!knowledge-vault'` prints nothing, and `evidence/baseline-cd29244.txt` holds. At dispatch, the orchestrator's verification of T24's merge is T30's baseline.
+
+**Reviewers**, regular: attack by `neovim-claude-code-reviewer`; test integrity and records together by `reviewer`, at the user's "optimize" of 2026-10-04. The implementer is `neovim-claude-code-integrator`, on Opus.
+
+**Branch, resource, session note:** `refactor/t30-drop-nvim-011`, `impl_t30_drop_011`, `<the date it starts> — T30 Drop Neovim 0.11`.
+
+**Verification mutants:** V1–V4, in the brief.
+
+**Brief:** `brief-t30-drop-011.md`, reviewed with T24's in `brief-review-t24-panes.md`.
 
 ## Landed
 

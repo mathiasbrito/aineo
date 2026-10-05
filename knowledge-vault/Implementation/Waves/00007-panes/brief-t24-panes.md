@@ -258,3 +258,16 @@ Medium to large: one home's state reshaped from a role's buffer to a pane's buff
 ## Report
 
 Exactly the shape in your definition, written to `<scratchpad>/t24-report-packet.md`. Open the pull request into `dev` before you report, and put in its body every verification claim a reviewer can re-measure.
+
+## Amendment — 2026-10-05: the user's answers to PD1–PD6
+
+The orchestrator put PD1–PD6 to the user on 2026-10-05, with the options and recommendations above. The user's answer, verbatim: "PD1, (a), PD2 (a), PD3 (b), PD4 (a), PD5 (a), PD6 (a)". Each is the orchestrator's recommendation. Build them so:
+
+- **PD1 — (a).** `\r` and `\i` (and `:Aineo report|input`, their `<Plug>` mappings) while the changes pane shows switch to the agent pane, then move to the Report or Input.
+- **PD2 — (a).** Send while the changes pane shows sends Input as today, unseen. Send's code, and the composition root's `send` action, stay as they are.
+- **PD3 — (b).** A report that arrives while the changes pane shows shows nothing then. `\pa` brings the Report back with its cursor at its last line, as an arrival would have put it.
+- **PD4 — (a).** `\pa` and `\pc` with the layout not open open it first, showing that pane, as `\r`, `\i` and `\c` do.
+- **PD5 — (a).** On a switch the cursor stays in the window it was in.
+- **PD6 — (a).** A layout built anew shows the pane last shown, for the editor's life.
+
+The same day the user confirmed D29's minimum: "drop support for 0.11 and the dangling code and tests". Nothing in this packet guards for 0.11, and its clean-up is T30's, after this packet, not yours.
