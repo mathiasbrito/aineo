@@ -241,14 +241,28 @@ local function placeholder_buffer(placeholder)
   return buffer
 end
 
+--- Whether `buffer`, a placeholder `changes_pane()` made, still holds its
+--- line: it was neither wiped nor unloaded, as `:bdelete` unloads it,
+--- emptied and no longer a scratch buffer.
+---
+---@param buffer integer|nil
+---@return boolean
+local function holds_placeholder(buffer)
+  return buffer ~= nil and vim.api.nvim_buf_is_loaded(buffer)
+end
+
 --- The changes pane's two buffers, each made once (`placeholder_buffer()`)
---- and made anew once it was wiped.
+--- and made anew once it no longer holds its line (`holds_placeholder()`),
+--- an unloaded one wiped first so that the new one can take its name.
 ---
 ---@return aineo.layout.ChangesPane
 local function changes_pane()
   for window, placeholder in pairs(CHANGES_PLACEHOLDERS) do
     local buffer = changes_buffers[window]
-    if not (buffer and vim.api.nvim_buf_is_valid(buffer)) then
+    if not holds_placeholder(buffer) then
+      if buffer and vim.api.nvim_buf_is_valid(buffer) then
+        vim.api.nvim_buf_delete(buffer, { force = true })
+      end
       changes_buffers[window] = placeholder_buffer(placeholder)
     end
   end

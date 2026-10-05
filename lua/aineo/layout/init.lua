@@ -945,14 +945,16 @@ local function switch_pane(pane)
   end
 end
 
---- Whether the right column's two windows exist, and so do the buffers
---- `pane` shows in them.
+--- Whether the right column's two windows exist, and the buffers `pane`
+--- shows in them are loaded: neither wiped nor unloaded, as `:bdelete`
+--- unloads a buffer, which then comes back empty.
 ---
 ---@param pane aineo.layout.Pane
 ---@return boolean
 local function can_show_in_place(pane)
   return vim.iter(RIGHT_COLUMN_ROLES):all(function(role)
-    return has_window(role) and is_buffer(state.buffers[PANE_BUFFERS[pane][role]])
+    local buffer = state.buffers[PANE_BUFFERS[pane][role]]
+    return has_window(role) and buffer ~= nil and vim.api.nvim_buf_is_loaded(buffer)
   end)
 end
 
@@ -1084,8 +1086,8 @@ end
 --- an arrival does in a window showing the Report.
 ---
 --- Opens the layout with `arrangement` first when either of the right
---- column's windows is gone, or a buffer of `pane` was wiped (see
---- `open()`). `arrangement` may be a function that returns it, which is
+--- column's windows is gone, or a buffer of `pane` was wiped or unloaded
+--- (see `open()`). `arrangement` may be a function that returns it, which is
 --- called only then.
 ---
 --- Raises an error naming `pane` when it is neither `'agent'` nor
