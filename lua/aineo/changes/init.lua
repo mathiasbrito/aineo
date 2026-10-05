@@ -6,6 +6,7 @@
 local git = require('aineo.git')
 local lines = require('aineo.changes.lines')
 local pages = require('aineo.changes.pages')
+local scratch = require('aineo.changes.scratch')
 local serial = require('aineo.changes.serial')
 
 local M = {}
@@ -64,6 +65,7 @@ local function commits_page()
   end
   return lines.commits_window({
     since = session.commits,
+    base = session.base,
     failure = session.commits_failure or session.watch_failure,
   })
 end
@@ -256,15 +258,19 @@ function M.begin_session(settings)
   find()
 end
 
---- A scratch buffer named `name`, which tells the session the pane is shown
---- whenever it enters a window (`pane_shown()`).
+--- A scratch buffer of the pane named `name` (`aineo.changes.scratch`),
+--- written with `page()` whenever it is made or read, which tells the
+--- session the pane is shown whenever it enters a window (`pane_shown()`).
 ---
 ---@param name string
+---@param page fun(): aineo.changes.Page
 ---@return integer buffer
-local function scratch_buffer(name)
-  local buffer = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_name(buffer, name)
-  vim.bo[buffer].modifiable = false
+local function pane_buffer(name, page)
+  local buffer = scratch.named_scratch_buffer(name, 'hide', function(made)
+    if session then
+      pages.write_page(made, page())
+    end
+  end)
   vim.api.nvim_create_autocmd('BufWinEnter', {
     buffer = buffer,
     desc = 'aineo: read the changes pane again',
@@ -275,18 +281,23 @@ local function scratch_buffer(name)
   return buffer
 end
 
---- The changes pane's two buffers, made once, each written for what the
---- session knows: the files buffer, `aineo://changes-files`, and the
---- commits buffer, `aineo://changes-commits`. Whenever either enters a
---- window, the pane is shown: the first time, the watch starts, and each
+--- The changes pane's two buffers, each written for what the session
+--- knows: the files buffer, `aineo://changes-files`, and the commits
+--- buffer, `aineo://changes-commits`. Each is a scratch buffer, not
+--- modifiable, made once and made anew once it is no longer loaded — wiped,
+--- or unloaded, as `:bdelete` unloads it — taking its name from any buffer
+--- holding it; `:edit` and `:edit!` write it again. Whenever either enters
+--- a window, the pane is shown: the first time, the watch starts, and each
 --- time both lists are read again.
 ---
 ---@return { files: integer, commits: integer }
 function M.pane_buffers()
-  buffers.files = buffers.files or scratch_buffer('aineo://changes-files')
-  buffers.commits = buffers.commits or scratch_buffer('aineo://changes-commits')
-  show_files()
-  show_commits()
+  if not (buffers.files and vim.api.nvim_buf_is_loaded(buffers.files)) then
+    buffers.files = pane_buffer('aineo://changes-files', files_page)
+  end
+  if not (buffers.commits and vim.api.nvim_buf_is_loaded(buffers.commits)) then
+    buffers.commits = pane_buffer('aineo://changes-commits', commits_page)
+  end
   return { files = buffers.files, commits = buffers.commits }
 end
 
