@@ -90,14 +90,16 @@ local function names_the_command(word)
   return name ~= nil and vim.startswith('Aineo', name)
 end
 
---- The words of `typed` from `:Aineo`'s name on (`names_the_command()`): the
---- command modifiers before it, such as `:silent` or `:vertical`, left out.
+--- The words of `typed` from the last word that names `:Aineo`
+--- (`names_the_command()`) on: what comes before the last `:Aineo` on the
+--- line — command modifiers, such as `:silent` or `:vertical`, a range, such
+--- as a mark (`'A`), or commands before a bar — left out.
 ---
 ---@param typed string[]
 ---@return string[]
 local function words_from_the_name(typed)
-  for index, word in ipairs(typed) do
-    if names_the_command(word) then
+  for index = #typed, 1, -1 do
+    if names_the_command(typed[index]) then
       return vim.list_slice(typed, index)
     end
   end
@@ -107,8 +109,9 @@ end
 --- What `:Aineo` completes the word the cursor is in to: the words it offers
 --- there (`offered_words()`) that begin with `argument_lead`, what the user
 --- has typed of that word. The words before it are read from `command_line`
---- up to `cursor_position`, from the command's name on, so that a command
---- modifier or a range before the name changes nothing.
+--- up to `cursor_position`, from the last word that names the command on
+--- (`words_from_the_name()`), so that a command modifier, a range or a
+--- command and a bar before the name change nothing.
 ---
 ---@param argument_lead string
 ---@param command_line string

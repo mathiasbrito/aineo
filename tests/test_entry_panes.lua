@@ -260,25 +260,31 @@ end
 --- The group of the autocommands a case makes fail.
 local FAILING_GROUP = 'panes-failing'
 
---- Makes every `BufWinEnter` for the buffer named `name` fail in the child,
---- as a user's own autocommand that raises does.
+--- Makes every `BufWinEnter` for the buffer named `name` fail in the child
+--- with the error `words`, as a user's own autocommand that raises does, in
+--- `FAILING_GROUP` beside those made before.
 ---
 ---@param name string
-local function fail_as_shown(name)
+---@param words string
+local function fail_as_shown(name, words)
   child.lua(
     [[
-      local group, name = ...
+      local group, name, words = ...
       vim.api.nvim_create_autocmd('BufWinEnter', {
-        group = vim.api.nvim_create_augroup(group, {}),
+        group = vim.api.nvim_create_augroup(group, { clear = false }),
         pattern = name,
         callback = function()
-          error('the user’s own autocommand failed')
+          error(words, 0)
         end,
       })
     ]],
-    { FAILING_GROUP, name }
+    { FAILING_GROUP, name, words }
   )
 end
+
+--- What `fail_as_shown()` makes a user's own autocommand raise when a case
+--- does not tell its errors apart.
+local USER_AUTOCOMMAND_FAILED = 'the user’s own autocommand failed'
 
 T['a switch a window refuses'] = MiniTest.new_set({
   parametrize = {
@@ -294,7 +300,7 @@ T['a switch a window refuses'] = MiniTest.new_set({
     {
       'a failing BufWinEnter for the files buffer',
       function()
-        fail_as_shown('aineo://changes-files')
+        fail_as_shown('aineo://changes-files', USER_AUTOCOMMAND_FAILED)
       end,
       function()
         child.api.nvim_del_augroup_by_name(FAILING_GROUP)
@@ -303,7 +309,7 @@ T['a switch a window refuses'] = MiniTest.new_set({
     {
       'a failing BufWinEnter for the commits buffer',
       function()
-        fail_as_shown('aineo://changes-commits')
+        fail_as_shown('aineo://changes-commits', USER_AUTOCOMMAND_FAILED)
       end,
       function()
         child.api.nvim_del_augroup_by_name(FAILING_GROUP)
@@ -343,6 +349,46 @@ T['a switch refused in the command-line window']['leaves the column as it was, a
   eq({ told, after_closing, entry.windows(child) }, { 1, AGENT_PANE, CHANGES_PANE })
 end
 
+--- What the user's own autocommand raises as the commits buffer is shown.
+local COMMITS_REFUSED = 'the commits buffer was refused'
+
+--- What the user's own autocommand raises as the Report is shown.
+local REPORT_REFUSED = 'the Report was refused'
+
+--- What aineo tells the user of `COMMITS_REFUSED`, framed as Neovim frames
+--- an autocommand's error.
+local TOLD_COMMITS_REFUSED = 'aineo: BufWinEnter Autocommands for "aineo://changes-commits": '
+  .. 'Vim(append):Lua callback: '
+  .. COMMITS_REFUSED
+
+--- Makes a switch to the changes pane fail in the child at Input's window,
+--- and the Report raise as it is shown there again, each with words of its
+--- own: `COMMITS_REFUSED`, then `REPORT_REFUSED`.
+local function refuse_switch_and_report()
+  fail_as_shown('aineo://changes-commits', COMMITS_REFUSED)
+  fail_as_shown('aineo://report', REPORT_REFUSED)
+end
+
+T['a switch refused, the Report raising as it is shown again,'] = MiniTest.new_set()
+
+T['a switch refused, the Report raising as it is shown again,']['leaves the agent pane in both windows, telling the user once'] = function()
+  open_layout('panes-refused-back')
+  refuse_switch_and_report()
+
+  entry.press(child, '\\pc')
+
+  eq({ entry.windows(child), #entry.messages(child) }, { AGENT_PANE, 1 })
+end
+
+T['a switch refused, the Report raising as it is shown again,']['tells the user the switch’s own error, not the Report’s'] = function()
+  open_layout('panes-refused-back-told')
+  refuse_switch_and_report()
+
+  entry.press(child, '\\pc')
+
+  eq(entry.messages(child), { { message = TOLD_COMMITS_REFUSED, level = vim.log.levels.ERROR } })
+end
+
 T['the changes pane key from another tab page'] = MiniTest.new_set({
   parametrize = {
     { 'the layout whole', function() end },
@@ -369,6 +415,25 @@ T['the changes pane key from another tab page']['shows the pane in the layout’
   child.cmd('tabfirst')
 
   eq({ where, entry.windows(child) }, { { window, {} }, CHANGES_PANE })
+end
+
+T['the changes pane key, a buffer named as its files buffer in the current window,'] =
+  MiniTest.new_set()
+
+T['the changes pane key, a buffer named as its files buffer in the current window,']['shows the pane in the layout’s tab page, telling nothing, when freeing the name closes that window'] = function()
+  open_layout('panes-namesake-here')
+  entry.press(child, '\\pc')
+  entry.press(child, '\\pa')
+  child.lua([[vim.cmd.bwipeout(vim.fn.bufnr('aineo://changes-files'))]])
+  child.cmd('tabnew')
+  child.cmd('split')
+  child.cmd('edit aineo://changes-files')
+
+  entry.press(child, '\\pc')
+  local told = entry.messages(child)
+  child.cmd('tabfirst')
+
+  eq({ told, entry.windows(child) }, { {}, CHANGES_PANE })
 end
 
 T['a session saved while the changes pane shows'] = MiniTest.new_set()
@@ -409,6 +474,23 @@ T['the pane key, with the layout never opened,']['opens the layout, showing the 
 
   eq({ entry.windows(child), entry.messages(child) }, { windows, {} })
   eq(#claude_session.wait_for_starts(fake, 1), 1)
+end
+
+T['the pane key, with the layout never opened,']['from a window showing a file, keeps the file beside the layout and starts the cursor in Input’s window, for'] = function(
+  _,
+  key,
+  windows
+)
+  local file = fixture.write('panes-from-a-file/file.txt', { 'a file' })
+  entry.use_fake(child, claude_session.fake('panes-from-a-file', 'ready'))
+  child.cmd('edit ' .. file)
+
+  entry.press(child, '\\' .. key)
+
+  eq(
+    { entry.windows(child), entry.current_window(child), entry.messages(child) },
+    { { windows[1], file, windows[2], windows[3] }, windows[3], {} }
+  )
 end
 
 --- Gives the child a state directory of its own, `.tests/fixtures/<name>`,
@@ -526,6 +608,30 @@ T['while the changes pane shows']['the key of a window of the agent pane, the ot
   eq({ where_the_cursor_is(), entry.messages(child) }, { { name, AGENT_PANE }, {} })
 end
 
+T['while the agent pane shows'] = MiniTest.new_set()
+
+T['while the agent pane shows']['the key of a window of the agent pane, the other’s buffer wiped, moves there and leaves the layout as it is'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'r', 'aineo://input', 'aineo://report' },
+      { 'i', 'aineo://report', 'aineo://input' },
+    },
+  })
+
+T['while the agent pane shows']['the key of a window of the agent pane, the other’s buffer wiped, moves there and leaves the layout as it is']['for'] = function(
+  key,
+  wiped,
+  name
+)
+  open_layout('panes-agent-wiped')
+  child.cmd('bwipeout ' .. wiped)
+  local left = entry.windows(child)
+
+  entry.press(child, '\\' .. key)
+
+  eq({ where_the_cursor_is(), entry.messages(child) }, { { name, left }, {} })
+end
+
 --- Gives the child a state directory of its own, `.tests/fixtures/<name>`,
 --- so that it holds no record a case before it kept.
 ---
@@ -600,6 +706,88 @@ T['a report arriving while the changes pane shows']['shows nothing then, and \\p
     { on_arrival, entry.windows(child), entry.messages(child), cursor },
     { { CHANGES_PANE, {} }, AGENT_PANE, {}, last_line }
   )
+end
+
+T['a report arriving while the changes pane shows, the Report wiped before,'] =
+  MiniTest.new_set({ parametrize = { { 1 }, { 2 } } })
+
+T['a report arriving while the changes pane shows, the Report wiped before,']['is on the Report’s last line once \\pa shows the agent pane, as many having arrived as the Report held:'] = function(
+  count
+)
+  own_state('panes-report-wiped-arrival-state')
+  open_layout('panes-report-wiped-arrival')
+  receive_reports(count)
+  entry.press(child, '\\pc')
+  child.lua([[vim.cmd.bwipeout(vim.fn.bufnr('aineo://report'))]])
+  receive_reports(count)
+
+  entry.press(child, '\\pa')
+
+  local cursor, last_line = unpack(child.lua_get(REPORT_CURSOR_AND_LAST_LINE))
+  eq({ entry.windows(child), entry.messages(child), cursor }, { AGENT_PANE, {}, last_line })
+end
+
+--- The child's Report's `'buftype'`.
+local REPORT_BUFTYPE = [[vim.bo[vim.fn.bufnr('aineo://report')].buftype]]
+
+T['while the changes pane shows']['the key of a window of the agent pane, the Report deleted, shows a Report anew that the next report keeps,'] =
+  MiniTest.new_set({ parametrize = { { 'r' }, { 'i' } } })
+
+T['while the changes pane shows']['the key of a window of the agent pane, the Report deleted, shows a Report anew that the next report keeps,']['for'] = function(
+  key
+)
+  own_state('panes-report-deleted-state')
+  open_layout('panes-report-deleted')
+  receive_reports(1)
+  entry.press(child, '\\pc')
+  child.lua([[vim.cmd.bdelete(vim.fn.bufnr('aineo://report'))]])
+
+  entry.press(child, '\\' .. key)
+  local shown = { entry.windows(child), child.lua_get(REPORT_BUFTYPE) }
+  receive_reports(1)
+
+  eq(
+    { shown, entry.windows(child), child.lua_get(REPORT_BUFTYPE) },
+    { { AGENT_PANE, 'nofile' }, AGENT_PANE, 'nofile' }
+  )
+end
+
+T['a switch to the changes pane, refused'] = MiniTest.new_set({
+  parametrize = {
+    {
+      'in the command-line window',
+      function()
+        child.type_keys('q:', '\\pc')
+        child.type_keys('<C-c>', '<Esc>')
+      end,
+    },
+    {
+      'by winfixbuf on Input’s window',
+      function()
+        child.lua([[vim.wo[vim.fn.bufwinid('aineo://input')].winfixbuf = true]])
+        entry.press(child, '\\pc')
+        child.lua([[vim.wo[vim.fn.bufwinid('aineo://input')].winfixbuf = false]])
+      end,
+    },
+  },
+})
+
+T['a switch to the changes pane, refused']['leaves the Report’s cursor to the user when the layout is restored after a report arrived,'] = function(
+  _,
+  refuse_switch
+)
+  own_state('panes-refused-follow-state')
+  open_layout('panes-refused-follow')
+  receive_reports(2)
+  entry.press(child, '\\r')
+  refuse_switch()
+  receive_reports(1)
+  child.api.nvim_win_set_cursor(child.fn.bufwinid('aineo://report'), { 3, 0 })
+
+  entry.press(child, '\\o')
+
+  local cursor = child.lua_get(REPORT_CURSOR_AND_LAST_LINE)[1]
+  eq({ entry.windows(child), cursor }, { AGENT_PANE, 3 })
 end
 
 T['while the changes pane shows']['the key of a window of the agent pane, the other’s window closed, shows its buffer there alone, telling nothing'] =
@@ -679,6 +867,72 @@ T['the pane key, with its pane shown,']['changes nothing and tells the user noth
   entry.press(child, '\\' .. key)
 
   eq({ before[2], where_the_cursor_is(), entry.messages(child) }, { windows, before, {} })
+end
+
+--- Makes a switch to the changes pane fail in the child at Input's window,
+--- after the Report's window took the files buffer and, by the user's own
+--- autocommand, `'winfixbuf'`: that window then refuses the Report back.
+local function refuse_switch_and_files_back()
+  child.lua(
+    [[
+      vim.api.nvim_create_autocmd('BufWinEnter', {
+        group = vim.api.nvim_create_augroup(..., { clear = false }),
+        pattern = 'aineo://changes-files',
+        callback = function(event)
+          vim.wo[vim.fn.bufwinid(event.buf)].winfixbuf = true
+        end,
+      })
+    ]],
+    { FAILING_GROUP }
+  )
+  fail_as_shown('aineo://changes-commits', COMMITS_REFUSED)
+end
+
+--- Ends, in the child, what `refuse_switch_and_files_back()` made refuse.
+local function stop_refusing_files_back()
+  child.api.nvim_del_augroup_by_name(FAILING_GROUP)
+  child.lua([[vim.wo[vim.fn.bufwinid('aineo://changes-files')].winfixbuf = false]])
+end
+
+T['a switch refused, the Report’s window refusing the Report back,'] =
+  MiniTest.new_set({ parametrize = PANES })
+
+T['a switch refused, the Report’s window refusing the Report back,']['leaves both panes shown, and the pane key then shows its pane, for'] = function(
+  _,
+  key,
+  windows
+)
+  open_layout('panes-refused-files-back')
+  refuse_switch_and_files_back()
+  entry.press(child, '\\pc')
+  local refused = { entry.windows(child), #entry.messages(child) }
+  stop_refusing_files_back()
+
+  entry.press(child, '\\' .. key)
+
+  eq(
+    { refused, entry.windows(child) },
+    { { { 'terminal', 'aineo://changes-files', 'aineo://input' }, 1 }, windows }
+  )
+end
+
+T['a switch refused, the Report’s window refusing the Report back, a report arriving then,'] =
+  MiniTest.new_set()
+
+T['a switch refused, the Report’s window refusing the Report back, a report arriving then,']['is on the Report’s last line once \\pa shows the agent pane'] = function()
+  own_state('panes-refused-files-back-follow-state')
+  open_layout('panes-refused-files-back-follow')
+  receive_reports(2)
+  child.api.nvim_win_set_cursor(child.fn.bufwinid('aineo://report'), { 3, 0 })
+  refuse_switch_and_files_back()
+  entry.press(child, '\\pc')
+  stop_refusing_files_back()
+  receive_reports(1)
+
+  entry.press(child, '\\pa')
+
+  local cursor, last_line = unpack(child.lua_get(REPORT_CURSOR_AND_LAST_LINE))
+  eq({ entry.windows(child), cursor }, { AGENT_PANE, last_line })
 end
 
 --- What Claude's terminal receives when Send sends an Input holding `hello`:
@@ -777,8 +1031,24 @@ T[':Aineo pane']['completes after a command modifier or a range as it does witho
       { 'keepalt botright Aineo pane c', { 'changes' } },
       { 'silent! Ain pane a', { 'agent' } },
       { 'silent 5Aineo pane ', { 'agent', 'changes' } },
+      { "'A Aineo pane ", { 'agent', 'changes' } },
     },
   })
+
+T[':Aineo pane']['completes after an earlier command and a bar as it does alone'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'Aineo open | Aineo ', SUBCOMMANDS },
+      { 'Aineo pane changes | Aineo pane ', { 'agent', 'changes' } },
+    },
+  })
+
+T[':Aineo pane']['completes after an earlier command and a bar as it does alone']['after'] = function(
+  typed,
+  completed
+)
+  eq(child.fn.getcompletion(typed, 'cmdline'), completed)
+end
 
 T[':Aineo pane']['completes after a command modifier or a range as it does without one']['after'] = function(
   typed,
