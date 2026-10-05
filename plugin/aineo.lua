@@ -229,13 +229,15 @@ local changes_buffers = {}
 
 --- A new buffer holding `placeholder`'s line under its name: a scratch
 --- buffer, as the Report is — no file, unlisted, kept when hidden, no swap
---- file — and not modifiable.
+--- file — and not modifiable, written whatever `'modifiable'` a new buffer
+--- gets, as under `nvim -M`.
 ---
 ---@param placeholder { name: string, line: string }
 ---@return integer buffer
 local function placeholder_buffer(placeholder)
   local buffer = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_name(buffer, placeholder.name)
+  vim.bo[buffer].modifiable = true
   vim.api.nvim_buf_set_lines(buffer, 0, -1, true, { placeholder.line })
   vim.bo[buffer].modifiable = false
   return buffer
