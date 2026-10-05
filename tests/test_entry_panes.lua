@@ -132,6 +132,144 @@ T['the changes pane’s windows']['show a scratch buffer each, saying it lists n
   })
 end
 
+--- The name of each window of the changes pane's buffer, with the line it
+--- holds, as a set's `parametrize`.
+local PLACEHOLDERS = {
+  { 'aineo://changes-files', { "aineo does not list the session's changed files here yet" } },
+  { 'aineo://changes-commits', { "aineo does not list the session's commits here yet" } },
+}
+
+T['a buffer already named as a buffer of the changes pane'] =
+  MiniTest.new_set({ parametrize = PLACEHOLDERS })
+
+T['a buffer already named as a buffer of the changes pane']['gives the name up, and the pane key shows the placeholder, for'] = function(
+  name,
+  line
+)
+  entry.use_fake(child, claude_session.fake('panes-namesake', 'ready'))
+  child.lua('vim.api.nvim_buf_set_name(vim.api.nvim_create_buf(false, true), ...)', { name })
+
+  entry.command(child, 'Aineo open')
+  local opened = entry.windows(child)
+  entry.press(child, '\\pc')
+
+  eq(
+    { opened, entry.windows(child), entry.messages(child), child.lua_get(PLACEHOLDER, { name }) },
+    { AGENT_PANE, CHANGES_PANE, {}, vim.tbl_extend('error', SCRATCH, { lines = line }) }
+  )
+end
+
+T['a buffer already named as a buffer of the changes pane']['keeps the text the user typed in it, unnamed, for'] = function(
+  name
+)
+  entry.use_fake(child, claude_session.fake('panes-namesake-typed', 'ready'))
+  local namesake = child.lua(
+    [[
+      local buffer = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_name(buffer, ...)
+      vim.api.nvim_buf_set_lines(buffer, 0, -1, true, { 'my own notes' })
+      return buffer
+    ]],
+    { name }
+  )
+
+  entry.command(child, 'Aineo open')
+  entry.press(child, '\\pc')
+
+  eq({
+    entry.windows(child),
+    entry.messages(child),
+    child.api.nvim_buf_get_name(namesake),
+    child.api.nvim_buf_get_lines(namesake, 0, -1, true),
+  }, { CHANGES_PANE, {}, '', { 'my own notes' } })
+end
+
+--- Moves the child's cursor to the window showing the buffer named `name`.
+---
+---@param name string
+local function enter_window_showing(name)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { name })
+end
+
+--- What the child's right column shows, top first: the last two windows
+--- `entry.windows()` lists, whatever a file column beside it holds.
+---
+---@return string[]
+local function right_column()
+  local windows = entry.windows(child)
+  return { windows[#windows - 1], windows[#windows] }
+end
+
+T['a buffer of the changes pane'] = MiniTest.new_set()
+
+T['a buffer of the changes pane']['holds its line again once a command run in its window emptied it'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'edit', PLACEHOLDERS[1][1], PLACEHOLDERS[1][2] },
+      { 'edit', PLACEHOLDERS[2][1], PLACEHOLDERS[2][2] },
+      { 'edit!', PLACEHOLDERS[1][1], PLACEHOLDERS[1][2] },
+      { 'edit!', PLACEHOLDERS[2][1], PLACEHOLDERS[2][2] },
+    },
+  })
+
+T['a buffer of the changes pane']['holds its line again once a command run in its window emptied it']['by'] = function(
+  command,
+  name,
+  line
+)
+  open_layout('panes-edited')
+  entry.press(child, '\\pc')
+  enter_window_showing(name)
+
+  entry.command(child, command)
+
+  eq(
+    { entry.windows(child), entry.messages(child), child.lua_get(PLACEHOLDER, { name }) },
+    { CHANGES_PANE, {}, vim.tbl_extend('error', SCRATCH, { lines = line }) }
+  )
+end
+
+T['a buffer of the changes pane']['deleted from its own window, is shown by the pane key holding its line,'] =
+  MiniTest.new_set({ parametrize = PLACEHOLDERS })
+
+T['a buffer of the changes pane']['deleted from its own window, is shown by the pane key holding its line,']['for'] = function(
+  name,
+  line
+)
+  open_layout('panes-deleted-in-place')
+  entry.press(child, '\\pc')
+  enter_window_showing(name)
+  child.cmd('bdelete')
+
+  entry.press(child, '\\pc')
+
+  eq({ right_column(), entry.messages(child), child.lua_get(PLACEHOLDER, { name }) }, {
+    { 'aineo://changes-files', 'aineo://changes-commits' },
+    {},
+    vim.tbl_extend('error', SCRATCH, { lines = line }),
+  })
+end
+
+T['a session saved while the changes pane shows'] = MiniTest.new_set()
+
+T['a session saved while the changes pane shows']['restored, lets the layout open and the pane key show the changes pane'] = function()
+  local session = vim.fs.joinpath(fixture.directory('panes-session'), 'Session.vim')
+  open_layout('panes-session-saved')
+  entry.press(child, '\\pc')
+  child.cmd('mksession! ' .. session)
+  entry.restart(child, { '-S', session })
+  entry.use_fake(child, claude_session.fake('panes-session-restored', 'ready'))
+
+  entry.command(child, 'Aineo open')
+  local opened = { entry.windows(child), entry.messages(child) }
+  entry.press(child, '\\pc')
+
+  eq(
+    { opened, entry.windows(child), entry.messages(child) },
+    { { AGENT_PANE, {} }, CHANGES_PANE, {} }
+  )
+end
+
 --- Each pane, with its key after the prefix and what the layout's windows
 --- show under it, as a set's `parametrize`.
 local PANES = { { 'agent', 'pa', AGENT_PANE }, { 'changes', 'pc', CHANGES_PANE } }
@@ -319,6 +457,28 @@ T[':Aineo pane']['completes its pane, filtered by what is typed, and nothing aft
   })
 
 T[':Aineo pane']['completes its pane, filtered by what is typed, and nothing after it']['after'] = function(
+  typed,
+  completed
+)
+  eq(child.fn.getcompletion(typed, 'cmdline'), completed)
+end
+
+--- `:Aineo`'s subcommands, in the order completion offers them.
+local SUBCOMMANDS = { 'send', 'open', 'report', 'input', 'claude', 'claude-numbers', 'pane' }
+
+T[':Aineo pane']['completes after a command modifier or a range as it does without one'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'silent Aineo ', SUBCOMMANDS },
+      { 'silent Aineo pane ', { 'agent', 'changes' } },
+      { 'vertical Aineo p', { 'pane' } },
+      { 'keepalt botright Aineo pane c', { 'changes' } },
+      { 'silent! Ain pane a', { 'agent' } },
+      { '5Aineo pane ', { 'agent', 'changes' } },
+    },
+  })
+
+T[':Aineo pane']['completes after a command modifier or a range as it does without one']['after'] = function(
   typed,
   completed
 )
