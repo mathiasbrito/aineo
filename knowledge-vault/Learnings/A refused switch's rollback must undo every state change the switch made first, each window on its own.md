@@ -16,13 +16,12 @@ T24's `switch_pane()` (`lua/aineo/layout/init.lua`, `local function switch_pane`
 2. **The first fix round** (`dadbaed` on `dev`; `865ab63` on the PR's branch) restored the pane and showed the old pane again under one `pcall`. Two leftovers remained (the re-measure, findings 1 and 2):
    - It kept the Report's `b:changedtick`, taken before the switch to tell a report arriving while the Report is hidden. After a `\pc` refused in the command-line window, one report, and the user moving back to line 3, `\o` "followed" the arrival: the cursor went to 66 of 66, not 3.
    - When the undo itself raised at the Report's window, Input's window was never undone.
-3. **The second fix round** (`1591bb1`; `5291f03` on the branch) undid each window in its own `pcall` (`show_buffers_of_each_window()`). It raised the switch's own error, not the undo's, and ran the follow inside the rollback so that nothing was left for a later restore.
-4. **`f21cef0`** (`73760cf` on the branch) then removed the follow's pane check, reasoning that no case builds the corner it guards. The guarantee review built the corner. With the check gone, the follow ran under the changes pane and forgot the Report it had kept: PD3 (b) was lost after a refused switch (G1), and a `\pc` refused in the command-line window moved the cursor of a Report the user had shown by hand (G2, G2b). The correction (`c9b78b1`; `8f08be9` on the branch) put the check back, red-first from those inputs.
+3. **The second fix round** (`1591bb1`; `5291f03` on the branch) undid each window in its own `pcall` (`show_buffers_of_each_window()`), kept raising the switch's own error and pinned it (the re-measure's RMk), and ran the follow inside the rollback so that nothing was left for a later restore.
+4. **`f21cef0`** (`73760cf` on the branch) then removed the follow's pane check, reasoning that no case builds the corner it guards. The guarantee review built the corner. With the check gone, the follow ran under the changes pane and forgot the Report it had kept: PD3 (b) was lost after a refused switch (G1), and a `\pc` refused in the command-line window moved the cursor of a Report the user had shown by hand (G2) and lost the next arrival (G2b). The correction (`c9b78b1`; `8f08be9` on the branch) put the check back, red-first from those inputs.
 
 ## Why it matters
 
 - **Each write is a separate obligation.** List every write the switch makes before its first call that can fail: the flag, any snapshot taken to compare against later (here a buffer and its tick), any "pending" marker. The rollback either restores each one or consumes it, as the follow does here.
 - **Undo per window.** In Neovim, showing a buffer in a window runs `BufWinEnter` and other autocommands, so undoing a window can raise as easily as doing it. Undo each window separately, and raise the original error.
-- **A guard next to rolled-back state needs its corner built before it goes.** "No case builds it" is a reason to build the case, not a reason to remove the guard.
 
 The same shape will meet T25's changes pane and any later code that moves buffers between fixed windows. Measured on Neovim 0.12.5.
