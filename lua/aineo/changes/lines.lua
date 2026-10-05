@@ -89,17 +89,17 @@ end
 ---
 ---@param failure aineo.git.Failure
 ---@return string
-local function words_of(failure)
+function M.words_of(failure)
   return vim.trim((failure.message:gsub('%c+', ' ')))
 end
 
 --- The line that says the last read of a window failed, in `failure`'s
---- words (`words_of()`).
+--- words (`M.words_of()`).
 ---
 ---@param failure aineo.git.Failure
 ---@return string
 function M.refresh_failed(failure)
-  return 'The last refresh failed: ' .. words_of(failure)
+  return 'The last refresh failed: ' .. M.words_of(failure)
 end
 
 --- A page of `notes` — lines that list nothing — then one line per row of
@@ -134,7 +134,7 @@ function M.no_repository(failure, directory)
   if failure.reason == 'not_a_repository' then
     line = 'Not in a git repository: ' .. M.quoted_path(directory)
   elseif failure.reason == 'no_git' then
-    line = 'git was not found: ' .. words_of(failure)
+    line = 'git was not found: ' .. M.words_of(failure)
   end
   return page({}, {}, line)
 end
