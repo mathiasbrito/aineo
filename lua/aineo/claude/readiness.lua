@@ -57,13 +57,14 @@ local function holds_input_box(lines)
 end
 
 --- How many rows the terminal `buffer` has while windows show it, as Neovim
---- 0.12.5 sizes a terminal whenever a window showing it opens or changes
---- size: the height of the tallest of them, in any tab page — among them the
---- autocommand window `jobstart()` runs a hidden buffer's terminal in, which
---- gives it its first size. A terminal started in a window that shows it has
---- that window's height until then; the session starts Claude Code's in a
---- buffer no window shows. None while no window shows it, when the terminal
---- keeps its rows.
+--- 0.12.5 sizes a terminal whenever the windows showing it change — one
+--- opens, closes, changes size, or switches to or from its buffer — and when
+--- Terminal mode is entered: the height of the tallest of them, in any tab
+--- page — among them the autocommand window `jobstart()` runs a hidden
+--- buffer's terminal in, which gives it its first size. A terminal started in
+--- a window that shows it has that window's height until one of those; the
+--- session starts Claude Code's in a buffer no window shows. None while no
+--- window shows it, when the terminal keeps its rows.
 ---
 ---@param buffer integer a terminal buffer
 ---@return integer?

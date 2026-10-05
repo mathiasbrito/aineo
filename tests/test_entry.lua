@@ -191,8 +191,8 @@ T[':Aineo open']['on a screen with no room tells the user Neovim’s error witho
 end
 
 --- What the user is told when a TermOpen autocommand of theirs fails: the
---- first line of the error, in the words Neovim wraps an error raised in a
---- Lua callback in.
+--- first line of the error, in the words Neovim 0.12 wraps an error raised
+--- in a Lua callback in.
 local TERMOPEN_FAILURE =
   'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:3: the user autocommand fails'
 
@@ -215,7 +215,7 @@ T[':Aineo open']['when a TermOpen autocommand of the user fails tells the user t
 end
 
 --- What the user is told when a TermOpen autocommand of theirs fails with
---- words that only look like Neovim's framing: every one of them.
+--- words that only look like Neovim 0.12's framing: every one of them.
 local TERMOPEN_FAILURE_QUOTING_FRAMING =
   'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:3: the user autocommand quotes Lua: here'
 
@@ -257,8 +257,8 @@ local EDITED_REPORT_AND_FAILING_BUFFILEPRE = [[
 ]]
 
 --- What the user is told when that BufFilePre autocommand fails as aineo
---- opens: the first line of the error, in Neovim's words for an error raised
---- in a Lua callback.
+--- opens: the first line of the error, in Neovim 0.12's words for an error
+--- raised in a Lua callback.
 local BUFFILEPRE_FAILURE =
   'aineo: nvim_exec2()[1]..nvim_exec2() called at nvim_exec2():1[1]..BufFilePre Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:7: the user autocommand fails'
 
@@ -274,8 +274,8 @@ end
 
 --- What the user is told when a TermOpen autocommand the user loaded from a
 --- Lua file fails with words that name another position: the first line of
---- its error, whole after Neovim's framing, as for a callback given as a
---- string.
+--- its error, whole after Neovim 0.12's framing, as for a callback given as
+--- a string.
 local TERMOPEN_FILE_FAILURE_NAMING_A_POSITION =
   'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: user/term.lua:3: the user hook failed: user/util.lua:4: the setting is missing'
 
@@ -303,7 +303,7 @@ end
 --- What the user is told when a TermOpen autocommand the user loaded from a
 --- Lua file fails with an error whose words begin on its second line: the
 --- first line, which ends at the position of the failing code, whole after
---- Neovim's framing, so that the user still learns where it failed.
+--- Neovim 0.12's framing, so that the user still learns where it failed.
 local TERMOPEN_FILE_FAILURE_ON_A_LATER_LINE =
   'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: user/term.lua:3: '
 
@@ -581,6 +581,30 @@ T[':Aineo send']["sends Input's text to Claude"] = function()
   child.cmd('Aineo send')
 
   eq(claude_session.wait_for_received_after(fake, received_before, #SENT_HELLO), SENT_HELLO)
+end
+
+--- The child code that makes the user's `vim.notify()`, as a notification
+--- plugin replaces it, fail on a warning with an error whose own words begin
+--- `Error executing lua: `, words no framing of Neovim 0.12's begins with,
+--- and keep every other notification as before.
+local NOTIFY_FAILING_ON_A_WARNING = [[
+  local notify = vim.notify
+  vim.notify = function(message, level)
+    if level == vim.log.levels.WARN then
+      error('Error executing lua: the notifier failed', 0)
+    end
+    notify(message, level)
+  end
+]]
+
+T[':Aineo send']['when the user’s vim.notify fails tells the user its error, every word of it'] = function()
+  child.lua(NOTIFY_FAILING_ON_A_WARNING)
+
+  entry.command(child, 'Aineo send')
+
+  eq(entry.messages(child), {
+    { message = 'aineo: Error executing lua: the notifier failed', level = vim.log.levels.ERROR },
+  })
 end
 
 return T

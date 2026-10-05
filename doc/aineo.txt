@@ -660,6 +660,10 @@ nothing opens. `--cmd`, `-t` and `-q` alone still autostart.
 reports on them. It starts no Claude session, opens no layout and maps no
 key; the one command it runs is `claude.cmd` with `--version` appended.
 
+Neovim ~
+  The version of the Neovim that runs aineo; an error when it is older
+  than 0.12, the oldest version aineo supports (|aineo-install|).
+
 Configuration ~
   An error naming a wrong setting; a warning naming each unknown key.
 
