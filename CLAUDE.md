@@ -28,7 +28,7 @@ Conventions live in `knowledge-vault/CLAUDE.md` and in a `CLAUDE.md` inside each
 
 **Until the project has specs, the agreed plan is the spec.** `knowledge-vault/Planning/aineo — v1 agent console.md` — its decision and component rows (D#, C#), converged with the user on 2026-09-23 — says what v1 must do. Those rows change only through a converge round with the user, superseded by a new ID, never edited in place. A packet that finds the plan, its brief and the code disagreeing reports a spec conflict; it does not choose.
 
-- **The suite runs on the newest Neovim release only, and Neovim 0.12 is the supported minimum** (D29: the newest-only rule is the user's decision of 2026-10-05; the 0.12 minimum is the orchestrator's reading of it, not yet answered; it supersedes D10's 0.11): terminals are `jobstart(…, { term = true })`, arguments are checked with `vim.validate(name, value, validator)`, and nothing older is guarded for or tested.
+- **The suite runs on the newest Neovim release only, and Neovim 0.12 is the supported minimum** (D29: the newest-only rule is the user's decision of 2026-10-05, and so is the 0.12 minimum, which the user confirmed the same day; it supersedes D10's 0.11): terminals are `jobstart(…, { term = true })`, arguments are checked with `vim.validate(name, value, validator)`, and nothing older is guarded for or tested.
 - **Tests run on mini.test with a fake `claude`; the real Claude never runs in the suite** (D10). **StyLua formats and selene lints** (D12, the user's choice). The commands, from the checkout's root (T1):
 
   | Command | Does |
