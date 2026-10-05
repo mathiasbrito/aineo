@@ -461,16 +461,14 @@ local ACTIONS = {
 }
 
 --- What Neovim puts before an error it passes on, outermost first: the
---- words it wraps an error raised in Lua in (`Lua: ` from Neovim 0.12 on,
---- `Error executing lua: ` before), the position of the Lua code that raised
---- it — `<file>.lua:<line>: `, the file's path holding no white space, or
---- for Neovim's own modules from 0.12 on `vim/<module>:<line>: ` or
+--- words it wraps an error raised in Lua in (`Lua: `), the position of the
+--- Lua code that raised it — `<file>.lua:<line>: `, the file's path holding
+--- no white space, or for Neovim's own modules `vim/<module>:<line>: ` or
 --- `[string "vim/<module>"]:<line>: ` — and the mark of an error a Vim
 --- function raised. A file's position is never looked for past a space, so
 --- the words of an error before a position they name are kept.
 local ERROR_FRAMING = {
   '^Lua: ',
-  '^Error executing lua: ',
   '^%S-%.lua:%d+: ',
   '^vim/[%w_/]+:%d+: ',
   '^%[string "vim/[^"]*"%]:%d+: ',

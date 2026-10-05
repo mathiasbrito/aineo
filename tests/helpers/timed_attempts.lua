@@ -7,49 +7,12 @@
 --- of three slow. A step over the bound in two of its three processes is
 --- judged over it; one over it in only one of three is not. No attempt's
 --- child finds what an earlier attempt or case left in its `stdpath()`
---- directories. A child whose LuaJIT compiles no code — which happens to some
---- processes of Neovim 0.11.6 that cannot allocate machine code for it, and
---- makes plain Lua many times slower — is started again before it is timed,
---- and timed all the same when none of its starts compiles code.
+--- directories.
 
 local M = {}
 
 --- How many attempts a case's steps are timed in, at most.
 local ATTEMPTS = 3
-
---- How many times a child is started for one attempt before it is timed
---- although its LuaJIT compiles no code.
-local STARTS_FOR_A_COMPILING_CHILD = 5
-
---- The expression, run in the child, that runs a loop hot enough for LuaJIT
---- to compile it and says whether any compiled trace exists: true too when
---- the child runs plain Lua, which has nothing to compile.
-local COMPILES_CODE = [[(function()
-  if not jit then
-    return true
-  end
-  local sum = 0
-  for index = 1, 200000 do
-    sum = (sum + index * 7) % 1000003
-  end
-  return require('jit.util').traceinfo(1) ~= nil
-end)()]]
-
---- Starts `child` with `start` until its LuaJIT compiles code, at most
---- `STARTS_FOR_A_COMPILING_CHILD` times, and leaves the last child it started
---- running when none does: a child that compiles no code is only slower, so
---- timing it can fail a step but never pass one that is too slow.
----
----@param child table a child from `MiniTest.new_child_neovim()`
----@param start fun()
-local function start_compiling_child(child, start)
-  for _ = 1, STARTS_FOR_A_COMPILING_CHILD do
-    start()
-    if child.lua_get(COMPILES_CODE) then
-      return
-    end
-  end
-end
 
 --- The XDG base directories a child's `stdpath()` directories lie in, each
 --- with the name of its directory in an attempt's home.
@@ -116,23 +79,20 @@ end
 --- second-fastest attempt: by step, the words "within the limit" when it did,
 --- or else that time, such as "2.5 s".
 ---
---- Each attempt starts the child with `timing.start` in a home of its own —
---- again, until its LuaJIT compiles code or `STARTS_FOR_A_COMPILING_CHILD`
---- starts are made — and times the steps with `timing.steps`. The attempts
---- end once every step's second-fastest time is within the limit, which takes
---- two of them at least, or after `ATTEMPTS`.
+--- Each attempt starts the child with `timing.start` in a home of its own and
+--- times the steps with `timing.steps`. The attempts end once every step's
+--- second-fastest time is within the limit, which takes two of them at least,
+--- or after `ATTEMPTS`.
 ---
----@param child table a child from `MiniTest.new_child_neovim()`
+---@param _child table the child `timing` starts and times, which this reaches only through `timing`
 ---@param timing { start: fun(), steps: fun(): table<string, number> } `start` starts the child ready for the steps; `steps` times them, in seconds by step
 ---@param limit number seconds
 ---@return table<string, string>
-function M.within_limit(child, timing, limit)
+function M.within_limit(_child, timing, limit)
   local seconds_by_step = {}
   local judged = {}
   for _ = 1, ATTEMPTS do
-    in_a_home_of_its_own(function()
-      start_compiling_child(child, timing.start)
-    end)
+    in_a_home_of_its_own(timing.start)
     for step, seconds in pairs(timing.steps()) do
       seconds_by_step[step] = seconds_by_step[step] or {}
       table.insert(seconds_by_step[step], seconds)
