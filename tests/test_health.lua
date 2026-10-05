@@ -73,6 +73,42 @@ T['the check']['starts nothing, maps nothing and loads only the configuration'] 
   )
 end
 
+T['Neovim'] = MiniTest.new_set()
+
+--- The child code that makes the child's `has()` say it is not Neovim 0.12
+--- or later, as an older Neovim does, and leaves every other feature to the
+--- real `has()`.
+local OLDER_THAN_0_12 = [[
+  local has = vim.fn.has
+  vim.fn.has = function(feature)
+    if feature == 'nvim-0.12' then
+      return 0
+    end
+    return has(feature)
+  end
+]]
+
+T['Neovim']['names the version that runs aineo'] = function()
+  start_with({ autostart = false })
+  local version = child.lua_get('tostring(vim.version())')
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Neovim'), { '- ✅ OK Neovim ' .. version })
+end
+
+T['Neovim']['is an error, naming the oldest version aineo supports, when older than 0.12'] = function()
+  start_with({ autostart = false })
+  child.lua(OLDER_THAN_0_12)
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Neovim'), {
+    '- ❌ ERROR Neovim is older than 0.12, the oldest version aineo supports',
+  })
+  eq(health.advice(report, 'Neovim'), { 'Update Neovim to 0.12 or later: :help |aineo-install|' })
+end
+
 T['the configuration'] = MiniTest.new_set()
 
 T['the configuration']['is reported valid when every setting is'] = function()
