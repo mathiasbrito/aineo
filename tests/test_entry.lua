@@ -191,11 +191,10 @@ T[':Aineo open']['on a screen with no room tells the user Neovim’s error witho
 end
 
 --- What the user is told when a TermOpen autocommand of theirs fails: the
---- first line of the error, in the words each Neovim wraps an error raised
---- in a Lua callback in.
-local TERMOPEN_FAILURE = vim.fn.has('nvim-0.12') == 1
-    and 'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:3: the user autocommand fails'
-  or 'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Error executing lua callback: [string "<nvim>"]:3: the user autocommand fails'
+--- first line of the error, in the words Neovim wraps an error raised in a
+--- Lua callback in.
+local TERMOPEN_FAILURE =
+  'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:3: the user autocommand fails'
 
 T[':Aineo open']['when a TermOpen autocommand of the user fails tells the user the first line of its error'] = function()
   local fake = claude_session.fake('entry-open-termopen-fails', 'ready')
@@ -217,9 +216,8 @@ end
 
 --- What the user is told when a TermOpen autocommand of theirs fails with
 --- words that only look like Neovim's framing: every one of them.
-local TERMOPEN_FAILURE_QUOTING_FRAMING = vim.fn.has('nvim-0.12') == 1
-    and 'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:3: the user autocommand quotes Lua: here'
-  or 'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Error executing lua callback: [string "<nvim>"]:3: the user autocommand quotes Lua: here'
+local TERMOPEN_FAILURE_QUOTING_FRAMING =
+  'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:3: the user autocommand quotes Lua: here'
 
 T[':Aineo open']['when a TermOpen autocommand fails with words that only look like framing tells the user them all'] = function()
   local fake = claude_session.fake('entry-open-termopen-quotes', 'ready')
@@ -259,11 +257,10 @@ local EDITED_REPORT_AND_FAILING_BUFFILEPRE = [[
 ]]
 
 --- What the user is told when that BufFilePre autocommand fails as aineo
---- opens: the first line of the error, in each Neovim's words for an error
---- raised in a Lua callback.
-local BUFFILEPRE_FAILURE = vim.fn.has('nvim-0.12') == 1
-    and 'aineo: nvim_exec2()[1]..nvim_exec2() called at nvim_exec2():1[1]..BufFilePre Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:7: the user autocommand fails'
-  or 'aineo: nvim_exec2()[1]..nvim_exec2() called at nvim_exec2():1[1]..BufFilePre Autocommands for "*": Vim(append):Error executing lua callback: [string "<nvim>"]:7: the user autocommand fails'
+--- opens: the first line of the error, in Neovim's words for an error raised
+--- in a Lua callback.
+local BUFFILEPRE_FAILURE =
+  'aineo: nvim_exec2()[1]..nvim_exec2() called at nvim_exec2():1[1]..BufFilePre Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:7: the user autocommand fails'
 
 T[':Aineo open']['when the user edited a buffer named as the Report and their BufFilePre autocommand fails tells the user the first line of its error'] = function()
   local fake = claude_session.fake('entry-open-buffilepre-fails', 'ready')
@@ -279,9 +276,8 @@ end
 --- Lua file fails with words that name another position: the first line of
 --- its error, whole after Neovim's framing, as for a callback given as a
 --- string.
-local TERMOPEN_FILE_FAILURE_NAMING_A_POSITION = vim.fn.has('nvim-0.12') == 1
-    and 'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: user/term.lua:3: the user hook failed: user/util.lua:4: the setting is missing'
-  or 'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Error executing lua callback: user/term.lua:3: the user hook failed: user/util.lua:4: the setting is missing'
+local TERMOPEN_FILE_FAILURE_NAMING_A_POSITION =
+  'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: user/term.lua:3: the user hook failed: user/util.lua:4: the setting is missing'
 
 T[':Aineo open']['when a TermOpen autocommand from a Lua file fails with words naming a position tells the user them all'] = function()
   local fake = claude_session.fake('entry-open-termopen-file', 'ready')
@@ -308,9 +304,8 @@ end
 --- Lua file fails with an error whose words begin on its second line: the
 --- first line, which ends at the position of the failing code, whole after
 --- Neovim's framing, so that the user still learns where it failed.
-local TERMOPEN_FILE_FAILURE_ON_A_LATER_LINE = vim.fn.has('nvim-0.12') == 1
-    and 'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: user/term.lua:3: '
-  or 'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Error executing lua callback: user/term.lua:3: '
+local TERMOPEN_FILE_FAILURE_ON_A_LATER_LINE =
+  'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: user/term.lua:3: '
 
 T[':Aineo open']['when a TermOpen autocommand from a Lua file fails with its words on a later line tells the user where it failed'] = function()
   local fake = claude_session.fake('entry-open-termopen-file-later-line', 'ready')

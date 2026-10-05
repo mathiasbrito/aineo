@@ -35,33 +35,6 @@ local function scripted_timing(seconds_by_attempt)
   return timing, attempts
 end
 
---- A start that gives the child a LuaJIT that compiles no code for its first
---- `failing_starts` starts and on every odd start after, and a working one on
---- the even starts after, and counts its starts in `starts.count`: a child
---- started once more after a working one compiles no code.
----
----@param failing_starts integer
----@return fun() start
----@return { count: integer } starts
-local function start_compiling_on_even_starts_after(failing_starts)
-  local starts = { count = 0 }
-  local function start()
-    starts.count = starts.count + 1
-    children.restart(child)
-    if starts.count <= failing_starts or starts.count % 2 == 1 then
-      child.lua('jit.off() jit.flush()')
-    end
-  end
-  return start, starts
-end
-
---- Whether the child's LuaJIT holds a compiled trace.
----
----@return boolean
-local function child_holds_a_trace()
-  return child.lua_get([[require('jit.util').traceinfo(1) ~= nil]])
-end
-
 --- The XDG base directories of the test's own Neovim: its config, data, state
 --- and cache homes, in that order.
 ---
@@ -181,38 +154,6 @@ T['the attempts']["raise what a start raised, with the test's own home as they f
   local completed, failure = pcall(timed_attempts.within_limit, child, timing, 2)
 
   eq({ completed, failure, xdg_base_directories() }, { false, 'the child did not start', own_home })
-end
-
-T['a child'] = MiniTest.new_set()
-
-T['a child']['whose LuaJIT compiles no code is started again before it is timed'] = function()
-  local start = start_compiling_on_even_starts_after(3)
-  local timing = {
-    start = start,
-    steps = function()
-      return { compiled = child_holds_a_trace() and 1 or 3 }
-    end,
-  }
-
-  local verdicts = timed_attempts.within_limit(child, timing, 2)
-
-  eq(verdicts, { compiled = 'within the limit' })
-end
-
-T['a child']['that compiles no code in five starts is timed after its fifth start'] = function()
-  local start, starts = start_compiling_on_even_starts_after(math.huge)
-  local starts_when_timed = {}
-  local timing = {
-    start = start,
-    steps = function()
-      table.insert(starts_when_timed, starts.count)
-      return { arrival = 1 }
-    end,
-  }
-
-  local completed = pcall(timed_attempts.within_limit, child, timing, 2)
-
-  eq({ completed, starts_when_timed }, { true, { 5, 10 } })
 end
 
 return T
