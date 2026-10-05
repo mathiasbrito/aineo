@@ -1,0 +1,24 @@
+# T24's baseline: the orchestrator's verification of tree cd29244 on 2026-10-05, the last
+# re-verification of wave 6 (T27, T28 and T29 merged over dev), copied from its record
+# with no path of the host. The record's other lines (its mutants) are T27's, T28's and
+# T29's, and are in their sections of Waves/00006-fixes/plan.md.
+#
+# The tree is dev's at d1b9225, the base T24 starts from, byte for byte:
+#   git rev-parse 'd1b9225^{tree}'
+#   cd292445be66cbf2eeaad1695ace466ecedefc11
+# (run by the brief's drafter on 2026-10-05).
+#
+# The lines, as recorded:
+== DELTA re-verification: tree cd29244 = dev c6172e5 + T29 0e55599
+== base: tree cd292445be66cbf2eeaad1695ace466ecedefc11; NVIM v0.12.5
+== guard 0.12.5 rc=0 secs=0 load= 8.72 11.00 13.11
+Total number of cases: 5
+Fails (0) and Notes (0)
+== suite 0.12.5 rc=0 secs=197 load= 17.38 14.32 14.08
+Total number of cases: 1455
+Fails (0) and Notes (0)
+== lint rc=0
+Results:
+0 errors
+0 warnings
+0 parse errors
