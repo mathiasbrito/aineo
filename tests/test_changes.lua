@@ -149,6 +149,24 @@ local function watch_live(top)
   end)
 end
 
+--- Opens `path` in the child in a window above the pane's, runs `command`
+--- there, and goes back to the files window.
+---
+---@param path string
+---@param command string
+local function in_file(path, command)
+  child.lua(
+    [[
+      local path, command = ...
+      local files = vim.api.nvim_get_current_win()
+      vim.cmd('aboveleft split ' .. vim.fn.fnameescape(path))
+      vim.cmd(command)
+      vim.api.nvim_set_current_win(files)
+    ]],
+    { path, command }
+  )
+end
+
 --- The git the suites run, by its absolute path, for the stand-ins that
 --- run it in their turn.
 local REAL_GIT = vim.fn.exepath('git')
@@ -215,6 +233,28 @@ T['the pane']['starts the watch and reads both lists the first time it is shown'
   expect_lines(FILES, { 'No files changed on this session' })
   expect_lines(COMMITS, { 'No commits on this session' })
   eq(child.lua_get('_G.git_calls.watch_repository'), 1)
+end
+
+--- The Lua that shows the child's files buffer anew in the window that
+--- shows it: another buffer first, then the files buffer again.
+local SHOW_FILES_AGAIN = [[
+  local window = vim.fn.bufwinid('aineo://changes-files')
+  local files = vim.api.nvim_win_get_buf(window)
+  vim.api.nvim_win_set_buf(window, vim.api.nvim_create_buf(false, true))
+  vim.api.nvim_win_set_buf(window, files)
+]]
+
+T['the pane']['counts every file as new and every commit as the session’s before the first commit'] = function()
+  local top = git_repo.create_unborn('changespane-unborn')
+  git_repo.write(top, 'notes.txt', { 'one' })
+  begin_and_show(top)
+  expect_lines(FILES, { '  ? notes.txt' })
+  local first = git_repo.commit_all(top, 'First')
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  expect_lines(FILES, { '  A notes.txt' })
+  expect_lines(COMMITS, { first:sub(1, 7) .. ' First' })
 end
 
 T['the files window'] = MiniTest.new_set()
@@ -410,25 +450,226 @@ T['the reads']['run only when asked for, never on a timer, while the pane shows'
   eq(child.lua_get('{ _G.git_calls.changed_files, _G.git_calls.commits_since }'), { 1, 1 })
 end
 
-T['the user’s saves'] = MiniTest.new_set()
-
---- Opens `path` in the child in a window above the pane's, runs `command`
---- there, and goes back to the files window.
+--- Writes a stand-in for git under the fixture `git-<name>`, which holds the
+--- repository at `top`, whose `subcommand` fails with `fatal: broken` while
+--- the file `broken` beside the repository exists; returns the stand-in's
+--- path and the switch file's.
 ---
----@param path string
----@param command string
-local function in_file(path, command)
-  child.lua(
-    [[
-      local path, command = ...
-      local files = vim.api.nvim_get_current_win()
-      vim.cmd('aboveleft split ' .. vim.fn.fnameescape(path))
-      vim.cmd(command)
-      vim.api.nvim_set_current_win(files)
-    ]],
-    { path, command }
+---@param name string
+---@param top string
+---@param subcommand string `ls-files`, the files window's last git, or `log`, the commits window's first
+---@return string stand_in
+---@return string switch
+local function breakable_git(name, top, subcommand)
+  local switch = vim.fs.joinpath(vim.fs.dirname(top), 'broken')
+  local stand_in = stand_in_git(name, {
+    ('case " $* " in *" %s "*) [ -f %s ] && { echo "fatal: broken" >&2; exit 128; } ;; esac'):format(
+      subcommand,
+      switch
+    ),
+  })
+  return stand_in, switch
+end
+
+--- Makes the stand-in whose switch file is `switch` fail from now on
+--- (`breakable_git()`).
+---
+---@param switch string
+local function turn_on(switch)
+  assert(vim.fn.writefile({}, switch) == 0, 'cannot write ' .. switch)
+end
+
+--- Makes the stand-in whose switch file is `switch` run git again.
+---
+---@param switch string
+local function turn_off(switch)
+  assert(vim.fn.delete(switch) == 0, 'cannot remove ' .. switch)
+end
+
+--- What a window says first once its last read failed with `fatal: broken`.
+local REFRESH_FAILED = 'The last refresh failed: fatal: broken'
+
+T['outside a repository'] = MiniTest.new_set()
+
+T['outside a repository']['both windows say so, naming the directory'] = function()
+  local directory = git_repo.directory('changespane-no-repository')
+
+  begin_and_show(directory)
+
+  local expected = { 'Not in a git repository: ' .. directory }
+  expect_lines(FILES, expected)
+  expect_lines(COMMITS, expected)
+end
+
+T['outside a repository']['both windows say so when git is not found'] = function()
+  local directory = git_repo.directory('changespane-no-git')
+  local missing = vim.fs.joinpath(directory, 'no-such-git')
+
+  begin_and_show(directory, { executable = missing })
+
+  local expected = {
+    ("git was not found: ENOENT: no such file or directory (cmd): '%s'"):format(missing),
+  }
+  expect_lines(FILES, expected)
+  expect_lines(COMMITS, expected)
+end
+
+T['outside a repository']['the pane, shown again, lists a repository made since, from its HEAD then'] = function()
+  local directory = git_repo.directory('changespane-later')
+  begin_and_show(directory)
+  expect_lines(FILES, { 'Not in a git repository: ' .. directory })
+  git_repo.git(directory, { 'init', '--quiet', '--initial-branch=main' })
+  git_repo.write(directory, 'notes.txt', { 'one' })
+  git_repo.commit_all(directory, 'First')
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(COMMITS, { 'No commits on this session' })
+end
+
+T['outside a repository']['a save looks again for a repository made since, the save itself unmarked'] = function()
+  local directory = git_repo.directory('changespane-later-saved')
+  begin_and_show(directory)
+  expect_lines(FILES, { 'Not in a git repository: ' .. directory })
+  git_repo.git(directory, { 'init', '--quiet', '--initial-branch=main' })
+
+  in_file(vim.fs.joinpath(directory, 'notes.txt'), "call setline(1, 'one') | write")
+
+  expect_lines(FILES, { '  ? notes.txt' })
+  expect_lines(COMMITS, { 'No commits on this session' })
+end
+
+T['outside a repository']['keeps the base the first look found, a look asked for meanwhile included'] = function()
+  local directory = git_repo.directory('changespane-later-twice')
+  local slow = stand_in_git('changespane-later-twice', {
+    'case " $* " in *" --show-toplevel "*) sleep 1 ;; esac',
+  })
+  child.lua(SPY_ON_GIT)
+  begin_and_show(directory, { executable = slow })
+  expect_lines(FILES, { 'Not in a git repository: ' .. directory })
+  git_repo.git(directory, { 'init', '--quiet', '--initial-branch=main' })
+  git_repo.write(directory, 'notes.txt', { 'one' })
+  git_repo.commit_all(directory, 'First')
+  child.lua(SHOW_FILES_AGAIN)
+  child.lua(SHOW_FILES_AGAIN)
+  expect_lines(COMMITS, { 'No commits on this session' })
+  local second = git_repo.commit_all(directory, 'Second')
+
+  git_repo.wait_until('the look asked for meanwhile answered', function()
+    return child.lua_get('_G.git_answers.find_repository') == 3
+  end)
+  child.lua(SHOW_FILES_AGAIN)
+
+  git_repo.wait_until('every read of the commits answered', function()
+    return child.lua_get('_G.git_answers.commits_since == _G.git_calls.commits_since')
+  end)
+  eq(lines_of(COMMITS), { second:sub(1, 7) .. ' Second' })
+end
+
+T['a failed read'] = MiniTest.new_set()
+
+T['a failed read']['keeps the list shown, under a line giving git’s words'] = function()
+  local top = git_repo.create('changespane-failed', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local stand_in, switch = breakable_git('changespane-failed', top, 'ls-files')
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(FILES, { '  M notes.txt' })
+  turn_on(switch)
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  expect_lines(FILES, { REFRESH_FAILED, '  M notes.txt' })
+end
+
+T['a failed read']['shows the line alone when no list was shown yet'] = function()
+  local top = git_repo.create('changespane-failed-first', { ['notes.txt'] = { 'one' } })
+  local stand_in, switch = breakable_git('changespane-failed-first', top, 'ls-files')
+  turn_on(switch)
+
+  begin_and_show(top, { executable = stand_in })
+
+  expect_lines(FILES, { REFRESH_FAILED })
+end
+
+T['a failed read']['of the commits keeps the commits shown, under a line giving git’s words'] = function()
+  local top = git_repo.create('changespane-failed-commits', { ['notes.txt'] = { 'one' } })
+  local stand_in, switch = breakable_git('changespane-failed-commits', top, 'log')
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(COMMITS, { 'No commits on this session' })
+  turn_on(switch)
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  expect_lines(COMMITS, { REFRESH_FAILED, 'No commits on this session' })
+end
+
+T['a failed watch'] = MiniTest.new_set()
+
+T['a failed watch']['is told in both windows and started again the next time the pane shows'] = function()
+  local top = git_repo.create('changespane-failed-watch', { ['notes.txt'] = { 'one' } })
+  local stand_in, switch = breakable_git('changespane-failed-watch', top, 'symbolic-ref')
+  begin_and_show(top, { executable = stand_in })
+  watch_live(top)
+  turn_on(switch)
+  local live = git_repo.commit_all(top, 'Add the marker')
+  expect_lines(COMMITS, { REFRESH_FAILED, 'No commits on this session' })
+  expect_lines(FILES, { REFRESH_FAILED, '  ? ' .. LIVE_MARKER })
+  turn_off(switch)
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  expect_lines(COMMITS, { live:sub(1, 7) .. ' Add the marker' })
+  local again = git_repo.git(top, { 'commit-tree', 'HEAD^{tree}', '-p', 'HEAD', '-m', 'Again' })
+  expect_lines_after(
+    COMMITS,
+    { again:sub(1, 7) .. ' Again', live:sub(1, 7) .. ' Add the marker' },
+    function()
+      git_repo.git(top, { 'update-ref', 'refs/heads/main', again })
+      git_repo.git(top, { 'update-ref', 'refs/heads/main', live })
+      git_repo.git(top, { 'update-ref', 'refs/heads/main', again })
+    end
   )
 end
+
+T['a failed watch']['stays told while the pane reads its lists again before it shows anew'] = function()
+  local top = git_repo.create('changespane-failed-watch-read', { ['notes.txt'] = { 'one' } })
+  local stand_in, switch = breakable_git('changespane-failed-watch-read', top, 'symbolic-ref')
+  begin_and_show(top, { executable = stand_in })
+  watch_live(top)
+  turn_on(switch)
+  git_repo.commit_all(top, 'Add the marker')
+  expect_lines(FILES, { REFRESH_FAILED, '  ? ' .. LIVE_MARKER })
+  turn_off(switch)
+
+  in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
+
+  expect_lines(FILES, { REFRESH_FAILED, '  A ' .. LIVE_MARKER, '* M notes.txt' })
+end
+
+T['a failed watch']['that cannot start is told until one starts'] = function()
+  local top = git_repo.create('changespane-watch-unstarted', { ['notes.txt'] = { 'one' } })
+  local git_directory, away = vim.fs.joinpath(top, '.git'), vim.fs.joinpath(top, '.git-away')
+  child.lua(SPY_ON_GIT)
+  child.lua(BEGIN_HIDDEN, { top })
+  git_repo.wait_until('the repository found', function()
+    return child.lua_get('_G.git_answers.find_repository') == 1
+  end)
+  assert(vim.uv.fs_rename(git_directory, away), 'cannot move ' .. git_directory)
+  child.lua([[vim.api.nvim_win_set_buf(0, vim.fn.bufnr('aineo://changes-files'))]])
+  assert(vim.uv.fs_rename(away, git_directory), 'cannot move ' .. away)
+
+  in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
+
+  expect_lines(FILES, {
+    ('The last refresh failed: cannot watch %s: ENOENT: no such file or directory'):format(
+      git_directory
+    ),
+    '* M notes.txt',
+  })
+end
+
+T['the user’s saves'] = MiniTest.new_set()
 
 T['the user’s saves']['are marked in the files window'] = function()
   local top = git_repo.create('changespane-saved', { ['notes.txt'] = { 'one' } })
@@ -491,7 +732,7 @@ end
 T['the user’s saves']['mark a file opened through a symbolic link to the repository'] = function()
   local top = git_repo.create('changespane-link', { ['notes.txt'] = { 'one' } })
   local link = vim.fs.joinpath(vim.fs.dirname(top), 'link')
-  assert(vim.uv.fs_symlink(top, link))
+  assert(vim.uv.fs_symlink(top, link), 'cannot link ' .. link)
   begin_and_show(top)
   expect_lines(FILES, { 'No files changed on this session' })
 
