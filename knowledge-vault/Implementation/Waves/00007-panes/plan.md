@@ -313,9 +313,9 @@ Added after the brief review, one per option the user did not choose, and two fo
     - `\pc` from another tab page moving the user or not, depending on a window out of sight (attack 7);
     - `plugin/aineo.lua` loading `vim.iter` as it is sourced (attack 8);
     - `\r` and `\i` under the changes pane raising "Invalid buffer id" after `:bwipeout` of the other agent-pane buffer (records 1);
-    - PD3 (b)'s "shows nothing then" and D21 at the user's doors unpinned, a ten-switch case green on `dev`, three mutants killed only by crash, Claude's window options unpinned (test integrity 1–8);
-    - a help sentence on the cursor's start made false by PD6, a miscounted mutant total, five readings missing from the session note, and four pieces of code written ahead of their failing test (records 2–9).
-  - **The fix round** went to a fresh agent and took every finding. It redid the reviews' measured fixes and pins red-first in the pane files: 39 cases added, 28 mutants killed by assertion, 1574 cases.
+    - PD3 (b)'s "shows nothing then" and D21 at the user's doors unpinned, a ten-switch case green on `dev`, three mutants killed only by crash, Claude's window options unpinned (test integrity 1–4 and 8, among others);
+    - a help sentence on the cursor's start made false by PD6, a miscounted mutant total, five readings missing from the session note, and four pieces of code written ahead of their failing test (records 2, 4, 6 and 7, among others; 5, 8 and 9 corrected the PR body, two commit messages and a docstring).
+  - **The fix round** went to a fresh agent and took every finding but records 10, which was the knowledge pass's. It redid the reviews' measured fixes and pins red-first: 39 cases added, all but one in the pane files, 28 mutants killed by assertion, 1574 cases.
   - **The re-measure**, with the attack question (`neovim-lua-reviewer`), held the round's fixes for every input the three reviews built. It found eight more:
     - a refused switch left the Report's `b:changedtick` behind, so `\o` later moved the Report's cursor (finding 1);
     - a rollback that itself raises left the column half switched, and `\pa` then did nothing (finding 2);
