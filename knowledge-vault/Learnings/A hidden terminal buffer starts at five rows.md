@@ -6,7 +6,7 @@
 
 ## The insight
 
-In Neovim 0.11.6 and 0.12.5, `jobstart(cmd, { term = true })` called for a buffer no window shows runs the terminal in Neovim's autocommand window, and the process first sees that window's size — 5 rows, as wide as the editor. On 0.11.6 that held whatever `width` and `height` the call passed, since those options do not apply to a terminal; 0.12.5 was measured without them. A full-screen program that draws its first screen then draws it for 5 rows. Show the buffer in its window before the program draws. On 0.11.6, shown in the same tick or from a `vim.schedule()` callback, the process saw the window's size. On 0.12.5 it has the window's size about 50 ms after it starts, but a size it reads as it starts can still be 5 rows.
+In Neovim 0.11.6 and 0.12.5, `jobstart(cmd, { term = true })` called for a buffer no window shows and given no `width` or `height` runs the terminal in Neovim's autocommand window, and the process first sees that window's size — 5 rows, as wide as the editor. On 0.11.6 that held whatever `width` and `height` the call passed, since those options do not apply to a terminal; on 0.12.5 they apply: hidden, with `width = 120, height = 40`, the process reads `40 120` (PR #111's records review). A full-screen program that draws its first screen then draws it for 5 rows. Show the buffer in its window before the program draws. On 0.11.6, shown in the same tick or from a `vim.schedule()` callback, the process saw the window's size. On 0.12.5 it has the window's size about 50 ms after it starts, but a size it reads as it starts can still be 5 rows.
 
 ## Example
 

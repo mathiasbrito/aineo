@@ -339,16 +339,16 @@ Added after the brief review, one per option the user did not choose, and two fo
   - `73760cf`'s line, the follow without its pane check, killed by four assertions in `tests/test_entry_panes.lua`.
 - **No release:** the user, 2026-10-05, "Wait for T25 (Recommended)". T24 ships with T25.
 - **T30 — PR #108, regular**, merged by rebase on 2026-10-05 as `4ffce13`, `d9ee33d`, `530b6d5` and `16f1fa7`. The code of `dev` `16f1fa7` is the code the orchestrator verified, the PR's head `c599679`. Session note: [[Sessions/2026-10-05 — T30 Drop Neovim 0.11]]; probes: `evidence/t30-probes.txt`.
-  - **The packet** (`neovim-claude-code-integrator`) removed what existed only for 0.11. Each removal under B and D came after its measurement on 0.12.5:
+  - **The packet** (`neovim-claude-code-integrator`) removed what existed only for 0.11. Each removal under B and D came, by the author's report, after its measurement on 0.12.5 (the records review could not verify the order):
     - A: the eight `vim.fn.has('nvim-0.12')` test branches, their 0.12 side kept;
     - B: `'^Error executing lua: '` out of both `ERROR_FRAMING` tables (no first line held it, 0 of 9 paths), with its parametrized row;
     - C: five docstrings restated for 0.12.5;
     - D: the timing helper's LuaJIT check, its loop, its two cases and their two helpers (0 of 300 fresh children compiled nothing).
 
     1599 → 1596 cases. Against the brief, it kept `run_within_bound()`'s docstring: the brief review's 1002 ms did not reproduce, and `vim.wait(1000, …)` returned only once the writer was killed, at 10.9–11.0 s. It kept `within_limit()`'s unused parameter as `_child`, since the callers lay outside the boundary (a spec conflict). It reported that D makes MR212's clause on the LuaJIT check false.
-  - **Reviews** on Opus: attack by `neovim-claude-code-reviewer`, test integrity by `reviewer`, records by `reviewer`. None blocked the merge.
+  - **Reviews** on Opus: attack by `neovim-claude-code-reviewer`, test integrity by `reviewer`, records by `reviewer`. Test integrity's finding 1 and records' finding 1 were to be made before merge, and the fix round made them; the attack review named none.
   - **What they found:**
-    - the brief review's 1002 ms comes only from a flood that never reaches Neovim (`stdout = false`, or a writer to `/dev/null`). A flood read by a handler keeps `vim.wait()` from running out on 0.12.5 as on 0.11.6, whose `LOOP_PROCESS_EVENTS_UNTIL` has the same body. `:checkhealth aineo` with `claude.cmd = { 'yes' }` took 3007 ms, and 12125 ms with the check's own timer disabled (M-H1). So the docstring holds, and the vault records that say otherwise invite removing the timer (attack 1);
+    - the brief review's 1002 ms is reproduced only by a flood that never reaches Neovim (`stdout = false`, or a writer to `/dev/null`); that this was its cause is the review's inference, since the brief review's probe was not kept. A flood a `vim.system()` handler reads cheaply keeps `vim.wait()` from running out on 0.12.5 as on 0.11.6, whose `LOOP_PROCESS_EVENTS_UNTIL` has the same body. `:checkhealth aineo` with `claude.cmd = { 'yes' }` took 3007 ms, and 12125 ms with the check's own timer disabled (M-H1). So the docstring holds, and the vault records that say otherwise invite removing the timer (attack 1);
     - `shown_rows()`'s restated docstring had one false sentence: Neovim 0.12.5 also resizes a terminal when a window showing it closes or switches to or from its buffer, and when Terminal mode is entered (attack 2);
     - "5, at 80 columns" for a hidden terminal, which is as wide as the editor (attack 3);
     - nothing tells a user of Neovim 0.11 that aineo no longer supports it (attack 4, outside the boundary);
@@ -371,7 +371,7 @@ Added after the brief review, one per option the user did not choose, and two fo
     - Three docstrings now carry the reviews' measured wording, and the probes file was completed.
     - 16 mutants killed by assertion; 1602 cases, `Fails (0)`, 201 s.
   - **The guarantee review** (`neovim-lua-developer`): merge. Its 12 mutants were all killed by assertion. The health section is true as it runs, and reachable with `has('nvim-0.12')` stubbed to 0. Both pins fail by assertion when the pattern is put back. The restated docstrings match 0.12.5. Whether `aineo.health` loads on a real 0.11 is not measured (D29).
-  - **Records the reviews named false** carry dated correction notes from the knowledge pass, beside the text as dispatched: the brief's C flood bullet and the brief review's T30-2.
+  - **Records the reviews named false, left as dispatched** (`Implementation/Waves/CLAUDE.md`): the brief's C flood bullet and the brief review's T30-2 say that on 0.12.5 `vim.wait(1000, …)` returns after 1002 ms under a `yes` flood. It does not when a `vim.system()` handler reads the flood cheaply, as `run_within_bound()` reads `claude.cmd --version`: 10.9–11.0 s with the writer killed at 10 s (the packet), and about 4000 ms with it killed at 3 s (the attack review, the fix round). The brief review's probe was not kept. Its 1002 ms is reproduced by a flood Neovim never reads, which is the attack review's inference, not a measurement of that probe (`evidence/t30-probes.txt` › *C6, why 1002 ms*).
 - **The orchestrator's verification** of `c599679`, on 0.12.5 (D29):
   - guard 5 cases, `Fails (0)`;
   - `make test`, 1602 cases, `Fails (0)`, 201 s;
