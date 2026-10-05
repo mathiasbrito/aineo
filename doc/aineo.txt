@@ -236,17 +236,17 @@ mode too. Any other terminal of yours keeps Neovim's own behaviour.
 
 `report`, `input`, `claude` and `pane` open the layout first when their window
 is gone (for `pane`, either window of the right column, or a buffer of the
-pane wiped), around Claude's terminal as it is — its exit on screen when
-Claude Code has exited. They start Claude Code only when there is no terminal
-to show: before the first start, or again, in a new terminal, once the
-terminal was wiped (|:bwipeout|). Wiping it from Claude's window closes that
-window; a window Neovim cannot close, such as its last one, stays on an empty
-buffer until `claude` opens the layout there again — `report` and `input` do
-so only when their own window is gone too. A file opened in Claude's window as
-the terminal is wiped stays in view, and moves to the file column when the
-layout opens again. Of the actions, only `open` restarts an exited Claude
-Code; aineo restarts one by itself only in place of a resume Claude Code has
-no conversation for (|aineo-claude-session|).
+pane wiped or deleted), around Claude's terminal as it is — its exit on screen
+when Claude Code has exited. They start Claude Code only when there is no
+terminal to show: before the first start, or again, in a new terminal, once
+the terminal was wiped (|:bwipeout|). Wiping it from Claude's window closes
+that window; a window Neovim cannot close, such as its last one, stays on an
+empty buffer until `claude` opens the layout there again — `report` and
+`input` do so only when their own window is gone too. A file opened in
+Claude's window as the terminal is wiped stays in view, and moves to the file
+column when the layout opens again. Of the actions, only `open` restarts an
+exited Claude Code; aineo restarts one by itself only in place of a resume
+Claude Code has no conversation for (|aineo-claude-session|).
 
                                                        *:Aineo-claude-numbers*
 :Aineo claude-numbers	Hides the line numbers of Claude's window, 'number'
