@@ -380,4 +380,33 @@ T['the changes pane key']['shows a wiped buffer of the changes pane anew, with n
   )
 end
 
+T['the changes pane key']['shows a deleted buffer of the changes pane anew, as a placeholder,'] =
+  MiniTest.new_set({
+    parametrize = { { 'deleted while shown', 'pc' }, { 'deleted while hidden', 'pa' } },
+  })
+
+T['the changes pane key']['shows a deleted buffer of the changes pane anew, as a placeholder,']['when'] = function(
+  _,
+  key_before_deleting
+)
+  open_layout('panes-deleted')
+  entry.press(child, '\\pc')
+  entry.press(child, '\\' .. key_before_deleting)
+  child.cmd('bdelete ' .. child.fn.bufnr('aineo://changes-files'))
+
+  entry.press(child, '\\pc')
+
+  eq({
+    entry.windows(child),
+    entry.messages(child),
+    child.lua_get(PLACEHOLDER, { 'aineo://changes-files' }),
+  }, {
+    CHANGES_PANE,
+    {},
+    vim.tbl_extend('error', SCRATCH, {
+      lines = { "aineo does not list the session's changed files here yet" },
+    }),
+  })
+end
+
 return T
