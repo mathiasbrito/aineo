@@ -42,8 +42,8 @@ The first line of an error raised in Lua changed between Neovim 0.11.6 and 0.12.
 A plugin that shows the user the first line of an error, or relays it, must not match one fixed prefix.
 - Strip a list of framings and positions, and repeat until nothing more comes off.
 - Anchor every pattern, and keep each one from crossing white space, so it cannot eat the user's words.
-- Pin each version's text on the version that writes it (`vim.fn.has('nvim-0.12')` picks the whole expected text in T13's tests; no pattern was widened to accept both).
+- Pin each version's text on the version that writes it. T13's tests picked the whole expected text with `vim.fn.has('nvim-0.12')`, and no pattern was widened to accept both. Since T30 (PR #108, D29) those branches are gone, and the tests pin 0.12.5's text alone.
 - **Limits:**
   - measured on 0.11.6 and 0.12.5;
   - the positions were measured for the four calls above and the two actions the attack review found. Which of 0.12's modules show as `[string "vim/<module>"]` and which as bare `vim/<module>` was not surveyed.
-  - The accepted trade-off: an error whose own words begin with `Lua: ` or `Error executing lua: ` loses them (T13's *Readings*).
+  - The accepted trade-off: an error whose own words begin with `Lua: ` loses them (T13's *Readings*). Since T30, aineo strips nothing for 0.11's `Error executing lua: `, which no path on 0.12.5 writes, so an error or a relayed reason whose own words begin with it keeps them. The user chose that on 2026-10-05: “Keep the removal (Recommended)” (MR99 and MR100 of [[Review/2026-09-24 — v1 MVP readings review]]).
