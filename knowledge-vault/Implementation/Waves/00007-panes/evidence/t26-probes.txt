@@ -1,0 +1,746 @@
+T26 (Visual Send) — the probes behind its brief, D20's "measurement first"
+==========================================================================
+
+Measured 2026-10-05 on macOS arm64 (Darwin 27.0.0), NVIM v0.12.5 (Homebrew,
+LuaJIT 2.1.1788856981). Nothing ran on 0.11. The code measured is T24's head,
+8e520f5 (origin/feature/t24-panes, PR #105), extracted with `git archive` into
+a scratch folder; every probe loads it through its own scripts/minimal_init.lua,
+so tests/helpers/entry_guard/ is first on PATH and the real `claude` never ran.
+Claude Code is the suites' fake (tests/helpers/fake_claude.lua, mode `ready`),
+run as aineo's `claude.cmd`. Each probe ran headless in a home of its own
+(run.sh: XDG_*, CLAUDE_CONFIG_DIR, NVIM_LOG_FILE and TMPDIR under it), and
+quit by itself; no process was left.
+
+Keys are typed with nvim_feedkeys(…, 'mtx'): typed, remapped, executed at once,
+so each key sequence is its own command and its own undo block, as typed keys
+are. `\s` is the prefix key aineo maps at VimEnter (<Plug>(aineo-send)).
+
+What they show, in short (the outputs below are the record):
+- U1 `u` in Input after a whole-Input Send brings Input's text back; <C-r>
+  empties it again. One `u` per Send (U7). Sent from another window (U2), or
+  while the changes pane hides Input (U3), `u` in Input still brings it back.
+  A Send from Insert mode through <C-o> is its own undo step (U6).
+- U4 a failed write (the write raising, as a closed stream does): Send's
+  removal and its put-back are ONE undo block, so the first `u` after it
+  changes nothing visible; the second undoes the user's own last change.
+- U5 a refused Send changes nothing and adds no undo step.
+- D the draft restored into Input (D17, `undolevels = -1`) is not undone by
+  `u` ("Already at oldest change"); after a Send, `u` brings the draft's text
+  back, and the draft file holds it again a second later; <C-r> empties the
+  draft file at once.
+- V for every selection kind, Vim's own `"_d` and `:normal! "_d` inside an
+  x mapping's Lua callback remove the same text, and one `u` restores it.
+  getregion() gives Vim's own yank text in every case but one: a selection
+  ending past the end of a line (`v$`), where the yank ends with an empty
+  line (the line break) and getregion() does not — yet `"_d` removes the
+  line break, joining the lines.
+- V in an x mapping's Lua callback, Visual mode is still on and '< '> still
+  hold the PREVIOUS selection: the selection is read from getpos('v') and
+  getpos('.'), or after leaving Visual mode.
+- V `\s` typed in Visual mode where nothing maps it: `\` does nothing and `s`
+  replaces the selection — the selected text is deleted and Insert mode
+  entered.
+- V2 a blockwise removal made of one nvim_buf_set_text() per line in one
+  callback is one undo step; a callback that changes nothing leaves Visual
+  mode on; `:'<,'>Aineo send` and `:1Aineo send` raise E481 (no range
+  allowed) on T24's `:Aineo`.
+
+==================== run.sh ====================
+#!/bin/sh
+# Runs one probe headless on the newest Neovim, isolated under this folder.
+# usage: run.sh <probe.lua> <home-name> [extra nvim args...]
+HERE=$(cd "$(dirname "$0")" && pwd)
+TREE=$(cd "$HERE/../../t24tree" && pwd)
+PROBE=$1; NAME=$2; shift 2
+H="$HERE/home-$NAME"
+rm -rf "$H"; mkdir -p "$H/config" "$H/data" "$H/state" "$H/cache" "$H/claude" "$H/tmp" "$H/work"
+for v in $(env | sed -n 's/^\(CLAUDE[A-Z_]*\)=.*/\1/p'); do unset "$v"; done
+unset AINEO_CHILD
+export XDG_CONFIG_HOME="$H/config" XDG_DATA_HOME="$H/data" XDG_STATE_HOME="$H/state" XDG_CACHE_HOME="$H/cache"
+export CLAUDE_CONFIG_DIR="$H/claude" NVIM_LOG_FILE="$H/nvim.log" TMPDIR="$H/tmp"
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_CEILING_DIRECTORIES="$HERE"
+export GIT_AUTHOR_NAME=probe GIT_AUTHOR_EMAIL=probe@example.invalid GIT_COMMITTER_NAME=probe GIT_COMMITTER_EMAIL=probe@example.invalid
+export AINEO_PROBE_TREE="$TREE" AINEO_PROBE_HOME="$H" AINEO_PROBE_OUT="$HERE/$NAME.out"
+cd "$H/work" || exit 1
+exec nvim --headless -u "$TREE/scripts/minimal_init.lua" "$@" -c "luafile $HERE/$PROBE"
+
+==================== lib.lua ====================
+-- Shared helpers for the T25/T26 brief probes.
+local M = {}
+local out = {}
+
+function M.log(...)
+  local parts = {}
+  for i = 1, select('#', ...) do
+    local v = select(i, ...)
+    parts[#parts + 1] = type(v) == 'string' and v or vim.inspect(v)
+  end
+  out[#out + 1] = table.concat(parts, ' ')
+end
+
+function M.finish()
+  vim.fn.writefile(out, vim.env.AINEO_PROBE_OUT)
+  vim.cmd('qall!')
+end
+
+-- No probe outlives 80 s: it writes what it has and quits.
+vim.defer_fn(function()
+  M.log('TIMEOUT: the probe ran past its limit')
+  M.finish()
+end, tonumber(vim.env.AINEO_PROBE_LIMIT_MS) or 80000)
+
+function M.keys(k)
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(k, true, false, true), 'mtx', false)
+end
+
+function M.lines(buf)
+  return vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+end
+
+M.messages = {}
+vim.notify = function(message, level)
+  table.insert(M.messages, { message = message, level = level })
+end
+
+function M.take_messages()
+  local m = M.messages
+  M.messages = {}
+  return m
+end
+
+--- Runs `fn` once the editor has started and aineo's VimEnter handler has
+--- mapped the prefix, then writes the log and quits.
+function M.main(fn)
+  local function run()
+    vim.schedule(function()
+      local ok, err = xpcall(fn, debug.traceback)
+      if not ok then
+        M.log('PROBE ERROR:', err)
+      end
+      M.finish()
+    end)
+  end
+  if vim.v.vim_did_enter == 1 then
+    run()
+  else
+    vim.api.nvim_create_autocmd('VimEnter', { once = true, callback = run })
+  end
+end
+
+--- Points aineo at the suites' fake claude in ready mode.
+function M.use_fake(mode)
+  local tree = vim.env.AINEO_PROBE_TREE
+  vim.env.AINEO_FAKE_CLAUDE_RECORD = vim.env.AINEO_PROBE_HOME .. '/record.jsonl'
+  vim.env.AINEO_FAKE_CLAUDE_MODE = mode or 'ready'
+  vim.g.aineo = {
+    autostart = false,
+    claude = { cmd = { vim.v.progpath, '--clean', '-l', tree .. '/tests/helpers/fake_claude.lua' } },
+  }
+end
+
+function M.received()
+  local ok, lines = pcall(vim.fn.readfile, vim.env.AINEO_FAKE_CLAUDE_RECORD)
+  if not ok then
+    return {}
+  end
+  local got = {}
+  for _, line in ipairs(lines) do
+    local decoded = vim.json.decode(line)
+    if decoded.received then
+      got[#got + 1] = decoded.received
+    end
+  end
+  return got
+end
+
+function M.wait_ready()
+  return vim.wait(15000, function()
+    return require('aineo.claude').session_status() == 'ready'
+  end, 50)
+end
+
+return M
+
+==================== p_undo.lua ====================
+-- T26 probe U: `u` in aineo's real Input after Sends, with the suites' fake
+-- claude ready. Run with run.sh p_undo.lua undo.
+local P = dofile(vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':h') .. '/lib.lua')
+P.main(function()
+P.log('nvim', tostring(vim.version()))
+P.log('maparg n \\s =', vim.fn.maparg('\\s', 'n'), ' maparg x \\s =', vim.fn.maparg('\\s', 'x'))
+vim.o.columns = 240
+vim.o.lines = 42
+P.use_fake('ready')
+vim.cmd('Aineo open')
+P.log('ready:', P.wait_ready(), require('aineo.claude').session_status())
+local input = require('aineo.layout').input_buffer()
+local function show(label)
+  P.log(label, P.lines(input), 'undolevels', vim.bo[input].undolevels, 'seq_cur', vim.fn.undotree(input).seq_cur)
+end
+
+-- U1: whole-Input Send typed in Input, then u, then <C-r>.
+vim.cmd('Aineo input')
+P.keys('iFirst line<CR>second line<Esc>')
+show('U1 before \\s:')
+P.keys('\\s')
+show('U1 after \\s:')
+vim.wait(500)
+P.log('U1 claude received:', P.received())
+P.keys('u')
+show('U1 after u:')
+P.keys('<C-r>')
+show('U1 after <C-r>:')
+P.log('U1 messages:', P.take_messages())
+
+-- U2: Send typed in the Report's window, then \i and u.
+P.keys('u')
+show('U2 Input before:')
+P.keys('\\r')
+P.log('U2 current buffer is Report:', vim.api.nvim_get_current_buf() ~= input)
+P.keys('\\s')
+show('U2 after \\s from the Report:')
+P.keys('\\i')
+P.keys('u')
+show('U2 after \\i u:')
+
+-- U3: Send while the changes pane hides Input, then \pa, \i, u.
+P.keys('\\pc')
+P.log('U3 pane: Input shown in a window:', #vim.fn.win_findbuf(input))
+P.keys('\\s')
+show('U3 after \\s with the changes pane shown:')
+P.keys('\\pa')
+P.keys('\\i')
+P.keys('u')
+show('U3 after \\pa \\i u:')
+
+-- U4: a failed write puts Input's lines back; then u, u.
+local claude = require('aineo.claude')
+local real_write = claude.write_to_session
+claude.write_to_session = function()
+  error("Can't send data to closed stream", 0)
+end
+P.keys('\\s')
+show('U4 after a failed \\s:')
+P.log('U4 messages:', P.take_messages())
+P.keys('u')
+show('U4 after u:')
+P.keys('u')
+show('U4 after u u:')
+P.keys('<C-r><C-r>')
+show('U4 after <C-r><C-r>:')
+claude.write_to_session = real_write
+
+-- U5: a refused Send (Input white space only) changes nothing; u then undoes the typing.
+P.keys('ggdG')
+P.keys('i   <Esc>')
+show('U5 before:')
+P.keys('\\s')
+show('U5 after refused \\s:')
+P.log('U5 messages:', P.take_messages())
+
+-- U6: Send from Insert mode through <C-o>, then <Esc> u.
+P.keys('ggdG')
+P.keys('<Esc>')
+P.keys('ityped in insert<C-o>\\s<Esc>')
+show('U6 after i…<C-o>\\s<Esc>:')
+P.keys('u')
+show('U6 after u:')
+P.keys('u')
+show('U6 after u u:')
+
+-- U7: two Sends in a row, then u twice.
+P.keys('ggdGione<Esc>')
+P.keys('\\s')
+P.keys('itwo<Esc>')
+P.keys('\\s')
+show('U7 after two sends:')
+P.keys('u')
+show('U7 after u:')
+P.keys('u')
+show('U7 after u u:')
+P.keys('u')
+show('U7 after u u u:')
+vim.wait(300)
+P.log('received total:', P.received())
+end)
+
+-------------------- output of p_undo.lua (sh run.sh p_undo.lua undo) --------------------
+nvim 0.12.5
+maparg n \s = <Plug>(aineo-send)  maparg x \s = 
+ready: true ready
+U1 before \s: { "First line", "second line" } undolevels -123456 seq_cur 1
+U1 after \s: { "" } undolevels -123456 seq_cur 2
+U1 claude received: { "\27P>|libvterm(0.3)\27\\\27[?5u\27[?61;22;52c", "\27[?2026;2$y", "\27[?1016;0$y\27[?61;22;52c", "\27P>|libvterm(0.3)\27\\\27[?61;22;52c", "\27[?20;3R\27[?2026;2$y\27[?61;22;52c\27[?20;3R\27[?20;3R\27[?20;3R", "\27[200~First line\nsecond line\27[201~\r" }
+U1 after u: { "First line", "second line" } undolevels -123456 seq_cur 1
+U1 after <C-r>: { "" } undolevels -123456 seq_cur 2
+U1 messages: {}
+U2 Input before: { "First line", "second line" } undolevels -123456 seq_cur 1
+U2 current buffer is Report: true
+U2 after \s from the Report: { "" } undolevels -123456 seq_cur 3
+U2 after \i u: { "First line", "second line" } undolevels -123456 seq_cur 1
+U3 pane: Input shown in a window: 0
+U3 after \s with the changes pane shown: { "" } undolevels -123456 seq_cur 4
+U3 after \pa \i u: { "First line", "second line" } undolevels -123456 seq_cur 1
+U4 after a failed \s: { "First line", "second line" } undolevels -123456 seq_cur 5
+U4 messages: { {     level = 4,     message = "aineo: Can't send data to closed stream"   } }
+U4 after u: { "First line", "second line" } undolevels -123456 seq_cur 1
+U4 after u u: { "" } undolevels -123456 seq_cur 0
+U4 after <C-r><C-r>: { "First line", "second line" } undolevels -123456 seq_cur 5
+U5 before: { "   " } undolevels -123456 seq_cur 7
+U5 after refused \s: { "   " } undolevels -123456 seq_cur 7
+U5 messages: { {     level = 3,     message = "aineo: nothing sent — Input is empty"   } }
+U6 after i…<C-o>\s<Esc>: { "" } undolevels -123456 seq_cur 10
+U6 after u: { "typed in insert" } undolevels -123456 seq_cur 9
+U6 after u u: { "" } undolevels -123456 seq_cur 8
+U7 after two sends: { "" } undolevels -123456 seq_cur 14
+U7 after u: { "two" } undolevels -123456 seq_cur 13
+U7 after u u: { "" } undolevels -123456 seq_cur 12
+U7 after u u u: { "one" } undolevels -123456 seq_cur 11
+received total: { "\27P>|libvterm(0.3)\27\\\27[?5u\27[?61;22;52c", "\27[?2026;2$y", "\27[?1016;0$y\27[?61;22;52c", "\27P>|libvterm(0.3)\27\\\27[?61;22;52c", "\27[?20;3R\27[?2026;2$y\27[?61;22;52c\27[?20;3R\27[?20;3R\27[?20;3R", "\27[200~First line\nsecond line\27[201~\r", "\27[200~First line\nsecond line\27[201~\r", "\27[200~First line\nsecond line\27[201~\r", "\27[200~typed in insert\27[201~\r", "\27[200~one\27[201~\r", "\27[200~two\27[201~\r" }
+
+==================== p_draft.lua ====================
+-- T26 probe D: `u` in aineo's real Input after the saved draft (D17) was
+-- restored into it, before and after a Send. Run with run.sh p_draft.lua draft.
+local P = dofile(vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':h') .. '/lib.lua')
+P.main(function()
+  P.log('nvim', tostring(vim.version()))
+  local state = vim.fn.stdpath('state')
+  local file = ('%s/aineo/drafts/%s.txt'):format(state, vim.fn.sha256(vim.fn.getcwd()))
+  vim.fn.mkdir(vim.fs.dirname(file), 'p')
+  vim.fn.writefile({ 'draft one', 'draft two' }, file)
+  vim.o.columns = 240
+  vim.o.lines = 42
+  P.use_fake('ready')
+  vim.cmd('Aineo open')
+  P.log('ready:', P.wait_ready())
+  local input = require('aineo.layout').input_buffer()
+  local function show(label)
+    P.log(
+      label,
+      P.lines(input),
+      'seq_cur',
+      vim.fn.undotree(input).seq_cur,
+      'seq_last',
+      vim.fn.undotree(input).seq_last,
+      'local undolevels',
+      vim.bo[input].undolevels
+    )
+  end
+  vim.cmd('Aineo input')
+  show('D1 restored draft:')
+  P.keys('u')
+  show('D1 after u:')
+  P.log('D1 messages (u):', vim.fn.execute('messages'):sub(-80))
+  P.keys('\\s')
+  show('D2 after \\s:')
+  P.keys('u')
+  show('D2 after u:')
+  P.keys('u')
+  show('D2 after u u:')
+  vim.wait(1500)
+  P.log('D3 draft file after u brought the text back:', vim.fn.readfile(file))
+  P.keys('<C-r>')
+  vim.wait(200)
+  show('D4 after <C-r>:')
+  P.log('D4 draft file:', vim.fn.readfile(file))
+end)
+
+-------------------- output of p_draft.lua (sh run.sh p_draft.lua draft) --------------------
+nvim 0.12.5
+ready: true nil
+D1 restored draft: { "draft one", "draft two" } seq_cur 0 seq_last 0 local undolevels -123456
+D1 after u: { "draft one", "draft two" } seq_cur 0 seq_last 0 local undolevels -123456
+D1 messages (u):  Already at oldest change
+D2 after \s: { "" } seq_cur 1 seq_last 1 local undolevels -123456
+D2 after u: { "draft one", "draft two" } seq_cur 0 seq_last 1 local undolevels -123456
+D2 after u u: { "draft one", "draft two" } seq_cur 0 seq_last 1 local undolevels -123456
+D3 draft file after u brought the text back: { "draft one", "draft two" }
+D4 after <C-r>: { "" } seq_cur 1 seq_last 1 local undolevels -123456
+D4 draft file: {}
+
+==================== p_visual.lua ====================
+-- T26 probe V: what a Visual selection in aineo's real Input gives
+-- getregion(), what Vim's own "_d removes, and how many `u` bring it back,
+-- for each kind of selection. Run with run.sh p_visual.lua visual.
+local P = dofile(vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':h') .. '/lib.lua')
+
+local CTRL_V = vim.api.nvim_replace_termcodes('<C-v>', true, false, true)
+
+local CASES = {
+  { 'charwise, one line, multibyte', { 'héllo wörld' }, '0fwv3l' },
+  { 'charwise, two lines', { 'alpha beta', 'gamma delta' }, '0wvj' },
+  { 'charwise, ending past the line (v$)', { 'one', 'two', 'three' }, '0lv$' },
+  { 'charwise, v$ then j', { 'one', 'two', 'three' }, '0lv$j' },
+  { 'linewise, one line', { 'a1', 'a2', 'a3' }, 'jV' },
+  { 'linewise, to the end', { 'a1', 'a2', 'a3' }, 'jVG' },
+  { 'blockwise, ragged lines', { 'abcdef', 'ab', 'abcdef' }, '0ll<C-v>jjl' },
+  { 'blockwise, $', { 'abcdef', 'abc', 'abcdefgh' }, '0l<C-v>jj$' },
+  { "charwise, 'selection' exclusive", { 'hello world' }, '0v4l', { selection = 'exclusive' } },
+  { "blockwise, 'selection' exclusive", { 'abcdef', 'abcdef' }, '0l<C-v>jll', { selection = 'exclusive' } },
+  { 'blockwise, a double-width character cut', { 'a漢字b', 'abcdef' }, '0l<C-v>j' },
+  { 'blockwise, double-width whole', { 'a漢字b', 'abcdef' }, '0l<C-v>jl' },
+  { 'charwise, backwards', { 'hello world' }, '$vb' },
+  { 'charwise, ending on a multibyte character', { 'aé b' }, '0vl' },
+  { 'linewise, the whole buffer', { 'x', 'y' }, 'ggVG' },
+  { 'linewise, an empty line', { '', 'x' }, 'V' },
+  { 'charwise, a tab', { 'a\tb' }, '0lv' },
+}
+
+local probe_result
+
+--- The mapping's callback: what a Visual-mode `\s` sees in Visual mode.
+local function seen_in_visual()
+  local mode = vim.fn.mode()
+  local from, to = vim.fn.getpos('v'), vim.fn.getpos('.')
+  local region = vim.fn.getregion(from, to, { type = mode })
+  local regionpos = vim.fn.getregionpos(from, to, { type = mode })
+  local marks = { vim.fn.getpos("'<"), vim.fn.getpos("'>") }
+  local curswant = vim.fn.winsaveview().curswant
+  -- Vim's own yank of the same selection, into register z, kept and restored.
+  local saved = vim.fn.getreginfo('z')
+  vim.cmd('normal! "zy')
+  local yank = vim.fn.getreg('z', 1, true)
+  local yank_type = vim.fn.getregtype('z')
+  vim.fn.setreg('z', saved)
+  probe_result = {
+    mode = mode,
+    region = region,
+    regionpos = regionpos,
+    marks_before_exit = marks,
+    curswant = curswant,
+    yank = yank,
+    yank_type = yank_type,
+  }
+end
+
+P.main(function()
+  P.log('nvim', tostring(vim.version()))
+  local layout = require('aineo.layout')
+  layout.open({
+    claude = vim.api.nvim_create_buf(false, true),
+    report = vim.api.nvim_create_buf(false, true),
+    report_height = 2 / 3,
+  })
+  local input = layout.input_buffer()
+  vim.keymap.set('x', '<F9>', seen_in_visual, { buffer = input })
+  for _, case in ipairs(CASES) do
+    local name, lines, select_keys, options = case[1], case[2], case[3], case[4] or {}
+    local saved_selection = vim.o.selection
+    if options.selection then
+      vim.o.selection = options.selection
+    end
+    vim.api.nvim_set_current_win(vim.fn.bufwinid(input))
+    -- 1: what the mapping sees.
+    vim.api.nvim_buf_set_lines(input, 0, -1, false, lines)
+    P.keys('<Esc>gg')
+    P.keys(select_keys .. '<F9>')
+    P.keys('<Esc>')
+    local seen = probe_result
+    -- 2: Vim's own "_d of the same selection, then `u` until the text is back.
+    vim.api.nvim_buf_set_lines(input, 0, -1, false, lines)
+    P.keys('<Esc>gg')
+    local seq_before = vim.fn.undotree(input).seq_cur
+    P.keys(select_keys .. '"_d')
+    local after_d = P.lines(input)
+    local cursor_after_d = vim.api.nvim_win_get_cursor(0)
+    local undos = 0
+    while not vim.deep_equal(P.lines(input), lines) and undos < 5 do
+      P.keys('u')
+      undos = undos + 1
+    end
+    -- 3: the same removal from inside an x mapping's Lua callback: :normal! "_d.
+    vim.keymap.set('x', '<F8>', function()
+      vim.cmd('normal! "_d')
+    end, { buffer = input })
+    vim.api.nvim_buf_set_lines(input, 0, -1, false, lines)
+    P.keys('<Esc>gg')
+    P.keys(select_keys .. '<F8>')
+    local after_mapping = P.lines(input)
+    local mode_after_mapping = vim.fn.mode()
+    local mapping_undos = 0
+    while not vim.deep_equal(P.lines(input), lines) and mapping_undos < 5 do
+      P.keys('u')
+      mapping_undos = mapping_undos + 1
+    end
+    vim.o.selection = saved_selection
+    P.log('=== V: ' .. name, '— lines', lines, 'keys', select_keys, 'selection', options.selection or 'inclusive')
+    P.log('  mode in the callback:', seen.mode, ' curswant:', seen.curswant)
+    P.log('  getregion:', seen.region)
+    P.log('  Vim yank of it:', seen.yank, 'type', seen.yank_type)
+    P.log('  getregion == yank:', vim.deep_equal(seen.region, seen.yank))
+    P.log('  joined by line feeds:', table.concat(seen.region, '\n'))
+    P.log('  getregionpos:', vim.tbl_map(function(pair)
+      return { pair[1][2], pair[1][3], pair[1][4], '..', pair[2][2], pair[2][3], pair[2][4] }
+    end, seen.regionpos))
+    P.log("  '< '> while still in Visual mode:", seen.marks_before_exit[1][2], seen.marks_before_exit[1][3], seen.marks_before_exit[2][2], seen.marks_before_exit[2][3])
+    P.log('  after "_d:', after_d, 'cursor', cursor_after_d, ' u to restore:', undos)
+    P.log('  after :normal! "_d in an x mapping:', after_mapping, 'mode after:', mode_after_mapping, ' u to restore:', mapping_undos)
+  end
+  -- What `\s` typed in Visual mode does where nothing maps it.
+  local plain = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_set_current_buf(plain)
+  vim.api.nvim_buf_set_lines(plain, 0, -1, false, { 'keep this text' })
+  P.keys('<Esc>gg0vll\\s')
+  local mode_after = vim.fn.mode()
+  P.keys('<Esc>')
+  P.log('=== V: \\s typed in Visual mode with no mapping, in a file buffer:', P.lines(plain), 'mode right after:', mode_after)
+end)
+
+-------------------- output of p_visual.lua (sh run.sh p_visual.lua visual) --------------------
+nvim 0.12.5
+=== V: charwise, one line, multibyte — lines { "héllo wörld" } keys 0fwv3l selection inclusive
+  mode in the callback: v  curswant: 9
+  getregion: { "wörl" }
+  Vim yank of it: { "wörl" } type v
+  getregion == yank: true
+  joined by line feeds: wörl
+  getregionpos: { { 1, 8, 0, "..", 1, 12, 0 } }
+  '< '> while still in Visual mode: 0 0 0 0
+  after "_d: { "héllo d" } cursor { 1, 7 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "héllo d" } mode after: n  u to restore: 1
+=== V: charwise, two lines — lines { "alpha beta", "gamma delta" } keys 0wvj selection inclusive
+  mode in the callback: v  curswant: 6
+  getregion: { "beta", "gamma d" }
+  Vim yank of it: { "beta", "gamma d" } type v
+  getregion == yank: true
+  joined by line feeds: beta gamma d
+  getregionpos: { { 1, 7, 0, "..", 1, 10, 0 }, { 2, 1, 0, "..", 2, 7, 0 } }
+  '< '> while still in Visual mode: 1 8 1 12
+  after "_d: { "alpha elta" } cursor { 1, 6 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "alpha elta" } mode after: n  u to restore: 1
+=== V: charwise, ending past the line (v$) — lines { "one", "two", "three" } keys 0lv$ selection inclusive
+  mode in the callback: v  curswant: 2147483647
+  getregion: { "ne" }
+  Vim yank of it: { "ne", "" } type v
+  getregion == yank: false
+  joined by line feeds: ne
+  getregionpos: { { 1, 2, 0, "..", 1, 3, 0 } }
+  '< '> while still in Visual mode: 1 7 1 7
+  after "_d: { "otwo", "three" } cursor { 1, 1 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "otwo", "three" } mode after: n  u to restore: 1
+=== V: charwise, v$ then j — lines { "one", "two", "three" } keys 0lv$j selection inclusive
+  mode in the callback: v  curswant: 2147483647
+  getregion: { "ne", "two" }
+  Vim yank of it: { "ne", "two", "" } type v
+  getregion == yank: false
+  joined by line feeds: ne two
+  getregionpos: { { 1, 2, 0, "..", 1, 3, 0 }, { 2, 1, 0, "..", 2, 3, 0 } }
+  '< '> while still in Visual mode: 1 2 1 4
+  after "_d: { "othree" } cursor { 1, 1 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "othree" } mode after: n  u to restore: 1
+=== V: linewise, one line — lines { "a1", "a2", "a3" } keys jV selection inclusive
+  mode in the callback: V  curswant: 1
+  getregion: { "a2" }
+  Vim yank of it: { "a2" } type V
+  getregion == yank: true
+  joined by line feeds: a2
+  getregionpos: { { 2, 1, 0, "..", 2, 2, 0 } }
+  '< '> while still in Visual mode: 1 2 1 4
+  after "_d: { "a1", "a3" } cursor { 2, 0 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "a1", "a3" } mode after: n  u to restore: 1
+=== V: linewise, to the end — lines { "a1", "a2", "a3" } keys jVG selection inclusive
+  mode in the callback: V  curswant: 0
+  getregion: { "a2", "a3" }
+  Vim yank of it: { "a2", "a3" } type V
+  getregion == yank: true
+  joined by line feeds: a2 a3
+  getregionpos: { { 2, 1, 0, "..", 2, 2, 0 }, { 3, 1, 0, "..", 3, 2, 0 } }
+  '< '> while still in Visual mode: 1 1 1 2147483647
+  after "_d: { "a1" } cursor { 1, 0 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "a1" } mode after: n  u to restore: 1
+=== V: blockwise, ragged lines — lines { "abcdef", "ab", "abcdef" } keys 0ll<C-v>jjl selection inclusive
+  mode in the callback: ^V  curswant: 3
+  getregion: { "cd", "", "cd" }
+  Vim yank of it: { "cd", "", "cd" } type ^V2
+  getregion == yank: true
+  joined by line feeds: cd  cd
+  getregionpos: { { 1, 3, 0, "..", 1, 4, 0 }, { 2, 0, 0, "..", 2, 2, 0 }, { 3, 3, 0, "..", 3, 4, 0 } }
+  '< '> while still in Visual mode: 1 1 1 2147483647
+  after "_d: { "abef", "ab", "abef" } cursor { 1, 2 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "abef", "ab", "abef" } mode after: n  u to restore: 1
+=== V: blockwise, $ — lines { "abcdef", "abc", "abcdefgh" } keys 0l<C-v>jj$ selection inclusive
+  mode in the callback: ^V  curswant: 2147483647
+  getregion: { "bcdef", "bc", "bcdefgh" }
+  Vim yank of it: { "bcdef", "bc", "bcdefgh" } type ^V7
+  getregion == yank: true
+  joined by line feeds: bcdef bc bcdefgh
+  getregionpos: { { 1, 2, 0, "..", 1, 6, 0 }, { 2, 2, 0, "..", 2, 3, 0 }, { 3, 2, 0, "..", 3, 8, 0 } }
+  '< '> while still in Visual mode: 1 3 1 4
+  after "_d: { "a", "a", "a" } cursor { 1, 0 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "a", "a", "a" } mode after: n  u to restore: 1
+=== V: charwise, 'selection' exclusive — lines { "hello world" } keys 0v4l selection exclusive
+  mode in the callback: v  curswant: 4
+  getregion: { "hell" }
+  Vim yank of it: { "hell" } type v
+  getregion == yank: true
+  joined by line feeds: hell
+  getregionpos: { { 1, 1, 0, "..", 1, 4, 0 } }
+  '< '> while still in Visual mode: 1 2 1 9
+  after "_d: { "o world" } cursor { 1, 0 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "o world" } mode after: n  u to restore: 1
+=== V: blockwise, 'selection' exclusive — lines { "abcdef", "abcdef" } keys 0l<C-v>jll selection exclusive
+  mode in the callback: ^V  curswant: 3
+  getregion: { "bc", "bc" }
+  Vim yank of it: { "bc", "bc" } type ^V2
+  getregion == yank: true
+  joined by line feeds: bc bc
+  getregionpos: { { 1, 2, 0, "..", 1, 3, 0 }, { 2, 2, 0, "..", 2, 3, 0 } }
+  '< '> while still in Visual mode: 1 1 1 5
+  after "_d: { "adef", "adef" } cursor { 1, 1 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "adef", "adef" } mode after: n  u to restore: 1
+=== V: blockwise, a double-width character cut — lines { "a漢字b", "abcdef" } keys 0l<C-v>j selection inclusive
+  mode in the callback: ^V  curswant: 1
+  getregion: { "漢", "bc" }
+  Vim yank of it: { "漢", "bc" } type ^V2
+  getregion == yank: true
+  joined by line feeds: 漢 bc
+  getregionpos: { { 1, 2, 0, "..", 1, 4, 0 }, { 2, 2, 0, "..", 2, 3, 0 } }
+  '< '> while still in Visual mode: 1 2 1 4
+  after "_d: { "a字b", "adef" } cursor { 1, 1 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "a字b", "adef" } mode after: n  u to restore: 1
+=== V: blockwise, double-width whole — lines { "a漢字b", "abcdef" } keys 0l<C-v>jl selection inclusive
+  mode in the callback: ^V  curswant: 2
+  getregion: { "漢", "bc" }
+  Vim yank of it: { "漢", "bc" } type ^V2
+  getregion == yank: true
+  joined by line feeds: 漢 bc
+  getregionpos: { { 1, 2, 0, "..", 1, 4, 0 }, { 2, 2, 0, "..", 2, 3, 0 } }
+  '< '> while still in Visual mode: 1 2 1 2
+  after "_d: { "a字b", "adef" } cursor { 1, 1 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "a字b", "adef" } mode after: n  u to restore: 1
+=== V: charwise, backwards — lines { "hello world" } keys $vb selection inclusive
+  mode in the callback: v  curswant: 6
+  getregion: { "world" }
+  Vim yank of it: { "world" } type v
+  getregion == yank: true
+  joined by line feeds: world
+  getregionpos: { { 1, 7, 0, "..", 1, 11, 0 } }
+  '< '> while still in Visual mode: 1 2 1 3
+  after "_d: { "hello " } cursor { 1, 5 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "hello " } mode after: n  u to restore: 1
+=== V: charwise, ending on a multibyte character — lines { "aé b" } keys 0vl selection inclusive
+  mode in the callback: v  curswant: 1
+  getregion: { "aé" }
+  Vim yank of it: { "aé" } type v
+  getregion == yank: true
+  joined by line feeds: aé
+  getregionpos: { { 1, 1, 0, "..", 1, 3, 0 } }
+  '< '> while still in Visual mode: 1 7 1 11
+  after "_d: { " b" } cursor { 1, 0 }  u to restore: 1
+  after :normal! "_d in an x mapping: { " b" } mode after: n  u to restore: 1
+=== V: linewise, the whole buffer — lines { "x", "y" } keys ggVG selection inclusive
+  mode in the callback: V  curswant: 0
+  getregion: { "x", "y" }
+  Vim yank of it: { "x", "y" } type V
+  getregion == yank: true
+  joined by line feeds: x y
+  getregionpos: { { 1, 1, 0, "..", 1, 1, 0 }, { 2, 1, 0, "..", 2, 1, 0 } }
+  '< '> while still in Visual mode: 1 1 1 2
+  after "_d: { "" } cursor { 1, 0 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "" } mode after: n  u to restore: 1
+=== V: linewise, an empty line — lines { "", "x" } keys V selection inclusive
+  mode in the callback: V  curswant: 0
+  getregion: { "" }
+  Vim yank of it: { "" } type V
+  getregion == yank: true
+  joined by line feeds: 
+  getregionpos: { { 1, 0, 0, "..", 1, 0, 0 } }
+  '< '> while still in Visual mode: 1 1 1 2147483647
+  after "_d: { "x" } cursor { 1, 0 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "x" } mode after: n  u to restore: 1
+=== V: charwise, a tab — lines { "a\tb" } keys 0lv selection inclusive
+  mode in the callback: v  curswant: 7
+  getregion: { "\t" }
+  Vim yank of it: { "\t" } type v
+  getregion == yank: true
+  joined by line feeds: 	
+  getregionpos: { { 1, 2, 0, "..", 1, 2, 0 } }
+  '< '> while still in Visual mode: 1 1 1 2147483647
+  after "_d: { "ab" } cursor { 1, 1 }  u to restore: 1
+  after :normal! "_d in an x mapping: { "ab" } mode after: n  u to restore: 1
+=== V: \s typed in Visual mode with no mapping, in a file buffer: { "p this text" } mode right after: n
+
+==================== p_visual2.lua ====================
+-- T26 probe V2: removal by API calls inside an x mapping, counted in `u`;
+-- `:'<,'>Aineo send` on T24's code; a Visual-mode key's callback after a
+-- refusal. Run with run.sh p_visual2.lua visual2.
+local P = dofile(vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':h') .. '/lib.lua')
+
+P.main(function()
+  P.log('nvim', tostring(vim.version()))
+  local layout = require('aineo.layout')
+  layout.open({
+    claude = vim.api.nvim_create_buf(false, true),
+    report = vim.api.nvim_create_buf(false, true),
+    report_height = 2 / 3,
+  })
+  local input = layout.input_buffer()
+  vim.api.nvim_set_current_win(vim.fn.bufwinid(input))
+
+  -- A blockwise removal made of one nvim_buf_set_text() per line, bottom up.
+  vim.keymap.set('x', '<F7>', function()
+    local from, to = vim.fn.getpos('v'), vim.fn.getpos('.')
+    local spans = vim.fn.getregionpos(from, to, { type = vim.fn.mode() })
+    for index = #spans, 1, -1 do
+      local first, last = spans[index][1], spans[index][2]
+      if first[3] > 0 then
+        vim.api.nvim_buf_set_text(input, first[2] - 1, first[3] - 1, last[2] - 1, last[3], {})
+      end
+    end
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<Esc>', true, false, true), 'n', false)
+  end, { buffer = input })
+  local lines = { 'abcdef', 'ab', 'abcdef', 'abcdef' }
+  vim.api.nvim_buf_set_lines(input, 0, -1, false, lines)
+  P.keys('<Esc>gg0ll<C-v>jjjl<F7>')
+  P.log('V2a after per-line set_text:', P.lines(input), 'mode', vim.fn.mode())
+  local undos = 0
+  while not vim.deep_equal(P.lines(input), lines) and undos < 6 do
+    P.keys('u')
+    undos = undos + 1
+  end
+  P.log('V2a u to restore:', undos, P.lines(input))
+
+  -- The same from the composition-root way: a function run through pcall, the
+  -- removal then an error, then the lines put back with set_lines.
+  vim.keymap.set('x', '<F6>', function()
+    local from, to = vim.fn.getpos('v'), vim.fn.getpos('.')
+    local before = vim.api.nvim_buf_get_lines(input, 0, -1, false)
+    vim.cmd('normal! "_d')
+    vim.api.nvim_buf_set_lines(input, 0, -1, false, before)
+  end, { buffer = input })
+  vim.api.nvim_buf_set_lines(input, 0, -1, false, { 'one two three' })
+  local seq = vim.fn.undotree(input).seq_cur
+  P.keys('<Esc>gg0wviw<F6>')
+  P.log('V2b removed then put back in one callback:', P.lines(input), 'seq before', seq, 'after', vim.fn.undotree(input).seq_cur)
+  P.keys('u')
+  P.log('V2b after u:', P.lines(input), 'seq', vim.fn.undotree(input).seq_cur)
+
+  -- :'<,'>Aineo send on T24's :Aineo (no range declared).
+  vim.api.nvim_buf_set_lines(input, 0, -1, false, { 'l1', 'l2' })
+  P.keys('<Esc>ggVj')
+  P.keys('<Esc>')
+  local ok, err = pcall(vim.cmd, "'<,'>Aineo send")
+  P.log("V2c :'<,'>Aineo send:", ok, err, 'messages', P.take_messages(), 'Input', P.lines(input))
+  local ok2, err2 = pcall(vim.cmd, '1Aineo send')
+  P.log('V2c :1Aineo send:', ok2, err2)
+
+  -- What a Lua x mapping leaves for the mode when it returns without leaving Visual.
+  vim.keymap.set('x', '<F5>', function()
+    vim.notify('refused')
+  end, { buffer = input })
+  P.keys('<Esc>ggv<F5>')
+  P.log('V2d mode after a callback that changes nothing:', vim.fn.mode(), P.take_messages())
+  P.keys('<Esc>')
+  P.log("V2d '< '> after leaving Visual:", vim.fn.getpos("'<"), vim.fn.getpos("'>"))
+end)
+
+-------------------- output of p_visual2.lua (sh run.sh p_visual2.lua visual2) --------------------
+nvim 0.12.5
+V2a after per-line set_text: { "abef", "ab", "abef", "abef" } mode n
+V2a u to restore: 1 { "abcdef", "ab", "abcdef", "abcdef" }
+V2b removed then put back in one callback: { "one two three" } seq before 3 after 4
+V2b after u: { "one two three" } seq 3
+V2c :'<,'>Aineo send: false [string "vim/_core/editor"]:353: nvim_exec2(), line 1: Vim:E481: No range allowed: '<,'>Aineo send messages {} Input { "l1", "l2" }
+V2c :1Aineo send: false [string "vim/_core/editor"]:353: nvim_exec2(), line 1: Vim:E481: No range allowed: 1Aineo send
+V2d mode after a callback that changes nothing: v { {     message = "refused"   } }
+V2d '< '> after leaving Visual: { 0, 1, 2, 0 } { 0, 1, 2, 0 }
