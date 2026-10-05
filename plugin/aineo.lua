@@ -200,16 +200,21 @@ local claude_terminal = nil
 --- it under the state directory of `kept_places()`. When the session puts a
 --- new terminal in place of one whose resume found no conversation, that
 --- terminal becomes `claude_terminal` and the layout's Claude terminal
---- (`aineo.layout`'s `follow_claude_terminal()`).
+--- (`aineo.layout`'s `follow_claude_terminal()`). Once a start has
+--- succeeded, the changes home is told the session began there
+--- (`aineo.changes`'s `begin_session()`, which heeds its first call alone),
+--- in Claude Code's working directory, with the layout's `show_diff()` to
+--- show its diffs in the middle column.
 ---
 ---@param config table the resolved configuration
 ---@return integer terminal
 local function started_claude_terminal(config)
   local report = require('aineo.report')
   local mcp = require('aineo.mcp')
+  local working_directory = vim.fn.getcwd()
   claude_terminal = require('aineo.claude').start_session({
     cmd = config.claude.cmd,
-    cwd = vim.fn.getcwd(),
+    cwd = working_directory,
     mcp_servers = mcp.mcp_servers(vim.v.servername, vim.v.progpath),
     allowed_tools = mcp.allowed_mcp_tools(),
     instructions = report.report_instructions(mcp.report_tool_name()),
@@ -217,6 +222,12 @@ local function started_claude_terminal(config)
     on_terminal_replaced = function(terminal)
       claude_terminal = terminal
       require('aineo.layout').follow_claude_terminal(terminal)
+    end,
+  })
+  require('aineo.changes').begin_session({
+    directory = working_directory,
+    show_diff = function(diff)
+      return require('aineo.layout').show_diff(diff)
     end,
   })
   return claude_terminal
@@ -235,107 +246,17 @@ local function current_claude_terminal(config)
   return started_claude_terminal(config)
 end
 
---- What the changes pane's two windows show until aineo lists the
---- session's changes there: for each, the name of its buffer, which is no
---- file path, and the one line it holds, which says the window shows
---- nothing yet and claims nothing about the repository.
-local CHANGES_PLACEHOLDERS = {
-  files = {
-    name = 'aineo://changes-files',
-    line = "aineo does not list the session's changed files here yet",
-  },
-  commits = {
-    name = 'aineo://changes-commits',
-    line = "aineo does not list the session's commits here yet",
-  },
-}
-
---- The changes pane's buffers `changes_pane()` made, by window.
----@type { files: integer|nil, commits: integer|nil }
-local changes_buffers = {}
-
---- Frees `name` from every buffer holding it, such as one a restored session
---- made: wipes the buffer out, unless the user changed its text, which is
---- then kept in that buffer, unnamed (`:0file`).
----
----@param name string
-local function free_buffer_name(name)
-  for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
-    if vim.api.nvim_buf_get_name(buffer) == name then
-      if vim.bo[buffer].modified then
-        vim.api.nvim_buf_call(buffer, function()
-          vim.cmd('0file')
-        end)
-      else
-        vim.api.nvim_buf_delete(buffer, { force = true })
-      end
-    end
-  end
-end
-
---- Makes `buffer` a scratch buffer, as the Report is — no file, unlisted,
---- kept when hidden, no swap file — holding `placeholder`'s line alone, and
---- not modifiable; the line is written whatever `'modifiable'` the buffer
---- had, as under `nvim -M`.
----
----@param buffer integer
----@param placeholder { name: string, line: string }
-local function write_placeholder(buffer, placeholder)
-  vim.bo[buffer].buftype = 'nofile'
-  vim.bo[buffer].bufhidden = 'hide'
-  vim.bo[buffer].buflisted = false
-  vim.bo[buffer].swapfile = false
-  vim.bo[buffer].modifiable = true
-  vim.api.nvim_buf_set_lines(buffer, 0, -1, true, { placeholder.line })
-  vim.bo[buffer].modifiable = false
-end
-
---- A new buffer under `placeholder`'s name, which any other buffer holding
---- it gives up first (`free_buffer_name()`), written as the placeholder
---- (`write_placeholder()`). It is written again whenever Neovim reads it
---- (`BufReadCmd`): `:edit` and `:edit!` empty a buffer that is no file, and
---- a buffer `:bdelete` unloaded, shown again, comes back empty, its options
---- reset.
----
----@param placeholder { name: string, line: string }
----@return integer buffer
-local function placeholder_buffer(placeholder)
-  free_buffer_name(placeholder.name)
-  local buffer = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_name(buffer, placeholder.name)
-  write_placeholder(buffer, placeholder)
-  vim.api.nvim_create_autocmd('BufReadCmd', {
-    buffer = buffer,
-    desc = 'aineo: write the changes pane placeholder again',
-    callback = function()
-      write_placeholder(buffer, placeholder)
-    end,
-  })
-  return buffer
-end
-
---- Whether `buffer`, a placeholder `changes_pane()` made, is loaded: it was
---- neither wiped nor unloaded, as `:bdelete` unloads it. The layout shows a
---- pane's buffers in place only while they are loaded.
----
----@param buffer integer|nil
----@return boolean
-local function is_loaded_placeholder(buffer)
-  return buffer ~= nil and vim.api.nvim_buf_is_loaded(buffer)
-end
-
---- The changes pane's two buffers, each made once (`placeholder_buffer()`)
---- and made anew once it is no longer loaded (`is_loaded_placeholder()`),
---- taking the name from the unloaded one, which is wiped.
+--- The changes pane's two buffers, from the changes home (`aineo.changes`'s
+--- `pane_buffers()`), which lists the session's files and commits there.
+--- While either is shown in a window, as when `\o` restores the layout with
+--- the changes pane shown, the home reads both lists again first
+--- (`refresh_shown_pane()`).
 ---
 ---@return aineo.layout.ChangesPane
 local function changes_pane()
-  for window, placeholder in pairs(CHANGES_PLACEHOLDERS) do
-    if not is_loaded_placeholder(changes_buffers[window]) then
-      changes_buffers[window] = placeholder_buffer(placeholder)
-    end
-  end
-  return { files = changes_buffers.files, commits = changes_buffers.commits }
+  local changes = require('aineo.changes')
+  changes.refresh_shown_pane()
+  return changes.pane_buffers()
 end
 
 --- The buffers aineo's layout shows: `claude_buffer`, the Claude session's

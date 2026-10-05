@@ -24,8 +24,10 @@ local COMMITS = 'aineo://changes-commits'
 --- directory `...`, with the git options that follow, and shows the pane's
 --- two buffers there: the files buffer in the current window, the commits
 --- buffer in a window below it. Every buffer the home asks to show as a diff
---- is kept in `_G.shown_diffs` and shown in a window of its own at the bottom,
---- the cursor left where it is, unless `_G.no_room` is set: then nowhere.
+--- is kept in `_G.shown_diffs` and shown in the window already showing it,
+--- or else in a window of its own at the bottom, the cursor left where it
+--- is; nowhere while `_G.no_room` is set; and while `_G.refusal` is set,
+--- showing it raises that error.
 local BEGIN_AND_SHOW = [[
   local directory, git_options = ...
   local changes = require('aineo.changes')
@@ -35,8 +37,15 @@ local BEGIN_AND_SHOW = [[
     git = git_options,
     show_diff = function(diff)
       table.insert(_G.shown_diffs, diff)
+      if _G.refusal then
+        error(_G.refusal, 0)
+      end
       if _G.no_room then
         return nil
+      end
+      local showing = vim.fn.bufwinid(diff)
+      if showing ~= -1 then
+        return showing
       end
       return vim.api.nvim_open_win(diff, false, { split = 'below', win = -1 })
     end,
@@ -1078,6 +1087,53 @@ T['Enter']['tells once, in git’s words, a diff that cannot be read'] = functio
       },
     },
     0,
+  })
+end
+
+T['the watch'] = MiniTest.new_set()
+
+--- The Lua expression that counts, in the child, the file system watches
+--- libuv runs: active, and not closing.
+local RUNNING_WATCHES = [[(function()
+  local count = 0
+  vim.uv.walk(function(handle)
+    if handle:get_type() == 'fs_event' and handle:is_active() and not handle:is_closing() then
+      count = count + 1
+    end
+  end)
+  return count
+end)()]]
+
+T['the watch']['stops as the editor quits'] = function()
+  local top = git_repo.create('changespane-quit', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  expect_lines(FILES, { 'No files changed on this session' })
+  local running = child.lua_get(RUNNING_WATCHES)
+
+  child.cmd('doautocmd VimLeavePre')
+
+  eq({ running, child.lua_get(RUNNING_WATCHES) }, { 2, 0 })
+end
+
+T['Enter']['tells once the error a window raised as it took the diff, and keeps no diff'] = function()
+  local top = git_repo.create('changespane-diff-refused', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  expect_lines(FILES, { '  M notes.txt' })
+  child.lua("_G.refusal = 'refused here'")
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  eq(child.lua_get('{ _G.messages, vim.fn.bufnr("aineo://diff/notes.txt") }'), {
+    {
+      {
+        message = 'aineo: the diff of notes.txt could not be shown: refused here',
+        level = vim.log.levels.ERROR,
+      },
+    },
+    -1,
   })
 end
 

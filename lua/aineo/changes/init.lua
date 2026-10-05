@@ -244,16 +244,30 @@ end
 
 --- Begins the session for `settings.directory`: finds its repository, whose
 --- `HEAD` is the session's base, and marks the files the user saves from
---- then on.
+--- then on. The session lasts the editor's life: once begun, a call does
+--- nothing, as a restart of Claude Code calls it again.
 ---
 ---@param settings aineo.changes.SessionSettings
 function M.begin_session(settings)
+  if session then
+    return
+  end
   session = { settings = settings, shown = false, saved = {} }
+  local group = vim.api.nvim_create_augroup('aineo_changes', {})
   vim.api.nvim_create_autocmd({ 'BufWritePost', 'FileWritePost', 'FileAppendPost' }, {
-    group = vim.api.nvim_create_augroup('aineo_changes', {}),
+    group = group,
     desc = 'aineo: mark a file saved in the changes pane',
     callback = function(event)
       note_save(event.match)
+    end,
+  })
+  vim.api.nvim_create_autocmd('VimLeavePre', {
+    group = group,
+    desc = "aineo: stop watching the changes pane's repository",
+    callback = function()
+      if session.watch then
+        session.watch.stop()
+      end
     end,
   })
   find()
@@ -288,16 +302,27 @@ end
 --- Shows `diff`, the text git printed for `entry`, in a diff buffer named
 --- for it (`diff_name()`, `aineo.changes.diffs`) through the session's
 --- `show_diff`. When the middle column has no room for it, the buffer is
---- wiped and the user warned, once.
+--- wiped and the user warned, once; when showing it raises an error, the
+--- buffer is wiped and the user told the error, once.
 ---
 ---@param entry aineo.changes.Entry
 ---@param diff string
 local function show_diff(entry, diff)
   local buffer = diffs.diff_buffer(diff_name(entry), diff)
-  if session.settings.show_diff(buffer) then
+  local shown, window = pcall(session.settings.show_diff, buffer)
+  if shown and window then
     return
   end
-  vim.api.nvim_buf_delete(buffer, { force = true })
+  if vim.api.nvim_buf_is_valid(buffer) then
+    vim.api.nvim_buf_delete(buffer, { force = true })
+  end
+  if not shown then
+    vim.notify(
+      ('aineo: the diff of %s could not be shown: %s'):format(told_name(entry), tostring(window)),
+      vim.log.levels.ERROR
+    )
+    return
+  end
   vim.notify(
     ('aineo: the middle column has no room for the diff of %s, which is not shown'):format(
       told_name(entry)
@@ -368,6 +393,24 @@ local function pane_buffer(name, page)
     open_entry(buffer)
   end, { buffer = buffer, desc = 'aineo: show the diff of the entry under the cursor' })
   return buffer
+end
+
+--- Whether `buffer`, a buffer of the pane once made, is shown in a window
+--- of any tab page.
+---
+---@param buffer integer|nil
+---@return boolean
+local function is_shown(buffer)
+  return buffer ~= nil and vim.api.nvim_buf_is_valid(buffer) and #vim.fn.win_findbuf(buffer) > 0
+end
+
+--- Reads both lists again, as a showing of the pane does, while either of
+--- the pane's buffers is shown in a window of any tab page (`is_shown()`);
+--- does nothing otherwise, or before the session has begun.
+function M.refresh_shown_pane()
+  if is_shown(buffers.files) or is_shown(buffers.commits) then
+    pane_shown()
+  end
 end
 
 --- The changes pane's two buffers, each written for what the session
