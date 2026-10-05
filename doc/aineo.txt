@@ -112,14 +112,16 @@ leave you where you are. `\r` and `\i` show the agent pane first, then move
 to the Report or Input; `\c` and `\tcn` leave the pane as it is. Send sends
 Input while the changes pane hides it (|aineo-send|). When a window will
 not take its buffer — 'winfixbuf' is set there, say, or you are in the
-command-line window — the right column stays as it was, and aineo tells
-you why, once.
+command-line window — aineo tells you why, once, and gives each window back
+the buffer it showed. A window that will not take that one back either
+keeps the other pane's buffer; `\pa` or `\pc` then shows its pane in both
+windows.
 
 The Report and Input are kept while hidden, with Input's text and its draft.
 A buffer shown again comes back as it was scrolled. When a report arrived
 while the agent pane was hidden, the Report's cursor is on its last line,
 where an arriving report puts it, once the agent pane shows again with the
-Report's window open — by `\pa`, `\r`, `\i` or `\o`.
+Report in its window — by `\pa`, `\r`, `\i` or `\o`.
 
 aineo keeps the pane shown until the editor quits: `\o` restores the layout
 with it, and so does the layout opened anew once its windows were closed.
@@ -248,17 +250,17 @@ mode too. Any other terminal of yours keeps Neovim's own behaviour.
 `report`, `input`, `claude` and `pane` open the layout first when their window
 is gone (for `pane`, either window of the right column, or a buffer of the
 pane wiped or deleted; for `report` and `input` while the changes pane shows,
-the Report or Input wiped too), around Claude's terminal as it is — its exit
-on screen when Claude Code has exited. They start Claude Code only when there
-is no terminal to show: before the first start, or again, in a new terminal,
-once the terminal was wiped (|:bwipeout|). Wiping it from Claude's window
-closes that window; a window Neovim cannot close, such as its last one, stays
-on an empty buffer until `claude` opens the layout there again — `report` and
-`input` do so only when their own window is gone too. A file opened in
-Claude's window as the terminal is wiped stays in view, and moves to the file
-column when the layout opens again. Of the actions, only `open` restarts an
-exited Claude Code; aineo restarts one by itself only in place of a resume
-Claude Code has no conversation for (|aineo-claude-session|).
+the Report or Input wiped or deleted too), around Claude's terminal as it is —
+its exit on screen when Claude Code has exited. They start Claude Code only
+when there is no terminal to show: before the first start, or again, in a new
+terminal, once the terminal was wiped (|:bwipeout|). Wiping it from Claude's
+window closes that window; a window Neovim cannot close, such as its last one,
+stays on an empty buffer until `claude` opens the layout there again —
+`report` and `input` do so only when their own window is gone too. A file
+opened in Claude's window as the terminal is wiped stays in view, and moves to
+the file column when the layout opens again. Of the actions, only `open`
+restarts an exited Claude Code; aineo restarts one by itself only in place of
+a resume Claude Code has no conversation for (|aineo-claude-session|).
 
                                                        *:Aineo-claude-numbers*
 :Aineo claude-numbers	Hides the line numbers of Claude's window, 'number'
