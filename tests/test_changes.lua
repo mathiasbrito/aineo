@@ -24,8 +24,8 @@ local COMMITS = 'aineo://changes-commits'
 --- directory `...`, with the git options that follow, and shows the pane's
 --- two buffers there: the files buffer in the current window, the commits
 --- buffer in a window below it. Every buffer the home asks to show as a diff
---- is shown in a window of its own at the bottom, the cursor left where it
---- is, and kept in `_G.shown_diffs`.
+--- is kept in `_G.shown_diffs` and shown in a window of its own at the bottom,
+--- the cursor left where it is, unless `_G.no_room` is set: then nowhere.
 local BEGIN_AND_SHOW = [[
   local directory, git_options = ...
   local changes = require('aineo.changes')
@@ -35,6 +35,9 @@ local BEGIN_AND_SHOW = [[
     git = git_options,
     show_diff = function(diff)
       table.insert(_G.shown_diffs, diff)
+      if _G.no_room then
+        return nil
+      end
       return vim.api.nvim_open_win(diff, false, { split = 'below', win = -1 })
     end,
   })
@@ -49,7 +52,8 @@ local BEGIN_AND_SHOW = [[
 local SPY_ON_GIT = [[
   local git = require('aineo.git')
   _G.git_calls, _G.git_answers = {}, {}
-  for _, name in ipairs({ 'find_repository', 'changed_files', 'commits_since', 'watch_repository' }) do
+  local names = { 'find_repository', 'changed_files', 'commits_since', 'watch_repository', 'file_diff', 'commit_diff' }
+  for _, name in ipairs(names) do
     local original = git[name]
     _G.git_calls[name], _G.git_answers[name] = 0, 0
     git[name] = function(...)
@@ -214,6 +218,8 @@ T['the pane']['starts no watch and reads no list until it is first shown'] = fun
     changed_files = 0,
     commits_since = 0,
     watch_repository = 0,
+    file_diff = 0,
+    commit_diff = 0,
   })
 end
 
@@ -818,6 +824,291 @@ T['a buffer already named as a buffer of the pane']['keeps the text the user typ
   begin_and_show(top)
 
   eq(child.lua_get(NAME_AND_LINES, { namesake }), { name = '', lines = { 'my own notes' } })
+end
+
+T['Enter'] = MiniTest.new_set()
+
+--- Waits until the home has asked the child to show `count` diffs.
+---
+---@param count integer
+local function wait_for_diffs(count)
+  git_repo.wait_until(('%d diffs shown'):format(count), function()
+    return child.lua_get('#_G.shown_diffs') >= count
+  end)
+end
+
+T['Enter']['on a file shows its diff from the base, the cursor staying in the pane'] = function()
+  local top, base = git_repo.create('changespane-enter-file', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local before = git_repo.git(top, { 'rev-parse', base .. ':notes.txt' })
+  local after = git_repo.git(top, { 'hash-object', 'notes.txt' })
+  begin_and_show(top)
+  expect_lines(FILES, { '  M notes.txt' })
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  eq({
+    child.lua_get('vim.api.nvim_buf_get_lines(_G.shown_diffs[1], 0, -1, true)'),
+    child.lua_get('vim.api.nvim_buf_get_name(0)'),
+  }, {
+    {
+      'diff --git a/notes.txt b/notes.txt',
+      ('index %s..%s 100644'):format(before, after),
+      '--- a/notes.txt',
+      '+++ b/notes.txt',
+      '@@ -1 +1 @@',
+      '-one',
+      '+two',
+    },
+    FILES,
+  })
+end
+
+T['Enter']['on a commit shows that commit’s diff'] = function()
+  local top = git_repo.create('changespane-enter-commit', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  expect_lines(COMMITS, { 'No commits on this session' })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local commit = git_repo.commit_all(top, 'Write two')
+  child.lua(SHOW_FILES_AGAIN)
+  expect_lines(COMMITS, { commit:sub(1, 7) .. ' Write two' })
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  local shown = child.lua_get([[(function()
+    local diff = _G.shown_diffs[1]
+    local text = vim.api.nvim_buf_get_lines(diff, 0, -1, true)
+    return { name = vim.api.nvim_buf_get_name(diff), first = text[1], last = { text[#text - 1], text[#text] } }
+  end)()]])
+  eq(shown, {
+    name = 'aineo://commit/' .. commit,
+    first = 'commit ' .. commit,
+    last = { '-one', '+two' },
+  })
+end
+
+--- The Lua that keeps, in the child, every notification from then on in
+--- `_G.messages`, as its message and level, rather than showing it.
+local KEEP_MESSAGES = [[
+  _G.messages = {}
+  vim.notify = function(message, level)
+    table.insert(_G.messages, { message = message, level = level })
+  end
+]]
+
+T['Enter']['on a line that lists nothing does nothing and says nothing'] = function()
+  local top = git_repo.create('changespane-enter-nothing', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  child.lua(SPY_ON_GIT)
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top, { system_name = 'Linux' })
+  expect_lines(FILES, { NOT_WATCHED, '  M notes.txt' })
+  child.type_keys('<CR>')
+
+  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  eq(
+    child.lua_get('{ _G.git_calls.file_diff, _G.git_calls.commit_diff, _G.messages }'),
+    { 1, 0, {} }
+  )
+end
+
+--- What the buffer that is the argument is, read in the child: its name and
+--- the options that make it a read-only scratch buffer showing a diff.
+local DIFF_BUFFER = [[(function(buffer)
+  return {
+    name = vim.api.nvim_buf_get_name(buffer),
+    buftype = vim.bo[buffer].buftype,
+    buflisted = vim.bo[buffer].buflisted,
+    bufhidden = vim.bo[buffer].bufhidden,
+    swapfile = vim.bo[buffer].swapfile,
+    modifiable = vim.bo[buffer].modifiable,
+    filetype = vim.bo[buffer].filetype,
+  }
+end)(...)]]
+
+T['Enter']['shows the diff in a read-only scratch buffer named for the file'] = function()
+  local top = git_repo.create('changespane-diff-buffer', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  begin_and_show(top)
+  expect_lines(FILES, { '  M notes.txt' })
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  eq(child.lua_get(DIFF_BUFFER, { child.lua_get('_G.shown_diffs[1]') }), {
+    name = 'aineo://diff/notes.txt',
+    buftype = 'nofile',
+    buflisted = false,
+    bufhidden = 'wipe',
+    swapfile = false,
+    modifiable = false,
+    filetype = 'diff',
+  })
+end
+
+T['Enter']['ten times on the same file leaves one diff buffer'] = function()
+  local top = git_repo.create('changespane-diff-ten', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  begin_and_show(top)
+  expect_lines(FILES, { '  M notes.txt' })
+
+  child.type_keys('<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>')
+
+  wait_for_diffs(10)
+  eq(
+    child.lua_get([[vim.tbl_map(vim.api.nvim_buf_get_name, vim.tbl_filter(function(buffer)
+      return vim.startswith(vim.api.nvim_buf_get_name(buffer), 'aineo://diff/')
+    end, vim.api.nvim_list_bufs()))]]),
+    { 'aineo://diff/notes.txt' }
+  )
+end
+
+--- Begins the session in the child for a repository of the fixture
+--- `git-<name>`, with git in a stand-in that prints the file `diff` beside
+--- the repository for every `git show`, and shows the pane; makes one commit
+--- there, shows the pane again, and presses Enter on that commit's line.
+---
+---@param name string
+---@param diff string[] the lines of the file the stand-in prints
+local function enter_on_a_commit_whose_diff_is(name, diff)
+  local top = git_repo.create(name, { ['notes.txt'] = { 'one' } })
+  local printed = vim.fs.joinpath(vim.fs.dirname(top), 'diff')
+  assert(vim.fn.writefile(diff, printed, 'b') == 0, 'cannot write ' .. printed)
+  local stand_in = stand_in_git(name, {
+    ('case " $* " in *" show "*) cat %s; exit 0 ;; esac'):format(printed),
+  })
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(COMMITS, { 'No commits on this session' })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  git_repo.commit_all(top, 'Write two')
+  child.lua(SHOW_FILES_AGAIN)
+  git_repo.wait_until('the commit listed', function()
+    return lines_of(COMMITS)[1] ~= 'No commits on this session'
+  end)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
+  child.type_keys('<CR>')
+  wait_for_diffs(1)
+end
+
+--- The Lua that tells, in the child, how many lines the diff shown first
+--- holds, its first line and its last two.
+local SHOWN_DIFF_ENDS = [[(function()
+  local text = vim.api.nvim_buf_get_lines(_G.shown_diffs[1], 0, -1, true)
+  return { count = #text, first = text[1], last = { text[#text - 1], text[#text] } }
+end)()]]
+
+T['Enter']['with no room in the middle column warns once, naming the file, and keeps no diff'] = function()
+  local top = git_repo.create('changespane-no-room', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  expect_lines(FILES, { '  M notes.txt' })
+  child.lua('_G.no_room = true')
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  eq(child.lua_get('{ _G.messages, vim.fn.bufnr("aineo://diff/notes.txt") }'), {
+    {
+      {
+        message = 'aineo: the middle column has no room for the diff of notes.txt, which is not shown',
+        level = vim.log.levels.WARN,
+      },
+    },
+    -1,
+  })
+end
+
+T['Enter']['with no room in the middle column warns once, naming the commit'] = function()
+  local top = git_repo.create('changespane-no-room-commit', { ['notes.txt'] = { 'one' } })
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  expect_lines(COMMITS, { 'No commits on this session' })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local commit = git_repo.commit_all(top, 'Write two')
+  child.lua(SHOW_FILES_AGAIN)
+  expect_lines(COMMITS, { commit:sub(1, 7) .. ' Write two' })
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
+  child.lua('_G.no_room = true')
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  eq(child.lua_get('_G.messages'), {
+    {
+      message = ('aineo: the middle column has no room for the diff of commit %s, which is not shown'):format(
+        commit:sub(1, 7)
+      ),
+      level = vim.log.levels.WARN,
+    },
+  })
+end
+
+T['Enter']['tells once, in git’s words, a diff that cannot be read'] = function()
+  local top = git_repo.create('changespane-diff-failed', { ['notes.txt'] = { 'one' } })
+  local stand_in, switch = breakable_git('changespane-diff-failed', top, 'show')
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(COMMITS, { 'No commits on this session' })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local commit = git_repo.commit_all(top, 'Write two')
+  child.lua(SHOW_FILES_AGAIN)
+  expect_lines(COMMITS, { commit:sub(1, 7) .. ' Write two' })
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
+  turn_on(switch)
+
+  child.type_keys('<CR>')
+
+  git_repo.wait_until('the user told', function()
+    return #child.lua_get('_G.messages') > 0
+  end)
+  eq(child.lua_get('{ _G.messages, #_G.shown_diffs }'), {
+    {
+      {
+        message = ('aineo: the diff of commit %s could not be read: fatal: broken'):format(
+          commit:sub(1, 7)
+        ),
+        level = vim.log.levels.ERROR,
+      },
+    },
+    0,
+  })
+end
+
+T['a large diff'] = MiniTest.new_set()
+
+T['a large diff']['is cut at the last line break within 1 MiB, with a line saying so'] = function()
+  local line = ('x'):rep(99)
+  local diff = vim.list_extend(vim.fn['repeat']({ line }, 11000), { '' })
+
+  enter_on_a_commit_whose_diff_is('changespane-large-diff', diff)
+
+  eq(child.lua_get(SHOWN_DIFF_ENDS), {
+    count = 10486,
+    first = line,
+    last = { line, 'aineo cut this diff at 1 MiB: 1048500 of its 1100000 bytes are shown' },
+  })
+end
+
+T['a large diff']['of one long line is cut at 1 MiB on a character’s edge'] = function()
+  local diff = { ('a'):rep(1048575) .. 'é' .. ('b'):rep(10000), '' }
+
+  enter_on_a_commit_whose_diff_is('changespane-long-line', diff)
+
+  eq(child.lua_get(SHOWN_DIFF_ENDS), {
+    count = 2,
+    first = ('a'):rep(1048575),
+    last = {
+      ('a'):rep(1048575),
+      'aineo cut this diff at 1 MiB: 1048575 of its 1058578 bytes are shown',
+    },
+  })
 end
 
 T['the user’s saves'] = MiniTest.new_set()
