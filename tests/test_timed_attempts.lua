@@ -86,6 +86,14 @@ T['a step']['over the limit in every attempt shows its second-fastest time'] = f
   eq(verdicts, { arrival = '3.5 s' })
 end
 
+T['a step']['that takes the limit exactly is within the limit, in two attempts'] = function()
+  local timing, attempts = scripted_timing({ { arrival = 2 } })
+
+  local verdicts = timed_attempts.within_limit(child, timing, 2)
+
+  eq({ verdicts, attempts.count }, { { arrival = 'within the limit' }, 2 })
+end
+
 T['a step']['is judged on its own second-fastest attempt, apart from the other steps'] = function()
   local timing = scripted_timing({
     { arrival = 1, edit = 3 },
@@ -114,6 +122,25 @@ T['the attempts']['are three at most'] = function()
   timed_attempts.within_limit(child, timing, 2)
 
   eq(attempts.count, 3)
+end
+
+T['the attempts']['time their steps after starting their child, once each'] = function()
+  local started = 0
+  local starts_when_timed = {}
+  local timing = {
+    start = function()
+      started = started + 1
+      children.restart(child)
+    end,
+    steps = function()
+      table.insert(starts_when_timed, started)
+      return { arrival = 1 }
+    end,
+  }
+
+  timed_attempts.within_limit(child, timing, 2)
+
+  eq(starts_when_timed, { 1, 2 })
 end
 
 T['the attempts']['start their children in homes no earlier attempt has drawn in'] = function()

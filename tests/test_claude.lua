@@ -296,10 +296,15 @@ T['start_session()']['names the setting that is malformed']['and starts nothing'
   eq(child.lua_get(STATUS), {})
 end
 
-T['start_session()']['refuses a directory it cannot enter, naming cwd, and starts nothing'] = function()
+T['start_session()']['refuses a directory it cannot enter, naming cwd, and starts nothing'] =
+  MiniTest.new_set({ parametrize = { { '000' }, { '600' } } })
+
+T['start_session()']['refuses a directory it cannot enter, naming cwd, and starts nothing']['of mode'] = function(
+  mode
+)
   local fake = claude.fake('cwd-unenterable', 'ready')
   local directory = fixture.directory('claude-cwd-unenterable')
-  vim.uv.fs_chmod(directory, tonumber('000', 8))
+  vim.uv.fs_chmod(directory, tonumber(mode, 8))
   MiniTest.finally(function()
     vim.uv.fs_chmod(directory, tonumber('755', 8))
   end)

@@ -365,7 +365,7 @@ T['a report']['that the editor refuses after the position of the Lua that raised
 end
 
 T['a report']['that the editor refuses keeps words of its reason that only look like framing'] = function()
-  local reason = 'the reason quotes Lua: and Error executing lua: in its own words'
+  local reason = 'Error executing lua: the reason quotes Lua: in its own words'
   local relay =
     mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = start_editor_refusing('Lua: ' .. reason) })
 
@@ -379,8 +379,8 @@ end
 
 --- The reason an editor gives when the user edited a buffer named as its
 --- Report and their BufFilePre autocommand fails as the Report takes the
---- name: the first line of the error, in Neovim's words for an error raised
---- in a Lua callback.
+--- name: the first line of the error, in Neovim 0.12's words for an error
+--- raised in a Lua callback.
 local BUFFILEPRE_REASON =
   'nvim_exec2()[1]..BufFilePre Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:7: the user autocommand fails'
 

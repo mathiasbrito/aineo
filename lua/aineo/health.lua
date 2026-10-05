@@ -28,6 +28,24 @@ local function error_line(message)
   return line
 end
 
+--- The oldest Neovim aineo supports, as `has()` names a version.
+local OLDEST_SUPPORTED_NEOVIM = '0.12'
+
+--- Reports the version of the Neovim that runs the check (`vim.version()`),
+--- or an error naming `OLDEST_SUPPORTED_NEOVIM` when that Neovim is older
+--- than it.
+local function check_neovim()
+  vim.health.start('Neovim')
+  if vim.fn.has('nvim-' .. OLDEST_SUPPORTED_NEOVIM) == 0 then
+    vim.health.error(
+      ('Neovim is older than %s, the oldest version aineo supports'):format(OLDEST_SUPPORTED_NEOVIM),
+      ('Update Neovim to %s or later: :help aineo-install'):format(OLDEST_SUPPORTED_NEOVIM)
+    )
+    return
+  end
+  vim.health.ok('Neovim ' .. tostring(vim.version()))
+end
+
 --- Reports whether aineo's configuration — `vim.g.aineo` and the options
 --- `require('aineo').setup()` recorded — is valid, warning of each key no
 --- setting knows, and returns it resolved; when a value is wrong, reports the
@@ -514,6 +532,7 @@ end
 
 --- Runs aineo's health check (`:h health-dev`).
 function M.check()
+  check_neovim()
   local resolved_config = check_configuration()
   check_claude(resolved_config)
   check_server_socket()
