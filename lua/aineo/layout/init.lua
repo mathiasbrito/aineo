@@ -31,7 +31,10 @@ local M = {}
 --- The layout's windows, by role, and the buffers they show, by role or, for
 --- the changes pane's, by name; the pane the right column shows, for the
 --- editor's life; the Report's `b:changedtick` when the agent pane was last
---- hidden; the Report's share of the right column's height, Claude's
+--- hidden, until the agent pane shows again with the Report's window open;
+--- the view each buffer a switch took out of the right column had there,
+--- by buffer, until a switch shows it again (`show_in_place()`);
+--- the Report's share of the right column's height, Claude's
 --- terminal once Neovim has seen its process end, the line numbers
 --- `M.toggle_claude_numbers()` last set in Claude's window, those it showed
 --- before it hid them, and the window and buffer those line numbers were
@@ -45,6 +48,8 @@ local state = {
   pane = 'agent',
   ---@type integer|nil
   report_tick_when_hidden = nil,
+  ---@type table<integer, table>
+  views = {},
   ---@type number|nil
   report_height = nil,
   ---@type integer|nil
@@ -924,25 +929,93 @@ local function follow_reports()
   vim.api.nvim_win_set_cursor(state.windows.report, { last_line, 0 })
 end
 
---- Shows `pane` in the right column's two windows, in place of the pane
---- they show.
+--- Once the agent pane shows with the Report's window open, after it was
+--- hidden: moves that window to the Report's last line when a report
+--- arrived meanwhile (`has_report_changed_while_hidden()`, `follow_reports()`),
+--- and forgets the Report's `b:changedtick` kept as it was hidden. Until
+--- then — the agent pane shown again with the Report's window closed, as
+--- focusing Input does — the tick is kept, and so is the arrival.
+local function follow_reports_shown_again()
+  if state.pane ~= 'agent' or state.report_tick_when_hidden == nil or not has_window('report') then
+    return
+  end
+  if has_report_changed_while_hidden() then
+    follow_reports()
+  end
+  state.report_tick_when_hidden = nil
+end
+
+--- Shows `buffer` in `window` in place of the buffer it shows, as a switch
+--- does: the view of the buffer leaving — its cursor and its top line
+--- (`winsaveview()`) — is kept in `state.views`, and `buffer` is given the
+--- view kept for it there when it last left by a switch, which is then
+--- forgotten. Neovim itself keeps a buffer's cursor line, not its top line.
+---
+---@param window integer
+---@param buffer integer
+local function show_in_place(window, buffer)
+  state.views[vim.api.nvim_win_get_buf(window)] = vim.api.nvim_win_call(window, vim.fn.winsaveview)
+  vim.api.nvim_win_set_buf(window, buffer)
+  local view = state.views[buffer]
+  state.views[buffer] = nil
+  if view then
+    vim.api.nvim_win_call(window, function()
+      vim.fn.winrestview(view)
+    end)
+  end
+end
+
+--- Shows, in each of the right column's two windows that exist and shows
+--- another buffer, the buffer `pane` shows there (`PANE_BUFFERS`), in place
+--- (`show_in_place()`). Raises the error a window raises as it is given its
+--- buffer, leaving the windows after it as they are.
+---
+---@param pane aineo.layout.Pane
+local function show_buffers_of(pane)
+  for _, role in ipairs(vim.tbl_filter(has_window, RIGHT_COLUMN_ROLES)) do
+    local window = state.windows[role]
+    local buffer = state.buffers[PANE_BUFFERS[pane][role]]
+    if vim.api.nvim_win_get_buf(window) ~= buffer then
+      show_in_place(window, buffer)
+    end
+  end
+end
+
+--- Shows `pane` in those of the right column's two windows that exist, in
+--- place of the pane they show, and makes it the pane shown. Shown again,
+--- the agent pane wraps the Report and Input (`wrap_agent_pane()`), and,
+--- when a report arrived while it was hidden, the Report's window shows the
+--- Report's last line (`follow_reports_shown_again()`). Before the agent
+--- pane is hidden, the Report's `b:changedtick` is kept, to tell an arrival
+--- by.
+---
+--- When a window refuses its buffer — `'winfixbuf'`, the command-line
+--- window (E11), an autocommand that fails as the buffer enters it — the
+--- pane shown before is shown again in both windows, and the pane shown
+--- stays that one; then the window's error is raised. A window that refuses
+--- the buffer it showed, too, is left as it is: the error raised is the
+--- first. While the buffers enter their windows, `pane` is the pane shown,
+--- so that the file column's redirect takes none of them for a file
+--- (`redirect_when_file()`).
 ---
 ---@param pane aineo.layout.Pane
 local function switch_pane(pane)
-  if pane == state.pane then
+  local shown = state.pane
+  if pane == shown then
     return
   end
-  if state.pane == 'agent' then
+  if shown == 'agent' then
     state.report_tick_when_hidden = vim.api.nvim_buf_get_changedtick(state.buffers.report)
   end
   state.pane = pane
-  for _, role in ipairs(vim.tbl_filter(has_window, RIGHT_COLUMN_ROLES)) do
-    vim.api.nvim_win_set_buf(state.windows[role], own_buffer(role))
+  local switched, failure = pcall(show_buffers_of, pane)
+  if not switched then
+    state.pane = shown
+    pcall(show_buffers_of, shown)
+    error(failure, 0)
   end
   wrap_agent_pane()
-  if pane == 'agent' and has_window('report') and has_report_changed_while_hidden() then
-    follow_reports()
-  end
+  follow_reports_shown_again()
 end
 
 --- Whether the right column's two windows exist, and the buffers `pane`
@@ -994,8 +1067,11 @@ end
 --- changes pane's when it hands them — a file shown there in its place
 --- moving to the file column first (`show_buffers()`), makes the Report and
 --- Input wrap again while the agent pane shows, and puts the proportions
---- back. The changes pane's buffers an arrangement without `changes` leaves
---- are those it was handed last.
+--- back. Opened or restored under the agent pane, the Report's window shows
+--- the Report's last line when a report arrived while the agent pane was
+--- hidden, and the agent pane has not shown with that window open since
+--- (`follow_reports_shown_again()`). The changes pane's buffers an
+--- arrangement without `changes` leaves are those it was handed last.
 --- The cursor stays where it is when the layout's tab is the current one,
 --- and moves to that tab otherwise.
 ---
@@ -1038,16 +1114,43 @@ function M.open(arrangement)
   state.report_height = arrangement.report_height
   pin_windows()
   wrap_agent_pane()
+  follow_reports_shown_again()
   keep_claude_numbers()
   apply_proportions()
   watch_windows()
 end
 
+--- Whether the Report and Input both exist: neither was wiped.
+---
+---@return boolean
+local function has_agent_pane_buffers()
+  return vim.iter(RIGHT_COLUMN_ROLES):all(function(role)
+    return state.buffers[role] ~= nil and vim.api.nvim_buf_is_valid(state.buffers[role])
+  end)
+end
+
+--- Whether focusing `role` must open the layout first: its window is gone,
+--- or its own buffer was wiped (`has_window_and_buffer()`); or, for the
+--- Report's or Input's while the changes pane shows, the agent pane it must
+--- show again lost the Report or Input (`has_agent_pane_buffers()`).
+---
+---@param role aineo.layout.Role
+---@return boolean
+local function must_open_to_focus(role)
+  if not has_window_and_buffer(role) then
+    return true
+  end
+  return vim.list_contains(RIGHT_COLUMN_ROLES, role)
+    and state.pane ~= 'agent'
+    and not has_agent_pane_buffers()
+end
+
 --- Moves the cursor to the layout's window for `role`, opening the layout
 --- with `arrangement` first when that window is gone, or its buffer was
---- wiped (see `open()`). The Report's and Input's windows show the agent
---- pane first (`M.show_pane()`), those of the right column's two windows
---- that are open; Claude's leaves the pane shown.
+--- wiped, or, for the Report's or Input's while the changes pane shows, the
+--- Report or Input was wiped (see `open()`). The Report's and Input's
+--- windows show the agent pane first (`M.show_pane()`), those of the right
+--- column's two windows that are open; Claude's leaves the pane shown.
 --- `arrangement` may be a function that returns it, which is called only
 --- then, so that what it makes — a session's terminal, say — is made only
 --- when the layout opens.
@@ -1060,7 +1163,7 @@ function M.focus(role, arrangement)
   vim.validate('role', role, function(value)
     return vim.list_contains(ROLES, value)
   end, false, "'claude', 'report' or 'input'")
-  if not has_window_and_buffer(role) then
+  if must_open_to_focus(role) then
     if type(arrangement) == 'function' then
       arrangement = arrangement()
     end
@@ -1080,20 +1183,26 @@ end
 --- again shows it (`open()`). Asked for the pane it shows, it changes
 --- nothing.
 ---
---- Shown again, the agent pane wraps the Report and Input as `open()` does,
---- and keeps the Report's cursor where it was, or, when the Report changed
---- while hidden — a report arrived — puts it on the Report's last line, as
---- an arrival does in a window showing the Report.
+--- Each buffer a switch shows again comes back with the view it had when a
+--- switch took it out: its cursor and its top line. Shown again, the agent
+--- pane wraps the Report and Input as `open()` does; when the Report changed
+--- while hidden — a report arrived — its cursor is on its last line, as an
+--- arrival puts it in a window showing the Report, once the agent pane shows
+--- with the Report's window open, by a switch or by `open()`.
 ---
 --- Opens the layout with `arrangement` first when either of the right
 --- column's windows is gone, or a buffer of `pane` was wiped or unloaded
 --- (see `open()`). `arrangement` may be a function that returns it, which is
---- called only then.
+--- called only then. A layout restored so, while any of its windows was
+--- left, leaves the cursor in the window it was in, in whichever tab page:
+--- from another tab page, the pane is shown in the layout's own.
 ---
 --- Raises an error naming `pane` when it is neither `'agent'` nor
 --- `'changes'`, and one naming `arrangement.changes` when the changes pane
 --- is asked for and no arrangement has handed its buffers, after opening
---- the layout and before switching anything.
+--- the layout and before switching anything. A window that refuses its
+--- buffer raises its own error, the right column left as it was (see
+--- `switch_pane()`).
 ---
 ---@param pane aineo.layout.Pane
 ---@param arrangement aineo.layout.Arrangement|fun(): aineo.layout.Arrangement
@@ -1102,10 +1211,15 @@ function M.show_pane(pane, arrangement)
     return PANE_BUFFERS[value] ~= nil
   end, false, "'agent' or 'changes'")
   if not can_show_in_place(pane) then
+    local current = vim.api.nvim_get_current_win()
+    local restoring = has_any_window()
     if type(arrangement) == 'function' then
       arrangement = arrangement()
     end
     M.open(arrangement)
+    if restoring then
+      vim.api.nvim_set_current_win(current)
+    end
   end
   if not can_show_in_place(pane) then
     error("arrangement.changes: expected the changes pane's buffers, and none was handed", 0)
