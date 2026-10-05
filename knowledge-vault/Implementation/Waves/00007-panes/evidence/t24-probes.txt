@@ -1,0 +1,243 @@
+# T24 planning probes, written by the brief's drafter on 2026-10-05.
+# Host: macOS arm64, NVIM v0.12.5 (Homebrew), the newest release (D29). Checkout at origin/dev d1b9225.
+# Each probe runs as: nvim --clean -u NONE -i NONE --headless -l <probe> [args], from the checkout's root.
+# The probe's source is shown commented, then its output.
+
+## P1. A user's own \p once \pa and \pc are mapped (the prefix's new first key)
+#   -- How long a user's own `\p` takes to run once `\pa` and `\pc` are mapped too.
+#   -- Run: nvim --clean -u NONE -i NONE --headless -l t24-probe-prefix.lua
+#   -- Each case starts its own `nvim --embed --headless --clean`, makes its
+#   -- mappings, types the keys with nvim_input(), polls nvim_get_mode() every 5 ms
+#   -- until the editor no longer waits for keys, and reports which mapping ran
+#   -- and how long after the input it ran (the mark it set, `reltime()`).
+#   local out = { 'nvim ' .. tostring(vim.version()) }
+#
+#   local function run(case)
+#     local channel = vim.fn.jobstart(
+#       { vim.v.progpath, '--embed', '--headless', '--clean', '-u', 'NONE', '-i', 'NONE' },
+#       { rpc = true }
+#     )
+#     for _, command in ipairs(case.commands) do
+#       vim.rpcrequest(channel, 'nvim_command', command)
+#     end
+#     local started = vim.rpcrequest(channel, 'nvim_eval', 'reltimefloat(reltime())')
+#     vim.rpcrequest(channel, 'nvim_input', case.keys)
+#     -- nvim_get_mode() is served while the editor waits for the rest of a
+#     -- mapping; any other request waits until the keys are resolved.
+#     local resolved = vim.wait(3000, function()
+#       return not vim.rpcrequest(channel, 'nvim_get_mode').blocking
+#     end, 5)
+#     local result
+#     if not resolved then
+#       result = 'still waiting for more keys after 3000 ms (nvim_get_mode().blocking)'
+#     else
+#       local mark = vim.rpcrequest(channel, 'nvim_eval', 'get(g:, "ran", v:null)')
+#       local ran_at = vim.rpcrequest(channel, 'nvim_eval', 'get(g:, "at", 0)')
+#       result = mark == vim.NIL and 'nothing ran'
+#         or ('%s ran after %d ms'):format(mark, math.floor((ran_at - started) * 1000 + 0.5))
+#     end
+#     table.insert(out, ('%-62s %s'):format(case.name .. ':', result))
+#     vim.fn.jobstop(channel)
+#   end
+#
+#   local function mark(name)
+#     return ("<Cmd>let g:at = reltimefloat(reltime()) <Bar> let g:ran = '%s'<CR>"):format(name)
+#   end
+#
+#   local USER_P = 'nnoremap \\p ' .. mark('user \\p')
+#   local AINEO_PA = 'nnoremap \\pa ' .. mark('\\pa')
+#   local AINEO_PC = 'nnoremap \\pc ' .. mark('\\pc')
+#
+#   for _, case in ipairs({
+#     { name = '\\p alone mapped, timeoutlen 1000, typing \\p', commands = { USER_P }, keys = '\\p' },
+#     {
+#       name = '\\p, \\pa, \\pc mapped, timeoutlen 1000 (default), typing \\p',
+#       commands = { USER_P, AINEO_PA, AINEO_PC },
+#       keys = '\\p',
+#     },
+#     {
+#       name = '\\p, \\pa, \\pc mapped, timeoutlen 300, typing \\p',
+#       commands = { 'set timeoutlen=300', USER_P, AINEO_PA, AINEO_PC },
+#       keys = '\\p',
+#     },
+#     {
+#       name = '\\p, \\pa, \\pc mapped, typing \\pa',
+#       commands = { USER_P, AINEO_PA, AINEO_PC },
+#       keys = '\\pa',
+#     },
+#     {
+#       name = '<Leader>p, mapleader unset, \\pa mapped, typing \\p',
+#       commands = { 'nnoremap <Leader>p ' .. mark('user <Leader>p'), AINEO_PA },
+#       keys = '\\p',
+#     },
+#     {
+#       name = '\\p, \\pa mapped, notimeout, typing \\p',
+#       commands = { 'set notimeout', USER_P, AINEO_PA },
+#       keys = '\\p',
+#     },
+#   }) do
+#     run(case)
+#   end
+#   io.stdout:write(table.concat(out, '\n') .. '\n')
+# Output (exit 0):
+nvim 0.12.5
+\p alone mapped, timeoutlen 1000, typing \p:                   user \p ran after 0 ms
+\p, \pa, \pc mapped, timeoutlen 1000 (default), typing \p:     user \p ran after 1064 ms
+\p, \pa, \pc mapped, timeoutlen 300, typing \p:                user \p ran after 321 ms
+\p, \pa, \pc mapped, typing \pa:                               \pa ran after 0 ms
+<Leader>p, mapleader unset, \pa mapped, typing \p:             user \p ran after 1066 ms
+\p, \pa mapped, notimeout, typing \p:                          still waiting for more keys after 3000 ms (nvim_get_mode().blocking)
+
+## P2. :Aineo on origin/dev given a second word, and its completion after `:Aineo pane `
+#   -- What :Aineo's definition on origin/dev does with a second word: the
+#   -- arguments a -nargs=? command receives, and what completion offers after
+#   -- `:Aineo pane `.
+#   -- Run from the checkout's root:
+#   --   nvim --clean -u NONE -i NONE --headless -l <this file>
+#   local out = { 'nvim ' .. tostring(vim.version()) }
+#   vim.opt.runtimepath:prepend(vim.fn.getcwd())
+#   vim.cmd.runtime('plugin/aineo.lua')
+#   vim.api.nvim_create_user_command('Probe', function(command)
+#     vim.g.probe_args = command.args
+#     vim.g.probe_fargs = command.fargs
+#   end, { nargs = '?' })
+#   vim.cmd('Probe pane agent')
+#   table.insert(
+#     out,
+#     (':Probe pane agent (-nargs=?): args=%q fargs=%s'):format(vim.g.probe_args, vim.inspect(vim.g.probe_fargs))
+#   )
+#   for _, typed in ipairs({ 'Aineo ', 'Aineo p', 'Aineo pane ', 'Aineo pane a' }) do
+#     table.insert(
+#       out,
+#       ('getcompletion(%q, "cmdline"): %s'):format(typed, vim.inspect(vim.fn.getcompletion(typed, 'cmdline')))
+#     )
+#   end
+#   local notified = {}
+#   vim.notify = function(message)
+#     table.insert(notified, message)
+#   end
+#   vim.cmd('Aineo pane agent')
+#   table.insert(out, ':Aineo pane agent notifies: ' .. vim.inspect(notified))
+#   io.stdout:write(table.concat(out, '\n') .. '\n')
+# Output (exit 0):
+nvim 0.12.5
+:Probe pane agent (-nargs=?): args="pane agent" fargs={ "pane agent" }
+getcompletion("Aineo ", "cmdline"): { "send", "open", "report", "input", "claude", "claude-numbers" }
+getcompletion("Aineo p", "cmdline"): {}
+getcompletion("Aineo pane ", "cmdline"): { "send", "open", "report", "input", "claude", "claude-numbers" }
+getcompletion("Aineo pane a", "cmdline"): {}
+:Aineo pane agent notifies: { "aineo: :Aineo takes one of send, open, report, input, claude, claude-numbers" }
+
+## P3. A buffer swapped out of a window and back in place: sizes, and the Report's cursor after lines arrive while hidden
+#   -- What a window shows when its buffer is swapped out and back in place with
+#   -- nvim_win_set_buf(), as a pane switch would: its size, and where the cursor
+#   -- of a Report-like buffer stands when lines were appended to it while it was
+#   -- hidden (the report home moves the cursor to the last line only in the
+#   -- windows that show the Report: `lua/aineo/report/buffer.lua`'s
+#   -- `follow_last_line()`, `vim.fn.win_findbuf()`).
+#   -- Run: nvim --clean -u NONE -i NONE --headless -l <this file>
+#   local out = { 'nvim ' .. tostring(vim.version()) }
+#   vim.o.lines, vim.o.columns = 40, 120
+#   local report = vim.api.nvim_create_buf(false, true)
+#   local input = vim.api.nvim_create_buf(false, true)
+#   local files = vim.api.nvim_create_buf(false, true)
+#   local commits = vim.api.nvim_create_buf(false, true)
+#   local lines = {}
+#   for i = 1, 100 do
+#     lines[i] = 'report line ' .. i
+#   end
+#   vim.api.nvim_buf_set_lines(report, 0, -1, false, lines)
+#   local input_window = vim.api.nvim_get_current_win()
+#   vim.api.nvim_win_set_buf(input_window, input)
+#   local report_window = vim.api.nvim_open_win(report, false, { split = 'above', win = input_window })
+#   local claude_window = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false, { split = 'left', win = -1 })
+#   for _, window in ipairs({ report_window, input_window, claude_window }) do
+#     vim.wo[window].winfixwidth = true
+#     vim.wo[window].winfixheight = true
+#   end
+#   vim.api.nvim_win_set_height(report_window, 25)
+#   vim.api.nvim_win_set_cursor(report_window, { 100, 0 })
+#
+#   local function sizes()
+#     return ('report window %dx%d, input window %dx%d, claude window %dx%d'):format(
+#       vim.api.nvim_win_get_width(report_window),
+#       vim.api.nvim_win_get_height(report_window),
+#       vim.api.nvim_win_get_width(input_window),
+#       vim.api.nvim_win_get_height(input_window),
+#       vim.api.nvim_win_get_width(claude_window),
+#       vim.api.nvim_win_get_height(claude_window)
+#     )
+#   end
+#
+#   table.insert(out, 'before: ' .. sizes() .. '; report cursor line ' .. vim.api.nvim_win_get_cursor(report_window)[1])
+#   vim.api.nvim_win_set_buf(report_window, files)
+#   vim.api.nvim_win_set_buf(input_window, commits)
+#   table.insert(out, 'swapped to files/commits: ' .. sizes())
+#
+#   -- Reports arrive while the Report is hidden: lines appended, and the cursor
+#   -- moved in every window showing it, of which there is none.
+#   local more = {}
+#   for i = 101, 130 do
+#     more[#more + 1] = 'report line ' .. i
+#   end
+#   vim.api.nvim_buf_set_lines(report, -1, -1, false, more)
+#   table.insert(out, 'windows showing the Report while hidden: ' .. #vim.fn.win_findbuf(report))
+#
+#   vim.api.nvim_win_set_buf(report_window, report)
+#   vim.api.nvim_win_set_buf(input_window, input)
+#   table.insert(
+#     out,
+#     ('swapped back: %s; report cursor line %d of %d; first line shown %d'):format(
+#       sizes(),
+#       vim.api.nvim_win_get_cursor(report_window)[1],
+#       vim.api.nvim_buf_line_count(report),
+#       vim.fn.line('w0', report_window)
+#     )
+#   )
+#   io.stdout:write(table.concat(out, '\n') .. '\n')
+# Output (exit 0):
+nvim 0.12.5
+before: report window 59x25, input window 59x1, claude window 60x27; report cursor line 100
+swapped to files/commits: report window 59x25, input window 59x1, claude window 60x27
+windows showing the Report while hidden: 0
+swapped back: report window 59x25, input window 59x1, claude window 60x27; report cursor line 100 of 130; first line shown 88
+
+## P4. Help tags *aineo-\pa* and *aineo-\pc*
+#   -- Whether `:help aineo-\pa` and `:help aineo-\pc` find tags written
+#   -- `*aineo-\pa*` and `*aineo-\pc*`, beside `*aineo-\p*`-like neighbours, as
+#   -- T12's brief review measured for `*aineo-\tcn*`.
+#   -- Run: nvim --clean -u NONE -i NONE --headless -l <this file> <scratch directory>
+#   local out = { 'nvim ' .. tostring(vim.version()) }
+#   local root = assert(_G.arg[1], 'give a scratch directory')
+#   local doc = vim.fs.joinpath(root, 'doc')
+#   vim.fn.mkdir(doc, 'p')
+#   vim.fn.writefile({
+#     '*probe.txt*	probe',
+#     '',
+#     '                                                                    *aineo-\\c*',
+#     '\\c		the claude key',
+#     '                                                                   *aineo-\\pa*',
+#     '\\pa		the agent pane',
+#     '                                                                   *aineo-\\pc*',
+#     '\\pc		the changes pane',
+#     '',
+#     ' vim:tw=78:ts=8:ft=help:norl:',
+#   }, vim.fs.joinpath(doc, 'probe.txt'))
+#   local made, failure = pcall(vim.cmd.helptags, vim.fn.fnameescape(doc))
+#   table.insert(out, ':helptags: ' .. (made and 'no error' or tostring(failure)))
+#   vim.opt.runtimepath:prepend(root)
+#   for _, subject in ipairs({ 'aineo-\\pa', 'aineo-\\pc', 'aineo-\\c' }) do
+#     local found, err = pcall(vim.cmd.help, subject)
+#     local line = found and vim.api.nvim_get_current_line() or tostring(err)
+#     table.insert(out, (':help %s -> %s'):format(subject, vim.trim(line)))
+#     if found then
+#       vim.cmd.helpclose()
+#     end
+#   end
+#   io.stdout:write(table.concat(out, '\n') .. '\n')
+# Output (exit 0):
+nvim 0.12.5
+:helptags: no error
+:help aineo-\pa -> *aineo-\pa*
+:help aineo-\pc -> *aineo-\pc*
+:help aineo-\c -> *aineo-\c*

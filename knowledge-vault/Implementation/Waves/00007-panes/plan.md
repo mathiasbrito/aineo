@@ -119,6 +119,92 @@ One for T26, to settle before its dispatch or at the MVP review. D20 records fou
 
 T26's row carries all four.
 
+## Packet T24 — 2026-10-05
+
+**Why now.**
+- Wave 7 was paused at the user's word on 2026-09-27 (*Landed*, first item).
+- On 2026-10-04 the user answered the orchestrator's three fixes: "check 1 to 3 and close 6. Please be carefull with the testing strategy, since each run is taking too long, try to optimize. than we will start the wave 7." This is quoted in `Implementation/Waves/00006-fixes/plan.md` › *Packet T27*.
+- T27–T29 have merged (PRs #94, #93, #97). T24 comes next, as *Packets* above fixes ("T23 comes first, then T24"). T25 and T26 both follow it.
+
+**What it builds.** The switching of D18 and D21, in the layout home (C12), with its four doors (C1), its health line (C7) and its help. The changes pane shows a placeholder until T25 fills it. The placeholder is a property T25 replaces without touching the switching: the layout shows the pane's buffers and never writes them.
+
+**The six rules for T24**, recomputed on 2026-10-05 against every open packet and every claimed wave:
+- `gh pr list --state open` lists one pull request, #101 (`knowledge/w6-close-t27-t29`), wave 6's closing knowledge pass. It is no packet.
+- Wave 6 is `claimed` on `dev` and `landed` in #101's head.
+- Wave 7 is claimed by this orchestrator's session, with no packet open.
+
+| rule | T24 |
+|---|---|
+| 1 dependencies | T12 landed: PR #84, merged 2026-09-28 (`gh pr view 84`) ✓ |
+| 2 files | `lua/aineo/layout/`, `plugin/aineo.lua`'s tables and `:Aineo`, `lua/aineo/health.lua`'s keys, `doc/aineo.txt`'s sections (the brief's *Facts*), new `tests/test_*panes*.lua`, and the pins listed in the brief. No other packet is open. #101's twelve files (`git diff origin/dev FETCH_HEAD --stat`, its head `2dcb17b`) are all under `knowledge-vault/`. T24's only files there are its own session note and, at the knowledge pass, this folder. ✓ |
+| 3 schema | none ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | D18, D21 and C12 are decided. **Six behaviours are left open, PD1–PD6 below.** T24 is dispatchable only once the user has answered them, recorded in a dated amendment to the brief. ✗ until then |
+| 6 task lines | T24's row (plan note, line 151) sits between T23's (done) and T25's (not dispatched). #101 edits T27–T29's rows (lines 154–156), two unchanged lines away. T24 holds its mark (rolling wave) ✓ |
+
+**The baseline.**
+- `dev` `d1b9225`. Its tree is `cd292445be66cbf2eeaad1695ace466ecedefc11` (`git rev-parse 'd1b9225^{tree}'`), the tree of the orchestrator's last verification of wave 6.
+- On 0.12.5: guard 5 cases, `Fails (0)`; `make test` 1455 cases, `Fails (0)`, in 197 s; lint clean.
+- The record: `evidence/baseline-cd29244.txt`.
+
+**Measured before writing the brief.** `evidence/t24-probes.txt`, Neovim 0.12.5, each probe with its source:
+- **P1.** A user's own `\p` runs only after `'timeoutlen'` once `\pa` and `\pc` are mapped (1064 ms at 1000, 321 ms at 300). With no `\p…` mapping it runs at once. `<Leader>p` with `mapleader` unset behaves the same.
+- **P2.** On `dev`, `:Aineo pane agent` reaches the callback as one argument and gets the usage error. Completion after `:Aineo pane ` offers the six subcommands.
+- **P3.** Buffers swapped in place keep every window's size. The Report swapped back in keeps its cursor where it was, above lines appended while it was hidden.
+- **P4.** `*aineo-\pa*` and `*aineo-\pc*` are valid tags that `:help` finds.
+
+**The questions for the user, before dispatch** (rule 5), numbered once here and in the brief:
+- **PD1 — `\r` and `\i` while the changes pane shows.**
+  - (a) switch to the agent pane, then move there;
+  - (b) move to the window in that place, showing the changes pane;
+  - (c) refuse, naming `\pa`.
+  - Recommended: (a).
+- **PD2 — Send while the changes pane shows.**
+  - (a) send Input as today, unseen;
+  - (b) refuse, naming `\pa`, Input kept;
+  - (c) switch to the agent pane, then send.
+  - Recommended: (a).
+- **PD3 — a report arriving while the changes pane shows.**
+  - (a) nothing shows, and `\pa` brings the Report back where it was;
+  - (b) nothing shows, and `\pa` brings the Report back at its last line;
+  - (c) a notification;
+  - (d) switch to the agent pane.
+  - Recommended: (b).
+- **PD4 — `\pa` and `\pc` with the layout not open.**
+  - (a) open it first, showing that pane, as `\r`, `\i` and `\c` do;
+  - (b) warn and open nothing, as `\tcn` does.
+  - Recommended: (a).
+- **PD5 — the cursor on a switch.**
+  - (a) it stays in its window;
+  - (b) it moves to the pane's top window.
+  - Recommended: (a).
+- **PD6 — the pane of a layout built anew after its three windows closed.**
+  - (a) the pane last shown;
+  - (b) the agent pane.
+  - Recommended: (a).
+
+The brief gives each question its evidence. **The answers:** not yet asked. The orchestrator records them, verbatim, in a dated amendment to `brief-t24-panes.md`, reviewed with it.
+
+**One more for the user, not a packet behaviour.** Until T25 lands, a release cut with T24 shows the user a changes pane that holds only its placeholder. Whether a release follows T24 alone or waits for T25 is the user's.
+
+**Reviewers**, regular: a reshaped layout state and four new doors. Attack by `neovim-lua-reviewer`, test-integrity by `reviewer`, records by `reviewer`. The implementer is `neovim-lua-developer`, on Opus.
+
+**Branch, resource, session note:** `feature/t24-panes`, `impl_t24_panes`, `2026-10-05 — T24 Panes`.
+
+**Verification mutants**, each applied literally against the test files that exercise the code it breaks:
+- **M1 — `\o` brings the agent pane back.** In `M.open()`'s restore branch, the right column's windows are given the Report and Input whatever pane shows, as `show_buffers()` does on `dev`. PN3 must kill it.
+- **M2 — a switch that replaces the windows.** The two windows are closed and new ones opened in their places (`nvim_win_close`, then `nvim_open_win` with `split = 'above'` and `'below'`), instead of the other pane's buffers being shown in them. PN1 must kill it, by window id.
+- **M3 — a switch that resizes.** After showing a pane, the Report's window is set to half the right column's rows. PN1 must kill it, by height.
+- **M4 — the redirect gives a changes window the agent pane's buffer back.** `redirect()` sets `state.buffers[role]` of the agent pane, as on `dev`. PN4 must kill it.
+- **M5 — a placeholder that is a file.** The placeholder buffers get an empty `'buftype'`, so the redirect takes them for files. The placeholder's property case or PN4 must kill it.
+- **M6 — a pane key over the user's own.** `map_prefix()` maps `\pc` without `has_global_mapping()`. PN8 must kill it.
+- **M7 — completion that ignores the command line.** `complete_subcommand()` returns to `dev`'s, filtering the subcommands by the argument lead alone. PN7 must kill it.
+- **M8 — an unknown pane switches.** `:Aineo pane other` shows the changes pane instead of telling the user what it takes. PN7 must kill it.
+- **M9 — the health check forgets a key.** `pc`'s row is dropped from `lua/aineo/health.lua`'s `PREFIX_KEYS`. PN9 must kill it.
+- **M10 — every switch makes new placeholders.** `\pc` creates its two buffers each time. PN11 must kill it.
+
+**Brief:** `brief-t24-panes.md`, to be reviewed by the brief dimension (`brief-review-t24-panes.md`) and amended with the user's answers to PD1–PD6 before dispatch.
+
 ## Landed
 
 - **Wave 7 paused** at the user's word on 2026-09-27 (20:16): "we will not continue towards wave 7, finish the current work and wait my go to start wave 7". That T23, already in its fix round, counted as current work and was finished is the orchestrator's reading, told to the user at 20:17. T24–T26 wait for the user's go. The wave stays claimed.
