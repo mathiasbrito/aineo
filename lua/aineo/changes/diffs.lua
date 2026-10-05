@@ -72,18 +72,36 @@ local function write_diff(buffer, text)
   vim.bo[buffer].filetype = 'diff'
 end
 
+--- The lines each diff buffer `M.diff_buffer()` made shows, by buffer; a
+--- buffer since wiped is forgotten the next time a diff is shown.
+---@type table<integer, string[]>
+local shown_lines = {}
+
 --- A buffer named `name` showing `diff`, the text git printed, read-only: a
 --- scratch buffer (`aineo.changes.scratch`), not modifiable, with
 --- `'filetype'` `diff`, wiped once hidden, and written again by `:edit`.
+--- The buffer this made last under `name`, while it exists, is written
+--- anew and kept, in the windows that show it; otherwise a new one is made.
 ---
 ---@param name string
 ---@param diff string
 ---@return integer buffer
 function M.diff_buffer(name, diff)
   local text = diff_lines(diff)
-  return scratch.named_scratch_buffer(name, 'wipe', function(buffer)
-    write_diff(buffer, text)
+  for existing in pairs(shown_lines) do
+    if not vim.api.nvim_buf_is_valid(existing) then
+      shown_lines[existing] = nil
+    elseif vim.api.nvim_buf_get_name(existing) == name then
+      shown_lines[existing] = text
+      write_diff(existing, text)
+      return existing
+    end
+  end
+  local buffer = scratch.named_scratch_buffer(name, 'wipe', function(made)
+    write_diff(made, shown_lines[made] or text)
   end)
+  shown_lines[buffer] = text
+  return buffer
 end
 
 return M

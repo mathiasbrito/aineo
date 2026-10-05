@@ -2,6 +2,7 @@ local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
+local git_repo = dofile('tests/helpers/git_repo.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -15,11 +16,23 @@ local CHANGES_PANE = { 'terminal', 'aineo://changes-files', 'aineo://changes-com
 
 local child = MiniTest.new_child_neovim()
 
+--- Starts the child afresh with the git isolation of the git home's suites
+--- (`git_repo.ENVIRONMENT`), which this file's own Neovim takes on and every
+--- child it starts inherits, and moves its working directory, where Claude
+--- Code starts, into a fixture repository of one commit: the changes pane
+--- this file shows lists that repository, never the checkout's.
+local function restart_in_a_fixture_repository()
+  for name, value in pairs(git_repo.ENVIRONMENT) do
+    vim.env[name] = value
+  end
+  entry.restart(child)
+  local top = git_repo.create('changespane-entry-panes', { ['notes.txt'] = { 'one' } })
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
+end
+
 local T = MiniTest.new_set({
   hooks = {
-    pre_case = function()
-      entry.restart(child)
-    end,
+    pre_case = restart_in_a_fixture_repository,
     post_once = child.stop,
   },
 })
@@ -91,7 +104,7 @@ end
 
 --- What the buffer whose name is the argument is, read in the child: its
 --- options and its lines.
-local PLACEHOLDER = [[(function(name)
+local PANE_BUFFER = [[(function(name)
   local buffer = vim.fn.bufnr(name)
   return {
     buftype = vim.bo[buffer].buftype,
@@ -103,7 +116,7 @@ local PLACEHOLDER = [[(function(name)
   }
 end)(...)]]
 
---- What a placeholder of the changes pane is, but for its line.
+--- What a buffer of the changes pane is, but for its lines.
 local SCRATCH = {
   buftype = 'nofile',
   buflisted = false,
@@ -112,31 +125,46 @@ local SCRATCH = {
   modifiable = false,
 }
 
+--- The child's buffer named `name` (`PANE_BUFFER`) once it holds `lines`,
+--- waiting for that at most `git_repo.PATIENCE_MS`, or as it is when the
+--- wait runs out: the changes pane lists what git answers once it answers.
+---
+---@param name string
+---@param lines string[]
+---@return table
+local function once_listing(name, lines)
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return vim.deep_equal(child.lua_get(PANE_BUFFER, { name }).lines, lines)
+  end, 10)
+  return child.lua_get(PANE_BUFFER, { name })
+end
+
+--- What the changes pane's two windows list for this file's fixture
+--- repository, unchanged since the session began.
+local NO_FILES = { 'No files changed on this session' }
+local NO_COMMITS = { 'No commits on this session' }
+
 T['the changes pane’s windows'] = MiniTest.new_set()
 
-T['the changes pane’s windows']['show a scratch buffer each, saying it lists nothing yet'] = function()
+T['the changes pane’s windows']['show a scratch buffer each, listing the session’s files and commits'] = function()
   open_layout('panes-placeholders')
 
   entry.press(child, '\\pc')
 
   eq({
-    child.lua_get(PLACEHOLDER, { 'aineo://changes-files' }),
-    child.lua_get(PLACEHOLDER, { 'aineo://changes-commits' }),
+    once_listing('aineo://changes-files', NO_FILES),
+    once_listing('aineo://changes-commits', NO_COMMITS),
   }, {
-    vim.tbl_extend('error', SCRATCH, {
-      lines = { "aineo does not list the session's changed files here yet" },
-    }),
-    vim.tbl_extend('error', SCRATCH, {
-      lines = { "aineo does not list the session's commits here yet" },
-    }),
+    vim.tbl_extend('error', SCRATCH, { lines = NO_FILES }),
+    vim.tbl_extend('error', SCRATCH, { lines = NO_COMMITS }),
   })
 end
 
---- The name of each window of the changes pane's buffer, with the line it
---- holds, as a set's `parametrize`.
-local PLACEHOLDERS = {
-  { 'aineo://changes-files', { "aineo does not list the session's changed files here yet" } },
-  { 'aineo://changes-commits', { "aineo does not list the session's commits here yet" } },
+--- The name of each buffer of the changes pane, with what it lists, as a
+--- set's `parametrize`.
+local LISTINGS = {
+  { 'aineo://changes-files', NO_FILES },
+  { 'aineo://changes-commits', NO_COMMITS },
 }
 
 --- The name and the lines of the child's buffer that is the argument, or
@@ -149,9 +177,9 @@ local NAME_AND_LINES = [[(function(buffer)
 end)(...)]]
 
 T['a buffer already named as a buffer of the changes pane'] =
-  MiniTest.new_set({ parametrize = PLACEHOLDERS })
+  MiniTest.new_set({ parametrize = LISTINGS })
 
-T['a buffer already named as a buffer of the changes pane']['gives the name up, and the pane key shows the placeholder, for'] = function(
+T['a buffer already named as a buffer of the changes pane']['gives the name up, and the pane key shows its list, for'] = function(
   name,
   line
 )
@@ -163,7 +191,7 @@ T['a buffer already named as a buffer of the changes pane']['gives the name up, 
   entry.press(child, '\\pc')
 
   eq(
-    { opened, entry.windows(child), entry.messages(child), child.lua_get(PLACEHOLDER, { name }) },
+    { opened, entry.windows(child), entry.messages(child), once_listing(name, line) },
     { AGENT_PANE, CHANGES_PANE, {}, vim.tbl_extend('error', SCRATCH, { lines = line }) }
   )
 end
@@ -209,37 +237,38 @@ end
 
 T['a buffer of the changes pane'] = MiniTest.new_set()
 
-T['a buffer of the changes pane']['holds its line again once a command run in its window emptied it'] =
+T['a buffer of the changes pane']['lists again once a command run in its window emptied it'] =
   MiniTest.new_set({
     parametrize = {
-      { 'edit', PLACEHOLDERS[1][1], PLACEHOLDERS[1][2] },
-      { 'edit', PLACEHOLDERS[2][1], PLACEHOLDERS[2][2] },
-      { 'edit!', PLACEHOLDERS[1][1], PLACEHOLDERS[1][2] },
-      { 'edit!', PLACEHOLDERS[2][1], PLACEHOLDERS[2][2] },
+      { 'edit', LISTINGS[1][1], LISTINGS[1][2] },
+      { 'edit', LISTINGS[2][1], LISTINGS[2][2] },
+      { 'edit!', LISTINGS[1][1], LISTINGS[1][2] },
+      { 'edit!', LISTINGS[2][1], LISTINGS[2][2] },
     },
   })
 
-T['a buffer of the changes pane']['holds its line again once a command run in its window emptied it']['by'] = function(
+T['a buffer of the changes pane']['lists again once a command run in its window emptied it']['by'] = function(
   command,
   name,
   line
 )
   open_layout('panes-edited')
   entry.press(child, '\\pc')
+  once_listing(name, line)
   enter_window_showing(name)
 
   entry.command(child, command)
 
   eq(
-    { entry.windows(child), entry.messages(child), child.lua_get(PLACEHOLDER, { name }) },
+    { entry.windows(child), entry.messages(child), once_listing(name, line) },
     { CHANGES_PANE, {}, vim.tbl_extend('error', SCRATCH, { lines = line }) }
   )
 end
 
-T['a buffer of the changes pane']['deleted from its own window, is shown by the pane key holding its line,'] =
-  MiniTest.new_set({ parametrize = PLACEHOLDERS })
+T['a buffer of the changes pane']['deleted from its own window, is shown by the pane key listing again,'] =
+  MiniTest.new_set({ parametrize = LISTINGS })
 
-T['a buffer of the changes pane']['deleted from its own window, is shown by the pane key holding its line,']['for'] = function(
+T['a buffer of the changes pane']['deleted from its own window, is shown by the pane key listing again,']['for'] = function(
   name,
   line
 )
@@ -250,7 +279,7 @@ T['a buffer of the changes pane']['deleted from its own window, is shown by the 
 
   entry.press(child, '\\pc')
 
-  eq({ right_column(), entry.messages(child), child.lua_get(PLACEHOLDER, { name }) }, {
+  eq({ right_column(), entry.messages(child), once_listing(name, line) }, {
     { 'aineo://changes-files', 'aineo://changes-commits' },
     {},
     vim.tbl_extend('error', SCRATCH, { lines = line }),
@@ -1234,12 +1263,12 @@ T['the changes pane key']['shows a wiped buffer of the changes pane anew, with n
   )
 end
 
-T['the changes pane key']['shows a deleted buffer of the changes pane anew, as a placeholder,'] =
+T['the changes pane key']['shows a deleted buffer of the changes pane anew, listing again,'] =
   MiniTest.new_set({
     parametrize = { { 'deleted while shown', 'pc' }, { 'deleted while hidden', 'pa' } },
   })
 
-T['the changes pane key']['shows a deleted buffer of the changes pane anew, as a placeholder,']['when'] = function(
+T['the changes pane key']['shows a deleted buffer of the changes pane anew, listing again,']['when'] = function(
   _,
   key_before_deleting
 )
@@ -1253,13 +1282,11 @@ T['the changes pane key']['shows a deleted buffer of the changes pane anew, as a
   eq({
     entry.windows(child),
     entry.messages(child),
-    child.lua_get(PLACEHOLDER, { 'aineo://changes-files' }),
+    once_listing('aineo://changes-files', NO_FILES),
   }, {
     CHANGES_PANE,
     {},
-    vim.tbl_extend('error', SCRATCH, {
-      lines = { "aineo does not list the session's changed files here yet" },
-    }),
+    vim.tbl_extend('error', SCRATCH, { lines = NO_FILES }),
   })
 end
 
