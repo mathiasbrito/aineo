@@ -51,7 +51,7 @@ Nothing calls it on a redraw.
 
 ## Where it applies again
 
-- Any code that infers a terminal's rows from the heights of its windows. It is right only after one of the triggers. A terminal started inside a window, then shown in a taller one only by moving the cursor, has the first window's rows. aineo has no such path today (the T30 session note's *Open threads*).
+- Any code that infers a terminal's rows from the heights of its windows. It is right only after one of the triggers. A terminal started in one window while a taller window already shows its buffer keeps the first window's rows when the cursor moves into the taller one; showing it in a taller window afterwards resizes it. aineo has no such path today (the T30 session note's *Open threads*).
 - A probe that measures a terminal's size must change the windows, or enter Terminal mode, before it reads, and must print the heights it got. Two of T30's C4 rows were labelled with heights the probe never set, and only the printed heights showed it (PR #108's records review, finding 4).
 - **Limits:**
   - measured on Neovim 0.12.5 under macOS only; the triggers were not measured on 0.11.6;
