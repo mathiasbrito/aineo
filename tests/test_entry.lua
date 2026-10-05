@@ -35,17 +35,17 @@ local T = MiniTest.new_set({
 
 T[':Aineo'] = MiniTest.new_set()
 
-T[':Aineo']['without an argument tells the user its six subcommands and does nothing else'] = function()
+T[':Aineo']['without an argument tells the user its seven subcommands and does nothing else'] = function()
   child.cmd('Aineo')
 
   eq(entry.messages(child), { { message = entry.USAGE, level = vim.log.levels.ERROR } })
   eq(entry.windows(child), { '' })
 end
 
-T[':Aineo']['completes its argument to its six subcommands'] = function()
+T[':Aineo']['completes its argument to its seven subcommands'] = function()
   eq(
     child.fn.getcompletion('Aineo ', 'cmdline'),
-    { 'send', 'open', 'report', 'input', 'claude', 'claude-numbers' }
+    { 'send', 'open', 'report', 'input', 'claude', 'claude-numbers', 'pane' }
   )
 end
 
@@ -53,14 +53,14 @@ T[':Aineo']['completes the subcommands that begin with what is typed'] = functio
   eq(child.fn.getcompletion('Aineo re', 'cmdline'), { 'report' })
 end
 
-T[':Aineo']['with another argument tells the user its six subcommands and does nothing else'] = function()
+T[':Aineo']['with another argument tells the user its seven subcommands and does nothing else'] = function()
   child.cmd('Aineo reports')
 
   eq(entry.messages(child), { { message = entry.USAGE, level = vim.log.levels.ERROR } })
   eq(entry.windows(child), { '' })
 end
 
-T[':Aineo']['with a subcommand and more tells the user its six subcommands and does nothing else'] = function()
+T[':Aineo']['with a subcommand and more tells the user its seven subcommands and does nothing else'] = function()
   local fake = claude_session.fake('entry-usage-extra', 'ready')
   entry.use_fake(child, fake)
 
