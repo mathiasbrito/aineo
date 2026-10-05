@@ -86,8 +86,10 @@ terminal, the changes pane, and a file shown in or split from those two
 windows, keep yours.
 
 Opening the layout closes the tab's other windows (floating ones stay); their
-buffers stay loaded. The cursor starts in Input. The Neovim startup buffer
-becomes Input; a file the current window shows stays, as the file column.
+buffers stay loaded. The cursor starts in Input's window, which shows the
+changes pane's commits instead when the layout is opened anew while the
+changes pane shows (|aineo-panes|). The Neovim startup buffer becomes Input;
+a file the current window shows stays, as the file column.
 
 Panes ~
                                                                  *aineo-panes*
@@ -97,18 +99,27 @@ same two windows, at the same sizes, show the other pane's buffers.
 - The agent pane: the Agent Report over Input, as the layout opens.
 - The changes pane: `aineo://changes-files` in the Report's place, over
   `aineo://changes-commits` in Input's. Each is a scratch buffer, read-only
-  to you, that says aineo lists nothing there yet.
+  to you, that says aineo lists nothing there yet; `:edit` there writes
+  that line again. A buffer of yours under either name, such as one a
+  restored session made, gives the name up: it is wiped out, or kept
+  unnamed when you changed its text.
 
 `\pa` (|:Aineo-pane|) shows the agent pane and `\pc` the changes pane; the
 pane already shown stays as it is. The cursor stays in the window it was
-in. `\r` and `\i` show the agent pane first, then move to the Report or
-Input; `\c` and `\tcn` leave the pane as it is. Send sends Input while the
-changes pane hides it (|aineo-send|).
+in. From another tab page they switch the pane in the layout's tab page,
+restoring the layout there first when one of its windows is gone, and
+leave you where you are. `\r` and `\i` show the agent pane first, then move
+to the Report or Input; `\c` and `\tcn` leave the pane as it is. Send sends
+Input while the changes pane hides it (|aineo-send|). When a window will
+not take its buffer — 'winfixbuf' is set there, say, or you are in the
+command-line window — the right column stays as it was, and aineo tells
+you why, once.
 
 The Report and Input are kept while hidden, with Input's text and its draft.
-When the agent pane shows again, the Report's cursor is where it was, unless
-a report arrived meanwhile: then it is on the Report's last line, where an
-arriving report puts it.
+A buffer shown again comes back as it was scrolled. When a report arrived
+while the agent pane was hidden, the Report's cursor is on its last line,
+where an arriving report puts it, once the agent pane shows again with the
+Report's window open — by `\pa`, `\r`, `\i` or `\o`.
 
 aineo keeps the pane shown until the editor quits: `\o` restores the layout
 with it, and so does the layout opened anew once its windows were closed.
@@ -236,12 +247,13 @@ mode too. Any other terminal of yours keeps Neovim's own behaviour.
 
 `report`, `input`, `claude` and `pane` open the layout first when their window
 is gone (for `pane`, either window of the right column, or a buffer of the
-pane wiped or deleted), around Claude's terminal as it is — its exit on screen
-when Claude Code has exited. They start Claude Code only when there is no
-terminal to show: before the first start, or again, in a new terminal, once
-the terminal was wiped (|:bwipeout|). Wiping it from Claude's window closes
-that window; a window Neovim cannot close, such as its last one, stays on an
-empty buffer until `claude` opens the layout there again — `report` and
+pane wiped or deleted; for `report` and `input` while the changes pane shows,
+the Report or Input wiped too), around Claude's terminal as it is — its exit
+on screen when Claude Code has exited. They start Claude Code only when there
+is no terminal to show: before the first start, or again, in a new terminal,
+once the terminal was wiped (|:bwipeout|). Wiping it from Claude's window
+closes that window; a window Neovim cannot close, such as its last one, stays
+on an empty buffer until `claude` opens the layout there again — `report` and
 `input` do so only when their own window is gone too. A file opened in
 Claude's window as the terminal is wiped stays in view, and moves to the file
 column when the layout opens again. Of the actions, only `open` restarts an
