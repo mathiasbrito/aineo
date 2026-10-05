@@ -139,6 +139,15 @@ local PLACEHOLDERS = {
   { 'aineo://changes-commits', { "aineo does not list the session's commits here yet" } },
 }
 
+--- The name and the lines of the child's buffer that is the argument, or
+--- `'wiped'` once it was wiped out.
+local NAME_AND_LINES = [[(function(buffer)
+  if not vim.api.nvim_buf_is_valid(buffer) then
+    return 'wiped'
+  end
+  return { name = vim.api.nvim_buf_get_name(buffer), lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, true) }
+end)(...)]]
+
 T['a buffer already named as a buffer of the changes pane'] =
   MiniTest.new_set({ parametrize = PLACEHOLDERS })
 
@@ -176,12 +185,10 @@ T['a buffer already named as a buffer of the changes pane']['keeps the text the 
   entry.command(child, 'Aineo open')
   entry.press(child, '\\pc')
 
-  eq({
-    entry.windows(child),
-    entry.messages(child),
-    child.api.nvim_buf_get_name(namesake),
-    child.api.nvim_buf_get_lines(namesake, 0, -1, true),
-  }, { CHANGES_PANE, {}, '', { 'my own notes' } })
+  eq(
+    { entry.windows(child), entry.messages(child), child.lua_get(NAME_AND_LINES, { namesake }) },
+    { CHANGES_PANE, {}, { name = '', lines = { 'my own notes' } } }
+  )
 end
 
 --- Moves the child's cursor to the window showing the buffer named `name`.
@@ -577,6 +584,103 @@ T['a report arrived while the changes pane showed']['is on the Report’s last l
   eq({ entry.windows(child), entry.messages(child), cursor }, { AGENT_PANE, {}, last_line })
 end
 
+T['a report arriving while the changes pane shows'] = MiniTest.new_set()
+
+T['a report arriving while the changes pane shows']['shows nothing then, and \\pa shows it on the Report’s last line'] = function()
+  own_state('panes-arrival-state')
+  open_layout('panes-arrival')
+  entry.press(child, '\\pc')
+
+  receive_reports(1)
+  local on_arrival = { entry.windows(child), entry.messages(child) }
+  entry.press(child, '\\pa')
+
+  local cursor, last_line = unpack(child.lua_get(REPORT_CURSOR_AND_LAST_LINE))
+  eq(
+    { on_arrival, entry.windows(child), entry.messages(child), cursor },
+    { { CHANGES_PANE, {} }, AGENT_PANE, {}, last_line }
+  )
+end
+
+T['while the changes pane shows']['the key of a window of the agent pane, the other’s window closed, shows its buffer there alone, telling nothing'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'r', 'aineo://changes-commits', 'aineo://report' },
+      { 'i', 'aineo://changes-files', 'aineo://input' },
+    },
+  })
+
+T['while the changes pane shows']['the key of a window of the agent pane, the other’s window closed, shows its buffer there alone, telling nothing']['for'] = function(
+  key,
+  closed,
+  name
+)
+  own_state('panes-focus-closed-state')
+  open_layout('panes-focus-closed')
+  entry.press(child, '\\pc')
+  child.api.nvim_win_close(child.fn.bufwinid(closed), false)
+  receive_reports(1)
+
+  entry.press(child, '\\' .. key)
+
+  eq({ where_the_cursor_is(), entry.messages(child) }, { { name, { 'terminal', name } }, {} })
+end
+
+--- The buffers of the changes pane, read in the child by their names.
+local CHANGES_PANE_BUFFERS =
+  [[{ vim.fn.bufnr('aineo://changes-files'), vim.fn.bufnr('aineo://changes-commits') }]]
+
+T['while the changes pane shows']['restoring the layout keeps its buffers, telling nothing, by'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        'pressing \\o',
+        function()
+          entry.press(child, '\\o')
+        end,
+      },
+      {
+        'running :Aineo open',
+        function()
+          entry.command(child, 'Aineo open')
+        end,
+      },
+    },
+  })
+
+T['while the changes pane shows']['restoring the layout keeps its buffers, telling nothing, by']['door'] = function(
+  _,
+  restore
+)
+  open_layout('panes-restore')
+  entry.press(child, '\\pc')
+  local buffers = child.lua_get(CHANGES_PANE_BUFFERS)
+  child.api.nvim_win_close(child.fn.bufwinid('aineo://changes-commits'), false)
+
+  restore()
+
+  eq(
+    { entry.windows(child), child.lua_get(CHANGES_PANE_BUFFERS), entry.messages(child) },
+    { CHANGES_PANE, buffers, {} }
+  )
+end
+
+T['the pane key, with its pane shown,'] = MiniTest.new_set({ parametrize = PANES })
+
+T['the pane key, with its pane shown,']['changes nothing and tells the user nothing, for'] = function(
+  _,
+  key,
+  windows
+)
+  open_layout('panes-shown-already')
+  entry.press(child, '\\' .. key)
+  local before = where_the_cursor_is()
+
+  entry.press(child, '\\' .. key)
+
+  eq({ before[2], where_the_cursor_is(), entry.messages(child) }, { windows, before, {} })
+end
+
 --- What Claude's terminal receives when Send sends an Input holding `hello`:
 --- one bracketed paste, then Enter.
 local SENT_HELLO = '\27[200~hello\27[201~\r'
@@ -691,28 +795,38 @@ local HELD = [[{
   autocommands = #vim.api.nvim_get_autocmds({ group = 'aineo.layout' }),
 }]]
 
---- Shows the changes pane, restores the layout and shows the agent pane in
---- the child, `times` times.
+--- Shows the changes pane, then the agent pane, in the child, `times`
+--- times, and returns what the layout's windows showed after each press,
+--- as `entry.windows()` lists them.
 ---
 ---@param times integer
-local function switch_and_restore(times)
+---@return string[][]
+local function switch(times)
+  local shown = {}
   for _ = 1, times do
     entry.press(child, '\\pc')
-    entry.press(child, '\\o')
+    table.insert(shown, entry.windows(child))
     entry.press(child, '\\pa')
+    table.insert(shown, entry.windows(child))
   end
+  return shown
 end
 
 T['switching ten times'] = MiniTest.new_set()
 
-T['switching ten times']['leaves the windows, buffers and autocommands switching twice leaves'] = function()
+T['switching ten times']['shows each pane at each press, and leaves the windows, buffers and autocommands switching twice leaves'] = function()
   open_layout('panes-ten-times')
-  switch_and_restore(2)
+  local shown_by_two = switch(2)
   local after_two = child.lua_get(HELD)
 
-  switch_and_restore(8)
+  local shown_by_eight = switch(8)
 
-  eq({ child.lua_get(HELD), entry.messages(child) }, { after_two, {} })
+  eq({ shown_by_two, shown_by_eight, child.lua_get(HELD), entry.messages(child) }, {
+    vim.fn['repeat']({ CHANGES_PANE, AGENT_PANE }, 2),
+    vim.fn['repeat']({ CHANGES_PANE, AGENT_PANE }, 8),
+    after_two,
+    {},
+  })
 end
 
 T['the changes pane key'] = MiniTest.new_set()
