@@ -776,7 +776,7 @@ T[':Aineo pane']['completes after a command modifier or a range as it does witho
       { 'vertical Aineo p', { 'pane' } },
       { 'keepalt botright Aineo pane c', { 'changes' } },
       { 'silent! Ain pane a', { 'agent' } },
-      { '5Aineo pane ', { 'agent', 'changes' } },
+      { 'silent 5Aineo pane ', { 'agent', 'changes' } },
     },
   })
 
