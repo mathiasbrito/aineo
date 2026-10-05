@@ -328,13 +328,8 @@ end
 --- The reason the stand-in editors in the framing cases refuse a report with.
 local REFUSAL_REASON = 'aineo.report has no environment: call set_report_environment() first'
 
-T['a report']['that the editor refuses is a tool error with its reason, without either Neovim’s framing'] =
-  MiniTest.new_set({ parametrize = { { 'Lua: ' }, { 'Error executing lua: ' } } })
-
-T['a report']['that the editor refuses is a tool error with its reason, without either Neovim’s framing']['framed as'] = function(
-  framing
-)
-  local refusal = framing .. REFUSAL_REASON .. '\nstack traceback:\n\t[C]: in ?'
+T['a report']['that the editor refuses is a tool error with its reason, without Neovim’s framing'] = function()
+  local refusal = 'Lua: ' .. REFUSAL_REASON .. '\nstack traceback:\n\t[C]: in ?'
   local relay = mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = start_editor_refusing(refusal) })
 
   relay:send(mcp_messages.recorded('tools/call'))
@@ -384,11 +379,10 @@ end
 
 --- The reason an editor gives when the user edited a buffer named as its
 --- Report and their BufFilePre autocommand fails as the Report takes the
---- name: the first line of the error, in each Neovim's words for an error
---- raised in a Lua callback.
-local BUFFILEPRE_REASON = vim.fn.has('nvim-0.12') == 1
-    and 'nvim_exec2()[1]..BufFilePre Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:7: the user autocommand fails'
-  or 'nvim_exec2()[1]..BufFilePre Autocommands for "*": Vim(append):Error executing lua callback: [string "<nvim>"]:7: the user autocommand fails'
+--- name: the first line of the error, in Neovim's words for an error raised
+--- in a Lua callback.
+local BUFFILEPRE_REASON =
+  'nvim_exec2()[1]..BufFilePre Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:7: the user autocommand fails'
 
 T['a report']['that the editor refuses with words naming a position keeps them all'] = function()
   local reason = 'nvim_exec2()[1]..BufFilePost Autocommands for "*": Vim(append):Lua callback:'

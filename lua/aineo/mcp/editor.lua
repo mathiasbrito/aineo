@@ -21,16 +21,14 @@ local REQUEST, RESPONSE = 0, 1
 local REQUEST_ID = 1
 
 --- What an editor puts before an error raised in Lua when it answers a
---- request with it: the words it wraps the error in (`Lua: ` from Neovim 0.12
---- on, `Error executing lua: ` before), and the position of the Lua code that
---- raised it — `<file>.lua:<line>: `, the file's path holding no white
---- space, or for Neovim's own modules from 0.12 on `vim/<module>:<line>: ` or
---- `[string "vim/<module>"]:<line>: `. A file's position is never looked for
---- past a space, so the words of a reason before a position they name are
---- kept.
+--- request with it: the words it wraps the error in (`Lua: `), and the
+--- position of the Lua code that raised it — `<file>.lua:<line>: `, the
+--- file's path holding no white space, or for Neovim's own modules
+--- `vim/<module>:<line>: ` or `[string "vim/<module>"]:<line>: `. A file's
+--- position is never looked for past a space, so the words of a reason before
+--- a position they name are kept.
 local ERROR_FRAMING = {
   '^Lua: ',
-  '^Error executing lua: ',
   '^%S-%.lua:%d+: ',
   '^vim/[%w_/]+:%d+: ',
   '^%[string "vim/[^"]*"%]:%d+: ',
