@@ -220,6 +220,57 @@ T['the agent pane shown again']['puts the Report’s cursor on its last line whe
   eq(cursor_line_in_window_showing(buffers.report), 130)
 end
 
+--- Fills the child's `buffer` with two hundred numbered lines and scrolls
+--- its window so that line 100 is at its top, the cursor on it.
+---
+---@param buffer integer
+local function scroll_to_line_100(buffer)
+  child.lua(
+    [[
+      local buffer, window = ...
+      local lines = {}
+      for number = 1, 200 do
+        lines[number] = 'line ' .. number
+      end
+      vim.api.nvim_buf_set_lines(buffer, 0, -1, true, lines)
+      vim.api.nvim_win_call(window, function()
+        vim.fn.winrestview({ topline = 100, lnum = 100 })
+      end)
+    ]],
+    { buffer, layout.window_showing(child, buffer) }
+  )
+end
+
+--- The top line and the cursor's line of the child's window showing
+--- `buffer`.
+---
+---@param buffer integer
+---@return { topline: integer, lnum: integer }
+local function view_of_window_showing(buffer)
+  return child.lua_get(
+    [[vim.api.nvim_win_call(..., function()
+      local view = vim.fn.winsaveview()
+      return { topline = view.topline, lnum = view.lnum }
+    end)]],
+    { layout.window_showing(child, buffer) }
+  )
+end
+
+T['the agent pane shown again']['shows the Report and Input as they were scrolled, no report arrived:'] =
+  MiniTest.new_set({ parametrize = { { 'report' }, { 'input' } } })
+
+T['the agent pane shown again']['shows the Report and Input as they were scrolled, no report arrived:']['the'] = function(
+  role
+)
+  local buffers = open_with_panes()
+  scroll_to_line_100(buffers[role])
+
+  show_pane('changes')
+  show_pane('agent')
+
+  eq(view_of_window_showing(buffers[role]), { topline = 100, lnum = 100 })
+end
+
 T['the pane shown'] = MiniTest.new_set({ parametrize = { { 'agent' }, { 'changes' } } })
 
 T['the pane shown']['asked for again changes nothing, a buffer shown in its window by hand included'] = function(
