@@ -2,7 +2,7 @@
 
 ## Overview
 **Path:** `~/Development/Personal/aineo`
-**Stack:** Lua — a Neovim plugin for Nvim ≥ 0.12, tested on the newest release only (D29, the user, 2026-10-05; the 0.12 minimum is the orchestrator's reading, unanswered; D10 said ≥ 0.11); tests on mini.test; StyLua and selene (D12)
+**Stack:** Lua — a Neovim plugin for Nvim ≥ 0.12, tested on the newest release only (D29, the user, 2026-10-05, the 0.12 minimum confirmed by the user the same day; D10 said ≥ 0.11); tests on mini.test; StyLua and selene (D12)
 **Description:** <!-- what aineo is, for whom, and what it deliberately is not -->
 
 ## Architecture
@@ -77,14 +77,14 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
   - T29, the Report's timing cases (PR #97, 2026-10-05): each step is judged by its second-fastest wall time over three fresh processes, each with a home of its own (RP4's reading, accepted by the user, MR212). No release, since it changes only tests.
 - **Released:** `v0.2.0`, with T9 and T13 (PR #37, `main` at `e26838f`); `v0.2.1`, with T15 and T16 (PR #42, `main` at `270743b`); `v0.2.2`, with T11 (PR #48, `main` at `f1285c1`); `v0.2.3`, with T14 (PR #53, `main` at `dcff14f`); `v0.2.4`, with T10 (PR #56, `main` at `89e6c87`); `v0.2.5`, with T20 (PR #63, `main` at `0d4c8b4`); `v0.2.6`, with T18 (PR #65, `main` at `164265b`), all 2026-09-26; `v0.2.7`, with T21 (PR #70, `main` at `e1b55ee`), and `v0.2.8`, with T17 (PR #71, `main` at `e202c1b`), 2026-09-27; `v0.2.9`, with T19 (PR #81, `main` at `ece0cdb`), 2026-09-27; `v0.2.10`, with T12, and T23 with no caller yet (PR #87, `main` at `2af6b56`), 2026-09-28; `v0.2.11`, with T27 and the help's 0.12 minimum, and T28 (PR #100, `main` at `10c330f`, from `dev` `c6172e5`), 2026-10-05.
 - **Wave 6 landed** (2026-10-05). The user asked for T27–T29 and the close on 2026-10-04: "check 1 to 3 and close 6". A rolling wave closes when the user says so and no packet is open (orchestrate §3); T27, T28 and T29 have merged, and the plan is `landed`.
-- **How the suite runs — D26** (the user, 2026-09-27): test files while working, the whole suite once before each push and in the orchestrator's verification, mutants on their covering files. It is in the root `CLAUDE.md`, the agents' charters and the orchestrate skill (PR #74). **D28** (the user, 2026-10-04) refines it: a test-only packet — one the orchestrator dispatched whose branch changes nothing outside `tests/` except its own session note and task lines — skips the pre-push whole suite and runs the test files it reaches; the verification still runs the whole suite. **D29** (the user, 2026-10-05): the suite runs on the newest Neovim release only, 0.12.5 on this host. That 0.12 is the supported minimum is the orchestrator's reading, unanswered.
+- **How the suite runs — D26** (the user, 2026-09-27): test files while working, the whole suite once before each push and in the orchestrator's verification, mutants on their covering files. It is in the root `CLAUDE.md`, the agents' charters and the orchestrate skill (PR #74). **D28** (the user, 2026-10-04) refines it: a test-only packet — one the orchestrator dispatched whose branch changes nothing outside `tests/` except its own session note and task lines — skips the pre-push whole suite and runs the test files it reaches; the verification still runs the whole suite. **D29** (the user, 2026-10-05): the suite runs on the newest Neovim release only, 0.12.5 on this host. That 0.12 is the supported minimum the user confirmed the same day: "drop support for 0.11 and the dangling code and tests". T30 removes what 0.11 left.
 
 **Next:**
 - **Wave 7** (`Implementation/Waves/00007-panes/`, claimed 2026-09-27): a changes pane beside the agent pane, and sending only Input's selection, from D18–D22, C12 and C13. It is next, now that wave 6 has closed.
-  - **Its gate is the user's go of 2026-10-04**, effective once wave 6 closes: "check 1 to 3 and close 6 … than we will start the wave 7". That this sentence is the go is the orchestrator's reading. It told the user on 2026-10-05 (02:28) that wave 7 begins with T24 once the closing records pass merges, and has asked the user to confirm the reading.
+  - **Resumed on 2026-10-05.** The user's words of 2026-10-04, "check 1 to 3 and close 6 … than we will start the wave 7", came with wave 6's close; on 2026-10-05 the user answered T24's questions and said "go ahead". That this is the go is the orchestrator's reading (the wave plan's *Landed*).
   - The pause it ends: the user, 2026-09-27, "we will not continue towards wave 7, finish the current work and wait my go to start wave 7". T23, the git home, was already in flight and has landed (PR #79, `2f44c73` … `da18aa6`); it has no caller yet, so no release carries it alone.
-  - T24 (panes) follows T12; T25 (the changes pane) and T26 (Visual Send) follow T24.
-  - D20's four clauses, told to the user without a reply, are to be settled before T26's dispatch or at the MVP review. They were put to the user again on 2026-10-05 (02:28).
+  - T24 (panes) follows T12, then T30 (drop Neovim 0.11); T25 (the changes pane) and T26 (Visual Send) follow T30. T24's PD1–PD6 are the user's (2026-10-05). No release for T24 alone: it ships with T25 (the user, 2026-10-05).
+  - D20's four clauses are the user's, 2026-10-05 (D20's annotation).
 - The MVP review: the user kept MR1–MR97, MR99, MR100 and MR102–MR107 on 2026-09-26 ([[Review/2026-09-24 — v1 MVP readings review]]). The readings below remain.
 
 **Open threads:**
@@ -101,9 +101,9 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 - ~~The help's recipe to turn the status's bold off is undone by a later colour scheme that runs `:highlight clear`~~ — closed by T27 (PR #94, `v0.2.11`). A bare `:highlight clear` still brings the bold back, as the help says (MR210).
 - ~~Six places in five docstrings of the test harness still describe the suite before T22~~ — closed by T28 (PR #93), with four more places its review found.
 - ~~`tests/test_report_paths.lua`'s timing case is intermittent~~ — closed by T29 (PR #97), with T10's long-line case.
-- Docstrings that give Neovim 0.11.6's behaviour as the reason for the code, to re-measure on 0.12.5 under D29: `lua/aineo/claude/init.lua:105`, `:392`, `:407`; `lua/aineo/claude/readiness.lua:4`, `:60`; `lua/aineo/claude/stop.lua:13`, `:32` (the records review of PRs #98–99, finding 7).
-- The 0.11 error framing `'^Error executing lua: '` in `lua/aineo/mcp/editor.lua:33` and `plugin/aineo.lua:259`, kept for the form before 0.12; whether 0.12 ever produces it is unmeasured.
-- Eight `vim.fn.has('nvim-0.12')` test branches whose 0.11 side no run executes since D29 (the records review of PRs #98–99, finding 7; the retrospective lists them).
+- Docstrings that give Neovim 0.11.6's behaviour as the reason for the code, the 0.11 error framing `'^Error executing lua: '` (0.12.5 never produces it, measured by T30's brief review), and eight `vim.fn.has('nvim-0.12')` test branches: T30's (wave 7).
+- `lua/aineo/claude/stop.lua`'s waits rest on Claude Code 2.1.281's answers measured in a Neovim 0.11.6 terminal; re-measuring them on 0.12.5 needs Claude Code, so no packet can (T30's brief review).
+- 30 Learnings mention 0.11; a docstring that states one of their 0.11 behaviours without naming the version is out of grep's reach (T30's brief review found `lua/aineo/health.lua`'s `run_within_bound()`, now T30's).
 - `tests/test_runner.lua:330` and `:338`: a case name still says "the runner" for what is now the file's runner (T28's open thread).
 - A LuaJIT crash on 0.12.5: a child Neovim crashed in the paths step, SIGSEGV inside LuaJIT under `nlua_exec`, once in each of two series of 40 and 72 runs, never in 42 (T29). Not attributed.
 - T29's form was never measured inside five whole suites run at once, the one condition in which the old form failed every run; the user skipped that run on 2026-10-05.
@@ -111,8 +111,6 @@ Wave 6 — `00006-fixes`, a rolling wave of the user's fixes, claimed 2026-09-25
 **Host limits for orchestration:** Macbook-Mathias — 3 agents at once (10 CPUs, 64 GiB; the orchestrate skill's default of 3 parallel implementers, applied to all agents).
 
 **Decisions awaiting the user:**
-- Whether aineo should still work on Neovim 0.11, untested (D29; asked on 2026-10-05 at 00:03 and 00:14). Until an answer, the 0.12 minimum is the orchestrator's reading.
-- D20's four clauses, before wave 7's T26 (asked again on 2026-10-05).
 - The oldest `claude` version supported (2.1.281 is installed) — MR28.
 - MR98, MR101, MR108 and MR111–MR113 of [[Review/2026-09-24 — v1 MVP readings review]], which were not on the list the user kept and were told to the user afterwards, on 2026-09-26 (03:16), without a reply; MR109 and MR110, which came after the user's answer of 2026-09-26 and were named to the user by number only; T14's readings and limits, MR115–MR125; T10's, MR126–MR134; T20's, MR135–MR137, MR139 and MR140, with MR138 decided by D25 and landed with T21 (PR #64, `v0.2.7`); T18's, MR141–MR143; T21's, MR144–MR148; T17's, MR149–MR159; T19's, MR160–MR180, of which MR165 and MR174 were told to the user without a reply; and T23's, MR181–MR198, of which MR188–MR190 were told to the user without a reply; and T12's new ones, MR201–MR207: MR203's second half, MR204's terminal half and MR206's first effect were told to the user without a reply, and the rest were not shown. MR199 and MR200 duplicate MR111 and MR112, MR202's and MR203's first halves are MR103 and MR104 (kept), MR114 is superseded by T12's amendment (the orchestrator's reading), and MR208 is D27, the user's; and T27's, MR209–MR211: MR209's form and MR210 were told to the user on 2026-10-04 without a reply, MR211 was not shown. MR142's recipe is superseded by MR209; MR212, T29's reading of RP4, the user accepted on 2026-10-05.
 
