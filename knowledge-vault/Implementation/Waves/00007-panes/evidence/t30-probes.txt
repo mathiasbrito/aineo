@@ -75,6 +75,7 @@ NVIM v0.12.5
 C1–C4 — terminal jobs in a mini.test child (cwd that cannot be entered, missing interpreter, hidden terminal's size, the size of a terminal two windows show)
 ==============================================================================
 Run: make test_file FILE=.claude/local/orchestrator/t30-test_probe_terminal.lua (Neovim v0.12.5), Fails (0).
+Correction (fix round, PR #108's records review, finding 4): two of the C4 labels name heights the probe never set. `shown_twice()` ignores `second` in one tab page, so the rows labelled "windows of 1 then 12 rows" ran in windows of 1 and 20 rows (`1:1 1:20`), and the rows labelled "windows of 3 then 12 rows, another tab page" ran in windows of 3 and 17 rows here and 10 and 1 rows in the other tab page (`1:3 1:17 2:10 2:1`). Each output line prints the heights the windows had, and every reading below follows from those; the code and output are left as they ran.
 Reading: a job started in a window that shows it keeps that window's height while redraws alone run (the 'no redraw' and 'redrawn every 50 ms' rows agree); the size is checked again when a window showing it opens or changes size, and then is the tallest, in any tab page. A terminal started hidden (as aineo's session starts one) has 5 rows, then the tallest window's height once shown. The 1-row rows read no size line: that buffer held no line at all.
 
 --- code: t30-test_probe_terminal.lua
@@ -412,6 +413,7 @@ NVIM v0.12.5
 C6 — vim.wait() and SystemObj:wait() while a child writes without end
 ==============================================================================
 Run: nvim --clean --headless -l t30-probe-flood.lua (Neovim v0.12.5), twice; the second run (below) added the no-op handler rows and 'yes flood'. A watchdog timer kills `yes` 10 s after it starts. The first run, without the no-op rows: 10943 ms, 10999 ms, 9999 ms. Neither vim.wait(1000) nor SystemObj:wait(1000) returned at 1 s while the flood ran: each returned only once the watchdog had killed the writer.
+The first run (fix round, PR #108's records review, finding 4): neither its code nor its output was kept. By the line above, its code differed from the code below only in its rows: it had the first three measure() calls and not the two no-op-handler rows, and its writer was `yes` without the `flood` argument the second run added. Its three times above are the summary the T30 implementer wrote down at the time; nothing else of that run is on record.
 
 --- code: t30-probe-flood.lua
 -- Probe C6: whether `vim.wait()`'s time-out runs out while a child writes
@@ -548,3 +550,311 @@ return T
 positive control, a child with jit.off() and jit.flush(): holds a trace = false
 NVIM v0.12.5, LuaJIT 2.1.1788856981
 
+T30 fix round — 2026-10-05, on the same host's Neovim v0.12.5 (Homebrew 0.12.5_1), by the T30 fix-round implementer (branch refactor/t30-drop-nvim-011, PR #108), after the attack, test-integrity and records reviews. Every probe ran inside the fix round's worktree; none ran Claude Code.
+
+==============================================================================
+C2, C4 and the same tick — a hidden terminal's size, the autocommand window, and a buffer shown as the process starts
+==============================================================================
+Run: make test_file FILE=.claude/local/orchestrator/t30fix-test_probe_sizes.lua (Neovim v0.12.5), Fails (0).
+R1 measures the clause of readiness.lua shown_rows() that the T30 probes left out (PR #108's records review, finding 4): when a hidden buffer's terminal first writes, win_findbuf() gives the autocommand window jobstart() runs it in, 5 rows high, and then no window. W measures the width of a hidden terminal (PR #108's attack review, finding 3): 5 rows, as wide as the editor — 80 or 200 columns — and the window's size once shown. S measures start_session()'s same-tick sentence (PR #108's records review, finding 2): shown in the same tick or from a vim.schedule() callback, a process that reads its size as it starts still reads 5 rows, and has the window's size about 50 ms later; shown 500 ms later, it reads 5 rows throughout. The records review measured the same with nvim --clean --headless -l, where its vim.schedule() row read 22 rows from the start.
+
+--- code: t30fix-test_probe_sizes.lua
+-- T30 fix round, probes in a mini.test child as the suites start one, on
+-- Neovim 0.12.5: (R1) the windows win_findbuf() gives when a hidden
+-- terminal's buffer first changes; (W) the size of a hidden terminal in an
+-- editor of 80 and of 200 columns; (S) the sizes a process started hidden
+-- reads at about 0, 50 and 350 ms when its buffer is shown in the same tick,
+-- from a vim.schedule() callback, or 500 ms later. Writes every result to
+-- `t30fix-probe-sizes.out` beside this file.
+local MiniTest = require('mini.test')
+local children = dofile('tests/helpers/child.lua')
+
+local HERE = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h')
+local OUT = vim.fs.joinpath(HERE, 't30fix-probe-sizes.out')
+local lines = {}
+local function record(text)
+  table.insert(lines, text)
+  vim.fn.writefile(lines, OUT)
+end
+
+local child = MiniTest.new_child_neovim()
+local T = MiniTest.new_set({
+  hooks = {
+    pre_case = function()
+      children.restart(child)
+    end,
+    post_once = child.stop,
+  },
+})
+
+local function idle(ms)
+  vim.wait(ms, function()
+    return false
+  end, 50)
+end
+
+local function sizes(buffer)
+  return child.lua(
+    [[
+    local found = {}
+    for _, line in ipairs(vim.api.nvim_buf_get_lines(..., 0, -1, false)) do
+      if line:match('^%d+ %d+$') then
+        table.insert(found, line)
+      end
+    end
+    return table.concat(found, ', then ')
+  ]],
+    { buffer }
+  )
+end
+
+T['R1 the windows win_findbuf() gives at a hidden terminal first change'] = function()
+  local seen = child.lua([[
+    local buffer = vim.api.nvim_create_buf(true, false)
+    _G.t30fix_seen = {}
+    vim.api.nvim_buf_attach(buffer, false, {
+      on_lines = function()
+        if #_G.t30fix_seen < 3 then
+          local windows = vim.tbl_map(function(window)
+            local kind = vim.fn.win_gettype(window)
+            return (kind ~= '' and kind or 'normal') .. ':' .. vim.fn.getwininfo(window)[1].height
+          end, vim.fn.win_findbuf(buffer))
+          table.insert(_G.t30fix_seen, #windows > 0 and table.concat(windows, ',') or 'none')
+        end
+      end,
+    })
+    vim.api.nvim_buf_call(buffer, function()
+      vim.fn.jobstart({ 'sh', '-c', 'stty size; sleep 1' }, { term = true })
+    end)
+    vim.wait(500, function() return false end)
+    return _G.t30fix_seen
+  ]])
+  record('R1 win_findbuf() at the first on_lines calls of a hidden terminal: ' .. table.concat(seen, ' | '))
+end
+
+for _, columns in ipairs({ 80, 200 }) do
+  T['W a hidden terminal in an editor of ' .. columns .. ' columns'] = function()
+    child.o.columns = columns
+    local buffer = child.lua([[
+      local buffer = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_call(buffer, function()
+        vim.fn.jobstart({ 'sh', '-c', 'while :; do stty size; sleep 0.1; done' }, { term = true })
+      end)
+      return buffer
+    ]])
+    idle(600)
+    local hidden = sizes(buffer):match('(%d+ %d+)$')
+    child.lua('vim.api.nvim_win_set_buf(0, ...)', { buffer })
+    idle(600)
+    local height = child.lua_get('vim.api.nvim_win_get_height(0)')
+    record(
+      ('W editor of %d columns: hidden %s; shown in the current window of %d rows: %s'):format(
+        columns,
+        hidden,
+        height,
+        sizes(buffer):match('(%d+ %d+)$')
+      )
+    )
+  end
+end
+
+local START = [[
+  local how = ...
+  local buffer = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_call(buffer, function()
+    vim.fn.jobstart({ 'sh', '-c', 'stty size; sleep 0.05; stty size; sleep 0.3; stty size; sleep 1' }, { term = true })
+  end)
+  local function show()
+    vim.api.nvim_win_set_buf(0, buffer)
+  end
+  if how == 'same tick' then
+    show()
+  elseif how == 'vim.schedule()' then
+    vim.schedule(show)
+  else
+    vim.defer_fn(show, 500)
+  end
+  return buffer
+]]
+
+for index, how in ipairs({ 'same tick', 'same tick', 'same tick', 'vim.schedule()', 'vim.schedule()', '500 ms later (control)' }) do
+  T['S shown ' .. how .. ' ' .. index] = function()
+    local buffer = child.lua(START, { how })
+    idle(1500)
+    local height = child.lua_get('vim.api.nvim_win_get_height(0)')
+    record(('S shown %s: stty size at about 0, 50 and 350 ms: %s (window %d rows)'):format(how, sizes(buffer), height))
+  end
+end
+
+T['version'] = function()
+  record(child.lua_get([[vim.fn.execute('version'):match('NVIM v[^\n]*')]]))
+end
+
+return T
+
+--- output: t30fix-probe-sizes.out
+R1 win_findbuf() at the first on_lines calls of a hidden terminal: autocmd:5 | none
+W editor of 80 columns: hidden 5 80; shown in the current window of 22 rows: 22 80
+W editor of 200 columns: hidden 5 200; shown in the current window of 22 rows: 22 200
+S shown same tick: stty size at about 0, 50 and 350 ms: 5 80, then 22 80, then 22 80 (window 22 rows)
+S shown same tick: stty size at about 0, 50 and 350 ms: 5 80, then 22 80, then 22 80 (window 22 rows)
+S shown same tick: stty size at about 0, 50 and 350 ms: 5 80, then 22 80, then 22 80 (window 22 rows)
+S shown vim.schedule(): stty size at about 0, 50 and 350 ms: 5 80, then 22 80, then 22 80 (window 22 rows)
+S shown vim.schedule(): stty size at about 0, 50 and 350 ms: 5 80, then 22 80, then 22 80 (window 22 rows)
+S shown 500 ms later (control): stty size at about 0, 50 and 350 ms: 5 80, then 5 80, then 5 80 (window 22 rows)
+NVIM v0.12.5
+
+==============================================================================
+C6, in place — :checkhealth aineo while claude.cmd writes without end, with and without the check's own timer
+==============================================================================
+Run: t30fix-run-health-flood.sh (Neovim v0.12.5), once on the code as it is and once under the attack review's mutant M-H1. M-H1, applied to lua/aineo/health.lua run_within_bound() from a copy and restored after (cmp: identical): the timer callback's two lines `    timed_out = true` and `    vim.uv.kill(-process.pid, 'sigkill')` replaced by `    -- MUTANT timed_out = true` and `    -- MUTANT kill`. claude.cmd = { 'yes' }: on macOS `yes --version` writes "--version" without end. A watchdog in the script kills the Neovim's `yes` children by pid at 12 s.
+PR #108's attack review measured the same (its finding 1): 3007 ms in place, with the warning; 12125 ms under M-H1, returning only once its watchdog had killed `yes` at 12 s, and then reporting "OK claude.cmd --version: --version", since a process ended by a signal reports code 0. Here: 3009 ms in place, 12112 ms under M-H1, the same lines. The check's own timer is what bounds it on 0.12.5: without it, its vim.wait(6000, …) does not run out while the flood is read.
+
+--- code: t30fix-probe-health-flood.lua
+-- T30 fix round, probe C6 in place: `:checkhealth aineo` on Neovim 0.12.5
+-- with claude.cmd = { 'yes' }, so that `run_within_bound()` runs
+-- `yes --version`, which writes without end on macOS. Prints how long the
+-- check took, its Claude Code line, and whether a `yes` child is left.
+-- `arg[1]` is the checkout whose aineo is loaded.
+local root = arg[1]
+vim.opt.runtimepath:prepend(root)
+vim.g.aineo = { autostart = false, claude = { cmd = { 'yes' } } }
+vim.cmd('runtime plugin/aineo.lua')
+local started = vim.uv.hrtime()
+vim.cmd('checkhealth aineo')
+local elapsed_ms = (vim.uv.hrtime() - started) / 1e6
+local report = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\n')
+local claude_line = report:match('[^\n]*claude%.cmd %-%-version[^\n]*') or '(no claude.cmd --version line)'
+local left = vim.system({ 'pgrep', '-P', tostring(vim.fn.getpid()), '-x', 'yes' }):wait().stdout
+io.stdout:write(('checkhealth aineo took %d ms\n%s\nyes children left: %q\n'):format(elapsed_ms, claude_line, left))
+io.stdout:write(vim.fn.execute('version'):match('NVIM v[^\n]*') .. '\n')
+io.stdout:flush()
+
+--- code: t30fix-run-health-flood.sh
+#!/bin/sh
+# Runs t30fix-probe-health-flood.lua in a home of its own under the
+# worktree's .tests/. A watchdog kills the Neovim's `yes` children by pid
+# once it has run 12 s, so a wait that ignores its own time-out can end, and
+# the Neovim itself by pid at 30 s.
+ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
+HOME_DIR=$ROOT/.tests/t30fix-health-home
+mkdir -p "$HOME_DIR"
+cd "$ROOT/.claude/local/orchestrator" || exit 1
+START=$(date +%s)
+XDG_CONFIG_HOME=$HOME_DIR/config XDG_DATA_HOME=$HOME_DIR/data XDG_STATE_HOME=$HOME_DIR/state \
+  XDG_CACHE_HOME=$HOME_DIR/cache CLAUDE_CONFIG_DIR=$HOME_DIR/claude NVIM_LOG_FILE=$HOME_DIR/log \
+  nvim --clean --headless -l t30fix-probe-health-flood.lua "$ROOT" &
+NVIM_PID=$!
+WAITED=0
+while kill -0 "$NVIM_PID" 2>/dev/null && [ "$WAITED" -lt 30 ]; do
+  sleep 1
+  WAITED=$((WAITED + 1))
+  if [ "$WAITED" -eq 12 ]; then
+    for YES_PID in $(pgrep -P "$NVIM_PID" -x yes); do
+      echo "watchdog: killed yes $YES_PID at 12 s"
+      kill -9 "$YES_PID"
+    done
+  fi
+done
+if kill -0 "$NVIM_PID" 2>/dev/null; then
+  echo "watchdog: killed nvim $NVIM_PID at 30 s"
+  kill -9 "$NVIM_PID"
+fi
+wait "$NVIM_PID"
+echo "nvim exited $? after $(( $(date +%s) - START )) s (wall clock, whole seconds)"
+
+--- output, on the code as it is: t30fix-probe-health-flood.out
+checkhealth: 100% checking aineocheckhealth: checks donecheckhealth aineo took 3009 ms
+- ⚠️ WARNING claude.cmd --version did not finish within 3 s
+yes children left: ""
+NVIM v0.12.5
+nvim exited 0 after 4 s (wall clock, whole seconds)
+
+--- output, under M-H1: t30fix-probe-health-flood-MH1.out
+checkhealth: 100% checking aineowatchdog: killed yes 5899 at 12 s
+checkhealth: checks donecheckhealth aineo took 12112 ms
+- ✅ OK claude.cmd --version: --version
+yes children left: ""
+NVIM v0.12.5
+nvim exited 0 after 13 s (wall clock, whole seconds)
+
+==============================================================================
+C6, why 1002 ms — vim.wait(1000) under a flood that reaches Neovim and under one that does not
+==============================================================================
+Run: t30fix-run-flood-reach.sh (Neovim v0.12.5), each variant twice, a 3 s watchdog killing the writer by pid.
+The brief review of wave 7's T24 packet (T30-2) reported that on 0.12.5 vim.wait(1000, …) returned after 1002 ms under a `yes` flood (1003 ms with fast_only); its probe file was not kept. That figure is what a flood that never reaches Neovim gives: with no pipe opened for the writer's output (stdout = false), or with the writer sending it to /dev/null itself, the wait returns at 1 s while the writer still floods. A flood read by a handler, as run_within_bound() reads claude.cmd --version, keeps the wait from running out until the writer is killed. PR #108's attack review measured the wider matrix (finding 1): 1002 ms only for stdout = false, a writer sending to /dev/null, and a handler that spends 1 ms a chunk; about 4000 ms — the writer killed at 3 s — for every handler that reads the flood cheaply, the health check's among them. The wait still subtracts whole milliseconds only (src/nvim/event/multiqueue.h LOOP_PROCESS_EVENTS_UNTIL, the same body in v0.11.6 and v0.12.5, by the attack review's diff of the two), so a loop whose passes each take under 1 ms never runs it out.
+
+--- code: t30fix-probe-flood-reach.lua
+-- T30 fix round, probe C6b: whether `vim.wait(1000, …)` runs out at 1 s while
+-- a writer floods, by whether the flood reaches Neovim's loop. One variant
+-- per Neovim (`nvim --clean --headless -l t30fix-probe-flood-reach.lua
+-- <variant>`); a timer kills the writer by pid 3 s after it starts. Prints
+-- how long the wait took and whether the writer still ran when it returned.
+local variant = arg[1]
+local WATCHDOG_MS = 3000
+
+local writers = {
+  -- read by a handler, as run_within_bound() reads `claude.cmd --version`
+  read_by_a_handler = function()
+    local kept = 0
+    return vim.system({ 'yes', 'flood' }, {
+      stdout = function(_, data)
+        kept = kept + #(data or '')
+      end,
+    })
+  end,
+  -- not read at all: Neovim opens no pipe for its standard output
+  stdout_false = function()
+    return vim.system({ 'yes', 'flood' }, { stdout = false })
+  end,
+  -- written to /dev/null by the writer itself: nothing reaches the pipe
+  to_dev_null = function()
+    return vim.system({ 'sh', '-c', 'exec yes flood >/dev/null' }, { stdout = function() end })
+  end,
+}
+
+local process = writers[variant]()
+local killed_at
+local watchdog = assert(vim.uv.new_timer())
+watchdog:start(WATCHDOG_MS, 0, function()
+  killed_at = vim.uv.hrtime()
+  vim.uv.kill(process.pid, 'sigkill')
+end)
+local started = vim.uv.hrtime()
+vim.wait(1000, function()
+  return false
+end)
+local returned = vim.uv.hrtime()
+local still_flooding = killed_at == nil
+watchdog:stop()
+watchdog:close()
+vim.uv.kill(process.pid, 'sigkill')
+io.stdout:write(
+  ('%-18s vim.wait(1000) returned after %5d ms; the writer %s\n'):format(
+    variant,
+    (returned - started) / 1e6,
+    still_flooding and 'still flooding' or ('killed by the watchdog at %d ms'):format((killed_at - started) / 1e6)
+  )
+)
+io.stdout:flush()
+
+--- code: t30fix-run-flood-reach.sh
+#!/bin/sh
+# Runs each variant of t30fix-probe-flood-reach.lua twice, one Neovim at a
+# time, then prints the host's load and Neovim's version.
+cd "$(dirname "$0")" || exit 1
+for variant in read_by_a_handler stdout_false to_dev_null read_by_a_handler stdout_false to_dev_null; do
+  nvim --clean --headless -l t30fix-probe-flood-reach.lua "$variant"
+done
+uptime
+nvim --version | head -1
+
+--- output: t30fix-probe-flood-reach.out
+read_by_a_handler  vim.wait(1000) returned after  3999 ms; the writer killed by the watchdog at 2998 ms
+stdout_false       vim.wait(1000) returned after  1001 ms; the writer still flooding
+to_dev_null        vim.wait(1000) returned after  1001 ms; the writer still flooding
+read_by_a_handler  vim.wait(1000) returned after  3998 ms; the writer killed by the watchdog at 2998 ms
+stdout_false       vim.wait(1000) returned after  1001 ms; the writer still flooding
+to_dev_null        vim.wait(1000) returned after  1001 ms; the writer still flooding
+22:47  up 5 days,  9:58, 13 users, load averages: 10.06 12.58 14.95
+NVIM v0.12.5
