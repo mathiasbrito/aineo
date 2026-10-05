@@ -120,6 +120,8 @@ D20's four clauses, the orchestrator's settlement of 2026-09-25, were told to th
 
 T26's row carries all four.
 
+**The measurement, and the gaps it found** (2026-10-05). The fourth clause had T26 measure undo before building on it. The orchestrator measured it instead, for T26's brief, before dispatch (`evidence/t26-probes.txt`), and the brief review measured the user's `'undolevels'` (`brief-review-t25-t26.md`, T26-3), so that the user heard the gaps before the build. Three gaps: after a failed write, the first `u` changes nothing visible; with `'undolevels'` 0, `u` toggles only the last Send; with -1, `u` brings nothing back. The orchestrator told the user on 2026-10-05, with VS1–VS5, and proposed that the help's *LIMITS* name each gap, a test pin each, and no workaround be built. The user: "as for the gaps in D20 do as you propose" (*Packet T26*).
+
 **T24's release:** until T25 lands, a release cut with T24 shows a changes pane that holds only its placeholder (*Packet T24*). The user's rule of 2026-09-26 is a release after each feature merges. Asked on 2026-10-05, the user chose "Wait for T25 (Recommended)": no release for T24 alone.
 
 ## Packet T24 — 2026-10-05
@@ -252,35 +254,39 @@ Added after the brief review, one per option the user did not choose, and two fo
 
 ## Packet T25 — 2026-10-06
 
-**Why now.** T25 is the changes pane's content, the last piece of D19 and D22. Its git home (T23) landed on 2026-09-27, and its pane (T24) is in its last review as PR #105, head `8e520f5`. The order is fixed here: T25, then T26, since both share `plugin/aineo.lua` and the help (rule 2). The user's release rule of 2026-10-05: no release after T24 or T30 alone; the next release ships with T25, carrying T24 and T30.
+**Why now.** T25 is the changes pane's content, the last piece of D19 and D22. Its git home (T23) landed on 2026-09-27, and its pane (T24) merged on 2026-10-05 as PR #105 (`c9b78b1`). The order is fixed here: T30, then T25, then T26, since they share `plugin/aineo.lua` and the help (rule 2). The user's answer of 2026-10-05 on releases was about T24 alone, "Wait for T25 (Recommended)": no release follows T24, and the next one ships with T25.
 
-**What it builds.** The two buffers T24's changes pane shows, filled: the session's changed files with the user's saves marked, and its commits or "No commits on this session"; Enter shows a file's or a commit's diff, read-only, in the middle column; the refresh on saves, changes and every commit; what it says outside a repository. T24's switching, restore and redirect stay as they are: T25 replaces only what the composition root's `changes_pane()` returns and what those buffers hold (`plugin/aineo.lua:238–339` on `8e520f5`), and adds a layout export for a diff in the file column.
+**What it builds.** The two buffers T24's changes pane shows, filled: the session's changed files with the user's saves marked, and its commits or "No commits on this session"; Enter shows a file's or a commit's diff, read-only, in the middle column; the refresh on saves, changes and every commit; what it says outside a repository. It lives in a new home, `lua/aineo/changes/` (**C15**, the user's CP1 (a)). T24's switching, restore and redirect stay as they are: T25 replaces only what the composition root's `changes_pane()` returns and what those buffers hold (`plugin/aineo.lua:238–339` on `cbe5a73`), and adds a layout export for a diff in the file column.
 
-**The six rules for T25**, recomputed on 2026-10-05 against every open packet and every claimed wave:
-- `gh pr list --state open` lists one pull request, #105 (`feature/t24-panes`, head `8e520f5`), T24.
-- Wave 7 is the only claimed wave (`grep -l "^status: claimed" knowledge-vault/Implementation/Waves/*/plan.md`). T30 is planned, its brief merged, not dispatched: no pull request.
+**The six rules for T25**, recomputed on 2026-10-05 (20:59 UTC) against every open packet and every claimed wave:
+- `gh pr list --state open` lists #108 (`refactor/t30-drop-nvim-011`, head `c599679`), T30 in review; #106, this section's first draft, superseded by the pull request that carries this section; and #109 (`ai/changes-home-modularity`), the modularity rows for C15.
+- Wave 7 is the only claimed wave (`grep -l "^status: claimed" knowledge-vault/Implementation/Waves/*/plan.md`).
 
 | rule | T25 |
 |---|---|
-| 1 dependencies | T23 landed: PR #79, merged 2026-09-27 (`gh pr view 79`) ✓. T24 is PR #105, open ✗ until it merges |
-| 2 files | `plugin/aineo.lua` is #105's, T30's (`ERROR_FRAMING`) and T26's: T25 waits for T24's and T30's merges, and T26 waits for T25's. `lua/aineo/layout/init.lua`, `doc/aineo.txt`, `tests/test_entry_panes.lua` and `tests/test_doc.lua` are #105's: they wait for its merge. None of T25's files is in T30's boundary but `plugin/aineo.lua`. The new home `lua/aineo/changes/` (CP1 (a)) needs its rows in the modularity skill's tables: the orchestrator's `ai/` change, merged before dispatch, as PR #77 was for `aineo.git`. `tests/helpers/git_repo.lua` gains functions only; no open packet touches it ✗ until T24 and T30 merge |
+| 1 dependencies | T23 merged (PR #79, 2026-09-27) ✓; T24 merged (PR #105, 2026-10-05, `c9b78b1`) ✓ |
+| 2 files | `plugin/aineo.lua` and `doc/aineo.txt` are #108's (T30): a Lua file, outside rule 2's document exception, and the help, which both edit. T25 waits for T30's merge ✗. The new home's rows in the modularity skill's tables (CP1 (a)) are #109, an `ai/` change merged before dispatch ✗. `lua/aineo/layout/init.lua`, `tests/test_entry_panes.lua`, `tests/test_doc.lua` and `tests/helpers/git_repo.lua` are no open packet's ✓. Under CP7 (b) the existing suites outside the boundary run one `find_repository()` per start of Claude Code in the checkout, and watch it only where a case shows the changes pane: accepted, the orchestrator's reading (brief, CH1) |
 | 3 schema | none ✓ |
 | 4 dependencies | none: git is a system executable, as `claude` is ✓ |
-| 5 decisions | D19, D22 and C13 are decided. Six things are left open, CP1–CP6 below, for the user before dispatch ✗ until answered |
-| 6 task lines | T25's row (plan note, line 152) sits between T24's (151) and T26's (153). This rolling wave holds its marks ✓ |
+| 5 decisions | D19, D22 and C13 are decided. Nine things were left open, CP1–CP9 below. The user answered them on 2026-10-05, each with the recommended option; the brief's *Amendment — 2026-10-05: the user's answers* records the answer verbatim ✓ |
+| 6 task lines | T25's row (plan note, line 153 once this section's pull request adds C15 above it) sits between T24's (152) and T26's (154), and gains a dated annotation naming C15 in that pull request, which no open packet edits. This rolling wave holds its marks ✓ |
 
-**The baseline.** At dispatch, the orchestrator's verification of T30's merge, pasted into the dispatch message. Every fact in the brief is `8e520f5`'s, and is re-checked against that `origin/dev` before dispatch (rule 2).
+T25 is dispatched once T30 (#108) and the `ai/` change (#109) have merged.
 
-**Measured before writing the brief.** `evidence/t25-probes.txt`, Neovim 0.12.5 and git 2.50.1, on `8e520f5`'s code, each probe with its source:
-- **L.** A repository of 20 001 files: `find_repository` ~60 ms, `changed_files` 90–290 ms, `commits_since` ~60–70 ms for 201 commits. With every file stat-dirty, one `changed_files` took 1.5–3.1 s, longer than the watch's longest burst (1 s). A writer in an ignored directory makes the watch call back once a second; a `git switch` of 2000 files, once.
-- **F.** With a buffer that is no file in the file column's window, a file then opened from the Report's window opens a second window between Claude's column and the right column.
-- **S.** `BufWritePost`'s `match` is the written file's absolute path for `:write`, `:write {other}`, `:1,1write {part}`, `:saveas` and `:update`; the buffer's name can differ from it.
-- **N.** `nvim_buf_set_lines()` refuses a line holding a newline.
+**The baseline.** The dispatch message pastes the counts of the orchestrator's verification of the merge before T25's — T30's — on Neovim 0.12.5: `tests/test_entry_guard.lua`, `make test`, `make lint`. *Landed* records them with T30's merge. Every fact in the brief is `cbe5a73`'s, and is re-checked against the dispatch's `origin/dev` (rule 2).
 
-**The questions for the user, before dispatch** (rule 5), numbered once here and in the brief, which gives each its evidence:
+**Measured before writing the brief.** `evidence/t25-probes.txt`, Neovim 0.12.5 and git 2.50.1, each probe with its source:
+- **L**, on `8e520f5`. A repository of 20 001 files: `find_repository` ~60 ms, `changed_files` 90–290 ms, `commits_since` ~60–70 ms for 201 commits. With every file stat-dirty, one `changed_files` took 1.5–3.1 s (3088 ms, then 1562 ms), longer than the watch's longest burst (1 s). A writer in an ignored directory makes the watch call back once a second; a `git switch` of 2000 files, once.
+- **F**, on `8e520f5`. With a buffer that is no file in the file column's window, a file then opened from the Report's window opens a second window between Claude's column and the right column.
+- **S**, on `8e520f5`. `BufWritePost`'s `match` is the written file's absolute path for `:write`, `:write {other}`, `:saveas` and `:update`; the buffer's name can differ from it. The brief review corrected S3 (T25-3): a partial write of a buffer of several lines fires `FileWritePost` only, an append `FileAppendPost` only, and a file opened through a symbolic link has a `match` outside the repository's resolved top level.
+- **N**, on `8e520f5`. `nvim_buf_set_lines()` refuses a line holding a newline.
+- **CP8**, on `cbe5a73`, after the user's answer. The git home gives a 52 MB diff in ~0.45 s; writing it whole into a buffer costs ~0.38 s on the main loop and some 290 MiB; one line of 10 MB costs ~1 s to show with syntax, 1 MB ~0.14 s. The bound chosen: 1 MiB of the diff (the brief's amendment).
+- **The brief review's probes** (`brief-review-t25-t26.md`), on `8f08be9`: a read in flight at quit outlives the editor (T25-1); saves and symbolic links (T25-3); L7 and CP6's premise reproduced.
+
+**The questions for the user, before dispatch** (rule 5), numbered once here and in the brief, which gives each its evidence. CP1–CP6 are the drafter's; CP7–CP9 the brief review's (T25-2, T25-4, T25-5):
 - **CP1 — where the changes pane's content lives.**
-  - (a) a new home, `lua/aineo/changes/`, requiring `aineo.git` alone, recorded as a new component row beside C12 and C13, with the modularity rows (`ai/`);
-  - (b) the layout home, undoing T24's seam;
+  - (a) a new home, `lua/aineo/changes/`, requiring `aineo.git` alone, recorded as a new component row beside C12 and C13, with the modularity rows (`ai/`); Enter reaches the layout's new export through a function the composition root hands the home;
+  - (b) the layout home, undoing T24's seam (an `ai/` change too: the edge `aineo.layout → aineo.git`);
   - (c) the composition root.
   - Recommended: (a).
 - **CP2 — the cursor on Enter.**
@@ -294,10 +300,10 @@ Added after the brief review, one per option the user did not choose, and two fo
 - **CP4 — the base no longer behind `HEAD`.**
   - (a) the commits git lists, under a line saying so;
   - (b) "No commits on this session" under that line;
-  - (c) the base moves to the new `HEAD`.
+  - (c) the base moves to the new `HEAD` (it would need a superseding D row).
   - Recommended: (a).
 - **CP5 — a read that fails.**
-  - (a) the last list kept, under a line saying the refresh failed;
+  - (a) the last list kept, under a line giving git's failure; a watch that failed started again the next time the pane is shown;
   - (b) the failure alone.
   - Recommended: (a).
 - **CP6 — where the watch sees no subdirectory (Linux).**
@@ -305,17 +311,31 @@ Added after the brief review, one per option the user did not choose, and two fo
   - (b) as (a), and it polls every few seconds while shown;
   - (c) as (a), without the line.
   - Recommended: (a).
+- **CP7 — when the watch and the reads start.**
+  - (a) the watch starts with the session, at Claude Code's first start, pane shown or not;
+  - (b) the base and the save marks start with the session; the watch and the reads start the first time the pane is shown, then run for the editor's life.
+  - Recommended: (b).
+- **CP8 — a large diff.**
+  - (a) shown whole;
+  - (b) cut at a bound, with one line saying so; the bound chosen by measurement.
+  - Recommended: (b).
+- **CP9 — a repository that appears after the first start.**
+  - (a) aineo looks once;
+  - (b) with none found, aineo looks again whenever the pane is shown or a file is saved; when one appears, its `HEAD` becomes the session's base.
+  - Recommended: (b).
 
-**T24's open threads,** the orchestrator's reading in the brief: the placeholders' `:edit` refill is T25's; the wrap reading is T25's to keep (the changes buffers keep the user's window options); Neovim's framing of an autocommand's error is not T25's — it is `error_line()`'s framing list, which T30 edits.
+**The answers**, the user's on 2026-10-05, verbatim (one message, which also answers T26's): "CP1 as you recommended. CP2. stay, as recommended, CP3 One middle window, as you propose, CP4 as recommended, CP5 as recommended. CP6 As recommended, CP7 ok, as recommended, CP8 fine, as recommended, CP9, fine, as recommended, VS1 Agreed, VS2 Ok, VS3 ok, agreed, VS4 ok, fine agreed, VS5 agree, as for the gaps in D20 do as you propose". Each is the recommended option: CP1 (a), CP2 (a), CP3 (a), CP4 (a), CP5 (a), CP6 (a), CP7 (b), CP8 (b), CP9 (b). They are recorded in the brief's *Amendment — 2026-10-05: the user's answers*, with CP8's bound, 1 MiB. CP1 (a) is a new component, **C15** in the plan note, and the modularity rows are #109.
 
-**Reviewers**, regular: a new home that waits on processes and watches the file system, a layout export, and the session's start in the composition root. Attack by `neovim-lua-reviewer`, test integrity by `reviewer`, records by `reviewer`. The implementer is `neovim-lua-developer`, on Opus.
+**T24's open threads,** the orchestrator's reading in the brief: the placeholders' `:edit` refill is T25's; the wrap reading is T25's to keep (the changes buffers keep the user's window options); Neovim's framing of an autocommand's error is not T25's, and not T30's either — T30 removes `'^Error executing lua: '` and nothing else — so it stays an open thread, outside T25.
 
-**Branch, resource, session note:** `feature/t25-changes-pane`, `impl_t25_changes`, `2026-10-06 — T25 Changes pane`.
+**Reviewers**, regular: a new home that waits on processes and watches the file system, a layout export, and the session's start in the composition root. Attack by `neovim-lua-reviewer`, test integrity by `reviewer`, records by `reviewer`. The implementer is `neovim-lua-developer`, on Opus. The attack reviewer also runs the brief review's `b_quit` against the merged pane: a read in flight at `:qa` must not be reported as cancelled.
+
+**Branch, resource, session note:** `feature/t25-changes-pane`, `impl_t25_changes`, `2026-10-06 — T25 Changes pane` (dated the day of dispatch).
 
 **Verification mutants**, each applied literally against the test files that exercise the code it breaks:
 - **K1 — every start a new session.** The session begins on every `started_claude_terminal()` call, not the first. CH1's restart case must kill it.
 - **K2 — a failed start takes a base.** The base is taken before `start_session()` returns. CH1's failed-start case must kill it.
-- **K3 — the buffer's name marked.** The save's file is read from the buffer's name, not from `BufWritePost`'s `match`. CH3's `:write {other}` case must kill it.
+- **K3 — the buffer's name marked.** The save's file is read from the buffer's name, not from the event's `match`. CH3's `:write {other}` case must kill it.
 - **K4 — the empty commit missed.** The commits window is read again only on `files_changed`. CH5's empty-commit case must kill it.
 - **K5 — reads in parallel.** The one-read-at-a-time guard removed: each trigger starts a read. CH5's slow-git case must kill it.
 - **K6 — the diff in the pane.** Enter shows the diff in the changes window itself (`nvim_win_set_buf(0, diff)`). CH6 must kill it.
@@ -324,11 +344,28 @@ Added after the brief review, one per option the user did not choose, and two fo
 - **K9 — a name written raw.** A path holding a newline is written unescaped. CH2's names case must kill it.
 - **K10 — `:edit` empties the pane.** The changes buffers' `BufReadCmd` refill removed. CH8 must kill it.
 - **K11 — the watch outlives the editor.** The watch not stopped at `VimLeavePre`. CH9 must kill it.
-- **K12 — two middle columns.** `window_taking_files()` left as on `8e520f5`. CP3 (a)'s case must kill it.
+- **K12 — two middle columns.** `window_taking_files()` left as on `cbe5a73`. CP3 (a)'s case must kill it.
 
-Added once the user answers, one per option not chosen, each to be killed by that decision's case: CP2 (b), the cursor moved to the diff; CP3 (b), the diff in a window of its own; CP4 (b) and (c); CP5 (b), the last list dropped on a failure; CP6 (b), a timer reading the repository, and (c), the line left out. CP1 has no mutant: it is where code lives, not what it does.
+Added after the brief review, for its findings:
+- **K13 — a partial write unmarked.** The home listens to `BufWritePost` alone. CH3's partial-write case (`FileWritePost`) must kill it; **K13b**, the same for an append (`FileAppendPost`).
+- **K14 — paths compared unresolved.** The written file's path is compared with the top level as it is, without `vim.uv.fs_realpath()`. CH3's symbolic-link case must kill it.
+- **K15 — `warn_no_room_for()`'s words.** Enter's no-room warning reuses the redirect's text. CH6's no-room case must kill it.
 
-**Brief:** `brief-t25-changes-pane.md`. Its brief review, with T26's, is added beside it as `brief-review-t25-changes-pane.md` before dispatch.
+Added after the user's answers, one per option not chosen, each to be killed by that decision's case:
+- **K16 — CP2 (b).** Enter moves the cursor to the diff's window. CP2's case must kill it.
+- **K17 — CP3 (b).** A diff opens in a window of its own above the file column's window (`split = 'above'`), the file column's window kept. CP3's one-window case must kill it.
+- **K18 — CP4 (b).** With the base no longer behind `HEAD`, the commits window shows "No commits on this session" under the line, whatever git lists. CP4's case must kill it.
+- **K19 — CP4 (c).** With the base no longer behind `HEAD`, the base moves to the new `HEAD`. CP4's case must kill it, by the files window still listing what differs from the old base.
+- **K20 — CP5 (b).** A failed read empties the window to the failure line. CP5's kept-list case must kill it.
+- **K20b — CP5's watch left failed.** A watch that called back with a failure is not started again when the pane is shown. CP5's watch case must kill it.
+- **K21 — CP6 (b).** A timer reads the repository every 2 s while the pane is shown. CP6's case must kill it, by counting the git home's reads across a span a later event ends, never by a fixed wait alone.
+- **K22 — CP6 (c).** The line saying subdirectories are not watched left out. CP6's Linux case (`system_name = 'Linux'`) must kill it.
+- **K23 — CP7 (a).** The watch starts at Claude Code's first start. CP7's case, a start with the pane never shown, must kill it.
+- **K24 — CP8 (a).** The diff written whole, no cut. CP8's case, a diff over 1 MiB, must kill it.
+- **K25 — CP9 (a).** With no repository at the first start, aineo never looks again. CP9's case, `git init` after the start and the pane then shown, must kill it.
+- **CP1 has no mutant:** it is where code lives, not what it does. The verification checks it instead: `grep -rnE "require\(['\"]aineo\." lua/aineo/changes lua/aineo/layout` shows `aineo.changes` requiring `aineo.git` alone (and its own files), and `aineo.layout` requiring no `aineo.git`.
+
+**Brief:** `brief-t25-changes-pane.md`, amended with the user's answers to CP1–CP9 and reviewed by the brief dimension (`brief-review-t25-t26.md`, with T26's). The review found twelve items for T25 (dispatch after corrections), all corrected in the brief before merge: CH9 asked for a cancel the boundary forbids (a read's git outlives the editor, measured); when the watch starts (CP7); three save facts (partial writes, appends, symbolic links); the diff's size (CP8) and the copied kind (shown as `added`); a repository that appears later (CP9); Enter's own warning words; facts re-anchored to `dev`; the help's limits (pulls and rebases, a restart in another directory, `update-ref` on Linux) and the watch's start instruction; a watch that failed (into CP5); the framing thread, which T30 does not take; an unsourced figure; and the baseline.
 
 ## Packet T26 — 2026-10-06
 
@@ -336,27 +373,28 @@ Added once the user answers, one per option not chosen, each to be killed by tha
 
 **What it builds.** `\s` in Visual mode in Input sends the selection alone, as one message, and removes it; a refused Send removes nothing; `u` brings back what every Send removed, pinned by tests. With it, the entry point's `<Plug>` loop, prefix keys and the health check gain Visual mode for one key.
 
-**The measurement first** (D20's fourth clause). The orchestrator measured undo in aineo's real Input for this brief: `evidence/t26-probes.txt`, Neovim 0.12.5, on `8e520f5`'s code with the suites' fake Claude Code:
-- `u` after a whole-Input Send brings Input's text back, one `u` per Send, from any window and under the changes pane; the restored draft is not undone, by design (D17);
+**The measurement first** (D20's fourth clause). The fourth clause had T26 measure undo; the orchestrator measured it instead, for this brief, before dispatch, and told the user the gaps on 2026-10-05 (*Decisions for the user*): `evidence/t26-probes.txt`, Neovim 0.12.5, on `8e520f5`'s code with the suites' fake Claude Code. The brief review measured more on `8f08be9` (`brief-review-t25-t26.md`):
+- `u` after a whole-Input Send brings Input's text back, one `u` per Send, from any window and under the changes pane, while `'undolevels'` is at least the number of Sends; the restored draft is not undone, by design (D17);
 - a refused Send adds no undo step;
-- **the gap:** after a failed write, Send's removal and its put-back are one undo block, so the first `u` changes nothing visible. D20 says a gap goes to the user, not around it. The brief pins it and has the help say it; the orchestrator tells the user before dispatch;
-- for every kind of selection, Vim's `"_d`, typed or run inside an `x` mapping, removes it and one `u` restores it; `getregion()` gives Vim's yank text except for a selection ending past a line (`v$`), whose line break `"_d` removes;
+- **the gaps:** after a failed write, Send's removal and its put-back are one undo block, so the first `u` changes nothing visible; with `'undolevels'` 0, `u` toggles only the last Send; with -1, `u` brings nothing back (the brief review, T26-3). D20 says a gap goes to the user, not around it;
+- for every kind of selection, Vim's `"_d`, typed or run inside an `x` mapping, removes it and one `u` restores it;
+- **what is removed is not always Vim's yank text, nor `getregion()`'s** (the brief review, T26-1, T26-2): a `$` block whose cursor ends on a shorter line (`getregion()` gives less than `"_d` removes), the padding of a ragged block or under `'virtualedit'`, a tab cut by a block, and a line break past a line's end. That widened VS5;
 - in an `x` mapping's Lua callback, `'<` and `'>` still hold the previous selection;
-- `\s` typed in Visual mode where nothing maps it deletes the selection and enters Insert mode;
+- `\s` typed in Visual mode where nothing maps it deletes the selection and enters Insert mode (the brief review saw `InsertEnter` fire, T26-6);
 - `:'<,'>Aineo send` raises E481 today.
 
-**The six rules for T26**, recomputed on 2026-10-05 against every open packet and every claimed wave (#105 alone open; wave 7 alone claimed; T30 planned, T25 planned in this section's pull request):
+**The six rules for T26**, recomputed on 2026-10-05 (20:59 UTC) against every open packet and every claimed wave: #108 (T30) in review, #109 (`ai/`) open, #106 superseded by this section's pull request; wave 7 alone claimed; T25 planned in this section's pull request.
 
 | rule | T26 |
 |---|---|
-| 1 dependencies | T24's tables, keys and help: PR #105, open ✗ until it merges |
-| 2 files | `plugin/aineo.lua` (#105, T30, T25), `lua/aineo/health.lua` (#105, T30's `run_within_bound()` docstring), `doc/aineo.txt` (#105, T25), `tests/test_doc.lua` (#105, T25), `tests/test_health.lua`, `tests/test_entry_prefix.lua` and `tests/test_plugin.lua` (#105). `lua/aineo/send/` is no open packet's (PD2 (a) left it untouched). T26 is dispatched after T25's merge ✗ until then |
+| 1 dependencies | T24 merged (PR #105, 2026-10-05, `c9b78b1`) ✓ |
+| 2 files | `plugin/aineo.lua` (#108, T25), `lua/aineo/health.lua` (#108: a `Neovim` section and `run_within_bound()`'s docstring), `tests/test_health.lua` (#108: two `Neovim` cases), `doc/aineo.txt` (#108, T25: T25 and T26 both edit `11. LIMITS`, so even the vimdoc exception does not hold), `tests/test_doc.lua` (T25: both add to `TAGS`). `tests/test_entry_prefix.lua`, `tests/test_plugin.lua`, `tests/helpers/health.lua` (joined the boundary, T26-4) and `lua/aineo/send/` are no open packet's. T26 is dispatched after T25's merge, itself after T30's ✗ until then |
 | 3 schema | none ✓ |
 | 4 dependencies | none ✓ |
-| 5 decisions | D20's four clauses are the user's (2026-10-05). Five things are left open, VS1–VS5 below, and the measured gap is told with them, before dispatch ✗ until answered |
-| 6 task lines | T26's row (plan note, line 153) follows T25's (152). This rolling wave holds its marks ✓ |
+| 5 decisions | D20's four clauses are the user's (2026-10-05). Five things were left open, VS1–VS5 below, VS5 widened by the brief review; the user answered them on 2026-10-05 with the measured gaps told, each with the recommended option, and the gaps as proposed; the brief's *Amendment — 2026-10-05: the user's answers* records the answer verbatim ✓ |
+| 6 task lines | T26's row (plan note, line 154 once C15 is added) follows T25's (153). This rolling wave holds its marks ✓ |
 
-**The baseline.** At dispatch, the orchestrator's verification of T25's merge, pasted into the dispatch message. Every fact in the brief is `8e520f5`'s, re-checked against that `origin/dev` before dispatch.
+**The baseline.** The dispatch message pastes the counts of the orchestrator's verification of the merge before T26's — T25's — on Neovim 0.12.5: `tests/test_entry_guard.lua`, `make test`, `make lint`. *Landed* records them with T25's merge. Every fact in the brief is `cbe5a73`'s, re-checked against the dispatch's `origin/dev`.
 
 **The questions for the user, before dispatch** (rule 5), numbered once here and in the brief:
 - **VS1 — `\s` in Visual mode outside Input.**
@@ -377,31 +415,46 @@ Added once the user answers, one per option not chosen, each to be killed by tha
   - (a) it ends, the selection kept for `gv`;
   - (b) it stays.
   - Recommended: (a).
-- **VS5 — a selection ending past a line's end.**
-  - (a) the message ends with the line break;
-  - (b) the message without the final line break, the line break removed as Vim removes it;
+- **VS5 — where Vim's yank text and the text removed differ** (a line break past a line's end, the padding of a ragged or `$` block, `'virtualedit'`, a tab cut by a block), widened by the brief review from the line break alone.
+  - (a) the message is Vim's yank text;
+  - (b) the message is exactly the text removed from Input, a ragged line's part empty;
   - (c) the line break neither sent nor removed.
   - Recommended: (b).
+- **The undo gaps (D20's fourth clause):** the orchestrator proposed that the help's *LIMITS* name each gap, a test pin each, and no workaround be built.
+
+**The answers**, the user's on 2026-10-05, verbatim (the same message as T25's): "… VS1 Agreed, VS2 Ok, VS3 ok, agreed, VS4 ok, fine agreed, VS5 agree, as for the gaps in D20 do as you propose". Each is the recommended option: VS1 (a), VS2 (a), VS3 (a), VS4 (a), VS5 (b), and the gaps as proposed. They are recorded in the brief's *Amendment — 2026-10-05: the user's answers*.
 
 **Reviewers**, regular: the send home, which writes to Claude Code's terminal. Attack by `neovim-claude-code-reviewer`, test integrity by `reviewer`, records by `reviewer`. The implementer is `neovim-claude-code-integrator`, on Opus, bound also by `neovim-lua-developer.md`.
 
-**Branch, resource, session note:** `feature/t26-visual-send`, `impl_t26_visual_send`, `2026-10-06 — T26 Visual Send`.
+**Branch, resource, session note:** `feature/t26-visual-send`, `impl_t26_visual_send`, `2026-10-06 — T26 Visual Send` (dated the day of dispatch).
 
 **Verification mutants**, each applied literally against the test files that exercise the code it breaks:
 - **S1 — sent, not removed.** The Visual Send writes the selection and leaves Input as it was. VS-A must kill it.
 - **S2 — the whole Input from Visual mode.** The Visual key runs `send()`. VS-A must kill it.
 - **S3 — removed before refusing.** The selection is removed before the status is checked. VS-B must kill it.
 - **S4 — the previous selection.** The selection is read from `'<` and `'>` inside the callback. VS-A's case with a second selection must kill it.
-- **S5 — a block sent as characters.** `getregion()`'s `type` forced to `'v'`. VS-A's blockwise case must kill it.
+- **S5 — a block sent as characters.** The read's `type` forced to `'v'`. VS-A's blockwise case must kill it.
 - **S6 — one write per line.** The selection's lines written one paste each. VS-A's "one message" must kill it.
 - **S7 — a Send undo cannot reach.** Send clears Input under `undolevels = -1`, as the draft restores it. VS-D's whole-Input case must kill it.
 - **S8 — over the user's Visual `\s`.** `has_global_mapping()` reads Normal mode for the Visual key. VS-E's own-mapping case must kill it.
 - **S9 — the health check reads the wrong mode.** `global_mapping()` reads Normal mode for the Visual row. VS-F must kill it.
 - **S10 — a register written.** The selection read with `y`. VS-A's register case must kill it.
 
-Added once the user answers, one per option not chosen: VS1 (b), the key mapped in Input only, and (c), a selection sent from a file; VS2 (b), another `<Plug>` name; VS3 (b) and (c); VS4 (b), Visual mode kept; VS5 (a), a final line feed, and (c), the lines left unjoined.
+Added after the brief review, for its findings:
+- **S11 — a `$` block read short.** The block is read with `getregion(getpos('v'), getpos('.'))` alone. VS-A's case of a `$` block whose cursor ends on a shorter line must kill it.
+- **S12 — the gap worked around.** An undo break is made between Send's removal and its put-back (`let &g:undolevels = &g:undolevels`), so that the first `u` after a failed write brings the text back. VS-C's pin must kill it.
 
-**Brief:** `brief-t26-visual-send.md`. Its brief review is T25's, `brief-review-t25-changes-pane.md`, added before dispatch.
+Added after the user's answers, one per option not chosen:
+- **S13 — VS1 (b).** The Visual `\s` mapped in Input only, buffer-locally. VS-E's outside-Input case must kill it.
+- **S14 — VS1 (c).** Outside Input, the selection is sent and not removed. VS-E's outside-Input case must kill it.
+- **S15 — VS2 (b).** The Visual mapping is named `<Plug>(aineo-send-selection)`. VS-E's `<Plug>` door case must kill it.
+- **S16 — VS3 (b).** `:Aineo` takes a range, and `:'<,'>Aineo send` sends and removes those lines. VS-E's `:Aineo send` case (E481) must kill it.
+- **S17 — VS3 (c).** `:Aineo` takes a range and refuses it with aineo's own error. VS-E's `:Aineo send` case (E481) must kill it.
+- **S18 — VS4 (b).** Visual mode kept after a Visual Send that sends nothing. VS-B's mode case must kill it.
+- **S19 — VS5 (a).** The message is Vim's yank text (`"zy`, the register restored): padding sent. VS-A's ragged-block case must kill it.
+- **S20 — VS5 (c).** A selection past a line's end removes and sends up to the line's end only, the lines left unjoined. VS-A's line-break case must kill it.
+
+**Brief:** `brief-t26-visual-send.md`, amended with the user's answers to VS1–VS5 and the gaps, and reviewed by the brief dimension with T25's (`brief-review-t25-t26.md`). The review found ten items for T26 (dispatch after corrections), all corrected in the brief before merge: a `$` block whose cursor ends on a shorter line (`getregion()` sends less than Send removes); VS5 widened to every family where the yank and the removal differ; the `'undolevels'` gaps; `tests/helpers/health.lua` in the boundary; VS1 (b)'s boundary (moot under (a)); VS1's evidence line; facts re-anchored to `dev`; who measured; the message with no Input at all; and the baseline.
 
 ## Landed
 
