@@ -1,8 +1,10 @@
 --- aineo's layout, `require('aineo.layout')`: the Claude terminal in a column
---- on the left, the Report above Input in a column on the right.
+--- on the left, and a column on the right whose two windows show one pane at
+--- a time — the agent pane, the Report above Input, or the changes pane.
 ---
---- The layout shows the Claude and Report buffers it is handed and never
---- creates, writes or deletes them; the Input buffer is its own.
+--- The layout shows the Claude and Report buffers, and the changes pane's,
+--- it is handed and never creates, writes or deletes them; the Input buffer
+--- is its own.
 
 local columns = require('aineo.layout.columns')
 
@@ -12,23 +14,37 @@ local M = {}
 ---@field claude integer the Claude session's terminal buffer
 ---@field report integer the Report buffer
 ---@field report_height number the Report's share of the right column's height, strictly between 0 and 1
+---@field changes? aineo.layout.ChangesPane the changes pane's buffers; without them the layout keeps those it was handed last
+
+---@class aineo.layout.ChangesPane
+---@field files integer the buffer the changes pane shows in the Report's window
+---@field commits integer the buffer the changes pane shows in Input's window
 
 ---@alias aineo.layout.Role 'claude'|'report'|'input'
+
+---@alias aineo.layout.Pane 'agent'|'changes'
 
 ---@class aineo.layout.LineNumbers
 ---@field number boolean the window's 'number'
 ---@field relativenumber boolean the window's 'relativenumber'
 
---- The layout's windows and the buffers they show, by role, the Report's
---- share of the right column's height, Claude's terminal once Neovim has
---- seen its process end, the line numbers `M.toggle_claude_numbers()` last
---- set in Claude's window, those it showed before it hid them, and the
---- window and buffer those line numbers were last shown for.
+--- The layout's windows, by role, and the buffers they show, by role or, for
+--- the changes pane's, by name; the pane the right column shows, for the
+--- editor's life; the Report's `b:changedtick` when the agent pane was last
+--- hidden; the Report's share of the right column's height, Claude's
+--- terminal once Neovim has seen its process end, the line numbers
+--- `M.toggle_claude_numbers()` last set in Claude's window, those it showed
+--- before it hid them, and the window and buffer those line numbers were
+--- last shown for.
 local state = {
   ---@type table<aineo.layout.Role, integer>
   windows = {},
-  ---@type table<aineo.layout.Role, integer>
+  ---@type table<aineo.layout.Role|'files'|'commits', integer>
   buffers = {},
+  ---@type aineo.layout.Pane
+  pane = 'agent',
+  ---@type integer|nil
+  report_tick_when_hidden = nil,
   ---@type number|nil
   report_height = nil,
   ---@type integer|nil
@@ -58,6 +74,29 @@ end
 ---@type aineo.layout.Role[]
 local ROLES = { 'claude', 'report', 'input' }
 
+--- The roles of the right column's two windows, which show one pane at a
+--- time.
+---@type aineo.layout.Role[]
+local RIGHT_COLUMN_ROLES = { 'report', 'input' }
+
+--- The buffer each pane shows in each of the right column's two windows,
+--- named as `state.buffers` keys them, by the window's role.
+---@type table<aineo.layout.Pane, table<aineo.layout.Role, string>>
+local PANE_BUFFERS = {
+  agent = { report = 'report', input = 'input' },
+  changes = { report = 'files', input = 'commits' },
+}
+
+--- The buffer the layout's window for `role` shows as its own: Claude's
+--- terminal in Claude's window, and the shown pane's buffer for that window
+--- in the right column's two.
+---
+---@param role aineo.layout.Role
+---@return integer buffer
+local function own_buffer(role)
+  return state.buffers[PANE_BUFFERS[state.pane][role] or role]
+end
+
 --- Whether the layout's window for `role` exists.
 ---
 ---@param role aineo.layout.Role
@@ -67,9 +106,10 @@ local function has_window(role)
   return window ~= nil and vim.api.nvim_win_is_valid(window)
 end
 
---- Whether the layout's window for `role` exists and the buffer it was
---- handed for that window was not wiped, whatever buffer the window shows:
---- a window left on another buffer after its own was wiped counts as gone.
+--- Whether the layout's window for `role` exists and the role's own buffer
+--- — Claude's terminal, the Report or Input — was not wiped, whatever buffer
+--- the window shows, the changes pane's included: a window left on another
+--- buffer after the role's own was wiped counts as gone.
 ---
 ---@param role aineo.layout.Role
 ---@return boolean
@@ -203,17 +243,17 @@ end
 --- line keeping its indent.
 local WORD_WRAP = { 'wrap', 'linebreak', 'breakindent' }
 
---- The roles of the right column's windows, which wrap words.
----@type aineo.layout.Role[]
-local WORD_WRAPPED_ROLES = { 'report', 'input' }
-
 --- Makes the Report's and Input's windows wrap long lines between words, a
 --- wrapped line keeping its indent, for the buffer each shows, as `:setlocal`
---- does: another buffer shown in either window, or in a window split from
---- it, keeps the user's own settings, and the Report and Input wrap again
+--- does, while they show the agent pane: another buffer shown in either
+--- window, or in a window split from it, keeps the user's own settings —
+--- the changes pane's buffers included — and the Report and Input wrap again
 --- when they return to their windows.
-local function wrap_right_column()
-  for _, role in ipairs(WORD_WRAPPED_ROLES) do
+local function wrap_agent_pane()
+  if state.pane ~= 'agent' then
+    return
+  end
+  for _, role in ipairs(vim.tbl_filter(has_window, RIGHT_COLUMN_ROLES)) do
     for _, option in ipairs(WORD_WRAP) do
       vim.wo[state.windows[role]][0][option] = true
     end
@@ -422,7 +462,7 @@ local function redirect(window, file)
     not role
     or not has_window(role)
     or vim.api.nvim_win_get_buf(window) ~= file
-    or not vim.api.nvim_buf_is_valid(state.buffers[role])
+    or not vim.api.nvim_buf_is_valid(own_buffer(role))
   then
     return
   end
@@ -433,7 +473,7 @@ local function redirect(window, file)
     return
   end
   vim.api.nvim_win_set_cursor(file_window, cursor)
-  vim.api.nvim_win_set_buf(window, state.buffers[role])
+  vim.api.nvim_win_set_buf(window, own_buffer(role))
   keep_proportions()
 end
 
@@ -445,7 +485,7 @@ end
 local function redirect_when_file(event)
   local window = vim.api.nvim_get_current_win()
   local role = role_of(window)
-  if not role or event.buf == state.buffers[role] or not is_file(event.buf) then
+  if not role or event.buf == own_buffer(role) or not is_file(event.buf) then
     return
   end
   vim.schedule(function()
@@ -587,28 +627,27 @@ local function is_file_to_keep(buffer)
 end
 
 --- Makes the layout's three windows in the current tab, closing its other
---- windows but the floating ones, with the cursor in Input. The window it
---- starts from (see `starting_window()`) becomes Input's, unless it shows a
---- file (`is_file_to_keep()`), which it keeps as the file column.
----
----@param arrangement aineo.layout.Arrangement
-local function build(arrangement)
+--- windows but the floating ones, with the cursor in the window in Input's
+--- place, each window showing its own buffer (`own_buffer()`). The window it
+--- starts from (see `starting_window()`) becomes the one in Input's place,
+--- unless it shows a file (`is_file_to_keep()`), which it keeps as the file
+--- column.
+local function build()
   local start = starting_window()
   local shown = vim.api.nvim_win_get_buf(start)
   hide_other_windows(start)
   local input = take_input_buffer(shown)
   local input_window = start
   if shown ~= input and is_file_to_keep(shown) then
-    input_window = vim.api.nvim_open_win(input, false, { split = 'right', win = -1 })
+    input_window = vim.api.nvim_open_win(own_buffer('input'), false, { split = 'right', win = -1 })
   else
-    vim.api.nvim_win_set_buf(input_window, input)
+    vim.api.nvim_win_set_buf(input_window, own_buffer('input'))
   end
   local report_window =
-    vim.api.nvim_open_win(arrangement.report, false, { split = 'above', win = input_window })
+    vim.api.nvim_open_win(own_buffer('report'), false, { split = 'above', win = input_window })
   local claude_window =
-    vim.api.nvim_open_win(arrangement.claude, false, { split = 'left', win = -1 })
+    vim.api.nvim_open_win(own_buffer('claude'), false, { split = 'left', win = -1 })
   state.windows = { claude = claude_window, report = report_window, input = input_window }
-  state.buffers = { claude = arrangement.claude, report = arrangement.report, input = input }
   vim.api.nvim_set_current_win(input_window)
 end
 
@@ -619,16 +658,16 @@ end
 local function reopen_closed_windows()
   if not has_window('claude') then
     state.windows.claude =
-      vim.api.nvim_open_win(state.buffers.claude, false, { split = 'left', win = -1 })
+      vim.api.nvim_open_win(own_buffer('claude'), false, { split = 'left', win = -1 })
   end
   if not has_window('report') then
     local place = has_window('input') and { split = 'above', win = state.windows.input }
       or { split = 'right', win = -1 }
-    state.windows.report = vim.api.nvim_open_win(state.buffers.report, false, place)
+    state.windows.report = vim.api.nvim_open_win(own_buffer('report'), false, place)
   end
   if not has_window('input') then
     state.windows.input = vim.api.nvim_open_win(
-      state.buffers.input,
+      own_buffer('input'),
       false,
       { split = 'below', win = state.windows.report }
     )
@@ -658,11 +697,11 @@ local function show_buffers()
   for _, role in ipairs(ROLES) do
     local window = state.windows[role]
     local shown = vim.api.nvim_win_get_buf(window)
-    if shown ~= state.buffers[role] then
+    if shown ~= own_buffer(role) then
       if is_file_to_move(shown) then
         place_in_file_column(shown, window)
       end
-      vim.api.nvim_win_set_buf(window, state.buffers[role])
+      vim.api.nvim_win_set_buf(window, own_buffer(role))
     end
   end
   vim.api.nvim_set_current_win(current)
@@ -807,6 +846,19 @@ local function watch_windows()
   })
 end
 
+--- Takes the buffers `arrangement` hands as the layout's own: Claude's
+--- terminal, the Report and, when it hands them, the changes pane's.
+---
+---@param arrangement aineo.layout.Arrangement
+local function take_buffers(arrangement)
+  state.buffers.claude = arrangement.claude
+  state.buffers.report = arrangement.report
+  if arrangement.changes then
+    state.buffers.files = arrangement.changes.files
+    state.buffers.commits = arrangement.changes.commits
+  end
+end
+
 --- Whether `value` is the number of an existing buffer.
 ---
 ---@param value any
@@ -838,12 +890,80 @@ local function validate_arrangement(arrangement)
     false,
     'a number strictly between 0 and 1'
   )
+  vim.validate('arrangement.changes', arrangement.changes, 'table', true)
+  if arrangement.changes then
+    vim.validate(
+      'arrangement.changes.files',
+      arrangement.changes.files,
+      is_buffer,
+      false,
+      'a buffer'
+    )
+    vim.validate(
+      'arrangement.changes.commits',
+      arrangement.changes.commits,
+      is_buffer,
+      false,
+      'a buffer'
+    )
+  end
+end
+
+--- Whether the Report has changed since the agent pane was last hidden: a
+--- report arrived while the changes pane showed.
+---
+---@return boolean
+local function has_report_changed_while_hidden()
+  return vim.api.nvim_buf_get_changedtick(state.buffers.report) ~= state.report_tick_when_hidden
+end
+
+--- Moves the cursor of the Report's window to the Report's last line, where
+--- an arriving report puts it.
+local function follow_reports()
+  local last_line = vim.api.nvim_buf_line_count(state.buffers.report)
+  vim.api.nvim_win_set_cursor(state.windows.report, { last_line, 0 })
+end
+
+--- Shows `pane` in the right column's two windows, in place of the pane
+--- they show.
+---
+---@param pane aineo.layout.Pane
+local function switch_pane(pane)
+  if pane == state.pane then
+    return
+  end
+  if state.pane == 'agent' then
+    state.report_tick_when_hidden = vim.api.nvim_buf_get_changedtick(state.buffers.report)
+  end
+  state.pane = pane
+  for _, role in ipairs(vim.tbl_filter(has_window, RIGHT_COLUMN_ROLES)) do
+    vim.api.nvim_win_set_buf(state.windows[role], own_buffer(role))
+  end
+  wrap_agent_pane()
+  if pane == 'agent' and has_window('report') and has_report_changed_while_hidden() then
+    follow_reports()
+  end
+end
+
+--- Whether the right column's two windows exist, and so do the buffers
+--- `pane` shows in them.
+---
+---@param pane aineo.layout.Pane
+---@return boolean
+local function can_show_in_place(pane)
+  return vim.iter(RIGHT_COLUMN_ROLES):all(function(role)
+    return has_window(role) and is_buffer(state.buffers[PANE_BUFFERS[pane][role]])
+  end)
 end
 
 --- Opens the layout in the current tab: `arrangement.claude` in a column on
 --- the left taking half the columns, `arrangement.report` above the Input
 --- buffer in a column on the right, the Report taking
---- `arrangement.report_height` of its rows, and the cursor in Input. The tab's
+--- `arrangement.report_height` of its rows, and the cursor in Input's
+--- window. The right column shows the pane it showed last (`M.show_pane()`),
+--- for the editor's life, the agent pane until then: under the changes pane
+--- its two windows show `arrangement.changes`' files and commits buffers in
+--- the Report's and Input's places. The tab's
 --- other windows close, but floating ones; their buffers stay loaded. A file
 --- the current window shows stays there, as the file column, unless it is
 --- wiped once hidden and holds no changes, as a startup dashboard's buffer
@@ -856,9 +976,10 @@ end
 --- anew, from a buffer named so when there is one, when it was wiped, and
 --- made a scratch buffer again whenever it is shown. The Report's and Input's
 --- windows wrap long lines between words, a wrapped line keeping its indent
---- (`'wrap'`, `'linebreak'`, `'breakindent'`), whatever the user's settings;
---- Claude's window, and any other buffer shown in or split from those two,
---- keep the user's own. Once `M.toggle_claude_numbers()` has set Claude's
+--- (`'wrap'`, `'linebreak'`, `'breakindent'`), whatever the user's settings,
+--- while they show the agent pane; Claude's window, the changes pane's
+--- buffers, and any other buffer shown in or split from those two, keep the
+--- user's own. Once `M.toggle_claude_numbers()` has set Claude's
 --- line numbers, Claude's window shows them for a Claude terminal new to
 --- it, and when the window itself is new (`keep_claude_numbers()`); line
 --- numbers the user set by hand for the same terminal in the same window
@@ -866,15 +987,19 @@ end
 ---
 --- While any of the three windows exists, opening again restores the layout
 --- instead, in the tab that holds it: it creates only the windows that were
---- closed, in their places, shows in each window its buffer — the Claude and
---- Report buffers it is handed this time — a file shown there in its place
+--- closed, in their places, shows in each window its buffer under the pane
+--- shown — the Claude and Report buffers it is handed this time, and the
+--- changes pane's when it hands them — a file shown there in its place
 --- moving to the file column first (`show_buffers()`), makes the Report and
---- Input wrap again, and puts the proportions back.
+--- Input wrap again while the agent pane shows, and puts the proportions
+--- back. The changes pane's buffers an arrangement without `changes` leaves
+--- are those it was handed last.
 --- The cursor stays where it is when the layout's tab is the current one,
 --- and moves to that tab otherwise.
 ---
 --- From then on a file shown in one of the three windows moves to a file
---- column beside them, while any of them exists; with the three open, the
+--- column beside them, while any of them exists, and the window gets back
+--- the buffer it shows under the pane shown; with the three open, the
 --- columns take a third of the screen each while the file column is open,
 --- and the proportions are put back whenever a window closes, the editor is
 --- resized or the layout's tab is entered.
@@ -890,26 +1015,27 @@ end
 ---
 --- Raises an error naming the setting, before changing anything, when
 --- `arrangement` is not a table, `claude` or `report` is not an existing
---- buffer, or `report_height` is not a number strictly between 0 and 1.
+--- buffer, `report_height` is not a number strictly between 0 and 1, or
+--- `changes`, when given, is not a table whose `files` and `commits` are
+--- existing buffers.
 ---
 ---@param arrangement aineo.layout.Arrangement
 function M.open(arrangement)
   validate_arrangement(arrangement)
+  take_buffers(arrangement)
   if has_any_window() then
     vim.api.nvim_set_current_tabpage(layout_tab())
-    state.buffers.claude = arrangement.claude
-    state.buffers.report = arrangement.report
     if not has_input() then
       make_input(buffer_named_input() or vim.api.nvim_create_buf(false, true))
     end
     reopen_closed_windows()
     show_buffers()
   else
-    build(arrangement)
+    build()
   end
   state.report_height = arrangement.report_height
   pin_windows()
-  wrap_right_column()
+  wrap_agent_pane()
   keep_claude_numbers()
   apply_proportions()
   watch_windows()
@@ -917,7 +1043,9 @@ end
 
 --- Moves the cursor to the layout's window for `role`, opening the layout
 --- with `arrangement` first when that window is gone, or its buffer was
---- wiped (see `open()`).
+--- wiped (see `open()`). The Report's and Input's windows show the agent
+--- pane first (`M.show_pane()`), those of the right column's two windows
+--- that are open; Claude's leaves the pane shown.
 --- `arrangement` may be a function that returns it, which is called only
 --- then, so that what it makes — a session's terminal, say — is made only
 --- when the layout opens.
@@ -936,7 +1064,51 @@ function M.focus(role, arrangement)
     end
     M.open(arrangement)
   end
+  if vim.list_contains(RIGHT_COLUMN_ROLES, role) then
+    switch_pane('agent')
+  end
   vim.api.nvim_set_current_win(state.windows[role])
+end
+
+--- Shows `pane` in the right column's two windows, in place: the agent
+--- pane, the Report above Input, or the changes pane, its files buffer in
+--- the Report's window and its commits buffer in Input's. The windows stay,
+--- by window ID, at their sizes, and the cursor stays in the window it was
+--- in. The pane shown is kept for the editor's life: opening the layout
+--- again shows it (`open()`). Asked for the pane it shows, it changes
+--- nothing.
+---
+--- Shown again, the agent pane wraps the Report and Input as `open()` does,
+--- and keeps the Report's cursor where it was, or, when the Report changed
+--- while hidden — a report arrived — puts it on the Report's last line, as
+--- an arrival does in a window showing the Report.
+---
+--- Opens the layout with `arrangement` first when either of the right
+--- column's windows is gone, or a buffer of `pane` was wiped (see
+--- `open()`). `arrangement` may be a function that returns it, which is
+--- called only then.
+---
+--- Raises an error naming `pane` when it is neither `'agent'` nor
+--- `'changes'`, and one naming `arrangement.changes` when the changes pane
+--- is asked for and no arrangement has handed its buffers, after opening
+--- the layout and before switching anything.
+---
+---@param pane aineo.layout.Pane
+---@param arrangement aineo.layout.Arrangement|fun(): aineo.layout.Arrangement
+function M.show_pane(pane, arrangement)
+  vim.validate('pane', pane, function(value)
+    return PANE_BUFFERS[value] ~= nil
+  end, false, "'agent' or 'changes'")
+  if not can_show_in_place(pane) then
+    if type(arrangement) == 'function' then
+      arrangement = arrangement()
+    end
+    M.open(arrangement)
+  end
+  if not can_show_in_place(pane) then
+    error("arrangement.changes: expected the changes pane's buffers, and none was handed", 0)
+  end
+  switch_pane(pane)
 end
 
 --- Makes `terminal` the layout's Claude terminal from now on, in place of
