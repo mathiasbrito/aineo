@@ -942,15 +942,17 @@ local function follow_reports()
   vim.api.nvim_win_set_cursor(state.windows.report, { last_line, 0 })
 end
 
---- Once the agent pane shows with the Report in the Report's window, after
---- it was hidden: moves that window to the Report's last line when a report
---- arrived meanwhile (`has_report_changed_while_hidden()`, `follow_reports()`),
---- and forgets the Report kept as it was hidden. Until then — the agent pane
---- shown again with the Report's window closed, as focusing Input does, or
---- with another buffer in it, as a refused switch can leave it — the Report
---- kept is kept, and so is the arrival.
+--- Once the Report shows in the Report's window again after the agent pane
+--- was hidden, as the agent pane shows again or as a refused switch leaves
+--- it there (`switch_pane()`): moves that window to the Report's last line
+--- when a report arrived meanwhile
+--- (`has_report_changed_while_hidden()`, `follow_reports()`), and forgets
+--- the Report kept as it was hidden. Until then — the agent pane shown
+--- again with the Report's window closed, as focusing Input does, or with
+--- another buffer in it, as a refused switch can leave it — the Report kept
+--- is kept, and so is the arrival.
 local function follow_reports_shown_again()
-  if state.pane ~= 'agent' or state.report_when_hidden == nil or not is_report_shown() then
+  if state.report_when_hidden == nil or not is_report_shown() then
     return
   end
   if has_report_changed_while_hidden() then
@@ -1053,12 +1055,11 @@ end
 --- then the window's error is raised, whatever a window raises as it is
 --- given its buffer back. A window that refuses that buffer too is left
 --- showing the other pane's, and the next switch to either pane shows that
---- pane in both windows. The agent pane shown before, with the Report back
---- in its window, forgets what was kept to tell an arrival by
---- (`follow_reports_shown_again()`), so that a refused switch leaves nothing
---- for a later restore to follow. While the buffers
---- enter their windows, `pane` is the pane shown, so that the file column's
---- redirect takes none of them for a file (`redirect_when_file()`).
+--- pane in both windows. The Report in its window then is followed as when
+--- the agent pane shows again (`follow_reports_shown_again()`), so that a
+--- refused switch leaves nothing for a later restore to follow. While the
+--- buffers enter their windows, `pane` is the pane shown, so that the file
+--- column's redirect takes none of them for a file (`redirect_when_file()`).
 ---
 ---@param pane aineo.layout.Pane
 local function switch_pane(pane)

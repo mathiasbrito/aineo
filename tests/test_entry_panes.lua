@@ -790,6 +790,18 @@ T['a switch to the changes pane, refused']['leaves the Report’s cursor to the 
   eq({ entry.windows(child), cursor }, { AGENT_PANE, 3 })
 end
 
+T['a switch to the changes pane, refused']['keeps the agent pane the pane shown, which restoring the layout shows,'] = function(
+  _,
+  refuse_switch
+)
+  open_layout('panes-refused-kept')
+  refuse_switch()
+
+  entry.press(child, '\\o')
+
+  eq(entry.windows(child), AGENT_PANE)
+end
+
 T['while the changes pane shows']['the key of a window of the agent pane, the other’s window closed, shows its buffer there alone, telling nothing'] =
   MiniTest.new_set({
     parametrize = {
