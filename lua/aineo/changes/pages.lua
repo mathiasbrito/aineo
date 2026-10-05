@@ -48,4 +48,15 @@ function M.write_page(buffer, page)
   end
 end
 
+--- The entry line `line` of `buffer` lists in the page it was last given,
+--- or nil when that line lists none.
+---
+---@param buffer integer
+---@param line integer
+---@return aineo.changes.Entry|nil
+function M.entry_at(buffer, line)
+  local page = pages[buffer]
+  return page and page.entries[line]
+end
+
 return M

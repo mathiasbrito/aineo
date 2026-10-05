@@ -4,6 +4,7 @@
 --- repository changes once the pane has been shown.
 
 local git = require('aineo.git')
+local diffs = require('aineo.changes.diffs')
 local lines = require('aineo.changes.lines')
 local pages = require('aineo.changes.pages')
 local scratch = require('aineo.changes.scratch')
@@ -258,6 +259,91 @@ function M.begin_session(settings)
   find()
 end
 
+--- The name of the buffer showing `entry`'s diff: `aineo://diff/<path>` for
+--- a file, its path quoted as the files window shows it, and
+--- `aineo://commit/<id>` for a commit, by its full id.
+---
+---@param entry aineo.changes.Entry
+---@return string
+local function diff_name(entry)
+  if entry.commit then
+    return 'aineo://commit/' .. entry.commit.id
+  end
+  return 'aineo://diff/' .. lines.quoted_path(entry.change.path)
+end
+
+--- What the diff of `entry` is called in what aineo tells the user: the
+--- diff of the file's path, quoted as the files window shows it, or of the
+--- commit's abbreviated id.
+---
+---@param entry aineo.changes.Entry
+---@return string
+local function told_name(entry)
+  if entry.commit then
+    return 'commit ' .. entry.commit.id:sub(1, lines.ABBREVIATED_ID_LENGTH)
+  end
+  return lines.quoted_path(entry.change.path)
+end
+
+--- Shows `diff`, the text git printed for `entry`, in a diff buffer named
+--- for it (`diff_name()`, `aineo.changes.diffs`) through the session's
+--- `show_diff`. When the middle column has no room for it, the buffer is
+--- wiped and the user warned, once.
+---
+---@param entry aineo.changes.Entry
+---@param diff string
+local function show_diff(entry, diff)
+  local buffer = diffs.diff_buffer(diff_name(entry), diff)
+  if session.settings.show_diff(buffer) then
+    return
+  end
+  vim.api.nvim_buf_delete(buffer, { force = true })
+  vim.notify(
+    ('aineo: the middle column has no room for the diff of %s, which is not shown'):format(
+      told_name(entry)
+    ),
+    vim.log.levels.WARN
+  )
+end
+
+--- Reads the diff of `entry` — a file's from the base, or a commit's — and
+--- calls `done(failure, diff)`.
+---
+---@param entry aineo.changes.Entry
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+local function read_diff(entry, done)
+  if entry.commit then
+    git.commit_diff(session.repository, entry.commit.id, done, session.settings.git)
+  else
+    git.file_diff(session.repository, session.base, entry.change, done, session.settings.git)
+  end
+end
+
+--- Reads the diff of the entry the line under the cursor lists in `buffer`
+--- (`read_diff()`) and shows it (`show_diff()`); does nothing on a line
+--- that lists none.
+---
+---@param buffer integer
+local function open_entry(buffer)
+  local entry = pages.entry_at(buffer, vim.api.nvim_win_get_cursor(0)[1])
+  if not entry then
+    return
+  end
+  read_diff(entry, function(failure, diff)
+    if failure then
+      vim.notify(
+        ('aineo: the diff of %s could not be read: %s'):format(
+          told_name(entry),
+          lines.words_of(failure)
+        ),
+        vim.log.levels.ERROR
+      )
+      return
+    end
+    show_diff(entry, diff)
+  end)
+end
+
 --- A scratch buffer of the pane named `name` (`aineo.changes.scratch`),
 --- written with `page()` whenever it is made or read, which tells the
 --- session the pane is shown whenever it enters a window (`pane_shown()`).
@@ -278,6 +364,9 @@ local function pane_buffer(name, page)
       pane_shown()
     end,
   })
+  vim.keymap.set('n', '<CR>', function()
+    open_entry(buffer)
+  end, { buffer = buffer, desc = 'aineo: show the diff of the entry under the cursor' })
   return buffer
 end
 
