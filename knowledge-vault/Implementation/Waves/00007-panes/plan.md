@@ -293,3 +293,48 @@ Added after the brief review, one per option the user did not choose, and two fo
   - three of the reviews' survivors: M2, W13, X1.
   - Every one was killed on its covering test files on both versions except M2. The orchestrator's list of covering files missed `test_git_process.lua`, where the correction pinned it, so M2 was killed by assertion in the whole suite on 0.12.5.
 - **No release:** T23 adds no command, key or window.
+- **T24 — PR #105, regular**, merged by rebase on 2026-10-05 as `8a24bea` … `c9b78b1` (16 commits). The tree of `dev` `c9b78b1` is the tree the orchestrator verified, the PR's head `8f08be9`. Session note: [[Sessions/2026-10-05 — T24 Panes]].
+  - **The brief review** (`brief-review-t24-panes.md`, with T30's; dispatch after corrections, nine findings for T24) found:
+    - a layout opened by `\pa` or `\pc` never handed Input to the draft home (D17), and the boundary did not allow the helper that would;
+    - PD3 (b) left open what `\pa` does when no report arrived, and where it could be built without the report home;
+    - no mutant pinned any of the user's six answers;
+    - `\pa` and `\pc` with one of the right column's windows closed;
+    - the wrap reading unpinned, and `\o` wrapping the placeholders by default;
+    - no record of PD1–PD6 in the plan (D18's annotation since);
+    - two help places, `pane`'s place in the completion order, and stale records.
+  - **Reviews** on Opus: attack by `neovim-lua-reviewer`, test-integrity by `reviewer`, records by `reviewer`.
+  - **What they found:**
+    - a buffer already named `aineo://changes-files` or `aineo://changes-commits`, as a restored session makes, made every door that opens the layout fail with E95, with Claude Code started and hidden (attack 1, high);
+    - a switch a window refuses left the column half switched, and the next `\pc` did nothing (attack 2);
+    - PD3 (b) lost through `\i` with the Report's window closed (attack 3);
+    - the Report coming back recentred, not where it was (attack 4);
+    - a placeholder emptied for good by `:edit`, `:edit!` or `:bdelete` from its own window (attack 5, records 3);
+    - completion after a command modifier offering nothing, a regression from `dev` (attack 6);
+    - `\pc` from another tab page moving the user or not, depending on a window out of sight (attack 7);
+    - `plugin/aineo.lua` loading `vim.iter` as it is sourced (attack 8);
+    - `\r` and `\i` under the changes pane raising "Invalid buffer id" after `:bwipeout` of the other agent-pane buffer (records 1);
+    - PD3 (b)'s "shows nothing then" and D21 at the user's doors unpinned, a ten-switch case green on `dev`, three mutants killed only by crash, Claude's window options unpinned (test integrity 1–8);
+    - a help sentence on the cursor's start made false by PD6, a miscounted mutant total, five readings missing from the session note, and four pieces of code written ahead of their failing test (records 2–9).
+  - **The fix round** went to a fresh agent and took every finding. It redid the reviews' measured fixes and pins red-first in the pane files: 39 cases added, 28 mutants killed by assertion, 1574 cases.
+  - **The re-measure**, with the attack question (`neovim-lua-reviewer`), held the round's fixes for every input the three reviews built. It found eight more:
+    - a refused switch left the Report's `b:changedtick` behind, so `\o` later moved the Report's cursor (finding 1);
+    - a rollback that itself raises left the column half switched, and `\pa` then did nothing (finding 2);
+    - `:bdelete` of the hidden Report, then `\r` or `\i`, showed it as an ordinary buffer (finding 3);
+    - PD3 (b) lost when the Report is wiped while hidden and the new Report's tick equals the old one's (finding 4);
+    - completion after a bar offering nothing (finding 5);
+    - the cursor's start from a file window unpinned (finding 6);
+    - "Invalid window id" when freeing a placeholder's name closes the current window (finding 7);
+    - two readings unpinned (finding 8).
+  - **The second fix round**, a small fix (orchestrate §3), by a fresh agent, took findings 1–8: each window given back its buffer on its own, the Report kept with its buffer as well as its tick, loaded buffers only, completion from the last command on the line. 21 cases added, 18 mutants killed by assertion, 1595 cases.
+  - **The guarantee review** (`neovim-lua-developer`) found three:
+    - `73760cf` had removed the follow's pane check on the reading that no case builds its corner. Building the corner refuted it: PD3 (b) was lost after a refused switch, and a `\pc` refused in the command-line window moved the cursor of a Report shown by hand (finding 1: G1, G2, G2b);
+    - a pane key replaces a buffer of the other pane shown by hand, where the help and two records said it changes nothing (finding 2, records only);
+    - the file column's redirect brings the Report back from a half switch without following it (finding 3, G5; a follow-up, not before merge).
+  - **The bounded correction**, by a fresh agent, put the pane check back red-first from G1, G2 and G2b: four cases, each red by assertion on `8e520f5`. It reworded the four records of finding 2 and recorded G5 as an open thread. 1599 cases.
+- **The orchestrator's verification**, on 0.12.5 (D29), after each round: on `722cab5`, 1574 cases, `Fails (0)`, 204 s; on `8e520f5`, 1595 cases, `Fails (0)`, 203 s. On the final head `8f08be9`:
+  - guard 5 cases, `Fails (0)`;
+  - `make test`, 1599 cases, `Fails (0)`, 203 s;
+  - lint clean;
+  - every plan mutant killed by assertion on its covering files: M1, M4, M6–M9, M11, M13b, M15 and M16 as the author worded them; M2, M3, M5, M10, M12, M13 and M14 re-worded on the final tree, whose sites the fix rounds rewrote. The author's M5 wording (`nvim_create_buf(false, false)`) is equivalent there, since `write_placeholder()` sets `'buftype'` itself: it survived its file and the whole suite (1599, `Fails (0)`);
+  - `73760cf`'s line, the follow without its pane check, killed by four assertions in `tests/test_entry_panes.lua`.
+- **No release:** the user, 2026-10-05, "Wait for T25 (Recommended)". T24 ships with T25.
