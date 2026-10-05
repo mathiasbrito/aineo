@@ -2,9 +2,9 @@
 --- on the left, and a column on the right whose two windows show one pane at
 --- a time — the agent pane, the Report above Input, or the changes pane.
 ---
---- The layout shows the Claude and Report buffers, and the changes pane's,
---- it is handed and never creates, writes or deletes them; the Input buffer
---- is its own.
+--- The layout shows the Claude and Report buffers, the changes pane's, and
+--- the diffs it is asked to show in the file column, it is handed and never
+--- creates, writes or deletes them; the Input buffer is its own.
 
 local columns = require('aineo.layout.columns')
 
@@ -39,7 +39,7 @@ local M = {}
 --- terminal once Neovim has seen its process end, the line numbers
 --- `M.toggle_claude_numbers()` last set in Claude's window, those it showed
 --- before it hid them, and the window and buffer those line numbers were
---- last shown for.
+--- last shown for; and the diffs `M.show_diff()` showed, by buffer.
 local state = {
   ---@type table<aineo.layout.Role, integer>
   windows = {},
@@ -61,6 +61,8 @@ local state = {
   claude_numbers_before_hiding = nil,
   ---@type { window: integer, buffer: integer }|nil
   claude_numbers_shown_in = nil,
+  ---@type table<integer, true>
+  diffs = {},
 }
 
 --- The role of `window` in the layout, or `nil` when it is not one of its
@@ -201,16 +203,18 @@ local function has_file_column()
   return #file_column_windows() > 0
 end
 
---- The file column's first window that may take a file: one showing a file,
---- not one of the layout's windows and without `'winfixbuf'`, so that neither
---- another plugin's window in the file column's place, such as a sidebar, nor
---- a layout window moved there is ever taken. `nil` when there is none.
+--- The file column's first window that may take a file or a diff: one
+--- showing a file or a diff `M.show_diff()` showed, not one of the layout's
+--- windows and without `'winfixbuf'`, so that neither another plugin's
+--- window in the file column's place, such as a sidebar, nor a layout window
+--- moved there is ever taken. `nil` when there is none.
 ---
 ---@return integer|nil window
 local function window_taking_files()
   return vim.iter(file_column_windows()):find(function(window)
+    local buffer = vim.api.nvim_win_get_buf(window)
     return not role_of(window)
-      and is_file(vim.api.nvim_win_get_buf(window))
+      and (is_file(buffer) or state.diffs[buffer] == true)
       and not vim.wo[window].winfixbuf
   end)
 end
@@ -1298,6 +1302,40 @@ function M.show_pane(pane, arrangement)
     error("arrangement.changes: expected the changes pane's buffers, and none was handed", 0)
   end
   switch_pane(pane)
+end
+
+--- Shows `diff`, a buffer that is no file — a diff the changes pane shows —
+--- in the file column, as a file opened from one of the layout's windows is
+--- shown there (`place_in_file_column()`), and returns its window. A file or
+--- a diff shown in the file column later takes `diff`'s window in its turn
+--- (`window_taking_files()`): the column keeps one window for them. The
+--- cursor stays in the window it was in. When the screen has no room for
+--- `diff` — no room above a file that cannot leave the column's window, or
+--- for a new file column (E36) — it shows `diff` nowhere and returns nil.
+--- With none of the layout's windows open, `diff` opens in a window above
+--- the current one. Raises any other error a window raises as it is made or
+--- given `diff`.
+---
+---@param diff integer
+---@return integer|nil window
+function M.show_diff(diff)
+  state.diffs[diff] = true
+  local current = vim.api.nvim_get_current_win()
+  local placed, window
+  if has_any_window() then
+    placed, window =
+      pcall(place_in_file_column, diff, right_column_window() or state.windows.claude)
+  else
+    placed, window = pcall(open_window_above, diff, current)
+  end
+  vim.api.nvim_set_current_win(current)
+  if placed then
+    return window
+  end
+  if not tostring(window):find('E36:', 1, true) then
+    error(window, 0)
+  end
+  return nil
 end
 
 --- Makes `terminal` the layout's Claude terminal from now on, in place of
