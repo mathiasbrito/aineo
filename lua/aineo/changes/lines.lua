@@ -84,6 +84,24 @@ end
 ---@field text string[]
 ---@field entries table<integer, aineo.changes.Entry>
 
+--- `failure`'s words on one line: every run of control characters in them,
+--- line breaks among them, written as one space.
+---
+---@param failure aineo.git.Failure
+---@return string
+local function words_of(failure)
+  return vim.trim((failure.message:gsub('%c+', ' ')))
+end
+
+--- The line that says the last read of a window failed, in `failure`'s
+--- words (`words_of()`).
+---
+---@param failure aineo.git.Failure
+---@return string
+function M.refresh_failed(failure)
+  return 'The last refresh failed: ' .. words_of(failure)
+end
+
 --- A page of `notes` — lines that list nothing — then one line per row of
 --- `listed`, or `empty` when it has none.
 ---
@@ -103,6 +121,24 @@ local function page(notes, listed, empty)
   return { text = text, entries = entries }
 end
 
+--- What both windows say when the session has no repository to list:
+--- `directory` is in none, or git was not found — in the words git's start
+--- failed with — or, for any other failure to find it, the line a failed
+--- read gives (`M.refresh_failed()`). None claims a repository.
+---
+---@param failure aineo.git.Failure why no repository was found
+---@param directory string the directory the session looked in
+---@return aineo.changes.Page
+function M.no_repository(failure, directory)
+  local line = M.refresh_failed(failure)
+  if failure.reason == 'not_a_repository' then
+    line = 'Not in a git repository: ' .. M.quoted_path(directory)
+  elseif failure.reason == 'no_git' then
+    line = 'git was not found: ' .. words_of(failure)
+  end
+  return page({}, {}, line)
+end
+
 --- What the files window says when no file differs from the base.
 M.NO_FILES = 'No files changed on this session'
 
@@ -112,21 +148,35 @@ M.NOT_WATCHED =
 
 --- What the files window knows.
 ---@class aineo.changes.FilesView
----@field changes? aineo.git.Change[] the files changed since the base, once read
+---@field changes? aineo.git.Change[] the files changed since the base, as last read
+---@field failure? aineo.git.Failure why the last read failed, when it did
 ---@field saved table<string, true> the paths, relative to the top level, of the files the user saved
 ---@field unwatched_subdirectories boolean whether a change in a subdirectory goes unseen by the watch
 
---- The files window's page for `view`: `M.NOT_WATCHED` first where
---- subdirectories go unwatched, then a line per file (`M.file_line()`),
---- marked when the user saved it, or `M.NO_FILES` when none differs, or
---- `M.READING` before they are read.
+--- The notes a window shows first when its last read failed: the line
+--- that says so (`M.refresh_failed()`); none otherwise.
+---
+---@param failure aineo.git.Failure|nil
+---@return string[]
+local function failure_notes(failure)
+  return failure and { M.refresh_failed(failure) } or {}
+end
+
+--- The files window's page for `view`: the line saying its last read
+--- failed, when it did, and `M.NOT_WATCHED` where subdirectories go
+--- unwatched; then a line per file (`M.file_line()`), marked when the user
+--- saved it, or `M.NO_FILES` when none differs. Before any list was read,
+--- `M.READING` in its place, or nothing once a read has failed.
 ---
 ---@param view aineo.changes.FilesView
 ---@return aineo.changes.Page
 function M.files_window(view)
-  local notes = view.unwatched_subdirectories and { M.NOT_WATCHED } or {}
+  local notes = failure_notes(view.failure)
+  if view.unwatched_subdirectories then
+    table.insert(notes, M.NOT_WATCHED)
+  end
   if not view.changes then
-    return page(notes, {}, M.READING)
+    return view.failure and page({}, {}, notes[1]) or page(notes, {}, M.READING)
   end
   return page(
     notes,
@@ -157,20 +207,23 @@ end
 
 --- What the commits window knows.
 ---@class aineo.changes.CommitsView
----@field since? aineo.git.CommitsSince the session's commits, once read
+---@field since? aineo.git.CommitsSince the session's commits, as last read
+---@field failure? aineo.git.Failure why the last read failed, when it did
 
---- The commits window's page for `view`: a line per commit, in git's order
---- (`M.commit_line()`), or `M.NO_COMMITS` when there is none, or
---- `M.READING` before they are read.
+--- The commits window's page for `view`: the line saying its last read
+--- failed, when it did, then a line per commit, in git's order
+--- (`M.commit_line()`), or `M.NO_COMMITS` when there is none. Before any
+--- list was read, `M.READING`, or the failure's line alone.
 ---
 ---@param view aineo.changes.CommitsView
 ---@return aineo.changes.Page
 function M.commits_window(view)
+  local notes = failure_notes(view.failure)
   if not view.since then
-    return page({}, {}, M.READING)
+    return view.failure and page({}, {}, notes[1]) or page({}, {}, M.READING)
   end
   return page(
-    {},
+    notes,
     vim.tbl_map(function(commit)
       return { line = M.commit_line(commit), entry = { key = commit.id, commit = commit } }
     end, view.since.commits),
