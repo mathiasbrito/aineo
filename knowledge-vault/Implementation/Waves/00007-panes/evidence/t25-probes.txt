@@ -18,8 +18,8 @@ What they show, in short (the outputs below are the record):
   ~60 ms; changed_files ~90 ms clean, ~200–290 ms with 2000 modified and
   with 2000 more untracked; commits_since ~60–70 ms for 201 commits.
 - L5 every tracked file rewritten with the same content (stat-dirty): one
-  changed_files call took 1.9–3.1 s, and again 1.5–1.6 s, since the private
-  index copy keeps no refresh (lua/aineo/git/private_index.lua says so); once
+  changed_files call took 3.1 s (3088 ms), and again 1.6 s (1562 ms), since
+  the private index copy keeps no refresh (lua/aineo/git/private_index.lua says so); once
   a git of the repository's own refreshed the index, ~90–240 ms. One read can
   outlast the watch's longest burst (1 s, lua/aineo/git/watch.lua).
 - L7 a writer in an ignored directory (build/, in .gitignore) every 50 ms
@@ -32,7 +32,9 @@ What they show, in short (the outputs below are the record):
   column and the right column (two.txt w40 beside the diff w39), since
   window_taking_files() takes only a window showing a file; `\o` keeps both.
 - S BufWritePost fires for `:write`, `:write {other}`, `:1,1write {part}`,
-  `:saveas` and `:update`; its `match` is the written file's absolute path
+  `:saveas` and `:update` (S3's buffer had one line, so `:1,1write` wrote it
+  whole: the brief review measured that a partial write of a longer buffer
+  fires FileWritePost only, and an append FileAppendPost only, T25-3); its `match` is the written file's absolute path
   whatever the working directory (S6, after `:cd sub`), and its buffer name
   can differ from it (S2, S3). One `:write` in a subdirectory: one watch call,
   files_changed, ~260 ms later; one `git commit -am`: one call with both.
@@ -507,3 +509,281 @@ N1 set_lines with a newline in a line: false 'replacement string' item contains 
 N2 set_lines with a tab and an escape: true nil { "tab\there.txt", "esc\27x.txt" }
 N3 strtrans of each: line^@break.txt esc^[x.txt tab^Ihere.txt
 N4 string.format %q of the newline name: "line\ break.txt"
+
+
+CP8 — what a large diff costs (added 2026-10-05, after the user's answer)
+=========================================================================
+
+Measured 2026-10-05 on the same host, NVIM v0.12.5, git 2.50.1, on dev
+cbe5a73's code (T24 merged; the git home unchanged), to choose the bound the
+user's CP8 (b) asks for. Each probe ran headless in a home of its own
+(run.sh below: as the drafter's, with the tree the checkout itself), with
+syntax on, and quit by itself; no process was left. The host's load average
+was 13–19 (other agents running): orders of magnitude, not bounds. A UI's
+drawing was not measured.
+
+What they show, in short (the outputs below are the record):
+- p_bigdiff: a repository whose files of 1 000, 10 000, 100 000 and 500 000
+  lines are rewritten whole, and one file of one 10 MiB line. The git home's
+  file_diff() gave a 1.0 MB diff (20 005 lines) in 27 ms, 10.4 MB (200 005)
+  in 97–103 ms, 52 MB (1 000 005) in 430–448 ms. Splitting it into lines
+  and writing it whole into a scratch buffer with 'filetype' diff took 3 ms,
+  44–59 ms and 376–381 ms on the main loop; the editor's resident memory
+  grew by some 290 MiB at 52 MB. Writing the first 20 000 lines alone took
+  4.5 ms whatever the diff's size. Showing the 10 MiB-line diff in a window
+  and redrawing took 894 ms.
+- p_longline: one long line shown in a window with syntax on ('filetype'
+  diff), 'wrap' on and off: 6 ms at 10 KB, 59 ms at 100 KB, 135–145 ms at
+  1 MB, 391–428 ms at 4 MB, 906–999 ms at 10 MB; without syntax about a
+  tenth of that.
+- The bound the amendment chooses, 1 MiB of the diff: some 20 000 lines of
+  a reviewable diff, written in under 5 ms; a single line at most some
+  150 ms a showing.
+
+==================== run.sh (CP8) ====================
+#!/bin/sh
+# Runs one probe headless on the newest Neovim, isolated under this folder.
+# usage: run.sh <probe.lua> <home-name>
+HERE=$(cd "$(dirname "$0")" && pwd)
+TREE=$(cd "$HERE/../../../.." && pwd)
+PROBE=$1; NAME=$2; shift 2
+H="$HERE/home-$NAME"
+rm -rf "$H"; mkdir -p "$H/config" "$H/data" "$H/state" "$H/cache" "$H/claude" "$H/tmp" "$H/work"
+for v in $(env | sed -n 's/^\(CLAUDE[A-Z_]*\)=.*/\1/p'); do unset "$v"; done
+unset AINEO_CHILD
+export XDG_CONFIG_HOME="$H/config" XDG_DATA_HOME="$H/data" XDG_STATE_HOME="$H/state" XDG_CACHE_HOME="$H/cache"
+export CLAUDE_CONFIG_DIR="$H/claude" NVIM_LOG_FILE="$H/nvim.log" TMPDIR="$H/tmp"
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_CEILING_DIRECTORIES="$HERE"
+export GIT_AUTHOR_NAME=probe GIT_AUTHOR_EMAIL=probe@example.invalid GIT_COMMITTER_NAME=probe GIT_COMMITTER_EMAIL=probe@example.invalid
+export AINEO_PROBE_TREE="$TREE" AINEO_PROBE_HOME="$H" AINEO_PROBE_OUT="$HERE/$NAME.out"
+cd "$H/work" || exit 1
+exec nvim --headless -u "$TREE/scripts/minimal_init.lua" "$@" -c "luafile $HERE/$PROBE"
+
+==================== p_bigdiff.lua ====================
+-- CP8 probe: what a large diff costs the changes pane — git's answer through
+-- the git home, the split into lines, and the write into a scratch buffer with
+-- 'filetype' diff — to choose the bound a diff is cut at.
+local out = {}
+local function log(...)
+  local parts = {}
+  for i = 1, select('#', ...) do
+    local v = select(i, ...)
+    parts[#parts + 1] = type(v) == 'string' and v or vim.inspect(v)
+  end
+  out[#out + 1] = table.concat(parts, ' ')
+end
+local function finish()
+  vim.fn.writefile(out, vim.env.AINEO_PROBE_OUT)
+  vim.cmd('qall!')
+end
+vim.defer_fn(function()
+  log('TIMEOUT')
+  finish()
+end, 300000)
+
+local function git(top, ...)
+  local r = vim.system({ 'git', '-C', top, ... }, { text = true }):wait()
+  assert(r.code == 0, table.concat({ ... }, ' ') .. ': ' .. (r.stderr or ''))
+  return vim.trim(r.stdout or '')
+end
+local function ms(start)
+  return (vim.uv.hrtime() - start) / 1e6
+end
+local function rss()
+  return math.floor(vim.uv.resident_set_memory() / 1048576)
+end
+
+local function timed(operation)
+  local start, finished, failure, answer = vim.uv.hrtime(), false, nil, nil
+  operation(function(f, a)
+    failure, answer, finished = f, a, true
+  end)
+  vim.wait(240000, function()
+    return finished
+  end, 2)
+  return ms(start), failure, answer
+end
+
+local function write_file(path, count, prefix)
+  local lines = {}
+  for i = 1, count do
+    lines[i] = ('%s line %07d of the file, some text to fill it'):format(prefix, i)
+  end
+  vim.fn.writefile(lines, path)
+end
+
+local CUTS = { 2000, 10000, 20000 }
+
+local function measure(gh, found, label, change)
+  collectgarbage('collect')
+  local before = rss()
+  local t_git, failure, diff = timed(function(done)
+    gh.file_diff(found, found.head, change, done)
+  end)
+  if failure then
+    log(label, 'FAILED', failure)
+    return
+  end
+  local s = vim.uv.hrtime()
+  local lines = vim.split(diff, '\n', { plain = true })
+  if lines[#lines] == '' then
+    lines[#lines] = nil
+  end
+  local t_split = ms(s)
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].filetype = 'diff'
+  s = vim.uv.hrtime()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  local t_set = ms(s)
+  s = vim.uv.hrtime()
+  vim.api.nvim_win_set_buf(0, buf)
+  vim.cmd('normal! G')
+  vim.cmd('redraw')
+  local t_show = ms(s)
+  local cut_times = {}
+  for _, cut in ipairs(CUTS) do
+    s = vim.uv.hrtime()
+    local b = vim.api.nvim_create_buf(false, true)
+    vim.bo[b].filetype = 'diff'
+    vim.api.nvim_buf_set_lines(b, 0, -1, false, vim.list_slice(lines, 1, cut))
+    cut_times[#cut_times + 1] = ('%d lines %.1f ms'):format(math.min(cut, #lines), ms(s))
+    vim.api.nvim_buf_delete(b, { force = true })
+  end
+  log(
+    ('%s: diff %d bytes, %d lines; git home %.0f ms; split %.0f ms; set_lines whole %.0f ms; show+G+redraw %.0f ms; cut: %s; rss %d -> %d MiB'):format(
+      label,
+      #diff,
+      #lines,
+      t_git,
+      t_split,
+      t_set,
+      t_show,
+      table.concat(cut_times, ', '),
+      before,
+      rss()
+    )
+  )
+  vim.api.nvim_win_set_buf(0, vim.api.nvim_create_buf(true, false))
+  vim.api.nvim_buf_delete(buf, { force = true })
+end
+
+vim.api.nvim_create_autocmd('VimEnter', {
+  once = true,
+  callback = function()
+    vim.schedule(function()
+      local ok, err = xpcall(function()
+        vim.cmd('syntax on')
+        log('nvim', tostring(vim.version()), git('.', '--version'), 'syntax_on', vim.g.syntax_on)
+        local gh = require('aineo.git')
+        local top = vim.fn.getcwd() .. '/repo'
+        vim.fn.mkdir(top, 'p')
+        git(top, 'init', '-q', '-b', 'main')
+        local sizes = { 1000, 10000, 100000, 500000 }
+        for _, n in ipairs(sizes) do
+          write_file(('%s/f%d.txt'):format(top, n), n, 'old')
+        end
+        vim.fn.writefile({ 'x' }, top .. '/long.txt')
+        git(top, 'add', '-A')
+        git(top, 'commit', '-q', '-m', 'base')
+        for _, n in ipairs(sizes) do
+          write_file(('%s/f%d.txt'):format(top, n), n, 'new')
+        end
+        vim.fn.writefile({ string.rep('abcdefghij', 1048576) }, top .. '/long.txt')
+        local t, failure, found = timed(function(done)
+          gh.find_repository(top, done)
+        end)
+        log('find_repository ms', math.floor(t), failure)
+        local _, f2, changes = timed(function(done)
+          gh.changed_files(found, found.head, done)
+        end)
+        log('changes', f2, changes and #changes)
+        for _, change in ipairs(changes) do
+          measure(gh, found, change.path, change)
+        end
+        for _, change in ipairs(changes) do
+          if change.path == 'f100000.txt' or change.path == 'f500000.txt' then
+            measure(gh, found, change.path .. ' again', change)
+          end
+        end
+      end, debug.traceback)
+      if not ok then
+        log('ERROR', err)
+      end
+      finish()
+    end)
+  end,
+})
+
+-------------------- output of p_bigdiff.lua (sh run.sh p_bigdiff.lua bigdiff) --------------------
+nvim 0.12.5 git version 2.50.1 (Apple Git-155) syntax_on 1
+find_repository ms 63 nil
+changes nil 5
+f1000.txt: diff 104185 bytes, 2005 lines; git home 23 ms; split 0 ms; set_lines whole 0 ms; show+G+redraw 1 ms; cut: 2000 lines 2.7 ms, 2005 lines 2.7 ms, 2005 lines 2.8 ms; rss 101 -> 103 MiB
+f10000.txt: diff 1040191 bytes, 20005 lines; git home 27 ms; split 1 ms; set_lines whole 2 ms; show+G+redraw 1 ms; cut: 2000 lines 2.8 ms, 10000 lines 3.4 ms, 20000 lines 4.5 ms; rss 95 -> 100 MiB
+f100000.txt: diff 10400197 bytes, 200005 lines; git home 103 ms; split 25 ms; set_lines whole 34 ms; show+G+redraw 1 ms; cut: 2000 lines 2.9 ms, 10000 lines 3.5 ms, 20000 lines 4.5 ms; rss 100 -> 152 MiB
+f500000.txt: diff 52000197 bytes, 1000005 lines; git home 448 ms; split 258 ms; set_lines whole 123 ms; show+G+redraw 1 ms; cut: 2000 lines 3.0 ms, 10000 lines 3.5 ms, 20000 lines 4.5 ms; rss 137 -> 424 MiB
+long.txt: diff 10485936 bytes, 7 lines; git home 75 ms; split 1 ms; set_lines whole 5 ms; show+G+redraw 894 ms; cut: 7 lines 7.5 ms, 7 lines 4.5 ms, 7 lines 4.5 ms; rss 292 -> 334 MiB
+f100000.txt again: diff 10400197 bytes, 200005 lines; git home 97 ms; split 22 ms; set_lines whole 22 ms; show+G+redraw 1 ms; cut: 2000 lines 2.8 ms, 10000 lines 3.4 ms, 20000 lines 4.3 ms; rss 324 -> 334 MiB
+f500000.txt again: diff 52000197 bytes, 1000005 lines; git home 430 ms; split 264 ms; set_lines whole 112 ms; show+G+redraw 1 ms; cut: 2000 lines 2.9 ms, 10000 lines 3.4 ms, 20000 lines 4.4 ms; rss 324 -> 454 MiB
+
+==================== p_longline.lua ====================
+-- CP8 probe, second part: what one long line costs a window showing a diff
+-- buffer, by the line's length, with and without 'wrap' and syntax.
+local out = {}
+local function log(s)
+  out[#out + 1] = s
+end
+local function ms(start)
+  return (vim.uv.hrtime() - start) / 1e6
+end
+
+local function show(line, wrap, syntax)
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].filetype = syntax and 'diff' or ''
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'diff --git a/x b/x', '@@ -1 +1 @@', '-x', '+' .. line })
+  vim.wo.wrap = wrap
+  local s = vim.uv.hrtime()
+  vim.api.nvim_win_set_buf(0, buf)
+  vim.cmd('normal! G')
+  vim.cmd('redraw!')
+  local t = ms(s)
+  vim.api.nvim_win_set_buf(0, vim.api.nvim_create_buf(true, false))
+  vim.api.nvim_buf_delete(buf, { force = true })
+  return t
+end
+
+vim.api.nvim_create_autocmd('VimEnter', {
+  once = true,
+  callback = function()
+    vim.schedule(function()
+      local ok, err = xpcall(function()
+        vim.cmd('syntax on')
+        log(('nvim %s, columns %d, lines %d'):format(tostring(vim.version()), vim.o.columns, vim.o.lines))
+        for _, bytes in ipairs({ 10000, 100000, 1000000, 4000000, 10000000 }) do
+          local line = string.rep('abcdefghi ', bytes / 10)
+          log(
+            ('line of %d bytes: wrap+syntax %.0f ms; nowrap+syntax %.0f ms; wrap, no syntax %.0f ms'):format(
+              bytes,
+              show(line, true, true),
+              show(line, false, true),
+              show(line, true, false)
+            )
+          )
+        end
+      end, debug.traceback)
+      if not ok then
+        log('ERROR ' .. err)
+      end
+      vim.fn.writefile(out, vim.env.AINEO_PROBE_OUT)
+      vim.cmd('qall!')
+    end)
+  end,
+})
+
+-------------------- output of p_longline.lua (sh run.sh p_longline.lua longline) --------------------
+nvim 0.12.5, columns 80, lines 24
+line of 10000 bytes: wrap+syntax 6 ms; nowrap+syntax 6 ms; wrap, no syntax 0 ms
+line of 100000 bytes: wrap+syntax 59 ms; nowrap+syntax 59 ms; wrap, no syntax 1 ms
+line of 1000000 bytes: wrap+syntax 145 ms; nowrap+syntax 135 ms; wrap, no syntax 9 ms
+line of 4000000 bytes: wrap+syntax 428 ms; nowrap+syntax 391 ms; wrap, no syntax 37 ms
+line of 10000000 bytes: wrap+syntax 999 ms; nowrap+syntax 906 ms; wrap, no syntax 93 ms
