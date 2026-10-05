@@ -408,13 +408,13 @@ Added 2026-09-28 by the orchestrator, from T12's brief, its amendment and its se
 Added 2026-10-05 by the orchestrator's closing knowledge pass for wave 6, from T27's brief, brief review and session note at `dev` `c6172e5` (PR #94, `v0.2.11`). The user asked for the fix ("check 1 to 3", item 1, 2026-10-04); the recipe's form is a reading.
 
 - **Told to the user without a reply:**
-  - MR209's form — the bold turned off for that one group, and a `ColorScheme` autocommand — on 2026-10-04 (18:30), and with `v0.2.11` on 2026-10-05 (00:57);
+  - MR209's form — the bold turned off for that one group, and a `ColorScheme` autocommand — on 2026-10-04 (18:30, and at 19:36 that it touches only the bold's own highlight group); its effect, that the recipe survives a colour-scheme change in Lua and in Vimscript, with `v0.2.11` on 2026-10-05 (00:57);
   - MR210 on 2026-10-04: that no `ColorScheme` autocommand survives a bare `:highlight clear` (18:12), that the help says so (18:30), and that the help will say to run the recipe again (19:36).
 - **Not shown:** MR209's details, the `highlight clear` of the group and the Lua form's `vim.cmd`; MR211.
 
 | ID | Reading | Source | Disposition |
 |---|---|---|---|
-| MR209 | The help's recipe to turn the `[status]`'s bold off is code in the user's own config, given in Lua and in Vimscript. It runs `highlight clear AineoReportStatusBold` and `highlight link AineoReportStatusBold NONE`, at once and again from a `ColorScheme` autocommand in an augroup of its own, `aineo_bold_off`. aineo itself still installs no `ColorScheme` autocommand. The Lua form calls `vim.cmd('highlight …')`, since `nvim_set_hl(0, 'AineoReportStatusBold', { link = 'NONE' })` creates a highlight group named `NONE`. | T27's brief (the autocommand), its author (the clear, `vim.cmd`), measured on 0.12.5 and 0.11.6 | open — its form told to the user on 2026-10-04 (18:30) and 2026-10-05 (00:57) without a reply; its details not shown |
+| MR209 | The help's recipe to turn the `[status]`'s bold off is code in the user's own config, given in Lua and in Vimscript. It runs `highlight clear AineoReportStatusBold` and `highlight link AineoReportStatusBold NONE`, at once and again from a `ColorScheme` autocommand in an augroup of its own, `aineo_bold_off`. aineo itself still installs no `ColorScheme` autocommand. The Lua form calls `vim.cmd('highlight …')`, since `nvim_set_hl(0, 'AineoReportStatusBold', { link = 'NONE' })` creates a highlight group named `NONE`. | T27's brief (the autocommand), its author (the clear, `vim.cmd`), measured on 0.12.5 and 0.11.6 | open — its form told to the user on 2026-10-04 (18:30, 19:36), its effect with `v0.2.11` on 2026-10-05 (00:57), without a reply; its details not shown |
 
 ## Limits a user can meet — the bold-off recipe (T27)
 
