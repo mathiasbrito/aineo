@@ -20,12 +20,16 @@ local M = {}
 ---@class aineo.changes.Session
 ---@field settings aineo.changes.SessionSettings
 ---@field repository? aineo.git.Repository
+---@field absence? aineo.git.Failure why no repository was found for the directory, while none is
 ---@field base? string
----@field changes? aineo.git.Change[]
----@field commits? aineo.git.CommitsSince
+---@field changes? aineo.git.Change[] the files changed since the base, as last read
+---@field files_failure? aineo.git.Failure why the last read of the files failed, when it did
+---@field commits? aineo.git.CommitsSince the commits since the base, as last read
+---@field commits_failure? aineo.git.Failure why the last read of the commits failed, when it did
 ---@field saved table<string, true> the files the user saved since the base, by path relative to the top level
 ---@field shown boolean whether the pane has been shown
----@field watch? aineo.git.Watch
+---@field watch? aineo.git.Watch the running watch, from the pane's first showing; nil once it failed
+---@field watch_failure? aineo.git.Failure why the watch failed, until one starts again
 
 ---@type aineo.changes.Session|nil
 local session = nil
@@ -34,39 +38,57 @@ local session = nil
 ---@type { files: integer|nil, commits: integer|nil }
 local buffers = {}
 
---- Writes the files buffer for what the session knows: its files, or that
---- aineo is reading the repository until git has answered.
-local function show_files()
-  if not (buffers.files and session) then
-    return
+--- The files window's page for what the session knows: why it has no
+--- repository, when it has none, or its files.
+---
+---@return aineo.changes.Page
+local function files_page()
+  if session.absence then
+    return lines.no_repository(session.absence, session.settings.directory)
   end
-  pages.write_page(
-    buffers.files,
-    lines.files_window({
-      changes = session.changes,
-      saved = session.saved,
-      unwatched_subdirectories = session.watch ~= nil and not session.watch.watches_subdirectories,
-    })
-  )
+  return lines.files_window({
+    changes = session.changes,
+    failure = session.files_failure or session.watch_failure,
+    saved = session.saved,
+    unwatched_subdirectories = session.watch ~= nil and not session.watch.watches_subdirectories,
+  })
 end
 
---- Writes the commits buffer for what the session knows: its commits, or
---- that aineo is reading the repository until git has answered.
-local function show_commits()
-  if not (buffers.commits and session) then
-    return
+--- The commits window's page for what the session knows: why it has no
+--- repository, when it has none, or its commits.
+---
+---@return aineo.changes.Page
+local function commits_page()
+  if session.absence then
+    return lines.no_repository(session.absence, session.settings.directory)
   end
-  pages.write_page(buffers.commits, lines.commits_window({ since = session.commits }))
+  return lines.commits_window({
+    since = session.commits,
+    failure = session.commits_failure or session.watch_failure,
+  })
+end
+
+--- Writes the files buffer for what the session knows (`files_page()`).
+local function show_files()
+  if buffers.files and session then
+    pages.write_page(buffers.files, files_page())
+  end
+end
+
+--- Writes the commits buffer for what the session knows (`commits_page()`).
+local function show_commits()
+  if buffers.commits and session then
+    pages.write_page(buffers.commits, commits_page())
+  end
 end
 
 --- Reads the files changed since the base, and shows them; one read at a
 --- time (`aineo.changes.serial`).
 local read_files = serial.one_at_a_time(function(ended)
   git.changed_files(session.repository, session.base, function(failure, changes)
-    if not failure then
-      session.changes = changes
-      show_files()
-    end
+    session.changes = changes or session.changes
+    session.files_failure = failure
+    show_files()
     ended()
   end, session.settings.git)
 end)
@@ -75,10 +97,9 @@ end)
 --- (`aineo.changes.serial`).
 local read_commits = serial.one_at_a_time(function(ended)
   git.commits_since(session.repository, session.base, function(failure, commits)
-    if not failure then
-      session.commits = commits
-      show_commits()
-    end
+    session.commits = commits or session.commits
+    session.commits_failure = failure
+    show_commits()
     ended()
   end, session.settings.git)
 end)
@@ -97,13 +118,38 @@ local function follow_change(change)
   end
 end
 
---- Starts watching the session's repository.
+--- Tells both windows that `failure` stopped the watch, under the lists
+--- they show; the watch, which may see nothing more, is stopped, to be
+--- started again the next time the pane is shown.
+---
+---@param failure aineo.git.Failure
+local function watch_failed(failure)
+  if session.watch then
+    session.watch.stop()
+    session.watch = nil
+  end
+  session.watch_failure = failure
+  show_files()
+  show_commits()
+end
+
+--- Starts watching the session's repository: each call reads again what it
+--- may have changed (`follow_change()`), and a failure stops it
+--- (`watch_failed()`), as one that cannot start is told.
 local function watch()
-  session.watch = git.watch_repository(session.repository, function(failure, change)
-    if not failure then
+  local started, failure = git.watch_repository(session.repository, function(change_failure, change)
+    if change_failure then
+      watch_failed(change_failure)
+    else
       follow_change(change)
     end
   end, session.settings.git)
+  session.watch = started
+  if failure then
+    watch_failed(failure)
+  else
+    session.watch_failure = nil
+  end
 end
 
 --- Starts what follows the repository once the pane has been shown: the
@@ -120,13 +166,43 @@ local function follow_repository()
   read_commits()
 end
 
+--- Looks for the repository of the session's directory, one look at a time
+--- (`aineo.changes.serial`). The first found is the session's for the
+--- editor's life: its `HEAD` is the base, the saves count from then, and it
+--- is followed once the pane has been shown (`follow_repository()`). While
+--- none is found, both windows say why.
+local find = serial.one_at_a_time(function(ended)
+  git.find_repository(session.settings.directory, function(failure, repository)
+    if not session.repository then
+      session.absence = failure
+      if repository then
+        session.repository = repository
+        session.base = repository.head
+        follow_repository()
+      end
+      show_files()
+      show_commits()
+    end
+    ended()
+  end, session.settings.git)
+end)
+
+--- Looks for the repository again (`find`) when none was found.
+local function look_again()
+  if session.absence then
+    find()
+  end
+end
+
 --- Notes that the pane is shown, and follows the repository from then on
---- (`follow_repository()`).
+--- (`follow_repository()`), or looks for it again while there is none
+--- (`look_again()`).
 local function pane_shown()
   if not session then
     return
   end
   session.shown = true
+  look_again()
   follow_repository()
 end
 
@@ -142,11 +218,14 @@ end
 --- Marks the file a save wrote, `written`, when it lies under the
 --- repository's top level, both resolved — a file opened through a
 --- symbolic link to the repository counts — and reads the files again once
---- the pane has been shown, whether the watch saw the save or not.
+--- the pane has been shown, whether the watch saw the save or not. While
+--- there is no repository, the save marks nothing and aineo looks for one
+--- again (`look_again()`).
 ---
 ---@param written string the written file's absolute path, as it was opened
 local function note_save(written)
   if not session.repository then
+    look_again()
     return
   end
   local top = resolved(session.repository.top) .. '/'
@@ -174,13 +253,7 @@ function M.begin_session(settings)
       note_save(event.match)
     end,
   })
-  git.find_repository(settings.directory, function(failure, repository)
-    if not failure then
-      session.repository = repository
-      session.base = repository.head
-      follow_repository()
-    end
-  end, settings.git)
+  find()
 end
 
 --- A scratch buffer named `name`, which tells the session the pane is shown
