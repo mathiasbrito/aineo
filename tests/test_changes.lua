@@ -669,6 +669,157 @@ T['a failed watch']['that cannot start is told until one starts'] = function()
   })
 end
 
+T['the base no longer behind HEAD'] = MiniTest.new_set()
+
+T['the base no longer behind HEAD']['is said above the commits git lists, the files still from the base'] = function()
+  local top, parent = git_repo.create('changespane-left-behind', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local base = git_repo.commit_all(top, 'Write two')
+  begin_and_show(top)
+  expect_lines(COMMITS, { 'No commits on this session' })
+  git_repo.git(top, { 'checkout', '--quiet', '-b', 'other', parent })
+  git_repo.write(top, 'other.txt', { 'other' })
+  local other = git_repo.commit_all(top, 'Add other')
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  expect_lines(FILES, { '  M notes.txt', '  A other.txt' })
+  expect_lines(COMMITS, {
+    ("The session's base, %s, is no longer behind HEAD"):format(base:sub(1, 7)),
+    other:sub(1, 7) .. ' Add other',
+  })
+end
+
+T['a buffer of the pane'] = MiniTest.new_set()
+
+--- What the buffer whose name is the argument is, read in the child: its
+--- options and its lines.
+local BUFFER_STATE = [[(function(name)
+  local buffer = vim.fn.bufnr(name)
+  return {
+    buftype = vim.bo[buffer].buftype,
+    buflisted = vim.bo[buffer].buflisted,
+    bufhidden = vim.bo[buffer].bufhidden,
+    swapfile = vim.bo[buffer].swapfile,
+    modifiable = vim.bo[buffer].modifiable,
+    lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, true),
+  }
+end)(...)]]
+
+--- What a buffer of the pane is, but for its lines.
+local SCRATCH = {
+  buftype = 'nofile',
+  buflisted = false,
+  bufhidden = 'hide',
+  swapfile = false,
+  modifiable = false,
+}
+
+--- Each buffer of the pane with what it lists in a repository whose one
+--- file changed and that has no commit since the base.
+local LISTS = {
+  { FILES, { '  M notes.txt' } },
+  { COMMITS, { 'No commits on this session' } },
+}
+
+T['a buffer of the pane']['lists again once a command run in its window emptied it'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'edit', LISTS[1][1], LISTS[1][2] },
+      { 'edit', LISTS[2][1], LISTS[2][2] },
+      { 'edit!', LISTS[1][1], LISTS[1][2] },
+      { 'edit!', LISTS[2][1], LISTS[2][2] },
+    },
+  })
+
+T['a buffer of the pane']['lists again once a command run in its window emptied it']['by'] = function(
+  command,
+  name,
+  expected
+)
+  local top = git_repo.create('changespane-edited', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  begin_and_show(top)
+  expect_lines(name, expected)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { name })
+
+  child.cmd(command)
+
+  eq(child.lua_get(BUFFER_STATE, { name }), vim.tbl_extend('error', SCRATCH, { lines = expected }))
+end
+
+T['a buffer of the pane']['deleted from its own window, is made anew listing again'] =
+  MiniTest.new_set({
+    parametrize = LISTS,
+  })
+
+T['a buffer of the pane']['deleted from its own window, is made anew listing again']['for'] = function(
+  name,
+  expected
+)
+  local top = git_repo.create('changespane-deleted', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  begin_and_show(top)
+  expect_lines(name, expected)
+  local deleted = child.fn.bufnr(name)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { name })
+  child.cmd('bdelete')
+
+  local made = child.lua_get("require('aineo.changes').pane_buffers()")
+
+  eq(
+    { made.files ~= deleted and made.commits ~= deleted, child.lua_get(BUFFER_STATE, { name }) },
+    { true, vim.tbl_extend('error', SCRATCH, { lines = expected }) }
+  )
+end
+
+--- The name and the lines of the child's buffer that is the argument, or
+--- `'wiped'` once it was wiped out.
+local NAME_AND_LINES = [[(function(buffer)
+  if not vim.api.nvim_buf_is_valid(buffer) then
+    return 'wiped'
+  end
+  return { name = vim.api.nvim_buf_get_name(buffer), lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, true) }
+end)(...)]]
+
+T['a buffer already named as a buffer of the pane'] = MiniTest.new_set({ parametrize = LISTS })
+
+T['a buffer already named as a buffer of the pane']['gives the name up, wiped, for'] = function(
+  name,
+  expected
+)
+  local top = git_repo.create('changespane-namesake', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local namesake = child.lua(
+    'local b = vim.api.nvim_create_buf(true, false) vim.api.nvim_buf_set_name(b, ...) return b',
+    { name }
+  )
+
+  begin_and_show(top)
+
+  expect_lines(name, expected)
+  eq(child.lua_get(NAME_AND_LINES, { namesake }), 'wiped')
+end
+
+T['a buffer already named as a buffer of the pane']['keeps the text the user typed in it, unnamed, for'] = function(
+  name
+)
+  local top = git_repo.create('changespane-namesake-typed', { ['notes.txt'] = { 'one' } })
+  local namesake = child.lua(
+    [[
+      local buffer = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_name(buffer, ...)
+      vim.api.nvim_buf_set_lines(buffer, 0, -1, true, { 'my own notes' })
+      return buffer
+    ]],
+    { name }
+  )
+
+  begin_and_show(top)
+
+  eq(child.lua_get(NAME_AND_LINES, { namesake }), { name = '', lines = { 'my own notes' } })
+end
+
 T['the user’s saves'] = MiniTest.new_set()
 
 T['the user’s saves']['are marked in the files window'] = function()

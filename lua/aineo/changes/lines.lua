@@ -209,9 +209,11 @@ end
 ---@class aineo.changes.CommitsView
 ---@field since? aineo.git.CommitsSince the session's commits, as last read
 ---@field failure? aineo.git.Failure why the last read failed, when it did
+---@field base? string the session's base commit, nil before the repository's first commit
 
 --- The commits window's page for `view`: the line saying its last read
---- failed, when it did, then a line per commit, in git's order
+--- failed, when it did, and one naming the base when it is no longer an
+--- ancestor of `HEAD`; then a line per commit git lists, in its order
 --- (`M.commit_line()`), or `M.NO_COMMITS` when there is none. Before any
 --- list was read, `M.READING`, or the failure's line alone.
 ---
@@ -219,6 +221,14 @@ end
 ---@return aineo.changes.Page
 function M.commits_window(view)
   local notes = failure_notes(view.failure)
+  if view.since and not view.since.base_is_ancestor then
+    table.insert(
+      notes,
+      ("The session's base, %s, is no longer behind HEAD"):format(
+        view.base:sub(1, M.ABBREVIATED_ID_LENGTH)
+      )
+    )
+  end
   if not view.since then
     return view.failure and page({}, {}, notes[1]) or page({}, {}, M.READING)
   end
