@@ -182,6 +182,13 @@ local SELECTIONS = {
   },
   { 'charwise, multibyte', { 'héllo wörld' }, 'gg0fwv3l', { 'héllo d' }, 'wörl' },
   {
+    'charwise through a NUL that a combining mark follows, which "_d leaves',
+    { 'a👍🏽', '\0\204\129' },
+    '1G0lllvjoo',
+    { 'a\204\129' },
+    '👍🏽\n',
+  },
+  {
     'charwise, selection=exclusive',
     { 'hello world' },
     'gg0v4l',
@@ -238,6 +245,22 @@ local SELECTIONS = {
     '  abc\nx\n',
     { selection = 'old' },
   },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit=all, which keep its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { ' ' },
+    ' abc\nx\n',
+    { selection = 'old', virtualedit = 'all' },
+  },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit=all,onemore, which move its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { '' },
+    '  abc\nx\n',
+    { selection = 'old', virtualedit = 'all,onemore' },
+  },
 }
 
 T['a Visual Send'] = MiniTest.new_set()
@@ -287,6 +310,33 @@ T['a Visual Send']['writes a NUL byte in the selection as Send writes it: not at
   eq(
     { writes = send.writes(child), input = send.input(child).lines },
     { writes = { paste('ab') }, input = { 'kept' } }
+  )
+end
+
+T['a Visual Send']['writes a selection whose bytes would form a control character only across its line break'] = function()
+  start_ready_session('control-across-lines')
+  send.set_input(child, { '\194', '\133' })
+  send.watch_writes(child)
+
+  send.send_selection(child, 'ggVj')
+
+  eq({
+    writes = send.writes(child),
+    input = send.input(child).lines,
+    messages = send.messages(child),
+  }, { writes = { paste('\194\n\133') }, input = { '' }, messages = {} })
+end
+
+T['a Visual Send']['writes an invalid byte a block’s edge ends on without the combining mark "_d removes with it, a named limit'] = function()
+  start_ready_session('invalid-byte-block-edge')
+  send.set_input(child, { 'abcdef', 'a\255\204\129b', 'abcdef' })
+  send.watch_writes(child)
+
+  send.send_selection(child, 'gg0l<C-v>jj')
+
+  eq(
+    { writes = send.writes(child), input = send.input(child).lines },
+    { writes = { paste('b\n\255\nb') }, input = { 'acdef', 'a   b', 'acdef' } }
   )
 end
 
@@ -420,6 +470,48 @@ T['a refused Visual Send']['removes and writes nothing, saying once, of a select
   eq(refusal(), {
     writes = {},
     input = { '\27\3', 'kept' },
+    messages = { { message = 'aineo: nothing sent — the selection is empty', level = WARN } },
+  })
+end
+
+--- Selections under `'selection'` old from which Vim's own `"_d` removes a
+--- line break alone, or nothing, as a set's `parametrize`: their name,
+--- Input's lines, the keys that select from Normal mode, and the options
+--- they are made under.
+local SELECTIONS_REMOVING_NO_TEXT = {
+  {
+    'virtualedit=all, from past a line’s end to the empty line below, which removes its line break alone',
+    { 'é', '' },
+    '1G0llllvw',
+    { selection = 'old', virtualedit = 'all' },
+  },
+  {
+    'virtualedit=onemore, from a line’s end to the empty line below, which removes nothing',
+    { 'abc', '' },
+    'gg$lvj',
+    { selection = 'old', virtualedit = 'onemore' },
+  },
+}
+
+T['a refused Visual Send']['removes and writes nothing, saying once that it is empty, under selection=old for'] =
+  MiniTest.new_set({ parametrize = SELECTIONS_REMOVING_NO_TEXT })
+
+T['a refused Visual Send']['removes and writes nothing, saying once that it is empty, under selection=old for']['the selection'] = function(
+  _,
+  lines,
+  keys,
+  options
+)
+  start_ready_session('removing-no-text')
+  send.set_options(child, options)
+  send.set_input(child, lines)
+  send.watch_writes(child)
+
+  send.send_selection(child, keys)
+
+  eq(refusal(), {
+    writes = {},
+    input = lines,
     messages = { { message = 'aineo: nothing sent — the selection is empty', level = WARN } },
   })
 end
@@ -591,6 +683,21 @@ T['a Visual Send whose write fails']['ends Visual mode, gv selecting again what 
     mode_after = mode_after,
     selected = child.lua_get("vim.fn.getregion(vim.fn.getpos('v'), vim.fn.getpos('.'))"),
   }, { mode_after = 'n', selected = { 'def', 'ghi' } })
+end
+
+T['a Visual Send whose write fails']['puts back both ends of a selection made backwards, gv selecting it again'] = function()
+  local _, buffer = start_ready_session('write-fails-gv-backwards')
+  send.set_input(child, { 'abc def', 'ghi' })
+  send.send_selection_after_closing_stream(child, buffer, 'jvgg0w')
+  claude.wait_for_status(child, 'exited')
+
+  send.type_keys(child, 'gv')
+
+  eq({
+    start = child.fn.getpos('v'),
+    cursor = child.fn.getpos('.'),
+    selected = child.lua_get("vim.fn.getregion(vim.fn.getpos('v'), vim.fn.getpos('.'))"),
+  }, { start = { 0, 2, 1, 0 }, cursor = { 0, 1, 5, 0 }, selected = { 'def', 'g' } })
 end
 
 T['a Visual Send whose write fails']['leaves one undo block, so that the first u changes nothing visible'] = function()

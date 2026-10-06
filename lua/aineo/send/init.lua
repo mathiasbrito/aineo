@@ -196,29 +196,37 @@ end
 --- and `to`, as `getregionpos()` takes it: its ends, the one nearer the
 --- buffer's start first, and its kind, `getregionpos()`'s `type`. That is
 --- the selection itself, but for a charwise one under `'selection'` old
---- whose end lies on an empty line below its start: Vim then ends it as an
---- exclusive motion that ends in column 1 (`:h exclusive`) — on the line
---- above, through its last character, or, when the start lies at or before
---- its line's first non-blank, linewise, through the line above
---- (`:h exclusive-linewise`).
+--- whose end lies on an empty line below its start, unless `'virtualedit'`
+--- is exactly `all`, which keeps the end: Vim then ends it as an exclusive
+--- motion that ends in column 1 (`:h exclusive`) — on the line above,
+--- through its last character, or, when the start lies at or before its
+--- line's first non-blank, linewise, through the line above
+--- (`:h exclusive-linewise`). Returns nothing when that last character lies
+--- before the start, as it does for a start past its line's end on the
+--- line above: `"_d` then removes nothing.
 ---
 ---@param mode string `mode()` in Visual mode
 ---@param from integer[] `getpos('v')`
 ---@param to integer[] `getpos('.')`
----@return integer[] first
----@return integer[] last
----@return string kind
+---@return integer[]? first
+---@return integer[]? last
+---@return string? kind
 local function removed_region(mode, from, to)
   local first, last = in_buffer_order(from, to)
   local ends_on_empty_line = last[2] > first[2] and buffer_line(last[2]) == ''
-  if mode ~= 'v' or vim.o.selection ~= 'old' or not ends_on_empty_line then
+  local operator_is_virtual = vim.o.virtualedit == 'all'
+  if mode ~= 'v' or vim.o.selection ~= 'old' or not ends_on_empty_line or operator_is_virtual then
     return first, last, mode
   end
   local above = last[2] - 1
   if #buffer_line(first[2]):match('^[ \t]*') >= first[3] - 1 then
     return first, { 0, above, 1, 0 }, 'V'
   end
-  return first, { 0, above, math.max(#buffer_line(above), 1), 0 }, mode
+  local above_end = math.max(#buffer_line(above), 1)
+  if first[2] == above and first[3] > above_end then
+    return nil
+  end
+  return first, { 0, above, above_end, 0 }, mode
 end
 
 --- The part of each line `"_d` removes the Visual selection between
@@ -226,7 +234,8 @@ end
 --- the selection is charwise. A part runs from the region's edge on its
 --- line through the character its other edge lies in (`character_end()`)
 --- — or, for a block made with `$`, to the line's own end — and is empty
---- on a line the region lies past.
+--- on a line the region lies past. There are no parts when there is no
+--- region.
 ---
 ---@param from integer[] `getpos('v')`
 ---@param to integer[] `getpos('.')`
@@ -235,6 +244,9 @@ local function visual_selection(from, to)
   local mode = vim.fn.mode()
   local to_line_end = mode == '\22' and vim.fn.winsaveview().curswant == vim.v.maxcol
   local first, last, kind = removed_region(mode, from, to)
+  if not first then
+    return { parts = {}, charwise = true }
+  end
   local parts = {}
   for _, span in ipairs(vim.fn.getregionpos(first, last, { type = kind })) do
     local line = buffer_line(span[1][2])
@@ -304,7 +316,7 @@ function M.send_selection()
   end
   local from, to = vim.fn.getpos('v'), vim.fn.getpos('.')
   local selection = visual_selection(from, to)
-  if not without_control_bytes(table.concat(selection.parts)):find('%S') then
+  if not without_control_bytes(table.concat(selection.parts, '\n')):find('%S') then
     return refuse_selection('empty_selection')
   end
   local status = claude.session_status()
