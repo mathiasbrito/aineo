@@ -6,13 +6,13 @@
 
 ## The insight
 
-When a blockwise selection's edge cuts a double-width character, `getregionpos()` gives that line's region as the character's **first byte** at both ends, the end with `off` 1. To read the whole character, as `"_d` removes it, the end must be extended to the end of the character Neovim draws. `vim.str_utf_end()` does not do that: it ends at the first **codepoint**. Where one drawn character is several codepoints — an emoji with a skin tone (`👍🏽`), a flag (`🇫🇷`), a ZWJ sequence (`👨‍👩`), a letter with a combining mark (`漢́`) — it stops short. `charidx()` and `byteidx()` count such a sequence as one character, so the end is:
+When a blockwise selection's edge cuts a double-width character, `getregionpos()` gives that edge as the character's **first byte**, with a non-zero `off`: a right edge on its left half ends the line's region there, so a read through the region's end stops at the character's first byte. (A one-column block on the character, the probe's case, gives both ends there.) To read the whole character, as `"_d` removes it, the end must be extended to the end of the character Neovim draws. `vim.str_utf_end()` does not do that: it ends at the first **codepoint**. Where one drawn character is several codepoints — an emoji with a skin tone (`👍🏽`), a flag (`🇫🇷`), a ZWJ sequence (`👨‍👩`), a letter with a combining mark (`漢́`) — it stops short. `charidx()` and `byteidx()` count such a sequence as one character, so the end is:
 
 ```lua
 vim.fn.byteidx(line, vim.fn.charidx(line, byte - 1) + 1) -- byte: 1-based; the result is the character's last byte, 1-based
 ```
 
-Measured on Neovim 0.12.5, macOS (`Implementation/Waves/00007-panes/evidence/t26-close-probes.txt`, sections 1 and 2):
+Measured on Neovim 0.12.5, macOS (`Implementation/Waves/00007-panes/evidence/t26-close-probes.txt`, sections 1, 2 and 2b):
 
 | line | `str_utf_end` ends at | `byteidx(charidx(…) + 1)` ends at |
 |---|---|---|
@@ -22,7 +22,14 @@ Measured on Neovim 0.12.5, macOS (`Implementation/Waves/00007-panes/evidence/t26
 | `a漢́b` | 4 | 6 |
 | `a漢b` | 4 | 4 |
 
-A block from column 2 over `a👍🏽b` gives `{ { 1, 2, 2, 0 }, { 1, 2, 2, 1 } }` for that line: both ends at byte 2.
+A block from column 2 over `a👍🏽b` gives `{ { 1, 2, 2, 0 }, { 1, 2, 2, 1 } }` for that line: both ends at byte 2. Other blocks over it (section 2b):
+
+| keys | line 2's region |
+|---|---|
+| `gg0l<C-V>jj` | `{ { 1, 2, 2, 0 }, { 1, 2, 2, 1 } }` |
+| `gg0<C-V>ljj` | `{ { 1, 2, 1, 0 }, { 1, 2, 2, 1 } }` |
+| `gg0ll<C-V>ljj` | `{ { 1, 2, 2, 1 }, { 1, 2, 10, 0 } }` |
+| `gg0ll<C-V>jj` | `{ { 1, 2, 2, 1 }, { 1, 2, 2, 2 } }` |
 
 ## Why it is true
 
