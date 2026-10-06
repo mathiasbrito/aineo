@@ -569,9 +569,9 @@ with none after the last, as a Send of Input is. With 'selection' set to
 `old`, a characterwise selection that ends on an empty line ends, as Vim's
 `d` ends it, on the line above, or takes whole lines, line breaks and all,
 when it starts in a line's indent; when it starts past the end of the line
-above, `d` removes nothing and nothing is sent. With 'virtualedit' set to
-`all` alone, it keeps its end. No register is written, and the cursor stays
-where `"_d` leaves it, in Normal mode.
+above, `d` removes nothing and nothing is sent. When 'virtualedit' holds
+`all` and no other flag but `none`, it keeps its end. No register is
+written, and the cursor stays where `"_d` leaves it, in Normal mode.
 
 Outside Input, `\s` in Visual mode sends and removes nothing, and tells you
 once that Visual Send works in Input.
@@ -893,6 +893,12 @@ A byte that is not UTF-8, followed by a combining mark or a zero-width
 joiner, is one character to a block's `"_d`. When a block's edge falls on
 it, `"_d` removes both, and the Visual Send sends one of them: the byte
 when the block ends on it, the mark when the block starts there.
+
+A characterwise start past an invalid byte ~
+Under 'virtualedit' set to `all`, a characterwise selection can start one
+cell past a byte that is not UTF-8, drawn as `<c3>`, while Vim still places
+its start on that byte. `"_d` then removes the byte, and the Visual Send
+sends from the character after it, without the byte.
 
 The changes pane ~
 - A large diff: a diff shows at most 1 MiB of what git gave, cut at the
