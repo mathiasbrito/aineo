@@ -276,7 +276,8 @@ end
 --- the repository from then on (`follow_repository()`), or looks for it
 --- again while there is none (`look_again()`): once for every showing in
 --- one turn, as both of the pane's buffers entering their windows are one
---- showing.
+--- showing. Once the editor is quitting (`v:exiting`) when that turn comes,
+--- it does neither: the watch the quit stopped is not started again.
 local function pane_shown()
   if not session then
     return
@@ -288,6 +289,9 @@ local function pane_shown()
   session.following_soon = true
   vim.schedule(function()
     session.following_soon = false
+    if vim.v.exiting ~= vim.NIL then
+      return
+    end
     look_again()
     follow_repository()
   end)

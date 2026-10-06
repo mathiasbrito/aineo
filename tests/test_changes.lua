@@ -1,5 +1,6 @@
 local MiniTest = require('mini.test')
 local git_repo = dofile('tests/helpers/git_repo.lua')
+local fixture = dofile('tests/helpers/fixture.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -1061,10 +1062,15 @@ T['a buffer of the pane']['its lists read while textlock holds']['are shown once
   git_repo.wait_until('both lists read', function()
     return child.lua_get('_G.git_given.changed_files == 1 and _G.git_given.commits_since == 1')
   end)
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  git_repo.wait_until('both lists read again', function()
+    return child.lua_get('_G.git_given.changed_files == 2 and _G.git_given.commits_since == 2')
+  end)
   local meanwhile = {
     files = child.lua_get(SHOWN_AND_MODIFIABLE, { FILES }),
     commits = child.lua_get(SHOWN_AND_MODIFIABLE, { COMMITS }),
     told = child.cmd_capture('messages'),
+    waiting = child.lua_get("#vim.api.nvim_get_autocmds({ event = 'SafeState' })"),
   }
 
   end_hold(release)
@@ -1083,11 +1089,12 @@ T['a buffer of the pane']['its lists read while textlock holds']['are shown once
       files = { lines = READING, modifiable = false },
       commits = { lines = READING, modifiable = false },
       told = '',
+      waiting = 2,
     },
     files = { lines = { '  M notes.txt' }, modifiable = false },
     commits = { lines = { 'No commits on this session' }, modifiable = false },
     told = '',
-    reads = { 1, 1 },
+    reads = { 2, 2 },
   })
 end
 
@@ -1197,6 +1204,20 @@ T['a buffer of the pane']['keeps no undo history of the lists it was written'] =
     ),
     { 0, 0 }
   )
+end
+
+T['a buffer of the pane']['keeps no undo history once :set undolevels runs in its window'] = function()
+  local top = git_repo.create('changespane-set-undo', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  expect_lines(FILES, { 'No files changed on this session' })
+  child.cmd('set undolevels=1000')
+  in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
+  expect_lines(FILES, { '* M notes.txt' })
+
+  in_file(vim.fs.joinpath(top, 'other.txt'), "call setline(1, 'other') | write")
+
+  expect_lines(FILES, { '* M notes.txt', '* ? other.txt' })
+  eq(child.lua_get('vim.fn.undotree(vim.fn.bufnr(...)).seq_last', { FILES }), 0)
 end
 
 --- The name and the lines of the child's buffer that is the argument, or
@@ -1527,6 +1548,32 @@ T['Enter']['read while textlock holds']['shows the diff once it ends, telling no
   })
 end
 
+T['Enter']['read while textlock holds, then on another file before the editor allows it, shows the last Enter’s diff alone'] = function()
+  local top =
+    git_repo.create('changespane-diff-textlock-twice', { ['a.txt'] = { 'a' }, ['b.txt'] = { 'b' } })
+  git_repo.write(top, 'a.txt', { 'a2' })
+  git_repo.write(top, 'b.txt', { 'b2' })
+  local gated, gate = gated_git('changespane-diff-textlock-twice', '*" diff "*a.txt*')
+  local _, ready, hold = unpack(TEXTLOCK_HOLDS[1])
+  child.lua(SPY_ON_GIT)
+  child.lua(ready)
+  begin_and_show(top, { executable = gated })
+  expect_lines(FILES, { '  M a.txt', '  M b.txt' })
+  child.type_keys('<CR>')
+  begin_hold(hold)
+  vim.fn.writefile({}, gate)
+  git_repo.wait_until('the diff of a.txt read', function()
+    return child.lua_get('_G.git_given.file_diff == 1')
+  end)
+
+  child.api.nvim_input('qj<CR>')
+
+  git_repo.wait_until('the diff of b.txt read', function()
+    return child.lua_get('_G.git_answers.file_diff == 2')
+  end)
+  eq(child.lua_get(SHOWN_DIFFS).names, { 'aineo://diff/b.txt' })
+end
+
 T['Enter']['again on the same file keeps no undo history of the diff it showed'] = function()
   local top = git_repo.create('changespane-diff-no-undo', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
@@ -1677,6 +1724,85 @@ T['the watch']['stops as the editor quits'] = function()
   child.cmd('doautocmd VimLeavePre')
 
   eq({ running, child.lua_get(RUNNING_WATCHES) }, { 2, 0 })
+end
+
+--- The Lua a Neovim of its own sources: it begins the changes home's session
+--- for the directory `g:aineo_quit_case[1]`, waits for the repository to be
+--- found, shows the files buffer and quits in the same turn of the main
+--- loop. A `VimLeavePre` made after the home's runs the Lua `%s` then. Each
+--- watch started, each list read asked for, and `VimLeavePre` and
+--- `VimLeave`, are logged in turn, one line each, to the file
+--- `g:aineo_quit_case[2]`.
+local SHOW_AND_QUIT = [[
+local directory, log = unpack(vim.g.aineo_quit_case)
+local function say(what)
+  vim.fn.writefile({ what }, log, 'a')
+end
+local git = require('aineo.git')
+local watch_repository = git.watch_repository
+git.watch_repository = function(...)
+  say('watch started')
+  return watch_repository(...)
+end
+for _, name in ipairs({ 'changed_files', 'commits_since' }) do
+  local read = git[name]
+  git[name] = function(...)
+    say(name .. ' asked')
+    return read(...)
+  end
+end
+local found = false
+local find_repository = git.find_repository
+git.find_repository = function(looked_in, done, options)
+  return find_repository(looked_in, function(...)
+    found = true
+    return done(...)
+  end, options)
+end
+local changes = require('aineo.changes')
+changes.begin_session({ directory = directory, show_diff = function() end })
+vim.wait(20000, function() return found end, 5)
+vim.api.nvim_create_autocmd('VimLeavePre', { callback = function()
+  say('VimLeavePre')
+  %s
+end })
+vim.api.nvim_create_autocmd('VimLeave', { callback = function() say('VimLeave') end })
+vim.api.nvim_win_set_buf(0, changes.pane_buffers().files)
+vim.cmd('qall!')
+]]
+
+T['the watch']['starts on no showing made in the turn the editor quits'] = MiniTest.new_set({
+  parametrize = {
+    { 'nothing waits as it quits', '' },
+    { 'a later VimLeavePre waits', 'vim.wait(300)' },
+  },
+})
+
+T['the watch']['starts on no showing made in the turn the editor quits']['when'] = function(
+  _,
+  at_quit
+)
+  local top = git_repo.create('changespane-quit-showing', { ['notes.txt'] = { 'one' } })
+  local script = fixture.write(
+    'git-changespane-quit-showing/quit.lua',
+    vim.split(SHOW_AND_QUIT:format(at_quit), '\n')
+  )
+  local log = vim.fs.joinpath(vim.fs.dirname(script), 'log.txt')
+
+  local quit = vim
+    .system({
+      vim.v.progpath,
+      '--headless',
+      '-u',
+      vim.fs.joinpath(vim.fn.getcwd(), 'scripts', 'minimal_init.lua'),
+      '--cmd',
+      ('let g:aineo_quit_case = %s'):format(vim.fn.string({ top, log })),
+      '-S',
+      script,
+    }, { cwd = top, env = git_repo.ENVIRONMENT })
+    :wait(git_repo.PATIENCE_MS)
+
+  eq({ quit.code, vim.fn.readfile(log) }, { 0, { 'VimLeavePre', 'VimLeave' } })
 end
 
 T['Enter']['tells once the error a window raised as it took the diff, and keeps no diff'] = function()
