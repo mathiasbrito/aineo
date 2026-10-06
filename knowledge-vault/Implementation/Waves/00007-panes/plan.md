@@ -1,15 +1,13 @@
 ---
 wave: 00007
-status: landed
+status: claimed
 rolling: true
 planned_by: the orchestrator (Claude, Opus 5.5) for Mathias Santos de Brito — host Macbook-Mathias
 planned_at: 2026-09-27 13:27 CEST
 base: e7ad8d9
 claimed_by: Macbook-Mathias (platform UUID prefix CF989BF4), session 938616f1-5ff6-4507-97aa-65611ff715c0
 claimed_at: 2026-09-27 14:01 CEST
-landed_at: 2026-10-06 16:02 CEST
-pull_requests: "#79, #105, #108, #112, #115"
-closed_by: the orchestrator, 2026-10-06, once T26, the last packet of the composition, had landed — the user's ask of 2026-09-26 was every functionality built before the MVP review; no word of the user closing the wave is in the record (orchestrate §3 leaves the close to the user)
+landed_at:
 ---
 
 # Wave 7 — panes
@@ -676,7 +674,7 @@ Added after the user's answers, one per option not chosen:
 - **T26 — PR #115, regular**, merged by rebase on 2026-10-06 (13:41 UTC; 15:41 CEST) as `51da4bb` … `3b5f0f7` (10 commits). The code of `dev` `3b5f0f7` is the code the orchestrator verified, the PR's head `66eb1b7` (`git diff --stat 66eb1b7 3b5f0f7 -- . ':!knowledge-vault'` prints nothing). Session note: [[Sessions/2026-10-06 — T26 Visual Send]]; probes: `evidence/t26-probes.txt`.
   - **The packet** (`neovim-claude-code-integrator`) ran as two agents.
     - The first committed the send home's Visual Send: VS-A's read of each kind of selection, VS-B's refusals and VS-C's failed write (`14800ee`, `f89f3d3`, `55e37d7` on the branch). It was interrupted twice on 2026-10-06: the host slept (about 10:00 CEST), and the user restarted Neovim. The harness then refused to resume it. The user said "go, do it" to the orchestrator pushing its three commits and starting a fresh agent. The orchestrator pushed them at 10:39 CEST with no whole-suite run on `55e37d7` (D26), and saved its uncommitted undo cases as a patch.
-    - The second continued from `55e37d7`: VS-D's undo pins (the patch, unchanged), the Visual `\s` and `<Plug>(aineo-send)` doors (VS1 (a), VS2 (a), VS3 (a)), the health row and the help. Its dispatch allowed a push at a green point without the whole suite, against D26: `ed50a1a` was pushed so at 10:55 CEST, its message citing D26 for it. Both pushes were the orchestrator's errors; the user was told on 2026-10-06.
+    - The second continued from `55e37d7`: VS-D's undo pins (the patch, unchanged), the Visual `\s` and `<Plug>(aineo-send)` doors (VS1 (a), VS2 (a), VS3 (a)), the health row and the help. Its dispatch allowed a push at a green point without the whole suite, against D26: `ed50a1a` was pushed so at 10:55 CEST, its message citing D26 for it. Both pushes were the orchestrator's errors; the user was told on 2026-10-06, in one message, that the orchestrator had pushed the first agent's three commits without a whole-suite run and of the dispatch's error.
     - 1718 → 1770 cases. 26 reds drove code (the first agent's 17, rebuilt by the second, and 9 of its own); 16 health pins moved apart from them. 32 mutants, all killed by assertion. It reported one spec conflict: S8's wording (below).
   - **Reviews** on Opus: attack by `neovim-claude-code-reviewer`, test integrity by `reviewer`, records by `reviewer`.
   - **What they found:**
@@ -697,16 +695,18 @@ Added after the user's answers, one per option not chosen:
     - The round built `character_end()` (`charidx()` and `byteidx()`), the read through `nvim_buf_get_lines()`, `removed_region()` for `'selection'` old, and the put-back of `'<` and `'>`. `line_part()` lost its flag parameter, and `tests/test_send_selection.lua` ends its fake by a hangup.
     - 11 cases seen red; 19 arrived green, each with its killer; 20 mutants killed by assertion; 1792 cases, 220 s. `tests/test_send_selection.lua` went from 89 s for 33 cases to 74 s for 52.
     - It could not push: github.com did not resolve on the host. The orchestrator pushed it, a fast-forward from `08ea516` to `66eb1b7`, once the network was back.
-  - **No re-measure ran.** The round changed production code and replaced mechanisms, for which orchestrate §6 dispatches a re-measure with the attack question. The orchestrator's own verification followed the round.
+  - **No re-measure ran before the merge.** The round changed production code and replaced mechanisms, for which orchestrate §6 dispatches a re-measure with the attack question; the orchestrator's own verification followed the round, and #115 merged. The orchestrator dispatched the re-measure after the merge and the release, on 2026-10-06; a finding becomes a follow-up packet inside wave 7.
 - **The orchestrator's verification** of `66eb1b7`, on 0.12.5 (D29):
   - guard 5 cases, `Fails (0)`;
   - `make test`, 1792 cases, `Fails (0)`, 218 s;
   - lint clean;
-  - 40 of 40 mutants killed by assertion on their covering files: the plan's S1–S20 (S4, S5, S6, S11 and S12 re-worded on the final tree), and the reviews' and the round's W1, O-GAP2v, O-GAP3v, O-BLANKCTRL, O-NOOP, O-RAISE-AFTER, A1–A4, `M-visual-unconditional`, `M-dot-api`, O-F2, `M-nul-blob`, the four `'selection'` old mutants and `M-unordered`.
+  - 40 runs, 39 distinct mutants (S10 twice: the plan's and the round's), all killed by assertion on their covering files: the plan's S1–S20 (S4, S5, S6, S11 and S12 re-worded on the final tree), and the reviews' and the round's W1, O-GAP2v, O-GAP3v, O-BLANKCTRL, O-NOOP, O-RAISE-AFTER, A1–A4, `M-visual-unconditional`, `M-dot-api`, O-F2, `M-nul-blob`, the four `'selection'` old mutants and `M-unordered`.
   - A first run was invalid: with no network, `make deps` could not fetch the suites' dependency, and nothing ran. The pinned mini.nvim was copied in and every run repeated. The verification script first dropped the second edit of S16, S17 and S20: S16 and S17 so applied survived their file and the whole suite (1792, `Fails (0)`); all three, re-run with every edit, were killed by assertion.
 - **Released:** `v0.2.13` (PR #117, squash-merged into `main` as `1cb649d`, tag `v0.2.13`), carrying T26. Its tree is `dev` `3b5f0f7`'s, 13 commits after `v0.2.12`'s `893a427`: T26's ten, T25's knowledge pass (two) and the idea note. The user's release checkout is at `v0.2.13`.
 - **Records the reviews named false in dispatched files, left as dispatched** (`Implementation/Waves/CLAUDE.md`):
   - *Packet T26*'s S8 says "VS-E's own-mapping case must kill it". It cannot: under S8 the Visual key reads Normal mode, finds aineo's own Normal `\s`, mapped a moment before, and is never mapped, so a user's own Visual `\s` stays either way. S8 is killed by the four `x` rows of *the prefix* and by the case of a user's `\s` in one mode (test integrity 8; the author's spec conflict). The edit the line meant is `M-visual-unconditional`, `if mode == 'x' or not has_global_mapping(mode, keys) then`, which the own-mapping case kills (records 1, measured; run by the fix round and the verification).
-  - *Decisions for the user* says each undo gap gets "a test pin each". At PR #115's first head, the failed-write gap was pinned for the Visual Send alone, and the `'undolevels'` gaps for the whole-Input Send alone (records 2; test integrity 1 and 2). The fix round pinned the other three, so the sentence holds since `66eb1b7`.
+  - *Packet T26*'s questions for the user propose "a test pin each" for the undo gaps, and the brief's amendment says "a test pins each". At PR #115's first head, the failed-write gap was pinned for the Visual Send alone, and the `'undolevels'` gaps for the whole-Input Send alone (records 2; test integrity 1 and 2). The fix round pinned the other three, so the sentence holds since `66eb1b7`.
   - *Packet T25*'s K19 is recorded with T25 above; the records review of PR #114 found that record true.
-- **Wave 7 landed** on 2026-10-06. Every packet of its composition has merged: T23 (#79), T24 (#105), T30 (#108), T25 (#112) and T26 (#115). With T26 every task row of [[Planning/aineo — v1 agent console]] is built, and v1 awaits the user's MVP review ([[Review/2026-09-24 — v1 MVP readings review]]). The wave is closed at the orchestrator's instruction to this pass: orchestrate §3 leaves a rolling wave's close to the user, whose word is not in the record. Retrospective: [[Sessions/2026-09-27 — Wave 7 retrospective]].
+  - The T26 brief's VS5 recommendation says "and no other Send ends in one", of a message ending in a line feed. It is false: a Visual Send of lines whose last is empty, or of lines removed linewise under `'selection'` `old` (MR284), ends in one, and so does a whole-Input Send whose Input ends in an empty line, since Send keeps blank lines (MR55). MR290 says so (PR #118's records review, finding 2, measured).
+  - The plan's *Ask* (line 16) dates the user's words 2026-09-26; the ledger and waves 2–5's plans date them 2026-09-23, 23:41 CEST.
+- **Wave 7 stays open.** Every packet of its composition has merged by 2026-10-06: T23 (#79), T24 (#105), T30 (#108), T25 (#112) and T26 (#115). With T26 every task row of [[Planning/aineo — v1 agent console]] is built, and v1 awaits the user's MVP review ([[Review/2026-09-24 — v1 MVP readings review]]). Asked on 2026-10-06 whether to close the wave, the user answered "Keep it open": it stays `claimed` until the post-merge re-check of T26 is back, so that a follow-up can land inside wave 7, and the user closes it then (orchestrate §3). Retrospective: [[Sessions/2026-09-27 — Wave 7 retrospective]].
