@@ -172,7 +172,8 @@ end
 --- failed, when it did, and `M.NOT_WATCHED` where subdirectories go
 --- unwatched; then a line per file (`M.file_line()`), marked when the user
 --- saved it, or `M.NO_FILES` when none differs. Before any list was read,
---- `M.READING` in its place, or nothing once a read has failed.
+--- `M.NOT_WATCHED` where it shows, then `M.READING`; or, once a read has
+--- failed, the line saying so alone.
 ---
 ---@param view aineo.changes.FilesView
 ---@return aineo.changes.Page
