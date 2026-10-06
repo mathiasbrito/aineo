@@ -83,20 +83,47 @@ local function is_writable(buffer)
   return buffer ~= nil and vim.api.nvim_buf_is_loaded(buffer)
 end
 
---- Writes the files buffer for what the session knows (`files_page()`),
---- while it can be written (`is_writable()`).
-local function show_files()
-  if session and is_writable(buffers.files) then
-    pages.write_page(buffers.files, files_page())
+--- The buffers of the pane whose page Neovim refused, each to be written at
+--- the editor's next `SafeState`.
+---@type table<integer, true>
+local refused = {}
+
+--- Writes `buffer`, a buffer of the pane, with `page()`, the page for what
+--- the session knows, while it can be written (`is_writable()`). A page
+--- Neovim refuses, as it does while textlock holds, is written again at the
+--- editor's next `SafeState`, once whatever was refused meanwhile, with what
+--- the session knows then.
+---
+---@param buffer integer|nil
+---@param page fun(): aineo.changes.Page
+local function show_page(buffer, page)
+  if not (session and is_writable(buffer)) then
+    return
   end
+  if pages.write_page(buffer, page()) or refused[buffer] then
+    return
+  end
+  refused[buffer] = true
+  vim.api.nvim_create_autocmd('SafeState', {
+    once = true,
+    desc = 'aineo: write the changes pane once the editor allows it',
+    callback = function()
+      refused[buffer] = nil
+      show_page(buffer, page)
+    end,
+  })
 end
 
---- Writes the commits buffer for what the session knows (`commits_page()`),
---- while it can be written (`is_writable()`).
+--- Writes the files buffer for what the session knows (`files_page()`,
+--- `show_page()`).
+local function show_files()
+  show_page(buffers.files, files_page)
+end
+
+--- Writes the commits buffer for what the session knows (`commits_page()`,
+--- `show_page()`).
 local function show_commits()
-  if session and is_writable(buffers.commits) then
-    pages.write_page(buffers.commits, commits_page())
-  end
+  show_page(buffers.commits, commits_page)
 end
 
 --- Reads the files changed since the base, and shows them; one read at a
@@ -352,15 +379,21 @@ end
 --- for it (`diff_name()`, `aineo.changes.diffs`) through the session's
 --- `show_diff`. When the middle column has no room for it, the buffer is
 --- wiped and the user warned, once; when showing it raises an error, the
---- buffer is wiped and the user told the error, once.
+--- buffer is wiped and the user told the error, once. Returns false, having
+--- shown and told nothing, when Neovim refuses the diff buffer its text, as
+--- it does while textlock holds; true otherwise.
 ---
 ---@param entry aineo.changes.Entry
 ---@param diff string
+---@return boolean allowed
 local function show_diff(entry, diff)
   local buffer = diffs.diff_buffer(diff_name(entry), diff)
+  if not buffer then
+    return false
+  end
   local shown, window = pcall(session.settings.show_diff, buffer)
   if shown and window then
-    return
+    return true
   end
   if vim.api.nvim_buf_is_valid(buffer) then
     vim.api.nvim_buf_delete(buffer, { force = true })
@@ -370,7 +403,7 @@ local function show_diff(entry, diff)
       ('aineo: the diff of %s could not be shown: %s'):format(told_name(entry), tostring(window)),
       vim.log.levels.ERROR
     )
-    return
+    return true
   end
   vim.notify(
     ('aineo: the middle column has no room for the diff of %s, which is not shown'):format(
@@ -378,6 +411,7 @@ local function show_diff(entry, diff)
     ),
     vim.log.levels.WARN
   )
+  return true
 end
 
 --- Reads the diff of `entry` — a file's from the base, or a commit's — and
@@ -396,8 +430,29 @@ end
 --- How many times Enter has asked for a diff (`open_entry()`).
 local enters = 0
 
+--- Shows `diff`, the diff of `entry` the Enter numbered `this_enter` read
+--- (`show_diff()`), while that Enter is the last. A diff Neovim refused, as
+--- it does while textlock holds, is shown at the editor's next `SafeState`,
+--- if that Enter is the last still.
+---
+---@param this_enter integer
+---@param entry aineo.changes.Entry
+---@param diff string
+local function show_last_diff(this_enter, entry, diff)
+  if this_enter ~= enters or show_diff(entry, diff) then
+    return
+  end
+  vim.api.nvim_create_autocmd('SafeState', {
+    once = true,
+    desc = 'aineo: show the diff Enter read once the editor allows it',
+    callback = function()
+      show_last_diff(this_enter, entry, diff)
+    end,
+  })
+end
+
 --- Reads the diff of the entry the line under the cursor lists in `buffer`
---- (`read_diff()`) and shows it (`show_diff()`), unless Enter asked for
+--- (`read_diff()`) and shows it (`show_last_diff()`), unless Enter asked for
 --- another diff meanwhile: only the last Enter's diff is shown, or its
 --- failure told. Does nothing on a line that lists none.
 ---
@@ -423,7 +478,7 @@ local function open_entry(buffer)
       )
       return
     end
-    show_diff(entry, diff)
+    show_last_diff(this_enter, entry, diff)
   end)
 end
 
