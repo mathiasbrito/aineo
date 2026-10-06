@@ -22,9 +22,8 @@ local function free_name(name)
   end
 end
 
---- Makes `buffer` a scratch buffer — no file, unlisted, no swap file, no
---- undo history, since the user cannot change its text — kept when hidden,
---- or wiped once hidden when `bufhidden` says `wipe`.
+--- Makes `buffer` a scratch buffer — no file, unlisted, no swap file — kept
+--- when hidden, or wiped once hidden when `bufhidden` says `wipe`.
 ---
 ---@param buffer integer
 ---@param bufhidden 'hide'|'wipe'
@@ -33,7 +32,6 @@ local function make_scratch(buffer, bufhidden)
   vim.bo[buffer].bufhidden = bufhidden
   vim.bo[buffer].buflisted = false
   vim.bo[buffer].swapfile = false
-  vim.bo[buffer].undolevels = -1
 end
 
 --- The code of the error Neovim raises for a change of text while textlock
@@ -43,12 +41,15 @@ local TEXTLOCK_REFUSAL = 'E565:'
 --- Writes `text` into `buffer`, whatever its `'modifiable'`, leaving it not
 --- modifiable, and returns whether it was written: it is not when Neovim
 --- refuses the change while textlock holds. Any other error the write
---- raises is raised again, the buffer left not modifiable.
+--- raises is raised again, the buffer left not modifiable. The buffer keeps
+--- no undo history, since the user cannot change its text, whatever
+--- `:set undolevels` gave it since the last write.
 ---
 ---@param buffer integer
 ---@param text string[]
 ---@return boolean written
 function M.write_text(buffer, text)
+  vim.bo[buffer].undolevels = -1
   vim.bo[buffer].modifiable = true
   local written, failure = pcall(vim.api.nvim_buf_set_lines, buffer, 0, -1, true, text)
   vim.bo[buffer].modifiable = false
