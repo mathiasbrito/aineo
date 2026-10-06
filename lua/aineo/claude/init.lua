@@ -102,9 +102,10 @@ end
 
 --- Raises an error naming the first setting of `settings` whose value is not
 --- of its kind, or, for `cwd`, not a directory that exists and can be
---- entered. One that cannot be entered is refused here because Neovim 0.11.6
---- does not refuse it: its terminal job then runs a copy of the editor in
---- place of the command.
+--- entered. One that cannot be entered is refused here because Neovim 0.12.5
+--- does not refuse it: its terminal job then runs nothing and exits at once
+--- with 122, and the user would see an exited session where this error names
+--- the setting.
 ---
 ---@param settings aineo.claude.Settings
 local function validate_settings(settings)
@@ -389,9 +390,11 @@ end
 ---
 --- Show a new buffer in a window before Claude Code draws its first screen:
 --- its terminal takes its size from the first window that shows it, and until
---- then has the rows of a hidden window — 5, at 80 columns, in Neovim 0.11.6 —
---- where Claude Code's prompt does not fit. Shown in the same tick, or from a
---- `vim.schedule()` callback, the process saw the window's size.
+--- then has the rows of a hidden window — 5, as wide as the editor, in Neovim
+--- 0.12.5 — where Claude Code's prompt does not fit. Shown in the same tick,
+--- or from a `vim.schedule()` callback, the process has the window's size
+--- about 50 ms after it starts in Neovim 0.12.5, though a size it reads as it
+--- starts can still be 5 rows.
 ---
 --- A session whose terminal has been wiped counts as ended, since the wipe
 --- hangs its Claude Code up: a start then launches a new one.
@@ -404,7 +407,7 @@ end
 --- nothing and leaves the session as it was. A command that `jobstart()`
 --- starts but the system then cannot execute — a script whose interpreter is
 --- missing — raises nothing: its session reports `'exited'` with 122, the
---- code Neovim 0.11.6's terminal job exits with then.
+--- code Neovim 0.12.5's terminal job exits with then.
 ---
 ---@param settings aineo.claude.Settings
 ---@return integer buffer the terminal buffer Claude Code runs in

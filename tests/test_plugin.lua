@@ -20,6 +20,23 @@ T['plugin/aineo.lua']['is sourced at startup and loads no aineo module'] = funct
   eq(child.lua_get('_G.loaded_before_vim_enter'), {})
 end
 
+--- The names of the modules a Neovim has loaded, sorted.
+local LOADED_MODULES = [[(function()
+  local names = vim.tbl_keys(package.loaded)
+  table.sort(names)
+  return names
+end)()]]
+
+T['plugin/aineo.lua']['loads no module as it is sourced that Neovim has not loaded without it'] = function()
+  local before_vim_enter = { '-c', 'lua _G.loaded_before_vim_enter = ' .. LOADED_MODULES }
+  children.restart(child, vim.list_extend({ '--cmd', 'let g:loaded_aineo = 1' }, before_vim_enter))
+  local without_the_file = child.lua_get('_G.loaded_before_vim_enter')
+
+  children.restart(child, before_vim_enter)
+
+  eq(child.lua_get('_G.loaded_before_vim_enter'), without_the_file)
+end
+
 T['plugin/aineo.lua']['loads the configuration alone in a headless start'] = function()
   children.restart(child, { '--cmd', 'lua vim.g.aineo = {}' })
 
@@ -72,11 +89,15 @@ T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings 
       'n <Plug>(aineo-claude-numbers)',
       'n <Plug>(aineo-input)',
       'n <Plug>(aineo-open)',
+      'n <Plug>(aineo-pane-agent)',
+      'n <Plug>(aineo-pane-changes)',
       'n <Plug>(aineo-report)',
       'n <Plug>(aineo-send)',
       'n \\c',
       'n \\i',
       'n \\o',
+      'n \\pa',
+      'n \\pc',
       'n \\r',
       'n \\s',
       'n \\tcn',

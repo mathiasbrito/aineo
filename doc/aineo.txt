@@ -27,7 +27,9 @@ Every command sits behind one prefix key, `\` by default, in Normal mode:
 `\s` sends Input to Claude, `\o` opens or restores the layout, and `\r`, `\i`
 and `\c` move to the Report, Input and Claude — `\c` in Terminal mode, so
 that what you type next goes to Claude, unless Claude Code has exited.
-`\tcn` hides or shows the line numbers of Claude's window.
+`\tcn` hides or shows the line numbers of Claude's window. `\pa` and `\pc`
+switch the right column between the agent pane, the Report over Input, and
+the changes pane (|aineo-panes|).
 
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
@@ -44,6 +46,8 @@ Requirements:
   behaviour was measured on Claude Code 2.1.281; the resume of Claude's
   session, and the new session that takes the place of a resume Claude
   Code has no conversation for (|aineo-claude-session|), on 2.1.283.
+- git 2.36 or later, the `git` command, for the changes pane
+  (|aineo-changes|). aineo is tested with git 2.50.1.
 
 With lazy.nvim, load aineo at startup, so that its autostart can run
 (|aineo-autostart|): >lua
@@ -55,7 +59,8 @@ aineo works without a `setup()` call. To configure it, see
 ==============================================================================
 3. THE LAYOUT                                                   *aineo-layout*
 
-The layout fills one tab page with three windows:
+The layout fills one tab page with three windows; the right column's two
+show one pane at a time, here the agent pane:
 
     +--------------------+--------------------+
     |                    |    Agent Report    |
@@ -71,17 +76,131 @@ The layout fills one tab page with three windows:
 - Input, `aineo://input`, takes the rest: a scratch buffer, left out of
   `:ls` and `:bnext`, where you write what Send gives Claude (|aineo-send|),
   kept as a draft until you send it (|aineo-draft|).
+- The changes pane shows in the same two windows in their place
+  (|aineo-panes|).
 
 The Report and Input wrap long lines between words, a wrapped line keeping
 its indent ('wrap', 'linebreak', 'breakindent'), whatever your own settings.
 Opening or restoring the layout sets this again: `\o`, or `\r`, `\i` or `\c`
-when their window is gone. A `:setlocal nowrap` in either lasts until then.
-Claude's terminal, and a file shown in or split from those two windows, keep
-yours.
+when their window is gone, and so does `\pa`, `\r` or `\i` showing the agent
+pane again. A `:setlocal nowrap` in either lasts until then. Claude's
+terminal, the changes pane, and a file shown in or split from those two
+windows, keep yours.
 
 Opening the layout closes the tab's other windows (floating ones stay); their
-buffers stay loaded. The cursor starts in Input. The Neovim startup buffer
-becomes Input; a file the current window shows stays, as the file column.
+buffers stay loaded. The cursor starts in Input's window, which shows the
+changes pane's commits instead when the layout is opened anew while the
+changes pane shows (|aineo-panes|). The Neovim startup buffer becomes Input;
+a file the current window shows stays, as the file column.
+
+Panes ~
+                                                                 *aineo-panes*
+The right column's two windows show one of two panes, switched in place: the
+same two windows, at the same sizes, show the other pane's buffers.
+
+- The agent pane: the Agent Report over Input, as the layout opens.
+- The changes pane: `aineo://changes-files` in the Report's place, over
+  `aineo://changes-commits` in Input's, listing the session's changed files
+  and its commits (|aineo-changes|). Each is a scratch buffer, read-only to
+  you; `:edit` there writes its list again. A buffer of yours under either
+  name, such as one a restored session made, gives the name up: it is wiped
+  out, or kept unnamed when you changed its text.
+
+`\pa` (|:Aineo-pane|) shows the agent pane and `\pc` the changes pane; the
+pane already shown stays as it is (the changes pane is read again,
+|aineo-changes|), unless one of its windows shows the other pane's buffer
+there, as a refused switch or you can leave it (the commits buffer in
+Input's window, say): they then show the pane's own buffer there. The
+cursor stays in the window it was
+in. From another tab page they switch the pane in the layout's tab page,
+restoring the layout there first when one of its windows is gone, and
+leave you where you are. `\r` and `\i` show the agent pane first, then move
+to the Report or Input; `\c` and `\tcn` leave the pane as it is. Send sends
+Input while the changes pane hides it (|aineo-send|). When a window will
+not take its buffer — 'winfixbuf' is set there, say, or you are in the
+command-line window — aineo tells you why, once, and gives each window back
+the buffer it showed. A window that will not take that one back either
+keeps the other pane's buffer; `\pa` or `\pc` then shows its pane in both
+windows.
+
+The Report and Input are kept while hidden, with Input's text and its draft.
+A buffer shown again comes back as it was scrolled. When a report arrived
+while the agent pane was hidden, the Report's cursor is on its last line,
+where an arriving report puts it, once the agent pane shows again with the
+Report in its window — by `\pa`, `\r`, `\i` or `\o`.
+
+aineo keeps the pane shown until the editor quits: `\o` restores the layout
+with it, and so does the layout opened anew once its windows were closed.
+
+The changes pane ~
+                                                               *aineo-changes*
+The changes pane lists what changed in your repository since aineo first
+started Claude Code in this editor: the session, which lasts the editor's
+life. Its repository is the one Claude Code's working directory was in at
+that start, and its base is the commit `HEAD` named then. A restart of
+Claude Code keeps both. A start aineo could not make — `claude.cmd` not
+executable, say — takes neither; a Claude Code that starts and then fails
+takes both.
+
+The files window, `aineo://changes-files`, lists every file that differs
+from the base, committed since or not, staged or not, and every new file
+your ignore rules leave in, one per line, in git's order: >
+    * M lua/aineo/init.lua
+      ? notes.txt
+      R old.txt → new.txt
+<
+The letter is the kind of change: `A` added, `M` modified, `D` deleted, `R`
+renamed, after its old path, `T` turned into a link or back, `?` new and
+untracked; a copy shows as added. The `*` marks a file you saved from this
+editor since the base was taken, or while aineo first looked for the
+repository it then found — `:write`, `:update`, `:wall`, a part of a buffer
+written to a file or appended to one, the file written whatever its buffer
+is named, a file opened through a symbolic link included. A file you and
+Claude both changed is marked too: aineo cannot tell who changed what. A
+path holding a line break, a control character, a double quote or a
+backslash is shown between double quotes, each of those escaped as git
+escapes it; characters outside ASCII are kept as they are, where git writes
+them in octal. With nothing changed, the window says "No files changed on
+this session".
+
+The commits window, `aineo://changes-commits`, lists the session's commits,
+newest first, by abbreviated id and subject, or says "No commits on this
+session".
+
+Enter on a file's line shows its unified diff from the base, and on a
+commit's line that commit's diff, in the middle column (the file column,
+below). The diff is read-only: a buffer named `aineo://diff/{path}` or
+`aineo://commit/{id}`, with 'filetype' `diff`, wiped once hidden. The cursor
+stays in the pane, so `j` and Enter step through the list: when you press
+Enter again before a diff was read, only the last Enter's diff is shown.
+Enter on any other line does nothing. When the middle column has no room
+for the diff, aineo says so and shows nothing.
+
+The pane is read again whenever it is shown — `\pc`, `:Aineo pane changes`,
+`\o`, or the layout built anew showing it — and, from its first showing
+until the editor quits, when a file is saved, when a file of the working
+tree changes, and when the branch moves: a commit, even one that changes no
+file, an amend, a reset, a checkout. One read of each window runs at a time,
+and the cursor stays on the line it was on while that line is listed. A
+diff already shown stays as it was until you press Enter on its line again.
+A list or a diff read while Neovim allows no change of text — an
+expression mapping waiting for a key or in |input()|, or a completion
+function still running — is shown once Neovim allows it again, with nothing
+told, and so is a diff read while the command-line window is open, once it
+closes (but see |aineo-limits|).
+
+Until git has answered, each window says aineo is reading the repository.
+When Claude Code's working directory is in no repository, both windows say
+so, naming the directory, and give git's words below, which tell a
+repository git refuses — one of another owner, or a bare one — from none;
+when `git` is not found, both say that. aineo then looks again whenever the
+pane is shown or a file is saved, and a repository made since — by
+`git init`, say — becomes the session's, its `HEAD` then the base. When the
+base is no longer behind `HEAD` — after a reset to before it, or a checkout
+of another branch — the commits window says so above what git lists, and
+the base stays. A read that fails keeps the list shown, under one line
+giving git's words. When aineo's watch of the repository fails, both
+windows say so until the pane is shown again, which starts it again.
 
 The file column ~
 A file you open from one of the three windows — `:edit`, a picker, a jump —
@@ -90,6 +209,11 @@ use and reused afterwards; the aineo window keeps its own buffer. While the
 file column is open, the three columns take a third of the screen each.
 Only file buffers move: help, terminals and scratch buffers stay where they
 were opened until `\o` restores the layout.
+
+A diff Enter shows from the changes pane (|aineo-changes|) takes the file
+column's window as a file does, and the next file or diff takes its place:
+the column keeps one window for both. A changed file that cannot leave that
+window keeps it, and the diff opens above it.
 
 Claude's session ~
                                                         *aineo-claude-session*
@@ -162,17 +286,18 @@ Restoring ~
 The three windows keep their sizes: the layout puts its proportions back
 when a window closes, when the editor is resized and when you enter its tab.
 `\o` (|:Aineo-open|) restores the layout while any of its windows is left:
-it recreates the windows that were closed, in their places. The layout
-lives in one tab; from another tab, `\o` moves you to it.
+it recreates the windows that were closed, in their places, and keeps the
+pane the right column shows (|aineo-panes|). The layout lives in one tab;
+from another tab, `\o` moves you to it.
 
 ==============================================================================
 4. COMMANDS                                                   *aineo-commands*
 
                                                                       *:Aineo*
-:Aineo {subcommand}	Runs one of aineo's six actions. Completion offers
-			the subcommands. Without one of them, or with
-			anything else, it tells you, with one error, which
-			ones it takes.
+:Aineo {subcommand}	Runs one of aineo's actions. Completion offers the
+			subcommands, and the panes after `pane`. Without one
+			of them, or with anything else, it tells you, with
+			one error, which ones it takes.
 
                                                                  *:Aineo-send*
 :Aineo send		Sends Input to Claude (|aineo-send|).
@@ -183,10 +308,11 @@ lives in one tab; from another tab, `\o` moves you to it.
 			has exited — or restores the layout while it is open.
 
                                                                *:Aineo-report*
-:Aineo report		Moves the cursor to the Agent Report.
+:Aineo report		Shows the agent pane, then moves the cursor to the
+			Agent Report.
 
                                                                 *:Aineo-input*
-:Aineo input		Moves the cursor to Input.
+:Aineo input		Shows the agent pane, then moves the cursor to Input.
 
                                                                *:Aineo-claude*
 :Aineo claude		Moves the cursor to Claude's terminal and enters
@@ -202,18 +328,20 @@ there, so that its exit stays on screen and the next key you type is a
 Normal-mode command. `i`, `a` and |:startinsert| leave that terminal in Normal
 mode too. Any other terminal of yours keeps Neovim's own behaviour.
 
-`report`, `input` and `claude` open the layout first when their window is
-gone, around Claude's terminal as it is — its exit on screen when Claude Code
-has exited. They start Claude Code only when there is no terminal to show:
-before the first start, or again, in a new terminal, once the terminal was
-wiped (|:bwipeout|). Wiping it from Claude's window closes that window; a
-window Neovim cannot close, such as its last one, stays on an empty buffer
-until `claude` opens the layout there again — `report` and `input` do so
-only when their own window is gone too. A file opened in Claude's window as
-the terminal is wiped stays in view, and moves to the file column when the
-layout opens again. Of the actions, only `open` restarts an exited Claude
-Code; aineo restarts one by itself only in place of a resume Claude Code
-has no conversation for (|aineo-claude-session|).
+`report`, `input`, `claude` and `pane` open the layout first when their window
+is gone (for `pane`, either window of the right column, or a buffer of the
+pane wiped or deleted; for `report` and `input` while the changes pane shows,
+the Report or Input wiped or deleted too), around Claude's terminal as it is —
+its exit on screen when Claude Code has exited. They start Claude Code only
+when there is no terminal to show: before the first start, or again, in a new
+terminal, once the terminal was wiped (|:bwipeout|). Wiping it from Claude's
+window closes that window; a window Neovim cannot close, such as its last one,
+stays on an empty buffer until `claude` opens the layout there again —
+`report` and `input` do so only when their own window is gone too. A file
+opened in Claude's window as the terminal is wiped stays in view, and moves to
+the file column when the layout opens again. Of the actions, only `open`
+restarts an exited Claude Code; aineo restarts one by itself only in place of
+a resume Claude Code has no conversation for (|aineo-claude-session|).
 
                                                        *:Aineo-claude-numbers*
 :Aineo claude-numbers	Hides the line numbers of Claude's window, 'number'
@@ -248,6 +376,16 @@ has no conversation for (|aineo-claude-session|).
 			the terminal's own. A file opened from Claude's window
 			keeps your own numbers.
 
+                                                                 *:Aineo-pane*
+:Aineo pane {pane}	Shows {pane} in the right column, `agent` or
+			`changes` (|aineo-panes|). When it shows already, the
+			layout stays as it is (the changes pane is read
+			again, |aineo-changes|), unless one of its windows
+			shows the other pane's buffer there: it then shows
+			{pane}'s buffer there. Without a pane, or with
+			anything else, it tells you, with one error, which
+			ones it takes.
+
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
 
@@ -277,6 +415,14 @@ of your own when you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-claude-numbers)
 			Does what |:Aineo-claude-numbers| does.
 
+                                                    *<Plug>(aineo-pane-agent)*
+<Plug>(aineo-pane-agent)
+			Does what `:Aineo pane agent` does (|:Aineo-pane|).
+
+                                                  *<Plug>(aineo-pane-changes)*
+<Plug>(aineo-pane-changes)
+			Does what `:Aineo pane changes` does (|:Aineo-pane|).
+
 Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
@@ -294,6 +440,10 @@ followed by these keys to each `<Plug>` mapping, globally, in Normal mode:
 \c		|<Plug>(aineo-claude)|
                                                                   *aineo-\tcn*
 \tcn		|<Plug>(aineo-claude-numbers)|
+                                                                   *aineo-\pa*
+\pa		|<Plug>(aineo-pane-agent)|
+                                                                   *aineo-\pc*
+\pc		|<Plug>(aineo-pane-changes)|
 
 A key sequence you mapped yourself — a global Normal-mode mapping, when the
 editor has started — stays yours, and aineo maps the others. A mapping local
@@ -301,7 +451,8 @@ to a buffer is not counted: it wins in its own buffer only. A mapping you
 make later replaces aineo's. A mapping that only overlaps aineo's key is not
 yours in this sense: with your own `\sa`, aineo still maps `\s`, and `\sa`
 then waits for 'timeoutlen' after `\s`; with your own `\t` or `\tc`, aineo
-still maps `\tcn`, and yours then waits for 'timeoutlen'.
+still maps `\tcn`, and with your own `\p` — or `<Leader>p` while the leader
+is `\` — it still maps `\pa` and `\pc`: yours then waits for 'timeoutlen'.
 
 The prefix is read once, when the editor has started (|VimEnter|): a
 `setup()` or `vim.g.aineo` that changes it later maps nothing until the next
@@ -383,7 +534,7 @@ removed first, so nothing in the text reaches Claude Code as a key.
 
 Send also works while Claude is in a turn: Claude Code queues the message and
 runs it after the turn. A draft already in Claude's prompt stays, and the
-paste joins it.
+paste joins it. It sends Input while the changes pane hides it, too.
 
 Send sends nothing, and tells you why with one warning starting with
 `aineo: nothing sent —`, when there is no Input yet (open the layout), when
@@ -589,6 +740,10 @@ nothing opens. `--cmd`, `-t` and `-q` alone still autostart.
 reports on them. It starts no Claude session, opens no layout and maps no
 key; the one command it runs is `claude.cmd` with `--version` appended.
 
+Neovim ~
+  The version of the Neovim that runs aineo; an error when it is older
+  than 0.12, the oldest version aineo supports (|aineo-install|).
+
 Configuration ~
   An error naming a wrong setting; a warning naming each unknown key.
 
@@ -663,5 +818,34 @@ Send and a dialog ~
 A permission dialog drawn in the few tens of milliseconds before aineo
 notices it receives Send's paste and Enter. What the dialog does with them
 was not measured.
+
+The changes pane ~
+- A large diff: a diff shows at most 1 MiB of what git gave, cut at the
+  last line break within it, or a first line longer than that cut there,
+  under one line saying how much of it is shown. git still gives the whole
+  diff first, which takes its time and memory.
+- A large repository: each read runs git over the whole working tree. On a
+  repository of 20 001 files whose every file had been rewritten with its
+  own content, one read took 1.5 to 3.1 seconds. A git that runs past 10
+  seconds is stopped, and the read said to have failed.
+- A pull, a merge, or a rebase onto newer upstream commits during the
+  session lists those commits, and their files, as the session's: the
+  commits window lists every commit reachable from `HEAD` and not from the
+  base.
+- A restart of Claude Code in another working directory keeps the first
+  repository and its base.
+- Where aineo cannot watch the working tree's subdirectories (Linux), the
+  files window says so first: a change in a subdirectory shows at the next
+  showing of the pane, save or commit, and a branch moved by
+  `git update-ref` from another worktree is missed too. No timer reads the
+  repository.
+- When the editor quits, aineo stops its watch, but a git it is running
+  then runs to its end, outliving the editor.
+- A buffer named for a diff that aineo did not make, such as one a restored
+  session made under `aineo://diff/{path}`, cannot give up its name while
+  Neovim allows no change of text, or in the command-line window: when the
+  diff Enter read for that name arrives then, Neovim shows an error with a
+  stack trace, the diff is not shown, and aineo does not try again. Enter
+  on the line again shows it, the other buffer giving its name up.
 
  vim:tw=78:ts=8:ft=help:norl:

@@ -29,7 +29,7 @@ local KEY_PRESSES = {
 
 --- How long the stop waits for Claude Code to exit once `jobstop()` has hung
 --- up its terminal. Claude Code 2.1.281 took 1.6 and 1.9 s to exit on the
---- hangup; a process that ignores it gets a SIGTERM from Neovim 0.11.6 2 s
+--- hangup; a process that ignores it gets a SIGTERM from Neovim 0.12.5 2 s
 --- after it, and one that ignores that too a SIGKILL 4 s after it. Neovim
 --- quitting waits for neither, so without this wait a hung process outlives
 --- the editor.

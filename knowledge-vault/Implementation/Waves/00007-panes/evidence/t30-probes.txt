@@ -1,0 +1,860 @@
+T30 probes — 2026-10-05, on the host's Neovim v0.12.5 (Homebrew 0.12.5_1, LuaJIT 2.1.1788856981), by the T30 implementer (branch refactor/t30-drop-nvim-011).
+Every probe ran inside the worktree; none ran Claude Code. Each section: what it measures, how it ran, its code, its output.
+
+==============================================================================
+B — the words Neovim frames an error raised in Lua in
+==============================================================================
+Run: nvim --clean --headless -l t30-probe-framing.lua (Neovim v0.12.5, Homebrew 0.12.5_1).
+Also: grep -a -c "Error executing" /opt/homebrew/Cellar/neovim/0.12.5_1/bin/nvim -> 0 (exit 1); the positive control grep -a -c "Lua callback: " on the same binary -> 1; grep -rl "Error executing" .../share/nvim/runtime/lua | wc -l -> 0.
+
+--- code: t30-probe-framing.lua
+-- Probe B: the words Neovim frames an error raised in Lua in, locally and
+-- over RPC to a second Neovim (as aineo's relay asks its editor), and whether
+-- any first line begins with `Error executing lua`.
+local function first_line(_, message)
+  return (tostring(message):match('^[^\n]*'))
+end
+local results = {}
+local function record(path, ...)
+  table.insert(results, ('%-36s %s'):format(path, first_line(...)))
+end
+
+record('nvim_exec2(:lua)', pcall(vim.api.nvim_exec2, 'lua error("the reason")', {}))
+record('vim.cmd(:lua)', pcall(vim.cmd, 'lua error("the reason")'))
+record('luaeval()', pcall(vim.fn.luaeval, 'error("the reason")'))
+vim.api.nvim_create_autocmd('User', {
+  pattern = 'T30Probe',
+  callback = function()
+    error('the reason')
+  end,
+})
+record('doautocmd of a Lua callback', pcall(vim.cmd, 'doautocmd User T30Probe'))
+local buffer = vim.api.nvim_create_buf(false, true)
+record(
+  'nvim_buf_call()',
+  pcall(vim.api.nvim_buf_call, buffer, function()
+    vim.cmd('lua error("the reason")')
+  end)
+)
+
+local editor = vim.fn.jobstart({ vim.v.progpath, '--clean', '--embed', '--headless' }, { rpc = true })
+record('RPC nvim_exec_lua', pcall(vim.rpcrequest, editor, 'nvim_exec_lua', 'error("the reason")', {}))
+record('RPC nvim_exec2(:lua)', pcall(vim.rpcrequest, editor, 'nvim_exec2', 'lua error("the reason")', {}))
+record('RPC nvim_command(:lua)', pcall(vim.rpcrequest, editor, 'nvim_command', 'lua error("the reason")'))
+record(
+  'RPC nvim_call_function(luaeval)',
+  pcall(vim.rpcrequest, editor, 'nvim_call_function', 'luaeval', { 'error("the reason")' })
+)
+vim.fn.jobstop(editor)
+vim.fn.jobwait({ editor }, 2000)
+
+local framed_as_011 = 0
+for _, line in ipairs(results) do
+  print(line)
+  if line:find('Error executing lua', 1, true) then
+    framed_as_011 = framed_as_011 + 1
+  end
+end
+print(('first lines holding "Error executing lua": %d of %d'):format(framed_as_011, #results))
+print(vim.fn.execute('version'):match('NVIM v[^\n]*'))
+
+--- output: t30-probe-framing.out
+nvim_exec2(:lua)                     nvim_exec2(), line 1: Vim(lua):E5108: Lua: [string ":lua"]:1: the reason
+vim.cmd(:lua)                        [string "vim/_core/editor"]:353: nvim_exec2(), line 1: Vim(lua):E5108: Lua: [string ":lua"]:1: the reason
+luaeval()                            Vim:E5108: Lua: [string "luaeval()"]:1: the reason
+doautocmd of a Lua callback          [string "vim/_core/editor"]:353: nvim_exec2()[1]..User Autocommands for "T30Probe": Vim(append):Lua callback: .claude/local/orchestrator/t30-probe-framing.lua:18: the reason
+nvim_buf_call()                      Lua: [string "vim/_core/editor"]:353: nvim_exec2(), line 1: Vim(lua):E5108: Lua: [string ":lua"]:1: the reason
+RPC nvim_exec_lua                    Lua: [string "<nvim>"]:1: the reason
+RPC nvim_exec2(:lua)                 nvim_exec2(), line 1: Vim(lua):E5108: Lua: [string ":lua"]:1: the reason
+RPC nvim_command(:lua)               Vim(lua):E5108: Lua: [string ":lua"]:1: the reason
+RPC nvim_call_function(luaeval)      Vim:E5108: Lua: [string "luaeval()"]:1: the reason
+first lines holding "Error executing lua": 0 of 9
+NVIM v0.12.5
+
+==============================================================================
+C1–C4 — terminal jobs in a mini.test child (cwd that cannot be entered, missing interpreter, hidden terminal's size, the size of a terminal two windows show)
+==============================================================================
+Run: make test_file FILE=.claude/local/orchestrator/t30-test_probe_terminal.lua (Neovim v0.12.5), Fails (0).
+Correction (fix round, PR #108's records review, finding 4): two of the C4 labels name heights the probe never set. `shown_twice()` ignores `second` in one tab page, so the rows labelled "windows of 1 then 12 rows" ran in windows of 1 and 20 rows (`1:1 1:20`), and the rows labelled "windows of 3 then 12 rows, another tab page" ran in windows of 3 and 17 rows here and 10 and 1 rows in the other tab page (`1:3 1:17 2:10 2:1`). Each output line prints the heights the windows had, and every reading below follows from those; the code and output are left as they ran.
+Reading: a job started in a window that shows it keeps that window's height while redraws alone run (the 'no redraw' and 'redrawn every 50 ms' rows agree); the size is checked again when a window showing it opens or changes size, and then is the tallest, in any tab page. A terminal started hidden (as aineo's session starts one) has 5 rows, then the tallest window's height once shown. The 1-row rows read no size line: that buffer held no line at all.
+
+--- code: t30-test_probe_terminal.lua
+-- Probes C1–C4 in a mini.test child, as the suites start one: what Neovim
+-- 0.12.5 does with a terminal job whose cwd cannot be entered, whose
+-- interpreter is missing, that is started hidden, and that is shown in two
+-- windows of different heights (one tab page, then two). Writes every result
+-- to `t30-probe-terminal.out` beside this file.
+local MiniTest = require('mini.test')
+local children = dofile('tests/helpers/child.lua')
+
+local HERE = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h')
+local OUT = vim.fs.joinpath(HERE, 't30-probe-terminal.out')
+local lines = {}
+local function record(text)
+  table.insert(lines, text)
+  vim.fn.writefile(lines, OUT)
+end
+
+local child = MiniTest.new_child_neovim()
+local T = MiniTest.new_set({
+  hooks = {
+    pre_case = function()
+      children.restart(child)
+    end,
+    post_once = child.stop,
+  },
+})
+
+--- Lets the child idle, and so redraw, for `ms`.
+local function idle(ms)
+  vim.wait(ms, function()
+    return false
+  end, 50)
+end
+
+--- The last `stty size` the terminal job of `buffer` printed.
+local function last_size(buffer)
+  return child.lua(
+    [[
+    local sizes = vim.tbl_filter(function(line)
+      return line:match('^%d+ %d+$') ~= nil
+    end, vim.api.nvim_buf_get_lines(..., 0, -1, false))
+    return sizes[#sizes] or 'none'
+  ]],
+    { buffer }
+  )
+end
+
+local SIZE_LOOP = { 'sh', '-c', 'while :; do stty size; sleep 0.1; done' }
+
+T['C1 a cwd that cannot be entered'] = function()
+  local directory = vim.fs.joinpath(HERE, 't30-noenter')
+  vim.fn.mkdir(directory, 'p')
+  vim.uv.fs_chmod(directory, tonumber('000', 8))
+  local result = child.lua(
+    [[
+    local directory = ...
+    vim.cmd('enew')
+    local buffer = vim.api.nvim_get_current_buf()
+    local started, job = pcall(vim.fn.jobstart, { 'sh', '-c', 'echo ran; exit 0' }, { term = true, cwd = directory })
+    local code = started and vim.fn.jobwait({ job }, 3000)[1] or 'none'
+    vim.wait(300, function() return false end)
+    local namespace = vim.api.nvim_get_namespaces()['nvim.terminal.exitmsg']
+    local marks = namespace and vim.api.nvim_buf_get_extmarks(buffer, namespace, 0, -1, { details = true }) or {}
+    local exit_line = marks[1] and marks[1][4].virt_text[1][1] or 'none'
+    local text = table.concat(vim.tbl_filter(function(line) return line ~= '' end, vim.api.nvim_buf_get_lines(buffer, 0, -1, false)), '|')
+    return { started = started, job = tostring(job), code = code, exit_line = exit_line, text = text }
+  ]],
+    { directory }
+  )
+  vim.uv.fs_chmod(directory, tonumber('755', 8))
+  record(('C1 cwd mode 000: raised=%s job=%s code=%s exit line=%q buffer text=%q'):format(
+    tostring(not result.started), result.job, tostring(result.code), result.exit_line, result.text))
+end
+
+T['C3 a command whose interpreter is missing'] = function()
+  local script = vim.fs.joinpath(HERE, 't30-nointerpreter.sh')
+  vim.fn.writefile({ '#!/nonexistent/t30-interpreter', 'echo ran' }, script)
+  vim.uv.fs_chmod(script, tonumber('755', 8))
+  local result = child.lua(
+    [[
+    vim.cmd('enew')
+    local started, job = pcall(vim.fn.jobstart, { ... }, { term = true })
+    local code = started and vim.fn.jobwait({ job }, 3000)[1] or 'none'
+    return { started = started, job = tostring(job), code = code }
+  ]],
+    { script }
+  )
+  record(('C3 missing interpreter: raised=%s job=%s code=%s'):format(
+    tostring(not result.started), result.job, tostring(result.code)))
+end
+
+T['C2 a hidden terminal, then shown in 14 rows'] = function()
+  local buffer = child.lua(
+    [[
+    local command = ...
+    local buffer = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_call(buffer, function()
+      vim.fn.jobstart(command, { term = true })
+    end)
+    return buffer
+  ]],
+    { SIZE_LOOP }
+  )
+  idle(1000)
+  record(('C2 hidden: %s'):format(last_size(buffer)))
+  child.lua([[vim.cmd('botright 14split') vim.api.nvim_win_set_buf(0, ...)]], { buffer })
+  idle(1000)
+  local height = child.lua_get('vim.api.nvim_win_get_height(0)')
+  record(('C2 shown in a window of %d rows: %s'):format(height, last_size(buffer)))
+end
+
+--- Starts the size loop in a buffer shown in two windows of `first` and
+--- `second` rows, the second in another tab page when `other_tab` is true.
+local function shown_twice(first, second, other_tab, redrawn)
+  return child.lua(
+    [[
+    local command, first, second, other_tab, redrawn = ...
+    vim.cmd('enew')
+    local buffer = vim.api.nvim_get_current_buf()
+    if other_tab then
+      vim.cmd('tab split')
+      vim.api.nvim_win_set_height(0, second)
+      vim.cmd('split')
+      vim.api.nvim_win_set_height(0, second)
+      vim.cmd('tabprevious')
+      vim.cmd('split')
+      vim.api.nvim_win_set_height(0, first)
+    else
+      vim.cmd('split')
+      vim.api.nvim_win_set_height(0, first)
+    end
+    if redrawn then
+      _G.t30_redraws = vim.uv.new_timer()
+      _G.t30_redraws:start(0, 50, vim.schedule_wrap(function() vim.cmd('redraw') end))
+    end
+    vim.fn.jobstart(command, { term = true })
+    local heights = vim.tbl_map(function(window)
+      return vim.api.nvim_tabpage_get_number(vim.api.nvim_win_get_tabpage(window)) .. ':' .. vim.api.nvim_win_get_height(window)
+    end, vim.fn.win_findbuf(buffer))
+    return { buffer = buffer, heights = table.concat(heights, ' ') }
+  ]],
+    { SIZE_LOOP, first, second, other_tab, redrawn }
+  )
+end
+
+T['C4 windows of 1 then 12 rows, one tab page, no redraw'] = function()
+  local shown = shown_twice(1, 12, false, false)
+  idle(1500)
+  record(('C4 windows of 1 then 12 rows, one tab page, no redraw: windows (tab:height) %s -> %s'):format(shown.heights, last_size(shown.buffer)))
+end
+
+T['C4 windows of 1 then 12 rows, one tab page, redrawn every 50 ms'] = function()
+  local shown = shown_twice(1, 12, false, true)
+  idle(1500)
+  record(('C4 windows of 1 then 12 rows, one tab page, redrawn every 50 ms: windows (tab:height) %s -> %s'):format(shown.heights, last_size(shown.buffer)))
+end
+
+T['C4 windows of 7 then 14 rows, one tab page, no redraw'] = function()
+  local shown = shown_twice(7, 14, false, false)
+  idle(1500)
+  record(('C4 windows of 7 then 14 rows, one tab page, no redraw: windows (tab:height) %s -> %s'):format(shown.heights, last_size(shown.buffer)))
+end
+
+T['C4 windows of 7 then 14 rows, one tab page, redrawn every 50 ms'] = function()
+  local shown = shown_twice(7, 14, false, true)
+  idle(1500)
+  record(('C4 windows of 7 then 14 rows, one tab page, redrawn every 50 ms: windows (tab:height) %s -> %s'):format(shown.heights, last_size(shown.buffer)))
+end
+
+T['C4 windows of 3 then 12 rows, another tab page, no redraw'] = function()
+  local shown = shown_twice(3, 12, true, false)
+  idle(1500)
+  record(('C4 windows of 3 then 12 rows, another tab page, no redraw: windows (tab:height) %s -> %s'):format(shown.heights, last_size(shown.buffer)))
+end
+
+T['C4 windows of 3 then 12 rows, another tab page, redrawn every 50 ms'] = function()
+  local shown = shown_twice(3, 12, true, true)
+  idle(1500)
+  record(('C4 windows of 3 then 12 rows, another tab page, redrawn every 50 ms: windows (tab:height) %s -> %s'):format(shown.heights, last_size(shown.buffer)))
+end
+
+--- Runs `after` in the child once the size loop has run in windows of 7 and
+--- 14 rows for 1 s, with redraws every 50 ms, and records the size before and
+--- after.
+local function then_after(name, after)
+  local shown = shown_twice(7, 14, false, true)
+  idle(1000)
+  local before = last_size(shown.buffer)
+  child.lua(after, { shown.buffer })
+  idle(1500)
+  local heights = child.lua([[return table.concat(vim.tbl_map(function(w) return vim.api.nvim_win_get_height(w) end, vim.fn.win_findbuf(...)), ' ')]], { shown.buffer })
+  record(('C4 windows of 7 then 14 rows, redrawn, then %s: %s -> heights now %s -> %s'):format(name, before, heights, last_size(shown.buffer)))
+end
+
+T['C4 then entering the taller window'] = function()
+  then_after('entering the taller window', [[vim.cmd('wincmd j')]])
+end
+
+T['C4 then resizing the shorter window to 6'] = function()
+  then_after('resizing the shorter window to 6', [[vim.api.nvim_win_set_height(0, 6)]])
+end
+
+T['C4 then a third window of 3 rows'] = function()
+  then_after('opening a third window of 3 rows on it', [[vim.cmd('split') vim.api.nvim_win_set_height(0, 3)]])
+end
+
+T['C4 the 1-row window case, its buffer'] = function()
+  local shown = shown_twice(1, 12, false, true)
+  idle(1000)
+  record('C4 1-row case buffer tail: ' .. table.concat(child.lua('return vim.api.nvim_buf_get_lines(..., -4, -1, false)', { shown.buffer }), '|'))
+end
+
+T['C4 hidden at start, then shown in windows of 7 and 14 rows, redrawn'] = function()
+  local buffer = child.lua([[
+    local command = ...
+    _G.t30_redraws = vim.uv.new_timer()
+    _G.t30_redraws:start(0, 50, vim.schedule_wrap(function() vim.cmd('redraw') end))
+    local buffer = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_call(buffer, function() vim.fn.jobstart(command, { term = true }) end)
+    return buffer
+  ]], { SIZE_LOOP })
+  idle(800)
+  local before = last_size(buffer)
+  child.lua([[local buffer = ... vim.api.nvim_win_set_buf(0, buffer) vim.cmd('split') vim.api.nvim_win_set_height(0, 7)]], { buffer })
+  idle(1500)
+  local heights = child.lua([[return table.concat(vim.tbl_map(function(w) return vim.api.nvim_win_get_height(w) end, vim.fn.win_findbuf(...)), ' ')]], { buffer })
+  record(('C4 hidden at start (%s), then shown in windows %s, redrawn: %s'):format(before, heights, last_size(buffer)))
+end
+
+T['C4 hidden at start, then shown in 3 rows here and in another tab page'] = function()
+  local buffer = child.lua([[
+    local command = ...
+    _G.t30_redraws = vim.uv.new_timer()
+    _G.t30_redraws:start(0, 50, vim.schedule_wrap(function() vim.cmd('redraw') end))
+    local buffer = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_call(buffer, function() vim.fn.jobstart(command, { term = true }) end)
+    return buffer
+  ]], { SIZE_LOOP })
+  idle(800)
+  local before = last_size(buffer)
+  child.lua([[
+    local buffer = ...
+    vim.cmd('tabnew')
+    vim.api.nvim_win_set_buf(0, buffer)
+    vim.cmd('tabprevious')
+    vim.cmd('split')
+    vim.api.nvim_win_set_buf(0, buffer)
+    vim.api.nvim_win_set_height(0, 3)
+  ]], { buffer })
+  idle(1500)
+  local heights = child.lua([[return table.concat(vim.tbl_map(function(w) return vim.api.nvim_tabpage_get_number(vim.api.nvim_win_get_tabpage(w)) .. ':' .. vim.api.nvim_win_get_height(w) end, vim.fn.win_findbuf(...)), ' ')]], { buffer })
+  local shown_in_both = last_size(buffer)
+  child.lua([[vim.api.nvim_win_set_height(0, 4)]])
+  idle(1500)
+  record(('C4 hidden at start (%s), then shown in windows (tab:height) %s, redrawn: %s; after the window here is resized to 4: %s'):format(before, heights, shown_in_both, last_size(buffer)))
+end
+
+T['version'] = function()
+  record(child.lua_get([[vim.fn.execute('version'):match('NVIM v[^\n]*')]]))
+end
+
+return T
+
+--- output: t30-probe-terminal.out
+C1 cwd mode 000: raised=false job=4 code=122 exit line="[Process exited 122]" buffer text=""
+C3 missing interpreter: raised=false job=4 code=122
+C2 hidden: 5 80
+C2 shown in a window of 14 rows: 14 80
+C4 windows of 1 then 12 rows, one tab page, no redraw: windows (tab:height) 1:1 1:20 -> none
+C4 windows of 1 then 12 rows, one tab page, redrawn every 50 ms: windows (tab:height) 1:1 1:20 -> none
+C4 windows of 7 then 14 rows, one tab page, no redraw: windows (tab:height) 1:7 1:14 -> 7 80
+C4 windows of 7 then 14 rows, one tab page, redrawn every 50 ms: windows (tab:height) 1:7 1:14 -> 7 80
+C4 windows of 3 then 12 rows, another tab page, no redraw: windows (tab:height) 1:3 1:17 2:10 2:1 -> 3 80
+C4 windows of 3 then 12 rows, another tab page, redrawn every 50 ms: windows (tab:height) 1:3 1:17 2:10 2:1 -> 3 80
+C4 windows of 7 then 14 rows, redrawn, then entering the taller window: 7 80 -> heights now 7 14 -> 7 80
+C4 windows of 7 then 14 rows, redrawn, then resizing the shorter window to 6: 7 80 -> heights now 6 15 -> 15 80
+C4 windows of 7 then 14 rows, redrawn, then opening a third window of 3 rows on it: 7 80 -> heights now 3 11 6 -> 11 80
+C4 1-row case buffer tail: 
+C4 hidden at start (5 80), then shown in windows 7 14, redrawn: 14 80
+C4 hidden at start (5 80), then shown in windows (tab:height) 1:3 2:21, redrawn: 21 80; after the window here is resized to 4: 21 80
+NVIM v0.12.5
+
+==============================================================================
+C5 — what Neovim does to a terminal job after jobstop() hangs it up
+==============================================================================
+Run: nvim --clean --headless -l t30-probe-hangup.lua (Neovim v0.12.5).
+
+--- code: t30-probe-hangup.lua
+-- Probe C5: what Neovim does to a terminal job after `jobstop()` hangs it up,
+-- for a process that ignores nothing, one that ignores only SIGHUP, and one
+-- that ignores SIGHUP and SIGTERM: how long until it exits, and its code.
+local COMMANDS = {
+  { 'ignores nothing', 'while :; do sleep 0.1; done' },
+  { 'ignores SIGHUP', 'trap "" HUP; while :; do sleep 0.1; done' },
+  { 'ignores SIGHUP and SIGTERM', 'trap "" HUP TERM; while :; do sleep 0.1; done' },
+}
+
+for _, entry in ipairs(COMMANDS) do
+  local name, script = entry[1], entry[2]
+  vim.cmd('enew')
+  local exited_at, code
+  local job = vim.fn.jobstart({ 'sh', '-c', script }, {
+    term = true,
+    on_exit = function(_, exit_code)
+      exited_at, code = vim.uv.hrtime(), exit_code
+    end,
+  })
+  vim.wait(500, function()
+    return false
+  end)
+  local stopped_at = vim.uv.hrtime()
+  vim.fn.jobstop(job)
+  vim.wait(8000, function()
+    return exited_at ~= nil
+  end, 10)
+  print(
+    ('%-28s exited %s s after jobstop(), code %s'):format(
+      name,
+      exited_at and ('%.2f'):format((exited_at - stopped_at) / 1e9) or 'never (8 s)',
+      tostring(code)
+    )
+  )
+end
+print(vim.fn.execute('version'):match('NVIM v[^\n]*'))
+
+--- output: t30-probe-hangup.out
+ignores nothing              exited 0.00 s after jobstop(), code 129
+ignores SIGHUP               exited 2.00 s after jobstop(), code 143
+ignores SIGHUP and SIGTERM   exited 4.00 s after jobstop(), code 137
+NVIM v0.12.5
+
+==============================================================================
+C6 — vim.wait() and SystemObj:wait() while a child writes without end
+==============================================================================
+Run: nvim --clean --headless -l t30-probe-flood.lua (Neovim v0.12.5), twice; the second run (below) added the no-op handler rows and 'yes flood'. A watchdog timer kills `yes` 10 s after it starts. The first run, without the no-op rows: 10943 ms, 10999 ms, 9999 ms. Neither vim.wait(1000) nor SystemObj:wait(1000) returned at 1 s while the flood ran: each returned only once the watchdog had killed the writer.
+The first run (fix round, PR #108's records review, finding 4): neither its code nor its output was kept. By the line above, its code differed from the code below only in its rows: it had the first three measure() calls and not the two no-op-handler rows, and its writer was `yes` without the `flood` argument the second run added. Its three times above are the summary the T30 implementer wrote down at the time; nothing else of that run is on record.
+
+--- code: t30-probe-flood.lua
+-- Probe C6: whether `vim.wait()`'s time-out runs out while a child writes
+-- without end (`yes`), with every chunk read by a callback, as the health
+-- check's command does; and `SystemObj:wait()` under the same flood.
+local function flood(no_op)
+  local bytes = 0
+  local process = vim.system({ 'yes', 'flood' }, {
+    stdout = no_op and function() end or function(_, data)
+      bytes = bytes + #(data or '')
+    end,
+  })
+  local watchdog = assert(vim.uv.new_timer())
+  watchdog:start(10000, 0, function()
+    process:kill(9)
+    io.stdout:write('  (watchdog: yes killed 10 s after it started)\n')
+    io.stdout:flush()
+  end)
+  return process, function()
+    watchdog:stop()
+    watchdog:close()
+    return bytes
+  end
+end
+
+local function measure(name, wait, no_op)
+  local process, bytes = flood(no_op)
+  local started = vim.uv.hrtime()
+  wait(process)
+  local elapsed = (vim.uv.hrtime() - started) / 1e6
+  process:kill(9)
+  process:wait(2000)
+  io.stdout:write(('%-34s returned after %d ms, %d bytes read\n'):format(name, elapsed, bytes()))
+  io.stdout:flush()
+end
+
+measure('vim.wait(1000, false)', function()
+  vim.wait(1000, function()
+    return false
+  end)
+end)
+measure('vim.wait(1000, false, 200, true)', function()
+  vim.wait(1000, function()
+    return false
+  end, 200, true)
+end)
+measure('SystemObj:wait(1000)', function(process)
+  process:wait(1000)
+end)
+measure('vim.wait(1000, false), no-op handler', function()
+  vim.wait(1000, function()
+    return false
+  end)
+end, true)
+measure('vim.wait(1000, false, 10, true), no-op', function()
+  vim.wait(1000, function()
+    return false
+  end, 10, true)
+end, true)
+print(vim.fn.execute('version'):match('NVIM v[^\n]*'))
+
+--- output: t30-probe-flood.out
+  (watchdog: yes killed 10 s after it started)
+vim.wait(1000, false)              returned after 10993 ms, 73239566400 bytes read
+  (watchdog: yes killed 10 s after it started)
+vim.wait(1000, false, 200, true)   returned after 10997 ms, 75048966720 bytes read
+  (watchdog: yes killed 10 s after it started)
+SystemObj:wait(1000)               returned after 9998 ms, 64698510240 bytes read
+  (watchdog: yes killed 10 s after it started)
+vim.wait(1000, false), no-op handler returned after 10987 ms, 0 bytes read
+  (watchdog: yes killed 10 s after it started)
+vim.wait(1000, false, 10, true), no-op returned after 10982 ms, 0 bytes read
+NVIM v0.12.5
+
+==============================================================================
+D — fresh children whose LuaJIT compiles no code
+==============================================================================
+Run: make test_file FILE=.claude/local/orchestrator/t30-test_probe_luajit.lua (Neovim v0.12.5), Fails (0). Each child started as the timing helper starts one (children.restart()), then ran the helper's COMPILES_CODE verbatim. Positive control: a child with jit.off() and jit.flush() holds no trace.
+
+--- code: t30-test_probe_luajit.lua
+-- Probe D: how many fresh children, started as the timing helper starts them
+-- (`children.restart()`, mini.test's start arguments and the suites' init),
+-- hold no compiled trace after the helper's own hot loop. Writes the count
+-- to `t30-probe-luajit.out` beside this file.
+local MiniTest = require('mini.test')
+local children = dofile('tests/helpers/child.lua')
+
+local HERE = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h')
+local OUT = vim.fs.joinpath(HERE, 't30-probe-luajit.out')
+local STARTS = 300
+
+--- `tests/helpers/timed_attempts.lua`'s `COMPILES_CODE`, verbatim.
+local COMPILES_CODE = [[(function()
+  if not jit then
+    return true
+  end
+  local sum = 0
+  for index = 1, 200000 do
+    sum = (sum + index * 7) % 1000003
+  end
+  return require('jit.util').traceinfo(1) ~= nil
+end)()]]
+
+local child = MiniTest.new_child_neovim()
+local T = MiniTest.new_set({ hooks = { post_once = child.stop } })
+
+T['fresh children compile code'] = function()
+  local compiling, not_compiling = 0, 0
+  for _ = 1, STARTS do
+    children.restart(child)
+    if child.lua_get(COMPILES_CODE) then
+      compiling = compiling + 1
+    else
+      not_compiling = not_compiling + 1
+    end
+  end
+  local control = child.lua_get([[(function()
+    jit.off() jit.flush()
+    local sum = 0
+    for index = 1, 200000 do sum = (sum + index * 7) % 1000003 end
+    return require('jit.util').traceinfo(1) ~= nil
+  end)()]])
+  vim.fn.writefile({
+    ('%d fresh children: %d compiled code, %d compiled nothing'):format(STARTS, compiling, not_compiling),
+    ('positive control, a child with jit.off() and jit.flush(): holds a trace = %s'):format(tostring(control)),
+    child.lua_get([[vim.fn.execute('version'):match('NVIM v[^\n]*') .. ', ' .. jit.version]]),
+  }, OUT)
+end
+
+return T
+
+--- output: t30-probe-luajit.out
+300 fresh children: 300 compiled code, 0 compiled nothing
+positive control, a child with jit.off() and jit.flush(): holds a trace = false
+NVIM v0.12.5, LuaJIT 2.1.1788856981
+
+T30 fix round — 2026-10-05, on the same host's Neovim v0.12.5 (Homebrew 0.12.5_1), by the T30 fix-round implementer (branch refactor/t30-drop-nvim-011, PR #108), after the attack, test-integrity and records reviews. Every probe ran inside the fix round's worktree; none ran Claude Code.
+
+==============================================================================
+C2, C4 and the same tick — a hidden terminal's size, the autocommand window, and a buffer shown as the process starts
+==============================================================================
+Run: make test_file FILE=.claude/local/orchestrator/t30fix-test_probe_sizes.lua (Neovim v0.12.5), Fails (0).
+R1 measures the clause of readiness.lua shown_rows() that the T30 probes left out (PR #108's records review, finding 4): when a hidden buffer's terminal first writes, win_findbuf() gives the autocommand window jobstart() runs it in, 5 rows high, and then no window. W measures the width of a hidden terminal (PR #108's attack review, finding 3): 5 rows, as wide as the editor — 80 or 200 columns — and the window's size once shown. S measures start_session()'s same-tick sentence (PR #108's records review, finding 2): shown in the same tick or from a vim.schedule() callback, a process that reads its size as it starts still reads 5 rows, and has the window's size about 50 ms later; shown 500 ms later, it reads 5 rows throughout. The records review measured the same with nvim --clean --headless -l, where its vim.schedule() row read 22 rows from the start.
+
+--- code: t30fix-test_probe_sizes.lua
+-- T30 fix round, probes in a mini.test child as the suites start one, on
+-- Neovim 0.12.5: (R1) the windows win_findbuf() gives when a hidden
+-- terminal's buffer first changes; (W) the size of a hidden terminal in an
+-- editor of 80 and of 200 columns; (S) the sizes a process started hidden
+-- reads at about 0, 50 and 350 ms when its buffer is shown in the same tick,
+-- from a vim.schedule() callback, or 500 ms later. Writes every result to
+-- `t30fix-probe-sizes.out` beside this file.
+local MiniTest = require('mini.test')
+local children = dofile('tests/helpers/child.lua')
+
+local HERE = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h')
+local OUT = vim.fs.joinpath(HERE, 't30fix-probe-sizes.out')
+local lines = {}
+local function record(text)
+  table.insert(lines, text)
+  vim.fn.writefile(lines, OUT)
+end
+
+local child = MiniTest.new_child_neovim()
+local T = MiniTest.new_set({
+  hooks = {
+    pre_case = function()
+      children.restart(child)
+    end,
+    post_once = child.stop,
+  },
+})
+
+local function idle(ms)
+  vim.wait(ms, function()
+    return false
+  end, 50)
+end
+
+local function sizes(buffer)
+  return child.lua(
+    [[
+    local found = {}
+    for _, line in ipairs(vim.api.nvim_buf_get_lines(..., 0, -1, false)) do
+      if line:match('^%d+ %d+$') then
+        table.insert(found, line)
+      end
+    end
+    return table.concat(found, ', then ')
+  ]],
+    { buffer }
+  )
+end
+
+T['R1 the windows win_findbuf() gives at a hidden terminal first change'] = function()
+  local seen = child.lua([[
+    local buffer = vim.api.nvim_create_buf(true, false)
+    _G.t30fix_seen = {}
+    vim.api.nvim_buf_attach(buffer, false, {
+      on_lines = function()
+        if #_G.t30fix_seen < 3 then
+          local windows = vim.tbl_map(function(window)
+            local kind = vim.fn.win_gettype(window)
+            return (kind ~= '' and kind or 'normal') .. ':' .. vim.fn.getwininfo(window)[1].height
+          end, vim.fn.win_findbuf(buffer))
+          table.insert(_G.t30fix_seen, #windows > 0 and table.concat(windows, ',') or 'none')
+        end
+      end,
+    })
+    vim.api.nvim_buf_call(buffer, function()
+      vim.fn.jobstart({ 'sh', '-c', 'stty size; sleep 1' }, { term = true })
+    end)
+    vim.wait(500, function() return false end)
+    return _G.t30fix_seen
+  ]])
+  record('R1 win_findbuf() at the first on_lines calls of a hidden terminal: ' .. table.concat(seen, ' | '))
+end
+
+for _, columns in ipairs({ 80, 200 }) do
+  T['W a hidden terminal in an editor of ' .. columns .. ' columns'] = function()
+    child.o.columns = columns
+    local buffer = child.lua([[
+      local buffer = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_call(buffer, function()
+        vim.fn.jobstart({ 'sh', '-c', 'while :; do stty size; sleep 0.1; done' }, { term = true })
+      end)
+      return buffer
+    ]])
+    idle(600)
+    local hidden = sizes(buffer):match('(%d+ %d+)$')
+    child.lua('vim.api.nvim_win_set_buf(0, ...)', { buffer })
+    idle(600)
+    local height = child.lua_get('vim.api.nvim_win_get_height(0)')
+    record(
+      ('W editor of %d columns: hidden %s; shown in the current window of %d rows: %s'):format(
+        columns,
+        hidden,
+        height,
+        sizes(buffer):match('(%d+ %d+)$')
+      )
+    )
+  end
+end
+
+local START = [[
+  local how = ...
+  local buffer = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_call(buffer, function()
+    vim.fn.jobstart({ 'sh', '-c', 'stty size; sleep 0.05; stty size; sleep 0.3; stty size; sleep 1' }, { term = true })
+  end)
+  local function show()
+    vim.api.nvim_win_set_buf(0, buffer)
+  end
+  if how == 'same tick' then
+    show()
+  elseif how == 'vim.schedule()' then
+    vim.schedule(show)
+  else
+    vim.defer_fn(show, 500)
+  end
+  return buffer
+]]
+
+for index, how in ipairs({ 'same tick', 'same tick', 'same tick', 'vim.schedule()', 'vim.schedule()', '500 ms later (control)' }) do
+  T['S shown ' .. how .. ' ' .. index] = function()
+    local buffer = child.lua(START, { how })
+    idle(1500)
+    local height = child.lua_get('vim.api.nvim_win_get_height(0)')
+    record(('S shown %s: stty size at about 0, 50 and 350 ms: %s (window %d rows)'):format(how, sizes(buffer), height))
+  end
+end
+
+T['version'] = function()
+  record(child.lua_get([[vim.fn.execute('version'):match('NVIM v[^\n]*')]]))
+end
+
+return T
+
+--- output: t30fix-probe-sizes.out
+R1 win_findbuf() at the first on_lines calls of a hidden terminal: autocmd:5 | none
+W editor of 80 columns: hidden 5 80; shown in the current window of 22 rows: 22 80
+W editor of 200 columns: hidden 5 200; shown in the current window of 22 rows: 22 200
+S shown same tick: stty size at about 0, 50 and 350 ms: 5 80, then 22 80, then 22 80 (window 22 rows)
+S shown same tick: stty size at about 0, 50 and 350 ms: 5 80, then 22 80, then 22 80 (window 22 rows)
+S shown same tick: stty size at about 0, 50 and 350 ms: 5 80, then 22 80, then 22 80 (window 22 rows)
+S shown vim.schedule(): stty size at about 0, 50 and 350 ms: 5 80, then 22 80, then 22 80 (window 22 rows)
+S shown vim.schedule(): stty size at about 0, 50 and 350 ms: 5 80, then 22 80, then 22 80 (window 22 rows)
+S shown 500 ms later (control): stty size at about 0, 50 and 350 ms: 5 80, then 5 80, then 5 80 (window 22 rows)
+NVIM v0.12.5
+
+==============================================================================
+C6, in place — :checkhealth aineo while claude.cmd writes without end, with and without the check's own timer
+==============================================================================
+Run: t30fix-run-health-flood.sh (Neovim v0.12.5), once on the code as it is and once under the attack review's mutant M-H1. M-H1, applied to lua/aineo/health.lua run_within_bound() from a copy and restored after (cmp: identical): the timer callback's two lines `    timed_out = true` and `    vim.uv.kill(-process.pid, 'sigkill')` replaced by `    -- MUTANT timed_out = true` and `    -- MUTANT kill`. claude.cmd = { 'yes' }: on macOS `yes --version` writes "--version" without end. A watchdog in the script kills the Neovim's `yes` children by pid at 12 s.
+PR #108's attack review measured the same (its finding 1): 3007 ms in place, with the warning; 12125 ms under M-H1, returning only once its watchdog had killed `yes` at 12 s, and then reporting "OK claude.cmd --version: --version", since a process ended by a signal reports code 0. Here: 3009 ms in place, 12112 ms under M-H1, the same lines. The check's own timer is what bounds it on 0.12.5: without it, its vim.wait(6000, …) does not run out while the flood is read.
+
+--- code: t30fix-probe-health-flood.lua
+-- T30 fix round, probe C6 in place: `:checkhealth aineo` on Neovim 0.12.5
+-- with claude.cmd = { 'yes' }, so that `run_within_bound()` runs
+-- `yes --version`, which writes without end on macOS. Prints how long the
+-- check took, its Claude Code line, and whether a `yes` child is left.
+-- `arg[1]` is the checkout whose aineo is loaded.
+local root = arg[1]
+vim.opt.runtimepath:prepend(root)
+vim.g.aineo = { autostart = false, claude = { cmd = { 'yes' } } }
+vim.cmd('runtime plugin/aineo.lua')
+local started = vim.uv.hrtime()
+vim.cmd('checkhealth aineo')
+local elapsed_ms = (vim.uv.hrtime() - started) / 1e6
+local report = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\n')
+local claude_line = report:match('[^\n]*claude%.cmd %-%-version[^\n]*') or '(no claude.cmd --version line)'
+local left = vim.system({ 'pgrep', '-P', tostring(vim.fn.getpid()), '-x', 'yes' }):wait().stdout
+io.stdout:write(('checkhealth aineo took %d ms\n%s\nyes children left: %q\n'):format(elapsed_ms, claude_line, left))
+io.stdout:write(vim.fn.execute('version'):match('NVIM v[^\n]*') .. '\n')
+io.stdout:flush()
+
+--- code: t30fix-run-health-flood.sh
+#!/bin/sh
+# Runs t30fix-probe-health-flood.lua in a home of its own under the
+# worktree's .tests/. A watchdog kills the Neovim's `yes` children by pid
+# once it has run 12 s, so a wait that ignores its own time-out can end, and
+# the Neovim itself by pid at 30 s.
+ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
+HOME_DIR=$ROOT/.tests/t30fix-health-home
+mkdir -p "$HOME_DIR"
+cd "$ROOT/.claude/local/orchestrator" || exit 1
+START=$(date +%s)
+XDG_CONFIG_HOME=$HOME_DIR/config XDG_DATA_HOME=$HOME_DIR/data XDG_STATE_HOME=$HOME_DIR/state \
+  XDG_CACHE_HOME=$HOME_DIR/cache CLAUDE_CONFIG_DIR=$HOME_DIR/claude NVIM_LOG_FILE=$HOME_DIR/log \
+  nvim --clean --headless -l t30fix-probe-health-flood.lua "$ROOT" &
+NVIM_PID=$!
+WAITED=0
+while kill -0 "$NVIM_PID" 2>/dev/null && [ "$WAITED" -lt 30 ]; do
+  sleep 1
+  WAITED=$((WAITED + 1))
+  if [ "$WAITED" -eq 12 ]; then
+    for YES_PID in $(pgrep -P "$NVIM_PID" -x yes); do
+      echo "watchdog: killed yes $YES_PID at 12 s"
+      kill -9 "$YES_PID"
+    done
+  fi
+done
+if kill -0 "$NVIM_PID" 2>/dev/null; then
+  echo "watchdog: killed nvim $NVIM_PID at 30 s"
+  kill -9 "$NVIM_PID"
+fi
+wait "$NVIM_PID"
+echo "nvim exited $? after $(( $(date +%s) - START )) s (wall clock, whole seconds)"
+
+--- output, on the code as it is: t30fix-probe-health-flood.out
+checkhealth: 100% checking aineocheckhealth: checks donecheckhealth aineo took 3009 ms
+- ⚠️ WARNING claude.cmd --version did not finish within 3 s
+yes children left: ""
+NVIM v0.12.5
+nvim exited 0 after 4 s (wall clock, whole seconds)
+
+--- output, under M-H1: t30fix-probe-health-flood-MH1.out
+checkhealth: 100% checking aineowatchdog: killed yes 5899 at 12 s
+checkhealth: checks donecheckhealth aineo took 12112 ms
+- ✅ OK claude.cmd --version: --version
+yes children left: ""
+NVIM v0.12.5
+nvim exited 0 after 13 s (wall clock, whole seconds)
+
+==============================================================================
+C6, why 1002 ms — vim.wait(1000) under a flood that reaches Neovim and under one that does not
+==============================================================================
+Run: t30fix-run-flood-reach.sh (Neovim v0.12.5), each variant twice, a 3 s watchdog killing the writer by pid.
+The brief review of wave 7's T24 packet (T30-2) reported that on 0.12.5 vim.wait(1000, …) returned after 1002 ms under a `yes` flood (1003 ms with fast_only); its probe file was not kept. That figure is what a flood that never reaches Neovim gives: with no pipe opened for the writer's output (stdout = false), or with the writer sending it to /dev/null itself, the wait returns at 1 s while the writer still floods. A flood read by a handler, as run_within_bound() reads claude.cmd --version, keeps the wait from running out until the writer is killed. PR #108's attack review measured the wider matrix (finding 1): 1002 ms only for stdout = false, a writer sending to /dev/null, and a handler that spends 1 ms a chunk; about 4000 ms — the writer killed at 3 s — for every handler that reads the flood cheaply, the health check's among them. The wait still subtracts whole milliseconds only (src/nvim/event/multiqueue.h LOOP_PROCESS_EVENTS_UNTIL, the same body in v0.11.6 and v0.12.5, by the attack review's diff of the two), so a loop whose passes each take under 1 ms never runs it out.
+
+--- code: t30fix-probe-flood-reach.lua
+-- T30 fix round, probe C6b: whether `vim.wait(1000, …)` runs out at 1 s while
+-- a writer floods, by whether the flood reaches Neovim's loop. One variant
+-- per Neovim (`nvim --clean --headless -l t30fix-probe-flood-reach.lua
+-- <variant>`); a timer kills the writer by pid 3 s after it starts. Prints
+-- how long the wait took and whether the writer still ran when it returned.
+local variant = arg[1]
+local WATCHDOG_MS = 3000
+
+local writers = {
+  -- read by a handler, as run_within_bound() reads `claude.cmd --version`
+  read_by_a_handler = function()
+    local kept = 0
+    return vim.system({ 'yes', 'flood' }, {
+      stdout = function(_, data)
+        kept = kept + #(data or '')
+      end,
+    })
+  end,
+  -- not read at all: Neovim opens no pipe for its standard output
+  stdout_false = function()
+    return vim.system({ 'yes', 'flood' }, { stdout = false })
+  end,
+  -- written to /dev/null by the writer itself: nothing reaches the pipe
+  to_dev_null = function()
+    return vim.system({ 'sh', '-c', 'exec yes flood >/dev/null' }, { stdout = function() end })
+  end,
+}
+
+local process = writers[variant]()
+local killed_at
+local watchdog = assert(vim.uv.new_timer())
+watchdog:start(WATCHDOG_MS, 0, function()
+  killed_at = vim.uv.hrtime()
+  vim.uv.kill(process.pid, 'sigkill')
+end)
+local started = vim.uv.hrtime()
+vim.wait(1000, function()
+  return false
+end)
+local returned = vim.uv.hrtime()
+local still_flooding = killed_at == nil
+watchdog:stop()
+watchdog:close()
+vim.uv.kill(process.pid, 'sigkill')
+io.stdout:write(
+  ('%-18s vim.wait(1000) returned after %5d ms; the writer %s\n'):format(
+    variant,
+    (returned - started) / 1e6,
+    still_flooding and 'still flooding' or ('killed by the watchdog at %d ms'):format((killed_at - started) / 1e6)
+  )
+)
+io.stdout:flush()
+
+--- code: t30fix-run-flood-reach.sh
+#!/bin/sh
+# Runs each variant of t30fix-probe-flood-reach.lua twice, one Neovim at a
+# time, then prints the host's load and Neovim's version.
+cd "$(dirname "$0")" || exit 1
+for variant in read_by_a_handler stdout_false to_dev_null read_by_a_handler stdout_false to_dev_null; do
+  nvim --clean --headless -l t30fix-probe-flood-reach.lua "$variant"
+done
+uptime
+nvim --version | head -1
+
+--- output: t30fix-probe-flood-reach.out
+read_by_a_handler  vim.wait(1000) returned after  3999 ms; the writer killed by the watchdog at 2998 ms
+stdout_false       vim.wait(1000) returned after  1001 ms; the writer still flooding
+to_dev_null        vim.wait(1000) returned after  1001 ms; the writer still flooding
+read_by_a_handler  vim.wait(1000) returned after  3998 ms; the writer killed by the watchdog at 2998 ms
+stdout_false       vim.wait(1000) returned after  1001 ms; the writer still flooding
+to_dev_null        vim.wait(1000) returned after  1001 ms; the writer still flooding
+22:47  up 5 days,  9:58, 13 users, load averages: 10.06 12.58 14.95
+NVIM v0.12.5

@@ -3,6 +3,7 @@ local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local report_editor = dofile('tests/helpers/report_editor.lua')
+local timed_attempts = dofile('tests/helpers/timed_attempts.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -384,10 +385,10 @@ end
 --- The expression, run in the child, that hands its report home a report
 --- whose details are `count` distinct paths of four bytes, `xy/z` with `x`,
 --- `y` and `z` each one of 62 letters and digits, one space apart, then
---- edits the Report again (`:edit`), and says of each step whether it took
---- at most `limit` seconds, or else how long it took.
+--- edits the Report again (`:edit`), and returns how many seconds each step
+--- took.
 local TIMED_DISTINCT_PATHS = [[
-  local count, limit = ...
+  local count = ...
   local symbols = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
   local function symbol(index)
     return symbols:sub(index % 62 + 1, index % 62 + 1)
@@ -398,17 +399,16 @@ local TIMED_DISTINCT_PATHS = [[
   end
   local details = table.concat(paths, ' ')
   local report = require('aineo.report')
-  local function timed(step)
+  local function seconds_of(step)
     local start = vim.uv.hrtime()
     step()
-    local seconds = (vim.uv.hrtime() - start) / 1e9
-    return seconds <= limit and 'within the limit' or ('%.1f s'):format(seconds)
+    return (vim.uv.hrtime() - start) / 1e9
   end
-  local arrival = timed(function()
+  local arrival = seconds_of(function()
     report.receive_report({ task = 'Task', status = 'done', summary = 'Summary', details = details })
   end)
   vim.api.nvim_set_current_buf(report.report_buffer())
-  local edit = timed(function()
+  local edit = seconds_of(function()
     vim.cmd('edit')
   end)
   return { arrival = arrival, edit = edit }
@@ -419,15 +419,23 @@ local TIMED_DISTINCT_PATHS = [[
 --- envelope, in five bytes a path.
 local DISTINCT_PATHS_IN_A_LINE = 209674
 
---- How long a report may take to show, and to show again on `:edit`.
+--- How long a report may take to show, and to show again on `:edit`, in its
+--- second-fastest of up to three attempts (`timed_attempts`).
 local TIME_LIMIT_SECONDS = 2
 
 T['the file checks']['of a line of distinct paths take at most the time limit, on arrival and on :edit'] = function()
-  start_editor({ '2026-09-24T09:05:00' })
+  local timing = {
+    start = function()
+      start_editor({ '2026-09-24T09:05:00' })
+    end,
+    steps = function()
+      return child.lua(TIMED_DISTINCT_PATHS, { DISTINCT_PATHS_IN_A_LINE })
+    end,
+  }
 
-  local timings = child.lua(TIMED_DISTINCT_PATHS, { DISTINCT_PATHS_IN_A_LINE, TIME_LIMIT_SECONDS })
+  local verdicts = timed_attempts.within_limit(child, timing, TIME_LIMIT_SECONDS)
 
-  eq(timings, { arrival = 'within the limit', edit = 'within the limit' })
+  eq(verdicts, { arrival = 'within the limit', edit = 'within the limit' })
 end
 
 T['the paths'] = MiniTest.new_set()

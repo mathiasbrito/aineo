@@ -1,13 +1,15 @@
 ---
 wave: 00006
-status: claimed
+status: landed
 rolling: true
 planned_by: the orchestrator (Claude, Opus 5.5) for Mathias Santos de Brito — host Macbook-Mathias
 planned_at: 2026-09-25 17:52 CEST
 base: 9af91a6
 claimed_by: Macbook-Mathias (platform UUID prefix CF989BF4), session 938616f1-5ff6-4507-97aa-65611ff715c0
 claimed_at: 2026-09-25 20:34 CEST
-landed_at:
+landed_at: 2026-10-05 02:35 CEST
+pull_requests: "#30, #31, #39, #40, #45, #46, #52, #58, #60, #64, #68, #73, #84, #85, #93, #94, #97"
+closed_by: the user, 2026-10-04 — "check 1 to 3 and close 6"
 ---
 
 # Wave 6 — fixes
@@ -1053,3 +1055,47 @@ Specified, with T27 and T28, in *Packet T27* above: the user's item 3, T17's tim
     - on 0.11.6, it survived the whole suite, 1434 cases, since there it has nothing to break.
   - **Every home cleared** ended its covering file with 0 cases and "its Neovim exited 1", with no assertion shown. The cause: the mutated runner, run by a nested `make`, deleted the verifying run's own homes (the records review of PR #88). Re-run on 2026-09-28 with a pristine outer runner whose homes lay elsewhere, it was killed by assertion on both versions: *a run started inside another › leaves the outer file's home as it was*.
 - **No release:** T22 changes only the test harness.
+- **T28 — PR #93, regular** (documentation only), merged by rebase on 2026-10-04 (22:55 UTC) as `c4420ae`, `d318d60`. Its files on `dev` are identical to the verified tree `8e91641` (below), which also holds T27 and T29's fix-round head.
+  - **The brief review** (dispatch after corrections) found the brief's diff check given without a command, and the plan's T28 mutant missable: a renamed local leaves the stripped bytecode identical, which only the diff filter catches.
+  - **Reviews** on Opus: records and reader by `reviewer`, run as one review — the orchestrator's decision under the user's "try to optimize". It found:
+    - the packet's "no seventh stale place" false: `tests/test_runner.lua:210` and `:216` described the runner before T22;
+    - two docstrings a reader could take two ways (`child.lua`, `entry_editor.lua`), one claiming more than its local holds (`test_entry_guard.lua:14`), and a `tdd` citation that did not say what it was cited for;
+    - "the runner" naming two scripts.
+  - **The fix round** went to the author (132 K). The orchestrator folded the two lines in and widened the boundary to comment lines of `tests/test_runner.lua` and `scripts/run_test_file.lua`. Ten places in seven files, comments only. No re-measure: only comments changed, and the stripped bytecode of all seven files stayed identical. The whole suite was not run again for the round; the verification ran it.
+- **T27 — PR #94, regular**, merged by rebase on 2026-10-04 (22:55 UTC) as `0a7cc71` … `c6172e5` (6 commits), after T28. Its files on `dev` are identical to the verified tree `8e91641`.
+  - **The brief review** found that no recipe of this shape survives a bare `:highlight clear`, which fires no `ColorScheme` event, so the help must not claim it; the test list without `:edit`; the records the fix makes false unnamed.
+  - **Reviews** on Opus: guarantee and records by `neovim-lua-reviewer`, as one review (the orchestrator's decision). The brief review had suggested a reader pass on the help paragraph beside the guarantee; none was dispatched, though this review raised one reader point (its finding 6). It found:
+    - the recipe holds: 35 bundled colour schemes and 8 hostile ones, both forms, before and after the first report, through `:edit`, a scheme after a scheme, re-sourcing and lazy loading, on both versions;
+    - the test proved less than the help says: ten literal help edits passed it, one of them a recipe that wipes the user's colour scheme (finding 1); "every later `:colorscheme`" pinned through one scheme; running the recipe twice unpinned; the screen read blind to a background;
+    - a wrong unit number, and "turn it off again" giving a Lua reader nothing to call;
+    - the author's mechanism probes run outside the harness (unverifiable; re-measured through it by the review).
+  - **The fix round** went to the author (186 K at the packet's end). It adopted the review's built fix, red first under its ten literal mutants: a fourth case, two schemes in case 3, and "until you run the recipe again". 18 help mutants killed on the whole file, on both versions; 1444 cases. No re-measure: the round added assertions, a case and records and moved no mechanism — the orchestrator's reading of §6.
+  - **The help's minimum, by D29.** After D29 a fresh `neovim-lua-developer` agent changed the help's requirements on T27's branch to "Neovim 0.12 or later, tested on the newest release" (`e3a5a30`), so it ships with T27. Help prose, no test pins it; `tests/test_doc.lua` and the whole suite, 1444 cases, on 0.12.5 only. No review of its own: the verification covered it.
+- **T29 — PR #97, regular** (test-only, D28), merged by rebase on 2026-10-05 (00:27 UTC) as `bd194da` … `d1b9225` (6 commits), after T27. `dev` `d1b9225`'s tree is the verified delta tree `cd29244`.
+  - **The brief review** found the plan's "check per occurrence" mutant equivalent on the timed input (replaced by T17's M10 and T10's X11), processor time 2.3–2.5 s on the efficiency cores, over the bound, and busy loops giving no red (load 22–40). It advised that T29 not run beside T27's runs; T29 was dispatched beside T27 all the same, its brief forbidding host-wide load instead.
+  - **Reviews** on Opus: guarantee and records by `neovim-lua-reviewer`, as one review (the orchestrator's decision). Its verdict: the guarantee does not hold. The first form scaled the step's processor time by a 44 ms plain-Lua reference:
+    - on 0.11.6, about one child in twelve compiled no code, and there a drawing at 1.85 times the bound passed;
+    - a reference timed on slower cores read a correct drawing 3–4 times lighter;
+    - N21 and MK2 survived most runs; waiting (W3) and other processes' work (PROC) were not counted;
+    - the records' load-68 spike was the LuaJIT state, and the RP4 reading put to the user was not what the form measured.
+  - **The fix round** went to the author (246 K at the packet's end). The orchestrator preferred, and the author chose, wall time judged over the fastest of up to three fresh children with a compiling JIT; `taskpolicy -b` was dropped as a requirement (the orchestrator's decision). M10, X11, N21, MK2, MK5, W3 and PROC killed 10 of 10 per version. D29 arrived mid-round, and nothing ran on 0.11.6 after it. The in-suite control was refused by the permission classifier and not run.
+  - **The re-measure**, with the attack question, on 0.12.5 only:
+    - INT, a drawing twice over the bound in about half of its processes, passed the fastest of three 8 of 8 times, where the old single attempt killed it 3 of 4. INT's per-process cost came from a coin; the re-measure gave as a real source of such variation that on 0.12.5 `pairs()` can visit string keys in a different order from one Neovim to the next;
+    - WARM, slow only on a home's first drawing, passed, since every attempt shared the test file's home;
+    - H12 survived the JIT pins; 236 runs beside five suites were 156; a child crashed about once in 70 runs.
+  - **The user's reading.** Put to the user on 2026-10-05 at 01:08; the answer at 01:14: "ok on the reading, skip the five-suite run". RP4 now reads: the step's second-fastest wall time over three fresh processes is within 2 s on this host.
+  - **The bounded correction**, by a fresh agent (the author was at 410 K), adopted the re-measure's measured fixes: the second-fastest of three, a home per attempt, a child timed after five starts with no compiling JIT, and the pin that kills H12. INT killed 5 of 8, exactly its runs with two slow children; WARM killed 2 of 2.
+- **The orchestrator's verification**, once, of the three merged together (D29: 0.12.5 only): tree `8e91641` = `dev` `d728d12` + T27 `e3a5a30` + T28 `965ce2b` + T29 `4ed9549`.
+  - guard 5 cases, `Fails (0)`;
+  - `make test`, 1451 cases in 198 s, `Fails (0)`;
+  - lint clean;
+  - T28: every changed line of its seven files a comment, and their stripped bytecode identical to `dev`'s;
+  - mutants on their covering files, each killed:
+    - T27: P1, the Lua form's `highlight clear` removed, and the review's R1, R3, R5 and R15, each by assertion in `tests/test_report_colours.lua`;
+    - T29: T17's M10 in `tests/test_report_paths.lua` and T10's X11 in `tests/test_report_links.lua`.
+  - The script first ran a list left over from T22's verification, its fourteen mutants. Thirteen were killed by assertion. T10, every home cleared, ended its file with 0 cases and "its Neovim exited 1", with no assertion: the artefact of T22's verification above, where the mutated runner, run by a nested `make`, deletes the verifying run's own homes. Disclosed to the user at 00:46 and 00:57, as "all caught", which was wrong for T10 (the records review of PR #101, finding 2).
+  - It ran beside T29's re-measure, dispatched at 00:36: the combined M10 and X11 runs logged loads 65 and 81, and the re-measure's attack runs 25–108.
+  - The plan's other mutants did not run in the verification. The test's `:colorscheme` step removed (T27) was not run. Of T28's, two ran as the records and reader review's instrument controls, on copies: a changed constant gave `identical=false` on both versions, and a renamed local left the bytecode identical (0.12.5) and was caught by the diff filter. The added statement was not run.
+- **The delta, for T29's final head:** tree `cd29244` = `dev` `c6172e5` + T29 `0e55599`. Guard 5/0; `make test` 1455 cases in 197 s, `Fails (0)`; lint clean; M10 (`arrival = "16.9 s"`) and X11 (`"68.0 s"`), each killed by assertion.
+- **Released:** `v0.2.11`, which carries T27 and the help's 0.12 minimum, and T28 (PR #100, `main` `10c330f`, from `dev` `c6172e5`). No release for T29: it changes only tests.
+- **The wave lands.** The user, 2026-10-04: "check 1 to 3 and close 6". By the rolling wave's rule, the user closes the wave when no packet is open (orchestrate §3). T27, T28 and T29 have merged, and no packet is open. The retrospective is completed over every packet: [[Sessions/2026-09-26 — Wave 6 retrospective]].

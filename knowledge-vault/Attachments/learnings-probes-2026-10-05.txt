@@ -1,0 +1,248 @@
+Probes behind the Learnings drawn from T29 (PR #97) by wave 6's closing knowledge pass, on 2026-10-05,
+macOS arm64, Apple M1 Max, on the branch knowledge/w6-close-t27-t29 cut from dev's d1b9225.
+
+The correction's counts the notes cite (INT killed 5 of 8 under the second-fastest rule, WARM killed 2 of 2
+with a home per attempt) are in the T29 session note, Sessions/2026-10-04 — T29 Timing cases.md, under
+"The correction". The re-measure's own counts are not in the repository otherwise, so its rows are quoted
+below, followed by the pairs() order probe.
+
+==== PR #97's re-measure (neovim-lua-reviewer, head 4ed9549, code 2d5722f, 0.12.5 only), quoted ====
+INT: a literal edit of lua/aineo/report/init.lua. Each Neovim draws one coin from vim.uv.random at its first
+file check; when it comes up slow (byte < 128), every path costs five extra names_file(path) calls, 4.1-4.5 s
+per step, about 2 times the 2 s bound. One coin per child; each run's coins were logged.
+
+  form                                       runs  killed  coins per run (T = slow child)
+  new, 2d5722f (fastest of up to 3)          8     0       F | T T F | F | T F | T F | F | T F | F
+  old, 985f1ee (one attempt)                 4     3       T | T | F | T        (arrival 4.3, 4.3, 4.5 s)
+  second-fastest of 3 (the reviewer's fix)   8     3       exactly the runs with two or three slow coins
+  Under the fastest of three, every pass came after a slow first attempt: the case stopped at the first
+  fast child. A kill needed all three coins slow.
+  The correct drawing under the second-fastest rule: 5 of 5 passed.
+
+WARM: a literal edit of init.lua; the first rendering of a path in a home (a marker in stdpath('cache'))
+makes five extra names_file(path) calls, 4.1-4.2 s; every later rendering is fast.
+
+  form                                         narrowed case            whole test_report_paths.lua
+  new, 2d5722f (attempts share the file's home) passes 2 of 2           passes (90 cases)
+  old, 985f1ee (one attempt)                   killed, arrival 4.2 s    passes: earlier cases warm the home
+  a fresh home per attempt (reviewer's fix)    killed, arrival 4.2 s    killed, arrival 4.1 s
+  What a fresh child inherits: the test file's XDG_* home, through jobstart's environment, across attempts
+  and cases. Not the OS file cache: forced attempts took 0.93-1.01 s each.
+
+==== script rm-pairs-order.lua (written by PR #97's re-measure, unchanged) ====
+-- Prints the order pairs() visits 12 string keys in, to see whether it
+-- changes from one Neovim process to the next.
+local t = {}
+for _, key in ipairs({ 'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa', 'lambda', 'mu' }) do
+  t[key] = true
+end
+local order = {}
+for key in pairs(t) do
+  order[#order + 1] = key
+end
+io.stdout:write(table.concat(order, ' '), '\n')
+
+==== script rm-pairs-probe.lua (the re-measure's driver; this pass changed 4 to 8 starts) ====
+-- Runs rm-pairs-order.lua in eight fresh Neovims (isolated by make test_file)
+-- and records the orders they print.
+local MiniTest = require('mini.test')
+local ROOT = vim.fn.getcwd()
+
+local T = MiniTest.new_set()
+
+T['pairs order'] = function()
+  local lines = {}
+  for _ = 1, 8 do
+    local result = vim
+      .system({ vim.v.progpath, '--clean', '--headless', '-i', 'NONE', '-l', ROOT .. '/.tests/rm-pairs-order.lua' })
+      :wait()
+    lines[#lines + 1] = vim.trim(result.stdout or '') .. vim.trim(result.stderr or '')
+  end
+  vim.fn.writefile(lines, ROOT .. '/.tests/rm-pairs-order.txt')
+end
+
+return T
+
+==== PR #97's re-measure, 2026-10-05, Neovim 0.12.5 (Homebrew), four fresh Neovims ====
+Run as: make test_file FILE=.tests/rm-pairs-probe.lua (Fails (0)); output, one line per process:
+gamma delta epsilon zeta eta theta iota kappa lambda mu alpha beta
+eta theta iota kappa lambda mu alpha beta gamma delta epsilon zeta
+eta theta iota kappa lambda mu alpha beta gamma delta epsilon zeta
+lambda mu alpha beta gamma delta epsilon zeta eta theta iota kappa
+Three orders in four processes.
+
+==== This pass, 2026-10-05, NVIM v0.12.5 (Homebrew, LuaJIT 2.1.1788856981), eight fresh Neovims ====
+Run as: make test_file FILE=.tests/rm-pairs-probe.lua, in this branch's worktree (Fails (0)); output:
+kappa lambda mu alpha beta gamma delta epsilon zeta eta theta iota
+lambda mu alpha beta gamma delta epsilon zeta eta theta iota kappa
+mu alpha beta gamma delta epsilon zeta eta theta iota kappa lambda
+kappa lambda mu alpha beta gamma delta epsilon zeta eta theta iota
+alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu
+delta epsilon zeta eta theta iota kappa lambda mu alpha beta gamma
+epsilon zeta eta theta iota kappa lambda mu alpha beta gamma delta
+epsilon zeta eta theta iota kappa lambda mu alpha beta gamma delta
+Six orders in eight processes. Every order is a rotation of one cycle.
+
+==== This pass, 2026-10-05, the same LuaJIT without Neovim ====
+Run as: luajit .tests/rm-pairs-order.lua, five times, with /opt/homebrew/bin/luajit
+(luajit -v: LuaJIT 2.1.1788856981); output:
+alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu
+epsilon zeta eta theta iota kappa lambda mu alpha beta gamma delta
+iota kappa lambda mu alpha beta gamma delta epsilon zeta eta theta
+alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu
+gamma delta epsilon zeta eta theta iota kappa lambda mu alpha beta
+Four orders in five processes.
+
+==== This pass, 2026-10-05, NVIM v0.12.5: one table built five times within one Neovim ====
+==== script pairs-same-probe.lua (the test file's own Neovim builds the tables) ====
+-- Builds the same twelve-key table five times in this one Neovim and records
+-- each order pairs() visits it in, to see whether it varies within a process.
+local MiniTest = require('mini.test')
+
+local KEYS = { 'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa', 'lambda', 'mu' }
+
+local function order_of_a_new_table()
+  local t = {}
+  for _, key in ipairs(KEYS) do
+    t[key] = true
+  end
+  local order = {}
+  for key in pairs(t) do
+    order[#order + 1] = key
+  end
+  return table.concat(order, ' ')
+end
+
+local T = MiniTest.new_set()
+
+T['pairs order within one process'] = function()
+  local lines = {}
+  for _ = 1, 5 do
+    lines[#lines + 1] = order_of_a_new_table()
+    collectgarbage()
+  end
+  vim.fn.writefile(lines, vim.fn.getcwd() .. '/.tests/pairs-same-order.txt')
+end
+
+return T
+
+Run as: make test_file FILE=.tests/pairs-same-probe.lua, twice (Fails (0) each); output, one line per table:
+first Neovim:
+beta gamma delta epsilon zeta eta theta iota kappa lambda mu alpha  (all five tables)
+second Neovim:
+alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu  (all five tables)
+One order within each process; a different one in the next.
+
+Not run: Neovim 0.11.6 (D29), and LuaJIT's source, which is not on the host.
+
+==== The records review of PR #101, 2026-10-05, and its correction: what the probes above do not show ====
+Two statements above do not generalise. "Every order is a rotation of one cycle" holds for the eight orders
+above, not in general: a run below printed one that is not. "One order within each process" holds for keys
+kept alive as the constants in KEYS, not for keys made again after a collection. LuaJIT's source was not on
+the host, so it was read through GitHub, at the v2.1 head c6ffc141a876 (committed 2026-09-08T08:43:01Z, the
+host's version stamp 2.1.1788856981):
+  src/lj_tab.h:41-42    /* String IDs are generated when a string is interned. */
+                        #define hashstr(t, s) hashmask(t, (s)->sid)
+  src/lj_str.c:265-296  lj_str_alloc: s->sid = g->str.id++; under STRID 1, g->str.id redrawn from
+                        lj_prng_u64(&g->prng) after a random interval below 2^8 strings
+  src/lj_arch.h:758-761 #define LUAJIT_SECURITY_STRID 1  /* String IDs: 0 = linear, 1 = reseed < 255, ... */
+  src/lj_state.c:257    lj_prng_seed_secure(&prng): the state's PRNG seeded from the OS's entropy
+  src/lj_tab.c:616      lj_tab_next walks the hash part from slot 0 to hmask
+  src/lj_str.c:367      g->str.seed = lj_prng_u64(&g->prng): the hash seed of the interning table only
+
+== The review: make test_file FILE=.tests/rm-pairs-probe.lua on NVIM v0.12.5, run 1 (Fails (0)): 6 orders in 8
+eta theta iota kappa lambda mu alpha beta gamma delta epsilon zeta
+kappa lambda mu alpha beta gamma delta epsilon zeta eta theta iota
+eta theta iota kappa lambda mu alpha beta gamma delta epsilon zeta
+theta iota kappa lambda mu alpha beta gamma delta epsilon zeta eta
+eta theta iota kappa lambda mu alpha beta gamma delta epsilon zeta
+alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu
+delta epsilon zeta eta theta iota kappa lambda mu alpha beta gamma
+beta gamma delta epsilon zeta eta theta iota kappa lambda mu alpha
+
+== The review, run 2 (Fails (0)): 7 orders in 8; line 2 is not a rotation of the cycle
+iota kappa lambda mu alpha beta gamma delta epsilon zeta eta theta
+lambda alpha beta gamma delta epsilon zeta eta theta iota kappa mu
+eta theta iota kappa lambda mu alpha beta gamma delta epsilon zeta
+alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu
+delta epsilon zeta eta theta iota kappa lambda mu alpha beta gamma
+kappa lambda mu alpha beta gamma delta epsilon zeta eta theta iota
+alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu
+epsilon zeta eta theta iota kappa lambda mu alpha beta gamma delta
+
+== The review: luajit rm-pairs-order.lua, 5 runs: 5 orders
+gamma delta epsilon zeta eta theta iota kappa lambda mu alpha beta
+delta epsilon zeta eta theta iota kappa lambda mu alpha beta gamma
+theta iota kappa lambda mu alpha beta gamma delta epsilon zeta eta
+kappa lambda mu alpha beta gamma delta epsilon zeta eta theta iota
+alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu
+
+== The review: luajit, constants parsed mu..alpha and inserted alpha..mu, 8 runs (its script was not kept):
+every order a rotation of the parse order mu lambda ... alpha, none of the insertion order
+iota theta eta zeta epsilon delta gamma beta alpha mu lambda kappa
+iota theta eta zeta epsilon delta gamma beta alpha mu lambda kappa
+zeta epsilon delta gamma beta alpha mu lambda kappa iota theta eta
+lambda kappa iota theta eta zeta epsilon delta gamma beta alpha mu
+mu lambda kappa iota theta eta zeta epsilon delta gamma beta alpha
+mu lambda kappa iota theta eta zeta epsilon delta gamma beta alpha
+mu lambda kappa iota theta eta zeta epsilon delta gamma beta alpha
+theta eta zeta epsilon delta gamma beta alpha mu lambda kappa iota
+
+== The review: luajit, one process, the twelve names made at run time and collected between builds
+(its script was not kept): 4 orders in 5 builds
+alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu
+alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu
+kappa lambda mu alpha beta gamma delta epsilon zeta eta theta iota
+delta epsilon zeta eta theta iota kappa lambda mu alpha beta gamma
+lambda mu alpha beta gamma delta epsilon zeta eta theta iota kappa
+
+==== The correction's re-run of the review's two LuaJIT checks, 2026-10-05, luajit 2.1.1788856981 ====
+==== script intern-reverse.lua ====
+-- The constants are interned as the chunk is parsed, mu first; the table is
+-- filled alpha first. Prints the order pairs() visits the keys in.
+local PARSED = { 'mu', 'lambda', 'kappa', 'iota', 'theta', 'eta', 'zeta', 'epsilon', 'delta', 'gamma', 'beta', 'alpha' }
+local t = {}
+for i = #PARSED, 1, -1 do
+  t[PARSED[i]] = true
+end
+local order = {}
+for key in pairs(t) do
+  order[#order + 1] = key
+end
+io.stdout:write(table.concat(order, ' '), '\n')
+
+Run as: luajit intern-reverse.lua, 8 times; seven rotations of the parse order, the last broken by a redraw:
+mu lambda kappa iota theta eta zeta epsilon delta gamma beta alpha
+eta zeta epsilon delta gamma beta alpha mu lambda kappa iota theta
+beta alpha mu lambda kappa iota theta eta zeta epsilon delta gamma
+mu lambda kappa iota theta eta zeta epsilon delta gamma beta alpha
+lambda kappa iota theta eta zeta epsilon delta gamma beta alpha mu
+mu lambda kappa iota theta eta zeta epsilon delta gamma beta alpha
+mu lambda kappa iota theta eta zeta epsilon delta gamma beta alpha
+zeta epsilon delta gamma beta alpha kappa iota theta eta mu lambda
+
+==== script within-process.lua ====
+-- Builds a twelve-key table five times in one process, its keys made at run
+-- time and collected between builds, and prints each pairs() order.
+local NAMES = 'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu'
+for _ = 1, 5 do
+  local t = {}
+  for name in NAMES:gmatch('%a+') do
+    t[name:upper():lower()] = true
+  end
+  local order = {}
+  for key in pairs(t) do
+    order[#order + 1] = key
+  end
+  io.stdout:write(table.concat(order, ' '), '\n')
+  t, order = nil, nil
+  collectgarbage()
+  collectgarbage()
+end
+
+Run as: luajit within-process.lua, once; 5 orders in 5 builds, none a rotation of the cycle:
+epsilon zeta eta theta alpha mu beta lambda gamma kappa delta iota
+alpha beta gamma delta mu epsilon lambda zeta kappa eta iota theta
+delta epsilon zeta eta theta mu alpha lambda beta kappa gamma iota
+theta alpha beta gamma mu delta lambda epsilon kappa zeta iota eta
+gamma delta epsilon zeta eta mu theta lambda alpha kappa beta iota

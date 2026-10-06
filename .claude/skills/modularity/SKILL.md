@@ -20,7 +20,7 @@ Where a boundary sits, what crosses it, and how the clients of a module are foun
 
   | Path | Holds |
   |---|---|
-  | `lua/aineo/<concern>/` | one concern behind its `init.lua` — `config` (C1), `layout` (C2, C9, C12), `claude` (C3), `send` (C4), `mcp` (C5), `report` (C6, C10), `draft` (C11), `git` (C13) |
+  | `lua/aineo/<concern>/` | one concern behind its `init.lua` — `config` (C1), `layout` (C2, C9, C12), `claude` (C3), `send` (C4), `mcp` (C5), `report` (C6, C10), `draft` (C11), `git` (C13), `changes` (C15) |
   | `lua/aineo/init.lua` | the plugin's public Lua API, `require('aineo')` (C1); it calls into homes, it never re-exports their symbols |
   | `lua/aineo/health.lua` | the `:checkhealth aineo` entry (C7) — a file Neovim looks up by name, not a home |
   | `plugin/aineo.lua` | the composition root (C1): commands, `<Plug>` mappings, autocommands; it `require()`s a home only inside a callback |
@@ -37,6 +37,7 @@ Where a boundary sits, what crosses it, and how the clients of a module are foun
   | `aineo.layout`, `aineo.report` | `aineo.config` |
   | `aineo.draft` | no aineo home (it is handed Input's buffer, and given its state and working directories) |
   | `aineo.git` | no aineo home (it is given a directory, a base and a callback, and runs `git`) |
+  | `aineo.changes` | `aineo.git` (the changes pane's content: the session's base and save marks, its lists and diffs; the composition root hands it what it needs of the layout) |
   | `aineo.mcp` | `aineo.config`, `aineo.report` (the relay renders into the Report buffer) |
   | `aineo.claude` | `aineo.config`, `aineo.mcp` (the session registers the report server) |
   | `aineo.send` | `aineo.config`, `aineo.claude`, `aineo.layout` (the Input buffer into the session's terminal) |
