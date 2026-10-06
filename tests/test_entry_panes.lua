@@ -16,24 +16,58 @@ local CHANGES_PANE = { 'terminal', 'aineo://changes-files', 'aineo://changes-com
 
 local child = MiniTest.new_child_neovim()
 
---- Starts the child afresh with the git isolation of the git home's suites
---- (`git_repo.ENVIRONMENT`), which this file's own Neovim takes on and every
---- child it starts inherits, and moves its working directory, where Claude
---- Code starts, into a fixture repository of one commit: the changes pane
---- this file shows lists that repository, never the checkout's.
-local function restart_in_a_fixture_repository()
+--- The fixture repository of one commit every case's child works in, made
+--- once for the file (`make_the_fixture_repository()`); no case changes it.
+local fixture_repository
+
+--- Takes on the git isolation of the git home's suites
+--- (`git_repo.ENVIRONMENT`) in this file's own Neovim, which every child it
+--- starts inherits, and makes `fixture_repository`.
+local function make_the_fixture_repository()
   for name, value in pairs(git_repo.ENVIRONMENT) do
     vim.env[name] = value
   end
+  fixture_repository = git_repo.create('changespane-entry-panes', { ['notes.txt'] = { 'one' } })
+end
+
+--- The Lua that ends, in the child, the process of every terminal by a
+--- hangup, and waits for each to end, at most 5 s each.
+local END_TERMINALS = [[
+  for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.bo[buffer].buftype == 'terminal' then
+      local job = vim.b[buffer].terminal_job_id
+      vim.fn.jobstop(job)
+      vim.fn.jobwait({ job }, 5000)
+    end
+  end
+]]
+
+--- Stops the child, once the fake Claude Code it runs, if any, has ended by
+--- a hangup (`END_TERMINALS`): Neovim quitting then has no Claude Code for
+--- aineo to stop by its keys, a stop that waits some 4.4 s for the fake to
+--- exit once it reads its keys.
+local function stop_the_child()
+  if child.is_running() then
+    child.lua(END_TERMINALS)
+  end
+  child.stop()
+end
+
+--- Starts the child afresh (`stop_the_child()` first) and moves its working
+--- directory, where Claude Code starts, into `fixture_repository`: the
+--- changes pane this file shows lists that repository, never the
+--- checkout's.
+local function restart_in_the_fixture_repository()
+  stop_the_child()
   entry.restart(child)
-  local top = git_repo.create('changespane-entry-panes', { ['notes.txt'] = { 'one' } })
-  child.cmd('cd ' .. vim.fn.fnameescape(top))
+  child.cmd('cd ' .. vim.fn.fnameescape(fixture_repository))
 end
 
 local T = MiniTest.new_set({
   hooks = {
-    pre_case = restart_in_a_fixture_repository,
-    post_once = child.stop,
+    pre_once = make_the_fixture_repository,
+    pre_case = restart_in_the_fixture_repository,
+    post_once = stop_the_child,
   },
 })
 
