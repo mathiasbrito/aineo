@@ -313,6 +313,23 @@ local SELECTIONS = {
     ' abc\nx\n',
     { selection = 'old', virtualedit = 'all,NONE' },
   },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit=all local to the window, which keep its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { ' ' },
+    ' abc\nx\n',
+    { selection = 'old', virtualedit = '' },
+    'setlocal virtualedit=all',
+  },
+  {
+    'charwise from the last character of a line to the empty line below, selection=old',
+    { 'abc', '' },
+    'gg$vj',
+    { 'ab', '' },
+    'c',
+    { selection = 'old', virtualedit = '' },
+  },
 }
 
 T['a Visual Send'] = MiniTest.new_set()
