@@ -953,13 +953,14 @@ T['a buffer of the pane']['gone as its list is read, lists what is read later on
 end
 
 --- The Lua that makes, in the child, the next write of lines into the files
---- buffer raise an error, as a buffer under textlock refuses it; every other
---- write goes through.
+--- buffer named `...` raise an error, as a buffer under textlock refuses it;
+--- every other write goes through.
 local REFUSE_ONE_WRITE = [[
+  local name = ...
   local set_lines = vim.api.nvim_buf_set_lines
   local refused = false
   vim.api.nvim_buf_set_lines = function(buffer, ...)
-    if not refused and buffer == vim.fn.bufnr('aineo://changes-files') then
+    if not refused and buffer == vim.fn.bufnr(name) then
       refused = true
       error('E565: Not allowed to change text or change window')
     end
@@ -971,12 +972,47 @@ T['a buffer of the pane']['that refuses its list once is written by the reads af
   local top = git_repo.create('changespane-refused-write', { ['notes.txt'] = { 'one' } })
   begin_and_show(top)
   expect_lines(FILES, { 'No files changed on this session' })
-  child.lua(REFUSE_ONE_WRITE)
+  child.lua(REFUSE_ONE_WRITE, { FILES })
   in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
 
   in_file(vim.fs.joinpath(top, 'other.txt'), "call setline(1, 'other') | write")
 
   expect_lines(FILES, { '* M notes.txt', '* ? other.txt' })
+end
+
+T['a buffer of the pane']['that refuses its commits once is written by the reads after it'] = function()
+  local top = git_repo.create('changespane-refused-commits', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  expect_lines(COMMITS, { 'No commits on this session' })
+  child.lua(REFUSE_ONE_WRITE, { COMMITS })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local first = git_repo.commit_all(top, 'Write two')
+  child.lua(SHOW_FILES_AGAIN)
+  git_repo.write(top, 'notes.txt', { 'three' })
+  local second = git_repo.commit_all(top, 'Write three')
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  expect_lines(COMMITS, { second:sub(1, 7) .. ' Write three', first:sub(1, 7) .. ' Write two' })
+end
+
+T['a buffer of the pane']['that refuses what the first look found is written by the looks after it'] = function()
+  local directory = git_repo.directory('changespane-refused-look')
+  local slow = stand_in_git('changespane-refused-look', {
+    'case " $* " in *" --show-toplevel "*) sleep 1 ;; esac',
+  })
+  child.lua(SPY_ON_GIT)
+  begin_and_show(directory, { executable = slow })
+  child.lua(REFUSE_ONE_WRITE, { COMMITS })
+  eq(child.lua_get('_G.git_answers.find_repository'), 0)
+  expect_lines(FILES, not_in_a_repository(directory))
+  git_repo.git(directory, { 'init', '--quiet', '--initial-branch=main' })
+  git_repo.write(directory, 'notes.txt', { 'one' })
+  git_repo.commit_all(directory, 'First')
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  expect_lines(FILES, { 'No files changed on this session' })
 end
 
 T['a buffer of the pane']['keeps no undo history of the lists it was written'] = function()
@@ -1227,24 +1263,34 @@ T['Enter']['shows the diff again once a command run in its window emptied it']['
   }, shown)
 end
 
-T['Enter']['ten times on the same file leaves one diff buffer'] = function()
+--- The Lua that presses Enter in the child's current window ten times, each
+--- once the diff the Enter before asked for has been read (`SPY_ON_GIT`),
+--- at most `...` milliseconds each.
+local ENTER_TEN_TIMES_ONE_BY_ONE = [[
+  local patience = ...
+  for count = 1, 10 do
+    vim.api.nvim_feedkeys(vim.keycode('<CR>'), 'x', false)
+    vim.wait(patience, function()
+      return _G.git_answers.file_diff == count
+    end, 10)
+  end
+]]
+
+T['Enter']['ten times on the same file, each once the last diff was read, leaves one diff buffer'] = function()
   local top = git_repo.create('changespane-diff-ten', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
   child.lua(SPY_ON_GIT)
   begin_and_show(top)
   expect_lines(FILES, { '  M notes.txt' })
 
-  child.type_keys('<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>')
+  child.lua(ENTER_TEN_TIMES_ONE_BY_ONE, { git_repo.PATIENCE_MS })
 
-  git_repo.wait_until('ten diffs read', function()
-    return child.lua_get('_G.git_answers.file_diff') == 10
-  end)
-  eq(
+  eq({
+    child.lua_get('#_G.shown_diffs'),
     child.lua_get([[vim.tbl_map(vim.api.nvim_buf_get_name, vim.tbl_filter(function(buffer)
       return vim.startswith(vim.api.nvim_buf_get_name(buffer), 'aineo://diff/')
     end, vim.api.nvim_list_bufs()))]]),
-    { 'aineo://diff/notes.txt' }
-  )
+  }, { 10, { 'aineo://diff/notes.txt' } })
 end
 
 T['Enter']['twice in quick succession shows only the last Enter’s diff, the first read slower'] = function()
