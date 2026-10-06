@@ -456,6 +456,27 @@ Added after the user's answers, one per option not chosen:
 
 **Brief:** `brief-t26-visual-send.md`, amended with the user's answers to VS1–VS5 and the gaps, and reviewed by the brief dimension with T25's (`brief-review-t25-t26.md`). The review found ten items for T26 (dispatch after corrections), all corrected in the brief before merge: a `$` block whose cursor ends on a shorter line (`getregion()` sends less than Send removes); VS5 widened to every family where the yank and the removal differ; the `'undolevels'` gaps; `tests/helpers/health.lua` in the boundary; VS1 (b)'s boundary (moot under (a)); VS1's evidence line; facts re-anchored to `dev`; who measured; the message with no Input at all; and the baseline.
 
+## Packet T31 — 2026-10-06
+
+**Why now.** The user kept wave 7 open on 2026-10-06 ("Keep it open") until the post-merge re-measure of T26's fix round was back. That re-measure was owed before #115's merge (orchestrate §6), and the orchestrator skipped it. It found that the fix round's `removed_region()` sends, under `'selection'` old with `'virtualedit'` all or onemore, text that never left Input. That is against VS5 (b) and is in v0.2.13. It also found an older empty-check mismatch, two unpinned behaviours and one invalid-UTF-8 limit. T31 fixes them inside wave 7, as a small fix.
+
+**The six rules for T31:**
+
+| rule | T31 |
+|---|---|
+| 1 dependencies | T26 landed (#115) ✓ |
+| 2 files | `lua/aineo/send/init.lua`, `doc/aineo.txt`, two test files; no other packet is open ✓ |
+| 3 schema | none ✓ |
+| 4 dependencies | none ✓ |
+| 5 decisions | D20 and VS5 (b) are the user's; F4 as a named limit is the orchestrator's reading ✓ |
+| 6 task lines | T31's row follows T30's; it holds its mark ✓ |
+
+**Review:** a guarantee review by `neovim-lua-developer` (small fix), then the orchestrator's verification of the whole suite and the re-measure's cases and mutants.
+
+**Release:** a release after the merge, v0.2.14, under the user's rule of 2026-09-26.
+
+**Brief:** `brief-t31-selection-old.md`. Its facts are the re-measure's measurements.
+
 ## Landed
 
 - **Wave 7 paused** at the user's word on 2026-09-27 (20:16): "we will not continue towards wave 7, finish the current work and wait my go to start wave 7". That T23, already in its fix round, counted as current work and was finished is the orchestrator's reading, told to the user at 20:17. T24–T26 wait for the user's go. The wave stays claimed.
