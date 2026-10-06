@@ -539,6 +539,23 @@ T['send()']['writes no Enter on its own, which a dialog would read as an answer'
   )
 end
 
+T['send()']['leaves Input’s text for one u to bring back, u writing nothing'] = function()
+  local fake = claude.fake('send-undo', 'ready')
+  start_ready_session(fake)
+  child.o.undolevels = 1000
+  send.enter_input(child)
+  send.type_keys(child, 'ifirst line<CR>second line<Esc>')
+  send.watch_writes(child)
+  send.type_keys(child, '\\s')
+
+  send.type_keys(child, 'u')
+
+  eq({ input = send.input(child).lines, writes = send.writes(child) }, {
+    input = { 'first line', 'second line' },
+    writes = { '\27[200~first line\nsecond line\27[201~\r' },
+  })
+end
+
 T['send()']['says Input is empty before saying Claude is not ready'] = function()
   local fake = claude.fake('send-empty-behind-trust', 'trust')
   local buffer = start_session(fake)
