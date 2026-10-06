@@ -3,6 +3,7 @@
 
 local arguments = require('aineo.claude.arguments')
 local readiness = require('aineo.claude.readiness')
+local session_name = require('aineo.claude.session_name')
 local session_ids = require('aineo.claude.session_ids')
 local stop = require('aineo.claude.stop')
 
@@ -239,6 +240,7 @@ local function launch(settings, choice, on_exit)
   vim.list_extend(command, session_arguments(choice))
   vim.list_extend(command, arguments.claude_arguments(settings))
   local launched = { buffer = vim.api.nvim_create_buf(false, true), choice = choice }
+  session_name.keep_name_and_folder(launched.buffer, settings.cwd)
   readiness.watch(launched.buffer, function(ready)
     launched.ready = ready
   end)
@@ -396,6 +398,10 @@ end
 --- about 50 ms after it starts in Neovim 0.12.5, though a size it reads as it
 --- starts can still be 5 rows.
 ---
+--- Each terminal keeps the session's name and the directory it started in
+--- as `b:aineo_session_name` and `b:aineo_session_folder`, which
+--- `session_statusline()` draws.
+---
 --- A session whose terminal has been wiped counts as ended, since the wipe
 --- hangs its Claude Code up: a start then launches a new one.
 ---
@@ -440,6 +446,22 @@ function M.session_status()
     return 'ready'
   end
   return 'starting'
+end
+
+--- A `'statusline'` that draws, for a window showing the session's terminal,
+--- the session's name, then the folder Claude Code started in:
+--- `<name> — <folder>`, read from the terminal's `b:aineo_session_name` and
+--- `b:aineo_session_folder`. The name is Claude Code's own for the session,
+--- taken from its terminal title without the status glyph before it, and
+--- `Claude Code` while the title gives none — before Claude Code sets one,
+--- when it sets an empty one, as at its exit, and whenever it sets none at
+--- all; every status line is drawn again when the name changes. The folder
+--- is the directory of the start, written from the home directory. A `%` in
+--- either draws as written.
+---
+---@return string
+function M.session_statusline()
+  return session_name.STATUSLINE
 end
 
 --- Writes `bytes` to the terminal Claude Code runs in, unchanged and in one
