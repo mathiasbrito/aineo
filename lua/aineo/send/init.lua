@@ -82,6 +82,21 @@ local function pasteable_text(input)
   return without_control_bytes(table.concat(lines, '\n'))
 end
 
+--- Writes `text` to Claude Code's terminal as one bracketed paste followed
+--- by Enter, in one write. When the write fails, puts `lines` back as
+--- `input`'s lines and raises the write's error as it is.
+---
+---@param input integer the Input buffer
+---@param lines string[] Input's lines before Send changed them
+---@param text string
+local function write_or_put_back(input, lines, text)
+  local written, failure = pcall(claude.write_to_session, PASTE_START .. text .. PASTE_END .. ENTER)
+  if not written then
+    vim.api.nvim_buf_set_lines(input, 0, -1, false, lines)
+    error(failure, 0)
+  end
+end
+
 --- Empties Input, then writes its text — its lines joined by line feeds,
 --- without control bytes (`without_control_bytes()`), every other byte
 --- kept — to Claude Code's terminal as one bracketed paste followed by
@@ -119,11 +134,7 @@ function M.send()
   end
   local lines = vim.api.nvim_buf_get_lines(input, 0, -1, false)
   vim.api.nvim_buf_set_lines(input, 0, -1, false, {})
-  local written, failure = pcall(claude.write_to_session, PASTE_START .. text .. PASTE_END .. ENTER)
-  if not written then
-    vim.api.nvim_buf_set_lines(input, 0, -1, false, lines)
-    error(failure, 0)
-  end
+  write_or_put_back(input, lines, text)
 end
 
 --- The part of a line a selection spans from `first` to `last`, positions
@@ -202,7 +213,13 @@ end
 --- for `gv`, and tells the user why with one `vim.notify()` warning, when
 --- the current buffer is not Input — Input missing too — when the selection
 --- holds nothing but white space, and when Claude Code is not ready, as
---- `send()` tells it — checked in that order.
+--- `send()` tells it — checked in that order. When Input cannot be changed,
+--- raises Neovim's error and writes nothing.
+---
+--- When the write fails — the terminal's stream has closed — puts Input's
+--- lines back as they were before the removal and raises the write's error
+--- as it is, as `send()` does: the removal and the put-back are then one
+--- undo block, which `u` undoes with no change to see.
 function M.send_selection()
   local input = vim.api.nvim_get_current_buf()
   if input ~= existing_input() then
@@ -216,11 +233,10 @@ function M.send_selection()
   if status ~= 'ready' then
     return refuse_selection(status or 'not_started')
   end
-  local line_count = vim.api.nvim_buf_line_count(input)
+  local lines = vim.api.nvim_buf_get_lines(input, 0, -1, false)
   vim.cmd.normal({ args = { '"_d' }, bang = true })
-  local text =
-    without_control_bytes(removed_text(selection, line_count - vim.api.nvim_buf_line_count(input)))
-  claude.write_to_session(PASTE_START .. text .. PASTE_END .. ENTER)
+  local removed = removed_text(selection, #lines - vim.api.nvim_buf_line_count(input))
+  write_or_put_back(input, lines, without_control_bytes(removed))
 end
 
 return M

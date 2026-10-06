@@ -4,6 +4,13 @@ local send = dofile('tests/helpers/send.lua')
 
 local eq = MiniTest.expect.equality
 
+--- Expects `text` to be a string holding `part`, character for character.
+local contains = MiniTest.new_expectation('a string containing a part', function(text, part)
+  return type(text) == 'string' and text:find(part, 1, true) ~= nil
+end, function(text, part)
+  return string.format('Text: %s\nPart: %s', vim.inspect(text), vim.inspect(part))
+end)
+
 local child = MiniTest.new_child_neovim()
 
 local T = MiniTest.new_set({
@@ -362,6 +369,57 @@ T['a refused Visual Send']['ends Visual mode, gv selecting again what was select
     mode_after = mode_after,
     selected = child.lua_get("vim.fn.getregion(vim.fn.getpos('v'), vim.fn.getpos('.'))"),
   }, { mode_after = 'n', selected = { 'message' } })
+end
+
+T['a Visual Send in an Input that cannot be changed'] = MiniTest.new_set()
+
+T['a Visual Send in an Input that cannot be changed']['writes nothing and raises Neovim’s error'] = function()
+  start_ready_session('not-modifiable')
+  send.set_input(child, { 'a message' })
+  child.lua("vim.bo[require('aineo.layout').input_buffer()].modifiable = false")
+  send.watch_writes(child)
+
+  send.send_selection(child, 'ggV')
+
+  eq({ writes = send.writes(child), input = send.input(child).lines }, {
+    writes = {},
+    input = { 'a message' },
+  })
+  contains(send.raised(child), 'E21')
+end
+
+T['a Visual Send whose write fails'] = MiniTest.new_set()
+
+T['a Visual Send whose write fails']['puts Input back as it was and raises the write’s error'] = function()
+  local _, buffer = start_ready_session('write-fails')
+  send.set_input(child, { 'abc def', 'ghi' })
+
+  local status = send.send_selection_after_closing_stream(child, buffer, 'gg0wvj')
+  claude.wait_for_status(child, 'exited')
+
+  eq({ status = status, input = send.input(child).lines }, {
+    status = 'ready',
+    input = { 'abc def', 'ghi' },
+  })
+  contains(send.raised(child), "Can't send data to closed stream")
+end
+
+T['a Visual Send whose write fails']['leaves one undo block, so that the first u changes nothing visible'] = function()
+  local _, buffer = start_ready_session('write-fails-undo')
+  child.o.undolevels = 1000
+  send.type_keys(child, 'iabc def<Esc>')
+
+  send.send_selection_after_closing_stream(child, buffer, '0wve')
+  claude.wait_for_status(child, 'exited')
+  local after_failure = send.input(child).lines
+  send.type_keys(child, 'u')
+  local after_u = send.input(child).lines
+  send.type_keys(child, 'u')
+
+  eq(
+    { after_failure = after_failure, after_u = after_u, after_u_u = send.input(child).lines },
+    { after_failure = { 'abc def' }, after_u = { 'abc def' }, after_u_u = { '' } }
+  )
 end
 
 return T

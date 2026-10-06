@@ -210,6 +210,28 @@ function M.type_keys(child, keys)
   )
 end
 
+--- The Visual-mode mapping of the tests' own that sends the selection
+--- (`map_send_selection()`).
+local SEND_SELECTION = '<Plug>(aineo-test-send-selection)'
+
+--- Maps `SEND_SELECTION` in Visual mode in `child` to the Visual Send,
+--- keeping an error it raises for `messages()` rather than raising it.
+---
+---@param child table
+local function map_send_selection(child)
+  child.lua(
+    [[
+      vim.keymap.set('x', ..., function()
+        local sent, error_message = pcall(require('aineo.send').send_selection)
+        if not sent then
+          table.insert(_G.aineo_test_messages, { error = error_message })
+        end
+      end)
+    ]],
+    { SEND_SELECTION }
+  )
+end
+
 --- Types `keys` in `child`, which make a Visual selection, then sends the
 --- selection as a Visual-mode `\s` will, through a Visual-mode mapping of
 --- the test's own, typed (`type_keys()`), keeping an error the Visual Send
@@ -218,15 +240,31 @@ end
 ---@param child table
 ---@param keys string
 function M.send_selection(child, keys)
-  child.lua([[
-    vim.keymap.set('x', '<Plug>(aineo-test-send-selection)', function()
-      local sent, error_message = pcall(require('aineo.send').send_selection)
-      if not sent then
-        table.insert(_G.aineo_test_messages, { error = error_message })
-      end
-    end)
-  ]])
-  M.type_keys(child, keys .. '<Plug>(aineo-test-send-selection)')
+  map_send_selection(child)
+  M.type_keys(child, keys .. SEND_SELECTION)
+end
+
+--- Closes the stream of the terminal `buffer` in `child`, then, in the same
+--- tick, before Neovim has seen the session exit, types `keys`, which make a
+--- Visual selection, and sends it as `send_selection()` does; returns the
+--- session's status, read between the two.
+---
+---@param child table
+---@param buffer integer the session's terminal buffer
+---@param keys string
+---@return string? status
+function M.send_selection_after_closing_stream(child, buffer, keys)
+  map_send_selection(child)
+  return child.lua(
+    [[
+      local buffer, keys = ...
+      vim.fn.jobstop(vim.bo[buffer].channel)
+      local status = require('aineo.claude').session_status()
+      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), 'mtx', false)
+      return status
+    ]],
+    { buffer, keys .. SEND_SELECTION }
+  )
 end
 
 --- What `child` has told the user since `restart()`, in order: each
