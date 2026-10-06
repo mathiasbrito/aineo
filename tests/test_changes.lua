@@ -2246,4 +2246,438 @@ T['the commits window']['lists a commit that changes no file nor the index, as t
   expect_lines(COMMITS, { empty:sub(1, 7) .. ' Nothing', live:sub(1, 7) .. ' Add the marker' })
 end
 
+T['the colours'] = MiniTest.new_set()
+
+--- The expression, run in the child, that lists every colour the buffer
+--- named `...` shows, in any namespace, as `{ line, first column, end
+--- column, group }`, counted as the API counts them — from 0, the end
+--- column excluded — in buffer order.
+local PANE_COLOURS = [[(function(name)
+  local marks = vim.api.nvim_buf_get_extmarks(vim.fn.bufnr(name), -1, 0, -1, { details = true })
+  return vim.tbl_map(function(mark)
+    return { mark[2], mark[3], mark[4].end_col, mark[4].hl_group }
+  end, marks)
+end)(...)]]
+
+--- Every colour the child's buffer named `name` shows (`PANE_COLOURS`).
+---
+---@param name string
+---@return any[][]
+local function colours_of(name)
+  return child.lua_get(PANE_COLOURS, { name })
+end
+
+T['the colours']['of a modified file are its letter and path in AineoChangesModified, its blank uncoloured'] = function()
+  local top = git_repo.create('changespane-colour-modified', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+
+  begin_and_show(top)
+
+  expect_lines(FILES, { '  M notes.txt' })
+  eq(colours_of(FILES), { { 0, 2, 13, 'AineoChangesModified' } })
+end
+
+T['the colours']['of every kind of change are its letter and path in its group, a rename’s old path and arrow included'] = function()
+  local top = git_repo.create('changespane-colour-kinds', {
+    ['gone.txt'] = { 'gone' },
+    ['kind.txt'] = { 'kind' },
+    ['moved.txt'] = { 'moved', 'unchanged' },
+    ['notes.txt'] = { 'one' },
+  })
+  git_repo.git(top, { 'rm', '--quiet', 'gone.txt' })
+  assert(vim.uv.fs_unlink(vim.fs.joinpath(top, 'kind.txt')))
+  assert(vim.uv.fs_symlink('notes.txt', vim.fs.joinpath(top, 'kind.txt')))
+  git_repo.git(top, { 'mv', 'moved.txt', 'there.txt' })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  git_repo.write(top, 'staged.txt', { 'staged' })
+  git_repo.git(top, { 'add', 'staged.txt' })
+  git_repo.write(top, 'untracked.txt', { 'untracked' })
+
+  begin_and_show(top)
+
+  expect_lines(FILES, {
+    '  D gone.txt',
+    '  T kind.txt',
+    '  M notes.txt',
+    '  A staged.txt',
+    '  R moved.txt → there.txt',
+    '  ? untracked.txt',
+  })
+  eq(colours_of(FILES), {
+    { 0, 2, 12, 'AineoChangesDeleted' },
+    { 1, 2, 12, 'AineoChangesTypeChanged' },
+    { 2, 2, 13, 'AineoChangesModified' },
+    { 3, 2, 14, 'AineoChangesAdded' },
+    { 4, 2, 27, 'AineoChangesRenamed' },
+    { 5, 2, 17, 'AineoChangesUntracked' },
+  })
+end
+
+T['the colours']['of a file the user saved are its * in AineoChangesSaved, then its letter and path'] = function()
+  local top = git_repo.create('changespane-colour-saved', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  expect_lines(FILES, { 'No files changed on this session' })
+
+  in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
+
+  expect_lines(FILES, { '* M notes.txt' })
+  eq(colours_of(FILES), {
+    { 0, 0, 1, 'AineoChangesSaved' },
+    { 0, 2, 13, 'AineoChangesModified' },
+  })
+end
+
+T['the colours']['of a commit are its abbreviated id in AineoChangesCommitId and its subject in AineoChangesCommitSubject'] = function()
+  local top = git_repo.create('changespane-colour-commit', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  expect_lines(COMMITS, { 'No commits on this session' })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local commit = git_repo.commit_all(top, 'Write two')
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  expect_lines(COMMITS, { commit:sub(1, 7) .. ' Write two' })
+  eq(colours_of(COMMITS), {
+    { 0, 0, 7, 'AineoChangesCommitId' },
+    { 0, 8, 17, 'AineoChangesCommitSubject' },
+  })
+end
+
+T['the colours']['of a line that lists nothing, in either window, are the whole line in AineoChangesNote'] = function()
+  local top = git_repo.create('changespane-colour-nothing', { ['notes.txt'] = { 'one' } })
+
+  begin_and_show(top)
+
+  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(COMMITS, { 'No commits on this session' })
+  eq(
+    { colours_of(FILES), colours_of(COMMITS) },
+    { { { 0, 0, 32, 'AineoChangesNote' } }, { { 0, 0, 26, 'AineoChangesNote' } } }
+  )
+end
+
+T['the colours']['of the line saying a read failed are the whole line in AineoChangesFailure, above the list'] = function()
+  local top = git_repo.create('changespane-colour-failed', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local stand_in, switch = breakable_git('changespane-colour-failed', top, 'ls-files')
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(FILES, { '  M notes.txt' })
+  turn_on(switch)
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  expect_lines(FILES, { REFRESH_FAILED, '  M notes.txt' })
+  eq(colours_of(FILES), {
+    { 0, 0, #REFRESH_FAILED, 'AineoChangesFailure' },
+    { 1, 2, 13, 'AineoChangesModified' },
+  })
+end
+
+T['the colours']['of the line saying git was not found are the whole line in AineoChangesFailure, in either window'] = function()
+  local directory = git_repo.directory('changespane-colour-no-git')
+  local missing = vim.fs.joinpath(directory, 'no-such-git')
+
+  begin_and_show(directory, { executable = missing })
+
+  local line = ("git was not found: ENOENT: no such file or directory (cmd): '%s'"):format(missing)
+  expect_lines(FILES, { line })
+  expect_lines(COMMITS, { line })
+  eq(
+    { colours_of(FILES), colours_of(COMMITS) },
+    { { { 0, 0, #line, 'AineoChangesFailure' } }, { { 0, 0, #line, 'AineoChangesFailure' } } }
+  )
+end
+
+T['the colours']['of the line saying the look for a repository failed are the whole line in AineoChangesFailure'] = function()
+  local directory = git_repo.directory('changespane-colour-look-failed')
+  local failing = stand_in_git('changespane-colour-look-failed', {
+    'case " $* " in *" rev-parse "*) echo "fatal: broken" >&2; exit 1 ;; esac',
+  })
+
+  begin_and_show(directory, { executable = failing })
+
+  expect_lines(FILES, { REFRESH_FAILED })
+  expect_lines(COMMITS, { REFRESH_FAILED })
+  eq({ colours_of(FILES), colours_of(COMMITS) }, {
+    { { 0, 0, #REFRESH_FAILED, 'AineoChangesFailure' } },
+    { { 0, 0, #REFRESH_FAILED, 'AineoChangesFailure' } },
+  })
+end
+
+T['the colours']['outside a repository are both lines, git’s words included, whole in AineoChangesNote'] = function()
+  local directory = git_repo.directory('changespane-colour-no-repository')
+
+  begin_and_show(directory)
+
+  local said = not_in_a_repository(directory)
+  expect_lines(FILES, said)
+  expect_lines(COMMITS, said)
+  local both_notes = {
+    { 0, 0, #said[1], 'AineoChangesNote' },
+    { 1, 0, #said[2], 'AineoChangesNote' },
+  }
+  eq({ colours_of(FILES), colours_of(COMMITS) }, { both_notes, both_notes })
+end
+
+T['the colours']['of the line saying aineo is reading the repository are the whole line in AineoChangesNote'] = function()
+  local top = git_repo.create('changespane-colour-reading', { ['notes.txt'] = { 'one' } })
+  local slow = stand_in_git('changespane-colour-reading', { 'sleep 1' })
+
+  begin_and_show(top, { executable = slow })
+
+  eq(
+    { colours_of(FILES), colours_of(COMMITS) },
+    { { { 0, 0, #READING[1], 'AineoChangesNote' } }, { { 0, 0, #READING[1], 'AineoChangesNote' } } }
+  )
+end
+
+T['the colours']['of the line saying subdirectories are not watched are the whole line in AineoChangesNote'] = function()
+  local top = git_repo.create('changespane-colour-linux', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+
+  begin_and_show(top, { system_name = 'Linux' })
+
+  expect_lines(FILES, { NOT_WATCHED, '  M notes.txt' })
+  eq(colours_of(FILES), {
+    { 0, 0, #NOT_WATCHED, 'AineoChangesNote' },
+    { 1, 2, 13, 'AineoChangesModified' },
+  })
+end
+
+T['the colours']['of the line saying the base is no longer behind HEAD are the whole line in AineoChangesNote'] = function()
+  local top, parent =
+    git_repo.create('changespane-colour-left-behind', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local base = git_repo.commit_all(top, 'Write two')
+  begin_and_show(top)
+  expect_lines(COMMITS, { 'No commits on this session' })
+  git_repo.git(top, { 'checkout', '--quiet', '-b', 'other', parent })
+  git_repo.write(top, 'other.txt', { 'other' })
+  local other = git_repo.commit_all(top, 'Add other')
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  local left_behind = ("The session's base, %s, is no longer behind HEAD"):format(base:sub(1, 7))
+  expect_lines(COMMITS, { left_behind, other:sub(1, 7) .. ' Add other' })
+  eq(colours_of(COMMITS), {
+    { 0, 0, #left_behind, 'AineoChangesNote' },
+    { 1, 0, 7, 'AineoChangesCommitId' },
+    { 1, 8, 17, 'AineoChangesCommitSubject' },
+  })
+end
+
+--- The expression, run in the child, that reads each of the changes pane's
+--- groups as `nvim_get_hl()` gives it, by name, creating none.
+local PANE_GROUPS = [[(function()
+  local names = {
+    'AineoChangesAdded', 'AineoChangesUntracked', 'AineoChangesModified', 'AineoChangesRenamed',
+    'AineoChangesTypeChanged', 'AineoChangesDeleted', 'AineoChangesSaved', 'AineoChangesCommitId',
+    'AineoChangesCommitSubject', 'AineoChangesNote', 'AineoChangesFailure',
+  }
+  local groups = {}
+  for _, name in ipairs(names) do
+    groups[name] = vim.api.nvim_get_hl(0, { name = name, create = false })
+  end
+  return groups
+end)()]]
+
+--- Each of the changes pane's groups as aineo defines it: linked to a
+--- group of Neovim's own, or, for a commit's subject, empty, as a default.
+local DEFAULT_GROUPS = {
+  AineoChangesAdded = { link = 'Added' },
+  AineoChangesUntracked = { link = 'Added' },
+  AineoChangesModified = { link = 'Changed' },
+  AineoChangesRenamed = { link = 'Changed' },
+  AineoChangesTypeChanged = { link = 'Changed' },
+  AineoChangesDeleted = { link = 'Removed' },
+  AineoChangesSaved = { link = 'WarningMsg' },
+  AineoChangesCommitId = { link = 'Identifier' },
+  AineoChangesCommitSubject = { default = true },
+  AineoChangesNote = { link = 'Comment' },
+  AineoChangesFailure = { link = 'DiagnosticWarn' },
+}
+
+T['the colours']['are groups of aineo’s own, each linked to a group of Neovim’s, a commit’s subject empty'] = function()
+  local top = git_repo.create('changespane-colour-groups', { ['notes.txt'] = { 'one' } })
+
+  begin_and_show(top)
+
+  expect_lines(FILES, { 'No files changed on this session' })
+  eq(child.lua_get(PANE_GROUPS), DEFAULT_GROUPS)
+end
+
+T['the colours']['the user gave a group stay once the pane is shown again'] = function()
+  local top = git_repo.create('changespane-colour-users', { ['notes.txt'] = { 'one' } })
+  child.lua(SPY_ON_GIT)
+  begin_and_show(top)
+  wait_for_the_reads()
+  child.cmd('highlight AineoChangesAdded guifg=#ff0000')
+  child.cmd('highlight AineoChangesCommitSubject guifg=#00ff00')
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  wait_for_the_reads()
+  eq(
+    child.lua_get(PANE_GROUPS),
+    vim.tbl_extend('force', DEFAULT_GROUPS, {
+      AineoChangesAdded = { fg = 0xff0000 },
+      AineoChangesCommitSubject = { fg = 0x00ff00 },
+    })
+  )
+end
+
+T['the colours']['are their defaults again, the user’s gone, once a command clears every colour'] =
+  MiniTest.new_set({ parametrize = { { 'highlight clear' }, { 'colorscheme default' } } })
+
+T['the colours']['are their defaults again, the user’s gone, once a command clears every colour']['by'] = function(
+  command
+)
+  local top = git_repo.create('changespane-colour-cleared', { ['notes.txt'] = { 'one' } })
+  child.lua(SPY_ON_GIT)
+  begin_and_show(top)
+  wait_for_the_reads()
+  child.cmd('highlight AineoChangesAdded guifg=#ff0000')
+  child.cmd('highlight AineoChangesCommitSubject guifg=#00ff00')
+
+  child.cmd(command)
+
+  eq(
+    child.lua_get(PANE_GROUPS),
+    vim.tbl_extend('force', DEFAULT_GROUPS, { AineoChangesCommitSubject = {} })
+  )
+end
+
+--- The expression, run in the child, that reads the background, as RGB, of
+--- the screen cell of the window `...` at its first line and the column
+--- after, counted from 0.
+local WINDOW_CELL_BACKGROUND = [[(function(window, column)
+  local row, first_column = unpack(vim.fn.win_screenpos(window))
+  return vim.api.nvim__inspect_cell(1, row - 1, first_column - 1 + column)[2].background
+end)(...)]]
+
+T['the colours']['leave a commit’s subject on the background of a window not current'] = function()
+  local top = git_repo.create('changespane-colour-dimmed', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  expect_lines(COMMITS, { 'No commits on this session' })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local commit = git_repo.commit_all(top, 'Write two')
+  child.lua(SHOW_FILES_AGAIN)
+  expect_lines(COMMITS, { commit:sub(1, 7) .. ' Write two' })
+  child.cmd('highlight Normal guibg=#101010')
+  child.cmd('highlight NormalNC guibg=#202040')
+  local commits_window = child.fn.bufwinid(COMMITS)
+  child.lua([[vim.api.nvim__inspect_cell(1, 0, 0)]])
+
+  child.cmd('redraw')
+
+  eq({
+    subject = child.lua_get(WINDOW_CELL_BACKGROUND, { commits_window, 8 }),
+    past_the_line = child.lua_get(WINDOW_CELL_BACKGROUND, { commits_window, 30 }),
+  }, { subject = 0x202040, past_the_line = 0x202040 })
+end
+
+T['the colours']['follow a page that adds a line, removes one and moves one'] = function()
+  local top = git_repo.create('changespane-colour-moved', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  git_repo.write(top, 'b.txt', { 'b' })
+  begin_and_show(top)
+  expect_lines(FILES, { '  M notes.txt', '  ? b.txt' })
+  git_repo.write(top, 'a.txt', { 'a' })
+  git_repo.git(top, { 'add', 'a.txt' })
+  assert(vim.uv.fs_unlink(vim.fs.joinpath(top, 'b.txt')))
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  expect_lines(FILES, { '  A a.txt', '  M notes.txt' })
+  eq(colours_of(FILES), {
+    { 0, 2, 9, 'AineoChangesAdded' },
+    { 1, 2, 13, 'AineoChangesModified' },
+  })
+end
+
+T['the colours']['leave none on a line a shorter page no longer holds'] = function()
+  local top = git_repo.create('changespane-colour-shorter', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  git_repo.write(top, 'b.txt', { 'b' })
+  begin_and_show(top)
+  expect_lines(FILES, { '  M notes.txt', '  ? b.txt' })
+  git_repo.write(top, 'notes.txt', { 'one' })
+  assert(vim.uv.fs_unlink(vim.fs.joinpath(top, 'b.txt')))
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  expect_lines(FILES, { 'No files changed on this session' })
+  eq(colours_of(FILES), { { 0, 0, 32, 'AineoChangesNote' } })
+end
+
+--- Each buffer of the pane with the colours of what it lists in a
+--- repository whose one file changed and that has no commit since the base
+--- (`LISTS`).
+local LISTS_COLOURS = {
+  { FILES, { { 0, 2, 13, 'AineoChangesModified' } } },
+  { COMMITS, { { 0, 0, 26, 'AineoChangesNote' } } },
+}
+
+T['the colours']['are shown again once :edit wrote a buffer of the pane anew'] =
+  MiniTest.new_set({ parametrize = LISTS_COLOURS })
+
+T['the colours']['are shown again once :edit wrote a buffer of the pane anew']['for'] = function(
+  name,
+  expected
+)
+  local top = git_repo.create('changespane-colour-edited', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  begin_and_show(top)
+  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(COMMITS, { 'No commits on this session' })
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { name })
+
+  child.cmd('edit')
+
+  eq(colours_of(name), expected)
+end
+
+T['the colours']['are shown in a buffer of the pane made anew once wiped out'] =
+  MiniTest.new_set({ parametrize = LISTS_COLOURS })
+
+T['the colours']['are shown in a buffer of the pane made anew once wiped out']['for'] = function(
+  name,
+  expected
+)
+  local top = git_repo.create('changespane-colour-wiped', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  begin_and_show(top)
+  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(COMMITS, { 'No commits on this session' })
+  child.cmd(('bwipeout! %d'):format(child.fn.bufnr(name)))
+
+  child.lua("require('aineo.changes').pane_buffers()")
+
+  eq(colours_of(name), expected)
+end
+
+T['the colours']['of a page kept while textlock refuses the next stay until the next is shown'] = function()
+  local _, ready, hold, release = unpack(TEXTLOCK_HOLDS[1])
+  local top = git_repo.create('changespane-colour-textlock', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local gated, gate = gated_git('changespane-colour-textlock', '*" ls-files "*')
+  child.lua(SPY_ON_GIT)
+  child.lua(ready)
+  begin_and_show(top, { executable = gated })
+  begin_hold(hold)
+  vim.fn.writefile({}, gate)
+  git_repo.wait_until('the files read', function()
+    return child.lua_get('_G.git_given.changed_files == 1')
+  end)
+  local meanwhile = { lines = lines_of(FILES), colours = colours_of(FILES) }
+
+  end_hold(release)
+
+  expect_lines(FILES, { '  M notes.txt' })
+  eq({ meanwhile = meanwhile, after = colours_of(FILES) }, {
+    meanwhile = { lines = READING, colours = { { 0, 0, #READING[1], 'AineoChangesNote' } } },
+    after = { { 0, 2, 13, 'AineoChangesModified' } },
+  })
+end
+
 return T
