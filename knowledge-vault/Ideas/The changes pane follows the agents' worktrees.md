@@ -1,6 +1,8 @@
 # The changes pane follows the agents' worktrees
 
-#idea/spark
+#idea/ready
+
+**Graduated** to [[Planning/aineo — worktrees and session switches]] › P1–P5 (2026-10-06), proposed for the user's converge round; wave 9's T38 builds it once agreed.
 
 **Raised by:** the user, 2026-10-06, to consider after the MVP review. Recorded by the orchestrator. Not a commitment.
 
@@ -46,6 +48,7 @@ On 2026-10-06 the user opened the pane with v0.2.12 while T26 was being built in
 ## Related
 
 - [[Planning/aineo — v1 agent console]] › D18, D19, D22, C12, C13, C15
+- [[Planning/aineo — worktrees and session switches]] › P1–P5, and [[Implementation/Waves/00009-worktrees-sessions/plan]]
 - [[Projects/aineo]]
 - [[Skills/Orchestrate]]
 
@@ -54,3 +57,4 @@ On 2026-10-06 the user opened the pane with v0.2.12 while T26 was being built in
 | Date | Note |
 |------|------|
 | 2026-10-06 | Raised by the user after seeing an empty changes pane while T26 was built in a worktree; to consider after the MVP review. |
+| 2026-10-06 | Asked for by the user ("\pc panel should be able to also track agents worktrees … You alerady have some notes on that"). Measured (wave 9's A1–A3) and proposed as P1–P5, answering this note's open questions: every worktree, a section each, Enter showing only the diff — each with its alternatives, for the converge round. |
