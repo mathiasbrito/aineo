@@ -319,4 +319,61 @@ T['Enter']['again on the file the middle column shows keeps the diff’s window'
   )
 end
 
+--- The Lua that holds, in the child, each answer the git home gives to a
+--- read of a file's diff until `_G.answer_diff()` is called, which then
+--- hands it to its caller at the main loop's next turn, and counts in
+--- `_G.diffs_handed` the answers handed over, each as its caller's `done`
+--- begins.
+local HOLD_DIFF_ANSWERS = [[
+  local git = require('aineo.git')
+  local file_diff = git.file_diff
+  _G.diffs_handed = 0
+  git.file_diff = function(found, base, change, done, options)
+    return file_diff(found, base, change, function(...)
+      local answer = { n = select('#', ...), ... }
+      _G.answer_diff = function()
+        vim.schedule(function()
+          _G.diffs_handed = _G.diffs_handed + 1
+          done(unpack(answer, 1, answer.n))
+        end)
+      end
+    end, options)
+  end
+]]
+
+--- The Lua expression giving everything the child's messages hold.
+local TOLD = "vim.api.nvim_exec2('messages', { output = true }).output"
+
+T['Enter']['while the command-line window is open shows the diff once it closes, telling nothing'] = function()
+  changes_pane_listing_a_file('changespane-entry-cmdwin')
+  child.lua(HOLD_DIFF_ANSWERS)
+  entry.press(child, '<CR>')
+  git_repo.wait_until('the diff read', function()
+    return child.lua_get('_G.answer_diff ~= nil')
+  end)
+  child.api.nvim_input('q:')
+  git_repo.wait_until('the command-line window open', function()
+    return child.fn.getcmdwintype() == ':'
+  end)
+  child.lua('_G.answer_diff()')
+  git_repo.wait_until('the diff handed over', function()
+    return child.lua_get('_G.diffs_handed') == 1
+  end)
+  local told_meanwhile = child.lua_get(TOLD)
+
+  child.api.nvim_input(':quit<CR>')
+
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return child.lua_get('vim.fn.bufwinid(...)', { 'aineo://diff/notes.txt' }) ~= -1
+  end, 10)
+  eq(
+    { told_meanwhile = told_meanwhile, windows = entry.windows(child), told = child.lua_get(TOLD) },
+    {
+      told_meanwhile = '',
+      windows = { 'terminal', 'aineo://diff/notes.txt', FILES, COMMITS },
+      told = '',
+    }
+  )
+end
+
 return T

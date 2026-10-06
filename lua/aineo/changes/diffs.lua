@@ -111,19 +111,24 @@ function M.diff_buffer(name, diff)
 end
 
 --- Wipes the buffer `M.diff_buffer()` made under `name` when no window
---- shows it, such as one made while textlock held and never shown since.
+--- shows it, such as one made while textlock held and never shown since,
+--- and returns whether no such buffer is left: one is when Neovim refuses
+--- the wipe for now (`aineo.changes.scratch`' `wipe()`).
 ---
 ---@param name string
+---@return boolean wiped
 function M.wipe_unshown(name)
+  local wiped = true
   for buffer in pairs(shown_lines) do
     if
       vim.api.nvim_buf_is_valid(buffer)
       and vim.api.nvim_buf_get_name(buffer) == name
       and #vim.fn.win_findbuf(buffer) == 0
     then
-      vim.api.nvim_buf_delete(buffer, { force = true })
+      wiped = scratch.wipe(buffer) and wiped
     end
   end
+  return wiped
 end
 
 return M

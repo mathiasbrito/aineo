@@ -200,9 +200,12 @@ end
 
 --- Starts what follows the repository once the pane has been shown: the
 --- watch, when none runs, and a read of each list; does nothing before the
---- repository is found or the pane first shown.
+--- repository is found or the pane first shown, nor once the editor is
+--- quitting (`v:exiting`): a look answered then, while a later
+--- `VimLeavePre` waits, starts no watch and no read after the quit has
+--- stopped the watch.
 local function follow_repository()
-  if not (session.repository and session.shown) then
+  if not (session.repository and session.shown) or vim.v.exiting ~= vim.NIL then
     return
   end
   if not session.watch then
@@ -277,7 +280,7 @@ end
 --- again while there is none (`look_again()`): once for every showing in
 --- one turn, as both of the pane's buffers entering their windows are one
 --- showing. Once the editor is quitting (`v:exiting`) when that turn comes,
---- it does neither: the watch the quit stopped is not started again.
+--- it does neither: no look for the repository starts as the editor quits.
 local function pane_shown()
   if not session then
     return
@@ -384,8 +387,12 @@ end
 --- `show_diff`. When the middle column has no room for it, the buffer is
 --- wiped and the user warned, once; when showing it raises an error, the
 --- buffer is wiped and the user told the error, once. Returns false, having
---- shown and told nothing, when Neovim refuses the diff buffer its text, as
---- it does while textlock holds; true otherwise.
+--- told nothing, when Neovim refuses for now the diff buffer its text, as it
+--- does while textlock holds, or the wipe of a diff it did not show, as it
+--- does while textlock holds and in the command-line window, where a window
+--- refuses the diff too (`aineo.changes.scratch`' `wipe()`): the buffer is
+--- then kept, shown nowhere, for the next call to show. Returns true
+--- otherwise.
 ---
 ---@param entry aineo.changes.Entry
 ---@param diff string
@@ -399,8 +406,8 @@ local function show_diff(entry, diff)
   if shown and window then
     return true
   end
-  if vim.api.nvim_buf_is_valid(buffer) then
-    vim.api.nvim_buf_delete(buffer, { force = true })
+  if not scratch.wipe(buffer) then
+    return false
   end
   if not shown then
     vim.notify(
@@ -435,20 +442,22 @@ end
 local enters = 0
 
 --- Shows `diff`, the diff of `entry` the Enter numbered `this_enter` read
---- (`show_diff()`), while that Enter is the last. A diff Neovim refused, as
---- it does while textlock holds, is shown at the editor's next `SafeState`,
+--- (`show_diff()`), while that Enter is the last. A diff Neovim refused for
+--- now, as it does while textlock holds and, for a diff it cannot show, in
+--- the command-line window, is shown at the editor's next `SafeState`,
 --- if that Enter is the last still; otherwise the buffer made for it, shown
---- nowhere, is wiped (`aineo.changes.diffs`' `wipe_unshown()`).
+--- nowhere, is wiped (`aineo.changes.diffs`' `wipe_unshown()`), at the next
+--- `SafeState` again while Neovim refuses the wipe.
 ---
 ---@param this_enter integer
 ---@param entry aineo.changes.Entry
 ---@param diff string
 local function show_last_diff(this_enter, entry, diff)
   if this_enter ~= enters then
-    diffs.wipe_unshown(diff_name(entry))
-    return
-  end
-  if show_diff(entry, diff) then
+    if diffs.wipe_unshown(diff_name(entry)) then
+      return
+    end
+  elseif show_diff(entry, diff) then
     return
   end
   vim.api.nvim_create_autocmd('SafeState', {
