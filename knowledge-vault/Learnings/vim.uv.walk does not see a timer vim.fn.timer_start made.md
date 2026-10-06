@@ -10,7 +10,7 @@ On Neovim 0.12.5, `vim.uv.walk()` lists a timer made through `vim.uv`, `vim.defe
 
 ## Why it is true
 
-`vim.fn.timer_start()` is Neovim's Vimscript timer, made by Neovim itself rather than through `vim.uv`, and `timer_info()` lists it (`:h timer_info()`). `vim.uv.walk()` is luv's walk, and it reported none of those timers in the test review's probe. How luv tells its own handles from Neovim's was not read in luv's source: the claim rests on the measurement.
+`vim.fn.timer_start()` is Neovim's Vimscript timer, made by Neovim itself rather than through `vim.uv`, and `timer_info()` lists it (`:h timer_info()`). `vim.uv.walk()` is luv's walk, and it reported none of those timers in the test review's probe. Before any timer is made, `vim.uv.walk()` lists no handle at all, though Neovim's loop runs handles of its own: it lists only the handles made through `vim.uv` (measured on 0.12.5 by the records review of PR #114). How luv tells them apart was not read in its source.
 
 ## How it showed up here
 
