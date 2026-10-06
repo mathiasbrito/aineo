@@ -134,7 +134,7 @@ T31's other mutants (`M-concat-nothing`, `R-gv-no-start`, `R-nul-x`, `M-in-block
 - `tests/test_send_selection.lua`: 67 cases (60 + 7), Fails (0).
 - `tests/test_doc.lua`: 44 cases, Fails (0).
 - `make lint`: StyLua clean; selene 0 errors, 0 warnings.
-- Whole suite (`make test`) on the tree pushed: 1807 cases (T31's 1800 and these 7), 58 groups, Fails (0), exit 0, 232 s by the wall clock.
+- Whole suite (`make test`) on the tree pushed: 1807 cases (T31's 1800 and these 7), 58 groups, Fails (0), exit 0, 232 s by the wall clock. *(corrected 2026-10-06, after PR #122's records review: on the pushed head `3fc1b11` exactly the run took 228 s, as the wave plan says; 232 s was an earlier run on a tree that differed by this line)*
 
 ## Commits
 
