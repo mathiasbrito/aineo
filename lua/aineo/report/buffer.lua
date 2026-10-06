@@ -14,8 +14,9 @@ local REPORT_COLOURS = vim.api.nvim_create_namespace('aineo_report_colours')
 local REPORT_BUFFER_NAME = 'aineo://report'
 
 --- The `'breakindentopt'` of a window showing the Report: a wrapped line
---- continues after the start of it `'formatlistpat'` matches.
-local CONTINUE_UNDER_LIST_MATCH = 'list:-1'
+--- continues after the part of its line that `'formatlistpat'` matches, and
+--- further left only where that would leave it fewer than 10 columns of text.
+local CONTINUE_UNDER_LIST_MATCH = 'list:-1,min:10'
 
 --- Frees the name `buffer` holds: wipes `buffer` out, unless the user
 --- changed its text, which is then kept in `buffer`, unnamed (`:0file`).

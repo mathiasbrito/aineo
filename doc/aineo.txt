@@ -81,8 +81,9 @@ show one pane at a time, here the agent pane:
   (|aineo-panes|).
 
 The Report and Input wrap long lines between words, a wrapped line keeping
-its indent ('wrap', 'linebreak', 'breakindent'), whatever your own settings;
-in the Report, under its text (|aineo-report|).
+its indent ('wrap', 'linebreak', 'breakindent'), whatever your own settings.
+In the Report a wrapped line continues under the `[` of its `[status]`, or
+under an item's text (|aineo-report|).
 Opening or restoring the layout sets this again: `\o`, or `\r`, `\i` or `\c`
 when their window is gone, and so does `\pa`, `\r` or `\i` showing the agent
 pane again. A `:setlocal nowrap` in either lasts until then. Claude's
@@ -628,12 +629,12 @@ The Report follows the newest report.
 
 A long line wraps between words: a wrapped first line continues under the
 `[` of its `[status]`, and a wrapped item under its text, not under its `-`.
-A Report narrower than about 28 columns continues a wrapped line further
-left, to keep 20 columns of text ('breakindentopt'), and your own
-'showbreak' moves where it continues by its width. Each window showing the
-Report gets 'breakindentopt' `list:-1` for the Report alone, as |:setlocal|
-sets it, each time it shows the Report; where you turn 'breakindent' or
-'wrap' off, a long line continues as Neovim draws it.
+A Report narrower than 18 columns continues a wrapped line further left, to
+keep 10 columns of text ('breakindentopt'), and your own 'showbreak' moves
+where it continues by its width. Each window showing the Report gets
+'breakindentopt' `list:-1,min:10` for the Report alone, as |:setlocal| sets
+it, each time it shows the Report; where you turn 'breakindent' or 'wrap'
+off, a long line continues as Neovim draws it.
 
 The instructions ask Claude to write each report for a person, in plain
 language: what was done or planned, and how, never the reasons for its
