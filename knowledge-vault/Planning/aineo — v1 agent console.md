@@ -4,7 +4,7 @@
 **Project:** [[Projects/aineo]]
 **Defined in session:** [[Sessions/2026-09-23 — Orchestration and knowledge vault scaffold]]; the rows added in wave 6 (D16–D25, C10–C14, 2026-09-25 and 2026-09-26) in [[Sessions/2026-09-26 — Wave 6 retrospective]]
 **Defined by:** Mathias Santos de Brito, with Claude — converged in two rounds, 2026-09-23
-**Status:** in progress — wave 1 (T1) landed 2026-09-24; wave 2 (T3, T4, T5) landed 2026-09-24; wave 3 (T6) landed 2026-09-25; wave 4 (T7) landed 2026-09-25; wave 5 (T8) planned 2026-09-25
+**Status:** in progress — wave 1 (T1) landed 2026-09-24; wave 2 (T3, T4, T5) landed 2026-09-24; wave 3 (T6) landed 2026-09-25; wave 4 (T7) landed 2026-09-25; wave 5 (T8) landed 2026-09-25; wave 6 (T9–T22, T27–T29) landed 2026-10-05; wave 7 (T23–T26, T30), a rolling wave claimed 2026-09-27: T23, T24, T30 and T25 landed, T26 running *(corrected 2026-10-06)*
 
 ## Goal
 
