@@ -22,10 +22,19 @@ local T = MiniTest.new_set({
   },
 })
 
+--- The Lua that ends, in the child, the process of the terminal `...` by a
+--- hangup, and waits for it to end, at most 5 s.
+local END_TERMINAL = [[
+  local job = vim.bo[...].channel
+  vim.fn.jobstop(job)
+  vim.fn.jobwait({ job }, 5000)
+]]
+
 --- Starts the session in `child` against a fake `claude` in `mode`, its
 --- files under `name` prefixed `selection-`, with the layout around it, has
---- the session end by its keys once the case is over, and moves the cursor
---- to Input; returns the fake and the session's terminal buffer.
+--- the session end by a hangup once the case is over (`END_TERMINAL`), and
+--- moves the cursor to Input; returns the fake and the session's terminal
+--- buffer.
 ---
 ---@param name string the case's own name for its files
 ---@param mode string one of the fake's modes
@@ -35,7 +44,7 @@ local function start_session(name, mode)
   local fake = claude.fake('selection-' .. name, mode)
   local buffer = send.start_with_layout(child, fake)
   MiniTest.finally(function()
-    claude.end_by_keys(child, fake, buffer)
+    child.lua(END_TERMINAL, { buffer })
   end)
   send.enter_input(child)
   return fake, buffer
@@ -60,6 +69,10 @@ end
 local function paste(message)
   return '\27[200~' .. message .. '\27[201~\r'
 end
+
+--- Two emoji joined by a zero-width joiner, U+200D, which Neovim draws as
+--- one double-width character.
+local FAMILY = '👨\226\128\141👩'
 
 --- Each kind of selection, as a set's `parametrize`: its name, Input's
 --- lines, the keys that select from Normal mode, Input's lines once Vim's
@@ -103,6 +116,41 @@ local SELECTIONS = {
     'b\n漢\nb',
   },
   {
+    'blockwise, its right edge on an emoji with a skin tone’s left half',
+    { 'abcdef', 'a👍🏽b', 'abcdef' },
+    'gg0l<C-v>jj',
+    { 'acdef', 'a b', 'acdef' },
+    'b\n👍🏽\nb',
+  },
+  {
+    'blockwise, its right edge on a flag’s left half',
+    { 'abcdef', 'a🇫🇷b', 'abcdef' },
+    'gg0l<C-v>jj',
+    { 'acdef', 'a b', 'acdef' },
+    'b\n🇫🇷\nb',
+  },
+  {
+    'blockwise, its right edge on a joined emoji sequence’s left half',
+    { 'abcdef', 'a' .. FAMILY .. 'b', 'abcdef' },
+    'gg0l<C-v>jj',
+    { 'acdef', 'a b', 'acdef' },
+    'b\n' .. FAMILY .. '\nb',
+  },
+  {
+    'blockwise, its left edge on a joined emoji sequence’s right half',
+    { 'abcdef', 'a' .. FAMILY .. 'b', 'abcdef' },
+    'gg0ll<C-v>jj',
+    { 'abdef', 'a b', 'abdef' },
+    'c\n' .. FAMILY .. '\nc',
+  },
+  {
+    'blockwise, its right edge on a double-width character with a combining mark',
+    { 'abcdef', 'a漢\204\129b', 'abcdef' },
+    'gg0l<C-v>jj',
+    { 'acdef', 'a b', 'acdef' },
+    'b\n漢\204\129\nb',
+  },
+  {
     'blockwise, its left edge one column past a short line’s end',
     { 'abcdef', 'ab', 'abcdef' },
     'gg0ll<C-v>jjl',
@@ -142,6 +190,54 @@ local SELECTIONS = {
     { selection = 'exclusive' },
   },
   { 'linewise, all of Input', { 'x', 'y' }, 'ggVG', { '' }, 'x\ny' },
+  {
+    'charwise to an empty line, selection=old, which ends it on the line above',
+    { 'abc', '', 'def' },
+    'gg0lvj',
+    { 'a', '', 'def' },
+    'bc',
+    { selection = 'old' },
+  },
+  {
+    'charwise to an empty line, selection=old, made backwards',
+    { 'abc', '', 'def' },
+    'jvk0l',
+    { 'a', '', 'def' },
+    'bc',
+    { selection = 'old' },
+  },
+  {
+    'charwise to an empty line two lines down, selection=old',
+    { 'abc', 'de', '' },
+    'gg0lvjj',
+    { 'a', '' },
+    'bc\nde',
+    { selection = 'old' },
+  },
+  {
+    'charwise to an empty line below an empty line, selection=old',
+    { 'abc', '', '', 'def' },
+    'gg0lvjj',
+    { 'a', '', 'def' },
+    'bc\n',
+    { selection = 'old' },
+  },
+  {
+    'charwise from the indent to an empty line, selection=old, which removes whole lines',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { '' },
+    '  abc\nx\n',
+    { selection = 'old' },
+  },
+  {
+    'charwise from a line’s first non-blank to an empty line, selection=old',
+    { '  abc', 'x', '' },
+    'gg0llvjj',
+    { '' },
+    '  abc\nx\n',
+    { selection = 'old' },
+  },
 }
 
 T['a Visual Send'] = MiniTest.new_set()
@@ -164,10 +260,11 @@ T['a Visual Send']['writes what it removes from Input as one paste and Enter, in
 
   send.send_selection(child, keys)
 
-  eq(
-    { writes = send.writes(child), input = send.input(child).lines },
-    { writes = { paste(removed) }, input = remaining }
-  )
+  eq({
+    writes = send.writes(child),
+    input = send.input(child).lines,
+    messages = send.messages(child),
+  }, { writes = { paste(removed) }, input = remaining, messages = {} })
 end
 
 T['a Visual Send']['writes the selection without its control bytes, nothing of it able to end the paste'] = function()
@@ -178,6 +275,19 @@ T['a Visual Send']['writes the selection without its control bytes, nothing of i
   send.send_selection(child, 'ggV')
 
   eq(send.writes(child), { paste('ab[201~c') })
+end
+
+T['a Visual Send']['writes a NUL byte in the selection as Send writes it: not at all'] = function()
+  start_ready_session('nul')
+  send.set_input(child, { 'a\0b', 'kept' })
+  send.watch_writes(child)
+
+  send.send_selection(child, 'ggV')
+
+  eq(
+    { writes = send.writes(child), input = send.input(child).lines },
+    { writes = { paste('ab') }, input = { 'kept' } }
+  )
 end
 
 T['a Visual Send']['writes the selection made last, not the one made before it'] = function()
@@ -214,10 +324,48 @@ T['a Visual Send']['leaves every register as it was, the unnamed one included'] 
   ]])
   local before = child.lua_get(REGISTERS)
   send.set_input(child, { 'some text to send' })
+  send.watch_writes(child)
 
   send.send_selection(child, 'gg0wve')
 
-  eq(child.lua_get(REGISTERS), before)
+  eq({
+    registers = child.lua_get(REGISTERS),
+    writes = send.writes(child),
+    input = send.input(child).lines,
+  }, { registers = before, writes = { paste('text') }, input = { 'some  to send' } })
+end
+
+T['a Visual Send']['removes the selection as Vim’s own "_d does, whatever d is mapped to in Visual mode'] = function()
+  start_ready_session('own-d')
+  child.cmd('xnoremap d "ad')
+  child.fn.setreg('a', 'the user’s a')
+  send.set_input(child, { 'alpha beta' })
+  send.watch_writes(child)
+
+  send.send_selection(child, '0wve')
+
+  eq(
+    { writes = send.writes(child), input = send.input(child).lines, a = child.fn.getreg('a') },
+    { writes = { paste('beta') }, input = { 'alpha ' }, a = 'the user’s a' }
+  )
+end
+
+T['a Visual Send']['leaves . to repeat its removal, which sends nothing, and u to bring it back'] = function()
+  start_ready_session('dot')
+  child.o.undolevels = 1000
+  send.set_input(child, { 'alpha beta gamma delta' })
+  send.watch_writes(child)
+  send.send_selection(child, '0wve')
+
+  send.type_keys(child, '.')
+  local after_dot = send.input(child).lines
+  send.type_keys(child, 'u')
+
+  eq({ writes = send.writes(child), after_dot = after_dot, after_u = send.input(child).lines }, {
+    writes = { paste('beta') },
+    after_dot = { 'alpha ma delta' },
+    after_u = { 'alpha  gamma delta' },
+  })
 end
 
 T['a Visual Send']['leaves the cursor where Vim’s own "_d leaves it, in Normal mode'] = function()
@@ -259,6 +407,32 @@ T['a refused Visual Send']['removes and writes nothing, saying once, of a select
     writes = {},
     input = { 'text', ' \t ', 'more' },
     messages = { { message = 'aineo: nothing sent — the selection is empty', level = WARN } },
+  })
+end
+
+T['a refused Visual Send']['removes and writes nothing, saying once, of a selection of control bytes alone, that it is empty'] = function()
+  start_ready_session('control-bytes-alone')
+  send.set_input(child, { '\27\3', 'kept' })
+  send.watch_writes(child)
+
+  send.send_selection(child, 'ggV')
+
+  eq(refusal(), {
+    writes = {},
+    input = { '\27\3', 'kept' },
+    messages = { { message = 'aineo: nothing sent — the selection is empty', level = WARN } },
+  })
+end
+
+T['a refused Visual Send']['says the selection is empty before saying Claude has not started'] = function()
+  send.open_layout_without_session(child)
+  send.enter_input(child)
+  send.set_input(child, { 'text', '   ', 'more' })
+
+  send.send_selection(child, 'ggjV')
+
+  eq(send.messages(child), {
+    { message = 'aineo: nothing sent — the selection is empty', level = WARN },
   })
 end
 
@@ -404,6 +578,21 @@ T['a Visual Send whose write fails']['puts Input back as it was and raises the w
   contains(send.raised(child), "Can't send data to closed stream")
 end
 
+T['a Visual Send whose write fails']['ends Visual mode, gv selecting again what was selected'] = function()
+  local _, buffer = start_ready_session('write-fails-gv')
+  send.set_input(child, { 'abc def', 'ghi' })
+  send.send_selection_after_closing_stream(child, buffer, 'gg0wvj')
+  claude.wait_for_status(child, 'exited')
+  local mode_after = child.fn.mode()
+
+  send.type_keys(child, 'gv')
+
+  eq({
+    mode_after = mode_after,
+    selected = child.lua_get("vim.fn.getregion(vim.fn.getpos('v'), vim.fn.getpos('.'))"),
+  }, { mode_after = 'n', selected = { 'def', 'ghi' } })
+end
+
 T['a Visual Send whose write fails']['leaves one undo block, so that the first u changes nothing visible'] = function()
   local _, buffer = start_ready_session('write-fails-undo')
   child.o.undolevels = 1000
@@ -486,6 +675,36 @@ T['u after Sends, as the user’s undolevels allow']['brings nothing back with u
   send.type_keys(child, 'u')
 
   eq(send.input(child).lines, { '' })
+end
+
+T['u after Sends, as the user’s undolevels allow']['brings back only the last Visual Send’s selection, and toggles it, with undolevels 0'] = function()
+  start_ready_session('undolevels-0-visual')
+  child.o.undolevels = 0
+  send.set_input(child, { 'a1', 'a2', 'a3' })
+  send.send_selection(child, 'ggV')
+  send.send_selection(child, 'ggV')
+
+  send.type_keys(child, 'u')
+  local after_u = send.input(child).lines
+  send.type_keys(child, 'u')
+  local after_u_u = send.input(child).lines
+  send.type_keys(child, 'u')
+
+  eq(
+    { after_u = after_u, after_u_u = after_u_u, after_u_u_u = send.input(child).lines },
+    { after_u = { 'a2', 'a3' }, after_u_u = { 'a3' }, after_u_u_u = { 'a2', 'a3' } }
+  )
+end
+
+T['u after Sends, as the user’s undolevels allow']['brings no Visual Send’s selection back with undolevels -1'] = function()
+  start_ready_session('undolevels-off-visual')
+  child.o.undolevels = -1
+  send.set_input(child, { 'a1', 'a2' })
+  send.send_selection(child, 'ggV')
+
+  send.type_keys(child, 'u')
+
+  eq(send.input(child).lines, { 'a2' })
 end
 
 return T

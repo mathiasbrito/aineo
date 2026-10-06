@@ -103,6 +103,15 @@ T["the user's own mapping"]['of \\s in one mode stays, and aineo maps \\s in the
   )
 end
 
+T["the user's own mapping"]['of \\s in Select mode alone stays, and aineo maps \\s in Visual mode'] = function()
+  children.restart(child, { '--cmd', 'snoremap \\s <Cmd>let g:mine = 1<CR>' })
+
+  eq(
+    { select = child.fn.maparg('\\s', 's'), visual = child.fn.maparg('\\s', 'x') },
+    { select = '<Cmd>let g:mine = 1<CR>', visual = '<Plug>(aineo-send)' }
+  )
+end
+
 T["the user's own mapping"]['of a key sequence stays, and the other keys are mapped'] = function()
   children.restart(child, { '--cmd', 'nnoremap \\o <Cmd>let g:mine = 1<CR>' })
 

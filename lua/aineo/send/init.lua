@@ -83,16 +83,16 @@ local function pasteable_text(input)
 end
 
 --- Writes `text` to Claude Code's terminal as one bracketed paste followed
---- by Enter, in one write. When the write fails, puts `lines` back as
---- `input`'s lines and raises the write's error as it is.
+--- by Enter, in one write. When the write fails, calls `put_back()`, which
+--- puts Input back as it was before Send changed it, and raises the write's
+--- error as it is.
 ---
----@param input integer the Input buffer
----@param lines string[] Input's lines before Send changed them
 ---@param text string
-local function write_or_put_back(input, lines, text)
+---@param put_back fun()
+local function write_or_put_back(text, put_back)
   local written, failure = pcall(claude.write_to_session, PASTE_START .. text .. PASTE_END .. ENTER)
   if not written then
-    vim.api.nvim_buf_set_lines(input, 0, -1, false, lines)
+    put_back()
     error(failure, 0)
   end
 end
@@ -134,48 +134,121 @@ function M.send()
   end
   local lines = vim.api.nvim_buf_get_lines(input, 0, -1, false)
   vim.api.nvim_buf_set_lines(input, 0, -1, false, {})
-  write_or_put_back(input, lines, text)
+  write_or_put_back(text, function()
+    vim.api.nvim_buf_set_lines(input, 0, -1, false, lines)
+  end)
 end
 
---- The part of a line a selection spans from `first` to `last`, positions
---- as `getregionpos()` gives them: empty when the selection lies past the
---- line's end (`first`'s column 0), else from `first` to the end of the
---- character `last` lies in — the whole of a double-width character the
---- selection cuts — or to the line's end when `to_line_end`.
+--- The line `lnum` of the current buffer, a NUL byte in it kept as one.
 ---
----@param first integer[] `[bufnum, lnum, col, off]`
----@param last integer[] `[bufnum, lnum, col, off]`
----@param to_line_end boolean
+---@param lnum integer 1-based
 ---@return string
-local function line_part(first, last, to_line_end)
-  if first[3] == 0 then
+local function buffer_line(lnum)
+  return vim.api.nvim_buf_get_lines(0, lnum - 1, lnum, false)[1]
+end
+
+--- The last byte of the character of `line` that its byte `byte` lies in,
+--- counting as one character what Neovim draws as one — a character with
+--- its composing ones, an emoji with its modifiers, or a sequence of emoji
+--- joined by U+200D — as `"_d` does when it removes the whole of one a
+--- selection cuts.
+---
+---@param line string as `nvim_buf_get_lines()` gives it
+---@param byte integer 1-based
+---@return integer
+local function character_end(line, byte)
+  -- A Lua string holding a NUL reaches Vimscript as a Blob, which charidx()
+  -- refuses; Vimscript holds a NUL in a line as a line feed, of one byte too.
+  local as_vimscript = line:gsub('%z', '\n')
+  return vim.fn.byteidx(as_vimscript, vim.fn.charidx(as_vimscript, byte - 1) + 1)
+end
+
+--- The part of `line` from its byte `first_byte` through its byte
+--- `last_byte`: empty when `first_byte` is 0, where `getregionpos()` puts
+--- a selection that lies past the line's end.
+---
+---@param line string
+---@param first_byte integer 1-based, or 0
+---@param last_byte integer 1-based
+---@return string
+local function line_part(line, first_byte, last_byte)
+  if first_byte == 0 then
     return ''
   end
-  local line = vim.fn.getline(first[2])
-  local last_byte = to_line_end and #line or last[3] + vim.str_utf_end(line, last[3])
-  return line:sub(first[3], last_byte)
+  return line:sub(first_byte, last_byte)
 end
 
---- The Visual selection's part of each line it spans, top to bottom, and
---- whether it is charwise.
+--- `a` and `b`, positions as `getpos()` gives them, the one nearer the
+--- buffer's start first.
 ---
+---@param a integer[] `[bufnum, lnum, col, off]`
+---@param b integer[] `[bufnum, lnum, col, off]`
+---@return integer[] first
+---@return integer[] last
+local function in_buffer_order(a, b)
+  if b[2] < a[2] or (b[2] == a[2] and b[3] < a[3]) then
+    return b, a
+  end
+  return a, b
+end
+
+--- The region `"_d` removes for a Visual selection of `mode` between `from`
+--- and `to`, as `getregionpos()` takes it: its ends, the one nearer the
+--- buffer's start first, and its kind, `getregionpos()`'s `type`. That is
+--- the selection itself, but for a charwise one under `'selection'` old
+--- whose end lies on an empty line below its start: Vim then ends it as an
+--- exclusive motion that ends in column 1 (`:h exclusive`) — on the line
+--- above, through its last character, or, when the start lies at or before
+--- its line's first non-blank, linewise, through the line above
+--- (`:h exclusive-linewise`).
+---
+---@param mode string `mode()` in Visual mode
+---@param from integer[] `getpos('v')`
+---@param to integer[] `getpos('.')`
+---@return integer[] first
+---@return integer[] last
+---@return string kind
+local function removed_region(mode, from, to)
+  local first, last = in_buffer_order(from, to)
+  local ends_on_empty_line = last[2] > first[2] and buffer_line(last[2]) == ''
+  if mode ~= 'v' or vim.o.selection ~= 'old' or not ends_on_empty_line then
+    return first, last, mode
+  end
+  local above = last[2] - 1
+  if #buffer_line(first[2]):match('^[ \t]*') >= first[3] - 1 then
+    return first, { 0, above, 1, 0 }, 'V'
+  end
+  return first, { 0, above, math.max(#buffer_line(above), 1), 0 }, mode
+end
+
+--- The part of each line `"_d` removes the Visual selection between
+--- `from` and `to` from, top to bottom (`removed_region()`), and whether
+--- the selection is charwise. A part runs from the region's edge on its
+--- line through the character its other edge lies in (`character_end()`)
+--- — or, for a block made with `$`, to the line's own end — and is empty
+--- on a line the region lies past.
+---
+---@param from integer[] `getpos('v')`
+---@param to integer[] `getpos('.')`
 ---@return { parts: string[], charwise: boolean }
-local function visual_selection()
+local function visual_selection(from, to)
   local mode = vim.fn.mode()
   local to_line_end = mode == '\22' and vim.fn.winsaveview().curswant == vim.v.maxcol
+  local first, last, kind = removed_region(mode, from, to)
   local parts = {}
-  for _, span in
-    ipairs(vim.fn.getregionpos(vim.fn.getpos('v'), vim.fn.getpos('.'), { type = mode }))
-  do
-    table.insert(parts, line_part(span[1], span[2], to_line_end))
+  for _, span in ipairs(vim.fn.getregionpos(first, last, { type = kind })) do
+    local line = buffer_line(span[1][2])
+    local last_byte = to_line_end and #line or character_end(line, span[2][3])
+    table.insert(parts, line_part(line, span[1][3], last_byte))
   end
   return { parts = parts, charwise = mode == 'v' }
 end
 
 --- The text a removal of `selection` took from Input: its parts joined by
---- line feeds, and, when the removal took a line break for each line the
---- selection spans — a charwise selection past its last line's end — that
---- line's break too.
+--- line feeds, then, for a charwise selection whose removal took a line
+--- break for each line it spans — its last line's too, as `v$` takes it on
+--- a line that has one, or `'selection'` old with whole lines — a final
+--- line feed. A linewise selection's text ends with none.
 ---
 ---@param selection { parts: string[], charwise: boolean }
 ---@param line_breaks_removed integer
@@ -204,28 +277,33 @@ end
 --- then writes exactly the text that removal took, without control bytes
 --- (`without_control_bytes()`), as one bracketed paste followed by Enter, in
 --- one write, as `send()` writes Input. That text is each line's removed
---- part joined by line feeds: a `$` block's part runs to each line's own
---- end, a line the block lies past gives an empty part and no padding, a
---- tab or a double-width character the selection cuts is sent whole, and a
---- charwise selection past its last line's end ends with that line break.
+--- part joined by line feeds (`visual_selection()`, `removed_text()`): a
+--- `$` block's part runs to each line's own end, a line the block lies past
+--- gives an empty part and no padding, a character the selection cuts — a
+--- tab, a double-width one, an emoji with its modifiers — is sent whole, a
+--- charwise selection whose removal took its last line's break ends with
+--- that line break, and a linewise one ends with none. A NUL byte is sent
+--- as `send()` sends it: not at all.
 ---
 --- Sends and removes nothing, ending Visual mode with the selection kept
 --- for `gv`, and tells the user why with one `vim.notify()` warning, when
---- the current buffer is not Input — Input missing too — when the selection
---- holds nothing but white space, and when Claude Code is not ready, as
---- `send()` tells it — checked in that order. When Input cannot be changed,
---- raises Neovim's error and writes nothing.
+--- the current buffer is not Input — Input missing too — when the text it
+--- would send holds nothing but white space, and when Claude Code is not
+--- ready, as `send()` tells it — checked in that order. When Input cannot
+--- be changed, raises Neovim's error and writes nothing.
 ---
 --- When the write fails — the terminal's stream has closed — puts Input's
---- lines back as they were before the removal and raises the write's error
---- as it is, as `send()` does: the removal and the put-back are then one
---- undo block, which `u` undoes with no change to see.
+--- lines back as they were before the removal, and the selection's marks
+--- `'<` and `'>`, so that `gv` selects it again, and raises the write's
+--- error as it is, as `send()` does: the removal and the put-back are then
+--- one undo block, which `u` undoes with no change to see.
 function M.send_selection()
   local input = vim.api.nvim_get_current_buf()
   if input ~= existing_input() then
     return refuse_selection('not_in_input')
   end
-  local selection = visual_selection()
+  local from, to = vim.fn.getpos('v'), vim.fn.getpos('.')
+  local selection = visual_selection(from, to)
   if not without_control_bytes(table.concat(selection.parts)):find('%S') then
     return refuse_selection('empty_selection')
   end
@@ -236,7 +314,11 @@ function M.send_selection()
   local lines = vim.api.nvim_buf_get_lines(input, 0, -1, false)
   vim.cmd.normal({ args = { '"_d' }, bang = true })
   local removed = removed_text(selection, #lines - vim.api.nvim_buf_line_count(input))
-  write_or_put_back(input, lines, without_control_bytes(removed))
+  write_or_put_back(without_control_bytes(removed), function()
+    vim.api.nvim_buf_set_lines(input, 0, -1, false, lines)
+    vim.fn.setpos("'<", from)
+    vim.fn.setpos("'>", to)
+  end)
 end
 
 return M
