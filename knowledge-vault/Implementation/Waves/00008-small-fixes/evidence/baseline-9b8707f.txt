@@ -1,0 +1,71 @@
+Wave 8 baseline: `make test` on dev 9b8707f (code-identical to 03a1345), Neovim 0.12.5, macOS arm64,
+run by the planning agent on 2026-10-06 in its worktree, AINEO_TEST_JOBS left at its default (8).
+
+Summary, as the runner printed it on stdout (escapes stripped):
+
+  Total number of cases: 1807
+  Total number of groups: 58
+  Fails (0) and Notes (0)
+
+Wall time, from zsh `time`: 100.50s user 94.88s system 87% cpu 3:42.50 total
+
+Cases per file, counted from each file's line of result marks (`o` a pass):
+
+  tests/test_aineo.lua                         14 cases
+  tests/test_changes.lua                       93 cases
+  tests/test_claude.lua                        74 cases
+  tests/test_claude_resume.lua                 49 cases
+  tests/test_config.lua                        31 cases
+  tests/test_deps.lua                           7 cases
+  tests/test_doc.lua                           44 cases
+  tests/test_draft.lua                         41 cases
+  tests/test_entry.lua                         48 cases
+  tests/test_entry_changes.lua                 12 cases
+  tests/test_entry_claude_exit.lua             61 cases
+  tests/test_entry_claude_mode.lua             12 cases
+  tests/test_entry_claude_numbers.lua          17 cases
+  tests/test_entry_claude_resume.lua           11 cases
+  tests/test_entry_draft.lua                   17 cases
+  tests/test_entry_guard.lua                    5 cases
+  tests/test_entry_panes.lua                   86 cases
+  tests/test_entry_prefix.lua                  64 cases
+  tests/test_entry_report.lua                   4 cases
+  tests/test_entry_send_selection.lua           9 cases
+  tests/test_entry_startup.lua                 28 cases
+  tests/test_git_changes.lua                    9 cases
+  tests/test_git_commits.lua                    5 cases
+  tests/test_git_configuration.lua              9 cases
+  tests/test_git_diffs.lua                     17 cases
+  tests/test_git_lock.lua                       8 cases
+  tests/test_git_process.lua                   11 cases
+  tests/test_git_repository.lua                 9 cases
+  tests/test_git_watch.lua                     33 cases
+  tests/test_health.lua                        81 cases
+  tests/test_isolation.lua                     23 cases
+  tests/test_layout.lua                        44 cases
+  tests/test_layout_claude_numbers.lua         18 cases
+  tests/test_layout_diffs.lua                  10 cases
+  tests/test_layout_file_column.lua            57 cases
+  tests/test_layout_input.lua                   9 cases
+  tests/test_layout_panes.lua                  38 cases
+  tests/test_layout_proportions.lua            25 cases
+  tests/test_layout_tabs.lua                    5 cases
+  tests/test_layout_wrap.lua                   32 cases
+  tests/test_mcp.lua                            5 cases
+  tests/test_mcp_blocked_editor.lua             5 cases
+  tests/test_mcp_delivery.lua                  25 cases
+  tests/test_mcp_relay.lua                     30 cases
+  tests/test_plugin.lua                         5 cases
+  tests/test_report.lua                        55 cases
+  tests/test_report_buffer.lua                 67 cases
+  tests/test_report_colours.lua                64 cases
+  tests/test_report_links.lua                  83 cases
+  tests/test_report_paths.lua                  90 cases
+  tests/test_runner.lua                        44 cases
+  tests/test_runner_fixtures.lua                1 cases
+  tests/test_runner_homes.lua                   9 cases
+  tests/test_runner_parallel.lua               17 cases
+  tests/test_runner_verdict.lua                25 cases
+  tests/test_send.lua                          34 cases
+  tests/test_send_selection.lua                67 cases
+  tests/test_timed_attempts.lua                11 cases
