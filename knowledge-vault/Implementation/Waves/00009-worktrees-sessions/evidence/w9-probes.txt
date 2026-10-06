@@ -1,0 +1,806 @@
+Wave 9 planning probes
+======================
+
+Run by the orchestrator's planning agent on 2026-10-06, Neovim 0.12.5 (Homebrew), git 2.50.1
+(Apple Git-155), macOS arm64, on dev 9b8707f (the base wave 8's plan measured; wave 8, PR #123,
+is not merged). Each probe ran headless in a Neovim isolated by the runner below: every XDG
+directory, the log and CLAUDE_CONFIG_DIR under a scratch directory inside the agent's
+worktree, `--clean`, no shada; and every git under T23's isolation, the suites' own
+(tests/helpers/git.lua, tests/helpers/git_repo.lua): no global or system configuration, a
+fixed author, and a ceiling at the scratch directory, so no git run there finds the
+checkout's repository. Fixture repositories were made under the scratch directory, written
+<a1>, <a2>, <a3> below. The real `claude` never ran, and nothing under the user's ~/.claude
+was read or written (B3 simulates a transcript folder in the scratch CLAUDE_CONFIG_DIR).
+A1b alone read this repository's own `git worktree list` and `.git/worktrees/`, read-only.
+
+Probe names: A for feature A (the changes pane follows worktrees), B for feature B (aineo
+follows a session switch). They are not the proposals' P1… of the converge proposal.
+
+One correction to a draft of A3 is kept in the record: its first run recorded the watch's
+calls into a table the probe had already replaced, and so printed no call at all; a minimal
+probe (one watch, one write) called back once, and the script was fixed to record into one
+global table. The output below is the fixed script's.
+
+The runner
+----------
+
+#!/bin/sh
+# Runs a probe in a Neovim isolated under this directory: every XDG path, the log and
+# CLAUDE_CONFIG_DIR here, no user config, no shada; git hermetic as the suites' own
+# (tests/helpers/git.lua: no global or system configuration, a fixed author) with a
+# ceiling at this directory, so no git run here ever finds the checkout's repository.
+here=$(cd "$(dirname "$0")" && pwd)
+home="$here/home"
+mkdir -p "$home"
+exec env -i PATH="/opt/homebrew/bin:/usr/bin:/bin" HOME="$home" TERM=xterm-256color \
+  XDG_CONFIG_HOME="$home/config" XDG_DATA_HOME="$home/data" XDG_STATE_HOME="$home/state" \
+  XDG_CACHE_HOME="$home/cache" NVIM_LOG_FILE="$home/nvim.log" CLAUDE_CONFIG_DIR="$home/claude" \
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_CEILING_DIRECTORIES="$here" \
+  GIT_AUTHOR_NAME='aineo probe' GIT_AUTHOR_EMAIL=probe@aineo.invalid \
+  GIT_COMMITTER_NAME='aineo probe' GIT_COMMITTER_EMAIL=probe@aineo.invalid \
+  PROBE_HERE="$here" \
+  nvim --clean --headless -i NONE -l "$@"
+
+A1 (feature A): `git worktree list --porcelain` for every kind of worktree, a worktree's administrative directory, locks, a removed worktree's leftovers
+----------------------------------------------------------------------------------------------------
+
+-- A1: what `git worktree list --porcelain` gives for every kind of worktree, what a
+-- worktree's administrative directory holds, a lock's file, and a removed worktree's
+-- leftovers before and after `git worktree prune`.
+local here = os.getenv('PROBE_HERE')
+local root = here .. '/a1'
+local function show(...)
+  io.stdout:write(table.concat(vim.tbl_map(function(v)
+    return type(v) == 'string' and v or vim.inspect(v)
+  end, { ... }), '  '), '\n')
+end
+local function sh(cwd, args)
+  local r = vim.system(args, { cwd = cwd, text = true }):wait()
+  return (r.stdout .. r.stderr):gsub(vim.pesc(root), '<a1>'), r.code
+end
+local function git(cwd, ...)
+  local out, code = sh(cwd, vim.list_extend({ 'git' }, { ... }))
+  return out, code
+end
+vim.fn.delete(root, 'rf')
+vim.fn.mkdir(root .. '/main', 'p')
+local main = root .. '/main'
+git(main, 'init', '-q', '-b', 'dev')
+vim.fn.writefile({ '.claude/worktrees/' }, main .. '/.gitignore')
+vim.fn.writefile({ 'a' }, main .. '/a.txt')
+git(main, 'add', '.')
+git(main, 'commit', '-qm', 'base')
+-- a linked worktree on a new branch, outside the top level
+show('add -b', git(main, 'worktree', 'add', '-q', '-b', 'feature/x', root .. '/wt-branch', 'dev'))
+-- a detached one, as Claude Code's Agent tool makes them, nested under the ignored .claude/worktrees/
+show('add --detach', git(main, 'worktree', 'add', '-q', '--detach', main .. '/.claude/worktrees/agent-1', 'dev'))
+-- locked with a reason, as Claude Code locks its agents' worktrees
+show('add locked', git(main, 'worktree', 'add', '-q', '--lock', '--reason', 'claude agent agent-2 (pid 4242 start Tue Oct  6 14:20:21 2026)', '-b', 'feature/y', main .. '/.claude/worktrees/agent-2', 'dev'))
+-- locked with no reason
+show('add', git(main, 'worktree', 'add', '-q', '-b', 'feature/z', root .. '/wt-locked', 'dev'))
+show('lock', git(main, 'worktree', 'lock', root .. '/wt-locked'))
+-- one whose directory is removed by hand, not by `git worktree remove`
+show('add', git(main, 'worktree', 'add', '-q', '-b', 'feature/gone', root .. '/wt-gone', 'dev'))
+vim.fn.delete(root .. '/wt-gone', 'rf')
+-- one on a branch with a space and a non-ASCII letter in its path
+show('add', git(main, 'worktree', 'add', '-q', '-b', 'feature/ü', root .. '/wt é', 'dev'))
+show('--- git worktree list --porcelain, from the main worktree')
+io.stdout:write((git(main, 'worktree', 'list', '--porcelain')))
+show('--- the same from a linked worktree: identical?', git(root .. '/wt-branch', 'worktree', 'list', '--porcelain') == git(main, 'worktree', 'list', '--porcelain'))
+show('--- git worktree list --porcelain -z (NULs shown as |)')
+io.stdout:write(((git(main, 'worktree', 'list', '--porcelain', '-z')):gsub('%z', '|')), '\n')
+show('--- .git/worktrees/ and what each administrative directory holds')
+for _, name in ipairs(vim.fn.readdir(main .. '/.git/worktrees')) do
+  local dir = main .. '/.git/worktrees/' .. name
+  local files = vim.fn.readdir(dir)
+  local locked = vim.fn.filereadable(dir .. '/locked') == 1 and table.concat(vim.fn.readfile(dir .. '/locked'), '\\n') or nil
+  show(name, files, 'gitdir:', (table.concat(vim.fn.readfile(dir .. '/gitdir'), ''):gsub(vim.pesc(root), '<a1>')), 'locked:', locked)
+end
+show('--- the linked worktree\'s .git file', (table.concat(vim.fn.readfile(root .. '/wt-branch/.git'), ''):gsub(vim.pesc(root), '<a1>')))
+show('--- git worktree prune -n -v (what prune would remove)')
+io.stdout:write((git(main, 'worktree', 'prune', '-n', '-v')))
+show('--- git worktree prune; list again')
+git(main, 'worktree', 'prune')
+io.stdout:write((git(main, 'worktree', 'list', '--porcelain')))
+show('branch feature/gone still exists:', (git(main, 'branch', '--list', 'feature/gone')))
+show('--- remove a locked worktree without --force twice')
+show(git(main, 'worktree', 'remove', main .. '/.claude/worktrees/agent-2'))
+show('--- remove a clean unlocked worktree')
+show(git(main, 'worktree', 'remove', root .. '/wt-branch'))
+show('.git/worktrees now', vim.fn.readdir(main .. '/.git/worktrees'))
+-- timing: list --porcelain, 20 runs
+local t = {}
+for _ = 1, 20 do
+  local s = vim.uv.hrtime()
+  git(main, 'worktree', 'list', '--porcelain')
+  table.insert(t, (vim.uv.hrtime() - s) / 1e6)
+end
+table.sort(t)
+show(('git worktree list --porcelain, 20 runs, ms: min %.1f median %.1f max %.1f'):format(t[1], t[10], t[20]))
+
+Its output:
+
+add -b    0
+add --detach    0
+add locked    0
+add    0
+lock    0
+add    0
+add    0
+--- git worktree list --porcelain, from the main worktree
+worktree <a1>/main
+HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994
+branch refs/heads/dev
+
+worktree <a1>/main/.claude/worktrees/agent-1
+HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994
+detached
+
+worktree <a1>/main/.claude/worktrees/agent-2
+HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994
+branch refs/heads/feature/y
+locked claude agent agent-2 (pid 4242 start Tue Oct  6 14:20:21 2026)
+
+worktree <a1>/wt é
+HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994
+branch refs/heads/feature/ü
+
+worktree <a1>/wt-branch
+HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994
+branch refs/heads/feature/x
+
+worktree <a1>/wt-gone
+HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994
+branch refs/heads/feature/gone
+prunable gitdir file points to non-existent location
+
+worktree <a1>/wt-locked
+HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994
+branch refs/heads/feature/z
+locked
+
+--- the same from a linked worktree: identical?  true
+--- git worktree list --porcelain -z (NULs shown as |)
+worktree <a1>/main|HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994|branch refs/heads/dev||worktree <a1>/main/.claude/worktrees/agent-1|HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994|detached||worktree <a1>/main/.claude/worktrees/agent-2|HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994|branch refs/heads/feature/y|locked claude agent agent-2 (pid 4242 start Tue Oct  6 14:20:21 2026)||worktree <a1>/wt é|HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994|branch refs/heads/feature/ü||worktree <a1>/wt-branch|HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994|branch refs/heads/feature/x||worktree <a1>/wt-gone|HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994|branch refs/heads/feature/gone|prunable gitdir file points to non-existent location||worktree <a1>/wt-locked|HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994|branch refs/heads/feature/z|locked||
+--- .git/worktrees/ and what each administrative directory holds
+agent-1  { "HEAD", "ORIG_HEAD", "commondir", "gitdir", "index", "logs", "refs" }  gitdir:  <a1>/main/.claude/worktrees/agent-1/.git  locked:
+agent-2  { "HEAD", "ORIG_HEAD", "commondir", "gitdir", "index", "locked", "logs", "refs" }  gitdir:  <a1>/main/.claude/worktrees/agent-2/.git  locked:  claude agent agent-2 (pid 4242 start Tue Oct  6 14:20:21 2026)
+wt-branch  { "HEAD", "ORIG_HEAD", "commondir", "gitdir", "index", "logs", "refs" }  gitdir:  <a1>/wt-branch/.git  locked:
+wt-gone  { "HEAD", "ORIG_HEAD", "commondir", "gitdir", "index", "logs", "refs" }  gitdir:  <a1>/wt-gone/.git  locked:
+wt-locked  { "HEAD", "ORIG_HEAD", "commondir", "gitdir", "index", "locked", "logs", "refs" }  gitdir:  <a1>/wt-locked/.git  locked:  
+wt-é  { "HEAD", "ORIG_HEAD", "commondir", "gitdir", "index", "logs", "refs" }  gitdir:  <a1>/wt é/.git  locked:
+--- the linked worktree's .git file  gitdir: <a1>/main/.git/worktrees/wt-branch
+--- git worktree prune -n -v (what prune would remove)
+Removing worktrees/wt-gone: gitdir file points to non-existent location
+--- git worktree prune; list again
+worktree <a1>/main
+HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994
+branch refs/heads/dev
+
+worktree <a1>/main/.claude/worktrees/agent-1
+HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994
+detached
+
+worktree <a1>/main/.claude/worktrees/agent-2
+HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994
+branch refs/heads/feature/y
+locked claude agent agent-2 (pid 4242 start Tue Oct  6 14:20:21 2026)
+
+worktree <a1>/wt é
+HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994
+branch refs/heads/feature/ü
+
+worktree <a1>/wt-branch
+HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994
+branch refs/heads/feature/x
+
+worktree <a1>/wt-locked
+HEAD 50736743cd144550c3bb1c3c7a7303ebd99a1994
+branch refs/heads/feature/z
+locked
+
+branch feature/gone still exists:    feature/gone
+
+--- remove a locked worktree without --force twice
+fatal: cannot remove a locked working tree, lock reason: claude agent agent-2 (pid 4242 start Tue Oct  6 14:20:21 2026)
+use 'remove -f -f' to override or unlock first
+  128
+--- remove a clean unlocked worktree
+  0
+.git/worktrees now  { "agent-1", "agent-2", "wt-locked", "wt-é" }
+git worktree list --porcelain, 20 runs, ms: min 20.1 median 21.4 max 32.1
+
+A1b (feature A): this repository, read-only, on 2026-10-06 while the wave-8 brief review and this planning agent ran
+----------------------------------------------------------------------------------------------------
+
+Its output:
+
+$ git worktree list --porcelain        (the checkout's path written <checkout>, a pid <n>)
+worktree <checkout>
+HEAD 9b8707f064d7614ebe505720c2b188b58e5772fb
+branch refs/heads/dev
+
+worktree <checkout>/.claude/worktrees/agent-a137adf93c6ae961d
+HEAD 2c83ab002af0765156c735356e397557d4fb1eea
+detached
+locked claude agent agent-a137adf93c6ae961d (pid <n> start Tue Oct  6 14:20:21 2026)
+
+worktree <checkout>/.claude/worktrees/agent-a5d8d8739f390f467
+HEAD 9b8707f064d7614ebe505720c2b188b58e5772fb
+branch refs/heads/knowledge/w9-plan
+locked claude agent agent-a5d8d8739f390f467 (pid <n> start Tue Oct  6 14:20:21 2026)
+
+$ ls <checkout>/.git/worktrees/<each>/     (both the same)
+CLAUDE_BASE commondir FETCH_HEAD gitdir HEAD index locked logs ORIG_HEAD refs
+
+$ cat <checkout>/.git/worktrees/<each>/CLAUDE_BASE     (both the same)
+ebfe71cc0e03dd56f32d8463c394984a279a22db
+
+$ git rev-parse origin/main main
+ebfe71cc0e03dd56f32d8463c394984a279a22db
+511e28957df36400a433f9f2adaaa3b2925d44a2
+
+Read: Claude Code's Agent tool locks each worktree it makes, with the reason
+"claude agent agent-<id> (pid <n> start <date>)", both under the same pid; one worktree is
+detached (the wave-8 brief reviewer at PR #123's head 2c83ab0), one on a branch this agent
+checked out from origin/dev. Claude Code also writes a file `CLAUDE_BASE` into the
+worktree's administrative directory, holding origin/main's commit, the commit the worktree
+was made at — not the origin/dev commit the agent then branched from. CLAUDE_BASE is not in
+git's own layout (A1's fixture worktrees have none) and Claude Code's documentation, as read
+for this plan, does not name it. This repository has 449 tracked files.
+
+A2 (feature A): each candidate base of an agent's worktree
+----------------------------------------------------------
+
+-- A2: what each candidate base of a worktree gives, in the orchestrate skill's shape: a
+-- main checkout on `dev` behind its remote's `dev`, and agent worktrees made detached at
+-- `main` (as Claude Code's Agent tool makes them) that then check out a branch from
+-- `origin/dev`, commit, and are left.
+local here = os.getenv('PROBE_HERE')
+local root = here .. '/a2'
+local function show(...)
+  io.stdout:write(table.concat(vim.tbl_map(function(v)
+    return type(v) == 'string' and v or vim.inspect(v)
+  end, { ... }), '  '), '\n')
+end
+local function git(cwd, ...)
+  local r = vim.system(vim.list_extend({ 'git' }, { ... }), { cwd = cwd, text = true }):wait()
+  return vim.trim((r.stdout .. r.stderr):gsub(vim.pesc(root), '<a2>')), r.code
+end
+local function commit(cwd, file, text, message)
+  vim.fn.writefile({ text }, cwd .. '/' .. file)
+  git(cwd, 'add', '.')
+  git(cwd, 'commit', '-qm', message)
+end
+vim.fn.delete(root, 'rf')
+vim.fn.mkdir(root .. '/origin', 'p')
+git(root .. '/origin', 'init', '-q', '--bare', '-b', 'main')
+git(root, 'clone', '-q', root .. '/origin', root .. '/main')
+local main = root .. '/main'
+commit(main, 'a.txt', 'a', 'm1 on main')
+git(main, 'push', '-q', 'origin', 'main')
+git(main, 'checkout', '-q', '-b', 'dev')
+commit(main, 'b.txt', 'b', 'd1 on dev')
+git(main, 'push', '-q', '-u', 'origin', 'dev')
+-- the remote's dev moves on (a merged pull request) while the user's dev is not pulled
+local other = root .. '/other'
+git(root, 'clone', '-q', '-b', 'dev', root .. '/origin', other)
+commit(other, 'c.txt', 'c', 'd2 merged upstream, not pulled')
+git(other, 'push', '-q', 'origin', 'dev')
+git(main, 'fetch', '-q', 'origin')
+show('main HEAD', git(main, 'log', '--oneline', '-1'), 'origin/dev', git(main, 'log', '--oneline', '-1', 'origin/dev'))
+-- an agent worktree, as Claude Code's Agent tool makes it: detached at main's tip
+local agent = main .. '/.claude/worktrees/agent-1'
+show('add', git(main, 'worktree', 'add', '-q', '--detach', agent, 'main'))
+show('agent then branches from origin/dev', git(agent, 'checkout', '-q', '-b', 'feature/t99', 'origin/dev'))
+commit(agent, 'e.txt', 'e', 'agent: e1')
+commit(agent, 'f.txt', 'f', 'agent: f1')
+vim.fn.writefile({ 'g' }, agent .. '/g.txt') -- uncommitted, untracked
+show('--- candidate bases for the agent worktree')
+local mb_main_head = git(agent, 'merge-base', 'HEAD', 'dev')
+show('(i) merge-base with the main worktree\'s branch, dev:', git(agent, 'log', '--oneline', '-1', mb_main_head))
+show('    commits listed:', git(agent, 'log', '--oneline', mb_main_head .. '..HEAD'))
+local mb_up = git(agent, 'merge-base', 'HEAD', 'origin/dev')
+show('(ii) merge-base with dev\'s upstream, origin/dev:', git(agent, 'log', '--oneline', '-1', mb_up))
+show('    commits listed:', git(agent, 'log', '--oneline', mb_up .. '..HEAD'))
+show('(iii) HEAD when first seen: whatever HEAD is at the pane\'s first look; for a worktree first seen now, its tip:', git(agent, 'log', '--oneline', '-1'))
+show('(iv) the branch\'s reflog, oldest entry:', git(agent, 'reflog', 'show', '--format=%gs', 'feature/t99'))
+show('    the worktree HEAD reflog, oldest last:', git(agent, 'reflog', 'show', '--format=%h %gs', 'HEAD'))
+show('(v) the main session\'s base (main HEAD at its first start, here d1):', git(agent, 'log', '--oneline', '-1', 'dev'))
+show('    files changed from dev:', git(agent, 'diff', '--name-status', 'dev'))
+show('    files changed from merge-base(HEAD, dev):', git(agent, 'diff', '--name-status', mb_main_head))
+show('    files changed from merge-base(HEAD, origin/dev):', git(agent, 'diff', '--name-status', mb_up))
+show('    untracked:', git(agent, 'ls-files', '--others', '--exclude-standard'))
+-- the worktree detached and never branched (a reviewer at a PR head)
+local reviewer = main .. '/.claude/worktrees/agent-2'
+git(main, 'worktree', 'add', '-q', '--detach', reviewer, 'origin/dev')
+local mb_reviewer = (git(reviewer, 'merge-base', 'HEAD', 'dev'))
+show('--- a detached reviewer worktree at origin/dev: merge-base with dev', (git(reviewer, 'log', '--oneline', '-1', mb_reviewer)), 'commits listed:', (git(reviewer, 'log', '--oneline', mb_reviewer .. '..HEAD')))
+local mb_reviewer_up = (git(reviewer, 'merge-base', 'HEAD', 'origin/dev'))
+show('    merge-base with origin/dev', (git(reviewer, 'log', '--oneline', '-1', mb_reviewer_up)), 'commits listed:', (git(reviewer, 'log', '--oneline', mb_reviewer_up .. '..HEAD')))
+-- the cost of merge-base and of the upstream lookup
+local function time(fn)
+  local t = {}
+  for _ = 1, 20 do
+    local s = vim.uv.hrtime()
+    fn()
+    table.insert(t, (vim.uv.hrtime() - s) / 1e6)
+  end
+  table.sort(t)
+  return ('min %.1f median %.1f max %.1f ms'):format(t[1], t[10], t[20])
+end
+show('merge-base HEAD dev, 20 runs:', time(function() git(agent, 'merge-base', 'HEAD', 'dev') end))
+show('rev-parse dev@{upstream}, 20 runs:', time(function() git(main, 'rev-parse', '--abbrev-ref', 'dev@{upstream}') end), git(main, 'rev-parse', '--abbrev-ref', 'dev@{upstream}'))
+
+Its output:
+
+main HEAD  0471f6f d1 on dev  origin/dev  da127b6 d2 merged upstream, not pulled  0
+add    0
+agent then branches from origin/dev    0
+--- candidate bases for the agent worktree
+(i) merge-base with the main worktree's branch, dev:  0471f6f d1 on dev  0
+    commits listed:  d447c0c agent: f1
+32a6f57 agent: e1
+da127b6 d2 merged upstream, not pulled  0
+(ii) merge-base with dev's upstream, origin/dev:  da127b6 d2 merged upstream, not pulled  0
+    commits listed:  d447c0c agent: f1
+32a6f57 agent: e1  0
+(iii) HEAD when first seen: whatever HEAD is at the pane's first look; for a worktree first seen now, its tip:  d447c0c agent: f1  0
+(iv) the branch's reflog, oldest entry:  commit: agent: f1
+commit: agent: e1
+branch: Created from origin/dev  0
+    the worktree HEAD reflog, oldest last:  d447c0c commit: agent: f1
+32a6f57 commit: agent: e1
+da127b6 checkout: moving from 0e16a8091a2575ba339f6c596fde642dddd0d4d7 to feature/t99
+0e16a80  0
+(v) the main session's base (main HEAD at its first start, here d1):  0471f6f d1 on dev  0
+    files changed from dev:  A	c.txt
+A	e.txt
+A	f.txt  0
+    files changed from merge-base(HEAD, dev):  A	c.txt
+A	e.txt
+A	f.txt  0
+    files changed from merge-base(HEAD, origin/dev):  A	e.txt
+A	f.txt  0
+    untracked:  g.txt  0
+--- a detached reviewer worktree at origin/dev: merge-base with dev  0471f6f d1 on dev  commits listed:  da127b6 d2 merged upstream, not pulled
+    merge-base with origin/dev  da127b6 d2 merged upstream, not pulled  commits listed:  
+merge-base HEAD dev, 20 runs:  min 19.1 median 21.3 max 55.7 ms
+rev-parse dev@{upstream}, 20 runs:  min 18.1 median 18.9 max 25.9 ms  origin/dev  0
+
+A3 (feature A): aineo's own watch (T23) as worktrees come, work and go; N watches; the cost of one read
+----------------------------------------------------------------------------------------------------
+
+-- A3: what aineo's own watch (aineo.git.watch_repository, T23, at this checkout's code)
+-- calls back when worktrees come, work and go; what a plain fs_event on the common git
+-- directory names; and what N watches cost when one worktree commits.
+local here = os.getenv('PROBE_HERE')
+local checkout = vim.fn.fnamemodify(here, ':h:h')
+vim.opt.rtp:prepend(checkout)
+local git_home = require('aineo.git')
+local root = here .. '/a3'
+local function show(...)
+  io.stdout:write(table.concat(vim.tbl_map(function(v)
+    return type(v) == 'string' and v or vim.inspect(v, { newline = ' ', indent = '' })
+  end, { ... }), '  '), '\n')
+end
+local function git(cwd, ...)
+  local r = vim.system(vim.list_extend({ 'git' }, { ... }), { cwd = cwd, text = true }):wait()
+  return vim.trim(r.stdout .. r.stderr), r.code
+end
+vim.fn.delete(root, 'rf')
+vim.fn.mkdir(root .. '/main', 'p')
+local main = root .. '/main'
+git(main, 'init', '-q', '-b', 'dev')
+vim.fn.writefile({ '.claude/worktrees/' }, main .. '/.gitignore')
+vim.fn.writefile({ 'a' }, main .. '/a.txt')
+git(main, 'add', '.')
+git(main, 'commit', '-qm', 'base')
+local function find(directory)
+  local found
+  git_home.find_repository(directory, function(failure, repository)
+    found = failure or repository
+  end)
+  vim.wait(5000, function() return found ~= nil end, 10)
+  return found
+end
+local function watch(label, repository)
+  local w, failure = git_home.watch_repository(repository, function(f, change)
+    table.insert(CALLS, { label = label, at = math.floor((vim.uv.hrtime() - T0) / 1e6), failure = f and f.reason, change = change })
+  end)
+  assert(w, vim.inspect(failure))
+  return w
+end
+T0 = vim.uv.hrtime()
+CALLS = {}
+local main_repo = find(main)
+show('main repository', { top = main_repo.top:gsub(vim.pesc(root), '<a3>'), git_directory = main_repo.git_directory:gsub(vim.pesc(root), '<a3>'), common = main_repo.common_directory:gsub(vim.pesc(root), '<a3>') })
+local main_watch = watch('main', main_repo)
+vim.wait(500, function() return false end, 10)
+-- a plain fs_event, recursive, on the common git directory, to see the names
+local names = {}
+local raw = vim.uv.new_fs_event()
+raw:start(main_repo.common_directory, { recursive = true }, function(_, name) table.insert(names, name) end)
+local function step(label, fn)
+  CALLS, names = {}, {}
+  T0 = vim.uv.hrtime()
+  fn()
+  vim.wait(1500, function() return false end, 10)
+  local seen = {}
+  for _, name in ipairs(names) do
+    local key = name:gsub('worktrees/([^/]+)/.*', 'worktrees/%1/…')
+    seen[key] = (seen[key] or 0) + 1
+  end
+  show(label, 'calls:', vim.tbl_map(function(c)
+    return ('%s@%dms files=%s branch=%s%s'):format(c.label, c.at, c.change and tostring(c.change.files_changed) or '-', c.change and tostring(c.change.branch_moved) or '-', c.failure and (' failure=' .. c.failure) or '')
+  end, CALLS), 'common-dir event names (grouped):', seen)
+end
+local outside = root .. '/wt-outside'
+local nested = main .. '/.claude/worktrees/agent-1'
+step('1 git worktree add (outside the top)', function() git(main, 'worktree', 'add', '-q', '-b', 'feature/x', outside, 'dev') end)
+step('2 git worktree add (nested, ignored)', function() git(main, 'worktree', 'add', '-q', '--detach', nested, 'dev') end)
+step('3 a file written in the outside worktree', function() vim.fn.writefile({ 'x' }, outside .. '/x.txt') end)
+step('4 a file written in the nested worktree', function() vim.fn.writefile({ 'y' }, nested .. '/y.txt') end)
+step('5 git add + commit in the outside worktree', function() git(outside, 'add', '.'); git(outside, 'commit', '-qm', 'x') end)
+step('6 git commit in the nested worktree (detached)', function() git(nested, 'add', '.'); git(nested, 'commit', '-qm', 'y') end)
+-- now a watch per linked worktree as well, as feature A would run them
+local outside_repo = find(outside)
+local nested_repo = find(nested)
+show('outside worktree repository: common_directory is main\'s?', outside_repo.common_directory == main_repo.common_directory, 'git_directory', outside_repo.git_directory:gsub(vim.pesc(root), '<a3>'))
+local w2 = watch('outside', outside_repo)
+local w3 = watch('nested', nested_repo)
+vim.wait(500, function() return false end, 10)
+step('7 three watches; a file written in the outside worktree', function() vim.fn.writefile({ 'x2' }, outside .. '/x.txt') end)
+step('8 three watches; commit in the outside worktree', function() git(outside, 'commit', '-qam', 'x2') end)
+step('9 three watches; a file written in the main checkout', function() vim.fn.writefile({ 'a2' }, main .. '/a.txt') end)
+step('10 three watches; a file written in the nested worktree', function() vim.fn.writefile({ 'y2' }, nested .. '/y.txt') end)
+-- a writer in the nested worktree every 50 ms for 3 s, as an agent's test run writes
+CALLS, names = {}, {}
+T0 = vim.uv.hrtime()
+local writes = 0
+local timer = vim.uv.new_timer()
+timer:start(0, 50, function() writes = writes + 1; local f = io.open(nested .. '/build.log', 'a'); f:write('line\n'); f:close() end)
+vim.wait(3000, function() return false end, 10)
+timer:stop()
+vim.wait(1500, function() return false end, 10)
+local by = {}
+for _, c in ipairs(CALLS) do by[c.label] = (by[c.label] or 0) + 1 end
+show(('11 a writer in the nested worktree every 50 ms for 3 s (%d writes): calls per watch'):format(writes), by)
+step('12 git worktree remove (outside), then the watch on it', function() git(main, 'worktree', 'remove', '--force', outside) end)
+step('13 prune after the nested directory is deleted by hand', function() vim.fn.delete(nested, 'rf'); git(main, 'worktree', 'prune') end)
+show('handles: 2 fs_event per watch (top, common directory) + 1 timer; 3 watches = 6 fs_events')
+main_watch.stop(); w2.stop(); w3.stop(); raw:stop()
+-- the cost of reading each worktree's lists
+local function time_read(label, repository, base)
+  local t = {}
+  for _ = 1, 5 do
+    local s, done = vim.uv.hrtime(), false
+    git_home.changed_files(repository, base, function() done = true end)
+    vim.wait(10000, function() return done end, 5)
+    local s2, done2 = vim.uv.hrtime(), false
+    git_home.commits_since(repository, base, function() done2 = true end)
+    vim.wait(10000, function() return done2 end, 5)
+    table.insert(t, { (s2 - s) / 1e6, (vim.uv.hrtime() - s2) / 1e6 })
+  end
+  table.sort(t, function(a, b) return a[1] + a[2] < b[1] + b[2] end)
+  show(label, ('changed_files %.0f ms, commits_since %.0f ms (median of 5)'):format(t[3][1], t[3][2]))
+end
+time_read('main, small repository', main_repo, main_repo.head)
+
+Its output:
+
+main repository  { common = "<a3>/main/.git", git_directory = "<a3>/main/.git", top = "<a3>/main" }
+1 git worktree add (outside the top)  calls:  { "main@323ms files=true branch=false" }  common-dir event names (grouped):  { ["logs/refs/heads/feature"] = 1, ["logs/refs/heads/feature/x"] = 1, ["packed-refs.lock"] = 2, ["refs/heads/feature"] = 1, ["refs/heads/feature/x"] = 1, ["refs/heads/feature/x.lock"] = 2, worktrees = 1, ["worktrees/wt-outside"] = 1, ["worktrees/wt-outside/…"] = 17 }
+2 git worktree add (nested, ignored)  calls:  { "main@316ms files=true branch=false" }  common-dir event names (grouped):  { ["packed-refs.lock"] = 2, ["worktrees/agent-1"] = 1, ["worktrees/agent-1/…"] = 17 }
+3 a file written in the outside worktree  calls:  {}  common-dir event names (grouped):  {}
+4 a file written in the nested worktree  calls:  { "main@210ms files=true branch=false" }  common-dir event names (grouped):  {}
+5 git add + commit in the outside worktree  calls:  { "main@333ms files=true branch=false" }  common-dir event names (grouped):  { ["logs/refs/heads/feature/x"] = 1, ["objects/0f/9b9063ec002ba4f8aad33daf34bb162853dbdd"] = 1, ["objects/58"] = 1, ["objects/58/7be6b4c3f93f93c489c0111bba5596147a26cb"] = 1, ["objects/58/tmp_obj_TFvID8"] = 1, ["objects/78/981922613b2afb6025042ff6bd878ac1994e85"] = 1, ["objects/b5"] = 1, ["objects/b5/3fa2756d9d430fa33442d9a82429fc7b29c84e"] = 1, ["objects/b5/tmp_obj_4KrTX3"] = 1, ["objects/bb"] = 1, ["objects/bb/83a2af6847bf41efe4903e535ddd2268a86b41"] = 1, ["objects/bb/tmp_obj_88wQn9"] = 1, ["objects/maintenance.lock"] = 1, ["packed-refs.lock"] = 1, ["refs/heads/feature/x"] = 2, ["refs/heads/feature/x.lock"] = 1, ["worktrees/wt-outside/…"] = 10 }
+6 git commit in the nested worktree (detached)  calls:  { "main@328ms files=true branch=false" }  common-dir event names (grouped):  { ["objects/0f/9b9063ec002ba4f8aad33daf34bb162853dbdd"] = 1, ["objects/74"] = 1, ["objects/74/fa36b748f3f3cd1266c212711d6ae8fdcc096b"] = 1, ["objects/74/tmp_obj_v0rUbu"] = 1, ["objects/78/981922613b2afb6025042ff6bd878ac1994e85"] = 1, ["objects/93"] = 1, ["objects/93/a925c937ac58d03ce939c33ab2db9fc44d8cc1"] = 1, ["objects/93/tmp_obj_LbygTj"] = 1, ["objects/97"] = 1, ["objects/97/5fbec8256d3e8a3797e7a3611380f27c49f4ac"] = 1, ["objects/97/tmp_obj_M6wbwZ"] = 1, ["objects/maintenance.lock"] = 1, ["packed-refs.lock"] = 1, ["worktrees/agent-1/…"] = 12 }
+outside worktree repository: common_directory is main's?  true  git_directory  <a3>/main/.git/worktrees/wt-outside  1
+7 three watches; a file written in the outside worktree  calls:  { "outside@211ms files=true branch=false" }  common-dir event names (grouped):  {}
+8 three watches; commit in the outside worktree  calls:  { "main@319ms files=true branch=false", "nested@319ms files=true branch=false", "outside@319ms files=true branch=true" }  common-dir event names (grouped):  { ["logs/refs/heads/feature/x"] = 1, ["objects/58"] = 1, ["objects/58/5486fd2dd4b8f881d09e1b1717553c602017e1"] = 1, ["objects/58/tmp_obj_C3jR7h"] = 1, ["objects/67"] = 1, ["objects/67/22e9d3475885d9333feb4433744d2a3231a7af"] = 1, ["objects/67/tmp_obj_fNb3IE"] = 1, ["objects/d7"] = 1, ["objects/d7/35d349cd07d14df2401dd401efccb2818872ab"] = 1, ["objects/d7/tmp_obj_Y2tTB9"] = 1, ["objects/maintenance.lock"] = 1, ["packed-refs.lock"] = 1, ["refs/heads/feature/x"] = 2, ["refs/heads/feature/x.lock"] = 1, ["worktrees/wt-outside/…"] = 8 }
+9 three watches; a file written in the main checkout  calls:  { "main@212ms files=true branch=false" }  common-dir event names (grouped):  {}
+10 three watches; a file written in the nested worktree  calls:  { "main@211ms files=true branch=false", "nested@211ms files=true branch=false" }  common-dir event names (grouped):  {}
+11 a writer in the nested worktree every 50 ms for 3 s (63 writes): calls per watch  { main = 4, nested = 4 }
+12 git worktree remove (outside), then the watch on it  calls:  { "outside@256ms files=- branch=- failure=failed", "main@277ms files=true branch=false", "nested@277ms files=true branch=false" }  common-dir event names (grouped):  { ["worktrees/wt-outside"] = 1, ["worktrees/wt-outside/…"] = 9 }
+13 prune after the nested directory is deleted by hand  calls:  { "outside@286ms files=- branch=- failure=failed", "nested@286ms files=- branch=- failure=failed", "main@305ms files=true branch=false" }  common-dir event names (grouped):  { worktrees = 1, ["worktrees/agent-1"] = 1, ["worktrees/agent-1/…"] = 9 }
+handles: 2 fs_event per watch (top, common directory) + 1 timer; 3 watches = 6 fs_events
+main, small repository  changed_files 43 ms, commits_since 39 ms (median of 5)
+
+B1 (feature B): reaching the editor from a process Claude Code starts; a hook-shaped relay and --remote-expr, timed
+----------------------------------------------------------------------------------------------------
+
+-- B1: what a process Claude Code starts (a hook command) could use to reach the editor,
+-- and how long a hook-shaped relay takes, without the real `claude`:
+--  (a) $NVIM in a terminal job's child and grandchild, with aineo's own `env` option;
+--  (b) a relay run as aineo's MCP server is run (`nvim --headless --clean --cmd 'set
+--      noloadplugins' -l <script>`), reading a SessionStart-shaped JSON on stdin and
+--      telling an idle editor by rpcnotify, the editor's address on its command line;
+--  (c) the same through `nvim --server <address> --remote-expr`.
+-- The "editor" of (b) and (c) is a second headless Neovim listening on a socket and idle in
+-- its main loop, as a user's editor is; this script drives it over RPC. uv.hrtime() is
+-- mach_absolute_time on macOS, one clock for every process.
+local here = os.getenv('PROBE_HERE')
+local function show(...)
+  io.stdout:write(table.concat(vim.tbl_map(function(v)
+    return type(v) == 'string' and v or vim.inspect(v, { newline = ' ', indent = '' })
+  end, { ... }), '  '), '\n')
+end
+-- (a)
+local buffer = vim.api.nvim_create_buf(false, true)
+local job
+vim.api.nvim_buf_call(buffer, function()
+  job = vim.fn.jobstart({ 'sh', '-c', 'echo "CHILD:$NVIM"; sh -c \'echo "GRANDCHILD:$NVIM"\'; echo "AINEO_CHILD:$AINEO_CHILD"; sleep 1' }, { term = true, env = { AINEO_CHILD = '1' } })
+end)
+vim.wait(800, function() return false end, 10)
+local text = table.concat(vim.api.nvim_buf_get_lines(buffer, 0, -1, false), '')
+show('(a) the child sees $NVIM = v:servername:', text:find('CHILD:' .. vim.v.servername, 1, true) ~= nil, 'the grandchild too:', text:find('GRANDCHILD:' .. vim.v.servername, 1, true) ~= nil, 'AINEO_CHILD beside it:', text:find('AINEO_CHILD:1', 1, true) ~= nil)
+vim.fn.jobstop(job)
+-- the idle editor
+local address = here .. '/b1.sock'
+vim.fn.delete(address)
+local editor = vim.system({ vim.v.progpath, '--clean', '--headless', '-i', 'NONE', '--listen', address, '--cmd',
+  'lua _G.SEEN = {}; _G.PROBE_SEEN = function(id, source) table.insert(_G.SEEN, { id = id, source = source, at = vim.uv.hrtime() }) return 0 end' })
+vim.wait(3000, function() return vim.uv.fs_stat(address) ~= nil end, 10)
+local channel = vim.fn.sockconnect('pipe', address, { rpc = true })
+local function seen_count() return vim.rpcrequest(channel, 'nvim_exec_lua', 'return #_G.SEEN', {}) end
+local function last_seen() return vim.rpcrequest(channel, 'nvim_exec_lua', 'return _G.SEEN[#_G.SEEN]', {}) end
+-- (b)
+local relay = here .. '/b1-hook-relay.lua'
+vim.fn.writefile({
+  '-- reads one JSON object on stdin and notifies the editor at arg[1] of its session_id and source',
+  'local ok, event = pcall(vim.json.decode, io.read("*a"))',
+  'local channel = vim.fn.sockconnect("pipe", arg[1], { rpc = true })',
+  'vim.rpcnotify(channel, "nvim_exec_lua", "_G.PROBE_SEEN(...)", { ok and event.session_id or "unreadable", ok and event.source or "" })',
+  'vim.fn.chanclose(channel)',
+}, relay)
+local event = vim.json.encode({ session_id = '00893aaf-19fa-41d2-8238-13269b9b3ca0', transcript_path = '/x/y.jsonl', cwd = '/x', hook_event_name = 'SessionStart', source = 'resume' })
+local function measure(command, stdin)
+  local seen_ms, exit_ms = {}, {}
+  for _ = 1, 10 do
+    local before = seen_count()
+    local start = vim.uv.hrtime()
+    local ended
+    vim.system(command, { stdin = stdin, text = true }, function(r) ended = { r = r, at = vim.uv.hrtime() } end)
+    vim.wait(5000, function() return ended ~= nil end, 2)
+    vim.wait(2000, function() return seen_count() > before end, 2)
+    local last = last_seen()
+    table.insert(seen_ms, seen_count() > before and (last.at - start) / 1e6 or -1)
+    table.insert(exit_ms, (ended.at - start) / 1e6)
+    if ended.r.code ~= 0 then show('exit', ended.r.code, ended.r.stderr) end
+  end
+  table.sort(seen_ms); table.sort(exit_ms)
+  return ('the editor saw it after min %.0f / median %.0f / max %.0f ms; the process ended after min %.0f / median %.0f / max %.0f ms'):format(seen_ms[1], seen_ms[5], seen_ms[10], exit_ms[1], exit_ms[5], exit_ms[10])
+end
+show('(b) relay as aineo runs its MCP server, 10 runs:', measure({ vim.v.progpath, '--headless', '--clean', '--cmd', 'set noloadplugins', '-l', relay, address }, event))
+show('(b) what the editor got', last_seen())
+-- (c)
+show('(c) --remote-expr, 10 runs:', measure({ vim.v.progpath, '--clean', '--headless', '--server', address, '--remote-expr', 'v:lua._G.PROBE_SEEN("via-remote-expr", "resume")' }, nil))
+show('(c) what the editor got', last_seen())
+vim.fn.chanclose(channel)
+editor:kill(15)
+editor:wait(2000)
+
+Its output:
+
+(a) the child sees $NVIM = v:servername:  true  the grandchild too:  true  AINEO_CHILD beside it:  true
+(b) relay as aineo runs its MCP server, 10 runs:  the editor saw it after min 18 / median 19 / max 21 ms; the process ended after min 19 / median 20 / max 22 ms
+(b) what the editor got  { at = 5.5701504568508e+14, id = "00893aaf-19fa-41d2-8238-13269b9b3ca0", source = "resume" }
+(c) --remote-expr, 10 runs:  the editor saw it after min 10 / median 10 / max 14 ms; the process ended after min 11 / median 11 / max 15 ms
+(c) what the editor got  { at = 5.5701516609767e+14, id = "via-remote-expr", source = "resume" }
+
+B3 (feature B): a watch on Claude Code's transcript folder, simulated
+---------------------------------------------------------------------
+
+-- B3: what a watch on Claude Code's transcript folder for one working directory would see,
+-- simulated in a scratch CLAUDE_CONFIG_DIR (no real `claude`, nothing under the user's
+-- ~/.claude): the folder's name as the documentation says Claude Code makes it, and the
+-- fs_event names when a session's transcript is created, appended to, a second one made
+-- (`/clear`), the first appended again (`/resume`), and another Claude Code in the same
+-- directory writes its own.
+local here = os.getenv('PROBE_HERE')
+local function show(...)
+  io.stdout:write(table.concat(vim.tbl_map(function(v)
+    return type(v) == 'string' and v or vim.inspect(v, { newline = ' ', indent = '' })
+  end, { ... }), '  '), '\n')
+end
+local config = os.getenv('CLAUDE_CONFIG_DIR')
+-- "where <project> is your working directory path with non-alphanumeric characters replaced by -"
+local function project_name(directory) return (directory:gsub('[^%w]', '-')) end
+for _, d in ipairs({ '/work/projects/aineo', '/work/projects/aineo/.claude/worktrees/agent-a5d8', '/tmp/wt é', '/a/b_c.d' }) do
+  show('project folder of', d, '->', project_name(d))
+end
+show('two directories that differ only in a non-alphanumeric character share one folder:', project_name('/a/b_c') == project_name('/a/b-c'), project_name('/a/b.c') == project_name('/a/b_c'))
+local folder = config .. '/projects/' .. project_name('/work/app')
+vim.fn.delete(config .. '/projects', 'rf')
+vim.fn.mkdir(folder, 'p')
+local events = {}
+local handle = vim.uv.new_fs_event()
+handle:start(folder, {}, function(_, name, flags) table.insert(events, name .. (flags.rename and ' rename' or '') .. (flags.change and ' change' or '')) end)
+vim.wait(300, function() return false end, 10)
+local function append(id, line)
+  local f = io.open(folder .. '/' .. id .. '.jsonl', 'a'); f:write(line .. '\n'); f:close()
+end
+local function step(label, fn)
+  events = {}
+  fn()
+  vim.wait(400, function() return false end, 10)
+  show(label, events)
+end
+local A, B, OTHER = 'aaaaaaaa-0000-4000-8000-000000000001', 'bbbbbbbb-0000-4000-8000-000000000002', 'cccccccc-0000-4000-8000-000000000003'
+step('session A starts and writes', function() append(A, '{}') end)
+step('session A writes again', function() append(A, '{}') end)
+step('/clear: session B begins', function() append(B, '{}') end)
+step('/resume A: A written again', function() append(A, '{}') end)
+step('a second Claude Code in the same directory writes its own session', function() append(OTHER, '{}') end)
+step('a subdirectory of a session is written (its name not documented)', function() vim.fn.mkdir(folder .. '/' .. A, 'p'); vim.fn.writefile({ '{}' }, folder .. '/' .. A .. '/sub.jsonl') end)
+handle:stop()
+
+Its output:
+
+project folder of  /work/projects/aineo  ->  -work-projects-aineo
+project folder of  /work/projects/aineo/.claude/worktrees/agent-a5d8  ->  -work-projects-aineo--claude-worktrees-agent-a5d8
+project folder of  /tmp/wt é  ->  -tmp-wt---
+project folder of  /a/b_c.d  ->  -a-b-c-d
+two directories that differ only in a non-alphanumeric character share one folder:  true  true
+session A starts and writes  { "aaaaaaaa-0000-4000-8000-000000000001.jsonl rename" }
+session A writes again  { "aaaaaaaa-0000-4000-8000-000000000001.jsonl rename" }
+/clear: session B begins  { "bbbbbbbb-0000-4000-8000-000000000002.jsonl rename" }
+/resume A: A written again  { "aaaaaaaa-0000-4000-8000-000000000001.jsonl change" }
+a second Claude Code in the same directory writes its own session  { "cccccccc-0000-4000-8000-000000000003.jsonl rename" }
+a subdirectory of a session is written (its name not documented)  { "aaaaaaaa-0000-4000-8000-000000000001 rename" }
+
+B2, B4 (feature B): what the recorded Claude Code gives a stdio MCP server
+-------------------------------------------------------------------------
+
+No probe: read from tests/fixtures/mcp/claude-code-2.1.281.jsonl at 9b8707f, which holds
+Claude Code 2.1.281's initialize, notifications/initialized and tools/list verbatim (recorded
+2026-09-24, Implementation/Waves/00002-layout-session-report/evidence/t2-handshake.txt) and a
+tools/call whose params keep the recorded shape:
+
+  initialize params: protocolVersion, capabilities { roots, elicitation }, clientInfo
+    { name "claude-code", title, version "2.1.281", description, websiteUrl }
+  tools/call params: name, arguments, _meta { "claudecode/toolUseId", progressToken }
+
+No field carries a session id. The recording of 2026-09-24 kept only the server's AINEO* and
+NVIM variables (t2-handshake.txt, line 3), so what Claude Code puts in a stdio MCP server's
+environment was not recorded; the documentation (below) says CLAUDE_CODE_SESSION_ID is set
+there and "retains the ID it was spawned with".
+
+aineo today passes `--mcp-config`, `--append-system-prompt` and `--allowedTools`
+(lua/aineo/claude/arguments.lua, claude_arguments(), lines 30-43), and `--resume` or
+`--session-id` (lua/aineo/claude/init.lua, session_arguments(), lines 186-188). It passes no
+`--settings`, and it hosts no IDE connection: `git grep -n -i 'websocket' -- lua plugin` prints
+nothing, and the plan note's A3 rejected the IDE WebSocket protocol for the report.
+
+D-docs (feature B): Claude Code's documentation on hooks and session ids, read 2026-10-06
+-------------------------------------------------------------------------------------------
+
+Fetched as raw Markdown (<page>.md) with curl on 2026-10-06, first by a research agent of this
+planning agent, then re-fetched by the planning agent itself for the quotes marked (*), which
+it grepped from the raw files. Quoted verbatim. Documentation, not a measurement: no page
+names the version it describes; the newest version the pages mention is 2.1.285.
+
+https://code.claude.com/docs/en/hooks, "Common input fields": every hook receives
+`session_id` ("Current session identifier"), `transcript_path`, `cwd`, `hook_event_name`, among
+others; "For command hooks, this JSON arrives via stdin."
+
+The same page, "SessionStart":
+  "Runs when Claude Code starts a new session or resumes an existing session."
+  "SessionStart runs on every session, so keep these hooks fast. Only `type: "command"` and
+  `type: "mcp_tool"` hooks are supported."
+  Matchers (*):
+  | `startup` | New session |
+  | `resume` | `--resume`, `--continue`, or `/resume` |
+  | `clear` | `/clear` |
+  | `compact` | Auto or manual compaction |
+  | `fork` | A new session forked from an existing one: `--fork-session` with `--resume` or
+    `--continue`, the `/fork` background copy, `/branch`, or a conversation you move to the
+    background |
+  "When you start an interactive session, resume a conversation at launch with `--continue`
+  or `--resume`, or run `/clear`, SessionStart hooks run in the background. ..."
+  (*) "When you switch conversations with `/resume` inside a session, the switch waits for the
+  hooks to finish instead. If you run `/clear` or switch to another conversation while
+  background hooks are still running, nothing they return applies to the session."
+
+The same page, "SessionEnd" (*):
+  | `clear` | Session cleared with `/clear` command |
+  | `resume` | Session switched via interactive `/resume` |
+  "SessionEnd hooks have a default timeout of 1.5 seconds. It applies when you exit, run
+  `/clear`, or switch sessions with interactive `/resume`."
+
+The same page, "Events that fire before MCP servers are available" (*):
+  "`SessionStart` at launch, including with `--continue` or `--resume`, and every `Setup` event
+  fire before the session's MCP servers are available to hooks. Claude Code skips their
+  `mcp_tool` hooks without calling the tool, ..." and "When `SessionStart` fires again later in
+  the session, after `/clear` or a compaction, its `mcp_tool` hooks run."
+
+The same page, "Hook locations" (*):
+  "Hook entries merge across settings levels rather than replacing each other: user, project,
+  and local settings add their own hooks without removing managed ones, and the
+  `disableAllHooks` setting can't disable managed hooks from outside managed settings."
+  "Administrators can use `allowManagedHooksOnly` in managed settings to restrict which hooks
+  run: Your user, project, local, and plugin hooks are blocked. ..."
+
+The same page, "Workspace trust" (*):
+  "Claude Code checks workspace trust before it runs any hook from a settings file."
+  "Interactive session: Claude Code holds back hooks from every settings file, including your
+  own `~/.claude/settings.json`, until you accept the workspace trust dialog for the folder,
+  or for a parent directory whose trust extends to it"
+
+The same page, "Common fields", `timeout`: "Defaults: 600 for `command`, `http`, and
+`mcp_tool`; ..." and "By default, hooks block Claude's execution until they complete." and
+"On macOS and Linux, command hooks run in their own session without a controlling terminal."
+
+https://code.claude.com/docs/en/cli-reference (*):
+  | `--settings` | Path to a settings JSON file or an inline JSON string. Values you set here
+    override the same keys in your `settings.json` files for this session. Keys you omit keep
+    their file-based values. The file must be a regular file no larger than 2 MiB. ... |
+  | `--fork-session` | When resuming, create a new session ID instead of reusing the original
+    (use with `--resume` or `--continue`) |
+
+https://code.claude.com/docs/en/settings (*):
+  "`--settings`: pass a key as JSON, inline or as a path to a file. Claude Code applies it
+  above your user, project, and local files and below managed settings."
+  "Claude Code merges JSON you pass with `--settings <file-or-json>` with your settings files
+  by the same rules as the other levels: it takes a key you set here over the same key in
+  local, project, or user settings, ..."
+  "Lists merge instead of overriding: When you set the same list key, such as
+  `permissions.allow`, in more than one file, Claude Code combines the lists instead of
+  picking one, ..."
+  Read: whether a `hooks` key passed with `--settings` adds to the user's own hooks (the hooks
+  page: "Hook entries merge across settings levels") or replaces them (the CLI row: "Values
+  you set here override the same keys") is not settled by the text. Pre-dispatch measurement
+  M2.
+
+https://code.claude.com/docs/en/env-vars (*):
+  | `CLAUDE_CODE_SESSION_ID` | Set automatically to the current session ID in Bash and
+    PowerShell tool subprocesses, hook command subprocesses, and stdio MCP server
+    subprocesses. For Bash, PowerShell, and hooks this matches the `session_id` field in the
+    hook JSON input and is updated on `/clear`. An MCP server subprocess retains the ID it was
+    spawned with. On `--resume <session-id>` it receives the resumed ID, matching hooks and
+    Bash. On `--continue` or `--resume` without an explicit ID it may receive the initial
+    startup ID instead. ... |
+
+https://code.claude.com/docs/en/sessions (the research agent's quotes):
+  "`/resume` | Switches to a different conversation from inside an active session"
+  "Not every configuration flag from the original launch is restored. If the session depended
+  on `--mcp-config`, `--settings`, ... pass them again when you resume"
+  "`/clear`: start fresh with an empty context. Claude Code saves the previous conversation;
+  resume it with `/resume`..."
+  "`/branch` copies the transcript and switches the running Claude Code process to write to
+  it."
+  "If you resume the same session in two terminals without forking, messages from both
+  interleave into one transcript."
+  Transcripts: `~/.claude/projects/<project>/<session-id>.jsonl`, "where `<project>` is your
+  working directory path with non-alphanumeric characters replaced by `-`"; "The entry
+  format is internal to Claude Code and changes between versions" (wave 8's D6, quoted in
+  Implementation/Waves/00008-small-fixes/evidence/w8-probes.txt on PR #123's branch).
+
+https://code.claude.com/docs/en/statusline (the research agent's quotes): the status line
+command receives `session_id` ("Unique session identifier") and `session_name`; "Your script
+runs once when a session starts, including when you resume one. After that, it runs again
+when: A new assistant message arrives ..."; it is the user's own `statusLine` settings key.
+
+Not documented (the research agent's list, checked against the raw pages for the first two):
+the order of SessionEnd and SessionStart on `/clear` and on an in-session `/resume`; a
+direct sentence that `/clear` makes a new session id (implied by the env-vars row, "updated
+on `/clear`"); whether `/rewind` changes the id; whether a stdio MCP server is restarted on
+`/clear` or `/resume` (implied not, by "retains the ID it was spawned with"); a session id
+or a switch told to an IDE connection; whether the status line runs again on `/clear`.
+
+Measurements that need the real Claude Code (for the orchestrator, with the user's leave,
+before T35's dispatch; listed in plan.md as M1-M8):
+  M1 a SessionStart command hook given with --settings runs, at start, after /clear, after an
+     in-session /resume, after /branch, after a compaction, with the session_id and source
+     the documentation gives; and SessionEnd before it, or after;
+  M2 a --settings hooks key beside a user's own SessionStart hook: both run, or the user's is
+     replaced;
+  M3 the hook's environment: $NVIM, AINEO_CHILD and CLAUDE_CODE_SESSION_ID present;
+  M4 the session id's form (a lower-case version-4 UUID, which aineo's kept-id check accepts);
+  M5 the stdio MCP server after /clear and /resume: the same process, and its
+     CLAUDE_CODE_SESSION_ID;
+  M6 the terminal title after an in-session /resume and after /clear (with wave 8's T33-6);
+  M7 the hook in a folder whose trust dialog is not yet answered: held, then run once
+     answered, or never for that start;
+  M8 how long an in-session /resume waits for aineo's hook (the relay measured 20 ms in B1).
