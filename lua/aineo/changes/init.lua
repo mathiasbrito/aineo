@@ -437,13 +437,18 @@ local enters = 0
 --- Shows `diff`, the diff of `entry` the Enter numbered `this_enter` read
 --- (`show_diff()`), while that Enter is the last. A diff Neovim refused, as
 --- it does while textlock holds, is shown at the editor's next `SafeState`,
---- if that Enter is the last still.
+--- if that Enter is the last still; otherwise the buffer made for it, shown
+--- nowhere, is wiped (`aineo.changes.diffs`' `wipe_unshown()`).
 ---
 ---@param this_enter integer
 ---@param entry aineo.changes.Entry
 ---@param diff string
 local function show_last_diff(this_enter, entry, diff)
-  if this_enter ~= enters or show_diff(entry, diff) then
+  if this_enter ~= enters then
+    diffs.wipe_unshown(diff_name(entry))
+    return
+  end
+  if show_diff(entry, diff) then
     return
   end
   vim.api.nvim_create_autocmd('SafeState', {
