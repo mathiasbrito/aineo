@@ -1,13 +1,15 @@
 ---
 wave: 00007
-status: claimed
+status: landed
 rolling: true
 planned_by: the orchestrator (Claude, Opus 5.5) for Mathias Santos de Brito — host Macbook-Mathias
 planned_at: 2026-09-27 13:27 CEST
 base: e7ad8d9
 claimed_by: Macbook-Mathias (platform UUID prefix CF989BF4), session 938616f1-5ff6-4507-97aa-65611ff715c0
 claimed_at: 2026-09-27 14:01 CEST
-landed_at:
+landed_at: 2026-10-06 16:02 CEST
+pull_requests: "#79, #105, #108, #112, #115"
+closed_by: the orchestrator, 2026-10-06, once T26, the last packet of the composition, had landed — the user's ask of 2026-09-26 was every functionality built before the MVP review; no word of the user closing the wave is in the record (orchestrate §3 leaves the close to the user)
 ---
 
 # Wave 7 — panes
@@ -671,3 +673,40 @@ Added after the user's answers, one per option not chosen:
   - *Packet T25* (dated `2026-10-06` in its heading) and its line *Branch, resource, session note* name the session note `2026-10-06 — T25 Changes pane`, "dated the day of dispatch"; so does the brief's *Boundary*. T25 was dispatched on 2026-10-05, so its note is `2026-10-05 — T25 Changes pane`, as the dispatch named it. This is the author's spec conflict 2 and the records review's finding 13.
   - *Packet T25*'s K19 asks for the kill "by the files window still listing what differs from the old base". The case killed K19 on the commits window instead. A K19 that moves the base for the files alone (K19F) survived it until the fix round re-read both lists (test integrity 3; the records review, *For the other dimensions*).
   - The brief's *What was decided already* says "T25's own autocommands and callbacks catch their errors and tell the user once (CP5)". That was false until the fix rounds. A wiped pane buffer (records 1, attack F1), textlock (the re-measure's finding 1) and the command-line window (the guarantee review's findings 1 and 2) each made a callback raise. It holds since the correction, but for MR268's limit.
+- **T26 — PR #115, regular**, merged by rebase on 2026-10-06 (13:41 UTC; 15:41 CEST) as `51da4bb` … `3b5f0f7` (10 commits). The code of `dev` `3b5f0f7` is the code the orchestrator verified, the PR's head `66eb1b7` (`git diff --stat 66eb1b7 3b5f0f7 -- . ':!knowledge-vault'` prints nothing). Session note: [[Sessions/2026-10-06 — T26 Visual Send]]; probes: `evidence/t26-probes.txt`.
+  - **The packet** (`neovim-claude-code-integrator`) ran as two agents.
+    - The first committed the send home's Visual Send: VS-A's read of each kind of selection, VS-B's refusals and VS-C's failed write (`14800ee`, `f89f3d3`, `55e37d7` on the branch). It was interrupted twice on 2026-10-06: the host slept (about 10:00 CEST), and the user restarted Neovim. The harness then refused to resume it. The user said "go, do it" to the orchestrator pushing its three commits and starting a fresh agent. The orchestrator pushed them at 10:39 CEST with no whole-suite run on `55e37d7` (D26), and saved its uncommitted undo cases as a patch.
+    - The second continued from `55e37d7`: VS-D's undo pins (the patch, unchanged), the Visual `\s` and `<Plug>(aineo-send)` doors (VS1 (a), VS2 (a), VS3 (a)), the health row and the help. Its dispatch allowed a push at a green point without the whole suite, against D26: `ed50a1a` was pushed so at 10:55 CEST, its message citing D26 for it. Both pushes were the orchestrator's errors; the user was told on 2026-10-06.
+    - 1718 → 1770 cases. 26 reds drove code (the first agent's 17, rebuilt by the second, and 9 of its own); 16 health pins moved apart from them. 32 mutants, all killed by assertion. It reported one spec conflict: S8's wording (below).
+  - **Reviews** on Opus: attack by `neovim-claude-code-reviewer`, test integrity by `reviewer`, records by `reviewer`.
+  - **What they found:**
+    - a block edge on a character drawn as one from several codepoints — an emoji with a skin tone, a flag, a ZWJ sequence, a CJK character with a combining mark — sent only its first codepoint, where `"_d` removed it whole (attack 1, medium): `getregionpos()` gives the character's first byte, and `vim.str_utf_end()` ends at its first codepoint;
+    - `.` after a Visual Send repeats `"_d`, removing text without sending it (attack 2; the records review's note to the attack dimension), a question for the user;
+    - with `'selection'` set to `old`, a charwise selection ending on an empty line sent a line feed it had not removed, or dropped an indent it had removed (attack 3);
+    - a NUL in a selected line was sent as a line feed, where Send drops it (attack 4);
+    - after a Visual Send whose write fails, `gv` selected less than had been selected (attack 5);
+    - four behaviours no case pinned, A1–A4 (attack 6), and more: the whole-Input Send's failed-write undo gap, which the help named and no case pinned (records 2, test integrity 1); the `'undolevels'` gaps for a Visual Send (test integrity 2); a selection of control bytes alone (test integrity 3); a register case that passed with no Send at all, and VS-A rows that read no error (test integrity 4 and 5);
+    - S8 is not killed by the case the plan names (test integrity 8), and the own-Visual-mapping row's killer was misnamed S8-mirror (records 1);
+    - records: the interruption record said the first agent had pushed (records 3); `ed50a1a`'s message cites D26 for a push D26 forbids (records 4); "a selection past the end of a line takes its line break" is false under `'virtualedit'` (records 5); four helper docstrings were stale (records 6); "30 reds" (records 7); half the readings were missing from the note (records 8); smaller findings 9–13.
+
+    Refuted: about 9,000 random selections, each message compared byte for byte with what `nvim_buf_attach()`'s `on_bytes` showed leaving Input, found no mismatch beyond the three faults above (attack); the doors, the refusals and the undo pins held, and no fourth undo gap was found; the 17 rebuilt reds are real; no case waits a fixed delay; no new file flaked in five runs (test integrity).
+  - **The user's two decisions of 2026-10-06**, each put as a question with options, each answered with the recommended option:
+    - `.` after a Visual Send, "Name it in LIMITS (Recommended)": the removal stays Vim's `"_d`, and the help's *LIMITS* says that `.` repeats it, sending nothing, and that `u` brings it back;
+    - a linewise `V` selection, "No final line feed (Recommended)": its lines are sent joined by line feeds, with none after the last.
+  - **The fix round** went to a fresh `neovim-claude-code-integrator`, with 18 items. The orchestrator widened the boundary to `tests/helpers/send.lua`'s docstrings, `tests/test_send.lua` and the help's *LIMITS*, and gave one reading of its own: `gv` after a failed write selects what was selected, VS4 (a) applied to a failed write.
+    - The round built `character_end()` (`charidx()` and `byteidx()`), the read through `nvim_buf_get_lines()`, `removed_region()` for `'selection'` old, and the put-back of `'<` and `'>`. `line_part()` lost its flag parameter, and `tests/test_send_selection.lua` ends its fake by a hangup.
+    - 11 cases seen red; 19 arrived green, each with its killer; 20 mutants killed by assertion; 1792 cases, 220 s. `tests/test_send_selection.lua` went from 89 s for 33 cases to 74 s for 52.
+    - It could not push: github.com did not resolve on the host. The orchestrator pushed it, a fast-forward from `08ea516` to `66eb1b7`, once the network was back.
+  - **No re-measure ran.** The round changed production code and replaced mechanisms, for which orchestrate §6 dispatches a re-measure with the attack question. The orchestrator's own verification followed the round.
+- **The orchestrator's verification** of `66eb1b7`, on 0.12.5 (D29):
+  - guard 5 cases, `Fails (0)`;
+  - `make test`, 1792 cases, `Fails (0)`, 218 s;
+  - lint clean;
+  - 40 of 40 mutants killed by assertion on their covering files: the plan's S1–S20 (S4, S5, S6, S11 and S12 re-worded on the final tree), and the reviews' and the round's W1, O-GAP2v, O-GAP3v, O-BLANKCTRL, O-NOOP, O-RAISE-AFTER, A1–A4, `M-visual-unconditional`, `M-dot-api`, O-F2, `M-nul-blob`, the four `'selection'` old mutants and `M-unordered`.
+  - A first run was invalid: with no network, `make deps` could not fetch the suites' dependency, and nothing ran. The pinned mini.nvim was copied in and every run repeated. The verification script first dropped the second edit of S16, S17 and S20: S16 and S17 so applied survived their file and the whole suite (1792, `Fails (0)`); all three, re-run with every edit, were killed by assertion.
+- **Released:** `v0.2.13` (PR #117, squash-merged into `main` as `1cb649d`, tag `v0.2.13`), carrying T26. Its tree is `dev` `3b5f0f7`'s, 13 commits after `v0.2.12`'s `893a427`: T26's ten, T25's knowledge pass (two) and the idea note. The user's release checkout is at `v0.2.13`.
+- **Records the reviews named false in dispatched files, left as dispatched** (`Implementation/Waves/CLAUDE.md`):
+  - *Packet T26*'s S8 says "VS-E's own-mapping case must kill it". It cannot: under S8 the Visual key reads Normal mode, finds aineo's own Normal `\s`, mapped a moment before, and is never mapped, so a user's own Visual `\s` stays either way. S8 is killed by the four `x` rows of *the prefix* and by the case of a user's `\s` in one mode (test integrity 8; the author's spec conflict). The edit the line meant is `M-visual-unconditional`, `if mode == 'x' or not has_global_mapping(mode, keys) then`, which the own-mapping case kills (records 1, measured; run by the fix round and the verification).
+  - *Decisions for the user* says each undo gap gets "a test pin each". At PR #115's first head, the failed-write gap was pinned for the Visual Send alone, and the `'undolevels'` gaps for the whole-Input Send alone (records 2; test integrity 1 and 2). The fix round pinned the other three, so the sentence holds since `66eb1b7`.
+  - *Packet T25*'s K19 is recorded with T25 above; the records review of PR #114 found that record true.
+- **Wave 7 landed** on 2026-10-06. Every packet of its composition has merged: T23 (#79), T24 (#105), T30 (#108), T25 (#112) and T26 (#115). With T26 every task row of [[Planning/aineo — v1 agent console]] is built, and v1 awaits the user's MVP review ([[Review/2026-09-24 — v1 MVP readings review]]). The wave is closed at the orchestrator's instruction to this pass: orchestrate §3 leaves a rolling wave's close to the user, whose word is not in the record. Retrospective: [[Sessions/2026-09-27 — Wave 7 retrospective]].

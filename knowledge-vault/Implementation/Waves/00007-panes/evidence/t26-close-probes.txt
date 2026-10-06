@@ -1,0 +1,103 @@
+T26's knowledge pass: probes re-measuring the facts its Learnings rest on
+==========================================================================
+
+Run by the knowledge pass on 2026-10-06, Neovim 0.12.5 (Homebrew), macOS arm64,
+as `nvim --clean --headless -l probe.lua` in an empty scratch directory.
+Each fact was first found by a review of PR #115 (T26); the review is named
+beside each section. Byte positions are 1-based.
+
+The script
+----------
+
+local function show(...) io.stdout:write(table.concat(vim.tbl_map(vim.inspect, { ... }), '  '), '\n') end
+
+-- 1. a cluster: str_utf_end against charidx/byteidx (the attack review, finding 1)
+for _, s in ipairs({ 'a👨‍👩b', 'a👍🏽b', 'a🇫🇷b', 'a漢́b', 'a漢b' }) do
+  local first = 2 -- byte of the cluster's start (1-based)
+  local by_codepoint = first + vim.str_utf_end(s, first)
+  local by_char = vim.fn.byteidx(s, vim.fn.charidx(s, first - 1) + 1)
+  show('cluster', s, 'str_utf_end ends at', by_codepoint, 'byteidx(charidx) ends at', by_char)
+end
+
+-- 2. getregionpos on a block edge cutting the cluster (the attack review, finding 1)
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'abcdef', 'a👍🏽b', 'abcdef' })
+vim.cmd('normal! gg0l\22jj')
+local regions = vim.fn.getregionpos(vim.fn.getpos('v'), vim.fn.getpos('.'), { type = '\22' })
+show('getregionpos line 2', regions[2])
+vim.cmd('normal! \27')
+
+-- 3. 'selection' old: a charwise selection ending on an empty line (the attack review, finding 3)
+for _, sel in ipairs({ 'inclusive', 'old' }) do
+  vim.o.selection = sel
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'abc', '', 'def' })
+  vim.cmd('normal! gg0lvj"_d')
+  show('selection', sel, 'gg0lvj"_d leaves', vim.api.nvim_buf_get_lines(0, 0, -1, false))
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { '  abc', 'x', '' })
+  vim.cmd('normal! gg0lvjj"_d')
+  show('selection', sel, 'gg0lvjj"_d from the indent leaves', vim.api.nvim_buf_get_lines(0, 0, -1, false))
+end
+vim.o.selection = 'inclusive'
+
+-- 4. . after "_d run by :normal!, and after nvim_buf_set_text (the attack review, finding 2)
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'alpha beta gamma delta' })
+vim.cmd('normal! 0wve"_d')
+vim.cmd('normal! .')
+show('. after normal! "_d', vim.api.nvim_buf_get_lines(0, 0, -1, false))
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'alpha beta gamma delta' })
+vim.cmd('normal! 0x')
+vim.api.nvim_buf_set_text(0, 0, 5, 0, 10, {})
+vim.cmd('normal! .')
+show('. after x then nvim_buf_set_text', vim.api.nvim_buf_get_lines(0, 0, -1, false))
+
+-- 5. NUL across the boundary (the attack review, finding 4; the fix round)
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'a\0b' })
+show('getline', vim.fn.getline(1), 'nvim_buf_get_lines', vim.api.nvim_buf_get_lines(0, 0, 1, false)[1])
+show('charidx with a NUL string', pcall(vim.fn.charidx, 'a\0b', 1))
+show('type of a NUL string in Vimscript', vim.fn.type('a\0b'), 'blob is', vim.v.t_blob)
+show('charidx', pcall(vim.fn.charidx, 'a\0b', 1))
+show('byteidx', pcall(vim.fn.byteidx, 'a\0b', 1))
+show('strchars', pcall(vim.fn.strchars, 'a\0b'))
+
+The output
+----------
+
+"cluster"  "a👨‍👩b"  "str_utf_end ends at"  5  "byteidx(charidx) ends at"  12
+"cluster"  "a👍🏽b"  "str_utf_end ends at"  5  "byteidx(charidx) ends at"  9
+"cluster"  "a🇫🇷b"  "str_utf_end ends at"  5  "byteidx(charidx) ends at"  9
+"cluster"  "a漢́b"  "str_utf_end ends at"  4  "byteidx(charidx) ends at"  6
+"cluster"  "a漢b"  "str_utf_end ends at"  4  "byteidx(charidx) ends at"  4
+"getregionpos line 2"  { { 1, 2, 2, 0 }, { 1, 2, 2, 1 } }
+"selection"  "inclusive"  'gg0lvj"_d leaves'  { "adef" }
+"selection"  "inclusive"  'gg0lvjj"_d from the indent leaves'  { " " }
+"selection"  "old"  'gg0lvj"_d leaves'  { "a", "", "def" }
+"selection"  "old"  'gg0lvjj"_d from the indent leaves'  { "" }
+'. after normal! "_d'  { "alpha ma delta" }
+". after x then nvim_buf_set_text"  { "pha gamma delta" }
+"getline"  "a\nb"  "nvim_buf_get_lines"  "a\0b"
+"charidx with a NUL string"  false  "Vim:E1174: String required for argument 1"
+"type of a NUL string in Vimscript"  10  "blob is"  10
+"charidx"  false  "Vim:E1174: String required for argument 1"
+"byteidx"  false  "Vim:E976: Using a Blob as a String"
+"strchars"  false  "Vim:E976: Using a Blob as a String"
+
+Reading it
+----------
+
+1. "byteidx(charidx) ends at" is the byte after the cluster, which is the
+   cluster's last byte counted from 1: 12 for the 11-byte ZWJ sequence that
+   starts at byte 2; 9 for the skin-toned thumb and the flag (8 bytes each);
+   6 for 漢 with its combining acute (5 bytes). str_utf_end ends at the first
+   codepoint: byte 5 for the three emoji, byte 4 for 漢. For a plain 漢 both
+   give 4.
+2. A block whose left edge is column 2 cuts the double-width 👍🏽: both ends of
+   line 2's region are byte 2, the cluster's first byte, the end with off 1.
+3. With 'selection' "old", gg0lvj"_d removes "bc" and no line break: the end
+   on the empty line moved to the end of the line above. Started in the
+   indent, gg0lvjj"_d removes lines 1 and 2 whole. Under "inclusive" the
+   same keys join the lines.
+4. `.` after a `:normal! "_d` of "beta" removed " gam": 4 characters at the
+   cursor, the size of the first removal. After nvim_buf_set_text(), `.` repeated the `x`
+   made before it: the API call did not set what `.` repeats.
+5. getline() gives the NUL as "\n"; nvim_buf_get_lines() gives "\0". A Lua
+   string holding a NUL is a Blob to Vimscript (type 10, v:t_blob): charidx()
+   refuses it with E1174, byteidx() and strchars() with E976.
