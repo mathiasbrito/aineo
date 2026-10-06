@@ -545,14 +545,34 @@ T['a wrapped report']['continues a details line under its text, not under its -'
   eq(column, 9)
 end
 
-T['a wrapped report']['narrower than 28 columns continues a details line further left, keeping 20 columns of text'] = function()
+T['a wrapped report']['continues its first line under the [ of its status in a Report 26 columns wide, a third of an 80-column screen'] = function()
   start_editor({ '2026-09-24T09:05:00' })
   report_editor.receive(child, LONG_REPORT)
-  local window = show_report_wrapping(24)
+  local window = show_report_wrapping(26)
+
+  local column = continuation_column(window, 1)
+
+  eq(column, 7)
+end
+
+T['a wrapped report']['continues a details line under its text in a Report 26 columns wide, a third of an 80-column screen'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, LONG_REPORT)
+  local window = show_report_wrapping(26)
 
   local column = continuation_column(window, 2)
 
-  eq(column, 5)
+  eq(column, 9)
+end
+
+T['a wrapped report']['narrower than 18 columns continues a details line further left, keeping 10 columns of text'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, LONG_REPORT)
+  local window = show_report_wrapping(16)
+
+  local column = continuation_column(window, 2)
+
+  eq(column, 7)
 end
 
 T['a wrapped report']["continues a details line under its text in a window split from the Report's"] = function()
