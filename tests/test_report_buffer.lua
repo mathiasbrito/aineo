@@ -93,7 +93,7 @@ T['a report']['shows with no icon when the user edits the Report again'] = funct
   eq(report_editor.lines(child), { '09:05 [progress] Task — Summary' })
 end
 
-T['a report']['renders each line of its details below it, indented under its status'] = function()
+T['a report']['renders each line of its details below it as an item, starting under its status'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
   report_editor.receive(child, {
@@ -105,8 +105,8 @@ T['a report']['renders each line of its details below it, indented under its sta
 
   eq(report_editor.lines(child), {
     '09:05 [done] Refactor the parser — All tests pass',
-    '      Changed three files',
-    '      Removed the old tokenizer',
+    '      - Changed three files',
+    '      - Removed the old tokenizer',
   })
 end
 
@@ -121,7 +121,7 @@ T['a report']["indents its details six cells under 'ambiwidth' double"] = functi
 
   eq(report_editor.lines(child), {
     '09:05 [progress] Task — Summary',
-    '      Detail',
+    '      - Detail',
   })
 end
 
@@ -136,7 +136,7 @@ T['a report']['indents its details six cells whatever setcellwidths() gives its 
 
   eq(report_editor.lines(child), {
     '09:05 [done] Task — Summary',
-    '      Detail',
+    '      - Detail',
   })
 end
 
@@ -160,7 +160,7 @@ T['a report']['indents its details six cells, however the current window wraps']
 
   eq(report_editor.lines(child), {
     '09:05 [done] Task — Summary',
-    '      Detail',
+    '      - Detail',
   })
 end
 
@@ -183,15 +183,15 @@ T['a report']["indents every report's details six cells when reports of differen
   eq({ before_the_edit, report_editor.lines(child) }, {
     {
       '09:05 [progress] First — Began',
-      '      One',
+      '      - One',
       '09:06 [done] Second — Ended',
-      '      Two',
+      '      - Two',
     },
     {
       '09:05 [progress] First — Began',
-      '      One',
+      '      - One',
       '09:06 [done] Second — Ended',
-      '      Two',
+      '      - Two',
     },
   })
 end
@@ -213,9 +213,9 @@ T['a report']["indents every report's details six cells when a done report shows
 
   eq(report_editor.lines(child), {
     '09:05 [done] First — Ended',
-    '      One',
+    '      - One',
     '09:06 [progress] Second — Began',
-    '      Two',
+    '      - Two',
   })
 end
 
@@ -223,7 +223,7 @@ end
 --- of each status the report tool accepts, each with one line of details,
 --- and lists what went wrong: each error a report raised, and each line that
 --- is neither a header starting with its time and `[status]` nor the details
---- starting six cells in, under the `[status]`.
+--- as an item starting six cells in, under the `[status]`.
 local EVERY_STATUS_FAULTS = [[(function()
   local report = require('aineo.report')
   local faults = {}
@@ -237,7 +237,7 @@ local EVERY_STATUS_FAULTS = [[(function()
     end
   end
   for _, line in ipairs(vim.api.nvim_buf_get_lines(report.report_buffer(), 0, -1, false)) do
-    if not (line:find('^%d%d:%d%d %[%l+%] Task — Summary$') or line == '      Detail') then
+    if not (line:find('^%d%d:%d%d %[%l+%] Task — Summary$') or line == '      - Detail') then
       table.insert(faults, line)
     end
   end
@@ -271,15 +271,15 @@ T['a report']["keeps its details six cells in when 'ambiwidth' changes before th
   eq({ before_the_edit, report_editor.lines(child) }, {
     {
       '09:05 [progress] First — Began',
-      '      One',
+      '      - One',
       '09:06 [progress] Second — Began',
-      '      Two',
+      '      - Two',
     },
     {
       '09:05 [progress] First — Began',
-      '      One',
+      '      - One',
       '09:06 [progress] Second — Began',
-      '      Two',
+      '      - Two',
     },
   })
 end
@@ -307,12 +307,12 @@ T['a report']["keeps its details six cells in when 'ambiwidth' changes before th
   )
 
   eq({ before_the_delete, report_editor.lines(child) }, {
-    { '09:05 [progress] First — Began', '      One' },
+    { '09:05 [progress] First — Began', '      - One' },
     {
       '09:05 [progress] First — Began',
-      '      One',
+      '      - One',
       '09:06 [progress] Second — Began',
-      '      Two',
+      '      - Two',
     },
   })
 end
@@ -342,6 +342,90 @@ T['a report']['renders no details line when its details are empty'] = function()
   eq(report_editor.lines(child), { '09:05 [done] Task — Summary' })
 end
 
+--- Each row: a report's details, then the lines its details render as.
+T['a report']['renders a details line that is empty, or white space alone, as an empty line'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'One\n\nTwo', { '      - One', '', '      - Two' } },
+      { 'One\n  \t \nTwo', { '      - One', '', '      - Two' } },
+      { 'One\n', { '      - One', '' } },
+    },
+  })
+
+T['a report']['renders a details line that is empty, or white space alone, as an empty line']['with the details'] = function(
+  details,
+  details_lines
+)
+  start_editor({ '2026-09-24T09:05:00' })
+
+  report_editor.receive(
+    child,
+    { task = 'Task', status = 'done', summary = 'Summary', details = details }
+  )
+
+  eq(report_editor.lines(child), { '09:05 [done] Task — Summary', unpack(details_lines) })
+end
+
+--- Each row: a details line Claude wrote as an item, or as its marker alone,
+--- then the line it renders as.
+T['a report']["renders a details line Claude marked as an item with aineo's marker in place of its own"] =
+  MiniTest.new_set({
+    parametrize = {
+      { '- x', '      - x' },
+      { '* x', '      - x' },
+      { '+ x', '      - x' },
+      { '• x', '      - x' },
+      { '-  x', '      -  x' },
+      { '-', '' },
+      { '- ', '' },
+      { '*  ', '' },
+      { '+\t', '' },
+      { '•', '' },
+    },
+  })
+
+T['a report']["renders a details line Claude marked as an item with aineo's marker in place of its own"]['with the line'] = function(
+  details,
+  rendered
+)
+  start_editor({ '2026-09-24T09:05:00' })
+
+  report_editor.receive(
+    child,
+    { task = 'Task', status = 'done', summary = 'Summary', details = details }
+  )
+
+  eq(report_editor.lines(child), { '09:05 [done] Task — Summary', rendered })
+end
+
+--- Each row: a details line holding no marker aineo replaces, then the line
+--- it renders as.
+T['a report']['renders any other details line as an item, keeping its text as written'] =
+  MiniTest.new_set({
+    parametrize = {
+      { '(D18, C12, #31)', '      - (D18, C12, #31)' },
+      { '  - x', '      -   - x' },
+      { '1. x', '      - 1. x' },
+      { '-x', '      - -x' },
+      { '**x**', '      - **x**' },
+      { '•x', '      - •x' },
+    },
+  })
+
+T['a report']['renders any other details line as an item, keeping its text as written']['with the line'] = function(
+  details,
+  rendered
+)
+  start_editor({ '2026-09-24T09:05:00' })
+
+  report_editor.receive(
+    child,
+    { task = 'Task', status = 'done', summary = 'Summary', details = details }
+  )
+
+  eq(report_editor.lines(child), { '09:05 [done] Task — Summary', rendered })
+end
+
 T['a report']['that is invalid is refused, naming the field, and not rendered'] = function()
   start_editor({ '2026-09-24T09:05:00' })
 
@@ -352,6 +436,188 @@ T['a report']['that is invalid is refused, naming the field, and not rendered'] 
 
   eq(refusal, 'aineo refused the report: task: expected a non-empty string')
   eq(report_editor.lines(child), { '' })
+end
+
+--- The expression, run in the child, that shows its Report in a new window
+--- `width` columns wide at the editor's left, wrapping long lines as the
+--- layout makes it wrap (`'wrap'`, `'linebreak'` and `'breakindent'`, as
+--- `:setlocal` sets them), and returns that window.
+local SHOW_REPORT_WRAPPING = [[(function(width)
+  vim.cmd('topleft vsplit')
+  local window = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(window, require('aineo.report').report_buffer())
+  vim.api.nvim_win_set_width(window, width)
+  for _, option in ipairs({ 'wrap', 'linebreak', 'breakindent' }) do
+    vim.wo[window][0][option] = true
+  end
+  return window
+end)(...)]]
+
+--- The expression, run in the child, that returns the column of `window`,
+--- from 1, at which the second screen row of line `line`, from 1, of the
+--- buffer it shows starts: where that line, wrapped, continues. Nil when the
+--- line takes one screen row.
+local CONTINUATION_COLUMN = [[(function(window, line)
+  vim.cmd('redraw')
+  local left = vim.fn.win_screenpos(window)[2]
+  local buffer = vim.api.nvim_win_get_buf(window)
+  local text = vim.api.nvim_buf_get_lines(buffer, line - 1, line, true)[1]
+  local first_row = vim.fn.screenpos(window, line, 1).row
+  for byte = 2, #text do
+    local position = vim.fn.screenpos(window, line, byte)
+    if position.row ~= first_row then
+      return position.col - left + 1
+    end
+  end
+  return nil
+end)(...)]]
+
+--- Shows the child's Report in a new window `width` columns wide, wrapping
+--- as the layout makes it wrap (`SHOW_REPORT_WRAPPING`), and returns that
+--- window.
+---
+---@param width integer
+---@return integer
+local function show_report_wrapping(width)
+  return child.lua_get(SHOW_REPORT_WRAPPING, { width })
+end
+
+--- Where line `line` of the buffer `window` shows continues when wrapped
+--- (`CONTINUATION_COLUMN`).
+---
+---@param window integer
+---@param line integer
+---@return integer?
+local function continuation_column(window, line)
+  return child.lua_get(CONTINUATION_COLUMN, { window, line })
+end
+
+--- A report whose header and details line each wrap in a Report 30 columns
+--- wide or narrower.
+local LONG_REPORT = {
+  task = 'Refactor the parser',
+  status = 'done',
+  summary = 'moved the tokenizer into its own module',
+  details = 'a details line long enough to wrap in a narrow Report, twice over',
+}
+
+T['a wrapped report'] = MiniTest.new_set()
+
+T['a wrapped report']['continues its first line under the [ of its status'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, LONG_REPORT)
+  local window = show_report_wrapping(30)
+
+  local column = continuation_column(window, 1)
+
+  eq(column, 7)
+end
+
+T['a wrapped report']["continues its first line under the [ of its status with 'number' on"] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, LONG_REPORT)
+  local window = show_report_wrapping(30)
+  child.lua('vim.wo[...].number = true', { window })
+
+  local column = continuation_column(window, 1)
+
+  eq(column, 7 + child.lua_get('vim.wo[...].numberwidth', { window }))
+end
+
+T['a wrapped report']["continues its first line the width of the user's 'showbreak' past the ["] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  child.cmd('set showbreak=↪\\ ')
+  report_editor.receive(child, LONG_REPORT)
+  local window = show_report_wrapping(30)
+
+  local column = continuation_column(window, 1)
+
+  eq(column, 9)
+end
+
+T['a wrapped report']['continues a details line under its text, not under its -'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, LONG_REPORT)
+  local window = show_report_wrapping(30)
+
+  local column = continuation_column(window, 2)
+
+  eq(column, 9)
+end
+
+T['a wrapped report']['narrower than 28 columns continues a details line further left, keeping 20 columns of text'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, LONG_REPORT)
+  local window = show_report_wrapping(24)
+
+  local column = continuation_column(window, 2)
+
+  eq(column, 5)
+end
+
+T['a wrapped report']["continues a details line under its text in a window split from the Report's"] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, LONG_REPORT)
+  show_report_wrapping(30)
+  child.cmd('split')
+
+  local column = continuation_column(child.api.nvim_get_current_win(), 2)
+
+  eq(column, 9)
+end
+
+--- The expression, run in the child, that shows in `window` a new buffer
+--- holding one numbered line, long enough to wrap in a narrow window, which
+--- Neovim's own `'formatlistpat'` matches.
+local SHOW_NUMBERED_LINE = [[(function(window)
+  local other = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(other, 0, -1, false, {
+    '1. a numbered line long enough to wrap in a narrow window, twice over',
+  })
+  vim.api.nvim_win_set_buf(window, other)
+end)(...)]]
+
+T['a wrapped report']["leaves Neovim's wrapping to another buffer shown later in the Report's window"] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, LONG_REPORT)
+  local window = show_report_wrapping(30)
+
+  child.lua(SHOW_NUMBERED_LINE, { window })
+
+  eq(continuation_column(window, 1), 1)
+end
+
+T['a wrapped report']["leaves Neovim's wrapping to another buffer in a window split from the Report's"] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, LONG_REPORT)
+  show_report_wrapping(30)
+  child.cmd('split')
+  local split = child.api.nvim_get_current_win()
+
+  child.lua(SHOW_NUMBERED_LINE, { split })
+
+  eq(continuation_column(split, 1), 1)
+end
+
+T['a wrapped report']['continues a details line under its text after the user edits the Report again'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, LONG_REPORT)
+  local window = show_report_wrapping(30)
+
+  child.cmd('edit')
+
+  eq(continuation_column(window, 2), 9)
+end
+
+T['a wrapped report']['continues a details line under its text in a Report made anew after the user wipes it out'] = function()
+  start_editor({ '2026-09-24T09:05:00', '2026-09-24T09:06:00' })
+  report_editor.receive(child, LONG_REPORT)
+  child.cmd(('bwipeout %d'):format(child.lua_get([[require('aineo.report').report_buffer()]])))
+  report_editor.receive(child, LONG_REPORT)
+
+  local window = show_report_wrapping(30)
+
+  eq(continuation_column(window, 2), 9)
 end
 
 T['the Report buffer'] = MiniTest.new_set()
