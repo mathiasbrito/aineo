@@ -107,10 +107,11 @@ same two windows, at the same sizes, show the other pane's buffers.
   out, or kept unnamed when you changed its text.
 
 `\pa` (|:Aineo-pane|) shows the agent pane and `\pc` the changes pane; the
-pane already shown stays as it is, unless one of its windows shows the
-other pane's buffer there, as a refused switch or you can leave it (the
-commits buffer in Input's window, say): they then show the pane's own
-buffer there. The cursor stays in the window it was
+pane already shown stays as it is (the changes pane is read again,
+|aineo-changes|), unless one of its windows shows the other pane's buffer
+there, as a refused switch or you can leave it (the commits buffer in
+Input's window, say): they then show the pane's own buffer there. The
+cursor stays in the window it was
 in. From another tab page they switch the pane in the layout's tab page,
 restoring the layout there first when one of its windows is gone, and
 leave you where you are. `\r` and `\i` show the agent pane first, then move
@@ -152,14 +153,15 @@ The letter is the kind of change: `A` added, `M` modified, `D` deleted, `R`
 renamed, after its old path, `T` turned into a link or back, `?` new and
 untracked; a copy shows as added. The `*` marks a file you saved from this
 editor since the base was taken, or while aineo first looked for the
-repository — `:write`, `:update`, `:wall`, a part of a buffer written to a
-file or appended to one, the file written whatever its buffer is named, a
-file opened through a symbolic link included. A file you and Claude both
-changed is marked too: aineo cannot tell who changed what. A path holding a
-line break, a control character, a double quote or a backslash is shown
-between double quotes, each of those escaped as git escapes it; characters
-outside ASCII are kept as they are, where git writes them in octal. With
-nothing changed, the window says "No files changed on this session".
+repository it then found — `:write`, `:update`, `:wall`, a part of a buffer
+written to a file or appended to one, the file written whatever its buffer
+is named, a file opened through a symbolic link included. A file you and
+Claude both changed is marked too: aineo cannot tell who changed what. A
+path holding a line break, a control character, a double quote or a
+backslash is shown between double quotes, each of those escaped as git
+escapes it; characters outside ASCII are kept as they are, where git writes
+them in octal. With nothing changed, the window says "No files changed on
+this session".
 
 The commits window, `aineo://changes-commits`, lists the session's commits,
 newest first, by abbreviated id and subject, or says "No commits on this
@@ -181,6 +183,9 @@ tree changes, and when the branch moves: a commit, even one that changes no
 file, an amend, a reset, a checkout. One read of each window runs at a time,
 and the cursor stays on the line it was on while that line is listed. A
 diff already shown stays as it was until you press Enter on its line again.
+A list or a diff read while Neovim allows no change of text — an
+expression mapping waiting for a key, or a completion function still
+running — is shown once Neovim allows it again, with nothing told.
 
 Until git has answered, each window says aineo is reading the repository.
 When Claude Code's working directory is in no repository, both windows say
@@ -371,11 +376,13 @@ a resume Claude Code has no conversation for (|aineo-claude-session|).
 
                                                                  *:Aineo-pane*
 :Aineo pane {pane}	Shows {pane} in the right column, `agent` or
-			`changes` (|aineo-panes|). When it shows already, it
-			changes nothing, unless one of its windows shows the
-			other pane's buffer there: it then shows {pane}'s
-			buffer there. Without a pane, or with anything else,
-			it tells you, with one error, which ones it takes.
+			`changes` (|aineo-panes|). When it shows already, the
+			layout stays as it is (the changes pane is read
+			again, |aineo-changes|), unless one of its windows
+			shows the other pane's buffer there: it then shows
+			{pane}'s buffer there. Without a pane, or with
+			anything else, it tells you, with one error, which
+			ones it takes.
 
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.

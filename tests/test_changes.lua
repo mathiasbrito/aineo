@@ -1574,6 +1574,37 @@ T['Enter']['read while textlock holds, then on another file before the editor al
   eq(child.lua_get(SHOWN_DIFFS).names, { 'aineo://diff/b.txt' })
 end
 
+T['Enter']['twice in quick succession tells nothing of the first Enter’s diff failing later'] = function()
+  local top =
+    git_repo.create('changespane-enter-stale-failure', { ['a.txt'] = { 'a' }, ['b.txt'] = { 'b' } })
+  git_repo.write(top, 'a.txt', { 'a2' })
+  git_repo.write(top, 'b.txt', { 'b2' })
+  local stand_in = stand_in_git('changespane-enter-stale-failure', {
+    'case " $* " in *" diff "*a.txt*)',
+    '  while [ ! -f "$0.gate" ]; do sleep 0.05; done',
+    '  echo "fatal: broken a" >&2; exit 1 ;;',
+    'esac',
+  })
+  child.lua(SPY_ON_GIT)
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(FILES, { '  M a.txt', '  M b.txt' })
+  child.type_keys('<CR>', 'j', '<CR>')
+  git_repo.wait_until('the diff of b.txt read', function()
+    return child.lua_get('_G.git_answers.file_diff') == 1
+  end)
+
+  vim.fn.writefile({}, stand_in .. '.gate')
+
+  git_repo.wait_until('the diff of a.txt read', function()
+    return child.lua_get('_G.git_answers.file_diff') == 2
+  end)
+  eq(child.lua_get('{ _G.messages, vim.tbl_map(vim.api.nvim_buf_get_name, _G.shown_diffs) }'), {
+    {},
+    { 'aineo://diff/b.txt' },
+  })
+end
+
 T['Enter']['again on the same file keeps no undo history of the diff it showed'] = function()
   local top = git_repo.create('changespane-diff-no-undo', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
@@ -1968,6 +1999,27 @@ T['the user’s saves']['made while git first looks for the repository are marke
   end)
 
   expect_lines(FILES, { '* M notes.txt' })
+end
+
+T['the user’s saves']['made while a first look finds no repository are not marked once one is made'] = function()
+  local directory = git_repo.directory('changespane-saved-early-none')
+  local gated, gate = gated_git('changespane-saved-early-none-git', '*" --show-toplevel "*')
+  child.lua(SPY_ON_GIT)
+  begin_and_show(directory, { executable = gated })
+  in_file(vim.fs.joinpath(directory, 'notes.txt'), "call setline(1, 'mine') | write")
+  eq(child.lua_get('_G.git_given.find_repository'), 0)
+  vim.fn.writefile({}, gate)
+  git_repo.wait_until('the first look answered', function()
+    return child.lua_get('_G.git_answers.find_repository') == 1
+  end)
+  git_repo.git(directory, { 'init', '--quiet', '--initial-branch=main' })
+  git_repo.write(directory, 'other.txt', { 'other' })
+  git_repo.git(directory, { 'add', 'other.txt' })
+  git_repo.git(directory, { 'commit', '--quiet', '-m', 'First' })
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  expect_lines(FILES, { '  ? notes.txt' })
 end
 
 T['the user’s saves']['refresh the files window where the watch misses them'] = function()
