@@ -240,4 +240,19 @@ The wave holds its marks (rule 6). The line T26 would take:
 
 ## Commits
 
-Recorded after the merge.
+Recorded after the merge, by T26's knowledge pass. PR #115 merged by rebase on 2026-10-06 (13:41 UTC; 15:41 CEST); `dev` `3b5f0f7`, whose code is the code of the orchestrator's verified head `66eb1b7` (`git diff --stat 66eb1b7 3b5f0f7 -- . ':!knowledge-vault'` prints nothing; the vault differs only by T25's knowledge pass, `4f80458` and `28189e3`, and the idea note `f1eca74`, which `dev` held before the rebase). Released in `v0.2.13` (PR #117, squash-merged into `main` as `1cb649d`, whose tree is `dev` `3b5f0f7`'s).
+
+The first three were committed by the first agent and pushed by the orchestrator (*Context*). The next five are the second agent's: `70b0ed0` commits the first agent's uncommitted undo cases, unchanged. The last two are the fix round's.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `14800ee` | `51da4bb` | Send a Visual selection as exactly the text it removes |
+| `f89f3d3` | `09e8920` | Refuse a Visual Send that cannot reach Claude, removing nothing |
+| `55e37d7` | `23d5599` | Put Input back when a Visual Send's write fails |
+| `70b0ed0` | `6cddec3` | Pin that u brings back what every Send removed |
+| `ed50a1a` | `1624920` | Map Visual Send to `\s` and `<Plug>(aineo-send)` in Visual mode |
+| `583ffe1` | `1db3ba3` | Report the Visual-mode `\s` in `:checkhealth aineo` |
+| `eecc5cf` | `181890f` | Document Visual Send, undo after every Send, and its gaps |
+| `08ea516` | `8af6dc7` | Record T26's session: Visual Send, its pins and mutants |
+| `77181e3` | `c6c1654` | Send what a Visual Send removes in every case the reviews found |
+| `66eb1b7` | `3b5f0f7` | Record T26's fix round and correct its session note |
