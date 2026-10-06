@@ -3,16 +3,18 @@ local children = dofile('tests/helpers/child.lua')
 
 local eq = MiniTest.expect.equality
 
---- Each key that follows the prefix, with the `<Plug>` mapping it runs.
+--- Each key that follows the prefix, with the `<Plug>` mapping it runs and
+--- the mode it is mapped in, `n` for Normal mode and `x` for Visual mode.
 local PREFIX_KEYS = {
-  { 's', '<Plug>(aineo-send)' },
-  { 'o', '<Plug>(aineo-open)' },
-  { 'r', '<Plug>(aineo-report)' },
-  { 'i', '<Plug>(aineo-input)' },
-  { 'c', '<Plug>(aineo-claude)' },
-  { 'tcn', '<Plug>(aineo-claude-numbers)' },
-  { 'pa', '<Plug>(aineo-pane-agent)' },
-  { 'pc', '<Plug>(aineo-pane-changes)' },
+  { 's', '<Plug>(aineo-send)', 'n' },
+  { 'o', '<Plug>(aineo-open)', 'n' },
+  { 'r', '<Plug>(aineo-report)', 'n' },
+  { 'i', '<Plug>(aineo-input)', 'n' },
+  { 'c', '<Plug>(aineo-claude)', 'n' },
+  { 'tcn', '<Plug>(aineo-claude-numbers)', 'n' },
+  { 'pa', '<Plug>(aineo-pane-agent)', 'n' },
+  { 'pc', '<Plug>(aineo-pane-changes)', 'n' },
+  { 's', '<Plug>(aineo-send)', 'x' },
 }
 
 local child = MiniTest.new_child_neovim()
@@ -21,36 +23,41 @@ local T = MiniTest.new_set({ hooks = { post_once = child.stop } })
 
 T['the prefix'] = MiniTest.new_set({ parametrize = PREFIX_KEYS })
 
-T['the prefix']['is \\ by default, each key running its <Plug> mapping'] = function(key, plug)
+T['the prefix']['is \\ by default, each key running its <Plug> mapping'] = function(key, plug, mode)
   children.restart(child)
 
-  eq(child.fn.maparg('\\' .. key, 'n'), plug)
+  eq(child.fn.maparg('\\' .. key, mode), plug)
 end
 
-T['the prefix']['is the one vim.g.aineo names'] = function(key, plug)
+T['the prefix']['is the one vim.g.aineo names'] = function(key, plug, mode)
   children.restart(child, { '--cmd', "let g:aineo = { 'prefix': ',' }" })
 
-  eq(child.fn.maparg(',' .. key, 'n'), plug)
-  eq(child.fn.maparg('\\' .. key, 'n'), '')
+  eq(child.fn.maparg(',' .. key, mode), plug)
+  eq(child.fn.maparg('\\' .. key, mode), '')
 end
 
-T['the prefix']['is the one setup() records before the editor has started'] = function(key, plug)
+T['the prefix']['is the one setup() records before the editor has started'] = function(
+  key,
+  plug,
+  mode
+)
   children.restart(child, { '-c', "lua require('aineo').setup({ prefix = ',' })" })
 
-  eq(child.fn.maparg(',' .. key, 'n'), plug)
-  eq(child.fn.maparg('\\' .. key, 'n'), '')
+  eq(child.fn.maparg(',' .. key, mode), plug)
+  eq(child.fn.maparg('\\' .. key, mode), '')
 end
 
-T['the prefix']['maps nothing, and says nothing, when it is false'] = function(key)
+T['the prefix']['maps nothing, and says nothing, when it is false'] = function(key, _, mode)
   children.restart(child, { '--cmd', 'lua vim.g.aineo = { prefix = false }' })
 
-  eq(child.fn.maparg('\\' .. key, 'n'), '')
+  eq(child.fn.maparg('\\' .. key, mode), '')
   eq(child.cmd_capture('messages'), '')
 end
 
 T['the prefix']['is the one setup() records right after the file is sourced late'] = function(
   key,
-  plug
+  plug,
+  mode
 )
   children.restart(child, { '--cmd', 'let g:loaded_aineo = 1' })
 
@@ -62,11 +69,11 @@ T['the prefix']['is the one setup() records right after the file is sourced late
 
   eq(
     vim.wait(1000, function()
-      return child.fn.maparg(',' .. key, 'n') == plug
+      return child.fn.maparg(',' .. key, mode) == plug
     end, 10),
     true
   )
-  eq(child.fn.maparg('\\' .. key, 'n'), '')
+  eq(child.fn.maparg('\\' .. key, mode), '')
 end
 
 T["the user's own mapping"] = MiniTest.new_set()
@@ -75,10 +82,34 @@ T["the user's own mapping"]['of a whole key sequence stays'] = MiniTest.new_set(
   parametrize = PREFIX_KEYS,
 })
 
-T["the user's own mapping"]['of a whole key sequence stays']['for'] = function(key)
-  children.restart(child, { '--cmd', ('nnoremap \\%s <Cmd>let g:mine = 1<CR>'):format(key) })
+T["the user's own mapping"]['of a whole key sequence stays']['for'] = function(key, _, mode)
+  children.restart(child, { '--cmd', ('%snoremap \\%s <Cmd>let g:mine = 1<CR>'):format(mode, key) })
 
-  eq(child.fn.maparg('\\' .. key, 'n'), '<Cmd>let g:mine = 1<CR>')
+  eq(child.fn.maparg('\\' .. key, mode), '<Cmd>let g:mine = 1<CR>')
+end
+
+T["the user's own mapping"]['of \\s in one mode stays, and aineo maps \\s in the other'] =
+  MiniTest.new_set({ parametrize = { { 'n', 'x' }, { 'x', 'n' } } })
+
+T["the user's own mapping"]['of \\s in one mode stays, and aineo maps \\s in the other']['mapped in'] = function(
+  own_mode,
+  other_mode
+)
+  children.restart(child, { '--cmd', own_mode .. 'noremap \\s <Cmd>let g:mine = 1<CR>' })
+
+  eq(
+    { own = child.fn.maparg('\\s', own_mode), other = child.fn.maparg('\\s', other_mode) },
+    { own = '<Cmd>let g:mine = 1<CR>', other = '<Plug>(aineo-send)' }
+  )
+end
+
+T["the user's own mapping"]['of \\s in Select mode alone stays, and aineo maps \\s in Visual mode'] = function()
+  children.restart(child, { '--cmd', 'snoremap \\s <Cmd>let g:mine = 1<CR>' })
+
+  eq(
+    { select = child.fn.maparg('\\s', 's'), visual = child.fn.maparg('\\s', 'x') },
+    { select = '<Cmd>let g:mine = 1<CR>', visual = '<Plug>(aineo-send)' }
+  )
 end
 
 T["the user's own mapping"]['of a key sequence stays, and the other keys are mapped'] = function()

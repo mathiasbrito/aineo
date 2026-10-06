@@ -1,7 +1,8 @@
---- Drives Send in a child Neovim for the Send suite: starts aineo's Claude
---- session against a fake `claude` (`tests/helpers/claude_session.lua`) with
---- aineo's layout around its terminal, fills and reads the Input buffer, sends
---- it as `\s` will, and collects what Send tells the user.
+--- Drives Send and the Visual Send in a child Neovim for the Send suites:
+--- starts aineo's Claude session against a fake `claude`
+--- (`tests/helpers/claude_session.lua`) with aineo's layout around its
+--- terminal, fills and reads the Input buffer, sends it or a selection of
+--- it as `\s` does, and collects what Send tells the user.
 
 local children = dofile('tests/helpers/child.lua')
 
@@ -52,7 +53,7 @@ end
 
 --- Starts aineo's Claude session in `child` with `fake`'s environment and
 --- the stand-in settings (`claude_session.stand_in_settings()`), and, in the
---- same tick, opens the layout around its terminal, as `:Aineo` will; returns
+--- same tick, opens the layout around its terminal, as `:Aineo` does; returns
 --- the terminal buffer.
 ---
 ---@param child table
@@ -127,7 +128,7 @@ function M.writes(child)
   return child.lua_get('_G.aineo_test_writes')
 end
 
---- Sends Input in `child`, as `\s` will, keeping an error it raises for
+--- Sends Input in `child`, as `\s` does, keeping an error it raises for
 --- `messages()` rather than raising it in the test.
 ---
 ---@param child table
@@ -180,9 +181,109 @@ function M.send_from_expression_mapping(child)
   ]])
 end
 
+--- Moves the cursor in `child` to the window showing the Input buffer.
+---
+---@param child table
+function M.enter_input(child)
+  child.lua("vim.api.nvim_set_current_win(vim.fn.bufwinid(require('aineo.layout').input_buffer()))")
+end
+
+--- Sets each global option `options` names in `child` to its value, as
+--- `:set` does; sets none when `options` is `nil`.
+---
+---@param child table
+---@param options? table<string, any>
+function M.set_options(child, options)
+  child.lua('for name, value in pairs(... or {}) do vim.o[name] = value end', { options })
+end
+
+--- Types `keys` in `child` as a user would, mappings applied, each key
+--- handled as typed — so that an undo block is what one typed command
+--- makes — and waits until they have run. `keys` are written as in a
+--- mapping, such as `<C-v>` or `<Esc>`.
+---
+---@param child table
+---@param keys string
+function M.type_keys(child, keys)
+  child.lua(
+    "vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(..., true, false, true), 'mtx', false)",
+    { keys }
+  )
+end
+
+--- The Visual-mode mapping of the tests' own that sends the selection
+--- (`map_send_selection()`).
+local SEND_SELECTION = '<Plug>(aineo-test-send-selection)'
+
+--- Maps `SEND_SELECTION` in Visual mode in `child` to the Visual Send,
+--- keeping an error it raises for `messages()` rather than raising it.
+---
+---@param child table
+local function map_send_selection(child)
+  child.lua(
+    [[
+      vim.keymap.set('x', ..., function()
+        local sent, error_message = pcall(require('aineo.send').send_selection)
+        if not sent then
+          table.insert(_G.aineo_test_messages, { error = error_message })
+        end
+      end)
+    ]],
+    { SEND_SELECTION }
+  )
+end
+
+--- Types `keys` in `child`, which make a Visual selection, then sends the
+--- selection as a Visual-mode `\s` does, through a Visual-mode mapping of
+--- the test's own, typed (`type_keys()`), keeping an error the Visual Send
+--- raises for `messages()` rather than raising it in the test.
+---
+---@param child table
+---@param keys string
+function M.send_selection(child, keys)
+  map_send_selection(child)
+  M.type_keys(child, keys .. SEND_SELECTION)
+end
+
+--- Closes the stream of the terminal `buffer` in `child`, then, in the same
+--- tick, before Neovim has seen the session exit, types `keys` as
+--- `type_keys()` does; returns the session's status, read between the two.
+---
+---@param child table
+---@param buffer integer the session's terminal buffer
+---@param keys string
+---@return string? status
+function M.type_keys_after_closing_stream(child, buffer, keys)
+  return child.lua(
+    [[
+      local buffer, keys = ...
+      vim.fn.jobstop(vim.bo[buffer].channel)
+      local status = require('aineo.claude').session_status()
+      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), 'mtx', false)
+      return status
+    ]],
+    { buffer, keys }
+  )
+end
+
+--- Closes the stream of the terminal `buffer` in `child`, then, in the same
+--- tick, types `keys`, which make a Visual selection, and sends it as
+--- `send_selection()` does (`type_keys_after_closing_stream()`); returns the
+--- session's status, read between the two.
+---
+---@param child table
+---@param buffer integer the session's terminal buffer
+---@param keys string
+---@return string? status
+function M.send_selection_after_closing_stream(child, buffer, keys)
+  map_send_selection(child)
+  return M.type_keys_after_closing_stream(child, buffer, keys .. SEND_SELECTION)
+end
+
 --- What `child` has told the user since `restart()`, in order: each
---- notification as its message and level, and each error `send()` raised as
---- that error.
+--- notification as its message and level, and each error `send()` or
+--- `send_selection()` raised, through this helper's functions, as that
+--- error.
 ---
 ---@param child table
 ---@return { message: string?, level: integer?, error: string? }[]
@@ -190,8 +291,9 @@ function M.messages(child)
   return child.lua_get('_G.aineo_test_messages')
 end
 
---- The errors `send()` has raised in `child` since `restart()`, joined by
---- line feeds: empty when it raised none.
+--- The errors `send()` or `send_selection()` has raised in `child` since
+--- `restart()`, as `messages()` keeps them, joined by line feeds: empty when
+--- neither raised one.
 ---
 ---@param child table
 ---@return string

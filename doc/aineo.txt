@@ -29,7 +29,8 @@ and `\c` move to the Report, Input and Claude — `\c` in Terminal mode, so
 that what you type next goes to Claude, unless Claude Code has exited.
 `\tcn` hides or shows the line numbers of Claude's window. `\pa` and `\pc`
 switch the right column between the agent pane, the Report over Input, and
-the changes pane (|aineo-panes|).
+the changes pane (|aineo-panes|). In Visual mode, in Input, `\s` sends the
+selection alone and removes it from Input (|aineo-v_\s|).
 
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
@@ -300,7 +301,10 @@ from another tab, `\o` moves you to it.
 			one error, which ones it takes.
 
                                                                  *:Aineo-send*
-:Aineo send		Sends Input to Claude (|aineo-send|).
+:Aineo send		Sends Input to Claude (|aineo-send|). It takes no
+			range: Neovim refuses `:'<,'>Aineo send` with E481.
+			A selection is sent by `\s` in Visual mode
+			(|aineo-v_\s|).
 
                                                                  *:Aineo-open*
 :Aineo open		Opens the layout around Claude's terminal, starting
@@ -392,12 +396,14 @@ once, with one error message starting with `aineo:`, and opens nothing.
 ==============================================================================
 5. MAPPINGS                                                   *aineo-mappings*
 
-aineo defines one Normal-mode `<Plug>` mapping per action. Map them to keys
-of your own when you turn the prefix off, or when a prefix key is yours: >lua
-    vim.keymap.set('n', '<Leader>as', '<Plug>(aineo-send)')
+aineo defines one Normal-mode `<Plug>` mapping per action, and
+`<Plug>(aineo-send)` in Visual mode too. Map them to keys of your own when
+you turn the prefix off, or when a prefix key is yours: >lua
+    vim.keymap.set({ 'n', 'x' }, '<Leader>as', '<Plug>(aineo-send)')
 <
                                                         *<Plug>(aineo-send)*
-<Plug>(aineo-send)	Does what |:Aineo-send| does.
+<Plug>(aineo-send)	Does what |:Aineo-send| does. In Visual mode, sends
+			the selection alone (|aineo-v_\s|).
 
                                                         *<Plug>(aineo-open)*
 <Plug>(aineo-open)	Does what |:Aineo-open| does.
@@ -426,7 +432,8 @@ of your own when you turn the prefix off, or when a prefix key is yours: >lua
 Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
-followed by these keys to each `<Plug>` mapping, globally, in Normal mode:
+followed by these keys to each `<Plug>` mapping, globally, in Normal mode,
+and `\s` in Visual mode too:
 
                                                                     *aineo-\s*
 \s		|<Plug>(aineo-send)|
@@ -444,15 +451,22 @@ followed by these keys to each `<Plug>` mapping, globally, in Normal mode:
 \pa		|<Plug>(aineo-pane-agent)|
                                                                    *aineo-\pc*
 \pc		|<Plug>(aineo-pane-changes)|
+                                                                  *aineo-v_\s*
+\s		|<Plug>(aineo-send)| in Visual mode (|aineo-send|)
 
-A key sequence you mapped yourself — a global Normal-mode mapping, when the
-editor has started — stays yours, and aineo maps the others. A mapping local
-to a buffer is not counted: it wins in its own buffer only. A mapping you
-make later replaces aineo's. A mapping that only overlaps aineo's key is not
-yours in this sense: with your own `\sa`, aineo still maps `\s`, and `\sa`
-then waits for 'timeoutlen' after `\s`; with your own `\t` or `\tc`, aineo
-still maps `\tcn`, and with your own `\p` — or `<Leader>p` while the leader
-is `\` — it still maps `\pa` and `\pc`: yours then waits for 'timeoutlen'.
+Visual mode here is Visual mode alone: in Select mode, `\s` is text you
+type.
+
+A key sequence you mapped yourself — a global mapping in the same mode,
+when the editor has started — stays yours, and aineo maps the others: with
+your own `\s` in Normal mode, aineo still maps `\s` in Visual mode, and the
+other way round. A mapping local to a buffer is not counted: it wins in its
+own buffer only. A mapping you make later replaces aineo's. A mapping that
+only overlaps aineo's key is not yours in this sense: with your own `\sa`,
+aineo still maps `\s`, and `\sa` then waits for 'timeoutlen' after `\s`;
+with your own `\t` or `\tc`, aineo still maps `\tcn`, and with your own `\p`
+— or `<Leader>p` while the leader is `\` — it still maps `\pa` and `\pc`:
+yours then waits for 'timeoutlen'.
 
 The prefix is read once, when the editor has started (|VimEnter|): a
 `setup()` or `vim.g.aineo` that changes it later maps nothing until the next
@@ -528,18 +542,53 @@ layout.report_height	A number strictly between 0 and 1.
 
 Send (`\s`, |:Aineo-send|) gives Claude what you wrote in Input, as one
 message: Input's lines, joined by line feeds, go to Claude's terminal as one
-bracketed paste followed by Enter, and Input is emptied. `u` in Input brings
-the text back. Control characters but tab, line feed and carriage return are
-removed first, so nothing in the text reaches Claude Code as a key.
+bracketed paste followed by Enter, and Input is emptied. Control characters
+but tab, line feed and carriage return are removed first, so nothing in the
+text reaches Claude Code as a key.
 
 Send also works while Claude is in a turn: Claude Code queues the message and
 runs it after the turn. A draft already in Claude's prompt stays, and the
 paste joins it. It sends Input while the changes pane hides it, too.
 
+Visual Send ~
+In Visual mode, in Input, `\s` (|aineo-v_\s|, |<Plug>(aineo-send)|) sends
+the selection alone — characterwise, linewise or blockwise — as one message,
+the same paste and Enter, and removes it from Input; the rest of Input
+stays. What leaves Input is what Vim's own `"_d` removes, and the message is
+exactly that text: each line's part of the selection, joined by line feeds.
+A line of a block too short to reach the block gives an empty line, with no
+spaces for padding; a block with `$` takes each line to its own end; a tab,
+a double-width character, or an emoji drawn as one with its modifiers, that
+a block cuts is removed and sent whole, and spaces take the place of its
+part outside the block. A characterwise selection that takes in the end of
+a line (`v$`) takes its line break too, which joins the lines, and sends it
+— but not on Input's last line, which has none, nor under 'virtualedit',
+where a selection past the end of a line takes no line break and sends no
+spaces. A linewise selection is sent as its lines, joined by line feeds,
+with none after the last, as a Send of Input is. With 'selection' set to
+`old`, a characterwise selection that ends on an empty line ends, as Vim's
+`d` ends it, on the line above, or takes whole lines, line breaks and all,
+when it starts in a line's indent. No register is written, and the cursor
+stays where `"_d` leaves it, in Normal mode.
+
+Outside Input, `\s` in Visual mode sends and removes nothing, and tells you
+once that Visual Send works in Input.
+
 Send sends nothing, and tells you why with one warning starting with
 `aineo: nothing sent —`, when there is no Input yet (open the layout), when
-Input holds only white space, and when Claude Code is not ready: not
-started, still starting, behind a dialog that awaits your answer, or exited.
+Input — or the selection — holds only white space, and when Claude Code is
+not ready: not started, still starting, behind a dialog that awaits your
+answer, or exited. A Visual Send that sends nothing removes nothing and ends
+Visual mode; `gv` selects the text again.
+
+Undo ~
+`u` in Input brings back what a Send removed, one `u` per Send: Input's text
+after a Send of Input, the selection, where it was, after a Visual Send —
+wherever `\s` was typed, and while the changes pane hid Input. `u` restores
+Input only: the message has reached Claude. The draft the layout restores
+into Input (|aineo-draft|) is not undone: after a Send, `u` brings the text
+back and stops there. How many Sends `u` can reach is your 'undolevels'
+(|aineo-limits|).
 
 Claude Code counts as ready once its input box has shown, unbroken, for 1.5
 seconds. A permission dialog drawn in the few tens of milliseconds before
@@ -764,7 +813,8 @@ Server socket ~
 
 Prefix mappings ~
   For each prefix key, whether it runs aineo's `<Plug>` mapping; a warning
-  when it runs something of yours, or nothing. While aineo's |VimEnter|
+  when it runs something of yours, or nothing. The Visual-mode `\s` comes
+  last, its line saying `in Visual mode`. While aineo's |VimEnter|
   handler, which maps the keys, has not run — the editor is still
   starting, as when `nvim +checkhealth` runs the check before `VimEnter`,
   or a `VimEnter` autocommand before aineo's threw an exception — one line
@@ -818,6 +868,23 @@ Send and a dialog ~
 A permission dialog drawn in the few tens of milliseconds before aineo
 notices it receives Send's paste and Enter. What the dialog does with them
 was not measured.
+
+Undo after a Send ~
+- A Send can reach a Claude Code that has just ended before aineo notices:
+  the write to its terminal then fails, and Send puts Input back as it was
+  and shows the error. Emptying Input and putting it back are then one
+  undo step: the first `u` changes nothing you can see, and the second
+  undoes your own last change. A Visual Send does the same, and `gv` then
+  selects the text again.
+- 'undolevels' decides how many Sends `u` can reach. At 0, `u` toggles the
+  last Send alone: after two Sends, `u` brings back the second's text, a
+  second `u` empties Input again, and the first's text never comes back. At
+  -1, `u` brings nothing back. The same holds for a Visual Send.
+
+Repeating a Visual Send ~
+A Visual Send removes the selection with Vim's own `"_d`, so `.` after it
+repeats that removal: it removes as much text again, at the cursor, and
+sends nothing. `u` brings it back.
 
 The changes pane ~
 - A large diff: a diff shows at most 1 MiB of what git gave, cut at the

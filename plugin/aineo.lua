@@ -454,6 +454,21 @@ for _, argument in ipairs(ACTION_ARGUMENTS) do
   end, { desc = 'aineo: ' .. argument })
 end
 
+--- What each action that has a Visual-mode form does in Visual mode, by its
+--- argument in `ACTION_ARGUMENTS`: Send sends the selection alone.
+---@type table<string, fun()>
+local VISUAL_ACTIONS = {
+  send = function()
+    require('aineo.send').send_selection()
+  end,
+}
+
+for argument, action in pairs(VISUAL_ACTIONS) do
+  vim.keymap.set('x', plug_mapping(argument), function()
+    run(action)
+  end, { desc = 'aineo: ' .. argument .. ' the selection' })
+end
+
 --- The keys that follow the prefix for each of `:Aineo`'s arguments in
 --- `ACTION_ARGUMENTS`.
 local PREFIX_KEYS = {
@@ -467,26 +482,41 @@ local PREFIX_KEYS = {
   ['pane changes'] = 'pc',
 }
 
---- Whether `keys`, written as in a mapping, have a global Normal-mode
---- mapping. A mapping local to a buffer does not count: it wins in its own
---- buffer only. A mapping's keys are compared in both the forms Neovim
---- records: `lhsraw`, and `lhsrawalt`, where a Ctrl key such as `<C-a>` has
---- the one byte `nvim_replace_termcodes()` gives it.
+--- Whether `keys`, written as in a mapping, have a global mapping in
+--- `mode`, `n` for Normal mode or `x` for Visual mode. A mapping local to a
+--- buffer does not count: it wins in its own buffer only. A mapping's keys
+--- are compared in both the forms Neovim records: `lhsraw`, and
+--- `lhsrawalt`, where a Ctrl key such as `<C-a>` has the one byte
+--- `nvim_replace_termcodes()` gives it.
 ---
+---@param mode 'n'|'x'
 ---@param keys string
 ---@return boolean
-local function has_global_mapping(keys)
+local function has_global_mapping(mode, keys)
   local typed = vim.api.nvim_replace_termcodes(keys, true, true, true)
-  return vim.iter(vim.api.nvim_get_keymap('n')):any(function(mapping)
+  return vim.iter(vim.api.nvim_get_keymap(mode)):any(function(mapping)
     return mapping.lhsraw == typed or mapping.lhsrawalt == typed
   end)
 end
 
---- Maps `prefix` followed by each action's keys (`PREFIX_KEYS`), in Normal
---- mode, to the action's `<Plug>` mapping, but for each key sequence the
---- user has mapped globally already — a mapping of only the start of a
---- sequence, or of a longer one, does not count; maps nothing when `prefix`
---- is `false`.
+--- Maps `keys` in `mode` to `argument`'s `<Plug>` mapping, unless the user
+--- has mapped `keys` globally in `mode` already (`has_global_mapping()`).
+---
+---@param mode 'n'|'x'
+---@param keys string
+---@param argument string
+local function map_unless_mapped(mode, keys, argument)
+  if not has_global_mapping(mode, keys) then
+    vim.keymap.set(mode, keys, plug_mapping(argument), { desc = 'aineo: ' .. argument })
+  end
+end
+
+--- Maps `prefix` followed by each action's keys (`PREFIX_KEYS`) to the
+--- action's `<Plug>` mapping, in Normal mode, and in Visual mode for each
+--- action that has a Visual-mode form (`VISUAL_ACTIONS`), but for each key
+--- sequence the user has mapped globally in that mode already — a mapping
+--- of only the start of a sequence, of a longer one, or in the other mode,
+--- does not count; maps nothing when `prefix` is `false`.
 ---
 ---@param prefix string|false
 local function map_prefix(prefix)
@@ -494,10 +524,10 @@ local function map_prefix(prefix)
     return
   end
   for _, argument in ipairs(ACTION_ARGUMENTS) do
-    local keys = prefix .. PREFIX_KEYS[argument]
-    if not has_global_mapping(keys) then
-      vim.keymap.set('n', keys, plug_mapping(argument), { desc = 'aineo: ' .. argument })
-    end
+    map_unless_mapped('n', prefix .. PREFIX_KEYS[argument], argument)
+  end
+  for argument in pairs(VISUAL_ACTIONS) do
+    map_unless_mapped('x', prefix .. PREFIX_KEYS[argument], argument)
   end
 end
 
