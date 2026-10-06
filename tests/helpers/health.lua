@@ -80,17 +80,19 @@ function M.section(report, heading)
   return lines
 end
 
---- The Normal-mode keys `child` has mapped to one of aineo's `<Plug>`
---- mappings, sorted.
+--- The keys `child` has mapped to one of aineo's `<Plug>` mappings in
+--- Normal and in Visual mode, each as `<mode> <keys>`, `n` or `x`, sorted.
 ---
 ---@param child table a child from `MiniTest.new_child_neovim()`
 ---@return string[]
 function M.keys_mapped_to_aineo(child)
   return child.lua([[
     local keys = {}
-    for _, mapping in ipairs(vim.api.nvim_get_keymap('n')) do
-      if mapping.rhs and vim.startswith(mapping.rhs, '<Plug>(aineo-') then
-        table.insert(keys, mapping.lhs)
+    for _, mode in ipairs({ 'n', 'x' }) do
+      for _, mapping in ipairs(vim.api.nvim_get_keymap(mode)) do
+        if mapping.rhs and vim.startswith(mapping.rhs, '<Plug>(aineo-') then
+          table.insert(keys, mode .. ' ' .. mapping.lhs)
+        end
       end
     end
     table.sort(keys)
@@ -99,14 +101,17 @@ function M.keys_mapped_to_aineo(child)
 end
 
 --- The keys `report`'s Prefix mappings section reports as running aineo's
---- `<Plug>` mappings, sorted.
+--- `<Plug>` mappings, each as `<mode> <keys>` — `x` for a line that says
+--- Visual mode, `n` for any other — sorted.
 ---
 ---@param report string[]
 ---@return string[]
 function M.keys_reported_in_place(report)
   local keys = {}
   for _, line in ipairs(M.section(report, 'Prefix mappings')) do
-    table.insert(keys, line:match('^%- ✅ OK (%S+) runs '))
+    local visual = line:match('^%- ✅ OK (%S+) in Visual mode runs ')
+    local normal = line:match('^%- ✅ OK (%S+) runs ')
+    table.insert(keys, visual and ('x ' .. visual) or normal and ('n ' .. normal))
   end
   table.sort(keys)
   return keys

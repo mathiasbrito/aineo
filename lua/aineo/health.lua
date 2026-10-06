@@ -267,17 +267,24 @@ local function check_server_socket()
 end
 
 --- The keys that follow the prefix for each of aineo's actions, with the
---- `<Plug>` mapping each runs, in the order `plugin/aineo.lua` maps them.
+--- `<Plug>` mapping each runs and the mode it is mapped in — `n`, Normal
+--- mode, or `x`, Visual mode — in the order `plugin/aineo.lua` maps them.
 local PREFIX_KEYS = {
-  { key = 's', plug = '<Plug>(aineo-send)' },
-  { key = 'o', plug = '<Plug>(aineo-open)' },
-  { key = 'r', plug = '<Plug>(aineo-report)' },
-  { key = 'i', plug = '<Plug>(aineo-input)' },
-  { key = 'c', plug = '<Plug>(aineo-claude)' },
-  { key = 'tcn', plug = '<Plug>(aineo-claude-numbers)' },
-  { key = 'pa', plug = '<Plug>(aineo-pane-agent)' },
-  { key = 'pc', plug = '<Plug>(aineo-pane-changes)' },
+  { key = 's', plug = '<Plug>(aineo-send)', mode = 'n' },
+  { key = 'o', plug = '<Plug>(aineo-open)', mode = 'n' },
+  { key = 'r', plug = '<Plug>(aineo-report)', mode = 'n' },
+  { key = 'i', plug = '<Plug>(aineo-input)', mode = 'n' },
+  { key = 'c', plug = '<Plug>(aineo-claude)', mode = 'n' },
+  { key = 'tcn', plug = '<Plug>(aineo-claude-numbers)', mode = 'n' },
+  { key = 'pa', plug = '<Plug>(aineo-pane-agent)', mode = 'n' },
+  { key = 'pc', plug = '<Plug>(aineo-pane-changes)', mode = 'n' },
+  { key = 's', plug = '<Plug>(aineo-send)', mode = 'x' },
 }
+
+--- How the Prefix mappings section names a key sequence in each mode it
+--- maps: as it is in Normal mode, and followed by `in Visual mode` in
+--- Visual mode.
+local IN_MODE = { n = '%s', x = '%s in Visual mode' }
 
 --- The keys `keys`, written as in a mapping, stand for when typed.
 ---
@@ -287,15 +294,17 @@ local function typed_keys(keys)
   return vim.api.nvim_replace_termcodes(keys, true, true, true)
 end
 
---- The global Normal-mode mapping of `keys`, written as in a mapping, if
---- any — compared in both the forms Neovim records, as `plugin/aineo.lua`
---- compares them when it decides whether the user has mapped a key.
+--- The global mapping of `keys`, written as in a mapping, in `mode` — `n`
+--- or `x` — if any, compared in both the forms Neovim records, as
+--- `plugin/aineo.lua` compares them when it decides whether the user has
+--- mapped a key.
 ---
+---@param mode 'n'|'x'
 ---@param keys string
 ---@return table|nil mapping as `nvim_get_keymap()` gives it
-local function global_mapping(keys)
+local function global_mapping(mode, keys)
   local typed = typed_keys(keys)
-  return vim.iter(vim.api.nvim_get_keymap('n')):find(function(mapping)
+  return vim.iter(vim.api.nvim_get_keymap(mode)):find(function(mapping)
     return mapping.lhsraw == typed or mapping.lhsrawalt == typed
   end)
 end
@@ -316,15 +325,16 @@ local function what_mapping_runs(mapping)
 end
 
 --- Reports what the key sequence `prefix` followed by `prefix_key.key`
---- runs: ok when it runs its `<Plug>` mapping, `prefix_key.plug`, a warning
---- when it runs anything else or is not mapped at all.
+--- runs in `prefix_key.mode`, naming the mode when it is Visual mode
+--- (`IN_MODE`): ok when it runs its `<Plug>` mapping, `prefix_key.plug`, a
+--- warning when it runs anything else or is not mapped at all.
 ---
 ---@param prefix string
----@param prefix_key { key: string, plug: string }
+---@param prefix_key { key: string, plug: string, mode: 'n'|'x' }
 local function check_prefix_key(prefix, prefix_key)
-  local keys = prefix .. prefix_key.key
+  local keys = IN_MODE[prefix_key.mode]:format(prefix .. prefix_key.key)
   local plug_mapping = prefix_key.plug
-  local mapping = global_mapping(keys)
+  local mapping = global_mapping(prefix_key.mode, prefix .. prefix_key.key)
   if mapping == nil then
     vim.health.warn(
       ('%s is not mapped'):format(keys),
