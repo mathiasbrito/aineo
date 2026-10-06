@@ -123,4 +123,53 @@ function M.send()
   end
 end
 
+--- The Visual selection's part of each line it spans, top to bottom, and
+--- whether it is charwise.
+---
+---@return { parts: string[], charwise: boolean }
+local function visual_selection()
+  local mode = vim.fn.mode()
+  local to_line_end = mode == '\22' and vim.fn.winsaveview().curswant == vim.v.maxcol
+  local parts = {}
+  for _, span in
+    ipairs(vim.fn.getregionpos(vim.fn.getpos('v'), vim.fn.getpos('.'), { type = mode }))
+  do
+    local first, last = span[1], span[2]
+    local line = vim.fn.getline(first[2])
+    table.insert(
+      parts,
+      first[3] == 0 and '' or line:sub(first[3], to_line_end and #line or last[3])
+    )
+  end
+  return { parts = parts, charwise = mode == 'v' }
+end
+
+--- The text a removal of `selection` took from Input: its parts joined by
+--- line feeds, and, when the removal took a line break for each line the
+--- selection spans — a charwise selection past its last line's end — that
+--- line's break too.
+---
+---@param selection { parts: string[], charwise: boolean }
+---@param line_breaks_removed integer
+---@return string
+local function removed_text(selection, line_breaks_removed)
+  local text = table.concat(selection.parts, '\n')
+  if selection.charwise and line_breaks_removed == #selection.parts then
+    return text .. '\n'
+  end
+  return text
+end
+
+--- Sends the Visual selection in Input to Claude Code's terminal as one
+--- bracketed paste followed by Enter, in one write, and removes it from
+--- Input as Vim's own `"_d` does.
+function M.send_selection()
+  local input = vim.api.nvim_get_current_buf()
+  local selection = visual_selection()
+  local line_count = vim.api.nvim_buf_line_count(input)
+  vim.cmd.normal({ args = { '"_d' }, bang = true })
+  local text = removed_text(selection, line_count - vim.api.nvim_buf_line_count(input))
+  claude.write_to_session(PASTE_START .. text .. PASTE_END .. ENTER)
+end
+
 return M
