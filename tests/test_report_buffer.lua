@@ -568,13 +568,18 @@ end
 
 --- The expression, run in the child, that shows in `window` a new buffer
 --- holding one numbered line, long enough to wrap in a narrow window, which
---- Neovim's own `'formatlistpat'` matches.
+--- Neovim's own `'formatlistpat'` matches, and makes it wrap as the layout
+--- makes Input wrap (`'wrap'`, `'linebreak'` and `'breakindent'`, as
+--- `:setlocal` sets them).
 local SHOW_NUMBERED_LINE = [[(function(window)
   local other = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(other, 0, -1, false, {
     '1. a numbered line long enough to wrap in a narrow window, twice over',
   })
   vim.api.nvim_win_set_buf(window, other)
+  for _, option in ipairs({ 'wrap', 'linebreak', 'breakindent' }) do
+    vim.wo[window][0][option] = true
+  end
 end)(...)]]
 
 T['a wrapped report']["leaves Neovim's wrapping to another buffer shown later in the Report's window"] = function()
@@ -597,6 +602,18 @@ T['a wrapped report']["leaves Neovim's wrapping to another buffer in a window sp
   child.lua(SHOW_NUMBERED_LINE, { split })
 
   eq(continuation_column(split, 1), 1)
+end
+
+T['a wrapped report']["continues a details line under its text again when shown again after the user empties 'breakindentopt'"] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, LONG_REPORT)
+  local window = show_report_wrapping(30)
+  child.cmd('setlocal breakindentopt=')
+  child.lua(SHOW_NUMBERED_LINE, { window })
+
+  child.lua([[vim.api.nvim_win_set_buf(..., require('aineo.report').report_buffer())]], { window })
+
+  eq(continuation_column(window, 2), 9)
 end
 
 T['a wrapped report']['continues a details line under its text after the user edits the Report again'] = function()
