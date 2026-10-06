@@ -2373,6 +2373,39 @@ T['the colours']['of the line saying a read failed are the whole line in AineoCh
   })
 end
 
+T['the colours']['of the line saying a read of the commits failed are the whole line in AineoChangesFailure, above the list'] = function()
+  local top = git_repo.create('changespane-colour-commits-failed', { ['notes.txt'] = { 'one' } })
+  local stand_in, switch = breakable_git('changespane-colour-commits-failed', top, 'log')
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(COMMITS, { 'No commits on this session' })
+  turn_on(switch)
+
+  child.lua(SHOW_FILES_AGAIN)
+
+  expect_lines(COMMITS, { REFRESH_FAILED, 'No commits on this session' })
+  eq(colours_of(COMMITS), {
+    { 0, 0, #REFRESH_FAILED, 'AineoChangesFailure' },
+    { 1, 0, 26, 'AineoChangesNote' },
+  })
+end
+
+T['the colours']['of the line saying the first read failed are the whole line in AineoChangesFailure'] =
+  MiniTest.new_set({ parametrize = { { FILES, 'ls-files' }, { COMMITS, 'log' } } })
+
+T['the colours']['of the line saying the first read failed are the whole line in AineoChangesFailure']['in'] = function(
+  name,
+  subcommand
+)
+  local top = git_repo.create('changespane-colour-first-failed', { ['notes.txt'] = { 'one' } })
+  local stand_in, switch = breakable_git('changespane-colour-first-failed', top, subcommand)
+  turn_on(switch)
+
+  begin_and_show(top, { executable = stand_in })
+
+  expect_lines(name, { REFRESH_FAILED })
+  eq(colours_of(name), { { 0, 0, #REFRESH_FAILED, 'AineoChangesFailure' } })
+end
+
 T['the colours']['of the line saying git was not found are the whole line in AineoChangesFailure, in either window'] = function()
   local directory = git_repo.directory('changespane-colour-no-git')
   local missing = vim.fs.joinpath(directory, 'no-such-git')
@@ -2549,7 +2582,10 @@ end
 
 --- The expression, run in the child, that reads the background, as RGB, of
 --- the screen cell of the window `...` at its first line and the column
---- after, counted from 0.
+--- after, counted from 0. A child's first `nvim__inspect_cell()` misreads
+--- every cell read in the same request, and cells read after the next
+--- redraw are right, so a test makes one read and drops it, and redraws,
+--- before it reads with this.
 local WINDOW_CELL_BACKGROUND = [[(function(window, column)
   local row, first_column = unpack(vim.fn.win_screenpos(window))
   return vim.api.nvim__inspect_cell(1, row - 1, first_column - 1 + column)[2].background
