@@ -81,7 +81,7 @@ The wave holds its marks. For the knowledge pass:
 
 ## Open threads
 
-- **The T26 session note's fix-round reading on `'selection'` old** is false under `'virtualedit'` all and onemore. This packet's boundary is its own note; the knowledge pass corrects that reading or points it here.
+- ~~**The T26 session note's fix-round reading on `'selection'` old** is false under `'virtualedit'` all and onemore. This packet's boundary is its own note; the knowledge pass corrects that reading or points it here.~~ — closed by T31's knowledge pass: that reading carries a dated correction pointing here.
 - **`character_end()`'s docstring** says it counts as one character what `"_d` removes whole; for an invalid byte that a combining mark follows, a block's `"_d` joins them and `character_end()` does not. LIMITS now names it; the docstring was outside the brief's boundary (it names `removed_region()` and the empty check) and is left for a follow-up.
 - **F4's residue under `'virtualedit'` all** (the re-measure's 2 in 60,000). The first, a truncated sequence before a mark at a block's edge, falls under LIMITS' *A block's edge on an invalid byte*. The second, a charwise start with a coladd as wide as a 4-cell `<c3>`, has no block, mark or joiner and is not covered by that entry; the *Correction* names it in LIMITS of its own. Neither is pinned; both predate T31.
 
@@ -138,4 +138,13 @@ T31's other mutants (`M-concat-nothing`, `R-gv-no-start`, `R-nul-x`, `M-in-block
 
 ## Commits
 
-Recorded after the merge.
+Recorded after the merge, by T31's knowledge pass. PR #120 merged by rebase on 2026-10-06 (19:55 UTC; 21:55 CEST); `dev` `03a1345`, whose tree is the tree of the orchestrator's verified head `3fc1b11` (`git diff --stat 3fc1b11 03a1345` prints nothing). Released in `v0.2.14` (PR #121, squash-merged into `main` as `ebfe71c`, whose tree is `dev` `03a1345`'s).
+
+The first two are the packet's; the last two are the bounded correction's, after the guarantee review.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `efe9a31` | `65679f4` | Send only what leaves Input under 'selection' old |
+| `e3dd139` | `9bf8a36` | Record T31's session note: reds, mutants and suite |
+| `acd3c8f` | `039602d` | Read 'virtualedit' as Vim's flag set in a Visual Send |
+| `3fc1b11` | `03a1345` | Pin the window's 'virtualedit' and the no-region edge in Visual Send |
