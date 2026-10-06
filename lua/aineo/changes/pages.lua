@@ -1,9 +1,13 @@
 --- Writes a window's page (`aineo.changes.lines`) into a buffer of the
---- changes pane, and tells which entry a line of it lists.
+--- changes pane, in its colours, and tells which entry a line of it lists.
 
+local colours = require('aineo.changes.colours')
 local scratch = require('aineo.changes.scratch')
 
 local M = {}
+
+--- The namespace of the colours the pane's buffers show.
+local PANE_COLOURS = vim.api.nvim_create_namespace('aineo_changes_colours')
 
 --- The page each buffer was last given, by buffer.
 ---@type table<integer, aineo.changes.Page>
@@ -24,11 +28,31 @@ local function line_listing(page, key)
   return nil
 end
 
+--- Shows `page`'s colours on `buffer`'s lines, which hold its text, and no
+--- other colour of the pane's, the pane's groups defined first
+--- (`colours.define_changes_colours()`).
+---
+---@param buffer integer
+---@param page aineo.changes.Page
+local function show_colours(buffer, page)
+  colours.define_changes_colours()
+  vim.api.nvim_buf_clear_namespace(buffer, PANE_COLOURS, 0, -1)
+  for line, line_colours in pairs(page.colours) do
+    for _, colour in ipairs(line_colours) do
+      vim.api.nvim_buf_set_extmark(buffer, PANE_COLOURS, line - 1, colour.first_column, {
+        end_col = colour.end_column,
+        hl_group = colour.group,
+      })
+    end
+  end
+end
+
 --- Writes `page` into `buffer` (`aineo.changes.scratch`'s `write_text()`),
---- leaving it not modifiable, and returns whether it was written. In each
---- window showing `buffer`, the cursor stays on the entry it was on when the
---- page lists it still, at the same column. A page Neovim refused leaves
---- the buffer, and the entries its lines list, as they were.
+--- in its colours (`show_colours()`), leaving it not modifiable, and
+--- returns whether it was written. In each window showing `buffer`, the
+--- cursor stays on the entry it was on when the page lists it still, at the
+--- same column. A page Neovim refused leaves
+--- the buffer, the entries its lines list and their colours, as they were.
 ---
 ---@param buffer integer
 ---@param page aineo.changes.Page
@@ -44,6 +68,7 @@ function M.write_page(buffer, page)
   if not scratch.write_text(buffer, page.text) then
     return false
   end
+  show_colours(buffer, page)
   pages[buffer] = page
   for window, cursor in pairs(kept) do
     local line = line_listing(page, cursor.key)
