@@ -105,6 +105,72 @@ The wave holds its marks. For the knowledge pass:
 - **`'breakindentopt'` replaces the user's own** in a window showing the Report (an `sbr` or `shift:` the user set globally is not kept there). The brief names `list:-1` and no merge with the user's value; the help says the Report gets `list:-1`.
 - **The `aineo_report` group** now holds the Report's `BufWinEnter` beside its `BufReadCmd`; a Report kept unnamed for the user's text (`free_name_held_by()`) loses both when the next Report clears the group, as it lost the `BufReadCmd` before.
 
+## Correction — 2026-10-07, after the review of PR #128
+
+A fresh implementer agent (`neovim-lua-developer`) took the review's three findings, as the orchestrator bounded them. The sections above record the packet as it was at `2a18c45`; this one records what changed, and its numbers replace theirs where they differ.
+
+### The revised A11 — the orchestrator's assumption under the user's instruction of 2026-10-06
+
+The user asked that a wrapped line continue under the `[`, and an item under its text. With the file column open (D6), an 80-column screen gives the Report 26 columns, and there Neovim's `min:20` put a wrapped item back at column 7, under its `-` (the review, finding 2). The orchestrator revised A11: the Report's windows take `'breakindentopt'` `list:-1,min:10`. That is the orchestrator's assumption under the user's instruction of 2026-10-06, not the user's answer, and goes to the user with the other assumptions. Rejected: `min:0`, which keeps the indents at any width but leaves three or four cells of text at 12 columns (the review's table).
+
+Measured in this session on Neovim 0.12.5 (`.claude/local/orchestrator/t34cor/t34cor-probe-widths.lua`, `screenpos()` in a window of each width):
+
+| Report width | header continues at | item continues at |
+|---|---|---|
+| 18 to 30 | 7 | 9 |
+| 17 | 7 | 8 |
+| 16 | 7 | 7 |
+| 15 | 6 | 6 |
+| 14 | 5 | 5 |
+| 12 | 3 | 3 |
+
+So the hanging indents hold down to 18 columns. The orchestrator's instruction named the limit "below 20 columns"; that is a bound, and the help states the exact one: "A Report narrower than 18 columns continues a wrapped line further left, to keep 10 columns of text". *aineo-report* also names the option's new value.
+
+### What changed
+
+- `lua/aineo/report/buffer.lua`: `CONTINUE_UNDER_LIST_MATCH` is `'list:-1,min:10'`; its docstring takes the review's wording (finding 3) and says the new limit.
+- `doc/aineo.txt`: *aineo-layout*'s clause in the review's wording (a wrapped line continues under the `[` of its `[status]`, or under an item's text), no longer claiming "under its text" whatever the user's settings; *aineo-report*'s narrow-width sentence and the option's value.
+- `tests/test_report_buffer.lua`, 97 → 101 cases:
+  - the review's two cases (finding 1), which show the Report as the layout does, in a window opened with `nvim_open_win(…, false)` and never entered: *continues a details line under its text in a window opened on it without entering it* and *… in a second window opened on it while another shows it*;
+  - *continues a details line under its text in a Report 26 columns wide, a third of an 80-column screen*, and its header twin;
+  - the 24-column pin of the old A11 (*narrower than 28 columns … keeping 20 columns of text*, column 5) is superseded and becomes *narrower than 18 columns continues a details line further left, keeping 10 columns of text*, 16 columns, column 7.
+
+### Seen red, arrived green (this correction)
+
+- *… in a window opened on it without entering it*: seen red under the review's r4 (`nvim_create_autocmd('BufWinEnter'` → `nvim_create_autocmd('BufEnter'`), `Left: 7`, `Right: 9`, then green on the restored code. Its red can only be shown under a mutant: the code already did the right thing.
+- *… in a second window opened on it while another shows it*: seen red under r7 (`vim.wo[0][0].breakindentopt = …` → `local window = vim.fn.bufwinid(buffer)` and `vim.wo[window][0].breakindentopt = …`), `Left: 7`, `Right: 9`.
+- *… details line … in a Report 26 columns wide*: seen red under `min:20`, `Left: 7`, `Right: 9`; green with `min:10`.
+- *… its first line … in a Report 26 columns wide*: arrived green. `min:20` already kept the header at 7 there, since its text is exactly 20 columns wide. Killed by `'list:-1,min:10'` → `'list:-1,min:21'`, `Left: 6`, `Right: 7`.
+- *narrower than 18 columns …*: rewritten from the superseded pin after the green step, so not seen red on its own. Killed by the shipped value `'list:-1'` (`Left: 1`), by `min:0` (9), `min:9` (8) and `min:11` (6), each against `Right: 7`.
+
+### Mutants (on `b444839`, each a literal edit of `lua/aineo/report/buffer.lua` from a copy, one at a time, on `tests/test_report_buffer.lua` narrowed to *a wrapped report*, 15 cases)
+
+| # | literal edit | cases failed | every kill by assertion |
+|---|---|---|---|
+| r4 | `nvim_create_autocmd('BufWinEnter'` → `nvim_create_autocmd('BufEnter'` | 2 | both finding-1 cases, 7/9 |
+| r7 | `      vim.wo[0][0].breakindentopt = CONTINUE_UNDER_LIST_MATCH` → `      local window = vim.fn.bufwinid(buffer)` / `      vim.wo[window][0].breakindentopt = CONTINUE_UNDER_LIST_MATCH` | 1 | the second-window case, 7/9 |
+| min20 | `'list:-1,min:10'` → `'list:-1'` | 2 | the 26-column item 7/9; the 16-column case 1/7 |
+| min21 | `'list:-1,min:10'` → `'list:-1,min:21'` | 4 | the 26-column header 6/7, among them |
+| min0 | `'list:-1,min:10'` → `'list:-1,min:0'` | 1 | the 16-column case, 9/7 |
+| min9 | `'list:-1,min:10'` → `'list:-1,min:9'` | 1 | the 16-column case, 8/7 |
+| min11 | `'list:-1,min:10'` → `'list:-1,min:11'` | 1 | the 16-column case, 6/7 |
+| p4 | `local CONTINUE_UNDER_LIST_MATCH = 'list:-1,min:10'` → `local CONTINUE_UNDER_LIST_MATCH = 'shift:6'` (the plan's mutant 4 on the new value) | 9 | e.g. *… not under its -*, 11/9 |
+| p2a | `vim.wo[0][0].breakindentopt` → `vim.o.breakindentopt` | 2 | the two *leaves Neovim's wrapping …* cases, 4/1 |
+| p2b | `vim.wo[0][0].breakindentopt` → `vim.wo[0].breakindentopt` | 2 | the same, 4/1 |
+| r1 | `  vim.bo[buffer].formatlistpat = render.CONTINUATION_PATTERN` → `  vim.o.formatlistpat = render.CONTINUATION_PATTERN` | 11 | e.g. *continues its first line under the [*, 4/7 |
+
+No survivor, so none went on to the other files. `render.lua` did not change, and its mutants are as the table above records.
+
+### Suites (0.12.5)
+
+No whole suite: D30, for this small fix. The brief's eight files, each `Fails (0)`, are in the correction's report and the PR body. `make lint`: clean. The help merged with `origin/bugfix/t32-changes-colours` (`bfa7bba`): clean, and `tests/test_doc.lua` on the merged tree has 44 cases, `Fails (0)`. `origin/feature/t33-claude-window-name` still does not exist.
+
+### Task line, corrected
+
+This replaces the *Task lines* paragraph above for the knowledge pass:
+
+- **T34** — done — PR into `dev`, wave 8 (each details line an item, `      - text`, Claude's own `- `/`* `/`+ `/`• ` replaced, a blank or marker-only line `""` (T34-1 (a), T34-2 (a), A9, A10); the Report's `'formatlistpat'` and its own `BufWinEnter` setting `'breakindentopt'` `list:-1,min:10` as `:setlocal` does, so a wrapped header continues under the `[` and an item under its text down to 18 columns, the user's `'showbreak'` kept (A11 as revised by the orchestrator under the user's instruction of 2026-10-06, A16); link, path, `gx` and double-click pins moved by 2; `tests/test_report_buffer.lua` 67 → 101 cases)
+
 ## Commits
 
 Recorded after the merge, never before (the branch lands by rebase).
