@@ -1,6 +1,7 @@
 --- The Report buffer: where reports are shown.
 
 local colours = require('aineo.report.colours')
+local render = require('aineo.report.render')
 
 local M = {}
 
@@ -11,6 +12,10 @@ local REPORT_COLOURS = vim.api.nvim_create_namespace('aineo_report_colours')
 --- The Report buffer's name. Not a file path: a named buffer is never reused
 --- by `:edit` the way an unnamed, empty one is.
 local REPORT_BUFFER_NAME = 'aineo://report'
+
+--- The `'breakindentopt'` of a window showing the Report: a wrapped line
+--- continues after the start of it `'formatlistpat'` matches.
+local CONTINUE_UNDER_LIST_MATCH = 'list:-1'
 
 --- Frees the name `buffer` holds: wipes `buffer` out, unless the user
 --- changed its text, which is then kept in `buffer`, unnamed (`:0file`).
@@ -109,8 +114,15 @@ end
 --- `fill` is then called with the emptied buffer to show its reports again.
 --- The autocommand doing so belongs to the buffer, in the group
 --- `aineo_report`, created anew with each Report: that clears the
---- autocommand of any Report before it, which by then is wiped out, or kept
+--- autocommands of any Report before it, which by then is wiped out, or kept
 --- unnamed for the text the user typed into it.
+---
+--- A window showing the Report wraps a long line under the text it starts
+--- (`render.CONTINUATION_PATTERN` as its `'formatlistpat'`): each time it
+--- shows the Report, the autocommand of the same group sets its
+--- `'breakindentopt'` to `CONTINUE_UNDER_LIST_MATCH` as `:setlocal` does, so
+--- another buffer shown in that window, or in a window split from it, keeps
+--- its own.
 ---
 --- A double-click (`<2-LeftMouse>`), in Normal or Insert mode, does what
 --- `double_click()` says: on a path the Report draws, it hands `open_path`
@@ -125,11 +137,20 @@ function M.create_report_buffer(fill, open_path)
   local buffer = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_name(buffer, REPORT_BUFFER_NAME)
   vim.bo[buffer].modifiable = false
+  vim.bo[buffer].formatlistpat = render.CONTINUATION_PATTERN
+  local group = vim.api.nvim_create_augroup('aineo_report', {})
   vim.api.nvim_create_autocmd('BufReadCmd', {
-    group = vim.api.nvim_create_augroup('aineo_report', {}),
+    group = group,
     buffer = buffer,
     callback = function(event)
       fill(event.buf)
+    end,
+  })
+  vim.api.nvim_create_autocmd('BufWinEnter', {
+    group = group,
+    buffer = buffer,
+    callback = function()
+      vim.wo[0][0].breakindentopt = CONTINUE_UNDER_LIST_MATCH
     end,
   })
   vim.keymap.set({ 'n', 'i' }, '<2-LeftMouse>', function()

@@ -100,7 +100,7 @@ T['a link']['in the details is drawn in AineoReportLink and carries its address'
     { task = 'Task', status = 'done', summary = 'Summary', details = 'https://example.com' }
   )
 
-  eq(report_links(), { { 1, 6, 25, 'https://example.com', 'AineoReportLink' } })
+  eq(report_links(), { { 1, 8, 27, 'https://example.com', 'AineoReportLink' } })
 end
 
 T['a link']['in the task or the summary is drawn at its place in the header'] = function()
@@ -154,107 +154,108 @@ end
 local LINK_OF_WELL_FORMED_EDGES =
   'https://x.y/\223\191\224\160\128\237\159\191\239\191\189\240\144\128\128\241\128\128\128\244\143\191\191z'
 
---- A link in the details of a report of 09:05 starts 6 bytes into its line,
---- after the indent that puts it under the `[status]`: each row gives the
---- details, then the links the Report shows on that line.
+--- A link in the details of a report of 09:05 starts 8 bytes into its line,
+--- after the indent that puts it under the `[status]` and the `- ` that makes
+--- the line an item: each row gives the details, then the links the Report
+--- shows on that line.
 T['a link in the details'] = MiniTest.new_set({
   parametrize = {
-    { 'https://example.com', { { 1, 6, 25, 'https://example.com', 'AineoReportLink' } } },
+    { 'https://example.com', { { 1, 8, 27, 'https://example.com', 'AineoReportLink' } } },
     {
       'See https://example.com/docs.',
-      { { 1, 10, 34, 'https://example.com/docs', 'AineoReportLink' } },
+      { { 1, 12, 36, 'https://example.com/docs', 'AineoReportLink' } },
     },
-    { '(https://x.y/a)', { { 1, 7, 20, 'https://x.y/a', 'AineoReportLink' } } },
+    { '(https://x.y/a)', { { 1, 9, 22, 'https://x.y/a', 'AineoReportLink' } } },
     {
       'https://en.wikipedia.org/wiki/Lua_(programming_language)',
       {
         {
           1,
-          6,
-          62,
+          8,
+          64,
           'https://en.wikipedia.org/wiki/Lua_(programming_language)',
           'AineoReportLink',
         },
       },
     },
-    { '[docs](https://x.y/z)', { { 1, 13, 26, 'https://x.y/z', 'AineoReportLink' } } },
+    { '[docs](https://x.y/z)', { { 1, 15, 28, 'https://x.y/z', 'AineoReportLink' } } },
     {
       'http://localhost:8080/a?b=c&d=e#f',
-      { { 1, 6, 39, 'http://localhost:8080/a?b=c&d=e#f', 'AineoReportLink' } },
+      { { 1, 8, 41, 'http://localhost:8080/a?b=c&d=e#f', 'AineoReportLink' } },
     },
     {
       'https://x.y/a, https://x.y/b;',
       {
-        { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' },
-        { 1, 21, 34, 'https://x.y/b', 'AineoReportLink' },
+        { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' },
+        { 1, 23, 36, 'https://x.y/b', 'AineoReportLink' },
       },
     },
-    { '"https://x.y/q"', { { 1, 7, 20, 'https://x.y/q', 'AineoReportLink' } } },
-    { 'https://x.y/café', { { 1, 6, 23, 'https://x.y/café', 'AineoReportLink' } } },
-    { 'Done: https://x.y/p! Next?', { { 1, 12, 25, 'https://x.y/p', 'AineoReportLink' } } },
-    { "it's https://x.y/r'", { { 1, 11, 24, 'https://x.y/r', 'AineoReportLink' } } },
-    { 'https://x.y/a—b', { { 1, 6, 23, 'https://x.y/a—b', 'AineoReportLink' } } },
-    { 'See **https://x.y/docs** now', { { 1, 12, 28, 'https://x.y/docs', 'AineoReportLink' } } },
-    { 'See *https://x.y/docs* now', { { 1, 11, 27, 'https://x.y/docs', 'AineoReportLink' } } },
-    { 'See ~~https://x.y/a~~ now', { { 1, 12, 25, 'https://x.y/a', 'AineoReportLink' } } },
-    { '(see https://x.y/a).', { { 1, 11, 24, 'https://x.y/a', 'AineoReportLink' } } },
-    { '(see https://x.y/a.)', { { 1, 11, 24, 'https://x.y/a', 'AineoReportLink' } } },
+    { '"https://x.y/q"', { { 1, 9, 22, 'https://x.y/q', 'AineoReportLink' } } },
+    { 'https://x.y/café', { { 1, 8, 25, 'https://x.y/café', 'AineoReportLink' } } },
+    { 'Done: https://x.y/p! Next?', { { 1, 14, 27, 'https://x.y/p', 'AineoReportLink' } } },
+    { "it's https://x.y/r'", { { 1, 13, 26, 'https://x.y/r', 'AineoReportLink' } } },
+    { 'https://x.y/a—b', { { 1, 8, 25, 'https://x.y/a—b', 'AineoReportLink' } } },
+    { 'See **https://x.y/docs** now', { { 1, 14, 30, 'https://x.y/docs', 'AineoReportLink' } } },
+    { 'See *https://x.y/docs* now', { { 1, 13, 29, 'https://x.y/docs', 'AineoReportLink' } } },
+    { 'See ~~https://x.y/a~~ now', { { 1, 14, 27, 'https://x.y/a', 'AineoReportLink' } } },
+    { '(see https://x.y/a).', { { 1, 13, 26, 'https://x.y/a', 'AineoReportLink' } } },
+    { '(see https://x.y/a.)', { { 1, 13, 26, 'https://x.y/a', 'AineoReportLink' } } },
     {
       'https://x.y/a,https://x.y/b',
-      { { 1, 6, 33, 'https://x.y/a,https://x.y/b', 'AineoReportLink' } },
+      { { 1, 8, 35, 'https://x.y/a,https://x.y/b', 'AineoReportLink' } },
     },
-    { '<https://x.y/z>', { { 1, 7, 20, 'https://x.y/z', 'AineoReportLink' } } },
-    { '`https://x.y/code`', { { 1, 7, 23, 'https://x.y/code', 'AineoReportLink' } } },
-    { '|https://x.y/a|b|', { { 1, 7, 20, 'https://x.y/a', 'AineoReportLink' } } },
+    { '<https://x.y/z>', { { 1, 9, 22, 'https://x.y/z', 'AineoReportLink' } } },
+    { '`https://x.y/code`', { { 1, 9, 25, 'https://x.y/code', 'AineoReportLink' } } },
+    { '|https://x.y/a|b|', { { 1, 9, 22, 'https://x.y/a', 'AineoReportLink' } } },
     {
       'https://x.y/a\27\\\27]0;title\7z',
-      { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } },
+      { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } },
     },
-    { 'https://x.y/\27]52;c;cHduZWQ=\7', { { 1, 6, 18, 'https://x.y/', 'AineoReportLink' } } },
+    { 'https://x.y/\27]52;c;cHduZWQ=\7', { { 1, 8, 20, 'https://x.y/', 'AineoReportLink' } } },
     {
       'https://x.y/a\194\157' .. '52;c;x\194\156z',
-      { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } },
+      { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } },
     },
-    { 'https://x.y/a\127z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\0z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'Is it https://x.y/a?', { { 1, 12, 25, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'At https://x.y/a:', { { 1, 9, 22, 'https://x.y/a', 'AineoReportLink' } } },
-    { '[https://x.y/a]', { { 1, 7, 20, 'https://x.y/a', 'AineoReportLink' } } },
-    { '{https://x.y/a}', { { 1, 7, 20, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\127z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\0z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'Is it https://x.y/a?', { { 1, 14, 27, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'At https://x.y/a:', { { 1, 11, 24, 'https://x.y/a', 'AineoReportLink' } } },
+    { '[https://x.y/a]', { { 1, 9, 22, 'https://x.y/a', 'AineoReportLink' } } },
+    { '{https://x.y/a}', { { 1, 9, 22, 'https://x.y/a', 'AineoReportLink' } } },
     {
       'xhttps://a.b/https://c.d',
-      { { 1, 19, 30, 'https://c.d', 'AineoReportLink' } },
+      { { 1, 21, 32, 'https://c.d', 'AineoReportLink' } },
     },
-    { 'https://x.y/a\7z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\1z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\tz', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\194\128z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\194\156z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\194\159z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { '“https://x.y/a”', { { 1, 9, 25, 'https://x.y/a”', 'AineoReportLink' } } },
-    { 'https://x.y/a…', { { 1, 6, 22, 'https://x.y/a…', 'AineoReportLink' } } },
-    { 'https://x.y/a\194\160b', { { 1, 6, 22, 'https://x.y/a\194\160b', 'AineoReportLink' } } },
-    { LINK_OF_WELL_FORMED_EDGES, { { 1, 6, 42, LINK_OF_WELL_FORMED_EDGES, 'AineoReportLink' } } },
+    { 'https://x.y/a\7z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\1z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\tz', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\194\128z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\194\156z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\194\159z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { '“https://x.y/a”', { { 1, 11, 27, 'https://x.y/a”', 'AineoReportLink' } } },
+    { 'https://x.y/a…', { { 1, 8, 24, 'https://x.y/a…', 'AineoReportLink' } } },
+    { 'https://x.y/a\194\160b', { { 1, 8, 24, 'https://x.y/a\194\160b', 'AineoReportLink' } } },
+    { LINK_OF_WELL_FORMED_EDGES, { { 1, 8, 44, LINK_OF_WELL_FORMED_EDGES, 'AineoReportLink' } } },
     { 'https//x.y', {} },
-    { 'https://x.y/a\157z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\156\1570;pwned\156z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\155' .. '31mRED', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\194 z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\226\128\27\\', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\192\155z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\224\128\155z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\237\160\128z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\244\144\128\128z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\255z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\226\128\192z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
-    { 'https://x.y/a\240\144\128\194 z', { { 1, 6, 19, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\157z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\156\1570;pwned\156z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\155' .. '31mRED', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\194 z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\226\128\27\\', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\192\155z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\224\128\155z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\237\160\128z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\244\144\128\128z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\255z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\226\128\192z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
+    { 'https://x.y/a\240\144\128\194 z', { { 1, 8, 21, 'https://x.y/a', 'AineoReportLink' } } },
     { 'ftp://x.y', {} },
     { 'file:///etc/hosts', {} },
     { 'mailto:a@b.c', {} },
     { 'www.example.com', {} },
     { 'https://', {} },
     { 'See https://.', {} },
-    { 'HTTPS://X.Y/A', { { 1, 6, 19, 'HTTPS://X.Y/A', 'AineoReportLink' } } },
+    { 'HTTPS://X.Y/A', { { 1, 8, 21, 'HTTPS://X.Y/A', 'AineoReportLink' } } },
     { 'nothttps://a.b', {} },
   },
 })
@@ -277,8 +278,8 @@ local TWO_REPORTS = {
   { task = 'First', status = 'done', summary = 'Ended', details = 'https://x.y/2' },
 }
 local LINKS_OF_TWO_REPORTS = {
-  { 1, 6, 19, 'https://x.y/1', 'AineoReportLink' },
-  { 3, 6, 19, 'https://x.y/2', 'AineoReportLink' },
+  { 1, 8, 21, 'https://x.y/1', 'AineoReportLink' },
+  { 3, 8, 21, 'https://x.y/2', 'AineoReportLink' },
 }
 
 T['the links'] = MiniTest.new_set()
@@ -407,13 +408,13 @@ T['gx'] = MiniTest.new_set({
   parametrize = {
     {
       'https://en.wikipedia.org/wiki/Lua_(programming_language)',
-      6,
+      8,
       'https://en.wikipedia.org/wiki/Lua_(programming_language)',
     },
-    { 'See **https://x.y/docs** now', 12, 'https://x.y/docs' },
-    { 'See *https://x.y/docs* now', 11, 'https://x.y/docs' },
-    { 'See ~~https://x.y/a~~ now', 12, 'https://x.y/a' },
-    { '(see https://x.y/a).', 11, 'https://x.y/a' },
+    { 'See **https://x.y/docs** now', 14, 'https://x.y/docs' },
+    { 'See *https://x.y/docs* now', 13, 'https://x.y/docs' },
+    { 'See ~~https://x.y/a~~ now', 14, 'https://x.y/a' },
+    { '(see https://x.y/a).', 13, 'https://x.y/a' },
   },
 })
 

@@ -31,6 +31,16 @@ local STATUS_COLUMN = CLOCK_TIME_LENGTH + 1
 --- `'ambiwidth'` and `setcellwidths()` say.
 local DETAILS_INDENT = (' '):rep(STATUS_COLUMN)
 
+--- What each line of a report's details shows after `DETAILS_INDENT`, so that
+--- it reads as an item of a list.
+local ITEM_MARKER = '- '
+
+--- A Vim pattern (`'formatlistpat'`) matching the start of each line of a
+--- rendering that a wrapped line continues after: a header's `HH:MM `, so
+--- that it continues under the `[status]`, and a details line's
+--- `DETAILS_INDENT` and `ITEM_MARKER`, so that it continues under its text.
+M.CONTINUATION_PATTERN = [[^\(\d\d:\d\d \|]] .. DETAILS_INDENT .. ITEM_MARKER .. [[\)]]
+
 --- `text` on one line: each newline in it becomes a space.
 ---
 ---@param text string
@@ -48,6 +58,47 @@ local function details_lines(details)
     return {}
   end
   return vim.split(details, '\n', { plain = true })
+end
+
+--- The marks a details line may start with to be an item of a list, as
+--- Markdown writes them, each then followed by a space.
+local OWN_ITEM_MARKERS = { '-', '*', '+', '•' }
+
+--- The text of the details line `line` as an item: `line` without the mark
+--- of `OWN_ITEM_MARKERS` it starts with and the one space after it, or the
+--- white space after a mark that stands alone; any other `line` as it is,
+--- white space before a mark included.
+---
+---@param line string a line of a report's details
+---@return string
+local function item_text(line)
+  for _, marker in ipairs(OWN_ITEM_MARKERS) do
+    if vim.startswith(line, marker) then
+      local rest = line:sub(#marker + 1)
+      if rest:match('^%s*$') then
+        return rest
+      end
+      if vim.startswith(rest, ' ') then
+        return rest:sub(2)
+      end
+    end
+  end
+  return line
+end
+
+--- How the details line `line` shows in the Report: as an item under the
+--- report's `[status]`, `DETAILS_INDENT` then `ITEM_MARKER` then its text
+--- (`item_text()`), so a line already written as an item shows one mark; or
+--- as an empty line when that text holds nothing but white space.
+---
+---@param line string a line of a report's details
+---@return string
+local function details_item(line)
+  local text = item_text(line)
+  if text:match('^%s*$') then
+    return ''
+  end
+  return DETAILS_INDENT .. ITEM_MARKER .. text
 end
 
 --- The colours of the header of a report of `status`, `HH:MM [status] …`:
@@ -165,11 +216,12 @@ local function path_colours(lines, web_links, names_file)
 end
 
 --- The lines a report shows: `HH:MM [status] task — summary`, then each line
---- of its details, indented to start under the `[status]` (`DETAILS_INDENT`).
---- A newline in the task or the summary becomes a space, so the header stays
---- one line. Its colours are `header_colours()`, then the web links of its
---- lines (`link_colours()`), then the paths in its lines that name a file
---- (`path_colours()`).
+--- of its details as an item starting under the `[status]`, or as an empty
+--- line (`details_item()`). A newline in the task or the summary becomes a
+--- space, so the header stays one line. A wrapped line continues where
+--- `M.CONTINUATION_PATTERN` says. Its colours are `header_colours()`, then
+--- the web links of its lines (`link_colours()`), then the paths in its lines
+--- that name a file (`path_colours()`).
 ---
 ---@param report { task: string, status: string, summary: string, details: string? } a valid report
 ---@param time string when the report arrived, as `YYYY-MM-DDTHH:MM:SS`
@@ -184,7 +236,7 @@ local function render_report(report, time, names_file)
   )
   local lines = { header }
   for _, line in ipairs(details_lines(report.details)) do
-    table.insert(lines, DETAILS_INDENT .. line)
+    table.insert(lines, details_item(line))
   end
   local web_links = link_colours(lines)
   local found = vim.list_extend(header_colours(report.status), web_links)
