@@ -59,6 +59,39 @@ function M.write_text(buffer, text)
   return written
 end
 
+--- The code of the error Neovim raises for a change of buffers or windows
+--- made from the command-line window (`:h E11`).
+local COMMAND_LINE_WINDOW_REFUSAL = 'E11:'
+
+--- Whether `failure`, an error a wipe raised, is Neovim refusing it only
+--- for now: while textlock holds, or from the command-line window.
+---
+---@param failure any
+---@return boolean
+local function is_refused_for_now(failure)
+  local message = tostring(failure)
+  return message:find(TEXTLOCK_REFUSAL, 1, true) ~= nil
+    or message:find(COMMAND_LINE_WINDOW_REFUSAL, 1, true) ~= nil
+end
+
+--- Wipes `buffer` out, when it exists still, and returns whether it is
+--- gone: it is not when Neovim refuses the wipe for now
+--- (`is_refused_for_now()`). Any other error the wipe raises is raised
+--- again.
+---
+---@param buffer integer
+---@return boolean wiped
+function M.wipe(buffer)
+  if not vim.api.nvim_buf_is_valid(buffer) then
+    return true
+  end
+  local wiped, failure = pcall(vim.api.nvim_buf_delete, buffer, { force = true })
+  if not wiped and not is_refused_for_now(failure) then
+    error(failure, 0)
+  end
+  return wiped
+end
+
 --- A new scratch buffer under `name` (`make_scratch()`), which any other
 --- buffer holding the name gives up first (`free_name()`), written by
 --- `fill(buffer)`. It is made a scratch buffer and filled again whenever

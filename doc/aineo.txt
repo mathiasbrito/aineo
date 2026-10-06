@@ -184,8 +184,10 @@ file, an amend, a reset, a checkout. One read of each window runs at a time,
 and the cursor stays on the line it was on while that line is listed. A
 diff already shown stays as it was until you press Enter on its line again.
 A list or a diff read while Neovim allows no change of text — an
-expression mapping waiting for a key, or a completion function still
-running — is shown once Neovim allows it again, with nothing told.
+expression mapping waiting for a key or in |input()|, or a completion
+function still running — is shown once Neovim allows it again, with nothing
+told, and so is a diff read while the command-line window is open, once it
+closes (but see |aineo-limits|).
 
 Until git has answered, each window says aineo is reading the repository.
 When Claude Code's working directory is in no repository, both windows say
@@ -839,5 +841,11 @@ The changes pane ~
   repository.
 - When the editor quits, aineo stops its watch, but a git it is running
   then runs to its end, outliving the editor.
+- A buffer named for a diff that aineo did not make, such as one a restored
+  session made under `aineo://diff/{path}`, cannot give up its name while
+  Neovim allows no change of text, or in the command-line window: when the
+  diff Enter read for that name arrives then, Neovim shows an error with a
+  stack trace, the diff is not shown, and aineo does not try again. Enter
+  on the line again shows it, the other buffer giving its name up.
 
  vim:tw=78:ts=8:ft=help:norl:
