@@ -426,6 +426,12 @@ statusline %f after the rename  aineo://claude [-]
 job still running  true
 cwd  <scratch>/.tests/w8
 
+Read again with the brief review (2026-10-06, finding 1.2): the `events` line holds two
+`TermRequest` events for three title sequences. The empty OSC 0 emptied `b:term_title` and fired
+none. The review measured it apart: an empty OSC 0 or OSC 2 fires no `TermRequest`, OSC 1 fires one
+and leaves `b:term_title` as it was, and a dictionary watcher on `b:term_title`
+(`dictwatcheradd()`) sees every change, the empty one included.
+
 P5 (T33): the OSC sequences in the recorded Claude Code bytes
 -------------------------------------------------------------
 
@@ -451,8 +457,11 @@ startup-2.1.281.bytes ['\x1b]0;✳ Claude Code\x07', '\x1b]9;4;0;\x07']
 synthetic-box-in-scrollback.bytes []
 synthetic-cursor-below-box.bytes []
 
-D6 (T33): Claude Code's documentation on a session's name, read 2026-10-06
---------------------------------------------------------------------------
+Docs (T33): Claude Code's documentation on a session's name, read 2026-10-06
+----------------------------------------------------------------------------
+
+(Labelled "D6" until the brief review of 2026-10-06, finding 1.7: the plan note's D6 is another
+row, the three columns' equal thirds. Renamed "Docs" in the evidence, the plan and the brief.)
 
 Read through a fetch of the pages as Markdown on 2026-10-06; quoted verbatim. Documentation, not a
 measurement: the version it describes is the documentation's current one, and what Claude Code
@@ -518,3 +527,16 @@ and a `--name` name each reach the terminal title (OSC 0 or 2) of Claude Code 2.
 terminal; what glyph or text precedes the name there (2.1.281's startup bytes hold OSC 0
 "✳ Claude Code", P5); whether the glyph changes during a turn; and what the title is after a
 `--resume` and after Claude Code exits.
+
+Added by the brief review, 2026-10-06 (finding 1.9), from the raw environment-variable page,
+https://code.claude.com/docs/en/env-vars.md, fetched 2026-10-06:
+
+  | `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` | Set to `1` to disable automatic terminal title updates
+  based on conversation context. This also skips the background small/fast-model request that
+  [generates a session title](/docs/en/sessions#name-your-sessions) |
+
+The brief review also re-read the quotes above against the raw `.md` pages (`cli-reference.md`,
+`sessions.md`): they match.
+
+The orchestrator's measurement of the real Claude Code 2.1.292 (T33-6, 2026-10-06) answers part of
+what is unmeasured above: t33-real-claude-title.txt in this folder.

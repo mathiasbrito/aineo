@@ -16,14 +16,32 @@ It rests on C14 and D24 (the Report line), C6 (the report format and rendering),
 
 ### The behaviour, as the user decided it
 
-The dispatch message says which options the user chose in `plan.md` › *Decisions for the user*. This brief is written with the recommended ones: **T34-1 (a), T34-2 (a), T34-3 (a)**. An answer that differs comes as a dated amendment below, before dispatch.
+The user answered on 2026-10-06: **T34-1 (a), T34-2 (a)**; T34-3 was dropped, since the user's own words decide it (*What was decided already*); T34-4, added by the brief review, is the orchestrator's assumption (*Amendment — 2026-10-06*, below). Where the brief review reworded a decision, the reworded part is the orchestrator's assumption, marked `A#` as in `plan.md` › *Assumptions to report to the user*.
 
-- **A wrapped first line continues under the `[`** of its `[status]`, screen column 7 (byte 6 after `HH:MM `), wherever the Report wraps it (T34-3 (a)). Today it continues at column 1.
-- **Every non-empty line of a report's details shows as a list item:** the six-space indent that puts it under the `[status]`, then `- `, then the line (T34-1 (a)). An empty details line stays empty. The header is never an item.
-- **A details line Claude already wrote as an item** — starting with `- `, `* ` or `• ` — shows aineo's `- ` in place of its own marker, so `- x` shows once (T34-2 (a)). Leading spaces before the marker, and a numbered `1. ` line, are kept as text after aineo's `- `.
+- **A wrapped first line continues under the `[`** of its `[status]`, screen column 7 (byte 6 after `HH:MM `), in a Report 28 columns wide or wider (the user's words). Today it continues at column 1.
+- **A narrow Report** (T34-4 (a), A11). Neovim's `'breakindentopt'` keeps its default `min:20` unless the value names `min:`, and `list:-1` gives way to it, keeping at least 20 columns of text. So below 28 columns a wrapped line continues further left (measured by the brief review, finding 2.1):
+
+  | Report width | header continues at | item continues at |
+  |---|---|---|
+  | 40, 30, 28 | 7 | 9 |
+  | 27 | 7 | 8 |
+  | 26 | 7 | 7 |
+  | 25 | 6 | 6 |
+  | 24 | 5 | 5 |
+  | 22 | 3 | 3 |
+  | 24, with `list:-1,min:0` | 7 | 9 |
+
+  With the file column open the three columns take a third each (D6), about 26 columns on an 80-column screen. aineo keeps Neovim's `min:20`, names no `min:`, and the help says that a Report narrower than about 28 columns continues a wrapped line further left, to keep 20 columns of text.
+- **Every non-empty line of a report's details shows as a list item:** the six-space indent that puts it under the `[status]`, then `- `, then the line (T34-1 (a)). The header is never an item. The rendered text of each edge (A9; brief review, finding 2.3):
+  - an empty details line renders as an empty line, `""`, with no indent — today it renders as six spaces, `DETAILS_INDENT .. line` (`render.lua:187`);
+  - a line of white space alone renders as `""` too;
+  - a trailing `\n` in the details (as `tests/test_entry_panes.lua:718` sends, `('a line of details\n'):rep(20)`) keeps its last, empty line, rendered `""`: `details_lines()` keeps empty lines (`render.lua:46–51`), and the line count stays as it is;
+  - the references line, `(D18, C12, #31)`, which the report instructions put last in `details` (`instructions.lua:60`), is an item like any other: `      - (D18, C12, #31)`.
+- **A details line Claude already wrote as an item** — whose first character is `-`, `*`, `+` or `•` followed by a space — shows aineo's `- ` in place of its own marker and that space, so `- x` shows once (T34-2 (a); the set, A10; brief review, finding 2.5). Leading spaces before the marker, and a numbered `1. ` line, are kept as text after aineo's `- `. A line holding only a marker — `-`, `- `, `*`, `+`, `•`, with or without white space after it — renders as an empty line, `""` (A10).
 - **A wrapped item continues under its text**, column 9, not under its dash.
 - **The links, paths and colours stay on what they mark.** A web link (T10) or a path (T17) in a details line is drawn on its own bytes after the `- `. A double-click and `gx` still open it, and the `[status]` and the time keep their colours (T18). The `- ` itself takes no colour.
 - **Only where 'wrap' holds.** The Report's window wraps as T16 left it (`'wrap'`, `'linebreak'`, `'breakindent'`, set by the layout). Where the user turns `'breakindent'` off, or the Report shows outside the layout with the user's own `'nowrap'`, lines continue as Neovim draws them. The help says so.
+- **The user's own `'showbreak'`** is left as it is. It moves where a wrapped line continues: with a global `'showbreak'` of `↪ `, the header continues at column 9 and an item at 11 (the brief review, finding 2.4). The help says so (A16).
 - **Kept records show the new way.** The rendering is made from the records each time the Report shows them, so reports kept from before show as items too. Nothing in the records file changes.
 
 ### Facts, checked against `origin/dev` `9b8707f`
@@ -56,8 +74,8 @@ The dispatch message says which options the user chose in `plan.md` › *Decisio
 ### The pins this packet moves
 
 On `9b8707f`, a details line is pinned as six spaces and its text, and a mark in it by its byte column. Each moves by the two bytes of `- `:
-- `tests/test_report_buffer.lua`: 17 lines of rendered details (`git grep -c -E "^[[:space:]]*'      [^ ]" origin/dev -- tests/test_report_buffer.lua` → 17), and the `EVERY_STATUS_FAULTS` check (line 227 on), which looks for "the details starting six cells in";
-- `tests/test_report_links.lua`: the rows of *a link in the details* (line 160 on), whose columns start at 6;
+- `tests/test_report_buffer.lua`: 18 lines of rendered details — the 17 a line-start grep finds (`git grep -c -E "^[[:space:]]*'      [^ ]" origin/dev -- tests/test_report_buffer.lua` → 17) and line 310's `{ '09:05 [progress] First — Began', '      One' }`, which that grep, anchored at the line's start, misses (brief review, finding 2.2) — and the `EVERY_STATUS_FAULTS` check (line 227 on), which looks for "the details starting six cells in";
+- `tests/test_report_links.lua`: the rows of *a link in the details* (line 160 on), whose columns start at 6; and the `gx` rows `{ details, column, url }` at lines 406–418, whose columns 6, 12, 11, 12 and 11 are bytes into a details line where each link starts today. Each moves by 2: with `- ` added, `gx` from byte 6 opens `-` (brief review, finding 2.2, measured);
 - `tests/test_report_paths.lua`: every details path's columns, such as `{ 1, 10, 19 }`, and the bytes `double_click_in_report()` is given for a details line (for example `input_cell_where_the_report_draws_a_path()`, line 859, "byte 12 of its second line");
 - `tests/test_mcp_delivery.lua` lines 249–250: two rendered details lines.
 
@@ -93,7 +111,7 @@ Read first:
 - **Model:** `opus`.
 - **Resources:** `impl_t34_report_layout` — pass it to `.claude/scripts/prepare-worktree.sh`.
 - **You may touch:**
-  - `lua/aineo/report/render.lua` and `lua/aineo/report/buffer.lua`; `lua/aineo/report/instructions.lua` only under an amendment for T34-2 (c);
+  - `lua/aineo/report/render.lua` and `lua/aineo/report/buffer.lua`. Not `lua/aineo/report/instructions.lua`: the user answered T34-2 (a);
   - `tests/test_report_buffer.lua`, `tests/test_report_links.lua`, `tests/test_report_paths.lua`, `tests/test_report_colours.lua`, `tests/test_report.lua`, `tests/test_mcp_delivery.lua` (its two rendered lines only), and a new `tests/test_report_layout.lua` if you prefer the wrapping cases in a file of their own;
   - `doc/aineo.txt`, inside your sections only (below);
   - your session note.
@@ -104,33 +122,37 @@ Read first:
   - `.claude/`, `.githooks/`, `CLAUDE.md`, `.worktreeinclude`, `.gitignore`.
 - **A document shared under rule 2's section exception:** `doc/aineo.txt`.
   - Yours are *aineo-report*, from `8. THE AGENT REPORT` to `the working directory of its own moment.`, and *aineo-layout*'s paragraph from `The Report and Input wrap long lines between words, a wrapped line keeping` to `windows, keep yours.`. Every hunk stays inside them.
-  - T32 owns *aineo-changes* (`The changes pane ~` … `windows say so until the pane is shown again, which starts it again.`). T33 owns *aineo-claude-session* (`Claude's session ~` … `same session.`).
-  - Before you push, merge your copy with each of their branches that exists (`git merge-tree --write-tree <your head> origin/bugfix/t32-changes-colours`, and the same for `origin/bugfix/t33-claude-window-name`). Run `make test_file FILE=tests/test_doc.lua` on each merged tree, and report both results.
-- **Session note:** `knowledge-vault/Sessions/2026-10-06 — T34 Report layout.md`, with a `## Task lines` section.
+  - T32 owns *aineo-changes* (the first `The changes pane ~` … `windows say so until the pane is shown again, which starts it again.`). T33 owns *aineo-claude-session* (`Claude's session ~` … `same session.`) and a new *aineo-limits* subsection, `Claude's window name ~`, at the end of *aineo-limits*.
+  - Before you push, merge your copy with each of their branches that exists (`git merge-tree --write-tree <your head> origin/bugfix/t32-changes-colours`, and the same for `origin/feature/t33-claude-window-name`). Run `make test_file FILE=tests/test_doc.lua` on each merged tree, and report both results.
+- **Session note:** `knowledge-vault/Sessions/<dispatch date> — T34 Report layout.md`, where `<dispatch date>` is the date the dispatch message gives, `YYYY-MM-DD`. Give it a `## Task lines` section.
 - **Scratch prefix:** `t34-`.
 - **How the suite runs (D30, D29):**
   - Neovim 0.12.5, the newest release, only. Never run the real `claude`.
   - While you work, and before every push, run the test files you touch and the eight files of the baseline table. **No whole suite before a push**: D30, for this small fix. Say in your report and pull request that it did not run.
+  - **D30 (the plan note, PR #123) relaxes `.claude/agents/implementer.md`'s whole-suite line (line 56) and the root `CLAUDE.md`'s D26 paragraph for this packet; they predate it** (brief review, finding 4.1). The `ai/` pull request `ai/d30-small-fix-suite` writes D30 into both; until it merges, this line is your authority.
   - Run each mutant on those files.
   - Stop what you start, by pid.
 
 ## The tests
 
-Each behaviour gets one test, seen failing first. Measure the wrapping on screen, as P1 does: `screenpos()` of a line's bytes in a narrow window.
+Each behaviour gets one test, seen failing first. Measure the wrapping on screen, as P1 does: `screenpos()` of a line's bytes in a narrow window, **28 columns wide or wider** unless the test is about a narrower Report (A11).
 - A wrapped header continues under the `[`, and under the `[` with `'number'` on.
 - A details line shows as `      - text`, and wrapped continues under its text.
-- An empty details line stays empty.
-- A line written `- x`, `* x` or `• x` shows `      - x`.
+- In a Report 24 columns wide, a wrapped item continues where Neovim's `min:20` puts it, column 5, as the help says (A11).
+- An empty details line, and one of white space alone, render as `""`; a trailing `\n` keeps its last line, rendered `""` (A9).
+- The references line renders as an item, `      - (D18, C12, #31)` (A9).
+- A line written `- x`, `* x`, `+ x` or `• x` shows `      - x`; a line holding only a marker renders as `""` (A10).
 - The option holds in a window split from the Report's, and not in another buffer shown later in the Report's window, nor in Input's.
 - It holds again for a Report made anew after a wipe, and after `:edit` in the Report.
 - A link and a path in a details line are drawn on their own bytes after `- `, and a double-click on the path still opens it.
 
-The verification will run the plan's six mutants for T34 (`plan.md` › *Verification mutants*). Name in your report the test that kills each.
+The verification will run the plan's mutants for T34 (`plan.md` › *Verification mutants*, 1–8). Name in your report the test that kills each.
 
 ## What was decided already
 
 - The user called it a small fix, 2026-10-06.
-- T34-1 to T34-3 as the user answers them (`plan.md`); this brief carries the recommended options until an amendment says otherwise.
+- T34-1 and T34-2, the user's answers of 2026-10-06, both (a); the assumptions A9–A11 and A16 are the orchestrator's (*Amendment — 2026-10-06*).
+- **Where a wrapped first line continues is the user's own:** "ideally it should resume below the opening brace [". T34-3, which put it to the user again, was dropped by the brief review: its (b) contradicts the user's words.
 - That a wrapped item continues under its text is the orchestrator's instruction, not put to the user.
 - That the `- ` stays inside C14's "details indented under the `[status]`" is the orchestrator's reading: the item starts under the `[`. No D# or C# row changes.
 - D30: no whole suite before a push for a small fix in this wave.
@@ -142,3 +164,26 @@ Small: two files of the report home, two window and buffer options, the `- ` and
 ## Report
 
 In your definition's shape, to `<scratchpad>/t34-report-packet.md`. Open the pull request into `dev` before you report. Put in its body every verification claim a reviewer can re-measure, the test files that ran, and each pin you moved.
+
+## Amendment — 2026-10-06: the user's answers and the orchestrator's assumptions
+
+The orchestrator put the plan's fourteen decisions to the user on 2026-10-06, each with its options and a recommendation. The user's answer, verbatim: "all recommended". So T34-1, T34-2 and T34-3 are each (a). Then, verbatim: "ok, after it finishes implement wave 8, assume your recommendations and report what they were after you finish so I can check. Go ahead and implement it until the end, I will evaluate only at the end." Every decision the brief review reworded or added therefore takes the review's recommended option as **the orchestrator's assumption under the user's instruction of 2026-10-06**, never as the user's answer. Build them so:
+
+- **T34-1 — (a)**, the user's. Every non-empty details line is an item. *The orchestrator's assumption (A9):* an empty line and a line of white space alone render as `""`; a trailing `\n` keeps its last line, rendered `""`; the references line is an item.
+- **T34-2 — (a)**, the user's. Claude's own marker gives way to aineo's `- `. *The orchestrator's assumption (A10):* the markers are `-`, `*`, `+` and `•`, each followed by a space, at the line's start; a line holding only a marker renders as `""`.
+- **T34-3 — dropped** by the brief review (its verdict per decision: "T34-3 — drop"): the user's own words decide it, "ideally it should resume below the opening brace [". The user's "all recommended" named (a), the same. It stands in *What was decided already* as the user's.
+- **T34-4 — (a)**, added by the brief review (finding 2.1) and not put to the user: *the orchestrator's assumption (A11).* Neovim's `min:20` is kept; the help says a Report narrower than about 28 columns continues a wrapped line further left; the tests' windows are 28 columns or wider unless they test this. Its alternative, (b), a lower `min:` in `'breakindentopt'`, keeps a wrapped line's place at any width (measured at 24 columns with `min:0`: 7 and 9).
+- **The user's `'showbreak'`** is left as it is, and the help says it moves the continuation: *the orchestrator's assumption (A16).*
+
+**The brief review's corrections** (`brief-review.md`, sections 2 and 4) are made in the body above, each as the review words it:
+- 2.1, the narrow Report: the measured table, T34-4, and the tests' width;
+- 2.2, the `gx` rows of `tests/test_report_links.lua` (lines 406–418) and `tests/test_report_buffer.lua:310` added to *The pins this packet moves*;
+- 2.3, the empty line's rendered text, a line of white space, a trailing `\n` and the references line;
+- 2.4, the user's `'showbreak'`, in the help;
+- 2.5, the marker set, `+ ` added, and the marker-only line;
+- 4.1, D30 relaxing `implementer.md`'s whole-suite line and the root `CLAUDE.md`'s D26 paragraph for this packet, said outright;
+- 4.2, the session note named for the dispatch date.
+
+T33's branch is `feature/t33-claude-window-name` (T33-5 (a)), which the merge check above names.
+
+**Verification mutants** for these answers and assumptions are in `plan.md` › *Verification mutants*, T34 7 and 8.

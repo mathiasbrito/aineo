@@ -1,0 +1,78 @@
+T33-6: the real Claude Code's terminal title, measured by the orchestrator, 2026-10-06
+=====================================================================================
+
+The measurement's README and its three outputs, copied as they were written but for the home
+directory, written `~/` here. The probe (not copied) ran Claude Code in a Neovim terminal buffer
+with `jobstart(…, { term = true })`, polled `b:term_title` every 50 ms, and logged every OSC
+`TermRequest`. The real `claude` ran here once per output, with the user's leave; no suite runs it.
+
+
+README.txt
+----------
+
+T33-6, the orchestrator's measurement of the real Claude Code's terminal title, run with the user's leave
+(wave 8 decision T33-6 (a), "all recommended", 2026-10-06).
+
+- Claude Code 2.1.292, started with no prompt in an already-trusted folder (the aineo checkout), so no
+  trust dialog came up. It was given nothing, stopped by two Ctrl-C, and exited 0.
+- Neovim 0.12.5, `nvim --clean --headless -l probe.lua`. The probe polls `b:term_title` every 50 ms and
+  logs every OSC `TermRequest`.
+- Three runs: out-plain.txt (no arguments), out-named.txt (`--name aineo-title-probe`) and
+  out-disabled.txt (`CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1`).
+
+Findings:
+- The title is set by OSC 0 about 0.9 s after start: "✳ Claude Code" with no name, "✳ <name>" with
+  `--name`. The leading glyph is "✳" followed by a space.
+- At exit the title is cleared: `b:term_title` reads "" afterwards.
+- With CLAUDE_CODE_DISABLE_TERMINAL_TITLE set, see out-disabled.txt.
+- Not measured: a title Claude Code generates during a turn, after `/rename`, after `--resume`, or the
+  glyph while Claude is busy. Each needs a prompt to the real model, which this measurement does not send.
+
+
+out-plain.txt (no arguments)
+----------------------------
+
+    4 ms  started pid 91880 args
+    4 ms  b:term_title -> "term://~/Development/Personal/aineo//91880:~/.local/bin/claude"
+  884 ms  b:term_title -> "✳ Claude Code"
+  884 ms  TermRequest "\27]0;✳ Claude Code"
+ 9050 ms  title after 9 s: "✳ Claude Code"
+ 9050 ms  screen has trust dialog: false
+10677 ms  exit after Ctrl-C x2: 0
+10978 ms  title at end: ""
+
+
+out-named.txt (`--name aineo-title-probe`)
+------------------------------------------
+
+    3 ms  started pid 92049 args --name aineo-title-probe
+    3 ms  b:term_title -> "term://~/Development/Personal/aineo//92049:~/.local/bin/claude"
+  889 ms  b:term_title -> "✳ aineo-title-probe"
+  889 ms  TermRequest "\27]0;✳ aineo-title-probe"
+ 9048 ms  title after 9 s: "✳ aineo-title-probe"
+ 9048 ms  screen has trust dialog: false
+10687 ms  exit after Ctrl-C x2: 0
+10989 ms  title at end: ""
+
+
+out-disabled.txt (`CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1`)
+--------------------------------------------------------
+
+    3 ms  started pid 92314 args
+    3 ms  b:term_title -> "term://~/Development/Personal/aineo//92314:~/.local/bin/claude"
+ 9055 ms  title after 9 s: "term://~/Development/Personal/aineo//92314:~/.local/bin/claude"
+ 9055 ms  screen has trust dialog: false
+10946 ms  exit after Ctrl-C x2: 0
+11248 ms  title at end: "term://~/Development/Personal/aineo//92314:~/.local/bin/claude"
+
+
+What it shows, for T33
+----------------------
+
+- With no name, the title is "✳ Claude Code"; with `--name <name>`, "✳ <name>". The glyph "✳" and
+  one space precede the name.
+- The title is cleared at exit: an empty title, which fires no `TermRequest` (none is logged at
+  exit), so the clear is seen only as a change of `b:term_title`.
+- With `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` set, Claude Code sets no title at all: `b:term_title`
+  holds the terminal buffer's own `term://` name from start to exit.
+- Not measured: a generated title, `/rename`, `--resume`, and the glyph during a turn.
