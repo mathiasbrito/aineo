@@ -557,12 +557,19 @@ the same paste and Enter, and removes it from Input; the rest of Input
 stays. What leaves Input is what Vim's own `"_d` removes, and the message is
 exactly that text: each line's part of the selection, joined by line feeds.
 A line of a block too short to reach the block gives an empty line, with no
-spaces for padding; a block with `$` takes each line to its own end; a tab
-or a double-width character a block cuts is removed and sent whole, and
-spaces take the place of its part outside the block; a selection past the
-end of a line takes its line break, which joins the lines, and sends it.
-No register is written, and the cursor stays where `"_d` leaves it, in
-Normal mode.
+spaces for padding; a block with `$` takes each line to its own end; a tab,
+a double-width character, or an emoji drawn as one with its modifiers, that
+a block cuts is removed and sent whole, and spaces take the place of its
+part outside the block. A characterwise selection that takes in the end of
+a line (`v$`) takes its line break too, which joins the lines, and sends it
+— but not on Input's last line, which has none, nor under 'virtualedit',
+where a selection past the end of a line takes no line break and sends no
+spaces. A linewise selection is sent as its lines, joined by line feeds,
+with none after the last, as a Send of Input is. With 'selection' set to
+`old`, a characterwise selection that ends on an empty line ends, as Vim's
+`d` ends it, on the line above, or takes whole lines, line breaks and all,
+when it starts in a line's indent. No register is written, and the cursor
+stays where `"_d` leaves it, in Normal mode.
 
 Outside Input, `\s` in Visual mode sends and removes nothing, and tells you
 once that Visual Send works in Input.
@@ -867,11 +874,17 @@ Undo after a Send ~
   the write to its terminal then fails, and Send puts Input back as it was
   and shows the error. Emptying Input and putting it back are then one
   undo step: the first `u` changes nothing you can see, and the second
-  undoes your own last change. A Visual Send does the same.
+  undoes your own last change. A Visual Send does the same, and `gv` then
+  selects the text again.
 - 'undolevels' decides how many Sends `u` can reach. At 0, `u` toggles the
   last Send alone: after two Sends, `u` brings back the second's text, a
   second `u` empties Input again, and the first's text never comes back. At
-  -1, `u` brings nothing back.
+  -1, `u` brings nothing back. The same holds for a Visual Send.
+
+Repeating a Visual Send ~
+A Visual Send removes the selection with Vim's own `"_d`, so `.` after it
+repeats that removal: it removes as much text again, at the cursor, and
+sends nothing. `u` brings it back.
 
 The changes pane ~
 - A large diff: a diff shows at most 1 MiB of what git gave, cut at the
