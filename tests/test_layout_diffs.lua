@@ -79,9 +79,11 @@ T['a diff']['opening a file column gives the columns a third each, as a file doe
 end
 
 T['a diff']['keeps the user’s window options in its window'] = function()
-  local buffers = layout.open_with_stand_ins(child)
+  layout.start(child)
+  child.lua('vim.o.list = true; vim.o.number = true')
+  local buffers = layout.stand_ins(child)
+  layout.open(child, layout.arrangement(buffers))
   layout.enter_window_showing(child, buffers.report)
-  local user = child.lua_get('{ wrap = vim.go.wrap, list = vim.go.list, number = vim.go.number }')
 
   local window = show_diff(diff_buffer('aineo://diff/first.txt'))
 
@@ -90,7 +92,7 @@ T['a diff']['keeps the user’s window options in its window'] = function()
       '{ wrap = vim.wo[...].wrap, list = vim.wo[...].list, number = vim.wo[...].number }',
       { window }
     ),
-    user
+    { wrap = true, list = true, number = true }
   )
 end
 
