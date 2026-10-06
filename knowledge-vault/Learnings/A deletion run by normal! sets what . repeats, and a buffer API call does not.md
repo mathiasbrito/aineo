@@ -6,7 +6,7 @@
 
 ## The insight
 
-A mapping whose callback changes the buffer with `vim.cmd.normal({ args = { '"_d' }, bang = true })` leaves that deletion as what `.` repeats. The user's next `.` then deletes as much text again at the cursor, through whatever else the mapping did not repeat — a send, a log, a notification. A change made through `nvim_buf_set_lines()` or `nvim_buf_set_text()` leaves `.` repeating the user's own last change. Which one a mapping uses decides what `.` does after it.
+A mapping whose callback changes the buffer with `vim.cmd.normal({ args = { '"_d' }, bang = true })` leaves that deletion as what `.` repeats. The user's next `.` then deletes as much text again at the cursor, without whatever else the mapping did — a send, a log, a notification. A change made through `nvim_buf_set_lines()` or `nvim_buf_set_text()` leaves `.` repeating the user's own last change. Which one a mapping uses decides what `.` does after it.
 
 Measured on Neovim 0.12.5, macOS (`Implementation/Waves/00007-panes/evidence/t26-close-probes.txt`, section 4): on `alpha beta gamma delta`, `:normal! 0wve"_d` then `.` leaves `alpha ma delta`, the `.` removing ` gam`, four characters at the cursor; after `0x` and an `nvim_buf_set_text()` that removes a word, `.` repeats the `x`.
 

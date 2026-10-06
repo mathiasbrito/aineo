@@ -1,7 +1,7 @@
 # Wave 7 retrospective
 
 **Author:** Mathias Santos de Brito, with Claude — the orchestrator (Opus 5.5, session `938616f1`)
-**Branch:** begun on `knowledge/w7-t23-landed`, T23's knowledge pass; extended on `knowledge/w6-t12-t22-landed` and `knowledge/w6-close`; completed on `knowledge/w7-t26-close`, T26's knowledge pass, which closes the wave. The knowledge passes of T24 (PR #107), T30 (PR #111) and T25 (PR #114) did not extend this note, as orchestrate §3 asks of a rolling wave; this close covers them from the wave plan's *Landed* and the orchestrator's ledger.
+**Branch:** begun on `knowledge/w7-t23-landed`, T23's knowledge pass; extended on `knowledge/w6-t12-t22-landed` and `knowledge/w6-close`; extended on `knowledge/w7-t26-close`, T26's knowledge pass, over every packet; the pass that lands the wave, once the user closes it, completes it. The knowledge passes of T24 (PR #107), T30 (PR #111) and T25 (PR #114) did not extend this note, as orchestrate §3 asks of a rolling wave; this pass covers them from the wave plan's *Landed* and the orchestrator's ledger.
 
 ## Links
 
@@ -25,7 +25,7 @@ Wave 7 builds what v1's plan still lacked: the right column's two panes (D18, D2
 
 T23 opened it beside wave 6's open packets, since all its files were new. Later that evening the user paused the wave: "we will not continue towards wave 7, finish the current work and wait my go to start wave 7". T23, already in its fix round, was finished.
 
-The wave resumed on 2026-10-05, once wave 6 had closed; that the user's "go ahead" of that day was the go is the orchestrator's reading (the plan's *Landed*). T30, dropping Neovim 0.11 (D29), joined the wave the same day. T24, T30, T25 and T26 then ran one after another, since each shared `plugin/aineo.lua` or the help with the next. The last, T26, merged on 2026-10-06. With it every task row of v1's plan is built, which is what the user asked for on 2026-09-26: "move on with the implementation until you have all the functionalities implemented, I will then review the first MVP." The wave closes here, at the orchestrator's instruction to this pass; orchestrate §3 leaves a rolling wave's close to the user, whose word is not in the record.
+The wave resumed on 2026-10-05, once wave 6 had closed; that the user's "go ahead" of that day was the go is the orchestrator's reading (the plan's *Landed*). T30, dropping Neovim 0.11 (D29), joined the wave the same day. T24, T30, T25 and T26 then ran one after another, since each shared `plugin/aineo.lua` or the help with the next. The last, T26, merged on 2026-10-06. With it every task row of v1's plan is built, which is what the user asked for on 2026-09-23 (23:41 CEST): "move on with the implementation until you have all the functionalities implemented, I will then review the first MVP." Every packet has landed. Asked on 2026-10-06 whether to close the wave, the user answered "Keep it open": it stays claimed until the post-merge re-check of T26 is back, so that a follow-up can land inside wave 7 (orchestrate §3 leaves the close to the user).
 
 ## What was done
 
@@ -71,14 +71,14 @@ The wave resumed on 2026-10-05, once wave 6 had closed; that the user's "go ahea
 | 10-06 08:20 | PR #112 merged after the orchestrator's verification (1718 cases); `v0.2.12` released at 08:21 (PR #113); T26 dispatched |
 | 10-06 10:00 | The host slept: T26's first agent and the records review of #114 stalled, and were resumed by message (the ledger's time) |
 | 10-06 10:26 | T25's knowledge pass merged (PR #114) |
-| 10-06 10:39 | The user restarted Neovim; the first T26 agent could not be resumed. On the user's "go, do it" the orchestrator pushed its three commits and dispatched a second agent |
+| 10-06 10:39 | After the user restarted Neovim, the first T26 agent could not be resumed; on the user's "go, do it" the orchestrator pushed its three commits (GitHub's time) and dispatched a second agent |
 | 10-06 10:55 | `ed50a1a` pushed without the whole suite (*Deviations*) |
 | 10-06 11:52 | T26 in: PR #115, 1770 cases. Three reviews; the user's two decisions; the fix round to a fresh agent |
 | 10-06 13:16 | The idea of a changes pane that follows the agents' worktrees recorded at the user's request (PR #116) |
 | 10-06 | The fix round in (1792 cases), unpushed: github.com did not resolve on the host. The orchestrator's verification ran on the local head; its first run was invalid |
 | 10-06 15:41 | The network back: the round pushed, PR #115 merged |
 | 10-06 15:42 | `v0.2.13` released (PR #117) |
-| 10-06 | This knowledge pass, which closes the wave |
+| 10-06 | This knowledge pass (PR #118); the re-measure of #115's fix round dispatched after the merge; the user, asked whether to close the wave, answered "Keep it open" |
 
 **Findings, per review** (the verdicts are the reviewers'; the plan's *Landed* lists each finding):
 
@@ -118,7 +118,7 @@ The wave resumed on 2026-10-05, once wave 6 had closed; that the user's "go ahea
 - #105 (T24, regular): the packet, 1535; a fix round by a fresh agent (429 K), 1574; a re-measure with the attack question; a second fix round, a small fix, 1595; a guarantee review; a bounded correction, 1599.
 - #108 (T30, regular): the packet, 1596; a fix round by a fresh agent, 1602; a guarantee review.
 - #112 (T25, regular): the packet, 1676; a fix round by a fresh agent (642 K), 1701; a re-measure with the attack question; a second fix round, a small fix, 1712; a guarantee review; a bounded correction, 1718.
-- #115 (T26, regular): the packet by two agents, 1770; a fix round by a fresh agent, 1792; no re-measure (*Deviations*).
+- #115 (T26, regular): the packet by two agents, 1770; a fix round by a fresh agent, 1792; no re-measure before the merge; one dispatched after it, pending (*Deviations*).
 
 ### What the reviews found across the wave
 
@@ -127,7 +127,7 @@ The wave resumed on 2026-10-05, once wave 6 had closed; that the user's "go ahea
 - **A mutant the plan names, with a case that cannot kill it** — twice: T25's K19, killed on the commits window and not, as written, on the files window; T26's S8, which no own-mapping case can kill. Both are recorded in the plan's *Landed* as dispatched records found false.
 - **Tests that pass for the wrong reason**: T24's ten-switch case was green on `dev`; T25's K2 kill was a race decided by git's start; T26's register case passed with no Send at all, and its VS-A rows read no error.
 - **The records were the weakest part of every packet**: code written before its failing case and reported as red-first (T24, T25), red counts that mixed moved pins with reds that drove code (T26), killers named that did not kill (T23, T26), and attributions — who pushed, who decided, what the user was told — wrong in the packet's own note (T23's pass, T24's pass, T26).
-- **The re-measure found more each time it ran**: seven findings after T23's round, eight after T24's, nine after T25's. T26's round had none.
+- **The re-measure found more each time it ran**: seven findings after T23's round, eight after T24's, nine after T25's. T26's round had none before its merge; the one dispatched after it is pending.
 
 ### Interruptions
 
@@ -187,14 +187,14 @@ No figure is in the record for: the records review of #105, T24's bounded correc
 - **The test-integrity review's 0.11.6 set was invalid** at first, from the same `VIMRUNTIME` leak as the fix round's.
 - **The orchestrator's verification left out one of the plan's twelve mutants,** W8; the re-measure had killed it. It also missed a covering file for M2: its list gave `test_git_lock.lua`, but the correction pinned M2 in `test_git_process.lua`. M2 was killed by assertion in the whole suite instead.
 - **T23 landed with the wave paused.** The user's instruction came while its fix round ran. The orchestrator read "finish the current work" as including T23, said so to the user, and started nothing else of wave 7.
-- **This note was not extended after T24, T30 and T25,** as orchestrate §3 asks of a rolling wave after each merge; this close does it from the plan's *Landed* and the ledger.
+- **This note was not extended after T24, T30 and T25,** as orchestrate §3 asks of a rolling wave after each merge; this pass does it from the plan's *Landed* and the ledger.
 - **T24 and T25: code written before its failing case**, reported as red-first: four pieces in T24 (its records review), 13 in T25, where the note had said 9 (the records review of #112). T25's eleven rewritten pins of `tests/test_entry_panes.lua` were never red in their new form.
 - **T25's session note is dated 2026-10-05,** the day of dispatch, where the plan and the brief named 2026-10-06 (the plan's *Landed*).
-- **T26: the orchestrator pushed the first agent's three commits** on the user's "go, do it", with no whole-suite run on `55e37d7` — against D26, the user's rule that the whole suite runs before each push of a code packet.
+- **T26: the orchestrator pushed the first agent's three commits** on the user's "go, do it", with no whole-suite run on `55e37d7` — against D26, the user's rule that the whole suite runs before each push of a code packet. The orchestrator told the user on 2026-10-06, in the same message as the dispatch's error (below).
 - **T26: the second agent's dispatch allowed a push at a green point without the whole suite,** against D26; `ed50a1a` was pushed so, its message citing D26 for it. The orchestrator recorded it as its own error and told the user on 2026-10-06; the fix round's dispatch restated the rule.
-- **T26: no re-measure of #115's fix round.** The round changed production code and replaced mechanisms — the read's character end, `'selection'` old's region, the put-back of `'<` and `'>` — for which orchestrate §6 dispatches a re-measure with the attack question. The orchestrator verified the head itself, with the plan's 20 mutants and the reviews' and the round's 20, and merged.
+- **T26: no re-measure of #115's fix round.** The round changed production code and replaced mechanisms — the read's character end, `'selection'` old's region, the put-back of `'<` and `'>` — for which orchestrate §6 dispatches a re-measure with the attack question. The orchestrator verified the head itself, with the plan's 20 mutants and 19 of the reviews' and the round's (S10 run twice), and merged. The orchestrator dispatched the re-measure after the merge and the release, on 2026-10-06, and the wave stays open until it is back.
 - **T26: the orchestrator's first verification was invalid**, run with no suite dependency while github.com did not resolve, and its script dropped the second edit of S16, S17 and S20; both are recorded with the verification in the plan's *Landed*.
-- **The wave closes without the user's word,** at the orchestrator's instruction to this pass (*Context*).
+- **The orchestrator's instruction to this pass was to close the wave,** although orchestrate §3 leaves a rolling wave's close to the user. Asked on 2026-10-06, the user kept it open (*Context*); the plan stays `claimed`.
 
 ## Decisions & reasoning
 
@@ -209,12 +209,13 @@ No figure is in the record for: the records review of #105, T24's bounded correc
 
 ## Open threads
 
+- **Wave 7 stays open** at the user's word (2026-10-06) until the post-merge re-check of T26 is back; a finding becomes a follow-up packet inside the wave, and the user then closes it.
 - ~~**T24–T26** wait for the user's go. D20's four clauses are to be settled before T26's dispatch or at the MVP review.~~ — the user gave the go on 2026-10-05 and answered D20's clauses the same day; T24, T25 and T26 landed.
 - ~~**The copied kind** (MR188): T25, or the user, decides whether a copy should show as copied.~~ — T25 shows a copy as added (MR254); MR188 stays open for the user at the MVP review.
 - **Linux** was not run (MR192); the changes pane is tested on macOS only (MR272).
 - **A descendant of git outside its group** holds the answer back past the limit (MR196).
 - **The MVP review is the user's**: every task row of v1's plan is built and released in `v0.2.13`. The open MR rows, by packet, are in the project note's *Decisions awaiting the user*.
-- **T26's open threads**: what Claude Code makes of a message ending in a line feed (MR290); `tests/test_send_selection.lua`'s 74 s; `VISUAL_ACTIONS` read with `pairs()`; the attack review's A7; D2's second half; the Visual read unattacked after its fix round — each in the project note's *Open threads*.
+- **T26's open threads**: what Claude Code makes of a message ending in a line feed (MR290); `tests/test_send_selection.lua`'s 74 s; `VISUAL_ACTIONS` read with `pairs()`; the attack review's A7; D2's second half; the Visual read unattacked after its fix round; the empty-selection check joining the parts unlike the message (MR277), for T26's re-check to judge — each in the project note's *Open threads*.
 - **The T26 fix round's worktree** is still checked out and locked under the orchestrator's session (the project note); the wave's cleanup removes it.
 - **After the MVP review:** the user's idea of a changes pane that follows the agents' worktrees ([[Ideas/The changes pane follows the agents' worktrees]]).
 
@@ -232,4 +233,4 @@ No figure is in the record for: the records review of #105, T24's bounded correc
 - T25, PR #112: `791b7f1` … `893a427` (22 commits) — [[Sessions/2026-10-05 — T25 Changes pane]]; `v0.2.12`, PR #113, `main` at `b6a6929`; its knowledge pass, PR #114: `4f80458`, `28189e3`.
 - The idea note, PR #116: `f1eca74`.
 - T26, PR #115: `51da4bb` … `3b5f0f7` (10 commits) — [[Sessions/2026-10-06 — T26 Visual Send]]; `v0.2.13`, PR #117, `main` at `1cb649d`.
-- This knowledge pass, which closes the wave: recorded after its merge by the next one.
+- This knowledge pass, PR #118: recorded after its merge by the next one.

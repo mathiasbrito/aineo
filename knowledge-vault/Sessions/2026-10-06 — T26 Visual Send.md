@@ -230,7 +230,7 @@ The wave holds its marks (rule 6). The line T26 would take:
 
 ## Limits
 
-- What Claude Code makes of a message ending in a line feed (a charwise selection past its last line's end) was not measured; no other Send ends in one.
+- What Claude Code makes of a message ending in a line feed (a charwise selection past its last line's end) was not measured; no other Send ends in one. *(corrected 2026-10-06: other Sends end in one too — a Visual Send of lines whose last is empty or removed linewise under `'selection'` `old`, and a whole-Input Send whose Input ends in an empty line; see MR290 in [[Review/2026-09-24 — v1 MVP readings review]], PR #118's records review)*
 - `tests/test_send_selection.lua` takes 74 s on 0.12.5 for 52 cases (it took 88 s for 33 before the fix round ended its fake by a hangup), since each case starts the fake Claude Code and waits 1.5 s for it to be ready.
 
 ## Open threads

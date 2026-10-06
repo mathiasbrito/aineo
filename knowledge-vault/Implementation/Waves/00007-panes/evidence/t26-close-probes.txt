@@ -6,6 +6,11 @@ as `nvim --clean --headless -l probe.lua` in an empty scratch directory.
 Each fact was first found by a review of PR #115 (T26); the review is named
 beside each section. Byte positions are 1-based.
 
+Sections 2b and 6 were added on 2026-10-06 by the correction of PR #118,
+after its records review (findings 6 and 7), and the whole script was run
+again then, the same way, on Neovim 0.12.5: sections 1-5 printed what they
+had printed before.
+
 The script
 ----------
 
@@ -25,6 +30,15 @@ vim.cmd('normal! gg0l\22jj')
 local regions = vim.fn.getregionpos(vim.fn.getpos('v'), vim.fn.getpos('.'), { type = '\22' })
 show('getregionpos line 2', regions[2])
 vim.cmd('normal! \27')
+
+-- 2b. which end getregionpos gives as the first byte (PR #118's records review, finding 6)
+for _, keys in ipairs({ 'gg0l\22jj', 'gg0\22ljj', 'gg0ll\22ljj', 'gg0ll\22jj' }) do
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'abcdef', 'a👍🏽b', 'abcdef' })
+  vim.cmd('normal! ' .. keys)
+  local rows = vim.fn.getregionpos(vim.fn.getpos('v'), vim.fn.getpos('.'), { type = '\22' })
+  show('getregionpos', vim.fn.keytrans(keys), 'line 2', rows[2])
+  vim.cmd('normal! \27')
+end
 
 -- 3. 'selection' old: a charwise selection ending on an empty line (the attack review, finding 3)
 for _, sel in ipairs({ 'inclusive', 'old' }) do
@@ -58,6 +72,22 @@ show('charidx', pcall(vim.fn.charidx, 'a\0b', 1))
 show('byteidx', pcall(vim.fn.byteidx, 'a\0b', 1))
 show('strchars', pcall(vim.fn.strchars, 'a\0b'))
 
+-- 6. a removal and its put-back in one typed command (the undo Learning; PR #118's records review, finding 7)
+for _, broken in ipairs({ false, true }) do
+  vim.keymap.set('n', '<F2>', function()
+    local held = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, {})
+    if broken then vim.cmd('let &g:undolevels = &g:undolevels') end
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, held)
+  end)
+  vim.cmd('enew!')
+  vim.api.nvim_feedkeys(vim.keycode('itext<Esc>'), 'mtx', false)
+  vim.api.nvim_feedkeys(vim.keycode('<F2>'), 'mtx', false)
+  vim.api.nvim_feedkeys('u', 'mtx', false); local u1 = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  vim.api.nvim_feedkeys('u', 'mtx', false)
+  show('undo break', broken, 'u', u1, 'u u', vim.api.nvim_buf_get_lines(0, 0, -1, false))
+end
+
 The output
 ----------
 
@@ -67,6 +97,10 @@ The output
 "cluster"  "a漢́b"  "str_utf_end ends at"  4  "byteidx(charidx) ends at"  6
 "cluster"  "a漢b"  "str_utf_end ends at"  4  "byteidx(charidx) ends at"  4
 "getregionpos line 2"  { { 1, 2, 2, 0 }, { 1, 2, 2, 1 } }
+"getregionpos"  "gg0l<C-V>jj"  "line 2"  { { 1, 2, 2, 0 }, { 1, 2, 2, 1 } }
+"getregionpos"  "gg0<C-V>ljj"  "line 2"  { { 1, 2, 1, 0 }, { 1, 2, 2, 1 } }
+"getregionpos"  "gg0ll<C-V>ljj"  "line 2"  { { 1, 2, 2, 1 }, { 1, 2, 10, 0 } }
+"getregionpos"  "gg0ll<C-V>jj"  "line 2"  { { 1, 2, 2, 1 }, { 1, 2, 2, 2 } }
 "selection"  "inclusive"  'gg0lvj"_d leaves'  { "adef" }
 "selection"  "inclusive"  'gg0lvjj"_d from the indent leaves'  { " " }
 "selection"  "old"  'gg0lvj"_d leaves'  { "a", "", "def" }
@@ -79,6 +113,8 @@ The output
 "charidx"  false  "Vim:E1174: String required for argument 1"
 "byteidx"  false  "Vim:E976: Using a Blob as a String"
 "strchars"  false  "Vim:E976: Using a Blob as a String"
+-- INSERT --1 change; before #2  0 seconds ago1 line less; before #1  0 seconds ago"undo break"  false  "u"  { "text" }  "u u"  { "" }
+-- INSERT --1 line less; before #5  0 seconds ago1 more line; before #4  0 seconds ago"undo break"  true  "u"  { "" }  "u u"  { "text" }
 
 Reading it
 ----------
@@ -91,6 +127,13 @@ Reading it
    give 4.
 2. A block whose left edge is column 2 cuts the double-width 👍🏽: both ends of
    line 2's region are byte 2, the cluster's first byte, the end with off 1.
+2b. Only the edge that cuts the character is given as its first byte, with a
+   non-zero off. A one-column block on it (gg0l<C-V>jj, section 2's case)
+   gives both ends there. A block whose right edge is on its left half
+   (gg0<C-V>ljj) starts at byte 1 and ends at byte 2, off 1. A block whose
+   left edge is on its right half starts at byte 2, off 1, and ends at byte
+   10 when it reaches past the character (gg0ll<C-V>ljj), or at byte 2, off 2,
+   when it is one column wide (gg0ll<C-V>jj).
 3. With 'selection' "old", gg0lvj"_d removes "bc" and no line break: the end
    on the empty line moved to the end of the line above. Started in the
    indent, gg0lvjj"_d removes lines 1 and 2 whole. Under "inclusive" the
@@ -101,3 +144,11 @@ Reading it
 5. getline() gives the NUL as "\n"; nvim_buf_get_lines() gives "\0". A Lua
    string holding a NUL is a Blob to Vimscript (type 10, v:t_blob): charidx()
    refuses it with E1174, byteidx() and strchars() with E976.
+6. One typed key, <F2>, runs a mapping that empties the buffer and puts its
+   line back. With no undo break between the two, the first u leaves "text"
+   as it was and the second empties it: the removal and the put-back were one
+   undo block. With `let &g:undolevels = &g:undolevels` between them, the
+   first u empties the buffer and the second brings "text" back. Keys fed
+   with nvim_feedkeys(..., 'mtx') in an `nvim -l` script make undo blocks of
+   their own. The text before each "undo break" row is what Neovim printed
+   while the keys ran: the mode and the undo messages.
