@@ -203,6 +203,54 @@ the base stays. A read that fails keeps the list shown, under one line
 giving git's words. When aineo's watch of the repository fails, both
 windows say so until the pane is shown again, which starts it again.
 
+Colours ~
+A file's letter and path, a rename's `old → new` whole, show in the group of
+its kind, and the `*` of a file you saved in |hl-AineoChangesSaved|; the
+blank before a file you did not save has no colour. A commit's abbreviated
+id shows in |hl-AineoChangesCommitId|, and its subject in
+|hl-AineoChangesCommitSubject|, which is empty: the subject shows in the
+colours of its window, dimmed with it where a colour scheme dims a window
+not current (|hl-NormalNC|), until you colour the group. A line that lists
+nothing shows whole in |hl-AineoChangesNote|: aineo reading the repository,
+no file changed, no commit, subdirectories not watched, the base no longer
+behind `HEAD`, no repository and git's words. A line that tells a failure,
+a refresh that failed or `git` not found, shows whole in
+|hl-AineoChangesFailure|. The colours follow every list written: a refresh,
+a save, a commit, `:edit` in the pane, a buffer of the pane made anew.
+Each group links to one of Neovim's own, the subject's excepted, unless a
+colour scheme or a `:highlight` of your own colours it.
+After `:colorscheme` or `:highlight clear`, a group nothing colours any more
+has its default again, its link or the subject's empty group, with one
+exception: a group given a default link of its own (`:highlight default
+link`, as some colour schemes do) before aineo first defined it goes back to
+that link, until the pane writes a list again. aineo defines the groups
+when the pane writes its first list, and again at every list it writes.
+
+                                                        *hl-AineoChangesAdded*
+AineoChangesAdded        an added file, linked to `Added`
+                                                    *hl-AineoChangesUntracked*
+AineoChangesUntracked    a new file git does not track, linked to `Added`
+                                                     *hl-AineoChangesModified*
+AineoChangesModified     a modified file, linked to `Changed`
+                                                      *hl-AineoChangesRenamed*
+AineoChangesRenamed      a renamed file, linked to `Changed`
+                                                  *hl-AineoChangesTypeChanged*
+AineoChangesTypeChanged  a file turned into a link or back, linked to
+                         `Changed`
+                                                      *hl-AineoChangesDeleted*
+AineoChangesDeleted      a deleted file, linked to `Removed`
+                                                        *hl-AineoChangesSaved*
+AineoChangesSaved        the `*` of a file you saved, linked to `WarningMsg`
+                                                     *hl-AineoChangesCommitId*
+AineoChangesCommitId     a commit's abbreviated id, linked to `Identifier`
+                                                *hl-AineoChangesCommitSubject*
+AineoChangesCommitSubject  a commit's subject, empty
+                                                         *hl-AineoChangesNote*
+AineoChangesNote         a line that lists nothing, linked to `Comment`
+                                                      *hl-AineoChangesFailure*
+AineoChangesFailure      a line that tells a failure, linked to
+                         `DiagnosticWarn`
+
 The file column ~
 A file you open from one of the three windows — `:edit`, a picker, a jump —
 moves to a column between Claude's and the right column, created on first
