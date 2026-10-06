@@ -74,9 +74,20 @@ end
 --- one double-width character.
 local FAMILY = '👨\226\128\141👩'
 
+--- Runs the Ex `commands` in `child`'s current window; runs nothing when
+--- `commands` is `nil`.
+---
+---@param commands? string
+local function run_commands(commands)
+  child.lua('vim.cmd(... or "")', { commands })
+end
+
 --- Each kind of selection, as a set's `parametrize`: its name, Input's
 --- lines, the keys that select from Normal mode, Input's lines once Vim's
---- own `"_d` has removed the selection, and the text it removed.
+--- own `"_d` has removed the selection, the text it removed, the options it
+--- is made under (`send.set_options()`), and the Ex commands run in Input's
+--- window after them (`run_commands()`), for a value an option table
+--- cannot give: one local to the window, or one `:set +=` builds.
 local SELECTIONS = {
   {
     'charwise, across two lines',
@@ -182,6 +193,13 @@ local SELECTIONS = {
   },
   { 'charwise, multibyte', { 'héllo wörld' }, 'gg0fwv3l', { 'héllo d' }, 'wörl' },
   {
+    'charwise through a NUL that a combining mark follows, which "_d leaves',
+    { 'a👍🏽', '\0\204\129' },
+    '1G0lllvjoo',
+    { 'a\204\129' },
+    '👍🏽\n',
+  },
+  {
     'charwise, selection=exclusive',
     { 'hello world' },
     'gg0v4l',
@@ -238,6 +256,80 @@ local SELECTIONS = {
     '  abc\nx\n',
     { selection = 'old' },
   },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit=all, which keep its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { ' ' },
+    ' abc\nx\n',
+    { selection = 'old', virtualedit = 'all' },
+  },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit=all,onemore, which move its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { '' },
+    '  abc\nx\n',
+    { selection = 'old', virtualedit = 'all,onemore' },
+  },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit=all,all, which keep its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { ' ' },
+    ' abc\nx\n',
+    { selection = 'old', virtualedit = 'all,all' },
+  },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit="all,", which keep its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { ' ' },
+    ' abc\nx\n',
+    { selection = 'old', virtualedit = 'all,' },
+  },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit=all,none, which keep its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { ' ' },
+    ' abc\nx\n',
+    { selection = 'old', virtualedit = 'all,none' },
+  },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit=none,all, as :set += makes it, which keep its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { ' ' },
+    ' abc\nx\n',
+    { selection = 'old' },
+    'set virtualedit=none | set virtualedit+=all',
+  },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit=all,NONE, which keep its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { ' ' },
+    ' abc\nx\n',
+    { selection = 'old', virtualedit = 'all,NONE' },
+  },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit=all local to the window, which keep its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { ' ' },
+    ' abc\nx\n',
+    { selection = 'old', virtualedit = '' },
+    'setlocal virtualedit=all',
+  },
+  {
+    'charwise from the last character of a line to the empty line below, selection=old',
+    { 'abc', '' },
+    'gg$vj',
+    { 'ab', '' },
+    'c',
+    { selection = 'old', virtualedit = '' },
+  },
 }
 
 T['a Visual Send'] = MiniTest.new_set()
@@ -251,10 +343,12 @@ T['a Visual Send']['writes what it removes from Input as one paste and Enter, in
   keys,
   remaining,
   removed,
-  options
+  options,
+  commands
 )
   start_ready_session('removes')
   send.set_options(child, options)
+  run_commands(commands)
   send.set_input(child, lines)
   send.watch_writes(child)
 
@@ -287,6 +381,33 @@ T['a Visual Send']['writes a NUL byte in the selection as Send writes it: not at
   eq(
     { writes = send.writes(child), input = send.input(child).lines },
     { writes = { paste('ab') }, input = { 'kept' } }
+  )
+end
+
+T['a Visual Send']['writes a selection whose bytes would form a control character only across its line break'] = function()
+  start_ready_session('control-across-lines')
+  send.set_input(child, { '\194', '\133' })
+  send.watch_writes(child)
+
+  send.send_selection(child, 'ggVj')
+
+  eq({
+    writes = send.writes(child),
+    input = send.input(child).lines,
+    messages = send.messages(child),
+  }, { writes = { paste('\194\n\133') }, input = { '' }, messages = {} })
+end
+
+T['a Visual Send']['writes an invalid byte a block’s edge ends on without the combining mark "_d removes with it, a named limit'] = function()
+  start_ready_session('invalid-byte-block-edge')
+  send.set_input(child, { 'abcdef', 'a\255\204\129b', 'abcdef' })
+  send.watch_writes(child)
+
+  send.send_selection(child, 'gg0l<C-v>jj')
+
+  eq(
+    { writes = send.writes(child), input = send.input(child).lines },
+    { writes = { paste('b\n\255\nb') }, input = { 'acdef', 'a   b', 'acdef' } }
   )
 end
 
@@ -420,6 +541,48 @@ T['a refused Visual Send']['removes and writes nothing, saying once, of a select
   eq(refusal(), {
     writes = {},
     input = { '\27\3', 'kept' },
+    messages = { { message = 'aineo: nothing sent — the selection is empty', level = WARN } },
+  })
+end
+
+--- Selections under `'selection'` old from which Vim's own `"_d` removes a
+--- line break alone, or nothing, as a set's `parametrize`: their name,
+--- Input's lines, the keys that select from Normal mode, and the options
+--- they are made under.
+local SELECTIONS_REMOVING_NO_TEXT = {
+  {
+    'virtualedit=all, from past a line’s end to the empty line below, which removes its line break alone',
+    { 'é', '' },
+    '1G0llllvw',
+    { selection = 'old', virtualedit = 'all' },
+  },
+  {
+    'virtualedit=onemore, from a line’s end to the empty line below, which removes nothing',
+    { 'abc', '' },
+    'gg$lvj',
+    { selection = 'old', virtualedit = 'onemore' },
+  },
+}
+
+T['a refused Visual Send']['removes and writes nothing, saying once that it is empty, under selection=old for'] =
+  MiniTest.new_set({ parametrize = SELECTIONS_REMOVING_NO_TEXT })
+
+T['a refused Visual Send']['removes and writes nothing, saying once that it is empty, under selection=old for']['the selection'] = function(
+  _,
+  lines,
+  keys,
+  options
+)
+  start_ready_session('removing-no-text')
+  send.set_options(child, options)
+  send.set_input(child, lines)
+  send.watch_writes(child)
+
+  send.send_selection(child, keys)
+
+  eq(refusal(), {
+    writes = {},
+    input = lines,
     messages = { { message = 'aineo: nothing sent — the selection is empty', level = WARN } },
   })
 end
@@ -591,6 +754,21 @@ T['a Visual Send whose write fails']['ends Visual mode, gv selecting again what 
     mode_after = mode_after,
     selected = child.lua_get("vim.fn.getregion(vim.fn.getpos('v'), vim.fn.getpos('.'))"),
   }, { mode_after = 'n', selected = { 'def', 'ghi' } })
+end
+
+T['a Visual Send whose write fails']['puts back both ends of a selection made backwards, gv selecting it again'] = function()
+  local _, buffer = start_ready_session('write-fails-gv-backwards')
+  send.set_input(child, { 'abc def', 'ghi' })
+  send.send_selection_after_closing_stream(child, buffer, 'jvgg0w')
+  claude.wait_for_status(child, 'exited')
+
+  send.type_keys(child, 'gv')
+
+  eq({
+    start = child.fn.getpos('v'),
+    cursor = child.fn.getpos('.'),
+    selected = child.lua_get("vim.fn.getregion(vim.fn.getpos('v'), vim.fn.getpos('.'))"),
+  }, { start = { 0, 2, 1, 0 }, cursor = { 0, 1, 5, 0 }, selected = { 'def', 'g' } })
 end
 
 T['a Visual Send whose write fails']['leaves one undo block, so that the first u changes nothing visible'] = function()
