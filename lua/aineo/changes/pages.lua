@@ -51,8 +51,8 @@ end
 --- in its colours (`show_colours()`), leaving it not modifiable, and
 --- returns whether it was written. In each window showing `buffer`, the
 --- cursor stays on the entry it was on when the page lists it still, at the
---- same column. A page Neovim refused leaves
---- the buffer, the entries its lines list and their colours, as they were.
+--- same column. A page Neovim refused leaves the buffer, the entries its
+--- lines list and their colours, as they were.
 ---
 ---@param buffer integer
 ---@param page aineo.changes.Page

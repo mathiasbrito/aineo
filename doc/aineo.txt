@@ -208,8 +208,10 @@ windows say so until the pane is shown again, which starts it again.
 Colours ~
 A file's letter and path, a rename's `old → new` whole, show in the group of
 its kind, and the `*` of a file you saved in |hl-AineoChangesSaved|; the
-blank before a file you did not save has no colour. A commit's abbreviated
-id shows in |hl-AineoChangesCommitId|, and its subject in
+blank before a file you did not save has no colour. The space between a
+file's letter and its path is in the group of its kind too, so a background
+you give that group runs unbroken from the letter to the end of the line. A
+commit's abbreviated id shows in |hl-AineoChangesCommitId|, and its subject in
 |hl-AineoChangesCommitSubject|, which is empty: the subject shows in the
 colours of its window, dimmed with it where a colour scheme dims a window
 not current (|hl-NormalNC|), until you colour the group. A line that lists

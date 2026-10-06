@@ -196,7 +196,9 @@ end
 --- refuses — one of another owner, or a bare one — from no repository; or
 --- git was not found, in the words git's start failed with; or, for any
 --- other failure to find it, the line a failed read gives
---- (`M.refresh_failed()`). None claims a repository.
+--- (`M.refresh_failed()`). None claims a repository. The two lines of a
+--- `directory` in none, git's words among them, are notes (`note()`); the
+--- one line of either other case is a failure (`failure_line()`).
 ---
 ---@param failure aineo.git.Failure why no repository was found
 ---@param directory string the directory the session looked in
@@ -243,7 +245,9 @@ end
 --- unwatched; then a line per file (`M.file_line()`), marked when the user
 --- saved it, or `M.NO_FILES` when none differs. Before any list was read,
 --- `M.NOT_WATCHED` where it shows, then `M.READING`; or, once a read has
---- failed, the line saying so alone.
+--- failed, the line saying so alone. The line saying a read failed is a
+--- failure (`failure_line()`), a file's line shows its own colours
+--- (`file_colours()`), and every other line is a note (`note()`).
 ---
 ---@param view aineo.changes.FilesView
 ---@return aineo.changes.Page
@@ -312,7 +316,10 @@ end
 --- failed, when it did, and one naming the base when it is no longer an
 --- ancestor of `HEAD`; then a line per commit git lists, in its order
 --- (`M.commit_line()`), or `M.NO_COMMITS` when there is none. Before any
---- list was read, `M.READING`, or the failure's line alone.
+--- list was read, `M.READING`, or the failure's line alone. The line saying
+--- a read failed is a failure (`failure_line()`), a commit's line shows its
+--- own colours (`commit_colours()`), and every other line is a note
+--- (`note()`).
 ---
 ---@param view aineo.changes.CommitsView
 ---@return aineo.changes.Page

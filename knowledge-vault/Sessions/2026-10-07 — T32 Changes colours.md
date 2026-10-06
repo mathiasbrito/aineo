@@ -26,7 +26,7 @@ The user asked on 2026-10-06 for colour in the changes pane, so that a new, a mo
 ## Decisions & reasoning
 
 - **T32-1 (a), T32-2 (a), T32-3 (a)** are the user's answers of 2026-10-06; **A1–A3** are the orchestrator's assumptions under the user's instruction of the same day, built as the brief says.
-- **The files line is coloured from the letter to its end as one span**, the space between letter and path inside it. The brief names "the letter and the path"; one span keeps a background a user gives the group unbroken across the line. The commit line keeps its space in neither group, as the brief says.
+- **The files line is coloured from the letter to its end as one span**, the space between letter and path inside it. The brief names "the letter and the path"; one span keeps a background a user gives the group unbroken across the line. The commit line keeps its space in neither group, as the brief says. The orchestrator confirmed this reading after the review, as its assumption **A18**: the user's T32-2 (a) answer, "the letter and the path", reads as one span that keeps the space, and the help now says so.
 - **Groups defined at every page written**, not once: the Report defines at each rendering with colours. Measured in bare Neovim 0.12.5: a group a colour scheme gave a default link (`Title`) before aineo's first definition keeps `Title` through aineo's definition and after `:highlight clear`, and aineo's next definition then links it to aineo's default. The help says so, as the Report's does.
 - **`nvim_get_hl()` readings the tests rest on**, measured in bare Neovim 0.12.5 before the tests were written: a default link reads `{ link = … }`; the subject's empty default reads `{ default = true }`; after `:highlight clear` or `:colorscheme default` the subject reads `{}` and each default link comes back.
 - **No pin moved.** No existing test compares a page table; the four named files stayed green with the page's new field.
@@ -100,9 +100,9 @@ Each ran as its literal edit, one at a time, from a pristine copy, on `tests/tes
 | M15 | `return page({}, {}, failure_line(line))` → `return page({}, {}, failure.reason == 'no_git' and failure_line(line) or note(line))` | killed, assertion: *…look for a repository failed…* |
 | M16 | `{ failure_line(M.refresh_failed(failure)) }` → `{ note(M.refresh_failed(failure)) }` | killed, assertion: *…a read failed…* |
 | M17 | `page({}, {}, note(M.READING))` → `failure_line(M.READING)` (commits) | killed, assertion: *…reading…* |
-| M18 | `show_colours(buffer, page)` added before `if not scratch.write_text(…)` | **crash**, not counted: `Invalid 'end_col': out of range` on 24 cases; replaced by M18b |
-| M18b | `nvim_buf_clear_namespace(buffer, PANE_COLOURS, 0, -1)` added before `if not scratch.write_text(…)` | killed, assertion, 3 of 3: the textlock case (`meanwhile.colours` empty) |
-| M19 | `show_colours()` returns first when `pages[buffer]` has the same text | killed, assertion: the `:edit` cases × 2, and *git was not found* |
+| M18 | pages.lua `  if not scratch.write_text(buffer, page.text) then` → `  show_colours(buffer, page)\n  if not scratch.write_text(buffer, page.text) then` | **crash**, not counted: `pages.lua:42: Invalid 'end_col': out of range` on every case of the group (27 of 27 at the correction's tree); replaced by M18b |
+| M18b | pages.lua `  if not scratch.write_text(buffer, page.text) then` → `  vim.api.nvim_buf_clear_namespace(buffer, PANE_COLOURS, 0, -1)\n  if not scratch.write_text(buffer, page.text) then` | killed, assertion: the textlock case (`"meanwhile"->"colours"->1, left = nil`) |
+| M19 | pages.lua `  show_colours(buffer, page)\n  pages[buffer] = page` → `  if not (before and vim.deep_equal(before.text, page.text)) then show_colours(buffer, page) end\n  pages[buffer] = page` | killed, assertion: the `:edit` cases × 2, and *git was not found* (`left = 1, right = 0`) |
 | M20 | pages.lua `show_colours(buffer, page)` → `if before then show_colours(buffer, page) end` | killed, assertion: 7 cases, the wipe case among them |
 | M21 | `nvim_set_hl(0, M.COMMIT_SUBJECT_GROUP, { default = true })` → `nvim_set_hl(0, M.COMMIT_SUBJECT_GROUP, {})` | killed, assertion: *are groups…* (`default` nil) |
 | M22 | `untracked = 'AineoChangesUntracked',` → `untracked = 'AineoChangesAdded',` | killed, assertion: *of every kind…* and the readings |
@@ -116,12 +116,37 @@ D30: a small fix; **the whole suite did not run** before the push. On Neovim 0.1
 
 ## Task lines
 
-T32 — done in `bugfix/t32-changes-colours` (a small fix, wave 8): the files window colours each file's letter and path by its kind — added and untracked `Added`, modified, renamed and type-changed `Changed`, deleted `Removed` — and a saved file's `*` in `AineoChangesSaved` (`WarningMsg`); the commits window its id (`Identifier`) and its subject, in a group defined empty (A2); lines that list nothing in `AineoChangesNote` (`Comment`, the "git: …" line among them, A3), failure lines in `AineoChangesFailure` (`DiagnosticWarn`); every group `:highlight default link`, overridable, its default back after `:highlight clear`; the colours follow every page and a page textlock refused keeps its own; the help names each group (`hl-AineoChanges…`); the whole suite did not run (D30).
+T32 — done in `bugfix/t32-changes-colours` (a small fix, wave 8): the files window colours each file's letter and path by its kind — added and untracked `Added`, modified, renamed and type-changed `Changed`, deleted `Removed` — and a saved file's `*` in `AineoChangesSaved` (`WarningMsg`); the commits window its id (`Identifier`) and its subject, in a group defined empty (A2); lines that list nothing in `AineoChangesNote` (`Comment`, the "git: …" line among them, A3), failure lines in `AineoChangesFailure` (`DiagnosticWarn`); every linked group `:highlight default link`, overridable, its default back after `:highlight clear`; the colours follow every page and a page textlock refused keeps its own; the help names each group (`hl-AineoChanges…`); the whole suite did not run (D30).
 
 ## Open threads
 
 - The first-default-link limit the Report has applies here too, and the help says so.
-- The files line's one span from letter to end includes the space between letter and path; a user who gives a kind's group a background sees it unbroken.
+- The files line's one span from letter to end includes the space between letter and path; a user who gives a kind's group a background sees it unbroken. Settled by the orchestrator as A18 (see *Correction*).
+
+## Correction
+
+After the guarantee and records review of PR #127 (`.claude/local/orchestrator/review127/review-t32.md`, at head `bfa7bba`), a bounded correction on the same branch, Neovim 0.12.5 on the host.
+
+**Finding 1 — three failure lines had no colour test.** The review's three cases, as it built them, go in `the colours` beside *of the line saying a read failed…*. The code was already right, so they **arrived green**: they pin code written ahead of them. Each has its killer, run as the review's literal edit on `lines.lua`, one at a time from a pristine copy, on `tests/test_changes.lua` narrowed to `the colours` (`.tests/t32cor-colours.lua`, 27 cases, `Fails (0)` unmutated):
+
+| Case | Killer | Result |
+|---|---|---|
+| *of the line saying a read of the commits failed are the whole line in AineoChangesFailure, above the list* | R20: in `commits_window()`, `  local notes = failure_notes(view.failure)\n  if view.since and` → `  local notes = vim.tbl_map(function(row) return note(row.line) end, failure_notes(view.failure))\n  if view.since and` | killed, assertion (R20 fails 2 cases: this one and the commits case below) |
+| *of the line saying the first read failed are the whole line in AineoChangesFailure*, in the files window | R21: `return view.failure and page({}, {}, notes[1]) or page(notes, {}, note(M.READING))` → `return view.failure and page({}, {}, note(notes[1].line)) or page(notes, {}, note(M.READING))` | killed, assertion (1 case) |
+| the same, in the commits window | R22: `return view.failure and page({}, {}, notes[1]) or page({}, {}, note(M.READING))` → `return view.failure and page({}, {}, note(notes[1].line)) or page({}, {}, note(M.READING))` | killed, assertion (1 case) |
+
+Every failure reads `Cause: different values at key branch 1->4, left = "AineoChangesNote", right = "AineoChangesFailure"`. The group is now 23 test functions and 27 cases (two functions, one of them parametrized × 2); with these, 15 functions and 19 cases arrived green, and the 8 seen red stand.
+
+**Finding 2 — A18.** A files line's kind span keeps the space between the letter and the path: the user's T32-2 (a) answer, "the letter and the path", reads as one span. No code changed. The help's `Colours ~` block says so in one sentence.
+
+**Findings 3–7, records.**
+- `write_page()`'s docstring refilled (`pages.lua`).
+- `files_window()`, `commits_window()` and `no_repository()` each say which of their lines are notes (`note()`) and which failures (`failure_line()`), and which lines show their own colours.
+- The task line says "every linked group `:highlight default link`": the subject's group is `nvim_set_hl(…, { default = true })`.
+- `WINDOW_CELL_BACKGROUND`'s docstring explains the dimmed-window case's dropped first `nvim__inspect_cell()` and redraw.
+- M18, M18b and M19 are given above as literal edits, re-run as such on the 27-case group: M18 crashes every case, M18b fails the textlock case by assertion, M19 fails three cases by assertion. M19's edit is the review's literal rebuild of the described mutant.
+
+**Verification at the correction's head.** D30: the whole suite did not run. `tests/test_changes.lua` 120 cases, `tests/test_entry_changes.lua` 12, `tests/test_entry_panes.lua` 86, `tests/test_doc.lua` 44, each `Fails (0)`. `make lint` clean.
 
 ## Commits
 
