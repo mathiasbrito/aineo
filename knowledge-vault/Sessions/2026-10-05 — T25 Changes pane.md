@@ -9,6 +9,7 @@
 - [[Implementation/Waves/00007-panes/plan]] › *Packet T25 — 2026-10-06*, its brief `brief-t25-changes-pane.md` with its *Amendment — 2026-10-05* (the user's answers to CP1–CP9), and the brief review `brief-review-t25-t26.md`
 - `Implementation/Waves/00007-panes/evidence/t25-probes.txt` (L, F, S, N, CP8)
 - [[Sessions/2026-09-27 — T23 git home]] (the git home this packet calls; *Minimum git*) · [[Sessions/2026-10-05 — T24 Panes]] (*The seam for T25*)
+- Learnings extracted by the knowledge pass (2026-10-06): [[Learnings/A scheduled callback can run under textlock, where Neovim refuses a buffer change with E565]], [[Learnings/Neovim runs scheduled callbacks during a later VimLeavePre and after VimLeave]], [[Learnings/A test child that quits with aineo's Claude Code running waits 4.4 s for the stop by keys]], [[Learnings/git commit --allow-empty rewrites the index, while reset --soft and update-ref do not]], [[Learnings/vim.uv.walk does not see a timer vim.fn.timer_start made]]; the readings are MR245–MR272 of [[Review/2026-09-24 — v1 MVP readings review]]
 
 ## What was done, and why
 
@@ -396,4 +397,29 @@ The wave holds its marks (rule 6). The line T25 would take:
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by T25's knowledge pass. PR #112 merged by rebase on 2026-10-06 (06:20 UTC; 08:20 CEST); `dev` `893a427`, whose code is the code of the orchestrator's verified head `1fe4095` (`git diff --stat 1fe4095 893a427 -- . ':!knowledge-vault'` prints nothing; the vault differs only by T30's knowledge pass, `bbe7889` and `4c326e0`, which `dev` held before the rebase). Released in `v0.2.12` with T24 and T30 (PR #113, squash-merged into `main` as `b6a6929`, whose tree is `dev` `893a427`'s).
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `6cf587c` | `791b7f1` | Add the changes home: the session's files, saves and commits |
+| `4e82fc2` | `e7c0e44` | Tell failures and the missing repository in the changes pane |
+| `6fe9259` | `f94c392` | Keep the changes pane's buffers and say a base left behind |
+| `e2e2c74` | `2e90d96` | Show a file's or a commit's diff on Enter in the changes pane |
+| `6f68a56` | `bb8e1ef` | Show a diff in the file column through the layout's show_diff |
+| `e6db1d1` | `d87c18f` | Begin the changes session at Claude Code's first start |
+| `eefd0b0` | `072572e` | Document the changes pane in the help |
+| `d9debd1` | `6cd0c62` | Record the T25 session: the changes pane |
+| `f7c246b` | `3fe9c47` | Fix the eight defects the review of the changes pane found |
+| `01cd4a1` | `9220c19` | End the fake Claude Code before each panes case quits its editor |
+| `96af85a` | `219ccc3` | Pin what the changes pane's tests claimed and did not check |
+| `808637d` | `dcea07c` | Pin every read ended before its list, and ten Enters shown one by one |
+| `aaa4b14` | `08c7278` | Make the changes pane's help and one docstring say what the code does |
+| `58d8610` | `1a37121` | Record T25's fix round and correct its session note |
+| `e17aa5e` | `5c68d30` | Show the changes pane's lists and diffs once textlock ends |
+| `5edcbd8` | `b015f64` | Start no watch on a quit, and keep the pane's undo history off |
+| `72a9093` | `cd25633` | Pin a stale Enter's failure, a save during a failed look, user options |
+| `5a81264` | `9f6af75` | Wipe the empty diff buffer a stale Enter left under textlock |
+| `1350877` | `d467b34` | Assert a kept diff by its windows, not the names of wiped buffers |
+| `681d535` | `de55f29` | Record T25's second fix round and correct its session note |
+| `0143508` | `515d39c` | Show a refused diff once Neovim allows a wipe again |
+| `1fe4095` | `893a427` | Record T25's correction of its second fix round |

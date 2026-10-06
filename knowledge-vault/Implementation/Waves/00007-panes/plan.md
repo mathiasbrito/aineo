@@ -584,3 +584,90 @@ Added after the user's answers, one per option not chosen:
   - lint clean;
   - each killed by assertion on its covering file: V1 (5 cases in `tests/test_entry.lua`), V2 (8 in `tests/test_mcp_delivery.lua`), V3 (1), V5 (both rows of the `cwd` case), RB1 (1), RB2 (1), and H, the health check's condition replaced by `false` (1 case in `tests/test_health.lua`). V4 does not apply: the check it mutates is gone.
 - **No release:** the next one ships with T25.
+- **T25 — PR #112, regular**, merged by rebase on 2026-10-06 as `791b7f1` … `893a427` (22 commits). The code of `dev` `893a427` is the code the orchestrator verified, the PR's head `1fe4095`. Session note: [[Sessions/2026-10-05 — T25 Changes pane]]; probes: `evidence/t25-probes.txt`.
+  - **The packet** (`neovim-lua-developer`) built the changes home, `lua/aineo/changes/` (C15, CP1 (a)), in six files. It also built the layout's `show_diff()` and the predicate that lets a diff take the file column's window (CP3 (a)), the session's start in the composition root, and the help's *The changes pane* (`*aineo-changes*`). 1602 → 1676 cases. It reported three spec conflicts:
+    - `tests/test_entry_panes.lua`'s `pre_case` widened to a fixture repository for every case: CH1, the later instruction, won over the boundary;
+    - the session note dated 2026-10-05, the day of dispatch, where the brief named 2026-10-06;
+    - `\pc` while the changes pane shows reads nothing, since nothing inside the boundary is called then.
+  - **Reviews** on Opus: attack by `neovim-lua-reviewer`, test integrity by `reviewer`, records by `reviewer`.
+  - **What they found:**
+    - a pane buffer wiped, or unloaded by `:bdelete`, made the next read raise from its callback (`Invalid buffer id`, `Buffer is not 'modifiable'`) and froze that list for the editor's life, up to "No commits on this session" beside a session commit (attack F1, high; records 1);
+    - every refresh kept the old list in an undo history no one can use: 288 MiB after 1 100 refreshes of 5 000 lines (attack F2);
+    - a repository git refuses — of another owner, or a bare one — read as no repository, with git's words dropped (attack F3; T23's exit-128 mapping is one cause);
+    - Enter pressed again before a slow diff was read showed the earlier line's diff (attack F4);
+    - a diff that opened the file column left the columns at 120/60/58/58 instead of thirds (attack F5);
+    - `\pc` and `:Aineo pane changes` with the pane shown read nothing, where the help said they read it again (attack F6, records 3);
+    - a save made while git first looked for the repository was never marked (attack F7); one showing read each list twice (N1);
+    - the test review's findings 1–9:
+      - *Enter on a file shows its diff from the base* never ran with `HEAD` away from the base (CH6b survived);
+      - CP7 (b)'s save before the first showing had no case (CH3b);
+      - the CP4 case met its files expectation before the base could move (K19F);
+      - *never on a timer* bounded its claim to 2.5 s (K21x, K21v);
+      - K2's kill was a race that the child's git start decided: K2 survived 12 of 12 runs with that git behind a shell script;
+      - the diffs' `:edit` refill, CP5's commits half, the diffs' window options and the watch's start had no pin (CH8d, CP5c, CH8w, K23d);
+      - `tests/test_entry_panes.lua` went from 24 s to 83 s;
+    - the records review's findings 2 and 4–12:
+      - the help's "a start that failed takes neither": a Claude Code that starts and then fails takes the base;
+      - the help's quoting of non-ASCII paths, and its "changed on disk";
+      - `lines.files_window()`'s docstring;
+      - the eleven readings the brief told the note to carry were missing;
+      - 13 pieces of code were written before their case, not 9, and the 11 rewritten `test_entry_panes.lua` pins were never red in their new form;
+      - two suite times were given for one tree, and S28's first form survived unrecorded;
+      - two commit messages' claims were wrong: `eefd0b0`'s git 2.36 "measured", and `6cf587c`'s "the only way".
+  - **The fix round** went to a fresh agent. The orchestrator widened its boundary to the composition root's pane action and to the whole of `tests/test_entry_panes.lua`. It took all 22 items red-first from the reviews' failing inputs: 20 cases seen red, 15 arrived green, each with its killer.
+    - The home writes a buffer only while it is loaded, and ends each read before it shows it.
+    - `test_entry_panes.lua` fell from 83 s to 8 s once each child's terminals were ended before it quits. The cause was aineo's quit-time stop by keys, 4.4 s a child.
+    - 1701 cases, 212 s.
+  - **The re-measure**, with the attack question (`neovim-lua-reviewer`): every first-review case passed and every literal survivor died, but it found nine more:
+    - a list read or Enter's diff answering under textlock raised `E565` from a `vim.schedule` callback (finding 1, medium). The holds were an `<expr>` mapping waiting in `getcharstr()` and a `'completefunc'` waiting in `vim.wait()`. The user got a stack trace, and the pane was left modifiable and stale. The round's claim that no error of the home's reaches the user from a callback was false;
+    - the round's N1 deferral let a showing and a quit in one turn start a watch after `VimLeave`, or during a later `VimLeavePre`, that nothing stopped (finding 2);
+    - the help's new save-mark sentence claimed a mark CP9 does not give (finding 3);
+    - the note's mutant table dropped its results when rendered, and it said "MP1 or MP2" (findings 4, 5);
+    - the window-options pin compared defaults, so CH8n survived (finding 6);
+    - `:set undolevels` in the pane's window gave the undo history back (finding 7);
+    - `:Aineo-pane`'s "changes nothing" (finding 8);
+    - a stale Enter's failure was unpinned, and NM6 survived (finding 9).
+  - **The second fix round**, a small fix (orchestrate §3), by a fresh agent, took all nine.
+    - A refused write is caught, `'modifiable'` is put back, and the list or the diff is written again at the next `SafeState`; any other error is raised again.
+    - The first round's stub (`REFUSE_ONE_WRITE`) stays, re-aimed at an error that is not textlock's (`FAIL_ONE_WRITE`), since textlock is now pinned on its real triggers.
+    - 11 cases seen red; 21 mutants killed by assertion; 1712 cases, 211 s. A first whole run failed `tests/test_health.lua`'s Ctrl-C timing case under load; that file passed alone 3 of 3.
+  - **The guarantee review** (`neovim-lua-developer`) found five:
+    - `SafeState` still fires while an `<expr>` mapping waits in `input()`, and in the command-line window, where Neovim refuses `nvim_buf_delete` (`E565`, `E11`). The stale retry's wipe raised from a `SafeState` callback and left an empty buffer for the editor's life (finding 1, introduced by the round);
+    - in the command-line window, `show_diff()`'s own cleanup raised `E11` from a callback once the real layout refused the window, and the diff was lost (finding 2, there since the first round);
+    - a look for the repository answered during a later `VimLeavePre` started a watch and two reads that nothing stopped (finding 3). aineo's own Claude stop is such a handler after a restart of Claude Code;
+    - no hold fired `SafeState` under textlock, so GM1 and GM3 survived (finding 4);
+    - `free_name()` of a foreign `aineo://diff/…` buffer under textlock raises, measured (finding 5, the round's stated limit).
+
+    It refuted the `test_health.lua` Ctrl-C failure as T25's: the case failed on `dev` before T25, and T22's note records it flaking.
+  - **The bounded correction**, by a fresh agent:
+    - GFIXW, without its show-error check, which the refused wipe covers: `scratch.wipe()` returns false on `E565` or `E11`, a refused stale wipe retries, and a refused cleanup keeps the diff to show at the next `SafeState`;
+    - GFIXQ2: the `v:exiting` guard added to `follow_repository()`, and `pane_shown()`'s kept;
+    - the review's third hold with `waiting = 0`, which kills GM1 and GM3;
+    - finding 5 a limit in the help's LIMITS.
+
+    4 cases seen red; GFIXQ and C7 survive (below). 1718 cases, 214 s.
+  - **The orchestrator's decisions in the rounds:**
+    - `\pc`, `<Plug>(aineo-pane-changes)` and `:Aineo pane changes` with the pane already shown read it again, done in the composition root's pane action, not in the layout home. This is the user's CP6 answer, which listed `\pc` (MR256);
+    - every changes-pane test runs in a fixture repository (CH1, tightened before dispatch: `3912267` on `dev`), which the author's widened `pre_case` follows;
+    - T23's mapping of git's exit 128 to `not_a_repository` stays, outside T25's boundary, as an open thread; the pane gives git's words below its line (MR260);
+    - the kept `pane_shown()` quit guard is unpinned: GFIXQ survives `tests/test_changes.lua` and `tests/test_entry_changes.lua`. Accepted as an open thread. With the follow guarded, the guard only keeps a showing in the quit's turn, in a directory with no repository, from starting a `git rev-parse` during a later `VimLeavePre` (MR267);
+    - `scratch.wipe()`'s re-raise of any other error has no real trigger, since a forced delete of a valid buffer raises nothing else: C7 survives, accepted.
+- **The orchestrator's verification**, on 0.12.5 (D29), after each round:
+  - on `58d8610`: 1701 cases, `Fails (0)`, 211 s; 47 of 49 K and R mutants killed by assertion, none surviving, since the round had moved K14's and K19L's sites;
+  - on `681d535`: 1712 cases, `Fails (0)`, 212 s. The orchestrator's first re-wording of K14 there left the top level unresolved. It survived the covering files and the whole suite (1712, `Fails (0)`): it is equivalent, since git returns the top level already resolved, as the re-measure's NM7 found. It was re-worded again.
+
+  On the final head `1fe4095`:
+  - guard 5 cases, `Fails (0)`;
+  - `make test`, 1718 cases, `Fails (0)`, 210 s;
+  - lint clean;
+  - 48 of 48 K and R mutants killed by assertion on their covering files:
+    - the plan's K1–K25 with K13b and K20b;
+    - the test review's K10b, K16L, K19F, K19L, K20b2, K20c, K21v, K21x, K23b and K23d;
+    - the fix round's reverts RA1 (with RA2, one site since the second round), RB1–RB3, RC–RH and RI1.
+
+    K14 (now `resolved(written)` removed), K7, K16, K23, K23b and RA1 were re-worded on the final tree, whose sites the rounds rewrote.
+- **Released:** `v0.2.12` (PR #113, squash-merged into `main` as `b6a6929`, tag `v0.2.12`), carrying T24, T30 and T25. Its tree is `dev` `893a427`'s, 63 commits after `v0.2.11`'s `c6172e5`. T24 waited for T25 at the user's decision of 2026-10-05, "Wait for T25 (Recommended)". The user's release checkout is at `v0.2.12`, and the user is told to restart Neovim.
+- **Records the reviews named false in dispatched files, left as dispatched** (`Implementation/Waves/CLAUDE.md`):
+  - *Packet T25* (dated `2026-10-06` in its heading) and its line *Branch, resource, session note* name the session note `2026-10-06 — T25 Changes pane`, "dated the day of dispatch"; so does the brief's *Boundary*. T25 was dispatched on 2026-10-05, so its note is `2026-10-05 — T25 Changes pane`, as the dispatch named it. This is the author's spec conflict 2 and the records review's finding 13.
+  - *Packet T25*'s K19 asks for the kill "by the files window still listing what differs from the old base". The case killed K19 on the commits window instead. A K19 that moves the base for the files alone (K19F) survived it until the fix round re-read both lists (test integrity 3; the records review, *For the other dimensions*).
+  - The brief's *What was decided already* says "T25's own autocommands and callbacks catch their errors and tell the user once (CP5)". That was false until the fix rounds. A wiped pane buffer (records 1, attack F1), textlock (the re-measure's finding 1) and the command-line window (the guarantee review's findings 1 and 2) each made a callback raise. It holds since the correction, but for MR268's limit.
