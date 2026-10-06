@@ -196,8 +196,9 @@ end
 --- and `to`, as `getregionpos()` takes it: its ends, the one nearer the
 --- buffer's start first, and its kind, `getregionpos()`'s `type`. That is
 --- the selection itself, but for a charwise one under `'selection'` old
---- whose end lies on an empty line below its start, unless `'virtualedit'`
---- is exactly `all`, which keeps the end: Vim then ends it as an exclusive
+--- whose end lies on an empty line below its start, unless the window's
+--- `'virtualedit'` holds at least one flag besides `none` and `NONE`, and
+--- every such flag is `all`, which keeps the end: Vim then ends it as an exclusive
 --- motion that ends in column 1 (`:h exclusive`) — on the line above,
 --- through its last character, or, when the start lies at or before its
 --- line's first non-blank, linewise, through the line above
@@ -214,7 +215,13 @@ end
 local function removed_region(mode, from, to)
   local first, last = in_buffer_order(from, to)
   local ends_on_empty_line = last[2] > first[2] and buffer_line(last[2]) == ''
-  local operator_is_virtual = vim.o.virtualedit == 'all'
+  local flags = vim.tbl_filter(function(flag)
+    return flag ~= 'none' and flag ~= 'NONE'
+  end, vim.split(vim.o.virtualedit, ',', { trimempty = true }))
+  local operator_is_virtual = #flags > 0
+    and vim.iter(flags):all(function(flag)
+      return flag == 'all'
+    end)
   if mode ~= 'v' or vim.o.selection ~= 'old' or not ends_on_empty_line or operator_is_virtual then
     return first, last, mode
   end
