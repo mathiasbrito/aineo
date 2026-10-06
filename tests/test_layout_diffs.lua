@@ -60,6 +60,40 @@ T['a diff']['opens a file column, the cursor staying in the window it was in'] =
   }, { layout.window_showing(child, diff), 4, report_window })
 end
 
+--- The Lua expression giving the widths of the child's windows in the
+--- current tab page, in its order of windows.
+local WIDTHS = 'vim.tbl_map(vim.api.nvim_win_get_width, vim.api.nvim_tabpage_list_wins(0))'
+
+T['a diff']['opening a file column gives the columns a third each, as a file does'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.report)
+  local diff_window = show_diff(diff_buffer('aineo://diff/first.txt'))
+  local with_the_diff = child.lua_get(WIDTHS)
+  child.api.nvim_win_close(diff_window, true)
+  layout.enter_window_showing(child, buffers.report)
+
+  child.cmd('edit ' .. file('first.txt'))
+
+  layout.wait_until(child, '#vim.api.nvim_tabpage_list_wins(0) == 4')
+  eq(with_the_diff, child.lua_get(WIDTHS))
+end
+
+T['a diff']['keeps the user’s window options in its window'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.report)
+  local user = child.lua_get('{ wrap = vim.go.wrap, list = vim.go.list, number = vim.go.number }')
+
+  local window = show_diff(diff_buffer('aineo://diff/first.txt'))
+
+  eq(
+    child.lua_get(
+      '{ wrap = vim.wo[...].wrap, list = vim.wo[...].list, number = vim.wo[...].number }',
+      { window }
+    ),
+    user
+  )
+end
+
 T['a diff']['takes the file column’s window from a file that can leave it'] = function()
   local buffers = layout.open_with_stand_ins(child)
   layout.enter_window_showing(child, buffers.report)

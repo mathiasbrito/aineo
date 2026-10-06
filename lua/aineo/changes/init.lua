@@ -28,8 +28,10 @@ local M = {}
 ---@field files_failure? aineo.git.Failure why the last read of the files failed, when it did
 ---@field commits? aineo.git.CommitsSince the commits since the base, as last read
 ---@field commits_failure? aineo.git.Failure why the last read of the commits failed, when it did
----@field saved table<string, true> the files the user saved since the base, by path relative to the top level
+---@field saved table<string, true> the files the user saved since the session began, by path relative to the top level; none saved while no repository was found
+---@field early_saves string[] the files the user saved, resolved, while the first look for the repository runs
 ---@field shown boolean whether the pane has been shown
+---@field following_soon boolean whether the pane's showing is followed at the main loop's next turn
 ---@field watch? aineo.git.Watch the running watch, from the pane's first showing; nil once it failed
 ---@field watch_failure? aineo.git.Failure why the watch failed, until one starts again
 
@@ -71,39 +73,53 @@ local function commits_page()
   })
 end
 
---- Writes the files buffer for what the session knows (`files_page()`).
+--- Whether `buffer`, a buffer of the pane once made, can be written: it is
+--- loaded. One wiped, or unloaded as `:bdelete` unloads it, is made anew
+--- and written the next time the pane is shown (`M.pane_buffers()`).
+---
+---@param buffer integer|nil
+---@return boolean
+local function is_writable(buffer)
+  return buffer ~= nil and vim.api.nvim_buf_is_loaded(buffer)
+end
+
+--- Writes the files buffer for what the session knows (`files_page()`),
+--- while it can be written (`is_writable()`).
 local function show_files()
-  if buffers.files and session then
+  if session and is_writable(buffers.files) then
     pages.write_page(buffers.files, files_page())
   end
 end
 
---- Writes the commits buffer for what the session knows (`commits_page()`).
+--- Writes the commits buffer for what the session knows (`commits_page()`),
+--- while it can be written (`is_writable()`).
 local function show_commits()
-  if buffers.commits and session then
+  if session and is_writable(buffers.commits) then
     pages.write_page(buffers.commits, commits_page())
   end
 end
 
 --- Reads the files changed since the base, and shows them; one read at a
---- time (`aineo.changes.serial`).
+--- time (`aineo.changes.serial`), each ended before its list is shown, so
+--- that an error showing it stops no read after it.
 local read_files = serial.one_at_a_time(function(ended)
   git.changed_files(session.repository, session.base, function(failure, changes)
     session.changes = changes or session.changes
     session.files_failure = failure
-    show_files()
     ended()
+    show_files()
   end, session.settings.git)
 end)
 
 --- Reads the commits since the base, and shows them; one read at a time
---- (`aineo.changes.serial`).
+--- (`aineo.changes.serial`), each ended before its list is shown, as
+--- `read_files()`'s.
 local read_commits = serial.one_at_a_time(function(ended)
   git.commits_since(session.repository, session.base, function(failure, commits)
     session.commits = commits or session.commits
     session.commits_failure = failure
-    show_commits()
     ended()
+    show_commits()
   end, session.settings.git)
 end)
 
@@ -169,24 +185,56 @@ local function follow_repository()
   read_commits()
 end
 
+--- `path` with every symbolic link it leads through resolved, or as it is
+--- when it cannot be resolved.
+---
+---@param path string
+---@return string
+local function resolved(path)
+  return vim.uv.fs_realpath(path) or path
+end
+
+--- Marks `file`, a written file's resolved path, as saved when it lies
+--- under the repository's top level, resolved too, and returns whether it
+--- does.
+---
+---@param file string
+---@return boolean
+local function mark_saved(file)
+  local top = resolved(session.repository.top) .. '/'
+  if not vim.startswith(file, top) then
+    return false
+  end
+  session.saved[file:sub(#top + 1)] = true
+  return true
+end
+
 --- Looks for the repository of the session's directory, one look at a time
 --- (`aineo.changes.serial`). The first found is the session's for the
---- editor's life: its `HEAD` is the base, the saves count from then, and it
---- is followed once the pane has been shown (`follow_repository()`). While
---- none is found, both windows say why.
+--- editor's life: its `HEAD` is the base, the saves count from then — those
+--- made while the first look ran included — and it is followed once the
+--- pane has been shown (`follow_repository()`). While none is found, both
+--- windows say why. Each look is ended before what it found is followed and
+--- shown, as `read_files()`'s.
 local find = serial.one_at_a_time(function(ended)
   git.find_repository(session.settings.directory, function(failure, repository)
-    if not session.repository then
-      session.absence = failure
-      if repository then
-        session.repository = repository
-        session.base = repository.head
-        follow_repository()
-      end
-      show_files()
-      show_commits()
+    if session.repository then
+      ended()
+      return
     end
+    session.absence = failure
+    if repository then
+      session.repository = repository
+      session.base = repository.head
+      for _, file in ipairs(session.early_saves) do
+        mark_saved(file)
+      end
+    end
+    session.early_saves = {}
     ended()
+    follow_repository()
+    show_files()
+    show_commits()
   end, session.settings.git)
 end)
 
@@ -197,62 +245,63 @@ local function look_again()
   end
 end
 
---- Notes that the pane is shown, and follows the repository from then on
---- (`follow_repository()`), or looks for it again while there is none
---- (`look_again()`).
+--- Notes that the pane is shown, and, at the main loop's next turn, follows
+--- the repository from then on (`follow_repository()`), or looks for it
+--- again while there is none (`look_again()`): once for every showing in
+--- one turn, as both of the pane's buffers entering their windows are one
+--- showing.
 local function pane_shown()
   if not session then
     return
   end
   session.shown = true
-  look_again()
-  follow_repository()
-end
-
---- `path` with every symbolic link it leads through resolved, or as it is
---- when it cannot be resolved.
----
----@param path string
----@return string
-local function resolved(path)
-  return vim.uv.fs_realpath(path) or path
+  if session.following_soon then
+    return
+  end
+  session.following_soon = true
+  vim.schedule(function()
+    session.following_soon = false
+    look_again()
+    follow_repository()
+  end)
 end
 
 --- Marks the file a save wrote, `written`, when it lies under the
 --- repository's top level, both resolved — a file opened through a
---- symbolic link to the repository counts — and reads the files again once
---- the pane has been shown, whether the watch saw the save or not. While
---- there is no repository, the save marks nothing and aineo looks for one
---- again (`look_again()`).
+--- symbolic link to the repository counts (`mark_saved()`) — and reads the
+--- files again once the pane has been shown, whether the watch saw the save
+--- or not. A save made while the first look for the repository runs is
+--- marked once it is found (`find`). While no repository was found, the
+--- save marks nothing and aineo looks for one again (`look_again()`).
 ---
 ---@param written string the written file's absolute path, as it was opened
 local function note_save(written)
-  if not session.repository then
+  if session.absence then
     look_again()
-    return
-  end
-  local top = resolved(session.repository.top) .. '/'
-  local file = resolved(written)
-  if not vim.startswith(file, top) then
-    return
-  end
-  session.saved[file:sub(#top + 1)] = true
-  if session.shown then
+  elseif not session.repository then
+    table.insert(session.early_saves, resolved(written))
+  elseif mark_saved(resolved(written)) and session.shown then
     read_files()
   end
 end
 
 --- Begins the session for `settings.directory`: finds its repository, whose
 --- `HEAD` is the session's base, and marks the files the user saves from
---- then on. The session lasts the editor's life: once begun, a call does
---- nothing, as a restart of Claude Code calls it again.
+--- then on (`note_save()`). The session lasts the editor's life: once
+--- begun, a call does nothing, as a restart of Claude Code calls it again.
 ---
 ---@param settings aineo.changes.SessionSettings
 function M.begin_session(settings)
   if session then
     return
   end
-  session = { settings = settings, shown = false, saved = {} }
+  session = {
+    settings = settings,
+    shown = false,
+    following_soon = false,
+    saved = {},
+    early_saves = {},
+  }
   local group = vim.api.nvim_create_augroup('aineo_changes', {})
   vim.api.nvim_create_autocmd({ 'BufWritePost', 'FileWritePost', 'FileAppendPost' }, {
     group = group,
@@ -344,9 +393,13 @@ local function read_diff(entry, done)
   end
 end
 
+--- How many times Enter has asked for a diff (`open_entry()`).
+local enters = 0
+
 --- Reads the diff of the entry the line under the cursor lists in `buffer`
---- (`read_diff()`) and shows it (`show_diff()`); does nothing on a line
---- that lists none.
+--- (`read_diff()`) and shows it (`show_diff()`), unless Enter asked for
+--- another diff meanwhile: only the last Enter's diff is shown, or its
+--- failure told. Does nothing on a line that lists none.
 ---
 ---@param buffer integer
 local function open_entry(buffer)
@@ -354,7 +407,12 @@ local function open_entry(buffer)
   if not entry then
     return
   end
+  enters = enters + 1
+  local this_enter = enters
   read_diff(entry, function(failure, diff)
+    if this_enter ~= enters then
+      return
+    end
     if failure then
       vim.notify(
         ('aineo: the diff of %s could not be read: %s'):format(
@@ -420,7 +478,8 @@ end
 --- or unloaded, as `:bdelete` unloads it — taking its name from any buffer
 --- holding it; `:edit` and `:edit!` write it again. Whenever either enters
 --- a window, the pane is shown: the first time, the watch starts, and each
---- time both lists are read again.
+--- time both lists are read again, once for every showing in one turn of
+--- the main loop (`pane_shown()`).
 ---
 ---@return { files: integer, commits: integer }
 function M.pane_buffers()
