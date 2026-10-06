@@ -56,15 +56,17 @@ local BEGIN_AND_SHOW = [[
 ]]
 
 --- The Lua that wraps each function of the git home in the child so that
---- `_G.git_calls[name]` counts its calls and `_G.git_answers[name]` the
---- answers it gave, each counted once the caller's `done` has run.
+--- `_G.git_calls[name]` counts its calls, `_G.git_given[name]` the answers
+--- it gave, each counted before the caller's `done` runs, and
+--- `_G.git_answers[name]` those answers again, each counted once `done` has
+--- run.
 local SPY_ON_GIT = [[
   local git = require('aineo.git')
-  _G.git_calls, _G.git_answers = {}, {}
+  _G.git_calls, _G.git_given, _G.git_answers = {}, {}, {}
   local names = { 'find_repository', 'changed_files', 'commits_since', 'watch_repository', 'file_diff', 'commit_diff' }
   for _, name in ipairs(names) do
     local original = git[name]
-    _G.git_calls[name], _G.git_answers[name] = 0, 0
+    _G.git_calls[name], _G.git_given[name], _G.git_answers[name] = 0, 0, 0
     git[name] = function(...)
       _G.git_calls[name] = _G.git_calls[name] + 1
       local arguments = { ... }
@@ -72,6 +74,7 @@ local SPY_ON_GIT = [[
         if type(arguments[index]) == 'function' and name ~= 'watch_repository' then
           local done = arguments[index]
           arguments[index] = function(...)
+            _G.git_given[name] = _G.git_given[name] + 1
             done(...)
             _G.git_answers[name] = _G.git_answers[name] + 1
           end
@@ -952,67 +955,226 @@ T['a buffer of the pane']['gone as its list is read, lists what is read later on
   )
 end
 
---- The Lua that makes, in the child, the next write of lines into the files
---- buffer named `...` raise an error, as a buffer under textlock refuses it;
+--- Each way the child's editor holds textlock while its main loop runs, as a
+--- set's `parametrize`: its name, the Lua that makes it ready, the keys that
+--- begin it from the files window, and the keys that end it once
+--- `_G.released` is set. `_G.holding` is true while it holds.
+local TEXTLOCK_HOLDS = {
+  {
+    'an expression mapping waiting for a key',
+    [[
+      vim.keymap.set('n', 'X', function()
+        _G.holding = true
+        vim.fn.getcharstr()
+        _G.holding = false
+        return ''
+      end, { expr = true })
+    ]],
+    'X',
+    'q',
+  },
+  {
+    'a completion function waiting',
+    [[
+      _G.complete_once_released = function(findstart)
+        if findstart == 1 then
+          _G.holding = true
+          vim.wait(20000, function() return _G.released end, 10)
+          _G.holding = false
+          return 0
+        end
+        return {}
+      end
+      vim.cmd('aboveleft new')
+      vim.bo.completefunc = 'v:lua.complete_once_released'
+      vim.cmd('wincmd p')
+    ]],
+    '<C-w>ki<C-x><C-u>',
+    '<Esc>',
+  },
+}
+
+--- Presses `keys` in the child, which begin a hold of `TEXTLOCK_HOLDS`, and
+--- waits until it holds.
+---
+---@param keys string
+local function begin_hold(keys)
+  child.api.nvim_input(keys)
+  git_repo.wait_until('textlock held', function()
+    return child.lua_get('_G.holding == true')
+  end)
+end
+
+--- Ends the child's hold of `TEXTLOCK_HOLDS` with `keys`, and waits until it
+--- has ended, at most `git_repo.PATIENCE_MS`: a message the editor shows
+--- meanwhile can take the keys instead, which the case's assertions then
+--- tell.
+---
+---@param keys string
+local function end_hold(keys)
+  child.lua('_G.released = true')
+  child.api.nvim_input(keys)
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return child.lua_get('_G.holding == false')
+  end, 10)
+end
+
+--- Writes a stand-in for git under the fixture `git-<name>` whose gits
+--- whose arguments match `pattern`, a shell `case` pattern, wait until a
+--- gate file exists before they run; returns the stand-in's path and the
+--- gate's, which no case has made yet.
+---
+---@param name string
+---@param pattern string
+---@return string stand_in
+---@return string gate
+local function gated_git(name, pattern)
+  local stand_in = stand_in_git(name, {
+    ('case " $* " in %s) while [ ! -f "$0.gate" ]; do sleep 0.05; done ;; esac'):format(pattern),
+  })
+  return stand_in, stand_in .. '.gate'
+end
+
+--- What the child's buffer named `...` shows and whether it is modifiable.
+local SHOWN_AND_MODIFIABLE = [[(function(name)
+  local buffer = vim.fn.bufnr(name)
+  return { lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, true), modifiable = vim.bo[buffer].modifiable }
+end)(...)]]
+
+T['a buffer of the pane']['its lists read while textlock holds'] =
+  MiniTest.new_set({ parametrize = TEXTLOCK_HOLDS })
+
+T['a buffer of the pane']['its lists read while textlock holds']['are shown once it ends, read-only meanwhile, telling nothing, under'] = function(
+  _,
+  ready,
+  hold,
+  release
+)
+  local top = git_repo.create('changespane-textlock', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local gated, gate = gated_git('changespane-textlock', '*" ls-files "*|*" log "*')
+  child.lua(SPY_ON_GIT)
+  child.lua(ready)
+  begin_and_show(top, { executable = gated })
+  begin_hold(hold)
+  vim.fn.writefile({}, gate)
+  git_repo.wait_until('both lists read', function()
+    return child.lua_get('_G.git_given.changed_files == 1 and _G.git_given.commits_since == 1')
+  end)
+  local meanwhile = {
+    files = child.lua_get(SHOWN_AND_MODIFIABLE, { FILES }),
+    commits = child.lua_get(SHOWN_AND_MODIFIABLE, { COMMITS }),
+    told = child.cmd_capture('messages'),
+  }
+
+  end_hold(release)
+
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return vim.deep_equal(lines_of(FILES), { '  M notes.txt' })
+  end, 10)
+  eq({
+    meanwhile = meanwhile,
+    files = child.lua_get(SHOWN_AND_MODIFIABLE, { FILES }),
+    commits = child.lua_get(SHOWN_AND_MODIFIABLE, { COMMITS }),
+    told = child.cmd_capture('messages'),
+    reads = child.lua_get('{ _G.git_calls.changed_files, _G.git_calls.commits_since }'),
+  }, {
+    meanwhile = {
+      files = { lines = READING, modifiable = false },
+      commits = { lines = READING, modifiable = false },
+      told = '',
+    },
+    files = { lines = { '  M notes.txt' }, modifiable = false },
+    commits = { lines = { 'No commits on this session' }, modifiable = false },
+    told = '',
+    reads = { 1, 1 },
+  })
+end
+
+--- The error `FAIL_ONE_WRITE` raises: one Neovim raises for no textlock.
+local WRITE_FAILURE = 'a write failing for no textlock'
+
+--- The Lua that makes, in the child, the next write of lines into the buffer
+--- named `...` raise `WRITE_FAILURE`, as a page holding a line break would;
 --- every other write goes through.
-local REFUSE_ONE_WRITE = [[
-  local name = ...
+local FAIL_ONE_WRITE = [[
+  local name, failure = ...
   local set_lines = vim.api.nvim_buf_set_lines
-  local refused = false
+  local failed = false
   vim.api.nvim_buf_set_lines = function(buffer, ...)
-    if not refused and buffer == vim.fn.bufnr(name) then
-      refused = true
-      error('E565: Not allowed to change text or change window')
+    if not failed and buffer == vim.fn.bufnr(name) then
+      failed = true
+      error(failure, 0)
     end
     return set_lines(buffer, ...)
   end
 ]]
 
-T['a buffer of the pane']['that refuses its list once is written by the reads after it'] = function()
-  local top = git_repo.create('changespane-refused-write', { ['notes.txt'] = { 'one' } })
-  begin_and_show(top)
-  expect_lines(FILES, { 'No files changed on this session' })
-  child.lua(REFUSE_ONE_WRITE, { FILES })
-  in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
+--- The Lua expression giving how many times the child's messages hold the
+--- text `...`, which holds no pattern character.
+local TIMES_TOLD =
+  [[select(2, vim.api.nvim_exec2('messages', { output = true }).output:gsub(..., ''))]]
 
-  in_file(vim.fs.joinpath(top, 'other.txt'), "call setline(1, 'other') | write")
+T['a buffer of the pane']['failing to take a list read'] = MiniTest.new_set({
+  parametrize = {
+    { FILES, '*" ls-files "*', 'changed_files', { '  M notes.txt' } },
+    { COMMITS, '*" log "*', 'commits_since', { 'No commits on this session' } },
+  },
+})
 
-  expect_lines(FILES, { '* M notes.txt', '* ? other.txt' })
-end
-
-T['a buffer of the pane']['that refuses its commits once is written by the reads after it'] = function()
-  local top = git_repo.create('changespane-refused-commits', { ['notes.txt'] = { 'one' } })
-  begin_and_show(top)
-  expect_lines(COMMITS, { 'No commits on this session' })
-  child.lua(REFUSE_ONE_WRITE, { COMMITS })
+T['a buffer of the pane']['failing to take a list read']['tells it once, stays read-only, and lists the next read, for'] = function(
+  name,
+  pattern,
+  read,
+  listed
+)
+  local top = git_repo.create('changespane-failed-write', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
-  local first = git_repo.commit_all(top, 'Write two')
-  child.lua(SHOW_FILES_AGAIN)
-  git_repo.write(top, 'notes.txt', { 'three' })
-  local second = git_repo.commit_all(top, 'Write three')
+  local gated, gate = gated_git('changespane-failed-write', pattern)
+  child.lua(SPY_ON_GIT)
+  begin_and_show(top, { executable = gated })
+  git_repo.wait_until('the look answered', function()
+    return child.lua_get('_G.git_given.find_repository == 1')
+  end)
+  child.lua(FAIL_ONE_WRITE, { name, WRITE_FAILURE })
+  vim.fn.writefile({}, gate)
+  git_repo.wait_until('the list read', function()
+    return child.lua_get('_G.git_given[...] == 1', { read })
+  end)
+  local meanwhile = child.lua_get(SHOWN_AND_MODIFIABLE, { name })
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(COMMITS, { second:sub(1, 7) .. ' Write three', first:sub(1, 7) .. ' Write two' })
+  expect_lines(name, listed)
+  eq(
+    { meanwhile = meanwhile, told = child.lua_get(TIMES_TOLD, { WRITE_FAILURE }) },
+    { meanwhile = { lines = READING, modifiable = false }, told = 1 }
+  )
 end
 
-T['a buffer of the pane']['that refuses what the first look found is written by the looks after it'] = function()
-  local directory = git_repo.directory('changespane-refused-look')
-  local slow = stand_in_git('changespane-refused-look', {
-    'case " $* " in *" --show-toplevel "*) sleep 1 ;; esac',
-  })
+T['a buffer of the pane']['failing to take what the first look found tells it once, stays read-only, and lists the next look'] = function()
+  local directory = git_repo.directory('changespane-failed-look')
+  local gated, gate = gated_git('changespane-failed-look', '*" --show-toplevel "*')
   child.lua(SPY_ON_GIT)
-  begin_and_show(directory, { executable = slow })
-  child.lua(REFUSE_ONE_WRITE, { COMMITS })
-  eq(child.lua_get('_G.git_answers.find_repository'), 0)
-  expect_lines(FILES, not_in_a_repository(directory))
+  begin_and_show(directory, { executable = gated })
+  child.lua(FAIL_ONE_WRITE, { COMMITS, WRITE_FAILURE })
+  vim.fn.writefile({}, gate)
+  git_repo.wait_until('the look answered', function()
+    return child.lua_get('_G.git_given.find_repository == 1')
+  end)
+  local meanwhile = child.lua_get(SHOWN_AND_MODIFIABLE, { COMMITS })
   git_repo.git(directory, { 'init', '--quiet', '--initial-branch=main' })
   git_repo.write(directory, 'notes.txt', { 'one' })
   git_repo.commit_all(directory, 'First')
 
   child.lua(SHOW_FILES_AGAIN)
 
+  expect_lines(COMMITS, { 'No commits on this session' })
   expect_lines(FILES, { 'No files changed on this session' })
+  eq(
+    { meanwhile = meanwhile, told = child.lua_get(TIMES_TOLD, { WRITE_FAILURE }) },
+    { meanwhile = { lines = READING, modifiable = false }, told = 1 }
+  )
 end
 
 T['a buffer of the pane']['keeps no undo history of the lists it was written'] = function()
@@ -1314,6 +1476,55 @@ T['Enter']['twice in quick succession shows only the last Enter’s diff, the fi
     child.lua_get('vim.tbl_map(vim.api.nvim_buf_get_name, _G.shown_diffs)'),
     { 'aineo://diff/b.txt' }
   )
+end
+
+--- What the child shows of the diffs the home asked it to show, and what it
+--- told: their names, the first line of each, and whether each is
+--- modifiable.
+local SHOWN_DIFFS = [[{
+  names = vim.tbl_map(vim.api.nvim_buf_get_name, _G.shown_diffs),
+  first_lines = vim.tbl_map(function(buffer) return vim.api.nvim_buf_get_lines(buffer, 0, 1, true)[1] end, _G.shown_diffs),
+  modifiable = vim.tbl_map(function(buffer) return vim.bo[buffer].modifiable end, _G.shown_diffs),
+  told = vim.api.nvim_exec2('messages', { output = true }).output,
+}]]
+
+T['Enter']['read while textlock holds'] = MiniTest.new_set({ parametrize = TEXTLOCK_HOLDS })
+
+T['Enter']['read while textlock holds']['shows the diff once it ends, telling nothing meanwhile, under'] = function(
+  _,
+  ready,
+  hold,
+  release
+)
+  local top = git_repo.create('changespane-diff-textlock', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local gated, gate = gated_git('changespane-diff-textlock', '*" diff "*notes.txt*')
+  child.lua(SPY_ON_GIT)
+  child.lua(ready)
+  begin_and_show(top, { executable = gated })
+  expect_lines(FILES, { '  M notes.txt' })
+  child.type_keys('<CR>')
+  begin_hold(hold)
+  vim.fn.writefile({}, gate)
+  git_repo.wait_until('the diff read', function()
+    return child.lua_get('_G.git_given.file_diff == 1')
+  end)
+  local meanwhile = child.lua_get(SHOWN_DIFFS)
+
+  end_hold(release)
+
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return child.lua_get('#_G.shown_diffs') > 0
+  end, 10)
+  eq({ meanwhile = meanwhile, shown = child.lua_get(SHOWN_DIFFS) }, {
+    meanwhile = { names = {}, first_lines = {}, modifiable = {}, told = '' },
+    shown = {
+      names = { 'aineo://diff/notes.txt' },
+      first_lines = { 'diff --git a/notes.txt b/notes.txt' },
+      modifiable = { false },
+      told = '',
+    },
+  })
 end
 
 T['Enter']['again on the same file keeps no undo history of the diff it showed'] = function()

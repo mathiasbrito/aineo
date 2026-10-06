@@ -60,16 +60,19 @@ local function diff_lines(diff)
   return text
 end
 
---- Writes `text` into the diff buffer `buffer`, whatever its `'modifiable'`,
---- leaving it not modifiable, with `'filetype'` `diff`.
+--- Writes `text` into the diff buffer `buffer` (`aineo.changes.scratch`'s
+--- `write_text()`), leaving it not modifiable, with `'filetype'` `diff`, and
+--- returns whether it was written.
 ---
 ---@param buffer integer
 ---@param text string[]
+---@return boolean written
 local function write_diff(buffer, text)
-  vim.bo[buffer].modifiable = true
-  vim.api.nvim_buf_set_lines(buffer, 0, -1, true, text)
-  vim.bo[buffer].modifiable = false
+  if not scratch.write_text(buffer, text) then
+    return false
+  end
   vim.bo[buffer].filetype = 'diff'
+  return true
 end
 
 --- The lines each diff buffer `M.diff_buffer()` made shows, by buffer; a
@@ -82,10 +85,13 @@ local shown_lines = {}
 --- `'filetype'` `diff`, wiped once hidden, and written again by `:edit`.
 --- The buffer this made last under `name`, while it exists, is written
 --- anew and kept, in the windows that show it; otherwise a new one is made.
+--- Returns nil when Neovim refuses the text, as it does while textlock
+--- holds: the buffer is then kept as it was, or, made, kept empty, for the
+--- next call under `name` to write.
 ---
 ---@param name string
 ---@param diff string
----@return integer buffer
+---@return integer|nil buffer
 function M.diff_buffer(name, diff)
   local text = diff_lines(diff)
   for existing in pairs(shown_lines) do
@@ -93,15 +99,15 @@ function M.diff_buffer(name, diff)
       shown_lines[existing] = nil
     elseif vim.api.nvim_buf_get_name(existing) == name then
       shown_lines[existing] = text
-      write_diff(existing, text)
-      return existing
+      return write_diff(existing, text) and existing or nil
     end
   end
+  local written = false
   local buffer = scratch.named_scratch_buffer(name, 'wipe', function(made)
-    write_diff(made, shown_lines[made] or text)
+    written = write_diff(made, shown_lines[made] or text)
   end)
   shown_lines[buffer] = text
-  return buffer
+  return written and buffer or nil
 end
 
 return M

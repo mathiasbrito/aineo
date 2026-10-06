@@ -1,6 +1,8 @@
 --- Writes a window's page (`aineo.changes.lines`) into a buffer of the
 --- changes pane, and tells which entry a line of it lists.
 
+local scratch = require('aineo.changes.scratch')
+
 local M = {}
 
 --- The page each buffer was last given, by buffer.
@@ -22,12 +24,15 @@ local function line_listing(page, key)
   return nil
 end
 
---- Writes `page` into `buffer`, whatever its `'modifiable'`, leaving it not
---- modifiable. In each window showing `buffer`, the cursor stays on the
---- entry it was on when the page lists it still, at the same column.
+--- Writes `page` into `buffer` (`aineo.changes.scratch`'s `write_text()`),
+--- leaving it not modifiable, and returns whether it was written. In each
+--- window showing `buffer`, the cursor stays on the entry it was on when the
+--- page lists it still, at the same column. A page Neovim refused leaves
+--- the buffer, and the entries its lines list, as they were.
 ---
 ---@param buffer integer
 ---@param page aineo.changes.Page
+---@return boolean written
 function M.write_page(buffer, page)
   local before = pages[buffer]
   local kept = {}
@@ -36,9 +41,9 @@ function M.write_page(buffer, page)
     local entry = before and before.entries[cursor[1]]
     kept[window] = { key = entry and entry.key, column = cursor[2] }
   end
-  vim.bo[buffer].modifiable = true
-  vim.api.nvim_buf_set_lines(buffer, 0, -1, true, page.text)
-  vim.bo[buffer].modifiable = false
+  if not scratch.write_text(buffer, page.text) then
+    return false
+  end
   pages[buffer] = page
   for window, cursor in pairs(kept) do
     local line = line_listing(page, cursor.key)
@@ -46,6 +51,7 @@ function M.write_page(buffer, page)
       vim.api.nvim_win_set_cursor(window, { line, cursor.column })
     end
   end
+  return true
 end
 
 --- The entry line `line` of `buffer` lists in the page it was last given,
