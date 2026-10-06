@@ -95,6 +95,7 @@ local TAGS = {
   'aineo-\\c',
   'aineo-\\pa',
   'aineo-\\pc',
+  'aineo-v_\\s',
   'g:aineo',
   'aineo.setup()',
   'aineo-config-prefix',
@@ -116,17 +117,21 @@ local TAGS = {
 
 --- The tags the running plugin says the help must hold, sorted: one per
 --- subcommand `:Aineo` completes, per `<Plug>(aineo-…)` mapping, per prefix
---- key mapped to one, and per setting the configuration resolves.
+--- key mapped to one — `aineo-{keys}` in Normal mode, `aineo-v_{keys}` in
+--- Visual mode, after Vim's own `v_` tags — and per setting the
+--- configuration resolves.
 local TAGS_THE_PLUGIN_DEFINES = [[
   local tags = {}
   for _, subcommand in ipairs(vim.fn.getcompletion('Aineo ', 'cmdline')) do
     table.insert(tags, ':Aineo-' .. subcommand)
   end
-  for _, mapping in ipairs(vim.api.nvim_get_keymap('n')) do
-    if vim.startswith(mapping.lhs, '<Plug>(aineo-') then
-      table.insert(tags, mapping.lhs)
-    elseif mapping.rhs and vim.startswith(mapping.rhs, '<Plug>(aineo-') then
-      table.insert(tags, 'aineo-' .. mapping.lhs)
+  for mode, key_tag in pairs({ n = 'aineo-', x = 'aineo-v_' }) do
+    for _, mapping in ipairs(vim.api.nvim_get_keymap(mode)) do
+      if vim.startswith(mapping.lhs, '<Plug>(aineo-') then
+        table.insert(tags, mapping.lhs)
+      elseif mapping.rhs and vim.startswith(mapping.rhs, '<Plug>(aineo-') then
+        table.insert(tags, key_tag .. mapping.lhs)
+      end
     end
   end
   local function add_settings(path, value)
