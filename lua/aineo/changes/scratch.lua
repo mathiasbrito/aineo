@@ -22,8 +22,9 @@ local function free_name(name)
   end
 end
 
---- Makes `buffer` a scratch buffer — no file, unlisted, no swap file —
---- kept when hidden, or wiped once hidden when `bufhidden` says `wipe`.
+--- Makes `buffer` a scratch buffer — no file, unlisted, no swap file, no
+--- undo history, since the user cannot change its text — kept when hidden,
+--- or wiped once hidden when `bufhidden` says `wipe`.
 ---
 ---@param buffer integer
 ---@param bufhidden 'hide'|'wipe'
@@ -32,6 +33,7 @@ local function make_scratch(buffer, bufhidden)
   vim.bo[buffer].bufhidden = bufhidden
   vim.bo[buffer].buflisted = false
   vim.bo[buffer].swapfile = false
+  vim.bo[buffer].undolevels = -1
 end
 
 --- A new scratch buffer under `name` (`make_scratch()`), which any other

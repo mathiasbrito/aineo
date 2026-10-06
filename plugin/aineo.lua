@@ -315,11 +315,16 @@ end
 --- Shows `pane` in the layout's right column (`aineo.layout`'s
 --- `show_pane()`). When the layout must open first, it opens as `focus()`
 --- opens it, around the Claude session's terminal as it is, and Input is
---- then handed to the draft home (`keep_input_draft()`).
+--- then handed to the draft home (`keep_input_draft()`). The changes pane,
+--- already shown, is read again first (`aineo.changes`'s
+--- `refresh_shown_pane()`), as showing it anew reads it.
 ---
 ---@param pane aineo.layout.Pane
 local function show_pane(pane)
   local config = resolved_config()
+  if pane == 'changes' then
+    require('aineo.changes').refresh_shown_pane()
+  end
   local opened = false
   require('aineo.layout').show_pane(pane, function()
     opened = true

@@ -504,14 +504,57 @@ end
 --- What a window says first once its last read failed with `fatal: broken`.
 local REFRESH_FAILED = 'The last refresh failed: fatal: broken'
 
+--- What a window says, under its line naming the directory, when git found
+--- no repository there: git's words.
+local NOT_A_REPOSITORY_WORDS =
+  'git: fatal: not a git repository (or any of the parent directories): .git'
+
+--- What both windows say for `directory`, in no repository.
+---
+---@param directory string
+---@return string[]
+local function not_in_a_repository(directory)
+  return { 'Not in a git repository: ' .. directory, NOT_A_REPOSITORY_WORDS }
+end
+
 T['outside a repository'] = MiniTest.new_set()
 
-T['outside a repository']['both windows say so, naming the directory'] = function()
+T['outside a repository']['both windows say so, naming the directory, in git’s words too'] = function()
   local directory = git_repo.directory('changespane-no-repository')
 
   begin_and_show(directory)
 
-  local expected = { 'Not in a git repository: ' .. directory }
+  expect_lines(FILES, not_in_a_repository(directory))
+  expect_lines(COMMITS, not_in_a_repository(directory))
+end
+
+T['outside a repository']['a repository git refuses for its owner is told in git’s words'] = function()
+  local top = git_repo.create('changespane-other-owner', { ['notes.txt'] = { 'one' } })
+  child.lua('vim.env.GIT_TEST_ASSUME_DIFFERENT_OWNER = "1"')
+
+  begin_and_show(top)
+
+  local expected = {
+    'Not in a git repository: ' .. top,
+    ("git: fatal: detected dubious ownership in repository at '%s' To add an exception for this directory, call: git config --global --add safe.directory %s"):format(
+      top,
+      top
+    ),
+  }
+  expect_lines(FILES, expected)
+  expect_lines(COMMITS, expected)
+end
+
+T['outside a repository']['a bare repository is told in git’s words'] = function()
+  local directory = git_repo.directory('changespane-bare')
+  git_repo.git(directory, { 'init', '--quiet', '--bare' })
+
+  begin_and_show(directory)
+
+  local expected = {
+    'Not in a git repository: ' .. directory,
+    'git: fatal: this operation must be run in a work tree',
+  }
   expect_lines(FILES, expected)
   expect_lines(COMMITS, expected)
 end
@@ -532,7 +575,7 @@ end
 T['outside a repository']['the pane, shown again, lists a repository made since, from its HEAD then'] = function()
   local directory = git_repo.directory('changespane-later')
   begin_and_show(directory)
-  expect_lines(FILES, { 'Not in a git repository: ' .. directory })
+  expect_lines(FILES, not_in_a_repository(directory))
   git_repo.git(directory, { 'init', '--quiet', '--initial-branch=main' })
   git_repo.write(directory, 'notes.txt', { 'one' })
   git_repo.commit_all(directory, 'First')
@@ -546,7 +589,7 @@ end
 T['outside a repository']['a save looks again for a repository made since, the save itself unmarked'] = function()
   local directory = git_repo.directory('changespane-later-saved')
   begin_and_show(directory)
-  expect_lines(FILES, { 'Not in a git repository: ' .. directory })
+  expect_lines(FILES, not_in_a_repository(directory))
   git_repo.git(directory, { 'init', '--quiet', '--initial-branch=main' })
 
   in_file(vim.fs.joinpath(directory, 'notes.txt'), "call setline(1, 'one') | write")
@@ -562,7 +605,7 @@ T['outside a repository']['keeps the base the first look found, a look asked for
   })
   child.lua(SPY_ON_GIT)
   begin_and_show(directory, { executable = slow })
-  expect_lines(FILES, { 'Not in a git repository: ' .. directory })
+  expect_lines(FILES, not_in_a_repository(directory))
   git_repo.git(directory, { 'init', '--quiet', '--initial-branch=main' })
   git_repo.write(directory, 'notes.txt', { 'one' })
   git_repo.commit_all(directory, 'First')
@@ -672,6 +715,9 @@ T['a failed watch']['that cannot start is told until one starts'] = function()
   end)
   assert(vim.uv.fs_rename(git_directory, away), 'cannot move ' .. git_directory)
   child.lua([[vim.api.nvim_win_set_buf(0, vim.fn.bufnr('aineo://changes-files'))]])
+  git_repo.wait_until('the watch started', function()
+    return child.lua_get('_G.git_calls.watch_repository') == 1
+  end)
   assert(vim.uv.fs_rename(away, git_directory), 'cannot move ' .. away)
 
   in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
@@ -785,6 +831,119 @@ T['a buffer of the pane']['deleted from its own window, is made anew listing aga
   eq(
     { made.files ~= deleted and made.commits ~= deleted, child.lua_get(BUFFER_STATE, { name }) },
     { true, vim.tbl_extend('error', SCRATCH, { lines = expected }) }
+  )
+end
+
+--- The Lua that shows the child's buffer named `...` anew in the window that
+--- shows it: another buffer first, then that buffer again.
+local SHOW_AGAIN = [[
+  local window = vim.fn.bufwinid(...)
+  local shown = vim.api.nvim_win_get_buf(window)
+  vim.api.nvim_win_set_buf(window, vim.api.nvim_create_buf(false, true))
+  vim.api.nvim_win_set_buf(window, shown)
+]]
+
+--- The Lua that makes the pane's buffers anew where one is gone, and shows
+--- the one named `...` in a window of its own below the current one.
+local SHOW_ANEW = [[
+  require('aineo.changes').pane_buffers()
+  vim.cmd('belowright split')
+  vim.api.nvim_win_set_buf(0, vim.fn.bufnr(...))
+]]
+
+--- Waits until every read of the files and of the commits the child's git
+--- home was asked for has answered (`SPY_ON_GIT`).
+local function wait_for_the_reads()
+  git_repo.wait_until('every read answered', function()
+    return child.lua_get(
+      '_G.git_answers.changed_files == _G.git_calls.changed_files and _G.git_answers.commits_since == _G.git_calls.commits_since'
+    )
+  end)
+end
+
+T['a buffer of the pane']['gone as its list is read, lists what is read later once made anew, telling nothing'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'bdelete', FILES, COMMITS },
+      { 'bwipeout', FILES, COMMITS },
+      { 'bdelete', COMMITS, FILES },
+      { 'bwipeout', COMMITS, FILES },
+    },
+  })
+
+T['a buffer of the pane']['gone as its list is read, lists what is read later once made anew, telling nothing']['by'] = function(
+  command,
+  gone,
+  kept
+)
+  local top = git_repo.create('changespane-gone', { ['notes.txt'] = { 'one' } })
+  child.lua(SPY_ON_GIT)
+  begin_and_show(top)
+  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(COMMITS, { 'No commits on this session' })
+  child.cmd(('%s! %d'):format(command, child.fn.bufnr(gone)))
+  child.lua(SHOW_AGAIN, { kept })
+  wait_for_the_reads()
+  local told = child.cmd_capture('messages')
+  child.lua(SHOW_ANEW, { gone })
+  git_repo.write(top, 'other.txt', { 'other' })
+  local commit = git_repo.commit_all(top, 'Add other')
+
+  child.lua(SHOW_AGAIN, { kept })
+
+  wait_for_the_reads()
+  eq(
+    { told, lines_of(FILES), lines_of(COMMITS) },
+    { '', { '  A other.txt' }, { commit:sub(1, 7) .. ' Add other' } }
+  )
+end
+
+--- The Lua that makes, in the child, the next write of lines into the files
+--- buffer raise an error, as a buffer under textlock refuses it; every other
+--- write goes through.
+local REFUSE_ONE_WRITE = [[
+  local set_lines = vim.api.nvim_buf_set_lines
+  local refused = false
+  vim.api.nvim_buf_set_lines = function(buffer, ...)
+    if not refused and buffer == vim.fn.bufnr('aineo://changes-files') then
+      refused = true
+      error('E565: Not allowed to change text or change window')
+    end
+    return set_lines(buffer, ...)
+  end
+]]
+
+T['a buffer of the pane']['that refuses its list once is written by the reads after it'] = function()
+  local top = git_repo.create('changespane-refused-write', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  expect_lines(FILES, { 'No files changed on this session' })
+  child.lua(REFUSE_ONE_WRITE)
+  in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
+
+  in_file(vim.fs.joinpath(top, 'other.txt'), "call setline(1, 'other') | write")
+
+  expect_lines(FILES, { '* M notes.txt', '* ? other.txt' })
+end
+
+T['a buffer of the pane']['keeps no undo history of the lists it was written'] = function()
+  local top = git_repo.create('changespane-no-undo', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  expect_lines(FILES, { 'No files changed on this session' })
+  in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
+  expect_lines(FILES, { '* M notes.txt' })
+
+  in_file(vim.fs.joinpath(top, 'other.txt'), "call setline(1, 'other') | write")
+
+  expect_lines(FILES, { '* M notes.txt', '* ? other.txt' })
+  eq(
+    child.lua_get(
+      '{ vim.fn.undotree(vim.fn.bufnr(...)).seq_last, vim.fn.undotree(vim.fn.bufnr(select(2, ...))).seq_last }',
+      {
+        FILES,
+        COMMITS,
+      }
+    ),
+    { 0, 0 }
   )
 end
 
@@ -964,18 +1123,59 @@ end
 T['Enter']['ten times on the same file leaves one diff buffer'] = function()
   local top = git_repo.create('changespane-diff-ten', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
+  child.lua(SPY_ON_GIT)
   begin_and_show(top)
   expect_lines(FILES, { '  M notes.txt' })
 
   child.type_keys('<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>', '<CR>')
 
-  wait_for_diffs(10)
+  git_repo.wait_until('ten diffs read', function()
+    return child.lua_get('_G.git_answers.file_diff') == 10
+  end)
   eq(
     child.lua_get([[vim.tbl_map(vim.api.nvim_buf_get_name, vim.tbl_filter(function(buffer)
       return vim.startswith(vim.api.nvim_buf_get_name(buffer), 'aineo://diff/')
     end, vim.api.nvim_list_bufs()))]]),
     { 'aineo://diff/notes.txt' }
   )
+end
+
+T['Enter']['twice in quick succession shows only the last Enter’s diff, the first read slower'] = function()
+  local top =
+    git_repo.create('changespane-enter-twice', { ['a.txt'] = { 'a' }, ['b.txt'] = { 'b' } })
+  git_repo.write(top, 'a.txt', { 'a2' })
+  git_repo.write(top, 'b.txt', { 'b2' })
+  local slow = stand_in_git('changespane-enter-twice', {
+    'case " $* " in *" diff "*a.txt*) sleep 1 ;; esac',
+  })
+  child.lua(SPY_ON_GIT)
+  begin_and_show(top, { executable = slow })
+  expect_lines(FILES, { '  M a.txt', '  M b.txt' })
+
+  child.type_keys('<CR>', 'j', '<CR>')
+
+  git_repo.wait_until('both diffs read', function()
+    return child.lua_get('_G.git_answers.file_diff') == 2
+  end)
+  eq(
+    child.lua_get('vim.tbl_map(vim.api.nvim_buf_get_name, _G.shown_diffs)'),
+    { 'aineo://diff/b.txt' }
+  )
+end
+
+T['Enter']['again on the same file keeps no undo history of the diff it showed'] = function()
+  local top = git_repo.create('changespane-diff-no-undo', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  begin_and_show(top)
+  expect_lines(FILES, { '  M notes.txt' })
+  child.type_keys('<CR>')
+  wait_for_diffs(1)
+  git_repo.write(top, 'notes.txt', { 'three' })
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(2)
+  eq(child.lua_get('vim.fn.undotree(_G.shown_diffs[2]).seq_last'), 0)
 end
 
 --- Begins the session in the child for a repository of the fixture
@@ -1247,6 +1447,23 @@ T['the user’s saves']['made before the session began are not marked'] = functi
   begin_and_show(top)
 
   expect_lines(FILES, { '  M notes.txt' })
+end
+
+T['the user’s saves']['made while git first looks for the repository are marked once it is found'] = function()
+  local top = git_repo.create('changespane-saved-early', { ['notes.txt'] = { 'one' } })
+  local slow = stand_in_git('changespane-saved-early', {
+    'case " $* " in *" --show-toplevel "*) sleep 1 ;; esac',
+  })
+  child.lua(SPY_ON_GIT)
+  begin_and_show(top, { executable = slow })
+  in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
+  eq(child.lua_get('_G.git_answers.find_repository'), 0)
+
+  git_repo.wait_until('the repository found', function()
+    return child.lua_get('_G.git_answers.find_repository') == 1
+  end)
+
+  expect_lines(FILES, { '* M notes.txt' })
 end
 
 T['the user’s saves']['refresh the files window where the watch misses them'] = function()
