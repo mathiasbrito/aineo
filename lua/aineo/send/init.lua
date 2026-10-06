@@ -1,5 +1,5 @@
---- aineo's Send home, `require('aineo.send')`: the Input buffer's text into
---- Claude Code's prompt.
+--- aineo's Send home, `require('aineo.send')`: the Input buffer's text, or
+--- a Visual selection of it, into Claude Code's prompt.
 
 local claude = require('aineo.claude')
 local layout = require('aineo.layout')
