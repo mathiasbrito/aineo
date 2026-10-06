@@ -1,6 +1,7 @@
 local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
+local entry_editor = dofile('tests/helpers/entry_editor.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 
 local eq = MiniTest.expect.equality
@@ -74,8 +75,10 @@ end)()]]
 
 --- What `child`'s screen shows on the row of the status line of Claude's
 --- window, across that window's width, without the blanks that pad it on
---- the right: read from mini.test's screenshot, which runs `:redraw` and so
---- draws again only what Neovim was asked to draw again.
+--- the right: read from mini.test's screenshot. Its `:redraw`, in a child
+--- with no user interface, draws the status line again whether or not
+--- anything asked for it, so an empty title's redraw is pinned in an editor
+--- that has one (`entry_editor`).
 ---
 ---@param child table
 ---@return string
@@ -107,8 +110,11 @@ end
 --- `claude.cmd`: it sets the title Claude Code 2.1.292 set for
 --- `--name aineo-title-probe`, `✳ aineo-title-probe` (measured on
 --- 2026-10-06), then, at each line typed into it, `✳ Second name`, then an
---- empty title, as Claude Code does as it exits, and then exits.
+--- empty title, as Claude Code does as it exits, and then exits. It echoes
+--- nothing typed, so that a title comes with nothing else drawn in the
+--- terminal, which would draw its window again.
 local TITLE_SCRIPT = {
+  'stty -echo',
   [[printf '\033]0;\342\234\263 aineo-title-probe\007']],
   'read _',
   [[printf '\033]0;\342\234\263 Second name\007']],
@@ -172,6 +178,45 @@ T["Claude's window"]['draws each title Claude Code sets, and Claude Code again o
     'Second name — ' .. folder,
     'Claude Code — ' .. folder,
   })
+end
+
+--- A terminal program of the tests' own standing in for Claude Code in an
+--- editor with a user interface: it sets the title `✳ aineo-title-probe`,
+--- then, a second after a line is typed into it, an empty title, so that
+--- the empty title comes while the editor has nothing else to draw. It
+--- echoes nothing typed.
+local LATE_EMPTY_TITLE_SCRIPT = {
+  'stty -echo',
+  [[printf '\033]0;\342\234\263 aineo-title-probe\007']],
+  'read _',
+  'sleep 1',
+  [[printf '\033]0;\007']],
+  'read _',
+}
+
+--- The code, run in an editor of `entry_editor`'s, that presses Enter in the
+--- terminal its first window shows, Claude's in the layout.
+local PRESS_ENTER_IN_CLAUDE = [[
+  local terminal = vim.api.nvim_win_get_buf(vim.fn.win_getid(1))
+  vim.api.nvim_chan_send(vim.bo[terminal].channel, '\r')
+]]
+
+T["Claude's window"]['draws Claude Code again on an empty title that comes while the editor draws nothing else'] = function()
+  local script = fixture.write('claude-name-ui/claude.sh', LATE_EMPTY_TITLE_SCRIPT)
+  local settings = { autostart = false, claude = { cmd = { 'sh', script } } }
+  local editor = entry_editor.start(child, entry.restart, {
+    args = { '--cmd', 'lua vim.g.aineo = ' .. vim.inspect(settings, { newline = '', indent = '' }) },
+  })
+  local folder = entry_editor.get(editor, "vim.fn.fnamemodify(vim.fn.getcwd(), ':~')")
+  entry_editor.request(editor, "vim.cmd('Aineo open')")
+  local named = entry_editor.wait_for_screen(editor, 'aineo-title-probe — ' .. folder)
+
+  entry_editor.request(editor, PRESS_ENTER_IN_CLAUDE)
+
+  eq(
+    { named, (entry_editor.wait_for_screen(editor, 'Claude Code — ' .. folder)) },
+    { true, true }
+  )
 end
 
 T["Claude's window"]['reads Claude Code, then the folder, once Claude Code has cleared its title and exited'] = function()
