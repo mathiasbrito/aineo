@@ -187,6 +187,15 @@ function M.enter_input(child)
   child.lua("vim.api.nvim_set_current_win(vim.fn.bufwinid(require('aineo.layout').input_buffer()))")
 end
 
+--- Sets each global option `options` names in `child` to its value, as
+--- `:set` does; sets none when `options` is `nil`.
+---
+---@param child table
+---@param options? table<string, any>
+function M.set_options(child, options)
+  child.lua('for name, value in pairs(... or {}) do vim.o[name] = value end', { options })
+end
+
 --- Types `keys` in `child` as a user would, mappings applied, each key
 --- handled as typed — so that an undo block is what one typed command
 --- makes — and waits until they have run. `keys` are written as in a
