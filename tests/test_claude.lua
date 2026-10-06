@@ -792,4 +792,150 @@ T['write_to_session()']['raises an error once Claude’s terminal is wiped'] = f
   MiniTest.expect.error(write_after_wiping, 'no Claude Code session is running')
 end
 
+--- The expression, run in a Neovim, that gives the session's name and
+--- folder the terminal buffer `...` holds for status lines.
+local SESSION_NAME_AND_FOLDER = [[(function(buffer)
+  return { name = vim.b[buffer].aineo_session_name, folder = vim.b[buffer].aineo_session_folder }
+end)(...)]]
+
+--- The session's name and folder the terminal `buffer` of the child holds
+--- (`SESSION_NAME_AND_FOLDER`).
+---
+---@param buffer integer
+---@return { name: string?, folder: string? }
+local function session_name_and_folder(buffer)
+  return child.lua_get(SESSION_NAME_AND_FOLDER, { buffer })
+end
+
+T["the session's name"] = MiniTest.new_set()
+
+T["the session's name"]['is Claude Code while the title is still the terminal’s own name'] = function()
+  local fake = claude.fake('name-no-title', 'turn')
+  local buffer = claude.start(child, fake)
+  claude.wait_for_start(fake)
+
+  eq(session_name_and_folder(buffer).name, 'Claude Code')
+end
+
+--- Titles and the session's names they give: Claude Code 2.1.292's titles
+--- with no name and with `--name aineo-title-probe`, measured on 2026-10-06
+--- (`knowledge-vault/Implementation/Waves/00008-small-fixes/evidence/
+--- t33-real-claude-title.txt`), its empty title at exit, and the rule's other
+--- cases: a status glyph is left out once, with the space after it.
+T["the session's name"]['read from the title'] = MiniTest.new_set({
+  parametrize = {
+    { '✳ Claude Code', 'Claude Code' },
+    { '✳ aineo-title-probe', 'aineo-title-probe' },
+    { '✳ 🚀 launch', '🚀 launch' },
+    { '✳ * draft', '* draft' },
+    { '✳ Fix 100% CPU', 'Fix 100% CPU' },
+    { '✻ Fix the login bug', 'Fix the login bug' },
+    { 'Claude Code', 'Claude Code' },
+    { '1 draft', '1 draft' },
+    { 'É draft', 'É draft' },
+    { '日 draft', '日 draft' },
+    { '✳', 'Claude Code' },
+    { '✳ ', 'Claude Code' },
+    { '', 'Claude Code' },
+  },
+})
+
+T["the session's name"]['read from the title']['is'] = function(title, name)
+  local fake = claude.fake('name-from-title', 'turn')
+  local buffer = claude.start(child, fake)
+  claude.wait_for_start(fake)
+
+  child.lua('local buffer, title = ...; vim.b[buffer].term_title = title', { buffer, title })
+
+  eq(session_name_and_folder(buffer).name, name)
+end
+
+--- The session's name the terminal `buffer` of the child holds once it is
+--- `name`, waiting for that at most `claude.PATIENCE_MS`, or when the wait
+--- runs out.
+---
+---@param buffer integer
+---@param name string
+---@return string?
+local function wait_for_session_name(buffer, name)
+  local held
+  vim.wait(claude.PATIENCE_MS, function()
+    held = session_name_and_folder(buffer).name
+    return held == name
+  end, 20)
+  return held
+end
+
+T["the session's name"]['is Claude Code once the fake shows the title Claude Code 2.1.281 set at start'] = function()
+  local fake = claude.fake('name-recorded-title', 'ready')
+  local buffer = claude.start(child, fake)
+  claude.wait_for_screen(child, buffer, 'for shortcuts')
+
+  eq(
+    child.lua_get('{ vim.b[...].term_title, vim.b[...].aineo_session_name }', { buffer }),
+    { '✳ Claude Code', 'Claude Code' }
+  )
+end
+
+--- A terminal program of the tests' own standing in for Claude Code: it
+--- sets the title `✳ aineo-title-probe`, then, at each line typed into it,
+--- `✳ Second name`, then an empty title, and then exits.
+local TITLE_SCRIPT = {
+  [[printf '\033]0;\342\234\263 aineo-title-probe\007']],
+  'read _',
+  [[printf '\033]0;\342\234\263 Second name\007']],
+  'read _',
+  [[printf '\033]0;\007']],
+  'read _',
+}
+
+T["the session's name"]['follows each title the terminal sets, back to Claude Code on an empty one'] = function()
+  local fake = claude.fake('name-follows', 'ready')
+  local script = fixture.write('claude-name-follows/titles.sh', TITLE_SCRIPT)
+  local buffer = claude.start(child, fake, { cmd = { 'sh', script } })
+  local names = { wait_for_session_name(buffer, 'aineo-title-probe') }
+
+  claude.press_keys(child, buffer, '\r')
+  table.insert(names, wait_for_session_name(buffer, 'Second name'))
+  claude.press_keys(child, buffer, '\r')
+  table.insert(names, wait_for_session_name(buffer, 'Claude Code'))
+
+  eq(names, { 'aineo-title-probe', 'Second name', 'Claude Code' })
+end
+
+T["the session's folder"] = MiniTest.new_set()
+
+T["the session's folder"]['is the directory Claude Code started in, written from the home directory'] = function()
+  local fake = claude.fake('folder-start', 'turn')
+  local directory = fixture.directory('claude-folder-start')
+
+  local buffer = claude.start(child, fake, { cwd = directory })
+
+  eq(session_name_and_folder(buffer).folder, vim.fn.fnamemodify(directory, ':~'))
+end
+
+--- The expression, run in a Neovim, that shows the terminal buffer `...` in
+--- the current window with `session_statusline()` as that window's status
+--- line, and gives the text that status line draws, however wide.
+local SESSION_STATUSLINE_TEXT = [[(function(buffer)
+  vim.api.nvim_win_set_buf(0, buffer)
+  local statusline = require('aineo.claude').session_statusline()
+  vim.wo[0][0].statusline = statusline
+  return vim.api.nvim_eval_statusline(statusline, { winid = 0, maxwidth = 1000 }).str
+end)(...)]]
+
+T['session_statusline()'] = MiniTest.new_set()
+
+T['session_statusline()']['shows the name, then the folder, a % in either as written'] = function()
+  local fake = claude.fake('statusline-percent', 'turn')
+  local directory = fixture.directory('claude-50%-off')
+  local buffer = claude.start(child, fake, { cwd = directory })
+  claude.wait_for_start(fake)
+  child.lua('vim.b[...].term_title = "✳ Fix 100% CPU"', { buffer })
+
+  local shown = child.lua_get(SESSION_STATUSLINE_TEXT, { buffer })
+
+  eq(shown, 'Fix 100% CPU — ' .. vim.fn.fnamemodify(directory, ':~'))
+end
+
 return T
