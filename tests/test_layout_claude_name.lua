@@ -82,6 +82,17 @@ T["Claude's window's status line"]['leaves the user’s own to another buffer sh
   eq(statusline_of_window_showing(child, other), USERS_STATUSLINE)
 end
 
+T["Claude's window's status line"]['leaves the user’s own to another buffer Claude’s window shows as the layout follows a new terminal'] = function()
+  local buffers = open_with_statusline(child)
+  local other = child.api.nvim_create_buf(false, true)
+  child.api.nvim_win_set_buf(layout.window_showing(child, buffers.claude), other)
+  local terminal = layout.terminal(child)
+
+  child.lua([[require('aineo.layout').follow_claude_terminal(...)]], { terminal })
+
+  eq(statusline_of_window_showing(child, other), USERS_STATUSLINE)
+end
+
 T["Claude's window's status line"]['is given to a new Claude terminal the layout is opened with again'] = function()
   local buffers = open_with_statusline(child)
   local terminal = layout.terminal(child)
