@@ -180,6 +180,46 @@ function M.send_from_expression_mapping(child)
   ]])
 end
 
+--- Moves the cursor in `child` to the window showing the Input buffer.
+---
+---@param child table
+function M.enter_input(child)
+  child.lua("vim.api.nvim_set_current_win(vim.fn.bufwinid(require('aineo.layout').input_buffer()))")
+end
+
+--- Types `keys` in `child` as a user would, mappings applied, each key
+--- handled as typed — so that an undo block is what one typed command
+--- makes — and waits until they have run. `keys` are written as in a
+--- mapping, such as `<C-v>` or `<Esc>`.
+---
+---@param child table
+---@param keys string
+function M.type_keys(child, keys)
+  child.lua(
+    "vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(..., true, false, true), 'mtx', false)",
+    { keys }
+  )
+end
+
+--- Types `keys` in `child`, which make a Visual selection, then sends the
+--- selection as a Visual-mode `\s` will, through a Visual-mode mapping of
+--- the test's own, typed (`type_keys()`), keeping an error the Visual Send
+--- raises for `messages()` rather than raising it in the test.
+---
+---@param child table
+---@param keys string
+function M.send_selection(child, keys)
+  child.lua([[
+    vim.keymap.set('x', '<Plug>(aineo-test-send-selection)', function()
+      local sent, error_message = pcall(require('aineo.send').send_selection)
+      if not sent then
+        table.insert(_G.aineo_test_messages, { error = error_message })
+      end
+    end)
+  ]])
+  M.type_keys(child, keys .. '<Plug>(aineo-test-send-selection)')
+end
+
 --- What `child` has told the user since `restart()`, in order: each
 --- notification as its message and level, and each error `send()` raised as
 --- that error.
