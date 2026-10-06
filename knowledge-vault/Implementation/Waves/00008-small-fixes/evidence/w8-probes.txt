@@ -1,0 +1,520 @@
+Wave 8 planning probes
+======================
+
+Run by the orchestrator's planning agent on 2026-10-06, Neovim 0.12.5 (Homebrew), macOS arm64,
+on dev 9b8707f. Its code is 03a1345's: the diff of the two over lua, plugin, tests, scripts, doc,
+the Makefile and .claude prints nothing. Each probe ran headless in a Neovim isolated by the
+runner below: every XDG directory, the log and CLAUDE_CONFIG_DIR under a scratch directory inside
+the agent's worktree, `--clean`, no shada. The real `claude` never ran, and no file under the
+user's ~/.claude was read. The scratch directory is written `<scratch>` below; a pid is whatever
+the run gave.
+
+Screen columns are 1-based, as screenpos() gives them. A window of 40 columns is made by
+`:vsplit` and nvim_win_set_width(): 'columns' set from `-l` does not narrow a headless window
+(measured first: a line of 63 cells did not wrap after `vim.o.columns = 40`).
+
+The runner
+----------
+
+#!/bin/sh
+# Runs a probe in a Neovim isolated under this directory: every XDG path, the log and
+# CLAUDE_CONFIG_DIR here, no user config, no shada.
+here=$(cd "$(dirname "$0")" && pwd)
+home="$here/home"
+mkdir -p "$home"
+exec env -i PATH="/opt/homebrew/bin:/usr/bin:/bin" HOME="$home" TERM=xterm-256color \
+  XDG_CONFIG_HOME="$home/config" XDG_DATA_HOME="$home/data" XDG_STATE_HOME="$home/state" \
+  XDG_CACHE_HOME="$home/cache" NVIM_LOG_FILE="$home/nvim.log" CLAUDE_CONFIG_DIR="$home/claude" \
+  nvim --clean --headless -i NONE -l "$@"
+
+P1 (T34): where a wrapped Report line continues
+-----------------------------------------------
+
+-- T34: where a wrapped Report line continues, under 'wrap' 'linebreak' 'breakindent'
+-- (T16's three), with and without 'breakindentopt' list:-1 and a 'formatlistpat'.
+local function show(...)
+  io.stdout:write(table.concat(vim.tbl_map(function(v)
+    return type(v) == 'string' and v or vim.inspect(v)
+  end, { ... }), '  '), '\n')
+end
+vim.cmd('vsplit')
+vim.api.nvim_win_set_width(0, 40)
+local lines = {
+  '09:41 [progress] Refactor the parser — moved the tokenizer into its own module and kept the API',
+  '      a detail line long enough to wrap past the forty columns of this window, twice over',
+  '      - a list item long enough to wrap past the forty columns of this window, twice over',
+}
+vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+local win = vim.api.nvim_get_current_win()
+show('window width', vim.api.nvim_win_get_width(win), 'columns', vim.o.columns)
+vim.wo.wrap, vim.wo.linebreak, vim.wo.breakindent = true, true, true
+-- the screen column at which each screen row of a buffer line starts
+local function row_starts(lnum)
+  local text = lines[lnum]
+  local starts, last_row = {}, nil
+  for col = 1, #text do
+    local pos = vim.fn.screenpos(win, lnum, col)
+    if pos.row ~= 0 and pos.row ~= last_row then
+      table.insert(starts, { row = pos.row, screen_col = pos.col, char = vim.fn.strpart(text, col - 1, 1, true) })
+      last_row = pos.row
+    end
+  end
+  return starts
+end
+local function measure(label)
+  vim.cmd('redraw!')
+  show('== ' .. label, "'breakindentopt' " .. vim.wo.breakindentopt, "'formatlistpat' " .. vim.bo.formatlistpat)
+  for l = 1, #lines do
+    local parts = {}
+    for _, s in ipairs(row_starts(l)) do
+      table.insert(parts, ('row %d at col %d (%s)'):format(s.row, s.screen_col, s.char))
+    end
+    show('  line ' .. l, table.concat(parts, '; '))
+  end
+end
+measure("T16's options only")
+vim.wo.breakindentopt = 'list:-1'
+vim.bo.formatlistpat = [[^\(\d\d:\d\d \|\s*- \)]]
+measure('list:-1, a pattern for the time and for "- "')
+vim.wo.breakindentopt = 'shift:6'
+vim.bo.formatlistpat = ''
+measure('shift:6 alone')
+vim.wo.breakindentopt = 'list:-1'
+vim.bo.formatlistpat = [[^\(\d\d:\d\d \|\s*- \)]]
+vim.wo.number = true
+measure('list:-1 with number on')
+vim.wo.number = false
+vim.wo.breakindent = false
+measure('list:-1 with breakindent off')
+vim.wo.breakindent = true
+vim.wo.linebreak = false
+measure('list:-1 with linebreak off')
+vim.wo.linebreak = true
+lines[1] = '09:41 [done] Füße — ëëëëëëëëëë ëëëëëëëëëë ëëëëëëëëëë ëëëëëëëëëë'
+vim.api.nvim_buf_set_lines(0, 0, 1, false, { lines[1] })
+measure('a header with non-ASCII text after the time')
+lines[1] = '09:41 [done] x'
+lines[2] = '      - ' .. ('ab '):rep(20)
+lines[3] = '      ' .. ('é'):rep(60)
+vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+measure('a detail line of one word longer than the window')
+vim.wo.breakindentopt = 'list:-1,min:20'
+measure('list:-1,min:20')
+lines = {
+  '09:41 [progress] Refactor the parser — moved the tokenizer into its own module and kept the API',
+  '09:41 [done] Refactor the parser — moved the tokenizer into its own module and kept the API',
+  '      - a list item long enough to wrap past the forty columns of this window, twice over',
+}
+vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+vim.wo.breakindentopt = 'list:-1'
+vim.bo.formatlistpat = [[^\(\d\d:\d\d \[\a\+\] \|\s*- \)]]
+measure('list:-1, the header continuing under its task instead')
+show('defaults', vim.api.nvim_get_option_info2('formatlistpat', {}).default, vim.api.nvim_get_option_info2('breakindentopt', {}).default)
+show('scopes', vim.api.nvim_get_option_info2('formatlistpat', {}).scope, vim.api.nvim_get_option_info2('breakindentopt', {}).scope)
+
+Its output:
+
+window width  40  columns  80
+== T16's options only  'breakindentopt'   'formatlistpat' ^\s*\d\+[\]:.)}\t ]\s*
+  line 1  row 1 at col 1 (0); row 2 at col 1 (m); row 3 at col 1 (a)
+  line 2  row 4 at col 1 ( ); row 5 at col 7 (p); row 6 at col 7 (w)
+  line 3  row 7 at col 1 ( ); row 8 at col 7 (p); row 9 at col 7 (w)
+== list:-1, a pattern for the time and for "- "  'breakindentopt' list:-1  'formatlistpat' ^\(\d\d:\d\d \|\s*- \)
+  line 1  row 1 at col 1 (0); row 2 at col 7 (m); row 3 at col 7 (m)
+  line 2  row 4 at col 1 ( ); row 5 at col 7 (p); row 6 at col 7 (w)
+  line 3  row 7 at col 1 ( ); row 8 at col 9 (p); row 9 at col 9 (w)
+== shift:6 alone  'breakindentopt' shift:6  'formatlistpat' 
+  line 1  row 1 at col 1 (0); row 2 at col 7 (m); row 3 at col 7 (m)
+  line 2  row 4 at col 1 ( ); row 5 at col 13 (p); row 6 at col 13 (t)
+  line 3  row 7 at col 1 ( ); row 8 at col 13 (p); row 9 at col 13 (t)
+== list:-1 with number on  'breakindentopt' list:-1  'formatlistpat' ^\(\d\d:\d\d \|\s*- \)
+  line 1  row 1 at col 5 (0); row 2 at col 11 (p); row 3 at col 11 (i); row 4 at col 11 (t)
+  line 2  row 5 at col 5 ( ); row 6 at col 11 (w); row 7 at col 11 (o)
+  line 3  row 8 at col 5 ( ); row 9 at col 13 (w); row 10 at col 13 (o)
+== list:-1 with breakindent off  'breakindentopt' list:-1  'formatlistpat' ^\(\d\d:\d\d \|\s*- \)
+  line 1  row 1 at col 1 (0); row 2 at col 1 (m); row 3 at col 1 (a)
+  line 2  row 4 at col 1 ( ); row 5 at col 1 (p); row 6 at col 1 (t)
+  line 3  row 7 at col 1 ( ); row 8 at col 1 (p); row 9 at col 1 (t)
+== list:-1 with linebreak off  'breakindentopt' list:-1  'formatlistpat' ^\(\d\d:\d\d \|\s*- \)
+  line 1  row 1 at col 1 (0); row 2 at col 7 (o); row 3 at col 7 (d)
+  line 2  row 4 at col 1 ( ); row 5 at col 7 (p); row 6 at col 7 (d)
+  line 3  row 7 at col 1 ( ); row 8 at col 9 (p); row 9 at col 9 (i)
+== a header with non-ASCII text after the time  'breakindentopt' list:-1  'formatlistpat' ^\(\d\d:\d\d \|\s*- \)
+  line 1  row 1 at col 1 (0); row 2 at col 7 (ë)
+  line 2  row 3 at col 1 ( ); row 4 at col 7 (p); row 5 at col 7 (w)
+  line 3  row 6 at col 1 ( ); row 7 at col 9 (p); row 8 at col 9 (w)
+== a detail line of one word longer than the window  'breakindentopt' list:-1  'formatlistpat' ^\(\d\d:\d\d \|\s*- \)
+  line 1  row 1 at col 1 (0)
+  line 2  row 2 at col 1 ( ); row 3 at col 9 (a)
+  line 3  row 4 at col 1 ( ); row 5 at col 7 (é)
+== list:-1,min:20  'breakindentopt' list:-1,min:20  'formatlistpat' ^\(\d\d:\d\d \|\s*- \)
+  line 1  row 1 at col 1 (0)
+  line 2  row 2 at col 1 ( ); row 3 at col 9 (a)
+  line 3  row 4 at col 1 ( ); row 5 at col 7 (é)
+== list:-1, the header continuing under its task instead  'breakindentopt' list:-1  'formatlistpat' ^\(\d\d:\d\d \[\a\+\] \|\s*- \)
+  line 1  row 1 at col 1 (0); row 2 at col 18 (m); row 3 at col 18 (i); row 4 at col 18 (a)
+  line 2  row 5 at col 1 (0); row 6 at col 14 (m); row 7 at col 14 (i); row 8 at col 14 (t)
+  line 3  row 9 at col 1 ( ); row 10 at col 9 (p); row 11 at col 9 (w)
+defaults  ^\s*\d\+[\]:.)}\t ]\s*  
+scopes  buf  win
+
+P4 (T34): 'breakindentopt' from the Report's own BufWinEnter, as :setlocal
+--------------------------------------------------------------------------
+
+-- T34: can the Report's home give its buffer 'breakindentopt' list:-1 in every window
+-- that shows it, from a BufWinEnter autocommand on its own buffer, as `:setlocal`
+-- does (vim.wo[window][0]), without another buffer later shown in that window, or in
+-- a window split from it, taking the value? 'formatlistpat' is buffer-local.
+local function show(...)
+  local parts = {}
+  for index = 1, select('#', ...) do
+    local v = select(index, ...)
+    parts[index] = type(v) == 'string' and v or vim.inspect(v, { newline = ' ', indent = '' })
+  end
+  io.stdout:write(table.concat(parts, '  '), '\n')
+end
+local report = vim.api.nvim_create_buf(false, true)
+local input = vim.api.nvim_create_buf(false, true)
+vim.bo[report].formatlistpat = [[^\(\d\d:\d\d \|\s*- \)]]
+vim.api.nvim_create_autocmd('BufWinEnter', {
+  buffer = report,
+  callback = function()
+    vim.wo[0][0].breakindentopt = 'list:-1'
+  end,
+})
+local function state(label)
+  local rows = {}
+  for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local buffer = vim.api.nvim_win_get_buf(window)
+    table.insert(rows, ('win %d shows %s: breakindentopt=%q formatlistpat=%q'):format(
+      window,
+      buffer == report and 'Report' or buffer == input and 'Input' or ('buffer ' .. buffer),
+      vim.wo[window].breakindentopt,
+      vim.bo[buffer].formatlistpat
+    ))
+  end
+  show('== ' .. label, rows)
+end
+local first = vim.api.nvim_get_current_win()
+vim.api.nvim_win_set_buf(first, report)
+state('Report shown by nvim_win_set_buf')
+vim.api.nvim_win_set_buf(first, input)
+state('Input shown in the same window (a pane switch)')
+vim.api.nvim_win_set_buf(first, report)
+state('Report shown again')
+vim.cmd('split')
+state('the window split from the Report')
+vim.cmd('enew')
+state('a new buffer in the split')
+vim.cmd('close')
+vim.api.nvim_set_current_win(first)
+vim.cmd('setlocal breakindentopt=')
+state('the user empties it with :setlocal')
+vim.api.nvim_win_set_buf(first, input)
+vim.api.nvim_win_set_buf(first, report)
+state('after the next showing')
+vim.api.nvim_buf_call(report, function()
+  vim.cmd('doautocmd BufReadCmd')
+end)
+show("formatlistpat after a BufReadCmd-style :edit", vim.bo[report].formatlistpat)
+
+Its output:
+
+== Report shown by nvim_win_set_buf  { 'win 1000 shows Report: breakindentopt="list:-1" formatlistpat="^\\\\(\\\\d\\\\d:\\\\d\\\\d \\\\|\\\\s*- \\\\)"' }
+== Input shown in the same window (a pane switch)  { 'win 1000 shows Input: breakindentopt="" formatlistpat="^\\\\s*\\\\d\\\\+[\\\\]:.)}\\\\t ]\\\\s*"' }
+== Report shown again  { 'win 1000 shows Report: breakindentopt="list:-1" formatlistpat="^\\\\(\\\\d\\\\d:\\\\d\\\\d \\\\|\\\\s*- \\\\)"' }
+== the window split from the Report  { 'win 1002 shows Report: breakindentopt="list:-1" formatlistpat="^\\\\(\\\\d\\\\d:\\\\d\\\\d \\\\|\\\\s*- \\\\)"', 'win 1000 shows Report: breakindentopt="list:-1" formatlistpat="^\\\\(\\\\d\\\\d:\\\\d\\\\d \\\\|\\\\s*- \\\\)"' }
+== a new buffer in the split  { 'win 1002 shows buffer 4: breakindentopt="" formatlistpat="^\\\\s*\\\\d\\\\+[\\\\]:.)}\\\\t ]\\\\s*"', 'win 1000 shows Report: breakindentopt="list:-1" formatlistpat="^\\\\(\\\\d\\\\d:\\\\d\\\\d \\\\|\\\\s*- \\\\)"' }
+== the user empties it with :setlocal  { 'win 1000 shows Report: breakindentopt="" formatlistpat="^\\\\(\\\\d\\\\d:\\\\d\\\\d \\\\|\\\\s*- \\\\)"' }
+== after the next showing  { 'win 1000 shows Report: breakindentopt="list:-1" formatlistpat="^\\\\(\\\\d\\\\d:\\\\d\\\\d \\\\|\\\\s*- \\\\)"' }
+formatlistpat after a BufReadCmd-style :edit  ^\(\d\d:\d\d \|\s*- \)
+
+P2 (T32): the standard groups, and a default link
+-------------------------------------------------
+
+-- T32: the standard groups aineo's changes-pane groups could link to, as Neovim 0.12.5's
+-- default colour scheme defines them, on a dark and a light background; and whether
+-- `:highlight default link` survives `:highlight clear` and a user's own definition.
+local function show(...)
+  io.stdout:write(table.concat(vim.tbl_map(function(v)
+    return type(v) == 'string' and v or vim.inspect(v, { newline = ' ', indent = '' })
+  end, { ... }), '  '), '\n')
+end
+vim.o.termguicolors = true
+local candidates = {
+  'Added', 'Changed', 'Removed', 'DiffAdd', 'DiffChange', 'DiffDelete', 'DiffText',
+  'diffAdded', 'diffRemoved', 'diffChanged', '@diff.plus', '@diff.minus', '@diff.delta',
+  'Comment', 'Identifier', 'Constant', 'Special', 'Title', 'Directory', 'NonText',
+  'DiagnosticOk', 'DiagnosticWarn', 'DiagnosticError', 'DiagnosticInfo', 'DiagnosticHint',
+  'gitHash', 'Statement', 'String', 'Function', 'WarningMsg', 'ErrorMsg', 'Question',
+}
+for _, background in ipairs({ 'dark', 'light' }) do
+  vim.o.background = background
+  vim.cmd('colorscheme default')
+  show('== background ' .. background)
+  for _, name in ipairs(candidates) do
+    show(name, vim.api.nvim_get_hl(0, { name = name, link = false }), 'link: ' .. tostring(vim.api.nvim_get_hl(0, { name = name }).link))
+  end
+end
+-- a default link and :highlight clear
+vim.cmd('highlight default link AineoChangesAdded Added')
+show('after default link', vim.api.nvim_get_hl(0, { name = 'AineoChangesAdded' }))
+vim.cmd('highlight AineoChangesAdded guifg=#ff00ff')
+vim.cmd('highlight default link AineoChangesAdded Added')
+show('a user colour, then aineo defines again', vim.api.nvim_get_hl(0, { name = 'AineoChangesAdded' }))
+vim.cmd('highlight clear')
+show('after :highlight clear', vim.api.nvim_get_hl(0, { name = 'AineoChangesAdded' }))
+vim.cmd('colorscheme default')
+show('after :colorscheme default', vim.api.nvim_get_hl(0, { name = 'AineoChangesAdded' }))
+-- syntax/git.vim's group for a hash, which the filetype git sets up
+vim.cmd('syntax on')
+local buffer = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_set_current_buf(buffer)
+vim.bo.filetype = 'git'
+show('gitHash after filetype git', vim.api.nvim_get_hl(0, { name = 'gitHash' }))
+
+Its output:
+
+== background dark
+Added  { ctermfg = 10, fg = 11794112 }  link: nil
+Changed  { ctermfg = 14, fg = 9238775 }  link: nil
+Removed  { ctermfg = 9, fg = 16761017 }  link: nil
+DiffAdd  { bg = 21795, ctermbg = 10, ctermfg = 0, fg = 15659512 }  link: nil
+DiffChange  { bg = 5198424, fg = 15659512 }  link: nil
+DiffDelete  { bold = true, cterm = { bold = true }, ctermfg = 9, fg = 16761017 }  link: nil
+DiffText  { bg = 29555, ctermbg = 14, ctermfg = 0, fg = 15659512 }  link: nil
+diffAdded  vim.empty_dict()  link: nil
+diffRemoved  vim.empty_dict()  link: nil
+diffChanged  vim.empty_dict()  link: nil
+@diff.plus  { ctermfg = 10, fg = 11794112 }  link: Added
+@diff.minus  { ctermfg = 9, fg = 16761017 }  link: Removed
+@diff.delta  { ctermfg = 14, fg = 9238775 }  link: Changed
+Comment  { fg = 10198692 }  link: nil
+Identifier  { ctermfg = 12, fg = 10935295 }  link: nil
+Constant  { fg = 14738154 }  link: nil
+Special  { ctermfg = 14, fg = 9238775 }  link: nil
+Title  { bold = true, cterm = { bold = true }, fg = 14738154 }  link: nil
+Directory  { ctermfg = 14, fg = 9238775 }  link: nil
+NonText  { fg = 5198424 }  link: nil
+DiagnosticOk  { ctermfg = 10, fg = 11794112 }  link: nil
+DiagnosticWarn  { ctermfg = 11, fg = 16572564 }  link: nil
+DiagnosticError  { ctermfg = 9, fg = 16761017 }  link: nil
+DiagnosticInfo  { ctermfg = 14, fg = 9238775 }  link: nil
+DiagnosticHint  { ctermfg = 12, fg = 10935295 }  link: nil
+gitHash  vim.empty_dict()  link: nil
+Statement  { bold = true, cterm = { bold = true }, fg = 14738154 }  link: nil
+String  { ctermfg = 10, fg = 11794112 }  link: nil
+Function  { ctermfg = 14, fg = 9238775 }  link: nil
+WarningMsg  { ctermfg = 11, fg = 16572564 }  link: nil
+ErrorMsg  { ctermfg = 9, fg = 16761017 }  link: nil
+Question  { ctermfg = 14, fg = 9238775 }  link: nil
+== background light
+Added  { ctermfg = 2, fg = 21795 }  link: nil
+Changed  { ctermfg = 6, fg = 29555 }  link: nil
+Removed  { ctermfg = 1, fg = 5832712 }  link: nil
+DiffAdd  { bg = 11794112, ctermbg = 2, ctermfg = 15, fg = 460813 }  link: nil
+DiffChange  { bg = 10198692, fg = 460813 }  link: nil
+DiffDelete  { bold = true, cterm = { bold = true }, ctermfg = 1, fg = 5832712 }  link: nil
+DiffText  { bg = 9238775, ctermbg = 6, ctermfg = 15, fg = 460813 }  link: nil
+diffAdded  vim.empty_dict()  link: nil
+diffRemoved  vim.empty_dict()  link: nil
+diffChanged  vim.empty_dict()  link: nil
+@diff.plus  { ctermfg = 2, fg = 21795 }  link: Added
+@diff.minus  { ctermfg = 1, fg = 5832712 }  link: Removed
+@diff.delta  { ctermfg = 6, fg = 29555 }  link: Changed
+Comment  { fg = 5198424 }  link: nil
+Identifier  { ctermfg = 4, fg = 19571 }  link: nil
+Constant  { fg = 1316379 }  link: nil
+Special  { ctermfg = 6, fg = 29555 }  link: nil
+Title  { bold = true, cterm = { bold = true }, fg = 1316379 }  link: nil
+Directory  { ctermfg = 6, fg = 29555 }  link: nil
+NonText  { fg = 10198692 }  link: nil
+DiagnosticOk  { ctermfg = 2, fg = 21795 }  link: nil
+DiagnosticWarn  { ctermfg = 3, fg = 7033600 }  link: nil
+DiagnosticError  { ctermfg = 1, fg = 5832712 }  link: nil
+DiagnosticInfo  { ctermfg = 6, fg = 29555 }  link: nil
+DiagnosticHint  { ctermfg = 4, fg = 19571 }  link: nil
+gitHash  vim.empty_dict()  link: nil
+Statement  { bold = true, cterm = { bold = true }, fg = 1316379 }  link: nil
+String  { ctermfg = 2, fg = 21795 }  link: nil
+Function  { ctermfg = 6, fg = 29555 }  link: nil
+WarningMsg  { ctermfg = 3, fg = 7033600 }  link: nil
+ErrorMsg  { ctermfg = 1, fg = 5832712 }  link: nil
+Question  { ctermfg = 6, fg = 29555 }  link: nil
+after default link  { link = "Added" }
+a user colour, then aineo defines again  { fg = 16711935 }
+after :highlight clear  { link = "Added" }
+after :colorscheme default  { link = "Added" }
+gitHash after filetype git  { link = "Identifier" }
+
+P3 (T33): a terminal program's title in Neovim, and a terminal buffer's name
+----------------------------------------------------------------------------
+
+-- T33: what Neovim 0.12.5 keeps of a terminal program's title (OSC 0 and OSC 2), which
+-- events fire for it, what a terminal buffer is named, and whether it can be renamed.
+-- The program is `sh`, printing the titles Claude Code 2.1.281's startup bytes hold
+-- (tests/fixtures/claude/startup-2.1.281.bytes: OSC 0 "✳ Claude Code") and a second one.
+local function show(...)
+  local parts = {}
+  for index = 1, select('#', ...) do
+    local v = select(index, ...)
+    parts[index] = type(v) == 'string' and v or vim.inspect(v, { newline = ' ', indent = '' })
+  end
+  io.stdout:write(table.concat(parts, '  '), '\n')
+end
+local events = {}
+for _, event in ipairs({ 'TermRequest', 'TermResponse', 'BufFilePre', 'BufFilePost', 'TermOpen' }) do
+  vim.api.nvim_create_autocmd(event, {
+    callback = function(args)
+      local data = args.data
+      if type(data) == 'table' then data = data.sequence or data end
+      table.insert(events, { event = event, data = data })
+    end,
+  })
+end
+local directory = vim.fn.getcwd()
+local buffer = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_set_current_buf(buffer)
+local script = [[printf '\033]0;\342\234\263 Claude Code\007'; sleep 0.3; printf '\033]2;\342\234\273 Fix the login bug\007'; sleep 0.3; printf '\033]0;\007'; sleep 30]]
+local job = vim.fn.jobstart({ 'sh', '-c', script }, { term = true })
+show('name at start', vim.api.nvim_buf_get_name(buffer))
+show('fnamemodify :~:.', vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buffer), ':~:.'))
+show('b:term_title at start', vim.b[buffer].term_title)
+vim.wait(200, function() return false end)
+show('b:term_title after OSC 0', vim.b[buffer].term_title)
+vim.wait(300, function() return false end)
+show('b:term_title after OSC 2', vim.b[buffer].term_title)
+show(
+  'a window-local statusline of the title, then the directory, after OSC 2',
+  vim.api.nvim_eval_statusline(
+    [[%{get(b:,'term_title','')} — %{fnamemodify(getcwd(),':~')}]],
+    { winid = 0, maxwidth = 1000 }
+  ).str
+)
+vim.wait(400, function() return false end)
+show('b:term_title after an empty OSC 0', vim.b[buffer].term_title)
+show('events', events)
+-- the default statusline, and %f in it
+show("'statusline' default", vim.api.nvim_get_option_info2('statusline', {}).default)
+show('statusline %f evaluated', vim.api.nvim_eval_statusline('%f %m', { winid = 0, maxwidth = 1000 }).str)
+-- a window-local statusline reading the buffer's title
+vim.wo.statusline = [[%{get(b:,'term_title','')} — %{fnamemodify(getcwd(),':~')}]]
+show('a window-local statusline', vim.api.nvim_eval_statusline(vim.wo.statusline, { winid = 0, maxwidth = 1000 }).str)
+-- renaming the terminal buffer
+local ok, failure = pcall(vim.api.nvim_buf_set_name, buffer, 'aineo://claude')
+show('nvim_buf_set_name on the running terminal', ok, failure, vim.api.nvim_buf_get_name(buffer), vim.bo[buffer].buftype)
+show('statusline %f after the rename', vim.api.nvim_eval_statusline('%f %m', { winid = 0, maxwidth = 1000 }).str)
+show('job still running', vim.fn.jobwait({ job }, 0)[1] == -1)
+show('cwd', vim.fn.fnamemodify(directory, ':~'))
+vim.fn.jobstop(job)
+
+Its output:
+
+name at start  term://<scratch>/.tests/w8//27600:/bin/sh
+fnamemodify :~:.  term://<scratch>/.tests/w8//27600:/bin/sh
+b:term_title at start  term://<scratch>/.tests/w8//27600:/bin/sh
+b:term_title after OSC 0  ✳ Claude Code
+b:term_title after OSC 2  ✻ Fix the login bug
+a window-local statusline of the title, then the directory, after OSC 2  ✻ Fix the login bug — <scratch>/.tests/w8
+b:term_title after an empty OSC 0  
+events  { { event = "BufFilePre" }, { event = "BufFilePost" }, { event = "TermOpen" }, { data = "\27]0;✳ Claude Code", event = "TermRequest" }, { data = "\27]2;✻ Fix the login bug", event = "TermRequest" } }
+'statusline' default  %<%f %h%w%m%r %{% v:lua.require('vim._core.util').term_exitcode() %}%=%{% luaeval('(package.loaded[''vim.ui''] and vim.api.nvim_get_current_win() == tonumber(vim.g.actual_curwin or -1) and vim.ui.progress_status()) or '''' ')%}%{% &showcmdloc == 'statusline' ? '%-10.S ' : '' %}%{% exists('b:keymap_name') ? '<'..b:keymap_name..'> ' : '' %}%{% &busy > 0 ? '◐ ' : '' %}%{% luaeval('(package.loaded[''vim.diagnostic''] and next(vim.diagnostic.count()) and vim.diagnostic.status() .. '' '') or '''' ') %}%{% &ruler ? ( &rulerformat == '' ? '%-14.(%l,%c%V%) %P' : &rulerformat ) : '' %}
+statusline %f evaluated  term://<scratch>/.tests/w8//27600:/bin/sh [-]
+a window-local statusline   — <scratch>/.tests/w8
+nvim_buf_set_name on the running terminal  true  nil  aineo://claude  terminal
+statusline %f after the rename  aineo://claude [-]
+job still running  true
+cwd  <scratch>/.tests/w8
+
+P5 (T33): the OSC sequences in the recorded Claude Code bytes
+-------------------------------------------------------------
+
+# T33: every OSC sequence in the recorded Claude Code bytes under tests/fixtures/claude/,
+# as `python3 -I p5-fixtures.py <checkout>` prints them, file by file.
+import os
+import re
+import sys
+
+directory = os.path.join(sys.argv[1], 'tests', 'fixtures', 'claude')
+for name in sorted(os.listdir(directory)):
+    if not name.endswith('.bytes'):
+        continue
+    data = open(os.path.join(directory, name), 'rb').read()
+    found = [m.group(0) for m in re.finditer(rb'\x1b\][0-9]+;[^\x07\x1b]*(?:\x07|\x1b\\)', data)]
+    print(name, [f.decode('utf-8', 'backslashreplace') for f in found])
+
+Its output:
+
+draft-2.1.281.bytes []
+mcp-server-dialog-2.1.281.bytes ['\x1b]8;id=c415zw;https://code.claude.com/docs/en/mcp\x07', '\x1b]8;;\x07']
+startup-2.1.281.bytes ['\x1b]0;✳ Claude Code\x07', '\x1b]9;4;0;\x07']
+synthetic-box-in-scrollback.bytes []
+synthetic-cursor-below-box.bytes []
+
+D6 (T33): Claude Code's documentation on a session's name, read 2026-10-06
+--------------------------------------------------------------------------
+
+Read through a fetch of the pages as Markdown on 2026-10-06; quoted verbatim. Documentation, not a
+measurement: the version it describes is the documentation's current one, and what Claude Code
+2.1.28x writes into its terminal title has not been measured (no real `claude` ran).
+
+https://code.claude.com/docs/en/cli-reference, the CLI flags table:
+
+  | `--name`, `-n` | Set a display name for the session, shown in `/resume` and the terminal
+  title. You can resume a named session with `claude --resume <name>`. In an interactive session,
+  if another live session on this machine already uses the name, Claude Code applies [a variant of
+  it](/docs/en/sessions#name-your-sessions) instead. <br /><br />[`/rename`](/docs/en/commands)
+  changes the name mid-session and also shows it on the prompt bar | `claude -n "my-feature-work"` |
+
+  | `--session-id` | Use a specific session ID for the conversation (must be a valid UUID) | ...
+
+https://code.claude.com/docs/en/sessions, "Name your sessions":
+
+  | During a session | `/rename auth-refactor`. The name also appears on the prompt bar |
+  ...
+  Sessions you don't name still get two labels that Claude Code assigns. Only the generated title
+  works as a resume handle:
+
+  * Default display name: interactive sessions you never name still get a default display name
+    when they start. Requires Claude Code v2.1.196 or later. The default combines the working
+    directory's name with a two-character suffix, for example `my-app-3f`, and identifies the
+    session in listings of running sessions, such as [agent view](/docs/en/agent-view) and
+    `claude agents --json` output. The default isn't a resume handle. ...
+  * Generated title: if you don't name a session, Claude Code generates a session title for it.
+    The title is a short summary of your first prompt, written by a background request to the
+    small/fast model, normally a Haiku-class model. A `claude -p` run you start directly from a
+    shell or script doesn't get one.
+
+    Accepting a plan replaces the generated title with a title based on the plan. Naming the
+    session replaces it as well.
+
+    You see the first-prompt title in the [session picker](#use-the-session-picker) and in the
+    statusline [`session_name`](/docs/en/statusline) field when no name is set. ...
+
+The same page, "Use the session picker":
+
+  Each row shows the session name if you set one, otherwise the AI-generated session title,
+  conversation summary, or first prompt, along with time since last activity, git branch, and
+  file size.
+
+The same page, "Where transcripts are stored":
+
+  By default, Claude Code stores transcripts as JSONL at
+  `~/.claude/projects/<project>/<session-id>.jsonl`, where `<project>` is your working directory
+  path with non-alphanumeric characters replaced by `-`. For a working directory whose converted
+  name exceeds 200 characters, Claude Code truncates the name to 200 characters and appends a hash
+  of the full path, so the directory name stays within filesystem limits.
+
+  Each line is a JSON object for a message, tool use, or metadata entry. The entry format is
+  internal to Claude Code and changes between versions, so scripts that parse these files directly
+  can break on any release. To build on session data, use `/export` or the [script
+  interfaces](#access-conversations-from-scripts) instead.
+
+  (Its table: `CLAUDE_CONFIG_DIR` moves the storage off `~/.claude`; `CLAUDE_CODE_PROJECT_DIR_NAME`
+  names the `<project>` directory.)
+
+What this leaves unmeasured, for T33's measurement: whether the generated title, a `/rename` name
+and a `--name` name each reach the terminal title (OSC 0 or 2) of Claude Code 2.1.28x in a Neovim
+terminal; what glyph or text precedes the name there (2.1.281's startup bytes hold OSC 0
+"✳ Claude Code", P5); whether the glyph changes during a turn; and what the title is after a
+`--resume` and after Claude Code exits.
