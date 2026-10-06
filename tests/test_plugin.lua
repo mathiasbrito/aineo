@@ -101,6 +101,8 @@ T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings 
       'n \\r',
       'n \\s',
       'n \\tcn',
+      'x <Plug>(aineo-send)',
+      'x \\s',
     },
     autocmds = { 'aineo StdinReadPost' },
   })
