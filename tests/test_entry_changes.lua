@@ -22,15 +22,17 @@ local FILES = 'aineo://changes-files'
 --- The name of the changes pane's commits buffer.
 local COMMITS = 'aineo://changes-commits'
 
---- The Lua that counts, in the child, the repositories the git home has
+--- The Lua that counts, in the child, the looks for a repository the git
+--- home was asked for, in `_G.finds_asked`, and the repositories it has
 --- found or failed to find, in `_G.finds_answered`, and the reads of the
 --- files it was asked for and answered, in `_G.file_reads`, each answer once
 --- its caller's `done` has run.
 local COUNT_FINDS = [[
   local git = require('aineo.git')
   local find_repository = git.find_repository
-  _G.finds_answered = 0
+  _G.finds_asked, _G.finds_answered = 0, 0
   git.find_repository = function(directory, done, options)
+    _G.finds_asked = _G.finds_asked + 1
     return find_repository(directory, function(...)
       done(...)
       _G.finds_answered = _G.finds_answered + 1
@@ -129,6 +131,7 @@ T['the session']['does not begin at a start that fails: the next start takes the
   local fake = claude_session.fake('changespane-entry-failed-start', 'ready')
   entry.use_fake(child, fake, { claude = { cmd = { vim.fs.joinpath(top, 'no-such-claude') } } })
   entry.command(child, 'Aineo open')
+  eq(child.lua_get('_G.finds_asked'), 0)
   git_repo.write(top, 'notes.txt', { 'two' })
   git_repo.commit_all(top, 'Write two')
   entry.use_fake(child, fake)
@@ -140,6 +143,14 @@ T['the session']['does not begin at a start that fails: the next start takes the
 end
 
 T['the pane'] = MiniTest.new_set()
+
+--- Waits until every read of the files the child's git home was asked for
+--- has answered.
+local function wait_for_the_reads()
+  git_repo.wait_until('every read of the files answered', function()
+    return child.lua_get('_G.file_reads.answered == _G.file_reads.asked')
+  end)
+end
 
 T['the pane']['reads its lists again as \\o restores the layout it shows in'] = function()
   local top = in_repository('changespane-entry-restore', { ['notes.txt'] = { 'one' } })
@@ -157,6 +168,62 @@ T['the pane']['reads its lists again as \\o restores the layout it shows in'] = 
   expect_lines(FILES, { 'No files changed on this session' })
 end
 
+--- Each door to the changes pane, as a set's `parametrize`: its name, and
+--- the function that opens it.
+local DOORS = {
+  {
+    'pressing \\pc',
+    function()
+      entry.press(child, '\\pc')
+    end,
+  },
+  {
+    'pressing <Plug>(aineo-pane-changes)',
+    function()
+      entry.press(child, '<Plug>(aineo-pane-changes)')
+    end,
+  },
+  {
+    'running :Aineo pane changes',
+    function()
+      entry.command(child, 'Aineo pane changes')
+    end,
+  },
+}
+
+T['the pane']['reads its lists again while it shows, by'] = MiniTest.new_set({
+  parametrize = DOORS,
+})
+
+T['the pane']['reads its lists again while it shows, by']['door'] = function(_, door)
+  local top = in_repository('changespane-entry-shown-again', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'scratch.log', { 'scratch' })
+  open_and_wait_for_the_base()
+  entry.press(child, '\\pc')
+  expect_lines(FILES, { '  ? scratch.log' })
+  wait_for_the_reads()
+  git_repo.write(top, '.git/info/exclude', { 'scratch.log' })
+
+  door()
+
+  expect_lines(FILES, { 'No files changed on this session' })
+end
+
+T['the pane']['shown once reads its files once'] = function()
+  in_repository('changespane-entry-read-once', { ['notes.txt'] = { 'one' } })
+  open_and_wait_for_the_base()
+  entry.press(child, '\\pc')
+  expect_lines(FILES, { 'No files changed on this session' })
+  wait_for_the_reads()
+  entry.press(child, '\\pa')
+  local asked = child.lua_get('_G.file_reads.asked')
+
+  entry.press(child, '\\pc')
+
+  wait_for_the_reads()
+  eq(child.lua_get('_G.file_reads.asked'), asked + 1)
+end
+
 --- The Lua expression that tells, in the child, how many autocommands,
 --- buffers and running file system watches it holds.
 local HELD = [[(function()
@@ -172,14 +239,6 @@ local HELD = [[(function()
     watches = watches,
   }
 end)()]]
-
---- Waits until every read of the files the child's git home was asked for
---- has answered.
-local function wait_for_the_reads()
-  git_repo.wait_until('every read of the files answered', function()
-    return child.lua_get('_G.file_reads.answered == _G.file_reads.asked')
-  end)
-end
 
 T['the pane']['shown ten times holds no more autocommands, buffers or watches than shown once'] = function()
   in_repository('changespane-entry-ten', { ['notes.txt'] = { 'one' } })

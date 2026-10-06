@@ -1309,9 +1309,12 @@ end
 --- shown there (`place_in_file_column()`), and returns its window. A file or
 --- a diff shown in the file column later takes `diff`'s window in its turn
 --- (`window_taking_files()`): the column keeps one window for them. The
---- cursor stays in the window it was in. When the screen has no room for
---- `diff` — no room above a file that cannot leave the column's window, or
---- for a new file column (E36) — it shows `diff` nowhere and returns nil.
+--- layout's proportions are put back once `diff` is placed, as they are
+--- once a file is (`keep_proportions()`): with a file column open, the
+--- three columns take a third each. The cursor stays in the window it was
+--- in. When the screen has no room for `diff` — no room above a file that
+--- cannot leave the column's window, or for a new file column (E36) — it
+--- shows `diff` nowhere and returns nil.
 --- With none of the layout's windows open, `diff` opens in a window above
 --- the current one. Raises any other error a window raises as it is made or
 --- given `diff`.
@@ -1330,6 +1333,7 @@ function M.show_diff(diff)
   end
   vim.api.nvim_set_current_win(current)
   if placed then
+    keep_proportions()
     return window
   end
   if not tostring(window):find('E36:', 1, true) then

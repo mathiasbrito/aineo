@@ -122,9 +122,11 @@ local function page(notes, listed, empty)
 end
 
 --- What both windows say when the session has no repository to list:
---- `directory` is in none, or git was not found — in the words git's start
---- failed with — or, for any other failure to find it, the line a failed
---- read gives (`M.refresh_failed()`). None claims a repository.
+--- `directory` is in none, then git's words, which tell a repository git
+--- refuses — one of another owner, or a bare one — from no repository; or
+--- git was not found, in the words git's start failed with; or, for any
+--- other failure to find it, the line a failed read gives
+--- (`M.refresh_failed()`). None claims a repository.
 ---
 ---@param failure aineo.git.Failure why no repository was found
 ---@param directory string the directory the session looked in
@@ -132,7 +134,11 @@ end
 function M.no_repository(failure, directory)
   local line = M.refresh_failed(failure)
   if failure.reason == 'not_a_repository' then
-    line = 'Not in a git repository: ' .. M.quoted_path(directory)
+    return page(
+      { 'Not in a git repository: ' .. M.quoted_path(directory) },
+      {},
+      'git: ' .. M.words_of(failure)
+    )
   elseif failure.reason == 'no_git' then
     line = 'git was not found: ' .. M.words_of(failure)
   end
