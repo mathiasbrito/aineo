@@ -1,22 +1,23 @@
 # Wave 7 retrospective
 
 **Author:** Mathias Santos de Brito, with Claude — the orchestrator (Opus 5.5, session `938616f1`)
-**Branch:** begun on `knowledge/w7-t23-landed`, T23's knowledge pass; extended on `knowledge/w6-t12-t22-landed` and `knowledge/w6-close`; extended on `knowledge/w7-t26-close`, T26's knowledge pass, over every packet; the pass that lands the wave, once the user closes it, completes it. The knowledge passes of T24 (PR #107), T30 (PR #111) and T25 (PR #114) did not extend this note, as orchestrate §3 asks of a rolling wave; this pass covers them from the wave plan's *Landed* and the orchestrator's ledger.
+**Branch:** begun on `knowledge/w7-t23-landed`, T23's knowledge pass; extended on `knowledge/w6-t12-t22-landed` and `knowledge/w6-close`; extended on `knowledge/w7-t26-close`, T26's knowledge pass, over every packet; completed on `knowledge/w7-t31-close`, T31's knowledge pass, which lands the wave. The knowledge passes of T24 (PR #107), T30 (PR #111) and T25 (PR #114) did not extend this note, as orchestrate §3 asks of a rolling wave; this pass covers them from the wave plan's *Landed* and the orchestrator's ledger.
 
 ## Links
 
 - [[Projects/aineo]]
 - [[Planning/aineo — v1 agent console]] › D18–D22, D29, C12, C13, C15
 - `Implementation/Waves/00007-panes/plan.md` — its *Landed* holds each packet's record in full
-- The packets: [[Sessions/2026-09-27 — T23 git home]], [[Sessions/2026-10-05 — T24 Panes]], [[Sessions/2026-10-05 — T30 Drop Neovim 0.11]], [[Sessions/2026-10-05 — T25 Changes pane]], [[Sessions/2026-10-06 — T26 Visual Send]]
+- The packets: [[Sessions/2026-09-27 — T23 git home]], [[Sessions/2026-10-05 — T24 Panes]], [[Sessions/2026-10-05 — T30 Drop Neovim 0.11]], [[Sessions/2026-10-05 — T25 Changes pane]], [[Sessions/2026-10-06 — T26 Visual Send]], [[Sessions/2026-10-06 — T31 Selection old]]
 - [[Sessions/2026-09-26 — Wave 6 retrospective]], the wave it ran beside
-- [[Review/2026-09-24 — v1 MVP readings review]] › the sections for T23, T24, T30, T25 and T26
+- [[Review/2026-09-24 — v1 MVP readings review]] › the sections for T23, T24, T30, T25, T26 and T31
 - What the wave found, as Learnings:
   - T23 (PR #90): [[Learnings/GIT_OPTIONAL_LOCKS=0 does not keep git diff from taking index.lock]], [[Learnings/A watch on a file git replaces goes silent after the replacement]], [[Learnings/libuv ignores fs_event's recursive flag on Linux]];
   - T24: [[Learnings/A refused switch's rollback must undo every state change the switch made first, each window on its own]], [[Learnings/A buffer name a loaded buffer holds cannot be taken, and an unloaded namesake is wiped]];
   - T30: [[Learnings/Neovim resizes a terminal to the tallest window showing it only when those windows change or Terminal mode is entered]];
   - T25: [[Learnings/A scheduled callback can run under textlock, where Neovim refuses a buffer change with E565]], [[Learnings/Neovim runs scheduled callbacks during a later VimLeavePre and after VimLeave]], [[Learnings/A test child that quits with aineo's Claude Code running waits 4.4 s for the stop by keys]], [[Learnings/git commit --allow-empty rewrites the index, while reset --soft and update-ref do not]], [[Learnings/vim.uv.walk does not see a timer vim.fn.timer_start made]];
-  - T26 (this pass): [[Learnings/A block edge on a character drawn from several codepoints needs charidx and byteidx to find its end]], [[Learnings/With 'selection' old, a Visual selection ending on an empty line ends on the line above, or turns linewise from the indent]], [[Learnings/A NUL in a buffer line is a line feed to Vimscript, and a Lua string holding one is a Blob]], [[Learnings/A deletion run by normal! sets what . repeats, and a buffer API call does not]], [[Learnings/A removal and its put-back made in one typed command are one undo step, so the first u shows nothing]].
+  - T26 (PR #118): [[Learnings/A block edge on a character drawn from several codepoints needs charidx and byteidx to find its end]], [[Learnings/With 'selection' old, a Visual selection ending on an empty line ends on the line above, or turns linewise from the indent]], [[Learnings/A NUL in a buffer line is a line feed to Vimscript, and a Lua string holding one is a Blob]], [[Learnings/A deletion run by normal! sets what . repeats, and a buffer API call does not]], [[Learnings/A removal and its put-back made in one typed command are one undo step, so the first u shows nothing]];
+  - T31 (this pass): [[Learnings/Vim reads 'virtualedit' as a set of flags, so all,none keeps a Visual selection's end as all does]], and a dated correction to the `'selection'` old Learning above.
 - After the MVP review: [[Ideas/The changes pane follows the agents' worktrees]]
 
 ## Context
@@ -25,7 +26,7 @@ Wave 7 builds what v1's plan still lacked: the right column's two panes (D18, D2
 
 T23 opened it beside wave 6's open packets, since all its files were new. Later that evening the user paused the wave: "we will not continue towards wave 7, finish the current work and wait my go to start wave 7". T23, already in its fix round, was finished.
 
-The wave resumed on 2026-10-05, once wave 6 had closed; that the user's "go ahead" of that day was the go is the orchestrator's reading (the plan's *Landed*). T30, dropping Neovim 0.11 (D29), joined the wave the same day. T24, T30, T25 and T26 then ran one after another, since each shared `plugin/aineo.lua` or the help with the next. The last, T26, merged on 2026-10-06. With it every task row of v1's plan is built, which is what the user asked for on 2026-09-23 (23:41 CEST): "move on with the implementation until you have all the functionalities implemented, I will then review the first MVP." Every packet has landed. Asked on 2026-10-06 whether to close the wave, the user answered "Keep it open": it stays claimed until the post-merge re-check of T26 is back, so that a follow-up can land inside wave 7 (orchestrate §3 leaves the close to the user).
+The wave resumed on 2026-10-05, once wave 6 had closed; that the user's "go ahead" of that day was the go is the orchestrator's reading (the plan's *Landed*). T30, dropping Neovim 0.11 (D29), joined the wave the same day. T24, T30, T25 and T26 then ran one after another, since each shared `plugin/aineo.lua` or the help with the next. The last, T26, merged on 2026-10-06. With it every task row of v1's plan is built, which is what the user asked for on 2026-09-23 (23:41 CEST): "move on with the implementation until you have all the functionalities implemented, I will then review the first MVP." Asked on 2026-10-06 whether to close the wave, the user answered "Keep it open": it stayed claimed until the post-merge re-check of T26 was back, so that a follow-up could land inside wave 7 (orchestrate §3 leaves the close to the user). The re-check was a re-measure of PR #115's fix round, owed before its merge. It found five, the worst a regression of that round. T31 fixed them as a small fix, released in `v0.2.14`. The orchestrator then asked: "T31 is merged and released in v0.2.14, so every packet of wave 7 has landed (T23, T24, T30, T25, T26, T31). Close wave 7 now?" The user answered "Close it (Recommended)", and this pass lands the wave.
 
 ## What was done
 
@@ -36,6 +37,7 @@ The wave resumed on 2026-10-05, once wave 6 had closed; that the user's "go ahea
 - **T30, drop Neovim 0.11** (PR #108, 2026-10-05; released with T25): the code, test branches and docstrings that existed only for 0.11 removed or restated for 0.12.5, each after a measurement; `:checkhealth aineo` reports a Neovim older than 0.12 (the user's decision). 1596 cases at the packet, 1602 at merge.
 - **T25, the changes pane** (PR #112, 2026-10-06; `v0.2.12`): the changes home, `lua/aineo/changes/` (C15), lists the session's changed files with the user's saves marked and its commits; Enter shows a diff, read-only, in the middle column; the pane is read again on every showing, save, change and commit. CP1–CP9 as the user answered. 1676 cases at the packet, 1718 at merge.
 - **T26, Visual Send** (PR #115, 2026-10-06; `v0.2.13`): in Input, `\s` and `<Plug>(aineo-send)` in Visual mode send the selection alone, exactly the text Vim's `"_d` removes, as one paste and Enter, and remove it; a Visual Send that sends nothing removes nothing; `u` brings back what every Send removed, the three undo gaps named in the help and pinned. VS1–VS5 as the user answered, and two more decisions of the user on 2026-10-06. 1770 cases at the packet, 1792 at merge.
+- **T31, Visual Send under `'selection'` old** (PR #120, 2026-10-06; `v0.2.14`), a small fix from the post-merge re-check of T26. Under `'selection'` old, a Visual Send sends exactly what `"_d` removes. `'virtualedit'` is read as Vim reads it, as a set of flags, and a start past the end of the line above is refused as empty. The empty check joins the parts as the message does. The `gv` put-back and the NUL's reading are pinned. Two edges with invalid UTF-8 are named in the help's *LIMITS*. 1800 cases at the packet, 1807 at merge.
 
 **Timeline** (CEST). For T23, the times the orchestrator wrote into its ledger, read from the clock in the same call — a step can precede its line by some minutes. From 2026-10-05, GitHub's times for each pull request, converted to CEST, and the ledger's where it names one; a row with no time has none in the record.
 
@@ -78,7 +80,16 @@ The wave resumed on 2026-10-05, once wave 6 had closed; that the user's "go ahea
 | 10-06 | The fix round in (1792 cases), unpushed: github.com did not resolve on the host. The orchestrator's verification ran on the local head; its first run was invalid |
 | 10-06 15:41 | The network back: the round pushed, PR #115 merged |
 | 10-06 15:42 | `v0.2.13` released (PR #117) |
-| 10-06 | This knowledge pass (PR #118); the re-measure of #115's fix round dispatched after the merge; the user, asked whether to close the wave, answered "Keep it open" |
+| 10-06 | T26's knowledge pass (PR #118); the re-measure of #115's fix round dispatched after the merge; the user, asked whether to close the wave, answered "Keep it open" |
+| 10-06 16:33 | PR #118 merged, corrected after its records review: the wave stays claimed |
+| 10-06 | The re-measure in: a follow-up packet is needed (F1–F5) |
+| 10-06 16:57 | T31 planned as a small fix (PR #119: its task row, brief and section), then dispatched |
+| 10-06 17:30 | T31 in: PR #120, 1800 cases. The guarantee review, and the orchestrator's verification of `e3dd139` (1800 cases) |
+| 10-06 | The guarantee review in: merge after fixes, four findings. The bounded correction went to a fresh agent |
+| 10-06 | Paused for the user's laptop suspend: the correction agent committed `acd3c8f` locally and stopped. It was resumed by message when the user was back |
+| 10-06 | The correction in (`3fc1b11`, 1807 cases); the orchestrator's verification: 1807 cases, 9 mutants killed |
+| 10-06 21:55 | PR #120 merged; `v0.2.14` released (PR #121) |
+| 10-06 | Asked again, the user closed the wave: "Close it (Recommended)". This knowledge pass |
 
 **Findings, per review** (the verdicts are the reviewers'; the plan's *Landed* lists each finding):
 
@@ -112,13 +123,17 @@ The wave resumed on 2026-10-05, once wave 6 had closed; that the user's "go ahea
 | attack, #115 | `neovim-claude-code-reviewer` | the read right across about 9,000 random selections but three: a block edge on a multi-codepoint character (medium), `'selection'` old, a NUL; `.` after a Visual Send a question for the user; `gv` after a failed write; A1–A4 unpinned |
 | test-integrity, #115 | `reviewer` | all 20 plan mutants die by assertion; four of the reviewer's survive (the undo gaps pinned for one Send each, control bytes alone); a register case that passes with no Send; S8 not killed by the case the plan names |
 | records, #115 | `reviewer` | the code keeps the four skills but for two low points; the records not yet true: a misnamed killer, a gap the help names and no case pins, the interruption's pushes attributed to the agent, `ed50a1a`'s D26 citation. Thirteen findings |
+| records, #118 (T26's pass) | `reviewer` | thirteen findings. The most serious: the pass marked wave 7 landed and closed, though its close is the user's. MR290 named one Send of several that end in a line feed; the MVP ask was misdated; the empty check's join went to the re-check as a lead |
+| re-measure, #115, with the attack question, after the merge | `neovim-claude-code-reviewer` | a follow-up packet is needed. F1, a regression of the round: under `'selection'` old with `'virtualedit'` `all` or `onemore`, a Visual Send sent text that never left Input (88 of 94 problems in 60,000 fuzzed cases). F2: the empty check's join. F3 and F5: two survivors. F4: invalid bytes at a block's edge. The round's other items held, and its 14 mutants died by assertion |
+| guarantee, #120 | `neovim-lua-developer` | merge after fixes, four findings. F1's fix compared the string `all`, where Vim reads flags (`all,all`, `all,`, `all,none`, `none,all`). The window's value and the no-region boundary were unpinned. A residue was not covered by LIMITS. 188,000 fuzzed selections found nothing else T31 touched |
 
 **Rounds, per pull request:**
 - #79 (T23, regular): the packet, 1238 cases; a fix round by a fresh agent (the author's context was 522 K), 1260 cases, which replaced the bound's kill, the burst's end and what the watch reports; a re-measure with the attack question; a bounded correction by a fresh agent, 1265 cases; 1328 laid over `dev`, which by then held T19: the whole suite once per version, and the mutants on their covering files (D26).
 - #105 (T24, regular): the packet, 1535; a fix round by a fresh agent (429 K), 1574; a re-measure with the attack question; a second fix round, a small fix, 1595; a guarantee review; a bounded correction, 1599.
 - #108 (T30, regular): the packet, 1596; a fix round by a fresh agent, 1602; a guarantee review.
 - #112 (T25, regular): the packet, 1676; a fix round by a fresh agent (642 K), 1701; a re-measure with the attack question; a second fix round, a small fix, 1712; a guarantee review; a bounded correction, 1718.
-- #115 (T26, regular): the packet by two agents, 1770; a fix round by a fresh agent, 1792; no re-measure before the merge; one dispatched after it, pending (*Deviations*).
+- #115 (T26, regular): the packet by two agents, 1770; a fix round by a fresh agent, 1792; no re-measure before the merge; one dispatched after it, which found five, fixed by T31 (*Deviations*).
+- #120 (T31, a small fix): the packet, 1800; a guarantee review; a bounded correction by a fresh agent, 1807.
 
 ### What the reviews found across the wave
 
@@ -126,8 +141,9 @@ The wave resumed on 2026-10-05, once wave 6 had closed; that the user's "go ahea
 - **Callbacks met Neovim where it refuses them.** T25's lists and diffs ran under textlock, during a later `VimLeavePre` and after `VimLeave`, and its retry was refused again in the command-line window. Each round's fix was itself attacked and found incomplete until the bounded correction.
 - **A mutant the plan names, with a case that cannot kill it** — twice: T25's K19, killed on the commits window and not, as written, on the files window; T26's S8, which no own-mapping case can kill. Both are recorded in the plan's *Landed* as dispatched records found false.
 - **Tests that pass for the wrong reason**: T24's ten-switch case was green on `dev`; T25's K2 kill was a race decided by git's start; T26's register case passed with no Send at all, and its VS-A rows read no error.
+- **A fix measured on the values tried holds for those values.** The re-measure measured nine `'virtualedit'` values, and its fix compared the option with the string `all`; T31 took that fix. The guarantee review tried every spelling Neovim accepts. It found four more that Vim reads as `all`, since Vim reads the option as a set of flags.
 - **The records were the weakest part of every packet**: code written before its failing case and reported as red-first (T24, T25), red counts that mixed moved pins with reds that drove code (T26), killers named that did not kill (T23, T26), and attributions — who pushed, who decided, what the user was told — wrong in the packet's own note (T23's pass, T24's pass, T26).
-- **The re-measure found more each time it ran**: seven findings after T23's round, eight after T24's, nine after T25's. T26's round had none before its merge; the one dispatched after it is pending.
+- **The re-measure found more each time it ran**: seven findings after T23's round, eight after T24's, nine after T25's. T26's round had none before its merge; the one dispatched after it found five, the worst a regression the round had introduced.
 
 ### Interruptions
 
@@ -135,6 +151,7 @@ The wave resumed on 2026-10-05, once wave 6 had closed; that the user's "go ahea
 - **The host suspended**, on 2026-10-05 from 18:05 to 21:20, at the user's word: nothing ran; T24's correction agent was asked to stop at a safe point first.
 - **The host slept**, on 2026-10-06 at about 10:00: T26's first agent and the records review of #114 stalled, and were resumed by message.
 - **The user restarted Neovim**, on 2026-10-06, to use `\pa` and `\pc` from `v0.2.12`. The first T26 agent could not be resumed after it. Its three commits were pushed by the orchestrator, its uncommitted cases saved as a patch, and a second agent continued.
+- **The user's laptop suspended**, on 2026-10-06, during T31's bounded correction. The agent was asked to pause safely: it committed `acd3c8f` locally, with no push and no whole-suite run, and stopped. When the user was back it was resumed by message.
 - **github.com did not resolve on the host**, on 2026-10-06. T26's second agent could not run `make deps` and copied the pinned dependency; the fix round could not push; the orchestrator's first verification ran with no dependency and was invalid. The round was pushed, a fast-forward, once the network was back.
 
 **Cost, per context.** For T23, read from the transcripts with `.claude/scripts/agent-context.py`:
@@ -173,8 +190,10 @@ For T24–T26 the record holds less: the ledger wrote, for most agents as each r
 | guarantee review, #112 — `neovim-lua-developer` | 3249 s | — |
 | bounded correction, #112 — `neovim-lua-developer` | 2572 s | — |
 | T26, second implementer — `neovim-claude-code-integrator` | 4420 s | 341 K |
+| re-measure, #115, after the merge — `neovim-claude-code-reviewer` | 3040 s | 433 K |
+| T31 implementer — `neovim-claude-code-integrator` | 2016 s | 208 K |
 
-No figure is in the record for: the records review of #105, T24's bounded correction, the knowledge passes and their records reviews (#107, #111, #114), the three reviews of #108 and its guarantee review, the agent that amended T25's and T26's briefs, the three reviews of #112, T26's first agent, the three reviews of #115, T26's fix round, and this pass. Not in either table: the orchestrator's own context.
+No figure is in the record for: the records review of #105, T24's bounded correction, the knowledge passes and their records reviews (#107, #111, #114), the three reviews of #108 and its guarantee review, the agent that amended T25's and T26's briefs, the three reviews of #112, T26's first agent, the three reviews of #115, T26's fix round, the records review of #118, T31's guarantee review and its bounded correction, and the knowledge passes of T26 (#118) and T31 (this one). Not in either table: the orchestrator's own context.
 
 ## Deviations and disclosures
 
@@ -192,9 +211,13 @@ No figure is in the record for: the records review of #105, T24's bounded correc
 - **T25's session note is dated 2026-10-05,** the day of dispatch, where the plan and the brief named 2026-10-06 (the plan's *Landed*).
 - **T26: the orchestrator pushed the first agent's three commits** on the user's "go, do it", with no whole-suite run on `55e37d7` — against D26, the user's rule that the whole suite runs before each push of a code packet. The orchestrator told the user on 2026-10-06, in the same message as the dispatch's error (below).
 - **T26: the second agent's dispatch allowed a push at a green point without the whole suite,** against D26; `ed50a1a` was pushed so, its message citing D26 for it. The orchestrator recorded it as its own error and told the user on 2026-10-06; the fix round's dispatch restated the rule.
-- **T26: no re-measure of #115's fix round.** The round changed production code and replaced mechanisms — the read's character end, `'selection'` old's region, the put-back of `'<` and `'>` — for which orchestrate §6 dispatches a re-measure with the attack question. The orchestrator verified the head itself, with the plan's 20 mutants and 19 of the reviews' and the round's (S10 run twice), and merged. The orchestrator dispatched the re-measure after the merge and the release, on 2026-10-06, and the wave stays open until it is back.
+- **T26: no re-measure of #115's fix round.** The round changed production code and replaced mechanisms — the read's character end, `'selection'` old's region, the put-back of `'<` and `'>` — for which orchestrate §6 dispatches a re-measure with the attack question. The orchestrator verified the head itself, with the plan's 20 mutants and 19 of the reviews' and the round's (S10 run twice), and merged. The orchestrator dispatched the re-measure after the merge and the release, on 2026-10-06. It found a regression of the round in `v0.2.13`, which T31 fixed in `v0.2.14`.
 - **T26: the orchestrator's first verification was invalid**, run with no suite dependency while github.com did not resolve, and its script dropped the second edit of S16, S17 and S20; both are recorded with the verification in the plan's *Landed*.
-- **The orchestrator's instruction to this pass was to close the wave,** although orchestrate §3 leaves a rolling wave's close to the user. Asked on 2026-10-06, the user kept it open (*Context*); the plan stays `claimed`.
+- **The orchestrator's instruction to T26's pass (PR #118) was to close the wave,** although orchestrate §3 leaves a rolling wave's close to the user. Asked on 2026-10-06, the user kept it open (*Context*). The plan stayed `claimed` until the user closed it after T31.
+- **The record does not show that the user called T31 a small fix.** Orchestrate §3 leaves that call to the user. PR #119 labels T31 a small fix, and so do its brief and the wave plan's section. Neither the ledger nor the pull request holds a call by the user.
+- **T31 edited three lines outside the functions its brief named.** The packet changed `visual_selection()` to read "no region" as no parts. It declared the edit, and the brief's measured fix made the same one. The correction added an `all,NONE` row beyond the brief's four spellings, also declared.
+- **T31's correction wrote outside its worktree once.** Before the pause, one `make deps` run wrote a scratch file to `/tmp`. The agent removed it in its next command.
+- **T31's verification did not re-run what *Packet T31* named.** That section's review line names the re-measure's cases and mutants for the orchestrator's verification. The verification of `3fc1b11` ran the correction's nine mutants, the guarantee review's two survivors among them. The packet and the guarantee review had run the re-measure's cases and the packet's other four mutants on `efe9a31`. The correction did not touch their sites.
 
 ## Decisions & reasoning
 
@@ -204,19 +227,20 @@ No figure is in the record for: the records review of #105, T24's bounded correc
 - **Wave 7 paused** — the user, 2026-09-27 (20:16). That T23 counted as current work, and was finished, is the orchestrator's reading, told to the user at 20:17.
 - **MR188, MR189 and MR190 were told to the user without a reply** (16:07, 17:16, 21:25). PR #86's first commit said none of T23's readings had been shown; it was wrong.
 - **The user's decisions of 2026-10-05**, each put as a question with options and each answered with the recommended option: PD1–PD6 (T24, D18's annotation); no release for T24 alone, "Wait for T25 (Recommended)"; D20's four clauses; D29's 0.12 minimum, "drop support for 0.11 and the dangling code and tests"; on T30's records review, "Keep the removal (Recommended)" for MR99 and MR100, and "Yes, in T30's fix round (Recommended)" for a health check of an old Neovim; CP1–CP9 (T25) and VS1–VS5 (T26), with D20's undo gaps "as you propose".
-- **The user's decisions of 2026-10-06**, the same way: `.` after a Visual Send, "Name it in LIMITS (Recommended)"; a linewise selection, "No final line feed (Recommended)".
-- **The orchestrator's decisions in the rounds**, each recorded where it applies: T25's `\pc` reading the shown pane again, done in the composition root, on the user's CP6 answer (MR256); T23's exit-128 mapping kept (MR260); T25's unpinned quit guard and untriggered re-raise accepted (MR267); T26's `gv` after a failed write (MR283).
+- **The user's decisions of 2026-10-06**, the same way: `.` after a Visual Send, "Name it in LIMITS (Recommended)"; a linewise selection, "No final line feed (Recommended)"; the wave kept open, "Keep it open"; and, after T31, the close, "Close it (Recommended)".
+- **The orchestrator's decisions in the rounds**, each recorded where it applies: T25's `\pc` reading the shown pane again, done in the composition root, on the user's CP6 answer (MR256); T23's exit-128 mapping kept (MR260); T25's unpinned quit guard and untriggered re-raise accepted (MR267); T26's `gv` after a failed write (MR283); T31's F4, an invalid byte at a block's edge, named in LIMITS rather than fixed (MR293).
 
 ## Open threads
 
-- **Wave 7 stays open** at the user's word (2026-10-06) until the post-merge re-check of T26 is back; a finding becomes a follow-up packet inside the wave, and the user then closes it.
+- ~~**Wave 7 stays open** at the user's word (2026-10-06) until the post-merge re-check of T26 is back; a finding becomes a follow-up packet inside the wave, and the user then closes it.~~ — the re-check found five, T31 fixed them, and the user closed the wave on 2026-10-06.
 - ~~**T24–T26** wait for the user's go. D20's four clauses are to be settled before T26's dispatch or at the MVP review.~~ — the user gave the go on 2026-10-05 and answered D20's clauses the same day; T24, T25 and T26 landed.
 - ~~**The copied kind** (MR188): T25, or the user, decides whether a copy should show as copied.~~ — T25 shows a copy as added (MR254); MR188 stays open for the user at the MVP review.
 - **Linux** was not run (MR192); the changes pane is tested on macOS only (MR272).
 - **A descendant of git outside its group** holds the answer back past the limit (MR196).
-- **The MVP review is the user's**: every task row of v1's plan is built and released in `v0.2.13`. The open MR rows, by packet, are in the project note's *Decisions awaiting the user*.
-- **T26's open threads**: what Claude Code makes of a message ending in a line feed (MR290); `tests/test_send_selection.lua`'s 74 s; `VISUAL_ACTIONS` read with `pairs()`; the attack review's A7; D2's second half; the Visual read unattacked after its fix round; the empty-selection check joining the parts unlike the message (MR277), for T26's re-check to judge — each in the project note's *Open threads*.
-- **The T26 fix round's worktree** is still checked out and locked under the orchestrator's session (the project note); the wave's cleanup removes it.
+- **The MVP review is the user's**: every task row of v1's plan, T1–T31, is built and released in `v0.2.14`. The open MR rows, by packet, are in the project note's *Decisions awaiting the user*.
+- **T26's open threads**: what Claude Code makes of a message ending in a line feed (MR290); `tests/test_send_selection.lua`'s 74 s; `VISUAL_ACTIONS` read with `pairs()`; the attack review's A7; D2's second half; the Visual read unattacked after its fix round; the empty-selection check joining the parts unlike the message (MR277) — each in the project note's *Open threads*. The last two are closed: the re-check attacked the read, and T31 fixed the join.
+- ~~**The T26 fix round's worktree** is still checked out and locked under the orchestrator's session.~~ — removed: the repository's worktree list no longer shows it.
+- **T31's open threads**: `character_end()`'s docstring on the invalid-byte case, and MR294, named but not pinned. Both are in the project note's *Open threads*.
 - **After the MVP review:** the user's idea of a changes pane that follows the agents' worktrees ([[Ideas/The changes pane follows the agents' worktrees]]).
 
 ## Commits
@@ -233,4 +257,7 @@ No figure is in the record for: the records review of #105, T24's bounded correc
 - T25, PR #112: `791b7f1` … `893a427` (22 commits) — [[Sessions/2026-10-05 — T25 Changes pane]]; `v0.2.12`, PR #113, `main` at `b6a6929`; its knowledge pass, PR #114: `4f80458`, `28189e3`.
 - The idea note, PR #116: `f1eca74`.
 - T26, PR #115: `51da4bb` … `3b5f0f7` (10 commits) — [[Sessions/2026-10-06 — T26 Visual Send]]; `v0.2.13`, PR #117, `main` at `1cb649d`.
-- This knowledge pass, PR #118: recorded after its merge by the next one.
+- T26's knowledge pass, PR #118: `0687e70`, `e04c404`.
+- T31's plan, PR #119: `686625c`.
+- T31, PR #120: `65679f4`, `9bf8a36`, `039602d`, `03a1345` — [[Sessions/2026-10-06 — T31 Selection old]]; `v0.2.14`, PR #121, `main` at `ebfe71c`.
+- This knowledge pass, which lands the wave: its hashes are recorded after its merge, by the next pass.
