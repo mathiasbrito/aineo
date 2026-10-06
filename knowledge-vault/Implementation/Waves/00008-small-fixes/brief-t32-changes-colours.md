@@ -17,7 +17,7 @@ It rests on D19 and C15 (the changes pane and its home), T25 (which built them),
 
 ### The behaviour, as the user decided it
 
-The dispatch message says which options the user chose in `plan.md` › *Decisions for the user*. This brief is written with the recommended ones: **T32-1 (a), T32-2 (a), T32-3 (a)**. An answer that differs comes as a dated amendment below, before dispatch.
+The user answered on 2026-10-06: **T32-1 (a), T32-2 (a), T32-3 (a)** (*Amendment — 2026-10-06*, below). Where the brief review reworded a decision, the reworded part is the orchestrator's assumption, marked `A#` as in `plan.md` › *Assumptions to report to the user*.
 
 - **Files window.** Each line `<mark> <letter> <path>` shows its letter and its path — for a rename, `old → new` whole — in the group of its kind:
 
@@ -30,12 +30,12 @@ The dispatch message says which options the user chose in `plan.md` › *Decisio
   | type-changed | `AineoChangesTypeChanged` | `Changed` |
   | deleted | `AineoChangesDeleted` | `Removed` |
 
-  The `*` of a file the user saved shows in `AineoChangesSaved`, linked to `WarningMsg`. A file not saved has a blank there, uncoloured.
-- **Commits window.** A commit's abbreviated id, its first `ABBREVIATED_ID_LENGTH` bytes, shows in `AineoChangesCommitId`, linked to `Identifier`. Its subject shows in `AineoChangesCommitSubject`, linked to `Normal`. The space between them is in neither.
+  The `*` of a file the user saved shows in `AineoChangesSaved`, linked to `WarningMsg`. A file not saved has a blank there, uncoloured. Under T32-1 (a) the `*`'s yellow is apart from the three kind colours; it is the yellow of `DiagnosticWarn` too, which the failure lines use, on lines of their own (P2: `#fce094` on dark, `#6b5300` on light; brief review, finding 3.3; A1).
+- **Commits window.** A commit's abbreviated id, its first `ABBREVIATED_ID_LENGTH` bytes, shows in `AineoChangesCommitId`, linked to `Identifier`. Its subject shows in `AineoChangesCommitSubject`, **defined empty, as a default** — `vim.api.nvim_set_hl(0, 'AineoChangesCommitSubject', { default = true })` — not linked to `Normal` (A2). The space between them is in neither. Why not `Normal`: in a window that is not current, under a colour scheme that dims such windows with `NormalNC`, a subject linked to `Normal` shows `Normal`'s background as a band across the dimmed line; an empty group leaves it on the window's own background and keeps a user's colour (brief review, finding 3.1, measured).
 - **Lines that list nothing, in both windows.** Each shows whole in one group:
-  - `AineoChangesNote`, linked to `Comment`: `M.READING`, `M.NO_FILES`, `M.NO_COMMITS`, `M.NOT_WATCHED`, the base note ("The session's base, …, is no longer behind HEAD"), the "Not in a git repository: …" line and the "git: …" line under it;
+  - `AineoChangesNote`, linked to `Comment`: `M.READING`, `M.NO_FILES`, `M.NO_COMMITS`, `M.NOT_WATCHED`, the base note ("The session's base, …, is no longer behind HEAD"), the "Not in a git repository: …" line and the "git: …" line under it, which carries git's own words (A3; brief review, finding 3.5);
   - `AineoChangesFailure`, linked to `DiagnosticWarn`: a line of `M.refresh_failed()` ("The last refresh failed: …") and "git was not found: …".
-- **The groups** are defined as `:highlight default link`, as `aineo.report.colours` defines the Report's. A colour of the user's or a colour scheme's wins, and `:highlight clear` restores aineo's link (P2). They are defined before the pane's buffers first show a page.
+- **The groups** are defined as `:highlight default link`, as `aineo.report.colours` defines the Report's, and the subject's as an empty default (above). A colour of the user's or a colour scheme's wins, and after `:highlight clear`, or `:colorscheme default`, each group has its default again: its link, or the subject's empty group (P2). They are defined before the pane's buffers first show a page. `:highlight link` without `default` is wrong twice over: aineo's second definition over a user's colour raises `E414`, and after `:highlight clear` the group is left empty (brief review, finding 3.2, measured).
 - **The colours follow every page.** They are set again whenever a page is written: a refresh, a save, a commit, `:edit`, a buffer made anew. None is left on a line that no longer carries its text. A page Neovim refused (textlock) keeps the colours of the page it keeps.
 - **Nothing else changes.** The text of every line, the cursor's keeping, Enter, the diffs (which keep `'filetype'` `diff`), the refresh and the buffers' names stay as T25 left them. The colours are marks, not text.
 - **The help** names each group with its default link, in the *aineo-changes* section, as *Colours* in *aineo-report* does for the Report's groups (`*hl-…*` tags, one per group).
@@ -60,16 +60,17 @@ The dispatch message says which options the user chose in `plan.md` › *Decisio
   - The home requires only `aineo.git` and its own files (C15; `git grep -n "require(" origin/dev -- lua/aineo/changes/`).
 - The Report's way: `lua/aineo/report/colours.lua` lines 28–54 (`DEFAULT_LINKS` and `define_report_colours()`, each `vim.cmd.highlight({ 'default', 'link', group, link })`). `lua/aineo/report/buffer.lua` line 9 keeps its marks in one namespace, `aineo_report_colours`.
 - `git grep -n "nvim_set_hl\|highlight\|extmark" origin/dev -- lua/aineo/changes/` finds nothing: the pane has no colour today.
+- `tests/test_entry_panes.lua` reads both buffers' lines through the entry point (lines 149, 189–201, 210), and makes their `BufWinEnter` raise (366–431). The colouring runs in those paths, so it runs with this packet (brief review, finding 3.4).
 - `lua/aineo/health.lua` names no highlight group (`grep -n "colour\|highlight\|hl-" lua/aineo/health.lua` is empty), so the health check is not touched.
 - **P2** (`evidence/w8-probes.txt`), Neovim 0.12.5:
   - `Added`, `Changed` and `Removed` are defined by the default colour scheme, green, cyan and red on a dark background. `Identifier`, `Comment`, `WarningMsg` and `DiagnosticWarn` are defined too;
   - `:highlight default link AineoChangesAdded Added` keeps a user's `guifg` when run again, and the link comes back after `:highlight clear` and after `:colorscheme default`.
-- `doc/aineo.txt` › *aineo-changes* runs from `The changes pane ~` to `windows say so until the pane is shown again, which starts it again.`. Its *Colours* model is *aineo-report*'s `Colours ~` block, with its `*hl-AineoReport…*` tags.
+- `doc/aineo.txt` › *aineo-changes* runs from the first `The changes pane ~` (line 136; line 903 is a heading of the same words in *aineo-limits*) to `windows say so until the pane is shown again, which starts it again.`. Its *Colours* model is *aineo-report*'s `Colours ~` block, with its `*hl-AineoReport…*` tags.
 - `tests/test_doc.lua`'s `TAGS` list (lines 76–116) holds no `hl-` tag. It pins the help whole: its tags generate without error (E154 on a duplicate), every line fits in 78 columns, and the help keeps its own tag first and its modeline last.
 
 ### Baseline
 
-On `9b8707f`, Neovim 0.12.5: 1807 cases, `Fails (0)`; `tests/test_changes.lua` 93 cases, `tests/test_entry_changes.lua` 12, `tests/test_doc.lua` 44, all passing (`evidence/baseline-9b8707f.txt`). The dispatch message names the `dev` you start from, and says whether its code still matches.
+On `9b8707f`, Neovim 0.12.5: 1807 cases, `Fails (0)`; `tests/test_changes.lua` 93 cases, `tests/test_entry_changes.lua` 12, `tests/test_entry_panes.lua` 86, `tests/test_doc.lua` 44, all passing (`evidence/baseline-9b8707f.txt`). The dispatch message names the `dev` you start from, and says whether its code still matches.
 
 Read first:
 - the plan note's D19, C15 and T25;
@@ -95,17 +96,18 @@ Read first:
   - the plan note, the project note and the task list. The wave holds its marks: write a `## Task lines` section in your session note, one paragraph for T32 in the closed rows' style;
   - `.claude/`, `.githooks/`, `CLAUDE.md`, `.worktreeinclude`, `.gitignore`.
 - **A document shared under rule 2's section exception:** `doc/aineo.txt`.
-  - Yours is *aineo-changes*, from its first line, `The changes pane ~`, to its last, `windows say so until the pane is shown again, which starts it again.`. Every hunk stays between those lines; your groups' block goes after the last paragraph and before the blank line that precedes `The file column ~`.
-  - T33 owns *aineo-claude-session* (`Claude's session ~` … `same session.`). T34 owns *aineo-report* (`8. THE AGENT REPORT` … `the working directory of its own moment.`) and *aineo-layout*'s paragraph `The Report and Input wrap long lines between words, a wrapped line keeping` … `windows, keep yours.`.
-  - Before you push, merge your copy with each of their branches that exists (`git merge-tree --write-tree <your head> origin/bugfix/t33-claude-window-name`, and the same for `origin/bugfix/t34-report-layout`). Run `make test_file FILE=tests/test_doc.lua` on each merged tree, and report both results.
-- **Session note:** `knowledge-vault/Sessions/2026-10-06 — T32 Changes colours.md`, with a `## Task lines` section.
+  - Yours is *aineo-changes*, from its first line, the first `The changes pane ~` in the file (the second, in *aineo-limits*, is not yours), to its last, `windows say so until the pane is shown again, which starts it again.`. Every hunk stays between those lines; your groups' block goes after the last paragraph and before the blank line that precedes `The file column ~`.
+  - T33 owns *aineo-claude-session* (`Claude's session ~` … `same session.`) and a new *aineo-limits* subsection, `Claude's window name ~`, after the second `The changes pane ~`'s list. T34 owns *aineo-report* (`8. THE AGENT REPORT` … `the working directory of its own moment.`) and *aineo-layout*'s paragraph `The Report and Input wrap long lines between words, a wrapped line keeping` … `windows, keep yours.`.
+  - Before you push, merge your copy with each of their branches that exists (`git merge-tree --write-tree <your head> origin/feature/t33-claude-window-name`, and the same for `origin/bugfix/t34-report-layout`). Run `make test_file FILE=tests/test_doc.lua` on each merged tree, and report both results.
+- **Session note:** `knowledge-vault/Sessions/<dispatch date> — T32 Changes colours.md`, where `<dispatch date>` is the date the dispatch message gives, `YYYY-MM-DD`. Give it a `## Task lines` section.
 - **Scratch prefix:** `t32-`.
 - **How the suite runs (D30, D29):**
   - Neovim 0.12.5, the newest release, only. Never run the real `claude`.
-  - While you work, and before every push, run the test files you touch, `tests/test_changes.lua`, `tests/test_entry_changes.lua` (if touched) and your new file. Run `tests/test_doc.lua` too. **No whole suite before a push**: D30, for this small fix. Say in your report and pull request that it did not run.
+  - While you work, and before every push, run the test files you touch, `tests/test_changes.lua`, `tests/test_entry_changes.lua`, `tests/test_entry_panes.lua` and your new file. Run `tests/test_doc.lua` too. **No whole suite before a push**: D30, for this small fix. Say in your report and pull request that it did not run.
+  - **D30 (the plan note, PR #123) relaxes `.claude/agents/implementer.md`'s whole-suite line (line 56) and the root `CLAUDE.md`'s D26 paragraph for this packet; they predate it** (brief review, finding 4.1). The `ai/` pull request `ai/d30-small-fix-suite` writes D30 into both; until it merges, this line is your authority.
   - Run each mutant on those files.
   - Stop what you start, by pid.
-- **Pins this packet moves:** none known. No test today reads a highlight group or a mark in the pane's buffers (`grep -n "nvim_get_hl\|extmark" tests/test_changes.lua tests/test_entry_changes.lua` finds none). If a test that compares a whole page table (`text` and `entries`) fails because the page gains a field, that is a pin you move; name it in your report.
+- **Pins this packet moves:** none known. No test today reads a highlight group or a mark in the pane's buffers (`grep -n "nvim_get_hl\|extmark" tests/test_changes.lua tests/test_entry_changes.lua tests/test_entry_panes.lua` finds none). If a test that compares a whole page table (`text` and `entries`) fails because the page gains a field, that is a pin you move; name it in your report.
 
 ## The tests
 
@@ -114,16 +116,18 @@ Each behaviour gets one test, seen failing first:
 - the `*` in `AineoChangesSaved`, and a file not saved with no colour on its blank;
 - a commit's id in `AineoChangesCommitId`, exactly `ABBREVIATED_ID_LENGTH` bytes, and its subject in `AineoChangesCommitSubject`;
 - a note line in `AineoChangesNote` and a failure line in `AineoChangesFailure`, in each window;
-- each group's default link, and a user's own colour kept when the pane is shown again;
+- each group's default link, the subject's group empty by default, and a user's own colour kept when the pane is shown again;
+- after `:highlight clear`, and after `:colorscheme default`, each group has its default again: its link, or the subject's empty group (kills mutant 2 by assertion);
+- the subject on a dimmed window's background: with `NormalNC` set and the commits window not current, the subject's cells show `NormalNC`'s background, not `Normal`'s (kills mutant 7);
 - the colours after a refresh that adds, removes and reorders lines, with none left on a line that lost its text;
 - the colours after `:edit` in a pane buffer, and in a buffer made anew after `:bwipeout`.
 
-The verification will run the plan's six mutants for T32 (`plan.md` › *Verification mutants*). Name in your report the test that kills each.
+The verification will run the plan's mutants for T32 (`plan.md` › *Verification mutants*, 1–7). Name in your report the test that kills each.
 
 ## What was decided already
 
 - The user called both items small fixes, 2026-10-06. They are one packet (the orchestrator's instruction).
-- The colours, as the user answers T32-1 to T32-3 (`plan.md`). This brief carries the recommended options until an amendment says otherwise.
+- The colours: T32-1 to T32-3, the user's answers of 2026-10-06, all (a); the assumptions A1–A3 are the orchestrator's (*Amendment — 2026-10-06*).
 - D30: no whole suite before a push for a small fix in this wave.
 
 ## Budget
@@ -133,3 +137,24 @@ Small: one home, about six groups and their marks on each page, seven or eight c
 ## Report
 
 In your definition's shape, to `<scratchpad>/t32-report-packet.md`. Open the pull request into `dev` before you report. Put in its body every verification claim a reviewer can re-measure, and the test files that ran.
+
+## Amendment — 2026-10-06: the user's answers and the orchestrator's assumptions
+
+The orchestrator put the plan's fourteen decisions to the user on 2026-10-06, each with its options and a recommendation. The user's answer, verbatim: "all recommended". So T32-1, T32-2 and T32-3 are each (a). Then, verbatim: "ok, after it finishes implement wave 8, assume your recommendations and report what they were after you finish so I can check. Go ahead and implement it until the end, I will evaluate only at the end." Every decision the brief review reworded therefore takes the review's recommended option as **the orchestrator's assumption under the user's instruction of 2026-10-06**, never as the user's answer. Build them so:
+
+- **T32-1 — (a)**, the user's. Added and untracked → `Added`; modified, renamed and type-changed → `Changed`; deleted → `Removed`.
+- **T32-2 — (a)**, the user's. The letter and the path in the kind's group, the `*` in `AineoChangesSaved` linked to `WarningMsg`. *The orchestrator's assumption (A1):* the `*` keeps `WarningMsg`, though the failure lines' `DiagnosticWarn` has its yellow, since they are lines of their own.
+- **T32-3 — (a)**, the user's. The id → `Identifier`, the note lines → `Comment`, the failure lines → `DiagnosticWarn`. *The orchestrator's assumptions:* the subject's group is defined empty, as a default, not linked to `Normal` (A2); the "git: …" line is a note line (A3).
+
+**The brief review's corrections** (`brief-review.md`, sections 3 and 4) are made in the body above, each as the review words it:
+- 3.1, the subject in an empty default group, not linked to `Normal`, with a test on a dimmed window;
+- 3.2, mutant 2 relabelled in `plan.md`, and a test after `:highlight clear` and `:colorscheme default`;
+- 3.3, the `*`'s colour and the failure lines' sharing one yellow;
+- 3.4, `tests/test_entry_panes.lua` added to the files this packet runs and to the verification's;
+- 3.5, the fence's first line is the first `The changes pane ~`, and the "git: …" line named;
+- 4.1, D30 relaxing `implementer.md`'s whole-suite line and the root `CLAUDE.md`'s D26 paragraph for this packet, said outright;
+- 4.2, the session note named for the dispatch date.
+
+T33's branch is `feature/t33-claude-window-name` (T33-5 (a)), which the merge check above names.
+
+**Verification mutants** for these answers and assumptions are in `plan.md` › *Verification mutants*, T32 2 (relabelled) and 7.
