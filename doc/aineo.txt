@@ -137,7 +137,9 @@ The changes pane lists what changed in your repository since aineo first
 started Claude Code in this editor: the session, which lasts the editor's
 life. Its repository is the one Claude Code's working directory was in at
 that start, and its base is the commit `HEAD` named then. A restart of
-Claude Code keeps both; a start that failed takes neither.
+Claude Code keeps both. A start aineo could not make — `claude.cmd` not
+executable, say — takes neither; a Claude Code that starts and then fails
+takes both.
 
 The files window, `aineo://changes-files`, lists every file that differs
 from the base, committed since or not, staged or not, and every new file
@@ -149,13 +151,15 @@ your ignore rules leave in, one per line, in git's order: >
 The letter is the kind of change: `A` added, `M` modified, `D` deleted, `R`
 renamed, after its old path, `T` turned into a link or back, `?` new and
 untracked; a copy shows as added. The `*` marks a file you saved from this
-editor since the base was taken — `:write`, `:update`, `:wall`, a part of a
-buffer written to a file or appended to one, the file written whatever its
-buffer is named, a file opened through a symbolic link included. A file you
-and Claude both changed is marked too: aineo cannot tell who changed what.
-A path holding a line break or a control character is shown between double
-quotes, escaped as git escapes it. With nothing changed, the window says
-"No files changed on this session".
+editor since the base was taken, or while aineo first looked for the
+repository — `:write`, `:update`, `:wall`, a part of a buffer written to a
+file or appended to one, the file written whatever its buffer is named, a
+file opened through a symbolic link included. A file you and Claude both
+changed is marked too: aineo cannot tell who changed what. A path holding a
+line break, a control character, a double quote or a backslash is shown
+between double quotes, each of those escaped as git escapes it; characters
+outside ASCII are kept as they are, where git writes them in octal. With
+nothing changed, the window says "No files changed on this session".
 
 The commits window, `aineo://changes-commits`, lists the session's commits,
 newest first, by abbreviated id and subject, or says "No commits on this
@@ -165,9 +169,10 @@ Enter on a file's line shows its unified diff from the base, and on a
 commit's line that commit's diff, in the middle column (the file column,
 below). The diff is read-only: a buffer named `aineo://diff/{path}` or
 `aineo://commit/{id}`, with 'filetype' `diff`, wiped once hidden. The cursor
-stays in the pane, so `j` and Enter step through the list. Enter on any
-other line does nothing. When the middle column has no room for the diff,
-aineo says so and shows nothing.
+stays in the pane, so `j` and Enter step through the list: when you press
+Enter again before a diff was read, only the last Enter's diff is shown.
+Enter on any other line does nothing. When the middle column has no room
+for the diff, aineo says so and shows nothing.
 
 The pane is read again whenever it is shown — `\pc`, `:Aineo pane changes`,
 `\o`, or the layout built anew showing it — and, from its first showing
@@ -179,13 +184,15 @@ diff already shown stays as it was until you press Enter on its line again.
 
 Until git has answered, each window says aineo is reading the repository.
 When Claude Code's working directory is in no repository, both windows say
-so, naming the directory; when `git` is not found, both say that. aineo then
-looks again whenever the pane is shown or a file is saved, and a repository
-made since — by `git init`, say — becomes the session's, its `HEAD` then the
-base. When the base is no longer behind `HEAD` — after a reset to before it,
-or a checkout of another branch — the commits window says so above what git
-lists, and the base stays. A read that fails keeps the list shown, under one
-line giving git's words. When aineo's watch of the repository fails, both
+so, naming the directory, and give git's words below, which tell a
+repository git refuses — one of another owner, or a bare one — from none;
+when `git` is not found, both say that. aineo then looks again whenever the
+pane is shown or a file is saved, and a repository made since — by
+`git init`, say — becomes the session's, its `HEAD` then the base. When the
+base is no longer behind `HEAD` — after a reset to before it, or a checkout
+of another branch — the commits window says so above what git lists, and
+the base stays. A read that fails keeps the list shown, under one line
+giving git's words. When aineo's watch of the repository fails, both
 windows say so until the pane is shown again, which starts it again.
 
 The file column ~
@@ -809,9 +816,9 @@ The changes pane ~
   under one line saying how much of it is shown. git still gives the whole
   diff first, which takes its time and memory.
 - A large repository: each read runs git over the whole working tree. On a
-  repository of 20 001 files whose every file had changed on disk, one read
-  took 1.5 to 3.1 seconds. A git that runs past 10 seconds is stopped, and
-  the read said to have failed.
+  repository of 20 001 files whose every file had been rewritten with its
+  own content, one read took 1.5 to 3.1 seconds. A git that runs past 10
+  seconds is stopped, and the read said to have failed.
 - A pull, a merge, or a rebase onto newer upstream commits during the
   session lists those commits, and their files, as the session's: the
   commits window lists every commit reachable from `HEAD` and not from the
