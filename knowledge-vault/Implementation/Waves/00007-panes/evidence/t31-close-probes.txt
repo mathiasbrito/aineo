@@ -1,0 +1,175 @@
+T31's knowledge pass, 2026-10-06: how Neovim 0.12.5 reads 'virtualedit' under 'selection' old.
+
+It re-measures the guarantee review of PR #120, finding 1. That review ran three probes: the values Neovim accepts, a value built by appending, and what "_d leaves. They are merged here into one script, with all,NONE and NONE,all added.
+
+Host: macOS arm64, NVIM v0.12.5 (Homebrew). The script ran in a clean Neovim (nvim --clean -i NONE -l), with every XDG path, CLAUDE_CONFIG_DIR and the log under the checkout's gitignored .tests/k31-xdg.
+
+Rows, each with the keys that select it:
+- A2: { '  abc', 'x', '' }, gg0lvjj
+- A1: { 'é', '' }, 1G0llllvw
+- A6: { 'abc', '', 'def' }, gg05lvj
+- B1: { 'abc', '' }, gg$lvj
+- P1: { 'abc def', '' }, gg0wvj
+
+Section 3 gives, for each value, what plain Neovim's own "_d leaves of each row.
+
+Result:
+- Every spelling whose flags are at least one, and all 'all' once none and NONE are dropped, keeps the end: A2 leaves { ' ' }. Every other value moves it.
+- A local NONE over a global all moves the end. A local all over a global '' or onemore keeps it.
+- Neovim stores the value as typed (section 1). A comparison with the string 'all' therefore misses the other spellings.
+
+:h 'virtualedit' (Neovim 0.12.5's runtime/doc/options.txt) says: "A comma-separated list of these words", and "When combined with other words, "none" is ignored."
+
+== the runner, .tests/k31-run.sh
+#!/bin/sh
+# Runs one Lua probe in a clean Neovim whose state lives under .tests/k31-xdg.
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+X=$ROOT/.tests/k31-xdg
+mkdir -p "$X"
+cd "$ROOT" || exit 1
+export XDG_CONFIG_HOME="$X/config" XDG_DATA_HOME="$X/data" XDG_STATE_HOME="$X/state" XDG_CACHE_HOME="$X/cache"
+export NVIM_LOG_FILE="$X/log" CLAUDE_CONFIG_DIR="$X/claude"
+unset NVIM NVIM_APPNAME MYVIMRC VIMINIT
+exec nvim --clean -i NONE -l "$1"
+
+== the probe, .tests/k31-ve-probe.lua
+-- What Neovim stores for each 'virtualedit' spelling, and what plain Neovim's
+-- own "_d removes under 'selection' old for each, on five rows.
+local out = {}
+local function say(line)
+  table.insert(out, line)
+end
+
+say('== 1. values: what is set -> what vim.o.virtualedit reads')
+local flags = { 'block', 'insert', 'all', 'onemore' }
+local values = {}
+for mask = 0, 15 do
+  local parts = {}
+  for i, flag in ipairs(flags) do
+    if bit.band(mask, bit.lshift(1, i - 1)) ~= 0 then
+      table.insert(parts, flag)
+    end
+  end
+  table.insert(values, table.concat(parts, ','))
+end
+for _, value in ipairs({ 'none', 'NONE', 'all,all', 'all,', 'all,none', 'none,all', 'all,NONE', 'NONE,all', 'ALL', ' all' }) do
+  table.insert(values, value)
+end
+for _, value in ipairs(values) do
+  local ok, err = pcall(function()
+    vim.o.virtualedit = value
+  end)
+  if ok then
+    say(('[%s] -> [%s]'):format(value, vim.o.virtualedit))
+  else
+    say(('[%s] refused: %s'):format(value, tostring(err):match('E%d+.*')))
+  end
+end
+
+say('== 2. built by appending')
+vim.cmd('set virtualedit=none')
+vim.cmd('set virtualedit+=all')
+say(('set ve=none | set ve+=all -> [%s]'):format(vim.o.virtualedit))
+vim.o.virtualedit = 'none'
+vim.opt.virtualedit:append('all')
+say(('vim.o.virtualedit = "none"; vim.opt.virtualedit:append("all") -> [%s]'):format(vim.o.virtualedit))
+
+say('== 3. what "_d leaves under selection=old')
+local setups = {}
+for _, value in ipairs(values) do
+  if value ~= 'ALL' and value ~= ' all' then
+    table.insert(setups, { '[' .. value .. ']', value })
+  end
+end
+table.insert(setups, { 'global all, local NONE', 'all', 'NONE' })
+table.insert(setups, { 'global empty, local all', '', 'all' })
+table.insert(setups, { 'global onemore, local all', 'onemore', 'all' })
+table.insert(setups, { 'global all, local onemore', 'all', 'onemore' })
+local rows = {
+  { 'A2', { '  abc', 'x', '' }, 'gg0lvjj' },
+  { 'A1', { 'é', '' }, '1G0llllvw' },
+  { 'A6', { 'abc', '', 'def' }, 'gg05lvj' },
+  { 'B1', { 'abc', '' }, 'gg$lvj' },
+  { 'P1', { 'abc def', '' }, 'gg0wvj' },
+}
+for _, setup in ipairs(setups) do
+  local line = { setup[1] }
+  for _, row in ipairs(rows) do
+    vim.cmd('enew!')
+    vim.bo.buftype = 'nofile'
+    vim.o.selection = 'old'
+    vim.o.virtualedit = setup[2]
+    if setup[3] then
+      vim.cmd('setlocal virtualedit=' .. setup[3])
+    end
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, row[2])
+    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+    vim.api.nvim_feedkeys(vim.keycode('<Esc><Esc>'), 'nx', false)
+    vim.api.nvim_feedkeys(vim.keycode(row[3] .. '"_d'), 'mtx', false)
+    vim.api.nvim_feedkeys(vim.keycode('<Esc><Esc>'), 'nx', false)
+    table.insert(line, row[1] .. ' ' .. vim.inspect(vim.api.nvim_buf_get_lines(0, 0, -1, false)))
+  end
+  say(table.concat(line, ' | '))
+end
+io.stdout:write(table.concat(out, '\n') .. '\n')
+
+== its output (.tests/k31-run.sh .tests/k31-ve-probe.lua)
+== 1. values: what is set -> what vim.o.virtualedit reads
+[] -> []
+[block] -> [block]
+[insert] -> [insert]
+[block,insert] -> [block,insert]
+[all] -> [all]
+[block,all] -> [block,all]
+[insert,all] -> [insert,all]
+[block,insert,all] -> [block,insert,all]
+[onemore] -> [onemore]
+[block,onemore] -> [block,onemore]
+[insert,onemore] -> [insert,onemore]
+[block,insert,onemore] -> [block,insert,onemore]
+[all,onemore] -> [all,onemore]
+[block,all,onemore] -> [block,all,onemore]
+[insert,all,onemore] -> [insert,all,onemore]
+[block,insert,all,onemore] -> [block,insert,all,onemore]
+[none] -> [none]
+[NONE] -> [NONE]
+[all,all] -> [all,all]
+[all,] -> [all,]
+[all,none] -> [all,none]
+[none,all] -> [none,all]
+[all,NONE] -> [all,NONE]
+[NONE,all] -> [NONE,all]
+[ALL] refused: E474: Invalid argument
+[ all] refused: E474: Invalid argument
+== 2. built by appending
+set ve=none | set ve+=all -> [none,all]
+vim.o.virtualedit = "none"; vim.opt.virtualedit:append("all") -> [none,all]
+== 3. what "_d leaves under selection=old
+[] | A2 { "" } | A1 { "" } | A6 { "ab", "", "def" } | B1 { "ab", "" } | P1 { "abc ", "" }
+[block] | A2 { "" } | A1 { "" } | A6 { "ab", "", "def" } | B1 { "ab", "" } | P1 { "abc ", "" }
+[insert] | A2 { "" } | A1 { "" } | A6 { "ab", "", "def" } | B1 { "ab", "" } | P1 { "abc ", "" }
+[block,insert] | A2 { "" } | A1 { "" } | A6 { "ab", "", "def" } | B1 { "ab", "" } | P1 { "abc ", "" }
+[all] | A2 { " " } | A1 { "é" } | A6 { "abc", "def" } | B1 { "abc" } | P1 { "abc " }
+[block,all] | A2 { "" } | A1 { "" } | A6 { "ab", "", "def" } | B1 { "ab", "" } | P1 { "abc ", "" }
+[insert,all] | A2 { "" } | A1 { "" } | A6 { "ab", "", "def" } | B1 { "ab", "" } | P1 { "abc ", "" }
+[block,insert,all] | A2 { "" } | A1 { "" } | A6 { "ab", "", "def" } | B1 { "ab", "" } | P1 { "abc ", "" }
+[onemore] | A2 { "" } | A1 { "é", "" } | A6 { "abc", "", "def" } | B1 { "abc", "" } | P1 { "abc ", "" }
+[block,onemore] | A2 { "" } | A1 { "é", "" } | A6 { "abc", "", "def" } | B1 { "abc", "" } | P1 { "abc ", "" }
+[insert,onemore] | A2 { "" } | A1 { "é", "" } | A6 { "abc", "", "def" } | B1 { "abc", "" } | P1 { "abc ", "" }
+[block,insert,onemore] | A2 { "" } | A1 { "é", "" } | A6 { "abc", "", "def" } | B1 { "abc", "" } | P1 { "abc ", "" }
+[all,onemore] | A2 { "" } | A1 { "é", "" } | A6 { "abc", "", "def" } | B1 { "abc", "" } | P1 { "abc ", "" }
+[block,all,onemore] | A2 { "" } | A1 { "é", "" } | A6 { "abc", "", "def" } | B1 { "abc", "" } | P1 { "abc ", "" }
+[insert,all,onemore] | A2 { "" } | A1 { "é", "" } | A6 { "abc", "", "def" } | B1 { "abc", "" } | P1 { "abc ", "" }
+[block,insert,all,onemore] | A2 { "" } | A1 { "é", "" } | A6 { "abc", "", "def" } | B1 { "abc", "" } | P1 { "abc ", "" }
+[none] | A2 { "" } | A1 { "" } | A6 { "ab", "", "def" } | B1 { "ab", "" } | P1 { "abc ", "" }
+[NONE] | A2 { "" } | A1 { "" } | A6 { "ab", "", "def" } | B1 { "ab", "" } | P1 { "abc ", "" }
+[all,all] | A2 { " " } | A1 { "é" } | A6 { "abc", "def" } | B1 { "abc" } | P1 { "abc " }
+[all,] | A2 { " " } | A1 { "é" } | A6 { "abc", "def" } | B1 { "abc" } | P1 { "abc " }
+[all,none] | A2 { " " } | A1 { "é" } | A6 { "abc", "def" } | B1 { "abc" } | P1 { "abc " }
+[none,all] | A2 { " " } | A1 { "é" } | A6 { "abc", "def" } | B1 { "abc" } | P1 { "abc " }
+[all,NONE] | A2 { " " } | A1 { "é" } | A6 { "abc", "def" } | B1 { "abc" } | P1 { "abc " }
+[NONE,all] | A2 { " " } | A1 { "é" } | A6 { "abc", "def" } | B1 { "abc" } | P1 { "abc " }
+global all, local NONE | A2 { "" } | A1 { "" } | A6 { "ab", "", "def" } | B1 { "ab", "" } | P1 { "abc ", "" }
+global empty, local all | A2 { " " } | A1 { "é" } | A6 { "abc", "def" } | B1 { "abc" } | P1 { "abc " }
+global onemore, local all | A2 { " " } | A1 { "é" } | A6 { "abc", "def" } | B1 { "abc" } | P1 { "abc " }
+global all, local onemore | A2 { "" } | A1 { "é", "" } | A6 { "abc", "", "def" } | B1 { "abc", "" } | P1 { "abc ", "" }

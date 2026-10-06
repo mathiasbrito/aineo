@@ -1,13 +1,15 @@
 ---
 wave: 00007
-status: claimed
+status: landed
 rolling: true
 planned_by: the orchestrator (Claude, Opus 5.5) for Mathias Santos de Brito — host Macbook-Mathias
 planned_at: 2026-09-27 13:27 CEST
 base: e7ad8d9
 claimed_by: Macbook-Mathias (platform UUID prefix CF989BF4), session 938616f1-5ff6-4507-97aa-65611ff715c0
 claimed_at: 2026-09-27 14:01 CEST
-landed_at:
+landed_at: 2026-10-06 22:15 CEST
+pull_requests: "#79, #105, #108, #112, #115, #120"
+closed_by: the user, 2026-10-06 — "Close it (Recommended)"
 ---
 
 # Wave 7 — panes
@@ -479,7 +481,7 @@ Added after the user's answers, one per option not chosen:
 
 ## Landed
 
-- **Wave 7 paused** at the user's word on 2026-09-27 (20:16): "we will not continue towards wave 7, finish the current work and wait my go to start wave 7". That T23, already in its fix round, counted as current work and was finished is the orchestrator's reading, told to the user at 20:17. T24–T26 wait for the user's go. The wave stays claimed.
+- **Wave 7 paused** at the user's word on 2026-09-27 (20:16): "we will not continue towards wave 7, finish the current work and wait my go to start wave 7". That T23, already in its fix round, counted as current work and was finished is the orchestrator's reading, told to the user at 20:17. T24–T26 wait for the user's go. The wave stayed claimed through the pause.
 - **Wave 7 resumed** on 2026-10-05. The user's words of 2026-10-04, "than we will start the wave 7", came with wave 6's close. On 2026-10-05 the orchestrator asked "Start wave 7? I'm treating your 10-04 'then we will start the wave 7' as the go … Confirm it." The user answered the same message's other questions and asked for the context to be compacted first, and after the compact said "go ahead". That this is the go is the orchestrator's reading. T30 joined the wave the same day.
 - **T23 — PR #79, regular**, merged by rebase on 2026-09-27 as `2f44c73` … `da18aa6` (19 commits). The code of `dev` is identical to the verified tree: `b38bdd8` laid over `dev` `cfa91ee`, merge-tree `8295e23`, which also holds T19.
   - **The brief review** (dispatch after corrections, 18 findings) found, among others:
@@ -716,7 +718,7 @@ Added after the user's answers, one per option not chosen:
     - The round built `character_end()` (`charidx()` and `byteidx()`), the read through `nvim_buf_get_lines()`, `removed_region()` for `'selection'` old, and the put-back of `'<` and `'>`. `line_part()` lost its flag parameter, and `tests/test_send_selection.lua` ends its fake by a hangup.
     - 11 cases seen red; 19 arrived green, each with its killer; 20 mutants killed by assertion; 1792 cases, 220 s. `tests/test_send_selection.lua` went from 89 s for 33 cases to 74 s for 52.
     - It could not push: github.com did not resolve on the host. The orchestrator pushed it, a fast-forward from `08ea516` to `66eb1b7`, once the network was back.
-  - **No re-measure ran before the merge.** The round changed production code and replaced mechanisms, for which orchestrate §6 dispatches a re-measure with the attack question; the orchestrator's own verification followed the round, and #115 merged. The orchestrator dispatched the re-measure after the merge and the release, on 2026-10-06; a finding becomes a follow-up packet inside wave 7.
+  - **No re-measure ran before the merge.** The round changed production code and replaced mechanisms, for which orchestrate §6 dispatches a re-measure with the attack question; the orchestrator's own verification followed the round, and #115 merged. The orchestrator dispatched the re-measure after the merge and the release, on 2026-10-06; a finding becomes a follow-up packet inside wave 7. It found five, and T31 fixed them (below).
 - **The orchestrator's verification** of `66eb1b7`, on 0.12.5 (D29):
   - guard 5 cases, `Fails (0)`;
   - `make test`, 1792 cases, `Fails (0)`, 218 s;
@@ -730,4 +732,45 @@ Added after the user's answers, one per option not chosen:
   - *Packet T25*'s K19 is recorded with T25 above; the records review of PR #114 found that record true.
   - The T26 brief's VS5 recommendation says "and no other Send ends in one", of a message ending in a line feed. It is false: a Visual Send of lines whose last is empty, or of lines removed linewise under `'selection'` `old` (MR284), ends in one, and so does a whole-Input Send whose Input ends in an empty line, since Send keeps blank lines (MR55). MR290 says so (PR #118's records review, finding 2, measured).
   - The plan's *Ask* (line 16) dates the user's words 2026-09-26; the ledger and waves 2–5's plans date them 2026-09-23, 23:41 CEST.
-- **Wave 7 stays open.** Every packet of its composition has merged by 2026-10-06: T23 (#79), T24 (#105), T30 (#108), T25 (#112) and T26 (#115). With T26 every task row of [[Planning/aineo — v1 agent console]] is built, and v1 awaits the user's MVP review ([[Review/2026-09-24 — v1 MVP readings review]]). Asked on 2026-10-06 whether to close the wave, the user answered "Keep it open": it stays `claimed` until the post-merge re-check of T26 is back, so that a follow-up can land inside wave 7, and the user closes it then (orchestrate §3). Retrospective: [[Sessions/2026-09-27 — Wave 7 retrospective]].
+- **Wave 7 kept open.** Every packet of its composition had merged by 2026-10-06: T23 (#79), T24 (#105), T30 (#108), T25 (#112) and T26 (#115). Asked on 2026-10-06 whether to close the wave, the user answered "Keep it open": it stayed `claimed` until the post-merge re-check of T26 was back, so that a follow-up could land inside wave 7 (orchestrate §3). That follow-up is T31.
+- **The re-measure of PR #115's fix round**, with the attack question (`neovim-claude-code-reviewer`), on `dev` `3b5f0f7` (`v0.2.13`), dispatched after the merge. It was owed before the merge and skipped, the orchestrator's error (T26's entry above). Its verdict: a follow-up packet is needed. It found five:
+  - **F1** (a regression of the round): under `'selection'` old, `removed_region()` moved a selection's end where Vim does not. With `'virtualedit'` `all`, Vim keeps the end; with `onemore`, a start past its line's end above an empty line removes nothing. In both, a Visual Send wrote text that never left Input, at times a lone UTF-8 continuation byte. 88 of the 94 problems its fuzzer flagged in 60,000 cases;
+  - **F2** (older than the round): the empty check joined the parts with nothing, the message with line feeds, so `{ '\194', '\133' }` with `ggVj` was refused as empty. This was PR #118's records review's lead (finding 5). Over 3,820,752 enumerated part lists, 12,258 were refused although the message held text, and none passed although it was white space;
+  - **F3:** the `gv` pin proved only the `'>` half of the put-back (`R-gv-no-start` survived);
+  - **F4** (older than the round): a block's edge on an invalid byte that a combining mark or a joiner follows sends one without the other;
+  - **F5:** nothing pinned why a NUL goes to `charidx()` as a line feed (`R-nul-x` survived).
+
+  The round's other items held, and each of its 14 mutants died by assertion.
+- **T31 — PR #120, a small fix**, planned in PR #119 (`686625c`) and merged by rebase on 2026-10-06 (19:55 UTC; 21:55 CEST) as `65679f4`, `9bf8a36`, `039602d` and `03a1345`. The tree of `dev` `03a1345` is the tree the orchestrator verified, the PR's head `3fc1b11` (`git diff --stat 3fc1b11 03a1345` prints nothing). Session note: [[Sessions/2026-10-06 — T31 Selection old]]; probes: `evidence/t31-close-probes.txt`.
+  - **The packet** (`neovim-claude-code-integrator`) took F1–F5, each red-first from the re-measure's failing inputs:
+    - `removed_region()` keeps the end when `'virtualedit'` is `all`. It returns no region when the start lies past the moved end, and `visual_selection()` reads that as no parts, so the Send is refused as empty. That edit is three lines outside the functions the brief named; it was declared, and the brief's measured fix made the same edit;
+    - the empty check joins the parts with line feeds;
+    - the help's *Visual Send* sentence was corrected, and LIMITS gained *A block's edge on an invalid byte*, F4 as the orchestrator's reading named it.
+
+    52 → 60 cases in `tests/test_send_selection.lua`. 3 cases seen red, and 5 arrived green, each with the mutant that kills it. 8 mutants, all killed by assertion. 1800 cases, `Fails (0)`, on `efe9a31`; the runner printed no duration.
+  - **The guarantee review** (`neovim-lua-developer`): merge after fixes. It found four:
+    - F1 was left incomplete (finding 1). The code compared `'virtualedit'` with the string `all`, but Vim reads it as a set of flags. `all,all`, `all,`, `all,none` and `none,all` — the last is what `:set ve=none | set ve+=all` makes — still sent text that never left Input. It was not a regression: `dev` `686625c` failed the same rows;
+    - the window's effective value was unpinned: `G-all-global` survived (finding 2);
+    - the no-region boundary was unpinned: `G-nil-at-end` survived (finding 3);
+    - a records finding (4): LIMITS did not cover the re-measure's second residue, a characterwise start one cell past an invalid byte drawn as `<c3>`, under `'virtualedit'` `all`.
+
+    It refuted the rest over 188,000 fuzzed selections on the head. No `removed_region()` problem was found but finding 1's. The 7 problems in the re-measure's 60,000 cases all predate T31. As a control, `dev` `686625c` gave 81 problems on the `'selection'`-old runs. Of its 12 mutants, 10 were killed by assertion, and its 2 survivors die on the rows K1 and K2 it built.
+  - **The bounded correction**, by a fresh `neovim-claude-code-integrator`, took all four:
+    - `removed_region()` reads the option as flags. It splits on commas with empty entries trimmed and drops `none` and `NONE`. The end is kept when at least one flag remains and every one is `all`;
+    - rows for `all,all`, `all,`, `all,none` and `all,NONE` were each seen red in turn. All five spellings, with `none,all`, fail on `e3dd139`'s code. The `all,NONE` row goes beyond the brief's four, declared: the rule drops `NONE`, so its branch needs a row;
+    - K1 and K2 were added as pins;
+    - the help now says "holds `all` and no other flag but `none`", and LIMITS gained *A characterwise start past an invalid byte*: named, not pinned, not fixed.
+
+    10 mutants, all killed by assertion. 67 cases in the file; 1807 cases, `Fails (0)`, 228 s.
+
+    It was paused for the user's laptop suspend after a local commit, `acd3c8f`, which was not pushed and had no whole-suite run, and was resumed by message. Before the pause, one `make deps` run wrote a scratch file to `/tmp`, outside its worktree, and the agent removed it in its next command.
+- **The orchestrator's verification**, on 0.12.5 (D29). On `e3dd139`: the guard, `Fails (0)`; `make test`, 1800 cases, `Fails (0)`, 241 s; lint clean. On the final head `3fc1b11`:
+  - guard 5 cases, `Fails (0)`;
+  - `make test`, 1807 cases, `Fails (0)`, 230 s;
+  - lint clean;
+  - the correction's 9 mutants, each applied literally and run on the whole of `tests/test_send_selection.lua`, all killed by assertion. They are `G-all-global` and `G-nil-at-end` (the guarantee review's two survivors), `M-keep-none`, `M-keep-NONE`, `M-keep-empty`, `M-no-count`, `M-any-all`, `M-drop-all` and `M-no-nil`.
+
+  *Packet T31*'s review line names the re-measure's cases and mutants for this verification. The verification did not re-run them, nor the packet's `M-concat-nothing`, `R-gv-no-start`, `R-nul-x` and `M-in-block-end`. The packet and the guarantee review had killed those four by assertion on `efe9a31`, and the guarantee review had run the re-measure's 13 cases there: 10 passed, and C1–C3 failed as the LIMITS entry says they do. The correction did not touch their sites.
+- **Released:** `v0.2.14` (PR #121, squash-merged into `main` as `ebfe71c`, tag `v0.2.14`), carrying T31. Its tree is `dev` `03a1345`'s, 7 commits after `v0.2.13`'s `3b5f0f7`: T26's knowledge pass (`0687e70`, `e04c404`), T31's plan (`686625c`) and T31's four. The user's release checkout is at `v0.2.14`.
+- **Records the reviews named false in dispatched files, left as dispatched** (`Implementation/Waves/CLAUDE.md`): the brief's F1 reads "with `'virtualedit'` exactly `all`", and the re-measure's measured fix compared the option with the string `all`. Both rest on nine values. Vim reads the option as a set of flags: `all,all`, `all,`, `all,none`, `none,all`, `all,NONE` and `NONE,all` keep the end as `all` does. This is the guarantee review's finding 1, re-measured by T31's knowledge pass (`evidence/t31-close-probes.txt`).
+- **Wave 7 closed** at the user's word. On 2026-10-06 the orchestrator asked: "T31 is merged and released in v0.2.14, so every packet of wave 7 has landed (T23, T24, T30, T25, T26, T31). Close wave 7 now?" The user answered "Close it (Recommended)". No packet was open or planned and undispatched. The wave is `landed`. With T31, every task row of [[Planning/aineo — v1 agent console]], T1–T31, is built, and v1 awaits the user's MVP review from `v0.2.14` ([[Review/2026-09-24 — v1 MVP readings review]]). Retrospective: [[Sessions/2026-09-27 — Wave 7 retrospective]].
