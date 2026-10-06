@@ -293,6 +293,28 @@ otherwise, or exits with another code — then fails the same way at each
 start there: removing `aineo/claude-sessions/` under `stdpath('state')`
 makes every directory start a new session.
 
+                               *b:aineo_session_name* *b:aineo_session_folder*
+Claude's window draws a status line of its own for Claude's terminal: the
+session's name, then the folder Claude Code started in, written from your
+home directory, as in `Fix the login bug — ~/projects/app`. The name is
+Claude Code's own for the session, as Claude Code writes it in its terminal
+title (`b:term_title`), without the status glyph before it, such as `✳`:
+Claude Code 2.1.292 titles a session started with `--name {name}` as
+`✳ {name}`. It reads `Claude Code` until Claude Code sets a title, while
+the title is empty, and once Claude Code has exited, since it clears its
+title as it exits; the status line follows each new title by itself. The
+folder is the directory Claude Code started in, whatever `:cd` and `\o` do
+while it runs; a Claude Code `\o` starts once the last has exited starts in
+the working directory then, and the folder is that one. The status line is
+set for Claude's terminal in Claude's window, as `:setlocal` sets it: your
+other windows, and another buffer shown in Claude's window, keep your own.
+It replaces the whole of Neovim's default status line there, the
+terminal's `term://` name, its ruler and its exit code with it; the
+terminal keeps its name, which `:ls` shows. For a status-line plugin, the
+name and the folder are kept, current, on Claude's terminal as
+`b:aineo_session_name` and `b:aineo_session_folder`. See
+|aineo-limits| for what can replace it.
+
 aineo resumes the session it started, not one you switch to inside Claude
 Code (`/clear`, `/resume`), and ignores a conversation you ran in a plain
 terminal in the same directory. Two Neovims in one directory resume the
@@ -993,5 +1015,21 @@ The changes pane ~
   diff Enter read for that name arrives then, Neovim shows an error with a
   stack trace, the diff is not shown, and aineo does not try again. Enter
   on the line again shows it, the other buffer giving its name up.
+
+Claude's window name ~
+- A status-line plugin that sets the status line of every window replaces
+  aineo's in Claude's window; lualine does with its default configuration,
+  within a second. Such a plugin can show `b:aineo_session_name` and
+  `b:aineo_session_folder` of Claude's terminal (|aineo-claude-session|).
+- With 'laststatus' set to 3, the one status line shows Claude's name and
+  folder only while the cursor is in Claude's window.
+- With `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` set in the environment Neovim
+  started in, Claude Code sets no title, and Claude's window reads
+  `Claude Code` for the whole session.
+- Not measured, and so not known to show: a title Claude Code generates
+  from your first prompt, a name `/rename` gives, the title after
+  `--resume`, and the glyph while Claude Code is busy. A glyph is left out
+  when the title's first character is neither a letter nor a digit and a
+  space follows it.
 
  vim:tw=78:ts=8:ft=help:norl:
