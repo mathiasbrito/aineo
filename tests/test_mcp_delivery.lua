@@ -246,8 +246,8 @@ T['a report']['reaches the editor as data: fields holding code render literally 
   eq(get(decoded(relay:next_line()), 'result', 'isError'), false)
   eq(report_editor.lines(editor), {
     "09:05 [done] ')) vim.g.aineo_ran = 'task' -- — \"]] vim.g.aineo_ran = 'summary' [[",
-    "      ') os.exit(3) --",
-    '      ' .. shell_line,
+    "      - ') os.exit(3) --",
+    '      - ' .. shell_line,
   })
   eq({ editor.lua_get('vim.g.aineo_ran == nil'), vim.uv.fs_stat(witness) == nil }, { true, true })
 end
