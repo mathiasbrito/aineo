@@ -21,12 +21,15 @@ local C0_CONTROLS = '[%z\1-\8\11\12\14-\31\127]'
 --- U+009B, the one-character form of the escape sequence `ESC [`.
 local C1_CONTROLS = '\194[\128-\159]'
 
---- What Send tells the user when it sends nothing, by the reason: no
---- Input, Input empty, or the session's status (`claude.session_status()`),
+--- What Send and the Visual Send tell the user when they send nothing, by
+--- the reason: no Input, Input empty, the selection empty, a selection made
+--- outside Input, or the session's status (`claude.session_status()`),
 --- `not_started` when there is no session.
 local REFUSALS = {
   no_input = 'aineo: nothing sent — there is no Input; open aineo’s layout to make one',
   empty = 'aineo: nothing sent — Input is empty',
+  empty_selection = 'aineo: nothing sent — the selection is empty',
+  not_in_input = 'aineo: nothing sent — Visual Send works in Input only',
   not_started = 'aineo: nothing sent — Claude has not started',
   starting = 'aineo: nothing sent — Claude is not ready: it is starting, or a dialog in its window awaits your answer',
   exited = 'aineo: nothing sent — Claude has exited',
@@ -123,6 +126,25 @@ function M.send()
   end
 end
 
+--- The part of a line a selection spans from `first` to `last`, positions
+--- as `getregionpos()` gives them: empty when the selection lies past the
+--- line's end (`first`'s column 0), else from `first` to the end of the
+--- character `last` lies in — the whole of a double-width character the
+--- selection cuts — or to the line's end when `to_line_end`.
+---
+---@param first integer[] `[bufnum, lnum, col, off]`
+---@param last integer[] `[bufnum, lnum, col, off]`
+---@param to_line_end boolean
+---@return string
+local function line_part(first, last, to_line_end)
+  if first[3] == 0 then
+    return ''
+  end
+  local line = vim.fn.getline(first[2])
+  local last_byte = to_line_end and #line or last[3] + vim.str_utf_end(line, last[3])
+  return line:sub(first[3], last_byte)
+end
+
 --- The Visual selection's part of each line it spans, top to bottom, and
 --- whether it is charwise.
 ---
@@ -134,12 +156,7 @@ local function visual_selection()
   for _, span in
     ipairs(vim.fn.getregionpos(vim.fn.getpos('v'), vim.fn.getpos('.'), { type = mode }))
   do
-    local first, last = span[1], span[2]
-    local line = vim.fn.getline(first[2])
-    table.insert(
-      parts,
-      first[3] == 0 and '' or line:sub(first[3], to_line_end and #line or last[3])
-    )
+    table.insert(parts, line_part(span[1], span[2], to_line_end))
   end
   return { parts = parts, charwise = mode == 'v' }
 end
@@ -160,15 +177,49 @@ local function removed_text(selection, line_breaks_removed)
   return text
 end
 
---- Sends the Visual selection in Input to Claude Code's terminal as one
---- bracketed paste followed by Enter, in one write, and removes it from
---- Input as Vim's own `"_d` does.
+--- Ends Visual mode, the selection kept for `gv`, as Vim ends it after a
+--- command that fails, and tells the user, once, why the Visual Send sent
+--- nothing.
+---
+---@param reason string a key of `REFUSALS`
+local function refuse_selection(reason)
+  vim.cmd.normal({ args = { vim.keycode('<Esc>') }, bang = true })
+  refuse(reason)
+end
+
+--- Sends the Visual selection in Input to Claude Code's terminal, called in
+--- Visual mode: removes it from Input as Vim's own `"_d` does — writing no
+--- register, and leaving the cursor where `"_d` leaves it, in Normal mode —
+--- then writes exactly the text that removal took, without control bytes
+--- (`without_control_bytes()`), as one bracketed paste followed by Enter, in
+--- one write, as `send()` writes Input. That text is each line's removed
+--- part joined by line feeds: a `$` block's part runs to each line's own
+--- end, a line the block lies past gives an empty part and no padding, a
+--- tab or a double-width character the selection cuts is sent whole, and a
+--- charwise selection past its last line's end ends with that line break.
+---
+--- Sends and removes nothing, ending Visual mode with the selection kept
+--- for `gv`, and tells the user why with one `vim.notify()` warning, when
+--- the current buffer is not Input — Input missing too — when the selection
+--- holds nothing but white space, and when Claude Code is not ready, as
+--- `send()` tells it — checked in that order.
 function M.send_selection()
   local input = vim.api.nvim_get_current_buf()
+  if input ~= existing_input() then
+    return refuse_selection('not_in_input')
+  end
   local selection = visual_selection()
+  if not without_control_bytes(table.concat(selection.parts)):find('%S') then
+    return refuse_selection('empty_selection')
+  end
+  local status = claude.session_status()
+  if status ~= 'ready' then
+    return refuse_selection(status or 'not_started')
+  end
   local line_count = vim.api.nvim_buf_line_count(input)
   vim.cmd.normal({ args = { '"_d' }, bang = true })
-  local text = removed_text(selection, line_count - vim.api.nvim_buf_line_count(input))
+  local text =
+    without_control_bytes(removed_text(selection, line_count - vim.api.nvim_buf_line_count(input)))
   claude.write_to_session(PASTE_START .. text .. PASTE_END .. ENTER)
 end
 
