@@ -956,6 +956,22 @@ T['a buffer of the pane']['gone as its list is read, lists what is read later on
   )
 end
 
+--- An expression mapping waiting in `input()`, a hold of textlock during
+--- which `SafeState` fires, in the shape of `TEXTLOCK_HOLDS`' entries.
+local INPUT_HOLD = {
+  'an expression mapping waiting in input()',
+  [[
+    vim.keymap.set('n', 'Y', function()
+      _G.holding = true
+      vim.fn.input('> ')
+      _G.holding = false
+      return ''
+    end, { expr = true })
+  ]],
+  'Y',
+  '<CR>',
+}
+
 --- Each way the child's editor holds textlock while its main loop runs, as a
 --- set's `parametrize`: its name, the Lua that makes it ready, the keys that
 --- begin it from the files window, and the keys that end it once
@@ -993,23 +1009,39 @@ local TEXTLOCK_HOLDS = {
     '<C-w>ki<C-x><C-u>',
     '<Esc>',
   },
+  INPUT_HOLD,
 }
 
---- Presses `keys` in the child, which begin a hold of `TEXTLOCK_HOLDS`, and
---- waits until it holds.
+--- Each hold during which Neovim refuses to wipe a buffer out and yet fires
+--- `SafeState`, as a set's `parametrize`, in the shape of `TEXTLOCK_HOLDS`'.
+local WIPE_REFUSING_HOLDS = {
+  {
+    'the command-line window',
+    [[
+      vim.api.nvim_create_autocmd('CmdwinEnter', { callback = function() _G.holding = true end })
+      vim.api.nvim_create_autocmd('CmdwinLeave', { callback = function() _G.holding = false end })
+    ]],
+    'q:',
+    ':quit<CR>',
+  },
+  INPUT_HOLD,
+}
+
+--- Presses `keys` in the child, which begin a hold of `TEXTLOCK_HOLDS` or
+--- `WIPE_REFUSING_HOLDS`, and waits until it holds.
 ---
 ---@param keys string
 local function begin_hold(keys)
   child.api.nvim_input(keys)
-  git_repo.wait_until('textlock held', function()
+  git_repo.wait_until('the hold begun', function()
     return child.lua_get('_G.holding == true')
   end)
 end
 
---- Ends the child's hold of `TEXTLOCK_HOLDS` with `keys`, and waits until it
---- has ended, at most `git_repo.PATIENCE_MS`: a message the editor shows
---- meanwhile can take the keys instead, which the case's assertions then
---- tell.
+--- Ends the child's hold of `TEXTLOCK_HOLDS` or `WIPE_REFUSING_HOLDS` with
+--- `keys`, and waits until it has ended, at most `git_repo.PATIENCE_MS`: a
+--- message the editor shows meanwhile can take the keys instead, which the
+--- case's assertions then tell.
 ---
 ---@param keys string
 local function end_hold(keys)
@@ -1084,6 +1116,7 @@ T['a buffer of the pane']['its lists read while textlock holds']['are shown once
     commits = child.lua_get(SHOWN_AND_MODIFIABLE, { COMMITS }),
     told = child.cmd_capture('messages'),
     reads = child.lua_get('{ _G.git_calls.changed_files, _G.git_calls.commits_since }'),
+    waiting = child.lua_get("#vim.api.nvim_get_autocmds({ event = 'SafeState' })"),
   }, {
     meanwhile = {
       files = { lines = READING, modifiable = false },
@@ -1095,6 +1128,7 @@ T['a buffer of the pane']['its lists read while textlock holds']['are shown once
     commits = { lines = { 'No commits on this session' }, modifiable = false },
     told = '',
     reads = { 2, 2 },
+    waiting = 0,
   })
 end
 
@@ -1611,6 +1645,66 @@ T['Enter']['again on a shown diff while textlock holds, then on another file, ke
   }, { a = 1, b = 1 })
 end
 
+T['Enter']['read while textlock holds, then on another file'] =
+  MiniTest.new_set({ parametrize = WIPE_REFUSING_HOLDS })
+
+T['Enter']['read while textlock holds, then on another file']['wipes the first diff once a hold refusing its wipe ends, telling nothing, in'] = function(
+  _,
+  ready,
+  hold,
+  release
+)
+  local top =
+    git_repo.create('changespane-diff-wipe-refused', { ['a.txt'] = { 'a' }, ['b.txt'] = { 'b' } })
+  git_repo.write(top, 'a.txt', { 'a2' })
+  git_repo.write(top, 'b.txt', { 'b2' })
+  local stand_in = stand_in_git('changespane-diff-wipe-refused', {
+    'case " $* " in *" diff "*a.txt*) while [ ! -f "$0.gate-a" ]; do sleep 0.05; done ;;',
+    '*" diff "*b.txt*) while [ ! -f "$0.gate-b" ]; do sleep 0.05; done ;;',
+    'esac',
+  })
+  local _, ready_first, first_hold, first_release = unpack(TEXTLOCK_HOLDS[1])
+  child.lua(SPY_ON_GIT)
+  child.lua(ready_first)
+  child.lua(ready)
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(FILES, { '  M a.txt', '  M b.txt' })
+  child.type_keys('<CR>')
+  begin_hold(first_hold)
+  vim.fn.writefile({}, stand_in .. '.gate-a')
+  git_repo.wait_until('the diff of a.txt read', function()
+    return child.lua_get('_G.git_given.file_diff == 1')
+  end)
+  child.lua('_G.holding = false')
+  begin_hold(first_release .. 'j<CR>' .. hold)
+  local told_meanwhile = child.cmd_capture('messages')
+
+  end_hold(release)
+  vim.fn.writefile({}, stand_in .. '.gate-b')
+
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return child.lua_get(
+      '_G.git_answers.file_diff == 2 and vim.fn.bufexists("aineo://diff/a.txt") == 0'
+    )
+  end, 10)
+  eq({
+    told_meanwhile = told_meanwhile,
+    shown = child.lua_get(SHOWN_DIFFS),
+    kept = child.fn.bufexists('aineo://diff/a.txt'),
+    waiting = child.lua_get("#vim.api.nvim_get_autocmds({ event = 'SafeState' })"),
+  }, {
+    told_meanwhile = '',
+    shown = {
+      names = { 'aineo://diff/b.txt' },
+      first_lines = { 'diff --git a/b.txt b/b.txt' },
+      modifiable = { false },
+      told = '',
+    },
+    kept = 0,
+    waiting = 0,
+  })
+end
+
 T['Enter']['twice in quick succession tells nothing of the first Enter’s diff failing later'] = function()
   local top =
     git_repo.create('changespane-enter-stale-failure', { ['a.txt'] = { 'a' }, ['b.txt'] = { 'b' } })
@@ -1795,14 +1889,15 @@ T['the watch']['stops as the editor quits'] = function()
 end
 
 --- The Lua a Neovim of its own sources: it begins the changes home's session
---- for the directory `g:aineo_quit_case[1]`, waits for the repository to be
---- found, shows the files buffer and quits in the same turn of the main
---- loop. A `VimLeavePre` made after the home's runs the Lua `%s` then. Each
---- watch started, each list read asked for, and `VimLeavePre` and
---- `VimLeave`, are logged in turn, one line each, to the file
---- `g:aineo_quit_case[2]`.
+--- for the directory `g:aineo_quit_case[1]`, with the git options
+--- `g:aineo_quit_case[3]`, runs the Lua of the first `%s`, then shows the
+--- files buffer and quits in the same turn of the main loop. A
+--- `VimLeavePre` made after the home's runs the Lua of the second `%s`
+--- then. Each repository found, which sets `_G.found`, each watch started,
+--- each list read asked for, and `VimLeavePre` and `VimLeave`, are logged in
+--- turn, one line each, to the file `g:aineo_quit_case[2]`.
 local SHOW_AND_QUIT = [[
-local directory, log = unpack(vim.g.aineo_quit_case)
+local directory, log, git_options = unpack(vim.g.aineo_quit_case)
 local function say(what)
   vim.fn.writefile({ what }, log, 'a')
 end
@@ -1819,17 +1914,17 @@ for _, name in ipairs({ 'changed_files', 'commits_since' }) do
     return read(...)
   end
 end
-local found = false
 local find_repository = git.find_repository
 git.find_repository = function(looked_in, done, options)
   return find_repository(looked_in, function(...)
-    found = true
+    say('found')
+    _G.found = true
     return done(...)
   end, options)
 end
 local changes = require('aineo.changes')
-changes.begin_session({ directory = directory, show_diff = function() end })
-vim.wait(20000, function() return found end, 5)
+changes.begin_session({ directory = directory, show_diff = function() end, git = git_options })
+%s
 vim.api.nvim_create_autocmd('VimLeavePre', { callback = function()
   say('VimLeavePre')
   %s
@@ -1846,17 +1941,29 @@ T['the watch']['starts on no showing made in the turn the editor quits'] = MiniT
   },
 })
 
-T['the watch']['starts on no showing made in the turn the editor quits']['when'] = function(
-  _,
-  at_quit
-)
-  local top = git_repo.create('changespane-quit-showing', { ['notes.txt'] = { 'one' } })
+--- The Lua that waits, in `SHOW_AND_QUIT`, until the repository is found.
+local WAIT_FOR_THE_FIND = 'vim.wait(20000, function() return _G.found end, 5)'
+
+--- How a case runs `SHOW_AND_QUIT`.
+---@class aineo.test.QuitCase
+---@field name string the case's own name, starting `changespane-`: its script and log go in the fixture `git-<name>`
+---@field top string the repository's top level, the session's directory
+---@field git table the git options of the session
+---@field before_showing string the Lua run before the showing
+---@field at_quit string the Lua a later `VimLeavePre` runs
+
+--- Runs `SHOW_AND_QUIT` for `case` in a Neovim of its own, under the git
+--- isolation of the git home's suites (`git_repo.ENVIRONMENT`), and returns
+--- its exit code and its log.
+---
+---@param case aineo.test.QuitCase
+---@return { code: integer, log: string[] }
+local function show_and_quit(case)
   local script = fixture.write(
-    'git-changespane-quit-showing/quit.lua',
-    vim.split(SHOW_AND_QUIT:format(at_quit), '\n')
+    ('git-%s/quit.lua'):format(case.name),
+    vim.split(SHOW_AND_QUIT:format(case.before_showing, case.at_quit), '\n')
   )
   local log = vim.fs.joinpath(vim.fs.dirname(script), 'log.txt')
-
   local quit = vim
     .system({
       vim.v.progpath,
@@ -1864,13 +1971,47 @@ T['the watch']['starts on no showing made in the turn the editor quits']['when']
       '-u',
       vim.fs.joinpath(vim.fn.getcwd(), 'scripts', 'minimal_init.lua'),
       '--cmd',
-      ('let g:aineo_quit_case = %s'):format(vim.fn.string({ top, log })),
+      ('let g:aineo_quit_case = %s'):format(vim.fn.string({ case.top, log, case.git })),
       '-S',
       script,
-    }, { cwd = top, env = git_repo.ENVIRONMENT })
+    }, { cwd = case.top, env = git_repo.ENVIRONMENT })
     :wait(git_repo.PATIENCE_MS)
+  return { code = quit.code, log = vim.fn.readfile(log) }
+end
 
-  eq({ quit.code, vim.fn.readfile(log) }, { 0, { 'VimLeavePre', 'VimLeave' } })
+T['the watch']['starts on no showing made in the turn the editor quits']['when'] = function(
+  _,
+  at_quit
+)
+  local top = git_repo.create('changespane-quit-showing', { ['notes.txt'] = { 'one' } })
+
+  local quit = show_and_quit({
+    name = 'changespane-quit-showing',
+    top = top,
+    git = {},
+    before_showing = WAIT_FOR_THE_FIND,
+    at_quit = at_quit,
+  })
+
+  eq(quit, { code = 0, log = { 'found', 'VimLeavePre', 'VimLeave' } })
+end
+
+T['the watch']['starts on no find answered while a later VimLeavePre waits as the editor quits'] = function()
+  local top = git_repo.create('changespane-quit-finding', { ['notes.txt'] = { 'one' } })
+  local slow = stand_in_git(
+    'changespane-quit-finding',
+    { 'case " $* " in *" --show-toplevel "*) sleep 0.5 ;; esac' }
+  )
+
+  local quit = show_and_quit({
+    name = 'changespane-quit-finding',
+    top = top,
+    git = { executable = slow },
+    before_showing = '',
+    at_quit = 'vim.wait(2000)',
+  })
+
+  eq(quit, { code = 0, log = { 'VimLeavePre', 'found', 'VimLeave' } })
 end
 
 T['Enter']['tells once the error a window raised as it took the diff, and keeps no diff'] = function()
