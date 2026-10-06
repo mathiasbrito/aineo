@@ -422,4 +422,70 @@ T['a Visual Send whose write fails']['leaves one undo block, so that the first u
   )
 end
 
+--- Each kind of selection undo is pinned for, as a set's `parametrize`: its
+--- name, Input's lines, the keys that select, and the text sent.
+local UNDONE_SELECTIONS = {
+  { 'charwise', { 'alpha beta', 'gamma delta' }, 'gg0wvj', 'beta\ngamma d' },
+  { 'linewise', { 'a1', 'a2', 'a3' }, 'ggjV', 'a2' },
+  { 'blockwise', { 'abcdef', 'ab', 'abcdef' }, 'gg0llll<C-v>jjl', 'ef\n\nef' },
+}
+
+T['u after a Visual Send'] = MiniTest.new_set()
+
+T['u after a Visual Send']['brings the selection back where it was, writing nothing more, for'] =
+  MiniTest.new_set({ parametrize = UNDONE_SELECTIONS })
+
+T['u after a Visual Send']['brings the selection back where it was, writing nothing more, for']['the kind'] = function(
+  _,
+  lines,
+  keys,
+  sent
+)
+  start_ready_session('undo')
+  child.o.undolevels = 1000
+  send.set_input(child, lines)
+  send.watch_writes(child)
+  send.send_selection(child, keys)
+
+  send.type_keys(child, 'u')
+
+  eq(
+    { input = send.input(child).lines, writes = send.writes(child) },
+    { input = lines, writes = { paste(sent) } }
+  )
+end
+
+T['u after Sends, as the user’s undolevels allow'] = MiniTest.new_set()
+
+T['u after Sends, as the user’s undolevels allow']['brings back only the last Send’s text, and toggles it, with undolevels 0'] = function()
+  start_ready_session('undolevels-0')
+  child.o.undolevels = 0
+  send.type_keys(child, 'ifirst<Esc>')
+  send.type_keys(child, '\\s')
+  send.type_keys(child, 'isecond<Esc>')
+  send.type_keys(child, '\\s')
+
+  send.type_keys(child, 'u')
+  local after_u = send.input(child).lines
+  send.type_keys(child, 'u')
+  local after_u_u = send.input(child).lines
+  send.type_keys(child, 'u')
+
+  eq(
+    { after_u = after_u, after_u_u = after_u_u, after_u_u_u = send.input(child).lines },
+    { after_u = { 'second' }, after_u_u = { '' }, after_u_u_u = { 'second' } }
+  )
+end
+
+T['u after Sends, as the user’s undolevels allow']['brings nothing back with undolevels -1'] = function()
+  start_ready_session('undolevels-off')
+  child.o.undolevels = -1
+  send.type_keys(child, 'ia message<Esc>')
+  send.type_keys(child, '\\s')
+
+  send.type_keys(child, 'u')
+
+  eq(send.input(child).lines, { '' })
+end
+
 return T
