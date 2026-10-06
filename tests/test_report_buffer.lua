@@ -637,6 +637,40 @@ T['a wrapped report']['continues a details line under its text in a Report made 
   eq(continuation_column(window, 2), 9)
 end
 
+--- The expression, run in the child, that opens a window on its Report
+--- without entering it, as the layout opens the Report's window, `width`
+--- columns wide at the editor's right, wrapping as the layout makes it wrap,
+--- and returns that window.
+local OPEN_REPORT_WRAPPING = [[(function(width)
+  local report = require('aineo.report').report_buffer()
+  local window = vim.api.nvim_open_win(report, false, { split = 'right', win = -1 })
+  vim.api.nvim_win_set_width(window, width)
+  for _, option in ipairs({ 'wrap', 'linebreak', 'breakindent' }) do
+    vim.wo[window][0][option] = true
+  end
+  return window
+end)(...)]]
+
+T['a wrapped report']['continues a details line under its text in a window opened on it without entering it'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, LONG_REPORT)
+
+  local window = child.lua_get(OPEN_REPORT_WRAPPING, { 30 })
+
+  eq(continuation_column(window, 2), 9)
+end
+
+T['a wrapped report']['continues a details line under its text in a second window opened on it while another shows it'] = function()
+  start_editor({ '2026-09-24T09:05:00' })
+  report_editor.receive(child, LONG_REPORT)
+  show_report_wrapping(30)
+  child.cmd('wincmd p')
+
+  local window = child.lua_get(OPEN_REPORT_WRAPPING, { 30 })
+
+  eq(continuation_column(window, 2), 9)
+end
+
 T['the Report buffer'] = MiniTest.new_set()
 
 --- The expression, run in the child, that describes its Report buffer.
