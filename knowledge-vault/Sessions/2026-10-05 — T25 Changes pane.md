@@ -296,6 +296,82 @@ On Neovim 0.12.5 and git 2.50.1 (macOS, load average about 10 from other agents)
 - `make lint`: StyLua and selene clean.
 - `aineo.changes` requires `aineo.git` and its own files alone (`pages.lua` now requires `aineo.changes.scratch`, inside the home).
 
+## Correction — 2026-10-06
+
+**Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-lua-developer`), a fresh agent on the orchestrator's correction brief (resource `impl_t25_correction`). Its input: the guarantee review of fix round 2 at `681d535` (`guarantee-t25fix2.md`), its findings 1–5, with its measured fixes GFIXW and GFIXQ2 and its pin. Each was redone red first in the project's own test files from the review's failing input.
+
+### What changed, and why
+
+- **Findings 1 and 2 (GFIXW).** Fix round 2's help sentence — "an expression mapping waiting for a key … is shown once Neovim allows it again, with nothing told" — was false until this correction. `SafeState` still fires while an `<expr>` mapping waits in `input()` (textlock) and in the command-line window, and there Neovim refuses `nvim_buf_delete`: `E565` in the first, `E11` in the second. So the stale retry's `diffs.wipe_unshown()` raised from a `SafeState` callback and left the empty buffer for the editor's life (finding 1). In the command-line window, `show_diff()`'s own cleanup raised `E11` from a `vim.schedule` callback once the real layout refused the window, and the diff was lost (finding 2, there since the first round).
+  - **The fix.** `scratch.wipe()` deletes a buffer and returns whether it is gone. It returns false on `E565` or `E11`, and raises any other error again.
+  - `diffs.wipe_unshown()` returns whether it wiped. A stale retry whose wipe was refused registers its `SafeState` retry again.
+  - `show_diff()` wipes through `scratch.wipe()`. When the wipe is refused, it returns false like a refused write, so the diff is kept and shown at the next `SafeState`, and the user is told nothing.
+  - **One departure from GFIXW's literal edit.** GFIXW also returned false on a `show_diff` error carrying `E11` or `E565`. That check is not needed: in every hold measured where showing is refused, the wipe is refused too, so the refused wipe covers it and the two paths stay one.
+  - **Docs.** The help sentence now names the `input()` hold and the command-line window, and points at the new limit. `show_diff()`'s and `show_last_diff()`'s docstrings say what the code does.
+- **Finding 3 (GFIXQ2).** `follow_repository()` returns once `v:exiting` is set. A look that answers while a later `VimLeavePre` waits now starts no watch and no read; aineo's own Claude stop is such a handler after a restart.
+  - The guard in `pane_shown()` stays. This is GFIXQ2 as the review measured it: an addition, not a removal. With the follow guarded, that guard only keeps a showing in the quit's turn from starting a look for a repository. A literal move would let a showing at quit in a directory with no repository start a `git rev-parse` during a later `VimLeavePre`.
+  - No case pins that remaining job. GFIXQ, the guard's deletion, survives `tests/test_changes.lua` and `tests/test_entry_changes.lua` (below).
+- **Finding 4 (the pin).** `TEXTLOCK_HOLDS` has a third hold: an expression mapping waiting in `input()`, keyed `Y`, defined once as `INPUT_HOLD` and shared with the new `WIPE_REFUSING_HOLDS`. The lists case asserts `waiting = 0` after the hold. GM1 and GM3 are killed by assertion.
+- **Finding 5.** The review's measurement of `free_name()` under textlock is recorded as a limit in the help's LIMITS and below, re-measured on this tree:
+  - Under `getcharstr()`, a foreign `aineo://diff/notes.txt` raises `E565` from `free_name()` with a traceback. In the command-line window it raises `E11`.
+  - The diff is not shown, the foreign buffer stays, and no retry is left (`waiting = 0`).
+  - A second Enter once the hold ends shows the diff.
+  - GFIXW does not cover it, and it is not fixed here.
+
+### Unit list (stated before the first test)
+
+- **U1:** the stale retry's wipe refused, in the command-line window and under `input()` in an `<expr>` mapping.
+- **U2:** a diff landing while the command-line window is open, through the composition root with the real layout.
+- **U3:** a look answered during a later `VimLeavePre`.
+- **U4:** the review's pin: the third hold and `waiting = 0`. It arrives green.
+- Then the help sentence, the LIMITS line and the docstrings.
+- Dropped while working: a separate no-room case in the command-line window. Once `show_diff()`'s cleanup went through `scratch.wipe()`, it would take the same line as U2.
+
+### Red and green
+
+**Seen red (4)**, each on `681d535`'s code for its intended reason:
+- `tests/test_changes.lua` › *Enter › read while textlock holds, then on another file › wipes the first diff once a hold refusing its wipe ends, telling nothing, in* ×2:
+  - the command-line window: `kept` `1` for `0`, with `Error in SafeState Autocommands … diffs.lua:124: E11` told meanwhile;
+  - `input()`: `kept` `1` for `0`, with `E5108 … diffs.lua:124: E565` told.
+- `tests/test_entry_changes.lua` › *Enter › while the command-line window is open shows the diff once it closes, telling nothing*: `vim.schedule callback: … init.lua:403: E11` told, and no diff window after `:quit`. Its first run failed in its own wait instead, because the answer counter was counted after `done` raised. The counter now counts as `done` begins, and the red was seen again for the intended reason.
+- `tests/test_changes.lua` › *the watch › starts on no find answered while a later VimLeavePre waits as the editor quits*: the log read `{ VimLeavePre, found, watch started, changed_files asked, commits_since asked, VimLeave }` for `{ VimLeavePre, found, VimLeave }`.
+
+**Arrived green (2 new cases, 3 strengthened)**, each with its killer run:
+- *its lists read while textlock holds* under `input()` (the review's pin): GM1 (`commits.lines[1]` "aineo is reading the repository").
+- The same case under the first two holds, now asserting `waiting = 0`: GM3 (`waiting` 2 for 0, both holds).
+- *Enter › read while textlock holds* under `input()`: C8 (`first_lines[1]` nil, on all three holds).
+- *the watch › starts on no showing made in the turn the editor quits* ×2: rewritten onto the shared `show_and_quit()`, they now log `found` first. GFIXQ was not their killer on this tree (below); C6 is not either, as the pane_shown guard covers them.
+
+### Mutants
+
+Each mutant is a literal edit (`.claude/local/orchestrator/t25cor-catalog.lua` in this worktree, applied by `t25cor-apply.lua`, the review's `g-apply.lua`). They ran one at a time from a pristine copy, on a copy of the test file narrowed to the cases named, against the final code tree. Every kill is by assertion.
+
+| id | file | edit | run on | result |
+|---|---|---|---|---|
+| GM1 | init.lua | `refused[buffer] = nil` deleted in `show_page()`'s retry (the review's, verbatim) | the lists under textlock ×3 | killed 1 (the `input()` hold: commits "aineo is reading the repository") |
+| GM3 | init.lua | `once = true,` deleted from the list retry (verbatim) | the lists under the first two holds | killed 2 (`waiting` 2 for 0). Its first run, on all three holds, ran away under the `input()` hold, as the review measured, and was stopped at 600 s. It is not counted, and the files were restored from the pristine copy. |
+| C1 | diffs.lua | `wipe_unshown()`: `return wiped` → `return true` | the wipe refused ×2 | killed 2 (`kept` 1 for 0) |
+| C2 | scratch.lua | the `E11` clause removed from `is_refused_for_now()` | the wipe refused ×2; the entry case | killed 1 (the command-line window, `kept` 1); killed 1 (`E11` told) |
+| C3 | scratch.lua | the `E565` clause removed | the wipe refused ×2 | killed 1 (`input()`, `kept` 1) |
+| C4 | init.lua | `show_diff()`: `if not scratch.wipe(buffer) then return false end` → `scratch.wipe(buffer)` | the entry case | killed (no diff window after `:quit`) |
+| C6 | init.lua | `or vim.v.exiting ~= vim.NIL` removed from `follow_repository()` | the watch ×4 | killed 1 (`watch started`) |
+| C8 | init.lua | `elseif show_diff(entry, diff) then` → `… or true then` | Enter under textlock ×3 | killed 3 (no diff shown) |
+| GFIXQ | init.lua | the `v:exiting` guard deleted in `pane_shown()` (verbatim) | the watch ×4; `test_changes.lua`; `test_entry_changes.lua` | **survives all three** (see *What changed*) |
+| C7 | scratch.lua | `wipe()`'s re-raise of any other error removed | the wipe refused ×2; `test_changes.lua`; `test_entry_changes.lua` | **survives all three**: no real input makes `nvim_buf_delete(…, { force = true })` of a valid buffer raise anything else, and the branch keeps the behaviour the delete had before, which raised |
+
+### Verification
+
+This ran on Neovim 0.12.5 and git 2.50.1 (macOS, load average about 11 from other agents), on the correction's code tree; the commit after it changes only this note.
+
+- `make test`: **1718 cases, `Fails (0)`, 214 s**, the one whole run. It ran on the code tree before one change: a docstring in `tests/test_changes.lua` (`end_hold()`'s) was reflowed to 78 columns after it. `tests/test_changes.lua` then ran again on the committed tree: 93 cases, `Fails (0)`.
+
+- Own runs on the final tree, each `Fails (0)`:
+  - `tests/test_changes.lua`: 93 cases (88 before: 2 wipe cases, 1 quit case and 2 `input()` holds added);
+  - `tests/test_entry_changes.lua`: 12 cases;
+  - `tests/test_doc.lua`: 43 cases.
+- `make lint`: StyLua and selene clean.
+- `aineo.changes` still requires `aineo.git` and its own files alone; `init.lua` and `diffs.lua` reach the new `scratch.wipe()` inside the home.
+
 ## Task lines
 
 The wave holds its marks (rule 6). The line T25 would take:
@@ -304,9 +380,10 @@ The wave holds its marks (rule 6). The line T25 would take:
 
 ## Limits
 
-- A git the home is running when the editor quits runs to its end (CH9; the brief review's `b_quit`): the git home's reads give nothing to cancel with. The watch is stopped, and since the second fix round no showing in the quit's own turn starts one again (the re-measure's finding 2).
+- A git the home is running when the editor quits runs to its end (CH9; the brief review's `b_quit`): the git home's reads give nothing to cancel with. The watch is stopped, and since the second fix round no showing in the quit's own turn starts one again (the re-measure's finding 2), and since the correction no look answered while a later `VimLeavePre` waits starts one either (the guarantee review's finding 3).
 - `\pc` while the changes pane already shows read nothing until the fix round, whose widened boundary let `show_pane()` read it again.
 - The lines a wiped diff showed are dropped the next time a diff is shown; that is not observable through the home's surface, and no case pins it.
+- A buffer under a diff's name that aineo did not make — one a restored session made — cannot give up its name while textlock holds (`E565`) or in the command-line window (`E11`). The guarantee review measured this as its finding 5, and the correction re-measured it. A diff arriving for that name then makes `free_name()` raise from the callback with a traceback, shows nothing, and leaves no retry. Enter on the line again, once the hold ends, shows it. The help's LIMITS says so.
 - The pane is rendered and tested on macOS only; the Linux path (no subdirectory watched) is tested by handing the git home `system_name = 'Linux'`.
 
 ## Open threads
