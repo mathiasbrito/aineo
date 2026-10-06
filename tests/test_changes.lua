@@ -1548,7 +1548,7 @@ T['Enter']['read while textlock holds']['shows the diff once it ends, telling no
   })
 end
 
-T['Enter']['read while textlock holds, then on another file before the editor allows it, shows the last Enter’s diff alone'] = function()
+T['Enter']['read while textlock holds, then on another file before the editor allows it, shows and keeps the last Enter’s diff alone'] = function()
   local top =
     git_repo.create('changespane-diff-textlock-twice', { ['a.txt'] = { 'a' }, ['b.txt'] = { 'b' } })
   git_repo.write(top, 'a.txt', { 'a2' })
@@ -1571,7 +1571,43 @@ T['Enter']['read while textlock holds, then on another file before the editor al
   git_repo.wait_until('the diff of b.txt read', function()
     return child.lua_get('_G.git_answers.file_diff == 2')
   end)
-  eq(child.lua_get(SHOWN_DIFFS).names, { 'aineo://diff/b.txt' })
+  eq({
+    shown = child.lua_get(SHOWN_DIFFS).names,
+    kept = child.fn.bufexists('aineo://diff/a.txt'),
+  }, { shown = { 'aineo://diff/b.txt' }, kept = 0 })
+end
+
+T['Enter']['again on a shown diff while textlock holds, then on another file, keeps the diff shown'] = function()
+  local top =
+    git_repo.create('changespane-diff-textlock-shown', { ['a.txt'] = { 'a' }, ['b.txt'] = { 'b' } })
+  git_repo.write(top, 'a.txt', { 'a2' })
+  git_repo.write(top, 'b.txt', { 'b2' })
+  local gated, gate = gated_git('changespane-diff-textlock-shown', '*" diff "*a.txt*')
+  local _, ready, hold = unpack(TEXTLOCK_HOLDS[1])
+  child.lua(SPY_ON_GIT)
+  child.lua(ready)
+  begin_and_show(top, { executable = gated })
+  expect_lines(FILES, { '  M a.txt', '  M b.txt' })
+  vim.fn.writefile({}, gate)
+  child.type_keys('<CR>')
+  wait_for_diffs(1)
+  vim.fn.delete(gate)
+  child.type_keys('<CR>')
+  begin_hold(hold)
+  vim.fn.writefile({}, gate)
+  git_repo.wait_until('the diff of a.txt read again', function()
+    return child.lua_get('_G.git_given.file_diff == 2')
+  end)
+
+  child.api.nvim_input('qj<CR>')
+
+  git_repo.wait_until('the diff of b.txt read', function()
+    return child.lua_get('_G.git_answers.file_diff == 3')
+  end)
+  eq({
+    shown = child.lua_get(SHOWN_DIFFS).names,
+    windows = child.lua_get('#vim.fn.win_findbuf(vim.fn.bufnr(...))', { 'aineo://diff/a.txt' }),
+  }, { shown = { 'aineo://diff/a.txt', 'aineo://diff/b.txt' }, windows = 1 })
 end
 
 T['Enter']['twice in quick succession tells nothing of the first Enter’s diff failing later'] = function()

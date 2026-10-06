@@ -87,7 +87,7 @@ local shown_lines = {}
 --- anew and kept, in the windows that show it; otherwise a new one is made.
 --- Returns nil when Neovim refuses the text, as it does while textlock
 --- holds: the buffer is then kept as it was, or, made, kept empty, for the
---- next call under `name` to write.
+--- next call under `name` to write or `M.wipe_unshown()` to wipe.
 ---
 ---@param name string
 ---@param diff string
@@ -108,6 +108,22 @@ function M.diff_buffer(name, diff)
   end)
   shown_lines[buffer] = text
   return written and buffer or nil
+end
+
+--- Wipes the buffer `M.diff_buffer()` made under `name` when no window
+--- shows it, such as one made while textlock held and never shown since.
+---
+---@param name string
+function M.wipe_unshown(name)
+  for buffer in pairs(shown_lines) do
+    if
+      vim.api.nvim_buf_is_valid(buffer)
+      and vim.api.nvim_buf_get_name(buffer) == name
+      and #vim.fn.win_findbuf(buffer) == 0
+    then
+      vim.api.nvim_buf_delete(buffer, { force = true })
+    end
+  end
 end
 
 return M
