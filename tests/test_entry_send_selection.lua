@@ -138,6 +138,27 @@ T['a Visual Send in Input']['sends the selection alone and removes it, by pressi
   })
 end
 
+T['a Visual Send in an Input that cannot be changed'] = MiniTest.new_set()
+
+T['a Visual Send in an Input that cannot be changed']['is told once, as aineo tells an error, by pressing \\s'] = function()
+  open_ready_layout('selection-entry-not-modifiable', { 'a message' })
+  child.lua("vim.bo[require('aineo.layout').input_buffer()].modifiable = false")
+
+  send.type_keys(child, 'ggV\\s')
+
+  eq(after_sending(), {
+    writes = {},
+    input = { 'a message' },
+    messages = {
+      {
+        message = "aineo: E21: Cannot make changes, 'modifiable' is off",
+        level = vim.log.levels.ERROR,
+      },
+    },
+    mode = 'n',
+  })
+end
+
 T[':Aineo send'] = MiniTest.new_set()
 
 T[':Aineo send']['takes no range: after a Visual selection, Neovim refuses it, and nothing is sent or removed'] = function()

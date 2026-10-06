@@ -556,6 +556,33 @@ T['send()']['leaves Input’s text for one u to bring back, u writing nothing'] 
   })
 end
 
+T['send()']['leaves one undo block when the write fails, so that the first u changes nothing visible'] = function()
+  local fake = claude.fake('send-write-fails-undo', 'ready')
+  local buffer = start_ready_session(fake)
+  child.o.undolevels = 1000
+  send.enter_input(child)
+  send.type_keys(child, 'iabc def<Esc>')
+
+  local status = send.type_keys_after_closing_stream(child, buffer, '\\s')
+  claude.wait_for_status(child, 'exited')
+  local after_failure = send.input(child).lines
+  send.type_keys(child, 'u')
+  local after_u = send.input(child).lines
+  send.type_keys(child, 'u')
+
+  eq({
+    status = status,
+    after_failure = after_failure,
+    after_u = after_u,
+    after_u_u = send.input(child).lines,
+  }, {
+    status = 'ready',
+    after_failure = { 'abc def' },
+    after_u = { 'abc def' },
+    after_u_u = { '' },
+  })
+end
+
 T['send()']['says Input is empty before saying Claude is not ready'] = function()
   local fake = claude.fake('send-empty-behind-trust', 'trust')
   local buffer = start_session(fake)
