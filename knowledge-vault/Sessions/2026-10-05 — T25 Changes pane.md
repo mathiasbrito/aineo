@@ -28,7 +28,7 @@ CP1–CP9 are the user's (2026-10-05), built as the amendment records them. The 
 - **The first repository found is the session's for the editor's life**, a look queued behind the one that finds it included (S10).
 - **A watch failure is kept apart from the reads' failures** (`watch_failure`), so that a read meanwhile does not clear the line while no watch runs.
 - **A diff of the same name is written again in the buffer already showing it**, rather than wiped and made anew: wiping it closed the middle column's window and opened another (the entry case `keeps the diff's window`).
-- **Errors raised while a diff is shown are told once** (`could not be shown: …`), and an unreadable diff is told once in git's words, so no error of the home's reaches the user as a callback's. *Corrected by the fix round:* this was false until then — a pane buffer wiped, or unloaded by `:bdelete`, made the next read raise from its callback (attack F1, records 1); it holds from the fix round on (*Fix round — 2026-10-06*).
+- **Errors raised while a diff is shown are told once** (`could not be shown: …`), and an unreadable diff is told once in git's words, so no error of the home's reaches the user as a callback's. *Corrected by the fix round:* this was false until then — a pane buffer wiped, or unloaded by `:bdelete`, made the next read raise from its callback (attack F1, records 1). *Corrected again by the second fix round:* it was still false after the first — a list read or Enter's diff answering while textlock holds (an `<expr>` mapping waiting in `getcharstr()`, a `'completefunc'` waiting in `vim.wait()`) raised `E565` from a `vim.schedule` callback, a stack trace for the user, the pane left modifiable and stale (the re-measure's finding 1). It holds from the second fix round on, for every error Neovim raises for textlock; any other error a write raises is raised again on purpose, so that a programming error is told (*Fix round 2 — 2026-10-06*).
 - **With none of the layout's windows open, a diff opens above the current window**; with no room anywhere (E36, from a split above or a new file column) nothing is shown and Enter warns in its own words.
 
 ## Readings for the MVP review
@@ -65,7 +65,7 @@ CP1–CP9 are the user's (2026-10-05), built as the amendment records them. The 
 
 **Seen red (45):** `tests/test_changes.lua` 36 — U1 (module not found), U2 (`  R there.txt`), U3 and U4 (`{ "" }`), U6, U10, U18, U5a and U5b, U12 (overlapping `start`s in the stand-in's log), U13 (cursor `{3,4}`), CP7 (`changed_files 1`), CH7 not a repository, CP9 shown again and saved, CP5 kept list and the commits', the failed watch, CP4, the four `:edit` cases (`buflisted true`), U8 `:write`, partial write and append, the symbolic link, the save where the watch misses it, Enter on a file (no diff shown) and on a commit (`attempt to index local 'change'`: the missing commit path), no room naming a file, an unreadable diff, a refused diff, the watch at quit (`{2, 2}`), the two cuts (`count 11000`, `count 1`). `tests/test_layout_diffs.lua` 4 — `show_diff` missing, a file opened later (5 windows), no room for a file column (E36 raised), the layout closed (`Invalid 'win'`). `tests/test_entry_changes.lua` 4 — the first start (the placeholder line), the restart (`No commits`), `\o` (after its rework), Enter again (window 1005 for 1004). `tests/test_doc.lua` 1 — `E149: No help for aineo-changes`. `tests/test_entry_panes.lua`: its eleven placeholder pins failed against the new code (`aineo does not list …` against the lists) before they were rewritten.
 
-*Corrected by the fix round (records 5):* of the 29 below, **13 had their code written before their case**, against `tdd` §2 and under none of its sanctioned deviations: the nine marked "written ahead" — the first look's base kept (S10), a failed watch kept through a read (S8), a watch that cannot start (S11), `:bdelete` ×2 (S12), the namesakes ×4 (S13, S14) — and four marked "written with" another case: git not found (S9), the failure line alone (S7), no room naming a commit (S18), another error raised (S23). And `tests/test_entry_panes.lua`'s eleven rewritten pins were seen red only in their old form, against the new code; in their new form they were written after the code and never seen red. They count as arrived green: K10 killed the four `:edit` pins (above); the other seven are killed by MP1 or MP2 (*Fix round — 2026-10-06*, *Mutants*).
+*Corrected by the fix round (records 5):* of the 29 below, **13 had their code written before their case**, against `tdd` §2 and under none of its sanctioned deviations: the nine marked "written ahead" — the first look's base kept (S10), a failed watch kept through a read (S8), a watch that cannot start (S11), `:bdelete` ×2 (S12), the namesakes ×4 (S13, S14) — and four marked "written with" another case: git not found (S9), the failure line alone (S7), no room naming a commit (S18), another error raised (S23). And `tests/test_entry_panes.lua`'s eleven rewritten pins were seen red only in their old form, against the new code; in their new form they were written after the code and never seen red. They count as arrived green: K10 killed the four `:edit` pins (above); the other seven are killed by MP1, and MP2 survives all seven (*Fix round — 2026-10-06*, *Mutants*; corrected by the second fix round, the re-measure's finding 5).
 
 **Arrived green (29), each with its killer run:** in `tests/test_changes.lua` — shown first starts both reads (U1's code read at the find; S1); every file new before the first commit (the git home's nil base; S6); a subdirectory change once shown again (CP7's `pane_shown()`; S2); a commit that changes no file (U10's `follow_change()`; K4 after the case's rework); never on a timer (by nature; K21); git not found (written with the not-a-repository case, never run before the code; S9); the first look's base kept (the guard written ahead; S10, 3/3); the failure line alone (written with the kept-list case; S7); a failed watch kept through a read (written ahead; S8); a watch that cannot start (written ahead; S11); `:bdelete` (2) and the namesakes (4) (written ahead with the `:edit` refill; S12, S13, S14); `:write` to another file (U8's `match`; K3); a save before the session (by nature; S3); Enter on nothing (U22's guard; S15); the diff buffer's options (U22's `diff_buffer()`; K7); ten Enters (freeing the name; S16); no room naming a commit (written with the file's; S18). In `tests/test_layout_diffs.lua` — the file's window taken (`place_in_file_column()`; K17); above a file that cannot leave (T24's placement; S24); no room above it (`open_window_above()`'s nil; S25); another error raised (written with the E36 handling; S23). In `tests/test_entry_changes.lua` — a failed start (the call placed after `start_session()`; K2); ten showings (by design; S29, S31); Enter in the middle column (the pieces composed; K6, K16).
 
@@ -153,7 +153,7 @@ The three reviews of PR #112 — attack, test integrity, records — each found 
 
 ### What changed, and why
 
-- **A pane buffer gone** (attack F1, records 1): a buffer of the pane wiped, or unloaded by `:bdelete`, made the next read raise from its callback (`Invalid buffer id`, `Buffer is not 'modifiable'`) and, since the read ended only after writing, froze that list for the editor's life. The home writes a buffer only while it is loaded (`is_writable()`), and each of its three one-at-a-time reads — the files, the commits, the look for the repository — ends before it shows what it found. *Decisions & reasoning*' claim that no error of the home's reaches the user as a callback's is true from this round on.
+- **A pane buffer gone** (attack F1, records 1): a buffer of the pane wiped, or unloaded by `:bdelete`, made the next read raise from its callback (`Invalid buffer id`, `Buffer is not 'modifiable'`) and, since the read ended only after writing, froze that list for the editor's life. The home writes a buffer only while it is loaded (`is_writable()`), and each of its three one-at-a-time reads — the files, the commits, the look for the repository — ends before it shows what it found. *Decisions & reasoning*' claim that no error of the home's reaches the user as a callback's was said here to be true from this round on; it was not, under textlock, until the second fix round (*Fix round 2 — 2026-10-06*).
 - **`\pc`, `<Plug>(aineo-pane-changes)` and `:Aineo pane changes` with the pane shown** read it again (attack F6, records 3, the author's spec conflict 3; the user's CP6 answer): the composition root's `show_pane()` calls `refresh_shown_pane()` first.
 - **A repository git refuses** — of another owner (`safe.directory`), or a bare one — adds git's own words under the not-a-repository line (attack F3). T23's mapping of exit 128 to `not_a_repository` stays (*Open threads*).
 - **Enter pressed again before a diff is read** shows only the last Enter's diff (attack F4, CP2).
@@ -185,8 +185,8 @@ U1 a pane buffer gone as its list is read; U2 a write that raises does not stop 
 
 Each mutant is a literal edit (`.claude/local/orchestrator/t25fix-mutants.lua` in the round's worktree), applied from a copy of the file, run on a copy of the test file narrowed to the cases named, and the file copied back. The test review's mutants are run as its catalog wrote them where their text still occurs; where the round changed the code around one, it is re-anchored and the reviewer's text quoted in the catalog. Every kill is an assertion's (a `wait_until` that never held counts, its cause named).
 
-| id | edit | run on | result |
-|---|---|---|---|
+| id | file | edit | run on | result |
+|---|---|---|---|---|
 | RA1 | init.lua | `show_files()`: `if session and is_writable(buffers.files) then` → `if session and buffers.files then` | 'gone as its list is read' ×4 | killed 2 of 4, the files cases (assertion: `every read answered` never held, the read's callback raising) |
 | RA2 | init.lua | the same for `buffers.commits` in `show_commits()` | same | killed 2 of 4, the commits cases (same) |
 | RB1 | init.lua | the files read: `ended()` / `show_files()` → `show_files()` / `ended()` | 'that refuses' ×3 | killed 1 (assertion: `No files changed on this session` kept) |
@@ -227,6 +227,75 @@ On Neovim 0.12.5 and git 2.50.1 (macOS), on `aaa4b14`, the code tree pushed (the
 - `make lint`: StyLua and selene clean.
 - `aineo.changes` requires `aineo.git` and its own files alone; `aineo.layout` no `aineo.git`; `plugin/aineo.lua` requires `aineo.changes` only inside callbacks.
 
+## Fix round 2 — 2026-10-06
+
+**Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-lua-developer`), a fresh agent on the orchestrator's second fix-round brief (resource `impl_t25_fix2`), within the first round's boundary. Its input: the re-measure of PR #112 at `58d8610` (attack question, nine findings). Every fix was redone red first in the project's own test files, from the re-measure's failing inputs, not its patches.
+
+### What changed, and why
+
+- **Textlock** (finding 1, medium). A list read or Enter's diff answering while textlock holds — an `<expr>` mapping waiting in `getcharstr()`, a `'completefunc'` waiting in `vim.wait()` — made `nvim_buf_set_lines` raise `E565` from a `vim.schedule` callback: a stack trace for the user, the pane left modifiable and stale, the diff never shown and an orphan buffer left modifiable. `scratch.write_text()` now writes every pane and diff buffer: it catches `E565` alone, always puts `'modifiable'` back to false, and raises any other error again, so a programming error is told rather than retried silently (the re-measure's own limit of its FIXT). A refused list is written again at the next `SafeState`, once per buffer, with what the session knows then (`show_page()`); a refused diff is shown at the next `SafeState` while its Enter is the last still (`show_last_diff()`), and when another Enter came first, the empty buffer made for it is wiped (`diffs.wipe_unshown()`; measured before the fix on this round's tree: bufnr 4, lines `{ "" }`, no window). The help says a list or a diff read while Neovim allows no change of text is shown once it does.
+- **`REFUSE_ONE_WRITE`'s three cases stay, re-aimed** (the decision the brief asked for). The textlock path is now pinned on the real triggers, with no stub. The stub's cases remain the only way to make a write fail for another reason — a page holding a line break would, and only a mutant makes one — so they now raise an error that is not textlock's (`FAIL_ONE_WRITE`) and assert what the user is told (the error, once), the buffer between (still the page before it, not modifiable) and the list the next read gives. They are the files and commits reads (parametrized) and the first look; RB1–RB3 kill them.
+- **A showing and a quit in one turn** (finding 2): the follow does nothing once `v:exiting` is set (FIXQ), so no watch starts after `VimLeave` or during a later `VimLeavePre`; the help's LIMITS line is true again.
+- **The save mark** (finding 3): the help now says a save made during the first look is marked when that look found the repository (CP9); P8 pins it.
+- **`:set undolevels=…`** in the pane's window (finding 7): `write_text()` sets `'undolevels'` to -1 before every write, which covers the diffs too; `make_scratch()` no longer sets it.
+- **`:Aineo-pane`** (finding 8) and the panes paragraph say a shown changes pane is read again.
+- **Records** (findings 1, 4, 5): *Decisions & reasoning* and *Fix round › What changed* no longer say the callback-error claim held from the first round; the first round's mutant table has its five-column header; MP1 alone kills the seven `test_entry_panes.lua` pins, MP2 survives them. The PR body's "the only way found" is corrected: textlock is a real way, and the stub's own docstring named it.
+
+### Unit list (stated before the first test)
+
+U1 the lists under textlock (both holds); U2 Enter's diff under textlock (both holds); U3 a write failing for another reason told, read-only between, the next read listed; U4 a showing and a quit in one turn; U5 `:set undolevels` in the pane's window; then the pins that arrive green: P8 (NM3), P3e (NM6), the user's window options (CH8w, CH8n); then the help and the records. Added while working: the stale retry's empty buffer, and the pins of F1d, F1h and F1j.
+
+### Red and green
+
+**Seen red (11)**, each on this round's base `58d8610` or the round's tree before its code, for its intended reason:
+- `tests/test_changes.lua` › *its lists read while textlock holds* ×2 — `modifiable = true` meanwhile and after, `E5108 … pages.lua:40: E565` told, the lists left `aineo is reading the repository`;
+- *Enter › read while textlock holds* ×2 — no diff shown, `E5108 … diffs.lua:70: E565` told;
+- *failing to take a list read* ×2 and *failing to take what the first look found* — `told = 0` on the round's catch-all tree (the error swallowed and retried at `SafeState`, the list shown meanwhile);
+- *the watch › starts on no showing made in the turn the editor quits* ×2 — `{ VimLeavePre, VimLeave, watch started, changed_files asked, commits_since asked }` and `{ VimLeavePre, watch started, …, VimLeave }`;
+- *keeps no undo history once :set undolevels runs in its window* — `2` for `0`;
+- *Enter › read while textlock holds, then on another file before the editor allows it* — its `kept` assertion, `1` for `0` (the case first arrived green for F1h, below; its assertion of the kept buffer was added red).
+
+**Arrived green (4 new cases, 1 strengthened)**, each with its killer run:
+- *the user's saves › made while a first look finds no repository are not marked once one is made* — the code right since CP9; NM3 (`* ? notes.txt`);
+- *Enter › twice in quick succession tells nothing of the first Enter's diff failing later* — NM6 (the failure told);
+- *Enter › again on a shown diff while textlock holds, then on another file, keeps the diff shown* — written with the wipe's code; F1j (`a = 0` for 1);
+- `tests/test_layout_diffs.lua` › *keeps the user's window options in its window*, now with `'list'` and `'number'` set by the user before the layout opens — CH8w and CH8n;
+- the textlock lists case, strengthened while green: a second read during the hold, and one `SafeState` autocommand per buffer — F1d (`6` for `2`).
+
+### Mutants
+
+Each a literal edit (`.tests/t25fix2-catalog.lua` in the round's worktree, applied by `t25fix2-apply.lua`, every `old` occurring once), run one at a time from a pristine copy of `lua/` and `plugin/` on a copy of its test file narrowed to the cases named, re-run together on the final code tree (`5a81264`; F1j once more on `1350877` after its case was corrected). Every kill is by assertion.
+
+| id | file | edit | run on | result |
+|---|---|---|---|---|
+| F1a | scratch.lua | `pcall(vim.api.nvim_buf_set_lines, …)` → the call itself, `written = true` | the textlock lists ×2, failing to take ×3 | killed 5 (`modifiable` true; lists `aineo is reading …`) |
+| F1b | scratch.lua | `vim.bo[buffer].modifiable = false` → `= not written` | same | killed 5 (`modifiable` true meanwhile) |
+| F1c | init.lua | `show_page()`: `… or refused[buffer] then` → `… or true then` | the textlock lists ×2 | killed 2 (lists not shown) |
+| F1d | init.lua | `show_page()`: `or refused[buffer]` removed | same | killed 2 (`waiting` 6 for 2) |
+| F1e | scratch.lua | `error(failure, 0)` → `return false` | failing to take ×3 | killed 3 (nothing told; the list shown meanwhile) |
+| F1f | init.lua | `show_last_diff()`: `if show_diff(entry, diff) then` → `… or true then` | Enter under textlock ×2 | killed 2 (no diff shown) |
+| F1g | diffs.lua | `return written and buffer or nil` → `return buffer` | same | killed 2 (an empty diff handed on) |
+| F1h | init.lua | `show_last_diff()`: the stale check and its wipe removed | then on another file | killed (`a.txt` shown and kept) |
+| F1i | init.lua | `diffs.wipe_unshown(diff_name(entry))` removed | same | killed (`kept` 1 for 0) |
+| F1j | diffs.lua | `wipe_unshown()`: `and #vim.fn.win_findbuf(buffer) == 0` removed | again on a shown diff | killed (`a` 0 for 1); first run crashed the case's own read of a wiped buffer's name — not counted, the case corrected |
+| RB1, RB2, RB3 | init.lua | the files read, the commits read, the look: `ended()` moved after the showing | failing to take ×3 | killed 1 each (the next read never listed) |
+| F2 | init.lua | the `v:exiting` guard removed (FIXQ reverted) | the quit ×2 | killed 2 (`watch started` logged) |
+| F7 | scratch.lua | `vim.bo[buffer].undolevels = -1` removed from `write_text()` | `undo history` ×3 | killed 3 (`{ 5, 1 }`, `5` and `1`, for 0) |
+| NM3 | init.lua | `session.early_saves = {}` removed (verbatim) | P8 | killed (`* ? notes.txt`) |
+| NM6 | init.lua | the Enter guard before the failure branch removed (the re-measure's first edit, verbatim; its second has no anchor, `show_last_diff()` holding that guard now) | P3e | killed (the failure told) |
+| CH8w, CH8n | layout/init.lua | `wrap = false`; `number = false; list = false` once placed (verbatim) | window options | killed (`wrap`, `list` false) |
+
+No survivor.
+
+### Verification
+
+On Neovim 0.12.5 and git 2.50.1 (macOS, load average about 10 from other agents), on the code tree `1350877` (the commit after it changes only this note):
+
+- `make test`: **1712 cases, `Fails (0)`, 211 s.** A first run on the same tree, 215 s, failed one case outside the boundary, `tests/test_health.lua` › *leaves the editor free to wait when Ctrl-C ends a check of a command that writes without end* (`false` for `true`: its `vim.wait(100)` took 1 s or more); that file then passed alone three times out of three, and the second whole run passed. Recorded as a timing case under load, not touched.
+- Own runs: `tests/test_changes.lua` 88 cases (77 before: 3 re-aimed, 11 added), `tests/test_layout_diffs.lua` 10, `tests/test_doc.lua` 43, each `Fails (0)`.
+- `make lint`: StyLua and selene clean.
+- `aineo.changes` requires `aineo.git` and its own files alone (`pages.lua` now requires `aineo.changes.scratch`, inside the home).
+
 ## Task lines
 
 The wave holds its marks (rule 6). The line T25 would take:
@@ -235,7 +304,7 @@ The wave holds its marks (rule 6). The line T25 would take:
 
 ## Limits
 
-- A git the home is running when the editor quits runs to its end (CH9; the brief review's `b_quit`): the git home's reads give nothing to cancel with. The watch is stopped.
+- A git the home is running when the editor quits runs to its end (CH9; the brief review's `b_quit`): the git home's reads give nothing to cancel with. The watch is stopped, and since the second fix round no showing in the quit's own turn starts one again (the re-measure's finding 2).
 - `\pc` while the changes pane already shows read nothing until the fix round, whose widened boundary let `show_pane()` read it again.
 - The lines a wiped diff showed are dropped the next time a diff is shown; that is not observable through the home's surface, and no case pins it.
 - The pane is rendered and tested on macOS only; the Linux path (no subdirectory watched) is tested by handing the git home `system_name = 'Linux'`.
