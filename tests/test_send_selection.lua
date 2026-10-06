@@ -74,9 +74,20 @@ end
 --- one double-width character.
 local FAMILY = '👨\226\128\141👩'
 
+--- Runs the Ex `commands` in `child`'s current window; runs nothing when
+--- `commands` is `nil`.
+---
+---@param commands? string
+local function run_commands(commands)
+  child.lua('vim.cmd(... or "")', { commands })
+end
+
 --- Each kind of selection, as a set's `parametrize`: its name, Input's
 --- lines, the keys that select from Normal mode, Input's lines once Vim's
---- own `"_d` has removed the selection, and the text it removed.
+--- own `"_d` has removed the selection, the text it removed, the options it
+--- is made under (`send.set_options()`), and the Ex commands run in Input's
+--- window after them (`run_commands()`), for a value an option table
+--- cannot give: one local to the window, or one `:set +=` builds.
 local SELECTIONS = {
   {
     'charwise, across two lines',
@@ -261,6 +272,47 @@ local SELECTIONS = {
     '  abc\nx\n',
     { selection = 'old', virtualedit = 'all,onemore' },
   },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit=all,all, which keep its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { ' ' },
+    ' abc\nx\n',
+    { selection = 'old', virtualedit = 'all,all' },
+  },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit="all,", which keep its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { ' ' },
+    ' abc\nx\n',
+    { selection = 'old', virtualedit = 'all,' },
+  },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit=all,none, which keep its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { ' ' },
+    ' abc\nx\n',
+    { selection = 'old', virtualedit = 'all,none' },
+  },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit=none,all, as :set += makes it, which keep its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { ' ' },
+    ' abc\nx\n',
+    { selection = 'old' },
+    'set virtualedit=none | set virtualedit+=all',
+  },
+  {
+    'charwise from the indent to an empty line, selection=old and virtualedit=all,NONE, which keep its end',
+    { '  abc', 'x', '' },
+    'gg0lvjj',
+    { ' ' },
+    ' abc\nx\n',
+    { selection = 'old', virtualedit = 'all,NONE' },
+  },
 }
 
 T['a Visual Send'] = MiniTest.new_set()
@@ -274,10 +326,12 @@ T['a Visual Send']['writes what it removes from Input as one paste and Enter, in
   keys,
   remaining,
   removed,
-  options
+  options,
+  commands
 )
   start_ready_session('removes')
   send.set_options(child, options)
+  run_commands(commands)
   send.set_input(child, lines)
   send.watch_writes(child)
 
