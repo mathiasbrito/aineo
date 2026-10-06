@@ -1604,10 +1604,11 @@ T['Enter']['again on a shown diff while textlock holds, then on another file, ke
   git_repo.wait_until('the diff of b.txt read', function()
     return child.lua_get('_G.git_answers.file_diff == 3')
   end)
+  local windows_showing = '#vim.fn.win_findbuf(vim.fn.bufnr(...))'
   eq({
-    shown = child.lua_get(SHOWN_DIFFS).names,
-    windows = child.lua_get('#vim.fn.win_findbuf(vim.fn.bufnr(...))', { 'aineo://diff/a.txt' }),
-  }, { shown = { 'aineo://diff/a.txt', 'aineo://diff/b.txt' }, windows = 1 })
+    a = child.lua_get(windows_showing, { 'aineo://diff/a.txt' }),
+    b = child.lua_get(windows_showing, { 'aineo://diff/b.txt' }),
+  }, { a = 1, b = 1 })
 end
 
 T['Enter']['twice in quick succession tells nothing of the first Enter’s diff failing later'] = function()
