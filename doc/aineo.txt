@@ -46,7 +46,8 @@ Requirements:
 - Claude Code, the `claude` command, installed and signed in. aineo's
   behaviour was measured on Claude Code 2.1.281; the resume of Claude's
   session, and the new session that takes the place of a resume Claude
-  Code has no conversation for (|aineo-claude-session|), on 2.1.283.
+  Code has no conversation for (|aineo-claude-session|), on 2.1.283; how
+  Claude Code tells of a session switch, on 2.1.292.
 - git 2.36 or later, the `git` command, for the changes pane
   (|aineo-changes|). aineo is tested with git 2.50.1.
 
@@ -319,10 +320,18 @@ a listed buffer. For a status-line plugin, the name and the folder are
 kept, current, on Claude's terminal as `b:aineo_session_name` and
 `b:aineo_session_folder`. See |aineo-limits| for what can replace it.
 
-aineo resumes the session it started, not one you switch to inside Claude
-Code (`/clear`, `/resume`), and ignores a conversation you ran in a plain
-terminal in the same directory. Two Neovims in one directory resume the
-same session.
+aineo follows a switch you make inside Claude Code: `/clear`, `/resume`
+and `/branch` each put Claude Code on another session, and the next start
+in that directory resumes the session Claude Code was last on in aineo's
+terminal there. Claude Code tells aineo of it through the hooks aineo
+gives it at each start (|aineo-report|): Claude Code 2.1.292 ends the
+session it leaves (`SessionEnd`), then starts the next (`SessionStart`).
+`/compact` stays on the same session. The new session that takes the
+place of a resume with no conversation (above) is followed too. Where
+hooks do not run, aineo follows the session it started: see
+|aineo-limits|. Two Neovims in one directory resume the session of the
+last switch in either. aineo ignores a conversation you ran in a plain
+terminal in the same directory.
 
 Input's draft ~
                                                                  *aineo-draft*
@@ -704,18 +713,24 @@ aineo notices it could receive the paste and the Enter (|aineo-limits|).
 ==============================================================================
 8. THE AGENT REPORT                                             *aineo-report*
 
-aineo starts Claude Code with four additions of its own:
+aineo starts Claude Code with five additions of its own:
 - the session it resumes, or the id of a new one: `--resume` or
   `--session-id` (|aineo-claude-session|);
 - instructions appended to its system prompt, telling Claude when to call
   the report tool and how to write a report (below);
 - aineo's MCP server, which Claude Code runs as a headless `nvim`, given
   through `--mcp-config`;
+- a `SessionStart` and a `SessionEnd` hook, which Claude Code also runs as
+  a headless `nvim`, given through `--settings`: they tell the editor when
+  Claude Code switches session (|aineo-claude-session|). Claude Code
+  2.1.292 ran them beside a project's own hooks, not in their place, and
+  `--settings` holds nothing else;
 - the report tool allowed without asking: `--allowedTools
   mcp__aineo__report`.
-The server is given this editor's address, |v:servername|, and relays each
-report to the editor there. Claude Code also gets `AINEO_CHILD=1` in its
-environment, so a Neovim started inside it never autostarts.
+The server and the hooks are given this editor's address, |v:servername|:
+the server relays each report to the editor there. Claude Code also gets
+`AINEO_CHILD=1` in its environment, so a Neovim started inside it never
+autostarts.
 
 A report holds a `task`, a `status` — `started`, `progress`, `blocked`,
 `done` or `failed` — a one-line `summary` and, optionally, `details`. The
@@ -989,6 +1004,22 @@ When Neovim quits, aineo stops a running Claude Code from its own
 before aineo's that raises an error makes Neovim skip aineo's: Claude Code
 then only gets Neovim's hangup, and a Claude Code that hangs outlives the
 editor. aineo cannot detect this.
+
+Session switches ~
+aineo learns of a switch inside Claude Code from Claude Code's session
+hooks, which do not always run. Claude Code runs no hook in a folder until
+you answer its trust dialog, none of aineo's under a managed
+`allowManagedHooksOnly`, and, as its documentation reads, none under a
+`disableAllHooks` in any of your settings. aineo then hears of no switch,
+and the next start resumes the session aineo started. Not seen: what
+Claude Code does once a folder's trust dialog is answered "Yes"; and
+whether a `/fork` background copy, a conversation moved to the background
+or a subagent tells of a new session. aineo follows a new session only
+right after the session it follows has ended, so such a session, without
+that end, is not followed. A hook that cannot reach the editor tells it
+nothing. Each hook leaves a headless `nvim` running until the editor has
+taken what it told, at once in an idle editor; an editor at a prompt
+takes it once you answer the prompt.
 
 The 80-column start ~
 At startup, a message longer than |v:echospace| — 68 columns on an 80-column

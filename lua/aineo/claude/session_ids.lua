@@ -70,12 +70,13 @@ local function kept_id_file(state_directory, working_directory)
   )
 end
 
---- Whether `text` is a session id of the form `new_session_id()` makes,
---- its letters lower-case: nil, what a read of a directory gives, is not.
+--- Whether `text` is a session id of the form `new_session_id()` makes and
+--- Claude Code 2.1.292 gives, a lower-case version-4 UUID: nil, what a read
+--- of a directory gives, is not.
 ---
 ---@param text string|nil
 ---@return boolean
-local function is_session_id(text)
+function M.is_session_id(text)
   return type(text) == 'string' and text:find(SESSION_ID_PATTERN) ~= nil and text == text:lower()
 end
 
@@ -93,7 +94,7 @@ function M.kept_session_id(state_directory, working_directory)
   end
   local kept = file:read('*a')
   file:close()
-  if not is_session_id(kept) then
+  if not M.is_session_id(kept) then
     return nil
   end
   return kept
