@@ -11,18 +11,35 @@ local UNNAMED = 'Claude Code'
 local WORD_CLASS = 2
 local EMOJI_CLASS = 3
 
+--- Whether the Latin-1 character numbered `code`, from U+0080 to U+00FF, is
+--- a letter: ª, µ, º, and À to ÿ but for × and ÷.
+---
+---@param code integer
+---@return boolean
+local function is_latin1_letter(code)
+  return code == 0xAA
+    or code == 0xB5
+    or code == 0xBA
+    or (code >= 0xC0 and code ~= 0xD7 and code ~= 0xF7)
+end
+
 --- Whether `character`, one character, is a letter or a digit: an ASCII
---- letter or digit, or a wider character Vim's `charclass()` puts among the
---- word characters or in a script class of its own, as it does a Latin,
---- Greek or Cyrillic letter (2) or a CJK one. Emoji (3), punctuation and
---- symbols (1) and blanks (0) are not; a character below 256 is classed by
---- the current buffer's 'iskeyword', as `charclass()` classes it.
+--- letter or digit, a Latin-1 letter (`is_latin1_letter()`), or a wider
+--- character Vim's `charclass()` puts among the word characters or in a
+--- script class of its own, as it does a Greek or Cyrillic letter (2) or a
+--- CJK one. Emoji (3), punctuation and symbols (1) and blanks (0) are not.
+--- No buffer's 'iskeyword' counts: `charclass()` reads it below U+0100
+--- only, where it is not asked.
 ---
 ---@param character string
 ---@return boolean
 local function is_letter_or_digit(character)
   if #character == 1 then
     return character:find('^%w') ~= nil
+  end
+  local code = vim.fn.char2nr(character)
+  if code < 0x100 then
+    return is_latin1_letter(code)
   end
   local class = vim.fn.charclass(character)
   return class == WORD_CLASS or class > EMOJI_CLASS
@@ -100,11 +117,41 @@ local function watch_title(buffer, on_title)
   end)
 end
 
---- A `'statusline'` that draws, for the terminal its window shows, the
---- session's name, then its folder: `<name> — <folder>`. Each is read
---- through `%{}`, so that a `%` in either draws as written, and a status line
---- too narrow for both cuts the folder, not the name.
-M.STATUSLINE = "%{get(b:,'aineo_session_name','')} — %<%{get(b:,'aineo_session_folder','')}"
+--- `text` as a status line format that draws it character for character:
+--- each `%` doubled.
+---
+---@param text string
+---@return string
+local function literal(text)
+  return (text:gsub('%%', '%%%%'))
+end
+
+--- The status line format that draws, for `window`, the name and the folder
+--- of the terminal it shows: `<name> — <folder>`, each as written, whatever
+--- it holds — a `%`, digits alone, a leading comma or space. A status line
+--- too narrow for both cuts the folder first, from its start, and the name
+--- only once no folder is left to cut.
+---
+---@param window integer
+---@return string
+function M.statusline_format(window)
+  local buffer = vim.api.nvim_win_get_buf(window)
+  local name = tostring(vim.b[buffer].aineo_session_name or '')
+  local folder = tostring(vim.b[buffer].aineo_session_folder or '')
+  return literal(name) .. ' — %<' .. literal(folder)
+end
+
+--- Gives `buffer`, the terminal of a Claude Code that has exited, the name
+--- `Claude Code`, as the empty title Claude Code sets as it exits does: one
+--- that was killed or hung up leaves its last title in place. A terminal
+--- already wiped, which hung its Claude Code up, is left as it is.
+---
+---@param buffer integer
+function M.forget_name(buffer)
+  if vim.api.nvim_buf_is_valid(buffer) then
+    keep_name(buffer, nil)
+  end
+end
 
 --- Keeps the session's name and folder on `buffer`, the terminal Claude Code
 --- is about to run in, for its whole life: the name as each title Claude

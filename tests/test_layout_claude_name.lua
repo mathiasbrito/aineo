@@ -82,6 +82,21 @@ T["Claude's window's status line"]['leaves the user’s own to another buffer sh
   eq(statusline_of_window_showing(child, other), USERS_STATUSLINE)
 end
 
+T["Claude's window's status line"]['is drawn too by a window split from Claude’s window, for Claude’s terminal'] = function()
+  local buffers = open_with_statusline(child)
+  local claude_window = layout.window_showing(child, buffers.claude)
+
+  local split = child.lua_get(
+    'vim.api.nvim_win_call(..., function() vim.cmd.split() return vim.api.nvim_get_current_win() end)',
+    { claude_window }
+  )
+
+  eq({
+    buffer = child.api.nvim_win_get_buf(split),
+    statusline = child.lua_get('vim.wo[...].statusline', { split }),
+  }, { buffer = buffers.claude, statusline = CLAUDE_STATUSLINE })
+end
+
 T["Claude's window's status line"]['leaves the user’s own to another buffer Claude’s window shows as the layout follows a new terminal'] = function()
   local buffers = open_with_statusline(child)
   local other = child.api.nvim_create_buf(false, true)
