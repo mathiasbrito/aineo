@@ -2,26 +2,44 @@
 
 You are dispatched by the orchestrator to implement **one packet** of `knowledge-vault/Planning/aineo — v1 agent console.md`. Your definition tells you how to work; this brief tells you what.
 
-> **Awaits the converge round.** Written with the recommended options of [[Planning/aineo — worktrees and session switches]] › P9 (a) with history (i), and P10 (b) — so the draft is **not** in this packet. It is not dispatched until the user has answered the round and the agreed rows are D39 and D40 in the v1 plan note, M5 is measured, and wave 8's T34 has merged (both change `lua/aineo/report/`). Under P10 (a) the amendment adds `lua/aineo/draft/` and *aineo-draft* to this packet, and gives the behaviour.
+> **Agreed and amended, 2026-10-07.** The user answered the converge round on 2026-10-07: P9 is (a) with history (i), now D39; **P10 is per session**, over the recommendation, now D40 — so **Input's draft is in this packet**, beside the Report (*The draft per session*, below). Wave 8's T34 merged (PR #128), and every fact below was read again at `dev` `f98bd9d`. The orchestrator measured M5 the same day (`evidence/w9-real-claude-sessions.txt`). Still before dispatch: the brief review, and wave 8's finish (the user's go: "when wave 8 finishes start right streight wave 9"). The *Amendment — 2026-10-07* at the end gives the answers.
 
 ## Objective
 
 The task, verbatim from the task list:
 
-> | T36 | The Report per session (C6; P9 once agreed, and P10 under its option (a)): reports are kept per Claude session id, a report under the session aineo follows when it arrives, and the Report can be shown for another session; the working directory's records become the session kept for it — the behaviour awaits the converge round | T5, wave 8's T34, the round | planned — wave 9 |
+> | T36 | The Report and Input's draft per session (C6, C11; D39, D40): reports are kept per Claude session id, a report under the session aineo follows when it arrives, and the Report can be shown for another session; the working directory's records become the session kept for it; Input's draft is kept per Claude session id, and following another session keeps Input's text as the old session's draft and puts the new session's in its place | T5, wave 8's T34, M5 | planned — wave 9 |
 
-It rests on: C6 (the report's format, rendering and records, "persisted under `stdpath('state')`"), C14 (the Report line), D8 (reports through the MCP tool), D17 (Input's draft per directory, unchanged under P10 (b)), D26 and D29; and P9's alternatives.
+It rests on: D39 (the Report per session) and D40 (Input's draft per session), agreed 2026-10-07; C6 (the report's format, rendering and records, "persisted under `stdpath('state')`"), C14 (the Report line), D8 (reports through the MCP tool); C11 and D17 (Input's draft), whose "per working directory" D40 supersedes and whose saving and restoring stand; D26 and D29; and P9's and P10's alternatives.
 
-### The behaviour, under the recommended options (awaits the converge round)
+### The behaviour — the Report (D39)
+
+The user's answer: "all your recommendations are fine" (the whole answer is in the amendment).
 
 - **One records file per Claude session**, under the same `stdpath('state')/aineo/reports/` folder as today, named so that no session id can make an invalid or colliding name (today's files are named by a SHA-256; keep a scheme of that kind, and say which in the help).
 - **The report home follows a session.** A new entry point (its name is yours) tells the home which session's records the Report shows and keeps reports under: it shows that session's records in the Report, in place of what it showed, and keeps every report received from then on in that session's file. A session with no records yet shows an empty Report. Following the session already followed changes nothing (the Report's lines, its cursor and its windows stay).
 - **Before the home is told any session**, it keeps and shows the working directory's records exactly as today. Nothing in this packet calls the new entry point: T39 wires it to the composition root once T35 says which session Claude Code is on. So `dev` behaves as before when this packet merges.
 - **History, (i):** the first time the home follows a session in an editor, when the working directory's records file exists and that session has none, the directory's file **becomes** the session's (moved, not copied), so every report shown today stays shown, with that session. When both exist, neither is touched, and the session's are shown. A move that fails is told once as a warning, as the home tells a records failure today, and the session's file is used from then on.
-- **A report is kept under the session followed when it arrives** — Claude Code's MCP server cannot say which session sent it (B2; M5 measures whether it is even the same server process after a switch).
+- **A report is kept under the session followed when it arrives** — Claude Code's MCP server cannot say which session sent it (B2). M5 measured one MCP server for Claude Code's whole life, never restarted by a switch, its `CLAUDE_CODE_SESSION_ID` the first session's and stale after `/clear`, `/resume` or `/branch`: so nothing here reads a session from the MCP server or its environment (A4).
 - **What stays:** the records' format (`{ time, report }`), the 2 MiB shown and the cut at 4 MiB (`RECORDS_KEPT_BYTES`), the owner-only permissions, the rendering, links, paths and colours (T10, T17, T18, and T34's layout).
 
-### Facts, checked against `origin/dev` `9b8707f` (re-checked after T34 merges)
+### The behaviour — the draft per session (D40)
+
+The user's reason for P10, verbatim: "p10 must be one per session, why, because it is used to catalog changes and notes that goes to the prompt with \s". Input is where the user gathers the changes and notes meant for one session's prompt.
+
+- **One draft file per Claude session**, under the same `stdpath('state')/aineo/drafts/` folder as today, named so that no session id can make an invalid or colliding name, nor collide with a directory's draft file (today's are `<sha256(working directory)>.txt`); say the scheme in the help. Owner-only, written as today.
+- **The draft home follows a session.** A new entry point (its name is yours; give it the report home's shape) tells the home which session's draft Input holds. Following another session, in this order:
+  1. a change of Input not yet saved is saved, at once, as the draft of what the home kept until now — the old session, or the directory before any follow;
+  2. the home keeps for the new session from then on;
+  3. Input's text is replaced by the new session's draft, or emptied when it has none — **whatever Input holds**, unlike D17's restore at opening, which never overwrites text: the old text is not lost, it is the old session's draft, and comes back when that session is followed again (D40).
+  The replacement is not a change of the user's, as D17's restore is not: `u` does not take it out, and it is not saved as either session's draft but the new one's own.
+- **Following the session already followed changes nothing**: Input's text, its cursor and its undo stay.
+- **Before the home is told any session**, it keeps and restores the working directory's draft exactly as today (D17, C11). Nothing in this packet calls the new entry point: T39 wires it, at every start and every switch. So `dev` behaves as before when this packet merges, and `tests/test_entry_draft.lua` stays true unchanged.
+- **The directory's draft, the first time (A6 — the planning's reading, for the brief review).** The first time the home follows a session in an editor, when the working directory's draft file exists and that session has none, the directory's draft **becomes** the session's (moved, not copied), as D39's history (i) does for the reports. Without it, the first start after this change would empty an Input that held a draft. When both exist, neither is touched, and the session's is shown. A move that fails is told once as a warning, as the home tells a write failure today.
+- **Two Neovims following one session** share its draft, the last change winning, as D17 says of two in one directory. *(The planning's reading of D40 with D17's surviving clause.)*
+- **What stays:** the save a second after each change, the save at once when Input empties, the saves at quit and at unload, the warnings once per editor, nothing raised (D17, C11).
+
+### Facts, checked against `origin/dev` `f98bd9d` (wave 8 merged)
 
 - `lua/aineo/report/records.lua`:
   - `M.records_file(state_directory, working_directory)`, lines 30–37: `<state>/aineo/reports/<sha256(working_directory)>.jsonl`;
@@ -30,19 +48,27 @@ It rests on: C6 (the report's format, rendering and records, "persisted under `s
 - `lua/aineo/report/init.lua`:
   - `aineo.report.Environment`, lines 15–18: `clock`, `state_directory`, `working_directory`;
   - `M.set_report_environment()`, lines 51–57;
-  - `report_view`, line 25: `{ buffer, records_file }`, chosen once in `M.report_buffer()`, lines 244–255;
-  - `show_records()`, lines 209–218, and `open_report_buffer()`, lines 226–232, which shows the records again when the user `:edit`s the Report;
-  - `show_and_keep()`, lines 267–280, appends to `report_view.records_file`.
-- `plugin/aineo.lua` › `give_report_environment()`, lines 159–171: the working directory of `kept_places()` (lines 148–152), the first one, for the editor's life. This packet does not change it.
-- Tests that pin the records' place: `tests/test_entry_report.lua` line 109 (the file named by the directory's SHA-256, under `nvim/aineo/reports/`), and `tests/test_report_buffer.lua`'s group `the records`, from line 605 (`records_file_holding()` at line 631, the cut, the permissions, a folder that cannot be written). They stay true before the home follows a session.
-- `doc/aineo.txt` › *aineo-report*'s last paragraph, `Reports are kept per working directory, under \`stdpath('state')\` in` … `the working directory of its own moment.` (as T34 leaves it — the amendment quotes it).
-- **B2** (`evidence/w9-probes.txt`): Claude Code 2.1.281's MCP messages carry no session id.
+  - `report_view`, line 25: `{ buffer, records_file }`, chosen once in `M.report_buffer()`, lines 244–254;
+  - `show_records()`, lines 209–217, and `open_report_buffer()`, lines 226–232, which shows the records again when the user `:edit`s the Report;
+  - `show_and_keep()`, lines 267–280, appends to `report_view.records_file`; `M.receive_report()`, lines 292–298.
+  - Wave 8's T34 changed `lua/aineo/report/buffer.lua` and `render.lua` only; `init.lua` and `records.lua` did not move.
+- `lua/aineo/draft/init.lua` (424 lines, one file; it requires no aineo home):
+  - `aineo.draft.Environment`, lines 26–29: `state_directory`, `working_directory`, `files?`; `environment`, line 63, set by `M.set_draft_environment()`, lines 348–350;
+  - `kept`, line 71, the buffers kept, each with its `pending` watch;
+  - `draft_file(state_directory, working_directory)`, lines 78–85: `<state>/aineo/drafts/<sha256(working_directory)>.txt`;
+  - `read_draft()`, lines 159–174; `restore_draft()`, lines 181–198, which puts the draft in with `'undolevels'` at -1, so `u` does not take it out;
+  - `write_draft()`, lines 277–285; `save()`, lines 291–296; `save_pending_change()`, lines 303–308; `take_in_change()`, lines 328–338 (an emptied Input empties the draft at once, other text saved `SAVE_DELAY_MS`, 1000 ms, later, line 11);
+  - `M.keep_draft(buffer)`, lines 381–422: restores the draft into an empty buffer only, then follows its changes (`nvim_buf_attach`), and saves at `BufUnload` and `QuitPre`.
+- `plugin/aineo.lua` › `give_report_environment()`, lines 159–171, and `keep_input_draft()`, lines 180–187: both homes are given the state directory and the working directory of `kept_places()` (lines 148–152), the first one, for the editor's life. This packet changes neither.
+- Tests that pin the records' place: `tests/test_entry_report.lua` line 109 (the file named by the directory's SHA-256, under `nvim/aineo/reports/`), and `tests/test_report_buffer.lua`'s group `the records`, from line 942 (`records_file_holding()` at line 968, the cut, the permissions, a folder that cannot be written; T34 moved them from 605 and 631). The draft's: `tests/test_draft.lua` and `tests/test_entry_draft.lua`. They stay true before the homes follow a session.
+- `doc/aineo.txt`, unchanged by wave 8 at these lines: *aineo-report*'s last paragraph, `Reports are kept per working directory, under \`stdpath('state')\` in` … `the working directory of its own moment.` (lines 841–846); *aineo-draft*'s body, `What you write in Input is kept as a draft, one per working directory,` … `you type there.` (lines 329–362), under `Input's draft ~` (line 327) and its tag (line 328).
+- **B2** (`evidence/w9-probes.txt`): Claude Code 2.1.281's MCP messages carry no session id. **M5** (`evidence/w9-real-claude-sessions.txt`): one MCP server for Claude Code's life, its session id stale after a switch.
 
 ### Baseline
 
-On `9b8707f`, Neovim 0.12.5: 1807 cases, `Fails (0)` (`Implementation/Waves/00008-small-fixes/evidence/baseline-9b8707f.txt`). Among them: `tests/test_report.lua` 55, `tests/test_report_buffer.lua` 67, `tests/test_report_paths.lua` 90, `tests/test_report_links.lua` 83, `tests/test_report_colours.lua` 64, `tests/test_mcp_delivery.lua` 25, `tests/test_entry_report.lua` 4, `tests/test_doc.lua` 44. Wave 8's T34 changes several; the dispatch message pastes the counts on the `dev` you start from.
+At `f98bd9d`, Neovim 0.12.5: 1929 cases in 60 groups, `Fails (0)` — T33's last whole-suite run, on code identical to `f98bd9d`'s (`plan.md` › *Baseline*). Since the first brief (`9b8707f`), T34 brought `tests/test_report_buffer.lua` from 67 cases to 97 at its packet's push (T34's session note) and reworked `tests/test_report_links.lua` and `tests/test_report_paths.lua`; `tests/test_report.lua` (55), `tests/test_entry_report.lua` (4) and the draft suites are files wave 8 did not change. The dispatch message pastes the counts on the `dev` you start from.
 
-Read first: the v1 plan note's C6, C14, D8, D17 and the D rows the round adds (D39, D40); [[Planning/aineo — worktrees and session switches]] › P9, P10; `knowledge-vault/Projects/aineo.md`; `Sessions/2026-09-24 — T5 report channel.md`; T34's session note once merged; `plan.md` and `evidence/w9-probes.txt` in this folder.
+Read first: the v1 plan note's C6, C11, C14, D8, D17, D39 and D40; [[Planning/aineo — worktrees and session switches]] › P9, P10 and its outcome; `knowledge-vault/Projects/aineo.md`; `Sessions/2026-09-24 — T5 report channel.md`; `Sessions/2026-09-26 — T14 Input draft.md` (the draft home's packet); `Sessions/2026-10-07 — T34 Report layout.md`; `plan.md` (*Assumptions to report to the user*, A4 and A6) and `evidence/w9-probes.txt` and `evidence/w9-real-claude-sessions.txt` in this folder.
 
 ## Boundary
 
@@ -50,13 +76,13 @@ Read first: the v1 plan note's C6, C14, D8, D17 and the D rows the round adds (D
 - **Class:** regular.
 - **Model:** `opus`.
 - **Resources:** `impl_t36_report_sessions` — pass it to `.claude/scripts/prepare-worktree.sh`.
-- **You may touch:** `lua/aineo/report/records.lua` and `lua/aineo/report/init.lua`; `tests/test_report.lua`, `tests/test_report_buffer.lua` where a records case must change, `tests/test_entry_report.lua` only if its pin must change (it should not), a new `tests/test_report_sessions.lua`; `doc/aineo.txt` inside the fence below; your session note.
-- **You must not touch:** `plugin/aineo.lua` (T35's and T39's); every other file under `lua/`, `plugin/`, `scripts/` and `tests/` — `lua/aineo/draft/` and `tests/test_draft.lua` included under P10 (b), `tests/test_doc.lua` (run it); T35's files (`lua/aineo/claude/`, `tests/helpers/fake_claude.lua`, `tests/test_claude*.lua`) and T37's (`lua/aineo/changes/`, `tests/test_changes*.lua`); the plan notes, the project note and the task list (write a `## Task lines` section in your session note); `.claude/`, `.githooks/`, `CLAUDE.md`, `.worktreeinclude`, `.gitignore`.
-- **A document shared under rule 2's section exception:** `doc/aineo.txt`. Yours: *aineo-report*'s last paragraph, from `Reports are kept per working directory, under \`stdpath('state')\` in` to `the working directory of its own moment.` — say what is kept per session, the history's move, and that until the session is followed the working directory's records are shown. T35 owns *aineo-claude-session* and a new LIMITS subsection after `Stopping Claude Code on quit ~`; T37 owns *aineo-changes*'s first paragraph and one LIMITS item. Before you push, merge with each of their branches that exists (`git merge-tree --write-tree <your head> origin/feature/t35-session-switch`, the same for `origin/feature/t37-changes-sessions`), run `make test_file FILE=tests/test_doc.lua` on each merged tree, and report both.
+- **You may touch:** `lua/aineo/report/records.lua` and `lua/aineo/report/init.lua`; `lua/aineo/draft/init.lua`, and one new file in `lua/aineo/draft/` if a concern needs one; `tests/test_report.lua`, `tests/test_report_buffer.lua` where a records case must change, `tests/test_entry_report.lua` only if its pin must change (it should not), a new `tests/test_report_sessions.lua`; `tests/test_draft.lua` where a case must change, a new `tests/test_draft_sessions.lua`; `doc/aineo.txt` inside the two fences below; your session note.
+- **You must not touch:** `plugin/aineo.lua` (T35's and T39's); every other file under `lua/`, `plugin/`, `scripts/` and `tests/` — `tests/test_entry_draft.lua` and `tests/test_doc.lua` included (run them); T35's files (`lua/aineo/claude/`, `tests/helpers/fake_claude.lua`, `tests/test_claude*.lua`) and T37's (`lua/aineo/changes/`, `tests/test_changes*.lua`); the plan notes, the project note and the task list (write a `## Task lines` section in your session note); `.claude/`, `.githooks/`, `CLAUDE.md`, `.worktreeinclude`, `.gitignore`.
+- **A document shared under rule 2's section exception:** `doc/aineo.txt`. Yours: *aineo-report*'s last paragraph, from `Reports are kept per working directory, under \`stdpath('state')\` in` to `the working directory of its own moment.` — say what is kept per session, the history's move, and that until the session is followed the working directory's records are shown. And *aineo-draft*'s body, from `What you write in Input is kept as a draft, one per working directory,` to `you type there.` — say that the draft is kept per Claude session, what a follow does to Input, the directory's draft's move, and that until a session is followed it is the working directory's; leave `Input's draft ~` and its tag line as they are, since T35's fence ends three lines above them, at `same session.`. T35 owns *aineo-claude-session* and a new LIMITS subsection after `Stopping Claude Code on quit ~`; T37 owns *aineo-changes*'s first paragraph and one LIMITS item. Before you push, merge with each of their branches that exists (`git merge-tree --write-tree <your head> origin/feature/t35-session-switch`, the same for `origin/feature/t37-changes-sessions`), run `make test_file FILE=tests/test_doc.lua` on each merged tree, and report both.
 - **Session note:** `knowledge-vault/Sessions/<date> — T36 Report per session.md`, with a `## Task lines` section.
 - **Scratch prefix:** `t36-`.
 - **How the suite runs (D26, D29):** Neovim 0.12.5 only; the test files you touch and the baseline table's while you work; the whole suite once before each push; mutants on their covering files. Never the real `claude`.
-- **Modularity:** `aineo.report` keeps requiring `aineo.config` alone (`.claude/skills/modularity/SKILL.md`). It learns of a session by being told, never by requiring `aineo.claude`.
+- **Modularity:** `aineo.report` keeps requiring at most `aineo.config`, and `aineo.draft` no aineo home (`.claude/skills/modularity/SKILL.md`, the direction table). Each learns of a session by being told, never by requiring `aineo.claude`; neither requires the other.
 
 ## The tests
 
@@ -68,19 +94,39 @@ Each behaviour gets one test, seen failing first:
 - the first follow moves the directory's records to the session; a later follow of another session moves nothing; when both files exist, neither is touched;
 - a move that fails warns once, and the session's file is used;
 - before any follow, the records are the directory's, as `tests/test_entry_report.lua` pins;
-- a Report wiped and made again (`report_buffer()`) shows the followed session's records, not the directory's.
+- a Report wiped and made again (`report_buffer()`) shows the followed session's records, not the directory's;
+- the draft: following a session puts its draft into Input, replacing Input's text, and keeps the next change under that session; following the first session again brings its text back;
+- a change not yet saved when a follow comes is saved as the old session's draft, not lost and not the new one's;
+- the replacement is no change of the user's: `u` does not take it out, and it is saved under no session but the new one;
+- following the session already followed leaves Input's text, cursor and undo as they were;
+- a session with no draft empties Input;
+- the first follow moves the directory's draft to the session; a later follow moves nothing; when both exist, neither is touched; a move that fails warns once;
+- before any follow, the draft is the directory's, as `tests/test_draft.lua` and `tests/test_entry_draft.lua` pin;
+- the help's two paragraphs through `tests/test_doc.lua`.
 
-The verification runs the plan's five mutants for T36. Name in your report the test that kills each.
+The verification runs the plan's eight mutants for T36. Name in your report the test that kills each.
 
 ## What was decided already
 
-- The user's request, 2026-10-06, and the user's answers to P9 and P10, which the amendment gives.
-- C6's report format and the 2 MiB bound stand.
+- The user's request, 2026-10-06, and the user's answers to P9 and P10, D39 and D40, which the amendment gives.
+- C6's report format and the 2 MiB bound stand; D17's saving and restoring stand, per session.
 
 ## Budget
 
-Medium: a records file chosen by session, one entry point that swaps what the Report shows, a one-time move, about eight cases and a help paragraph. If it grows past that, stop at a green, reviewed, pushed state and report.
+Medium to large: a records file and a draft file chosen by session, one entry point in each home, a one-time move in each, about sixteen cases and two help paragraphs. If it grows past that, stop at a green, reviewed, pushed state and report.
 
 ## Report
 
 In your definition's shape, to `<scratchpad>/t36-report-packet.md`. Open the pull request into `dev` before you report. Put in its body every verification claim a reviewer can re-measure, the test files that ran and the whole suite's counts.
+
+## Amendment — 2026-10-07: the user's answers, the measurements, and the facts at `f98bd9d`
+
+**The user's answers.** The orchestrator put P1–P11 to the user as a table, each with its options and its recommendation first, and M, R and S for the wave. The user answered, verbatim: "p10 must be one per session, why, because it is used to catalog changes and notes that goes to the prompt with \s, other than that all your recommendations are fine, so when wave 8 finishes start right streight wave 9."
+- P9 is (a) with history (i): D39. The Report's half of this brief, written with it, stands.
+- **P10 is per session**, over the recommendation: D40. The proposal note letters it (a); the table put to the user, recommendation first, lettered it (b). This brief first left the draft out under the recommendation; it now holds it: *The behaviour — the draft per session*, the draft home in *Boundary*, its fence in `doc/aineo.txt`, its tests, and the plan's mutants 6–8. T39 wires it.
+
+**The measurements** (`evidence/w9-real-claude-sessions.txt`, the orchestrator's, 2026-10-07). M5: one MCP server for Claude Code's life, its `CLAUDE_CODE_SESSION_ID` stale after a switch. D39's rule — a report kept under the session followed when it arrives — stands, and this packet reads no session from the MCP server (the orchestrator's assumption A4, reported to the user).
+
+**Readings the round did not ask** (the planning's, for the brief review and the user): A6, the directory's draft moved to the first session followed, as D39's history (i) moves the records; and two Neovims on one session sharing its draft, last change winning, as D17 says of one directory.
+
+**Facts that moved since `9b8707f`** (the body gives them at `f98bd9d`): `M.report_buffer()` ends at line 254 and `show_records()` at 217 (both read one line long before; the code did not move); `tests/test_report_buffer.lua`'s group `the records` is at line 942 and `records_file_holding()` at 968 (T34 added cases above them; they were 605 and 631); the draft home's lines are new to this brief. `records.lua`, `init.lua`, `plugin/aineo.lua`'s two hand-overs and the help's two fences did not move. The baseline is 1929 cases at `f98bd9d`.

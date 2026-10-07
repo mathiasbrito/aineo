@@ -4,9 +4,42 @@
 **Project:** [[Projects/aineo]]
 **Spec it changes:** [[Planning/aineo — v1 agent console]] — the plan the root `CLAUDE.md` names as the spec. Its D and C rows change only through a converge round with the user, superseded by a new ID, never edited in place.
 **Raised by:** the user, 2026-10-06, two requests (verbatim under *The ask*).
-**Drafted by:** the orchestrator's planning agent (Claude, Opus 5.5), 2026-10-06, for the orchestrator to put to the user. **Status: proposed — not agreed.** Nothing here binds until the user answers the converge round; the agreed rows are then recorded in the v1 plan note as D31… with the user's words, and the proposals left here as the record of what was offered.
-**Wave:** [[Implementation/Waves/00009-worktrees-sessions/plan]] (planned; its briefs await this round).
+**Drafted by:** the orchestrator's planning agent (Claude, Opus 5.5), 2026-10-06, for the orchestrator to put to the user. **Status: agreed, 2026-10-07** — every proposal as the user answered it (*Outcome of the converge round*, below). The agreed rows are D31–D41 in the v1 plan note, with the user's words; the proposals stay here as the record of what was offered. *(Proposed 2026-10-06; nothing here bound until the round was answered.)*
+**Wave:** [[Implementation/Waves/00009-worktrees-sessions/plan]] (planned; its briefs amended for the answers on 2026-10-07).
 **Evidence:** `Implementation/Waves/00009-worktrees-sessions/evidence/w9-probes.txt` — probes A1–A3 (feature A), B1–B4 (feature B), and Claude Code's documentation, quoted (D-docs).
+
+## Outcome of the converge round — 2026-10-07
+
+The orchestrator put the round to the user as one table: P1–P11, each with its options and its recommendation, and three questions on the wave — M (the measurements with the real Claude Code, with the user's leave), R (the releases) and S (the order of stage 2). The user answered, verbatim:
+
+> "p10 must be one per session, why, because it is used to catalog changes and notes that goes to the prompt with \s, other than that all your recommendations are fine, so when wave 8 finishes start right streight wave 9."
+
+**Every proposal is agreed as answered:**
+
+| Proposal | Answer | Row |
+|---|---|---|
+| P1 — which worktrees | (a), recommended | D31 |
+| P2 — each worktree's base | (a), recommended | D32 |
+| P3 — how the windows show several | (a), recommended | D33 |
+| P4 — Enter in a worktree's section | (a), recommended | D34 |
+| P5 — following worktrees, the cost | (a), recommended | D35 |
+| P6 — how aineo learns of a switch | (a), recommended, with (g) if M2 finds that `--settings` replaces the user's hooks | D36 |
+| P7 — what counts as a switch | (a), recommended | D37 |
+| P8 — which session resumes next | (a), recommended | D38 |
+| P9 — the Report | (a), recommended, with history (i) | D39 |
+| P10 — Input's draft | **per session**, this note's (a), over the recommendation | D40 |
+| P11 — the changes pane | (a), recommended | D41 |
+| M — the measurements | (a), recommended: the orchestrator runs M1–M8 before T35 is dispatched — run 2026-10-07, `Implementation/Waves/00009-worktrees-sessions/evidence/w9-real-claude-sessions.txt` | the wave plan |
+| R — the releases | (a), recommended: one when T38 merges, one when T39 merges | the wave plan |
+| S — stage 2's order | (a), recommended: T38 and T39 at once | the wave plan |
+
+**P10's letters.** This note lists per session as P10's option (a) and recommends (b), per directory. The table put to the user listed each recommendation first, so there per directory was (a) and per session was (b), described as "one per session, the literal reading of your request". The user chose per session, giving the reason: Input is where the changes and notes meant for that session's prompt are gathered, and `\s` sends them. The rows, the wave plan and the briefs name it "P10, per session", not by a letter.
+
+**The go.** "when wave 8 finishes start right streight wave 9": stage 1 is dispatched once wave 8 has finished.
+
+**The measurements, 2026-10-07.** The orchestrator measured M1–M8 with Claude Code 2.1.292 (`Implementation/Waves/00009-worktrees-sessions/evidence/w9-real-claude-sessions.txt`). None defeats an agreed row: the hook runs at every switch, each switch being `SessionEnd` of the old id then `SessionStart` of the new (M1); a `--settings` hook is added to the hooks already configured, so P6 (g) is not needed (M2); the ids are lower-case version-4 UUIDs (M4). What they shape beyond the rows — relaying `SessionEnd` too, following the started id when no hook comes, as in a folder not yet trusted (M7), and a hook that returns at once (M8) — is the orchestrator's, as assumptions A1–A4 in the wave's plan.
+
+The table *What survives exit, and what survives a switch* below is written under the recommended options; for Input's draft the agreed answer differs: per session, surviving exit and switches (D40).
 
 ## ID legend
 - `P#` — a proposal of this round, with its alternatives `(a)`, `(b)`…; the recommended option first
@@ -147,7 +180,7 @@ For (a), the history alternatives: (i) **recommended**, moved to the kept sessio
 
 ## Measurements before dispatch (the real Claude Code)
 
-The orchestrator, with the user's leave, in a scratch folder, as for Q8 on 2026-09-26 — a few short messages, the user's login. Each names the packet that waits on it.
+The orchestrator, with the user's leave, in a scratch folder, as for Q8 on 2026-09-26 — a few short messages, the user's login. Each names the packet that waits on it. *(Measured 2026-10-07: see the outcome of the converge round, above, and the wave's `evidence/w9-real-claude-sessions.txt`.)*
 
 - **M1** (T35): a `SessionStart` command hook given with `--settings` runs at start, after `/clear`, after an in-session `/resume`, after `/branch` and after a compaction, with the `session_id` and `source` the documentation gives; and `SessionEnd` runs before it or after.
 - **M2** (T35): a `--settings` `hooks` key beside the user's own `SessionStart` hook in a scratch `CLAUDE_CONFIG_DIR`: both run, or the user's is replaced.
