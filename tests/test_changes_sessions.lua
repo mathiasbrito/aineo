@@ -534,6 +534,80 @@ T['following a session']['already followed changes nothing: saves held in memory
   expect_lines(FILES, { '* M readme.txt', '* ? new.txt' })
 end
 
+T['following a session']['before the repository is found reads the kept base back once it is'] = function()
+  local top = git_repo.create('changessessions-early-kept', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-early-kept-state')
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  save_in_child(vim.fs.joinpath(top, 'notes.txt'), 'two')
+  expect_lines(FILES, { '* M notes.txt' })
+  local commit = commit_only(top, 'other.txt', 'other', 'Made in the session')
+  git_repo.start_editor(child)
+  begin_and_show(top, { executable = slow_first_look('changessessions-early-kept') })
+
+  follow(SESSION_A, state)
+  eq(child.lua_get('_G.finds_answered'), 0)
+
+  expect_lines(COMMITS, { commit_line(commit, 'Made in the session') })
+  expect_lines(FILES, { '* M notes.txt', '  A other.txt' })
+end
+
+--- An id no file could be named by as it is.
+local SESSION_PATH = '../a/b'
+
+--- The Lua expression giving, in the child, every file under the state
+--- directory `...`, at any depth, each as its permission bits.
+local FILES_UNDER = [[(function(state)
+  local found = {}
+  for name, kind in vim.fs.dir(state, { depth = 10 }) do
+    if kind == 'file' then
+      found[#found + 1] = { mode = vim.uv.fs_stat(vim.fs.joinpath(state, name)).mode % 512 }
+    end
+  end
+  return found
+end)(...)]]
+
+T['following a session']['keeps each session in a file of its own, the user’s alone, whatever its id'] = function()
+  local top = git_repo.create('changessessions-files', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-files-state')
+  begin_and_show(top)
+  wait_for_finds(1)
+
+  follow(SESSION_PATH, state)
+  wait_for_finds(2)
+  follow(SESSION_A, state)
+  wait_for_finds(3)
+
+  eq(child.lua_get(FILES_UNDER, { state }), { { mode = 384 }, { mode = 384 } })
+end
+
+T['following a session']['counts a kept file aineo did not write as nothing kept, and replaces it'] = function()
+  local top = git_repo.create('changessessions-foreign', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-foreign-state')
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  local kept_file = vim.fn.glob(vim.fs.joinpath(state, 'aineo', '*', '*'), false, true)[1]
+  vim.fn.writefile({ '{"top": 1, "saved": "none"}' }, kept_file)
+  commit_line_of(top, 'notes.txt', 'two', 'Before the second editor')
+  git_repo.start_editor(child)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  local commit = commit_line_of(top, 'notes.txt', 'three', 'Made in the second editor')
+  git_repo.start_editor(child)
+  begin_and_show(top)
+  wait_for_finds(1)
+
+  follow(SESSION_A, state)
+
+  expect_lines(COMMITS, { commit_line(commit, 'Made in the second editor') })
+end
+
 T['following a session']['before the session begins is held until it does'] = function()
   local top = git_repo.create('changessessions-before-begin', { ['notes.txt'] = { 'one' } })
   local state = fixture.directory('changessessions-before-begin-state')
