@@ -1762,4 +1762,26 @@ T['a follow refused for another reason']['is told once, and not tried again'] = 
   })
 end
 
+T['a follow refused for another reason']['to a session whose draft cannot be read tells that too'] = function()
+  local state = fixture.directory('draft-sessions-unmodifiable-unreadable')
+  local second = session_draft_file(state, 'session-b')
+  plant_draft(second, 'Kept for the second session\n')
+  vim.uv.fs_chmod(second, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(second, tonumber('600', 8))
+  end)
+  keep_new_buffer(state)
+  child.lua(KEEP_WARNINGS)
+  follow('session-a')
+  set_input({ 'Typed for the first session' })
+  child.lua('vim.bo[_G.input].modifiable = false')
+
+  follow('session-b')
+
+  eq({ shown = input_lines(), reads = child.lua_get(READ_WARNINGS) }, {
+    shown = { 'Typed for the first session' },
+    reads = 1,
+  })
+end
+
 return T
