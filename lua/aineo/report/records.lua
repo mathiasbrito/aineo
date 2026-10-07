@@ -55,19 +55,32 @@ end
 
 --- Moves the records file `from` to `to` when `to` does not exist and
 --- `from` does: `from`'s records are then `to`'s, and `from` is gone. Neither
---- is touched otherwise.
+--- is touched otherwise. The move links `to` to `from` and then removes
+--- `from`; the link refuses an existing `to` at once, so another editor
+--- making `to`, or taking `from`, meanwhile never has its file replaced, and
+--- is no failure. A `from` that cannot be removed once linked is a failure:
+--- its records are then in both files.
 ---
 ---@param from string
 ---@param to string
----@return string? failure why `from` could not be moved, naming both files; nil when it was moved or had not to be
+---@return string? failure why `from` could not be moved, naming both files; nil when it was moved, or when `to` exists or `from` does not
 function M.move_records(from, to)
-  if vim.uv.fs_stat(to) or not vim.uv.fs_stat(from) then
+  local linked, failure, code = vim.uv.fs_link(from, to)
+  if linked then
+    local removed, removal_failure = vim.uv.fs_unlink(from)
+    if not removed then
+      return ('aineo cannot move the report records in %s to %s: they are in both, the first cannot be removed: %s'):format(
+        from,
+        to,
+        removal_failure
+      )
+    end
     return nil
   end
-  local moved, failure = vim.uv.fs_rename(from, to)
-  if not moved then
-    return ('aineo cannot move the report records in %s to %s: %s'):format(from, to, failure)
+  if code == 'EEXIST' or code == 'ENOENT' then
+    return nil
   end
+  return ('aineo cannot move the report records in %s to %s: %s'):format(from, to, failure)
 end
 
 --- The newest lines of `file` that fit in `bytes`, oldest first: whole lines

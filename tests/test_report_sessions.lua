@@ -280,16 +280,72 @@ T['following a session']["shows that session's records when the user edits the R
   eq(report_editor.lines(child), { '09:00 [done] Task — Beta' })
 end
 
+T['following a session']['refuses an id that is not a string, naming it, and keeps the session followed'] =
+  MiniTest.new_set({
+    parametrize = { { 'nil' }, { '{}' }, { '7' } },
+  })
+
+T['following a session']['refuses an id that is not a string, naming it, and keeps the session followed']['as the id'] = function(
+  id
+)
+  local state = fixture.directory('report-sessions-not-an-id')
+  start_editor(state)
+  follow('session-a')
+
+  local refusal = child.lua_get(([[(function()
+    local followed, failure = pcall(require('aineo.report').follow_report_session, %s)
+    return { followed = followed, named = tostring(failure):find('session_id', 1, true) ~= nil }
+  end)()]]):format(id))
+  child.lua(
+    "pcall(require('aineo.report').receive_report, ...)",
+    { { task = 'Task', status = 'done', summary = 'After the refusal' } }
+  )
+
+  eq({
+    refusal = refusal,
+    session = summaries_in(session_records_file(state, 'session-a')),
+    directory = summaries_in(directory_records_file(state)),
+  }, {
+    refusal = { followed = false, named = true },
+    session = { 'After the refusal' },
+    directory = nil,
+  })
+end
+
 T['following a session']['with no records shows an empty Report'] = function()
   local state = fixture.directory('report-sessions-none')
   plant_records(session_records_file(state, 'session-a'), { 'Alpha' })
   start_editor(state)
   follow('session-a')
-  report_editor.lines(child)
+  local before = report_editor.lines(child)
 
   follow('session-new')
 
-  eq(report_editor.lines(child), { '' })
+  eq({ before = before, after = report_editor.lines(child) }, {
+    before = { '09:00 [done] Task — Alpha' },
+    after = { '' },
+  })
+end
+
+T['following a session']['back shows the reports another editor kept for that session meanwhile'] = function()
+  local state = fixture.directory('report-sessions-other-editor')
+  plant_records(session_records_file(state, 'session-a'), { 'Alpha' })
+  start_editor(state)
+  follow('session-a')
+  report_editor.lines(child)
+  follow('session-b')
+  vim.fn.writefile(
+    { record_line('From another editor') },
+    session_records_file(state, 'session-a'),
+    'a'
+  )
+
+  follow('session-a')
+
+  eq(report_editor.lines(child), {
+    '09:00 [done] Task — Alpha',
+    '09:00 [done] Task — From another editor',
+  })
 end
 
 T["the working directory's records"] = MiniTest.new_set()
@@ -357,6 +413,9 @@ T["the working directory's records"]['that cannot be moved are told once, and th
   child.lua(KEEP_WARNINGS)
   local reports = vim.fs.dirname(directory_records_file(state))
   vim.uv.fs_chmod(reports, tonumber('500', 8))
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(reports, tonumber('700', 8))
+  end)
   follow('session-a')
   vim.uv.fs_chmod(reports, tonumber('700', 8))
 
@@ -374,6 +433,92 @@ T["the working directory's records"]['that cannot be moved are told once, and th
     lines = { '10:00 [done] Task — After the move failed' },
     directory = { 'Directory' },
     session = { 'After the move failed' },
+  })
+end
+
+--- The Lua that makes the child's next file move — its first call of
+--- `vim.uv.fs_rename` or `vim.uv.fs_link` — first run
+--- `_G.other_editor(from, to)`, what another editor does at that moment,
+--- and then the call itself.
+local OTHER_EDITOR_FIRST = [[
+  local real = { fs_rename = vim.uv.fs_rename, fs_link = vim.uv.fs_link }
+  for name, call in pairs(real) do
+    vim.uv[name] = function(from, to)
+      vim.uv.fs_rename, vim.uv.fs_link = real.fs_rename, real.fs_link
+      _G.other_editor(from, to)
+      return call(from, to)
+    end
+  end
+]]
+
+T["the working directory's records"]['whose file cannot be removed once linked are told once'] = function()
+  local state = fixture.directory('report-sessions-unremovable')
+  plant_records(directory_records_file(state), { 'Directory' })
+  start_editor(state)
+  child.lua(KEEP_WARNINGS)
+  child.lua([[
+    vim.uv.fs_unlink = function(path)
+      return nil, 'EACCES: permission denied: ' .. path, 'EACCES'
+    end
+  ]])
+
+  follow('session-a')
+
+  eq({
+    moves = child.lua_get(MOVE_WARNINGS),
+    session = summaries_in(session_records_file(state, 'session-a')),
+  }, { moves = 1, session = { 'Directory' } })
+end
+
+T["the working directory's records"]['taken by another editor first are told as no failure'] = function()
+  local state = fixture.directory('report-sessions-race-taken')
+  plant_records(directory_records_file(state), { 'Directory' })
+  start_editor(state)
+  child.lua(KEEP_WARNINGS)
+  child.lua(
+    [[
+      local other = ...
+      _G.other_editor = function(from)
+        assert(vim.uv.fs_rename(from, other))
+      end
+    ]],
+    { session_records_file(state, 'session-other') }
+  )
+  child.lua(OTHER_EDITOR_FIRST)
+
+  follow('session-a')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    other = summaries_in(session_records_file(state, 'session-other')),
+  }, { warnings = {}, other = { 'Directory' } })
+end
+
+T["the working directory's records"]["never replace a session's file another editor made meanwhile"] = function()
+  local state = fixture.directory('report-sessions-race-made')
+  plant_records(directory_records_file(state), { 'Directory' })
+  start_editor(state)
+  child.lua(
+    [[
+      local older_line, other_line = ...
+      _G.other_editor = function(from, to)
+        assert(vim.uv.fs_rename(from, to))
+        vim.fn.writefile({ other_line }, to, 'a')
+        vim.fn.writefile({ older_line }, from)
+      end
+    ]],
+    { record_line('Written by an older aineo'), record_line('Kept by the other editor') }
+  )
+  child.lua(OTHER_EDITOR_FIRST)
+
+  follow('session-a')
+
+  eq({
+    session = summaries_in(session_records_file(state, 'session-a')),
+    directory = summaries_in(directory_records_file(state)),
+  }, {
+    session = { 'Directory', 'Kept by the other editor' },
+    directory = { 'Written by an older aineo' },
   })
 end
 
@@ -447,6 +592,7 @@ T['a follow refused while textlock holds']['keeps a report arriving meanwhile in
   child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
   begin_hold('vim.fn.getcharstr()')
   follow('session-b')
+  local waiting = child.lua_get(RETRIES)
 
   child.lua(
     "pcall(require('aineo.report').receive_report, ...)",
@@ -458,13 +604,48 @@ T['a follow refused while textlock holds']['keeps a report arriving meanwhile in
     return child.lua_get(RETRIES) == 0
   end, 10)
   eq({
+    waiting = waiting,
     lines = report_editor.lines(child),
     first = summaries_in(session_records_file(state, 'session-a')),
     second = summaries_in(session_records_file(state, 'session-b')),
   }, {
+    waiting = 1,
     lines = { '09:00 [done] Task — Beta', '10:00 [done] Task — Meanwhile' },
     first = { 'Alpha' },
     second = { 'Beta', 'Meanwhile' },
+  })
+end
+
+T['a follow refused while textlock holds']["followed twice, shows the last session's records and keeps the next report there"] = function()
+  local state = fixture.directory('report-sessions-textlock-twice')
+  plant_records(session_records_file(state, 'session-a'), { 'Alpha' })
+  plant_records(session_records_file(state, 'session-b'), { 'Beta' })
+  plant_records(session_records_file(state, 'session-c'), { 'Gamma' })
+  start_editor(state)
+  follow('session-a')
+  child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
+  begin_hold('vim.fn.getcharstr()')
+  follow('session-b')
+  follow('session-c')
+  local meanwhile = { lines = report_editor.lines(child), retries = child.lua_get(RETRIES) }
+  end_hold('q')
+
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+  local lines = report_editor.lines(child)
+  receive('After the hold')
+
+  eq({
+    meanwhile = meanwhile,
+    lines = lines,
+    second = summaries_in(session_records_file(state, 'session-b')),
+    third = summaries_in(session_records_file(state, 'session-c')),
+  }, {
+    meanwhile = { lines = { '09:00 [done] Task — Alpha' }, retries = 1 },
+    lines = { '09:00 [done] Task — Gamma' },
+    second = { 'Beta' },
+    third = { 'Gamma', 'After the hold' },
   })
 end
 
