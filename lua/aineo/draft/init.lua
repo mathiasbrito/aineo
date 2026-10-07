@@ -300,6 +300,19 @@ local function give_up_link_taken_meanwhile(from, to)
   end
 end
 
+--- Pins every kept buffer whose text is kept in `from` until its swap lands
+--- (`file_of()`) to `to`, where that text was just moved.
+---
+---@param from string
+---@param to string
+local function pin_moved_text(from, to)
+  for _, watch in pairs(kept) do
+    if watch.file == from then
+      watch.file = to
+    end
+  end
+end
+
 --- Moves the working directory's draft to the followed session the first
 --- time it is called, when the session has no draft and the directory has
 --- one: the directory's draft is then the session's, and its file is gone.
@@ -308,9 +321,12 @@ end
 --- existing file at once, so another editor making the session's draft, or
 --- taking the directory's, meanwhile never has its file replaced, and is no
 --- failure; one that took it between the link and the removal keeps it
---- alone (`give_up_link_taken_meanwhile()`). Tells the user once when the
---- draft could not be moved, or was linked but cannot be removed from the
---- directory's file (`warn_once()`), and raises nothing then.
+--- alone (`give_up_link_taken_meanwhile()`). Once the session's file holds
+--- the text, a kept buffer whose saves went to the directory's file until
+--- its swap lands saves to the session's (`pin_moved_text()`). Tells the
+--- user once when the draft could not be moved, or was linked but cannot be
+--- removed from the directory's file (`warn_once()`), and raises nothing
+--- then.
 local function move_directory_draft_once()
   if directory_draft_moved then
     return
@@ -331,6 +347,7 @@ local function move_directory_draft_once()
     give_up_link_taken_meanwhile(from, to)
     return
   end
+  pin_moved_text(from, to)
   if not removed then
     local why = 'it is in both, the first cannot be removed: ' .. removal_failure
     warn_once('move', not_moved:format(from, to, why))
