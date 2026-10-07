@@ -33,8 +33,9 @@ local CHILD_ENVIRONMENT = { AINEO_CHILD = '1' }
 --- name (`launch()`), whether it started without them, the session id it
 --- follows now (`session_id()`), what its session hooks told that no switch
 --- has paired yet (`follow_switches()`); whether Claude Code is ready for
---- input now and, once its process has ended, the process's exit code.
----@alias aineo.claude.Start { buffer: integer, job: integer, choice: aineo.claude.SessionChoice, settings: aineo.claude.Settings, start_token: string, settings_unread: boolean, followed: string, unpaired: aineo.claude.SessionEvent[], ready: boolean?, exit_code: integer? }
+--- input now and, once its process has ended, the process's exit code and
+--- when it ended, by `vim.uv.hrtime()`.
+---@alias aineo.claude.Start { buffer: integer, job: integer, choice: aineo.claude.SessionChoice, settings: aineo.claude.Settings, start_token: string, settings_unread: boolean, followed: string, unpaired: aineo.claude.SessionEvent[], ready: boolean?, exit_code: integer?, ended_at: number? }
 
 --- The one Claude Code session, once one has started: its last start.
 ---@type aineo.claude.Start?
@@ -288,6 +289,7 @@ local function launch(settings, choice, on_exit)
     env = CHILD_ENVIRONMENT,
     on_exit = function(_, exit_code)
       launched.exit_code = exit_code
+      launched.ended_at = vim.uv.hrtime()
       session_name.forget_name(launched.buffer)
       on_exit(launched)
     end,
@@ -644,9 +646,10 @@ end
 --- not paired yet, it may complete a switch (`follow_switches()`), whatever
 --- order the hooks reach the editor in — each comes from a process of its
 --- own. Anything else does nothing — a hook of another start than the
---- running one, an id of another form than Claude Code's
---- (`session_ids.is_session_id()`), and every hook once Neovim is quitting
---- (`v:exiting` set) among them.
+--- running one, a hook that ran after the running start's process ended
+--- (another process Claude Code started with the start's `--settings`), an
+--- id of another form than Claude Code's (`session_ids.is_session_id()`),
+--- and every hook once Neovim is quitting (`v:exiting` set) among them.
 ---
 ---@param told aineo.claude.SessionEvent
 local function take_session_event(told)
@@ -655,6 +658,7 @@ local function take_session_event(told)
     or not session
     or session.start_token ~= told.start_token
     or not session_ids.is_session_id(told.id)
+    or (session.ended_at and told.ran and told.ran > session.ended_at)
   then
     return
   end
@@ -686,7 +690,10 @@ end
 --- the session followed (`/compact`, the start's own, a `/resume` of it), a
 --- `SessionStart` with no `SessionEnd` of the session followed before it,
 --- and a `SessionEnd`
---- alone (Claude Code's exit) call nothing back. Once a `SessionEnd` of the
+--- alone (Claude Code's exit) call nothing back, nor does a hook that ran
+--- after the start's Claude Code process ended: one of another process
+--- Claude Code started with the same `--settings`, such as a teammate or a
+--- background session. Once a `SessionEnd` of the
 --- session followed is lost, no later switch of that Claude Code is
 --- followed, since each begins with a `SessionEnd` of a session aineo does
 --- not follow.
