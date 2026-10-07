@@ -3,6 +3,7 @@
 --- `claude.cmd --version`; it starts no Claude session, opens no layout and
 --- maps no key.
 
+local claude = require('aineo.claude')
 local config = require('aineo.config')
 
 local M = {}
@@ -217,10 +218,33 @@ local function check_claude_version(command)
   vim.health.ok('claude.cmd --version: ' .. version)
 end
 
+--- Reports, when `command` gives Claude Code a `--settings`, whether aineo
+--- can add its session hooks to them, read from the editor's working
+--- directory as a start of Claude Code reads them
+--- (`aineo.claude`'s `given_settings_verdict()`): a warning naming
+--- why when it cannot.
+---
+---@param command string[] `claude.cmd`
+local function check_claude_settings(command)
+  local verdict = claude.given_settings_verdict(command, vim.fn.getcwd())
+  if verdict == nil then
+    return
+  end
+  if verdict.problem then
+    vim.health.warn(
+      "claude.cmd's --settings cannot take aineo's session hooks: " .. verdict.problem,
+      "Claude Code starts with them as they are, without aineo's hooks, so a session switch inside it is not followed: :help aineo-config-claude.cmd"
+    )
+    return
+  end
+  vim.health.ok("claude.cmd's --settings takes aineo's session hooks")
+end
+
 --- Reports on the command that runs Claude Code, `claude.cmd`: an error when
 --- its first word is not executable (`executable()`), in the words the
 --- Claude session uses when it refuses to start; else the version it prints
---- (`check_claude_version()`).
+--- (`check_claude_version()`) and what becomes of a `--settings` it gives
+--- (`check_claude_settings()`).
 ---
 ---@param command string[] `claude.cmd`
 local function check_claude_command(command)
@@ -233,6 +257,7 @@ local function check_claude_command(command)
     return
   end
   check_claude_version(command)
+  check_claude_settings(command)
 end
 
 --- Reports on the Claude Code `resolved_config`'s `claude.cmd` runs, and the version
