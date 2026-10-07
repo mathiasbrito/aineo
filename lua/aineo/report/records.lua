@@ -36,6 +36,40 @@ function M.records_file(state_directory, working_directory)
   )
 end
 
+--- The file that holds the records of the reports kept for the Claude
+--- session `session_id`: one per session, named `session-` and the id's
+--- SHA-256, so that any id makes a valid file name, and none the name of a
+--- working directory's file (`records_file()`).
+---
+---@param state_directory string
+---@param session_id string
+---@return string
+function M.session_records_file(state_directory, session_id)
+  return vim.fs.joinpath(
+    state_directory,
+    'aineo',
+    'reports',
+    'session-' .. vim.fn.sha256(session_id) .. '.jsonl'
+  )
+end
+
+--- Moves the records file `from` to `to` when `to` does not exist and
+--- `from` does: `from`'s records are then `to`'s, and `from` is gone. Neither
+--- is touched otherwise.
+---
+---@param from string
+---@param to string
+---@return string? failure why `from` could not be moved, naming both files; nil when it was moved or had not to be
+function M.move_records(from, to)
+  if vim.uv.fs_stat(to) or not vim.uv.fs_stat(from) then
+    return nil
+  end
+  local moved, failure = vim.uv.fs_rename(from, to)
+  if not moved then
+    return ('aineo cannot move the report records in %s to %s: %s'):format(from, to, failure)
+  end
+end
+
 --- The newest lines of `file` that fit in `bytes`, oldest first: whole lines
 --- only, from the first line that starts within its last `bytes` bytes.
 ---
