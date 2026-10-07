@@ -29,7 +29,9 @@ local followed_session
 --- the first session it followed (`move_directory_records_once()`).
 local directory_records_moved = false
 
---- The Report buffer and the records file it shows, once it is created.
+--- The Report buffer, once it is created, and the records file reports are
+--- kept in, which it shows once a swap that waits for `SafeState` lands
+--- (`show_followed_records()`).
 ---@type { buffer: integer, records_file: string }?
 local report_view
 
@@ -404,16 +406,19 @@ end
 ---
 --- The first session the home follows in an editor takes the working
 --- directory's records, when that session has none (`records.move_records()`):
---- they become its own, and the directory's file is gone. A later follow
---- moves nothing. A move that fails is told to the user, and the session's
---- own file is used.
+--- they become its own, and the directory's file is gone. A later follow in
+--- that editor moves nothing. A move that fails is told to the user, and
+--- the session's own file is used.
 ---
 --- A session told before `set_report_environment()` is held: the
 --- environment, once given, moves the directory's records to it, and the
 --- Report, once created, shows its records.
 ---
+--- Raises an error naming `session_id` when it is not a string.
+---
 ---@param session_id string
 function M.follow_report_session(session_id)
+  vim.validate('session_id', session_id, 'string')
   if session_id == followed_session then
     return
   end
