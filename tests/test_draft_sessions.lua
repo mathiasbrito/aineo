@@ -948,6 +948,22 @@ T['a draft that cannot be read']['empties Input at a follow, which keeps no late
   })
 end
 
+T['a draft that cannot be read']['of the working directory, before any follow, is replaced by the first change'] = function()
+  local state = fixture.directory('draft-sessions-unreadable-directory')
+  local directory = directory_draft_file(state)
+  plant_draft(directory, 'From the directory\n')
+  vim.uv.fs_chmod(directory, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(directory, tonumber('600', 8))
+  end)
+  child.lua(KEEP_WARNINGS)
+  keep_new_buffer(state)
+
+  set_input({ 'Typed before any session' })
+
+  eq(wait_for_text(directory, 'Typed before any session\n'), 'Typed before any session\n')
+end
+
 T['a draft that cannot be read']['is told at each follow to its session'] = function()
   local state = fixture.directory('draft-sessions-unreadable-each-follow')
   local second = session_draft_file(state, 'session-b')
@@ -1287,6 +1303,31 @@ T['a session switch when the draft cannot be saved']['saves the text whose delay
   }, {
     shown = { 'Kept for the second session' },
     first = 'Notes for the first session\n',
+  })
+end
+
+T['a session switch when the draft cannot be saved']['saves an emptying of Input whose save failed once the disk is freed before the switch'] = function()
+  local state = fixture.directory('draft-sessions-emptying-freed')
+  plant_draft(session_draft_file(state, 'session-b'), 'Kept for the second session\n')
+  child.lua(KEEP_WARNINGS)
+  child.lua(WRITES_THAT_FAIL)
+  child.lua('_G.full = false')
+  keep_new_buffer(state)
+  follow('session-a')
+  set_input({ 'Notes for the first session' })
+  wait_for_text(session_draft_file(state, 'session-a'), 'Notes for the first session\n')
+  child.lua('_G.full = true')
+  set_input({ '' })
+  child.lua('_G.full = false')
+
+  follow('session-b')
+
+  eq({
+    shown = input_lines(),
+    first = read_text(session_draft_file(state, 'session-a')),
+  }, {
+    shown = { 'Kept for the second session' },
+    first = '',
   })
 end
 
