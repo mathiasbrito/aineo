@@ -82,11 +82,22 @@ end
 
 --- The codes, as libuv gives them, of a hard link the file system refuses:
 --- it has none (exFAT, FAT, some network and FUSE mounts), the file is on
---- another device (a symbolic link leading there), or it has too many.
+--- another device, or it has too many.
 local LINK_REFUSALS = { ENOTSUP = true, EPERM = true, EXDEV = true, EMLINK = true, ENOSYS = true }
 
+--- Whether the file at `path` is a symbolic link: a hard link to it would
+--- name the file it leads to, not the link.
+---
+---@param path string
+---@return boolean
+local function is_symbolic_link(path)
+  local file = vim.uv.fs_lstat(path)
+  return file ~= nil and file.type == 'link'
+end
+
 --- Moves the records file `from` to `to` by renaming it, where hard links
---- are refused (`LINK_REFUSALS`), when `to` does not exist and `from` does;
+--- are refused (`LINK_REFUSALS`) or `from` is a symbolic link
+--- (`is_symbolic_link()`), when `to` does not exist and `from` does;
 --- neither is touched otherwise. `to` is looked for first and then
 --- `from` renamed, so another editor making `to` between the two has its
 --- file replaced.
@@ -115,12 +126,17 @@ end
 --- sessions never share one file, and the records are the other editor's
 --- session's. A `from` that cannot be removed once linked is a failure: its
 --- records are then in both files. Where the file system refuses the link
---- (`LINK_REFUSALS`), `from` is renamed instead (`move_records_by_rename()`).
+--- (`LINK_REFUSALS`), or `from` is a symbolic link (`is_symbolic_link()`),
+--- which then stays one, `from` is renamed instead
+--- (`move_records_by_rename()`).
 ---
 ---@param from string
 ---@param to string
 ---@return string? failure why `from` could not be moved, naming both files; nil when it was moved, or when `to` exists or `from` does not
 function M.move_records(from, to)
+  if is_symbolic_link(from) then
+    return move_records_by_rename(from, to)
+  end
   local linked, failure, code = vim.uv.fs_link(from, to)
   if LINK_REFUSALS[code] then
     return move_records_by_rename(from, to)
