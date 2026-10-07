@@ -3,6 +3,7 @@
 
 local arguments = require('aineo.claude.arguments')
 local readiness = require('aineo.claude.readiness')
+local session_name = require('aineo.claude.session_name')
 local session_ids = require('aineo.claude.session_ids')
 local stop = require('aineo.claude.stop')
 
@@ -226,8 +227,9 @@ end
 --- Runs Claude Code with `settings` on the session `choice` names, in a new
 --- terminal buffer, and returns the session that tracks it: its buffer and
 --- job, the session it is on, whether it is ready, and its exit code once it
---- has exited. `on_exit` is called with that session once its process has
---- ended.
+--- has exited. Once its process has ended, its terminal's session name is
+--- `Claude Code` again (`session_name.forget_name()`), and `on_exit` is
+--- called with that session.
 ---
 ---@param settings aineo.claude.Settings
 ---@param choice aineo.claude.SessionChoice
@@ -239,6 +241,7 @@ local function launch(settings, choice, on_exit)
   vim.list_extend(command, session_arguments(choice))
   vim.list_extend(command, arguments.claude_arguments(settings))
   local launched = { buffer = vim.api.nvim_create_buf(false, true), choice = choice }
+  session_name.keep_name_and_folder(launched.buffer, settings.cwd)
   readiness.watch(launched.buffer, function(ready)
     launched.ready = ready
   end)
@@ -248,6 +251,7 @@ local function launch(settings, choice, on_exit)
     env = CHILD_ENVIRONMENT,
     on_exit = function(_, exit_code)
       launched.exit_code = exit_code
+      session_name.forget_name(launched.buffer)
       on_exit(launched)
     end,
   })
@@ -396,6 +400,11 @@ end
 --- about 50 ms after it starts in Neovim 0.12.5, though a size it reads as it
 --- starts can still be 5 rows.
 ---
+--- Each terminal keeps the session's name and the directory it started in
+--- as `b:aineo_session_name` and `b:aineo_session_folder`, which
+--- `session_statusline()` draws; the name is `Claude Code` again once Claude
+--- Code has exited, however it ended.
+---
 --- A session whose terminal has been wiped counts as ended, since the wipe
 --- hangs its Claude Code up: a start then launches a new one.
 ---
@@ -440,6 +449,40 @@ function M.session_status()
     return 'ready'
   end
   return 'starting'
+end
+
+--- The `'statusline'` `session_statusline()` returns: an expression whose
+--- result Neovim draws, so that the text it holds is never read as items.
+local SESSION_STATUSLINE = "%!v:lua.require'aineo.claude'.session_statusline_format()"
+
+--- A `'statusline'` that draws, for a window showing the session's terminal,
+--- the session's name, then the folder Claude Code started in:
+--- `<name> — <folder>`, read from the terminal's `b:aineo_session_name` and
+--- `b:aineo_session_folder`. The name is Claude Code's own for the session,
+--- taken from its terminal title without the status glyph before it, and
+--- `Claude Code` while the title gives none — before Claude Code sets one,
+--- when it sets an empty one, and whenever it sets none at all — and once
+--- Claude Code has exited, however it ended; every status line is drawn
+--- again when the name changes. The folder is the directory of the start,
+--- written from the home directory. Both draw as written, a `%`, digits
+--- alone, a leading comma or space among them, since the status line is an
+--- expression Neovim evaluates as it draws (`session_statusline_format()`);
+--- a control character draws in caret notation, as `^[` for Escape, and a
+--- name longer than about 4 KB loses its start.
+---
+---@return string
+function M.session_statusline()
+  return SESSION_STATUSLINE
+end
+
+--- The status line format `session_statusline()` draws for the window
+--- Neovim is drawing it for, `g:statusline_winid`: the name and the folder
+--- of the terminal that window shows, as written. Neovim calls it as it
+--- draws; a `'statusline'` expression reaches it through this entry point.
+---
+---@return string
+function M.session_statusline_format()
+  return session_name.statusline_format(vim.g.statusline_winid)
 end
 
 --- Writes `bytes` to the terminal Claude Code runs in, unchanged and in one

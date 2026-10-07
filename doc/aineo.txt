@@ -82,6 +82,8 @@ show one pane at a time, here the agent pane:
 
 The Report and Input wrap long lines between words, a wrapped line keeping
 its indent ('wrap', 'linebreak', 'breakindent'), whatever your own settings.
+In the Report a wrapped line continues under the `[` of its `[status]`, or
+under an item's text (|aineo-report|).
 Opening or restoring the layout sets this again: `\o`, or `\r`, `\i` or `\c`
 when their window is gone, and so does `\pa`, `\r` or `\i` showing the agent
 pane again. A `:setlocal nowrap` in either lasts until then. Claude's
@@ -203,6 +205,56 @@ the base stays. A read that fails keeps the list shown, under one line
 giving git's words. When aineo's watch of the repository fails, both
 windows say so until the pane is shown again, which starts it again.
 
+Colours ~
+A file's letter and path, a rename's `old → new` whole, show in the group of
+its kind, and the `*` of a file you saved in |hl-AineoChangesSaved|; the
+blank before a file you did not save has no colour. The space between a
+file's letter and its path is in the group of its kind too, so a background
+you give that group runs unbroken from the letter to the end of the line. A
+commit's abbreviated id shows in |hl-AineoChangesCommitId|, and its subject in
+|hl-AineoChangesCommitSubject|, which is empty: the subject shows in the
+colours of its window, dimmed with it where a colour scheme dims a window
+not current (|hl-NormalNC|), until you colour the group. A line that lists
+nothing shows whole in |hl-AineoChangesNote|: aineo reading the repository,
+no file changed, no commit, subdirectories not watched, the base no longer
+behind `HEAD`, no repository and git's words. A line that tells a failure,
+a refresh that failed or `git` not found, shows whole in
+|hl-AineoChangesFailure|. The colours follow every list written: a refresh,
+a save, a commit, `:edit` in the pane, a buffer of the pane made anew.
+Each group links to one of Neovim's own, the subject's excepted, unless a
+colour scheme or a `:highlight` of your own colours it.
+After `:colorscheme` or `:highlight clear`, a group nothing colours any more
+has its default again, its link or the subject's empty group, with one
+exception: a group given a default link of its own (`:highlight default
+link`, as some colour schemes do) before aineo first defined it goes back to
+that link, until the pane writes a list again. aineo defines the groups
+when the pane writes its first list, and again at every list it writes.
+
+                                                        *hl-AineoChangesAdded*
+AineoChangesAdded        an added file, linked to `Added`
+                                                    *hl-AineoChangesUntracked*
+AineoChangesUntracked    a new file git does not track, linked to `Added`
+                                                     *hl-AineoChangesModified*
+AineoChangesModified     a modified file, linked to `Changed`
+                                                      *hl-AineoChangesRenamed*
+AineoChangesRenamed      a renamed file, linked to `Changed`
+                                                  *hl-AineoChangesTypeChanged*
+AineoChangesTypeChanged  a file turned into a link or back, linked to
+                         `Changed`
+                                                      *hl-AineoChangesDeleted*
+AineoChangesDeleted      a deleted file, linked to `Removed`
+                                                        *hl-AineoChangesSaved*
+AineoChangesSaved        the `*` of a file you saved, linked to `WarningMsg`
+                                                     *hl-AineoChangesCommitId*
+AineoChangesCommitId     a commit's abbreviated id, linked to `Identifier`
+                                                *hl-AineoChangesCommitSubject*
+AineoChangesCommitSubject  a commit's subject, empty
+                                                         *hl-AineoChangesNote*
+AineoChangesNote         a line that lists nothing, linked to `Comment`
+                                                      *hl-AineoChangesFailure*
+AineoChangesFailure      a line that tells a failure, linked to
+                         `DiagnosticWarn`
+
 The file column ~
 A file you open from one of the three windows — `:edit`, a picker, a jump —
 moves to a column between Claude's and the right column, created on first
@@ -240,6 +292,32 @@ resume that fails some other way — a Claude Code that words the message
 otherwise, or exits with another code — then fails the same way at each
 start there: removing `aineo/claude-sessions/` under `stdpath('state')`
 makes every directory start a new session.
+
+                               *b:aineo_session_name* *b:aineo_session_folder*
+Claude's window draws a status line of its own for Claude's terminal: the
+session's name, then the folder Claude Code started in, written from your
+home directory, as in `Claude Code — ~/projects/app`. The name is Claude
+Code's own for the session, as Claude Code writes it in its terminal title
+(`b:term_title`), without the status glyph before it, such as `✳`: Claude
+Code 2.1.292 titles a session `✳ Claude Code`, and one started with
+`--name {name}` `✳ {name}`. It reads `Claude Code` until Claude Code sets
+a title, while the title is empty, and once Claude Code has exited,
+however it ended; the status line follows each new title by itself. The
+name and the folder are drawn as written, a `%`, digits alone, a leading
+comma or space among them; a control character shows in caret notation,
+as `^[` for Escape, and a name longer than about 4 KB loses its start.
+The folder is the directory Claude Code started in, whatever `:cd` and
+`\o` do while it runs; a Claude Code `\o` starts once the last has exited
+starts in the working directory then, and the folder is that one. The
+status line is set for Claude's terminal as `:setlocal` sets it: Claude's
+window draws it, and so does a window split from it or any window you show
+Claude's terminal in; another buffer in those windows, and your other
+windows, keep your own. It replaces the whole of Neovim's default status
+line there, the terminal's `term://` name, its ruler and its exit code
+with it; the terminal keeps its name, which `:ls!` shows, since it is not
+a listed buffer. For a status-line plugin, the name and the folder are
+kept, current, on Claude's terminal as `b:aineo_session_name` and
+`b:aineo_session_folder`. See |aineo-limits| for what can replace it.
 
 aineo resumes the session it started, not one you switch to inside Claude
 Code (`/clear`, `/resume`), and ignores a conversation you ran in a plain
@@ -616,10 +694,23 @@ A report holds a `task`, a `status` — `started`, `progress`, `blocked`,
 `done` or `failed` — a one-line `summary` and, optionally, `details`. The
 Agent Report shows each as: >
     HH:MM [status] task — summary
-          details, indented under the status
+          - each line of the details,
+          - an item of a list under the status
 <
-A line break in the task or the summary becomes a space. The Report follows
-the newest report.
+A line break in the task or the summary becomes a space. Each line of the
+details is an item, `- ` and its text; a line Claude wrote as an item, after
+`- `, `* `, `+ ` or `• `, shows aineo's `- ` in place of its own, and a line
+that is empty, white space alone or a marker alone shows as an empty line.
+The Report follows the newest report.
+
+A long line wraps between words: a wrapped first line continues under the
+`[` of its `[status]`, and a wrapped item under its text, not under its `-`.
+A Report narrower than 18 columns continues a wrapped line further left, to
+keep 10 columns of text ('breakindentopt'), and your own 'showbreak' moves
+where it continues by its width. Each window showing the Report gets
+'breakindentopt' `list:-1,min:10` for the Report alone, as |:setlocal| sets
+it, each time it shows the Report; where you turn 'breakindent' or 'wrap'
+off, a long line continues as Neovim draws it.
 
 The instructions ask Claude to write each report for a person, in plain
 language: what was done or planned, and how, never the reasons for its
@@ -928,5 +1019,23 @@ The changes pane ~
   diff Enter read for that name arrives then, Neovim shows an error with a
   stack trace, the diff is not shown, and aineo does not try again. Enter
   on the line again shows it, the other buffer giving its name up.
+
+Claude's window name ~
+- A status-line plugin that sets the status line of every window replaces
+  aineo's in Claude's window; lualine does with its default configuration,
+  within a second. Such a plugin can show `b:aineo_session_name` and
+  `b:aineo_session_folder` of Claude's terminal (|aineo-claude-session|).
+- With 'laststatus' set to 3, the one status line shows Claude's name and
+  folder only while the cursor is in Claude's window.
+- With `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` set to `1` in the environment
+  Neovim started in, Claude Code sets no title, and Claude's window reads
+  `Claude Code` for the whole session.
+- Not measured, and so not known to show: a title Claude Code generates
+  from your first prompt, a name `/rename` gives, the title after
+  `--resume`, and the glyph while Claude Code is busy. A glyph is left out
+  when the title's first character is neither a letter nor a digit and a
+  space or nothing follows it: a title `✳` alone reads `Claude Code`.
+  Below U+0100 the letters are the ASCII and Latin-1 ones, `×` and `÷`
+  not among them, whatever 'iskeyword' holds.
 
  vim:tw=78:ts=8:ft=help:norl:

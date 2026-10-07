@@ -15,6 +15,7 @@ local M = {}
 ---@field report integer the Report buffer
 ---@field report_height number the Report's share of the right column's height, strictly between 0 and 1
 ---@field changes? aineo.layout.ChangesPane the changes pane's buffers; without them the layout keeps those it was handed last
+---@field claude_statusline? string the 'statusline' Claude's window draws for Claude's terminal; without it the layout keeps the one it was handed last, and before any, Claude's window draws the user's own
 
 ---@class aineo.layout.ChangesPane
 ---@field files integer the buffer the changes pane shows in the Report's window
@@ -39,7 +40,9 @@ local M = {}
 --- terminal once Neovim has seen its process end, the line numbers
 --- `M.toggle_claude_numbers()` last set in Claude's window, those it showed
 --- before it hid them, and the window and buffer those line numbers were
---- last shown for; and the diffs `M.show_diff()` showed, by buffer.
+--- last shown for; the status line Claude's window draws for Claude's
+--- terminal, the one handed last; and the diffs `M.show_diff()` showed, by
+--- buffer.
 local state = {
   ---@type table<aineo.layout.Role, integer>
   windows = {},
@@ -61,6 +64,8 @@ local state = {
   claude_numbers_before_hiding = nil,
   ---@type { window: integer, buffer: integer }|nil
   claude_numbers_shown_in = nil,
+  ---@type string|nil
+  claude_statusline = nil,
   ---@type table<integer, true>
   diffs = {},
 }
@@ -337,14 +342,30 @@ local function keep_claude_numbers()
   end
 end
 
---- Keeps Claude's line numbers (`keep_claude_numbers()`) when Claude's
---- terminal enters a window, as it does when the user brings it back into
---- Claude's window by hand.
+--- Makes Claude's window draw, for Claude's terminal, the status line the
+--- layout was handed last, as `:setlocal` sets it: another buffer shown
+--- later in that window, or in a window split from it, draws the user's
+--- own. Does nothing before one was handed, or while Claude's window shows
+--- another buffer.
+local function keep_claude_statusline()
+  if
+    state.claude_statusline
+    and has_window('claude')
+    and vim.api.nvim_win_get_buf(state.windows.claude) == state.buffers.claude
+  then
+    vim.wo[state.windows.claude][0].statusline = state.claude_statusline
+  end
+end
+
+--- Keeps Claude's line numbers (`keep_claude_numbers()`) and status line
+--- (`keep_claude_statusline()`) when Claude's terminal enters a window, as
+--- it does when the user brings it back into Claude's window by hand.
 ---
 ---@param event { buf: integer }
-local function keep_claude_numbers_on_entry(event)
+local function keep_claude_window_on_entry(event)
   if event.buf == state.buffers.claude then
     keep_claude_numbers()
+    keep_claude_statusline()
   end
 end
 
@@ -817,8 +838,8 @@ end
 --- (`leave_terminal_mode_as_claude_exits()`, `remember_claude_exit()`,
 --- `refuse_terminal_mode_once_claude_exited()`) and closes Claude's window
 --- when its terminal is wiped there (`close_claude_window_when_wiped()`);
---- keeps Claude's line numbers as Claude's terminal enters a window
---- (`keep_claude_numbers_on_entry()`); and puts the proportions back
+--- keeps Claude's line numbers and status line as Claude's terminal enters
+--- a window (`keep_claude_window_on_entry()`); and puts the proportions back
 --- whenever a window closes, the editor is resized or a tab is entered,
 --- replacing what an earlier call set up.
 --- Input is made a scratch buffer first, so the redirect never takes it for
@@ -831,7 +852,7 @@ local function watch_windows()
   vim.api.nvim_create_autocmd('BufWinEnter', { group = group, callback = redirect_when_file })
   vim.api.nvim_create_autocmd(
     'BufWinEnter',
-    { group = group, callback = keep_claude_numbers_on_entry }
+    { group = group, callback = keep_claude_window_on_entry }
   )
   vim.api.nvim_create_autocmd('WinClosed', {
     group = group,
@@ -856,17 +877,20 @@ local function watch_windows()
   })
 end
 
---- Takes the buffers `arrangement` hands as the layout's own: Claude's
---- terminal, the Report and, when it hands them, the changes pane's.
+--- Takes what `arrangement` hands as the layout's own: Claude's terminal,
+--- the Report and, when it hands them, the changes pane's buffers and the
+--- status line of Claude's window; the changes pane's and the status line
+--- handed last are kept when it hands none.
 ---
 ---@param arrangement aineo.layout.Arrangement
-local function take_buffers(arrangement)
+local function take_arrangement(arrangement)
   state.buffers.claude = arrangement.claude
   state.buffers.report = arrangement.report
   if arrangement.changes then
     state.buffers.files = arrangement.changes.files
     state.buffers.commits = arrangement.changes.commits
   end
+  state.claude_statusline = arrangement.claude_statusline or state.claude_statusline
 end
 
 --- Whether `value` is the number of an existing buffer.
@@ -901,6 +925,7 @@ local function validate_arrangement(arrangement)
     'a number strictly between 0 and 1'
   )
   vim.validate('arrangement.changes', arrangement.changes, 'table', true)
+  vim.validate('arrangement.claude_statusline', arrangement.claude_statusline, 'string', true)
   if arrangement.changes then
     vim.validate(
       'arrangement.changes.files',
@@ -1129,7 +1154,13 @@ end
 --- line numbers, Claude's window shows them for a Claude terminal new to
 --- it, and when the window itself is new (`keep_claude_numbers()`); line
 --- numbers the user set by hand for the same terminal in the same window
---- stay as they are.
+--- stay as they are. Claude's window draws, for Claude's terminal, the
+--- `claude_statusline` handed last, as `:setlocal` sets it, whenever that
+--- terminal shows there — opened, followed (`M.follow_claude_terminal()`)
+--- or brought back by hand (`keep_claude_statusline()`); a window split
+--- from it, or any window Claude's terminal is shown in, draws it too, as
+--- window-local options go with a buffer; another buffer shown in those
+--- windows, and every other window, draw the user's own.
 ---
 --- While any of the three windows exists, opening again restores the layout
 --- instead, in the tab that holds it: it creates only the windows that were
@@ -1166,12 +1197,12 @@ end
 --- `arrangement` is not a table, `claude` or `report` is not an existing
 --- buffer, `report_height` is not a number strictly between 0 and 1, or
 --- `changes`, when given, is not a table whose `files` and `commits` are
---- existing buffers.
+--- existing buffers, or `claude_statusline`, when given, is not a string.
 ---
 ---@param arrangement aineo.layout.Arrangement
 function M.open(arrangement)
   validate_arrangement(arrangement)
-  take_buffers(arrangement)
+  take_arrangement(arrangement)
   if has_any_window() then
     vim.api.nvim_set_current_tabpage(layout_tab())
     if not has_input() then
@@ -1187,6 +1218,7 @@ function M.open(arrangement)
   wrap_agent_pane()
   follow_reports_shown_again()
   keep_claude_numbers()
+  keep_claude_statusline()
   apply_proportions()
   watch_windows()
 end
@@ -1350,8 +1382,9 @@ end
 --- once it has, its window closed once it is wiped — then applies to
 --- `terminal`. It shows `terminal` in no window itself; Claude's window,
 --- when it shows `terminal` already, shows the line numbers
---- `M.toggle_claude_numbers()` last set (`keep_claude_numbers()`), and so
---- does it when `terminal` enters it later.
+--- `M.toggle_claude_numbers()` last set (`keep_claude_numbers()`) and the
+--- status line `M.open()` was handed last (`keep_claude_statusline()`), and
+--- so does it when `terminal` enters it later.
 ---
 --- Raises an error naming `terminal` when it is not an existing buffer.
 ---
@@ -1360,6 +1393,7 @@ function M.follow_claude_terminal(terminal)
   vim.validate('terminal', terminal, is_buffer, false, 'a buffer')
   state.buffers.claude = terminal
   keep_claude_numbers()
+  keep_claude_statusline()
 end
 
 --- What `M.toggle_claude_numbers()` tells the user when the layout has no

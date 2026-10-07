@@ -263,7 +263,8 @@ end
 --- terminal, the Report, taken from the report home, which this gives its
 --- environment the first time it is called (`give_report_environment()`),
 --- and the changes pane's (`changes_pane()`); with the Report's share from
---- `config`.
+--- `config`, and the status line of Claude's window, which draws the
+--- session's name and folder (`aineo.claude`'s `session_statusline()`).
 ---
 ---@param config table the resolved configuration
 ---@param claude_buffer integer
@@ -275,6 +276,7 @@ local function arrangement(config, claude_buffer)
     report = require('aineo.report').report_buffer(),
     report_height = config.layout.report_height,
     changes = changes_pane(),
+    claude_statusline = require('aineo.claude').session_statusline(),
   }
 end
 
