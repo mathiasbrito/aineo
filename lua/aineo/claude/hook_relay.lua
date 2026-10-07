@@ -12,15 +12,20 @@
 --- writes nothing on stdout or stderr.
 ---
 --- As the deliverer — `-l <this file> --deliver <editor address> <start
---- token> <event> <session id> <source or reason>` — it sends the editor one
---- RPC notification calling `require('aineo.claude').receive_session_event
---- (event, session id, source or reason, start token)` there, then waits for
---- the editor's answer to a request sent behind it on the same connection
---- before it closes it, and exits: Neovim 0.12.5 drops a notification whose
---- connection was closed before it handled it when it has another channel's
---- message to handle first, as it has when its user leaves a hit-enter
---- prompt. It ends at once when the editor cannot be reached, and when the
---- editor ends while it waits.
+--- token> <event> <session id> <source or reason> <hook time>`, the hook time
+--- being `vim.uv.hrtime()` as the hook began, a monotonic clock every process
+--- on the host shares, by which the editor tells the order the hooks ran in
+--- whatever order their deliverers reach it — it sends the editor one RPC
+--- notification calling `require('aineo.claude').receive_session_event
+--- (event, session id, source or reason, start token, hook time)` there,
+--- then waits for the editor's answer to a request sent behind it on the
+--- same connection before it closes it, and exits. Neovim 0.12.5 drops an
+--- RPC notification whose sender closed the connection before the editor
+--- ran it, when the editor could not run it at once — busy, or at a
+--- hit-enter prompt — and a channel connected earlier has a message waiting
+--- too, as the TUI's keys have when its user leaves the prompt. It ends at
+--- once when the editor cannot be reached, and when the editor ends while
+--- it waits.
 ---
 --- It runs only when it is the script `-l` runs (`arg[0]`, `:h lua-args`):
 --- loaded inside an editor, by `require` or `dofile`, it does nothing.
@@ -43,9 +48,9 @@ local CAUSE_FIELDS = { SessionStart = 'source', SessionEnd = 'reason' }
 local RECEIVE_SESSION_EVENT = "require('aineo.claude').receive_session_event(...)"
 
 --- The Lua of the request whose answer tells the deliverer that the editor
---- has handled its notification: the editor answers its requests and
---- notifications on one connection in order, and runs Lua only once it is
---- free, so it answers this one after the notification.
+--- has handled its notification: the editor handles the requests and
+--- notifications of one connection in order, and runs Lua only once it is
+--- free, so it answers this request once it has handled the notification.
 local CONFIRMATION = 'return 0'
 
 --- The hook's input, read from stdin, when it is a JSON object with a string
@@ -59,16 +64,19 @@ local function hook_input()
   end
 end
 
---- Starts this file as the deliverer of `event` for the editor at `address`,
+--- One run of the hook: its event, its input (`hook_input()`), and when it
+--- began, by `vim.uv.hrtime()`.
+---@alias aineo.claude.HookRun { event: string, input: table, ran: number }
+
+--- Starts this file as the deliverer of `hook` for the editor at `address`,
 --- detached in a session of its own with no standard stream, so that the
 --- hook ends without waiting for it and Claude Code reads no output of its.
 ---
 ---@param address string
 ---@param start_token string
----@param event string
----@param input table the hook's input (`hook_input()`)
-local function start_deliverer(address, start_token, event, input)
-  local cause = input[CAUSE_FIELDS[event]]
+---@param hook aineo.claude.HookRun
+local function start_deliverer(address, start_token, hook)
+  local cause = hook.input[CAUSE_FIELDS[hook.event]]
   local deliverer = vim.uv.spawn(vim.v.progpath, {
     args = {
       '--headless',
@@ -80,9 +88,10 @@ local function start_deliverer(address, start_token, event, input)
       DELIVER,
       address,
       start_token,
-      event,
-      input.session_id,
+      hook.event,
+      hook.input.session_id,
       type(cause) == 'string' and cause or '',
+      ('%.0f'):format(hook.ran),
     },
     detached = true,
   }, function() end)
@@ -108,15 +117,22 @@ local function deliver(address, event_arguments)
 end
 
 if arg[1] == DELIVER then
-  local address, start_token, event, session_id, cause = unpack(arg, 2, 6)
+  local address, start_token, event, session_id, cause, ran = unpack(arg, 2, 7)
   -- An editor that cannot be reached, or ends before it answers, has nothing
   -- more to be told: the deliverer ends as quietly as when it has told it.
-  pcall(deliver, address, { event, session_id, cause ~= '' and cause or vim.NIL, start_token })
+  pcall(deliver, address, {
+    event,
+    session_id,
+    cause ~= '' and cause or vim.NIL,
+    start_token,
+    tonumber(ran) or vim.NIL,
+  })
   return
 end
 
 local address, start_token, event = arg[1], arg[2], arg[3]
+local ran = vim.uv.hrtime()
 local input = hook_input()
 if input then
-  start_deliverer(address, start_token, event, input)
+  start_deliverer(address, start_token, { event = event, input = input, ran = ran })
 end
