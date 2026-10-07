@@ -138,13 +138,17 @@ with it, and so does the layout opened anew once its windows were closed.
 
 The changes pane ~
                                                                *aineo-changes*
-The changes pane lists what changed in your repository since aineo first
-started Claude Code in this editor: the session, which lasts the editor's
-life. Its repository is the one Claude Code's working directory was in at
-that start, and its base is the commit `HEAD` named then. A restart of
-Claude Code keeps both. A start aineo could not make — `claude.cmd` not
-executable, say — takes neither; a Claude Code that starts and then fails
-takes both.
+The changes pane lists what changed in your repository since the base of
+the Claude Code session it shows. Its repository is the one Claude Code's
+working directory was in when aineo first started Claude Code in this
+editor, for the editor's life. A session aineo has not seen takes as its
+base the commit `HEAD` names when Claude Code starts on it or switches to
+it. aineo keeps each session's base, and the files you save while it shows
+that session, under `stdpath('state')`: a restart of Claude Code or of the
+editor, or a switch back to an earlier session, shows that session's base
+and saves again. A start aineo could not make — `claude.cmd` not
+executable, say — takes no base; a Claude Code that starts and then fails
+takes one.
 
 The files window, `aineo://changes-files`, lists every file that differs
 from the base, committed since or not, staged or not, and every new file
@@ -1135,7 +1139,11 @@ The changes pane ~
   commits window lists every commit reachable from `HEAD` and not from the
   base.
 - A restart of Claude Code in another working directory keeps the first
-  repository and its base.
+  repository. A session whose base was kept for another repository takes
+  `HEAD` as its base here, and the files you save then are marked while
+  this editor shows it, never kept: what was kept for the other repository
+  stays as it was. A kept base git no longer has, garbage-collected say,
+  is kept, and the pane says in git's words that it cannot be read.
 - Where aineo cannot watch the working tree's subdirectories (Linux), the
   files window says so first: a change in a subdirectory shows at the next
   showing of the pane, save or commit, and a branch moved by

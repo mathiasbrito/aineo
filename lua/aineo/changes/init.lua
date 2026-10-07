@@ -1,10 +1,13 @@
 --- The changes pane's content, `require('aineo.changes')`: the session's
 --- base, its files changed since — the user's saves marked — and its
 --- commits, each listed in a buffer of the pane, and read again as the
---- repository changes once the pane has been shown.
+--- repository changes once the pane has been shown. Once told which Claude
+--- Code session the pane is for, the base and the saves are that session's,
+--- kept under the editor's state directory (`aineo.changes.kept`).
 
 local git = require('aineo.git')
 local diffs = require('aineo.changes.diffs')
+local kept = require('aineo.changes.kept')
 local lines = require('aineo.changes.lines')
 local pages = require('aineo.changes.pages')
 local scratch = require('aineo.changes.scratch')
@@ -24,11 +27,16 @@ local M = {}
 ---@field repository? aineo.git.Repository
 ---@field absence? aineo.git.Failure why no repository was found for the directory, while none is
 ---@field base? string
+---@field followed? aineo.changes.FollowedSession the Claude Code session the pane is for, once the home is told one
+---@field keeps_followed? boolean whether the base and the saves are kept for the session followed: not when what was kept for it is another repository's, which is never written over
+---@field looking_for_head? boolean whether git looks for `HEAD`, the base of the session followed, while it runs
+---@field head_look_failed? boolean whether the last look for the base of the session followed failed
+---@field keeping_failure_told? boolean whether the user was told that the base and the saves could not be kept
 ---@field changes? aineo.git.Change[] the files changed since the base, as last read
 ---@field files_failure? aineo.git.Failure why the last read of the files failed, when it did
 ---@field commits? aineo.git.CommitsSince the commits since the base, as last read
 ---@field commits_failure? aineo.git.Failure why the last read of the commits failed, when it did
----@field saved table<string, true> the files the user saved since the session began, by path relative to the top level; none saved while no repository was found
+---@field saved table<string, true> the files the user saved under the base, by path relative to the top level: since the session began, or the Claude Code session's followed; none saved while no repository was found
 ---@field early_saves string[] the files the user saved, resolved, while the first look for the repository runs
 ---@field shown boolean whether the pane has been shown
 ---@field following_soon boolean whether the pane's showing is followed at the main loop's next turn
@@ -37,6 +45,11 @@ local M = {}
 
 ---@type aineo.changes.Session|nil
 local session = nil
+
+--- The Claude Code session the pane was told to follow before the session
+--- began, followed once it does.
+---@type aineo.changes.FollowedSession|nil
+local followed_before_beginning = nil
 
 --- The pane's buffers, by window.
 ---@type { files: integer|nil, commits: integer|nil }
@@ -126,29 +139,62 @@ local function show_commits()
   show_page(buffers.commits, commits_page)
 end
 
---- Reads the files changed since the base, and shows them; one read at a
---- time (`aineo.changes.serial`), each ended before its list is shown, so
---- that an error showing it stops no read after it.
-local read_files = serial.one_at_a_time(function(ended)
-  git.changed_files(session.repository, session.base, function(failure, changes)
-    session.changes = changes or session.changes
-    session.files_failure = failure
-    ended()
-    show_files()
-  end, session.settings.git)
-end)
+--- Whether the session's base is the one a read was asked from: not once
+--- the session has another, nor while it looks for one
+--- (`M.follow_changes_session()`).
+---
+---@param base string|nil
+---@return boolean
+local function is_current_base(base)
+  return not session.looking_for_head and session.base == base
+end
 
---- Reads the commits since the base, and shows them; one read at a time
---- (`aineo.changes.serial`), each ended before its list is shown, as
---- `read_files()`'s.
-local read_commits = serial.one_at_a_time(function(ended)
-  git.commits_since(session.repository, session.base, function(failure, commits)
-    session.commits = commits or session.commits
-    session.commits_failure = failure
-    ended()
-    show_commits()
-  end, session.settings.git)
-end)
+--- Asks for one list read from the session's base, one read at a time
+--- (`aineo.changes.serial`): `read(base, done)` asks git, and `take(failure,
+--- answer)` keeps what it answered, which `show()` then shows. None is read
+--- while the session looks for its base, and an answer for a base that is
+--- no longer current (`is_current_base()`) is dropped, the read for the new
+--- one asked for already. Each read is ended before its list is shown, so
+--- that an error showing it stops no read after it.
+---
+---@param read fun(base: string|nil, done: fun(failure: aineo.git.Failure|nil, answer: any))
+---@param take fun(failure: aineo.git.Failure|nil, answer: any)
+---@param show fun()
+---@return fun() ask
+local function list_read(read, take, show)
+  return serial.one_at_a_time(function(ended)
+    local base = session.base
+    if not is_current_base(base) then
+      ended()
+      return
+    end
+    read(base, function(failure, answer)
+      if not is_current_base(base) then
+        ended()
+        return
+      end
+      take(failure, answer)
+      ended()
+      show()
+    end)
+  end)
+end
+
+--- Reads the files changed since the base, and shows them (`list_read()`).
+local read_files = list_read(function(base, done)
+  git.changed_files(session.repository, base, done, session.settings.git)
+end, function(failure, changes)
+  session.changes = changes or session.changes
+  session.files_failure = failure
+end, show_files)
+
+--- Reads the commits since the base, and shows them (`list_read()`).
+local read_commits = list_read(function(base, done)
+  git.commits_since(session.repository, base, done, session.settings.git)
+end, function(failure, commits)
+  session.commits = commits or session.commits
+  session.commits_failure = failure
+end, show_commits)
 
 --- Reads again what `change`, a call of the watch, may have changed: the
 --- files when they may differ, and the commits and the files when the
@@ -224,9 +270,70 @@ local function resolved(path)
   return vim.uv.fs_realpath(path) or path
 end
 
+--- Keeps the session's base and saves for the Claude Code session the pane
+--- follows (`aineo.changes.kept`). Keeps nothing before it follows one,
+--- while git looks for the session's base (`take_head()`), or when what was
+--- kept for the session is another repository's (`use_kept_base()`). A
+--- write that fails is told once, as a warning, for the editor's life; the
+--- pane goes on from what it holds.
+local function keep()
+  local followed = session.followed
+  if not (followed and session.keeps_followed) or session.looking_for_head then
+    return
+  end
+  local saved = vim.tbl_keys(session.saved)
+  table.sort(saved)
+  local failure = kept.keep_base(
+    followed.state_directory,
+    followed.id,
+    { top = session.repository.top, base = session.base, saved = saved }
+  )
+  if failure and not session.keeping_failure_told then
+    session.keeping_failure_told = true
+    vim.notify(
+      ("aineo: the changes pane cannot keep this session's base and saves, and goes on without: %s"):format(
+        failure
+      ),
+      vim.log.levels.WARN
+    )
+  end
+end
+
+--- `paths` as a set.
+---
+---@param paths string[]
+---@return table<string, true>
+local function set_of(paths)
+  local set = {}
+  for _, path in ipairs(paths) do
+    set[path] = true
+  end
+  return set
+end
+
+--- Takes the base and the saves kept for the Claude Code session the pane
+--- follows (`aineo.changes.kept`), when they were kept for this
+--- repository, and returns whether it did. Otherwise the saves are none
+--- from then on, and are kept (`keep()`) only when nothing was kept for the
+--- session: what was kept for another repository is never written over.
+---
+---@return boolean
+local function use_kept_base()
+  local followed = session.followed
+  local kept_base = followed and kept.read_kept_base(followed.state_directory, followed.id)
+  session.keeps_followed = not kept_base or kept_base.top == session.repository.top
+  if not (kept_base and session.keeps_followed) then
+    session.saved = {}
+    return false
+  end
+  session.base = kept_base.base
+  session.saved = set_of(kept_base.saved)
+  return true
+end
+
 --- Marks `file`, a written file's resolved path, as saved when it lies
---- under the repository's top level, resolved too, and returns whether it
---- does.
+--- under the repository's top level, resolved too, keeps it (`keep()`), and
+--- returns whether it does.
 ---
 ---@param file string
 ---@return boolean
@@ -236,16 +343,19 @@ local function mark_saved(file)
     return false
   end
   session.saved[file:sub(#top + 1)] = true
+  keep()
   return true
 end
 
 --- Looks for the repository of the session's directory, one look at a time
 --- (`aineo.changes.serial`). The first found is the session's for the
---- editor's life: its `HEAD` is the base, the saves count from then — those
---- made while the first look ran included — and it is followed once the
---- pane has been shown (`follow_repository()`). While none is found, both
---- windows say why. Each look is ended before what it found is followed and
---- shown, as `read_files()`'s.
+--- editor's life: its `HEAD` is the base — or the base kept for the Claude
+--- Code session the pane follows, when one was kept for this repository
+--- (`use_kept_base()`), `HEAD` being kept for it otherwise — the saves
+--- count from then — those made while the first look ran included — and it
+--- is followed once the pane has been shown (`follow_repository()`). While
+--- none is found, both windows say why. Each look is ended before what it
+--- found is followed and shown, as `read_files()`'s.
 local find = serial.one_at_a_time(function(ended)
   git.find_repository(session.settings.directory, function(failure, repository)
     if session.repository then
@@ -255,7 +365,10 @@ local find = serial.one_at_a_time(function(ended)
     session.absence = failure
     if repository then
       session.repository = repository
-      session.base = repository.head
+      if not use_kept_base() then
+        session.base = repository.head
+        keep()
+      end
       for _, file in ipairs(session.early_saves) do
         mark_saved(file)
       end
@@ -272,6 +385,58 @@ end)
 local function look_again()
   if session.absence then
     find()
+  end
+end
+
+--- The Claude Code session the changes pane is for, as the composition
+--- root tells it.
+---@class aineo.changes.FollowedSession
+---@field id string Claude Code's session id
+---@field state_directory string the editor's state directory, `stdpath('state')`, under which the session's base and saves are kept
+
+--- Reads both lists again for the session's new base, from nothing: until
+--- they are read, each window says aineo is reading the repository.
+local function read_for_new_base()
+  session.changes, session.files_failure = nil, nil
+  session.commits, session.commits_failure = nil, nil
+  show_files()
+  show_commits()
+  follow_repository()
+end
+
+--- Takes `HEAD` now, the repository's of the directory `M.begin_session()`
+--- was given, as the base of the Claude Code session the pane follows, and
+--- keeps it (`keep()`). No list is read while git looks. When the look
+--- fails, both windows say why, and the next showing of the pane looks
+--- again (`pane_shown()`).
+local function take_head()
+  local followed = session.followed
+  session.looking_for_head = true
+  session.head_look_failed = false
+  read_for_new_base()
+  git.find_repository(session.settings.directory, function(failure, repository)
+    if session.followed ~= followed then
+      return
+    end
+    if failure then
+      session.head_look_failed = true
+      session.files_failure, session.commits_failure = failure, failure
+      show_files()
+      show_commits()
+      return
+    end
+    session.looking_for_head = false
+    session.base = repository.head
+    keep()
+    read_for_new_base()
+  end, session.settings.git)
+end
+
+--- Looks for `HEAD` again when the last look for the base of the session
+--- followed failed (`take_head()`).
+local function take_head_again()
+  if session.head_look_failed then
+    take_head()
   end
 end
 
@@ -296,6 +461,7 @@ local function pane_shown()
       return
     end
     look_again()
+    take_head_again()
     follow_repository()
   end)
 end
@@ -320,9 +486,11 @@ local function note_save(written)
 end
 
 --- Begins the session for `settings.directory`: finds its repository, whose
---- `HEAD` is the session's base, and marks the files the user saves from
---- then on (`note_save()`). The session lasts the editor's life: once
---- begun, a call does nothing, as a restart of Claude Code calls it again.
+--- `HEAD` is the session's base until the home follows a Claude Code
+--- session (`M.follow_changes_session()`), and marks the files the user
+--- saves from then on (`note_save()`). The session lasts the editor's
+--- life: once begun, a call does nothing, as a restart of Claude Code calls
+--- it again.
 ---
 ---@param settings aineo.changes.SessionSettings
 function M.begin_session(settings)
@@ -331,6 +499,7 @@ function M.begin_session(settings)
   end
   session = {
     settings = settings,
+    followed = followed_before_beginning,
     shown = false,
     following_soon = false,
     saved = {},
@@ -354,6 +523,39 @@ function M.begin_session(settings)
     end,
   })
   find()
+end
+
+--- Shows the changes pane for the Claude Code session `followed`: its base
+--- and saves as they were kept for this repository, read back; or, for a
+--- session with nothing kept, `HEAD` at this moment, the repository's of
+--- the directory `M.begin_session()` was given, and no saves, both kept
+--- from then on (`take_head()`); or, for a session kept for another
+--- repository, `HEAD` and no saves too, held in memory, what was kept left
+--- as it was. The lists are read again for that base. Following the session
+--- already followed does nothing. Told before the session has begun, or
+--- before its repository is found, the home holds the session and takes its
+--- base once the repository is found (`find`); while no repository is
+--- found, nothing is kept.
+---
+---@param followed aineo.changes.FollowedSession
+function M.follow_changes_session(followed)
+  if not session then
+    followed_before_beginning = followed
+    return
+  end
+  if session.followed and session.followed.id == followed.id then
+    return
+  end
+  session.followed = followed
+  session.looking_for_head, session.head_look_failed = false, false
+  if not session.repository then
+    return
+  end
+  if use_kept_base() then
+    read_for_new_base()
+    return
+  end
+  take_head()
 end
 
 --- The name of the buffer showing `entry`'s diff: `aineo://diff/<path>` for
