@@ -525,6 +525,119 @@ T["the working directory's records"]["never replace a session's file another edi
   })
 end
 
+--- The Lua that interleaves another editor's first follow with the child's,
+--- one call at a time: the other editor links the file being moved to its
+--- own session's file, given as the chunk's argument, just before the
+--- child's link, and removes the moved file's name just before the child's
+--- removal of it.
+local OTHER_EDITOR_INTERLEAVED = [[
+  local other = ...
+  local real_link, real_unlink = vim.uv.fs_link, vim.uv.fs_unlink
+  vim.uv.fs_link = function(from, to)
+    vim.uv.fs_link = real_link
+    assert(real_link(from, other))
+    return real_link(from, to)
+  end
+  vim.uv.fs_unlink = function(path)
+    vim.uv.fs_unlink = real_unlink
+    assert(real_unlink(path))
+    return real_unlink(path)
+  end
+]]
+
+T["the working directory's records"]['moved by another editor at the same moment stay that session file alone'] = function()
+  local state = fixture.directory('report-sessions-race-interleaved')
+  plant_records(directory_records_file(state), { 'Directory' })
+  start_editor(state)
+  child.lua(KEEP_WARNINGS)
+  child.lua(OTHER_EDITOR_INTERLEAVED, { session_records_file(state, 'session-other') })
+
+  follow('session-a')
+  receive('Kept for session a only')
+  local a = session_records_file(state, 'session-a')
+  local other = session_records_file(state, 'session-other')
+  local same_file = vim.uv.fs_stat(a).ino == vim.uv.fs_stat(other).ino
+  local warnings = child.lua_get('_G.warnings')
+  start_editor(state)
+  follow('session-other')
+
+  eq({
+    warnings = warnings,
+    same_file = same_file,
+    other = summaries_in(other),
+    other_report = report_editor.lines(child),
+  }, {
+    warnings = {},
+    same_file = false,
+    other = { 'Directory' },
+    other_report = { '09:00 [done] Task — Directory' },
+  })
+end
+
+T["the working directory's records"]['removed between the link and its removal stay the session file'] = function()
+  local state = fixture.directory('report-sessions-race-removed')
+  plant_records(directory_records_file(state), { 'Directory' })
+  start_editor(state)
+  child.lua(KEEP_WARNINGS)
+  child.lua([[
+    local real_unlink = vim.uv.fs_unlink
+    vim.uv.fs_unlink = function(path)
+      vim.uv.fs_unlink = real_unlink
+      assert(real_unlink(path))
+      return real_unlink(path)
+    end
+  ]])
+
+  follow('session-a')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    session = summaries_in(session_records_file(state, 'session-a')),
+    lines = report_editor.lines(child),
+  }, {
+    warnings = {},
+    session = { 'Directory' },
+    lines = { '09:00 [done] Task — Directory' },
+  })
+end
+
+T["the working directory's records"]['moved by another editor at the same moment are told so when the link cannot be removed'] = function()
+  local state = fixture.directory('report-sessions-race-unremovable')
+  plant_records(directory_records_file(state), { 'Directory' })
+  local from = directory_records_file(state)
+  local to = session_records_file(state, 'session-a')
+  start_editor(state)
+  child.lua(KEEP_WARNINGS)
+  child.lua(OTHER_EDITOR_INTERLEAVED, { session_records_file(state, 'session-other') })
+  child.lua([[
+    local interleaved = vim.uv.fs_unlink
+    vim.uv.fs_unlink = function(path)
+      local result = { interleaved(path) }
+      vim.uv.fs_unlink = function(refused)
+        return nil, 'EACCES: permission denied: ' .. refused, 'EACCES'
+      end
+      return unpack(result)
+    end
+  ]])
+
+  follow('session-a')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    session = summaries_in(to),
+  }, {
+    warnings = {
+      ('aineo cannot move the report records in %s to %s: another editor moved them to its session at the same moment, and %s cannot be removed, so both sessions keep them: EACCES: permission denied: %s'):format(
+        from,
+        to,
+        to,
+        to
+      ),
+    },
+    session = { 'Directory' },
+  })
+end
+
 T['a session told before the environment'] = MiniTest.new_set()
 
 T['a session told before the environment']["is held: once it comes, the directory's records move to it and the next report is kept there"] = function()
