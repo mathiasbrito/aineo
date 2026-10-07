@@ -2,26 +2,28 @@
 
 You are dispatched by the orchestrator to implement **one packet** of `knowledge-vault/Planning/aineo — v1 agent console.md`. Your definition tells you how to work; this brief tells you what.
 
-> **Awaits the converge round.** Written with the recommended option of [[Planning/aineo — worktrees and session switches]] › P11 (a), and P7 (a) for what a session not seen before takes as its base. It is not dispatched until the user has answered the round and the agreed row is D41 (with D37) in the v1 plan note, and wave 8's T32 has merged (both change `lua/aineo/changes/`). An answer that differs comes as a dated amendment below.
+> **Agreed and amended, 2026-10-07.** The user answered the converge round on 2026-10-07: P11 is (a), now D41, and P7 is (a), now D37 — the options this brief was written with. Wave 8's T32 merged (PR #127), and every fact below was read again at `dev` `f98bd9d`. Still before dispatch: the brief review, and wave 8's finish (the user's go: "when wave 8 finishes start right streight wave 9"). The *Amendment — 2026-10-07* at the end gives the answers.
 
 ## Objective
 
 The task, verbatim from the task list:
 
-> | T37 | The changes pane per session (C15; P11 once agreed): the session's base and the user's save marks are kept per Claude session id and survive exit; the pane can be shown for another session, a session not seen before taking `HEAD` then as its base — the behaviour awaits the converge round | T25, wave 8's T32, the round | planned — wave 9 |
+> | T37 | The changes pane per session (C15; D37, D41): the session's base and the user's save marks are kept per Claude session id and survive exit; the pane can be shown for another session, a session not seen before taking `HEAD` then as its base | T25, wave 8's T32 | planned — wave 9 |
 
-It rests on: D19 (the changes pane), whose clause "The session starts when aineo first starts Claude Code in this editor and lasts the editor's life: a restart of Claude keeps the same list and commits" D41 supersedes once agreed; D22 (the commits window updates on every commit); C15 (the changes home), C13 (the git home); D26 and D29; and P11's alternatives.
+It rests on: D41 (the changes pane per session) and D37 (`/clear` a new, empty session), agreed 2026-10-07; D19 (the changes pane), whose clause "The session starts when aineo first starts Claude Code in this editor and lasts the editor's life: a restart of Claude keeps the same list and commits" D41 supersedes; D22 (the commits window updates on every commit); C15 (the changes home), C13 (the git home); D26 and D29; and P11's alternatives.
 
-### The behaviour, under the recommended options (awaits the converge round)
+### The behaviour (D41, D37)
 
 - **What is kept, per Claude session id:** the repository's top level, the base commit (or that there was none, before a first commit), and the paths the user saved, relative to the top level — under `stdpath('state')/aineo/` in a folder of its own, one file per session, owner-only, named so that no id can make an invalid or colliding name. It is written when the base is taken and whenever a new path is marked; a write that fails is told once as a warning and the pane goes on from memory.
 - **The changes home follows a session.** A new entry point (its name is yours) tells the home which session the pane is for: the pane then shows that session's base and marks, read back from what is kept; for a session with nothing kept, the base is `HEAD` at that moment — the repository of the directory `begin_session()` was given — and the marks empty, and both are kept from then on. Following the session already followed changes nothing. The watch and the reads (T25's one-at-a-time rule) go on as before; the lists are read again for the new base.
 - **Before the home is told any session**, it behaves exactly as today: the base is `HEAD` at `begin_session()`'s first call, in memory, for the editor's life. Nothing in this packet calls the new entry point: T39 wires it once T35 says which session Claude Code is on. So `dev` behaves as before when this packet merges, and `tests/test_entry_changes.lua`'s group `the session` stays true.
-- **A kept base for another repository** (the session's top level is not the repository `begin_session()` found) is not used: the session takes `HEAD` then, as an unseen one does, and says nothing. *(Awaits the round: the proposal does not ask it; it is the brief's reading, for the brief review to check.)*
+- **A kept base for another repository** (the session's top level is not the repository `begin_session()` found) is not used: the session takes `HEAD` then, as an unseen one does, and says nothing. *(The planning's reading, A5 in `plan.md` › *Assumptions to report to the user*: the round did not ask it; for the brief review to check.)*
 - **A kept base git no longer has** (garbage-collected, a different clone) makes the reads fail as T25's failed read does today, under one line in git's words; the base is kept.
 - **What stays:** the windows, their lines and buffers, Enter's diffs, the watch, and T32's colours.
 
-### Facts, checked against `origin/dev` `9b8707f` (re-checked after T32 merges)
+### Facts, checked against `origin/dev` `f98bd9d` (wave 8 merged)
+
+Wave 8's T32 changed `lua/aineo/changes/lines.lua` and `pages.lua` and added `colours.lua`; `init.lua` did not move, nor did `lua/aineo/git/`.
 
 - `lua/aineo/changes/init.lua`:
   - `aineo.changes.SessionSettings`, lines 16–19: `directory`, `show_diff`, `git?`;
@@ -33,15 +35,15 @@ It rests on: D19 (the changes pane), whose clause "The session starts when aineo
   - `M.begin_session()`, lines 328–357: heeds its first call alone ("a restart of Claude Code calls it again");
   - `M.refresh_shown_pane()`, line 541; `M.pane_buffers()`, line 558.
 - `plugin/aineo.lua` › `started_claude_terminal()`, lines 227–232, calls `begin_session({ directory = working_directory, show_diff = … })` after each start. This packet does not change it.
-- `lua/aineo/git/init.lua`: `find_repository()`, line 40; `changed_files(found, base, done, options)`, line 53; `commits_since()`, line 65. `base` nil means "before the first commit" (`repository.lua` › `comparison_base()`, lines 157–170).
+- `lua/aineo/git/init.lua`: `find_repository()`, line 40; `changed_files(found, base, done, options)`, line 53; `commits_since()`, line 65. `base` nil means "before the first commit" (`repository.lua` › `comparison_base()`, lines 157–168).
 - Tests that pin the session: `tests/test_entry_changes.lua` group `the session` (line 102): it "begins at the first start of Claude Code", "outlives a restart of Claude Code", and "does not begin at a start that fails"; `tests/test_changes.lua` group `the user’s saves` (line 2069). They stay true before the home follows a session.
-- `doc/aineo.txt` › *aineo-changes*'s first paragraph, `The changes pane lists what changed in your repository since aineo first` … `takes both.`, and LIMITS › `The changes pane ~`'s item `- A restart of Claude Code in another working directory keeps the first` … `repository and its base.` (as T32 leaves them — the amendment quotes them).
+- `doc/aineo.txt`, unchanged by T32 at these lines: *aineo-changes*'s first paragraph, `The changes pane lists what changed in your repository since aineo first` … `takes both.` (lines 140–146), and LIMITS › `The changes pane ~`'s item `- A restart of Claude Code in another working directory keeps the first` … `repository and its base.` (lines 1007–1008).
 
 ### Baseline
 
-On `9b8707f`, Neovim 0.12.5: 1807 cases, `Fails (0)` (`Implementation/Waves/00008-small-fixes/evidence/baseline-9b8707f.txt`). Among them: `tests/test_changes.lua` 93, `tests/test_entry_changes.lua` 12, `tests/test_entry_panes.lua` 86, `tests/test_git_watch.lua` 33, `tests/test_doc.lua` 44. Wave 8's T32 changes `tests/test_changes.lua`; the dispatch message pastes the counts on the `dev` you start from.
+At `f98bd9d`, Neovim 0.12.5: 1929 cases in 60 groups, `Fails (0)` — T33's last whole-suite run, on code identical to `f98bd9d`'s (`plan.md` › *Baseline*). Since the first brief (`9b8707f`: `tests/test_changes.lua` 93), T32 brought `tests/test_changes.lua` to 120 cases at its correction (T32's session note); `tests/test_entry_changes.lua` (12), `tests/test_entry_panes.lua` (86) and `tests/test_git_watch.lua` (33) are as T32's session note and the first baseline give them. The dispatch message pastes the counts on the `dev` you start from.
 
-Read first: the v1 plan note's D19, D22, C13, C15 and the D rows the round adds (D37, D41); [[Planning/aineo — worktrees and session switches]] › P7, P11; `knowledge-vault/Projects/aineo.md`; `Sessions/2026-10-05 — T25 Changes pane.md`; T32's session note once merged; the Learnings [[Learnings/A scheduled callback can run under textlock, where Neovim refuses a buffer change with E565]] and [[Learnings/Neovim runs scheduled callbacks during a later VimLeavePre and after VimLeave]]; `plan.md` in this folder.
+Read first: the v1 plan note's D19, D22, C13, C15, D37 and D41; [[Planning/aineo — worktrees and session switches]] › P7, P11 and its outcome; `knowledge-vault/Projects/aineo.md`; `Sessions/2026-10-05 — T25 Changes pane.md`; `Sessions/2026-10-07 — T32 Changes colours.md`; the Learnings [[Learnings/A scheduled callback can run under textlock, where Neovim refuses a buffer change with E565]] and [[Learnings/Neovim runs scheduled callbacks during a later VimLeavePre and after VimLeave]]; `plan.md` in this folder.
 
 ## Boundary
 
@@ -73,7 +75,7 @@ The verification runs the plan's five mutants for T37. Name in your report the t
 
 ## What was decided already
 
-- The user's request, 2026-10-06, and the user's answers to P7 and P11, which the amendment gives.
+- The user's request, 2026-10-06, and the user's answers to P7 and P11, D37 and D41, which the amendment gives.
 - D19's lists, Enter and refresh stand; D22 stands.
 
 ## Budget
@@ -83,3 +85,13 @@ Medium: a small kept file per session, one entry point that swaps the base and t
 ## Report
 
 In your definition's shape, to `<scratchpad>/t37-report-packet.md`. Open the pull request into `dev` before you report. Put in its body every verification claim a reviewer can re-measure, the test files that ran and the whole suite's counts.
+
+## Amendment — 2026-10-07: the user's answers and the facts at `f98bd9d`
+
+**The user's answers.** The orchestrator put P1–P11 to the user as a table, each with its options and its recommendation, and M, R and S for the wave. The user answered, verbatim: "p10 must be one per session, why, because it is used to catalog changes and notes that goes to the prompt with \s, other than that all your recommendations are fine, so when wave 8 finishes start right streight wave 9." So P11 is (a), D41, and P7 is (a), D37: the options this brief was written with. Its body stands; its "awaits the converge round" markers are gone. P10, per session, is T36's and T39's, not this packet's.
+
+**The measurements** (`evidence/w9-real-claude-sessions.txt`, the orchestrator's, 2026-10-07) change nothing here: this packet is told a session and never learns one from Claude Code.
+
+**A reading the round did not ask** (the planning's, A5, for the brief review and the user): a kept base of another repository is not used.
+
+**Facts that moved since `9b8707f`:** none in `lua/aineo/changes/init.lua`, `lua/aineo/git/` or `plugin/aineo.lua`; `comparison_base()` ends at line 168 (read two lines long before; the code did not move). T32 added `lua/aineo/changes/colours.lua` and moved `lines.lua` and `pages.lua`, which this packet does not touch. The help's two fences did not move. The baseline is 1929 cases at `f98bd9d`, `tests/test_changes.lua` 120 at T32's correction.
