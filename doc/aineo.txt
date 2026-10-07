@@ -326,23 +326,39 @@ same session.
 
 Input's draft ~
                                                                  *aineo-draft*
-What you write in Input is kept as a draft, one per working directory,
-beside the Reports: under `stdpath('state')` in `aineo/drafts/`, in a file
-only you can read and write. It is saved a second after each change, at
-once when Input becomes empty, as Send leaves it, and, for a change not
-saved yet, when Neovim quits. Nothing asks you anything at quit, and a crash
-loses at most the last second's typing. The working directory is the one of
-the first time the layout opened, for the editor's life.
+What you write in Input is kept as a draft, one per Claude session, beside
+the Reports: under `stdpath('state')` in `aineo/drafts/`, in a file only
+you can read and write, named `session-` and the SHA-256 of the session's
+id. It is saved a second after each change, at once when Input becomes
+empty, as Send leaves it, and, for a change not saved yet, when Neovim
+quits. Nothing asks you anything at quit, and a crash loses at most the
+last second's typing. Until aineo follows a Claude session, the draft is
+the working directory's, in a file named by the directory's SHA-256; the
+working directory is the one of the first time the layout opened, for the
+editor's life.
+
+When aineo follows another session, a change not saved yet is first saved
+as the draft of the session it followed until then, and that session's
+draft then takes the place of whatever Input holds — or Input is emptied,
+for a session with no draft. The text that leaves Input is not lost: it
+comes back when aineo follows its session again. The swap is not a change
+of yours: `u` does not take it out. The first session aineo follows in an
+editor takes the working directory's draft, when it has none of its own; a
+directory's draft written after that is not shown again. A draft that
+cannot be moved so is told once as a warning, and the session keeps its
+own.
 
 The draft comes back into an empty Input: the first time the layout opens
 in this editor, and again once Input's text was dropped — `:bwipeout`,
 `:bdelete`, `:edit!` — as soon as Input is shown again. Its coming back is
-not a change of yours: `u` does not take it out. It never replaces text you
-have written, and an Input that Send emptied stays empty.
+not a change of yours: `u` does not take it out. Coming back so, it never
+replaces text you have written — only following another session does —
+and an Input that Send emptied stays empty.
 
-Two Neovims in one working directory share one draft, and the last change
-in either wins: a Neovim that quits with no change unsaved leaves the draft
-as the other left it.
+Two Neovims on one session, or in one working directory before aineo
+follows a session, share one draft, and the last change in either wins: a
+Neovim that quits with no change unsaved leaves the draft as the other left
+it.
 
 A change not saved yet is saved as you quit with `:quit`, `:qall`,
 `:wqall`, `:xall` or `ZZ`, and again, when that save failed or did not
@@ -838,12 +854,22 @@ AineoReportLink      a web link, linked to `Underlined`
                                                           *hl-AineoReportPath*
 AineoReportPath      a path to a file, linked to `Underlined`
 
-Reports are kept per working directory, under `stdpath('state')` in
-`aineo/reports/`, and shown again when aineo opens in that directory. The
-Report shows the newest 2 MiB of them; the file is cut back to its newest
-2 MiB once it passes 4 MiB. The working directory is the one of the first
-time the layout opened, for the editor's life; each new Claude Code starts in
-the working directory of its own moment.
+Reports are kept per Claude session, under `stdpath('state')` in
+`aineo/reports/`, one file for each session, named `session-` and the
+SHA-256 of its id. A report is kept under the session aineo follows when it
+arrives, and when aineo follows another session, the Report shows that
+session's reports in place of what it showed — none for a session with no
+reports. Two Neovims on one session share its reports. Until aineo follows
+a Claude session, the reports are the working directory's, in a file named
+by the directory's SHA-256, and are shown again when aineo opens in that
+directory. The first session aineo follows in an editor takes that file,
+when it has none of its own, and every report it held is that session's
+from then on; a directory's file written after that is not shown again. A
+file that cannot be moved so is told once as a warning, and the session
+keeps its own. The Report shows the newest 2 MiB of them; the file is cut
+back to its newest 2 MiB once it passes 4 MiB. The working directory is the
+one of the first time the layout opened, for the editor's life; each new
+Claude Code starts in the working directory of its own moment.
 
 ==============================================================================
 9. THE AUTOSTART                                             *aineo-autostart*
