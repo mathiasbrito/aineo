@@ -18,8 +18,8 @@ aineo resumed the session it started in a directory even after the user switched
 
 ## What was done
 
-- **`lua/aineo/claude/arguments.lua`**: `claude_arguments(settings, start_token)` adds `--settings` before `--allowedTools`: one JSON object holding only `hooks`, with one `SessionStart` and one `SessionEnd` entry, each a `type: "command"` hook with no matcher and `timeout` 5 (seconds). The command is the hook relay run as aineo's MCP server is run — `<editor_program> --headless --clean --cmd 'set noloadplugins' -l <hook_relay.lua> <editor_address> <start token> <event>` — every word single-quoted for a POSIX shell, a `'` written `'\''` (T35-2). The timeout: far above the relay's measured ~20 ms and a loaded host's Neovim start, far below Claude Code's 600 s default; the hook returns at once, so it bounds only a relay that hangs.
-- **`lua/aineo/claude/hook_relay.lua`** (new): the hook, and the composition root of its process. As the hook it reads stdin, and for an object with a string `session_id` starts itself again, detached (its own session, no standard stream), as the *deliverer*, then exits 0 — about 20 ms. As the deliverer it sends the editor one RPC notification calling `require('aineo.claude').receive_session_event(event, id, source or reason, token)`, then waits for the answer to a request sent behind it on the same connection before closing; an editor it cannot reach, or that ends while it waits, ends it quietly (T35-10). It never writes on stdout or stderr, and reads the address from its command line, never `$NVIM`. See *Decided over the brief* for why the deliverer exists.
+- **`lua/aineo/claude/arguments.lua`**: `claude_arguments(settings, start_token)` adds `--settings` before `--allowedTools`: one JSON object holding only `hooks`, with one `SessionStart` and one `SessionEnd` entry, each a `type: "command"` hook with no matcher and `timeout` 5 (seconds). The command is the hook relay run as aineo's MCP server is run — `<editor_program> --headless --clean --cmd 'set noloadplugins' -l <hook_relay.lua> <editor_address> <start token> <event>` — every word single-quoted for a POSIX shell, a `'` written `'\''` (T35-2). The timeout: Claude Code's documentation gives a command hook 600 s by default, and the `SessionEnd` hooks of an exit, a `/clear` or an in-session `/resume` 1.5 s in all, a budget a hook's own `timeout` raises (D-docs; the attack review read the same from the hooks page). 5 s is below the first and above the second: far above the hook's own run (20–43 ms, median 26 ms, in the attack review's 24 runs) and a Neovim start on a loaded host, so that a loaded host does not stop a `SessionEnd` hook before it has started its deliverer, which would lose that switch; in return, a hook that stalls holds `/clear` up to 5 s rather than 1.5 s. Whether a hook's own `timeout` lifts `SessionEnd`'s 1.5 s was read, not measured (the real `claude` is never run here).
+- **`lua/aineo/claude/hook_relay.lua`** (new): the hook, and the composition root of its process. As the hook it reads stdin, and for an object with a string `session_id` starts itself again, detached (its own session, no standard stream), as the *deliverer*, then exits 0 — 20–43 ms (the attack review's 24 runs, median 26 ms). As the deliverer it sends the editor one RPC notification calling `require('aineo.claude').receive_session_event(event, id, source or reason, token)`, then waits for the answer to a request sent behind it on the same connection before closing; an editor it cannot reach, or that ends while it waits, ends it quietly (T35-10). It never writes on stdout or stderr, and reads the address from its command line, never `$NVIM`. See *Decided over the brief* for why the deliverer exists.
 - **`lua/aineo/claude/init.lua`**: `Settings` gains `editor_address`, `editor_program` (both validated as strings) and the optional `on_session_switched(id, source, left, reason)`. Each `launch()` has a start token (a launch counter) and follows the id it started on (A2); `M.session_id()` returns the id followed now, nil before any start. `M.receive_session_event()` schedules `take_session_event()`, which drops anything while Neovim quits (`v:exiting`), for another start's token (T35-8), or for an id `session_ids.is_session_id()` refuses (M4); a `SessionEnd` of the followed id marks it ending with its reason; a `SessionStart` of another id after that mark is a switch (A1 as reworded, T35-4): `follow_switch()` follows the new id, keeps it for the directory (D38) and calls `on_session_switched`. A `SessionStart` of the followed id does nothing (it does not clear the mark: with one deliverer per hook, a late startup `SessionStart` must not cancel a switch). A start whose session differs from the one followed before it — T19's fallback (T35-1) and a later start in another directory — calls `on_session_switched(<new>, 'startup' | 'resume', <old>)` after `on_terminal_replaced`; an editor's first start calls nothing.
 - **`lua/aineo/claude/session_ids.lua`**: `is_session_id()` exported, its check unchanged (M4).
 - **`plugin/aineo.lua`** › `started_claude_terminal()`: hands `editor_address = vim.v.servername` and `editor_program = vim.v.progpath`. Nothing else (T39 wires the switch).
@@ -30,11 +30,15 @@ aineo resumed the session it started in a directory even after the user switched
 
 ## Decided over the brief, on measurement
 
+**This departed from D36, the user's row, not only from the brief and the orchestrator's A3** (PR #137's records review, finding 1): D36 says the relay "sends the editor one RPC notification, never a request". The packet chose without the user; it should have reported a spec conflict. The user decided it on 2026-10-07 as **D43**, answering "Accept the helper (Recommended)": "the hook starts a detached deliverer that notifies the editor and waits for its answer, then exits, or exits when the editor is gone. It supersedes D36's \"one notification, never a request\"." The D row itself is written by the knowledge pass.
+
 The brief's relay "sends the editor one RPC notification … then exits". Measured on Neovim 0.12.5 (probes below): **a notification whose connection its peer closed before the editor handled it is dropped when the editor has a message of another channel to handle first.** In the suite, the busy-editor case lost the notification every time the test polled the woken child; with a plain `nvim --listen` and a probe client it was lost after a 2 s busy spell whenever one request came as the editor woke, and delivered when nothing else came; and with a real Neovim TUI in a terminal job (the user's own setup: the TUI is a client of its server), held at a hit-enter prompt and left with Enter, it was lost 3 times out of 3 — the brief's own named case. Keeping the connection open until the editor answers a request behind the notification delivered it every time (idle: 20 ms; at the prompt: once Enter came). But a hook that waits holds Claude Code's in-session `/resume` (M8, A3). So the hook now starts a detached deliverer and returns in about 20 ms; the deliverer waits. Rejected: the relay waiting itself (holds `/resume` for as long as a prompt lasts, then Claude Code's timeout kills it and the switch is lost); a bounded wait (the same loss after the bound). The plan's mutant 1 (a request in place of the notification) therefore no longer changes anything observable — the waiting moved out of Claude Code's way — and its observable is carried by m1 (the hook delivering itself) and m1c (the deliverer closing without waiting).
 
-Not decided here: whether two deliverers can reach a busy editor out of order (a `SessionStart` before its `SessionEnd` would drop that switch). Idle, the 0.1 s between the two hooks (M1) and ~20 ms deliveries keep them in order; at a prompt, the order the editor accepts two pending connections in was not measured.
+Not decided here, and closed by the fix round: whether two deliverers can reach a busy editor out of order. The attack review measured the deliverers' own start-up as the race (arrival gap at idle 18–66 ms, each deliverer 43–106 ms from hook to arrival) and built a case that holds the `SessionEnd`'s delivery back; the fix round pairs the two by when their hooks ran (*Fix round*, F1).
 
-### The probes (Neovim 0.12.5, macOS; scripts under the worktree's `.tests/`, not committed)
+### The probes (Neovim 0.12.5, macOS)
+
+The scripts are kept for the knowledge pass in the orchestrator's local store, `.claude/local/orchestrator/t35-probes/` (copied there in the fix round from the author's worktree, with a README naming each); their outputs are below. The time in "seen after 0.027 ms" is from the relay's exit to the first poll.
 
 ```
 t35-probe-busy.lua — the brief's relay, an editor sleeping 2 s, then polled by another channel every N ms
@@ -114,7 +118,7 @@ Counts: `tests/test_claude_switch.lua` 43 cases; `tests/test_claude.lua` 117 (11
 
 ## Mutants
 
-Run one at a time from a byte copy of the file (`.tests/t35-mutant.lua`: each edit must match its old text exactly once), each on the group of `tests/test_claude_switch.lua` that targets it (a copy of the file with every other group removed), on the final tree `07ae776`. Every kill below was read as an assertion (`Failed expectation`), its count equal to the run's `Fails`. The first pass of the final table ran into the host's DNS outage: m6, m8 and m9 hit the run's 960 s limit with one case done and printed `Fails (0)`, and m7's own-group output was overwritten before it could be checked; all four were run again on `07ae776` after the network came back, and finished.
+Run one at a time from a byte copy of the file (`.tests/t35-mutant.lua`: each edit must match its old text exactly once), each on the group of `tests/test_claude_switch.lua` that targets it (a copy of the file with every other group removed), on the final tree `07ae776`. Every kill below was read as an assertion (`Failed expectation`), its count equal to the run's `Fails`. The first pass of the final table ran into the host's DNS outage: m6 and m9 hit the run's 960 s limit with one case done, printing `Fails (0)` and "still running when the run ended", m7 and m8 printed `Fails (1)` with one case done, and m7's own-group output was overwritten before it could be checked; all four were run again on `07ae776` after the network came back, and finished (corrected from the records review, finding 8). m1b's whole-suite run (1975 cases) finished at 07:54:46, before `a7448dd` and `07ae776` were committed, on a tree that differed from `07ae776` in tests only; its whole-file run kept no output. This table is the packet's, on `07ae776`; the fix round's mutants, on its own tree, are in *Fix round*.
 
 | # | Literal edit | Plan's # | Group | Result |
 |---|---|---|---|---|
@@ -145,16 +149,121 @@ Run one at a time from a byte copy of the file (`.tests/t35-mutant.lua`: each ed
 | f2 | `fake_claude.lua`: `/resume`'s `switch_session(resumed, 'resume', 'resume')` → `'clear', 'resume'` | — | keys | killed, 1: the `/resume` row |
 | f3 | `fake_claude.lua`: `run_hooks('SessionEnd', current_session_id, 'prompt_input_exit')` deleted in `exit_by_keys` | — | keys | killed, 1: `an exit reaches nothing` |
 
+## Fix round
+
+**Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-claude-code-integrator`), a fresh agent; resources `impl_t35_fix`. From `c2a6cee`, on PR #137's three reviews (attack, test integrity, records) and the user's answers of 2026-10-07. Neovim 0.12.5; the real `claude` never ran.
+
+**The user's decisions** (the D rows are the knowledge pass's to write):
+- **D43** — "Accept the helper (Recommended)": "the hook starts a detached deliverer that notifies the editor and waits for its answer, then exits, or exits when the editor is gone. It supersedes D36's \"one notification, never a request\"." The deliverer stays; D36 and D43 are named here, in the PR body and in the help's LIMITS where it states the mechanism.
+- **D44** — "Merge them (Recommended)": "aineo reads your `--settings` (a file or inline JSON), adds its two hooks beside yours, and passes one `--settings`. Nothing of yours is dropped. If it cannot read yours, it starts Claude without its hooks and warns once, so switches aren't followed."
+
+**The orchestrator's rulings, to report to the user as its assumptions:** attack finding 2 fixed by the reviewer's F1 (pair `SessionEnd` and `SessionStart` by when each hook ran); attack finding 3, A1 stands (a lost `SessionEnd` leaves that Claude Code's later switches unfollowed, said in LIMITS); attack finding 4, an `on_session_switched` that raises is caught and warned.
+
+### What changed
+
+- **D44, `arguments.lua`**: `claude_command(settings, session_words, start_token)` builds the whole command and replaces `claude_arguments()`. It finds the last `--settings` of `claude.cmd` (`--settings <value>` or `--settings=<value>`; Claude Code 2.1.292 reads the last, attack review, read from its binary), tells inline settings from a file as Claude Code 2.1.292 does (read from its binary, `sks()`: inline when, trimmed, it begins with `{` and ends with `}`), and takes a relative file name from Claude Code's working directory (aineo's choice: how 2.1.292 resolves one was not read to the end), adds aineo's two entries after the user's own for each event, and passes one `--settings` in aineo's place before `--allowedTools`. A value it cannot read — a missing file, no JSON object, JSON that does not parse, `hooks` not an object, an event's entries not a list — leaves `claude.cmd` whole, adds no hooks, and `launch()` warns once: "aineo: cannot read claude.cmd's --settings (…): Claude Code starts without aineo's session hooks, so a session switch inside it is not followed". Empty JSON objects of the user's survive the round trip (measured: `vim.json.decode` marks them, `encode` writes `{}`).
+- **F1, `hook_relay.lua` and `init.lua`** (the attack reviewer's `f1-fix.diff`, adopted red-first): the hook takes `vim.uv.hrtime()` as it begins and the deliverer passes it as `receive_session_event()`'s fifth argument; the receiver pairs a `SessionEnd` of the followed id and a `SessionStart` of another by when their hooks ran, whichever arrives first, keeping an early `SessionStart` until a `SessionEnd` whose hook ran before it; one whose hook ran before the `SessionEnd` is never a switch (A1). Without the time (an older relay) it pairs by arrival, as before.
+- **Attack finding 4, `init.lua`**: `tell_switch()` calls `on_session_switched` under `pcall` and warns "aineo: on_session_switched failed: …", for a start, the fallback and a hook alike.
+- Records: docstrings 5a (a failed swap calls neither callback, though `session_id()` names the new session), 5b, 5c; the relay's statement of the drop narrowed to what was measured; `HOOK_TIMEOUT_SECONDS` and the fake's default name the 1.5 s `SessionEnd` budget; `start_deliverer()` and `take_session_event()` take records past three parameters; the helper's `session_id(child)` is `followed_session_id(child)` (modularity §6). The probe scripts are in `.claude/local/orchestrator/t35-probes/`.
+- Help: *aineo-config-claude.cmd* (widened by the fix-round brief), *aineo-report*'s fifth addition, LIMITS › *Session switches*.
+
+### Findings
+
+| Review | Finding | Outcome |
+|---|---|---|
+| attack | 1, a user's `--settings` overridden | fixed (D44): 4 merge rows, the user's hooks kept, 5 unread rows |
+| attack | 2, pairing by arrival | fixed (F1): the late-`SessionEnd` case through a proxy, the reversed case, the ran-first case ×2, the hook-time pin |
+| attack | 3, one lost `SessionEnd` deafens the process | not changed (A1 stands, the orchestrator's ruling); said in LIMITS and in `receive_session_event()`'s docstring |
+| attack | 4, a raising callback | fixed: two cases, a start in another directory and a switch by hooks |
+| attack | 5–10 | refuted by the review; nothing to do |
+| tests | 1, the hit-enter mechanism unpinned | fixed: the reviewer's TUI case, killing r3 |
+| tests | 2, `vim.wait(1500)` | fixed: the quit case waits for the deliverers, then a scheduled round; m10 killed |
+| tests | 3, `leaves nothing running` vacuous | fixed: a deliverer seen running before `child.stop()`; r21 kills it |
+| tests | 4, r6 and r7 | fixed: two cases |
+| tests | 5, quoting | fixed: the fixture `switch-quoted it's $HOME "here"`; r10 killed |
+| tests | 6, TCP | fixed: an editor on `serverstart('127.0.0.1:0')`; r5 killed |
+| tests | 7, raised errors unseen | fixed: `post_case` checks `v:errmsg` on *a session switch*; m2crash killed by it |
+| records | 1, D36 | named in the note (*Decided over the brief*), the PR body and the help; the D row is the knowledge pass's |
+| records | 2, the Learning's wording | narrowed in the relay's docstring and *Open threads* |
+| records | 3, the probes | copied to `.claude/local/orchestrator/t35-probes/` with a README |
+| records | 4, what T35 makes false elsewhere (D36, D37, `plan.md` A3 and mutant 1, `brief-review.md`, P6, T39's brief, the hit-enter Learning) | not this packet's: the knowledge pass's, by the fix-round brief |
+| records | 5, docstrings | 5a–5d fixed |
+| records | 6, the timeout | both defaults and the trade-off in the note, `HOOK_TIMEOUT_SECONDS` and the fake |
+| records | 7, `allowManagedHooksOnly` | the help says both clauses were read, not measured |
+| records | 8, counts | corrected in this note and the PR body: 46 cases, not 47; the deep-require check prints 51 lines in 6 homes, each inside its own; m1b's suite run preceded `07ae776`; the m6–m9 wording |
+| records | 9, the helper's name | renamed |
+
+**Not done, out of this packet:** the D rows D43 and D44, `plan.md`'s A3 and mutant 1 text, T39's brief (the knowledge pass's). The tests reviewer's other note — after a `/resume` of the followed session itself (`SessionEnd` A, `SessionStart` A) the `SessionEnd` mark stays, so a later `SessionStart` with no `SessionEnd` and a later hook time is taken as a switch — is left open; with F1's hook times, a same-id `SessionStart` that ran after the mark could clear it, but no brief asked for it.
+
+### Red and green, fix round
+
+**Seen red, by unit, each for the intended reason:** the F1 receiver cases (reversed: `Left: {}`; end-first: a switch made); the hook-time pin (`Left: "userdata"`); the D44 cases ×9 (two `--settings`: `Left: 2`, and the user's word with aineo's JSON after it); the raising callback ×2 (`Left: false` from `pcall(start_session)`; `Left: {…, {}}`, no warning). **On the final test file against `c2a6cee`'s three production files**, 16 of the 21 new cases fail, each by assertion (`Fails (17)`, 17 `Failed expectation`: the raising-hook case fails twice, its own assertion and the `post_case` check): the 10 D44 rows (the list-file row among them), the hook-time pin, the proxy case, the reversed case, the end-first row and both raising-callback cases.
+
+**Arrived green, 5 new cases and 5 changed ones, each with the mutant that kills it (run):** the start-first row (m9, m2crash), the TCP case (r5), the hit-enter TUI case (r3, m1, m1c), the mark-cleared case (r6), the other-session `SessionEnd` case (r7); changed: the quoting fixture (r10), the quit case's wait (m10), `leaves nothing running` (r21), the `post_case` check (m2crash), the list-file row (D11, which had survived the group before the row was added).
+
+### Mutants, fix round
+
+Each a literal edit on `2ad91a5`'s code (later commits change only docstrings, the help, a test row and this note), from a byte copy restored and checked after each (`.tests/t35fix/mut.py`), run alone on the copy of `tests/test_claude_switch.lua` narrowed to the group that targets it. Every kill below is an assertion: each run's `Failed expectation` count equals its `Fails`.
+
+| # | Literal edit | Group | Result |
+|---|---|---|---|
+| FM1 | `init.lua`: `      follow_switch(session, early.id, early.source)` deleted | a session switch | killed, 2: the proxy case, the reversed case |
+| FM2 | `init.lua`: `if ending and (not ending.ran or not told.ran or ending.ran < told.ran) then` → `if ending then` | a session switch | killed, 1: the end-first row |
+| FM3 | `hook_relay.lua`: `    tonumber(ran) or vim.NIL,` → `    vim.NIL,` | the hook relay; a session switch | killed, 1 (hook-time pin); 1 (proxy case) |
+| FM4 | the same line → `    vim.uv.hrtime(),` (the deliverer's own time) | the hook relay; a session switch | killed, 1 (hook-time pin); survived the switch group |
+| D1 | `arguments.lua`: `for index = #cmd, 1, -1 do` → `for index = 0, 1, -1 do` | start_session() | killed, 9 |
+| D2 | `return { cmd = vim.list_extend(cmd, settings.cmd, given.last + 1), settings = merged }` → `return { cmd = settings.cmd, settings = merged }` | start_session() | killed, 5 |
+| D3 | `local path = vim.startswith(value, '/') and value or vim.fs.joinpath(cwd, value)` → `local path = value` | start_session() | killed, 1: the relative file |
+| D4 | `if not (vim.startswith(text, '{') and vim.endswith(text, '}')) then` → `if true then` | start_session() | killed, 3 |
+| D5 | `vim.list_extend(given, { entry })` → `vim.list_extend({ entry }, given)` | start_session() | killed, 1: the user's hooks kept |
+| D6 | the unread return gains `settings = add_hook_entries(vim.empty_dict(), entries),` | start_session() | killed, 4 |
+| D7 | `init.lua`: `if unread then` → `if false then` | start_session() | killed, 4 |
+| D8 | `if not is_object(settings.hooks) then` → `if false then` | start_session() | killed, 1 |
+| D9 | `if type(given) ~= 'table' or not vim.islist(given) then` → `if type(given) ~= 'table' then` | start_session() | killed, 1 |
+| D10 | `elseif vim.startswith(cmd[index], JOINED_SETTINGS_FLAG) then` → `elseif false then` | start_session() | killed, 1: the joined form |
+| D11 | `if not is_object(settings) then` → `if false then` | start_session() | survived the group; killed, 1, by the list-file row added for it |
+| A1 | `init.lua`: `pcall(settings.on_session_switched, …)` → `true, settings.on_session_switched(…)` | a session switch; a start in place | killed, 1 (+ its `post_case`); 1 |
+| A2 | `if not told then` → `if false then` | a session switch; a start in place | killed, 1; 1 |
+| r3 | `hook_relay.lua`: the confirmation → `vim.rpcrequest(channel, 'nvim_get_mode')` | the hook relay | killed, 1: the hit-enter TUI case |
+| r5 | `local mode = address:match('^[^/]+:%d+$') and 'tcp' or 'pipe'` → `local mode = 'pipe'` | the hook relay | killed, 1: TCP |
+| r21 | `start_deliverer(address, start_token, { … })` → `local _ = start_deliverer` | the hook relay | killed, 16, `leaves nothing running` among them |
+| m10 | `vim.v.exiting ~= vim.NIL\n    or not session` → `not session` | a session switch | killed, 1: the quit case, with the deterministic wait |
+| r6 | `  running.ending = nil` deleted | a session switch | killed, 1: the mark-cleared case |
+| r7 | `if told.event == 'SessionEnd' and told.id == session.followed then` → `if told.event == 'SessionEnd' then` | a session switch | killed, 1: the other-session case |
+| r10 | `arguments.lua`: `return "'" .. word:gsub(…) .. "'"` → `return '"' .. word .. '"'` | start_session() | killed, 1: the quoting case |
+| m2crash | `if ending and (…) then` → `if not ending or ending.ran < told.ran then` (follow_switch then indexes a nil `ending`) | a session switch | killed, 8; the no-`SessionEnd` case by its `post_case` (`Left` the scheduled callback's error) |
+| m1 | the hook delivers itself: `start_deliverer(…)` → `pcall(deliver, address, { …, ran })` | the hook relay | killed, 3: busy (duration), leaves nothing running, hit-enter |
+| m1c | the confirmation request deleted | the hook relay | killed, 2: busy, hit-enter |
+| m2 | `elseif told.event == 'SessionStart' and told.id ~= session.followed then` → `elseif told.event == 'SessionStart' then` | a session switch; keys | killed, 1; survived the keys group |
+| m3 | `  keep_session_id(running.settings, id)` deleted | a session switch | killed, 1 |
+| m4 | `--settings` moved after the tools (`return claude_settings and vim.list_extend(words, { SETTINGS_FLAG, … }) or words`) | start_session() | killed, 2 |
+| m5 | `start_deliverer(os.getenv('NVIM') or '', …)` | the hook relay | killed, 16 |
+| m6 | `    or not session_ids.is_session_id(told.id)` deleted | a session switch | killed, 3 |
+| m7 | `follow_switch(session, told.id, told.cause)` added after the `ending` mark | a session switch; keys | killed, 16; 5 |
+| m8 | `    followed = choice.id,` deleted | session_id() | killed, 2 |
+| m9 | `if ending and (…) then` → `if true then`, and `running.ending.reason` → `(running.ending or {}).reason` | a session switch | killed, 7 |
+| m11 | `tell_session_replaced(settings, left)` deleted in `start_new_session_in_place()` | a start in place | killed, 1 |
+| m12 | `    or session.start_token ~= told.start_token` deleted | a session switch | killed, 1 |
+
+Summary: 37 mutants; 36 killed by assertion on their group, D11 killed once its row was added; FM4 and m2 each survive one of their two groups and die on the other. The fix round ran none of m13–m20 or f1–f3 again: their code is unchanged, and the packet's table killed each.
+
+### Counts (Neovim 0.12.5, host)
+
+- `tests/test_claude_switch.lua` 64 cases (43 + 21), `tests/test_claude.lua` 117, `tests/test_claude_resume.lua` 49, `tests/test_doc.lua` 44, each `Fails (0)`.
+- Whole suite on `ac5d6a4` (the code and tests pushed): 1996 cases, 61 groups, `Fails (0)`; on `d3c9be2`, before a docstring correction, the same. `dev` was 1929; the packet left 1975.
+- `make lint` clean; the deep-require check prints 51 lines, each inside its own home (changes 9, claude 5, git 15, layout 1, mcp 7, report 14).
+- `git merge-tree --write-tree` of `d3c9be2` with `origin/feature/t36-report-sessions` (`199910a`) and with `origin/feature/t37-changes-sessions` (`0442ade`): both clean; `tests/test_doc.lua` 44, `Fails (0)`, on each merged help.
+
 ## Task lines
 
-T35 — done (PR into `dev`, `feature/t35-session-switch`): every start of Claude Code passes `--settings` with only a `SessionStart` and a `SessionEnd` command hook (no matcher, timeout 5 s) before `--allowedTools`, running `lua/aineo/claude/hook_relay.lua` as the MCP relay is run with the editor's address, a per-start token and the event, every word shell-quoted; the hook starts a detached deliverer and exits in ~20 ms, and the deliverer notifies the editor and waits for an answer behind the notification (decided over the brief on measurement: Neovim 0.12.5 drops a notification whose peer closed first when another channel's message comes first — 3 of 3 at a hit-enter prompt); `aineo.claude` follows the started id (A2, `session_id()`), takes a switch as a `SessionStart` of another id after the followed id's `SessionEnd` (A1), keeps it for the directory (D38) and calls `on_session_switched(id, source, left, reason)`, and tells a start that replaces the followed session (T19's fallback, T35-1) the same way; hooks of another start, malformed ids and anything while quitting are dropped; the fake runs the hooks on `/clear`, `/resume`, `/branch`, `/compact` and an exit by keys; help in four places; 47 cases (43 new file, 3 rows, 1 pin moved); mutants in the session note; open: deliverers' order at a busy editor, the hit-enter measurement in the suite (no UI there).
+T35 — done (PR #137 into `dev`, `feature/t35-session-switch`): every start of Claude Code passes one `--settings` holding a `SessionStart` and a `SessionEnd` command hook (no matcher, timeout 5 s) before `--allowedTools` — added after the hooks of a `--settings` in `claude.cmd`, inline or a file, which is passed whole as that one `--settings` (D44); one aineo cannot read passes as it is, without aineo's hooks, with one warning — running `lua/aineo/claude/hook_relay.lua` as the MCP relay is run with the editor's address, a per-start token and the event, every word shell-quoted; the hook starts a detached deliverer and exits in 20–43 ms, and the deliverer notifies the editor, naming when its hook began, and waits for an answer behind the notification (D43, superseding D36's "never a request", on measurement: Neovim 0.12.5 drops a notification whose sender closed first when the editor could not run it at once and a channel connected earlier has a message waiting — 3 of 3 at a hit-enter prompt); `aineo.claude` follows the started id (A2, `session_id()`), takes a switch as a `SessionStart` of another id whose hook ran after the followed id's `SessionEnd`, whichever reaches the editor first (A1, F1), keeps it for the directory (D38) and calls `on_session_switched(id, source, left, reason)`, an error of which is warned and goes no further, and tells a start that replaces the followed session (T19's fallback, T35-1) the same way; hooks of another start, malformed ids and anything while quitting are dropped; the fake runs the hooks on `/clear`, `/resume`, `/branch`, `/compact` and an exit by keys; help in four places and `claude.cmd`; 67 cases (64 in the new file, 3 rows, 1 pin moved); mutants in the session note; open: a lost `SessionEnd` leaves that Claude Code's later switches unfollowed (A1), the same-id `/resume` mark.
 
 ## Open threads
 
 - **For the orchestrator and the user:** the deliverer departs from the brief's relay (above). The plan's mutant 1 no longer has an observable; m1 and m1c carry it.
-- **A Learning for the adjustment pass** (outside this packet's boundary): "Neovim 0.12.5 drops an RPC notification whose connection its peer closed before the editor handled it, when the editor has another channel's message to handle first" — the probes above. It bears on every relay that notifies and exits, the MCP relay's report path aside (it waits for an answer).
-- Two deliverers reaching a busy editor out of order were not measured; a `SessionStart` taken before its `SessionEnd` drops that switch (the session stays the old one, as when hooks do not run).
-- The suite cannot hold its child at a hit-enter prompt (no UI is attached), so the busy-editor case uses a sleeping child, which drops the brief's relay's notification the same way; the hit-enter case itself is in the probes only.
+- **A Learning for the adjustment pass** (outside this packet's boundary), worded as narrowly as the records review measured it (finding 2): "Neovim 0.12.5 drops an RPC notification whose sender closed the connection before the editor ran it, when the editor could not run it at once (busy, or at a hit-enter prompt) and a channel connected earlier has a message waiting too: the TUI's keys, another client's request or notification. Keep the connection open until the answer to a request sent behind the notification arrives." A channel connected *after* the closed one did not cause the loss (3 of 3 delivered), and a connection held open delayed the notification rather than losing it. [[Learnings/An RPC request to a Neovim at a hit-enter prompt waits until it is answered]] should link to it. It bears on every relay that notifies and exits, the MCP relay's report path aside (it waits for an answer).
+- ~~Two deliverers reaching a busy editor out of order were not measured~~ — measured by the attack review and closed by the fix round's F1 (*Fix round*).
+- ~~The hit-enter case is in the probes only~~ — the fix round adopted the test-integrity review's case, a real TUI in a terminal job of the child, held at a hit-enter prompt (*Fix round*).
 - The fake's hook input is the documented common fields plus the source or reason M1 measured; M1 did not record the whole input, so it is not a recording.
 - `git merge-tree --write-tree` of this branch's head `6fb592a` with `origin/feature/t36-report-sessions` (`fe112c4`) and with `origin/feature/t37-changes-sessions` (`0442ade`): both clean, and `tests/test_doc.lua` 44 cases, `Fails (0)`, on each merged tree (W-2).
 
