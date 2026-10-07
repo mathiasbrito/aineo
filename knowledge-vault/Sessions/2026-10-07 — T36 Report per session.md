@@ -130,7 +130,7 @@ The brief asks for `git merge-tree --write-tree` with `origin/feature/t35-sessio
 
 The wave holds its marks. For the knowledge pass:
 
-- **T36** — done — PR into `dev`, wave 9 (the Report's records and Input's draft per Claude session, D39, D40: `follow_report_session()` and `follow_draft_session()`, `session-<sha256(id)>` files beside the directories', the directory's file moved to the first session followed (history (i), A6), a session told before the environment held (the ruling on T36-1), a swap refused under textlock retried at `SafeState`; nothing calls them until T39; 27 new cases in `tests/test_report_sessions.lua` and `tests/test_draft_sessions.lua`; fix round of PR #135: a kept buffer's saves stay with its old session until its swap lands, the swap never saved, no swap while the old text cannot be saved, the moves by link then unlink, the ids checked; 52 cases in the two files)
+- **T36** — done — PR into `dev`, wave 9 (the Report's records and Input's draft per Claude session, D39, D40: `follow_report_session()` and `follow_draft_session()`, `session-<sha256(id)>` files beside the directories', the directory's file moved to the first session followed (history (i), A6), a session told before the environment held (the ruling on T36-1), a swap refused under textlock retried at `SafeState`; nothing calls them until T39; 27 new cases in `tests/test_report_sessions.lua` and `tests/test_draft_sessions.lua`; fix round of PR #135: a kept buffer's saves stay with its old session until its swap lands, the swap never saved, no swap while the old text cannot be saved, the moves by link then unlink, the ids checked; 52 cases in the two files; fix round 2 after the re-measure: a failed save stays pending, two interleaved first follows keep one file each, an edit in the first follow's window lands with the moved draft, both retries in aineo's augroups, a rename fallback where hard links are refused, an unreadable session draft never replaced (the orchestrator's ruling), LIMITS names the two races left; 117 cases in the two files)
 
 ## Open threads
 
@@ -248,6 +248,115 @@ Each row's failing cases are in `.tests/t36-mutants-fix.out`.
 - **For T39 or the knowledge pass:**
   - the help's *Undo* section and LIMITS *Undo after a Send*, outside T36's fences (records finding 5);
   - `plugin/aineo.lua`'s docstrings, the plan's A6 and A7, and D39's "once" (records › *What T36 makes false elsewhere*).
+
+## Fix round 2 — 2026-10-07, after the re-measure of PR #135
+
+A fresh implementer (`neovim-lua-developer`, Opus) took the re-measure of `199910a` (`remeasure135/remeasure-t36.md` in the main checkout's orchestrator folder) and the orchestrator's instructions for the round (`orch-fixround2-135.md` there). Every red below was seen on Neovim 0.12.5, each case run alone, before its code.
+
+### The orchestrator's rulings — its assumptions under the user's instruction of 2026-10-06, to report to the user
+
+- **Finding 8: a session whose draft cannot be read keeps its file.** While Input shows such a session, typing is not saved to that file. The user is warned at the follow and again at the first edit, each time. No write ever replaces an unreadable draft.
+  - Read here as: the session's draft, at a follow or at `keep_draft()`'s restore of a held session. The working directory's draft before any follow keeps D17's rule (replaced by the first change after one warning), so `dev` behaves as before; a case pins it.
+  - Text typed while Input shows such a session is a text that cannot be saved, so the first round's ruling applies: the next follow keeps it in Input, with a warning each time. An empty Input has nothing to keep, and the follow goes on.
+- **Finding 7: the older-aineo race is named in LIMITS, not fixed.**
+- **Findings 1–6** were to be fixed as the re-measure built them (F1–F5), and **finding 9** corrected in the PR body.
+
+### What changed
+
+- **F1 (finding 1).** Every save goes through `save_pending_change_now()`, which clears `pending` only once the write succeeded: the delayed save, the save at once when Input empties, and the quit save. `save()` had no caller left and went.
+- **F3 (finding 2), both homes.** When the unlink after a successful link finds `ENOENT`, another editor took the file between the two calls. `give_up_link_taken_meanwhile()` then removes this editor's name when the file has another one, and keeps it when it is the only one. A removal that fails is told, naming that another editor moved the file at the same moment and that both sessions keep it: that is the round's "the warning names what happened". Before, the warning blamed the directory's file with `ENOENT`.
+- **F5 (finding 3).** `pin_moved_text()` re-pins every buffer pinned to the directory's file to the session's, once the session's file holds the text: after the link, also when the directory's name cannot be removed, and after the fallback's rename.
+- **F2 (finding 4).** The draft's retry is in `aineo.draft` and the Report's in a new `aineo.report`. Each docstring says what clearing aineo's own group while a retry waits does, measured with `:autocmd! aineo.draft` and `:autocmd! aineo.report`: the buffer stays on its old file, or the Report on its old records, for the editor's life.
+- **F4 (finding 5), both homes.** A link refused with `ENOTSUP`, `EPERM`, `EXDEV`, `EMLINK` or `ENOSYS` falls back to looking for the session's file, then renaming. A rename that finds the directory's file gone is no failure, and any other failure is told. LIMITS names the race the fallback keeps.
+- **Finding 8.** `watch.unreadable` holds the session file that could not be read. `write_kept_text()`, used by every save, never writes it. The follow's read warning is given each time (it was `warn_once`), and `tell_text_not_saved()` warns at the first change after each such follow.
+- **Help.** The draft fence says the unreadable-session rule. A new LIMITS subsection, *The first follow's move*, names the fallback's check-then-rename race and the older-aineo save removed between the link and the unlink (finding 7). That subsection is outside the brief's fences, as the round's instructions asked.
+
+### Tests — seen red, arrived green
+
+`tests/test_draft_sessions.lua`: 30 → 71 cases. `tests/test_report_sessions.lua`: 22 → 46. The F4 cases are a set parametrized over the five codes.
+
+**Seen red:**
+
+| Item | Case | Red |
+|---|---|---|
+| F1 | keeps Input's text whose delayed save failed before the switch (RM-1) | `kept` 0 vs 1, Input showing B's draft |
+| F1 | saves the text whose delayed save failed once the disk is freed (RM-2) | on `199910a`'s home: `first` nil vs the text |
+| F1 | keeps the text when its delayed save fails between two switches (RM-3) | on `199910a`'s home: `kept` 1 vs 2 |
+| F3 | records moved by another editor at the same moment stay that session's file alone (RR-1) | `other` held "Kept for session a only", `same_file` true |
+| F3 | records … told so when the link cannot be removed | no warning |
+| F3 | draft moved by another editor at the same moment stays that session's alone (RM-9) | Input showed the directory's draft |
+| F3 | draft … told so when the link cannot be removed | no warning |
+| F5 | keeps an edit made while the first follow waits with the draft it moved (RM-11) | the edit in a new directory file |
+| F2 | draft: made still when every `SafeState` autocommand in no group is cleared (RM-4) | A's file took the third session's typing |
+| F2 | Report: the same (RR-2) | Report stayed on Alpha |
+| F4 | records become the first session followed by a rename, ×5 | Report empty |
+| F4 | records left as they are when the session has records, ×5 | session's file replaced |
+| F4 | records that cannot be renamed are told once, ×5 | `moves` 0 vs 1 |
+| F4 | draft becomes the first session followed by a rename, ×5 | directory's file left |
+| F4 | draft left as it is when the session has a draft, ×5 | a move warning |
+| F4 | draft taken by another editor first is told as no failure, ×5 | a move warning |
+| 8 | is told at each follow to its session | 1 vs 2 |
+| 8 | is not replaced by what is typed while Input follows its session | typed text in the file |
+| 8 | tells at the first change after the follow, once, that Input's text is not saved | `unsaved` 0 vs 1 |
+| 8 | lets an emptied Input take the next session draft, writing nothing | `kept` 1 vs 0 |
+| 8 | a held session whose draft cannot be read keeps it from what is typed | typed text in the file |
+
+The three F1 cases: RM-1 was seen red alone, before the fix. RM-2 and RM-3 were written after it, arrived green, and were then run against `199910a`'s draft home, where all three fail (shown above).
+
+The records' two "cannot be renamed" rows above went red before their code. The draft's "cannot be renamed" case arrived green, as described below.
+
+**Arrived green**, each with the mutant that kills it, run on the final tree:
+- "removed between the link and its removal", both homes: written ahead in the same unit. Killed by F3-*-nlink.
+- Records "taken by another editor first", where links are refused: killed by F4-report-enoent-fails.
+- Draft "that cannot be renamed is told once", ×5: green on the old code too, because the refused link was itself told. Killed by F4-draft-rename-untold.
+- "keeps an edit … with the draft it renamed where links are refused": killed by F5-no-pin-rename.
+- Finding 6's three cases (twice in one hold with an edit; a quit in the window; an unreadable draft empties Input): killed by MX3, MX16a and MX5a.
+- "keeps what was typed for its session in Input at the next follow": spent by "is not replaced…". Killed by F8-write-unguarded.
+- "tells again, at the first change after each follow": killed by F8-told-never-reset.
+- "saves an emptying of Input whose save failed once the disk is freed": built for the survivor F1-empty-clears, which it kills.
+- "of the working directory, before any follow, is replaced by the first change": built for the survivor F8-restore-marks-directory, which it kills.
+
+**Not adopted literally:**
+- RM-5: under the ruling, its second follow keeps the typed text in Input and reads nothing, so its `reads = 2` no longer holds. Its two claims are the first two finding-8 cases.
+- RM-13 (finding 7): ruled a LIMITS entry.
+
+### Mutants (each its literal edit from a pristine copy, one at a time, against its home's session test file and, while it survives, the covering files; Neovim 0.12.5)
+
+The runner is `.tests/t36f2/mutate.py` in the worktree, with every literal edit; its rows are in `.tests/t36f2/mutants.txt`. 61 mutants:
+- **The re-measure's 19**: ti-R5, ti-R7, ti-R9, ti-D6a, ti-D8a, ti-D10, ti-D11a; MX3, MX5a, MX6, MX9, MX10, MX15, MX16a, MX17; POISON-D, POISON-R, NOOP-D, NOOP-R. They are literal where the edit still applies.
+  - MX5 is adapted: the follow's read warning is `warn()` now.
+  - MX16 is adapted: the quit save shares `save_pending_change_now()`, so its edit is `watch.file = nil` before that call.
+  - 17 were killed by assertion. POISON-D and POISON-R crash, as meant. NOOP-R has 39 assertions and 2 crashes.
+  - **ti-R5 and ti-D6a survive** the session file and every covering file. They have had no separating input since the first round, as disclosed then.
+- **This round's 42:**
+  - F1 ×2;
+  - F3 ×8: `ENOENT` ignored, the link always given up, the link never given up, the give-up's failure untold, each in both homes;
+  - F5 ×3;
+  - F2 ×2;
+  - F4 ×18: each of the five codes dropped, no fallback, no look, `ENOENT` a failure, and the rename failure untold, each in both homes;
+  - finding 8 ×9: F8-read-told-once, F8-swap-unmarked, F8-restore-unmarked, F8-restore-marks-directory, F8-told-never-reset, F8-told-every-change, F8-write-unguarded, F8-empty-refused, F8-change-unguarded.
+- On the first run, 40 of the 42 were killed by assertion.
+  - F1-empty-clears and F8-restore-marks-directory survived all three draft files.
+  - The two cases above were built for them, and each is now killed by assertion.
+
+**Totals on the final tree:** 59 of 61 killed. The 2 survivors are ti-R5 and ti-D6a.
+
+The source files are the same at `8b97d8a`, where the full run was made, and at the head. Only `7becb7d` adds the two draft cases, and every killing case is still in the file. ti-D6a was re-run on the final draft file and still survives; the report files did not change.
+
+### Suites, lint, merges
+
+- Touched files, final tree: `test_draft_sessions` 71, `test_report_sessions` 46, `test_draft` 41, `test_entry_draft` 17, `test_doc` 44. Each has `Fails (0)`.
+- `make lint`: clean.
+- Merge checks, on `8b97d8a`. The code and help are final there; the later commits add test cases and this note.
+  - `git merge-tree --write-tree` with `origin/feature/t35-session-switch` (`83a5029`) gives `d11da13`, clean.
+  - With `origin/feature/t37-changes-sessions` (`0442ade`) it gives `0c5031f`, clean.
+  - `tests/test_doc.lua` on each merged tree: 44 cases, `Fails (0) and Notes (0)`.
+- **Whole suite** (`make test`, once, on `7becb7d`, `NVIM v0.12.5`): 2046 cases in 62 groups, `Fails (0) and Notes (0)`, exit 0. That is the first round's 1981 plus this round's 41 draft and 24 report cases. The push adds only this note to that tree.
+
+### Not done
+
+- ti-R5 and ti-D6a: still no separating input.
+- `give_up_link_taken_meanwhile()` keeps a link that is the file's only name without re-pinning a waiting buffer to it. That needs the directory's file deleted by hand, between two syscalls, during a textlock window.
 
 ## Commits
 
