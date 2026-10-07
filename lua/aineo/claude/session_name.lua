@@ -127,10 +127,11 @@ local function literal(text)
 end
 
 --- The status line format that draws, for `window`, the name and the folder
---- of the terminal it shows: `<name> — <folder>`, each as written, whatever
---- it holds — a `%`, digits alone, a leading comma or space. A status line
---- too narrow for both cuts the folder first, from its start, and the name
---- only once no folder is left to cut.
+--- of the terminal it shows: `<name> — <folder>`, each as written, a `%`,
+--- digits alone, a leading comma or space among them; a control character
+--- draws in caret notation, and a name longer than about 4 KB loses its
+--- start. A status line too narrow for both cuts the folder first, from its
+--- start, and the name only once no folder is left to cut.
 ---
 ---@param window integer
 ---@return string

@@ -841,7 +841,8 @@ end
 --- (`knowledge-vault/Implementation/Waves/00008-small-fixes/evidence/
 --- t33-real-claude-title.txt`), its empty title at exit, and the rule's other
 --- cases: a status glyph is left out once, with the space after it, and
---- only when a space or nothing follows it; a letter or a digit is never one.
+--- only when a space or nothing follows it; a letter or a digit is never one,
+--- and below U+0100 the letters are ª, µ, º, and À to ÿ but × and ÷.
 T["the session's name"]['read from the title'] = MiniTest.new_set({
   parametrize = {
     { '✳ Claude Code', 'Claude Code' },
@@ -857,6 +858,13 @@ T["the session's name"]['read from the title'] = MiniTest.new_set({
     { 'A fix', 'A fix' },
     { '#42 fix', '#42 fix' },
     { '× draft', 'draft' },
+    { 'ª draft', 'ª draft' },
+    { 'µ draft', 'µ draft' },
+    { 'º draft', 'º draft' },
+    { 'À draft', 'À draft' },
+    { 'ÿ draft', 'ÿ draft' },
+    { '¿ draft', 'draft' },
+    { '÷ draft', 'draft' },
     { '✳', 'Claude Code' },
     { '✳ ', 'Claude Code' },
     { '', 'Claude Code' },
@@ -1071,6 +1079,31 @@ T['session_statusline()']['shows as written the name']['of'] = function(title, n
   local shown = child.lua_get(SESSION_STATUSLINE_TEXT, { buffer })
 
   eq(shown, name .. ' — ' .. vim.fn.fnamemodify(directory, ':~'))
+end
+
+--- The expression, run in a Neovim, that shows the terminal buffer given
+--- first in the current window with `session_statusline()` as that window's
+--- status line, and gives the text that status line draws at the width given
+--- second.
+local SESSION_STATUSLINE_AT_WIDTH = [[(function(buffer, width)
+  vim.api.nvim_win_set_buf(0, buffer)
+  local statusline = require('aineo.claude').session_statusline()
+  vim.wo[0][0].statusline = statusline
+  return vim.api.nvim_eval_statusline(statusline, { winid = 0, maxwidth = width }).str
+end)(...)]]
+
+T['session_statusline()']['cuts the folder first, from its start, and the name only once no folder is left'] = function()
+  local directory = fixture.directory('statusline-narrow-folder')
+  local buffer = start_idle_session('statusline-narrow', directory)
+  child.lua('vim.b[...].term_title = "✳ aineo-title-probe"', { buffer })
+  local folder = vim.fn.fnamemodify(directory, ':~')
+
+  local shown = {
+    child.lua_get(SESSION_STATUSLINE_AT_WIDTH, { buffer, 40 }),
+    child.lua_get(SESSION_STATUSLINE_AT_WIDTH, { buffer, 15 }),
+  }
+
+  eq(shown, { 'aineo-title-probe — <' .. folder:sub(-19), 'aineo-title-pr>' })
 end
 
 return T
