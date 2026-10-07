@@ -15,18 +15,21 @@ unset NVIM NVIM_APPNAME MYVIMRC VIMINIT
 cd "$here" && exec nvim --clean --headless -i NONE -l "$1"
 
 ==== probe-statusline-expr.lua ====
+-- Re-run 2026-10-07 by the correction to PR #131, with a %{%…%} row for each name and the
+-- name "100% done" added (the records review of PR #131, finding 1); the other rows are unchanged.
 -- What a %{} status-line item draws for a name of digits alone, or one that begins
--- with a comma or a space, against a %! expression returning the same text.
+-- with a comma or a space, against a %{%…%} item and a %! expression returning the same text.
 local function show(label, statusline)
   local drawn = vim.api.nvim_eval_statusline(statusline, { maxwidth = 80 }).str
   print(string.format('%-34s %-48s -> %q', label, statusline, drawn))
 end
 
-local names = { '0042', '99999999999', '12345678901234567890', ',draft', ' draft', 'draft' }
+local names = { '0042', '99999999999', '12345678901234567890', ',draft', ' draft', 'draft', '100% done' }
 for _, name in ipairs(names) do
   vim.g.probe_name = name
   show(string.format('%%{} at start, name %q', name), "%{g:probe_name} — folder")
   show(string.format('%%{} after text, name %q', name), "x %{g:probe_name} — folder")
+  show(string.format('%%{%%…%%} at start, name %q', name), "%{%g:probe_name%} — folder")
   _G.probe_expression = function()
     return (name:gsub('%%', '%%%%')) .. ' — folder'
   end
@@ -36,22 +39,32 @@ print('nvim ' .. tostring(vim.version()))
 ---- its output ----
 %{} at start, name "0042"          %{g:probe_name} — folder                       -> "42 — folder"
 %{} after text, name "0042"        x %{g:probe_name} — folder                     -> "x 42 — folder"
+%{%…%} at start, name "0042"     %{%g:probe_name%} — folder                     -> "42 — folder"
 %! expression, name "0042"         %!v:lua.probe_expression()                       -> "0042 — folder"
 %{} at start, name "99999999999"   %{g:probe_name} — folder                       -> "1215752191 — folder"
 %{} after text, name "99999999999" x %{g:probe_name} — folder                     -> "x 1215752191 — folder"
+%{%…%} at start, name "99999999999" %{%g:probe_name%} — folder                     -> "1215752191 — folder"
 %! expression, name "99999999999"  %!v:lua.probe_expression()                       -> "99999999999 — folder"
 %{} at start, name "12345678901234567890" %{g:probe_name} — folder                       -> " — folder"
 %{} after text, name "12345678901234567890" x %{g:probe_name} — folder                     -> "x  — folder"
+%{%…%} at start, name "12345678901234567890" %{%g:probe_name%} — folder                     -> " — folder"
 %! expression, name "12345678901234567890" %!v:lua.probe_expression()                       -> "12345678901234567890 — folder"
 %{} at start, name ",draft"        %{g:probe_name} — folder                       -> "draft — folder"
 %{} after text, name ",draft"      x %{g:probe_name} — folder                     -> "x draft — folder"
+%{%…%} at start, name ",draft"   %{%g:probe_name%} — folder                     -> "draft — folder"
 %! expression, name ",draft"       %!v:lua.probe_expression()                       -> ",draft — folder"
 %{} at start, name " draft"        %{g:probe_name} — folder                       -> "draft — folder"
 %{} after text, name " draft"      x %{g:probe_name} — folder                     -> "x  draft — folder"
+%{%…%} at start, name " draft"   %{%g:probe_name%} — folder                     -> "draft — folder"
 %! expression, name " draft"       %!v:lua.probe_expression()                       -> " draft — folder"
 %{} at start, name "draft"         %{g:probe_name} — folder                       -> "draft — folder"
 %{} after text, name "draft"       x %{g:probe_name} — folder                     -> "x draft — folder"
+%{%…%} at start, name "draft"    %{%g:probe_name%} — folder                     -> "draft — folder"
 %! expression, name "draft"        %!v:lua.probe_expression()                       -> "draft — folder"
+%{} at start, name "100% done"     %{g:probe_name} — folder                       -> "100% done — folder"
+%{} after text, name "100% done"   x %{g:probe_name} — folder                     -> "x 100% done — folder"
+%{%…%} at start, name "100% done" %{%g:probe_name%} — folder                     -> "100done — folder"
+%! expression, name "100% done"    %!v:lua.probe_expression()                       -> "100% done — folder"
 nvim 0.12.5
 
 ==== probe-breakindent-min.lua ====

@@ -105,7 +105,7 @@ Wave 8 — `00008-small-fixes`, the first wave of the user's series of prompts, 
 
 **Next:**
 - **Wave 8 has landed** (2026-10-07) and is released as `v0.2.15`. The orchestrator reports its assumptions, A1–A20, and their readings, MR295–MR321, to the user, as the user asked.
-- **Wave 9 is next**: worktrees in the changes pane and the session switches inside Claude Code. The user answered its converge round on 2026-10-07, and its plan (PR #124) is being amended with those answers on another branch.
+- **Wave 9 is next**: worktrees in the changes pane and the session switches inside Claude Code. The user answered its converge round on 2026-10-07, and its plan is PR #132 (open), which supersedes PR #124 with the user's answers.
 - **The MVP review is the user's.** v1's plan is built, T1–T31, and released as `v0.2.14`, from which the user reviews it; wave 8's small fixes followed in `v0.2.15`. The user asked on 2026-09-23 (23:41 CEST) to review the first MVP once every functionality was implemented. Its agenda is [[Review/2026-09-24 — v1 MVP readings review]]: the user kept MR1–MR97, MR99, MR100 and MR102–MR107 on 2026-09-26 and narrowed MR99 and MR100 on 2026-10-05 (T30); the rows still open are listed under *Decisions awaiting the user*, below.
 - **After the MVP review:** the idea notes in `Ideas/`, today one, [[Ideas/The changes pane follows the agents' worktrees]], raised by the user on 2026-10-06 (PR #116); the user made it part of wave 9's input the same day.
 
