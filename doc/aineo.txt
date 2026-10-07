@@ -621,16 +621,22 @@ claude.cmd		A list of at least one string. Default: `{ 'claude' }`
 			passes that file as its one `--settings`. Nothing of
 			your settings goes on Claude Code's command line.
 			aineo reads only a regular file, never a FIFO, a
-			directory or a device. When aineo cannot read your
-			settings, add to their `hooks` or write that file,
-			it passes your `--settings` as it is, Claude Code
-			starts without aineo's hooks, and aineo warns once:
-			a session switch inside Claude Code is then not
-			followed. A `--settings` that a wrapper script adds
-			itself is not among these words, so aineo cannot
-			see it: Claude Code 2.1.292 reads the last
-			`--settings` it is given, aineo's, and the script's
-			is overridden. Put it in `claude.cmd` instead.
+			directory or a device, and reads a file that begins
+			with a UTF-8 byte order mark, or holds nothing but
+			blanks, as Claude Code 2.1.292 does. When aineo cannot
+			read your settings, add to their `hooks` or write that
+			file, it passes your `--settings` as it is, Claude
+			Code starts without aineo's hooks, and aineo warns
+			once: a session switch inside Claude Code is then not
+			followed. |aineo-health| says why it could not. What
+			the file's lifetime means for teammates and background
+			sessions is in |aineo-limits|. A `--settings` that a
+			wrapper script adds itself is not among these words,
+			so aineo cannot see it. Claude Code 2.1.292 reads the
+			last `--settings` it is given: one the script adds
+			before aineo's words is overridden, and one it adds
+			after them, after `"$@"`, overrides aineo's hooks,
+			without a warning. Put it in `claude.cmd` instead.
 			Claude Code started through another program works,
 			its words all in the list: >lua
 			    vim.g.aineo = {
@@ -936,6 +942,14 @@ Claude Code ~
   process of its own holding its output open counts as running longer. A
   process it starts that leaves the group, by starting a session or a
   group of its own, is not killed and can outlive the check.
+  When `claude.cmd` gives a `--settings`, whether aineo can add its
+  session hooks to it, read from the editor's working directory as a
+  start reads it (|aineo-config-claude.cmd|): a warning naming why it
+  cannot — the file missing, not a regular file or unreadable, settings
+  that are not valid JSON or hold no object, `hooks` that are not an
+  object, a `SessionStart` or `SessionEnd` entry that is not a list, or
+  no value after the flag. Whether aineo can write the file it passes
+  them in is not checked.
 
 Server socket ~
   The address the editor listens at (|v:servername|); an error when it
@@ -1001,12 +1015,30 @@ once a folder's trust dialog is answered "Yes"; and whether a `/fork`
 background copy, a conversation moved to the background or a subagent
 tells of a new session. aineo follows a new session only when Claude Code
 started it after ending the session aineo follows, so such a session,
-without that end, is not followed. A hook that cannot reach the editor
-tells it nothing; and once the end of the session aineo follows is lost,
-no later switch of that Claude Code is followed, until it starts again.
-Each hook starts a headless `nvim` and returns at once; that `nvim` tells
-the editor, waits for its answer, then exits: at once in an idle editor,
-and once you answer the prompt in an editor at a prompt.
+without that end, is not followed. The teammates and background sessions
+Claude Code 2.1.292 starts are given its `--settings`, aineo's hooks among
+them (read in its program, not run); aineo ignores every hook that ran
+after its Claude Code exited, so a session they start then is not
+followed either. A hook that cannot reach the editor tells it nothing;
+and once the end of the session aineo follows is lost, no later switch
+of that Claude Code is followed, until it starts again. Each hook starts
+a headless `nvim` and returns at once; that `nvim` tells the editor, waits
+for its answer, then exits: at once in an idle editor, and once you answer
+the prompt in an editor at a prompt.
+
+The settings file ~
+The file aineo writes for a `--settings` in `claude.cmd`
+(|aineo-config-claude.cmd|) is removed when Neovim exits, also on a hangup
+or SIGTERM. A Neovim killed by SIGKILL leaves it in its temporary
+directory, readable and writable by you alone (0600), your settings in it,
+secrets among them, until the system clears that directory. Each start of
+Claude Code writes one more, and none is removed before Neovim exits.
+Claude Code 2.1.292 reads the file once, when it starts, so its removal
+does not touch a running Claude Code. The teammates it starts and its
+background sessions, and their restarts, are started with the same
+`--settings` and read the file again at their own start: once Neovim has
+exited and removed it, such a start fails. Read in Claude Code's program,
+not run.
 
 The 80-column start ~
 At startup, a message longer than |v:echospace| — 68 columns on an 80-column
@@ -1014,7 +1046,7 @@ screen — holds Neovim at a hit-enter prompt. aineo's line for a
 `claude.cmd` that is not executable fits for a command name of up to 29
 characters; a longer one, such as an absolute path, still prompts. Its
 line for a `--settings` in `claude.cmd` that it cannot read fits; it says
-no more than that, not which file or why.
+no more than that, not which file or why: |aineo-health| says why.
 
 Send and a dialog ~
 A permission dialog drawn in the few tens of milliseconds before aineo
