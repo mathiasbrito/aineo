@@ -891,6 +891,30 @@ T['a draft that cannot be read']['is left as it is by a follow, which tells it o
   }, { reads = 1, second = 'Kept for the second session\n' })
 end
 
+T['a draft that cannot be read']['empties Input at a follow, which keeps no later change as the old session draft'] = function()
+  local state = fixture.directory('draft-sessions-unreadable-empties')
+  local second = session_draft_file(state, 'session-b')
+  plant_draft(second, 'Kept for the second session\n')
+  child.lua(KEEP_WARNINGS)
+  keep_new_buffer(state)
+  follow('session-a')
+  set_input({ 'Notes for the first session' })
+  vim.uv.fs_chmod(second, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(second, tonumber('600', 8))
+  end)
+
+  follow('session-b')
+  local shown = input_lines()
+  set_input({ 'Typed after the follow' })
+  vim.wait(SAVE_DELAY_AND_MARGIN_MS)
+
+  eq({ shown = shown, first = read_text(session_draft_file(state, 'session-a')) }, {
+    shown = { '' },
+    first = 'Notes for the first session\n',
+  })
+end
+
 T['a follow refused while textlock holds']["keeps an emptying of Input made meanwhile as the old session's draft"] = function()
   local state = fixture.directory('draft-sessions-window-empty')
   plant_draft(session_draft_file(state, 'session-b'), 'Kept for the second session\n')
@@ -1167,6 +1191,63 @@ T['a follow refused while textlock holds']['keeps an edit made while the first f
     shown = { 'From the directory and more' },
     session = 'From the directory and more\n',
     directory = nil,
+  })
+end
+
+T['a follow refused while textlock holds']["followed twice, keeps an edit made meanwhile as the first session's draft"] = function()
+  local state = fixture.directory('draft-sessions-textlock-twice-edit')
+  plant_draft(session_draft_file(state, 'session-b'), 'Kept for the second session\n')
+  plant_draft(session_draft_file(state, 'session-c'), 'Kept for the third session\n')
+  keep_new_buffer(state)
+  follow('session-a')
+  set_input({ 'Typed for the first session' })
+  begin_hold('vim.fn.getcharstr()', 'A and more<Esc>')
+  follow('session-b')
+  follow('session-c')
+  local waiting = child.lua_get(RETRIES)
+  end_hold('q')
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+
+  eq({
+    waiting = waiting,
+    shown = input_lines(),
+    first = read_text(session_draft_file(state, 'session-a')),
+    second = read_text(session_draft_file(state, 'session-b')),
+    third = read_text(session_draft_file(state, 'session-c')),
+  }, {
+    waiting = 1,
+    shown = { 'Kept for the third session' },
+    first = 'Typed for the first session and more\n',
+    second = 'Kept for the second session\n',
+    third = 'Kept for the third session\n',
+  })
+end
+
+T['a follow refused while textlock holds']["keeps an edit made meanwhile as the old session's draft when Neovim quits"] = function()
+  local state = fixture.directory('draft-sessions-quit-window')
+  plant_draft(session_draft_file(state, 'session-b'), 'Kept for the second session\n')
+  keep_new_buffer(state)
+  follow('session-a')
+  set_input({ 'Typed for the first session' })
+  begin_hold('vim.fn.getcharstr()', 'A and more<Esc>:qall<CR>')
+  follow('session-b')
+  local waiting = child.lua_get(RETRIES)
+  pcall(child.api.nvim_input, 'q')
+  vim.wait(PATIENCE_MS, function()
+    return read_text(session_draft_file(state, 'session-a')) ~= 'Typed for the first session\n'
+      or read_text(session_draft_file(state, 'session-b')) ~= 'Kept for the second session\n'
+  end, 20)
+
+  eq({
+    waiting = waiting,
+    first = read_text(session_draft_file(state, 'session-a')),
+    second = read_text(session_draft_file(state, 'session-b')),
+  }, {
+    waiting = 1,
+    first = 'Typed for the first session and more\n',
+    second = 'Kept for the second session\n',
   })
 end
 
