@@ -732,6 +732,31 @@ T['a follow refused while textlock holds']['keeps a report arriving meanwhile in
   })
 end
 
+T['a follow refused while textlock holds']['is made still when every SafeState autocommand in no group is cleared while it waits'] = function()
+  local state = fixture.directory('report-sessions-safestate-cleared')
+  plant_records(session_records_file(state, 'session-a'), { 'Alpha' })
+  plant_records(session_records_file(state, 'session-b'), { 'Beta' })
+  plant_records(session_records_file(state, 'session-c'), { 'Gamma' })
+  start_editor(state)
+  follow('session-a')
+  child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
+  begin_hold('vim.fn.getcharstr()')
+  follow('session-b')
+  local waiting = child.lua_get(RETRIES)
+  child.cmd('autocmd! SafeState')
+  end_hold('q')
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+
+  follow('session-c')
+
+  eq({ waiting = waiting, lines = report_editor.lines(child) }, {
+    waiting = 1,
+    lines = { '09:00 [done] Task — Gamma' },
+  })
+end
+
 T['a follow refused while textlock holds']["followed twice, shows the last session's records and keeps the next report there"] = function()
   local state = fixture.directory('report-sessions-textlock-twice')
   plant_records(session_records_file(state, 'session-a'), { 'Alpha' })

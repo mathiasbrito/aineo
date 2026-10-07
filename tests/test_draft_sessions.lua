@@ -1046,6 +1046,41 @@ T['a follow refused while textlock holds']['keeps an edit made while the first f
   })
 end
 
+T['a follow refused while textlock holds']['is made still when every SafeState autocommand in no group is cleared while it waits'] = function()
+  local state = fixture.directory('draft-sessions-safestate-cleared')
+  plant_draft(session_draft_file(state, 'session-b'), 'Kept for the second session\n')
+  plant_draft(session_draft_file(state, 'session-c'), 'Kept for the third session\n')
+  keep_new_buffer(state)
+  follow('session-a')
+  set_input({ 'Typed for the first session' })
+  begin_hold('vim.fn.getcharstr()')
+  follow('session-b')
+  local waiting = child.lua_get(RETRIES)
+  child.cmd('autocmd! SafeState')
+  end_hold('q')
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+
+  follow('session-c')
+  set_input({ 'Typed while following the third session' })
+
+  eq({
+    waiting = waiting,
+    shown = input_lines(),
+    first = wait_for_text(
+      session_draft_file(state, 'session-a'),
+      'Typed while following the third session\n'
+    ),
+    third = read_text(session_draft_file(state, 'session-c')),
+  }, {
+    waiting = 1,
+    shown = { 'Typed while following the third session' },
+    first = 'Typed for the first session\n',
+    third = 'Typed while following the third session\n',
+  })
+end
+
 T['a follow refused for another reason'] = MiniTest.new_set()
 
 T['a follow refused for another reason']['is told once, and not tried again'] = function()
