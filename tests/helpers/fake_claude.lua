@@ -362,7 +362,11 @@ end
 local RUNS_HOOKS = os.getenv('AINEO_FAKE_CLAUDE_HOOKS') ~= nil
 
 --- How long a hook may run, in seconds, when its settings give no
---- `timeout`: Claude Code's documented default for a command hook.
+--- `timeout`: Claude Code's documented default for a command hook. Claude
+--- Code documents a shorter one for `SessionEnd` hooks — 1.5 s for all of
+--- them at an exit, a `/clear` or an in-session `/resume`, raised by a
+--- hook's own `timeout` — which the fake does not model: aineo's hooks give
+--- a `timeout`, and end in milliseconds.
 local DEFAULT_HOOK_TIMEOUT_SECONDS = 600
 
 --- What Claude Code writes on a session hook's stdin for `event`: the

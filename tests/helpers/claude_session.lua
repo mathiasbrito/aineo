@@ -214,7 +214,7 @@ local START_NOTING_SWITCHES = [[
 --- Starts the session in `child` as `start()` does — `fake`'s environment
 --- set, its terminal shown in the current window — with an
 --- `on_session_switched` that notes each switch in the child's
---- `_G.session_switches` (`session_switches()`); returns its terminal.
+--- `_G.session_switches` (`wait_for_session_switches()`); returns its terminal.
 ---
 ---@param child table
 ---@param fake { environment: table<string, string> }
@@ -229,7 +229,7 @@ end
 
 --- Calls `start_session()` in `child` once more, as `start_again()` does,
 --- with an `on_session_switched` that notes each switch in the child's
---- `_G.session_switches`, emptied first (`session_switches()`); returns what
+--- `_G.session_switches`, emptied first (`wait_for_session_switches()`); returns what
 --- `start_session()` returns.
 ---
 ---@param child table
@@ -256,11 +256,11 @@ function M.wait_for_session_switches(child, count)
 end
 
 --- The id of the session `child`'s Claude home follows now
---- (`session_id()`), or `vim.NIL` when it follows none.
+--- (`aineo.claude`'s `session_id()`), or `vim.NIL` when it follows none.
 ---
 ---@param child table
 ---@return string|userdata
-function M.session_id(child)
+function M.followed_session_id(child)
   return child.lua_get("require('aineo.claude').session_id()")
 end
 
