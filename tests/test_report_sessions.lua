@@ -638,6 +638,128 @@ T["the working directory's records"]['moved by another editor at the same moment
   })
 end
 
+--- The Lua that makes the child's every hard link fail as a file system
+--- refuses one, with the code given as the chunk's argument, as libuv
+--- returns it.
+local LINKS_REFUSED = [[
+  local code = ...
+  vim.uv.fs_link = function(from)
+    return nil, code .. ': hard links refused: ' .. from, code
+  end
+]]
+
+--- The codes a file system refuses a hard link with, as a set's
+--- `parametrize`: no hard links on it (exFAT, FAT, some network and FUSE
+--- mounts), a file on another device, or too many links.
+local LINK_REFUSALS = { { 'ENOTSUP' }, { 'EPERM' }, { 'EXDEV' }, { 'EMLINK' }, { 'ENOSYS' } }
+
+T["the working directory's records"]['where hard links are refused'] = MiniTest.new_set({
+  parametrize = LINK_REFUSALS,
+})
+
+T["the working directory's records"]['where hard links are refused']['become the first session followed by a rename'] = function(
+  code
+)
+  local state = fixture.directory('report-sessions-no-links')
+  plant_records(directory_records_file(state), { 'Directory' })
+  start_editor(state)
+  child.lua(KEEP_WARNINGS)
+  child.lua(LINKS_REFUSED, { code })
+
+  follow('session-a')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    lines = report_editor.lines(child),
+    directory = summaries_in(directory_records_file(state)),
+    session = summaries_in(session_records_file(state, 'session-a')),
+  }, {
+    warnings = {},
+    lines = { '09:00 [done] Task — Directory' },
+    directory = nil,
+    session = { 'Directory' },
+  })
+end
+
+T["the working directory's records"]['where hard links are refused']['are left as they are when the session has records'] = function(
+  code
+)
+  local state = fixture.directory('report-sessions-no-links-both')
+  plant_records(directory_records_file(state), { 'Directory' })
+  plant_records(session_records_file(state, 'session-a'), { 'Session' })
+  start_editor(state)
+  child.lua(KEEP_WARNINGS)
+  child.lua(LINKS_REFUSED, { code })
+
+  follow('session-a')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    directory = summaries_in(directory_records_file(state)),
+    session = summaries_in(session_records_file(state, 'session-a')),
+  }, {
+    warnings = {},
+    directory = { 'Directory' },
+    session = { 'Session' },
+  })
+end
+
+T["the working directory's records"]['where hard links are refused']['taken by another editor first are told as no failure'] = function(
+  code
+)
+  local state = fixture.directory('report-sessions-no-links-taken')
+  plant_records(directory_records_file(state), { 'Directory' })
+  start_editor(state)
+  child.lua(KEEP_WARNINGS)
+  child.lua(LINKS_REFUSED, { code })
+  child.lua(
+    [[
+      local other = ...
+      _G.other_editor = function(from)
+        assert(vim.uv.fs_rename(from, other))
+      end
+    ]],
+    { session_records_file(state, 'session-other') }
+  )
+  child.lua(OTHER_EDITOR_FIRST)
+
+  follow('session-a')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    other = summaries_in(session_records_file(state, 'session-other')),
+    session = summaries_in(session_records_file(state, 'session-a')),
+  }, { warnings = {}, other = { 'Directory' }, session = nil })
+end
+
+T["the working directory's records"]['where hard links are refused']['that cannot be renamed are told once'] = function(
+  code
+)
+  local state = fixture.directory('report-sessions-no-links-unmovable')
+  plant_records(directory_records_file(state), { 'Directory' })
+  local reports = vim.fs.dirname(directory_records_file(state))
+  start_editor(state)
+  child.lua(KEEP_WARNINGS)
+  child.lua(LINKS_REFUSED, { code })
+  vim.uv.fs_chmod(reports, tonumber('500', 8))
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(reports, tonumber('700', 8))
+  end)
+
+  follow('session-a')
+  vim.uv.fs_chmod(reports, tonumber('700', 8))
+
+  eq({
+    moves = child.lua_get(MOVE_WARNINGS),
+    directory = summaries_in(directory_records_file(state)),
+    session = summaries_in(session_records_file(state, 'session-a')),
+  }, {
+    moves = 1,
+    directory = { 'Directory' },
+    session = nil,
+  })
+end
+
 T['a session told before the environment'] = MiniTest.new_set()
 
 T['a session told before the environment']["is held: once it comes, the directory's records move to it and the next report is kept there"] = function()
