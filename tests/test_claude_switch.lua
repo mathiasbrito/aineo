@@ -1677,6 +1677,26 @@ T['through Claude Code’s keys']['a switch reaches on_session_switched']['by'] 
   })
 end
 
+T['through Claude Code’s keys']['a /clear reaches on_session_switched with the hooks in a file of claude.cmd’s --settings'] = function()
+  local file = vim.fs.joinpath(fixture.directory('switch-keys-file'), 'settings.json')
+  vim.fn.writefile({ USER_SETTINGS }, file)
+  local fake = claude.fake('switch-keys-file', 'ready', { AINEO_FAKE_CLAUDE_HOOKS = '1' })
+  local terminal = claude.start_noting_switches(
+    child,
+    fake,
+    kept_in('switch-keys-file-state', { cmd = claude.fake_command({ '--settings', file }) })
+  )
+  eq(#wait_for_hook_runs(fake, 'SessionStart', 1), 1)
+
+  claude.press_keys(child, terminal, '/clear\r')
+
+  local switches = claude.wait_for_session_switches(child, 1)
+  local cleared_to = wait_for_hook_runs(fake, 'SessionStart', 2)[2].session_id
+  eq(switches, {
+    { id = cleared_to, source = 'clear', left = first_session_id(fake), reason = 'clear' },
+  })
+end
+
 T['through Claude Code’s keys']['/compact reaches nothing'] = function()
   local fake = claude.fake('switch-compact', 'ready', { AINEO_FAKE_CLAUDE_HOOKS = '1' })
   local terminal = claude.start_noting_switches(child, fake, kept_in('switch-compact-state'))
