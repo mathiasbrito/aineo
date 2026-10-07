@@ -214,7 +214,7 @@ Three reviews on `fe112c4`: attack, test integrity, records (`.claude/local/orch
   - "is left as it is…", asserting no warning — X-D7.
 - `MiniTest.finally` restores the read-only fixture (finding 1).
 
-The reviewer's R5 (`empty_report()` swallowing every error) and D6 (the retry ignoring `kept`) still have no separating input. Neither was run.
+The reviewer's R5 (`empty_report()` swallowing every error) and D6 (the retry ignoring `kept`) still have no separating input. Neither was run. *Corrected in the* Correction *below: D6 (ti-D6a) has had a separating input since the first re-measure, its RM-12, now a case that kills it by assertion; R5 still has none.*
 
 ### Mutants (on `12a0a40`, each its literal edit from a pristine copy, one at a time, against the whole new test file of its home, Neovim 0.12.5)
 
@@ -327,7 +327,7 @@ The runner is `.tests/t36f2/mutate.py` in the worktree, with every literal edit;
   - MX5 is adapted: the follow's read warning is `warn()` now.
   - MX16 is adapted: the quit save shares `save_pending_change_now()`, so its edit is `watch.file = nil` before that call.
   - 17 were killed by assertion. POISON-D and POISON-R crash, as meant. NOOP-R has 39 assertions and 2 crashes.
-  - **ti-R5 and ti-D6a survive** the session file and every covering file. They have had no separating input since the first round, as disclosed then.
+  - **ti-R5 and ti-D6a survive** the session file and every covering file. ~~They have had no separating input since the first round, as disclosed then.~~ *Corrected in the* Correction *below:* ti-R5 has none; ti-D6a has had one since the first re-measure (RM-12), now adopted as a case that kills it.
 - **This round's 42:**
   - F1 ×2;
   - F3 ×8: `ENOENT` ignored, the link always given up, the link never given up, the give-up's failure untold, each in both homes;
@@ -355,8 +355,79 @@ The source files are the same at `8b97d8a`, where the full run was made, and at 
 
 ### Not done
 
-- ti-R5 and ti-D6a: still no separating input.
-- `give_up_link_taken_meanwhile()` keeps a link that is the file's only name without re-pinning a waiting buffer to it. That needs the directory's file deleted by hand, between two syscalls, during a textlock window.
+- ti-R5: still no separating input. ~~ti-D6a~~: RM-12 separates it (*Correction*, below).
+- `give_up_link_taken_meanwhile()` keeps a link that is the file's only name without re-pinning a waiting buffer to it. That needs the directory's file deleted by hand, between two syscalls, during a textlock window. *Done in the* Correction *below (FX1): the pin is made at the link.*
+
+## Correction — 2026-10-07, after the second re-measure of PR #135
+
+A fresh implementer (`neovim-lua-developer`, Opus) took the second re-measure of `98931de` (`remeasure2-135/remeasure2-t36.md` in the main checkout's orchestrator folder, verdict merge) and the orchestrator's instructions for the round (`orch-correction-135.md` there). The round takes only the re-measure's measured fixes and cases; FX4 is not taken. Every red below was seen on Neovim 0.12.5, against the committed code, before its fix.
+
+### What changed
+
+- **FX3 (finding 1), both homes.** A working-directory draft or records file that is a symbolic link takes the rename path before any link (`is_symbolic_link()`), so the link itself moves and the file it leads to keeps receiving what is written. Before, macOS `link()` followed the symlink on one device, and the session's file became a hard link to the target; the draft's first cut-and-rename then left the target stale. `LINK_REFUSALS`'s docstring no longer says a symlink to another device reaches it.
+- **FX1 (finding 2).** `pin_moved_text()` runs once the link succeeds, before the unlink. An edit made in the first follow's textlock window now lands in the session's file on the two `ENOENT` paths too: a third party removed the directory's name (AD1), or another editor took it at the same moment (AD1b; the given-up session file is made again by the next save, as this session's draft, and the other editor's stays its own).
+- **FX2 (finding 3).** `replace_with_kept_draft()` tells an unreadable draft once the put lands, or when it is refused for a reason other than textlock; a follow that textlock delays warns once, not twice (AD3).
+- **Finding 4.** No code change. `M.follow_draft_session()`'s docstring says that `M.keep_draft()` reads a held session's draft only into an empty buffer, that a buffer holding text is not checked against an unreadable draft, and that `plugin/aineo.lua` hands it the Input it has just made, which keeps that path unreached.
+- **Finding 5.** RM-12, AD10 and AD22 are cases now. RM-12 kills ti-D6a by assertion, so this note's earlier "no separating input" for ti-D6a is corrected above, where it was written.
+- **Help, LIMITS.** *The first follow's move*'s first item names the symlink rename (and that the link stays one) in place of "a symbolic link to another device". A new subsection, *A session's draft*, names the ruling's two measured consequences: typing while Input shows a session whose draft cannot be read is saved nowhere and lost at quit (and making the file readable does not save it until Input is emptied and another session followed, AD12); an Input emptied while its saves fail refuses the next switch, and later typing is the old session's (AD20).
+
+### Tests — seen red, arrived green
+
+`tests/test_draft_sessions.lua`: 71 → 79 cases. `tests/test_report_sessions.lua`: 46 → 47.
+
+**Seen red** (each in its unit's run of the whole file, before its code; AD1 and AD1b, two cases of the one FX1 edit, were written and seen red together):
+
+| Item | Case | Red |
+|---|---|---|
+| FX3 | the working directory's draft that is a symbolic link stays one at the first session followed, and its saves reach the file it leads to (AD5) | `session`: left `"file"`, right `"link"`; the target kept `"Typed before any session\n"` |
+| FX3 | the working directory's records that are a symbolic link stay one at the first session followed, and the next report reaches the file it leads to (built for this round, the probe's records half) | `session`: left `"file"`, right `"link"` |
+| FX1 | keeps an edit made while the first follow waits with the draft it moved, its first name removed meanwhile (AD1) | `directory`: left `"From the directory and more\n"`, right nil |
+| FX1 | keeps an edit made while the first follow waits as its session draft when another editor took the draft at the same moment (AD1b, asserted with the re-measure's measured values; it was a note) | `directory`: left `"From the directory and more\n"`, right nil |
+| FX2 | a draft that cannot be read is told once at a follow to its session that waits while textlock holds (AD3) | `reads`: left 2, right 1 |
+
+The two symlink cases first asserted `fs_lstat(...).type` behind a nil guard; the guard was replaced by `vim.fn.getftype()` to keep logic out of the tests, after the reds. Their mutants (FX3-*-off) are the reds' own edits, run on the final tree.
+
+**Arrived green**, each with its killer run on the final tree:
+- AD10, "keeps an edit made while the first follow waits with the draft it moved, its first name not removable": green since fix round 2's F5. Killed by FX1-pin-only-removed.
+- RM-12, "leaves no retry and raises nothing when Input is wiped while it waits, keeping the edit as the old session draft": green by the code since the first fix round. Killed by ti-D6a.
+- AD22, "readable again at a later follow to its session takes what is typed": green since fix round 2. Killed by RM2-F8-mark-never-cleared.
+- "a follow refused for another reason, to a session whose draft cannot be read, tells that too": built here for the survivor FX2-told-only-when-put, which it kills.
+
+`REMOVED_MEANWHILE` was extracted from the existing "removed between the link and its removal" case, which AD1 shares.
+
+### Mutants (on the final source, each its literal edit from a pristine copy, one at a time, against its home's whole session test file — 79 or 47 cases, about 40 s a run; Neovim 0.12.5)
+
+The runner, with every literal edit, is `.tests/t36cor/mutate.py` in the worktree; its output is `.tests/t36cor/mutants-final.out`.
+
+| id | Literal edit | Result |
+|---|---|---|
+| FX3-draft-off | in `move_directory_draft_once()`, `if is_symbolic_link(from) then move_directory_draft_by_rename(from, to) return end` removed | killed [assertion], 1 fail: the draft symlink case |
+| FX3-records-off | in `M.move_records()`, `if is_symbolic_link(from) then return move_records_by_rename(from, to) end` removed | killed [assertion], 1 fail: the records symlink case |
+| FX3-draft-any-file | draft `is_symbolic_link()`: `return file ~= nil and file.type == 'link'` → `return file ~= nil` | killed [assertion], 6 fails (the link's race cases, AD1b, AD10) |
+| FX3-records-any-file | the same edit in `records.lua` | killed, 4 fails: 3 assertions and 1 crash (`test_report_sessions.lua:559`, indexing the missing session file) |
+| FX1-revert | `pin_moved_text(from, to)` moved back after the `ENOENT` branch | killed [assertion], 2 fails: AD1, AD1b |
+| FX1-pin-only-removed | `pin_moved_text(from, to)` before the unlink → `if removed then pin_moved_text(from, to) end` after it | killed [assertion], 3 fails: AD1, AD1b, AD10 |
+| FX2-revert | `if not read and not waits then` → `if not read then` | killed [assertion], 1 fail: AD3 |
+| FX2-told-only-when-put | `if not read and not waits then` → `if not read and put then` | survived the first run (78 cases); killed [assertion] by the case built for it, 1 fail |
+| ti-D6a | `if replacements_waiting[buffer] or not watch then` → `if replacements_waiting[buffer] then` | killed [assertion], 1 fail: RM-12 |
+| RM2-F8-mark-never-cleared | `watch.unreadable = not read and kept_draft_file() or nil` → `… or watch.unreadable` | killed [assertion], 1 fail: AD22 |
+
+**Totals on the final tree:** 10 of 10 killed, each with at least one assertion failure. The first run, on `8a9e2b7` (78 draft cases), had the same rows but FX2-told-only-when-put, which survived.
+
+### Suites, lint, merges
+
+- Touched and covering files, each `Fails (0)`, Neovim 0.12.5: `test_draft_sessions` 79 (on `c3d376e`), `test_report_sessions` 47, `test_draft` 41, `test_entry_draft` 17, `test_report` 55, `test_report_buffer` 101, `test_entry_report` 4, `test_doc` 44 (on `8a9e2b7`'s source, which `c3d376e` does not change).
+- `make lint`: StyLua clean; selene 0 errors, 0 warnings.
+- **Whole suite** (`make test`, once, on `c3d376e`, `NVIM v0.12.5`): 2055 cases in 62 groups, `Fails (0) and Notes (0)`, exit 0. That is fix round 2's 2046 plus this round's 8 draft cases and 1 records case. The push adds only this note to that tree.
+- Merge checks on `c3d376e`, merge-tree with `--write-tree`, each clean (exit 0): with `origin/feature/t35-session-switch` (`83a5029`) → `3fb9139`; with `origin/feature/t37-changes-sessions` (`9690b5a`) → `62159e5`; with `origin/dev` (`ac99e49`) → `a8080f2`.
+
+### Not done
+
+- FX4 (`keep_draft()` reading a held session's draft into a buffer that holds text): not taken, as ruled; the docstring names why it is unreached.
+- AD21 (a second environment, API only) is not adopted: the composition root gives the environment once, so RM2-F8-mark-any and RM2-F8-write-mark-any are equivalent in production.
+- ti-R5: still no separating input (the re-measure probed every refusal besides textlock).
+- Finding 6 (AD20): held as ruled; only LIMITS names it.
+- Branch commits of this round, before the merge's rebase: `8a9e2b7` (fixes, cases, help), `c3d376e` (the FX2 case), and the commit that adds this section. Their hashes change at the merge.
 
 ## Commits
 
