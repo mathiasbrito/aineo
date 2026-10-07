@@ -413,7 +413,7 @@ P7  The claim check a report server makes before each report — read its own Cl
     0.27–0.28 ms with 10 and 1.19 ms with 50; its 95th percentile 0.10–0.39 ms up to 10
     listed and 1.41–1.43 ms at 50; the slowest single check 3.3 ms, at 50. The first check
     of a fresh process (cold) took 0.26–0.54 ms up to 10 listed and 1.5–1.6 ms at 50. Two
-    runs of each size, alike within noise. So the user's "about 1 ms" holds as an upper
+    runs of each size, alike within noise. So the option's "about 1 ms" holds as an upper
     bound for the lists a user has: a tenth to a third of a millisecond for one to ten
     Neovims, about a millisecond at fifty. The check reads files only; trying the claimant
     is a delivery, costed by P3 when the claimant is gone (well under a millisecond) and by
