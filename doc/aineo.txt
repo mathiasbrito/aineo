@@ -343,17 +343,20 @@ draft then takes the place of whatever Input holds — or Input is emptied,
 for a session with no draft. The text that leaves Input is not lost: it
 comes back when aineo follows its session again. When it cannot be saved,
 Input keeps it, as that session's draft, and you are told so at each
-switch. Until the new draft is in Input — Neovim may hold the swap until
-it is done with what it is doing — what you change in Input is still the
-old session's. The swap is not a change of yours: `u` does not take it
-out, and no `u` reaches a change or a Send made before it. It is not
-saved either: a draft another Neovim keeps for that session stays as it
-left it. The first session aineo follows in an editor takes the working
-directory's draft, when it has none of its own. A directory's draft
-written after that is taken by the next editor that first follows a
-session with no draft of its own, and is not shown otherwise. A draft
-that cannot be moved so is told once as a warning, and the session keeps
-its own.
+switch. A session's draft that cannot be read is told at each switch to
+that session, and Input is emptied: aineo never replaces a session's
+draft it could not read, so what you then type is not saved, and you are
+told so at your first change after each such switch. Until the new draft
+is in Input — Neovim may hold the swap until it is done with what it is
+doing — what you change in Input is still the old session's. The swap is
+not a change of yours: `u` does not take it out, and no `u` reaches a
+change or a Send made before it. It is not saved either: a draft another
+Neovim keeps for that session stays as it left it. The first session
+aineo follows in an editor takes the working directory's draft, when it
+has none of its own. A directory's draft written after that is taken by
+the next editor that first follows a session with no draft of its own,
+and is not shown otherwise. A draft that cannot be moved so is told once
+as a warning, and the session keeps its own.
 
 The draft comes back into an empty Input: the first time the layout opens
 in this editor, and again once Input's text was dropped — `:bwipeout`,
@@ -379,7 +382,8 @@ signal — its terminal window closed, `kill` — saves nothing as it ends:
 like a crash, it loses at most the last second's typing.
 
 A draft that cannot be read, put into Input or written is told once as a
-warning. While you type in Insert, Replace or Terminal mode — in Input or
+warning; a session's draft that cannot be read is told as above. While
+you type in Insert, Replace or Terminal mode — in Input or
 in Claude's terminal — the warning waits until you leave that mode, with
 `<Esc>`, `CTRL-C` or `CTRL-\ CTRL-N`, so that its prompt never takes a key
 you type there.
@@ -1072,5 +1076,17 @@ Claude's window name ~
   space or nothing follows it: a title `✳` alone reads `Claude Code`.
   Below U+0100 the letters are the ASCII and Latin-1 ones, `×` and `÷`
   not among them, whatever 'iskeyword' holds.
+
+The first follow's move ~
+- Where the file system refuses hard links — exFAT, FAT, some network and
+  FUSE mounts, or a file that is a symbolic link to another device — the
+  first session aineo follows takes the working directory's draft and
+  reports by looking for the session's file and then renaming the
+  directory's to it. Another Neovim that makes that session's file
+  between the look and the rename has it replaced.
+- An aineo older than sessions, in the same working directory, that
+  saves its draft in the instant between this editor's link of the
+  directory's draft to the session and its removal of the directory's
+  name has that save removed.
 
  vim:tw=78:ts=8:ft=help:norl:
