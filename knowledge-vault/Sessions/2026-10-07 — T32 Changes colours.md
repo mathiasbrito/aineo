@@ -150,4 +150,12 @@ Every failure reads `Cause: different values at key branch 1->4, left = "AineoCh
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by wave 8's knowledge pass. PR #127 merged by rebase on 2026-10-06 (23:19 UTC; 2026-10-07 01:19 CEST), after PR #128 (T34); `dev` `b6230c7`. Its files hold what the orchestrator verified at the head `6f0b886`: `git diff --stat 6f0b886 b6230c7` names only T34's eight files, and its `doc/aineo.txt` hunks are T34's (18 lines in, 3 out, as `git diff --stat 685a00e a21f466 -- doc/aineo.txt`). Released in `v0.2.15` with T33 and T34 (PR #130, squash-merged into `main` as `f9cec19`, whose tree is `dev` `f98bd9d`'s).
+
+The first two are the packet's; the third is the bounded correction's, after the guarantee and records review.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `acb6e33` | `f7744b9` | Colour the changes pane's files, commits and notes (T32) |
+| `bfa7bba` | `8723423` | Record T32's session: the colours, their tests and mutants |
+| `6f0b886` | `b6230c7` | Pin the failure colour of three more lines of the changes pane |
