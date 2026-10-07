@@ -125,12 +125,18 @@ local function regular_file_text(path)
   return text
 end
 
+--- A UTF-8 byte order mark, which Claude Code 2.1.292 drops from the start
+--- of settings before it parses them.
+local BYTE_ORDER_MARK = '\239\187\191'
+
 --- The settings `value`, a `--settings` value, gives: the JSON object it
 --- holds when, its blanks trimmed, it begins with `{` and ends with `}` —
 --- how Claude Code 2.1.292 tells inline settings from a file — else the JSON
 --- object in the regular file it names (`regular_file_text()`), a relative
 --- name taken from `cwd`, the working directory Claude Code starts in, which
---- is where Claude Code 2.1.292 resolves one from. Returns nil when it gives
+--- is where Claude Code 2.1.292 resolves one from. As Claude Code 2.1.292
+--- reads them, a `BYTE_ORDER_MARK` they begin with is dropped, and settings
+--- of blanks alone, or none, are an empty object. Returns nil when it gives
 --- no JSON object.
 ---
 ---@param value string?
@@ -146,6 +152,12 @@ local function read_settings(value, cwd)
   end
   if not text then
     return nil
+  end
+  if vim.startswith(text, BYTE_ORDER_MARK) then
+    text = text:sub(#BYTE_ORDER_MARK + 1)
+  end
+  if vim.trim(text) == '' then
+    return vim.empty_dict()
   end
   local decoded, settings = pcall(vim.json.decode, text)
   if not decoded or not is_object(settings) then

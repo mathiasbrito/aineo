@@ -682,6 +682,39 @@ T['start_session()']['merges the settings of a symbolic link to a regular file i
   )
 end
 
+T['start_session()']['merges a settings file of claude.cmd that Claude Code 2.1.292 reads'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'beginning with a byte order mark', '\239\187\191{"env":{"A":"1"}}', { A = '1' } },
+      { 'empty', '', nil },
+      { 'holding blanks alone', ' \n\t\n', nil },
+    },
+  })
+
+T['start_session()']['merges a settings file of claude.cmd that Claude Code 2.1.292 reads']['when'] = function(
+  _,
+  text,
+  env
+)
+  local file = vim.fs.joinpath(fixture.directory('switch-settings-read'), 'settings.json')
+  local handle = assert(io.open(file, 'wb'))
+  handle:write(text)
+  handle:close()
+  local fake = claude.fake('switch-settings-read', 'exit')
+  child.lua(NOTE_NOTIFICATIONS)
+
+  claude.start(
+    child,
+    fake,
+    kept_in('switch-settings-read-state', { cmd = claude.fake_command({ '--settings', file }) })
+  )
+
+  local given = settings_given(claude.arguments(fake))
+  eq({ #given, given[1] ~= file, child.lua_get('_G.notified') }, { 1, true, {} })
+  local merged = settings_in_file(given[1])
+  eq({ env = merged.env, hooks = shape_of(merged).hooks }, { env = env, hooks = AINEO_HOOKS_SHAPE })
+end
+
 T['start_session()']['starts Claude Code with a settings file of 1.5 MB in claude.cmd'] = function()
   local file = large_settings_file('switch-large-settings')
   local fake = claude.fake('switch-large-settings', 'exit')
