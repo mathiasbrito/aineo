@@ -373,14 +373,17 @@ T["the working directory's records"]['are left as they are when the session has 
   plant_records(directory_records_file(state), { 'Directory' })
   plant_records(session_records_file(state, 'session-a'), { 'Session' })
   start_editor(state)
+  child.lua(KEEP_WARNINGS)
 
   follow('session-a')
 
   eq({
+    warnings = child.lua_get('_G.warnings'),
     lines = report_editor.lines(child),
     directory = summaries_in(directory_records_file(state)),
     session = summaries_in(session_records_file(state, 'session-a')),
   }, {
+    warnings = {},
     lines = { '09:00 [done] Task — Session' },
     directory = { 'Directory' },
     session = { 'Session' },
