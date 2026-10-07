@@ -1,0 +1,101 @@
+Wave 9 — real Claude Code session-switch measurements M1–M8
+==========================================================
+
+Run by the orchestrator, 2026-10-07, with the user's leave (answer "M (a)").
+Claude Code 2.1.292, Neovim 0.12.5, macOS. Claude ran in a headless Neovim
+terminal (`jobstart(cmd, { term = true })`, 140x45), driven by a script that
+typed prompts and slash commands and recorded every change of `b:term_title`
+and a screen snapshot after each step. Claude was given `--settings` with a
+SessionStart and a SessionEnd command hook that logged their event, a
+timestamp, their environment and their stdin, and `--mcp-config` with a
+minimal stdio MCP server that logged its start, pid, parent pid and the
+session id in its environment. The trust dialog was never answered.
+
+Run 1 inherited the orchestrator's own Claude environment and Claude refused
+to save transcripts ("inherited CLAUDE_CODE_CHILD_SESSION marker"), so
+/resume, /branch and /compact had nothing to act on. Run 2 started Claude
+with `clear_env = true` and only PATH, HOME, USER, LOGNAME, SHELL, LANG,
+LC_ALL, TMPDIR and TERM. Run 3 started it in a folder never trusted.
+Session ids below are cut to their first 8 hex digits; times are seconds
+after Claude's start.
+
+Run 2 — the hook log (event, stdin source/reason, stdin session_id,
+CLAUDE_CODE_SESSION_ID in the hook's environment)
+------------------------------------------------------------------------
+   0.7  SessionStart  source=startup  c9d64d84  env c9d64d84
+  66.4  SessionEnd    reason=clear    c9d64d84  env c9d64d84   (/clear)
+  66.5  SessionStart  source=clear    ca30ae0c  env ca30ae0c
+  76.9  SessionEnd    reason=resume   ca30ae0c  env ca30ae0c   (/resume c9d64d84…)
+  77.0  SessionStart  source=resume   c9d64d84  env c9d64d84   (hook sleeps 2 s)
+  79.0  (the resume hook's sleep ends)
+  92.4  SessionEnd    reason=resume   c9d64d84  env c9d64d84   (/branch)
+  92.5  SessionStart  source=fork     063cc43c  env 063cc43c
+ 146.1  SessionStart  source=compact  063cc43c  env 063cc43c   (/compact; no SessionEnd)
+ 186.7  SessionEnd    reason=prompt_input_exit 063cc43c        (Ctrl-C twice)
+
+Run 2 — the terminal title (b:term_title)
+-----------------------------------------
+   0.0  term://…//<pid>:…/claude      (Neovim's default, before Claude's OSC 0)
+   0.9  ✳ Claude Code
+  13.0  ✳ OK                          (after the first turn: the session's title)
+  66.6  ✳ Claude Code                 (/clear)
+  79.3  ✳ OK                          (/resume: the resumed session's title)
+  92.7  ✳ Reply with the single word OK and nothing else. (Branch)   (/branch)
+ 146.4  unchanged after /compact
+ 187.2  ""                            (exit)
+The /branch title is also drawn in the prompt box's top border. Claude
+printed: "Branched conversation. You are now in the new branch (session
+063cc43c-…). Use /resume c9d64d84-… to return to the original".
+
+Run 2 — the MCP server
+----------------------
+One process, started 0.16 s after SessionStart(startup), parent = Claude's
+pid, CLAUDE_CODE_SESSION_ID=c9d64d84 in its environment. It was not
+restarted by /clear, /resume, /branch or /compact. At exit it ended without
+running its own exit line (ended by a signal, not by end of stdin) and left
+no orphan process.
+
+Run 3 — an untrusted folder
+---------------------------
+The trust dialog showed ("Quick safety check: Is this a project you created
+or one you trust?", "❯ No, exit / Yes, I trust this folder"). It was not
+answered; Ctrl-C twice ended Claude with exit status 1. In 11 s: no
+SessionStart and no SessionEnd hook ran, the MCP server never started, and
+the title stayed Neovim's term://… default.
+
+Findings
+--------
+M1  Sources. SessionStart's `source` is startup, clear, resume, fork
+    (/branch) and compact. Every switch to another session id (/clear,
+    /resume, /branch) is SessionEnd(old id) then SessionStart(new id),
+    about 0.1 s apart; SessionEnd's reason is "clear" for /clear and
+    "resume" for both /resume and /branch. /compact keeps the id and sends
+    SessionStart(compact) with no SessionEnd. Exit sends SessionEnd
+    (prompt_input_exit).
+M2  (run 1, again in run 2) A `--settings` hook is added to the project's
+    hooks, not put in their place: the repository's protected-branch guard
+    still refused `git commit --dry-run` on dev.
+M3  Environment. In every hook, CLAUDE_CODE_SESSION_ID equals stdin's
+    session_id — the old id in SessionEnd, the new id in SessionStart.
+    Run 1 showed the hook inherits Claude's environment, NVIM and
+    AINEO_CHILD included, so a hook can reach the Neovim that started
+    Claude through $NVIM.
+M4  Ids are lowercase UUID v4 strings (8-4-4-4-12, version nibble 4).
+M5  The MCP server lives as long as the Claude process and is not
+    restarted by any switch; its environment's CLAUDE_CODE_SESSION_ID is
+    the first session's and goes stale after /clear, /resume or /branch.
+    A switch can therefore be learned only from the hooks (or the
+    transcript), never from the MCP server's environment.
+M6  The title follows the session: "✳ Claude Code" for a session with no
+    title yet, "✳ <session title>" after the first turn and after a
+    /resume, "✳ <first prompt> (Branch)" after /branch, cleared at exit.
+    It names a session but is not an id; two sessions can share it.
+M7  In a folder Claude does not yet trust, nothing runs before the trust
+    dialog is answered: no SessionStart hook, no MCP server, no title.
+    Answering it was out of bounds, so what follows a "Yes" was not seen.
+M8  /resume waits for the SessionStart hook, as far as the title shows:
+    the hook slept 2 s and the resumed title appeared 0.3 s after the
+    sleep ended (2.3 s after SessionStart), where /clear's title appeared
+    0.1 s after SessionStart. Consistent with Claude awaiting the hook; a
+    hook that must not delay a switch should return at once and do its
+    work in the background.
