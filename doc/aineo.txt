@@ -1010,14 +1010,22 @@ The changes pane ~
   base.
 - A restart of Claude Code in another working directory keeps the first
   repository. A session whose base was kept for another repository, or
-  whose kept base aineo cannot read, takes `HEAD` as its base here, and
+  whose kept file aineo cannot open, takes `HEAD` as its base here, and
   the files you save then are marked; this editor holds both until it
   quits, a switch back included, and never keeps them: what was kept
-  stays as it was. A repository moved or renamed on disk counts as
-  another, so its sessions' bases are not read back there. A session
-  whose base could not be written is held so too. A kept base git no
+  stays as it was. A kept file that holds anything but what aineo
+  writes, one cut short say, counts as nothing kept, and is replaced. A
+  repository moved or renamed on disk counts as another, so its
+  sessions' bases are not read back there. A session whose base could
+  not be written is held until a write succeeds: aineo writes it again
+  as you follow the session again, and at each save. A kept base git no
   longer has, garbage-collected say, is kept, and the pane says in git's
   words that it cannot be read.
+- Two editors following one session in one repository keep the first
+  base kept for it, and each other's saves. A save the other editor keeps
+  between this editor's read of the kept file and its write is lost from
+  the file, though that editor still marks it: it is kept again when
+  that editor next saves a file it had not saved before.
 - Where aineo cannot watch the working tree's subdirectories (Linux), the
   files window says so first: a change in a subdirectory shows at the next
   showing of the pane, save or commit, and a branch moved by

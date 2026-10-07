@@ -173,6 +173,15 @@ local function the_kept_file(state)
   return kept_files[1]
 end
 
+--- What is kept under the state directory `state`, decoded: the one file
+--- there (`the_kept_file()`).
+---
+---@param state string
+---@return table
+local function record_of(state)
+  return vim.json.decode(table.concat(vim.fn.readfile(the_kept_file(state)), '\n'))
+end
+
 --- The commits window's line for `commit`, a full id, with `subject`.
 ---
 ---@param commit string
@@ -952,11 +961,11 @@ T['following a session']['counts a kept file holding a bare JSON value as nothin
   wait_for_finds(1)
 
   local raised = child.lua_get(FOLLOW_RAISED, { SESSION_A, state })
+
+  eq(raised, vim.NIL)
   wait_for_finds(2)
   local commit = commit_line_of(top, 'notes.txt', 'three', 'After the follow')
   child.lua(SHOW_FILES_AGAIN)
-
-  eq(raised, vim.NIL)
   expect_lines(COMMITS, { commit_line(commit, 'After the follow') })
 end
 
@@ -1095,6 +1104,294 @@ T['following a session']['that could not be kept, followed again, keeps its base
   follow(SESSION_A, state)
 
   expect_lines(COMMITS, { commit_line(commit, 'Made in the session') })
+end
+
+T['following a session']['whose write failed, followed again, never writes over what another repository kept since'] = function()
+  local first = git_repo.create('changessessions-held-foreign-first', { ['notes.txt'] = { 'one' } })
+  local second =
+    git_repo.create('changessessions-held-foreign-second', { ['readme.txt'] = { 'one' } })
+  local state = vim.fs.joinpath(fixture.directory('changessessions-held-foreign'), 'state')
+  vim.fn.writefile({ 'a file, not a directory' }, state)
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(first)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  follow(SESSION_B, state)
+  wait_for_finds(3)
+  vim.fn.delete(state)
+  vim.fn.mkdir(state, 'p')
+  git_repo.start_editor(other)
+  begin_and_show(second, nil, other)
+  wait_for_finds(1, other)
+  follow(SESSION_A, state, other)
+  wait_for_finds(2, other)
+  local commit = commit_only(second, 'other.txt', 'other', 'Made in the second')
+  local second_top = record_of(state).top
+
+  follow(SESSION_A, state)
+  save_file(vim.fs.joinpath(first, 'later.txt'), 'later')
+  expect_lines(FILES, { '* ? later.txt' })
+
+  eq(record_of(state).top, second_top)
+  git_repo.start_editor(other)
+  begin_and_show(second, nil, other)
+  wait_for_finds(1, other)
+  follow(SESSION_A, state, other)
+  expect_lines(COMMITS, { commit_line(commit, 'Made in the second') }, other)
+end
+
+T['following a session']['kept for another repository while it looks for HEAD, never writes over it'] = function()
+  local first = git_repo.create('changessessions-late-look-first', { ['notes.txt'] = { 'one' } })
+  local second = git_repo.create('changessessions-late-look-second', { ['readme.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-late-look-state')
+  local held, hold = held_looks('changessessions-late-look')
+  begin_and_show(first, { executable = held })
+  wait_for_finds(1)
+  vim.fn.writefile({}, hold)
+  follow(SESSION_A, state)
+  git_repo.start_editor(other)
+  begin_and_show(second, nil, other)
+  wait_for_finds(1, other)
+  follow(SESSION_A, state, other)
+  wait_for_finds(2, other)
+  local commit = commit_only(second, 'other.txt', 'other', 'Made in the second')
+  local second_top = record_of(state).top
+
+  vim.fn.delete(hold)
+  wait_for_finds(2)
+  wait_for_reads()
+
+  eq(record_of(state).top, second_top)
+  git_repo.start_editor(other)
+  begin_and_show(second, nil, other)
+  wait_for_finds(1, other)
+  follow(SESSION_A, state, other)
+  expect_lines(COMMITS, { commit_line(commit, 'Made in the second') }, other)
+end
+
+T['following a session']['whose write failed keeps its base once it can, at a save of a path already marked'] = function()
+  local top = git_repo.create('changessessions-remarked', { ['notes.txt'] = { 'one' } })
+  local state = vim.fs.joinpath(fixture.directory('changessessions-remarked'), 'state')
+  vim.fn.writefile({ 'a file, not a directory' }, state)
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  save_file(vim.fs.joinpath(top, 'notes.txt'), 'two')
+  expect_lines(FILES, { '* M notes.txt' })
+  vim.fn.delete(state)
+  vim.fn.mkdir(state, 'p')
+
+  save_file(vim.fs.joinpath(top, 'notes.txt'), 'three')
+  local commit = commit_only(top, 'other.txt', 'other', 'Made in the session')
+  git_repo.start_editor(child)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+
+  expect_lines(COMMITS, { commit_line(commit, 'Made in the session') })
+  expect_lines(FILES, { '* M notes.txt', '  A other.txt' })
+end
+
+T['following a session']['whose write failed, followed again, keeps its base once it can, at a save of a path marked'] = function()
+  local top = git_repo.create('changessessions-held-remarked', { ['notes.txt'] = { 'one' } })
+  local state = vim.fs.joinpath(fixture.directory('changessessions-held-remarked'), 'state')
+  vim.fn.writefile({ 'a file, not a directory' }, state)
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  save_file(vim.fs.joinpath(top, 'notes.txt'), 'two')
+  expect_lines(FILES, { '* M notes.txt' })
+  local commit = commit_only(top, 'other.txt', 'other', 'Made in the session')
+  follow(SESSION_B, state)
+  wait_for_finds(3)
+  vim.fn.delete(state)
+  vim.fn.mkdir(state, 'p')
+  follow(SESSION_A, state)
+  save_file(vim.fs.joinpath(top, 'notes.txt'), 'three')
+
+  git_repo.start_editor(child)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+
+  expect_lines(COMMITS, { commit_line(commit, 'Made in the session') })
+  expect_lines(FILES, { '* M notes.txt', '  A other.txt' })
+end
+
+T['following a session']['whose write failed, followed again once it can be kept, keeps its base without a save'] = function()
+  local top = git_repo.create('changessessions-held-unsaved', { ['notes.txt'] = { 'one' } })
+  local state = vim.fs.joinpath(fixture.directory('changessessions-held-unsaved'), 'state')
+  vim.fn.writefile({ 'a file, not a directory' }, state)
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  local commit = commit_only(top, 'other.txt', 'other', 'Made in the session')
+  follow(SESSION_B, state)
+  wait_for_finds(3)
+  vim.fn.delete(state)
+  vim.fn.mkdir(state, 'p')
+  follow(SESSION_A, state)
+  expect_lines(COMMITS, { commit_line(commit, 'Made in the session') })
+
+  git_repo.start_editor(child)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+
+  expect_lines(COMMITS, { commit_line(commit, 'Made in the session') })
+end
+
+T['following a session']['whose write failed, kept once it can, shows the saves another editor kept since'] = function()
+  local top = git_repo.create('changessessions-held-merged', { ['notes.txt'] = { 'one' } })
+  local state = vim.fs.joinpath(fixture.directory('changessessions-held-merged'), 'state')
+  vim.fn.writefile({ 'a file, not a directory' }, state)
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  save_file(vim.fs.joinpath(top, 'notes.txt'), 'two')
+  expect_lines(FILES, { '* M notes.txt' })
+  follow(SESSION_B, state)
+  wait_for_finds(3)
+  vim.fn.delete(state)
+  vim.fn.mkdir(state, 'p')
+  follow(SESSION_A, state)
+  save_file(vim.fs.joinpath(top, 'other.txt'), 'other')
+  expect_lines(FILES, { '* M notes.txt', '* ? other.txt' })
+  git_repo.start_editor(other)
+  begin_and_show(top, nil, other)
+  wait_for_finds(1, other)
+  follow(SESSION_A, state, other)
+  expect_lines(FILES, { '* M notes.txt', '* ? other.txt' }, other)
+  save_file(vim.fs.joinpath(top, 'third.txt'), 'third', other)
+  expect_lines(FILES, { '* M notes.txt', '* ? other.txt', '* ? third.txt' }, other)
+
+  follow(SESSION_B, state)
+  follow(SESSION_A, state)
+
+  expect_lines(FILES, { '* M notes.txt', '* ? other.txt', '* ? third.txt' })
+end
+
+T['following a session']['unseen, in two editors of one repository at once, keeps the first base kept and the saves of both'] = function()
+  local top = git_repo.create('changessessions-first-base', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-first-base-state')
+  local held, hold = held_looks('changessessions-first-base')
+  begin_and_show(top, { executable = held })
+  wait_for_finds(1)
+  vim.fn.writefile({}, hold)
+  follow(SESSION_A, state)
+  git_repo.start_editor(other)
+  begin_and_show(top, nil, other)
+  wait_for_finds(1, other)
+  follow(SESSION_A, state, other)
+  wait_for_finds(2, other)
+  local first_base = record_of(state).base
+  commit_only(top, 'second.txt', 'second', 'Between the looks')
+  vim.fn.delete(hold)
+  wait_for_finds(2)
+  wait_for_reads()
+
+  save_file(vim.fs.joinpath(top, 'notes.txt'), 'two', other)
+  save_file(vim.fs.joinpath(top, 'readme.txt'), 'readme')
+
+  local final = record_of(state)
+  eq(
+    { base = final.base, saved = final.saved },
+    { base = first_base, saved = { 'notes.txt', 'readme.txt' } }
+  )
+end
+
+T['following a session']['kept for another repository, followed again and saved in, never writes over it'] = function()
+  local first = git_repo.create('changessessions-held-saved-first', { ['notes.txt'] = { 'one' } })
+  local second =
+    git_repo.create('changessessions-held-saved-second', { ['readme.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-held-saved-state')
+  begin_and_show(first)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  local commit = commit_only(first, 'other.txt', 'other', 'Made in the first')
+  local file = the_kept_file(state)
+  local before = table.concat(vim.fn.readfile(file), '\n')
+  git_repo.start_editor(child)
+  begin_and_show(second)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  follow(SESSION_B, state)
+  wait_for_finds(3)
+
+  follow(SESSION_A, state)
+  save_file(vim.fs.joinpath(second, 'readme.txt'), 'two')
+  expect_lines(FILES, { '* M readme.txt' })
+
+  eq(table.concat(vim.fn.readfile(file), '\n'), before)
+  git_repo.start_editor(child)
+  begin_and_show(first)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  expect_lines(COMMITS, { commit_line(commit, 'Made in the first') })
+end
+
+T['following a session']['kept in a file cut short replaces it, and a later editor reads the new base back'] = function()
+  local top = git_repo.create('changessessions-cut-short', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-cut-short-state')
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  local file = the_kept_file(state)
+  local text = table.concat(vim.fn.readfile(file), '\n')
+  vim.fn.writefile({ text:sub(1, 20) }, file)
+  git_repo.start_editor(child)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  local commit = commit_only(top, 'other.txt', 'other', 'After the cut')
+  git_repo.start_editor(child)
+  begin_and_show(top)
+  wait_for_finds(1)
+
+  follow(SESSION_A, state)
+
+  expect_lines(COMMITS, { commit_line(commit, 'After the cut') })
+end
+
+T['following a session']['kept for another repository, left while it looks for HEAD, takes HEAD when followed again'] = function()
+  local first = git_repo.create('changessessions-left-looking-first', { ['notes.txt'] = { 'one' } })
+  local second =
+    git_repo.create('changessessions-left-looking-second', { ['readme.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-left-looking-state')
+  begin_and_show(first)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  git_repo.start_editor(child)
+  local held, hold = held_looks('changessessions-left-looking')
+  begin_and_show(second, { executable = held })
+  wait_for_finds(1)
+  follow(SESSION_B, state)
+  wait_for_finds(2)
+  local under_b = commit_only(second, 'other.txt', 'other', 'Under B')
+  expect_lines(COMMITS, { commit_line(under_b, 'Under B') })
+  vim.fn.writefile({}, hold)
+  follow(SESSION_A, state)
+  follow(SESSION_B, state)
+  vim.fn.delete(hold)
+  wait_for_finds(3)
+
+  follow(SESSION_A, state)
+
+  expect_lines(COMMITS, { NO_COMMITS })
 end
 
 return T

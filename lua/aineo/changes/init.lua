@@ -292,20 +292,23 @@ local function merge_kept_saves(on_disk)
   end
 end
 
---- Keeps the session's base and saves for the Claude Code session the pane
---- follows (`aineo.changes.kept`), with the saves another editor kept for it
---- meanwhile (`merge_kept_saves()`). Keeps nothing before it follows one,
---- while git looks for the session's base (`take_head()`), or when what was
---- kept for the session is another repository's or cannot be read
---- (`use_kept_base()`). A
---- write that fails is told once, as a warning, for the editor's life; the
---- pane goes on from what it holds.
-local function keep()
-  local followed = session.followed
-  if not (followed and session.keeps_followed) or session.looking_for_head then
-    return
-  end
-  merge_kept_saves(kept.read_kept_base(followed.state_directory, followed.id))
+--- Reads both lists again for the session's new base, from nothing: until
+--- they are read, each window says aineo is reading the repository.
+local function read_for_new_base()
+  session.changes, session.files_failure = nil, nil
+  session.commits, session.commits_failure = nil, nil
+  show_files()
+  show_commits()
+  follow_repository()
+end
+
+--- Writes the session's base and saves for `followed`, the Claude Code
+--- session the pane follows (`aineo.changes.kept`). A write that fails is
+--- told once, as a warning, for the editor's life; the pane goes on from
+--- what it holds.
+---
+---@param followed aineo.changes.FollowedSession
+local function write_kept_base(followed)
   local saved = vim.tbl_keys(session.saved)
   table.sort(saved)
   local failure = kept.keep_base(
@@ -322,6 +325,37 @@ local function keep()
       ),
       vim.log.levels.WARN
     )
+  end
+end
+
+--- Keeps the session's base and saves for the Claude Code session the pane
+--- follows (`write_kept_base()`), with what another editor kept for it in
+--- this repository meanwhile: its saves (`merge_kept_saves()`), and its
+--- base when it differs — the first base kept for a session wins, and both
+--- lists are read again for it (`read_for_new_base()`). Keeps nothing
+--- before it follows one, while git looks for the session's base
+--- (`take_head()`), or when what was kept for the session is another
+--- repository's or cannot be read — found so as the pane began following it
+--- (`use_kept_base()`), or now, as it reads what is kept before writing:
+--- the session is then never kept again in this editor.
+local function keep()
+  local followed = session.followed
+  if not (followed and session.keeps_followed) or session.looking_for_head then
+    return
+  end
+  local on_disk, unreadable = kept.read_kept_base(followed.state_directory, followed.id)
+  if unreadable or (on_disk and on_disk.top ~= session.repository.top) then
+    session.keeps_followed = false
+    return
+  end
+  local rebased = on_disk ~= nil and on_disk.base ~= session.base
+  if rebased then
+    session.base = on_disk.base
+  end
+  merge_kept_saves(on_disk)
+  write_kept_base(followed)
+  if rebased then
+    read_for_new_base()
   end
 end
 
@@ -379,9 +413,10 @@ end
 
 --- Takes the base and the saves held for the Claude Code session the pane
 --- follows (`hold_unkept_base()`), when they are, and returns whether it
---- did. A session held because its write failed is written again at its
---- next new mark; one held because what was kept for it is another
---- repository's, or cannot be read, never is.
+--- did. A session held because its write failed is written again at once
+--- (`keep()`), with the saves another editor kept for it since, and at each
+--- save until a write succeeds; one held because what was kept for it is
+--- another repository's, or cannot be read, never is.
 ---
 ---@return boolean
 local function use_held_base()
@@ -391,12 +426,14 @@ local function use_held_base()
   end
   session.base, session.saved = held.base, held.saved
   session.keeps_followed = held.keeps
+  keep()
   return true
 end
 
 --- Marks `file`, a written file's resolved path, as saved when it lies
---- under the repository's top level, resolved too, keeps the mark when it
---- is new (`keep()`), and returns whether it lies there.
+--- under the repository's top level, resolved too, keeps the marks when
+--- this one is new or the last write of them failed (`keep()`), and
+--- returns whether it lies there.
 ---
 ---@param file string
 ---@return boolean
@@ -406,7 +443,7 @@ local function mark_saved(file)
     return false
   end
   local path = file:sub(#top + 1)
-  if not session.saved[path] then
+  if not session.saved[path] or session.keeping_failed then
     session.saved[path] = true
     keep()
   end
@@ -459,16 +496,6 @@ end
 ---@class aineo.changes.FollowedSession
 ---@field id string Claude Code's session id
 ---@field state_directory string the editor's state directory, `stdpath('state')`, under which the session's base and saves are kept
-
---- Reads both lists again for the session's new base, from nothing: until
---- they are read, each window says aineo is reading the repository.
-local function read_for_new_base()
-  session.changes, session.files_failure = nil, nil
-  session.commits, session.commits_failure = nil, nil
-  show_files()
-  show_commits()
-  follow_repository()
-end
 
 --- Takes `HEAD` now, looked for from the session's repository's top level
 --- — not from the directory `M.begin_session()` was given, which may since
@@ -600,9 +627,10 @@ end
 --- them (`use_held_base()`); else those kept for it in this repository,
 --- read back; else, for a session with nothing kept, `HEAD` at this moment
 --- in the session's repository and no saves, both kept from then on
---- (`take_head()`); else — what was kept for it is another repository's, or
---- cannot be read — `HEAD` and no saves too, held in memory for the
---- editor's life, what was kept left as it was. Following the session
+--- (`take_head()`) — unless another editor keeps a base for it first, which
+--- the pane then takes (`keep()`); else — what was kept for it is another
+--- repository's, or cannot be read — `HEAD` and no saves too, held in
+--- memory for the editor's life, what was kept left as it was. Following the session
 --- already followed does nothing. Told before the session has begun, or
 --- before its repository is found, the home holds the session and takes
 --- its base once the repository is found (`find`); while no repository is
