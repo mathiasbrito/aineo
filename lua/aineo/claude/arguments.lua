@@ -107,18 +107,22 @@ end
 
 --- The text of the file at `path` when it is a regular file, or a symbolic
 --- link to one; nil when it is not — a FIFO, a directory or a device, whose
---- read could wait or never end — or cannot be read.
+--- read could wait or never end — or cannot be read, with why.
 ---
 ---@param path string
----@return string?
+---@return string? text
+---@return string? problem
 local function regular_file_text(path)
-  local stat = vim.uv.fs_stat(path)
-  if not stat or stat.type ~= 'file' then
-    return nil
+  local stat, stat_problem = vim.uv.fs_stat(path)
+  if not stat then
+    return nil, stat_problem
   end
-  local file = io.open(path, 'r')
+  if stat.type ~= 'file' then
+    return nil, ('%s is not a regular file (%s)'):format(path, stat.type)
+  end
+  local file, open_problem = io.open(path, 'r')
   if not file then
-    return nil
+    return nil, open_problem
   end
   local text = file:read('*a')
   file:close()
@@ -129,6 +133,10 @@ end
 --- of settings before it parses them.
 local BYTE_ORDER_MARK = '\239\187\191'
 
+--- What the problems `read_settings()` and `hooks_problem()` tell name
+--- settings given inline by.
+local INLINE_SOURCE = 'the inline value'
+
 --- The settings `value`, a `--settings` value, gives: the JSON object it
 --- holds when, its blanks trimmed, it begins with `{` and ends with `}` —
 --- how Claude Code 2.1.292 tells inline settings from a file — else the JSON
@@ -137,54 +145,97 @@ local BYTE_ORDER_MARK = '\239\187\191'
 --- is where Claude Code 2.1.292 resolves one from. As Claude Code 2.1.292
 --- reads them, a `BYTE_ORDER_MARK` they begin with is dropped, and settings
 --- of blanks alone, or none, are an empty object. Returns nil when it gives
---- no JSON object.
+--- no JSON object, with why; and where they came from: the file's path, or
+--- `INLINE_SOURCE`.
 ---
 ---@param value string?
 ---@param cwd string
 ---@return table? settings
+---@return string? problem
+---@return string? source
 local function read_settings(value, cwd)
   if not value then
-    return nil
+    return nil, 'no value follows it'
   end
-  local text = vim.trim(value)
-  if not (vim.startswith(text, '{') and vim.endswith(text, '}')) then
-    text = regular_file_text(vim.startswith(value, '/') and value or vim.fs.joinpath(cwd, value))
-  end
-  if not text then
-    return nil
+  local text, source = value, INLINE_SOURCE
+  local trimmed = vim.trim(value)
+  if not (vim.startswith(trimmed, '{') and vim.endswith(trimmed, '}')) then
+    local problem
+    source = vim.startswith(value, '/') and value or vim.fs.joinpath(cwd, value)
+    text, problem = regular_file_text(source)
+    if not text then
+      return nil, problem
+    end
   end
   if vim.startswith(text, BYTE_ORDER_MARK) then
     text = text:sub(#BYTE_ORDER_MARK + 1)
   end
   if vim.trim(text) == '' then
-    return vim.empty_dict()
+    return vim.empty_dict(), nil, source
   end
   local decoded, settings = pcall(vim.json.decode, text)
-  if not decoded or not is_object(settings) then
+  if not decoded then
+    return nil, ('%s is not valid JSON: %s'):format(source, settings)
+  end
+  if not is_object(settings) then
+    return nil, ('%s holds no JSON object'):format(source)
+  end
+  return settings, nil, source
+end
+
+--- Why aineo's hook entries for `RELAYED_EVENTS` cannot be added after the
+--- hooks `settings`, from `source`, already gives: its `hooks` not an
+--- object, or an event's entries in it not a list; nil when they can.
+---
+---@param settings table settings decoded from JSON
+---@param source string where they came from, as `read_settings()` names it
+---@return string? problem
+local function hooks_problem(settings, source)
+  if not settings.hooks then
     return nil
+  end
+  if not is_object(settings.hooks) then
+    return ('the hooks in %s are not an object'):format(source)
+  end
+  for _, event in ipairs(RELAYED_EVENTS) do
+    local given = settings.hooks[event]
+    if given and not (type(given) == 'table' and vim.islist(given)) then
+      return ('the %s hooks in %s are not a list'):format(event, source)
+    end
+  end
+  return nil
+end
+
+--- Adds each of `entries`, by event, after the hook entries `settings`
+--- already gives that event, in place, and returns `settings`; settings for
+--- which `hooks_problem()` finds no problem.
+---
+---@param settings table settings decoded from JSON
+---@param entries table<string, table> `hook_entries()`
+---@return table settings
+local function add_hook_entries(settings, entries)
+  settings.hooks = settings.hooks or vim.empty_dict()
+  for event, entry in pairs(entries) do
+    settings.hooks[event] = vim.list_extend(settings.hooks[event] or {}, { entry })
   end
   return settings
 end
 
---- Adds each of `entries`, by event, after the hook entries `settings`
---- already gives that event, in place. Returns `settings`, or nil when its
---- `hooks` is not an object, or an event's entries in it not a list, so
---- that nothing can be added to them.
+--- The settings `given` gives (`read_settings()`), when aineo can add its
+--- hook entries to them (`hooks_problem()`); else nil, with why.
 ---
----@param settings table settings decoded from JSON
----@param entries table<string, table> `hook_entries()`
+---@param given { value: string? } `given_settings()`
+---@param cwd string the directory Claude Code starts in
 ---@return table? settings
-local function add_hook_entries(settings, entries)
-  settings.hooks = settings.hooks or vim.empty_dict()
-  if not is_object(settings.hooks) then
-    return nil
+---@return string? problem
+local function settings_taking_hooks(given, cwd)
+  local settings, problem, source = read_settings(given.value, cwd)
+  if not settings then
+    return nil, problem
   end
-  for event, entry in pairs(entries) do
-    local given = settings.hooks[event] or {}
-    if type(given) ~= 'table' or not vim.islist(given) then
-      return nil
-    end
-    settings.hooks[event] = vim.list_extend(given, { entry })
+  problem = hooks_problem(settings, source)
+  if problem then
+    return nil, problem
   end
   return settings
 end
@@ -216,7 +267,7 @@ end
 
 --- What aineo gives Claude Code as `--settings` for `settings`, with
 --- `entries`, its own hook entries, in them, as `value`: the settings
---- `settings.cmd` gives (`given_settings()`, `read_settings()`) with
+--- `settings.cmd` gives (`given_settings()`, `settings_taking_hooks()`) with
 --- `entries` added after its own hooks (`add_hook_entries()`), written to a
 --- file only the user can read (`write_private_file()`), which `value` names,
 --- and `cmd` without the words that gave them; or `entries` alone, as JSON,
@@ -235,7 +286,7 @@ local function settings_with_hooks(settings, entries)
       value = vim.json.encode(add_hook_entries(vim.empty_dict(), entries)),
     }
   end
-  local read = read_settings(given.value, settings.cwd)
+  local read = settings_taking_hooks(given, settings.cwd)
   local merged = read and add_hook_entries(read, entries)
   local file = merged and write_private_file(vim.json.encode(merged))
   if not file then
@@ -243,6 +294,24 @@ local function settings_with_hooks(settings, entries)
   end
   local cmd = vim.list_slice(settings.cmd, 1, given.first - 1)
   return { cmd = vim.list_extend(cmd, settings.cmd, given.last + 1), value = file }
+end
+
+--- What becomes of the `--settings` that `cmd` gives when Claude Code starts
+--- in `cwd`, read as `M.claude_command()` reads it: nil when `cmd` gives
+--- none; else a verdict whose `problem` says why aineo cannot add its
+--- session hooks to them, nil when it can. Whether the file aineo writes
+--- them to can be written is not part of it.
+---
+---@param cmd string[]
+---@param cwd string
+---@return { problem: string? }?
+function M.given_settings_verdict(cmd, cwd)
+  local given = given_settings(cmd)
+  if not given then
+    return nil
+  end
+  local _, problem = settings_taking_hooks(given, cwd)
+  return { problem = problem }
 end
 
 --- `server` as `--mcp-config` needs it written: its `env` an object even when
