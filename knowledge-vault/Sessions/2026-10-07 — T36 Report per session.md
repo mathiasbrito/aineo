@@ -19,7 +19,7 @@ D39 (the user, 2026-10-07: "all your recommendations are fine") keeps the Report
 
 ## What was done
 
-- **`lua/aineo/report/records.lua`.** `session_records_file(state, id)`: `<state>/aineo/reports/session-<sha256(id)>.jsonl` — the prefix keeps every session's name off the directories' 64-hex names. `move_records(from, to)`: renames `from` to `to` when `to` is absent and `from` exists, returns why not otherwise.
+- **`lua/aineo/report/records.lua`.** `session_records_file(state, id)`: `<state>/aineo/reports/session-<sha256(id)>.jsonl` — the prefix keeps every session's name off the directories' 64-hex names. `move_records(from, to)`: renames `from` to `to` when `to` is absent and `from` exists; returns nil when it does not try, and a reason only when the rename fails. *(Corrected in the fix round, records finding 9; the move is now a link and an unlink — see* Fix round *below.)*
 - **`lua/aineo/report/init.lua`.** `follow_report_session(id)`: the same id changes nothing; otherwise the records file reports are kept in swaps at once (`report_view.records_file`), the first follow in the editor moves the directory's file (`move_directory_records_once()`, a failure warned through `warn_later()`), and `show_followed_records()` empties the Report and shows the session's records. An `E565` refusal alone is retried at the next `SafeState`, registering again while refused; any other error is raised again. `set_report_environment()` now runs the move for a session told before it (T36-1), so it moved below the helpers it calls. `:edit`'s refill reads `report_view.records_file` when it runs, not the file the Report was made with — without that, `:edit` after a follow showed the old session (seen red).
 - **`lua/aineo/draft/init.lua`.** `session_draft_file()` (`session-<sha256(id)>.txt`) and `kept_draft_file()`, which every read and write now goes through. `follow_draft_session(id)`, in D40's order: a pending change saved at once to the old file; the session switched; the directory's draft moved once (`move_directory_draft_once()`, warned with a new `warn_once` kind, `move`); every kept buffer given the session's draft in place of its text, or emptied (`replace_with_kept_draft()`), with `'undolevels'` at -1 as D17's restore does (`put_draft()`, now shared by both). An `E565` refusal is retried at `SafeState` while the buffer is still kept; another refusal (not `'modifiable'`) is warned as the restore warns. Without an environment the follow is held; `set_draft_environment()` runs the move, and `keep_draft()` then restores the session's draft.
 - **`doc/aineo.txt`**, inside the brief's two fences only: *aineo-draft*'s body (per session, the file's name, what a follow does to Input, the move and its cost, two Neovims on one session, per directory until a session is followed) and *aineo-report*'s last paragraph (the same for the records). No tag changed.
@@ -29,8 +29,8 @@ D39 (the user, 2026-10-07: "all your recommendations are fine") keeps the Report
 
 - The entry points are `follow_report_session()` and `follow_draft_session()`, one shape in both homes.
 - After a follow the Report's cursor is where emptying the buffer leaves it, as when the Report is first made; the Report does not jump to its last line.
-- The replacement at a follow is saved as the new session's own draft by the buffer's change watch (D40: "not saved as either session's draft but the new one's own"): an Input emptied for a session with no draft writes an empty draft file for it at once. An empty draft restores nothing, so this is invisible.
-- A draft that cannot be read at a follow is warned once and Input is emptied, as for a session with no draft.
+- The replacement at a follow is saved as the new session's own draft by the buffer's change watch (D40: "not saved as either session's draft but the new one's own"): an Input emptied for a session with no draft writes an empty draft file for it at once. An empty draft restores nothing, so this is invisible. *(False, and reversed in the fix round: the write-back overwrote another editor's newer draft and an unreadable one — attack findings 3–4, records finding 2. The swap is now never saved.)*
+- A draft that cannot be read at a follow is warned once and Input is emptied, as for a session with no draft. *(Since the fix round the unreadable file is left as it is.)*
 
 ## Unit list (stated before the first test)
 
@@ -81,7 +81,7 @@ Before any follow, the records and the draft are the directory's: pinned by the 
 
 ## Mutants (on the final tree `2195138`, each its literal edit from a pristine copy, one at a time, against a copy of its test file narrowed to one group, Neovim 0.12.5)
 
-The runner is `.tests/t36-mutate.py` in the worktree (gitignored); every row's literal edit is there. A control of each narrowed copy, unmutated, passed first (6, 4, 1, 3 report cases; 6, 4, 1, 2 draft cases). Every mutant was killed in its group by an assertion; none needed a wider run.
+The runner is `.tests/t36-mutate.py` in the worktree (gitignored); every row's literal edit is there. There are **28** mutants — the plan's eleven and 17 more; the PR body and the report first said 29 (records finding 4, corrected). A control of each narrowed copy, unmutated, passed first (6, 4, 1, 3 report cases; 6, 4, 1, 2 draft cases). Every mutant was killed in its group by an assertion; none needed a wider run.
 
 | # | Literal edit | Killed by |
 |---|---|---|
@@ -130,15 +130,124 @@ The brief asks for `git merge-tree --write-tree` with `origin/feature/t35-sessio
 
 The wave holds its marks. For the knowledge pass:
 
-- **T36** — done — PR into `dev`, wave 9 (the Report's records and Input's draft per Claude session, D39, D40: `follow_report_session()` and `follow_draft_session()`, `session-<sha256(id)>` files beside the directories', the directory's file moved to the first session followed (history (i), A6), a session told before the environment held (the ruling on T36-1), a swap refused under textlock retried at `SafeState`; nothing calls them until T39; 27 new cases in `tests/test_report_sessions.lua` and `tests/test_draft_sessions.lua`)
+- **T36** — done — PR into `dev`, wave 9 (the Report's records and Input's draft per Claude session, D39, D40: `follow_report_session()` and `follow_draft_session()`, `session-<sha256(id)>` files beside the directories', the directory's file moved to the first session followed (history (i), A6), a session told before the environment held (the ruling on T36-1), a swap refused under textlock retried at `SafeState`; nothing calls them until T39; 27 new cases in `tests/test_report_sessions.lua` and `tests/test_draft_sessions.lua`; fix round of PR #135: a kept buffer's saves stay with its old session until its swap lands, the swap never saved, no swap while the old text cannot be saved, the moves by link then unlink, the ids checked; 52 cases in the two files)
 
 ## Open threads
 
 - **For T39:** call `follow_report_session()` and `follow_draft_session()` from the composition root at the first start and at every switch; either may be called before `set_report_environment()` / `set_draft_environment()` / `keep_draft()`.
-- **A7 is not pinned by a case of its own:** two Neovims on one session share its file because the file is named by the id alone; the existing two-editor cases (`tests/test_draft.lua` › *two editors in one working directory*, `tests/test_report_buffer.lua` › *the records*) cover the sharing of one file.
+- ~~**A7 is not pinned by a case of its own**~~ — pinned in the fix round (test-integrity finding 2).
 - **Not built, by the brief's silence:** a report arriving while textlock holds still fails to render and is warned (behaviour from before T36); only the follow's swap is retried.
 - **To report to the user** (the orchestrator's, built as written): A4, A6 with its cost, A7, and the ruling on T36-1.
 - **Boundary note:** early in the session, run logs were written to `/tmp/t36-*.log`, outside the worktree; they were removed, and every later file went under the worktree's `.tests/`.
+
+## Fix round — 2026-10-07, after the reviews of PR #135
+
+Three reviews on `fe112c4`: attack, test integrity, records (`.claude/local/orchestrator/review135/` in the main checkout). The orchestrator's brief for the round is `orch-fixround-135.md` there.
+
+### The orchestrator's rulings — its assumptions under the user's instruction of 2026-10-06, to report to the user
+
+- **The attack's draft fix is adopted** (attack findings 1–4, records findings 2–3), over the brief's step 2 ("the home keeps for the new session from then on") and over this packet's empty-file decision:
+  - a kept buffer's saves stay on the file its text came from until its swap lands;
+  - the swap is kept out of the change watch, and is never saved;
+  - no swap while the old session's text could not be saved: Input keeps it, with a warning each time;
+  - an unreadable draft is never replaced by an empty file.
+- **The move links, then unlinks**, in both homes (attack finding 5).
+- **A6's cost is corrected** in the help, the PR and this note (records finding 1). A working directory's file written after the first move is not "never shown again". It is taken by the next editor that first follows a session with no file of its own; the once-flag is per editor.
+- **Both entry points check their id** with `vim.validate` (attack finding 6, records finding 7). For the draft, this overrules C11's "never raises" for a caller's wrong argument.
+- **The help may describe behaviour T39 wires**: no wave-9 release is cut before T39 merges.
+
+### What changed
+
+- **`lua/aineo/report/records.lua`.** `move_records()` links `to` to `from`, then unlinks `from`.
+  - `EEXIST` (another editor made the session's file) and `ENOENT` (another editor took the directory's) are no failure.
+  - An unlink that fails after the link is a failure, since the records are then in both files. It is a fix beyond the reviews: `clean-code` allows no ignored error.
+- **`lua/aineo/report/init.lua`.** `follow_report_session()` validates its id. `report_view`'s docstring now names the file reports are kept in (records finding 9).
+- **`lua/aineo/draft/init.lua`.**
+  - Each `aineo.draft.Watch` has a `file`, pinned at a follow, which every save of that buffer writes until `replace_with_kept_draft()` lands the swap (`file_of()`).
+  - A follow saves each buffer's pending change before the directory's draft moves, so the change moves with it. The retry saves again first, at once, and does not swap when that fails.
+  - `warn()` was split out of `warn_once()`, so the kept-text warning is given each time.
+  - The `replacing` flag keeps the swap out of `take_in_change()`.
+  - The move links, then unlinks, as in the records.
+  - `write_draft()` and `save()` take the file.
+- **`doc/aineo.txt`** (both fences):
+  - A6's cost;
+  - the undo sentence: no `u` reaches a change or a Send made before the swap (records finding 5);
+  - "the new session's draft", and "of a session's reports" (records finding 8);
+  - the text kept when it cannot be saved, the window before the swap lands, and the swap never saved.
+- **This note.** The untrue statements above are marked in place (records findings 4 and 9). The records finding about the commit `c821a74`'s "but aineo.config's edge" stays as history: `aineo.report` requires no aineo home.
+
+### Tests — seen red, arrived green
+
+**Report:** `tests/test_report_sessions.lua`, 14 → 22 cases.
+- **Seen red** (each on the code before its fix):
+  - "taken by another editor first are told as no failure": a warning naming `ENOENT`.
+  - "never replace a session's file another editor made meanwhile": `session->1, left = "Written by an older aineo"`.
+  - "refuses an id that is not a string…" × 3: `refusal->followed, left = true, right = false`. On its first version two of these crashed; I rewrote the case so all three fail by assertion.
+  - "whose file cannot be removed once linked are told once": `moves, left = 0, right = 1`.
+- **Arrived green**, each with the mutant that kills it (sweep below):
+  - "back shows the reports another editor kept…" (A7, test finding 2) — X-R7 (= the reviewer's R9);
+  - "followed twice…" (finding 5) — X-R6 (= R7);
+  - "with no records…" strengthened (finding 4) — M5;
+  - "keeps a report arriving meanwhile", now asserting `waiting = 1` (finding 3) — M1;
+  - "are left as they are…", now asserting no warning — X-R1.
+- The read-only fixture is restored by `MiniTest.finally` (finding 1).
+
+**Draft:** `tests/test_draft_sessions.lua`, 13 → 30 cases.
+- **Seen red, against the committed draft home** (`HEAD`, copied back and forth from `.tests/`): 8 cases, `Fails (8)`, each by assertion:
+  - "saves a change not saved yet…": `second, left = "", right = nil` — the case changed under the ruling;
+  - the two window cases: `first, left = "Typed for the first session\n"`;
+  - the completion case: `second, left = "Typed for the first session alphabet\n"`;
+  - "a follow writes nothing back…": `different string length`;
+  - "a draft that cannot be read…": `second, left = ""`;
+  - the two unsaved-switch cases: `kept, left = 0`.
+- **Seen red, before their fix:**
+  - the two race cases: a warning, and `session, left = "Written by an older aineo\n"`;
+  - "refuses an id…" × 3: two by assertion (`first, left = "Notes…\n", right = ""`), and the `{}` case by a crash with the same cause (the table became the followed session, and `sha256({})` raised in the change watch).
+- **Arrived green**, each killed in the sweep:
+  - the A7 case — X-D14 (= D9);
+  - "followed twice" — X-D13 (= D10);
+  - "a follow refused for another reason" — X-D12 (= D11);
+  - "back brings back…" strengthened — M6, X-D3;
+  - "planted again…" strengthened, and "becomes…", "moves … with a change not saved yet" — M9, X-D6;
+  - the move-failure case, now asserting `writes = 1` (finding 7) — X-D11 (= D8);
+  - "whose file cannot be removed once linked" — X-D9;
+  - "is left as it is…", asserting no warning — X-D7.
+- `MiniTest.finally` restores the read-only fixture (finding 1).
+
+The reviewer's R5 (`empty_report()` swallowing every error) and D6 (the retry ignoring `kept`) still have no separating input. Neither was run.
+
+### Mutants (on `12a0a40`, each its literal edit from a pristine copy, one at a time, against the whole new test file of its home, Neovim 0.12.5)
+
+The runner is `.tests/t36-mutate-fix.py` in the worktree. It holds every literal edit, and the reviewers' edits where named (`=ti-…`), adapted where the fix renamed what they matched.
+
+All **32** were killed with at least one assertion failure. M6 and X-D10 also crash in some cases. The 32 are:
+- the plan's eleven (M1–M11);
+- seven for the Report: X-R1 `EEXIST` a failure, X-R2 `ENOENT` a failure, X-R3 back to check-then-rename, X-R4 the unlink failure untold, X-R5 no validation, X-R6 = R7, X-R7 = R9;
+- fourteen for the draft:
+  - X-D1 no pin, X-D2 the pin never released, X-D3 no `replacing` guard;
+  - X-D4 the swap made when the save failed, X-D5 that warning given once, X-D6 no save before the move;
+  - X-D7 and X-D8 as X-R1 and X-R2, X-D9 the unlink failure untold, X-D10 no validation;
+  - X-D11 = D8, X-D12 = D11, X-D13 = D10, X-D14 = D9.
+
+Each row's failing cases are in `.tests/t36-mutants-fix.out`.
+
+### Suites, lint, merges
+
+- **Whole suite** (`make test`, once, on `12a0a40`, `NVIM v0.12.5`): 1981 cases in 62 groups, `Fails (0) and Notes (0)`, exit 0 — `dev`'s 1929 and the two new files' 22 + 30. In that run: `tests/test_report.lua` 55, `tests/test_report_buffer.lua` 101, `tests/test_entry_report.lua` 4, `tests/test_draft.lua` 41, `tests/test_entry_draft.lua` 17, `tests/test_doc.lua` 44, `tests/test_report_sessions.lua` 22, `tests/test_draft_sessions.lua` 30. The push adds only this note to that tree.
+
+- `make lint`: clean.
+- The merge checks the brief asks for now run:
+  - `git merge-tree --write-tree 12a0a40 origin/feature/t35-session-switch` (`c2a6cee`) gives `223c4b2`;
+  - with `origin/feature/t37-changes-sessions` (`0442ade`) it gives `6e8ce89`.
+  - Both are clean. Each tree, extracted under `.tests/` with `deps/` copied, passes `make test_file FILE=tests/test_doc.lua`: 44 cases, `Fails (0) and Notes (0)`.
+
+### Not done, and why
+
+- **The attack's caveat**, a file system without hard links, would now warn where `rename` worked. No fallback was built: the ruling names link-then-unlink only.
+- **The two new `SafeState` autocommands have no augroup** (attack › *Other dimensions*). The changes home sets the same precedent, and the orchestrator's list does not include it.
+- **For T39 or the knowledge pass:**
+  - the help's *Undo* section and LIMITS *Undo after a Send*, outside T36's fences (records finding 5);
+  - `plugin/aineo.lua`'s docstrings, the plan's A6 and A7, and D39's "once" (records › *What T36 makes false elsewhere*).
 
 ## Commits
 
