@@ -306,3 +306,89 @@ Two aineo-started Claude Codes in live editors, for comparison:
              --append-system-prompt … --allowedTools mcp__aineo__report
   pid 17516  ppid 17492  nvim … -l <checkout>/lua/aineo/mcp/relay.lua
   editor 17304 alive: yes
+
+Amendment — 2026-10-07: P5 and P6, for the claim of a session by its id
+------------------------------------------------------------------------
+
+Run by the same planning agent the same day, after the user's answer "Claim takes a
+session (Recommended)" (the plan's *Packet T40* section quotes it): `:Aineo claim <id>`
+completes over the sessions that have a running Claude Code. Same runner as above, on the
+same host.
+
+P5  `vim.uv.kill(pid, 0)` returns 0 for a process that runs (this one, a running child),
+    ESRCH for one that ended and was reaped, and EPERM for another user's process (pid 1).
+    So a record whose pid gives anything but 0 belongs to no running Claude Code of this
+    user: ESRCH an ended one, EPERM a pid another user's process took since. A pid that one
+    of the user's own processes took since gives 0, as the Claude Code's own would: the
+    check cannot tell those apart (the start token, A19, tells them apart for the hooks'
+    records). Listing 50 small records, each read and its pid checked, took 1.1–1.6 ms.
+P6  The working directory (read-only `lsof -a -d cwd`) of the incident's background Claude
+    Code (pid 17251) and of its MCP server (pid 17315) is the same, `<home>/Development/
+    Personal/aineo`, as for the two Claude Codes in live editors and their servers. So an
+    MCP server can name its Claude Code's working directory as its own.
+
+p5-alive.lua:
+
+-- P5: what `vim.uv.kill(pid, 0)` says of a process that runs, one that ended,
+-- and one of another user (pid 1, launchd); and what listing records of
+-- running Claude Code processes costs: 50 small JSON files, each read and its
+-- pid checked, half of them for processes that ended.
+local here = os.getenv('PROBE_HERE')
+local function show(...)
+  io.stdout:write(table.concat(vim.tbl_map(function(v)
+    return type(v) == 'string' and v or vim.inspect(v, { newline = ' ', indent = '' })
+  end, { ... }), '  '), '\n')
+end
+local function alive(pid)
+  local ok, failure, code = vim.uv.kill(pid, 0)
+  return ok and 'runs (0)' or ('%s'):format(code or failure)
+end
+show('this process:', alive(vim.uv.os_getpid()))
+local child = vim.system({ 'sleep', '30' })
+show('a running child:', alive(child.pid))
+child:kill(15)
+child:wait()
+show('the same child once it ended and was reaped:', alive(child.pid))
+show('pid 1 (another user):', alive(1))
+local folder = here .. '/records'
+vim.fn.mkdir(folder, 'p')
+local ended = {}
+for i = 1, 25 do
+  local c = vim.system({ 'true' })
+  c:wait()
+  table.insert(ended, c.pid)
+end
+for i = 1, 50 do
+  local pid = i <= 25 and ended[i] or vim.uv.os_getpid()
+  vim.fn.writefile({ vim.json.encode({ pid = pid, session = ('%08d-0000-4000-8000-000000000000'):format(i), token = 't' .. i, cwd = '/x' }) }, ('%s/%d-%d.json'):format(folder, pid, i))
+end
+local runs = {}
+for _ = 1, 5 do
+  local start = vim.uv.hrtime()
+  local running = 0
+  for name in vim.fs.dir(folder) do
+    local record = vim.json.decode(table.concat(vim.fn.readfile(folder .. '/' .. name), '\n'))
+    if vim.uv.kill(record.pid, 0) then
+      running = running + 1
+    end
+  end
+  table.insert(runs, ('%.2f ms (%d running)'):format((vim.uv.hrtime() - start) / 1e6, running))
+end
+show('listing 50 records, 25 of ended processes, 5 runs:', runs)
+vim.fn.delete(folder, 'rf')
+
+Its output:
+
+this process:  runs (0)
+a running child:  runs (0)
+the same child once it ended and was reaped:  ESRCH
+pid 1 (another user):  EPERM
+listing 50 records, 25 of ended processes, 5 runs:  { "1.50 ms (25 running)", "1.30 ms (25 running)", "1.19 ms (25 running)", "1.18 ms (25 running)", "1.16 ms (25 running)" }
+
+P6, read-only (home written <home>):
+
+  lsof -a -d cwd -p 17251,17315,17492,17516 -Fpn
+  p17251 cwd <home>/Development/Personal/aineo   (the background Claude Code)
+  p17315 cwd <home>/Development/Personal/aineo   (its MCP server)
+  p17492 cwd <home>/Development/Personal/aineo   (a Claude Code in a live editor)
+  p17516 cwd <home>/Development/Personal/aineo   (its MCP server)
