@@ -166,7 +166,7 @@ Made under the user's instruction of 2026-10-06 ("assume your recommendations an
 | Records 5 | fixed | `pane_shown()`, `find` and `M.follow_changes_session()`'s docstrings |
 | Records 6 | fixed | *keeps a save once for each path newly marked* — red `3` writes against `1` |
 
-Rejected: letting go of a held session once a later write succeeds. No case could tell it apart from keeping it held.
+Rejected: letting go of a held session once a later write succeeds. ~~No case could tell it apart from keeping it held.~~ **Corrected in fix round 2:** the re-measure's A3 tells it apart — a session held after a failed write, kept later, hid the saves another editor kept since. Fix 2b (`use_held_base()` calls `keep()`) answers it; see *Fix round 2*.
 
 ### Survivors found and pinned in the round
 
@@ -257,9 +257,130 @@ Each run below is on Neovim 0.12.5, on `3cb52d9`'s code, and each gave `Fails (0
 - Since `85a57f9`, `dev` (`ac99e49`) holds only T40's vault notes, and merges with this head without conflict.
 - The pull request gives the whole suite's count on the pushed head.
 
+## Fix round 2 — 2026-10-07/08, PR #136's re-measure
+
+The re-measure of PR #136 after its first fix round (`.claude/local/orchestrator/remeasure136/remeasure-t37.md`, on `9690b5a`, with its cases `remeasure-t37-cases.lua` and its measured fixes `remeasure-t37-fixes.diff`), and the orchestrator's message. Branch `feature/t37-changes-sessions`, from `9690b5a`; a fresh implementer agent (`neovim-lua-developer`).
+
+### The orchestrator's rulings — its assumptions, to report to the user
+
+Made under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"):
+
+- **Findings 1 and 2 are required fixes.** `keep()` refuses at write time what `use_kept_base()` refuses at follow time (fix 1); a session whose write failed is written again at each save until a write succeeds (2a), and as it is followed again (2b).
+- **Finding 5 — the first base kept wins.** When two editors in one repository begin the same unseen session, the first base kept for it wins, and the other editor takes it (fix 4). It predates the first fix round; it moves an editor's base under it when another editor kept the session first.
+- **Finding 3's let-go (the re-measure's fix 3) is not added:** fix 2b answers A3 on its own.
+- **Finding 8 is named, not fixed:** a save another editor keeps between this editor's read of the record and its rename is lost from the record until that editor's next new mark. A lock or a read-back was judged not worth its cost now.
+- **Finding 9 (a truncated record) keeps the code:** it is replaced as nothing kept, and the help says so.
+
+### Each item
+
+| Item | Status | Case (red → green, or the mutant it kills) |
+|---|---|---|
+| Fix 1 (finding 1, A1) | fixed | *whose write failed, followed again, never writes over what another repository kept since* — red: the record's top `…/git-changessessions-held-foreign-first/repo` against `…-second/repo` |
+| Fix 1 (finding 1, A2) | fixed | *kept for another repository while it looks for HEAD, never writes over it* — red: `…/git-changessessions-late-look-first/repo` against `…-second/repo` (red on the pre-fix code, seen before fix 1 was written) |
+| Fix 2a (finding 2, A4) | fixed | *whose write failed keeps its base once it can, at a save of a path already marked* — red `{ "No commits on this session" }` against `{ "77f5407 Made in the session" }` |
+| Fix 2b (finding 2, A4b) | fixed | *whose write failed, followed again, keeps its base once it can, at a save of a path marked* — red `No commits on this session` against `df3295a Made in the session` |
+| Fix 2b (finding 2, A4c) | fixed | *whose write failed, followed again once it can be kept, keeps its base without a save* — red `No commits on this session` against `5c38a46 Made in the session` |
+| Fix 2b (finding 3, A3) | fixed | *whose write failed, kept once it can, shows the saves another editor kept since* — red `{ "* M notes.txt", "* ? other.txt", "  ? third.txt" }` against `* ? third.txt` marked |
+| Fix 4 (finding 5, the re-measure's A6b) | fixed (ruling) | *unseen, in two editors of one repository at once, keeps the first base kept and the saves of both* — red: base `f9cef8c…`, saved `{ "readme.txt" }` against base `1764206…`, saved `{ "notes.txt", "readme.txt" }` |
+| Finding 4 (M22) | fixed | `eq(raised, vim.NIL)` moved before `wait_for_finds(2)`: M22 now dies on it, in all three parameters |
+| Finding 6 (A5) | pinned | *kept for another repository, followed again and saved in, never writes over it* — arrived green. It killed X2 before fix 1; with fix 1, `keep()` refuses the other repository's record itself, so X2 survives (see the table) |
+| Finding 6 (A7a) | pinned | *kept in a file cut short replaces it, and a later editor reads the new base back* — arrived green; kills X11 |
+| Finding 6 (A10) | pinned | *kept for another repository, left while it looks for HEAD, takes HEAD when followed again* — arrived green; kills X1 |
+| Finding 7.1 | corrected | LIMITS: a kept file aineo *cannot open* is held; one holding anything but what aineo writes, cut short say, counts as nothing kept and is replaced |
+| Finding 7.2 | corrected | LIMITS: a session whose base could not be written is held *until a write succeeds*, written again as it is followed again and at each save |
+| Finding 7.3 | corrected | the PR body's first verification line is labelled the first round's |
+| Finding 8 | named | LIMITS: the read-then-rename race between two editors |
+| The "let go" claim | corrected | *Fix round* › *Rejected* above, and the PR body: A3 tells it apart |
+
+The re-measure's cases were adopted as they were measured, renamed in this file's domain language; `record_of()` joins the file's helpers.
+
+### Pins the round's own mutants asked for
+
+The first pass of this round's mutants, on `b4973fb`, left four survivors of its own mechanisms. Each became a case that arrived green, pinning code written ahead of it (`208bd97`):
+
+- F1a — *never writes over what is kept once it cannot be read* (the record made unreadable after the follow, then a save);
+- F1c — *kept for another repository while it looks for HEAD, followed again, brings back its saves held*;
+- F4b — *takes the base another editor kept for it since, and lists the commits from there*;
+- M1 — *in a later editor reads its base back without looking for HEAD*: fix 4's adoption of the record's base in `keep()` healed M1's always-look follow everywhere a look succeeds; the case gives the later editor a git whose look fails.
+- R6 — *keeps a base git no longer has without looking for HEAD* (`87d699c`): fix 4 made R6 survive the same way, since `keep()` takes the lost base back from the record after R6's look; the case breaks the look.
+
+### The mutants, on the tree pushed (`87d699c`)
+
+Every mutant ran one at a time, from pristine copies of `init.lua` and `kept.lua` copied back and checked equal after each run, on `tests/test_changes_sessions.lua` (52 cases), on Neovim 0.12.5. The first round's rows are the `edit_for` lines above, run as pasted with `perl -0pi -e`; this round's are plain-text edits — in the file named, the one occurrence of `from` replaced by `to` — given verbatim here:
+
+```lua
+X1  = { INIT, '  if not (leaving and session.repository) or session.looking_for_head then', '  if not (leaving and session.repository) then' },
+X2  = { INIT, '  session.keeps_followed = held.keeps', '  session.keeps_followed = true' },
+X4  = { INIT, 'on_disk.top == session.repository.top and on_disk.base == session.base', 'on_disk.top == session.repository.top' },
+X5  = { INIT, 'on_disk.top == session.repository.top and on_disk.base == session.base', 'on_disk.base == session.base' },
+X6  = { KEPT, "  local tries_left = #vim.split(path, '/', { trimempty = true })", '  local tries_left = 1' },
+X7  = { INIT, '  session.looking_for_head, session.head_look_failed, session.keeping_failed = false, false, false', '  session.looking_for_head, session.head_look_failed = false, false' },
+X8  = { INIT, '  session.keeping_failed = failure ~= nil', '  session.keeping_failed = session.keeping_failed or failure ~= nil' },
+X9  = { INIT, '  local held = held_bases[session.followed.id]\n', '  local held = held_bases[session.followed.id]\n  held_bases[session.followed.id] = nil\n' },
+X10 = { KEPT, '    return nil, vim.uv.fs_stat(path) ~= nil', '    return nil, true' },
+X11 = { KEPT, '  return decoded and as_kept_base(value) or nil, false', '  if not decoded then\n    return nil, true\n  end\n  return as_kept_base(value), false' },
+F1  = { INIT, '  if unreadable or (on_disk and on_disk.top ~= session.repository.top) then\n    session.keeps_followed = false\n    return\n  end\n', '' },
+F1a = { INIT, '  if unreadable or (on_disk and on_disk.top ~= session.repository.top) then', '  if on_disk and on_disk.top ~= session.repository.top then' },
+F1b = { INIT, '  if unreadable or (on_disk and on_disk.top ~= session.repository.top) then', '  if unreadable then' },
+F1c = { INIT, '    session.keeps_followed = false\n    return\n  end\n  local rebased', '    return\n  end\n  local rebased' },
+F2a = { INIT, '  if not session.saved[path] or session.keeping_failed then', '  if not session.saved[path] then' },
+F2b = { INIT, '  session.keeps_followed = held.keeps\n  keep()\n', '  session.keeps_followed = held.keeps\n' },
+F4a = { INIT, '  if rebased then\n    session.base = on_disk.base\n  end\n', '' },
+F4b = { INIT, '  if rebased then\n    read_for_new_base()\n  end\n', '' },
+F4c = { INIT, '  local rebased = on_disk ~= nil and on_disk.base ~= session.base', '  local rebased = false' },
+N6r = { INIT, '  merge_kept_saves(on_disk)\n', '' },
+N7r = { INIT, '  if not session.saved[path] or session.keeping_failed then', '  if true then' },
+```
+
+X1–X11 are the re-measure's literal edits. N6 and N7's `edit_for` lines no longer match the code (the lines they edit changed in this round); N6r and N7r are the same edits on the lines as they stand.
+
+**Killed, every one by an assertion on a line** (fails in the file):
+
+| | | | | | | | |
+|---|---|---|---|---|---|---|---|
+| M1 3 | M2 9 | M3 11 | M4 2 | M6 6 | M7 12 | M8 1 | M9 1 |
+| M10 1 | M11 1 | M12 3 | M13 1 | M14 1 | M16 1 | M17 2 | M18 1 |
+| M19 3 | M20 1 | M21 1 | M22 3 | M22b 3 | N1 2 | N2 7 | N3 5 |
+| N4 1 | N6r 3 | N7r 1 | N8 4 | R1 1 | R2 1 | R6 1 | R8 2 |
+| R19 1 | R24 1 | X1 1 | X10 33 | X11 2 | F1 4 | F1a 1 | F1b 3 |
+| F1c 1 | F2a 1 | F2b 3 | F4a 2 | F4b 1 | F4c 2 | | |
+
+- M6 (5 of its 6) and M7 (5 of 12) also fail at a wait on the second look; X11's second fail is a wait in *kept for another repository while it looks for HEAD, never writes over it*, which X11 does not fail when that case runs alone (0 fails). Each still has kills on lines.
+- M22 now dies on `eq(raised, vim.NIL)` in all three parameters, Left `…/kept.lua:50: attempt to index local 'decoded' (a number value)` (a boolean, a nil): the raised error is the asserted value.
+- M5 survives this file and is killed by `tests/test_entry_changes.lua` › *the session* › *outlives a restart of Claude Code: its commits stay the session's*, `{ "No commits on this session" }`.
+
+**Survivors** — each run as its literal edit on the file above, `Fails (0)`; the file is the only one that reaches `follow_changes_session` (its other callers are none until T39):
+
+| Mutant | Why it survives |
+|---|---|
+| M1b | Equivalent in outcome on every state measured: in `find`, the kept base read back is replaced by `HEAD`, then `keep()` reads the record of this repository and takes its base back (fix 4), reading both lists again. A foreign record leaves `HEAD` either way |
+| M15 | A late look for a session left sets the base of the session now followed; `keep()` then takes back that session's kept base (fix 4). It differs only for a session followed now that has nothing kept and is itself looking for `HEAD`, when both looks answer at different `HEAD`s. Not pinned: the file's held stand-in releases every look at once, and a pin needs one that releases two looks in turn, with a commit between; not built in this round |
+| N5 | Equivalent through fix 1: an unreadable record's session takes `HEAD` (`take_head()`) on both sides, and `keep()` refuses the unreadable record before any write |
+| X2 | Equivalent while the other repository's record stands: fix 1's `keep()` refuses it whatever `keeps_followed` says. It differs only once that record is removed, when X2 would keep the held session's base — no requirement covers that |
+| X4, X5 | Equivalent: `keep()`, `merge_kept_saves()`' only caller, refuses another top level and takes the record's base before merging, so both halves of the condition always hold |
+| X6 | The re-measure's: the case stages one lost race only; the bound is the one `session_ids.lua` uses |
+| X7, X8 | A stale `keeping_failed` makes each later save write and holds the session when left; the base and marks shown are the same. Not pinned: the round's brief asked for A5, A7a and A10 only |
+| X9 | A held entry dropped when restored: a session held for A5 is held again when left, and one held for a failed write is kept or held again by fix 2b's `keep()` — by reading, equivalent; not proved |
+
+### Verification of the round
+
+On Neovim 0.12.5, on `87d699c`:
+
+| File | Cases | Result |
+|---|---|---|
+| `tests/test_changes_sessions.lua` | 52 (37 before the round) | `Fails (0) and Notes (0)` |
+| `tests/test_changes.lua` | 120 | `Fails (0) and Notes (0)` |
+| `tests/test_entry_changes.lua` | 12 | `Fails (0) and Notes (0)` |
+| `tests/test_doc.lua` | 44 | `Fails (0) and Notes (0)` |
+
+`make lint`: stylua clean, selene 0 errors, 0 warnings.
+
+- **Whole suite** on `87d699c`'s code and tests (the push adds only this note): `make test` — 1981 cases in 61 groups (1966 + 15), `Fails (0) and Notes (0)`, exit 0, 231 s.
+- **Merges:** `git merge-tree --write-tree 87d699c origin/dev` (`aa3cb74`, T36 merged) gives `3bb84d3` without conflict, and this branch's `tests/test_doc.lua` on that tree's `doc/aineo.txt` gives 44 cases, `Fails (0)`; with T35's head `e738bf7`, `999b85b`, without conflict.
+
 ## Task lines
 
-T37 — done in `feature/t37-changes-sessions` (wave 9, stage 1): `aineo.changes.follow_changes_session({ id, state_directory })` shows the pane for a Claude Code session — its base and saves kept per session id under `<state>/aineo/changes-sessions/` (one owner-only JSON file each, named by the id's SHA-256), read back, or `HEAD` then and no saves for a session not seen, kept from then on; held until `begin_session()` and its look have found the repository (T37-1); a record of another repository not used nor written over (A5); nothing read or kept while the look for `HEAD` runs, a list for the old base dropped; a failed write warned once; not called yet (T39 wires it); the help's two fences updated. Fix round (PR #136's reviews, the orchestrator's rulings): `HEAD` looked for from the session's repository; a session not kept (A5, an unreadable record, a failed write) held for the editor's life; `mkdir()` retried; two editors' marks merged; the record written at each new mark.
+T37 — done in `feature/t37-changes-sessions` (wave 9, stage 1): `aineo.changes.follow_changes_session({ id, state_directory })` shows the pane for a Claude Code session — its base and saves kept per session id under `<state>/aineo/changes-sessions/` (one owner-only JSON file each, named by the id's SHA-256), read back, or `HEAD` then and no saves for a session not seen, kept from then on; held until `begin_session()` and its look have found the repository (T37-1); a record of another repository not used nor written over (A5); nothing read or kept while the look for `HEAD` runs, a list for the old base dropped; a failed write warned once; not called yet (T39 wires it); the help's two fences updated. Fix round (PR #136's reviews, the orchestrator's rulings): `HEAD` looked for from the session's repository; a session not kept (A5, an unreadable record, a failed write) held for the editor's life; `mkdir()` retried; two editors' marks merged; the record written at each new mark. Fix round 2 (the re-measure): `keep()` never writes over another repository's or an unreadable record; a failed write retried at each save and when the session is followed again; the first base kept for a session wins between two editors of one repository; the read-then-rename race named in LIMITS.
 
 ## Open threads
 
@@ -267,7 +388,9 @@ T37 — done in `feature/t37-changes-sessions` (wave 9, stage 1): `aineo.changes
 - **For T38:** the interface this packet leaves is `begin_session()`, `follow_changes_session()`, `refresh_shown_pane()`, `pane_buffers()`; `list_read()` drops answers for another base, which T38's sections may reuse per worktree.
 - **M22** survived the first pass; the fix round's case of a bare JSON value kills it (*Fix round*).
 - **A5** is the orchestrator's assumption, to report to the user, with the fix round's rulings (*Fix round*). The attack review's consequence goes with it: an unseen session first followed in an editor whose home holds another repository is kept for that repository, so every later editor in the session's own repository meets A5.
-- **Left open by the attack review:** a truncated record, which fails to decode, is replaced as nothing kept, though it may be another repository's.
+- **Settled in fix round 2:** a truncated record, which fails to decode, is replaced as nothing kept, though it may be another repository's — the re-measure's finding 9 judged counting it unreadable worse (the session would stay unkept in every editor); the help now says so, and *kept in a file cut short replaces it, …* pins it.
+- **Fix round 2's rulings** are the orchestrator's assumptions, to report to the user: the first base kept for a session wins between two editors of one repository (fix 4), and the read-then-rename race is named, not fixed. Its unpinned survivors — M15, X7, X8, X9 — are listed with their reasons in *Fix round 2*.
+- **Named, not fixed (fix round 2):** a save another editor keeps between this editor's read of the record and its rename is lost from the record until that editor's next new mark (the re-measure's finding 8, forced as its A8). A lock or a read-back would close it; LIMITS names it.
 - **For the knowledge pass** (records review): `vim.fn.mkdir(…, 'p')` fails with E739 when another process makes a directory of the path first — a Learning; D19's "files the user saved from this editor" now spans editors on one session (D41); T38's fence says "a file you saved from this editor".
 
 ## Commits
