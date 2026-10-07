@@ -540,6 +540,112 @@ T["the working directory's draft"]["never replaces a session's draft another edi
   })
 end
 
+--- The Lua that interleaves another editor's first follow with the child's,
+--- one call at a time: the other editor links the file being moved to its
+--- own session's file, given as the chunk's argument, just before the
+--- child's link, and removes the moved file's name just before the child's
+--- removal of it.
+local OTHER_EDITOR_INTERLEAVED = [[
+  local other = ...
+  local real_link, real_unlink = vim.uv.fs_link, vim.uv.fs_unlink
+  vim.uv.fs_link = function(from, to)
+    vim.uv.fs_link = real_link
+    assert(real_link(from, other))
+    return real_link(from, to)
+  end
+  vim.uv.fs_unlink = function(path)
+    vim.uv.fs_unlink = real_unlink
+    assert(real_unlink(path))
+    return real_unlink(path)
+  end
+]]
+
+T["the working directory's draft"]['moved by another editor at the same moment stays that session draft alone'] = function()
+  local state = fixture.directory('draft-sessions-race-interleaved')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  child.lua(KEEP_WARNINGS)
+  child.lua(OTHER_EDITOR_INTERLEAVED, { session_draft_file(state, 'session-other') })
+  keep_new_buffer(state)
+
+  follow('session-a')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    shown = input_lines(),
+    a = read_text(session_draft_file(state, 'session-a')),
+    other = read_text(session_draft_file(state, 'session-other')),
+  }, {
+    warnings = {},
+    shown = { '' },
+    a = nil,
+    other = 'From the directory\n',
+  })
+end
+
+T["the working directory's draft"]['moved by another editor at the same moment is told so when the link cannot be removed'] = function()
+  local state = fixture.directory('draft-sessions-race-unremovable')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  local from = directory_draft_file(state)
+  local to = session_draft_file(state, 'session-a')
+  child.lua(KEEP_WARNINGS)
+  child.lua(OTHER_EDITOR_INTERLEAVED, { session_draft_file(state, 'session-other') })
+  child.lua([[
+    local interleaved = vim.uv.fs_unlink
+    vim.uv.fs_unlink = function(path)
+      local result = { interleaved(path) }
+      vim.uv.fs_unlink = function(refused)
+        return nil, 'EACCES: permission denied: ' .. refused, 'EACCES'
+      end
+      return unpack(result)
+    end
+  ]])
+  keep_new_buffer(state)
+
+  follow('session-a')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    session = read_text(to),
+  }, {
+    warnings = {
+      ("aineo: cannot move Input's draft in %s to %s: another editor moved it to its session at the same moment, and %s cannot be removed, so both sessions keep it: EACCES: permission denied: %s"):format(
+        from,
+        to,
+        to,
+        to
+      ),
+    },
+    session = 'From the directory\n',
+  })
+end
+
+T["the working directory's draft"]['removed between the link and its removal stays the session draft'] = function()
+  local state = fixture.directory('draft-sessions-race-removed')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  child.lua(KEEP_WARNINGS)
+  child.lua([[
+    local real_unlink = vim.uv.fs_unlink
+    vim.uv.fs_unlink = function(path)
+      vim.uv.fs_unlink = real_unlink
+      assert(real_unlink(path))
+      return real_unlink(path)
+    end
+  ]])
+  keep_new_buffer(state)
+
+  follow('session-a')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    shown = input_lines(),
+    session = read_text(session_draft_file(state, 'session-a')),
+  }, {
+    warnings = {},
+    shown = { 'From the directory' },
+    session = 'From the directory\n',
+  })
+end
+
 T['a session told before the environment'] = MiniTest.new_set()
 
 T['a session told before the environment']["is held: once it comes, the directory's draft moves to it, and Input is given its draft"] = function()

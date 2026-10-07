@@ -53,13 +53,43 @@ function M.session_records_file(state_directory, session_id)
   )
 end
 
+--- Removes `to`, just linked to the records file `from`, once `from` was
+--- found gone: another editor took `from` between the link and its removal,
+--- and when `to` is not the only name left of that file, the other editor's
+--- session holds it, so `to` is removed for the two sessions to keep one
+--- file each. A `to` that is that file's only name is kept: `from` was
+--- removed some other way, and `to` holds the only copy.
+---
+---@param from string
+---@param to string
+---@return string? failure why `to` could not be removed, naming both files and what happened; nil once removed, or kept
+local function give_up_link_taken_meanwhile(from, to)
+  local moved = vim.uv.fs_stat(to)
+  if not moved or moved.nlink < 2 then
+    return nil
+  end
+  local removed, removal_failure = vim.uv.fs_unlink(to)
+  if not removed then
+    return ('aineo cannot move the report records in %s to %s: another editor moved them to its session at the same moment, and %s cannot be removed, so both sessions keep them: %s'):format(
+      from,
+      to,
+      to,
+      removal_failure
+    )
+  end
+  return nil
+end
+
 --- Moves the records file `from` to `to` when `to` does not exist and
 --- `from` does: `from`'s records are then `to`'s, and `from` is gone. Neither
 --- is touched otherwise. The move links `to` to `from` and then removes
 --- `from`; the link refuses an existing `to` at once, so another editor
 --- making `to`, or taking `from`, meanwhile never has its file replaced, and
---- is no failure. A `from` that cannot be removed once linked is a failure:
---- its records are then in both files.
+--- is no failure. Another editor that took `from` between the link and the
+--- removal took the same file: `to` is then removed again, so that two
+--- sessions never share one file, and the records are the other editor's
+--- session's. A `from` that cannot be removed once linked is a failure: its
+--- records are then in both files.
 ---
 ---@param from string
 ---@param to string
@@ -67,7 +97,10 @@ end
 function M.move_records(from, to)
   local linked, failure, code = vim.uv.fs_link(from, to)
   if linked then
-    local removed, removal_failure = vim.uv.fs_unlink(from)
+    local removed, removal_failure, removal_code = vim.uv.fs_unlink(from)
+    if removal_code == 'ENOENT' then
+      return give_up_link_taken_meanwhile(from, to)
+    end
     if not removed then
       return ('aineo cannot move the report records in %s to %s: they are in both, the first cannot be removed: %s'):format(
         from,
