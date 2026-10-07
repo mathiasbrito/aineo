@@ -80,6 +80,31 @@ local function give_up_link_taken_meanwhile(from, to)
   return nil
 end
 
+--- The codes, as libuv gives them, of a hard link the file system refuses:
+--- it has none (exFAT, FAT, some network and FUSE mounts), the file is on
+--- another device (a symbolic link leading there), or it has too many.
+local LINK_REFUSALS = { ENOTSUP = true, EPERM = true, EXDEV = true, EMLINK = true, ENOSYS = true }
+
+--- Moves the records file `from` to `to` by renaming it, where hard links
+--- are refused (`LINK_REFUSALS`), when `to` does not exist and `from` does;
+--- neither is touched otherwise. `to` is looked for first and then
+--- `from` renamed, so another editor making `to` between the two has its
+--- file replaced.
+---
+---@param from string
+---@param to string
+---@return string? failure why `from` could not be moved, naming both files; nil when it was moved, or when `to` exists or `from` does not
+local function move_records_by_rename(from, to)
+  if vim.uv.fs_stat(to) then
+    return nil
+  end
+  local renamed, failure, code = vim.uv.fs_rename(from, to)
+  if renamed or code == 'ENOENT' then
+    return nil
+  end
+  return ('aineo cannot move the report records in %s to %s: %s'):format(from, to, failure)
+end
+
 --- Moves the records file `from` to `to` when `to` does not exist and
 --- `from` does: `from`'s records are then `to`'s, and `from` is gone. Neither
 --- is touched otherwise. The move links `to` to `from` and then removes
@@ -89,13 +114,17 @@ end
 --- removal took the same file: `to` is then removed again, so that two
 --- sessions never share one file, and the records are the other editor's
 --- session's. A `from` that cannot be removed once linked is a failure: its
---- records are then in both files.
+--- records are then in both files. Where the file system refuses the link
+--- (`LINK_REFUSALS`), `from` is renamed instead (`move_records_by_rename()`).
 ---
 ---@param from string
 ---@param to string
 ---@return string? failure why `from` could not be moved, naming both files; nil when it was moved, or when `to` exists or `from` does not
 function M.move_records(from, to)
   local linked, failure, code = vim.uv.fs_link(from, to)
+  if LINK_REFUSALS[code] then
+    return move_records_by_rename(from, to)
+  end
   if linked then
     local removed, removal_failure, removal_code = vim.uv.fs_unlink(from)
     if removal_code == 'ENOENT' then
