@@ -1477,4 +1477,25 @@ T['following a session']['in a later editor reads its base back without looking 
   expect_lines(COMMITS, { commit_line(commit, 'Made in the session') })
 end
 
+T['following a session']['keeps a base git no longer has without looking for HEAD'] = function()
+  local top = git_repo.create('changessessions-lost-no-look', { ['notes.txt'] = { 'one' } })
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local state = fixture.directory('changessessions-lost-no-look-state')
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  child.stop()
+  git_repo.create('changessessions-lost-no-look', { ['readme.txt'] = { 'another clone' } })
+  local breakable, broken = breakable_looks('changessessions-lost-no-look')
+  git_repo.start_editor(child)
+  begin_and_show(top, { executable = breakable })
+  wait_for_finds(1)
+  vim.fn.writefile({}, broken)
+
+  follow(SESSION_A, state)
+
+  expect_lines(COMMITS, { 'The last refresh failed: fatal: Not a valid commit name ' .. base })
+end
+
 return T
