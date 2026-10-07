@@ -202,6 +202,12 @@ local KEPT_WARNINGS = [[#vim.tbl_filter(function(message)
   return message:find('Input keeps its text', 1, true) ~= nil
 end, _G.warnings)]]
 
+--- The expression, run in the child, that counts the warnings it gave that
+--- Input's text is not saved, its session's draft being unreadable.
+local UNSAVED_WARNINGS = [[#vim.tbl_filter(function(message)
+  return message:find("Input's text is not saved", 1, true) ~= nil
+end, _G.warnings)]]
+
 local T = MiniTest.new_set({
   hooks = {
     pre_case = function()
@@ -790,6 +796,33 @@ T['a session told before the environment']["is held: once it comes, the director
   })
 end
 
+T['a session told before the environment']['whose draft cannot be read keeps it from what is typed in Input, telling why'] = function()
+  local state = fixture.directory('draft-sessions-held-unreadable')
+  local session = session_draft_file(state, 'session-a')
+  plant_draft(session, 'Kept for the session\n')
+  vim.uv.fs_chmod(session, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(session, tonumber('600', 8))
+  end)
+  child.lua(KEEP_WARNINGS)
+  follow('session-a')
+  keep_new_buffer(state)
+
+  set_input({ 'Typed for the session' })
+  vim.wait(SAVE_DELAY_AND_MARGIN_MS)
+  vim.uv.fs_chmod(session, tonumber('600', 8))
+
+  eq({
+    reads = child.lua_get(READ_WARNINGS),
+    unsaved = child.lua_get(UNSAVED_WARNINGS),
+    session = read_text(session),
+  }, {
+    reads = 1,
+    unsaved = 1,
+    session = 'Kept for the session\n',
+  })
+end
+
 T['a follow refused while textlock holds'] = MiniTest.new_set()
 
 T['a follow refused while textlock holds']["puts the session's draft into Input once the hold ends, with no retry left"] =
@@ -912,6 +945,151 @@ T['a draft that cannot be read']['empties Input at a follow, which keeps no late
   eq({ shown = shown, first = read_text(session_draft_file(state, 'session-a')) }, {
     shown = { '' },
     first = 'Notes for the first session\n',
+  })
+end
+
+T['a draft that cannot be read']['is told at each follow to its session'] = function()
+  local state = fixture.directory('draft-sessions-unreadable-each-follow')
+  local second = session_draft_file(state, 'session-b')
+  plant_draft(second, 'Kept for the second session\n')
+  child.lua(KEEP_WARNINGS)
+  keep_new_buffer(state)
+  follow('session-a')
+  vim.uv.fs_chmod(second, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(second, tonumber('600', 8))
+  end)
+
+  follow('session-b')
+  follow('session-a')
+  follow('session-b')
+
+  eq(child.lua_get(READ_WARNINGS), 2)
+end
+
+T['a draft that cannot be read']['is not replaced by what is typed while Input follows its session'] = function()
+  local state = fixture.directory('draft-sessions-unreadable-typed')
+  local second = session_draft_file(state, 'session-b')
+  plant_draft(second, 'Kept for the second session\n')
+  child.lua(KEEP_WARNINGS)
+  keep_new_buffer(state)
+  follow('session-a')
+  vim.uv.fs_chmod(second, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(second, tonumber('600', 8))
+  end)
+  follow('session-b')
+
+  set_input({ 'Typed on the second session' })
+  vim.wait(SAVE_DELAY_AND_MARGIN_MS)
+  vim.uv.fs_chmod(second, tonumber('600', 8))
+
+  eq(read_text(second), 'Kept for the second session\n')
+end
+
+T['a draft that cannot be read']["tells again, at the first change after each follow to its session, that Input's text is not saved"] = function()
+  local state = fixture.directory('draft-sessions-unreadable-told-again')
+  local second = session_draft_file(state, 'session-b')
+  plant_draft(second, 'Kept for the second session\n')
+  child.lua(KEEP_WARNINGS)
+  keep_new_buffer(state)
+  follow('session-a')
+  vim.uv.fs_chmod(second, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(second, tonumber('600', 8))
+  end)
+  follow('session-b')
+  set_input({ 'Typed on the second session' })
+  set_input({ '' })
+  follow('session-a')
+  follow('session-b')
+
+  set_input({ 'Typed on the second session again' })
+
+  eq(child.lua_get(UNSAVED_WARNINGS), 2)
+end
+
+T['a draft that cannot be read']['keeps what was typed for its session in Input at the next follow, telling why'] = function()
+  local state = fixture.directory('draft-sessions-unreadable-kept')
+  local second = session_draft_file(state, 'session-b')
+  plant_draft(second, 'Kept for the second session\n')
+  plant_draft(session_draft_file(state, 'session-c'), 'Kept for the third session\n')
+  child.lua(KEEP_WARNINGS)
+  keep_new_buffer(state)
+  follow('session-a')
+  vim.uv.fs_chmod(second, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(second, tonumber('600', 8))
+  end)
+  follow('session-b')
+  set_input({ 'Typed on the second session' })
+
+  follow('session-c')
+  vim.uv.fs_chmod(second, tonumber('600', 8))
+
+  eq({
+    shown = input_lines(),
+    kept = child.lua_get(KEPT_WARNINGS),
+    second = read_text(second),
+    third = read_text(session_draft_file(state, 'session-c')),
+  }, {
+    shown = { 'Typed on the second session' },
+    kept = 1,
+    second = 'Kept for the second session\n',
+    third = 'Kept for the third session\n',
+  })
+end
+
+T['a draft that cannot be read']['lets an emptied Input take the next session draft, writing nothing'] = function()
+  local state = fixture.directory('draft-sessions-unreadable-emptied')
+  local second = session_draft_file(state, 'session-b')
+  plant_draft(second, 'Kept for the second session\n')
+  plant_draft(session_draft_file(state, 'session-c'), 'Kept for the third session\n')
+  child.lua(KEEP_WARNINGS)
+  keep_new_buffer(state)
+  follow('session-a')
+  vim.uv.fs_chmod(second, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(second, tonumber('600', 8))
+  end)
+  follow('session-b')
+  set_input({ 'Typed on the second session' })
+  set_input({ '' })
+
+  follow('session-c')
+  vim.uv.fs_chmod(second, tonumber('600', 8))
+
+  eq({
+    shown = input_lines(),
+    kept = child.lua_get(KEPT_WARNINGS),
+    second = read_text(second),
+  }, {
+    shown = { 'Kept for the third session' },
+    kept = 0,
+    second = 'Kept for the second session\n',
+  })
+end
+
+T['a draft that cannot be read']["tells at the first change after the follow, once, that Input's text is not saved"] = function()
+  local state = fixture.directory('draft-sessions-unreadable-told')
+  local second = session_draft_file(state, 'session-b')
+  plant_draft(second, 'Kept for the second session\n')
+  child.lua(KEEP_WARNINGS)
+  keep_new_buffer(state)
+  follow('session-a')
+  vim.uv.fs_chmod(second, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(second, tonumber('600', 8))
+  end)
+  follow('session-b')
+
+  set_input({ 'Typed on the second session' })
+  set_input({ 'Typed on the second session, and more' })
+  vim.wait(SAVE_DELAY_AND_MARGIN_MS)
+
+  eq({ unsaved = child.lua_get(UNSAVED_WARNINGS), warnings = child.lua_get('#_G.warnings') }, {
+    unsaved = 1,
+    warnings = 2,
   })
 end
 
