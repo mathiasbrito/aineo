@@ -320,11 +320,22 @@ end
 
 --- The codes, as libuv gives them, of a hard link the file system refuses:
 --- it has none (exFAT, FAT, some network and FUSE mounts), the file is on
---- another device (a symbolic link leading there), or it has too many.
+--- another device, or it has too many.
 local LINK_REFUSALS = { ENOTSUP = true, EPERM = true, EXDEV = true, EMLINK = true, ENOSYS = true }
 
+--- Whether the file at `path` is a symbolic link: a hard link to it would
+--- name the file it leads to, not the link.
+---
+---@param path string
+---@return boolean
+local function is_symbolic_link(path)
+  local file = vim.uv.fs_lstat(path)
+  return file ~= nil and file.type == 'link'
+end
+
 --- Moves the working directory's draft `from` to the session's file `to`
---- by renaming it, where hard links are refused (`LINK_REFUSALS`), when
+--- by renaming it, where hard links are refused (`LINK_REFUSALS`) or
+--- `from` is a symbolic link (`is_symbolic_link()`), when
 --- `to` does not exist and `from` does; neither is touched otherwise. `to`
 --- is looked for first and then `from` renamed, so another editor making
 --- `to` between the two has its file replaced. Once moved, a kept buffer
@@ -354,14 +365,17 @@ end
 --- existing file at once, so another editor making the session's draft, or
 --- taking the directory's, meanwhile never has its file replaced, and is no
 --- failure; one that took it between the link and the removal keeps it
---- alone (`give_up_link_taken_meanwhile()`). Once the session's file holds
---- the text, a kept buffer whose saves went to the directory's file until
---- its swap lands saves to the session's (`pin_moved_text()`). Where the
---- file system refuses the link (`LINK_REFUSALS`), the directory's draft is
---- renamed instead (`move_directory_draft_by_rename()`). Tells the
---- user once when the draft could not be moved, or was linked but cannot be
---- removed from the directory's file (`warn_once()`), and raises nothing
---- then.
+--- alone (`give_up_link_taken_meanwhile()`). Once the link is made, before
+--- the removal, a kept buffer whose saves went to the directory's file until
+--- its swap lands saves to the session's (`pin_moved_text()`), whatever the
+--- removal finds: a session's file given up then is made again by the
+--- buffer's next save, as this session's draft. Where the file system
+--- refuses the link (`LINK_REFUSALS`), or the directory's draft is a
+--- symbolic link (`is_symbolic_link()`), which then stays one, the
+--- directory's draft is renamed instead (`move_directory_draft_by_rename()`).
+--- Tells the user once when the draft could not be moved, or was linked but
+--- cannot be removed from the directory's file (`warn_once()`), and raises
+--- nothing then.
 local function move_directory_draft_once()
   if directory_draft_moved then
     return
@@ -370,6 +384,10 @@ local function move_directory_draft_once()
   local from = draft_file(environment.state_directory, environment.working_directory)
   local to = kept_draft_file()
   local not_moved = "cannot move Input's draft in %s to %s: %s"
+  if is_symbolic_link(from) then
+    move_directory_draft_by_rename(from, to)
+    return
+  end
   local linked, link_failure, code = vim.uv.fs_link(from, to)
   if LINK_REFUSALS[code] then
     move_directory_draft_by_rename(from, to)
@@ -381,12 +399,12 @@ local function move_directory_draft_once()
     end
     return
   end
+  pin_moved_text(from, to)
   local removed, removal_failure, removal_code = vim.uv.fs_unlink(from)
   if removal_code == 'ENOENT' then
     give_up_link_taken_meanwhile(from, to)
     return
   end
-  pin_moved_text(from, to)
   if not removed then
     local why = 'it is in both, the first cannot be removed: ' .. removal_failure
     warn_once('move', not_moved:format(from, to, why))
@@ -620,11 +638,13 @@ local replacements_waiting = {}
 --- and the buffer then keeps its text and saves to that file, and no later
 --- follow puts a draft into it, for the editor's life. A text that cannot
 --- be saved is left in the buffer, still its file's, and told to the user
---- each time. A draft that cannot be read is told to the user each time,
---- and `buffer` emptied then; that file is never replaced by the buffer's
---- saves (`write_kept_text()`), and the first change after it tells the
---- user so (`tell_text_not_saved()`). Tells the user once when the draft
---- cannot be put in for another reason (`warn_not_put()`); raises nothing.
+--- each time. A draft that cannot be read is told to the user at each
+--- follow, once the putting lands or is refused for a reason other than
+--- textlock, and `buffer` emptied then; that file is never replaced by the
+--- buffer's saves (`write_kept_text()`), and the first change after it
+--- tells the user so (`tell_text_not_saved()`). Tells the user once when
+--- the draft cannot be put in for another reason (`warn_not_put()`);
+--- raises nothing.
 ---
 ---@param buffer integer
 local function replace_with_kept_draft(buffer)
@@ -638,19 +658,20 @@ local function replace_with_kept_draft(buffer)
     return
   end
   local read, draft = pcall(read_draft)
-  if not read then
-    warn('aineo: ' .. draft)
-  end
   watch.replacing = true
   local put, refusal = put_draft(buffer, read and draft or '')
   watch.replacing = false
+  local waits = not put and tostring(refusal):find(TEXTLOCK_REFUSAL, 1, true) ~= nil
+  if not read and not waits then
+    warn('aineo: ' .. draft)
+  end
   if put then
     watch.file = nil
     watch.unreadable = not read and kept_draft_file() or nil
     watch.unsaved_told = nil
     return
   end
-  if not tostring(refusal):find(TEXTLOCK_REFUSAL, 1, true) then
+  if not waits then
     warn_not_put(refusal)
     return
   end
@@ -786,7 +807,12 @@ end
 --- directory's draft, when it has none (`move_directory_draft_once()`).
 --- A session told before `M.set_draft_environment()` is held: the
 --- environment, once given, moves the directory's draft to it, and
---- `M.keep_draft()` restores its draft.
+--- `M.keep_draft()` restores its draft. `M.keep_draft()` reads that draft
+--- only into an empty buffer: a buffer handed it holding text is not
+--- checked against a held session's draft that cannot be read, and its
+--- first change replaces that draft, unwarned. A caller that holds a
+--- session hands `M.keep_draft()` an empty buffer, as `plugin/aineo.lua`
+--- does with the Input it has just made, which keeps that unreached.
 ---
 --- Raises an error naming `session_id` when it is not a string, and nothing
 --- else; a draft that cannot be read or put in, saved, or moved is told to

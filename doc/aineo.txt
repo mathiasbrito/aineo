@@ -1079,14 +1079,24 @@ Claude's window name ~
 
 The first follow's move ~
 - Where the file system refuses hard links — exFAT, FAT, some network and
-  FUSE mounts, or a file that is a symbolic link to another device — the
-  first session aineo follows takes the working directory's draft and
-  reports by looking for the session's file and then renaming the
-  directory's to it. Another Neovim that makes that session's file
-  between the look and the rename has it replaced.
+  FUSE mounts — or the working directory's draft or reports file is a
+  symbolic link, the first session aineo follows takes that draft and
+  those reports by looking for the session's file and then renaming the
+  directory's to it; a symbolic link stays one. Another Neovim that makes
+  that session's file between the look and the rename has it replaced.
 - An aineo older than sessions, in the same working directory, that
   saves its draft in the instant between this editor's link of the
   directory's draft to the session and its removal of the directory's
   name has that save removed.
+
+A session's draft ~
+- What you type while Input shows a session whose draft cannot be read is
+  saved nowhere: aineo never replaces that draft, and a quit loses the
+  text. Making the file readable again does not save it either, until
+  Input is emptied and another session is followed.
+- An Input emptied — by Send, or by you — while its saves fail refuses
+  the next switch: it stays the session it followed, empty, and you are
+  told that Input keeps its text. Once the saves work again, what you
+  type is kept as that session's draft, not the new one's.
 
  vim:tw=78:ts=8:ft=help:norl:

@@ -625,18 +625,24 @@ T["the working directory's draft"]['moved by another editor at the same moment i
   })
 end
 
+--- The Lua that makes the child's next removal of a file find it gone, as
+--- when a third party removes the working directory's draft between the
+--- child's link of it to a session and its removal of it: the file is
+--- removed just before the child's removal.
+local REMOVED_MEANWHILE = [[
+  local real_unlink = vim.uv.fs_unlink
+  vim.uv.fs_unlink = function(path)
+    vim.uv.fs_unlink = real_unlink
+    assert(real_unlink(path))
+    return real_unlink(path)
+  end
+]]
+
 T["the working directory's draft"]['removed between the link and its removal stays the session draft'] = function()
   local state = fixture.directory('draft-sessions-race-removed')
   plant_draft(directory_draft_file(state), 'From the directory\n')
   child.lua(KEEP_WARNINGS)
-  child.lua([[
-    local real_unlink = vim.uv.fs_unlink
-    vim.uv.fs_unlink = function(path)
-      vim.uv.fs_unlink = real_unlink
-      assert(real_unlink(path))
-      return real_unlink(path)
-    end
-  ]])
+  child.lua(REMOVED_MEANWHILE)
   keep_new_buffer(state)
 
   follow('session-a')
@@ -773,6 +779,31 @@ T["the working directory's draft"]['where hard links are refused']['that cannot 
     moves = 1,
     directory = 'From the directory\n',
     session = nil,
+  })
+end
+
+T["the working directory's draft"]['that is a symbolic link stays one at the first session followed, and its saves reach the file it leads to'] = function()
+  local state = fixture.directory('draft-sessions-symbolic-link')
+  local target = vim.fs.joinpath(state, 'kept-elsewhere.txt')
+  plant_draft(target, 'Typed before any session\n')
+  local directory = directory_draft_file(state)
+  vim.fn.mkdir(vim.fs.dirname(directory), 'p')
+  assert(vim.uv.fs_symlink(target, directory))
+  child.lua(KEEP_WARNINGS)
+  keep_new_buffer(state)
+
+  follow('session-a')
+  set_input({ 'Typed after the follow' })
+  wait_for_text(target, 'Typed after the follow\n')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    session = vim.fn.getftype(session_draft_file(state, 'session-a')),
+    target = read_text(target),
+  }, {
+    warnings = {},
+    session = 'link',
+    target = 'Typed after the follow\n',
   })
 end
 
@@ -981,6 +1012,58 @@ T['a draft that cannot be read']['is told at each follow to its session'] = func
   follow('session-b')
 
   eq(child.lua_get(READ_WARNINGS), 2)
+end
+
+T['a draft that cannot be read']['is told once at a follow to its session that waits while textlock holds'] = function()
+  local state = fixture.directory('draft-sessions-unreadable-textlock')
+  local second = session_draft_file(state, 'session-b')
+  plant_draft(second, 'Kept for the second session\n')
+  vim.uv.fs_chmod(second, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(second, tonumber('600', 8))
+  end)
+  child.lua(KEEP_WARNINGS)
+  keep_new_buffer(state)
+  follow('session-a')
+  begin_hold('vim.fn.getcharstr()')
+
+  follow('session-b')
+  end_hold('q')
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+
+  eq({ reads = child.lua_get(READ_WARNINGS), shown = input_lines() }, { reads = 1, shown = { '' } })
+end
+
+T['a draft that cannot be read']['readable again at a later follow to its session takes what is typed'] = function()
+  local state = fixture.directory('draft-sessions-unreadable-readable-again')
+  local second = session_draft_file(state, 'session-b')
+  plant_draft(second, 'Kept for the second session\n')
+  child.lua(KEEP_WARNINGS)
+  keep_new_buffer(state)
+  follow('session-a')
+  vim.uv.fs_chmod(second, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(second, tonumber('600', 8))
+  end)
+  follow('session-b')
+  follow('session-a')
+  vim.uv.fs_chmod(second, tonumber('600', 8))
+  follow('session-b')
+  local shown = input_lines()
+
+  set_input({ 'Typed once it is readable' })
+
+  eq({
+    shown = shown,
+    second = wait_for_text(second, 'Typed once it is readable\n'),
+    unsaved = child.lua_get(UNSAVED_WARNINGS),
+  }, {
+    shown = { 'Kept for the second session' },
+    second = 'Typed once it is readable\n',
+    unsaved = 0,
+  })
 end
 
 T['a draft that cannot be read']['is not replaced by what is typed while Input follows its session'] = function()
@@ -1410,6 +1493,127 @@ T['a follow refused while textlock holds']['keeps an edit made while the first f
     shown = { 'From the directory and more' },
     session = 'From the directory and more\n',
     directory = nil,
+  })
+end
+
+T['a follow refused while textlock holds']['keeps an edit made while the first follow waits with the draft it moved, its first name removed meanwhile'] = function()
+  local state = fixture.directory('draft-sessions-first-follow-window-removed')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  child.lua(REMOVED_MEANWHILE)
+  keep_new_buffer(state)
+  begin_hold('vim.fn.getcharstr()', 'A and more<Esc>')
+  follow('session-a')
+  local waiting = child.lua_get(RETRIES)
+  end_hold('q')
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+  vim.wait(SAVE_DELAY_AND_MARGIN_MS)
+
+  eq({
+    waiting = waiting,
+    shown = input_lines(),
+    session = read_text(session_draft_file(state, 'session-a')),
+    directory = read_text(directory_draft_file(state)),
+  }, {
+    waiting = 1,
+    shown = { 'From the directory and more' },
+    session = 'From the directory and more\n',
+    directory = nil,
+  })
+end
+
+T['a follow refused while textlock holds']['keeps an edit made while the first follow waits as its session draft when another editor took the draft at the same moment'] = function()
+  local state = fixture.directory('draft-sessions-first-follow-window-interleaved')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  child.lua(OTHER_EDITOR_INTERLEAVED, { session_draft_file(state, 'session-other') })
+  keep_new_buffer(state)
+  begin_hold('vim.fn.getcharstr()', 'A and more<Esc>')
+  follow('session-a')
+  end_hold('q')
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+  vim.wait(SAVE_DELAY_AND_MARGIN_MS)
+
+  eq({
+    shown = input_lines(),
+    session = read_text(session_draft_file(state, 'session-a')),
+    other = read_text(session_draft_file(state, 'session-other')),
+    directory = read_text(directory_draft_file(state)),
+  }, {
+    shown = { 'From the directory and more' },
+    session = 'From the directory and more\n',
+    other = 'From the directory\n',
+    directory = nil,
+  })
+end
+
+T['a follow refused while textlock holds']['keeps an edit made while the first follow waits with the draft it moved, its first name not removable'] = function()
+  local state = fixture.directory('draft-sessions-first-follow-window-unremovable')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  child.lua(KEEP_WARNINGS)
+  child.lua([[
+    local real_unlink = vim.uv.fs_unlink
+    vim.uv.fs_unlink = function(path)
+      vim.uv.fs_unlink = real_unlink
+      return nil, 'EACCES: permission denied: ' .. path, 'EACCES'
+    end
+  ]])
+  keep_new_buffer(state)
+  begin_hold('vim.fn.getcharstr()', 'A and more<Esc>')
+  follow('session-a')
+  end_hold('q')
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+  vim.wait(SAVE_DELAY_AND_MARGIN_MS)
+
+  eq({
+    shown = input_lines(),
+    session = read_text(session_draft_file(state, 'session-a')),
+    directory = read_text(directory_draft_file(state)),
+  }, {
+    shown = { 'From the directory and more' },
+    session = 'From the directory and more\n',
+    directory = 'From the directory\n',
+  })
+end
+
+T['a follow refused while textlock holds']['leaves no retry and raises nothing when Input is wiped while it waits, keeping the edit as the old session draft'] = function()
+  local state = fixture.directory('draft-sessions-wiped-window')
+  plant_draft(session_draft_file(state, 'session-b'), 'Kept for the second session\n')
+  keep_new_buffer(state)
+  child.lua(KEEP_WARNINGS)
+  follow('session-a')
+  set_input({ 'Typed for the first session' })
+  child.cmd('split')
+  child.lua('vim.api.nvim_win_set_buf(0, vim.api.nvim_create_buf(false, true))')
+  child.cmd('wincmd p')
+  begin_hold('vim.fn.getcharstr()', 'A and more<Esc>:bwipeout!<CR>')
+  follow('session-b')
+  local waiting = child.lua_get(RETRIES)
+  end_hold('q')
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+
+  eq({
+    waiting = waiting,
+    valid = child.lua_get('vim.api.nvim_buf_is_valid(_G.input)'),
+    retries = child.lua_get(RETRIES),
+    warnings = child.lua_get('_G.warnings'),
+    errmsg = child.lua_get('vim.v.errmsg'),
+    first = read_text(session_draft_file(state, 'session-a')),
+    second = read_text(session_draft_file(state, 'session-b')),
+  }, {
+    waiting = 1,
+    valid = false,
+    retries = 0,
+    warnings = {},
+    errmsg = '',
+    first = 'Typed for the first session and more\n',
+    second = 'Kept for the second session\n',
   })
 end
 
