@@ -388,6 +388,12 @@ T['start_session()']['adds its hooks to the settings that claude.cmd gives, and 
           return { '--settings=' .. USER_SETTINGS }
         end,
       },
+      {
+        'as JSON with blanks around it',
+        function()
+          return { '--settings', ' ' .. USER_SETTINGS .. '\n' }
+        end,
+      },
     },
   })
 
