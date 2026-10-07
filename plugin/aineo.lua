@@ -197,7 +197,8 @@ local claude_terminal = nil
 --- `claude_terminal`. While one runs it starts nothing and returns that
 --- session's terminal (`aineo.claude`'s `start_session()`). Claude Code
 --- starts in the editor's working directory, resuming the session kept for
---- it under the state directory of `kept_places()`. When the session puts a
+--- it under the state directory of `kept_places()`, its session hooks told
+--- the editor's address and program. When the session puts a
 --- new terminal in place of one whose resume found no conversation, that
 --- terminal becomes `claude_terminal` and the layout's Claude terminal
 --- (`aineo.layout`'s `follow_claude_terminal()`). Once a start has
@@ -219,6 +220,8 @@ local function started_claude_terminal(config)
     allowed_tools = mcp.allowed_mcp_tools(),
     instructions = report.report_instructions(mcp.report_tool_name()),
     state_directory = kept_places().state_directory,
+    editor_address = vim.v.servername,
+    editor_program = vim.v.progpath,
     on_terminal_replaced = function(terminal)
       claude_terminal = terminal
       require('aineo.layout').follow_claude_terminal(terminal)
