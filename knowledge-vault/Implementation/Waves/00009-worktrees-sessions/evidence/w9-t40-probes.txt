@@ -1,0 +1,308 @@
+Wave 9, T40 — planning probes: reports from a Claude Code whose editor has quit
+================================================================================
+
+Run by the T40 planning agent (Claude, Opus 5.5) on 2026-10-07, Neovim 0.12.5 (Homebrew),
+macOS arm64, on `dev` 85a57f9, with T35's branch read at c2a6cee (PR #137) and T36's at
+fe112c4 (PR #135). P1–P3 ran headless in a Neovim isolated by the runner below: every XDG
+directory but the runtime one, the log and CLAUDE_CONFIG_DIR under a scratch directory inside
+the agent's worktree, `--clean`, no shada. TMPDIR is kept, since `stdpath('run')` falls back
+to it. The real `claude` never ran, and nothing under the user's `~/.claude` was read or
+written. P4 is a read-only look at the host's process table (`ps`), no file read.
+
+Paths are written `<TMPDIR>`, `<probe>` (the scratch directory), `<home>` and `<user>`; a
+session id is cut to its first 8 hex digits, as `w9-real-claude-sessions.txt` writes them.
+
+Findings
+--------
+
+P1  `stdpath('run')` on macOS, with XDG_RUNTIME_DIR unset, is a directory of each process's
+    own, `<TMPDIR>/nvim.<user>/<6 random characters>`, and `v:servername` is
+    `<that directory>/nvim.<pid>.0`; two Neovims never share it, and a Neovim that quits
+    removes it. So a registry of running editors cannot live there: `stdpath('state')` is the
+    per-user place two Neovims share. A relay-shaped child (`--clean --cmd 'set
+    noloadplugins'`, the environment inherited) has the same `stdpath('state')` as its
+    parent. With XDG_RUNTIME_DIR set, `stdpath('run')` is that directory itself, shared;
+    the probe's own was too long for a socket (115 bytes against macOS's 104), so no server
+    started there — W-3's limit again, not a finding about Neovim.
+P2  A hook command run through a shell — `/bin/sh -c`, `/bin/zsh -c`, `/bin/bash -c`, and
+    Node's `spawn(command, { shell: true })` — expands `"$PPID"` to the pid of the process
+    that ran the shell (the stand-in for Claude Code) in every case. The relay's own parent
+    (`vim.uv.os_getppid()`) is that process only when the shell runs the command in its own
+    place: one command under any of the three shells and Node; with two commands
+    (`true; <command>`), `/bin/sh` and `/bin/bash` and Node's shell leave the shell between
+    them, so the relay's parent is the shell. So a relay that must name Claude Code's
+    process takes it from `"$PPID"` written on its command line, never from its own parent.
+    How Claude Code itself runs a command hook was not measured.
+P3  A connection to an editor that is gone fails at once: ENOENT after the editor quit (its
+    socket file is gone; 0.1 ms) — the incident's error — and ECONNREFUSED after it was
+    killed by SIGKILL (its socket file and runtime directory stay; 0.0 ms). A registry entry
+    of either kind costs a reader nothing to skip.
+P4  The incident, in the host's process table (2026-10-07, about 14:36): the orchestrator's
+    Claude Code session runs under Claude Code's background host — `claude --bg-pty-host
+    /tmp/cc-daemon-<uid>/<id>/pty/55110cd0….sock … -- <home>/.local/share/claude/versions/2.1.291
+    --session-id 55110cd0… --fork-session --resume <home>/.claude/projects/<folder>/938616f1….jsonl
+    --mcp-config {…} --allowed-tools …`, parent pid 1, started 2026-10-06 16:20:18. So
+    the conversation moved to the background is a new Claude Code process on a new session
+    id, 55110cd0…, forked from the transcript of 938616f1…. Its `--mcp-config` is aineo's,
+    carried over word for word, `AINEO_EDITOR_ADDRESS` naming
+    `<TMPDIR>/nvim.<user>/Zsm2hJ/nvim.64474.0`, an editor (pid 64474) that no longer runs.
+    The background host's command line carries `--mcp-config` and the allowed tools
+    (respelled `--allowed-tools`) but no `--append-system-prompt`; whether it would carry a
+    `--settings` (T35's hooks) cannot be read from it, since this session was started
+    before T35. Its MCP server, aineo's relay (`nvim --headless --clean --cmd set
+    noloadplugins -l <checkout>/lua/aineo/mcp/relay.lua`), has Claude Code's process
+    (2.1.291) as its parent, as M5 measured, and in its environment `NVIM` and
+    `AINEO_CHILD=1` — Claude Code passes its environment on to its MCP server — and
+    `CLAUDE_CODE_SESSION_ID=55110cd0…`, the process's own first session. Two other
+    aineo-started Claude Codes on the host, each in a live Neovim (its parent), show the
+    ordinary shape: `claude --session-id …` or `--resume …`, the relay a child of claude.
+
+Not measured: how Claude Code runs a command hook (through which shell, and whether its
+parent is the Claude Code process); whether the background host keeps `--settings` and runs
+its hooks, and which `SessionStart` or `SessionEnd`, if any, a move to the background sends;
+whether `--resume` of a session another Claude Code process runs keeps that id; whether a
+user's terminal sends focus events (`FocusGained`) — tmux sends none unless `focus-events` is
+on.
+
+The runner
+----------
+
+#!/bin/sh
+# Runs a probe in a Neovim isolated under this directory: every XDG path but the
+# runtime one, the log and CLAUDE_CONFIG_DIR here, no user config, no shada.
+# TMPDIR is kept (stdpath('run') falls back to it on macOS); XDG_RUNTIME_DIR is
+# unset unless the probe sets it.
+here=$(cd "$(dirname "$0")" && pwd)
+home="$here/home"
+mkdir -p "$home"
+exec env -i PATH="/opt/homebrew/bin:/usr/bin:/bin" HOME="$home" TERM=xterm-256color TMPDIR="$TMPDIR" \
+  XDG_CONFIG_HOME="$home/config" XDG_DATA_HOME="$home/data" XDG_STATE_HOME="$home/state" \
+  XDG_CACHE_HOME="$home/cache" NVIM_LOG_FILE="$home/nvim.log" CLAUDE_CONFIG_DIR="$home/claude" \
+  PROBE_HERE="$here" PROBE_NODE="$PROBE_NODE" \
+  nvim --clean --headless -i NONE -l "$@"
+
+P1: where the runtime directory and the server address are
+-----------------------------------------------------------
+
+-- P1: where a Neovim's runtime directory and server address are, on macOS, and
+-- whether two Neovims share the runtime directory; whether a relay started as
+-- aineo starts its MCP server (`--headless --clean --cmd 'set noloadplugins'`)
+-- sees the editor's stdpath('state').
+local here = os.getenv('PROBE_HERE')
+local function show(...)
+  io.stdout:write(table.concat(vim.tbl_map(function(v)
+    return type(v) == 'string' and v or vim.inspect(v, { newline = ' ', indent = '' })
+  end, { ... }), '  '), '\n')
+end
+local function redact(text)
+  text = text:gsub(vim.pesc(vim.env.TMPDIR or '/nonexistent'), '<TMPDIR>/')
+  text = text:gsub(vim.pesc(here), '<probe>')
+  text = text:gsub('nvim%.[%w_]+/', 'nvim.<user>/')
+  return text
+end
+local QUERY = 'io.stdout:write(vim.fn.stdpath("run") .. "|" .. vim.v.servername .. "|" .. vim.fn.stdpath("state") .. "|" .. vim.uv.os_getpid())'
+local function child(extra_env, args)
+  local command = { vim.v.progpath, '--headless', '--clean', '-i', 'NONE' }
+  vim.list_extend(command, args or {})
+  vim.list_extend(command, { '--cmd', 'lua ' .. QUERY, '+qa!' })
+  local result = vim.system(command, { env = extra_env, text = true }):wait()
+  return result.stdout
+end
+show('this Neovim (the runner):  run =', redact(vim.fn.stdpath('run')), ' servername =', redact(vim.v.servername), ' XDG_RUNTIME_DIR =', tostring(vim.env.XDG_RUNTIME_DIR))
+for i = 1, 2 do
+  local run, server, state, pid = unpack(vim.split(child({ NVIM = '' }), '|', { plain = true }))
+  show(('child %d (pid %s):'):format(i, pid), ' run =', redact(run), ' servername =', redact(server), ' state =', redact(state))
+end
+local run, server, state = unpack(vim.split(child({ NVIM = '' }, { '--cmd', 'set noloadplugins' }), '|', { plain = true }))
+show("relay-shaped child (--clean --cmd 'set noloadplugins'):", ' run =', redact(run), ' state =', redact(state), ' same state as the runner:', state == vim.fn.stdpath('state'))
+local xdg = here .. '/xdg-run'
+vim.fn.mkdir(xdg, 'p')
+vim.uv.fs_chmod(xdg, tonumber('700', 8))
+for i = 1, 2 do
+  local r, s, _, pid = unpack(vim.split(child({ NVIM = '', XDG_RUNTIME_DIR = xdg }), '|', { plain = true }))
+  local would_be = ('%s/nvim.%s.0'):format(xdg, pid)
+  show(('with XDG_RUNTIME_DIR set, child %d:'):format(i), ' run =', redact(r), ' servername =', redact(s), (' (the address it would take, %s, is %d bytes; macOS sun_path holds 104)'):format(redact(would_be), #would_be))
+end
+-- Does a child's runtime directory survive the child?
+local r1 = vim.split(child({ NVIM = '' }), '|', { plain = true })[1]
+show('a quit child left its runtime directory behind:', vim.uv.fs_stat(r1) ~= nil)
+
+Its output:
+
+this Neovim (the runner):  run =  <TMPDIR>/nvim.<user>/OsZKjK   servername =  <TMPDIR>/nvim.<user>/OsZKjK/nvim.68889.0   XDG_RUNTIME_DIR =  nil
+child 1 (pid 68923):   run =  <TMPDIR>/nvim.<user>/5nH2MX   servername =  <TMPDIR>/nvim.<user>/5nH2MX/nvim.68923.0   state =  <probe>/home/state/nvim
+child 2 (pid 68943):   run =  <TMPDIR>/nvim.<user>/R2ZnDY   servername =  <TMPDIR>/nvim.<user>/R2ZnDY/nvim.68943.0   state =  <probe>/home/state/nvim
+relay-shaped child (--clean --cmd 'set noloadplugins'):   run =  <TMPDIR>/nvim.<user>/zzoLSb   state =  <probe>/home/state/nvim   same state as the runner:  true
+with XDG_RUNTIME_DIR set, child 1:   run =  <probe>/xdg-run   servername =     (the address it would take, <probe>/xdg-run/nvim.68956.0, is 115 bytes; macOS sun_path holds 104)
+with XDG_RUNTIME_DIR set, child 2:   run =  <probe>/xdg-run   servername =     (the address it would take, <probe>/xdg-run/nvim.68958.0, is 115 bytes; macOS sun_path holds 104)
+a quit child left its runtime directory behind:  false
+
+P2: which process a hook relay's `$PPID` and its own parent name
+-----------------------------------------------------------------
+
+p2-record.lua, the relay stand-in:
+
+-- P2's relay stand-in: writes one line to the file arg[1] names: the `$PPID`
+-- its command line was given (arg[2]), its own pid and its parent's pid.
+local out = assert(io.open(arg[1], 'a'))
+out:write(('ppid_argument=%s own_pid=%d own_parent=%d\n'):format(arg[2] or '-', vim.uv.os_getpid(), vim.uv.os_getppid()))
+out:close()
+
+p2-node-claude.js, the Node stand-in:
+
+// P2's Node stand-in for Claude Code: runs one hook command string as Node's
+// `child_process.spawn(command, { shell: true })` runs it (`/bin/sh -c` on
+// macOS), and prints its own pid first. Not Claude Code: how Claude Code
+// itself runs a command hook was not measured.
+const { spawn } = require('child_process');
+const command = process.argv[2];
+process.stdout.write(`node_pid=${process.pid}\n`);
+const child = spawn(command, { shell: true, stdio: ['pipe', 'inherit', 'inherit'] });
+child.stdin.end('{"session_id":"x"}');
+child.on('exit', (code) => process.stdout.write(`hook_exit=${code}\n`));
+
+p2-hook-parent.lua, run with PROBE_NODE naming Node v24.12.0:
+
+-- P2: which process a hook relay's `$PPID` and its own parent name, when a
+-- command hook is run through a shell, as Claude Code runs one (D-docs; T35's
+-- brief: "Claude Code runs it through a shell"). Stand-ins for Claude Code:
+-- this Neovim running `/bin/sh -c` and `/bin/zsh -c` (vim.system), and Node's
+-- `spawn(command, { shell: true })`. The real `claude` never runs.
+local here = os.getenv('PROBE_HERE')
+local node = os.getenv('PROBE_NODE')
+local function show(...)
+  io.stdout:write(table.concat(vim.tbl_map(function(v)
+    return type(v) == 'string' and v or vim.inspect(v, { newline = ' ', indent = '' })
+  end, { ... }), '  '), '\n')
+end
+local function quoted(word)
+  return "'" .. word:gsub("'", [['\'']]) .. "'"
+end
+local record = here .. '/p2-record.lua'
+local function hook_command(log, prefix)
+  local words = vim.tbl_map(quoted, { vim.v.progpath, '--headless', '--clean', '--cmd', 'set noloadplugins', '-l', record, log })
+  return (prefix or '') .. table.concat(words, ' ') .. ' "$PPID"'
+end
+local function read_log(log)
+  local lines = vim.fn.readfile(log)
+  vim.fn.delete(log)
+  return lines[1] or '(nothing written)'
+end
+local me = vim.uv.os_getpid()
+for _, shell in ipairs({ '/bin/sh', '/bin/zsh', '/bin/bash' }) do
+  for _, shape in ipairs({ { 'one command', nil }, { 'two commands', 'true; ' } }) do
+    local log = here .. '/p2.log'
+    local result = vim.system({ shell, '-c', hook_command(log, shape[2]) }, { stdin = '{"session_id":"x"}' }):wait()
+    show(('%s -c, %s: the stand-in Claude pid=%d;'):format(shell, shape[1], me), read_log(log), 'exit', result.code)
+  end
+end
+if node then
+  for _, shape in ipairs({ { 'one command', nil }, { 'two commands', 'true; ' } }) do
+    local log = here .. '/p2.log'
+    local result = vim.system({ node, here .. '/p2-node-claude.js', hook_command(log, shape[2]) }, { text = true }):wait()
+    show(("node spawn(shell: true), %s: %s"):format(shape[1], (result.stdout:gsub('\n', ' '))), read_log(log))
+  end
+end
+
+Its output:
+
+/bin/sh -c, one command: the stand-in Claude pid=79264;  ppid_argument=79264 own_pid=79290 own_parent=79264  exit  0
+/bin/sh -c, two commands: the stand-in Claude pid=79264;  ppid_argument=79264 own_pid=79332 own_parent=79311  exit  0
+/bin/zsh -c, one command: the stand-in Claude pid=79264;  ppid_argument=79264 own_pid=79356 own_parent=79264  exit  0
+/bin/zsh -c, two commands: the stand-in Claude pid=79264;  ppid_argument=79264 own_pid=79370 own_parent=79264  exit  0
+/bin/bash -c, one command: the stand-in Claude pid=79264;  ppid_argument=79264 own_pid=79395 own_parent=79264  exit  0
+/bin/bash -c, two commands: the stand-in Claude pid=79264;  ppid_argument=79264 own_pid=79417 own_parent=79416  exit  0
+node spawn(shell: true), one command: node_pid=79429 hook_exit=0   ppid_argument=79429 own_pid=79439 own_parent=79429
+node spawn(shell: true), two commands: node_pid=79458 hook_exit=0   ppid_argument=79458 own_pid=79473 own_parent=79463
+
+P3: a connection to an editor that is gone
+------------------------------------------
+
+-- P3: what a connection to an editor's address gives once that editor is gone,
+-- through the MCP relay's own connect (libuv's pipe connect, as
+-- `lua/aineo/mcp/editor.lua` makes it): after the editor quit, and after it
+-- was killed by SIGKILL; and how long the failure takes.
+local here = os.getenv('PROBE_HERE')
+local function show(...)
+  io.stdout:write(table.concat(vim.tbl_map(function(v)
+    return type(v) == 'string' and v or vim.inspect(v, { newline = ' ', indent = '' })
+  end, { ... }), '  '), '\n')
+end
+local function start_editor()
+  local file = here .. '/p3-address'
+  vim.fn.delete(file)
+  local editor = vim.system({ vim.v.progpath, '--headless', '--clean', '-i', 'NONE', '--cmd',
+    ('lua vim.fn.writefile({ vim.v.servername }, %q)'):format(file) })
+  vim.wait(3000, function() return vim.uv.fs_stat(file) ~= nil end, 10)
+  return editor, vim.fn.readfile(file)[1]
+end
+local function try_connect(address)
+  local pipe = assert(vim.uv.new_pipe(false))
+  local result
+  local start = vim.uv.hrtime()
+  pipe:connect(address, function(failure)
+    result = failure or 'connected'
+  end)
+  vim.wait(2000, function() return result ~= nil end, 1)
+  pipe:close()
+  return result, (vim.uv.hrtime() - start) / 1e6
+end
+local editor, address = start_editor()
+show('live editor:', try_connect(address))
+local channel = vim.fn.sockconnect('pipe', address, { rpc = true })
+pcall(vim.rpcrequest, channel, 'nvim_command', 'qa!')
+editor:wait(3000)
+local result, ms = try_connect(address)
+show('after the editor quit:', result, ('%.1f ms'):format(ms), 'socket file left:', vim.uv.fs_stat(address) ~= nil)
+editor, address = start_editor()
+editor:kill(9)
+editor:wait(3000)
+result, ms = try_connect(address)
+show('after SIGKILL:', result, ('%.1f ms'):format(ms), 'socket file left:', vim.uv.fs_stat(address) ~= nil, 'its runtime directory left:', vim.uv.fs_stat(vim.fs.dirname(address)) ~= nil)
+vim.fn.delete(vim.fs.dirname(address), 'rf')
+
+Its output:
+
+live editor:  connected  0.052042
+after the editor quit:  ENOENT  0.1 ms  socket file left:  false
+after SIGKILL:  ECONNREFUSED  0.0 ms  socket file left:  true  its runtime directory left:  true
+
+P4: the incident's processes (read-only `ps`, 2026-10-07)
+---------------------------------------------------------
+
+Commands: `ps -axo pid,ppid,lstart,command | grep -E 'aineo/mcp/relay\.lua|hook_relay'`, then
+`ps -o pid=,ppid=,etime=,comm= -p <pid>` for each, `ps -p <pid>` for each editor named, and
+`ps eww -o command= -p <pid>` filtered to the variables named below. Home paths, the user
+name, the temporary directory and the session's name are written as placeholders; the
+allowed-tools list is shortened.
+
+The background session (the orchestrator's):
+  pid 17209  ppid 1      <home>/.local/share/claude/ClaudeCode.app/Contents/MacOS/claude
+             --bg-pty-host /tmp/cc-daemon-<uid>/<id>/pty/55110cd0….sock 123 76 --
+             <home>/.local/share/claude/versions/2.1.291 --session-id 55110cd0…
+             --fork-session --resume <home>/.claude/projects/<folder>/938616f1….jsonl
+             --mcp-config {"mcpServers":{"aineo":{"args":["--headless","--clean","--cmd",
+             "set noloadplugins","-l","<checkout>/lua/aineo/mcp/relay.lua"],
+             "command":"/opt/homebrew/Cellar/neovim/0.12.5_1/bin/nvim","type":"stdio",
+             "env":{"AINEO_EDITOR_ADDRESS":"<TMPDIR>/nvim.<user>/Zsm2hJ/nvim.64474.0"}}}}
+             --allowed-tools mcp__aineo__report --allowed-tools … --model … --permission-mode
+             auto --name <the session's name>
+             (no --append-system-prompt; started Tue Oct 6 16:20:18 2026)
+  pid 17251  ppid 17209  <home>/.local/share/claude/versions/2.1.291 (the same arguments)
+             environment: NVIM=<TMPDIR>/nvim.<user>/Zsm2hJ/nvim.64474.0  AINEO_CHILD=1
+  pid 17315  ppid 17251  /opt/homebrew/Cellar/neovim/0.12.5_1/bin/nvim --headless --clean
+             --cmd set noloadplugins -l <checkout>/lua/aineo/mcp/relay.lua
+             environment: NVIM=<TMPDIR>/nvim.<user>/Zsm2hJ/nvim.64474.0  AINEO_CHILD=1
+             CLAUDE_CODE_ENTRYPOINT=cli  CLAUDE_CODE_SESSION_ID=55110cd0…
+             AINEO_EDITOR_ADDRESS=<TMPDIR>/nvim.<user>/Zsm2hJ/nvim.64474.0
+  editor 64474 alive: no
+
+Two aineo-started Claude Codes in live editors, for comparison:
+  pid 43979  ppid 43948  <home>/.local/bin/claude --resume 864642a4… --mcp-config {…}
+             --append-system-prompt … --allowedTools mcp__aineo__report
+  pid 44177  ppid 43979  nvim … -l <checkout>/lua/aineo/mcp/relay.lua
+  editor 43948 alive: yes
+  pid 17492  ppid 17304  <home>/.local/bin/claude --session-id c060846b… --mcp-config {…}
+             --append-system-prompt … --allowedTools mcp__aineo__report
+  pid 17516  ppid 17492  nvim … -l <checkout>/lua/aineo/mcp/relay.lua
+  editor 17304 alive: yes
