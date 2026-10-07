@@ -577,10 +577,113 @@ T['start_session()']['passes the settings of claude.cmd as they are, without its
   )
 end
 
-T['start_session()']['starts Claude Code with a settings file of 1.5 MB in claude.cmd'] = function()
-  local file = vim.fs.joinpath(fixture.directory('switch-large-settings'), 'settings.json')
+T['start_session()']['writes nothing through a symbolic link planted at the next temporary name'] = function()
+  local target = vim.fs.joinpath(fixture.directory('switch-planted-link'), 'target.json')
+  vim.fn.writefile({ 'original' }, target)
+  vim.fn.setfperm(target, 'rw-r--r--')
+  child.lua(
+    [[
+      local name = vim.fn.tempname()
+      local next_name = vim.fs.joinpath(vim.fs.dirname(name), tostring(tonumber(vim.fs.basename(name)) + 1))
+      assert(vim.uv.fs_symlink(..., next_name))
+    ]],
+    { target }
+  )
+  local fake = claude.fake('switch-planted-link', 'exit')
+  child.lua(NOTE_NOTIFICATIONS)
+
+  claude.start(
+    child,
+    fake,
+    kept_in(
+      'switch-planted-link-state',
+      { cmd = claude.fake_command({ '--settings', SETTINGS_WITH_SECRET }) }
+    )
+  )
+
+  eq({
+    target = vim.fn.readfile(target),
+    mode = vim.fn.getfperm(target),
+    given = settings_given(claude.arguments(fake)),
+    notified = child.lua_get('_G.notified'),
+  }, {
+    target = { 'original' },
+    mode = 'rw-r--r--',
+    given = { SETTINGS_WITH_SECRET },
+    notified = UNREAD_SETTINGS_WARNINGS,
+  })
+end
+
+--- The Lua, run in a child, that limits the size of a file the child writes
+--- to 256 KiB (`RLIMIT_FSIZE`, 1 on macOS and Linux) and ignores the
+--- `SIGXFSZ` (25) a longer write raises, so that the write is cut short
+--- instead; returns what `setrlimit()` returned, 0 when it held.
+local LIMIT_FILE_SIZE = [[
+  local ffi = require('ffi')
+  pcall(ffi.cdef, [=[
+    struct aineo_rlimit { uint64_t cur; uint64_t max; };
+    int setrlimit(int resource, const struct aineo_rlimit *limit);
+    typedef void (*aineo_handler)(int);
+    aineo_handler signal(int number, aineo_handler handler);
+  ]=])
+  ffi.C.signal(25, ffi.cast('aineo_handler', 1))
+  return ffi.C.setrlimit(1, ffi.new('struct aineo_rlimit', { 262144, 262144 }))
+]]
+
+--- Writes, in `name`'s fixture directory, a settings file of 1.5 MB that
+--- denies nothing, and returns its path.
+---
+---@param name string
+---@return string
+local function large_settings_file(name)
+  local file = vim.fs.joinpath(fixture.directory(name), 'settings.json')
   local rules = string.rep('"Bash(echo aineo:*)",', 75000) .. '"Bash(true)"'
   vim.fn.writefile({ '{"permissions":{"allow":[' .. rules .. ']}}' }, file)
+  return file
+end
+
+T['start_session()']['passes the settings of claude.cmd as they are, and says so once, when a write of them is cut short'] = function()
+  local file = large_settings_file('switch-short-write')
+  local limited = child.lua(LIMIT_FILE_SIZE)
+  local fake = claude.fake('switch-short-write', 'exit')
+  child.lua(NOTE_NOTIFICATIONS)
+
+  claude.start(
+    child,
+    fake,
+    kept_in('switch-short-write-state', { cmd = claude.fake_command({ '--settings', file }) })
+  )
+
+  eq(
+    { limited, settings_given(claude.arguments(fake)), child.lua_get('_G.notified') },
+    { 0, { file }, UNREAD_SETTINGS_WARNINGS }
+  )
+end
+
+T['start_session()']['merges the settings of a symbolic link to a regular file in claude.cmd'] = function()
+  local directory = fixture.directory('switch-settings-link')
+  local real = vim.fs.joinpath(directory, 'real.json')
+  local link = vim.fs.joinpath(directory, 'link.json')
+  vim.fn.writefile({ USER_SETTINGS }, real)
+  assert(vim.uv.fs_symlink(real, link))
+  local fake = claude.fake('switch-settings-link', 'exit')
+  child.lua(NOTE_NOTIFICATIONS)
+
+  claude.start(
+    child,
+    fake,
+    kept_in('switch-settings-link-state', { cmd = claude.fake_command({ '--settings', link }) })
+  )
+
+  local given = settings_given(claude.arguments(fake))
+  eq(
+    { #given, settings_in_file(given[1]).permissions, child.lua_get('_G.notified') },
+    { 1, { deny = { 'Bash(rm:*)' } }, {} }
+  )
+end
+
+T['start_session()']['starts Claude Code with a settings file of 1.5 MB in claude.cmd'] = function()
+  local file = large_settings_file('switch-large-settings')
   local fake = claude.fake('switch-large-settings', 'exit')
 
   claude.start(
