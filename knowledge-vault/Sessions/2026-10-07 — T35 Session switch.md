@@ -156,7 +156,7 @@ T35 — done (PR into `dev`, `feature/t35-session-switch`): every start of Claud
 - Two deliverers reaching a busy editor out of order were not measured; a `SessionStart` taken before its `SessionEnd` drops that switch (the session stays the old one, as when hooks do not run).
 - The suite cannot hold its child at a hit-enter prompt (no UI is attached), so the busy-editor case uses a sleeping child, which drops the brief's relay's notification the same way; the hit-enter case itself is in the probes only.
 - The fake's hook input is the documented common fields plus the source or reason M1 measured; M1 did not record the whole input, so it is not a recording.
-- `merge-tree` with `origin/feature/t36-report-sessions` (`fe112c4`): clean, `tests/test_doc.lua` 44 cases `Fails (0)` on the merged tree. `origin/feature/t37-changes-sessions` did not exist when this packet pushed.
+- `git merge-tree --write-tree` of this branch's head `6fb592a` with `origin/feature/t36-report-sessions` (`fe112c4`) and with `origin/feature/t37-changes-sessions` (`0442ade`): both clean, and `tests/test_doc.lua` 44 cases, `Fails (0)`, on each merged tree (W-2).
 
 ## Commits
 
