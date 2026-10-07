@@ -10,6 +10,8 @@ Claude Code 2.1.292, run in a Neovim 0.12.5 terminal, titles its terminal with O
 
 The version is part of the claim, and so are the cases that were not measured: a title Claude Code generates from the first prompt, the name `/rename` gives, the title after `--resume`, the glyph while it is busy, and the title after an exit other than two Ctrl-C.
 
+*(2026-10-07: wave 9's M6, `Implementation/Waves/00009-worktrees-sessions/evidence/w9-real-claude-sessions.txt`, run 2 — Claude Code 2.1.292 in a Neovim 0.12.5 terminal, every change of `b:term_title` recorded — measured more of this, by the orchestrator with the user's leave. The title follows the session: `✳ Claude Code` 0.9 s after the start and again after `/clear`; after the first turn, the session's title, `✳ OK` (the first prompt asked Claude to reply with the single word OK); after an in-session `/resume`, the resumed session's title; after `/branch`, `✳ <first prompt> (Branch)`; after `/compact`, unchanged. At the exit, by two Ctrl-C, `""` again. Still not measured: the name `/rename` gives, the title after a start with `--resume`, the glyph while Claude Code is busy, and an exit other than two Ctrl-C.)*
+
 ## Example
 
 - **T33-6**, measured by the orchestrator on 2026-10-06 with the user's leave (`Implementation/Waves/00008-small-fixes/evidence/t33-real-claude-title.txt`). Three runs in a headless Neovim terminal, each polling `b:term_title` every 50 ms and logging every `TermRequest`, each given no prompt and stopped by two Ctrl-C:
