@@ -646,6 +646,130 @@ T["the working directory's draft"]['removed between the link and its removal sta
   })
 end
 
+--- The Lua that makes the child's every hard link fail as a file system
+--- refuses one, with the code given as the chunk's argument, as libuv
+--- returns it.
+local LINKS_REFUSED = [[
+  local code = ...
+  vim.uv.fs_link = function(from)
+    return nil, code .. ': hard links refused: ' .. from, code
+  end
+]]
+
+--- The codes a file system refuses a hard link with, as a set's
+--- `parametrize`: no hard links on it (exFAT, FAT, some network and FUSE
+--- mounts), a file on another device, or too many links.
+local LINK_REFUSALS = { { 'ENOTSUP' }, { 'EPERM' }, { 'EXDEV' }, { 'EMLINK' }, { 'ENOSYS' } }
+
+T["the working directory's draft"]['where hard links are refused'] = MiniTest.new_set({
+  parametrize = LINK_REFUSALS,
+})
+
+T["the working directory's draft"]['where hard links are refused']['becomes the first session followed by a rename'] = function(
+  code
+)
+  local state = fixture.directory('draft-sessions-no-links')
+  plant_draft(directory_draft_file(state), 'Typed before any session\n')
+  child.lua(KEEP_WARNINGS)
+  child.lua(LINKS_REFUSED, { code })
+  keep_new_buffer(state)
+
+  follow('session-a')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    shown = input_lines(),
+    directory = read_text(directory_draft_file(state)),
+    session = read_text(session_draft_file(state, 'session-a')),
+  }, {
+    warnings = {},
+    shown = { 'Typed before any session' },
+    directory = nil,
+    session = 'Typed before any session\n',
+  })
+end
+
+T["the working directory's draft"]['where hard links are refused']['is left as it is when the session has a draft'] = function(
+  code
+)
+  local state = fixture.directory('draft-sessions-no-links-both')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  plant_draft(session_draft_file(state, 'session-a'), 'Kept for the session\n')
+  child.lua(KEEP_WARNINGS)
+  child.lua(LINKS_REFUSED, { code })
+  keep_new_buffer(state)
+
+  follow('session-a')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    shown = input_lines(),
+    directory = read_text(directory_draft_file(state)),
+    session = read_text(session_draft_file(state, 'session-a')),
+  }, {
+    warnings = {},
+    shown = { 'Kept for the session' },
+    directory = 'From the directory\n',
+    session = 'Kept for the session\n',
+  })
+end
+
+T["the working directory's draft"]['where hard links are refused']['taken by another editor first is told as no failure'] = function(
+  code
+)
+  local state = fixture.directory('draft-sessions-no-links-taken')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  child.lua(KEEP_WARNINGS)
+  child.lua(LINKS_REFUSED, { code })
+  child.lua(
+    [[
+      local other = ...
+      _G.other_editor = function(from)
+        assert(vim.uv.fs_rename(from, other))
+      end
+    ]],
+    { session_draft_file(state, 'session-other') }
+  )
+  child.lua(OTHER_EDITOR_FIRST)
+  keep_new_buffer(state)
+
+  follow('session-a')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    other = read_text(session_draft_file(state, 'session-other')),
+    session = read_text(session_draft_file(state, 'session-a')),
+  }, { warnings = {}, other = 'From the directory\n', session = nil })
+end
+
+T["the working directory's draft"]['where hard links are refused']['that cannot be renamed is told once'] = function(
+  code
+)
+  local state = fixture.directory('draft-sessions-no-links-unmovable')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  local drafts = vim.fs.dirname(directory_draft_file(state))
+  child.lua(KEEP_WARNINGS)
+  child.lua(LINKS_REFUSED, { code })
+  keep_new_buffer(state)
+  vim.uv.fs_chmod(drafts, tonumber('500', 8))
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(drafts, tonumber('700', 8))
+  end)
+
+  follow('session-a')
+  vim.uv.fs_chmod(drafts, tonumber('700', 8))
+
+  eq({
+    moves = child.lua_get(MOVE_WARNINGS),
+    directory = read_text(directory_draft_file(state)),
+    session = read_text(session_draft_file(state, 'session-a')),
+  }, {
+    moves = 1,
+    directory = 'From the directory\n',
+    session = nil,
+  })
+end
+
 T['a session told before the environment'] = MiniTest.new_set()
 
 T['a session told before the environment']["is held: once it comes, the directory's draft moves to it, and Input is given its draft"] = function()
@@ -1023,6 +1147,33 @@ end
 T['a follow refused while textlock holds']['keeps an edit made while the first follow waits with the draft it moved'] = function()
   local state = fixture.directory('draft-sessions-first-follow-window')
   plant_draft(directory_draft_file(state), 'From the directory\n')
+  keep_new_buffer(state)
+  begin_hold('vim.fn.getcharstr()', 'A and more<Esc>')
+  follow('session-a')
+  local waiting = child.lua_get(RETRIES)
+  end_hold('q')
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+  vim.wait(SAVE_DELAY_AND_MARGIN_MS)
+
+  eq({
+    waiting = waiting,
+    shown = input_lines(),
+    session = read_text(session_draft_file(state, 'session-a')),
+    directory = read_text(directory_draft_file(state)),
+  }, {
+    waiting = 1,
+    shown = { 'From the directory and more' },
+    session = 'From the directory and more\n',
+    directory = nil,
+  })
+end
+
+T['a follow refused while textlock holds']['keeps an edit made while the first follow waits with the draft it renamed where links are refused'] = function()
+  local state = fixture.directory('draft-sessions-first-follow-window-renamed')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  child.lua(LINKS_REFUSED, { 'ENOTSUP' })
   keep_new_buffer(state)
   begin_hold('vim.fn.getcharstr()', 'A and more<Esc>')
   follow('session-a')

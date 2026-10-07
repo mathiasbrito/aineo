@@ -313,6 +313,34 @@ local function pin_moved_text(from, to)
   end
 end
 
+--- The codes, as libuv gives them, of a hard link the file system refuses:
+--- it has none (exFAT, FAT, some network and FUSE mounts), the file is on
+--- another device (a symbolic link leading there), or it has too many.
+local LINK_REFUSALS = { ENOTSUP = true, EPERM = true, EXDEV = true, EMLINK = true, ENOSYS = true }
+
+--- Moves the working directory's draft `from` to the session's file `to`
+--- by renaming it, where hard links are refused (`LINK_REFUSALS`), when
+--- `to` does not exist and `from` does; neither is touched otherwise. `to`
+--- is looked for first and then `from` renamed, so another editor making
+--- `to` between the two has its file replaced. Once moved, a kept buffer
+--- whose saves went to `from` saves to `to` (`pin_moved_text()`). Tells the
+--- user once when `from` cannot be renamed (`warn_once()`), and raises
+--- nothing then.
+---
+---@param from string
+---@param to string
+local function move_directory_draft_by_rename(from, to)
+  if vim.uv.fs_stat(to) then
+    return
+  end
+  local renamed, failure, code = vim.uv.fs_rename(from, to)
+  if renamed then
+    pin_moved_text(from, to)
+  elseif code ~= 'ENOENT' then
+    warn_once('move', ("cannot move Input's draft in %s to %s: %s"):format(from, to, failure))
+  end
+end
+
 --- Moves the working directory's draft to the followed session the first
 --- time it is called, when the session has no draft and the directory has
 --- one: the directory's draft is then the session's, and its file is gone.
@@ -323,7 +351,9 @@ end
 --- failure; one that took it between the link and the removal keeps it
 --- alone (`give_up_link_taken_meanwhile()`). Once the session's file holds
 --- the text, a kept buffer whose saves went to the directory's file until
---- its swap lands saves to the session's (`pin_moved_text()`). Tells the
+--- its swap lands saves to the session's (`pin_moved_text()`). Where the
+--- file system refuses the link (`LINK_REFUSALS`), the directory's draft is
+--- renamed instead (`move_directory_draft_by_rename()`). Tells the
 --- user once when the draft could not be moved, or was linked but cannot be
 --- removed from the directory's file (`warn_once()`), and raises nothing
 --- then.
@@ -336,6 +366,10 @@ local function move_directory_draft_once()
   local to = kept_draft_file()
   local not_moved = "cannot move Input's draft in %s to %s: %s"
   local linked, link_failure, code = vim.uv.fs_link(from, to)
+  if LINK_REFUSALS[code] then
+    move_directory_draft_by_rename(from, to)
+    return
+  end
   if not linked then
     if code ~= 'EEXIST' and code ~= 'ENOENT' then
       warn_once('move', not_moved:format(from, to, link_failure))
