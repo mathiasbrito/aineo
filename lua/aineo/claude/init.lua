@@ -718,6 +718,19 @@ function M.receive_session_event(event, session_id, cause, start_token, ran)
   end)
 end
 
+--- What becomes of the `--settings` that `cmd`, a `claude.cmd`, gives when
+--- Claude Code starts in `cwd`: nil when `cmd` gives none; else a verdict
+--- whose `problem` says why aineo cannot add its session hooks to them —
+--- so that a start passes them as they are, without its hooks, and warns —
+--- nil when it can (`arguments.given_settings_verdict()`).
+---
+---@param cmd string[]
+---@param cwd string
+---@return { problem: string? }?
+function M.given_settings_verdict(cmd, cwd)
+  return arguments.given_settings_verdict(cmd, cwd)
+end
+
 --- The id of the Claude Code session aineo follows now: from each start of
 --- Claude Code, the id it started it on (`--session-id` or `--resume`),
 --- without waiting for a hook to name it, since in a folder Claude Code does

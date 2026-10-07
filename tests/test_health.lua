@@ -35,13 +35,18 @@ end
 
 T['the check'] = MiniTest.new_set()
 
---- What a check could change in a Neovim: the aineo modules it has loaded,
---- its terminal buffers, its windows, its Normal-mode mappings and aineo's
---- record of the autostart.
+--- What a check could change in a Neovim: the aineo homes whose modules it
+--- has loaded, each named by its entry point, its terminal buffers, its
+--- windows, its Normal-mode mappings and aineo's record of the autostart.
 local EDITOR_STATE = [[(function()
-  local modules = vim.tbl_filter(function(name)
-    return vim.startswith(name, 'aineo')
-  end, vim.tbl_keys(package.loaded))
+  local homes = {}
+  for name in pairs(package.loaded) do
+    local home = name:match('^aineo%.[%w_]+') or name:match('^aineo$')
+    if home then
+      homes[home] = true
+    end
+  end
+  local modules = vim.tbl_keys(homes)
   table.sort(modules)
   local terminals = vim.tbl_filter(function(buffer)
     return vim.bo[buffer].buftype == 'terminal'
@@ -59,7 +64,7 @@ local EDITOR_STATE = [[(function()
   }
 end)()]]
 
-T['the check']['starts nothing, maps nothing and loads only the configuration'] = function()
+T['the check']['starts nothing, maps nothing and loads only the configuration and the Claude session'] = function()
   start_with({ autostart = false })
   local before = child.lua_get(EDITOR_STATE)
 
@@ -68,7 +73,7 @@ T['the check']['starts nothing, maps nothing and loads only the configuration'] 
   eq(
     child.lua_get(EDITOR_STATE),
     vim.tbl_extend('force', before, {
-      modules = { 'aineo.config', 'aineo.health' },
+      modules = { 'aineo.claude', 'aineo.config', 'aineo.health' },
     })
   )
 end
@@ -473,6 +478,96 @@ T['Claude Code']['keeps the first 1024 bytes of what claude.cmd --version writes
   local report = health.report(child)
 
   eq(health.advice(report, 'Claude Code'), { string.rep('x', 1024) })
+end
+
+T['Claude Code']['reports that a --settings in claude.cmd takes aineo’s session hooks'] = function()
+  local file = vim.fs.joinpath(fixture.directory('health-settings'), 'settings.json')
+  vim.fn.writefile({ '{"permissions":{"deny":["Bash(rm:*)"]}}' }, file)
+  start_with({ autostart = false, claude = { cmd = { HEALTH_CLAUDE, '--settings', file } } })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Claude Code'), {
+    '- ✅ OK claude.cmd --version: 9.9.9 (health stand-in)',
+    "- ✅ OK claude.cmd's --settings takes aineo's session hooks",
+    "- aineo's behaviour was measured on Claude Code 2.1.281",
+  })
+end
+
+T['Claude Code']['reads a relative --settings in claude.cmd from the editor’s working directory'] = function()
+  local directory = fixture.directory('health-relative-settings')
+  vim.fn.writefile({ '{"hooks":[]}' }, vim.fs.joinpath(directory, 'settings.json'))
+  start_with({
+    autostart = false,
+    claude = { cmd = { HEALTH_CLAUDE, '--settings', 'settings.json' } },
+  })
+  child.lua('vim.cmd.cd(...)', { directory })
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Claude Code')[2],
+    "- ⚠️ WARNING claude.cmd's --settings cannot take aineo's session hooks: the hooks in "
+      .. vim.fs.joinpath(directory, 'settings.json')
+      .. ' are not an object'
+  )
+end
+
+--- The fixture directory of the cases on a `--settings` aineo cannot add
+--- its session hooks to, and the files they name in it.
+local UNUSABLE_SETTINGS = fixture.directory('health-unusable-settings')
+local SETTINGS_LIST = vim.fs.joinpath(UNUSABLE_SETTINGS, 'list.json')
+local SETTINGS_BROKEN = vim.fs.joinpath(UNUSABLE_SETTINGS, 'broken.json')
+local SETTINGS_MISSING = vim.fs.joinpath(UNUSABLE_SETTINGS, 'missing.json')
+
+T['Claude Code']['warns of a --settings in claude.cmd that cannot take aineo’s session hooks, saying why'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        { '--settings', SETTINGS_MISSING },
+        'ENOENT: no such file or directory: ' .. SETTINGS_MISSING,
+      },
+      {
+        { '--settings', UNUSABLE_SETTINGS },
+        UNUSABLE_SETTINGS .. ' is not a regular file (directory)',
+      },
+      { { '--settings', '/dev/null' }, '/dev/null is not a regular file (char)' },
+      {
+        { '--settings', SETTINGS_BROKEN },
+        SETTINGS_BROKEN .. ' is not valid JSON: Expected value but found T_OBJ_END at character 16',
+      },
+      {
+        { '--settings={"permissions":}' },
+        'the inline value is not valid JSON: Expected value but found T_OBJ_END at character 16',
+      },
+      { { '--settings', SETTINGS_LIST }, SETTINGS_LIST .. ' holds no JSON object' },
+      { { '--settings', '{"hooks":[]}' }, 'the hooks in the inline value are not an object' },
+      {
+        { '--settings', '{"hooks":{"SessionEnd":{}}}' },
+        'the SessionEnd hooks in the inline value are not a list',
+      },
+      { { '--settings' }, 'no value follows it' },
+    },
+  })
+
+T['Claude Code']['warns of a --settings in claude.cmd that cannot take aineo’s session hooks, saying why']['given'] = function(
+  words,
+  why
+)
+  vim.fn.writefile({ '["settings", "in a list"]' }, SETTINGS_LIST)
+  vim.fn.writefile({ '{"permissions":}' }, SETTINGS_BROKEN)
+  start_with({ autostart = false, claude = { cmd = vim.list_extend({ HEALTH_CLAUDE }, words) } })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Claude Code'), {
+    '- ✅ OK claude.cmd --version: 9.9.9 (health stand-in)',
+    "- ⚠️ WARNING claude.cmd's --settings cannot take aineo's session hooks: " .. why,
+    "- aineo's behaviour was measured on Claude Code 2.1.281",
+  })
+  eq(health.advice(report, 'Claude Code'), {
+    "Claude Code starts with them as they are, without aineo's hooks, so a session switch inside it is not followed: :help |aineo-config-claude.cmd|",
+  })
 end
 
 T['the server socket'] = MiniTest.new_set()
