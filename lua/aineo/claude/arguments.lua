@@ -105,11 +105,12 @@ local function is_object(value)
   return type(value) == 'table' and not vim.islist(value)
 end
 
---- The settings `value`, a `--settings` value, gives, as Claude Code 2.1.292
---- reads one: the JSON object it holds when, its blanks trimmed, it begins
---- with `{` and ends with `}`; else the JSON object in the file it names,
---- from `cwd`, Claude Code's working directory, when the name is relative.
---- Returns nil and why when it gives no JSON object.
+--- The settings `value`, a `--settings` value, gives: the JSON object it
+--- holds when, its blanks trimmed, it begins with `{` and ends with `}` —
+--- how Claude Code 2.1.292 tells inline settings from a file — else the JSON
+--- object in the file it names, a relative name taken from `cwd`, Claude
+--- Code's working directory. Returns nil and why when it gives no JSON
+--- object.
 ---
 ---@param value string?
 ---@param cwd string
