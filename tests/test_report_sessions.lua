@@ -129,6 +129,12 @@ local KEEP_WARNINGS = [[
   end
 ]]
 
+--- The expression, run in the child, that counts the warnings it gave that
+--- records could not be moved.
+local MOVE_WARNINGS = [[#vim.tbl_filter(function(message)
+  return message:find('cannot move the report records', 1, true) ~= nil
+end, _G.warnings)]]
+
 --- How long a case waits for the child to reach a state.
 local PATIENCE_MS = 5000
 
@@ -358,13 +364,13 @@ T["the working directory's records"]['that cannot be moved are told once, and th
 
   eq({
     warnings = child.lua_get('#_G.warnings'),
-    moving = child.lua_get('_G.warnings[1]'):find('cannot move the report records', 1, true) ~= nil,
+    moves = child.lua_get(MOVE_WARNINGS),
     lines = report_editor.lines(child),
     directory = summaries_in(directory_records_file(state)),
     session = summaries_in(session_records_file(state, 'session-a')),
   }, {
     warnings = 1,
-    moving = true,
+    moves = 1,
     lines = { '10:00 [done] Task — After the move failed' },
     directory = { 'Directory' },
     session = { 'After the move failed' },
@@ -393,9 +399,12 @@ T['a session told before the environment']["is held: once it comes, the director
   })
 end
 
-T['a follow refused while textlock holds'] = MiniTest.new_set({ parametrize = TEXTLOCK_HOLDS })
+T['a follow refused while textlock holds'] = MiniTest.new_set()
 
-T['a follow refused while textlock holds']["shows the session's records once the hold ends, with no retry left, under"] = function(
+T['a follow refused while textlock holds']["shows the session's records once the hold ends, with no retry left"] =
+  MiniTest.new_set({ parametrize = TEXTLOCK_HOLDS })
+
+T['a follow refused while textlock holds']["shows the session's records once the hold ends, with no retry left"]['under'] = function(
   _,
   wait,
   release
@@ -408,7 +417,8 @@ T['a follow refused while textlock holds']["shows the session's records once the
   child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
   begin_hold(wait)
 
-  follow('session-b')
+  local raised_nothing =
+    child.lua_get("(pcall(require('aineo.report').follow_report_session, ...))", { 'session-b' })
   local meanwhile = { lines = report_editor.lines(child), retries = child.lua_get(RETRIES) }
   end_hold(release)
 
@@ -416,10 +426,12 @@ T['a follow refused while textlock holds']["shows the session's records once the
     return vim.deep_equal(report_editor.lines(child), { '09:00 [done] Task — Beta' })
   end, 10)
   eq({
+    raised_nothing = raised_nothing,
     meanwhile = meanwhile,
     lines = report_editor.lines(child),
     retries = child.lua_get(RETRIES),
   }, {
+    raised_nothing = true,
     meanwhile = { lines = { '09:00 [done] Task — Alpha' }, retries = 1 },
     lines = { '09:00 [done] Task — Beta' },
     retries = 0,
