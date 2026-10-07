@@ -22,6 +22,25 @@ local function claude_statusline_text(child)
   return child.lua_get(CLAUDE_STATUSLINE_TEXT)
 end
 
+--- The expression, run in the child, that gives the text the status line of
+--- its first window — Claude's in the layout — draws at that window's own
+--- width, as the screen shows it.
+local CLAUDE_STATUSLINE_FITTED = [[(function()
+  local window = vim.fn.win_getid(1)
+  local width = vim.api.nvim_win_get_width(window)
+  return vim.api.nvim_eval_statusline(vim.wo[window].statusline, { winid = window, maxwidth = width }).str
+end)()]]
+
+--- The text the status line of Claude's window in `child` draws at that
+--- window's width (`CLAUDE_STATUSLINE_FITTED`): what the screen's row shows,
+--- however long the folder.
+---
+---@param child table
+---@return string
+local function claude_statusline_fitted(child)
+  return child.lua_get(CLAUDE_STATUSLINE_FITTED)
+end
+
 --- What `child`'s current directory reads as, written from the home
 --- directory.
 ---
@@ -160,23 +179,29 @@ T["Claude's window"]['reads Claude Code, never the terminal’s name, when Claud
   eq(claude_statusline_text(child), 'Claude Code — ' .. folder_of_current_directory(child))
 end
 
-T["Claude's window"]['draws each title Claude Code sets, and Claude Code again on an empty one'] = function()
+T["Claude's window"]['shows each title Claude Code sets, and Claude Code again on an empty one, once the screen is redrawn'] = function()
   open_with_script(child, 'claude-name-titles', TITLE_SCRIPT)
   local folder = folder_of_current_directory(child)
-  wait_for_claude_statusline(child, 'aineo-title-probe — ' .. folder)
+  local texts = { wait_for_claude_statusline(child, 'aineo-title-probe — ' .. folder) }
   local drawn = { drawn_claude_statusline(child) }
+  local fitted = { claude_statusline_fitted(child) }
 
   claude_session.press_keys(child, claude_terminal(child), '\r')
-  wait_for_claude_statusline(child, 'Second name — ' .. folder)
+  table.insert(texts, wait_for_claude_statusline(child, 'Second name — ' .. folder))
   table.insert(drawn, drawn_claude_statusline(child))
+  table.insert(fitted, claude_statusline_fitted(child))
   claude_session.press_keys(child, claude_terminal(child), '\r')
-  wait_for_claude_statusline(child, 'Claude Code — ' .. folder)
+  table.insert(texts, wait_for_claude_statusline(child, 'Claude Code — ' .. folder))
   table.insert(drawn, drawn_claude_statusline(child))
+  table.insert(fitted, claude_statusline_fitted(child))
 
-  eq(drawn, {
-    'aineo-title-probe — ' .. folder,
-    'Second name — ' .. folder,
-    'Claude Code — ' .. folder,
+  eq({ texts, drawn }, {
+    {
+      'aineo-title-probe — ' .. folder,
+      'Second name — ' .. folder,
+      'Claude Code — ' .. folder,
+    },
+    fitted,
   })
 end
 
@@ -233,8 +258,30 @@ T["Claude's window"]['reads Claude Code, then the folder, once Claude Code has c
   eq(claude_session.wait_for_status(child, 'exited')[1], 'exited')
   eq(
     { claude_statusline_text(child), drawn_claude_statusline(child) },
-    { 'Claude Code — ' .. folder, 'Claude Code — ' .. folder }
+    { 'Claude Code — ' .. folder, claude_statusline_fitted(child) }
   )
+end
+
+T["Claude's window"]['reads Claude Code, then the folder, once a named Claude Code has been hung up'] = function()
+  open_with_script(child, 'claude-name-hung-up', {
+    'stty -echo',
+    [[printf '\033]0;\342\234\263 aineo-title-probe\007']],
+    'read _',
+  })
+  local folder = folder_of_current_directory(child)
+  local named = wait_for_claude_statusline(child, 'aineo-title-probe — ' .. folder)
+
+  end_claude_code(child)
+
+  eq({
+    named,
+    wait_for_claude_statusline(child, 'Claude Code — ' .. folder),
+    drawn_claude_statusline(child),
+  }, {
+    'aineo-title-probe — ' .. folder,
+    'Claude Code — ' .. folder,
+    claude_statusline_fitted(child),
+  })
 end
 
 T["Claude's window"]['reads a % in the name and in the folder as written'] = function()
@@ -250,7 +297,13 @@ T["Claude's window"]['reads a % in the name and in the folder as written'] = fun
     wait_for_claude_statusline(child, 'Fix 100% CPU — ' .. vim.fn.fnamemodify(directory, ':~')),
     'Fix 100% CPU — ' .. vim.fn.fnamemodify(directory, ':~')
   )
-  eq(entry.messages(child), {})
+  eq({ entry.messages(child), child.v.errmsg }, { {}, '' })
+end
+
+T["Claude's window"]['leaves Claude’s terminal its term:// name'] = function()
+  open_with_fake(child, 'claude-name-term', 'ready')
+
+  eq(child.api.nvim_buf_get_name(claude_terminal(child)):sub(1, 7), 'term://')
 end
 
 T["Claude's window"]['reads the folder Claude Code started in, whatever :cd and \\o do while it runs'] = function()
