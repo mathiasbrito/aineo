@@ -149,7 +149,7 @@ From PR #129's three reviews (attack, test integrity, records), by the orchestra
 - The screenshot case is renamed `shows each title Claude Code sets, and Claude Code again on an empty one, once the screen is redrawn`: M7b survives it, and the UI case kills M7b.
 - The rows, the term-name case, the folder case and the `session_statusline()` cases run on an idle `sh` terminal of the test's own (`IDLE_SCRIPT`, `read _`) instead of the `turn` fake, whose stop cost about 4.4 s each. The term-name case also asserts that the title still begins `term://`.
 
-**`tests/test_claude.lua`'s time:** 230 s for 92 cases on `5285847` before the round; 162 s for 106 cases after it, one run each. T33's cases in the narrowed copy: 72 s for 23 cases before the move, 6 s for 32 after.
+**`tests/test_claude.lua`'s time:** 230 s for 92 cases on `5285847` before the round; 162 s for 106 cases after it, one run each. T33's cases in the narrowed copy: 72 s for 18 cases on `5285847`, 6 s for 32 after.
 
 **Mutants, final tree.** One at a time from a byte copy, by the worktree's gitignored scratch driver `.tests/t33fix/t33-mutate.py`, on `.tests/t33fix-claude-name.lua` (TC: `tests/test_claude.lua` narrowed to T33's groups), `tests/test_entry_claude_name.lua` (TE) and `tests/test_layout_claude_name.lua` (TL). Every kill was read from the output as an assertion.
 
@@ -203,6 +203,33 @@ From PR #129's three reviews (attack, test integrity, records), by the orchestra
 44 mutants: 42 killed by assertion, 2 equivalent (M6a; B7 on the terminal path). B11 is killed now that `forget_name()` passes `nil`; in the packet round it survived, outside the brief (the test-integrity review).
 
 **Verification:** whole suite, `make test`, Neovim 0.12.5, on `e97fea2` (the fix round's code; this note is the only file after it): `Total number of cases: 1921`, `Total number of groups: 60`, `Fails (0) and Notes (0)`, exit 0, 226 s — the packet round's 1904 plus 17 (14 in `tests/test_claude.lua`, 2 in the entry file, 1 in the layout file). `make lint`: StyLua clean, selene `0 errors, 0 warnings`. §1's deep-require check prints no new line.
+
+## Correction — 2026-10-07
+
+From the re-measure of PR #129 after its fix round (four low findings), by the orchestrator's correction brief; same author and branch. Every test file ran on Neovim 0.12.5; the real `claude` never ran.
+
+**Units, in order:** (1) where a narrow status line is cut, at widths 40 and 15; (2) the seven Latin-1 rows; (3) "drawn as written, whatever characters they hold" narrowed; (4) the fix round's time corrected.
+
+**Arrived green (8)**, each a pin the re-measure built and measured, adopted as built. Each killer ran on the final tree, one at a time from a byte copy, on `tests/test_claude.lua` narrowed to T33's three groups (40 cases), by the worktree's gitignored scratch driver `.tests/t33cor/t33cor-mutate.py` (the re-measure's `rm-mutate.py`, its edits unchanged). Every kill was read from the output as an assertion.
+- `session_statusline()` › `cuts the folder first, from its start, and the name only once no folder is left` — pinning code written ahead of its test (the fix round's ` — %<`); the drawn rows compare against the same format, so no earlier case saw where the cut falls. N2 and N3 each fail it: `left = "<tests/fixtures/statusline-narrow-folder", right = "aineo-title-probe — <sline-narrow-folder"`.
+- `the session's name` › `read from the title` › `is`, 7 rows — pinning code written ahead of its test (the fix round's `is_latin1_letter()`, pinned before only at `×`). `ª draft`: N5. `µ draft`: N4, N5. `º draft`: N5. `À draft`: N12. `ÿ draft`: N13. `¿ draft`: N10. `÷ draft`: N11.
+
+| Mutant | Literal edit, in `session_name.lua` | Result |
+|---|---|---|
+| N2 | `return literal(name) .. ' — %<' .. literal(folder)` → `return literal(name) .. ' — ' .. literal(folder)` | killed: the narrow case |
+| N3 | the same line → `return '%<' .. literal(name) .. ' — ' .. literal(folder)` | killed: the narrow case |
+| N4 | the line `or code == 0xB5` deleted | killed: `µ draft` (`left = "draft"`) |
+| N5 | `return code == 0xAA` / `or code == 0xB5` / `or code == 0xBA` / `or (` → `return (` | killed: the `ª`, `µ` and `º` rows |
+| N10 | `or (code >= 0xC0 and code ~= 0xD7 and code ~= 0xF7)` → `or (code >= 0xA0 and code ~= 0xD7 and code ~= 0xF7)` | killed: `¿ draft` (`left = "¿ draft"`), and forth's `· draft` |
+| N11 | the same line → `or (code >= 0xC0 and code ~= 0xD7)` | killed: `÷ draft` (`left = "÷ draft"`) |
+| N12 | the same line → `or (code > 0xC0 and code ~= 0xD7 and code ~= 0xF7)` | killed: `À draft` |
+| N13 | the same line → `or (code >= 0xC0 and code < 0xFF and code ~= 0xD7 and code ~= 0xF7)` | killed: `ÿ draft` |
+
+**Records:**
+- "The name and the folder are drawn as written, whatever characters they hold" claimed more than Neovim draws. The help (`doc/aineo.txt`), `session_statusline()`'s docstring, and `statusline_format()`'s, which said the same ("whatever it holds"), now say: as written, a `%`, digits alone, a leading comma or space among them; a control character in caret notation, as `^[` for Escape; and a name longer than about 4 KB loses its start. Measured on `8cb3cc9` by a probe of the drawn row (`.tests/t33cor/t33cor-probe.lua`): a folder `~/a<ESC>b` draws `~/a^[b`, `~/a<Tab>b` draws `~/a^Ib`, and a name `START` + 5000 × `n` + `END` draws `<nnn…`. `statusline_format()`'s docstring is beyond the brief's two places, declared in the report.
+- The fix round's "72 s for 23 cases before the move" was measured on a tree no commit holds. The committed figure is 72 s for 18 cases on `5285847`, which this correction measured again: one run of the three groups, narrowed from an archive of `5285847`, `Fails (0)`. Corrected above and in the PR body.
+
+**Verification:** whole suite, `make test`, Neovim 0.12.5, on `8cb3cc9` (this correction's code; this note is the only file after it): `Total number of cases: 1929`, `Total number of groups: 60`, `Fails (0) and Notes (0)`, exit 0, 227 s — the fix round's 1921 plus the 8 cases above, all in `tests/test_claude.lua` (now 114). `make lint`: StyLua clean, selene `0 errors, 0 warnings, 0 parse errors`. T33's narrowed groups: 40 cases, 6 s.
 
 ## Task lines
 
