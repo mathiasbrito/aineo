@@ -373,7 +373,29 @@ T["the working directory's draft"]['is left as it is when the session has a draf
   local state = fixture.directory('draft-sessions-both')
   plant_draft(directory_draft_file(state), 'From the directory\n')
   plant_draft(session_draft_file(state, 'session-a'), 'From the session\n')
+  child.lua(KEEP_WARNINGS)
   keep_new_buffer(state)
+
+  follow('session-a')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    shown = input_lines(),
+    directory = read_text(directory_draft_file(state)),
+    session = read_text(session_draft_file(state, 'session-a')),
+  }, {
+    warnings = {},
+    shown = { 'From the session' },
+    directory = 'From the directory\n',
+    session = 'From the session\n',
+  })
+end
+
+T["the working directory's draft"]['moves to the first session followed with a change not saved yet'] = function()
+  local state = fixture.directory('draft-sessions-moved-pending')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  keep_new_buffer(state)
+  set_input({ 'Edited before the first follow' })
 
   follow('session-a')
 
@@ -382,9 +404,9 @@ T["the working directory's draft"]['is left as it is when the session has a draf
     directory = read_text(directory_draft_file(state)),
     session = read_text(session_draft_file(state, 'session-a')),
   }, {
-    shown = { 'From the session' },
-    directory = 'From the directory\n',
-    session = 'From the session\n',
+    shown = { 'Edited before the first follow' },
+    directory = nil,
+    session = 'Edited before the first follow\n',
   })
 end
 
