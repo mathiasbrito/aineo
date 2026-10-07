@@ -1034,4 +1034,67 @@ T['following a session']['keeps a base git no longer has, and the windows say so
   eq(vim.json.decode(table.concat(vim.fn.readfile(the_kept_file(state)), '\n')).base, base)
 end
 
+T['following a session']['already followed reads nothing again'] = function()
+  local top = git_repo.create('changessessions-no-reread', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-no-reread-state')
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  expect_lines(COMMITS, { NO_COMMITS })
+  wait_for_reads()
+  local asked = child.lua_get('_G.reads_asked')
+
+  follow(SESSION_A, state)
+
+  eq(child.lua_get('_G.reads_asked'), asked)
+  eq(lines_of(COMMITS), { NO_COMMITS })
+end
+
+--- A Claude Code session id longer than a file's name may be.
+local SESSION_LONG = ('a'):rep(300)
+
+T['following a session']['keeps the base of an id too long to name a file'] = function()
+  local top = git_repo.create('changessessions-long-id', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-long-id-state')
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_LONG, state)
+  wait_for_finds(2)
+  local commit = commit_line_of(top, 'notes.txt', 'two', 'Made in the session')
+  git_repo.start_editor(child)
+  begin_and_show(top)
+  wait_for_finds(1)
+
+  follow(SESSION_LONG, state)
+
+  expect_lines(COMMITS, { commit_line(commit, 'Made in the session') })
+end
+
+T['following a session']['that could not be kept, followed again, keeps its base once it can'] = function()
+  local top = git_repo.create('changessessions-kept-later', { ['notes.txt'] = { 'one' } })
+  local state = vim.fs.joinpath(fixture.directory('changessessions-kept-later'), 'state')
+  vim.fn.writefile({ 'a file, not a directory' }, state)
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  local commit = commit_line_of(top, 'notes.txt', 'two', 'Made in the session')
+  follow(SESSION_B, state)
+  wait_for_finds(3)
+  vim.fn.delete(state)
+  vim.fn.mkdir(state, 'p')
+  follow(SESSION_A, state)
+  save_file(vim.fs.joinpath(top, 'other.txt'), 'other')
+  expect_lines(FILES, { '  M notes.txt', '* ? other.txt' })
+  git_repo.start_editor(child)
+  begin_and_show(top)
+  wait_for_finds(1)
+
+  follow(SESSION_A, state)
+
+  expect_lines(COMMITS, { commit_line(commit, 'Made in the session') })
+end
+
 return T
