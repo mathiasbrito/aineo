@@ -6,9 +6,9 @@
 
 ## The insight
 
-A program in a Neovim terminal sets its title with OSC 0 or OSC 2, and Neovim keeps it in the terminal's `b:term_title`. A non-empty title also fires `TermRequest` with the sequence. **An empty title** — the clear a program sends as it exits — empties `b:term_title` and fires **no `TermRequest`**. So code that follows a title through `TermRequest` keeps the last title after it is cleared. A dictionary watcher on the terminal's `b:` dictionary, for the key `term_title`, sees every change, the empty one included.
+A program in a Neovim terminal sets its title with OSC 0 or OSC 2, and Neovim keeps it in the terminal's `b:term_title`. A non-empty title also fires `TermRequest` with the sequence. **An empty title** — the clear a program sends as it exits — empties `b:term_title` and fires **no `TermRequest`**. So code that follows a title through `TermRequest` keeps the last title after it is cleared. Of Neovim's events none sees it but a dictionary watcher on the terminal's `b:` dictionary, for the key `term_title`, which sees every change, the empty one included; a read of `b:term_title`, a poll, sees it too (T33-6 polled it every 50 ms and read `""` at the end).
 
-`TermRequest` also fires for sequences that set no title (OSC 1, OSC 9;4, APC), so it is the wrong signal in both directions; the watcher is the one that matches the variable.
+`TermRequest` also fires for sequences that set no title (OSC 1, OSC 9;4, APC) (the brief review of wave 8, finding 1.2; `autocmd.txt` › `TermRequest`), so it is the wrong signal in both directions; the watcher is the one that matches the variable.
 
 ## Example
 

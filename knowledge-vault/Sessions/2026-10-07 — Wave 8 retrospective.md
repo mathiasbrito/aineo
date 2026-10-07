@@ -38,8 +38,9 @@ T33 reached the Claude integration's home and the composition root, which orches
 | When | Step |
 |---|---|
 | 10-06 22:50 | The planning agent dispatched (the plan's `planned_at` is 23:04) |
-| 10-06 23:15 | PR #123 opened (head `2c83ab0`); the brief review dispatched |
-| 10-06 23:45 | The brief review in: T32 and T34 to dispatch after the answers and its corrections, T33 only after T33-6's measurement too; T33-6 measured by the orchestrator with the user's leave, recorded with it in the ledger |
+| 10-06 23:14 | PR #123 opened (head `2c83ab0`); the brief review dispatched |
+| 10-06 23:45 | The brief review in: T32 and T34 to dispatch after the answers and its corrections, T33 only after T33-6's measurement too |
+| 10-06 23:46–23:47 | T33-6 measured by the orchestrator with the user's leave, recorded with it in the ledger |
 | 10-06 23:47 | The amendment dispatched: the user's answers verbatim, the brief review's corrections, A1–A16 |
 | 10-07 00:03 | The amendment in; PR #123 and the `ai/` PR #125 (D30 in the root `CLAUDE.md` and the implementer's charter) merged; the claim, PR #126, at 00:04 |
 | 00:04 | T32, T33 and T34 dispatched in one message |
@@ -71,7 +72,7 @@ T33 reached the Claude integration's home and the composition root, which orches
 - **The user's ask, measured at the user's width.** A11, as first recorded, kept Neovim's `min:20`, after the brief review had measured the narrow-window break. The guarantee review measured it where the user works: 80 columns with a file open, a 26-column Report, an item back under its `-`. The orchestrator revised A11 to `min:10`; its own instruction then said "down to 20 columns", and the correction measured 18.
 - **Text drawn "as written" was not.** A `%{}` status-line item reads digits alone as a number and drops a leading comma or space; the attack review found it with names a test with ordinary names never tries. The re-measure then found that "whatever characters they hold" claimed more than Neovim draws.
 - **An assumption met an untested exit.** A5 rested on T33-6, which measured a clean exit only. A killed or hung-up Claude Code kept its last name; A19 forgets it at every exit.
-- **The records repeated wave 7's faults:** a mutant labelled as the plan's when it was the author's own, and that label taken into the orchestrator's ledger; three green-on-arrival rows counted as reds; mutants recorded by description. The records review caught each before the merge.
+- **The records repeated one of wave 7's faults, mutants recorded by description, and added two:** a mutant labelled as the plan's when it was the author's own, a label the orchestrator's ledger took; and three green-on-arrival rows counted as reds. The records review caught each before the merge.
 - **The re-measure ran before the merge this time.** Wave 7 skipped it for T26 and paid for it in a regression; here the fix round replaced mechanisms, and the re-measure attacked each one before #129 merged. It found four low findings and no regression.
 - **The brief review earned its place again.** It found, before dispatch, that T33's folder would have moved with `:cd`, that an empty title fires no `TermRequest`, that lualine overrides a window's status line within a second, that a `%` raises `E539`, and the narrow-window break of T34 (findings 1.1–1.14, 2.1–2.5, 3.1–3.5, 4.1 and 4.2).
 
@@ -134,7 +135,7 @@ Not in the table: the orchestrator's own context, its T33-6 measurement and veri
 - **The `aineo_report` group** holds the Report's `BufWinEnter` beside its `BufReadCmd`; a Report kept unnamed for the user's text loses both when the next Report clears the group, as it lost the `BufReadCmd` before (T34's session note).
 - **T33's test helpers**: `SESSION_STATUSLINE_AT_WIDTH` near-duplicates `SESSION_STATUSLINE_TEXT`, and the width-40 expectation assumes the fixture folder's `~` form is ASCII and longer than 19 bytes (the correction's report).
 - **The Learnings of this pass** are reviewed by a `records` reviewer before they merge (orchestrate §7).
-- **Wave 9** — worktrees in the changes pane and session switches — is next: the user answered its converge round on 2026-10-07, and its plan (PR #124) is amended on another branch.
+- **Wave 9** — worktrees in the changes pane and session switches — is next: the user answered its converge round on 2026-10-07, and its plan is PR #132 (open), which supersedes PR #124 with the user's answers.
 
 ## Commits
 
