@@ -1409,6 +1409,39 @@ T['a session switch']['is not made by a SessionEnd alone, as at Claude Code’s 
   })
 end
 
+T['a session switch']['is not made by a SessionStart whose hook ran after Claude Code exited'] = function()
+  local fake = claude.fake('switch-after-exit', 'ready')
+  local settings = kept_in('switch-after-exit-state')
+  local terminal = claude.start_noting_switches(child, fake, settings)
+  local started_on = first_session_id(fake)
+  claude.run_session_hook(
+    child,
+    fake,
+    1,
+    'SessionEnd',
+    hook_input('SessionEnd', started_on, 'prompt_input_exit')
+  )
+  child.lua('vim.fn.jobstop(vim.bo[...].channel)', { terminal })
+  claude.wait_for_status(child, 'exited')
+
+  claude.run_session_hook(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', OTHER_SESSION_ID, 'compact')
+  )
+  claude.wait_for_deliveries(child)
+  local switches = child.lua_get('_G.session_switches')
+  claude.start_again(child, settings)
+
+  eq({
+    switches = switches,
+    followed = claude.followed_session_id(child),
+    resumed = claude.words_after(claude.start_arguments(fake, 2), '--resume'),
+  }, { switches = {}, followed = started_on, resumed = { started_on } })
+end
+
 T['a session switch']['is not made to an id of another form than Claude Code’s'] =
   MiniTest.new_set({
     parametrize = {
