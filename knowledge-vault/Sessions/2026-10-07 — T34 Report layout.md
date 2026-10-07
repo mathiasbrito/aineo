@@ -173,4 +173,15 @@ This replaces the *Task lines* paragraph above for the knowledge pass:
 
 ## Commits
 
-Recorded after the merge, never before (the branch lands by rebase).
+Recorded after the merge, by wave 8's knowledge pass. PR #128 merged by rebase on 2026-10-06 (23:14 UTC; 2026-10-07 01:14 CEST), the first of wave 8; `dev` `cabe3a3`, whose tree is the tree of the orchestrator's verified head `a21f466` (`git diff --stat a21f466 cabe3a3` prints nothing). Released in `v0.2.15` with T32 and T33 (PR #130, squash-merged into `main` as `f9cec19`, whose tree is `dev` `f98bd9d`'s). The task line for the plan is the *Correction*'s, which replaces *Task lines*.
+
+The first three are the packet's; the last three are the bounded correction's, after the guarantee and records review.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `2f2cf30` | `be90050` | Show a report's details as items that wrap under their text |
+| `f95c538` | `6af2179` | Pin the Report's wrapping where mutants found it unpinned |
+| `2a18c45` | `a272b08` | Record T34's session: the Report's layout as items |
+| `19896a1` | `2158f16` | Pin the Report's wrap in windows the layout opens unentered |
+| `b444839` | `bd2caa0` | Keep the Report's hanging indents down to 18 columns |
+| `a21f466` | `cabe3a3` | Record T34's correction: the revised A11 and the unentered window |
