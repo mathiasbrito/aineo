@@ -400,30 +400,6 @@ local function write_draft(file, text)
   end
 end
 
---- Writes `text` as the whole of the draft file `file`, and tells the user
---- once when it cannot (`warn_once()`); raises nothing.
----
----@param file string
----@param text string
-local function save(file, text)
-  local saved, failure = pcall(write_draft, file, text)
-  if not saved then
-    warn_once('write', failure)
-  end
-end
-
---- Saves `buffer`'s text as the draft of its file (`file_of()`) when
---- `watch` says a change to it has not been saved yet.
----
----@param buffer integer
----@param watch aineo.draft.Watch
-local function save_pending_change(buffer, watch)
-  if watch.pending then
-    watch.pending = false
-    save(file_of(watch), draft_of(buffer))
-  end
-end
-
 --- Saves `buffer`'s text as the draft of its file (`file_of()`) at once
 --- when `watch` says a change to it has not been saved yet, and returns
 --- whether nothing is left unsaved; a save that fails leaves the change
@@ -444,16 +420,28 @@ local function save_pending_change_now(buffer, watch)
   return saved, failure
 end
 
+--- Saves `buffer`'s text as the draft of its file (`file_of()`) when
+--- `watch` says a change to it has not been saved yet
+--- (`save_pending_change_now()`); a save that fails leaves the change
+--- pending, and tells the user once (`warn_once()`). Raises nothing.
+---
+---@param buffer integer
+---@param watch aineo.draft.Watch
+local function save_pending_change(buffer, watch)
+  local saved, failure = save_pending_change_now(buffer, watch)
+  if not saved then
+    warn_once('write', failure)
+  end
+end
+
 --- Saves the text of every kept buffer that has a change not saved yet, as
---- Neovim starts to quit. A save that fails leaves its change pending and
---- is not told: the buffer's own save as Neovim unloads it tries again and
---- warns, since a warning given here would hold an editor with a screen at
---- a hit-enter prompt.
+--- Neovim starts to quit (`save_pending_change_now()`). A save that fails
+--- leaves its change pending and is not told: the buffer's own save as
+--- Neovim unloads it tries again and warns, since a warning given here
+--- would hold an editor with a screen at a hit-enter prompt.
 local function save_pending_changes_before_quit()
   for buffer, watch in pairs(kept) do
-    if watch.pending and pcall(write_draft, file_of(watch), draft_of(buffer)) then
-      watch.pending = false
-    end
+    save_pending_change_now(buffer, watch)
   end
 end
 
@@ -466,12 +454,11 @@ local function take_in_change(buffer, watch)
   if watch.replacing then
     return
   end
+  watch.pending = true
   if is_empty(buffer) then
-    watch.pending = false
-    save(file_of(watch), '')
+    save_pending_change(buffer, watch)
     return
   end
-  watch.pending = true
   vim.defer_fn(function()
     save_pending_change(buffer, watch)
   end, SAVE_DELAY_MS)

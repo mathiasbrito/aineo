@@ -760,11 +760,17 @@ end
 T['a session switch when the draft cannot be saved'] = MiniTest.new_set()
 
 --- The Lua that makes every write of the child's draft home fail as on a
---- full disk, through `_G.draft_files`, which `keep_new_buffer()` hands it.
+--- full disk, through `_G.draft_files`, which `keep_new_buffer()` hands it,
+--- while `_G.full` is true there, as it is at first: a case frees the disk
+--- by setting it false.
 local WRITES_THAT_FAIL = [[
+  _G.full = true
   _G.draft_files = {
-    write = function()
-      return nil, 'ENOSPC: no space left on device'
+    write = function(descriptor, text)
+      if _G.full then
+        return nil, 'ENOSPC: no space left on device'
+      end
+      return vim.uv.fs_write(descriptor, text)
     end,
   }
 ]]
@@ -800,6 +806,78 @@ T['a session switch when the draft cannot be saved']['tells it again at each swi
 
   eq({ shown = input_lines(), kept = child.lua_get(KEPT_WARNINGS) }, {
     shown = { 'Notes for the second session' },
+    kept = 2,
+  })
+end
+
+T['a session switch when the draft cannot be saved']["keeps Input's text whose delayed save failed before the switch, telling why"] = function()
+  local state = fixture.directory('draft-sessions-delayed-unsaved')
+  plant_draft(session_draft_file(state, 'session-b'), 'Kept for the second session\n')
+  child.lua(KEEP_WARNINGS)
+  child.lua(WRITES_THAT_FAIL)
+  keep_new_buffer(state)
+  follow('session-a')
+  set_input({ 'Notes for the first session' })
+  vim.wait(SAVE_DELAY_AND_MARGIN_MS)
+  local writes_before = child.lua_get(WRITE_WARNINGS)
+
+  follow('session-b')
+
+  eq({
+    writes_before = writes_before,
+    shown = input_lines(),
+    first = read_text(session_draft_file(state, 'session-a')),
+    kept = child.lua_get(KEPT_WARNINGS),
+  }, {
+    writes_before = 1,
+    shown = { 'Notes for the first session' },
+    first = nil,
+    kept = 1,
+  })
+end
+
+T['a session switch when the draft cannot be saved']['saves the text whose delayed save failed once the disk is freed before the switch'] = function()
+  local state = fixture.directory('draft-sessions-delayed-freed')
+  plant_draft(session_draft_file(state, 'session-b'), 'Kept for the second session\n')
+  child.lua(KEEP_WARNINGS)
+  child.lua(WRITES_THAT_FAIL)
+  keep_new_buffer(state)
+  follow('session-a')
+  set_input({ 'Notes for the first session' })
+  vim.wait(SAVE_DELAY_AND_MARGIN_MS)
+  child.lua('_G.full = false')
+
+  follow('session-b')
+
+  eq({
+    shown = input_lines(),
+    first = read_text(session_draft_file(state, 'session-a')),
+  }, {
+    shown = { 'Kept for the second session' },
+    first = 'Notes for the first session\n',
+  })
+end
+
+T['a session switch when the draft cannot be saved']['keeps the text when its delayed save fails between two switches'] = function()
+  local state = fixture.directory('draft-sessions-delayed-between')
+  child.lua(KEEP_WARNINGS)
+  child.lua(WRITES_THAT_FAIL)
+  keep_new_buffer(state)
+  follow('session-a')
+  set_input({ 'Notes for the first session' })
+  follow('session-b')
+  local shown_after_first = input_lines()
+  vim.wait(SAVE_DELAY_AND_MARGIN_MS)
+
+  follow('session-c')
+
+  eq({
+    shown_after_first = shown_after_first,
+    shown = input_lines(),
+    kept = child.lua_get(KEPT_WARNINGS),
+  }, {
+    shown_after_first = { 'Notes for the first session' },
+    shown = { 'Notes for the first session' },
     kept = 2,
   })
 end
