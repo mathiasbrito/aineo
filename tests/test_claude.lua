@@ -167,16 +167,16 @@ T['start_session()']['appends the instructions to the system prompt byte for byt
   )
 end
 
-T['start_session()']['passes no flag beyond the session, the servers, the instructions and the tools'] = function()
+T['start_session()']['passes no flag beyond the session, the servers, the instructions, the hooks and the tools'] = function()
   local fake = claude.fake('no-other-flag', 'exit')
 
   claude.start(child, fake, { state_directory = fixture.directory('claude-no-other-flag-state') })
 
   eq(
     claude.flags(claude.arguments(fake)),
-    { '--allowedTools', '--append-system-prompt', '--mcp-config', '--session-id' }
+    { '--allowedTools', '--append-system-prompt', '--mcp-config', '--session-id', '--settings' }
   )
-  eq(#claude.arguments(fake), 9)
+  eq(#claude.arguments(fake), 11)
 end
 
 T['start_session()']['marks the process as aineo’s child with AINEO_CHILD=1'] = function()
@@ -280,6 +280,9 @@ T['start_session()']['names the setting that is malformed'] = MiniTest.new_set({
     { 'instructions', false },
     { 'state_directory', 1 },
     { 'on_terminal_replaced', 'a callback' },
+    { 'editor_address', 1 },
+    { 'editor_program', false },
+    { 'on_session_switched', 'a callback' },
   },
 })
 
