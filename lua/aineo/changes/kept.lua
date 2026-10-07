@@ -57,30 +57,39 @@ local function as_kept_base(decoded)
 end
 
 --- What is kept for the session `id`, or nil when nothing is: a file that
---- cannot be read, or holds anything but what `M.keep_base()` writes,
---- counts as nothing kept.
+--- holds anything but what `M.keep_base()` writes counts as nothing kept.
+--- A file that is there but cannot be read is nil too, and says so.
 ---
 ---@param state_directory string
 ---@param id string
----@return aineo.changes.KeptBase|nil
+---@return aineo.changes.KeptBase|nil kept
+---@return boolean unreadable whether a file is there that could not be read
 function M.read_kept_base(state_directory, id)
-  local file = io.open(M.kept_base_file(state_directory, id), 'rb')
+  local path = M.kept_base_file(state_directory, id)
+  local file = io.open(path, 'rb')
   if not file then
-    return nil
+    return nil, vim.uv.fs_stat(path) ~= nil
   end
   local text = file:read('*a')
   file:close()
   local decoded, value = pcall(vim.json.decode, text, { luanil = { object = true, array = true } })
-  return decoded and as_kept_base(value) or nil
+  return decoded and as_kept_base(value) or nil, false
 end
 
 --- Makes the directory `path` and the directories leading to it, unless it
---- exists.
+--- exists. Another editor making one of them at the same moment makes
+--- `mkdir()` fail, so it tries again, up to once for each of the path's
+--- directories.
 ---
 ---@param path string
 ---@return string? failure why it could not be made, as `mkdir()` says it, without the `Vim:` Neovim puts before it; nil once made
 local function make_directory(path)
+  local tries_left = #vim.split(path, '/', { trimempty = true })
   local made, failure = pcall(vim.fn.mkdir, path, 'p')
+  while not made and tries_left > 0 do
+    tries_left = tries_left - 1
+    made, failure = pcall(vim.fn.mkdir, path, 'p')
+  end
   if not made then
     return (tostring(failure):gsub('^Vim:', ''))
   end

@@ -28,10 +28,11 @@ local M = {}
 ---@field absence? aineo.git.Failure why no repository was found for the directory, while none is
 ---@field base? string
 ---@field followed? aineo.changes.FollowedSession the Claude Code session the pane is for, once the home is told one
----@field keeps_followed? boolean whether the base and the saves are kept for the session followed: not when what was kept for it is another repository's, which is never written over
+---@field keeps_followed? boolean whether the base and the saves are kept for the session followed: not when what was kept for it is another repository's or cannot be read, which is never written over
 ---@field looking_for_head? boolean whether git looks for `HEAD`, the base of the session followed, while it runs
 ---@field head_look_failed? boolean whether the last look for the base of the session followed failed
 ---@field keeping_failure_told? boolean whether the user was told that the base and the saves could not be kept
+---@field keeping_failed? boolean whether the last write of the base and the saves of the session followed failed
 ---@field changes? aineo.git.Change[] the files changed since the base, as last read
 ---@field files_failure? aineo.git.Failure why the last read of the files failed, when it did
 ---@field commits? aineo.git.CommitsSince the commits since the base, as last read
@@ -50,6 +51,12 @@ local session = nil
 --- began, followed once it does.
 ---@type aineo.changes.FollowedSession|nil
 local followed_before_beginning = nil
+
+--- The base and the saves of each Claude Code session the pane followed
+--- whose own could not be kept, by session id, held for the editor's life
+--- so that following the session again brings them back.
+---@type table<string, { base: string|nil, saved: table<string, true>, keeps: boolean|nil }>
+local held_bases = {}
 
 --- The pane's buffers, by window.
 ---@type { files: integer|nil, commits: integer|nil }
@@ -270,10 +277,27 @@ local function resolved(path)
   return vim.uv.fs_realpath(path) or path
 end
 
+--- Adds to the session's saves those of `on_disk`, what is kept for the
+--- Claude Code session the pane follows, when it was kept for this
+--- repository and this base: another editor following the same session
+--- marked them.
+---
+---@param on_disk aineo.changes.KeptBase|nil
+local function merge_kept_saves(on_disk)
+  if not (on_disk and on_disk.top == session.repository.top and on_disk.base == session.base) then
+    return
+  end
+  for _, path in ipairs(on_disk.saved) do
+    session.saved[path] = true
+  end
+end
+
 --- Keeps the session's base and saves for the Claude Code session the pane
---- follows (`aineo.changes.kept`). Keeps nothing before it follows one,
+--- follows (`aineo.changes.kept`), with the saves another editor kept for it
+--- meanwhile (`merge_kept_saves()`). Keeps nothing before it follows one,
 --- while git looks for the session's base (`take_head()`), or when what was
---- kept for the session is another repository's (`use_kept_base()`). A
+--- kept for the session is another repository's or cannot be read
+--- (`use_kept_base()`). A
 --- write that fails is told once, as a warning, for the editor's life; the
 --- pane goes on from what it holds.
 local function keep()
@@ -281,6 +305,7 @@ local function keep()
   if not (followed and session.keeps_followed) or session.looking_for_head then
     return
   end
+  merge_kept_saves(kept.read_kept_base(followed.state_directory, followed.id))
   local saved = vim.tbl_keys(session.saved)
   table.sort(saved)
   local failure = kept.keep_base(
@@ -288,6 +313,7 @@ local function keep()
     followed.id,
     { top = session.repository.top, base = session.base, saved = saved }
   )
+  session.keeping_failed = failure ~= nil
   if failure and not session.keeping_failure_told then
     session.keeping_failure_told = true
     vim.notify(
@@ -315,13 +341,18 @@ end
 --- follows (`aineo.changes.kept`), when they were kept for this
 --- repository, and returns whether it did. Otherwise the saves are none
 --- from then on, and are kept (`keep()`) only when nothing was kept for the
---- session: what was kept for another repository is never written over.
+--- session: what was kept for another repository, or what cannot be read
+--- and may be, is never written over.
 ---
 ---@return boolean
 local function use_kept_base()
   local followed = session.followed
-  local kept_base = followed and kept.read_kept_base(followed.state_directory, followed.id)
-  session.keeps_followed = not kept_base or kept_base.top == session.repository.top
+  local kept_base, unreadable = nil, false
+  if followed then
+    kept_base, unreadable = kept.read_kept_base(followed.state_directory, followed.id)
+  end
+  session.keeps_followed = not unreadable
+    and (not kept_base or kept_base.top == session.repository.top)
   if not (kept_base and session.keeps_followed) then
     session.saved = {}
     return false
@@ -331,9 +362,41 @@ local function use_kept_base()
   return true
 end
 
+--- Holds the base and the saves of the Claude Code session the pane
+--- follows, as it leaves it, when they could not be kept for it — what was
+--- kept for it is another repository's, or its last write failed
+--- (`held_bases`). Does nothing while git still looks for its base.
+local function hold_unkept_base()
+  local leaving = session.followed
+  if not (leaving and session.repository) or session.looking_for_head then
+    return
+  end
+  if session.keeps_followed == false or session.keeping_failed then
+    held_bases[leaving.id] =
+      { base = session.base, saved = session.saved, keeps = session.keeps_followed }
+  end
+end
+
+--- Takes the base and the saves held for the Claude Code session the pane
+--- follows (`hold_unkept_base()`), when they are, and returns whether it
+--- did. A session held because its write failed is written again at its
+--- next new mark; one held because what was kept for it is another
+--- repository's, or cannot be read, never is.
+---
+---@return boolean
+local function use_held_base()
+  local held = held_bases[session.followed.id]
+  if not held then
+    return false
+  end
+  session.base, session.saved = held.base, held.saved
+  session.keeps_followed = held.keeps
+  return true
+end
+
 --- Marks `file`, a written file's resolved path, as saved when it lies
---- under the repository's top level, resolved too, keeps it (`keep()`), and
---- returns whether it does.
+--- under the repository's top level, resolved too, keeps the mark when it
+--- is new (`keep()`), and returns whether it lies there.
 ---
 ---@param file string
 ---@return boolean
@@ -342,8 +405,11 @@ local function mark_saved(file)
   if not vim.startswith(file, top) then
     return false
   end
-  session.saved[file:sub(#top + 1)] = true
-  keep()
+  local path = file:sub(#top + 1)
+  if not session.saved[path] then
+    session.saved[path] = true
+    keep()
+  end
   return true
 end
 
@@ -351,7 +417,7 @@ end
 --- (`aineo.changes.serial`). The first found is the session's for the
 --- editor's life: its `HEAD` is the base — or the base kept for the Claude
 --- Code session the pane follows, when one was kept for this repository
---- (`use_kept_base()`), `HEAD` being kept for it otherwise — the saves
+--- (`use_kept_base()`), `HEAD` being kept for it when nothing was — the saves
 --- count from then — those made while the first look ran included — and it
 --- is followed once the pane has been shown (`follow_repository()`). While
 --- none is found, both windows say why. Each look is ended before what it
@@ -404,17 +470,18 @@ local function read_for_new_base()
   follow_repository()
 end
 
---- Takes `HEAD` now, the repository's of the directory `M.begin_session()`
---- was given, as the base of the Claude Code session the pane follows, and
---- keeps it (`keep()`). No list is read while git looks. When the look
---- fails, both windows say why, and the next showing of the pane looks
---- again (`pane_shown()`).
+--- Takes `HEAD` now, looked for from the session's repository's top level
+--- — not from the directory `M.begin_session()` was given, which may since
+--- hold a repository of its own, or be gone — as the base of the Claude
+--- Code session the pane follows, and keeps it (`keep()`). No list is read
+--- while git looks. When the look fails, both windows say why, and the
+--- next showing of the pane looks again (`pane_shown()`).
 local function take_head()
   local followed = session.followed
   session.looking_for_head = true
   session.head_look_failed = false
   read_for_new_base()
-  git.find_repository(session.settings.directory, function(failure, repository)
+  git.find_repository(session.repository.top, function(failure, repository)
     if session.followed ~= followed then
       return
     end
@@ -442,10 +509,12 @@ end
 
 --- Notes that the pane is shown, and, at the main loop's next turn, follows
 --- the repository from then on (`follow_repository()`), or looks for it
---- again while there is none (`look_again()`): once for every showing in
---- one turn, as both of the pane's buffers entering their windows are one
---- showing. Once the editor is quitting (`v:exiting`) when that turn comes,
---- it does neither: no look for the repository starts as the editor quits.
+--- again while there is none (`look_again()`), and looks again for the
+--- base of the Claude Code session followed when its last look failed
+--- (`take_head_again()`): once for every showing in one turn, as both of
+--- the pane's buffers entering their windows are one showing. Once the
+--- editor is quitting (`v:exiting`) when that turn comes, it does none of
+--- these: no look for the repository starts as the editor quits.
 local function pane_shown()
   if not session then
     return
@@ -525,17 +594,21 @@ function M.begin_session(settings)
   find()
 end
 
---- Shows the changes pane for the Claude Code session `followed`: its base
---- and saves as they were kept for this repository, read back; or, for a
---- session with nothing kept, `HEAD` at this moment, the repository's of
---- the directory `M.begin_session()` was given, and no saves, both kept
---- from then on (`take_head()`); or, for a session kept for another
---- repository, `HEAD` and no saves too, held in memory, what was kept left
---- as it was. The lists are read again for that base. Following the session
+--- Makes the changes pane the Claude Code session `followed`'s, its
+--- buffers written for it and its lists read again: the base and the saves
+--- this editor held for it, when it followed it before and could not keep
+--- them (`use_held_base()`); else those kept for it in this repository,
+--- read back; else, for a session with nothing kept, `HEAD` at this moment
+--- in the session's repository and no saves, both kept from then on
+--- (`take_head()`); else — what was kept for it is another repository's, or
+--- cannot be read — `HEAD` and no saves too, held in memory for the
+--- editor's life, what was kept left as it was. Following the session
 --- already followed does nothing. Told before the session has begun, or
---- before its repository is found, the home holds the session and takes its
---- base once the repository is found (`find`); while no repository is
---- found, nothing is kept.
+--- before its repository is found, the home holds the session and takes
+--- its base once the repository is found (`find`); while no repository is
+--- found, nothing is kept. Called on the main loop only: from a fast event
+--- (a `vim.uv` callback) it raises E5560, as the Vimscript functions it
+--- calls do there.
 ---
 ---@param followed aineo.changes.FollowedSession
 function M.follow_changes_session(followed)
@@ -546,12 +619,13 @@ function M.follow_changes_session(followed)
   if session.followed and session.followed.id == followed.id then
     return
   end
+  hold_unkept_base()
   session.followed = followed
-  session.looking_for_head, session.head_look_failed = false, false
+  session.looking_for_head, session.head_look_failed, session.keeping_failed = false, false, false
   if not session.repository then
     return
   end
-  if use_kept_base() then
+  if use_held_base() or use_kept_base() then
     read_for_new_base()
     return
   end

@@ -1139,11 +1139,15 @@ The changes pane ~
   commits window lists every commit reachable from `HEAD` and not from the
   base.
 - A restart of Claude Code in another working directory keeps the first
-  repository. A session whose base was kept for another repository takes
-  `HEAD` as its base here, and the files you save then are marked while
-  this editor shows it, never kept: what was kept for the other repository
-  stays as it was. A kept base git no longer has, garbage-collected say,
-  is kept, and the pane says in git's words that it cannot be read.
+  repository. A session whose base was kept for another repository, or
+  whose kept base aineo cannot read, takes `HEAD` as its base here, and
+  the files you save then are marked; this editor holds both until it
+  quits, a switch back included, and never keeps them: what was kept
+  stays as it was. A repository moved or renamed on disk counts as
+  another, so its sessions' bases are not read back there. A session
+  whose base could not be written is held so too. A kept base git no
+  longer has, garbage-collected say, is kept, and the pane says in git's
+  words that it cannot be read.
 - Where aineo cannot watch the working tree's subdirectories (Linux), the
   files window says so first: a change in a subdirectory shows at the next
   showing of the pane, save or commit, and a branch moved by
