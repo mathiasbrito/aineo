@@ -333,7 +333,12 @@ local followed_records_waiting = false
 --- place of what it shows, while it can show reports (`buffer.is_showing()`).
 --- When Neovim refuses the change, as it does while textlock holds, they are
 --- shown at the editor's next `SafeState`, once whatever was refused
---- meanwhile, from the records file the home keeps reports in then.
+--- meanwhile, from the records file the home keeps reports in then. That
+--- retry is in the group `aineo.report`: clearing the group while it waits
+--- (`:autocmd! aineo.report`) drops it, and the Report then shows what it
+--- showed, and no later follow shows another session's records in it, for
+--- the editor's life; reports are kept in the followed session's file
+--- still.
 local function show_followed_records()
   if followed_records_waiting or not buffer.is_showing(report_view.buffer) then
     return
@@ -344,6 +349,7 @@ local function show_followed_records()
   end
   followed_records_waiting = true
   vim.api.nvim_create_autocmd('SafeState', {
+    group = vim.api.nvim_create_augroup('aineo.report', { clear = false }),
     once = true,
     desc = "aineo: show the followed session's reports once the editor allows it",
     callback = function()

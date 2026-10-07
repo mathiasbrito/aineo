@@ -530,8 +530,12 @@ local replacements_waiting = {}
 --- A change Neovim refuses while textlock holds is made at the editor's
 --- next `SafeState`, once whatever was refused meanwhile, with the draft
 --- kept then, while the buffer is kept still; until it lands, the buffer's
---- changes are its file's still. A text that cannot be saved is left in the
---- buffer, still its file's, and told to the user each time. Tells the user
+--- changes are its file's still. That retry is in the group `aineo.draft`:
+--- clearing the group while it waits (`:autocmd! aineo.draft`) drops it,
+--- and the buffer then keeps its text and saves to that file, and no later
+--- follow puts a draft into it, for the editor's life. A text that cannot
+--- be saved is left in the buffer, still its file's, and told to the user
+--- each time. Tells the user
 --- once when the draft cannot be read, and empties `buffer` then, or when it
 --- cannot be put in for another reason (`warn_not_put()`); raises nothing.
 ---
@@ -563,6 +567,7 @@ local function replace_with_kept_draft(buffer)
   end
   replacements_waiting[buffer] = true
   vim.api.nvim_create_autocmd('SafeState', {
+    group = vim.api.nvim_create_augroup('aineo.draft', { clear = false }),
     once = true,
     desc = "aineo: put the followed session's draft into Input once the editor allows it",
     callback = function()
