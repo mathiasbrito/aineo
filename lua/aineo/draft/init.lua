@@ -271,6 +271,35 @@ local TEXTLOCK_REFUSAL = 'E565:'
 --- first session it followed (`move_directory_draft_once()`).
 local directory_draft_moved = false
 
+--- Removes `to`, just linked to the draft file `from`, once `from` was found
+--- gone: another editor took `from` between the link and its removal, and
+--- when `to` is not the only name left of that file, the other editor's
+--- session holds it, so `to` is removed for the two sessions to keep one
+--- draft each. A `to` that is that file's only name is kept: `from` was
+--- removed some other way, and `to` holds the only copy. Tells the user once
+--- when `to` cannot be removed (`warn_once()`), and raises nothing then.
+---
+---@param from string
+---@param to string
+local function give_up_link_taken_meanwhile(from, to)
+  local moved = vim.uv.fs_stat(to)
+  if not moved or moved.nlink < 2 then
+    return
+  end
+  local removed, removal_failure = vim.uv.fs_unlink(to)
+  if not removed then
+    warn_once(
+      'move',
+      ("cannot move Input's draft in %s to %s: another editor moved it to its session at the same moment, and %s cannot be removed, so both sessions keep it: %s"):format(
+        from,
+        to,
+        to,
+        removal_failure
+      )
+    )
+  end
+end
+
 --- Moves the working directory's draft to the followed session the first
 --- time it is called, when the session has no draft and the directory has
 --- one: the directory's draft is then the session's, and its file is gone.
@@ -278,9 +307,10 @@ local directory_draft_moved = false
 --- directory's and then removes the directory's; the link refuses an
 --- existing file at once, so another editor making the session's draft, or
 --- taking the directory's, meanwhile never has its file replaced, and is no
---- failure. Tells the user once when the draft could not be moved, or was
---- linked but cannot be removed from the directory's file
---- (`warn_once()`), and raises nothing then.
+--- failure; one that took it between the link and the removal keeps it
+--- alone (`give_up_link_taken_meanwhile()`). Tells the user once when the
+--- draft could not be moved, or was linked but cannot be removed from the
+--- directory's file (`warn_once()`), and raises nothing then.
 local function move_directory_draft_once()
   if directory_draft_moved then
     return
@@ -296,7 +326,11 @@ local function move_directory_draft_once()
     end
     return
   end
-  local removed, removal_failure = vim.uv.fs_unlink(from)
+  local removed, removal_failure, removal_code = vim.uv.fs_unlink(from)
+  if removal_code == 'ENOENT' then
+    give_up_link_taken_meanwhile(from, to)
+    return
+  end
   if not removed then
     local why = 'it is in both, the first cannot be removed: ' .. removal_failure
     warn_once('move', not_moved:format(from, to, why))
