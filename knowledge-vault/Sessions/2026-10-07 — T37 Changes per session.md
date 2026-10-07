@@ -34,7 +34,7 @@ D41 (the user's answer to P11, 2026-10-07) keeps the changes pane's base and the
 - **`HEAD` is read by a second `git.find_repository()`.** The git home offers no other read of `HEAD`, and `lua/aineo/git/` is T38's; the found repository's `head` is the commit `HEAD` names at that moment.
 - **Beyond the brief's list, four behaviours of the look were added**, each with a case seen red: the windows say "reading" during it; nothing is kept during it (a quit then kept the old session's base for the new one); a list read for the old base is dropped (the old session's lists showed after a switch until the next read — found when a case passed on that transient); a late look is ignored and a failed look told and tried again. Without them the pane would show, or keep, the previous session's base under the new one.
 - **The warning is once for the editor's life**, not per session: the files share one folder, so a second session's write fails for the same reason.
-- **The help describes the per-session behaviour now**, though T39 wires it: no release is cut between T37 and T39 (plan.md › R (a)), so no released help says it before it is true.
+- **The help describes the per-session behaviour now**, though T39 wires it. The first reading here, that plan.md › R (a) cuts no release between T37 and T39, was wrong: R (a) cuts one when T38 merges, which can come before T39 (records review, finding 1). The orchestrator has ruled that no wave-9 release is cut before T39 merges (2026-10-07, the fix round of PR #136, its assumption to report to the user), so the lines stay and no released help says them before they are true.
 
 ## Unit list (stated before the first test)
 
@@ -89,7 +89,7 @@ Arrived green, each with its killer run (table below):
 
 ## Mutants
 
-Each its literal `perl -0pe` edit (`.tests/t37-mutants.sh`, the scratch script, quoted in the PR), applied to a pristine copy, run on `tests/test_changes_sessions.lua` (one group, 19 cases), restored. Every kill below is an assertion: no mutant log holds a `Lua:` error. The plan's six are M1–M6.
+Each its literal `perl -0pe` edit (`.tests/t37-mutants.sh`, the scratch script; its cases are pasted verbatim under *Fix round*), applied to a pristine copy, run on `tests/test_changes_sessions.lua` (one group, 19 cases), restored. Every kill below is an assertion: no mutant log holds a `Lua:` error. The plan's six are M1–M6.
 
 Measured on `a407c2e`'s code (no line under `lua/` changed after it):
 
@@ -117,23 +117,158 @@ Measured on `a407c2e`'s code (no line under `lua/` changed after it):
 | M19 | `read_for_new_base()` before the look removed | 3 cases, *says each window is being read while it looks for HEAD* among them |
 | M20 | `kept.lua`: `OWNER_ONLY` `600` → `644` | *keeps each session in a file of its own, the user’s alone, whatever its id* |
 | M21 | `kept.lua`: `vim.fn.sha256(id) .. '.json'` → `id .. '.json'` | the same case |
-| M22 | `kept.lua`: `if type(decoded) ~= 'table'` → `if false and type(decoded) ~= 'table'` | **survives**: the clauses after it still check the shape; only a bare JSON number would differ, raising inside the follow (*Open threads*) |
+| M22 | `kept.lua`: `if type(decoded) ~= 'table'` → `if false and type(decoded) ~= 'table'` | **survived** this pass, recorded after its covering file alone; a kept file holding a bare `5`, `true` or `null` separates it (not only a number, as first written). Killed in the fix round (*Fix round*) |
 | M22b | `kept.lua`: `return decoded and as_kept_base(value) or nil` → `return decoded and value or nil` | *counts a kept file aineo did not write as nothing kept, and replaces it* |
 
 ## Verification
 
 The test files this packet touches, on Neovim 0.12.5, at `a407c2e`: `tests/test_changes_sessions.lua` 19, `tests/test_changes.lua` 120, `tests/test_entry_changes.lua` 12, `tests/test_doc.lua` 44, each `Fails (0) and Notes (0)`; `make lint` clean. `tests/test_doc.lua` on the help merged with T36's head `fe112c4` (`git merge-tree`, no conflict): 44, `Fails (0)`; T35's branch did not exist yet. The whole suite's run before the push is in the pull request.
 
+## Fix round — 2026-10-07, PR #136's three reviews
+
+The attack, test-integrity and records reviews of PR #136 (`.claude/local/orchestrator/review136/`, on `0442ade`), and the orchestrator's message of the same day. Branch `feature/t37-changes-sessions`, from `0442ade`.
+
+### The orchestrator's rulings — its assumptions, to report to the user
+
+Made under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"):
+
+- **Attack 1.** The look for `HEAD` runs from the session's repository's top level, not from the editor's directory.
+- **Attack 2.** "Held in memory" means *for the editor's life*. A per-editor table holds the base and saves of a session the pane could not keep — A5's, or one whose write failed — so following it again brings them back. A5's LIMITS wording follows, and names the records review's finding 3: a moved or renamed repository's sessions count as another repository's.
+- **Attack 3, records 2.** `kept.lua` retries `mkdir()` as `session_ids.lua` does.
+- **Attack 4.** A record that exists but cannot be read is treated as another repository's and never written over.
+- **Attack 5.** `keep()` merges the record's saves, so two editors on one session keep each other's marks.
+- **Records 6.** The record is written at each new mark, not at every save, as D41 says.
+- **Records 1.** The help may describe what T39 wires: no wave-9 release is cut before T39 merges. The note's and the PR's sentence about R (a) are corrected to say so.
+
+### Each finding
+
+| Finding | Status | Case (red → green, or the mutant it kills) |
+|---|---|---|
+| Attack 1 (F1a) | fixed | *takes HEAD of its repository, not of one made since in its directory* — red `The last refresh failed: fatal: Not a valid commit name 1b8e59f…` against the commit made in the session |
+| Attack 1 (F1b) | fixed, by the same edit | *takes HEAD of its repository once the directory it began in is gone* — arrived green, spent by F1a's fix; N1 kills it |
+| Attack 2 (F2a) | fixed | *kept for another repository, followed again, brings back its base and saves held* — red `No commits on this session` against `… Under A here` |
+| Attack 2 (F2b) | fixed | *that could not be kept, followed again, brings back its base and saves held* — red `No commits on this session` against `… Under A` |
+| Attack 3, records 2 | fixed | *keeps its base when another editor makes the folder at the same moment* — red: the warning `… E739: Cannot create directory …: file already exists` against none |
+| Attack 4 | fixed | *never writes over what is kept when it cannot read it* — red `No commits on this session` against `… Made in the first` |
+| Attack 5 | fixed | *in two editors at once keeps the saves of both* — red `  M notes.txt` against `* M notes.txt` |
+| Attack R6 | named | the follow's docstring: called on the main loop only; from a fast event it raises E5560. No caller does so |
+| Attack 6, tests 1, records 7 (M22) | fixed | *counts a kept file holding a bare JSON value as nothing kept* (`5`, `true`, `null`) — arrived green; M22 killed in all three |
+| Tests 2 (R24) | fixed | *kept, while another's look for HEAD runs, …* waits for the reads the showing asked for, then asserts directly; R24 killed |
+| Tests 3 | fixed | the same case commits before following B; *keeps nothing of a save made while it looks for HEAD* commits after the restart — neither passes under a follow that does nothing |
+| Tests 4 (R6) | fixed | *keeps a base git no longer has, and the windows say so in git's words* — arrived green; R6 killed |
+| Tests 5 (R1, R2) | fixed | *begun in a subdirectory reads its base back in a later editor* — arrived green; R1 and R2 killed |
+| Tests 6 (R8) | fixed | *keeps the base of two ids a name of their characters would confuse apart* — arrived green; R8 killed |
+| Tests 7 | fixed | `the_kept_file()` asserts exactly one kept file before a case writes over it; no `v:null` can be written into the checkout |
+| Tests 8 (R19) | fixed | *kept for another repository says nothing* — arrived green; R19 killed |
+| Records 1 | corrected | the help is left; the R (a) sentence above (*Decisions & reasoning*) and in the PR now give the orchestrator's ruling |
+| Records 3 | fixed with attack 2 | the LIMITS item: held until the editor quits, a switch back included; a moved or renamed repository counts as another |
+| Records 4 | fixed | the script's cases, verbatim, below; the PR's table is literal |
+| Records 5 | fixed | `pane_shown()`, `find` and `M.follow_changes_session()`'s docstrings |
+| Records 6 | fixed | *keeps a save once for each path newly marked* — red `3` writes against `1` |
+
+Rejected: letting go of a held session once a later write succeeds. No case could tell it apart from keeping it held.
+
+### Survivors found and pinned in the round
+
+The first pass on `60aa219` left four survivors. M5 is still killed by `tests/test_entry_changes.lua`. The other three became cases, each arriving green and killing its mutant by assertion:
+
+- M8 survived because a held session followed again restores the same state: *already followed reads nothing again*.
+- M21 survived because the retry now makes `../a/b`'s directories: *keeps the base of an id too long to name a file*.
+- N8, a held failed-write session never written again: *that could not be kept, followed again, keeps its base once it can*.
+
+### The mutants, verbatim
+
+Each is its `perl -0pe` edit on `lua/aineo/changes/init.lua` (`$INIT`) or `kept.lua` (`$KEPT`), applied to a pristine copy, run on `tests/test_changes_sessions.lua`, and restored. M1, M6, M7 and M16 are the first pass's, rewritten for the moved code; R6 checks the object alone.
+
+```sh
+edit_for() {
+  case $1 in
+    M1) echo "$INIT|s/  if use_held_base\(\) or use_kept_base\(\) then\n    read_for_new_base\(\)\n    return\n  end\n  take_head\(\)/  if use_held_base() then\n    read_for_new_base()\n    return\n  end\n  use_kept_base()\n  take_head()/" ;;
+    M1b) echo "$INIT|s/      if not use_kept_base\(\) then/      if not use_kept_base() or true then/" ;;
+    M2) echo "$INIT|s/  session.saved = set_of\(kept_base.saved\)/  session.saved = {}/" ;;
+    M3) echo "$INIT|s/    session.looking_for_head = false\n    session.base = repository.head/    session.looking_for_head = false\n    session.base = session.base/" ;;
+    M4) echo "$INIT|s/        session.base = repository.head\n        keep\(\)/        keep()\n        session.base = repository.head/" ;;
+    M5) echo "$INIT|s/function M.begin_session\(settings\)\n  if session then\n    return\n  end/function M.begin_session(settings)/" ;;
+    M6) echo "$INIT|s/  session.keeps_followed = not unreadable\n    and \(not kept_base or kept_base.top == session.repository.top\)/  session.keeps_followed = true/" ;;
+    M7) echo "$INIT|s/    session.saved\[path\] = true\n    keep\(\)/    session.saved[path] = true/; s/      if session.watch then\n        session.watch.stop\(\)\n      end/      keep()\n      if session.watch then\n        session.watch.stop()\n      end/" ;;
+    M8) echo "$INIT|s/  if session.followed and session.followed.id == followed.id then\n    return\n  end\n//" ;;
+    M9) echo "$INIT|s/  if not \(kept_base and session.keeps_followed\) then\n    session.saved = \{\}\n/  if not (kept_base and session.keeps_followed) then\n/" ;;
+    M10) echo "$INIT|s/    followed = followed_before_beginning,\n//" ;;
+    M11) echo "$INIT|s/    local base = session.base\n    if not is_current_base\(base\) then\n      ended\(\)\n      return\n    end\n/    local base = session.base\n/" ;;
+    M12) echo "$INIT|s/    read\(base, function\(failure, answer\)\n      if not is_current_base\(base\) then\n        ended\(\)\n        return\n      end\n/    read(base, function(failure, answer)\n/" ;;
+    M13) echo "$INIT|s/  if not \(followed and session.keeps_followed\) or session.looking_for_head then/  if not (followed and session.keeps_followed) then/" ;;
+    M14) echo "$INIT|s/  if failure and not session.keeping_failure_told then/  if failure then/" ;;
+    M15) echo "$INIT|s/    if session.followed ~= followed then\n      return\n    end\n//" ;;
+    M16) echo "$INIT|s/  session.looking_for_head, session.head_look_failed, session.keeping_failed = false, false, false\n/  session.keeping_failed = false\n/" ;;
+    M17) echo "$INIT|s/      session.files_failure, session.commits_failure = failure, failure\n//" ;;
+    M18) echo "$INIT|s/    take_head_again\(\)\n//" ;;
+    M19) echo "$INIT|s/  session.head_look_failed = false\n  read_for_new_base\(\)\n  git.find_repository/  session.head_look_failed = false\n  git.find_repository/" ;;
+    M20) echo "$KEPT|s/local OWNER_ONLY = tonumber\('600', 8\)/local OWNER_ONLY = tonumber('644', 8)/" ;;
+    M21) echo "$KEPT|s/vim.fn.sha256\(id\) .. '.json'/id .. '.json'/" ;;
+    M22) echo "$KEPT|s/  if\n    type\(decoded\) ~= 'table'/  if\n    false and type(decoded) ~= 'table'/" ;;
+    M22b) echo "$KEPT|s/  return decoded and as_kept_base\(value\) or nil/  return decoded and value or nil/" ;;
+    N1) echo "$INIT|s/  git.find_repository\(session.repository.top, function\(failure, repository\)/  git.find_repository(session.settings.directory, function(failure, repository)/" ;;
+    N2) echo "$INIT|s/  if use_held_base\(\) or use_kept_base\(\) then/  if use_kept_base() then/" ;;
+    N3) echo "$INIT|s/  if session.keeps_followed == false or session.keeping_failed then/  if session.keeps_followed == false then/" ;;
+    N4) echo "$KEPT|s/  while not made and tries_left > 0 do/  while false do/" ;;
+    N5) echo "$INIT|s/  session.keeps_followed = not unreadable\n    and/  session.keeps_followed = true\n    and/" ;;
+    N6) echo "$INIT|s/  merge_kept_saves\(kept.read_kept_base\(followed.state_directory, followed.id\)\)\n//" ;;
+    N7) echo "$INIT|s/  if not session.saved\[path\] then/  if true then/" ;;
+    N8) echo "$INIT|s/  session.keeps_followed = held.keeps/  session.keeps_followed = false/" ;;
+    R1) echo "$INIT|s/\{ top = session.repository.top, base = session.base, saved = saved \}/{ top = session.settings.directory, base = session.base, saved = saved }/" ;;
+    R2) echo "$INIT|s/kept_base.top == session.repository.top\)/kept_base.top == session.settings.directory)/" ;;
+    R6) echo "$INIT|s/  session.base = kept_base.base\n  session.saved = set_of\(kept_base.saved\)/  if kept_base.base and vim.system({ 'git', 'cat-file', '-e', kept_base.base }, { cwd = session.repository.top }):wait().code ~= 0 then\n    session.saved = {}\n    return false\n  end\n  session.base = kept_base.base\n  session.saved = set_of(kept_base.saved)/" ;;
+    R8) echo "$KEPT|s/vim.fn.sha256\(id\) .. '.json'/id:gsub('[^%w%-]', '_') .. '.json'/" ;;
+    R19) echo "$INIT|s/(    and \(not kept_base or kept_base.top == session.repository.top\)\n)/\$1  if kept_base and not session.keeps_followed then\n    vim.notify('aineo: this session was kept for another repository', vim.log.levels.WARN)\n  end\n/" ;;
+    R24) echo "$INIT|s/    if session.followed ~= followed then\n      return\n    end/    if session.followed ~= followed then\n      session.base = repository.head\n      return\n    end/" ;;
+    *) echo "" ;;
+  esac
+}
+
+```
+
+### The final pass, on `3cb52d9`
+
+Every mutant above was run on `tests/test_changes_sessions.lua` (37 cases). Each was killed by assertion: no mutant log holds a `Lua:` error. M5 survives this file and is killed by `tests/test_entry_changes.lua` › *the session* › *outlives a restart of Claude Code*. The fails per mutant:
+
+| | | | | | | | |
+|---|---|---|---|---|---|---|---|
+| M1 13 | M1b 1 | M2 6 | M3 10 | M4 2 | M5 0 (entry: 1) | M6 5 | M7 8 |
+| M8 1 | M9 1 | M10 1 | M11 1 | M12 2 | M13 1 | M14 1 | M15 1 |
+| M16 1 | M17 2 | M18 1 | M19 3 | M20 1 | M21 1 | M22 3 | M22b 3 |
+| N1 2 | N2 3 | N3 2 | N4 1 | N5 1 | N6 1 | N7 1 | N8 1 |
+| R1 1 | R2 1 | R6 1 | R8 2 | R19 1 | R24 1 | | |
+
+### Verification of the round
+
+Each run below is on Neovim 0.12.5, on `3cb52d9`'s code, and each gave `Fails (0) and Notes (0)`:
+
+| File | Cases |
+|---|---|
+| `tests/test_changes_sessions.lua` | 37 (19 before the round) |
+| `tests/test_changes.lua` | 120 |
+| `tests/test_entry_changes.lua` | 12 |
+| `tests/test_doc.lua` | 44 |
+
+- `make lint` is clean.
+- The help merged with each stage-1 sibling (`git merge-tree`, no conflict) passes `tests/test_doc.lua` with 44 cases, `Fails (0)`:
+  - T35's head `83a5029` gives `85318c8`;
+  - T36's head `199910a` gives `491f93f`.
+- Since `85a57f9`, `dev` (`ac99e49`) holds only T40's vault notes, and merges with this head without conflict.
+- The pull request gives the whole suite's count on the pushed head.
+
 ## Task lines
 
-T37 — done in `feature/t37-changes-sessions` (wave 9, stage 1): `aineo.changes.follow_changes_session({ id, state_directory })` shows the pane for a Claude Code session — its base and saves kept per session id under `<state>/aineo/changes-sessions/` (one owner-only JSON file each, named by the id's SHA-256), read back, or `HEAD` then and no saves for a session not seen, kept from then on; held until `begin_session()` and its look have found the repository (T37-1); a record of another repository not used nor written over (A5); nothing read or kept while the look for `HEAD` runs, a list for the old base dropped; a failed write warned once; not called yet (T39 wires it); the help's two fences updated.
+T37 — done in `feature/t37-changes-sessions` (wave 9, stage 1): `aineo.changes.follow_changes_session({ id, state_directory })` shows the pane for a Claude Code session — its base and saves kept per session id under `<state>/aineo/changes-sessions/` (one owner-only JSON file each, named by the id's SHA-256), read back, or `HEAD` then and no saves for a session not seen, kept from then on; held until `begin_session()` and its look have found the repository (T37-1); a record of another repository not used nor written over (A5); nothing read or kept while the look for `HEAD` runs, a list for the old base dropped; a failed write warned once; not called yet (T39 wires it); the help's two fences updated. Fix round (PR #136's reviews, the orchestrator's rulings): `HEAD` looked for from the session's repository; a session not kept (A5, an unreadable record, a failed write) held for the editor's life; `mkdir()` retried; two editors' marks merged; the record written at each new mark.
 
 ## Open threads
 
 - **For T39:** call `begin_session()` and then `follow_changes_session({ id = <session id>, state_directory = kept_places().state_directory })` at every start and every switch; following the same id again is a no-op.
 - **For T38:** the interface this packet leaves is `begin_session()`, `follow_changes_session()`, `refresh_shown_pane()`, `pane_buffers()`; `list_read()` drops answers for another base, which T38's sections may reuse per worktree.
-- **M22 survives** (only the record's table check dropped): a kept file holding a bare JSON number would raise inside the follow. No case writes one; the shape check as a whole is pinned (M22b).
-- **A5** is the orchestrator's assumption, to report to the user.
+- **M22** survived the first pass; the fix round's case of a bare JSON value kills it (*Fix round*).
+- **A5** is the orchestrator's assumption, to report to the user, with the fix round's rulings (*Fix round*). The attack review's consequence goes with it: an unseen session first followed in an editor whose home holds another repository is kept for that repository, so every later editor in the session's own repository meets A5.
+- **Left open by the attack review:** a truncated record, which fails to decode, is replaced as nothing kept, though it may be another repository's.
+- **For the knowledge pass** (records review): `vim.fn.mkdir(…, 'p')` fails with E739 when another process makes a directory of the path first — a Learning; D19's "files the user saved from this editor" now spans editors on one session (D41); T38's fence says "a file you saved from this editor".
 
 ## Commits
 
