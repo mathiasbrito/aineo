@@ -68,6 +68,8 @@ local environment = nil
 ---@field pending boolean whether a change to its text has not been saved yet
 ---@field replacing? boolean whether the home is putting a draft into it, which is no change of the user's and is not taken in
 ---@field file? string the draft file its text is kept in until a follow's swap lands; nil: the file the home keeps (`kept_draft_file()`)
+---@field unreadable? string the draft file whose draft could not be read when a follow put the session's draft into it, which its saves never replace
+---@field unsaved_told? boolean whether the user was told, since that follow, that its text is not saved (`tell_text_not_saved()`)
 
 --- The buffers whose text is kept as the draft, each with its watch.
 ---@type table<integer, aineo.draft.Watch>
@@ -245,13 +247,16 @@ end
 
 --- Puts the kept draft into `buffer`, when there is one; tells the user
 --- once when it cannot be read, or cannot be put into `buffer`
---- (`put_draft()`), and raises nothing then.
+--- (`put_draft()`), and raises nothing then. A followed session's draft that
+--- cannot be read is never replaced by `buffer`'s saves (`watch.unreadable`).
 ---
 ---@param buffer integer
-local function restore_draft(buffer)
+---@param watch aineo.draft.Watch `buffer`'s
+local function restore_draft(buffer, watch)
   local read, draft = pcall(read_draft)
   if not read then
     warn_once('read', draft)
+    watch.unreadable = followed_session and kept_draft_file() or nil
     return
   end
   if not draft or draft == '' then
@@ -485,6 +490,30 @@ local function write_draft(file, text)
   end
 end
 
+--- Writes `buffer`'s text as the whole of the draft file it is kept in
+--- (`file_of()`), unless that file's draft could not be read when it was put
+--- into `buffer` (`watch.unreadable`): such a draft is never replaced, and
+--- an empty `buffer` then has nothing to keep.
+---
+--- Raises an error naming the file when the text cannot be written there,
+--- or is not, since the file's draft could not be read.
+---
+---@param buffer integer
+---@param watch aineo.draft.Watch
+local function write_kept_text(buffer, watch)
+  local file = file_of(watch)
+  if watch.unreadable ~= file then
+    write_draft(file, draft_of(buffer))
+  elseif not is_empty(buffer) then
+    error(
+      ("cannot keep Input's text in %s: the draft there could not be read, and is not replaced"):format(
+        file
+      ),
+      0
+    )
+  end
+end
+
 --- Saves `buffer`'s text as the draft of its file (`file_of()`) at once
 --- when `watch` says a change to it has not been saved yet, and returns
 --- whether nothing is left unsaved; a save that fails leaves the change
@@ -498,7 +527,7 @@ local function save_pending_change_now(buffer, watch)
   if not watch.pending then
     return true
   end
-  local saved, failure = pcall(write_draft, file_of(watch), draft_of(buffer))
+  local saved, failure = pcall(write_kept_text, buffer, watch)
   if saved then
     watch.pending = false
   end
@@ -530,6 +559,24 @@ local function save_pending_changes_before_quit()
   end
 end
 
+--- Tells the user, at the first change after the follow that put into
+--- `watch`'s buffer a session's draft that could not be read
+--- (`watch.unreadable`), that the buffer's text is not saved; tells
+--- nothing at the changes after it.
+---
+---@param watch aineo.draft.Watch
+local function tell_text_not_saved(watch)
+  if watch.unsaved_told then
+    return
+  end
+  watch.unsaved_told = true
+  warn(
+    ("aineo: Input's text is not saved while it follows this session: Input's draft in %s could not be read, and is not replaced"):format(
+      watch.unreadable
+    )
+  )
+end
+
 --- Takes in a change to `buffer`'s text: an emptied buffer empties the draft
 --- at once, and other text is saved `SAVE_DELAY_MS` later.
 ---
@@ -540,6 +587,10 @@ local function take_in_change(buffer, watch)
     return
   end
   watch.pending = true
+  if watch.unreadable == file_of(watch) then
+    tell_text_not_saved(watch)
+    return
+  end
   if is_empty(buffer) then
     save_pending_change(buffer, watch)
     return
@@ -569,8 +620,10 @@ local replacements_waiting = {}
 --- and the buffer then keeps its text and saves to that file, and no later
 --- follow puts a draft into it, for the editor's life. A text that cannot
 --- be saved is left in the buffer, still its file's, and told to the user
---- each time. Tells the user
---- once when the draft cannot be read, and empties `buffer` then, or when it
+--- each time. A draft that cannot be read is told to the user each time,
+--- and `buffer` emptied then; that file is never replaced by the buffer's
+--- saves (`write_kept_text()`), and the first change after it tells the
+--- user so (`tell_text_not_saved()`). Tells the user once when the draft
 --- cannot be put in for another reason (`warn_not_put()`); raises nothing.
 ---
 ---@param buffer integer
@@ -586,13 +639,15 @@ local function replace_with_kept_draft(buffer)
   end
   local read, draft = pcall(read_draft)
   if not read then
-    warn_once('read', draft)
+    warn('aineo: ' .. draft)
   end
   watch.replacing = true
   local put, refusal = put_draft(buffer, read and draft or '')
   watch.replacing = false
   if put then
     watch.file = nil
+    watch.unreadable = not read and kept_draft_file() or nil
+    watch.unsaved_told = nil
     return
   end
   if not tostring(refusal):find(TEXTLOCK_REFUSAL, 1, true) then
@@ -660,8 +715,10 @@ end
 ---
 --- A draft that cannot be read, put into `buffer`, or written, is told to
 --- the user as a warning, once per editor for reading and once for writing;
---- in Insert, Replace or Terminal mode, once that mode is left. Nothing is
---- raised: not here, not into the changes, not as Neovim quits.
+--- in Insert, Replace or Terminal mode, once that mode is left. A followed
+--- session's draft that cannot be read is never replaced by the buffer's
+--- saves (`restore_draft()`). Nothing is raised: not here, not into the
+--- changes, not as Neovim quits.
 ---
 ---@param buffer integer
 function M.keep_draft(buffer)
@@ -671,7 +728,7 @@ function M.keep_draft(buffer)
   local watch = { pending = false }
   kept[buffer] = watch
   if is_empty(buffer) then
-    restore_draft(buffer)
+    restore_draft(buffer, watch)
   end
   vim.api.nvim_buf_attach(buffer, false, {
     on_lines = function()
@@ -720,9 +777,10 @@ end
 --- not saved. Until it lands — at the editor's next `SafeState` when
 --- textlock refuses it — a buffer's changes are saved as its old file's
 --- draft. A buffer whose text cannot be saved keeps it, as its old file's
---- draft, and is told to the user each time. Following the session it
---- follows already changes nothing, the buffers' text, cursor and undo
---- included.
+--- draft, and is told to the user each time. A session's draft that
+--- cannot be read empties the buffers, and is never replaced by what is
+--- typed in them while they show it. Following the session it follows
+--- already changes nothing, the buffers' text, cursor and undo included.
 ---
 --- The first session the home follows in an editor takes the working
 --- directory's draft, when it has none (`move_directory_draft_once()`).
@@ -732,9 +790,11 @@ end
 ---
 --- Raises an error naming `session_id` when it is not a string, and nothing
 --- else; a draft that cannot be read or put in, saved, or moved is told to
---- the user as a warning, once per editor for reading or putting in, once
---- for saving and once for moving, but a text kept in a buffer, which is
---- told each time.
+--- the user as a warning, once per editor for putting in, once for saving
+--- and once for moving, but a draft that cannot be read and a text kept in
+--- a buffer, which are told each time, and a text that is not saved since
+--- its session's draft cannot be read, told at the first change after each
+--- follow.
 ---
 ---@param session_id string
 function M.follow_draft_session(session_id)
