@@ -760,6 +760,30 @@ T["the working directory's records"]['where hard links are refused']['that canno
   })
 end
 
+T["the working directory's records"]['that are a symbolic link stay one at the first session followed, and the next report reaches the file it leads to'] = function()
+  local state = fixture.directory('report-sessions-symbolic-link')
+  local target = vim.fs.joinpath(state, 'kept-elsewhere.jsonl')
+  plant_records(target, { 'Directory' })
+  local directory = directory_records_file(state)
+  vim.fn.mkdir(vim.fs.dirname(directory), 'p')
+  assert(vim.uv.fs_symlink(target, directory))
+  start_editor(state)
+  child.lua(KEEP_WARNINGS)
+
+  follow('session-a')
+  receive('After the follow')
+
+  eq({
+    warnings = child.lua_get('_G.warnings'),
+    session = vim.fn.getftype(session_records_file(state, 'session-a')),
+    target = summaries_in(target),
+  }, {
+    warnings = {},
+    session = 'link',
+    target = { 'Directory', 'After the follow' },
+  })
+end
+
 T['a session told before the environment'] = MiniTest.new_set()
 
 T['a session told before the environment']["is held: once it comes, the directory's records move to it and the next report is kept there"] = function()
