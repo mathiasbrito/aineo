@@ -999,20 +999,23 @@ T["the session's name"]['is Claude Code once Claude Code has been hung up, its t
   eq({ named, session_name_and_folder(buffer).name }, { 'aineo-title-probe', 'Claude Code' })
 end
 
---- The expression, run in a Neovim, that says whether the job `...` has
---- ended and its exit been handled.
-local JOB_ENDED = 'vim.fn.jobwait({ ... }, 0)[1] ~= -1'
+--- The code, run in a Neovim, that wipes the terminal buffer `...` and waits
+--- at most 5 s for its job, the second argument, to end and its exit to be
+--- handled, and gives whether each step raised nothing.
+local WIPE_AND_WAIT = [[
+  local buffer, job = ...
+  local wiped = pcall(vim.cmd.bwipeout, { tostring(buffer), bang = true })
+  local waited = pcall(vim.fn.jobwait, { job }, 5000)
+  return { wiped = wiped, waited = waited }
+]]
 
 T["the session's name"]['raises nothing as the terminal of a running Claude Code is wiped'] = function()
   local buffer = start_idle_session('name-wiped')
   local job = child.lua_get('vim.bo[...].channel', { buffer })
 
-  child.cmd('bwipeout! ' .. buffer)
-  vim.wait(claude.PATIENCE_MS, function()
-    return child.lua_get(JOB_ENDED, { job })
-  end, 20)
+  local raised_nothing = child.lua(WIPE_AND_WAIT, { buffer, job })
 
-  eq({ child.lua_get(JOB_ENDED, { job }), child.v.errmsg }, { true, '' })
+  eq({ raised_nothing, child.v.errmsg }, { { wiped = true, waited = true }, '' })
 end
 
 T["the session's folder"] = MiniTest.new_set()
