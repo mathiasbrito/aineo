@@ -392,3 +392,140 @@ P6, read-only (home written <home>):
   p17315 cwd <home>/Development/Personal/aineo   (its MCP server)
   p17492 cwd <home>/Development/Personal/aineo   (a Claude Code in a live editor)
   p17516 cwd <home>/Development/Personal/aineo   (its MCP server)
+
+Amendment — 2026-10-07: P7, for the claim that wins over the starting editor
+----------------------------------------------------------------------------
+
+Run by the agent that amended T40's plan the same day (Claude, Opus 5.5), after the user's
+answer "Claim wins (Recommended)" (the plan's *Packet T40* section quotes it): "Before each
+report, the report server checks for a claim on its session (about 1 ms) and delivers to the
+claiming Neovim, even when the starting editor still answers." Neovim 0.12.5 (Homebrew),
+macOS arm64, headless, in a Neovim isolated by the runner below, which starts it as aineo
+starts its MCP server (`--headless --clean --cmd 'set noloadplugins' -l`), under a scratch
+directory inside the agent's worktree, removed afterwards. The real `claude` never ran, and
+nothing under the user's `~/.claude` was read or written.
+
+P7  The claim check a report server makes before each report — read its own Claude Code
+    process's record (one small JSON file), list the running aineo Neovims (one small JSON
+    file each, in one folder under `stdpath('state')`), and pick the newest claim of the
+    report's session — took, warm (500 checks in a row, as in a server that has run a
+    while), a median of 0.07 ms with 1 Neovim listed, 0.09 ms with 2, 0.16 ms with 5,
+    0.27–0.28 ms with 10 and 1.19 ms with 50; its 95th percentile 0.10–0.39 ms up to 10
+    listed and 1.41–1.43 ms at 50; the slowest single check 3.3 ms, at 50. The first check
+    of a fresh process (cold) took 0.26–0.54 ms up to 10 listed and 1.5–1.6 ms at 50. Two
+    runs of each size, alike within noise. So the user's "about 1 ms" holds as an upper
+    bound for the lists a user has: a tenth to a third of a millisecond for one to ten
+    Neovims, about a millisecond at fifty. The check reads files only; trying the claimant
+    is a delivery, costed by P3 when the claimant is gone (well under a millisecond) and by
+    its answer when it is not.
+
+The runner (P7's):
+
+#!/bin/sh
+# Runs a probe as aineo runs its MCP server, in a Neovim isolated under this
+# directory: every XDG path but the runtime one, the log and CLAUDE_CONFIG_DIR
+# here, no user config, no shada, no plugins.
+here=$(cd "$(dirname "$0")" && pwd)
+home="$here/home"
+mkdir -p "$home"
+exec env -i PATH="/opt/homebrew/bin:/usr/bin:/bin" HOME="$home" TERM=xterm-256color TMPDIR="$TMPDIR" \
+  XDG_CONFIG_HOME="$home/config" XDG_DATA_HOME="$home/data" XDG_STATE_HOME="$home/state" \
+  XDG_CACHE_HOME="$home/cache" NVIM_LOG_FILE="$home/nvim.log" CLAUDE_CONFIG_DIR="$home/claude" \
+  PROBE_HERE="$here" \
+  nvim --headless --clean -i NONE --cmd 'set noloadplugins' -l "$@"
+
+p7-claim-check.lua, run as `./run.sh p7-claim-check.lua <listed>` for 1, 2, 5, 10 and 50,
+then again for each:
+
+-- P7: what the claim check costs a report server before each report: read its
+-- own Claude Code process's record (one small JSON file), then list the
+-- running aineo Neovims (one small JSON file each, in one folder of
+-- stdpath('state')) and pick the newest claim of the report's session. Run
+-- as aineo runs its MCP server (`--headless --clean --cmd 'set noloadplugins'
+-- -l`). The first check of a fresh process is timed alone (cold), then 500
+-- checks in a row (warm, as a server that has run a while), for 1, 2, 5, 10
+-- and 50 listed Neovims, a fifth of them claiming a session.
+local state = vim.fn.stdpath('state') .. '/aineo'
+local editors = state .. '/editors'
+local processes = state .. '/processes'
+local session = '11111111-1111-4111-8111-111111111111'
+local other = '22222222-2222-4222-8222-222222222222'
+local pid = vim.uv.os_getppid()
+
+local function json_file(path)
+  local lines = vim.fn.readfile(path)
+  return vim.json.decode(table.concat(lines, '\n'))
+end
+
+local function claim_check()
+  local record = json_file(('%s/%d.json'):format(processes, pid))
+  local wanted = record.session
+  local newest
+  for name in vim.fs.dir(editors) do
+    local entry = json_file(editors .. '/' .. name)
+    if entry.session == wanted and entry.claimed_at and (not newest or entry.claimed_at > newest.claimed_at) then
+      newest = entry
+    end
+  end
+  return newest
+end
+
+local function fill(count)
+  vim.fn.delete(state, 'rf')
+  vim.fn.mkdir(editors, 'p')
+  vim.fn.mkdir(processes, 'p')
+  vim.fn.writefile(
+    { vim.json.encode({ pid = pid, session = session, token = 'x', cwd = '/w' }) },
+    ('%s/%d.json'):format(processes, pid)
+  )
+  for i = 1, count do
+    local claims = i % 5 == 0 or i == count
+    vim.fn.writefile({
+      vim.json.encode({
+        address = ('/tmp/nvim.%d.0'):format(10000 + i),
+        cwd = '/w',
+        session = (i % 2 == 0 or i == count) and session or other,
+        own = not claims,
+        used_at = 1000 + i,
+        claimed_at = claims and (2000 + i) or nil,
+      }),
+    }, ('%s/%d.json'):format(editors, 10000 + i))
+  end
+end
+
+local count = tonumber(arg[1])
+fill(count)
+local start = vim.uv.hrtime()
+local found = claim_check()
+local cold = (vim.uv.hrtime() - start) / 1e6
+local times = {}
+for _ = 1, 500 do
+  local t = vim.uv.hrtime()
+  claim_check()
+  table.insert(times, (vim.uv.hrtime() - t) / 1e6)
+end
+table.sort(times)
+io.stdout:write(
+  ('%2d listed: cold %.3f ms; warm median %.3f ms, p95 %.3f ms, max %.3f ms; claimant %s\n'):format(
+    count,
+    cold,
+    times[250],
+    times[475],
+    times[500],
+    found and found.address or 'none'
+  )
+)
+vim.fn.delete(state, 'rf')
+
+Its output (the addresses are the probe's own, written in the entries, not Neovims'):
+
+ 1 listed: cold 0.259 ms; warm median 0.071 ms, p95 0.102 ms, max 0.195 ms; claimant /tmp/nvim.10001.0
+ 2 listed: cold 0.348 ms; warm median 0.095 ms, p95 0.143 ms, max 0.275 ms; claimant /tmp/nvim.10002.0
+ 5 listed: cold 0.356 ms; warm median 0.162 ms, p95 0.220 ms, max 0.407 ms; claimant /tmp/nvim.10005.0
+10 listed: cold 0.539 ms; warm median 0.273 ms, p95 0.332 ms, max 0.577 ms; claimant /tmp/nvim.10010.0
+50 listed: cold 1.566 ms; warm median 1.188 ms, p95 1.434 ms, max 3.303 ms; claimant /tmp/nvim.10050.0
+ 1 listed: cold 0.312 ms; warm median 0.073 ms, p95 0.115 ms, max 0.441 ms; claimant /tmp/nvim.10001.0
+ 2 listed: cold 0.360 ms; warm median 0.092 ms, p95 0.150 ms, max 0.547 ms; claimant /tmp/nvim.10002.0
+ 5 listed: cold 0.381 ms; warm median 0.163 ms, p95 0.225 ms, max 0.374 ms; claimant /tmp/nvim.10005.0
+10 listed: cold 0.509 ms; warm median 0.278 ms, p95 0.387 ms, max 1.383 ms; claimant /tmp/nvim.10010.0
+50 listed: cold 1.491 ms; warm median 1.185 ms, p95 1.410 ms, max 1.971 ms; claimant /tmp/nvim.10050.0
