@@ -303,7 +303,9 @@ Code 2.1.292 titles a session `✳ Claude Code`, and one started with
 `--name {name}` `✳ {name}`. It reads `Claude Code` until Claude Code sets
 a title, while the title is empty, and once Claude Code has exited,
 however it ended; the status line follows each new title by itself. The
-name and the folder are drawn as written, whatever characters they hold.
+name and the folder are drawn as written, a `%`, digits alone, a leading
+comma or space among them; a control character shows in caret notation,
+as `^[` for Escape, and a name longer than about 4 KB loses its start.
 The folder is the directory Claude Code started in, whatever `:cd` and
 `\o` do while it runs; a Claude Code `\o` starts once the last has exited
 starts in the working directory then, and the folder is that one. The

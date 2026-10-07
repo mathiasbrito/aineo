@@ -464,9 +464,11 @@ local SESSION_STATUSLINE = "%!v:lua.require'aineo.claude'.session_statusline_for
 --- when it sets an empty one, and whenever it sets none at all — and once
 --- Claude Code has exited, however it ended; every status line is drawn
 --- again when the name changes. The folder is the directory of the start,
---- written from the home directory. Both draw as written, whatever
---- characters they hold: the status line is an expression Neovim evaluates
---- as it draws (`session_statusline_format()`).
+--- written from the home directory. Both draw as written, a `%`, digits
+--- alone, a leading comma or space among them, since the status line is an
+--- expression Neovim evaluates as it draws (`session_statusline_format()`);
+--- a control character draws in caret notation, as `^[` for Escape, and a
+--- name longer than about 4 KB loses its start.
 ---
 ---@return string
 function M.session_statusline()
