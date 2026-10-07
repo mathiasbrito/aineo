@@ -105,91 +105,131 @@ local function is_object(value)
   return type(value) == 'table' and not vim.islist(value)
 end
 
+--- The text of the file at `path` when it is a regular file, or a symbolic
+--- link to one; nil when it is not — a FIFO, a directory or a device, whose
+--- read could wait or never end — or cannot be read.
+---
+---@param path string
+---@return string?
+local function regular_file_text(path)
+  local stat = vim.uv.fs_stat(path)
+  if not stat or stat.type ~= 'file' then
+    return nil
+  end
+  local file = io.open(path, 'r')
+  if not file then
+    return nil
+  end
+  local text = file:read('*a')
+  file:close()
+  return text
+end
+
 --- The settings `value`, a `--settings` value, gives: the JSON object it
 --- holds when, its blanks trimmed, it begins with `{` and ends with `}` —
 --- how Claude Code 2.1.292 tells inline settings from a file — else the JSON
---- object in the file it names, a relative name taken from `cwd`, Claude
---- Code's working directory. Returns nil and why when it gives no JSON
---- object.
+--- object in the regular file it names (`regular_file_text()`), a relative
+--- name taken from `cwd`, the working directory Claude Code starts in, which
+--- is where Claude Code 2.1.292 resolves one from. Returns nil when it gives
+--- no JSON object.
 ---
 ---@param value string?
 ---@param cwd string
 ---@return table? settings
----@return string? failure
 local function read_settings(value, cwd)
   if not value then
-    return nil, 'it has no value'
+    return nil
   end
   local text = vim.trim(value)
   if not (vim.startswith(text, '{') and vim.endswith(text, '}')) then
-    local path = vim.startswith(value, '/') and value or vim.fs.joinpath(cwd, value)
-    local file, failure = io.open(path, 'r')
-    if not file then
-      return nil, failure
-    end
-    text = file:read('*a')
-    file:close()
+    text = regular_file_text(vim.startswith(value, '/') and value or vim.fs.joinpath(cwd, value))
+  end
+  if not text then
+    return nil
   end
   local decoded, settings = pcall(vim.json.decode, text)
-  if not decoded then
-    return nil, settings
-  end
-  if not is_object(settings) then
-    return nil, 'it holds no JSON object'
+  if not decoded or not is_object(settings) then
+    return nil
   end
   return settings
 end
 
 --- Adds each of `entries`, by event, after the hook entries `settings`
---- already gives that event, in place. Returns `settings`, or nil and why
---- when its `hooks` is not an object, or an event's entries in it not a
---- list, so that nothing can be added to them.
+--- already gives that event, in place. Returns `settings`, or nil when its
+--- `hooks` is not an object, or an event's entries in it not a list, so
+--- that nothing can be added to them.
 ---
 ---@param settings table settings decoded from JSON
 ---@param entries table<string, table> `hook_entries()`
 ---@return table? settings
----@return string? failure
 local function add_hook_entries(settings, entries)
   settings.hooks = settings.hooks or vim.empty_dict()
   if not is_object(settings.hooks) then
-    return nil, 'its hooks are not an object'
+    return nil
   end
   for event, entry in pairs(entries) do
     local given = settings.hooks[event] or {}
     if type(given) ~= 'table' or not vim.islist(given) then
-      return nil, ('its %s hooks are not a list'):format(event)
+      return nil
     end
     settings.hooks[event] = vim.list_extend(given, { entry })
   end
   return settings
 end
 
+--- The mode of a file only its owner can read and write, 0600.
+local PRIVATE_FILE_MODE = tonumber('600', 8)
+
+--- Writes `text` to a new file in Neovim's own temporary directory
+--- (`tempname()`), which Neovim removes when it exits, that only the user
+--- can read and write (`PRIVATE_FILE_MODE`). Returns its path, or nil when
+--- it cannot write it whole.
+---
+---@param text string
+---@return string? path
+local function write_private_file(text)
+  local path = vim.fn.tempname()
+  local file = vim.uv.fs_open(path, 'wx', PRIVATE_FILE_MODE)
+  if not file then
+    return nil
+  end
+  local written = vim.uv.fs_write(file, text)
+  vim.uv.fs_close(file)
+  if written ~= #text then
+    return nil
+  end
+  return path
+end
+
 --- What aineo gives Claude Code as `--settings` for `settings`, with
---- `entries`, its own hook entries, in them: the settings `settings.cmd`
---- gives (`given_settings()`, `read_settings()`) with `entries` added after
---- its own hooks (`add_hook_entries()`), and `cmd` without the words that
---- gave them; or `entries` alone, and `cmd` whole, when it gives none. When
---- `settings.cmd` gives settings that cannot be read or added to, `cmd` is
---- `settings.cmd` whole, `settings` is nil, and `unread` says why.
+--- `entries`, its own hook entries, in them, as `value`: the settings
+--- `settings.cmd` gives (`given_settings()`, `read_settings()`) with
+--- `entries` added after its own hooks (`add_hook_entries()`), written to a
+--- file only the user can read (`write_private_file()`), which `value` names,
+--- and `cmd` without the words that gave them; or `entries` alone, as JSON,
+--- and `cmd` whole, when it gives none. When `settings.cmd` gives settings
+--- that cannot be read or added to, or the file cannot be written, `cmd` is
+--- `settings.cmd` whole, `value` is nil, and `unread` is true.
 ---
 ---@param settings aineo.claude.Settings
 ---@param entries table<string, table>
----@return { cmd: string[], settings: table?, unread: string? }
+---@return { cmd: string[], value: string?, unread: boolean? }
 local function settings_with_hooks(settings, entries)
   local given = given_settings(settings.cmd)
   if not given then
-    return { cmd = settings.cmd, settings = add_hook_entries(vim.empty_dict(), entries) }
+    return {
+      cmd = settings.cmd,
+      value = vim.json.encode(add_hook_entries(vim.empty_dict(), entries)),
+    }
   end
-  local read, failure = read_settings(given.value, settings.cwd)
-  local merged, refusal
-  if read then
-    merged, refusal = add_hook_entries(read, entries)
-  end
-  if not merged then
-    return { cmd = settings.cmd, unread = failure or refusal }
+  local read = read_settings(given.value, settings.cwd)
+  local merged = read and add_hook_entries(read, entries)
+  local file = merged and write_private_file(vim.json.encode(merged))
+  if not file then
+    return { cmd = settings.cmd, unread = true }
   end
   local cmd = vim.list_slice(settings.cmd, 1, given.first - 1)
-  return { cmd = vim.list_extend(cmd, settings.cmd, given.last + 1), settings = merged }
+  return { cmd = vim.list_extend(cmd, settings.cmd, given.last + 1), value = file }
 end
 
 --- `server` as `--mcp-config` needs it written: its `env` an object even when
@@ -207,17 +247,17 @@ end
 
 --- The arguments that hand Claude Code the MCP servers of `settings` as one
 --- JSON object — `{}` when there are none — the instructions appended to its
---- system prompt as they are, `claude_settings` as one JSON object when it
---- is given, and the tools it may use without asking, each one word after
+--- system prompt as they are, `settings_value` as `--settings` when it is
+--- given, and the tools it may use without asking, each one word after
 --- `--allowedTools`. Claude Code's CLI reference gives that flag several
 --- words (its example names three tools), as it gives `--mcp-config` several
 --- space-separated values, so that flag comes last, where no word of aineo's
 --- own follows it, and `--mcp-config` is followed by a flag.
 ---
 ---@param settings aineo.claude.Settings
----@param claude_settings table?
+---@param settings_value string?
 ---@return string[]
-local function claude_arguments(settings, claude_settings)
+local function claude_arguments(settings, settings_value)
   local servers = vim.empty_dict()
   for name, server in pairs(settings.mcp_servers) do
     servers[name] = encodable_server(server)
@@ -228,8 +268,8 @@ local function claude_arguments(settings, claude_settings)
     '--append-system-prompt',
     settings.instructions,
   }
-  if claude_settings then
-    vim.list_extend(words, { SETTINGS_FLAG, vim.json.encode(claude_settings) })
+  if settings_value then
+    vim.list_extend(words, { SETTINGS_FLAG, settings_value })
   end
   table.insert(words, '--allowedTools')
   return vim.list_extend(words, settings.allowed_tools)
@@ -239,21 +279,24 @@ end
 --- `session_words` pick: `settings.cmd`, then `session_words`, then aineo's
 --- arguments (`claude_arguments()`), among them `--settings` with a
 --- `SessionStart` and a `SessionEnd` hook that tell the editor of each,
---- naming `start_token`. A `--settings` of `settings.cmd`, in a file or
---- inline, gets aineo's hooks after its own and is passed as that one
---- `--settings`, nothing of it dropped (`settings_with_hooks()`). When it
---- cannot be read or added to, `settings.cmd` is passed whole and aineo
---- passes no `--settings`, and `unread` says why.
+--- naming `start_token`: inline when `settings.cmd` gives no `--settings`.
+--- A `--settings` of `settings.cmd`, in a file or inline, gets aineo's hooks
+--- after its own, nothing of it dropped, and is written to a new file only
+--- the user can read, in Neovim's temporary directory, which that one
+--- `--settings` names, so that nothing of it is on the command line
+--- (`settings_with_hooks()`). When it cannot be read or added to, or that
+--- file cannot be written, `settings.cmd` is passed whole, aineo passes no
+--- `--settings`, and `unread` is true.
 ---
 ---@param settings aineo.claude.Settings
 ---@param session_words string[]
 ---@param start_token string the token that tells this start's hooks from another's
 ---@return string[] command
----@return string? unread
+---@return boolean unread
 function M.claude_command(settings, session_words, start_token)
   local given = settings_with_hooks(settings, hook_entries(settings, start_token))
   local command = vim.list_extend(vim.list_slice(given.cmd), session_words)
-  return vim.list_extend(command, claude_arguments(settings, given.settings)), given.unread
+  return vim.list_extend(command, claude_arguments(settings, given.value)), given.unread == true
 end
 
 return M

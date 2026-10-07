@@ -105,6 +105,20 @@ T['a bare interactive start']['with a command that is not executable tells the u
   eq(entry_editor.mode(editor), { mode = 'n', blocking = false })
 end
 
+T['a bare interactive start']['with settings in claude.cmd it cannot read tells the user without a prompt at 80 columns'] = function()
+  local fake = claude_session.fake('entry-autostart-unread-settings', 'ready')
+  local cmd = claude_session.fake_command({ '--settings', 'aineo-no-such-settings.json' })
+
+  local editor = launch_editor(fake, {
+    settings = { claude = { cmd = cmd } },
+    columns = 80,
+    lines = 24,
+  })
+
+  eq(entry_editor.wait_for_screen(editor, "claude.cmd's --settings"), true)
+  eq(entry_editor.mode(editor), { mode = 'n', blocking = false })
+end
+
 T['a bare interactive start']['starts no Claude when setup() turns autostart off over vim.g.aineo'] = function()
   local fake = claude_session.fake('entry-autostart-off-by-setup', 'ready')
 

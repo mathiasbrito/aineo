@@ -49,6 +49,14 @@ local function settings_given(argv)
   return given
 end
 
+--- The settings in the file at `path`, decoded.
+---
+---@param path string
+---@return table
+local function settings_in_file(path)
+  return vim.json.decode(table.concat(vim.fn.readfile(path), '\n'))
+end
+
 --- The shape of aineo's own hooks in its `--settings` (`shape_of()`): a
 --- `SessionStart` and a `SessionEnd` command hook, with no matcher.
 local AINEO_HOOKS_SHAPE = {
@@ -56,9 +64,15 @@ local AINEO_HOOKS_SHAPE = {
   SessionEnd = { { hooks = { { type = 'command', command = 'command', timeout = 5 } } } },
 }
 
---- How aineo's warning begins when it cannot add its hooks to a
---- `--settings` of `claude.cmd`.
-local UNREAD_SETTINGS_WARNING = "aineo: cannot read claude.cmd's --settings"
+--- What aineo tells the user when it cannot add its hooks to a `--settings`
+--- of `claude.cmd`, as `NOTE_NOTIFICATIONS` keeps it: one line of 60
+--- characters, which fits an 80-column screen at startup.
+local UNREAD_SETTINGS_WARNINGS = {
+  {
+    message = "aineo: claude.cmd's --settings unread; switches not followed",
+    level = vim.log.levels.WARN,
+  },
+}
 
 --- The Lua, run in a child, that keeps every notification from then on in
 --- `_G.notified`, as `{ message, level }`, rather than showing it.
@@ -95,9 +109,10 @@ local RAISED_WARNING = 'aineo: on_session_switched failed: a callback that raise
 --- The hook relay, as the checkout holds it.
 local HOOK_RELAY = vim.fs.joinpath(vim.fn.getcwd(), 'lua', 'aineo', 'claude', 'hook_relay.lua')
 
---- A session id of the form Claude Code gives, and another.
+--- Session ids of the form Claude Code gives.
 local CLAUDE_SESSION_ID = 'c9d64d84-5f2b-4c3e-9a1d-2b7e8f0a6c31'
 local OTHER_SESSION_ID = '063cc43c-8e1a-4d2f-b5c7-91d0e3a4f852'
+local THIRD_SESSION_ID = '7d0e3a4f-8e1a-4d2f-b5c7-91d0e3a4f853'
 
 --- The Lua, run in a Neovim, that stands in for the claude home where the
 --- hook relay's notification lands: it keeps the event, the session, the
@@ -263,6 +278,23 @@ local function hold_first_connection(address, target, delay_ms)
   end))
 end
 
+--- An RPC channel to the Neovim that listens on the local socket
+--- `address`, once it accepts a connection, waiting for that at most
+--- `claude.PATIENCE_MS`: its socket file is there from before it listens,
+--- when a connection is refused. Raises the last refusal when the wait runs
+--- out.
+---
+---@param address string
+---@return integer channel
+local function connect_when_listening(address)
+  local connected, channel
+  vim.wait(claude.PATIENCE_MS, function()
+    connected, channel = pcall(vim.fn.sockconnect, 'pipe', address, { rpc = true })
+    return connected
+  end, 20)
+  return connected and channel or error(channel, 0)
+end
+
 --- The id the fake's first start was started on, as a new session.
 ---
 ---@param fake { record: string }
@@ -374,11 +406,184 @@ T['start_session()']['adds its hooks to the settings that claude.cmd gives, and 
 
   local given = settings_given(claude.arguments(fake))
   eq({ #given, child.lua_get('_G.notified') }, { 1, {} })
-  eq(shape_of(vim.json.decode(given[1])), {
+  eq(shape_of(settings_in_file(given[1])), {
     permissions = { deny = { 'Bash(rm:*)' } },
     env = {},
     hooks = AINEO_HOOKS_SHAPE,
   })
+end
+
+T['start_session()']['leaves no word of the --settings of claude.cmd before the session’s'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        'in a file',
+        function(file)
+          return { '--settings', file }
+        end,
+      },
+      {
+        'as JSON',
+        function()
+          return { '--settings', USER_SETTINGS }
+        end,
+      },
+      {
+        'as JSON joined to the flag',
+        function()
+          return { '--settings=' .. USER_SETTINGS }
+        end,
+      },
+    },
+  })
+
+T['start_session()']['leaves no word of the --settings of claude.cmd before the session’s']['given'] = function(
+  _,
+  words_for
+)
+  local file = vim.fs.joinpath(fixture.directory('switch-settings-words'), 'settings.json')
+  vim.fn.writefile({ USER_SETTINGS }, file)
+  local fake = claude.fake('switch-settings-words', 'exit')
+
+  claude.start(
+    child,
+    fake,
+    kept_in('switch-settings-words-state', { cmd = claude.fake_command(words_for(file)) })
+  )
+
+  eq(claude.arguments(fake)[1], '--session-id')
+end
+
+T['start_session()']['merges the last --settings of claude.cmd, the one Claude Code reads'] = function()
+  local fake = claude.fake('switch-settings-last', 'exit')
+  local cmd = claude.fake_command({
+    '--settings',
+    '{"env":{"FIRST":"1"}}',
+    '--settings',
+    '{"env":{"LAST":"1"}}',
+  })
+
+  claude.start(child, fake, kept_in('switch-settings-last-state', { cmd = cmd }))
+
+  local given = settings_given(claude.arguments(fake))
+  eq(settings_in_file(given[#given]).env, { LAST = '1' })
+end
+
+--- Settings of the user's own that hold a secret, and the secret.
+local SECRET = 'aineo-secret-1234'
+local SETTINGS_WITH_SECRET = '{"env":{"API_TOKEN":"' .. SECRET .. '"}}'
+
+T['start_session()']['puts nothing of the settings claude.cmd gives on Claude Code’s command line'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        'in a file',
+        function(file)
+          return { '--settings', file }
+        end,
+      },
+      {
+        'as JSON',
+        function()
+          return { '--settings', SETTINGS_WITH_SECRET }
+        end,
+      },
+    },
+  })
+
+T['start_session()']['puts nothing of the settings claude.cmd gives on Claude Code’s command line']['given'] = function(
+  _,
+  words_for
+)
+  local file = vim.fs.joinpath(fixture.directory('switch-secret-settings'), 'settings.json')
+  vim.fn.writefile({ SETTINGS_WITH_SECRET }, file)
+  local fake = claude.fake('switch-secret-settings', 'exit')
+
+  claude.start(
+    child,
+    fake,
+    kept_in('switch-secret-settings-state', { cmd = claude.fake_command(words_for(file)) })
+  )
+
+  eq(table.concat(claude.arguments(fake), '\n'):find(SECRET, 1, true), nil)
+end
+
+T['start_session()']['passes the settings it merges in a file only the user can read and write'] = function()
+  local fake = claude.fake('switch-private-settings', 'exit')
+
+  claude.start(
+    child,
+    fake,
+    kept_in(
+      'switch-private-settings-state',
+      { cmd = claude.fake_command({ '--settings', USER_SETTINGS }) }
+    )
+  )
+
+  eq(vim.fn.getfperm(settings_given(claude.arguments(fake))[1]), 'rw-------')
+end
+
+T['start_session()']['leaves no file of the settings it merges once Neovim has exited'] = function()
+  local fake = claude.fake('switch-settings-removed', 'exit')
+  claude.start(
+    child,
+    fake,
+    kept_in(
+      'switch-settings-removed-state',
+      { cmd = claude.fake_command({ '--settings', USER_SETTINGS }) }
+    )
+  )
+  local file = settings_given(claude.arguments(fake))[1]
+  local before = vim.fn.filereadable(file)
+
+  child.stop()
+
+  vim.wait(claude.PATIENCE_MS, function()
+    return vim.fn.filereadable(file) == 0
+  end, 20)
+  eq({ before, vim.fn.filereadable(file) }, { 1, 0 })
+end
+
+T['start_session()']['passes the settings of claude.cmd as they are, without its hooks, and says so once, when it cannot write the settings it merges'] = function()
+  local temporary = child.lua([[
+    local directory = vim.fs.dirname(vim.fn.tempname())
+    vim.uv.fs_chmod(directory, tonumber('500', 8))
+    return directory
+  ]])
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(temporary, tonumber('700', 8))
+  end)
+  local fake = claude.fake('switch-settings-unwritable', 'exit')
+  child.lua(NOTE_NOTIFICATIONS)
+
+  claude.start_silently(
+    child,
+    fake,
+    kept_in(
+      'switch-settings-unwritable-state',
+      { cmd = claude.fake_command({ '--settings', USER_SETTINGS }) }
+    )
+  )
+
+  eq(
+    { settings_given(claude.arguments(fake)), child.lua_get('_G.notified') },
+    { { USER_SETTINGS }, UNREAD_SETTINGS_WARNINGS }
+  )
+end
+
+T['start_session()']['starts Claude Code with a settings file of 1.5 MB in claude.cmd'] = function()
+  local file = vim.fs.joinpath(fixture.directory('switch-large-settings'), 'settings.json')
+  local rules = string.rep('"Bash(echo aineo:*)",', 75000) .. '"Bash(true)"'
+  vim.fn.writefile({ '{"permissions":{"allow":[' .. rules .. ']}}' }, file)
+  local fake = claude.fake('switch-large-settings', 'exit')
+
+  claude.start(
+    child,
+    fake,
+    kept_in('switch-large-settings-state', { cmd = claude.fake_command({ '--settings', file }) })
+  )
+
+  eq(#claude.wait_for_starts(fake, 1), 1)
 end
 
 T['start_session()']['keeps the user’s own session hooks beside its own'] = function()
@@ -400,7 +605,7 @@ T['start_session()']['keeps the user’s own session hooks beside its own'] = fu
 
   local given = settings_given(claude.arguments(fake))
   eq({ #given, child.lua_get('_G.notified') }, { 1, {} })
-  eq(shape_of(vim.json.decode(given[1])).hooks, {
+  eq(shape_of(settings_in_file(given[1])).hooks, {
     SessionStart = {
       { matcher = 'startup', hooks = { { type = 'command', command = 'command' } } },
       AINEO_HOOKS_SHAPE.SessionStart[1],
@@ -417,6 +622,8 @@ T['start_session()']['passes settings of claude.cmd it cannot read as they are, 
       { 'JSON that does not parse', '{"permissions":}' },
       { 'hooks that are not an object', '{"hooks":[]}' },
       { 'an event whose hooks are not a list', '{"hooks":{"SessionEnd":{}}}' },
+      { 'a directory', '.' },
+      { 'a device', '/dev/null' },
     },
   })
 
@@ -432,11 +639,39 @@ T['start_session()']['passes settings of claude.cmd it cannot read as they are, 
 
   claude.start(child, fake, kept_in('switch-unread-settings-state', { cmd = cmd, cwd = directory }))
 
-  eq(settings_given(claude.arguments(fake)), { value })
-  local notified = child.lua_get('_G.notified')
-  eq(#notified, 1)
-  eq(notified[1].level, vim.log.levels.WARN)
-  eq(vim.startswith(notified[1].message, UNREAD_SETTINGS_WARNING), true)
+  eq(
+    { settings_given(claude.arguments(fake)), child.lua_get('_G.notified') },
+    { { value }, UNREAD_SETTINGS_WARNINGS }
+  )
+end
+
+T['start_session()']['passes a FIFO named as the settings of claude.cmd as it is, unread, and says so once'] = function()
+  local fifo = vim.fs.joinpath(fixture.directory('switch-settings-fifo'), 'settings.json')
+  vim.system({ 'mkfifo', fifo }):wait()
+  local fake = claude.fake('switch-settings-fifo', 'exit')
+  child.lua(NOTE_NOTIFICATIONS)
+
+  child.lua_notify(
+    [[
+      local helper, environment, overrides = dofile(...), select(2, ...)
+      for name, value in pairs(environment) do
+        vim.env[name] = value
+      end
+      require('aineo.claude').start_session(helper.stand_in_settings(overrides))
+    ]],
+    {
+      'tests/helpers/claude_session.lua',
+      fake.environment,
+      kept_in('switch-settings-fifo-state', { cmd = claude.fake_command({ '--settings', fifo }) }),
+    }
+  )
+  local started = #claude.wait_for_starts(fake, 1)
+  vim.system({ 'sh', '-c', 'exec : > "$1"', 'sh', fifo }):wait(1000)
+
+  eq(
+    { started, settings_given(claude.arguments(fake)), child.lua_get('_G.notified') },
+    { 1, { fifo }, UNREAD_SETTINGS_WARNINGS }
+  )
 end
 
 T['start_session()']['puts --settings right before --allowedTools'] = MiniTest.new_set({
@@ -668,10 +903,7 @@ T['the hook relay']['tells an editor held at a hit-enter prompt, once the prompt
   MiniTest.finally(function()
     child.lua('vim.fn.chansend(..., "\\27:qa!\\r"); vim.fn.jobwait({ ... }, 5000)', { job })
   end)
-  vim.wait(claude.PATIENCE_MS, function()
-    return vim.uv.fs_stat(address) ~= nil
-  end, 20)
-  local editor = vim.fn.sockconnect('pipe', address, { rpc = true })
+  local editor = connect_when_listening(address)
   vim.rpcrequest(editor, 'nvim_exec_lua', NOTE_SESSION_EVENTS, {})
   vim.fn.chanclose(editor)
   child.lua([[vim.fn.chansend(..., ':echo "a\\nb"\r')]], { job })
@@ -834,6 +1066,49 @@ T['a session switch']['is not made by a SessionStart of the session followed aft
   })
 end
 
+T['a session switch']['is not made by a SessionStart alone after a resume of the session followed'] = function()
+  local fake = claude.fake('switch-same-resumed', 'ready')
+  claude.start_noting_switches(child, fake, kept_in('switch-same-resumed-state'))
+  local started_on = first_session_id(fake)
+  switch_by_hooks(
+    child,
+    fake,
+    1,
+    { from = started_on, to = started_on, source = 'resume', reason = 'resume' }
+  )
+
+  claude.run_session_hook(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', OTHER_SESSION_ID, 'fork')
+  )
+  claude.wait_for_deliveries(child)
+
+  eq(
+    { child.lua_get('_G.session_switches'), claude.followed_session_id(child) },
+    { {}, started_on }
+  )
+end
+
+T['a session switch']['is not made by a SessionStart alone after a resume of the session followed whose SessionStart reached the editor first'] = function()
+  local fake = claude.fake('switch-same-resumed-reversed', 'ready')
+  claude.start_noting_switches(child, fake, kept_in('switch-same-resumed-reversed-state'))
+  local started_on = first_session_id(fake)
+
+  receive_in_order(child, {
+    { 'SessionStart', started_on, 'resume', '1', 2000 },
+    { 'SessionEnd', started_on, 'resume', '1', 1000 },
+    { 'SessionStart', OTHER_SESSION_ID, 'fork', '1', 3000 },
+  })
+
+  eq(
+    { child.lua_get('_G.session_switches'), claude.followed_session_id(child) },
+    { {}, started_on }
+  )
+end
+
 T['a session switch']['is not made by a SessionStart of another session with no SessionEnd before it'] = function()
   local fake = claude.fake('switch-no-end', 'ready')
   claude.start_noting_switches(child, fake, kept_in('switch-no-end-state'))
@@ -923,6 +1198,108 @@ T['a session switch']['is not made by a SessionStart whose hook ran before the S
   eq(
     { child.lua_get('_G.session_switches'), claude.followed_session_id(child) },
     { {}, started_on }
+  )
+end
+
+T['a session switch']['ends on the last session of two switches whose hooks reach the editor out of order'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        'their SessionStarts first',
+        function(started_on)
+          return {
+            { 'SessionStart', OTHER_SESSION_ID, 'clear', '1', 2000 },
+            { 'SessionStart', THIRD_SESSION_ID, 'clear', '1', 4000 },
+            { 'SessionEnd', started_on, 'clear', '1', 1000 },
+            { 'SessionEnd', OTHER_SESSION_ID, 'clear', '1', 3000 },
+          }
+        end,
+      },
+      {
+        'the second SessionEnd before the first SessionStart',
+        function(started_on)
+          return {
+            { 'SessionEnd', started_on, 'clear', '1', 1000 },
+            { 'SessionEnd', OTHER_SESSION_ID, 'clear', '1', 3000 },
+            { 'SessionStart', OTHER_SESSION_ID, 'clear', '1', 2000 },
+            { 'SessionStart', THIRD_SESSION_ID, 'clear', '1', 4000 },
+          }
+        end,
+      },
+      {
+        'every hook in the reverse of the order it ran',
+        function(started_on)
+          return {
+            { 'SessionStart', THIRD_SESSION_ID, 'clear', '1', 4000 },
+            { 'SessionEnd', OTHER_SESSION_ID, 'clear', '1', 3000 },
+            { 'SessionStart', OTHER_SESSION_ID, 'clear', '1', 2000 },
+            { 'SessionEnd', started_on, 'clear', '1', 1000 },
+          }
+        end,
+      },
+    },
+  })
+
+T['a session switch']['ends on the last session of two switches whose hooks reach the editor out of order']['with'] = function(
+  _,
+  hooks_for
+)
+  local fake = claude.fake('switch-two-out-of-order', 'ready')
+  claude.start_noting_switches(child, fake, kept_in('switch-two-out-of-order-state'))
+  local started_on = first_session_id(fake)
+
+  receive_in_order(child, hooks_for(started_on))
+
+  eq({ child.lua_get('_G.session_switches'), claude.followed_session_id(child) }, {
+    {
+      { id = OTHER_SESSION_ID, source = 'clear', left = started_on, reason = 'clear' },
+      { id = THIRD_SESSION_ID, source = 'clear', left = OTHER_SESSION_ID, reason = 'clear' },
+    },
+    THIRD_SESSION_ID,
+  })
+end
+
+T['a session switch']['pairs hooks by the order they reach the editor when one does not tell when it ran'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        'the SessionEnd first, a switch',
+        function(started_on)
+          return {
+            { 'SessionEnd', started_on, 'clear', '1', vim.NIL },
+            { 'SessionStart', OTHER_SESSION_ID, 'clear', '1', 2000 },
+          }
+        end,
+        { OTHER_SESSION_ID },
+      },
+      {
+        'the SessionStart first, none',
+        function(started_on)
+          return {
+            { 'SessionStart', OTHER_SESSION_ID, 'clear', '1', 2000 },
+            { 'SessionEnd', started_on, 'clear', '1', vim.NIL },
+          }
+        end,
+        {},
+      },
+    },
+  })
+
+T['a session switch']['pairs hooks by the order they reach the editor when one does not tell when it ran']['with'] = function(
+  _,
+  hooks_for,
+  switched_to
+)
+  local fake = claude.fake('switch-untimed', 'ready')
+  claude.start_noting_switches(child, fake, kept_in('switch-untimed-state'))
+
+  receive_in_order(child, hooks_for(first_session_id(fake)))
+
+  eq(
+    vim.tbl_map(function(switch)
+      return switch.id
+    end, child.lua_get('_G.session_switches')),
+    switched_to
   )
 end
 
@@ -1210,6 +1587,23 @@ T['a start in place of the session followed']['that a resume with no conversatio
       left = first_session_id(fake),
     },
   })
+end
+
+T['a start in place of the session followed']['that a resume with no conversation makes warns no more of settings that start warned of'] = function()
+  local fake = fake_keeping_conversations('switch-fallback-unread')
+  local cmd = claude.fake_command({ '--settings', 'aineo-no-such-settings.json' })
+  local settings = kept_in('switch-fallback-unread-state', { cmd = cmd })
+  local first = claude.start(child, fake, settings)
+  claude.wait_for_start(fake)
+  child.lua('vim.fn.jobstop(vim.bo[...].channel)', { first })
+  claude.wait_for_status(child, 'exited')
+  child.lua(NOTE_NOTIFICATIONS)
+
+  claude.start_again(child, settings)
+  claude.wait_for_starts(fake, 3)
+  claude.wait_for_status(child, 'ready')
+
+  eq(child.lua_get('_G.notified'), UNREAD_SETTINGS_WARNINGS)
 end
 
 T['a start in place of the session followed']['that a resume with no conversation makes is followed'] = function()

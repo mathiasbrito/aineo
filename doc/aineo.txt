@@ -642,12 +642,24 @@ claude.cmd		A list of at least one string. Default: `{ 'claude' }`
 			exits 1. A `--settings` in it, inline JSON or a file
 			(named from the directory Claude Code starts in), is
 			kept whole: aineo adds its session hooks after the
-			hooks it gives and passes it as its one `--settings`.
-			When aineo cannot read it, or add to its `hooks`, it
-			passes it as it is, Claude Code starts without
-			aineo's hooks, and aineo warns once: a session switch
-			inside Claude Code is then not followed. A wrapper
-			works: >lua
+			hooks it gives, writes the result to a file only you
+			can read and write, in Neovim's own temporary
+			directory, which Neovim removes when it exits, and
+			passes that file as its one `--settings`. Nothing of
+			your settings goes on Claude Code's command line.
+			aineo reads only a regular file, never a FIFO, a
+			directory or a device. When aineo cannot read your
+			settings, add to their `hooks` or write that file,
+			it passes your `--settings` as it is, Claude Code
+			starts without aineo's hooks, and aineo warns once:
+			a session switch inside Claude Code is then not
+			followed. A `--settings` that a wrapper script adds
+			itself is not among these words, so aineo cannot
+			see it: Claude Code 2.1.292 reads the last
+			`--settings` it is given, aineo's, and the script's
+			is overridden. Put it in `claude.cmd` instead.
+			Claude Code started through another program works,
+			its words all in the list: >lua
 			    vim.g.aineo = {
 			      claude = { cmd = { 'npx', '-y',
 			        '@anthropic-ai/claude-code' } },
@@ -733,7 +745,8 @@ aineo starts Claude Code with five additions of its own:
   Claude Code switches session (|aineo-claude-session|). Claude Code
   2.1.292 ran them beside a project's own hooks, not in their place.
   aineo puts nothing else in `--settings`, and adds them after the hooks
-  of a `--settings` in `claude.cmd` (|aineo-config-claude.cmd|);
+  of a `--settings` in `claude.cmd`, passing the two together in a file
+  only you can read (|aineo-config-claude.cmd|);
 - the report tool allowed without asking: `--allowedTools
   mcp__aineo__report`.
 The server and the hooks are given this editor's address, |v:servername|:
@@ -1031,14 +1044,16 @@ without that end, is not followed. A hook that cannot reach the editor
 tells it nothing; and once the end of the session aineo follows is lost,
 no later switch of that Claude Code is followed, until it starts again.
 Each hook starts a headless `nvim` and returns at once; that `nvim` tells
-the editor, waits for its answer, then exits (D36, D43): at once in an
-idle editor, and once you answer the prompt in an editor at a prompt.
+the editor, waits for its answer, then exits: at once in an idle editor,
+and once you answer the prompt in an editor at a prompt.
 
 The 80-column start ~
 At startup, a message longer than |v:echospace| — 68 columns on an 80-column
 screen — holds Neovim at a hit-enter prompt. aineo's line for a
 `claude.cmd` that is not executable fits for a command name of up to 29
-characters; a longer one, such as an absolute path, still prompts.
+characters; a longer one, such as an absolute path, still prompts. Its
+line for a `--settings` in `claude.cmd` that it cannot read fits; it says
+no more than that, not which file or why.
 
 Send and a dialog ~
 A permission dialog drawn in the few tens of milliseconds before aineo
