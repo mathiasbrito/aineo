@@ -40,7 +40,9 @@ local M = {}
 --- terminal once Neovim has seen its process end, the line numbers
 --- `M.toggle_claude_numbers()` last set in Claude's window, those it showed
 --- before it hid them, and the window and buffer those line numbers were
---- last shown for; and the diffs `M.show_diff()` showed, by buffer.
+--- last shown for; the status line Claude's window draws for Claude's
+--- terminal, the one handed last; and the diffs `M.show_diff()` showed, by
+--- buffer.
 local state = {
   ---@type table<aineo.layout.Role, integer>
   windows = {},
@@ -875,11 +877,13 @@ local function watch_windows()
   })
 end
 
---- Takes the buffers `arrangement` hands as the layout's own: Claude's
---- terminal, the Report and, when it hands them, the changes pane's.
+--- Takes what `arrangement` hands as the layout's own: Claude's terminal,
+--- the Report and, when it hands them, the changes pane's buffers and the
+--- status line of Claude's window; the changes pane's and the status line
+--- handed last are kept when it hands none.
 ---
 ---@param arrangement aineo.layout.Arrangement
-local function take_buffers(arrangement)
+local function take_arrangement(arrangement)
   state.buffers.claude = arrangement.claude
   state.buffers.report = arrangement.report
   if arrangement.changes then
@@ -1153,8 +1157,10 @@ end
 --- stay as they are. Claude's window draws, for Claude's terminal, the
 --- `claude_statusline` handed last, as `:setlocal` sets it, whenever that
 --- terminal shows there — opened, followed (`M.follow_claude_terminal()`)
---- or brought back by hand (`keep_claude_statusline()`); another buffer
---- shown there, and every other window, draw the user's own.
+--- or brought back by hand (`keep_claude_statusline()`); a window split
+--- from it, or any window Claude's terminal is shown in, draws it too, as
+--- window-local options go with a buffer; another buffer shown in those
+--- windows, and every other window, draw the user's own.
 ---
 --- While any of the three windows exists, opening again restores the layout
 --- instead, in the tab that holds it: it creates only the windows that were
@@ -1196,7 +1202,7 @@ end
 ---@param arrangement aineo.layout.Arrangement
 function M.open(arrangement)
   validate_arrangement(arrangement)
-  take_buffers(arrangement)
+  take_arrangement(arrangement)
   if has_any_window() then
     vim.api.nvim_set_current_tabpage(layout_tab())
     if not has_input() then

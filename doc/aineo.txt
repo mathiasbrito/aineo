@@ -296,24 +296,26 @@ makes every directory start a new session.
                                *b:aineo_session_name* *b:aineo_session_folder*
 Claude's window draws a status line of its own for Claude's terminal: the
 session's name, then the folder Claude Code started in, written from your
-home directory, as in `Fix the login bug — ~/projects/app`. The name is
-Claude Code's own for the session, as Claude Code writes it in its terminal
-title (`b:term_title`), without the status glyph before it, such as `✳`:
-Claude Code 2.1.292 titles a session started with `--name {name}` as
-`✳ {name}`. It reads `Claude Code` until Claude Code sets a title, while
-the title is empty, and once Claude Code has exited, since it clears its
-title as it exits; the status line follows each new title by itself. The
-folder is the directory Claude Code started in, whatever `:cd` and `\o` do
-while it runs; a Claude Code `\o` starts once the last has exited starts in
-the working directory then, and the folder is that one. The status line is
-set for Claude's terminal in Claude's window, as `:setlocal` sets it: your
-other windows, and another buffer shown in Claude's window, keep your own.
-It replaces the whole of Neovim's default status line there, the
-terminal's `term://` name, its ruler and its exit code with it; the
-terminal keeps its name, which `:ls` shows. For a status-line plugin, the
-name and the folder are kept, current, on Claude's terminal as
-`b:aineo_session_name` and `b:aineo_session_folder`. See
-|aineo-limits| for what can replace it.
+home directory, as in `Claude Code — ~/projects/app`. The name is Claude
+Code's own for the session, as Claude Code writes it in its terminal title
+(`b:term_title`), without the status glyph before it, such as `✳`: Claude
+Code 2.1.292 titles a session `✳ Claude Code`, and one started with
+`--name {name}` `✳ {name}`. It reads `Claude Code` until Claude Code sets
+a title, while the title is empty, and once Claude Code has exited,
+however it ended; the status line follows each new title by itself. The
+name and the folder are drawn as written, whatever characters they hold.
+The folder is the directory Claude Code started in, whatever `:cd` and
+`\o` do while it runs; a Claude Code `\o` starts once the last has exited
+starts in the working directory then, and the folder is that one. The
+status line is set for Claude's terminal as `:setlocal` sets it: Claude's
+window draws it, and so does a window split from it or any window you show
+Claude's terminal in; another buffer in those windows, and your other
+windows, keep your own. It replaces the whole of Neovim's default status
+line there, the terminal's `term://` name, its ruler and its exit code
+with it; the terminal keeps its name, which `:ls!` shows, since it is not
+a listed buffer. For a status-line plugin, the name and the folder are
+kept, current, on Claude's terminal as `b:aineo_session_name` and
+`b:aineo_session_folder`. See |aineo-limits| for what can replace it.
 
 aineo resumes the session it started, not one you switch to inside Claude
 Code (`/clear`, `/resume`), and ignores a conversation you ran in a plain
@@ -1023,13 +1025,15 @@ Claude's window name ~
   `b:aineo_session_folder` of Claude's terminal (|aineo-claude-session|).
 - With 'laststatus' set to 3, the one status line shows Claude's name and
   folder only while the cursor is in Claude's window.
-- With `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` set in the environment Neovim
-  started in, Claude Code sets no title, and Claude's window reads
+- With `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` set to `1` in the environment
+  Neovim started in, Claude Code sets no title, and Claude's window reads
   `Claude Code` for the whole session.
 - Not measured, and so not known to show: a title Claude Code generates
   from your first prompt, a name `/rename` gives, the title after
   `--resume`, and the glyph while Claude Code is busy. A glyph is left out
   when the title's first character is neither a letter nor a digit and a
-  space follows it.
+  space or nothing follows it: a title `✳` alone reads `Claude Code`.
+  Below U+0100 the letters are the ASCII and Latin-1 ones, `×` and `÷`
+  not among them, whatever 'iskeyword' holds.
 
  vim:tw=78:ts=8:ft=help:norl:
