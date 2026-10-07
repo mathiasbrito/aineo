@@ -66,6 +66,8 @@ local environment = nil
 --- What is known of the text of a buffer kept as the draft.
 ---@class aineo.draft.Watch
 ---@field pending boolean whether a change to its text has not been saved yet
+---@field replacing? boolean whether the home is putting a draft into it, which is no change of the user's and is not taken in
+---@field file? string the draft file its text is kept in until a follow's swap lands; nil: the file the home keeps (`kept_draft_file()`)
 
 --- The buffers whose text is kept as the draft, each with its watch.
 ---@type table<integer, aineo.draft.Watch>
@@ -150,25 +152,14 @@ local function lines_of(draft)
   return lines
 end
 
---- The kinds of failure the draft home has told the user of.
----@type table<'read'|'write'|'move', true>
-local warned = {}
-
---- Tells the user `failure`, an error the draft home raised, as a warning,
---- unless it has told them of a failure of the same `kind` already. In
---- Insert, Replace or Terminal mode the warning waits until that mode is
---- left, by whatever key leaves it — `<C-c>`, which fires no `InsertLeave`,
---- included: a message longer than the screen's last line prompts, and the
---- prompt would take the next key typed.
+--- Tells the user `message` as a warning. In Insert, Replace or Terminal
+--- mode the warning waits until that mode is left, by whatever key leaves
+--- it — `<C-c>`, which fires no `InsertLeave`, included: a message longer
+--- than the screen's last line prompts, and the prompt would take the next
+--- key typed.
 ---
----@param kind 'read'|'write'|'move'
----@param failure string
-local function warn_once(kind, failure)
-  if warned[kind] then
-    return
-  end
-  warned[kind] = true
-  local message = 'aineo: ' .. failure
+---@param message string
+local function warn(message)
   if vim.api.nvim_get_mode().mode:find('^[iRt]') then
     vim.api.nvim_create_autocmd('ModeChanged', {
       pattern = '*:[^iRt]*',
@@ -180,6 +171,24 @@ local function warn_once(kind, failure)
     return
   end
   vim.notify(message, vim.log.levels.WARN)
+end
+
+--- The kinds of failure the draft home has told the user of.
+---@type table<'read'|'write'|'move', true>
+local warned = {}
+
+--- Tells the user `failure`, an error the draft home raised, as a warning
+--- (`warn()`), unless it has told them of a failure of the same `kind`
+--- already.
+---
+---@param kind 'read'|'write'|'move'
+---@param failure string
+local function warn_once(kind, failure)
+  if warned[kind] then
+    return
+  end
+  warned[kind] = true
+  warn('aineo: ' .. failure)
 end
 
 --- The draft kept in the draft's file (`kept_draft_file()`), or nil when
@@ -258,47 +267,6 @@ end
 --- holds (`:h textlock`).
 local TEXTLOCK_REFUSAL = 'E565:'
 
---- The kept buffers waiting for the editor's next `SafeState` to be given
---- the kept draft (`replace_with_kept_draft()`).
----@type table<integer, true>
-local replacements_waiting = {}
-
---- Puts the kept draft into `buffer`, a kept buffer, in place of whatever it
---- holds, or empties it when none is kept (`put_draft()`). A change Neovim
---- refuses while textlock holds is made at the editor's next `SafeState`,
---- once whatever was refused meanwhile, with the draft kept then, while the
---- buffer is kept still. Tells the user once when the draft cannot be read,
---- and empties `buffer` then, or when it cannot be put in for another
---- reason (`warn_not_put()`); raises nothing.
----
----@param buffer integer
-local function replace_with_kept_draft(buffer)
-  if replacements_waiting[buffer] or not kept[buffer] then
-    return
-  end
-  local read, draft = pcall(read_draft)
-  if not read then
-    warn_once('read', draft)
-  end
-  local put, failure = put_draft(buffer, read and draft or '')
-  if put then
-    return
-  end
-  if not tostring(failure):find(TEXTLOCK_REFUSAL, 1, true) then
-    warn_not_put(failure)
-    return
-  end
-  replacements_waiting[buffer] = true
-  vim.api.nvim_create_autocmd('SafeState', {
-    once = true,
-    desc = "aineo: put the followed session's draft into Input once the editor allows it",
-    callback = function()
-      replacements_waiting[buffer] = nil
-      replace_with_kept_draft(buffer)
-    end,
-  })
-end
-
 --- Whether the home has tried to move the working directory's draft to the
 --- first session it followed (`move_directory_draft_once()`).
 local directory_draft_moved = false
@@ -306,8 +274,13 @@ local directory_draft_moved = false
 --- Moves the working directory's draft to the followed session the first
 --- time it is called, when the session has no draft and the directory has
 --- one: the directory's draft is then the session's, and its file is gone.
---- Neither is touched otherwise. Tells the user once when the draft could
---- not be moved (`warn_once()`), and raises nothing then.
+--- Neither is touched otherwise. The move links the session's file to the
+--- directory's and then removes the directory's; the link refuses an
+--- existing file at once, so another editor making the session's draft, or
+--- taking the directory's, meanwhile never has its file replaced, and is no
+--- failure. Tells the user once when the draft could not be moved, or was
+--- linked but cannot be removed from the directory's file
+--- (`warn_once()`), and raises nothing then.
 local function move_directory_draft_once()
   if directory_draft_moved then
     return
@@ -315,12 +288,18 @@ local function move_directory_draft_once()
   directory_draft_moved = true
   local from = draft_file(environment.state_directory, environment.working_directory)
   local to = kept_draft_file()
-  if vim.uv.fs_stat(to) or not vim.uv.fs_stat(from) then
+  local not_moved = "cannot move Input's draft in %s to %s: %s"
+  local linked, link_failure, code = vim.uv.fs_link(from, to)
+  if not linked then
+    if code ~= 'EEXIST' and code ~= 'ENOENT' then
+      warn_once('move', not_moved:format(from, to, link_failure))
+    end
     return
   end
-  local moved, failure = vim.uv.fs_rename(from, to)
-  if not moved then
-    warn_once('move', ("cannot move Input's draft in %s to %s: %s"):format(from, to, failure))
+  local removed, removal_failure = vim.uv.fs_unlink(from)
+  if not removed then
+    local why = 'it is in both, the first cannot be removed: ' .. removal_failure
+    warn_once('move', not_moved:format(from, to, why))
   end
 end
 
@@ -396,13 +375,23 @@ local function replace_file(files, file, text)
   end
 end
 
---- Writes `text` as the draft, making its directory when missing.
+--- The draft file `watch`'s buffer's text is kept in: the one a follow
+--- pinned it to until its swap lands, else the one the home keeps.
 ---
---- Raises an error naming the draft's file when it cannot be written.
+---@param watch aineo.draft.Watch
+---@return string
+local function file_of(watch)
+  return watch.file or kept_draft_file()
+end
+
+--- Writes `text` as the whole of the draft file `file`, making its
+--- directory when missing.
 ---
+--- Raises an error naming `file` when it cannot be written.
+---
+---@param file string
 ---@param text string
-local function write_draft(text)
-  local file = kept_draft_file()
+local function write_draft(file, text)
   local files = vim.tbl_extend('keep', environment.files or {}, FILES)
   local failure = make_directory_racing(files, vim.fs.dirname(file))
     or replace_file(files, file, text)
@@ -411,27 +400,48 @@ local function write_draft(text)
   end
 end
 
---- Writes `text` as the draft, and tells the user once when it cannot
---- (`warn_once()`); raises nothing.
+--- Writes `text` as the whole of the draft file `file`, and tells the user
+--- once when it cannot (`warn_once()`); raises nothing.
 ---
+---@param file string
 ---@param text string
-local function save(text)
-  local saved, failure = pcall(write_draft, text)
+local function save(file, text)
+  local saved, failure = pcall(write_draft, file, text)
   if not saved then
     warn_once('write', failure)
   end
 end
 
---- Saves `buffer`'s text as the draft when `watch` says a change to it has
---- not been saved yet.
+--- Saves `buffer`'s text as the draft of its file (`file_of()`) when
+--- `watch` says a change to it has not been saved yet.
 ---
 ---@param buffer integer
 ---@param watch aineo.draft.Watch
 local function save_pending_change(buffer, watch)
   if watch.pending then
     watch.pending = false
-    save(draft_of(buffer))
+    save(file_of(watch), draft_of(buffer))
   end
+end
+
+--- Saves `buffer`'s text as the draft of its file (`file_of()`) at once
+--- when `watch` says a change to it has not been saved yet, and returns
+--- whether nothing is left unsaved; a save that fails leaves the change
+--- pending, and tells nothing.
+---
+---@param buffer integer
+---@param watch aineo.draft.Watch
+---@return boolean saved
+---@return string? failure why the change could not be saved, naming the file
+local function save_pending_change_now(buffer, watch)
+  if not watch.pending then
+    return true
+  end
+  local saved, failure = pcall(write_draft, file_of(watch), draft_of(buffer))
+  if saved then
+    watch.pending = false
+  end
+  return saved, failure
 end
 
 --- Saves the text of every kept buffer that has a change not saved yet, as
@@ -441,7 +451,7 @@ end
 --- a hit-enter prompt.
 local function save_pending_changes_before_quit()
   for buffer, watch in pairs(kept) do
-    if watch.pending and pcall(write_draft, draft_of(buffer)) then
+    if watch.pending and pcall(write_draft, file_of(watch), draft_of(buffer)) then
       watch.pending = false
     end
   end
@@ -453,15 +463,75 @@ end
 ---@param buffer integer
 ---@param watch aineo.draft.Watch
 local function take_in_change(buffer, watch)
+  if watch.replacing then
+    return
+  end
   if is_empty(buffer) then
     watch.pending = false
-    save('')
+    save(file_of(watch), '')
     return
   end
   watch.pending = true
   vim.defer_fn(function()
     save_pending_change(buffer, watch)
   end, SAVE_DELAY_MS)
+end
+
+--- The kept buffers waiting for the editor's next `SafeState` to be given
+--- the kept draft (`replace_with_kept_draft()`).
+---@type table<integer, true>
+local replacements_waiting = {}
+
+--- Puts the kept draft into `buffer`, a kept buffer, in place of whatever it
+--- holds, or empties it when none is kept (`put_draft()`), once a change of
+--- its text not saved yet is saved to the file its text is kept in
+--- (`file_of()`); from then on the buffer's text is the kept draft's, and
+--- its saves go to the file the home keeps. The putting is no change the
+--- watch takes in, and is not saved.
+---
+--- A change Neovim refuses while textlock holds is made at the editor's
+--- next `SafeState`, once whatever was refused meanwhile, with the draft
+--- kept then, while the buffer is kept still; until it lands, the buffer's
+--- changes are its file's still. A text that cannot be saved is left in the
+--- buffer, still its file's, and told to the user each time. Tells the user
+--- once when the draft cannot be read, and empties `buffer` then, or when it
+--- cannot be put in for another reason (`warn_not_put()`); raises nothing.
+---
+---@param buffer integer
+local function replace_with_kept_draft(buffer)
+  local watch = kept[buffer]
+  if replacements_waiting[buffer] or not watch then
+    return
+  end
+  local saved, failure = save_pending_change_now(buffer, watch)
+  if not saved then
+    warn(("aineo: Input keeps its text, not the followed session's draft: %s"):format(failure))
+    return
+  end
+  local read, draft = pcall(read_draft)
+  if not read then
+    warn_once('read', draft)
+  end
+  watch.replacing = true
+  local put, refusal = put_draft(buffer, read and draft or '')
+  watch.replacing = false
+  if put then
+    watch.file = nil
+    return
+  end
+  if not tostring(refusal):find(TEXTLOCK_REFUSAL, 1, true) then
+    warn_not_put(refusal)
+    return
+  end
+  replacements_waiting[buffer] = true
+  vim.api.nvim_create_autocmd('SafeState', {
+    once = true,
+    desc = "aineo: put the followed session's draft into Input once the editor allows it",
+    callback = function()
+      replacements_waiting[buffer] = nil
+      replace_with_kept_draft(buffer)
+    end,
+  })
 end
 
 --- Sets where the draft is kept: until the home follows a Claude session
@@ -508,7 +578,8 @@ end
 --- or any error when the quit runs from Lua — skips both saves. A Neovim
 --- ended by a signal saves nothing then. Nothing else is written but a
 --- change not saved yet at a follow (`M.follow_draft_session()`), so a draft
---- another editor wrote since the last change here stays.
+--- another editor wrote since the last change here stays. Until a follow's
+--- draft is put in, the buffer's saves go to the file its text came from.
 ---
 --- A draft that cannot be read, put into `buffer`, or written, is told to
 --- the user as a warning, once per editor for reading and once for writing;
@@ -559,16 +630,22 @@ function M.keep_draft(buffer)
   end
 end
 
---- Follows the Claude session `session_id`, in this order: a change of a
---- kept buffer not saved yet is saved at once as the draft of what the home
---- kept until now — the session followed before, or the working directory;
---- the home keeps the draft in the session's file from then on,
+--- Follows the Claude session `session_id`, in this order: each kept
+--- buffer's text stays the draft of the file it is kept in until now — the
+--- session followed before, or the working directory — and a change of it
+--- not saved yet is saved there at once; the home keeps the draft in the
+--- session's file from then on,
 --- `<state_directory>/aineo/drafts/session-<SHA-256 of the id>.txt`; and
 --- the session's draft is put into every kept buffer in place of whatever it
 --- holds, or the buffer is emptied when the session has none
---- (`replace_with_kept_draft()`), as no change of the user's: no undo takes
---- it out. Following the session it follows already changes nothing, the
---- buffers' text, cursor and undo included.
+--- (`replace_with_kept_draft()`). The putting is no change of the user's:
+--- no undo takes it out, no undo reaches a change made before it, and it is
+--- not saved. Until it lands — at the editor's next `SafeState` when
+--- textlock refuses it — a buffer's changes are saved as its old file's
+--- draft. A buffer whose text cannot be saved keeps it, as its old file's
+--- draft, and is told to the user each time. Following the session it
+--- follows already changes nothing, the buffers' text, cursor and undo
+--- included.
 ---
 --- The first session the home follows in an editor takes the working
 --- directory's draft, when it has none (`move_directory_draft_once()`).
@@ -576,16 +653,23 @@ end
 --- environment, once given, moves the directory's draft to it, and
 --- `M.keep_draft()` restores its draft.
 ---
---- Raises nothing; a draft that cannot be read, put in, saved or moved is
---- told to the user as a warning, once per editor for each.
+--- Raises an error naming `session_id` when it is not a string, and nothing
+--- else; a draft that cannot be read or put in, saved, or moved is told to
+--- the user as a warning, once per editor for reading or putting in, once
+--- for saving and once for moving, but a text kept in a buffer, which is
+--- told each time.
 ---
 ---@param session_id string
 function M.follow_draft_session(session_id)
+  vim.validate('session_id', session_id, 'string')
   if session_id == followed_session then
     return
   end
   for buffer, watch in pairs(kept) do
-    save_pending_change(buffer, watch)
+    watch.file = file_of(watch)
+    -- Saved before the directory's draft moves, so it moves with this text;
+    -- a failure is told when replace_with_kept_draft() tries it again.
+    save_pending_change_now(buffer, watch)
   end
   followed_session = session_id
   if not environment then
