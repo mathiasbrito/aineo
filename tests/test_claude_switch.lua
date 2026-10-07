@@ -466,6 +466,29 @@ T['a session switch']['is not made by a SessionStart of the session followed'] =
   })
 end
 
+T['a session switch']['is not made by a SessionStart of the session followed after its own SessionEnd'] = function()
+  local fake = claude.fake('switch-same-after-end', 'ready')
+  claude.start_noting_switches(child, fake, kept_in('switch-same-after-end-state'))
+  local started_on = first_session_id(fake)
+
+  switch_by_hooks(
+    child,
+    fake,
+    1,
+    { from = started_on, to = started_on, source = 'resume', reason = 'resume' }
+  )
+  switch_by_hooks(
+    child,
+    fake,
+    1,
+    { from = started_on, to = OTHER_SESSION_ID, source = 'clear', reason = 'clear' }
+  )
+
+  eq(claude.wait_for_session_switches(child, 1), {
+    { id = OTHER_SESSION_ID, source = 'clear', left = started_on, reason = 'clear' },
+  })
+end
+
 T['a session switch']['is not made by a SessionStart of another session with no SessionEnd before it'] = function()
   local fake = claude.fake('switch-no-end', 'ready')
   claude.start_noting_switches(child, fake, kept_in('switch-no-end-state'))
