@@ -413,6 +413,7 @@ T['start_session()']['passes settings of claude.cmd it cannot read as they are, 
   MiniTest.new_set({
     parametrize = {
       { 'a file that does not exist', 'no-such-settings.json' },
+      { 'a file that holds no JSON object', 'list.json' },
       { 'JSON that does not parse', '{"permissions":}' },
       { 'hooks that are not an object', '{"hooks":[]}' },
       { 'an event whose hooks are not a list', '{"hooks":{"SessionEnd":{}}}' },
@@ -423,14 +424,13 @@ T['start_session()']['passes settings of claude.cmd it cannot read as they are, 
   _,
   value
 )
+  local directory = fixture.directory('switch-unread-settings')
+  vim.fn.writefile({ '["settings", "in a list"]' }, vim.fs.joinpath(directory, 'list.json'))
   local fake = claude.fake('switch-unread-settings', 'exit')
+  local cmd = claude.fake_command({ '--settings', value })
   child.lua(NOTE_NOTIFICATIONS)
 
-  claude.start(
-    child,
-    fake,
-    kept_in('switch-unread-settings-state', { cmd = claude.fake_command({ '--settings', value }) })
-  )
+  claude.start(child, fake, kept_in('switch-unread-settings-state', { cmd = cmd, cwd = directory }))
 
   eq(settings_given(claude.arguments(fake)), { value })
   local notified = child.lua_get('_G.notified')
