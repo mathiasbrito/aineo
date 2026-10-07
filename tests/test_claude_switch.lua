@@ -147,6 +147,20 @@ local function wait_for_hook_runs(fake, event, count)
   return runs
 end
 
+--- The source or reason of each `event` hook the fake has run, in order,
+--- once there are `count` of them, or when the wait runs out
+--- (`wait_for_hook_runs()`).
+---
+---@param fake { record: string }
+---@param event string
+---@param count integer
+---@return string[]
+local function wait_for_hook_causes(fake, event, count)
+  return vim.tbl_map(function(run)
+    return run.cause
+  end, wait_for_hook_runs(fake, event, count))
+end
+
 local child = MiniTest.new_child_neovim()
 
 local T = MiniTest.new_set({
@@ -675,7 +689,7 @@ T['through Claude Code’s keys']['an exit reaches nothing'] = function()
   claude.end_by_keys(child, fake, terminal)
   claude.wait_for_deliveries(child)
 
-  eq(wait_for_hook_runs(fake, 'SessionEnd', 1)[1].cause, 'prompt_input_exit')
+  eq(wait_for_hook_causes(fake, 'SessionEnd', 1), { 'prompt_input_exit' })
   eq(child.lua_get('_G.session_switches'), {})
 end
 
