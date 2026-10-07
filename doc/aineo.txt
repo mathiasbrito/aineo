@@ -338,15 +338,22 @@ working directory is the one of the first time the layout opened, for the
 editor's life.
 
 When aineo follows another session, a change not saved yet is first saved
-as the draft of the session it followed until then, and that session's
+as the draft of the session it followed until then, and the new session's
 draft then takes the place of whatever Input holds — or Input is emptied,
 for a session with no draft. The text that leaves Input is not lost: it
-comes back when aineo follows its session again. The swap is not a change
-of yours: `u` does not take it out. The first session aineo follows in an
-editor takes the working directory's draft, when it has none of its own; a
-directory's draft written after that is not shown again. A draft that
-cannot be moved so is told once as a warning, and the session keeps its
-own.
+comes back when aineo follows its session again. When it cannot be saved,
+Input keeps it, as that session's draft, and you are told so at each
+switch. Until the new draft is in Input — Neovim may hold the swap until
+it is done with what it is doing — what you change in Input is still the
+old session's. The swap is not a change of yours: `u` does not take it
+out, and no `u` reaches a change or a Send made before it. It is not
+saved either: a draft another Neovim keeps for that session stays as it
+left it. The first session aineo follows in an editor takes the working
+directory's draft, when it has none of its own. A directory's draft
+written after that is taken by the next editor that first follows a
+session with no draft of its own, and is not shown otherwise. A draft
+that cannot be moved so is told once as a warning, and the session keeps
+its own.
 
 The draft comes back into an empty Input: the first time the layout opens
 in this editor, and again once Input's text was dropped — `:bwipeout`,
@@ -864,12 +871,14 @@ a Claude session, the reports are the working directory's, in a file named
 by the directory's SHA-256, and are shown again when aineo opens in that
 directory. The first session aineo follows in an editor takes that file,
 when it has none of its own, and every report it held is that session's
-from then on; a directory's file written after that is not shown again. A
-file that cannot be moved so is told once as a warning, and the session
-keeps its own. The Report shows the newest 2 MiB of them; the file is cut
-back to its newest 2 MiB once it passes 4 MiB. The working directory is the
-one of the first time the layout opened, for the editor's life; each new
-Claude Code starts in the working directory of its own moment.
+from then on. A directory's file written after that is taken by the next
+editor that first follows a session with no file of its own, and is not
+shown otherwise. A file that cannot be moved so is told once as a warning,
+and the session keeps its own. The Report shows the newest 2 MiB of a
+session's reports; its file is cut back to its newest 2 MiB once it
+passes 4 MiB. The working directory is the one of the first time the
+layout opened, for the editor's life; each new Claude Code starts in the
+working directory of its own moment.
 
 ==============================================================================
 9. THE AUTOSTART                                             *aineo-autostart*
