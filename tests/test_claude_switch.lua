@@ -660,6 +660,23 @@ T['start_session()']['passes the settings of claude.cmd as they are, and says so
   )
 end
 
+T['start_session()']['leaves no part of the settings it merges when a write of them is cut short'] = function()
+  local file = large_settings_file('switch-short-write-left')
+  child.lua(LIMIT_FILE_SIZE)
+  local temporary = child.lua_get('vim.fs.dirname(vim.fn.tempname())')
+  local before = vim.fn.readdir(temporary)
+  local fake = claude.fake('switch-short-write-left', 'exit')
+  child.lua(NOTE_NOTIFICATIONS)
+
+  claude.start(
+    child,
+    fake,
+    kept_in('switch-short-write-left-state', { cmd = claude.fake_command({ '--settings', file }) })
+  )
+
+  eq({ before, vim.fn.readdir(temporary) }, { {}, {} })
+end
+
 T['start_session()']['merges the settings of a symbolic link to a regular file in claude.cmd'] = function()
   local directory = fixture.directory('switch-settings-link')
   local real = vim.fs.joinpath(directory, 'real.json')

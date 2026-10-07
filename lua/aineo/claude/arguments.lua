@@ -195,7 +195,7 @@ local PRIVATE_FILE_MODE = tonumber('600', 8)
 --- Writes `text` to a new file in Neovim's own temporary directory
 --- (`tempname()`), which Neovim removes when it exits, that only the user
 --- can read and write (`PRIVATE_FILE_MODE`). Returns its path, or nil when
---- it cannot write it whole.
+--- it cannot write it whole, removing what part of it it wrote.
 ---
 ---@param text string
 ---@return string? path
@@ -208,6 +208,7 @@ local function write_private_file(text)
   local written = vim.uv.fs_write(file, text)
   vim.uv.fs_close(file)
   if written ~= #text then
+    vim.uv.fs_unlink(path)
     return nil
   end
   return path
