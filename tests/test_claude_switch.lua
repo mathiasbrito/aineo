@@ -1309,6 +1309,22 @@ T['a session switch']['pairs hooks by the order they reach the editor when one d
   )
 end
 
+T['a session switch']['is not made by a SessionStart whose hook ran at the same moment as the SessionEnd'] = function()
+  local fake = claude.fake('switch-same-moment', 'ready')
+  claude.start_noting_switches(child, fake, kept_in('switch-same-moment-state'))
+  local started_on = first_session_id(fake)
+
+  receive_in_order(child, {
+    { 'SessionEnd', started_on, 'clear', '1', 1000 },
+    { 'SessionStart', OTHER_SESSION_ID, 'clear', '1', 1000 },
+  })
+
+  eq(
+    { child.lua_get('_G.session_switches'), claude.followed_session_id(child) },
+    { {}, started_on }
+  )
+end
+
 T['a session switch']['is followed when on_session_switched raises, which is told the user'] = function()
   local fake = claude.fake('switch-raising-hook', 'ready')
   child.lua('for name, value in pairs(...) do vim.env[name] = value end', { fake.environment })
