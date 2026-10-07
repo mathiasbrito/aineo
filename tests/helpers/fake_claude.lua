@@ -389,8 +389,24 @@ local function hook_input(event, session_id, cause)
   })
 end
 
+--- The text of the settings `value`, a `--settings` value, gives, as
+--- Claude Code 2.1.292 tells them apart: `value` itself when, its blanks
+--- trimmed, it begins with `{` and ends with `}`, else the text of the file
+--- it names.
+---
+---@param value string
+---@return string
+local function settings_text(value)
+  local trimmed = vim.trim(value)
+  if vim.startswith(trimmed, '{') and vim.endswith(trimmed, '}') then
+    return value
+  end
+  return table.concat(vim.fn.readfile(value), '\n')
+end
+
 --- The command hooks the `--settings` among the fake's arguments gives for
---- `event`, in order; none without `--settings`.
+--- `event`, inline or in a file (`settings_text()`), in order; none without
+--- `--settings`.
 ---
 ---@param event string
 ---@return { command: string, timeout: number? }[]
@@ -400,7 +416,7 @@ local function configured_hooks(event)
     return {}
   end
   local hooks = {}
-  for _, entry in ipairs(vim.json.decode(given).hooks[event] or {}) do
+  for _, entry in ipairs(vim.json.decode(settings_text(given)).hooks[event] or {}) do
     vim.list_extend(hooks, entry.hooks or {})
   end
   return hooks
