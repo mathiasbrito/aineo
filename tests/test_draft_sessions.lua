@@ -1020,6 +1020,32 @@ T['a follow refused while textlock holds']["followed twice, puts the last sessio
   })
 end
 
+T['a follow refused while textlock holds']['keeps an edit made while the first follow waits with the draft it moved'] = function()
+  local state = fixture.directory('draft-sessions-first-follow-window')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  keep_new_buffer(state)
+  begin_hold('vim.fn.getcharstr()', 'A and more<Esc>')
+  follow('session-a')
+  local waiting = child.lua_get(RETRIES)
+  end_hold('q')
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+  vim.wait(SAVE_DELAY_AND_MARGIN_MS)
+
+  eq({
+    waiting = waiting,
+    shown = input_lines(),
+    session = read_text(session_draft_file(state, 'session-a')),
+    directory = read_text(directory_draft_file(state)),
+  }, {
+    waiting = 1,
+    shown = { 'From the directory and more' },
+    session = 'From the directory and more\n',
+    directory = nil,
+  })
+end
+
 T['a follow refused for another reason'] = MiniTest.new_set()
 
 T['a follow refused for another reason']['is told once, and not tried again'] = function()
