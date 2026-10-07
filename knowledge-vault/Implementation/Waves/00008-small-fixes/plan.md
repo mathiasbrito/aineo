@@ -1,13 +1,14 @@
 ---
 wave: 00008
-status: claimed
+status: landed
 rolling: false
 planned_by: the orchestrator's planning agent (Claude, Opus 5.5) for Mathias Santos de Brito — host Macbook-Mathias
 planned_at: 2026-10-06 23:04 CEST
 base: 9b8707f
 claimed_by: Macbook-Mathias (platform UUID prefix CF989BF4), session 55110cd0-9e62-4330-a618-b45ff2fce2aa
 claimed_at: 2026-10-07 CEST
-landed_at:
+landed_at: 2026-10-07 05:36 CEST
+pull_requests: "#127, #128, #129"
 ---
 
 # Wave 8 — small fixes
@@ -244,4 +245,129 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 **Amended 2026-10-06, before dispatch.** Each brief carries a section *Amendment — 2026-10-06: the user's answers and the orchestrator's assumptions*. Every correction of the brief review was made, as the review words it, in the briefs' bodies and in this plan: T32 3.1–3.5, T33 1.1–1.14, T34 2.1–2.5, the wave's 4.1 and 4.2. T33-6's measurement is `evidence/t33-real-claude-title.txt`. The `ai/` pull request for finding 4.1 is `ai/d30-small-fix-suite`.
 
 ## Landed
+
+Wave 8 was not rolling: its three packets were dispatched together, and it lands with this knowledge pass. Every time below is GitHub's for a pull request, or the first or last entry of an agent's transcript, in CEST. The retrospective, [[Sessions/2026-10-07 — Wave 8 retrospective]], holds the timeline and each agent's cost.
+
+- **Before dispatch.** The plan merged in PR #123 on 2026-10-07 at 00:03 CEST (`5583c61`, `cb26c0d` on `dev`), amended with the user's answers and the brief review's corrections. The `ai/` pull request for the brief review's finding 4.1, which names D30 in the root `CLAUDE.md` and the implementer's charter, merged as PR #125 (`6a75772`). The claim merged as PR #126 (`685a00e`). T33-6 was measured by the orchestrator on 2026-10-06, with the user's leave, before dispatch (`evidence/t33-real-claude-title.txt`). The three packets were dispatched at 00:04, in one message.
+- **T34 — PR #128, a small fix**, merged by rebase on 2026-10-06 (23:14 UTC; 2026-10-07 01:14 CEST), the first of the wave, as `be90050` … `cabe3a3` (6 commits). The tree of `dev` `cabe3a3` is the tree the orchestrator verified, the PR's head `a21f466` (`git diff --stat a21f466 cabe3a3` prints nothing). Session note: [[Sessions/2026-10-07 — T34 Report layout]].
+  - **The packet** (`neovim-lua-developer`). Each details line renders as an item, `      - text`. Claude's own `- `, `* `, `+ ` or `• ` gives way to aineo's, and an empty, blank or marker-only line renders `""` (T34-1 (a), T34-2 (a), A9, A10). The Report's buffer takes the `'formatlistpat'` `^\(\d\d:\d\d \|      - \)`. A `BufWinEnter` of its own gives each window showing it `'breakindentopt'` `list:-1`, as `:setlocal` does, so a wrapped header continues under the `[` and an item under its text. The link, path, `gx` and double-click pins moved by the two bytes of `- `.
+    - `tests/test_report_buffer.lua` went from 67 to 97 cases: 5 tests (15 cases) seen red, 11 (16) arrived green with their killers;
+    - 16 mutants killed by assertion; 2a, 2b and 13 only after the packet's second commit pinned what they had survived;
+    - the eight files of its boundary `Fails (0)`; no whole suite (D30);
+    - its help merged cleanly with T32's: `test_doc.lua` on the merged tree, 44 cases, `Fails (0)`.
+  - **The guarantee and records review**, by one reviewer for both (`neovim-lua-developer`, A17): merge after one fix. It found three:
+    - no test showed the Report as the layout shows it, in a window opened with `nvim_open_win(…, false)` and never entered, which fires `BufWinEnter` but not `BufEnter`. `'BufWinEnter'` → `'BufEnter'` (r4) and the option set through `bufwinid()` (r7) survived every file, and r4 brought the user's complaint back in the real layout (finding 1);
+    - `'breakindentopt'` keeps Neovim's `min:20` unless the value names `min:`. With the file column open, an 80-column screen gives a 26-column Report, where a wrapped item continued at column 7, under its `-`; a 64-column screen lost the header's indent too (finding 2, the measured consequence of A11 as first recorded);
+    - *aineo-layout*'s new clause claimed "under its text" whatever the user's settings (finding 3).
+
+    Refuted: the indents under `'number'`, `'linebreak'` off, a `'showbreak'`, multibyte text and a second window; the option on any other window or buffer; the items' edge rows; the links' and paths' bytes; the PR's counts. 19 mutants, 17 killed by the PR's files.
+  - **A11 revised**, the orchestrator's assumption under the user's instruction of 2026-10-06, on finding 2: `'breakindentopt'` `list:-1,min:10`. The orchestrator's correction brief said this holds the hanging indents down to 20 columns and asked the help to say "below 20 columns". The correction measured that they hold down to 18 (17 → 7/8, 16 → 7/7), and the help says 18.
+  - **The bounded correction**, by a fresh `neovim-lua-developer`:
+    - the review's two cases, seen red under r4 and r7;
+    - a 26-column item case, seen red under `min:20`, and its header twin, which arrived green, since under `min:20` the header's text there is exactly 20 columns wide;
+    - the 24-column pin of the first A11, rewritten as a 16-column one;
+    - finding 3's wording.
+
+    97 → 101 cases; 11 mutants killed by assertion. Its report noted that the plan's mutants 4 and 9 edit `'list:-1'`, which no longer occurs with its closing quote, so they run on the new value.
+  - **The orchestrator's verification** of `a21f466`, on 0.12.5:
+    - the eight files, each `Fails (0)`: `test_report_buffer` 101, `test_report_links` 83, `test_report_paths` 90, `test_report_colours` 64, `test_report` 55, `test_mcp_delivery` 25, `test_entry_panes` 86, `test_doc` 44;
+    - lint clean;
+    - r4, r7 and `min20` (the shipped `list:-1` again) killed by assertion.
+
+    No whole suite (D30).
+- **T32 — PR #127, a small fix**, merged by rebase on 2026-10-06 (23:19 UTC; 2026-10-07 01:19 CEST), after T34, as `f7744b9`, `8723423`, `b6230c7`. Its files on `dev` `b6230c7` hold what the orchestrator verified at the head `6f0b886`: `git diff --stat 6f0b886 b6230c7` names only T34's eight files, and its `doc/aineo.txt` lines are T34's hunks. Session note: [[Sessions/2026-10-07 — T32 Changes colours]].
+  - **The packet** (`neovim-lua-developer`). `lua/aineo/changes/colours.lua` holds eleven groups of aineo's own. Each page of the pane carries its colours, placed after its text is written and cleared with it:
+    - a file's letter and path in the group of its kind (`Added`, `Changed`, `Removed`), and a saved file's `*` in `AineoChangesSaved` (`WarningMsg`);
+    - a commit's id in `AineoChangesCommitId` (`Identifier`), and its subject in an empty group (A2);
+    - lines that list nothing in `AineoChangesNote` (`Comment`), failures in `AineoChangesFailure` (`DiagnosticWarn`).
+
+    The help names each group. 8 tests seen red, 13 (16 cases) arrived green with their killers. 25 mutants killed by assertion; M18, which crashed every case, was replaced by M18b. Four files `Fails (0)`; no whole suite (D30).
+  - **The guarantee and records review**, by one reviewer for both (A17): merge after one fix.
+    - Three failure lines had no colour test. R20–R22, which colour them as notes, survived `tests/test_changes.lua` whole (finding 1).
+    - A files line's span covers the space between the letter and the path (finding 2): a reading the orchestrator settled as A18.
+    - Findings 3–7, records: a docstring broken mid-sentence; three docstrings silent on which lines are notes; the task line's "every group"; the dimmed-window case's unexplained first read; three mutants given by description.
+
+    47 mutants, 44 killed by the PR's tests; the three survivors die by finding 1's cases. Refuted: the colours on screen under three colour schemes; a user's colours through `:colorscheme` and a refresh; the help's first-default-link exception; all three textlock holds; an empty subject and a multibyte rename.
+  - **The bounded correction**, by a fresh `neovim-lua-developer`: finding 1's three cases, arriving green, each killed by R20, R21 or R22 by assertion; A18 in one sentence of the help; findings 3–7. 117 → 120 cases.
+  - **The orchestrator's verification** of `6f0b886`, on 0.12.5:
+    - `tests/test_changes.lua` 120, `tests/test_entry_changes.lua` 12, `tests/test_entry_panes.lua` 86 and `tests/test_doc.lua` 44, each `Fails (0)`;
+    - lint clean;
+    - three kind mutants killed by assertion: added linked to `Changed`, deleted to `Added`, renamed shown as modified;
+    - the help's merge with T34's checked by `test_doc.lua` on the merged `dev`.
+
+    No whole suite (D30).
+- **T33 — PR #129, a regular packet** (T33-5 (a)), merged by rebase on 2026-10-07 (03:24 UTC; 05:24 CEST), the last of the wave, as `cca919a` … `f98bd9d` (8 commits). The tree of `dev` `f98bd9d` is the tree of the PR's last head, `4025019` (`git diff --stat 4025019 f98bd9d` prints nothing). Session note: [[Sessions/2026-10-07 — T33 Claude window name]].
+  - **The packet** (`neovim-claude-code-integrator`):
+    - `lua/aineo/claude/session_name.lua` keeps `b:aineo_session_name` and `b:aineo_session_folder` on each terminal Claude Code is launched in. The name follows `b:term_title` through a dictionary watcher, which sees the empty title that fires no `TermRequest`;
+    - the layout keeps the status line the composition root hands it on Claude's window, where D27 keeps the numbers;
+    - the help gains a paragraph and a *LIMITS* subsection;
+    - T32 and T34 merged while it ran, so it rebased onto `dev` `b6230c7` in place of the brief's `git merge-tree`, and ran the whole suite there: 1904 cases, `Fails (0)`;
+    - 36 new cases. Its report said 17 seen red and 19 arrived green; the records review corrected that to 14 and 22;
+    - 23 mutants. It measured its own extra edit, `vim.wo[w][0]` → `vim.wo[w]`, as equivalent and labelled it the plan's mutant 6;
+    - it found that the brief's mini.test screenshot cannot fail when the redraw is missing, since a child with no user interface redraws on `:redraw` anyway, and pinned the redraw in an editor with a user interface.
+  - **Reviews** on Opus, in one message: attack by `neovim-claude-code-reviewer`, test integrity by `neovim-lua-reviewer`, records by `reviewer`.
+    - **Attack.** A `%{}` status-line item turned a name of digits alone into a number (`0042` → `42`, `99999999999` → `1215752191`, twenty digits → nothing) and dropped a leading comma or space (1, medium). A Claude Code killed or hung up kept its last name after the exit, against A5 (2). The glyph rule read the current buffer's `'iskeyword'` below U+0100, and counted `×` as a letter (3). The help's "your other windows … keep your own" is false for a window showing Claude's terminal (4). Refuted: OSC 0 and 2, control bytes, a 70 000-byte title, splits, tabs, `:only`, a wipe, the redirect, the folder against `:lcd` and `~`, the watcher's references, the redraw's cost.
+    - **Test integrity.** The `%` case's "nothing raises" could not see a raise (8r survived). The glyph rule's letter half and space half were pinned by no row (G1, G2). Five rows could not fail for an ignored title (W0, U0). The 13 rows added 72 s to `tests/test_claude.lua`, stopping fakes they did not need. The drawn-row cases depended on the length of the checkout's path. The terminal's `term://` name was pinned by nothing (B10). The screenshot case's name claimed a redraw only the UI case proves. 41 mutants: 34 killed, 2 equivalent (`vim.wo[w]`, and `:redrawstatus` without `!` on the terminal path), 5 survivors.
+    - **Records.** The plan's mutant 6 is "the status line kept for a file shown in Claude's window", the author's M6b, killed by assertion; the `vim.wo[w]` edit is an extra mutant, equivalent, and the orchestrator's ledger had taken the label (1). The help said `:ls` shows Claude's terminal, which is unlisted (2). "Your other windows keep your own" (3). Three green-on-arrival rows counted as reds (4). 19 of 23 mutants given by description (5). Two stale docstrings (6). "Cuts the folder, not the name" holds only while the name fits (7). The help's glyph rule, its example name, and "set" for "set to `1`" (8). Smaller slips (9).
+  - **A19 and A20**, the orchestrator's assumptions under the user's instruction of 2026-10-06, on attack findings 2 and 4: the name is forgotten on every exit of Claude Code; any window showing Claude's terminal, a split included, draws it, and the help is corrected to say so.
+  - **The fix round**, by a fresh `neovim-claude-code-integrator`: 19 items, each red-first from the reviewers' failing input.
+    - The status line became `%!v:lua.require'aineo.claude'.session_statusline_format()`, each `%` doubled. The function is on `aineo.claude`'s entry point, so the option string reaches no file inside the home.
+    - `launch()`'s job `on_exit` calls `forget_name()`, guarded against a wiped terminal.
+    - Below U+0100 the letters are a fixed Latin-1 list.
+    - The tests' items, and the records' items, mutant 6 relabelled in the note and the PR body.
+
+    10 seen red, 7 arrived green. 44 mutants: 42 killed by assertion, 2 equivalent (M6a, B7). `tests/test_claude.lua` went from 230 s for 92 cases to 162 s for 106. Whole suite on `e97fea2`: 1921 cases, `Fails (0)`, 226 s.
+  - **The re-measure** with the attack question (`neovim-claude-code-reviewer`), since the round replaced mechanisms. 19 of 19 items fixed, each re-run from the first reviews' failing input. The `%!` expression, `forget_name()` against a restart by `\o`, the order at exit and the Latin-1 list held under attack, and nothing the first reviews refuted broke. Four low findings:
+    - where a narrow status line is cut was unpinned (N2, N3 survived);
+    - the Latin-1 list was pinned only at `×` (N4, N5, N11–N13 survived);
+    - "drawn as written, whatever characters they hold" claimed more than Neovim draws;
+    - "72 s for 23 cases" was measured on a tree no commit holds.
+
+    33 mutants: 24 killed, 2 equivalent, 7 survivors, each killed by a pin it built.
+  - **The bounded correction**, by a fresh `neovim-claude-code-integrator`: the re-measure's 8 pins, arriving green, each with its killers run (N2 and N3; N4, N5 and N10–N13); the as-written sentence narrowed (a control character shows in caret notation, and a name over about 4 KB loses its start); the figure corrected to 72 s for 18 cases on `5285847`. Whole suite on `8cb3cc9`: 1929 cases, `Fails (0)`, 227 s.
+  - **The orchestrator's verification** of `70ca22f`, on 0.12.5: `make test`, 1921 cases, `Fails (0)`, 230 s; the guard, `Fails (0)`; lint clean. It ran no mutants of its own. The fix round had run the plan's 1–9 on the final tree (plan 6 as M6b), and the re-measure ran 33 mutants, 20 of them rows of the round's table, which matched its kills. The correction after it changed tests and docs only; it was checked by the whole suite on the merged `dev`, below, and by no verification of its own.
+- **The whole suite on `dev` `f98bd9d`**, for the release (R-1), on 0.12.5: 1929 cases, `Fails (0)`, 224 s; lint clean.
+- **Released:** `v0.2.15` (PR #130, squash-merged into `main` as `f9cec19` on 2026-10-07 at 05:28 CEST, tag `v0.2.15`), carrying T32, T33 and T34: one release after the three merges, as the user chose (R-1 (a)). Its tree is `dev` `f98bd9d`'s (`git diff --stat f98bd9d f9cec19` prints nothing), 23 commits after `v0.2.14`'s `03a1345`. The user's release checkout is at `v0.2.15`.
+- **The orchestrator's ledger first called T33's plan mutant 6 "equivalent"**, in its update recording T33's packet, taking the author's label. That was wrong. The plan's mutant 6 is "the status line kept for a file shown in Claude's window", the author's M6b, killed by assertion; the equivalent `vim.wo[w]` edit is an extra mutant of the author's, M6a. The records review of PR #129 (finding 1) found it. The ledger was corrected in its next update, before the fix round relabelled the note and the PR body.
+- **Readings for the MVP review:** MR295–MR321 ([[Review/2026-09-24 — v1 MVP readings review]] › the sections for T32, T33 and T34), each assumed by the orchestrator under the user's instruction of 2026-10-06, to report.
+
+### Assumptions to report to the user — completed
+
+*Assumptions to report to the user*, above, lists A1–A16 as dispatched. This is the list at landing: A11 is revised, and A17–A20 were taken during the reviews. Each is **the orchestrator's assumption under the user's instruction of 2026-10-06** ("assume your recommendations and report what they were after you finish so I can check"), never the user's answer.
+
+| # | decision | assumption | where it came from |
+|---|---|---|---|
+| A1 | T32-2 | The `*` of a saved file stays in `AineoChangesSaved`, linked to `WarningMsg`, though the failure lines' `DiagnosticWarn` has the same yellow | brief review 3.3 |
+| A2 | T32-3 | The commit's subject is in `AineoChangesCommitSubject`, defined empty as a default, not linked to `Normal` | brief review 3.1 |
+| A3 | T32-3 | The "git: …" line under "Not in a git repository" is a note line, in `AineoChangesNote` (`Comment`) | brief review 3.5 |
+| A4 | T33-1 | (a) stands on T33-6's measurement: `--name` reaches the title; a generated title, `/rename`, `--resume` and the glyph during a turn are named unmeasured in *LIMITS*; under `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` the window reads `Claude Code`; Claude Code's statusline `session_name` is left out | brief review 1.7, 1.9 |
+| A5 | T33-2 | After Claude Code exits, Claude's window reads `Claude Code — <folder>`; it does not keep the last name | T33-6 |
+| A6 | T33-2 | A `b:term_title` that still holds the terminal's own `term://` name counts as no title | brief review 1.5, 1.9 |
+| A7 | T33-3 | The name and the folder are also kept as `b:aineo_session_name` and `b:aineo_session_folder` for status-line plugins; *LIMITS* names plugins that set every window's status line, and `'laststatus'` 3 | brief review 1.3 |
+| A8 | T33-3 | aineo's status line replaces the whole of Neovim's default for Claude's terminal: the ruler, the exit code and the diagnostics part go | brief review 1.14 |
+| A9 | T34-1 | An empty or blank details line, and a trailing `\n`'s last line, render `""`; the references line is an item | brief review 2.3 |
+| A10 | T34-2 | The markers are `-`, `*`, `+` and `•`, each followed by a space, at the line's start; a marker-only line renders `""` | brief review 2.5 |
+| A11 | T34-4 | **Revised 2026-10-07:** `'breakindentopt'` `list:-1,min:10`, which holds the hanging indents down to an 18-column Report, below which a wrapped line continues further left to keep 10 columns of text. `min:20`, A11 as first recorded, broke the user's ask at 80 columns with a file open, where the Report is 26 columns wide. `min:0` was rejected: it leaves three or four cells of text at 12 columns | brief review 2.1; the guarantee review of PR #128, finding 2 |
+| A12 | T33 | The folder is the directory the running Claude Code started in (`settings.cwd`), not `getcwd()` at each `\o` | brief review 1.1 |
+| A13 | T33 | The status glyph — a first character that is neither a letter nor a digit, followed by one space or, since the fix round's records item, by nothing — is left out with that space, once | brief review 1.8 |
+| A14 | T33 | No new recorded fixture: the tests pin Neovim's side with titles of their own, or ones T33-6 recorded | brief review 1.6 |
+| A15 | T33 | The help's *LIMITS* sentences go in a new *aineo-limits* subsection, `Claude's window name ~` | brief review 1.11 |
+| A16 | T34 | The user's own `'showbreak'` is left as it is; the help says it moves where a wrapped line continues | brief review 2.4 |
+| A17 | T32, T34 | For the two small fixes, one reviewer (`neovim-lua-developer`) covered the guarantee and the records dimensions together, for speed, in place of two reviewers in one message | the orchestrator, at T32's review |
+| A18 | T32-2 | A files line's kind span keeps the space between the letter and the path: "the letter and the path" reads as one span, so a background a user gives the group runs unbroken; the commit line's space stays in neither group | the review of PR #127, finding 2 |
+| A19 | T33-2 | The session name is forgotten on every exit of Claude Code — a normal exit, `kill -KILL`, a hang-up — so the window reads `Claude Code — <folder>`, as A5 says | the attack review of PR #129, finding 2 |
+| A20 | T33-3 | Any window showing Claude's terminal, a split included, draws the name; another buffer in it, and every other window, keep the user's status line. The code stayed; the help and `M.open()`'s docstring were corrected | the attack review of PR #129, finding 4; its records review, finding 3 |
+
+### Records the reviews named false in dispatched files, left as dispatched
+
+Nothing above this section is edited after dispatch (`Implementation/Waves/CLAUDE.md`); these are its corrections.
+- *Decisions for the user* › T33-3 (b) says "every status line and `:ls` show it", and the T33 brief says the terminal keeps its `term://` name "so `:ls` … stay[s] as [it is]". Claude's terminal is an unlisted buffer: `:ls` does not show it, `:ls!` does (the records review of PR #129, finding 2, measured through `\o`).
+- The T33 brief says "Another window keeps the user's status line". A window split from Claude's, or any window showing Claude's terminal, draws aineo's, by Vim's rules for window-local options; A20 keeps that behaviour (attack 4, records 3).
+- The T33 brief's *After Claude Code exits* rests on "Claude Code clears its title at exit (T33-6)". T33-6 measured that for an exit by two Ctrl-C only. A Claude Code killed, or hung up by `jobstop`, left its last title, which A19 now forgets (attack 2).
+- The T33 brief asks for the empty title's test through "mini.test's child screenshot". That test cannot fail when the redraw is missing: a child with no user interface redraws the status line on `:redraw` whatever asked. The redraw is pinned in an editor with a user interface (the packet's spec conflict; the test-integrity review, finding 7).
+- The T33 brief's merge check (`git merge-tree` with T32's and T34's branches) could not run: both had merged and their branches were gone. The packet rebased onto `dev` `b6230c7` and ran the whole suite there.
+- *Verification mutants* › T34's 4 and 9 edit `'list:-1'`, which no longer occurs with its closing quote once A11 is revised; they run on `'list:-1,min:10'` (the correction's report).
+- *Decisions for the user* › T34-4 and the A11 row of *Assumptions to report to the user* keep `min:20`. A11 is revised (above).
+- *Host and reviewers* gives T32 and T34 a guarantee review and a records review in one message. One reviewer took both (A17).
+- PR #130's body, merged into `main`, says the name "follows `--name` and `/rename`". `/rename` was not measured (A4); the help's *LIMITS* names it unmeasured.
 
