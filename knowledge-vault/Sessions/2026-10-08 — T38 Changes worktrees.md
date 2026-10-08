@@ -30,8 +30,8 @@ The user asked on 2026-10-06 that the changes pane (`\pc`) also follow the agent
 - **No shared history, or no commit yet, reads with no base** (the brief's *Not measured* left the choice): `merge-base` exits 1 for unrelated histories and 128 for an unborn `HEAD`; both give `nil`, so such a worktree lists every file as new and every commit as its own, rather than a failure under its heading. Same when the editor's worktree has no commit.
 - **The failed list's line goes after the editor's section**, where the other sections are. The brief words it "keeps the editor's own section working as today, under one line in git's words", which in the help's idiom puts the line above; D33 (a binding row) puts the editor's section first, so D33 won. Reported as a reading.
 - **The heading's words** are the packet's: `Worktree <folder> (<branch>)`, `detached` in the branch's place, in `AineoChangesNote` as a line that lists nothing (a new group would need a tag in *Colours*, outside this packet's fences).
-- **D32's base is read per worktree** from the editor's `HEAD` (`read_head` + upstream + `merge-base`), and each worktree's repository by `find_repository()`: about ten git processes per worktree per window. Declarative over cheap; the measured cost is in the help and below.
-- **One read per window, not two.** A second reader for the other worktrees, beside the editor's own, kept every existing timing but broke D35's "one read at a time per window"; rejected. The cost: a window's read now ends once its worktree list has answered, a few tens of milliseconds after its own list shows, which moved three pins (below).
+- **D32's base is read per worktree** from the editor's `HEAD` (`read_head` + upstream + `merge-base`), and each worktree's repository by `find_repository()`: about ten git processes per worktree per window. Declarative over cheap; the measured cost is in the help and below. *(Fix round: the editor's comparison commit is read once per window read since V1, and a refresh with five worktrees runs 72 git processes, not 96 — *Fix round* below.)*
+- **One read per window, not two.** A second reader for the other worktrees, beside the editor's own, kept every existing timing but broke D35's "one read at a time per window"; rejected. The cost: a window's read now ends once its worktree list and every other worktree's list have answered — a few tens of milliseconds after its own list shows when there is no other worktree, 1.1 to 2.1 s with five (the records review's probe) — which moved three pins (below). *(Corrected in the fix round: it said the read ends once the worktree list has answered.)*
 - **`*` across editors and before the follow** (T38-1, T38-2, the ruling on T39-2): three sentences of *aineo-changes* are worded for the behaviour once T39 merges (A22: no wave-9 release before T39). The 1.5 s is `SETTLE_MS` in `lua/aineo/claude/readiness.lua` (read, line 27).
 
 ## Unit list (stated before the first test)
@@ -78,6 +78,8 @@ Each red was read as the behaviour missing, from the output.
 | (30) `a worktree removed while it is read` › `is dropped…` | key 2, left = `"Worktree agent (agent)"` with `fatal: cannot change to '…/agent'` |
 | (31) `the reads` › `of a window stay one at a time…` | **arrived green**: `window_read()` and the sequential loop. Killed by G9 and G9b (run) |
 
+**Counted once each** (corrected in the fix round, records review finding 6): 26 cases seen red in their final form and 10 arrived green, one of the ten, (4), seen red in an earlier form and sharpened afterwards. The PR body said 27 seen red and listed the same ten as arrived green, 37 for 36 cases; the packet report said 27 and 9.
+
 **Pins moved in suites this packet may change**, each red first in the run that found it:
 - `tests/test_changes.lua`: `SPY_ON_GIT` spies `list_worktrees`, and `wait_for_the_reads()` waits for it; `the reads` › `run one at a time…` waits for the first read to end before it saves (it timed out on "three reads answered", the saves coalescing into the first read's worktree list); `leave no timer running…` (red: `uv = 1`) passes through the same wait; `the pane` › `starts no watch and reads no list until it is first shown…` asserts `list_worktrees = 0` (red on the new key).
 - `tests/test_entry_changes.lua`: `COUNT_FINDS` counts `_G.worktree_lists`, and `wait_for_the_reads()` waits for them (`shown once reads its files once` was red: `Left: 1, Right: 2`).
@@ -114,21 +116,114 @@ Not mutated: the "its diff left as it was" half of (25) — no code wipes a diff
 
 ## Verification
 
-**Whole suite** (`make test`, Neovim 0.12.5, on the tree pushed — `feature/t38-changes-worktrees` rebased on `dev` `132da01`, knowledge-only since `f27ee69`): **2265 cases in 66 groups, `Fails (0) and Notes (0)`, exit 0** — `dev`'s 2229 and this packet's 36 (`tests/test_git_worktrees.lua` 15, `tests/test_changes_worktrees.lua` 21). The files moved kept their counts: `tests/test_changes.lua` 120, `tests/test_entry_changes.lua` 12; and those run without change: `tests/test_changes_sessions.lua` 61, `tests/test_entry_panes.lua` 86, `tests/test_layout_diffs.lua` 10, `tests/test_doc.lua` 44. `make lint`: StyLua and selene clean. `tests/helpers/git_repo.lua` was not changed, so the files requiring it ran only in the whole suite.
+**Whole suite** (`make test`, Neovim 0.12.5, on the tree pushed — `feature/t38-changes-worktrees` rebased on `dev` `132da01`, knowledge-only since `f27ee69`): **2265 cases in 66 groups, `Fails (0) and Notes (0)`, exit 0** — `dev`'s 2229 and this packet's 36 (`tests/test_git_worktrees.lua` 15, `tests/test_changes_worktrees.lua` 21). The files moved kept their counts: `tests/test_changes.lua` 120, `tests/test_entry_changes.lua` 12; and those run without change: `tests/test_changes_sessions.lua` 61, `tests/test_entry_panes.lua` 86, `tests/test_layout_diffs.lua` 10, `tests/test_doc.lua` 44. `make lint` was **not** clean on the pushed head, though this note, the PR body and the packet report said so: StyLua 2.5.2 wanted `tests/test_changes_worktrees.lua` 600–606 formatted, a block that came in with `ff47247` (records review finding 1); selene was clean. Corrected in the fix round. `tests/helpers/git_repo.lua` was not changed, so the files requiring it ran only in the whole suite.
 
-**Read time with five worktrees** (`.tests/t38-measure.lua`, not committed): a fixture with five other worktrees, each with a commit, a modified file and a new one; both windows read again after `refresh_shown_pane()`, timed until each window's six list reads answered: 1257, 1304, 1267, 1176, 1250, 1503, 1367 ms (seven runs; median 1267). About a quarter of a second of git per worktree for each window; the editor's own lines show first.
+**Read time with five worktrees** (`.tests/t38-measure.lua`, not committed): a fixture with five other worktrees, each with a commit, a modified file and a new one; both windows read again after `refresh_shown_pane()`, timed until each window's six list reads answered: 1257, 1304, 1267, 1176, 1250, 1503, 1367 ms (seven runs; median 1267). About a quarter of a second of git per worktree for each window; the editor's own lines show first within one read, not before a read already running ends (attack review finding 2; corrected in the fix round).
 
 **Merge check with T39 and T40** (brief, *Rule 2*): neither `feature/t39-panes-follow-switch` nor a T40 branch existed on `origin` when this packet pushed (`git ls-remote --heads origin`), so there was nothing to merge; `tests/test_doc.lua` ran on this branch's tree. The second of T38 and T39 to push runs the check.
 
 ## Task lines
 
-- T38 — built on `feature/t38-changes-worktrees`; D31–D35, A8, A9 as written; a worktree with no shared history or no commit reads with no base; the failed list's line follows the editor's section (D33). Open: the read cost per worktree (below).
+- T38 — done in `feature/t38-changes-worktrees`, PR #142 (wave 9, stage 2): D31–D35, A8, A9 as written; a worktree with no shared history or no commit reads with no base; the failed list's line follows the editor's section (D33); fix round: worktrees known by their resolved path and git directory, the own list read between other worktrees (V3), the comparison commit read once per window read (V1); no release yet (released with T39, A22).
 
 ## Open threads
 
-- **Cost.** About ten git processes per worktree per window at every read: 1.2–1.5 s for both windows with five worktrees on a small repository. Computing the editor's comparison commit once per read, and the worktree's repository from the list rather than by `find_repository()`, would cut it by about half; not done (the git home's interface would grow a step a caller must order).
-- **Messages name no worktree.** A diff of another worktree that cannot be read, or finds no room, is told by its path alone ("the diff of notes.txt …").
+- **Cost.** About ten git processes per worktree per window at every read: 1.2–1.5 s for both windows with five worktrees on a small repository. Computing the editor's comparison commit once per read, and the worktree's repository from the list rather than by `find_repository()`, would cut it by about half; not done (the git home's interface would grow a step a caller must order). *(Fix round: the comparison commit is read once per window read (V1); the worktree's repository is still found by git, which finding 1's identity check needs.)*
+- **Messages name no worktree.** A diff of another worktree that cannot be read, or finds no room, is told by its path alone ("the diff of notes.txt …"). *(Fix round: they name it.)*
 - **Linux** was not run: what the editor's watch sees of other worktrees there is worded "may" in LIMITS.
+
+## Fix round
+
+**Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-lua-developer`), a fresh agent. **Branch:** `feature/t38-changes-worktrees-fix`, pushed to `feature/t38-changes-worktrees`, PR #142. The one fix round, from the attack, test-integrity and records reviews of `2dd926a`.
+
+### The orchestrator's rulings — assumptions to report to the user
+
+- **FR-1 (attack finding 2): V3, not V2.** D35's "one read at a time per window" is kept as one git at a time per window. An own list asked during the other worktrees' read is read before the next worktree's, not after them all. It still waits for the worktree read in progress: one worktree's steps, or one slow git (the reviewer measured 5.2 s behind a 5 s `merge-base`). V2 is not taken: a separate read for the own list would let two gits of one window run at once. It is a reading of D35 for the user, if the user wants the own list never held.
+- **FR-2 (attack finding 3): V1.** The editor's comparison commit is read once per window read. The git home's `worktree_base(found, worktree)` becomes `comparison_commit(found)` and `worktree_base(worktree, comparison)`. With five worktrees, a refresh of both windows runs 72 git processes, against 96 before. It takes 0.7 to 1.6 s until every read has answered (seven runs, median 1.1 s, the host shared). That is still above D35's computed "about 0.6 s of git per second for five worktrees under a writer". The measured figure goes to the user, since D35's acceptance rested on the estimate.
+- **FR-3 (the packet's reading, attack finding 6):** a worktree whose path holds a newline stays listed, and its section says only that its read failed. LIMITS now says so. Building the section's repository from the list was not chosen: finding 1's identity check needs git's own answer for the directory.
+- **FR-4 (the packet's reading, attack finding 7):** messages about another worktree's diff end the name with `in the worktree <folder>`, the heading's folder name.
+- **FR-5 (the packet's reading, attack finding 1):** a listed directory that git finds in another repository than the listed worktree is dropped, as A9 drops a gone one, not told as a failure.
+
+### The spec conflict, a reading for the user
+
+The failed worktree list's line goes **after** the editor's own lines, over the sections last shown. The brief's "keeps the editor's own section working as today, under one line in git's words" would, in T25's idiom, put the line above the editor's section. D33, the user's row, puts the editor's worktree first, "as today". All three reviews judged the author's placement D33's meaning (attack, *The author's spec conflict*; tests, finding 8; records, finding 13). No code changed. It is recorded here for the knowledge pass to put before the user, with the packet's other readings:
+- no base for an unrelated or unborn worktree, or while the editor's has no commit;
+- the heading's words, and the lines that list nothing;
+- FR-1 to FR-5.
+
+### Red → green
+
+| Item | Test | Red, or why green |
+|---|---|---|
+| Attack 1 | `the editor's own worktree` › `is shown alone, as ever, in a repository whose git directory is separate` | `Left: { "  M notes.txt", "Worktree store.git (main)", "The last refresh failed: fatal: this operation must be run in a work tree" }` |
+| | `… in a submodule` | **arrived green**: spent by the git-directory clause. Killed by I1a (run) |
+| | `… is shown once, a linked one whose folder moved and left a link behind` | key 4, `"Worktree mine (mine)"`: the editor's own worktree again |
+| | `… is not listed as a locked one whose .git is gone, its folder inside the top level` | `Left: { "  M notes.txt", "Worktree agent (agent)", "  M notes.txt" }` |
+| | `… in a submodule's linked worktree lists the submodule's checkout as another` | **arrived green**, the reviewer's control. Killed by I1e (run) |
+| | git home `the worktrees` › `of a submodule give its checkout's top level…`, `of a repository whose git directory is separate…` | **arrived green**: spent by the list's fix. Killed by I1a and I1c (run) |
+| | git home `… are listed from a linked one whose folder moved and left a link behind, it first` | **arrived green**, added after I1b survived the pane's group (the section check masked it). Killed by I1b (run) |
+| Attack 2 (V3) | `the reads` › `of the editor's own list, asked during the other worktrees', show it before the next worktree is read` | `Left: "No files changed on this session"`, `Right: "  ? saved.txt"` |
+| Attack 3 (V1) | `the reads` › `of a window read the editor's branch once, however many worktrees` | `Left: 6`, `Right: 2`, on the committed code. The git home's six `the base of a worktree` cases were red on the new interface (`comparison_commit` missing) |
+| | `a worktree whose later read fails` › `… when the editor's branch cannot be read` | **arrived green**: the failure path was written with the split. Killed by V1b (run) |
+| | `the reads` › `of a window read nothing of the editor's branch with no other worktree` | **arrived green**, added after V1c survived its group. Killed by V1c (run) |
+| Attack 4 / tests 4 | `the reads` › `of the editor's commits, asked during a read, stay asked when a later call asks without them` | **arrived green**, a pin. Killed by M1 (run) |
+| Attack 5 | `Enter` › `on two worktrees' files whose top level and path join alike shows two diff buffers` | `Left: false`. The two Enter cases pinning the names then failed on the old form and moved to `//` |
+| Attack 7 | `a diff of another worktree that fails` › `is told naming its worktree` | `left = "aineo: the diff of notes.txt could not be read: fatal: broken"` |
+| Tests 1 (PR1) | `Enter` › `on another worktree's file shows its diff from that worktree's base, neither the session's nor a HEAD` | **arrived green**, a pin. Killed by E2, E4, E1b (run). The old case was renamed `… shows its diff, named for the worktree` |
+| Tests 2 (PR2) | `the commits window` › `no longer lists another worktree's commit once the editor's branch holds it, its base read again` | **arrived green**, a pin. Killed by B3 (run) |
+| Tests 3 (PR6) | `the reads` › `of a window stay one at a time…` waits for every git home call to answer, then asserts six `changed_files` asks | the case changed, not added. Killed by Q1 and SQ (run, `Left: 8`) |
+| Tests 5 (PR5) | `the files window` › `lists another worktree with no shared history, every file new`, and the commits window's | **arrived green**, pins. Killed by N1 (run) |
+| Tests 6 (PR4) | `the files window` › `colours another worktree's heading as a note, and its files as the editor's` | **arrived green**, a pin. Killed by C1, C2 (run) |
+| Tests 7 (PR3) | `the files window` › `keeps the cursor on another worktree's entry while one of the same path is listed above it` | **arrived green**, a pin. Killed by KY (run) |
+
+New cases: 21, 18 in `tests/test_changes_worktrees.lua` (now 39) and 3 in `tests/test_git_worktrees.lua` (now 18). Counted once each: **7 seen red** (separate git directory, moved, locked, own list between, branch read once, joined names, failed-diff message) and **14 arrived green**. Changed cases, not counted in the 21: the git home's six base cases, red on the new interface; the two Enter name pins, red on the old form; and PR6's case.
+
+### Mutants
+
+Each is its literal edit, applied alone from a copy, run on a copy of its test file narrowed to the groups named, and restored. The edits are in `.tests/t38fix-mutants.lua` (scratch, not committed). All kills are assertion failures; none was a Lua error.
+
+| # | Edit | Groups | Result |
+|---|---|---|---|
+| I1a | `if top == found.top or top == found.git_directory then` → `if top == found.top then` | cw `the editor's own worktree`; gw `the worktrees` | killed: 2 + 2 cases |
+| I1b | `local top = vim.uv.fs_realpath(worktree.top)` → `local top = vim.uv.fs_stat(worktree.top) and worktree.top` | cw own; gw `the worktrees` | survived cw own (the section check drops the moved worktree); killed by gw's moved case |
+| I1c | `worktree.top = found.top` before `table.insert(own, worktree)` removed | gw `the worktrees` | killed: 2 cases |
+| I1d | `if not is_listed_worktree(repository, worktree) then` → `if false then` | cw own | killed |
+| I1e | `… or repository.git_directory == worktree.top` dropped | cw own | killed (the control) |
+| V3a | `before_each_worktree = read_own_then,` → `before_each_worktree = function(proceed) proceed() end,` | cw `the reads` | killed |
+| V1a | `read_section()` also starts `git.comparison_commit(read.found, function() end, read.git)` | cw `the reads` | killed |
+| V1b | `section.failure = comparison_failure` → `section.failure = nil` | cw `a worktree whose later read fails` | killed |
+| V1c | `if #others == 0 then` → `if false then` | cw own; cw `the reads` | survived cw own; killed by the no-other-worktree case |
+| M1 / Q2 | `own_asked = own_asked or with_own` → `own_asked = with_own` | cw `the reads` | killed |
+| Q1 | `serial.one_at_a_time(` in `window_read()` → a local queue running every ask (`pending` counter) | cw `the reads` | killed (`Left: 8`) |
+| SQ | `serial.lua`'s `asked_again` a counter | cw `the reads` | killed (`Left: 8`) |
+| N5 | `'aineo://worktree%s//%s'` → `'aineo://worktree%s/%s'` | cw `Enter` | killed: 3 cases |
+| N7 | `told_name()`'s `if entry.worktree then` → `if false then` | cw `a diff of another worktree that fails` | killed |
+| E1b | `or_failed(function(base)` → `or_failed(function(_) local base = read.found.head` | cw `Enter`, `the commits window`, `the files window` | killed: 3 cases |
+| E2 | `entry.worktree.base` → `session.base` in `read_diff()` | cw `Enter` | killed |
+| E4 | `entry.worktree.base` → `entry.worktree.repository.head` | cw `Enter` | killed |
+| B3 | `git.worktree_base(` → `(section.base and function(_, _, answer) answer(nil, section.base) end or git.worktree_base)(` | cw `the commits window` | killed |
+| N1 | a nil base told as `fatal: no base` before `read.read_list(` | cw files and commits windows | killed: 2 cases |
+| C1 | the heading row `note(…)` → `{ line = … }` | cw `the files window` | killed |
+| C2 | `in_worktree()` gains `colours = {},` | cw `the files window` | killed |
+| KY | `key = section.top .. '\0' .. entry.key,` → `key = entry.key,` | cw `the files window` | killed |
+
+### Records corrected
+
+- `make lint` failed on the pushed head (records 1). StyLua now formats `tests/test_changes_worktrees.lua`, and *Verification* above says what was false. The PR body is corrected too. The packet report lies outside this branch.
+- The help: records findings 2 to 5 in the review's wording, and finding 11. LIMITS gives the cost and time measured after V1 (finding 7, attack 3), the slow git that still delays the own list (attack 2), and the newline path (attack 6). The names now use `//` (attack 5).
+- The counts: the double-counted arrived-green case (finding 6), the read's end (finding 8) and the per-window cost, each above.
+- The docstrings: the git home's `list_worktrees()` says which worktrees are left out (finding 9). `find` no longer cites `read_files()` (finding 10).
+- The task line is in the closed lines' style (finding 12).
+
+### Verification
+
+- **Whole suite** (`make test`, Neovim 0.12.5, on `64549bf` with this note uncommitted, the tree pushed): **2286 cases in 66 groups, `Fails (0) and Notes (0)`**, exit 0. That is the packet's 2265 plus this round's 21.
+- **Touched files** at the end (`make test_file`, each `Fails (0)`):
+  - `tests/test_changes_worktrees.lua` 39 and `tests/test_git_worktrees.lua` 18;
+  - `tests/test_changes.lua` 120, `tests/test_entry_changes.lua` 12, `tests/test_changes_sessions.lua` 61;
+  - `tests/test_doc.lua` 44, `tests/test_entry_panes.lua` 86, `tests/test_layout_diffs.lua` 10.
+- `make lint`: StyLua and selene, 0 errors and 0 warnings.
+- **Merge check with T39** (`origin/feature/t39-panes-follow-switch` at `5eb5a6f`): `git merge-tree --write-tree` gave tree `3da8ca0`, no conflict. Extracted under the scratch `.tests/`, it passed `tests/test_doc.lua` 44, `tests/test_entry_session_switch.lua` 12, `tests/test_entry_changes.lua` 12 and `tests/test_changes_worktrees.lua` 39, each `Fails (0)`.
 
 ## Commits
 
