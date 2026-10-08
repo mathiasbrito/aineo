@@ -284,6 +284,79 @@ T['the files window']['heads a detached worktree’s section so'] = function()
   )
 end
 
+T['the files window']['lists another worktree with no shared history, every file new'] = function()
+  local top = git_repo.create('changesworktrees-unrelated-files', { ['notes.txt'] = { 'one' } })
+  local unrelated = vim.fs.joinpath(vim.fs.dirname(top), 'unrelated')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '--orphan', '-b', 'unrelated', unrelated })
+  git_repo.write(unrelated, 'b.txt', { 'b' })
+  git_repo.commit_all(unrelated, 'Its own')
+
+  begin_and_show(top)
+
+  expect_lines(
+    FILES,
+    { 'No files changed on this session', 'Worktree unrelated (unrelated)', '  A b.txt' }
+  )
+end
+
+--- The Lua expression giving the colours of the child's buffer named
+--- `...`: each as its line, first and last column, and group, all
+--- 0-based, the last column end-exclusive.
+local COLOURS_OF = [[(function(name)
+  local marks = vim.api.nvim_buf_get_extmarks(vim.fn.bufnr(name), -1, 0, -1, { details = true })
+  return vim.tbl_map(function(mark)
+    return { mark[2], mark[3], mark[4].end_col, mark[4].hl_group }
+  end, marks)
+end)(...)]]
+
+T['the files window']['colours another worktree’s heading as a note, and its files as the editor’s'] = function()
+  local top = git_repo.create('changesworktrees-colours', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  begin_and_show(top)
+  expect_lines(FILES, { '  M notes.txt', 'Worktree agent (agent)', '  M notes.txt' })
+
+  local colours = child.lua_get(COLOURS_OF, { FILES })
+
+  eq(colours, {
+    { 0, 2, 13, 'AineoChangesModified' },
+    { 1, 0, #'Worktree agent (agent)', 'AineoChangesNote' },
+    { 2, 2, 13, 'AineoChangesModified' },
+  })
+end
+
+T['the files window']['keeps the cursor on another worktree’s entry while one of the same path is listed above it'] = function()
+  local top = git_repo.create('changesworktrees-cursor', { ['notes.txt'] = { 'one' } })
+  local first = add_worktree(top, 'first', 'first')
+  git_repo.write(first, 'notes.txt', { 'first' })
+  local second = add_worktree(top, 'second', 'second')
+  git_repo.write(second, 'notes.txt', { 'second' })
+  begin_and_show(top)
+  expect_lines(FILES, {
+    'No files changed on this session',
+    'Worktree first (first)',
+    '  M notes.txt',
+    'Worktree second (second)',
+    '  M notes.txt',
+  })
+  child.lua('vim.api.nvim_win_set_cursor(0, { 5, 0 })')
+  git_repo.write(top, 'a.txt', { 'a' })
+  git_repo.write(top, 'b.txt', { 'b' })
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_lines(FILES, {
+    '  ? a.txt',
+    '  ? b.txt',
+    'Worktree first (first)',
+    '  M notes.txt',
+    'Worktree second (second)',
+    '  M notes.txt',
+  })
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)[1]'), 6)
+end
+
 T['a worktree with nothing changed'] = MiniTest.new_set({
   parametrize = {
     {
@@ -328,7 +401,30 @@ local SHOWN_DIFF = [[(function(index)
   return { name = vim.api.nvim_buf_get_name(diff), text = vim.api.nvim_buf_get_lines(diff, 0, -1, true) }
 end)(...)]]
 
-T['Enter']['on another worktree’s file shows its diff from that worktree’s base, named for the worktree'] = function()
+T['Enter']['on another worktree’s file shows its diff from that worktree’s base, neither the session’s nor a HEAD'] = function()
+  local top = git_repo.create('changesworktrees-enter-base', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'two' })
+  git_repo.commit_all(agent, 'The agent’s')
+  git_repo.write(agent, 'notes.txt', { 'three' })
+  git_repo.write(top, 'notes.txt', { 'main' })
+  git_repo.write(top, 'main.txt', { 'main' })
+  git_repo.commit_all(top, 'The editor’s')
+  begin_and_show(top)
+  expect_lines(
+    FILES,
+    { 'No files changed on this session', 'Worktree agent (agent)', '  M notes.txt' }
+  )
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  local shown = child.lua_get(SHOWN_DIFF, { 1 })
+  eq({ shown.text[#shown.text - 1], shown.text[#shown.text] }, { '-one', '+three' })
+end
+
+T['Enter']['on another worktree’s file shows its diff, named for the worktree'] = function()
   local top, base = git_repo.create('changesworktrees-enter-file', { ['notes.txt'] = { 'one' } })
   local agent = add_worktree(top, 'agent', 'agent')
   git_repo.write(agent, 'notes.txt', { 'agent' })
@@ -831,7 +927,7 @@ T['the reads']['of a window stay one at a time with several worktrees, one asked
   add_worktree(top, 'first', 'first')
   add_worktree(top, 'second', 'second')
   local stand_in, log = logging_git('changesworktrees-one-at-a-time')
-  child.lua(COUNT_FILE_READS)
+  child.lua(COUNT_GIT_READS)
   begin_and_show(top, { executable = stand_in, system_name = 'Linux' })
   git_repo.wait_until('the first read started', function()
     return vim.uv.fs_stat(log) ~= nil
@@ -840,10 +936,8 @@ T['the reads']['of a window stay one at a time with several worktrees, one asked
   child.lua("require('aineo.changes').refresh_shown_pane()")
   child.lua("require('aineo.changes').refresh_shown_pane()")
 
-  git_repo.wait_until('two reads of three worktrees answered', function()
-    return child.lua_get('_G.file_reads_answered') >= 6
-  end)
-  eq({ vim.fn.readfile(log), child.lua_get('_G.file_reads_answered') }, {
+  wait_for_the_reads(4)
+  eq({ vim.fn.readfile(log), child.lua_get('_G.git_asked.changed_files') }, {
     {
       'start',
       'end',
@@ -1007,6 +1101,43 @@ T['the reads']['of a window read the editor’s branch once, however many worktr
 end
 
 T['the commits window'] = MiniTest.new_set()
+
+T['the commits window']['no longer lists another worktree’s commit once the editor’s branch holds it, its base read again'] = function()
+  local top = git_repo.create('changesworktrees-base-again', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+  begin_and_show(top)
+  expect_lines(
+    COMMITS,
+    { 'No commits on this session', 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' }
+  )
+  git_repo.git(top, { 'merge', '--quiet', '--ff-only', 'agent' })
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_lines(COMMITS, {
+    commit:sub(1, 7) .. ' The agent’s',
+    'Worktree agent (agent)',
+    'No commits in this worktree',
+  })
+end
+
+T['the commits window']['lists another worktree with no shared history, every commit its own'] = function()
+  local top = git_repo.create('changesworktrees-unrelated-commits', { ['notes.txt'] = { 'one' } })
+  local unrelated = vim.fs.joinpath(vim.fs.dirname(top), 'unrelated')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '--orphan', '-b', 'unrelated', unrelated })
+  git_repo.write(unrelated, 'b.txt', { 'b' })
+  local commit = git_repo.commit_all(unrelated, 'Its own')
+
+  begin_and_show(top)
+
+  expect_lines(COMMITS, {
+    'No commits on this session',
+    'Worktree unrelated (unrelated)',
+    commit:sub(1, 7) .. ' Its own',
+  })
+end
 
 T['the commits window']['lists the editor’s commits first, as ever, then each other worktree’s under its heading'] = function()
   local top = git_repo.create('changesworktrees-commits', { ['notes.txt'] = { 'one' } })
