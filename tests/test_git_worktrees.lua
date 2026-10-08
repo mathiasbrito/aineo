@@ -189,6 +189,33 @@ T['the worktrees']['of a submodule give its checkout’s top level, where git li
   )
 end
 
+T['the worktrees']['are listed from a linked one whose folder moved and left a link behind, it first'] = function()
+  local fixture = git_repo.directory('worktrees-moved')
+  local before = vim.fs.joinpath(fixture, 'before')
+  local top = vim.fs.joinpath(before, 'repo')
+  vim.fn.mkdir(top, 'p')
+  git_repo.git(top, { 'init', '--quiet', '--initial-branch=main' })
+  git_repo.write(top, 'a.txt', { 'a' })
+  local base = git_repo.commit_all(top, 'base')
+  git_repo.git(
+    top,
+    { 'worktree', 'add', '--quiet', '-b', 'side', vim.fs.joinpath(before, 'linked') }
+  )
+  local after = vim.fs.joinpath(fixture, 'after')
+  assert(vim.uv.fs_rename(before, after))
+  assert(vim.uv.fs_symlink(after, before))
+  local linked = vim.fs.joinpath(after, 'linked')
+
+  local seen = child.lua(LIST_WORKTREES, { linked })
+
+  eq({ failure = seen.failure, result = seen.result }, {
+    result = {
+      { top = linked, head = base, branch = 'side' },
+      { top = vim.fs.joinpath(after, 'repo'), head = base, branch = 'main' },
+    },
+  })
+end
+
 T['the worktrees']['of a repository whose git directory is separate give its top level'] = function()
   local fixture = git_repo.directory('worktrees-separate')
   local top = vim.fs.joinpath(fixture, 'work')
