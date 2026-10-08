@@ -446,6 +446,24 @@ T["the working directory's draft"]["moved to the first session followed leaves I
   })
 end
 
+T["the working directory's draft"]["left as it is when the session's draft is the same text keeps what is typed next as the session's"] = function()
+  local state = fixture.directory('draft-sessions-same-both')
+  plant_draft(directory_draft_file(state), 'Same text\n')
+  plant_draft(session_draft_file(state, 'session-a'), 'Same text\n')
+  keep_new_buffer(state)
+  follow('session-a')
+
+  child.cmd('normal! A and more')
+
+  eq({
+    session = wait_for_text(session_draft_file(state, 'session-a'), 'Same text and more\n'),
+    directory = read_text(directory_draft_file(state)),
+  }, {
+    session = 'Same text and more\n',
+    directory = 'Same text\n',
+  })
+end
+
 T["the working directory's draft"]['planted again is not moved at a later follow'] = function()
   local state = fixture.directory('draft-sessions-later')
   keep_new_buffer(state)
@@ -1524,6 +1542,27 @@ T['a follow refused while textlock holds']['at the first, with Input holding the
     session = 'From the directory and more\n',
     directory = nil,
   })
+end
+
+T['a follow refused while textlock holds']["at the first, made once an edit meanwhile gave Input the session's draft, leaves Input's text and undo as they were"] = function()
+  local state = fixture.directory('draft-sessions-first-follow-same-at-retry')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  plant_draft(session_draft_file(state, 'session-a'), 'From the session\n')
+  keep_new_buffer(state)
+  begin_hold('vim.fn.getcharstr()', 'ccFrom the session<Esc>')
+  follow('session-a')
+  end_hold('q')
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+  local after_retry = input_lines()
+
+  child.cmd('normal! u')
+
+  eq(
+    { after_retry = after_retry, undone = input_lines() },
+    { after_retry = { 'From the session' }, undone = { 'From the directory' } }
+  )
 end
 
 T['a follow refused while textlock holds']['at the first, with Input holding the draft it moved, waits for nothing and keeps an edit made meanwhile with that draft, its first name removed meanwhile'] = function()
