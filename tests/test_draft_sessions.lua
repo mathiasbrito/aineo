@@ -338,6 +338,19 @@ T['following a session']['puts its draft in as no change of the user: no undo ta
   })
 end
 
+T['following a session']["after the first puts its draft in when it is Input's text already: no undo reaches a change made before it"] = function()
+  local state = fixture.directory('draft-sessions-same-text')
+  plant_draft(session_draft_file(state, 'session-b'), 'Same text\n')
+  keep_new_buffer(state)
+  follow('session-a')
+  child.cmd('normal! iSame text')
+
+  follow('session-b')
+  child.cmd('normal! u')
+
+  eq(input_lines(), { 'Same text' })
+end
+
 T['following a session']["already followed leaves Input's text, cursor and undo as they were"] = function()
   local state = fixture.directory('draft-sessions-same')
   keep_new_buffer(state)
@@ -413,6 +426,23 @@ T["the working directory's draft"]['moves to the first session followed with a c
     shown = { 'Edited before the first follow' },
     directory = nil,
     session = 'Edited before the first follow\n',
+  })
+end
+
+T["the working directory's draft"]["moved to the first session followed leaves Input's text and undo as they were"] = function()
+  local state = fixture.directory('draft-sessions-moved-undo')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  keep_new_buffer(state)
+  child.cmd('normal! oTyped before the first follow')
+  child.cmd('normal! dd')
+
+  follow('session-a')
+  local after_follow = input_lines()
+  child.cmd('normal! u')
+
+  eq({ after_follow = after_follow, undone = input_lines() }, {
+    after_follow = { 'From the directory' },
+    undone = { 'From the directory', 'Typed before the first follow' },
   })
 end
 
@@ -1470,7 +1500,7 @@ T['a follow refused while textlock holds']["followed twice, puts the last sessio
   })
 end
 
-T['a follow refused while textlock holds']['keeps an edit made while the first follow waits with the draft it moved'] = function()
+T['a follow refused while textlock holds']['at the first, with Input holding the draft it moved, waits for nothing and keeps an edit made meanwhile with that draft'] = function()
   local state = fixture.directory('draft-sessions-first-follow-window')
   plant_draft(directory_draft_file(state), 'From the directory\n')
   keep_new_buffer(state)
@@ -1489,14 +1519,14 @@ T['a follow refused while textlock holds']['keeps an edit made while the first f
     session = read_text(session_draft_file(state, 'session-a')),
     directory = read_text(directory_draft_file(state)),
   }, {
-    waiting = 1,
+    waiting = 0,
     shown = { 'From the directory and more' },
     session = 'From the directory and more\n',
     directory = nil,
   })
 end
 
-T['a follow refused while textlock holds']['keeps an edit made while the first follow waits with the draft it moved, its first name removed meanwhile'] = function()
+T['a follow refused while textlock holds']['at the first, with Input holding the draft it moved, waits for nothing and keeps an edit made meanwhile with that draft, its first name removed meanwhile'] = function()
   local state = fixture.directory('draft-sessions-first-follow-window-removed')
   plant_draft(directory_draft_file(state), 'From the directory\n')
   child.lua(REMOVED_MEANWHILE)
@@ -1516,7 +1546,7 @@ T['a follow refused while textlock holds']['keeps an edit made while the first f
     session = read_text(session_draft_file(state, 'session-a')),
     directory = read_text(directory_draft_file(state)),
   }, {
-    waiting = 1,
+    waiting = 0,
     shown = { 'From the directory and more' },
     session = 'From the directory and more\n',
     directory = nil,
@@ -1549,7 +1579,7 @@ T['a follow refused while textlock holds']['keeps an edit made while the first f
   })
 end
 
-T['a follow refused while textlock holds']['keeps an edit made while the first follow waits with the draft it moved, its first name not removable'] = function()
+T['a follow refused while textlock holds']['at the first, with Input holding the draft it moved, keeps an edit made meanwhile with that draft, its first name not removable'] = function()
   local state = fixture.directory('draft-sessions-first-follow-window-unremovable')
   plant_draft(directory_draft_file(state), 'From the directory\n')
   child.lua(KEEP_WARNINGS)
@@ -1674,7 +1704,7 @@ T['a follow refused while textlock holds']["keeps an edit made meanwhile as the 
   })
 end
 
-T['a follow refused while textlock holds']['keeps an edit made while the first follow waits with the draft it renamed where links are refused'] = function()
+T['a follow refused while textlock holds']['at the first, with Input holding the draft it renamed where links are refused, waits for nothing and keeps an edit made meanwhile with that draft'] = function()
   local state = fixture.directory('draft-sessions-first-follow-window-renamed')
   plant_draft(directory_draft_file(state), 'From the directory\n')
   child.lua(LINKS_REFUSED, { 'ENOTSUP' })
@@ -1694,7 +1724,7 @@ T['a follow refused while textlock holds']['keeps an edit made while the first f
     session = read_text(session_draft_file(state, 'session-a')),
     directory = read_text(directory_draft_file(state)),
   }, {
-    waiting = 1,
+    waiting = 0,
     shown = { 'From the directory and more' },
     session = 'From the directory and more\n',
     directory = nil,

@@ -395,13 +395,14 @@ kept there. At an editor's first start, that is the working directory's
 Report and draft, which the session takes when it has none of its own.
 When it has its own, the panes show those, and what you typed in Input
 meanwhile leaves Input and stays the directory's draft (|aineo-draft|).
-The changes pane takes the session's base then too (|aineo-changes|). A
-start that is never ready — a trust dialog answered "No, exit", a Claude
-Code that exits before its input box settles — is not followed, and
-nothing moves. A resume Claude Code finds no conversation for is never
-ready either: the new session that takes its place (above) is followed
-once it is ready, and at an editor's first start it takes the working
-directory's Report and draft. What a session kept while it ran — its
+The Report is drawn again then, its cursor on its first line, even when it
+shows the same reports. The changes pane takes the session's base then too
+(|aineo-changes|). A start that is never ready — a trust dialog answered
+"No, exit", a Claude Code that exits before its input box settles — is not
+followed, and nothing moves. A resume Claude Code finds no conversation
+for is never ready either: the new session that takes its place (above)
+is followed once it is ready, and at an editor's first start it takes the
+working directory's Report and draft. What a session kept while it ran — its
 Report, its draft and its base — stays with it when a later resume of it
 finds no conversation, and is not shown again.
 
@@ -434,9 +435,11 @@ not a change of yours: `u` does not take it out, and no `u` reaches a
 change or a Send made before it. It is not saved either: a draft another
 Neovim keeps for that session stays as it left it. The first session
 aineo follows in an editor takes the working directory's draft, when it
-has none of its own. A directory's draft written after that is taken by
-the next editor that first follows a session with no draft of its own,
-and is not shown otherwise. A draft that cannot be moved so is told once
+has none of its own; an Input that holds that draft already is then left
+as it is, with no swap, and `u` still reaches what you typed before. A
+directory's draft written after that is taken by the next editor that
+first follows a session with no draft of its own, and is not shown
+otherwise. A draft that cannot be moved so is told once
 as a warning, and the session keeps its own.
 
 The draft comes back into an empty Input: the first time the layout opens
@@ -801,9 +804,12 @@ after a Send of Input, the selection, where it was, after a Visual Send —
 wherever `\s` was typed, and while the changes pane hid Input. `u` restores
 Input only: the message has reached Claude. The draft the layout restores
 into Input (|aineo-draft|) is not undone: after a Send, `u` brings the text
-back and stops there. A switch of session puts that session's draft in
-Input (|aineo-claude-session|), and no `u` reaches a Send or a change made
-before it. How many Sends `u` can reach is your 'undolevels'
+back and stops there. A switch of session, or a start of Claude Code on
+another session once it is ready (|aineo-claude-session|), puts that
+session's draft in Input, and no `u` reaches a Send or a change made before
+it. At an editor's first start, an Input that holds the draft the session
+takes already is left as it is, and `u` still reaches what you typed
+before. How many Sends `u` can reach is your 'undolevels'
 (|aineo-limits|).
 
 Claude Code counts as ready once its input box has shown, unbroken, for 1.5

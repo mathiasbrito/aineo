@@ -49,6 +49,20 @@ end
 
 --- The Lua, run in a child, that starts the session with the stand-in
 --- settings overridden by `...`'s second value and an `on_session_ready`
+--- that appends what `session_status()` says when it is called to
+--- `_G.statuses_when_called`, emptied first; and returns its terminal.
+local START_NOTING_STATUS = [[
+  local helper, overrides = dofile(...), select(2, ...)
+  _G.statuses_when_called = {}
+  local settings = helper.stand_in_settings(overrides)
+  settings.on_session_ready = function()
+    table.insert(_G.statuses_when_called, require('aineo.claude').session_status())
+  end
+  return require('aineo.claude').start_session(settings)
+]]
+
+--- The Lua, run in a child, that starts the session with the stand-in
+--- settings overridden by `...`'s second value and an `on_session_ready`
 --- that writes each id it is called with to the file `...`'s third value
 --- names, and shows its terminal in the current window.
 local START_WRITING_READINESS = [[
@@ -116,7 +130,9 @@ end
 --- the hangup and SIGTERM, as a process whose event loop is stuck would, so
 --- that it outlives the wipe of its terminal for a while: the POSIX sh
 --- script `.tests/fixtures/<name>/claude.sh`, which it writes, run by `sh`.
---- It ends after 30 s, so that none outlives a failed test for long.
+--- Neovim kills it 4 s after the hangup while the child runs; a case whose
+--- child quits before that ends it with `end_with_the_case()`, and it ends
+--- by itself after 30 s, should the case's runner be killed first.
 ---
 ---@param name string
 ---@return string[] the command that runs it, as `claude.cmd`
@@ -129,6 +145,18 @@ local function box_drawing_claude_deaf_to_hangups(name)
     'sleep 30',
   }, script) == 0, 'cannot write ' .. script)
   return { 'sh', script }
+end
+
+--- Ends, when the case ends, the process group of what runs in the child's
+--- terminal `terminal` — a stand-in from `box_drawing_claude_deaf_to_hangups()`,
+--- which the child's quitting does not end — by SIGKILL.
+---
+---@param terminal integer
+local function end_with_the_case(terminal)
+  local deaf = child.lua_get('vim.fn.jobpid(vim.b[...].terminal_job_id)', { terminal })
+  MiniTest.finally(function()
+    vim.uv.kill(-deaf, 'sigkill')
+  end)
 end
 
 --- A session id of the form Claude Code gives, kept for a directory by a test.
@@ -207,6 +235,53 @@ T['on_session_ready']['is called once, with the new session’s id, by the time 
   eq(ready_sessions(), { new_session_id(fake, 1) })
 end
 
+T['on_session_ready']['is called once the session says it is ready'] = function()
+  local fake = claude.fake('ready-status', 'ready')
+  child.lua('for name, value in pairs(...) do vim.env[name] = value end', { fake.environment })
+  local terminal = child.lua(
+    START_NOTING_STATUS,
+    { 'tests/helpers/claude_session.lua', kept_in('ready-status-state') }
+  )
+  child.api.nvim_win_set_buf(0, terminal)
+
+  claude.wait_for_status(child, 'ready')
+
+  eq(child.lua_get('_G.statuses_when_called'), { 'ready' })
+end
+
+T['on_session_ready']['is called with the session Claude Code switched to before it was ready'] = function()
+  local switched_to = '5a1e2b3c-4d5e-4f60-8a7b-9c0d1e2f3a4b'
+  local fake = claude.fake('ready-switched-early', 'ready')
+  local terminal = start_noting_readiness(fake, kept_in('ready-switched-early-state'))
+  claude.wait_for_screen(child, terminal, '❯')
+  local first = claude.followed_session_id(child)
+  claude.run_session_hook(
+    child,
+    fake,
+    1,
+    'SessionEnd',
+    claude.hook_input('SessionEnd', first, 'clear')
+  )
+  claude.run_session_hook(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    claude.hook_input('SessionStart', switched_to, 'clear')
+  )
+  vim.wait(claude.PATIENCE_MS, function()
+    return claude.followed_session_id(child) ~= first
+  end, 20)
+  local status_at_switch = child.lua_get("require('aineo.claude').session_status()")
+
+  claude.wait_for_status(child, 'ready')
+
+  eq({ status_at_switch = status_at_switch, called = ready_sessions() }, {
+    status_at_switch = 'starting',
+    called = { switched_to },
+  })
+end
+
 T['on_session_ready']['is called once, with the resumed session’s id, by the time a resume that finds its conversation is ready'] = function()
   local fake = fake_with_conversations('ready-resumed', 'ready', { KEPT_SESSION_ID })
   local settings = kept_in('ready-resumed-state')
@@ -263,6 +338,7 @@ T['on_session_ready']['is not called for a start whose terminal was wiped before
     vim.tbl_extend('force', settings, { cmd = box_drawing_claude_deaf_to_hangups('ready-wiped') })
   )
   claude.wait_for_screen(child, wiped, '❯')
+  end_with_the_case(wiped)
   child.cmd('bwipeout! ' .. wiped)
   local fake = claude.fake('ready-wiped', 'ready')
 
@@ -270,6 +346,27 @@ T['on_session_ready']['is not called for a start whose terminal was wiped before
   claude.wait_for_status(child, 'ready')
 
   eq(ready_sessions(), claude.words_after(claude.arguments(fake), '--resume'))
+end
+
+T['on_session_ready']['is not called for a start whose terminal was wiped before it was ready, with no start after it'] = function()
+  local wiped = start_noting_readiness(
+    claude.fake('ready-wiped-alone-deaf', 'ready'),
+    vim.tbl_extend(
+      'force',
+      kept_in('ready-wiped-alone-state'),
+      { cmd = box_drawing_claude_deaf_to_hangups('ready-wiped-alone') }
+    )
+  )
+  claude.wait_for_screen(child, wiped, '❯')
+  end_with_the_case(wiped)
+  child.cmd('bwipeout! ' .. wiped)
+
+  local called = ready_sessions_within(NO_CALL_PATIENCE_MS)
+
+  eq({ called = called, status = child.lua_get("require('aineo.claude').session_status()") }, {
+    called = {},
+    status = 'exited',
+  })
 end
 
 T['on_session_ready']['is not called once Neovim is quitting'] = function()

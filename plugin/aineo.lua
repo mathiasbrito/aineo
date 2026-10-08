@@ -135,14 +135,17 @@ local function resolved_config()
   return (config.resolve_config(vim.g.aineo, config.recorded_setup_options()))
 end
 
---- Where aineo keeps what it keeps for a working directory — the Reports
---- and Input's draft — once `kept_places()` has taken it.
+--- Where aineo keeps what it keeps — the Reports, Input's draft, the
+--- changes pane's kept bases and the session id Claude Code resumes — once
+--- `kept_places()` has taken it.
 ---@type { state_directory: string, working_directory: string }|nil
 local places = nil
 
 --- The editor's state directory and working directory, as they are the
---- first time this is called: the Reports and Input's draft are kept there,
---- for that directory, whatever `:cd` does later.
+--- first time this is called: the Reports and Input's draft are kept under
+--- that state directory — for that working directory until the panes follow
+--- a Claude session (`follow_session()`), then per session — whatever `:cd`
+--- does later.
 ---
 ---@return { state_directory: string, working_directory: string }
 local function kept_places()
