@@ -22,7 +22,7 @@ local M = {}
 ---@field editor_address string the editor's server address (`v:servername`), which Claude Code's session hooks tell
 ---@field editor_program string the editor's own program (`v:progpath`), which runs the hook relay
 ---@field on_session_switched? fun(id: string, source: string?, left: string, reason: string?) called when the session followed changes (`session_id()`): with the new id, how Claude Code started it (`clear`, `resume`, `fork`; `startup` or `resume` for a start that takes the place of the session followed), the id left, and why Claude Code left it (`clear`, `resume`; none for a start). Never for an editor's first start. An error it raises is told the user as a warning and goes no further
----@field on_session_ready? fun(id: string) called once per start of Claude Code — the new session's in place of a resume with no conversation among them — the first time it is ready for input (`session_status()` turns `'ready'`), with the session it follows then (`session_id()`): before that status is read, from the callback that sets it. Never for a start that is not the session any more, whose process has ended, or once Neovim is quitting (`v:exiting`): not for a resume Claude Code found no conversation for, a dialog never answered, or a Claude Code that exits before its input box settles. An error it raises is told the user as a warning and goes no further
+---@field on_session_ready? fun(id: string) called once per start of Claude Code — the new session's in place of a resume with no conversation among them — the first time it is ready for input (`session_status()` turns `'ready'`), with the session it follows then (`session_id()`): before that status is read, from the callback that sets it. Never for a start that is not the session any more, whose process has ended or whose terminal was wiped, or once Neovim is quitting (`v:exiting`): not for a resume Claude Code found no conversation for, a dialog never answered, or a Claude Code that exits before its input box settles. An error it raises is told the user as a warning and goes no further
 
 --- The variables Claude Code's process gets on top of the editor's own, which
 --- it inherits unchanged: `AINEO_CHILD` tells aineo, should Claude Code start a
@@ -280,7 +280,7 @@ end
 --- `claude.cmd` gives settings aineo cannot add its hooks to runs without
 --- them, which its start's `settings_unread` says. The first time Claude
 --- Code is ready for input (`readiness.watch()`) while the start is still
---- the session, its process has not ended and Neovim is not quitting,
+--- the session, it runs (`is_running()`) and Neovim is not quitting,
 --- `settings.on_session_ready` is called with the session the start
 --- follows then (`call_back()`), once. Once its process has ended, its
 --- terminal's session name is `Claude Code` again
@@ -311,7 +311,7 @@ local function launch(settings, choice, on_exit)
       ready
       and not launched.ready_told
       and session == launched
-      and launched.exit_code == nil
+      and is_running()
       and vim.v.exiting == vim.NIL
     then
       launched.ready_told = true
@@ -525,9 +525,10 @@ end
 --- Claude Code is ready for input — from the callback that makes
 --- `session_status()` say `'ready'`, never before `start_session()` has
 --- returned — with the session followed then (`session_id()`). It is not
---- called for a start that never becomes ready, one whose process ended
---- first, one another start has taken the place of, or once Neovim is
---- quitting; an error it raises is told the user as a warning.
+--- called for a start that never becomes ready, one whose process ended or
+--- whose terminal was wiped first, one another start has taken the place
+--- of, or once Neovim is quitting; an error it raises is told the user as
+--- a warning.
 ---
 --- Show a new buffer in a window before Claude Code draws its first screen:
 --- its terminal takes its size from the first window that shows it, and until

@@ -56,6 +56,10 @@ local REPORT_LINES = [[vim.tbl_map(function(line)
   return (line:gsub('^%d%d:%d%d ', 'HH:MM '))
 end, vim.api.nvim_buf_get_lines(vim.fn.bufnr('aineo://report'), 0, -1, true))]]
 
+--- The expression, run in the child, that gives what the Claude home says of
+--- the session (`session_status()`).
+local STATUS = "require('aineo.claude').session_status()"
+
 --- Gives the child the git isolation of the git home's suites
 --- (`git_repo.ENVIRONMENT`) and `state_home` as `XDG_STATE_HOME`, and moves
 --- its working directory into `top`, where Claude Code starts.
@@ -400,6 +404,47 @@ T['a start']['that is never ready leaves the folder’s draft and records where 
   })
 end
 
+T['a start']['once ready, leaves what was typed in Input before it for `u` to reach'] = function()
+  in_repository('session-switch-undo')
+  entry.use_fake(child, claude_session.fake('session-switch-undo', 'ready'))
+  child.cmd('Aineo open')
+  child.cmd('Aineo input')
+  child.type_keys('i', 'keep this paragraph', '<Esc>')
+  child.type_keys('d', 'd')
+  local before = { status = child.lua_get(STATUS), input = child.lua_get(INPUT_LINES) }
+
+  claude_session.wait_for_status(child, 'ready')
+  child.type_keys('u')
+
+  eq({ before = before, undone = child.lua_get(INPUT_LINES) }, {
+    before = { status = 'starting', input = { '' } },
+    undone = { 'keep this paragraph' },
+  })
+end
+
+T['a start']['never ready leaves what was typed in Input meanwhile for `u` to reach once a later start is ready'] = function()
+  in_repository('session-switch-undo-restart')
+  entry.use_fake(child, claude_session.fake('session-switch-undo-restart-exit', 'exit'))
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'exited')
+  child.cmd('Aineo input')
+  child.type_keys('i', 'Notes on the parser', '<Esc>')
+  child.type_keys('o', 'A paragraph deleted by mistake', '<Esc>')
+  child.type_keys('d', 'd')
+  local before = child.lua_get(INPUT_LINES)
+  entry.use_fake(child, claude_session.fake('session-switch-undo-restart', 'ready'))
+
+  entry.press(child, '\\o')
+  claude_session.wait_for_status(child, 'ready')
+  child.cmd('Aineo input')
+  child.type_keys('u')
+
+  eq({ before = before, undone = child.lua_get(INPUT_LINES) }, {
+    before = { 'Notes on the parser' },
+    undone = { 'Notes on the parser', 'A paragraph deleted by mistake' },
+  })
+end
+
 T['a switch'] = MiniTest.new_set()
 
 T['a switch']['by /clear, once ready, shows an empty Report and an empty Input, and takes HEAD as the changes pane’s base'] = function()
@@ -472,16 +517,19 @@ T['a switch']['by /resume back to the first session brings its Report, its base 
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
   switch_by_keys('/clear\r')
+  local after_clear = { report = child.lua_get(REPORT_LINES), input = child.lua_get(INPUT_LINES) }
 
   switch_by_keys('/resume ' .. first .. '\r')
 
   local report, input = child.lua_get(REPORT_LINES), child.lua_get(INPUT_LINES)
   entry.press(child, '\\pc')
   eq({
+    after_clear = after_clear,
     report = report,
     input = input,
     listed = lists_once(COMMITS, listed(commit, 'Write two'), true),
   }, {
+    after_clear = { report = { '' }, input = { '' } },
     report = { shown('Rename the lexer') },
     input = { 'notes for the first session' },
     listed = true,
@@ -503,6 +551,18 @@ T['a switch']['keeps Input’s text as the draft of the session left, and puts t
     input = { 'notes for the other session' },
     left = 'notes for the first session\n',
   })
+end
+
+T['a switch']['after :Aineo open again while Claude Code runs is followed still'] = function()
+  in_repository('session-switch-reopen')
+  local first = open_until_ready(fake_running_hooks('session-switch-reopen'))
+  receive_report('Rename the lexer')
+  child.cmd('Aineo open')
+
+  local cleared = switch_by_keys('/clear\r')
+
+  MiniTest.expect.no_equality(cleared, first)
+  eq(child.lua_get(REPORT_LINES), { '' })
 end
 
 T['a switch']['by /branch shows the new session’s Report and Input, both empty'] = function()
@@ -556,7 +616,7 @@ T['a SessionStart of the session followed']['by /compact changes nothing: the Re
   local first = open_until_ready(fake)
   receive_report('Rename the lexer')
   receive_report('Write the docs')
-  child.lua("vim.api.nvim_win_set_cursor(vim.fn.bufwinid('aineo://report'), { 1, 0 })")
+  child.lua("vim.api.nvim_win_set_cursor(vim.fn.bufwinid('aineo://report'), { 2, 4 })")
   entry.set_input(child, { 'notes for the first session' })
 
   claude_session.press_keys(child, child.lua_get(RUNNING_CLAUDE_TERMINAL), '/compact\r')
@@ -573,7 +633,7 @@ T['a SessionStart of the session followed']['by /compact changes nothing: the Re
     causes = { 'startup', 'compact' },
     followed = first,
     report = { shown('Rename the lexer'), shown('Write the docs') },
-    cursor = { 1, 0 },
+    cursor = { 2, 4 },
     input = { 'notes for the first session' },
   })
 end
@@ -586,7 +646,8 @@ T['a new editor']['in the directory resumes the session switched to, and shows i
   local cleared = switch_by_keys('/clear\r')
   receive_report('Write the docs')
   entry.set_input(child, { 'notes for the cleared session' })
-  text_once_written(session_files(state, cleared).draft, 'notes for the cleared session\n')
+  local kept_draft =
+    text_once_written(session_files(state, cleared).draft, 'notes for the cleared session\n')
   stop_the_child()
   entry.restart(child)
   enter(top, state_home)
@@ -595,10 +656,12 @@ T['a new editor']['in the directory resumes the session switched to, and shows i
   open_until_ready(fake)
 
   eq({
+    kept_draft = kept_draft,
     resumed = claude_session.words_after(claude_session.arguments(fake), '--resume'),
     report = child.lua_get(REPORT_LINES),
     input = child.lua_get(INPUT_LINES),
   }, {
+    kept_draft = 'notes for the cleared session\n',
     resumed = { cleared },
     report = { shown('Write the docs') },
     input = { 'notes for the cleared session' },
