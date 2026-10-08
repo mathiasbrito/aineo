@@ -31,6 +31,19 @@ local function own_state_directory(name)
   )
 end
 
+--- Waits until Claude Code is ready in the child, and so aineo follows the
+--- session it started on, and returns the file that keeps that session's
+--- draft, beside `draft`, the working directory's: the draft once the
+--- session is followed.
+---
+---@param draft string
+---@return string
+local function session_draft_once_ready(draft)
+  claude_session.wait_for_status(child, 'ready')
+  local id = claude_session.followed_session_id(child)
+  return vim.fs.joinpath(vim.fs.dirname(draft), 'session-' .. vim.fn.sha256(id) .. '.txt')
+end
+
 --- Writes `lines` as the draft file `draft`, as an earlier editor left it.
 ---
 ---@param draft string
@@ -92,10 +105,10 @@ end
 T[':Aineo send'] = MiniTest.new_set()
 
 T[':Aineo send']['from another window empties the draft with Input, at once'] = function()
-  local draft = own_state_directory('entry-draft-send-state')
+  local directory_draft = own_state_directory('entry-draft-send-state')
   entry.use_fake(child, claude_session.fake('entry-draft-send', 'ready'))
   child.cmd('Aineo open')
-  claude_session.wait_for_status(child, 'ready')
+  local draft = session_draft_once_ready(directory_draft)
   entry.set_input(child, { 'hello' })
   wait_for_draft(draft, 'hello\n')
   child.cmd('Aineo report')
@@ -187,9 +200,10 @@ end
 T[':bdelete of Input'] = MiniTest.new_set()
 
 T[':bdelete of Input']['while the layout is open brings the draft back and keeps what is typed after it'] = function()
-  local draft = own_state_directory('entry-draft-bdelete-state')
+  local directory_draft = own_state_directory('entry-draft-bdelete-state')
   entry.use_fake(child, claude_session.fake('entry-draft-bdelete', 'ready'))
   child.cmd('Aineo open')
+  local draft = session_draft_once_ready(directory_draft)
   entry.set_input(child, { 'Refactor the parser' })
   wait_for_draft(draft, 'Refactor the parser\n')
   local input = child.lua_get("require('aineo.layout').input_buffer()")
@@ -219,9 +233,10 @@ T[':bdelete of Input while its window is closed'] =
 T[':bdelete of Input while its window is closed']['then \\r or \\c, then \\i, brings the draft back and keeps what is typed after it'] = function(
   key
 )
-  local draft = own_state_directory('entry-draft-bdelete-closed-' .. key .. '-state')
+  local directory_draft = own_state_directory('entry-draft-bdelete-closed-' .. key .. '-state')
   entry.use_fake(child, claude_session.fake('entry-draft-bdelete-closed-' .. key, 'ready'))
   child.cmd('Aineo open')
+  local draft = session_draft_once_ready(directory_draft)
   entry.set_input(child, { 'Refactor the parser' })
   wait_for_draft(draft, 'Refactor the parser\n')
   local input = child.lua_get("require('aineo.layout').input_buffer()")
