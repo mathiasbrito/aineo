@@ -345,7 +345,7 @@ T['Enter']['on another worktree’s file shows its diff from that worktree’s b
 
   wait_for_diffs(1)
   eq(child.lua_get(SHOWN_DIFF, { 1 }), {
-    name = ('aineo://worktree%s/diff/notes.txt'):format(agent),
+    name = ('aineo://worktree%s//diff/notes.txt'):format(agent),
     text = {
       'diff --git a/notes.txt b/notes.txt',
       ('index %s..%s 100644'):format(before, after),
@@ -381,7 +381,7 @@ T['Enter']['on another worktree’s commit shows that commit’s diff, named for
     first = shown.text[1],
     last = { shown.text[#shown.text - 1], shown.text[#shown.text] },
   }, {
-    name = ('aineo://worktree%s/commit/%s'):format(agent, commit),
+    name = ('aineo://worktree%s//commit/%s'):format(agent, commit),
     first = 'commit ' .. commit,
     last = { '-one', '+agent' },
   })
@@ -454,6 +454,39 @@ T['Enter']['on one path in two worktrees shows two diff buffers, each its worktr
     first = child.lua_get(last_line, { 1 }),
     second = child.lua_get(last_line, { 2 }),
   }, { distinct = true, first = '+first', second = '+second' })
+end
+
+T['Enter']['on two worktrees’ files whose top level and path join alike shows two diff buffers'] = function()
+  local fixture = git_repo.directory('changesworktrees-enter-joined')
+  local top = vim.fs.joinpath(fixture, 'repo')
+  vim.fn.mkdir(top, 'p')
+  git_repo.git(top, { 'init', '--quiet', '--initial-branch=main' })
+  git_repo.write(top, '.gitignore', { '/diff/' })
+  git_repo.write(top, 'sub/diff/x.txt', { 'one' })
+  git_repo.commit_all(top, 'First')
+  git_repo.write(top, 'sub/diff/x.txt', { 'main' })
+  local nested = vim.fs.joinpath(top, 'diff', 'sub')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'nested', nested })
+  git_repo.write(nested, 'x.txt', { 'nested' })
+  local editor = vim.fs.joinpath(fixture, 'editor')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'editor', editor })
+  begin_and_show(editor)
+  expect_lines(FILES, {
+    'No files changed on this session',
+    'Worktree repo (main)',
+    '  M sub/diff/x.txt',
+    'Worktree sub (nested)',
+    '  ? x.txt',
+  })
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
+  child.type_keys('<CR>')
+  wait_for_diffs(1)
+
+  child.lua('vim.api.nvim_win_set_cursor(0, { 5, 0 })')
+  child.type_keys('<CR>')
+
+  wait_for_diffs(2)
+  eq(child.lua_get('_G.shown_diffs[1] ~= _G.shown_diffs[2]'), true)
 end
 
 --- How long a case waits for the watch to call back for one change before it
@@ -565,6 +598,30 @@ end
 ---@param switch string
 local function turn_on(switch)
   assert(vim.fn.writefile({}, switch) == 0, 'cannot write ' .. switch)
+end
+
+T['a diff of another worktree that fails'] = MiniTest.new_set()
+
+T['a diff of another worktree that fails']['is told naming its worktree'] = function()
+  local top = git_repo.create('changesworktrees-diff-failed', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local stand_in, switch = breakable_git_in('changesworktrees-diff-failed', agent, 'diff')
+  child.lua(COUNT_DIFFS_AND_MESSAGES)
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(FILES, { '  M notes.txt', 'Worktree agent (agent)', '  M notes.txt' })
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
+  turn_on(switch)
+
+  child.type_keys('<CR>')
+
+  git_repo.wait_until('a message told', function()
+    return child.lua_get('#_G.messages') > 0
+  end)
+  eq(child.lua_get('_G.messages'), {
+    'aineo: the diff of notes.txt in the worktree agent could not be read: fatal: broken',
+  })
 end
 
 T['a worktree whose read fails'] = MiniTest.new_set({
@@ -806,23 +863,25 @@ T['the reads']['of a window stay one at a time with several worktrees, one asked
 end
 
 --- Writes a stand-in for git under the fixture `git-<name>` that, while the
---- file `<stand-in>.<folder>.hold` exists, holds every `ls-files` in each
---- worktree of `held`, by its top level, `<folder>` the top level's last
---- part: it writes `<stand-in>.<folder>.waiting` and waits for
+--- file `<stand-in>.<folder>.hold` exists, holds every `subcommand` in
+--- each worktree of `held`, by its top level, `<folder>` the top level's
+--- last part: it writes `<stand-in>.<folder>.waiting` and waits for
 --- `<stand-in>.<folder>.gate` before it runs git, as it runs git at once
 --- for anything else; returns its path.
 ---
 ---@param name string
+---@param subcommand string
 ---@param held string[]
 ---@return string stand_in
-local function git_holding(name, held)
+local function git_holding(name, subcommand, held)
   local lines = {}
   for _, top in ipairs(held) do
     local files = '"$0.' .. vim.fs.basename(top)
     table.insert(
       lines,
-      ('case " $* " in *" -C %s "*" ls-files "*) if [ -f %s.hold" ]; then : > %s.waiting"; while [ ! -f %s.gate" ]; do sleep 0.05; done; fi ;; esac'):format(
+      ('case " $* " in *" -C %s "*" %s "*) if [ -f %s.hold" ]; then : > %s.waiting"; while [ ! -f %s.gate" ]; do sleep 0.05; done; fi ;; esac'):format(
         top,
+        subcommand,
         files,
         files,
         files
@@ -844,7 +903,7 @@ T['the reads']['of the editor’s own list, asked during the other worktrees’,
   local top = git_repo.create('changesworktrees-own-between', { ['notes.txt'] = { 'one' } })
   local first = add_worktree(top, 'first', 'first')
   local second = add_worktree(top, 'second', 'second')
-  local stand_in = git_holding('changesworktrees-own-between', { first, second })
+  local stand_in = git_holding('changesworktrees-own-between', 'ls-files', { first, second })
   child.lua(COUNT_GIT_READS)
   begin_and_show(top, { executable = stand_in })
   wait_for_the_reads()
@@ -868,12 +927,43 @@ T['the reads']['of the editor’s own list, asked during the other worktrees’,
 end
 
 --- The Lua that replaces, in the child, the git home's watch with one that
---- never calls back, so that only what a case asks for reads the pane.
-local NO_WATCH = [[
-  require('aineo.git').watch_repository = function()
+--- calls back only when a case calls `_G.on_change(failure, change)`, so
+--- that only what a case asks for reads the pane.
+local WATCH_IN_HAND = [[
+  require('aineo.git').watch_repository = function(_, on_change)
+    _G.on_change = on_change
     return { stop = function() end, watches_subdirectories = true }
   end
 ]]
+
+T['the reads']['of the editor’s commits, asked during a read, stay asked when a later call asks without them'] = function()
+  local top = git_repo.create('changesworktrees-own-asked', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  local stand_in = git_holding('changesworktrees-own-asked', 'merge-base', { agent })
+  child.lua(WATCH_IN_HAND)
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(
+    COMMITS,
+    { 'No commits on this session', 'Worktree agent (agent)', 'No commits in this worktree' }
+  )
+  touch(stand_in .. '.agent.hold')
+  child.lua('_G.on_change(nil, { files_changed = false, branch_moved = false })')
+  git_repo.wait_until('the other worktree’s base asked for', function()
+    return vim.uv.fs_stat(stand_in .. '.agent.waiting') ~= nil
+  end)
+  local commit = git_repo.commit_all(top, 'Mine')
+  child.lua('_G.on_change(nil, { files_changed = true, branch_moved = true })')
+  child.lua('_G.on_change(nil, { files_changed = true, branch_moved = false })')
+  vim.fn.delete(stand_in .. '.agent.hold')
+
+  touch(stand_in .. '.agent.gate')
+
+  expect_lines(COMMITS, {
+    commit:sub(1, 7) .. ' Mine',
+    'Worktree agent (agent)',
+    'No commits in this worktree',
+  })
+end
 
 --- Writes a stand-in for git under the fixture `git-<name>` that appends
 --- the arguments of every git it runs, one line each, to the file
@@ -907,7 +997,7 @@ T['the reads']['of a window read the editor’s branch once, however many worktr
   add_worktree(top, 'second', 'second')
   add_worktree(top, 'third', 'third')
   local stand_in, log = git_logging_every_run('changesworktrees-comparison-once')
-  child.lua(NO_WATCH)
+  child.lua(WATCH_IN_HAND)
   child.lua(COUNT_GIT_READS)
 
   begin_and_show(top, { executable = stand_in })
