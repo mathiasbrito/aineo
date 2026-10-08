@@ -31,6 +31,7 @@ M.NONE = { sections = {} }
 ---@field found aineo.git.Repository the editor's repository
 ---@field before aineo.changes.OtherWorktrees what the window knew of the other worktrees before this read
 ---@field read_list aineo.changes.ReadList reads the window's list for a worktree
+---@field before_each_worktree fun(proceed: fun()) runs before each worktree's read, which starts once it calls `proceed()`
 ---@field git? aineo.git.Options how the git home runs git
 
 --- The section of `before` for the worktree at `top`, or nil when it has
@@ -119,7 +120,8 @@ end
 
 --- Lists the worktrees of the editor's repository, `read.found`, other than
 --- its own, and reads each one's list (`read_section()`), one after
---- another, then calls `done(others)`; or, when they cannot be listed,
+--- another, each once `read.before_each_worktree` lets it start, then calls
+--- `done(others)`; or, when they cannot be listed,
 --- `done(others)` saying why, with the sections the window knew before.
 ---
 ---@param read aineo.changes.WorktreesRead
@@ -139,11 +141,13 @@ function M.read_other_worktrees(read, done)
         done({ sections = sections })
         return
       end
-      read_section(read, others[index], function(section)
-        if section then
-          table.insert(sections, section)
-        end
-        read_from(index + 1)
+      read.before_each_worktree(function()
+        read_section(read, others[index], function(section)
+          if section then
+            table.insert(sections, section)
+          end
+          read_from(index + 1)
+        end)
       end)
     end
     read_from(1)
