@@ -748,9 +748,10 @@ end
 --- The name of the buffer showing `entry`'s diff: `aineo://diff/<path>` for
 --- a file, its path quoted as the files window shows it, and
 --- `aineo://commit/<id>` for a commit, by its full id; for an entry of
---- another worktree, `aineo://worktree<top>/diff/<path>` and
---- `aineo://worktree<top>/commit/<id>`, the worktree's top level quoted too,
---- so that two worktrees' diffs of one path are two buffers.
+--- another worktree, `aineo://worktree<top>//diff/<path>` and
+--- `aineo://worktree<top>//commit/<id>`, the worktree's top level quoted
+--- too, so that two worktrees' diffs are two buffers, whatever their paths:
+--- a resolved top level holds no `//`, and neither does a path git gives.
 ---
 ---@param entry aineo.changes.Entry
 ---@return string
@@ -758,22 +759,28 @@ local function diff_name(entry)
   local diff = entry.commit and 'commit/' .. entry.commit.id
     or 'diff/' .. lines.quoted_path(entry.change.path)
   if entry.worktree then
-    return ('aineo://worktree%s/%s'):format(lines.quoted_path(entry.worktree.top), diff)
+    return ('aineo://worktree%s//%s'):format(lines.quoted_path(entry.worktree.top), diff)
   end
   return 'aineo://' .. diff
 end
 
 --- What the diff of `entry` is called in what aineo tells the user: the
 --- diff of the file's path, quoted as the files window shows it, or of the
---- commit's abbreviated id.
+--- commit's abbreviated id; for an entry of another worktree, followed by
+--- `in the worktree <folder>`, its folder's name as its heading gives it.
 ---
 ---@param entry aineo.changes.Entry
 ---@return string
 local function told_name(entry)
-  if entry.commit then
-    return 'commit ' .. entry.commit.id:sub(1, lines.ABBREVIATED_ID_LENGTH)
+  local name = entry.commit and 'commit ' .. entry.commit.id:sub(1, lines.ABBREVIATED_ID_LENGTH)
+    or lines.quoted_path(entry.change.path)
+  if entry.worktree then
+    return ('%s in the worktree %s'):format(
+      name,
+      lines.quoted_path(vim.fs.basename(entry.worktree.top))
+    )
   end
-  return lines.quoted_path(entry.change.path)
+  return name
 end
 
 --- Shows `diff`, the text git printed for `entry`, in a diff buffer named
