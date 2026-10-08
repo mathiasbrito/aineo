@@ -604,17 +604,17 @@ The previous section names a consequence of the wait, read from T37's code and n
 
 ## Correction — 2026-10-08, from the brief review
 
-The stage-2 brief review (`brief-review-stage2.md` in this folder, on `e5ef23a`, against `dev` `dc5ff70`) found this brief dispatchable only after corrections: thirteen findings, T39-1 to T39-13. No packet had been dispatched, so each is applied here. Each superseded line above is struck through with a dated pointer to this section (T39-9), and nothing else above was edited. Where the review left a choice, the orchestrator ruled under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"). Each such ruling is named below as **the orchestrator's assumption, to report to the user**. None is the user's answer.
+The stage-2 brief review of 2026-10-08 (not committed; each finding it raised is listed, with its correction, in this section) read this brief on `e5ef23a`, against `dev` `dc5ff70`. It found the facts right: every path, line range, symbol, help fence and count it checked held, and C1–C7 reproduced to within 30 ms. To measure the wait, the reviewer built a minimal version of it in its own worktree and removed it afterwards: the callback in `launch()`'s readiness callback, and the flag wiring in `plugin/aineo.lua`. Its probes (`probe_wait.lua`, `probe_ready.lua`, `probe_panes_timing.lua`) are named below where they measured something. It found the brief dispatchable only after corrections: thirteen findings, T39-1 to T39-13. No packet had been dispatched, so each is applied here. Each superseded line above is struck through with a dated pointer to this section (T39-9), and nothing else above was edited. Where the review left a choice, the orchestrator ruled under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"). Each such ruling is named below as **the orchestrator's assumption, to report to the user**. None is the user's answer.
 
 **Base.** `origin/dev` is now `2fdda81` (PR #140, stage 1's knowledge pass). It changed no code, test, help or script: `git diff --stat dc5ff70 2fdda81 -- lua plugin tests doc scripts Makefile` prints nothing. Every line number in this brief holds there. Start from the `origin/dev` the dispatch message names.
 
-**Implementer type (T39-13) — the orchestrator's assumption, to report to the user.** This packet is dispatched as **`neovim-claude-code-integrator`**, not `neovim-lua-developer`, since it now edits `lua/aineo/claude/init.lua`, code that runs Claude Code. That agent binds its own rules and every rule of `.claude/agents/neovim-lua-developer.md`, and it was T35's type. Read both, as the first line says. The attack review stays with `neovim-claude-code-reviewer`; test integrity and records stay with `reviewer`. `plan.md` › *Packets* (T39's row), › *Host and reviewers* and › *Briefs* still name `neovim-lua-developer`. This section supersedes them for T39, and the wave's knowledge pass records the change there.
+**Implementer type (T39-13) — the orchestrator's assumption, to report to the user.** The finding: `plan.md` › *Host and reviewers* still dispatched T39 as `neovim-lua-developer`, though the packet now edits code that runs Claude Code, and the brief named no type. This packet is dispatched as **`neovim-claude-code-integrator`**, not `neovim-lua-developer`, since it now edits `lua/aineo/claude/init.lua`, code that runs Claude Code. That agent binds its own rules and every rule of `.claude/agents/neovim-lua-developer.md`, and it was T35's type. Read both, as the first line says. The attack review stays with `neovim-claude-code-reviewer`; test integrity and records stay with `reviewer`. `plan.md` › *Packets* (T39's row), › *Host and reviewers* and › *Briefs* still name `neovim-lua-developer`. This section supersedes them for T39, and the wave's knowledge pass records the change there.
 
 **Read first** also: `evidence/w9-t39-confirmation-probes.txt` (C1–C7) and `lua/aineo/claude/readiness.lua` (read, not edited).
 
 ### T39-1 — the confirmation never runs once Neovim is quitting (the orchestrator's assumption, to report to the user)
 
-The review measured it. A `ready` fake was started and the child ran `:qall!` 400 ms later. The callback still ran while `stop_on_quit()`'s `VimLeavePre` waited for Claude Code to stop: `v:exiting` was set, and the process had not yet ended. `readiness.watch()`'s `vim.defer_fn()` timer runs inside that wait's event loop. Told then, the homes would move the folder's records and draft into a session in which nothing was sent. That is the strand the wait exists to close, reached by quitting within about 1.5 s of `nvim`.
+The finding: the ready callback can be called while Neovim quits, and the contract did not exclude it. The review measured it (`probe_ready.lua`). A `ready` fake was started and the child ran `:qall!` 400 ms later. The callback still ran while `stop_on_quit()`'s `VimLeavePre` waited for Claude Code to stop: `v:exiting` was set, and the process had not yet ended. `readiness.watch()`'s `vim.defer_fn()` timer runs inside that wait's event loop. Told then, the homes would move the folder's records and draft into a session in which nothing was sent. That is the strand the wait exists to close, reached by quitting within about 1.5 s of `nvim`.
 
 - **The contract gains a clause.** The ready callback is called only while that start is still the session, its process has not ended (C7), **and Neovim is not quitting (`v:exiting` is not set)**. This replaces the struck line in *What the claude home exposes, and what T39 adds*. It follows T35's own pattern: `take_session_event()` and the fallback drop work once `v:exiting` is set.
 - **A test in `tests/test_claude_ready.lua`:** the callback writes a file; the child quits 400 ms after the start; no file is written.
@@ -622,6 +622,8 @@ The review measured it. A `ready` fake was started and the child ran `:qall!` 40
 - It reaches T40 too: see *For T40's dispatch amendment*, below.
 
 ### T39-2 — the save marks lost before the confirmation stay lost (the orchestrator's assumption, to report to the user)
+
+The finding: a file saved in the editor before a start's confirmation loses its `*` in the changes pane at the confirmation. This brief left the decision open (its six rules' rule 5, an undecided decision at dispatch), with "The decision is the orchestrator's, on that review" and "If T38 takes it, T39 drops that sentence". T38's brief said nothing of it, so neither implementer could act.
 
 **Ruling: the lost `*` stays, as the review recommends.** A file saved before a start is confirmed is not marked for that session. That matches D19's definition: the `*` marks a save since the base, and under the wait the base is taken at the confirmation, so a save before it predates the base.
 
@@ -635,7 +637,7 @@ The review measured it. A `ready` fake was started and the child ran `:qall!` 40
 
 ### T39-3 — text typed in Input before the confirmation can leave Input (the orchestrator's assumption, to report to the user)
 
-The review measured it with `probe_wait.lua`, the draft home alone, in the wait's order:
+The finding: what the user types in Input while a start is unconfirmed leaves Input at the confirmation when the session has a draft of its own, stays out of sight, and the brief did not name it. The review measured it with `probe_wait.lua`, the draft home alone, in the wait's order:
 1. the environment;
 2. `keep_draft(<empty Input>)`;
 3. `notes typed while unconfirmed` typed;
@@ -651,7 +653,7 @@ Input then holds the session's own draft, and the directory's draft file holds t
 
 ### T39-4 — which entry cases move under the wait (measured)
 
-The review ran the entry suites on a minimal build of the wait (the callback in `launch()`'s readiness callback, and the flag wiring in `plugin/aineo.lua`), Neovim 0.12.5. This replaces the struck forecast in *Mutants and tests for the wait*:
+The finding: the brief's forecast of which entry cases move under the wait was wrong both ways. It named `tests/test_entry_report.lua` (109) and `tests/test_entry_send_selection.lua` (279), which do not move, and missed four cases of `tests/test_entry_draft.lua`, which do. The case at `tests/test_entry_panes.lua:601–619` would stay green only by timing. The review ran the entry suites on its minimal build of the wait, Neovim 0.12.5. This replaces the struck forecast in *Mutants and tests for the wait*:
 
 | Test file | Cases | Under the wait |
 |---|---|---|
@@ -679,12 +681,16 @@ The review ran the entry suites on a minimal build of the wait (the callback in 
 
 ### T39-5 — mutant 9 as a literal edit, and the bounds of the negative tests
 
+The finding: mutant 9, "the homes told after a fixed delay", named no delay, so a mutant whose delay outlasts the test's bound would survive. "Wait for `ready`, not for a time" cannot apply to the negative cases, where `ready` never comes. And "no session file is made" was ambiguous, since T35 keeps a file for a new id at its start.
+
 - **Mutant 9 now reads**, as an edit of `plugin/aineo.lua`, on `tests/test_entry_session_switch.lua`: the ready callback not wired, and at the start, in its place, `vim.defer_fn(function() tell(require('aineo.claude').session_id()) end, 2000)`. Here `tell` stands for this packet's function that tells the three homes a session. Under the fake's `trust` mode, the folder's draft then moves into the start's id.
 - **The `trust` test's wait is timed, and its bound is named:** at least 4000 ms after the start. That is above the mutant's 2000 ms and above a dead resume's 3 s (C2). "Wait for `ready`, not for a time" cannot apply where `ready` never comes.
 - **The `exit` test's wait** ("never called under `exit`") **is timed too**, since `session_status()` never says `ready` there. Its bound is at least 3000 ms (twice `SETTLE_MS`, 1500) after the fake's first screen, named in the test.
 - **"No session file is made" now reads "no records, draft or kept-base file for the session".** T35 keeps a new id's `aineo/claude-sessions/` file at the start.
 
 ### T39-6 — the budget and the mutants, restated
+
+The finding: the *Budget* ("about twelve entry cases, one case of `tests/test_entry_panes.lua` moved, a help paragraph and one LIMITS sentence") and *The tests*' "five mutants" were stale against the amended packet. The budget's stop rule ("if it grows past that, stop") could have ended the packet early.
 
 **Budget: large.**
 - a ready callback in the claude home, and a new `tests/test_claude_ready.lua` of about eight cases, T39-1's and T39-11's included;
@@ -703,6 +709,8 @@ If it grows past that, stop at a green, reviewed, pushed state and report a true
 
 ### T39-7 — the fence in `launch()`, widened
 
+The finding: the fence was tighter than `clean-code` wants. A build inside the readiness callback (283–285) alone works: the review's build there kept `tests/test_claude.lua` (117), `tests/test_claude_resume.lua` (49) and `tests/test_claude_switch.lua` (98) at `Fails (0)`. But its `pcall`-and-warn duplicates `tell_switch()` (352–361), and the fence admitted no helper and no line of `launch()` outside 283–285, such as initialising a flag in `launched` (273–281).
+
 This replaces the struck `launch()` item of the boundary. In `lua/aineo/claude/init.lua` you may also change:
 - **`launch()` 255–298 whole, except the start token (270–271)**, which is T40's. For instance: a once-per-start flag left `nil` in `launched` (273–281), the guard and the call in the readiness callback (283–285), and its docstring.
 - **One of these two**, so the `pcall`-and-warn is not written twice:
@@ -712,6 +720,8 @@ This replaces the struck `launch()` item of the boundary. In `lua/aineo/claude/i
 `tests/test_claude.lua`, `tests/test_claude_resume.lua` and `tests/test_claude_switch.lua` stay green and are not edited. The rest of the fence stands: the `Settings` class (14–24), the `Start` alias (31–38) when a field is added, `validate_settings()` (130–149), and `M.start_session()`'s docstring (455–522). Nothing else under `lua/`.
 
 ### T39-8 — what the wait keeps out, said exactly
+
+The finding: the brief overclaimed. It said "The wait keeps the folder's records and draft out of a session that turns out dead".
 
 The wait keeps the folder's records and draft out of a session that is dead **at its start**. It does not keep them out of a session that is confirmed and later turns out dead: a confirmed session in which nothing is ever sent is dead at its next resume. For example:
 1. a first start after the upgrade resumes a kept id that is dead;
@@ -723,7 +733,7 @@ It stays stranded until **T41** hands a dead session's files to its replacement.
 
 ### T39-9 — superseded statements, struck through
 
-Each of these is struck above with a dated pointer:
+The finding: five statements above were superseded by the amendments but not marked as such. Each of these is now struck above with a dated pointer:
 - *The tests*' "five mutants" (T39-6);
 - the *Budget* (T39-6);
 - "every source, `startup` included, is told (mutant 4)": the gate is the start's confirmation, not the source;
@@ -734,7 +744,7 @@ The lines superseded by T39-1, T39-2, T39-4, T39-5, T39-7 and T39-8 are struck t
 
 ### T39-10 — where a report after `ready` comes from
 
-The test "after `ready`, a report lands in the started session's records" needs a report sent after `ready`. The fake cannot send one: `mcp-client` reports at its start and exits unready. Send it one of two ways:
+The finding: the brief did not say where that report comes from. The test "after `ready`, a report lands in the started session's records" needs a report sent after `ready`. The fake cannot send one: `mcp-client` reports at its start and exits unready. Send it one of two ways:
 - through `tests/helpers/mcp_relay.lua`'s `start_relay()` (157), run and not edited;
 - or through the editor's own RPC, the Lua `require('aineo.report').receive_report(...)` that `lua/aineo/mcp/editor.lua` (8) sends.
 
@@ -742,13 +752,13 @@ The fake still needs nothing new, and `tests/helpers/` stays out of bounds.
 
 ### T39-11 — a test for the callback's validation
 
-`tests/test_claude_ready.lua` gains a case: the claude home names `settings.<the callback's name>` when it is not a function, and starts nothing. T35's equivalent sits in `tests/test_claude.lua`'s parametrised table (282–285), which this packet may not edit.
+The finding: the contract's item "It is validated as `on_session_switched` is" had no test in the `tests/test_claude_ready.lua` list. `tests/test_claude_ready.lua` gains a case: the claude home names `settings.<the callback's name>` when it is not a function, and starts nothing. T35's equivalent sits in `tests/test_claude.lua`'s parametrised table (282–285), which this packet may not edit.
 
 ### T39-12 — no clearing of the flag in `on_terminal_replaced`
 
-No input sets the flag before a fallback: a confirmed start would have to exit 1 showing "No conversation found with session ID: <its own id>". So a clear there could never be seen failing, as `tdd` requires.
+The finding: the brief had the composition root's confirmed flag cleared in `on_terminal_replaced`, and that clear cannot be seen failing. No input sets the flag before a fallback: a confirmed start would have to exit 1 showing "No conversation found with session ID: <its own id>". So a clear there could never be seen failing, as `tdd` requires.
 
-**It is dropped.** The clear before `start_session()` covers every start the composition root makes. This replaces the third item of *One way to know whether the running start is confirmed*. The review offered two options ("call it defensive with no test, or drop it"); taking the second is the correcting agent's reading, for the orchestrator to confirm.
+**It is dropped.** The clear before `start_session()` covers every start the composition root makes. This replaces the third item of *One way to know whether the running start is confirmed*. The review offered two options ("call it defensive with no test, or drop it"). Taking the second is **the orchestrator's assumption, to report to the user**.
 
 ### For T40's dispatch amendment
 
