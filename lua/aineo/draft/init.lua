@@ -646,8 +646,13 @@ local replacements_waiting = {}
 --- the draft cannot be put in for another reason (`warn_not_put()`);
 --- raises nothing.
 ---
+--- With `keep_same_text`, a buffer whose text is the kept draft already
+--- keeps it as it is, with its cursor and undo: nothing is put in, and its
+--- saves go to the file the home keeps from then on.
+---
 ---@param buffer integer
-local function replace_with_kept_draft(buffer)
+---@param keep_same_text boolean
+local function replace_with_kept_draft(buffer, keep_same_text)
   local watch = kept[buffer]
   if replacements_waiting[buffer] or not watch then
     return
@@ -658,6 +663,12 @@ local function replace_with_kept_draft(buffer)
     return
   end
   local read, draft = pcall(read_draft)
+  if keep_same_text and read and (draft or '') == draft_of(buffer) then
+    watch.file = nil
+    watch.unreadable = nil
+    watch.unsaved_told = nil
+    return
+  end
   watch.replacing = true
   local put, refusal = put_draft(buffer, read and draft or '')
   watch.replacing = false
@@ -682,7 +693,7 @@ local function replace_with_kept_draft(buffer)
     desc = "aineo: put the followed session's draft into Input once the editor allows it",
     callback = function()
       replacements_waiting[buffer] = nil
-      replace_with_kept_draft(buffer)
+      replace_with_kept_draft(buffer, keep_same_text)
     end,
   })
 end
@@ -795,8 +806,11 @@ end
 --- holds, or the buffer is emptied when the session has none
 --- (`replace_with_kept_draft()`). The putting is no change of the user's:
 --- no undo takes it out, no undo reaches a change made before it, and it is
---- not saved. Until it lands — at the editor's next `SafeState` when
---- textlock refuses it — a buffer's changes are saved as its old file's
+--- not saved. At the first follow that moves the working directory's draft
+--- (`move_directory_draft_once()`), a buffer whose text is the session's
+--- draft already is left as it is, its undo included. Until it lands — at
+--- the editor's next `SafeState` when textlock refuses it — a buffer's
+--- changes are saved as its old file's
 --- draft. A buffer whose text cannot be saved keeps it, as its old file's
 --- draft, and is told to the user each time. A session's draft that
 --- cannot be read empties the buffers, and is never replaced by what is
@@ -838,9 +852,10 @@ function M.follow_draft_session(session_id)
   if not environment then
     return
   end
+  local first_follow = not directory_draft_moved
   move_directory_draft_once()
   for buffer in pairs(kept) do
-    replace_with_kept_draft(buffer)
+    replace_with_kept_draft(buffer, first_follow)
   end
 end
 
