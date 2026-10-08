@@ -598,11 +598,11 @@ local INPUT_LINES =
 
 T['the changes pane key, with the layout never opened,'] = MiniTest.new_set()
 
-T['the changes pane key, with the layout never opened,']['hands Input to the draft, which the agent pane then shows and keeps'] = function()
+T['the changes pane key, with the layout never opened,']['hands Input to the folder’s draft, which the agent pane then shows and keeps while Claude Code is not ready'] = function()
   local draft = own_draft('panes-draft-state')
   vim.fn.mkdir(vim.fs.dirname(draft), 'p')
   assert(vim.fn.writefile({ 'Refactor the parser' }, draft) == 0, 'cannot write ' .. draft)
-  entry.use_fake(child, claude_session.fake('panes-draft', 'ready'))
+  entry.use_fake(child, claude_session.fake('panes-draft', 'trust'))
 
   entry.press(child, '\\pc')
   entry.press(child, '\\pa')
