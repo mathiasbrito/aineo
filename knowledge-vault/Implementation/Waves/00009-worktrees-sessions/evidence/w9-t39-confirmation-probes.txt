@@ -1,0 +1,372 @@
+Wave 9 — T39: when a start of Claude Code is confirmed
+=====================================================
+
+Run 2026-10-08 by the agent that wrote T39's second dispatch amendment
+(Claude, Opus 5.5), for the orchestrator, on dev dc5ff70 (T35's merged
+claude home), Neovim 0.12.5, macOS, with the suite's fake claude
+(tests/helpers/fake_claude.lua). The real Claude Code never ran.
+
+Each probe is a mini.test file, run with `make test_file FILE=<probe>` from
+the checkout's root, from a git-ignored scratch folder under .tests/; each
+case runs in a child Neovim of its own. Both scripts are at the end of this
+file. Before the start, a probe wraps two functions in the child:
+- `aineo.claude.readiness`'s `watch()`, so that each change of a start's
+  readiness is noted: the moment `aineo.claude.session_status()` turns
+  `ready`, or stops being it;
+- `aineo.claude`'s `receive_session_event()`, so that each session hook is
+  noted as it reaches the editor.
+It starts the session through `aineo.claude.start_session()`, with the
+suite's stand-in settings (`stand_in_settings()` in
+tests/helpers/claude_session.lua). It passes an `on_session_switched` and an
+`on_terminal_replaced` that note each call, and it shows the terminal in the
+current window at once, as the layout does.
+
+Times are milliseconds after the probe's instrumentation was installed, a
+few ms before the start. Session ids are cut to their first 8 hex digits.
+`aaaaaaaa-…` and `bbbbbbbb-…` are ids the probe kept for a directory
+beforehand.
+
+The fake's settings, per case:
+- "found": an id kept for the directory, with a conversation file for it in
+  AINEO_FAKE_CLAUDE_CONVERSATIONS, so the fake resumes it.
+- "dead": an id kept for the directory, with no conversation file. The fake
+  draws nothing, prints "No conversation found with session ID: <id>" at
+  900 ms, and exits 1 510 ms later. T19's fallback then starts a new id in
+  its place.
+- "new": no id kept, so the start is on a new id (`--session-id`).
+- "hooks": AINEO_FAKE_CLAUDE_HOOKS set, so the fake runs the start's
+  SessionStart hook. "nohooks": unset, so no hook runs, as in a folder not
+  yet trusted (A2) or under settings aineo cannot add its hooks to.
+
+Probe 1 — the four starts, with and without hooks
+-------------------------------------------------
+
+== p-found-hooks ==
+      3 ms  start 1 launched (buffer 2)
+      7 ms  start_session returned; session_id()=aaaaaaaa
+     82 ms  hook SessionStart resume aaaaaaaa token 1
+   1551 ms  start 1 ready=true, session_id()=aaaaaaaa
+   6008 ms  end; status=ready session_id()=aaaaaaaa
+
+== p-dead-hooks ==
+      2 ms  start 1 launched (buffer 2)
+      5 ms  start_session returned; session_id()=aaaaaaaa
+   1440 ms  start 2 launched (buffer 3)
+   1443 ms  on_terminal_replaced(3)
+   1443 ms  on_session_switched(5bde7b9c, startup, aaaaaaaa, nil)
+   1514 ms  hook SessionStart startup 5bde7b9c token 2
+   2985 ms  start 2 ready=true, session_id()=5bde7b9c
+   6006 ms  end; status=ready session_id()=5bde7b9c
+
+== p-new-hooks ==
+      6 ms  start 1 launched (buffer 2)
+     10 ms  start_session returned; session_id()=5f5e0bd8
+     84 ms  hook SessionStart startup 5f5e0bd8 token 1
+   1551 ms  start 1 ready=true, session_id()=5f5e0bd8
+   6011 ms  end; status=ready session_id()=5f5e0bd8
+
+== p-found-nohooks ==
+      2 ms  start 1 launched (buffer 2)
+      6 ms  start_session returned; session_id()=aaaaaaaa
+   1551 ms  start 1 ready=true, session_id()=aaaaaaaa
+   6006 ms  end; status=ready session_id()=aaaaaaaa
+
+== p-dead-nohooks ==
+      2 ms  start 1 launched (buffer 2)
+      6 ms  start_session returned; session_id()=aaaaaaaa
+   1443 ms  start 2 launched (buffer 3)
+   1446 ms  on_terminal_replaced(3)
+   1446 ms  on_session_switched(e1aff370, startup, aaaaaaaa, nil)
+   2989 ms  start 2 ready=true, session_id()=e1aff370
+   6007 ms  end; status=ready session_id()=e1aff370
+
+== p-new-nohooks ==
+      6 ms  start 1 launched (buffer 2)
+     10 ms  start_session returned; session_id()=6b5435eb
+   1552 ms  start 1 ready=true, session_id()=6b5435eb
+   6011 ms  end; status=ready session_id()=6b5435eb
+
+== p-trust ==  (the fake's `trust` mode, hooks set, a new id)
+      6 ms  start 1 launched (buffer 2)
+     10 ms  start_session returned; session_id()=88aede98
+     86 ms  hook SessionStart startup 88aede98 token 1
+   6011 ms  end; status=starting session_id()=88aede98
+
+Probe 2 — a later start in another directory, a dialog, an early exit
+---------------------------------------------------------------------
+- "later start": a first start (a new id) in directory a, which becomes
+  ready and is then stopped by `jobstop()`. Then a start in directory b,
+  for which the id bbbbbbbb-…, with no conversation, is kept. Hooks are set.
+- "asks": the fake's `asks` mode. Enter brings up a permission dialog, and
+  Esc takes it away again.
+- "exit": the fake's `exit` mode, which draws its startup screen and exits
+  0 after 200 ms.
+In these lines "status=…" is read just before the readiness change is
+applied, so it is the status the change leaves.
+
+== later start in another directory, resuming an id with no conversation ==
+      3 ms  start 1 launched (buffer 2)
+      7 ms  start_session returned; session_id()=502b0325
+   1560 ms  start 1 ready=true, status=starting, session_id()=502b0325
+   2509 ms  stopping the first start
+   2811 ms  start 2 launched (buffer 3)
+   2813 ms  on_session_switched(bbbbbbbb, resume, 502b0325, nil)
+   2813 ms  start_session returned; session_id()=bbbbbbbb
+   4256 ms  start 3 launched (buffer 4)
+   4259 ms  on_terminal_replaced(4)
+   4259 ms  on_session_switched(fadc5efc, startup, bbbbbbbb, nil)
+   5807 ms  start 3 ready=true, status=starting, session_id()=fadc5efc
+   7315 ms  end; status=ready session_id()=fadc5efc
+
+== asks: ready, a dialog, ready again ==
+      6 ms  start 1 launched (buffer 2)
+     10 ms  start_session returned; session_id()=333655f5
+   1552 ms  start 1 ready=true, status=starting, session_id()=333655f5
+   2013 ms  Enter
+   2024 ms  start 1 ready=false, status=ready, session_id()=333655f5
+   2515 ms  Esc
+   4029 ms  start 1 ready=true, status=starting, session_id()=333655f5
+   5017 ms  end; status=ready session_id()=333655f5
+
+== exit 200 ms after the startup screen ==
+      6 ms  start 1 launched (buffer 2)
+     10 ms  start_session returned; session_id()=88d47d28
+   1553 ms  start 1 ready=true, status=exited, session_id()=88d47d28
+   3012 ms  end; status=exited session_id()=88d47d28
+
+Findings
+--------
+C1  Readiness (`session_status()` turning `ready`) comes about 1550 ms
+    after the launch, both for a resume that finds its conversation and for
+    a new session, with or without hooks. That is the input box's 1500 ms
+    settle (SETTLE_MS in lua/aineo/claude/readiness.lua) after the fake's
+    first screen.
+C2  A resume that finds no conversation never becomes ready. The fake draws
+    no screen of its own, as Claude Code 2.1.283 drew none (wave 6,
+    00006-fixes/evidence/claude-resume-q8.txt). Its replacement, from T19's
+    fallback, launches about 1440 ms after it and becomes ready about
+    1545 ms after its own launch: about 2990 ms after the first start.
+C3  The start's own SessionStart hook reaches the editor about 80 ms after
+    the launch, about 1470 ms before readiness. In the fake, a resume with
+    no conversation runs no hook. Whether the real Claude Code 2.1.292 runs
+    SessionStart(resume) before it finds no conversation was never
+    measured: wave 6's runs had no hooks, and M1–M8 resumed no id that
+    lacked a conversation.
+C4  The fake runs its SessionStart hook in `trust` mode, 86 ms after the
+    launch, while the trust dialog shows and readiness never comes. The
+    real Claude Code runs no hook before the dialog is answered (M7).
+C5  A later start whose session differs from the one followed calls
+    `on_session_switched(<id>, 'resume', <left>, nil)` before
+    `start_session()` returns, in the same millisecond. A dead id there is
+    replaced as at a first start (C2):
+    `on_session_switched(<new id>, 'startup', <dead id>, nil)` comes right
+    after `on_terminal_replaced`, and the new id becomes ready about
+    1550 ms after its launch.
+C6  Readiness leaves and comes back with a dialog. It came at 1552 ms, went
+    11 ms after Enter brought up the permission dialog, and came back
+    1514 ms after Esc took the dialog away.
+C7  Readiness can arrive after the process has ended. The `exit` mode's
+    start became ready at 1553 ms, about 1350 ms after the fake had exited,
+    when `session_status()` already said `exited`: the settle timer was
+    already running when the process ended.
+
+Probe 1's script
+----------------
+-- Probe, not a suite: when does each signal that a start is confirmed reach
+-- the editor, on dev dc5ff70, Neovim 0.12.5, with the suite's fake claude?
+local MiniTest = require('mini.test')
+local children = dofile('tests/helpers/child.lua')
+local claude = dofile('tests/helpers/claude_session.lua')
+local fixture = dofile('tests/helpers/fixture.lua')
+
+local child = MiniTest.new_child_neovim()
+local T = MiniTest.new_set({
+  hooks = {
+    pre_case = function()
+      children.restart(child)
+    end,
+    post_once = function()
+      child.stop()
+    end,
+  },
+})
+
+local INSTRUMENT = [[
+  local t0 = vim.uv.hrtime()
+  _G.probe = {}
+  local function note(what) table.insert(_G.probe, ('%7.0f ms  %s'):format((vim.uv.hrtime() - t0) / 1e6, what)) end
+  _G.probe_note = note
+  local readiness = require('aineo.claude.readiness')
+  local watch = readiness.watch
+  local starts = 0
+  readiness.watch = function(buffer, on_change)
+    starts = starts + 1
+    local this = starts
+    note(('start %d launched (buffer %d)'):format(this, buffer))
+    return watch(buffer, function(ready)
+      note(('start %d ready=%s, session_id()=%s'):format(this, tostring(ready), tostring(require('aineo.claude').session_id()):sub(1, 8)))
+      on_change(ready)
+    end)
+  end
+  local aineo_claude = require('aineo.claude')
+  local receive = aineo_claude.receive_session_event
+  aineo_claude.receive_session_event = function(event, id, cause, token, ran)
+    note(('hook %s %s %s token %s'):format(event, tostring(cause), tostring(id):sub(1, 8), token))
+    return receive(event, id, cause, token, ran)
+  end
+]]
+
+local function run(name, keep_id, has_conversation, hooks, mode)
+  local env = { AINEO_FAKE_CLAUDE_CONVERSATIONS = fixture.directory(name .. '-conv') }
+  if hooks then
+    env.AINEO_FAKE_CLAUDE_HOOKS = '1'
+  end
+  local fake = claude.fake(name, mode or 'ready', env)
+  local state = fixture.directory(name .. '-state')
+  local id = 'aaaaaaaa-1111-4222-8333-444444444444'
+  if keep_id then
+    child.lua(
+      [[require('aineo.claude.session_ids').keep_session_id(...)]],
+      { state, child.lua_get('vim.fn.getcwd()'), id }
+    )
+    if has_conversation then
+      assert(io.open(vim.fs.joinpath(env.AINEO_FAKE_CLAUDE_CONVERSATIONS, id), 'w')):close()
+    end
+  end
+  child.lua(INSTRUMENT)
+  child.lua([[
+    _G.on_switch = function(id, source, left, reason)
+      _G.probe_note(('on_session_switched(%s, %s, %s, %s)'):format(id:sub(1, 8), tostring(source), left:sub(1, 8), tostring(reason)))
+    end
+  ]])
+  child.lua(
+    [[
+      local helper, environment, state = dofile('tests/helpers/claude_session.lua'), ...
+      for k, v in pairs(environment) do vim.env[k] = v end
+      local settings = helper.stand_in_settings({ state_directory = state })
+      settings.on_session_switched = _G.on_switch
+      settings.on_terminal_replaced = function(t) _G.probe_note('on_terminal_replaced(' .. t .. ')') ; vim.api.nvim_win_set_buf(0, t) end
+      local buffer = require('aineo.claude').start_session(settings)
+      vim.api.nvim_win_set_buf(0, buffer)
+    ]],
+    { fake.environment, state }
+  )
+  child.lua([[_G.probe_note('start_session returned; session_id()=' .. tostring(require('aineo.claude').session_id()):sub(1, 8))]])
+  vim.uv.sleep(6000)
+  child.lua([[_G.probe_note('end; status=' .. tostring(require('aineo.claude').session_status()) .. ' session_id()=' .. tostring(require('aineo.claude').session_id()):sub(1, 8))]])
+  local lines = child.lua_get('_G.probe')
+  io.stdout:write('\n== ' .. name .. ' ==\n' .. table.concat(lines, '\n') .. '\n')
+  child.lua([[for _, b in ipairs(vim.api.nvim_list_bufs()) do if vim.bo[b].buftype == 'terminal' then pcall(vim.fn.jobstop, vim.bo[b].channel) end end]])
+end
+
+for _, hooks in ipairs({ true, false }) do
+  local tag = hooks and 'hooks' or 'nohooks'
+  T['resume-found-' .. tag] = function()
+    run('p-found-' .. tag, true, true, hooks)
+  end
+  T['resume-dead-' .. tag] = function()
+    run('p-dead-' .. tag, true, false, hooks)
+  end
+  T['new-' .. tag] = function()
+    run('p-new-' .. tag, false, false, hooks)
+  end
+end
+T['trust-dialog-hooks'] = function()
+  run('p-trust', false, false, true, 'trust')
+end
+
+return T
+
+Probe 2's script
+----------------
+-- Probe, not a suite: a later start in another directory that resumes an id
+-- with no conversation; readiness that leaves and comes back; an exit before
+-- the input box settles. dev dc5ff70, Neovim 0.12.5, the suite's fake.
+local MiniTest = require('mini.test')
+local children = dofile('tests/helpers/child.lua')
+local claude = dofile('tests/helpers/claude_session.lua')
+local fixture = dofile('tests/helpers/fixture.lua')
+
+local child = MiniTest.new_child_neovim()
+local T = MiniTest.new_set({
+  hooks = {
+    pre_case = function() children.restart(child) end,
+    post_once = function() child.stop() end,
+  },
+})
+
+local INSTRUMENT = [[
+  local t0 = vim.uv.hrtime()
+  _G.probe = {}
+  local function note(what) table.insert(_G.probe, ('%7.0f ms  %s'):format((vim.uv.hrtime() - t0) / 1e6, what)) end
+  _G.probe_note = note
+  local readiness = require('aineo.claude.readiness')
+  local watch = readiness.watch
+  local starts = 0
+  readiness.watch = function(buffer, on_change)
+    starts = starts + 1
+    local this = starts
+    note(('start %d launched (buffer %d)'):format(this, buffer))
+    return watch(buffer, function(ready)
+      note(('start %d ready=%s, status=%s, session_id()=%s'):format(this, tostring(ready), tostring(require('aineo.claude').session_status()), tostring(require('aineo.claude').session_id()):sub(1, 8)))
+      on_change(ready)
+    end)
+  end
+  _G.on_switch = function(id, source, left, reason)
+    note(('on_session_switched(%s, %s, %s, %s)'):format(id:sub(1, 8), tostring(source), left:sub(1, 8), tostring(reason)))
+  end
+  _G.start_in = function(environment, overrides)
+    for k, v in pairs(environment) do vim.env[k] = v end
+    local settings = dofile('tests/helpers/claude_session.lua').stand_in_settings(overrides)
+    settings.on_session_switched = _G.on_switch
+    settings.on_terminal_replaced = function(t) note('on_terminal_replaced(' .. t .. ')'); vim.api.nvim_win_set_buf(0, t) end
+    local buffer = require('aineo.claude').start_session(settings)
+    note('start_session returned; session_id()=' .. tostring(require('aineo.claude').session_id()):sub(1, 8))
+    vim.api.nvim_win_set_buf(0, buffer)
+  end
+]]
+
+local function dump(name)
+  child.lua([[_G.probe_note('end; status=' .. tostring(require('aineo.claude').session_status()) .. ' session_id()=' .. tostring(require('aineo.claude').session_id()):sub(1, 8))]])
+  io.stdout:write('\n== ' .. name .. ' ==\n' .. table.concat(child.lua_get('_G.probe'), '\n') .. '\n')
+  child.lua([[for _, b in ipairs(vim.api.nvim_list_bufs()) do if vim.bo[b].buftype == 'terminal' then pcall(vim.fn.jobstop, vim.bo[b].channel) end end]])
+end
+
+T['later-start-other-directory-dead'] = function()
+  local env = { AINEO_FAKE_CLAUDE_CONVERSATIONS = fixture.directory('m-later-conv'), AINEO_FAKE_CLAUDE_HOOKS = '1' }
+  local fake = claude.fake('m-later', 'ready', env)
+  local state = fixture.directory('m-later-state')
+  local a, b = fixture.directory('m-later-a'), fixture.directory('m-later-b')
+  local dead = 'bbbbbbbb-1111-4222-8333-444444444444'
+  child.lua([[require('aineo.claude.session_ids').keep_session_id(...)]], { state, b, dead })
+  child.lua(INSTRUMENT)
+  child.lua([[_G.start_in(...)]], { fake.environment, { state_directory = state, cwd = a } })
+  vim.uv.sleep(2500)
+  child.lua([[_G.probe_note('stopping the first start'); vim.fn.jobstop(vim.bo[vim.api.nvim_get_current_buf()].channel)]])
+  vim.uv.sleep(300)
+  child.lua([[_G.start_in(...)]], { fake.environment, { state_directory = state, cwd = b } })
+  vim.uv.sleep(4500)
+  dump('later start in another directory, resuming an id with no conversation')
+end
+
+T['asks-enter-escape'] = function()
+  local fake = claude.fake('m-asks', 'asks', {})
+  child.lua(INSTRUMENT)
+  child.lua([[_G.start_in(...)]], { fake.environment, { state_directory = fixture.directory('m-asks-state') } })
+  vim.uv.sleep(2000)
+  child.lua([[_G.probe_note('Enter'); require('aineo.claude').write_to_session('\r')]])
+  vim.uv.sleep(500)
+  child.lua([[_G.probe_note('Esc'); require('aineo.claude').write_to_session('\27')]])
+  vim.uv.sleep(2500)
+  dump('asks: ready, a dialog, ready again')
+end
+
+T['exit-before-settle'] = function()
+  local fake = claude.fake('m-exit', 'exit', {})
+  child.lua(INSTRUMENT)
+  child.lua([[_G.start_in(...)]], { fake.environment, { state_directory = fixture.directory('m-exit-state') } })
+  vim.uv.sleep(3000)
+  dump('exit 200 ms after the startup screen')
+end
+
+return T
