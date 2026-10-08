@@ -123,3 +123,92 @@ The brief review (`brief-review.md` in this folder, on `ed83367`) found this bri
 - **W-4:** the session note's `<date>` is the dispatch message's: *Boundary*.
 
 **Mutants** (`plan.md` › *Verification mutants*, T38): 5 reworded to a newline; 7 (A8), 8 (A9) and 9 (a heading above the editor's own section, T38-1) added.
+
+## Amendment — 2026-10-08, at dispatch
+
+**Base: `dev` `dc5ff70`.** Stage 1 has merged: T35 (PR #137), T36 (PR #135) and T37 (PR #136), each through two fix rounds and two re-measures. Every path, symbol, line range and help fence this brief cites was read again at `dc5ff70` with `git grep -n` (by the agent that wrote this amendment, for the orchestrator). The body and the earlier sections stand except where this section says a fact moved. Start your branch from the `origin/dev` the dispatch message names, and re-check against it if it is not `dc5ff70`.
+
+### Facts that held at `dc5ff70`
+
+- **`lua/aineo/git/` did not change** (`git diff --stat f98bd9d dc5ff70 -- lua/aineo/git` prints nothing). Every line the body gives stands: `init.lua`'s docstring 1–18, `find_repository()` 40, `changed_files()` 53, `commits_since()` 65, `file_diff()` 79, `commit_diff()` 91, `watch_repository()` 114; `repository.lua`'s `aineo.git.Repository` 8–13, `locate()` 54–86, `read_head()` 95, `comparison_base()` 157–168; `process.lua`'s `DEFAULT_LIMIT_MS` 13 and lines 15–76.
+- **`lines.lua`, `pages.lua` and `colours.lua` did not change.** `file_line()` 73, `file_colours()` 90, `note()` 160, `failure_line()` 169, `NO_FILES` 221, `files_window()` 254, `commit_line()` 288, `commit_colours()` 298, `commits_window()` 326; `PANE_COLOURS` 10, `write_page()` 60, `entry_at()` 88; `KIND_GROUPS` 8, `define_changes_colours()` 55.
+- **The modularity table** (`.claude/skills/modularity/SKILL.md`, lines 39–40): `aineo.git` requires no aineo home, and `aineo.changes` requires `aineo.git` alone. T37's new `kept.lua` is inside the changes home and requires no other home. No test or lint list enumerates the files of either home, so a new `lua/aineo/git/worktrees.lua` moves no list.
+- **`tests/test_entry_panes.lua` did not change.** It still pins `{ 'No files changed on this session' }` and `{ 'No commits on this session' }` (`NO_FILES` and `NO_COMMITS` at 178–179, the case at 183–194, `LISTINGS` at 199–202). It is T39's. Do not edit it: run it.
+- **`tests/test_doc.lua` did not change.** It still pins the tags, the 78-column width and the help file's shape (59–208), and no text.
+- `tests/helpers/git_repo.lua`, `tests/test_entry_changes.lua` and `tests/test_layout_diffs.lua` did not change.
+
+### Facts that moved
+
+- **`lua/aineo/changes/init.lua`, as T37 left it** (`git grep -n` at `dc5ff70`):
+  - `read_files` 132 → **193** and `read_commits` 144 → **201**. They are no longer bare `serial.one_at_a_time()` reads. Each is `list_read(read, take, show)` (173–190): it reads nothing while the session looks for its base, and drops an answer for a base that is no longer current (`is_current_base()`, 157–159). T37's note offers it to this packet: "`list_read()` drops answers for another base, which T38's sections may reuse per worktree."
+  - `follow_change()` 158 → **213**; `diff_name()` 365–370 → **683–688**, its body unchanged; `open_entry()` 478 → **796**.
+  - `M.begin_session()` 328 → **606**; `M.refresh_shown_pane()` 541 → **859**; `M.pane_buffers()` 558 → **876**.
+  - New, T37's: `M.follow_changes_session(followed)` **656**, its argument `aineo.changes.FollowedSession` **510–512** (`id`, `state_directory`), `find` 476, `keep()` 346, `take_head()` 520, and `held_bases` 61.
+- **`lua/aineo/changes/kept.lua`, new (T37).** It keeps one owner-only JSON file per Claude Code session under `<state>/aineo/changes-sessions/`, named by the id's SHA-256 (`kept_base_file()` 22). The file holds the top level, the base and the saved paths. D41 keeps the editor's own worktree's base there, and "the other worktrees' bases are D32's, read and never kept". Nothing of another worktree goes into `kept.lua`.
+- **T37 reads `HEAD` with a second `git.find_repository()`** (`take_head()`, 520–541), because the git home offers no other read of it. If this packet adds a read of `HEAD` to the git home, T37's behaviour stays as it is. `tests/test_changes_sessions.lua` counts the finds (`wait_for_finds`), and `tests/test_entry_changes.lua` counts them too (`finds_answered`, `finds_asked`).
+- **The interface to keep** (T38-5, now with its names). T39 calls the first two of these at every start and at every switch, at the same time as this packet; T40, after T39, calls `follow_changes_session()` for a claim (`plan.md` › *Packet T40*, rule 5):
+  - `begin_session(settings)` (606), whose `aineo.changes.SessionSettings` (18–22) is `directory`, `show_diff` and `git?`;
+  - `follow_changes_session({ id, state_directory })` (656);
+  - `refresh_shown_pane()` (859);
+  - `pane_buffers()` (876).
+
+  Their names, their arguments and what they promise stay. What they do inside may change.
+- **A suite this packet now runs and may change: `tests/test_changes_sessions.lua`** (T37's, 61 cases). It drives the home this packet rewrites. *You may touch* gains it where a pin moves; name each change in your report. T39's boundary forbids `tests/test_changes*.lua`, so the two packets stay disjoint.
+- **`tests/helpers/git_repo.lua` is now required by 13 files.** They are `tests/test_changes.lua`, `tests/test_changes_sessions.lua`, `tests/test_entry_changes.lua`, `tests/test_entry_panes.lua`, `tests/test_entry_send_selection.lua`, and the eight git suites: `tests/test_git_changes.lua`, `test_git_commits.lua`, `test_git_configuration.lua`, `test_git_diffs.lua`, `test_git_lock.lua`, `test_git_process.lua`, `test_git_repository.lua` and `test_git_watch.lua`. If you add to the helper, run every one of them. Additions only, as before (T38-6).
+- **The help, `doc/aineo.txt`, as T37 and T35 left it.** Each fence is quoted by its first and last line, as they stand at `dc5ff70`:
+  - *aineo-panes*'s changes-pane item is now lines **106–111** (was 105–110). It runs from `- The changes pane: \`aineo://changes-files\` in the Report's place, over` to `  out, or kept unnamed when you changed its text.`
+  - *aineo-changes* is now **widened to the section's first paragraph**, lines **141–211** (the files-window part was 148–206). It runs from `The changes pane lists what changed in your repository since the base of` to `windows say so until the pane is shown again, which starts it again.`
+    - **Why it is widened.** T37 has merged, and its first paragraph (141–151) says the pane "lists what changed in your repository since the base of the Claude Code session it shows" — no longer the whole of it once other worktrees show. No open packet edits that paragraph: T39's places are in *aineo-claude-session* and LIMITS, and T40's places (`plan.md` › *Packet T40*, rule 2) are not in *aineo-changes*.
+    - **One sentence there is already stale.** "The `*` marks a file you saved from this editor since the base was taken" (162–163). Since T37's fix round, two editors on one session keep each other's marks (its attack finding 5, `keep()` merging the saves), so a `*` can mark a save made in another editor. T37's note left this for later. Correct it here.
+  - LIMITS › `The changes pane ~` is now lines **1128–1174** (was 994–1021), whole. It runs from `The changes pane ~` to `  on the line again shows it, the other buffer giving its name up.` T37's item `- A restart of Claude Code in another working directory keeps the first` (1141–1153) and its new item `- Two editors following one session in one repository keep the first` (1154–1161) are inside it. Keep what they say true.
+
+### The rulings that bind this packet
+
+Each comes from the plan or from a stage-1 session note. Each ruling is the orchestrator's, to report to the user; none is a D row.
+
+- **No wave-9 release before T39 merges** (`plan.md` A22; T36's and T37's fix rounds). R (a) cut a release when this packet merges. If it merges first, that release waits for T39's, and the two may be one. Help that describes T39's wiring may stand on `dev` meanwhile.
+- **`tests/test_entry_panes.lua` is T39's** (T39-1). This packet does not touch it. Under D33 the editor's own lines stay exactly today's, so the file needs nothing from this packet.
+- **D33: the editor's own section has no heading** (T38-1). Only other worktrees get a heading line. Mutant 9 checks it.
+- **A8: an entry marked `bare` is left out**, and a linked worktree of a bare repository is shown. Mutant 7.
+- **A9: a worktree whose directory does not exist is left out, locked or not.** Mutant 8.
+- **T39's checks of the changes pane pin only the session it follows** (T39-5): the editor's own entries, by content, in repositories with no other worktree. The lines of other worktrees are this packet's alone.
+- **Other worktrees' bases are never kept** (D41's last sentence). The editor's own base and marks stay T37's, per session.
+
+### Counts on `dc5ff70`
+
+Measured with `make test_file`, Neovim 0.12.5, each file alone. Every file printed `Fails (0) and Notes (0)` and exited 0.
+
+| Test file | Cases |
+|---|---|
+| `tests/test_git_watch.lua` | 33 |
+| `tests/test_git_repository.lua` | 9 |
+| `tests/test_git_changes.lua` | 9 |
+| `tests/test_git_commits.lua` | 5 |
+| `tests/test_git_diffs.lua` | 17 |
+| `tests/test_git_configuration.lua` | 9 |
+| `tests/test_git_lock.lua` | 8 |
+| `tests/test_git_process.lua` | 11 |
+| `tests/test_changes.lua` | 120 |
+| `tests/test_changes_sessions.lua` | 61 |
+| `tests/test_entry_changes.lua` | 12 |
+| `tests/test_layout_diffs.lua` | 10 |
+| `tests/test_entry_panes.lua` (run, not edited) | 86 |
+| `tests/test_entry_send_selection.lua` (requires `git_repo.lua`) | 9 |
+| `tests/test_doc.lua` | 44 |
+
+The whole suite on `dev` is **2229 cases** (the orchestrator's count). This amendment ran no whole suite.
+
+### Rule 2 against T39, recomputed on `dc5ff70`
+
+- **Code.** This packet's code is `lua/aineo/git/` and `lua/aineo/changes/`. T39's is `plugin/aineo.lua` alone: its boundary forbids every file under `lua/`. They are disjoint.
+- **Tests.** This packet's tests are the git suites, `tests/test_changes.lua`, `tests/test_changes_sessions.lua`, the new `tests/test_git_worktrees.lua` and `tests/test_changes_worktrees.lua`, `tests/test_entry_changes.lua`, `tests/test_layout_diffs.lua`, and additions to `tests/helpers/git_repo.lua`. T39's are the new `tests/test_entry_session_switch.lua`, `tests/test_entry_claude_resume.lua`, `tests/test_entry_report.lua`, `tests/test_entry_draft.lua` and `tests/test_entry_panes.lua`. They are disjoint.
+  - `git_repo.lua` is shared by additions only (T38-6).
+  - `aineo.changes`' interface is shared, and kept as it is (above).
+- **No registration file** is shared. Neither packet adds a module home. mini.test collects `tests/**/test_*.lua` by glob, and no list names a home's files.
+- **`doc/aineo.txt`, under the section exception.**
+  - This packet's places are 106–111, 141–211 and 1128–1174.
+  - T39's are *aineo-claude-session*'s paragraph on switches, from `aineo follows a switch you make inside Claude Code: \`/clear\`, \`/resume\`` to `terminal in the same directory.` (327–338), and the first sentence of LIMITS › `Claude's window name ~`'s last item, from `- Not measured, and so not known to show: a title Claude Code generates` to `` `--resume`, and the glyph while Claude Code is busy. `` (1186–1188, the sentence ending mid-line).
+  - Unchanged lines separate the nearest pair. Lines 212–326 hold *Colours*, *The file column* and the start of *aineo-claude-session*. Lines 1175–1185 hold the blank line, `Claude's window name ~` and its first three items.
+  - **Measured.** `git merge-file` ran on worst-case edits of `dc5ff70`'s help: every fenced line of each packet rewritten, and a line added after each fence. Each fence's first and last line was checked against the quotes above before editing. Result: 0 conflicts, with all 127 of this packet's lines and all 17 of T39's in the merged file.
+- **So T38 and T39 can still run at once** (S (a)). Before you push, merge with T39's branch if it exists, as the body says: `git merge-tree --write-tree <your head> origin/feature/t39-panes-follow-switch`. On the merged tree, run `make test_file FILE=tests/test_doc.lua`, and also T39's `tests/test_entry_session_switch.lua`, since that suite drives this home through the composition root. Report all three.
+- **T40.** T40 waits for T39's merge (its plan's rule 1) and may then run beside this packet. Its plan found the two disjoint: it calls `follow_changes_session()`, whose interface this packet keeps, and none of its files or help places is this packet's. If T40 has a branch when you push, merge with it too, and run `tests/test_doc.lua` on that tree. Both packets add help tags, and `:helptags` refuses one defined twice (E154).
