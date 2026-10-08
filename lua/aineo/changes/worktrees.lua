@@ -62,23 +62,35 @@ local function is_listed_worktree(repository, worktree)
   return repository.top == worktree.top or repository.git_directory == worktree.top
 end
 
---- Reads `worktree`'s list (`read.read_list`) from its base
---- (`git.worktree_base()`) and calls `done(section)`; when the list cannot
---- be read, the section says why and keeps what the window last listed for
---- the worktree (`section_before()`), if anything — unless the worktree's
---- directory is gone by then, removed while it was read, when it calls
---- `done(nil)`, as it does when git finds the directory in another
---- repository than that worktree (`is_listed_worktree()`).
+--- The section of `worktree` before it is read: its top level and branch,
+--- and what the window last read for it (`section_before()`), if anything.
 ---
 ---@param read aineo.changes.WorktreesRead
 ---@param worktree aineo.git.Worktree
----@param done fun(section: aineo.changes.WorktreeSection|nil)
-local function read_section(read, worktree, done)
+---@return aineo.changes.WorktreeSection
+local function unread_section(read, worktree)
   local section = { top = worktree.top, branch = worktree.branch }
   local before = section_before(read.before, worktree.top)
   if before then
     section.repository, section.base, section.listed = before.repository, before.base, before.listed
   end
+  return section
+end
+
+--- Reads `worktree`'s list (`read.read_list`) from its base against the
+--- commit `comparison` (`git.worktree_base()`), and calls `done(section)`;
+--- when the list cannot be read, the section says why and keeps what the
+--- window last listed for the worktree (`unread_section()`), if anything —
+--- unless the worktree's directory is gone by then, removed while it was
+--- read, when it calls `done(nil)`, as it does when git finds the directory
+--- in another repository than that worktree (`is_listed_worktree()`).
+---
+---@param read aineo.changes.WorktreesRead
+---@param worktree aineo.git.Worktree
+---@param comparison string|nil
+---@param done fun(section: aineo.changes.WorktreeSection|nil)
+local function read_section(read, worktree, comparison, done)
+  local section = unread_section(read, worktree)
   local function or_failed(proceed)
     return function(failure, ...)
       if not failure then
@@ -99,8 +111,8 @@ local function read_section(read, worktree, done)
         return
       end
       git.worktree_base(
-        read.found,
         repository,
+        comparison,
         or_failed(function(base)
           read.read_list(
             repository,
@@ -119,10 +131,13 @@ local function read_section(read, worktree, done)
 end
 
 --- Lists the worktrees of the editor's repository, `read.found`, other than
---- its own, and reads each one's list (`read_section()`), one after
---- another, each once `read.before_each_worktree` lets it start, then calls
---- `done(others)`; or, when they cannot be listed,
---- `done(others)` saying why, with the sections the window knew before.
+--- its own, reads once the commit their bases are taken against
+--- (`git.comparison_commit()`), and reads each one's list
+--- (`read_section()`), one after another, each once
+--- `read.before_each_worktree` lets it start, then calls `done(others)`.
+--- When the worktrees cannot be listed, `done(others)` says why, with the
+--- sections the window knew before; when the commit cannot be read, each
+--- section says why, over what the window last listed for it.
 ---
 ---@param read aineo.changes.WorktreesRead
 ---@param done fun(others: aineo.changes.OtherWorktrees)
@@ -135,22 +150,38 @@ function M.read_other_worktrees(read, done)
     local others = vim.tbl_filter(function(worktree)
       return worktree.top ~= read.found.top
     end, listed)
-    local sections = {}
-    local function read_from(index)
-      if index > #others then
-        done({ sections = sections })
+    if #others == 0 then
+      done({ sections = {} })
+      return
+    end
+    git.comparison_commit(read.found, function(comparison_failure, comparison)
+      if comparison_failure then
+        done({
+          sections = vim.tbl_map(function(worktree)
+            local section = unread_section(read, worktree)
+            section.failure = comparison_failure
+            return section
+          end, others),
+        })
         return
       end
-      read.before_each_worktree(function()
-        read_section(read, others[index], function(section)
-          if section then
-            table.insert(sections, section)
-          end
-          read_from(index + 1)
+      local sections = {}
+      local function read_from(index)
+        if index > #others then
+          done({ sections = sections })
+          return
+        end
+        read.before_each_worktree(function()
+          read_section(read, others[index], comparison, function(section)
+            if section then
+              table.insert(sections, section)
+            end
+            read_from(index + 1)
+          end)
         end)
-      end)
-    end
-    read_from(1)
+      end
+      read_from(1)
+    end, read.git)
   end, read.git)
 end
 
