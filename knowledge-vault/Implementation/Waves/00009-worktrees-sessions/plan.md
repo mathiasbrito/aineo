@@ -435,6 +435,89 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 38. The return to its own session told to the report home alone: after `:Aineo claim` with no argument while a claim of another session holds, Input keeps the claimed session's draft and the changes pane its session (A29).
 39. `:Aineo claim` with no argument in a Neovim whose terminal runs no session, while a claim of another session holds, drops the claim: the panes leave the claimed session, where A29 warns and changes nothing.
 
+## Packet T41 — 2026-10-08
+
+**Planned by:** the T41 planning agent (Claude, Opus 5.5), for the orchestrator, on `dev` `2fdda81`, with T38's and T39's dispatch amendments read on `knowledge/w9-stage2-amend` at `e5ef23a` (PR #139, open when this was written). **Brief:** `brief-t41-dead-session-handover.md`. **Brief review:** `brief-review-t41-dead-session-handover.md`, before dispatch (orchestrate §3, a later packet). **Evidence:** `evidence/w9-t41-probes.txt` (P1–P3, and the counts of the three homes' session suites on `2fdda81`). **Order:** after T38, T39 and T40 have merged (rule 2, below); a dispatch amendment re-checks the brief against that `dev`.
+
+**Ask.** T39's dispatch amendment found that T19's fallback strands what a session held (`brief-t39-panes-follow-switch.md` › *For the orchestrator, before dispatch: T19's fallback strands what the first follow moved*). The user's first answer, "Wait for the resume", keeps the folder's records and draft out of a session that turns out dead; T39's second amendment then found what the wait does not reach (*What the wait does not reach — for the orchestrator, before dispatch*): what was kept under a session while it was confirmed and alive, as the notes typed after a `/clear` in which nothing was sent. The orchestrator put that to the user.
+
+### The user's answer — 2026-10-08
+
+Put with AskUserQuestion by the orchestrator, verbatim: "\"Wait for the resume\" stops the folder's Input draft moving into a dead session at start. It does not rescue text typed after a /clear: that is saved under the new session, and if nothing was sent, the next resume of it finds no conversation, so the notes stay behind with it. Should a dead session's draft, Report and changes base be handed to the session that replaces it?" The user chose **"Yes, as packet T41 (Recommended)"**: "When a resume finds no conversation and Claude Code starts a fresh session, the fresh session takes over the dead one's Input draft, Report records and changes base. A small separate packet after T38 and T39, since it touches the report, draft and changes homes that T38 is changing."
+
+The agreed row is **D45** in [[Planning/aineo — v1 agent console]], which amends D39, D40 and D41 and touches D38, C6, C11 and C15, each with a dated note. The task row is **T41**. "A small separate packet" sizes it; the user did not call it a small fix, which lives in one home (orchestrate §3), so it is regular and keeps D26.
+
+### Measured before planning — P1–P3
+
+`evidence/w9-t41-probes.txt`: one mini.test file run with `make test_file` on `2fdda81`, Neovim 0.12.5, under the suite's isolation, Claude Code being the suite's fake with `AINEO_FAKE_CLAUDE_CONVERSATIONS`. The real `claude` never ran.
+- **P1, the fallback's callbacks.** `on_terminal_replaced`, then `on_session_switched(<fresh>, 'startup', <dead>, nil)`, in the same main-loop tick and the same millisecond, neither in a fast event; inside both, `session_id()` already names the fresh id and `session_status()` is `starting`. The fallback came 1449 ms after the resume's start; the fresh session was ready 1547 ms after the fallback.
+- **P1b, `on_terminal_replaced` elsewhere.** Never called by a restart in the same directory or a start in another directory. The start in another directory is told with source `startup` and a `left`, as the fallback is: the source alone does not identify the fallback.
+- **P2 and P2b, the strand today.** A report home and a draft home that followed X and then follow Y: Input emptied, X's draft and X's record kept under X, nothing under Y, the Report empty. A changes home that followed X, then Y: X's kept file keeps its base and its saved path; Y's holds `HEAD` at the follow and no saved path.
+- **P3, the moves.** T36's `records.move_records()` moves a session's file to another session's when the second has none (a), touches neither when it has (b), moves a mode-000 file by its link all the same (c), renames a symbolic link (d), and makes nothing when neither exists (e). A kept base linked to another session's name reads back whole there (f).
+
+### Six rules — recomputed 2026-10-08 against every open packet and claimed wave
+
+Open at planning: T38 and T39, not yet dispatched, their dispatch amendments in PR #139 (open); T40, planned (PR #138), not yet dispatched. No branch of T38, T39 or T40 exists (`git branch -r` lists none). No other wave is claimed.
+
+| packet | tasks (task-list lines) | type / model | files | schema? | dependency change? | decision open? | task-line marks |
+|---|---|---|---|---|---|---|---|
+| T41 | T41 | `neovim-lua-developer` / opus | `lua/aineo/report/` (`init.lua`, `records.lua`); `lua/aineo/draft/init.lua`; `lua/aineo/changes/` (`init.lua`, `kept.lua`); `plugin/aineo.lua` › the fallback's wiring (the `on_terminal_replaced` and `on_session_switched` handlers T39 hands the claude home, the three hand-over calls, the check of T40's running sessions and T40's entry write there); new cases in `tests/test_report_sessions.lua`, `tests/test_draft_sessions.lua` and `tests/test_changes_sessions.lua`; a new `tests/test_entry_session_handover.lua`; `tests/test_entry_session_switch.lua` where a case of T39's pins what T41 changes; `doc/aineo.txt` › four places (the brief's *Boundary*) | no (see rule 3) | no | none (D45, 2026-10-08); A57–A64 the planning's readings, to report | held |
+
+**Rule 1, dependencies.** T41 rests on T35's fallback and callbacks (merged), T36's and T37's homes (merged), **T38** (the changes home it rewrites; the user's "after T38 and T39"), **T39** (the wiring it extends, the confirmation it leaves as it is, and the help sentence it replaces) and T40 (its claims, list and records, which *6* of the brief uses). T41 is dispatched once T38, T39 and T40 have merged.
+
+**Rule 2, files.** Measured by `grep -c -F <path>` of each of T41's paths in T38's and T39's briefs as PR #139 amends them and in T40's brief, then read against each brief's *Boundary*:
+- **Against T38:** both edit `lua/aineo/changes/init.lua` and `tests/test_changes_sessions.lua` (T38's amendment admits it), and the help's *aineo-changes* first paragraph (T38's amendment widens its fence to it). Sequence: T41 after T38's merge, as the user said.
+- **Against T39:** both edit `plugin/aineo.lua` in the wiring that tells the homes a session, and the help's paragraph on switches (T39 writes there the sentence T41 replaces); T41 may touch T39's `tests/test_entry_session_switch.lua`. Sequence: after T39's merge (rule 1 already).
+- **Against T40: sequence, not at once.** Both edit `plugin/aineo.lua` in T39's wiring — T40 its entry write and its hold while a claim of another session holds, T41 the fallback's handler — and `plugin/aineo.lua` is not a document the section exception admits. Both edit `lua/aineo/report/init.lua` and `lua/aineo/draft/init.lua` (T40 one option on each follow, T41 an entry point beside it) and add cases to `tests/test_report_sessions.lua` and `tests/test_draft_sessions.lua`. Both edit *aineo-claude-session*'s paragraph on switches. **Order: T40 first.** T40 is ready at T39's merge, T41 only once T38 has merged as well; T40 is the user's "this definetly needs to be fixed"; and T41 then builds on T40's merged claims and records (the brief's *6*), where T40 first would otherwise need a dispatch amendment for a hand-over its plan never saw. *Rejected:* T41 before T40 — it would make T40, the larger and more urgent packet, wait for T38 and for T41's reviews, and T40's amendment would have to add the claim and record cases of *6*.
+- **Against T35–T37:** merged.
+- **`doc/aineo.txt`:** T41's four places (the brief's *Boundary*) are edited after every other wave-9 packet has merged, so no merge check is needed; `tests/test_doc.lua` runs on T41's tree. No new tag.
+- **No registration file** is shared and no module home is added: the hand-over adds no require between homes (`.claude/skills/modularity/SKILL.md:37–40`). ✓
+
+**Rule 3, shared state.** T41 moves files inside folders other packets made: T36's `reports/` and `drafts/` and T37's `changes-sessions/` under `stdpath('state')/aineo/`. T40 writes `reports/` too, and merges first. No folder or format is new. ✓ **Rule 4.** No dependency change. ✓ **Rule 5.** D45 decides the behaviour; what it does not reach is the planning's reading, A57–A64 below, to report to the user. A58 reads T39's wait narrowly for the fresh session, and is named so for the brief review. No decision is open. ✓ **Rule 6.** T41's task row is next to T40's: T41 holds its mark and writes a `## Task lines` section in its session note. ✓
+
+### Host and reviewers
+
+| packet | implementer | reviews | session note | resource | branch |
+|---|---|---|---|---|---|
+| T41 | `neovim-lua-developer` | attack by `neovim-lua-reviewer`; test integrity and records by `reviewer` | `Sessions/<date> — T41 Dead session handover.md` | `impl_t41_dead_session_handover` | `feature/t41-dead-session-handover` |
+
+Regular, three reviews and a re-measure when a fix round moves a mechanism (orchestrate §6). `<date>` is the dispatch date, fixed in the dispatch message. Every file the packet changes is under `lua/`, `plugin/`, `tests/` or `doc/` and none runs or talks to `claude`, so `neovim-lua-developer` implements and `neovim-lua-reviewer` attacks; the fallback's callbacks it reads are T35's, unchanged.
+
+### Assumptions to report to the user — T41
+
+The planning's readings where D45 does not reach, built as written until the user says otherwise; none is a D row. Numbered after stage 1's A56.
+
+- **A57 — The trigger is the switch told right after `on_terminal_replaced`.** T19's fallback is the only caller of `on_terminal_replaced` (P1b), and calls `on_session_switched(<fresh>, 'startup', <dead>)` in the same tick (P1). The source alone would also take a start in another directory, which is told `startup` with a `left` (P1b). Not taken: a reason of its own for the fallback from the claude home, which would change T35's contract ("none for a start") and widen T41 into `lua/aineo/claude/`.
+- **A58 — The hand-over is made at the fallback, before the fresh session is confirmed.** The dead session is known dead then, and the fresh id is already the one kept for the directory, so a fresh session that never becomes ready hands the content on at its own dead resume. A home that showed the dead session shows the same content under the fresh id from then on, before the confirmation T39 waits for. This reads the user's answer to T39, "so nothing moves into a session that turns out dead", as being about resumes: the fresh session is a new id, which cannot find no conversation at its own start. T39's follow at the confirmation stays as built and changes nothing for a home already moved over. For the brief review to check, and to report.
+- **A59 — Each home's file moves whole and unread, and only to a session that has none.** The draft, the records file and the kept base (with its marks) move by link then unlink, as T36's moves (A43); a file that cannot be read moves as it is, and the fresh session meets it as the dead one would have (A45, A50); a kept base of another repository moves too (A5 then holds for the fresh session). When the fresh session already has a file of its own, nothing moves in that home, and a home that follows the dead session stays on it until T39's follow of the fresh one swaps as at any switch. Two editors handing over one dead id at once leave its files with one fresh id.
+- **A60 — A pane that showed the dead session shows the same under the fresh one.** No swap and no re-read: Input's text, cursor and undo, the Report's lines and cursor, the changes pane's base, marks and lists stay; a change not yet saved is saved before the move and moves with it; what the home held for the dead session (a waiting swap, a base held in memory, a look for `HEAD` under way) is held for the fresh one. This goes past D40's "at a switch, Input's text is kept as the draft of the session switched from, and the draft of the session switched to … takes its place", which would empty Input and refill it with the same text, its undo lost.
+- **A61 — At an editor's first follow, the dead session's draft and records come before the directory's.** In a new editor, what is typed in Input before the fresh session is ready is the directory's draft; at the confirmation it moves only to a session with none (A6), and after a hand-over the fresh session has the dead one's. So that text stays in the directory's draft, unshown until another editor first follows a session with no draft — A6's cost, in one more case. Not taken: appending the directory's draft to the dead session's, which no row has done before.
+- **A62 — Another Neovim that follows the dead session is not told.** One that follows it by `:Aineo claim <id>`, or as its own exited terminal's session, keeps showing what it showed; its next save of Input or next new mark writes the dead id's draft or base again, a copy beside the fresh session's. Telling it would need an editor to tell another editor, which T40 does only from a hook's deliverer.
+- **A63 — A session whose Claude Code still runs is not handed over.** A second Neovim whose Claude Code started X and has sent nothing makes a resume of X find no conversation too. The composition root asks T40's records of running Claude Code processes, through `aineo.mcp`'s entry point, and hands nothing over while one is on the dead id; the fresh session then starts empty, as today. A record whose pid another of the user's processes took since counts as running (T40's P5, A26).
+- **A64 — T40's claims and the hand-over.** A claim of another session does not hold the hand-over: the files move, and the panes stay on the claimed session (A25). This Neovim's own claim of the dead id ends as T40 ends a claim when the Neovim follows another session (A15), and is not moved: the Neovim is the fresh session's starting editor. Its entry in T40's list is written at the hand-over, as at a switch, when its homes moved over.
+
+### Verification mutants — T41
+
+Each runs as its literal edit, shown applied, on the test files that exercise the code it breaks, and on the whole suite only when it survives there. The line numbers are given by the dispatch amendment, on the merged code.
+1. The hand-over keyed on the source `startup` alone, the `on_terminal_replaced` note dropped: a start in another directory with no kept id hands the session it left to the new one (A57).
+2. The hand-over made at the fresh session's confirmation instead of at the fallback: a fresh session stopped before it is ready keeps nothing, and the next fresh session shows none of the dead session's draft (A58).
+3. A copy in place of the move: a file stays under the dead id, and the dead session's draft shows again in a Neovim that follows it.
+4. The home that follows the dead session left on it after the move: Input's text typed between the fallback and the confirmation is saved under the dead id again, and leaves Input at the confirmation.
+5. The draft home moved over by a swap — a follow of the fresh session after the move — instead of keeping Input as it is: `u` no longer undoes the change typed before the hand-over (A60).
+6. A change of Input not saved before the move: the fresh session's draft lacks the last change, and a file appears under the dead id.
+7. The move made when the fresh session has a file of its own: that file's content is replaced (A59).
+8. The changes home's base held in memory for the dead session (A49) not held for the fresh one: following the fresh session shows `HEAD` in place of the held base.
+9. The hand-over held while a claim of another session holds: the dead session's files stay under the dead id (A64).
+10. T40's running-session check dropped: the draft of a session whose Claude Code runs in a second Neovim moves to this Neovim's fresh session (A63).
+11. The changes home's look for `HEAD` under way for the dead session dropped at the hand-over: the pane goes on saying aineo is reading, and the fresh session keeps no base.
+12. The report home's records file left the dead session's after the move: the next report makes a records file under the dead id again.
+
+### For the dispatch amendment
+
+- Re-read every fact of the brief on the `dev` T41 starts from: T38's `lua/aineo/changes/` (its held table, its look for `HEAD`, whatever T38 decided about this editor's saves before the first follow, which T39's amendment left to T38's brief review), T39's wiring (its `on_terminal_replaced` and `on_session_switched` handlers, the confirmation flag, the ready callback's name) and T40's (the entry write, the hold, and the entry point that says whether a running Claude Code is on a session).
+- Quote the four help fences as the merged help has them.
+- Paste the counts of the test files T41 runs, and the whole suite's.
+
 ## Landed
 
 ### Stage 1 — T35, T36 and T37, merged 2026-10-07 and 2026-10-08
