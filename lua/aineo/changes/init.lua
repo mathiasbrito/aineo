@@ -53,8 +53,10 @@ local session = nil
 local followed_before_beginning = nil
 
 --- The base and the saves of each Claude Code session the pane followed
---- whose own could not be kept, by session id, held for the editor's life
---- so that following the session again brings them back.
+--- whose own could not be kept, by session id, so that following the
+--- session again brings them back: held for the editor's life when what
+--- was kept for it is another repository's or cannot be read, and until a
+--- write of them succeeds when their write failed (`hold_unkept_base()`).
 ---@type table<string, { base: string|nil, saved: table<string, true>, keeps: boolean|nil }>
 local held_bases = {}
 
@@ -335,16 +337,23 @@ end
 --- lists are read again for it (`read_for_new_base()`). Keeps nothing
 --- before it follows one, while git looks for the session's base
 --- (`take_head()`), or when what was kept for the session is another
---- repository's or cannot be read — found so as the pane began following it
---- (`use_kept_base()`), or now, as it reads what is kept before writing:
---- the session is then never kept again in this editor.
+--- repository's or cannot be read as the pane began following it
+--- (`use_kept_base()`), or is another repository's now, as it reads what is
+--- kept before writing: the session is then never kept again in this
+--- editor. What is kept that cannot be read now is not written over, and
+--- counts as a failed write: it is tried again at the next save, and as
+--- the session is followed again.
 local function keep()
   local followed = session.followed
   if not (followed and session.keeps_followed) or session.looking_for_head then
     return
   end
   local on_disk, unreadable = kept.read_kept_base(followed.state_directory, followed.id)
-  if unreadable or (on_disk and on_disk.top ~= session.repository.top) then
+  if unreadable then
+    session.keeping_failed = true
+    return
+  end
+  if on_disk and on_disk.top ~= session.repository.top then
     session.keeps_followed = false
     return
   end
@@ -399,7 +408,8 @@ end
 --- Holds the base and the saves of the Claude Code session the pane
 --- follows, as it leaves it, when they could not be kept for it — what was
 --- kept for it is another repository's, or its last write failed
---- (`held_bases`). Does nothing while git still looks for its base.
+--- (`held_bases`) — and lets go of what was held for it once they were.
+--- Does nothing while git still looks for its base.
 local function hold_unkept_base()
   local leaving = session.followed
   if not (leaving and session.repository) or session.looking_for_head then
@@ -408,15 +418,19 @@ local function hold_unkept_base()
   if session.keeps_followed == false or session.keeping_failed then
     held_bases[leaving.id] =
       { base = session.base, saved = session.saved, keeps = session.keeps_followed }
+  else
+    held_bases[leaving.id] = nil
   end
 end
 
 --- Takes the base and the saves held for the Claude Code session the pane
 --- follows (`hold_unkept_base()`), when they are, and returns whether it
---- did. A session held because its write failed is written again at once
---- (`keep()`), with the saves another editor kept for it since, and at each
---- save until a write succeeds; one held because what was kept for it is
---- another repository's, or cannot be read, never is.
+--- did. A session held because its write failed, or was refused over what
+--- could not be read, is written again at once (`keep()`), with the saves
+--- another editor kept for it since, and at each save until a write
+--- succeeds; one held because what was kept for it is another
+--- repository's, or could not be read as the pane began following it,
+--- never is.
 ---
 ---@return boolean
 local function use_held_base()
