@@ -1718,6 +1718,75 @@ T['a session switch']['is not followed while Neovim quits'] = function()
   eq(claude.words_after(claude.start_arguments(fake, 2), '--resume'), { started_on })
 end
 
+--- The Lua, run in a child before its session starts, that registers a
+--- handler of Neovim's quit (`VimLeavePre`) ahead of aineo's own, as a plugin
+--- loaded before aineo would. The handler runs each hook of
+--- `_G.hooks_on_quit` (`{ command, input }`) as Claude Code runs a command
+--- hook, waits until their deliverers have ended and the work they scheduled
+--- has run, and writes to the file `...`, as JSON, whether the job of the
+--- terminal `_G.terminal_on_quit` was still running when the hooks ran, the
+--- switches `_G.session_switches` holds and the session followed by then.
+local RUN_HOOKS_BEFORE_AINEO_ON_QUIT = [[
+  local record = ...
+  vim.api.nvim_create_autocmd('VimLeavePre', {
+    desc = 'Run a switch’s hooks as Neovim quits, before aineo stops Claude Code',
+    callback = function()
+      local channel = vim.bo[_G.terminal_on_quit].channel
+      local running = vim.fn.jobwait({ channel }, 0)[1] == -1
+      for _, hook in ipairs(_G.hooks_on_quit) do
+        vim.system({ 'sh', '-c', hook.command }, { stdin = hook.input }):wait(5000)
+      end
+      vim.wait(5000, function()
+        return vim.system({ 'pgrep', '-f', '--', '--deliver ' .. vim.v.servername }):wait().code == 1
+      end, 20)
+      local flushed = false
+      vim.schedule(function()
+        flushed = true
+      end)
+      vim.wait(5000, function()
+        return flushed
+      end, 10)
+      local seen = {
+        running = running,
+        switches = _G.session_switches,
+        followed = require('aineo.claude').session_id(),
+      }
+      vim.fn.writefile({ vim.json.encode(seen) }, record)
+    end,
+  })
+]]
+
+T['a session switch']['is neither followed nor kept while Neovim quits with Claude Code still running'] = function()
+  local fake = claude.fake('switch-quitting-running', 'ready')
+  local settings = kept_in('switch-quitting-running-state')
+  local record = vim.fs.joinpath(fixture.directory('switch-quitting-running'), 'seen.json')
+  child.lua(RUN_HOOKS_BEFORE_AINEO_ON_QUIT, { record })
+  local terminal = claude.start_noting_switches(child, fake, settings)
+  local started_on = first_session_id(fake)
+  child.lua('_G.terminal_on_quit, _G.hooks_on_quit = ...', {
+    terminal,
+    {
+      {
+        command = claude.hook_command(fake, 1, 'SessionEnd'),
+        input = hook_input('SessionEnd', started_on, 'clear'),
+      },
+      {
+        command = claude.hook_command(fake, 1, 'SessionStart'),
+        input = hook_input('SessionStart', OTHER_SESSION_ID, 'clear'),
+      },
+    },
+  })
+
+  claude.quit(child)
+  eq(vim.fn.jobwait({ child.job.id }, claude.STOP_PATIENCE_MS), { 0 })
+  local seen = vim.json.decode(table.concat(vim.fn.readfile(record), ''))
+  children.restart(child)
+  claude.start(child, fake, settings)
+
+  eq(seen, { running = true, switches = {}, followed = started_on })
+  eq(claude.words_after(claude.start_arguments(fake, 2), '--resume'), { started_on })
+end
+
 T['through Claude Code’s keys'] = MiniTest.new_set()
 
 T['through Claude Code’s keys']['a switch reaches on_session_switched'] = MiniTest.new_set({
