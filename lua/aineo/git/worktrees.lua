@@ -8,7 +8,7 @@ local M = {}
 
 --- A worktree of a repository, as `git worktree list` gives it.
 ---@class aineo.git.Worktree
----@field top string its top level, the directory of its working tree
+---@field top string its top level, the directory of its working tree, or the git directory git lists it by
 ---@field head string|nil the full id of the commit its `HEAD` names; nil before its first commit
 ---@field branch string|nil the branch its `HEAD` is on; nil when `HEAD` is detached
 
@@ -48,10 +48,13 @@ end
 
 --- Lists the worktrees of the repository `found` is in, and calls
 --- `done(nil, worktrees)`, the worktree `found` is first and the others in
---- git's order, or `done(failure)`. A worktree git marks `prunable` or
---- `bare` is left out (`LEFT_OUT_MARKS`), and so is one whose directory does
---- not exist, which git marks `locked` rather than `prunable` once it is
---- locked.
+--- git's order, or `done(failure)`. Each is given by its path with every
+--- link resolved, and `found`'s by `found.top`, whether git lists it by its
+--- top level, by a path through a link, or by its git directory, as it
+--- lists a submodule's checkout and a repository whose git directory is
+--- separate. A worktree git marks `prunable` or `bare` is left out
+--- (`LEFT_OUT_MARKS`), and so is one whose directory does not exist, which
+--- git marks `locked` rather than `prunable` once it is locked.
 ---
 ---@param run aineo.git.Run
 ---@param found aineo.git.Repository
@@ -63,8 +66,15 @@ function M.list_worktrees(run, found, done)
       local own, others = {}, {}
       for _, listed in ipairs(parse_porcelain(output.stdout)) do
         local worktree = listed.worktree
-        if not listed.left_out and vim.uv.fs_stat(worktree.top) then
-          table.insert(worktree.top == found.top and own or others, worktree)
+        local top = vim.uv.fs_realpath(worktree.top)
+        if not listed.left_out and top then
+          if top == found.top or top == found.git_directory then
+            worktree.top = found.top
+            table.insert(own, worktree)
+          else
+            worktree.top = top
+            table.insert(others, worktree)
+          end
         end
       end
       done(nil, vim.list_extend(own, others))

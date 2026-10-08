@@ -91,6 +91,172 @@ local function add_worktree(top, name, branch, start_point)
   return worktree
 end
 
+--- The Lua that counts, in the child, every call made to a function of the
+--- git home but its watch, in `_G.git_asked`, and each answer once its
+--- caller's `done` has run, in `_G.git_answered`, both by the function's
+--- name.
+local COUNT_GIT_READS = [[
+  local git = require('aineo.git')
+  _G.git_asked, _G.git_answered = {}, {}
+  for name, operation in pairs(git) do
+    if type(operation) == 'function' and name ~= 'watch_repository' then
+      _G.git_asked[name], _G.git_answered[name] = 0, 0
+      git[name] = function(...)
+        _G.git_asked[name] = _G.git_asked[name] + 1
+        local arguments = { ... }
+        for index = 1, select('#', ...) do
+          if type(arguments[index]) == 'function' then
+            local done = arguments[index]
+            arguments[index] = function(...)
+              done(...)
+              _G.git_answered[name] = _G.git_answered[name] + 1
+            end
+            break
+          end
+        end
+        return operation(unpack(arguments, 1, select('#', ...)))
+      end
+    end
+  end
+]]
+
+--- The Lua expression saying whether the child has asked the git home for
+--- the worktrees `...` times at least, and every call it made to the home
+--- has answered (`COUNT_GIT_READS`).
+local READS_ANSWERED = [[(function(lists)
+  for name, asked in pairs(_G.git_asked) do
+    if _G.git_answered[name] ~= asked then
+      return false
+    end
+  end
+  return _G.git_answered.list_worktrees >= lists
+end)(...)]]
+
+--- Waits until the child has listed the worktrees `lists` times, once per
+--- window when not given, and every read it asked of the git home has
+--- answered (`COUNT_GIT_READS`), so that what the pane shows is what those
+--- reads gave.
+---
+---@param lists? integer
+local function wait_for_the_reads(lists)
+  git_repo.wait_until('every read answered', function()
+    return child.lua_get(READS_ANSWERED, { lists or 2 })
+  end)
+end
+
+T['the editor’s own worktree'] = MiniTest.new_set()
+
+T['the editor’s own worktree']['is shown alone, as ever, in a repository whose git directory is separate'] = function()
+  local fixture = git_repo.directory('changesworktrees-separate')
+  local top = vim.fs.joinpath(fixture, 'work')
+  vim.fn.mkdir(top, 'p')
+  local separate = vim.fs.joinpath(fixture, 'store.git')
+  git_repo.git(top, { 'init', '--quiet', '--initial-branch=main', '--separate-git-dir', separate })
+  git_repo.write(top, 'notes.txt', { 'one' })
+  git_repo.commit_all(top, 'First')
+  git_repo.write(top, 'notes.txt', { 'two' })
+  child.lua(COUNT_GIT_READS)
+
+  begin_and_show(top)
+
+  wait_for_the_reads()
+  eq(lines_of(FILES), { '  M notes.txt' })
+end
+
+--- Makes the repository `lib`, with one commit, a submodule of the
+--- repository `super`, with one commit, both under the fixture
+--- `git-<name>`; returns the submodule's checkout in `super` and the
+--- fixture's directory.
+---
+---@param name string
+---@return string checkout
+---@return string fixture
+local function create_submodule(name)
+  local fixture = git_repo.directory(name)
+  local lib, super = vim.fs.joinpath(fixture, 'lib'), vim.fs.joinpath(fixture, 'super')
+  for _, top in ipairs({ lib, super }) do
+    vim.fn.mkdir(top, 'p')
+    git_repo.git(top, { 'init', '--quiet', '--initial-branch=main' })
+    git_repo.write(top, 'notes.txt', { 'one' })
+    git_repo.commit_all(top, 'First')
+  end
+  git_repo.git(
+    super,
+    { '-c', 'protocol.file.allow=always', 'submodule', 'add', '--quiet', lib, 'lib' }
+  )
+  git_repo.commit_all(super, 'The submodule')
+  return vim.fs.joinpath(super, 'lib'), fixture
+end
+
+T['the editor’s own worktree']['is shown alone, as ever, in a submodule'] = function()
+  local checkout = create_submodule('changesworktrees-submodule')
+  git_repo.write(checkout, 'notes.txt', { 'two' })
+  child.lua(COUNT_GIT_READS)
+
+  begin_and_show(checkout)
+
+  wait_for_the_reads()
+  eq(lines_of(FILES), { '  M notes.txt' })
+end
+
+T['the editor’s own worktree']['is shown once, a linked one whose folder moved and left a link behind'] = function()
+  local fixture = git_repo.directory('changesworktrees-moved')
+  local before = vim.fs.joinpath(fixture, 'before')
+  local top = vim.fs.joinpath(before, 'repo')
+  vim.fn.mkdir(top, 'p')
+  git_repo.git(top, { 'init', '--quiet', '--initial-branch=main' })
+  git_repo.write(top, 'notes.txt', { 'one' })
+  git_repo.commit_all(top, 'First')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'mine', vim.fs.joinpath(before, 'mine') })
+  local after = vim.fs.joinpath(fixture, 'after')
+  assert(vim.uv.fs_rename(before, after))
+  assert(vim.uv.fs_symlink(after, before))
+  local mine = vim.fs.joinpath(after, 'mine')
+  git_repo.write(mine, 'notes.txt', { 'two' })
+  child.lua(COUNT_GIT_READS)
+
+  begin_and_show(mine)
+
+  wait_for_the_reads()
+  eq(
+    lines_of(FILES),
+    { '  M notes.txt', 'Worktree repo (main)', 'No files changed in this worktree' }
+  )
+end
+
+T['the editor’s own worktree']['is not listed as a locked one whose .git is gone, its folder inside the top level'] = function()
+  local top = git_repo.create('changesworktrees-locked-unlinked', {
+    ['notes.txt'] = { 'one' },
+    ['.gitignore'] = { '/worktrees/' },
+  })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local agent = vim.fs.joinpath(top, 'worktrees', 'agent')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '--lock', '-b', 'agent', agent })
+  assert(os.remove(vim.fs.joinpath(agent, '.git')))
+  child.lua(COUNT_GIT_READS)
+
+  begin_and_show(top)
+
+  wait_for_the_reads()
+  eq(lines_of(FILES), { '  M notes.txt' })
+end
+
+T['the editor’s own worktree']['in a submodule’s linked worktree lists the submodule’s checkout as another'] = function()
+  local checkout, fixture = create_submodule('changesworktrees-submodule-linked')
+  git_repo.write(checkout, 'notes.txt', { 'two' })
+  local linked = vim.fs.joinpath(fixture, 'linked')
+  git_repo.git(checkout, { 'worktree', 'add', '--quiet', '-b', 'linked', linked })
+  child.lua(COUNT_GIT_READS)
+
+  begin_and_show(linked)
+
+  wait_for_the_reads()
+  eq(
+    lines_of(FILES),
+    { 'No files changed on this session', 'Worktree lib (main)', '  M notes.txt' }
+  )
+end
+
 T['the files window'] = MiniTest.new_set()
 
 T['the files window']['lists the editor’s files first, as ever, then each other worktree’s under its heading'] = function()
@@ -597,13 +763,23 @@ T['the reads']['of a window stay one at a time with several worktrees, one asked
   git_repo.wait_until('two reads of three worktrees answered', function()
     return child.lua_get('_G.file_reads_answered') >= 6
   end)
-  eq(
-    { vim.fn.readfile(log), child.lua_get('_G.file_reads_answered') },
+  eq({ vim.fn.readfile(log), child.lua_get('_G.file_reads_answered') }, {
     {
-      { 'start', 'end', 'start', 'end', 'start', 'end', 'start', 'end', 'start', 'end', 'start', 'end' },
-      6,
-    }
-  )
+      'start',
+      'end',
+      'start',
+      'end',
+      'start',
+      'end',
+      'start',
+      'end',
+      'start',
+      'end',
+      'start',
+      'end',
+    },
+    6,
+  })
 end
 
 T['the commits window'] = MiniTest.new_set()
