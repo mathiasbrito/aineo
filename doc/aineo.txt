@@ -105,10 +105,11 @@ same two windows, at the same sizes, show the other pane's buffers.
 - The agent pane: the Agent Report over Input, as the layout opens.
 - The changes pane: `aineo://changes-files` in the Report's place, over
   `aineo://changes-commits` in Input's, listing the session's changed files
-  and its commits (|aineo-changes|). Each is a scratch buffer, read-only to
-  you; `:edit` there writes its list again. A buffer of yours under either
-  name, such as one a restored session made, gives the name up: it is wiped
-  out, or kept unnamed when you changed its text.
+  and its commits, then those of each other worktree of the repository
+  (|aineo-changes|). Each is a scratch buffer, read-only to you; `:edit`
+  there writes its list again. A buffer of yours under either name, such
+  as one a restored session made, gives the name up: it is wiped out, or
+  kept unnamed when you changed its text.
 
 `\pa` (|:Aineo-pane|) shows the agent pane and `\pc` the changes pane; the
 pane already shown stays as it is (the changes pane is read again,
@@ -139,16 +140,19 @@ with it, and so does the layout opened anew once its windows were closed.
 The changes pane ~
                                                                *aineo-changes*
 The changes pane lists what changed in your repository since the base of
-the Claude Code session it shows. Its repository is the one Claude Code's
-working directory was in when aineo first started Claude Code in this
-editor, for the editor's life. A session aineo has not seen takes as its
-base the commit `HEAD` names when Claude Code starts on it or switches to
-it. aineo keeps each session's base, and the files you save while it shows
-that session, under `stdpath('state')`: a restart of Claude Code or of the
-editor, or a switch back to an earlier session, shows that session's base
-and saves again. A start aineo could not make — `claude.cmd` not
-executable, say — takes no base; a Claude Code that starts and then fails
-takes one.
+the Claude Code session it shows, then what changed in each of the
+repository's other worktrees since a base of its own (below). Its
+repository is the one Claude Code's working directory was in when aineo
+first started Claude Code in this editor, for the editor's life. A session
+aineo has not seen takes as its base the commit `HEAD` names when aineo
+starts following it: when Claude Code, started on it, is first ready for
+input, which can be long after the start, while a dialog is up say, or when
+you switch to it inside Claude Code. aineo keeps each session's base, and
+the files you save while it shows that session, under `stdpath('state')`:
+a restart of Claude Code or of the editor, or a switch back to an earlier
+session, shows that session's base and saves again. A start aineo could
+not make — `claude.cmd` not executable, say — takes no base, and neither
+does a Claude Code that fails before it is first ready for input.
 
 The files window, `aineo://changes-files`, lists every file that differs
 from the base, committed since or not, staged or not, and every new file
@@ -159,12 +163,18 @@ your ignore rules leave in, one per line, in git's order: >
 <
 The letter is the kind of change: `A` added, `M` modified, `D` deleted, `R`
 renamed, after its old path, `T` turned into a link or back, `?` new and
-untracked; a copy shows as added. The `*` marks a file you saved from this
-editor since the base was taken, or while aineo first looked for the
-repository it then found — `:write`, `:update`, `:wall`, a part of a buffer
-written to a file or appended to one, the file written whatever its buffer
-is named, a file opened through a symbolic link included. A file you and
-Claude both changed is marked too: aineo cannot tell who changed what. A
+untracked; a copy shows as added. The `*` marks a file saved since the
+base was taken, from this editor or from another one following the same
+session in this repository — `:write`, `:update`, `:wall`, a part of a
+buffer written to a file or appended to one, the file written whatever its
+buffer is named, a file opened through a symbolic link included. A file
+you saved before aineo started following the session carries no `*` for
+it, though it is still listed against the base: when Claude Code starts,
+that is at least the 1.5 seconds it waits for Claude Code's input to
+settle, longer while a trust or MCP-server dialog is up (a real Claude
+Code's start was not measured), and a save made then is marked for the
+session followed before, if any. A file you and Claude both changed is
+marked too: aineo cannot tell who changed what. A
 path holding a line break, a control character, a double quote or a
 backslash is shown between double quotes, each of those escaped as git
 escapes it; characters outside ASCII are kept as they are, where git writes
@@ -175,22 +185,51 @@ The commits window, `aineo://changes-commits`, lists the session's commits,
 newest first, by abbreviated id and subject, or says "No commits on this
 session".
 
+Below these lines, under no heading of their own, each window lists the
+repository's other worktrees, in the order `git worktree list` gives them,
+each under a heading naming its folder and its branch, or `detached`: >
+    Worktree agent-1 (feature/x)
+      M lua/aineo/init.lua
+<
+then that worktree's files or commits, in the same form, unmarked, or "No
+files changed in this worktree" or "No commits in this worktree". With no
+other worktree, the pane shows only your own lines. A worktree git marks
+prunable, one whose directory is gone, locked or not, and the directory of
+a bare repository are left out; a locked one is listed. A worktree's base
+is read again at each read and never kept: its merge base with the
+upstream of the branch your own worktree is on, with that branch when it
+has no upstream, or with your `HEAD` when it is detached. A worktree that
+shares no history with yours, or has no commit yet, is listed with no
+base: every file new, every commit its own.
+
 Enter on a file's line shows its unified diff from the base, and on a
 commit's line that commit's diff, in the middle column (the file column,
 below). The diff is read-only: a buffer named `aineo://diff/{path}` or
-`aineo://commit/{id}`, with 'filetype' `diff`, wiped once hidden. The cursor
-stays in the pane, so `j` and Enter step through the list: when you press
-Enter again before a diff was read, only the last Enter's diff is shown.
-Enter on any other line does nothing. When the middle column has no room
-for the diff, aineo says so and shows nothing.
+`aineo://commit/{id}`, with 'filetype' `diff`, wiped once hidden. Under
+another worktree's heading, Enter shows that worktree's diff of the file
+from its base, or the commit's, in a buffer named
+`aineo://worktree{top}/diff/{path}` or `aineo://worktree{top}/commit/{id}`,
+{top} the worktree's top level, so two worktrees' diffs of one path are two
+buffers; no key opens another worktree's file. The cursor stays in the
+pane, so `j` and Enter step through the list: when you press Enter again
+before a diff was read, only the last Enter's diff is shown. Enter on any
+other line, a heading included, does nothing. When the middle column has
+no room for the diff, aineo says so and shows nothing.
 
 The pane is read again whenever it is shown — `\pc`, `:Aineo pane changes`,
 `\o`, or the layout built anew showing it — and, from its first showing
 until the editor quits, when a file is saved, when a file of the working
 tree changes, and when the branch moves: a commit, even one that changes no
-file, an amend, a reset, a checkout. One read of each window runs at a time,
-and the cursor stays on the line it was on while that line is listed. A
-diff already shown stays as it was until you press Enter on its line again.
+file, an amend, a reset, a checkout. The other worktrees are listed again,
+and each one's files and commits read again, whenever the pane is shown
+and whenever aineo's watch of your repository sees a change: in another
+worktree, its `git add` or commit, a worktree added or removed, or a file
+written in one inside your top level (but see |aineo-limits|). A worktree
+added shows at the next read, and one removed goes, its diffs left as they
+are. One read of each window runs at a time, your own worktree's and the
+others' one after another, and the cursor stays on the line it was on
+while that line is listed. A diff already shown stays as it was until you
+press Enter on its line again.
 A list or a diff read while Neovim allows no change of text — an
 expression mapping waiting for a key or in |input()|, or a completion
 function still running — is shown once Neovim allows it again, with nothing
@@ -207,7 +246,10 @@ pane is shown or a file is saved, and a repository made since — by
 base is no longer behind `HEAD` — after a reset to before it, or a checkout
 of another branch — the commits window says so above what git lists, and
 the base stays. A read that fails keeps the list shown, under one line
-giving git's words. When aineo's watch of the repository fails, both
+giving git's words; so does another worktree's, under its heading, the
+other worktrees as they are. When the other worktrees cannot be listed,
+one line in git's words follows your own lines, over the worktrees last
+listed. When aineo's watch of the repository fails, both
 windows say so until the pane is shown again, which starts it again.
 
 Colours ~
@@ -1164,6 +1206,17 @@ The changes pane ~
   showing of the pane, save or commit, and a branch moved by
   `git update-ref` from another worktree is missed too. No timer reads the
   repository.
+- The other worktrees have no watch of their own. A file written in a
+  worktree outside your top level shows only at that worktree's next
+  `git add` or commit, your next save, or the pane's next showing. On
+  Linux, a file written in a worktree inside your top level, a worktree
+  added or removed, and another worktree's commit may show only then too
+  (not measured there). Each worktree costs its reads, at every read: on
+  a small repository with five other worktrees, reading both windows again
+  took 1.2 to 1.5 seconds, about a quarter of a second of git for each
+  worktree; your own lines show first. Once a worktree's branch is merged
+  by rebase, its commits stay listed under it until the worktree is
+  removed.
 - When the editor quits, aineo stops its watch, but a git it is running
   then runs to its end, outliving the editor.
 - A buffer named for a diff that aineo did not make, such as one a restored

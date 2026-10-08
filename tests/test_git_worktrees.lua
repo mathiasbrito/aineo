@@ -98,10 +98,10 @@ T['the worktrees']['keep a linked one']['that is'] = function(_, options, branch
   })
 end
 
-T['the worktrees']['leave out one git marks prunable, its directory removed'] = function()
+T['the worktrees']['leave out one git marks prunable, its directory left without its .git'] = function()
   local top, base = git_repo.create('worktrees-prunable', { ['a.txt'] = { 'a' } })
   local gone = add_worktree(top, 'gone', { '-b', 'side' })
-  vim.fn.delete(gone, 'rf')
+  vim.fn.delete(vim.fs.joinpath(gone, '.git'))
 
   local seen = child.lua(LIST_WORKTREES, { top })
 
