@@ -218,8 +218,9 @@ local FIND_EDITOR = [[
 ]]
 
 --- The Lua that finds, in the child, the repository of the worktree at
---- `...` and asks the git home for its base against `_G.editor`; returns
---- what `_G.await` saw of the base, or of the failure to find the worktree.
+--- `...`, asks the git home for `_G.editor`'s comparison commit and then
+--- for the worktree's base against it; returns what `_G.await` saw of the
+--- base, or of the failure to find the worktree or to read the commit.
 local WORKTREE_BASE = [[
   local directory = ...
   local git = require('aineo.git')
@@ -229,7 +230,13 @@ local WORKTREE_BASE = [[
         done(failure)
         return
       end
-      git.worktree_base(_G.editor, worktree, done)
+      git.comparison_commit(_G.editor, function(comparison_failure, comparison)
+        if comparison_failure then
+          done(comparison_failure)
+          return
+        end
+        git.worktree_base(worktree, comparison, done)
+      end)
     end)
   end)
 ]]

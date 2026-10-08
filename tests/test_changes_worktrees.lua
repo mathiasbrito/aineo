@@ -621,6 +621,29 @@ T['a worktree whose later read fails']['keeps the list it showed, under git’s 
   })
 end
 
+T['a worktree whose later read fails']['keeps the list it showed, under git’s words, when the editor’s branch cannot be read'] = function()
+  local top = git_repo.create('changesworktrees-comparison-failed', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local stand_in, switch =
+    breakable_git_in('changesworktrees-comparison-failed', top, 'symbolic-ref')
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(
+    FILES,
+    { 'No files changed on this session', 'Worktree agent (agent)', '  M notes.txt' }
+  )
+  turn_on(switch)
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_lines(FILES, {
+    'No files changed on this session',
+    'Worktree agent (agent)',
+    'The last refresh failed: fatal: broken',
+    '  M notes.txt',
+  })
+end
+
 T['a list of worktrees that fails'] = MiniTest.new_set({
   parametrize = {
     { FILES, '  M notes.txt' },
@@ -842,6 +865,55 @@ T['the reads']['of the editor’s own list, asked during the other worktrees’,
   local shown = lines_of(FILES)[1]
   touch(stand_in .. '.second.gate')
   eq(shown, '  ? saved.txt')
+end
+
+--- The Lua that replaces, in the child, the git home's watch with one that
+--- never calls back, so that only what a case asks for reads the pane.
+local NO_WATCH = [[
+  require('aineo.git').watch_repository = function()
+    return { stop = function() end, watches_subdirectories = true }
+  end
+]]
+
+--- Writes a stand-in for git under the fixture `git-<name>` that appends
+--- the arguments of every git it runs, one line each, to the file
+--- `<stand-in>.log`; returns its path and the log's.
+---
+---@param name string
+---@return string stand_in
+---@return string log
+local function git_logging_every_run(name)
+  local stand_in = git_repo.script(name, 'git', {
+    'printf "%s\\n" "$*" >> "$0.log"',
+    ('exec %s "$@"'):format(REAL_GIT),
+  })
+  return stand_in, stand_in .. '.log'
+end
+
+--- How many lines of the file `log` hold `text`.
+---
+---@param log string
+---@param text string
+---@return integer
+local function lines_holding(log, text)
+  return #vim.tbl_filter(function(line)
+    return line:find(text, 1, true) ~= nil
+  end, vim.fn.readfile(log))
+end
+
+T['the reads']['of a window read the editor’s branch once, however many worktrees'] = function()
+  local top = git_repo.create('changesworktrees-comparison-once', { ['notes.txt'] = { 'one' } })
+  add_worktree(top, 'first', 'first')
+  add_worktree(top, 'second', 'second')
+  add_worktree(top, 'third', 'third')
+  local stand_in, log = git_logging_every_run('changesworktrees-comparison-once')
+  child.lua(NO_WATCH)
+  child.lua(COUNT_GIT_READS)
+
+  begin_and_show(top, { executable = stand_in })
+
+  wait_for_the_reads()
+  eq(lines_holding(log, '@{upstream}'), 2)
 end
 
 T['the commits window'] = MiniTest.new_set()
