@@ -48,12 +48,26 @@ local function section_before(before, top)
   return nil
 end
 
+--- Whether `repository`, what git found from `worktree`'s directory, is
+--- that worktree: its top level, or its git directory where git lists a
+--- worktree by it, as it lists a submodule's checkout. A directory that
+--- no longer is a worktree, its `.git` gone, is in whatever repository
+--- holds it, or in none.
+---
+---@param repository aineo.git.Repository
+---@param worktree aineo.git.Worktree
+---@return boolean
+local function is_listed_worktree(repository, worktree)
+  return repository.top == worktree.top or repository.git_directory == worktree.top
+end
+
 --- Reads `worktree`'s list (`read.read_list`) from its base
 --- (`git.worktree_base()`) and calls `done(section)`; when the list cannot
 --- be read, the section says why and keeps what the window last listed for
 --- the worktree (`section_before()`), if anything — unless the worktree's
 --- directory is gone by then, removed while it was read, when it calls
---- `done(nil)`.
+--- `done(nil)`, as it does when git finds the directory in another
+--- repository than that worktree (`is_listed_worktree()`).
 ---
 ---@param read aineo.changes.WorktreesRead
 ---@param worktree aineo.git.Worktree
@@ -79,6 +93,10 @@ local function read_section(read, worktree, done)
   git.find_repository(
     worktree.top,
     or_failed(function(repository)
+      if not is_listed_worktree(repository, worktree) then
+        done(nil)
+        return
+      end
       git.worktree_base(
         read.found,
         repository,
