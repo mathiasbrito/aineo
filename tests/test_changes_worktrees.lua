@@ -1100,6 +1100,18 @@ T['the reads']['of a window read the editor’s branch once, however many worktr
   eq(lines_holding(log, '@{upstream}'), 2)
 end
 
+T['the reads']['of a window read nothing of the editor’s branch with no other worktree'] = function()
+  local top = git_repo.create('changesworktrees-comparison-none', { ['notes.txt'] = { 'one' } })
+  local stand_in, log = git_logging_every_run('changesworktrees-comparison-none')
+  child.lua(WATCH_IN_HAND)
+  child.lua(COUNT_GIT_READS)
+
+  begin_and_show(top, { executable = stand_in })
+
+  wait_for_the_reads()
+  eq(lines_holding(log, '@{upstream}'), 0)
+end
+
 T['the commits window'] = MiniTest.new_set()
 
 T['the commits window']['no longer lists another worktree’s commit once the editor’s branch holds it, its base read again'] = function()
