@@ -104,6 +104,508 @@ T['the files window']['lists the editor’s files first, as ever, then each othe
   expect_lines(FILES, { '  M notes.txt', 'Worktree agent (agent)', '  ? agent.txt' })
 end
 
+T['the files window']['heads a detached worktree’s section so'] = function()
+  local top = git_repo.create('changesworktrees-detached', { ['notes.txt'] = { 'one' } })
+  local agent = vim.fs.joinpath(vim.fs.dirname(top), 'agent')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '--detach', agent })
+  git_repo.write(agent, 'agent.txt', { 'new' })
+
+  begin_and_show(top)
+
+  expect_lines(
+    FILES,
+    { 'No files changed on this session', 'Worktree agent (detached)', '  ? agent.txt' }
+  )
+end
+
+T['a worktree with nothing changed'] = MiniTest.new_set({
+  parametrize = {
+    {
+      FILES,
+      {
+        'No files changed on this session',
+        'Worktree agent (agent)',
+        'No files changed in this worktree',
+      },
+    },
+    {
+      COMMITS,
+      { 'No commits on this session', 'Worktree agent (agent)', 'No commits in this worktree' },
+    },
+  },
+})
+
+T['a worktree with nothing changed']['says so under its heading in'] = function(name, expected)
+  local top = git_repo.create('changesworktrees-nothing', { ['notes.txt'] = { 'one' } })
+  add_worktree(top, 'agent', 'agent')
+
+  begin_and_show(top)
+
+  expect_lines(name, expected)
+end
+
+T['Enter'] = MiniTest.new_set()
+
+--- Waits until the home has asked the child to show `count` diffs.
+---
+---@param count integer
+local function wait_for_diffs(count)
+  git_repo.wait_until(('%d diffs shown'):format(count), function()
+    return child.lua_get('#_G.shown_diffs') >= count
+  end)
+end
+
+--- The Lua expression giving the name and the lines of the diff buffer the
+--- home asked the child to show `...`-th.
+local SHOWN_DIFF = [[(function(index)
+  local diff = _G.shown_diffs[index]
+  return { name = vim.api.nvim_buf_get_name(diff), text = vim.api.nvim_buf_get_lines(diff, 0, -1, true) }
+end)(...)]]
+
+T['Enter']['on another worktree’s file shows its diff from that worktree’s base, named for the worktree'] = function()
+  local top, base = git_repo.create('changesworktrees-enter-file', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local before = git_repo.git(top, { 'rev-parse', base .. ':notes.txt' })
+  local after = git_repo.git(agent, { 'hash-object', 'notes.txt' })
+  begin_and_show(top)
+  expect_lines(
+    FILES,
+    { 'No files changed on this session', 'Worktree agent (agent)', '  M notes.txt' }
+  )
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  eq(child.lua_get(SHOWN_DIFF, { 1 }), {
+    name = ('aineo://worktree%s/diff/notes.txt'):format(agent),
+    text = {
+      'diff --git a/notes.txt b/notes.txt',
+      ('index %s..%s 100644'):format(before, after),
+      '--- a/notes.txt',
+      '+++ b/notes.txt',
+      '@@ -1 +1 @@',
+      '-one',
+      '+agent',
+    },
+  })
+end
+
+T['Enter']['on another worktree’s commit shows that commit’s diff, named for the worktree'] = function()
+  local top = git_repo.create('changesworktrees-enter-commit', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+  begin_and_show(top)
+  expect_lines(COMMITS, {
+    'No commits on this session',
+    'Worktree agent (agent)',
+    commit:sub(1, 7) .. ' The agent’s',
+  })
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  local shown = child.lua_get(SHOWN_DIFF, { 1 })
+  eq({
+    name = shown.name,
+    first = shown.text[1],
+    last = { shown.text[#shown.text - 1], shown.text[#shown.text] },
+  }, {
+    name = ('aineo://worktree%s/commit/%s'):format(agent, commit),
+    first = 'commit ' .. commit,
+    last = { '-one', '+agent' },
+  })
+end
+
+--- The Lua that counts, in the child, the diffs the git home is asked for,
+--- in `_G.diffs_asked`, and keeps every notification from then on in
+--- `_G.messages` rather than showing it.
+local COUNT_DIFFS_AND_MESSAGES = [[
+  local git = require('aineo.git')
+  _G.diffs_asked = 0
+  for _, name in ipairs({ 'file_diff', 'commit_diff' }) do
+    local read = git[name]
+    git[name] = function(...)
+      _G.diffs_asked = _G.diffs_asked + 1
+      return read(...)
+    end
+  end
+  _G.messages = {}
+  vim.notify = function(message)
+    table.insert(_G.messages, message)
+  end
+]]
+
+T['Enter']['on another worktree’s heading does nothing and says nothing'] = function()
+  local top = git_repo.create('changesworktrees-enter-heading', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  child.lua(COUNT_DIFFS_AND_MESSAGES)
+  begin_and_show(top)
+  expect_lines(
+    FILES,
+    { 'No files changed on this session', 'Worktree agent (agent)', '  M notes.txt' }
+  )
+  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.type_keys('<CR>')
+
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  eq(child.lua_get('{ _G.diffs_asked, _G.messages }'), { 1, {} })
+end
+
+T['Enter']['on one path in two worktrees shows two diff buffers, each its worktree’s'] = function()
+  local top = git_repo.create('changesworktrees-enter-two', { ['notes.txt'] = { 'one' } })
+  local first = add_worktree(top, 'first', 'first')
+  git_repo.write(first, 'notes.txt', { 'first' })
+  local second = add_worktree(top, 'second', 'second')
+  git_repo.write(second, 'notes.txt', { 'second' })
+  begin_and_show(top)
+  expect_lines(FILES, {
+    'No files changed on this session',
+    'Worktree first (first)',
+    '  M notes.txt',
+    'Worktree second (second)',
+    '  M notes.txt',
+  })
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
+  child.type_keys('<CR>')
+  wait_for_diffs(1)
+
+  child.lua('vim.api.nvim_win_set_cursor(0, { 5, 0 })')
+  child.type_keys('<CR>')
+
+  wait_for_diffs(2)
+  local last_line = 'vim.api.nvim_buf_get_lines(_G.shown_diffs[...], -2, -1, true)[1]'
+  eq({
+    distinct = child.lua_get('_G.shown_diffs[1] ~= _G.shown_diffs[2]'),
+    first = child.lua_get(last_line, { 1 }),
+    second = child.lua_get(last_line, { 2 }),
+  }, { distinct = true, first = '+first', second = '+second' })
+end
+
+--- How long a case waits for the watch to call back for one change before it
+--- makes the change again: far longer than a call takes.
+local RETRY_MS = 3000
+
+--- The file `watch_live()` writes at the top level of a repository.
+local LIVE_MARKER = 'live.txt'
+
+--- Returns once the watch the pane started on the repository at `top` is
+--- seen to be live: `LIVE_MARKER`, written there again every `RETRY_MS`, is
+--- listed in the files window, the editor's only file, above the lines
+--- `after`, none when not given. On macOS, libuv starts a watch's event
+--- stream after the watch has started, and a change made before the stream
+--- runs is never seen.
+---
+---@param top string
+---@param after? string[]
+local function watch_live(top, after)
+  local expected = vim.list_extend({ '  ? ' .. LIVE_MARKER }, after or {})
+  for _ = 1, git_repo.PATIENCE_MS / RETRY_MS do
+    git_repo.write(top, LIVE_MARKER, { 'live' })
+    if
+      vim.wait(RETRY_MS, function()
+        return vim.deep_equal(lines_of(FILES), expected)
+      end, 10)
+    then
+      return
+    end
+  end
+  eq(lines_of(FILES), expected)
+end
+
+T['the worktrees followed'] = MiniTest.new_set()
+
+T['the worktrees followed']['show one added after the pane first showed, once the watch calls back'] = function()
+  local top = git_repo.create('changesworktrees-added', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  watch_live(top)
+
+  add_worktree(top, 'agent', 'agent')
+
+  expect_lines(
+    FILES,
+    { '  ? ' .. LIVE_MARKER, 'Worktree agent (agent)', 'No files changed in this worktree' }
+  )
+end
+
+T['the worktrees followed']['show a commit made in another worktree, once the watch calls back'] = function()
+  local top = git_repo.create('changesworktrees-commit-followed', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  begin_and_show(top)
+  watch_live(top, { 'Worktree agent (agent)', 'No files changed in this worktree' })
+
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+
+  expect_lines(COMMITS, {
+    'No commits on this session',
+    'Worktree agent (agent)',
+    commit:sub(1, 7) .. ' The agent’s',
+  })
+end
+
+T['the worktrees followed']['drop one removed, once the watch calls back, its diff left as it was'] = function()
+  local top = git_repo.create('changesworktrees-removed', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  begin_and_show(top)
+  watch_live(top, { 'Worktree agent (agent)', '  M notes.txt' })
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
+  child.type_keys('<CR>')
+  wait_for_diffs(1)
+  local diff = child.lua_get(SHOWN_DIFF, { 1 })
+
+  git_repo.git(top, { 'worktree', 'remove', '--force', agent })
+
+  expect_lines(FILES, { '  ? ' .. LIVE_MARKER })
+  eq(child.lua_get(SHOWN_DIFF, { 1 }), diff)
+end
+
+--- The git the suites run, by its absolute path, for the stand-ins that
+--- run it in their turn.
+local REAL_GIT = vim.fn.exepath('git')
+
+--- Writes a stand-in for git under the fixture `git-<name>` that fails
+--- with `fatal: broken`, as git words a failure, every `subcommand` it is
+--- asked to run in the directory `broken` while the file `<stand-in>.broken`
+--- exists, and runs git otherwise; returns its path and the switch file's.
+---
+---@param name string
+---@param broken string
+---@param subcommand string
+---@return string stand_in
+---@return string switch
+local function breakable_git_in(name, broken, subcommand)
+  local stand_in = git_repo.script(name, 'git', {
+    ('case " $* " in *" -C %s "*" %s "*) [ -f "$0.broken" ] && { echo "fatal: broken" >&2; exit 128; } ;; esac'):format(
+      broken,
+      subcommand
+    ),
+    ('exec %s "$@"'):format(REAL_GIT),
+  })
+  return stand_in, stand_in .. '.broken'
+end
+
+--- Makes the stand-in whose switch file is `switch` fail from now on
+--- (`breakable_git_in()`).
+---
+---@param switch string
+local function turn_on(switch)
+  assert(vim.fn.writefile({}, switch) == 0, 'cannot write ' .. switch)
+end
+
+T['a worktree whose read fails'] = MiniTest.new_set({
+  parametrize = {
+    { 'its repository found', 'rev-parse' },
+    { 'its base read', 'merge-base' },
+    { 'its files listed', 'ls-files' },
+  },
+})
+
+T['a worktree whose read fails']['shows git’s words under its heading, the other worktrees as ever, failing'] = function(
+  _,
+  subcommand
+)
+  local top = git_repo.create('changesworktrees-failed', { ['notes.txt'] = { 'one' } })
+  local first = add_worktree(top, 'first', 'first')
+  local second = add_worktree(top, 'second', 'second')
+  git_repo.write(second, 'notes.txt', { 'second' })
+  local stand_in, switch = breakable_git_in('changesworktrees-failed', first, subcommand)
+  turn_on(switch)
+
+  begin_and_show(top, { executable = stand_in })
+
+  expect_lines(FILES, {
+    'No files changed on this session',
+    'Worktree first (first)',
+    'The last refresh failed: fatal: broken',
+    'Worktree second (second)',
+    '  M notes.txt',
+  })
+end
+
+T['a worktree whose later read fails'] = MiniTest.new_set()
+
+T['a worktree whose later read fails']['keeps the list it showed, under git’s words'] = function()
+  local top = git_repo.create('changesworktrees-failed-later', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local stand_in, switch = breakable_git_in('changesworktrees-failed-later', agent, 'ls-files')
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(
+    FILES,
+    { 'No files changed on this session', 'Worktree agent (agent)', '  M notes.txt' }
+  )
+  turn_on(switch)
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_lines(FILES, {
+    'No files changed on this session',
+    'Worktree agent (agent)',
+    'The last refresh failed: fatal: broken',
+    '  M notes.txt',
+  })
+end
+
+T['a list of worktrees that fails'] = MiniTest.new_set({
+  parametrize = {
+    { FILES, '  M notes.txt' },
+    { COMMITS, 'No commits on this session' },
+  },
+})
+
+T['a list of worktrees that fails']['leaves the editor’s lines as ever, then says so in git’s words, in'] = function(
+  name,
+  own_line
+)
+  local top = git_repo.create('changesworktrees-list-failed', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local stand_in, switch = breakable_git_in('changesworktrees-list-failed', top, 'worktree')
+  turn_on(switch)
+
+  begin_and_show(top, { executable = stand_in })
+
+  expect_lines(name, { own_line, 'The other worktrees could not be listed: fatal: broken' })
+end
+
+T['a later list of worktrees that fails'] = MiniTest.new_set()
+
+T['a later list of worktrees that fails']['keeps the worktrees it showed, under the line saying so'] = function()
+  local top = git_repo.create('changesworktrees-list-failed-later', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local stand_in, switch = breakable_git_in('changesworktrees-list-failed-later', top, 'worktree')
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(
+    FILES,
+    { 'No files changed on this session', 'Worktree agent (agent)', '  M notes.txt' }
+  )
+  turn_on(switch)
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_lines(FILES, {
+    'No files changed on this session',
+    'The other worktrees could not be listed: fatal: broken',
+    'Worktree agent (agent)',
+    '  M notes.txt',
+  })
+end
+
+--- Writes a stand-in for git under the fixture `git-<name>` that, asked
+--- for an `ls-files` in the directory `held`, writes the file
+--- `<stand-in>.waiting` and waits for the file `<stand-in>.gate` before it
+--- runs git, as it runs git at once for anything else; returns its path,
+--- the waiting file's and the gate's.
+---
+---@param name string
+---@param held string
+---@return string stand_in
+---@return string waiting
+---@return string gate
+local function git_held_in(name, held)
+  local stand_in = git_repo.script(name, 'git', {
+    ('case " $* " in *" -C %s "*" ls-files "*) : > "$0.waiting"; while [ ! -f "$0.gate" ]; do sleep 0.05; done ;; esac'):format(
+      held
+    ),
+    ('exec %s "$@"'):format(REAL_GIT),
+  })
+  return stand_in, stand_in .. '.waiting', stand_in .. '.gate'
+end
+
+T['a worktree removed while it is read'] = MiniTest.new_set()
+
+--- The Lua that counts, in the child, the reads of changed files the git
+--- home has answered, in `_G.file_reads_answered`, each once its caller's
+--- `done` has run.
+local COUNT_FILE_READS = [[
+  local git = require('aineo.git')
+  local changed_files = git.changed_files
+  _G.file_reads_answered = 0
+  git.changed_files = function(found, base, done, options)
+    return changed_files(found, base, function(...)
+      done(...)
+      _G.file_reads_answered = _G.file_reads_answered + 1
+    end, options)
+  end
+]]
+
+T['a worktree removed while it is read']['is dropped, not told as a failure'] = function()
+  local top = git_repo.create('changesworktrees-removed-meanwhile', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  local stand_in, waiting, gate = git_held_in('changesworktrees-removed-meanwhile', agent)
+  child.lua(COUNT_FILE_READS)
+  begin_and_show(top, { executable = stand_in })
+  git_repo.wait_until('the worktree’s files asked for', function()
+    return vim.uv.fs_stat(waiting) ~= nil
+  end)
+  vim.fn.delete(agent, 'rf')
+
+  assert(vim.fn.writefile({}, gate) == 0, 'cannot write ' .. gate)
+
+  git_repo.wait_until('the editor’s and the worktree’s files read', function()
+    return child.lua_get('_G.file_reads_answered') == 2
+  end)
+  eq(lines_of(FILES), { 'No files changed on this session' })
+end
+
+T['the reads'] = MiniTest.new_set()
+
+--- Writes a stand-in for git under the fixture `git-<name>` that runs
+--- every `ls-files` — the last git of each worktree's read of the files
+--- window — between a line `start` and a line `end` it appends to the file
+--- `<stand-in>.log`, after a pause of half a second; returns its path and
+--- the log's.
+---
+---@param name string
+---@return string stand_in
+---@return string log
+local function logging_git(name)
+  local stand_in = git_repo.script(name, 'git', {
+    'case " $* " in',
+    ('  *" ls-files "*) echo start >> "$0.log"; sleep 0.5; %s "$@"; code=$?; echo end >> "$0.log"; exit $code ;;'):format(
+      REAL_GIT
+    ),
+    'esac',
+    ('exec %s "$@"'):format(REAL_GIT),
+  })
+  return stand_in, stand_in .. '.log'
+end
+
+T['the reads']['of a window stay one at a time with several worktrees, one asked meanwhile once more after'] = function()
+  local top = git_repo.create('changesworktrees-one-at-a-time', { ['notes.txt'] = { 'one' } })
+  add_worktree(top, 'first', 'first')
+  add_worktree(top, 'second', 'second')
+  local stand_in, log = logging_git('changesworktrees-one-at-a-time')
+  child.lua(COUNT_FILE_READS)
+  begin_and_show(top, { executable = stand_in, system_name = 'Linux' })
+  git_repo.wait_until('the first read started', function()
+    return vim.uv.fs_stat(log) ~= nil
+  end)
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  git_repo.wait_until('two reads of three worktrees answered', function()
+    return child.lua_get('_G.file_reads_answered') >= 6
+  end)
+  eq(
+    { vim.fn.readfile(log), child.lua_get('_G.file_reads_answered') },
+    {
+      { 'start', 'end', 'start', 'end', 'start', 'end', 'start', 'end', 'start', 'end', 'start', 'end' },
+      6,
+    }
+  )
+end
+
 T['the commits window'] = MiniTest.new_set()
 
 T['the commits window']['lists the editor’s commits first, as ever, then each other worktree’s under its heading'] = function()

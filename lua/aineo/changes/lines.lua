@@ -239,6 +239,10 @@ end
 --- What the files window says when no file differs from the base.
 M.NO_FILES = 'No files changed on this session'
 
+--- What the files window says under another worktree's heading when no
+--- file of it differs from its base.
+M.NO_WORKTREE_FILES = 'No files changed in this worktree'
+
 --- What the files window says first where the watch sees no subdirectory.
 M.NOT_WATCHED =
   'Subdirectories are not watched: their changes show at the next showing of this pane, save or commit'
@@ -260,15 +264,19 @@ local function failure_notes(failure)
   return failure and { failure_line(M.refresh_failed(failure)) } or {}
 end
 
+--- What a worktree's heading says in place of a branch when its `HEAD` is
+--- detached.
+local DETACHED = 'detached'
+
 --- The heading line of `section`, a worktree other than the editor's: its
---- folder's name and its branch (`M.quoted_path()`).
+--- folder's name and its branch, or `DETACHED` (`M.quoted_path()`).
 ---
 ---@param section aineo.changes.WorktreeSection
 ---@return string
 function M.worktree_heading(section)
   return ('Worktree %s (%s)'):format(
     M.quoted_path(vim.fs.basename(section.top)),
-    M.quoted_path(section.branch)
+    section.branch and M.quoted_path(section.branch) or DETACHED
   )
 end
 
@@ -293,18 +301,53 @@ local function in_worktree(rows, section)
   end, rows)
 end
 
---- The rows of the other worktrees, `others`, in their order: each one's
---- heading (`M.worktree_heading()`), a note, then the rows `listed_rows`
---- gives for its list (`in_worktree()`).
+--- How one window shows a worktree other than the editor's.
+---@class aineo.changes.SectionLines
+---@field listed_rows fun(listed: any): aineo.changes.Row[] the rows of what the worktree's read gave
+---@field empty string what the window says under the worktree's heading when its list is empty
+
+--- The rows under the heading of `section`, a worktree other than the
+--- editor's: the line saying its last read failed, when it did; then the
+--- rows of the list it last read (`in_worktree()`), or the window's empty
+--- line, a note, when it has none, as `lines` says. Before any list of it
+--- was read, the line saying its read failed alone.
+---
+---@param section aineo.changes.WorktreeSection
+---@param lines aineo.changes.SectionLines
+---@return aineo.changes.Row[]
+local function section_rows(section, lines)
+  local notes = failure_notes(section.failure)
+  if not section.listed then
+    return notes
+  end
+  return rows_of(notes, in_worktree(lines.listed_rows(section.listed), section), note(lines.empty))
+end
+
+--- The line that says the other worktrees could not be listed, in
+--- `failure`'s words (`M.words_of()`).
+---
+---@param failure aineo.git.Failure
+---@return string
+local function worktrees_unlisted(failure)
+  return 'The other worktrees could not be listed: ' .. M.words_of(failure)
+end
+
+--- The rows of the other worktrees, `others`: the line saying they could
+--- not be listed (`worktrees_unlisted()`), a failure, when they could
+--- not; then, in their order, each one's heading (`M.worktree_heading()`),
+--- a note, and its rows (`section_rows()`).
 ---
 ---@param others aineo.changes.OtherWorktrees|nil
----@param listed_rows fun(listed: any): aineo.changes.Row[]
+---@param lines aineo.changes.SectionLines
 ---@return aineo.changes.Row[]
-local function worktree_rows(others, listed_rows)
+local function worktree_rows(others, lines)
   local rows = {}
+  if others and others.failure then
+    table.insert(rows, failure_line(worktrees_unlisted(others.failure)))
+  end
   for _, section in ipairs(others and others.sections or {}) do
     table.insert(rows, note(M.worktree_heading(section)))
-    vim.list_extend(rows, in_worktree(listed_rows(section.listed), section))
+    vim.list_extend(rows, section_rows(section, lines))
   end
   return rows
 end
@@ -356,18 +399,23 @@ end
 ---@param view aineo.changes.FilesView
 ---@return aineo.changes.Page
 function M.files_window(view)
-  return page_of(
-    vim.list_extend(
-      own_file_rows(view),
-      worktree_rows(view.worktrees, function(changes)
+  return page_of(vim.list_extend(
+    own_file_rows(view),
+    worktree_rows(view.worktrees, {
+      listed_rows = function(changes)
         return file_rows(changes, {})
-      end)
-    )
-  )
+      end,
+      empty = M.NO_WORKTREE_FILES,
+    })
+  ))
 end
 
 --- What the commits window says when the session has no commit.
 M.NO_COMMITS = 'No commits on this session'
+
+--- What the commits window says under another worktree's heading when it
+--- has no commit since its base.
+M.NO_WORKTREE_COMMITS = 'No commits in this worktree'
 
 --- How many characters of a commit's id stand for it in the pane.
 M.ABBREVIATED_ID_LENGTH = 7
@@ -457,14 +505,15 @@ end
 ---@param view aineo.changes.CommitsView
 ---@return aineo.changes.Page
 function M.commits_window(view)
-  return page_of(
-    vim.list_extend(
-      own_commit_rows(view),
-      worktree_rows(view.worktrees, function(since)
+  return page_of(vim.list_extend(
+    own_commit_rows(view),
+    worktree_rows(view.worktrees, {
+      listed_rows = function(since)
         return commit_rows(since.commits)
-      end)
-    )
-  )
+      end,
+      empty = M.NO_WORKTREE_COMMITS,
+    })
+  ))
 end
 
 return M
