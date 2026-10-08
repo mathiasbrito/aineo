@@ -1155,7 +1155,10 @@ The changes pane ~
   base kept for it, and each other's saves. A save the other editor keeps
   between this editor's read of the kept file and its write is lost from
   the file, though that editor still marks it: it is kept again when
-  that editor next saves a file it had not saved before.
+  that editor next saves a file it had not saved before. Between that
+  read and that write, the last base written wins too: the other editor
+  shows its own base until its next such save, and this editor's from
+  then on.
 - Where aineo cannot watch the working tree's subdirectories (Linux), the
   files window says so first: a change in a subdirectory shows at the next
   showing of the pane, save or commit, and a branch moved by
