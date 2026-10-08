@@ -118,6 +118,33 @@ function M.read_head(run, top, done)
   )
 end
 
+--- Reads the commit the upstream of `branch` names in the repository at
+--- `top`, and calls `done(nil, upstream)`, nil when `branch` has no
+--- upstream, or one whose branch git does not have; or `done(failure)`.
+---
+---@param run aineo.git.Run
+---@param top string
+---@param branch string
+---@param done fun(failure: aineo.git.Failure|nil, upstream: string?)
+function M.read_upstream(run, top, branch, done)
+  run(
+    {
+      directory = top,
+      arguments = {
+        'rev-parse',
+        '--verify',
+        '--quiet',
+        '--end-of-options',
+        branch .. '@{upstream}',
+      },
+      answers = { 0, NONE_CODE },
+    },
+    process.or_fail(done, function(upstream)
+      done(nil, M.first_line(upstream.stdout))
+    end)
+  )
+end
+
 --- Finds the repository `directory` is in, and calls `done(nil,
 --- repository)`, or `done(failure)`.
 ---
