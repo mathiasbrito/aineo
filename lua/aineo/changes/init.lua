@@ -1,9 +1,11 @@
 --- The changes pane's content, `require('aineo.changes')`: the session's
 --- base, its files changed since — the user's saves marked — and its
---- commits, each listed in a buffer of the pane, and read again as the
---- repository changes once the pane has been shown. Once told which Claude
---- Code session the pane is for, the base and the saves are that session's,
---- kept under the editor's state directory (`aineo.changes.kept`).
+--- commits, each listed in a buffer of the pane, then each other worktree
+--- of its repository's files and commits since that worktree's own base
+--- (`aineo.changes.worktrees`), and read again as the repository changes
+--- once the pane has been shown. Once told which Claude Code session the
+--- pane is for, the base and the saves are that session's, kept under the
+--- editor's state directory (`aineo.changes.kept`).
 
 local git = require('aineo.git')
 local diffs = require('aineo.changes.diffs')
@@ -12,6 +14,7 @@ local lines = require('aineo.changes.lines')
 local pages = require('aineo.changes.pages')
 local scratch = require('aineo.changes.scratch')
 local serial = require('aineo.changes.serial')
+local worktrees = require('aineo.changes.worktrees')
 
 local M = {}
 
@@ -37,6 +40,8 @@ local M = {}
 ---@field files_failure? aineo.git.Failure why the last read of the files failed, when it did
 ---@field commits? aineo.git.CommitsSince the commits since the base, as last read
 ---@field commits_failure? aineo.git.Failure why the last read of the commits failed, when it did
+---@field files_others aineo.changes.OtherWorktrees what the files window knows of the other worktrees
+---@field commits_others aineo.changes.OtherWorktrees what the commits window knows of the other worktrees
 ---@field saved table<string, true> the files the user saved under the base, by path relative to the top level: since the session began, or the Claude Code session's followed; none saved while no repository was found
 ---@field early_saves string[] the files the user saved, resolved, while the first look for the repository runs
 ---@field shown boolean whether the pane has been shown
@@ -77,6 +82,7 @@ local function files_page()
     failure = session.files_failure or session.watch_failure,
     saved = session.saved,
     unwatched_subdirectories = session.watch ~= nil and not session.watch.watches_subdirectories,
+    worktrees = session.files_others,
   })
 end
 
@@ -92,6 +98,7 @@ local function commits_page()
     since = session.commits,
     base = session.base,
     failure = session.commits_failure or session.watch_failure,
+    worktrees = session.commits_others,
   })
 end
 
@@ -158,52 +165,103 @@ local function is_current_base(base)
   return not session.looking_for_head and session.base == base
 end
 
---- Asks for one list read from the session's base, one read at a time
---- (`aineo.changes.serial`): `read(base, done)` asks git, and `take(failure,
---- answer)` keeps what it answered, which `show()` then shows. None is read
---- while the session looks for its base, and an answer for a base that is
---- no longer current (`is_current_base()`) is dropped, the read for the new
---- one asked for already. Each read is ended before its list is shown, so
---- that an error showing it stops no read after it.
+--- Whether `others`, what a window knows of the other worktrees, shows
+--- anything in it.
 ---
----@param read fun(base: string|nil, done: fun(failure: aineo.git.Failure|nil, answer: any))
----@param take fun(failure: aineo.git.Failure|nil, answer: any)
----@param show fun()
+---@param others aineo.changes.OtherWorktrees
+---@return boolean
+local function shows_any(others)
+  return #others.sections > 0
+end
+
+--- What one window of the pane reads, and how it keeps and shows it.
+---@class aineo.changes.WindowReads
+---@field read_own fun(base: string|nil, done: fun(failure: aineo.git.Failure|nil, answer: any)) asks git for the editor's own list from the session's base
+---@field take_own fun(failure: aineo.git.Failure|nil, answer: any) keeps what that read answered
+---@field read_list aineo.changes.ReadList asks git for another worktree's list
+---@field others_field 'files_others'|'commits_others' the field of the session that keeps what the window knows of the other worktrees
+---@field show fun() writes the window for what the session knows
+
+--- Asks for one read of a window as `reads` describes it, one read at a
+--- time (`aineo.changes.serial`): the editor's own list from the session's
+--- base, kept and shown as soon as git answers, then the other worktrees'
+--- (`aineo.changes.worktrees`), shown once all are read, when the window
+--- shows any of them, or did. The editor's own list is not read while the
+--- session looks for its base, and an answer for a base that is no longer
+--- current (`is_current_base()`) is dropped, the read for the new one asked
+--- for already. The other worktrees' read starts before the editor's own
+--- list is shown, so that an error showing it stops no read, and the read
+--- ends before the other worktrees' are shown.
+---
+---@param reads aineo.changes.WindowReads
 ---@return fun() ask
-local function list_read(read, take, show)
+local function window_read(reads)
   return serial.one_at_a_time(function(ended)
+    local function read_others()
+      worktrees.read_other_worktrees(
+        session.repository,
+        reads.read_list,
+        session.settings.git,
+        function(others)
+          local showed = shows_any(session[reads.others_field])
+          session[reads.others_field] = others
+          ended()
+          if showed or shows_any(others) then
+            reads.show()
+          end
+        end
+      )
+    end
     local base = session.base
     if not is_current_base(base) then
-      ended()
+      read_others()
       return
     end
-    read(base, function(failure, answer)
+    reads.read_own(base, function(failure, answer)
       if not is_current_base(base) then
-        ended()
+        read_others()
         return
       end
-      take(failure, answer)
-      ended()
-      show()
+      reads.take_own(failure, answer)
+      read_others()
+      reads.show()
     end)
   end)
 end
 
---- Reads the files changed since the base, and shows them (`list_read()`).
-local read_files = list_read(function(base, done)
-  git.changed_files(session.repository, base, done, session.settings.git)
-end, function(failure, changes)
-  session.changes = changes or session.changes
-  session.files_failure = failure
-end, show_files)
+--- Reads the files changed since the base, and those of each other
+--- worktree since its own, and shows them (`window_read()`).
+local read_files = window_read({
+  read_own = function(base, done)
+    git.changed_files(session.repository, base, done, session.settings.git)
+  end,
+  take_own = function(failure, changes)
+    session.changes = changes or session.changes
+    session.files_failure = failure
+  end,
+  read_list = function(repository, base, done)
+    git.changed_files(repository, base, done, session.settings.git)
+  end,
+  others_field = 'files_others',
+  show = show_files,
+})
 
---- Reads the commits since the base, and shows them (`list_read()`).
-local read_commits = list_read(function(base, done)
-  git.commits_since(session.repository, base, done, session.settings.git)
-end, function(failure, commits)
-  session.commits = commits or session.commits
-  session.commits_failure = failure
-end, show_commits)
+--- Reads the commits since the base, and those of each other worktree
+--- since its own, and shows them (`window_read()`).
+local read_commits = window_read({
+  read_own = function(base, done)
+    git.commits_since(session.repository, base, done, session.settings.git)
+  end,
+  take_own = function(failure, commits)
+    session.commits = commits or session.commits
+    session.commits_failure = failure
+  end,
+  read_list = function(repository, base, done)
+    git.commits_since(repository, base, done, session.settings.git)
+  end,
+  others_field = 'commits_others',
+  show = show_commits,
+})
 
 --- Reads again what `change`, a call of the watch, may have changed: the
 --- files when they may differ, and the commits and the files when the
@@ -614,6 +672,8 @@ function M.begin_session(settings)
     following_soon = false,
     saved = {},
     early_saves = {},
+    files_others = worktrees.NONE,
+    commits_others = worktrees.NONE,
   }
   local group = vim.api.nvim_create_augroup('aineo_changes', {})
   vim.api.nvim_create_autocmd({ 'BufWritePost', 'FileWritePost', 'FileAppendPost' }, {
