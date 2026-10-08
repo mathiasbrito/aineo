@@ -19,3 +19,5 @@ T7's interactive test editors — real Neovims in terminal jobs, queried over th
 ## Why it matters
 
 Any tool that drives a Neovim over RPC — a test harness, an embedding UI, a remote plugin — must treat a message longer than `v:echospace`, or any error at startup, as a way to freeze its client. Ask `nvim_get_mode()` first, keep messages short enough not to prompt, and bound every wait from outside. Measured on Neovim 0.11.6 by T7's packet and its reviews.
+
+*(2026-10-08, wave 9's stage-1 knowledge pass.)* Sending a notification instead of a request avoids the hold only while the sender stays connected: a notification whose sender closed before the editor ran it is dropped when a channel connected earlier also has a message waiting, as the TUI's keys do when the prompt is left — [[Learnings/Neovim 0.12.5 drops a notification whose sender closed first when an earlier channel's message is waiting too]]. T35's hook relay notifies, then waits from a detached process for the answer to a request behind the notification (D43).

@@ -431,4 +431,32 @@ The runner, with every literal edit, is `.tests/t36cor/mutate.py` in the worktre
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by wave 9's stage-1 knowledge pass. PR #135 merged by rebase on 2026-10-07 (21:19 UTC; 23:19 CEST), the first of stage 1, as `ac9842b` … `aa3cb74` (23 commits), after T40's plan (PR #138) had landed on `dev` at `ac99e49`. The orchestrator verified the pull request's head `7b5175e`, rebased on `dev`. Every file the pull request changes is the same on `dev` `aa3cb74` as at `7b5175e`: `git diff --stat 7b5175e aa3cb74` names only T40's plan files, and `git diff 7b5175e origin/dev` over T36's code, tests and this note prints nothing. The help's hunks landed as written: `git patch-id` gives the same id for `git diff 85a57f9 7b5175e -- doc/aineo.txt` and `git diff ac99e49 aa3cb74 -- doc/aineo.txt`. No release: no wave-9 release is cut before T39 merges (the wave plan's A22).
+
+The first five are the packet's, the next five the first fix round's, the next ten the second fix round's, and the last three the correction's.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `c821a74` | `ac9842b` | Keep the Report's records per Claude session |
+| `7c21a14` | `b12a714` | Keep Input's draft per Claude session |
+| `34a58e5` | `d61aa4b` | Tell in the help that reports and drafts follow the session |
+| `2195138` | `0057f03` | Make the Report session cases kill by assertion only |
+| `fe112c4` | `f1103a3` | Record the T36 session: the Report and the draft per session |
+| `bcacab9` | `63fdf85` | Move the Report's records by link, and check the session id |
+| `a34c628` | `99dcffd` | Keep Input's text with its session until the draft swap lands |
+| `827ee38` | `920589e` | Correct the help's session paragraphs from the review of PR #135 |
+| `12a0a40` | `48a7746` | Pin the link move's silent refusal and the save before the move |
+| `199910a` | `8d7c3bf` | Record T36's fix round after the reviews of PR #135 |
+| `f6c0ee7` | `45c309c` | Keep a draft change pending until a save of it succeeds |
+| `f724922` | `9ed8fad` | Keep each session its own file when two first follows interleave |
+| `15eef6a` | `11b3d12` | Save an edit made while the first follow waits with the moved draft |
+| `46cd9d5` | `8779a83` | Put both SafeState retries in aineo's own autocommand groups |
+| `dd1950a` | `7e967a3` | Rename the directory's file where hard links are refused |
+| `2480d9b` | `33686d5` | Pin the pin's re-pin, the quit save and the unreadable emptying |
+| `57d7451` | `7aabb39` | Never replace a session's draft that cannot be read |
+| `8b97d8a` | `9a5d3da` | Tell the unreadable-draft rule and the move's two races in the help |
+| `7becb7d` | `404ed47` | Pin the failed emptying and the directory draft's D17 rule |
+| `98931de` | `e062bbf` | Record T36's second fix round after the re-measure of PR #135 |
+| `8a9e2b7` | `23cde52` | Rename a symlinked session file and pin the move at the link |
+| `c3d376e` | `42a4f45` | Pin the read warning of a follow refused for another reason |
+| `7b5175e` | `aa3cb74` | Record T36's correction round after the second re-measure |
