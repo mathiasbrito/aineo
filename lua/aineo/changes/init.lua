@@ -166,12 +166,12 @@ local function is_current_base(base)
 end
 
 --- Whether `others`, what a window knows of the other worktrees, shows
---- anything in it.
+--- anything in it: a section, or the line saying they could not be listed.
 ---
 ---@param others aineo.changes.OtherWorktrees
 ---@return boolean
 local function shows_any(others)
-  return #others.sections > 0
+  return #others.sections > 0 or others.failure ~= nil
 end
 
 --- What one window of the pane reads, and how it keeps and shows it.
@@ -182,38 +182,43 @@ end
 ---@field others_field 'files_others'|'commits_others' the field of the session that keeps what the window knows of the other worktrees
 ---@field show fun() writes the window for what the session knows
 
---- Asks for one read of a window as `reads` describes it, one read at a
---- time (`aineo.changes.serial`): the editor's own list from the session's
---- base, kept and shown as soon as git answers, then the other worktrees'
---- (`aineo.changes.worktrees`), shown once all are read, when the window
---- shows any of them, or did. The editor's own list is not read while the
---- session looks for its base, and an answer for a base that is no longer
---- current (`is_current_base()`) is dropped, the read for the new one asked
---- for already. The other worktrees' read starts before the editor's own
---- list is shown, so that an error showing it stops no read, and the read
---- ends before the other worktrees' are shown.
+--- Returns the function that asks for one read of a window as `reads`
+--- describes it, one read at a time (`aineo.changes.serial`): the editor's
+--- own list from the session's base, when asked with `with_own`, kept and
+--- shown as soon as git answers, then the other worktrees' (`aineo.changes.
+--- worktrees`), shown once all are read, when the window shows any of them,
+--- or did. A read asked for with the editor's own list while another runs
+--- reads it after. The editor's own list is not read while the session
+--- looks for its base, and an answer for a base that is no longer current
+--- (`is_current_base()`) is dropped, the read for the new one asked for
+--- already. The other worktrees' read starts before the editor's own list
+--- is shown, so that an error showing it stops no read, and the read ends
+--- before the other worktrees' are shown.
 ---
 ---@param reads aineo.changes.WindowReads
----@return fun() ask
+---@return fun(with_own: boolean) ask
 local function window_read(reads)
-  return serial.one_at_a_time(function(ended)
+  local own_asked = false
+  local ask = serial.one_at_a_time(function(ended)
+    local with_own = own_asked
+    own_asked = false
     local function read_others()
-      worktrees.read_other_worktrees(
-        session.repository,
-        reads.read_list,
-        session.settings.git,
-        function(others)
-          local showed = shows_any(session[reads.others_field])
-          session[reads.others_field] = others
-          ended()
-          if showed or shows_any(others) then
-            reads.show()
-          end
+      local before = session[reads.others_field]
+      worktrees.read_other_worktrees({
+        found = session.repository,
+        before = before,
+        read_list = reads.read_list,
+        git = session.settings.git,
+      }, function(others)
+        session[reads.others_field] = others
+        ended()
+        if shows_any(before) or shows_any(others) then
+          reads.show()
         end
-      )
+      end)
     end
     local base = session.base
-    if not is_current_base(base) then
+    if not (with_own and is_current_base(base)) then
       read_others()
       return
     end
@@ -227,6 +232,10 @@ local function window_read(reads)
       reads.show()
     end)
   end)
+  return function(with_own)
+    own_asked = own_asked or with_own
+    ask()
+  end
 end
 
 --- Reads the files changed since the base, and those of each other
@@ -264,17 +273,14 @@ local read_commits = window_read({
 })
 
 --- Reads again what `change`, a call of the watch, may have changed: the
---- files when they may differ, and the commits and the files when the
---- branch moved.
+--- other worktrees' files and commits at every call, as a commit in one of
+--- them moves no branch of the editor's; the editor's own files when they
+--- may differ, and its commits and files when its branch moved.
 ---
 ---@param change aineo.git.RepositoryChange
 local function follow_change(change)
-  if change.files_changed or change.branch_moved then
-    read_files()
-  end
-  if change.branch_moved then
-    read_commits()
-  end
+  read_files(change.files_changed or change.branch_moved)
+  read_commits(change.branch_moved)
 end
 
 --- Tells both windows that `failure` stopped the watch, under the lists
@@ -324,8 +330,8 @@ local function follow_repository()
   if not session.watch then
     watch()
   end
-  read_files()
-  read_commits()
+  read_files(true)
+  read_commits(true)
 end
 
 --- `path` with every symbolic link it leads through resolved, or as it is
@@ -649,7 +655,7 @@ local function note_save(written)
   elseif not session.repository then
     table.insert(session.early_saves, resolved(written))
   elseif mark_saved(resolved(written)) and session.shown then
-    read_files()
+    read_files(true)
   end
 end
 
@@ -736,15 +742,20 @@ end
 
 --- The name of the buffer showing `entry`'s diff: `aineo://diff/<path>` for
 --- a file, its path quoted as the files window shows it, and
---- `aineo://commit/<id>` for a commit, by its full id.
+--- `aineo://commit/<id>` for a commit, by its full id; for an entry of
+--- another worktree, `aineo://worktree<top>/diff/<path>` and
+--- `aineo://worktree<top>/commit/<id>`, the worktree's top level quoted too,
+--- so that two worktrees' diffs of one path are two buffers.
 ---
 ---@param entry aineo.changes.Entry
 ---@return string
 local function diff_name(entry)
-  if entry.commit then
-    return 'aineo://commit/' .. entry.commit.id
+  local diff = entry.commit and 'commit/' .. entry.commit.id
+    or 'diff/' .. lines.quoted_path(entry.change.path)
+  if entry.worktree then
+    return ('aineo://worktree%s/%s'):format(lines.quoted_path(entry.worktree.top), diff)
   end
-  return 'aineo://diff/' .. lines.quoted_path(entry.change.path)
+  return 'aineo://' .. diff
 end
 
 --- What the diff of `entry` is called in what aineo tells the user: the
@@ -804,15 +815,21 @@ local function show_diff(entry, diff)
 end
 
 --- Reads the diff of `entry` — a file's from the base, or a commit's — and
---- calls `done(failure, diff)`.
+--- calls `done(failure, diff)`: in the session's repository from its base,
+--- or, for an entry of another worktree, in that worktree from the base its
+--- list was read from.
 ---
 ---@param entry aineo.changes.Entry
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
 local function read_diff(entry, done)
+  local repository, base = session.repository, session.base
+  if entry.worktree then
+    repository, base = entry.worktree.repository, entry.worktree.base
+  end
   if entry.commit then
-    git.commit_diff(session.repository, entry.commit.id, done, session.settings.git)
+    git.commit_diff(repository, entry.commit.id, done, session.settings.git)
   else
-    git.file_diff(session.repository, session.base, entry.change, done, session.settings.git)
+    git.file_diff(repository, base, entry.change, done, session.settings.git)
   end
 end
 
