@@ -25,8 +25,9 @@ local COMMITS = 'aineo://changes-commits'
 --- The Lua that counts, in the child, the looks for a repository the git
 --- home was asked for, in `_G.finds_asked`, and the repositories it has
 --- found or failed to find, in `_G.finds_answered`, and the reads of the
---- files it was asked for and answered, in `_G.file_reads`, each answer once
---- its caller's `done` has run.
+--- files it was asked for and answered, in `_G.file_reads`, and the lists
+--- of worktrees each window reads last, in `_G.worktree_lists`, each answer
+--- once its caller's `done` has run.
 local COUNT_FINDS = [[
   local git = require('aineo.git')
   local find_repository = git.find_repository
@@ -45,6 +46,15 @@ local COUNT_FINDS = [[
     return changed_files(found, base, function(...)
       done(...)
       _G.file_reads.answered = _G.file_reads.answered + 1
+    end, options)
+  end
+  local list_worktrees = git.list_worktrees
+  _G.worktree_lists = { asked = 0, answered = 0 }
+  git.list_worktrees = function(found, done, options)
+    _G.worktree_lists.asked = _G.worktree_lists.asked + 1
+    return list_worktrees(found, function(...)
+      done(...)
+      _G.worktree_lists.answered = _G.worktree_lists.answered + 1
     end, options)
   end
 ]]
@@ -145,10 +155,12 @@ end
 T['the pane'] = MiniTest.new_set()
 
 --- Waits until every read of the files the child's git home was asked for
---- has answered.
+--- has answered, and every list of worktrees the reads end with.
 local function wait_for_the_reads()
   git_repo.wait_until('every read of the files answered', function()
-    return child.lua_get('_G.file_reads.answered == _G.file_reads.asked')
+    return child.lua_get(
+      '_G.file_reads.answered == _G.file_reads.asked and _G.worktree_lists.answered == _G.worktree_lists.asked'
+    )
   end)
 end
 
