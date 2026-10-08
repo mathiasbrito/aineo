@@ -451,4 +451,33 @@ T35 — done (PR #137 into `dev`, `feature/t35-session-switch`): every start of 
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by wave 9's stage-1 knowledge pass. PR #137 merged by rebase on 2026-10-08 (00:52 UTC; 02:52 CEST), after T36, as `e5d661d` … `ff19c80` (24 commits). The orchestrator verified the pull request's head `0b64d03`, rebased on `dev`. Every file the pull request changes is the same on `dev` `ff19c80` as at `0b64d03` but `doc/aineo.txt`, where `dev` also holds T36's hunks: `git diff 0b64d03 ff19c80` over T35's code, tests, helpers, health check and this note prints nothing, and `git patch-id` gives the same id for `git diff 85a57f9 0b64d03 -- doc/aineo.txt` and `git diff aa3cb74 ff19c80 -- doc/aineo.txt`. No release: no wave-9 release is cut before T39 merges (the wave plan's A22).
+
+The first five are the packet's, the next four the first fix round's, the next four the second fix round's, the next nine the correction's, and the last two the pin of the plan's mutant 10.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `3cc8435` | `e5d661d` | Follow a session switch made inside Claude Code |
+| `a7448dd` | `2f8e568` | Pin that a SessionStart of the followed id after its end is no switch |
+| `07ae776` | `7a5f723` | Make the exit-by-keys case fail by assertion when no hook ran |
+| `6fb592a` | `6692c58` | Record T35's session: the switch, the deliverer, the mutants |
+| `c2a6cee` | `2702bf2` | Record the help's merge checks with T36 and T37 in T35's note |
+| `2ad91a5` | `469ab4e` | Merge claude.cmd's --settings, and pair switch hooks by when they ran |
+| `d3c9be2` | `b3cb968` | Say in the help how claude.cmd's --settings and lost hooks behave |
+| `ac5d6a4` | `654f2f9` | Say only what was read of how Claude Code reads --settings |
+| `83a5029` | `d785609` | Record T35's fix round in its session note |
+| `94956ac` | `e6f8243` | Pass merged settings in a private file and pair hooks as they ran |
+| `ba53337` | `8a4c84f` | Pin that inline settings with blanks around them are merged |
+| `4c2fe7e` | `0e4295c` | Pin that hooks told at the same moment make no switch |
+| `e738bf7` | `0849865` | Record T35's second fix round in its session note |
+| `544793f` | `b248b86` | Refuse session hooks that ran after Claude Code exited |
+| `0f514fe` | `dff19d5` | Pin the private settings file's refusals and its symlink reading |
+| `16e349b` | `d305826` | Run the fake's hooks from a settings file, and /clear through one |
+| `6e08a17` | `4360ce9` | Read a settings file with a byte order mark, or blank, as Claude does |
+| `e3f1f62` | `a020778` | Remove the partial settings file a short write leaves |
+| `a5d3295` | `9b6b58f` | Say in :checkhealth why claude.cmd's --settings cannot take the hooks |
+| `3a2456e` | `4b5a4fb` | Say in the help what the settings file's lifetime and a wrapper do |
+| `3d77a20` | `4a1287d` | Pin that a switch told after the exit, but run before it, is followed |
+| `dc146cb` | `b04b0de` | Record T35's correction in its session note |
+| `8e19640` | `3a00f2b` | Pin that a switch told while Neovim quits is dropped by v:exiting |
+| `0b64d03` | `ff19c80` | Record the pin of T35's mutant 10 in its session note |
