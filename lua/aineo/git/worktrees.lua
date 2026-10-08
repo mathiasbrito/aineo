@@ -86,49 +86,23 @@ end
 --- share no history: an answer, not a failure.
 local NO_MERGE_BASE_CODE = 1
 
---- Reads the merge base of `worktree`'s `HEAD` and the commit `other`, and
---- calls `done(nil, base)`, nil when they share no history or either has
---- no commit yet; or `done(failure)`.
----
----@param run aineo.git.Run
----@param worktree aineo.git.Worktree
----@param other string|nil
----@param done fun(failure: aineo.git.Failure|nil, base: string?)
-local function merge_base(run, worktree, other, done)
-  if not (worktree.head and other) then
-    done(nil, nil)
-    return
-  end
-  run(
-    {
-      directory = worktree.top,
-      arguments = { 'merge-base', worktree.head, other },
-      answers = { 0, NO_MERGE_BASE_CODE },
-    },
-    process.or_fail(done, function(output)
-      done(nil, repository.first_line(output.stdout))
-    end)
-  )
-end
-
---- Reads the base of `worktree`, one of the repository's worktrees other
---- than the editor's, `found`, as `found`'s `HEAD` is now: its merge base
---- with the upstream of the branch `found` is on; with that branch when it
---- has no upstream; with `found`'s `HEAD` when that is detached. Calls
---- `done(nil, base)`, nil when they share no history or either has no
+--- Reads the commit the bases of the repository's other worktrees are
+--- taken against, as the `HEAD` of `found`, the editor's worktree, is now:
+--- the upstream of the branch `found` is on; that branch when it has no
+--- upstream, or one whose branch git does not have; `found`'s `HEAD` when
+--- that is detached. Calls `done(nil, commit)`, nil while `found` has no
 --- commit yet, or `done(failure)`.
 ---
 ---@param run aineo.git.Run
 ---@param found aineo.git.Repository
----@param worktree aineo.git.Worktree
----@param done fun(failure: aineo.git.Failure|nil, base: string?)
-function M.worktree_base(run, found, worktree, done)
+---@param done fun(failure: aineo.git.Failure|nil, commit: string?)
+function M.comparison_commit(run, found, done)
   repository.read_head(
     run,
     found.top,
     process.or_fail(done, function(head, branch)
       if not branch then
-        merge_base(run, worktree, head, done)
+        done(nil, head)
         return
       end
       repository.read_upstream(
@@ -136,9 +110,35 @@ function M.worktree_base(run, found, worktree, done)
         found.top,
         branch,
         process.or_fail(done, function(upstream)
-          merge_base(run, worktree, upstream or head, done)
+          done(nil, upstream or head)
         end)
       )
+    end)
+  )
+end
+
+--- Reads the base of `worktree`: the merge base of its `HEAD` and the
+--- commit `comparison` (`M.comparison_commit()`). Calls `done(nil, base)`,
+--- nil when they share no history or either has no commit yet, or
+--- `done(failure)`.
+---
+---@param run aineo.git.Run
+---@param worktree aineo.git.Worktree
+---@param comparison string|nil
+---@param done fun(failure: aineo.git.Failure|nil, base: string?)
+function M.worktree_base(run, worktree, comparison, done)
+  if not (worktree.head and comparison) then
+    done(nil, nil)
+    return
+  end
+  run(
+    {
+      directory = worktree.top,
+      arguments = { 'merge-base', worktree.head, comparison },
+      answers = { 0, NO_MERGE_BASE_CODE },
+    },
+    process.or_fail(done, function(output)
+      done(nil, repository.first_line(output.stdout))
     end)
   )
 end

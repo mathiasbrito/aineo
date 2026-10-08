@@ -108,20 +108,32 @@ function M.list_worktrees(found, done, options)
   worktrees.list_worktrees(process.runner(options), found, done)
 end
 
---- Reads the base of `worktree`, one of the worktrees of the repository
---- `found` is in other than `found`'s own, as `found`'s `HEAD` is now: its
---- merge base with the upstream of the branch `found` is on; with that
---- branch when it has no upstream, or one whose branch git does not have;
---- with `found`'s `HEAD` when that is detached. Calls `done(nil, base)`,
---- nil when they share no history or either has no commit yet, or
---- `done(failure)`.
+--- Reads the commit the bases of the other worktrees of the repository
+--- `found` is in are taken against (`M.worktree_base()`), as `found`'s
+--- `HEAD` is now: the upstream of the branch `found` is on; that branch
+--- when it has no upstream, or one whose branch git does not have;
+--- `found`'s `HEAD` when that is detached. Calls `done(nil, commit)`, nil
+--- while `found` has no commit yet, or `done(failure)`.
 ---
 ---@param found aineo.git.Repository the editor's, as `M.find_repository()` gave it
+---@param done fun(failure: aineo.git.Failure|nil, commit: string|nil)
+---@param options? aineo.git.Options
+function M.comparison_commit(found, done, options)
+  worktrees.comparison_commit(process.runner(options), found, done)
+end
+
+--- Reads the base of `worktree`, a worktree of the repository other than
+--- the editor's: the merge base of its `HEAD` and the commit `comparison`,
+--- as `M.comparison_commit()` read it from the editor's. Calls `done(nil,
+--- base)`, nil when they share no history or either has no commit yet, or
+--- `done(failure)`.
+---
 ---@param worktree aineo.git.Worktree as `M.list_worktrees()` or `M.find_repository()` gave it
+---@param comparison string|nil the full id of the commit, nil when the editor's worktree has no commit yet
 ---@param done fun(failure: aineo.git.Failure|nil, base: string|nil)
 ---@param options? aineo.git.Options
-function M.worktree_base(found, worktree, done, options)
-  worktrees.worktree_base(process.runner(options), found, worktree, done)
+function M.worktree_base(worktree, comparison, done, options)
+  worktrees.worktree_base(process.runner(options), worktree, comparison, done)
 end
 
 --- Starts watching `found`, and calls `on_change(nil, change)` on the main
