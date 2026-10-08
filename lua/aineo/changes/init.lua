@@ -183,31 +183,50 @@ end
 ---@field show fun() writes the window for what the session knows
 
 --- Returns the function that asks for one read of a window as `reads`
---- describes it, one read at a time (`aineo.changes.serial`): the editor's
+--- describes it, one git at a time (`aineo.changes.serial`): the editor's
 --- own list from the session's base, when asked with `with_own`, kept and
 --- shown as soon as git answers, then the other worktrees' (`aineo.changes.
 --- worktrees`), shown once all are read, when the window shows any of them,
 --- or did. A read asked for with the editor's own list while another runs
---- reads it after. The editor's own list is not read while the session
---- looks for its base, and an answer for a base that is no longer current
---- (`is_current_base()`) is dropped, the read for the new one asked for
---- already. The other worktrees' read starts before the editor's own list
---- is shown, so that an error showing it stops no read, and the read ends
---- before the other worktrees' are shown.
+--- reads it before the next other worktree's, or, when none is left, once
+--- more after; a read asked for without it runs once more after. The
+--- editor's own list is not read while the session looks for its base, and
+--- an answer for a base that is no longer current (`is_current_base()`) is
+--- dropped, the read for the new one asked for already. What follows the
+--- editor's own list starts before the list is shown, so that an error
+--- showing it stops no read, and the read ends before the other worktrees'
+--- are shown.
 ---
 ---@param reads aineo.changes.WindowReads
 ---@return fun(with_own: boolean) ask
 local function window_read(reads)
   local own_asked = false
-  local ask = serial.one_at_a_time(function(ended)
+  local function read_own_then(proceed)
+    local base = session.base
     local with_own = own_asked
     own_asked = false
-    local function read_others()
+    if not (with_own and is_current_base(base)) then
+      proceed()
+      return
+    end
+    reads.read_own(base, function(failure, answer)
+      if not is_current_base(base) then
+        proceed()
+        return
+      end
+      reads.take_own(failure, answer)
+      proceed()
+      reads.show()
+    end)
+  end
+  local ask = serial.one_at_a_time(function(ended)
+    read_own_then(function()
       local before = session[reads.others_field]
       worktrees.read_other_worktrees({
         found = session.repository,
         before = before,
         read_list = reads.read_list,
+        before_each_worktree = read_own_then,
         git = session.settings.git,
       }, function(others)
         session[reads.others_field] = others
@@ -216,20 +235,6 @@ local function window_read(reads)
           reads.show()
         end
       end)
-    end
-    local base = session.base
-    if not (with_own and is_current_base(base)) then
-      read_others()
-      return
-    end
-    reads.read_own(base, function(failure, answer)
-      if not is_current_base(base) then
-        read_others()
-        return
-      end
-      reads.take_own(failure, answer)
-      read_others()
-      reads.show()
     end)
   end)
   return function(with_own)
