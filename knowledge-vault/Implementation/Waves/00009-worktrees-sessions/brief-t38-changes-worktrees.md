@@ -215,11 +215,13 @@ The whole suite on `dev` is **2229 cases** (the orchestrator's count). This amen
 
 ## Correction — 2026-10-08, from the brief review
 
-The stage-2 brief review (`brief-review-stage2.md` in this folder, on `e5ef23a`, against `dev` `dc5ff70`) found this brief dispatchable after corrections: T38-1 to T38-3, and a note, T38-4. No packet had been dispatched, so each is applied here. Each superseded line above is struck through with a dated pointer to this section, and nothing else above was edited. Where the review left a choice, the orchestrator ruled under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"). Each such ruling is named below as **the orchestrator's assumption, to report to the user**. None is the user's answer.
+The stage-2 brief review of 2026-10-08 (not committed; each finding it raised is listed, with its correction, in this section) read this brief on `e5ef23a`, against `dev` `dc5ff70`. It found the facts right: every path, line range, symbol, help fence and count it checked held. It found the brief dispatchable after corrections: T38-1 to T38-3, and a note, T38-4. No packet had been dispatched, so each is applied here. Each superseded line above is struck through with a dated pointer to this section, and nothing else above was edited. Where the review left a choice, the orchestrator ruled under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"). Each such ruling is named below as **the orchestrator's assumption, to report to the user**. None is the user's answer.
 
-**Base (T38-4).** `origin/dev` is now `2fdda81` (PR #140, stage 1's knowledge pass). It changed no code, test, help or script: `git diff --stat dc5ff70 2fdda81 -- lua plugin tests doc scripts Makefile` prints nothing. Every fact and line number above holds there. Start from the `origin/dev` the dispatch message names.
+**Base (T38-4, the review's note).** The note: the base will be `2fdda81` or later, not `dc5ff70`, and the dispatch message should name it. `origin/dev` is now `2fdda81` (PR #140, stage 1's knowledge pass). It changed no code, test, help or script: `git diff --stat dc5ff70 2fdda81 -- lua plugin tests doc scripts Makefile` prints nothing. Every fact and line number above holds there. Start from the `origin/dev` the dispatch message names.
 
 ### T38-1 — T39's wait, and the three sentences of *aineo-changes* it makes false
+
+The finding: this brief said nothing of T39's wait, though T38's widened help fence holds three sentences the wait makes false. The decision on the save marks lost before a confirmation (T39's finding T39-2) was not given to T38 either, so T38's implementer could not act on it. Unless both briefs carried it, the two packets would each write help that is true alone, and the merged help would contradict itself on when a session's base is taken and what the `*` marks.
 
 **T39's wait is the user's decision, not an assumption.** On 2026-10-07 the user chose "Wait for the resume (Recommended)" for T39, verbatim:
 
@@ -248,6 +250,8 @@ So `follow_changes_session()` is called at a start's confirmation and at a confi
 
 ### The lost `*`, ruled (T39-2) — the orchestrator's assumption, to report to the user
 
+T39-2 is the review's finding on T39's brief: a file saved before a start's confirmation loses its `*` at the confirmation, and neither brief decided whether that stays. T38-1 carries it here.
+
 **The behaviour stays, as the review recommends.** A file saved before a start is confirmed is not marked for that session. That matches D19's definition: the `*` marks a save since the base, and under the wait the base is taken at the confirmation, so a save before it predates the base.
 
 - **The behaviour is measured** (the review's `probe_wait.lua`, the changes home alone). Before any follow the line is `{ "* M notes.txt" }`; after the first follow it is `{ "  M notes.txt" }`; the kept record holds `"saved":[]`. The cause is `use_kept_base()` (`lua/aineo/changes/init.lua` 399–401), which sets `session.saved = {}` when nothing was kept, and `take_head()`, which keeps no saves.
@@ -260,11 +264,11 @@ So `follow_changes_session()` is called at a start's confirmation and at a confi
 
 ### T38-2 — when the `*` sentence goes stale
 
-At `dc5ff70`, "The `*` marks a file you saved from this editor since the base was taken" is **not stale yet**. No composition root calls `follow_changes_session()` there, so `keep()` never merges another editor's saves. `origin/dev`'s D19 note (PR #140, A51) says so: "until then the `*` marks this editor's saves, as before". **It goes stale once T39 wires the follow:** two editors following one session then keep each other's marks (T37's attack finding 5, `keep()` merging the saves), so a `*` can mark a save made in another editor. The correction stands, worded for the behaviour after T39 merges, as T38-1 says. It now also covers T38-1's third sentence. This replaces the struck bullet in *Facts that moved*.
+The finding: this brief's "One sentence there is already stale" was not true at `dc5ff70`. At `dc5ff70`, "The `*` marks a file you saved from this editor since the base was taken" is **not stale yet**. No composition root calls `follow_changes_session()` there, so `keep()` never merges another editor's saves. `origin/dev`'s D19 note (PR #140, A51) says so: "until then the `*` marks this editor's saves, as before". **It goes stale once T39 wires the follow:** two editors following one session then keep each other's marks (T37's attack finding 5, `keep()` merging the saves), so a `*` can mark a save made in another editor. The correction stands, worded for the behaviour after T39 merges, as T38-1 says. It now also covers T38-1's third sentence. This replaces the struck bullet in *Facts that moved*.
 
 ### T38-3 — rule 2 against T39, restated
 
-This replaces the struck lines of *Rule 2 against T39, recomputed on `dc5ff70`*:
+The finding: this brief's rule-2 record was stale against T39's widened boundary. It said T39's code is `plugin/aineo.lua` alone, its boundary forbidding every file under `lua/`, and it listed two T39 help places and "all 17 of T39's" lines. The two packets stayed disjoint, but the record was wrong. This replaces the struck lines of *Rule 2 against T39, recomputed on `dc5ff70`*:
 - **Code.** T39's is `plugin/aineo.lua` and `lua/aineo/claude/init.lua`, the latter fenced to the `Settings` class, the `Start` alias, `validate_settings()`, `launch()` without its start token, one helper or `tell_switch()`, and `M.start_session()`'s docstring (T39's brief, its correction T39-7). This packet's is `lua/aineo/git/` and `lua/aineo/changes/`. They are still disjoint.
 - **Tests.** T39's are the new `tests/test_entry_session_switch.lua` and `tests/test_claude_ready.lua`, and `tests/test_entry_claude_resume.lua`, `tests/test_entry_report.lua`, `tests/test_entry_draft.lua` and `tests/test_entry_panes.lua`. This packet touches no `tests/test_claude*.lua` and no `tests/test_entry_*.lua` but `tests/test_entry_changes.lua`. They are still disjoint.
 - **Help.** T39 has three places, 25 lines:
