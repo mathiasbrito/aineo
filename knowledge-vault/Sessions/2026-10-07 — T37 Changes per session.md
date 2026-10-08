@@ -467,4 +467,22 @@ T37 — done in `feature/t37-changes-sessions` (wave 9, stage 1): `aineo.changes
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by wave 9's stage-1 knowledge pass. PR #136 merged by rebase on 2026-10-08 (01:22 UTC; 03:22 CEST), the last of stage 1, as `03828f1` … `dc5ff70` (13 commits). The orchestrator verified the pull request's head `6520250`, rebased on `dev` `ff19c80`. Every file the pull request changes is the same on `dev` `dc5ff70` as at `6520250` but `doc/aineo.txt`, where `dev` also holds T35's and T36's hunks: `git diff 6520250 dc5ff70` over T37's code, tests and this note prints nothing, and `git patch-id` gives the same id for `git diff 85a57f9 6520250 -- doc/aineo.txt` and `git diff ff19c80 dc5ff70 -- doc/aineo.txt`. No release: no wave-9 release is cut before T39 merges (the wave plan's A22).
+
+The first three are the packet's, the next three the fix round's, the next four the second fix round's, and the last three the correction's.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `5c5da7d` | `03828f1` | Keep the changes pane's base and saves per Claude session |
+| `a407c2e` | `666c007` | Pin the kept base read back, the kept files and a foreign file |
+| `0442ade` | `7be95e6` | Record T37's session: the changes pane per Claude session |
+| `60aa219` | `e26bfaf` | Fix T37's review findings in the changes pane per session |
+| `3cb52d9` | `616889d` | Pin three guards the fix round's held sessions hid |
+| `9690b5a` | `df3476e` | Record T37's fix round in its session note |
+| `b4973fb` | `6140be0` | Refuse another repository's record when T37 writes a session |
+| `208bd97` | `bd2cc3a` | Pin the paths T37's second fix round left unmeasured |
+| `87d699c` | `c962419` | Pin that a lost kept base is shown without looking for HEAD |
+| `c94d197` | `a8024c3` | Record T37's second fix round in its session note |
+| `927df1f` | `eae959d` | Let go of a held session once kept, and retry an unreadable record |
+| `872214e` | `ac76a0e` | Pin that a refused write is retried at a save of the same path |
+| `6520250` | `dc5ff70` | Record T37's correction in its session note |
