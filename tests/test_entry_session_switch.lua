@@ -224,7 +224,7 @@ end
 ---@param started_at integer
 ---@return string[]
 local function session_files_after_unconfirmed_wait(state, started_at)
-  vim.wait(UNCONFIRMED_PATIENCE_MS - (vim.uv.now() - started_at), function()
+  vim.wait(math.max(0, UNCONFIRMED_PATIENCE_MS - (vim.uv.now() - started_at)), function()
     return #any_session_files(state) > 0
   end, 20)
   return any_session_files(state)
