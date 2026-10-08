@@ -782,6 +782,68 @@ T['the reads']['of a window stay one at a time with several worktrees, one asked
   })
 end
 
+--- Writes a stand-in for git under the fixture `git-<name>` that, while the
+--- file `<stand-in>.<folder>.hold` exists, holds every `ls-files` in each
+--- worktree of `held`, by its top level, `<folder>` the top level's last
+--- part: it writes `<stand-in>.<folder>.waiting` and waits for
+--- `<stand-in>.<folder>.gate` before it runs git, as it runs git at once
+--- for anything else; returns its path.
+---
+---@param name string
+---@param held string[]
+---@return string stand_in
+local function git_holding(name, held)
+  local lines = {}
+  for _, top in ipairs(held) do
+    local files = '"$0.' .. vim.fs.basename(top)
+    table.insert(
+      lines,
+      ('case " $* " in *" -C %s "*" ls-files "*) if [ -f %s.hold" ]; then : > %s.waiting"; while [ ! -f %s.gate" ]; do sleep 0.05; done; fi ;; esac'):format(
+        top,
+        files,
+        files,
+        files
+      )
+    )
+  end
+  table.insert(lines, ('exec %s "$@"'):format(REAL_GIT))
+  return git_repo.script(name, 'git', lines)
+end
+
+--- Writes the empty file `path`.
+---
+---@param path string
+local function touch(path)
+  assert(vim.fn.writefile({}, path) == 0, 'cannot write ' .. path)
+end
+
+T['the reads']['of the editor’s own list, asked during the other worktrees’, show it before the next worktree is read'] = function()
+  local top = git_repo.create('changesworktrees-own-between', { ['notes.txt'] = { 'one' } })
+  local first = add_worktree(top, 'first', 'first')
+  local second = add_worktree(top, 'second', 'second')
+  local stand_in = git_holding('changesworktrees-own-between', { first, second })
+  child.lua(COUNT_GIT_READS)
+  begin_and_show(top, { executable = stand_in })
+  wait_for_the_reads()
+  touch(stand_in .. '.first.hold')
+  touch(stand_in .. '.second.hold')
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  git_repo.wait_until('the first worktree’s files asked for', function()
+    return vim.uv.fs_stat(stand_in .. '.first.waiting') ~= nil
+  end)
+  git_repo.write(top, 'saved.txt', { 'saved' })
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  touch(stand_in .. '.first.gate')
+
+  git_repo.wait_until('the second worktree’s files asked for', function()
+    return vim.uv.fs_stat(stand_in .. '.second.waiting') ~= nil
+  end)
+  local shown = lines_of(FILES)[1]
+  touch(stand_in .. '.second.gate')
+  eq(shown, '  ? saved.txt')
+end
+
 T['the commits window'] = MiniTest.new_set()
 
 T['the commits window']['lists the editor’s commits first, as ever, then each other worktree’s under its heading'] = function()
