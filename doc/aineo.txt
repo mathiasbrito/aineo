@@ -371,17 +371,39 @@ kept, current, on Claude's terminal as `b:aineo_session_name` and
 `b:aineo_session_folder`. See |aineo-limits| for what can replace it.
 
 aineo follows a switch you make inside Claude Code: `/clear`, `/resume`
-and `/branch` each put Claude Code on another session, and the next start
-in that directory resumes the session Claude Code was last on in aineo's
-terminal there. Claude Code tells aineo of it through the hooks aineo
-gives it at each start (|aineo-report|): Claude Code 2.1.292 ends the
-session it leaves (`SessionEnd`), then starts the next (`SessionStart`).
-`/compact` stays on the same session. The new session that takes the
-place of a resume with no conversation (above) is followed too. Where
-hooks do not run, aineo follows the session it started: see
-|aineo-limits|. Two Neovims in one directory resume the session of the
-last switch in either. aineo ignores a conversation you ran in a plain
-terminal in the same directory.
+and `/branch` each put Claude Code on another session, and the Report,
+Input's draft (|aineo-draft|) and the changes pane (|aineo-changes|) then
+show that session's, whichever pane is shown: the windows that show them
+at once, a hidden pane when it is next shown. `/clear`'s new session has
+an empty Report and an empty Input, and `HEAD` then as its base; `/resume`
+back to a session brings its Report, its draft and its base back. The next
+start in that directory resumes the session Claude Code was last on in
+aineo's terminal there. Claude's status line follows too, through Claude
+Code's title, but a title is not a session's id: two sessions can share
+one. Claude Code tells aineo of a switch through the hooks aineo gives it
+at each start (|aineo-report|): Claude Code 2.1.292 ends the session it
+leaves (`SessionEnd`), then starts the next (`SessionStart`). `/compact`
+stays on the same session, and changes nothing. Where hooks do not run,
+aineo follows the session it started: see |aineo-limits|. Two Neovims in
+one directory resume the session of the last switch in either. aineo
+ignores a conversation you ran in a plain terminal in the same directory.
+
+The panes follow the session a start of Claude Code is on once Claude Code
+is ready for input the first time, and every switch after that; until
+then they show what they showed before, and what you type in Input is
+kept there. At an editor's first start, that is the working directory's
+Report and draft, which the session takes when it has none of its own.
+When it has its own, the panes show those, and what you typed in Input
+meanwhile leaves Input and stays the directory's draft (|aineo-draft|).
+The changes pane takes the session's base then too (|aineo-changes|). A
+start that is never ready — a trust dialog answered "No, exit", a Claude
+Code that exits before its input box settles — is not followed, and
+nothing moves. A resume Claude Code finds no conversation for is never
+ready either: the new session that takes its place (above) is followed
+once it is ready, and at an editor's first start it takes the working
+directory's Report and draft. What a session kept while it ran — its
+Report, its draft and its base — stays with it when a later resume of it
+finds no conversation, and is not shown again.
 
 Input's draft ~
                                                                  *aineo-draft*
@@ -779,7 +801,9 @@ after a Send of Input, the selection, where it was, after a Visual Send —
 wherever `\s` was typed, and while the changes pane hid Input. `u` restores
 Input only: the message has reached Claude. The draft the layout restores
 into Input (|aineo-draft|) is not undone: after a Send, `u` brings the text
-back and stops there. How many Sends `u` can reach is your 'undolevels'
+back and stops there. A switch of session puts that session's draft in
+Input (|aineo-claude-session|), and no `u` reaches a Send or a change made
+before it. How many Sends `u` can reach is your 'undolevels'
 (|aineo-limits|).
 
 Claude Code counts as ready once its input box has shown, unbroken, for 1.5
@@ -1245,9 +1269,12 @@ Claude's window name ~
 - With `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` set to `1` in the environment
   Neovim started in, Claude Code sets no title, and Claude's window reads
   `Claude Code` for the whole session.
-- Not measured, and so not known to show: a title Claude Code generates
-  from your first prompt, a name `/rename` gives, the title after
-  `--resume`, and the glyph while Claude Code is busy. A glyph is left out
+- Claude Code 2.1.292 titles a session after its first turn, and the
+  name then follows the session: after an in-session `/resume` it is the
+  resumed session's title, and after `/branch` `{first prompt} (Branch)`.
+  Not measured, and so not known to show: a name `/rename` gives, the
+  title of a start with `--resume`, and the glyph while Claude Code is
+  busy. A glyph is left out
   when the title's first character is neither a letter nor a digit and a
   space or nothing follows it: a title `✳` alone reads `Claude Code`.
   Below U+0100 the letters are the ASCII and Latin-1 ones, `×` and `÷`
