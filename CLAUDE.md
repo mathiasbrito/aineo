@@ -63,7 +63,7 @@ Conventions live in `knowledge-vault/CLAUDE.md` and in a `CLAUDE.md` inside each
 
 `modularity` exists because of how this repository is built. Work arrives as tasks executed largely by agents, and an agent is only as safe as the boundary it is told to stay inside. Thin modules behind one entry point make a task containable and make *"who breaks if I change this?"* a search rather than a reading exercise.
 
-**`orchestrate`** is how work is *dispatched* rather than how code is written: an orchestrator plans waves from the task list, sends worktree-isolated `implementer` agents (which preload the four skills above) and `reviewer` agents, verifies what comes back, and writes no application code itself. **Every agent it dispatches, and the orchestrator itself, runs on Opus.** Its charters live in `.claude/agents/`; the reasoning in `knowledge-vault/Skills/Orchestrate.md` and `knowledge-vault/Review/How pre-merge review runs here.md`.
+**`orchestrate`** is how work is *dispatched* rather than how code is written: an orchestrator plans waves from the task list, sends worktree-isolated `implementer` agents (which preload the four skills above) and `reviewer` agents, verifies what comes back, and writes no application code itself. **The orchestrator runs on Opus, and each agent on the model its task needs** (the user, 2026-10-08): Opus for code, attack, test integrity, briefs and design; Sonnet for records reviews (`records-reviewer`) and vault work that decides nothing (`knowledge-writer`). Its charters live in `.claude/agents/`; the reasoning in `knowledge-vault/Skills/Orchestrate.md` and `knowledge-vault/Review/How pre-merge review runs here.md`.
 
 Two rules from those skills that this repository makes concrete:
 
