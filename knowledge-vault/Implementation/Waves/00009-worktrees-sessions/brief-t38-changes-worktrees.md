@@ -159,7 +159,7 @@ The brief review (`brief-review.md` in this folder, on `ed83367`) found this bri
   - *aineo-panes*'s changes-pane item is now lines **106–111** (was 105–110). It runs from `- The changes pane: \`aineo://changes-files\` in the Report's place, over` to `  out, or kept unnamed when you changed its text.`
   - *aineo-changes* is now **widened to the section's first paragraph**, lines **141–211** (the files-window part was 148–206). It runs from `The changes pane lists what changed in your repository since the base of` to `windows say so until the pane is shown again, which starts it again.`
     - **Why it is widened.** T37 has merged, and its first paragraph (141–151) says the pane "lists what changed in your repository since the base of the Claude Code session it shows" — no longer the whole of it once other worktrees show. No open packet edits that paragraph: T39's places are in *aineo-claude-session* and LIMITS, and T40's places (`plan.md` › *Packet T40*, rule 2) are not in *aineo-changes*.
-    - **One sentence there is already stale.** "The `*` marks a file you saved from this editor since the base was taken" (162–163). Since T37's fix round, two editors on one session keep each other's marks (its attack finding 5, `keep()` merging the saves), so a `*` can mark a save made in another editor. T37's note left this for later. Correct it here.
+    - ~~**One sentence there is already stale.** "The `*` marks a file you saved from this editor since the base was taken" (162–163). Since T37's fix round, two editors on one session keep each other's marks (its attack finding 5, `keep()` merging the saves), so a `*` can mark a save made in another editor. T37's note left this for later. Correct it here.~~ *(2026-10-08: superseded; the sentence is not stale on `dev` yet, it goes stale once T39 wires the follow. See "Correction — 2026-10-08, from the brief review", below, T38-2.)*
   - LIMITS › `The changes pane ~` is now lines **1128–1174** (was 994–1021), whole. It runs from `The changes pane ~` to `  on the line again shows it, the other buffer giving its name up.` T37's item `- A restart of Claude Code in another working directory keeps the first` (1141–1153) and its new item `- Two editors following one session in one repository keep the first` (1154–1161) are inside it. Keep what they say true.
 
 ### The rulings that bind this packet
@@ -200,15 +200,78 @@ The whole suite on `dev` is **2229 cases** (the orchestrator's count). This amen
 
 ### Rule 2 against T39, recomputed on `dc5ff70`
 
-- **Code.** This packet's code is `lua/aineo/git/` and `lua/aineo/changes/`. T39's is `plugin/aineo.lua` alone: its boundary forbids every file under `lua/`. They are disjoint.
+- **Code.** This packet's code is `lua/aineo/git/` and `lua/aineo/changes/`. ~~T39's is `plugin/aineo.lua` alone: its boundary forbids every file under `lua/`.~~ *(2026-10-08: superseded; T39 now also edits `lua/aineo/claude/init.lua`, fenced. See "Correction — 2026-10-08, from the brief review", below, T38-3.)* They are disjoint.
 - **Tests.** This packet's tests are the git suites, `tests/test_changes.lua`, `tests/test_changes_sessions.lua`, the new `tests/test_git_worktrees.lua` and `tests/test_changes_worktrees.lua`, `tests/test_entry_changes.lua`, `tests/test_layout_diffs.lua`, and additions to `tests/helpers/git_repo.lua`. T39's are the new `tests/test_entry_session_switch.lua`, `tests/test_entry_claude_resume.lua`, `tests/test_entry_report.lua`, `tests/test_entry_draft.lua` and `tests/test_entry_panes.lua`. They are disjoint.
   - `git_repo.lua` is shared by additions only (T38-6).
   - `aineo.changes`' interface is shared, and kept as it is (above).
 - **No registration file** is shared. Neither packet adds a module home. mini.test collects `tests/**/test_*.lua` by glob, and no list names a home's files.
 - **`doc/aineo.txt`, under the section exception.**
   - This packet's places are 106–111, 141–211 and 1128–1174.
-  - T39's are *aineo-claude-session*'s paragraph on switches, from `aineo follows a switch you make inside Claude Code: \`/clear\`, \`/resume\`` to `terminal in the same directory.` (327–338), and the first sentence of LIMITS › `Claude's window name ~`'s last item, from `- Not measured, and so not known to show: a title Claude Code generates` to `` `--resume`, and the glyph while Claude Code is busy. `` (1186–1188, the sentence ending mid-line).
+  - ~~T39's are *aineo-claude-session*'s paragraph on switches, from `aineo follows a switch you make inside Claude Code: \`/clear\`, \`/resume\`` to `terminal in the same directory.` (327–338), and the first sentence of LIMITS › `Claude's window name ~`'s last item, from `- Not measured, and so not known to show: a title Claude Code generates` to `` `--resume`, and the glyph while Claude Code is busy. `` (1186–1188, the sentence ending mid-line).~~ *(2026-10-08: superseded; T39 has three places, `Undo ~` (731–737) the third. See "Correction — 2026-10-08, from the brief review", below, T38-3.)*
   - Unchanged lines separate the nearest pair. Lines 212–326 hold *Colours*, *The file column* and the start of *aineo-claude-session*. Lines 1175–1185 hold the blank line, `Claude's window name ~` and its first three items.
-  - **Measured.** `git merge-file` ran on worst-case edits of `dc5ff70`'s help: every fenced line of each packet rewritten, and a line added after each fence. Each fence's first and last line was checked against the quotes above before editing. Result: 0 conflicts, with all 127 of this packet's lines and all 17 of T39's in the merged file.
+  - **Measured.** `git merge-file` ran on worst-case edits of `dc5ff70`'s help: every fenced line of each packet rewritten, and a line added after each fence. Each fence's first and last line was checked against the quotes above before editing. ~~Result: 0 conflicts, with all 127 of this packet's lines and all 17 of T39's in the merged file.~~ *(2026-10-08: superseded; T39 holds 25 lines in three places, and the review's own run kept them all. See "Correction — 2026-10-08, from the brief review", below, T38-3.)*
 - **So T38 and T39 can still run at once** (S (a)). Before you push, merge with T39's branch if it exists, as the body says: `git merge-tree --write-tree <your head> origin/feature/t39-panes-follow-switch`. On the merged tree, run `make test_file FILE=tests/test_doc.lua`, and also T39's `tests/test_entry_session_switch.lua`, since that suite drives this home through the composition root. Report all three.
 - **T40.** T40 waits for T39's merge (its plan's rule 1) and may then run beside this packet. Its plan found the two disjoint: it calls `follow_changes_session()`, whose interface this packet keeps, and none of its files or help places is this packet's. If T40 has a branch when you push, merge with it too, and run `tests/test_doc.lua` on that tree. Both packets add help tags, and `:helptags` refuses one defined twice (E154).
+
+## Correction — 2026-10-08, from the brief review
+
+The stage-2 brief review (`brief-review-stage2.md` in this folder, on `e5ef23a`, against `dev` `dc5ff70`) found this brief dispatchable after corrections: T38-1 to T38-3, and a note, T38-4. No packet had been dispatched, so each is applied here. Each superseded line above is struck through with a dated pointer to this section, and nothing else above was edited. Where the review left a choice, the orchestrator ruled under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"). Each such ruling is named below as **the orchestrator's assumption, to report to the user**. None is the user's answer.
+
+**Base (T38-4).** `origin/dev` is now `2fdda81` (PR #140, stage 1's knowledge pass). It changed no code, test, help or script: `git diff --stat dc5ff70 2fdda81 -- lua plugin tests doc scripts Makefile` prints nothing. Every fact and line number above holds there. Start from the `origin/dev` the dispatch message names.
+
+### T38-1 — T39's wait, and the three sentences of *aineo-changes* it makes false
+
+**T39's wait is the user's decision, not an assumption.** On 2026-10-07 the user chose "Wait for the resume (Recommended)" for T39, verbatim:
+
+> "T39 tells the Report, Input and changes panel which session to follow only once the resume is confirmed (Claude Code ready, or its session-start hook), so nothing moves into a session that turns out dead. Stays inside T39 if the Claude home can say when a start is ready; the brief review checks that first."
+
+T39's brief builds it so (its *Amendment — 2026-10-08, the user's answer on a dead resume*, quoted verbatim):
+
+> "**The confirmation is readiness:** the first time a start's Claude Code is ready for input."
+
+> "T39 tells the three homes a session in two cases only:
+> 1. **At a start's confirmation** (`on_session_ready(id)`): the three follows with `id`, as the first amendment's step 3 named them: report, then draft, then changes with `kept_places().state_directory`.
+> 2. **At a switch told while the running start is confirmed**: the hooks' `/clear`, `/resume` and `/branch` (`follow_switch()`), which only a running Claude Code makes. These are told at once, as before."
+
+> "**A start whose Claude Code exits first is never confirmed,** even though its settle timer can fire after the exit (C7)."
+
+> "**No timeout confirms.** A start that never becomes ready is never followed."
+
+So `follow_changes_session()` is called at a start's confirmation and at a confirmed switch, never at the start itself. T39's own correction adds that the confirmation never comes once Neovim is quitting (its T39-1).
+
+**Word three sentences of your *aineo-changes* fence for the behaviour after T39 merges.** They lie inside this packet's fence (141–211). T39 cannot change them, and until now this brief did not name them. At `dc5ff70` they read:
+- **144–146:** "A session aineo has not seen takes as its base the commit `HEAD` names when Claude Code starts on it or switches to it." Under the wait it is `HEAD` at the start's *confirmation* (`take_head()` at the first follow), which can come long after the start: while a dialog is up, say.
+- **149–151:** "… a Claude Code that starts and then fails takes one." A Claude Code that fails before it is ready is never followed, so no base is kept for its session.
+- **162–164:** "The `*` marks a file you saved from this editor since the base was taken, or while aineo first looked for the repository it then found." Under the wait, the saves of the first look, and every save before the confirmation, lose their `*` at the confirmation. That is measured, and ruled below (T39-2).
+
+**They are never shipped false.** No wave-9 release is cut before T39 merges: T39's brief says "No wave-9 release before T39 merges (`plan.md` A22 …). This packet's merge is the release of feature B. If T38 merged first, its release waits for this one, and the two may be one." So word them for the behaviour after T39's merge, even if this packet merges first. This applies the ruling above, "Help that describes T39's wiring may stand on `dev` meanwhile."
+
+### The lost `*`, ruled (T39-2) — the orchestrator's assumption, to report to the user
+
+**The behaviour stays, as the review recommends.** A file saved before a start is confirmed is not marked for that session. That matches D19's definition: the `*` marks a save since the base, and under the wait the base is taken at the confirmation, so a save before it predates the base.
+
+- **The behaviour is measured** (the review's `probe_wait.lua`, the changes home alone). Before any follow the line is `{ "* M notes.txt" }`; after the first follow it is `{ "  M notes.txt" }`; the kept record holds `"saved":[]`. The cause is `use_kept_base()` (`lua/aineo/changes/init.lua` 399–401), which sets `session.saved = {}` when nothing was kept, and `take_head()`, which keeps no saves.
+- **Do not change it.** Carrying this editor's unfollowed saves into the first follow would rewrite T37's documented contract (`follow_changes_session()`'s docstring, 638–654: "`HEAD` at this moment … and no saves") inside a parallel packet. `use_kept_base()`'s and `take_head()`'s treatment of the saves stays as T37 left it.
+- **The help sentence is yours to word,** in *aineo-changes* where the `*` is described (162–164). T39 writes no lost-`*` sentence; its paragraph of *aineo-claude-session* refers to `|aineo-changes|`. What it has to say:
+  - a file saved before a start is confirmed carries no `*` for that session, though it is still listed against the base;
+  - the window is however long the start stays unconfirmed: at least the 1.5 s readiness waits for the input box to settle (`SETTLE_MS`), longer while a trust or MCP-server dialog is up; a real Claude Code's startup was not measured;
+  - at a later start, a save made before the new start's confirmation is marked for the session followed before.
+- **Neither packet pins the lost mark with a new test.**
+
+### T38-2 — when the `*` sentence goes stale
+
+At `dc5ff70`, "The `*` marks a file you saved from this editor since the base was taken" is **not stale yet**. No composition root calls `follow_changes_session()` there, so `keep()` never merges another editor's saves. `origin/dev`'s D19 note (PR #140, A51) says so: "until then the `*` marks this editor's saves, as before". **It goes stale once T39 wires the follow:** two editors following one session then keep each other's marks (T37's attack finding 5, `keep()` merging the saves), so a `*` can mark a save made in another editor. The correction stands, worded for the behaviour after T39 merges, as T38-1 says. It now also covers T38-1's third sentence. This replaces the struck bullet in *Facts that moved*.
+
+### T38-3 — rule 2 against T39, restated
+
+This replaces the struck lines of *Rule 2 against T39, recomputed on `dc5ff70`*:
+- **Code.** T39's is `plugin/aineo.lua` and `lua/aineo/claude/init.lua`, the latter fenced to the `Settings` class, the `Start` alias, `validate_settings()`, `launch()` without its start token, one helper or `tell_switch()`, and `M.start_session()`'s docstring (T39's brief, its correction T39-7). This packet's is `lua/aineo/git/` and `lua/aineo/changes/`. They are still disjoint.
+- **Tests.** T39's are the new `tests/test_entry_session_switch.lua` and `tests/test_claude_ready.lua`, and `tests/test_entry_claude_resume.lua`, `tests/test_entry_report.lua`, `tests/test_entry_draft.lua` and `tests/test_entry_panes.lua`. This packet touches no `tests/test_claude*.lua` and no `tests/test_entry_*.lua` but `tests/test_entry_changes.lua`. They are still disjoint.
+- **Help.** T39 has three places, 25 lines:
+  - *aineo-claude-session*'s paragraph on switches (327–338);
+  - *aineo-send*'s `Undo ~` paragraph (731–737);
+  - the first sentence of LIMITS › `Claude's window name ~`'s last item (1186–1188).
+
+  All three lie outside this packet's places (106–111, 141–211, 1128–1174). The review re-ran the worst-case `git merge-file`: exit 0, 0 conflict markers, and all 127 of this packet's lines and all 25 of T39's in the merged file.
+- **In meaning, the two are not disjoint.** This packet's 144–151 and 162–164 describe T39's timing. That is why T38-1 has this packet word them for T39's wait.
+- **So T38 and T39 can still run at once** (S (a)). The merge check before you push stands as written above.
