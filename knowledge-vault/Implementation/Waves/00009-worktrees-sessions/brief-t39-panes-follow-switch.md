@@ -554,3 +554,50 @@ The first amendment already gives the true statement, and it is the one that sta
 - a later start whose session is another calls it synchronously, inside `start_session()`, before it returns.
 
 This section relies on that statement and does not give a second one. Under the wait, T39 does not pass that synchronous call on to the homes (*A later start on another session*). Every telling therefore comes from a scheduled callback, and the body's textlock item holds as written for what the homes are told.
+
+## Amendment — 2026-10-08, the user's answers on the hand-over and the ready signal
+
+**Base: `dev` `dc5ff70`**, as in both earlier amendments. Written by the same amending agent (Claude, Opus 5.5), for the orchestrator, after the user answered two of the questions the previous section left open. Nothing above is edited. Where this section settles something the previous one left to the orchestrator or to the brief review, it says which.
+
+### The hand-over of a dead session: the user's answer
+
+The orchestrator asked the user, on 2026-10-08 (AskUserQuestion), whether a dead session's draft, Report and changes base should be handed to the session that replaces it. The user chose **"Yes, as packet T41 (Recommended)"**, verbatim:
+
+> "When a resume finds no conversation and Claude Code starts a fresh session, the fresh session takes over the dead one's Input draft, Report records and changes base. A small separate packet after T38 and T39, since it touches the report, draft and changes homes that T38 is changing."
+
+**This is the user's decision, not an assumption.** It settles the previous section's *What the wait does not reach — for the orchestrator, before dispatch*:
+- **T39 does not build the hand-over.** That is the first amendment's reading (b), and it now belongs to **T41**: a packet of its own after T38 and T39. It changes `lua/aineo/report/`, `lua/aineo/draft/` and `lua/aineo/changes/`, which stay outside T39's boundary.
+- **T41 is planned in its own knowledge pull request,** after PR #140 merges. This brief does not plan it, and gives it no boundary, tests or mutants.
+- **T39's wait stands as the previous section gives it.** The panes follow a start only once it is confirmed. At T19's fallback, T39 follows the replacement at its confirmation. Nothing in T39 moves a dead session's files.
+- **The help and the report.** Until T41 merges, the case stays as the previous section describes it: what was kept under a session while it was alive stays there when a later resume of it finds no conversation.
+  - T39's paragraph of the help (327–338) names the case in one sentence, which T41 will make false and replace.
+  - Your report names the case and points to T41.
+  - A test or a mutant of T39 that pins the stranded state is not wanted: T41 would move it. T39's fallback tests assert only what the wait gives (the previous section's mutants 6 and 7).
+
+### The ready signal: the user's answer
+
+The orchestrator asked the user, on 2026-10-08 (AskUserQuestion), how T39 should get the signal that a start is ready. The user chose **"Add one callback (Recommended)"**, verbatim:
+
+> "T39 adds a single "start is ready" callback to `lua/aineo/claude/init.lua` (fenced to the settings, `launch()` and docs), with its own test file. Clean and testable; T40 later builds on it."
+
+**This is the user's decision, not an assumption.** It settles the previous section's *What the claude home exposes, and what T39 adds*:
+- **The widening into the claude home is the user's,** not the amender's reading. The user's first answer said "Stays inside T39 if the Claude home can say when a start is ready". The home cannot, as things stand, so the user chose the callback over the poll. The previous section's "the orchestrator may report the widening to the user" is done.
+- **The boundary is as the previous section fences it:**
+  - `lua/aineo/claude/init.lua`: the `Settings` class (14–24), the `Start` alias (31–38) when needed, `validate_settings()` (130–149), `launch()` (255–298) and `M.start_session()`'s docstring (455–522);
+  - a new `tests/test_claude_ready.lua`.
+
+  The callback's contract, the rejected poll and the rejected hold of T35's calls stand as written there.
+- **"T40 later builds on it"** agrees with the previous section's *Rule 2, rechecked*: T40's dispatch amendment builds on the callback, on `launch()` as T39 leaves it, and on the wiring's two kinds of telling.
+- **Still the amender's reading, not settled by this answer:** that the confirmation is readiness alone, with the start's own `SessionStart` hook left out. The user's first answer named both signals; this one names "a single 'start is ready' callback", which is the readiness signal. The brief review confirms it.
+
+### The attack review
+
+T39's attack review goes to **`neovim-claude-code-reviewer`**, as `plan.md` › *Host and reviewers* already gives it for T39 ("the switch crosses the Claude integration"). Test integrity and records go to `reviewer`. The previous section's widening into `lua/aineo/claude/init.lua` gives that reviewer a second reason: this packet now edits code that runs Claude Code. The implementer reads `.claude/agents/neovim-claude-code-integrator.md`, as the brief's first line says.
+
+### The save marks lost before confirmation: T38's code
+
+The previous section names a consequence of the wait, read from T37's code and not probed. At a start's confirmation, the changes home takes the session's kept base and saves, or `HEAD` and no saves (`use_kept_base()`, `take_head()`). So a file saved in this editor before the confirmation loses its `*` in the pane. The file is still listed against the base.
+- **That code is `lua/aineo/changes/init.lua`, which T38 owns** while it runs. T39 does not change it, and must not work around it in `plugin/aineo.lua`, for example by telling the changes home earlier than the other two homes. That would bring back the strand the wait removes, for the base.
+- **Named for T38's brief review,** to decide whether T38 carries this editor's unfollowed saves into the first follow, or leaves the case to LIMITS. The decision is the orchestrator's, on that review.
+- **Until it decides,** T39's paragraph of the help names it in one sentence. If T38 takes it, T39 drops that sentence; whichever of the two merges second checks the help on the merged tree.
+- T39's tests do not pin the lost mark: T38 may change it.
