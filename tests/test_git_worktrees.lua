@@ -166,6 +166,46 @@ T['the worktrees']['of a bare repository leave out its bare entry, and list its 
   )
 end
 
+T['the worktrees']['of a submodule give its checkout’s top level, where git lists its git directory'] = function()
+  local fixture = git_repo.directory('worktrees-submodule')
+  local lib, super = vim.fs.joinpath(fixture, 'lib'), vim.fs.joinpath(fixture, 'super')
+  vim.fn.mkdir(lib, 'p')
+  git_repo.git(lib, { 'init', '--quiet', '--initial-branch=main' })
+  git_repo.write(lib, 'a.txt', { 'a' })
+  local base = git_repo.commit_all(lib, 'base')
+  vim.fn.mkdir(super, 'p')
+  git_repo.git(super, { 'init', '--quiet', '--initial-branch=main' })
+  git_repo.git(
+    super,
+    { '-c', 'protocol.file.allow=always', 'submodule', 'add', '--quiet', lib, 'lib' }
+  )
+  local checkout = vim.fs.joinpath(super, 'lib')
+
+  local seen = child.lua(LIST_WORKTREES, { checkout })
+
+  eq(
+    { failure = seen.failure, result = seen.result },
+    { result = { { top = checkout, head = base, branch = 'main' } } }
+  )
+end
+
+T['the worktrees']['of a repository whose git directory is separate give its top level'] = function()
+  local fixture = git_repo.directory('worktrees-separate')
+  local top = vim.fs.joinpath(fixture, 'work')
+  vim.fn.mkdir(top, 'p')
+  local separate = vim.fs.joinpath(fixture, 'store.git')
+  git_repo.git(top, { 'init', '--quiet', '--initial-branch=main', '--separate-git-dir', separate })
+  git_repo.write(top, 'a.txt', { 'a' })
+  local base = git_repo.commit_all(top, 'base')
+
+  local seen = child.lua(LIST_WORKTREES, { top })
+
+  eq(
+    { failure = seen.failure, result = seen.result },
+    { result = { { top = top, head = base, branch = 'main' } } }
+  )
+end
+
 --- The Lua that finds, in the child, the repository of the directory `...`,
 --- the editor's, and keeps it as `_G.editor`; returns what `_G.await` saw.
 local FIND_EDITOR = [[

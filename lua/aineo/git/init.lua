@@ -95,8 +95,11 @@ function M.commit_diff(found, commit, done, options)
 end
 
 --- Lists the worktrees of the repository `found` is in, and calls
---- `done(nil, worktrees)`, the worktree `found` is first and the others in
---- git's order, or `done(failure)`.
+--- `done(nil, worktrees)`, the worktree `found` is first, by `found.top`,
+--- and the others in git's order, each by its path with every link
+--- resolved; or `done(failure)`. A worktree git marks `prunable` or `bare`
+--- is left out, and so is one whose directory does not exist, locked or
+--- not.
 ---
 ---@param found aineo.git.Repository as `M.find_repository()` gave it
 ---@param done fun(failure: aineo.git.Failure|nil, worktrees: aineo.git.Worktree[]|nil)
