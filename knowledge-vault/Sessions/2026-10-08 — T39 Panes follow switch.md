@@ -147,6 +147,35 @@ Four seen red, nine green with a killer, run. The wiped-terminal fixture's stand
 | MC | `take_session_event()` tells a same-id `SessionStart` through `tell_switch()`, and `follow_report_session()`'s same-id return deleted | killed: `cursor->1, left = 1, right = 2` |
 | O2 | `call_back(…)` wrapped in `vim.schedule(function() … end)` | **survived** `test_claude_ready` (12) and `test_entry_session_switch` (15), as the tests review found; not in this round's list, left as a low-weight survivor |
 
+**Counts**, Neovim 0.12.5, macOS, `make test_file`, each `Fails (0)`:
+
+| File | Cases |
+|---|---|
+| `test_draft_sessions` | 83 (79 + 4) |
+| `test_claude_ready` | 12 (9 + 3) |
+| `test_entry_session_switch` | 15 (12 + 3) |
+| `test_draft` | 41 |
+| `test_entry_draft` | 17 |
+| `test_entry_send_selection` | 9 |
+| `test_entry_panes` | 86 |
+| `test_claude_switch` | 98 |
+| `test_claude_resume` | 49 |
+| `test_claude` | 117 |
+| `test_doc` | 44 |
+
+- **The whole suite** (`make test`) on `d244cd7`: 2260 cases in 66 groups, `Fails (0)`, exit 0. That is 2250 + 10. The commit after it changes this note only.
+- `make lint` is clean.
+- `test_entry_panes`'s rare child death, which predates T39 on `dev`, did not occur.
+
+**Merge check.** `git merge-tree --write-tree d244cd7 2f7abce` merges this round with T38's current head and gives `16d2822`, with no conflict. On that tree, extracted with `deps/`, each `Fails (0)`:
+
+| File | Cases |
+|---|---|
+| `test_doc` | 44 |
+| `test_entry_session_switch` | 15 |
+| `test_entry_changes` | 12 |
+| `test_entry_panes` | 86 |
+
 ## Task lines
 
 T39 — done in `feature/t39-panes-follow-switch` (wave 9, stage 2): the panes follow the session a start of Claude Code is on once it is first ready (`aineo.claude`'s new `on_session_ready`, once per start, never once Neovim quits), and every switch Claude Code tells after that — the Report, Input's draft and the changes pane, through `follow_session()` in `plugin/aineo.lua`; a switch told before the running start is confirmed (a later start's own, T19's fallback) is not followed, its session followed at its confirmation; nothing moves for a start never ready; the help's three places updated; in the fix round, the first follow leaves an Input that holds the moved draft as it is, its undo included (the boundary widened into `lua/aineo/draft/init.lua`, the orchestrator's ruling), and a start whose terminal was wiped is never confirmed. Open: the dead session's hand-over (T41); one release once T38 and T39 have both merged.
