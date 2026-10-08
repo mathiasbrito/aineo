@@ -1498,4 +1498,245 @@ T['following a session']['keeps a base git no longer has without looking for HEA
   expect_lines(COMMITS, { 'The last refresh failed: fatal: Not a valid commit name ' .. base })
 end
 
+T['following a session']['whose write failed, kept since, its file removed, followed again, takes HEAD'] = function()
+  local top = git_repo.create('changessessions-held-let-go', { ['notes.txt'] = { 'one' } })
+  local state = vim.fs.joinpath(fixture.directory('changessessions-held-let-go'), 'state')
+  vim.fn.writefile({ 'a file, not a directory' }, state)
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  follow(SESSION_B, state)
+  wait_for_finds(3)
+  vim.fn.delete(state)
+  vim.fn.mkdir(state, 'p')
+  follow(SESSION_A, state)
+  local kept_file = the_kept_file(state)
+  local commit = commit_only(top, 'other.txt', 'other', 'Made in the session')
+  expect_lines(COMMITS, { commit_line(commit, 'Made in the session') })
+  follow(SESSION_B, state)
+  wait_for_reads()
+  vim.fn.delete(kept_file)
+
+  follow(SESSION_A, state)
+
+  expect_lines(COMMITS, { NO_COMMITS })
+end
+
+T['following a session']['kept, its file removed, followed again, takes HEAD'] = function()
+  local top = git_repo.create('changessessions-kept-removed', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-kept-removed-state')
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  local kept_file = the_kept_file(state)
+  local commit = commit_only(top, 'other.txt', 'other', 'Made in the session')
+  expect_lines(COMMITS, { commit_line(commit, 'Made in the session') })
+  follow(SESSION_B, state)
+  wait_for_finds(3)
+  wait_for_reads()
+  vim.fn.delete(kept_file)
+
+  follow(SESSION_A, state)
+
+  expect_lines(COMMITS, { NO_COMMITS })
+end
+
+--- The Lua that makes the child's next opening of a kept file fail, as one
+--- does with too many files open, while the file stays there.
+local FAIL_NEXT_KEPT_OPEN = [[
+  local open = io.open
+  io.open = function(path, mode)
+    if path:find('changes-sessions', 1, true) then
+      io.open = open
+      return nil, path .. ': Too many open files', 24
+    end
+    return open(path, mode)
+  end
+]]
+
+T['following a session']['whose kept file cannot be opened once keeps the later saves once it can'] = function()
+  local top = git_repo.create('changessessions-open-fails', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-open-fails-state')
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  child.lua(FAIL_NEXT_KEPT_OPEN)
+  save_file(vim.fs.joinpath(top, 'first.txt'), 'first')
+  save_file(vim.fs.joinpath(top, 'second.txt'), 'second')
+  expect_lines(FILES, { '* ? first.txt', '* ? second.txt' })
+  local told = child.lua_get('_G.told')
+  git_repo.start_editor(child)
+  begin_and_show(top)
+  wait_for_finds(1)
+
+  follow(SESSION_A, state)
+
+  expect_lines(FILES, { '* ? first.txt', '* ? second.txt' })
+  eq(told, {})
+end
+
+T['following a session']['kept for another repository, followed again, keeps its base when the look for HEAD of a session left answers late'] = function()
+  local first = git_repo.create('changessessions-late-held-first', { ['notes.txt'] = { 'one' } })
+  local second = git_repo.create('changessessions-late-held-second', { ['readme.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-late-held-state')
+  begin_and_show(first)
+  wait_for_finds(1)
+  follow(SESSION_B, state)
+  wait_for_finds(2)
+  git_repo.start_editor(child)
+  local held, hold = held_looks('changessessions-late-held')
+  begin_and_show(second, { executable = held })
+  wait_for_finds(1)
+  follow(SESSION_B, state)
+  wait_for_finds(2)
+  local under_b = commit_only(second, 'other.txt', 'other', 'Under B')
+  expect_lines(COMMITS, { commit_line(under_b, 'Under B') })
+  vim.fn.writefile({}, hold)
+  follow(SESSION_A, state)
+  follow(SESSION_B, state)
+  expect_lines(COMMITS, { commit_line(under_b, 'Under B') })
+
+  vim.fn.delete(hold)
+  wait_for_finds(3)
+  wait_for_reads()
+
+  expect_lines(COMMITS, { commit_line(under_b, 'Under B') })
+end
+
+--- Writes a stand-in for git under the fixture `git-<name>` whose looks for
+--- a repository wait while the file it returns second exists, at most 30
+--- seconds, and then fail as git does outside a repository while the file
+--- it returns third exists; every other call is the real git's at once.
+---
+---@param name string
+---@return string path
+---@return string hold
+---@return string fail
+local function held_failing_looks(name)
+  local stand_in = git_repo.script(name, 'git', {
+    'case " $* " in *" --show-toplevel "*)',
+    '  waits=600',
+    '  while [ -f "$0.hold" ] && [ "$waits" -gt 0 ]; do sleep 0.05; waits=$((waits - 1)); done',
+    '  if [ -f "$0.fail" ]; then echo "fatal: held look failed" >&2; exit 2; fi ;;',
+    'esac',
+    ('exec %s "$@"'):format(REAL_GIT),
+  })
+  return stand_in, stand_in .. '.hold', stand_in .. '.fail'
+end
+
+T['following a session']['followed again, says nothing of a late look for HEAD of a session left that failed'] = function()
+  local top = git_repo.create('changessessions-late-failed', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-late-failed-state')
+  local held, hold, fail = held_failing_looks('changessessions-late-failed')
+  begin_and_show(top, { executable = held })
+  wait_for_finds(1)
+  follow(SESSION_B, state)
+  wait_for_finds(2)
+  local under_b = commit_only(top, 'other.txt', 'other', 'Under B')
+  expect_lines(COMMITS, { commit_line(under_b, 'Under B') })
+  vim.fn.writefile({}, hold)
+  vim.fn.writefile({}, fail)
+  follow(SESSION_A, state)
+  follow(SESSION_B, state)
+  expect_lines(COMMITS, { commit_line(under_b, 'Under B') })
+
+  vim.fn.delete(hold)
+  wait_for_finds(3)
+  wait_for_reads()
+
+  expect_lines(COMMITS, { commit_line(under_b, 'Under B') })
+end
+
+--- The Lua that makes the child lose the race to make a directory `...`
+--- times running, each `mkdir()` failing with E739 as Neovim's does when
+--- another editor makes a directory of its path at the same moment; the
+--- next makes it.
+local LOSE_MKDIR_RACES = [[
+  local races = ...
+  local make_directory = vim.fn.mkdir
+  vim.fn.mkdir = function(directory, flags)
+    races = races - 1
+    if races < 0 then
+      vim.fn.mkdir = make_directory
+      return make_directory(directory, flags)
+    end
+    error('Vim:E739: Cannot create directory ' .. directory .. ': file already exists', 0)
+  end
+]]
+
+T['following a session']['keeps its base after losing two races to make the folder'] = function()
+  local top = git_repo.create('changessessions-two-races', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-two-races-state')
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  wait_for_finds(1)
+  child.lua(LOSE_MKDIR_RACES, { 2 })
+
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  wait_for_reads()
+
+  eq(child.lua_get('_G.told'), {})
+  eq(vim.fn.filereadable(the_kept_file(state)), 1)
+end
+
+T['following a session']['whose write failed, kept at a later save, its file removed, followed again, takes HEAD'] = function()
+  local top = git_repo.create('changessessions-saved-let-go', { ['notes.txt'] = { 'one' } })
+  local state = vim.fs.joinpath(fixture.directory('changessessions-saved-let-go'), 'state')
+  vim.fn.writefile({ 'a file, not a directory' }, state)
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  vim.fn.delete(state)
+  vim.fn.mkdir(state, 'p')
+  save_file(vim.fs.joinpath(top, 'notes.txt'), 'two')
+  local kept_file = the_kept_file(state)
+  local commit = commit_only(top, 'other.txt', 'other', 'Made in the session')
+  expect_lines(COMMITS, { commit_line(commit, 'Made in the session') })
+  follow(SESSION_B, state)
+  wait_for_finds(3)
+  wait_for_reads()
+  vim.fn.delete(kept_file)
+
+  follow(SESSION_A, state)
+
+  expect_lines(COMMITS, { NO_COMMITS })
+end
+
+T['following a session']['read back after one whose write failed, its file removed, followed again, takes HEAD'] = function()
+  local top = git_repo.create('changessessions-read-after-failed', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-read-after-failed-state')
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_B, state)
+  wait_for_finds(2)
+  local kept_file = the_kept_file(state)
+  local commit = commit_only(top, 'other.txt', 'other', 'Made in B')
+  expect_lines(COMMITS, { commit_line(commit, 'Made in B') })
+  local folder = vim.fs.dirname(kept_file)
+  vim.fn.setfperm(folder, 'r-xr-xr-x')
+  follow(SESSION_A, state)
+  wait_for_finds(3)
+  wait_for_reads()
+  eq(#child.lua_get('_G.told'), 1)
+  follow(SESSION_B, state)
+  expect_lines(COMMITS, { commit_line(commit, 'Made in B') })
+  follow(SESSION_A, state)
+  wait_for_reads()
+  vim.fn.setfperm(folder, 'rwxr-xr-x')
+  vim.fn.delete(kept_file)
+
+  follow(SESSION_B, state)
+
+  expect_lines(COMMITS, { NO_COMMITS })
+end
+
 return T
