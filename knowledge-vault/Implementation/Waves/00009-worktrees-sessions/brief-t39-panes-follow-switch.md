@@ -122,3 +122,197 @@ The brief review (`brief-review.md` in this folder, on `ed83367`) found this bri
 - **W-4:** the session note's `<date>` is the dispatch message's: *Boundary*.
 
 **Mutants** (`plan.md` › *Verification mutants*, T39): 1, 2 and 5 stand; 3 is now the started session not told at the start, and 4 the switch callback ignored for a start's `startup` source.
+
+## Amendment — 2026-10-08, at dispatch
+
+**Base: `dev` `dc5ff70`.** Stage 1 has merged: T35 (PR #137), T36 (PR #135) and T37 (PR #136), each through two fix rounds and two re-measures. Every path, symbol, line range and help fence this brief cites was read again at `dc5ff70` with `git grep -n` (by the agent that wrote this amendment, for the orchestrator). The body and the earlier sections stand except where this section says a fact moved. Start your branch from the `origin/dev` the dispatch message names, and re-check against it if it is not `dc5ff70`.
+
+### Facts that moved, and those that held
+
+- **`plugin/aineo.lua`.**
+  - T35 changed it in `started_claude_terminal()` alone, four lines added and one changed:
+    - its docstring now says the session's hooks are "told the editor's address and program";
+    - it now passes `editor_address = vim.v.servername` and `editor_program = vim.v.progpath` (223–224).
+  - Nothing else in the file changed. The ranges now:
+    - `kept_places()` 148–152, `give_report_environment()` 159–171 and `keep_input_draft()` 180–187 held;
+    - `started_claude_terminal()` 211–234 → **212–237**: its docstring 195–209, `on_terminal_replaced` 222–225 → **225–228**, and the `begin_session()` call 227–232 → **230–235**;
+    - `current_claude_terminal()` **245–250**;
+    - `changes_pane()` 256–260 → **259–263**;
+    - `arrangement()` 272–281 → **275–284**, its first line, `give_report_environment()`, 273 → **276**, and `claude_statusline` 279 → **282**;
+    - `open()` 288–292 → **291–295**: `arrangement(config, started_claude_terminal(config))` 290 → **293**, and `keep_input_draft()` 291 → **294**;
+    - `focus()` 305–315 → **308–318**;
+    - `show_pane()` 325–338 → **328–341**.
+- **`lua/aineo/changes/init.lua`, as T37 left it:**
+  - `M.refresh_shown_pane()` 541 → **859**;
+  - `M.begin_session()` **606**;
+  - `M.follow_changes_session()` **656**;
+  - `M.pane_buffers()` **876**.
+- **`tests/test_entry_panes.lua` did not change.** Its draft case is still 601–619, its `own_draft()` still 565–575, and it still waits for `read_draft(draft) == 'then run the tests\n'` in the directory's file.
+- **The fake runs the hooks only when asked.** `tests/helpers/fake_claude.lua` runs the `--settings` hooks only when `AINEO_FAKE_CLAUDE_HOOKS` is set (its header, 35–49), through `sh -c` as Claude Code 2.1.292 ran them. It runs them on:
+  - its start;
+  - the keys `/clear`, `/resume <id>`, `/branch` and `/compact`, each then Enter;
+  - an exit by its keys.
+
+  Pass the variable as `claude_session.fake(name, mode, extra_environment)`'s third argument. With it unset the fake runs no hook, which is the folder not yet trusted of A2. `AINEO_FAKE_CLAUDE_CONVERSATIONS` gives T19's no-conversation exit.
+- **Helpers.** `tests/helpers/claude_session.lua` now has `wait_for_deliveries(child)` (322): no deliverer left, then one scheduled round. It is the deterministic way to assert that nothing was called back after a hook. It also has `press_keys(child, buffer, keys)` (558). Neither helper is yours to edit.
+- **The help, `doc/aineo.txt`.** Each fence is quoted by its first and last line, as they stand at `dc5ff70`:
+  - **T35's paragraph on switches**, in *aineo-claude-session* (named here, as the body promised): lines **327–338**, from `aineo follows a switch you make inside Claude Code: \`/clear\`, \`/resume\`` to `terminal in the same directory.` Line 326 above it is empty, and below it come the empty line 339 and `Input's draft ~` (340).
+  - **LIMITS › `Claude's window name ~`'s "Not measured" sentence** (T39-7): 1033–1035 → **1186–1188**, from `- Not measured, and so not known to show: a title Claude Code generates` to `` `--resume`, and the glyph while Claude Code is busy. `` The sentence ends mid-line 1188. The rest of the item, from `A glyph is left out` (1188) to `not among them, whatever 'iskeyword' holds.` (1191), is T33's and stays.
+  - **A third place: *aineo-send*'s `Undo ~` paragraph**, lines **731–737**, from `` `u` in Input brings back what a Send removed, one `u` per Send: Input's text `` to `(|aineo-limits|).`
+    - **Why it is added.** Once this packet wires the switch, a draft swap ends what `u` can reach: no `u` reaches a change or a Send made before it (T36's *aineo-draft* text, 364–366). This paragraph still says only "one `u` per Send".
+    - T36's note left it "for T39 or the knowledge pass" (records finding 5), and no open packet edits it. Say there what a switch does to `u`; LIMITS › `Undo after a Send ~` (1099–1109) stays as it is.
+- **`tests/test_doc.lua` did not change.** It still pins 59–208: the tags, the width and the help's shape.
+
+### The three homes' entry points, as merged
+
+**T35 — `aineo.claude`** (`lua/aineo/claude/init.lua`):
+- **The callback.** `aineo.claude.Settings`' field (24), verbatim: "`on_session_switched? fun(id: string, source: string?, left: string, reason: string?)` called when the session followed changes (`session_id()`): with the new id, how Claude Code started it (`clear`, `resume`, `fork`; `startup` or `resume` for a start that takes the place of the session followed), the id left, and why Claude Code left it (`clear`, `resume`; none for a start). Never for an editor's first start. An error it raises is told the user as a warning and goes no further".
+  - It is checked as `vim.validate('settings.on_session_switched', settings.on_session_switched, 'function', true)` (148).
+  - It is called only by `tell_switch()` (352–361), as `pcall(settings.on_session_switched, switch.id, switch.source, switch.left, switch.reason)`. An error becomes the warning `aineo: on_session_switched failed: …`.
+  - **The fourth argument, `reason`,** is the `SessionEnd`'s reason: `clear` for `/clear`, `resume` for `/resume` and `/branch` (M1). A start passes none.
+- **Its three callers:**
+  - **A switch told by the hooks.** `follow_switch()` (570–575) runs from a callback scheduled by `receive_session_event()` (`take_session_event()`, 655–667). It keeps the new id for the directory first (D38), then calls back with `source` `clear`, `resume` or `fork`, and `reason` `clear` or `resume`. Before that, `take_session_event()` drops:
+    - a hook while Neovim quits (`v:exiting`);
+    - a hook of another start's token;
+    - an id `is_session_id()` refuses;
+    - a hook that ran after the start's Claude Code exited.
+  - **A start whose session is another than the one followed before it.** `M.start_session()` (523–535) calls `tell_session_replaced(settings, left)` (372–377) itself, so the call comes **inside `start_session()`, before it returns** — that is, before `started_claude_terminal()` reaches `begin_session()`. The source is `resume` when that start resumed an id and `startup` when it is new, and there is no reason. Two cases make it:
+    - a later start in another directory, after a `:cd`;
+    - a restart after another Neovim's switch in the same directory changed the kept id (D38: "the last switch in either wins").
+
+    It is never called at an editor's first start, nor at a restart on the session followed.
+  - **T19's fallback.** `start_new_session_in_place()` (400–416) runs from a scheduled callback. It always starts a new id (`resumed = false`, 404), so its source is always **`startup`**. It calls `on_terminal_replaced(terminal)` first (412–414), then `tell_session_replaced()` (415), whose `left` is the id that found no conversation. It calls neither when the new start fails.
+- **Which session.** `M.session_id()` (743–745) is `session and session.followed`. That is the id a start launched on, set in `launch()` without waiting for a hook (A2), then each switch's id. It is nil before any start, and it keeps the last id once Claude Code has exited.
+
+**T36 — `aineo.report` and `aineo.draft`:**
+- **`follow_report_session(session_id)`** (`lua/aineo/report/init.lua` 426–441):
+  - It checks its argument with `vim.validate('session_id', session_id, 'string')` and raises an error naming `session_id` otherwise.
+  - The session it follows already changes nothing, the Report's lines and cursor included.
+  - **Before its environment is given,** it only sets the session it follows: the follow is held.
+  - `set_report_environment()` (120–129) then moves the working directory's records to that session, once per editor (`move_directory_records_once()`, 92). The Report, once `report_buffer()` makes it, shows that session's records (`kept_records_file()`, 297).
+  - With its environment given, a follow moves the directory's records once, and, once the Report exists, swaps its records file and shows the session's records (`show_followed_records()`). A swap textlock refuses (E565) is made again at `SafeState`.
+- **`follow_draft_session(session_id)`** (`lua/aineo/draft/init.lua` 826–845):
+  - It checks its argument the same way. The session it follows already changes nothing.
+  - **First, even before its environment is given,** each kept buffer is pinned to the file its text came from, and a change not saved yet is saved there at once. Before `keep_draft()` there is no kept buffer.
+  - Then it sets the session it follows. **Without an environment it stops there: the follow is held.**
+  - `set_draft_environment()` (702–707) then moves the directory's draft to that session, once per editor (`move_directory_draft_once()`, 379), and `keep_draft()` (745) restores that session's draft into the buffer it is handed — **only an empty one**.
+  - With its environment given, a follow moves the directory's draft once, then puts the session's draft, or nothing, in place of every kept buffer's text (`replace_with_kept_draft()`). That swap is not saved and not undoable; under textlock it is made at `SafeState`.
+
+**T37 — `aineo.changes`** (`lua/aineo/changes/init.lua`):
+- **`follow_changes_session(followed)`** (656–675) takes `followed`, an `aineo.changes.FollowedSession` (510–512): `{ id = <Claude Code's session id>, state_directory = <stdpath('state')> }`.
+  - **It checks no argument.**
+  - It must be called on the main loop: from a fast event it raises E5560, as its docstring says.
+- **Before `begin_session()`,** it only keeps `followed` (`followed_before_beginning`; the latest follow wins). `begin_session()` (606–636) makes it the session's.
+- **After `begin_session()` but before the first look has found the repository,** it sets the session followed and returns. `find` (476–499) then takes that session's kept base and saves when one was kept for this repository (`use_kept_base()`), else `HEAD` from that look, which it keeps (`keep()`). Nothing is kept before the repository is found.
+- **Once the repository is found,** a follow restores a base this editor held for the session, or the kept one, and reads both lists again. Otherwise it looks for `HEAD` again from the repository's top level (`take_head()`, 520–541), while both windows say aineo is reading.
+- The session it follows already changes nothing.
+- Its state directory is `kept_places().state_directory` (T37's note: "call `begin_session()` and then `follow_changes_session({ id = <session id>, state_directory = kept_places().state_directory })` at every start and every switch").
+
+### The order T39 wires them
+
+**At the first start.** This is `open()`, and also `focus()` and `show_pane()` when they must open the layout: each runs `started_claude_terminal()` as `arrangement()`'s argument, so it runs before `arrangement()`'s body.
+1. `aineo.claude.start_session({ …, on_session_switched = <T39's handler> })` (216–229). An editor's first start calls nothing back.
+2. `aineo.changes.begin_session({ directory, show_diff })` (230–235), as today.
+3. **T39 tells the three homes `aineo.claude.session_id()`:**
+   - `follow_report_session(id)` and `follow_draft_session(id)`, each held: no environment yet, and the draft home keeps no buffer yet;
+   - `follow_changes_session({ id = id, state_directory = kept_places().state_directory })`, held in the session until `find` answers.
+4. `arrangement()`: `give_report_environment()` (276) moves the directory's records to the session when it has none of its own, then `report_buffer()` (279) shows its records.
+5. `aineo.layout.open(…)`.
+6. `keep_input_draft()` (294): `set_draft_environment(kept_places())`, given once (`draft_environment_given`, 174), moves the directory's draft to the session when it has none of its own. Then `keep_draft(<the Input layout.open has just made>)` restores the session's draft into that empty buffer.
+
+The ruling on T36-1 and T39-3 stands. The first start is not reordered; `begin_session()` comes before the changes home's follow (step 2 before step 3).
+
+**At a later start, `\o` or `:Aineo open` after an exit.**
+- When the start's session is another, `start_session()` calls T39's handler before it returns, and the homes, their environments given by then, follow at once.
+- `begin_session()` then does nothing.
+- Step 3's telling then names the session already followed, and changes nothing.
+
+On a restart on the same session nothing is called back, and step 3 changes nothing.
+
+**At a switch** — the hooks' `/clear`, `/resume`, `/branch` (`follow_switch()`), or T19's fallback (after `on_terminal_replaced`) — T39's handler tells the three homes the new `id` the same way.
+- Each runs from a callback Neovim scheduled, so it can run under textlock. The homes make a refused swap again at `SafeState` (T39-6).
+- `on_session_switched`'s `source` and `reason` change nothing in the wiring: every source, `startup` included, is told (mutant 4).
+
+**T36's notes bind this order.** Keep it, or say so in your report as a spec conflict:
+- **The held-session path.** `follow_draft_session()`'s docstring (810–815) says: "`M.keep_draft()` reads that draft only into an empty buffer: a buffer handed it holding text is not checked against a held session's draft that cannot be read, and its first change replaces that draft, unwarned. A caller that holds a session hands `M.keep_draft()` an empty buffer, as `plugin/aineo.lua` does with the Input it has just made, which keeps that unreached." The finding behind it, FX4, was not taken (T36's *Correction* › *Not done*).
+- **The second environment.** The same note's AD21 (a second environment) is not adopted, because "the composition root gives the environment once".
+
+So:
+- the draft home is told a session before its environment only at the first start, in step 3;
+- `keep_input_draft()` hands `keep_draft()` only the Input `layout.open()` has just made;
+- `draft_environment_given` keeps the environment to one call.
+
+**Shape.** A function of the composition root that tells the three homes one session is one way to keep the start (step 3) and the switch alike. It is also the place T40, after this packet, writes its editor entry and holds this wiring while a claim of another session holds (`plan.md` › *Packet T40*, A25). The seam is yours, under `tdd`.
+
+### The rulings that bind this packet
+
+Each is the orchestrator's, to report to the user, and none is a D row.
+
+- **No wave-9 release before T39 merges** (`plan.md` A22; T36's and T37's fix rounds). This packet's merge is the release of feature B. If T38 merged first, its release waits for this one, and the two may be one.
+- **`tests/test_entry_panes.lua` is this packet's** (T39-1), and T38 does not touch it.
+- **D33: the editor's own section of the changes pane has no heading** (T38-1). Its lines stay exactly today's, so this packet's checks of the pane hold whatever T38 does to other worktrees' sections.
+- **A8 and A9** (T38's: a `bare` entry, and a worktree whose directory is gone, left out) do not reach this packet. Its fixtures have no other worktree.
+- **T39-5: the changes pane's checks pin only the session followed.** That means the editor's own entries, by content, in fixture repositories with no other worktree.
+- **The homes hold a session told early** (the rulings on T36-1, T37-1). The first start is not reordered (above).
+- **T35's rulings this packet builds on:**
+  - A1, a switch is a `SessionStart` after the followed id's `SessionEnd`, paired by hook time (F1);
+  - an `on_session_switched` that raises is warned, and goes no further;
+  - hooks after the start's Claude Code exited are dropped.
+
+### Counts on `dc5ff70`
+
+Measured with `make test_file`, Neovim 0.12.5, each file alone. Every file printed `Fails (0) and Notes (0)` and exited 0.
+
+| Test file | Cases | Why it runs |
+|---|---|---|
+| `tests/test_entry_panes.lua` | 86 | yours; its draft case moves |
+| `tests/test_entry_claude_resume.lua` | 11 | yours where a case moves |
+| `tests/test_entry_report.lua` | 4 | yours; its directory-records case (109) moves once the first start follows a session |
+| `tests/test_entry_draft.lua` | 17 | yours where a case moves |
+| `tests/test_entry_changes.lua` | 12 | T38's; run, never edited |
+| `tests/test_entry_send_selection.lua` | 9 | run, not yours: *u in Input* › *after the draft was restored* (279) writes the directory's draft, which the first start now moves to the session |
+| `tests/test_entry_claude_name.lua` | 11 | run (T33's status line) |
+| `tests/test_entry_startup.lua` | 29 | run (the autostart reaches `started_claude_terminal()`) |
+| `tests/test_entry.lua` | 48 | run |
+| `tests/test_entry_claude_exit.lua` | 61 | run |
+| `tests/test_plugin.lua` | 5 | run (its autocommand pin) |
+| `tests/test_doc.lua` | 44 | run |
+| `tests/test_claude_switch.lua` | 98 | run, not yours (T35's homes) |
+| `tests/test_report_sessions.lua` | 47 | run, not yours (T36's) |
+| `tests/test_draft_sessions.lua` | 79 | run, not yours (T36's) |
+| `tests/test_changes_sessions.lua` | 61 | run, not yours (T37's; T38's to change) |
+
+The whole suite on `dev` is **2229 cases** (the orchestrator's count). This amendment ran no whole suite. A file outside your boundary that goes red under your wiring is a spec conflict for your report, not an edit: that includes `tests/test_entry_send_selection.lua` and `tests/test_entry_changes.lua`.
+
+### Rule 2 against T38, recomputed on `dc5ff70`
+
+- **Code.** This packet's is `plugin/aineo.lua`. T38's is `lua/aineo/git/` and `lua/aineo/changes/`. They are disjoint.
+- **Tests.** This packet's are the new `tests/test_entry_session_switch.lua` and the four entry suites above. T38's are the git suites, `tests/test_changes.lua`, `tests/test_changes_sessions.lua`, its two new suites, `tests/test_entry_changes.lua` and `tests/test_layout_diffs.lua`. They are disjoint.
+  - `tests/helpers/git_repo.lua` is shared: T38 adds to it only, and your suite may require it.
+  - `aineo.changes`' interface — `begin_session()`, `follow_changes_session()`, `refresh_shown_pane()`, `pane_buffers()` — is kept by T38 as T37 left it.
+- **No registration file** is shared, and neither packet adds a module home.
+- **`doc/aineo.txt`, under the section exception.**
+  - This packet's places are 327–338, 731–737 and 1186–1188.
+  - T38's places, as its own amendment gives them, are *aineo-panes*'s changes-pane item, 106–111; *aineo-changes* from its first paragraph to the end of its failures paragraph, 141–211, widened in that amendment; and LIMITS › `The changes pane ~` whole, 1128–1174.
+  - The nearest pairs are separated by unchanged lines: 212–326 (*Colours*, *The file column*, the start of *aineo-claude-session*), and 1175–1185 (`Claude's window name ~` and its first three items). The `Undo ~` paragraph is far from both.
+  - **Measured.** `git merge-file` ran on worst-case edits of `dc5ff70`'s help: every fenced line of both packets rewritten, and a line added after each fence. Each fence's first and last line was checked against its quote first. Result: 0 conflicts, with all 25 of this packet's lines and all 127 of T38's kept.
+- **So T38 and T39 can still run at once** (S (a)). Before you push, merge with T38's branch if it exists: `git merge-tree --write-tree <your head> origin/feature/t38-changes-worktrees`. On the merged tree, run `make test_file FILE=tests/test_doc.lua`, your `tests/test_entry_session_switch.lua` and `tests/test_entry_changes.lua`, and report each.
+- **T40 waits for this packet's merge** (its plan's rule 1). It then edits the same function and `tests/test_entry_panes.lua`, so nothing of T40 runs beside you.
+
+### For the orchestrator, before dispatch: T19's fallback strands what the first follow moved
+
+This consequence of the ruling that T19's fallback is a switch (T35-1, T39-2, D38's own case) was found by reading the merged code; no probe ran it. Neither the plan nor the briefs state it. It is not this packet's to decide: the remedy lies in the homes, outside this boundary.
+
+- **When a start resumes a kept id with no conversation** (D38: "a `/clear` session in which nothing was sent"; or a start in which nothing was sent before the editor quit), step 3 first tells the homes that id. At the first start in an editor, that follow moves the working directory's records and draft to it (D39's history (i), A6).
+- About 1.5 s later the fallback switches to a new id. `follow_draft_session()` then:
+  - saves Input's text as the dead session's draft;
+  - puts the new session's draft in its place — none, so Input is emptied (T36's *with no draft empties Input*).
+
+  The Report shows the new session's records, which are none. The changes pane takes `HEAD`, and the marks made under the dead session go with it.
+- The dead session can never be resumed (its id is replaced as the one kept, D38). So the draft typed for it, and on the first start the directory's whole history, is shown again only by a follow of that id: T40's `:Aineo claim <id>`, typed whole. Today's per-directory draft does not lose it.
+- **The common case.** Notes typed in Input after a `/clear`, or in an editor where nothing was sent, then a quit and a new editor: the notes leave Input at the next start.
+- **Both readings are open to the orchestrator** (or to the user, as a converge question):
+  - (a) build as written — the fallback is a switch like any other — and name the case in LIMITS;
+  - (b) the homes give a session that found no conversation's records, draft and kept base to the session that replaces it, which takes a change in `lua/aineo/report/`, `lua/aineo/draft/` and `lua/aineo/changes/`, outside this boundary.
+
+  Until the orchestrator rules, this packet builds (a). Its test of the fallback (T39-2) asserts what (a) gives, and its report names the case.
