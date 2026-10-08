@@ -315,4 +315,242 @@ This consequence of the ruling that T19's fallback is a switch (T35-1, T39-2, D3
   - (a) build as written — the fallback is a switch like any other — and name the case in LIMITS;
   - (b) the homes give a session that found no conversation's records, draft and kept base to the session that replaces it, which takes a change in `lua/aineo/report/`, `lua/aineo/draft/` and `lua/aineo/changes/`, outside this boundary.
 
-  Until the orchestrator rules, this packet builds (a). Its test of the fallback (T39-2) asserts what (a) gives, and its report names the case.
+  ~~Until the orchestrator rules, this packet builds (a). Its test of the fallback (T39-2) asserts what (a) gives, and its report names the case.~~ *(2026-10-08: the user answered on 2026-10-07, and chose neither reading. The panes wait for the resume to be confirmed: see the next section, "Amendment — 2026-10-08, the user's answer on a dead resume". This packet does not build (a).)*
+
+## Amendment — 2026-10-08, the user's answer on a dead resume
+
+**Base: `dev` `dc5ff70`**, as in the first amendment. This section was written by a second amending agent (Claude, Opus 5.5) for the orchestrator. Where it says so, it supersedes the body and the first amendment. Nothing above was edited except the first amendment's last paragraph, which now points here. The measurements are in `evidence/w9-t39-confirmation-probes.txt` (C1–C7), taken on `dc5ff70` with Neovim 0.12.5 and the suite's fake. The real Claude Code never ran.
+
+### The question and the answer
+
+The orchestrator put the first amendment's open case to the user on 2026-10-07 (AskUserQuestion). The question, verbatim:
+
+> "When aineo resumes a kept session that has no conversation (common after a /clear with nothing sent), Claude Code starts a fresh session about 1.5 s later. As built, the panes first move the folder's Report and Input draft into the dead session, then switch to the new one: your Input text and marks are left behind in the dead session for good. How should T39 handle it?"
+
+The user chose **"Wait for the resume (Recommended)"**, verbatim:
+
+> "T39 tells the Report, Input and changes panel which session to follow only once the resume is confirmed (Claude Code ready, or its session-start hook), so nothing moves into a session that turns out dead. Stays inside T39 if the Claude home can say when a start is ready; the brief review checks that first."
+
+**This is the user's decision, not an assumption.** It settles *For the orchestrator, before dispatch: T19's fallback strands what the first follow moved*, above: neither reading (a) nor reading (b) is built.
+
+### What "the resume is confirmed" means
+
+When each signal reaches the editor, in milliseconds after the start is launched (C1–C5):
+
+| Signal | A resume that finds its conversation | A resume that finds none | A new session (no `--resume`) | No hook runs (A2) |
+|---|---|---|---|---|
+| **Claude Code ready**: `Start.ready`, which `session_status()` reports as `ready` | about 1550 | **never**; its replacement is ready about 1545 after its own launch, about 2990 after the first start | about 1550 | the same as with hooks, in all three cases |
+| **The start's own `SessionStart` hook** (`resume` or `startup`) | about 80 | none in the fake; **never measured on the real Claude Code** | about 84 | none |
+| **T19's fallback detection** | — | the replacement launches about 1440 after the start; then `on_terminal_replaced`, then `on_session_switched(<new>, 'startup', <dead>, nil)` | — | the same |
+
+**The confirmation is readiness:** the first time a start's Claude Code is ready for input. The design rests on that alone, for these reasons.
+
+- **It comes in every case.** It needs no hook, so it comes in a folder where none runs (A2) and under settings aineo cannot add its hooks to. A resume that finds no conversation never reaches it (C2): Claude Code 2.1.283 drew no screen of its own then (wave 6, `00006-fixes/evidence/claude-resume-q8.txt`).
+- **The hook is left out.** The user's answer names both signals, so this choice is the amender's reading, for the brief review and the orchestrator to confirm:
+  - M7: no hook runs before a trust dialog is answered.
+  - It was never measured whether the real Claude Code runs `SessionStart(resume)` on a resume that finds no conversation. Wave 6's runs had no hooks, and M1–M8 resumed no such id (C3). If it does run, a confirmation by hook would confirm the dead id: the very strand the user's answer rules out.
+  - The fake runs its hook in `trust` mode while the dialog shows (C4), and the real Claude Code does not. A confirmation by hook would pass the suite where the real Claude Code behaves otherwise.
+  - The cost: the panes follow about 1.47 s later than the hook would let them (C3).
+  - A measurement could admit the hook later as an earlier signal. It would be the orchestrator's, taken with the user's leave as M1–M8 were: the real Claude Code 2.1.292 resuming an id with no conversation, under a `SessionStart` hook.
+- **T19's fallback detection is no confirmation.** It says only that a start failed. Its replacement waits for its own readiness, like any start.
+- **A start is confirmed once.** Readiness that goes and comes back with a dialog (C6) does not confirm it again.
+- **A start whose Claude Code exits first is never confirmed,** even though its settle timer can fire after the exit (C7).
+
+### What the claude home exposes, and what T39 adds
+
+**The state is exposed, the moment is not.** `session_status()` (`lua/aineo/claude/init.lua` 537–558) reads `Start.ready`, which the readiness watch sets in `launch()` (283–285). Nothing tells a caller when a start becomes ready. Meanwhile `on_session_switched` is called for a start before it is ready (C5), and for the fallback (C2). **So the claude home does not yet say when a start is ready, and the user's condition "stays inside T39 if…" is not met as things stand.**
+
+**T39 adds one callback to `aineo.claude.Settings`**, for instance `on_session_ready? fun(id: string)`. The name is the implementer's, under `clean-code`; the contract binds:
+- It is called once per start: each `launch()`, the fallback's included, the first time readiness reports that start ready.
+- It is called only while that start is still the session and its process has not ended (C7).
+- It is called with the id the start follows at that moment (`followed`).
+- It is called in the same callback that sets `ready`, after setting it. So a test that waits for `session_status()` to say `ready` sees the callback already called.
+- It is validated as `on_session_switched` is (`'function', true`). An error it raises becomes a warning, as in `tell_switch()`, and goes no further.
+- It runs from readiness's deferred callback: on the main loop, which the changes home's follow requires (E5560), and possibly under textlock (T39-6).
+- It is never called for a resume that finds no conversation, a dialog never answered, or a Claude Code that exits before its input box settles.
+
+**Rejected: a poll.** The composition root could poll `session_status()` on a timer at each start, and T39 would stay inside `plugin/aineo.lua`, as the user's answer hoped. It is rejected because:
+- it runs a timer per start for something the home already knows;
+- it adds up to one timer period of latency;
+- it makes a caller read how the home works rather than what it says (`modularity`).
+
+The answer named that condition, so the orchestrator may report the widening to the user.
+
+**Rejected: the claude home holding its own start-switch calls until confirmation.** That would change T35's merged contract: the call inside `start_session()` before it returns, which `tests/test_claude_switch.lua` pins (*a start in place of the session followed* › *in another directory is told as a switch to the session it resumes*). T35's tests are not T39's to move.
+
+**The boundary is widened**, for this one file. This replaces the body's ban on "every file under `lua/`" here:
+- **`lua/aineo/claude/init.lua`, in these places only:**
+  - the `aineo.claude.Settings` class (14–24), gaining one field after 24;
+  - the `aineo.claude.Start` alias (31–38), when a field is added there;
+  - `validate_settings()` (130–149), one line;
+  - `launch()` (255–298): its docstring and its readiness callback (283–285);
+  - `M.start_session()`'s docstring (455–522).
+
+  Not `readiness.lua`, not any other file of `lua/aineo/claude/`, and nothing else under `lua/`.
+- **A new `tests/test_claude_ready.lua`** tests the callback.
+- **Run, not edited:** `tests/test_claude.lua` (117 cases on `dc5ff70`), `tests/test_claude_resume.lua` (49) and `tests/test_claude_switch.lua` (98), each measured with `make test_file`, `Fails (0)`.
+- **The fake needs nothing new.** Every mode the tests below use exists: `ready`, `trust`, `asks`, `exit`, and `AINEO_FAKE_CLAUDE_CONVERSATIONS`. `tests/helpers/` stays out of bounds.
+- **`.claude/agents/neovim-claude-code-integrator.md` binds this edit**, since it is code that runs Claude Code. The brief's first line already has it read.
+
+### The wiring, under the wait
+
+T39 tells the three homes a session in two cases only:
+1. **At a start's confirmation** (`on_session_ready(id)`): the three follows with `id`, as the first amendment's step 3 named them: report, then draft, then changes with `kept_places().state_directory`.
+2. **At a switch told while the running start is confirmed**: the hooks' `/clear`, `/resume` and `/branch` (`follow_switch()`), which only a running Claude Code makes. These are told at once, as before.
+
+**A switch that arrives before the running start is confirmed is not told.** That covers the start's own call inside `start_session()` (a later start whose session is another, C5) and T19's fallback's call (C2). The confirmation that follows tells `session_id()`. By then that names the replacement, or, after a hook switch made before the confirmation, the id switched to.
+
+**One way to know whether the running start is confirmed** (the seam is yours, under `tdd`): a flag in the composition root.
+- It is set at `on_session_ready`.
+- It is cleared before `start_session()` is called whenever no Claude Code runs (`session_status()` nil or `exited`, the only case in which it launches one).
+- It is cleared in `on_terminal_replaced`, which T35 calls before the fallback's switch.
+- **Clear it before the call, not after it returns:** the start's own switch comes before `start_session()` returns, in the same millisecond (C5).
+
+**This supersedes the first amendment's *The order T39 wires them*:**
+- **Step 3 is gone.** `started_claude_terminal()` no longer tells the homes anything. Steps 1, 2, 4, 5 and 6 stand.
+- **At the first start nothing is told before the homes' environment or `keep_draft()`.** The confirmation comes at least 1.5 s after `open()`, `focus()` or `show_pane()` has returned (C1). So:
+  - T36's held-session paths are not reached at all: `keep_draft()` with a held session (A47) and the second environment (AD21);
+  - `begin_session()` has run, and its look has usually found the repository, before the changes home's first follow.
+- **"At a later start… the homes… follow at once" no longer holds.** They follow at that start's confirmation.
+- **The switches T39 tells at once are the hooks' only.** The first amendment's "At a switch — … or T19's fallback (after `on_terminal_replaced`) — T39's handler tells the three homes the new `id` the same way" now covers the hooks' switches, and only once the start is confirmed. The fallback's switch is held, and its new session is told at its own confirmation.
+- **Every telling now comes from a callback Neovim scheduled** (readiness's timer or the hooks'), never from inside `start_session()`. The textlock rule (T39-6) covers both.
+
+**The body is superseded the same way:**
+- *The behaviour*'s first item now reads: the composition root tells the three homes the session Claude Code starts on **once that start is confirmed**. It still waits for no hook (A2), since readiness needs none.
+- *The order at the first start* and *T19's fallback is a switch* are replaced by this section. For the claude home, the fallback stays D38's switch (T35-1, T35's mutant 11). For the panes it is a start, followed at its confirmation.
+- *Nothing happens* gains a case: no telling for a start that is not confirmed.
+
+### What the panes show while unconfirmed
+
+**At an editor's first start: the folder's own records and draft, untouched.**
+- No home follows a session yet.
+  - The Report shows the directory's records (`kept_records_file()`).
+  - `keep_draft()` restores the directory's draft into the new Input.
+  - The changes pane's base is `HEAD` as `begin_session()`'s look finds it. This editor's saves are held in memory, and nothing is kept: `keep()` keeps nothing while no session is followed.
+- What is typed in Input is saved as the directory's draft. No report can arrive before Claude Code is ready.
+- **At the confirmation of `id`:**
+  - the directory's records and draft move to `id` when it has none of its own (A6 as corrected), with the text typed meanwhile, and the Report and Input show them;
+  - when `id` has records or a draft of its own (a resume of a session that kept them), the panes show those, and the directory's files stay for the next editor's first follow (A6).
+
+**At a later start, the homes follow `S`,** a session confirmed earlier. The panes keep showing `S`'s records, draft and base, untouched, and what is typed in Input is `S`'s draft. At the new start's confirmation the homes follow it, which keeps Input's text as `S`'s draft (D40).
+
+**A consequence the wait adds.** This was read from T37's code, not probed.
+- At the confirmation, the changes home takes `id`'s kept base and saves, or else `HEAD` at that moment with no saves (`use_kept_base()` replaces the saves; `take_head()`).
+- So a file saved in this editor before the confirmation loses its `*` in the pane: in the first 1.5 s after a start, or 3 s after a dead resume (C1, C2). The file is still listed against the base.
+- Without the wait, the follow arrived before the repository was found, and `find` carried those saves over (`early_saves`).
+- This is `lua/aineo/changes/`, which is T38's, so this packet does not change it. T39's paragraph of the help names it. The orchestrator may give it to T38 or to a later packet.
+
+### If confirmation never comes
+
+Three cases:
+- a folder not yet trusted, whose dialog is answered "No, exit";
+- a Claude Code that exits, or is stopped, before its input box settles (C7);
+- a `claude.cmd` that never draws Claude Code's input box.
+
+In each:
+- **Nothing moves.** The homes are told nothing for that start. At a first start the folder's records and draft stay where they are and stay shown; at a later start, the session followed before does. What is typed is saved there, and nothing is lost.
+- **A dialog still up is waited out.** The panes follow once it is answered "Yes" and the input box settles. What follows a "Yes" on the real Claude Code was not seen (M7). Readiness's recorded screens include the trust dialog of 2.1.280.
+- **The next start waits for its own confirmation.** Nothing carries over from the unconfirmed one.
+- **No timeout confirms.** A start that never becomes ready is never followed.
+
+### A later start on another session
+
+T35 calls `on_session_switched` inside `start_session()`, before it returns (C5; the first amendment, *T35 — `aineo.claude`* › *A start whose session is another*). Under the wait, T39 does not tell the homes then, because that start is not confirmed. They follow at its confirmation, with `session_id()` at that moment:
+- the start's own id;
+- or, when the start resumed an id with no conversation, the fallback's new id (C5: ready at 5807 ms).
+
+Until then the panes stay on the session followed before.
+
+### What the wait does not reach — for the orchestrator, before dispatch
+
+This was found by reading the merged code, not probed. The user's question calls the case "common after a /clear with nothing sent". The wait keeps the folder's records and draft out of a session that turns out dead, and with them what is typed while a start is unconfirmed. **It does not reach what was kept under a session while that session was confirmed and alive.**
+
+- **After a `/clear` with nothing sent,** the panes follow its new id `X` at once, since it is a hook switch of a confirmed start.
+  - Input is emptied, because `X` has no draft (D40). The notes typed after that are `X`'s draft, and the marks are `X`'s.
+  - Quit, then open a new editor. The start resumes `X`, finds no conversation, and the fallback's new session `Y` is followed at its confirmation.
+  - `X`'s draft, marks and records stay under `X`, which is never resumed again (D38). Only T40's `:Aineo claim <id>` shows them.
+- The same holds for a start in which nothing was sent before Claude Code exited, followed by `\o`.
+- **So in the very case the question names, the notes typed after the `/clear` still leave Input.** The question said "your Input text and marks are left behind in the dead session for good". The wait answers that for the folder's move and for the wait's own window, not for these notes.
+- **Reaching them needs the homes** to give a dead session's draft, records and kept base to its replacement. That is the first amendment's reading (b), in `lua/aineo/report/`, `lua/aineo/draft/` and `lua/aineo/changes/`, outside this boundary.
+- Whether to ask the user is the orchestrator's call. Until then, T39's paragraph of the help (327–338) names the case, and so does this packet's report.
+
+### Mutants and tests for the wait
+
+These replace the plan's T39 list (`plan.md` › *Verification mutants* › T39) where they say so; that list is not edited here.
+
+**The plan's mutants:**
+- 1, 2 and 5 stand.
+- **3 now reads:** the started session is not told at its confirmation, because the callback is not wired. With no hook (A2), a report sent after `ready` lands in the directory's records, not the started session's.
+- **4 is retired.** It ignores the switch callback for `startup`. Under the wait the fallback's switch is not told by design, so the edit changes nothing a test can see.
+
+**New, each an edit of `plugin/aineo.lua`, on `tests/test_entry_session_switch.lua`:**
+- **6. The homes are told at the start, before confirmation** (the first amendment's step 3 kept). A first start on a kept id with no conversation strands the draft: the directory's draft moves into the dead id, Input is emptied at the fallback, and the new session has no draft.
+- **7. A switch is told while the start is unconfirmed** (the hold dropped). A later start in another directory resumes an id with no conversation. Text typed in Input right after that start is saved as the dead id's draft, not as the draft of the session left. The dead resume gives about 1.4 s for the typing (C5).
+- **8. The hold is never lifted** (the flag is not set at confirmation). A `/clear` after `ready` is not followed, and the Report keeps the old session's reports.
+- **9. A timeout stands in for the confirmation** (the homes told after a fixed delay). Under the fake's `trust` mode, the folder's draft moves into the start's id.
+
+**New, each an edit of `lua/aineo/claude/init.lua`, on `tests/test_claude_ready.lua`:**
+- **10. The callback is called at the launch, not at readiness.** A resume with no conversation calls it with the id it could not resume.
+- **11. It is called at every readiness, not only the first.** The `asks` mode's dialog (Enter, then Esc, C6) calls it twice.
+- **12. The start guard is dropped.** The `exit` mode's start, which becomes ready after its exit (C7), calls it.
+
+**The tests**, each seen failing first. They replace *The tests*' first item, the fallback item (T39-2) and the first-open item (T39-3):
+- **Before confirmation and after `ready`**, with no hook (A2):
+  - before confirmation, the Report shows the directory's records and Input shows the directory's draft;
+  - after `ready`, a report lands in the started session's records, Input holds that session's draft, and the changes pane's base is that session's.
+- **T19's fallback at a first start** (mutant 6):
+  - the directory's draft and records become the new session's, and so does what was typed in Input before the fallback;
+  - no draft, records or kept base exists for the id that found no conversation.
+- **A later start in another directory**, resuming an id with no conversation (mutant 7): what is typed before confirmation stays the old session's draft, and the panes follow the new session at its `ready`.
+- **Confirmation never comes** (mutant 9): the `trust` mode, checked after a bounded wait longer than a dead resume's 3 s (C2), with the bound named in the test.
+  - The folder's draft and records stay the directory's.
+  - Typed text is saved there.
+  - No session file is made.
+- **A hook switch after `ready` is told at once** (mutant 8). The body's `/clear` test does this, once it waits for `ready` first.
+- **In `tests/test_claude_ready.lua`**, the callback is:
+  - called once, with the started id, after `ready`, both for a resume that finds its conversation and for a new session;
+  - never called for a resume with no conversation, but called once for its replacement, with the new id;
+  - called once across the `asks` dialog;
+  - never called under `exit`;
+  - when it raises, warned of, and the session goes on.
+
+**Wait for `ready`, not for a time,** wherever a test needs the confirmation (`claude_session.wait_for_status(child, 'ready')`). The callback runs inside the readiness callback that sets it.
+
+**T39-1 still holds, now through the confirmation.** The draft case at `tests/test_entry_panes.lua` 601–619 waits for the typed text in the directory's file. Under the wait the text is there until `ready`, then moves to the session's file. Whether that case changes depends on when it types. If it changes, name it in your report. The same goes for `tests/test_entry_report.lua` (109) and `tests/test_entry_send_selection.lua` (279): their moves now happen at the confirmation, not at the start.
+
+### Rule 2, rechecked
+
+**Against T38: disjoint.**
+- *Code:* this packet's is now `plugin/aineo.lua` and `lua/aineo/claude/init.lua`; T38's is `lua/aineo/git/` and `lua/aineo/changes/`.
+- *Tests:* `tests/test_claude_ready.lua` (new) joins this packet's, and T38 touches no `tests/test_claude*.lua`.
+- *Help:* this packet's places are unchanged (327–338, 731–737, 1186–1188), so the first amendment's merge measurement stands. The lost `*` is told in T39's paragraph, not in T38's *aineo-changes*.
+- **T38 and T39 can still run at once** (S (a)).
+
+**Against T40: sequenced, and T40's amendment must build on this.**
+- T40's plan holds `lua/aineo/claude/`: `hook_relay.lua`, `arguments.lua`, `session_ids.lua`, and in `init.lua` the start token and the `is_session_id()` re-export.
+- In `plugin/aineo.lua`, T40 holds:
+  - the editor's entry, written "where T39's wiring tells the homes a session";
+  - "T39's switch and start wiring held while a claim of another session holds".
+- `launch()` holds the start token (270–271) and now this callback, so both packets edit it. Rule 1 already makes T40 wait for T39's merge, so the two never run at once.
+- **T40's dispatch amendment must build on what T39 adds:**
+  - the `Settings` field and its once-per-start contract;
+  - `launch()` as T39 leaves it;
+  - the wiring's two kinds of telling. The editor's entry is written at a confirmation and at a confirmed switch, never at a start, and a claim's hold must cover the confirmation as well as the switches.
+
+  T40's plan says none of this; its amendment adds it.
+
+**Against T35–T37: merged.** T35's contract is extended, not changed: one new optional field. `on_session_switched`'s calls and their order stay as T35's tests pin them.
+
+**The six-rules table** (`plan.md` › *Packets*) gains, in T39's row, `lua/aineo/claude/init.lua` (in the places above) and `tests/test_claude_ready.lua`. That table is not edited here: the brief review recomputes it (`Waves/CLAUDE.md`).
+
+### Stage 1's knowledge pass: what it named false in this brief
+
+Stage 1's knowledge pass named two statements of this brief false:
+- that the switch reaches the homes from T35's scheduled callback (*The behaviour* › *Textlock*);
+- that the callback takes three arguments (*At a switch*: "with the new id, its source and the session left"; *T19's fallback is a switch*: `on_session_switched(<new id>, 'startup', <old id>)`).
+
+The first amendment already gives the true statement, and it is the one that stands (*The three homes' entry points, as merged* › *T35 — `aineo.claude`*):
+- the callback takes four arguments, `(id, source, left, reason)`;
+- a later start whose session is another calls it synchronously, inside `start_session()`, before it returns.
+
+This section relies on that statement and does not give a second one. Under the wait, T39 does not pass that synchronous call on to the homes (*A later start on another session*). Every telling therefore comes from a scheduled callback, and the body's textlock item holds as written for what the homes are told.
