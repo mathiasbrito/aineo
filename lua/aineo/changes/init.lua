@@ -541,7 +541,7 @@ end
 --- count from then — those made while the first look ran included — and it
 --- is followed once the pane has been shown (`follow_repository()`). While
 --- none is found, both windows say why. Each look is ended before what it
---- found is followed and shown, as `read_files()`'s.
+--- found is followed and shown.
 local find = serial.one_at_a_time(function(ended)
   git.find_repository(session.settings.directory, function(failure, repository)
     if session.repository then
