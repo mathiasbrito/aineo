@@ -1580,6 +1580,26 @@ T['following a session']['whose kept file cannot be opened once keeps the later 
   eq(told, {})
 end
 
+T['following a session']['whose kept file cannot be opened at a save keeps it at the next save of that path'] = function()
+  local top = git_repo.create('changessessions-open-fails-same', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-open-fails-same-state')
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_A, state)
+  wait_for_finds(2)
+  child.lua(FAIL_NEXT_KEPT_OPEN)
+  save_file(vim.fs.joinpath(top, 'first.txt'), 'first')
+  save_file(vim.fs.joinpath(top, 'first.txt'), 'again')
+  expect_lines(FILES, { '* ? first.txt' })
+  git_repo.start_editor(child)
+  begin_and_show(top)
+  wait_for_finds(1)
+
+  follow(SESSION_A, state)
+
+  expect_lines(FILES, { '* ? first.txt' })
+end
+
 T['following a session']['kept for another repository, followed again, keeps its base when the look for HEAD of a session left answers late'] = function()
   local first = git_repo.create('changessessions-late-held-first', { ['notes.txt'] = { 'one' } })
   local second = git_repo.create('changessessions-late-held-second', { ['readme.txt'] = { 'one' } })
