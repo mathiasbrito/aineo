@@ -454,6 +454,26 @@ T['Enter']['on another worktree’s file shows its diff, named for the worktree'
   })
 end
 
+T['Enter']['on another worktree’s file moves the cursor to its diff'] = function()
+  local top = git_repo.create('changesworktrees-enter-cursor', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  begin_and_show(top)
+  expect_lines(
+    FILES,
+    { 'No files changed on this session', 'Worktree agent (agent)', '  M notes.txt' }
+  )
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  eq(
+    child.lua_get('vim.api.nvim_buf_get_name(0)'),
+    ('aineo://worktree%s//diff/notes.txt'):format(agent)
+  )
+end
+
 T['Enter']['on another worktree’s commit shows that commit’s diff, named for the worktree'] = function()
   local top = git_repo.create('changesworktrees-enter-commit', { ['notes.txt'] = { 'one' } })
   local agent = add_worktree(top, 'agent', 'agent')
@@ -539,6 +559,7 @@ T['Enter']['on one path in two worktrees shows two diff buffers, each its worktr
   child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
   child.type_keys('<CR>')
   wait_for_diffs(1)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
 
   child.lua('vim.api.nvim_win_set_cursor(0, { 5, 0 })')
   child.type_keys('<CR>')
@@ -577,6 +598,7 @@ T['Enter']['on two worktrees’ files whose top level and path join alike shows 
   child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
   child.type_keys('<CR>')
   wait_for_diffs(1)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
 
   child.lua('vim.api.nvim_win_set_cursor(0, { 5, 0 })')
   child.type_keys('<CR>')
