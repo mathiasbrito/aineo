@@ -583,7 +583,7 @@ The test files this packet touches, requires, or must run, from that run (each `
 
 The verification runs T40's mutants from two places in `plan.md`, neither moved nor renumbered:
 - **1–39** under *Packet T40 — 2026-10-07* › *Verification mutants — T40*;
-- **40–48** under *Decisions for the user*, where the brief review's corrections put them, headed *Added 2026-10-07, from the brief review*, between P9 and P10. They are verification mutants, not decisions. Stage 1's knowledge pass found them there (`plan.md` › *Landed* › *Records the reviews named false in dispatched files, left as dispatched*).
+- **40–48** under *Decisions for the user*, where the brief review's corrections put them, headed *Added 2026-10-07, from the brief review*, between P9 and P10. They are verification mutants, not decisions. Stage 1's knowledge pass found them there (`plan.md` › *Landed*, stage 1's *Records the reviews named false in dispatched files, left as dispatched*, its item "T40's mutants 40–48").
 
 This amendment adds **49**, the `v:exiting` guard (T39's notes, 4), under *Verification mutants — T40*, beside a dated line that points to 40–48. Name in your report the test that kills each of the 49.
 
