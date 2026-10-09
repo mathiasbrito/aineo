@@ -349,6 +349,14 @@ Open at planning: T35 (PR #137), T36 (PR #135), T37 (PR #136), all unmerged; T38
 
 Regular, three reviews and a re-measure when a fix round moves a mechanism (orchestrate §6). `<date>` is the dispatch date, fixed in the dispatch message.
 
+*2026-10-10, T40's dispatch amendment, by the cost rules of 2026-10-08:*
+- attack by `neovim-claude-code-reviewer` (Opus);
+- test integrity by `reviewer` (Opus);
+- records by `records-reviewer` (Sonnet);
+- one fix round, then the orchestrator's own verification.
+
+The brief's last section says where this departs from orchestrate §6.
+
 ### Assumptions to report to the user — T40
 
 The planning's readings where D42 does not reach, built as written until the user says otherwise; none is a D row.
@@ -434,6 +442,10 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 37. `:Aineo claim` with no argument while a claim of another session holds claims the session followed: the panes and Input stay on the claimed session (A29).
 38. The return to its own session told to the report home alone: after `:Aineo claim` with no argument while a claim of another session holds, Input keeps the claimed session's draft and the changes pane its session (A29).
 39. `:Aineo claim` with no argument in a Neovim whose terminal runs no session, while a claim of another session holds, drops the claim: the panes leave the claimed session, where A29 warns and changes nothing.
+
+*2026-10-10, T40's dispatch amendment:* mutants **40–48** are T40's too. They sit under *Decisions for the user*, headed *Added 2026-10-07, from the brief review*, between P9 and P10, where the brief review's corrections put them. They are left there, not moved or renumbered. The verification runs 1–49.
+
+49. The `v:exiting` guard dropped from the editor's entry write (T39-1, which reaches T40; the brief's dispatch amendment, T39's notes, 4). Take a Neovim that claimed a session by its id before its first start. It quits while aineo stops its Claude Code, and a deliverer tells it a switch during that stop. It then writes its entry again after its own `VimLeavePre` removed it, and the list names an editor that has ended.
 
 ## Packet T41 — 2026-10-08
 
