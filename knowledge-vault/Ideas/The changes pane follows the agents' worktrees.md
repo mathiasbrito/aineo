@@ -2,7 +2,7 @@
 
 #idea/ready
 
-**Graduated** to [[Planning/aineo — worktrees and session switches]] › P1–P5 (2026-10-06), proposed for the user's converge round; wave 9's T38 builds it once agreed.
+**Graduated** to [[Planning/aineo — worktrees and session switches]] › P1–P5 (2026-10-06), agreed as D31–D35 on 2026-10-07 and **built** by wave 9's T38 (PR #142, merged 2026-10-09, released in `v0.2.16`).
 
 **Raised by:** the user, 2026-10-06, to consider after the MVP review. Recorded by the orchestrator. Not a commitment.
 

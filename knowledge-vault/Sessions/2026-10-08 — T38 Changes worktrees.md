@@ -229,7 +229,7 @@ Each is its literal edit, applied alone from a copy, run on a copy of its test f
 
 Recorded after the merge, by wave 9's stage-2 knowledge pass. PR #142 merged by rebase on 2026-10-09 (17:47 UTC; 19:47 CEST), first of stage 2, as `2c67c5c` … `89cefc2` (13 commits), on `dev` `fc3a257`. The orchestrator verified the pull request's head `cc8a053`, rebased on `dev` `fc3a257`: the whole suite `Fails (0)` in 5:14, lint clean, the plan's mutants 7, 8, 6 and 3 applied literally, each killed by assertion (1, 1, 7 and 3 failures). Released in v0.2.16, with T39 (one release for both, the orchestrator's ruling).
 
-The first four are the packet's, the next one its session note, the next six the fix round's code, tests and help, and the last the fix round's note.
+The first four are the packet's, the next one its session note, the next seven the fix round's code, tests and help, and the last the fix round's note.
 
 | Branch | `dev` | Subject |
 |---|---|---|
