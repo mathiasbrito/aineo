@@ -227,4 +227,24 @@ Each is its literal edit, applied alone from a copy, run on a copy of its test f
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by wave 9's stage-2 knowledge pass. PR #142 merged by rebase on 2026-10-09 (17:47 UTC; 19:47 CEST), first of stage 2, as `2c67c5c` … `89cefc2` (13 commits), on `dev` `fc3a257`. The orchestrator verified the pull request's head `cc8a053`, rebased on `dev` `fc3a257`: the whole suite `Fails (0)` in 5:14, lint clean, the plan's mutants 7, 8, 6 and 3 applied literally, each killed by assertion (1, 1, 7 and 3 failures). Released in v0.2.16, with T39 (one release for both, the orchestrator's ruling).
+
+The first four are the packet's, the next one its session note, the next six the fix round's code, tests and help, and the last the fix round's note.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `d2ec9d8` | `2c67c5c` | List a repository's worktrees and read each one's base in the git home |
+| `5cc2061` | `77745e7` | List each other worktree's files and commits in the changes pane |
+| `ff47247` | `0129ecb` | Follow, diff and report failures of the other worktrees in the pane |
+| `aa7fa97` | `85f396e` | Document the changes pane's other worktrees, and pin the prunable mark |
+| `2dd926a` | `eec9fe7` | Record T38's session: the changes pane follows the worktrees |
+| `7e59965` | `5512781` | Know each worktree by what git resolves, not by its listed path |
+| `11aa489` | `88a30e6` | Read the editor's own list between other worktrees' reads |
+| `17e552d` | `4a4de69` | Read the editor's comparison commit once per window read |
+| `9a9703b` | `d9750c8` | Pin the own-list ask, part diff names by //, name worktrees |
+| `3f85f06` | `36c854a` | Pin worktree bases, re-reads, colours and cursor in the pane |
+| `96eff41` | `ab9d7c2` | Correct the changes pane's help to what the fixes and T39 do |
+| `64549bf` | `028a260` | Pin the resolved path of a moved worktree and V1's short cut |
+| `2f7abce` | `89cefc2` | Record T38's fix round and correct the packet's records |
+
+The `Branch` column is the pull request's own commits (`refs/pull/142/head`); the verified head `cc8a053` was those commits rebased on `fc3a257`.

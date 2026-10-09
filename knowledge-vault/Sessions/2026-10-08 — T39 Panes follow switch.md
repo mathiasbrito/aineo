@@ -192,4 +192,19 @@ T39 — done in `feature/t39-panes-follow-switch` (wave 9, stage 2): the panes f
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by wave 9's stage-2 knowledge pass. PR #143 merged by rebase on 2026-10-09 (17:49 UTC; 19:49 CEST), second of stage 2, two minutes after T38, as `4d8d728` … `239f581` (8 commits). The orchestrator verified the pull request's head `fc8fecc`, rebased on `dev` `fc3a257`: the whole suite `Fails (0)` in 4:38, lint clean, the plan's mutants 1, 5 and 3 killed (4, 8 and 9 failures); mutant 4 survives, as retired by the brief's second amendment (see *Mutants* above). Rebased on T38's merge (`89cefc2`), `test_doc`, `test_entry_session_switch`, `test_entry_changes` and `test_entry_panes` each `Fails (0)`. Released in v0.2.16 with T38.
+
+The first four are the packet's, the next one its session note, the next two the fix round's code and pins, and the last the fix round's note.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `5ae1651` | `4d8d728` | Call on_session_ready the first time a start is ready |
+| `3384e81` | `7c519da` | Follow a session in the panes once its start is confirmed |
+| `a15a76a` | `3eb5833` | Say in the help when the panes follow a session |
+| `b7183ce` | `38c1011` | Keep the unconfirmed case's wait from going negative |
+| `5eb5a6f` | `c8d00f3` | Record T39's session: the panes follow a confirmed start |
+| `5ae99ef` | `e7766de` | Keep Input's undo at the first confirmation; pin T39's open clauses |
+| `d244cd7` | `e164e17` | Pin the draft home's keep path; record T39's fix round |
+| `0284b8e` | `239f581` | Record T39's fix-round counts and its merge check with T38 |
+
+The `Branch` column is the pull request's own commits (`refs/pull/143/head`); the verified head `fc8fecc` was those commits rebased on `fc3a257`. Commit `3384e81`'s message overclaims, as the open threads say; history is not rewritten.
