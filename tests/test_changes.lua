@@ -1315,7 +1315,7 @@ local function wait_for_diffs(count)
   end)
 end
 
-T['Enter']['on a file shows its diff from the base, the cursor staying in the pane'] = function()
+T['Enter']['on a file shows its diff from the base, the cursor moving to it'] = function()
   local top, base = git_repo.create('changespane-enter-file', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
   local before = git_repo.git(top, { 'rev-parse', base .. ':notes.txt' })
@@ -1339,7 +1339,7 @@ T['Enter']['on a file shows its diff from the base, the cursor staying in the pa
       '-one',
       '+two',
     },
-    FILES,
+    'aineo://diff/notes.txt',
   })
 end
 
@@ -1391,6 +1391,22 @@ T['Enter']['on a commit shows that commit’s diff'] = function()
     first = 'commit ' .. commit,
     last = { '-one', '+two' },
   })
+end
+
+T['Enter']['on a commit moves the cursor to that commit’s diff'] = function()
+  local top = git_repo.create('changespane-enter-commit-cursor', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  expect_lines(COMMITS, { 'No commits on this session' })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local commit = git_repo.commit_all(top, 'Write two')
+  child.lua(SHOW_FILES_AGAIN)
+  expect_lines(COMMITS, { commit:sub(1, 7) .. ' Write two' })
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  eq(child.lua_get('vim.api.nvim_buf_get_name(0)'), 'aineo://commit/' .. commit)
 end
 
 --- The Lua that keeps, in the child, every notification from then on in
@@ -1483,12 +1499,14 @@ T['Enter']['shows the diff again once a command run in its window emptied it']['
   }, shown)
 end
 
---- The Lua that presses Enter in the child's current window ten times, each
+--- The Lua that presses Enter in the child's files window ten times, each
 --- once the diff the Enter before asked for has been read (`SPY_ON_GIT`),
---- at most `...` milliseconds each.
+--- at most `...` milliseconds each, going back to the files window from the
+--- diff each Enter moved the cursor to.
 local ENTER_TEN_TIMES_ONE_BY_ONE = [[
   local patience = ...
   for count = 1, 10 do
+    vim.api.nvim_set_current_win(vim.fn.bufwinid('aineo://changes-files'))
     vim.api.nvim_feedkeys(vim.keycode('<CR>'), 'x', false)
     vim.wait(patience, function()
       return _G.git_answers.file_diff == count
@@ -1629,6 +1647,7 @@ T['Enter']['again on a shown diff while textlock holds, then on another file, ke
   child.type_keys('<CR>')
   wait_for_diffs(1)
   vim.fn.delete(gate)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
   child.type_keys('<CR>')
   begin_hold(hold)
   vim.fn.writefile({}, gate)
@@ -1747,6 +1766,7 @@ T['Enter']['again on the same file keeps no undo history of the diff it showed']
   child.type_keys('<CR>')
   wait_for_diffs(1)
   git_repo.write(top, 'notes.txt', { 'three' })
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
 
   child.type_keys('<CR>')
 
@@ -2015,6 +2035,80 @@ T['the watch']['starts on no find answered while a later VimLeavePre waits as th
   })
 
   eq(quit, { code = 0, log = { 'VimLeavePre', 'found', 'VimLeave' } })
+end
+
+T['Enter']['once its diff is shown, leaves the cursor where it is as the pane is read again'] = function()
+  local top = git_repo.create('changespane-read-again-cursor', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  child.lua(SPY_ON_GIT)
+  begin_and_show(top)
+  expect_lines(FILES, { '  M notes.txt' })
+  child.type_keys('<CR>')
+  wait_for_diffs(1)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  git_repo.wait_until('the reads and the diffs answered', function()
+    return child.lua_get(
+      '_G.git_answers.changed_files == _G.git_calls.changed_files and _G.git_answers.commits_since == _G.git_calls.commits_since and _G.git_answers.file_diff == _G.git_calls.file_diff'
+    )
+  end)
+  eq(child.lua_get('{ vim.api.nvim_buf_get_name(0), #_G.shown_diffs }'), { FILES, 1 })
+end
+
+T['Enter']['read once the cursor left the pane shows the diff, the cursor staying where it went'] = function()
+  local top = git_repo.create('changespane-left-pane', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local gated, gate = gated_git('changespane-left-pane', '*" diff "*notes.txt*')
+  begin_and_show(top, { executable = gated })
+  expect_lines(FILES, { '  M notes.txt' })
+  child.type_keys('<CR>')
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
+
+  vim.fn.writefile({}, gate)
+
+  wait_for_diffs(1)
+  eq(child.lua_get('vim.api.nvim_buf_get_name(0)'), COMMITS)
+end
+
+T['Enter']['read once the cursor went to a terminal in Terminal mode leaves it there, in Terminal mode'] = function()
+  local top = git_repo.create('changespane-left-to-terminal', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local gated, gate = gated_git('changespane-left-to-terminal', '*" diff "*notes.txt*')
+  begin_and_show(top, { executable = gated })
+  expect_lines(FILES, { '  M notes.txt' })
+  child.type_keys('<CR>')
+  child.lua([[
+    vim.cmd('botright new')
+    vim.fn.jobstart({ 'sh' }, { term = true })
+  ]])
+  child.type_keys('i')
+
+  vim.fn.writefile({}, gate)
+
+  wait_for_diffs(1)
+  eq({ child.lua_get('vim.bo.buftype'), child.api.nvim_get_mode().mode }, { 'terminal', 't' })
+end
+
+T['Enter']['leaves the cursor in the pane when the diff is not shown, as'] = MiniTest.new_set({
+  parametrize = { { '_G.no_room = true' }, { "_G.refusal = 'refused here'" } },
+})
+
+T['Enter']['leaves the cursor in the pane when the diff is not shown, as']['the child sets'] = function(
+  not_shown
+)
+  local top = git_repo.create('changespane-not-shown-cursor', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  expect_lines(FILES, { '  M notes.txt' })
+  child.lua(not_shown)
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  eq(child.lua_get('{ vim.api.nvim_buf_get_name(0), #_G.messages }'), { FILES, 1 })
 end
 
 T['Enter']['tells once the error a window raised as it took the diff, and keeps no diff'] = function()

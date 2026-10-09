@@ -291,15 +291,32 @@ local function wait_for_window_showing(name)
   end)
 end
 
-T['Enter']['shows a file’s diff in the middle column, the cursor staying in the pane'] = function()
+T['Enter']['shows a file’s diff in the middle column and moves the cursor there, in Normal mode'] = function()
   changes_pane_listing_a_file('changespane-entry-enter')
+
+  entry.press(child, '<CR>')
+
+  wait_for_window_showing('aineo://diff/notes.txt')
+  eq({ entry.windows(child), entry.current_window(child), child.api.nvim_get_mode().mode }, {
+    { 'terminal', 'aineo://diff/notes.txt', FILES, COMMITS },
+    'aineo://diff/notes.txt',
+    'n',
+  })
+end
+
+T['Enter']['with none of the layout’s windows open moves the cursor to the diff above the pane'] = function()
+  changes_pane_listing_a_file('changespane-entry-enter-alone')
+  child.cmd('new')
+  child.cmd('only')
+  child.lua('vim.api.nvim_win_set_buf(0, vim.fn.bufnr(...))', { FILES })
+  expect_lines(FILES, { '  M notes.txt' })
 
   entry.press(child, '<CR>')
 
   wait_for_window_showing('aineo://diff/notes.txt')
   eq(
     { entry.windows(child), entry.current_window(child) },
-    { { 'terminal', 'aineo://diff/notes.txt', FILES, COMMITS }, FILES }
+    { { 'aineo://diff/notes.txt', FILES }, 'aineo://diff/notes.txt' }
   )
 end
 
@@ -319,6 +336,7 @@ T['Enter']['again on the file the middle column shows keeps the diff’s window'
       end, options)
     end
   ]])
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
 
   entry.press(child, '<CR>')
 
