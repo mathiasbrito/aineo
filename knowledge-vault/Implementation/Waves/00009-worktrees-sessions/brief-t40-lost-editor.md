@@ -636,3 +636,16 @@ Each item needs a ruling before dispatch. Each ruling is an assumption to report
    - **It can recur** whenever two test files make `.tests/fixtures` for the first time together.
    - **Recommended:** a test-only fix of its own after T40 (D28), with the retry the Learning gives. Until then, tell T40's implementer that a single E739 from `fixture.lua` in a whole run is not T40's, and to re-run that file.
 8. **Mutant 49** is this amendment's addition, not the plan's. Strike it in the dispatch message if it is not wanted.
+
+## The orchestrator's rulings — 2026-10-10, at dispatch
+
+Each is the orchestrator's assumption under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"), to report to the user; none is a D row. Numbered after `plan.md`'s A75.
+
+- **A76 (*For the orchestrator*, 1).** A report reaching a starting editor that follows no session yet: today's behaviour stands. It is shown and kept in the working directory's records, which the session takes at the confirmation.
+- **A77 (2).** `:Aineo claim` with no argument before the running start is confirmed is A29's third case: it warns once that Claude Code is not ready yet, and changes nothing. `:Aineo claim <id>` proceeds.
+- **A78 (3).** The changes pane after `:Aineo claim <id>` in a Neovim where Claude Code never started: (b), as merged. The pane shows the claimed session from that Neovim's first start of Claude Code on; the help says so in place 13. C15's rule is unchanged.
+- **A79 (4).** Where the file system refuses hard links, the MCP server writes no record of its own; its reports find their session by `CLAUDE_CODE_SESSION_ID` (A10's fallback). LIMITS says so, beside *The first follow's move*.
+- **A80 (5).** The reviewers line binds as written: attack by `neovim-claude-code-reviewer`, tests by `reviewer`, records by `records-reviewer`; one fix round, then the orchestrator's own verification, no re-measure (A75). Where orchestrate §6 says otherwise, this packet follows the line; recording the cost rules in §6 for good is left to an `ai/` change.
+- **(6) — confirmed, no assumption.** The option the user chose on 2026-10-07, "Accept the helper (Recommended)", read in full: "New row D43: the hook starts a detached deliverer that notifies the editor and waits for its answer, then exits, or exits when the editor is gone. It supersedes D36's \"one notification, never a request\". Reviewers measured it 12/12 delivered and no leftovers." The orchestrator checked it against the question as put. D43's last quoted sentence was the user's option, and stays in quotation marks. T40-21 is closed.
+- **A81 (7).** The E739 in `tests/helpers/fixture.lua` is not T40's: a single E739 from that file in a whole run does not block T40. A test-only fix of its own follows T40 (D28).
+- **A82 (8).** Mutant 49 is kept.
