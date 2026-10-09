@@ -783,31 +783,40 @@ local function told_name(entry)
   return name
 end
 
---- Shows `diff`, the text git printed for `entry`, in a diff buffer named
---- for it (`diff_name()`, `aineo.changes.diffs`) through the session's
---- `show_diff`, then moves the cursor to the window showing it, in the mode
---- the user is in: the user's Enter asked for it. When the middle column
---- has no room for it, the buffer is wiped and the user warned, once; when
---- showing it raises an error, the buffer is wiped and the user told the
---- error, once; the cursor then stays where it is. Returns false, having
---- told nothing, when Neovim refuses for now the diff buffer its text, as it
---- does while textlock holds, or the wipe of a diff it did not show, as it
---- does while textlock holds and in the command-line window, where a window
---- refuses the diff too (`aineo.changes.scratch`' `wipe()`): the buffer is
---- then kept, shown nowhere, for the next call to show. Returns true
---- otherwise.
+--- An entry the user selected with Enter, and the window Enter was pressed in.
+---@class aineo.changes.Selection
+---@field entry aineo.changes.Entry
+---@field window integer
+
+--- Shows `diff`, the text git printed for the `selection`'s entry, in a
+--- diff buffer named for it (`diff_name()`, `aineo.changes.diffs`) through
+--- the session's `show_diff`, then moves the cursor to the window showing
+--- it, in the mode the user is in, while the cursor is still in the window
+--- Enter was pressed in: the move answers that Enter, and a user who has
+--- gone elsewhere since stays there. When the middle column has no room
+--- for it, the buffer is wiped and the user warned, once; when showing it
+--- raises an error, the buffer is wiped and the user told the error, once;
+--- the cursor then stays where it is. Returns false, having told nothing,
+--- when Neovim refuses for now the diff buffer its text, as it does while
+--- textlock holds, or the wipe of a diff it did not show, as it does while
+--- textlock holds and in the command-line window, where a window refuses
+--- the diff too (`aineo.changes.scratch`' `wipe()`): the buffer is then
+--- kept, shown nowhere, for the next call to show. Returns true otherwise.
 ---
----@param entry aineo.changes.Entry
+---@param selection aineo.changes.Selection
 ---@param diff string
 ---@return boolean allowed
-local function show_diff(entry, diff)
+local function show_diff(selection, diff)
+  local entry = selection.entry
   local buffer = diffs.diff_buffer(diff_name(entry), diff)
   if not buffer then
     return false
   end
   local shown, window = pcall(session.settings.show_diff, buffer)
   if shown and window then
-    vim.api.nvim_set_current_win(window)
+    if vim.api.nvim_get_current_win() == selection.window then
+      vim.api.nvim_set_current_win(window)
+    end
     return true
   end
   if not scratch.wipe(buffer) then
@@ -851,38 +860,40 @@ end
 --- How many times Enter has asked for a diff (`open_entry()`).
 local enters = 0
 
---- Shows `diff`, the diff of `entry` the Enter numbered `this_enter` read
---- (`show_diff()`), while that Enter is the last. A diff Neovim refused for
---- now, as it does while textlock holds and, for a diff it cannot show, in
---- the command-line window, is shown at the editor's next `SafeState`,
---- if that Enter is the last still; otherwise the buffer made for it, shown
---- nowhere, is wiped (`aineo.changes.diffs`' `wipe_unshown()`), at the next
---- `SafeState` again while Neovim refuses the wipe.
+--- Shows `diff`, the diff of the `selection`'s entry the Enter numbered
+--- `this_enter` read (`show_diff()`), while that Enter is the last. A diff
+--- Neovim refused for now, as it does while textlock holds and, for a diff
+--- it cannot show, in the command-line window, is shown at the editor's
+--- next `SafeState`, if that Enter is the last still; otherwise the buffer
+--- made for it, shown nowhere, is wiped (`aineo.changes.diffs`'
+--- `wipe_unshown()`), at the next `SafeState` again while Neovim refuses
+--- the wipe.
 ---
 ---@param this_enter integer
----@param entry aineo.changes.Entry
+---@param selection aineo.changes.Selection
 ---@param diff string
-local function show_last_diff(this_enter, entry, diff)
+local function show_last_diff(this_enter, selection, diff)
   if this_enter ~= enters then
-    if diffs.wipe_unshown(diff_name(entry)) then
+    if diffs.wipe_unshown(diff_name(selection.entry)) then
       return
     end
-  elseif show_diff(entry, diff) then
+  elseif show_diff(selection, diff) then
     return
   end
   vim.api.nvim_create_autocmd('SafeState', {
     once = true,
     desc = 'aineo: show the diff Enter read once the editor allows it',
     callback = function()
-      show_last_diff(this_enter, entry, diff)
+      show_last_diff(this_enter, selection, diff)
     end,
   })
 end
 
 --- Reads the diff of the entry the line under the cursor lists in `buffer`
---- (`read_diff()`) and shows it (`show_last_diff()`), unless Enter asked for
---- another diff meanwhile: only the last Enter's diff is shown, or its
---- failure told. Does nothing on a line that lists none.
+--- (`read_diff()`) and shows it (`show_last_diff()`), the current window
+--- kept as the one Enter was pressed in (`aineo.changes.Selection`), unless
+--- Enter asked for another diff meanwhile: only the last Enter's diff is
+--- shown, or its failure told. Does nothing on a line that lists none.
 ---
 ---@param buffer integer
 local function open_entry(buffer)
@@ -892,6 +903,7 @@ local function open_entry(buffer)
   end
   enters = enters + 1
   local this_enter = enters
+  local selection = { entry = entry, window = vim.api.nvim_get_current_win() }
   read_diff(entry, function(failure, diff)
     if this_enter ~= enters then
       return
@@ -906,7 +918,7 @@ local function open_entry(buffer)
       )
       return
     end
-    show_last_diff(this_enter, entry, diff)
+    show_last_diff(this_enter, selection, diff)
   end)
 end
 

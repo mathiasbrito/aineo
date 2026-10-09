@@ -2057,6 +2057,40 @@ T['Enter']['once its diff is shown, leaves the cursor where it is as the pane is
   eq(child.lua_get('{ vim.api.nvim_buf_get_name(0), #_G.shown_diffs }'), { FILES, 1 })
 end
 
+T['Enter']['read once the cursor left the pane shows the diff, the cursor staying where it went'] = function()
+  local top = git_repo.create('changespane-left-pane', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local gated, gate = gated_git('changespane-left-pane', '*" diff "*notes.txt*')
+  begin_and_show(top, { executable = gated })
+  expect_lines(FILES, { '  M notes.txt' })
+  child.type_keys('<CR>')
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
+
+  vim.fn.writefile({}, gate)
+
+  wait_for_diffs(1)
+  eq(child.lua_get('vim.api.nvim_buf_get_name(0)'), COMMITS)
+end
+
+T['Enter']['read once the cursor went to a terminal in Terminal mode leaves it there, in Terminal mode'] = function()
+  local top = git_repo.create('changespane-left-to-terminal', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local gated, gate = gated_git('changespane-left-to-terminal', '*" diff "*notes.txt*')
+  begin_and_show(top, { executable = gated })
+  expect_lines(FILES, { '  M notes.txt' })
+  child.type_keys('<CR>')
+  child.lua([[
+    vim.cmd('botright new')
+    vim.fn.jobstart({ 'sh' }, { term = true })
+  ]])
+  child.type_keys('i')
+
+  vim.fn.writefile({}, gate)
+
+  wait_for_diffs(1)
+  eq({ child.lua_get('vim.bo.buftype'), child.api.nvim_get_mode().mode }, { 'terminal', 't' })
+end
+
 T['Enter']['leaves the cursor in the pane when the diff is not shown, as'] = MiniTest.new_set({
   parametrize = { { '_G.no_room = true' }, { "_G.refusal = 'refused here'" } },
 })
