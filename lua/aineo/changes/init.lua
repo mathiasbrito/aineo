@@ -785,9 +785,11 @@ end
 
 --- Shows `diff`, the text git printed for `entry`, in a diff buffer named
 --- for it (`diff_name()`, `aineo.changes.diffs`) through the session's
---- `show_diff`. When the middle column has no room for it, the buffer is
---- wiped and the user warned, once; when showing it raises an error, the
---- buffer is wiped and the user told the error, once. Returns false, having
+--- `show_diff`, then moves the cursor to the window showing it, in the mode
+--- the user is in: the user's Enter asked for it. When the middle column
+--- has no room for it, the buffer is wiped and the user warned, once; when
+--- showing it raises an error, the buffer is wiped and the user told the
+--- error, once; the cursor then stays where it is. Returns false, having
 --- told nothing, when Neovim refuses for now the diff buffer its text, as it
 --- does while textlock holds, or the wipe of a diff it did not show, as it
 --- does while textlock holds and in the command-line window, where a window
@@ -805,6 +807,7 @@ local function show_diff(entry, diff)
   end
   local shown, window = pcall(session.settings.show_diff, buffer)
   if shown and window then
+    vim.api.nvim_set_current_win(window)
     return true
   end
   if not scratch.wipe(buffer) then
