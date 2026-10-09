@@ -215,8 +215,10 @@ from its base, or the commit's, in a buffer named
 {top} the worktree's top level, so two worktrees' diffs of one path are two
 buffers; no key opens another worktree's file. Once the diff is shown, the
 cursor moves to its window, in the mode you were in: Normal mode, as in the
-pane; no Insert mode starts. When you press Enter again before a diff was
-read, only the last Enter's diff is shown. Enter on any other line, a
+pane; no Insert mode starts. When you have left the pane's window before the
+diff is shown, the diff is shown and the cursor stays where you are, in
+your mode, Terminal mode included. When you press Enter again before a diff
+was read, only the last Enter's diff is shown. Enter on any other line, a
 heading included, does nothing. When the middle column has no room for the
 diff, aineo says so, shows nothing, and the cursor stays in the pane; so it
 does when showing the diff fails.
