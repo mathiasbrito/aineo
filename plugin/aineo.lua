@@ -135,14 +135,17 @@ local function resolved_config()
   return (config.resolve_config(vim.g.aineo, config.recorded_setup_options()))
 end
 
---- Where aineo keeps what it keeps for a working directory — the Reports
---- and Input's draft — once `kept_places()` has taken it.
+--- Where aineo keeps what it keeps — the Reports, Input's draft, the
+--- changes pane's kept bases and the session id Claude Code resumes — once
+--- `kept_places()` has taken it.
 ---@type { state_directory: string, working_directory: string }|nil
 local places = nil
 
 --- The editor's state directory and working directory, as they are the
---- first time this is called: the Reports and Input's draft are kept there,
---- for that directory, whatever `:cd` does later.
+--- first time this is called: the Reports and Input's draft are kept under
+--- that state directory — for that working directory until the panes follow
+--- a Claude session (`follow_session()`), then per session — whatever `:cd`
+--- does later.
 ---
 ---@return { state_directory: string, working_directory: string }
 local function kept_places()
@@ -174,9 +177,11 @@ end
 local draft_environment_given = false
 
 --- Hands the layout's Input to the draft home, which keeps its text as the
---- draft of the working directory of `kept_places()` and restores that
---- draft into it when it is new and empty (`aineo.draft`'s `keep_draft()`);
---- gives the draft home that environment the first time. Raises nothing.
+--- draft of the Claude session the panes follow (`follow_session()`) — of
+--- the working directory of `kept_places()` until they follow one — and
+--- restores that draft into it when it is new and empty (`aineo.draft`'s
+--- `keep_draft()`); gives the draft home that environment the first time.
+--- Raises nothing.
 local function keep_input_draft()
   local draft = require('aineo.draft')
   if not draft_environment_given then
@@ -184,6 +189,66 @@ local function keep_input_draft()
     draft_environment_given = true
   end
   draft.keep_draft(require('aineo.layout').input_buffer())
+end
+
+--- Makes the Report, Input's draft and the changes pane the Claude session
+--- `id`'s: tells the report home (`aineo.report`'s
+--- `follow_report_session()`), then the draft home (`aineo.draft`'s
+--- `follow_draft_session()`), then the changes home (`aineo.changes`'s
+--- `follow_changes_session()`, its base and saves kept under the state
+--- directory of `kept_places()`). Each home changes nothing for the session
+--- it follows already, and shows the new session's content in the windows
+--- that show its buffers at once, or when they are next shown.
+---
+---@param id string Claude Code's session id
+local function follow_session(id)
+  require('aineo.report').follow_report_session(id)
+  require('aineo.draft').follow_draft_session(id)
+  require('aineo.changes').follow_changes_session({
+    id = id,
+    state_directory = kept_places().state_directory,
+  })
+end
+
+--- Whether the Claude Code aineo started last has been confirmed: it has
+--- been ready for input once (`aineo.claude`'s `on_session_ready`). Until
+--- then the panes stay on the session they followed before it, and no
+--- switch it tells is followed.
+local start_confirmed = false
+
+--- Forgets that a start was confirmed (`start_confirmed`) when no Claude
+--- Code runs — none has started, or the last has exited — and so the next
+--- start launches a new one, which must be confirmed in turn. Called before
+--- that start: the switch to a session another than the one followed,
+--- which `aineo.claude`'s `start_session()` tells before it returns, is
+--- then not followed.
+local function forget_confirmation_unless_running()
+  local status = require('aineo.claude').session_status()
+  if status == nil or status == 'exited' then
+    start_confirmed = false
+  end
+end
+
+--- Confirms the start of Claude Code that has become ready for input
+--- (`start_confirmed`), and makes the panes the session `id`'s, the one it
+--- is on then (`follow_session()`).
+---
+---@param id string
+local function follow_confirmed_start(id)
+  start_confirmed = true
+  follow_session(id)
+end
+
+--- Makes the panes the session `id`'s (`follow_session()`), Claude Code
+--- having switched to it, once the start that runs has been confirmed
+--- (`start_confirmed`); before that, does nothing: the confirmation follows
+--- the session the start is on then.
+---
+---@param id string
+local function follow_switch_once_confirmed(id)
+  if start_confirmed then
+    follow_session(id)
+  end
 end
 
 --- The terminal of the Claude session aineo started last — the new
@@ -197,10 +262,16 @@ local claude_terminal = nil
 --- `claude_terminal`. While one runs it starts nothing and returns that
 --- session's terminal (`aineo.claude`'s `start_session()`). Claude Code
 --- starts in the editor's working directory, resuming the session kept for
---- it under the state directory of `kept_places()`. When the session puts a
+--- it under the state directory of `kept_places()`, its session hooks told
+--- the editor's address and program. When the session puts a
 --- new terminal in place of one whose resume found no conversation, that
 --- terminal becomes `claude_terminal` and the layout's Claude terminal
---- (`aineo.layout`'s `follow_claude_terminal()`). Once a start has
+--- (`aineo.layout`'s `follow_claude_terminal()`). The panes follow the
+--- session the start is on once Claude Code is first ready for input — the
+--- new session's that takes the place of a resume with no conversation —
+--- and then each session Claude Code switches to; not before, and nothing
+--- for a start that never becomes ready (`follow_confirmed_start()`,
+--- `follow_switch_once_confirmed()`). Once a start has
 --- succeeded, the changes home is told the session began there
 --- (`aineo.changes`'s `begin_session()`, which heeds its first call alone),
 --- in Claude Code's working directory, with the layout's `show_diff()` to
@@ -212,6 +283,7 @@ local function started_claude_terminal(config)
   local report = require('aineo.report')
   local mcp = require('aineo.mcp')
   local working_directory = vim.fn.getcwd()
+  forget_confirmation_unless_running()
   claude_terminal = require('aineo.claude').start_session({
     cmd = config.claude.cmd,
     cwd = working_directory,
@@ -219,10 +291,14 @@ local function started_claude_terminal(config)
     allowed_tools = mcp.allowed_mcp_tools(),
     instructions = report.report_instructions(mcp.report_tool_name()),
     state_directory = kept_places().state_directory,
+    editor_address = vim.v.servername,
+    editor_program = vim.v.progpath,
     on_terminal_replaced = function(terminal)
       claude_terminal = terminal
       require('aineo.layout').follow_claude_terminal(terminal)
     end,
+    on_session_ready = follow_confirmed_start,
+    on_session_switched = follow_switch_once_confirmed,
   })
   require('aineo.changes').begin_session({
     directory = working_directory,

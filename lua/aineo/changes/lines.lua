@@ -104,6 +104,7 @@ end
 ---@field key string what tells the entry apart from one read to the next: a change's path, a commit's id
 ---@field change? aineo.git.Change
 ---@field commit? aineo.git.Commit
+---@field worktree? aineo.changes.WorktreeSection the worktree other than the editor's that lists it; nil for the editor's own
 
 --- A colour a line shows: its bytes from `first_column`, counted from 0, to
 --- `end_column`, excluded, in the highlight group `group`.
@@ -170,25 +171,43 @@ local function failure_line(line)
   return whole_line(line, colours.FAILURE_GROUP)
 end
 
---- A page of `notes`, rows of lines that list nothing (`note()`,
+--- The rows of `notes`, rows of lines that list nothing (`note()`,
 --- `failure_line()`), then the rows of `listed`, or `empty` when it has
 --- none.
 ---
 ---@param notes aineo.changes.Row[]
 ---@param listed aineo.changes.Row[]
 ---@param empty aineo.changes.Row
----@return aineo.changes.Page
-local function page(notes, listed, empty)
+---@return aineo.changes.Row[]
+local function rows_of(notes, listed, empty)
   local rows = vim.list_extend({}, notes)
   if #listed == 0 then
     table.insert(rows, empty)
   end
-  vim.list_extend(rows, listed)
+  return vim.list_extend(rows, listed)
+end
+
+--- The page of `rows`, one line each, in their order.
+---
+---@param rows aineo.changes.Row[]
+---@return aineo.changes.Page
+local function page_of(rows)
   local text, entries, line_colours = {}, {}, {}
   for line, row in ipairs(rows) do
     text[line], entries[line], line_colours[line] = row.line, row.entry, row.colours
   end
   return { text = text, entries = entries, colours = line_colours }
+end
+
+--- A page of `notes`, then the rows of `listed`, or `empty` when it has
+--- none (`rows_of()`).
+---
+---@param notes aineo.changes.Row[]
+---@param listed aineo.changes.Row[]
+---@param empty aineo.changes.Row
+---@return aineo.changes.Page
+local function page(notes, listed, empty)
+  return page_of(rows_of(notes, listed, empty))
 end
 
 --- What both windows say when the session has no repository to list:
@@ -220,6 +239,10 @@ end
 --- What the files window says when no file differs from the base.
 M.NO_FILES = 'No files changed on this session'
 
+--- What the files window says under another worktree's heading when no
+--- file of it differs from its base.
+M.NO_WORKTREE_FILES = 'No files changed in this worktree'
+
 --- What the files window says first where the watch sees no subdirectory.
 M.NOT_WATCHED =
   'Subdirectories are not watched: their changes show at the next showing of this pane, save or commit'
@@ -230,6 +253,7 @@ M.NOT_WATCHED =
 ---@field failure? aineo.git.Failure why the last read failed, when it did
 ---@field saved table<string, true> the paths, relative to the top level, of the files the user saved
 ---@field unwatched_subdirectories boolean whether a change in a subdirectory goes unseen by the watch
+---@field worktrees? aineo.changes.OtherWorktrees what the window knows of the other worktrees, none when not given
 
 --- The notes a window shows first when its last read failed: the line
 --- that says so (`M.refresh_failed()`, `failure_line()`); none otherwise.
@@ -240,42 +264,158 @@ local function failure_notes(failure)
   return failure and { failure_line(M.refresh_failed(failure)) } or {}
 end
 
---- The files window's page for `view`: the line saying its last read
---- failed, when it did, and `M.NOT_WATCHED` where subdirectories go
---- unwatched; then a line per file (`M.file_line()`), marked when the user
---- saved it, or `M.NO_FILES` when none differs. Before any list was read,
---- `M.NOT_WATCHED` where it shows, then `M.READING`; or, once a read has
---- failed, the line saying so alone. The line saying a read failed is a
---- failure (`failure_line()`), a file's line shows its own colours
---- (`file_colours()`), and every other line is a note (`note()`).
+--- What a worktree's heading says in place of a branch when its `HEAD` is
+--- detached.
+local DETACHED = 'detached'
+
+--- The heading line of `section`, a worktree other than the editor's: its
+--- folder's name and its branch, or `DETACHED` (`M.quoted_path()`).
+---
+---@param section aineo.changes.WorktreeSection
+---@return string
+function M.worktree_heading(section)
+  return ('Worktree %s (%s)'):format(
+    M.quoted_path(vim.fs.basename(section.top)),
+    section.branch and M.quoted_path(section.branch) or DETACHED
+  )
+end
+
+--- `rows` with the entry each lists made `section`'s: told apart from the
+--- editor's own entries and from every other worktree's by the worktree's
+--- top level, and carrying the worktree it is listed in.
+---
+---@param rows aineo.changes.Row[]
+---@param section aineo.changes.WorktreeSection
+---@return aineo.changes.Row[]
+local function in_worktree(rows, section)
+  return vim.tbl_map(function(row)
+    local entry = row.entry
+    return vim.tbl_extend('force', row, {
+      entry = {
+        key = section.top .. '\0' .. entry.key,
+        change = entry.change,
+        commit = entry.commit,
+        worktree = section,
+      },
+    })
+  end, rows)
+end
+
+--- How one window shows a worktree other than the editor's.
+---@class aineo.changes.SectionLines
+---@field listed_rows fun(listed: any): aineo.changes.Row[] the rows of what the worktree's read gave
+---@field empty string what the window says under the worktree's heading when its list is empty
+
+--- The rows under the heading of `section`, a worktree other than the
+--- editor's: the line saying its last read failed, when it did; then the
+--- rows of the list it last read (`in_worktree()`), or the window's empty
+--- line, a note, when it has none, as `lines` says. Before any list of it
+--- was read, the line saying its read failed alone.
+---
+---@param section aineo.changes.WorktreeSection
+---@param lines aineo.changes.SectionLines
+---@return aineo.changes.Row[]
+local function section_rows(section, lines)
+  local notes = failure_notes(section.failure)
+  if not section.listed then
+    return notes
+  end
+  return rows_of(notes, in_worktree(lines.listed_rows(section.listed), section), note(lines.empty))
+end
+
+--- The line that says the other worktrees could not be listed, in
+--- `failure`'s words (`M.words_of()`).
+---
+---@param failure aineo.git.Failure
+---@return string
+local function worktrees_unlisted(failure)
+  return 'The other worktrees could not be listed: ' .. M.words_of(failure)
+end
+
+--- The rows of the other worktrees, `others`: the line saying they could
+--- not be listed (`worktrees_unlisted()`), a failure, when they could
+--- not; then, in their order, each one's heading (`M.worktree_heading()`),
+--- a note, and its rows (`section_rows()`).
+---
+---@param others aineo.changes.OtherWorktrees|nil
+---@param lines aineo.changes.SectionLines
+---@return aineo.changes.Row[]
+local function worktree_rows(others, lines)
+  local rows = {}
+  if others and others.failure then
+    table.insert(rows, failure_line(worktrees_unlisted(others.failure)))
+  end
+  for _, section in ipairs(others and others.sections or {}) do
+    table.insert(rows, note(M.worktree_heading(section)))
+    vim.list_extend(rows, section_rows(section, lines))
+  end
+  return rows
+end
+
+--- The rows of `changes`, a line per file (`M.file_line()`), marked when
+--- `saved` holds its path, in its own colours (`file_colours()`).
+---
+---@param changes aineo.git.Change[]
+---@param saved table<string, true>
+---@return aineo.changes.Row[]
+local function file_rows(changes, saved)
+  return vim.tbl_map(function(change)
+    local is_saved = saved[change.path] == true
+    local line = M.file_line(change, is_saved)
+    return {
+      line = line,
+      entry = { key = change.path, change = change },
+      colours = file_colours(line, change, is_saved),
+    }
+  end, changes)
+end
+
+--- The rows of the editor's own worktree in the files window, for `view`:
+--- the line saying its last read failed, when it did, and `M.NOT_WATCHED`
+--- where subdirectories go unwatched; then a line per file
+--- (`file_rows()`), or `M.NO_FILES` when none differs. Before any list was
+--- read, `M.NOT_WATCHED` where it shows, then `M.READING`; or, once a read
+--- has failed, the line saying so alone.
 ---
 ---@param view aineo.changes.FilesView
----@return aineo.changes.Page
-function M.files_window(view)
+---@return aineo.changes.Row[]
+local function own_file_rows(view)
   local notes = failure_notes(view.failure)
   if view.unwatched_subdirectories then
     table.insert(notes, note(M.NOT_WATCHED))
   end
   if not view.changes then
-    return view.failure and page({}, {}, notes[1]) or page(notes, {}, note(M.READING))
+    return view.failure and { notes[1] } or rows_of(notes, {}, note(M.READING))
   end
-  return page(
-    notes,
-    vim.tbl_map(function(change)
-      local saved = view.saved[change.path] == true
-      local line = M.file_line(change, saved)
-      return {
-        line = line,
-        entry = { key = change.path, change = change },
-        colours = file_colours(line, change, saved),
-      }
-    end, view.changes),
-    note(M.NO_FILES)
-  )
+  return rows_of(notes, file_rows(view.changes, view.saved), note(M.NO_FILES))
+end
+
+--- The files window's page for `view`: the editor's own worktree's rows
+--- first, under no heading (`own_file_rows()`), then each other worktree's
+--- (`worktree_rows()`). The line saying a read failed is a failure
+--- (`failure_line()`), a file's line shows its own colours
+--- (`file_colours()`), and every other line is a note (`note()`).
+---
+---@param view aineo.changes.FilesView
+---@return aineo.changes.Page
+function M.files_window(view)
+  return page_of(vim.list_extend(
+    own_file_rows(view),
+    worktree_rows(view.worktrees, {
+      listed_rows = function(changes)
+        return file_rows(changes, {})
+      end,
+      empty = M.NO_WORKTREE_FILES,
+    })
+  ))
 end
 
 --- What the commits window says when the session has no commit.
 M.NO_COMMITS = 'No commits on this session'
+
+--- What the commits window says under another worktree's heading when it
+--- has no commit since its base.
+M.NO_WORKTREE_COMMITS = 'No commits in this worktree'
 
 --- How many characters of a commit's id stand for it in the pane.
 M.ABBREVIATED_ID_LENGTH = 7
@@ -311,19 +451,34 @@ end
 ---@field since? aineo.git.CommitsSince the session's commits, as last read
 ---@field failure? aineo.git.Failure why the last read failed, when it did
 ---@field base? string the session's base commit, nil before the repository's first commit
+---@field worktrees? aineo.changes.OtherWorktrees what the window knows of the other worktrees, none when not given
 
---- The commits window's page for `view`: the line saying its last read
---- failed, when it did, and one naming the base when it is no longer an
---- ancestor of `HEAD`; then a line per commit git lists, in its order
---- (`M.commit_line()`), or `M.NO_COMMITS` when there is none. Before any
---- list was read, `M.READING`, or the failure's line alone. The line saying
---- a read failed is a failure (`failure_line()`), a commit's line shows its
---- own colours (`commit_colours()`), and every other line is a note
---- (`note()`).
+--- The rows of `commits`, a line per commit in their order
+--- (`M.commit_line()`), in its own colours (`commit_colours()`).
+---
+---@param commits aineo.git.Commit[]
+---@return aineo.changes.Row[]
+local function commit_rows(commits)
+  return vim.tbl_map(function(commit)
+    local line = M.commit_line(commit)
+    return {
+      line = line,
+      entry = { key = commit.id, commit = commit },
+      colours = commit_colours(line),
+    }
+  end, commits)
+end
+
+--- The rows of the editor's own worktree in the commits window, for
+--- `view`: the line saying its last read failed, when it did, and one
+--- naming the base when it is no longer an ancestor of `HEAD`; then a line
+--- per commit git lists (`commit_rows()`), or `M.NO_COMMITS` when there is
+--- none. Before any list was read, `M.READING`, or the failure's line
+--- alone.
 ---
 ---@param view aineo.changes.CommitsView
----@return aineo.changes.Page
-function M.commits_window(view)
+---@return aineo.changes.Row[]
+local function own_commit_rows(view)
   local notes = failure_notes(view.failure)
   if view.since and not view.since.base_is_ancestor then
     table.insert(
@@ -336,20 +491,29 @@ function M.commits_window(view)
     )
   end
   if not view.since then
-    return view.failure and page({}, {}, notes[1]) or page({}, {}, note(M.READING))
+    return view.failure and { notes[1] } or { note(M.READING) }
   end
-  return page(
-    notes,
-    vim.tbl_map(function(commit)
-      local line = M.commit_line(commit)
-      return {
-        line = line,
-        entry = { key = commit.id, commit = commit },
-        colours = commit_colours(line),
-      }
-    end, view.since.commits),
-    note(M.NO_COMMITS)
-  )
+  return rows_of(notes, commit_rows(view.since.commits), note(M.NO_COMMITS))
+end
+
+--- The commits window's page for `view`: the editor's own worktree's rows
+--- first, under no heading (`own_commit_rows()`), then each other
+--- worktree's (`worktree_rows()`). The line saying a read failed is a
+--- failure (`failure_line()`), a commit's line shows its own colours
+--- (`commit_colours()`), and every other line is a note (`note()`).
+---
+---@param view aineo.changes.CommitsView
+---@return aineo.changes.Page
+function M.commits_window(view)
+  return page_of(vim.list_extend(
+    own_commit_rows(view),
+    worktree_rows(view.worktrees, {
+      listed_rows = function(since)
+        return commit_rows(since.commits)
+      end,
+      empty = M.NO_WORKTREE_COMMITS,
+    })
+  ))
 end
 
 return M

@@ -1,6 +1,7 @@
 --- The git home: what a repository holds, asked of git — the files changed
---- since a base commit, the commits since it, their diffs — and a watch that
---- calls back when the branch moves or a working-tree file changes.
+--- since a base commit, the commits since it, their diffs, its worktrees and
+--- the base of each — and a watch that calls back when the branch moves or a
+--- working-tree file changes.
 ---
 --- Every operation returns at once, runs git asynchronously with each process
 --- bounded in time, and calls its `done` exactly once, on the main loop, with
@@ -23,6 +24,7 @@ local history = require('aineo.git.history')
 local process = require('aineo.git.process')
 local repository = require('aineo.git.repository')
 local watch = require('aineo.git.watch')
+local worktrees = require('aineo.git.worktrees')
 
 local M = {}
 
@@ -90,6 +92,48 @@ end
 ---@param options? aineo.git.Options
 function M.commit_diff(found, commit, done, options)
   diffs.commit_diff(process.runner(options), found, commit, done)
+end
+
+--- Lists the worktrees of the repository `found` is in, and calls
+--- `done(nil, worktrees)`, the worktree `found` is first, by `found.top`,
+--- and the others in git's order, each by its path with every link
+--- resolved; or `done(failure)`. A worktree git marks `prunable` or `bare`
+--- is left out, and so is one whose directory does not exist, locked or
+--- not.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param done fun(failure: aineo.git.Failure|nil, worktrees: aineo.git.Worktree[]|nil)
+---@param options? aineo.git.Options
+function M.list_worktrees(found, done, options)
+  worktrees.list_worktrees(process.runner(options), found, done)
+end
+
+--- Reads the commit the bases of the other worktrees of the repository
+--- `found` is in are taken against (`M.worktree_base()`), as `found`'s
+--- `HEAD` is now: the upstream of the branch `found` is on; that branch
+--- when it has no upstream, or one whose branch git does not have;
+--- `found`'s `HEAD` when that is detached. Calls `done(nil, commit)`, nil
+--- while `found` has no commit yet, or `done(failure)`.
+---
+---@param found aineo.git.Repository the editor's, as `M.find_repository()` gave it
+---@param done fun(failure: aineo.git.Failure|nil, commit: string|nil)
+---@param options? aineo.git.Options
+function M.comparison_commit(found, done, options)
+  worktrees.comparison_commit(process.runner(options), found, done)
+end
+
+--- Reads the base of `worktree`, a worktree of the repository other than
+--- the editor's: the merge base of its `HEAD` and the commit `comparison`,
+--- as `M.comparison_commit()` read it from the editor's. Calls `done(nil,
+--- base)`, nil when they share no history or either has no commit yet, or
+--- `done(failure)`.
+---
+---@param worktree aineo.git.Worktree as `M.list_worktrees()` or `M.find_repository()` gave it
+---@param comparison string|nil the full id of the commit, nil when the editor's worktree has no commit yet
+---@param done fun(failure: aineo.git.Failure|nil, base: string|nil)
+---@param options? aineo.git.Options
+function M.worktree_base(worktree, comparison, done, options)
+  worktrees.worktree_base(process.runner(options), worktree, comparison, done)
 end
 
 --- Starts watching `found`, and calls `on_change(nil, change)` on the main

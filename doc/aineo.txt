@@ -46,7 +46,8 @@ Requirements:
 - Claude Code, the `claude` command, installed and signed in. aineo's
   behaviour was measured on Claude Code 2.1.281; the resume of Claude's
   session, and the new session that takes the place of a resume Claude
-  Code has no conversation for (|aineo-claude-session|), on 2.1.283.
+  Code has no conversation for (|aineo-claude-session|), on 2.1.283; how
+  Claude Code tells of a session switch, on 2.1.292.
 - git 2.36 or later, the `git` command, for the changes pane
   (|aineo-changes|). aineo is tested with git 2.50.1.
 
@@ -104,10 +105,11 @@ same two windows, at the same sizes, show the other pane's buffers.
 - The agent pane: the Agent Report over Input, as the layout opens.
 - The changes pane: `aineo://changes-files` in the Report's place, over
   `aineo://changes-commits` in Input's, listing the session's changed files
-  and its commits (|aineo-changes|). Each is a scratch buffer, read-only to
-  you; `:edit` there writes its list again. A buffer of yours under either
-  name, such as one a restored session made, gives the name up: it is wiped
-  out, or kept unnamed when you changed its text.
+  and its commits, then those of each other worktree of the repository
+  (|aineo-changes|). Each is a scratch buffer, read-only to you; `:edit`
+  there writes its list again. A buffer of yours under either name, such
+  as one a restored session made, gives the name up: it is wiped out, or
+  kept unnamed when you changed its text.
 
 `\pa` (|:Aineo-pane|) shows the agent pane and `\pc` the changes pane; the
 pane already shown stays as it is (the changes pane is read again,
@@ -137,13 +139,23 @@ with it, and so does the layout opened anew once its windows were closed.
 
 The changes pane ~
                                                                *aineo-changes*
-The changes pane lists what changed in your repository since aineo first
-started Claude Code in this editor: the session, which lasts the editor's
-life. Its repository is the one Claude Code's working directory was in at
-that start, and its base is the commit `HEAD` named then. A restart of
-Claude Code keeps both. A start aineo could not make — `claude.cmd` not
-executable, say — takes neither; a Claude Code that starts and then fails
-takes both.
+The changes pane lists what changed in your repository since the base of
+the Claude Code session it shows, then what changed in each of the
+repository's other worktrees since a base of its own (below). Its
+repository is the one Claude Code's working directory was in when aineo
+first started Claude Code in this editor, for the editor's life. A session
+aineo has not seen takes as its base the commit `HEAD` names when aineo
+starts following it: when Claude Code, started on it, is first ready for
+input, which can be long after the start, while a dialog is up say, or when
+you switch to it inside Claude Code. aineo keeps each session's base, and
+the files you save while it shows that session, under `stdpath('state')`:
+a restart of Claude Code or of the editor, or a switch back to an earlier
+session, shows that session's base and saves again — unless a resume of
+it finds no conversation (|aineo-claude-session|). A start aineo could
+not make — `claude.cmd` not executable, say — takes no base. A Claude Code
+that fails before it is first ready for input is never followed: the pane
+takes `HEAD` at that start as its base, as at any start, and keeps it for
+no session.
 
 The files window, `aineo://changes-files`, lists every file that differs
 from the base, committed since or not, staged or not, and every new file
@@ -154,38 +166,74 @@ your ignore rules leave in, one per line, in git's order: >
 <
 The letter is the kind of change: `A` added, `M` modified, `D` deleted, `R`
 renamed, after its old path, `T` turned into a link or back, `?` new and
-untracked; a copy shows as added. The `*` marks a file you saved from this
-editor since the base was taken, or while aineo first looked for the
-repository it then found — `:write`, `:update`, `:wall`, a part of a buffer
-written to a file or appended to one, the file written whatever its buffer
-is named, a file opened through a symbolic link included. A file you and
-Claude both changed is marked too: aineo cannot tell who changed what. A
-path holding a line break, a control character, a double quote or a
-backslash is shown between double quotes, each of those escaped as git
+untracked; a copy shows as added. The `*` marks a file saved since the
+base was taken, from this editor, or from another one following the same
+session in this repository once this editor next saves a file it had not
+saved, or follows the session again — `:write`, `:update`, `:wall`, a part of
+a buffer written to a file or appended to one, the file written whatever its
+buffer is named, a file opened through a symbolic link included. A file you
+saved before aineo started following the session carries no `*` for it, though
+it is still listed against the base: when Claude Code starts, that is at least
+the 1.5 seconds it waits for Claude Code's input to settle, longer while a
+trust or MCP-server dialog is up (a real Claude Code's start was not
+measured), and a save made then is marked for the session followed before, if
+any. A file you and Claude both changed is marked too: aineo cannot tell who
+changed what. A path holding a line break, a control character, a double quote
+or a backslash is shown between double quotes, each of those escaped as git
 escapes it; characters outside ASCII are kept as they are, where git writes
-them in octal. With nothing changed, the window says "No files changed on
-this session".
+them in octal. With nothing changed, the window says "No files changed on this
+session".
 
 The commits window, `aineo://changes-commits`, lists the session's commits,
 newest first, by abbreviated id and subject, or says "No commits on this
 session".
 
+Below your own lines, which have no heading, each window lists the
+repository's other worktrees, in the order `git worktree list` gives them,
+each under a heading naming its folder and its branch, or `detached`: >
+    Worktree agent-1 (feature/x)
+      M lua/aineo/init.lua
+<
+then that worktree's files or commits, in the same form, unmarked, or "No
+files changed in this worktree" or "No commits in this worktree". With no
+other worktree, the pane shows only your own lines. A worktree git marks
+prunable, one whose directory is gone, locked or not, and the directory of
+a bare repository are left out; a locked one is listed. A worktree's base
+is read again at each read and never kept: its merge base with the
+upstream of the branch your own worktree is on, with that branch when it
+has no upstream, or with your `HEAD` when it is detached. A worktree that
+shares no history with yours, or has no commit yet, is listed with no
+base: every file new, every commit its own.
+
 Enter on a file's line shows its unified diff from the base, and on a
 commit's line that commit's diff, in the middle column (the file column,
 below). The diff is read-only: a buffer named `aineo://diff/{path}` or
-`aineo://commit/{id}`, with 'filetype' `diff`, wiped once hidden. The cursor
-stays in the pane, so `j` and Enter step through the list: when you press
-Enter again before a diff was read, only the last Enter's diff is shown.
-Enter on any other line does nothing. When the middle column has no room
-for the diff, aineo says so and shows nothing.
+`aineo://commit/{id}`, with 'filetype' `diff`, wiped once hidden. Under
+another worktree's heading, Enter shows that worktree's diff of the file
+from its base, or the commit's, in a buffer named
+`aineo://worktree{top}//diff/{path}` or `aineo://worktree{top}//commit/{id}`,
+{top} the worktree's top level, so two worktrees' diffs of one path are two
+buffers; no key opens another worktree's file. The cursor stays in the
+pane, so `j` and Enter step through the list: when you press Enter again
+before a diff was read, only the last Enter's diff is shown. Enter on any
+other line, a heading included, does nothing. When the middle column has
+no room for the diff, aineo says so and shows nothing.
 
 The pane is read again whenever it is shown — `\pc`, `:Aineo pane changes`,
 `\o`, or the layout built anew showing it — and, from its first showing
 until the editor quits, when a file is saved, when a file of the working
 tree changes, and when the branch moves: a commit, even one that changes no
-file, an amend, a reset, a checkout. One read of each window runs at a time,
-and the cursor stays on the line it was on while that line is listed. A
-diff already shown stays as it was until you press Enter on its line again.
+file, an amend, a reset, a checkout. The other worktrees are listed again,
+and each one's files and commits read again, whenever the pane is shown
+and whenever aineo's watch of your repository sees a change: in another
+worktree, its `git add` or commit, a worktree added or removed, or a file
+written in one inside your top level (but see |aineo-limits|). A worktree
+added shows at the next read, and one removed goes, its diffs left as they
+are. One read of each window runs at a time, your own worktree's and the
+others' one after another, one git at a time; your own lines asked for
+meanwhile are read before the next worktree's, not after them all. The
+cursor stays on the line it was on while that line is listed. A diff
+already shown stays as it was until you press Enter on its line again.
 A list or a diff read while Neovim allows no change of text — an
 expression mapping waiting for a key or in |input()|, or a completion
 function still running — is shown once Neovim allows it again, with nothing
@@ -202,7 +250,10 @@ pane is shown or a file is saved, and a repository made since — by
 base is no longer behind `HEAD` — after a reset to before it, or a checkout
 of another branch — the commits window says so above what git lists, and
 the base stays. A read that fails keeps the list shown, under one line
-giving git's words. When aineo's watch of the repository fails, both
+giving git's words; so does another worktree's, under its heading, the
+other worktrees as they are. When the other worktrees cannot be listed,
+one line in git's words follows your own lines, over the worktrees last
+listed. When aineo's watch of the repository fails, both
 windows say so until the pane is shown again, which starts it again.
 
 Colours ~
@@ -319,30 +370,89 @@ a listed buffer. For a status-line plugin, the name and the folder are
 kept, current, on Claude's terminal as `b:aineo_session_name` and
 `b:aineo_session_folder`. See |aineo-limits| for what can replace it.
 
-aineo resumes the session it started, not one you switch to inside Claude
-Code (`/clear`, `/resume`), and ignores a conversation you ran in a plain
-terminal in the same directory. Two Neovims in one directory resume the
-same session.
+aineo follows a switch you make inside Claude Code: `/clear`, `/resume`
+and `/branch` each put Claude Code on another session, and the Report,
+Input's draft (|aineo-draft|) and the changes pane (|aineo-changes|) then
+show that session's, whichever pane is shown: the windows that show them
+at once, a hidden pane when it is next shown. `/clear`'s new session has
+an empty Report and an empty Input, and `HEAD` then as its base; `/resume`
+back to a session brings its Report, its draft and its base back. The next
+start in that directory resumes the session Claude Code was last on in
+aineo's terminal there. Claude's status line follows too, through Claude
+Code's title, but a title is not a session's id: two sessions can share
+one. Claude Code tells aineo of a switch through the hooks aineo gives it
+at each start (|aineo-report|): Claude Code 2.1.292 ends the session it
+leaves (`SessionEnd`), then starts the next (`SessionStart`). `/compact`
+stays on the same session, and changes nothing. Where hooks do not run,
+aineo follows the session it started: see |aineo-limits|. Two Neovims in
+one directory resume the session of the last switch in either. aineo
+ignores a conversation you ran in a plain terminal in the same directory.
+
+The panes follow the session a start of Claude Code is on once Claude Code
+is ready for input the first time, and every switch after that; until
+then they show what they showed before, and what you type in Input is
+kept there. At an editor's first start, that is the working directory's
+Report and draft, which the session takes when it has none of its own.
+When it has its own, the panes show those, and what you typed in Input
+meanwhile leaves Input and stays the directory's draft (|aineo-draft|).
+The Report is drawn again then, its cursor on its first line, even when it
+shows the same reports. The changes pane takes the session's base then too
+(|aineo-changes|). A start that is never ready — a trust dialog answered
+"No, exit", a Claude Code that exits before its input box settles — is not
+followed, and nothing moves. A resume Claude Code finds no conversation
+for is never ready either: the new session that takes its place (above)
+is followed once it is ready, and at an editor's first start it takes the
+working directory's Report and draft. What a session kept while it ran — its
+Report, its draft and its base — stays with it when a later resume of it
+finds no conversation, and is not shown again.
 
 Input's draft ~
                                                                  *aineo-draft*
-What you write in Input is kept as a draft, one per working directory,
-beside the Reports: under `stdpath('state')` in `aineo/drafts/`, in a file
-only you can read and write. It is saved a second after each change, at
-once when Input becomes empty, as Send leaves it, and, for a change not
-saved yet, when Neovim quits. Nothing asks you anything at quit, and a crash
-loses at most the last second's typing. The working directory is the one of
-the first time the layout opened, for the editor's life.
+What you write in Input is kept as a draft, one per Claude session, beside
+the Reports: under `stdpath('state')` in `aineo/drafts/`, in a file only
+you can read and write, named `session-` and the SHA-256 of the session's
+id. It is saved a second after each change, at once when Input becomes
+empty, as Send leaves it, and, for a change not saved yet, when Neovim
+quits. Nothing asks you anything at quit, and a crash loses at most the
+last second's typing. Until aineo follows a Claude session, the draft is
+the working directory's, in a file named by the directory's SHA-256; the
+working directory is the one of the first time the layout opened, for the
+editor's life.
+
+When aineo follows another session, a change not saved yet is first saved
+as the draft of the session it followed until then, and the new session's
+draft then takes the place of whatever Input holds — or Input is emptied,
+for a session with no draft. The text that leaves Input is not lost: it
+comes back when aineo follows its session again. When it cannot be saved,
+Input keeps it, as that session's draft, and you are told so at each
+switch. A session's draft that cannot be read is told at each switch to
+that session, and Input is emptied: aineo never replaces a session's
+draft it could not read, so what you then type is not saved, and you are
+told so at your first change after each such switch. Until the new draft
+is in Input — Neovim may hold the swap until it is done with what it is
+doing — what you change in Input is still the old session's. The swap is
+not a change of yours: `u` does not take it out, and no `u` reaches a
+change or a Send made before it. It is not saved either: a draft another
+Neovim keeps for that session stays as it left it. The first session
+aineo follows in an editor takes the working directory's draft, when it
+has none of its own; an Input that holds that draft already is then left
+as it is, with no swap, and `u` still reaches what you typed before. A
+directory's draft written after that is taken by the next editor that
+first follows a session with no draft of its own, and is not shown
+otherwise. A draft that cannot be moved so is told once
+as a warning, and the session keeps its own.
 
 The draft comes back into an empty Input: the first time the layout opens
 in this editor, and again once Input's text was dropped — `:bwipeout`,
 `:bdelete`, `:edit!` — as soon as Input is shown again. Its coming back is
-not a change of yours: `u` does not take it out. It never replaces text you
-have written, and an Input that Send emptied stays empty.
+not a change of yours: `u` does not take it out. Coming back so, it never
+replaces text you have written — only following another session does —
+and an Input that Send emptied stays empty.
 
-Two Neovims in one working directory share one draft, and the last change
-in either wins: a Neovim that quits with no change unsaved leaves the draft
-as the other left it.
+Two Neovims on one session, or in one working directory before aineo
+follows a session, share one draft, and the last change in either wins: a
+Neovim that quits with no change unsaved leaves the draft as the other left
+it.
 
 A change not saved yet is saved as you quit with `:quit`, `:qall`,
 `:wqall`, `:xall` or `ZZ`, and again, when that save failed or did not
@@ -356,7 +466,8 @@ signal — its terminal window closed, `kill` — saves nothing as it ends:
 like a crash, it loses at most the last second's typing.
 
 A draft that cannot be read, put into Input or written is told once as a
-warning. While you type in Insert, Replace or Terminal mode — in Input or
+warning; a session's draft that cannot be read is told as above. While
+you type in Insert, Replace or Terminal mode — in Input or
 in Claude's terminal — the warning waits until you leave that mode, with
 `<Esc>`, `CTRL-C` or `CTRL-\ CTRL-N`, so that its prompt never takes a key
 you type there.
@@ -603,7 +714,33 @@ claude.cmd		A list of at least one string. Default: `{ 'claude' }`
 			`--continue` or `--resume`, printing "Error:
 			--session-id can only be used with --continue or
 			--resume if --fork-session is also specified.", and
-			exits 1. A wrapper works: >lua
+			exits 1. A `--settings` in it, inline JSON or a file
+			(named from the directory Claude Code starts in), is
+			kept whole: aineo adds its session hooks after the
+			hooks it gives, writes the result to a file only you
+			can read and write, in Neovim's own temporary
+			directory, which Neovim removes when it exits, and
+			passes that file as its one `--settings`. Nothing of
+			your settings goes on Claude Code's command line.
+			aineo reads only a regular file, never a FIFO, a
+			directory or a device, and reads a file that begins
+			with a UTF-8 byte order mark, or holds nothing but
+			blanks, as Claude Code 2.1.292 does. When aineo cannot
+			read your settings, add to their `hooks` or write that
+			file, it passes your `--settings` as it is, Claude
+			Code starts without aineo's hooks, and aineo warns
+			once: a session switch inside Claude Code is then not
+			followed. |aineo-health| says why it could not. What
+			the file's lifetime means for teammates and background
+			sessions is in |aineo-limits|. A `--settings` that a
+			wrapper script adds itself is not among these words,
+			so aineo cannot see it. Claude Code 2.1.292 reads the
+			last `--settings` it is given: one the script adds
+			before aineo's words is overridden, and one it adds
+			after them, after `"$@"`, overrides aineo's hooks,
+			without a warning. Put it in `claude.cmd` instead.
+			Claude Code started through another program works,
+			its words all in the list: >lua
 			    vim.g.aineo = {
 			      claude = { cmd = { 'npx', '-y',
 			        '@anthropic-ai/claude-code' } },
@@ -667,7 +804,12 @@ after a Send of Input, the selection, where it was, after a Visual Send —
 wherever `\s` was typed, and while the changes pane hid Input. `u` restores
 Input only: the message has reached Claude. The draft the layout restores
 into Input (|aineo-draft|) is not undone: after a Send, `u` brings the text
-back and stops there. How many Sends `u` can reach is your 'undolevels'
+back and stops there. A switch of session, or a start of Claude Code on
+another session once it is ready (|aineo-claude-session|), puts that
+session's draft in Input, and no `u` reaches a Send or a change made before
+it. At an editor's first start, an Input that holds the draft the session
+takes already is left as it is, and `u` still reaches what you typed
+before. How many Sends `u` can reach is your 'undolevels'
 (|aineo-limits|).
 
 Claude Code counts as ready once its input box has shown, unbroken, for 1.5
@@ -677,18 +819,26 @@ aineo notices it could receive the paste and the Enter (|aineo-limits|).
 ==============================================================================
 8. THE AGENT REPORT                                             *aineo-report*
 
-aineo starts Claude Code with four additions of its own:
+aineo starts Claude Code with five additions of its own:
 - the session it resumes, or the id of a new one: `--resume` or
   `--session-id` (|aineo-claude-session|);
 - instructions appended to its system prompt, telling Claude when to call
   the report tool and how to write a report (below);
 - aineo's MCP server, which Claude Code runs as a headless `nvim`, given
   through `--mcp-config`;
+- a `SessionStart` and a `SessionEnd` hook, which Claude Code also runs as
+  a headless `nvim`, given through `--settings`: they tell the editor when
+  Claude Code switches session (|aineo-claude-session|). Claude Code
+  2.1.292 ran them beside a project's own hooks, not in their place.
+  aineo puts nothing else in `--settings`, and adds them after the hooks
+  of a `--settings` in `claude.cmd`, passing the two together in a file
+  only you can read (|aineo-config-claude.cmd|);
 - the report tool allowed without asking: `--allowedTools
   mcp__aineo__report`.
-The server is given this editor's address, |v:servername|, and relays each
-report to the editor there. Claude Code also gets `AINEO_CHILD=1` in its
-environment, so a Neovim started inside it never autostarts.
+The server and the hooks are given this editor's address, |v:servername|:
+the server relays each report to the editor there. Claude Code also gets
+`AINEO_CHILD=1` in its environment, so a Neovim started inside it never
+autostarts.
 
 A report holds a `task`, a `status` — `started`, `progress`, `blocked`,
 `done` or `failed` — a one-line `summary` and, optionally, `details`. The
@@ -838,12 +988,24 @@ AineoReportLink      a web link, linked to `Underlined`
                                                           *hl-AineoReportPath*
 AineoReportPath      a path to a file, linked to `Underlined`
 
-Reports are kept per working directory, under `stdpath('state')` in
-`aineo/reports/`, and shown again when aineo opens in that directory. The
-Report shows the newest 2 MiB of them; the file is cut back to its newest
-2 MiB once it passes 4 MiB. The working directory is the one of the first
-time the layout opened, for the editor's life; each new Claude Code starts in
-the working directory of its own moment.
+Reports are kept per Claude session, under `stdpath('state')` in
+`aineo/reports/`, one file for each session, named `session-` and the
+SHA-256 of its id. A report is kept under the session aineo follows when it
+arrives, and when aineo follows another session, the Report shows that
+session's reports in place of what it showed — none for a session with no
+reports. Two Neovims on one session share its reports. Until aineo follows
+a Claude session, the reports are the working directory's, in a file named
+by the directory's SHA-256, and are shown again when aineo opens in that
+directory. The first session aineo follows in an editor takes that file,
+when it has none of its own, and every report it held is that session's
+from then on. A directory's file written after that is taken by the next
+editor that first follows a session with no file of its own, and is not
+shown otherwise. A file that cannot be moved so is told once as a warning,
+and the session keeps its own. The Report shows the newest 2 MiB of a
+session's reports; its file is cut back to its newest 2 MiB once it
+passes 4 MiB. The working directory is the one of the first time the
+layout opened, for the editor's life; each new Claude Code starts in the
+working directory of its own moment.
 
 ==============================================================================
 9. THE AUTOSTART                                             *aineo-autostart*
@@ -899,6 +1061,14 @@ Claude Code ~
   process of its own holding its output open counts as running longer. A
   process it starts that leaves the group, by starting a session or a
   group of its own, is not killed and can outlive the check.
+  When `claude.cmd` gives a `--settings`, whether aineo can add its
+  session hooks to it, read from the editor's working directory as a
+  start reads it (|aineo-config-claude.cmd|): a warning naming why it
+  cannot — the file missing, not a regular file or unreadable, settings
+  that are not valid JSON or hold no object, `hooks` that are not an
+  object, a `SessionStart` or `SessionEnd` entry that is not a list, or
+  no value after the flag. Whether aineo can write the file it passes
+  them in is not checked.
 
 Server socket ~
   The address the editor listens at (|v:servername|); an error when it
@@ -951,11 +1121,51 @@ before aineo's that raises an error makes Neovim skip aineo's: Claude Code
 then only gets Neovim's hangup, and a Claude Code that hangs outlives the
 editor. aineo cannot detect this.
 
+Session switches ~
+aineo learns of a switch inside Claude Code from Claude Code's session
+hooks, which do not always run. Claude Code runs no hook in a folder until
+you answer its trust dialog. As its documentation reads, and neither was
+measured, it runs none of aineo's under a managed `allowManagedHooksOnly`,
+and none under a `disableAllHooks` in any of your settings. aineo gives
+Claude Code no hooks when it cannot read the `--settings` of `claude.cmd`
+(|aineo-config-claude.cmd|). aineo then hears of no switch, and the next
+start resumes the session aineo started. Not seen: what Claude Code does
+once a folder's trust dialog is answered "Yes"; and whether a `/fork`
+background copy, a conversation moved to the background or a subagent
+tells of a new session. aineo follows a new session only when Claude Code
+started it after ending the session aineo follows, so such a session,
+without that end, is not followed. The teammates and background sessions
+Claude Code 2.1.292 starts are given its `--settings`, aineo's hooks among
+them (read in its program, not run); aineo ignores every hook that ran
+after its Claude Code exited, so a session they start then is not
+followed either. A hook that cannot reach the editor tells it nothing;
+and once the end of the session aineo follows is lost, no later switch
+of that Claude Code is followed, until it starts again. Each hook starts
+a headless `nvim` and returns at once; that `nvim` tells the editor, waits
+for its answer, then exits: at once in an idle editor, and once you answer
+the prompt in an editor at a prompt.
+
+The settings file ~
+The file aineo writes for a `--settings` in `claude.cmd`
+(|aineo-config-claude.cmd|) is removed when Neovim exits, also on a hangup
+or SIGTERM. A Neovim killed by SIGKILL leaves it in its temporary
+directory, readable and writable by you alone (0600), your settings in it,
+secrets among them, until the system clears that directory. Each start of
+Claude Code writes one more, and none is removed before Neovim exits.
+Claude Code 2.1.292 reads the file once, when it starts, so its removal
+does not touch a running Claude Code. The teammates it starts and its
+background sessions, and their restarts, are started with the same
+`--settings` and read the file again at their own start: once Neovim has
+exited and removed it, such a start fails. Read in Claude Code's program,
+not run.
+
 The 80-column start ~
 At startup, a message longer than |v:echospace| — 68 columns on an 80-column
 screen — holds Neovim at a hit-enter prompt. aineo's line for a
 `claude.cmd` that is not executable fits for a command name of up to 29
-characters; a longer one, such as an absolute path, still prompts.
+characters; a longer one, such as an absolute path, still prompts. Its
+line for a `--settings` in `claude.cmd` that it cannot read fits; it says
+no more than that, not which file or why: |aineo-health| says why.
 
 Send and a dialog ~
 A permission dialog drawn in the few tens of milliseconds before aineo
@@ -1005,12 +1215,47 @@ The changes pane ~
   commits window lists every commit reachable from `HEAD` and not from the
   base.
 - A restart of Claude Code in another working directory keeps the first
-  repository and its base.
+  repository. A session whose base was kept for another repository, or
+  whose kept file aineo cannot open, takes `HEAD` as its base here, and
+  the files you save then are marked; this editor holds both until it
+  quits, a switch back included, and never keeps them: what was kept
+  stays as it was. A kept file that holds anything but what aineo
+  writes, one cut short say, counts as nothing kept, and is replaced. A
+  repository moved or renamed on disk counts as another, so its
+  sessions' bases are not read back there. A session whose base could
+  not be written is held until a write succeeds: aineo writes it again
+  as you follow the session again, and at each save. A kept base git no
+  longer has, garbage-collected say, is kept, and the pane says in git's
+  words that it cannot be read.
+- Two editors following one session in one repository keep the first
+  base kept for it, and each other's saves. A save the other editor keeps
+  between this editor's read of the kept file and its write is lost from
+  the file, though that editor still marks it: it is kept again when
+  that editor next saves a file it had not saved before. Between that
+  read and that write, the last base written wins too: the other editor
+  shows its own base until its next such save, and this editor's from
+  then on.
 - Where aineo cannot watch the working tree's subdirectories (Linux), the
   files window says so first: a change in a subdirectory shows at the next
   showing of the pane, save or commit, and a branch moved by
   `git update-ref` from another worktree is missed too. No timer reads the
   repository.
+- The other worktrees have no watch of their own. A file written in a
+  worktree outside your top level shows at the next change aineo's watch
+  sees in your repository — that worktree's `git add` or commit, a file
+  written inside your top level, your save — or the pane's next showing.
+  On Linux, a file written in a worktree inside your top level, a
+  worktree added or removed, and another worktree's commit may show only
+  then too (not measured there). Each worktree costs its reads, at every
+  read: on a small repository with five other worktrees, reading both
+  windows again took 0.7 to 1.6 seconds and 72 git processes, about a
+  fifth of a second of git for each worktree in each window, the two
+  windows read at once. Your own lines asked for during that read show
+  once the worktree being read is done, which a slow git there delays. A
+  worktree whose path holds a line break is listed, but its section says
+  only that its read failed: git gives that path on lines of its own.
+  Once a worktree's branch is merged by rebase, its commits stay listed
+  under it until the worktree is removed.
 - When the editor quits, aineo stops its watch, but a git it is running
   then runs to its end, outliving the editor.
 - A buffer named for a diff that aineo did not make, such as one a restored
@@ -1030,12 +1275,37 @@ Claude's window name ~
 - With `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` set to `1` in the environment
   Neovim started in, Claude Code sets no title, and Claude's window reads
   `Claude Code` for the whole session.
-- Not measured, and so not known to show: a title Claude Code generates
-  from your first prompt, a name `/rename` gives, the title after
-  `--resume`, and the glyph while Claude Code is busy. A glyph is left out
+- Claude Code 2.1.292 titles a session after its first turn, and the
+  name then follows the session: after an in-session `/resume` it is the
+  resumed session's title, and after `/branch` `{first prompt} (Branch)`.
+  Not measured, and so not known to show: a name `/rename` gives, the
+  title of a start with `--resume`, and the glyph while Claude Code is
+  busy. A glyph is left out
   when the title's first character is neither a letter nor a digit and a
   space or nothing follows it: a title `✳` alone reads `Claude Code`.
   Below U+0100 the letters are the ASCII and Latin-1 ones, `×` and `÷`
   not among them, whatever 'iskeyword' holds.
+
+The first follow's move ~
+- Where the file system refuses hard links — exFAT, FAT, some network and
+  FUSE mounts — or the working directory's draft or reports file is a
+  symbolic link, the first session aineo follows takes that draft and
+  those reports by looking for the session's file and then renaming the
+  directory's to it; a symbolic link stays one. Another Neovim that makes
+  that session's file between the look and the rename has it replaced.
+- An aineo older than sessions, in the same working directory, that
+  saves its draft in the instant between this editor's link of the
+  directory's draft to the session and its removal of the directory's
+  name has that save removed.
+
+A session's draft ~
+- What you type while Input shows a session whose draft cannot be read is
+  saved nowhere: aineo never replaces that draft, and a quit loses the
+  text. Making the file readable again does not save it either, until
+  Input is emptied and another session is followed.
+- An Input emptied — by Send, or by you — while its saves fail refuses
+  the next switch: it stays the session it followed, empty, and you are
+  told that Input keeps its text. Once the saves work again, what you
+  type is kept as that session's draft, not the new one's.
 
  vim:tw=78:ts=8:ft=help:norl:

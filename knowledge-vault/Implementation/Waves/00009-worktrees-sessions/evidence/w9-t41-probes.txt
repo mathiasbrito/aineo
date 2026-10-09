@@ -1,0 +1,369 @@
+T41 planning probes — a dead session handed to its replacement
+================================================================
+
+Taken 2026-10-08 by T41's planning agent (Claude, Opus 5.5), for the
+orchestrator, on dev 2fdda81 (code identical to dc5ff70: `git diff --stat
+dc5ff70 2fdda81 -- lua plugin tests scripts doc Makefile` prints nothing),
+Neovim 0.12.5, git 2.50.1, macOS arm64. Run as one mini.test file with
+`make test_file FILE=<the file>`, so every Neovim ran under the suite's
+isolation (every XDG directory, the log and CLAUDE_CONFIG_DIR under the
+checkout's .tests/). The real `claude` never ran: Claude Code is the
+suite's fake (tests/helpers/fake_claude.lua) with
+AINEO_FAKE_CLAUDE_CONVERSATIONS set, which answers a `--resume` of an id in
+which nothing was sent as Claude Code 2.1.283 did. Session ids below are
+the fake's random ones, or the two fixed ids X = 11111111-…-111111111111
+and Y = 22222222-…-222222222222.
+
+Each probe prints `PROBE <name>: <json>`. The file ran 5 cases,
+`Fails (0) and Notes (0)`, exit 0.
+
+P1 — the callbacks T19's fallback makes
+---------------------------------------
+A start on a new id (S), stopped by a hangup before anything was sent;
+then a start that resumes S, which finds no conversation, so the claude
+home starts a new id (R) in its place. Every callback noted with the
+milliseconds since the first start, a counter of main-loop ticks, what the
+claude home says inside it (`session_id()`, `session_status()`), and
+whether it ran in a fast event.
+
+Measured:
+- `on_terminal_replaced` and `on_session_switched` are called in the same
+  tick (2696 = 2696) and the same millisecond (3024 ms after the first
+  start; 1449 ms after the resume's own start at 1575 ms), in that order,
+  neither in a fast event.
+- Inside both, `session_id()` is already R, the new id, and
+  `session_status()` is `starting`.
+- `on_session_switched` gets id = R, source = `startup`, left = S (the id
+  that found no conversation), reason = nil.
+- R is ready 1547 ms after the fallback (4571 ms after the first start).
+
+P1b — `on_terminal_replaced` outside the fallback
+-------------------------------------------------
+The fake in its `exit` mode: a start, a restart in the same directory once
+it exited, then a start in another directory once that exited.
+
+Measured: `on_terminal_replaced` was never called. The restart in the same
+directory called nothing back. The start in another directory called
+`on_session_switched` with source `startup` and a `left` — the same source
+the fallback's switch has — and no `on_terminal_replaced` before it. So
+the source alone does not tell the fallback from a start elsewhere; the
+call of `on_terminal_replaced` just before it does.
+
+P2 — the strand at the report and draft homes, today
+----------------------------------------------------
+Both homes given an environment; a new buffer kept as Input; both follow X;
+"notes for the next prompt" typed in Input; one report received under X;
+then both follow Y, as T39 will at the fresh session's confirmation.
+
+Measured: Input after the follow of Y is empty (`[""]`); X's draft file
+still holds "notes for the next prompt\n"; Y has no draft file; the Report
+shows nothing (`[""]`); X's records file keeps its 1 record; Y has none.
+
+P2b — the strand at the changes home, today
+-------------------------------------------
+A fixture repository with one commit; the home begun there and following
+X; a second commit; a file saved from the editor; then a follow of Y.
+
+Measured: X's kept file holds the first commit as its base and the saved
+path `a.txt`, before and after the follow of Y. Y's kept file holds the
+commit HEAD names at the follow (the second) and no saved path.
+
+P3 — moving one session's file to another's
+-------------------------------------------
+T36's `records.move_records(from, to)` (lua/aineo/report/records.lua),
+which links `to` to `from` and unlinks `from`, renaming where a link is
+refused or `from` is a symbolic link; and a plain `vim.uv.fs_link()` then
+`fs_unlink()` of a kept base (lua/aineo/changes/kept.lua's file).
+
+Measured:
+- a, `to` missing: moved; `from` gone; no failure.
+- b, `to` present: neither touched (both files stay); no failure.
+- c, `from` unreadable (mode 000): moved by the link all the same; `to` is
+  mode 000 and unreadable; no failure. A link needs no read of the file.
+- d, `from` a symbolic link: renamed; `to` is the symbolic link; `from`
+  gone.
+- e, neither exists: nothing made; no failure.
+- f, a kept base linked to another session's name and the first name
+  removed: `kept.read_kept_base()` of the second session reads back the
+  whole record (top, base, saved), not unreadable; mode 600 kept.
+
+Counts on 2fdda81 (make test_file, each file alone)
+---------------------------------------------------
+tests/test_report_sessions.lua   47 cases  Fails (0) and Notes (0)
+tests/test_draft_sessions.lua    79 cases  Fails (0) and Notes (0)
+tests/test_changes_sessions.lua  61 cases  Fails (0) and Notes (0)
+
+The raw output
+--------------
+PROBE P1 events: [{"kind":"start_session called","fast":false,"ms":0,"tick":0},{"fast":false,"tick":0,"status":"starting","kind":"start_session returned","ms":7,"session_id":"e34dd48b-a865-4529-a700-310b59d37ca2"},{"status":"ready","ms":1570,"kind":"first ready","session_id":"e34dd48b-a865-4529-a700-310b59d37ca2"},{"fast":false,"tick":1414,"status":"exited","kind":"start_session called","ms":1575,"session_id":"e34dd48b-a865-4529-a700-310b59d37ca2"},{"fast":false,"tick":1414,"status":"starting","kind":"start_session returned","ms":1578,"session_id":"e34dd48b-a865-4529-a700-310b59d37ca2"},{"fast":false,"terminal":4,"tick":2696,"status":"starting","ms":3024,"kind":"on_terminal_replaced","session_id":"5b80197a-a448-4207-80b5-f6a151500c3b"},{"fast":false,"tick":2696,"id":"5b80197a-a448-4207-80b5-f6a151500c3b","session_id":"5b80197a-a448-4207-80b5-f6a151500c3b","ms":3024,"source":"startup","kind":"on_session_switched","status":"starting","reason":null,"left":"e34dd48b-a865-4529-a700-310b59d37ca2"},{"status":"ready","ms":4571,"kind":"replacement ready","session_id":"5b80197a-a448-4207-80b5-f6a151500c3b"}]
+PROBE P1 ids: {"first":"e34dd48b-a865-4529-a700-310b59d37ca2","third":"5b80197a-a448-4207-80b5-f6a151500c3b","second_resumes":"e34dd48b-a865-4529-a700-310b59d37ca2"}
+PROBE P1b kinds: [{"kind":"start_session called"},{"kind":"start_session returned"},{"kind":"start_session called"},{"kind":"start_session returned"},{"kind":"start_session called"},{"kind":"on_session_switched","id":"289edf7e-8ab7-45f4-9a66-62b3e37a8e15","left":"fba0fa47-c65a-4886-a204-604e479603c9","source":"startup"},{"kind":"start_session returned"}]
+PROBE P2 draft and report: {"report_lines_after":[""],"x_records_lines":1,"y_records":null,"input_after_follow_of_Y":[""],"x_draft":"notes for the next prompt\n","y_draft":null}
+PROBE P2b changes: {"x_kept_after":{"saved":["a.txt"]},"x_kept_before_follow_of_Y":{"base_is_first_commit":true,"saved":["a.txt"]},"y_kept_after":{"base_is_head_now":true,"saved":[]}}
+PROBE P3 moves: {"b":{"to":{"type":"file","mode":"644","nlink":1},"failure":null,"from":{"type":"file","mode":"644","nlink":1}},"d":{"to":{"type":"link","mode":"755","nlink":1},"failure":null,"from":null},"f":{"y_unreadable":false,"y_mode":{"type":"file","mode":"600","nlink":1},"x":null,"linked":true,"y":{"top":"/repo","base":"abc","saved":["a.txt"]}},"e":{"to":null,"failure":null},"a":{"to":{"type":"file","mode":"644","nlink":1},"failure":null,"from":null},"c":{"to":{"type":"file","mode":"0","nlink":1},"readable":false,"failure":null,"from":null}}
+
+The probe file
+--------------
+-- T41 planning probes, run with `make test_file FILE=<this file>` on dev 2fdda81.
+-- Each case prints what it measured as `PROBE <name>: <json>` on stderr.
+local MiniTest = require('mini.test')
+local children = dofile('tests/helpers/child.lua')
+local claude = dofile('tests/helpers/claude_session.lua')
+local fixture = dofile('tests/helpers/fixture.lua')
+local git_repo = dofile('tests/helpers/git_repo.lua')
+
+local child = MiniTest.new_child_neovim()
+
+local T = MiniTest.new_set({
+  hooks = {
+    pre_case = function()
+      children.restart(child)
+    end,
+    post_once = child.stop,
+  },
+})
+
+local function show(name, value)
+  io.stderr:write(('PROBE %s: %s\n'):format(name, vim.json.encode(value)))
+end
+
+-- P1. Which callbacks T19's fallback makes, in which order, in one tick or not, and what the
+-- claude home says inside each; then when the replacement is ready.
+local START_NOTING_ALL = [[
+  local helper, overrides = dofile(...), select(2, ...)
+  _G.events = _G.events or {}
+  _G.tick = _G.tick or 0
+  if not _G.ticking then
+    _G.ticking = true
+    local timer = vim.uv.new_timer()
+    timer:start(0, 1, vim.schedule_wrap(function() _G.tick = _G.tick + 1 end))
+  end
+  local function note(kind, extra)
+    local claude = require('aineo.claude')
+    table.insert(_G.events, vim.tbl_extend('force', {
+      kind = kind,
+      ms = math.floor(vim.uv.hrtime() / 1e6),
+      tick = _G.tick,
+      session_id = claude.session_id(),
+      status = claude.session_status(),
+      fast = vim.in_fast_event(),
+    }, extra or {}))
+  end
+  local settings = helper.stand_in_settings(overrides)
+  settings.on_terminal_replaced = function(terminal)
+    note('on_terminal_replaced', { terminal = terminal })
+  end
+  settings.on_session_switched = function(id, source, left, reason)
+    note('on_session_switched', { id = id, source = source, left = left, reason = reason or vim.NIL })
+  end
+  note('start_session called')
+  local buffer = require('aineo.claude').start_session(settings)
+  note('start_session returned')
+  vim.api.nvim_win_set_buf(0, buffer)
+  return buffer
+]]
+
+local function start_noting_all(fake, overrides)
+  child.lua('for name, value in pairs(...) do vim.env[name] = value end', { fake.environment })
+  return child.lua(START_NOTING_ALL, { vim.fs.joinpath(vim.fn.getcwd(), 'tests', 'helpers', 'claude_session.lua'), overrides })
+end
+
+local function poll_ready(label)
+  vim.wait(claude.PATIENCE_MS, function()
+    return child.lua_get("require('aineo.claude').session_status()") == 'ready'
+  end, 10)
+  child.lua(
+    [[table.insert(_G.events, { kind = ..., ms = math.floor(vim.uv.hrtime() / 1e6), status = require('aineo.claude').session_status(), session_id = require('aineo.claude').session_id() })]],
+    { label }
+  )
+end
+
+T['P1 fallback callbacks'] = function()
+  local fake = claude.fake('t41-p1', 'ready', {
+    AINEO_FAKE_CLAUDE_CONVERSATIONS = fixture.directory('t41-p1-conversations'),
+  })
+  local state = { state_directory = fixture.directory('t41-p1-state') }
+  local first = start_noting_all(fake, state)
+  claude.wait_for_start(fake)
+  poll_ready('first ready')
+  child.lua('vim.fn.jobstop(vim.bo[...].channel)', { first })
+  claude.wait_for_status(child, 'exited')
+  start_noting_all(fake, state)
+  claude.wait_for_starts(fake, 3)
+  vim.wait(claude.PATIENCE_MS, function()
+    return #vim.tbl_filter(function(event)
+      return event.kind == 'on_session_switched'
+    end, child.lua_get('_G.events')) >= 1
+  end, 10)
+  poll_ready('replacement ready')
+  local events = child.lua_get('_G.events')
+  local base = events[1].ms
+  for _, event in ipairs(events) do
+    event.ms = event.ms - base
+  end
+  show('P1 events', events)
+  show('P1 ids', {
+    first = claude.words_after(claude.start_arguments(fake, 1), '--session-id')[1],
+    second_resumes = claude.words_after(claude.start_arguments(fake, 2), '--resume')[1],
+    third = claude.words_after(claude.start_arguments(fake, 3), '--session-id')[1],
+  })
+end
+
+-- P1b. No on_terminal_replaced outside the fallback: a restart after an exit, and a start in
+-- another directory.
+T['P1b on_terminal_replaced elsewhere'] = function()
+  local fake = claude.fake('t41-p1b', 'exit')
+  local state = { state_directory = fixture.directory('t41-p1b-state') }
+  start_noting_all(fake, state)
+  claude.wait_for_status(child, 'exited')
+  start_noting_all(fake, state)
+  claude.wait_for_starts(fake, 2)
+  claude.wait_for_status(child, 'exited')
+  start_noting_all(fake, vim.tbl_extend('force', state, { cwd = fixture.directory('t41-p1b-elsewhere') }))
+  claude.wait_for_starts(fake, 3)
+  claude.wait_for_status(child, 'exited')
+  vim.wait(300)
+  show('P1b kinds', vim.tbl_map(function(event)
+    return { kind = event.kind, source = event.source, left = event.left, id = event.id }
+  end, child.lua_get('_G.events')))
+end
+
+-- P2. The strand at the homes, on dev: what a follow of the replacement does to the dead
+-- session's draft and records when the home followed it.
+local X = '11111111-1111-4111-8111-111111111111'
+local Y = '22222222-2222-4222-8222-222222222222'
+
+T['P2 draft and report strand'] = function()
+  local state = fixture.directory('t41-p2-state')
+  local result = child.lua(
+    [[
+    local state, X, Y = ...
+    local draft = require('aineo.draft')
+    local report = require('aineo.report')
+    draft.set_draft_environment({ state_directory = state, working_directory = '/t41/p2' })
+    report.set_report_environment({ clock = function() return '2026-10-08T10:00:00' end, state_directory = state, working_directory = '/t41/p2' })
+    local input = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_win_set_buf(0, input)
+    draft.keep_draft(input)
+    draft.follow_draft_session(X)
+    report.follow_report_session(X)
+    local shown = report.report_buffer()
+    vim.api.nvim_buf_set_lines(input, 0, -1, false, { 'notes for the next prompt' })
+    report.receive_report({ task = 'probe', status = 'done', summary = 'kept under X' })
+    local function file(kind, id)
+      return vim.fs.joinpath(state, 'aineo', kind, 'session-' .. vim.fn.sha256(id) .. (kind == 'drafts' and '.txt' or '.jsonl'))
+    end
+    local function read(path)
+      local f = io.open(path, 'rb')
+      if not f then return vim.NIL end
+      local text = f:read('*a')
+      f:close()
+      return text
+    end
+    draft.follow_draft_session(Y)
+    report.follow_report_session(Y)
+    return {
+      input_after_follow_of_Y = vim.api.nvim_buf_get_lines(input, 0, -1, false),
+      x_draft = read(file('drafts', X)),
+      y_draft = read(file('drafts', Y)),
+      report_lines_after = vim.api.nvim_buf_get_lines(shown, 0, -1, false),
+      x_records_lines = read(file('reports', X)) ~= vim.NIL and #vim.split(vim.trim(read(file('reports', X))), '\n') or 0,
+      y_records = read(file('reports', Y)),
+    }
+    ]],
+    { state, X, Y }
+  )
+  show('P2 draft and report', result)
+end
+
+T['P2b changes strand'] = function()
+  git_repo.start_editor(child)
+  local top = git_repo.create('t41-p2b', { ['a.txt'] = { 'a' } })
+  local state = fixture.directory('t41-p2b-state')
+  child.lua(
+    [[
+    local top = ...
+    local changes = require('aineo.changes')
+    changes.begin_session({ directory = top, show_diff = function() end })
+    local pane = changes.pane_buffers()
+    vim.api.nvim_win_set_buf(0, pane.files)
+    ]],
+    { top }
+  )
+  vim.wait(5000, function()
+    return child.lua_get([[vim.api.nvim_buf_get_lines(vim.fn.bufnr('aineo://changes-files'), 0, 1, false)[1] or '']]) ~= ''
+  end, 20)
+  child.lua("require('aineo.changes').follow_changes_session({ id = ..., state_directory = select(2, ...) })", { X, state })
+  vim.wait(500)
+  git_repo.write(top, 'a.txt', { 'a', 'changed' })
+  git_repo.commit_all(top, 'second')
+  child.lua("vim.cmd.edit(vim.fn.fnameescape(...)); vim.cmd.write()", { vim.fs.joinpath(top, 'a.txt') })
+  vim.wait(800)
+  local function kept(id)
+    local path = vim.fs.joinpath(state, 'aineo', 'changes-sessions', vim.fn.sha256(id) .. '.json')
+    local f = io.open(path, 'rb')
+    if not f then return vim.NIL end
+    local text = f:read('*a')
+    f:close()
+    return vim.json.decode(text)
+  end
+  local x_before = kept(X)
+  child.lua("require('aineo.changes').follow_changes_session({ id = ..., state_directory = select(2, ...) })", { Y, state })
+  vim.wait(1500)
+  local head = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local x_after, y_after = kept(X), kept(Y)
+  show('P2b changes', {
+    x_kept_before_follow_of_Y = x_before and { base_is_first_commit = x_before.base ~= head, saved = x_before.saved } or vim.NIL,
+    x_kept_after = x_after and { saved = x_after.saved } or vim.NIL,
+    y_kept_after = y_after and { base_is_head_now = y_after.base == head, saved = y_after.saved } or vim.NIL,
+  })
+end
+
+-- P3. A move of a session's file to another session's, by T36's records.move_records() and by a
+-- plain link of a kept base: to missing, to present, from unreadable, from a symbolic link.
+T['P3 moves'] = function()
+  local dir = fixture.directory('t41-p3')
+  local result = child.lua(
+    [[
+    local dir = ...
+    local records = require('aineo.report.records')
+    local function write(path, text, mode)
+      local f = assert(io.open(path, 'wb')); f:write(text); f:close()
+      if mode then vim.uv.fs_chmod(path, mode) end
+    end
+    local function state(path)
+      local s = vim.uv.fs_lstat(path)
+      return s and { type = s.type, mode = ('%o'):format(s.mode % 4096), nlink = s.nlink } or vim.NIL
+    end
+    local out = {}
+    -- a: to missing
+    write(dir .. '/a-from', 'x\n')
+    out.a = { failure = records.move_records(dir .. '/a-from', dir .. '/a-to') or vim.NIL, from = state(dir .. '/a-from'), to = state(dir .. '/a-to') }
+    -- b: to present
+    write(dir .. '/b-from', 'x\n'); write(dir .. '/b-to', 'y\n')
+    out.b = { failure = records.move_records(dir .. '/b-from', dir .. '/b-to') or vim.NIL, from = state(dir .. '/b-from'), to = state(dir .. '/b-to') }
+    -- c: from unreadable (mode 000)
+    write(dir .. '/c-from', 'x\n', tonumber('000', 8))
+    out.c = { failure = records.move_records(dir .. '/c-from', dir .. '/c-to') or vim.NIL, from = state(dir .. '/c-from'), to = state(dir .. '/c-to'), readable = vim.uv.fs_access(dir .. '/c-to', 'R') }
+    vim.uv.fs_chmod(dir .. '/c-to', tonumber('600', 8))
+    -- d: from a symbolic link
+    write(dir .. '/d-target', 'x\n'); vim.uv.fs_symlink(dir .. '/d-target', dir .. '/d-from')
+    out.d = { failure = records.move_records(dir .. '/d-from', dir .. '/d-to') or vim.NIL, from = state(dir .. '/d-from'), to = state(dir .. '/d-to') }
+    -- e: neither exists
+    out.e = { failure = records.move_records(dir .. '/e-from', dir .. '/e-to') or vim.NIL, to = state(dir .. '/e-to') }
+    -- f: a kept base linked to another session's name is read back whole
+    local kept = require('aineo.changes.kept')
+    local X, Y = '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'
+    kept.keep_base(dir, X, { top = '/repo', base = 'abc', saved = { 'a.txt' } })
+    local linked = vim.uv.fs_link(kept.kept_base_file(dir, X), kept.kept_base_file(dir, Y))
+    vim.uv.fs_unlink(kept.kept_base_file(dir, X))
+    local y, y_unreadable = kept.read_kept_base(dir, Y)
+    out.f = { linked = linked or vim.NIL, y = y or vim.NIL, y_unreadable = y_unreadable, x = state(kept.kept_base_file(dir, X)), y_mode = state(kept.kept_base_file(dir, Y)) }
+    return out
+    ]],
+    { dir }
+  )
+  show('P3 moves', result)
+end
+
+return T

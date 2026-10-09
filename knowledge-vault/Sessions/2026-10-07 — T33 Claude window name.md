@@ -237,4 +237,17 @@ From the re-measure of PR #129 after its fix round (four low findings), by the o
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by wave 8's knowledge pass. PR #129 merged by rebase on 2026-10-07 (03:24 UTC; 05:24 CEST), after T34 and T32; `dev` `f98bd9d`, whose tree is the tree of the pull request's last head `4025019` (`git diff --stat 4025019 f98bd9d` prints nothing). The orchestrator's verification ran on `70ca22f`; the correction after it changed tests and docs only. Released in `v0.2.15` with T32 and T34 (PR #130, squash-merged into `main` as `f9cec19`, whose tree is `dev` `f98bd9d`'s).
+
+The packet rebased its branch onto `dev` `b6230c7` once T32 and T34 had merged (*Verification*, above), so the packet's hashes below are the rebased ones; its mutant table names the tree before the rebase, `d10b382`. The first three are the packet's, the next three the fix round's, the last two the bounded correction's, after the re-measure.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `3103e6f` | `cca919a` | Name Claude's window by the session and its folder |
+| `37d3ab6` | `7058084` | Pin the empty title's redraw in an editor with a user interface |
+| `5285847` | `3618573` | Record T33's session: the window's name, its tests and mutants |
+| `c5c4941` | `a0e4034` | Draw Claude's window name as written, and forget it at exit |
+| `e97fea2` | `1cc84df` | Read a wiped terminal's raise as data, not as a harness error |
+| `70ca22f` | `3ffe8ba` | Record T33's fix round and correct its packet-round records |
+| `8cb3cc9` | `f188af3` | Pin the status line's cut and the Latin-1 letters, narrow as-written |
+| `4025019` | `f98bd9d` | Record T33's correction: the cut, the Latin-1 rows, the time |

@@ -1,0 +1,198 @@
+Probes behind the Learnings drawn from wave 8 (T32, T33, T34) by its knowledge pass, on 2026-10-07,
+macOS arm64, on the branch knowledge/w8-landed cut from dev's f98bd9d. Each ran in a bare Neovim 0.12.5,
+`nvim --clean --headless -i NONE -l <probe>`, with every XDG home and the log under a scratch directory
+(run.sh, below). The real `claude` never ran. In the terminal names the probe folder is written <probe folder>.
+
+==== run.sh ====
+#!/bin/sh
+# Runs one probe in a bare, isolated Neovim: every XDG home and the log under ./xdg.
+here=$(cd "$(dirname "$0")" && pwd)
+mkdir -p "$here/xdg"
+export XDG_STATE_HOME="$here/xdg/state" XDG_DATA_HOME="$here/xdg/data"
+export XDG_CACHE_HOME="$here/xdg/cache" XDG_CONFIG_HOME="$here/xdg/config"
+export NVIM_LOG_FILE="$here/xdg/nvim.log"
+unset NVIM NVIM_APPNAME MYVIMRC VIMINIT
+cd "$here" && exec nvim --clean --headless -i NONE -l "$1"
+
+==== probe-statusline-expr.lua ====
+-- Re-run 2026-10-07 by the correction to PR #131, with a %{%…%} row for each name and the
+-- name "100% done" added (the records review of PR #131, finding 1); the other rows are unchanged.
+-- What a %{} status-line item draws for a name of digits alone, or one that begins
+-- with a comma or a space, against a %{%…%} item and a %! expression returning the same text.
+local function show(label, statusline)
+  local drawn = vim.api.nvim_eval_statusline(statusline, { maxwidth = 80 }).str
+  print(string.format('%-34s %-48s -> %q', label, statusline, drawn))
+end
+
+local names = { '0042', '99999999999', '12345678901234567890', ',draft', ' draft', 'draft', '100% done' }
+for _, name in ipairs(names) do
+  vim.g.probe_name = name
+  show(string.format('%%{} at start, name %q', name), "%{g:probe_name} — folder")
+  show(string.format('%%{} after text, name %q', name), "x %{g:probe_name} — folder")
+  show(string.format('%%{%%…%%} at start, name %q', name), "%{%g:probe_name%} — folder")
+  _G.probe_expression = function()
+    return (name:gsub('%%', '%%%%')) .. ' — folder'
+  end
+  show(string.format('%%! expression, name %q', name), '%!v:lua.probe_expression()')
+end
+print('nvim ' .. tostring(vim.version()))
+---- its output ----
+%{} at start, name "0042"          %{g:probe_name} — folder                       -> "42 — folder"
+%{} after text, name "0042"        x %{g:probe_name} — folder                     -> "x 42 — folder"
+%{%…%} at start, name "0042"     %{%g:probe_name%} — folder                     -> "42 — folder"
+%! expression, name "0042"         %!v:lua.probe_expression()                       -> "0042 — folder"
+%{} at start, name "99999999999"   %{g:probe_name} — folder                       -> "1215752191 — folder"
+%{} after text, name "99999999999" x %{g:probe_name} — folder                     -> "x 1215752191 — folder"
+%{%…%} at start, name "99999999999" %{%g:probe_name%} — folder                     -> "1215752191 — folder"
+%! expression, name "99999999999"  %!v:lua.probe_expression()                       -> "99999999999 — folder"
+%{} at start, name "12345678901234567890" %{g:probe_name} — folder                       -> " — folder"
+%{} after text, name "12345678901234567890" x %{g:probe_name} — folder                     -> "x  — folder"
+%{%…%} at start, name "12345678901234567890" %{%g:probe_name%} — folder                     -> " — folder"
+%! expression, name "12345678901234567890" %!v:lua.probe_expression()                       -> "12345678901234567890 — folder"
+%{} at start, name ",draft"        %{g:probe_name} — folder                       -> "draft — folder"
+%{} after text, name ",draft"      x %{g:probe_name} — folder                     -> "x draft — folder"
+%{%…%} at start, name ",draft"   %{%g:probe_name%} — folder                     -> "draft — folder"
+%! expression, name ",draft"       %!v:lua.probe_expression()                       -> ",draft — folder"
+%{} at start, name " draft"        %{g:probe_name} — folder                       -> "draft — folder"
+%{} after text, name " draft"      x %{g:probe_name} — folder                     -> "x  draft — folder"
+%{%…%} at start, name " draft"   %{%g:probe_name%} — folder                     -> "draft — folder"
+%! expression, name " draft"       %!v:lua.probe_expression()                       -> " draft — folder"
+%{} at start, name "draft"         %{g:probe_name} — folder                       -> "draft — folder"
+%{} after text, name "draft"       x %{g:probe_name} — folder                     -> "x draft — folder"
+%{%…%} at start, name "draft"    %{%g:probe_name%} — folder                     -> "draft — folder"
+%! expression, name "draft"        %!v:lua.probe_expression()                       -> "draft — folder"
+%{} at start, name "100% done"     %{g:probe_name} — folder                       -> "100% done — folder"
+%{} after text, name "100% done"   x %{g:probe_name} — folder                     -> "x 100% done — folder"
+%{%…%} at start, name "100% done" %{%g:probe_name%} — folder                     -> "100done — folder"
+%! expression, name "100% done"    %!v:lua.probe_expression()                       -> "100% done — folder"
+nvim 0.12.5
+
+==== probe-breakindent-min.lua ====
+-- Where a wrapped Report line continues, by window width, under 'breakindentopt'
+-- list:-1 (Neovim's default min:20 in force), list:-1,min:10 and list:-1,min:0.
+-- Line 1 is a header, line 2 a details item: six spaces, "- ", then words.
+local header = '09:05 [progress] ' .. string.rep('word ', 12)
+local item = '      - ' .. string.rep('word ', 12)
+vim.o.columns = 120
+vim.o.lines = 60
+local buffer = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_buf_set_lines(buffer, 0, -1, false, { header, item })
+vim.bo[buffer].formatlistpat = [[^\(\d\d:\d\d \|      - \)]]
+vim.cmd('vsplit')
+local window = vim.api.nvim_get_current_win()
+vim.api.nvim_win_set_buf(window, buffer)
+for _, option in ipairs({ 'wrap', 'linebreak', 'breakindent' }) do
+  vim.wo[window][0][option] = true
+end
+
+--- The column, counted from the window's first, where the first wrapped row of
+--- `line` begins; "none" when the line does not wrap.
+local function continuation_column(line)
+  local text = vim.api.nvim_buf_get_lines(buffer, line - 1, line, false)[1]
+  local first_row = vim.fn.screenpos(window, line, 1).row
+  for byte = 1, #text do
+    local position = vim.fn.screenpos(window, line, byte)
+    if position.row > first_row then
+      return tostring(position.col - vim.fn.win_screenpos(window)[2] + 1)
+    end
+  end
+  return 'none'
+end
+
+for _, value in ipairs({ 'list:-1', 'list:-1,min:10', 'list:-1,min:0' }) do
+  vim.wo[window][0].breakindentopt = value
+  local row = {}
+  for _, width in ipairs({ 12, 16, 17, 18, 20, 24, 26, 27, 28, 40 }) do
+    vim.api.nvim_win_set_width(window, width)
+    vim.cmd('redraw')
+    table.insert(row, string.format('%d:%s/%s', width, continuation_column(1), continuation_column(2)))
+  end
+  io.stdout:write(string.format('%-16s %s\n', value, table.concat(row, '  ')))
+end
+io.stdout:write('width:header/item columns; nvim ' .. tostring(vim.version()) .. '\n')
+---- its output ----
+list:-1          12:1/1  16:1/1  17:1/1  18:1/1  20:1/1  24:5/5  26:7/7  27:7/8  28:7/9  40:7/9
+list:-1,min:10   12:3/3  16:7/7  17:7/8  18:7/9  20:7/9  24:7/9  26:7/9  27:7/9  28:7/9  40:7/9
+list:-1,min:0    12:7/9  16:7/9  17:7/9  18:7/9  20:7/9  24:7/9  26:7/9  27:7/9  28:7/9  40:7/9
+width:header/item columns; nvim 0.12.5
+
+==== probe-unentered-window.lua ====
+-- Which buffer events fire, and in which window, when a buffer is shown in a
+-- window nobody enters: nvim_open_win(…, false), and nvim_win_set_buf() on a
+-- window that is not current.
+local buffer = vim.api.nvim_create_buf(false, true)
+local events = {}
+for _, event in ipairs({ 'BufEnter', 'BufWinEnter', 'WinEnter' }) do
+  vim.api.nvim_create_autocmd(event, {
+    callback = function(args)
+      if args.buf == buffer then
+        table.insert(events, string.format('%s current=%d', event, vim.api.nvim_get_current_win()))
+      end
+    end,
+  })
+end
+
+local function report(label)
+  io.stdout:write(string.format('%-44s current=%d events: %s\n', label, vim.api.nvim_get_current_win(),
+    #events > 0 and table.concat(events, ', ') or '(none)'))
+  events = {}
+end
+
+local start = vim.api.nvim_get_current_win()
+local opened = vim.api.nvim_open_win(buffer, false, { split = 'above', win = -1 })
+report(string.format('nvim_open_win(…, false) -> window %d', opened))
+
+vim.cmd('vsplit')
+local other = vim.api.nvim_get_current_win()
+vim.api.nvim_set_current_win(start)
+vim.api.nvim_win_set_buf(other, buffer)
+report(string.format('nvim_win_set_buf(%d, …) from window %d', other, start))
+
+vim.api.nvim_set_current_win(opened)
+report(string.format('nvim_set_current_win(%d)', opened))
+io.stdout:write('nvim ' .. tostring(vim.version()) .. '\n')
+---- its output ----
+nvim_open_win(…, false) -> window 1001     current=1000 events: BufWinEnter current=1001
+nvim_win_set_buf(1002, …) from window 1000 current=1000 events: BufEnter current=1002, BufWinEnter current=1002
+nvim_set_current_win(1001)                   current=1001 events: WinEnter current=1001, BufEnter current=1001
+nvim 0.12.5
+
+==== probe-empty-title.lua ====
+-- What a terminal program's title does to b:term_title, TermRequest and a
+-- dictionary watcher on the terminal's b:, for a title and then an empty one.
+local log = {}
+local started = vim.uv.hrtime()
+local function note(text)
+  table.insert(log, string.format('%5d ms  %s', (vim.uv.hrtime() - started) / 1e6, text))
+end
+
+local buffer = vim.api.nvim_get_current_buf()
+vim.api.nvim_create_autocmd('TermRequest', {
+  buffer = buffer,
+  callback = function(args)
+    note('TermRequest ' .. vim.inspect(args.data.sequence))
+  end,
+})
+_G.probe_watcher = function(_, key, change)
+  note(string.format('watcher %s: %s -> %s', key, vim.inspect(change.old), vim.inspect(change.new)))
+end
+vim.cmd([[call dictwatcheradd(b:, 'term_title', {d, k, z -> v:lua.probe_watcher(d, k, z)})]])
+
+local script = [[printf '\033]0;One\007'; sleep 0.4; printf '\033]0;\007'; sleep 0.4]]
+local job = vim.fn.jobstart({ 'sh', '-c', script }, { term = true })
+note('started, b:term_title = ' .. vim.inspect(vim.b[buffer].term_title))
+vim.fn.jobwait({ job }, 3000)
+vim.wait(300)
+note('ended, b:term_title = ' .. vim.inspect(vim.b[buffer].term_title))
+for _, line in ipairs(log) do
+  io.stdout:write(line .. '\n')
+end
+io.stdout:write('nvim ' .. tostring(vim.version()) .. '\n')
+---- its output ----
+    4 ms  watcher term_title: nil -> "term://<probe folder>//55996:/bin/sh"
+    5 ms  started, b:term_title = "term://<probe folder>//55996:/bin/sh"
+    7 ms  watcher term_title: "term://<probe folder>//55996:/bin/sh" -> "One"
+  420 ms  watcher term_title: "One" -> ""
+  834 ms  TermRequest "\27]0;One"
+ 1136 ms  ended, b:term_title = ""
+nvim 0.12.5

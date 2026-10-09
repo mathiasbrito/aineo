@@ -20,7 +20,18 @@ local M = {}
 ---@type aineo.report.Environment?
 local environment
 
---- The Report buffer and the records file it shows, once it is created.
+--- The Claude session whose records the Report shows, once the home is told
+--- one (`follow_report_session()`).
+---@type string?
+local followed_session
+
+--- Whether the home has tried to move the working directory's records to
+--- the first session it followed (`move_directory_records_once()`).
+local directory_records_moved = false
+
+--- The Report buffer, once it is created, and the records file reports are
+--- kept in, which it shows once a swap that waits for `SafeState` lands
+--- (`show_followed_records()`).
 ---@type { buffer: integer, records_file: string }?
 local report_view
 
@@ -36,25 +47,6 @@ M.report_schema = format.report_schema
 --- call the report tool, given the tool's name
 --- (`instructions.report_instructions()`).
 M.report_instructions = instructions.report_instructions
-
---- Gives the report home what it reads from the editor: the clock, called
---- for each report received, and the state and working directories, read
---- when the Report buffer is first created. The working directory is read
---- again whenever the Report shows reports, to find the files their relative
---- paths name, and at each double-click on a path, to open its file. The
---- composition root calls it before anything else in the home is used.
----
---- Raises an error naming the field when `report_environment` is not an
---- environment.
----
----@param report_environment aineo.report.Environment
-function M.set_report_environment(report_environment)
-  vim.validate('environment', report_environment, 'table')
-  vim.validate('environment.clock', report_environment.clock, 'function')
-  vim.validate('environment.state_directory', report_environment.state_directory, 'string')
-  vim.validate('environment.working_directory', report_environment.working_directory, 'string')
-  environment = report_environment
-end
 
 --- The environment `set_report_environment()` gave the home.
 ---
@@ -78,6 +70,62 @@ local function warn_later(message)
   vim.schedule(function()
     vim.notify(message, vim.log.levels.WARN)
   end)
+end
+
+--- The records file reports are kept in, in `current`: the followed
+--- session's, or the working directory's before the home follows one.
+---
+---@param current aineo.report.Environment
+---@return string
+local function kept_records_file(current)
+  if followed_session then
+    return records.session_records_file(current.state_directory, followed_session)
+  end
+  return records.records_file(current.state_directory, current.working_directory)
+end
+
+--- Moves the working directory's records, in `current`, to the followed
+--- session the first time it is called (`records.move_records()`), and
+--- tells the user, once, when they could not be moved.
+---
+---@param current aineo.report.Environment
+local function move_directory_records_once(current)
+  if directory_records_moved then
+    return
+  end
+  directory_records_moved = true
+  local failure = records.move_records(
+    records.records_file(current.state_directory, current.working_directory),
+    kept_records_file(current)
+  )
+  if failure then
+    warn_later(failure)
+  end
+end
+
+--- Gives the report home what it reads from the editor: the clock, called
+--- for each report received, and the state and working directories, read
+--- when the Report buffer is first created. The working directory is read
+--- again whenever the Report shows reports, to find the files their relative
+--- paths name, and at each double-click on a path, to open its file. The
+--- composition root calls it before anything else in the home is used but
+--- `follow_report_session()`, whose session it then holds: when the home
+--- follows a session already, the working directory's records are moved to
+--- it now (`move_directory_records_once()`).
+---
+--- Raises an error naming the field when `report_environment` is not an
+--- environment.
+---
+---@param report_environment aineo.report.Environment
+function M.set_report_environment(report_environment)
+  vim.validate('environment', report_environment, 'table')
+  vim.validate('environment.clock', report_environment.clock, 'function')
+  vim.validate('environment.state_directory', report_environment.state_directory, 'string')
+  vim.validate('environment.working_directory', report_environment.working_directory, 'string')
+  environment = report_environment
+  if followed_session then
+    move_directory_records_once(environment)
+  end
 end
 
 --- The records kept in `records_file`, and how many of its lines were
@@ -217,25 +265,27 @@ local function show_records(report_buffer, records_file)
 end
 
 --- A new Report buffer showing the records kept in `records_file`, showing
---- them again when the user edits it anew (`:edit`), and opening the file a
---- path it draws names when the user double-clicks the path
---- (`open_drawn_path()`).
+--- the records of the file the home keeps reports in then when the user
+--- edits it anew (`:edit`), and opening the file a path it draws names when
+--- the user double-clicks the path (`open_drawn_path()`).
 ---
 ---@param records_file string
 ---@return integer
 local function open_report_buffer(records_file)
   local report_buffer = buffer.create_report_buffer(function(emptied)
-    show_records(emptied, records_file)
+    show_records(emptied, report_view.records_file)
   end, open_drawn_path)
   show_records(report_buffer, records_file)
   return report_buffer
 end
 
 --- The Report buffer, created on first use, when it shows every record kept
---- for the environment's working directory. Reports received later are kept
---- for that same directory. When the user has unloaded, deleted or wiped out
---- the Report, or shown a deleted one again as an ordinary buffer, it is
---- created again, with every record; a buffer holding its name gives it up,
+--- for the session the home follows (`follow_report_session()`), or, before
+--- it follows one, for the environment's working directory; reports received
+--- later are kept there too, until the home follows another session. When
+--- the user has unloaded, deleted or wiped out the Report, or shown a deleted
+--- one again as an ordinary buffer, it is created again, with every record of
+--- the file reports are kept in then; a buffer holding its name gives it up,
 --- and is wiped out unless the user changed its text.
 ---
 --- Raises an error until `set_report_environment()` was called.
@@ -244,13 +294,69 @@ end
 function M.report_buffer()
   local current = current_environment()
   if not report_view then
-    local records_file = records.records_file(current.state_directory, current.working_directory)
+    local records_file = kept_records_file(current)
     report_view = { buffer = open_report_buffer(records_file), records_file = records_file }
   elseif not buffer.is_showing(report_view.buffer) then
     buffer.discard(report_view.buffer)
     report_view.buffer = open_report_buffer(report_view.records_file)
   end
   return report_view.buffer
+end
+
+--- The code of the error Neovim raises for a change of text while textlock
+--- holds (`:h textlock`).
+local TEXTLOCK_REFUSAL = 'E565:'
+
+--- Empties `report_buffer`, whether or not the user may edit it, leaving
+--- `'modifiable'` as it found it, and returns whether it was emptied: it is
+--- not when Neovim refuses the change while textlock holds. Any other error
+--- the change raises is raised again.
+---
+---@param report_buffer integer
+---@return boolean emptied
+local function empty_report(report_buffer)
+  local modifiable = vim.bo[report_buffer].modifiable
+  vim.bo[report_buffer].modifiable = true
+  local emptied, failure = pcall(vim.api.nvim_buf_set_lines, report_buffer, 0, -1, false, {})
+  vim.bo[report_buffer].modifiable = modifiable
+  if not emptied and not tostring(failure):find(TEXTLOCK_REFUSAL, 1, true) then
+    error(failure, 0)
+  end
+  return emptied
+end
+
+--- Whether the Report waits for the editor's next `SafeState` to show the
+--- followed session's records (`show_followed_records()`).
+local followed_records_waiting = false
+
+--- Shows the records of the session the home follows in the Report, in
+--- place of what it shows, while it can show reports (`buffer.is_showing()`).
+--- When Neovim refuses the change, as it does while textlock holds, they are
+--- shown at the editor's next `SafeState`, once whatever was refused
+--- meanwhile, from the records file the home keeps reports in then. That
+--- retry is in the group `aineo.report`: clearing the group while it waits
+--- (`:autocmd! aineo.report`) drops it, and the Report then shows what it
+--- showed, and no later follow shows another session's records in it, for
+--- the editor's life; reports are kept in the followed session's file
+--- still.
+local function show_followed_records()
+  if followed_records_waiting or not buffer.is_showing(report_view.buffer) then
+    return
+  end
+  if empty_report(report_view.buffer) then
+    show_records(report_view.buffer, report_view.records_file)
+    return
+  end
+  followed_records_waiting = true
+  vim.api.nvim_create_autocmd('SafeState', {
+    group = vim.api.nvim_create_augroup('aineo.report', { clear = false }),
+    once = true,
+    desc = "aineo: show the followed session's reports once the editor allows it",
+    callback = function()
+      followed_records_waiting = false
+      show_followed_records()
+    end,
+  })
 end
 
 --- Shows `arguments`, a report, at the end of the Report buffer, moves every
@@ -295,6 +401,43 @@ function M.receive_report(arguments)
     warn_later(failure)
     error(failure, 0)
   end
+end
+
+--- Follows the Claude session `session_id`: keeps every report received
+--- from then on in that session's records file
+--- (`records.session_records_file()`), and shows its records in the
+--- Report in place of what it showed (`show_followed_records()`) — none
+--- for a session with no records. Following the session it follows already
+--- changes nothing, the Report's lines and cursor included.
+---
+--- The first session the home follows in an editor takes the working
+--- directory's records, when that session has none (`records.move_records()`):
+--- they become its own, and the directory's file is gone. A later follow in
+--- that editor moves nothing. A move that fails is told to the user, and
+--- the session's own file is used.
+---
+--- A session told before `set_report_environment()` is held: the
+--- environment, once given, moves the directory's records to it, and the
+--- Report, once created, shows its records.
+---
+--- Raises an error naming `session_id` when it is not a string.
+---
+---@param session_id string
+function M.follow_report_session(session_id)
+  vim.validate('session_id', session_id, 'string')
+  if session_id == followed_session then
+    return
+  end
+  followed_session = session_id
+  if not environment then
+    return
+  end
+  move_directory_records_once(environment)
+  if not report_view then
+    return
+  end
+  report_view.records_file = kept_records_file(environment)
+  show_followed_records()
 end
 
 return M

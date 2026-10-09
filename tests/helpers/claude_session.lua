@@ -46,10 +46,10 @@ function M.deaf_fake_command()
 end
 
 --- The session's settings a test starts it with: the fake's command, the
---- editor's working directory and state directory, and stand-ins for the MCP
---- servers, the tools to pre-allow and the instructions the composition root
---- hands over — one server with variables and one with none — overridden key
---- by key by `overrides`.
+--- editor's working directory, state directory, server address and program,
+--- and stand-ins for the MCP servers, the tools to pre-allow and the
+--- instructions the composition root hands over — one server with variables
+--- and one with none — overridden key by key by `overrides`.
 ---
 ---@param overrides? table
 ---@return table
@@ -58,6 +58,8 @@ function M.stand_in_settings(overrides)
     cmd = M.fake_command(),
     cwd = vim.fn.getcwd(),
     state_directory = vim.fn.stdpath('state'),
+    editor_address = vim.v.servername,
+    editor_program = vim.v.progpath,
     mcp_servers = {
       aineo = {
         type = 'stdio',
@@ -193,6 +195,141 @@ function M.start_again_noting_replacements(child, overrides)
     ]],
     { THIS_FILE, overrides or vim.empty_dict() }
   )
+end
+
+--- The Lua, run in a child, that starts the session with the stand-in
+--- settings overridden by `...`'s second value and an `on_session_switched`
+--- that appends each switch it is told of to `_G.session_switches`, emptied
+--- first, as `{ id, source, left, reason }`; and returns its terminal.
+local START_NOTING_SWITCHES = [[
+  local helper, overrides = dofile(...), select(2, ...)
+  _G.session_switches = {}
+  local settings = helper.stand_in_settings(overrides)
+  settings.on_session_switched = function(id, source, left, reason)
+    table.insert(_G.session_switches, { id = id, source = source, left = left, reason = reason })
+  end
+  return require('aineo.claude').start_session(settings)
+]]
+
+--- Starts the session in `child` as `start()` does — `fake`'s environment
+--- set, its terminal shown in the current window — with an
+--- `on_session_switched` that notes each switch in the child's
+--- `_G.session_switches` (`wait_for_session_switches()`); returns its terminal.
+---
+---@param child table
+---@param fake { environment: table<string, string> }
+---@param overrides? table
+---@return integer
+function M.start_noting_switches(child, fake, overrides)
+  child.lua('for name, value in pairs(...) do vim.env[name] = value end', { fake.environment })
+  local buffer = M.start_again_noting_switches(child, overrides)
+  child.api.nvim_win_set_buf(0, buffer)
+  return buffer
+end
+
+--- Calls `start_session()` in `child` once more, as `start_again()` does,
+--- with an `on_session_switched` that notes each switch in the child's
+--- `_G.session_switches`, emptied first (`wait_for_session_switches()`); returns what
+--- `start_session()` returns.
+---
+---@param child table
+---@param overrides? table
+---@return integer
+function M.start_again_noting_switches(child, overrides)
+  return child.lua(START_NOTING_SWITCHES, { THIS_FILE, overrides or vim.empty_dict() })
+end
+
+--- The switches `on_session_switched` has noted in `child` (`start_noting_switches()`),
+--- each `{ id, source, left, reason }`, once there are `count` of them —
+--- waiting for that at most `PATIENCE_MS` — or when the wait runs out.
+---
+---@param child table
+---@param count integer
+---@return table[]
+function M.wait_for_session_switches(child, count)
+  local switches
+  vim.wait(M.PATIENCE_MS, function()
+    switches = child.lua_get('_G.session_switches')
+    return #switches >= count
+  end, 20)
+  return switches
+end
+
+--- The id of the session `child`'s Claude home follows now
+--- (`aineo.claude`'s `session_id()`), or `vim.NIL` when it follows none.
+---
+---@param child table
+---@return string|userdata
+function M.followed_session_id(child)
+  return child.lua_get("require('aineo.claude').session_id()")
+end
+
+--- What Claude Code writes on a session hook's stdin for `event`: the
+--- session's id, and its source (`SessionStart`) or reason (`SessionEnd`),
+--- beside the other fields every hook's input has (the hooks page of Claude
+--- Code's documentation); M1, Claude Code 2.1.292, measured the sources and
+--- reasons, not the whole input.
+---
+---@param event 'SessionStart'|'SessionEnd'
+---@param session_id string
+---@param cause string
+---@return string
+function M.hook_input(event, session_id, cause)
+  return vim.json.encode({
+    session_id = session_id,
+    transcript_path = '/tmp/aineo-fake-claude/' .. session_id .. '.jsonl',
+    cwd = vim.fn.getcwd(),
+    hook_event_name = event,
+    [event == 'SessionStart' and 'source' or 'reason'] = cause,
+  })
+end
+
+--- The command of the `event` hook in the `--settings` the fake's `count`th
+--- start was given, once it has started that many times.
+---
+---@param fake { record: string }
+---@param count integer
+---@param event string
+---@return string
+function M.hook_command(fake, count, event)
+  local given = M.words_after(M.start_arguments(fake, count), '--settings')[1]
+  return vim.json.decode(given).hooks[event][1].hooks[1].command
+end
+
+--- Runs the `event` hook of the fake's `count`th start as Claude Code runs a
+--- command hook: its command through `sh -c`, with `input` on stdin and the
+--- address of `child`, the editor Claude Code runs in, as `NVIM`; returns
+--- how it ended, once it has.
+---
+---@param child table
+---@param fake { record: string }
+---@param count integer
+---@param event string
+---@param input string such as `hook_input()` makes
+---@return vim.SystemCompleted
+function M.run_session_hook(child, fake, count, event, input)
+  local command = M.hook_command(fake, count, event)
+  local options = { stdin = input, env = { NVIM = child.v.servername } }
+  return vim.system({ 'sh', '-c', command }, options):wait(M.PATIENCE_MS)
+end
+
+--- Waits, at most `PATIENCE_MS`, until no hook relay delivers to `child`
+--- any more — a deliverer ends once `child` has handled its notification —
+--- and then until `child` has run the callbacks scheduled before that, the
+--- work of every notification handled among them.
+---
+---@param child table
+function M.wait_for_deliveries(child)
+  local delivering = { 'pgrep', '-f', '--', '--deliver ' .. child.v.servername }
+  vim.wait(M.PATIENCE_MS, function()
+    return vim.system(delivering):wait().code == 1
+  end, 20)
+  child.lua(
+    '_G.scheduled_callbacks_ran = false; vim.schedule(function() _G.scheduled_callbacks_ran = true end)'
+  )
+  vim.wait(M.PATIENCE_MS, function()
+    return child.lua_get('_G.scheduled_callbacks_ran')
+  end, 20)
 end
 
 --- Makes `child` call `start_session()` once more, with the stand-in settings

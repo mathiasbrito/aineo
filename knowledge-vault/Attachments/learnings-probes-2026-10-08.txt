@@ -1,0 +1,216 @@
+Probes behind the Learnings drawn from wave 9's stage 1 (T35, T36, T37) by its knowledge pass, on 2026-10-08,
+macOS arm64 (APFS), on the branch knowledge/w9-stage1-landed cut from dev's dc5ff70. Each ran in a bare Neovim 0.12.5,
+`nvim --clean --headless -i NONE -l <probe>`, with every XDG home and the log under a scratch directory (run.sh, below).
+The real `claude` never ran, and no probe loads aineo's code. In the outputs the probe folder is written <probe folder>.
+probe-link.lua's last two lines ran on a 20 MB exFAT disk image made with `hdiutil create -fs ExFAT` and mounted inside
+the probe folder (`hdiutil attach … -nobrowse`; `diskutil info` named its personality ExFAT), written <image>.
+The host's load average was 13–16 while they ran.
+
+==== run.sh ====
+#!/bin/sh
+# Runs one probe in a bare, isolated Neovim: every XDG home and the log under ./xdg.
+here=$(cd "$(dirname "$0")" && pwd)
+mkdir -p "$here/xdg"
+export XDG_STATE_HOME="$here/xdg/state" XDG_DATA_HOME="$here/xdg/data"
+export XDG_CACHE_HOME="$here/xdg/cache" XDG_CONFIG_HOME="$here/xdg/config"
+export NVIM_LOG_FILE="$here/xdg/nvim.log"
+unset NVIM NVIM_APPNAME MYVIMRC VIMINIT
+cd "$here" && exec nvim --clean --headless -i NONE -l "$@"
+
+==== relay.lua ====
+-- A relay: connect to arg[1], send one notification, and either close at once
+-- ('close') or send a request behind it and wait for its answer ('confirm').
+local channel = vim.fn.sockconnect('pipe', arg[1], { rpc = true })
+vim.rpcnotify(channel, 'nvim_exec_lua', 'table.insert(_G.seen, 1)', {})
+if arg[2] == 'confirm' then
+  vim.rpcrequest(channel, 'nvim_exec_lua', 'return 0', {})
+end
+vim.fn.chanclose(channel)
+
+==== probe-notify.lua ====
+-- Is a notification from a relay that closed first delivered to an editor that
+-- was busy when it came? `other`: what a channel connected before the relay
+-- sends once the relay has ended, while the editor still sleeps —
+-- 'request', 'notify', or 'none'. `relay`: 'close' (notify, close) or
+-- 'confirm' (notify, then a request behind it, then close).
+local here = vim.fn.getcwd()
+local function trial(relay_mode, other)
+  local address = vim.fs.joinpath(here, 'probe.sock')
+  vim.fn.delete(address)
+  local editor = vim.system({ vim.v.progpath, '--clean', '--headless', '-i', 'NONE', '--listen', address })
+  vim.wait(3000, function()
+    return vim.uv.fs_stat(address) ~= nil
+  end, 10)
+  vim.wait(200)
+  local control = vim.fn.sockconnect('pipe', address, { rpc = true })
+  vim.rpcrequest(control, 'nvim_exec_lua', '_G.seen = {}', {})
+  vim.rpcnotify(control, 'nvim_exec_lua', 'vim.uv.sleep(2000)', {})
+  vim.wait(100)
+  local started = vim.uv.hrtime()
+  local relay = vim.system({ vim.v.progpath, '--clean', '--headless', '-i', 'NONE', '-l', 'relay.lua', address, relay_mode })
+  if relay_mode == 'close' then
+    relay:wait(1000)
+  end
+  local relay_ms = (vim.uv.hrtime() - started) / 1e6
+  if other == 'notify' then
+    vim.rpcnotify(control, 'nvim_exec_lua', 'return 0', {})
+  end
+  local seen_at_wake = -1
+  if other == 'request' then
+    seen_at_wake = #vim.rpcrequest(control, 'nvim_exec_lua', 'return _G.seen', {})
+  end
+  if relay_mode == 'confirm' then
+    relay:wait(5000)
+    relay_ms = (vim.uv.hrtime() - started) / 1e6
+  end
+  vim.wait(3000)
+  local seen = #vim.rpcrequest(control, 'nvim_exec_lua', 'return _G.seen', {})
+  print(
+    ('relay %-7s other %-7s relay ended after %.0f ms; seen when the other came back %d; seen 3 s later %d'):format(
+      relay_mode,
+      other,
+      relay_ms,
+      seen_at_wake,
+      seen
+    )
+  )
+  editor:kill(15)
+  editor:wait(2000)
+end
+for _ = 1, 3 do
+  trial('close', 'request')
+end
+for _ = 1, 3 do
+  trial('close', 'notify')
+end
+for _ = 1, 3 do
+  trial('close', 'none')
+end
+for _ = 1, 3 do
+  trial('confirm', 'request')
+end
+print('nvim ' .. tostring(vim.version()))
+---- its output ----
+relay close   other request relay ended after 23 ms; seen when the other came back 0; seen 3 s later 0
+relay close   other request relay ended after 24 ms; seen when the other came back 0; seen 3 s later 0
+relay close   other request relay ended after 27 ms; seen when the other came back 0; seen 3 s later 0
+relay close   other notify  relay ended after 24 ms; seen when the other came back -1; seen 3 s later 0
+relay close   other notify  relay ended after 23 ms; seen when the other came back -1; seen 3 s later 0
+relay close   other notify  relay ended after 24 ms; seen when the other came back -1; seen 3 s later 0
+relay close   other none    relay ended after 24 ms; seen when the other came back -1; seen 3 s later 1
+relay close   other none    relay ended after 23 ms; seen when the other came back -1; seen 3 s later 1
+relay close   other none    relay ended after 24 ms; seen when the other came back -1; seen 3 s later 1
+relay confirm other request relay ended after 1902 ms; seen when the other came back 0; seen 3 s later 1
+relay confirm other request relay ended after 1900 ms; seen when the other came back 0; seen 3 s later 1
+relay confirm other request relay ended after 1901 ms; seen when the other came back 0; seen 3 s later 1
+nvim 0.12.5
+
+==== probe-mkdir.lua ====
+-- Does vim.fn.mkdir(path, 'p') fail when another process makes a directory of
+-- the path at the same moment? Four Neovims at once, each making
+-- <root>/<n>/aineo/<its own leaf> for n = 1..200, once ('once') or retried once
+-- per level of the path on failure ('retry'), as aineo's homes now do.
+local mode = arg[1]
+local root = vim.fs.joinpath(vim.fn.getcwd(), 'mkdir-race')
+if mode == 'worker' then
+  local leaf, retry = arg[2], arg[3] == 'retry'
+  local failures, example = 0, nil
+  for n = 1, 200 do
+    local path = vim.fs.joinpath(root, tostring(n), 'aineo', leaf)
+    local tries_left = retry and #vim.split(path, '/', { trimempty = true }) or 0
+    local made, failure = pcall(vim.fn.mkdir, path, 'p')
+    while not made and tries_left > 0 do
+      tries_left = tries_left - 1
+      made, failure = pcall(vim.fn.mkdir, path, 'p')
+    end
+    if not made then
+      failures = failures + 1
+      example = example or failure
+    end
+  end
+  io.stdout:write(('%s %d %s\n'):format(leaf, failures, tostring(example)))
+  return
+end
+for _, how in ipairs({ 'once', 'retry' }) do
+  for run = 1, 2 do
+    vim.fn.delete(root, 'rf')
+    local workers = {}
+    for w = 1, 4 do
+      table.insert(
+        workers,
+        vim.system({ vim.v.progpath, '--clean', '--headless', '-i', 'NONE', '-l', 'probe-mkdir.lua', 'worker', 'leaf' .. w, how })
+      )
+    end
+    local total, example = 0, nil
+    for _, worker in ipairs(workers) do
+      local out = worker:wait(60000).stdout
+      local failures, failure = out:match('^%S+ (%d+) (.*)\n$')
+      total = total + tonumber(failures)
+      if failure ~= 'nil' then
+        example = example or failure
+      end
+    end
+    print(('%s, run %d: %d of 800 failed%s'):format(how, run, total, example and ('; e.g. ' .. example) or ''))
+  end
+end
+vim.fn.delete(root, 'rf')
+print('nvim ' .. tostring(vim.version()))
+---- its output ----
+once, run 1: 366 of 800 failed; e.g. Vim:E739: Cannot create directory <probe folder>/mkdir-race/10/aineo: file already exists
+once, run 2: 350 of 800 failed; e.g. Vim:E739: Cannot create directory <probe folder>/mkdir-race: file already exists
+retry, run 1: 0 of 800 failed
+retry, run 2: 0 of 800 failed
+nvim 0.12.5
+
+==== probe-link.lua ====
+-- What does a move by link-then-unlink do to a symbolic link, and what does a
+-- file system without hard links answer? arg[1]: an optional second folder,
+-- on a file system to test (an exFAT image's mount point).
+local function plant(path, text)
+  local file = assert(io.open(path, 'wb'))
+  file:write(text)
+  file:close()
+end
+local function kind(path)
+  local stat = vim.uv.fs_lstat(path)
+  return stat and stat.type or 'none'
+end
+local dir = vim.fs.joinpath(vim.fn.getcwd(), 'link-probe')
+vim.fn.delete(dir, 'rf')
+vim.fn.mkdir(dir, 'p')
+plant(dir .. '/target', 'before\n')
+assert(vim.uv.fs_symlink(dir .. '/target', dir .. '/from'))
+print('from is a ' .. kind(dir .. '/from'))
+print('fs_link(from, to): ' .. vim.inspect({ vim.uv.fs_link(dir .. '/from', dir .. '/to') }))
+print('fs_unlink(from): ' .. vim.inspect({ vim.uv.fs_unlink(dir .. '/from') }))
+print(('to is a %s, nlink %d; target nlink %d'):format(kind(dir .. '/to'), vim.uv.fs_stat(dir .. '/to').nlink, vim.uv.fs_stat(dir .. '/target').nlink))
+plant(dir .. '/to.tmp', 'after\n')
+assert(vim.uv.fs_rename(dir .. '/to.tmp', dir .. '/to'))
+print('after a cut-and-rename over to, target holds ' .. vim.inspect(table.concat(vim.fn.readfile(dir .. '/target'), '\n')))
+assert(vim.uv.fs_symlink(dir .. '/target', dir .. '/from2'))
+print('fs_rename(from2, to2): ' .. vim.inspect({ vim.uv.fs_rename(dir .. '/from2', dir .. '/to2') }) .. '; to2 is a ' .. kind(dir .. '/to2'))
+vim.fn.delete(dir, 'rf')
+if arg[1] then
+  local other = vim.fs.joinpath(arg[1], 'link-probe')
+  vim.fn.delete(other, 'rf')
+  vim.fn.mkdir(other, 'p')
+  plant(other .. '/a', 'a\n')
+  print('on ' .. '<image>' .. ': fs_link: ' .. vim.inspect({ vim.uv.fs_link(other .. '/a', other .. '/b') }))
+  print('on ' .. '<image>' .. ': fs_rename: ' .. vim.inspect({ vim.uv.fs_rename(other .. '/a', other .. '/c') }))
+  vim.fn.delete(other, 'rf')
+end
+print('nvim ' .. tostring(vim.version()))
+---- its output ----
+from is a link
+fs_link(from, to): { true }
+fs_unlink(from): { true }
+to is a file, nlink 2; target nlink 2
+after a cut-and-rename over to, target holds "before"
+fs_rename(from2, to2): { true }; to2 is a link
+on <image>: fs_link: {
+  [2] = "ENOTSUP: operation not supported on socket: <probe folder>/mnt/link-probe/a -> <probe folder>/mnt/link-probe/b",
+  [3] = "ENOTSUP"
+}
+on <image>: fs_rename: { true }
+nvim 0.12.5
+

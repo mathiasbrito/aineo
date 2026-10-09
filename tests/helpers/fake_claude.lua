@@ -32,6 +32,21 @@
 ---   resumed, has a conversation once Enter has sent a message in it, as one
 ---   in which nothing was sent had none. Unset, it records those flags and
 ---   nothing more.
+--- - `AINEO_FAKE_CLAUDE_HOOKS` — set, the fake runs the `SessionStart` and
+---   `SessionEnd` command hooks of the `--settings` it is given, as Claude
+---   Code 2.1.292 ran them (M1, wave 9): each through `sh -c`, the hook's
+---   JSON on its stdin (`hook_input()`) and the `NVIM` the fake inherited in
+---   its environment, waiting for it to end. It runs `SessionStart` as it
+---   starts (`startup` for `--session-id`, `resume` for `--resume`); on the
+---   keys `/clear` and Enter, `SessionEnd` of its session (`clear`), then
+---   `SessionStart` of a new one (`clear`); on `/resume <id>` and Enter,
+---   `SessionEnd` (`resume`), then `SessionStart` of that id (`resume`); on
+---   `/branch` and Enter, `SessionEnd` (`resume`), then `SessionStart` of a
+---   new one (`fork`); on `/compact` and Enter, `SessionStart` of its session
+---   (`compact`) alone; and, as it exits by its keys, `SessionEnd`
+---   (`prompt_input_exit`) — nothing on a hangup or at its lifetime's end.
+---   Unset, it runs no hook. Either way, those keys move it to the session
+---   they name, and send no message.
 ---
 --- It answers Ctrl-C as Claude Code 2.1.281 did in a Neovim terminal: idle, a
 --- second press within `DOUBLE_PRESS_MS` of the first exits 0,
@@ -47,7 +62,9 @@
 --- when unset, and the process id. Every chunk of input follows as
 --- `{ received }` — a Ctrl-C as `{"received":"\u0003"}` — a turn ended by
 --- Ctrl-C as `{ turn = 'interrupted' }`, a SIGINT as `{ signal = 'sigint' }`,
---- an MCP server's answer as `{ mcp }` (the `mcp-client` mode), and the last
+--- an MCP server's answer as `{ mcp }` (the `mcp-client` mode), each hook it
+--- ran as `{ hook, session_id, cause, code }` — its event, the session and
+--- source or reason its input named, and its exit code — and the last
 --- line says how it ended: `{ ended, code }`, where `ended` is
 --- `keys`, `hangup`, `exit` or `lifetime`.
 
@@ -260,6 +277,11 @@ local keys = {
   asking = false,
 }
 
+--- Ends the fake as an exit by its keys does: the `SessionEnd` hooks of its
+--- session first (`prompt_input_exit`). Defined below, with the hooks.
+---@type fun()
+local exit_by_keys
+
 --- Answers one Ctrl-C press at `now_ms` as the mode does.
 ---
 ---@param now_ms number
@@ -275,9 +297,7 @@ local function press_ctrl_c(now_ms)
   end
   if keys.last_press_ms and now_ms - keys.last_press_ms <= DOUBLE_PRESS_MS then
     keys.exiting = true
-    vim.defer_fn(function()
-      finish('keys', 0)
-    end, EXIT_AFTER_DOUBLE_PRESS_MS)
+    vim.defer_fn(exit_by_keys, EXIT_AFTER_DOUBLE_PRESS_MS)
     return
   end
   keys.last_press_ms = now_ms
@@ -315,11 +335,16 @@ end
 --- or nil when it was given neither.
 local SESSION_ID = word_after('--resume') or word_after('--session-id')
 
---- The file of the conversation `SESSION_ID` names under `CONVERSATIONS`.
+--- The session id the fake is on now: `SESSION_ID`, until keys move it to
+--- another (`session_command()`).
+local current_session_id = SESSION_ID
+
+--- The file of the conversation of the session the fake is on, under
+--- `CONVERSATIONS`.
 ---
 ---@return string
 local function conversation_file()
-  return vim.fs.joinpath(CONVERSATIONS, SESSION_ID)
+  return vim.fs.joinpath(CONVERSATIONS, current_session_id)
 end
 
 --- Gives the session a conversation when `input` sends a message — holds
@@ -327,8 +352,160 @@ end
 ---
 ---@param input string
 local function keep_conversation(input)
-  if CONVERSATIONS and SESSION_ID and input:find(ENTER, 1, true) then
+  if CONVERSATIONS and current_session_id and input:find(ENTER, 1, true) then
     assert(io.open(conversation_file(), 'a')):close()
+  end
+end
+
+--- Whether the fake runs the session hooks of its `--settings`
+--- (`AINEO_FAKE_CLAUDE_HOOKS`).
+local RUNS_HOOKS = os.getenv('AINEO_FAKE_CLAUDE_HOOKS') ~= nil
+
+--- How long a hook may run, in seconds, when its settings give no
+--- `timeout`: Claude Code's documented default for a command hook. Claude
+--- Code documents a shorter one for `SessionEnd` hooks — 1.5 s for all of
+--- them at an exit, a `/clear` or an in-session `/resume`, raised by a
+--- hook's own `timeout` — which the fake does not model: aineo's hooks give
+--- a `timeout`, and end in milliseconds.
+local DEFAULT_HOOK_TIMEOUT_SECONDS = 600
+
+--- What Claude Code writes on a session hook's stdin for `event`: the
+--- session's id and its source (`SessionStart`) or reason (`SessionEnd`),
+--- beside the other fields every hook's input has. The same as
+--- `tests/helpers/claude_session.lua`'s `hook_input()`, which the fake, run
+--- in another directory, cannot load.
+---
+---@param event string
+---@param session_id string
+---@param cause string
+---@return string
+local function hook_input(event, session_id, cause)
+  return vim.json.encode({
+    session_id = session_id,
+    transcript_path = '/tmp/aineo-fake-claude/' .. session_id .. '.jsonl',
+    cwd = vim.uv.cwd(),
+    hook_event_name = event,
+    [event == 'SessionStart' and 'source' or 'reason'] = cause,
+  })
+end
+
+--- The text of the settings `value`, a `--settings` value, gives, as
+--- Claude Code 2.1.292 tells them apart: `value` itself when, its blanks
+--- trimmed, it begins with `{` and ends with `}`, else the text of the file
+--- it names.
+---
+---@param value string
+---@return string
+local function settings_text(value)
+  local trimmed = vim.trim(value)
+  if vim.startswith(trimmed, '{') and vim.endswith(trimmed, '}') then
+    return value
+  end
+  return table.concat(vim.fn.readfile(value), '\n')
+end
+
+--- The command hooks the `--settings` among the fake's arguments gives for
+--- `event`, inline or in a file (`settings_text()`), in order; none without
+--- `--settings`.
+---
+---@param event string
+---@return { command: string, timeout: number? }[]
+local function configured_hooks(event)
+  local given = word_after('--settings')
+  if not given then
+    return {}
+  end
+  local hooks = {}
+  for _, entry in ipairs(vim.json.decode(settings_text(given)).hooks[event] or {}) do
+    vim.list_extend(hooks, entry.hooks or {})
+  end
+  return hooks
+end
+
+--- Runs, when the fake runs hooks (`RUNS_HOOKS`), each command hook given
+--- for `event` as Claude Code runs one — through `sh -c`, its input
+--- (`hook_input()`) on stdin, the inherited `NVIM` in its environment, which
+--- `vim.system()` would otherwise set to the fake's own address — waiting for
+--- each to end, at most its timeout, and records it.
+---
+---@param event string
+---@param session_id string
+---@param cause string
+local function run_hooks(event, session_id, cause)
+  if not RUNS_HOOKS then
+    return
+  end
+  for _, hook in ipairs(configured_hooks(event)) do
+    local ended = vim
+      .system({ 'sh', '-c', hook.command }, {
+        stdin = hook_input(event, session_id, cause),
+        env = { NVIM = os.getenv('NVIM') },
+      })
+      :wait((hook.timeout or DEFAULT_HOOK_TIMEOUT_SECONDS) * 1000)
+    record({ hook = event, session_id = session_id, cause = cause, code = ended.code })
+  end
+end
+
+exit_by_keys = function()
+  run_hooks('SessionEnd', current_session_id, 'prompt_input_exit')
+  finish('keys', 0)
+end
+
+--- A new session id, as Claude Code 2.1.292 makes them: a random version-4
+--- UUID in lower-case hexadecimal, `8-4-4-4-12`.
+---
+---@return string
+local function new_session_id()
+  local bytes = { assert(vim.uv.random(16)):byte(1, 16) }
+  bytes[7] = 0x40 + bytes[7] % 16
+  bytes[9] = 0x80 + bytes[9] % 64
+  local hex = string.format(string.rep('%02x', 16), unpack(bytes))
+  return ('%s-%s-%s-%s-%s'):format(
+    hex:sub(1, 8),
+    hex:sub(9, 12),
+    hex:sub(13, 16),
+    hex:sub(17, 20),
+    hex:sub(21, 32)
+  )
+end
+
+--- Moves the fake from its session to `to` as Claude Code 2.1.292 did on a
+--- switch: the `SessionEnd` hooks of the session left, with `reason`, then
+--- the `SessionStart` hooks of `to`, with `source`.
+---
+---@param to string
+---@param source string
+---@param reason string
+local function switch_session(to, source, reason)
+  run_hooks('SessionEnd', current_session_id, reason)
+  current_session_id = to
+  run_hooks('SessionStart', to, source)
+end
+
+--- What the keys of `input` do when they give a session command — `/clear`,
+--- `/resume <id>`, `/branch` or `/compact`, then Enter, in one chunk — or
+--- nil when they give none.
+---
+---@param input string
+---@return fun()?
+local function session_command(input)
+  local resumed = input:match('^/resume (%S+)\r$')
+  if input == '/clear\r' then
+    return function()
+      switch_session(new_session_id(), 'clear', 'clear')
+    end
+  elseif resumed then
+    return function()
+      switch_session(resumed, 'resume', 'resume')
+    end
+  elseif input == '/branch\r' then
+    return function()
+      switch_session(new_session_id(), 'fork', 'resume')
+    end
+  elseif input == '/compact\r' then
+    return function()
+      run_hooks('SessionStart', current_session_id, 'compact')
+    end
   end
 end
 
@@ -381,11 +558,18 @@ local function resumes_no_conversation()
   return CONVERSATIONS ~= nil and resumed ~= nil and vim.uv.fs_stat(conversation_file()) == nil
 end
 
---- Answers one chunk of input: draws the screen a key brings up, or else
---- answers each Ctrl-C in it and echoes its text.
+--- Answers one chunk of input: runs the session command it gives
+--- (`session_command()`), from a scheduled callback, since running a hook
+--- waits; or draws the screen a key brings up; or else answers each Ctrl-C
+--- in it and echoes its text.
 ---
 ---@param input string
 local function answer(input)
+  local command = session_command(input)
+  if command then
+    vim.schedule(command)
+    return
+  end
   keep_conversation(input)
   local screen = screen_for_key(input)
   if screen then
@@ -506,6 +690,9 @@ for index, screen in ipairs(MODE.screens) do
     vim.wait(SCREEN_GAP_MS)
   end
   draw(screen)
+end
+if current_session_id then
+  run_hooks('SessionStart', current_session_id, word_after('--resume') and 'resume' or 'startup')
 end
 
 stdin:read_start(function(_, input)

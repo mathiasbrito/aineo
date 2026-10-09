@@ -36,6 +36,131 @@ function M.records_file(state_directory, working_directory)
   )
 end
 
+--- The file that holds the records of the reports kept for the Claude
+--- session `session_id`: one per session, named `session-` and the id's
+--- SHA-256, so that any id makes a valid file name, and none the name of a
+--- working directory's file (`records_file()`).
+---
+---@param state_directory string
+---@param session_id string
+---@return string
+function M.session_records_file(state_directory, session_id)
+  return vim.fs.joinpath(
+    state_directory,
+    'aineo',
+    'reports',
+    'session-' .. vim.fn.sha256(session_id) .. '.jsonl'
+  )
+end
+
+--- Removes `to`, just linked to the records file `from`, once `from` was
+--- found gone: another editor took `from` between the link and its removal,
+--- and when `to` is not the only name left of that file, the other editor's
+--- session holds it, so `to` is removed for the two sessions to keep one
+--- file each. A `to` that is that file's only name is kept: `from` was
+--- removed some other way, and `to` holds the only copy.
+---
+---@param from string
+---@param to string
+---@return string? failure why `to` could not be removed, naming both files and what happened; nil once removed, or kept
+local function give_up_link_taken_meanwhile(from, to)
+  local moved = vim.uv.fs_stat(to)
+  if not moved or moved.nlink < 2 then
+    return nil
+  end
+  local removed, removal_failure = vim.uv.fs_unlink(to)
+  if not removed then
+    return ('aineo cannot move the report records in %s to %s: another editor moved them to its session at the same moment, and %s cannot be removed, so both sessions keep them: %s'):format(
+      from,
+      to,
+      to,
+      removal_failure
+    )
+  end
+  return nil
+end
+
+--- The codes, as libuv gives them, of a hard link the file system refuses:
+--- it has none (exFAT, FAT, some network and FUSE mounts), the file is on
+--- another device, or it has too many.
+local LINK_REFUSALS = { ENOTSUP = true, EPERM = true, EXDEV = true, EMLINK = true, ENOSYS = true }
+
+--- Whether the file at `path` is a symbolic link: a hard link to it would
+--- name the file it leads to, not the link.
+---
+---@param path string
+---@return boolean
+local function is_symbolic_link(path)
+  local file = vim.uv.fs_lstat(path)
+  return file ~= nil and file.type == 'link'
+end
+
+--- Moves the records file `from` to `to` by renaming it, where hard links
+--- are refused (`LINK_REFUSALS`) or `from` is a symbolic link
+--- (`is_symbolic_link()`), when `to` does not exist and `from` does;
+--- neither is touched otherwise. `to` is looked for first and then
+--- `from` renamed, so another editor making `to` between the two has its
+--- file replaced.
+---
+---@param from string
+---@param to string
+---@return string? failure why `from` could not be moved, naming both files; nil when it was moved, or when `to` exists or `from` does not
+local function move_records_by_rename(from, to)
+  if vim.uv.fs_stat(to) then
+    return nil
+  end
+  local renamed, failure, code = vim.uv.fs_rename(from, to)
+  if renamed or code == 'ENOENT' then
+    return nil
+  end
+  return ('aineo cannot move the report records in %s to %s: %s'):format(from, to, failure)
+end
+
+--- Moves the records file `from` to `to` when `to` does not exist and
+--- `from` does: `from`'s records are then `to`'s, and `from` is gone. Neither
+--- is touched otherwise. The move links `to` to `from` and then removes
+--- `from`; the link refuses an existing `to` at once, so another editor
+--- making `to`, or taking `from`, meanwhile never has its file replaced, and
+--- is no failure. Another editor that took `from` between the link and the
+--- removal took the same file: `to` is then removed again, so that two
+--- sessions never share one file, and the records are the other editor's
+--- session's. A `from` that cannot be removed once linked is a failure: its
+--- records are then in both files. Where the file system refuses the link
+--- (`LINK_REFUSALS`), or `from` is a symbolic link (`is_symbolic_link()`),
+--- which then stays one, `from` is renamed instead
+--- (`move_records_by_rename()`).
+---
+---@param from string
+---@param to string
+---@return string? failure why `from` could not be moved, naming both files; nil when it was moved, or when `to` exists or `from` does not
+function M.move_records(from, to)
+  if is_symbolic_link(from) then
+    return move_records_by_rename(from, to)
+  end
+  local linked, failure, code = vim.uv.fs_link(from, to)
+  if LINK_REFUSALS[code] then
+    return move_records_by_rename(from, to)
+  end
+  if linked then
+    local removed, removal_failure, removal_code = vim.uv.fs_unlink(from)
+    if removal_code == 'ENOENT' then
+      return give_up_link_taken_meanwhile(from, to)
+    end
+    if not removed then
+      return ('aineo cannot move the report records in %s to %s: they are in both, the first cannot be removed: %s'):format(
+        from,
+        to,
+        removal_failure
+      )
+    end
+    return nil
+  end
+  if code == 'EEXIST' or code == 'ENOENT' then
+    return nil
+  end
+  return ('aineo cannot move the report records in %s to %s: %s'):format(from, to, failure)
+end
+
 --- The newest lines of `file` that fit in `bytes`, oldest first: whole lines
 --- only, from the first line that starts within its last `bytes` bytes.
 ---

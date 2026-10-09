@@ -19,17 +19,37 @@ local M = {}
 ---@field instructions string the text appended to Claude Code's system prompt
 ---@field on_terminal_replaced? fun(terminal: integer) called with the new terminal when the session replaces its terminal on its own, as it does when Claude Code finds no conversation to resume (`start_session()`); never for a terminal `start_session()` returns
 ---@field state_directory string the directory under which the session id of each working directory is kept, in `aineo/claude-sessions/`: the editor's state directory
+---@field editor_address string the editor's server address (`v:servername`), which Claude Code's session hooks tell
+---@field editor_program string the editor's own program (`v:progpath`), which runs the hook relay
+---@field on_session_switched? fun(id: string, source: string?, left: string, reason: string?) called when the session followed changes (`session_id()`): with the new id, how Claude Code started it (`clear`, `resume`, `fork`; `startup` or `resume` for a start that takes the place of the session followed), the id left, and why Claude Code left it (`clear`, `resume`; none for a start). Never for an editor's first start. An error it raises is told the user as a warning and goes no further
+---@field on_session_ready? fun(id: string) called once per start of Claude Code — the new session's in place of a resume with no conversation among them — the first time it is ready for input (`session_status()` turns `'ready'`), with the session it follows then (`session_id()`): before that status is read, from the callback that sets it. Never for a start that is not the session any more, whose process has ended or whose terminal was wiped, or once Neovim is quitting (`v:exiting`): not for a resume Claude Code found no conversation for, a dialog never answered, or a Claude Code that exits before its input box settles. An error it raises is told the user as a warning and goes no further
 
 --- The variables Claude Code's process gets on top of the editor's own, which
 --- it inherits unchanged: `AINEO_CHILD` tells aineo, should Claude Code start a
 --- Neovim, that it runs inside aineo's own session.
 local CHILD_ENVIRONMENT = { AINEO_CHILD = '1' }
 
---- The one Claude Code session, once one has started: its terminal buffer and
---- job, the session id it is on, whether Claude Code is ready for input now
---- and, once its process has ended, the process's exit code.
----@type { buffer: integer, job: integer, choice: aineo.claude.SessionChoice, ready: boolean?, exit_code: integer? }?
+--- A start of Claude Code: its terminal buffer and job, the session it
+--- started on, the settings it started with, the token its session hooks
+--- name (`launch()`), whether it started without them, the session id it
+--- follows now (`session_id()`), what its session hooks told that no switch
+--- has paired yet (`follow_switches()`); whether Claude Code is ready for
+--- input now, and whether `on_session_ready` was called for it; and, once
+--- its process has ended, the process's exit code and when it ended, by
+--- `vim.uv.hrtime()`.
+---@alias aineo.claude.Start { buffer: integer, job: integer, choice: aineo.claude.SessionChoice, settings: aineo.claude.Settings, start_token: string, settings_unread: boolean, followed: string, unpaired: aineo.claude.SessionEvent[], ready: boolean?, ready_told: boolean?, exit_code: integer?, ended_at: number? }
+
+--- The one Claude Code session, once one has started: its last start.
+---@type aineo.claude.Start?
 local session
+
+--- How many times Claude Code has been launched in this editor: the last
+--- launch's start token (`launch()`).
+local launches = 0
+
+--- How many session hooks have reached this editor: the last one's place in
+--- the order they reached it (`receive_session_event()`).
+local hooks_received = 0
 
 --- Whether a session's Claude Code process has not ended yet — whatever
 --- became of its terminal.
@@ -125,6 +145,10 @@ local function validate_settings(settings)
   vim.validate('settings.instructions', settings.instructions, 'string')
   vim.validate('settings.state_directory', settings.state_directory, 'string')
   vim.validate('settings.on_terminal_replaced', settings.on_terminal_replaced, 'function', true)
+  vim.validate('settings.editor_address', settings.editor_address, 'string')
+  vim.validate('settings.editor_program', settings.editor_program, 'string')
+  vim.validate('settings.on_session_switched', settings.on_session_switched, 'function', true)
+  vim.validate('settings.on_session_ready', settings.on_session_ready, 'function', true)
 end
 
 --- Runs `command` as a terminal job in the new, empty `buffer` and returns the
@@ -224,26 +248,75 @@ local function found_no_conversation(ended)
   return screen:find(message, 1, true) ~= nil
 end
 
+--- What aineo tells the user when Claude Code starts without aineo's
+--- session hooks, since the `--settings` of `claude.cmd` cannot be read or
+--- added to: a session switch inside Claude Code is not followed. One line of
+--- 60 characters, so that at startup it holds no 80-column screen at a
+--- hit-enter prompt, whose `v:echospace` is 68.
+local SETTINGS_UNREAD_WARNING = "aineo: claude.cmd's --settings unread; switches not followed"
+
+--- Calls `settings[name]`, a callback of `settings`, with `...` when it is
+--- given; an error it raises goes no further than a warning to the user,
+--- `aineo: <name> failed: <the error>`, so that what called it goes on.
+---
+---@param settings aineo.claude.Settings
+---@param name 'on_session_switched'|'on_session_ready'
+---@param ... any
+local function call_back(settings, name, ...)
+  local callback = settings[name]
+  if not callback then
+    return
+  end
+  local called, failure = pcall(callback, ...)
+  if not called then
+    vim.notify(('aineo: %s failed: %s'):format(name, tostring(failure)), vim.log.levels.WARN)
+  end
+end
+
 --- Runs Claude Code with `settings` on the session `choice` names, in a new
---- terminal buffer, and returns the session that tracks it: its buffer and
---- job, the session it is on, whether it is ready, and its exit code once it
---- has exited. Once its process has ended, its terminal's session name is
---- `Claude Code` again (`session_name.forget_name()`), and `on_exit` is
---- called with that session.
+--- terminal buffer, and returns the start that tracks it, following the
+--- session it started on. Each launch has a start token of its own, which
+--- its session hooks name (`arguments.claude_command()`); a launch whose
+--- `claude.cmd` gives settings aineo cannot add its hooks to runs without
+--- them, which its start's `settings_unread` says. The first time Claude
+--- Code is ready for input (`readiness.watch()`) while the start is still
+--- the session, it runs (`is_running()`) and Neovim is not quitting,
+--- `settings.on_session_ready` is called with the session the start
+--- follows then (`call_back()`), once. Once its process has ended, its
+--- terminal's session name is `Claude Code` again
+--- (`session_name.forget_name()`), and `on_exit` is called with that start.
 ---
 ---@param settings aineo.claude.Settings
 ---@param choice aineo.claude.SessionChoice
----@param on_exit fun(ended: table)
----@return { buffer: integer, job: integer, choice: aineo.claude.SessionChoice, ready: boolean?, exit_code: integer? }
+---@param on_exit fun(ended: aineo.claude.Start)
+---@return aineo.claude.Start
 local function launch(settings, choice, on_exit)
   ensure_executable(settings.cmd[1])
-  local command = vim.list_slice(settings.cmd)
-  vim.list_extend(command, session_arguments(choice))
-  vim.list_extend(command, arguments.claude_arguments(settings))
-  local launched = { buffer = vim.api.nvim_create_buf(false, true), choice = choice }
+  launches = launches + 1
+  local start_token = tostring(launches)
+  local command, unread = arguments.claude_command(settings, session_arguments(choice), start_token)
+  local launched = {
+    buffer = vim.api.nvim_create_buf(false, true),
+    choice = choice,
+    settings = settings,
+    start_token = start_token,
+    settings_unread = unread,
+    followed = choice.id,
+    unpaired = {},
+  }
   session_name.keep_name_and_folder(launched.buffer, settings.cwd)
   readiness.watch(launched.buffer, function(ready)
     launched.ready = ready
+    if
+      ready
+      and not launched.ready_told
+      and session == launched
+      and is_running()
+      and vim.v.exiting == vim.NIL
+    then
+      launched.ready_told = true
+      call_back(settings, 'on_session_ready', launched.followed)
+    end
   end)
   launched.job = run_in_terminal(launched.buffer, command, {
     term = true,
@@ -251,6 +324,7 @@ local function launch(settings, choice, on_exit)
     env = CHILD_ENVIRONMENT,
     on_exit = function(_, exit_code)
       launched.exit_code = exit_code
+      launched.ended_at = vim.uv.hrtime()
       session_name.forget_name(launched.buffer)
       on_exit(launched)
     end,
@@ -298,8 +372,42 @@ local function is_typing(mode)
   return mode:find('^[iRt]') ~= nil or mode:find('^ni') ~= nil or mode == 'ntT'
 end
 
+--- A change of the session followed, as `on_session_switched` is told it:
+--- the id followed now, how Claude Code started it, the id left, and why
+--- Claude Code left it.
+---@alias aineo.claude.Switch { id: string, source: string?, left: string, reason: string? }
+
+--- Calls `settings.on_session_switched`, when it is given, with `switch`;
+--- an error it raises goes no further than a warning to the user, so that
+--- what follows the switch — the start that made it, or the hook that told
+--- it — goes on.
+---
+---@param settings aineo.claude.Settings
+---@param switch aineo.claude.Switch
+local function tell_switch(settings, switch)
+  call_back(settings, 'on_session_switched', switch.id, switch.source, switch.left, switch.reason)
+end
+
+--- Tells `settings.on_session_switched` (`tell_switch()`) of the session
+--- followed now, once a start has put it in place of `left`, the session
+--- followed before that start, and it is another: as a switch whose source
+--- is `resume` when the start resumed it and `startup` when it is new, and
+--- which gives no reason. Tells nothing after an editor's first start, which
+--- leaves no session.
+---
+---@param settings aineo.claude.Settings
+---@param left string? the id followed before the start
+local function tell_session_replaced(settings, left)
+  if left and left ~= session.followed then
+    local source = session.choice.resumed and 'resume' or 'startup'
+    tell_switch(settings, { id = session.followed, source = source, left = left })
+  end
+end
+
 --- Starts a new session on a new id in place of the last (`start_in_place()`)
---- and hands its terminal to `settings.on_terminal_replaced`. Raises nothing.
+--- and hands its terminal to `settings.on_terminal_replaced`, then tells
+--- `settings.on_session_switched` of it (`tell_session_replaced()`). Raises
+--- nothing.
 ---
 --- A user who is typing (`is_typing()`) goes on typing where they are. Any
 --- other user — in Normal, Visual or Select mode, on the command line, with
@@ -312,12 +420,14 @@ end
 --- `aineo:`. One that fails before Claude Code has launched leaves the last
 --- session as it was; one that fails after — an autocommand of the user's
 --- raising as the terminals are swapped — leaves the new Claude Code running
---- as the one session, though no window may show it, its id may not be kept,
---- and `settings.on_terminal_replaced` is not called.
+--- as the one session, followed (`session_id()`), though no window may show
+--- it, its id may not be kept, and neither `settings.on_terminal_replaced`
+--- nor `settings.on_session_switched` is called.
 ---
 ---@param settings aineo.claude.Settings
 local function start_new_session_in_place(settings)
   local was_typing = is_typing(vim.api.nvim_get_mode().mode)
+  local left = session and session.followed
   local started, terminal =
     pcall(start_in_place, settings, { id = session_ids.new_session_id(), resumed = false })
   if not was_typing then
@@ -330,6 +440,7 @@ local function start_new_session_in_place(settings)
   if settings.on_terminal_replaced then
     settings.on_terminal_replaced(terminal)
   end
+  tell_session_replaced(settings, left)
 end
 
 --- When `ended`, a session whose process has ended, resumed an id Claude
@@ -392,6 +503,33 @@ end
 --- told the user once, as an error. Any other exit leaves the session exited
 --- and its id kept.
 ---
+--- Claude Code is given a `SessionStart` and a `SessionEnd` hook that tell
+--- the editor at `settings.editor_address` of each, through the hook relay
+--- run by `settings.editor_program`; a switch they tell of inside Claude Code
+--- is followed and kept for `settings.cwd` (`receive_session_event()`). The
+--- hooks go into the `--settings` of `settings.cmd` when it gives one, after
+--- its own hooks, in a file only the user can read; when that cannot be read
+--- or added to, Claude Code starts without them and the user is told once,
+--- as a one-line warning (`SETTINGS_UNREAD_WARNING`,
+--- `arguments.claude_command()`) — not again by the new session that takes
+--- the place of a resume with no conversation. A start whose session is
+--- another than the one followed before it — the new session in place of a
+--- resume with no conversation among them — is told to
+--- `settings.on_session_switched` as a switch, after
+--- `settings.on_terminal_replaced`; an editor's first start is not. An
+--- error `on_session_switched` raises is told the user as a warning, and
+--- `start_session()` returns the new terminal all the same.
+---
+--- `settings.on_session_ready` is called once per start, the new session's
+--- in place of a resume with no conversation among them, the first time
+--- Claude Code is ready for input — from the callback that makes
+--- `session_status()` say `'ready'`, never before `start_session()` has
+--- returned — with the session followed then (`session_id()`). It is not
+--- called for a start that never becomes ready, one whose process ended or
+--- whose terminal was wiped first, one another start has taken the place
+--- of, or once Neovim is quitting; an error it raises is told the user as
+--- a warning.
+---
 --- Show a new buffer in a window before Claude Code draws its first screen:
 --- its terminal takes its size from the first window that shows it, and until
 --- then has the rows of a hidden window — 5, as wide as the editor, in Neovim
@@ -425,7 +563,13 @@ function M.start_session(settings)
   if is_running() then
     return session.buffer
   end
-  return start_in_place(settings, kept_or_new_session(settings))
+  local left = session and session.followed
+  local terminal = start_in_place(settings, kept_or_new_session(settings))
+  if session.settings_unread then
+    vim.notify(SETTINGS_UNREAD_WARNING, vim.log.levels.WARN)
+  end
+  tell_session_replaced(settings, left)
+  return terminal
 end
 
 --- Where the session stands: `'ready'` while Claude Code's input box is on
@@ -449,6 +593,193 @@ function M.session_status()
     return 'ready'
   end
   return 'starting'
+end
+
+--- Follows `id`, the session Claude Code switched to from the one `running`
+--- followed, which it left for `reason`: keeps it for the running start's
+--- working directory, as the session the next start there resumes, and
+--- tells the running start's `on_session_switched` of it (`tell_switch()`),
+--- with `source` and the session left.
+---
+---@param running aineo.claude.Start the session
+---@param id string
+---@param source string?
+---@param reason string?
+local function follow_switch(running, id, source, reason)
+  local left = running.followed
+  running.followed = id
+  keep_session_id(running.settings, id)
+  tell_switch(running.settings, { id = id, source = source, left = left, reason = reason })
+end
+
+--- What a session hook of Claude Code told (`receive_session_event()`): its
+--- event, the session that started or ended, its source or reason, the
+--- token of the start whose hook ran, when the hook ran, by
+--- `vim.uv.hrtime()`, and its place in the order the hooks reached the
+--- editor.
+---@alias aineo.claude.SessionEvent { event: string, id: string, cause: string?, start_token: string, ran: number?, arrival: integer }
+
+--- Whether the hook that told `earlier` ran before the one that told
+--- `later`: by when each ran when both say, else by the order they reached
+--- the editor.
+---
+---@param earlier aineo.claude.SessionEvent
+---@param later aineo.claude.SessionEvent
+---@return boolean
+local function ran_before(earlier, later)
+  if earlier.ran and later.ran then
+    return earlier.ran < later.ran
+  end
+  return earlier.arrival < later.arrival
+end
+
+--- The one of `events` whose hook ran first (`ran_before()`) among those
+--- `is_wanted` accepts; nil when it accepts none.
+---
+---@param events aineo.claude.SessionEvent[]
+---@param is_wanted fun(event: aineo.claude.SessionEvent): boolean
+---@return aineo.claude.SessionEvent?
+local function first_ran(events, is_wanted)
+  local first
+  for _, event in ipairs(events) do
+    if is_wanted(event) and (not first or ran_before(event, first)) then
+      first = event
+    end
+  end
+  return first
+end
+
+--- Follows each switch that the hooks `running` holds unpaired make, in the
+--- order their hooks ran: the first `SessionEnd` of the session followed
+--- and the first `SessionStart` whose hook ran after it are a switch
+--- (`follow_switch()`) — none when that `SessionStart` is of the session
+--- followed, as an in-session `/resume` of it makes — and every hook that
+--- ran by that `SessionStart` is let go. A `SessionEnd` with no
+--- `SessionStart` after it yet, and a `SessionStart` with no `SessionEnd`
+--- before it, stay held.
+---
+---@param running aineo.claude.Start
+local function follow_switches(running)
+  while true do
+    local ending = first_ran(running.unpaired, function(event)
+      return event.event == 'SessionEnd' and event.id == running.followed
+    end)
+    local start = ending
+      and first_ran(running.unpaired, function(event)
+        return event.event == 'SessionStart' and ran_before(ending, event)
+      end)
+    if not start then
+      return
+    end
+    running.unpaired = vim.tbl_filter(function(event)
+      return ran_before(start, event)
+    end, running.unpaired)
+    if start.id ~= running.followed then
+      follow_switch(running, start.id, start.cause, ending.cause)
+    end
+  end
+end
+
+--- What `told` does to the session: held with the hooks of the running start
+--- not paired yet, it may complete a switch (`follow_switches()`), whatever
+--- order the hooks reach the editor in — each comes from a process of its
+--- own. Anything else does nothing — a hook of another start than the
+--- running one, a hook that ran after the running start's process ended
+--- (another process Claude Code started with the start's `--settings`), an
+--- id of another form than Claude Code's (`session_ids.is_session_id()`),
+--- and every hook once Neovim is quitting (`v:exiting` set) among them.
+---
+---@param told aineo.claude.SessionEvent
+local function take_session_event(told)
+  if
+    vim.v.exiting ~= vim.NIL
+    or not session
+    or session.start_token ~= told.start_token
+    or not session_ids.is_session_id(told.id)
+    or (session.ended_at and told.ran and told.ran > session.ended_at)
+  then
+    return
+  end
+  table.insert(session.unpaired, told)
+  follow_switches(session)
+end
+
+--- Takes what a session hook of Claude Code told the editor through the hook
+--- relay (`aineo.claude.hook_relay`): `event`, `SessionStart` or
+--- `SessionEnd`; `session_id`, the session that started or ended; `cause`,
+--- its `source` or `reason` (nil or `vim.NIL` when the hook gave none);
+--- `start_token`, the token of the start whose hook ran; and `ran`, when the
+--- hook began, by `vim.uv.hrtime()` (nil or `vim.NIL` when not told). It
+--- works from a callback scheduled now, never in the RPC handler that calls
+--- it, so that the editor answers the deliverer's next request without
+--- waiting for that work.
+---
+--- Claude Code 2.1.292 switches session — `/clear`, an in-session
+--- `/resume`, `/branch` — with a `SessionEnd` of the session it leaves, then
+--- a `SessionStart` of the one it switches to; so a `SessionStart` of another
+--- id is a switch only when its hook is the first `SessionStart` to run after
+--- the hook of a `SessionEnd` of the session followed, in whatever order the
+--- hooks reach the editor: each is held until a switch pairs it
+--- (`follow_switches()`), and when the hook ran stands for the order —
+--- where a hook does not tell it, the order the hooks reached the editor. A
+--- switch makes the new id the one followed (`session_id()`), keeps it for
+--- the working directory as the session the next start there resumes, and
+--- calls `on_session_switched(id, source, left, reason)`. A `SessionStart` of
+--- the session followed (`/compact`, the start's own, a `/resume` of it), a
+--- `SessionStart` with no `SessionEnd` of the session followed before it,
+--- and a `SessionEnd`
+--- alone (Claude Code's exit) call nothing back, nor does a hook that ran
+--- after the start's Claude Code process ended: one of another process
+--- Claude Code started with the same `--settings`, such as a teammate or a
+--- background session. Once a `SessionEnd` of the
+--- session followed is lost, no later switch of that Claude Code is
+--- followed, since each begins with a `SessionEnd` of a session aineo does
+--- not follow.
+---
+---@param event string
+---@param session_id string
+---@param cause string|userdata|nil
+---@param start_token string
+---@param ran number|userdata|nil
+function M.receive_session_event(event, session_id, cause, start_token, ran)
+  hooks_received = hooks_received + 1
+  local arrival = hooks_received
+  vim.schedule(function()
+    take_session_event({
+      event = event,
+      id = session_id,
+      cause = type(cause) == 'string' and cause or nil,
+      start_token = start_token,
+      ran = type(ran) == 'number' and ran or nil,
+      arrival = arrival,
+    })
+  end)
+end
+
+--- What becomes of the `--settings` that `cmd`, a `claude.cmd`, gives when
+--- Claude Code starts in `cwd`: nil when `cmd` gives none; else a verdict
+--- whose `problem` says why aineo cannot add its session hooks to them —
+--- so that a start passes them as they are, without its hooks, and warns —
+--- nil when it can (`arguments.given_settings_verdict()`).
+---
+---@param cmd string[]
+---@param cwd string
+---@return { problem: string? }?
+function M.given_settings_verdict(cmd, cwd)
+  return arguments.given_settings_verdict(cmd, cwd)
+end
+
+--- The id of the Claude Code session aineo follows now: from each start of
+--- Claude Code, the id it started it on (`--session-id` or `--resume`),
+--- without waiting for a hook to name it, since in a folder Claude Code does
+--- not trust yet none runs; then the id of each session switch
+--- (`receive_session_event()`), and the new id of a start that takes the
+--- place of a resume Claude Code found no conversation for. Once Claude Code
+--- has exited it stays the last id followed. Nil before any start.
+---
+---@return string?
+function M.session_id()
+  return session and session.followed
 end
 
 --- The `'statusline'` `session_statusline()` returns: an expression whose
