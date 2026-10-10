@@ -110,6 +110,10 @@ end
 ---@type string|nil
 local followed_session = nil
 
+--- Whether the session followed was told as a claim's
+--- (`M.follow_draft_session()`), whose follow moves nothing.
+local followed_as_claim = false
+
 --- The file the draft is kept in: the followed session's, or the working
 --- directory's before the home follows one.
 ---
@@ -706,13 +710,14 @@ end
 --- once the buffer is empty. It is created, with its directories, when it
 --- is first written, readable and writable by its owner only.
 ---
---- When the home follows a session already, told before this, the working
---- directory's draft is moved to it now (`move_directory_draft_once()`).
+--- When the home follows a session already, told before this otherwise than
+--- as a claim's, the working directory's draft is moved to it now
+--- (`move_directory_draft_once()`).
 ---
 ---@param draft_environment aineo.draft.Environment
 function M.set_draft_environment(draft_environment)
   environment = draft_environment
-  if followed_session then
+  if followed_session and not followed_as_claim then
     move_directory_draft_once()
   end
 end
@@ -818,17 +823,22 @@ end
 --- already changes nothing, the buffers' text, cursor and undo included.
 ---
 --- The first session the home follows in an editor takes the working
---- directory's draft, when it has none (`move_directory_draft_once()`).
+--- directory's draft, when it has none (`move_directory_draft_once()`). A
+--- follow told with `options.claim` — the follow of a session the editor
+--- claimed, which its own Claude Code need not run — moves nothing, and is
+--- not that first follow: the directory's draft stays where it is until the
+--- first follow told without it.
 --- A session told before `M.set_draft_environment()` is held: the
---- environment, once given, moves the directory's draft to it, and
---- `M.keep_draft()` restores its draft. `M.keep_draft()` reads that draft
+--- environment, once given, moves the directory's draft to it, unless it
+--- was told as a claim's, and `M.keep_draft()` restores its draft. `M.keep_draft()` reads that draft
 --- only into an empty buffer: a buffer handed it holding text is not
 --- checked against a held session's draft that cannot be read, and its
 --- first change replaces that draft, unwarned. A caller that holds a
 --- session hands `M.keep_draft()` an empty buffer, as `plugin/aineo.lua`
 --- does with the Input it has just made, which keeps that unreached.
 ---
---- Raises an error naming `session_id` when it is not a string, and nothing
+--- Raises an error naming `session_id` when it is not a string, or
+--- `options` when it is not a table, and nothing
 --- else; a draft that cannot be read or put in, saved, or moved is told to
 --- the user as a warning, once per editor for putting in, once for saving
 --- and once for moving, but a draft that cannot be read and a text kept in
@@ -837,9 +847,12 @@ end
 --- follow.
 ---
 ---@param session_id string
-function M.follow_draft_session(session_id)
+---@param options? { claim: boolean? }
+function M.follow_draft_session(session_id, options)
   vim.validate('session_id', session_id, 'string')
-  if session_id == followed_session then
+  vim.validate('options', options, 'table', true)
+  local as_claim = options ~= nil and options.claim == true
+  if session_id == followed_session and as_claim == followed_as_claim then
     return
   end
   for buffer, watch in pairs(kept) do
@@ -849,11 +862,14 @@ function M.follow_draft_session(session_id)
     save_pending_change_now(buffer, watch)
   end
   followed_session = session_id
+  followed_as_claim = as_claim
   if not environment then
     return
   end
-  local first_follow = not directory_draft_moved
-  move_directory_draft_once()
+  local first_follow = not as_claim and not directory_draft_moved
+  if not as_claim then
+    move_directory_draft_once()
+  end
   for buffer in pairs(kept) do
     replace_with_kept_draft(buffer, first_follow)
   end

@@ -106,14 +106,16 @@ T['start_session()']['runs the command in the directory it is given'] = function
   eq(claude.wait_for_start(fake).cwd, directory)
 end
 
-T['start_session()']['gives Claude the MCP servers as one --mcp-config'] = function()
+T['start_session()']['gives Claude the MCP servers as one --mcp-config, the report server told the token its hooks name'] = function()
   local fake = claude.fake('mcp-config', 'exit')
 
   claude.start(child, fake)
 
+  local servers = claude.stand_in_settings().mcp_servers
+  servers.aineo.env.AINEO_START_TOKEN = claude.start_token(fake, 1)
   eq(
     claude.decoded_words_after(claude.arguments(fake), '--mcp-config'),
-    { { mcpServers = claude.stand_in_settings().mcp_servers } }
+    { { mcpServers = servers } }
   )
 end
 

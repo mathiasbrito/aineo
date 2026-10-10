@@ -1,6 +1,8 @@
 --- The command that runs Claude Code: `claude.cmd`, the words that pick its
 --- session, which `aineo.claude` chooses, and the arguments aineo gives it.
 
+local mcp = require('aineo.mcp')
+
 local M = {}
 
 --- The hook relay script, beside this file.
@@ -34,10 +36,16 @@ local function shell_word(word)
   return "'" .. word:gsub("'", [['\'']]) .. "'"
 end
 
+--- The word of the hook's command the shell expands to the pid of the
+--- process that ran the hook's shell — Claude Code's — whose record the
+--- hook relay writes; the one word left unquoted for the shell.
+local CLAUDE_PID_WORD = '"$PPID"'
+
 --- The shell command that runs the hook relay for `event`, telling the
---- editor of `settings` the start `start_token`, every word quoted
---- (`shell_word()`): Claude Code runs a command hook's command through a
---- shell.
+--- editor of `settings` the start `start_token`, then the pid of Claude
+--- Code's process (`CLAUDE_PID_WORD`) and the directory it runs in, every
+--- word but the pid's quoted (`shell_word()`): Claude Code runs a command
+--- hook's command through a shell.
 ---
 ---@param settings aineo.claude.Settings
 ---@param start_token string
@@ -56,7 +64,9 @@ local function relay_command(settings, start_token, event)
     start_token,
     event,
   }
-  return table.concat(vim.tbl_map(shell_word, words), ' ')
+  local quoted = vim.tbl_map(shell_word, words)
+  vim.list_extend(quoted, { CLAUDE_PID_WORD, shell_word(settings.cwd) })
+  return table.concat(quoted, ' ')
 end
 
 --- aineo's hook entry for each of `RELAYED_EVENTS`, by event: a command hook
@@ -328,9 +338,10 @@ local function encodable_server(server)
 end
 
 --- The arguments that hand Claude Code the MCP servers of `settings` as one
---- JSON object — `{}` when there are none — the instructions appended to its
---- system prompt as they are, `settings_value` as `--settings` when it is
---- given, and the tools it may use without asking, each one word after
+--- JSON object — `{}` when there are none — aineo's report server among them
+--- told `start_token` (`aineo.mcp`'s `with_start_token()`), the instructions
+--- appended to its system prompt as they are, `settings_value` as
+--- `--settings` when it is given, and the tools it may use without asking, each one word after
 --- `--allowedTools`. Claude Code's CLI reference gives that flag several
 --- words (its example names three tools), as it gives `--mcp-config` several
 --- space-separated values, so that flag comes last, where no word of aineo's
@@ -338,10 +349,11 @@ end
 ---
 ---@param settings aineo.claude.Settings
 ---@param settings_value string?
+---@param start_token string
 ---@return string[]
-local function claude_arguments(settings, settings_value)
+local function claude_arguments(settings, settings_value, start_token)
   local servers = vim.empty_dict()
-  for name, server in pairs(settings.mcp_servers) do
+  for name, server in pairs(mcp.with_start_token(settings.mcp_servers, start_token)) do
     servers[name] = encodable_server(server)
   end
   local words = {
@@ -378,7 +390,8 @@ end
 function M.claude_command(settings, session_words, start_token)
   local given = settings_with_hooks(settings, hook_entries(settings, start_token))
   local command = vim.list_extend(vim.list_slice(given.cmd), session_words)
-  return vim.list_extend(command, claude_arguments(settings, given.value)), given.unread == true
+  return vim.list_extend(command, claude_arguments(settings, given.value, start_token)),
+    given.unread == true
 end
 
 return M
