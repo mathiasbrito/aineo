@@ -107,16 +107,52 @@ local function move_directory_records_once(current)
   end
 end
 
+--- The hand-overs told before `set_report_environment()`, in the order they
+--- were told, made once it is called (`hand_over()`).
+---@type { from: string, to: string }[]
+local hand_overs_waiting = {}
+
+--- Hands the records of the Claude session `from` over to the session `to`
+--- under `current`'s state directory, when `to` has no records file of its
+--- own (`M.hand_over_report_session()`): `from`'s file is moved to `to`'s
+--- name, unread (`records.move_records()`), and a home that follows `from`
+--- follows `to` from then on, as its own, showing what it showed. A move
+--- that fails is told to the user, once, as a warning.
+---
+---@param current aineo.report.Environment
+---@param from string
+---@param to string
+local function hand_over(current, from, to)
+  local to_file = records.session_records_file(current.state_directory, to)
+  if vim.uv.fs_lstat(to_file) then
+    return
+  end
+  local failure =
+    records.move_records(records.session_records_file(current.state_directory, from), to_file)
+  if failure then
+    warn_later(failure)
+  end
+  if followed_session ~= from then
+    return
+  end
+  followed_session = to
+  followed_as_claim = false
+  if report_view then
+    report_view.records_file = kept_records_file(current)
+  end
+end
+
 --- Gives the report home what it reads from the editor: the clock, called
 --- for each report received, and the state and working directories, read
 --- when the Report buffer is first created. The working directory is read
 --- again whenever the Report shows reports, to find the files their relative
 --- paths name, and at each double-click on a path, to open its file. The
 --- composition root calls it before anything else in the home is used but
---- `follow_report_session()`, whose session it then holds: when the home
---- follows a session already, told otherwise than as a claim's, the
---- working directory's records are moved to it now
---- (`move_directory_records_once()`).
+--- `follow_report_session()` and `hand_over_report_session()`, which it
+--- then holds: the hand-overs told meanwhile are made now, in their order
+--- (`hand_over()`), and then, when the home follows a session, told
+--- otherwise than as a claim's, the working directory's records are moved
+--- to it (`move_directory_records_once()`).
 ---
 --- Raises an error naming the field when `report_environment` is not an
 --- environment.
@@ -128,6 +164,10 @@ function M.set_report_environment(report_environment)
   vim.validate('environment.state_directory', report_environment.state_directory, 'string')
   vim.validate('environment.working_directory', report_environment.working_directory, 'string')
   environment = report_environment
+  for _, waiting in ipairs(hand_overs_waiting) do
+    hand_over(environment, waiting.from, waiting.to)
+  end
+  hand_overs_waiting = {}
   if followed_session and not followed_as_claim then
     move_directory_records_once(environment)
   end
@@ -539,6 +579,40 @@ function M.follow_report_session(session_id, options)
   end
   report_view.records_file = kept_records_file(environment)
   show_followed_records()
+end
+
+--- Hands the records of the Claude session `from`, which Claude Code found
+--- no conversation for, over to the session `to`, which took its place:
+--- `from`'s records file becomes `to`'s, whole and unread — one that cannot
+--- be read included, which `to` then meets as `from` would have — and no
+--- file is left under `from`'s name (`records.move_records()`). Nothing is
+--- made when neither has records. When `to` has a records file of its own,
+--- nothing moves, and a home that follows `from` goes on following it.
+---
+--- A home that follows `from` follows `to` from then on, as its own even
+--- when `from` was followed as a claim's (`follow_report_session()`), with
+--- no swap: the Report keeps its lines and cursor, a showing that waits for
+--- `SafeState` shows `to`'s records, the next report is kept in `to`'s
+--- file, and a later follow of `to` changes nothing. A home that follows
+--- another session only has the file moved.
+---
+--- A hand-over told before `set_report_environment()` is held, and made
+--- once the environment is given, before the working directory's records
+--- move. A move that fails is told to the user as a warning, once, and
+--- nothing is raised for it.
+---
+--- Raises an error naming `from` or `to` when it is not a string.
+---
+---@param from string
+---@param to string
+function M.hand_over_report_session(from, to)
+  vim.validate('from', from, 'string')
+  vim.validate('to', to, 'string')
+  if not environment then
+    table.insert(hand_overs_waiting, { from = from, to = to })
+    return
+  end
+  hand_over(environment, from, to)
 end
 
 return M

@@ -1759,4 +1759,586 @@ T['following a session']['read back after one whose write failed, its file remov
   expect_lines(COMMITS, { NO_COMMITS })
 end
 
+--- The session Claude Code found no conversation for, and the session that
+--- took its place.
+local SESSION_DEAD = '33333333-3333-4333-8333-333333333333'
+local SESSION_NEW = '44444444-4444-4444-8444-444444444444'
+
+--- The file under the state directory `state` that keeps the base and the
+--- saves of the session `id`.
+---
+---@param state string
+---@param id string
+---@return string
+local function kept_file_of(state, id)
+  return vim.fs.joinpath(state, 'aineo', 'changes-sessions', vim.fn.sha256(id) .. '.json')
+end
+
+--- Writes `text` as the file that keeps the base and the saves of the
+--- session `id` under the state directory `state`, making its folder.
+---
+---@param state string
+---@param id string
+---@param text string
+local function plant_kept(state, id, text)
+  local file = kept_file_of(state, id)
+  vim.fn.mkdir(vim.fs.dirname(file), 'p')
+  vim.fn.writefile({ text }, file, 'b')
+end
+
+--- The whole text of the file at `path`, or nil when it cannot be read.
+---
+---@param path string
+---@return string|nil
+local function text_of(path)
+  local file = io.open(path, 'rb')
+  if not file then
+    return nil
+  end
+  local text = file:read('*a')
+  file:close()
+  return text
+end
+
+--- Tells the changes home of the child to hand the base and the saves of
+--- the session `from`, which Claude Code found no conversation for, over
+--- to `to`, the session that took its place, under the state directory
+--- `state`.
+---
+---@param from string
+---@param to string
+---@param state string
+local function hand_over(from, to, state)
+  child.lua(
+    "require('aineo.changes').hand_over_changes_session({ from = ..., to = select(2, ...), state_directory = select(3, ...) })",
+    { from, to, state }
+  )
+end
+
+T['a hand-over'] = MiniTest.new_set()
+
+T['a hand-over']["makes the dead session's base and saves the new one's, whole, and leaves none under the dead one"] = function()
+  local state = fixture.directory('changessessions-hand-over-state')
+  local kept = '{"top":"/somewhere","base":"0123","saved":["notes.txt"]}'
+  plant_kept(state, SESSION_DEAD, kept)
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+
+  eq({
+    dead = text_of(kept_file_of(state, SESSION_DEAD)),
+    new = text_of(kept_file_of(state, SESSION_NEW)),
+  }, { new = kept })
+end
+
+--- What is kept for the session `id` under the state directory `state`,
+--- decoded, or nil when nothing is.
+---
+---@param state string
+---@param id string
+---@return table|nil
+local function kept_record(state, id)
+  local text = text_of(kept_file_of(state, id))
+  return text and vim.json.decode(text) or nil
+end
+
+T['a hand-over']['of the session followed keeps the next new mark for the new session'] = function()
+  local top = git_repo.create('changessessions-hand-over-next', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-hand-over-next-state')
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_DEAD, state)
+  wait_for_finds(2)
+  save_file(vim.fs.joinpath(top, 'notes.txt'), 'two')
+  expect_lines(FILES, { '* M notes.txt' })
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+  save_file(vim.fs.joinpath(top, 'other.txt'), 'other')
+  expect_lines(FILES, { '* M notes.txt', '* ? other.txt' })
+
+  eq({
+    dead = kept_record(state, SESSION_DEAD),
+    saved = (kept_record(state, SESSION_NEW) or {}).saved,
+  }, { saved = { 'notes.txt', 'other.txt' } })
+end
+
+T['a hand-over']['to a session with a base of its own moves nothing, and the session followed stays followed'] = function()
+  local top = git_repo.create('changessessions-hand-over-own', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-hand-over-own-state')
+  local own = '{"top":"/elsewhere","saved":[]}'
+  plant_kept(state, SESSION_NEW, own)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_DEAD, state)
+  wait_for_finds(2)
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+  save_file(vim.fs.joinpath(top, 'notes.txt'), 'two')
+  expect_lines(FILES, { '* M notes.txt' })
+
+  eq({
+    dead = (kept_record(state, SESSION_DEAD) or {}).saved,
+    new = text_of(kept_file_of(state, SESSION_NEW)),
+  }, { dead = { 'notes.txt' }, new = own })
+end
+
+T['a hand-over']['while the look for HEAD of the session followed runs completes it for the new session'] = function()
+  local top = git_repo.create('changessessions-hand-over-head', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-hand-over-head-state')
+  local held, hold = held_looks('changessessions-hand-over-head')
+  begin_and_show(top, { executable = held })
+  expect_lines(FILES, { NO_FILES })
+  vim.fn.writefile({}, hold)
+  follow(SESSION_DEAD, state)
+  expect_lines(FILES, { READING })
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+  vim.fn.delete(hold)
+
+  expect_lines(FILES, { NO_FILES })
+  expect_lines(COMMITS, { NO_COMMITS })
+  eq({
+    dead = kept_record(state, SESSION_DEAD),
+    new = (kept_record(state, SESSION_NEW) or {}).base,
+  }, { new = git_repo.git(top, { 'rev-parse', 'HEAD' }) })
+end
+
+--- Keeps, for the session `id` under the state directory `state`, the
+--- repository `top`'s `HEAD` now as the base, and `saved` as the saves.
+---
+---@param state string
+---@param id string
+---@param top string
+---@param saved string[]
+local function plant_head_as_base(state, id, top, saved)
+  plant_kept(
+    state,
+    id,
+    vim.json.encode({
+      top = git_repo.git(top, { 'rev-parse', '--show-toplevel' }),
+      base = git_repo.git(top, { 'rev-parse', 'HEAD' }),
+      saved = saved,
+    })
+  )
+end
+
+T['a hand-over']['told before the session begins makes the pane show the base and saves the dead session kept'] = function()
+  local top = git_repo.create('changessessions-hand-over-before', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-hand-over-before-state')
+  plant_head_as_base(state, SESSION_DEAD, top, { 'notes.txt' })
+  local commit = commit_line_of(top, 'notes.txt', 'two', 'After the base')
+  follow(SESSION_DEAD, state)
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+  begin_and_show(top)
+
+  expect_lines(COMMITS, { commit_line(commit, 'After the base') })
+  expect_lines(FILES, { '* M notes.txt' })
+end
+
+T['a hand-over']['of a session whose base is held in memory holds it for the new session'] = function()
+  local first =
+    git_repo.create('changessessions-hand-over-held-first', { ['notes.txt'] = { 'one' } })
+  local second =
+    git_repo.create('changessessions-hand-over-held-second', { ['readme.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-hand-over-held-state')
+  plant_head_as_base(state, SESSION_DEAD, first, {})
+  begin_and_show(second)
+  wait_for_finds(1)
+  follow(SESSION_DEAD, state)
+  wait_for_finds(2)
+  save_file(vim.fs.joinpath(second, 'readme.txt'), 'two')
+  expect_lines(FILES, { '* M readme.txt' })
+  local under_dead = commit_only(second, 'other.txt', 'other', 'Under the dead session')
+  child.lua(SHOW_FILES_AGAIN)
+  expect_lines(COMMITS, { commit_line(under_dead, 'Under the dead session') })
+  follow(SESSION_B, state)
+  wait_for_finds(3)
+  expect_lines(COMMITS, { NO_COMMITS })
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+  follow(SESSION_NEW, state)
+
+  expect_lines(COMMITS, { commit_line(under_dead, 'Under the dead session') })
+  expect_lines(FILES, { '  A other.txt', '* M readme.txt' })
+end
+
+T['a hand-over']['of the session followed, whose last write failed, keeps its base and saves before they move'] = function()
+  local top = git_repo.create('changessessions-hand-over-unkept', { ['notes.txt'] = { 'one' } })
+  local state = vim.fs.joinpath(fixture.directory('changessessions-hand-over-unkept'), 'state')
+  vim.fn.writefile({ 'a file, not a directory' }, state)
+  child.lua(KEEP_MESSAGES)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_DEAD, state)
+  wait_for_finds(2)
+  save_file(vim.fs.joinpath(top, 'notes.txt'), 'two')
+  expect_lines(FILES, { '* M notes.txt' })
+  vim.fn.delete(state)
+  vim.fn.mkdir(state, 'p')
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+
+  eq({
+    dead = kept_record(state, SESSION_DEAD),
+    saved = (kept_record(state, SESSION_NEW) or {}).saved,
+  }, { saved = { 'notes.txt' } })
+end
+
+T['a hand-over']['refuses an id that is not a string, naming it, and moves nothing'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'nil', ('%q'):format(SESSION_NEW), 'from' },
+      { '{}', ('%q'):format(SESSION_NEW), 'from' },
+      { ('%q'):format(SESSION_DEAD), '7', 'to' },
+    },
+  })
+
+T['a hand-over']['refuses an id that is not a string, naming it, and moves nothing']['as'] = function(
+  from,
+  to,
+  named
+)
+  local state = fixture.directory('changessessions-hand-over-not-an-id')
+  local kept = '{"top":"/somewhere","saved":[]}'
+  plant_kept(state, SESSION_DEAD, kept)
+
+  local refusal = child.lua_get(
+    ([[(function(state)
+      local handed, failure = pcall(require('aineo.changes').hand_over_changes_session, {
+        from = %s,
+        to = %s,
+        state_directory = state,
+      })
+      return { handed = handed, named = tostring(failure):find(%q, 1, true) ~= nil }
+    end)(...)]]):format(from, to, named),
+    { state }
+  )
+
+  eq({
+    refusal = refusal,
+    dead = text_of(kept_file_of(state, SESSION_DEAD)),
+  }, { refusal = { handed = false, named = true }, dead = kept })
+end
+
+--- The Lua, run in the child, that lists the messages it was told that the
+--- changes pane cannot keep a session's base and saves (`KEEP_MESSAGES`),
+--- each as its level.
+local KEEPING_TOLD = [[vim.tbl_map(function(told)
+  return told.level
+end, vim.tbl_filter(function(told)
+  return told.message:find("cannot keep this session's base and saves", 1, true) ~= nil
+end, _G.told))]]
+
+T['a hand-over']['that cannot move the base tells it once, and raises nothing'] = function()
+  local state = fixture.directory('changessessions-hand-over-unmovable')
+  local kept = '{"top":"/somewhere","saved":[]}'
+  plant_kept(state, SESSION_DEAD, kept)
+  child.lua(KEEP_MESSAGES)
+  local folder = vim.fs.dirname(kept_file_of(state, SESSION_DEAD))
+  vim.fn.setfperm(folder, 'r-xr-xr-x')
+  MiniTest.finally(function()
+    vim.fn.setfperm(folder, 'rwxr-xr-x')
+  end)
+
+  local raised_nothing = child.lua_get(
+    "(pcall(require('aineo.changes').hand_over_changes_session, { from = ..., to = select(2, ...), state_directory = select(3, ...) }))",
+    { SESSION_DEAD, SESSION_NEW, state }
+  )
+  vim.fn.setfperm(folder, 'rwxr-xr-x')
+
+  eq({
+    raised_nothing = raised_nothing,
+    told = child.lua_get(KEEPING_TOLD),
+    dead = text_of(kept_file_of(state, SESSION_DEAD)),
+  }, { raised_nothing = true, told = { vim.log.levels.WARN }, dead = kept })
+end
+
+--- The Lua that makes the child's every hard link fail as a file system
+--- refuses one, with the code given as the chunk's argument, as libuv
+--- returns it.
+local LINKS_REFUSED = [[
+  local code = ...
+  vim.uv.fs_link = function(from)
+    return nil, code .. ': hard links refused: ' .. from, code
+  end
+]]
+
+T['a hand-over']['where hard links are refused'] = MiniTest.new_set({
+  parametrize = { { 'ENOTSUP' }, { 'EPERM' }, { 'EXDEV' }, { 'EMLINK' }, { 'ENOSYS' } },
+})
+
+T['a hand-over']['where hard links are refused']['moves the base by a rename'] = function(code)
+  local state = fixture.directory('changessessions-hand-over-no-links')
+  local kept = '{"top":"/somewhere","saved":[]}'
+  plant_kept(state, SESSION_DEAD, kept)
+  child.lua(KEEP_MESSAGES)
+  child.lua(LINKS_REFUSED, { code })
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+
+  eq({
+    told = child.lua_get('#_G.told'),
+    dead = text_of(kept_file_of(state, SESSION_DEAD)),
+    new = text_of(kept_file_of(state, SESSION_NEW)),
+  }, { told = 0, new = kept })
+end
+
+T['a hand-over']['of a base kept as a symbolic link moves the link, which still leads to its file'] = function()
+  local state = fixture.directory('changessessions-hand-over-symbolic-link')
+  local target = vim.fs.joinpath(state, 'kept-elsewhere.json')
+  local kept = '{"top":"/somewhere","saved":[]}'
+  vim.fn.writefile({ kept }, target, 'b')
+  local dead = kept_file_of(state, SESSION_DEAD)
+  vim.fn.mkdir(vim.fs.dirname(dead), 'p')
+  assert(vim.uv.fs_symlink(target, dead))
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+
+  eq({
+    dead = vim.fn.getftype(dead),
+    new = vim.fn.getftype(kept_file_of(state, SESSION_NEW)),
+    leads_to = text_of(kept_file_of(state, SESSION_NEW)),
+  }, { dead = '', new = 'link', leads_to = kept })
+end
+
+--- The Lua that interleaves another editor's hand-over of the same file
+--- with the child's, one call at a time: the other editor links the file
+--- being moved to its own session's file, given as the chunk's argument,
+--- just before the child's link, and removes the moved file's name just
+--- before the child's removal of it.
+local OTHER_EDITOR_INTERLEAVED = [[
+  local other = ...
+  local real_link, real_unlink = vim.uv.fs_link, vim.uv.fs_unlink
+  vim.uv.fs_link = function(from, to)
+    vim.uv.fs_link = real_link
+    assert(real_link(from, other))
+    return real_link(from, to)
+  end
+  vim.uv.fs_unlink = function(path)
+    vim.uv.fs_unlink = real_unlink
+    assert(real_unlink(path))
+    return real_unlink(path)
+  end
+]]
+
+T['a hand-over']['made by another editor at the same moment leaves the base with that editor’s session alone'] = function()
+  local state = fixture.directory('changessessions-hand-over-race')
+  local kept = '{"top":"/somewhere","saved":[]}'
+  plant_kept(state, SESSION_DEAD, kept)
+  child.lua(KEEP_MESSAGES)
+  child.lua(OTHER_EDITOR_INTERLEAVED, { kept_file_of(state, SESSION_B) })
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+
+  eq({
+    told = child.lua_get('#_G.told'),
+    dead = text_of(kept_file_of(state, SESSION_DEAD)),
+    new = text_of(kept_file_of(state, SESSION_NEW)),
+    other = text_of(kept_file_of(state, SESSION_B)),
+  }, { told = 0, other = kept })
+end
+
+--- The Lua that makes the child's next removal of a file fail as one
+--- refused it.
+local NEXT_REMOVAL_REFUSED = [[
+  local real_unlink = vim.uv.fs_unlink
+  vim.uv.fs_unlink = function(path)
+    vim.uv.fs_unlink = real_unlink
+    return nil, 'EACCES: permission denied: ' .. path, 'EACCES'
+  end
+]]
+
+T['a hand-over']['whose dead file cannot be removed once linked tells it once, both sessions keeping it'] = function()
+  local state = fixture.directory('changessessions-hand-over-unremovable')
+  local kept = '{"top":"/somewhere","saved":[]}'
+  plant_kept(state, SESSION_DEAD, kept)
+  child.lua(KEEP_MESSAGES)
+  child.lua(NEXT_REMOVAL_REFUSED)
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+
+  eq({
+    told = child.lua_get(KEEPING_TOLD),
+    dead = text_of(kept_file_of(state, SESSION_DEAD)),
+    new = text_of(kept_file_of(state, SESSION_NEW)),
+  }, { told = { vim.log.levels.WARN }, dead = kept, new = kept })
+end
+
+T['a hand-over']['made by another editor at the same moment tells it once when the new name cannot be removed'] = function()
+  local state = fixture.directory('changessessions-hand-over-race-unremovable')
+  local kept = '{"top":"/somewhere","saved":[]}'
+  plant_kept(state, SESSION_DEAD, kept)
+  child.lua(KEEP_MESSAGES)
+  child.lua(OTHER_EDITOR_INTERLEAVED, { kept_file_of(state, SESSION_B) })
+  child.lua([[
+    local interleaved = vim.uv.fs_unlink
+    vim.uv.fs_unlink = function(path)
+      local result = { interleaved(path) }
+      vim.uv.fs_unlink = function(refused)
+        return nil, 'EACCES: permission denied: ' .. refused, 'EACCES'
+      end
+      return unpack(result)
+    end
+  ]])
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+
+  eq({
+    told = child.lua_get(KEEPING_TOLD),
+    new = text_of(kept_file_of(state, SESSION_NEW)),
+    other = text_of(kept_file_of(state, SESSION_B)),
+  }, { told = { vim.log.levels.WARN }, new = kept, other = kept })
+end
+
+T['a hand-over']['where hard links are refused']['that cannot rename the base tells it once'] = function(
+  code
+)
+  local state = fixture.directory('changessessions-hand-over-no-links-unmovable')
+  local kept = '{"top":"/somewhere","saved":[]}'
+  plant_kept(state, SESSION_DEAD, kept)
+  child.lua(KEEP_MESSAGES)
+  child.lua(LINKS_REFUSED, { code })
+  local folder = vim.fs.dirname(kept_file_of(state, SESSION_DEAD))
+  vim.fn.setfperm(folder, 'r-xr-xr-x')
+  MiniTest.finally(function()
+    vim.fn.setfperm(folder, 'rwxr-xr-x')
+  end)
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+  vim.fn.setfperm(folder, 'rwxr-xr-x')
+
+  eq({
+    told = child.lua_get(KEEPING_TOLD),
+    dead = text_of(kept_file_of(state, SESSION_DEAD)),
+    new = text_of(kept_file_of(state, SESSION_NEW)),
+  }, { told = { vim.log.levels.WARN }, dead = kept })
+end
+
+T['a hand-over']['when neither session has a base makes none'] = function()
+  local state = fixture.directory('changessessions-hand-over-none')
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+
+  eq(vim.fn.glob(vim.fs.joinpath(state, 'aineo', '*', '*'), false, true), {})
+end
+
+T['a hand-over']['of a base that cannot be read moves it as it is, and a follow of the new session never writes over it'] = function()
+  local top = git_repo.create('changessessions-hand-over-unreadable', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-hand-over-unreadable-state')
+  local kept = '{"top":"/somewhere","saved":[]}'
+  plant_kept(state, SESSION_DEAD, kept)
+  local new = kept_file_of(state, SESSION_NEW)
+  vim.uv.fs_chmod(kept_file_of(state, SESSION_DEAD), 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(new, tonumber('600', 8))
+  end)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_B, state)
+  wait_for_finds(2)
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+  follow(SESSION_NEW, state)
+  wait_for_finds(3)
+  save_file(vim.fs.joinpath(top, 'notes.txt'), 'two')
+  expect_lines(FILES, { '* M notes.txt' })
+  local new_mode = vim.uv.fs_stat(new).mode % 512
+  vim.uv.fs_chmod(new, tonumber('600', 8))
+
+  eq({
+    dead = vim.uv.fs_stat(kept_file_of(state, SESSION_DEAD)) ~= nil,
+    new_mode = new_mode,
+    new = text_of(new),
+  }, { dead = false, new_mode = 0, new = kept })
+end
+
+T['a hand-over']['of the session followed leaves the pane as it was, reading nothing again'] = function()
+  local top = git_repo.create('changessessions-hand-over-stays', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-hand-over-stays-state')
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_DEAD, state)
+  wait_for_finds(2)
+  save_file(vim.fs.joinpath(top, 'notes.txt'), 'two')
+  local commit = commit_only(top, 'other.txt', 'other', 'Under the dead session')
+  child.lua(SHOW_FILES_AGAIN)
+  expect_lines(COMMITS, { commit_line(commit, 'Under the dead session') })
+  expect_lines(FILES, { '* M notes.txt', '  A other.txt' })
+  wait_for_reads()
+  local asked = child.lua_get('_G.reads_asked')
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+
+  eq({
+    files = lines_of(FILES),
+    commits = lines_of(COMMITS),
+    asked = child.lua_get('_G.reads_asked'),
+  }, {
+    files = { '* M notes.txt', '  A other.txt' },
+    commits = { commit_line(commit, 'Under the dead session') },
+    asked = asked,
+  })
+end
+
+T['a hand-over']['of the session followed, then a follow of the new session, leaves the pane as it was, reading nothing again'] = function()
+  local top =
+    git_repo.create('changessessions-hand-over-then-follow', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-hand-over-then-follow-state')
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_DEAD, state)
+  wait_for_finds(2)
+  save_file(vim.fs.joinpath(top, 'notes.txt'), 'two')
+  expect_lines(FILES, { '* M notes.txt' })
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+  wait_for_reads()
+  local asked = child.lua_get('_G.reads_asked')
+
+  follow(SESSION_NEW, state)
+
+  eq({ files = lines_of(FILES), asked = child.lua_get('_G.reads_asked') }, {
+    files = { '* M notes.txt' },
+    asked = asked,
+  })
+end
+
+T['a hand-over']['of a session not followed leaves the pane and the session followed as they were'] = function()
+  local top = git_repo.create('changessessions-hand-over-other', { ['notes.txt'] = { 'one' } })
+  local state = fixture.directory('changessessions-hand-over-other-state')
+  local kept = '{"top":"/somewhere","saved":[]}'
+  plant_kept(state, SESSION_DEAD, kept)
+  begin_and_show(top)
+  wait_for_finds(1)
+  follow(SESSION_B, state)
+  wait_for_finds(2)
+  save_file(vim.fs.joinpath(top, 'notes.txt'), 'two')
+  expect_lines(FILES, { '* M notes.txt' })
+
+  hand_over(SESSION_DEAD, SESSION_NEW, state)
+  save_file(vim.fs.joinpath(top, 'other.txt'), 'other')
+  expect_lines(FILES, { '* M notes.txt', '* ? other.txt' })
+
+  eq({
+    other = (kept_record(state, SESSION_B) or {}).saved,
+    new = text_of(kept_file_of(state, SESSION_NEW)),
+  }, { other = { 'notes.txt', 'other.txt' }, new = kept })
+end
+
+T['a hand-over']['of the session followed leaves the table the follow was given as it was'] = function()
+  local state = fixture.directory('changessessions-hand-over-argument')
+
+  local given = child.lua_get(
+    [[(function(state, from, to)
+      local changes = require('aineo.changes')
+      local followed = { id = from, state_directory = state }
+      changes.follow_changes_session(followed)
+      changes.hand_over_changes_session({ from = from, to = to, state_directory = state })
+      return followed.id
+    end)(...)]],
+    { state, SESSION_DEAD, SESSION_NEW }
+  )
+
+  eq(given, SESSION_DEAD)
+end
+
 return T

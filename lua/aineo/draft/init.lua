@@ -337,19 +337,18 @@ local function is_symbolic_link(path)
   return file ~= nil and file.type == 'link'
 end
 
---- Moves the working directory's draft `from` to the session's file `to`
---- by renaming it, where hard links are refused (`LINK_REFUSALS`) or
---- `from` is a symbolic link (`is_symbolic_link()`), when
---- `to` does not exist and `from` does; neither is touched otherwise. `to`
---- is looked for first and then `from` renamed, so another editor making
---- `to` between the two has its file replaced. Once moved, a kept buffer
---- whose saves went to `from` saves to `to` (`pin_moved_text()`). Tells the
---- user once when `from` cannot be renamed (`warn_once()`), and raises
---- nothing then.
+--- Moves the draft file `from` to the draft file `to` by renaming it, where
+--- hard links are refused (`LINK_REFUSALS`) or `from` is a symbolic link
+--- (`is_symbolic_link()`), when `to` does not exist and `from` does;
+--- neither is touched otherwise. `to` is looked for first and then `from`
+--- renamed, so another editor making `to` between the two has its file
+--- replaced. Once moved, a kept buffer whose saves went to `from` saves to
+--- `to` (`pin_moved_text()`). Tells the user once when `from` cannot be
+--- renamed (`warn_once()`), and raises nothing then.
 ---
 ---@param from string
 ---@param to string
-local function move_directory_draft_by_rename(from, to)
+local function move_draft_by_rename(from, to)
   if vim.uv.fs_stat(to) then
     return
   end
@@ -361,40 +360,33 @@ local function move_directory_draft_by_rename(from, to)
   end
 end
 
---- Moves the working directory's draft to the followed session the first
---- time it is called, when the session has no draft and the directory has
---- one: the directory's draft is then the session's, and its file is gone.
---- Neither is touched otherwise. The move links the session's file to the
---- directory's and then removes the directory's; the link refuses an
---- existing file at once, so another editor making the session's draft, or
---- taking the directory's, meanwhile never has its file replaced, and is no
---- failure; one that took it between the link and the removal keeps it
---- alone (`give_up_link_taken_meanwhile()`). Once the link is made, before
---- the removal, a kept buffer whose saves went to the directory's file until
---- its swap lands saves to the session's (`pin_moved_text()`), whatever the
---- removal finds: a session's file given up then is made again by the
---- buffer's next save, as this session's draft. Where the file system
---- refuses the link (`LINK_REFUSALS`), or the directory's draft is a
---- symbolic link (`is_symbolic_link()`), which then stays one, the
---- directory's draft is renamed instead (`move_directory_draft_by_rename()`).
+--- Moves the draft file `from` to the draft file `to`, when `to` does not
+--- exist and `from` does: `from`'s draft is then `to`'s, unread, and
+--- `from` is gone. Neither is touched otherwise. The move links `to` to
+--- `from` and then removes `from`; the link refuses an existing file at
+--- once, so another editor making `to`, or taking `from`, meanwhile never
+--- has its file replaced, and is no failure; one that took it between the
+--- link and the removal keeps it alone (`give_up_link_taken_meanwhile()`).
+--- Once the link is made, before the removal, a kept buffer whose saves
+--- went to `from` until its swap lands saves to `to` (`pin_moved_text()`),
+--- whatever the removal finds: a file given up then is made again by the
+--- buffer's next save. Where the file system refuses the link
+--- (`LINK_REFUSALS`), or `from` is a symbolic link (`is_symbolic_link()`),
+--- which then stays one, `from` is renamed instead (`move_draft_by_rename()`).
 --- Tells the user once when the draft could not be moved, or was linked but
---- cannot be removed from the directory's file (`warn_once()`), and raises
---- nothing then.
-local function move_directory_draft_once()
-  if directory_draft_moved then
-    return
-  end
-  directory_draft_moved = true
-  local from = draft_file(environment.state_directory, environment.working_directory)
-  local to = kept_draft_file()
+--- cannot be removed from `from` (`warn_once()`), and raises nothing then.
+---
+---@param from string
+---@param to string
+local function move_draft(from, to)
   local not_moved = "cannot move Input's draft in %s to %s: %s"
   if is_symbolic_link(from) then
-    move_directory_draft_by_rename(from, to)
+    move_draft_by_rename(from, to)
     return
   end
   local linked, link_failure, code = vim.uv.fs_link(from, to)
   if LINK_REFUSALS[code] then
-    move_directory_draft_by_rename(from, to)
+    move_draft_by_rename(from, to)
     return
   end
   if not linked then
@@ -413,6 +405,21 @@ local function move_directory_draft_once()
     local why = 'it is in both, the first cannot be removed: ' .. removal_failure
     warn_once('move', not_moved:format(from, to, why))
   end
+end
+
+--- Moves the working directory's draft to the followed session the first
+--- time it is called, when the session has no draft and the directory has
+--- one (`move_draft()`): the directory's draft is then the session's, and
+--- its file is gone.
+local function move_directory_draft_once()
+  if directory_draft_moved then
+    return
+  end
+  directory_draft_moved = true
+  move_draft(
+    draft_file(environment.state_directory, environment.working_directory),
+    kept_draft_file()
+  )
 end
 
 --- Makes `directory`, and the directories leading to it, unless it exists,
@@ -702,6 +709,44 @@ local function replace_with_kept_draft(buffer, keep_same_text)
   })
 end
 
+--- The hand-overs told before `M.set_draft_environment()`, in the order
+--- they were told, made once it is called (`hand_over()`).
+---@type { from: string, to: string }[]
+local hand_overs_waiting = {}
+
+--- Hands the draft of the Claude session `from` over to the session `to`
+--- (`M.hand_over_draft_session()`): a change not saved yet of a kept buffer
+--- whose text is kept in `from`'s file is saved there first; then, when
+--- `to` has no draft file of its own, `from`'s is moved to `to`'s name
+--- (`move_draft()`), whatever a watch held for `from`'s file — the file its
+--- text is kept in until a swap lands, a draft that could not be read — is
+--- held for `to`'s, and a home that follows `from` follows `to`, as its own.
+---
+---@param from string
+---@param to string
+local function hand_over(from, to)
+  local from_file = session_draft_file(environment.state_directory, from)
+  for buffer, watch in pairs(kept) do
+    if file_of(watch) == from_file then
+      save_pending_change_now(buffer, watch)
+    end
+  end
+  local to_file = session_draft_file(environment.state_directory, to)
+  if vim.uv.fs_lstat(to_file) then
+    return
+  end
+  move_draft(from_file, to_file)
+  for _, watch in pairs(kept) do
+    if watch.unreadable == from_file then
+      watch.unreadable = to_file
+    end
+  end
+  if followed_session == from then
+    followed_session = to
+    followed_as_claim = false
+  end
+end
+
 --- Sets where the draft is kept: until the home follows a Claude session
 --- (`M.follow_draft_session()`), one file for `working_directory`, under
 --- `state_directory`, named by the directory's SHA-256 so that any path
@@ -710,13 +755,18 @@ end
 --- once the buffer is empty. It is created, with its directories, when it
 --- is first written, readable and writable by its owner only.
 ---
---- When the home follows a session already, told before this otherwise than
---- as a claim's, the working directory's draft is moved to it now
---- (`move_directory_draft_once()`).
+--- The hand-overs told before this (`M.hand_over_draft_session()`) are made
+--- now, in their order (`hand_over()`). Then, when the home follows a
+--- session already, told before this otherwise than as a claim's, the
+--- working directory's draft is moved to it (`move_directory_draft_once()`).
 ---
 ---@param draft_environment aineo.draft.Environment
 function M.set_draft_environment(draft_environment)
   environment = draft_environment
+  for _, waiting in ipairs(hand_overs_waiting) do
+    hand_over(waiting.from, waiting.to)
+  end
+  hand_overs_waiting = {}
   if followed_session and not followed_as_claim then
     move_directory_draft_once()
   end
@@ -874,6 +924,46 @@ function M.follow_draft_session(session_id, options)
   for buffer in pairs(kept) do
     replace_with_kept_draft(buffer, first_follow)
   end
+end
+
+--- Hands the draft of the Claude session `from`, which Claude Code found no
+--- conversation for, over to the session `to`, which took its place.
+---
+--- A change of a kept buffer not saved yet, whose text is kept in `from`'s
+--- draft, is saved there first, so that it moves with it. Then `from`'s
+--- draft file becomes `to`'s, whole and unread — one that cannot be read
+--- included, which `to` then meets as `from` would have — and no file is
+--- left under `from`'s name (`move_draft()`). Nothing is made when neither
+--- has a draft. When `to` has a draft file of its own, nothing moves, and a
+--- home that follows `from` goes on following it.
+---
+--- A home that follows `from` follows `to` from then on, as its own even
+--- when `from` was followed as a claim's (`M.follow_draft_session()`), with
+--- no swap: Input keeps its text, cursor and undo, its next change is saved
+--- as `to`'s draft, and a later follow of `to` changes nothing. A draft of
+--- `from` that could not be read is never replaced by what is typed while
+--- Input follows `to`, and a swap that waits for `SafeState` puts `to`'s
+--- draft. A kept buffer whose text is kept in `from`'s file until its swap
+--- lands keeps it in `to`'s. A home that follows another session only has
+--- the file moved.
+---
+--- A hand-over told before `M.set_draft_environment()` is held, and made
+--- once the environment is given, before the working directory's draft
+--- moves. A move that fails is told to the user as a warning, once per
+--- editor as every move is (`warn_once()`), and nothing is raised for it.
+---
+--- Raises an error naming `from` or `to` when it is not a string.
+---
+---@param from string
+---@param to string
+function M.hand_over_draft_session(from, to)
+  vim.validate('from', from, 'string')
+  vim.validate('to', to, 'string')
+  if not environment then
+    table.insert(hand_overs_waiting, { from = from, to = to })
+    return
+  end
+  hand_over(from, to)
 end
 
 return M

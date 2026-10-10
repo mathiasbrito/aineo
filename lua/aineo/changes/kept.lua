@@ -158,4 +158,103 @@ function M.keep_base(state_directory, id, kept)
   end
 end
 
+--- The codes, as libuv gives them, of a hard link the file system refuses:
+--- it has none (exFAT, FAT, some network and FUSE mounts), the file is on
+--- another device, or it has too many.
+local LINK_REFUSALS = { ENOTSUP = true, EPERM = true, EXDEV = true, EMLINK = true, ENOSYS = true }
+
+--- Moves the kept file `from` to `to` by renaming it, when `to` does not
+--- exist and `from` does; neither is touched otherwise. `to` is looked for
+--- first and then `from` renamed, so another editor making `to` between
+--- the two has its file replaced.
+---
+---@param from string
+---@param to string
+---@return string? failure why `from` could not be moved, naming both files; nil when it was moved, or when `to` exists or `from` does not
+local function move_by_rename(from, to)
+  if vim.uv.fs_stat(to) then
+    return nil
+  end
+  local renamed, failure, code = vim.uv.fs_rename(from, to)
+  if renamed or code == 'ENOENT' then
+    return nil
+  end
+  return ('cannot move %s to %s: %s'):format(from, to, failure)
+end
+
+--- Removes `to`, just linked to the kept file `from`, once `from` was found
+--- gone: another editor took `from` between the link and its removal, and
+--- when `to` is not the only name left of that file, the other editor's
+--- session holds it, so `to` is removed for the two sessions to keep one
+--- file each. A `to` that is that file's only name is kept: `from` was
+--- removed some other way, and `to` holds the only copy.
+---
+---@param from string
+---@param to string
+---@return string? failure why `to` could not be removed, naming both files; nil once removed, or kept
+local function give_up_link_taken_meanwhile(from, to)
+  local moved = vim.uv.fs_stat(to)
+  if not moved or moved.nlink < 2 then
+    return nil
+  end
+  local removed, removal_failure = vim.uv.fs_unlink(to)
+  if not removed then
+    return ('cannot move %s to %s: another editor moved it to its session at the same moment, and %s cannot be removed, so both sessions keep it: %s'):format(
+      from,
+      to,
+      to,
+      removal_failure
+    )
+  end
+  return nil
+end
+
+--- Moves what is kept for the session `from` to the session `to`, under
+--- `state_directory`, when `to` has no file and `from` has one: `from`'s
+--- file, unread, is then `to`'s, and `from`'s is gone. Neither is touched
+--- otherwise. The move links `to`'s file to `from`'s and then removes
+--- `from`'s; the link refuses an existing file at once, so another editor
+--- making `to`'s file, or taking `from`'s, meanwhile never has its file
+--- replaced, and is no failure. Another editor that took `from`'s file
+--- between the link and the removal took the same file: `to`'s is then
+--- removed again (`give_up_link_taken_meanwhile()`), so that two sessions
+--- never share one file. Where the file system refuses the link
+--- (`LINK_REFUSALS`), or `from`'s file is a symbolic link, which then stays
+--- one, it is renamed instead (`move_by_rename()`).
+---
+---@param state_directory string
+---@param from string
+---@param to string
+---@return string? failure why it could not be moved, naming both files; nil when it was moved, or when `to`'s file exists or `from`'s does not
+function M.move_kept_base(state_directory, from, to)
+  local from_file = M.kept_base_file(state_directory, from)
+  local to_file = M.kept_base_file(state_directory, to)
+  local from_link = vim.uv.fs_lstat(from_file)
+  if from_link and from_link.type == 'link' then
+    return move_by_rename(from_file, to_file)
+  end
+  local linked, failure, code = vim.uv.fs_link(from_file, to_file)
+  if LINK_REFUSALS[code] then
+    return move_by_rename(from_file, to_file)
+  end
+  if linked then
+    local removed, removal_failure, removal_code = vim.uv.fs_unlink(from_file)
+    if removal_code == 'ENOENT' then
+      return give_up_link_taken_meanwhile(from_file, to_file)
+    end
+    if not removed then
+      return ('cannot move %s to %s: it is in both, the first cannot be removed: %s'):format(
+        from_file,
+        to_file,
+        removal_failure
+      )
+    end
+    return nil
+  end
+  if code == 'EEXIST' or code == 'ENOENT' then
+    return nil
+  end
+  return ('cannot move %s to %s: %s'):format(from_file, to_file, failure)
+end
+
 return M
