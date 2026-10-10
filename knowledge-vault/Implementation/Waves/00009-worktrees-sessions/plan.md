@@ -451,6 +451,12 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 
 **Planned by:** the T41 planning agent (Claude, Opus 5.5), for the orchestrator, on `dev` `2fdda81`, with T38's and T39's dispatch amendments read on `knowledge/w9-stage2-amend` at `e5ef23a` (PR #139, open when this was written). **Brief:** `brief-t41-dead-session-handover.md`. **Brief review:** `brief-review-t41-dead-session-handover.md`, before dispatch (orchestrate §3, a later packet). **Evidence:** `evidence/w9-t41-probes.txt` (P1–P3, and the counts of the three homes' session suites on `2fdda81`). **Order:** after T38, T39 and T40 have merged (rule 2, below); a dispatch amendment re-checks the brief against that `dev`.
 
+*(2026-10-10, at dispatch.)* T41's brief review was not committed, as the stage-2 brief review was not. Its fifteen findings, T41-1 to T41-15, are applied in the brief and listed there with where, in *Correction — 2026-10-10, from the brief review*. The brief's *Amendment — 2026-10-10, at dispatch: T38, T39, T40 and T42 merged* does four things on `dev` `0ed6681`:
+- it re-reads the facts and the help fences, and gives the baseline;
+- it answers *For the dispatch amendment* below. T38 added one file to the changes home, `worktrees.lua`, which holds none of the session state. This editor's saves before the first follow were ruled on `dev` already (A71): the lost `*` stays, and T38 words it.
+- it adds mutants 13 and 14;
+- it gives the reviewers line: attack by `neovim-lua-reviewer`, test integrity by `reviewer`, records by `records-reviewer` (A80), in place of *Host and reviewers* below.
+
 **Ask.** T39's dispatch amendment found that T19's fallback strands what a session held (`brief-t39-panes-follow-switch.md` › *For the orchestrator, before dispatch: T19's fallback strands what the first follow moved*). The user's first answer, "Wait for the resume", keeps the folder's records and draft out of a session that turns out dead; T39's second amendment then found what the wait does not reach (*What the wait does not reach — for the orchestrator, before dispatch*): what was kept under a session while it was confirmed and alive, as the notes typed after a `/clear` in which nothing was sent. The orchestrator put that to the user.
 
 ### The user's answer — 2026-10-08
