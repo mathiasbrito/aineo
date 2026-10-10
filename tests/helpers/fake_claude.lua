@@ -46,7 +46,10 @@
 ---   (`compact`) alone; and, as it exits by its keys, `SessionEnd`
 ---   (`prompt_input_exit`) — nothing on a hangup or at its lifetime's end.
 ---   Unset, it runs no hook. Either way, those keys move it to the session
----   they name, and send no message.
+---   they name, and send no message. Each hook gets the session it tells as
+---   `CLAUDE_CODE_SESSION_ID` (M3, wave 9).
+--- - `AINEO_FAKE_CLAUDE_HOOK_SHELL` — `wrapped`, the shell runs each hook's
+---   command followed by `; true`, so that it stays the command's parent.
 ---
 --- It answers Ctrl-C as Claude Code 2.1.281 did in a Neovim terminal: idle, a
 --- second press within `DOUBLE_PRESS_MS` of the first exits 0,
@@ -422,11 +425,27 @@ local function configured_hooks(event)
   return hooks
 end
 
+--- Whether the shell that runs a hook runs it as one command among two
+--- (`AINEO_FAKE_CLAUDE_HOOK_SHELL` set to `wrapped`), so that it cannot run
+--- the hook's command in its own place and stays its parent, as P2 measured
+--- of `/bin/sh` and Node's shell given two commands.
+local WRAPS_HOOKS = os.getenv('AINEO_FAKE_CLAUDE_HOOK_SHELL') == 'wrapped'
+
+--- The shell command that runs `command`, a hook's: `command` alone, or,
+--- when the fake wraps hooks (`WRAPS_HOOKS`), `command` and then `true`.
+---
+---@param command string
+---@return string
+local function shell_command(command)
+  return WRAPS_HOOKS and (command .. '; true') or command
+end
+
 --- Runs, when the fake runs hooks (`RUNS_HOOKS`), each command hook given
---- for `event` as Claude Code runs one — through `sh -c`, its input
---- (`hook_input()`) on stdin, the inherited `NVIM` in its environment, which
---- `vim.system()` would otherwise set to the fake's own address — waiting for
---- each to end, at most its timeout, and records it.
+--- for `event` as Claude Code runs one — through `sh -c` (`shell_command()`),
+--- its input (`hook_input()`) on stdin, the inherited `NVIM` in its
+--- environment, which `vim.system()` would otherwise set to the fake's own
+--- address, and the session it tells as `CLAUDE_CODE_SESSION_ID`, as M3
+--- measured — waiting for each to end, at most its timeout, and records it.
 ---
 ---@param event string
 ---@param session_id string
@@ -437,9 +456,9 @@ local function run_hooks(event, session_id, cause)
   end
   for _, hook in ipairs(configured_hooks(event)) do
     local ended = vim
-      .system({ 'sh', '-c', hook.command }, {
+      .system({ 'sh', '-c', shell_command(hook.command) }, {
         stdin = hook_input(event, session_id, cause),
-        env = { NVIM = os.getenv('NVIM') },
+        env = { NVIM = os.getenv('NVIM'), CLAUDE_CODE_SESSION_ID = session_id },
       })
       :wait((hook.timeout or DEFAULT_HOOK_TIMEOUT_SECONDS) * 1000)
     record({ hook = event, session_id = session_id, cause = cause, code = ended.code })

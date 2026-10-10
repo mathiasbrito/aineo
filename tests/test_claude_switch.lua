@@ -199,20 +199,32 @@ local function switch_by_hooks(child, fake, count, switch)
   )
 end
 
+--- The word a call of `receive_in_order()` names for the start token of the
+--- fake's first start, which it puts in its place.
+local START = 'the token of the first start'
+
 --- Calls, in `child`, `aineo.claude`'s `receive_session_event()` with
 --- each of `calls` in order, as deliverers reaching the editor in that order
---- would, then waits until the work they scheduled has run.
+--- would, `START` among their arguments replaced by the start token of the
+--- fake's first start, then waits until the work they scheduled has run.
 ---
 ---@param child table
+---@param fake { record: string }
 ---@param calls any[][] each the arguments of one call
-local function receive_in_order(child, calls)
+local function receive_in_order(child, fake, calls)
+  local token = claude.start_token(fake, 1)
+  local with_token = vim.tbl_map(function(call)
+    return vim.tbl_map(function(argument)
+      return argument == START and token or argument
+    end, call)
+  end, calls)
   child.lua(
     [[
       for _, call in ipairs(...) do
-        require('aineo.claude').receive_session_event(unpack(call))
+        require('aineo.claude').receive_session_event(unpack(call, 1, 5))
       end
     ]],
-    { calls }
+    { with_token }
   )
   claude.wait_for_deliveries(child)
 end
@@ -356,6 +368,38 @@ T['start_session()']['gives Claude Code a SessionStart and a SessionEnd command 
 
   local given = claude.decoded_words_after(claude.arguments(fake), '--settings')
   eq(vim.tbl_map(shape_of, given), { { hooks = AINEO_HOOKS_SHAPE } })
+end
+
+T['start_session()']['gives each hook a command of words quoted for the shell, but "$PPID" for the shell to expand, then the directory Claude Code runs in'] = function()
+  local fake = claude.fake('switch-ppid', 'exit')
+  local cwd = child.fn.getcwd()
+
+  claude.start(child, fake, kept_in('switch-ppid-state'))
+
+  eq({
+    session_start = vim.endswith(
+      claude.hook_command(fake, 1, 'SessionStart'),
+      ("'SessionStart' \"$PPID\" '%s'"):format(cwd)
+    ),
+    session_end = vim.endswith(
+      claude.hook_command(fake, 1, 'SessionEnd'),
+      ("'SessionEnd' \"$PPID\" '%s'"):format(cwd)
+    ),
+  }, { session_start = true, session_end = true })
+end
+
+T['start_session()']['gives the first starts of two editors different start tokens'] = function()
+  local other = MiniTest.new_child_neovim()
+  MiniTest.finally(other.stop)
+  children.restart(other)
+  local fake = claude.fake('switch-tokens', 'exit')
+  local other_fake = claude.fake('switch-tokens-other', 'exit')
+
+  claude.start(child, fake, kept_in('switch-tokens-state'))
+  claude.start(other, other_fake, kept_in('switch-tokens-other-state'))
+
+  local token, other_token = claude.start_token(fake, 1), claude.start_token(other_fake, 1)
+  eq({ type(token), token ~= other_token }, { 'string', true })
 end
 
 --- Settings of the user's own, as a `--settings` of `claude.cmd` gives them.
@@ -1256,10 +1300,10 @@ T['a session switch']['is not made by a SessionStart alone after a resume of the
   claude.start_noting_switches(child, fake, kept_in('switch-same-resumed-reversed-state'))
   local started_on = first_session_id(fake)
 
-  receive_in_order(child, {
-    { 'SessionStart', started_on, 'resume', '1', 2000 },
-    { 'SessionEnd', started_on, 'resume', '1', 1000 },
-    { 'SessionStart', OTHER_SESSION_ID, 'fork', '1', 3000 },
+  receive_in_order(child, fake, {
+    { 'SessionStart', started_on, 'resume', START, 2000 },
+    { 'SessionEnd', started_on, 'resume', START, 1000 },
+    { 'SessionStart', OTHER_SESSION_ID, 'fork', START, 3000 },
   })
 
   eq(
@@ -1320,9 +1364,9 @@ T['a session switch']['is followed when its SessionStart reaches the editor befo
   claude.start_noting_switches(child, fake, kept_in('switch-reversed-state'))
   local started_on = first_session_id(fake)
 
-  receive_in_order(child, {
-    { 'SessionStart', OTHER_SESSION_ID, 'clear', '1', 2000 },
-    { 'SessionEnd', started_on, 'clear', '1', 1000 },
+  receive_in_order(child, fake, {
+    { 'SessionStart', OTHER_SESSION_ID, 'clear', START, 2000 },
+    { 'SessionEnd', started_on, 'clear', START, 1000 },
   })
 
   eq(child.lua_get('_G.session_switches'), {
@@ -1343,16 +1387,16 @@ T['a session switch']['is not made by a SessionStart whose hook ran before the S
   local started_on = first_session_id(fake)
   local events = {
     ['the SessionStart first'] = {
-      { 'SessionStart', OTHER_SESSION_ID, 'fork', '1', 1000 },
-      { 'SessionEnd', started_on, 'prompt_input_exit', '1', 2000 },
+      { 'SessionStart', OTHER_SESSION_ID, 'fork', START, 1000 },
+      { 'SessionEnd', started_on, 'prompt_input_exit', START, 2000 },
     },
     ['the SessionEnd first'] = {
-      { 'SessionEnd', started_on, 'prompt_input_exit', '1', 2000 },
-      { 'SessionStart', OTHER_SESSION_ID, 'fork', '1', 1000 },
+      { 'SessionEnd', started_on, 'prompt_input_exit', START, 2000 },
+      { 'SessionStart', OTHER_SESSION_ID, 'fork', START, 1000 },
     },
   }
 
-  receive_in_order(child, events[first])
+  receive_in_order(child, fake, events[first])
 
   eq(
     { child.lua_get('_G.session_switches'), claude.followed_session_id(child) },
@@ -1367,10 +1411,10 @@ T['a session switch']['ends on the last session of two switches whose hooks reac
         'their SessionStarts first',
         function(started_on)
           return {
-            { 'SessionStart', OTHER_SESSION_ID, 'clear', '1', 2000 },
-            { 'SessionStart', THIRD_SESSION_ID, 'clear', '1', 4000 },
-            { 'SessionEnd', started_on, 'clear', '1', 1000 },
-            { 'SessionEnd', OTHER_SESSION_ID, 'clear', '1', 3000 },
+            { 'SessionStart', OTHER_SESSION_ID, 'clear', START, 2000 },
+            { 'SessionStart', THIRD_SESSION_ID, 'clear', START, 4000 },
+            { 'SessionEnd', started_on, 'clear', START, 1000 },
+            { 'SessionEnd', OTHER_SESSION_ID, 'clear', START, 3000 },
           }
         end,
       },
@@ -1378,10 +1422,10 @@ T['a session switch']['ends on the last session of two switches whose hooks reac
         'the second SessionEnd before the first SessionStart',
         function(started_on)
           return {
-            { 'SessionEnd', started_on, 'clear', '1', 1000 },
-            { 'SessionEnd', OTHER_SESSION_ID, 'clear', '1', 3000 },
-            { 'SessionStart', OTHER_SESSION_ID, 'clear', '1', 2000 },
-            { 'SessionStart', THIRD_SESSION_ID, 'clear', '1', 4000 },
+            { 'SessionEnd', started_on, 'clear', START, 1000 },
+            { 'SessionEnd', OTHER_SESSION_ID, 'clear', START, 3000 },
+            { 'SessionStart', OTHER_SESSION_ID, 'clear', START, 2000 },
+            { 'SessionStart', THIRD_SESSION_ID, 'clear', START, 4000 },
           }
         end,
       },
@@ -1389,10 +1433,10 @@ T['a session switch']['ends on the last session of two switches whose hooks reac
         'every hook in the reverse of the order it ran',
         function(started_on)
           return {
-            { 'SessionStart', THIRD_SESSION_ID, 'clear', '1', 4000 },
-            { 'SessionEnd', OTHER_SESSION_ID, 'clear', '1', 3000 },
-            { 'SessionStart', OTHER_SESSION_ID, 'clear', '1', 2000 },
-            { 'SessionEnd', started_on, 'clear', '1', 1000 },
+            { 'SessionStart', THIRD_SESSION_ID, 'clear', START, 4000 },
+            { 'SessionEnd', OTHER_SESSION_ID, 'clear', START, 3000 },
+            { 'SessionStart', OTHER_SESSION_ID, 'clear', START, 2000 },
+            { 'SessionEnd', started_on, 'clear', START, 1000 },
           }
         end,
       },
@@ -1407,7 +1451,7 @@ T['a session switch']['ends on the last session of two switches whose hooks reac
   claude.start_noting_switches(child, fake, kept_in('switch-two-out-of-order-state'))
   local started_on = first_session_id(fake)
 
-  receive_in_order(child, hooks_for(started_on))
+  receive_in_order(child, fake, hooks_for(started_on))
 
   eq({ child.lua_get('_G.session_switches'), claude.followed_session_id(child) }, {
     {
@@ -1425,8 +1469,8 @@ T['a session switch']['pairs hooks by the order they reach the editor when one d
         'the SessionEnd first, a switch',
         function(started_on)
           return {
-            { 'SessionEnd', started_on, 'clear', '1', vim.NIL },
-            { 'SessionStart', OTHER_SESSION_ID, 'clear', '1', 2000 },
+            { 'SessionEnd', started_on, 'clear', START, vim.NIL },
+            { 'SessionStart', OTHER_SESSION_ID, 'clear', START, 2000 },
           }
         end,
         { OTHER_SESSION_ID },
@@ -1435,8 +1479,8 @@ T['a session switch']['pairs hooks by the order they reach the editor when one d
         'the SessionStart first, none',
         function(started_on)
           return {
-            { 'SessionStart', OTHER_SESSION_ID, 'clear', '1', 2000 },
-            { 'SessionEnd', started_on, 'clear', '1', vim.NIL },
+            { 'SessionStart', OTHER_SESSION_ID, 'clear', START, 2000 },
+            { 'SessionEnd', started_on, 'clear', START, vim.NIL },
           }
         end,
         {},
@@ -1452,7 +1496,7 @@ T['a session switch']['pairs hooks by the order they reach the editor when one d
   local fake = claude.fake('switch-untimed', 'ready')
   claude.start_noting_switches(child, fake, kept_in('switch-untimed-state'))
 
-  receive_in_order(child, hooks_for(first_session_id(fake)))
+  receive_in_order(child, fake, hooks_for(first_session_id(fake)))
 
   eq(
     vim.tbl_map(function(switch)
@@ -1467,9 +1511,9 @@ T['a session switch']['is not made by a SessionStart whose hook ran at the same 
   claude.start_noting_switches(child, fake, kept_in('switch-same-moment-state'))
   local started_on = first_session_id(fake)
 
-  receive_in_order(child, {
-    { 'SessionEnd', started_on, 'clear', '1', 1000 },
-    { 'SessionStart', OTHER_SESSION_ID, 'clear', '1', 1000 },
+  receive_in_order(child, fake, {
+    { 'SessionEnd', started_on, 'clear', START, 1000 },
+    { 'SessionStart', OTHER_SESSION_ID, 'clear', START, 1000 },
   })
 
   eq(
@@ -1603,9 +1647,9 @@ T['a session switch']['is followed when its hooks ran before Claude Code exited 
   child.lua('vim.fn.jobstop(vim.bo[...].channel)', { terminal })
   claude.wait_for_status(child, 'exited')
 
-  receive_in_order(child, {
-    { 'SessionEnd', started_on, 'clear', '1', 1000 },
-    { 'SessionStart', OTHER_SESSION_ID, 'clear', '1', 2000 },
+  receive_in_order(child, fake, {
+    { 'SessionEnd', started_on, 'clear', START, 1000 },
+    { 'SessionStart', OTHER_SESSION_ID, 'clear', START, 2000 },
   })
 
   eq({ child.lua_get('_G.session_switches'), claude.followed_session_id(child) }, {

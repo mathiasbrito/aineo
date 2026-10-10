@@ -296,6 +296,16 @@ function M.hook_command(fake, count, event)
   return vim.json.decode(given).hooks[event][1].hooks[1].command
 end
 
+--- The start token the session hooks of the fake's `count`th start name:
+--- the word of the `SessionStart` hook's command before its event.
+---
+---@param fake { record: string }
+---@param count integer
+---@return string?
+function M.start_token(fake, count)
+  return M.hook_command(fake, count, 'SessionStart'):match("'([^']*)' 'SessionStart'")
+end
+
 --- Runs the `event` hook of the fake's `count`th start as Claude Code runs a
 --- command hook: its command through `sh -c`, with `input` on stdin and the
 --- address of `child`, the editor Claude Code runs in, as `NVIM`; returns
