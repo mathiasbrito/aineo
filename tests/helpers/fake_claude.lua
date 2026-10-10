@@ -50,6 +50,13 @@
 ---   `CLAUDE_CODE_SESSION_ID` (M3, wave 9).
 --- - `AINEO_FAKE_CLAUDE_HOOK_SHELL` — `wrapped`, the shell runs each hook's
 ---   command followed by `; true`, so that it stays the command's parent.
+--- - `AINEO_FAKE_CLAUDE_MCP` — `kept`, the fake starts the MCP server its
+---   `--mcp-config` names once its `SessionStart` hooks have run, keeps it
+---   for its life, as Claude Code 2.1.292 did (M5, wave 9), and sends it
+---   Claude Code's handshake; then the keys `/report <task>` and Enter call
+---   its report tool with a report of that task, done, and record the
+---   answer. Every MCP server the fake starts gets the session it started
+---   on as `CLAUDE_CODE_SESSION_ID`.
 ---
 --- It answers Ctrl-C as Claude Code 2.1.281 did in a Neovim terminal: idle, a
 --- second press within `DOUBLE_PRESS_MS` of the first exits 0,
@@ -284,6 +291,12 @@ local keys = {
 --- session first (`prompt_input_exit`). Defined below, with the hooks.
 ---@type fun()
 local exit_by_keys
+
+--- Calls the report tool of the MCP server the fake keeps for its life with
+--- a report of the task it is given, when it keeps one. Defined below, with
+--- the MCP client.
+---@type fun(task: string)
+local report_to_kept_server
 
 --- Answers one Ctrl-C press at `now_ms` as the mode does.
 ---
@@ -589,6 +602,13 @@ local function answer(input)
     vim.schedule(command)
     return
   end
+  local reported = input:match('/report ([^\r]+)\r$')
+  if reported then
+    vim.schedule(function()
+      report_to_kept_server(reported)
+    end)
+    return
+  end
   keep_conversation(input)
   local screen = screen_for_key(input)
   if screen then
@@ -636,43 +656,105 @@ local function fixture_mcp_messages()
   end, vim.fn.readfile(MCP_MESSAGES))
 end
 
---- Acts as the MCP client Claude Code is: starts the server `--mcp-config`
---- names — its command, arguments and environment — as a process with piped
---- standard streams, sends it each of `MCP_MESSAGES` in order, waiting for
---- the answer to each request, records each answer as `{ mcp = <answer> }`,
---- and closes the server's input once the report tool's call is answered.
---- An answer that does not come within `MCP_ANSWER_MS` is recorded as
---- `{ mcp = 'no answer to <id>' }`, and the fake goes on.
-local function call_report_tool()
+--- A running MCP server: its process, what it has written to stdout, and
+--- the id of the next request the fake sends it.
+---@class aineo.test.FakeMcpServer
+---@field process vim.SystemObj
+---@field output string
+---@field next_id integer
+
+--- Starts the MCP server `--mcp-config` names — its command, arguments and
+--- environment, with the session the fake started on as
+--- `CLAUDE_CODE_SESSION_ID`, as M5 measured — as a process with piped
+--- standard streams.
+---
+---@return aineo.test.FakeMcpServer
+local function start_mcp_server()
   local server = configured_mcp_server()
-  local output = ''
-  local process = vim.system(vim.list_extend({ server.command }, server.args), {
-    env = server.env,
+  local started = { output = '', next_id = 100 }
+  started.process = vim.system(vim.list_extend({ server.command }, server.args), {
+    env = vim.tbl_extend('force', server.env or {}, { CLAUDE_CODE_SESSION_ID = SESSION_ID }),
     stdin = true,
     stdout = function(_, data)
-      output = output .. (data or '')
+      started.output = started.output .. (data or '')
     end,
   })
-  local function answer_to(id)
-    for line in output:gmatch('([^\n]*)\n') do
-      local message = vim.json.decode(line)
+  return started
+end
+
+--- Sends `server` the JSON-RPC message `line` and, when it is a request,
+--- waits for its answer at most `MCP_ANSWER_MS` and records it as
+--- `{ mcp = <answer> }`, or `{ mcp = 'no answer to <id>' }`.
+---
+---@param server aineo.test.FakeMcpServer
+---@param line string
+local function send_mcp_message(server, line)
+  server.process:write(line .. '\n')
+  local id = vim.json.decode(line).id
+  if id == nil then
+    return
+  end
+  local function server_answer()
+    for answer_line in server.output:gmatch('([^\n]*)\n') do
+      local message = vim.json.decode(answer_line)
       if message.id == id then
         return message
       end
     end
   end
+  local answered = vim.wait(MCP_ANSWER_MS, function()
+    return server_answer() ~= nil
+  end, 10)
+  record({ mcp = answered and server_answer() or ('no answer to %d'):format(id) })
+end
+
+--- Acts as the MCP client Claude Code is: starts the server `--mcp-config`
+--- names (`start_mcp_server()`), sends it each of `MCP_MESSAGES` in order,
+--- waiting for the answer to each request and recording it
+--- (`send_mcp_message()`), and closes the server's input once the report
+--- tool's call is answered.
+local function call_report_tool()
+  local server = start_mcp_server()
   for _, line in ipairs(fixture_mcp_messages()) do
-    process:write(line .. '\n')
-    local id = vim.json.decode(line).id
-    if id ~= nil then
-      local answered = vim.wait(MCP_ANSWER_MS, function()
-        return answer_to(id) ~= nil
-      end, 10)
-      record({ mcp = answered and answer_to(id) or ('no answer to %d'):format(id) })
+    send_mcp_message(server, line)
+  end
+  server.process:write(nil)
+  server.process:wait(MCP_ANSWER_MS)
+end
+
+--- The MCP server the fake keeps for its life (`AINEO_FAKE_CLAUDE_MCP` set
+--- to `kept`), once started.
+---@type aineo.test.FakeMcpServer?
+local kept_server
+
+--- Starts the MCP server the fake keeps for its life, as Claude Code 2.1.292
+--- did (M5), and sends it Claude Code's handshake, the report tool's call
+--- left out: `MCP_MESSAGES` but its `tools/call`.
+local function keep_mcp_server()
+  kept_server = start_mcp_server()
+  for _, line in ipairs(fixture_mcp_messages()) do
+    if vim.json.decode(line).method ~= 'tools/call' then
+      send_mcp_message(kept_server, line)
     end
   end
-  process:write(nil)
-  process:wait(MCP_ANSWER_MS)
+end
+
+--- Calls the report tool of the kept MCP server with a report of `task`,
+--- done, its summary `All tests pass`, as a turn of Claude Code calls it;
+--- does nothing when the fake keeps none.
+---
+---@param task string
+report_to_kept_server = function(task)
+  if not kept_server then
+    return
+  end
+  local message = vim.json.decode(vim.iter(fixture_mcp_messages()):find(function(line)
+    return vim.json.decode(line).method == 'tools/call'
+  end))
+  message.params.arguments = { task = task, status = 'done', summary = 'All tests pass' }
+  kept_server.next_id = kept_server.next_id + 1
+  message.id = kept_server.next_id
+  send_mcp_message(kept_server, vim.json.encode(message))
 end
 
 vim.uv.new_signal():start('sighup', function()
@@ -712,6 +794,9 @@ for index, screen in ipairs(MODE.screens) do
 end
 if current_session_id then
   run_hooks('SessionStart', current_session_id, word_after('--resume') and 'resume' or 'startup')
+end
+if os.getenv('AINEO_FAKE_CLAUDE_MCP') == 'kept' then
+  keep_mcp_server()
 end
 
 stdin:read_start(function(_, input)
