@@ -408,24 +408,66 @@ function M.receive_report(arguments)
   end
 end
 
---- Takes `arguments`, a report of the Claude session `session_id`, as
---- `receive_report()` does when the home follows that session, or follows
---- none yet — the report is then kept in the working directory's records,
---- which the first session followed takes — and returns true. When the home
---- follows another session, it neither shows nor keeps the report, and
---- returns false: the report server then offers it to another editor that
---- shows its session, or keeps it on disk (`keep_session_report()`).
+--- Appends `arguments`, a report, to the records file `records_file`,
+--- received at `time`, without showing it. A grown records file that cannot
+--- be cut back to its newest records keeps the report all the same, and is
+--- cut at a later record (`records.append_record()`).
 ---
---- Raises what `receive_report()` raises.
+--- Raises an error naming the field at fault when `arguments` are not a
+--- report, and an error naming the records file when it cannot be kept.
+---
+---@param records_file string
+---@param arguments table
+---@param time string
+local function keep_unshown(records_file, arguments, time)
+  local valid_report, refusal = format.validate_report(arguments)
+  if not valid_report then
+    error('aineo refused the report: ' .. refusal, 0)
+  end
+  records.append_record(records_file, { time = time, report = valid_report })
+end
+
+--- Takes `arguments`, a report of the Claude session `session_id`, as
+--- `receive_report()` does when the home follows that session, and returns
+--- true. With `options.at_start` — asked of the editor that started the
+--- report's Claude Code — it takes it too while the home follows no session
+--- yet: the report is then kept in the working directory's records, which
+--- the first session followed takes. Otherwise it neither shows nor keeps
+--- the report, and returns false: the report server then offers it to
+--- another editor that shows its session, or keeps it on disk
+--- (`keep_session_report()`).
+---
+--- With `options.keep_with_directory` too — asked once no editor that shows
+--- the report's session took it — a home that follows another session, and
+--- has not yet moved the working directory's records into a session of its
+--- own (`move_directory_records_once()`), keeps the report in those records
+--- without showing it, and returns true: the first follow of this editor's
+--- own session then takes them whole, the report among them. Once they have
+--- moved, it returns false.
+---
+--- Raises what `receive_report()` raises, and, for a report kept with the
+--- directory's records, an error naming the field at fault or the records
+--- file.
 ---
 ---@param arguments table
 ---@param session_id string
+---@param options? { at_start: boolean?, keep_with_directory: boolean? }
 ---@return boolean taken
-function M.receive_session_report(arguments, session_id)
-  if followed_session ~= nil and followed_session ~= session_id then
+function M.receive_session_report(arguments, session_id, options)
+  options = options or {}
+  if followed_session == session_id or (followed_session == nil and options.at_start) then
+    M.receive_report(arguments)
+    return true
+  end
+  if not (options.at_start and options.keep_with_directory) or directory_records_moved then
     return false
   end
-  M.receive_report(arguments)
+  local current = current_environment()
+  keep_unshown(
+    records.records_file(current.state_directory, current.working_directory),
+    arguments,
+    current.clock()
+  )
   return true
 end
 
@@ -447,14 +489,7 @@ end
 ---@param arguments table
 ---@param time string
 function M.keep_session_report(state_directory, session_id, arguments, time)
-  local valid_report, refusal = format.validate_report(arguments)
-  if not valid_report then
-    error('aineo refused the report: ' .. refusal, 0)
-  end
-  records.append_record(
-    records.session_records_file(state_directory, session_id),
-    { time = time, report = valid_report }
-  )
+  keep_unshown(records.session_records_file(state_directory, session_id), arguments, time)
 end
 
 --- Follows the Claude session `session_id`: keeps every report received

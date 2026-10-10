@@ -416,6 +416,21 @@ local function type_to_orphan(host, keys)
   claude_session.press_keys(host, host.lua_get('_G.orphaned_terminal'), keys)
 end
 
+--- Waits, at most `PATIENCE_MS`, until the report server the fake keeps
+--- for its life has answered Claude Code's handshake: the fake records two
+--- answers, to `initialize` and to `tools/list`. Returns whether it has.
+---
+---@param fake { record: string }
+---@return boolean
+local function wait_for_report_server(fake)
+  return vim.wait(PATIENCE_MS, function()
+    local answered = vim.tbl_filter(function(recorded)
+      return recorded.mcp ~= nil
+    end, claude_session.record(fake))
+    return #answered >= 2
+  end, 20)
+end
+
 --- The text of the report tool's answer the fake recorded `count`th, once
 --- it has recorded that many past its handshake, waiting at most
 --- `PATIENCE_MS`.
@@ -453,7 +468,7 @@ T['a claim of a session whose editor is gone']['shows its kept reports and gets 
   children.restart(other)
   share_state(other, home)
   local fake, session = start_orphaned_claude(other, state, 'entry-claim-orphan')
-  report_answer(fake, 0)
+  wait_for_report_server(fake)
   type_to_orphan(other, '/report Kept before the claim\r')
   report_answer(fake, 1)
   open_until_ready(child, fake_running_hooks('entry-claim-orphan-own'))
@@ -464,14 +479,16 @@ T['a claim of a session whose editor is gone']['shows its kept reports and gets 
   local answer = report_answer(fake, 2)
   type_to_orphan(other, '/clear\r')
   local moved = entry_once(state, child, function(listed)
-    return listed ~= nil and listed.session ~= session
+    return listed ~= nil
+      and listed.session ~= session
+      and (claim_of(state, listed.session) or {}).address == child.v.servername
   end)
   type_to_orphan(other, '/report After the clear\r')
 
   eq({
     kept = kept,
     answer = answer,
-    moved = moved and { moved.own, claim_of(state, moved.session).address },
+    moved = moved and { moved.own, (claim_of(state, moved.session) or {}).address },
     after_clear = report_answer(fake, 3),
     report = once_equal(child, REPORT_LINES, { reported('After the clear') }),
   }, {
@@ -495,7 +512,7 @@ T['a claim of a session whose editor is gone']['wins over a Neovim used later th
   children.restart(host)
   share_state(host, home)
   local fake, session = start_orphaned_claude(host, state, 'entry-claim-precedence')
-  report_answer(fake, 0)
+  wait_for_report_server(fake)
   entry.restart(other)
   share_state(other, home)
   local own = open_until_ready(other, fake_running_hooks('entry-claim-precedence-own'))
@@ -541,18 +558,20 @@ T['a claim of a session whose editor answers']['follows its Claude Code to the s
   share_state(other, home)
   local fake = fake_running_hooks('entry-claim-answering', { AINEO_FAKE_CLAUDE_MCP = 'kept' })
   local session = open_until_ready(other, fake)
-  report_answer(fake, 0)
+  wait_for_report_server(fake)
   child.cmd('Aineo claim ' .. session)
 
   type_to_claude(other, '/clear\r')
   local moved = entry_once(state, child, function(listed)
-    return listed ~= nil and listed.session ~= session
+    return listed ~= nil
+      and listed.session ~= session
+      and (claim_of(state, listed.session) or {}).address == child.v.servername
   end)
   type_to_claude(other, '/report After the clear\r')
 
   eq({
     moved = moved and moved.session == claude_session.followed_session_id(other),
-    claimant = moved and claim_of(state, moved.session).address,
+    claimant = moved and (claim_of(state, moved.session) or {}).address,
     starting = entry_at(state, other.v.servername).own,
     answer = report_answer(fake, 1),
     lines = once_equal(child, REPORT_LINES, { reported('After the clear') }),
@@ -570,12 +589,47 @@ T[':Aineo claim']['completes to the session of a Claude Code started without ain
   local fake =
     claude_session.fake('entry-claim-no-hooks', 'ready', { AINEO_FAKE_CLAUDE_MCP = 'kept' })
   local session = open_until_ready(child, fake)
-  report_answer(fake, 0)
+  wait_for_report_server(fake)
 
   eq(child.fn.getcompletion('Aineo claim ', 'cmdline'), { session })
 end
 
 T['a claim of another session'] = MiniTest.new_set()
+
+--- What the report tool answers when a report was kept on disk.
+local KEPT = "Kept in this session's Agent Report on disk, because no Neovim shows the session now;"
+  .. ' it shows when aineo next shows the session.'
+
+T['a claim of another session']['keeps a report of this Neovim’s own Claude Code unshown with the directory’s records, which its own session then takes whole'] = function()
+  local state = share_state(child, fixture.directory('entry-claim-own-report'))
+  local folder = directory_files(child, state)
+  leave_file(folder.records, { record_of('Directory task') })
+  child.cmd('Aineo claim ' .. OTHER_SESSION_ID)
+  local fake = fake_running_hooks('entry-claim-own-report', { AINEO_FAKE_CLAUDE_MCP = 'kept' })
+  open_until_ready(child, fake)
+  wait_for_report_server(fake)
+
+  type_to_claude(child, '/report Own while claimed\r')
+  local answer = report_answer(fake, 1)
+  local while_claimed = child.lua_get(REPORT_LINES)
+  child.cmd('Aineo claim')
+
+  eq({
+    answer = answer,
+    while_claimed = while_claimed,
+    returned = once_equal(
+      child,
+      REPORT_LINES,
+      { shown('Directory task'), reported('Own while claimed') }
+    ),
+    directory_records = vim.fn.filereadable(folder.records),
+  }, {
+    answer = KEPT,
+    while_claimed = { '' },
+    returned = { shown('Directory task'), reported('Own while claimed') },
+    directory_records = 0,
+  })
+end
 
 T['a claim of another session']['keeps the panes where they are at a /clear of this Neovim’s own Claude Code, which is kept for the directory; :Aineo claim with its own id brings them back'] = function()
   local state = share_state(child, fixture.directory('entry-claim-own-switch'))
@@ -635,7 +689,7 @@ T['an editor’s entry']['is not written again once the editor quits, though a s
     if not connected then
       return false
     end
-    local told = pcall(
+    local requested, told = pcall(
       vim.rpcrequest,
       channel,
       'nvim_exec_lua',
@@ -649,7 +703,7 @@ T['an editor’s entry']['is not written again once the editor quits, though a s
       { OTHER_SESSION_ID, THIRD_SESSION_ID }
     )
     pcall(vim.fn.chanclose, channel)
-    return told
+    return requested and told == true
   end, 10)
   vim.wait(claude_session.STOP_PATIENCE_MS, function()
     return vim.uv.fs_stat(address) == nil
@@ -795,6 +849,54 @@ T[':Aineo claim']['with no word in a Neovim whose Claude Code never started warn
     },
     claims = {},
   })
+end
+
+T[':Aineo claim']['with no word before the start is confirmed warns once and claims nothing'] = function()
+  local state = share_state(child, fixture.directory('entry-claim-not-ready'))
+  local fake = claude_session.fake('entry-claim-not-ready', 'trust')
+  entry.use_fake(child, fake)
+  child.cmd('Aineo open')
+  claude_session.wait_for_start(fake)
+  local named = vim.wait(PATIENCE_MS, function()
+    return child.lua_get("require('aineo.claude').session_id() ~= nil")
+  end, 20)
+  child.lua('_G.entry_test_messages = {}')
+
+  child.cmd('Aineo claim')
+
+  eq({
+    named = named,
+    messages = entry.messages(child),
+    claims = vim.fn.glob(vim.fs.joinpath(state, 'aineo', 'claims', '*'), true, true),
+  }, {
+    named = true,
+    messages = {
+      {
+        message = 'aineo: Claude Code is not ready yet; nothing claimed',
+        level = vim.log.levels.WARN,
+      },
+    },
+    claims = {},
+  })
+end
+
+T[':Aineo claim']['with an id, and the return, tell the changes pane the session'] = function()
+  share_state(child, fixture.directory('entry-claim-changes'))
+  local own = open_until_ready(child, fake_running_hooks('entry-claim-changes'))
+  child.lua([[
+    local changes = require('aineo.changes')
+    local follow_changes_session = changes.follow_changes_session
+    _G.changes_followed = {}
+    changes.follow_changes_session = function(followed)
+      table.insert(_G.changes_followed, followed.id)
+      return follow_changes_session(followed)
+    end
+  ]])
+
+  child.cmd('Aineo claim ' .. OTHER_SESSION_ID)
+  child.cmd('Aineo claim')
+
+  eq(child.lua_get('_G.changes_followed'), { OTHER_SESSION_ID, own })
 end
 
 return T

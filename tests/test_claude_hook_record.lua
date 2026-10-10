@@ -2,6 +2,7 @@ local MiniTest = require('mini.test')
 local children = dofile('tests/helpers/child.lua')
 local claude = dofile('tests/helpers/claude_session.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
+local report_tui = dofile('tests/helpers/report_tui.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -193,6 +194,58 @@ T['a switch whose editor is gone']['is not made by a SessionStart of another ses
     kept = kept_once(state, child.fn.getcwd(), '063cc43c-8e1a-4d2f-b5c7-91d0e3a4f852'),
     recorded = recorded_session(state, fake),
   }, { kept = first, recorded = first })
+end
+
+T['a switch told to the Neovims that follow the session left'] = MiniTest.new_set({
+  hooks = {
+    post_case = function()
+      report_tui.stop_all()
+    end,
+  },
+})
+
+T['a switch told to the Neovims that follow the session left']['reaches the claimant while the editor that started Claude Code waits at a hit-enter prompt'] = function()
+  local state = state_of('hook-record-tell-claimant')
+  local left = '063cc43c-8e1a-4d2f-b5c7-91d0e3a4f852'
+  local new = '7d0e3a4f-8e1a-4d2f-b5c7-91d0e3a4f853'
+  child.cmd('Aineo claim ' .. left)
+  local starting = report_tui.start({
+    time = '2026-10-10T09:05:00',
+    state_directory = state,
+    working_directory = '/projects/alpha',
+  })
+  starting:type(':echo "one\\ntwo\\nthree"\r')
+  local waiting = starting:waits_at_hit_enter()
+  local relay = vim.fs.joinpath(vim.fn.getcwd(), 'lua', 'aineo', 'claude', 'hook_relay.lua')
+  local deliverer = vim.system({
+    vim.v.progpath,
+    '--headless',
+    '--clean',
+    '--cmd',
+    'set noloadplugins',
+    '-l',
+    relay,
+    '--deliver',
+    starting.address,
+    'a-token',
+    'SessionStart',
+    new,
+    'clear',
+    '1000',
+    left,
+    new,
+    '/projects/alpha',
+  }, { env = { XDG_STATE_HOME = vim.fs.dirname(state) } })
+  MiniTest.finally(function()
+    deliverer:kill('sigkill')
+  end)
+
+  local claimed_new = vim.wait(claude.PATIENCE_MS, function()
+    return require('aineo.mcp').session_claimant(state, new) == child.v.servername
+  end, 20)
+  starting:type('\r')
+
+  eq({ waiting = waiting, claimed_new = claimed_new }, { waiting = true, claimed_new = true })
 end
 
 return T

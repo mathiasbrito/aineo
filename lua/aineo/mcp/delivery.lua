@@ -71,16 +71,36 @@ local function report_session(context)
 end
 
 --- The Lua an editor listed, or a claimant, runs for a report: its report
---- home takes it only while it follows the report's session.
-local RECEIVE_SESSION_REPORT = "return require('aineo.report').receive_session_report(...)"
+--- home takes it only while it follows exactly the report's session. A
+--- Neovim without aineo, or with an aineo older than this relay, declines
+--- it, as one that follows another session does, so that the search goes on.
+local RECEIVE_SESSION_REPORT = [[
+  local loaded, home = pcall(require, 'aineo.report')
+  if not loaded or not home.receive_session_report then
+    return false
+  end
+  return home.receive_session_report(...)
+]]
 
---- The Lua the editor that started Claude Code runs for a report: as
---- `RECEIVE_SESSION_REPORT`, or, where its report home is older than this
---- relay and lacks that function, `receive_report()`, as before.
+--- The options of the first offer to the editor that started Claude Code,
+--- and of the one made once no editor that shows the session took the
+--- report: the editor then keeps a report of its own Claude Code with its
+--- working directory's records, unshown, while those have not moved into a
+--- session of its own.
+local AT_START = { at_start = true }
+local KEEP_WITH_DIRECTORY = { at_start = true, keep_with_directory = true }
+
+--- The Lua the editor that started Claude Code runs for a report, its
+--- arguments the report, its session and the options of
+--- `receive_session_report()` (`AT_START`, `KEEP_WITH_DIRECTORY`): as
+--- `RECEIVE_SESSION_REPORT`, but also taking a report while its home follows
+--- no session yet; or, where its report home is older than this relay and
+--- lacks that function, `receive_report()`, as before.
 local RECEIVE_AT_START = [[
   local home = require('aineo.report')
   if home.receive_session_report then
-    return home.receive_session_report(...)
+    local report, session, options = ...
+    return home.receive_session_report(report, session, options)
   end
   home.receive_report((...))
   return true
@@ -224,17 +244,20 @@ end
 ---
 --- 1. to the editor at the address of the session's claim file, unless it
 ---    is the starting editor or may not be tried: taken, unconfirmed or
----    closed ends the search; one that cannot be reached, or does not
----    follow the session any more, passes it on, and its claim is removed
----    if it still names it;
+---    closed ends the search; one that cannot be reached, does not follow
+---    exactly the session, or is no aineo of this version, passes it on,
+---    and its claim is removed if it still names it;
 --- 2. to the editor that started Claude Code: anything but an address that
 ---    cannot be reached, or a decline because it follows another session,
 ---    ends the search;
 --- 3. to the editors listed as showing the session (`offer_to_listed()`);
---- 4. to the session's records on disk (`keep_on_disk()`).
+--- 4. when the starting editor declined, to it again, to keep the report
+---    with its working directory's records, unshown, while those have not
+---    moved into a session of its own (`KEEP_WITH_DIRECTORY`);
+--- 5. to the session's records on disk (`keep_on_disk()`).
 ---
 --- Only an editor that holds the request without answering waits, up to
---- the offer's bound; nothing is offered twice.
+--- the offer's bound; no report is shown twice.
 ---
 ---@param context aineo.mcp.DeliveryContext
 ---@param valid_report table
@@ -257,19 +280,30 @@ function M.deliver(context, valid_report)
     return claimant_outcome, claimant_explanation
   end
   local starting = context.editor_address
+  local starting_declined = false
   if starting then
     tried[starting] = true
     local kind, explanation = editor.offer_report(
       starting,
-      { lua = RECEIVE_AT_START, arguments = { valid_report, session } }
+      { lua = RECEIVE_AT_START, arguments = { valid_report, session, AT_START } }
     )
     if not passes_on(kind) then
       return ended_by(kind, explanation, TOLD.delivered)
     end
+    starting_declined = kind == 'declined'
   end
   local outcome, explanation = offer_to_listed(context, session, valid_report, tried)
   if outcome then
     return outcome, explanation
+  end
+  if starting_declined then
+    local kind, kept_explanation = editor.offer_report(
+      starting,
+      { lua = RECEIVE_AT_START, arguments = { valid_report, session, KEEP_WITH_DIRECTORY } }
+    )
+    if not passes_on(kind) then
+      return ended_by(kind, kept_explanation, TOLD.kept)
+    end
   end
   return keep_on_disk(context, session, valid_report)
 end

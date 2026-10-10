@@ -998,4 +998,18 @@ T['a claim’s follow']['leaves the directory’s records to the first follow th
   })
 end
 
+T['a claim’s follow']['of a session followed as this editor’s own next leaves that follow to take the directory’s records'] = function()
+  local state = fixture.directory('report-sessions-claim-then-same')
+  plant_records(directory_records_file(state), { 'Directory' })
+  start_editor(state)
+  follow_as_claim('session-a')
+
+  follow('session-a')
+
+  eq({
+    directory = summaries_in(directory_records_file(state)),
+    own = summaries_in(session_records_file(state, 'session-a')),
+  }, { own = { 'Directory' } })
+end
+
 return T

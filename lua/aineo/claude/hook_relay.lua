@@ -26,18 +26,20 @@
 --- deliverers reach it, and the two sessions empty when the hook completed
 --- no switch — it sends the editor one RPC notification calling
 --- `require('aineo.claude').receive_session_event(event, session id, source
---- or reason, start token, hook time)` there, then waits for the editor's
---- answer to a request sent behind it on the same connection before it
---- closes it. Neovim 0.12.5 drops an RPC notification whose sender closed
---- the connection before the editor ran it, when the editor could not run it
---- at once — busy, or at a hit-enter prompt — and a channel connected
---- earlier has a message waiting too, as the TUI's keys have when its user
---- leaves the prompt. It goes on at once when the editor cannot be reached,
---- and when the editor ends while it waits. For a switch, it then keeps the
---- new session for the working directory, as the session the next start
---- there resumes, when its editor could not be reached; and, whether or not
---- it could, tells the switch to each other editor that follows the session
---- left by a claim, and to its claimant (`tell_followers()`). Then it exits.
+--- or reason, start token, hook time)` there. For a switch, it then sends
+--- each other editor that follows the session left by a claim, and its
+--- claimant, a notification of the switch (`notify_followers()`), and, when
+--- its own editor could not be reached, keeps the new session for the
+--- working directory, as the session the next start there resumes. Only
+--- then does it wait, editor by editor, for the answer to a request sent
+--- behind each notification on the same connection, and close it
+--- (`wait_for_confirmation()`): so an editor held at a hit-enter prompt
+--- keeps no other from being told. Neovim 0.12.5 drops an RPC notification
+--- whose sender closed the connection before the editor ran it, when the
+--- editor could not run it at once — busy, or at a hit-enter prompt — and a
+--- channel connected earlier has a message waiting too, as the TUI's keys
+--- have when its user leaves the prompt. An editor that cannot be reached,
+--- or ends while it waits, is passed by. Then it exits.
 ---
 --- It runs only when it is the script `-l` runs (`arg[0]`, `:h lua-args`):
 --- loaded inside an editor, by `require` or `dofile`, it does nothing.
@@ -158,75 +160,85 @@ local function start_deliverer(place, hook)
   end
 end
 
---- Sends the editor at `address` the notification that calls
---- `RECEIVE_SESSION_EVENT` with `event_arguments`, over TCP when `address`
---- is `host:port` and over a local socket otherwise, then waits for the
---- answer to `CONFIRMATION` before it closes the connection. Returns whether
---- the editor could be reached. Raises an error when the editor ends before
---- it answers.
+--- Connects to the editor at `address`, over TCP when it is `host:port` and
+--- over a local socket otherwise, and sends it one RPC notification that
+--- runs `lua` with `arguments` there. Returns the channel, which stays open
+--- until `wait_for_confirmation()` closes it — a notification whose sender
+--- closed the connection first can be dropped — or nil when the editor
+--- cannot be reached.
 ---
 ---@param address string
----@param event_arguments any[]
----@return boolean reached
-local function deliver(address, event_arguments)
+---@param lua string
+---@param arguments any[]
+---@return integer? channel
+local function notify(address, lua, arguments)
   local mode = address:match('^[^/]+:%d+$') and 'tcp' or 'pipe'
   local connected, channel = pcall(vim.fn.sockconnect, mode, address, { rpc = true })
   if not connected then
-    return false
+    return nil
   end
-  vim.rpcnotify(channel, 'nvim_exec_lua', RECEIVE_SESSION_EVENT, event_arguments)
-  vim.rpcrequest(channel, 'nvim_exec_lua', CONFIRMATION, {})
-  vim.fn.chanclose(channel)
-  return true
+  vim.rpcnotify(channel, 'nvim_exec_lua', lua, arguments)
+  return channel
 end
 
---- Tells each editor that follows the session `left` by a claim, and the
---- claimant of `left`, but the editor at `address`, that Claude Code
---- switched from `left` to `new` (`aineo.mcp`'s `switch_followers()`),
---- waiting for each to answer. An editor that cannot be reached, or ends
---- before it answers, is passed by: it has nothing more to be told.
+--- Waits for the editor on `channel` to answer `CONFIRMATION`, which it does
+--- once it has handled the notification sent before it, then closes the
+--- channel. An editor that ends before it answers is passed by: it has
+--- nothing more to be told.
+---
+---@param channel integer
+local function wait_for_confirmation(channel)
+  pcall(vim.rpcrequest, channel, 'nvim_exec_lua', CONFIRMATION, {})
+  pcall(vim.fn.chanclose, channel)
+end
+
+--- Sends each editor that follows the session `left` by a claim, and the
+--- claimant of `left`, but the editor at `address`, the notification that
+--- Claude Code switched from `left` to `new` (`aineo.mcp`'s
+--- `switch_followers()`), and returns the channels of those it reached,
+--- without waiting for any to answer.
 ---
 ---@param address string
 ---@param left string
 ---@param new string
-local function tell_followers(address, left, new)
+---@return integer[] channels
+local function notify_followers(address, left, new)
+  local channels = {}
   local followers = require('aineo.mcp').switch_followers(vim.fn.stdpath('state'), left, address)
   for _, follower in ipairs(followers) do
-    pcall(function()
-      local channel = vim.fn.sockconnect('pipe', follower, { rpc = true })
-      vim.rpcrequest(channel, 'nvim_exec_lua', RECEIVE_FOLLOWED_SWITCH, { left, new })
-      vim.fn.chanclose(channel)
-    end)
+    table.insert(channels, notify(follower, RECEIVE_FOLLOWED_SWITCH, { left, new }))
   end
+  return channels
 end
 
 if arg[1] == DELIVER then
   local address, start_token, event, session_id, cause, ran, left, new, working_directory =
     unpack(arg, 2, 10)
-  -- An editor that ends before it answers has nothing more to be told: the
-  -- deliverer goes on as when it has told it.
-  local told, reached = pcall(deliver, address, {
+  local editor = notify(address, RECEIVE_SESSION_EVENT, {
     event,
     session_id,
     cause ~= '' and cause or vim.NIL,
     start_token,
     tonumber(ran) or vim.NIL,
   })
-  if (left or '') == '' or (new or '') == '' then
-    return
+  local followers = {}
+  if (left or '') ~= '' and (new or '') ~= '' then
+    load_aineo()
+    followers = notify_followers(address, left, new)
+    if not editor and (working_directory or '') ~= '' then
+      -- No one is left to tell of a switch that cannot be kept: the next
+      -- start in the directory resumes the session before it.
+      pcall(
+        require('aineo.claude.session_ids').keep_session_id,
+        vim.fn.stdpath('state'),
+        working_directory,
+        new
+      )
+    end
   end
-  load_aineo()
-  if told and not reached and (working_directory or '') ~= '' then
-    -- No one is left to tell of a switch that cannot be kept: the next
-    -- start in the directory resumes the session before it.
-    pcall(
-      require('aineo.claude.session_ids').keep_session_id,
-      vim.fn.stdpath('state'),
-      working_directory,
-      new
-    )
+  for _, channel in ipairs(vim.list_extend({ editor }, followers)) do
+    wait_for_confirmation(channel)
   end
-  tell_followers(address, left, new)
   return
 end
 

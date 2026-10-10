@@ -830,16 +830,17 @@ end
 --- first follow told without it.
 --- A session told before `M.set_draft_environment()` is held: the
 --- environment, once given, moves the directory's draft to it, unless it
---- was told as a claim's, and `M.keep_draft()` restores its draft. `M.keep_draft()` reads that draft
---- only into an empty buffer: a buffer handed it holding text is not
+--- was told as a claim's, and `M.keep_draft()` restores its draft.
+--- `M.keep_draft()` reads that draft only into an empty buffer: a buffer
+--- handed it holding text is not
 --- checked against a held session's draft that cannot be read, and its
 --- first change replaces that draft, unwarned. A caller that holds a
 --- session hands `M.keep_draft()` an empty buffer, as `plugin/aineo.lua`
 --- does with the Input it has just made, which keeps that unreached.
 ---
 --- Raises an error naming `session_id` when it is not a string, or
---- `options` when it is not a table, and nothing
---- else; a draft that cannot be read or put in, saved, or moved is told to
+--- `options` when it is not a table, and nothing else; a draft that cannot
+--- be read or put in, saved, or moved is told to
 --- the user as a warning, once per editor for putting in, once for saving
 --- and once for moving, but a draft that cannot be read and a text kept in
 --- a buffer, which are told each time, and a text that is not saved since

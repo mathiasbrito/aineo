@@ -440,8 +440,9 @@ end
 
 --- Whether the shell that runs a hook runs it as one command among two
 --- (`AINEO_FAKE_CLAUDE_HOOK_SHELL` set to `wrapped`), so that it cannot run
---- the hook's command in its own place and stays its parent, as P2 measured
---- of `/bin/sh` and Node's shell given two commands.
+--- the hook's command in its own place and stays its parent: `/bin/sh` and
+--- Node's shell, given two commands, were measured staying the parent of
+--- the first (wave 9's probes, Neovim 0.12.5, macOS).
 local WRAPS_HOOKS = os.getenv('AINEO_FAKE_CLAUDE_HOOK_SHELL') == 'wrapped'
 
 --- The shell command that runs `command`, a hook's: `command` alone, or,
@@ -590,10 +591,16 @@ local function resumes_no_conversation()
   return CONVERSATIONS ~= nil and resumed ~= nil and vim.uv.fs_stat(conversation_file()) == nil
 end
 
+--- What has been typed of a `/report <task>` key whose Enter has not come
+--- yet: a terminal can hand the keys over in more than one chunk.
+local report_typed = ''
+
 --- Answers one chunk of input: runs the session command it gives
 --- (`session_command()`), from a scheduled callback, since running a hook
---- waits; or draws the screen a key brings up; or else answers each Ctrl-C
---- in it and echoes its text.
+--- waits; or calls the report tool for a `/report <task>` key once its
+--- Enter has come, holding what came before it (`report_typed`); or draws
+--- the screen a key brings up; or else answers each Ctrl-C in it and echoes
+--- its text.
 ---
 ---@param input string
 local function answer(input)
@@ -602,11 +609,17 @@ local function answer(input)
     vim.schedule(command)
     return
   end
-  local reported = input:match('/report ([^\r]+)\r$')
+  local typed = report_typed .. input
+  local reported = typed:match('/report ([^\r]+)\r$')
   if reported then
+    report_typed = ''
     vim.schedule(function()
       report_to_kept_server(reported)
     end)
+    return
+  end
+  if typed:find('/report ', 1, true) then
+    report_typed = typed
     return
   end
   keep_conversation(input)

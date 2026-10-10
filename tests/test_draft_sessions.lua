@@ -1906,4 +1906,18 @@ T['a claim’s follow']['leaves the directory’s draft to the first follow that
   }, { shown = { 'From the directory' }, own = 'From the directory\n' })
 end
 
+T['a claim’s follow']['of a session followed as this editor’s own next leaves that follow to take the directory’s draft'] = function()
+  local state = fixture.directory('draft-sessions-claim-then-same')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  keep_new_buffer(state)
+  follow_as_claim('session-a')
+
+  follow('session-a')
+
+  eq({
+    directory = read_text(directory_draft_file(state)),
+    own = read_text(session_draft_file(state, 'session-a')),
+  }, { own = 'From the directory\n' })
+end
+
 return T
