@@ -15,6 +15,9 @@ local starting = MiniTest.new_child_neovim()
 local first = MiniTest.new_child_neovim()
 local second = MiniTest.new_child_neovim()
 
+--- A Neovim without aineo, at an address a list entry or a claim may name.
+local plain = MiniTest.new_child_neovim()
+
 local T = MiniTest.new_set({
   hooks = {
     post_case = function()
@@ -25,6 +28,7 @@ local T = MiniTest.new_set({
       starting.stop()
       first.stop()
       second.stop()
+      plain.stop()
     end,
   },
 })
@@ -677,12 +681,35 @@ T['a report of a claimed session']['claimed by the starting editor goes there on
   })
 end
 
-T['a report whose starting editor is gone']['skips a listed Neovim on host:port, keeping its entry, and keeps the report'] = function()
+--- Starts `child` as an aineo editor whose report home keeps its reports
+--- under `state` and follows `session`, its Report made, and lists nothing
+--- for it.
+---
+---@param child table
+---@param state { directory: string }
+---@param session string
+local function start_unlisted(child, state, session)
+  report_editor.start(child, {
+    times = { '2026-09-24T09:05:00' },
+    state_directory = state.directory,
+    working_directory = '/projects/alpha',
+  })
+  child.lua(
+    [[
+      require('aineo.report').follow_report_session(...)
+      require('aineo.report').report_buffer()
+    ]],
+    { session }
+  )
+end
+
+T['a report whose starting editor is gone']['never offers a Neovim listed on host:port alone, keeping its entry, and keeps the report'] = function()
   local state = case_state('mcp-lost-tcp-entry')
-  start_follower(first, state, SESSION_ID, 1000)
+  start_unlisted(first, state, SESSION_ID)
   local tcp = first.lua_get("vim.fn.serverstart('127.0.0.1:0')")
   local tcp_entry =
     vim.fs.joinpath(state.directory, 'aineo', 'editors', vim.fn.sha256(tcp) .. '.json')
+  vim.fn.mkdir(vim.fs.dirname(tcp_entry), 'p')
   vim.fn.writefile({
     vim.json.encode({
       address = tcp,
@@ -692,7 +719,6 @@ T['a report whose starting editor is gone']['skips a listed Neovim on host:port,
       used = 2000,
     }),
   }, tcp_entry)
-  first.lua("require('aineo.report').follow_report_session(...)", { OTHER_SESSION_ID })
   local relay = start_relay(state, gone_address(state), SESSION_ID)
 
   relay:send(mcp_messages.recorded('tools/call'))
@@ -702,6 +728,72 @@ T['a report whose starting editor is gone']['skips a listed Neovim on host:port,
     shown = report_editor.lines(first),
     tcp_entry = vim.uv.fs_stat(tcp_entry) ~= nil,
   }, { answer = { text = KEPT, error = false }, shown = { '' }, tcp_entry = true })
+end
+
+T['a report of a claimed session']['whose claimant is reachable on host:port alone goes to the starting editor'] = function()
+  local state = case_state('mcp-lost-tcp-claimant')
+  start_follower(starting, state, SESSION_ID, 3000)
+  start_unlisted(first, state, SESSION_ID)
+  local tcp = first.lua_get("vim.fn.serverstart('127.0.0.1:0')")
+  require('aineo.mcp').claim_session(state.directory, SESSION_ID, tcp, 5000)
+  local relay = start_relay(state, starting.v.servername, SESSION_ID)
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq(
+    { answer(relay), report_editor.lines(starting), report_editor.lines(first) },
+    { { text = DELIVERED, error = false }, SHOWN, { '' } }
+  )
+end
+
+T['a report whose starting editor is gone']['killed, its socket left, goes to the Neovim listed as showing its session'] = function()
+  local state = case_state('mcp-lost-killed')
+  local doomed = MiniTest.new_child_neovim()
+  MiniTest.finally(function()
+    pcall(doomed.stop)
+  end)
+  start_follower(doomed, state, SESSION_ID, 3000)
+  start_follower(first, state, SESSION_ID, 1000)
+  local address = doomed.v.servername
+  local pid = doomed.lua_get('vim.fn.getpid()')
+  vim.uv.kill(pid, 'sigkill')
+  vim.wait(5000, function()
+    return vim.uv.kill(pid, 0) ~= 0
+  end, 20)
+  local socket_left = vim.uv.fs_stat(address) ~= nil
+  local relay = start_relay(state, address, SESSION_ID)
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq(
+    { socket_left, answer(relay), report_editor.lines(first) },
+    { true, { text = SHOWN_ELSEWHERE, error = false }, SHOWN }
+  )
+end
+
+T['a report whose starting editor is gone']['goes, of two Neovims last used at the same moment, to the one whose entry’s name sorts first'] = function()
+  local state = case_state('mcp-lost-tie')
+  start_follower(first, state, SESSION_ID, 1000)
+  start_follower(second, state, SESSION_ID, 1000)
+  local by_name = {
+    [vim.fn.sha256(first.v.servername)] = first,
+    [vim.fn.sha256(second.v.servername)] = second,
+  }
+  local names = vim.tbl_keys(by_name)
+  table.sort(names)
+  local relay = start_relay(state, gone_address(state), SESSION_ID)
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq({
+    answer = answer(relay),
+    sorting_first = report_editor.lines(by_name[names[1]]),
+    sorting_last = report_editor.lines(by_name[names[2]]),
+  }, {
+    answer = { text = SHOWN_ELSEWHERE, error = false },
+    sorting_first = SHOWN,
+    sorting_last = { '' },
+  })
 end
 
 T['a report whose starting editor is gone']['goes to the Neovim listed as showing its session, and says so'] = function()
@@ -715,6 +807,86 @@ T['a report whose starting editor is gone']['goes to the Neovim listed as showin
     { answer(relay), report_editor.lines(first) },
     { { text = SHOWN_ELSEWHERE, error = false }, SHOWN }
   )
+end
+
+--- Writes, under `state`, the entry of the editor at `address` following
+--- `session`, last used at `used`, as an editor that ended without taking
+--- it off the list left it.
+---
+---@param state { directory: string }
+---@param address string
+---@param session string
+---@param used integer
+local function plant_entry(state, address, session, used)
+  local folder = vim.fs.joinpath(state.directory, 'aineo', 'editors')
+  vim.fn.mkdir(folder, 'p')
+  vim.fn.writefile({
+    vim.json.encode({
+      address = address,
+      working_directory = '/projects/alpha',
+      session = session,
+      own = true,
+      used = used,
+    }),
+  }, vim.fs.joinpath(folder, vim.fn.sha256(address) .. '.json'))
+end
+
+--- A session id of the form Claude Code gives, which an editor follows as
+--- its own after the report.
+local OWN_SESSION_ID = '91d0e3a4-f852-4d2f-b5c7-063cc43c8e1a'
+
+T['a report whose listed editor is not what its entry says'] = MiniTest.new_set()
+
+T['a report whose listed editor is not what its entry says']['is not taken by an aineo Neovim there that follows no session yet, whose own session would take it later'] = function()
+  local state = case_state('mcp-lost-follows-none')
+  report_editor.start(first, {
+    times = { '2026-09-24T09:05:00' },
+    state_directory = state.directory,
+    working_directory = '/projects/alpha',
+  })
+  plant_entry(state, first.v.servername, SESSION_ID, 2000)
+  local relay = start_relay(state, gone_address(state), SESSION_ID)
+
+  relay:send(mcp_messages.recorded('tools/call'))
+  local answered = answer(relay)
+  first.lua("require('aineo.report').follow_report_session(...)", { OWN_SESSION_ID })
+
+  eq({
+    answer = answered,
+    session = kept_tasks(session_records(state, SESSION_ID)),
+    own = kept_tasks(session_records(state, OWN_SESSION_ID)),
+  }, { answer = { text = KEPT, error = false }, session = { 'Refactor the parser' } })
+end
+
+T['a report whose listed editor is not what its entry says']['passes a Neovim without aineo, used later, to the next that shows the session'] = function()
+  local state = case_state('mcp-lost-not-aineo')
+  plain.restart({ '-u', 'NONE' })
+  start_follower(first, state, SESSION_ID, 1000)
+  plant_entry(state, plain.v.servername, SESSION_ID, 2000)
+  local relay = start_relay(state, gone_address(state), SESSION_ID)
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq(
+    { answer(relay), report_editor.lines(first) },
+    { { text = SHOWN_ELSEWHERE, error = false }, SHOWN }
+  )
+end
+
+T['a report of a claimed session']['whose claimant is a Neovim without aineo goes to the starting editor, the claim removed'] = function()
+  local state = case_state('mcp-lost-claimant-not-aineo')
+  plain.restart({ '-u', 'NONE' })
+  start_follower(starting, state, SESSION_ID, 1000)
+  claim(state, SESSION_ID, plain.v.servername)
+  local relay = start_relay(state, starting.v.servername, SESSION_ID)
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq({
+    answer = answer(relay),
+    starting = report_editor.lines(starting),
+    claim = claim_of(state, SESSION_ID),
+  }, { answer = { text = DELIVERED, error = false }, starting = SHOWN })
 end
 
 return T

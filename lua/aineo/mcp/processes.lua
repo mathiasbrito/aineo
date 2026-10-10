@@ -130,15 +130,24 @@ end
 --- a rename, a millisecond or so.
 local LOCK_PATIENCE_MS = 3000
 
---- How old a lock is, in milliseconds, when it is taken for one left by a
---- hook that was stopped while it held it.
+--- How old a lock that names no holder is, in milliseconds, when it is
+--- taken for one left by a hook that ended in the moment between making it
+--- and writing its pid in it.
 local STALE_LOCK_MS = 1000
 
---- Whether the lock file `lock` was made more than `STALE_LOCK_MS` ago.
+--- Whether the lock file `lock` was left by a hook that has ended: the
+--- process whose pid it holds has (`ESRCH`); a lock that holds no pid yet,
+--- when it was made more than `STALE_LOCK_MS` ago. A lock whose holder
+--- runs is never stale, however long it has held it.
 ---
 ---@param lock string
 ---@return boolean
 local function is_stale(lock)
+  local holder = tonumber(kept_files.read_file(lock) or '')
+  if holder then
+    local _, _, code = vim.uv.kill(holder, 0)
+    return code == 'ESRCH'
+  end
   local made = vim.uv.fs_stat(lock)
   if not made then
     return false
@@ -149,10 +158,10 @@ local function is_stale(lock)
 end
 
 --- Runs `work` while this process holds the lock file `lock`, which it
---- makes with an exclusive create and removes after: a second process
---- waits, up to `LOCK_PATIENCE_MS`, until the first has removed it. A lock
---- older than `STALE_LOCK_MS` is removed and taken. Returns what `work`
---- returns.
+--- makes with an exclusive create, writes its pid in, and removes after: a
+--- second process waits, up to `LOCK_PATIENCE_MS`, until the first has
+--- removed it. A lock left by a process that has ended (`is_stale()`) is
+--- removed and taken. Returns what `work` returns.
 ---
 --- Raises an error naming `lock` when it cannot be taken in time, and the
 --- error `work` raises, the lock removed.
@@ -175,6 +184,7 @@ local function while_holding(lock, work)
   if not descriptor then
     error(('aineo cannot take %s: %s'):format(lock, failure), 0)
   end
+  vim.uv.fs_write(descriptor, tostring(vim.uv.os_getpid()))
   vim.uv.fs_close(descriptor)
   local worked, result = pcall(work)
   vim.uv.fs_unlink(lock)
