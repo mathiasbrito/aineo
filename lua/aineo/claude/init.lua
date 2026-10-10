@@ -43,10 +43,6 @@ local CHILD_ENVIRONMENT = { AINEO_CHILD = '1' }
 ---@type aineo.claude.Start?
 local session
 
---- How many times Claude Code has been launched in this editor: the last
---- launch's start token (`launch()`).
-local launches = 0
-
 --- How many session hooks have reached this editor: the last one's place in
 --- the order they reached it (`receive_session_event()`).
 local hooks_received = 0
@@ -275,8 +271,10 @@ end
 
 --- Runs Claude Code with `settings` on the session `choice` names, in a new
 --- terminal buffer, and returns the start that tracks it, following the
---- session it started on. Each launch has a start token of its own, which
---- its session hooks name (`arguments.claude_command()`); a launch whose
+--- session it started on. Each launch has a start token of its own, as
+--- random as a session id (`session_ids.new_session_id()`), so that no two
+--- starts on the host share one, which its session hooks and its report
+--- server name (`arguments.claude_command()`); a launch whose
 --- `claude.cmd` gives settings aineo cannot add its hooks to runs without
 --- them, which its start's `settings_unread` says. The first time Claude
 --- Code is ready for input (`readiness.watch()`) while the start is still
@@ -292,8 +290,7 @@ end
 ---@return aineo.claude.Start
 local function launch(settings, choice, on_exit)
   ensure_executable(settings.cmd[1])
-  launches = launches + 1
-  local start_token = tostring(launches)
+  local start_token = session_ids.new_session_id()
   local command, unread = arguments.claude_command(settings, session_arguments(choice), start_token)
   local launched = {
     buffer = vim.api.nvim_create_buf(false, true),

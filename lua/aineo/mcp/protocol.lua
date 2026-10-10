@@ -17,9 +17,12 @@ local INVALID_PARAMS = -32602
 
 ---@alias aineo.mcp.Error { code: integer, message: string }
 
---- How the server hands a valid report on: whether the editor confirmed it
---- (`'delivered'`), has it but did not confirm it in time (`'unconfirmed'`),
---- or did not get it (`'failed'`), and, unless delivered, the words for Claude.
+--- How the server hands a valid report on: whether an editor confirmed it,
+--- or it was kept (`'delivered'`), an editor has it but did not confirm it
+--- in time (`'unconfirmed'`), or it was neither delivered nor kept
+--- (`'failed'`), and the words for Claude — for a delivery, which editor
+--- took it or where it was kept, `Delivered to the Agent Report.` when not
+--- given.
 ---@alias aineo.mcp.DeliverReport fun(report: table): 'delivered'|'unconfirmed'|'failed', string?
 
 --- The server's one tool, as `tools/list` describes it: its input schema is
@@ -62,7 +65,7 @@ local function call_tool(params, deliver_report)
   end
   local outcome, explanation = deliver_report(valid_report)
   if outcome == 'delivered' then
-    return tool_result('Delivered to the Agent Report.', false)
+    return tool_result(explanation or 'Delivered to the Agent Report.', false)
   end
   return tool_result(explanation, outcome == 'failed')
 end

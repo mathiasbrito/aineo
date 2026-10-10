@@ -936,4 +936,66 @@ T['a follow refused while textlock holds']["followed twice, shows the last sessi
   })
 end
 
+--- Tells the child's report home to follow the Claude session `session` as
+--- a claim of it.
+---
+---@param session string
+local function follow_as_claim(session)
+  child.lua("require('aineo.report').follow_report_session(..., { claim = true })", { session })
+end
+
+T['a claim’s follow'] = MiniTest.new_set()
+
+T['a claim’s follow']['leaves the directory’s records where they are, and keeps the next report under the claimed session'] = function()
+  local state = fixture.directory('report-sessions-claim')
+  plant_records(directory_records_file(state), { 'Directory' })
+  start_editor(state)
+
+  follow_as_claim('session-a')
+  receive('After the claim')
+
+  eq({
+    lines = report_editor.lines(child),
+    directory = summaries_in(directory_records_file(state)),
+    session = summaries_in(session_records_file(state, 'session-a')),
+  }, {
+    lines = { '10:00 [done] Task — After the claim' },
+    directory = { 'Directory' },
+    session = { 'After the claim' },
+  })
+end
+
+T['a claim’s follow']['told before the environment moves nothing once the environment comes'] = function()
+  local state = fixture.directory('report-sessions-claim-held')
+  plant_records(directory_records_file(state), { 'Directory' })
+  children.restart(child)
+  follow_as_claim('session-a')
+
+  give_environment(state)
+
+  eq({
+    directory = summaries_in(directory_records_file(state)),
+    session = summaries_in(session_records_file(state, 'session-a')),
+  }, { directory = { 'Directory' } })
+end
+
+T['a claim’s follow']['leaves the directory’s records to the first follow that is not a claim’s'] = function()
+  local state = fixture.directory('report-sessions-claim-then-own')
+  plant_records(directory_records_file(state), { 'Directory' })
+  start_editor(state)
+  follow_as_claim('session-a')
+
+  follow('session-b')
+
+  eq({
+    lines = report_editor.lines(child),
+    directory = summaries_in(directory_records_file(state)),
+    claimed = summaries_in(session_records_file(state, 'session-a')),
+    own = summaries_in(session_records_file(state, 'session-b')),
+  }, {
+    lines = { '09:00 [done] Task — Directory' },
+    own = { 'Directory' },
+  })
+end
+
 return T
