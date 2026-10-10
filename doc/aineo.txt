@@ -146,8 +146,12 @@ repository is the one Claude Code's working directory was in when aineo
 first started Claude Code in this editor, for the editor's life. A session
 aineo has not seen takes as its base the commit `HEAD` names when aineo
 starts following it: when Claude Code, started on it, is first ready for
-input, which can be long after the start, while a dialog is up say, or when
-you switch to it inside Claude Code. aineo keeps each session's base, and
+input, which can be long after the start, while a dialog is up say, when
+you switch to it inside Claude Code, or when you claim it by its id
+(|:Aineo-claim|). A Neovim that claims a session before it has first
+started Claude Code lists nothing in the pane until it does: the pane then
+shows the claimed session. A file saved while a claim holds is marked for
+the claimed session (see the `*` below). aineo keeps each session's base, and
 the files you save while it shows that session, under `stdpath('state')`:
 a restart of Claude Code or of the editor, or a switch back to an earlier
 session, shows that session's base and saves again — unless a resume of
@@ -389,8 +393,14 @@ at each start (|aineo-report|): Claude Code 2.1.292 ends the session it
 leaves (`SessionEnd`), then starts the next (`SessionStart`). `/compact`
 stays on the same session, and changes nothing. Where hooks do not run,
 aineo follows the session it started: see |aineo-limits|. Two Neovims in
-one directory resume the session of the last switch in either. aineo
-ignores a conversation you ran in a plain terminal in the same directory.
+one directory resume the session of the last switch in either. A switch
+made by a Claude Code whose editor is gone — it quit while Claude Code ran
+on — is kept all the same, as the session the next start in that directory
+resumes. A Neovim that follows a session by a claim (|:Aineo-claim|)
+follows its switches too, and its claim moves with them; while it follows
+a session its own terminal does not run, a switch in its own Claude Code is
+kept for the directory and leaves its panes where they are. aineo ignores
+a conversation you ran in a plain terminal in the same directory.
 
 The panes follow the session a start of Claude Code is on once Claude Code
 is ready for input the first time, and every switch after that; until
@@ -408,7 +418,10 @@ for is never ready either: the new session that takes its place (above)
 is followed once it is ready, and at an editor's first start it takes the
 working directory's Report and draft. What a session kept while it ran — its
 Report, its draft and its base — stays with it when a later resume of it
-finds no conversation, and is not shown again.
+finds no conversation, and is not shown again. While this Neovim follows a
+session its own terminal does not run (|:Aineo-claim|), a start of its
+Claude Code, ready or not, leaves the panes on the claimed session, until
+`:Aineo claim` without an id returns them.
 
 Input's draft ~
                                                                  *aineo-draft*
@@ -438,8 +451,9 @@ doing — what you change in Input is still the old session's. The swap is
 not a change of yours: `u` does not take it out, and no `u` reaches a
 change or a Send made before it. It is not saved either: a draft another
 Neovim keeps for that session stays as it left it. The first session
-aineo follows in an editor takes the working directory's draft, when it
-has none of its own; an Input that holds that draft already is then left
+aineo follows in an editor, but a session claimed by its id
+(|:Aineo-claim|), takes the working directory's draft, when it has none of
+its own; an Input that holds that draft already is then left
 as it is, with no swap, and `u` still reaches what you typed before. A
 directory's draft written after that is taken by the next editor that
 first follows a session with no draft of its own, and is not shown
@@ -489,9 +503,12 @@ from another tab, `\o` moves you to it.
 
                                                                       *:Aineo*
 :Aineo {subcommand}	Runs one of aineo's actions. Completion offers the
-			subcommands, and the panes after `pane`. Without one
-			of them, or with anything else, it tells you, with
-			one error, which ones it takes.
+			subcommands, the panes after `pane`, and after
+			`claim` the sessions that have a running Claude Code
+			in the directory this Neovim started in
+			(|:Aineo-claim|). Without one of them, or with
+			anything else, it tells you, with one error, which
+			ones it takes.
 
                                                                  *:Aineo-send*
 :Aineo send		Sends Input to Claude (|aineo-send|). It takes no
@@ -583,6 +600,54 @@ a resume Claude Code has no conversation for (|aineo-claude-session|).
 			anything else, it tells you, with one error, which
 			ones it takes.
 
+                                                                *:Aineo-claim*
+:Aineo claim [{id}]	Claims a Claude session for this Neovim: each report
+			of that session comes here first, even while the
+			Neovim that started its Claude Code answers, until
+			another Neovim claims it (|aineo-report-claims|).
+			With {id}, the Report, the changes pane and Input's
+			draft follow that session, at once in the windows
+			that show them, while this Neovim's own Claude
+			terminal runs on its own session; nothing is sent to
+			Claude Code. Completion offers the sessions that
+			have a running Claude Code in the directory this
+			Neovim started in, which `:cd` does not change; any
+			id of Claude Code's form is taken, running or not,
+			and shows that session's kept Report and draft. Any
+			other word is refused with one error naming it.
+			Without {id}, it depends on what this Neovim
+			follows:
+			- its own Claude terminal's session: it claims that.
+			- a session claimed by its id: it returns the Report,
+			  the changes pane and Input to its own terminal's
+			  session, and claims that. The claimed session's
+			  draft is kept as that session's, and Input shows
+			  its own session's draft again.
+			- its terminal runs no session, as before Claude
+			  Code has started here: it warns once and changes
+			  nothing. `:Aineo claim {id}` follows another
+			  session, and `:Aineo open` starts Claude Code.
+			Until the start of this Neovim's Claude Code is
+			ready, it warns once that Claude Code is not ready
+			yet, and changes nothing. `:Aineo claim` with the id
+			of this Neovim's own session does what it does
+			without one. It takes at most one word.
+
+			While this Neovim follows a session its own
+			terminal does not run, a report of its own Claude
+			Code is not shown here: it goes to another Neovim
+			that shows that session, or is kept on disk for it
+			(|aineo-report-claims|); a switch in its own Claude
+			Code, and a start of it, are kept for the directory
+			(|aineo-claude-session|) but leave the panes on the
+			claimed session; and Send sends nothing
+			(|aineo-send|). A claim never moves the working
+			directory's records or draft: they stay the
+			directory's until this Neovim first follows its own
+			terminal's session. A file saved while the claim
+			holds is marked for the claimed session
+			(|aineo-changes|).
+
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
 
@@ -622,11 +687,16 @@ you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-pane-changes)
 			Does what `:Aineo pane changes` does (|:Aineo-pane|).
 
+                                                       *<Plug>(aineo-claim)*
+<Plug>(aineo-claim)	Does what `:Aineo claim` without an id does
+			(|:Aineo-claim|). It has no prefix key: map it to a
+			key of your own.
+
 Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
-followed by these keys to each `<Plug>` mapping, globally, in Normal mode,
-and `\s` in Visual mode too:
+followed by these keys to each `<Plug>` mapping but `<Plug>(aineo-claim)`,
+which has none, globally, in Normal mode, and `\s` in Visual mode too:
 
                                                                     *aineo-\s*
 \s		|<Plug>(aineo-send)|
@@ -799,8 +869,14 @@ Send sends nothing, and tells you why with one warning starting with
 `aineo: nothing sent —`, when there is no Input yet (open the layout), when
 Input — or the selection — holds only white space, and when Claude Code is
 not ready: not started, still starting, behind a dialog that awaits your
-answer, or exited. A Visual Send that sends nothing removes nothing and ends
-Visual mode; `gv` selects the text again.
+answer, or exited. It sends nothing either while this Neovim follows a session
+its own Claude terminal does not run (|:Aineo-claim|): Input then holds the
+claimed session's draft, which must not reach another conversation. The
+warning names the claimed session, and what works here: `:Aineo claim`
+without an id, which returns this Neovim to its own session, or, when its
+terminal runs no session, `:Aineo claim {id}` or `:Aineo open`. A Visual Send
+that sends nothing removes nothing and ends Visual mode; `gv` selects the
+text again.
 
 Undo ~
 `u` in Input brings back what a Send removed, one `u` per Send: Input's text
@@ -808,8 +884,9 @@ after a Send of Input, the selection, where it was, after a Visual Send —
 wherever `\s` was typed, and while the changes pane hid Input. `u` restores
 Input only: the message has reached Claude. The draft the layout restores
 into Input (|aineo-draft|) is not undone: after a Send, `u` brings the text
-back and stops there. A switch of session, or a start of Claude Code on
-another session once it is ready (|aineo-claude-session|), puts that
+back and stops there. A switch of session, a start of Claude Code on
+another session once it is ready (|aineo-claude-session|), a claim of a
+session by its id and the return from it (|:Aineo-claim|) put that
 session's draft in Input, and no `u` reaches a Send or a change made before
 it. At an editor's first start, an Input that holds the draft the session
 takes already is left as it is, and `u` still reaches what you typed
@@ -839,10 +916,46 @@ aineo starts Claude Code with five additions of its own:
   only you can read (|aineo-config-claude.cmd|);
 - the report tool allowed without asking: `--allowedTools
   mcp__aineo__report`.
-The server and the hooks are given this editor's address, |v:servername|:
-the server relays each report to the editor there. Claude Code also gets
-`AINEO_CHILD=1` in its environment, so a Neovim started inside it never
-autostarts.
+The server and the hooks are given this editor's address, |v:servername|,
+and a token of this start of Claude Code; the hooks are also given the
+directory Claude Code runs in and its process id, which the shell that runs
+them fills in. The server relays each report to an editor (below). Claude
+Code also gets `AINEO_CHILD=1` in its environment, so a Neovim started inside
+it never autostarts.
+
+                                                         *aineo-report-claims*
+Each report belongs to the Claude session its Claude Code is on, which the
+hooks record as they run, or, where they do not run, the session Claude Code
+started on. The server hands each report on to the first of these that takes
+it:
+1. a Neovim that has claimed the report's session (|:Aineo-claim|), even
+   while the editor that started Claude Code answers;
+2. the editor that started Claude Code, as before — unless it cannot be
+   reached, as when it has quit, or follows another session by a claim, in
+   which case it shows nothing of it;
+3. a running aineo Neovim that shows the report's session, the one used
+   last first: last focused, or whose Claude Code last started, switched or
+   was claimed;
+4. that session's Report on disk: it shows when aineo next follows the
+   session, never in another session's Report.
+A Neovim that holds the report without answering, at a hit-enter prompt say,
+ends the search, as does one that closes the connection before it answers:
+no report is shown twice. The tool's answer tells Claude which happened, each
+in its own words: delivered to the Agent Report; delivered to the Agent Report
+of another Neovim that claimed the session; delivered to the Agent Report of
+another Neovim that shows the session; or kept in the session's Agent Report
+on disk. None of the four is a tool error.
+
+A claim lasts until the claiming Neovim follows another session, returns to
+its own (|:Aineo-claim|) or quits, or until another Neovim claims the
+session; a claim another Neovim took over does not come back when that one
+lets go. When Claude Code switches session — `/clear`, `/resume`, `/branch` —
+the claim moves to the new session, and a Neovim that follows the session
+left by a claim follows the new one, whether or not the editor that started
+Claude Code answers. What aineo keeps for this, under `stdpath('state')` in
+`aineo/editors/`, `aineo/claims/` and `aineo/claude-processes/`, only you can
+read: the running aineo Neovims and the session each follows, the claims,
+and the session each Claude Code process aineo started is on.
 
 A report holds a `task`, a `status` — `started`, `progress`, `blocked`,
 `done` or `failed` — a one-line `summary` and, optionally, `details`. The
@@ -994,15 +1107,19 @@ AineoReportPath      a path to a file, linked to `Underlined`
 
 Reports are kept per Claude session, under `stdpath('state')` in
 `aineo/reports/`, one file for each session, named `session-` and the
-SHA-256 of its id. A report is kept under the session aineo follows when it
-arrives, and when aineo follows another session, the Report shows that
-session's reports in place of what it showed — none for a session with no
-reports. Two Neovims on one session share its reports. Until aineo follows
-a Claude session, the reports are the working directory's, in a file named
-by the directory's SHA-256, and are shown again when aineo opens in that
-directory. The first session aineo follows in an editor takes that file,
-when it has none of its own, and every report it held is that session's
-from then on. A directory's file written after that is taken by the next
+SHA-256 of its id. A report is kept under its own session, by the Neovim
+that shows it, or, when no Neovim shows that session, on disk by aineo's MCP
+server (|aineo-report-claims|); and when aineo follows another session, the
+Report shows that session's reports in place of what it showed — none for a
+session with no reports. A report kept on disk shows when aineo next follows
+its session. Two Neovims on one session share its reports, though one shows
+the reports the other took only at its next follow of the session. Until
+aineo follows a Claude session, the reports are the working directory's, in
+a file named by the directory's SHA-256, and are shown again when aineo opens
+in that directory. The first session aineo follows in an editor takes that
+file, when it has none of its own, and every report it held is that
+session's from then on; a session claimed by its id does not
+(|:Aineo-claim|). A directory's file written after that is taken by the next
 editor that first follows a session with no file of its own, and is not
 shown otherwise. A file that cannot be moved so is told once as a warning,
 and the session keeps its own. The Report shows the newest 2 MiB of a
@@ -1142,9 +1259,11 @@ without that end, is not followed. The teammates and background sessions
 Claude Code 2.1.292 starts are given its `--settings`, aineo's hooks among
 them (read in its program, not run); aineo ignores every hook that ran
 after its Claude Code exited, so a session they start then is not
-followed either. A hook that cannot reach the editor tells it nothing;
-and once the end of the session aineo follows is lost, no later switch
-of that Claude Code is followed, until it starts again. Each hook starts
+followed either. A hook that cannot reach the editor tells it nothing,
+but keeps a switch it completes as the session the next start in that
+directory resumes (|aineo-claude-session|); and once the end of the session
+aineo follows is lost, no later switch of that Claude Code is followed,
+until it starts again. Each hook starts
 a headless `nvim` and returns at once; that `nvim` tells the editor, waits
 for its answer, then exits: at once in an idle editor, and once you answer
 the prompt in an editor at a prompt.
@@ -1162,6 +1281,36 @@ background sessions, and their restarts, are started with the same
 `--settings` and read the file again at their own start: once Neovim has
 exited and removed it, such a start fails. Read in Claude Code's program,
 not run.
+
+Reports whose editor is gone ~
+Where a report goes when the editor that started Claude Code is gone
+(|aineo-report-claims|) rests on what was not measured with Claude Code
+itself:
+- A conversation moved to Claude Code's background runs as a new Claude
+  Code process on a new session id, which no Neovim follows by itself: its
+  reports are kept on disk under that session until a Neovim follows it.
+  `:Aineo claim {id}` does, and offers it when its Claude Code has a record
+  — written by aineo's hooks, if the background keeps them, else by aineo's
+  MCP server at its start. A Claude Code that runs neither aineo's hooks nor
+  its MCP server of this version has no record and is not offered.
+- How Claude Code runs a hook — through which shell, and whether the shell's
+  parent is Claude Code's own process — was measured with stand-ins only.
+  Whether Claude Code runs its startup hook before it starts its MCP server,
+  and its `SessionEnd` hook and the `SessionStart` after it one at a time or
+  at once, was not: aineo orders them by when each hook began.
+- "Used last" counts focus: a terminal that sends no focus events, as tmux
+  without its `focus-events` option, leaves the last start, switch or claim.
+- A process id one of your own processes took after Claude Code ended is
+  taken for that Claude Code's until a hook or a server writes over its
+  record: `:Aineo claim` may offer its session meanwhile.
+- A report held by a Neovim at a hit-enter prompt that, once you are done,
+  follows another session is lost: the server has answered Claude already.
+- A Neovim listening on `host:port`, or on a socket another user owns, is
+  never offered a report but by its own Claude Code, nor told a switch.
+- Where the file system refuses hard links, aineo's MCP server writes no
+  record at its start: its reports find their session by the id Claude
+  Code started it on, and `:Aineo claim` does not offer a Claude Code
+  without aineo's hooks there.
 
 The 80-column start ~
 At startup, a message longer than |v:echospace| — 68 columns on an 80-column

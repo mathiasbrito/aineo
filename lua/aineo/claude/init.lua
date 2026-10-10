@@ -779,6 +779,15 @@ function M.session_id()
   return session and session.followed
 end
 
+--- Whether `text` is a session id of the form Claude Code gives, a
+--- lower-case version-4 UUID (`session_ids.is_session_id()`).
+---
+---@param text any
+---@return boolean
+function M.is_session_id(text)
+  return session_ids.is_session_id(text)
+end
+
 --- The `'statusline'` `session_statusline()` returns: an expression whose
 --- result Neovim draws, so that the text it holds is never read as items.
 local SESSION_STATUSLINE = "%!v:lua.require'aineo.claude'.session_statusline_format()"
