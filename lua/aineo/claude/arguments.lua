@@ -1,8 +1,6 @@
 --- The command that runs Claude Code: `claude.cmd`, the words that pick its
 --- session, which `aineo.claude` chooses, and the arguments aineo gives it.
 
-local mcp = require('aineo.mcp')
-
 local M = {}
 
 --- The hook relay script, beside this file.
@@ -353,6 +351,9 @@ end
 ---@return string[]
 local function claude_arguments(settings, settings_value, start_token)
   local servers = vim.empty_dict()
+  -- Required here, at a start, so that loading the Claude home, as
+  -- `:checkhealth aineo` does, loads no MCP home.
+  local mcp = require('aineo.mcp')
   for name, server in pairs(mcp.with_start_token(settings.mcp_servers, start_token)) do
     servers[name] = encodable_server(server)
   end
