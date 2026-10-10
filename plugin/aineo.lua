@@ -481,11 +481,99 @@ local function follow_switch_once_confirmed(id, _, left)
   end
 end
 
+--- Hands what aineo keeps for the Claude session `dead`, whose resume
+--- Claude Code found no conversation for, over to `fresh`, the session
+--- that took its place: the Report's records, then Input's draft, then the
+--- changes pane's base and saves, kept under the state directory of
+--- `kept_places()` (`aineo.report`'s `hand_over_report_session()`,
+--- `aineo.draft`'s `hand_over_draft_session()`, `aineo.changes`'s
+--- `hand_over_changes_session()`). A pane that showed `dead` shows the same
+--- under `fresh` from then on, before `fresh` is ready.
+---
+--- Hands nothing over while a Claude Code aineo knows of runs on `dead`
+--- (`aineo.mcp`'s `running_sessions()`, asked with `working_directory`, the
+--- directory the resume started in, which a record of a Claude Code on
+--- `dead` names): another Neovim's Claude Code that has sent nothing yet
+--- makes a resume of its session find no conversation too.
+---
+--- A claim of another session does not hold the hand-over: the files move,
+--- and the panes stay on the claimed session. This Neovim's claim of `dead`
+--- is let go (`release_claim()`), and a claim made with `dead`'s id ends:
+--- the panes then follow `fresh` as this Neovim's own. When the panes
+--- followed `dead`, they follow `fresh` (`panes_session`), and this
+--- Neovim's entry in the list of running editors is written for it
+--- (`write_entry()`).
+---
+---@param dead string
+---@param fresh string
+---@param working_directory string
+local function hand_over_dead_session(dead, fresh, working_directory)
+  local running =
+    require('aineo.mcp').running_sessions(kept_places().state_directory, working_directory)
+  if vim.tbl_contains(running, dead) then
+    return
+  end
+  require('aineo.report').hand_over_report_session(dead, fresh)
+  require('aineo.draft').hand_over_draft_session(dead, fresh)
+  require('aineo.changes').hand_over_changes_session({
+    from = dead,
+    to = fresh,
+    state_directory = kept_places().state_directory,
+  })
+  if claimed == dead then
+    release_claim()
+  end
+  if claimed_by_id == dead then
+    claimed_by_id = nil
+  end
+  if panes_session == dead then
+    panes_session = fresh
+    write_entry()
+  end
+end
+
 --- The terminal of the Claude session aineo started last — the new
 --- session's once one took the place of a resume Claude Code found no
 --- conversation for — or `nil` before it has started one.
 ---@type integer|nil
 local claude_terminal = nil
+
+--- The two callbacks a start of Claude Code in `working_directory` hands
+--- the claude home (`aineo.claude`'s `start_session()`) for a resume Claude
+--- Code finds no conversation for. `on_terminal_replaced`, which the claude
+--- home calls only then, makes the new terminal `claude_terminal` and the
+--- layout's Claude terminal (`aineo.layout`'s `follow_claude_terminal()`),
+--- and notes the new session's id (`aineo.claude`'s `session_id()`, which
+--- names it there). The switch told next whose id is that note and whose
+--- source is `startup` is that new session taking the dead one's place: it
+--- is handed what aineo kept for the dead one (`hand_over_dead_session()`)
+--- and is not followed now. Every other switch goes to
+--- `follow_switch_once_confirmed()`.
+---
+--- The note is the new id, not a flag: a start in another directory is
+--- told with the source `startup` too, and a note left by a handler that
+--- raised before its switch was told never names that start's new id.
+---
+---@param working_directory string
+---@return { on_terminal_replaced: fun(terminal: integer), on_session_switched: fun(id: string, source: string?, left: string) }
+local function replacement_callbacks(working_directory)
+  local replacing_session = nil
+  return {
+    on_terminal_replaced = function(terminal)
+      replacing_session = require('aineo.claude').session_id()
+      claude_terminal = terminal
+      require('aineo.layout').follow_claude_terminal(terminal)
+    end,
+    on_session_switched = function(id, source, left)
+      if id == replacing_session and source == 'startup' then
+        replacing_session = nil
+        hand_over_dead_session(left, id, working_directory)
+        return
+      end
+      follow_switch_once_confirmed(id, source, left)
+    end,
+  }
+end
 
 --- Starts Claude Code with `config` when none runs — again once the last
 --- has exited — and returns its terminal, which it keeps as
@@ -495,10 +583,12 @@ local claude_terminal = nil
 --- it under the state directory of `kept_places()`, its session hooks told
 --- the editor's address and program. When the session puts a
 --- new terminal in place of one whose resume found no conversation, that
---- terminal becomes `claude_terminal` and the layout's Claude terminal
---- (`aineo.layout`'s `follow_claude_terminal()`). The panes follow the
+--- terminal becomes `claude_terminal` and the layout's Claude terminal,
+--- and the new session is handed what aineo kept for the dead one at once
+--- (`replacement_callbacks()`). The panes follow the
 --- session the start is on once Claude Code is first ready for input — the
---- new session's that takes the place of a resume with no conversation —
+--- new session's that takes the place of a resume with no conversation,
+--- which they show from the hand-over on when they showed the dead one —
 --- and then each session Claude Code switches to; not before, and nothing
 --- for a start that never becomes ready (`follow_confirmed_start()`,
 --- `follow_switch_once_confirmed()`). Once a start has
@@ -513,6 +603,7 @@ local function started_claude_terminal(config)
   local report = require('aineo.report')
   local mcp = require('aineo.mcp')
   local working_directory = vim.fn.getcwd()
+  local replacement = replacement_callbacks(working_directory)
   forget_confirmation_unless_running()
   claude_terminal = require('aineo.claude').start_session({
     cmd = config.claude.cmd,
@@ -523,12 +614,9 @@ local function started_claude_terminal(config)
     state_directory = kept_places().state_directory,
     editor_address = vim.v.servername,
     editor_program = vim.v.progpath,
-    on_terminal_replaced = function(terminal)
-      claude_terminal = terminal
-      require('aineo.layout').follow_claude_terminal(terminal)
-    end,
+    on_terminal_replaced = replacement.on_terminal_replaced,
     on_session_ready = follow_confirmed_start,
-    on_session_switched = follow_switch_once_confirmed,
+    on_session_switched = replacement.on_session_switched,
   })
   require('aineo.changes').begin_session({
     directory = working_directory,
