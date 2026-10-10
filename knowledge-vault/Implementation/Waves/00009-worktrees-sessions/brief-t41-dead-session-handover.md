@@ -495,3 +495,14 @@ Items 1 and 2 need a ruling before dispatch. Each ruling is an assumption to rep
 3. **T41's task row** (T41-12). Recommended: add T40 to its dependencies in the v1 plan note's task list, in the `knowledge/` change that marks T41 done after its merge. The row's mark is held (rule 6), and a change to it now would be a vault edit apart from the packet.
 4. **A58 and A60, for the user** (the brief review's verdict). They depart from the wording of "Wait for the resume": in the same editor the panes follow the fresh session from the fallback, before its confirmation. Report them to the user together as that departure. This needs no ruling before dispatch.
 5. **Mutants 13 and 14** are this amendment's additions, from the brief review. Strike them in the dispatch message if they are not wanted.
+
+## The orchestrator's rulings — 2026-10-10, at dispatch
+
+Each is the orchestrator's assumption under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"), to report to the user; none is a D row. Numbered after T40's A85.
+
+- **A86 (*For the orchestrator*, 1: A83 meets A61).** After a hand-over, reports that A83 kept with the working directory's records stay there, unshown; nothing is merged. Help place 7 qualifies *aineo-report-claims* item 4, and LIMITS says so beside A61.
+- **A87 (2: a home that follows the dead id as a claim).** A60 holds: the hand-over leaves the report and draft homes following the fresh session as not a claim, so its confirmation changes nothing; the directory's files wait for the next follow that is not a claim (A6, A31).
+- **(3) The task row.** T41's row gains T40 among its dependencies in the change that marks T41 done; no ruling needed.
+- **(4)** A58 and A60 are reported to the user together, as a departure from "Wait for the resume"; no ruling needed.
+- **A88 (5).** Mutants 13 and 14 are kept.
+- **A89, the reviewers line.** Attack by `neovim-lua-reviewer`, since T41 changes no file of the Claude Code integration; tests by `reviewer`; records by `records-reviewer` (A80). The implementer is `neovim-lua-developer`.
