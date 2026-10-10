@@ -1920,4 +1920,318 @@ T['a claim’s follow']['of a session followed as this editor’s own next leave
   }, { own = 'From the directory\n' })
 end
 
+--- Tells the child's draft home to hand the draft of the Claude session
+--- `from`, which Claude Code found no conversation for, over to `to`, the
+--- session that took its place.
+---
+---@param from string
+---@param to string
+local function hand_over(from, to)
+  child.lua("require('aineo.draft').hand_over_draft_session(...)", { from, to })
+end
+
+T['a hand-over'] = MiniTest.new_set()
+
+T['a hand-over']["makes the dead session's draft the new one's, whole, and leaves none under the dead one"] = function()
+  local state = fixture.directory('draft-sessions-hand-over')
+  plant_draft(session_draft_file(state, 'session-dead'), 'First line\nSecond line\n')
+  keep_new_buffer(state)
+
+  hand_over('session-dead', 'session-new')
+
+  eq({
+    dead = read_text(session_draft_file(state, 'session-dead')),
+    new = read_text(session_draft_file(state, 'session-new')),
+  }, { new = 'First line\nSecond line\n' })
+end
+
+T['a hand-over']["of the session followed saves Input's next change as the new session's draft"] = function()
+  local state = fixture.directory('draft-sessions-hand-over-next')
+  plant_draft(session_draft_file(state, 'session-dead'), 'Kept\n')
+  keep_new_buffer(state)
+  follow('session-dead')
+
+  hand_over('session-dead', 'session-new')
+  set_input({ 'Typed after' })
+
+  eq({
+    new = wait_for_text(session_draft_file(state, 'session-new'), 'Typed after\n'),
+    dead = read_text(session_draft_file(state, 'session-dead')),
+  }, { new = 'Typed after\n' })
+end
+
+T['a hand-over']['to a session with a draft of its own moves nothing, and the session followed stays followed'] = function()
+  local state = fixture.directory('draft-sessions-hand-over-own')
+  plant_draft(session_draft_file(state, 'session-dead'), 'Dead\n')
+  plant_draft(session_draft_file(state, 'session-new'), 'Own\n')
+  keep_new_buffer(state)
+  follow('session-dead')
+
+  hand_over('session-dead', 'session-new')
+  set_input({ 'Typed after' })
+
+  eq({
+    dead = wait_for_text(session_draft_file(state, 'session-dead'), 'Typed after\n'),
+    new = read_text(session_draft_file(state, 'session-new')),
+  }, { dead = 'Typed after\n', new = 'Own\n' })
+end
+
+T['a hand-over']['of the session followed moves a change not saved yet with the draft, at once'] = function()
+  local state = fixture.directory('draft-sessions-hand-over-pending')
+  plant_draft(session_draft_file(state, 'session-dead'), 'Kept\n')
+  keep_new_buffer(state)
+  follow('session-dead')
+  set_input({ 'Kept', 'Typed a moment ago' })
+
+  hand_over('session-dead', 'session-new')
+
+  eq({
+    new = read_text(session_draft_file(state, 'session-new')),
+    dead = read_text(session_draft_file(state, 'session-dead')),
+  }, { new = 'Kept\nTyped a moment ago\n' })
+end
+
+T['a hand-over']["of the session followed leaves Input's text, cursor and undo as they were"] = function()
+  local state = fixture.directory('draft-sessions-hand-over-undo')
+  keep_new_buffer(state)
+  follow('session-dead')
+  child.cmd('normal! iFirst')
+  child.cmd('normal! oSecond')
+  child.api.nvim_win_set_cursor(0, { 2, 3 })
+
+  hand_over('session-dead', 'session-new')
+  local after = { lines = input_lines(), cursor = child.api.nvim_win_get_cursor(0) }
+  child.cmd('normal! u')
+
+  eq({ after = after, undone = input_lines() }, {
+    after = { lines = { 'First', 'Second' }, cursor = { 2, 3 } },
+    undone = { 'First' },
+  })
+end
+
+T['a hand-over']["of the session followed, then a follow of the new session, leaves Input's text, cursor and undo as they were"] = function()
+  local state = fixture.directory('draft-sessions-hand-over-then-follow')
+  keep_new_buffer(state)
+  follow('session-dead')
+  child.cmd('normal! iFirst')
+  hand_over('session-dead', 'session-new')
+  child.cmd('normal! oSecond')
+  child.api.nvim_win_set_cursor(0, { 2, 3 })
+
+  follow('session-new')
+  local after = { lines = input_lines(), cursor = child.api.nvim_win_get_cursor(0) }
+  child.cmd('normal! u')
+
+  eq({ after = after, undone = input_lines() }, {
+    after = { lines = { 'First', 'Second' }, cursor = { 2, 3 } },
+    undone = { 'First' },
+  })
+end
+
+T['a hand-over']['of a session not followed leaves Input and the session followed as they were'] = function()
+  local state = fixture.directory('draft-sessions-hand-over-other')
+  plant_draft(session_draft_file(state, 'session-dead'), 'Dead\n')
+  keep_new_buffer(state)
+  follow('session-other')
+  set_input({ 'Typed for the other' })
+
+  hand_over('session-dead', 'session-new')
+  local shown = input_lines()
+  set_input({ 'Typed after' })
+
+  eq({
+    shown = shown,
+    other = wait_for_text(session_draft_file(state, 'session-other'), 'Typed after\n'),
+    new = read_text(session_draft_file(state, 'session-new')),
+  }, { shown = { 'Typed for the other' }, other = 'Typed after\n', new = 'Dead\n' })
+end
+
+T['a hand-over']['when neither session has a draft makes none'] = function()
+  local state = fixture.directory('draft-sessions-hand-over-none')
+  keep_new_buffer(state)
+
+  hand_over('session-dead', 'session-new')
+
+  eq(vim.fn.glob(vim.fs.joinpath(state, 'aineo', 'drafts', '*'), false, true), {})
+end
+
+T['a hand-over']['of a draft that cannot be read moves it as it is, and a follow of the new session tells it'] = function()
+  local state = fixture.directory('draft-sessions-hand-over-unreadable')
+  local dead = session_draft_file(state, 'session-dead')
+  local new = session_draft_file(state, 'session-new')
+  plant_draft(dead, 'Unreadable\n')
+  vim.uv.fs_chmod(dead, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(new, tonumber('600', 8))
+  end)
+  child.lua(KEEP_WARNINGS)
+  keep_new_buffer(state)
+  follow('session-other')
+  set_input({ 'Typed for the other' })
+
+  hand_over('session-dead', 'session-new')
+  follow('session-new')
+  local shown = input_lines()
+
+  eq({
+    dead = vim.uv.fs_stat(dead) ~= nil,
+    new_mode = vim.uv.fs_stat(new).mode % 512,
+    shown = shown,
+    read_warnings = child.lua_get(READ_WARNINGS),
+  }, { dead = false, new_mode = 0, shown = { '' }, read_warnings = 1 })
+end
+
+T['a hand-over']['of a session whose draft waits to be put into Input while textlock holds puts it once it ends'] = function()
+  local state = fixture.directory('draft-sessions-hand-over-textlock')
+  plant_draft(session_draft_file(state, 'session-dead'), 'Dead\n')
+  keep_new_buffer(state)
+  follow('session-a')
+  set_input({ 'Typed for a' })
+  begin_hold('vim.fn.getcharstr()')
+  follow('session-dead')
+
+  hand_over('session-dead', 'session-new')
+  end_hold('q')
+
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+  eq(input_lines(), { 'Dead' })
+end
+
+T['a hand-over']["of a session whose file Input's text is kept in until a waiting swap lands keeps an edit made meanwhile in the new session's draft"] = function()
+  local state = fixture.directory('draft-sessions-hand-over-pinned')
+  plant_draft(session_draft_file(state, 'session-other'), 'Other\n')
+  keep_new_buffer(state)
+  follow('session-dead')
+  set_input({ 'Typed for the dead session' })
+  begin_hold('vim.fn.getcharstr()', 'ggdG')
+  follow('session-other')
+
+  hand_over('session-dead', 'session-new')
+  end_hold('q')
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+
+  eq({
+    shown = input_lines(),
+    dead = read_text(session_draft_file(state, 'session-dead')),
+    new = read_text(session_draft_file(state, 'session-new')),
+  }, { shown = { 'Other' }, new = '' })
+end
+
+T['a hand-over']['that cannot move the draft tells it once, and raises nothing'] = function()
+  local state = fixture.directory('draft-sessions-hand-over-unmovable')
+  plant_draft(session_draft_file(state, 'session-dead'), 'Dead\n')
+  child.lua(KEEP_WARNINGS)
+  keep_new_buffer(state)
+  local drafts = vim.fs.dirname(session_draft_file(state, 'session-dead'))
+  vim.uv.fs_chmod(drafts, tonumber('500', 8))
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(drafts, tonumber('700', 8))
+  end)
+
+  local raised_nothing = child.lua_get(
+    "(pcall(require('aineo.draft').hand_over_draft_session, ...))",
+    { 'session-dead', 'session-new' }
+  )
+  vim.uv.fs_chmod(drafts, tonumber('700', 8))
+
+  eq({
+    raised_nothing = raised_nothing,
+    warnings = child.lua_get('#_G.warnings'),
+    moves = child.lua_get(MOVE_WARNINGS),
+    dead = read_text(session_draft_file(state, 'session-dead')),
+  }, { raised_nothing = true, warnings = 1, moves = 1, dead = 'Dead\n' })
+end
+
+T['a hand-over']['told before the environment is made once it comes, and Input is given the moved draft'] = function()
+  local state = fixture.directory('draft-sessions-hand-over-held')
+  plant_draft(session_draft_file(state, 'session-dead'), 'Dead\n')
+  follow('session-dead')
+
+  hand_over('session-dead', 'session-new')
+  keep_new_buffer(state)
+
+  eq({
+    shown = input_lines(),
+    dead = read_text(session_draft_file(state, 'session-dead')),
+    new = read_text(session_draft_file(state, 'session-new')),
+  }, { shown = { 'Dead' }, new = 'Dead\n' })
+end
+
+T['a hand-over']['refuses an id that is not a string, naming it, and moves nothing'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'nil', "'session-new'", 'from' },
+      { '{}', "'session-new'", 'from' },
+      { "'session-dead'", '7', 'to' },
+    },
+  })
+
+T['a hand-over']['refuses an id that is not a string, naming it, and moves nothing']['as'] = function(
+  from,
+  to,
+  named
+)
+  local state = fixture.directory('draft-sessions-hand-over-not-an-id')
+  plant_draft(session_draft_file(state, 'session-dead'), 'Dead\n')
+  keep_new_buffer(state)
+
+  local refusal = child.lua_get(([[(function()
+    local handed, failure = pcall(require('aineo.draft').hand_over_draft_session, %s, %s)
+    return { handed = handed, named = tostring(failure):find(%q, 1, true) ~= nil }
+  end)()]]):format(from, to, named))
+
+  eq({
+    refusal = refusal,
+    dead = read_text(session_draft_file(state, 'session-dead')),
+  }, { refusal = { handed = false, named = true }, dead = 'Dead\n' })
+end
+
+T['a hand-over']['of the session followed, whose draft cannot be read, keeps it from what is typed next, telling why'] = function()
+  local state = fixture.directory('draft-sessions-hand-over-unreadable-followed')
+  local dead = session_draft_file(state, 'session-dead')
+  local new = session_draft_file(state, 'session-new')
+  plant_draft(dead, 'Unreadable\n')
+  vim.uv.fs_chmod(dead, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(new, tonumber('600', 8))
+  end)
+  child.lua(KEEP_WARNINGS)
+  keep_new_buffer(state)
+  follow('session-dead')
+
+  hand_over('session-dead', 'session-new')
+  set_input({ 'Typed after' })
+  vim.wait(SAVE_DELAY_AND_MARGIN_MS)
+  local new_mode = vim.uv.fs_stat(new).mode % 512
+  vim.uv.fs_chmod(new, tonumber('600', 8))
+
+  eq({
+    new_mode = new_mode,
+    new = read_text(new),
+    unsaved_warnings = child.lua_get(UNSAVED_WARNINGS),
+  }, { new_mode = 0, new = 'Unreadable\n', unsaved_warnings = 1 })
+end
+
+T['a hand-over']["of a session followed as a claim's makes the new session followed as the editor's own, the directory's draft left to the next follow"] = function()
+  local state = fixture.directory('draft-sessions-hand-over-claim')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  plant_draft(session_draft_file(state, 'session-dead'), 'Dead\n')
+  keep_new_buffer(state)
+  follow_as_claim('session-dead')
+  hand_over('session-dead', 'session-new')
+  follow('session-new')
+
+  follow('session-next')
+
+  eq({
+    shown = input_lines(),
+    directory = read_text(directory_draft_file(state)),
+    next = read_text(session_draft_file(state, 'session-next')),
+  }, { shown = { 'From the directory' }, next = 'From the directory\n' })
+end
+
 return T
