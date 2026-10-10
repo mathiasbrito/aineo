@@ -6,6 +6,7 @@
 --- and the target sees none of the `make` that runs the suite, nor the
 --- suite's own `AINEO_TEST_JOBS`.
 
+local fixture = dofile('tests/helpers/fixture.lua')
 local git = dofile('tests/helpers/git.lua')
 
 local M = {}
@@ -106,7 +107,7 @@ end
 ---@return vim.SystemCompleted
 function M.run(target, run)
   run = run or {}
-  vim.fn.mkdir(EMPTY_DIRECTORY, 'p')
+  fixture.make_directory(EMPTY_DIRECTORY)
   local command = vim.list_extend(
     { 'make', '--no-print-directory', '-f', run.makefile or MAKEFILE, target },
     run.assignments or {}
