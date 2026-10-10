@@ -29,7 +29,7 @@ A Claude Code started by aineo ran on after its Neovim quit, and every report fa
 - **`lua/aineo/claude/`**: the start token is a new session id (A19); the hook's command ends `"$PPID" '<directory>'`; the report server's entry gets the token (through `aineo.mcp`'s `with_start_token()`, required at a start so that `:checkhealth` loads no MCP home); the hook relay records each event before it starts its deliverer, and the deliverer keeps a switch whose editor cannot be reached and tells the claimant and the claim followers of the session left (A17); `is_session_id()` re-exported.
 - **`plugin/aineo.lua`**: the entry written at a confirmation, a confirmed switch, a claim and a return, its handlers made at the first write; `:Aineo claim [id]`, `<Plug>(aineo-claim)` without a prefix key, its completion; T39's start and switch wiring held while a claim of another session holds; `\s`'s refusal; a switch told by another Claude Code's hook.
 - **`doc/aineo.txt`**: the fourteen places of the dispatch amendment.
-- **Tests** (80 cases added; the whole suite 2405 cases in 73 groups, `Fails (0)`, Neovim 0.12.5): new `test_mcp_editors.lua` (10), `test_mcp_processes.lua` (15), `test_mcp_lost_editor.lua` (23), `test_claude_hook_record.lua` (5), `test_entry_claim.lua` (19); new cases in `test_report_sessions.lua` (3), `test_draft_sessions.lua` (3), `test_claude_switch.lua` (2); pins moved in `test_claude.lua`, `test_claude_switch.lua` (the start token is read from the hook's command, no longer `'1'`), `test_entry.lua`, `test_entry_panes.lua`, `test_plugin.lua`, `tests/helpers/entry.lua`; `tests/helpers/fake_claude.lua` gains `CLAUDE_CODE_SESSION_ID` for hooks and servers, a wrapped hook shell, a report server kept for its life and a `/report <task>` key; `tests/helpers/claude_session.lua` gains `start_token()`.
+- **Tests** (97 cases added after the fix round, 80 before it; the whole suite 2422 cases in 73 groups, `Fails (0)`, Neovim 0.12.5): new `test_mcp_editors.lua` (10), `test_mcp_processes.lua` (20), `test_mcp_lost_editor.lua` (29), `test_claude_hook_record.lua` (6), `test_entry_claim.lua` (22); new cases in `test_report_sessions.lua` (4), `test_draft_sessions.lua` (4), `test_claude_switch.lua` (2); pins moved in `test_claude.lua`, `test_claude_switch.lua` (the start token is read from the hook's command, no longer `'1'`), `test_entry.lua`, `test_entry_panes.lua`, `test_plugin.lua`, `tests/helpers/entry.lua`; `tests/helpers/fake_claude.lua` gains `CLAUDE_CODE_SESSION_ID` for hooks and servers, a wrapped hook shell, a report server kept for its life and a `/report <task>` key; `tests/helpers/claude_session.lua` gains `start_token()`.
 
 ## Decisions
 
@@ -56,7 +56,7 @@ Arrived green, the code written ahead of its test, each with the mutant that kil
 
 ## Mutants
 
-Each its literal edit (`.tests/t40-mutants.json` in the worktree, not committed), one at a time, from a pristine copy, on the test file named; every one killed by an assertion on the final tree.
+Short names below; the literal edits were in an uncommitted file of the worktree. Each ran one at a time, from a pristine copy, on the test file named, and was killed by an assertion, with two corrections from the test-integrity review: mutant 43 is not an edit of its own (it is 14's edit, run once); L1 was first killed only by a crash, the edit itself being wrong (`(function(_, _, work)` truncated by `gsub`'s two values), and its corrected edit was killed by an assertion — on a fixed 400 ms wait, which the fix round replaced (below).
 
 | # | Edit (short) | Killed by |
 |---|---|---|
@@ -73,7 +73,7 @@ Each its literal edit (`.tests/t40-mutants.json` in the worktree, not committed)
 | 11 | entry not removed at `VimLeavePre` | `test_entry_claim` › entry written … gone once the editor quits; not written again once the editor quits |
 | 12 | `FocusGained` writes nothing | › is marked used again when the editor gains focus |
 | 13 | switch with its editor gone not kept | `test_claude_hook_record` › a switch whose editor is gone … |
-| 14, 43 | an unpaired `SessionStart` moves the record | `test_mcp_processes` › stays on its session … (and two more) |
+| 14 (= 43) | an unpaired `SessionStart` moves the record | `test_mcp_processes` › stays on its session … (and two more) |
 | 15 | token `'1'` | `test_claude_switch` › different start tokens; a hook of an earlier start |
 | 16 | the disk's answer a tool error | `test_mcp_lost_editor` › kept … (four) |
 | 17 | closed taken as unreachable | `test_mcp_blocked_editor` › … dies before it answers |
@@ -115,10 +115,27 @@ Each its literal edit (`.tests/t40-mutants.json` in the worktree, not committed)
 | U1, G1 | claim's usage; the report environment at a claim | `test_entry_claim` |
 | E1 | claims not pruned at an entry write | `test_mcp_editors` › whose claimant cannot be reached is removed … |
 
+## Fix round — after the three reviews of PR #150
+
+**The orchestrator's rulings, each the orchestrator's assumption to report to the user (under the user's instruction of 2026-10-06), not the user's decision:** A83 (a report of this Neovim's own Claude Code that A23 keeps while a claim of another session holds is kept with the working directory's records, unshown, until those have moved into its own session; no merge of records files), A84 (the window in which letting go of a claim can remove a newer one is named in LIMITS; no lock), A85 (A79's line stays in T40's LIMITS subsection).
+
+- **Attack 1, 2:** a listed editor or a claimant takes a report only on an exact session match; the starting editor also while it follows none (`{ at_start = true }`); a Neovim without aineo, or an older aineo, declines (`pcall(require, …)`), so the search goes on and a claim naming it is let go. Red: three new cases in `test_mcp_lost_editor.lua` (a stale entry at an aineo following no session; a later-used non-aineo entry; a non-aineo claimant).
+- **Attack 3 (A83):** once no Neovim that shows the session took a report the starting editor declined, the relay asks that editor again with `keep_with_directory`; its report home keeps the report with the directory's records, unshown, while those have not moved. Red: `test_entry_claim.lua` › *keeps a report of this Neovim's own Claude Code unshown with the directory's records …* (the directory's file stranded).
+- **Attack 4:** the lock holds its holder's pid and is stale only when that pid has ended (`ESRCH`); the age rule stays for a lock that holds no pid yet. Red: *a hook waits while another holds the record, however long it holds it* (a lock of a live pid, 5 s old, was taken). This case replaces the 400 ms wait (tests 13): the recorder marks its start, and the bound after the marker is named (`RECORDER_WRITE_MS`, 1.5 s; the lock of a live pid is never stale, so the bound can be that wide).
+- **Attack 5:** the deliverer notifies its editor and every follower first, then waits for each answer. Red: `test_claude_hook_record.lua` › *reaches the claimant while the editor that started Claude Code waits at a hit-enter prompt*.
+- **Attack 6 (A84):** a LIMITS line; and one for a hook that waits more than 3 s for the record.
+- **Tests 1:** the exiting case reads the request's answer (`requested and told == true`); mutant 49 killed by assertion in the case's own order and with the quit deferred 500 ms (a copy of the file).
+- **Tests 2:** the two `/clear` cases wait for the entry and the claim file together, the reads total; the file ran 10 times (see the fix round's report), and a 300 ms delay before `claim(new)` leaves it green.
+- **Tests 3–9:** adopted from the review's probes: host:port never offered, for a listed editor (replacing the case whose name said more than it proved) and a claimant; a killed starting editor (socket left); the tie-break; A77; the changes pane at a claim and a return; A79 (two); the records' folder 0700; EPERM; a session followed first as a claim, then as the own (report and draft).
+- **Records:** the *aineo-draft* sentence; *aineo-report-claims* item 2 names the time before a new start is ready; the mutant line above; the "P2" citation in the fake; three docstrings rewrapped; the help behind findings 1, 3 and 5.
+
+Fix-round mutants, each its literal edit (an uncommitted file), killed by an assertion: the review's R-listed-may, R-claimant-may, R-tie, R-A77, R-changes-claim, R-A79, R-procmode, R-eperm, R-report-same, R-draft-same, P-refused; the fix round's W1 (follows-none taken), W2 (no `pcall` around the require), A83a (no keep pass), A83b (kept after the directory moved), L4 (pid ignored), L4b (a dead holder never stale), L1 (lock dropped, on the new case), T5 (the editor's answer awaited before the followers are told), 49 (both orders). Not built: R-uid, R-told-own (the review left them without a probe).
+
 ## Open threads
 
 - Mutant 40 (claims per claimant) has no literal edit here: claims are one file per session, so an overtaken claim has nowhere to come back from; the test it names (the newest claimant, then the starting editor, not the overtaken one) is in `test_mcp_lost_editor.lua`.
-- A79's LIMITS line sits in T40's own new LIMITS subsection, not beside *The first follow's move*, which is not one of T40's places.
+- A79's LIMITS line sits in T40's own new LIMITS subsection, not beside *The first follow's move*, which is not one of T40's places; the orchestrator ruled it stays there (A85).
+- Without a probe: a socket another user owns (R-uid) and a claimed session switching to the claimant's own terminal session (R-told-own).
 - The changes pane after a claim before any start shows nothing until the first start (A78), as the help says.
 
 ## Task lines

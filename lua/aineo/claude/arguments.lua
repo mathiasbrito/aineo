@@ -339,8 +339,9 @@ end
 --- JSON object — `{}` when there are none — aineo's report server among them
 --- told `start_token` (`aineo.mcp`'s `with_start_token()`), the instructions
 --- appended to its system prompt as they are, `settings_value` as
---- `--settings` when it is given, and the tools it may use without asking, each one word after
---- `--allowedTools`. Claude Code's CLI reference gives that flag several
+--- `--settings` when it is given, and the tools it may use without asking,
+--- each one word after `--allowedTools`. Claude Code's CLI reference gives
+--- that flag several
 --- words (its example names three tools), as it gives `--mcp-config` several
 --- space-separated values, so that flag comes last, where no word of aineo's
 --- own follows it, and `--mcp-config` is followed by a flag.
