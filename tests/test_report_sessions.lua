@@ -1012,4 +1012,288 @@ T['a claim’s follow']['of a session followed as this editor’s own next leave
   }, { own = { 'Directory' } })
 end
 
+--- Tells the child's report home to hand the records of the Claude session
+--- `from`, which Claude Code found no conversation for, over to `to`, the
+--- session that took its place.
+---
+---@param from string
+---@param to string
+local function hand_over(from, to)
+  child.lua("require('aineo.report').hand_over_report_session(...)", { from, to })
+end
+
+T['a hand-over'] = MiniTest.new_set()
+
+T['a hand-over']["makes the dead session's records the new one's, whole, and leaves none under the dead one"] = function()
+  local state = fixture.directory('report-sessions-hand-over')
+  plant_records(session_records_file(state, 'session-dead'), { 'First', 'Second' })
+  start_editor(state)
+
+  hand_over('session-dead', 'session-new')
+
+  eq({
+    dead = summaries_in(session_records_file(state, 'session-dead')),
+    new = summaries_in(session_records_file(state, 'session-new')),
+  }, { new = { 'First', 'Second' } })
+end
+
+T['a hand-over']["of the session followed keeps the next report in the new session's records"] = function()
+  local state = fixture.directory('report-sessions-hand-over-next')
+  plant_records(session_records_file(state, 'session-dead'), { 'Before' })
+  start_editor(state)
+  follow('session-dead')
+  report_editor.lines(child)
+
+  hand_over('session-dead', 'session-new')
+  receive('After')
+
+  eq({
+    dead = summaries_in(session_records_file(state, 'session-dead')),
+    new = summaries_in(session_records_file(state, 'session-new')),
+  }, { new = { 'Before', 'After' } })
+end
+
+T['a hand-over']['to a session with records of its own moves nothing, and the session followed stays followed'] = function()
+  local state = fixture.directory('report-sessions-hand-over-own')
+  plant_records(session_records_file(state, 'session-dead'), { 'Dead' })
+  plant_records(session_records_file(state, 'session-new'), { 'Own' })
+  start_editor(state)
+  follow('session-dead')
+  report_editor.lines(child)
+
+  hand_over('session-dead', 'session-new')
+  receive('After')
+
+  eq({
+    dead = summaries_in(session_records_file(state, 'session-dead')),
+    new = summaries_in(session_records_file(state, 'session-new')),
+  }, { dead = { 'Dead', 'After' }, new = { 'Own' } })
+end
+
+--- The expression, run in the child, that counts the warnings it gave that
+--- records could not be read.
+local READ_WARNINGS = [[#vim.tbl_filter(function(message)
+  return message:find('cannot read the report records', 1, true) ~= nil
+end, _G.warnings)]]
+
+T['a hand-over']['of records that cannot be read moves them as they are, and a follow of the new session tells it'] = function()
+  local state = fixture.directory('report-sessions-hand-over-unreadable')
+  local dead = session_records_file(state, 'session-dead')
+  local new = session_records_file(state, 'session-new')
+  plant_records(dead, { 'Unreadable' })
+  vim.uv.fs_chmod(dead, 0)
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(new, tonumber('600', 8))
+  end)
+  start_editor(state)
+  child.lua(KEEP_WARNINGS)
+
+  hand_over('session-dead', 'session-new')
+  follow('session-new')
+  local lines = report_editor.lines(child)
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(READ_WARNINGS) > 0
+  end, 10)
+
+  eq({
+    dead = vim.uv.fs_stat(dead) ~= nil,
+    new_mode = vim.uv.fs_stat(new).mode % 512,
+    lines = lines,
+    read_warnings = child.lua_get(READ_WARNINGS),
+  }, { dead = false, new_mode = 0, lines = { '' }, read_warnings = 1 })
+end
+
+T['a hand-over']['when neither session has records makes none'] = function()
+  local state = fixture.directory('report-sessions-hand-over-none')
+  start_editor(state)
+
+  hand_over('session-dead', 'session-new')
+
+  eq(vim.fn.glob(vim.fs.joinpath(state, 'aineo', 'reports', '*'), false, true), {})
+end
+
+--- Shows the child's Report in its current window, with the cursor at
+--- `cursor`.
+---
+---@param cursor integer[]
+local function show_report_at(cursor)
+  child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
+  child.api.nvim_win_set_cursor(0, cursor)
+end
+
+T['a hand-over']["of the session followed leaves the Report's lines and cursor as they were"] = function()
+  local state = fixture.directory('report-sessions-hand-over-lines')
+  plant_records(session_records_file(state, 'session-dead'), { 'First', 'Second', 'Third' })
+  start_editor(state)
+  follow('session-dead')
+  show_report_at({ 3, 4 })
+
+  hand_over('session-dead', 'session-new')
+
+  eq({ lines = report_editor.lines(child), cursor = child.api.nvim_win_get_cursor(0) }, {
+    lines = {
+      '09:00 [done] Task — First',
+      '09:00 [done] Task — Second',
+      '09:00 [done] Task — Third',
+    },
+    cursor = { 3, 4 },
+  })
+end
+
+T['a hand-over']["of the session followed, then a follow of the new session, leaves the Report's lines and cursor as they were"] = function()
+  local state = fixture.directory('report-sessions-hand-over-then-follow')
+  plant_records(session_records_file(state, 'session-dead'), { 'First', 'Second' })
+  start_editor(state)
+  follow('session-dead')
+  show_report_at({ 2, 4 })
+  hand_over('session-dead', 'session-new')
+  receive('Third')
+  child.api.nvim_win_set_cursor(0, { 2, 4 })
+
+  follow('session-new')
+
+  eq({ lines = report_editor.lines(child), cursor = child.api.nvim_win_get_cursor(0) }, {
+    lines = {
+      '09:00 [done] Task — First',
+      '09:00 [done] Task — Second',
+      '10:00 [done] Task — Third',
+    },
+    cursor = { 2, 4 },
+  })
+end
+
+T['a hand-over']['of a session not followed leaves the Report and the session followed as they were'] = function()
+  local state = fixture.directory('report-sessions-hand-over-other')
+  plant_records(session_records_file(state, 'session-dead'), { 'Dead' })
+  plant_records(session_records_file(state, 'session-other'), { 'Other' })
+  start_editor(state)
+  follow('session-other')
+  report_editor.lines(child)
+
+  hand_over('session-dead', 'session-new')
+  receive('After')
+
+  eq({
+    lines = report_editor.lines(child),
+    other = summaries_in(session_records_file(state, 'session-other')),
+    new = summaries_in(session_records_file(state, 'session-new')),
+  }, {
+    lines = { '09:00 [done] Task — Other', '10:00 [done] Task — After' },
+    other = { 'Other', 'After' },
+    new = { 'Dead' },
+  })
+end
+
+T['a hand-over']['of a session whose records wait to be shown while textlock holds shows them once it ends'] = function()
+  local state = fixture.directory('report-sessions-hand-over-textlock')
+  plant_records(session_records_file(state, 'session-a'), { 'Alpha' })
+  plant_records(session_records_file(state, 'session-dead'), { 'Dead' })
+  start_editor(state)
+  follow('session-a')
+  child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
+  begin_hold('vim.fn.getcharstr()')
+  follow('session-dead')
+
+  hand_over('session-dead', 'session-new')
+  end_hold('q')
+
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+  eq(report_editor.lines(child), { '09:00 [done] Task — Dead' })
+end
+
+T['a hand-over']['told before the environment is made once it comes, and the next report is kept for the new session'] = function()
+  local state = fixture.directory('report-sessions-hand-over-held')
+  plant_records(session_records_file(state, 'session-dead'), { 'Dead' })
+  children.restart(child)
+  follow('session-dead')
+
+  hand_over('session-dead', 'session-new')
+  give_environment(state)
+  receive('After')
+
+  eq({
+    lines = report_editor.lines(child),
+    dead = summaries_in(session_records_file(state, 'session-dead')),
+    new = summaries_in(session_records_file(state, 'session-new')),
+  }, {
+    lines = { '09:00 [done] Task — Dead', '10:00 [done] Task — After' },
+    new = { 'Dead', 'After' },
+  })
+end
+
+T['a hand-over']['refuses an id that is not a string, naming it, and moves nothing'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'nil', "'session-new'", 'from' },
+      { '{}', "'session-new'", 'from' },
+      { "'session-dead'", '7', 'to' },
+    },
+  })
+
+T['a hand-over']['refuses an id that is not a string, naming it, and moves nothing']['as'] = function(
+  from,
+  to,
+  named
+)
+  local state = fixture.directory('report-sessions-hand-over-not-an-id')
+  plant_records(session_records_file(state, 'session-dead'), { 'Dead' })
+  start_editor(state)
+
+  local refusal = child.lua_get(([[(function()
+    local handed, failure = pcall(require('aineo.report').hand_over_report_session, %s, %s)
+    return { handed = handed, named = tostring(failure):find(%q, 1, true) ~= nil }
+  end)()]]):format(from, to, named))
+
+  eq({
+    refusal = refusal,
+    dead = summaries_in(session_records_file(state, 'session-dead')),
+  }, { refusal = { handed = false, named = true }, dead = { 'Dead' } })
+end
+
+T['a hand-over']['that cannot move the records tells it once, and raises nothing'] = function()
+  local state = fixture.directory('report-sessions-hand-over-unmovable')
+  plant_records(session_records_file(state, 'session-dead'), { 'Dead' })
+  start_editor(state)
+  child.lua(KEEP_WARNINGS)
+  local reports = vim.fs.dirname(session_records_file(state, 'session-dead'))
+  vim.uv.fs_chmod(reports, tonumber('500', 8))
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(reports, tonumber('700', 8))
+  end)
+
+  local raised_nothing = child.lua_get(
+    "(pcall(require('aineo.report').hand_over_report_session, ...))",
+    { 'session-dead', 'session-new' }
+  )
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get('#_G.warnings') > 0
+  end, 10)
+  vim.uv.fs_chmod(reports, tonumber('700', 8))
+
+  eq({
+    raised_nothing = raised_nothing,
+    warnings = child.lua_get('#_G.warnings'),
+    moves = child.lua_get(MOVE_WARNINGS),
+    dead = summaries_in(session_records_file(state, 'session-dead')),
+  }, { raised_nothing = true, warnings = 1, moves = 1, dead = { 'Dead' } })
+end
+
+T['a hand-over']["of a session followed as a claim's makes the new session followed as the editor's own"] = function()
+  local state = fixture.directory('report-sessions-hand-over-claim')
+  plant_records(session_records_file(state, 'session-dead'), { 'First', 'Second' })
+  start_editor(state)
+  follow_as_claim('session-dead')
+  show_report_at({ 2, 4 })
+  hand_over('session-dead', 'session-new')
+
+  follow('session-new')
+
+  eq({ lines = report_editor.lines(child), cursor = child.api.nvim_win_get_cursor(0) }, {
+    lines = { '09:00 [done] Task — First', '09:00 [done] Task — Second' },
+    cursor = { 2, 4 },
+  })
+end
+
 return T
