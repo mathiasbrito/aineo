@@ -511,6 +511,28 @@ T['a resume with no conversation']['is not a restart on a session with a convers
   })
 end
 
+--- The entry the list of running editors under `state` keeps for `editor`,
+--- decoded, once `is_wanted` accepts it, waiting at most
+--- `FILE_PATIENCE_MS`; else what it is when the wait runs out, nil when
+--- there is none.
+---
+---@param state string
+---@param editor table
+---@param is_wanted fun(candidate: table?): boolean
+---@return table?
+local function entry_once(state, editor, is_wanted)
+  local path =
+    vim.fs.joinpath(state, 'aineo', 'editors', vim.fn.sha256(editor.v.servername) .. '.json')
+  local function decoded()
+    local text = read_file(path)
+    return text and vim.json.decode(text)
+  end
+  vim.wait(FILE_PATIENCE_MS, function()
+    return is_wanted(decoded())
+  end, 20)
+  return decoded()
+end
+
 --- A session id of the form Claude Code gives, for a session this Neovim
 --- claims and its own Claude Code does not run.
 local CLAIMED_SESSION_ID = '063cc43c-8e1a-4d2f-b5c7-91d0e3a4f852'
@@ -528,13 +550,18 @@ T['a resume with no conversation']['while a claim of another session holds moves
   claude_session.wait_for_starts(fake, 2)
   claude_session.wait_for_status(child, 'ready')
   local fresh = followed_session(child)
+  local editor_entry = entry_once(state, child, function(candidate)
+    return candidate ~= nil
+  end)
 
   eq({
     input = child.lua_get(INPUT_LINES),
+    listed = editor_entry and { editor_entry.session, editor_entry.own },
     fresh = read_file(session_files(state, fresh).draft),
     dead = files_left(state, DEAD_SESSION_ID),
   }, {
     input = { 'notes for the claimed session' },
+    listed = { CLAIMED_SESSION_ID, false },
     fresh = 'notes for the dead session\n',
     dead = {},
   })
@@ -575,28 +602,6 @@ T['a resume with no conversation']['of a session whose Claude Code still runs in
     running = { draft = true },
     fresh = {},
   })
-end
-
---- The entry the list of running editors under `state` keeps for `editor`,
---- decoded, once `is_wanted` accepts it, waiting at most
---- `FILE_PATIENCE_MS`; else what it is when the wait runs out, nil when
---- there is none.
----
----@param state string
----@param editor table
----@param is_wanted fun(candidate: table?): boolean
----@return table?
-local function entry_once(state, editor, is_wanted)
-  local path =
-    vim.fs.joinpath(state, 'aineo', 'editors', vim.fn.sha256(editor.v.servername) .. '.json')
-  local function decoded()
-    local text = read_file(path)
-    return text and vim.json.decode(text)
-  end
-  vim.wait(FILE_PATIENCE_MS, function()
-    return is_wanted(decoded())
-  end, 20)
-  return decoded()
 end
 
 --- Makes, in the child, the session of a `/clear` in which nothing was
