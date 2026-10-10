@@ -1,7 +1,6 @@
 --- The report server's stdio transport: one JSON-RPC message per line on
 --- stdin, one answer per line on stdout, in the order the lines came.
 
-local editor = require('aineo.mcp.editor')
 local lines = require('aineo.mcp.lines')
 local protocol = require('aineo.mcp.protocol')
 
@@ -29,24 +28,21 @@ local function answer_safely(answer)
 end
 
 --- Serves MCP on this process's stdin and stdout until stdin closes,
---- delivering each valid report to the editor at `editor_address`.
+--- handing each valid report to `deliver_report`.
 ---
---- Lines are answered in the order they came: while a delivery waits on the
---- editor (`editor.deliver_report()`, bounded), Neovim does not run the stdin
+--- Lines are answered in the order they came: while a delivery waits on an
+--- editor (`aineo.mcp.delivery`, bounded), Neovim does not run the stdin
 --- callback again, so the lines after it wait their turn. A line longer than
 --- `LINE_LIMIT` is refused, and dropped, as soon as the chunk that takes it
 --- past the limit is read (`lines.new_line_reader()`). A line whose answer
 --- fails gets none; the next line is answered as usual.
 ---
----@param editor_address string? the editor's server address
-function M.serve_stdio(editor_address)
+---@param deliver_report aineo.mcp.DeliverReport
+function M.serve_stdio(deliver_report)
   local closed = false
   local stdio
   local function send(answer)
     vim.fn.chansend(stdio, vim.json.encode(answer) .. '\n')
-  end
-  local function deliver_report(report)
-    return editor.deliver_report(editor_address, report)
   end
   local read_lines = lines.new_line_reader({
     limit = LINE_LIMIT,

@@ -3,6 +3,8 @@
 You are dispatched by the orchestrator to implement **one packet** of `knowledge-vault/Planning/aineo — v1 agent console.md`. Your definition tells you how to work; this brief tells you what.
 
 > **Planned 2026-10-07, a later packet of wave 9** (`plan.md` › *Packet T40 — 2026-10-07*). The user decided its behaviour the same day: D42 in the v1 plan note, seven answers quoted under *What was decided already*; and D43 and D44, which T35's fix round builds (PR #137), shape the hook relay this packet extends. *Amended 2026-10-07 before review for answer 5, D43 and D44, and again the same day for answers 6 and 7: the two last sections list each change.* **It is dispatched once T35 (PR #137), T36 (PR #135) and T39 have merged** — T39 wires the session every editor follows, which this packet lists, and T39 edits `plugin/aineo.lua` and `tests/test_entry_panes.lua`, which this packet edits too (rule 1 and rule 2, `plan.md`). Every fact below was read on `dev` `85a57f9`, on T35's branch at `c2a6cee` and on T36's at `fe112c4`; the dispatch amendment re-reads each on the `dev` you start from, names the entry points T39 leaves, and quotes the help's fences as T35, T36 and T39 leave them.
+>
+> *(2026-10-10, at dispatch.)* T35, T36, T37, T38, T39 and T42 have merged. T40 runs alone, and T41 follows it. The facts, line numbers, help fences and baseline to use are those of `origin/dev` `a317287`, in *Amendment — 2026-10-10, at dispatch: T38, T39 and T42 merged*, at the end.
 
 ## Objective
 
@@ -74,8 +76,9 @@ None of the four is a tool error (`isError` false). A report that could not be k
   - when it was last used, on the wall clock of *1.3* (A14).
 - **The claims** are one owner-only file per claimed session, named by the SHA-256 of the session's id. It holds the claimant's address and the time of the claim. A claim replaces the file whole, by a rename, so the file names the newest claimant, and an overtaken claim does not come back when the newer claimant lets go (A15; the orchestrator's ruling on T40-5).
 - **An editor:**
-  - **writes its entry** whenever it is told a session to follow: at every start of Claude Code, every switch, every claim and every return (A29), where T39's wiring tells the report home the session. An editor that follows no session has no entry. **Its `FocusGained` and `VimLeavePre` handlers are created at its first entry write**, not as `plugin/aineo.lua` is sourced, so `tests/test_plugin.lua`'s pin of the autocommands sourcing adds stays as it is (T40-1);
-  - **marks itself used** at `FocusGained`, at each start and switch, and at a claim (A14);
+  - **writes its entry** whenever it is told a session to follow: ~~at every start of Claude Code, every switch,~~ *(2026-10-10: at every start's confirmation and every confirmed switch, where `follow_session()` runs, never at a start; the dispatch amendment, T39's notes, 1)* every claim and every return (A29), where T39's wiring tells the report home the session. An editor that follows no session has no entry. **Its `FocusGained` and `VimLeavePre` handlers are created at its first entry write**, not as `plugin/aineo.lua` is sourced, so `tests/test_plugin.lua`'s pin of the autocommands sourcing adds stays as it is (T40-1);
+  - **marks itself used** at `FocusGained`, ~~at each start and switch,~~ *(2026-10-10: at each start's confirmation and each confirmed switch)* and at a claim (A14);
+  - *(2026-10-10)* **writes no entry and no claim file once `v:exiting` is set** (T39-1; the dispatch amendment, T39's notes, 4);
   - **writes the claim file of a session it claims.** It removes that file, if it still names this editor, when it follows another session, returns to its own (A29), or quits;
   - **removes its entry** as it quits (`VimLeavePre`);
   - **prunes, at each write of its entry** (T40-19): it removes each other entry, and each claim file, whose address cannot be reached (P3: under a millisecond each).
@@ -149,7 +152,7 @@ How it works:
 - **While this Neovim follows a session its own terminal does not run** (A23, A25, A28):
   - a report of its own Claude Code comes to it as the starting editor, unless another Neovim has claimed its session (*1.1*). It refuses that report, so the report goes on to another Neovim that shows its session, else the disk (*1.1*, A23);
   - a switch inside its own Claude Code is kept for the directory, as T35 keeps one (D38), but does not move the panes, which stay on the claimed session (A25);
-  - **a start of its own Claude Code does not move the panes either** (A25; the orchestrator's ruling on T40-16). That covers `:Aineo open` after an exit, and the first start in a Neovim that claimed by an id. While such a claim holds, T39's start wiring tells the homes nothing. The claim holds until `:Aineo claim` with no argument;
+  - **a start of its own Claude Code does not move the panes either** (A25; the orchestrator's ruling on T40-16). That covers `:Aineo open` after an exit, and the first start in a Neovim that claimed by an id. While such a claim holds, T39's start wiring tells the homes nothing *(2026-10-10: that wiring is `follow_confirmed_start()`, which still records the confirmation, and `follow_switch_once_confirmed()`; the dispatch amendment, T39's notes, 3)*. The claim holds until `:Aineo claim` with no argument;
   - `\s` sends nothing (A28, below);
   - `:Aineo claim` with no word, or with its own session's id, brings the panes back to its own terminal's session (A29).
 - **`\s` while this Neovim follows a session its own terminal does not run** (D42, answer 7; A28, which replaces A24).
@@ -183,6 +186,8 @@ How it works:
 
 *Corrected 2026-10-07 from the brief review (T40-22): T36's facts are given at `199910a`, its branch's head, and T35's fix round at `83a5029` is added. The dispatch amendment re-reads each on the `dev` you start from.*
 
+*(2026-10-10: re-read at `a317287` in the dispatch amendment's* Facts at `a317287`*. Where a line or a symbol below differs from it, the amendment's is the one to use.)*
+
 - `lua/aineo/mcp/init.lua` (53 lines): `RELAY`, lines 9–10; `M.mcp_servers(editor_address, editor_program)`, lines 25–36, the server's `env` holding the address alone (line 33).
 - `lua/aineo/mcp/relay.lua` (21 lines): serves only when it is `-l`'s script; puts the plugin on `'runtimepath'` (line 18); `serve_stdio(vim.env[names.EDITOR_ADDRESS_VARIABLE])` (line 21).
 - `lua/aineo/mcp/server.lua` (81 lines): `M.serve_stdio(editor_address)`, lines 42–79; `deliver_report` (48–50) calls `editor.deliver_report(editor_address, report)`.
@@ -194,7 +199,7 @@ How it works:
 - T35's fix round, at `83a5029` (PR #137): the hook passes its deliverer the time it began (`vim.uv.hrtime()`), and the editor pairs a `SessionEnd` with the `SessionStart` whose hook ran after it, whichever reaches it first (F1: `first_start_after()` 581, `take_session_event()` 608, `M.receive_session_event()` 663, `M.session_id()` 684 in `lua/aineo/claude/init.lua`); `launch()` 270, the token at 272–273; `hook_relay.lua` (138 lines): `hook_input()` 60, `start_deliverer()` 78, `deliver()` 111, its `pcall` 123; `arguments.lua`: `shell_word()` 33, `relay_command()` 46, `hook_entries()` 70, `claude_arguments()` 220, the report server's entries at 222–227, `M.claude_command(settings, session_words, start_token)` 253. The fake runs each hook through `sh -c` (`tests/helpers/fake_claude.lua:424`) and starts its MCP server per report call (614), in its `mcp-client` mode (127) once, at its start.
 - `plugin/aineo.lua` on `dev`: `SUBCOMMANDS` 27; `kept_places()` 148–152; `started_claude_terminal()` 211–234 (`mcp_servers = mcp.mcp_servers(vim.v.servername, vim.v.progpath)` at 218); `ACTIONS` 368; `PREFIX_KEYS` 476, which `map_prefix()` (524) reads for every action, so an action with no prefix key needs `map_prefix()` to pass it by; `:Aineo` defined at 708, its callback looking the whole argument up as `ACTIONS[table.concat(command.fargs, ' ')]` (708–714), so `claim <id>` is never a key; `USAGE` 34, built from `SUBCOMMANDS`; `usage()` 42–48; the command's `desc` 719; the loop at 453 that makes a `<Plug>` mapping for every action argument; `start_up()` 661, which calls `map_prefix()` at 667 and reaches `started_claude_terminal()` through `open_after_dashboards()` and `open()`. T39 changes `started_claude_terminal()` and what it calls; the dispatch amendment gives the lines as T39 leaves them.
 - **Send, `\s`, on `dev`** *(2026-10-07, for answer 7)*: in `plugin/aineo.lua`, `ACTIONS.send` (369–371) calls `require('aineo.send').send()`, and `VISUAL_ACTIONS.send` (462–466) calls `.send_selection()`, its `<Plug>(aineo-send)` defined in Visual mode at 468–472. `PREFIX_KEYS.send = 's'` (477) is mapped in Normal and Visual mode by `map_prefix()` (524–535), and `:Aineo send` runs `ACTIONS['send']` from the user command (708–713). In `lua/aineo/send/init.lua`: `REFUSALS` (28–36), each `aineo: nothing sent — …`; `refuse()` (41); `M.send()` (122); `refuse_selection()` (288), which ends Visual mode with `<Esc>`, the selection kept for `gv`; `M.send_selection()` (319). In the help, *aineo-send*'s paragraph of refusals runs from `Send sends nothing, and tells you why with one warning starting with` to `Visual mode; \`gv\` selects the text again.` (657–662). The suites that drive Send: `tests/test_send.lua`, `tests/test_send_selection.lua`, `tests/test_entry_send_selection.lua`, `tests/test_entry.lua` (542–608), `tests/test_entry_draft.lua` (92–106) and `tests/test_entry_prefix.lua`.
-- **Pins this packet moves** *(widened 2026-10-07 from the brief review, T40-1)*: `tests/test_entry.lua:48`, the subcommands, its `:Aineo` cases (36–70: the case names at 44 and 56 say "seven subcommands", and 41, 59 and 69 compare against `USAGE`) and its `--mcp-config` case (110–117), which compares the arguments the fake received with `REPORT_SERVERS` (15) and moves when the report server's entry gains the start token (*3*); `tests/helpers/entry.lua:18`, `M.USAGE`, which 19 files require; `tests/test_plugin.lua:79–103`, the keymaps and autocommands sourcing `plugin/aineo.lua` adds, which gains `n <Plug>(aineo-claim)` and keeps its autocommands, since the new handlers are made at the first entry write (*2*); `tests/test_entry_panes.lua:1198–1216`, the completion's subcommands (T39's file in stage 2; yours once T39 has merged); `tests/test_entry_prefix.lua:9–17`, the prefix keys and their `<Plug>` mappings — with no prefix key for `claim`, it should not move; `lua/aineo/health.lua:272–282` and `tests/test_health.lua` list the prefix keys and stay as they are. `tests/test_mcp_delivery.lua:285` and `:306` pin the unreachable failure's words, and `:442` the no-address failure: a delivery that now goes on to the list or the disk changes what those cases see — say which cases you changed and why. `tests/helpers/mcp_relay.lua:158` calls `mcp_servers('', vim.v.progpath)`: `mcp_servers()` keeps its signature (*3*), so it does not move.
+- **Pins this packet moves** *(widened 2026-10-07 from the brief review, T40-1)*: `tests/test_entry.lua:48`, the subcommands, its `:Aineo` cases (36–70: the case names at 44 and 56 say "seven subcommands", and 41, 59 and 69 compare against `USAGE`) and its `--mcp-config` case (110–117), which compares the arguments the fake received with `REPORT_SERVERS` (15) and moves when the report server's entry gains the start token (*3*); `tests/helpers/entry.lua:18`, `M.USAGE`, which ~~19 files require~~ *(2026-10-10: 15 test files load; the dispatch amendment lists them)*; `tests/test_plugin.lua:79–103`, the keymaps and autocommands sourcing `plugin/aineo.lua` adds, which gains `n <Plug>(aineo-claim)` and keeps its autocommands, since the new handlers are made at the first entry write (*2*); `tests/test_entry_panes.lua:1198–1216`, the completion's subcommands (T39's file in stage 2; yours once T39 has merged); `tests/test_entry_prefix.lua:9–17`, the prefix keys and their `<Plug>` mappings — with no prefix key for `claim`, it should not move; `lua/aineo/health.lua:272–282` and `tests/test_health.lua` list the prefix keys and stay as they are. `tests/test_mcp_delivery.lua:285` and `:306` pin the unreachable failure's words, and `:442` the no-address failure: a delivery that now goes on to the list or the disk changes what those cases see — say which cases you changed and why. `tests/helpers/mcp_relay.lua:158` calls `mcp_servers('', vim.v.progpath)`: `mcp_servers()` keeps its signature (*3*), so it does not move.
 - `tests/test_mcp_blocked_editor.lua:97` (a report for an editor at a hit-enter prompt is answered in time as `unconfirmed`, the relay keeps serving, the report shows once the user is done) and `:128` (a tool error at once when that editor dies before it answers) stay true for the editor that started Claude Code.
 - **P1–P7** (`evidence/w9-t40-probes.txt`, Neovim 0.12.5, macOS): `stdpath('run')` is each Neovim's own (P1); `"$PPID"` names the process that ran the hook's shell, the relay's own parent only sometimes (P2); a gone editor's address fails at once, ENOENT or ECONNREFUSED (P3); the incident's processes (P4); `vim.uv.kill(pid, 0)` is 0 for a running process, ESRCH for an ended one, EPERM for another user's, and listing 50 records with the check takes about a millisecond (P5); an MCP server's working directory is its Claude Code's (P6); and the claim check before each report — the process's record and the list read, the newest claim picked — takes 0.07–0.28 ms with one to ten Neovims listed and 1.2 ms with fifty, as aineo runs its report server (P7, 2026-10-07).
 - **D43 and D44** (agreed 2026-10-07, built in T35's fix round, PR #137): the hook-and-deliverer shape read at `c2a6cee` is D43's; D44 merges aineo's two hooks into the user's own `--settings` — a file or inline JSON — and, when it cannot read the user's, starts Claude Code without its hooks and warns once. At `83a5029` the merged hooks are built by `hook_entries()` and `M.claude_command()` in `arguments.lua`; the dispatch amendment gives the merged head.
@@ -206,7 +211,7 @@ How it works:
 
 ### Baseline
 
-Measured on the `dev` you start from, after T35, T36 and T39 have merged: the dispatch message pastes the whole suite's counts and those of the test files below. At planning (`85a57f9`), the last whole run was T33's, 1929 cases in 60 groups, `Fails (0)` (`plan.md` › *Baseline*).
+Measured on the `dev` you start from, after T35, T36 and T39 have merged: the dispatch message pastes the whole suite's counts and those of the test files below. At planning (`85a57f9`), the last whole run was T33's, 1929 cases in 60 groups, `Fails (0)` (`plan.md` › *Baseline*). *(2026-10-10: on `a317287`, 2325 cases in 68 groups; the dispatch amendment's* Baseline on `a317287` *gives the run, its one harness failure, and the counts of the test files below.)*
 
 Read first: the v1 plan note's C1, C3, C4, C5, C6, D8, D11, D18, D36, D38, D39, D40, **D42**, D43 and D44; `plan.md` › *Packet T40 — 2026-10-07* (the assumptions A10–A32 and the mutants) and *Assumptions to report to the user* (A1–A4); `evidence/w9-t40-probes.txt` and `evidence/w9-real-claude-sessions.txt`; the session notes of T35, T36 and T39; `Sessions/2026-09-24 — T5 report channel.md`; [[Learnings/An RPC request to a Neovim at a hit-enter prompt waits until it is answered]]; `knowledge-vault/Projects/aineo.md`.
 
@@ -215,6 +220,7 @@ Read first: the v1 plan note's C1, C3, C4, C5, C6, D8, D11, D18, D36, D38, D39, 
 - **Branch:** `feature/t40-lost-editor` from `origin/dev`.
 - **Class:** regular.
 - **Model:** `opus`.
+- **Reviews** *(2026-10-10, the cost rules of 2026-10-08)*: attack by `neovim-claude-code-reviewer` (Opus); test integrity by `reviewer` (Opus); records by `records-reviewer` (Sonnet). One fix round, then the orchestrator's own verification. What each review takes first is in the dispatch amendment's *Boundary, as it reads now*.
 - **Resources:** `impl_t40_lost_editor` — pass it to `.claude/scripts/prepare-worktree.sh`.
 - **You may touch:**
   - `lua/aineo/mcp/` — every file, and new files for the list of running Neovims, the claims and the record of *3*; their exports, the editor-side call of *4* among them, go through `lua/aineo/mcp/init.lua`; `mcp_servers(editor_address, editor_program)` keeps its signature (*3*);
@@ -226,7 +232,7 @@ Read first: the v1 plan note's C1, C3, C4, C5, C6, D8, D11, D18, D36, D38, D39, 
   - `tests/test_mcp.lua`, `tests/test_mcp_relay.lua`, `tests/test_mcp_delivery.lua`, `tests/test_mcp_blocked_editor.lua` where a case must change; new test files of yours (`tests/test_mcp_editors.lua`, `tests/test_mcp_lost_editor.lua`, `tests/test_entry_claim.lua`, say); `tests/test_claude_switch.lua` and `tests/test_claude.lua` where the hook's command line or the token is pinned; `tests/test_entry.lua:48`, its `:Aineo` cases (36–70) and its `--mcp-config` case (110–117), `tests/test_plugin.lua`'s definitions case (79–103), and `tests/test_entry_panes.lua`'s completion cases (1198–1216 at `85a57f9`) for `claim` (T40-1); new cases in `tests/test_report_sessions.lua` and `tests/test_draft_sessions.lua` for the claim's follow that moves nothing (T40-10); `\s`'s refusal is tested in a new suite of yours (`tests/test_entry_claim.lua`, say), not in Send's suites;
   - `doc/aineo.txt`, inside the places below;
   - your session note.
-- **You must not touch:** T38's files, if T38 is still open — `lua/aineo/git/`, `lua/aineo/changes/`, `tests/test_git_worktrees.lua`, `tests/test_changes*.lua`, `tests/test_entry_changes.lua`, `tests/test_layout_diffs.lua`, `tests/helpers/git_repo.lua`; every other file under `lua/`, `plugin/`, `scripts/` and `tests/` — `tests/helpers/mcp_relay.lua` (`mcp_servers()` keeps its signature; run every file that requires it), `lua/aineo/health.lua`, `tests/test_health.lua`, `tests/test_entry_prefix.lua` and `tests/test_doc.lua` included (run them), and `lua/aineo/send/`, `tests/test_send.lua`, `tests/test_send_selection.lua`, `tests/test_entry_send_selection.lua` and `tests/test_entry_draft.lua` (run them: Send's actions change); the plan notes, the project note and the task list (write a `## Task lines` section in your session note); `.claude/`, `.githooks/`, `CLAUDE.md`, `.worktreeinclude`, `.gitignore`.
+- **You must not touch:** T38's files~~, if T38 is still open~~ *(2026-10-10: T38 has merged; its files stay out of bounds)* — `lua/aineo/git/`, `lua/aineo/changes/`, `tests/test_git_worktrees.lua`, `tests/test_changes*.lua`, `tests/test_entry_changes.lua`, `tests/test_layout_diffs.lua`, `tests/helpers/git_repo.lua`; every other file under `lua/`, `plugin/`, `scripts/` and `tests/` — `tests/helpers/mcp_relay.lua` (`mcp_servers()` keeps its signature; run every file that requires it), `lua/aineo/health.lua`, `tests/test_health.lua`, `tests/test_entry_prefix.lua` and `tests/test_doc.lua` included (run them), and `lua/aineo/send/`, `tests/test_send.lua`, `tests/test_send_selection.lua`, `tests/test_entry_send_selection.lua` and `tests/test_entry_draft.lua` (run them: Send's actions change); the plan notes, the project note and the task list (write a `## Task lines` section in your session note); `.claude/`, `.githooks/`, `CLAUDE.md`, `.worktreeinclude`, `.gitignore`.
 - **A document shared under rule 2's section exception:** `doc/aineo.txt`. Yours, each named by its first and last line as T35, T36 and T39 leave them (the dispatch amendment quotes them; the lines are `85a57f9`'s):
   - *aineo-report*'s first paragraph, `aineo starts Claude Code with` … `environment, so a Neovim started inside it never autostarts.` (680–691), and a new paragraph after it, before `A report holds a \`task\``: where a report goes, and what Claude is told;
   - *aineo-report*'s last paragraph, T36's, from `Reports are kept per` to its last line before the `====` rule (841–846 before T36): the report kept for a session no Neovim shows;
@@ -235,8 +241,8 @@ Read first: the v1 plan note's C1, C3, C4, C5, C6, D8, D11, D18, D36, D38, D39, 
   - *aineo-mappings*: a new `*<Plug>(aineo-claim)*` entry after `<Plug>(aineo-pane-changes)`'s, which ends `Does what \`:Aineo pane changes\` does (|:Aineo-pane|).` (508), and before `Prefix keys ~` (510);
   - LIMITS: a new subsection inserted after T35's LIMITS subsection and before `The 80-column start ~`;
   - *(2026-10-07, from the brief review, T40-17)* `:Aineo`'s entry, from `:Aineo {subcommand}` to `one error, which ones it takes.` (376–379), which must say the completion offers the running sessions after `claim`; and *Prefix keys*'s first paragraph, from `Once the editor has started, aineo maps the prefix` to `in Visual mode too:` (512–514), which must say `<Plug>(aineo-claim)` has no key. Neither is near a T38 place;
-  - *aineo-send*'s paragraph of refusals, `Send sends nothing, and tells you why with one warning starting with` … `Visual mode; \`gv\` selects the text again.` (657–662): `\s` while this Neovim follows a session its terminal does not run *(2026-10-07, for answer 7)*. No wave-9 packet touches section 7: T35's nearest hunk begins at 680, the first line of *aineo-report*'s first paragraph, which T40 holds after T35's merge, and `Undo ~` (664–676) and section 8's rule stand between them.
-  T38, if still open, owns *aineo-panes*'s changes-pane item, *aineo-changes* from `The files window` to `which starts it again.`, and LIMITS › `The changes pane ~`: unchanged lines separate each of them from each of yours. Before you push, merge with its branch if it exists (`git merge-tree --write-tree <your head> origin/feature/t38-changes-worktrees`), run `make test_file FILE=tests/test_doc.lua` on the merged tree, and report it. Two new tags, `*:Aineo-claim*` and `*<Plug>(aineo-claim)*`: `tests/test_doc.lua` runs `:helptags`, which refuses a tag defined twice (E154).
+  - *aineo-send*'s paragraph of refusals, `Send sends nothing, and tells you why with one warning starting with` … `Visual mode; \`gv\` selects the text again.` (657–662): `\s` while this Neovim follows a session its terminal does not run *(2026-10-07, for answer 7)*. ~~No wave-9 packet touches section 7~~ *(2026-10-10: false; T39 edited `Undo ~` in section 7, which is now one of your places; the dispatch amendment, T39's notes, 5)*: T35's nearest hunk begins at 680, the first line of *aineo-report*'s first paragraph, which T40 holds after T35's merge, and `Undo ~` (664–676) and section 8's rule stand between them.
+  ~~T38, if still open, owns *aineo-panes*'s changes-pane item, *aineo-changes* from `The files window` to `which starts it again.`, and LIMITS › `The changes pane ~`: unchanged lines separate each of them from each of yours. Before you push, merge with its branch if it exists (`git merge-tree --write-tree <your head> origin/feature/t38-changes-worktrees`), run `make test_file FILE=tests/test_doc.lua` on the merged tree, and report it.~~ *(2026-10-10: T38 has merged and no packet is open beside T40, so no merge check is due; run `make test_file FILE=tests/test_doc.lua` on your tree. Your places, fourteen now, are listed with their lines at `a317287` in the dispatch amendment's* The help: T40's places at `a317287`*.)* Two new tags, `*:Aineo-claim*` and `*<Plug>(aineo-claim)*`: `tests/test_doc.lua` runs `:helptags`, which refuses a tag defined twice (E154).
 - **Session note:** `knowledge-vault/Sessions/<date> — T40 Lost editor.md`, with a `## Task lines` section. `<date>` is the dispatch message's date, written `YYYY-MM-DD`, which that message gives; the orchestrator checks the name is free before dispatch.
 - **Scratch prefix:** `t40-`.
 - **Two notes for the tests** (T40-13): "editor gone" cannot be made by quitting the editor in an entry suite, since T35's `stop_on_quit()` stops the fake and a SIGKILL hangs up its pty; those tests give `start_session()` or `mcp_servers()` an unreachable address instead. And the records of *3* are keyed by the parent pid, which every relay a test file starts shares (that file's Neovim): give each case a state directory of its own, or clear the records between cases.
@@ -290,7 +296,7 @@ Each behaviour gets one test, seen failing first:
 
 The help is not in that list: `tests/test_doc.lua` pins the tags, the 78-column width and the help file's shape, and no text, so no paragraph can be seen failing there, and you may not edit that file. **`tests/test_doc.lua` stays green on the merged trees.**
 
-The verification runs the plan's mutants for T40 (`plan.md` › *Packet T40 — 2026-10-07*). Name in your report the test that kills each.
+The verification runs the plan's mutants for T40 (`plan.md` › *Packet T40 — 2026-10-07*). Name in your report the test that kills each. *(2026-10-10: 1–39 are under* Verification mutants — T40*, 40–48 under* Decisions for the user*, and 49 is added; the dispatch amendment's* The mutants*.)*
 
 ## What was decided already
 
@@ -303,7 +309,7 @@ The user, 2026-10-07, after the incident above: "ok, this definetly needs to be 
 6. "With `:Aineo claim <id>`, should the claiming Neovim get that session's reports even while the Neovim that started Claude is still open? As planned, the starting Neovim is always tried first, so a claim only takes effect once that editor is gone." — **"Claim wins (Recommended)"**: "Before each report, the report server checks for a claim on its session (about 1 ms) and delivers to the claiming Neovim, even when the starting editor still answers. This matches your "receive its reports"."
 7. "While a Neovim has claimed another session, Input shows that session's draft, but `\s` would send it to this Neovim's own Claude terminal, which runs a different session. What should `\s` do then?" — **"Refuse with a message (Recommended)"**: "`\s` sends nothing and says Input holds the claimed session's draft; `:Aineo claim` with no argument returns this Neovim to its own session. Nothing is sent to the wrong conversation."
 
-Answer 3 narrows answer 1: the Neovim found must show the report's session, not merely run in the same directory. Answer 5 widens answer 4's last sentence: the claim may now pick another session, by its id. Answer 6 widens answer 4's overriding of "more recently used": a claim overrides the editor that started Claude Code too, while the claimant answers. Answer 7 settles what answer 5 left open for `\s`, and gives `:Aineo claim` with no argument a second case: while a claim of another session holds, it returns this Neovim to its own session (*5*, A29). Answer 2's "in parallel with T38 and T39" is not kept: T40 waits for T39's merge, for the reason `plan.md` gives (rule 1 and rule 2), reported to the user.
+Answer 3 narrows answer 1: the Neovim found must show the report's session, not merely run in the same directory. Answer 5 widens answer 4's last sentence: the claim may now pick another session, by its id. Answer 6 widens answer 4's overriding of "more recently used": a claim overrides the editor that started Claude Code too, while the claimant answers. Answer 7 settles what answer 5 left open for `\s`, and gives `:Aineo claim` with no argument a second case: while a claim of another session holds, it returns this Neovim to its own session (*5*, A29). Answer 2's "in parallel with T38 and T39" is not kept: T40 waits for T39's merge, for the reason `plan.md` gives (rule 1 and rule 2), reported to the user. *(2026-10-10: T39 has merged, and T40 runs alone.)*
 
 The hook relay's shape is the user's too (2026-10-07, built in T35's fix round; the questions behind D43 and D44 are paraphrased, their options quoted): **D43**, "Accept the helper (Recommended)": "New row D43: the hook starts a detached deliverer that notifies the editor and waits for its answer, then exits, or exits when the editor is gone. It supersedes D36's "one notification, never a request". Reviewers measured it 12/12 delivered and no leftovers."; and **D44**, "Merge them (Recommended)": "aineo reads your `--settings` (a file or inline JSON), adds its two hooks beside yours, and passes one `--settings`. Nothing of yours is dropped. If it cannot read yours, it starts Claude without its hooks and warns once, so switches aren't followed."
 
@@ -367,3 +373,279 @@ The brief review (`brief-review-t40-lost-editor.md`) read the brief at `fadd071`
 - **T40-22.** T36's facts are at `199910a`, and T35's fix round at `83a5029` is added. T35's nearest help hunk starts at 680, and `health.lua`'s prefix keys are at 272–282 (*Facts*, *Boundary*).
 - **T40-23** (A26, A32). The completion's directory is `kept_places().working_directory`. A nil editor address with a known session counts as unreachable. The server and the hook use their own `stdpath('state')` (*1.1*, *3*, *5*).
 - **Mutants.** 2, 4 and 24 are reworded so that each has a killing test, 28 for the claim file, and 40–48 are added (`plan.md`).
+
+## Amendment — 2026-10-10, at dispatch: T38, T39 and T42 merged
+
+By the agent that amended T40's brief for its dispatch (Claude, Opus 5.5), for the orchestrator, on `origin/dev` `a317287`. The brief is not dispatched. Where the body above would mislead, it is corrected in place, the words replaced struck through with a pointer to this section, as T39's brief did (T39-9). Every other fact, line number and boundary item the body gives at `85a57f9`, `83a5029` or `199910a` is superseded by the lists below, read at `a317287`. D42–D44, the user's answers and the assumptions A10–A32 are unchanged. Where a choice is left that the brief, D42–D45 and the answers do not settle, it is not made here: *For the orchestrator*, at the end, lists each with a recommendation, and the orchestrator rules before dispatch.
+
+### Where `dev` stands: T40 runs alone
+
+- **Merged:** T35 (PR #137), T36 (PR #135), T37 (PR #136), T38 (PR #142), T39 (PR #143) and T42 (PR #146). Releases `v0.2.16` (PR #145, T35 to T39) and `v0.2.17` (PR #147, T42) are cut.
+- **T40 runs alone.** No other packet is open. T41 (`plan.md` › *Packet T41 — 2026-10-08*) is dispatched after T40 merges: its rule 2 reads "Order: T40 first".
+- **The sequencing with T39 is spent.** T39 has merged, so these no longer bind:
+  - *Packet T40*'s rule 1 and rule 2 in `plan.md`;
+  - the header's dispatch condition;
+  - *What was decided already*'s note on answer 2.
+- **No merge check with T38.** T38 has merged, so the merge check under *Boundary* (`git merge-tree` with `origin/feature/t38-changes-worktrees`) is dropped. T38's places in `doc/aineo.txt` are no open packet's. `doc/aineo.txt` is shared with no packet, so rule 2's section exception does not apply to it. `tests/test_doc.lua` still runs on T40's tree, and still refuses a tag defined twice (E154).
+- **T41 reads two things of T40's:**
+  - the sessions that have a running Claude Code, through `aineo.mcp`'s entry point (T41's A63);
+  - the editor's entry write, which T41 makes at its hand-over (A64).
+
+  Keep each as one function behind one entry point.
+
+**The six rules at `a317287`, against the merged code and no open packet:**
+1. **Dependencies:** satisfied. T35, T36 and T39 have merged, and T37 before T39.
+2. **Files:** no packet is open, so no file is shared. `plugin/aineo.lua`, `tests/test_entry_panes.lua` and `doc/aineo.txt` are T40's alone while it runs.
+3. **Shared state:** T40 writes T36's `reports/` through the report home, and two new folders under `stdpath('state')/aineo/`. No other packet runs.
+4. **Dependency changes:** none.
+5. **Decisions:** D42–D44 decide the behaviour. *For the orchestrator* 1–4, below, are readings where they do not reach, and the orchestrator rules each before dispatch.
+6. **Task lines:** held. T40's row lies between T39's and T41's, and every packet of this rolling wave holds its mark. The session note's `## Task lines` section stands.
+
+### T39's notes for this packet
+
+From T39's brief › *For T40's dispatch amendment*, and from T39's session note (`Sessions/2026-10-08 — T39 Panes follow switch.md`): its *Open threads* line "For T40", its T39-2 thread, and its "the confirmation is readiness alone" thread.
+
+1. **The entry is written where `follow_session()` runs** (`plugin/aineo.lua` 204–211): at a start's confirmation and at a confirmed switch, never at a start.
+   - **The confirmation** is `follow_confirmed_start()` (237–240). The claude home's `on_session_ready` calls it once per start, the first time Claude Code is ready for input.
+   - **A confirmed switch** is `follow_switch_once_confirmed()` (248–252).
+   - **An editor is listed** from its first confirmation, or its first claim, until it quits.
+   - **It marks itself used** at each confirmation and each confirmed switch, besides `FocusGained` and a claim.
+   - **So "start" reads "a start's confirmation"** in *2*'s "at every start of Claude Code", in A12's "from its first start of Claude Code" and in A14's "its starts". *2* is corrected above.
+2. **The confirmation is readiness alone** (T39's ruling, the orchestrator's assumption, to report to the user). The start's own `SessionStart` hook does not confirm it. *3*'s record still moves at its token's first `SessionStart`, a hook, whatever the panes do. So between a start and its confirmation, the record and the starting editor can name different sessions:
+   - **At a later start.** The starting editor follows the session before it until the confirmation. A report of the started session therefore reaches an editor that follows another session, and A23 has it refuse the report. The report is kept on disk under the started session, and the Report shows it at the confirmation, when it follows that session. A real Claude Code calls the report tool in a turn, after it is ready. The fake's `mcp-client` mode reports before it is ready (T39-4).
+   - **At an editor's first start,** before the confirmation the editor follows no session: see *For the orchestrator*, 1.
+3. **A claim's hold covers both of T39's callbacks** (A25, T40-16).
+   - **While a claim of another session holds, `follow_confirmed_start()`** still records the confirmation (`start_confirmed`, 217), so that later switches count as confirmed, but it tells the homes nothing.
+   - **`follow_switch_once_confirmed()`** tells them nothing either.
+   - **T35's own switch is still kept** for the directory (`follow_switch()`, `lua/aineo/claude/init.lua` 608–613).
+   - **The mutants:** mutant 48's literal edit sits in `follow_confirmed_start()`, and mutant 22's in `follow_switch_once_confirmed()`.
+   - **"A claim of another session holds"** means one thing: this Neovim follows a session that `:Aineo claim <id>` made it follow, or that a switch moved its claim to (*4*), and that session is not its own terminal's. That is the entry's own-or-claimed mark (*2*). It never means only "the panes follow a session other than `session_id()`". That is also true between a later start and its confirmation, where no claim holds.
+   - **`\s`'s refusal (A28) uses the same predicate.** So the claim's warning never shows in that window, where Send's own "not ready" refusal stands (`REFUSALS`, `lua/aineo/send/init.lua` 28).
+   - **`forget_confirmation_unless_running()`** (225–230) is T39's and stays as it is.
+4. **The `v:exiting` guard (T39-1) reaches the entry.** The claude home calls neither `on_session_ready` nor `on_session_switched` once Neovim quits (`lua/aineo/claude/init.lua` 315 and 695). This packet's other writers do not pass through it:
+   - the `FocusGained` handler;
+   - the handler that *4*'s editor-side call reaches;
+   - any write a report's arrival makes.
+
+   Each writes no entry and no claim file once `v:exiting` is set.
+   - **Why it matters.** aineo's own `VimLeavePre`, which stops Claude Code (`stop_on_quit()`, `lua/aineo/claude/init.lua` 75–87), is made again at each start (473). So it can run after this packet's `VimLeavePre`, the one that removes the entry. It always does in a Neovim that claimed by an id before its first start.
+   - **The stop waits for Claude Code with the event loop running.** It waits up to about 12 seconds (the help, LIMITS › `Stopping Claude Code on quit ~`), and T39-1 measured a timer run inside that wait. A deliverer's switch, or a focus event, served in that wait would write an entry for an editor that is about to be gone.
+   - **A test:** an editor that quits while aineo stops its Claude Code, and that is told a switch by a deliverer during that wait, leaves no entry and no claim file once it has ended. Whether an RPC request is served inside that wait is the packet's to measure; say in your report what you measured.
+   - **Mutant 49** is added in `plan.md` (*Verification mutants — T40*).
+5. **Section 7 of the help is T39's too.** T39 edited *aineo-send* › `Undo ~` (805–817), so "no wave-9 packet touches section 7" (*Boundary*) is false. T40 now runs alone, so this matters only for what T40 must update: `Undo ~` is now one of T40's places (*The help* below). A claim, and a return to the Neovim's own session (A29), put another session's draft in Input, as a switch does.
+6. **T39-2, the lost `*`** (the orchestrator's assumption, to report to the user).
+   - **What it is.** A file saved before the panes follow a session carries no `*` for it. T38 words it in *aineo-changes* (help 173–179). The changes home takes `HEAD` and no saves for a session it never kept (`follow_changes_session()`, `lua/aineo/changes/init.lua` 727).
+   - **For T40 the same holds at a claim and at a return (A29).** A file saved while a claim of another session holds is marked for the claimed session. The session returned to shows the saves kept for it, or none.
+   - **T40 does not change it.** `lua/aineo/changes/` is not T40's. T40's help refers to `|aineo-changes|` for it, and no test of T40's pins the lost mark.
+
+### Facts at `a317287`
+
+**Unchanged since `85a57f9`, so the body's lines hold.** `git diff --stat 85a57f9 a317287 --` over these paths prints nothing:
+- `lua/aineo/mcp/` (every line *Facts* cites) and `lua/aineo/send/`;
+- `tests/test_entry.lua` (48; its `:Aineo` cases 36–70, with 44, 56, 41, 59 and 69; `--mcp-config` 110–117; `REPORT_SERVERS` 15; Send 542–608) and `tests/test_plugin.lua` (79–103);
+- `tests/test_entry_prefix.lua` (9–17), `tests/test_mcp.lua` and `tests/test_mcp_relay.lua`;
+- `tests/test_mcp_delivery.lua` (285, 306, 442) and `tests/test_mcp_blocked_editor.lua` (97, 128);
+- `tests/helpers/entry.lua` (18, `M.USAGE`) and `tests/helpers/mcp_relay.lua` (158);
+- Send's suites.
+
+`lua/aineo/claude/hook_relay.lua` is unchanged since T35's `83a5029`: 138 lines; `hook_input()` 60, `start_deliverer()` 78, `deliver()` 111, its `pcall` 123. The relay still puts nothing on `'runtimepath'` and requires no aineo module.
+
+**Moved, or new since the body was written:**
+- **`lua/aineo/claude/arguments.lua`** (384 lines):
+  - `shell_word()` 33, `relay_command()` 46–60, `hook_entries()` 70–81, `HOOK_TIMEOUT_SECONDS` 18.
+  - **`claude_arguments(settings, settings_value)`** (342–358) **no longer receives the start token.** The token reaches `M.claude_command(settings, session_words, start_token)` (378–382), which hands it to `hook_entries()`. The report server's entry is built at 343–346 (`encodable_server()` 323), so *3*'s "adds the token … where it builds Claude Code's arguments (`claude_arguments()`, `arguments.lua:220–227`)" reads: from `claude_command()` into the server entries `claude_arguments()` builds.
+  - **D44's merged settings:** `settings_with_hooks()` 281. When `claude.cmd` gives a `--settings`, the merged settings, aineo's hooks among them, go to a file only the user can read (`write_private_file()` 253). The hook's command, `"$PPID"` included, then lives in that file, not on the command line.
+- **`lua/aineo/claude/init.lua`** (838 lines):
+  - `launches` 48; `keep_session_id()` 220–224; `call_back()` 265;
+  - `launch()` 293–333, with the start token at 295–296 and the readiness callback at 308–320 (its `v:exiting` guard at 315);
+  - `start_session()` 561; `follow_switch()` 608–613;
+  - `take_session_event()` 693–705; `M.receive_session_event()` 744; `M.session_id()` 781.
+  - **T35's pairing is now `follow_switches()` (662–681)**, over `first_ran()` (642) and `ran_before()` (629); `first_start_after()` is gone. A `SessionStart` is a switch when it is the first `SessionStart` whose hook ran after the first `SessionEnd` of the session followed. It is no switch when it is of the session followed, as an in-session `/resume` of it makes. Each hook is held until a switch pairs it. *3*'s "the pairing T35's fix round gives the editor (F1 …: `take_session_event()` 608; `first_start_after()` 581)" reads: the pairing `follow_switches()` makes, those rules included, folded into the record by each hook's time.
+  - `take_session_event()` also drops a hook that ran after the start's process ended. A hook cannot know that, so the record does without it.
+- **`lua/aineo/claude/session_ids.lua`:** `new_session_id()` 39, `is_session_id()` 79, `kept_session_id()` 90, `make_directory()` 110 (the `mkdir()` retry), `replace_file()` 155 (a temporary file and a rename), `keep_session_id()` 178.
+- **The `mkdir()` retry binds the new folders.** [[Learnings/vim.fn.mkdir with p fails with E739 when another process makes a directory of the path first]]: every home that makes a folder under `stdpath('state')` where two Neovims can start together takes the retry. The list's, the claims' and the records' folders are a fifth copy, and take it.
+- **`lua/aineo/report/records.lua`** (356 lines):
+  - `session_records_file()` 47; `append_record()` 295; `read_records()` 340.
+  - **`move_records()` 136.** It links, and `EEXIST` leaves the target as it is. **Where the file system refuses hard links** (`LINK_REFUSALS`, 86), or the source is a symbolic link, it renames instead (`move_records_by_rename()`, 108), which can replace a file made meanwhile. *3*'s exclusive create of the server's record follows "the pattern T36's `records.move_records()` uses". That pattern now has this fallback, which an exclusive create cannot take: *For the orchestrator*, 4.
+- **`lua/aineo/report/init.lua`** (443 lines):
+  - `followed_session` 26, `directory_records_moved` 30, `kept_records_file()` 80, `move_directory_records_once()` 92;
+  - `M.set_report_environment()` 120; `show_and_keep()` 373, where a record is `{ time = clock(), report = … }`;
+  - `M.receive_report()` 398, `M.follow_report_session()` 426–441.
+- **`lua/aineo/draft/init.lua`** (862 lines):
+  - `move_directory_draft_once()` 379; `M.set_draft_environment()` 713; `M.keep_draft()` 756.
+  - **`replace_with_kept_draft(buffer, keep_same_text)`** (655) is from T39's fix round. `M.follow_draft_session()` (840–860) passes it `first_follow`, whether this follow is the one that moves the directory's draft.
+  - **A claim's follow moves nothing (A31),** so it is not that first follow: it leaves `directory_draft_moved` as it is, and puts the claimed session's draft in as any later follow does.
+- **`lua/aineo/changes/init.lua`:**
+  - `M.begin_session()` 675 heeds its first call alone, and only `started_claude_terminal()` calls it (`plugin/aineo.lua` 303–308).
+  - `M.follow_changes_session()` 727 holds a session told before `begin_session()`, and takes its base once the repository is found: *For the orchestrator*, 3.
+- **`plugin/aineo.lua`** (796 lines):
+  - **The subcommands and their words:** `SUBCOMMANDS` 27, `SUBCOMMAND_WORDS` 31, `USAGE` 34, `usage()` 42–48, `ACTION_ARGUMENTS` 54–64, `offered_words()` 73–81.
+  - **The places and environments:** `places` 142, `kept_places()` 151–155, `give_report_environment()` 162, `keep_input_draft()` 185.
+  - **T39's wiring:**
+    - `follow_session()` 204–211 and `start_confirmed` 217;
+    - `forget_confirmation_unless_running()` 225–230;
+    - `follow_confirmed_start()` 237–240 and `follow_switch_once_confirmed()` 248–252.
+  - **`started_claude_terminal()` 282–310:**
+    - `mcp_servers = mcp.mcp_servers(vim.v.servername, vim.v.progpath)` at 290;
+    - `editor_address` and `editor_program` at 294–295;
+    - `on_session_ready` and `on_session_switched` at 300–301;
+    - `begin_session()` at 303–308.
+  - **Send:** `ACTIONS` 444–465, with `send` at 445–447; `run()` 509.
+  - **The mappings:**
+    - the `<Plug>` loop over `ACTION_ARGUMENTS`, 529–533;
+    - `VISUAL_ACTIONS` 538–542, with `send` at 539–541, and its Visual `<Plug>` loop 544–548;
+    - `PREFIX_KEYS` 552–561, with `send = 's'` at 553;
+    - `map_prefix()` 600–610.
+  - **The autostart:** `start_up()` 737–755, which calls `map_prefix()` at 743; `open_after_dashboards()` 725; `open()` 364.
+  - **`:Aineo`:** 784–796. Its callback (784–791) looks the whole argument up as `ACTIONS[table.concat(command.fargs, ' ')]` (785), and its `desc` is at 795.
+- **`tests/helpers/entry.lua`** is loaded (`dofile`) by 15 test files: `test_entry.lua`, `test_entry_changes.lua`, `test_entry_claude_exit.lua`, `test_entry_claude_mode.lua`, `test_entry_claude_name.lua`, `test_entry_claude_numbers.lua`, `test_entry_claude_resume.lua`, `test_entry_draft.lua`, `test_entry_guard.lua`, `test_entry_panes.lua`, `test_entry_report.lua`, `test_entry_send_selection.lua`, `test_entry_session_switch.lua`, `test_entry_startup.lua` and `test_report_paths.lua`. The body's "which 19 files require" was 14 at `85a57f9`.
+- **`tests/helpers/claude_session.lua`** (834 lines) is loaded by 21 test files, and `tests/helpers/fake_claude.lua` by `claude_session.lua` and `entry.lua`. `tests/helpers/mcp_relay.lua` is loaded by `test_mcp_relay.lua`, `test_mcp_delivery.lua` and `test_mcp_blocked_editor.lua`.
+- **`tests/helpers/fake_claude.lua`** (719 lines):
+  - **Its hooks:** `run_hooks()` 434 runs each hook as `sh -c <command>` (440) with `env = { NVIM = os.getenv('NVIM') }` (442). `switch_session()` 479 runs `SessionEnd`, then `SessionStart`.
+  - **Its session commands:** `session_command()` 491 answers `/clear`, `/resume <id>`, `/branch` and `/compact`.
+  - **Its MCP server:** the `mcp-client` mode (127) calls `call_report_tool()` (627–655) once, at its start, and exits (706–708). It starts the server per call (630), with the server's `env`.
+  - **No `CLAUDE_CODE_SESSION_ID`:** it sets none, in the hooks' environment or the server's.
+- **`tests/test_entry_panes.lua`'s completion pins:** the local `SUBCOMMANDS` at 1196–1197, and the two parametrised cases that use it, 1199–1233. The body has 1198–1216.
+- **`tests/test_entry_draft.lua`'s `:Aineo send` case:** 105–119. The body has 92–106.
+- **`lua/aineo/health.lua`'s prefix keys:** `PREFIX_KEYS` at 294–307. The body has 272–282. It stays as it is, and `tests/test_health.lua` (92 cases) runs.
+- **`stop_on_quit()`:** `lua/aineo/claude/init.lua` 75–87, made again at each start (473). See T39's notes, 4.
+
+### The help: T40's places at `a317287`
+
+Each place is named by its first and last line, as `a317287` has them; the line numbers are for finding them.
+
+**From the body, re-read:**
+1. **`:Aineo`'s entry**, `:Aineo {subcommand}` (491) … `one error, which ones it takes.` (494).
+2. **The new `*:Aineo-claim*` entry**, after `:Aineo pane {pane}`'s entry, which ends `ones it takes.` (584), and before `When an action fails` (586).
+3. **The new `*<Plug>(aineo-claim)*` entry**, after `<Plug>(aineo-pane-changes)`'s, which ends ``Does what `:Aineo pane changes` does (|:Aineo-pane|).`` (623), and before `Prefix keys ~` (625).
+4. ***Prefix keys*'s first paragraph**, `Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)` (627) … ``and `\s` in Visual mode too:`` (629).
+5. ***aineo-send*'s paragraph of refusals**, `Send sends nothing, and tells you why with one warning starting with` (798) … ``Visual mode; `gv` selects the text again.`` (803).
+6. ***aineo-report*'s first paragraph**, `aineo starts Claude Code with five additions of its own:` (826) … `autostarts.` (845), and a new paragraph after it, before ``A report holds a `task` `` (847).
+7. ***aineo-report*'s last paragraph**, T36's, `Reports are kept per Claude session, under` (995) … `working directory of its own moment.` (1012), before the section's rule.
+8. ***aineo-claude-session*'s paragraph on switches**, as T39 leaves it: `aineo follows a switch you make inside Claude Code:` (377) … `ignores a conversation you ran in a plain terminal in the same directory.` (393).
+9. **A new LIMITS subsection** after T35's two, `Session switches ~` and `The settings file ~`. It goes after the latter's last line, `not run.` (1164), and before `The 80-column start ~` (1166).
+
+**Added: documentation the change makes false.** This is inside the boundary from the start (orchestrate §4, *Boundary*); report what you corrected.
+10. **T39's paragraph on when the panes follow**, `The panes follow the session a start of Claude Code is on once Claude Code` (395) … `finds no conversation, and is not shown again.` (411). A confirmation while a claim of another session holds moves nothing (A25).
+11. ***aineo-send* › `Undo ~`**, `` `u` in Input brings back what a Send removed, one `u` per Send: Input's text`` (806) … `(|aineo-limits|).` (817). A claim and a return (A29) put another session's draft in Input, as a switch does.
+12. ***aineo-draft*'s second paragraph**, `When aineo follows another session, a change not saved yet is first saved` (426) … `as a warning, and the session keeps its own.` (447). Its "The first session aineo follows in an editor takes the working directory's draft" is false after a claim, which moves nothing (A31).
+13. ***aineo-changes*'s first paragraph**, `The changes pane lists what changed in your repository since the base of` (142) … `no session.` (158). It names when aineo starts following a session, and a claim is one such time. What the pane shows after a claim in a Neovim where Claude Code never started is *For the orchestrator*, 3. The lost `*` is T38's paragraph (173–179): refer to it, and do not edit it.
+14. **LIMITS › `Session switches ~`**, `aineo learns of a switch inside Claude Code from Claude Code's session` (1129) … `the prompt in an editor at a prompt.` (1150). Its "A hook that cannot reach the editor tells it nothing" is false once a switch whose editor is gone is kept (*4*).
+
+*6* above lists what the help must say. Add the points places 10–14 make false.
+
+### Baseline on `a317287`
+
+Measured by this amendment, once: `make test` on `a317287`, Neovim 0.12.5, macOS, in a fresh worktree.
+
+- **The whole suite:** 2325 cases in 68 groups, `Fails (1)`, exit 2.
+- **The one failure is not a product case.** It is `tests/test_changes_sessions.lua` › *following a session* › *for the first time takes HEAD then as its base*: `E739: Cannot create directory <checkout>/.tests/fixtures: file already exists`, at `tests/helpers/fixture.lua:21`.
+  - **Its cause:** `M.directory()` calls `vim.fn.mkdir(path, 'p')` with no retry. On this first run of a fresh worktree, another test file's Neovim made `.tests/fixtures` at the same moment. That is the race of the Learning cited above.
+  - **That file alone, run next:** 61 cases, `Fails (0)`.
+  - It is outside T40's boundary: *For the orchestrator*, 7.
+
+The test files this packet touches, requires, or must run, from that run (each `Fails (0)`):
+
+| Test file | Cases |
+|---|---|
+| `test_mcp.lua` | 5 |
+| `test_mcp_relay.lua` | 30 |
+| `test_mcp_delivery.lua` | 25 |
+| `test_mcp_blocked_editor.lua` | 5 |
+| `test_claude.lua` | 117 |
+| `test_claude_switch.lua` | 98 |
+| `test_claude_resume.lua` | 49 |
+| `test_claude_ready.lua` | 12 |
+| `test_entry.lua` | 48 |
+| `test_entry_panes.lua` | 86 |
+| `test_entry_session_switch.lua` | 15 |
+| `test_entry_report.lua` | 4 |
+| `test_entry_draft.lua` | 17 |
+| `test_entry_send_selection.lua` | 9 |
+| `test_entry_prefix.lua` | 64 |
+| `test_entry_startup.lua` | 29 |
+| `test_entry_claude_exit.lua` | 61 |
+| `test_entry_claude_resume.lua` | 11 |
+| `test_entry_claude_name.lua` | 11 |
+| `test_entry_claude_mode.lua` | 12 |
+| `test_entry_claude_numbers.lua` | 17 |
+| `test_entry_changes.lua` | 13 |
+| `test_entry_guard.lua` | 5 |
+| `test_plugin.lua` | 5 |
+| `test_report_sessions.lua` | 47 |
+| `test_draft_sessions.lua` | 83 |
+| `test_send.lua` | 34 |
+| `test_send_selection.lua` | 67 |
+| `test_health.lua` | 92 |
+| `test_doc.lua` | 44 |
+
+### The mutants
+
+The verification runs T40's mutants from two places in `plan.md`, neither moved nor renumbered:
+- **1–39** under *Packet T40 — 2026-10-07* › *Verification mutants — T40*;
+- **40–48** under *Decisions for the user*, where the brief review's corrections put them, headed *Added 2026-10-07, from the brief review*, between P9 and P10. They are verification mutants, not decisions. Stage 1's knowledge pass found them there (`plan.md` › *Landed*, stage 1's *Records the reviews named false in dispatched files, left as dispatched*, its item "T40's mutants 40–48").
+
+This amendment adds **49**, the `v:exiting` guard (T39's notes, 4), under *Verification mutants — T40*, beside a dated line that points to 40–48. Name in your report the test that kills each of the 49.
+
+### Boundary, as it reads now
+
+- **"You must not touch":** "T38's files, if T38 is still open" reads "T38's files". `lua/aineo/git/`, `lua/aineo/changes/` and their suites are not T40's; run `tests/test_entry_changes.lua`.
+- **The help:** T40's places are the fourteen above. No merge check with another branch is due. `make test_file FILE=tests/test_doc.lua` runs on T40's tree before each push.
+- **`tests/test_entry_report.lua`** is not in the boundary. Whether it should be depends on *For the orchestrator*, 1: under the recommendation, it stays as it is, and runs.
+- **The reviews,** by the cost rules of 2026-10-08 (orchestrate §1):
+  - attack by `neovim-claude-code-reviewer` (Opus);
+  - test integrity by `reviewer` (Opus);
+  - records by `records-reviewer` (Sonnet).
+
+  One fix round, then the orchestrator's own verification. The brief review's guidance per dimension, not carried into this brief until now: the attack review re-runs T40-5 to T40-9 and T40-18 as live scenarios, with two Neovims and the fake keeping one MCP server for its life, and adds T39's notes, 4; the test-integrity review takes mutants 2, 4 and 24 first; the records review reads D42's reasoning cell (T40-21) and D39's dated note (T40-9).
+
+### The brief review: what the correction left
+
+`brief-review-t40-lost-editor.md` raised T40-1 to T40-23. *Correction — 2026-10-07, from the brief review* applied each of them to the body, with one exception, and that exception is a record, not a brief correction:
+- **T40-21, D43's last quoted sentence.** The quoted option ends "Reviewers measured it 12/12 delivered and no leftovers." Whether the option the user chose held that sentence is still unconfirmed. The correction left it "for the orchestrator to confirm against the question as put", and D43 still carries it. It is in D43, in this brief's *What was decided already*, and in `plan.md`'s answer 6. See *For the orchestrator*, 6.
+
+The review's guidance per review dimension (its *Verdict*, "Other dimensions") is now in the reviewers line above.
+
+### For the orchestrator
+
+Each item needs a ruling before dispatch. Each ruling is an assumption to report to the user, not a D row.
+
+1. **A report reaching a starting editor that follows no session yet.** At an editor's first start, before the confirmation, the editor follows no session. A23 covers an editor that follows *another* session, not none.
+   - **Recommended: today's behaviour stands.** The report is shown and kept in the working directory's records, which the session takes at the confirmation (T36, T39). `tests/test_entry_report.lua`'s directory cases, which pin that path (T39-4), stay as they are.
+   - **The alternative: refuse it, as A23 does.** The report would go to the list, then to the disk under its session. That session then has a records file of its own, so the directory's move at the confirmation moves nothing: `move_records()` leaves an existing target. The directory's history would be stranded, which T39's wait exists to prevent.
+2. **`:Aineo claim` with no argument before the running start is confirmed.** T35's `session_id()` names the started session at once, while the panes still follow the session before it (T39). A29's cases read "what this Neovim follows now" against `session_id()`, so they disagree in that window.
+   - **Recommended:** until the running start is confirmed, it is A29's third case: it warns once that Claude Code is not ready yet, and changes nothing.
+   - **What it avoids:** claiming or returning to `session_id()` at once would be the first follow of the Neovim's own session, which moves the directory's records and draft (A31), into a session that may never be confirmed. That is the strand T39's wait closes.
+   - **`:Aineo claim <id>` needs no ruling.** A claim's follow moves nothing (A31), so it may proceed before the confirmation, which it then holds (A25).
+3. **The changes pane after `:Aineo claim <id>` in a Neovim where Claude Code never started.** The changes home holds the claimed session until `begin_session()`, and only a start of Claude Code calls that. So the pane lists nothing until this Neovim first starts Claude Code. A start is common under the default autostart, absent under `nvim <file>` and `autostart = false`.
+   - **Recommended (b): as merged.** The pane shows the claimed session from this Neovim's first start of Claude Code on, whose confirmation the claim then holds. The help says so in place 13, and C15's "its repository is the one Claude Code's working directory was in when aineo first started Claude Code in this editor" stands.
+   - **For the tests under (b):** a test that checks a claimant's changes pane starts that Neovim's own Claude Code.
+   - **The alternative (a):** the claim begins the changes home's session itself, in `kept_places().working_directory`, the directory the completion offers sessions of. That changes C15's rule for the repository, which a converge round would decide.
+4. **The server's exclusive create where the file system refuses hard links.** *3* creates the server's record by a temporary file linked into place, so that `EEXIST` leaves a hook's record. Where links are refused (`LINK_REFUSALS`), T36's `move_records()` renames instead. A rename can write over a hook's record, which A27 forbids.
+   - **Recommended:** on a refused link, the server writes no record. Its reports still find their session by its own `CLAUDE_CODE_SESSION_ID` (A10's fallback), and only the completion misses a Claude Code without aineo's hooks there (A27).
+   - **The help** says so in LIMITS, beside T36's `The first follow's move ~`.
+   - **The hooks' lock is not affected.** A lock file created with `vim.uv.fs_open(path, 'wx', …)` needs no link.
+5. **The reviewers line against orchestrate §6.** It is written as the cost rules of 2026-10-08 give it, and §6 says otherwise in two places:
+   - for a change to the Claude Code integration, §6 puts test integrity with `neovim-lua-reviewer`, and this line puts it with `reviewer`;
+   - after a fix round that changes code, §6 dispatches one re-measure, and this line has none before the verification.
+   - **Stage 2 ran the same way.** `plan.md` › *Landed* records it as A75: "No re-measure after stage 2's fix rounds".
+   - **Recommended:** say in the dispatch message which binds. Under A75 that is this line. If the cost rules are meant to replace §6 for good, record that on an `ai/` branch.
+6. **D43's quoted sentence (T40-21).** Recommended: confirm it from the question as put. If the user's option did not hold it, take it out of the quotation marks in D43, in this brief's *What was decided already* and in `plan.md`'s answer 6, in a `knowledge/` change.
+7. **The baseline's one failure**, E739 in `tests/helpers/fixture.lua` (`M.directory()`, no retry).
+   - **Not T40's.** It is the shared harness, outside T40's boundary.
+   - **It can recur** whenever two test files make `.tests/fixtures` for the first time together.
+   - **Recommended:** a test-only fix of its own after T40 (D28), with the retry the Learning gives. Until then, tell T40's implementer that a single E739 from `fixture.lua` in a whole run is not T40's, and to re-run that file.
+8. **Mutant 49** is this amendment's addition, not the plan's. Strike it in the dispatch message if it is not wanted.
+
+## The orchestrator's rulings — 2026-10-10, at dispatch
+
+Each is the orchestrator's assumption under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"), to report to the user; none is a D row. Numbered after `plan.md`'s A75.
+
+- **A76 (*For the orchestrator*, 1).** A report reaching a starting editor that follows no session yet: today's behaviour stands. It is shown and kept in the working directory's records, which the session takes at the confirmation.
+- **A77 (2).** `:Aineo claim` with no argument before the running start is confirmed is A29's third case: it warns once that Claude Code is not ready yet, and changes nothing. `:Aineo claim <id>` proceeds.
+- **A78 (3).** The changes pane after `:Aineo claim <id>` in a Neovim where Claude Code never started: (b), as merged. The pane shows the claimed session from that Neovim's first start of Claude Code on; the help says so in place 13. C15's rule is unchanged.
+- **A79 (4).** Where the file system refuses hard links, the MCP server writes no record of its own; its reports find their session by `CLAUDE_CODE_SESSION_ID` (A10's fallback). LIMITS says so, beside *The first follow's move*.
+- **A80 (5).** The reviewers line binds as written: attack by `neovim-claude-code-reviewer`, tests by `reviewer`, records by `records-reviewer`; one fix round, then the orchestrator's own verification, no re-measure (A75). Where orchestrate §6 says otherwise, this packet follows the line; recording the cost rules in §6 for good is left to an `ai/` change.
+- **(6) — confirmed, no assumption.** The option the user chose on 2026-10-07, "Accept the helper (Recommended)", read in full: "New row D43: the hook starts a detached deliverer that notifies the editor and waits for its answer, then exits, or exits when the editor is gone. It supersedes D36's \"one notification, never a request\". Reviewers measured it 12/12 delivered and no leftovers." The orchestrator checked it against the question as put. D43's last quoted sentence was the user's option, and stays in quotation marks. T40-21 is closed.
+- **A81 (7).** The E739 in `tests/helpers/fixture.lua` is not T40's: a single E739 from that file in a whole run does not block T40. A test-only fix of its own follows T40 (D28).
+- **A82 (8).** Mutant 49 is kept.

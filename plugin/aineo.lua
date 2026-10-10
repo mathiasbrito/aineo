@@ -24,7 +24,8 @@ end
 vim.g.loaded_aineo = true
 
 --- `:Aineo`'s subcommands, in the order it offers them.
-local SUBCOMMANDS = { 'send', 'open', 'report', 'input', 'claude', 'claude-numbers', 'pane' }
+local SUBCOMMANDS =
+  { 'send', 'open', 'report', 'input', 'claude', 'claude-numbers', 'pane', 'claim' }
 
 --- The words each subcommand that takes one is followed by, in the order
 --- `:Aineo` offers them: `pane` takes the pane to show.
@@ -33,13 +34,19 @@ local SUBCOMMAND_WORDS = { pane = { 'agent', 'changes' } }
 --- What `:Aineo` tells the user when it is not given one of its subcommands.
 local USAGE = 'aineo: :Aineo takes one of ' .. table.concat(SUBCOMMANDS, ', ')
 
+--- What `:Aineo claim` tells the user when it is given more than one word.
+local CLAIM_USAGE = 'aineo: :Aineo claim takes at most one Claude session id'
+
 --- What `:Aineo` tells the user when `words`, its arguments, run no action:
---- for a subcommand that takes words (`SUBCOMMAND_WORDS`), which ones it
---- takes, and `USAGE` otherwise.
+--- for `claim`, that it takes at most one word; for a subcommand that takes
+--- words (`SUBCOMMAND_WORDS`), which ones it takes; and `USAGE` otherwise.
 ---
 ---@param words string[]
 ---@return string
 local function usage(words)
+  if words[1] == 'claim' then
+    return CLAIM_USAGE
+  end
   local subcommand_words = SUBCOMMAND_WORDS[words[1]]
   if not subcommand_words then
     return USAGE
@@ -63,16 +70,26 @@ for _, subcommand in ipairs(SUBCOMMANDS) do
   end
 end
 
+--- The sessions that have a running Claude Code in the directory this
+--- Neovim started in, which `:Aineo claim` offers. Defined below, with the
+--- places aineo keeps what it keeps.
+---@type fun(): string[]
+local running_sessions_here
+
 --- The words `:Aineo` offers after `typed`, the words before the one the
 --- cursor is in, the command's name first: its subcommands after the name
 --- alone, the words of a subcommand that takes them (`SUBCOMMAND_WORDS`)
---- after that subcommand, and nothing otherwise.
+--- after that subcommand, the running sessions of this Neovim's directory
+--- after `claim` (`running_sessions_here()`), and nothing otherwise.
 ---
 ---@param typed string[]
 ---@return string[]
 local function offered_words(typed)
   if #typed == 1 then
     return SUBCOMMANDS
+  end
+  if #typed == 2 and typed[2] == 'claim' then
+    return running_sessions_here()
   end
   if #typed == 2 then
     return SUBCOMMAND_WORDS[typed[2]] or {}
@@ -154,6 +171,13 @@ local function kept_places()
   return places
 end
 
+running_sessions_here = function()
+  return require('aineo.mcp').running_sessions(
+    kept_places().state_directory,
+    kept_places().working_directory
+  )
+end
+
 --- Whether the report home has been given its environment yet.
 local report_environment_given = false
 
@@ -200,14 +224,207 @@ end
 --- it follows already, and shows the new session's content in the windows
 --- that show its buffers at once, or when they are next shown.
 ---
+--- A follow told `{ claim = true }` is a claim's: the report and draft homes
+--- then move nothing of the working directory's (their `claim` option).
+---
 ---@param id string Claude Code's session id
-local function follow_session(id)
-  require('aineo.report').follow_report_session(id)
-  require('aineo.draft').follow_draft_session(id)
+---@param options? { claim: boolean? }
+local function follow_session(id, options)
+  require('aineo.report').follow_report_session(id, options)
+  require('aineo.draft').follow_draft_session(id, options)
   require('aineo.changes').follow_changes_session({
     id = id,
     state_directory = kept_places().state_directory,
   })
+end
+
+--- The session the panes follow, as `follow_session()` was last told it
+--- through this file's own follows; nil before the first.
+---@type string?
+local panes_session = nil
+
+--- The session `:Aineo claim <id>`, or a switch of the session it claimed,
+--- made the panes follow, as a claim of it; nil while they follow the
+--- session of this Neovim's own Claude terminal.
+---@type string?
+local claimed_by_id = nil
+
+--- The session whose claim file this Neovim wrote, while it may still name
+--- it; nil when it claims none.
+---@type string?
+local claimed = nil
+
+--- Whether a claim of another session holds: the panes follow a session
+--- that `:Aineo claim <id>` made them follow, or that a switch moved that
+--- claim to, and it is not the session of this Neovim's own Claude terminal
+--- (`aineo.claude`'s `session_id()`).
+---
+---@return boolean
+local function holds_other_claim()
+  return claimed_by_id ~= nil and claimed_by_id ~= require('aineo.claude').session_id()
+end
+
+--- The wall clock now, in microseconds: when this Neovim was last used, as
+--- its entry in the list of running editors keeps it.
+---
+---@return integer
+local function microseconds_now()
+  local now = vim.uv.clock_gettime('realtime')
+  return now.sec * 1000000 + math.floor(now.nsec / 1000)
+end
+
+--- Whether this Neovim's entry's handlers have been made
+--- (`make_entry_handlers()`).
+local entry_handlers_made = false
+
+--- Lets go this Neovim's claim (`claimed`), if its claim file still names
+--- it (`aineo.mcp`'s `release_claim()`).
+local function release_claim()
+  if claimed then
+    require('aineo.mcp').release_claim(kept_places().state_directory, claimed, vim.v.servername)
+    claimed = nil
+  end
+end
+
+--- Writes, unless Neovim is quitting (`v:exiting`), this Neovim's entry in
+--- the list of running editors (`aineo.mcp`'s `write_editor_entry()`): its
+--- address, the directory it started in, the session the panes follow,
+--- whether that is its own terminal's (`holds_other_claim()`), and now as
+--- its last use. It writes none before the panes follow a session, nor for
+--- a Neovim with no server address. An entry that cannot be written is told
+--- to the user as a warning. Defined below, with its handlers.
+---@type fun()
+local write_entry
+
+--- Makes this Neovim the claimant of `session` (`aineo.mcp`'s
+--- `claim_session()`), letting go any session it claimed before, unless
+--- Neovim is quitting.
+---
+---@param session string
+local function claim(session)
+  if vim.v.exiting ~= vim.NIL then
+    return
+  end
+  if claimed ~= session then
+    release_claim()
+  end
+  require('aineo.mcp').claim_session(
+    kept_places().state_directory,
+    session,
+    vim.v.servername,
+    microseconds_now()
+  )
+  claimed = session
+end
+
+--- Whether this Neovim is the claimant of `session` now, as its claim file
+--- names it (`aineo.mcp`'s `session_claimant()`).
+---
+---@param session string
+---@return boolean
+local function claims(session)
+  local claimant = require('aineo.mcp').session_claimant(kept_places().state_directory, session)
+  return claimant == vim.v.servername
+end
+
+--- Makes the panes follow `id`, the session of this Neovim's own Claude
+--- terminal (`follow_session()`), ending any claim of another session; a
+--- claim of a session other than `id` is let go. Writes the entry.
+---
+---@param id string
+local function follow_own_session(id)
+  follow_session(id)
+  panes_session = id
+  claimed_by_id = nil
+  if claimed and claimed ~= id then
+    release_claim()
+  end
+  write_entry()
+end
+
+--- Makes the panes follow `id` as a claim of it, a session this Neovim's own
+--- Claude terminal does not run (`follow_session()` told a claim's, which
+--- moves nothing), and writes the entry.
+---
+---@param id string
+local function follow_claimed_session(id)
+  follow_session(id, { claim = true })
+  panes_session = id
+  claimed_by_id = id
+  write_entry()
+end
+
+--- What this Neovim does with a switch of a Claude Code it does not run,
+--- from `left` to `new`, told by the deliverer of that Claude Code's hook
+--- (`aineo.mcp`'s `on_followed_switch()`): when the panes follow `left` by
+--- a claim of it, they follow `new` the same way — or as their own, when
+--- `new` is this Neovim's own terminal's — and when this Neovim claims
+--- `left`, it claims `new`. Anything else does nothing. Once Neovim is
+--- quitting, it writes neither an entry nor a claim (`write_entry()`,
+--- `claim()`).
+---
+---@param left string
+---@param new string
+local function follow_told_switch(left, new)
+  local claimant = claims(left)
+  if claimed_by_id ~= left and not claimant then
+    return
+  end
+  if new == require('aineo.claude').session_id() then
+    follow_own_session(new)
+  else
+    follow_claimed_session(new)
+  end
+  if claimant then
+    claim(new)
+  end
+end
+
+--- Makes, once, the handlers this Neovim's entry needs: `FocusGained`
+--- writes the entry again, marking this Neovim used; `VimLeavePre` removes
+--- the entry and lets go its claim; and a switch told by another Claude
+--- Code's hook is followed (`follow_told_switch()`). Made at the first
+--- entry write, so that sourcing this file makes none.
+local function make_entry_handlers()
+  if entry_handlers_made then
+    return
+  end
+  entry_handlers_made = true
+  local group = vim.api.nvim_create_augroup('aineo.editors', {})
+  vim.api.nvim_create_autocmd('FocusGained', {
+    group = group,
+    desc = 'aineo: mark this editor used in the list of running editors',
+    callback = function()
+      write_entry()
+    end,
+  })
+  vim.api.nvim_create_autocmd('VimLeavePre', {
+    group = group,
+    desc = 'aineo: take this editor off the list of running editors',
+    callback = function()
+      require('aineo.mcp').remove_editor_entry(kept_places().state_directory, vim.v.servername)
+      release_claim()
+    end,
+  })
+  require('aineo.mcp').on_followed_switch(follow_told_switch)
+end
+
+write_entry = function()
+  if vim.v.exiting ~= vim.NIL or not panes_session or vim.v.servername == '' then
+    return
+  end
+  make_entry_handlers()
+  local written, failure =
+    pcall(require('aineo.mcp').write_editor_entry, kept_places().state_directory, {
+      address = vim.v.servername,
+      working_directory = kept_places().working_directory,
+      session = panes_session,
+      own = not holds_other_claim(),
+      used = microseconds_now(),
+    })
+  if not written then
+    vim.notify('aineo: ' .. tostring(failure), vim.log.levels.WARN)
+  end
 end
 
 --- Whether the Claude Code aineo started last has been confirmed: it has
@@ -231,23 +448,36 @@ end
 
 --- Confirms the start of Claude Code that has become ready for input
 --- (`start_confirmed`), and makes the panes the session `id`'s, the one it
---- is on then (`follow_session()`).
+--- is on then (`follow_own_session()`) — unless a claim of another session
+--- holds (`holds_other_claim()`), which keeps them where they are.
 ---
 ---@param id string
 local function follow_confirmed_start(id)
   start_confirmed = true
-  follow_session(id)
+  if not holds_other_claim() then
+    follow_own_session(id)
+  end
 end
 
---- Makes the panes the session `id`'s (`follow_session()`), Claude Code
---- having switched to it, once the start that runs has been confirmed
---- (`start_confirmed`); before that, does nothing: the confirmation follows
---- the session the start is on then.
+--- Makes the panes the session `id`'s (`follow_own_session()`), Claude Code
+--- having switched to it from `left`, once the start that runs has been
+--- confirmed (`start_confirmed`), and moves this Neovim's claim of `left`,
+--- if it still claims it, to `id`; before the confirmation, and while a
+--- claim of another session holds (`holds_other_claim()`), does nothing:
+--- the confirmation follows the session the start is on then, and a claim
+--- keeps the panes where they are.
 ---
 ---@param id string
-local function follow_switch_once_confirmed(id)
-  if start_confirmed then
-    follow_session(id)
+---@param _ string? how Claude Code started `id`
+---@param left string the session left
+local function follow_switch_once_confirmed(id, _, left)
+  if not start_confirmed or holds_other_claim() then
+    return
+  end
+  local moves_claim = claimed == left and claims(left)
+  follow_own_session(id)
+  if moves_claim then
+    claim(id)
   end
 end
 
@@ -439,12 +669,99 @@ local function focus_claude()
   end
 end
 
+--- What `:Aineo claim` tells the user, as a warning, when this Neovim's own
+--- Claude terminal runs no session — Claude Code never started here — so
+--- that it has no session of its own to claim or return to.
+local NO_OWN_SESSION = 'aineo: Claude Code has not started in this Neovim;'
+  .. ' :Aineo claim {id} follows a session, :Aineo open starts Claude Code here'
+
+--- What `:Aineo claim` tells the user, as a warning, while the start of
+--- this Neovim's Claude Code has not been confirmed: its session may never
+--- be one.
+local NOT_READY_TO_CLAIM = 'aineo: Claude Code is not ready yet; nothing claimed'
+
+--- Makes the panes follow the session of this Neovim's own Claude terminal
+--- (`aineo.claude`'s `session_id()`), as its own, and claims that session
+--- (`claim()`): what `:Aineo claim` with no argument does, whether a claim
+--- of another session holds or not. In a Neovim whose terminal runs no
+--- session (`NO_OWN_SESSION`), or before the running start is confirmed
+--- (`NOT_READY_TO_CLAIM`), it warns once and changes nothing.
+local function claim_own_session()
+  local own = require('aineo.claude').session_id()
+  if not own then
+    vim.notify(NO_OWN_SESSION, vim.log.levels.WARN)
+    return
+  end
+  if not start_confirmed then
+    vim.notify(NOT_READY_TO_CLAIM, vim.log.levels.WARN)
+    return
+  end
+  follow_own_session(own)
+  claim(own)
+  write_entry()
+end
+
+--- Makes the panes follow the session `id` as a claim of it, and claims it
+--- (`claim()`): what `:Aineo claim {id}` does, and what a session picker
+--- calls. Nothing is sent to Claude Code, whose terminal runs on its own
+--- session. The report home is given its environment first
+--- (`give_report_environment()`), so that it takes the session's reports
+--- before aineo's layout has opened. The id of this Neovim's own terminal's
+--- session claims it as `claim_own_session()` does.
+---
+--- Raises an error naming `id` when it is not a session id of the form
+--- Claude Code gives (`aineo.claude`'s `is_session_id()`), and changes
+--- nothing then.
+---
+---@param id string
+local function claim_session(id)
+  local claude = require('aineo.claude')
+  if not claude.is_session_id(id) then
+    error((':Aineo claim takes a Claude session id, not %s'):format(id), 0)
+  end
+  if id == claude.session_id() then
+    claim_own_session()
+    return
+  end
+  give_report_environment()
+  follow_claimed_session(id)
+  claim(id)
+end
+
+--- Whether Send is refused while a claim of another session holds
+--- (`holds_other_claim()`): Input then holds the claimed session's draft,
+--- which this Neovim's own Claude terminal, running another session, must
+--- not get. Tells the user why once, with one warning, naming the claimed
+--- session and what returns this Neovim to its own, or, when its terminal
+--- runs no session, what else works here.
+---
+---@return boolean refused
+local function refuses_send_while_claimed()
+  if not holds_other_claim() then
+    return false
+  end
+  local way_out = require('aineo.claude').session_id()
+      and ':Aineo claim with no argument returns this Neovim to its own session'
+    or ':Aineo claim {id} follows another session, :Aineo open starts Claude Code here'
+  vim.notify(
+    ('aineo: nothing sent — Input holds the draft of the claimed session %s; %s'):format(
+      claimed_by_id,
+      way_out
+    ),
+    vim.log.levels.WARN
+  )
+  return true
+end
+
 --- What each of `:Aineo`'s arguments in `ACTION_ARGUMENTS` does.
 ---@type table<string, fun()>
 local ACTIONS = {
   send = function()
-    require('aineo.send').send()
+    if not refuses_send_while_claimed() then
+      require('aineo.send').send()
+    end
   end,
+  claim = claim_own_session,
   open = open,
   report = function()
     focus('report')
@@ -533,10 +850,18 @@ for _, argument in ipairs(ACTION_ARGUMENTS) do
 end
 
 --- What each action that has a Visual-mode form does in Visual mode, by its
---- argument in `ACTION_ARGUMENTS`: Send sends the selection alone.
+--- argument in `ACTION_ARGUMENTS`: Send sends the selection alone, unless a
+--- claim of another session refuses it (`refuses_send_while_claimed()`),
+--- which ends Visual mode as Vim ends it after a command that fails, the
+--- selection kept for `gv`.
 ---@type table<string, fun()>
 local VISUAL_ACTIONS = {
   send = function()
+    if holds_other_claim() then
+      vim.cmd.normal({ args = { vim.keycode('<Esc>') }, bang = true })
+      refuses_send_while_claimed()
+      return
+    end
     require('aineo.send').send_selection()
   end,
 }
@@ -548,7 +873,7 @@ for argument, action in pairs(VISUAL_ACTIONS) do
 end
 
 --- The keys that follow the prefix for each of `:Aineo`'s arguments in
---- `ACTION_ARGUMENTS`.
+--- `ACTION_ARGUMENTS` but `claim`, which has no prefix key.
 local PREFIX_KEYS = {
   send = 's',
   open = 'o',
@@ -594,7 +919,9 @@ end
 --- action that has a Visual-mode form (`VISUAL_ACTIONS`), but for each key
 --- sequence the user has mapped globally in that mode already — a mapping
 --- of only the start of a sequence, of a longer one, or in the other mode,
---- does not count; maps nothing when `prefix` is `false`.
+--- does not count; maps nothing when `prefix` is `false`. An action with no
+--- keys there, `claim`, gets none: any key after the `c` of `claude` would
+--- make that key wait for 'timeoutlen'.
 ---
 ---@param prefix string|false
 local function map_prefix(prefix)
@@ -602,7 +929,9 @@ local function map_prefix(prefix)
     return
   end
   for _, argument in ipairs(ACTION_ARGUMENTS) do
-    map_unless_mapped('n', prefix .. PREFIX_KEYS[argument], argument)
+    if PREFIX_KEYS[argument] then
+      map_unless_mapped('n', prefix .. PREFIX_KEYS[argument], argument)
+    end
   end
   for argument in pairs(VISUAL_ACTIONS) do
     map_unless_mapped('x', prefix .. PREFIX_KEYS[argument], argument)
@@ -787,10 +1116,16 @@ vim.api.nvim_create_user_command('Aineo', function(command)
     run(action)
     return
   end
+  if command.fargs[1] == 'claim' and #command.fargs == 2 then
+    run(function()
+      claim_session(command.fargs[2])
+    end)
+    return
+  end
   vim.notify(usage(command.fargs), vim.log.levels.ERROR)
 end, {
   nargs = '*',
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers or pane agent|changes',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, pane agent|changes or claim [id]',
 })

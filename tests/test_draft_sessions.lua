@@ -1853,4 +1853,71 @@ T['a follow refused for another reason']['to a session whose draft cannot be rea
   })
 end
 
+--- Tells the child's draft home to follow the Claude session `session` as a
+--- claim of it.
+---
+---@param session string
+local function follow_as_claim(session)
+  child.lua("require('aineo.draft').follow_draft_session(..., { claim = true })", { session })
+end
+
+T['a claim’s follow'] = MiniTest.new_set()
+
+T['a claim’s follow']['leaves the directory’s draft where it is, and puts the claimed session’s, none, in Input'] = function()
+  local state = fixture.directory('draft-sessions-claim')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  keep_new_buffer(state)
+
+  follow_as_claim('session-a')
+
+  eq({
+    shown = input_lines(),
+    directory = read_text(directory_draft_file(state)),
+    session = read_text(session_draft_file(state, 'session-a')),
+  }, { shown = { '' }, directory = 'From the directory\n' })
+end
+
+T['a claim’s follow']['told before the environment moves nothing once the environment comes'] = function()
+  local state = fixture.directory('draft-sessions-claim-held')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  follow_as_claim('session-a')
+
+  keep_new_buffer(state)
+
+  eq({
+    shown = input_lines(),
+    directory = read_text(directory_draft_file(state)),
+    session = read_text(session_draft_file(state, 'session-a')),
+  }, { shown = { '' }, directory = 'From the directory\n' })
+end
+
+T['a claim’s follow']['leaves the directory’s draft to the first follow that is not a claim’s'] = function()
+  local state = fixture.directory('draft-sessions-claim-then-own')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  keep_new_buffer(state)
+  follow_as_claim('session-a')
+
+  follow('session-b')
+
+  eq({
+    shown = input_lines(),
+    directory = read_text(directory_draft_file(state)),
+    own = read_text(session_draft_file(state, 'session-b')),
+  }, { shown = { 'From the directory' }, own = 'From the directory\n' })
+end
+
+T['a claim’s follow']['of a session followed as this editor’s own next leaves that follow to take the directory’s draft'] = function()
+  local state = fixture.directory('draft-sessions-claim-then-same')
+  plant_draft(directory_draft_file(state), 'From the directory\n')
+  keep_new_buffer(state)
+  follow_as_claim('session-a')
+
+  follow('session-a')
+
+  eq({
+    directory = read_text(directory_draft_file(state)),
+    own = read_text(session_draft_file(state, 'session-a')),
+  }, { own = 'From the directory\n' })
+end
+
 return T

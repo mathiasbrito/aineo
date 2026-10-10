@@ -143,45 +143,98 @@ local function connect(address, on_connect)
   return connecting(tcp, tcp:connect(resolved[1].addr, tonumber(port), on_connect))
 end
 
---- Asks the editor on `connection` to receive `report`, and reads its answer
---- into `call` (`answer_reader()`).
+--- Asks the editor on `connection` to run `request` — Lua code and its
+--- arguments, which travel as data — and reads its answer into `call`
+--- (`answer_reader()`).
 ---
 ---@param connection uv.uv_stream_t
----@param report table
+---@param request aineo.mcp.ReportRequest
 ---@param call aineo.mcp.Call
-local function request_report(connection, report, call)
+local function send_request(connection, request, call)
   connection:read_start(answer_reader(call, connection))
   connection:write(
-    vim.mpack.encode({ REQUEST, REQUEST_ID, 'nvim_exec_lua', { RECEIVE_REPORT, { report } } })
+    vim.mpack.encode({ REQUEST, REQUEST_ID, 'nvim_exec_lua', { request.lua, request.arguments } })
   )
 end
 
---- How the delivery `call` to the editor at `address` went, in the terms of
---- `deliver_report()`.
+--- What the relay tells Claude when an editor did not confirm a report in
+--- time.
+local UNCONFIRMED = ('aineo sent the report, but the editor did not confirm it within %d s:'):format(
+  CONFIRMATION_TIMEOUT_MS / 1000
+) .. ' it may be waiting for the user, at a hit-enter prompt for one.' .. ' The report is sent, not confirmed; do not send it again.'
+
+---@alias aineo.mcp.OfferKind 'taken'|'declined'|'refused'|'unreachable'|'closed'|'unconfirmed'
+
+--- How the offer `call` to the editor at `address` went, in the terms of
+--- `offer_report()`.
 ---
 ---@param call aineo.mcp.Call
 ---@param address string
----@return 'delivered'|'unconfirmed'|'failed' outcome
+---@return aineo.mcp.OfferKind kind
 ---@return string? explanation
-local function outcome(call, address)
+local function offer_outcome(call, address)
   if call.unreachable then
-    return 'failed',
+    return 'unreachable',
       ('aineo could not reach the editor at %s: %s'):format(address, call.unreachable)
   end
   if call.response then
     local failure = call.response[3]
     if failure ~= vim.NIL then
-      return 'failed', 'the editor did not take the report: ' .. editor_reason(tostring(failure[2]))
+      return 'refused',
+        'the editor did not take the report: ' .. editor_reason(tostring(failure[2]))
     end
-    return 'delivered'
+    return call.response[4] == false and 'declined' or 'taken'
   end
   if call.closed then
-    return 'failed', ('the editor at %s closed the connection before it answered'):format(address)
+    return 'closed', ('the editor at %s closed the connection before it answered'):format(address)
   end
-  return 'unconfirmed',
-    ('aineo sent the report, but the editor did not confirm it within %d s:'):format(
-      CONFIRMATION_TIMEOUT_MS / 1000
-    ) .. ' it may be waiting for the user, at a hit-enter prompt for one.' .. ' The report is sent, not confirmed; do not send it again.'
+  return 'unconfirmed', UNCONFIRMED
+end
+
+--- A request an editor runs to take a report: Lua code, which reaches the
+--- report home through its entry point, and its arguments, the report
+--- among them.
+---@alias aineo.mcp.ReportRequest { lua: string, arguments: any[] }
+
+--- Offers the editor listening at `address` to run `request`, which takes
+--- a report, and says how it went:
+---
+--- - `'taken'` when the editor ran it and it returned anything but `false`;
+--- - `'declined'` when it returned `false`: the editor does not take the
+---   report, and has not shown it;
+--- - `'refused'` when it raised an error, with the first line of its reason;
+--- - `'unreachable'` when the editor cannot be reached;
+--- - `'closed'` when the editor closed the connection before it answered;
+--- - `'unconfirmed'` when it did not answer within
+---   `CONFIRMATION_TIMEOUT_MS`: the request stays with the editor, which runs
+---   it when it is free, and the connection stays open until it answers.
+---
+--- The second result says it in words, for Claude, but for `'taken'` and
+--- `'declined'`.
+---
+---@param address string the editor's server address
+---@param request aineo.mcp.ReportRequest
+---@return aineo.mcp.OfferKind kind
+---@return string? explanation
+function M.offer_report(address, request)
+  local call = { closed = false }
+  local connection, failure
+  connection, failure = connect(address, function(connect_failure)
+    if connect_failure then
+      call.unreachable = connect_failure
+      close(connection)
+    else
+      send_request(connection, request, call)
+    end
+  end)
+  if not connection then
+    call.unreachable = failure
+    return offer_outcome(call, address)
+  end
+  vim.wait(CONFIRMATION_TIMEOUT_MS, function()
+    return call.unreachable ~= nil or call.response ~= nil or call.closed
+  end, 10)
+  return offer_outcome(call, address)
 end
 
 --- Hands `report` to the report home of the editor listening at `address`,
@@ -190,40 +243,32 @@ end
 ---
 --- - `'delivered'` when the editor confirmed it;
 --- - `'unconfirmed'` when the editor did not answer within
----   `CONFIRMATION_TIMEOUT_MS`: the request stays with the editor, which runs
----   it when it is free, and the connection stays open until it answers;
+---   `CONFIRMATION_TIMEOUT_MS` (`offer_report()`);
 --- - `'failed'` when there is no address, the editor cannot be reached,
 ---   closes the connection before answering, or does not take the report —
 ---   then with the first line of the reason it gave.
 ---
---- The second result says it in words, for Claude.
+--- The second result says it in words, for Claude, and the third, for a
+--- failure, whether it was that the editor could not be reached.
 ---
 ---@param address string? the editor's server address
 ---@param report table a valid report
 ---@return 'delivered'|'unconfirmed'|'failed' outcome
 ---@return string? explanation
+---@return boolean? unreachable
 function M.deliver_report(address, report)
   if address == nil then
     return 'failed', 'aineo has no editor address to deliver the report to'
   end
-  local call = { closed = false }
-  local connection, failure
-  connection, failure = connect(address, function(connect_failure)
-    if connect_failure then
-      call.unreachable = connect_failure
-      close(connection)
-    else
-      request_report(connection, report, call)
-    end
-  end)
-  if not connection then
-    call.unreachable = failure
-    return outcome(call, address)
+  local kind, explanation =
+    M.offer_report(address, { lua = RECEIVE_REPORT, arguments = { report } })
+  if kind == 'taken' or kind == 'declined' then
+    return 'delivered'
   end
-  vim.wait(CONFIRMATION_TIMEOUT_MS, function()
-    return call.unreachable ~= nil or call.response ~= nil or call.closed
-  end, 10)
-  return outcome(call, address)
+  if kind == 'unconfirmed' then
+    return 'unconfirmed', explanation
+  end
+  return 'failed', explanation, kind == 'unreachable'
 end
 
 return M

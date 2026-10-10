@@ -85,6 +85,7 @@ T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings 
   eq(added(child.lua_get(DEFINITIONS), without_the_file), {
     commands = { 'Aineo' },
     keymaps = {
+      'n <Plug>(aineo-claim)',
       'n <Plug>(aineo-claude)',
       'n <Plug>(aineo-claude-numbers)',
       'n <Plug>(aineo-input)',

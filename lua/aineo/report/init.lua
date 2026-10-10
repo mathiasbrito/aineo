@@ -25,6 +25,10 @@ local environment
 ---@type string?
 local followed_session
 
+--- Whether the session followed was told as a claim's
+--- (`follow_report_session()`), whose follow moves nothing.
+local followed_as_claim = false
+
 --- Whether the home has tried to move the working directory's records to
 --- the first session it followed (`move_directory_records_once()`).
 local directory_records_moved = false
@@ -110,8 +114,9 @@ end
 --- paths name, and at each double-click on a path, to open its file. The
 --- composition root calls it before anything else in the home is used but
 --- `follow_report_session()`, whose session it then holds: when the home
---- follows a session already, the working directory's records are moved to
---- it now (`move_directory_records_once()`).
+--- follows a session already, told otherwise than as a claim's, the
+--- working directory's records are moved to it now
+--- (`move_directory_records_once()`).
 ---
 --- Raises an error naming the field when `report_environment` is not an
 --- environment.
@@ -123,7 +128,7 @@ function M.set_report_environment(report_environment)
   vim.validate('environment.state_directory', report_environment.state_directory, 'string')
   vim.validate('environment.working_directory', report_environment.working_directory, 'string')
   environment = report_environment
-  if followed_session then
+  if followed_session and not followed_as_claim then
     move_directory_records_once(environment)
   end
 end
@@ -403,6 +408,90 @@ function M.receive_report(arguments)
   end
 end
 
+--- Appends `arguments`, a report, to the records file `records_file`,
+--- received at `time`, without showing it. A grown records file that cannot
+--- be cut back to its newest records keeps the report all the same, and is
+--- cut at a later record (`records.append_record()`).
+---
+--- Raises an error naming the field at fault when `arguments` are not a
+--- report, and an error naming the records file when it cannot be kept.
+---
+---@param records_file string
+---@param arguments table
+---@param time string
+local function keep_unshown(records_file, arguments, time)
+  local valid_report, refusal = format.validate_report(arguments)
+  if not valid_report then
+    error('aineo refused the report: ' .. refusal, 0)
+  end
+  records.append_record(records_file, { time = time, report = valid_report })
+end
+
+--- Takes `arguments`, a report of the Claude session `session_id`, as
+--- `receive_report()` does when the home follows that session, and returns
+--- true. With `options.at_start` — asked of the editor that started the
+--- report's Claude Code — it takes it too while the home follows no session
+--- yet: the report is then kept in the working directory's records, which
+--- the first session followed takes. Otherwise it neither shows nor keeps
+--- the report, and returns false: the report server then offers it to
+--- another editor that shows its session, or keeps it on disk
+--- (`keep_session_report()`).
+---
+--- With `options.keep_with_directory` too — asked once no editor that shows
+--- the report's session took it — a home that follows another session, and
+--- has not yet moved the working directory's records into a session of its
+--- own (`move_directory_records_once()`), keeps the report in those records
+--- without showing it, and returns true: the first follow of this editor's
+--- own session then takes them whole, the report among them. Once they have
+--- moved, it returns false.
+---
+--- Raises what `receive_report()` raises, and, for a report kept with the
+--- directory's records, an error naming the field at fault or the records
+--- file.
+---
+---@param arguments table
+---@param session_id string
+---@param options? { at_start: boolean?, keep_with_directory: boolean? }
+---@return boolean taken
+function M.receive_session_report(arguments, session_id, options)
+  options = options or {}
+  if followed_session == session_id or (followed_session == nil and options.at_start) then
+    M.receive_report(arguments)
+    return true
+  end
+  if not (options.at_start and options.keep_with_directory) or directory_records_moved then
+    return false
+  end
+  local current = current_environment()
+  keep_unshown(
+    records.records_file(current.state_directory, current.working_directory),
+    arguments,
+    current.clock()
+  )
+  return true
+end
+
+--- Keeps `arguments`, a report of the Claude session `session_id`, in that
+--- session's records under `state_directory` (`records.session_records_file()`),
+--- received at `time`, `YYYY-MM-DDTHH:MM:SS`, without showing it: the Report
+--- of an editor that follows the session shows it when it next reads the
+--- session's records (`follow_report_session()`). It needs no environment
+--- and no Report buffer: the report server calls it where no editor took the
+--- report. A grown records file that cannot be cut back to its newest
+--- records keeps the report all the same, and is cut at a later record
+--- (`records.append_record()`); no one is there to be told.
+---
+--- Raises an error naming the field at fault when `arguments` are not a
+--- report, and an error naming the records file when it cannot be kept.
+---
+---@param state_directory string
+---@param session_id string
+---@param arguments table
+---@param time string
+function M.keep_session_report(state_directory, session_id, arguments, time)
+  keep_unshown(records.session_records_file(state_directory, session_id), arguments, time)
+end
+
 --- Follows the Claude session `session_id`: keeps every report received
 --- from then on in that session's records file
 --- (`records.session_records_file()`), and shows its records in the
@@ -416,23 +505,35 @@ end
 --- that editor moves nothing. A move that fails is told to the user, and
 --- the session's own file is used.
 ---
---- A session told before `set_report_environment()` is held: the
---- environment, once given, moves the directory's records to it, and the
---- Report, once created, shows its records.
+--- A follow told with `options.claim` — the follow of a session the editor
+--- claimed, which its own Claude Code need not run — moves nothing: the
+--- directory's records stay where they are until the first follow told
+--- without it.
 ---
---- Raises an error naming `session_id` when it is not a string.
+--- A session told before `set_report_environment()` is held: the
+--- environment, once given, moves the directory's records to it, unless it
+--- was told as a claim's, and the Report, once created, shows its records.
+---
+--- Raises an error naming `session_id` when it is not a string, and
+--- `options` when it is not a table.
 ---
 ---@param session_id string
-function M.follow_report_session(session_id)
+---@param options? { claim: boolean? }
+function M.follow_report_session(session_id, options)
   vim.validate('session_id', session_id, 'string')
-  if session_id == followed_session then
+  vim.validate('options', options, 'table', true)
+  local as_claim = options ~= nil and options.claim == true
+  if session_id == followed_session and as_claim == followed_as_claim then
     return
   end
   followed_session = session_id
+  followed_as_claim = as_claim
   if not environment then
     return
   end
-  move_directory_records_once(environment)
+  if not as_claim then
+    move_directory_records_once(environment)
+  end
   if not report_view then
     return
   end
