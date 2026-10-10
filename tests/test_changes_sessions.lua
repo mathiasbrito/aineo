@@ -2324,4 +2324,21 @@ T['a hand-over']['of a session not followed leaves the pane and the session foll
   }, { other = { 'notes.txt', 'other.txt' }, new = kept })
 end
 
+T['a hand-over']['of the session followed leaves the table the follow was given as it was'] = function()
+  local state = fixture.directory('changessessions-hand-over-argument')
+
+  local given = child.lua_get(
+    [[(function(state, from, to)
+      local changes = require('aineo.changes')
+      local followed = { id = from, state_directory = state }
+      changes.follow_changes_session(followed)
+      changes.hand_over_changes_session({ from = from, to = to, state_directory = state })
+      return followed.id
+    end)(...)]],
+    { state, SESSION_DEAD, SESSION_NEW }
+  )
+
+  eq(given, SESSION_DEAD)
+end
+
 return T
