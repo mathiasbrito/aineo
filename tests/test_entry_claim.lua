@@ -268,10 +268,15 @@ local function record_of(task)
 end
 
 --- The expression, run in an editor, that gives the Report's lines, each time
---- of day, which starts a header, written `HH:MM`.
-local REPORT_LINES = [[vim.tbl_map(function(line)
-  return (line:gsub('^%d%d:%d%d ', 'HH:MM '))
-end, vim.api.nvim_buf_get_lines(vim.fn.bufnr('aineo://report'), 0, -1, true))]]
+--- of day, which starts a header, written `HH:MM`; none while there is no
+--- Report.
+local REPORT_LINES = [[(function()
+  local report = vim.fn.bufnr('aineo://report')
+  local lines = report == -1 and {} or vim.api.nvim_buf_get_lines(report, 0, -1, true)
+  return vim.tbl_map(function(line)
+    return (line:gsub('^%d%d:%d%d ', 'HH:MM '))
+  end, lines)
+end)()]]
 
 --- The lines of the layout's Input, read in an editor.
 local INPUT_LINES =
