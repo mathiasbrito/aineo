@@ -799,6 +799,25 @@ function M.list_sessions(command, folder, on_done)
   agents.list_sessions(command, folder, on_done)
 end
 
+--- Where `listed`, as `list_sessions()` delivers it, stands for a pick,
+--- given the session of aineo's own terminal (`agents.standing()`).
+---
+---@param listed aineo.claude.ListedSession
+---@param own_session_id string?
+---@return 'own'|'elsewhere'|'switchable'
+function M.session_standing(listed, own_session_id)
+  return agents.standing(listed, own_session_id)
+end
+
+--- The row of the list of sessions for `listed` (`agents.row()`).
+---
+---@param listed aineo.claude.ListedSession
+---@param own_session_id string?
+---@return string
+function M.session_row(listed, own_session_id)
+  return agents.row(listed, own_session_id)
+end
+
 --- Whether the prompt of Claude Code's terminal that `window` shows holds
 --- text (`prompt.shows_text()`).
 ---
