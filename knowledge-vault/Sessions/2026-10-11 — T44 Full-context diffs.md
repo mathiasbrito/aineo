@@ -136,10 +136,20 @@ On Neovim 0.12.5 (git 2.50.1), on the tree pushed: `make test` — 2594 cases in
 
 ## Task lines
 
-The wave holds its marks (rule 6). The line T44 would take:
+Marked done in the v1 plan note by wave 10's closing knowledge pass (PR #161, wave 10; released in v0.2.21). The line as the wave holds it:
 
 - [X] T44 — a full-context diff toggle (C15, C13; D48): `F` in a diff the changes pane showed re-reads it with the whole file as context, in the same buffer, and every diff shown after opens the same way until `F` flips it back, for the editor's life; for a file, a commit, *Uncommitted* and *Session work*, another worktree's too (PR #161, into `dev`, wave 10) — regular. The five mutants of `plan.md` › *Verification mutants* › T44 map to this note's P1–P5.
 
 ## Commits
 
-Recorded after the merge.
+Recorded after the merge, by wave 10's closing knowledge pass. PR #161 merged by rebase as `0b09db7` … `32283d1` (5 commits); the orchestrator verified the pull request's head `221531c`, rebased on `dev` `c3d4d30`: the whole suite 2594 cases, `Fails (0)`, lint clean, and the mutant naming a file's section by position instead of its `diff --git` line killed by assertion. Released in v0.2.21 (PR #162, `main` `50a28da`).
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `5066bc8` | `0b09db7` | Add F, a full-context toggle for the diffs the changes pane shows |
+| `6e7b0cb` | `a3c2408` | Pin T44's cursor, textlock and failure cases and record the session |
+| `48afb1d` | `ca8919c` | Name pull request #161 on T44's task line |
+| `9aa8819` | `fa96f80` | Fix T44's review findings: sections, stale Enters, F's target, windows |
+| `221531c` | `32283d1` | Record T44's fix round in the session note |
+
+The `Branch` column is the pull request's own commits (`refs/pull/161/head`); the verified head `221531c` is the last of them. The first commit carries the brief's dispatch amendment (A124).
