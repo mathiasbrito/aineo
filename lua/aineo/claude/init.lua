@@ -2,6 +2,7 @@
 --- interactive CLI running in a terminal buffer.
 
 local arguments = require('aineo.claude.arguments')
+local prompt = require('aineo.claude.prompt')
 local readiness = require('aineo.claude.readiness')
 local session_name = require('aineo.claude.session_name')
 local session_ids = require('aineo.claude.session_ids')
@@ -786,6 +787,15 @@ end
 ---@return boolean
 function M.is_session_id(text)
   return session_ids.is_session_id(text)
+end
+
+--- Whether the prompt of Claude Code's terminal that `window` shows holds
+--- text (`prompt.shows_text()`).
+---
+---@param window integer
+---@return boolean
+function M.prompt_shows_text(window)
+  return prompt.shows_text(window)
 end
 
 --- The `'statusline'` `session_statusline()` returns: an expression whose
