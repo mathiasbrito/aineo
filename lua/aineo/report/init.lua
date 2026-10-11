@@ -483,7 +483,9 @@ end
 --- own (`move_directory_records_once()`), keeps the report in those records
 --- without showing it, and returns true: the first follow of this editor's
 --- own session then takes them whole, the report among them. Once they have
---- moved, it returns false.
+--- moved, or when the report's session has a records file of its own, which
+--- that first follow would leave the directory's records beside, it returns
+--- false, and the report is kept with its session.
 ---
 --- Raises what `receive_report()` raises, and, for a report kept with the
 --- directory's records, an error naming the field at fault or the records
@@ -503,6 +505,9 @@ function M.receive_session_report(arguments, session_id, options)
     return false
   end
   local current = current_environment()
+  if vim.uv.fs_stat(records.session_records_file(current.state_directory, session_id)) then
+    return false
+  end
   keep_unshown(
     records.records_file(current.state_directory, current.working_directory),
     arguments,

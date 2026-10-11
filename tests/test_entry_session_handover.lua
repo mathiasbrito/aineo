@@ -743,4 +743,62 @@ T['a resume with no conversation']['of a session this Neovim claimed by its id l
   })
 end
 
+--- What `expression`, run in `editor`, gives once it is `expected`, waiting
+--- for that at most `FILE_PATIENCE_MS`; else what it gives when the wait
+--- runs out.
+---
+---@param editor table
+---@param expression string
+---@param expected any
+---@return any
+local function once_equal(editor, expression, expected)
+  vim.wait(FILE_PATIENCE_MS, function()
+    return vim.deep_equal(editor.lua_get(expression), expected)
+  end, 20)
+  return editor.lua_get(expression)
+end
+
+--- Waits, at most `FILE_PATIENCE_MS`, until the report server `fake` keeps
+--- (`AINEO_FAKE_CLAUDE_MCP=kept`) has answered `count` of its messages,
+--- which it records as `{ mcp }`.
+---
+---@param fake { record: string }
+---@param count integer
+local function wait_for_server_answers(fake, count)
+  vim.wait(FILE_PATIENCE_MS, function()
+    local answered = vim.tbl_filter(function(recorded)
+      return recorded.mcp ~= nil
+    end, claude_session.record(fake))
+    return #answered >= count
+  end, 20)
+end
+
+T['a resume with no conversation']['while a claim of another session holds keeps a report of the session that took its place with that session, which shows it once the claim returns'] = function()
+  local top, base, state = in_repository('session-handover-claimed-report')
+  keep_session_id(state, top, DEAD_SESSION_ID)
+  leave_session(state, DEAD_SESSION_ID, top, base, 'notes for the dead session')
+  local fake = fake_with_no_conversation(
+    'session-handover-claimed-report',
+    { AINEO_FAKE_CLAUDE_HOOKS = '1', AINEO_FAKE_CLAUDE_MCP = 'kept' }
+  )
+  entry.use_fake(child, fake)
+  child.cmd('Aineo claim ' .. CLAIMED_SESSION_ID)
+  child.cmd('Aineo open')
+  claude_session.wait_for_starts(fake, 2)
+  claude_session.wait_for_status(child, 'ready')
+  wait_for_server_answers(fake, 2)
+
+  type_to_claude(child, '/report Reported while claimed\r')
+  wait_for_server_answers(fake, 3)
+  child.cmd('Aineo claim')
+
+  local expected = { EARLIER_REPORT, 'HH:MM [done] Reported while claimed — All tests pass' }
+  eq({
+    report = once_equal(child, REPORT_LINES, expected),
+    directory = read_file(
+      vim.fs.joinpath(state, 'aineo', 'reports', vim.fn.sha256(top) .. '.jsonl')
+    ),
+  }, { report = expected })
+end
+
 return T
