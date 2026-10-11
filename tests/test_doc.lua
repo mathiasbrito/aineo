@@ -94,7 +94,7 @@ local TAGS = {
   'aineo-\\i',
   'aineo-\\c',
   'aineo-\\pa',
-  'aineo-\\pc',
+  'aineo-\\g',
   'aineo-v_\\s',
   'g:aineo',
   'aineo.setup()',

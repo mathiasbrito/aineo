@@ -1,7 +1,9 @@
 --- aineo's Claude session home, `require('aineo.claude')`: Claude Code's
 --- interactive CLI running in a terminal buffer.
 
+local agents = require('aineo.claude.agents')
 local arguments = require('aineo.claude.arguments')
+local prompt = require('aineo.claude.prompt')
 local readiness = require('aineo.claude.readiness')
 local session_name = require('aineo.claude.session_name')
 local session_ids = require('aineo.claude.session_ids')
@@ -779,6 +781,14 @@ function M.session_id()
   return session and session.followed
 end
 
+--- The directory the session's Claude Code started in, whatever the
+--- editor's working directory is now. Nil before any start.
+---
+---@return string?
+function M.session_directory()
+  return session and session.settings.cwd
+end
+
 --- Whether `text` is a session id of the form Claude Code gives, a
 --- lower-case version-4 UUID (`session_ids.is_session_id()`).
 ---
@@ -786,6 +796,55 @@ end
 ---@return boolean
 function M.is_session_id(text)
   return session_ids.is_session_id(text)
+end
+
+--- Lists the sessions Claude Code lists for `folder` (`agents.list_sessions()`).
+---
+---@param command string[] `claude.cmd`
+---@param folder string
+---@param on_done fun(sessions: table[]?, problem: string?)
+function M.list_sessions(command, folder, on_done)
+  agents.list_sessions(command, folder, on_done)
+end
+
+--- Where `listed`, as `list_sessions()` delivers it, stands for a pick,
+--- given the session of aineo's own terminal and the folder listed
+--- (`agents.standing()`).
+---
+---@param listed aineo.claude.ListedSession
+---@param own_session_id string?
+---@param folder string
+---@return 'own'|'elsewhere'|'another_folder'|'switchable'
+function M.session_standing(listed, own_session_id, folder)
+  return agents.standing(listed, own_session_id, folder)
+end
+
+--- What names `listed`, as `list_sessions()` delivers it, to the user
+--- (`agents.name()`).
+---
+---@param listed aineo.claude.ListedSession
+---@return string
+function M.listed_session_name(listed)
+  return agents.name(listed)
+end
+
+--- The row of the list of sessions for `listed` (`agents.row()`).
+---
+---@param listed aineo.claude.ListedSession
+---@param own_session_id string?
+---@param folder string
+---@return string
+function M.session_row(listed, own_session_id, folder)
+  return agents.row(listed, own_session_id, folder)
+end
+
+--- Whether the prompt of Claude Code's terminal that `window` shows holds
+--- text (`prompt.shows_text()`).
+---
+---@param window integer
+---@return boolean
+function M.prompt_shows_text(window)
+  return prompt.shows_text(window)
 end
 
 --- The `'statusline'` `session_statusline()` returns: an expression whose

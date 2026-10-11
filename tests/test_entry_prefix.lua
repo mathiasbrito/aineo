@@ -12,8 +12,9 @@ local PREFIX_KEYS = {
   { 'i', '<Plug>(aineo-input)', 'n' },
   { 'c', '<Plug>(aineo-claude)', 'n' },
   { 'tcn', '<Plug>(aineo-claude-numbers)', 'n' },
+  { 'S', '<Plug>(aineo-sessions)', 'n' },
   { 'pa', '<Plug>(aineo-pane-agent)', 'n' },
-  { 'pc', '<Plug>(aineo-pane-changes)', 'n' },
+  { 'g', '<Plug>(aineo-pane-changes)', 'n' },
   { 's', '<Plug>(aineo-send)', 'x' },
 }
 
@@ -76,6 +77,8 @@ T['the prefix']['is the one setup() records right after the file is sourced late
   eq(child.fn.maparg('\\' .. key, mode), '')
 end
 
+T['the changes pane'] = MiniTest.new_set()
+
 T["the user's own mapping"] = MiniTest.new_set()
 
 T["the user's own mapping"]['of a whole key sequence stays'] = MiniTest.new_set({
@@ -135,14 +138,33 @@ T["the user's own mapping"]['of the start of a key sequence stays, and aineo map
   )
 end
 
-T["the user's own mapping"]['of \\p stays, and aineo maps \\pa and \\pc too'] = function()
+T["the user's own mapping"]['of \\p stays, and aineo maps \\pa too'] = function()
   children.restart(child, { '--cmd', 'nnoremap \\p <Cmd>let g:mine = 1<CR>' })
 
-  eq({ child.fn.maparg('\\p', 'n'), child.fn.maparg('\\pa', 'n'), child.fn.maparg('\\pc', 'n') }, {
+  eq({ child.fn.maparg('\\p', 'n'), child.fn.maparg('\\pa', 'n') }, {
     '<Cmd>let g:mine = 1<CR>',
     '<Plug>(aineo-pane-agent)',
-    '<Plug>(aineo-pane-changes)',
   })
+end
+
+T['the changes pane']['is shown by \\g, and \\pc is mapped to nothing'] = function()
+  children.restart(child)
+
+  eq(
+    { child.fn.maparg('\\g', 'n'), child.fn.maparg('\\pc', 'n'), child.fn.maparg('\\pa', 'n') },
+    { '<Plug>(aineo-pane-changes)', '', '<Plug>(aineo-pane-agent)' }
+  )
+end
+
+T['the session list'] = MiniTest.new_set()
+
+T['the session list']['is shown by \\S, and \\cs and \\c are not taken from \\c'] = function()
+  children.restart(child)
+
+  eq(
+    { child.fn.maparg('\\S', 'n'), child.fn.maparg('\\cs', 'n'), child.fn.maparg('\\c', 'n') },
+    { '<Plug>(aineo-sessions)', '', '<Plug>(aineo-claude)' }
+  )
 end
 
 T["the user's own mapping"]['of a key sequence with a Ctrl key in the prefix stays, and the other keys are mapped'] = function()
