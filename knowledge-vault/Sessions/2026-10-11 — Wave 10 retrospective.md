@@ -30,7 +30,7 @@ On 2026-10-10 the user asked for two features: the commits window as a filter of
 
 ### What cost most
 
-- **Survivor mutants read as dead code.** T43's first round deleted two guards its mutants had not killed (`cursor_unplaced` and `--root`) as unreachable; the attack review reached both, and the fix round restored them under A117.
+- **Survivor mutants read as dead code.** T43's first round deleted three pieces of code its mutants had not killed (the `cursor_unplaced` guard, the `BufWinEnter` placing and `--root`) as dead; the attack review reached two of them (the guard and `--root`), and the fix round restored them under A117.
 - **The first two commits of T43 carried the wrong model in their trailers** (A116), the dispatch having named Opus for a Sonnet agent; pushed history was not rewritten.
 
 ### What to change
@@ -54,6 +54,7 @@ On 2026-10-10 the user asked for two features: the commits window as a filter of
 - **The assumptions go to the user:** A93–A111, A115–A117, A124 and A125.
 - **Wave 11:** T45 (`gf`, in flight) and T46 (`\cs`, after the MVP review and the user's manual checks M7 and M8; O9 unruled).
 - **T44's three small edges:** a second git read when an Enter's read arrives after `F`; a diff buffer wiped between `F` and its read skipped silently; `F` shadowing Vim's `F{char}` in a diff buffer.
+- **T43's textlock edge:** a hold of textlock that refuses the commits page after a reset leaves the cursor on a stale row until the next write.
 - **Wave 9's threads stand:** T36's directory moves (A91), two `--settings` on Claude Code's argv, `tests/test_entry_panes.lua`'s child death and the test Neovims left after runs, `tests/test_health.lua`'s Ctrl-C timing case under load, T39's O2.
 
 ## Commits
