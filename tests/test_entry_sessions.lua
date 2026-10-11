@@ -216,7 +216,7 @@ end
 
 --- Presses `\cs` in the child.
 local function press_sessions()
-  entry.press(child, '\\cs')
+  entry.press(child, '\\S')
 end
 
 --- The arguments of each `agents --json` run the fake has recorded.
@@ -249,13 +249,13 @@ T['the entry points'] = MiniTest.new_set({
     },
     {
       function()
-        entry.press(child, '\\cs')
+        entry.press(child, '\\S')
       end,
     },
   },
 })
 
-T['the entry points'][':Aineo sessions, <Plug>(aineo-sessions) and \\cs offer the same list'] = function(
+T['the entry points'][':Aineo sessions, <Plug>(aineo-sessions) and \\S offer the same list'] = function(
   trigger
 )
   local fake = sessions_fake('sessions-entry-points', 'ready')

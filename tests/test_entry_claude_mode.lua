@@ -67,6 +67,22 @@ T['\\c']["enters Terminal mode in Claude's window, from the file column"] = func
   eq(child.lua_get(MODE), 't')
 end
 
+T['\\c']['followed at once by a message reaches Claude’s prompt, not the file buffer'] = function()
+  local fake = claude_session.fake('entry-claude-mode-typed-message', 'ready')
+  local file = fixture.write('entry-claude-mode-typed-message/file.txt', { 'local x = 1' })
+  entry.use_fake(child, fake)
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  child.cmd('edit ' .. file)
+
+  child.type_keys('\\cshow me the diff')
+
+  eq(claude_session.received(fake):find('show me the diff', 1, true) ~= nil, true)
+  eq(child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, false)', { file }), {
+    'local x = 1',
+  })
+end
+
 T['\\c']["reopens Claude's closed window in Terminal mode"] = function()
   local fake = claude_session.fake('entry-claude-mode-closed-window', 'ready')
   entry.use_fake(child, fake)
