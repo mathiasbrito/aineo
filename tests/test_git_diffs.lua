@@ -577,27 +577,27 @@ end
 --- true) or from the base that follows (`vim.NIL` for none) to the working
 --- tree, and returns what `_G.await` saw of the second.
 local WHOLE_DIFF = [[
-  local directory, uncommitted, base = ...
+  local directory, uncommitted, base, options = ...
   local git = require('aineo.git')
   local found = _G.await(function(done)
     git.find_repository(directory, done)
   end)
   return _G.await(function(done)
     if uncommitted then
-      git.uncommitted_diff(found.result, done)
+      git.uncommitted_diff(found.result, done, options)
     else
-      git.diff_since(found.result, base ~= vim.NIL and base or nil, done)
+      git.diff_since(found.result, base ~= vim.NIL and base or nil, done, options)
     end
   end)
 ]]
 
 --- The paths of the files a unified diff names, in its order.
 ---
----@param diff string
+---@param diff string|nil no file when the diff could not be read
 ---@return string[]
 local function files_of(diff)
   local files = {}
-  for path in diff:gmatch('diff %-%-git a/[^\n]- b/([^\n]*)') do
+  for path in (diff or ''):gmatch('diff %-%-git a/[^\n]- b/([^\n]*)') do
     table.insert(files, path)
   end
   return files
@@ -658,6 +658,49 @@ T['the whole diff']['of an uncommitted checkout with nothing in it is empty'] = 
   local seen = child.lua(WHOLE_DIFF, { top, true })
 
   eq({ failure = seen.failure, diff = seen.result }, { diff = '' })
+end
+
+T['the whole diff']['leaves out an untracked repository with no commit, which git cannot add'] = function()
+  local top = git_repo.create('diffs-whole-nested', { ['a.txt'] = { 'a' } })
+  vim.fn.mkdir(vim.fs.joinpath(top, 'nested'), 'p')
+  git_repo.git(vim.fs.joinpath(top, 'nested'), { 'init', '--quiet' })
+  git_repo.write(top, 'nested/x.txt', { 'x' })
+  git_repo.write(top, 'plain.txt', { 'plain' })
+
+  local seen = child.lua(WHOLE_DIFF, { top, true })
+
+  eq({ failure = seen.failure, files = files_of(seen.result) }, { files = { 'plain.txt' } })
+end
+
+T['the whole diff']['names its untracked files to git in a file, removed afterwards, whatever they are called'] = function()
+  local top = git_repo.create('diffs-whole-list', { ['tracked.txt'] = { 't' } })
+  local log = vim.fs.joinpath(vim.fs.dirname(top), 'calls.log')
+  local stand_in = git_repo.script('diffs-whole-list', 'git', {
+    ('echo "$*" >> %s'):format(log),
+    ('exec %s "$@"'):format(vim.fn.exepath('git')),
+  })
+  for _, name in ipairs({ '-x.txt', '[ab].txt', 'a b.txt', 'a.txt', 'b.txt' }) do
+    git_repo.write(top, name, { name })
+  end
+
+  local seen = child.lua(WHOLE_DIFF, { top, true, vim.NIL, { executable = stand_in } })
+
+  local adding = vim.tbl_filter(function(call)
+    return call:find(' add ', 1, true) ~= nil
+  end, vim.fn.readfile(log))[1]
+  local list = adding:match('%-%-pathspec%-from%-file=(%S+)')
+  eq({
+    failure = seen.failure,
+    files = files_of(seen.result),
+    paths_on_the_command_line = adding:find('.txt', 1, true) ~= nil,
+    nul_separated = adding:find('--pathspec-file-nul', 1, true) ~= nil,
+    list_left = vim.uv.fs_stat(list or '') ~= nil,
+  }, {
+    files = { '-x.txt', '[ab].txt', 'a b.txt', 'a.txt', 'b.txt' },
+    paths_on_the_command_line = false,
+    nul_separated = true,
+    list_left = false,
+  })
 end
 
 T['a file’s diff']['from a base named like an option is refused, and writes nothing'] = function()

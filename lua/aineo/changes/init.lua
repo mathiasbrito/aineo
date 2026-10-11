@@ -79,7 +79,7 @@ local held_bases = {}
 --- What the files window lists.
 ---@class aineo.changes.Listing
 ---@field filter aineo.changes.Filter the filter whose files these are
----@field changes aineo.git.Change[] its files, as last read
+---@field changes? aineo.git.Change[] its files, as last read; none when the read of them failed
 
 --- The pane's buffers, by window.
 ---@type { files: integer|nil, commits: integer|nil }
@@ -293,15 +293,16 @@ end
 
 --- Reads the files of the selected filter from the session's repository,
 --- the session's base for *Session work*, and calls `done(failure,
---- listing)`: the listing of the filter asked for, nil on a failure.
+--- listing)`: the listing of the filter asked for, with no files on a
+--- failure.
 ---
 ---@param base string|nil
----@param done fun(failure: aineo.git.Failure|nil, listing: aineo.changes.Listing|nil)
+---@param done fun(failure: aineo.git.Failure|nil, listing: aineo.changes.Listing)
 local function read_selected_files(base, done)
   local selected = session.selected
   local repository, options = session.repository, session.settings.git
   local function listing_of(failure, changes)
-    done(failure, changes and { filter = selected, changes = changes })
+    done(failure, { filter = selected, changes = changes })
   end
   if selected.kind == 'uncommitted' then
     git.uncommitted_files(repository, listing_of, options)
@@ -314,11 +315,16 @@ end
 
 --- Reads the files of the selected filter, and those of each other
 --- worktree since its own base, and shows them (`window_read()`). A read
---- that fails keeps the listing shown, filter and files.
+--- that fails keeps the files shown when they are those of the filter
+--- read; for another filter, the window lists that filter with no files,
+--- under the failure's line.
 local read_files = window_read({
   read_own = read_selected_files,
   take_own = function(failure, listing)
-    session.listed = listing or session.listed
+    local listed = session.listed
+    if not failure or not (listed and filter.same(listed.filter, listing.filter)) then
+      session.listed = listing
+    end
     session.files_failure = failure
   end,
   read_list = function(repository, base, done)
@@ -1083,12 +1089,15 @@ local window_moved = nil
 --- last moved in the commits buffer lists, when it is a filter other than
 --- the selected one, and reads the files window for it. A line that lists
 --- no filter — a note, another worktree's heading or commit — leaves the
---- selection as it was.
+--- selection as it was, and so does a cursor not yet put on the selected
+--- filter's line (`place_commits_cursor()`), which a commits page written
+--- before git answered shows on its first line.
 local function select_filter_at_cursor()
   local window = window_moved
   if
     not (
       session
+      and not session.cursor_unplaced
       and window
       and vim.api.nvim_win_is_valid(window)
       and buffers.commits
