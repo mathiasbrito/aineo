@@ -34,14 +34,16 @@ local function is_rule(line)
   return line ~= nil and vim.startswith(line, RULE)
 end
 
---- Whether `lines`, from the top of a screen down, hold Claude Code's input
+--- Where Claude Code's input box stands in `lines`, from the top of a screen
+--- down: the prompt's line, and the rule that closes the box, with the lines
+--- a longer draft continues on between them. Nil when `lines` hold no input
 --- box: a rule, the prompt's line, the lines a longer draft continues on, and
 --- a rule. A dialog drawing its selected choice at the first column between
 --- two rules would hold one too; no recorded dialog does.
 ---
 ---@param lines string[]
----@return boolean
-local function holds_input_box(lines)
+---@return { prompt: integer, rule: integer }?
+function M.input_box(lines)
   for index = 2, #lines do
     if vim.startswith(lines[index], PROMPT) and is_rule(lines[index - 1]) then
       local below = index + 1
@@ -49,11 +51,11 @@ local function holds_input_box(lines)
         below = below + 1
       end
       if is_rule(lines[below]) then
-        return true
+        return { prompt = index, rule = below }
       end
     end
   end
-  return false
+  return nil
 end
 
 --- How many rows the terminal `buffer` has while windows show it, as Neovim
@@ -86,6 +88,22 @@ local function screen_lines(buffer, rows)
   return vim.api.nvim_buf_get_lines(buffer, -rows - 1, -1, false)
 end
 
+--- The lines of the screen of the terminal `buffer` while a window shows it
+--- (`shown_rows()`), and the number of the buffer's line the first of them
+--- is; nil while none does.
+---
+---@param buffer integer a terminal buffer
+---@return string[]? lines
+---@return integer? first_line
+function M.shown_screen(buffer)
+  local rows = shown_rows(buffer)
+  if not rows then
+    return nil
+  end
+  local lines = screen_lines(buffer, rows)
+  return lines, vim.api.nvim_buf_line_count(buffer) - #lines + 1
+end
+
 --- Watches the screen of `buffer` from the moment it is called — so it is
 --- called before the terminal starts — and calls `on_change(true)` once
 --- Claude Code's input box has shown for `SETTLE_MS` with no change taking it
@@ -101,7 +119,7 @@ function M.watch(buffer, on_change)
   vim.api.nvim_buf_attach(buffer, false, {
     on_lines = function()
       rows = shown_rows(buffer) or rows
-      if not holds_input_box(screen_lines(buffer, rows)) then
+      if not M.input_box(screen_lines(buffer, rows)) then
         settle = nil
         if ready then
           ready = false
