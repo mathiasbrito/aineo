@@ -1,13 +1,14 @@
 ---
 wave: 00011
-status: planned
+status: landed
 rolling: true
 planned_by: the orchestrator's planning agent (Claude, Opus 5.5) for the user
 planned_at: 2026-10-11
 base: e6a0295
 claimed_by:
 claimed_at:
-landed_at:
+landed_at: 2026-10-12
+pull_requests: "#164, #167"
 ---
 
 # Wave 11 — names with spaces, and `\cs`
@@ -316,3 +317,43 @@ Under the user's instruction of 2026-10-06; none is a decision of the user's and
 **Open threads at T45:**
 - Under a commit filter `gf` opens the working tree's file, not the file at that commit (A2).
 - A directory's line is refused rather than opened (A127).
+
+### T46 and T47 — PR #167, merged by rebase (`dev` `f319ff3`), released in v0.2.23 (PR #168, `main` `9d2e1ee`)
+
+`55e6d32` … `7278d07` on the branch, `83f3342` … `f319ff3` on `dev` (13 commits). Session note: [[Sessions/2026-10-11 — T46 Claude sessions key]]. T47 (`\g` in place of `\pc`, D52) was folded into T46's packet by the orchestrator, because both edit the prefix-key table, the health check's list, the help's key sections and the key suites.
+- **Dispatch.** On `dev` `a0627fe`, the user having answered "Build it now" (it supersedes A114) and having made the checks M7 and M8. The implementer (`neovim-claude-code-integrator`, Sonnet) wrote the dated dispatch amendment as its first commit (A129).
+- **The packet** (head `d742c9a`). `claude agents --json --cwd <folder> --all` is read asynchronously and bounded (5 s, 1 MiB, Neovim quitting) and shown in `vim.ui.select`; this terminal's session is marked and a session running elsewhere is listed and refused; the prompt must show no text (the terminal's cursor right after the prompt glyph, M8); a pick writes `/resume <id>` and Enter, which aineo already follows (D36–D38, D51). First built as `\cs`, `:Aineo sessions`, `<Plug>(aineo-sessions)`. T47: the changes pane's key `\g`.
+- **Reviews on `d742c9a`.**
+  - *Attack (`neovim-claude-code-reviewer`):* nine findings. Any `sessionId` string was typed into Claude's terminal, an injection (HIGH, 1); `\c` followed by a message starting with `s` ran `\cs` and the rest edited the buffer (HIGH, 2); a running session listed as switchable when `pid` was not a number (MEDIUM, 3); the standing came from a stale list (MEDIUM, 4); the switch written as plain text where Send pastes (5); a refusal from Claude's window in Normal mode left Terminal mode on (6); repeated presses (7); `\pc` removed with no alias (8); sessions of other folders (9).
+  - *Tests and records (`records-reviewer`):* the `exited` guard unpinned, and six records findings.
+- **Fix round**, by the author. D53 (the user): the list's key is `\S`, so `\c` acts at once again. The user also answered "Remove now" on `\pc` (A132). A133, A134. The `sessionId` check at the listing and at the pick; the list read again at the pick; `running` when `pid` or `status` is present at all; `return_to()` stops Insert mode and the timeout path calls it; one list in flight; the `exited` guard pinned; the records corrected. Whole-suite failures on the first run: 62 of 64 were the `\c` suites, 2 the subcommand list's pin.
+- **The orchestrator's check** at `3df71aa` on `dev` `a0627fe`: whole suite 2708 cases, `Fails (0)`; lint clean; the two session-id guards' mutants killed (3 and 1 failures). It pushed one records commit, `7278d07`, which names A132 the user's decision.
+- **Departures.** The switch is a bracketed paste of `/resume <id>` followed by Enter in one write, as Send writes (A133), where the orchestrator's ruling said Enter as its own write; the session note records it. An entry in another folder is refused (A134).
+- **Not measured on the real Claude Code:** that it takes a pasted `/resume <id>` as a command; whether `claude agents --json` starts Claude Code's background service (A131); whether it lists aineo's own interactive session.
+
+### Rulings made after dispatch — the orchestrator's assumptions, A129–A134
+
+Under the user's instruction of 2026-10-06; none is a D row. They continue A126–A128, above.
+
+- **A129 (T46's dispatch)** — the implementer writes T46's dispatch amendment into the brief as its first commit, as A124 and A126 did. The orchestrator's.
+- **A130 (O9)** — `--cwd <folder> --all` always, with no global form. The orchestrator's.
+- **A131** — whether `claude agents --json` starts the background service is unmeasured; the help's limits name it and nothing guards it. The orchestrator's.
+- **A132 (the attack review, finding 8)** — `\pc` is removed with no alias. Proposed as the orchestrator's assumption; **it became the user's decision** when the user answered "Remove now" (D53's answers, D52's note).
+- **A133 (finding 5)** — the switch is written as Send writes: a bracketed paste of `/resume <id>` and Enter in one write; the fake strips the paste markers. The orchestrator's.
+- **A134 (finding 9)** — an entry whose `cwd` is not the folder listed is marked `[another folder]` and refused on pick, as a session running elsewhere is. The orchestrator's.
+
+**Open threads at T46:**
+- That Claude Code takes a pasted `/resume <id>` as a command is unmeasured; so are the background service (A131) and the listing of aineo's own session.
+- Two menus open at once, answered at once, are not guarded; the second reads the screen the first switch left.
+- `tests/test_health.lua`'s Ctrl-C case is timing-sensitive under load.
+- This plan's text still names `\cs` and `\pc`; it is not edited after dispatch.
+
+### Wave 11 closed
+
+Wave 11 landed on 2026-10-12. Its packets are T45 (PR #164, released in v0.2.22), `gf` on a name with a space or an apostrophe, and T46 with T47 (PR #167, released in v0.2.23), the session list `\S` over `claude agents --json` and the changes pane's key `\g`. The suite grew from 2594 cases at the wave's base to 2625 after T45 and 2708 after T46. Its assumptions are A112–A114, A118–A123 and A126–A134, in *The orchestrator's rulings*, *Assumptions to report to the user* and the sections above; A132 is the user's decision. Retrospective: [[Sessions/2026-10-12 — Wave 11 retrospective]].
+
+**Open threads at the close:**
+- The three unmeasured points of T46, for the user to try by hand: the pasted `/resume` switch; whether `claude agents --json` starts the background service; whether it lists aineo's own interactive session.
+- T45: under a commit filter `gf` opens the working tree's file (A2); a directory's line is refused (A127).
+- T46: two menus answered at once are not guarded.
+- The wave 9 and wave 10 threads stand (see wave 10's *Open threads at the close*).
