@@ -68,3 +68,13 @@ In your definition's shape, to `<scratchpad>/t45-report-packet.md`. Open the pul
 - **A118 (O1):** T45 is dispatched after T44 merges.
 - **A122 (O6):** `gf` alone.
 - **A123 (O7):** Sonnet implementer; the attack review on Opus; tests and records in one Sonnet `records-reviewer`.
+
+## Amendment — 2026-10-11, at dispatch: T43 and T44 merged
+
+Written by the T45 implementer under the orchestrator's assumption A126, against `origin/dev` `32283d1`. The brief's *Facts*, *Boundary* and *The tests* re-checked; nothing changes what is built.
+
+- **Line numbers moved.** In `lua/aineo/changes/init.lua`, `open_entry()` is at 1173 (the brief says 975), `pane_buffer()` at 1208 and its `<CR>` map at 1221 (1008 and 1021). The shape is the one the brief describes: `pages.entry_at(buffer, cursor line)` gives the entry; the map is made in `pane_buffer()`, so a files buffer made anew is mapped again.
+- **Entries (T43).** A file's line lists `{ key = change.path, change = change, filter = <the filter it is listed under> }`; another worktree's file lists the same without `filter`, and its `worktree` is set when the page was built from `worktree_rows()` (`lua/aineo/changes/lines.lua`, `file_rows()`). The files window's first line, `Files in: <filter>`, lists no entry (`files_in_row()`), as the brief assumes; so do notes and headings. Under a commit filter a line's `change.path` is relative to the top level and `gf` opens the working tree's file (A2), as the brief rules.
+- **Diff buffers (T44).** A diff buffer maps `F` only; no buffer of the pane or a diff maps `gf`, so the buffer-local `gf` in the files buffer collides with nothing.
+- **The session's top level** is `session.repository.top`, the base of `change.path`.
+- **Tests.** `tests/test_changes_filter.lua` and `tests/test_changes_full_context.lua` exist beside the files the brief names; the new file follows `test_changes_full_context.lua`'s harness (`BEGIN_AND_SHOW`, no layout) and the layout case follows `tests/test_entry_changes.lua`'s `Enter` set.

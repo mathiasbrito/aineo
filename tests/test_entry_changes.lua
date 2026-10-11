@@ -408,4 +408,50 @@ T['Enter']['while the command-line window is open shows the diff once it closes,
   )
 end
 
+T['gf'] = MiniTest.new_set()
+
+--- Opens the layout around a repository with one new file, `has space.txt`,
+--- shows the changes pane and waits for it to list the file, then moves the
+--- cursor to the files window, onto the file's line. Returns the file's
+--- absolute path.
+---
+---@param name string
+---@return string path
+local function changes_pane_listing_a_new_file(name)
+  local top = in_repository(name, { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'has space.txt', { 'text' })
+  open_and_wait_for_the_base()
+  entry.press(child, '\\pc')
+  expect_lines(FILES, { 'Files in: Session work', '  ? has space.txt' })
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
+  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  return vim.fs.joinpath(top, 'has space.txt')
+end
+
+T['gf']['opens the file in the file column, the files window still showing the list'] = function()
+  local path = changes_pane_listing_a_new_file('changespane-entry-gf')
+
+  entry.press(child, 'gf')
+
+  wait_for_window_showing(path)
+  eq({ entry.windows(child), entry.current_window(child) }, {
+    { 'terminal', path, FILES, COMMITS },
+    path,
+  })
+end
+
+T['gf']['with none of the layout’s windows open opens the file in the files window, as :edit does'] = function()
+  local path = changes_pane_listing_a_new_file('changespane-entry-gf-alone')
+  child.cmd('new')
+  child.cmd('only')
+  child.lua('vim.api.nvim_win_set_buf(0, vim.fn.bufnr(...))', { FILES })
+  expect_lines(FILES, { 'Files in: Session work', '  ? has space.txt' })
+  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+
+  entry.press(child, 'gf')
+
+  wait_for_window_showing(path)
+  eq({ entry.windows(child), entry.current_window(child) }, { { path }, path })
+end
+
 return T

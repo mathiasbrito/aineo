@@ -18,6 +18,7 @@ local filter = require('aineo.changes.filter')
 local full_context = require('aineo.changes.full_context')
 local kept = require('aineo.changes.kept')
 local lines = require('aineo.changes.lines')
+local open_file = require('aineo.changes.open_file')
 local pages = require('aineo.changes.pages')
 local pause = require('aineo.changes.pause')
 local scratch = require('aineo.changes.scratch')
@@ -1198,6 +1199,28 @@ local function open_entry(buffer)
   read_in_current_context()
 end
 
+--- Opens the file the line under the cursor lists in `buffer`, the files
+--- buffer (`aineo.changes.open_file`).
+---
+---@param buffer integer
+local function open_file_at_cursor(buffer)
+  local entry = pages.entry_at(buffer, vim.api.nvim_win_get_cursor(0)[1])
+  if not entry then
+    return
+  end
+  open_file.open_listed_file(entry, session.repository.top)
+end
+
+--- Maps `gf` in `buffer`, the files buffer, in Normal mode, to open the
+--- file the line under the cursor lists (`open_file_at_cursor()`).
+---
+---@param buffer integer
+local function map_open_file(buffer)
+  vim.keymap.set('n', 'gf', function()
+    open_file_at_cursor(buffer)
+  end, { buffer = buffer, desc = 'aineo: open the file of the entry under the cursor' })
+end
+
 --- A scratch buffer of the pane named `name` (`aineo.changes.scratch`),
 --- written with `page()` whenever it is made or read, which tells the
 --- session the pane is shown whenever it enters a window (`pane_shown()`).
@@ -1311,6 +1334,7 @@ end
 function M.pane_buffers()
   if not (buffers.files and vim.api.nvim_buf_is_loaded(buffers.files)) then
     buffers.files = pane_buffer('aineo://changes-files', files_page)
+    map_open_file(buffers.files)
   end
   if not (buffers.commits and vim.api.nvim_buf_is_loaded(buffers.commits)) then
     buffers.commits = pane_buffer('aineo://changes-commits', commits_page)
