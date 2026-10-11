@@ -980,7 +980,8 @@ local PROMPT_HOLDS_TEXT = NOT_SWITCHED
 
 --- Puts the cursor back where it was before a switch moved it: in the
 --- window `origin` names, and in Insert mode when it was in Insert mode.
---- Moving to the window ends Terminal mode.
+--- Moving to the window ends Terminal mode, and Insert mode is asked for
+--- once it has ended: asked for sooner, it is lost to it.
 ---
 ---@param origin { window: integer, mode: string }
 local function return_to(origin)
@@ -988,7 +989,13 @@ local function return_to(origin)
     vim.api.nvim_set_current_win(origin.window)
   end
   if vim.startswith(origin.mode, 'i') then
-    vim.cmd.startinsert()
+    vim.api.nvim_create_autocmd('ModeChanged', {
+      pattern = 't:*',
+      once = true,
+      callback = function()
+        vim.schedule(vim.cmd.startinsert)
+      end,
+    })
   end
 end
 
