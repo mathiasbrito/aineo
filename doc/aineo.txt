@@ -247,10 +247,11 @@ the whole diff from `HEAD` to the working tree, new files included, in
 `aineo://session-work`; on a commit that commit's diff, in
 `aineo://commit/{id}`, a merge's against its first parent. A new file
 enters a whole diff through a copy of git's index, so your own index is
-never touched. A diff is read-only: a buffer with 'filetype' `diff`, wiped
-once hidden. Under
-another worktree's heading, Enter shows that worktree's diff of the file
-from its base, or the commit's, in a buffer named
+never touched; an untracked repository with no commit yet is left out. A
+diff is read-only: a buffer with 'filetype' `diff`, wiped once hidden.
+Under another worktree's heading, Enter shows that worktree's diff of the
+file from its base, or the commit's, a merge's against its first parent
+too, in a buffer named
 `aineo://worktree{top}//diff/{path}` or `aineo://worktree{top}//commit/{id}`,
 {top} the worktree's top level, so two worktrees' diffs of one path are two
 buffers; no key opens another worktree's file. Once the diff is shown, the
@@ -1472,14 +1473,11 @@ The changes pane ~
   files window says so below its first line: a change in a subdirectory
   shows at the next showing of the pane, save or commit, and a branch moved
   by `git update-ref` from another worktree is missed too. No timer reads
-  the repository on a schedule; the one timer there is runs the pause
-  before the files window follows the commits window's cursor.
+  the repository on a schedule; the only timer is the pause before the
+  files window follows the commits window's cursor.
 - Choosing another line in the commits window reads the files window again,
   the other worktrees' sections with it, as any read of it does: each
-  worktree costs its reads there too. The whole diffs of Uncommitted and
-  Session work name every new file on one git command line, so a list of
-  new files longer than the system's limit fails the read, and the failure
-  is told.
+  worktree costs its reads there too.
 - The other worktrees have no watch of their own. A file written in a
   worktree outside your top level shows at the next change aineo's watch
   sees in your repository — that worktree's `git add` or commit, a file

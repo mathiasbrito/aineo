@@ -259,6 +259,39 @@ T['the files a commit changed']['are, for a merge, those it brought in against i
   eq(seen.result, { { path = 'side.txt', kind = 'added' } })
 end
 
+T['the files a commit changed']['are every file of a root commit whatever log.showRoot says'] = function()
+  local top = git_repo.create_unborn('commit-files-show-root')
+  git_repo.git(top, { 'config', 'log.showRoot', 'false' })
+  git_repo.write(top, 'first.txt', { 'first' })
+  local root = git_repo.commit_all(top, 'First')
+
+  local seen = child.lua(COMMIT_FILES, { top, root })
+
+  eq(seen.result, { { path = 'first.txt', kind = 'added' } })
+end
+
+T['the files a commit changed']['are those of a signed commit whatever log.showSignature says'] = function()
+  local top = git_repo.create('commit-files-signed', { ['a.txt'] = { '1', '2', '3', '4', '5' } })
+  local key = vim.fs.joinpath(git_repo.directory('commit-files-signed-key'), 'key')
+  local keygen = vim.system({ 'ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', key }):wait()
+  assert(keygen.code == 0, 'ssh-keygen: ' .. keygen.stderr)
+  git_repo.git(top, { 'config', 'gpg.format', 'ssh' })
+  git_repo.git(top, { 'config', 'user.signingkey', key })
+  git_repo.git(top, { 'config', 'log.showSignature', 'true' })
+  git_repo.git(top, { 'mv', 'a.txt', 'c.txt' })
+  git_repo.write(top, 'd.txt', { 'd' })
+  git_repo.git(top, { 'add', '--all' })
+  git_repo.git(top, { 'commit', '--quiet', '--gpg-sign', '--message=Signed' })
+  local signed = git_repo.git(top, { 'rev-parse', 'HEAD' })
+
+  local seen = child.lua(COMMIT_FILES, { top, signed })
+
+  eq(seen.result, {
+    { path = 'c.txt', kind = 'renamed', old_path = 'a.txt' },
+    { path = 'd.txt', kind = 'added' },
+  })
+end
+
 T['the files a commit changed']['of a commit named like an option are refused, and write nothing'] = function()
   local top = git_repo.create('commit-files-option', { ['a.txt'] = { 'a' } })
   local written = vim.fs.joinpath(vim.fs.dirname(top), 'written')

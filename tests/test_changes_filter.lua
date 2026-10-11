@@ -34,11 +34,12 @@ local NO_COMMITS = 'No commits on this session'
 --- shown in the window already showing it, or else in a window of its own
 --- at the bottom, the cursor left where it is.
 local BEGIN_AND_SHOW = [[
-  local directory = ...
+  local directory, git_options = ...
   local changes = require('aineo.changes')
   _G.shown_diffs = {}
   changes.begin_session({
     directory = directory,
+    git = git_options,
     show_diff = function(diff)
       table.insert(_G.shown_diffs, diff)
       local showing = vim.fn.bufwinid(diff)
@@ -127,8 +128,9 @@ end
 --- (`BEGIN_AND_SHOW`).
 ---
 ---@param directory string
-local function begin_and_show(directory)
-  child.lua(BEGIN_AND_SHOW, { directory })
+---@param git_options? table how the git home runs git
+local function begin_and_show(directory, git_options)
+  child.lua(BEGIN_AND_SHOW, { directory, git_options })
 end
 
 --- Makes the current window the one showing the child's buffer named
@@ -198,15 +200,16 @@ end
 ---
 ---@param name string
 ---@param before_beginning? string Lua run in the child before the session begins
+---@param git_options? table how the git home runs git
 ---@return string top
 ---@return string first
 ---@return string second
-local function session_with_two_commits(name, before_beginning)
+local function session_with_two_commits(name, before_beginning, git_options)
   local top = git_repo.create(name, { ['a.txt'] = { 'one' } })
   if before_beginning then
     child.lua(before_beginning)
   end
-  begin_and_show(top)
+  begin_and_show(top, git_options)
   expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, NO_COMMITS })
   git_repo.write(top, 'a.txt', { 'two' })
   local first = git_repo.commit_all(top, 'Change a')
@@ -289,6 +292,36 @@ T['the commits window']['has its cursor on Session work again when its buffer is
 
   expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  A b.txt' })
   eq(cursor_of(COMMITS), { 2, 0 })
+end
+
+T['the commits window']['keeps Session work selected when its buffer is made anew and git answers slower than the pause'] = function()
+  local flag = vim.fs.joinpath(git_repo.directory('filter-slow-anew-flag'), 'slow')
+  local stand_in = git_repo.script('filter-slow-anew-bin', 'git', {
+    ('if [ -e %s ]; then case " $* " in *" log "*) sleep 0.5 ;; esac; fi'):format(flag),
+    ('exec %s "$@"'):format(vim.fn.exepath('git')),
+  })
+  session_with_two_commits(
+    'filter-slow-anew',
+    QUIET_WATCH .. COUNT_GIT_CALLS,
+    { executable = stand_in }
+  )
+  vim.fn.writefile({}, flag)
+  local asked = child.lua_get('_G.git_asked')
+  child.cmd(('bwipeout! %d'):format(child.fn.bufnr(COMMITS)))
+
+  child.lua(
+    [[
+    require('aineo.changes').pane_buffers()
+    vim.cmd('belowright split')
+    vim.api.nvim_win_set_buf(0, vim.fn.bufnr(...))
+  ]],
+    { COMMITS }
+  )
+
+  git_repo.wait_until('the reads asked for since have answered', function()
+    return child.lua_get(('_G.git_asked > %d and _G.git_asked == _G.git_answered'):format(asked))
+  end)
+  eq({ lines_of(FILES)[1], cursor_of(COMMITS) }, { 'Files in: Session work', { 2, 0 } })
 end
 
 T['the commits window']['keeps the user’s line when the pane is shown again'] = function()
@@ -375,7 +408,37 @@ T['the filter']['is read after a pause, once, for the last of the lines the curs
   eq(child.lua_get('_G.file_reads'), { 'commit_files' })
 end
 
-T['the filter']['leaves the files window as it was until the pause ends'] = function()
+T['the filter']['restarts its pause at every move of the cursor, reading once after the last'] = function()
+  local _, first = session_with_two_commits('filter-restart', QUIET_WATCH .. COUNT_GIT_CALLS)
+  git_repo.wait_until('no read left', function()
+    return child.lua_get('_G.git_asked == _G.git_answered')
+  end)
+  child.lua(COUNT_FILE_READS)
+  enter_window_of(COMMITS)
+
+  child.type_keys(60, 'gg', 'j', 'j', 'j')
+
+  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Change a', '  M a.txt' })
+  eq(child.lua_get('_G.file_reads'), { 'commit_files' })
+end
+
+T['the filter']['failing to read the files of a commit says so under that commit’s own first line'] = function()
+  local stand_in = git_repo.script('filter-failed-commit-bin', 'git', {
+    'case " $* " in *" --format= --name-status "*) echo "cannot read this commit" >&2; exit 1 ;; esac',
+    ('exec %s "$@"'):format(vim.fn.exepath('git')),
+  })
+  local _, first = session_with_two_commits('filter-failed-commit', nil, { executable = stand_in })
+  enter_window_of(COMMITS)
+
+  go_to_line(4)
+
+  expect_lines(FILES, {
+    'Files in: ' .. first:sub(1, 7) .. ' Change a',
+    'The last refresh failed: cannot read this commit',
+  })
+end
+
+T['the filter']['keeps the first line and the list until the new list arrives'] = function()
   session_with_two_commits('filter-before-pause')
   enter_window_of(COMMITS)
 
