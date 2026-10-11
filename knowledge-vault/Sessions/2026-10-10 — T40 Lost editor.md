@@ -144,4 +144,15 @@ Fix-round mutants, each its literal edit (an uncommitted file), killed by an ass
 
 ## Commits
 
-Recorded after the merge.
+Recorded after the merge, by wave 9's closing knowledge pass. PR #150 merged by rebase on 2026-10-10 (03:18 UTC; 05:18 CEST), as `1a7eb83` … `0ed6681` (4 commits). The orchestrator verified the pull request's head `19dc971`, rebased on `dev` `a43dc48`: the whole suite `Fails (0)` in 5:00 (2422 cases in 73 groups), lint clean; four of the plan's mutants applied literally and killed by assertion: reports accepted for any session (1 failure in `tests/test_mcp_lost_editor.lua`), a live holder's lock taken (1 in `tests/test_mcp_processes.lua`), the exit guard dropped from the entry write, mutant 49 (1 in `tests/test_entry_claim.lua`), and `keep_with_directory` ignored (1 in `tests/test_entry_claim.lua`). Released in v0.2.18 (PR #151, `main` `e2d4252`).
+
+The first two are the packet's code, the next one its health-check fix and session note, the last the fix round's.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `c286d6e` | `1a7eb83` | Find a report's editor when the one Claude Code started in is gone |
+| `777965d` | `40958c3` | Let a Neovim claim a Claude session and list the editors that run |
+| `bbc6e67` | `d1a70ea` | Keep the health check off the MCP home and record T40's session |
+| `19dc971` | `0ed6681` | Close T40's review findings: exact sessions, kept reports, lock, tells |
+
+The `Branch` column is the pull request's own commits (`refs/pull/150/head`); the verified head `19dc971` is the last of them, rebased on `a43dc48`.
