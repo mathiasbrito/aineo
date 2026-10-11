@@ -205,3 +205,90 @@ from the buffer's lines, as `lua/aineo/claude/readiness.lua` reads the
 screen, an empty prompt with a placeholder and a prompt holding that text
 are the same line. The recorded idle prompts of 2.1.281
 (`permission-denied-2.1.281.screen`, `turn-2.1.281.screen`) show `❯` alone.
+
+P7 — what Lua can read of Claude Code's prompt (round 2, 2026-10-11)
+--------------------------------------------------------------------
+Script: `w11-probe-prompt.lua`, Neovim 0.12.5 headless. It replays Claude
+Code 2.1.281's own recordings from `tests/fixtures/claude/` into a terminal
+buffer (`nvim_open_term`) at 120x40. No `claude` runs.
+
+The raw bytes, read from the fixtures:
+  startup-2.1.281.bytes, the prompt line:
+    ESC[39m ❯ NBSP ESC[2m Try "fix lint errors"      (SGR 2 = faint)
+    and last of all ESC[22;1H ESC[20;3H ESC[?25h     (cursor row 20, column 3,
+                                                     right after "❯ ", shown)
+    The footer reads "⏸ manual mode on · ? for shortcuts · ← for agents".
+  draft-2.1.281.bytes, a two-line draft:
+    ESC[39m ❯ NBSP first line ESC[K  /  "  second line" ESC[K
+    and last of all ESC[20;14H ESC[?25h               (cursor at the end of
+                                                     "  second line")
+
+What Lua read from the replayed buffers:
+startup-2.1.281.bytes: prompt row 20: "❯ Try \"fix lint errors\""
+  Normal mode window cursor: { 1, 0 }
+  mode nt, window cursor in Terminal mode: { 1, 0 }
+  inspect_pos(row 20, byte 4): { extmarks = {}, semantic_tokens = 0, syntax = {}, treesitter = 0 }
+  inspect_pos(row 20, byte 8): { extmarks = {}, semantic_tokens = 0, syntax = {}, treesitter = 0 }
+draft-2.1.281.bytes: prompt row 19: "❯ first line"
+  Normal mode window cursor: { 1, 0 }
+  mode nt, window cursor in Terminal mode: { 1, 0 }
+  inspect_pos(row 19, byte 4): { extmarks = {}, semantic_tokens = 0, syntax = {}, treesitter = 0 }
+  inspect_pos(row 19, byte 8): { extmarks = {}, semantic_tokens = 0, syntax = {}, treesitter = 0 }
+
+So: the buffer's text holds the grey placeholder as plain text; Lua sees no
+cell attribute of a terminal buffer (no highlight, extmark or syntax item at
+the placeholder). `startinsert` from a `-l` script never reached Terminal
+mode (`nt`), so where Neovim puts the window's cursor in Terminal mode was
+not measured here.
+
+P8 — Claude Code's ways to list sessions (read, never run)
+---------------------------------------------------------
+Raw pages under `https://code.claude.com/docs/en/`, fetched 2026-10-11;
+`CHANGELOG.md` top entry `## 2.1.296`.
+
+sessions.md, *Resume a session*: "`claude --resume` | Opens the session
+  picker"; "`/resume` | Switches to a different session from inside an
+  active session".
+sessions.md, *Where the session picker looks*: "Sessions from the current
+  worktree, including background sessions, which are marked `bg` in the
+  list"; "Use `Ctrl+W` to widen to all worktrees of the repository or
+  `Ctrl+A` to widen to every project on this machine."
+sessions.md, *Resume a running background session*: "From inside a session:
+  `/resume` moves your current conversation to the background and attaches
+  this terminal to the running session".
+sessions.md, *Where transcripts are stored*: "The entry format is internal
+  to Claude Code and changes between versions, so scripts that parse these
+  files directly can break on any release."
+cli-reference.md, `--resume`: "Resume a specific session by ID or name, or
+  show an interactive picker to choose a session. [...] When you pass a
+  session ID, Claude Code searches the current project directory and its git
+  worktrees, then every other project on this machine."
+agent-view.md, *List sessions as JSON*: "`claude agents --json` prints active
+  sessions as a JSON array and exits: every live session, plus background
+  sessions that are still working or blocked even when their process has
+  exited. Add `--all` to also include completed background sessions, and
+  `--cwd <path>` to limit the list to sessions started under that
+  directory." Fields: `cwd`, `kind` (`interactive` or `background`),
+  `startedAt`; `id`, `state` (background); `pid`, `status` (`busy`,
+  `waiting`, `idle`) while alive; `waitingFor`; "`sessionId` is the full
+  session UUID, usable with `claude --resume`".
+agent-view.md, *Read session state from a script*: "`claude agents --json`
+  is the supported way to read session state from outside Claude Code".
+agent-view.md, agent view's list: "Interactive sessions you have open in
+  other terminals don't appear until you background them."
+CHANGELOG.md, 2.1.145: "Added `claude agents --json` to list live Claude
+  sessions as JSON for scripting (tmux-resurrect, status bars, session
+  pickers)".
+agent-sdk/typescript.md, `listSessions()`: "Discovers and lists past sessions
+  with light metadata. Filter by project directory or list sessions across
+  all projects." Options `dir`, `limit`, `includeWorktrees`; fields
+  `sessionId`, `summary`, `lastModified`, `customTitle`, `firstPrompt`,
+  `gitBranch`, `cwd`, `tag`, `createdAt`.
+agent-sdk/sessions.md: "Use them to build custom session pickers, cleanup
+  logic, or transcript viewers."
+interactive-mode.md, *Prompt suggestions*: "When you first open a session,
+  Claude Code shows a grayed-out example command in the prompt input [...]
+  It picks this from your project's git history"; "After Claude responds,
+  Claude Code can suggest your next prompt based on your conversation
+  history".
+No page read documents a session list in stream-json output or over MCP.
