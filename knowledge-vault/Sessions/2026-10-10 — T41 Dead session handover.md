@@ -111,4 +111,24 @@ The three reviews of PR #154 (attack, test integrity, records) and the orchestra
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by wave 9's closing knowledge pass. PR #154 merged by rebase on 2026-10-11 (09:41 UTC; 11:41 CEST), as `445b116` … `536a694` (13 commits). The orchestrator verified the pull request's head `5a70be2`, rebased on `dev` `a9c3b5f`: the whole suite `Fails (0)` in 5:15 (2494 cases in 74 groups), lint clean. Two of the plan's mutants killed by assertion, A90's own-file check dropped (1 failure in `tests/test_entry_session_handover.lua`) and the claim always released (1 in the same file); the `source == 'startup'` condition dropped (attack probe P1) survives `tests/test_entry_session_handover.lua` and is equivalent in practice, since T35 reports the fallback as a switch from the new id to the dead one, `startup`, in the same tick as `on_terminal_replaced`, so no other switch can carry the fresh id first. Released in v0.2.19 (PR #155, `main` `befe50b`).
+
+The first three are the Report's, Input's and the changes home's hand-overs; then a pin, the wiring at the fallback, a pin, the help and the session note (the packet, head `5ea7867`); then the fix round's four commits and its note.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `53b2ec3` | `445b116` | Hand a dead session's Report records to its replacement |
+| `207fafc` | `1efea8a` | Hand a dead session's Input draft to its replacement |
+| `0aea98e` | `2ea757f` | Hand a dead session's changes base and saves to its replacement |
+| `2581b66` | `bbc1a2a` | Pin that a hand-over leaves the follow's table alone |
+| `59fc2d2` | `3758c6d` | Hand a dead session to its replacement at T19's fallback |
+| `87eb1a5` | `f2653a4` | Pin that a hand-over under another claim leaves the entry alone |
+| `0473de7` | `312c922` | Say in the help that a dead session hands over to its replacement |
+| `5ea7867` | `ac079c2` | Record T41's session: a dead session handed to its replacement |
+| `5ad399d` | `38ddce2` | Keep a claimed-over report with its session once it has records |
+| `150144f` | `2645455` | Move a handed-over session's files by one rename |
+| `716bbeb` | `9cbd006` | Pin what PR #154's test review found unpinned |
+| `a3943f9` | `c92b41e` | Correct the composition root's docstrings for the hand-over |
+| `5a70be2` | `536a694` | Record T41's fix round in its session note |
+
+The `Branch` column is the pull request's own commits (`refs/pull/154/head`); the verified head `5a70be2` is the last of them, rebased on `a9c3b5f`.

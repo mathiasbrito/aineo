@@ -1,0 +1,294 @@
+Wave 11 planning probes — 2026-10-11
+====================================
+
+Host: macOS arm64, Neovim 0.12.5 (NVIM v0.12.5), git 2.50.1 (Apple Git-155).
+Code: `origin/dev` `e6a0295` (wave 10 planned; T43 in flight, not merged).
+Every probe ran headless, in scratch repositories under the checkout's
+ignored `.tests/`, git with no global or system configuration, Neovim with
+no user configuration and its data, state, cache and log under `.tests/`
+(P1, P3) or under `make test_file`'s own isolation (P2). The real `claude`
+was never run: P2 runs the suites' fake `claude`.
+
+P1 — Enter on every file line, through the changes home alone
+-------------------------------------------------------------
+Script: `w11-probe-names.lua`. The session's base holds `has space.txt` and
+`old name.md`; after it: a commit adding
+`knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md`,
+`has space.txt` modified, `old name.md` renamed (staged) to `new name.md`,
+untracked `untracked it's.md`, `tab<TAB>here.txt`, `say "hi".txt`, `café.md`,
+`plain.md`, `star*.md`, `[x].md`, and committed then edited
+`committed [y].md` and `committed y.md`.
+
+Every line's Enter read and showed its diff (the probe's own `show_diff`
+opened a split per diff; its last two splits ran out of room, E36, a fault of
+the probe's split, not of a name):
+
+files window:
+   1 |  A committed [y].md|
+   2 |  A committed y.md|
+   3 |  M has space.txt|
+   4 |  A knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md|
+   5 |  R old name.md → new name.md|
+   6 |  ? [x].md|
+   7 |  ? café.md|
+   8 |  ? plain.md|
+   9 |  ? "say \"hi\".txt"|
+  10 |  ? star*.md|
+  11 |  ? "tab\there.txt"|
+  12 |  ? untracked it's.md|
+Enter, line 1  -> aineo://diff/committed [y].md — diff of that file alone
+Enter, line 3  -> aineo://diff/has space.txt — "-base" "+changed"
+Enter, line 4  -> aineo://diff/knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md — "+idea"
+Enter, line 5  -> aineo://diff/new name.md — "rename from old name.md" "rename to new name.md"
+Enter, line 6  -> aineo://diff/[x].md — "+new"
+Enter, line 7  -> aineo://diff/café.md — "+new"
+Enter, line 9  -> aineo://diff/"say \"hi\".txt" — "+new"
+Enter, line 10 -> aineo://diff/star*.md — "+new"
+Enter, lines 11, 12 -> diff read; the probe's split refused it (E36)
+
+P2 — Enter through the whole plugin (`:Aineo open`, fake `claude`, `\pc`)
+-------------------------------------------------------------------------
+Script: `w11-probe-entry.lua`, run as a test file from `.tests/` with
+`make test_file`. Each case commits one file after the session's base, edits
+it, shows the changes pane with `\pc`, puts the cursor on the file's line and
+presses Enter. The last two cases add the file in a second worktree of the
+repository (D33's section). Every case: the diff in the middle column, the
+cursor in it (D46), nothing told. Output, the checkout's path written
+`<checkout>`:
+
+[space] files={ "  A has space.txt" }
+  windows={ "terminal", "aineo://diff/has space.txt", "aineo://changes-files", "aineo://changes-commits" }
+  current="aineo://diff/has space.txt"
+  current lines={ "diff --git a/has space.txt b/has space.txt", "new file mode 100644", "index 0000000000000000000000000000000000000000..a1925b9e2ce00a56dad247f90deaea11c2d96902", "--- /dev/null", "+++ b/has space.txt\t", "@@ -0,0 +1,2 @@", "+committed", "+edited" }
+  messages={}
+[glob] files={ "  A [x].md" }
+  windows={ "terminal", "aineo://diff/[x].md", "aineo://changes-files", "aineo://changes-commits" }
+  current="aineo://diff/[x].md"
+  current lines={ "diff --git a/[x].md b/[x].md", "new file mode 100644", "index 0000000000000000000000000000000000000000..a1925b9e2ce00a56dad247f90deaea11c2d96902", "--- /dev/null", "+++ b/[x].md", "@@ -0,0 +1,2 @@", "+committed", "+edited" }
+  messages={}
+[quote] files={ '  A "say \\"hi\\".txt"' }
+  windows={ "terminal", 'aineo://diff/"say \\"hi\\".txt"', "aineo://changes-files", "aineo://changes-commits" }
+  current='aineo://diff/"say \\"hi\\".txt"'
+  current lines={ 'diff --git "a/say \\"hi\\".txt" "b/say \\"hi\\".txt"', "new file mode 100644", "index 0000000000000000000000000000000000000000..a1925b9e2ce00a56dad247f90deaea11c2d96902", "--- /dev/null", '+++ "b/say \\"hi\\".txt"\t', "@@ -0,0 +1,2 @@", "+committed", "+edited" }
+  messages={}
+[control] files={ "  A plain.md" }
+  windows={ "terminal", "aineo://diff/plain.md", "aineo://changes-files", "aineo://changes-commits" }
+  current="aineo://diff/plain.md"
+  current lines={ "diff --git a/plain.md b/plain.md", "new file mode 100644", "index 0000000000000000000000000000000000000000..a1925b9e2ce00a56dad247f90deaea11c2d96902", "--- /dev/null", "+++ b/plain.md", "@@ -0,0 +1,2 @@", "+committed", "+edited" }
+  messages={}
+[accent] files={ "  A café.md" }
+  windows={ "terminal", "aineo://diff/café.md", "aineo://changes-files", "aineo://changes-commits" }
+  current="aineo://diff/café.md"
+  current lines={ "diff --git a/café.md b/café.md", "new file mode 100644", "index 0000000000000000000000000000000000000000..a1925b9e2ce00a56dad247f90deaea11c2d96902", "--- /dev/null", "+++ b/café.md", "@@ -0,0 +1,2 @@", "+committed", "+edited" }
+  messages={}
+[tab] files={ '  A "tab\\there.txt"' }
+  windows={ "terminal", 'aineo://diff/"tab\\there.txt"', "aineo://changes-files", "aineo://changes-commits" }
+  current='aineo://diff/"tab\\there.txt"'
+  current lines={ 'diff --git "a/tab\\there.txt" "b/tab\\there.txt"', "new file mode 100644", "index 0000000000000000000000000000000000000000..a1925b9e2ce00a56dad247f90deaea11c2d96902", "--- /dev/null", '+++ "b/tab\\there.txt"', "@@ -0,0 +1,2 @@", "+committed", "+edited" }
+  messages={}
+[idea] files={ "  A knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md" }
+  windows={ "terminal", "aineo://diff/knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md", "aineo://changes-files", "aineo://changes-commits" }
+  current="aineo://diff/knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md"
+  current lines={ "diff --git a/knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md b/knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md", "new file mode 100644", "index 0000000000000000000000000000000000000000..a1925b9e2ce00a56dad247f90deaea11c2d96902", "--- /dev/null", "+++ b/knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md\t", "@@ -0,0 +1,2 @@", "+committed", "+edited" }
+  messages={}
+[worktree idea] files={ "No files changed on this session", "Worktree repo-agent (agent)", "  A knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md" }
+  windows={ "terminal", "aineo://worktree<checkout>/.tests/fixtures/git-changespane-w11-worktree-idea/repo-agent//diff/knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md", "aineo://changes-files", "aineo://changes-commits" }
+  current lines={ "diff --git a/knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md b/knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md", "new file mode 100644", "index 0000000000000000000000000000000000000000..d0fe82252177cb2caf3563f8190643a292c2caa1", "--- /dev/null", "+++ b/knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md\t", "@@ -0,0 +1 @@", "+committed" }
+  messages={}
+[worktree control] files={ "No files changed on this session", "Worktree repo-agent (agent)", "  A plain.md" }
+  windows={ "terminal", "aineo://worktree<checkout>/.tests/fixtures/git-changespane-w11-worktree-control/repo-agent//diff/plain.md", "aineo://changes-files", "aineo://changes-commits" }
+  current lines={ "diff --git a/plain.md b/plain.md", "new file mode 100644", "index 0000000000000000000000000000000000000000..d0fe82252177cb2caf3563f8190643a292c2caa1", "--- /dev/null", "+++ b/plain.md", "@@ -0,0 +1 @@", "+committed" }
+  messages={}
+Total number of cases: 9
+Total number of groups: 1
+.tests/w11-probe/test_w11_probe_entry.lua: ooooooooo
+Fails (0) and Notes (0)
+
+P3 — Vim's own `gf` on a files-window line
+------------------------------------------
+Script: `w11-probe-gf.lua`. The working directory is the repository's top
+level, as Claude Code's is. `gf` at the path's first byte and near its end:
+
+'isfname' = @,48-57,/,.,-,_,+,,,#,$,%,~,=
+|  ? café.md| cursor at byte 4: <cfile>="café.md" gf -> opened café.md
+|  ? dir/sub.md| cursor at byte 4: <cfile>="dir/sub.md" gf -> opened dir/sub.md
+|  ? has space.txt| cursor at byte 4: <cfile>="has" gf -> E447: Can't find file "has" in path
+|  ? has space.txt| cursor at byte 13: <cfile>="space.txt" gf -> E447: Can't find file "space.txt" in path
+|  ? knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md| cursor at byte 4: <cfile>="knowledge-vault/Ideas/The" gf -> E447: Can't find file "knowledge-vault/Ideas/The" in path
+|  ? knowledge-vault/Ideas/The changes pane follows the agents' worktrees.md| cursor at byte 71: <cfile>="worktrees.md" gf -> E447: Can't find file "worktrees.md" in path
+|  ? plain.md| cursor at byte 4: <cfile>="plain.md" gf -> opened plain.md
+
+(E447 lines shortened: Neovim prefixes `[string "vim/_core/editor"]:353:
+nvim_exec2(), line 1: Vim(normal):`.) A space and `'` are outside the
+default 'isfname', so `<cfile>` stops at them. `gf` opened the file in the
+window it was pressed in — here the files window, no layout being open.
+A name the pane quotes (a tab, a double quote) is shown in C quotes, which
+`gf` cannot read back either.
+
+P4 — glob characters in a pathspec
+----------------------------------
+In P1's repository, plain `git diff --name-only <base> -- 'committed [y].md'`
+lists both `committed [y].md` and `committed y.md`; `git show --name-only
+--format= <decoy commit> -- 'committed [y].md'` lists `committed y.md`. The
+git home's reads do not: `lua/aineo/git/process.lua` gives every git it runs
+`GIT_LITERAL_PATHSPECS=1` (line 41), so P1's Enter on line 1 showed that file
+alone. A new read that runs through the home's runner inherits it.
+
+P5 — what `←` does in Claude Code (read, never run)
+---------------------------------------------------
+The installed Claude Code is 2.1.296 (the version directory the `claude`
+link on the host's PATH resolves to; `claude` itself was not run). Read raw:
+`https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md`
+(top entry `## 2.1.296`) and `https://code.claude.com/docs/en/agent-view.md`,
+`https://code.claude.com/docs/en/interactive-mode.md`, fetched 2026-10-11.
+
+agent-view.md, *Switch sessions without leaving the terminal*:
+  "In a session running in the foreground, one you started in the terminal
+  rather than attached to from agent view, pressing `←` on an empty prompt
+  backgrounds it and opens agent view with that row selected, so you can
+  switch sessions without leaving the terminal."
+  "If you press `←` right after you delete the last of the prompt's text or
+  move through prompt history, Claude Code asks you to confirm: the first
+  press shows `Press ← again to open agents` [...] and the second press
+  switches."
+  "Press `Esc` to undo the switch and return to the conversation."
+  "You type into the prompt input: Claude Code cancels the switch [...]
+  `Backgrounding cancelled — you have unsent text in the input.`"
+  "You can turn this shortcut off for foreground sessions with the
+  [`leftArrowOpensAgents`] setting in `/config`."
+agent-view.md, *What carries over when you background*:
+  "Backgrounding starts a fresh process that resumes from the saved
+  conversation [...]"
+  "Configuration flags from the original launch carry through to the
+  backgrounded session [...]: `--mcp-config` and `--strict-mcp-config`,
+  `--settings`, `--setting-sources`, `--add-dir`, `--plugin-dir`,
+  `--fallback-model`, `--allow-dangerously-skip-permissions`" — the list
+  names neither `--append-system-prompt` nor `--allowedTools`, which aineo
+  passes (C3, D11), nor the environment (`AINEO_CHILD`, the editor's
+  address, C3).
+agent-view.md, the walkthrough: "Press `Enter` or `→` on a row to attach
+  [...] The session takes over the terminal as a full interactive Claude
+  Code session. Press `←` on an empty prompt to detach and return to the
+  table." *The supervisor process*: "Each session is its own Claude Code
+  process under the supervisor". "An attached session doesn't report its
+  status to your terminal."
+interactive-mode.md, *Vim editor mode*: "`←` on an empty prompt opens
+  [agent view] from NORMAL mode as well as INSERT".
+interactive-mode.md, keys: `Ctrl+C` — "If nothing is running, the first
+  press clears the prompt input and a second press exits Claude Code";
+  `Esc` + `Esc` — "When the prompt input contains text, double `Esc` clears
+  it [...] When the input is empty, double `Esc` opens the rewind menu";
+  `Ctrl+U` — "Delete from cursor to line start | Stores deleted text for
+  pasting. Repeat to clear across lines in multiline input"; `Ctrl+E` —
+  "Move cursor to end of current line".
+CHANGELOG.md: 2.1.196 "Changed opening the agents view from a foreground
+  session to require a single `←` press instead of two"; 2.1.290 "Changed
+  the "Press ← again" confirm on a just-cleared prompt: a second ← no longer
+  has to wait a second before it switches"; 2.1.162 "Fixed backgrounding a
+  session with ← silently losing the conversation when the background
+  service cannot start"; 2.1.141 "Empty idle background sessions left over
+  from `←` are now automatically retired by the daemon after 5 minutes".
+
+So `←` on an empty prompt does not open a picker inside the running
+session: it moves the conversation into a new process under Claude Code's
+background service and turns aineo's terminal into agent view, a list of
+every background session across projects. What aineo's report tool, its
+session hooks and its stop on quit (C3, C5, D36) do for a conversation
+moved so was not measured.
+
+P6 — an empty prompt is not readable from the terminal's text
+-------------------------------------------------------------
+`tests/fixtures/claude/startup-2.1.281.bytes`, Claude Code's own recorded
+startup, draws `Try "fix lint errors"` in the empty prompt's line, after
+`❯`: a placeholder whose dimness is a terminal attribute, not text. Read
+from the buffer's lines, as `lua/aineo/claude/readiness.lua` reads the
+screen, an empty prompt with a placeholder and a prompt holding that text
+are the same line. The recorded idle prompts of 2.1.281
+(`permission-denied-2.1.281.screen`, `turn-2.1.281.screen`) show `❯` alone.
+
+P7 — what Lua can read of Claude Code's prompt (round 2, 2026-10-11)
+--------------------------------------------------------------------
+Script: `w11-probe-prompt.lua`, Neovim 0.12.5 headless. It replays Claude
+Code 2.1.281's own recordings from `tests/fixtures/claude/` into a terminal
+buffer (`nvim_open_term`) at 120x40. No `claude` runs.
+
+The raw bytes, read from the fixtures:
+  startup-2.1.281.bytes, the prompt line:
+    ESC[39m ❯ NBSP ESC[2m Try "fix lint errors"      (SGR 2 = faint)
+    and last of all ESC[22;1H ESC[20;3H ESC[?25h     (cursor row 20, column 3,
+                                                     right after "❯ ", shown)
+    The footer reads "⏸ manual mode on · ? for shortcuts · ← for agents".
+  draft-2.1.281.bytes, a two-line draft:
+    ESC[39m ❯ NBSP first line ESC[K  /  "  second line" ESC[K
+    and last of all ESC[20;14H ESC[?25h               (cursor at the end of
+                                                     "  second line")
+
+What Lua read from the replayed buffers:
+startup-2.1.281.bytes: prompt row 20: "❯ Try \"fix lint errors\""
+  Normal mode window cursor: { 1, 0 }
+  mode nt, window cursor in Terminal mode: { 1, 0 }
+  inspect_pos(row 20, byte 4): { extmarks = {}, semantic_tokens = 0, syntax = {}, treesitter = 0 }
+  inspect_pos(row 20, byte 8): { extmarks = {}, semantic_tokens = 0, syntax = {}, treesitter = 0 }
+draft-2.1.281.bytes: prompt row 19: "❯ first line"
+  Normal mode window cursor: { 1, 0 }
+  mode nt, window cursor in Terminal mode: { 1, 0 }
+  inspect_pos(row 19, byte 4): { extmarks = {}, semantic_tokens = 0, syntax = {}, treesitter = 0 }
+  inspect_pos(row 19, byte 8): { extmarks = {}, semantic_tokens = 0, syntax = {}, treesitter = 0 }
+
+So: the buffer's text holds the grey placeholder as plain text; Lua sees no
+cell attribute of a terminal buffer (no highlight, extmark or syntax item at
+the placeholder). `startinsert` from a `-l` script never reached Terminal
+mode (`nt`), so where Neovim puts the window's cursor in Terminal mode was
+not measured here.
+
+P8 — Claude Code's ways to list sessions (read, never run)
+---------------------------------------------------------
+Raw pages under `https://code.claude.com/docs/en/`, fetched 2026-10-11;
+`CHANGELOG.md` top entry `## 2.1.296`.
+
+sessions.md, *Resume a session*: "`claude --resume` | Opens the session
+  picker"; "`/resume` | Switches to a different session from inside an
+  active session".
+sessions.md, *Where the session picker looks*: "Sessions from the current
+  worktree, including background sessions, which are marked `bg` in the
+  list"; "Use `Ctrl+W` to widen to all worktrees of the repository or
+  `Ctrl+A` to widen to every project on this machine."
+sessions.md, *Resume a running background session*: "From inside a session:
+  `/resume` moves your current conversation to the background and attaches
+  this terminal to the running session".
+sessions.md, *Where transcripts are stored*: "The entry format is internal
+  to Claude Code and changes between versions, so scripts that parse these
+  files directly can break on any release."
+cli-reference.md, `--resume`: "Resume a specific session by ID or name, or
+  show an interactive picker to choose a session. [...] When you pass a
+  session ID, Claude Code searches the current project directory and its git
+  worktrees, then every other project on this machine."
+agent-view.md, *List sessions as JSON*: "`claude agents --json` prints active
+  sessions as a JSON array and exits: every live session, plus background
+  sessions that are still working or blocked even when their process has
+  exited. Add `--all` to also include completed background sessions, and
+  `--cwd <path>` to limit the list to sessions started under that
+  directory." Fields: `cwd`, `kind` (`interactive` or `background`),
+  `startedAt`; `id`, `state` (background); `pid`, `status` (`busy`,
+  `waiting`, `idle`) while alive; `waitingFor`; "`sessionId` is the full
+  session UUID, usable with `claude --resume`".
+agent-view.md, *Read session state from a script*: "`claude agents --json`
+  is the supported way to read session state from outside Claude Code".
+agent-view.md, agent view's list: "Interactive sessions you have open in
+  other terminals don't appear until you background them."
+CHANGELOG.md, 2.1.145: "Added `claude agents --json` to list live Claude
+  sessions as JSON for scripting (tmux-resurrect, status bars, session
+  pickers)".
+agent-sdk/typescript.md, `listSessions()`: "Discovers and lists past sessions
+  with light metadata. Filter by project directory or list sessions across
+  all projects." Options `dir`, `limit`, `includeWorktrees`; fields
+  `sessionId`, `summary`, `lastModified`, `customTitle`, `firstPrompt`,
+  `gitBranch`, `cwd`, `tag`, `createdAt`.
+agent-sdk/sessions.md: "Use them to build custom session pickers, cleanup
+  logic, or transcript viewers."
+interactive-mode.md, *Prompt suggestions*: "When you first open a session,
+  Claude Code shows a grayed-out example command in the prompt input [...]
+  It picks this from your project's git history"; "After Claude responds,
+  Claude Code can suggest your next prompt based on your conversation
+  history".
+No page read documents a session list in stream-json output or over MCP.

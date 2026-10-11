@@ -42,7 +42,11 @@ The 66 test files that load `fixture.lua` or `make.lua`, directly or through `gi
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by wave 9's closing knowledge pass. PR #152 merged by rebase on 2026-10-10 (07:15 UTC; 09:15 CEST), as `81846cb` (1 commit), a test-only packet (D28). The orchestrator reviewed its diff itself, with no review agent (A92). Its whole suite `Fails (0)` in 4:56 (2427 cases in 73 groups, 2422 and the 5 cases of this packet); the mutant with the retry removed killed, 4 failures in the orchestrator's own run of `tests/test_runner_fixtures.lua`. No release of its own, since it changes nothing outside `tests/`; it shipped in v0.2.19.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `6360970` | `81846cb` | Retry the test helpers' mkdir when another Neovim wins the race |
 
 ## Open threads
 

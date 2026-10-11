@@ -39,9 +39,11 @@ local UNIFIED_DIFF = {
 --- The options that make `git show` print a commit's header in git's
 --- default format whatever the user's settings: the medium format, the
 --- whole id, no branch names or notes, the default date, the message in
---- UTF-8, no signature check, and a first commit's diff shown in full.
+--- UTF-8, no signature check, a first commit's diff shown in full, and a
+--- merge's diff taken against its first parent: what the merge brought in.
 local COMMIT_HEADER = {
   '--root',
+  '--diff-merges=first-parent',
   '--pretty=medium',
   '--no-abbrev-commit',
   '--no-decorate',
@@ -146,15 +148,16 @@ function M.file_diff(run, found, base, change, done)
   )
 end
 
---- Gives the unified diff of the commit `commit` in `found`, after its
---- header, as `git show` gives it in its default format, and calls
---- `done(nil, diff)`, or `done(failure)`.
+--- Gives the commit `commit` in `found`, after its header, as `git show`
+--- gives it in its default format, limited to `paths` or, when there are
+--- none, whole, and calls `done(nil, diff)`, or `done(failure)`.
 ---
 ---@param run aineo.git.Run
 ---@param found aineo.git.Repository
 ---@param commit string
+---@param paths string[]
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
-function M.commit_diff(run, found, commit, done)
+local function show_commit(run, found, commit, paths, done)
   run(
     {
       directory = found.top,
@@ -163,10 +166,191 @@ function M.commit_diff(run, found, commit, done)
         COMMIT_HEADER,
         UNIFIED_DIFF,
         { '--end-of-options', commit, '--' },
+        paths,
       }),
     },
     process.or_fail(done, function(output)
       done(nil, output.stdout)
+    end)
+  )
+end
+
+--- Gives the unified diff of the commit `commit` in `found`, after its
+--- header, as `git show` gives it in its default format — a merge's against
+--- its first parent — and calls `done(nil, diff)`, or `done(failure)`.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param commit string
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+function M.commit_diff(run, found, commit, done)
+  show_commit(run, found, commit, {}, done)
+end
+
+--- Gives the commit `commit` in `found`, after its header, as
+--- `M.commit_diff()` does, limited to the file `change` names: a renamed one
+--- asked with both its paths, since git shows the rename only then. Calls
+--- `done(nil, diff)`, or `done(failure)`.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param commit string
+---@param change aineo.git.Change one of the changes `changes.commit_files()` gave
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+function M.commit_file_diff(run, found, commit, change, done)
+  local paths = change.kind == 'renamed' and { change.old_path, change.path } or { change.path }
+  show_commit(run, found, commit, paths, done)
+end
+
+--- Gives the unified diff of the file `change` names in `found`, from
+--- `HEAD` as it is now to the working tree, as `M.file_diff()` gives it from
+--- a base, and calls `done(nil, diff)`, or `done(failure)`. Before the first
+--- commit the file is wholly added.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param change aineo.git.Change
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+function M.uncommitted_file_diff(run, found, change, done)
+  repository.read_head(
+    run,
+    found.top,
+    process.or_fail(done, function(head)
+      M.file_diff(run, found, head, change, done)
+    end)
+  )
+end
+
+--- The files `git ls-files --others -z` gave as `output`, less the
+--- directories it names, which end in a slash: an untracked repository
+--- with no commit yet, which git cannot enter as to be added.
+---
+---@param output string
+---@return string[]
+local function untracked_files(output)
+  return vim.tbl_filter(function(path)
+    return not vim.endswith(path, '/')
+  end, vim.split(output, '\0', { plain = true, trimempty = true }))
+end
+
+--- Enters `paths`, files of `found`, in the index `environment` names as to
+--- be added (`git add --intent-to-add`), and calls `done(nil, output)`, or
+--- `done(failure)`. The paths go to git in a file beside that index, NUL
+--- separated and removed once git has run, so that their number is not
+--- bounded by the length of a command line.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param environment table<string, string>
+---@param paths string[]
+---@param done fun(failure: aineo.git.Failure|nil, output: aineo.git.Output|nil)
+local function enter_as_to_be_added(run, found, environment, paths, done)
+  local list = environment.GIT_INDEX_FILE .. '.untracked'
+  local file, opening_failure = io.open(list, 'wb')
+  if not file then
+    done({ reason = 'failed', message = 'cannot write the list of new files: ' .. opening_failure })
+    return
+  end
+  file:write(table.concat(paths, '\0'), '\0')
+  file:close()
+  run({
+    directory = found.top,
+    arguments = {
+      'add',
+      '--intent-to-add',
+      '--pathspec-from-file=' .. list,
+      '--pathspec-file-nul',
+    },
+    environment = environment,
+  }, function(...)
+    os.remove(list)
+    done(...)
+  end)
+end
+
+--- Gives the diff of every file of `found` from `tree_ish` to the working
+--- tree, the untracked files wholly added: they are entered in a private
+--- copy of the index as to be added (`enter_as_to_be_added()`), so that the
+--- diff shows them, and the repository's own index and lock are never
+--- touched (`private_index`). Calls `done(nil, output)`, or `done(failure)`.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param tree_ish string
+---@param done fun(failure: aineo.git.Failure|nil, output: aineo.git.Output|nil)
+local function whole_diff(run, found, tree_ish, done)
+  private_index.with_private_index(found.git_directory, function(environment, finish)
+    local function diff_from_tree()
+      run({
+        directory = found.top,
+        arguments = joined({
+          { 'diff' },
+          UNIFIED_DIFF,
+          { '--end-of-options', tree_ish, '--' },
+        }),
+        environment = environment,
+      }, finish)
+    end
+    run(
+      {
+        directory = found.top,
+        arguments = { 'ls-files', '--others', '--exclude-standard', '-z' },
+        environment = environment,
+      },
+      process.or_fail(finish, function(untracked)
+        local paths = untracked_files(untracked.stdout)
+        if #paths == 0 then
+          diff_from_tree()
+          return
+        end
+        enter_as_to_be_added(
+          run,
+          found,
+          environment,
+          paths,
+          process.or_fail(finish, diff_from_tree)
+        )
+      end)
+    )
+  end, done)
+end
+
+--- Gives the unified diff of every file of `found` from the commit `base` to
+--- the working tree, the untracked files the ignore rules leave in wholly
+--- added, and calls `done(nil, diff)`, or `done(failure)`.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param base string|nil the full id of the commit the diff runs from; nil runs it from nothing
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+function M.diff_since(run, found, base, done)
+  local give_diff = process.or_fail(done, function(output)
+    done(nil, output.stdout)
+  end)
+  repository.comparison_base(
+    run,
+    found.top,
+    base,
+    process.or_fail(done, function(tree_ish)
+      whole_diff(run, found, tree_ish, give_diff)
+    end)
+  )
+end
+
+--- Gives the unified diff of every file of `found` from `HEAD` as it is now
+--- to the working tree, as `M.diff_since()` gives it from a base, and calls
+--- `done(nil, diff)`, or `done(failure)`. Before the first commit every file
+--- is wholly added.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+function M.uncommitted_diff(run, found, done)
+  repository.read_head(
+    run,
+    found.top,
+    process.or_fail(done, function(head)
+      M.diff_since(run, found, head, done)
     end)
   )
 end

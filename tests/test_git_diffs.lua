@@ -372,6 +372,337 @@ T['a commit’s diff']['of a commit named like an option is refused, and writes 
   }, { reason = 'failed', beside = { 'repo' } })
 end
 
+T['a commit’s diff']['of a merge is against its first parent: what the merge brought in'] = function()
+  local top = git_repo.create('diffs-commit-merge', { ['a.txt'] = { 'a' } })
+  git_repo.git(top, { 'switch', '--quiet', '--create', 'side' })
+  git_repo.write(top, 'side.txt', { 'side' })
+  git_repo.commit_all(top, 'On the side')
+  git_repo.git(top, { 'switch', '--quiet', '-' })
+  git_repo.write(top, 'here.txt', { 'here' })
+  git_repo.commit_all(top, 'Here')
+  git_repo.git(top, { 'merge', '--quiet', '--no-ff', '--message=Merge side', 'side' })
+  local merge = git_repo.git(top, { 'rev-parse', 'HEAD' })
+
+  local seen = child.lua(COMMIT_DIFF, { top, merge })
+
+  eq(vim.list_slice(vim.split(seen.result, '\n'), 8), {
+    'diff --git a/side.txt b/side.txt',
+    'new file mode 100644',
+    ('index %s..%s'):format(('0'):rep(40), blob_on_disk(top, 'side.txt')),
+    '--- /dev/null',
+    '+++ b/side.txt',
+    '@@ -0,0 +1 @@',
+    '+side',
+    '',
+  })
+end
+
+--- The Lua that asks the git home in the child for the repository of the
+--- directory `...`, then for the diff there of the file `change` in the
+--- commit `commit`, and returns what `_G.await` saw of the second.
+local COMMIT_FILE_DIFF = [[
+  local directory, commit, change = ...
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end)
+  return _G.await(function(done)
+    git.commit_file_diff(found.result, commit, change, done)
+  end)
+]]
+
+T['a file’s diff in a commit'] = MiniTest.new_set()
+
+T['a file’s diff in a commit']['comes with the commit’s header and that file’s change alone'] = function()
+  local top, base =
+    git_repo.create('diffs-commit-file', { ['a.txt'] = { 'a' }, ['b.txt'] = { 'b' } })
+  git_repo.write(top, 'a.txt', { 'a, changed' })
+  git_repo.write(top, 'b.txt', { 'b, changed' })
+  git_repo.git(top, { 'add', '--all' })
+  git_repo.git(top, {
+    'commit',
+    '--quiet',
+    '--date=2026-09-27T12:00:00+02:00',
+    '--message=Change both',
+  })
+  local commit = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  git_repo.write(top, 'a.txt', { 'a, changed again' })
+
+  local seen = child.lua(COMMIT_FILE_DIFF, { top, commit, { path = 'a.txt', kind = 'modified' } })
+
+  eq(
+    seen.result,
+    table.concat({
+      'commit ' .. commit,
+      'Author: aineo tests <tests@aineo.invalid>',
+      'Date:   Sun Sep 27 12:00:00 2026 +0200',
+      '',
+      '    Change both',
+      '',
+      'diff --git a/a.txt b/a.txt',
+      ('index %s..%s 100644'):format(
+        git_repo.git(top, { 'rev-parse', base .. ':a.txt' }),
+        git_repo.git(top, { 'rev-parse', commit .. ':a.txt' })
+      ),
+      '--- a/a.txt',
+      '+++ b/a.txt',
+      '@@ -1 +1 @@',
+      '-a',
+      '+a, changed',
+      '',
+    }, '\n')
+  )
+end
+
+T['a file’s diff in a commit']['of a renamed file is its rename, asked with both paths'] = function()
+  local top = git_repo.create('diffs-commit-rename', { ['old.txt'] = { '1', '2', '3', '4', '5' } })
+  git_repo.git(top, { 'mv', 'old.txt', 'new.txt' })
+  local commit = git_repo.commit_all(top, 'Move it')
+
+  local seen = child.lua(
+    COMMIT_FILE_DIFF,
+    { top, commit, { path = 'new.txt', kind = 'renamed', old_path = 'old.txt' } }
+  )
+
+  eq(vim.list_slice(vim.split(seen.result, '\n'), 7), {
+    'diff --git a/old.txt b/new.txt',
+    'similarity index 100%',
+    'rename from old.txt',
+    'rename to new.txt',
+    '',
+  })
+end
+
+T['a file’s diff in a commit']['of a merge is against the first parent'] = function()
+  local top = git_repo.create('diffs-commit-file-merge', { ['a.txt'] = { 'a' } })
+  git_repo.git(top, { 'switch', '--quiet', '--create', 'side' })
+  git_repo.write(top, 'side.txt', { 'side' })
+  git_repo.commit_all(top, 'On the side')
+  git_repo.git(top, { 'switch', '--quiet', '-' })
+  git_repo.write(top, 'here.txt', { 'here' })
+  git_repo.commit_all(top, 'Here')
+  git_repo.git(top, { 'merge', '--quiet', '--no-ff', '--message=Merge side', 'side' })
+  local merge = git_repo.git(top, { 'rev-parse', 'HEAD' })
+
+  local seen = child.lua(COMMIT_FILE_DIFF, { top, merge, { path = 'side.txt', kind = 'added' } })
+
+  eq(vim.list_slice(vim.split(seen.result, '\n'), 8), {
+    'diff --git a/side.txt b/side.txt',
+    'new file mode 100644',
+    ('index %s..%s'):format(('0'):rep(40), blob_on_disk(top, 'side.txt')),
+    '--- /dev/null',
+    '+++ b/side.txt',
+    '@@ -0,0 +1 @@',
+    '+side',
+    '',
+  })
+end
+
+T['a file’s diff in a commit']['of a commit named like an option is refused, and writes nothing'] = function()
+  local top = git_repo.create('diffs-commit-file-option', { ['a.txt'] = { 'a' } })
+  local written = vim.fs.joinpath(vim.fs.dirname(top), 'written')
+
+  local seen = child.lua(
+    COMMIT_FILE_DIFF,
+    { top, '--output=' .. written, { path = 'a.txt', kind = 'modified' } }
+  )
+
+  eq({
+    reason = vim.tbl_get(seen, 'failure', 'reason'),
+    beside = vim.fn.readdir(vim.fs.dirname(top)),
+  }, { reason = 'failed', beside = { 'repo' } })
+end
+
+--- The Lua that asks the git home in the child for the repository of the
+--- directory `...`, then for the diff there of the file `change` from
+--- `HEAD`, and returns what `_G.await` saw of the second.
+local UNCOMMITTED_FILE_DIFF = [[
+  local directory, change = ...
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end)
+  return _G.await(function(done)
+    git.uncommitted_file_diff(found.result, change, done)
+  end)
+]]
+
+T['an uncommitted file’s diff'] = MiniTest.new_set()
+
+T['an uncommitted file’s diff']['runs from HEAD, not from what the session began at'] = function()
+  local top = git_repo.create('diffs-uncommitted-file', { ['a.txt'] = { 'one', 'two', 'three' } })
+  git_repo.write(top, 'a.txt', { 'one', 'two, committed', 'three' })
+  git_repo.commit_all(top, 'Change two')
+  git_repo.write(top, 'a.txt', { 'one', 'two, committed', 'three, not staged' })
+
+  local seen = child.lua(UNCOMMITTED_FILE_DIFF, { top, { path = 'a.txt', kind = 'modified' } })
+
+  eq(vim.list_slice(vim.split(seen.result, '\n'), 5), {
+    '@@ -1,3 +1,3 @@',
+    ' one',
+    ' two, committed',
+    '-three',
+    '+three, not staged',
+    '',
+  })
+end
+
+T['an uncommitted file’s diff']['shows an untracked file wholly added'] = function()
+  local top = git_repo.create('diffs-uncommitted-untracked', { ['a.txt'] = { 'a' } })
+  git_repo.write(top, 'new.txt', { 'new' })
+
+  local seen = child.lua(UNCOMMITTED_FILE_DIFF, { top, { path = 'new.txt', kind = 'untracked' } })
+
+  eq(
+    vim.list_slice(vim.split(seen.result, '\n'), 4),
+    { '--- /dev/null', '+++ b/new.txt', '@@ -0,0 +1 @@', '+new', '' }
+  )
+end
+
+T['an uncommitted file’s diff']['shows a file wholly added before the first commit'] = function()
+  local top = git_repo.create_unborn('diffs-uncommitted-unborn')
+  git_repo.write(top, 'first.txt', { 'first' })
+  git_repo.git(top, { 'add', 'first.txt' })
+
+  local seen = child.lua(UNCOMMITTED_FILE_DIFF, { top, { path = 'first.txt', kind = 'added' } })
+
+  eq(
+    vim.list_slice(vim.split(seen.result, '\n'), 4),
+    { '--- /dev/null', '+++ b/first.txt', '@@ -0,0 +1 @@', '+first', '' }
+  )
+end
+
+--- The Lua that asks the git home in the child for the repository of the
+--- directory `...`, then for the whole diff there from `HEAD` (`uncommitted`
+--- true) or from the base that follows (`vim.NIL` for none) to the working
+--- tree, and returns what `_G.await` saw of the second.
+local WHOLE_DIFF = [[
+  local directory, uncommitted, base, options = ...
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end)
+  return _G.await(function(done)
+    if uncommitted then
+      git.uncommitted_diff(found.result, done, options)
+    else
+      git.diff_since(found.result, base ~= vim.NIL and base or nil, done, options)
+    end
+  end)
+]]
+
+--- The paths of the files a unified diff names, in its order.
+---
+---@param diff string|nil no file when the diff could not be read
+---@return string[]
+local function files_of(diff)
+  local files = {}
+  for path in (diff or ''):gmatch('diff %-%-git a/[^\n]- b/([^\n]*)') do
+    table.insert(files, path)
+  end
+  return files
+end
+
+T['the whole diff'] = MiniTest.new_set()
+
+T['the whole diff']['from HEAD holds every uncommitted file, the untracked ones too'] = function()
+  local top =
+    git_repo.create('diffs-whole-uncommitted', { ['a.txt'] = { 'a' }, ['b.txt'] = { 'b' } })
+  git_repo.write(top, 'a.txt', { 'a, committed' })
+  git_repo.commit_all(top, 'Change a')
+  git_repo.write(top, 'b.txt', { 'b, not staged' })
+  git_repo.write(top, 'new.txt', { 'new' })
+
+  local seen = child.lua(WHOLE_DIFF, { top, true })
+
+  eq(files_of(seen.result), { 'b.txt', 'new.txt' })
+end
+
+T['the whole diff']['from a base holds every file changed since, the untracked ones too'] = function()
+  local top, base =
+    git_repo.create('diffs-whole-session', { ['a.txt'] = { 'a' }, ['b.txt'] = { 'b' } })
+  git_repo.write(top, 'a.txt', { 'a, committed' })
+  git_repo.commit_all(top, 'Change a')
+  git_repo.write(top, 'new.txt', { 'new' })
+
+  local seen = child.lua(WHOLE_DIFF, { top, false, base })
+
+  eq(files_of(seen.result), { 'a.txt', 'new.txt' })
+end
+
+T['the whole diff']['from no base is every file, as new'] = function()
+  local top = git_repo.create_unborn('diffs-whole-unborn')
+  git_repo.write(top, 'first.txt', { 'first' })
+  git_repo.commit_all(top, 'First')
+  git_repo.write(top, 'new.txt', { 'new' })
+
+  local seen = child.lua(WHOLE_DIFF, { top, false, vim.NIL })
+
+  eq(files_of(seen.result), { 'first.txt', 'new.txt' })
+end
+
+T['the whole diff']['leaves the real index as it was, the untracked files untracked'] = function()
+  local top = git_repo.create('diffs-whole-index', { ['a.txt'] = { 'a' } })
+  git_repo.write(top, 'new.txt', { 'new' })
+  local before = git_repo.git(top, { 'status', '--short' })
+
+  child.lua(WHOLE_DIFF, { top, true })
+
+  eq(git_repo.git(top, { 'status', '--short' }), before)
+  eq(before, '?? new.txt')
+end
+
+T['the whole diff']['of an uncommitted checkout with nothing in it is empty'] = function()
+  local top = git_repo.create('diffs-whole-clean', { ['a.txt'] = { 'a' } })
+
+  local seen = child.lua(WHOLE_DIFF, { top, true })
+
+  eq({ failure = seen.failure, diff = seen.result }, { diff = '' })
+end
+
+T['the whole diff']['leaves out an untracked repository with no commit, which git cannot add'] = function()
+  local top = git_repo.create('diffs-whole-nested', { ['a.txt'] = { 'a' } })
+  vim.fn.mkdir(vim.fs.joinpath(top, 'nested'), 'p')
+  git_repo.git(vim.fs.joinpath(top, 'nested'), { 'init', '--quiet' })
+  git_repo.write(top, 'nested/x.txt', { 'x' })
+  git_repo.write(top, 'plain.txt', { 'plain' })
+
+  local seen = child.lua(WHOLE_DIFF, { top, true })
+
+  eq({ failure = seen.failure, files = files_of(seen.result) }, { files = { 'plain.txt' } })
+end
+
+T['the whole diff']['names its untracked files to git in a file, removed afterwards, whatever they are called'] = function()
+  local top = git_repo.create('diffs-whole-list', { ['tracked.txt'] = { 't' } })
+  local log = vim.fs.joinpath(vim.fs.dirname(top), 'calls.log')
+  local stand_in = git_repo.script('diffs-whole-list', 'git', {
+    ('echo "$*" >> %s'):format(log),
+    ('exec %s "$@"'):format(vim.fn.exepath('git')),
+  })
+  for _, name in ipairs({ '-x.txt', '[ab].txt', 'a b.txt', 'a.txt', 'b.txt' }) do
+    git_repo.write(top, name, { name })
+  end
+
+  local seen = child.lua(WHOLE_DIFF, { top, true, vim.NIL, { executable = stand_in } })
+
+  local adding = vim.tbl_filter(function(call)
+    return call:find(' add ', 1, true) ~= nil
+  end, vim.fn.readfile(log))[1]
+  local list = adding:match('%-%-pathspec%-from%-file=(%S+)')
+  eq({
+    failure = seen.failure,
+    files = files_of(seen.result),
+    paths_on_the_command_line = adding:find('.txt', 1, true) ~= nil,
+    nul_separated = adding:find('--pathspec-file-nul', 1, true) ~= nil,
+    list_left = vim.uv.fs_stat(list or '') ~= nil,
+  }, {
+    files = { '-x.txt', '[ab].txt', 'a b.txt', 'a.txt', 'b.txt' },
+    paths_on_the_command_line = false,
+    nul_separated = true,
+    list_left = false,
+  })
+end
+
 T['a file’s diff']['from a base named like an option is refused, and writes nothing'] = function()
   local top = git_repo.create('diffs-file-option', { ['a.txt'] = { 'a' } })
   git_repo.write(top, 'a.txt', { 'a, changed' })

@@ -119,8 +119,8 @@ T['the session']['begins at the first start of Claude Code: a commit made since 
 
   entry.press(child, '\\pc')
 
-  expect_lines(COMMITS, { commit:sub(1, 7) .. ' Write two' })
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
 end
 
 T['the session']['outlives a restart of Claude Code: its commits stay the session’s'] = function()
@@ -133,7 +133,7 @@ T['the session']['outlives a restart of Claude Code: its commits stay the sessio
   child.cmd('Aineo open')
   entry.press(child, '\\pc')
 
-  expect_lines(COMMITS, { commit:sub(1, 7) .. ' Write two' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
 end
 
 T['the session']['does not begin at a start that fails: the next start takes the base'] = function()
@@ -149,7 +149,7 @@ T['the session']['does not begin at a start that fails: the next start takes the
   open_and_wait_for_the_base()
   entry.press(child, '\\pc')
 
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
 end
 
 T['the pane'] = MiniTest.new_set()
@@ -169,7 +169,7 @@ T['the pane']['reads its lists again as \\o restores the layout it shows in'] = 
   git_repo.write(top, 'scratch.log', { 'scratch' })
   open_and_wait_for_the_base()
   entry.press(child, '\\pc')
-  expect_lines(FILES, { '  ? scratch.log' })
+  expect_lines(FILES, { 'Files in: Session work', '  ? scratch.log' })
   git_repo.wait_until('every read of the files answered', function()
     return child.lua_get('_G.file_reads.answered == _G.file_reads.asked')
   end)
@@ -177,7 +177,7 @@ T['the pane']['reads its lists again as \\o restores the layout it shows in'] = 
 
   entry.press(child, '\\o')
 
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
 end
 
 --- Each door to the changes pane, as a set's `parametrize`: its name, and
@@ -212,20 +212,20 @@ T['the pane']['reads its lists again while it shows, by']['door'] = function(_, 
   git_repo.write(top, 'scratch.log', { 'scratch' })
   open_and_wait_for_the_base()
   entry.press(child, '\\pc')
-  expect_lines(FILES, { '  ? scratch.log' })
+  expect_lines(FILES, { 'Files in: Session work', '  ? scratch.log' })
   wait_for_the_reads()
   git_repo.write(top, '.git/info/exclude', { 'scratch.log' })
 
   door()
 
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
 end
 
 T['the pane']['shown once reads its files once'] = function()
   in_repository('changespane-entry-read-once', { ['notes.txt'] = { 'one' } })
   open_and_wait_for_the_base()
   entry.press(child, '\\pc')
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
   wait_for_the_reads()
   entry.press(child, '\\pa')
   local asked = child.lua_get('_G.file_reads.asked')
@@ -256,7 +256,7 @@ T['the pane']['shown ten times holds no more autocommands, buffers or watches th
   in_repository('changespane-entry-ten', { ['notes.txt'] = { 'one' } })
   open_and_wait_for_the_base()
   entry.press(child, '\\pc')
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
   wait_for_the_reads()
   local held = child.lua_get(HELD)
 
@@ -270,7 +270,7 @@ T['Enter'] = MiniTest.new_set()
 
 --- Opens the layout around a repository whose `notes.txt` changed since the
 --- base, shows the changes pane and waits for it to list the file, then
---- moves the cursor to the files window.
+--- moves the cursor to the files window, onto the file's line.
 ---
 ---@param name string
 local function changes_pane_listing_a_file(name)
@@ -278,8 +278,9 @@ local function changes_pane_listing_a_file(name)
   git_repo.write(top, 'notes.txt', { 'two' })
   open_and_wait_for_the_base()
   entry.press(child, '\\pc')
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
+  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
 end
 
 --- Waits until a window of the child shows the buffer named `name`.
@@ -309,7 +310,8 @@ T['Enter']['with none of the layout’s windows open moves the cursor to the dif
   child.cmd('new')
   child.cmd('only')
   child.lua('vim.api.nvim_win_set_buf(0, vim.fn.bufnr(...))', { FILES })
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
+  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
 
   entry.press(child, '<CR>')
 

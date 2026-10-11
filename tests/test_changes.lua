@@ -172,7 +172,7 @@ local LIVE_MARKER = 'live.txt'
 ---
 ---@param top string
 local function watch_live(top)
-  expect_lines_after(FILES, { '  ? ' .. LIVE_MARKER }, function()
+  expect_lines_after(FILES, { 'Files in: Session work', '  ? ' .. LIVE_MARKER }, function()
     git_repo.write(top, LIVE_MARKER, { 'live' })
   end)
 end
@@ -278,8 +278,8 @@ T['the pane']['starts the watch and reads both lists the first time it is shown'
     vim.api.nvim_open_win(vim.fn.bufnr('aineo://changes-commits'), false, { split = 'below' })
   ]])
 
-  expect_lines(FILES, { 'No files changed on this session' })
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   eq(child.lua_get('_G.git_calls.watch_repository'), 1)
 end
 
@@ -296,13 +296,13 @@ T['the pane']['counts every file as new and every commit as the session’s befo
   local top = git_repo.create_unborn('changespane-unborn')
   git_repo.write(top, 'notes.txt', { 'one' })
   begin_and_show(top)
-  expect_lines(FILES, { '  ? notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  ? notes.txt' })
   local first = git_repo.commit_all(top, 'First')
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(FILES, { '  A notes.txt' })
-  expect_lines(COMMITS, { first:sub(1, 7) .. ' First' })
+  expect_lines(FILES, { 'Files in: Session work', '  A notes.txt' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', first:sub(1, 7) .. ' First' })
 end
 
 T['the files window'] = MiniTest.new_set()
@@ -317,13 +317,13 @@ T['the files window']['says once, above its list, that subdirectories are not wa
 
   begin_and_show(top, { system_name = 'Linux' })
 
-  expect_lines(FILES, { NOT_WATCHED, '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', NOT_WATCHED, '  M notes.txt' })
 end
 
 T['the files window']['lists what changed in a subdirectory the watch misses once shown again'] = function()
   local top = git_repo.create('changespane-shown-again', { ['sub/notes.txt'] = { 'one' } })
   begin_and_show(top, { system_name = 'Linux' })
-  expect_lines(FILES, { NOT_WATCHED, 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', NOT_WATCHED, 'No files changed on this session' })
   git_repo.write(top, 'sub/notes.txt', { 'two' })
 
   child.lua([[
@@ -332,7 +332,7 @@ T['the files window']['lists what changed in a subdirectory the watch misses onc
     vim.api.nvim_win_set_buf(0, files)
   ]])
 
-  expect_lines(FILES, { NOT_WATCHED, '  M sub/notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', NOT_WATCHED, '  M sub/notes.txt' })
 end
 
 T['the files window']['lists a file changed since the base, by its kind and its path'] = function()
@@ -341,7 +341,7 @@ T['the files window']['lists a file changed since the base, by its kind and its 
 
   begin_and_show(top)
 
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
 end
 
 T['the files window']['lists every kind of change in git’s order, a rename with its old path'] = function()
@@ -358,6 +358,7 @@ T['the files window']['lists every kind of change in git’s order, a rename wit
   begin_and_show(top)
 
   expect_lines(FILES, {
+    'Files in: Session work',
     '  D gone.txt',
     '  A staged.txt',
     '  R moved.txt → there.txt',
@@ -372,7 +373,7 @@ T['the files window']['quotes a path holding a line break or a control character
 
   begin_and_show(top)
 
-  expect_lines(FILES, { '  ? "esc\\033.txt"', '  ? "line\\nbreak.txt"' })
+  expect_lines(FILES, { 'Files in: Session work', '  ? "esc\\033.txt"', '  ? "line\\nbreak.txt"' })
 end
 
 T['the files window']['says so when no file changed since the base'] = function()
@@ -380,15 +381,15 @@ T['the files window']['says so when no file changed since the base'] = function(
 
   begin_and_show(top)
 
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
 end
 
 T['the files window']['lists a file changed once the pane is shown, as the watch sees it'] = function()
   local top = git_repo.create('changespane-watched', { ['notes.txt'] = { 'one' } })
   begin_and_show(top)
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
 
-  expect_lines_after(FILES, { '  M notes.txt' }, function()
+  expect_lines_after(FILES, { 'Files in: Session work', '  M notes.txt' }, function()
     git_repo.write(top, 'notes.txt', { 'two' })
   end)
 end
@@ -454,7 +455,7 @@ T['the reads']['run one at a time, a read asked for meanwhile once more after it
   local stand_in, log = logging_git('changespane-one-at-a-time', top, 1)
   child.lua(SPY_ON_GIT)
   begin_and_show(top, { executable = stand_in, system_name = 'Linux' })
-  expect_lines(FILES, { NOT_WATCHED, 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', NOT_WATCHED, 'No files changed on this session' })
   wait_for_the_reads()
 
   child.lua(SAVE_IN_SUB, { top, 'a.txt', 'b.txt', 'c.txt' })
@@ -477,13 +478,16 @@ T['the reads']['keep the cursor on its entry when it is listed still'] = functio
   git_repo.write(top, 'sub/a.txt', { 'changed' })
   git_repo.write(top, 'sub/c.txt', { 'changed' })
   begin_and_show(top, { system_name = 'Linux' })
-  expect_lines(FILES, { NOT_WATCHED, '  M sub/a.txt', '  M sub/c.txt' })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 4 })')
+  expect_lines(FILES, { 'Files in: Session work', NOT_WATCHED, '  M sub/a.txt', '  M sub/c.txt' })
+  child.lua('vim.api.nvim_win_set_cursor(0, { 4, 4 })')
 
   child.lua(SAVE_IN_SUB, { top, 'b.txt' })
 
-  expect_lines(FILES, { NOT_WATCHED, '  M sub/a.txt', '* M sub/b.txt', '  M sub/c.txt' })
-  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 4, 4 })
+  expect_lines(
+    FILES,
+    { 'Files in: Session work', NOT_WATCHED, '  M sub/a.txt', '* M sub/b.txt', '  M sub/c.txt' }
+  )
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 5, 4 })
 end
 
 T['the reads']['run only when asked for, never on a timer, while the pane shows'] = function()
@@ -506,7 +510,7 @@ T['the reads']['leave no timer running once they have answered, while the pane s
 
   begin_and_show(top, { system_name = 'Linux' })
 
-  expect_lines(FILES, { NOT_WATCHED, 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', NOT_WATCHED, 'No files changed on this session' })
   wait_for_the_reads()
   eq(child.lua_get(RUNNING_TIMERS), timers)
 end
@@ -628,8 +632,8 @@ T['outside a repository']['the pane, shown again, lists a repository made since,
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(FILES, { 'No files changed on this session' })
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
 end
 
 T['outside a repository']['a save looks again for a repository made since, the save itself unmarked'] = function()
@@ -640,8 +644,8 @@ T['outside a repository']['a save looks again for a repository made since, the s
 
   in_file(vim.fs.joinpath(directory, 'notes.txt'), "call setline(1, 'one') | write")
 
-  expect_lines(FILES, { '  ? notes.txt' })
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(FILES, { 'Files in: Session work', '  ? notes.txt' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
 end
 
 T['outside a repository']['keeps the base the first look found, a look asked for meanwhile included'] = function()
@@ -664,7 +668,7 @@ T['outside a repository']['keeps the base the first look found, a look asked for
   child.lua(SHOW_FILES_AGAIN)
   child.lua(SHOW_FILES_AGAIN)
   assert(vim.fn.writefile({}, gate .. '2') == 0, 'cannot write ' .. gate .. '2')
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   git_repo.wait_until('the look asked for meanwhile started', function()
     return vim.fn.readfile(looks)[1] == '3'
   end)
@@ -679,7 +683,7 @@ T['outside a repository']['keeps the base the first look found, a look asked for
   git_repo.wait_until('every read of the commits answered', function()
     return child.lua_get('_G.git_answers.commits_since == _G.git_calls.commits_since')
   end)
-  eq(lines_of(COMMITS), { second:sub(1, 7) .. ' Second' })
+  eq(lines_of(COMMITS), { 'Uncommitted', 'Session work', second:sub(1, 7) .. ' Second' })
 end
 
 T['a failed read'] = MiniTest.new_set()
@@ -689,12 +693,12 @@ T['a failed read']['keeps the list shown, under a line giving git’s words'] = 
   git_repo.write(top, 'notes.txt', { 'two' })
   local stand_in, switch = breakable_git('changespane-failed', top, 'ls-files')
   begin_and_show(top, { executable = stand_in })
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
   turn_on(switch)
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(FILES, { REFRESH_FAILED, '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', REFRESH_FAILED, '  M notes.txt' })
 end
 
 T['a failed read']['shows the line alone when no list was shown yet'] = function()
@@ -704,7 +708,7 @@ T['a failed read']['shows the line alone when no list was shown yet'] = function
 
   begin_and_show(top, { executable = stand_in })
 
-  expect_lines(FILES, { REFRESH_FAILED })
+  expect_lines(FILES, { 'Files in: Session work', REFRESH_FAILED })
 end
 
 T['a failed read']['of the commits shows the line alone when no list was shown yet'] = function()
@@ -714,19 +718,22 @@ T['a failed read']['of the commits shows the line alone when no list was shown y
 
   begin_and_show(top, { executable = stand_in })
 
-  expect_lines(COMMITS, { REFRESH_FAILED })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', REFRESH_FAILED })
 end
 
 T['a failed read']['of the commits keeps the commits shown, under a line giving git’s words'] = function()
   local top = git_repo.create('changespane-failed-commits', { ['notes.txt'] = { 'one' } })
   local stand_in, switch = breakable_git('changespane-failed-commits', top, 'log')
   begin_and_show(top, { executable = stand_in })
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   turn_on(switch)
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(COMMITS, { REFRESH_FAILED, 'No commits on this session' })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', REFRESH_FAILED, 'No commits on this session' }
+  )
 end
 
 T['a failed watch'] = MiniTest.new_set()
@@ -738,23 +745,27 @@ T['a failed watch']['is told in both windows and started again the next time the
   watch_live(top)
   turn_on(switch)
   local live = git_repo.commit_all(top, 'Add the marker')
-  expect_lines(COMMITS, { REFRESH_FAILED, 'No commits on this session' })
-  expect_lines(FILES, { REFRESH_FAILED, '  ? ' .. LIVE_MARKER })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', REFRESH_FAILED, 'No commits on this session' }
+  )
+  expect_lines(FILES, { 'Files in: Session work', REFRESH_FAILED, '  ? ' .. LIVE_MARKER })
   turn_off(switch)
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(COMMITS, { live:sub(1, 7) .. ' Add the marker' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', live:sub(1, 7) .. ' Add the marker' })
   local again = git_repo.git(top, { 'commit-tree', 'HEAD^{tree}', '-p', 'HEAD', '-m', 'Again' })
-  expect_lines_after(
-    COMMITS,
-    { again:sub(1, 7) .. ' Again', live:sub(1, 7) .. ' Add the marker' },
-    function()
-      git_repo.git(top, { 'update-ref', 'refs/heads/main', again })
-      git_repo.git(top, { 'update-ref', 'refs/heads/main', live })
-      git_repo.git(top, { 'update-ref', 'refs/heads/main', again })
-    end
-  )
+  expect_lines_after(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    again:sub(1, 7) .. ' Again',
+    live:sub(1, 7) .. ' Add the marker',
+  }, function()
+    git_repo.git(top, { 'update-ref', 'refs/heads/main', again })
+    git_repo.git(top, { 'update-ref', 'refs/heads/main', live })
+    git_repo.git(top, { 'update-ref', 'refs/heads/main', again })
+  end)
 end
 
 T['a failed watch']['stays told while the pane reads its lists again before it shows anew'] = function()
@@ -764,12 +775,15 @@ T['a failed watch']['stays told while the pane reads its lists again before it s
   watch_live(top)
   turn_on(switch)
   git_repo.commit_all(top, 'Add the marker')
-  expect_lines(FILES, { REFRESH_FAILED, '  ? ' .. LIVE_MARKER })
+  expect_lines(FILES, { 'Files in: Session work', REFRESH_FAILED, '  ? ' .. LIVE_MARKER })
   turn_off(switch)
 
   in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
 
-  expect_lines(FILES, { REFRESH_FAILED, '  A ' .. LIVE_MARKER, '* M notes.txt' })
+  expect_lines(
+    FILES,
+    { 'Files in: Session work', REFRESH_FAILED, '  A ' .. LIVE_MARKER, '* M notes.txt' }
+  )
 end
 
 T['a failed watch']['that cannot start is told until one starts'] = function()
@@ -790,6 +804,7 @@ T['a failed watch']['that cannot start is told until one starts'] = function()
   in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
 
   expect_lines(FILES, {
+    'Files in: Session work',
     ('The last refresh failed: cannot watch %s: ENOENT: no such file or directory'):format(
       git_directory
     ),
@@ -805,11 +820,13 @@ T['the base no longer behind HEAD']['is said above the commits git lists, the fi
   local base = git_repo.commit_all(top, 'Write two')
   child.lua(SPY_ON_GIT)
   begin_and_show(top)
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   git_repo.git(top, { 'checkout', '--quiet', '-b', 'other', parent })
   git_repo.write(top, 'other.txt', { 'other' })
   local other = git_repo.commit_all(top, 'Add other')
   local left_behind = {
+    'Uncommitted',
+    'Session work',
     ("The session's base, %s, is no longer behind HEAD"):format(base:sub(1, 7)),
     other:sub(1, 7) .. ' Add other',
   }
@@ -819,7 +836,10 @@ T['the base no longer behind HEAD']['is said above the commits git lists, the fi
   child.lua(SHOW_FILES_AGAIN)
 
   wait_for_the_reads()
-  eq({ lines_of(FILES), lines_of(COMMITS) }, { { '  M notes.txt', '  A other.txt' }, left_behind })
+  eq(
+    { lines_of(FILES), lines_of(COMMITS) },
+    { { 'Files in: Session work', '  M notes.txt', '  A other.txt' }, left_behind }
+  )
 end
 
 T['a buffer of the pane'] = MiniTest.new_set()
@@ -850,8 +870,8 @@ local SCRATCH = {
 --- Each buffer of the pane with what it lists in a repository whose one
 --- file changed and that has no commit since the base.
 local LISTS = {
-  { FILES, { '  M notes.txt' } },
-  { COMMITS, { 'No commits on this session' } },
+  { FILES, { 'Files in: Session work', '  M notes.txt' } },
+  { COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' } },
 }
 
 T['a buffer of the pane']['lists again once a command run in its window emptied it'] =
@@ -940,8 +960,8 @@ T['a buffer of the pane']['gone as its list is read, lists what is read later on
   local top = git_repo.create('changespane-gone', { ['notes.txt'] = { 'one' } })
   child.lua(SPY_ON_GIT)
   begin_and_show(top)
-  expect_lines(FILES, { 'No files changed on this session' })
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   child.cmd(('%s! %d'):format(command, child.fn.bufnr(gone)))
   child.lua(SHOW_AGAIN, { kept })
   wait_for_the_reads()
@@ -953,10 +973,11 @@ T['a buffer of the pane']['gone as its list is read, lists what is read later on
   child.lua(SHOW_AGAIN, { kept })
 
   wait_for_the_reads()
-  eq(
-    { told, lines_of(FILES), lines_of(COMMITS) },
-    { '', { '  A other.txt' }, { commit:sub(1, 7) .. ' Add other' } }
-  )
+  eq({ told, lines_of(FILES), lines_of(COMMITS) }, {
+    '',
+    { 'Files in: Session work', '  A other.txt' },
+    { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Add other' },
+  })
 end
 
 --- An expression mapping waiting in `input()`, a hold of textlock during
@@ -1111,7 +1132,7 @@ T['a buffer of the pane']['its lists read while textlock holds']['are shown once
   end_hold(release)
 
   vim.wait(git_repo.PATIENCE_MS, function()
-    return vim.deep_equal(lines_of(FILES), { '  M notes.txt' })
+    return vim.deep_equal(lines_of(FILES), { 'Files in: Session work', '  M notes.txt' })
   end, 10)
   eq({
     meanwhile = meanwhile,
@@ -1127,8 +1148,11 @@ T['a buffer of the pane']['its lists read while textlock holds']['are shown once
       told = '',
       waiting = 2,
     },
-    files = { lines = { '  M notes.txt' }, modifiable = false },
-    commits = { lines = { 'No commits on this session' }, modifiable = false },
+    files = { lines = { 'Files in: Session work', '  M notes.txt' }, modifiable = false },
+    commits = {
+      lines = { 'Uncommitted', 'Session work', 'No commits on this session' },
+      modifiable = false,
+    },
     told = '',
     reads = { 2, 2 },
     waiting = 0,
@@ -1161,8 +1185,20 @@ local TIMES_TOLD =
 
 T['a buffer of the pane']['failing to take a list read'] = MiniTest.new_set({
   parametrize = {
-    { FILES, '*" ls-files "*', 'changed_files', { '  M notes.txt' } },
-    { COMMITS, '*" log "*', 'commits_since', { 'No commits on this session' } },
+    {
+      FILES,
+      '*" ls-files "*',
+      'changed_files',
+      { 'Files in: Session work', '  M notes.txt' },
+      { 'Files in: Session work', 'aineo is reading the repository' },
+    },
+    {
+      COMMITS,
+      '*" log "*',
+      'commits_since',
+      { 'Uncommitted', 'Session work', 'No commits on this session' },
+      { 'Uncommitted', 'Session work', 'aineo is reading the repository' },
+    },
   },
 })
 
@@ -1170,7 +1206,8 @@ T['a buffer of the pane']['failing to take a list read']['tells it once, stays r
   name,
   pattern,
   read,
-  listed
+  listed,
+  reading
 )
   local top = git_repo.create('changespane-failed-write', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
@@ -1192,7 +1229,7 @@ T['a buffer of the pane']['failing to take a list read']['tells it once, stays r
   expect_lines(name, listed)
   eq(
     { meanwhile = meanwhile, told = child.lua_get(TIMES_TOLD, { WRITE_FAILURE }) },
-    { meanwhile = { lines = READING, modifiable = false }, told = 1 }
+    { meanwhile = { lines = reading, modifiable = false }, told = 1 }
   )
 end
 
@@ -1213,8 +1250,8 @@ T['a buffer of the pane']['failing to take what the first look found tells it on
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(COMMITS, { 'No commits on this session' })
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
   eq(
     { meanwhile = meanwhile, told = child.lua_get(TIMES_TOLD, { WRITE_FAILURE }) },
     { meanwhile = { lines = READING, modifiable = false }, told = 1 }
@@ -1224,13 +1261,13 @@ end
 T['a buffer of the pane']['keeps no undo history of the lists it was written'] = function()
   local top = git_repo.create('changespane-no-undo', { ['notes.txt'] = { 'one' } })
   begin_and_show(top)
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
   in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
-  expect_lines(FILES, { '* M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '* M notes.txt' })
 
   in_file(vim.fs.joinpath(top, 'other.txt'), "call setline(1, 'other') | write")
 
-  expect_lines(FILES, { '* M notes.txt', '* ? other.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '* M notes.txt', '* ? other.txt' })
   eq(
     child.lua_get(
       '{ vim.fn.undotree(vim.fn.bufnr(...)).seq_last, vim.fn.undotree(vim.fn.bufnr(select(2, ...))).seq_last }',
@@ -1246,14 +1283,14 @@ end
 T['a buffer of the pane']['keeps no undo history once :set undolevels runs in its window'] = function()
   local top = git_repo.create('changespane-set-undo', { ['notes.txt'] = { 'one' } })
   begin_and_show(top)
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
   child.cmd('set undolevels=1000')
   in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
-  expect_lines(FILES, { '* M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '* M notes.txt' })
 
   in_file(vim.fs.joinpath(top, 'other.txt'), "call setline(1, 'other') | write")
 
-  expect_lines(FILES, { '* M notes.txt', '* ? other.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '* M notes.txt', '* ? other.txt' })
   eq(child.lua_get('vim.fn.undotree(vim.fn.bufnr(...)).seq_last', { FILES }), 0)
 end
 
@@ -1321,9 +1358,9 @@ T['Enter']['on a file shows its diff from the base, the cursor moving to it'] = 
   local before = git_repo.git(top, { 'rev-parse', base .. ':notes.txt' })
   local after = git_repo.git(top, { 'hash-object', 'notes.txt' })
   begin_and_show(top)
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
 
-  child.type_keys('<CR>')
+  child.type_keys('j<CR>')
 
   wait_for_diffs(1)
   eq({
@@ -1347,14 +1384,14 @@ T['Enter']['on a file committed since the base shows its diff from the base'] = 
   local top, base = git_repo.create('changespane-enter-committed', { ['notes.txt'] = { 'one' } })
   local before = git_repo.git(top, { 'rev-parse', base .. ':notes.txt' })
   begin_and_show(top)
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
   git_repo.write(top, 'notes.txt', { 'two' })
   git_repo.commit_all(top, 'Write two')
   local after = git_repo.git(top, { 'hash-object', 'notes.txt' })
   child.lua(SHOW_FILES_AGAIN)
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
 
-  child.type_keys('<CR>')
+  child.type_keys('j<CR>')
 
   wait_for_diffs(1)
   eq(child.lua_get('vim.api.nvim_buf_get_lines(_G.shown_diffs[1], 0, -1, true)'), {
@@ -1371,14 +1408,14 @@ end
 T['Enter']['on a commit shows that commit’s diff'] = function()
   local top = git_repo.create('changespane-enter-commit', { ['notes.txt'] = { 'one' } })
   begin_and_show(top)
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
   child.lua(SHOW_FILES_AGAIN)
-  expect_lines(COMMITS, { commit:sub(1, 7) .. ' Write two' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
 
-  child.type_keys('<CR>')
+  child.type_keys('j<CR>')
 
   wait_for_diffs(1)
   local shown = child.lua_get([[(function()
@@ -1396,14 +1433,14 @@ end
 T['Enter']['on a commit moves the cursor to that commit’s diff'] = function()
   local top = git_repo.create('changespane-enter-commit-cursor', { ['notes.txt'] = { 'one' } })
   begin_and_show(top)
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
   child.lua(SHOW_FILES_AGAIN)
-  expect_lines(COMMITS, { commit:sub(1, 7) .. ' Write two' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
 
-  child.type_keys('<CR>')
+  child.type_keys('j<CR>')
 
   wait_for_diffs(1)
   eq(child.lua_get('vim.api.nvim_buf_get_name(0)'), 'aineo://commit/' .. commit)
@@ -1424,10 +1461,10 @@ T['Enter']['on a line that lists nothing does nothing and says nothing'] = funct
   child.lua(SPY_ON_GIT)
   child.lua(KEEP_MESSAGES)
   begin_and_show(top, { system_name = 'Linux' })
-  expect_lines(FILES, { NOT_WATCHED, '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', NOT_WATCHED, '  M notes.txt' })
   child.type_keys('<CR>')
 
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
   child.type_keys('<CR>')
 
   wait_for_diffs(1)
@@ -1455,9 +1492,9 @@ T['Enter']['shows the diff in a read-only scratch buffer named for the file'] = 
   local top = git_repo.create('changespane-diff-buffer', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
   begin_and_show(top)
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
 
-  child.type_keys('<CR>')
+  child.type_keys('j<CR>')
 
   wait_for_diffs(1)
   eq(child.lua_get(DIFF_BUFFER, { child.lua_get('_G.shown_diffs[1]') }), {
@@ -1481,8 +1518,8 @@ T['Enter']['shows the diff again once a command run in its window emptied it']['
   local top = git_repo.create('changespane-diff-edited', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
   begin_and_show(top)
-  expect_lines(FILES, { '  M notes.txt' })
-  child.type_keys('<CR>')
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
+  child.type_keys('j<CR>')
   wait_for_diffs(1)
   local diff = child.lua_get('_G.shown_diffs[1]')
   local shown = {
@@ -1507,6 +1544,7 @@ local ENTER_TEN_TIMES_ONE_BY_ONE = [[
   local patience = ...
   for count = 1, 10 do
     vim.api.nvim_set_current_win(vim.fn.bufwinid('aineo://changes-files'))
+    vim.api.nvim_win_set_cursor(0, { 2, 0 })
     vim.api.nvim_feedkeys(vim.keycode('<CR>'), 'x', false)
     vim.wait(patience, function()
       return _G.git_answers.file_diff == count
@@ -1519,7 +1557,7 @@ T['Enter']['ten times on the same file, each once the last diff was read, leaves
   git_repo.write(top, 'notes.txt', { 'two' })
   child.lua(SPY_ON_GIT)
   begin_and_show(top)
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
 
   child.lua(ENTER_TEN_TIMES_ONE_BY_ONE, { git_repo.PATIENCE_MS })
 
@@ -1541,9 +1579,9 @@ T['Enter']['twice in quick succession shows only the last Enter’s diff, the fi
   })
   child.lua(SPY_ON_GIT)
   begin_and_show(top, { executable = slow })
-  expect_lines(FILES, { '  M a.txt', '  M b.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt' })
 
-  child.type_keys('<CR>', 'j', '<CR>')
+  child.type_keys('j', '<CR>', 'j', '<CR>')
 
   git_repo.wait_until('both diffs read', function()
     return child.lua_get('_G.git_answers.file_diff') == 2
@@ -1578,8 +1616,8 @@ T['Enter']['read while textlock holds']['shows the diff once it ends, telling no
   child.lua(SPY_ON_GIT)
   child.lua(ready)
   begin_and_show(top, { executable = gated })
-  expect_lines(FILES, { '  M notes.txt' })
-  child.type_keys('<CR>')
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
+  child.type_keys('j<CR>')
   begin_hold(hold)
   vim.fn.writefile({}, gate)
   git_repo.wait_until('the diff read', function()
@@ -1613,8 +1651,8 @@ T['Enter']['read while textlock holds, then on another file before the editor al
   child.lua(SPY_ON_GIT)
   child.lua(ready)
   begin_and_show(top, { executable = gated })
-  expect_lines(FILES, { '  M a.txt', '  M b.txt' })
-  child.type_keys('<CR>')
+  expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt' })
+  child.type_keys('j<CR>')
   begin_hold(hold)
   vim.fn.writefile({}, gate)
   git_repo.wait_until('the diff of a.txt read', function()
@@ -1642,9 +1680,9 @@ T['Enter']['again on a shown diff while textlock holds, then on another file, ke
   child.lua(SPY_ON_GIT)
   child.lua(ready)
   begin_and_show(top, { executable = gated })
-  expect_lines(FILES, { '  M a.txt', '  M b.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt' })
   vim.fn.writefile({}, gate)
-  child.type_keys('<CR>')
+  child.type_keys('j<CR>')
   wait_for_diffs(1)
   vim.fn.delete(gate)
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
@@ -1690,8 +1728,8 @@ T['Enter']['read while textlock holds, then on another file']['wipes the first d
   child.lua(ready_first)
   child.lua(ready)
   begin_and_show(top, { executable = stand_in })
-  expect_lines(FILES, { '  M a.txt', '  M b.txt' })
-  child.type_keys('<CR>')
+  expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt' })
+  child.type_keys('j<CR>')
   begin_hold(first_hold)
   vim.fn.writefile({}, stand_in .. '.gate-a')
   git_repo.wait_until('the diff of a.txt read', function()
@@ -1741,8 +1779,8 @@ T['Enter']['twice in quick succession tells nothing of the first Enter’s diff 
   child.lua(SPY_ON_GIT)
   child.lua(KEEP_MESSAGES)
   begin_and_show(top, { executable = stand_in })
-  expect_lines(FILES, { '  M a.txt', '  M b.txt' })
-  child.type_keys('<CR>', 'j', '<CR>')
+  expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt' })
+  child.type_keys('j', '<CR>', 'j', '<CR>')
   git_repo.wait_until('the diff of b.txt read', function()
     return child.lua_get('_G.git_answers.file_diff') == 1
   end)
@@ -1762,8 +1800,8 @@ T['Enter']['again on the same file keeps no undo history of the diff it showed']
   local top = git_repo.create('changespane-diff-no-undo', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
   begin_and_show(top)
-  expect_lines(FILES, { '  M notes.txt' })
-  child.type_keys('<CR>')
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
+  child.type_keys('j<CR>')
   wait_for_diffs(1)
   git_repo.write(top, 'notes.txt', { 'three' })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
@@ -1789,15 +1827,15 @@ local function enter_on_a_commit_whose_diff_is(name, diff)
     ('case " $* " in *" show "*) cat %s; exit 0 ;; esac'):format(printed),
   })
   begin_and_show(top, { executable = stand_in })
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   git_repo.write(top, 'notes.txt', { 'two' })
   git_repo.commit_all(top, 'Write two')
   child.lua(SHOW_FILES_AGAIN)
   git_repo.wait_until('the commit listed', function()
-    return lines_of(COMMITS)[1] ~= 'No commits on this session'
+    return lines_of(COMMITS)[3] ~= 'No commits on this session'
   end)
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
-  child.type_keys('<CR>')
+  child.type_keys('j<CR>')
   wait_for_diffs(1)
 end
 
@@ -1813,10 +1851,10 @@ T['Enter']['with no room in the middle column warns once, naming the file, and k
   git_repo.write(top, 'notes.txt', { 'two' })
   child.lua(KEEP_MESSAGES)
   begin_and_show(top)
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
   child.lua('_G.no_room = true')
 
-  child.type_keys('<CR>')
+  child.type_keys('j<CR>')
 
   wait_for_diffs(1)
   eq(child.lua_get('{ _G.messages, vim.fn.bufnr("aineo://diff/notes.txt") }'), {
@@ -1834,15 +1872,15 @@ T['Enter']['with no room in the middle column warns once, naming the commit'] = 
   local top = git_repo.create('changespane-no-room-commit', { ['notes.txt'] = { 'one' } })
   child.lua(KEEP_MESSAGES)
   begin_and_show(top)
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
   child.lua(SHOW_FILES_AGAIN)
-  expect_lines(COMMITS, { commit:sub(1, 7) .. ' Write two' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
   child.lua('_G.no_room = true')
 
-  child.type_keys('<CR>')
+  child.type_keys('j<CR>')
 
   wait_for_diffs(1)
   eq(child.lua_get('_G.messages'), {
@@ -1860,15 +1898,15 @@ T['Enter']['tells once, in git’s words, a diff that cannot be read'] = functio
   local stand_in, switch = breakable_git('changespane-diff-failed', top, 'show')
   child.lua(KEEP_MESSAGES)
   begin_and_show(top, { executable = stand_in })
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
   child.lua(SHOW_FILES_AGAIN)
-  expect_lines(COMMITS, { commit:sub(1, 7) .. ' Write two' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
   turn_on(switch)
 
-  child.type_keys('<CR>')
+  child.type_keys('j<CR>')
 
   git_repo.wait_until('the user told', function()
     return #child.lua_get('_G.messages') > 0
@@ -1903,7 +1941,7 @@ end)()]]
 T['the watch']['stops as the editor quits'] = function()
   local top = git_repo.create('changespane-quit', { ['notes.txt'] = { 'one' } })
   begin_and_show(top)
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
   local running = child.lua_get(RUNNING_WATCHES)
 
   child.cmd('doautocmd VimLeavePre')
@@ -2042,8 +2080,8 @@ T['Enter']['once its diff is shown, leaves the cursor where it is as the pane is
   git_repo.write(top, 'notes.txt', { 'two' })
   child.lua(SPY_ON_GIT)
   begin_and_show(top)
-  expect_lines(FILES, { '  M notes.txt' })
-  child.type_keys('<CR>')
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
+  child.type_keys('j<CR>')
   wait_for_diffs(1)
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
 
@@ -2062,8 +2100,8 @@ T['Enter']['read once the cursor left the pane shows the diff, the cursor stayin
   git_repo.write(top, 'notes.txt', { 'two' })
   local gated, gate = gated_git('changespane-left-pane', '*" diff "*notes.txt*')
   begin_and_show(top, { executable = gated })
-  expect_lines(FILES, { '  M notes.txt' })
-  child.type_keys('<CR>')
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
+  child.type_keys('j<CR>')
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
 
   vim.fn.writefile({}, gate)
@@ -2077,8 +2115,8 @@ T['Enter']['read once the cursor went to a terminal in Terminal mode leaves it t
   git_repo.write(top, 'notes.txt', { 'two' })
   local gated, gate = gated_git('changespane-left-to-terminal', '*" diff "*notes.txt*')
   begin_and_show(top, { executable = gated })
-  expect_lines(FILES, { '  M notes.txt' })
-  child.type_keys('<CR>')
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
+  child.type_keys('j<CR>')
   child.lua([[
     vim.cmd('botright new')
     vim.fn.jobstart({ 'sh' }, { term = true })
@@ -2102,10 +2140,10 @@ T['Enter']['leaves the cursor in the pane when the diff is not shown, as']['the 
   git_repo.write(top, 'notes.txt', { 'two' })
   child.lua(KEEP_MESSAGES)
   begin_and_show(top)
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
   child.lua(not_shown)
 
-  child.type_keys('<CR>')
+  child.type_keys('j<CR>')
 
   wait_for_diffs(1)
   eq(child.lua_get('{ vim.api.nvim_buf_get_name(0), #_G.messages }'), { FILES, 1 })
@@ -2116,10 +2154,10 @@ T['Enter']['tells once the error a window raised as it took the diff, and keeps 
   git_repo.write(top, 'notes.txt', { 'two' })
   child.lua(KEEP_MESSAGES)
   begin_and_show(top)
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
   child.lua("_G.refusal = 'refused here'")
 
-  child.type_keys('<CR>')
+  child.type_keys('j<CR>')
 
   wait_for_diffs(1)
   eq(child.lua_get('{ _G.messages, vim.fn.bufnr("aineo://diff/notes.txt") }'), {
@@ -2168,11 +2206,11 @@ T['the user’s saves'] = MiniTest.new_set()
 T['the user’s saves']['are marked in the files window'] = function()
   local top = git_repo.create('changespane-saved', { ['notes.txt'] = { 'one' } })
   begin_and_show(top)
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
 
   in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
 
-  expect_lines(FILES, { '* M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '* M notes.txt' })
 end
 
 --- Each write a case makes from a buffer of `notes.txt`, a file of two
@@ -2216,11 +2254,11 @@ T['the user’s saves']['mark the file written, not the buffer’s, for a write'
     { ['notes.txt'] = { 'one', 'two' }, ['log.txt'] = { 'log' } }
   )
   begin_and_show(top)
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
 
   in_file(vim.fs.joinpath(top, 'notes.txt'), command_for(top))
 
-  expect_lines(FILES, { line })
+  expect_lines(FILES, { 'Files in: Session work', line })
 end
 
 T['the user’s saves']['mark a file opened through a symbolic link to the repository'] = function()
@@ -2228,11 +2266,11 @@ T['the user’s saves']['mark a file opened through a symbolic link to the repos
   local link = vim.fs.joinpath(vim.fs.dirname(top), 'link')
   assert(vim.uv.fs_symlink(top, link), 'cannot link ' .. link)
   begin_and_show(top)
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
 
   in_file(vim.fs.joinpath(link, 'notes.txt'), "call setline(1, 'two') | write")
 
-  expect_lines(FILES, { '* M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '* M notes.txt' })
 end
 
 T['the user’s saves']['made before the session began are not marked'] = function()
@@ -2242,7 +2280,7 @@ T['the user’s saves']['made before the session began are not marked'] = functi
 
   begin_and_show(top)
 
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
 end
 
 T['the user’s saves']['made before the pane is first shown are marked once it shows'] = function()
@@ -2256,7 +2294,7 @@ T['the user’s saves']['made before the pane is first shown are marked once it 
 
   child.lua([[vim.api.nvim_win_set_buf(0, vim.fn.bufnr('aineo://changes-files'))]])
 
-  expect_lines(FILES, { '* M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '* M notes.txt' })
 end
 
 T['the user’s saves']['made while git first looks for the repository are marked once it is found'] = function()
@@ -2273,7 +2311,7 @@ T['the user’s saves']['made while git first looks for the repository are marke
     return child.lua_get('_G.git_answers.find_repository') == 1
   end)
 
-  expect_lines(FILES, { '* M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '* M notes.txt' })
 end
 
 T['the user’s saves']['made while a first look finds no repository are not marked once one is made'] = function()
@@ -2294,17 +2332,17 @@ T['the user’s saves']['made while a first look finds no repository are not mar
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(FILES, { '  ? notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  ? notes.txt' })
 end
 
 T['the user’s saves']['refresh the files window where the watch misses them'] = function()
   local top = git_repo.create('changespane-saved-unwatched', { ['sub/notes.txt'] = { 'one' } })
   begin_and_show(top, { system_name = 'Linux' })
-  expect_lines(FILES, { NOT_WATCHED, 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', NOT_WATCHED, 'No files changed on this session' })
 
   in_file(vim.fs.joinpath(top, 'sub', 'notes.txt'), "call setline(1, 'two') | write")
 
-  expect_lines(FILES, { NOT_WATCHED, '* M sub/notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', NOT_WATCHED, '* M sub/notes.txt' })
 end
 
 T['the commits window'] = MiniTest.new_set()
@@ -2314,7 +2352,7 @@ T['the commits window']['says “No commits on this session” when there is non
 
   begin_and_show(top)
 
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
 end
 
 T['the commits window']['lists the session’s commits, newest first, by abbreviated id and subject'] = function()
@@ -2327,7 +2365,12 @@ T['the commits window']['lists the session’s commits, newest first, by abbrevi
   git_repo.write(top, 'notes.txt', { 'three' })
   local second = git_repo.commit_all(top, 'Write three')
 
-  expect_lines(COMMITS, { second:sub(1, 7) .. ' Write three', first:sub(1, 7) .. ' Write two' })
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    second:sub(1, 7) .. ' Write three',
+    first:sub(1, 7) .. ' Write two',
+  })
 end
 
 T['the commits window']['lists a commit that changes no file nor the index, as the branch moves'] = function()
@@ -2335,12 +2378,17 @@ T['the commits window']['lists a commit that changes no file nor the index, as t
   begin_and_show(top)
   watch_live(top)
   local live = git_repo.commit_all(top, 'Add the marker')
-  expect_lines(COMMITS, { live:sub(1, 7) .. ' Add the marker' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', live:sub(1, 7) .. ' Add the marker' })
 
   local empty = git_repo.git(top, { 'commit-tree', 'HEAD^{tree}', '-p', 'HEAD', '-m', 'Nothing' })
   git_repo.git(top, { 'update-ref', 'refs/heads/main', empty })
 
-  expect_lines(COMMITS, { empty:sub(1, 7) .. ' Nothing', live:sub(1, 7) .. ' Add the marker' })
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    empty:sub(1, 7) .. ' Nothing',
+    live:sub(1, 7) .. ' Add the marker',
+  })
 end
 
 T['the colours'] = MiniTest.new_set()
@@ -2364,14 +2412,48 @@ local function colours_of(name)
   return child.lua_get(PANE_COLOURS, { name })
 end
 
+--- `colours` moved down by `lines` lines.
+---
+---@param colours any[][] as `colours_of()` gives them
+---@param lines integer
+---@return any[][]
+local function moved_down(colours, lines)
+  return vim.tbl_map(function(colour)
+    return { colour[1] + lines, colour[2], colour[3], colour[4] }
+  end, colours)
+end
+
+--- The colours of the files window when `listed` are those of its lines
+--- below its first, which names Session work.
+---
+---@param listed any[][]
+---@return any[][]
+local function below_files_heading(listed)
+  local heading = { { 0, 0, #'Files in: Session work', 'AineoChangesFilter' } }
+  return vim.list_extend(heading, moved_down(listed, 1))
+end
+
+--- The colours of the commits window when `listed` are those of its lines
+--- below its two fixed lines.
+---
+---@param listed any[][]
+---@return any[][]
+local function below_commit_filters(listed)
+  local filters = {
+    { 0, 0, #'Uncommitted', 'AineoChangesFilter' },
+    { 1, 0, #'Session work', 'AineoChangesFilter' },
+  }
+  return vim.list_extend(filters, moved_down(listed, 2))
+end
+
 T['the colours']['of a modified file are its letter and path in AineoChangesModified, its blank uncoloured'] = function()
   local top = git_repo.create('changespane-colour-modified', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
 
   begin_and_show(top)
 
-  expect_lines(FILES, { '  M notes.txt' })
-  eq(colours_of(FILES), { { 0, 2, 13, 'AineoChangesModified' } })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
+  eq(colours_of(FILES), below_files_heading({ { 0, 2, 13, 'AineoChangesModified' } }))
 end
 
 T['the colours']['of every kind of change are its letter and path in its group, a rename’s old path and arrow included'] = function()
@@ -2393,6 +2475,7 @@ T['the colours']['of every kind of change are its letter and path in its group, 
   begin_and_show(top)
 
   expect_lines(FILES, {
+    'Files in: Session work',
     '  D gone.txt',
     '  T kind.txt',
     '  M notes.txt',
@@ -2400,44 +2483,53 @@ T['the colours']['of every kind of change are its letter and path in its group, 
     '  R moved.txt → there.txt',
     '  ? untracked.txt',
   })
-  eq(colours_of(FILES), {
-    { 0, 2, 12, 'AineoChangesDeleted' },
-    { 1, 2, 12, 'AineoChangesTypeChanged' },
-    { 2, 2, 13, 'AineoChangesModified' },
-    { 3, 2, 14, 'AineoChangesAdded' },
-    { 4, 2, 27, 'AineoChangesRenamed' },
-    { 5, 2, 17, 'AineoChangesUntracked' },
-  })
+  eq(
+    colours_of(FILES),
+    below_files_heading({
+      { 0, 2, 12, 'AineoChangesDeleted' },
+      { 1, 2, 12, 'AineoChangesTypeChanged' },
+      { 2, 2, 13, 'AineoChangesModified' },
+      { 3, 2, 14, 'AineoChangesAdded' },
+      { 4, 2, 27, 'AineoChangesRenamed' },
+      { 5, 2, 17, 'AineoChangesUntracked' },
+    })
+  )
 end
 
 T['the colours']['of a file the user saved are its * in AineoChangesSaved, then its letter and path'] = function()
   local top = git_repo.create('changespane-colour-saved', { ['notes.txt'] = { 'one' } })
   begin_and_show(top)
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
 
   in_file(vim.fs.joinpath(top, 'notes.txt'), "call setline(1, 'two') | write")
 
-  expect_lines(FILES, { '* M notes.txt' })
-  eq(colours_of(FILES), {
-    { 0, 0, 1, 'AineoChangesSaved' },
-    { 0, 2, 13, 'AineoChangesModified' },
-  })
+  expect_lines(FILES, { 'Files in: Session work', '* M notes.txt' })
+  eq(
+    colours_of(FILES),
+    below_files_heading({
+      { 0, 0, 1, 'AineoChangesSaved' },
+      { 0, 2, 13, 'AineoChangesModified' },
+    })
+  )
 end
 
 T['the colours']['of a commit are its abbreviated id in AineoChangesCommitId and its subject in AineoChangesCommitSubject'] = function()
   local top = git_repo.create('changespane-colour-commit', { ['notes.txt'] = { 'one' } })
   begin_and_show(top)
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(COMMITS, { commit:sub(1, 7) .. ' Write two' })
-  eq(colours_of(COMMITS), {
-    { 0, 0, 7, 'AineoChangesCommitId' },
-    { 0, 8, 17, 'AineoChangesCommitSubject' },
-  })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
+  eq(
+    colours_of(COMMITS),
+    below_commit_filters({
+      { 0, 0, 7, 'AineoChangesCommitId' },
+      { 0, 8, 17, 'AineoChangesCommitSubject' },
+    })
+  )
 end
 
 T['the colours']['of a line that lists nothing, in either window, are the whole line in AineoChangesNote'] = function()
@@ -2445,12 +2537,12 @@ T['the colours']['of a line that lists nothing, in either window, are the whole 
 
   begin_and_show(top)
 
-  expect_lines(FILES, { 'No files changed on this session' })
-  expect_lines(COMMITS, { 'No commits on this session' })
-  eq(
-    { colours_of(FILES), colours_of(COMMITS) },
-    { { { 0, 0, 32, 'AineoChangesNote' } }, { { 0, 0, 26, 'AineoChangesNote' } } }
-  )
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
+  eq({ colours_of(FILES), colours_of(COMMITS) }, {
+    below_files_heading({ { 0, 0, 32, 'AineoChangesNote' } }),
+    below_commit_filters({ { 0, 0, 26, 'AineoChangesNote' } }),
+  })
 end
 
 T['the colours']['of the line saying a read failed are the whole line in AineoChangesFailure, above the list'] = function()
@@ -2458,40 +2550,56 @@ T['the colours']['of the line saying a read failed are the whole line in AineoCh
   git_repo.write(top, 'notes.txt', { 'two' })
   local stand_in, switch = breakable_git('changespane-colour-failed', top, 'ls-files')
   begin_and_show(top, { executable = stand_in })
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
   turn_on(switch)
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(FILES, { REFRESH_FAILED, '  M notes.txt' })
-  eq(colours_of(FILES), {
-    { 0, 0, #REFRESH_FAILED, 'AineoChangesFailure' },
-    { 1, 2, 13, 'AineoChangesModified' },
-  })
+  expect_lines(FILES, { 'Files in: Session work', REFRESH_FAILED, '  M notes.txt' })
+  eq(
+    colours_of(FILES),
+    below_files_heading({
+      { 0, 0, #REFRESH_FAILED, 'AineoChangesFailure' },
+      { 1, 2, 13, 'AineoChangesModified' },
+    })
+  )
 end
 
 T['the colours']['of the line saying a read of the commits failed are the whole line in AineoChangesFailure, above the list'] = function()
   local top = git_repo.create('changespane-colour-commits-failed', { ['notes.txt'] = { 'one' } })
   local stand_in, switch = breakable_git('changespane-colour-commits-failed', top, 'log')
   begin_and_show(top, { executable = stand_in })
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   turn_on(switch)
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(COMMITS, { REFRESH_FAILED, 'No commits on this session' })
-  eq(colours_of(COMMITS), {
-    { 0, 0, #REFRESH_FAILED, 'AineoChangesFailure' },
-    { 1, 0, 26, 'AineoChangesNote' },
-  })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', REFRESH_FAILED, 'No commits on this session' }
+  )
+  eq(
+    colours_of(COMMITS),
+    below_commit_filters({
+      { 0, 0, #REFRESH_FAILED, 'AineoChangesFailure' },
+      { 1, 0, 26, 'AineoChangesNote' },
+    })
+  )
 end
 
 T['the colours']['of the line saying the first read failed are the whole line in AineoChangesFailure'] =
-  MiniTest.new_set({ parametrize = { { FILES, 'ls-files' }, { COMMITS, 'log' } } })
+  MiniTest.new_set({
+    parametrize = {
+      { FILES, 'ls-files', { 'Files in: Session work', REFRESH_FAILED }, below_files_heading },
+      { COMMITS, 'log', { 'Uncommitted', 'Session work', REFRESH_FAILED }, below_commit_filters },
+    },
+  })
 
 T['the colours']['of the line saying the first read failed are the whole line in AineoChangesFailure']['in'] = function(
   name,
-  subcommand
+  subcommand,
+  expected,
+  below_the_fixed_lines
 )
   local top = git_repo.create('changespane-colour-first-failed', { ['notes.txt'] = { 'one' } })
   local stand_in, switch = breakable_git('changespane-colour-first-failed', top, subcommand)
@@ -2499,8 +2607,8 @@ T['the colours']['of the line saying the first read failed are the whole line in
 
   begin_and_show(top, { executable = stand_in })
 
-  expect_lines(name, { REFRESH_FAILED })
-  eq(colours_of(name), { { 0, 0, #REFRESH_FAILED, 'AineoChangesFailure' } })
+  expect_lines(name, expected)
+  eq(colours_of(name), below_the_fixed_lines({ { 0, 0, #REFRESH_FAILED, 'AineoChangesFailure' } }))
 end
 
 T['the colours']['of the line saying git was not found are the whole line in AineoChangesFailure, in either window'] = function()
@@ -2567,11 +2675,14 @@ T['the colours']['of the line saying subdirectories are not watched are the whol
 
   begin_and_show(top, { system_name = 'Linux' })
 
-  expect_lines(FILES, { NOT_WATCHED, '  M notes.txt' })
-  eq(colours_of(FILES), {
-    { 0, 0, #NOT_WATCHED, 'AineoChangesNote' },
-    { 1, 2, 13, 'AineoChangesModified' },
-  })
+  expect_lines(FILES, { 'Files in: Session work', NOT_WATCHED, '  M notes.txt' })
+  eq(
+    colours_of(FILES),
+    below_files_heading({
+      { 0, 0, #NOT_WATCHED, 'AineoChangesNote' },
+      { 1, 2, 13, 'AineoChangesModified' },
+    })
+  )
 end
 
 T['the colours']['of the line saying the base is no longer behind HEAD are the whole line in AineoChangesNote'] = function()
@@ -2580,7 +2691,7 @@ T['the colours']['of the line saying the base is no longer behind HEAD are the w
   git_repo.write(top, 'notes.txt', { 'two' })
   local base = git_repo.commit_all(top, 'Write two')
   begin_and_show(top)
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   git_repo.git(top, { 'checkout', '--quiet', '-b', 'other', parent })
   git_repo.write(top, 'other.txt', { 'other' })
   local other = git_repo.commit_all(top, 'Add other')
@@ -2588,12 +2699,18 @@ T['the colours']['of the line saying the base is no longer behind HEAD are the w
   child.lua(SHOW_FILES_AGAIN)
 
   local left_behind = ("The session's base, %s, is no longer behind HEAD"):format(base:sub(1, 7))
-  expect_lines(COMMITS, { left_behind, other:sub(1, 7) .. ' Add other' })
-  eq(colours_of(COMMITS), {
-    { 0, 0, #left_behind, 'AineoChangesNote' },
-    { 1, 0, 7, 'AineoChangesCommitId' },
-    { 1, 8, 17, 'AineoChangesCommitSubject' },
-  })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', left_behind, other:sub(1, 7) .. ' Add other' }
+  )
+  eq(
+    colours_of(COMMITS),
+    below_commit_filters({
+      { 0, 0, #left_behind, 'AineoChangesNote' },
+      { 1, 0, 7, 'AineoChangesCommitId' },
+      { 1, 8, 17, 'AineoChangesCommitSubject' },
+    })
+  )
 end
 
 --- The expression, run in the child, that reads each of the changes pane's
@@ -2602,7 +2719,7 @@ local PANE_GROUPS = [[(function()
   local names = {
     'AineoChangesAdded', 'AineoChangesUntracked', 'AineoChangesModified', 'AineoChangesRenamed',
     'AineoChangesTypeChanged', 'AineoChangesDeleted', 'AineoChangesSaved', 'AineoChangesCommitId',
-    'AineoChangesCommitSubject', 'AineoChangesNote', 'AineoChangesFailure',
+    'AineoChangesCommitSubject', 'AineoChangesFilter', 'AineoChangesNote', 'AineoChangesFailure',
   }
   local groups = {}
   for _, name in ipairs(names) do
@@ -2623,6 +2740,7 @@ local DEFAULT_GROUPS = {
   AineoChangesSaved = { link = 'WarningMsg' },
   AineoChangesCommitId = { link = 'Identifier' },
   AineoChangesCommitSubject = { default = true },
+  AineoChangesFilter = { link = 'Title' },
   AineoChangesNote = { link = 'Comment' },
   AineoChangesFailure = { link = 'DiagnosticWarn' },
 }
@@ -2632,7 +2750,7 @@ T['the colours']['are groups of aineo’s own, each linked to a group of Neovim�
 
   begin_and_show(top)
 
-  expect_lines(FILES, { 'No files changed on this session' })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
   eq(child.lua_get(PANE_GROUPS), DEFAULT_GROUPS)
 end
 
@@ -2691,11 +2809,11 @@ end)(...)]]
 T['the colours']['leave a commit’s subject on the background of a window not current'] = function()
   local top = git_repo.create('changespane-colour-dimmed', { ['notes.txt'] = { 'one' } })
   begin_and_show(top)
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
   child.lua(SHOW_FILES_AGAIN)
-  expect_lines(COMMITS, { commit:sub(1, 7) .. ' Write two' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
   child.cmd('highlight Normal guibg=#101010')
   child.cmd('highlight NormalNC guibg=#202040')
   local commits_window = child.fn.bufwinid(COMMITS)
@@ -2714,18 +2832,21 @@ T['the colours']['follow a page that adds a line, removes one and moves one'] = 
   git_repo.write(top, 'notes.txt', { 'two' })
   git_repo.write(top, 'b.txt', { 'b' })
   begin_and_show(top)
-  expect_lines(FILES, { '  M notes.txt', '  ? b.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt', '  ? b.txt' })
   git_repo.write(top, 'a.txt', { 'a' })
   git_repo.git(top, { 'add', 'a.txt' })
   assert(vim.uv.fs_unlink(vim.fs.joinpath(top, 'b.txt')))
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(FILES, { '  A a.txt', '  M notes.txt' })
-  eq(colours_of(FILES), {
-    { 0, 2, 9, 'AineoChangesAdded' },
-    { 1, 2, 13, 'AineoChangesModified' },
-  })
+  expect_lines(FILES, { 'Files in: Session work', '  A a.txt', '  M notes.txt' })
+  eq(
+    colours_of(FILES),
+    below_files_heading({
+      { 0, 2, 9, 'AineoChangesAdded' },
+      { 1, 2, 13, 'AineoChangesModified' },
+    })
+  )
 end
 
 T['the colours']['leave none on a line a shorter page no longer holds'] = function()
@@ -2733,22 +2854,29 @@ T['the colours']['leave none on a line a shorter page no longer holds'] = functi
   git_repo.write(top, 'notes.txt', { 'two' })
   git_repo.write(top, 'b.txt', { 'b' })
   begin_and_show(top)
-  expect_lines(FILES, { '  M notes.txt', '  ? b.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt', '  ? b.txt' })
   git_repo.write(top, 'notes.txt', { 'one' })
   assert(vim.uv.fs_unlink(vim.fs.joinpath(top, 'b.txt')))
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(FILES, { 'No files changed on this session' })
-  eq(colours_of(FILES), { { 0, 0, 32, 'AineoChangesNote' } })
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
+  eq(colours_of(FILES), below_files_heading({ { 0, 0, 32, 'AineoChangesNote' } }))
 end
 
 --- Each buffer of the pane with the colours of what it lists in a
 --- repository whose one file changed and that has no commit since the base
 --- (`LISTS`).
 local LISTS_COLOURS = {
-  { FILES, { { 0, 2, 13, 'AineoChangesModified' } } },
-  { COMMITS, { { 0, 0, 26, 'AineoChangesNote' } } },
+  { FILES, { { 0, 0, 22, 'AineoChangesFilter' }, { 1, 2, 13, 'AineoChangesModified' } } },
+  {
+    COMMITS,
+    {
+      { 0, 0, 11, 'AineoChangesFilter' },
+      { 1, 0, 12, 'AineoChangesFilter' },
+      { 2, 0, 26, 'AineoChangesNote' },
+    },
+  },
 }
 
 T['the colours']['are shown again once :edit wrote a buffer of the pane anew'] =
@@ -2761,8 +2889,8 @@ T['the colours']['are shown again once :edit wrote a buffer of the pane anew']['
   local top = git_repo.create('changespane-colour-edited', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
   begin_and_show(top)
-  expect_lines(FILES, { '  M notes.txt' })
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { name })
 
   child.cmd('edit')
@@ -2780,8 +2908,8 @@ T['the colours']['are shown in a buffer of the pane made anew once wiped out']['
   local top = git_repo.create('changespane-colour-wiped', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
   begin_and_show(top)
-  expect_lines(FILES, { '  M notes.txt' })
-  expect_lines(COMMITS, { 'No commits on this session' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   child.cmd(('bwipeout! %d'):format(child.fn.bufnr(name)))
 
   child.lua("require('aineo.changes').pane_buffers()")
@@ -2806,10 +2934,10 @@ T['the colours']['of a page kept while textlock refuses the next stay until the 
 
   end_hold(release)
 
-  expect_lines(FILES, { '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
   eq({ meanwhile = meanwhile, after = colours_of(FILES) }, {
     meanwhile = { lines = READING, colours = { { 0, 0, #READING[1], 'AineoChangesNote' } } },
-    after = { { 0, 2, 13, 'AineoChangesModified' } },
+    after = below_files_heading({ { 0, 2, 13, 'AineoChangesModified' } }),
   })
 end
 
