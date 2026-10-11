@@ -929,14 +929,24 @@ function M.hand_over_changes_session(hand_over)
   end
 end
 
---- An entry the user selected with Enter, and the window Enter was pressed in.
+--- An entry the user selected with Enter, the window Enter was pressed in, and
+--- the context its diff was read in.
 ---@class aineo.changes.Selection
 ---@field entry aineo.changes.Entry
 ---@field window integer
+---@field context aineo.git.DiffContext
 
---- The entry each diff buffer the home showed is the diff of, by buffer.
----@type table<integer, aineo.changes.Entry>
-local diff_entries = {}
+--- What a diff buffer the home showed is the diff of, the context its text
+--- is in, and the context F last asked it to be read in, which is the
+--- context its text will be in once that read arrives.
+---@class aineo.changes.ShownDiff
+---@field entry aineo.changes.Entry
+---@field context aineo.git.DiffContext
+---@field asked aineo.git.DiffContext
+
+--- The diff each buffer the home showed holds, by buffer.
+---@type table<integer, aineo.changes.ShownDiff>
+local shown_diffs = {}
 
 --- Where an entry's diff is read from now, in the context the diffs are
 --- read in now (`aineo.changes.full_context`).
@@ -968,86 +978,94 @@ end
 --- How many times F has asked for a diff to be read again (`reread_diff()`).
 local rereads = 0
 
---- Writes `diff`, the text git printed for `entry` in the context the
---- re-read numbered `this_reread` asked for, into `buffer`, the buffer that
---- showed the entry's diff, while that re-read is the last and the buffer
---- exists still; then puts the cursor of `window`, if it shows the buffer,
---- on the line of the file it was on, or on the first line when the diff
---- no longer shows that line. A text Neovim refuses for now, as it does
---- while textlock holds, is written at the editor's next `SafeState`.
+--- Writes `diff`, the text git printed for `entry` in `context` for the
+--- re-read numbered `this_reread`, into `buffer`, the buffer that showed the
+--- entry's diff, while that re-read is the last and the buffer exists
+--- still; then puts the cursor of each window showing the buffer on the line
+--- of the file it was on, or on the first line when the diff no longer shows
+--- that line. A text Neovim refuses for now, as it does while textlock holds,
+--- is written at the editor's next `SafeState`.
 ---
 ---@param this_reread integer
 ---@param buffer integer
----@param window integer
 ---@param entry aineo.changes.Entry
+---@param context aineo.git.DiffContext
 ---@param diff string
-local function write_reread(this_reread, buffer, window, entry, diff)
+local function write_reread(this_reread, buffer, entry, context, diff)
   if this_reread ~= rereads or not vim.api.nvim_buf_is_valid(buffer) then
     return
   end
-  local shows_buffer = vim.api.nvim_win_is_valid(window)
-    and vim.api.nvim_win_get_buf(window) == buffer
-  local cursor = shows_buffer and vim.api.nvim_win_get_cursor(window)
-  local position = cursor
-    and diff_position.at(vim.api.nvim_buf_get_lines(buffer, 0, -1, true), cursor[1])
+  local before = vim.api.nvim_buf_get_lines(buffer, 0, -1, true)
+  local cursors = {}
+  for _, window in ipairs(vim.fn.win_findbuf(buffer)) do
+    local cursor = vim.api.nvim_win_get_cursor(window)
+    cursors[window] = { cursor = cursor, position = diff_position.at(before, cursor[1]) }
+  end
   if not diffs.diff_buffer(entry_diff.name(entry), diff) then
     vim.api.nvim_create_autocmd('SafeState', {
       once = true,
       desc = 'aineo: show the diff F read again once the editor allows it',
       callback = function()
-        write_reread(this_reread, buffer, window, entry, diff)
+        write_reread(this_reread, buffer, entry, context, diff)
       end,
     })
     return
   end
-  if shows_buffer then
-    local shown = vim.api.nvim_buf_get_lines(buffer, 0, -1, true)
-    local row = position and diff_position.row_of(shown, position) or 1
-    local column = math.min(cursor[2], math.max(#shown[row] - 1, 0))
-    vim.api.nvim_win_set_cursor(window, { row, column })
+  shown_diffs[buffer] = { entry = entry, context = context, asked = context }
+  local shown = vim.api.nvim_buf_get_lines(buffer, 0, -1, true)
+  for window, before_write in pairs(cursors) do
+    if vim.api.nvim_win_is_valid(window) and vim.api.nvim_win_get_buf(window) == buffer then
+      local row = before_write.position and diff_position.row_of(shown, before_write.position) or 1
+      local column = math.min(before_write.cursor[2], math.max(#shown[row] - 1, 0))
+      vim.api.nvim_win_set_cursor(window, { row, column })
+    end
   end
 end
 
---- Changes the context the diffs are read in (`aineo.changes.full_context`)
---- and reads the diff `buffer` shows again in it, the window F was pressed
---- in kept for the cursor (`write_reread()`); only the last F's read is
---- written, or its failure told, once.
+--- Reads the diff `buffer` shows again in the context other than the one it
+--- was last asked to be read in, and reads the diffs from now on in that
+--- context (`aineo.changes.full_context`); only the last F's read is
+--- written, or its failure told, once, the buffer then asked for the context
+--- its text is in.
 ---
 ---@param buffer integer
 local function reread_diff(buffer)
-  local entry = diff_entries[buffer]
-  if not entry or not session then
+  local shown = shown_diffs[buffer]
+  if not shown or not session then
     return
   end
-  local window = vim.api.nvim_get_current_win()
-  full_context.flip()
+  local context = full_context.other(shown.asked)
+  shown.asked = context
+  full_context.use(context)
   rereads = rereads + 1
   local this_reread = rereads
-  entry_diff.read(entry, diff_source(), function(failure, diff)
+  entry_diff.read(shown.entry, diff_source(), function(failure, diff)
     if this_reread ~= rereads then
       return
     end
     if failure then
-      tell_diff_unreadable(entry, failure)
+      shown.asked = shown.context
+      tell_diff_unreadable(shown.entry, failure)
       return
     end
-    write_reread(this_reread, buffer, window, entry, diff)
+    write_reread(this_reread, buffer, shown.entry, context, diff)
   end)
 end
 
---- Records that `buffer` shows the diff of `entry`, and maps F in it, in
---- Normal mode, to read that diff again in the other context
+--- Records that `buffer` holds the diff of `entry` read in `context`, and
+--- maps F in it, in Normal mode, to read that diff again in the other context
 --- (`reread_diff()`); the buffers of diffs since wiped are forgotten.
 ---
 ---@param buffer integer
 ---@param entry aineo.changes.Entry
-local function remember_diff(buffer, entry)
-  for remembered in pairs(diff_entries) do
+---@param context aineo.git.DiffContext
+local function remember_diff(buffer, entry, context)
+  for remembered in pairs(shown_diffs) do
     if not vim.api.nvim_buf_is_valid(remembered) then
-      diff_entries[remembered] = nil
+      shown_diffs[remembered] = nil
     end
   end
-  diff_entries[buffer] = entry
+  shown_diffs[buffer] = { entry = entry, context = context, asked = context }
   vim.keymap.set('n', 'F', function()
     reread_diff(buffer)
   end, {
@@ -1070,6 +1088,9 @@ end
 --- textlock holds and in the command-line window, where a window refuses
 --- the diff too (`aineo.changes.scratch`' `wipe()`): the buffer is then
 --- kept, shown nowhere, for the next call to show. Returns true otherwise.
+--- Once the buffer holds the diff it records the entry the buffer shows and
+--- the context the diff was read in, and maps F in the buffer
+--- (`remember_diff()`).
 ---
 ---@param selection aineo.changes.Selection
 ---@param diff string
@@ -1080,7 +1101,7 @@ local function show_diff(selection, diff)
   if not buffer then
     return false
   end
-  remember_diff(buffer, entry)
+  remember_diff(buffer, entry, selection.context)
   local shown, window = pcall(session.settings.show_diff, buffer)
   if shown and window then
     if vim.api.nvim_get_current_win() == selection.window then
@@ -1156,17 +1177,25 @@ local function open_entry(buffer)
   end
   enters = enters + 1
   local this_enter = enters
-  local selection = { entry = entry, window = vim.api.nvim_get_current_win() }
-  entry_diff.read(entry, diff_source(), function(failure, diff)
-    if this_enter ~= enters then
-      return
-    end
-    if failure then
-      tell_diff_unreadable(entry, failure)
-      return
-    end
-    show_last_diff(this_enter, selection, diff)
-  end)
+  local window = vim.api.nvim_get_current_win()
+  local function read_in_current_context()
+    local source = diff_source()
+    entry_diff.read(entry, source, function(failure, diff)
+      if this_enter ~= enters then
+        return
+      end
+      if source.context ~= full_context.current() then
+        read_in_current_context()
+        return
+      end
+      if failure then
+        tell_diff_unreadable(entry, failure)
+        return
+      end
+      show_last_diff(this_enter, { entry = entry, window = window, context = source.context }, diff)
+    end)
+  end
+  read_in_current_context()
 end
 
 --- A scratch buffer of the pane named `name` (`aineo.changes.scratch`),

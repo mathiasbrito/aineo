@@ -4,13 +4,14 @@
 
 local M = {}
 
---- Where a row of a diff stands: in the section of the file it shows (the
---- nth `diff --git` block; the text before the first is section 0), and
+--- Where a row of a diff stands: in the section of the file it shows, named
+--- by the `diff --git` line it starts with (the text before the first such
+--- line is the section named by an empty string), and
 --- either how far from the section's first row it is, while it is part of
 --- the section's header, or its line numbers in the old and the new file,
 --- those it has: a context row both, a `+` row the new, a `-` row the old.
 ---@class aineo.changes.DiffPosition
----@field section integer
+---@field section string
 ---@field head? integer the row's distance from the first row of its section, for a row before the section's first hunk
 ---@field old? integer the line's number in the old file
 ---@field new? integer the line's number in the new file
@@ -21,7 +22,7 @@ local M = {}
 --- A row with another sign has no position.
 ---
 ---@param sign string the row's first character
----@param section integer
+---@param section string
 ---@param old integer the old file's line number of the previous row of the hunk
 ---@param new integer the new file's line number of the previous row of the hunk
 ---@return aineo.changes.DiffPosition|nil position
@@ -46,11 +47,11 @@ end
 ---@return table<integer, aineo.changes.DiffPosition>
 local function positions_of(lines)
   local positions = {}
-  local section, section_start, in_hunk = 0, 1, false
+  local section, section_start, in_hunk = '', 1, false
   local old, new = 0, 0
   for row, line in ipairs(lines) do
     if vim.startswith(line, 'diff --git ') then
-      section, section_start, in_hunk = section + 1, row, false
+      section, section_start, in_hunk = line, row, false
     end
     local old_start, new_start = line:match('^@@ %-(%d+)[,%d]* %+(%d+)')
     if old_start then
