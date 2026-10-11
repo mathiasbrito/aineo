@@ -1,13 +1,14 @@
 ---
 wave: 00010
-status: planned
+status: landed
 rolling: true
 planned_by: the orchestrator's planning agent (Claude, Opus 5.5) for Mathias Santos de Brito
 planned_at: 2026-10-11
 base: 08c16b2
 claimed_by:
 claimed_at:
-landed_at:
+landed_at: 2026-10-11
+pull_requests: "#159, #161"
 ---
 
 # Wave 10 — the changes pane's filter and full-context diffs
@@ -153,4 +154,53 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 
 ## Landed
 
-<filled by the knowledge pass>
+Written 2026-10-11 by wave 10's closing knowledge pass, on `dev` `32283d1`. Wave 10 was dispatched from its merged plan on `dev` `e6a0295` with no `claimed` commit, each packet holding its own task mark; `claimed_by` and `claimed_at` stay empty. Both packets ran as designed: regular (D26), Sonnet implementers (A104), two reviews each (the attack on Opus, tests and records together on Sonnet), one fix round, then the orchestrator's check. The session notes hold every case, mutant and commit; this section is their record against the plan. The wave's assumptions are A93–A111 (*The orchestrator's rulings*, above) and A115–A117, A124 and A125 (below).
+
+### T43 — PR #159, merged by rebase (`dev` `5c7e21d`), released in v0.2.20 (PR #160, `main` `f647cfd`)
+
+`a0e0134` … `5c7e21d` (3 commits). Session note: [[Sessions/2026-10-11 — T43 Changes filter]].
+- **Dispatch.** On `dev` `e6a0295`, with the brief and its rulings (A93–A104, A105–A111); the trailers of the dispatch named Opus, where the implementer ran on Sonnet (A116).
+- **The packet** (head `eb6f308`). The commits window's two fixed lines, the 150 ms pause, the files window's first line, Enter's diffs within the filter and the two whole diffs, `*` marks under *Uncommitted* and *Session work* only. 49 cases; 21 mutants; whole suite 2543.
+- **Reviews on `eb6f308`.**
+  - *Attack (`neovim-lua-reviewer`):* a signed commit's files misread under `log.showSignature=true` (1, high); a root commit listing no files under `log.showRoot=false` (2); the selection becoming *Uncommitted* when the commits buffer is made anew and git is slower than the pause (3); an untracked embedded repository with no commit failing both whole diffs (4); the argument-list limit, avoidable (5); a failed read shown under the previous filter's heading (6); another worktree's merge commit changed too (7).
+  - *Tests and records (`records-reviewer`):* another worktree's commit line keeping the filter unpinned (1); the pause's restart unpinned (2); a case named for the pause that does not test it (3); the mutant count 22 against 21 rows (4); the commit trailers naming another model (5); the LIMITS wording and the task line's form (6, 7).
+- **Fix round**, by the author: findings 1–6 each red first, finding 7 by A115, the two missing cases, the records (A116). 8 more cases; 11 mutants killed, by assertion save one of mutant 7's five kills (a crash after its failed precondition); whole suite 2551.
+- **The orchestrator's check** at `ec30c46`, on `dev` `e6a0295`: whole suite 2551 cases, `Fails (0)`; lint clean; the mutant dropping `--no-show-signature` killed by assertion.
+- **Departures.** Six git exports where the brief named four reads (`uncommitted` is three, for Enter's two diffs); a filter change re-reads the whole files window, the other worktrees' sections included, where the brief says the files window "is read for it" (one ordered read path; named in LIMITS); the untracked paths reach `git add --intent-to-add` through `--pathspec-from-file` (fix round, attack 5), where the plan's A108 names the intent-to-add and the first round's LIMITS item named the argument-list limit; A115.
+
+### T44 — PR #161, merged by rebase (`dev` `32283d1`), released in v0.2.21 (PR #162, `main` `50a28da`)
+
+`0b09db7` … `32283d1` (5 commits). Session note: [[Sessions/2026-10-11 — T44 Full-context diffs]].
+- **Dispatch.** On `dev` `c3d4d30`, T43 merged. The implementer wrote the brief's *Amendment — 2026-10-11, at dispatch: T43 merged* as its first commit (A124), which found no spec conflict.
+- **The packet** (head `48afb1d`). `F` in a diff buffer the changes home shows re-reads it in the same buffer with the whole file as context, remembered for the editor's life, for a file, a commit, *Uncommitted*, *Session work* and another worktree's file, the cursor kept on the same line of the same file. 35 cases (12 in `tests/test_git_diffs.lua`, 23 in `tests/test_changes_full_context.lua`); 27 mutants, the plan’s five again on the final tree; whole suite 2586.
+- **Reviews on `48afb1d`.**
+  - *Attack (`neovim-lua-reviewer`):* the cursor going into another file when the files of a whole diff change between the two reads, a section named by its ordinal (1, high); an Enter in flight when `F` is pressed shown in the old context (2); `F` in a diff left in the other context re-reading the same three lines (3, a spec reading); the cursor restored in one window only (4).
+  - *Tests and records (`records-reviewer`):* a stale read's failure told, its guard unpinned (1); the header branch of `diff_position` unpinned (2); the mutant table not as its rules say (3); `show_diff()`'s docstring (4); nothing pinning that the context is never kept on disk (5, not required).
+- **Fix round**, by the author: a section named by its `diff --git` line; a read arriving in a changed context read again; A125; the cursor restored in every window that shows the buffer; the two pins; the mutant table renumbered. 8 more cases; 7 more mutants (28–34), 34 numbered in all beside the plan’s five; whole suite 2594.
+- **The orchestrator's check** at `221531c`, on `dev` `c3d4d30`: whole suite 2594 cases, `Fails (0)`; lint clean; the mutant naming a file's section by its position, not its `diff --git` line, killed by assertion.
+- **Departures.** The context travels as `options.context` (`'three_lines'` or `'whole_file'`), where the brief says each diff 'takes the context as an argument' (a positional one would have changed every caller); A124 (the amendment in the packet's first commit); A125.
+
+### Rulings made after dispatch — the orchestrator's assumptions, A115–A117, A124 and A125
+
+Under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"); none is a decision of the user's and none a D row. They continue *The orchestrator's rulings* (A93–A111), above, which is not edited after dispatch.
+
+- **A115 (T43 fix round, attack finding 7)** — A95's "everywhere" stands: Enter on another worktree's merge commit shows its diff against the first parent too (`COMMIT_HEADER` is shared); the help says so. It departs from the brief's "every line of another worktree, and what Enter does on it, stays exactly as today" for merge commits only.
+- **A116 (T43 fix round, tests and records finding 5)** — the pushed commits keep their trailers; the first two name a different model from the one the implementer ran on (Sonnet), and are not rewritten. The fix round's commits name Sonnet 5.5.
+- **A117 (T43 fix round)** — a mutant that survives does not make its code dead: where a survivor guards a reachable state, a case reaches it; code is deleted only once the state is shown unreachable. The attack's findings 2 and 3 were code removed that way, restored.
+- **A124 (T44's dispatch)** — the implementer writes T44's dispatch amendment into the brief as its first commit, in place of A93's separate amendment, for cost. Confirmed in T44's fix round.
+- **A125 (T44 fix round, attack finding 3)** — `F` sets the context to the opposite of what the buffer it is pressed in shows (or was last asked to show), and that becomes the remembered context; D48's "re-reads the same diff with the whole file" then holds in a buffer shown before a flip elsewhere. Brief item 3 is read this way; the help says so.
+
+### Records the reviews named false in dispatched files, left as dispatched
+
+The T43 brief's "Every line of another worktree, and what Enter does on it, stays exactly as today" (line 17) is false for another worktree's merge commit, whose diff Enter now shows against its first parent (A115). The brief is left as dispatched. Nothing else: the T44 amendment is the implementer's own first commit (A124), and found no conflict.
+
+### Wave 10 closed
+
+Wave 10 landed on 2026-10-11. Its packets are T43 (PR #159) and T44 (PR #161), the commits window as a filter (D47) and the full-context diff toggle (D48); the releases are v0.2.20 (T43) and v0.2.21 (T44). The suite grew from 2494 cases at the wave's base to 2594: 2551 after T43 and 2594 after T44. Its assumptions are A93–A111, A115–A117, A124 and A125, listed whole in *The orchestrator's rulings* and the section above. Retrospective: [[Sessions/2026-10-11 — Wave 10 retrospective]]. The next wave, 11, is T45 (`gf` on a name with a space or an apostrophe, in flight) and T46 (`\cs`, after the MVP review and the user's manual checks M7 and M8, O9 unruled).
+
+**Open threads at the close:**
+- An Enter's read that arrives after `F` changed the context is read again (a second git read of the same diff).
+- A diff buffer wiped between `F` and its read's arrival is skipped silently; the help does not say so.
+- `F` shadows Vim's `F{char}` in a diff buffer (A105).
+- A hold of textlock that refuses the commits page after a reset leaves the cursor on a stale row until the next write (T43).
+- The wave 9 threads stand: T36's directory moves (A91), two `--settings` on Claude Code's argv, `tests/test_entry_panes.lua`'s child death and the test Neovims left after runs, `tests/test_health.lua`'s Ctrl-C timing case under load, T39's O2.
