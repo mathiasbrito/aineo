@@ -291,4 +291,28 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 
 ## Landed
 
-<filled by the knowledge pass>
+Written 2026-10-11 by the T45 knowledge pass, on `dev` `d0055c9`. **The wave stays open:** T46 waits for the MVP review and the user's manual checks M7 and M8 (A114), and O9 is unruled; `status` is not set to `landed`. Only T45 is recorded here, and T46's part is added by its own knowledge pass.
+
+### T45 — PR #164, merged by rebase (`dev` `d0055c9`), released in v0.2.22 (PR #165, `main` `591fa2b`)
+
+`a3b2fef` … `a62588d` on the branch, `9a922f7` … `d0055c9` on `dev` (3 commits). Session note: [[Sessions/2026-10-11 — T45 Open a named file]].
+- **Dispatch.** On `dev` `32283d1`, T43 and T44 merged. The implementer wrote the brief's dated dispatch amendment as its first commit (A126); it found no spec conflict, and recorded that the brief's line numbers had moved.
+- **The packet** (head `8c2919f`). A buffer-local `gf` in the changes pane's files window opens the line's file by its path taken whole, so a name with a space or an apostrophe opens (A112); a deleted file is told gone, another worktree's file refused; `gf` is not mapped in the commits or diff buffers; the layout moves the file to the file column; the help says Enter and `gf` take any name. 11 mutants; whole suite 2618.
+- **Reviews on `8c2919f`.**
+  - *Attack (`neovim-lua-reviewer`):* no wrong file opened and nothing run over 45 awkward names; three LOW findings: `gf` on a directory's line opened netrw, and for a worktree nested in the editor's tree a listing of the other worktree's files (1); a failed `:edit` reached the user as a Lua stack trace (2); the `file` magic guard pinned only by side effect (3).
+  - *Tests and records (`records-reviewer`):* seven LOW findings: the commit-filter behaviour (A2) without a case (1); the `fs_lstat` choice without a case (2); mutant 1's count and mutant 6's second half misstated in the note (3, 4); the help's "Enter takes any name" without a case in this PR (5); the task line lacking the PR number and mutant mapping (6); the first commit's message miscounting (7).
+- **Fix round**, by the author (A127, A128): `gf` on a directory refuses with `aineo: <path> is a directory, not a file`; `pcall` around the edit, `Keyboard interrupt` ignored, any other error told once; a backtick-command name and `[x].txt` beside `x.txt` among the awkward names; a commit-filter case and a dangling-symlink case; the note's rows, count and task line corrected, the pushed commit not amended. 29 cases in `tests/test_changes_open_file.lua`; mutants F1–F7, six killed by assertion and F6 equivalent; whole suite 2625.
+- **The orchestrator's check** at `a62588d`, rebased on `dev` `1234fcd`: whole suite 2625 cases, `Fails (0)`; lint clean; the directory-refusal mutant killed by assertion.
+- **Departures.** The dispatch amendment's moved line numbers; no guard on `session.repository` (an entry listing a file exists only once the repository was found); under a commit filter `gf` opens the working tree's file (A2); a directory is refused where the brief named no such case (A127).
+
+### Rulings made after dispatch — the orchestrator's assumptions, A126–A128
+
+Under the user's instruction of 2026-10-06; none is a decision of the user's and none a D row. They continue *The orchestrator's rulings*, above, which is not edited after dispatch.
+
+- **A126 (T45's dispatch)** — the implementer writes T45's dispatch amendment into the brief as its first commit, as A124 did for T44.
+- **A127 (T45 fix round, attack finding 1)** — `gf` on a line whose path is a directory (a submodule, a nested repository, a worktree inside the tree) refuses with `aineo: <quoted> is a directory, not a file`, as it refuses another worktree's file; the help says so.
+- **A128 (T45 fix round, tests finding 5)** — the help's "Enter takes any name" stands on T43's and the wave 11 probes' evidence; no new case.
+
+**Open threads at T45:**
+- Under a commit filter `gf` opens the working tree's file, not the file at that commit (A2).
+- A directory's line is refused rather than opened (A127).

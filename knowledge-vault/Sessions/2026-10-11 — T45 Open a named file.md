@@ -104,4 +104,12 @@ The two reviews of `8c2919f` found no blocking fault. **A127 and A128 are the or
 
 ## Commits
 
-*Recorded after the merge.*
+Recorded after the merge, by the T45 knowledge pass. PR #164 merged by rebase as `a3b2fef` … `a62588d` (3 commits), now `9a922f7` … `d0055c9` on `dev`; the orchestrator verified the pull request's head `a62588d`, rebased on `dev` `1234fcd`: the whole suite 2625 cases, `Fails (0)`, lint clean, and the mutant for the directory refusal killed by assertion. Released in v0.2.22 (PR #165, `main` `591fa2b`).
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `a3b2fef` | `9a922f7` | Open a named file from the files window with gf |
+| `8c2919f` | `2fc0e78` | Pin T45's quoting and make its kills assertions; add its session note |
+| `a62588d` | `d0055c9` | Refuse a directory in gf, tell a failed edit once, pin the open's edges |
+
+The `Branch` column is the pull request's own commits (`refs/pull/164/head`); the verified head `a62588d` is the last of them. The first commit carries the brief's dispatch amendment (A126).
