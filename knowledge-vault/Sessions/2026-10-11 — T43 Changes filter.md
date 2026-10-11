@@ -123,10 +123,18 @@ On Neovim 0.12.5 (git 2.50.1), on the tree pushed: `make test` — 2543 cases in
 
 ## Task lines
 
-The wave holds its marks (rule 6). The line T43 would take:
+Marked done in the v1 plan note by wave 10's closing knowledge pass (PR #159, wave 10; released in v0.2.20). The line as the wave holds it:
 
 - [X] T43 — the commits window as a filter (C15, C13; D47): *Uncommitted* and *Session work* above the session's commits, the line under the cursor choosing, after a 150 ms pause, what the files window lists (named on its first line), Enter's diff within the filter and the two whole diffs, `*` marks under those two only, the other worktrees unchanged (PR #159, into `dev`, wave 10) — regular. The five mutants of `plan.md` › *Verification mutants* › T43 map to this note's mutants 1, 2b and 2c, 3, 4 and 5.
 
 ## Commits
 
-Recorded after the merge.
+Recorded after the merge, by wave 10's closing knowledge pass. PR #159 merged by rebase as `a0e0134` … `5c7e21d` (3 commits); the orchestrator verified the pull request's head `ec30c46`, rebased on `dev` `e6a0295`: the whole suite 2551 cases, `Fails (0)`, lint clean, and the mutant dropping `--no-show-signature` killed by assertion. Released in v0.2.20 (PR #160, `main` `f647cfd`).
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `8ea7f3f` | `a0e0134` | Filter the files window by the commits window's cursor line (T43) |
+| `eb6f308` | `6498026` | Drop what no mutant could see; pin the pause and the reselection (T43) |
+| `ec30c46` | `5c7e21d` | Answer the review of T43: restore what the mutants hid, fix four reads |
+
+The `Branch` column is the pull request's own commits (`refs/pull/159/head`); the verified head `ec30c46` is the last of them. The session note itself is in the packet's first commit; the fix round's note text is in the third.
