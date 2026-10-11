@@ -3,19 +3,30 @@ local git_repo = dofile('tests/helpers/git_repo.lua')
 
 local eq = MiniTest.expect.equality
 
+local children = dofile('tests/helpers/child.lua')
+
 local child = MiniTest.new_child_neovim()
+
+--- A second editor, holding a file open so that its swap file exists.
+local other = MiniTest.new_child_neovim()
 
 local T = MiniTest.new_set({
   hooks = {
     pre_case = function()
       git_repo.start_editor(child)
     end,
-    post_once = child.stop,
+    post_once = function()
+      child.stop()
+      other.stop()
+    end,
   },
 })
 
 --- The name of the changes pane's files buffer.
 local FILES = 'aineo://changes-files'
+
+--- The name of the changes pane's commits buffer.
+local COMMITS = 'aineo://changes-commits'
 
 --- The Lua that begins the changes home's session in the child for the
 --- directory `...` and shows the pane's two buffers there: the files buffer
@@ -142,16 +153,31 @@ local AWKWARD_NAMES = {
   { 'a backslash', 'a\\b.txt' },
   { 'a line break', 'a\nb.txt' },
   { 'a leading plus', '+-x.txt' },
+  { 'a backtick command', '`touch pwned`' },
 }
 
 T['gf']['opens a file whose name holds'] = MiniTest.new_set({ parametrize = AWKWARD_NAMES })
 
 T['gf']['opens a file whose name holds']['characters'] = function(_, name)
   local top = pane_listing_one_file('openfile-awkward', name)
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
 
   press_gf_on(2)
 
   eq(current_buffer_name(), vim.fs.joinpath(top, name))
+  eq(vim.uv.fs_stat(vim.fs.joinpath(top, 'pwned')), nil)
+end
+
+T['gf']['opens the file called [x].txt, not the x.txt a wildcard would match'] = function()
+  local top = pane_listing(
+    'openfile-wildcard-neighbour',
+    { ['x.txt'] = { 'wrong' }, ['[x].txt'] = { 'right' } },
+    { 'Files in: Session work', '  ? [x].txt', '  ? x.txt' }
+  )
+
+  press_gf_on(2)
+
+  eq(current_buffer_name(), vim.fs.joinpath(top, '[x].txt'))
 end
 
 T['gf']['on a deleted file opens nothing and says the file is gone'] = function()
@@ -180,6 +206,100 @@ T['gf']['on a deleted file names it as the files window does'] = function()
   press_gf_on(2)
 
   eq(child.lua_get(TOLD), 'aineo: "say \\"hi\\".txt" is gone from the working tree')
+end
+
+T['gf']['under a commit filter opens the working tree’s file, not the file as the commit had it'] = function()
+  local top = git_repo.create('openfile-commit-filter', { ['notes.txt'] = { 'one' } })
+  child.lua(BEGIN_AND_SHOW, { top })
+  git_repo.write(top, 'has space.txt', { 'in the commit' })
+  local commit = git_repo.commit_all(top, 'Add the file')
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    commit:sub(1, 7) .. ' Add the file',
+  })
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
+  child.type_keys('3G')
+  local filter_line = 'Files in: ' .. commit:sub(1, 7) .. ' Add the file'
+  expect_lines(FILES, { filter_line, '  A has space.txt' })
+  git_repo.write(top, 'has space.txt', { 'in the working tree' })
+
+  press_gf_on(2)
+
+  eq(current_buffer_name(), vim.fs.joinpath(top, 'has space.txt'))
+  eq(child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)'), { 'in the working tree' })
+end
+
+T['gf']['on a link whose target is missing opens the link, which is in the working tree'] = function()
+  local top = pane_listing(
+    'openfile-dangling',
+    {},
+    { 'Files in: Session work', 'No files changed on this session' }
+  )
+  assert(vim.uv.fs_symlink('missing-target.txt', vim.fs.joinpath(top, 'link.txt')))
+  expect_lines(FILES, { 'Files in: Session work', '  ? link.txt' })
+
+  press_gf_on(2)
+
+  eq(current_buffer_name(), vim.fs.joinpath(top, 'link.txt'))
+  eq(child.lua_get(TOLD), '')
+end
+
+T['gf']['on a directory’s line, a nested repository’s, opens nothing and says it is a directory'] = function()
+  local top = git_repo.create('openfile-directory', { ['notes.txt'] = { 'one' } })
+  git_repo.git(top, { 'init', '--quiet', 'nested' })
+  git_repo.write(top, 'nested/inner.txt', { 'text' })
+  child.lua(BEGIN_AND_SHOW, { top })
+  expect_lines(FILES, { 'Files in: Session work', '  ? nested/' })
+
+  MiniTest.expect.no_error(function()
+    press_gf_on(2)
+  end)
+
+  eq(current_buffer_name(), FILES)
+  eq(child.lua_get(TOLD), 'aineo: nested/ is a directory, not a file')
+end
+
+T['gf']['that :edit refuses is told once, not raised as an error of the plugin'] = function()
+  pane_listing(
+    'openfile-refused',
+    { ['has space.txt'] = { 'text' } },
+    { 'Files in: Session work', '  ? has space.txt' }
+  )
+  child.lua('vim.wo[vim.fn.bufwinid(...)].winfixbuf = true', { FILES })
+
+  MiniTest.expect.error(function()
+    press_gf_on(2)
+  end, 'aineo: has space.txt could not be opened: Vim:E1513')
+
+  eq(current_buffer_name(), FILES)
+end
+
+T['gf']['that the user abandons at the swap file’s prompt is dropped, as Vim’s own gf drops it'] = function()
+  local top = pane_listing(
+    'openfile-abandoned',
+    { ['has space.txt'] = { 'text' } },
+    { 'Files in: Session work', '  ? has space.txt' }
+  )
+  children.restart(other)
+  other.o.updatecount = 200
+  other.lua('vim.cmd.edit(vim.fn.fnameescape(...))', { vim.fs.joinpath(top, 'has space.txt') })
+  child.o.updatecount = 200
+  child.lua([[
+    vim.api.nvim_create_autocmd('SwapExists', {
+      callback = function()
+        vim.v.swapchoice = 'a'
+      end,
+    })
+  ]])
+
+  MiniTest.expect.no_error(function()
+    press_gf_on(2)
+  end)
+
+  eq(current_buffer_name(), FILES)
+  eq(child.lua_get(TOLD):find('could not be opened', 1, true), nil)
 end
 
 T['gf']['on another worktree’s file opens nothing, not the editor’s file of that name, and says so'] = function()

@@ -269,9 +269,13 @@ any file opened from one of the layout's windows is; with none of the
 layout's windows open, it opens in the window the pane is in, as |:edit|
 does. Under a commit it opens the working tree's file, not the file as that
 commit had it. On a file no longer in the working tree it opens nothing, and
-aineo says the file is gone; on a file under another worktree's heading it
-opens nothing, and aineo says the changes pane opens no other worktree's
-file; on any other line it does nothing and says nothing. It is a
+aineo says the file is gone; on a line whose path is a directory, a submodule,
+a nested repository or a worktree inside your tree, it opens nothing, and
+aineo says it is a directory, not a file; on a file under another worktree's
+heading it opens nothing, and aineo says the changes pane opens no other
+worktree's file; on any other line it does nothing and says nothing. An edit
+Neovim refuses is told once, naming the file; one you abandon at a swap
+file's prompt is dropped without a word, as Vim's own |gf| drops it. It is a
 Normal-mode map of the files window's buffer alone, made again whenever that
 buffer is made anew, so |gf| in every other buffer, the commits window and
 the diffs included, is Vim's own, and no `<Plug>` mapping stands for it.
