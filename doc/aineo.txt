@@ -264,6 +264,25 @@ heading included, does nothing. When the middle column has no room for the
 diff, aineo says so, shows nothing, and the cursor stays in the pane; so it
 does when showing the diff fails.
 
+In a diff the pane showed, `F` reads that diff again with the whole file as
+its context when its text shows three lines, and again with three lines of
+context when it shows the whole file, so that it always changes what the
+diff shows, even in a diff shown before an `F` in another one. It is a
+Normal-mode map of the diff's buffer alone, so it shadows Vim's `F{char}`
+there, and no `<Plug>` mapping stands for it. The diff is written into the
+same buffer, under the same name, with the commit's header when it has one,
+and the cursor of every window showing it stays on the same line of the same
+file, or goes to the first line when the diff no longer shows that line. It
+holds for every diff the pane shows, another worktree's too, the whole diffs
+of Uncommitted and Session work among them. The context `F` chose is kept
+until the editor quits, not on disk: each diff Enter shows after `F` is read
+in it, one already being read when `F` is pressed included, and the editor
+starts with three lines. A diff shown in another window keeps its text until
+Enter shows it again. `F` says nothing; when the diff cannot be read, aineo
+tells it once and leaves the buffer as it was, and the next diff Enter shows
+is read in the context `F` chose all the same. When you press `F` again
+before a diff was read, only the last one's is written.
+
 The pane is read again whenever it is shown — `\pc`, `:Aineo pane changes`,
 `\o`, or the layout built anew showing it — and, from its first showing
 until the editor quits, when a file is saved, when a file of the working
@@ -1439,7 +1458,9 @@ The changes pane ~
 - A large diff: a diff shows at most 1 MiB of what git gave, cut at the
   last line break within it, or a first line longer than that cut there,
   under one line saying how much of it is shown. git still gives the whole
-  diff first, which takes its time and memory.
+  diff first, which takes its time and memory. With the whole file as
+  context (`F`) a diff is larger, and the whole diff of a long session is
+  cut sooner.
 - A large repository: each read runs git over the whole working tree. On a
   repository of 20 001 files whose every file had been rewritten with its
   own content, one read took 1.5 to 3.1 seconds. A git that runs past 10

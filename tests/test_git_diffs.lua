@@ -717,4 +717,265 @@ T['a file’s diff']['from a base named like an option is refused, and writes no
   }, { reason = 'failed', beside = { 'repo' } })
 end
 
+--- The Lua that asks the git home in the child for the diff `operation`
+--- names — one of the six the home gives — in the repository of the
+--- directory `...`, with `request`'s `context`, and returns what
+--- `_G.await` saw. `request` holds what the operation takes: `base`,
+--- `change`, `commit`.
+local DIFF_IN_CONTEXT = [[
+  local directory, operation, request = ...
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end).result
+  local options = { context = request.context }
+  local operations = {
+    file_diff = function(done)
+      git.file_diff(found, request.base, request.change, done, options)
+    end,
+    uncommitted_file_diff = function(done)
+      git.uncommitted_file_diff(found, request.change, done, options)
+    end,
+    commit_diff = function(done)
+      git.commit_diff(found, request.commit, done, options)
+    end,
+    commit_file_diff = function(done)
+      git.commit_file_diff(found, request.commit, request.change, done, options)
+    end,
+    diff_since = function(done)
+      git.diff_since(found, request.base, done, options)
+    end,
+    uncommitted_diff = function(done)
+      git.uncommitted_diff(found, done, options)
+    end,
+  }
+  return _G.await(operations[operation])
+]]
+
+--- The lines `first`…`last` of a file whose line `n` reads `line n`.
+---
+---@param last integer
+---@return string[]
+local function numbered_lines(last)
+  local lines = {}
+  for number = 1, last do
+    table.insert(lines, 'line ' .. number)
+  end
+  return lines
+end
+
+--- The hunk headers (`@@ … @@`) of the unified diff `diff`, in order.
+---
+---@param diff string|nil
+---@return string[]
+local function hunk_headers(diff)
+  local headers = {}
+  for header in (diff or ''):gmatch('\n(@@ [^\n]- @@)') do
+    table.insert(headers, header)
+  end
+  return headers
+end
+
+--- Makes a repository whose base commit holds `a.txt` of 20 lines and, in
+--- the working tree, line 10 of it changed; returns the top level and the
+--- base.
+---
+---@param name string
+---@return string top
+---@return string base
+local function twenty_lines_with_the_tenth_changed(name)
+  local top, base = git_repo.create(name, { ['a.txt'] = numbered_lines(20) })
+  local changed = numbered_lines(20)
+  changed[10] = 'line ten'
+  git_repo.write(top, 'a.txt', changed)
+  return top, base
+end
+
+T['a diff in the whole file’s context'] = MiniTest.new_set()
+
+T['a diff in the whole file’s context']['of a file is one hunk from its first line to its last'] = function()
+  local top, base = twenty_lines_with_the_tenth_changed('diffs-context-file')
+
+  local seen = child.lua(DIFF_IN_CONTEXT, {
+    top,
+    'file_diff',
+    { base = base, change = { path = 'a.txt', kind = 'modified' }, context = 'whole_file' },
+  })
+
+  eq(hunk_headers(seen.result), { '@@ -1,20 +1,20 @@' })
+end
+
+T['a diff in the whole file’s context']['of a file is three lines of context when asked for three'] = function()
+  local top, base = twenty_lines_with_the_tenth_changed('diffs-context-three')
+
+  local seen = child.lua(DIFF_IN_CONTEXT, {
+    top,
+    'file_diff',
+    { base = base, change = { path = 'a.txt', kind = 'modified' }, context = 'three_lines' },
+  })
+
+  eq(hunk_headers(seen.result), { '@@ -7,7 +7,7 @@' })
+end
+
+T['a diff in the whole file’s context']['of a file is three lines of context when not asked for any'] = function()
+  local top, base = twenty_lines_with_the_tenth_changed('diffs-context-default')
+
+  local seen = child.lua(DIFF_IN_CONTEXT, {
+    top,
+    'file_diff',
+    { base = base, change = { path = 'a.txt', kind = 'modified' } },
+  })
+
+  eq(hunk_headers(seen.result), { '@@ -7,7 +7,7 @@' })
+end
+
+T['a diff in the whole file’s context']['of a context git has no name for is refused, not run'] = function()
+  local top, base = twenty_lines_with_the_tenth_changed('diffs-context-unknown')
+
+  local refusal = child.lua(
+    [[
+      local directory, base = ...
+      local git = require('aineo.git')
+      local found = _G.await(function(done)
+        git.find_repository(directory, done)
+      end).result
+      local asked, message = pcall(
+        git.file_diff,
+        found,
+        base,
+        { path = 'a.txt', kind = 'modified' },
+        function() end,
+        { context = 'wide' }
+      )
+      return { asked = asked, message = tostring(message) }
+    ]],
+    { top, base }
+  )
+
+  eq({ refusal.asked, refusal.message:find('context', 1, true) ~= nil }, { false, true })
+end
+
+T['a diff in the whole file’s context']['of a deleted file is wholly removed, as in three lines'] = function()
+  local top, base = git_repo.create('diffs-context-deleted', { ['gone.txt'] = numbered_lines(10) })
+  assert(vim.uv.fs_unlink(top .. '/gone.txt'))
+
+  local seen = child.lua(DIFF_IN_CONTEXT, {
+    top,
+    'file_diff',
+    { base = base, change = { path = 'gone.txt', kind = 'deleted' }, context = 'whole_file' },
+  })
+
+  eq(hunk_headers(seen.result), { '@@ -1,10 +0,0 @@' })
+end
+
+T['a diff in the whole file’s context']['of an untracked file is wholly added, as in three lines'] = function()
+  local top, base = git_repo.create('diffs-context-untracked', { ['a.txt'] = { 'a' } })
+  git_repo.write(top, 'new.txt', numbered_lines(10))
+
+  local seen = child.lua(DIFF_IN_CONTEXT, {
+    top,
+    'file_diff',
+    { base = base, change = { path = 'new.txt', kind = 'untracked' }, context = 'whole_file' },
+  })
+
+  eq(hunk_headers(seen.result), { '@@ -0,0 +1,10 @@' })
+end
+
+T['a diff in the whole file’s context']['of a renamed file is its rename, the whole file'] = function()
+  local top, base = git_repo.create('diffs-context-renamed', { ['old.txt'] = numbered_lines(20) })
+  git_repo.git(top, { 'mv', 'old.txt', 'new.txt' })
+  local changed = numbered_lines(20)
+  changed[10] = 'line ten'
+  git_repo.write(top, 'new.txt', changed)
+
+  local seen = child.lua(DIFF_IN_CONTEXT, {
+    top,
+    'file_diff',
+    {
+      base = base,
+      change = { path = 'new.txt', old_path = 'old.txt', kind = 'renamed' },
+      context = 'whole_file',
+    },
+  })
+
+  eq(
+    { hunk_headers(seen.result), seen.result:find('rename from old.txt', 1, true) ~= nil },
+    { { '@@ -1,20 +1,20 @@' }, true }
+  )
+end
+
+T['a diff in the whole file’s context']['of a file from HEAD is one hunk, whatever the session began at'] = function()
+  local top, _ = twenty_lines_with_the_tenth_changed('diffs-context-uncommitted-file')
+
+  local seen = child.lua(DIFF_IN_CONTEXT, {
+    top,
+    'uncommitted_file_diff',
+    { change = { path = 'a.txt', kind = 'modified' }, context = 'whole_file' },
+  })
+
+  eq(hunk_headers(seen.result), { '@@ -1,20 +1,20 @@' })
+end
+
+T['a diff in the whole file’s context']['of a commit is every file of it whole, after its header'] = function()
+  local top, _ = git_repo.create(
+    'diffs-context-commit',
+    { ['a.txt'] = numbered_lines(20), ['b.txt'] = numbered_lines(20) }
+  )
+  local changed = numbered_lines(20)
+  changed[10] = 'line ten'
+  git_repo.write(top, 'a.txt', changed)
+  git_repo.write(top, 'b.txt', changed)
+  local commit = git_repo.commit_all(top, 'Change both')
+
+  local seen =
+    child.lua(DIFF_IN_CONTEXT, { top, 'commit_diff', { commit = commit, context = 'whole_file' } })
+
+  eq({
+    header = vim.startswith(seen.result, 'commit ' .. commit .. '\n'),
+    hunks = hunk_headers(seen.result),
+  }, { header = true, hunks = { '@@ -1,20 +1,20 @@', '@@ -1,20 +1,20 @@' } })
+end
+
+T['a diff in the whole file’s context']['of a file in a commit is that file whole, after the header'] = function()
+  local top, _ = git_repo.create(
+    'diffs-context-commit-file',
+    { ['a.txt'] = numbered_lines(20), ['b.txt'] = numbered_lines(20) }
+  )
+  local changed = numbered_lines(20)
+  changed[10] = 'line ten'
+  git_repo.write(top, 'a.txt', changed)
+  git_repo.write(top, 'b.txt', changed)
+  local commit = git_repo.commit_all(top, 'Change both')
+
+  local seen = child.lua(DIFF_IN_CONTEXT, {
+    top,
+    'commit_file_diff',
+    { commit = commit, change = { path = 'a.txt', kind = 'modified' }, context = 'whole_file' },
+  })
+
+  eq({
+    header = vim.startswith(seen.result, 'commit ' .. commit .. '\n'),
+    hunks = hunk_headers(seen.result),
+    only_a = seen.result:find('b.txt', 1, true) == nil,
+  }, { header = true, hunks = { '@@ -1,20 +1,20 @@' }, only_a = true })
+end
+
+T['a diff in the whole file’s context']['since a base is every file whole, the untracked ones too'] = function()
+  local top, base = twenty_lines_with_the_tenth_changed('diffs-context-since')
+  git_repo.write(top, 'new.txt', numbered_lines(5))
+
+  local seen =
+    child.lua(DIFF_IN_CONTEXT, { top, 'diff_since', { base = base, context = 'whole_file' } })
+
+  eq(hunk_headers(seen.result), { '@@ -1,20 +1,20 @@', '@@ -0,0 +1,5 @@' })
+end
+
+T['a diff in the whole file’s context']['from HEAD is every uncommitted file whole'] = function()
+  local top, _ = twenty_lines_with_the_tenth_changed('diffs-context-uncommitted')
+
+  local seen = child.lua(DIFF_IN_CONTEXT, { top, 'uncommitted_diff', { context = 'whole_file' } })
+
+  eq(hunk_headers(seen.result), { '@@ -1,20 +1,20 @@' })
+end
+
 return T
