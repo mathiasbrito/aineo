@@ -264,6 +264,21 @@ heading included, does nothing. When the middle column has no room for the
 diff, aineo says so, shows nothing, and the cursor stays in the pane; so it
 does when showing the diff fails.
 
+`gf` on a file's line opens the working tree's file in the file column, as
+any file opened from one of the layout's windows is; with none of the
+layout's windows open, it opens in the window the pane is in, as |:edit|
+does. Under a commit it opens the working tree's file, not the file as that
+commit had it. On a file no longer in the working tree it opens nothing, and
+aineo says the file is gone; on a file under another worktree's heading it
+opens nothing, and aineo says the changes pane opens no other worktree's
+file; on any other line it does nothing and says nothing. It is a
+Normal-mode map of the files window's buffer alone, made again whenever that
+buffer is made anew, so |gf| in every other buffer, the commits window and
+the diffs included, is Vim's own, and no `<Plug>` mapping stands for it.
+Enter and `gf` take a file's name from the list itself, whatever characters
+it holds, spaces, quotes and an apostrophe among them: a name that fails to
+open from the pane is a fault to report.
+
 In a diff the pane showed, `F` reads that diff again with the whole file as
 its context when its text shows three lines, and again with three lines of
 context when it shows the whole file, so that it always changes what the
