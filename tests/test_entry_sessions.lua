@@ -594,6 +594,31 @@ T['a pick']['when Terminal mode is not entered writes nothing, says so, and writ
   eq(claude_session.received(fake):find('/resume', 1, true), nil)
 end
 
+T['a pick']['while the prompt holds a draft puts Insert mode back when the pick came in Insert mode'] = function()
+  local fake = sessions_fake('sessions-pick-draft-insert', 'draft')
+  open_layout_on(fake)
+  list_in(fake, three_sessions())
+  child.lua([[
+    vim.ui.select = function(items, _, on_choice)
+      vim.cmd('Aineo input')
+      vim.cmd.startinsert()
+      vim.defer_fn(function()
+        on_choice(items[3], 3)
+      end, 200)
+    end
+  ]])
+
+  press_sessions()
+
+  messages_once_told()
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(MODE) == 'i'
+  end, 20)
+  eq(entry.current_window(child), 'aineo://input')
+  eq(child.lua_get(MODE), 'i')
+  eq(claude_session.received(fake):find('/resume', 1, true), nil)
+end
+
 T['a pick']['of a row running elsewhere writes nothing and says why it cannot be switched to'] = function()
   local fake = sessions_fake('sessions-pick-elsewhere', 'ready')
   open_layout_on(fake)
