@@ -1,4 +1,5 @@
---- Lists the files of a repository that differ from a base.
+--- Lists the files of a repository that differ from a base, from `HEAD`, or
+--- that a commit changed.
 
 local private_index = require('aineo.git.private_index')
 local process = require('aineo.git.process')
@@ -121,6 +122,57 @@ function M.changed_files(run, found, base, done)
     base,
     process.or_fail(done, function(tree_ish)
       list_changes(run, found, tree_ish, done)
+    end)
+  )
+end
+
+--- Lists the files of `found` that differ from `HEAD` as it is now, and
+--- calls `done(nil, changes)`, or `done(failure)`. Before the first commit
+--- every file is new.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param done fun(failure: aineo.git.Failure|nil, changes: aineo.git.Change[]|nil)
+function M.uncommitted_files(run, found, done)
+  repository.read_head(
+    run,
+    found.top,
+    process.or_fail(done, function(head)
+      M.changed_files(run, found, head, done)
+    end)
+  )
+end
+
+--- Lists the files the commit `commit` changed in `found`, against its
+--- first parent, or against nothing for a root commit, and calls
+--- `done(nil, changes)`, or `done(failure)`. A merge lists what it brought
+--- in from the branch it merged, not what each parent has that the other
+--- lacks.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param commit string the commit's id
+---@param done fun(failure: aineo.git.Failure|nil, changes: aineo.git.Change[]|nil)
+function M.commit_files(run, found, commit, done)
+  run(
+    {
+      directory = found.top,
+      arguments = {
+        'show',
+        '--format=',
+        '--name-status',
+        '-z',
+        '-M',
+        '--root',
+        '--diff-merges=first-parent',
+        '-O/dev/null',
+        '--end-of-options',
+        commit,
+        '--',
+      },
+    },
+    process.or_fail(done, function(output)
+      done(nil, parse_name_status(output.stdout))
     end)
   )
 end

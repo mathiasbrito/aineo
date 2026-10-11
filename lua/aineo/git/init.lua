@@ -56,6 +56,31 @@ function M.changed_files(found, base, done, options)
   changes.changed_files(process.runner(options), found, base, done)
 end
 
+--- Lists the files of `found` that differ from `HEAD` as it is now — staged
+--- or not — and the untracked files its ignore rules leave in, with paths
+--- relative to its top level; calls `done(nil, changes)`, or `done(failure)`.
+--- Before the first commit every file counts as new.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param done fun(failure: aineo.git.Failure|nil, changes: aineo.git.Change[]|nil)
+---@param options? aineo.git.Options
+function M.uncommitted_files(found, done, options)
+  changes.uncommitted_files(process.runner(options), found, done)
+end
+
+--- Lists the files the commit `commit` changed in `found`, against its
+--- first parent — a merge lists what it brought in — with paths relative to
+--- its top level; calls `done(nil, changes)`, or `done(failure)`. A root
+--- commit lists its files as added, an empty commit none.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param commit string the commit's id
+---@param done fun(failure: aineo.git.Failure|nil, changes: aineo.git.Change[]|nil)
+---@param options? aineo.git.Options
+function M.commit_files(found, commit, done, options)
+  changes.commit_files(process.runner(options), found, commit, done)
+end
+
 --- Lists the commits of `found` reachable from `HEAD` and not from the
 --- commit `base`, newest first, and whether `base` is still an ancestor of
 --- `HEAD`; calls `done(nil, commits_since)`, or `done(failure)`.
@@ -82,9 +107,46 @@ function M.file_diff(found, base, change, done, options)
   diffs.file_diff(process.runner(options), found, base, change, done)
 end
 
+--- Gives the unified diff of the file `change` names in `found`, from `HEAD`
+--- as it is now to the working tree, as `M.file_diff()` gives it from a
+--- base, and calls `done(nil, diff)`, or `done(failure)`.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param change aineo.git.Change one of the changes `M.uncommitted_files()` gave
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+---@param options? aineo.git.Options
+function M.uncommitted_file_diff(found, change, done, options)
+  diffs.uncommitted_file_diff(process.runner(options), found, change, done)
+end
+
+--- Gives the unified diff of every file of `found` from the commit `base` to
+--- the working tree — the untracked files the ignore rules leave in wholly
+--- added, without touching the repository's index — and calls
+--- `done(nil, diff)`, or `done(failure)`.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param base string|nil the full id of the commit the diff runs from; nil runs it from nothing
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+---@param options? aineo.git.Options
+function M.diff_since(found, base, done, options)
+  diffs.diff_since(process.runner(options), found, base, done)
+end
+
+--- Gives the unified diff of every file of `found` from `HEAD` as it is now
+--- to the working tree, as `M.diff_since()` gives it from a base, and calls
+--- `done(nil, diff)`, or `done(failure)`.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+---@param options? aineo.git.Options
+function M.uncommitted_diff(found, done, options)
+  diffs.uncommitted_diff(process.runner(options), found, done)
+end
+
 --- Gives the unified diff of the commit `commit` in `found`, after its
 --- header — its id, author, date and message — as `git show` gives it in
---- its default format, and calls `done(nil, diff)`, or `done(failure)`.
+--- its default format, a merge's against its first parent, and calls
+--- `done(nil, diff)`, or `done(failure)`.
 ---
 ---@param found aineo.git.Repository as `M.find_repository()` gave it
 ---@param commit string the commit's id
@@ -92,6 +154,19 @@ end
 ---@param options? aineo.git.Options
 function M.commit_diff(found, commit, done, options)
   diffs.commit_diff(process.runner(options), found, commit, done)
+end
+
+--- Gives the diff of the commit `commit` in `found`, after its header, as
+--- `M.commit_diff()` gives it, limited to the file `change` names, and calls
+--- `done(nil, diff)`, or `done(failure)`.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param commit string the commit's id
+---@param change aineo.git.Change one of the changes `M.commit_files()` gave
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+---@param options? aineo.git.Options
+function M.commit_file_diff(found, commit, change, done, options)
+  diffs.commit_file_diff(process.runner(options), found, commit, change, done)
 end
 
 --- Lists the worktrees of the repository `found` is in, and calls

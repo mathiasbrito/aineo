@@ -79,6 +79,17 @@ function M.write_page(buffer, page)
   return true
 end
 
+--- The line of `buffer` that lists the entry `key` names in the page it was
+--- last given, or nil when none does.
+---
+---@param buffer integer
+---@param key string
+---@return integer|nil line
+function M.line_of(buffer, key)
+  local page = pages[buffer]
+  return page and line_listing(page, key)
+end
+
 --- The entry line `line` of `buffer` lists in the page it was last given,
 --- or nil when that line lists none.
 ---
