@@ -1,0 +1,93 @@
+== P1: the cost of one files read, on a clone of this repository
+commits: 609; files: 528
+diff-tree, one commit (HEAD): 61 ms (runs: 39 100 71 61 50)
+diff-tree, one commit (HEAD~5): 44 ms (runs: 44 35 31 64 46)
+show --name-status, one commit: 38 ms (runs: 39 43 30 38 37)
+uncommitted: diff --name-status HEAD: 70 ms (runs: 70 68 63 77 83)
+uncommitted: ls-files --others: 42 ms (runs: 42 35 56 42 38)
+session work: diff --name-status HEAD~60: 88 ms (runs: 93 76 99 88 73)
+log HEAD~60..HEAD: 35 ms (runs: 31 35 39 35 39)
+
+== P2: a merge commit's and a root commit's files
+-- diff-tree -r --name-status <merge> (default):
+exit 0
+-- diff-tree --first-parent? (diff-tree -r <merge>^1 <merge>):
+A	b
+-- show --format= --name-status <merge> (default, combined):
+exit 0
+-- show --format= --name-status --diff-merges=first-parent <merge>:
+A	b
+-- log --format=%h:%s main~1..main (the merge is listed):
+9e61078:Merge branch 'side'
+9374970:side
+-- root commit, diff-tree without --root:
+(printed nothing above means nothing)
+-- root commit, diff-tree --root:
+A	a
+-- an empty commit:
+exit 0 (nothing listed)
+
+== P3: full context
+-U3: exit 0 lines 22 hunks 2 first-hunk: @@ -2,7 +2,7 @@
+-U1000000: exit 0 lines 47 hunks 1 first-hunk: @@ -1,40 +1,40 @@
+-U2147483647: exit 0 lines 47 hunks 1 first-hunk: @@ -1,40 +1,40 @@
+-U2147483648: exit 0 lines 38 hunks 1 first-hunk: @@ -2147483653,4294967265- +2147483653,4294967265- @@
+-U99999999999: exit 0 lines 47 hunks 1 first-hunk: @@ -1,40 +1,40 @@
+-U-1: exit 0 lines 38 hunks 1 first-hunk: @@ -6,29 +6,29 @@
+-- --function-context on a plain text file:
+@@ -1,40 +1,40 @@
+-- -U2147483647, deleted file:
+deleted file mode 100644
+@@ -1,10 +0,0 @@
+-- -U2147483647, renamed and modified (staged rename), both paths:
+similarity index 95%
+rename from old
+rename to new
+@@ -1,30 +1,30 @@
+-- -U2147483647, untracked via --no-index:
+new file mode 100644
+@@ -0,0 +1,5 @@
+-- show -U2147483647 of a commit (every file whole):
+diff --git a/f b/f
+@@ -1,40 +1,40 @@
+diff --git a/fresh b/fresh
+@@ -0,0 +1,5 @@
+diff --git a/gone b/gone
+@@ -1,10 +0,0 @@
+diff --git a/old b/new
+@@ -1,30 +1,30 @@
+
+== P3b: size of full-context diffs on this repository
+08c16b2: -U3 18845 bytes, full 245263 bytes
+cc0b036: -U3 61573 bytes, full 438729 bytes
+536a694: -U3 10752 bytes, full 15945 bytes
+c92b41e: -U3 3384 bytes, full 48880 bytes
+HEAD~60..working tree: -U3 1179594 bytes, full 2454105 bytes
+show -U3 HEAD: 34 ms (runs: 39 64 34 32 34)
+show full HEAD: 32 ms (runs: 31 33 32 32 32)
+diff full HEAD~60: 96 ms (runs: 57 58 195 303 96)
+
+== P4: untracked files in a whole diff, through intent-to-add on a private index
+-- git diff HEAD on the private index:
+ brand-new | 1 +
+ f         | 1 +
+ 2 files changed, 2 insertions(+)
+-- the real index is untouched (status --short):
+ M f
+?? brand-new
+-- git diff HEAD on the real index (untracked absent):
+ f | 1 +
+ 1 file changed, 1 insertion(+)
+
+== P5: a held key (read, not timed)
+- The host's `defaults read -g KeyRepeat` and `InitialKeyRepeat` are unset (macOS
+  defaults apply); the interval between repeated keys was not measured.
+- Neovim 0.12.5, `:h CursorMoved`: "After the cursor was moved in Normal or Visual
+  mode or to another window. [...] Not always triggered when there is typeahead,
+  while executing commands in a script file, or when an operator is pending."
+  So a held `j` that Neovim keeps up with fires CursorMoved once per key; the
+  pause before a re-read has to outlast the gap between two repeated keys.
+
+Host: macOS arm64, git 2.50.1 (Apple Git-155), NVIM v0.12.5; the probe ran on a
+`git clone --no-local` of this repository at `08c16b2` (609 commits, 528 files),
+under .tests/w10-probe, with no global or system git configuration.
