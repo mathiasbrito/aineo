@@ -1,7 +1,10 @@
 --- The changes pane's content, `require('aineo.changes')`: the session's
---- base, its files changed since — the user's saves marked — and its
---- commits, each listed in a buffer of the pane, then each other worktree
---- of its repository's files and commits since that worktree's own base
+--- base, its commits — under the two lines *Uncommitted* and *Session work*
+--- — and the files of the filter the commits window's cursor chose
+--- (`aineo.changes.filter`): what differs from `HEAD`, what changed since
+--- the base — the user's saves marked — or what one commit changed, each
+--- listed in a buffer of the pane, then each other worktree of its
+--- repository's files and commits since that worktree's own base
 --- (`aineo.changes.worktrees`), and read again as the repository changes
 --- once the pane has been shown. Once told which Claude Code session the
 --- pane is for, the base and the saves are that session's, kept under the
@@ -9,14 +12,21 @@
 
 local git = require('aineo.git')
 local diffs = require('aineo.changes.diffs')
+local entry_diff = require('aineo.changes.entry_diff')
+local filter = require('aineo.changes.filter')
 local kept = require('aineo.changes.kept')
 local lines = require('aineo.changes.lines')
 local pages = require('aineo.changes.pages')
+local pause = require('aineo.changes.pause')
 local scratch = require('aineo.changes.scratch')
 local serial = require('aineo.changes.serial')
 local worktrees = require('aineo.changes.worktrees')
 
 local M = {}
+
+--- How long the cursor must stay in the commits window before the files
+--- window is read for the line under it.
+local SELECTION_PAUSE_MS = 150
 
 --- What the composition root hands the home as the session begins.
 ---@class aineo.changes.SessionSettings
@@ -35,7 +45,9 @@ local M = {}
 ---@field looking_for_head? boolean whether git looks for `HEAD`, the base of the session followed, while it runs
 ---@field head_look_failed? boolean whether the last look for the base of the session followed failed
 ---@field keeping_failed? boolean whether the last write of the base and the saves of the session followed failed
----@field changes? aineo.git.Change[] the files changed since the base, as last read
+---@field selected aineo.changes.Filter the filter the commits window's cursor last selected: *Session work* until it selects another
+---@field cursor_unplaced boolean whether the commits window's cursor is still to be put on the selected filter's line, which it is until the commits window lists that line in a window
+---@field listed? aineo.changes.Listing what the files window lists, as last read
 ---@field files_failure? aineo.git.Failure why the last read of the files failed, when it did
 ---@field commits? aineo.git.CommitsSince the commits since the base, as last read
 ---@field commits_failure? aineo.git.Failure why the last read of the commits failed, when it did
@@ -64,20 +76,28 @@ local followed_before_beginning = nil
 ---@type table<string, { base: string|nil, saved: table<string, true>, keeps: boolean|nil }>
 local held_bases = {}
 
+--- What the files window lists.
+---@class aineo.changes.Listing
+---@field filter aineo.changes.Filter the filter whose files these are
+---@field changes aineo.git.Change[] its files, as last read
+
 --- The pane's buffers, by window.
 ---@type { files: integer|nil, commits: integer|nil }
 local buffers = {}
 
 --- The files window's page for what the session knows: why it has no
---- repository, when it has none, or its files.
+--- repository, when it has none, or the files of the filter it lists, the
+--- selected one before any list was read.
 ---
 ---@return aineo.changes.Page
 local function files_page()
   if session.absence then
     return lines.no_repository(session.absence, session.settings.directory)
   end
+  local listed = session.listed
   return lines.files_window({
-    changes = session.changes,
+    filter = session.repository and (listed and listed.filter or session.selected) or nil,
+    changes = listed and listed.changes,
     failure = session.files_failure or session.watch_failure,
     saved = session.saved,
     unwatched_subdirectories = session.watch ~= nil and not session.watch.watches_subdirectories,
@@ -97,6 +117,7 @@ local function commits_page()
     since = session.commits,
     base = session.base,
     failure = session.commits_failure or session.watch_failure,
+    lists_filters = session.repository ~= nil,
     worktrees = session.commits_others,
   })
 end
@@ -120,15 +141,23 @@ local refused = {}
 --- the session knows, while it can be written (`is_writable()`). A page
 --- Neovim refuses, as it does while textlock holds, is written again at the
 --- editor's next `SafeState`, once whatever was refused meanwhile, with what
---- the session knows then.
+--- the session knows then. Calls `written()`, when given, each time a page
+--- was written.
 ---
 ---@param buffer integer|nil
 ---@param page fun(): aineo.changes.Page
-local function show_page(buffer, page)
+---@param written? fun()
+local function show_page(buffer, page, written)
   if not (session and is_writable(buffer)) then
     return
   end
-  if pages.write_page(buffer, page()) or refused[buffer] then
+  if pages.write_page(buffer, page()) then
+    if written then
+      written()
+    end
+    return
+  end
+  if refused[buffer] then
     return
   end
   refused[buffer] = true
@@ -137,7 +166,7 @@ local function show_page(buffer, page)
     desc = 'aineo: write the changes pane once the editor allows it',
     callback = function()
       refused[buffer] = nil
-      show_page(buffer, page)
+      show_page(buffer, page, written)
     end,
   })
 end
@@ -148,10 +177,30 @@ local function show_files()
   show_page(buffers.files, files_page)
 end
 
+--- Puts the cursor of each window showing the commits buffer on the line of
+--- the selected filter, while the session says it is still to be put there
+--- (`aineo.changes.Session`'s `cursor_unplaced`) and the buffer lists that
+--- line in a window.
+local function place_commits_cursor()
+  if not (session.cursor_unplaced and is_writable(buffers.commits)) then
+    return
+  end
+  local line = pages.line_of(buffers.commits, filter.key(session.selected))
+  local windows = vim.fn.win_findbuf(buffers.commits)
+  if not line or #windows == 0 then
+    return
+  end
+  for _, window in ipairs(windows) do
+    vim.api.nvim_win_set_cursor(window, { line, 0 })
+  end
+  session.cursor_unplaced = false
+end
+
 --- Writes the commits buffer for what the session knows (`commits_page()`,
---- `show_page()`).
+--- `show_page()`), then puts the cursor on the selected filter's line when
+--- it is still to be put there (`place_commits_cursor()`).
 local function show_commits()
-  show_page(buffers.commits, commits_page)
+  show_page(buffers.commits, commits_page, place_commits_cursor)
 end
 
 --- Whether the session's base is the one a read was asked from: not once
@@ -242,14 +291,34 @@ local function window_read(reads)
   end
 end
 
---- Reads the files changed since the base, and those of each other
---- worktree since its own, and shows them (`window_read()`).
+--- Reads the files of the selected filter from the session's repository,
+--- the session's base for *Session work*, and calls `done(failure,
+--- listing)`: the listing of the filter asked for, nil on a failure.
+---
+---@param base string|nil
+---@param done fun(failure: aineo.git.Failure|nil, listing: aineo.changes.Listing|nil)
+local function read_selected_files(base, done)
+  local selected = session.selected
+  local repository, options = session.repository, session.settings.git
+  local function listing_of(failure, changes)
+    done(failure, changes and { filter = selected, changes = changes })
+  end
+  if selected.kind == 'uncommitted' then
+    git.uncommitted_files(repository, listing_of, options)
+  elseif selected.kind == 'commit' then
+    git.commit_files(repository, selected.commit.id, listing_of, options)
+  else
+    git.changed_files(repository, base, listing_of, options)
+  end
+end
+
+--- Reads the files of the selected filter, and those of each other
+--- worktree since its own base, and shows them (`window_read()`). A read
+--- that fails keeps the listing shown, filter and files.
 local read_files = window_read({
-  read_own = function(base, done)
-    git.changed_files(session.repository, base, done, session.settings.git)
-  end,
-  take_own = function(failure, changes)
-    session.changes = changes or session.changes
+  read_own = read_selected_files,
+  take_own = function(failure, listing)
+    session.listed = listing or session.listed
     session.files_failure = failure
   end,
   read_list = function(repository, base, done)
@@ -259,15 +328,43 @@ local read_files = window_read({
   show = show_files,
 })
 
+--- Selects *Session work* again, the commits window's cursor to be put on
+--- its line (`place_commits_cursor()`).
+local function select_session_work()
+  session.selected = filter.SESSION_WORK
+  session.cursor_unplaced = true
+end
+
+--- Whether `commits`, as last read, still list the commit `selected` names.
+---
+---@param selected aineo.changes.Filter a `commit` filter
+---@param commits aineo.git.Commit[]
+---@return boolean
+local function lists_commit(selected, commits)
+  return vim.iter(commits):any(function(commit)
+    return commit.id == selected.commit.id
+  end)
+end
+
 --- Reads the commits since the base, and those of each other worktree
---- since its own, and shows them (`window_read()`).
+--- since its own, and shows them (`window_read()`). When the commit the
+--- files window lists is no longer among them — after a reset, a rebase —
+--- *Session work* is selected again, and the files window read for it.
 local read_commits = window_read({
   read_own = function(base, done)
     git.commits_since(session.repository, base, done, session.settings.git)
   end,
-  take_own = function(failure, commits)
-    session.commits = commits or session.commits
+  take_own = function(failure, since)
+    session.commits = since or session.commits
     session.commits_failure = failure
+    if
+      since
+      and session.selected.kind == 'commit'
+      and not lists_commit(session.selected, since.commits)
+    then
+      select_session_work()
+      read_files(true)
+    end
   end,
   read_list = function(repository, base, done)
     git.commits_since(repository, base, done, session.settings.git)
@@ -365,7 +462,7 @@ end
 --- Reads both lists again for the session's new base, from nothing: until
 --- they are read, each window says aineo is reading the repository.
 local function read_for_new_base()
-  session.changes, session.files_failure = nil, nil
+  session.listed, session.files_failure = nil, nil
   session.commits, session.commits_failure = nil, nil
   show_files()
   show_commits()
@@ -693,6 +790,8 @@ function M.begin_session(settings)
   session = {
     settings = settings,
     followed = followed_before_beginning,
+    selected = filter.SESSION_WORK,
+    cursor_unplaced = true,
     shown = false,
     following_soon = false,
     saved = {},
@@ -751,6 +850,7 @@ function M.follow_changes_session(followed)
   end
   hold_unkept_base()
   session.followed = followed
+  select_session_work()
   session.looking_for_head, session.head_look_failed, session.keeping_failed = false, false, false
   if not session.repository then
     return
@@ -821,52 +921,14 @@ function M.hand_over_changes_session(hand_over)
   end
 end
 
---- The name of the buffer showing `entry`'s diff: `aineo://diff/<path>` for
---- a file, its path quoted as the files window shows it, and
---- `aineo://commit/<id>` for a commit, by its full id; for an entry of
---- another worktree, `aineo://worktree<top>//diff/<path>` and
---- `aineo://worktree<top>//commit/<id>`, the worktree's top level quoted
---- too, so that two worktrees' diffs are two buffers, whatever their paths:
---- a resolved top level holds no `//`, and neither does a path git gives.
----
----@param entry aineo.changes.Entry
----@return string
-local function diff_name(entry)
-  local diff = entry.commit and 'commit/' .. entry.commit.id
-    or 'diff/' .. lines.quoted_path(entry.change.path)
-  if entry.worktree then
-    return ('aineo://worktree%s//%s'):format(lines.quoted_path(entry.worktree.top), diff)
-  end
-  return 'aineo://' .. diff
-end
-
---- What the diff of `entry` is called in what aineo tells the user: the
---- diff of the file's path, quoted as the files window shows it, or of the
---- commit's abbreviated id; for an entry of another worktree, followed by
---- `in the worktree <folder>`, its folder's name as its heading gives it.
----
----@param entry aineo.changes.Entry
----@return string
-local function told_name(entry)
-  local name = entry.commit and 'commit ' .. entry.commit.id:sub(1, lines.ABBREVIATED_ID_LENGTH)
-    or lines.quoted_path(entry.change.path)
-  if entry.worktree then
-    return ('%s in the worktree %s'):format(
-      name,
-      lines.quoted_path(vim.fs.basename(entry.worktree.top))
-    )
-  end
-  return name
-end
-
 --- An entry the user selected with Enter, and the window Enter was pressed in.
 ---@class aineo.changes.Selection
 ---@field entry aineo.changes.Entry
 ---@field window integer
 
 --- Shows `diff`, the text git printed for the `selection`'s entry, in a
---- diff buffer named for it (`diff_name()`, `aineo.changes.diffs`) through
---- the session's `show_diff`, then moves the cursor to the window showing
+--- diff buffer named for it (`entry_diff.name()`, `aineo.changes.diffs`)
+--- through the session's `show_diff`, then moves the cursor to the window showing
 --- it, in the mode the user is in, while the cursor is still in the window
 --- Enter was pressed in: the move answers that Enter, and a user who has
 --- gone elsewhere since stays there. When the middle column has no room
@@ -884,7 +946,7 @@ end
 ---@return boolean allowed
 local function show_diff(selection, diff)
   local entry = selection.entry
-  local buffer = diffs.diff_buffer(diff_name(entry), diff)
+  local buffer = diffs.diff_buffer(entry_diff.name(entry), diff)
   if not buffer then
     return false
   end
@@ -900,37 +962,21 @@ local function show_diff(selection, diff)
   end
   if not shown then
     vim.notify(
-      ('aineo: the diff of %s could not be shown: %s'):format(told_name(entry), tostring(window)),
+      ('aineo: the diff of %s could not be shown: %s'):format(
+        entry_diff.told_name(entry),
+        tostring(window)
+      ),
       vim.log.levels.ERROR
     )
     return true
   end
   vim.notify(
     ('aineo: the middle column has no room for the diff of %s, which is not shown'):format(
-      told_name(entry)
+      entry_diff.told_name(entry)
     ),
     vim.log.levels.WARN
   )
   return true
-end
-
---- Reads the diff of `entry` — a file's from the base, or a commit's — and
---- calls `done(failure, diff)`: in the session's repository from its base,
---- or, for an entry of another worktree, in that worktree from the base its
---- list was read from.
----
----@param entry aineo.changes.Entry
----@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
-local function read_diff(entry, done)
-  local repository, base = session.repository, session.base
-  if entry.worktree then
-    repository, base = entry.worktree.repository, entry.worktree.base
-  end
-  if entry.commit then
-    git.commit_diff(repository, entry.commit.id, done, session.settings.git)
-  else
-    git.file_diff(repository, base, entry.change, done, session.settings.git)
-  end
 end
 
 --- How many times Enter has asked for a diff (`open_entry()`).
@@ -950,7 +996,7 @@ local enters = 0
 ---@param diff string
 local function show_last_diff(this_enter, selection, diff)
   if this_enter ~= enters then
-    if diffs.wipe_unshown(diff_name(selection.entry)) then
+    if diffs.wipe_unshown(entry_diff.name(selection.entry)) then
       return
     end
   elseif show_diff(selection, diff) then
@@ -966,8 +1012,8 @@ local function show_last_diff(this_enter, selection, diff)
 end
 
 --- Reads the diff of the entry the line under the cursor lists in `buffer`
---- (`read_diff()`) and shows it (`show_last_diff()`), the current window
---- kept as the one Enter was pressed in (`aineo.changes.Selection`), unless
+--- (`aineo.changes.entry_diff`) and shows it (`show_last_diff()`), the
+--- current window kept as the one Enter was pressed in (`aineo.changes.Selection`), unless
 --- Enter asked for another diff meanwhile: only the last Enter's diff is
 --- shown, or its failure told. Does nothing on a line that lists none.
 ---
@@ -980,14 +1026,19 @@ local function open_entry(buffer)
   enters = enters + 1
   local this_enter = enters
   local selection = { entry = entry, window = vim.api.nvim_get_current_win() }
-  read_diff(entry, function(failure, diff)
+  local source = {
+    repository = session.repository,
+    base = session.base,
+    options = session.settings.git,
+  }
+  entry_diff.read(entry, source, function(failure, diff)
     if this_enter ~= enters then
       return
     end
     if failure then
       vim.notify(
         ('aineo: the diff of %s could not be read: %s'):format(
-          told_name(entry),
+          entry_diff.told_name(entry),
           lines.words_of(failure)
         ),
         vim.log.levels.ERROR
@@ -1024,6 +1075,69 @@ local function pane_buffer(name, page)
   return buffer
 end
 
+--- The window whose cursor last moved in the commits buffer.
+---@type integer|nil
+local window_moved = nil
+
+--- Selects the filter the line under the cursor of the window whose cursor
+--- last moved in the commits buffer lists, when it is a filter other than
+--- the selected one, and reads the files window for it. A line that lists
+--- no filter — a note, another worktree's heading or commit — leaves the
+--- selection as it was, and so does a cursor not yet put on the selected
+--- filter's line (`place_commits_cursor()`).
+local function select_filter_at_cursor()
+  local window = window_moved
+  if
+    not (
+      session
+      and not session.cursor_unplaced
+      and window
+      and vim.api.nvim_win_is_valid(window)
+      and buffers.commits
+      and vim.api.nvim_win_get_buf(window) == buffers.commits
+    )
+  then
+    return
+  end
+  local entry = pages.entry_at(buffers.commits, vim.api.nvim_win_get_cursor(window)[1])
+  local at_cursor = entry and entry.filter
+  if not at_cursor or filter.same(at_cursor, session.selected) then
+    return
+  end
+  session.selected = at_cursor
+  read_files(true)
+end
+
+--- The pause after the last move of the cursor in the commits buffer, at
+--- whose end the selection follows the cursor (`select_filter_at_cursor()`).
+local selection_pause = pause.restartable(SELECTION_PAUSE_MS, select_filter_at_cursor)
+
+--- Makes the commits buffer `buffer` choose the filter of the files window:
+--- its cursor, once it has stayed on a line for a pause
+--- (`selection_pause`), and the cursor's first placing on the selected
+--- filter's line when the buffer enters a window (`place_commits_cursor()`).
+---
+---@param buffer integer
+local function select_filters_from(buffer)
+  vim.api.nvim_create_autocmd('CursorMoved', {
+    buffer = buffer,
+    desc = 'aineo: select the filter of the files window after a pause',
+    callback = function()
+      window_moved = vim.api.nvim_get_current_win()
+      selection_pause.restart()
+    end,
+  })
+  vim.api.nvim_create_autocmd('BufWinEnter', {
+    buffer = buffer,
+    desc = 'aineo: put the cursor on the selected filter',
+    callback = function()
+      if session then
+        place_commits_cursor()
+      end
+    end,
+  })
+end
+
 --- Whether `buffer`, a buffer of the pane once made, is shown in a window
 --- of any tab page.
 ---
@@ -1050,7 +1164,8 @@ end
 --- holding it; `:edit` and `:edit!` write it again. Whenever either enters
 --- a window, the pane is shown: the first time, the watch starts, and each
 --- time both lists are read again, once for every showing in one turn of
---- the main loop (`pane_shown()`).
+--- the main loop (`pane_shown()`). A commits buffer made anew selects
+--- *Session work* again, its cursor to be put there when it is shown.
 ---
 ---@return { files: integer, commits: integer }
 function M.pane_buffers()
@@ -1059,6 +1174,10 @@ function M.pane_buffers()
   end
   if not (buffers.commits and vim.api.nvim_buf_is_loaded(buffers.commits)) then
     buffers.commits = pane_buffer('aineo://changes-commits', commits_page)
+    select_filters_from(buffers.commits)
+    if session then
+      select_session_work()
+    end
   end
   return { files = buffers.files, commits = buffers.commits }
 end

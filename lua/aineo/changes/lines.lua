@@ -3,6 +3,7 @@
 --- inputs.
 
 local colours = require('aineo.changes.colours')
+local filter = require('aineo.changes.filter')
 
 local M = {}
 
@@ -101,9 +102,10 @@ end
 
 --- One entry a window lists: a file changed, or a commit.
 ---@class aineo.changes.Entry
----@field key string what tells the entry apart from one read to the next: a change's path, a commit's id
+---@field key string what tells the entry apart from one read to the next: a change's path, a commit's id, or the key of a fixed line's filter (`aineo.changes.filter`'s `key()`)
 ---@field change? aineo.git.Change
 ---@field commit? aineo.git.Commit
+---@field filter? aineo.changes.Filter for an entry of the editor's own worktree: the filter a commits window line selects, or the filter a file is listed under; nil for another worktree's entries
 ---@field worktree? aineo.changes.WorktreeSection the worktree other than the editor's that lists it; nil for the editor's own
 
 --- A colour a line shows: its bytes from `first_column`, counted from 0, to
@@ -239,6 +241,24 @@ end
 --- What the files window says when no file differs from the base.
 M.NO_FILES = 'No files changed on this session'
 
+--- What the files window says when no file differs from `HEAD`.
+M.NO_UNCOMMITTED_FILES = 'No uncommitted changes'
+
+--- What the files window says when the commit it lists changed no file.
+M.NO_COMMIT_FILES = 'No files in this commit'
+
+--- What the files window says when no file of the filter it lists differs,
+--- by the kind of the filter.
+---@type table<string, string>
+local NO_FILES_OF = {
+  session_work = M.NO_FILES,
+  uncommitted = M.NO_UNCOMMITTED_FILES,
+  commit = M.NO_COMMIT_FILES,
+}
+
+--- What the files window's first line says before the filter's name.
+local FILES_IN = 'Files in: '
+
 --- What the files window says under another worktree's heading when no
 --- file of it differs from its base.
 M.NO_WORKTREE_FILES = 'No files changed in this worktree'
@@ -249,9 +269,10 @@ M.NOT_WATCHED =
 
 --- What the files window knows.
 ---@class aineo.changes.FilesView
----@field changes? aineo.git.Change[] the files changed since the base, as last read
+---@field filter? aineo.changes.Filter what the window lists the files of, named on its first line; nil while the session has no repository to list
+---@field changes? aineo.git.Change[] the files of the filter, as last read
 ---@field failure? aineo.git.Failure why the last read failed, when it did
----@field saved table<string, true> the paths, relative to the top level, of the files the user saved
+---@field saved table<string, true> the paths, relative to the top level, of the files the user saved; marked under every filter but a commit
 ---@field unwatched_subdirectories boolean whether a change in a subdirectory goes unseen by the watch
 ---@field worktrees? aineo.changes.OtherWorktrees what the window knows of the other worktrees, none when not given
 
@@ -353,33 +374,70 @@ local function worktree_rows(others, lines)
 end
 
 --- The rows of `changes`, a line per file (`M.file_line()`), marked when
---- `saved` holds its path, in its own colours (`file_colours()`).
+--- `saved` holds its path, in its own colours (`file_colours()`), each
+--- listing the entry of its file under `listed_under`, the filter the
+--- window lists, nil for another worktree's.
 ---
 ---@param changes aineo.git.Change[]
 ---@param saved table<string, true>
+---@param listed_under? aineo.changes.Filter
 ---@return aineo.changes.Row[]
-local function file_rows(changes, saved)
+local function file_rows(changes, saved, listed_under)
   return vim.tbl_map(function(change)
     local is_saved = saved[change.path] == true
     local line = M.file_line(change, is_saved)
     return {
       line = line,
-      entry = { key = change.path, change = change },
+      entry = { key = change.path, change = change, filter = listed_under },
       colours = file_colours(line, change, is_saved),
     }
   end, changes)
 end
 
---- The rows of the editor's own worktree in the files window, for `view`:
---- the line saying its last read failed, when it did, and `M.NOT_WATCHED`
---- where subdirectories go unwatched; then a line per file
---- (`file_rows()`), or `M.NO_FILES` when none differs. Before any list was
---- read, `M.NOT_WATCHED` where it shows, then `M.READING`; or, once a read
---- has failed, the line saying so alone.
+--- The name of `selected`, a filter, as the pane says it: *Uncommitted* and
+--- *Session work*, or for a commit its line as the commits window shows it
+--- (`M.commit_line()`).
+---
+---@param selected aineo.changes.Filter
+---@return string
+function M.filter_name(selected)
+  if selected.kind == 'commit' then
+    return M.commit_line(selected.commit)
+  end
+  return selected.kind == 'uncommitted' and 'Uncommitted' or 'Session work'
+end
+
+--- The commits window's row of `selected`, a filter: its name, whole in the
+--- group of filters, listing the entry of that filter.
+---
+---@param selected aineo.changes.Filter
+---@return aineo.changes.Row
+local function filter_row(selected)
+  local row = whole_line(M.filter_name(selected), colours.FILTER_GROUP)
+  row.entry = { key = filter.key(selected), filter = selected }
+  return row
+end
+
+--- The files window's first row for `listed`, the filter it lists: `Files
+--- in: ` and its name, whole in the group of filters, listing no entry.
+---
+---@param listed aineo.changes.Filter
+---@return aineo.changes.Row
+local function files_in_row(listed)
+  return whole_line(FILES_IN .. M.filter_name(listed), colours.FILTER_GROUP)
+end
+
+--- The rows below the first line of the files window's own worktree, for
+--- `view`: the line saying its last read failed, when it did, and
+--- `M.NOT_WATCHED` where subdirectories go unwatched; then a line per file
+--- (`file_rows()`), marked as saved unless the filter is a commit, or the
+--- filter's line for no file (`NO_FILES_OF`). Before any list was read,
+--- `M.NOT_WATCHED` where it shows, then `M.READING`; or, once a read has
+--- failed, the line saying so alone.
 ---
 ---@param view aineo.changes.FilesView
 ---@return aineo.changes.Row[]
-local function own_file_rows(view)
+local function listed_file_rows(view)
   local notes = failure_notes(view.failure)
   if view.unwatched_subdirectories then
     table.insert(notes, note(M.NOT_WATCHED))
@@ -387,7 +445,23 @@ local function own_file_rows(view)
   if not view.changes then
     return view.failure and { notes[1] } or rows_of(notes, {}, note(M.READING))
   end
-  return rows_of(notes, file_rows(view.changes, view.saved), note(M.NO_FILES))
+  local kind = view.filter and view.filter.kind or 'session_work'
+  local saved = kind == 'commit' and {} or view.saved
+  return rows_of(notes, file_rows(view.changes, saved, view.filter), note(NO_FILES_OF[kind]))
+end
+
+--- The rows of the editor's own worktree in the files window, for `view`:
+--- the line naming the filter it lists (`files_in_row()`), when it has one,
+--- then the rows below it (`listed_file_rows()`).
+---
+---@param view aineo.changes.FilesView
+---@return aineo.changes.Row[]
+local function own_file_rows(view)
+  local rows = listed_file_rows(view)
+  if view.filter then
+    table.insert(rows, 1, files_in_row(view.filter))
+  end
+  return rows
 end
 
 --- The files window's page for `view`: the editor's own worktree's rows
@@ -451,6 +525,7 @@ end
 ---@field since? aineo.git.CommitsSince the session's commits, as last read
 ---@field failure? aineo.git.Failure why the last read failed, when it did
 ---@field base? string the session's base commit, nil before the repository's first commit
+---@field lists_filters? boolean whether the window starts with the lines *Uncommitted* and *Session work*: once the session's repository is found
 ---@field worktrees? aineo.changes.OtherWorktrees what the window knows of the other worktrees, none when not given
 
 --- The rows of `commits`, a line per commit in their order
@@ -463,22 +538,22 @@ local function commit_rows(commits)
     local line = M.commit_line(commit)
     return {
       line = line,
-      entry = { key = commit.id, commit = commit },
+      entry = { key = commit.id, commit = commit, filter = filter.of_commit(commit) },
       colours = commit_colours(line),
     }
   end, commits)
 end
 
---- The rows of the editor's own worktree in the commits window, for
---- `view`: the line saying its last read failed, when it did, and one
---- naming the base when it is no longer an ancestor of `HEAD`; then a line
---- per commit git lists (`commit_rows()`), or `M.NO_COMMITS` when there is
---- none. Before any list was read, `M.READING`, or the failure's line
---- alone.
+--- The rows of the editor's own worktree in the commits window below the
+--- filters, for `view`: the line saying its last read failed, when it did,
+--- and one naming the base when it is no longer an ancestor of `HEAD`; then
+--- a line per commit git lists (`commit_rows()`), or `M.NO_COMMITS` when
+--- there is none. Before any list was read, `M.READING`, or the failure's
+--- line alone.
 ---
 ---@param view aineo.changes.CommitsView
 ---@return aineo.changes.Row[]
-local function own_commit_rows(view)
+local function listed_commit_rows(view)
   local notes = failure_notes(view.failure)
   if view.since and not view.since.base_is_ancestor then
     table.insert(
@@ -494,6 +569,22 @@ local function own_commit_rows(view)
     return view.failure and { notes[1] } or { note(M.READING) }
   end
   return rows_of(notes, commit_rows(view.since.commits), note(M.NO_COMMITS))
+end
+
+--- The rows of the editor's own worktree in the commits window, for `view`:
+--- the two filters that are always there, *Uncommitted* and *Session work*
+--- (`filter_row()`), when the window lists filters, then the rows below
+--- them (`listed_commit_rows()`).
+---
+---@param view aineo.changes.CommitsView
+---@return aineo.changes.Row[]
+local function own_commit_rows(view)
+  local rows = listed_commit_rows(view)
+  if view.lists_filters then
+    table.insert(rows, 1, filter_row(filter.SESSION_WORK))
+    table.insert(rows, 1, filter_row(filter.UNCOMMITTED))
+  end
+  return rows
 end
 
 --- The commits window's page for `view`: the editor's own worktree's rows
