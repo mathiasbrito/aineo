@@ -1296,4 +1296,63 @@ T['a hand-over']["of a session followed as a claim's makes the new session follo
   })
 end
 
+--- The Lua that makes another editor hand the same dead session over to its
+--- own new session, whose file is given as the chunk's argument, at the
+--- same moment as the child, one call at a time: before the child's next
+--- link, the other editor links the file being moved to its own name;
+--- before the child's next removal, it removes the file's name, and the
+--- child's removal succeeds too, as two removals of one name at the same
+--- moment both do on APFS; before the child's next rename, it renames the
+--- file to its own name.
+local OTHER_EDITOR_SAME_MOMENT = [[
+  local other = ...
+  local real = { link = vim.uv.fs_link, unlink = vim.uv.fs_unlink, rename = vim.uv.fs_rename }
+  vim.uv.fs_link = function(from, to)
+    vim.uv.fs_link = real.link
+    assert(real.link(from, other))
+    return real.link(from, to)
+  end
+  vim.uv.fs_unlink = function(path)
+    vim.uv.fs_unlink = real.unlink
+    assert(real.unlink(path))
+    return true
+  end
+  vim.uv.fs_rename = function(from, to)
+    vim.uv.fs_rename = real.rename
+    assert(real.rename(from, other))
+    return real.rename(from, to)
+  end
+]]
+
+--- How the files `first` and `second` hold one thing two sessions could
+--- share: how many of them exist, and whether they are one file.
+---
+---@param first string
+---@param second string
+---@return { names: integer, one_file: boolean }
+local function holders(first, second)
+  local a, b = vim.uv.fs_stat(first), vim.uv.fs_stat(second)
+  return {
+    names = (a and 1 or 0) + (b and 1 or 0),
+    one_file = a ~= nil and b ~= nil and a.ino == b.ino,
+  }
+end
+
+T['a hand-over']['made by another editor at the same moment leaves the records with one new session, never shared'] = function()
+  local state = fixture.directory('report-sessions-hand-over-same-moment')
+  plant_records(session_records_file(state, 'session-dead'), { 'Dead' })
+  start_editor(state)
+  child.lua(OTHER_EDITOR_SAME_MOMENT, { session_records_file(state, 'session-other') })
+
+  hand_over('session-dead', 'session-new')
+
+  eq(
+    holders(
+      session_records_file(state, 'session-new'),
+      session_records_file(state, 'session-other')
+    ),
+    { names = 1, one_file = false }
+  )
+end
+
 return T
