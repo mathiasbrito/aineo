@@ -107,6 +107,6 @@ Written by the T46 implementer under the orchestrator's assumption A129, against
 
 ### Fix round — 2026-10-11, the user's answers on the attack review
 
-- The session list's key is `\S`, not `\cs` (D53): `\c` begins no other key and acts at once again, so the `entry.press()` the `\c` suites needed for the wait is harmless and kept, except in `test_entry_claude_exit.lua`'s busy-editor case, which is back to its original form. `\pc` stays removed, with no alias (the user's answer; A132 is his decision).
+- The session list's key is `\S`, not `\cs` (D53): `\c` begins no other key and acts at once again, so the `entry.press()` the `\c` suites needed for the wait is harmless and kept, except in `test_entry_claude_exit.lua`'s busy-editor case, which is back to its original form. `\pc` stays removed, with no alias (the user's answer; A132 is the user's decision).
 - Two rulings of the orchestrator, under the user's instruction of 2026-10-06, never the user's decisions: A133 (the switch is written as Send writes: a bracketed paste of `/resume <id>` and Enter, in one write — Send's code, `lua/aineo/send/init.lua` 93, writes both in one write; the ruling said "then `\r` as its own write, as Send does") and A134 (an entry started in another folder is marked and refused).
 - `tests/helpers/fake_claude.lua`: `session_command()` strips the paste markers before it matches (inside the boundary).
