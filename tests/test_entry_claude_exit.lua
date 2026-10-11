@@ -36,7 +36,7 @@ local WHOLE_LAYOUT = { 'terminal', 'aineo://report', 'aineo://input' }
 ---@param name string the test's own name for the fake's files
 local function type_to_claude_code_exiting_at_start(child, name)
   entry.use_fake(child, claude_session.fake(name, 'exit'))
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
   claude_session.wait_for_status(child, 'exited')
 end
 
@@ -130,7 +130,7 @@ T["Claude Code's exit"]["returns Normal mode in Claude's window when Claude Code
   entry.use_fake(child, claude_session.fake('entry-claude-exit-in-prompt', 'ready'))
   child.cmd('Aineo open')
   claude_session.wait_for_status(child, 'ready')
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   end_claude_code(child)
 
@@ -143,7 +143,7 @@ T["Claude Code's exit"]["returns Normal mode in Claude's window when Claude Code
   entry.use_fake(child, fake)
   child.cmd('Aineo open')
   claude_session.wait_for_status(child, 'ready')
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   claude_session.end_by_keys(child, fake, child.lua_get(CLAUDE_WINDOW_BUFFER))
 
@@ -186,8 +186,10 @@ end
 T["Claude Code's exit"]['returns Normal mode once Neovim sees an exit that a busy editor handled \\c before'] = function()
   entry.use_fake(child, claude_session.fake('entry-claude-exit-busy', 'exit'))
   child.cmd('Aineo open')
+  child.o.timeoutlen = 50
   child.lua_notify('vim.uv.sleep(1500)')
   child.api.nvim_input('\\c')
+  vim.wait(2000)
 
   claude_session.wait_for_status(child, 'exited')
 
@@ -253,7 +255,7 @@ T['an exit Neovim ran no TermClose autocommand for']["keeps Claude's ended termi
   child.lua(exit_unseen, { child.lua_get(CLAUDE_WINDOW_BUFFER) })
   eq(claude_session.wait_for_status(child, 'exited')[1], 'exited')
   child.o.eventignore = ''
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   child.type_keys('i')
   child.api.nvim_input('fix this')
@@ -290,7 +292,7 @@ T['a wiped Claude terminal']['lets \\c start Claude Code again, in Terminal mode
   wipe_ended_terminal_from_its_window(child, command)
   entry.use_fake(child, claude_session.fake('entry-claude-exit-restarted', 'trust'))
 
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   eq(child.lua_get(SESSION_STATE), 'starting')
   eq(entry.windows(child), WHOLE_LAYOUT)
@@ -310,7 +312,7 @@ T['a wiped Claude terminal']['lets the keys of the right column move there once 
 )
   wipe_ended_terminal_from_its_window(child, command)
   entry.use_fake(child, claude_session.fake('entry-claude-exit-right-column', 'trust'))
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
   eq(child.lua_get(SESSION_STATE), 'starting')
   child.type_keys([[<C-\><C-n>]])
 
@@ -344,7 +346,7 @@ T['a wiped Claude terminal']['lets \\c start Claude Code again, raising no error
   entry.command(child, command .. ' ' .. terminal)
   entry.use_fake(child, claude_session.fake('entry-claude-exit-other-tab-restarted', 'trust'))
 
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   eq(entry.messages(child), {})
   eq(child.v.errmsg, '')
@@ -361,7 +363,7 @@ T['a wiped Claude terminal']["lets \\c start Claude Code again when Claude's win
   entry.command(child, command)
   entry.use_fake(child, claude_session.fake('entry-claude-exit-last-window-restarted', 'trust'))
 
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   eq(child.lua_get(SESSION_STATE), 'starting')
   eq(entry.windows(child), WHOLE_LAYOUT)
@@ -426,7 +428,7 @@ T['a wiped Claude terminal']["keeps in view the file the same command line opens
   entry.command(child, command .. ' | edit ' .. file)
   entry.use_fake(child, claude_session.fake('entry-claude-exit-edit-restarted-new', 'trust'))
 
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   eq(child.lua_get(SESSION_STATE), 'starting')
   eq(entry.windows(child), { 'terminal', file, 'aineo://report', 'aineo://input' })
@@ -456,7 +458,7 @@ T['a wiped Claude terminal']["opens no file column for the file the same command
   entry.command(child, command .. ' | edit ' .. file .. ' | tab split | tabprevious')
   entry.use_fake(child, claude_session.fake('entry-claude-exit-edit-other-tab-new', 'trust'))
 
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   eq(child.lua_get(SESSION_STATE), 'starting')
   eq(entry.windows(child), WHOLE_LAYOUT)
@@ -472,7 +474,7 @@ T['a wiped Claude terminal']["keeps in view the file Neovim shows in Claude's wi
   entry.command(child, command)
   entry.use_fake(child, claude_session.fake('entry-claude-exit-last-window-file-new', 'trust'))
 
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   eq(child.lua_get(SESSION_STATE), 'starting')
   eq(entry.windows(child), { 'terminal', file, 'aineo://report', 'aineo://input' })
@@ -505,7 +507,7 @@ T['a wiped Claude terminal']['lets \\c start Claude Code again once the command-
   child.v.errmsg = ''
   entry.use_fake(child, claude_session.fake('entry-claude-exit-cmdwin-restarted', 'trust'))
 
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   eq(child.lua_get(SESSION_STATE), 'starting')
   eq(entry.windows(child), WHOLE_LAYOUT)
@@ -532,7 +534,7 @@ T['a wiped running Claude terminal']['lets \\c start Claude Code again, in Termi
   wipe_running_terminal_from_its_window(child, command)
   entry.use_fake(child, claude_session.fake('entry-claude-exit-running-restarted', 'trust'))
 
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   eq(child.lua_get(SESSION_STATE), 'starting')
   eq(entry.windows(child), WHOLE_LAYOUT)
@@ -552,7 +554,7 @@ T["a user's TermClose autocommand that wipes Claude's terminal"]['lets \\c start
   type_to_claude_code_exiting_at_start(child, 'entry-claude-exit-user-wipe')
   entry.use_fake(child, claude_session.fake('entry-claude-exit-user-wipe-restarted', 'trust'))
 
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   eq(child.lua_get(SESSION_STATE), 'starting')
   eq(entry.windows(child), WHOLE_LAYOUT)
@@ -566,7 +568,7 @@ T["a user's TermClose autocommand that opens the layout"]["keeps Claude's ended 
   entry.use_fake(child, claude_session.fake('entry-claude-exit-user-open', 'ready'))
   child.cmd('Aineo open')
   claude_session.wait_for_status(child, 'ready')
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
   end_claude_code(child)
   child.type_keys([[<C-\><C-n>]])
 

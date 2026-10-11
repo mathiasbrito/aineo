@@ -1196,7 +1196,7 @@ end
 
 --- `:Aineo`'s subcommands, in the order completion offers them.
 local SUBCOMMANDS =
-  { 'send', 'open', 'report', 'input', 'claude', 'claude-numbers', 'pane', 'claim' }
+  { 'send', 'open', 'report', 'input', 'claude', 'claude-numbers', 'sessions', 'pane', 'claim' }
 
 T[':Aineo pane']['completes after a command modifier or a range as it does without one'] =
   MiniTest.new_set({

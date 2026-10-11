@@ -182,7 +182,7 @@ end
 T['after a resume with no conversation']["\\c enters Terminal mode in the new session's terminal"] = function()
   local fake = open_after_a_resume_with_no_conversation(child, 'entry-resume-focus')
 
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   eq(child.lua_get(MODE), 't')
   eq(child.api.nvim_get_current_buf(), child.lua_get(CLAUDE_WINDOW_BUFFER))
@@ -227,7 +227,7 @@ T['after a resume with no conversation, before any \\c']["shows the new session'
   local terminal = child.lua_get(CLAUDE_WINDOW_BUFFER)
   end_claude_code(child)
 
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   eq(child.lua_get(MODE), 'nt')
   eq(child.api.nvim_get_current_buf(), terminal)
