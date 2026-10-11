@@ -32,6 +32,20 @@ local M = {}
 ---@class aineo.git.WatchOptions: aineo.git.Options
 ---@field system_name? string the platform, as `vim.uv.os_uname().sysname` names it; the editor's own when not given
 
+--- How a diff is read: as the home runs git, and with as much of each file
+--- around a change as `context` says. A diff raises an error, called with
+--- a `context` it has no name for.
+---@class aineo.git.DiffOptions: aineo.git.Options
+---@field context? aineo.git.DiffContext three lines (`'three_lines'`) when not given, or the whole file (`'whole_file'`)
+
+--- The context `options` ask a diff for, nil when they ask for none.
+---
+---@param options aineo.git.DiffOptions|nil
+---@return aineo.git.DiffContext|nil
+local function context_of(options)
+  return options and options.context
+end
+
 --- Finds the repository `directory` is in, and calls `done(nil, repository)`,
 --- or `done(failure)`: `not_a_repository`, in git's words, when there is
 --- none.
@@ -102,9 +116,9 @@ end
 ---@param base string|nil the base `change` was listed for by `M.changed_files()`
 ---@param change aineo.git.Change one of the changes `M.changed_files()` gave
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
----@param options? aineo.git.Options
+---@param options? aineo.git.DiffOptions
 function M.file_diff(found, base, change, done, options)
-  diffs.file_diff(process.runner(options), found, base, change, done)
+  diffs.file_diff(process.runner(options), found, base, change, done, context_of(options))
 end
 
 --- Gives the unified diff of the file `change` names in `found`, from `HEAD`
@@ -114,9 +128,9 @@ end
 ---@param found aineo.git.Repository as `M.find_repository()` gave it
 ---@param change aineo.git.Change one of the changes `M.uncommitted_files()` gave
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
----@param options? aineo.git.Options
+---@param options? aineo.git.DiffOptions
 function M.uncommitted_file_diff(found, change, done, options)
-  diffs.uncommitted_file_diff(process.runner(options), found, change, done)
+  diffs.uncommitted_file_diff(process.runner(options), found, change, done, context_of(options))
 end
 
 --- Gives the unified diff of every file of `found` from the commit `base` to
@@ -127,9 +141,9 @@ end
 ---@param found aineo.git.Repository as `M.find_repository()` gave it
 ---@param base string|nil the full id of the commit the diff runs from; nil runs it from nothing
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
----@param options? aineo.git.Options
+---@param options? aineo.git.DiffOptions
 function M.diff_since(found, base, done, options)
-  diffs.diff_since(process.runner(options), found, base, done)
+  diffs.diff_since(process.runner(options), found, base, done, context_of(options))
 end
 
 --- Gives the unified diff of every file of `found` from `HEAD` as it is now
@@ -138,9 +152,9 @@ end
 ---
 ---@param found aineo.git.Repository as `M.find_repository()` gave it
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
----@param options? aineo.git.Options
+---@param options? aineo.git.DiffOptions
 function M.uncommitted_diff(found, done, options)
-  diffs.uncommitted_diff(process.runner(options), found, done)
+  diffs.uncommitted_diff(process.runner(options), found, done, context_of(options))
 end
 
 --- Gives the unified diff of the commit `commit` in `found`, after its
@@ -151,9 +165,9 @@ end
 ---@param found aineo.git.Repository as `M.find_repository()` gave it
 ---@param commit string the commit's id
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
----@param options? aineo.git.Options
+---@param options? aineo.git.DiffOptions
 function M.commit_diff(found, commit, done, options)
-  diffs.commit_diff(process.runner(options), found, commit, done)
+  diffs.commit_diff(process.runner(options), found, commit, done, context_of(options))
 end
 
 --- Gives the diff of the commit `commit` in `found`, after its header, as
@@ -164,9 +178,9 @@ end
 ---@param commit string the commit's id
 ---@param change aineo.git.Change one of the changes `M.commit_files()` gave
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
----@param options? aineo.git.Options
+---@param options? aineo.git.DiffOptions
 function M.commit_file_diff(found, commit, change, done, options)
-  diffs.commit_file_diff(process.runner(options), found, commit, change, done)
+  diffs.commit_file_diff(process.runner(options), found, commit, change, done, context_of(options))
 end
 
 --- Lists the worktrees of the repository `found` is in, and calls
