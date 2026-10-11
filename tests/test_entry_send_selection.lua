@@ -240,7 +240,7 @@ end
 --- and the keys typed from Input that send it and come back to Input.
 local SENDS_ELSEWHERE = {
   { 'from the Report’s window', '\\r\\s\\i' },
-  { 'while the changes pane hides Input', '\\pc\\s\\pa\\i' },
+  { 'while the changes pane hides Input', '\\g\\s\\pa\\i' },
 }
 
 T['u in Input'] = MiniTest.new_set()
