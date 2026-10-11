@@ -189,4 +189,174 @@ T['the files changed since a base']['since a base named like an option are refus
   }, { reason = 'failed', beside = { 'repo' } })
 end
 
+--- The Lua that asks the git home in the child for the repository of the
+--- directory `...`, then for the files the commit that follows it changed,
+--- and returns what `_G.await` saw of the second.
+local COMMIT_FILES = [[
+  local directory, commit = ...
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end)
+  return _G.await(function(done)
+    git.commit_files(found.result, commit, done)
+  end)
+]]
+
+T['the files a commit changed'] = MiniTest.new_set()
+
+T['the files a commit changed']['are those it changed against its parent, with their kinds'] = function()
+  local top = git_repo.create('commit-files-kinds', {
+    ['a.txt'] = { 'a' },
+    ['b.txt'] = { 'b' },
+    ['c.txt'] = { 'one', 'two', 'three', 'four', 'five', 'six' },
+  })
+  git_repo.write(top, 'a.txt', { 'a, changed' })
+  git_repo.git(top, { 'rm', '--quiet', 'b.txt' })
+  git_repo.git(top, { 'mv', 'c.txt', 'c-moved.txt' })
+  git_repo.write(top, 'd.txt', { 'd' })
+  local commit = git_repo.commit_all(top, 'Change four files')
+  git_repo.write(top, 'later.txt', { 'later' })
+
+  local seen = child.lua(COMMIT_FILES, { top, commit })
+
+  eq(seen.result, {
+    { path = 'a.txt', kind = 'modified' },
+    { path = 'b.txt', kind = 'deleted' },
+    { path = 'c-moved.txt', kind = 'renamed', old_path = 'c.txt' },
+    { path = 'd.txt', kind = 'added' },
+  })
+end
+
+T['the files a commit changed']['are every file of a root commit, and none of an empty one'] = function()
+  local top = git_repo.create_unborn('commit-files-root')
+  git_repo.write(top, 'first.txt', { 'first' })
+  local root = git_repo.commit_all(top, 'First')
+  local empty = git_repo.commit_all(top, 'Nothing')
+
+  local root_seen = child.lua(COMMIT_FILES, { top, root })
+  local empty_seen = child.lua(COMMIT_FILES, { top, empty })
+
+  eq(
+    { root = root_seen.result, empty = empty_seen.result },
+    { root = { { path = 'first.txt', kind = 'added' } }, empty = {} }
+  )
+end
+
+T['the files a commit changed']['are, for a merge, those it brought in against its first parent'] = function()
+  local top = git_repo.create('commit-files-merge', { ['a.txt'] = { 'a' } })
+  git_repo.git(top, { 'switch', '--quiet', '--create', 'side' })
+  git_repo.write(top, 'side.txt', { 'side' })
+  git_repo.commit_all(top, 'On the side')
+  git_repo.git(top, { 'switch', '--quiet', '-' })
+  git_repo.write(top, 'here.txt', { 'here' })
+  git_repo.commit_all(top, 'Here')
+  git_repo.git(top, { 'merge', '--quiet', '--no-ff', '--message=Merge side', 'side' })
+  local merge = git_repo.git(top, { 'rev-parse', 'HEAD' })
+
+  local seen = child.lua(COMMIT_FILES, { top, merge })
+
+  eq(seen.result, { { path = 'side.txt', kind = 'added' } })
+end
+
+T['the files a commit changed']['of a commit named like an option are refused, and write nothing'] = function()
+  local top = git_repo.create('commit-files-option', { ['a.txt'] = { 'a' } })
+  local written = vim.fs.joinpath(vim.fs.dirname(top), 'written')
+
+  local seen = child.lua(COMMIT_FILES, { top, '--output=' .. written })
+
+  eq({
+    reason = vim.tbl_get(seen, 'failure', 'reason'),
+    beside = vim.fn.readdir(vim.fs.dirname(top)),
+  }, { reason = 'failed', beside = { 'repo' } })
+end
+
+--- The Lua that asks the git home in the child for the repository of the
+--- directory `...`, then for the files that differ from `HEAD` there, and
+--- returns what `_G.await` saw of the second.
+local UNCOMMITTED_FILES = [[
+  local directory = ...
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end)
+  return _G.await(function(done)
+    git.uncommitted_files(found.result, done)
+  end)
+]]
+
+T['the uncommitted files'] = MiniTest.new_set()
+
+T['the uncommitted files']['are those that differ from HEAD, staged or not, and the untracked ones'] = function()
+  local top = git_repo.create('uncommitted-kinds', {
+    ['a.txt'] = { 'a' },
+    ['b.txt'] = { 'b' },
+    ['c.txt'] = { 'c' },
+  })
+  git_repo.write(top, 'a.txt', { 'a, committed since' })
+  git_repo.commit_all(top, 'Change a')
+  git_repo.write(top, 'b.txt', { 'b, staged' })
+  git_repo.git(top, { 'add', 'b.txt' })
+  git_repo.write(top, 'c.txt', { 'c, not staged' })
+  git_repo.write(top, 'new.txt', { 'new' })
+
+  local seen = child.lua(UNCOMMITTED_FILES, { top })
+
+  eq(seen.result, {
+    { path = 'b.txt', kind = 'modified' },
+    { path = 'c.txt', kind = 'modified' },
+    { path = 'new.txt', kind = 'untracked' },
+  })
+end
+
+T['the uncommitted files']['are none in a clean checkout'] = function()
+  local top = git_repo.create('uncommitted-clean', { ['a.txt'] = { 'a' } })
+
+  local seen = child.lua(UNCOMMITTED_FILES, { top })
+
+  eq(seen.result, {})
+end
+
+T['the uncommitted files']['are every file, as new, before the first commit'] = function()
+  local top = git_repo.create_unborn('uncommitted-unborn')
+  git_repo.write(top, 'staged.txt', { 's' })
+  git_repo.git(top, { 'add', 'staged.txt' })
+  git_repo.write(top, 'untracked.txt', { 'u' })
+
+  local seen = child.lua(UNCOMMITTED_FILES, { top })
+
+  eq(seen.result, {
+    { path = 'staged.txt', kind = 'added' },
+    { path = 'untracked.txt', kind = 'untracked' },
+  })
+end
+
+T['the uncommitted files']['are read against the HEAD of now, not the one the repository was found with'] = function()
+  local top = git_repo.create_unborn('uncommitted-after-commit')
+  git_repo.write(top, 'first.txt', { 'first' })
+  local found = child.lua(
+    [[
+      local directory = ...
+      return _G.await(function(done)
+        require('aineo.git').find_repository(directory, done)
+      end).result
+    ]],
+    { top }
+  )
+  git_repo.commit_all(top, 'First')
+  git_repo.write(top, 'second.txt', { 'second' })
+
+  local seen = child.lua(
+    [[
+      local found = ...
+      return _G.await(function(done)
+        require('aineo.git').uncommitted_files(found, done)
+      end)
+    ]],
+    { found }
+  )
+
+  eq(seen.result, { { path = 'second.txt', kind = 'untracked' } })
+end
+
 return T

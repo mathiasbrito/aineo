@@ -175,8 +175,8 @@ end
 
 --- What the changes pane's two windows list for this file's fixture
 --- repository, unchanged since the session began.
-local NO_FILES = { 'No files changed on this session' }
-local NO_COMMITS = { 'No commits on this session' }
+local NO_FILES = { 'Files in: Session work', 'No files changed on this session' }
+local NO_COMMITS = { 'Uncommitted', 'Session work', 'No commits on this session' }
 
 T['the changes pane’s windows'] = MiniTest.new_set()
 

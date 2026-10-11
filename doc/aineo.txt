@@ -104,8 +104,10 @@ same two windows, at the same sizes, show the other pane's buffers.
 
 - The agent pane: the Agent Report over Input, as the layout opens.
 - The changes pane: `aineo://changes-files` in the Report's place, over
-  `aineo://changes-commits` in Input's, listing the session's changed files
-  and its commits, then those of each other worktree of the repository
+  `aineo://changes-commits` in Input's. The commits window lists
+  Uncommitted, Session work and the session's commits, and the line under
+  its cursor decides which files the files window lists; each other
+  worktree of the repository has a section of its own in both
   (|aineo-changes|). Each is a scratch buffer, read-only to you; `:edit`
   there writes its list again. A buffer of yours under either name, such
   as one a restored session made, gives the name up: it is wiped out, or
@@ -164,9 +166,13 @@ Claude Code that fails before it is first ready for input is never
 followed: the pane takes `HEAD` at that start as its base, as at any start,
 and keeps it for no session.
 
-The files window, `aineo://changes-files`, lists every file that differs
-from the base, committed since or not, staged or not, and every new file
-your ignore rules leave in, one per line, in git's order: >
+The first line of the files window, `aineo://changes-files`, names what it
+lists: `Files in: Session work`, `Files in: Uncommitted`, or `Files in: `
+and a commit's line as the commits window shows it, its abbreviated id and
+subject; the commits window chooses (below). Under Session work the window
+lists every file that differs from the base, committed since or not,
+staged or not, and every new file your ignore rules leave in, one per
+line, in git's order: >
     * M lua/aineo/init.lua
       ? notes.txt
       R old.txt → new.txt
@@ -191,9 +197,27 @@ escapes it; characters outside ASCII are kept as they are, where git writes
 them in octal. With nothing changed, the window says "No files changed on this
 session".
 
-The commits window, `aineo://changes-commits`, lists the session's commits,
-newest first, by abbreviated id and subject, or says "No commits on this
-session".
+Under Uncommitted the window lists every file that differs from `HEAD`,
+staged or not, and every new file your ignore rules leave in, in the same
+form and with the same `*` marks, or says "No uncommitted changes"; before
+the first commit every file is new. Under a commit it lists the files that
+commit changed, against its first parent, with no `*` on any line: a merge
+lists what it brought in, a root commit its files; an empty commit says "No
+files in this commit".
+
+The commits window, `aineo://changes-commits`, starts with two lines that
+are always there, Uncommitted and Session work, then lists the session's
+commits, newest first, by abbreviated id and subject, or says "No commits
+on this session". Its cursor is on Session work when the pane first shows,
+and when the buffer is made anew; `\pc` keeps your line. The line under
+the cursor chooses what the files window lists, once the cursor has stayed
+on it for 150 milliseconds: Uncommitted, Session work, or that commit. A
+line that lists none of these - a note, another worktree's heading or one
+of its commits - keeps the last choice. The files window keeps its first
+line and its list until the new list is read. The choice goes back to
+Session work, the cursor with it, when aineo follows another Claude Code
+session and when the chosen commit is no longer listed after a reset or a
+rebase.
 
 Below your own lines, which have no heading, each window lists the
 repository's other worktrees, in the order `git worktree list` gives them,
@@ -212,10 +236,19 @@ has no upstream, or with your `HEAD` when it is detached. A worktree that
 shares no history with yours, or has no commit yet, is listed with no
 base: every file new, every commit its own.
 
-Enter on a file's line shows its unified diff from the base, and on a
-commit's line that commit's diff, in the middle column (the file column,
-below). The diff is read-only: a buffer named `aineo://diff/{path}` or
-`aineo://commit/{id}`, with 'filetype' `diff`, wiped once hidden. Under
+Enter on a file's line shows its unified diff in the middle column (the
+file column, below), within what the files window lists: from the base
+under Session work, in `aineo://diff/{path}`; from `HEAD` to the working
+tree under Uncommitted, in `aineo://uncommitted/{path}`; under a commit,
+the commit's header and that file's change in it, in
+`aineo://commit/{id}/{path}`, {id} its full id. Enter on Uncommitted shows
+the whole diff from `HEAD` to the working tree, new files included, in
+`aineo://uncommitted`; on Session work the whole diff from the base, in
+`aineo://session-work`; on a commit that commit's diff, in
+`aineo://commit/{id}`, a merge's against its first parent. A new file
+enters a whole diff through a copy of git's index, so your own index is
+never touched. A diff is read-only: a buffer with 'filetype' `diff`, wiped
+once hidden. Under
 another worktree's heading, Enter shows that worktree's diff of the file
 from its base, or the commit's, in a buffer named
 `aineo://worktree{top}//diff/{path}` or `aineo://worktree{top}//commit/{id}`,
@@ -276,7 +309,9 @@ you give that group runs unbroken from the letter to the end of the line. A
 commit's abbreviated id shows in |hl-AineoChangesCommitId|, and its subject in
 |hl-AineoChangesCommitSubject|, which is empty: the subject shows in the
 colours of its window, dimmed with it where a colour scheme dims a window
-not current (|hl-NormalNC|), until you colour the group. A line that lists
+not current (|hl-NormalNC|), until you colour the group. The commits
+window's two fixed lines, Uncommitted and Session work, and the files
+window's first line show whole in |hl-AineoChangesFilter|. A line that lists
 nothing shows whole in |hl-AineoChangesNote|: aineo reading the repository,
 no file changed, no commit, subdirectories not watched, the base no longer
 behind `HEAD`, no repository and git's words. A line that tells a failure,
@@ -311,6 +346,9 @@ AineoChangesSaved        the `*` of a file you saved, linked to `WarningMsg`
 AineoChangesCommitId     a commit's abbreviated id, linked to `Identifier`
                                                 *hl-AineoChangesCommitSubject*
 AineoChangesCommitSubject  a commit's subject, empty
+                                                       *hl-AineoChangesFilter*
+AineoChangesFilter       the two fixed lines of the commits window and the
+                         files window's first line, linked to `Title`
                                                          *hl-AineoChangesNote*
 AineoChangesNote         a line that lists nothing, linked to `Comment`
                                                       *hl-AineoChangesFailure*
@@ -1431,10 +1469,17 @@ The changes pane ~
   shows its own base until its next such save, and this editor's from
   then on.
 - Where aineo cannot watch the working tree's subdirectories (Linux), the
-  files window says so first: a change in a subdirectory shows at the next
-  showing of the pane, save or commit, and a branch moved by
-  `git update-ref` from another worktree is missed too. No timer reads the
-  repository.
+  files window says so below its first line: a change in a subdirectory
+  shows at the next showing of the pane, save or commit, and a branch moved
+  by `git update-ref` from another worktree is missed too. No timer reads
+  the repository on a schedule; the one timer there is runs the pause
+  before the files window follows the commits window's cursor.
+- Choosing another line in the commits window reads the files window again,
+  the other worktrees' sections with it, as any read of it does: each
+  worktree costs its reads there too. The whole diffs of Uncommitted and
+  Session work name every new file on one git command line, so a list of
+  new files longer than the system's limit fails the read, and the failure
+  is told.
 - The other worktrees have no watch of their own. A file written in a
   worktree outside your top level shows at the next change aineo's watch
   sees in your repository — that worktree's `git add` or commit, a file
