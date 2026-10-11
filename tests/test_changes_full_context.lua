@@ -323,6 +323,53 @@ T['the cursor']['on a note that the file has no newline at its end goes to the l
   eq(cursor_and_line()[2], '+line 20')
 end
 
+T['the cursor']['on a file’s header row stays on that row of the same file'] = function()
+  session_with_two_changed_files('fullcontext-cursor-header-row')
+  enter_window_of(COMMITS)
+  child.type_keys('2G', '<CR>')
+  wait_for_diffs(1)
+  child.type_keys('17G')
+  eq(cursor_and_line()[2], '+++ b/b.txt')
+
+  child.type_keys('F')
+
+  expect_hunks_shown({ WHOLE_HUNK, WHOLE_HUNK })
+  eq(cursor_and_line(), { { 30, 0 }, '+++ b/b.txt' })
+end
+
+T['the cursor']['stays in its own file when a file new to the diff came between the two reads'] = function()
+  local top = git_repo.create(
+    'fullcontext-section-new-file',
+    { ['a.txt'] = numbered_lines(20), ['c.txt'] = numbered_lines(20) }
+  )
+  git_repo.write(top, 'a.txt', numbered_lines(20, { 10 }))
+  git_repo.write(top, 'c.txt', numbered_lines(20, { 10 }))
+  child.lua(BEGIN_AND_SHOW, { top })
+  expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M c.txt' })
+  enter_window_of(COMMITS)
+  child.type_keys('2G', '<CR>')
+  wait_for_diffs(1)
+  child.type_keys('25G')
+  eq(cursor_and_line()[2], ' line 12')
+  git_repo.write(top, 'b.txt', numbered_lines(20))
+
+  child.type_keys('F')
+
+  git_repo.wait_until('the diff whole', function()
+    return #child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)') > 50
+  end)
+  local section_of_cursor = child.lua_get([[(function()
+    local row = vim.api.nvim_win_get_cursor(0)[1]
+    for candidate = row, 1, -1 do
+      local line = vim.api.nvim_buf_get_lines(0, candidate - 1, candidate, true)[1]
+      if vim.startswith(line, 'diff --git') then
+        return { line, vim.api.nvim_get_current_line() }
+      end
+    end
+  end)()]])
+  eq(section_of_cursor, { 'diff --git a/c.txt b/c.txt', ' line 12' })
+end
+
 T['the cursor']['stays in the section of its own file in a diff of several files'] = function()
   session_with_two_changed_files('fullcontext-cursor-section')
   enter_window_of(COMMITS)
@@ -491,6 +538,27 @@ T['F']['flips the context all the same when it cannot read the diff again'] = fu
   eq(child.lua_get('_G.contexts'), { 'three_lines', 'whole_file', 'whole_file' })
 end
 
+T['F']['asks for the whole file again after a read of it failed'] = function()
+  session_with_two_changed_files('fullcontext-failed-again')
+  child.lua(KEEP_MESSAGES)
+  child.lua(HOLD_FILE_DIFFS)
+  open_held_file_at(2)
+  expect_hunks_shown({ THREE_LINES_HUNK })
+  child.lua('_G.fail_reads = true')
+  child.type_keys('F')
+  git_repo.wait_until('the user told', function()
+    return #child.lua_get('_G.messages') > 0
+  end)
+  child.lua('_G.fail_reads = false')
+
+  child.type_keys('F')
+
+  git_repo.wait_until('the second read asked', function()
+    return #child.lua_get('_G.contexts') == 3
+  end)
+  eq(child.lua_get('_G.contexts'), { 'three_lines', 'whole_file', 'whole_file' })
+end
+
 T['F']['says nothing when it flips'] = function()
   session_with_two_changed_files('fullcontext-silent')
   child.lua(KEEP_MESSAGES)
@@ -650,6 +718,162 @@ T['F']['shows a whole file larger than 1 MiB cut there, as a diff of it is'] = f
     )
   end)
   eq(child.lua_get('vim.api.nvim_buf_line_count(0) > 24000'), true)
+end
+
+--- The hunk headers of the child's buffer named `name`.
+---
+---@param name string
+---@return string[]
+local function hunks_of(name)
+  local headers = {}
+  for _, line in ipairs(lines_of(name)) do
+    table.insert(headers, line:match('^(@@ [^@]+ @@)'))
+  end
+  return headers
+end
+
+--- Waits until the child holds `count` reads, and lets the last through.
+---
+---@param count integer
+local function release_read(count)
+  git_repo.wait_until('the read held', function()
+    return child.lua_get('#_G.held') == count
+  end)
+  child.lua('_G.held[' .. count .. ']()')
+end
+
+T['F']['makes an Enter already reading when it is pressed read again in the new context'] = function()
+  session_with_two_changed_files('fullcontext-enter-in-flight')
+  child.lua(HOLD_FILE_DIFFS)
+  open_held_file_at(2)
+  expect_hunks_shown({ THREE_LINES_HUNK })
+  child.lua('_G.held, _G.delivered = {}, 0')
+  enter_window_of(FILES)
+  child.type_keys('3G', '<CR>')
+  git_repo.wait_until('the Enter’s read held', function()
+    return child.lua_get('#_G.held') == 1
+  end)
+  enter_window_of('aineo://diff/a.txt')
+  child.type_keys('F')
+
+  release_read(2)
+  git_repo.wait_until('the F’s read delivered', function()
+    return child.lua_get('_G.delivered') == 1
+  end)
+  child.lua('_G.held[1]()')
+  release_read(3)
+  wait_for_diffs(2)
+
+  eq(hunks_of('aineo://diff/b.txt'), { WHOLE_HUNK })
+  eq(child.lua_get('_G.contexts'), { 'three_lines', 'three_lines', 'whole_file', 'whole_file' })
+end
+
+T['F']['is not undone by an Enter on the same file already reading when it is pressed'] = function()
+  session_with_two_changed_files('fullcontext-enter-same-file')
+  child.lua(HOLD_FILE_DIFFS)
+  open_held_file_at(2)
+  expect_hunks_shown({ THREE_LINES_HUNK })
+  child.lua('_G.held, _G.delivered = {}, 0')
+  enter_window_of(FILES)
+  child.type_keys('2G', '<CR>')
+  git_repo.wait_until('the Enter’s read held', function()
+    return child.lua_get('#_G.held') == 1
+  end)
+  enter_window_of('aineo://diff/a.txt')
+  child.type_keys('F')
+  release_read(2)
+  git_repo.wait_until('the F’s read delivered', function()
+    return child.lua_get('_G.delivered') == 1
+  end)
+
+  child.lua('_G.held[1]()')
+  release_read(3)
+
+  git_repo.wait_until('the Enter’s diff delivered', function()
+    return child.lua_get('_G.delivered') == 3
+  end)
+  expect_hunks_shown({ WHOLE_HUNK })
+end
+
+T['F']['in a diff shown before another diff’s F reads it with the whole file too'] = function()
+  session_with_two_changed_files('fullcontext-other-diff-first')
+  open_file_at(2, 1)
+  open_file_at(3, 2)
+  enter_window_of('aineo://diff/a.txt')
+  child.type_keys('F')
+  git_repo.wait_until('a.txt’s diff whole', function()
+    return #lines_of('aineo://diff/a.txt') > 20
+  end)
+  enter_window_of('aineo://diff/b.txt')
+
+  child.type_keys('F')
+
+  git_repo.wait_until('b.txt’s diff whole', function()
+    return #hunks_of('aineo://diff/b.txt') > 0 and hunks_of('aineo://diff/b.txt')[1] == WHOLE_HUNK
+  end)
+  eq(child.lua_get("require('aineo.changes.full_context').current()"), 'whole_file')
+end
+
+T['F']['leaves a failure of a read it no longer waits for untold'] = function()
+  session_with_two_changed_files('fullcontext-stale-failure')
+  child.lua(KEEP_MESSAGES)
+  child.lua(HOLD_FILE_DIFFS)
+  open_held_file_at(2)
+  expect_hunks_shown({ THREE_LINES_HUNK })
+  child.lua('_G.held, _G.delivered = {}, 0')
+  child.lua([[
+    local home = require('aineo.git')
+    local holding = home.file_diff
+    local asked = 0
+    _G.failing = {}
+    home.file_diff = function(found, base, change, done, options)
+      asked = asked + 1
+      if asked == 1 then
+        table.insert(_G.failing, function()
+          done({ reason = 'failed', message = 'fatal: broken' })
+        end)
+      else
+        holding(found, base, change, done, options)
+      end
+    end
+  ]])
+
+  child.type_keys('FF')
+  git_repo.wait_until('both reads asked', function()
+    return child.lua_get('#_G.held') >= 1 and child.lua_get('#_G.failing') >= 1
+  end)
+  child.lua('_G.held[1]()')
+  git_repo.wait_until('the last read delivered', function()
+    return child.lua_get('_G.delivered') == 1
+  end)
+  child.lua('_G.failing[1]()')
+
+  eq(child.lua_get('_G.messages'), {})
+  eq(hunk_headers_shown(), { THREE_LINES_HUNK })
+end
+
+T['F']['puts the cursor of every window that shows the diff on the same line of the file'] = function()
+  session_with_two_changed_files('fullcontext-two-windows')
+  open_file_at(2, 1)
+  child.cmd('split')
+  child.type_keys('10G')
+  local second = child.lua_get('vim.api.nvim_get_current_win()')
+  eq(cursor_and_line()[2], '+changed 10')
+  child.cmd('wincmd p')
+
+  child.type_keys('F')
+
+  expect_hunks_shown({ WHOLE_HUNK })
+  eq(
+    child.lua_get(
+      [[(function(window)
+        local row = vim.api.nvim_win_get_cursor(window)[1]
+        return { row, vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(window), row - 1, row, true)[1] }
+      end)(...)]],
+      { second }
+    ),
+    { 16, '+changed 10' }
+  )
 end
 
 T['F']['leaves a diff shown in another window as it was'] = function()

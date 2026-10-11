@@ -265,20 +265,23 @@ diff, aineo says so, shows nothing, and the cursor stays in the pane; so it
 does when showing the diff fails.
 
 In a diff the pane showed, `F` reads that diff again with the whole file as
-its context, and again with three lines of context when pressed once more.
-It is a Normal-mode map of the diff's buffer alone, so it shadows Vim's
-`F{char}` there, and no `<Plug>` mapping stands for it. The diff is written
-into the same buffer, under the same name, with the commit's header when it
-has one, and the cursor stays on the same line of the same file, or goes to
-the first line when the diff no longer shows that line. It holds for every
-diff the pane shows, another worktree's too, the whole diffs of Uncommitted
-and Session work among them. The choice is kept until the editor quits, not
-on disk: each diff Enter shows after `F` is read in it, and the editor
+its context when its text shows three lines, and again with three lines of
+context when it shows the whole file, so that it always changes what the
+diff shows, even in a diff shown before an `F` in another one. It is a
+Normal-mode map of the diff's buffer alone, so it shadows Vim's `F{char}`
+there, and no `<Plug>` mapping stands for it. The diff is written into the
+same buffer, under the same name, with the commit's header when it has one,
+and the cursor of every window showing it stays on the same line of the same
+file, or goes to the first line when the diff no longer shows that line. It
+holds for every diff the pane shows, another worktree's too, the whole diffs
+of Uncommitted and Session work among them. The context `F` chose is kept
+until the editor quits, not on disk: each diff Enter shows after `F` is read
+in it, one already being read when `F` is pressed included, and the editor
 starts with three lines. A diff shown in another window keeps its text until
 Enter shows it again. `F` says nothing; when the diff cannot be read, aineo
-tells it once, leaves the buffer as it was, and the next diff Enter shows is
-read in the context `F` chose all the same. When you press `F` again before
-a diff was read, only the last one's is written.
+tells it once and leaves the buffer as it was, and the next diff Enter shows
+is read in the context `F` chose all the same. When you press `F` again
+before a diff was read, only the last one's is written.
 
 The pane is read again whenever it is shown — `\pc`, `:Aineo pane changes`,
 `\o`, or the layout built anew showing it — and, from its first showing
