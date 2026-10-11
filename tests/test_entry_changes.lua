@@ -117,7 +117,7 @@ T['the session']['begins at the first start of Claude Code: a commit made since 
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
 
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
@@ -131,7 +131,7 @@ T['the session']['outlives a restart of Claude Code: its commits stay the sessio
   local commit = git_repo.commit_all(top, 'Write two')
 
   child.cmd('Aineo open')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
 end
@@ -147,7 +147,7 @@ T['the session']['does not begin at a start that fails: the next start takes the
   entry.use_fake(child, fake)
 
   open_and_wait_for_the_base()
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
 end
@@ -168,7 +168,7 @@ T['the pane']['reads its lists again as \\o restores the layout it shows in'] = 
   local top = in_repository('changespane-entry-restore', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'scratch.log', { 'scratch' })
   open_and_wait_for_the_base()
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   expect_lines(FILES, { 'Files in: Session work', '  ? scratch.log' })
   git_repo.wait_until('every read of the files answered', function()
     return child.lua_get('_G.file_reads.answered == _G.file_reads.asked')
@@ -184,9 +184,9 @@ end
 --- the function that opens it.
 local DOORS = {
   {
-    'pressing \\pc',
+    'pressing \\g',
     function()
-      entry.press(child, '\\pc')
+      entry.press(child, '\\g')
     end,
   },
   {
@@ -211,7 +211,7 @@ T['the pane']['reads its lists again while it shows, by']['door'] = function(_, 
   local top = in_repository('changespane-entry-shown-again', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'scratch.log', { 'scratch' })
   open_and_wait_for_the_base()
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   expect_lines(FILES, { 'Files in: Session work', '  ? scratch.log' })
   wait_for_the_reads()
   git_repo.write(top, '.git/info/exclude', { 'scratch.log' })
@@ -224,13 +224,13 @@ end
 T['the pane']['shown once reads its files once'] = function()
   in_repository('changespane-entry-read-once', { ['notes.txt'] = { 'one' } })
   open_and_wait_for_the_base()
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
   wait_for_the_reads()
   entry.press(child, '\\pa')
   local asked = child.lua_get('_G.file_reads.asked')
 
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   wait_for_the_reads()
   eq(child.lua_get('_G.file_reads.asked'), asked + 1)
@@ -255,12 +255,12 @@ end)()]]
 T['the pane']['shown ten times holds no more autocommands, buffers or watches than shown once'] = function()
   in_repository('changespane-entry-ten', { ['notes.txt'] = { 'one' } })
   open_and_wait_for_the_base()
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
   wait_for_the_reads()
   local held = child.lua_get(HELD)
 
-  entry.press(child, '\\pa\\pc\\pa\\pc\\pa\\pc\\pa\\pc\\pa\\pc\\pa\\pc\\pa\\pc\\pa\\pc\\pa\\pc')
+  entry.press(child, '\\pa\\g\\pa\\g\\pa\\g\\pa\\g\\pa\\g\\pa\\g\\pa\\g\\pa\\g\\pa\\g')
 
   wait_for_the_reads()
   eq(child.lua_get(HELD), held)
@@ -277,7 +277,7 @@ local function changes_pane_listing_a_file(name)
   local top = in_repository(name, { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
   open_and_wait_for_the_base()
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
   child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
@@ -421,7 +421,7 @@ local function changes_pane_listing_a_new_file(name)
   local top = in_repository(name, { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'has space.txt', { 'text' })
   open_and_wait_for_the_base()
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   expect_lines(FILES, { 'Files in: Session work', '  ? has space.txt' })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
   child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')

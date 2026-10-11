@@ -635,7 +635,7 @@ T['the prefix mappings']['are reported in place when aineo mapped each key'] = f
     '- ✅ OK \\tcn runs <Plug>(aineo-claude-numbers)',
     '- ✅ OK \\cs runs <Plug>(aineo-sessions)',
     '- ✅ OK \\pa runs <Plug>(aineo-pane-agent)',
-    '- ✅ OK \\pc runs <Plug>(aineo-pane-changes)',
+    '- ✅ OK \\g runs <Plug>(aineo-pane-changes)',
     '- ✅ OK \\s in Visual mode runs <Plug>(aineo-send)',
     LEADER_WARNING,
   })
@@ -756,7 +756,7 @@ T['the prefix mappings']['warn that the local leader, the same key as a prefix i
     '- ✅ OK <space>tcn runs <Plug>(aineo-claude-numbers)',
     '- ✅ OK <space>cs runs <Plug>(aineo-sessions)',
     '- ✅ OK <space>pa runs <Plug>(aineo-pane-agent)',
-    '- ✅ OK <space>pc runs <Plug>(aineo-pane-changes)',
+    '- ✅ OK <space>g runs <Plug>(aineo-pane-changes)',
     '- ✅ OK <space>s in Visual mode runs <Plug>(aineo-send)',
     '- ⚠️ WARNING the local leader is the prefix, <space>',
   })
@@ -776,7 +776,7 @@ T['the prefix mappings']['take a local leader written in key notation as the cha
     '- ✅ OK <Space>tcn runs <Plug>(aineo-claude-numbers)',
     '- ✅ OK <Space>cs runs <Plug>(aineo-sessions)',
     '- ✅ OK <Space>pa runs <Plug>(aineo-pane-agent)',
-    '- ✅ OK <Space>pc runs <Plug>(aineo-pane-changes)',
+    '- ✅ OK <Space>g runs <Plug>(aineo-pane-changes)',
     '- ✅ OK <Space>s in Visual mode runs <Plug>(aineo-send)',
   })
 end
@@ -909,7 +909,7 @@ T['the prefix mappings']['warn of a key the user mapped, naming what it runs'] =
     '- ✅ OK \\tcn runs <Plug>(aineo-claude-numbers)',
     '- ✅ OK \\cs runs <Plug>(aineo-sessions)',
     '- ✅ OK \\pa runs <Plug>(aineo-pane-agent)',
-    '- ✅ OK \\pc runs <Plug>(aineo-pane-changes)',
+    '- ✅ OK \\g runs <Plug>(aineo-pane-changes)',
     '- ✅ OK \\s in Visual mode runs <Plug>(aineo-send)',
     LEADER_WARNING,
   })
@@ -994,7 +994,7 @@ T['the prefix mappings']['warn of each key nobody mapped, as after setup() chang
     '- ⚠️ WARNING ,tcn is not mapped',
     '- ⚠️ WARNING ,cs is not mapped',
     '- ⚠️ WARNING ,pa is not mapped',
-    '- ⚠️ WARNING ,pc is not mapped',
+    '- ⚠️ WARNING ,g is not mapped',
     '- ⚠️ WARNING ,s in Visual mode is not mapped',
   })
   eq(

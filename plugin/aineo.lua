@@ -1229,7 +1229,7 @@ local PREFIX_KEYS = {
   ['claude-numbers'] = 'tcn',
   sessions = 'cs',
   ['pane agent'] = 'pa',
-  ['pane changes'] = 'pc',
+  ['pane changes'] = 'g',
 }
 
 --- Whether `keys`, written as in a mapping, have a global mapping in

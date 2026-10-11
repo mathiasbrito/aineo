@@ -112,7 +112,7 @@ local function doors_to(pane, key)
   }
 end
 
-T['the changes pane'] = MiniTest.new_set({ parametrize = doors_to('changes', 'pc') })
+T['the changes pane'] = MiniTest.new_set({ parametrize = doors_to('changes', 'g') })
 
 T['the changes pane']['shows in the right column, telling the user nothing, by'] = function(_, door)
   open_layout('panes-doors-changes')
@@ -183,7 +183,7 @@ T['the changes pane’s windows'] = MiniTest.new_set()
 T['the changes pane’s windows']['show a scratch buffer each, listing the session’s files and commits'] = function()
   open_layout('panes-placeholders')
 
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   eq({
     once_listing('aineo://changes-files', NO_FILES),
@@ -222,7 +222,7 @@ T['a buffer already named as a buffer of the changes pane']['gives the name up, 
 
   entry.command(child, 'Aineo open')
   local opened = entry.windows(child)
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   eq(
     { opened, entry.windows(child), entry.messages(child), once_listing(name, line) },
@@ -245,7 +245,7 @@ T['a buffer already named as a buffer of the changes pane']['keeps the text the 
   )
 
   entry.command(child, 'Aineo open')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   eq(
     { entry.windows(child), entry.messages(child), child.lua_get(NAME_AND_LINES, { namesake }) },
@@ -287,7 +287,7 @@ T['a buffer of the changes pane']['lists again once a command run in its window 
   line
 )
   open_layout('panes-edited')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   once_listing(name, line)
   enter_window_showing(name)
 
@@ -307,11 +307,11 @@ T['a buffer of the changes pane']['deleted from its own window, is shown by the 
   line
 )
   open_layout('panes-deleted-in-place')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   enter_window_showing(name)
   child.cmd('bdelete')
 
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   eq({ right_column(), entry.messages(child), once_listing(name, line) }, {
     { 'aineo://changes-files', 'aineo://changes-commits' },
@@ -389,10 +389,10 @@ T['a switch a window refuses']['leaves the column as it was, says why once, and 
   open_layout('panes-refused')
   refuse()
 
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   local refused = { entry.windows(child), #entry.messages(child) }
   stop_refusing()
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   eq({ refused, entry.windows(child) }, { { AGENT_PANE, 1 }, CHANGES_PANE })
 end
@@ -403,11 +403,11 @@ T['a switch refused in the command-line window']['leaves the column as it was, a
   open_layout('panes-refused-cmdwin')
   enter_window_showing('aineo://input')
 
-  child.type_keys('q:', '\\pc')
+  child.type_keys('q:', '\\g')
   local told = #entry.messages(child)
   child.type_keys('<C-c>', '<Esc>')
   local after_closing = entry.windows(child)
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   eq({ told, after_closing, entry.windows(child) }, { 1, AGENT_PANE, CHANGES_PANE })
 end
@@ -438,7 +438,7 @@ T['a switch refused, the Report raising as it is shown again,']['leaves the agen
   open_layout('panes-refused-back')
   refuse_switch_and_report()
 
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   eq({ entry.windows(child), #entry.messages(child) }, { AGENT_PANE, 1 })
 end
@@ -447,7 +447,7 @@ T['a switch refused, the Report raising as it is shown again,']['tells the user 
   open_layout('panes-refused-back-told')
   refuse_switch_and_report()
 
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   eq(entry.messages(child), { { message = TOLD_COMMITS_REFUSED, level = vim.log.levels.ERROR } })
 end
@@ -473,7 +473,7 @@ T['the changes pane key from another tab page']['shows the pane in the layout’
   child.cmd('tabnew')
   local window = child.api.nvim_get_current_win()
 
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   local where = { child.api.nvim_get_current_win(), entry.messages(child) }
   child.cmd('tabfirst')
 
@@ -485,14 +485,14 @@ T['the changes pane key, a buffer named as its files buffer in the current windo
 
 T['the changes pane key, a buffer named as its files buffer in the current window,']['shows the pane in the layout’s tab page, telling nothing, when freeing the name closes that window'] = function()
   open_layout('panes-namesake-here')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   entry.press(child, '\\pa')
   child.lua([[vim.cmd.bwipeout(vim.fn.bufnr('aineo://changes-files'))]])
   child.cmd('tabnew')
   child.cmd('split')
   child.cmd('edit aineo://changes-files')
 
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   local told = entry.messages(child)
   child.cmd('tabfirst')
 
@@ -504,14 +504,14 @@ T['a session saved while the changes pane shows'] = MiniTest.new_set()
 T['a session saved while the changes pane shows']['restored, lets the layout open and the pane key show the changes pane'] = function()
   local session = vim.fs.joinpath(fixture.directory('panes-session'), 'Session.vim')
   open_layout('panes-session-saved')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   child.cmd('mksession! ' .. session)
   entry.restart(child, { '-S', session })
   entry.use_fake(child, claude_session.fake('panes-session-restored', 'ready'))
 
   entry.command(child, 'Aineo open')
   local opened = { entry.windows(child), entry.messages(child) }
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   eq(
     { opened, entry.windows(child), entry.messages(child) },
@@ -521,7 +521,7 @@ end
 
 --- Each pane, with its key after the prefix and what the layout's windows
 --- show under it, as a set's `parametrize`.
-local PANES = { { 'agent', 'pa', AGENT_PANE }, { 'changes', 'pc', CHANGES_PANE } }
+local PANES = { { 'agent', 'pa', AGENT_PANE }, { 'changes', 'g', CHANGES_PANE } }
 
 T['the pane key, with the layout never opened,'] = MiniTest.new_set({ parametrize = PANES })
 
@@ -604,7 +604,7 @@ T['the changes pane key, with the layout never opened,']['hands Input to the fol
   assert(vim.fn.writefile({ 'Refactor the parser' }, draft) == 0, 'cannot write ' .. draft)
   entry.use_fake(child, claude_session.fake('panes-draft', 'trust'))
 
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   entry.press(child, '\\pa')
   local restored = child.lua_get(INPUT_LINES)
   entry.set_input(child, { 'then run the tests' })
@@ -638,7 +638,7 @@ T['while the changes pane shows']['the key of a window of the agent pane shows t
   name
 )
   open_layout('panes-focus')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   local before = entry.windows(child)
 
   entry.press(child, '\\' .. key)
@@ -663,7 +663,7 @@ T['while the changes pane shows']['the key of a window of the agent pane, the ot
   name
 )
   open_layout('panes-focus-wiped')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   child.cmd('bwipeout ' .. wiped)
 
   entry.press(child, '\\' .. key)
@@ -742,7 +742,7 @@ T['a report arrived while the changes pane showed']['is on the Report’s last l
   receive_reports(2)
   entry.press(child, '\\r')
   child.api.nvim_win_set_cursor(0, { 3, 0 })
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   receive_reports(3)
   child.api.nvim_win_close(child.fn.bufwinid('aineo://changes-files'), false)
   entry.press(child, '\\i')
@@ -758,7 +758,7 @@ T['a report arriving while the changes pane shows'] = MiniTest.new_set()
 T['a report arriving while the changes pane shows']['shows nothing then, and \\pa shows it on the Report’s last line'] = function()
   own_state('panes-arrival-state')
   open_layout('panes-arrival')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   receive_reports(1)
   local on_arrival = { entry.windows(child), entry.messages(child) }
@@ -780,7 +780,7 @@ T['a report arriving while the changes pane shows, the Report wiped before,']['i
   own_state('panes-report-wiped-arrival-state')
   open_layout('panes-report-wiped-arrival')
   receive_reports(count)
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   child.lua([[vim.cmd.bwipeout(vim.fn.bufnr('aineo://report'))]])
   receive_reports(count)
 
@@ -802,7 +802,7 @@ T['while the changes pane shows']['the key of a window of the agent pane, the Re
   own_state('panes-report-deleted-state')
   open_layout('panes-report-deleted')
   receive_reports(1)
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   child.lua([[vim.cmd.bdelete(vim.fn.bufnr('aineo://report'))]])
 
   entry.press(child, '\\' .. key)
@@ -820,7 +820,7 @@ T['a switch to the changes pane, refused'] = MiniTest.new_set({
     {
       'in the command-line window',
       function()
-        child.type_keys('q:', '\\pc')
+        child.type_keys('q:', '\\g')
         child.type_keys('<C-c>', '<Esc>')
       end,
     },
@@ -828,7 +828,7 @@ T['a switch to the changes pane, refused'] = MiniTest.new_set({
       'by winfixbuf on Input’s window',
       function()
         child.lua([[vim.wo[vim.fn.bufwinid('aineo://input')].winfixbuf = true]])
-        entry.press(child, '\\pc')
+        entry.press(child, '\\g')
         child.lua([[vim.wo[vim.fn.bufwinid('aineo://input')].winfixbuf = false]])
       end,
     },
@@ -880,7 +880,7 @@ T['while the changes pane shows']['the key of a window of the agent pane, the ot
 )
   own_state('panes-focus-closed-state')
   open_layout('panes-focus-closed')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   child.api.nvim_win_close(child.fn.bufwinid(closed), false)
   receive_reports(1)
 
@@ -916,7 +916,7 @@ T['while the changes pane shows']['restoring the layout keeps its buffers, telli
   restore
 )
   open_layout('panes-restore')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   local buffers = child.lua_get(CHANGES_PANE_BUFFERS)
   child.api.nvim_win_close(child.fn.bufwinid('aineo://changes-commits'), false)
 
@@ -979,7 +979,7 @@ T['a switch refused, the Report’s window refusing the Report back,']['leaves b
 )
   open_layout('panes-refused-files-back')
   refuse_switch_and_files_back()
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   local refused = { entry.windows(child), #entry.messages(child) }
   stop_refusing_files_back()
 
@@ -1000,7 +1000,7 @@ T['a switch refused, the Report’s window refusing the Report back, a report ar
   receive_reports(2)
   child.api.nvim_win_set_cursor(child.fn.bufwinid('aineo://report'), { 3, 0 })
   refuse_switch_and_files_back()
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   stop_refusing_files_back()
   receive_reports(1)
 
@@ -1037,7 +1037,7 @@ local function stop_refusing_report_kept()
 end
 
 T['a switch to the agent pane refused, the Report’s window keeping the Report, the changes pane hiding it again,'] =
-  MiniTest.new_set({ parametrize = { { 'pc' }, { 'o' } } })
+  MiniTest.new_set({ parametrize = { { 'g' }, { 'o' } } })
 
 T['a switch to the agent pane refused, the Report’s window keeping the Report, the changes pane hiding it again,']['is on the Report’s last line once a report arrives and \\pa shows the agent pane, hidden by'] = function(
   key
@@ -1047,7 +1047,7 @@ T['a switch to the agent pane refused, the Report’s window keeping the Report,
   receive_reports(2)
   entry.press(child, '\\r')
   child.api.nvim_win_set_cursor(0, { 3, 0 })
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   refuse_switch_and_report_kept()
   entry.press(child, '\\pa')
   local refused = entry.windows(child)
@@ -1068,18 +1068,18 @@ T['a switch to the agent pane refused, the Report’s window keeping the Report,
 end
 
 --- Shows, in the child, the Report by hand in the Report's window under the
---- changes pane, a report having arrived since `\pc` hid it, with the
+--- changes pane, a report having arrived since `\g` hid it, with the
 --- cursor on its third line, then has a switch to the changes pane refused
 --- in the command-line window.
 local function refuse_switch_with_report_shown_by_hand()
   receive_reports(2)
   entry.press(child, '\\r')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   receive_reports(1)
   child.api.nvim_set_current_win(child.fn.bufwinid('aineo://changes-files'))
   child.cmd('buffer aineo://report')
   child.api.nvim_win_set_cursor(0, { 3, 0 })
-  child.type_keys('q:', '\\pc')
+  child.type_keys('q:', '\\g')
   child.type_keys('<C-c>', '<Esc>')
 end
 
@@ -1096,11 +1096,11 @@ T['the Report shown by hand under the changes pane, a switch to the changes pane
   eq({ #entry.messages(child), cursor }, { 1, 3 })
 end
 
-T['the Report shown by hand under the changes pane, a switch to the changes pane refused,']['is on the Report’s last line once \\pc hides it, a report arrives and \\pa shows the agent pane'] = function()
+T['the Report shown by hand under the changes pane, a switch to the changes pane refused,']['is on the Report’s last line once \\g hides it, a report arrives and \\pa shows the agent pane'] = function()
   own_state('panes-by-hand-refused-follow-state')
   open_layout('panes-by-hand-refused-follow')
   refuse_switch_with_report_shown_by_hand()
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   local hidden = entry.windows(child)
   receive_reports(1)
 
@@ -1118,7 +1118,7 @@ T['while the changes pane shows']['Send sends Input, unseen, and the changes pan
   local fake = open_layout('panes-send')
   claude_session.wait_for_status(child, 'ready')
   entry.set_input(child, { 'hello' })
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   local received_before = #claude_session.received(fake)
 
   entry.press(child, '\\s')
@@ -1129,7 +1129,7 @@ end
 
 T['while the changes pane shows']['the key of Claude moves to Claude, and the changes pane stays'] = function()
   open_layout('panes-claude')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   entry.press(child, '\\c')
 
@@ -1139,7 +1139,7 @@ end
 T['while the changes pane shows']['the key of Claude’s line numbers toggles them, and the changes pane stays'] = function()
   child.o.number = true
   open_layout('panes-claude-numbers')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   entry.press(child, '\\tcn')
 
@@ -1250,7 +1250,7 @@ local HELD = [[{
 local function switch(times)
   local shown = {}
   for _ = 1, times do
-    entry.press(child, '\\pc')
+    entry.press(child, '\\g')
     table.insert(shown, entry.windows(child))
     entry.press(child, '\\pa')
     table.insert(shown, entry.windows(child))
@@ -1286,11 +1286,11 @@ T['the changes pane key']['shows a wiped buffer of the changes pane anew, with n
   name
 )
   open_layout('panes-wiped')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   local wiped = child.fn.bufnr(name)
   child.cmd('bwipeout ' .. name)
 
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   eq(
     { entry.windows(child), entry.messages(child), child.fn.bufnr(name) ~= wiped },
@@ -1300,7 +1300,7 @@ end
 
 T['the changes pane key']['shows a deleted buffer of the changes pane anew, listing again,'] =
   MiniTest.new_set({
-    parametrize = { { 'deleted while shown', 'pc' }, { 'deleted while hidden', 'pa' } },
+    parametrize = { { 'deleted while shown', 'g' }, { 'deleted while hidden', 'pa' } },
   })
 
 T['the changes pane key']['shows a deleted buffer of the changes pane anew, listing again,']['when'] = function(
@@ -1308,11 +1308,11 @@ T['the changes pane key']['shows a deleted buffer of the changes pane anew, list
   key_before_deleting
 )
   open_layout('panes-deleted')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   entry.press(child, '\\' .. key_before_deleting)
   child.cmd('bdelete ' .. child.fn.bufnr('aineo://changes-files'))
 
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   eq({
     entry.windows(child),

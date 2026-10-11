@@ -30,7 +30,7 @@ that what you type next goes to Claude, unless Claude Code has exited.
 `\tcn` hides or shows the line numbers of Claude's window. `\cs` lists the
 sessions Claude Code lists for the folder and switches Claude to the one you
 pick (|:Aineo-sessions|); since `\cs` begins with it, `\c` waits for
-'timeoutlen' for an `s` to follow. `\pa` and `\pc` switch the right column
+'timeoutlen' for an `s` to follow. `\pa` and `\g` switch the right column
 between the agent pane, the Report over Input, and the changes pane
 (|aineo-panes|). In Visual mode, in Input, `\s` sends the selection alone and
 removes it from Input (|aineo-v_\s|).
@@ -116,7 +116,7 @@ same two windows, at the same sizes, show the other pane's buffers.
   as one a restored session made, gives the name up: it is wiped out, or
   kept unnamed when you changed its text.
 
-`\pa` (|:Aineo-pane|) shows the agent pane and `\pc` the changes pane; the
+`\pa` (|:Aineo-pane|) shows the agent pane and `\g` the changes pane; the
 pane already shown stays as it is (the changes pane is read again,
 |aineo-changes|), unless one of its windows shows the other pane's buffer
 there, as a refused switch or you can leave it (the commits buffer in
@@ -130,7 +130,7 @@ Input while the changes pane hides it (|aineo-send|). When a window will
 not take its buffer — 'winfixbuf' is set there, say, or you are in the
 command-line window — aineo tells you why, once, and gives each window back
 the buffer it showed. A window that will not take that one back either
-keeps the other pane's buffer; `\pa` or `\pc` then shows its pane in both
+keeps the other pane's buffer; `\pa` or `\g` then shows its pane in both
 windows.
 
 The Report and Input are kept while hidden, with Input's text and its draft.
@@ -212,7 +212,7 @@ The commits window, `aineo://changes-commits`, starts with two lines that
 are always there, Uncommitted and Session work, then lists the session's
 commits, newest first, by abbreviated id and subject, or says "No commits
 on this session". Its cursor is on Session work when the pane first shows,
-and when the buffer is made anew; `\pc` keeps your line. The line under
+and when the buffer is made anew; `\g` keeps your line. The line under
 the cursor chooses what the files window lists, once the cursor has stayed
 on it for 150 milliseconds: Uncommitted, Session work, or that commit. A
 line that lists none of these - a note, another worktree's heading or one
@@ -305,7 +305,7 @@ tells it once and leaves the buffer as it was, and the next diff Enter shows
 is read in the context `F` chose all the same. When you press `F` again
 before a diff was read, only the last one's is written.
 
-The pane is read again whenever it is shown — `\pc`, `:Aineo pane changes`,
+The pane is read again whenever it is shown — `\g`, `:Aineo pane changes`,
 `\o`, or the layout built anew showing it — and, from its first showing
 until the editor quits, when a file is saved, when a file of the working
 tree changes, and when the branch moves: a commit, even one that changes no
@@ -867,8 +867,8 @@ which has none, globally, in Normal mode, and `\s` in Visual mode too:
 \cs		|<Plug>(aineo-sessions)|
                                                                    *aineo-\pa*
 \pa		|<Plug>(aineo-pane-agent)|
-                                                                   *aineo-\pc*
-\pc		|<Plug>(aineo-pane-changes)|
+                                                                    *aineo-\g*
+\g		|<Plug>(aineo-pane-changes)|
                                                                   *aineo-v_\s*
 \s		|<Plug>(aineo-send)| in Visual mode (|aineo-send|)
 
@@ -883,7 +883,7 @@ own buffer only. A mapping you make later replaces aineo's. A mapping that
 only overlaps aineo's key is not yours in this sense: with your own `\sa`,
 aineo still maps `\s`, and `\sa` then waits for 'timeoutlen' after `\s`;
 with your own `\t` or `\tc`, aineo still maps `\tcn`, and with your own `\p`
-— or `<Leader>p` while the leader is `\` — it still maps `\pa` and `\pc`:
+— or `<Leader>p` while the leader is `\` — it still maps `\pa`:
 yours then waits for 'timeoutlen'. aineo's own `\c` waits too, for an `s` to
 follow, since `\cs` begins with it.
 

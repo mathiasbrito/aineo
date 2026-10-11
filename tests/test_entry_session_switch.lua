@@ -456,14 +456,14 @@ T['a switch']['by /clear, once ready, shows an empty Report and an empty Input, 
   entry.set_input(child, { 'notes for the first session' })
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   local listed_before = lists_once(COMMITS, listed(commit, 'Write two'), true)
   entry.press(child, '\\pa')
 
   switch_by_keys('/clear\r')
 
   local report, input = child.lua_get(REPORT_LINES), child.lua_get(INPUT_LINES)
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   eq({
     listed_before = listed_before,
     report = report,
@@ -472,7 +472,7 @@ T['a switch']['by /clear, once ready, shows an empty Report and an empty Input, 
   }, { listed_before = true, report = { '' }, input = { '' }, listed = false })
 end
 
-T['a switch']['by /resume, with the agent pane shown, shows the session’s reports in the Report at once, and its base at \\pc'] = function()
+T['a switch']['by /resume, with the agent pane shown, shows the session’s reports in the Report at once, and its base at \\g'] = function()
   local top, base, state = in_repository('session-switch-resume-agent')
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
@@ -482,7 +482,7 @@ T['a switch']['by /resume, with the agent pane shown, shows the session’s repo
   switch_by_keys('/resume ' .. OTHER_SESSION_ID .. '\r')
 
   local report = child.lua_get(REPORT_LINES)
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   eq(
     { report = report, listed = lists_once(COMMITS, listed(commit, 'Write two'), true) },
     { report = { EARLIER_REPORT }, listed = true }
@@ -495,7 +495,7 @@ T['a switch']['by /resume, with the changes pane shown, shows the session’s ba
   local commit = git_repo.commit_all(top, 'Write two')
   leave_session(state, OTHER_SESSION_ID, top, base)
   open_until_ready(fake_running_hooks('session-switch-resume-changes'))
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   local listed_before = lists_once(COMMITS, listed(commit, 'Write two'), false)
 
   switch_by_keys('/resume ' .. OTHER_SESSION_ID .. '\r')
@@ -522,7 +522,7 @@ T['a switch']['by /resume back to the first session brings its Report, its base 
   switch_by_keys('/resume ' .. first .. '\r')
 
   local report, input = child.lua_get(REPORT_LINES), child.lua_get(INPUT_LINES)
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
   eq({
     after_clear = after_clear,
     report = report,
