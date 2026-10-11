@@ -113,7 +113,7 @@ The three reviews of PR #154 (attack, test integrity, records) and the orchestra
 
 Recorded after the merge, by wave 9's closing knowledge pass. PR #154 merged by rebase on 2026-10-11 (09:41 UTC; 11:41 CEST), as `445b116` … `536a694` (13 commits). The orchestrator verified the pull request's head `5a70be2`, rebased on `dev` `a9c3b5f`: the whole suite `Fails (0)` in 5:15 (2494 cases in 74 groups), lint clean. Two of the plan's mutants killed by assertion, A90's own-file check dropped (1 failure in `tests/test_entry_session_handover.lua`) and the claim always released (1 in the same file); the `source == 'startup'` condition dropped (attack probe P1) survives `tests/test_entry_session_handover.lua` and is equivalent in practice, since T35 reports the fallback as a switch from the new id to the dead one, `startup`, in the same tick as `on_terminal_replaced`, so no other switch can carry the fresh id first. Released in v0.2.19 (PR #155, `main` `befe50b`).
 
-The first four are the packet's three hand-overs and the changes home's, then the entry's pin and wiring, the help and the session note, then the fix round's code, pins and docstrings, and its note.
+The first three are the Report's, Input's and the changes home's hand-overs; then a pin, the wiring at the fallback, a pin, the help and the session note (the packet, head `5ea7867`); then the fix round's four commits and its note.
 
 | Branch | `dev` | Subject |
 |---|---|---|
