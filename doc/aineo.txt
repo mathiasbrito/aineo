@@ -964,9 +964,10 @@ it:
    claim and has not yet moved its working directory's Reports into a
    session of its own: that editor, which keeps the report with them,
    unshown, so that its own session takes them together (|:Aineo-claim|),
-   when that session has no Reports of its own yet — one that took the
-   place of a session whose resume found no conversation has that
-   session's, and the reports stay with the directory's (|aineo-limits|);
+   when the report's session has no Reports of its own yet — one that took
+   the place of a session whose resume found no conversation has that
+   session's, when it kept any — else the report goes on to 5
+   (|aineo-limits|);
 5. that session's Report on disk: it shows when aineo next follows the
    session, never in another session's Report.
 A Neovim that holds the report without answering, at a hit-enter prompt say,
@@ -1510,7 +1511,9 @@ A session in place of one with no conversation ~
   however long that start takes: Input shows the resumed session's draft
   instead. The directory's draft is then shown only once an editor first
   follows a session with no draft of its own. Reports kept unshown with
-  the directory's while a claim held stay with them the same way.
+  the directory's while a claim held, before their session had Reports of
+  its own, stay with them the same way, and are then shown in the Report
+  of whichever session takes the directory's.
 - Another Neovim that shows the resumed session, by `:Aineo claim` or as
   the session of its own exited Claude Code, is not told: it goes on
   showing it, and its next save of Input or new `*` writes that session's
