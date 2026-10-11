@@ -57,6 +57,14 @@
 ---   its report tool with a report of that task, done, and record the
 ---   answer. Every MCP server the fake starts gets the session it started
 ---   on as `CLAUDE_CODE_SESSION_ID`.
+--- - `AINEO_FAKE_CLAUDE_AGENTS` and `AINEO_FAKE_CLAUDE_AGENTS_EXIT` — how it
+---   answers `agents --json`, which Claude Code prints as a JSON array of
+---   its sessions and exits (`answer_agents()`): given `agents` as its
+---   first argument it draws no screen and reads no key, records its
+---   arguments as the record's one line, prints the array held in the file
+---   `AINEO_FAKE_CLAUDE_AGENTS` names, `[]` when that is unset, and exits 0;
+---   or, with `AINEO_FAKE_CLAUDE_AGENTS_EXIT` set, prints nothing and exits
+---   with that code. It writes no `ended` line.
 ---
 --- It answers Ctrl-C as Claude Code 2.1.281 did in a Neovim terminal: idle, a
 --- second press within `DOUBLE_PRESS_MS` of the first exits 0,
@@ -256,6 +264,36 @@ end
 local function finish(how, code)
   record({ ended = how, code = code })
   os.exit(code)
+end
+
+--- Answers `agents --json` as `claude agents --json` does: records its
+--- arguments, prints the array of sessions `AINEO_FAKE_CLAUDE_AGENTS` names
+--- (`[]` when unset) and exits 0, or prints nothing and exits with the code
+--- `AINEO_FAKE_CLAUDE_AGENTS_EXIT` names. It runs before the terminal is put
+--- in raw mode, which `claude agents --json` does not need.
+local function answer_agents()
+  record({
+    argv = { unpack(arg) },
+    cwd = vim.uv.cwd(),
+    env = requested_environment(),
+    pid = vim.fn.getpid(),
+  })
+  local failure_code = tonumber(os.getenv('AINEO_FAKE_CLAUDE_AGENTS_EXIT'))
+  if failure_code then
+    os.exit(failure_code)
+  end
+  local listing = os.getenv('AINEO_FAKE_CLAUDE_AGENTS')
+  if listing then
+    io.write(assert(io.open(listing, 'rb')):read('*a'))
+  else
+    io.write('[]\n')
+  end
+  io.flush()
+  os.exit(0)
+end
+
+if arg[1] == 'agents' then
+  answer_agents()
 end
 
 -- `stty` on the inherited terminal, and a pipe on its descriptor, rather than
