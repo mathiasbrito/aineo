@@ -34,7 +34,6 @@ local M = {}
 ---@field keeps_followed? boolean whether the base and the saves are kept for the session followed: not when what was kept for it is another repository's or cannot be read, which is never written over
 ---@field looking_for_head? boolean whether git looks for `HEAD`, the base of the session followed, while it runs
 ---@field head_look_failed? boolean whether the last look for the base of the session followed failed
----@field keeping_failure_told? boolean whether the user was told that the base and the saves could not be kept
 ---@field keeping_failed? boolean whether the last write of the base and the saves of the session followed failed
 ---@field changes? aineo.git.Change[] the files changed since the base, as last read
 ---@field files_failure? aineo.git.Failure why the last read of the files failed, when it did
@@ -373,10 +372,31 @@ local function read_for_new_base()
   follow_repository()
 end
 
+--- Whether the user was told that a session's base and saves could not be
+--- kept (`tell_keeping_failure()`).
+local keeping_failure_told = false
+
+--- Tells the user, as a warning, that a session's base and saves could not
+--- be kept, and why: `failure`. Told once for the editor's life; the pane
+--- goes on from what it holds.
+---
+---@param failure string
+local function tell_keeping_failure(failure)
+  if keeping_failure_told then
+    return
+  end
+  keeping_failure_told = true
+  vim.notify(
+    ("aineo: the changes pane cannot keep this session's base and saves, and goes on without: %s"):format(
+      failure
+    ),
+    vim.log.levels.WARN
+  )
+end
+
 --- Writes the session's base and saves for `followed`, the Claude Code
 --- session the pane follows (`aineo.changes.kept`). A write that fails is
---- told once, as a warning, for the editor's life; the pane goes on from
---- what it holds.
+--- told once (`tell_keeping_failure()`).
 ---
 ---@param followed aineo.changes.FollowedSession
 local function write_kept_base(followed)
@@ -388,14 +408,8 @@ local function write_kept_base(followed)
     { top = session.repository.top, base = session.base, saved = saved }
   )
   session.keeping_failed = failure ~= nil
-  if failure and not session.keeping_failure_told then
-    session.keeping_failure_told = true
-    vim.notify(
-      ("aineo: the changes pane cannot keep this session's base and saves, and goes on without: %s"):format(
-        failure
-      ),
-      vim.log.levels.WARN
-    )
+  if failure then
+    tell_keeping_failure(failure)
   end
 end
 
@@ -719,12 +733,15 @@ end
 --- already followed does nothing. Told before the session has begun, or
 --- before its repository is found, the home holds the session and takes
 --- its base once the repository is found (`find`); while no repository is
---- found, nothing is kept. Called on the main loop only: from a fast event
+--- found, nothing is kept. The home keeps a copy of `followed`, whose id a
+--- hand-over renames (`M.hand_over_changes_session()`), and never changes
+--- the table it is given. Called on the main loop only: from a fast event
 --- (a `vim.uv` callback) it raises E5560, as the Vimscript functions it
 --- calls do there.
 ---
 ---@param followed aineo.changes.FollowedSession
 function M.follow_changes_session(followed)
+  followed = { id = followed.id, state_directory = followed.state_directory }
   if not session then
     followed_before_beginning = followed
     return
@@ -743,6 +760,65 @@ function M.follow_changes_session(followed)
     return
   end
   take_head()
+end
+
+--- A hand-over, as the composition root tells it.
+---@class aineo.changes.HandOver
+---@field from string the Claude Code session id Claude Code found no conversation for
+---@field to string the Claude Code session id that took its place
+---@field state_directory string the editor's state directory, `stdpath('state')`, under which the sessions' bases and saves are kept
+
+--- Hands the base and the saves of the Claude Code session `hand_over.from`,
+--- which Claude Code found no conversation for, over to `hand_over.to`,
+--- which took its place, under `hand_over.state_directory`.
+---
+--- When the pane follows `from`, its base and saves are kept for `from`
+--- first (`keep()`), a write that failed before included. Then, when `to`
+--- has nothing kept of its own, what is kept for `from` becomes `to`'s,
+--- whole and unread, whatever repository it names — a file that cannot be
+--- read included, which `to` then meets as `from` would have — and no file
+--- is left under `from`'s name (`aineo.changes.kept`'s `move_kept_base()`).
+--- Nothing is made when neither has a file. What this editor holds in
+--- memory for `from` (`held_bases`) is held for `to`. When `to` has a file
+--- of its own, nothing moves, and the pane goes on following `from`.
+---
+--- A pane that follows `from`, or was told it before the session began,
+--- follows `to` from then on, with no swap and no list read again: its
+--- base, its `*` marks and its lists stay, its next new mark is kept for
+--- `to`, a look for `HEAD` under way completes for `to`, and a later follow
+--- of `to` changes nothing. A pane that follows another session only has
+--- the file moved.
+---
+--- A move that fails is told to the user as a warning, as a failed keep is,
+--- once for the editor's life, and nothing is raised for it.
+---
+--- Raises an error naming the field when `hand_over` is not a hand-over.
+---
+---@param hand_over aineo.changes.HandOver
+function M.hand_over_changes_session(hand_over)
+  vim.validate('hand_over', hand_over, 'table')
+  vim.validate('hand_over.from', hand_over.from, 'string')
+  vim.validate('hand_over.to', hand_over.to, 'string')
+  vim.validate('hand_over.state_directory', hand_over.state_directory, 'string')
+  local followed = followed_before_beginning
+  if session then
+    followed = session.followed
+  end
+  local follows_from = followed ~= nil and followed.id == hand_over.from
+  if follows_from and session then
+    keep()
+  end
+  if vim.uv.fs_lstat(kept.kept_base_file(hand_over.state_directory, hand_over.to)) then
+    return
+  end
+  local failure = kept.move_kept_base(hand_over.state_directory, hand_over.from, hand_over.to)
+  if failure then
+    tell_keeping_failure(failure)
+  end
+  held_bases[hand_over.to], held_bases[hand_over.from] = held_bases[hand_over.from], nil
+  if follows_from then
+    followed.id = hand_over.to
+  end
 end
 
 --- The name of the buffer showing `entry`'s diff: `aineo://diff/<path>` for

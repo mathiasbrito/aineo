@@ -158,4 +158,29 @@ function M.keep_base(state_directory, id, kept)
   end
 end
 
+--- Moves what is kept for the session `from` to the session `to`, under
+--- `state_directory`, when `to` has no file and `from` has one: `from`'s
+--- file, unread — a symbolic link as a link — is then `to`'s, and `from`'s
+--- is gone. Neither is touched otherwise. `to`'s file is looked for first
+--- and then `from`'s renamed to it, in one step: two editors moving one
+--- `from` at the same moment leave it with one of them, never shared, and
+--- the one that finds it gone moves nothing, which is no failure.
+---
+---@param state_directory string
+---@param from string
+---@param to string
+---@return string? failure why it could not be moved, naming both files; nil when it was moved, or when `to`'s file exists or `from`'s does not
+function M.move_kept_base(state_directory, from, to)
+  local from_file = M.kept_base_file(state_directory, from)
+  local to_file = M.kept_base_file(state_directory, to)
+  if vim.uv.fs_stat(to_file) then
+    return nil
+  end
+  local renamed, failure, code = vim.uv.fs_rename(from_file, to_file)
+  if renamed or code == 'ENOENT' then
+    return nil
+  end
+  return ('cannot move %s to %s: %s'):format(from_file, to_file, failure)
+end
+
 return M
