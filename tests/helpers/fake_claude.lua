@@ -553,13 +553,15 @@ local function switch_session(to, source, reason)
   run_hooks('SessionStart', to, source)
 end
 
---- What the keys of `input` do when they give a session command — `/clear`,
---- `/resume <id>`, `/branch` or `/compact`, then Enter, in one chunk — or
---- nil when they give none.
+--- What the keys of `pasted` do when they give a session command — `/clear`,
+--- `/resume <id>`, `/branch` or `/compact`, then Enter, in one chunk, the
+--- command typed or pasted between the bracketed-paste markers as Send pastes
+--- text — or nil when they give none.
 ---
----@param input string
+---@param pasted string
 ---@return fun()?
-local function session_command(input)
+local function session_command(pasted)
+  local input = pasted:gsub('^\27%[200~(.-)\27%[201~', '%1')
   local resumed = input:match('^/resume (%S+)\r$')
   if input == '/clear\r' then
     return function()
