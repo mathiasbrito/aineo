@@ -66,3 +66,7 @@ Medium: a context argument through the git home's diffs, the mode and the `F` ma
 ## Report
 
 In your definition's shape, to `<scratchpad>/t44-report-packet.md`. Open the pull request into `dev` before you report, with every verification claim a reviewer can re-measure and the whole suite's counts. The orchestrator's verification runs `plan.md`'s five T44 mutants: name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-11, before dispatch
+
+`plan.md` › *The orchestrator's rulings* rules every open decision for this packet as its (a), which this body is written for: A101–A103 (O9–O11) and A105–A107 and A111 (the plan's A1–A3 and A7). The implementer is `neovim-lua-developer` on Sonnet (A104). These are the orchestrator's assumptions, to record in the session note and the PR body as such, never as the user's decisions.

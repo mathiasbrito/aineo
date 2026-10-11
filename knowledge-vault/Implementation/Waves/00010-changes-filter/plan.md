@@ -110,6 +110,24 @@ Each is this planning's, built as written unless the orchestrator rules otherwis
 - **A6 — The other worktrees' lines take no part in the filter** (T43): Enter on them is today's, and the cursor on them keeps the last filter (O5).
 - **A7 — `F`'s choice applies to diffs shown after it**; a diff shown in another window keeps its text until Enter shows it again, as today's diffs do (T44).
 
+## The orchestrator's rulings — 2026-10-11, before dispatch
+
+Each ruling is the orchestrator's assumption under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"), reported to the user with the wave; none is the user's decision, and none is a D row.
+
+- **A93 (O1)** — (a): a rolling wave, T43 first, T44 after T43 merges, with a dated amendment of T44's brief re-checking its facts against the `dev` T43 lands.
+- **A94 (O2)** — (a): `Uncommitted`, `Session work`, `Files in: …`, and the three empty lines as written.
+- **A95 (O3)** — (a): a merge commit is read against its first parent everywhere.
+- **A96 (O4)** — (a): one 150 ms timer restarted on each cursor move; the files window keeps its list until the new one arrives.
+- **A97 (O5)** — (a): *Session work* at the first showing and when the commits buffer is made anew; a later `\pc` keeps the user's line; reset when the pane follows another session or the selected commit is gone.
+- **A98 (O6)** — (a): `AineoChangesFilter`, linked to `Title`.
+- **A99 (O7)** — (a): the diff buffer names as written.
+- **A100 (O8)** — (a): the commit's header, then that file's change.
+- **A101 (O9)** — (a): `F` in every diff buffer the changes home makes.
+- **A102 (O10)** — (a): the cursor stays on the same line of the file.
+- **A103 (O11)** — (a): no message at a flip.
+- **A104 (O12)** — (a): the implementers run on Sonnet, and one `records-reviewer` (Sonnet) reviews tests and records together; the attack review stays on Opus. Why: the user's later instruction of 2026-10-11 ("use sonnet model when it is suitable for the tasks, and avoid over testing") and briefs written to the last line. It departs from the root `CLAUDE.md`'s "Opus for code" (2026-10-08); that file is not changed by this ruling. If an implementer's packet comes back short of its brief, the fix round goes to Opus.
+- **A105–A111** — this plan's *Assumptions to report to the user* A1–A7 are adopted as written, renumbered into the orchestrator's series: A1 → A105, A2 → A106, A3 → A107, A4 → A108, A5 → A109, A6 → A110, A7 → A111. The briefs' citations of A1–A7 mean these.
+
 ## Verification mutants
 
 Each runs as its literal edit, shown applied, on the test files that exercise the code it breaks, and on the whole suite only when it survives there. Written for the recommendations.
