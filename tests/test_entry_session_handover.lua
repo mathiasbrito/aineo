@@ -273,7 +273,7 @@ T['a resume with no conversation']['in a new editor shows the dead session’s d
 
   claude_session.wait_for_starts(fake, 2)
   claude_session.wait_for_status(child, 'ready')
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   eq({
     input = child.lua_get(INPUT_LINES),
@@ -413,7 +413,7 @@ T['a resume with no conversation']['in the same editor keeps Input’s text and 
 
   claude_session.wait_for_status(child, 'ready')
   local fresh = followed_session(child)
-  entry.press(child, '\\pc')
+  entry.press(child, '\\g')
 
   eq({
     at_fallback = at_fallback,
