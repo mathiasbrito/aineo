@@ -1,10 +1,15 @@
 --- The sessions Claude Code lists, read from `claude agents --json`.
 
+local session_ids = require('aineo.claude.session_ids')
+
 local M = {}
 
---- A session `claude agents --json` lists. A background session ended in its
---- process has no `pid`.
----@alias aineo.claude.ListedSession { session_id: string, name: string?, kind: string?, status: string?, pid: integer? }
+--- A session `claude agents --json` lists: its session id, name, kind, status
+--- and the directory it started in, where the entry has them, and whether
+--- a process runs it (`running`). An entry has a `pid` and a `status` only
+--- while its process is alive, so `running` is set when it has either,
+--- whatever its type.
+---@alias aineo.claude.ListedSession { session_id: string, name: string?, kind: string?, status: string?, running: boolean?, cwd: string? }
 
 --- How long `claude agents --json` may run before it is killed, with every
 --- process in its process group.
@@ -33,8 +38,10 @@ local function typed_field(entry, key, expected)
 end
 
 --- The session an entry of `claude agents --json` describes; nil for what is
---- not an object, and for an entry with no `sessionId` string. A field that
---- does not have the type Claude Code documents is left out.
+--- not an object and for an entry whose `sessionId` is not a session id
+--- (`session_ids.is_session_id()`), since the id is typed into Claude Code's
+--- terminal. A field that does not have the type Claude Code documents is
+--- left out.
 ---
 ---@param entry any
 ---@return aineo.claude.ListedSession?
@@ -42,8 +49,8 @@ local function listed_session(entry)
   if type(entry) ~= 'table' then
     return nil
   end
-  local session_id = typed_field(entry, 'sessionId', 'string')
-  if not session_id then
+  local session_id = entry.sessionId
+  if not session_ids.is_session_id(session_id) then
     return nil
   end
   return {
@@ -51,28 +58,53 @@ local function listed_session(entry)
     name = typed_field(entry, 'name', 'string'),
     kind = typed_field(entry, 'kind', 'string'),
     status = typed_field(entry, 'status', 'string') or typed_field(entry, 'state', 'string'),
-    pid = typed_field(entry, 'pid', 'number'),
+    running = (entry.pid ~= nil or entry.status ~= nil) or nil,
+    cwd = typed_field(entry, 'cwd', 'string'),
   }
 end
 
+--- Whether the directories `first` and `second` are the same one, with the
+--- links in either resolved when it exists.
+---
+---@param first string
+---@param second string
+---@return boolean
+local function same_directory(first, second)
+  return (vim.uv.fs_realpath(first) or first) == (vim.uv.fs_realpath(second) or second)
+end
+
 --- Where a listed session stands for a pick, given the session of aineo's
---- own terminal: `'own'` when it is that session, already shown;
---- `'elsewhere'` when another process runs it, in another terminal or in
---- Claude Code's background service, which a switch would pull it away from;
---- else `'switchable'`, a background session whose process has ended.
+--- own terminal and the folder aineo listed: `'own'` when it is that
+--- session, already shown; `'elsewhere'` when another process runs it, in
+--- another terminal or in Claude Code's background service, which a switch
+--- would pull it away from; `'another_folder'` when it started under a
+--- directory other than the folder, or in none the entry names, since a
+--- switch would resume it in the wrong project; else `'switchable'`, a
+--- background session whose process has ended.
 ---
 ---@param session aineo.claude.ListedSession
 ---@param own_session_id string?
----@return 'own'|'elsewhere'|'switchable'
-function M.standing(session, own_session_id)
+---@param folder string
+---@return 'own'|'elsewhere'|'another_folder'|'switchable'
+function M.standing(session, own_session_id, folder)
   if session.session_id == own_session_id then
     return 'own'
   end
-  return session.pid and 'elsewhere' or 'switchable'
+  if session.running then
+    return 'elsewhere'
+  end
+  if not session.cwd or not same_directory(session.cwd, folder) then
+    return 'another_folder'
+  end
+  return 'switchable'
 end
 
 --- What a row of the list marks a session with, by its standing.
-local STANDING_MARKS = { own = '[this terminal]', elsewhere = '[running elsewhere]' }
+local STANDING_MARKS = {
+  own = '[this terminal]',
+  elsewhere = '[running elsewhere]',
+  another_folder = '[another folder]',
+}
 
 --- How many characters of a session's id name it when it has no name.
 local UNNAMED_ID_LENGTH = 8
@@ -91,15 +123,16 @@ end
 ---
 ---@param session aineo.claude.ListedSession
 ---@param own_session_id string?
+---@param folder string
 ---@return string
-function M.row(session, own_session_id)
+function M.row(session, own_session_id, folder)
   local words = { M.name(session) }
   for _, word in ipairs({ session.kind or false, session.status or false }) do
     if word then
       table.insert(words, word)
     end
   end
-  local mark = STANDING_MARKS[M.standing(session, own_session_id)]
+  local mark = STANDING_MARKS[M.standing(session, own_session_id, folder)]
   if mark then
     table.insert(words, mark)
   end
