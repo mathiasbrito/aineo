@@ -337,12 +337,13 @@ local function is_symbolic_link(path)
   return file ~= nil and file.type == 'link'
 end
 
---- Moves the draft file `from` to the draft file `to` by renaming it, where
---- hard links are refused (`LINK_REFUSALS`) or `from` is a symbolic link
---- (`is_symbolic_link()`), when `to` does not exist and `from` does;
---- neither is touched otherwise. `to` is looked for first and then `from`
---- renamed, so another editor making `to` between the two has its file
---- replaced. Once moved, a kept buffer whose saves went to `from` saves to
+--- Moves the draft file `from` to the draft file `to` by renaming it, when
+--- `to` does not exist and `from` does; neither is touched otherwise. `to` is
+--- looked for first and then `from` renamed, so another editor making `to`
+--- between the two has its file replaced; a rename is one step, so two
+--- editors renaming one `from` at the same moment leave it with one of them.
+--- `move_draft()` moves so where hard links are refused or `from` is a
+--- symbolic link. Once moved, a kept buffer whose saves went to `from` saves to
 --- `to` (`pin_moved_text()`). Tells the user once when `from` cannot be
 --- renamed (`warn_once()`), and raises nothing then.
 ---
@@ -366,7 +367,9 @@ end
 --- `from` and then removes `from`; the link refuses an existing file at
 --- once, so another editor making `to`, or taking `from`, meanwhile never
 --- has its file replaced, and is no failure; one that took it between the
---- link and the removal keeps it alone (`give_up_link_taken_meanwhile()`).
+--- link and the removal keeps it alone (`give_up_link_taken_meanwhile()`),
+--- unless both removals of `from` succeed, as two removals of one name at
+--- the same moment can on APFS: the two then share one file.
 --- Once the link is made, before the removal, a kept buffer whose saves
 --- went to `from` until its swap lands saves to `to` (`pin_moved_text()`),
 --- whatever the removal finds: a file given up then is made again by the
@@ -717,8 +720,8 @@ local hand_overs_waiting = {}
 --- Hands the draft of the Claude session `from` over to the session `to`
 --- (`M.hand_over_draft_session()`): a change not saved yet of a kept buffer
 --- whose text is kept in `from`'s file is saved there first; then, when
---- `to` has no draft file of its own, `from`'s is moved to `to`'s name
---- (`move_draft()`), whatever a watch held for `from`'s file — the file its
+--- `to` has no draft file of its own, `from`'s is renamed to `to`'s name
+--- (`move_draft_by_rename()`), whatever a watch held for `from`'s file — the file its
 --- text is kept in until a swap lands, a draft that could not be read — is
 --- held for `to`'s, and a home that follows `from` follows `to`, as its own.
 ---
@@ -735,7 +738,7 @@ local function hand_over(from, to)
   if vim.uv.fs_lstat(to_file) then
     return
   end
-  move_draft(from_file, to_file)
+  move_draft_by_rename(from_file, to_file)
   for _, watch in pairs(kept) do
     if watch.unreadable == from_file then
       watch.unreadable = to_file
@@ -933,9 +936,12 @@ end
 --- draft, is saved there first, so that it moves with it. Then `from`'s
 --- draft file becomes `to`'s, whole and unread — one that cannot be read
 --- included, which `to` then meets as `from` would have — and no file is
---- left under `from`'s name (`move_draft()`). Nothing is made when neither
---- has a draft. When `to` has a draft file of its own, nothing moves, and a
---- home that follows `from` goes on following it.
+--- left under `from`'s name: it is renamed, in one step
+--- (`move_draft_by_rename()`), so that two editors handing `from` over at
+--- the same moment leave it with one new session, never shared. `to` is
+--- this editor's own new session, which nothing else writes yet. Nothing is
+--- made when neither has a draft. When `to` has a draft file of its own,
+--- nothing moves, and a home that follows `from` goes on following it.
 ---
 --- A home that follows `from` follows `to` from then on, as its own even
 --- when `from` was followed as a claim's (`M.follow_draft_session()`), with

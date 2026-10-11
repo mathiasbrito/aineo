@@ -95,17 +95,17 @@ local function is_symbolic_link(path)
   return file ~= nil and file.type == 'link'
 end
 
---- Moves the records file `from` to `to` by renaming it, where hard links
---- are refused (`LINK_REFUSALS`) or `from` is a symbolic link
---- (`is_symbolic_link()`), when `to` does not exist and `from` does;
---- neither is touched otherwise. `to` is looked for first and then
---- `from` renamed, so another editor making `to` between the two has its
---- file replaced.
+--- Moves the records file `from` to `to` by renaming it, when `to` does not
+--- exist and `from` does; neither is touched otherwise. `to` is looked for
+--- first and then `from` renamed, so another editor making `to` between the
+--- two has its file replaced; a rename is one step, so two editors renaming
+--- one `from` at the same moment leave it with one of them. `move_records()`
+--- moves so where hard links are refused, or `from` is a symbolic link.
 ---
 ---@param from string
 ---@param to string
 ---@return string? failure why `from` could not be moved, naming both files; nil when it was moved, or when `to` exists or `from` does not
-local function move_records_by_rename(from, to)
+function M.rename_records(from, to)
   if vim.uv.fs_stat(to) then
     return nil
   end
@@ -123,23 +123,25 @@ end
 --- making `to`, or taking `from`, meanwhile never has its file replaced, and
 --- is no failure. Another editor that took `from` between the link and the
 --- removal took the same file: `to` is then removed again, so that two
---- sessions never share one file, and the records are the other editor's
---- session's. A `from` that cannot be removed once linked is a failure: its
+--- sessions do not share one file, and the records are the other editor's
+--- session's — unless both removals of `from` succeed, as two removals of
+--- one name at the same moment can on APFS: the two sessions then share
+--- one file. A `from` that cannot be removed once linked is a failure: its
 --- records are then in both files. Where the file system refuses the link
 --- (`LINK_REFUSALS`), or `from` is a symbolic link (`is_symbolic_link()`),
 --- which then stays one, `from` is renamed instead
---- (`move_records_by_rename()`).
+--- (`rename_records()`).
 ---
 ---@param from string
 ---@param to string
 ---@return string? failure why `from` could not be moved, naming both files; nil when it was moved, or when `to` exists or `from` does not
 function M.move_records(from, to)
   if is_symbolic_link(from) then
-    return move_records_by_rename(from, to)
+    return M.rename_records(from, to)
   end
   local linked, failure, code = vim.uv.fs_link(from, to)
   if LINK_REFUSALS[code] then
-    return move_records_by_rename(from, to)
+    return M.rename_records(from, to)
   end
   if linked then
     local removed, removal_failure, removal_code = vim.uv.fs_unlink(from)

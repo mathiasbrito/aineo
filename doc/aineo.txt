@@ -1492,6 +1492,12 @@ The first follow's move ~
   saves its draft in the instant between this editor's link of the
   directory's draft to the session and its removal of the directory's
   name has that save removed.
+- Two editors whose first follows take the same directory's draft or
+  reports at the same moment can, on APFS, both remove the directory's
+  name: their two sessions then share one file, and each session's
+  reports appear in the other's Report. A Neovim that stops between the
+  link and the removal leaves the directory's name and the session's on
+  one file in the same way.
 
 A session's draft ~
 - What you type while Input shows a session whose draft cannot be read is
