@@ -153,7 +153,7 @@ T["Claude's line numbers, once hidden,"]["stay hidden in the terminal \\c starts
   entry.command(child, 'bwipeout!')
   eq(entry.windows(child), { 'aineo://report', 'aineo://input' })
 
-  child.type_keys('\\c')
+  entry.press(child, '\\c')
 
   eq(#claude_session.wait_for_starts(fake, 2), 2)
   eq(numbers_of_window(child, 1), HIDDEN)
