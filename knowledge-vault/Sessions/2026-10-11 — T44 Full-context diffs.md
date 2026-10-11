@@ -94,7 +94,7 @@ On Neovim 0.12.5 (git 2.50.1), on the tree pushed: `make test` — 2586 cases in
 
 The wave holds its marks (rule 6). The line T44 would take:
 
-- [X] T44 — a full-context diff toggle (C15, C13; D48): `F` in a diff the changes pane showed re-reads it with the whole file as context, in the same buffer, and every diff shown after opens the same way until `F` flips it back, for the editor's life; for a file, a commit, *Uncommitted* and *Session work*, another worktree's too (PR PRNUMBER, into `dev`, wave 10) — regular. The five mutants of `plan.md` › *Verification mutants* › T44 map to this note's mutants 1, 2, 3, 4 and 5.
+- [X] T44 — a full-context diff toggle (C15, C13; D48): `F` in a diff the changes pane showed re-reads it with the whole file as context, in the same buffer, and every diff shown after opens the same way until `F` flips it back, for the editor's life; for a file, a commit, *Uncommitted* and *Session work*, another worktree's too (PR #161, into `dev`, wave 10) — regular. The five mutants of `plan.md` › *Verification mutants* › T44 map to this note's mutants 1, 2, 3, 4 and 5.
 
 ## Commits
 
