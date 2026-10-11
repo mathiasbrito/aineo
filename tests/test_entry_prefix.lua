@@ -12,6 +12,7 @@ local PREFIX_KEYS = {
   { 'i', '<Plug>(aineo-input)', 'n' },
   { 'c', '<Plug>(aineo-claude)', 'n' },
   { 'tcn', '<Plug>(aineo-claude-numbers)', 'n' },
+  { 'cs', '<Plug>(aineo-sessions)', 'n' },
   { 'pa', '<Plug>(aineo-pane-agent)', 'n' },
   { 'pc', '<Plug>(aineo-pane-changes)', 'n' },
   { 's', '<Plug>(aineo-send)', 'x' },

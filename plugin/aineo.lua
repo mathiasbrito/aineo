@@ -25,7 +25,7 @@ vim.g.loaded_aineo = true
 
 --- `:Aineo`'s subcommands, in the order it offers them.
 local SUBCOMMANDS =
-  { 'send', 'open', 'report', 'input', 'claude', 'claude-numbers', 'pane', 'claim' }
+  { 'send', 'open', 'report', 'input', 'claude', 'claude-numbers', 'sessions', 'pane', 'claim' }
 
 --- The words each subcommand that takes one is followed by, in the order
 --- `:Aineo` offers them: `pane` takes the pane to show.
@@ -820,6 +820,17 @@ local function claim_session(id)
   claim(id)
 end
 
+--- What tells the user how to leave a claim of another session
+--- (`holds_other_claim()`): what returns this Neovim to its own session, or,
+--- when its Claude terminal runs no session, what else works here.
+---
+---@return string
+local function way_out_of_claim()
+  return require('aineo.claude').session_id()
+      and ':Aineo claim with no argument returns this Neovim to its own session'
+    or ':Aineo claim {id} follows another session, :Aineo open starts Claude Code here'
+end
+
 --- Whether Send is refused while a claim of another session holds
 --- (`holds_other_claim()`): Input then holds the claimed session's draft,
 --- which this Neovim's own Claude terminal, running another session, must
@@ -832,17 +843,252 @@ local function refuses_send_while_claimed()
   if not holds_other_claim() then
     return false
   end
-  local way_out = require('aineo.claude').session_id()
-      and ':Aineo claim with no argument returns this Neovim to its own session'
-    or ':Aineo claim {id} follows another session, :Aineo open starts Claude Code here'
   vim.notify(
     ('aineo: nothing sent — Input holds the draft of the claimed session %s; %s'):format(
       claimed_by_id,
-      way_out
+      way_out_of_claim()
     ),
     vim.log.levels.WARN
   )
   return true
+end
+
+--- Whether `:Aineo sessions` must do nothing while a claim of another
+--- session holds (`holds_other_claim()`): the panes follow the claimed
+--- session, which this Neovim's own Claude terminal does not run, and a
+--- switch would change that terminal's session behind them. Tells the user
+--- why once, with one warning that begins `outcome`, the words of what was
+--- not done, naming the claimed session and the way out
+--- (`way_out_of_claim()`).
+---
+---@param outcome string
+---@return boolean refused
+local function refuses_while_claimed(outcome)
+  if not holds_other_claim() then
+    return false
+  end
+  vim.notify(
+    (
+      outcome
+      .. 'the panes follow the claimed session %s, which this Neovim’s Claude terminal does not run; %s'
+    ):format(claimed_by_id, way_out_of_claim()),
+    vim.log.levels.WARN
+  )
+  return true
+end
+
+--- What `:Aineo sessions` tells the user, as a warning, by the status of
+--- the Claude session (`aineo.claude`'s `session_status()`; `not_started`
+--- when there is none) when it does nothing because Claude Code is not ready.
+local NOT_READY = {
+  not_started = 'Claude has not started',
+  starting = 'Claude is not ready: it is starting, or a dialog in its window awaits your answer',
+  exited = 'Claude has exited',
+}
+
+--- Whether `:Aineo sessions` must do nothing because Claude Code is not
+--- ready for input (`NOT_READY`). Tells the user why once, with one warning
+--- that begins `outcome`, the words of what was not done.
+---
+---@param outcome string
+---@return boolean refused
+local function refuses_while_not_ready(outcome)
+  local status = require('aineo.claude').session_status()
+  if status == 'ready' then
+    return false
+  end
+  vim.notify(outcome .. NOT_READY[status or 'not_started'], vim.log.levels.WARN)
+  return true
+end
+
+--- Runs an action and tells the user, once, the error it raises. Defined
+--- below, with the framing it strips from the error.
+---@type fun(action: fun()): boolean, string|nil
+local run
+
+--- What the messages of `:Aineo sessions` begin with when it lists nothing,
+--- and when a pick switches nothing.
+local NO_LIST = 'aineo: no session list — '
+local NOT_SWITCHED = 'aineo: not switched — '
+
+--- What `:Aineo sessions` tells the user, as a warning, when a pick
+--- switches nothing because the session picked is the one Claude's
+--- terminal already shows.
+---
+---@param name string
+---@return string
+local function already_shown(name)
+  return (NOT_SWITCHED .. '%s is the session Claude’s terminal already shows'):format(name)
+end
+
+--- What `:Aineo sessions` tells the user, as a warning, when a pick
+--- switches nothing because another process runs the session picked, in
+--- another terminal or in Claude Code's background service, and a switch
+--- would pull it away from there.
+---
+---@param name string
+---@return string
+local function runs_elsewhere(name)
+  return (
+    NOT_SWITCHED
+    .. '%s runs in another terminal or in Claude Code’s background service,'
+    .. ' and a switch would pull it away from there'
+  ):format(name)
+end
+
+--- How long a switch waits, after it asks for Terminal mode in Claude's
+--- window, for Neovim to enter it.
+local TERMINAL_MODE_PATIENCE_MS = 1000
+
+--- Calls `callback` from a scheduled callback once Terminal mode is entered
+--- in `terminal`, Claude's terminal: at once, scheduled, when it is
+--- entered already; else at the next `TermEnter` in it, which must come
+--- within `TERMINAL_MODE_PATIENCE_MS`. Past that time `callback` is never
+--- called and the user is told Claude's window did not enter Terminal mode.
+---
+---@param terminal integer
+---@param callback fun()
+local function after_entering_terminal_mode(terminal, callback)
+  if vim.api.nvim_get_current_buf() == terminal and vim.api.nvim_get_mode().mode == 't' then
+    vim.schedule(callback)
+    return
+  end
+  local entered = false
+  local autocommand = vim.api.nvim_create_autocmd('TermEnter', {
+    buffer = terminal,
+    once = true,
+    callback = function()
+      entered = true
+      vim.schedule(callback)
+    end,
+  })
+  vim.defer_fn(function()
+    if not entered then
+      vim.api.nvim_del_autocmd(autocommand)
+      vim.notify(
+        NOT_SWITCHED .. 'Claude’s window did not enter Terminal mode',
+        vim.log.levels.WARN
+      )
+    end
+  end, TERMINAL_MODE_PATIENCE_MS)
+end
+
+--- What `:Aineo sessions` tells the user, as a warning, when a pick
+--- switches nothing because the prompt of Claude Code shows text.
+local PROMPT_HOLDS_TEXT = NOT_SWITCHED
+  .. 'the prompt holds text; clear it, then pick the session again'
+
+--- Puts the cursor back where it was before a switch moved it: in the
+--- window `origin` names, and in Insert mode when it was in Insert mode.
+--- Moving to the window ends Terminal mode.
+---
+---@param origin { window: integer, mode: string }
+local function return_to(origin)
+  if vim.api.nvim_win_is_valid(origin.window) then
+    vim.api.nvim_set_current_win(origin.window)
+  end
+  if vim.startswith(origin.mode, 'i') then
+    vim.cmd.startinsert()
+  end
+end
+
+--- Switches Claude Code to `listed`: moves to Claude's window in Terminal
+--- mode (`focus_claude()`) and, once there, writes `/resume <session id>`
+--- and Enter to its terminal in one write, which Claude Code answers by
+--- switching and aineo follows (`aineo.claude`'s `on_session_switched`).
+--- Does nothing, and tells the user why, when Claude Code is not ready
+--- (`refuses_while_not_ready()`), when a claim of another session holds
+--- (`refuses_while_claimed()`), and when the prompt shows text
+--- (`aineo.claude`'s `prompt_shows_text()`, read in Terminal mode); then it
+--- also puts the cursor back where it was (`return_to()`).
+---
+---@param listed aineo.claude.ListedSession
+local function switch_to_session(listed)
+  if refuses_while_not_ready(NOT_SWITCHED) or refuses_while_claimed(NOT_SWITCHED) then
+    return
+  end
+  local claude = require('aineo.claude')
+  local terminal = claude_terminal
+  local origin = { window = vim.api.nvim_get_current_win(), mode = vim.api.nvim_get_mode().mode }
+  focus_claude()
+  after_entering_terminal_mode(terminal, function()
+    run(function()
+      if claude.prompt_shows_text(vim.api.nvim_get_current_win()) then
+        return_to(origin)
+        vim.notify(PROMPT_HOLDS_TEXT, vim.log.levels.WARN)
+        return
+      end
+      claude.write_to_session('/resume ' .. listed.session_id .. '\r')
+    end)
+  end)
+end
+
+--- Acts on the pick of `listed`, a session of the list `list_sessions()`
+--- offered.
+---
+---@param listed aineo.claude.ListedSession
+local function pick_listed_session(listed)
+  local claude = require('aineo.claude')
+  local name = claude.listed_session_name(listed)
+  local standing = claude.session_standing(listed, claude.session_id())
+  if standing == 'own' then
+    vim.notify(already_shown(name), vim.log.levels.WARN)
+  elseif standing == 'elsewhere' then
+    vim.notify(runs_elsewhere(name), vim.log.levels.WARN)
+  else
+    switch_to_session(listed)
+  end
+end
+
+--- Offers `listed`, the sessions Claude Code lists for `directory`, in
+--- `vim.ui.select`; a pick is acted on by `pick_listed_session()`, which
+--- reports an error it raises once. Offers nothing, and tells the user why,
+--- when Claude Code could not list them (`problem`) or lists none.
+---
+---@param listed aineo.claude.ListedSession[]?
+---@param problem string?
+---@param directory string
+local function offer_sessions(listed, problem, directory)
+  if problem then
+    vim.notify(NO_LIST .. problem, vim.log.levels.WARN)
+    return
+  end
+  if #listed == 0 then
+    vim.notify(NO_LIST .. 'Claude Code lists no session for ' .. directory, vim.log.levels.WARN)
+    return
+  end
+  local claude = require('aineo.claude')
+  vim.ui.select(listed, {
+    prompt = 'Claude sessions',
+    format_item = function(session)
+      return claude.session_row(session, claude.session_id())
+    end,
+  }, function(picked)
+    if picked then
+      run(function()
+        pick_listed_session(picked)
+      end)
+    end
+  end)
+end
+
+--- Reads the sessions Claude Code lists for the directory it started in,
+--- without waiting for them, and offers them (`offer_sessions()`), telling
+--- the user once an error that raises. Reads and offers nothing, and tells
+--- the user why, while Claude Code is not ready
+--- (`refuses_while_not_ready()`) or a claim of another session holds
+--- (`refuses_while_claimed()`).
+local function list_sessions()
+  if refuses_while_not_ready(NO_LIST) or refuses_while_claimed(NO_LIST) then
+    return
+  end
+  local claude = require('aineo.claude')
+  local directory = claude.session_directory()
+  claude.list_sessions(resolved_config().claude.cmd, directory, function(listed, problem)
+    run(function()
+      offer_sessions(listed, problem, directory)
+    end)
+  end)
 end
 
 --- What each of `:Aineo`'s arguments in `ACTION_ARGUMENTS` does.
@@ -865,6 +1111,7 @@ local ACTIONS = {
   ['claude-numbers'] = function()
     require('aineo.layout').toggle_claude_numbers()
   end,
+  sessions = list_sessions,
   ['pane agent'] = function()
     show_pane('agent')
   end,
@@ -915,7 +1162,7 @@ end
 ---@param action fun()
 ---@return boolean succeeded
 ---@return string|nil failure
-local function run(action)
+run = function(action)
   local succeeded, failure = pcall(action)
   if succeeded then
     return true
@@ -973,6 +1220,7 @@ local PREFIX_KEYS = {
   input = 'i',
   claude = 'c',
   ['claude-numbers'] = 'tcn',
+  sessions = 'cs',
   ['pane agent'] = 'pa',
   ['pane changes'] = 'pc',
 }
@@ -1012,8 +1260,8 @@ end
 --- sequence the user has mapped globally in that mode already — a mapping
 --- of only the start of a sequence, of a longer one, or in the other mode,
 --- does not count; maps nothing when `prefix` is `false`. An action with no
---- keys there, `claim`, gets none: any key after the `c` of `claude` would
---- make that key wait for 'timeoutlen'.
+--- keys there, `claim`, gets none. `\c`, the keys of `claude`, begins those
+--- of `sessions`, `cs`, and so waits for 'timeoutlen'.
 ---
 ---@param prefix string|false
 local function map_prefix(prefix)
