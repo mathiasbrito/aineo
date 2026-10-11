@@ -221,9 +221,56 @@ function M.uncommitted_file_diff(run, found, change, done)
   )
 end
 
+--- The files `git ls-files --others -z` gave as `output`, less the
+--- directories it names, which end in a slash: an untracked repository
+--- with no commit yet, which git cannot enter as to be added.
+---
+---@param output string
+---@return string[]
+local function untracked_files(output)
+  return vim.tbl_filter(function(path)
+    return not vim.endswith(path, '/')
+  end, vim.split(output, '\0', { plain = true, trimempty = true }))
+end
+
+--- Enters `paths`, files of `found`, in the index `environment` names as to
+--- be added (`git add --intent-to-add`), and calls `done(nil, output)`, or
+--- `done(failure)`. The paths go to git in a file beside that index, NUL
+--- separated and removed once git has run, so that their number is not
+--- bounded by the length of a command line.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param environment table<string, string>
+---@param paths string[]
+---@param done fun(failure: aineo.git.Failure|nil, output: aineo.git.Output|nil)
+local function enter_as_to_be_added(run, found, environment, paths, done)
+  local list = environment.GIT_INDEX_FILE .. '.untracked'
+  local file, opening_failure = io.open(list, 'wb')
+  if not file then
+    done({ reason = 'failed', message = 'cannot write the list of new files: ' .. opening_failure })
+    return
+  end
+  file:write(table.concat(paths, '\0'), '\0')
+  file:close()
+  run({
+    directory = found.top,
+    arguments = {
+      'add',
+      '--intent-to-add',
+      '--pathspec-from-file=' .. list,
+      '--pathspec-file-nul',
+    },
+    environment = environment,
+  }, function(...)
+    os.remove(list)
+    done(...)
+  end)
+end
+
 --- Gives the diff of every file of `found` from `tree_ish` to the working
 --- tree, the untracked files wholly added: they are entered in a private
---- copy of the index as to be added (`git add --intent-to-add`), so that the
+--- copy of the index as to be added (`enter_as_to_be_added()`), so that the
 --- diff shows them, and the repository's own index and lock are never
 --- touched (`private_index`). Calls `done(nil, output)`, or `done(failure)`.
 ---
@@ -251,16 +298,18 @@ local function whole_diff(run, found, tree_ish, done)
         environment = environment,
       },
       process.or_fail(finish, function(untracked)
-        local paths = vim.split(untracked.stdout, '\0', { plain = true, trimempty = true })
+        local paths = untracked_files(untracked.stdout)
         if #paths == 0 then
           diff_from_tree()
           return
         end
-        run({
-          directory = found.top,
-          arguments = joined({ { 'add', '--intent-to-add', '--' }, paths }),
-          environment = environment,
-        }, process.or_fail(finish, diff_from_tree))
+        enter_as_to_be_added(
+          run,
+          found,
+          environment,
+          paths,
+          process.or_fail(finish, diff_from_tree)
+        )
       end)
     )
   end, done)

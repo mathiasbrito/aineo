@@ -1258,4 +1258,32 @@ T['the commits window']['lists the editor’s commits first, as ever, then each 
   })
 end
 
+T['the commits window']['a cursor on another worktree’s commit or heading keeps the filter'] = function()
+  local top = git_repo.create('changesworktrees-cursor-keeps-filter', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+  begin_and_show(top)
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent (agent)',
+    commit:sub(1, 7) .. ' The agent’s',
+  })
+  local listed = {
+    'Files in: Session work',
+    'No files changed on this session',
+    'Worktree agent (agent)',
+    '  M notes.txt',
+  }
+  expect_lines(FILES, listed)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
+
+  child.type_keys(10, '4G', '5G')
+
+  vim.wait(600)
+  eq(lines_of(FILES), listed)
+end
+
 return T
