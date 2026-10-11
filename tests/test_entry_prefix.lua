@@ -12,7 +12,7 @@ local PREFIX_KEYS = {
   { 'i', '<Plug>(aineo-input)', 'n' },
   { 'c', '<Plug>(aineo-claude)', 'n' },
   { 'tcn', '<Plug>(aineo-claude-numbers)', 'n' },
-  { 'cs', '<Plug>(aineo-sessions)', 'n' },
+  { 'S', '<Plug>(aineo-sessions)', 'n' },
   { 'pa', '<Plug>(aineo-pane-agent)', 'n' },
   { 'g', '<Plug>(aineo-pane-changes)', 'n' },
   { 's', '<Plug>(aineo-send)', 'x' },
@@ -153,6 +153,17 @@ T['the changes pane']['is shown by \\g, and \\pc is mapped to nothing'] = functi
   eq(
     { child.fn.maparg('\\g', 'n'), child.fn.maparg('\\pc', 'n'), child.fn.maparg('\\pa', 'n') },
     { '<Plug>(aineo-pane-changes)', '', '<Plug>(aineo-pane-agent)' }
+  )
+end
+
+T['the session list'] = MiniTest.new_set()
+
+T['the session list']['is shown by \\S, and \\cs and \\c are not taken from \\c'] = function()
+  children.restart(child)
+
+  eq(
+    { child.fn.maparg('\\S', 'n'), child.fn.maparg('\\cs', 'n'), child.fn.maparg('\\c', 'n') },
+    { '<Plug>(aineo-sessions)', '', '<Plug>(aineo-claude)' }
   )
 end
 

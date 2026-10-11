@@ -1227,7 +1227,7 @@ local PREFIX_KEYS = {
   input = 'i',
   claude = 'c',
   ['claude-numbers'] = 'tcn',
-  sessions = 'cs',
+  sessions = 'S',
   ['pane agent'] = 'pa',
   ['pane changes'] = 'g',
 }
@@ -1267,8 +1267,7 @@ end
 --- sequence the user has mapped globally in that mode already — a mapping
 --- of only the start of a sequence, of a longer one, or in the other mode,
 --- does not count; maps nothing when `prefix` is `false`. An action with no
---- keys there, `claim`, gets none. `\c`, the keys of `claude`, begins those
---- of `sessions`, `cs`, and so waits for 'timeoutlen'.
+--- keys there, `claim`, gets none.
 ---
 ---@param prefix string|false
 local function map_prefix(prefix)

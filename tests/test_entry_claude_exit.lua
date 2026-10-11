@@ -186,10 +186,8 @@ end
 T["Claude Code's exit"]['returns Normal mode once Neovim sees an exit that a busy editor handled \\c before'] = function()
   entry.use_fake(child, claude_session.fake('entry-claude-exit-busy', 'exit'))
   child.cmd('Aineo open')
-  child.o.timeoutlen = 50
   child.lua_notify('vim.uv.sleep(1500)')
   child.api.nvim_input('\\c')
-  vim.wait(2000)
 
   claude_session.wait_for_status(child, 'exited')
 
