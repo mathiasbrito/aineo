@@ -78,3 +78,27 @@ In your definition's shape, to `<scratchpad>/t46-report-packet.md`. Open the pul
 - **A120 (O3):** under a claim, `\cs` refuses as Send does.
 - **A121 (O4):** after a pick that switches, the cursor goes to Claude's window in Terminal mode; a refusal leaves it where it was, with the message.
 - **A123 (O7):** Sonnet implementers; the attack review on Opus; tests and records in one Sonnet `records-reviewer`.
+
+## Amendment — 2026-10-11, at dispatch: built now, M7 and M8 measured
+
+Written by the T46 implementer under the orchestrator's assumption A129, against `origin/dev` `a0627fe`. The brief's *Facts*, *Boundary* and *The tests* re-checked; the first section below is what the dispatch changes, the second what moved, the third what the packet widens.
+
+### What the dispatch changes
+
+- **The timing.** The user, 2026-10-11, asked whether to build T46 now or after the MVP review and answered "Build it now (Recommended)". That is the user's decision and supersedes A114.
+- **M8, the user's, verbatim: "M8 before the hint".** The terminal cursor sits right after `❯`, before Claude Code's grey hint, so R2's cursor check stands (behaviour 7).
+- **M7, the user's.** `claude agents --json --cwd .` run in a repository's root printed a JSON array whose entries carry `id` (8 hexadecimal characters), `cwd` (an absolute path), `kind` (`"background"` for both), `startedAt` (milliseconds since the epoch), `sessionId` (a UUID), `name` and `state` (`"blocked"`). One entry had no `pid` and no `status`: an ended background session, a pick that can switch under R3. The other had a `pid` and `"status": "idle"`: running elsewhere, listed and refused. Not reported: `claude daemon status` before and after, and how aineo's own interactive session is listed. The fake's `agents --json` can print both entry shapes; no path, id or name of the user's is committed.
+- **A129 (the orchestrator's assumption).** This amendment is the packet's first commit, as A124 and A126 were.
+- **A130 (O9, the orchestrator's assumption).** `agents --json --cwd <folder> --all` always, with no global form; folder versus global is `--cwd`'s, and a global form can follow.
+- **A131 (the orchestrator's assumption).** Whether `claude agents --json` starts Claude Code's background service was not measured. The help names it under LIMITS and nothing guards it.
+
+### What moved since `e6a0295`
+
+- Every line number in *Facts* holds on `a0627fe`, but `lua/aineo/health.lua`'s prefix-key table starts at line 297 (the brief says 303, which is inside it). In `doc/aineo.txt`, section 4 starts at line 594 and section 5 at line 751.
+- `tests/helpers/entry.lua` pins the text `:Aineo` tells for an unknown subcommand (`M.USAGE`), which lists `SUBCOMMANDS`; adding `sessions` moves that pin, and `tests/test_entry.lua` reads it.
+
+### What the packet widens, declared
+
+- `lua/aineo/claude/readiness.lua`: the input box's rule (a rule, the `❯` line, the lines of a draft, a rule) is exported as a function that gives the box's first and last line, so that the text check reads the box as the readiness check does and the rule is kept once. `tests/test_claude_ready.lua` runs.
+- `lua/aineo/claude/init.lua`: exports for the list and the text check, and `session_directory()`, the directory the session's Claude Code started in, which the list is scoped to (the composition root keeps no such directory once Claude Code restarts elsewhere).
+- `tests/helpers/entry.lua`: the one line `M.USAGE`, whose pin moves with `SUBCOMMANDS`.
