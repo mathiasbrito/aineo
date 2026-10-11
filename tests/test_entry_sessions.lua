@@ -471,7 +471,11 @@ T['a pick']['of a switchable row writes /resume and Enter, follows the switch, a
     return own_session_id() == SWITCHABLE_ID
   end, 20)
   eq(own_session_id(), SWITCHABLE_ID)
-  eq(claude_session.received(fake):find('/resume ' .. SWITCHABLE_ID .. '\r', 1, true) ~= nil, true)
+  eq(
+    claude_session.received(fake):find('\27[200~/resume ' .. SWITCHABLE_ID .. '\27[201~\r', 1, true)
+      ~= nil,
+    true
+  )
   eq(entry.current_window(child), 'terminal')
   eq(child.lua_get(MODE), 't')
   eq(entry.messages(child), {})
@@ -573,6 +577,7 @@ end
 T['a pick']['when Terminal mode is not entered writes nothing, says so, and writes nothing when it is entered later'] = function()
   local fake = sessions_fake('sessions-pick-no-terminal-mode', 'ready')
   open_layout_on(fake)
+  child.cmd('Aineo report')
   list_in(fake, three_sessions())
   pick_row(3)
   child.lua('rawset(vim.cmd, "startinsert", function() end)')
@@ -585,7 +590,9 @@ T['a pick']['when Terminal mode is not entered writes nothing, says so, and writ
       level = vim.log.levels.WARN,
     },
   })
+  eq(entry.current_window(child), 'aineo://report')
   child.lua('rawset(vim.cmd, "startinsert", nil)')
+  child.lua('vim.api.nvim_set_current_win(vim.fn.win_getid(1))')
   child.cmd('startinsert')
   vim.wait(PATIENCE_MS, function()
     return child.lua_get(MODE) == 't'
@@ -617,6 +624,180 @@ T['a pick']['while the prompt holds a draft puts Insert mode back when the pick 
   eq(entry.current_window(child), 'aineo://input')
   eq(child.lua_get(MODE), 'i')
   eq(claude_session.received(fake):find('/resume', 1, true), nil)
+end
+
+T['a pick']['of what is not a session id writes nothing and says so'] = function()
+  local fake = sessions_fake('sessions-pick-hostile-id', 'ready')
+  open_layout_on(fake)
+  list_in(fake, three_sessions())
+  child.lua([[
+    vim.ui.select = function(_, _, on_choice)
+      vim.schedule(function()
+        on_choice({ session_id = 'x\r!touch pwned\r', kind = 'background', cwd = vim.fn.getcwd() }, 1)
+      end)
+    end
+  ]])
+
+  press_sessions()
+
+  eq(messages_once_told(), {
+    {
+      message = NOT_SWITCHED .. 'what was picked is not a Claude session id',
+      level = vim.log.levels.WARN,
+    },
+  })
+  eq(claude_session.received(fake):find('pwned', 1, true), nil)
+  eq(claude_session.received(fake):find('/resume', 1, true), nil)
+end
+
+--- Picks row 3 of the menu `pick_row_later()` holds, after `entries` replace
+--- what the fake lists, once the list has been given.
+---
+---@param fake { listing: string }
+---@param entries table[]
+local function finish_pick_after_listing(fake, entries)
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get('_G.finish_pick ~= nil')
+  end, 20)
+  list_in(fake, entries)
+  finish_pick()
+end
+
+T['a pick']['of a row another process has taken since the list was read writes nothing and says it runs elsewhere'] = function()
+  local fake = sessions_fake('sessions-pick-taken', 'ready')
+  open_layout_on(fake)
+  list_in(fake, three_sessions())
+  pick_row_later(3)
+  press_sessions()
+  local taken = three_sessions()
+  taken[3].pid = 4003
+  taken[3].status = 'busy'
+
+  finish_pick_after_listing(fake, taken)
+
+  eq(messages_once_told(), {
+    {
+      message = NOT_SWITCHED
+        .. 'tests runs in another terminal or in Claude Code’s background service,'
+        .. ' and a switch would pull it away from there',
+      level = vim.log.levels.WARN,
+    },
+  })
+  eq(claude_session.received(fake):find('/resume', 1, true), nil)
+end
+
+T['a pick']['of a row the list no longer holds writes nothing and says so'] = function()
+  local fake = sessions_fake('sessions-pick-gone', 'ready')
+  open_layout_on(fake)
+  list_in(fake, three_sessions())
+  pick_row_later(3)
+  press_sessions()
+  local gone = three_sessions()
+  table.remove(gone, 3)
+
+  finish_pick_after_listing(fake, gone)
+
+  eq(messages_once_told(), {
+    { message = NOT_SWITCHED .. 'tests is no longer listed', level = vim.log.levels.WARN },
+  })
+  eq(claude_session.received(fake):find('/resume', 1, true), nil)
+end
+
+T['a pick']['when the list cannot be read again writes nothing and says why'] = function()
+  local fake = sessions_fake('sessions-pick-relist-fails', 'ready')
+  open_layout_on(fake)
+  list_in(fake, three_sessions())
+  pick_row_later(3)
+  press_sessions()
+  child.lua('vim.env.AINEO_FAKE_CLAUDE_AGENTS_EXIT = "3"')
+
+  finish_pick()
+
+  eq(messages_once_told(), {
+    { message = NOT_SWITCHED .. 'claude agents --json exited with 3', level = vim.log.levels.WARN },
+  })
+  eq(claude_session.received(fake):find('/resume', 1, true), nil)
+end
+
+T['a pick']['of a row started in another folder is marked, writes nothing and says where it started'] = function()
+  local fake = sessions_fake('sessions-pick-other-folder', 'ready')
+  open_layout_on(fake)
+  local entries = three_sessions()
+  entries[3].cwd = '/elsewhere/project'
+  list_in(fake, entries)
+  pick_row(3)
+
+  press_sessions()
+
+  eq(messages_once_told(), {
+    {
+      message = NOT_SWITCHED .. 'tests was started in another folder, /elsewhere/project',
+      level = vim.log.levels.WARN,
+    },
+  })
+  eq(menus()[1][3], 'tests  background  blocked  [another folder]')
+  eq(claude_session.received(fake):find('/resume', 1, true), nil)
+end
+
+T['a pick']['of a row started in the folder by a link to it switches'] = function()
+  local fake = sessions_fake('sessions-pick-linked-folder', 'ready')
+  open_layout_on(fake)
+  local link = vim.fs.joinpath(vim.fs.dirname(fake.record), 'link')
+  assert(vim.uv.fs_symlink(child.fn.getcwd(), link), 'cannot link ' .. link)
+  local entries = three_sessions()
+  entries[3].cwd = link
+  list_in(fake, entries)
+  pick_row(3)
+
+  press_sessions()
+
+  vim.wait(PATIENCE_MS, function()
+    return own_session_id() == SWITCHABLE_ID
+  end, 20)
+  eq(own_session_id(), SWITCHABLE_ID)
+end
+
+T['a pick']['while the prompt holds a draft, from Claude’s window in Normal mode, leaves Terminal mode off'] = function()
+  local fake = sessions_fake('sessions-pick-draft-normal-mode', 'draft')
+  open_layout_on(fake)
+  child.cmd('Aineo claude')
+  child.type_keys('<C-\\><C-n>')
+  eq(child.lua_get(MODE), 'nt')
+  list_in(fake, three_sessions())
+  pick_row(3)
+
+  press_sessions()
+
+  messages_once_told()
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(MODE) == 'nt'
+  end, 20)
+  eq(entry.current_window(child), 'terminal')
+  eq(child.lua_get(MODE), 'nt')
+end
+
+T['the list']['is read once at a time: a second press says so and starts nothing'] = function()
+  local fake = sessions_fake('sessions-one-at-a-time', 'ready')
+  open_layout_on(fake)
+  list_in(fake, three_sessions())
+  pick_row(false)
+
+  entry.press(child, '\\S\\S')
+
+  eq(messages_once_told(), {
+    { message = NO_LIST .. 'a session list is still being read', level = vim.log.levels.WARN },
+  })
+  vim.wait(PATIENCE_MS, function()
+    return #menus() > 0
+  end, 20)
+  vim.wait(300)
+  eq(#menus(), 1)
+  eq(#agents_runs(fake), 1)
+  press_sessions()
+  vim.wait(PATIENCE_MS, function()
+    return #menus() > 1
+  end, 20)
+  eq(#menus(), 2)
 end
 
 T['a pick']['of a row running elsewhere writes nothing and says why it cannot be switched to'] = function()

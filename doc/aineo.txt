@@ -694,8 +694,13 @@ a resume Claude Code has no conversation for (|aineo-claude-session|).
 			is on says `[this terminal]`, and that of every other
 			session some process runs says `[running elsewhere]`,
 			in another terminal or in Claude Code's background
-			service. A session whose process has ended, a
-			background one, has no mark. It takes no word.
+			service, and that of a session started in another
+			directory than the folder says `[another folder]`.
+			A session whose process has ended, a background one,
+			has no mark. Only an entry whose session id is one
+			Claude Code gives is listed. It takes no word, and
+			only one list is read at a time: pressed again
+			meanwhile, it says so and starts nothing.
 
 			The list comes from `claude.cmd` followed by `agents
 			--json --cwd {folder} --all`, which aineo runs
@@ -706,15 +711,19 @@ a resume Claude Code has no conversation for (|aineo-claude-session|).
 			aineo tells you so in Claude Code's words.
 
 			A pick:
-			- of this terminal's row, or of a row running
-			  elsewhere, switches nothing and tells you why: a
-			  switch to a session another process runs would pull
-			  it away from there.
-			- of any other row moves the cursor to Claude's window
-			  in Terminal mode (|:Aineo-claude|) and, unless the
-			  prompt shows text, writes `/resume {id}` and Enter
-			  to it. Claude Code switches to the session, aineo
-			  follows it, and the next start resumes it
+			- of this terminal's row, a row running elsewhere or
+			  a row started in another folder switches nothing
+			  and tells you why: a switch to a session another
+			  process runs would pull it away from there.
+			- of any other row reads the list again, as the menu
+			  may have been open for long, and switches only if
+			  the session is still listed and still switchable.
+			  It moves the cursor to Claude's window in Terminal
+			  mode (|:Aineo-claude|) and, unless the prompt shows
+			  text, writes `/resume {id}` as a bracketed paste,
+			  as Send writes text (|aineo-send|), and Enter, in
+			  one write. Claude Code switches to the session,
+			  aineo follows it, and the next start resumes it
 			  (|aineo-claude-session|).
 			The prompt shows text unless the input box is one line
 			and Claude Code's cursor sits right after its `❯`: the
@@ -1506,8 +1515,9 @@ The session list ~
   `[this terminal]`.
 - Claude Code's documentation says what an entry holds; only the fields
   aineo reads are checked, and an entry with no session id is not listed.
-- Whether Claude Code takes the text and Enter of one write as a command
-  was not measured, only the fake `claude` of aineo's tests.
+- Send's paste and Enter in one write was measured with Claude Code
+  2.1.281; that it is taken as a `/resume` command was not, only by the
+  fake `claude` of aineo's tests.
 - A draft whose cursor you moved back to the start of its first line reads
   as an empty prompt, and `/resume {id}` is written in front of it.
 - The prompt is read in Terminal mode, where Neovim keeps the window's

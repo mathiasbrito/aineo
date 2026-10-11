@@ -37,9 +37,10 @@ end
 --- Where Claude Code's input box stands in `lines`, from the top of a screen
 --- down: the prompt's line, and the rule that closes the box, with the lines
 --- a longer draft continues on between them. Nil when `lines` hold no input
---- box: a rule, the prompt's line, the lines a longer draft continues on, and
---- a rule. A dialog drawing its selected choice at the first column between
---- two rules would hold one too; no recorded dialog does.
+--- box. The box is a rule, the prompt's line, the lines a longer draft
+--- continues on, and a rule. A dialog drawing its selected choice at the
+--- first column between two rules would hold one too; no recorded dialog
+--- does.
 ---
 ---@param lines string[]
 ---@return { prompt: integer, rule: integer }?

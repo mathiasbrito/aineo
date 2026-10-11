@@ -103,13 +103,17 @@ T['a listed session'] = MiniTest.new_set()
 --- The session of the child's own terminal in these cases.
 local OWN_SESSION_ID = '99999999-9999-4999-8999-999999999999'
 
+--- The folder the rows are listed for in these cases.
+local FOLDER = '/work/project'
+
 --- A session as `list_sessions()` delivers it, running elsewhere.
 local RUNNING_ELSEWHERE = {
   session_id = '11111111-1111-4111-8111-111111111111',
   name = 'refactor',
   kind = 'interactive',
   status = 'idle',
-  pid = 4242,
+  running = true,
+  cwd = FOLDER,
 }
 
 --- `RUNNING_ELSEWHERE` with `overrides` on top.
@@ -128,10 +132,19 @@ T['a listed session']['row'] = MiniTest.new_set({
       'refactor  interactive  idle  [this terminal]',
     },
     {
-      { session_id = RUNNING_ELSEWHERE.session_id, status = 'blocked', kind = 'background' },
+      {
+        session_id = RUNNING_ELSEWHERE.session_id,
+        status = 'blocked',
+        kind = 'background',
+        cwd = FOLDER,
+      },
       '11111111  background  blocked',
     },
-    { { session_id = RUNNING_ELSEWHERE.session_id, name = 'tests' }, 'tests' },
+    { { session_id = RUNNING_ELSEWHERE.session_id, name = 'tests', cwd = FOLDER }, 'tests' },
+    {
+      { session_id = RUNNING_ELSEWHERE.session_id, name = 'tests', cwd = '/work/other' },
+      'tests  [another folder]',
+    },
   },
 })
 
@@ -140,7 +153,7 @@ T['a listed session']['row']['names the session, its kind and its status, and ma
   expected
 )
   eq(
-    child.lua_get("require('aineo.claude').session_row(...)", { listed, OWN_SESSION_ID }),
+    child.lua_get("require('aineo.claude').session_row(...)", { listed, OWN_SESSION_ID, FOLDER }),
     expected
   )
 end
@@ -149,7 +162,19 @@ T['a listed session']['standing'] = MiniTest.new_set({
   parametrize = {
     { running_elsewhere_with({ session_id = OWN_SESSION_ID }), 'own' },
     { RUNNING_ELSEWHERE, 'elsewhere' },
-    { { session_id = RUNNING_ELSEWHERE.session_id, kind = 'background' }, 'switchable' },
+    {
+      { session_id = RUNNING_ELSEWHERE.session_id, kind = 'background', cwd = FOLDER },
+      'switchable',
+    },
+    {
+      { session_id = RUNNING_ELSEWHERE.session_id, kind = 'background', cwd = '/work/other' },
+      'another_folder',
+    },
+    { { session_id = RUNNING_ELSEWHERE.session_id, kind = 'background' }, 'another_folder' },
+    {
+      running_elsewhere_with({ session_id = OWN_SESSION_ID, cwd = '/work/other' }),
+      'own',
+    },
   },
 })
 
@@ -158,7 +183,10 @@ T['a listed session']['standing']['tells whether a pick may switch to it'] = fun
   expected
 )
   eq(
-    child.lua_get("require('aineo.claude').session_standing(...)", { listed, OWN_SESSION_ID }),
+    child.lua_get(
+      "require('aineo.claude').session_standing(...)",
+      { listed, OWN_SESSION_ID, FOLDER }
+    ),
     expected
   )
 end
@@ -216,13 +244,15 @@ T['the listing']['delivers each session that carries an id, a running one and an
         name = 'refactor',
         kind = 'interactive',
         status = 'idle',
-        pid = 4242,
+        running = true,
+        cwd = '/work/project',
       },
       {
         session_id = '22222222-2222-4222-8222-222222222222',
         name = 'tests',
         kind = 'background',
         status = 'blocked',
+        cwd = '/work/project',
       },
     },
   })
@@ -259,9 +289,43 @@ T['the listing']['keeps the fields of an entry that have the type Claude Code do
         session_id = '33333333-3333-4333-8333-333333333333',
         kind = 'interactive',
         status = 'blocked',
+        running = true,
       },
     },
   })
+end
+
+T['the listing']['keeps an entry running when it has a pid or a status, whatever their types'] = function()
+  local fake = fake_listing(
+    'agents-running',
+    '[{"sessionId": "11111111-1111-4111-8111-111111111111", "pid": "4242"},'
+      .. ' {"sessionId": "22222222-2222-4222-8222-222222222222", "status": 5},'
+      .. ' {"sessionId": "33333333-3333-4333-8333-333333333333", "pid": null, "state": "blocked"}]'
+  )
+
+  local answer = list_sessions(fake, '/work/project')
+
+  eq(answer, {
+    sessions = {
+      { session_id = '11111111-1111-4111-8111-111111111111', running = true },
+      { session_id = '22222222-2222-4222-8222-222222222222', running = true },
+      { session_id = '33333333-3333-4333-8333-333333333333', status = 'blocked' },
+    },
+  })
+end
+
+T['the listing']['drops an entry whose session id is not a session id, whatever else it holds'] = function()
+  local fake = fake_listing(
+    'agents-bad-ids',
+    '[{"sessionId": "x\\r!touch pwned\\r", "kind": "background", "state": "blocked"},'
+      .. ' {"sessionId": "not-a-uuid"},'
+      .. ' {"sessionId": "11111111-1111-1111-8111-111111111111"},'
+      .. ' {"sessionId": "22222222-2222-4222-8222-222222222222"}]'
+  )
+
+  local answer = list_sessions(fake, '/work/project')
+
+  eq(answer, { sessions = { { session_id = '22222222-2222-4222-8222-222222222222' } } })
 end
 
 T['the listing']['adds the first line claude.cmd writes to its standard error to a failure'] = function()
@@ -373,6 +437,37 @@ T['the listing']['stops a claude.cmd still running when the editor quits'] = fun
     return not process_runs(pids[1]) and not process_runs(pids[2])
   end, 20)
   eq({ process_runs(pids[1]), process_runs(pids[2]) }, { false, false })
+end
+
+T['the listing']['kills no process group once its process has ended, when the editor quits before the cleanup'] = function()
+  local kills_sent = child.lua([[
+    local kills = {}
+    local real_kill = vim.uv.kill
+    vim.uv.kill = function(pid, signal)
+      if signal == 'sigkill' then
+        table.insert(kills, pid)
+      end
+      return real_kill(pid, signal)
+    end
+    local held = {}
+    local real_schedule = vim.schedule
+    vim.schedule = function(callback)
+      table.insert(held, callback)
+    end
+    require('aineo.claude').list_sessions({ 'sh', '-c', 'exit 0' }, '/tmp', function() end)
+    vim.wait(2000, function()
+      return #held > 0
+    end, 10)
+    vim.api.nvim_exec_autocmds('VimLeavePre', {})
+    vim.schedule = real_schedule
+    vim.uv.kill = real_kill
+    for _, callback in ipairs(held) do
+      callback()
+    end
+    return #kills
+  ]])
+
+  eq(kills_sent, 0)
 end
 
 T['the listing']['JSON that is not a list'] = MiniTest.new_set({

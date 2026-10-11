@@ -49,6 +49,13 @@ T[':Aineo']['completes its argument to its nine subcommands'] = function()
   )
 end
 
+T[':Aineo']['is described with every subcommand it takes'] = function()
+  eq(
+    child.lua_get('vim.api.nvim_get_commands({}).Aineo.definition'),
+    'aineo: send, open, report, input, claude, claude-numbers, sessions, pane agent|changes or claim [id]'
+  )
+end
+
 T[':Aineo']['completes the subcommands that begin with what is typed'] = function()
   eq(child.fn.getcompletion('Aineo re', 'cmdline'), { 'report' })
 end
