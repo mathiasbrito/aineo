@@ -163,7 +163,6 @@ function M.commit_files(run, found, commit, done)
         '--name-status',
         '-z',
         '-M',
-        '--root',
         '--diff-merges=first-parent',
         '-O/dev/null',
         '--end-of-options',

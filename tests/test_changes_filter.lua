@@ -68,6 +68,41 @@ local COUNT_FILE_READS = [[
   end
 ]]
 
+--- The Lua that replaces, in the child, the git home's watch with one that
+--- never calls back, so that only what a case asks for reads the pane.
+local QUIET_WATCH = [[
+  require('aineo.git').watch_repository = function()
+    return { stop = function() end, watches_subdirectories = true }
+  end
+]]
+
+--- The Lua that counts, in the child, every call to the git home made after
+--- it: `_G.git_asked`, and `_G.git_answered`, those whose caller's `done`
+--- has run, so that equal counts mean no read is under way.
+local COUNT_GIT_CALLS = [[
+  local git = require('aineo.git')
+  _G.git_asked, _G.git_answered = 0, 0
+  for name, operation in pairs(git) do
+    if type(operation) == 'function' and name ~= 'watch_repository' then
+      git[name] = function(...)
+        _G.git_asked = _G.git_asked + 1
+        local arguments = { ... }
+        for index = 1, select('#', ...) do
+          if type(arguments[index]) == 'function' then
+            local done = arguments[index]
+            arguments[index] = function(...)
+              done(...)
+              _G.git_answered = _G.git_answered + 1
+            end
+            break
+          end
+        end
+        return operation(unpack(arguments, 1, select('#', ...)))
+      end
+    end
+  end
+]]
+
 --- The lines of the child's buffer named `name`.
 ---
 ---@param name string
@@ -111,6 +146,12 @@ end
 local function go_to_line(line)
   child.type_keys(line .. 'G')
 end
+
+--- How long `child.type_keys()` waits after each key when a case needs the
+--- child to act on every key, its `CursorMoved` included, before the next
+--- arrives: far shorter than the pause before the files window follows the
+--- cursor.
+local KEY_GAP_MS = 10
 
 --- The cursor of the window showing the child's buffer named `name`, as
 --- `{ line, column }`.
@@ -156,11 +197,15 @@ end
 --- first.
 ---
 ---@param name string
+---@param before_beginning? string Lua run in the child before the session begins
 ---@return string top
 ---@return string first
 ---@return string second
-local function session_with_two_commits(name)
+local function session_with_two_commits(name, before_beginning)
   local top = git_repo.create(name, { ['a.txt'] = { 'one' } })
+  if before_beginning then
+    child.lua(before_beginning)
+  end
   begin_and_show(top)
   expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, NO_COMMITS })
   git_repo.write(top, 'a.txt', { 'two' })
@@ -223,6 +268,26 @@ T['the commits window']['has its cursor on Session work when first shown long af
   child.lua("vim.api.nvim_open_win(_G.pane.commits, false, { split = 'below' })")
 
   expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, NO_COMMITS })
+  eq(cursor_of(COMMITS), { 2, 0 })
+end
+
+T['the commits window']['has its cursor on Session work again when its buffer is made anew'] = function()
+  local _, first = session_with_two_commits('filter-made-anew')
+  enter_window_of(COMMITS)
+  go_to_line(4)
+  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Change a', '  M a.txt' })
+  child.cmd(('bwipeout! %d'):format(child.fn.bufnr(COMMITS)))
+
+  child.lua(
+    [[
+    require('aineo.changes').pane_buffers()
+    vim.cmd('belowright split')
+    vim.api.nvim_win_set_buf(0, vim.fn.bufnr(...))
+  ]],
+    { COMMITS }
+  )
+
+  expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  A b.txt' })
   eq(cursor_of(COMMITS), { 2, 0 })
 end
 
@@ -297,14 +362,14 @@ T['the filter']['a commit that changed no file says so'] = function()
 end
 
 T['the filter']['is read after a pause, once, for the last of the lines the cursor crossed'] = function()
-  local _, first = session_with_two_commits('filter-pause')
+  local _, first = session_with_two_commits('filter-pause', QUIET_WATCH .. COUNT_GIT_CALLS)
+  git_repo.wait_until('no read left', function()
+    return child.lua_get('_G.git_asked == _G.git_answered')
+  end)
   child.lua(COUNT_FILE_READS)
   enter_window_of(COMMITS)
 
-  child.type_keys('gg')
-  child.type_keys('j')
-  child.type_keys('j')
-  child.type_keys('j')
+  child.type_keys(KEY_GAP_MS, 'gg', 'j', 'j', 'j')
 
   expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Change a', '  M a.txt' })
   eq(child.lua_get('_G.file_reads'), { 'commit_files' })
@@ -317,6 +382,20 @@ T['the filter']['leaves the files window as it was until the pause ends'] = func
   go_to_line(1)
 
   eq(lines_of(FILES), { 'Files in: Session work', '  M a.txt', '  A b.txt' })
+end
+
+T['the filter']['is not followed once the window closed within the pause, telling nothing'] = function()
+  session_with_two_commits('filter-window-closed')
+  enter_window_of(COMMITS)
+  go_to_line(1)
+
+  child.cmd('close')
+
+  vim.wait(400)
+  eq(
+    { lines_of(FILES), child.cmd_capture('messages') },
+    { { 'Files in: Session work', '  M a.txt', '  A b.txt' }, '' }
+  )
 end
 
 T['the filter']['stays what it was on a line that lists none'] = function()

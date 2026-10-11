@@ -1083,14 +1083,12 @@ local window_moved = nil
 --- last moved in the commits buffer lists, when it is a filter other than
 --- the selected one, and reads the files window for it. A line that lists
 --- no filter — a note, another worktree's heading or commit — leaves the
---- selection as it was, and so does a cursor not yet put on the selected
---- filter's line (`place_commits_cursor()`).
+--- selection as it was.
 local function select_filter_at_cursor()
   local window = window_moved
   if
     not (
       session
-      and not session.cursor_unplaced
       and window
       and vim.api.nvim_win_is_valid(window)
       and buffers.commits
@@ -1114,8 +1112,7 @@ local selection_pause = pause.restartable(SELECTION_PAUSE_MS, select_filter_at_c
 
 --- Makes the commits buffer `buffer` choose the filter of the files window:
 --- its cursor, once it has stayed on a line for a pause
---- (`selection_pause`), and the cursor's first placing on the selected
---- filter's line when the buffer enters a window (`place_commits_cursor()`).
+--- (`selection_pause`).
 ---
 ---@param buffer integer
 local function select_filters_from(buffer)
@@ -1125,15 +1122,6 @@ local function select_filters_from(buffer)
     callback = function()
       window_moved = vim.api.nvim_get_current_win()
       selection_pause.restart()
-    end,
-  })
-  vim.api.nvim_create_autocmd('BufWinEnter', {
-    buffer = buffer,
-    desc = 'aineo: put the cursor on the selected filter',
-    callback = function()
-      if session then
-        place_commits_cursor()
-      end
     end,
   })
 end
