@@ -1,6 +1,7 @@
 --- aineo's Claude session home, `require('aineo.claude')`: Claude Code's
 --- interactive CLI running in a terminal buffer.
 
+local agents = require('aineo.claude.agents')
 local arguments = require('aineo.claude.arguments')
 local prompt = require('aineo.claude.prompt')
 local readiness = require('aineo.claude.readiness')
@@ -787,6 +788,15 @@ end
 ---@return boolean
 function M.is_session_id(text)
   return session_ids.is_session_id(text)
+end
+
+--- Lists the sessions Claude Code lists for `folder` (`agents.list_sessions()`).
+---
+---@param command string[] `claude.cmd`
+---@param folder string
+---@param on_done fun(sessions: table[]?, problem: string?)
+function M.list_sessions(command, folder, on_done)
+  agents.list_sessions(command, folder, on_done)
 end
 
 --- Whether the prompt of Claude Code's terminal that `window` shows holds
