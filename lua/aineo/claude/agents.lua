@@ -77,15 +77,23 @@ local STANDING_MARKS = { own = '[this terminal]', elsewhere = '[running elsewher
 --- How many characters of a session's id name it when it has no name.
 local UNNAMED_ID_LENGTH = 8
 
---- The row of the list for `session`: its name, or the start of its id; its
---- kind and its status, where it has them; and the mark of its standing
+--- What names `session` to the user: its name, or the start of its id.
+---
+---@param session aineo.claude.ListedSession
+---@return string
+function M.name(session)
+  return session.name or session.session_id:sub(1, UNNAMED_ID_LENGTH)
+end
+
+--- The row of the list for `session`: its name (`M.name()`); its kind and
+--- its status, where it has them; and the mark of its standing
 --- (`M.standing()`) when a pick may not switch to it.
 ---
 ---@param session aineo.claude.ListedSession
 ---@param own_session_id string?
 ---@return string
 function M.row(session, own_session_id)
-  local words = { session.name or session.session_id:sub(1, UNNAMED_ID_LENGTH) }
+  local words = { M.name(session) }
   for _, word in ipairs({ session.kind or false, session.status or false }) do
     if word then
       table.insert(words, word)

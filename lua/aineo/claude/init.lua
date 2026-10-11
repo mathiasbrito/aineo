@@ -781,6 +781,14 @@ function M.session_id()
   return session and session.followed
 end
 
+--- The directory the session's Claude Code started in, whatever the
+--- editor's working directory is now. Nil before any start.
+---
+---@return string?
+function M.session_directory()
+  return session and session.settings.cwd
+end
+
 --- Whether `text` is a session id of the form Claude Code gives, a
 --- lower-case version-4 UUID (`session_ids.is_session_id()`).
 ---
@@ -807,6 +815,15 @@ end
 ---@return 'own'|'elsewhere'|'switchable'
 function M.session_standing(listed, own_session_id)
   return agents.standing(listed, own_session_id)
+end
+
+--- What names `listed`, as `list_sessions()` delivers it, to the user
+--- (`agents.name()`).
+---
+---@param listed aineo.claude.ListedSession
+---@return string
+function M.listed_session_name(listed)
+  return agents.name(listed)
 end
 
 --- The row of the list of sessions for `listed` (`agents.row()`).

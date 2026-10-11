@@ -163,6 +163,21 @@ T['a listed session']['standing']['tells whether a pick may switch to it'] = fun
   )
 end
 
+T['the session’s directory'] = MiniTest.new_set()
+
+T['the session’s directory']['is none before a session has started'] = function()
+  eq(child.lua_get("require('aineo.claude').session_directory()"), vim.NIL)
+end
+
+T['the session’s directory']['is the directory Claude Code started in, whatever :cd did since'] = function()
+  local fake = claude_session.fake('agents-directory', 'ready')
+  local started_in = child.fn.getcwd()
+  claude_session.start(child, fake)
+  child.cmd('cd /')
+
+  eq(child.lua_get("require('aineo.claude').session_directory()"), started_in)
+end
+
 T['the listing'] = MiniTest.new_set()
 
 T['the listing']['asks claude.cmd for agents --json scoped to the folder, finished sessions included'] = function()

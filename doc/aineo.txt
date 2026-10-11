@@ -27,10 +27,13 @@ Every command sits behind one prefix key, `\` by default, in Normal mode:
 `\s` sends Input to Claude, `\o` opens or restores the layout, and `\r`, `\i`
 and `\c` move to the Report, Input and Claude — `\c` in Terminal mode, so
 that what you type next goes to Claude, unless Claude Code has exited.
-`\tcn` hides or shows the line numbers of Claude's window. `\pa` and `\pc`
-switch the right column between the agent pane, the Report over Input, and
-the changes pane (|aineo-panes|). In Visual mode, in Input, `\s` sends the
-selection alone and removes it from Input (|aineo-v_\s|).
+`\tcn` hides or shows the line numbers of Claude's window. `\cs` lists the
+sessions Claude Code lists for the folder and switches Claude to the one you
+pick (|:Aineo-sessions|); since `\cs` begins with it, `\c` waits for
+'timeoutlen' for an `s` to follow. `\pa` and `\pc` switch the right column
+between the agent pane, the Report over Input, and the changes pane
+(|aineo-panes|). In Visual mode, in Input, `\s` sends the selection alone and
+removes it from Input (|aineo-v_\s|).
 
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
@@ -682,6 +685,57 @@ a resume Claude Code has no conversation for (|aineo-claude-session|).
 			the terminal's own. A file opened from Claude's window
 			keeps your own numbers.
 
+                                                             *:Aineo-sessions*
+:Aineo sessions		Lists the sessions Claude Code lists for the
+			directory it started in, which `:cd` does not change,
+			and offers them in |vim.ui.select()|, one row each:
+			the session's name, or the first eight characters of
+			its id, its kind, `interactive` or `background`, and
+			its status. The row of the session Claude's terminal
+			is on says `[this terminal]`, and that of every other
+			session some process runs says `[running elsewhere]`,
+			in another terminal or in Claude Code's background
+			service. A session whose process has ended, a
+			background one, has no mark. It takes no word.
+
+			The list comes from `claude.cmd` followed by `agents
+			--json --cwd {folder} --all`, which aineo runs
+			without waiting for it (|aineo-config-claude.cmd|):
+			it is stopped after 5 seconds, or after 1 MiB of
+			output. A `claude.cmd` that holds `--add-dir` or
+			`--mcp-config` makes Claude Code refuse `agents`, and
+			aineo tells you so in Claude Code's words.
+
+			A pick:
+			- of this terminal's row, or of a row running
+			  elsewhere, switches nothing and tells you why: a
+			  switch to a session another process runs would pull
+			  it away from there.
+			- of any other row moves the cursor to Claude's window
+			  in Terminal mode (|:Aineo-claude|) and, unless the
+			  prompt shows text, writes `/resume {id}` and Enter
+			  to it. Claude Code switches to the session, aineo
+			  follows it, and the next start resumes it
+			  (|aineo-claude-session|).
+			The prompt shows text unless the input box is one line
+			and Claude Code's cursor sits right after its `❯`: the
+			grey example it draws in an empty prompt is not text.
+			Aineo never clears the prompt. When it shows text,
+			nothing is written, the cursor goes back to the
+			window and the mode it came from, and you are told to
+			clear the prompt and pick again.
+
+			It lists nothing, and tells you once, with a warning
+			starting `aineo: no session list`, while Claude Code
+			is not ready for input — it has not started, is
+			starting or behind a dialog, or has exited, as for
+			Send (|aineo-send|) — while a claim of another session
+			holds (|:Aineo-claim|), when `claude agents` fails,
+			is stopped or prints what is not a JSON list, and when
+			Claude Code lists no session. A pick made after the
+			state changed tells you the same, starting `aineo: not
+			switched`. What it cannot know is in |aineo-limits|.
+
                                                                  *:Aineo-pane*
 :Aineo pane {pane}	Shows {pane} in the right column, `agent` or
 			`changes` (|aineo-panes|). When it shows already, the
@@ -775,6 +829,9 @@ you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-claude-numbers)
 			Does what |:Aineo-claude-numbers| does.
 
+                                                      *<Plug>(aineo-sessions)*
+<Plug>(aineo-sessions)	Does what |:Aineo-sessions| does.
+
                                                     *<Plug>(aineo-pane-agent)*
 <Plug>(aineo-pane-agent)
 			Does what `:Aineo pane agent` does (|:Aineo-pane|).
@@ -806,6 +863,8 @@ which has none, globally, in Normal mode, and `\s` in Visual mode too:
 \c		|<Plug>(aineo-claude)|
                                                                   *aineo-\tcn*
 \tcn		|<Plug>(aineo-claude-numbers)|
+                                                                   *aineo-\cs*
+\cs		|<Plug>(aineo-sessions)|
                                                                    *aineo-\pa*
 \pa		|<Plug>(aineo-pane-agent)|
                                                                    *aineo-\pc*
@@ -825,7 +884,8 @@ only overlaps aineo's key is not yours in this sense: with your own `\sa`,
 aineo still maps `\s`, and `\sa` then waits for 'timeoutlen' after `\s`;
 with your own `\t` or `\tc`, aineo still maps `\tcn`, and with your own `\p`
 — or `<Leader>p` while the leader is `\` — it still maps `\pa` and `\pc`:
-yours then waits for 'timeoutlen'.
+yours then waits for 'timeoutlen'. aineo's own `\c` waits too, for an `s` to
+follow, since `\cs` begins with it.
 
 The prefix is read once, when the editor has started (|VimEnter|): a
 `setup()` or `vim.g.aineo` that changes it later maps nothing until the next
@@ -1438,6 +1498,23 @@ screen — holds Neovim at a hit-enter prompt. aineo's line for a
 characters; a longer one, such as an absolute path, still prompts. Its
 line for a `--settings` in `claude.cmd` that it cannot read fits; it says
 no more than that, not which file or why: |aineo-health| says why.
+
+The session list ~
+- Whether `claude agents --json` starts Claude Code's background service
+  was not measured, and aineo does not guard against it: `:Aineo sessions`
+  runs it each time.
+- Whether it lists the session of aineo's own terminal was not measured.
+  When it does not, the list holds the others alone and no row says
+  `[this terminal]`.
+- Claude Code's documentation says what an entry holds; only the fields
+  aineo reads are checked, and an entry with no session id is not listed.
+- Whether Claude Code takes the text and Enter of one write as a command
+  was not measured, only the fake `claude` of aineo's tests.
+- A draft whose cursor you moved back to the start of its first line reads
+  as an empty prompt, and `/resume {id}` is written in front of it.
+- The prompt is read in Terminal mode, where Neovim keeps the window's
+  cursor on the terminal's, so the cursor moves to Claude's window before
+  the read, and back when the prompt shows text.
 
 Send and a dialog ~
 A permission dialog drawn in the few tens of milliseconds before aineo
