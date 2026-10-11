@@ -169,6 +169,19 @@ T['gf']['on a deleted file opens nothing and says the file is gone'] = function(
   eq(child.lua_get(TOLD), 'aineo: notes.txt is gone from the working tree')
 end
 
+T['gf']['on a deleted file names it as the files window does'] = function()
+  local top = git_repo.create('openfile-deleted-quoted', { ['say "hi".txt'] = { 'one' } })
+  git_repo.write(top, 'say "hi".txt', { 'two' })
+  child.lua(BEGIN_AND_SHOW, { top })
+  expect_lines(FILES, { 'Files in: Session work', '  M "say \\"hi\\".txt"' })
+  vim.fn.delete(vim.fs.joinpath(top, 'say "hi".txt'))
+  expect_lines(FILES, { 'Files in: Session work', '  D "say \\"hi\\".txt"' })
+
+  press_gf_on(2)
+
+  eq(child.lua_get(TOLD), 'aineo: "say \\"hi\\".txt" is gone from the working tree')
+end
+
 T['gf']['on another worktree’s file opens nothing, not the editor’s file of that name, and says so'] = function()
   local top = git_repo.create('openfile-other-worktree', { ['notes.txt'] = { 'one' } })
   local agent = vim.fs.joinpath(vim.fs.dirname(top), 'agent')
@@ -211,7 +224,9 @@ T['gf']['on a line listing no file']['opens nothing and says nothing'] = functio
     'No files changed in this worktree',
   })
 
-  press_gf_on(line)
+  MiniTest.expect.no_error(function()
+    press_gf_on(line)
+  end)
 
   eq(current_buffer_name(), FILES)
   eq(child.lua_get(TOLD), '')
@@ -234,7 +249,9 @@ T['gf']['in the files buffer made anew opens the file as before'] = function()
   )
   expect_lines(FILES, { 'Files in: Session work', '  ? has space.txt' })
 
-  press_gf_on(2)
+  MiniTest.expect.no_error(function()
+    press_gf_on(2)
+  end)
 
   eq(current_buffer_name(), vim.fs.joinpath(top, 'has space.txt'))
 end
