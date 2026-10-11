@@ -2,15 +2,15 @@
 
 You are dispatched by the orchestrator to implement **one packet** of `knowledge-vault/Planning/aineo — v1 agent console.md`. Your definition tells you how to work; this brief tells you what.
 
-> Written for U1 (a) of `plan.md` › *Questions for the user* — the user pressed `gf` — with proposed D50 as the row, and for the recommendations O5 (a) and O6 (a). It is dispatched only after T44 has merged and the user has answered U1. A dated amendment at the end of this brief records the answer, the D50 row as the user agreed it, the rulings, and every fact below re-checked against the `dev` T44 landed; the amendment wins over the body.
+> Written for the orchestrator's assumption **A112** (`plan.md` › *The user's answers — round 1*): the user does not remember which key failed, and `gf` is the one failure found, so T45 is the `gf` fix, `gf` alone (O5 (a), O6 (a)). Proposed D50 (`plan.md`, U1 (a)) is the row it builds, cited with A112 — not a decision of the user's. It is dispatched only after T44 has merged; a dated amendment at the end of this brief records every fact below re-checked against the `dev` T44 landed, and wins over the body.
 
 ## Objective
 
 The task, verbatim from the task list:
 
-> | T45 | A file whose name holds a space or an apostrophe, listed in the changes pane's files window, opens from it (C15; D19, D34): on `origin/dev` `e6a0295`, Enter shows the diff of such a name, in the editor's own section and in another worktree's, and Vim's own `gf` on its line takes the name only up to the first space or apostrophe and fails (E447) (`Implementation/Waves/00011-names-and-sessions/evidence/w11-probes.txt`, P1–P3); which of the two failed for the user is the user's answer U1 | T44 | planned — wave 11, held for U1 |
+> | T45 | A file whose name holds a space or an apostrophe, listed in the changes pane's files window, opens from it (C15; D19, D34): on `origin/dev` `e6a0295`, Enter shows the diff of such a name, in the editor's own section and in another worktree's, and Vim's own `gf` on its line takes the name only up to the first space or apostrophe and fails (E447) (`Implementation/Waves/00011-names-and-sessions/evidence/w11-probes.txt`, P1–P3); which of the two failed for the user is the user's answer U1 | T44 | planned — wave 11, after T44 *(2026-10-11: the user does not remember the key (U1); planned as a buffer-local `gf` in the files window that opens the line's file by its path, under the orchestrator's assumption A112 and proposed D50, with a line in the help saying Enter and `gf` take any name)* |
 
-It rests on: proposed **D50** (`plan.md` › U1 (a)); D19 (the files window, Enter); D34 (no key opens another worktree's file); D7 and C9 (a file opened from one of the layout's windows moves to the file column); D47 (T43's filter, whose lines `gf` must read); C15 (the changes home); D26, D29.
+It rests on: proposed **D50** under **A112** (`plan.md` › U1 (a), *The user's answers — round 1*); D19 (the files window, Enter); D34 (no key opens another worktree's file); D7 and C9 (a file opened from one of the layout's windows moves to the file column); D47 (T43's filter, whose lines `gf` must read); C15 (the changes home); D26, D29.
 
 ### The behaviour — one test each, seen failing first
 
@@ -20,6 +20,7 @@ It rests on: proposed **D50** (`plan.md` › U1 (a)); D19 (the files window, Ent
 4. On a line of another worktree's section, `gf` opens nothing and says the changes pane opens no other worktree's file (D34).
 5. On a line that lists no file — the filter's first line (T43), a note, a heading, an empty line — `gf` opens nothing and says nothing.
 6. The map is buffer-local to the files buffer, and is made again whenever the buffer is made anew; `gf` in every other buffer, the commits buffer and the diff buffers included, stays Vim's own.
+7. The help says, in *aineo-changes*' paragraph on Enter, that Enter and `gf` take a file's name from the list itself, whatever characters it holds — spaces, quotes, an apostrophe — so that a name that fails to open is a fault to report. `tests/test_doc.lua` pins the help's shape, not its words: this line has no test of its own; the records review reads it.
 
 ### Facts, checked against `origin/dev` `e6a0295` — re-checked by the amendment
 
@@ -48,7 +49,7 @@ Read first: the v1 plan note's D7, D19, D34, D46, D47, C9, C15; `plan.md` in thi
 
 ## What was decided already
 
-- D50 as the user agrees it (the amendment quotes it). Do not re-open whether `gf` opens another worktree's file (D34).
+- D50 as proposed, under A112: the orchestrator's assumption, to be recorded as such in the session note and the PR body, never as the user's decision. Do not re-open whether `gf` opens another worktree's file (D34).
 - The planning's assumptions A1–A3 (`plan.md`), as the orchestrator rules them.
 
 ## Budget
