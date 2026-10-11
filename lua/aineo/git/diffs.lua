@@ -20,21 +20,50 @@ local FILES_DIFFER_CODE = 1
 --- The options that make `git diff` and `git show` print a plain unified
 --- diff whatever the user's settings: no colours; git's own diff, not an
 --- external program or a text conversion; `a/` and `b/` before the paths;
---- three lines of context, and hunks joined only where their context meets;
---- renames found; whole object ids; and files in git's own order, not a
---- user's order file.
+--- hunks joined only where their context meets; renames found; whole object
+--- ids; and files in git's own order, not a user's order file. The context
+--- around a change is the caller's (`context_option()`).
 local UNIFIED_DIFF = {
   '--no-color',
   '--no-ext-diff',
   '--no-textconv',
   '--src-prefix=a/',
   '--dst-prefix=b/',
-  '--unified=3',
   '--inter-hunk-context=0',
   '--find-renames',
   '--full-index',
   '-O/dev/null',
 }
+
+--- How much of a file a diff shows around its changes: three lines, or the
+--- whole file.
+---@alias aineo.git.DiffContext 'three_lines'|'whole_file'
+
+--- The option that gives each context of a diff (`aineo.git.DiffContext`):
+--- three lines around a change, or git's context made unlimited, with the
+--- largest count git takes (`2147483648` wraps to a negative one).
+---@type table<aineo.git.DiffContext, string>
+local CONTEXT_OPTIONS = {
+  three_lines = '--unified=3',
+  whole_file = '--unified=2147483647',
+}
+
+--- The context a diff has when its caller names none.
+---@type aineo.git.DiffContext
+local DEFAULT_CONTEXT = 'three_lines'
+
+--- The option that sets a diff's context to `context`, three lines when nil.
+--- Raises an error naming the contexts there are, for one there is not.
+---
+---@param context aineo.git.DiffContext|nil
+---@return string
+local function context_option(context)
+  local option = CONTEXT_OPTIONS[context or DEFAULT_CONTEXT]
+  if not option then
+    error(("context must be 'three_lines' or 'whole_file', not %s"):format(vim.inspect(context)), 0)
+  end
+  return option
+end
 
 --- The options that make `git show` print a commit's header in git's
 --- default format whatever the user's settings: the medium format, the
@@ -73,14 +102,16 @@ end
 ---@param run aineo.git.Run
 ---@param found aineo.git.Repository
 ---@param change aineo.git.Change
+---@param unified string the option that sets the diff's context (`context_option()`)
 ---@param done fun(failure: aineo.git.Failure|nil, output: aineo.git.Output|nil)
-local function untracked_diff(run, found, change, done)
+local function untracked_diff(run, found, change, unified, done)
   run(
     {
       directory = found.top,
       arguments = joined({
         { 'diff' },
         UNIFIED_DIFF,
+        { unified },
         { '--no-index', '--', '/dev/null', change.path },
       }),
       answers = { 0, FILES_DIFFER_CODE },
@@ -104,8 +135,9 @@ end
 ---@param found aineo.git.Repository
 ---@param tree_ish string
 ---@param change aineo.git.Change
+---@param unified string the option that sets the diff's context (`context_option()`)
 ---@param done fun(failure: aineo.git.Failure|nil, output: aineo.git.Output|nil)
-local function tracked_diff(run, found, tree_ish, change, done)
+local function tracked_diff(run, found, tree_ish, change, unified, done)
   local paths = change.kind == 'renamed' and { change.old_path, change.path } or { change.path }
   private_index.with_private_index(found.git_directory, function(environment, finish)
     run({
@@ -113,6 +145,7 @@ local function tracked_diff(run, found, tree_ish, change, done)
       arguments = joined({
         { 'diff' },
         UNIFIED_DIFF,
+        { unified },
         { '--end-of-options', tree_ish, '--' },
         paths,
       }),
@@ -130,12 +163,14 @@ end
 ---@param base string|nil the full id of the commit the diff runs from; nil runs it from nothing
 ---@param change aineo.git.Change
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
-function M.file_diff(run, found, base, change, done)
+---@param context? aineo.git.DiffContext the lines of context around a change; three when not given
+function M.file_diff(run, found, base, change, done, context)
+  local unified = context_option(context)
   local give_diff = process.or_fail(done, function(output)
     done(nil, output.stdout)
   end)
   if change.kind == 'untracked' then
-    untracked_diff(run, found, change, give_diff)
+    untracked_diff(run, found, change, unified, give_diff)
     return
   end
   repository.comparison_base(
@@ -143,7 +178,7 @@ function M.file_diff(run, found, base, change, done)
     found.top,
     base,
     process.or_fail(done, function(tree_ish)
-      tracked_diff(run, found, tree_ish, change, give_diff)
+      tracked_diff(run, found, tree_ish, change, unified, give_diff)
     end)
   )
 end
@@ -156,8 +191,9 @@ end
 ---@param found aineo.git.Repository
 ---@param commit string
 ---@param paths string[]
+---@param unified string the option that sets the diff's context (`context_option()`)
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
-local function show_commit(run, found, commit, paths, done)
+local function show_commit(run, found, commit, paths, unified, done)
   run(
     {
       directory = found.top,
@@ -165,6 +201,7 @@ local function show_commit(run, found, commit, paths, done)
         { 'show' },
         COMMIT_HEADER,
         UNIFIED_DIFF,
+        { unified },
         { '--end-of-options', commit, '--' },
         paths,
       }),
@@ -183,8 +220,9 @@ end
 ---@param found aineo.git.Repository
 ---@param commit string
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
-function M.commit_diff(run, found, commit, done)
-  show_commit(run, found, commit, {}, done)
+---@param context? aineo.git.DiffContext the lines of context around a change; three when not given
+function M.commit_diff(run, found, commit, done, context)
+  show_commit(run, found, commit, {}, context_option(context), done)
 end
 
 --- Gives the commit `commit` in `found`, after its header, as
@@ -197,9 +235,10 @@ end
 ---@param commit string
 ---@param change aineo.git.Change one of the changes `changes.commit_files()` gave
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
-function M.commit_file_diff(run, found, commit, change, done)
+---@param context? aineo.git.DiffContext the lines of context around a change; three when not given
+function M.commit_file_diff(run, found, commit, change, done, context)
   local paths = change.kind == 'renamed' and { change.old_path, change.path } or { change.path }
-  show_commit(run, found, commit, paths, done)
+  show_commit(run, found, commit, paths, context_option(context), done)
 end
 
 --- Gives the unified diff of the file `change` names in `found`, from
@@ -211,12 +250,14 @@ end
 ---@param found aineo.git.Repository
 ---@param change aineo.git.Change
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
-function M.uncommitted_file_diff(run, found, change, done)
+---@param context? aineo.git.DiffContext the lines of context around a change; three when not given
+function M.uncommitted_file_diff(run, found, change, done, context)
+  context_option(context)
   repository.read_head(
     run,
     found.top,
     process.or_fail(done, function(head)
-      M.file_diff(run, found, head, change, done)
+      M.file_diff(run, found, head, change, done, context)
     end)
   )
 end
@@ -277,8 +318,9 @@ end
 ---@param run aineo.git.Run
 ---@param found aineo.git.Repository
 ---@param tree_ish string
+---@param unified string the option that sets the diff's context (`context_option()`)
 ---@param done fun(failure: aineo.git.Failure|nil, output: aineo.git.Output|nil)
-local function whole_diff(run, found, tree_ish, done)
+local function whole_diff(run, found, tree_ish, unified, done)
   private_index.with_private_index(found.git_directory, function(environment, finish)
     local function diff_from_tree()
       run({
@@ -286,6 +328,7 @@ local function whole_diff(run, found, tree_ish, done)
         arguments = joined({
           { 'diff' },
           UNIFIED_DIFF,
+          { unified },
           { '--end-of-options', tree_ish, '--' },
         }),
         environment = environment,
@@ -323,7 +366,9 @@ end
 ---@param found aineo.git.Repository
 ---@param base string|nil the full id of the commit the diff runs from; nil runs it from nothing
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
-function M.diff_since(run, found, base, done)
+---@param context? aineo.git.DiffContext the lines of context around a change; three when not given
+function M.diff_since(run, found, base, done, context)
+  local unified = context_option(context)
   local give_diff = process.or_fail(done, function(output)
     done(nil, output.stdout)
   end)
@@ -332,7 +377,7 @@ function M.diff_since(run, found, base, done)
     found.top,
     base,
     process.or_fail(done, function(tree_ish)
-      whole_diff(run, found, tree_ish, give_diff)
+      whole_diff(run, found, tree_ish, unified, give_diff)
     end)
   )
 end
@@ -345,12 +390,14 @@ end
 ---@param run aineo.git.Run
 ---@param found aineo.git.Repository
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
-function M.uncommitted_diff(run, found, done)
+---@param context? aineo.git.DiffContext the lines of context around a change; three when not given
+function M.uncommitted_diff(run, found, done, context)
+  context_option(context)
   repository.read_head(
     run,
     found.top,
     process.or_fail(done, function(head)
-      M.diff_since(run, found, head, done)
+      M.diff_since(run, found, head, done, context)
     end)
   )
 end
