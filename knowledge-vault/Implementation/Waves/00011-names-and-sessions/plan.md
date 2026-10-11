@@ -20,6 +20,8 @@ landed_at:
 
 **Revised 2026-10-11 with the user's round-1 answers** (*The user's answers — round 1*, below): T45 is planned as the `gf` fix under the orchestrator's assumption A112 and waits only for T44's merge; T46 waits for round 2 (R1–R3) and the manual checks M5–M8. D51 is the user's decision. The round-1 questions are kept as they were asked.
 
+**Revised again 2026-10-11 with the user's round-2 answers and the orchestrator's rulings** (*The user's answers — round 2*, *Round 3*, *The orchestrator's rulings*): `\cs` is aineo's own list over `claude agents --json`, refused on text by the cursor and on a session running elsewhere. T45 goes after T44 (A118); T46 after the MVP review and the user's M7 and M8 (A114).
+
 ## The user's requests — 2026-10-11, verbatim
 
 "check the tasks below, plan them while the other agents works, we will implement them after you are finished."
@@ -66,7 +68,7 @@ On `origin/dev`, Enter opens every name tried, in both sections. The one failure
 | packet | tasks | type / model | files | schema? | dependency change? | decision open? | task-line marks |
 |---|---|---|---|---|---|---|---|
 | T45 | T45 | `neovim-lua-developer` / sonnet | `lua/aineo/changes/init.lua` (the pane's buffer-local keys), a new file in `lua/aineo/changes/` if the open needs one; a new `tests/test_changes_open_file.lua`, and `tests/test_entry_changes.lua` for the layout case; `doc/aineo.txt` › *aineo-changes* (the paragraph on Enter) | no | no | none: A112 (U1), O5 (a), O6 (a) | held |
-| T46 | T46 | `neovim-claude-code-integrator` / sonnet | `plugin/aineo.lua` (`SUBCOMMANDS`, `ACTIONS`, `PREFIX_KEYS`, the new action); `lua/aineo/claude/` (whether the prompt shows text, beside `readiness.lua`'s reading of the input box; a new file if it is a concern of its own, exported through `init.lua`); `lua/aineo/health.lua` (its prefix-key list, line 303's table); a new `tests/test_entry_sessions.lua`; the suites that list the subcommands, the `<Plug>` mappings or the prefix keys where a pin moves (`tests/test_plugin.lua`, `tests/test_entry.lua`, `tests/test_entry_prefix.lua`, `tests/test_health.lua`); `doc/aineo.txt` › *aineo* (the introduction's paragraph on the prefix keys), *aineo-commands*, *aineo-mappings* (with *aineo-keys*) | no | no | R1–R3 (the user), M5–M8, then O3, O8 | held |
+| T46 | T46 | `neovim-claude-code-integrator` / sonnet | `plugin/aineo.lua` (`SUBCOMMANDS`, `ACTIONS`, `PREFIX_KEYS`, the new action and its `vim.ui.select`); `lua/aineo/claude/` (the list read from `claude agents --json`, and whether the prompt shows text, beside `readiness.lua`; new files for either, exported through `init.lua`); `lua/aineo/health.lua` (its prefix-key table); `tests/helpers/fake_claude.lua` (its `agents --json` answer, *Round 3*); a new `tests/test_entry_sessions.lua` and `tests/test_claude_*.lua` for the Claude home's parts; the suites that pin the subcommands, the `<Plug>` mappings or the prefix keys where a pin moves (`tests/test_plugin.lua`, `tests/test_entry.lua`, `tests/test_entry_prefix.lua`, `tests/test_health.lua`); `doc/aineo.txt` › *aineo* (the introduction's paragraph on the prefix keys), *aineo-commands*, *aineo-mappings* (with *aineo-keys*) | no | no | none once O9 is ruled; M7 and M8 are the user's, before dispatch | held |
 
 **Rule 1, dependencies.** T45 rests on T44: both change `lua/aineo/changes/init.lua`, and a `gf` written before T43 would read entries T43 reshapes (a commit's files, the filter line). T46 rests on nothing open. ✓
 **Rule 2, files.** T45 shares `lua/aineo/changes/init.lua` and *aineo-changes* with T43 and T44, so it waits for T44's merge; a brief re-check against that `dev` is a dated amendment. T46 shares no code file with T43, T44 or T45. It shares `doc/aineo.txt`, under rule 2's section exception: T46 edits only the introduction's paragraph that begins `Every command sits behind one prefix key`, section 4 *aineo-commands* and section 5 *aineo-mappings*; T43 and T44 edit *aineo-panes*, *aineo-changes* (both in section 3) and section 11 *aineo-limits*. If T46 runs beside T44, it merge-checks against T44's head and runs `tests/test_doc.lua` on the merged file before pushing. ✓
@@ -193,6 +195,35 @@ The recommendation is (a) each.
 - **M7** (R1 (b)) — in a shell, `claude agents --json --cwd <that folder>`: does it print at once, start nothing (`claude daemon status` before and after), and list aineo's own interactive session with its `sessionId`?
 - **M8** (R2 (a)) — with the grey example showing, press `\c` and look where the terminal cursor sits: right after `❯`, before the grey text?
 
+## The user's answers — round 2, 2026-10-11
+
+Verbatim, from the orchestrator's record of the `AskUserQuestion` on R1–R3:
+
+- **R1** — Q: "For \cs, Claude Code 2.1.296 offers two real session lists. One is its own /resume picker: this folder's sessions, running and past, with Ctrl+W to widen it to the repo's worktrees and Ctrl+A to every project. The other is `claude agents --json`, a list of live sessions only, made for session pickers. What should \cs show?" — A: "aineo's own list" (option text: "An aineo picker over `claude agents --json`. Adds a second claude run whose side effects are unmeasured, so after the MVP review.")
+- **R2** — Q: "You chose 'refuse when text shows'. Claude's grey hint text isn't a fixed string, so aineo can't tell it from a draft by reading the screen. What it can check: on an empty prompt the cursor sits right after ❯, and with a draft it sits at the end of your text. How should \cs decide?" — A: "By the cursor (Recommended)" (option text: "Refuse unless the input box is one line with the cursor right after ❯. The one miss: a draft whose cursor you moved back to its start. The implementer first checks the cursor can be read, and stops if not.")
+- **R3** — Q: "aineo's own \cs list will read `claude agents --json`, which also lists sessions running in Claude Code's background service. If you pick one, resuming it in aineo's terminal would pull it away from wherever it is running. What should \cs do with such a pick?" — A: "List, refuse switch (Recommended)" (option text: "Show it in the list marked as running elsewhere; picking it says why it can't be switched to. Nothing is moved behind your back.")
+
+All three are the user's decisions, recorded in D49 and D51 by dated notes.
+
+## Round 3 — `\cs` as aineo's own list (T46, for R1 (b), R2 (a), R3 (a))
+
+**What `\cs` does.** When Claude Code is ready and no claim holds (A120), aineo runs `claude.cmd` followed by `agents --json --cwd <folder>`, `<folder>` the working directory Claude Code started in, bounded in time as the health check bounds `claude.cmd --version` (`lua/aineo/health.lua`, `check_claude_version()`), never blocking the editor. It shows the entries that carry a `sessionId` in `vim.ui.select`, one row each: the name (or the start of the id), interactive or background, and the status or state. Two marks: **this terminal**, on the session aineo's own terminal is on (`session_id()`), and **running elsewhere**, on every other entry whose process is alive (it has a `pid`). On a pick:
+- this terminal: nothing is written, and the user is told it is the session already shown;
+- running elsewhere: nothing is written, and the user is told it runs in another terminal or in Claude Code's background service, which a switch would pull it away from (R3 (a));
+- any other: the cursor check (R2 (a)) runs, and if the prompt shows no text aineo types `/resume <sessionId>` and Enter, the switch Claude Code makes and aineo already follows (D36–D38); D51 makes it the next resume. Then the cursor goes to Claude's window in Terminal mode (A121).
+
+A refusal before or at the pick leaves the cursor where it was, with the message (A121). Not ready, a failed or timed-out `claude agents --json`, output that is not a JSON array, and an empty list each say so and switch nothing.
+
+**The consequence of R1 (b) with R3 (a), for the orchestrator to put to the user if it matters.** `claude agents --json` lists "every live session, plus background sessions that are still working or blocked even when their process has exited" (P8). Every live session has a process somewhere, so under R3 (a) the rows a pick can switch to are only the background sessions whose process has exited: blocked or working ones, and, with `--all`, finished ones. An interactive session open in another terminal is listed and always refused. The list is mainly a view of what runs in the folder; switching to it is the exception. M7 measures what the list holds on the user's own machine.
+
+**Folder or global, and finished sessions.** Two flags decide it: `--cwd <folder>` limits the list to sessions started under the folder (the worktrees under `.claude/worktrees/` included, `agent-view.md`); `--all` adds finished background sessions. Recommended (O9 (a)): `--cwd <folder>` always, and `--all` always — the finished background sessions are exactly the ones a pick can switch to under R3. No global form now: `:Aineo sessions` takes no word, and a global list waits until the user asks for it.
+
+**How `claude.cmd` is extended.** `claude.cmd` is the user's command (D13, default `{ "claude" }`), and aineo already runs it with one word added for the health check. `agent-view.md` says `--add-dir` and `--mcp-config` placed before `agents` make `claude agents --json` fail with `unknown option`: a `claude.cmd` holding them makes `\cs` say the list could not be read, in the command's own words.
+
+**How the fake answers `agents --json`.** `tests/helpers/fake_claude.lua` is taught one more argv: given `agents --json`, it records its argv as its first record line does today, prints the JSON array held in the file `AINEO_FAKE_CLAUDE_AGENTS` names (or `[]` when unset), and exits 0 — or, with `AINEO_FAKE_CLAUDE_AGENTS_EXIT` set, exits with that code and prints nothing. It neither draws a screen nor reads a key in that form. A test writes the array, stubs `vim.ui.select` in the child to pick a given row, and reads the interactive fake's record for `/resume <id>` and `\r`; the refusals read that nothing was received and what the user was told.
+
+**The manual checks R1 (b) needs, before dispatch.** M7 and M8 stand (*Round 2*'s list): M7 — `claude agents --json --cwd <folder>` (and with `--all`): does it print at once, start nothing (`claude daemon status` before and after), and list aineo's own interactive session with its `sessionId` and `pid`? Paste its output with the names blanked. M8 — where the terminal cursor sits on an empty prompt showing the grey example. **M5 and M6 are no longer needed**: they were for the `/resume` picker.
+
 ## Decisions for the orchestrator
 
 Numbered once, here. The recommendation is (a). The briefs are written for it.
@@ -204,7 +235,22 @@ Numbered once, here. The recommendation is (a). The briefs are written for it.
 - **O5 — T45's class.** (a) Regular, under proposed D50, if U1 is (a). *(Ruled by the orchestrator, 2026-10-11: A112, (a), `gf` alone.)* (b) A small fix, only if U1 is (b) and the user calls it one.
 - **O6 — T45's keys.** (a) `gf` alone, buffer-local in the files window. (b) `gf`, `gF` and `<C-w>f`.
 - **O8 — When T46 goes in** (the request's "decide whether it goes in now or after the MVP review"; the orchestrator rules it). (a) Under R1 (a): now, after M5, M6 and M8 — a small packet in the composition root and the Claude home, disjoint from wave 10's code, that adds no process and moves no session out of aineo's terminal. Under R1 (b): after the MVP review, since it adds a second `claude` run whose side effects M7 has to show first. (b) After the MVP review whatever R1 says: the MVP is reviewed as built, and `/resume` typed by hand does the same meanwhile.
+- **O9 — Folder or global, and finished sessions** (*Round 3*). (a) `--cwd <folder>` and `--all` always; no global form until the user asks. (b) `--cwd` alone. (c) A global form, `:Aineo sessions all`, beside the folder's.
 - **O7 — Models.** (a) Implementers on Sonnet, the attack review on Opus, tests and records in one `records-reviewer` on Sonnet, as the orchestrator instructed this planning and as wave 10 ruled (A104). (b) Opus implementers.
+
+## The orchestrator's rulings — 2026-10-11
+
+Each is the orchestrator's assumption, reported to the user with the wave; none is the user's decision, and none is a D row.
+
+- **A114 (O8)** — T46 goes in after the MVP review, and after the user's M7 and M8. The option the user chose in R1 said so.
+- **A118 (O1)** — T45 after T44 merges; T46 as A114.
+- **A119 (O2)** — T46 on `neovim-claude-code-integrator`.
+- **A120 (O3)** — Under a claim of another session (D42), `\cs` refuses as Send does.
+- **A121 (O4)** — After a pick that switches, the cursor goes to Claude's window in Terminal mode. A refusal leaves it where it was, with the message.
+- **A122 (O6)** — `gf` alone.
+- **A123 (O7)** — Implementers on Sonnet; the attack review on Opus; tests and records in one `records-reviewer` on Sonnet.
+
+O5 was ruled earlier as A112. **O9** (*Round 3*: `--cwd` and `--all` always, no global form) is not yet ruled; T46's brief is written for its (a).
 
 ## Assumptions to report to the user
 
@@ -218,7 +264,7 @@ The planning's, built as written unless the orchestrator rules otherwise. None i
 
 ## How a test proves the key is sent, with the fake `claude` only
 
-The fake (`tests/helpers/fake_claude.lua`) appends every chunk of input it reads to its record file as `{ "received": "<bytes>" }`, in raw mode, so each key arrives as its bytes. A test starts aineo on the fake in mode `ready`, presses `\cs` (`entry.press`), and waits until the record's `received` entries after the start equal exactly `/resume` then `\r` (R1 (a)). The refusals: the fake in mode `draft` (Claude Code's recorded two-line draft, its cursor at the draft's end) and in `trust` (the trust dialog), and stopped or exited (`exit` mode, `jobstop`) — no `received` entry follows the press, and the user is told why. The empty prompt with grey text is the fake's `ready` mode, which replays Claude Code's recorded startup, placeholder and cursor included (`startup-2.1.281.bytes`). The pick itself is not the fake's to simulate; the switch is: the fake answers `/resume <id>` and Enter with `SessionEnd` and `SessionStart` (its `AINEO_FAKE_CLAUDE_HOOKS`), which the suites already use to check D37, D38 and so D51.
+The fake is taught `agents --json` (*Round 3*): it prints the array a test writes to the file `AINEO_FAKE_CLAUDE_AGENTS` names, and records its argv. A test starts aineo on the interactive fake in mode `ready`, writes an array holding a switchable entry (background, no `pid`), one running elsewhere (with a `pid`) and aineo's own session, stubs `vim.ui.select` in the child to pick a given row, presses `\cs` (`entry.press`), and reads the interactive fake's record (`{ "received": … }`, raw mode): exactly `/resume <sessionId>` then `\r` for the switchable pick; nothing for a pick running elsewhere, for aineo's own row, on `draft` (the recorded two-line draft, the cursor at its end), on `trust`, and once exited — each with what the user was told. The `agents --json` fake's own record shows `--cwd <folder>` and `--all` in its argv. The switch itself is the fake's `/resume <id>` with `SessionEnd` and `SessionStart` (`AINEO_FAKE_CLAUDE_HOOKS`), which the suites already use for D37 and D38, and so for D51.
 
 ## Verification mutants
 
@@ -231,17 +277,17 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 4. A deleted file is opened: `gf` on a `D` line makes an empty buffer instead of telling.
 5. The file is opened in the pane's window and stays there: the pane's window no longer shows `aineo://changes-files`.
 
-**T46** (on `tests/test_entry_sessions.lua`, then `tests/test_plugin.lua`):
-1. No readiness check: on the fake in `trust`, `\cs` writes keys.
-2. No text check: on the fake in `draft`, `\cs` writes `/resume`.
-3. No Enter: the record holds `/resume` without `\r`.
-4. `\cs` mapped over a user's own global `\cs`.
+**T46** (on `tests/test_entry_sessions.lua`, then `tests/test_claude_*.lua` and `tests/test_plugin.lua`):
+1. No readiness check: on the fake in `trust`, a pick writes `/resume`.
+2. No text check: on the fake in `draft`, a switchable pick writes `/resume`.
+3. No running-elsewhere refusal: a pick of an entry with a `pid` writes `/resume <its id>`.
+4. `--cwd` dropped from the `agents --json` argv: the fake's argv record lacks `--cwd <folder>`.
 5. `sessions` left out of `SUBCOMMANDS`: `:Aineo sessions` gives the usage message.
 
 ## Briefs
 
-- `brief-t45-open-file.md` — T45, after T44's merge (A112).
-- `brief-t46-sessions.md` — T46, after R1–R3 and M5–M8 (written for R1 (a), R2 (a)).
+- `brief-t45-open-file.md` — T45, after T44's merge (A112, A118).
+- `brief-t46-sessions.md` — T46, after the MVP review and the user's M7 and M8 (A114); written for R1 (b), R2 (a), R3 (a) and O9 (a).
 
 ## Landed
 

@@ -8,7 +8,7 @@ You are dispatched by the orchestrator to implement **one packet** of `knowledge
 
 The task, verbatim from the task list:
 
-> | T45 | A file whose name holds a space or an apostrophe, listed in the changes pane's files window, opens from it (C15; D19, D34): on `origin/dev` `e6a0295`, Enter shows the diff of such a name, in the editor's own section and in another worktree's, and Vim's own `gf` on its line takes the name only up to the first space or apostrophe and fails (E447) (`Implementation/Waves/00011-names-and-sessions/evidence/w11-probes.txt`, P1–P3); which of the two failed for the user is the user's answer U1 | T44 | planned — wave 11, after T44 *(2026-10-11: the user does not remember the key (U1); planned as a buffer-local `gf` in the files window that opens the line's file by its path, under the orchestrator's assumption A112 and proposed D50, with a line in the help saying Enter and `gf` take any name)* |
+> | T45 | A file whose name holds a space or an apostrophe, listed in the changes pane's files window, opens from it (C15; D19, D34): on `origin/dev` `e6a0295`, Enter shows the diff of such a name, in the editor's own section and in another worktree's, and Vim's own `gf` on its line takes the name only up to the first space or apostrophe and fails (E447) (`Implementation/Waves/00011-names-and-sessions/evidence/w11-probes.txt`, P1–P3); which of the two failed for the user is the user's answer U1 | T44 | planned — wave 11, after T44 (A118) *(2026-10-11: the user does not remember the key (U1); planned as a buffer-local `gf` in the files window that opens the line's file by its path, under the orchestrator's assumption A112 and proposed D50, with a line in the help saying Enter and `gf` take any name)* |
 
 It rests on: proposed **D50** under **A112** (`plan.md` › U1 (a), *The user's answers — round 1*); D19 (the files window, Enter); D34 (no key opens another worktree's file); D7 and C9 (a file opened from one of the layout's windows moves to the file column); D47 (T43's filter, whose lines `gf` must read); C15 (the changes home); D26, D29.
 
@@ -39,7 +39,7 @@ Read first: the v1 plan note's D7, D19, D34, D46, D47, C9, C15; `plan.md` in thi
 
 - **Branch:** `feature/t45-open-file` from `origin/dev`.
 - **Class:** regular.
-- **Model:** `sonnet`, as the orchestrator dispatches it (`plan.md` › O7).
+- **Model:** `sonnet` (A123).
 - **Resources:** `impl_t45_open_file` — pass it to `.claude/scripts/prepare-worktree.sh`.
 - **You may touch:** `lua/aineo/changes/init.lua` (the pane's buffer-local keys), a new file in `lua/aineo/changes/` if opening a file is a concern of its own; a new `tests/test_changes_open_file.lua`; `tests/test_entry_changes.lua` for behaviour 2 through the layout; `doc/aineo.txt` › *aineo-changes*, the paragraph on what Enter does, where `gf` is added; your session note. Correct in the same commit what the change makes false there, and say in your report what you corrected.
 - **You must not touch:** `lua/aineo/git/`, `lua/aineo/layout/`, `plugin/aineo.lua`, every other file under `lua/`, `scripts/`, `tests/helpers/`; `tests/test_doc.lua` (run it); the plan notes, the project note and the task list (write a `## Task lines` section in your session note); `.claude/`, `.githooks/`, `CLAUDE.md`, `.worktreeinclude`, `.gitignore`.
@@ -59,3 +59,12 @@ One test/implementation pair: one buffer-local key and its messages, about six c
 ## Report
 
 In your definition's shape, to `<scratchpad>/t45-report-packet.md`. Open the pull request into `dev` before you report, with every verification claim a reviewer can re-measure and the whole suite's counts. The orchestrator's verification runs `plan.md`'s five T45 mutants: name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-11
+
+`plan.md` › *The orchestrator's rulings*. Each is the orchestrator's assumption, to be recorded in the session note and the PR body as such, never as the user's decision:
+
+- **A112 (U1, O5):** T45 is the `gf` fix, a regular packet under proposed D50; the user did not name the key.
+- **A118 (O1):** T45 is dispatched after T44 merges.
+- **A122 (O6):** `gf` alone.
+- **A123 (O7):** Sonnet implementer; the attack review on Opus; tests and records in one Sonnet `records-reviewer`.
