@@ -429,7 +429,9 @@ end
 
 --- Whether the Claude Code aineo started last has been confirmed: it has
 --- been ready for input once (`aineo.claude`'s `on_session_ready`). Until
---- then the panes stay on the session they followed before it, and no
+--- then the panes stay on the session they followed before it, except that
+--- a hand-over at a resume with no conversation moves panes that showed the
+--- dead session to the new one (`hand_over_dead_session()`); no other
 --- switch it tells is followed.
 local start_confirmed = false
 
@@ -550,9 +552,11 @@ local claude_terminal = nil
 --- and is not followed now. Every other switch goes to
 --- `follow_switch_once_confirmed()`.
 ---
---- The note is the new id, not a flag: a start in another directory is
---- told with the source `startup` too, and a note left by a handler that
---- raised before its switch was told never names that start's new id.
+--- The note is the new id, not a flag, and each start has its own: a
+--- handler that raised before its switch was told leaves the note set, and
+--- a later switch of the same start told with the source `startup` — a
+--- session hook relayed to this editor, say — then hands nothing over
+--- unless its id is that new session's.
 ---
 ---@param working_directory string
 ---@return { on_terminal_replaced: fun(terminal: integer), on_session_switched: fun(id: string, source: string?, left: string) }
@@ -585,17 +589,17 @@ end
 --- new terminal in place of one whose resume found no conversation, that
 --- terminal becomes `claude_terminal` and the layout's Claude terminal,
 --- and the new session is handed what aineo kept for the dead one at once
---- (`replacement_callbacks()`). The panes follow the
---- session the start is on once Claude Code is first ready for input — the
---- new session's that takes the place of a resume with no conversation,
---- which they show from the hand-over on when they showed the dead one —
---- and then each session Claude Code switches to; not before, and nothing
---- for a start that never becomes ready (`follow_confirmed_start()`,
---- `follow_switch_once_confirmed()`). Once a start has
---- succeeded, the changes home is told the session began there
---- (`aineo.changes`'s `begin_session()`, which heeds its first call alone),
---- in Claude Code's working directory, with the layout's `show_diff()` to
---- show its diffs in the middle column.
+--- (`replacement_callbacks()`). The panes follow the session the start is
+--- on once Claude Code is first ready for input — the new session's that
+--- takes the place of a resume with no conversation, which they show from
+--- the hand-over on when they showed the dead one — and then each session
+--- Claude Code switches to; not before, and nothing for a start that never
+--- becomes ready (`follow_confirmed_start()`,
+--- `follow_switch_once_confirmed()`). Once a start has succeeded, the
+--- changes home is told the session began there (`aineo.changes`'s
+--- `begin_session()`, which heeds its first call alone), in Claude Code's
+--- working directory, with the layout's `show_diff()` to show its diffs in
+--- the middle column.
 ---
 ---@param config table the resolved configuration
 ---@return integer terminal
