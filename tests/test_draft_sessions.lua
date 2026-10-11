@@ -2096,7 +2096,11 @@ T['a hand-over']['of a session whose draft waits to be put into Input while text
   vim.wait(PATIENCE_MS, function()
     return child.lua_get(RETRIES) == 0
   end, 10)
-  eq(input_lines(), { 'Dead' })
+  eq({
+    shown = input_lines(),
+    dead = read_text(session_draft_file(state, 'session-dead')),
+    new = read_text(session_draft_file(state, 'session-new')),
+  }, { shown = { 'Dead' }, new = 'Dead\n' })
 end
 
 T['a hand-over']["of a session whose file Input's text is kept in until a waiting swap lands keeps an edit made meanwhile in the new session's draft"] = function()
@@ -2182,7 +2186,7 @@ T['a hand-over']['refuses an id that is not a string, naming it, and moves nothi
   local refusal = child.lua_get(([[(function()
     local handed, failure = pcall(require('aineo.draft').hand_over_draft_session, %s, %s)
     return { handed = handed, named = tostring(failure):find(%q, 1, true) ~= nil }
-  end)()]]):format(from, to, named))
+  end)()]]):format(from, to, named .. ': expected string'))
 
   eq({
     refusal = refusal,

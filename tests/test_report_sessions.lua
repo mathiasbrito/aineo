@@ -1200,7 +1200,11 @@ T['a hand-over']['of a session whose records wait to be shown while textlock hol
   vim.wait(PATIENCE_MS, function()
     return child.lua_get(RETRIES) == 0
   end, 10)
-  eq(report_editor.lines(child), { '09:00 [done] Task — Dead' })
+  eq({
+    lines = report_editor.lines(child),
+    dead = summaries_in(session_records_file(state, 'session-dead')),
+    new = summaries_in(session_records_file(state, 'session-new')),
+  }, { lines = { '09:00 [done] Task — Dead' }, new = { 'Dead' } })
 end
 
 T['a hand-over']['told before the environment is made once it comes, and the next report is kept for the new session'] = function()
@@ -1244,7 +1248,7 @@ T['a hand-over']['refuses an id that is not a string, naming it, and moves nothi
   local refusal = child.lua_get(([[(function()
     local handed, failure = pcall(require('aineo.report').hand_over_report_session, %s, %s)
     return { handed = handed, named = tostring(failure):find(%q, 1, true) ~= nil }
-  end)()]]):format(from, to, named))
+  end)()]]):format(from, to, named .. ': expected string'))
 
   eq({
     refusal = refusal,
@@ -1294,6 +1298,24 @@ T['a hand-over']["of a session followed as a claim's makes the new session follo
     lines = { '09:00 [done] Task — First', '09:00 [done] Task — Second' },
     cursor = { 2, 4 },
   })
+end
+
+T['a hand-over']["of a session followed as a claim's leaves the directory's records to the next follow"] = function()
+  local state = fixture.directory('report-sessions-hand-over-claim-directory')
+  plant_records(directory_records_file(state), { 'Directory' })
+  plant_records(session_records_file(state, 'session-dead'), { 'Dead' })
+  start_editor(state)
+  follow_as_claim('session-dead')
+  hand_over('session-dead', 'session-new')
+  follow('session-new')
+
+  follow('session-next')
+
+  eq({
+    lines = report_editor.lines(child),
+    directory = summaries_in(directory_records_file(state)),
+    next = summaries_in(session_records_file(state, 'session-next')),
+  }, { lines = { '09:00 [done] Task — Directory' }, next = { 'Directory' } })
 end
 
 --- The Lua that makes another editor hand the same dead session over to its

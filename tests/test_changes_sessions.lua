@@ -2010,7 +2010,7 @@ T['a hand-over']['refuses an id that is not a string, naming it, and moves nothi
         state_directory = state,
       })
       return { handed = handed, named = tostring(failure):find(%q, 1, true) ~= nil }
-    end)(...)]]):format(from, to, named),
+    end)(...)]]):format(from, to, named .. ': expected string'),
     { state }
   )
 
