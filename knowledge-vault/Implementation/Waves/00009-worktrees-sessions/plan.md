@@ -1,13 +1,14 @@
 ---
 wave: 00009
-status: claimed
+status: landed
 rolling: true
 planned_by: the orchestrator's planning agent (Claude, Opus 5.5) for Mathias Santos de Brito — host Macbook-Mathias
 planned_at: 2026-10-06 23:39 CEST
 base: f98bd9d
 claimed_by: Macbook-Mathias (platform UUID prefix CF989BF4), session 55110cd0-9e62-4330-a618-b45ff2fce2aa
 claimed_at: 2026-10-07 06:44 CEST
-landed_at:
+landed_at: 2026-10-11
+pull_requests: "#135, #136, #137, #142, #143, #146, #150, #152, #154"
 ---
 
 # Wave 9 — worktrees and session switches
@@ -745,3 +746,101 @@ Nothing above *Landed* is edited after dispatch (`Implementation/Waves/CLAUDE.md
 - **A73 — T42 ran with no wave folder and no brief review**, to keep the cost low, as a small fix of the user's prompt-driven waves (D30): the user's prompt was the brief, with D46 and the T42 row written by the packet.
 - **A74 — T42's move answers the selection** (D46's "when selecting a file/commit"; the orchestrator's ruling at the fix round). The cursor moves only while it is still in the window Enter was pressed in; when the user has left that window before the diff is shown, the diff is shown and the cursor and the mode stay where the user is, Terminal mode in Claude's terminal included. Measured first: without the check a user who had moved to a terminal in Terminal mode ended in the diff, in Normal mode.
 - **A75 — No re-measure after stage 2's fix rounds** (the orchestrator's cost recommendation of 2026-10-08, applied alongside the user's "do 5": one fix round, then the orchestrator's own verification, no re-measure agents). The mechanisms the rounds added — T38's identity check, V3 and V1, T39's variant 1b — were measured by their authors and by the orchestrator's suite and mutants, and attacked by no reviewer after the round.
+
+### Stage 3 — T40 and T41, merged 2026-10-10 and 2026-10-11, and the test-helper fix
+
+Written 2026-10-11 by wave 9's closing knowledge pass, on `dev` `536a694`. Both packets were dispatched after their briefs were amended at dispatch and ruled on (below), each regular (D26), under the reviewers line of A80 and A89: attack, tests and records reviews, one fix round, then the orchestrator's own verification, no re-measure (A75). Every time below is GitHub's for a pull request, in UTC and CEST. Each packet's session note holds its rounds in full, with every mutant and its commit table; this section is their record against the plan, and the stage's assumptions to report to the user close it.
+
+- **Before dispatch.** T40's dispatch amendment (PR #149, `619f541`, `242d172`) and the orchestrator's rulings A76–A82 (`a43dc48`) merged on 2026-10-10, and T40 was dispatched on that `dev`. The test-helper fix (PR #152) merged next, then T41's dispatch amendment and rulings A86–A89 (PR #153, `01522d2`, `a9c3b5f`), and T41 was dispatched on `a9c3b5f`. T41's dispatch amendment applied the fifteen findings of its brief review (T41-1 to T41-15); the review itself was not copied into the vault.
+- **The baseline and the end.** `dev` `a317287` held 2325 cases in 68 groups, with one E739 from `tests/helpers/fixture.lua` on a fresh worktree's first run; the file alone, 61 cases, passed. The orchestrator's verifications ran **2422** (T40, 73 groups), **2427** (the helper fix, 73 groups) and **2494** (T41, 74 groups), each `Fails (0)`. T40 added 97 cases (80 in the packet, 17 in its fix round), the helper fix 5, and T41 67 net (75 in the packet; its fix round added 4 and deleted 12, 2502 before it).
+- **Two releases.** v0.2.18 for T40 (PR #151, `main` `e2d4252`, 2026-10-10 03:18 UTC; 05:18 CEST) and v0.2.19 for T41 and the helper fix (PR #155, `main` `befe50b`, 2026-10-11 09:41 UTC; 11:41 CEST). The helper fix changes nothing outside `tests/` and has no release of its own.
+- **An interruption.** The attack and tests reviews of PR #154 were cut off mid-run on the evening of 2026-10-10 by an API usage limit and resumed on 2026-10-11, after it; the records review had finished. No figure of the limit is recorded here.
+
+#### T40 — PR #150, merged by rebase on 2026-10-10 (03:18 UTC; 05:18 CEST)
+
+`1a7eb83` … `0ed6681` (4 commits). Session note: [[Sessions/2026-10-10 — T40 Lost editor]].
+- **The packet** (`neovim-claude-code-integrator`, head `bbc6e67`). A report from a Claude Code whose editor has quit reaches, in this order, a Neovim that claimed the report's session, the Neovim that started Claude Code, a running aineo Neovim that shows the session (the more recently used first), or the session's Report records on disk, and the tool tells Claude which (D42, D43). Each aineo Neovim writes an entry for itself at the confirmation of a start and at a switch; `:Aineo claim [id]` claims a session and `:Aineo claim` returns; the hook relay writes the session's process record itself, under a lock, before the detached deliverer starts, and tells every follower of the session left; `\s` refuses while this Neovim follows a session its terminal does not run. New modules in `lua/aineo/mcp/` (`kept_files`, `editors`, `processes`, `delivery`) and the help's fourteen places. 80 cases; plan mutants 1–39 and 41–49 and the author's own, all killed by assertion; whole suite 2405 (baseline 2325).
+- **The dispatch amendment** (PR #149) brought the brief to `a317287`, where T38, T39 and T42 had merged: T40 runs alone with T41 after it, T39's notes for the entry write and the hold, the facts and the help's places re-read, mutant 49 (the `v:exiting` guard) added, the reviewers line. The orchestrator's rulings (A76–A82, in the brief) settled its eight questions; T40-21 was closed by reading D43's chosen option in full.
+- **Three reviews** on `bbc6e67`: attack by `neovim-claude-code-reviewer`, test integrity by `reviewer`, records by `records-reviewer` (Sonnet).
+  - *Attack:* a listed editor or a claimant that follows no session took a report of any session into its directory records (1, high); a Neovim that is not this aineo ended the search with a tool error (2); a report of this Neovim's own Claude Code, kept while a claim of another session holds, stranded the directory's records (3); a hook stalled past the lock's 1 s lost the other hook's write (4); a told switch waited without bound on a follower at a hit-enter prompt (5); letting go of a claim could remove a newer claimant's, in a window of microseconds (6). T40-5 to T40-9, T40-18 and T39's `v:exiting` held live.
+  - *Test integrity:* the `served` check of the exit-guard case could not fail when the request lands before `qall!` (1, mutant 49 green in that order); two cases raced the claim file (2); T40-18 on the report path, A77, the changes pane after a claim and a return, a killed starting editor, A79, three named rules and a session followed first as a claim and then as the own were unpinned (3–9); mutant L1 rested on a fixed 400 ms wait that proves a negative (13). The plan's first three mutants and mutant 40 were pinned by assertion.
+  - *Records:* A77's "not ready yet" branch had no test (1); two help sentences said the opposite of the code or named one of its two reasons (2, 3); the session note promised literal edits it did not keep (4); the first commit and the PR body did not name the orchestrator's departures (5).
+- **The rulings** (A83–A85, below): until the directory's records have moved into the own session, a report of the own Claude Code that A23 keeps while a claim holds is kept with them, unshown; the claim-release window is named in LIMITS and no lock is built; A79's line stays in T40's own LIMITS subsection.
+- **Fix round** (one), by a fresh `neovim-claude-code-integrator`: an exact-session take at every listed editor and claimant, the starting editor's `{ at_start = true }` excepted, and a Neovim that is not this aineo declining so the search goes on; A83; the lock holding its holder's pid, stale only when that pid has ended; every follower notified before any answer is waited for; the pins for the tests review's findings, adopted from its probes; L1's wait replaced by a named bound; the help's sentences and the session note's mutant lines. 17 new cases; 20 mutants killed by assertion, one timing-only delay surviving as intended; whole suite 2422.
+- **The orchestrator's verification** of `19dc971` (the PR rebased on `dev` `a43dc48`): whole suite **2422, `Fails (0)`**, 5:00; lint clean; four literal mutants, each killed by assertion: reports accepted for any session, a live holder's lock taken, the exit guard dropped from the entry write (mutant 49), and `keep_with_directory` ignored.
+
+#### The test-helper fix — PR #152, merged by rebase on 2026-10-10 (07:15 UTC; 09:15 CEST)
+
+`81846cb` (1 commit). Session note: [[Sessions/2026-10-10-b — Fixture mkdir race]]. A test-only packet (D28) the orchestrator dispatched under A81 after T40, by `neovim-lua-developer`: `fixture.make_directory()` retries a `mkdir` that raised E739 although another Neovim had made the directory, and `tests/helpers/fixture.lua` and `tests/helpers/make.lua` use it. 5 cases in `tests/test_runner_fixtures.lua`, four seen red; six mutants killed by assertion. The packet ran the 66 test files that load the helpers (2242 cases), where `tests/test_health.lua`'s Ctrl-C timing case failed once under load and passed alone, twice. **The orchestrator reviewed the diff itself, with no review agent (A92).** Its whole suite: 2427 cases, `Fails (0)`, 4:56; the mutant with the retry removed, killed by 4 failures. Released in v0.2.19.
+
+#### T41 — PR #154, merged by rebase on 2026-10-11 (09:41 UTC; 11:41 CEST)
+
+`445b116` … `536a694` (13 commits). Session note: [[Sessions/2026-10-10 — T41 Dead session handover]].
+- **The packet** (`neovim-lua-developer`, head `5ea7867`). When a resume finds no conversation and Claude Code starts a fresh session in its place (T19's fallback), the fresh session takes over the dead one's Report records, Input draft, and changes base with its save marks, and a pane that showed the dead session shows the same under the fresh one (D45, D38–D41): `hand_over_*_session()` in the three homes, the hand-over at the fallback in `plugin/aineo.lua`, seven help places. 75 cases, 32 of them seen red; plan mutants 1–14 killed by assertion; whole suite 2502.
+- **The dispatch amendment** (PR #153) applied the brief review's fifteen findings (among them the A63 query on the dead start's own directory, the boundary, the hand-over placed before T39's drop and T40's hold, the held hand-over, three more help places) and set how T41 meets T40's records, claims and A83. The orchestrator's rulings A86–A89 settled its questions; the task row's T40 dependency was left to the change that marks T41 done.
+- **Three reviews** on `5ea7867`: attack by `neovim-lua-reviewer` (T41 changes no file of the Claude Code integration), test integrity by `reviewer`, records by `records-reviewer`.
+  - *Attack:* with a claim of another session held (A64), a report of the fresh session was kept with the directory's records unshown, then shown in an unrelated session's Report (1, medium); two editors handing over one dead id at the same moment could leave both fresh sessions sharing one file on APFS (2); a crash between link and unlink left a shared inode that later received another session's reports (3). The author's two readings past the brief found no failure, and the live scenarios held.
+  - *Test integrity:* the A64 case did not check that the claim survives (1); a hand-over made while the Report waits for `SafeState` was unpinned (2); A87's report half (3); each home's not-a-string row passed on `dev` (4); A63's query was unpinned to the dead start's directory (5). The restart-with-a-conversation case has no killer inside the packet, and the held hand-overs made after the directory's move are equivalent (information). Plan mutants 1–14 killed by assertion.
+  - *Records:* the help's *aineo-report-claims* item 4 said more than the code did (1); the PR body miscounted one file (2); a docstring T41 made false (3); the session note and PR body did not say whose each A is (4) or itemise the departures (5).
+- **The rulings** (A90, A91, below): a report for a session that already has its own records file is never kept with the directory's, one condition in T40's `receive_session_report()`; T41's hand-overs move by one rename after the `lstat` of the target.
+- **Fix round** (one), by the same author: A90 with the attack review's probe as an entry case; A91 in all three homes (`records.rename_records()` made public, `move_draft_by_rename()`, `kept.move_kept_base()` now the rename alone) and the twelve changes cases that pinned only the link's removed steps deleted; the five pins of the tests review; the docstrings; the help's item 4 ("when it kept any"); the counts and the readings in the PR body. 4 new cases, each seen red by assertion; the test-only pins each shown failing against its mutant; whole suite 2494.
+- **The orchestrator's verification** of `5a70be2` (the PR rebased on `dev` `a9c3b5f`): whole suite **2494, `Fails (0)`**, 5:15; lint clean; two mutants killed by assertion, A90's own-file check dropped and the claim always released (1 failure each, in `tests/test_entry_session_handover.lua`). The mutant that drops the `source == 'startup'` condition (attack probe P1) survives; it is equivalent in practice, since T35 reports the fallback in the same tick as the replacement, so no other switch can carry the fresh id first.
+
+### How stage 3 departed from what was dispatched
+
+- **T41 widened into T40's `receive_session_report()`** (`lua/aineo/report/init.lua`) by one condition, A90. The brief fenced T41 to the three homes, the composition root's fallback and the help; the ruling names the widening.
+- **Twelve changes cases deleted with A91.** They pinned the steps of link then unlink (links refused ×10, the unremovable dead file, the race with an unremovable new name), which the hand-over no longer takes. T36's directory moves keep link then unlink; their shared-file window on APFS, where two Neovims hand one directory file to their own sessions at the same moment, is named in LIMITS as an open limit, unfixed (A91).
+- **T40's A23 departs from D39's clause**, which D39's note names: a starting editor that follows another session refuses, and the report goes on (the orchestrator's ruling of 2026-10-07, T40-9).
+- **Four departures T40's author named:** the process record keeps every unpaired hook, to pair as `follow_switches()` does; A79's LIMITS line is in T40's own LIMITS subsection (A85); a claim by id gives the report home its environment, else a claimant whose layout never opened would refuse reports; `aineo.mcp` keeps its own copy of the session-id pattern, since it cannot require `aineo.claude`.
+- **Departures T41's author named:** the draft home's directory move was generalised as `move_draft()` and `move_draft_by_rename()`; `follow_changes_session()` copies its argument; the changes home's told-once flag moved from the session to the home; `lua/aineo/changes/kept.lua` gained the full move with every branch, nine more changes cases than the brief counted. A58 and A60 depart from the user's "Wait for the resume (Recommended)" and are reported to the user together.
+- **The reviewers line departs from orchestrate §6** (A80, A89): test integrity by `reviewer` rather than `neovim-lua-reviewer`, and no re-measure. Recording the cost rules in §6 for good is left to an `ai/` change.
+- **No re-measure after either fix round** (A75, A80): the mechanisms the rounds added were measured by their authors and by the orchestrator's suite and mutants, and attacked by no reviewer after the round.
+- **The helper fix had no review agent** (A92).
+
+### Records the reviews named false in dispatched files, left as dispatched
+
+The reviews of PRs #150 and #154 named no false record in a dispatched brief or in this plan; the brief reviews' corrections were made before dispatch (T40-1 to T40-23, T41-1 to T41-15). One gap stands: *Packets* and T41's brief name T38 and T39 as T41's dependencies, and T41 also depends on T40, whose `receive_session_report()` it widens (A90) and whose claims and A83 it meets (A64, A86). The task row in [[Planning/aineo — v1 agent console]] carries a dated note.
+
+### Assumptions to report to the user — T40, T41 and the helper fix
+
+*Assumptions to report to the user*, *— T40*, *— stage 1*, *— T41* and *— stage 2*, above, hold A1–A75. The orchestrator's rulings at the two dispatches and the two fix rounds, and one decision about review, bring these, numbered after them. Each is **the orchestrator's assumption under the user's instruction of 2026-10-06** ("assume your recommendations and report what they were after you finish"), built as written, never the user's answer and never a D row. A76–A82 and A86–A89 stand in the briefs' *The orchestrator's rulings*; they are listed here so the wave's list is whole.
+
+**T40's dispatch (A76–A82, in `brief-t40-lost-editor.md`):**
+- **A76 — A report reaching a starting editor that follows no session yet** is shown and kept in the working directory's records, which the session takes at the confirmation.
+- **A77 — `:Aineo claim` with no argument before the running start is confirmed** warns once that Claude Code is not ready yet and changes nothing; `:Aineo claim <id>` proceeds.
+- **A78 — The changes pane after `:Aineo claim <id>` in a Neovim where Claude Code never started** shows the claimed session from that Neovim's first start of Claude Code on; the help says so (place 13); C15's rule is unchanged.
+- **A79 — Where the file system refuses hard links,** the MCP server writes no record of its own and its reports find their session by `CLAUDE_CODE_SESSION_ID` (A10's fallback); LIMITS says so.
+- **A80 — The reviewers line binds as written** (attack `neovim-claude-code-reviewer`, tests `reviewer`, records `records-reviewer`; one fix round, then the orchestrator's verification, no re-measure), over orchestrate §6.
+- **A81 — The E739 in `tests/helpers/fixture.lua` is not T40's;** a single one from that file in a whole run does not block T40, and a test-only fix follows (D28).
+- **A82 — Mutant 49 (the `v:exiting` guard) is kept.** The question on D43's quoted sentence (T40-21) was confirmed by reading the chosen option in full and is no assumption.
+
+**T40's fix round (recorded in its session note):**
+- **A83 — A report of the own Claude Code that A23 keeps while a claim of another session holds** is kept in the directory's records, unshown, until those records have moved into the own session, as A76 keeps a report before the confirmation; the first own follow then moves the directory's records whole, and no records files are merged (attack finding 3).
+- **A84 — The window in which letting go of a claim can remove a newer claimant's** is named in T40's LIMITS subsection; no per-session lock is built (attack finding 6).
+- **A85 — A79's LIMITS line stays in T40's own LIMITS subsection,** not beside *The first follow's move*, which is not a T40 place (records finding 6).
+
+**T41's dispatch (A86–A89, in `brief-t41-dead-session-handover.md`):**
+- **A86 — After a hand-over, reports that A83 kept with the directory's records stay there, unshown;** nothing is merged. Help place 7 qualifies *aineo-report-claims* item 4, and LIMITS says so beside A61.
+- **A87 — A home that follows the dead id as a claim:** A60 holds; the hand-over leaves the report and draft homes following the fresh session as not a claim, so its confirmation changes nothing, and the directory's files wait for the next follow that is not a claim (A6, A31).
+- **A88 — Mutants 13 and 14 are kept.**
+- **A89 — T41's reviewers line:** attack by `neovim-lua-reviewer`, since T41 changes no file of the Claude Code integration; tests by `reviewer`; records by `records-reviewer`; the implementer `neovim-lua-developer`. The T40 dependency of T41's task row goes in the change that marks T41 done (no ruling).
+
+**T41's fix round (recorded in its session note):**
+- **A90 — A report for a session that already has its own records file is never kept with the directory's records** (`receive_session_report()` returns false when that session's records file exists); T41's boundary widens by this one condition in T40's function (attack finding 1).
+- **A91 — T41's hand-overs move by `fs_rename` after the `lstat` of the target,** not by link then unlink, since the target is this editor's own new id, which nothing else writes yet; T36's directory moves keep link then unlink and their shared-file window is named in LIMITS as an open limit (attack findings 2 and 3).
+
+**The helper fix:**
+- **A92 — The orchestrator reviewed PR #152's diff itself instead of dispatching a review agent;** its verification ran the whole suite and the retry-removed mutant.
+
+**A rule of the user's in stage 3, not an assumption:** on 2026-10-09, "it is important to clean up after a merge" (agent worktrees and branches are removed after each merge).
+
+### Wave 9 closed
+
+Wave 9 landed on 2026-10-11. Its packets are T35, T36 and T37 (stage 1; PRs #137, #135 and #136), T38 and T39 (stage 2; PRs #142 and #143), T40 (PR #150) and T41 (PR #154), with T42 (PR #146, D46) between the stages as a small fix and the test-helper fix (PR #152) beside T40 and T41. The releases are v0.2.16 (T35–T39), v0.2.17 (T42), v0.2.18 (T40) and v0.2.19 (T41 and the helper fix). The suite grew from 1929 cases at the wave's base to 2494: 2229 at stage 1's end, 2325 at stage 2's, 2422 after T40, 2427 after the helper fix and 2494 after T41. Its assumptions are A1–A92, listed whole above. Retrospective: [[Sessions/2026-10-11 — Wave 9 retrospective]]. The next wave, 10, is the user's request of 2026-10-10 (the commits window as a filter, and a full-context diff toggle); its decisions D47 and D48 are written by its planning.
+
+**Open threads at the close:**
+- T36's directory moves keep a shared-file window on APFS (A91); named in LIMITS, unfixed.
+- Two `--settings` in `claude.cmd` leave the earlier one on Claude Code's argv (the records review of PR #140).
+- `tests/test_entry_panes.lua`'s child death (3 of 15 runs on `dev`, older than T39) and test Neovims left running after runs.
+- `tests/test_health.lua`'s Ctrl-C timing case fails under load (once in the helper fix's run of 66 files, passing alone twice).
+- T39's O2, the ready callback wrapped in `vim.schedule`, which no case sees (A72).
