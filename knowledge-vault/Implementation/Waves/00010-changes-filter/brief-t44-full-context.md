@@ -70,3 +70,18 @@ In your definition's shape, to `<scratchpad>/t44-report-packet.md`. Open the pul
 ## The orchestrator's rulings — 2026-10-11, before dispatch
 
 `plan.md` › *The orchestrator's rulings* rules every open decision for this packet as its (a), which this body is written for: A101–A103 (O9–O11) and A105–A107 and A111 (the plan's A1–A3 and A7). The implementer is `neovim-lua-developer` on Sonnet (A104). These are the orchestrator's assumptions, to record in the session note and the PR body as such, never as the user's decisions.
+
+## Amendment — 2026-10-11, at dispatch: T43 merged
+
+Re-checked against `origin/dev` `c3d4d30` (T43's merge, PR #159) by the implementer, on the orchestrator's assumption A124 (it replaces a separate amendment pass). The amendment wins over the body above.
+
+**What moved, none of it changing what to build:**
+
+- `lua/aineo/git/diffs.lua`: `UNIFIED_DIFF` still holds `--unified=3` and `--inter-hunk-context=0` (lines 26–37); `COMMIT_HEADER` (44–54) now carries `--root` and `--diff-merges=first-parent`. The private `untracked_diff()` is at 77, `tracked_diff()` at 108, `M.file_diff()` at 133; `M.commit_diff()` (186) and the new `M.commit_file_diff()` (200) both go through a private `show_commit()` (160), which is where `git show` takes its context. The new `M.uncommitted_file_diff()` (214), `M.diff_since()` (326) and `M.uncommitted_diff()` (348) reach git through `tracked_diff()`, `untracked_diff()` and a private `whole_diff()` (281), the last running `git diff UNIFIED_DIFF <tree-ish>` on the private index. **Four private places take git's context** (`untracked_diff`, `tracked_diff`, `show_commit`, `whole_diff`'s `diff_from_tree`), reached by the six public diffs T43 leaves: `file_diff`, `commit_diff`, `commit_file_diff`, `uncommitted_file_diff`, `diff_since`, `uncommitted_diff`.
+- `lua/aineo/git/init.lua` exports those six (and `changed_files`, `commit_files`, `uncommitted_files`, `commits_since`), each ending in `done, options`.
+- `lua/aineo/changes/diffs.lua` is unchanged: `diff_buffer(name, diff)` at 95, `SHOWN_BYTES` at 11.
+- `lua/aineo/changes/entry_diff.lua` (new in T43) reads an entry's diff by the kind of its filter (`OWN_READS`) and names its buffer (A99: `aineo://diff/{path}`, `uncommitted/{path}`, `commit/{id}/{path}`, `uncommitted`, `session-work`, `commit/{id}`, `worktree<top>//diff/{path}`, `worktree<top>//commit/{id}`); `M.read(entry, source, done)` is what Enter and now `F` call. `DiffSource` gains `context`.
+- `lua/aineo/changes/init.lua`: `show_diff(selection, diff)` is at 953, `enters` at 989, `show_last_diff()` at 1003, `open_entry()` at 1027, the pane buffer's `<CR>` at 1078.
+- The help paragraph on Enter (*aineo-changes*) and the LIMITS item `A large diff` are as T43 left them; read at the edit.
+
+**No spec conflict.** The git home keeps its "no state" rule: the context arrives as `options.context` (`'three_lines'` or `'whole_file'`), the mode lives in `aineo.changes`.

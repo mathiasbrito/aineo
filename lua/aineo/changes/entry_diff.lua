@@ -11,6 +11,7 @@ local M = {}
 ---@field repository aineo.git.Repository the editor's repository
 ---@field base string|nil the session's base
 ---@field options? aineo.git.Options how the git home runs git
+---@field context? aineo.git.DiffContext how much of a file the diff shows around a change; three lines when not given
 
 --- How the diff of an entry of the editor's own worktree is read, by the
 --- kind of the filter it is listed under and by what it is: a file in the
@@ -54,12 +55,18 @@ local OWN_READS = {
 --- file's from the session's base, from `HEAD` or in its commit; the whole
 --- of *Session work*, of *Uncommitted* or of a commit — in `source`'s
 --- repository; for an entry of another worktree, a file's from that
---- worktree's base or a commit's, in that worktree.
+--- worktree's base or a commit's, in that worktree. Every diff is read in
+--- the context `source` names.
 ---
 ---@param entry aineo.changes.Entry
 ---@param source aineo.changes.DiffSource
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
 function M.read(entry, source, done)
+  source = vim.tbl_extend(
+    'force',
+    source,
+    { options = vim.tbl_extend('force', source.options or {}, { context = source.context }) }
+  )
   if entry.worktree then
     local worktree_source = {
       repository = entry.worktree.repository,
