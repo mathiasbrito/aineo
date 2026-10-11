@@ -55,6 +55,49 @@ local function listed_session(entry)
   }
 end
 
+--- Where a listed session stands for a pick, given the session of aineo's
+--- own terminal: `'own'` when it is that session, already shown;
+--- `'elsewhere'` when another process runs it, in another terminal or in
+--- Claude Code's background service, which a switch would pull it away from;
+--- else `'switchable'`, a background session whose process has ended.
+---
+---@param session aineo.claude.ListedSession
+---@param own_session_id string?
+---@return 'own'|'elsewhere'|'switchable'
+function M.standing(session, own_session_id)
+  if session.session_id == own_session_id then
+    return 'own'
+  end
+  return session.pid and 'elsewhere' or 'switchable'
+end
+
+--- What a row of the list marks a session with, by its standing.
+local STANDING_MARKS = { own = '[this terminal]', elsewhere = '[running elsewhere]' }
+
+--- How many characters of a session's id name it when it has no name.
+local UNNAMED_ID_LENGTH = 8
+
+--- The row of the list for `session`: its name, or the start of its id; its
+--- kind and its status, where it has them; and the mark of its standing
+--- (`M.standing()`) when a pick may not switch to it.
+---
+---@param session aineo.claude.ListedSession
+---@param own_session_id string?
+---@return string
+function M.row(session, own_session_id)
+  local words = { session.name or session.session_id:sub(1, UNNAMED_ID_LENGTH) }
+  for _, word in ipairs({ session.kind or false, session.status or false }) do
+    if word then
+      table.insert(words, word)
+    end
+  end
+  local mark = STANDING_MARKS[M.standing(session, own_session_id)]
+  if mark then
+    table.insert(words, mark)
+  end
+  return table.concat(words, '  ')
+end
+
 --- The sessions `output`, the standard output of `claude agents --json`,
 --- lists, or the problem it presents.
 ---

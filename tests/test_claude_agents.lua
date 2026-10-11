@@ -98,6 +98,71 @@ local function list_sessions(fake, folder, command)
   )
 end
 
+T['a listed session'] = MiniTest.new_set()
+
+--- The session of the child's own terminal in these cases.
+local OWN_SESSION_ID = '99999999-9999-4999-8999-999999999999'
+
+--- A session as `list_sessions()` delivers it, running elsewhere.
+local RUNNING_ELSEWHERE = {
+  session_id = '11111111-1111-4111-8111-111111111111',
+  name = 'refactor',
+  kind = 'interactive',
+  status = 'idle',
+  pid = 4242,
+}
+
+--- `RUNNING_ELSEWHERE` with `overrides` on top.
+---
+---@param overrides table
+---@return table
+local function running_elsewhere_with(overrides)
+  return vim.tbl_extend('force', RUNNING_ELSEWHERE, overrides)
+end
+
+T['a listed session']['row'] = MiniTest.new_set({
+  parametrize = {
+    { RUNNING_ELSEWHERE, 'refactor  interactive  idle  [running elsewhere]' },
+    {
+      running_elsewhere_with({ session_id = OWN_SESSION_ID }),
+      'refactor  interactive  idle  [this terminal]',
+    },
+    {
+      { session_id = RUNNING_ELSEWHERE.session_id, status = 'blocked', kind = 'background' },
+      '11111111  background  blocked',
+    },
+    { { session_id = RUNNING_ELSEWHERE.session_id, name = 'tests' }, 'tests' },
+  },
+})
+
+T['a listed session']['row']['names the session, its kind and its status, and marks it'] = function(
+  listed,
+  expected
+)
+  eq(
+    child.lua_get("require('aineo.claude').session_row(...)", { listed, OWN_SESSION_ID }),
+    expected
+  )
+end
+
+T['a listed session']['standing'] = MiniTest.new_set({
+  parametrize = {
+    { running_elsewhere_with({ session_id = OWN_SESSION_ID }), 'own' },
+    { RUNNING_ELSEWHERE, 'elsewhere' },
+    { { session_id = RUNNING_ELSEWHERE.session_id, kind = 'background' }, 'switchable' },
+  },
+})
+
+T['a listed session']['standing']['tells whether a pick may switch to it'] = function(
+  listed,
+  expected
+)
+  eq(
+    child.lua_get("require('aineo.claude').session_standing(...)", { listed, OWN_SESSION_ID }),
+    expected
+  )
+end
+
 T['the listing'] = MiniTest.new_set()
 
 T['the listing']['asks claude.cmd for agents --json scoped to the folder, finished sessions included'] = function()
