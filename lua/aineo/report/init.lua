@@ -114,8 +114,8 @@ local hand_overs_waiting = {}
 
 --- Hands the records of the Claude session `from` over to the session `to`
 --- under `current`'s state directory, when `to` has no records file of its
---- own (`M.hand_over_report_session()`): `from`'s file is moved to `to`'s
---- name, unread (`records.move_records()`), and a home that follows `from`
+--- own (`M.hand_over_report_session()`): `from`'s file is renamed to `to`'s
+--- name, unread (`records.rename_records()`), and a home that follows `from`
 --- follows `to` from then on, as its own, showing what it showed. A move
 --- that fails is told to the user, once, as a warning.
 ---
@@ -128,7 +128,7 @@ local function hand_over(current, from, to)
     return
   end
   local failure =
-    records.move_records(records.session_records_file(current.state_directory, from), to_file)
+    records.rename_records(records.session_records_file(current.state_directory, from), to_file)
   if failure then
     warn_later(failure)
   end
@@ -590,7 +590,10 @@ end
 --- no conversation for, over to the session `to`, which took its place:
 --- `from`'s records file becomes `to`'s, whole and unread — one that cannot
 --- be read included, which `to` then meets as `from` would have — and no
---- file is left under `from`'s name (`records.move_records()`). Nothing is
+--- file is left under `from`'s name: it is renamed, in one step
+--- (`records.rename_records()`), so that two editors handing `from` over at
+--- the same moment leave it with one new session, never shared. `to` is
+--- this editor's own new session, which nothing else writes yet. Nothing is
 --- made when neither has records. When `to` has a records file of its own,
 --- nothing moves, and a home that follows `from` goes on following it.
 ---

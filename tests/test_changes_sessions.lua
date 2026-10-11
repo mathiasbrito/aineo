@@ -2053,36 +2053,6 @@ T['a hand-over']['that cannot move the base tells it once, and raises nothing'] 
   }, { raised_nothing = true, told = { vim.log.levels.WARN }, dead = kept })
 end
 
---- The Lua that makes the child's every hard link fail as a file system
---- refuses one, with the code given as the chunk's argument, as libuv
---- returns it.
-local LINKS_REFUSED = [[
-  local code = ...
-  vim.uv.fs_link = function(from)
-    return nil, code .. ': hard links refused: ' .. from, code
-  end
-]]
-
-T['a hand-over']['where hard links are refused'] = MiniTest.new_set({
-  parametrize = { { 'ENOTSUP' }, { 'EPERM' }, { 'EXDEV' }, { 'EMLINK' }, { 'ENOSYS' } },
-})
-
-T['a hand-over']['where hard links are refused']['moves the base by a rename'] = function(code)
-  local state = fixture.directory('changessessions-hand-over-no-links')
-  local kept = '{"top":"/somewhere","saved":[]}'
-  plant_kept(state, SESSION_DEAD, kept)
-  child.lua(KEEP_MESSAGES)
-  child.lua(LINKS_REFUSED, { code })
-
-  hand_over(SESSION_DEAD, SESSION_NEW, state)
-
-  eq({
-    told = child.lua_get('#_G.told'),
-    dead = text_of(kept_file_of(state, SESSION_DEAD)),
-    new = text_of(kept_file_of(state, SESSION_NEW)),
-  }, { told = 0, new = kept })
-end
-
 T['a hand-over']['of a base kept as a symbolic link moves the link, which still leads to its file'] = function()
   local state = fixture.directory('changessessions-hand-over-symbolic-link')
   local target = vim.fs.joinpath(state, 'kept-elsewhere.json')
@@ -2101,117 +2071,49 @@ T['a hand-over']['of a base kept as a symbolic link moves the link, which still 
   }, { dead = '', new = 'link', leads_to = kept })
 end
 
---- The Lua that interleaves another editor's hand-over of the same file
---- with the child's, one call at a time: the other editor links the file
---- being moved to its own session's file, given as the chunk's argument,
---- just before the child's link, and removes the moved file's name just
---- before the child's removal of it.
-local OTHER_EDITOR_INTERLEAVED = [[
+--- The Lua that makes another editor hand the same dead session over to its
+--- own new session, whose file is given as the chunk's argument, at the
+--- same moment as the child, one call at a time: before the child's next
+--- link, the other editor links the file being moved to its own name;
+--- before the child's next removal, it removes the file's name, and the
+--- child's removal succeeds too, as two removals of one name at the same
+--- moment both do on APFS; before the child's next rename, it renames the
+--- file to its own name.
+local OTHER_EDITOR_SAME_MOMENT = [[
   local other = ...
-  local real_link, real_unlink = vim.uv.fs_link, vim.uv.fs_unlink
+  local real = { link = vim.uv.fs_link, unlink = vim.uv.fs_unlink, rename = vim.uv.fs_rename }
   vim.uv.fs_link = function(from, to)
-    vim.uv.fs_link = real_link
-    assert(real_link(from, other))
-    return real_link(from, to)
+    vim.uv.fs_link = real.link
+    assert(real.link(from, other))
+    return real.link(from, to)
   end
   vim.uv.fs_unlink = function(path)
-    vim.uv.fs_unlink = real_unlink
-    assert(real_unlink(path))
-    return real_unlink(path)
+    vim.uv.fs_unlink = real.unlink
+    assert(real.unlink(path))
+    return true
+  end
+  vim.uv.fs_rename = function(from, to)
+    vim.uv.fs_rename = real.rename
+    assert(real.rename(from, other))
+    return real.rename(from, to)
   end
 ]]
 
-T['a hand-over']['made by another editor at the same moment leaves the base with that editor’s session alone'] = function()
+T['a hand-over']['made by another editor at the same moment leaves the base with one new session, never shared'] = function()
   local state = fixture.directory('changessessions-hand-over-race')
-  local kept = '{"top":"/somewhere","saved":[]}'
-  plant_kept(state, SESSION_DEAD, kept)
+  plant_kept(state, SESSION_DEAD, '{"top":"/somewhere","saved":[]}')
   child.lua(KEEP_MESSAGES)
-  child.lua(OTHER_EDITOR_INTERLEAVED, { kept_file_of(state, SESSION_B) })
+  child.lua(OTHER_EDITOR_SAME_MOMENT, { kept_file_of(state, SESSION_B) })
 
   hand_over(SESSION_DEAD, SESSION_NEW, state)
 
+  local new_file, other_file =
+    vim.uv.fs_stat(kept_file_of(state, SESSION_NEW)), vim.uv.fs_stat(kept_file_of(state, SESSION_B))
   eq({
     told = child.lua_get('#_G.told'),
-    dead = text_of(kept_file_of(state, SESSION_DEAD)),
-    new = text_of(kept_file_of(state, SESSION_NEW)),
-    other = text_of(kept_file_of(state, SESSION_B)),
-  }, { told = 0, other = kept })
-end
-
---- The Lua that makes the child's next removal of a file fail as one
---- refused it.
-local NEXT_REMOVAL_REFUSED = [[
-  local real_unlink = vim.uv.fs_unlink
-  vim.uv.fs_unlink = function(path)
-    vim.uv.fs_unlink = real_unlink
-    return nil, 'EACCES: permission denied: ' .. path, 'EACCES'
-  end
-]]
-
-T['a hand-over']['whose dead file cannot be removed once linked tells it once, both sessions keeping it'] = function()
-  local state = fixture.directory('changessessions-hand-over-unremovable')
-  local kept = '{"top":"/somewhere","saved":[]}'
-  plant_kept(state, SESSION_DEAD, kept)
-  child.lua(KEEP_MESSAGES)
-  child.lua(NEXT_REMOVAL_REFUSED)
-
-  hand_over(SESSION_DEAD, SESSION_NEW, state)
-
-  eq({
-    told = child.lua_get(KEEPING_TOLD),
-    dead = text_of(kept_file_of(state, SESSION_DEAD)),
-    new = text_of(kept_file_of(state, SESSION_NEW)),
-  }, { told = { vim.log.levels.WARN }, dead = kept, new = kept })
-end
-
-T['a hand-over']['made by another editor at the same moment tells it once when the new name cannot be removed'] = function()
-  local state = fixture.directory('changessessions-hand-over-race-unremovable')
-  local kept = '{"top":"/somewhere","saved":[]}'
-  plant_kept(state, SESSION_DEAD, kept)
-  child.lua(KEEP_MESSAGES)
-  child.lua(OTHER_EDITOR_INTERLEAVED, { kept_file_of(state, SESSION_B) })
-  child.lua([[
-    local interleaved = vim.uv.fs_unlink
-    vim.uv.fs_unlink = function(path)
-      local result = { interleaved(path) }
-      vim.uv.fs_unlink = function(refused)
-        return nil, 'EACCES: permission denied: ' .. refused, 'EACCES'
-      end
-      return unpack(result)
-    end
-  ]])
-
-  hand_over(SESSION_DEAD, SESSION_NEW, state)
-
-  eq({
-    told = child.lua_get(KEEPING_TOLD),
-    new = text_of(kept_file_of(state, SESSION_NEW)),
-    other = text_of(kept_file_of(state, SESSION_B)),
-  }, { told = { vim.log.levels.WARN }, new = kept, other = kept })
-end
-
-T['a hand-over']['where hard links are refused']['that cannot rename the base tells it once'] = function(
-  code
-)
-  local state = fixture.directory('changessessions-hand-over-no-links-unmovable')
-  local kept = '{"top":"/somewhere","saved":[]}'
-  plant_kept(state, SESSION_DEAD, kept)
-  child.lua(KEEP_MESSAGES)
-  child.lua(LINKS_REFUSED, { code })
-  local folder = vim.fs.dirname(kept_file_of(state, SESSION_DEAD))
-  vim.fn.setfperm(folder, 'r-xr-xr-x')
-  MiniTest.finally(function()
-    vim.fn.setfperm(folder, 'rwxr-xr-x')
-  end)
-
-  hand_over(SESSION_DEAD, SESSION_NEW, state)
-  vim.fn.setfperm(folder, 'rwxr-xr-x')
-
-  eq({
-    told = child.lua_get(KEEPING_TOLD),
-    dead = text_of(kept_file_of(state, SESSION_DEAD)),
-    new = text_of(kept_file_of(state, SESSION_NEW)),
-  }, { told = { vim.log.levels.WARN }, dead = kept })
+    names = (new_file and 1 or 0) + (other_file and 1 or 0),
+    one_file = new_file ~= nil and other_file ~= nil and new_file.ino == other_file.ino,
+  }, { told = 0, names = 1, one_file = false })
 end
 
 T['a hand-over']['when neither session has a base makes none'] = function()
