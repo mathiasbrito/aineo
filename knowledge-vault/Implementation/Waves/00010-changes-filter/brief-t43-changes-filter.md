@@ -91,3 +91,7 @@ Large: four new reads in the git home (a commit's files, a file in a commit, wha
 ## Report
 
 In your definition's shape, to `<scratchpad>/t43-report-packet.md`. Open the pull request into `dev` before you report. Put in its body every verification claim a reviewer can re-measure, each test file whose pins moved and why, and the whole suite's counts. The orchestrator's verification runs `plan.md`'s five T43 mutants: name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-11, before dispatch
+
+`plan.md` › *The orchestrator's rulings* rules every open decision for this packet as its (a), which this body is written for: A94–A100 (O2–O8) and A108–A110 (the plan's A4–A6). The implementer is `neovim-lua-developer` on Sonnet (A104). These are the orchestrator's assumptions, to record in the session note and the PR body as such, never as the user's decisions.
