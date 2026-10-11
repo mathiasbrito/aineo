@@ -27,10 +27,9 @@ Every command sits behind one prefix key, `\` by default, in Normal mode:
 `\s` sends Input to Claude, `\o` opens or restores the layout, and `\r`, `\i`
 and `\c` move to the Report, Input and Claude — `\c` in Terminal mode, so
 that what you type next goes to Claude, unless Claude Code has exited.
-`\tcn` hides or shows the line numbers of Claude's window. `\cs` lists the
+`\tcn` hides or shows the line numbers of Claude's window. `\S` lists the
 sessions Claude Code lists for the folder and switches Claude to the one you
-pick (|:Aineo-sessions|); since `\cs` begins with it, `\c` waits for
-'timeoutlen' for an `s` to follow. `\pa` and `\g` switch the right column
+pick (|:Aineo-sessions|). `\pa` and `\g` switch the right column
 between the agent pane, the Report over Input, and the changes pane
 (|aineo-panes|). In Visual mode, in Input, `\s` sends the selection alone and
 removes it from Input (|aineo-v_\s|).
@@ -863,8 +862,8 @@ which has none, globally, in Normal mode, and `\s` in Visual mode too:
 \c		|<Plug>(aineo-claude)|
                                                                   *aineo-\tcn*
 \tcn		|<Plug>(aineo-claude-numbers)|
-                                                                   *aineo-\cs*
-\cs		|<Plug>(aineo-sessions)|
+                                                                    *aineo-\S*
+\S		|<Plug>(aineo-sessions)|
                                                                    *aineo-\pa*
 \pa		|<Plug>(aineo-pane-agent)|
                                                                     *aineo-\g*
@@ -882,10 +881,9 @@ other way round. A mapping local to a buffer is not counted: it wins in its
 own buffer only. A mapping you make later replaces aineo's. A mapping that
 only overlaps aineo's key is not yours in this sense: with your own `\sa`,
 aineo still maps `\s`, and `\sa` then waits for 'timeoutlen' after `\s`;
-with your own `\t` or `\tc`, aineo still maps `\tcn`, and with your own `\p`
-— or `<Leader>p` while the leader is `\` — it still maps `\pa`:
-yours then waits for 'timeoutlen'. aineo's own `\c` waits too, for an `s` to
-follow, since `\cs` begins with it.
+with your own `\t` or `\tc`, aineo still maps `\tcn`, with your own `\p` — or
+`<Leader>p` while the leader is `\` — it still maps `\pa`, and with your own
+`\gs` it still maps `\g`: yours then waits for 'timeoutlen'.
 
 The prefix is read once, when the editor has started (|VimEnter|): a
 `setup()` or `vim.g.aineo` that changes it later maps nothing until the next
