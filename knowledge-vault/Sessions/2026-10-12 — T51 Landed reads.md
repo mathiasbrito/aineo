@@ -127,4 +127,11 @@ New cases of the round: 17 (11 in `test_git_repository`, 3 in `test_git_watch`, 
 
 ## Commits
 
-Recorded after the merge.
+Recorded after the merge, by the wave 13 knowledge pass. PR #175 merged by rebase as `9e48052` … `0e83ba9` (4 commits), now `7c3118a` … `56e63ab` on `dev`. The orchestrator's check of T51 and T50 on one combined tree: the whole suite 2798 cases, `Fails (0)`, lint clean, and the mutant `name == path` → `true` killed. Released in v0.2.25 (PR #178, `main` `f59a7d8`).
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `9e48052` | `7c3118a` | Add the git reads Landed and the files window's keys need |
+| `f36aef2` | `424a387` | Pin the T51 reads' option handling and record the packet |
+| `d2de333` | `260a4ca` | Fix the T51 reads after the attack and tests reviews |
+| `0e83ba9` | `56e63ab` | Record the T51 fix round in the session note |

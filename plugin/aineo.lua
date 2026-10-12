@@ -714,21 +714,23 @@ local function focus(role)
   end
 end
 
---- Shows `pane` in the layout's right column (`aineo.layout`'s
---- `show_pane()`). When the layout must open first, it opens as `focus()`
+--- Shows `pane` in the layout's right column and moves the cursor into it
+--- (`aineo.layout`'s `focus_pane()`): into the Report under the agent pane,
+--- into the commits window under the changes pane, though the pane was
+--- shown already. When the layout must open first, it opens as `focus()`
 --- opens it, around the Claude session's terminal as it is, and Input is
 --- then handed to the draft home (`keep_input_draft()`). The changes pane,
 --- already shown, is read again first (`aineo.changes`'s
 --- `refresh_shown_pane()`), as showing it anew reads it.
 ---
 ---@param pane aineo.layout.Pane
-local function show_pane(pane)
+local function focus_pane(pane)
   local config = resolved_config()
   if pane == 'changes' then
     require('aineo.changes').refresh_shown_pane()
   end
   local opened = false
-  require('aineo.layout').show_pane(pane, function()
+  require('aineo.layout').focus_pane(pane, function()
     opened = true
     return arrangement(config, current_claude_terminal(config))
   end)
@@ -1236,10 +1238,10 @@ local ACTIONS = {
   end,
   sessions = list_sessions,
   ['pane agent'] = function()
-    show_pane('agent')
+    focus_pane('agent')
   end,
   ['pane changes'] = function()
-    show_pane('changes')
+    focus_pane('changes')
   end,
 }
 
