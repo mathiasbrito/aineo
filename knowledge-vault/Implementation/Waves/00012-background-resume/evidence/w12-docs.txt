@@ -1,0 +1,132 @@
+Wave 12 planning — Claude Code 2.1.296's documentation and changelog, read, never run.
+
+Read 2026-10-12 as raw text from https://code.claude.com/docs/en/<page>.md
+(sessions, agent-view, interactive-mode, changelog). The real `claude` was not
+run; no background service, no session and no file under the user's home was
+touched. Each block below is the page's text, verbatim, under the line range
+it was cut from in the copy read that day. Line numbers move with the pages.
+
+What each block establishes is in plan.md › "What is established"; the labels
+D1–D8 are used there.
+
+== D1 — sessions.md 30-44: resuming a running background session
+
+When the conversation you resume with `claude --resume` or `/resume` belongs to a [background session](/docs/en/agent-view) that is still running, Claude Code opens the running session itself. With `--bg` on the command line, the resume is a [background dispatch](/docs/en/agent-view#from-your-shell) instead. Before v2.1.285, Claude Code refused and told you to open the session with `claude attach <id>`, or to stop it with `claude stop <id>` first.
+
+* **From your shell**: `claude --resume <session>` runs [`claude attach`](/docs/en/agent-view#attach-to-a-session) on that session in the same terminal instead of loading the transcript itself. A prompt you pass on the command line, as in `claude --resume <session> "check the tests too"`, goes to the session as its next turn first, and Claude Code prints `Sent your prompt to the background session (<id>); opening it…` before attaching. `claude -p --resume <session> "prompt"` typed at a terminal does the same, so `-p` doesn't keep that run non-interactive.
+
+  Claude Code doesn't open the session when the command line has any of these:
+
+  * Piped or redirected input or output
+  * Flags that configure the session, such as `--permission-mode`, `--model`, or `--settings`
+  * Flags that read the output, such as `--output-format json` or `--json-schema`
+  * Flags that limit or rewind the run, such as `--max-turns` or `--max-budget-usd`
+
+  With any of these, or when [agent view is turned off](/docs/en/agent-view#turn-off-agent-view), Claude Code sends nothing and exits with status 1, printing that the session is running in the background along with the `claude attach <id>` command that opens it, or telling you to find it in `claude agents` when it can't determine the ID. Add `--fork-session` to resume a copy of the conversation instead. To continue the conversation itself in a session of your own, with your flags applied, run `claude stop <id>` and then repeat the command.
+
+  A prompt that starts with `/` or `!` isn't sent, and neither is any prompt while the session waits on your answer to a question. In both cases Claude Code doesn't open the session, and the message includes `Your prompt was not sent to it` with the reason.
+* **From inside a session**: `/resume` moves your current conversation to the background and attaches this terminal to the running session, printing `Opening "<title>", running in the background (<id>)`. Press `←` on an empty prompt to return to agent view, which also lists the conversation you left. When the current conversation can't move to the background, for example because you're already attached to a background session or session persistence is off, `/resume` prints the `claude attach` command to run instead.
+
+== D2 — agent-view.md 233-269: attaching, detaching, and moving a foreground session with the left arrow
+
+### Attach to a session
+
+Press `Enter` or `→` on a selected row to attach. Agent view is replaced by the full interactive session. When you attach, Claude posts a short recap of what happened while you were away.
+
+While attached, the session behaves like any other Claude Code session: [commands](/docs/en/commands), keyboard shortcuts, and features all work, with the exceptions below.
+
+While you're attached, `/install-github-app` and the [`/mcp`](/docs/en/mcp) settings list work normally, since a human at the terminal can complete their dialogs. When nobody is attached, these commands can't open their dialogs, so the session appears under `Needs input` in agent view with a row such as `open this session to manage MCP servers`, and the transcript reply says the same. Attach and run the command again to continue; the needs-input row clears when you attach. `/mcp reconnect <server>`, `/mcp enable`, and `/mcp disable` work without attaching either way.
+
+Attached sessions always render in [fullscreen mode](/docs/en/fullscreen), regardless of your `tui` setting, because a background session has no terminal scrollback to append to. Scroll with `PgUp`, `PgDn`, or the mouse wheel, and press `Ctrl+O` for transcript mode. Your terminal's native scroll and tmux copy mode show only the current viewport, the same as when you run any fullscreen application.
+
+An attached session doesn't [report its status to your terminal](/docs/en/terminal-config#see-session-status-in-your-terminal).
+
+Press `←` on an empty prompt, or run `/exit`, to detach and return to agent view, whether you opened the session from agent view or with `claude attach <id>` from your shell.
+
+`←` also detaches while the [`/btw` overlay](/docs/en/interactive-mode#side-questions-with-%2Fbtw) is open. Requires Claude Code v2.1.257 or later. A side question that's still answering keeps running while you're away. The next time you attach, the overlay reopens with it, or with its answer.
+
+On Windows, if you press `←` within about half a second of attaching, Claude Code shows `Ambiguous ←, press again to detach`, because in that window the terminal can redeliver a press from before you attached. Press `←` again to detach.
+
+`Ctrl+Z` also detaches but goes back to where you started instead: agent view if you attached from there, or your shell if you ran `claude attach`. Use `Ctrl+Z` when a dialog has focus and isn't responding to `←`.
+
+`Ctrl+C` keeps its standard interrupt behavior while attached: it cancels a running response or `!` shell command rather than detaching. Pressing `Ctrl+C` twice on an empty prompt detaches.
+
+Detaching never stops a background session: `←`, `Ctrl+Z`, `/exit`, and double `Ctrl+C` or double `Ctrl+D` all leave it running. If you detach while a `/loop` is waiting for its next iteration, the loop keeps running and that iteration starts on schedule without you. To stop the loop before you detach, see [Stop a loop](/docs/en/scheduled-tasks#stop-a-loop). To end a session from inside it, run `/stop`.
+
+#### Switch sessions without leaving the terminal
+
+In a session running in the foreground, one you started in the terminal rather than attached to from agent view, pressing `←` on an empty prompt backgrounds it and opens agent view with that row selected, so you can switch sessions without leaving the terminal. The same single press detaches an attached session.
+
+If you press `←` right after you delete the last of the prompt's text or move through prompt history, Claude Code asks you to confirm: the first press shows `Press ← again to open agents`, or `Press ← again to go back to agents` in an attached session, and the second press switches.
+
+When `←` backgrounds a foreground session, agent view shows `Your conversation moved to the background` above the list, with that session's row already selected. From there:
+
+* Press `Enter` to reopen the conversation.
+* Press `Esc` to undo the switch and return to the conversation. If `Esc` shows `Still starting — try again in a moment`, the background session isn't ready yet, so press `Esc` again in a moment.
+* Press `Ctrl+C` twice to exit to your shell.
+
+When Claude Code can't reopen the conversation, it exits and prints a `claude --resume` command that resumes it.
+
+== D3 — agent-view.md 436-440: /background, and exiting with background work running
+
+Exiting a session that still has background work running, such as subagents, background shell commands, workflows, or [monitors](/docs/en/tools-reference#monitor-tool), shows a `Background work is running` dialog instead of quitting immediately. Choose `Move to background and exit` to background the session the same way `/background` does and return to your shell. The option isn't shown when agent view is [turned off](#turn-off-agent-view).
+
+If a background session on the list already has the conversation's name, Claude Code numbers the new row's name, such as `my-session (2)`, and leaves the existing row's name alone. To rename the new row, select it in agent view and press `Ctrl+R`.
+
+#### Copy the session with /fork
+
+== D4 — agent-view.md 465-481: what carries over when a session moves to the background
+
+Backgrounding starts a fresh process that resumes from the saved conversation, and in-flight background work moves to it: running background shell commands, backgrounded subagents, dynamic workflows, scheduled tasks you created with [`/loop`](/docs/en/scheduled-tasks), and Claude's [automatic replies to artifact comments](/docs/en/artifacts#let-claude-reply-to-comments-on-its-own) all carry over and keep running there. A subagent moves together with everything it started, so it carries over only when all of that work can move too. To stop in-flight background work instead of carrying it over, set the [`CLAUDE_DISABLE_ADOPT=1`](/docs/en/env-vars#variables) environment variable; Claude Code then asks you to confirm before backgrounding.
+
+When a [dynamic workflow](/docs/en/workflows) still has subagents running, Claude Code asks before backgrounding with the `Background this session?` dialog, which says how many subagents would restart. Choose `Stay` to let them finish first. If you confirm, Claude Code replays the run in the background session: subagents that were still running start over from the beginning, so the tokens they used so far are spent again. See [Resume after a pause](/docs/en/workflows#resume-after-a-pause) for which completed subagents return their saved results and which run again.
+
+Claude Code stops background work that can't carry over, such as a running [monitor](/docs/en/tools-reference#monitor-tool), and stops a backgrounded subagent that owns a monitor along with it. When any such work is running, Claude Code shows the `Background this session?` dialog so you can confirm before it stops the work.
+
+Once in the background, the session can start new subagents, monitors, and background commands, and those keep running across later detach and reattach.
+
+Configuration flags from the original launch carry through to the backgrounded session, so its MCP servers, settings, and fallback model remain in effect:
+
+* `--mcp-config` and `--strict-mcp-config`
+* `--settings`
+* `--setting-sources`
+* `--add-dir`
+* `--plugin-dir`
+* `--fallback-model`
+* `--allow-dangerously-skip-permissions`
+
+== D5 — agent-view.md 779-790: claude agents --json
+
+`claude agents --json` prints active sessions as a JSON array and exits: every live session, plus background sessions that are still working or blocked even when their process has exited. Add `--all` to also include completed background sessions, and `--cwd <path>` to limit the list to sessions started under that directory.
+
+Each entry describes one session:
+
+| Field | Present | Description |
+| :- | :- | :- |
+| `cwd`, `kind`, `startedAt` | Always | The working directory, `interactive` or `background`, and the start time in Unix milliseconds |
+| `id` | Background sessions | Short ID, usable with `claude attach`, `claude logs`, and `claude stop` |
+| `state` | Background sessions | One of `working`, `blocked`, `done`, `failed`, or `stopped`. See [Read session state from a script](#read-session-state-from-a-script) for what each value means |
+| `pid`, `status` | While the process is alive | Process ID and one of `busy`, `waiting`, or `idle` |
+| `waitingFor` | When `status` is `waiting` | What the session is blocked on: `permission prompt` for an approval, `input needed` for a question from Claude or an MCP server's input request, `sandbox request`, `worker request`, or `dialog open` |
+| `sessionId`, `name` | When set | `sessionId` is the full session UUID, usable with [`claude --resume`](/docs/en/sessions). An interactive session's `name` is its [default display name](/docs/en/sessions#name-your-sessions) until you name the session or accept a plan in it |
+
+== D6 — agent-view.md 850-852: turning agent view off
+
+### Turn off agent view
+
+To turn off background agents and agent view entirely, set the `disableAgentView` [setting](/docs/en/settings) to `true` or set the `CLAUDE_CODE_DISABLE_AGENT_VIEW` environment variable. Administrators can enforce this through [managed settings](/docs/en/managed-settings).
+
+== D7 — interactive-mode.md 21-23: Ctrl+C and Ctrl+D
+
+| `Ctrl+C` | Interrupt, or clear input | Interrupts a running operation. If nothing is running, the first press clears the prompt input and a second press exits Claude Code. Press `Up` while the prompt is still empty to bring the cleared draft back, which requires Claude Code v2.1.288 or later |
+| `Ctrl+X Ctrl+K` | Stop all running [background subagents](/docs/en/sub-agents#run-subagents-in-foreground-or-background) in this session, and turn off [artifact auto-replies](/docs/en/artifacts#let-claude-reply-to-comments-on-its-own) for the rest of it. Press twice within 3 seconds to confirm. You can press it while a background subagent's permission prompt is open | Subagent control |
+| `Ctrl+D` | Exit Claude Code session | The first press shows a confirmation hint and a second press within 800ms exits. When the prompt has text, `Ctrl+D` deletes the character after the cursor instead |
+
+== D8 — changelog page: 2.1.296 (first line), 2.1.295 (next two), 2.1.285, 2.1.280, 2.1.257 (one line each, in that order)
+
+  * Changed `←`: a turn or `!` command started while the session moves to the background is now stopped instead of finishing out of sight
+  * Changed Ctrl+C at the idle prompt of an attached background session to leave a pending `/loop` wakeup alone, so pressing it twice detaches and the loop keeps running; press Esc to stop it
+  * Changed `claude agents` stopped with its background service (macOS, or Linux without the service installed): running sessions now stop in about a minute unless it is run again, and a notice says so
+    - Improved `/resume` and `claude --resume` on a session that is running in the background: they now open that session instead of refusing, and a prompt given with `claude --resume <id> "prompt"` is sent to it as its next turn
+    * Fixed Ctrl+C needing three or four presses to exit while background subagents are running; two presses now exit
+    * Fixed `--resume` listing a backgrounded conversation twice and `--continue` reopening its stalled pre-background copy; `--continue` now also opens finished background sessions
