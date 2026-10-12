@@ -149,7 +149,8 @@ end
 --- `top`, as git reads a name — a branch, a remote-tracking branch, a tag
 --- (an annotated one gives the commit it tags), a reference by its full
 --- path, an id — and calls `done(nil, commit)`, nil when the name gives no
---- commit; or `done(failure)`. A name that begins with `-` is a name.
+--- commit, a negation (`^main`) or a range (`a..b`) included; or
+--- `done(failure)`. A name that begins with `-` is a name.
 ---
 ---@param run aineo.git.Run
 ---@param top string
@@ -163,7 +164,7 @@ function M.resolve_commit(run, top, name, done)
       answers = { 0, NONE_CODE },
     },
     process.or_fail(done, function(commit)
-      done(nil, M.first_line(commit.stdout))
+      done(nil, commit.stdout:match('^(%x+)\n$'))
     end)
   )
 end

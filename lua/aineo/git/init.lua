@@ -246,8 +246,9 @@ end
 --- calls `done(nil, text)`, the bytes exactly as git printed them, or
 --- `done(failure)`: a `path_missing` one when the commit has nothing at
 --- `path` — a file deleted in it, say — told apart from any other failure,
---- a directory at `path` included. The path is taken whole, never as a
---- pattern or an option. A commit of another worktree is read in `found`,
+--- a directory at `path` included. The path is taken whole and as the
+--- commit names it, never as a pattern or an option: `.`, a trailing slash
+--- and `./x` name nothing. A commit of another worktree is read in `found`,
 --- which shares its object store.
 ---
 ---@param found aineo.git.Repository as `M.find_repository()` gave it
@@ -261,7 +262,7 @@ end
 
 --- Gives the unified diff of every file of `found` between the merge base of
 --- the commits `from` and `to`, and `to` — what `M.files_between()` lists —
---- after no commit header, and calls `done(nil, diff)`, or `done(failure)`.
+--- without a commit header, and calls `done(nil, diff)`, or `done(failure)`.
 --- Only the commits are read.
 ---
 ---@param found aineo.git.Repository as `M.find_repository()` gave it
@@ -377,8 +378,10 @@ end
 --- missed, so a caller reads what it shows once the watch has started.
 --- Returns the watch, which says whether it sees changes in subdirectories
 --- — on Linux it does not, and misses a branch moved by `git update-ref`
---- from another worktree, and a fetch, too — or nil and why it could not
---- start; it never raises.
+--- from another worktree too, and every reference written under `refs/`,
+--- so that `references_changed` is true there only for `packed-refs` and a
+--- fetch of this worktree — or nil and why it could not start; it never
+--- raises.
 ---
 ---@param found aineo.git.Repository as `M.find_repository()` gave it
 ---@param on_change fun(failure: aineo.git.Failure|nil, change: aineo.git.RepositoryChange|nil)

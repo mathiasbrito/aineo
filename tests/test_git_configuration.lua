@@ -136,6 +136,77 @@ T['a user’s git configuration']['does not change the files changed since a bas
   })
 end
 
+T['a user’s git configuration']['does not change the files between two commits'] = function()
+  local top, base = git_repo.create('configuration-between-files', {
+    ['sub/moved.txt'] = { 'moved' },
+    ['sub/changed.txt'] = { 'changed' },
+  })
+  make_hostile('configuration-between-files', top)
+  git_repo.git(top, { 'mv', 'sub/moved.txt', 'sub/moved-here.txt' })
+  git_repo.write(top, 'sub/changed.txt', { 'changed, again' })
+  local second = git_repo.commit_all(top, 'Move and change')
+
+  local seen = child.lua(ASK, { top .. '/sub', 'files_between', { base, second } })
+
+  eq(seen.result, {
+    { path = 'sub/changed.txt', kind = 'modified' },
+    { path = 'sub/moved-here.txt', kind = 'renamed', old_path = 'sub/moved.txt' },
+  })
+end
+
+T['a user’s git configuration']['does not change the commits between two commits'] = function()
+  local top, base = git_repo.create('configuration-between-commits', { ['a.txt'] = { 'a' } })
+  make_hostile('configuration-between-commits', top)
+  git_repo.write(top, 'a.txt', { 'a, changed' })
+  git_repo.git(top, { 'add', 'a.txt' })
+  local signed = commit_signed('configuration-between-commits', top, 'Café, signed')
+
+  local seen = child.lua(ASK, { top, 'commits_between', { base, signed } })
+
+  eq(seen.result, { { id = signed, subject = 'Café, signed' } })
+end
+
+T['a user’s git configuration']['does not change the diff between two commits'] = function()
+  local lines = { '1', '', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15' }
+  local top, base = git_repo.create(
+    'configuration-between-diff',
+    { ['sub/a.txt'] = lines, ['sub/moved.txt'] = { 'kept' } }
+  )
+  make_hostile('configuration-between-diff', top)
+  lines[3] = 'three'
+  git_repo.write(top, 'sub/a.txt', lines)
+  git_repo.git(top, { 'mv', 'sub/moved.txt', 'sub/moved-here.txt' })
+  local second = git_repo.commit_all(top, 'Change and move')
+
+  local seen = child.lua(ASK, { top .. '/sub', 'diff_between', { base, second } })
+
+  eq(
+    seen.result,
+    table.concat({
+      'diff --git a/sub/a.txt b/sub/a.txt',
+      ('index %s..%s 100644'):format(
+        git_repo.git(top, { 'rev-parse', base .. ':sub/a.txt' }),
+        git_repo.git(top, { 'rev-parse', second .. ':sub/a.txt' })
+      ),
+      '--- a/sub/a.txt',
+      '+++ b/sub/a.txt',
+      '@@ -1,6 +1,6 @@',
+      ' 1',
+      ' ',
+      '-3',
+      '+three',
+      ' 4',
+      ' 5',
+      ' 6',
+      'diff --git a/sub/moved.txt b/sub/moved-here.txt',
+      'similarity index 100%',
+      'rename from sub/moved.txt',
+      'rename to sub/moved-here.txt',
+      '',
+    }, '\n')
+  )
+end
+
 T['a user’s git configuration']['that asks for copies does not change the files changed since a base'] = function()
   local top, base =
     git_repo.create('configuration-copies', { ['a.txt'] = { 'one', 'two', 'three' } })
