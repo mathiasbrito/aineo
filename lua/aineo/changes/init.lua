@@ -1397,8 +1397,10 @@ local function show_diff(selection, diff)
   return show_buffer(buffer, selection.window, 'the diff of ' .. entry_diff.told_name(entry))
 end
 
---- How many times a key has asked for a diff or a file to be shown in the
---- middle column (`open_entry()`, `show_commit_file()`).
+--- How many times a key of the files window has asked for a diff to be
+--- shown in the middle column, or for a file to be opened or shown
+--- (`show_diff_at_cursor()`, `show_commit_file()`, `open_file_at_cursor()`):
+--- what a key read is shown only while no later key has asked.
 local enters = 0
 
 --- What a key asked to show in the middle column.
@@ -1560,6 +1562,7 @@ local function open_file_at_cursor(buffer)
     show_commit_file(entry)
     return
   end
+  enters = enters + 1
   open_file.open_listed_file(entry, session.repository.top)
 end
 
