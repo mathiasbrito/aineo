@@ -4,7 +4,10 @@
 --- branch is seen through the git directories: every event there makes the
 --- watch read `HEAD` again and compare its commit and branch with the ones
 --- it knew, since no single file of git's is written by every move — a
---- reflog can be replaced, missing, or not kept at all.
+--- reflog can be replaced, missing, or not kept at all. A reference written
+--- under `refs/` or in `packed-refs` — a fetch's remote-tracking branch, a
+--- tag, a branch of another worktree — is noted as such, so that a caller
+--- learns of it though `HEAD` did not move and no file changed.
 
 local repository = require('aineo.git.repository')
 
@@ -29,10 +32,11 @@ local RECURSIVE_PLATFORMS = { Darwin = true, Windows_NT = true }
 ---@class aineo.git.RepositoryChange
 ---@field files_changed boolean the list of files changed may differ: a file of the working tree was written, created, removed or renamed, or an index or a submodule changed — which every commit, and a commit of another worktree's, does too
 ---@field branch_moved boolean `HEAD` names another commit or another branch than before
+---@field references_changed boolean a reference of the repository was written or removed — a path under `refs/` of the common git directory, or `packed-refs` — by a commit, a branch or a tag made or deleted, or a fetch, in this worktree or another, whether `HEAD` moved or not
 
 --- A running watch.
 ---@class aineo.git.Watch
----@field watches_subdirectories boolean whether a change in a subdirectory of the working tree, or of the git directory, is seen; where it is not, a branch moved by `git update-ref` from another worktree is missed too
+---@field watches_subdirectories boolean whether a change in a subdirectory of the working tree, or of the git directory, is seen; where it is not, a branch moved by `git update-ref` from another worktree, and a fetch, are missed too
 ---@field stop fun() stops the watch, and releases every handle it holds and every git it runs; stopping it again does nothing, and nothing is called after it, save one `no_git` failure when the watch is stopped in the turn in which its read of `HEAD` found no git
 
 --- What a running watch keeps.
@@ -41,12 +45,26 @@ local RECURSIVE_PLATFORMS = { Darwin = true, Windows_NT = true }
 ---@field top string the top level of the repository watched
 ---@field on_change fun(failure: aineo.git.Failure|nil, change: aineo.git.RepositoryChange|nil)
 ---@field known { head: string?, branch: string? } `HEAD`'s commit and branch when last read
----@field pending { files: boolean, git: boolean } what the events since the last call touched: the working tree, the git directories
+---@field pending aineo.git.Burst what the events since the last call touched
 ---@field burst_started? integer when the first event of the pending burst came, in the event loop's milliseconds; nil when none is pending
 ---@field timer uv.uv_timer_t the timer that ends a burst
 ---@field reading boolean whether a read of `HEAD` is running
 ---@field cancel_read fun() cancels the git the last read of `HEAD` ran
 ---@field stopped boolean
+
+--- What the events of a burst touched: the working tree, the git directories,
+--- and among them a reference.
+---@class aineo.git.Burst
+---@field files boolean
+---@field git boolean
+---@field references boolean
+
+--- A burst no event has touched anything in.
+---
+---@return aineo.git.Burst
+local function untouched_burst()
+  return { files = false, git = false, references = false }
+end
 
 --- Whether `name`, a path an event on the top level gave, is in the
 --- repository's own `.git` rather than in its working tree.
@@ -69,6 +87,16 @@ local function changes_the_list(name)
   return name == 'index'
     or vim.endswith(name or '', '/index')
     or vim.startswith(name or '', 'modules/')
+end
+
+--- Whether `name`, a path an event on the common git directory gave, is a
+--- reference: a file under `refs/`, or the file `packed-refs`, where git
+--- keeps the references it has packed.
+---
+---@param name string|nil
+---@return boolean
+local function is_reference(name)
+  return name == 'packed-refs' or vim.startswith(name or '', 'refs/')
 end
 
 --- Stops and closes each of `handles`.
@@ -117,7 +145,7 @@ local settle
 --- while it read is settled after it.
 ---
 ---@param state aineo.git.WatchState
----@param burst { files: boolean, git: boolean }
+---@param burst aineo.git.Burst
 local function read_branch(state, burst)
   state.reading = true
   repository.read_head(
@@ -133,8 +161,12 @@ local function read_branch(state, burst)
       else
         local moved = head ~= state.known.head or branch ~= state.known.branch
         state.known = { head = head, branch = branch }
-        if moved or burst.files then
-          state.on_change(nil, { files_changed = burst.files, branch_moved = moved })
+        if moved or burst.files or burst.references then
+          state.on_change(nil, {
+            files_changed = burst.files,
+            branch_moved = moved,
+            references_changed = burst.references,
+          })
         end
       end
       settle(state)
@@ -153,22 +185,22 @@ function settle(state)
     return
   end
   local burst = state.pending
-  state.pending = { files = false, git = false }
+  state.pending = untouched_burst()
   state.burst_started = nil
   if not burst.git then
-    state.on_change(nil, { files_changed = true, branch_moved = false })
+    state.on_change(nil, { files_changed = true, branch_moved = false, references_changed = false })
     return
   end
   read_branch(state, burst)
 end
 
---- Notes an event that touched `kind` — `files` or `git` — and starts the
---- burst's time again: the burst ends `SETTLE_MS` after its last event, or
---- `LONGEST_BURST_MS` after its first, whichever comes sooner. Runs in a
---- fast event.
+--- Notes an event that touched `kind` — `files`, `git` or `references` — and
+--- starts the burst's time again: the burst ends `SETTLE_MS` after its last
+--- event, or `LONGEST_BURST_MS` after its first, whichever comes sooner.
+--- Runs in a fast event.
 ---
 ---@param state aineo.git.WatchState
----@param kind 'files'|'git'
+---@param kind 'files'|'git'|'references'
 local function note(state, kind)
   local now = vim.uv.now()
   state.pending[kind] = true
@@ -215,8 +247,9 @@ end
 --- elsewhere, Linux included, libuv takes the request and watches each
 --- directory alone, so the watch says it cannot. There, as libuv's
 --- non-recursive watch was measured on macOS (Linux itself was not run),
---- it misses a file changed in a subdirectory and a branch moved by
---- `git update-ref` from another worktree; it still sees a commit, a
+--- it misses a file changed in a subdirectory, a branch moved by
+--- `git update-ref` from another worktree, and a reference a fetch wrote
+--- under `refs/` (`references_changed`); it still sees a commit, a
 --- `reset --soft` (`ORIG_HEAD`) and a linked worktree's commit
 --- (`packed-refs.lock`), each through a file written directly in the common
 --- git directory.
@@ -235,7 +268,7 @@ function M.watch_repository(run, found, on_change, system_name)
     top = found.top,
     on_change = on_change,
     known = { head = found.head, branch = found.branch },
-    pending = { files = false, git = false },
+    pending = untouched_burst(),
     timer = assert(vim.uv.new_timer()),
     reading = false,
     cancel_read = function() end,
@@ -261,6 +294,9 @@ function M.watch_repository(run, found, on_change, system_name)
         end
         if changes_the_list(name) then
           note(state, 'files')
+        end
+        if is_reference(name) then
+          note(state, 'references')
         end
         note(state, 'git')
       end,

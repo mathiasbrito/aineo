@@ -95,7 +95,7 @@ local EDITOR_VARIABLES_LEFT_OUT = {
 
 --- Why git gave no answer.
 ---@class aineo.git.Failure
----@field reason 'not_a_repository'|'no_git'|'timed_out'|'failed' what went wrong: the directory is in no repository; git could not be started; git ran past its limit and was stopped; or git, or a step around it, failed
+---@field reason 'not_a_repository'|'no_git'|'timed_out'|'path_missing'|'failed' what went wrong: the directory is in no repository; git could not be started; git ran past its limit and was stopped; a commit has no file at the path asked for (`file_at_commit()` only); or git, or a step around it, failed
 ---@field message string the words for it: git's own, from its standard error, when git gave them
 ---@field code? integer the code git exited with, when it `failed` with one
 

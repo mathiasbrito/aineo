@@ -127,7 +127,10 @@ T['a watch']['calls back on the main loop when a file in a subdirectory is writt
   git_repo.write(top, 'sub/a.txt', { 'a, written' })
 
   eq(wait_for_changes(1), {
-    { change = { files_changed = true, branch_moved = false }, fast = false },
+    {
+      change = { files_changed = true, branch_moved = false, references_changed = false },
+      fast = false,
+    },
   })
 end
 
@@ -154,8 +157,14 @@ T['a watch']['calls back once for a burst of writes'] = function()
   eq({ during = calls_during_the_burst, changes = wait_for_changes(2) }, {
     during = 0,
     changes = {
-      { change = { files_changed = true, branch_moved = false }, fast = false },
-      { change = { files_changed = true, branch_moved = true }, fast = false },
+      {
+        change = { files_changed = true, branch_moved = false, references_changed = false },
+        fast = false,
+      },
+      {
+        change = { files_changed = true, branch_moved = true, references_changed = true },
+        fast = false,
+      },
     },
   })
 end
@@ -173,10 +182,10 @@ T['a watch']['calls back while a file is written without a pause'] = function()
     writer:kill('sigkill')
   end)
 
-  eq(
-    wait_for_changes(1)[1],
-    { change = { files_changed = true, branch_moved = false }, fast = false }
-  )
+  eq(wait_for_changes(1)[1], {
+    change = { files_changed = true, branch_moved = false, references_changed = false },
+    fast = false,
+  })
 end
 
 T['a watch']['calls back when a commit that changes no file moves the branch'] = function()
@@ -186,7 +195,10 @@ T['a watch']['calls back when a commit that changes no file moves the branch'] =
   git_repo.git(top, { 'commit', '--quiet', '--allow-empty', '--message=Nothing, and yet a commit' })
 
   eq(wait_for_changes(1), {
-    { change = { files_changed = true, branch_moved = true }, fast = false },
+    {
+      change = { files_changed = true, branch_moved = true, references_changed = true },
+      fast = false,
+    },
   })
 end
 
@@ -233,7 +245,7 @@ T['a watch that sees the branch move']['calls back once for it'] = function(comm
 
   eq({ first = vim.tbl_get(changes, 1, 'change', 'branch_moved'), second = changes[2].change }, {
     first = true,
-    second = { files_changed = true, branch_moved = false },
+    second = { files_changed = true, branch_moved = false, references_changed = false },
   })
 end
 
@@ -249,7 +261,10 @@ T['a watch that sees the list change through the index']['calls back for it'] = 
   git_repo.git(top, command)
 
   eq(wait_for_changes(1), {
-    { change = { files_changed = true, branch_moved = false }, fast = false },
+    {
+      change = { files_changed = true, branch_moved = false, references_changed = false },
+      fast = false,
+    },
   })
 end
 
@@ -268,7 +283,10 @@ T['a watch']['calls back when a submodule’s branch moves, which changes the li
   git_repo.git(in_top, { 'update-ref', 'refs/heads/main', 'HEAD~1' })
 
   eq(wait_for_changes(1), {
-    { change = { files_changed = true, branch_moved = false }, fast = false },
+    {
+      change = { files_changed = true, branch_moved = false, references_changed = false },
+      fast = false,
+    },
   })
 end
 
@@ -282,8 +300,14 @@ T['a watch']['once the branch moved, takes a burst that moves nothing for no mov
   git_repo.write(top, 'after.txt', { 'the next burst' })
 
   eq(wait_for_changes(2), {
-    { change = { files_changed = true, branch_moved = true }, fast = false },
-    { change = { files_changed = true, branch_moved = false }, fast = false },
+    {
+      change = { files_changed = true, branch_moved = true, references_changed = true },
+      fast = false,
+    },
+    {
+      change = { files_changed = true, branch_moved = false, references_changed = true },
+      fast = false,
+    },
   })
 end
 
@@ -298,8 +322,14 @@ T['a watch']['still sees the branch move after git gc rewrote the reflog'] = fun
   git_repo.commit_all(top, 'After the collection')
 
   eq(wait_for_changes(2), {
-    { change = { files_changed = true, branch_moved = false }, fast = false },
-    { change = { files_changed = true, branch_moved = true }, fast = false },
+    {
+      change = { files_changed = true, branch_moved = false, references_changed = true },
+      fast = false,
+    },
+    {
+      change = { files_changed = true, branch_moved = true, references_changed = true },
+      fast = false,
+    },
   })
 end
 
@@ -312,7 +342,10 @@ T['a watch']['sees the first commit of a repository that had none'] = function()
   git_repo.git(top, { 'commit', '--quiet', '--message=First' })
 
   eq(wait_for_changes(1), {
-    { change = { files_changed = true, branch_moved = true }, fast = false },
+    {
+      change = { files_changed = true, branch_moved = true, references_changed = true },
+      fast = false,
+    },
   })
 end
 
@@ -327,7 +360,10 @@ T['a watch']['sees its branch moved from another worktree'] = function()
   git_repo.git(other, { 'update-ref', 'refs/heads/main', first })
 
   eq(wait_for_changes(1), {
-    { change = { files_changed = false, branch_moved = true }, fast = false },
+    {
+      change = { files_changed = false, branch_moved = true, references_changed = true },
+      fast = false,
+    },
   })
 end
 
@@ -340,11 +376,14 @@ T['a watch']['on a linked worktree sees a commit made there'] = function()
   git_repo.commit_all(linked, 'On the linked worktree')
 
   eq(wait_for_changes(1), {
-    { change = { files_changed = true, branch_moved = true }, fast = false },
+    {
+      change = { files_changed = true, branch_moved = true, references_changed = true },
+      fast = false,
+    },
   })
 end
 
-T['a watch']['does not call back when another worktree commits on its own branch'] = function()
+T['a watch']['takes a commit of another worktree on its own branch for no move of the branch'] = function()
   local top = git_repo.create('watch-other-branch', { ['a.txt'] = { 'a' } })
   local other = vim.fs.joinpath(vim.fs.dirname(top), 'other')
   git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'side', other })
@@ -354,7 +393,68 @@ T['a watch']['does not call back when another worktree commits on its own branch
   git_repo.write(top, 'after.txt', { 'the next burst' })
 
   eq(wait_for_changes(1), {
-    { change = { files_changed = true, branch_moved = false }, fast = false },
+    {
+      change = { files_changed = true, branch_moved = false, references_changed = true },
+      fast = false,
+    },
+  })
+end
+
+--- Makes a repository `clone` of a repository that then gains a commit the
+--- clone has not fetched; returns the clone's top level.
+---
+---@param name string
+---@return string clone
+local function create_clone_behind(name)
+  local source = git_repo.create(name, { ['a.txt'] = { 'a' } })
+  local clone = vim.fs.joinpath(vim.fs.dirname(source), 'clone')
+  git_repo.git(source, { 'clone', '--quiet', source, clone })
+  git_repo.write(source, 'landed.txt', { 'landed' })
+  git_repo.commit_all(source, 'Landed elsewhere')
+  return clone
+end
+
+T['a watch']['calls back for a fetch, which moves a reference and neither HEAD nor a file'] = function()
+  local clone = create_clone_behind('watch-fetch')
+  start_live_watch(clone)
+
+  git_repo.git(clone, { 'fetch', '--quiet' })
+
+  eq(wait_for_changes(1), {
+    {
+      change = { files_changed = false, branch_moved = false, references_changed = true },
+      fast = false,
+    },
+  })
+end
+
+T['a watch']['calls back for a fetch another worktree ran'] = function()
+  local clone = create_clone_behind('watch-fetch-elsewhere')
+  local agent = vim.fs.joinpath(vim.fs.dirname(clone), 'agent')
+  git_repo.git(clone, { 'worktree', 'add', '--quiet', '-b', 'agent-work', agent })
+  start_live_watch(clone)
+
+  git_repo.git(agent, { 'fetch', '--quiet' })
+
+  eq(wait_for_changes(1), {
+    {
+      change = { files_changed = false, branch_moved = false, references_changed = true },
+      fast = false,
+    },
+  })
+end
+
+T['a watch']['calls back when packed-refs alone is rewritten'] = function()
+  local top = git_repo.create('watch-packed-refs', { ['a.txt'] = { 'a' } })
+  start_live_watch(top)
+
+  git_repo.write(top, '.git/packed-refs', { '# pack-refs with: peeled fully-peeled sorted ' })
+
+  eq(wait_for_changes(1), {
+    {
+      change = { files_changed = false, branch_moved = false, references_changed = true },
+      fast = false,
+    },
   })
 end
 
