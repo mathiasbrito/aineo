@@ -1,14 +1,15 @@
 --- The changes pane's content, `require('aineo.changes')`: the session's
 --- base, its commits — under the two lines *Uncommitted* and *Session work*
---- — and the files of the filter the commits window's cursor chose
---- (`aineo.changes.filter`): what differs from `HEAD`, what changed since
---- the base — the user's saves marked — or what one commit changed, each
---- listed in a buffer of the pane, then each other worktree of its
---- repository's files and commits since that worktree's own base
---- (`aineo.changes.worktrees`), and read again as the repository changes
---- once the pane has been shown. Once told which Claude Code session the
---- pane is for, the base and the saves are that session's, kept under the
---- editor's state directory (`aineo.changes.kept`).
+--- — and then each other worktree of its repository's commits since that
+--- worktree's own base (`aineo.changes.worktrees`), listed in a buffer of
+--- the pane; and in another, the files of the one filter the commits
+--- window's cursor chose (`aineo.changes.filter`): what differs from
+--- `HEAD`, what changed since the base — the user's saves marked — what one
+--- commit changed, or, read in another worktree, what changed in it since
+--- its base or in one of its commits. Both are read again as the
+--- repository changes once the pane has been shown. Once told which Claude
+--- Code session the pane is for, the base and the saves are that session's,
+--- kept under the editor's state directory (`aineo.changes.kept`).
 
 local git = require('aineo.git')
 local diff_position = require('aineo.changes.diff_position')
@@ -54,7 +55,6 @@ local SELECTION_PAUSE_MS = 150
 ---@field files_failure? aineo.git.Failure why the last read of the files failed, when it did
 ---@field commits? aineo.git.CommitsSince the commits since the base, as last read
 ---@field commits_failure? aineo.git.Failure why the last read of the commits failed, when it did
----@field files_others aineo.changes.OtherWorktrees what the files window knows of the other worktrees
 ---@field commits_others aineo.changes.OtherWorktrees what the commits window knows of the other worktrees
 ---@field saved table<string, true> the files the user saved under the base, by path relative to the top level: since the session began, or the Claude Code session's followed; none saved while no repository was found
 ---@field early_saves string[] the files the user saved, resolved, while the first look for the repository runs
@@ -83,14 +83,44 @@ local held_bases = {}
 ---@class aineo.changes.Listing
 ---@field filter aineo.changes.Filter the filter whose files these are
 ---@field changes? aineo.git.Change[] its files, as last read; none when the read of them failed
+---@field worktree? aineo.changes.WorktreeSection for a filter of another worktree, that worktree as the read of the files found it
 
 --- The pane's buffers, by window.
 ---@type { files: integer|nil, commits: integer|nil }
 local buffers = {}
 
+--- `worktree`, a worktree other than the editor's, as the commits window
+--- last read it: the section of `session.commits_others` with its top
+--- level, or `worktree` itself when the window lists none.
+---
+---@param worktree aineo.changes.WorktreeSection
+---@return aineo.changes.WorktreeSection
+local function section_as_last_read(worktree)
+  for _, section in ipairs(session.commits_others.sections) do
+    if section.top == worktree.top then
+      return section
+    end
+  end
+  return worktree
+end
+
+--- The filter the files window names: `listed`'s, the selected one before
+--- any list was read, and, for another worktree's, with the worktree as the
+--- commits window last read it, its branch included.
+---
+---@param listed aineo.changes.Listing|nil
+---@return aineo.changes.Filter
+local function filter_named(listed)
+  local named = listed and listed.filter or session.selected
+  if named.worktree then
+    return filter.in_worktree(named, section_as_last_read(named.worktree))
+  end
+  return named
+end
+
 --- The files window's page for what the session knows: why it has no
---- repository, when it has none, or the files of the filter it lists, the
---- selected one before any list was read.
+--- repository, when it has none, or the files of the one filter it lists
+--- (`filter_named()`).
 ---
 ---@return aineo.changes.Page
 local function files_page()
@@ -99,12 +129,12 @@ local function files_page()
   end
   local listed = session.listed
   return lines.files_window({
-    filter = session.repository and (listed and listed.filter or session.selected) or nil,
+    filter = session.repository and filter_named(listed) or nil,
     changes = listed and listed.changes,
     failure = session.files_failure or session.watch_failure,
+    worktree = listed and listed.worktree,
     saved = session.saved,
     unwatched_subdirectories = session.watch ~= nil and not session.watch.watches_subdirectories,
-    worktrees = session.files_others,
   })
 end
 
@@ -229,24 +259,26 @@ end
 ---@class aineo.changes.WindowReads
 ---@field read_own fun(base: string|nil, done: fun(failure: aineo.git.Failure|nil, answer: any)) asks git for the editor's own list from the session's base
 ---@field take_own fun(failure: aineo.git.Failure|nil, answer: any) keeps what that read answered
----@field read_list aineo.changes.ReadList asks git for another worktree's list
----@field others_field 'files_others'|'commits_others' the field of the session that keeps what the window knows of the other worktrees
+---@field read_list? aineo.changes.ReadList asks git for another worktree's list; nil for a window that lists no other worktree
+---@field others_field? 'commits_others' the field of the session that keeps what the window knows of the other worktrees; nil for a window that lists no other worktree
+---@field took_others? fun(others: aineo.changes.OtherWorktrees) told what the window now knows of the other worktrees, before it is shown
 ---@field show fun() writes the window for what the session knows
 
 --- Returns the function that asks for one read of a window as `reads`
---- describes it, one git at a time (`aineo.changes.serial`): the editor's
+--- describes it, one git at a time (`aineo.changes.serial`): the window's
 --- own list from the session's base, when asked with `with_own`, kept and
---- shown as soon as git answers, then the other worktrees' (`aineo.changes.
---- worktrees`), shown once all are read, when the window shows any of them,
---- or did. A read asked for with the editor's own list while another runs
---- reads it before the next other worktree's, or, when none is left, once
---- more after; a read asked for without it runs once more after. The
---- editor's own list is not read while the session looks for its base, and
---- an answer for a base that is no longer current (`is_current_base()`) is
+--- shown as soon as git answers, then, for a window that lists them, the
+--- other worktrees' (`aineo.changes.worktrees`), kept and told to
+--- `reads.took_others`, and shown once all are read, when the window shows
+--- any of them, or did. A read asked for with the own list while another
+--- runs reads it before the next other worktree's, or, when none is left,
+--- once more after; a read asked for without it runs once more after. The
+--- own list is not read while the session looks for its base, and an
+--- answer for a base that is no longer current (`is_current_base()`) is
 --- dropped, the read for the new one asked for already. What follows the
---- editor's own list starts before the list is shown, so that an error
---- showing it stops no read, and the read ends before the other worktrees'
---- are shown.
+--- own list starts before the list is shown, so that an error showing it
+--- stops no read, and the read ends before the other worktrees' are
+--- shown.
 ---
 ---@param reads aineo.changes.WindowReads
 ---@return fun(with_own: boolean) ask
@@ -272,6 +304,10 @@ local function window_read(reads)
   end
   local ask = serial.one_at_a_time(function(ended)
     read_own_then(function()
+      if not reads.others_field then
+        ended()
+        return
+      end
       local before = session[reads.others_field]
       worktrees.read_other_worktrees({
         found = session.repository,
@@ -281,6 +317,9 @@ local function window_read(reads)
         git = session.settings.git,
       }, function(others)
         session[reads.others_field] = others
+        if reads.took_others then
+          reads.took_others(others)
+        end
         ended()
         if shows_any(before) or shows_any(others) then
           reads.show()
@@ -294,15 +333,56 @@ local function window_read(reads)
   end
 end
 
---- Reads the files of the selected filter from the session's repository,
---- the session's base for *Session work*, and calls `done(failure,
---- listing)`: the listing of the filter asked for, with no files on a
---- failure.
+--- Reads the files of the selected filter, a filter of another worktree,
+--- in that worktree, and calls `done(failure, listing)`: a commit's files in
+--- the repository the commits window found for the worktree; its whole
+--- change from its base, read again now (`aineo.changes.worktrees`'
+--- `read_worktree()`). The listing names the worktree as the read found it.
+---
+---@param selected aineo.changes.Filter a filter with a `worktree`
+---@param done fun(failure: aineo.git.Failure|nil, listing: aineo.changes.Listing)
+local function read_worktree_files(selected, done)
+  local options = session.settings.git
+  local section = section_as_last_read(selected.worktree)
+  if selected.kind == 'commit' then
+    git.commit_files(section.repository, selected.commit.id, function(failure, changes)
+      done(failure, { filter = selected, changes = changes, worktree = section })
+    end, options)
+    return
+  end
+  worktrees.read_worktree(
+    {
+      found = session.repository,
+      before = worktrees.NONE,
+      read_list = function(repository, base, listed)
+        git.changed_files(repository, base, listed, options)
+      end,
+      git = options,
+    },
+    selected.worktree,
+    function(read)
+      if not read then
+        done(nil, { filter = selected, changes = {}, worktree = section })
+        return
+      end
+      done(read.failure, { filter = selected, changes = read.listed, worktree = read })
+    end
+  )
+end
+
+--- Reads the files of the selected filter, in the editor's own repository
+--- or in the worktree it belongs to, and calls `done(failure, listing)`: the
+--- listing of the filter asked for, with no files on a failure. The
+--- session's base is the one *Session work* is read from.
 ---
 ---@param base string|nil
 ---@param done fun(failure: aineo.git.Failure|nil, listing: aineo.changes.Listing)
 local function read_selected_files(base, done)
   local selected = session.selected
+  if selected.worktree then
+    read_worktree_files(selected, done)
+    return
+  end
   local repository, options = session.repository, session.settings.git
   local function listing_of(failure, changes)
     done(failure, { filter = selected, changes = changes })
@@ -316,12 +396,11 @@ local function read_selected_files(base, done)
   end
 end
 
---- Reads the files of the selected filter, and those of each other
---- worktree since its own base, and shows them (`window_read()`). A read
---- that fails keeps the files shown when they are those of the filter
---- read; for another filter, the window lists that filter with no files,
---- under the failure's line.
-local read_files = window_read({
+--- Asks for one read of the selected filter's files (`window_read()`).
+--- A read that fails keeps the files shown when they are those of the
+--- filter read; for another filter, the window lists that filter with no
+--- files, under the failure's line.
+local ask_for_files = window_read({
   read_own = read_selected_files,
   take_own = function(failure, listing)
     local listed = session.listed
@@ -330,18 +409,33 @@ local read_files = window_read({
     end
     session.files_failure = failure
   end,
-  read_list = function(repository, base, done)
-    git.changed_files(repository, base, done, session.settings.git)
-  end,
-  others_field = 'files_others',
   show = show_files,
 })
+
+--- Reads the files of the selected filter again, and shows them
+--- (`ask_for_files()`), when asked with `with_own` — the editor's own
+--- files may differ — or, always, when the filter is another worktree's
+--- whole change, which a commit in that worktree changes whatever the
+--- editor's own files do.
+---
+---@param with_own boolean
+local function read_files(with_own)
+  ask_for_files(with_own or session.selected.kind == 'worktree')
+end
+
+--- Selects `selected`, the commits window's cursor to be put on its line
+--- (`place_commits_cursor()`).
+---
+---@param selected aineo.changes.Filter
+local function select_filter(selected)
+  session.selected = selected
+  session.cursor_unplaced = true
+end
 
 --- Selects *Session work* again, the commits window's cursor to be put on
 --- its line (`place_commits_cursor()`).
 local function select_session_work()
-  session.selected = filter.SESSION_WORK
-  session.cursor_unplaced = true
+  select_filter(filter.SESSION_WORK)
 end
 
 --- Whether `commits`, as last read, still list the commit `selected` names.
@@ -355,10 +449,48 @@ local function lists_commit(selected, commits)
   end)
 end
 
+--- Selects again, and reads the files window for it, what the selection
+--- comes to when `others`, what the commits window now knows of the other
+--- worktrees, no longer lists what it names: *Session work* when the
+--- selected filter's worktree is gone; that worktree's whole change when it
+--- lists the worktree but not the selected commit any more — after an
+--- amend, a rebase. A worktree still listed becomes the selected filter's
+--- as it was last read, and the files window is written again when its
+--- branch changed, for its first line names it.
+---
+---@param others aineo.changes.OtherWorktrees
+local function reselect_in_worktrees(others)
+  local selected = session.selected
+  if not selected.worktree then
+    return
+  end
+  local section = vim.iter(others.sections):find(function(listed)
+    return listed.top == selected.worktree.top
+  end)
+  if not section then
+    select_session_work()
+    read_files(true)
+  elseif
+    selected.kind == 'commit'
+    and section.listed
+    and not lists_commit(selected, section.listed.commits)
+  then
+    select_filter(filter.of_worktree(section))
+    read_files(true)
+  else
+    session.selected = filter.in_worktree(selected, section)
+    if section.branch ~= selected.worktree.branch then
+      show_files()
+    end
+  end
+end
+
 --- Reads the commits since the base, and those of each other worktree
---- since its own, and shows them (`window_read()`). When the commit the
---- files window lists is no longer among them — after a reset, a rebase —
---- *Session work* is selected again, and the files window read for it.
+--- since its own, and shows them (`window_read()`). When the editor's own
+--- commit the files window lists is no longer among them — after a reset, a
+--- rebase — *Session work* is selected again, and the files window read for
+--- it; when it is another worktree's, or that worktree is, see
+--- `reselect_in_worktrees()`.
 local read_commits = window_read({
   read_own = function(base, done)
     git.commits_since(session.repository, base, done, session.settings.git)
@@ -369,6 +501,7 @@ local read_commits = window_read({
     if
       since
       and session.selected.kind == 'commit'
+      and not session.selected.worktree
       and not lists_commit(session.selected, since.commits)
     then
       select_session_work()
@@ -379,13 +512,15 @@ local read_commits = window_read({
     git.commits_since(repository, base, done, session.settings.git)
   end,
   others_field = 'commits_others',
+  took_others = reselect_in_worktrees,
   show = show_commits,
 })
 
 --- Reads again what `change`, a call of the watch, may have changed: the
---- other worktrees' files and commits at every call, as a commit in one of
---- them moves no branch of the editor's; the editor's own files when they
---- may differ, and its commits and files when its branch moved.
+--- other worktrees' commits at every call, as a commit in one of them
+--- moves no branch of the editor's, and their files when the files window
+--- lists one's whole change; the editor's own files when they may differ,
+--- and its commits and files when its branch moved.
 ---
 ---@param change aineo.git.RepositoryChange
 local function follow_change(change)
@@ -805,7 +940,6 @@ function M.begin_session(settings)
     following_soon = false,
     saved = {},
     early_saves = {},
-    files_others = worktrees.NONE,
     commits_others = worktrees.NONE,
   }
   local group = vim.api.nvim_create_augroup('aineo_changes', {})
@@ -1254,10 +1388,10 @@ local window_moved = nil
 --- Selects the filter the line under the cursor of the window whose cursor
 --- last moved in the commits buffer lists, when it is a filter other than
 --- the selected one, and reads the files window for it. A line that lists
---- no filter — a note, another worktree's heading or commit — leaves the
---- selection as it was, and so does a cursor not yet put on the selected
---- filter's line (`place_commits_cursor()`), which a commits page written
---- before git answered shows on its first line.
+--- no filter — a note — leaves the selection as it was, and so does a
+--- cursor not yet put on the selected filter's line
+--- (`place_commits_cursor()`), which a commits page written before git
+--- answered shows on its first line.
 local function select_filter_at_cursor()
   local window = window_moved
   if

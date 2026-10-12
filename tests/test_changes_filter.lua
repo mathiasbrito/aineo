@@ -392,6 +392,43 @@ T['the filter']['follows a scroll of the commits window made while the cursor is
   expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Change a', '  M a.txt' })
 end
 
+T['the filter']['puts the cursor of every files window on its first line, the view at the top, at a change of filter'] = function()
+  local files = {}
+  for number = 1, 40 do
+    files[('f%02d.txt'):format(number)] = { 'one' }
+  end
+  local top = git_repo.create('filter-view-reset', files)
+  begin_and_show(top)
+  expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, NO_COMMITS })
+  for name in pairs(files) do
+    git_repo.write(top, name, { 'two' })
+  end
+  refresh_pane()
+  git_repo.wait_until('forty files listed', function()
+    return #lines_of(FILES) == 41
+  end)
+  child.cmd('vsplit')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 35, 0 })')
+  child.cmd('wincmd p')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 35, 0 })')
+  enter_window_of(COMMITS)
+
+  go_to_line(1)
+
+  git_repo.wait_until('the files window lists Uncommitted', function()
+    return lines_of(FILES)[1] == 'Files in: Uncommitted'
+  end)
+  eq(
+    child.lua_get(
+      [[vim.tbl_map(function(window)
+        return { vim.api.nvim_win_get_cursor(window)[1], vim.fn.getwininfo(window)[1].topline }
+      end, vim.fn.win_findbuf(vim.fn.bufnr(...)))]],
+      { FILES }
+    ),
+    { { 1, 1 }, { 1, 1 } }
+  )
+end
+
 T['the filter']['is Uncommitted under the first line: the files that differ from HEAD, the untracked ones too'] = function()
   local top = session_with_two_commits('filter-uncommitted')
   git_repo.write(top, 'a.txt', { 'three' })
@@ -546,6 +583,192 @@ T['the filter']['goes back to Session work, the cursor with it, when the selecte
   expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, first:sub(1, 7) .. ' Change a' })
   expect_lines(FILES, { 'Files in: Session work', '  M a.txt' })
   eq(cursor_of(COMMITS), { 2, 0 })
+end
+
+--- Makes the directory `name` beside the repository at `top` a worktree of
+--- it on the new branch `branch`, from `start_point` when given, and
+--- returns the worktree's top level.
+---
+---@param top string
+---@param name string
+---@param branch string
+---@param start_point? string
+---@return string worktree
+local function add_worktree(top, name, branch, start_point)
+  local worktree = vim.fs.joinpath(vim.fs.dirname(top), name)
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', branch, worktree, start_point })
+  return worktree
+end
+
+--- Puts the cursor of the commits window, entered, on line `line`.
+---
+---@param line integer
+local function go_to_commits_line(line)
+  enter_window_of(COMMITS)
+  go_to_line(line)
+end
+
+--- The Lua that records, in the child, the top level of the repository
+--- every read of a commit's files is given, in `_G.commit_files_tops`.
+local RECORD_COMMIT_FILES_REPOSITORIES = [[
+  local git = require('aineo.git')
+  local commit_files = git.commit_files
+  _G.commit_files_tops = {}
+  git.commit_files = function(found, ...)
+    table.insert(_G.commit_files_tops, found.top)
+    return commit_files(found, ...)
+  end
+]]
+
+--- The commits window's lines for an editor with no commit and one
+--- worktree, `agent`, whose commit lines are `commits`.
+---
+---@param commits string[]
+---@return string[]
+local function commits_with_agent(commits)
+  return vim.list_extend({
+    UNCOMMITTED,
+    SESSION_WORK,
+    NO_COMMITS,
+    'Worktree agent (agent)',
+  }, commits)
+end
+
+T['the filter in another worktree'] = MiniTest.new_set()
+
+T['the filter in another worktree']['a cursor on its commit lists that commit’s files, read in that worktree'] = function()
+  local top = git_repo.create('wtfilter-commit', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  git_repo.write(agent, 'new.txt', { 'new' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+  child.lua(RECORD_COMMIT_FILES_REPOSITORIES)
+  begin_and_show(top)
+  expect_lines(COMMITS, commits_with_agent({ commit:sub(1, 7) .. ' The agent’s' }))
+
+  go_to_commits_line(5)
+
+  expect_lines(FILES, {
+    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    '  A new.txt',
+    '  M notes.txt',
+  })
+  eq(child.lua_get('_G.commit_files_tops'), { agent })
+end
+
+T['the filter in another worktree']['a cursor on its heading lists its files since its base, unmarked'] = function()
+  local top = git_repo.create('wtfilter-heading', { ['notes.txt'] = { 'one' } })
+  add_worktree(top, 'agent', 'agent')
+  local agent = vim.fs.joinpath(vim.fs.dirname(top), 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  git_repo.write(agent, 'new.txt', { 'new' })
+  begin_and_show(top)
+  expect_lines(COMMITS, commits_with_agent({ 'No commits in this worktree' }))
+  git_repo.write(top, 'notes.txt', { 'saved' })
+  child.lua(
+    [[
+      local files = vim.api.nvim_get_current_win()
+      vim.cmd('aboveleft split ' .. vim.fn.fnameescape(... .. '/notes.txt'))
+      vim.cmd('write')
+      vim.api.nvim_set_current_win(files)
+    ]],
+    { top }
+  )
+  expect_lines(FILES, { 'Files in: Session work', '* M notes.txt' })
+
+  go_to_commits_line(4)
+
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt', '  ? new.txt' })
+end
+
+T['the filter in another worktree']['says so when its whole change, or its commit, holds no file'] = function()
+  local top = git_repo.create('wtfilter-empty', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  local commit = git_repo.commit_all(agent, 'Nothing')
+  begin_and_show(top)
+  expect_lines(COMMITS, commits_with_agent({ commit:sub(1, 7) .. ' Nothing' }))
+
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', 'No files changed in this worktree' })
+  go_to_commits_line(5)
+
+  expect_lines(FILES, {
+    'Files in: ' .. commit:sub(1, 7) .. ' Nothing (worktree agent)',
+    'No files in this commit',
+  })
+end
+
+T['the filter in another worktree']['leaves no other worktree’s section in the files window under the editor’s own filters'] = function()
+  local top = git_repo.create('wtfilter-alone', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'agent.txt', { 'new' })
+  begin_and_show(top)
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local own = git_repo.commit_all(top, 'Mine')
+  refresh_pane()
+  expect_lines(COMMITS, {
+    UNCOMMITTED,
+    SESSION_WORK,
+    own:sub(1, 7) .. ' Mine',
+    'Worktree agent (agent)',
+    'No commits in this worktree',
+  })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
+
+  go_to_commits_line(1)
+  expect_lines(FILES, { 'Files in: Uncommitted', 'No uncommitted changes' })
+  go_to_commits_line(3)
+
+  expect_lines(FILES, { 'Files in: ' .. own:sub(1, 7) .. ' Mine', '  M notes.txt' })
+end
+
+T['the filter in another worktree']['is one filter per worktree for the same commit'] = function()
+  local top = git_repo.create('wtfilter-same-commit', { ['notes.txt'] = { 'one' } })
+  local first = add_worktree(top, 'first', 'first')
+  git_repo.write(first, 'notes.txt', { 'first' })
+  local commit = git_repo.commit_all(first, 'Shared')
+  local second = add_worktree(top, 'second', 'second', 'first')
+  child.lua(RECORD_COMMIT_FILES_REPOSITORIES)
+  begin_and_show(top)
+  expect_lines(COMMITS, {
+    UNCOMMITTED,
+    SESSION_WORK,
+    NO_COMMITS,
+    'Worktree first (first)',
+    commit:sub(1, 7) .. ' Shared',
+    'Worktree second (second)',
+    commit:sub(1, 7) .. ' Shared',
+  })
+  go_to_commits_line(5)
+  git_repo.wait_until('the first worktree’s commit read', function()
+    return child.lua_get('#_G.commit_files_tops') == 1
+  end)
+
+  go_to_commits_line(7)
+
+  git_repo.wait_until('the second worktree’s commit read', function()
+    return child.lua_get('#_G.commit_files_tops') == 2
+  end)
+  eq(child.lua_get('_G.commit_files_tops'), { first, second })
+  expect_lines(FILES, {
+    'Files in: ' .. commit:sub(1, 7) .. ' Shared (worktree second)',
+    '  M notes.txt',
+  })
+end
+
+T['the filter in another worktree']['stays what it was on a line that lists none'] = function()
+  local top = git_repo.create('wtfilter-note-line', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  begin_and_show(top)
+  expect_lines(COMMITS, commits_with_agent({ 'No commits in this worktree' }))
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
+
+  go_to_commits_line(5)
+
+  vim.wait(600)
+  eq(lines_of(FILES), { 'Files in: Worktree agent (agent)', '  M notes.txt' })
 end
 
 T['the save marks'] = MiniTest.new_set()
