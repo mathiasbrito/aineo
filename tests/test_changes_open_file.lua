@@ -571,6 +571,40 @@ T['gf']['under a landed commit shows the file as that commit has it'] = function
   eq(child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)'), { 'first' })
 end
 
+T['gf']['under a commit, then on another file before the first is read, tells nothing of the first read’s failure'] = function()
+  pane_under_commit(
+    'openfile-commit-twice-failed',
+    { ['a.txt'] = { 'a' }, ['b.txt'] = { 'b' } },
+    { '  A a.txt', '  A b.txt' }
+  )
+  child.lua([[
+    _G.pending = {}
+    require('aineo.git').file_at_commit = function(_, _, path, done)
+      _G.pending[path] = done
+    end
+  ]])
+  press_gf_on(2)
+  press_gf_on(3)
+
+  child.lua('_G.pending["a.txt"]({ reason = "failed", message = "late" })')
+  child.lua('_G.pending["b.txt"](nil, "b text\\n")')
+
+  eq({ child.lua_get(TOLD), child.lua_get('#_G.shown_diffs') }, { '', 1 })
+end
+
+T['gf']['under a commit names the buffer after the file as the files window quotes it'] = function()
+  local _, commit = pane_under_commit(
+    'openfile-commit-quoted',
+    { ['say "hi".txt'] = { 'text' } },
+    { '  A "say \\"hi\\".txt"' }
+  )
+
+  press_gf_on(2)
+
+  wait_for_file_shown()
+  eq(current_buffer_name(), 'aineo://show/' .. commit .. '/"say \\"hi\\".txt"')
+end
+
 T['gf']['under Landed, once the working branch names no commit, shows nothing and says why'] = function()
   pane_with_landed('openfile-landed-gone')
   go_to_commits_line(4)
