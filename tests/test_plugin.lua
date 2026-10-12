@@ -76,7 +76,7 @@ local function added(definitions, before)
   end, { commands = 'commands', keymaps = 'keymaps', autocmds = 'autocmds' })
 end
 
-T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings and, once started, the StdinReadPost autocommand alone'] = function()
+T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings, their twins in Insert and Terminal mode and, once started, the StdinReadPost autocommand alone'] = function()
   children.restart(child, { '--cmd', 'let g:loaded_aineo = 1' })
   local without_the_file = child.lua_get(DEFINITIONS)
 
@@ -85,6 +85,14 @@ T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings 
   eq(added(child.lua_get(DEFINITIONS), without_the_file), {
     commands = { 'Aineo' },
     keymaps = {
+      'i <C-Bslash>S',
+      'i <C-Bslash>c',
+      'i <C-Bslash>g',
+      'i <C-Bslash>i',
+      'i <C-Bslash>o',
+      'i <C-Bslash>pa',
+      'i <C-Bslash>r',
+      'i <C-Bslash>tcn',
       'n <Plug>(aineo-claim)',
       'n <Plug>(aineo-claude)',
       'n <Plug>(aineo-claude-numbers)',
@@ -104,6 +112,14 @@ T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings 
       'n \\r',
       'n \\s',
       'n \\tcn',
+      't <C-Bslash>S',
+      't <C-Bslash>c',
+      't <C-Bslash>g',
+      't <C-Bslash>i',
+      't <C-Bslash>o',
+      't <C-Bslash>pa',
+      't <C-Bslash>r',
+      't <C-Bslash>tcn',
       'x <Plug>(aineo-send)',
       'x \\s',
     },

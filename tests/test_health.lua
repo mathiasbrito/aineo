@@ -1073,6 +1073,125 @@ T['the prefix mappings']['are not checked while the configuration is wrong'] = f
   })
 end
 
+T['the terminal prefix mappings'] = MiniTest.new_set()
+
+--- The lines of the Terminal prefix mappings section when aineo mapped each
+--- twin, for the default terminal prefix: one per key and mode, Terminal
+--- mode first.
+local TWIN_LINES = {
+  '- ✅ OK <C-\\>o in Terminal mode runs <C-\\><C-n><Plug>(aineo-open)',
+  '- ✅ OK <C-\\>o in Insert mode runs <C-\\><C-n><Plug>(aineo-open)',
+  '- ✅ OK <C-\\>r in Terminal mode runs <C-\\><C-n><Plug>(aineo-report)',
+  '- ✅ OK <C-\\>r in Insert mode runs <C-\\><C-n><Plug>(aineo-report)',
+  '- ✅ OK <C-\\>i in Terminal mode runs <C-\\><C-n><Plug>(aineo-input)',
+  '- ✅ OK <C-\\>i in Insert mode runs <C-\\><C-n><Plug>(aineo-input)',
+  '- ✅ OK <C-\\>c in Terminal mode runs <C-\\><C-n><Plug>(aineo-claude)',
+  '- ✅ OK <C-\\>c in Insert mode runs <C-\\><C-n><Plug>(aineo-claude)',
+  '- ✅ OK <C-\\>tcn in Terminal mode runs <C-\\><C-n><Plug>(aineo-claude-numbers)',
+  '- ✅ OK <C-\\>tcn in Insert mode runs <C-\\><C-n><Plug>(aineo-claude-numbers)',
+  '- ✅ OK <C-\\>S in Terminal mode runs <C-\\><C-n><Plug>(aineo-sessions)',
+  '- ✅ OK <C-\\>S in Insert mode runs <C-\\><C-n><Plug>(aineo-sessions)',
+  '- ✅ OK <C-\\>pa in Terminal mode runs <C-\\><C-n><Plug>(aineo-pane-agent)',
+  '- ✅ OK <C-\\>pa in Insert mode runs <C-\\><C-n><Plug>(aineo-pane-agent)',
+  '- ✅ OK <C-\\>g in Terminal mode runs <C-\\><C-n><Plug>(aineo-pane-changes)',
+  '- ✅ OK <C-\\>g in Insert mode runs <C-\\><C-n><Plug>(aineo-pane-changes)',
+}
+
+T['the terminal prefix mappings']['are reported in place when aineo mapped each twin'] = function()
+  start_with({ autostart = false })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Terminal prefix mappings'), TWIN_LINES)
+end
+
+T['the terminal prefix mappings']['warn of a twin the user mapped, naming what it runs'] = function()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({ autostart = false }), {
+      '--cmd',
+      'tnoremap <C-\\>r :echo "mine"<CR>',
+    })
+  )
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Terminal prefix mappings')[3],
+    '- ⚠️ WARNING <C-\\>r in Terminal mode runs \':echo "mine"<CR>\', not <C-\\><C-n><Plug>(aineo-report)'
+  )
+  eq(health.advice(report, 'Terminal prefix mappings'), {
+    'aineo leaves a key you mapped alone; map <Plug>(aineo-report) to a key of your own: :help |aineo-mappings|',
+  })
+end
+
+T['the terminal prefix mappings']['warn of a twin nobody mapped, as after one is unmapped'] = function()
+  start_with({ autostart = false })
+  child.cmd([[iunmap <C-\>i]])
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Terminal prefix mappings')[6],
+    '- ⚠️ WARNING <C-\\>i in Insert mode is not mapped'
+  )
+  eq(health.advice(report, 'Terminal prefix mappings'), {
+    'aineo maps its keys once, when the editor has started; a terminal_prefix changed or a key unmapped since stays so until the next start: :help |aineo-config-terminal_prefix|',
+  })
+end
+
+T['the terminal prefix mappings']['report the keys of the terminal prefix the setting names'] = function()
+  start_with({ autostart = false, terminal_prefix = '<C-q>' })
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Terminal prefix mappings')[1],
+    '- ✅ OK <C-q>o in Terminal mode runs <C-\\><C-n><Plug>(aineo-open)'
+  )
+end
+
+T['the terminal prefix mappings']['are none when terminal_prefix is false'] = function()
+  start_with({ autostart = false, terminal_prefix = false })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Terminal prefix mappings'), {
+    '- terminal_prefix is false: aineo maps no key in Terminal and Insert mode',
+  })
+end
+
+T['the terminal prefix mappings']['are not checked while the configuration is wrong'] = function()
+  start_with({ autostart = false, terminal_prefix = 1 })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Terminal prefix mappings'), {
+    '- the terminal prefix mappings are not checked while the configuration is wrong',
+  })
+end
+
+T['the terminal prefix mappings']['say the keys are mapped once the editor has started, when checked before'] = function()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({ autostart = false }), { '-c', health.CAPTURE })
+  )
+
+  local report = child.lua_get('vim.g.health_report')
+
+  eq(health.section(report, 'Terminal prefix mappings'), {
+    '- the terminal prefix keys are not mapped: aineo maps them from its VimEnter handler, which has not run — the editor is still starting, or a VimEnter autocommand before it threw an exception',
+  })
+end
+
+T['the terminal prefix mappings']['say the keys are mapped in the next tick, when checked in the tick aineo is loaded late'] = function()
+  local report = check_in_the_tick_aineo_is_loaded_late()
+
+  eq(health.section(report, 'Terminal prefix mappings'), {
+    '- the terminal prefix keys are not mapped yet: aineo was loaded after startup, and maps them in the next event-loop tick',
+  })
+end
+
 T['the autostart'] = MiniTest.new_set()
 
 T['the autostart']['has no record when aineo did not load at startup'] = function()
