@@ -621,10 +621,11 @@ local function own_commit_rows(view)
 end
 
 --- The rows of what landed in the working branch, `landed`: its heading,
---- listing the filter of what landed (`filter_row()`), then a line per
---- commit that landed (`commit_rows()`), or a note saying nothing did, or a
---- failure saying the name names no commit. None when the window knows no
---- working branch.
+--- listing the filter of what landed (`filter_row()`), the line saying its
+--- last read failed, when it did (`failure_notes()`), then a line per commit
+--- that landed (`commit_rows()`), or a note saying nothing did, or a failure
+--- saying the name names no commit; after a first read that failed, the
+--- failure's line alone. None when the window knows no working branch.
 ---
 ---@param landed aineo.changes.Landed|nil
 ---@return aineo.changes.Row[]
@@ -633,15 +634,18 @@ local function landed_rows(landed)
     return {}
   end
   local rows = { filter_row(filter.of_landed(landed.name)) }
+  local notes = failure_notes(landed.failure)
   local name = M.quoted_path(landed.name)
   if landed.names_no_commit then
-    table.insert(rows, failure_line(name .. ' names no commit'))
-    return rows
+    table.insert(notes, failure_line(name .. ' names no commit'))
+  end
+  if landed.names_no_commit or not landed.commits then
+    return vim.list_extend(rows, notes)
   end
   return vim.list_extend(
     rows,
     rows_of(
-      {},
+      notes,
       commit_rows(landed.commits, function(commit)
         return filter.of_landed_commit(landed.name, commit)
       end),

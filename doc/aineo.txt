@@ -218,10 +218,10 @@ lists what it brought in, a root commit its files; an empty commit says "No
 files in this commit".
 
 Under the Landed heading the window lists the files that differ between the
-merge base of the session's base and the working branch, and the commit the
-working branch named when the commits window last read it, in the same form
-and with no `*` on any line, or says "No files changed in what landed"; with
-no base, every file of that commit is new. Under a commit that landed it
+merge base of the session's base and the commit the working branch named
+when the commits window last read it, and that commit, in the same form and
+with no `*` on any line, or says "No files changed in what landed"; with no
+base, every file of that commit is new. Under a commit that landed it
 lists the files that commit changed, against its first parent, with no `*`,
 as under any commit.
 
@@ -404,8 +404,9 @@ base is no longer behind `HEAD` — after a reset to before it, or a checkout
 of another branch — the commits window says so above what git lists, and
 the base stays. A read that fails keeps the list shown, under one line
 giving git's words; a read of the working branch that fails keeps what
-landed as it was, its line among your own lines; so does another
-worktree's, under its heading, the other worktrees as they are. When the
+landed as it was, its line under the Landed heading, which reads `Landed
+in origin/HEAD` when no name was known yet; so does another worktree's,
+under its heading, the other worktrees as they are. When the
 other worktrees cannot be listed, one line in git's words follows your own
 lines, over the worktrees last listed. When aineo's watch of the repository
 fails, both windows say so until the pane is shown again, which starts it
@@ -1686,10 +1687,10 @@ The changes pane ~
   shows at the next showing of the pane, save or commit, and a branch moved
   by `git update-ref` from another worktree, a tag, and a fetch another
   worktree ran are missed too; a fetch run in your repository's main
-  worktree is seen; what landed in your working branch then shows such a
-  fetch at the next showing of the pane. No timer reads the repository on
-  a schedule; the only timer is the pause before the files window follows
-  the commits window's cursor.
+  worktree is seen; what landed in your working branch then shows what
+  such a fetch brought at the next showing of the pane. No timer reads
+  the repository on a schedule; the only timer is the pause before the
+  files window follows the commits window's cursor.
 - Choosing another line in the commits window reads the files window again
   for it: another worktree's heading or commit is read in that worktree,
   and a heading's base with it.
@@ -1702,10 +1703,14 @@ The changes pane ~
   since the fork. A checkout on the working branch itself lists its own
   commits both among the session's and among what landed. A working branch
   that shares no history with the base lists its commits, and the files
-  under its heading fail with git's `no merge base`. When the default
-  branch of the remote was renamed and pruned, `origin/HEAD` names a branch
-  that is gone, and the section says it names no commit until
-  `changes.working_branch` names the new one. Each read of the commits
+  under its heading fail with git's `no merge base`. A name git finds
+  ambiguous is read as git reads it: with a local branch called
+  `origin/dev`, the setting `origin/dev` names that branch, and
+  `refs/remotes/origin/dev` names the remote one. When the default branch
+  of the remote was renamed and pruned, `origin/HEAD` names a branch that
+  is gone, and the section says it names no commit until
+  `git remote set-head origin -a` points `origin/HEAD` at the new default,
+  or `changes.working_branch` names it. Each read of the commits
   window runs two or three more git processes for it (the default branch of
   the remote, unless the setting names one; the commit the name names; the
   commits between it and the base), and the files window under the heading

@@ -61,7 +61,6 @@ local SELECTION_PAUSE_MS = 150
 ---@field commits? aineo.git.CommitsSince the commits since the base, as last read
 ---@field commits_failure? aineo.git.Failure why the last read of the commits failed, when it did
 ---@field landed? aineo.changes.Landed what landed in the working branch, as last read; nil while unread, and when there is no working branch
----@field landed_failure? aineo.git.Failure why the last read of what landed failed, when it did
 ---@field commits_others aineo.changes.OtherWorktrees what the commits window knows of the other worktrees
 ---@field saved table<string, true> the files the user saved under the base, by path relative to the top level: since the session began, or the Claude Code session's followed; none saved while no repository was found
 ---@field early_saves string[] the files the user saved, resolved, while the first look for the repository runs
@@ -156,7 +155,7 @@ local function commits_page()
   return lines.commits_window({
     since = session.commits,
     base = session.base,
-    failure = session.commits_failure or session.landed_failure or session.watch_failure,
+    failure = session.commits_failure or session.watch_failure,
     lists_filters = session.repository ~= nil,
     landed = session.landed,
     worktrees = session.commits_others,
@@ -539,9 +538,10 @@ end
 --- Keeps `read`, what the commits window read of the working branch. When it
 --- no longer lists what the selected filter of what landed names — a
 --- working branch reset or pushed over, or none any more — *Session work* is
---- selected again, and the files window read for it; when it lists what
---- landed and the commit the working branch names is another than before,
---- the files window is read again.
+--- selected again, and the files window read for it; when the heading is
+--- selected and the working branch is another one or names another commit
+--- than before, the heading selected is that branch's, and the files window
+--- is read again.
 ---
 ---@param read aineo.changes.Landed|nil
 local function take_landed(read)
@@ -551,7 +551,8 @@ local function take_landed(read)
   if selected.landed and not lists_landed(selected, read) then
     select_session_work()
     read_files(true)
-  elseif selected.kind == 'landed' and (read and read.tip) ~= tip_before then
+  elseif selected.kind == 'landed' and (read.name ~= selected.landed or read.tip ~= tip_before) then
+    session.selected = filter.of_landed(read.name)
     read_files(true)
   end
 end
@@ -565,7 +566,8 @@ local landed_reads = 0
 --- it, and shows it (`take_landed()`, `show_commits()`) once the answer
 --- comes and differs from what the window knew, unless a later read was
 --- started or the session has another base by then (`is_current_base()`).
---- A read that fails keeps what landed as it was, under the failure's line.
+--- A read that fails keeps what landed as it was, with the failure, which the
+--- commits window tells under the Landed heading.
 ---
 ---@param base string|nil
 local function read_landed(base)
@@ -577,13 +579,11 @@ local function read_landed(base)
     working_branch = session.settings.working_branch,
     before = session.landed,
     git = session.settings.git,
-  }, function(failure, read)
+  }, function(read)
     if this_read ~= landed_reads or not is_current_base(base) then
       return
     end
     local unchanged = vim.deep_equal(session.landed, read)
-      and vim.deep_equal(session.landed_failure, failure)
-    session.landed_failure = failure
     take_landed(read)
     if not unchanged then
       show_commits()
@@ -721,7 +721,7 @@ end
 local function read_for_new_base()
   session.listed, session.files_failure = nil, nil
   session.commits, session.commits_failure = nil, nil
-  session.landed, session.landed_failure = nil, nil
+  session.landed = nil
   show_files()
   show_commits()
   follow_repository()
