@@ -31,9 +31,10 @@ that what you type next goes to Claude, unless Claude Code has exited.
 `\tcn` hides or shows the line numbers of Claude's window. `\S` lists the
 sessions Claude Code lists for the folder and switches Claude to the one you
 pick (|:Aineo-sessions|). `\pa` and `\g` switch the right column
-between the agent pane, the Report over Input, and the changes pane
-(|aineo-panes|). In Visual mode, in Input, `\s` sends the selection alone and
-removes it from Input (|aineo-v_\s|).
+between the agent pane, the Report over Input, and the changes pane, and move
+to the Report and to the changes pane's commits (|aineo-panes|). In Visual
+mode, in Input, `\s` sends the selection alone and removes it from Input
+(|aineo-v_\s|).
 
 In Terminal mode and in Insert mode, `<C-\>` followed by the same letters
 does the same: `<C-\>i` moves to Input, `<C-\>r` to the Report, `<C-\>c` to
@@ -124,11 +125,12 @@ same two windows, at the same sizes, show the other pane's buffers.
 pane already shown stays as it is (the changes pane is read again,
 |aineo-changes|), unless one of its windows shows the other pane's buffer
 there, as a refused switch or you can leave it (the commits buffer in
-Input's window, say): they then show the pane's own buffer there. The
-cursor stays in the window it was
-in. From another tab page they switch the pane in the layout's tab page,
-restoring the layout there first when one of its windows is gone, and
-leave you where you are. `\r` and `\i` show the agent pane first, then move
+Input's window, say): they then show the pane's own buffer there. Either way
+the cursor moves into the pane: into the Report under the agent pane, into
+the commits window under the changes pane, where `j` and `k` choose the
+filter. From another tab page they switch the pane in the layout's tab page,
+restoring the layout there first when one of its windows is gone, and move
+you there. `\r` and `\i` show the agent pane first, then move
 to the Report or Input; `\c` and `\tcn` leave the pane as it is. Send sends
 Input while the changes pane hides it (|aineo-send|). When a window will
 not take its buffer — 'winfixbuf' is set there, say, or you are in the
@@ -868,13 +870,15 @@ a resume Claude Code has no conversation for (|aineo-claude-session|).
 
                                                                  *:Aineo-pane*
 :Aineo pane {pane}	Shows {pane} in the right column, `agent` or
-			`changes` (|aineo-panes|). When it shows already, the
+			`changes` (|aineo-panes|), and moves the cursor into
+			it: into the Report for `agent`, into the commits
+			window for `changes`. When it shows already, the
 			layout stays as it is (the changes pane is read
 			again, |aineo-changes|), unless one of its windows
 			shows the other pane's buffer there: it then shows
-			{pane}'s buffer there. Without a pane, or with
-			anything else, it tells you, with one error, which
-			ones it takes.
+			{pane}'s buffer there. The cursor moves all the same.
+			Without a pane, or with anything else, it tells you,
+			with one error, which ones it takes.
 
                                                                 *:Aineo-claim*
 :Aineo claim [{id}]	Claims a Claude session for this Neovim: each report
@@ -1040,7 +1044,8 @@ does (|CTRL-\_CTRL-N|). In Insert mode it leaves as `<Esc>` does: an
 abbreviation before the cursor is expanded (|i_CTRL-]|) and an insert given a
 count is repeated. `<C-\>c` enters Terminal mode in Claude's window again, as
 `\c` does, and the others leave you in Normal mode in the window they move
-to. Claude Code is sent none of the twin's keys.
+to: `<C-\>pa` in the Report and `<C-\>g` in the changes pane's commits.
+Claude Code is sent none of the twin's keys.
 
                                                                 *aineo-<C-\>o*
 <C-\>o		|<Plug>(aineo-open)|

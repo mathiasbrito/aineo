@@ -136,6 +136,65 @@ T['the agent pane']['shows again in the right column, telling the user nothing, 
   eq({ entry.windows(child), entry.messages(child) }, { AGENT_PANE, {} })
 end
 
+--- Moves the child's cursor to Claude's window, the first of the layout.
+local function move_to_claude()
+  child.cmd('1wincmd w')
+  eq(entry.current_window(child), 'terminal')
+end
+
+T['the changes pane']['moves the cursor into the commits window from Claude’s window, hidden before, by'] = function(
+  _,
+  door
+)
+  open_layout('panes-cursor-changes-hidden')
+  move_to_claude()
+
+  door()
+
+  eq(entry.current_window(child), 'aineo://changes-commits')
+end
+
+T['the changes pane']['moves the cursor into the commits window from Claude’s window, shown before, by'] = function(
+  _,
+  door
+)
+  open_layout('panes-cursor-changes-shown')
+  entry.command(child, 'Aineo pane changes')
+  move_to_claude()
+
+  door()
+
+  eq(
+    { entry.current_window(child), entry.windows(child) },
+    { 'aineo://changes-commits', CHANGES_PANE }
+  )
+end
+
+T['the agent pane']['moves the cursor into the Report from Claude’s window, shown before, by'] = function(
+  _,
+  door
+)
+  open_layout('panes-cursor-agent-shown')
+  move_to_claude()
+
+  door()
+
+  eq({ entry.current_window(child), entry.windows(child) }, { 'aineo://report', AGENT_PANE })
+end
+
+T['the agent pane']['moves the cursor into the Report from Claude’s window, hidden before, by'] = function(
+  _,
+  door
+)
+  open_layout('panes-cursor-agent-hidden')
+  entry.command(child, 'Aineo pane changes')
+  move_to_claude()
+
+  door()
+
+  eq({ entry.current_window(child), entry.windows(child) }, { 'aineo://report', AGENT_PANE })
+end
+
 --- What the buffer whose name is the argument is, read in the child: its
 --- options and its lines.
 local PANE_BUFFER = [[(function(name)
@@ -464,20 +523,20 @@ T['the changes pane key from another tab page'] = MiniTest.new_set({
   },
 })
 
-T['the changes pane key from another tab page']['shows the pane in the layout’s tab page and leaves the cursor where it is, with'] = function(
+T['the changes pane key from another tab page']['shows the pane in the layout’s tab page and moves the cursor there, into the commits window, with'] = function(
   _,
   arrange_layout
 )
   open_layout('panes-other-tab')
   arrange_layout()
   child.cmd('tabnew')
-  local window = child.api.nvim_get_current_win()
 
   entry.press(child, '\\g')
-  local where = { child.api.nvim_get_current_win(), entry.messages(child) }
-  child.cmd('tabfirst')
 
-  eq({ where, entry.windows(child) }, { { window, {} }, CHANGES_PANE })
+  eq(
+    { entry.current_window(child), entry.windows(child), entry.messages(child) },
+    { 'aineo://changes-commits', CHANGES_PANE, {} }
+  )
 end
 
 T['the changes pane key, a buffer named as its files buffer in the current window,'] =
@@ -519,9 +578,12 @@ T['a session saved while the changes pane shows']['restored, lets the layout ope
   )
 end
 
---- Each pane, with its key after the prefix and what the layout's windows
---- show under it, as a set's `parametrize`.
-local PANES = { { 'agent', 'pa', AGENT_PANE }, { 'changes', 'g', CHANGES_PANE } }
+--- Each pane, with its key after the prefix, what the layout's windows show
+--- under it and the window the cursor lands in, as a set's `parametrize`.
+local PANES = {
+  { 'agent', 'pa', AGENT_PANE, 'aineo://report' },
+  { 'changes', 'g', CHANGES_PANE, 'aineo://changes-commits' },
+}
 
 T['the pane key, with the layout never opened,'] = MiniTest.new_set({ parametrize = PANES })
 
@@ -539,10 +601,11 @@ T['the pane key, with the layout never opened,']['opens the layout, showing the 
   eq(#claude_session.wait_for_starts(fake, 1), 1)
 end
 
-T['the pane key, with the layout never opened,']['from a window showing a file, keeps the file beside the layout and starts the cursor in Input’s window, for'] = function(
+T['the pane key, with the layout never opened,']['from a window showing a file, keeps the file beside the layout and starts the cursor in the pane’s window, for'] = function(
   _,
   key,
-  windows
+  windows,
+  landing
 )
   local file = fixture.write('panes-from-a-file/file.txt', { 'a file' })
   entry.use_fake(child, claude_session.fake('panes-from-a-file', 'ready'))
@@ -552,7 +615,7 @@ T['the pane key, with the layout never opened,']['from a window showing a file, 
 
   eq(
     { entry.windows(child), entry.current_window(child), entry.messages(child) },
-    { { windows[1], file, windows[2], windows[3] }, windows[3], {} }
+    { { windows[1], file, windows[2], windows[3] }, landing, {} }
   )
 end
 

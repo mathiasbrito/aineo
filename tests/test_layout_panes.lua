@@ -83,6 +83,34 @@ T['the changes pane']['shows its files in the Report’s window and its commits 
   })
 end
 
+T['focusing a pane'] = MiniTest.new_set({
+  parametrize = { { 'agent', 'report' }, { 'changes', 'commits' } },
+})
+
+T['focusing a pane']['shows it and moves the cursor into its landing window, hidden or shown before, for'] = function(
+  pane,
+  landing
+)
+  local buffers = open_with_panes()
+  layout.enter_window_showing(child, buffers.claude)
+
+  child.lua([[require('aineo.layout').focus_pane(...)]], { pane })
+  local first = child.api.nvim_get_current_buf()
+  layout.enter_window_showing(child, buffers.claude)
+  child.lua([[require('aineo.layout').focus_pane(...)]], { pane })
+
+  eq({ first, child.api.nvim_get_current_buf() }, { buffers[landing], buffers[landing] })
+end
+
+T['focusing a pane']['leaves the cursor where it is when the pane is neither'] = function()
+  local buffers = open_with_panes()
+  layout.enter_window_showing(child, buffers.claude)
+
+  local raised = pcall(child.lua, [[require('aineo.layout').focus_pane('other')]])
+
+  eq({ raised, child.api.nvim_get_current_buf() }, { false, buffers.claude })
+end
+
 --- Where each of the child's windows sits and how large it is, by window
 --- ID, as `layout.box()` gives it.
 local BOXES_BY_WINDOW = [[(function()

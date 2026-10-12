@@ -1336,6 +1336,28 @@ function M.show_pane(pane, arrangement)
   switch_pane(pane)
 end
 
+--- The role of the right column's window the cursor lands in as a pane is
+--- focused (`M.focus_pane()`): the Report's window under the agent pane,
+--- and Input's, which shows the commits, under the changes pane.
+---@type table<aineo.layout.Pane, aineo.layout.Role>
+local PANE_LANDING = { agent = 'report', changes = 'input' }
+
+--- Shows `pane` as `M.show_pane()` does, then moves the cursor to the window
+--- the pane lands it in: the Report under the agent pane, the commits
+--- window under the changes pane. The cursor moves even when the pane was
+--- shown already, and from another tab page into the layout's own. When
+--- showing the pane raises, the cursor stays where it is.
+---
+--- Raises the errors `M.show_pane()` raises, and an error naming `pane` when
+--- it is neither `'agent'` nor `'changes'`.
+---
+---@param pane aineo.layout.Pane
+---@param arrangement aineo.layout.Arrangement|fun(): aineo.layout.Arrangement
+function M.focus_pane(pane, arrangement)
+  M.show_pane(pane, arrangement)
+  vim.api.nvim_set_current_win(state.windows[PANE_LANDING[pane]])
+end
+
 --- Shows `diff`, a buffer that is no file — a diff the changes pane shows —
 --- in the file column, as a file opened from one of the layout's windows is
 --- shown there (`place_in_file_column()`), and returns its window. A file or
