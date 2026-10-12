@@ -305,18 +305,58 @@ T['gf']['under a commit shows the file in the middle column through the sessionâ
   eq(child.lua_get('_G.shown_diffs[1] == vim.api.nvim_get_current_buf()'), true)
 end
 
-T['gf']['under a commit shows a file larger than 1 MiB cut, the last line saying so'] = function()
+--- The Lua giving what the current buffer shows as virtual lines: how many
+--- there are, the line the first sits under (-1 for none) and its text, and
+--- the buffer's last line and its text.
+local VIRTUAL_NOTES = [[(function()
+  local marks = vim.api.nvim_buf_get_extmarks(0, -1, 0, -1, { details = true })
+  local last_row = vim.api.nvim_buf_line_count(0) - 1
+  return {
+    count = #marks,
+    row = marks[1] and marks[1][2] or -1,
+    text = marks[1] and marks[1][4].virt_lines[1][1][1] or '',
+    last_row = last_row,
+    last_line = vim.api.nvim_buf_get_lines(0, last_row, last_row + 1, true)[1],
+  }
+end)()]]
+
+--- Commits `long.txt` of 22 000 lines, over 1 MiB, selects the commit and
+--- presses `gf` on the file.
+---
+---@param case string
+local function show_a_file_over_1_mib(case)
   local long = {}
   for number = 1, 22000 do
     long[number] = ('line %05d %s'):format(number, ('x'):rep(40))
   end
-  pane_under_commit('openfile-commit-long', { ['long.txt'] = long }, { '  A long.txt' })
-
+  pane_under_commit(case, { ['long.txt'] = long }, { '  A long.txt' })
   press_gf_on(2)
-
   wait_for_file_shown()
-  local last = child.lua_get('vim.api.nvim_buf_get_lines(0, -2, -1, true)[1]')
-  eq(vim.startswith(last, 'aineo cut this file at 1 MiB: '), true)
+end
+
+T['gf']['under a commit shows a file larger than 1 MiB cut, a virtual line under its last line saying so'] = function()
+  show_a_file_over_1_mib('openfile-commit-long')
+
+  local shown = child.lua_get(VIRTUAL_NOTES)
+  eq({
+    last_line_is_the_files = vim.startswith(shown.last_line, 'line '),
+    row_is_the_last = shown.row == shown.last_row,
+    text_is_the_note = vim.startswith(shown.text, 'aineo cut this file at 1 MiB: '),
+    count = shown.count,
+  }, {
+    last_line_is_the_files = true,
+    row_is_the_last = true,
+    text_is_the_note = true,
+    count = 1,
+  })
+end
+
+T['gf']['under a commit writes the note of a cut file once again after :edit!'] = function()
+  show_a_file_over_1_mib('openfile-commit-long-again')
+
+  child.cmd('edit!')
+
+  eq(child.lua_get(VIRTUAL_NOTES).count, 1)
 end
 
 --- Files whose path and content give a `'filetype'`, or none.
