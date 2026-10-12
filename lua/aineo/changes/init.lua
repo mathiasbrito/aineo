@@ -333,11 +333,17 @@ local function window_read(reads)
   end
 end
 
+--- What the files of a worktree fail with when its directory is gone by the
+--- time they are read.
+---@type aineo.git.Failure
+local WORKTREE_GONE = { reason = 'failed', message = 'the worktree is gone' }
+
 --- Reads the files of the selected filter, a filter of another worktree,
 --- in that worktree, and calls `done(failure, listing)`: a commit's files in
 --- the repository the commits window found for the worktree; its whole
 --- change from its base, read again now (`aineo.changes.worktrees`'
---- `read_worktree()`). The listing names the worktree as the read found it.
+--- `read_worktree()`), which fails with `WORKTREE_GONE` when the worktree's
+--- directory is gone. The listing names the worktree as the read found it.
 ---
 ---@param selected aineo.changes.Filter a filter with a `worktree`
 ---@param done fun(failure: aineo.git.Failure|nil, listing: aineo.changes.Listing)
@@ -362,7 +368,7 @@ local function read_worktree_files(selected, done)
     selected.worktree,
     function(read)
       if not read then
-        done(nil, { filter = selected, changes = {}, worktree = section })
+        done(WORKTREE_GONE, { filter = selected, worktree = section })
         return
       end
       done(read.failure, { filter = selected, changes = read.listed, worktree = read })
@@ -1437,15 +1443,18 @@ local function select_filters_from(buffer)
   vim.api.nvim_create_autocmd('WinScrolled', {
     group = vim.api.nvim_create_augroup('aineo_changes_commits_scroll', {}),
     desc = 'aineo: select the filter of the files window after a pause, as a scroll carries the cursor',
-    callback = function(event)
-      local window = tonumber(event.match)
-      if
-        window
-        and vim.api.nvim_win_is_valid(window)
-        and vim.api.nvim_win_get_buf(window) == buffer
-      then
-        window_moved = window
-        selection_pause.restart()
+    callback = function()
+      for key in pairs(vim.v.event) do
+        local window = tonumber(key)
+        if
+          window
+          and vim.api.nvim_win_is_valid(window)
+          and vim.api.nvim_win_get_buf(window) == buffer
+        then
+          window_moved = window
+          selection_pause.restart()
+          return
+        end
       end
     end,
   })

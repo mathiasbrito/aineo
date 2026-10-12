@@ -429,6 +429,51 @@ T['the filter']['puts the cursor of every files window on its first line, the vi
   )
 end
 
+T['the filter']['follows a scroll of the commits window made in the turn another window scrolled in'] = function()
+  local files = {}
+  for number = 1, 40 do
+    files[('f%02d.txt'):format(number)] = { 'one' }
+  end
+  local top = git_repo.create('filter-wheel-same-turn', files)
+  child.lua(QUIET_WATCH)
+  begin_and_show(top)
+  expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, NO_COMMITS })
+  for name in pairs(files) do
+    git_repo.write(top, name, { 'two' })
+  end
+  local forty = git_repo.commit_all(top, 'Forty')
+  git_repo.write(top, 'f01.txt', { 'three' })
+  refresh_pane()
+  expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, forty:sub(1, 7) .. ' Forty' })
+  git_repo.wait_until('forty files listed', function()
+    return #lines_of(FILES) == 41
+  end)
+  child.lua([[
+    local files = vim.fn.bufwinid('aineo://changes-files')
+    local commits = vim.fn.bufwinid('aineo://changes-commits')
+    vim.api.nvim_set_current_win(files)
+    vim.api.nvim_win_set_cursor(files, { 35, 0 })
+    vim.api.nvim_win_set_height(commits, 1)
+    vim.api.nvim_win_set_cursor(commits, { 2, 0 })
+  ]])
+  vim.wait(400)
+  eq(cursor_of(COMMITS), { 2, 0 })
+
+  child.lua([[
+    local files = vim.fn.bufwinid('aineo://changes-files')
+    local commits = vim.fn.bufwinid('aineo://changes-commits')
+    vim.api.nvim_win_set_cursor(files, { 1, 0 })
+    vim.api.nvim_win_call(commits, function()
+      vim.cmd('normal! \5')
+    end)
+  ]])
+
+  git_repo.wait_until('the files window follows the scroll', function()
+    return lines_of(FILES)[1] == 'Files in: ' .. forty:sub(1, 7) .. ' Forty'
+  end)
+  eq(cursor_of(COMMITS), { 3, 0 })
+end
+
 T['the filter']['is Uncommitted under the first line: the files that differ from HEAD, the untracked ones too'] = function()
   local top = session_with_two_commits('filter-uncommitted')
   git_repo.write(top, 'a.txt', { 'three' })
@@ -658,8 +703,7 @@ end
 
 T['the filter in another worktree']['a cursor on its heading lists its files since its base, unmarked'] = function()
   local top = git_repo.create('wtfilter-heading', { ['notes.txt'] = { 'one' } })
-  add_worktree(top, 'agent', 'agent')
-  local agent = vim.fs.joinpath(vim.fs.dirname(top), 'agent')
+  local agent = add_worktree(top, 'agent', 'agent')
   git_repo.write(agent, 'notes.txt', { 'agent' })
   git_repo.write(agent, 'new.txt', { 'new' })
   begin_and_show(top)
