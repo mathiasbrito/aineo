@@ -1,7 +1,8 @@
 --- The git home: what a repository holds, asked of git — the files changed
---- since a base commit, the commits since it, their diffs, its worktrees and
---- the base of each — and a watch that calls back when the branch moves or a
---- working-tree file changes.
+--- since a base commit, the commits since it or between two commits, their
+--- diffs, a file as a commit has it, a name resolved to a commit, its
+--- worktrees and the base of each — and a watch that calls back when the
+--- branch moves, a reference is written or a working-tree file changes.
 ---
 --- Every operation returns at once, runs git asynchronously with each process
 --- bounded in time, and calls its `done` exactly once, on the main loop, with
@@ -19,6 +20,7 @@
 --- its watches: the base is its caller's.
 
 local changes = require('aineo.git.changes')
+local content = require('aineo.git.content')
 local diffs = require('aineo.git.diffs')
 local history = require('aineo.git.history')
 local process = require('aineo.git.process')
@@ -107,6 +109,36 @@ function M.commits_since(found, base, done, options)
   history.commits_since(process.runner(options), found, base, done)
 end
 
+--- Lists the commits of `found` reachable from the commit `to` and not from
+--- the commit `from`, newest first, and calls `done(nil, commits)`, or
+--- `done(failure)`. A commit a rebase merge made counts under its new id,
+--- not the id the commit it copied has.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param from string|nil the full id of the commit the commits are counted from; nil counts every commit of `to`
+---@param to string the full id of the commit the commits are counted to
+---@param done fun(failure: aineo.git.Failure|nil, commits: aineo.git.Commit[]|nil)
+---@param options? aineo.git.Options
+function M.commits_between(found, from, to, done, options)
+  history.commits_between(process.runner(options), found, from, to, done)
+end
+
+--- Lists the files of `found` that differ between the merge base of the
+--- commits `from` and `to`, and `to` — git's `from...to`: what `to` gained
+--- since the two forked, all of `to` when `from` is behind it — with paths
+--- relative to its top level, renames found; calls `done(nil, changes)`, or
+--- `done(failure)`. Only the commits are read, never the working tree or the
+--- index.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param from string|nil the full id of the first commit; nil counts every file of `to` as new
+---@param to string the full id of the second commit
+---@param done fun(failure: aineo.git.Failure|nil, changes: aineo.git.Change[]|nil)
+---@param options? aineo.git.Options
+function M.files_between(found, from, to, done, options)
+  changes.files_between(process.runner(options), found, from, to, done)
+end
+
 --- Gives the unified diff of the file `change` names in `found`, from the
 --- commit `base` to the working tree — an untracked file wholly added, a
 --- deleted one wholly removed, a renamed one as its rename — and calls
@@ -183,6 +215,111 @@ function M.commit_file_diff(found, commit, change, done, options)
   diffs.commit_file_diff(process.runner(options), found, commit, change, done, context_of(options))
 end
 
+--- Reads the full id of the commit the name `name` gives in `found`, as git
+--- reads a name — a branch, a remote-tracking branch such as `origin/dev`, a
+--- tag (an annotated one gives the commit it tags), a reference by its full
+--- path, an id — and calls `done(nil, commit)`, nil when the name gives no
+--- commit, or `done(failure)`. A name that begins with `-` is a name, never
+--- an option.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param name string
+---@param done fun(failure: aineo.git.Failure|nil, commit: string|nil)
+---@param options? aineo.git.Options
+function M.resolve_commit(found, name, done, options)
+  repository.resolve_commit(process.runner(options), found.top, name, done)
+end
+
+--- Reads the short name of the branch the remote `origin`'s `HEAD` points at
+--- in `found` — `origin/main` — and calls `done(nil, name)`, nil when `found`
+--- has no `origin/HEAD`, or `done(failure)`. It is the remote's own default
+--- branch, as of the last fetch or clone, whatever branch `found` is on.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param done fun(failure: aineo.git.Failure|nil, name: string|nil)
+---@param options? aineo.git.Options
+function M.remote_default_branch(found, done, options)
+  repository.read_remote_default_branch(process.runner(options), found.top, done)
+end
+
+--- Reads the file at `path` as the commit `commit` of `found` has it, and
+--- calls `done(nil, text)`, the bytes exactly as git printed them, or
+--- `done(failure)`: a `path_missing` one when the commit has nothing at
+--- `path` — a file deleted in it, say — told apart from any other failure,
+--- a directory at `path` included. The path is taken whole, never as a
+--- pattern or an option. A commit of another worktree is read in `found`,
+--- which shares its object store.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param commit string the commit's id
+---@param path string relative to the repository's top level
+---@param done fun(failure: aineo.git.Failure|nil, text: string|nil)
+---@param options? aineo.git.Options
+function M.file_at_commit(found, commit, path, done, options)
+  content.file_at_commit(process.runner(options), found, commit, path, done)
+end
+
+--- Gives the unified diff of every file of `found` between the merge base of
+--- the commits `from` and `to`, and `to` — what `M.files_between()` lists —
+--- after no commit header, and calls `done(nil, diff)`, or `done(failure)`.
+--- Only the commits are read.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param from string|nil the full id of the first commit; nil runs the diff from nothing
+---@param to string the full id of the second commit
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+---@param options? aineo.git.DiffOptions
+function M.diff_between(found, from, to, done, options)
+  diffs.diff_between(process.runner(options), found, from, to, done, context_of(options))
+end
+
+--- Gives the unified diff of the file `change` names in `found` between the
+--- merge base of the commits `from` and `to`, and `to`, as
+--- `M.diff_between()` gives it — a renamed file asked with both its paths —
+--- and calls `done(nil, diff)`, or `done(failure)`.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param from string|nil the full id of the first commit; nil runs the diff from nothing
+---@param to string the full id of the second commit
+---@param change aineo.git.Change one of the changes `M.files_between()` gave
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+---@param options? aineo.git.DiffOptions
+function M.file_diff_between(found, from, to, change, done, options)
+  diffs.file_diff_between(
+    process.runner(options),
+    found,
+    from,
+    to,
+    change,
+    done,
+    context_of(options)
+  )
+end
+
+--- Gives the unified diff of the file `change` names in `found` straight
+--- from the commit `from` to the commit `to`, as `M.file_diff_between()`
+--- gives it from their merge base. Where `to` is behind `from`, the merge
+--- base would hide what `to` lacks and this shows it. Calls `done(nil,
+--- diff)`, or `done(failure)`.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param from string|nil the full id of the first commit; nil runs the diff from nothing
+---@param to string the full id of the second commit
+---@param change aineo.git.Change
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+---@param options? aineo.git.DiffOptions
+function M.file_diff_straight(found, from, to, change, done, options)
+  diffs.file_diff_straight(
+    process.runner(options),
+    found,
+    from,
+    to,
+    change,
+    done,
+    context_of(options)
+  )
+end
+
 --- Lists the worktrees of the repository `found` is in, and calls
 --- `done(nil, worktrees)`, the worktree `found` is first, by `found.top`,
 --- and the others in git's order, each by its path with every link
@@ -233,11 +370,15 @@ end
 --- file of the working tree is written, created, removed or renamed, by any
 --- process, or an index or a submodule changes, as every commit also does;
 --- or `on_change(failure)` when the branch cannot be read or a file system
---- watch fails. A change made as the watch starts can be missed, so a caller
---- reads what it shows once the watch has started. Returns the watch, which
---- says whether it sees changes in subdirectories — on Linux it does not,
---- and misses a branch moved by `git update-ref` from another worktree too
---- — or nil and why it could not start; it never raises.
+--- watch fails. A burst that wrote a reference of the repository — a commit,
+--- a branch or a tag made or deleted, a fetch, from this worktree or
+--- another — calls back too, even when `HEAD` did not move and no file
+--- changed (`references_changed`). A change made as the watch starts can be
+--- missed, so a caller reads what it shows once the watch has started.
+--- Returns the watch, which says whether it sees changes in subdirectories
+--- — on Linux it does not, and misses a branch moved by `git update-ref`
+--- from another worktree, and a fetch, too — or nil and why it could not
+--- start; it never raises.
 ---
 ---@param found aineo.git.Repository as `M.find_repository()` gave it
 ---@param on_change fun(failure: aineo.git.Failure|nil, change: aineo.git.RepositoryChange|nil)

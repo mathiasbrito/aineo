@@ -96,4 +96,85 @@ T['the commits since a base']['since a base named like an option are refused, an
   }, { reason = 'failed', beside = { 'repo' } })
 end
 
+--- The Lua that asks the git home in the child for the repository of the
+--- directory `...`, then for the commits between the two commits that
+--- follow it (`vim.NIL` for no first one), and returns what `_G.await` saw
+--- of the second.
+local COMMITS_BETWEEN = [[
+  local directory, from, to = ...
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end)
+  return _G.await(function(done)
+    git.commits_between(found.result, from ~= vim.NIL and from or nil, to, done)
+  end)
+]]
+
+T['the commits between two commits'] = MiniTest.new_set()
+
+T['the commits between two commits']['are those reachable from the second and not from the first, newest first'] = function()
+  local top, base = git_repo.create('between-commits', { ['a.txt'] = { 'a' } })
+  git_repo.write(top, 'a.txt', { 'a, again' })
+  local first = git_repo.commit_all(top, 'Change a')
+  local second = git_repo.commit_all(top, 'Record nothing: an empty commit')
+
+  local seen = child.lua(COMMITS_BETWEEN, { top, base, second })
+
+  eq({ failure = seen.failure, commits = seen.result }, {
+    commits = {
+      { id = second, subject = 'Record nothing: an empty commit' },
+      { id = first, subject = 'Change a' },
+    },
+  })
+end
+
+T['the commits between two commits']['are every commit of the second when there is no first'] = function()
+  local top = git_repo.create_unborn('between-no-from')
+  local first = git_repo.commit_all(top, 'First')
+  local second = git_repo.commit_all(top, 'Second')
+
+  local seen = child.lua(COMMITS_BETWEEN, { top, vim.NIL, second })
+
+  eq({ failure = seen.failure, commits = seen.result }, {
+    commits = { { id = second, subject = 'Second' }, { id = first, subject = 'First' } },
+  })
+end
+
+T['the commits between two commits']['list a rebase merge’s commits under their new ids'] = function()
+  local top, base = git_repo.create('between-rebase', { ['a.txt'] = { 'a' } })
+  git_repo.git(top, { 'checkout', '--quiet', '-b', 'feature' })
+  git_repo.write(top, 'feature.txt', { 'feature' })
+  local feature = git_repo.commit_all(top, 'Feature work')
+  git_repo.git(top, { 'checkout', '--quiet', 'main' })
+  git_repo.write(top, 'main.txt', { 'main' })
+  local ahead = git_repo.commit_all(top, 'Main moves on')
+  git_repo.git(top, { 'rebase', '--quiet', 'main', 'feature' })
+  git_repo.git(top, { 'checkout', '--quiet', 'main' })
+  git_repo.git(top, { 'merge', '--quiet', '--ff-only', 'feature' })
+  local landed = git_repo.git(top, { 'rev-parse', 'HEAD' })
+
+  local seen = child.lua(COMMITS_BETWEEN, { top, base, landed })
+
+  eq({ failure = seen.failure, commits = seen.result }, {
+    commits = {
+      { id = landed, subject = 'Feature work' },
+      { id = ahead, subject = 'Main moves on' },
+    },
+  })
+  eq(landed == feature, false)
+end
+
+T['the commits between two commits']['named like an option are refused, and write nothing'] = function()
+  local top, base = git_repo.create('between-option', { ['a.txt'] = { 'a' } })
+  local written = vim.fs.joinpath(vim.fs.dirname(top), 'written')
+
+  local seen = child.lua(COMMITS_BETWEEN, { top, '--output=' .. written, base })
+
+  eq({
+    reason = vim.tbl_get(seen, 'failure', 'reason'),
+    beside = vim.fn.readdir(vim.fs.dirname(top)),
+  }, { reason = 'failed', beside = { 'repo' } })
+end
+
 return T

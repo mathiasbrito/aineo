@@ -305,6 +305,91 @@ T['the files a commit changed']['of a commit named like an option are refused, a
 end
 
 --- The Lua that asks the git home in the child for the repository of the
+--- directory `...`, then for the files between the two commits that follow
+--- it (`vim.NIL` for no first one), and returns what `_G.await` saw of the
+--- second.
+local FILES_BETWEEN = [[
+  local directory, from, to = ...
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end)
+  return _G.await(function(done)
+    git.files_between(found.result, from ~= vim.NIL and from or nil, to, done)
+  end)
+]]
+
+T['the files between two commits'] = MiniTest.new_set()
+
+T['the files between two commits']['are those that differ from the first to the second, with their kinds'] = function()
+  local top, base = git_repo.create('between-files-kinds', {
+    ['a.txt'] = { 'a' },
+    ['b.txt'] = { 'b' },
+    ['c.txt'] = { 'one', 'two', 'three', 'four', 'five', 'six' },
+  })
+  git_repo.write(top, 'a.txt', { 'a, changed' })
+  git_repo.git(top, { 'rm', '--quiet', 'b.txt' })
+  git_repo.git(top, { 'mv', 'c.txt', 'c-moved.txt' })
+  git_repo.commit_all(top, 'Change three files')
+  git_repo.write(top, 'd.txt', { 'd' })
+  local second = git_repo.commit_all(top, 'Add one')
+  git_repo.write(top, 'later.txt', { 'later' })
+
+  local seen = child.lua(FILES_BETWEEN, { top, base, second })
+
+  eq({ failure = seen.failure, files = seen.result }, {
+    files = {
+      { path = 'a.txt', kind = 'modified' },
+      { path = 'b.txt', kind = 'deleted' },
+      { path = 'c-moved.txt', kind = 'renamed', old_path = 'c.txt' },
+      { path = 'd.txt', kind = 'added' },
+    },
+  })
+end
+
+T['the files between two commits']['count from the merge base: a first commit not behind the second leaves out its own side'] = function()
+  local top = git_repo.create('between-files-forked', { ['a.txt'] = { 'a' } })
+  git_repo.git(top, { 'switch', '--quiet', '--create', 'feature' })
+  git_repo.write(top, 'feature.txt', { 'feature' })
+  local feature = git_repo.commit_all(top, 'On the feature')
+  git_repo.git(top, { 'switch', '--quiet', 'main' })
+  git_repo.write(top, 'main.txt', { 'main' })
+  local main = git_repo.commit_all(top, 'On main')
+
+  local seen = child.lua(FILES_BETWEEN, { top, feature, main })
+
+  eq({ failure = seen.failure, files = seen.result }, {
+    files = { { path = 'main.txt', kind = 'added' } },
+  })
+end
+
+T['the files between two commits']['are every file of the second, as new, when there is no first'] = function()
+  local top = git_repo.create_unborn('between-files-no-from')
+  git_repo.write(top, 'first.txt', { 'first' })
+  git_repo.commit_all(top, 'First')
+  git_repo.write(top, 'second.txt', { 'second' })
+  local second = git_repo.commit_all(top, 'Second')
+
+  local seen = child.lua(FILES_BETWEEN, { top, vim.NIL, second })
+
+  eq({ failure = seen.failure, files = seen.result }, {
+    files = { { path = 'first.txt', kind = 'added' }, { path = 'second.txt', kind = 'added' } },
+  })
+end
+
+T['the files between two commits']['from a commit named like an option are refused, and write nothing'] = function()
+  local top, base = git_repo.create('between-files-option', { ['a.txt'] = { 'a' } })
+  local written = vim.fs.joinpath(vim.fs.dirname(top), 'written')
+
+  local seen = child.lua(FILES_BETWEEN, { top, '--output=' .. written, base })
+
+  eq({
+    reason = vim.tbl_get(seen, 'failure', 'reason'),
+    beside = vim.fn.readdir(vim.fs.dirname(top)),
+  }, { reason = 'failed', beside = { 'repo' } })
+end
+
+--- The Lua that asks the git home in the child for the repository of the
 --- directory `...`, then for the files that differ from `HEAD` there, and
 --- returns what `_G.await` saw of the second.
 local UNCOMMITTED_FILES = [[
