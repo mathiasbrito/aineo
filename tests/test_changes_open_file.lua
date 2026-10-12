@@ -29,17 +29,22 @@ local FILES = 'aineo://changes-files'
 local COMMITS = 'aineo://changes-commits'
 
 --- The Lua that begins the changes home's session in the child for the
---- directory `...` and shows the pane's two buffers there: the files buffer
---- in the current window, the commits buffer in a window below it. The home
---- is given no layout: a diff it shows is kept in `_G.shown_diffs` and shown
---- in a window of its own at the bottom.
+--- directory `...` and the working branch that follows it, if any, and shows
+--- the pane's two buffers there: the files buffer in the current window, the
+--- commits buffer in a window below it. The home is given no layout: a
+--- buffer it shows is kept in `_G.shown_diffs` and shown in a window of its
+--- own at the bottom.
 local BEGIN_AND_SHOW = [[
-  local directory = ...
+  local directory, working_branch = ...
   local changes = require('aineo.changes')
   _G.shown_diffs = {}
   changes.begin_session({
     directory = directory,
+    working_branch = working_branch,
     show_diff = function(diff)
+      if _G.no_room then
+        return nil
+      end
       table.insert(_G.shown_diffs, diff)
       return vim.api.nvim_open_win(diff, false, { split = 'below', win = -1 })
     end,
@@ -217,27 +222,527 @@ T['gf']['on a deleted file names it as the files window does'] = function()
   eq(child.lua_get(TOLD), 'aineo: "say \\"hi\\".txt" is gone from the working tree')
 end
 
-T['gf']['under a commit filter opens the working tree’s file, not the file as the commit had it'] = function()
-  local top = git_repo.create('openfile-commit-filter', { ['notes.txt'] = { 'one' } })
+--- Makes a repository whose base commit holds `notes.txt`, begins the
+--- session there with the pane shown, commits `files` (path to lines, or
+--- false for a file to delete) as `Add the files`, selects that commit in
+--- the commits window and waits for the files window to list `listed`.
+--- Returns the top level and the commit's full id.
+---
+---@param case string the case's own name
+---@param files table<string, string[]|false>
+---@param listed string[] the files window's lines after its heading
+---@return string top
+---@return string commit
+local function pane_under_commit(case, files, listed)
+  local top = git_repo.create(case, { ['notes.txt'] = { 'one' } })
   child.lua(BEGIN_AND_SHOW, { top })
-  git_repo.write(top, 'has space.txt', { 'in the commit' })
-  local commit = git_repo.commit_all(top, 'Add the file')
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
+  for path, lines in pairs(files) do
+    if lines then
+      git_repo.write(top, path, lines)
+    else
+      vim.fn.delete(vim.fs.joinpath(top, path))
+    end
+  end
+  local commit = git_repo.commit_all(top, 'Add the files')
   child.lua("require('aineo.changes').refresh_shown_pane()")
-  expect_lines(COMMITS, {
-    'Uncommitted',
-    'Session work',
-    commit:sub(1, 7) .. ' Add the file',
-  })
-  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
-  child.type_keys('3G')
-  local filter_line = 'Files in: ' .. commit:sub(1, 7) .. ' Add the file'
-  expect_lines(FILES, { filter_line, '  A has space.txt' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Add the files' })
+  go_to_commits_line(3)
+  expect_lines(
+    FILES,
+    vim.list_extend({ 'Files in: ' .. commit:sub(1, 7) .. ' Add the files' }, listed)
+  )
+  return top, commit
+end
+
+--- Waits until the child's current buffer is not the files buffer: a key of
+--- the files window has shown something in the middle column.
+local function wait_for_file_shown()
+  git_repo.wait_until('the file shown', function()
+    return current_buffer_name() ~= FILES
+  end)
+end
+
+T['gf']['under a commit shows the file as the commit had it, not the working tree’s file'] = function()
+  local top, commit = pane_under_commit(
+    'openfile-commit-filter',
+    { ['has space.txt'] = { 'in the commit' } },
+    { '  A has space.txt' }
+  )
   git_repo.write(top, 'has space.txt', { 'in the working tree' })
 
   press_gf_on(2)
 
-  eq(current_buffer_name(), vim.fs.joinpath(top, 'has space.txt'))
-  eq(child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)'), { 'in the working tree' })
+  wait_for_file_shown()
+  eq(current_buffer_name(), 'aineo://show/' .. commit .. '/has space.txt')
+  eq(child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)'), { 'in the commit' })
+end
+
+T['gf']['under a commit leaves the file’s buffer not modifiable'] = function()
+  pane_under_commit(
+    'openfile-commit-readonly',
+    { ['has space.txt'] = { 'text' } },
+    { '  A has space.txt' }
+  )
+
+  press_gf_on(2)
+
+  wait_for_file_shown()
+  eq(child.lua_get('vim.bo.modifiable'), false)
+end
+
+T['gf']['under a commit shows the file in the middle column through the session’s show_diff'] = function()
+  pane_under_commit(
+    'openfile-commit-shown',
+    { ['has space.txt'] = { 'text' } },
+    { '  A has space.txt' }
+  )
+
+  press_gf_on(2)
+
+  wait_for_file_shown()
+  eq(child.lua_get('#_G.shown_diffs'), 1)
+  eq(child.lua_get('_G.shown_diffs[1] == vim.api.nvim_get_current_buf()'), true)
+end
+
+--- The Lua giving what the current buffer shows as virtual lines: how many
+--- there are, the line the first sits under (-1 for none) and its text, and
+--- the buffer's last line and its text.
+local VIRTUAL_NOTES = [[(function()
+  local marks = vim.api.nvim_buf_get_extmarks(0, -1, 0, -1, { details = true })
+  local last_row = vim.api.nvim_buf_line_count(0) - 1
+  return {
+    count = #marks,
+    row = marks[1] and marks[1][2] or -1,
+    text = marks[1] and marks[1][4].virt_lines[1][1][1] or '',
+    last_row = last_row,
+    last_line = vim.api.nvim_buf_get_lines(0, last_row, last_row + 1, true)[1],
+  }
+end)()]]
+
+--- Commits `long.txt` of 22 000 lines, over 1 MiB, selects the commit and
+--- presses `gf` on the file.
+---
+---@param case string
+local function show_a_file_over_1_mib(case)
+  local long = {}
+  for number = 1, 22000 do
+    long[number] = ('line %05d %s'):format(number, ('x'):rep(40))
+  end
+  pane_under_commit(case, { ['long.txt'] = long }, { '  A long.txt' })
+  press_gf_on(2)
+  wait_for_file_shown()
+end
+
+T['gf']['under a commit shows a file larger than 1 MiB cut, a virtual line under its last line saying so'] = function()
+  show_a_file_over_1_mib('openfile-commit-long')
+
+  local shown = child.lua_get(VIRTUAL_NOTES)
+  eq({
+    last_line_is_the_files = vim.startswith(shown.last_line, 'line '),
+    row_is_the_last = shown.row == shown.last_row,
+    text_is_the_note = vim.startswith(shown.text, 'aineo cut this file at 1 MiB: '),
+    count = shown.count,
+  }, {
+    last_line_is_the_files = true,
+    row_is_the_last = true,
+    text_is_the_note = true,
+    count = 1,
+  })
+end
+
+T['gf']['under a commit writes the note of a cut file once again after :edit!'] = function()
+  show_a_file_over_1_mib('openfile-commit-long-again')
+
+  child.cmd('edit!')
+
+  eq(child.lua_get(VIRTUAL_NOTES).count, 1)
+end
+
+--- Files whose path and content give a `'filetype'`, or none.
+local FILETYPES = {
+  { 'a Lua file', 'tool.lua', { 'return 1' }, 'lua' },
+  { 'a script with a shebang and no extension', 'run', { '#!/bin/sh', 'true' }, 'sh' },
+  { 'a file whose path gives none', 'notes.zzz', { 'text' }, '' },
+}
+
+T['gf']['under a commit gives the buffer the filetype of'] = MiniTest.new_set({
+  parametrize = FILETYPES,
+})
+
+T['gf']['under a commit gives the buffer the filetype of']['the file'] = function(
+  _,
+  path,
+  content,
+  filetype
+)
+  pane_under_commit('openfile-commit-filetype', { [path] = content }, { '  A ' .. path })
+
+  press_gf_on(2)
+
+  wait_for_file_shown()
+  eq(child.lua_get('vim.bo.filetype'), filetype)
+end
+
+--- Waits until the child has been told something, and returns everything
+--- its messages hold.
+---
+---@return string
+local function told_something()
+  git_repo.wait_until('something told', function()
+    return child.lua_get(TOLD) ~= ''
+  end)
+  return child.lua_get(TOLD)
+end
+
+T['gf']['under a commit on a file the commit deleted shows nothing and says it was deleted there'] = function()
+  local _, commit = pane_under_commit(
+    'openfile-commit-deleted',
+    { ['notes.txt'] = false },
+    { '  D notes.txt' }
+  )
+
+  press_gf_on(2)
+
+  eq(told_something(), ('aineo: notes.txt was deleted in commit %s'):format(commit:sub(1, 7)))
+  eq({ current_buffer_name(), child.lua_get('#_G.shown_diffs') }, { FILES, 0 })
+end
+
+T['gf']['under a commit whose file cannot be read tells git’s words once, naming the file'] = function()
+  local _, commit = pane_under_commit(
+    'openfile-commit-unreadable',
+    { ['has space.txt'] = { 'text' } },
+    { '  A has space.txt' }
+  )
+  child.lua([[
+    require('aineo.git').file_at_commit = function(_, _, _, done)
+      done({ reason = 'failed', message = 'broken object' })
+    end
+  ]])
+
+  local told = ('aineo: has space.txt could not be read in commit %s: broken object'):format(
+    commit:sub(1, 7)
+  )
+
+  MiniTest.expect.error(function()
+    press_gf_on(2)
+  end, told)
+
+  eq(child.lua_get(TOLD), told)
+  eq({ current_buffer_name(), child.lua_get('#_G.shown_diffs') }, { FILES, 0 })
+end
+
+T['gf']['under a commit names a failure after the file as the files window quotes it'] = function()
+  local _, commit = pane_under_commit(
+    'openfile-commit-quoted-told',
+    { ['say "hi".txt'] = { 'text' } },
+    { '  A "say \\"hi\\".txt"' }
+  )
+  child.lua([[
+    require('aineo.git').file_at_commit = function(_, _, _, done)
+      done({ reason = 'path_missing' })
+    end
+  ]])
+
+  press_gf_on(2)
+
+  eq(
+    told_something(),
+    ('aineo: "say \\"hi\\".txt" was deleted in commit %s'):format(commit:sub(1, 7))
+  )
+end
+
+T['gf']['under a commit with no room in the middle column shows nothing and says so'] = function()
+  local _, commit = pane_under_commit(
+    'openfile-commit-no-room',
+    { ['say "hi".txt'] = { 'text' } },
+    { '  A "say \\"hi\\".txt"' }
+  )
+  child.lua('_G.no_room = true')
+
+  press_gf_on(2)
+
+  eq(
+    told_something(),
+    ('aineo: the middle column has no room for "say \\"hi\\".txt" in commit %s, which is not shown'):format(
+      commit:sub(1, 7)
+    )
+  )
+  local file_buffer =
+    child.lua_get('vim.fn.bufnr(...)', { 'aineo://show/' .. commit .. '/"say \\"hi\\".txt"' })
+  eq({ current_buffer_name(), file_buffer }, { FILES, -1 })
+end
+
+T['gf']['under a commit read while textlock holds shows the file once the editor allows it'] = function()
+  pane_under_commit(
+    'openfile-commit-textlock',
+    { ['has space.txt'] = { 'text' } },
+    { '  A has space.txt' }
+  )
+  child.lua([[
+    require('aineo.git').file_at_commit = function(_, _, _, done)
+      _G.finish = done
+    end
+    vim.keymap.set('n', 'X', function()
+      _G.holding = true
+      vim.fn.getcharstr()
+      _G.holding = false
+      return ''
+    end, { expr = true })
+  ]])
+  press_gf_on(2)
+  child.api.nvim_input('X')
+  git_repo.wait_until('textlock held', function()
+    return child.lua_get('_G.holding == true')
+  end)
+
+  child.lua('_G.finish(nil, "in the commit\\n")')
+  local meanwhile = child.lua_get('#_G.shown_diffs')
+  child.api.nvim_input('q')
+
+  git_repo.wait_until('the file shown', function()
+    return child.lua_get('#_G.shown_diffs') == 1
+  end)
+  eq(meanwhile, 0)
+  eq(
+    child.lua_get('vim.api.nvim_buf_get_lines(_G.shown_diffs[1], 0, -1, true)'),
+    { 'in the commit' }
+  )
+  eq(child.lua_get(TOLD), '')
+end
+
+T['gf']['under a commit, then on another file before the first is read, shows the last key’s file alone'] = function()
+  local _, commit = pane_under_commit(
+    'openfile-commit-twice',
+    { ['a.txt'] = { 'a' }, ['b.txt'] = { 'b' } },
+    { '  A a.txt', '  A b.txt' }
+  )
+  child.lua([[
+    _G.pending = {}
+    require('aineo.git').file_at_commit = function(_, _, path, done)
+      _G.pending[path] = done
+    end
+  ]])
+  press_gf_on(2)
+  press_gf_on(3)
+
+  child.lua('_G.pending["b.txt"](nil, "b text\\n")')
+  child.lua('_G.pending["a.txt"](nil, "a text\\n")')
+
+  eq(child.lua_get('#_G.shown_diffs'), 1)
+  eq(
+    child.lua_get('vim.api.nvim_buf_get_name(_G.shown_diffs[1])'),
+    'aineo://show/' .. commit .. '/b.txt'
+  )
+  eq(child.lua_get('vim.fn.bufnr(...)', { 'aineo://show/' .. commit .. '/a.txt' }), -1)
+end
+
+T['gf']['under a commit of another worktree shows the file as that commit has it'] = function()
+  local top = git_repo.create('openfile-worktree-commit', { ['notes.txt'] = { 'one' } })
+  local agent = vim.fs.joinpath(vim.fs.dirname(top), 'agent')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'agent', agent })
+  git_repo.write(agent, 'notes.txt', { 'in the agent’s commit' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+  git_repo.write(agent, 'notes.txt', { 'in the agent’s tree' })
+  child.lua(BEGIN_AND_SHOW, { top })
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent (agent)',
+    commit:sub(1, 7) .. ' The agent’s',
+  })
+  go_to_commits_line(5)
+  expect_lines(FILES, {
+    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    '  M notes.txt',
+  })
+
+  press_gf_on(2)
+
+  wait_for_file_shown()
+  eq(current_buffer_name(), 'aineo://show/' .. commit .. '/notes.txt')
+  eq(child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)'), { 'in the agent’s commit' })
+end
+
+T['gf']['under a commit of another worktree reads it in that worktree’s repository'] = function()
+  local top = git_repo.create('openfile-worktree-clone', { ['notes.txt'] = { 'one' } })
+  local agent = vim.fs.joinpath(vim.fs.dirname(top), 'agent')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'agent', agent })
+  vim.fn.delete(agent, 'rf')
+  git_repo.git(vim.fs.dirname(top), { 'clone', '--quiet', '--branch', 'main', top, agent })
+  git_repo.git(agent, { 'switch', '--quiet', '--create', 'agent' })
+  git_repo.write(agent, 'notes.txt', { 'in the clone’s commit' })
+  local commit = git_repo.commit_all(agent, 'Clone')
+  child.lua(BEGIN_AND_SHOW, { top })
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent (agent)',
+    commit:sub(1, 7) .. ' Clone',
+  })
+  go_to_commits_line(5)
+  expect_lines(FILES, {
+    'Files in: ' .. commit:sub(1, 7) .. ' Clone (worktree agent)',
+    '  M notes.txt',
+  })
+
+  press_gf_on(2)
+
+  wait_for_file_shown()
+  eq(current_buffer_name(), 'aineo://show/' .. commit .. '/notes.txt')
+  eq(child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)'), { 'in the clone’s commit' })
+end
+
+T['gf']['under Uncommitted opens the working tree’s file, as before'] = function()
+  local top = pane_listing(
+    'openfile-uncommitted',
+    { ['notes.txt'] = { 'two' } },
+    { 'Files in: Session work', '  M notes.txt' }
+  )
+  go_to_commits_line(1)
+  expect_lines(FILES, { 'Files in: Uncommitted', '  M notes.txt' })
+
+  press_gf_on(2)
+
+  eq(current_buffer_name(), vim.fs.joinpath(top, 'notes.txt'))
+end
+
+--- Makes a repository on `main` whose base commit holds `a.txt`, with a
+--- branch `dev` that holds two commits main lacks, each changing `a.txt`:
+--- what landed in the working branch `dev`. Begins the session there with
+--- `dev` the working branch, shows the pane and waits for the commits window
+--- to list what landed. Returns the commits' full ids, the older first.
+---
+---@param case string the case's own name
+---@param file? string the file's name, `a.txt` when not given
+---@return string first
+---@return string second
+local function pane_with_landed(case, file)
+  file = file or 'a.txt'
+  local top = git_repo.create(case, { [file] = { 'one' } })
+  git_repo.git(top, { 'switch', '--quiet', '--create', 'dev' })
+  git_repo.write(top, file, { 'first' })
+  local first = git_repo.commit_all(top, 'Land first')
+  git_repo.write(top, file, { 'second' })
+  local second = git_repo.commit_all(top, 'Land second')
+  git_repo.git(top, { 'switch', '--quiet', 'main' })
+  child.lua(BEGIN_AND_SHOW, { top, 'dev' })
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Landed in dev',
+    second:sub(1, 7) .. ' Land second',
+    first:sub(1, 7) .. ' Land first',
+  })
+  return first, second
+end
+
+T['gf']['under Landed shows the file as the working branch’s commit has it'] = function()
+  local _, second = pane_with_landed('openfile-landed-heading')
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Landed in dev', '  M a.txt' })
+
+  press_gf_on(2)
+
+  wait_for_file_shown()
+  eq(current_buffer_name(), 'aineo://show/' .. second .. '/a.txt')
+  eq(child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)'), { 'second' })
+end
+
+T['gf']['under a landed commit shows the file as that commit has it'] = function()
+  local first = pane_with_landed('openfile-landed-commit')
+  go_to_commits_line(6)
+  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Land first', '  M a.txt' })
+
+  press_gf_on(2)
+
+  wait_for_file_shown()
+  eq(current_buffer_name(), 'aineo://show/' .. first .. '/a.txt')
+  eq(child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)'), { 'first' })
+end
+
+T['gf']['under a commit, then on another file before the first is read, tells nothing of the first read’s failure'] = function()
+  pane_under_commit(
+    'openfile-commit-twice-failed',
+    { ['a.txt'] = { 'a' }, ['b.txt'] = { 'b' } },
+    { '  A a.txt', '  A b.txt' }
+  )
+  child.lua([[
+    _G.pending = {}
+    require('aineo.git').file_at_commit = function(_, _, path, done)
+      _G.pending[path] = done
+    end
+  ]])
+  press_gf_on(2)
+  press_gf_on(3)
+
+  child.lua('_G.pending["a.txt"]({ reason = "failed", message = "late" })')
+  child.lua('_G.pending["b.txt"](nil, "b text\\n")')
+
+  eq({ child.lua_get(TOLD), child.lua_get('#_G.shown_diffs') }, { '', 1 })
+end
+
+T['gf']['on the working tree’s file, after l before its diff was read, leaves the file shown alone'] = function()
+  local top = pane_listing(
+    'openfile-after-l',
+    { ['notes.txt'] = { 'two' } },
+    { 'Files in: Session work', '  M notes.txt' }
+  )
+  child.lua([[
+    require('aineo.git').file_diff = function(_, _, _, done)
+      _G.finish = done
+    end
+  ]])
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
+  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.type_keys('l')
+  git_repo.wait_until('the diff asked for', function()
+    return child.lua_get('_G.finish ~= nil')
+  end)
+  press_gf_on(2)
+
+  child.lua('_G.finish(nil, "diff --git a/notes.txt b/notes.txt\\n-one\\n+two\\n")')
+
+  eq({ current_buffer_name(), child.lua_get('#_G.shown_diffs') }, {
+    vim.fs.joinpath(top, 'notes.txt'),
+    0,
+  })
+end
+
+T['gf']['under a commit names the buffer after the file as the files window quotes it'] = function()
+  local _, commit = pane_under_commit(
+    'openfile-commit-quoted',
+    { ['say "hi".txt'] = { 'text' } },
+    { '  A "say \\"hi\\".txt"' }
+  )
+
+  press_gf_on(2)
+
+  wait_for_file_shown()
+  eq(current_buffer_name(), 'aineo://show/' .. commit .. '/"say \\"hi\\".txt"')
+end
+
+T['gf']['under Landed, once the working branch names no commit, shows nothing and says why'] = function()
+  pane_with_landed('openfile-landed-gone', 'say "hi".txt')
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Landed in dev', '  M "say \\"hi\\".txt"' })
+  child.lua([[
+    local landed = require('aineo.changes.landed')
+    landed.read = function(_, done)
+      done({ name = 'dev', names_no_commit = true })
+    end
+    require('aineo.changes').refresh_shown_pane()
+    vim.api.nvim_set_current_win(vim.fn.bufwinid('aineo://changes-files'))
+    vim.api.nvim_win_set_cursor(0, { 2, 0 })
+  ]])
+
+  child.lua("vim.fn.maparg('gf', 'n', false, true).callback()")
+
+  eq(child.lua_get(TOLD), 'aineo: "say \\"hi\\".txt" could not be read: dev names no commit')
+  eq(child.lua_get('#_G.shown_diffs'), 0)
 end
 
 T['gf']['on a link whose target is missing opens the link, which is in the working tree'] = function()

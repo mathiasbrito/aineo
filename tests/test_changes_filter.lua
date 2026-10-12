@@ -298,10 +298,21 @@ T['the commits window']['has its cursor on Session work when first shown long af
 end
 
 T['the commits window']['has its cursor on Session work again when its buffer is made anew'] = function()
-  local _, first = session_with_two_commits('filter-made-anew')
+  local flag = vim.fs.joinpath(git_repo.directory('filter-made-anew-flag'), 'slow')
+  local stand_in = git_repo.script('filter-made-anew-bin', 'git', {
+    ('if [ -e %s ]; then case " $* " in *" log "*) sleep 0.5 ;; esac; fi'):format(flag),
+    ('exec %s "$@"'):format(vim.fn.exepath('git')),
+  })
+  local _, first = session_with_two_commits(
+    'filter-made-anew',
+    QUIET_WATCH .. COUNT_GIT_CALLS,
+    { executable = stand_in }
+  )
   enter_window_of(COMMITS)
   go_to_line(4)
   expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Change a', '  M a.txt' })
+  vim.fn.writefile({}, flag)
+  local asked = child.lua_get('_G.git_asked')
   child.cmd(('bwipeout! %d'):format(child.fn.bufnr(COMMITS)))
 
   child.lua(
@@ -314,6 +325,9 @@ T['the commits window']['has its cursor on Session work again when its buffer is
   )
 
   expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  A b.txt' })
+  git_repo.wait_until('the reads asked for since have answered', function()
+    return child.lua_get(('_G.git_asked > %d and _G.git_asked == _G.git_answered'):format(asked))
+  end)
   eq(cursor_of(COMMITS), { 2, 0 })
 end
 

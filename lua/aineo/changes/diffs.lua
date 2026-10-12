@@ -1,10 +1,11 @@
---- The buffers that show a diff git gave, read-only.
+--- The buffers that show what git gave, read-only: a diff, or a file as a
+--- commit has it.
 
 local scratch = require('aineo.changes.scratch')
 
 local M = {}
 
---- The most of a diff a buffer shows, in bytes of the text git printed:
+--- The most of a text a buffer shows, in bytes of the text git printed:
 --- 1 MiB, some 20 000 lines of a reviewable diff, written in a few
 --- milliseconds, which bounds the longest line to some 150 ms a showing
 --- with syntax on, as measured in Neovim 0.12.5.
@@ -23,103 +24,149 @@ local function lines_of(text)
   return split
 end
 
---- The part of `diff` a buffer shows: all of it within `SHOWN_BYTES`;
+--- The part of `text` a buffer shows: all of it within `SHOWN_BYTES`;
 --- otherwise its lines up to the last line break within the bound, or, when
 --- its first line alone is longer, that line cut at the bound on a
 --- character's edge.
 ---
----@param diff string
+---@param text string
 ---@return string
-local function shown_part(diff)
-  if #diff <= SHOWN_BYTES then
-    return diff
+local function shown_part(text)
+  if #text <= SHOWN_BYTES then
+    return text
   end
-  local from_end = diff:sub(1, SHOWN_BYTES):reverse():find('\n', 1, true)
+  local from_end = text:sub(1, SHOWN_BYTES):reverse():find('\n', 1, true)
   if from_end then
-    return diff:sub(1, SHOWN_BYTES - from_end + 1)
+    return text:sub(1, SHOWN_BYTES - from_end + 1)
   end
   local cut_character = SHOWN_BYTES + 1
-  return diff:sub(1, cut_character + vim.str_utf_start(diff, cut_character) - 1)
+  return text:sub(1, cut_character + vim.str_utf_start(text, cut_character) - 1)
 end
 
---- The lines a buffer shows for `diff`, the text git printed: its lines, or
---- those of the part shown (`shown_part()`) then one saying how much of the
---- whole is shown.
+--- What a buffer shows of a text git printed.
+---@class aineo.changes.Shown
+---@field lines string[] the buffer's lines
+---@field note? string what is told of the text being cut, when it was
+
+--- What a buffer shows of `text`, the text git printed: its lines, or those
+--- of the part shown (`shown_part()`) and a note saying how much of the
+--- whole is shown, `what` — `diff` or `file` — being what was cut.
 ---
----@param diff string
----@return string[]
-local function diff_lines(diff)
-  local shown = shown_part(diff)
-  local text = lines_of(shown)
-  if #shown < #diff then
-    table.insert(
-      text,
-      ('aineo cut this diff at 1 MiB: %d of its %d bytes are shown'):format(#shown, #diff)
-    )
+---@param text string
+---@param what 'diff'|'file'
+---@return aineo.changes.Shown
+local function shown_of(text, what)
+  local shown = shown_part(text)
+  local note = nil
+  if #shown < #text then
+    note = ('aineo cut this %s at 1 MiB: %d of its %d bytes are shown'):format(what, #shown, #text)
   end
-  return text
+  return { lines = lines_of(shown), note = note }
 end
 
---- Writes `text` into the diff buffer `buffer` (`aineo.changes.scratch`'s
---- `write_text()`), leaving it not modifiable, with `'filetype'` `diff`, and
---- returns whether it was written.
+--- The namespace of the notes telling that a file was cut.
+local NOTES = vim.api.nvim_create_namespace('aineo_changes_cut')
+
+--- Writes `shown` into the buffer `buffer` (`aineo.changes.scratch`'s
+--- `write_text()`), leaving it not modifiable, with `'filetype'`
+--- `filetype`, and its note, if any, as a virtual line under the last line,
+--- so that the buffer holds only the lines; returns whether it was written.
 ---
 ---@param buffer integer
----@param text string[]
+---@param shown aineo.changes.Shown
+---@param filetype string
 ---@return boolean written
-local function write_diff(buffer, text)
-  if not scratch.write_text(buffer, text) then
+local function write_shown(buffer, shown, filetype)
+  if not scratch.write_text(buffer, shown.lines) then
     return false
   end
-  vim.bo[buffer].filetype = 'diff'
+  vim.bo[buffer].filetype = filetype
+  vim.api.nvim_buf_clear_namespace(buffer, NOTES, 0, -1)
+  if shown.note then
+    vim.api.nvim_buf_set_extmark(buffer, NOTES, math.max(#shown.lines - 1, 0), 0, {
+      virt_lines = { { { shown.note, 'AineoChangesNote' } } },
+    })
+  end
   return true
 end
 
---- The lines each diff buffer `M.diff_buffer()` made shows, by buffer; a
---- buffer since wiped is forgotten the next time a diff is shown.
----@type table<integer, string[]>
-local shown_lines = {}
+--- What each buffer this module made shows, by buffer; a buffer since
+--- wiped is forgotten the next time one is shown.
+---@type table<integer, aineo.changes.Shown>
+local shown_by_buffer = {}
 
---- A buffer named `name` showing `diff`, the text git printed, read-only: a
---- scratch buffer (`aineo.changes.scratch`), not modifiable, with
---- `'filetype'` `diff`, wiped once hidden, and written again by `:edit`.
---- The buffer this made last under `name`, while it exists, is written
---- anew and kept, in the windows that show it; otherwise a new one is made.
---- Returns nil when Neovim refuses the text, as it does while textlock
---- holds: the buffer is then kept as it was, or, made, kept empty, for the
---- next call under `name` to write or `M.wipe_unshown()` to wipe.
+--- A buffer named `name` showing `shown`, read-only: a scratch buffer
+--- (`aineo.changes.scratch`), not modifiable, with `'filetype'`
+--- `filetype`, wiped once hidden, and written again by `:edit`. The buffer
+--- this made last under `name`, while it exists, is written anew and kept,
+--- in the windows that show it; otherwise a new one is made. Returns nil
+--- when Neovim refuses the text, as it does while textlock holds: the
+--- buffer is then kept as it was, or, made, kept empty, for the next call
+--- under `name` to write or `M.wipe_unshown()` to wipe.
 ---
 ---@param name string
----@param diff string
+---@param shown aineo.changes.Shown
+---@param filetype string
 ---@return integer|nil buffer
-function M.diff_buffer(name, diff)
-  local text = diff_lines(diff)
-  for existing in pairs(shown_lines) do
+local function shown_buffer(name, shown, filetype)
+  for existing in pairs(shown_by_buffer) do
     if not vim.api.nvim_buf_is_valid(existing) then
-      shown_lines[existing] = nil
+      shown_by_buffer[existing] = nil
     elseif vim.api.nvim_buf_get_name(existing) == name then
-      shown_lines[existing] = text
-      return write_diff(existing, text) and existing or nil
+      shown_by_buffer[existing] = shown
+      return write_shown(existing, shown, filetype) and existing or nil
     end
   end
   local written = false
   local buffer = scratch.named_scratch_buffer(name, 'wipe', function(made)
-    written = write_diff(made, shown_lines[made] or text)
+    written = write_shown(made, shown_by_buffer[made] or shown, filetype)
   end)
-  shown_lines[buffer] = text
+  shown_by_buffer[buffer] = shown
   return written and buffer or nil
 end
 
---- Wipes the buffer `M.diff_buffer()` made under `name` when no window
---- shows it, such as one made while textlock held and never shown since,
---- and returns whether no such buffer is left: one is when Neovim refuses
---- the wipe for now (`aineo.changes.scratch`' `wipe()`).
+--- A buffer named `name` showing `diff`, the text git printed, read-only
+--- (`shown_buffer()`), with `'filetype'` `diff`; a diff cut at 1 MiB ends
+--- in a last line saying how much of it is shown.
+---
+---@param name string
+---@param diff string
+---@return integer|nil buffer nil when Neovim refuses the text for now
+function M.diff_buffer(name, diff)
+  local shown = shown_of(diff, 'diff')
+  if shown.note then
+    table.insert(shown.lines, shown.note)
+    shown.note = nil
+  end
+  return shown_buffer(name, shown, 'diff')
+end
+
+--- A buffer named `name` showing `content`, the bytes git printed for the
+--- file at `path`, read-only (`shown_buffer()`), with the `'filetype'` the
+--- path and the content give (`vim.filetype.match()`), none when they give
+--- none. A file cut at 1 MiB is told so by a virtual line under the last
+--- line shown, not by a line of the buffer.
+---
+---@param name string
+---@param path string the file's path, as the commit names it
+---@param content string
+---@return integer|nil buffer nil when Neovim refuses the text for now
+function M.file_buffer(name, path, content)
+  local shown = shown_of(content, 'file')
+  local filetype = vim.filetype.match({ filename = path, contents = shown.lines })
+  return shown_buffer(name, shown, filetype or '')
+end
+
+--- Wipes the buffer `M.diff_buffer()` or `M.file_buffer()` made under
+--- `name` when no window shows it, such as one made while textlock held and
+--- never shown since, and returns whether no such buffer is left: one is
+--- when Neovim refuses the wipe for now (`aineo.changes.scratch`' `wipe()`).
 ---
 ---@param name string
 ---@return boolean wiped
 function M.wipe_unshown(name)
   local wiped = true
-  for buffer in pairs(shown_lines) do
+  for buffer in pairs(shown_by_buffer) do
     if
       vim.api.nvim_buf_is_valid(buffer)
       and vim.api.nvim_buf_get_name(buffer) == name

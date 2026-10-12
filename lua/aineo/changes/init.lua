@@ -12,14 +12,20 @@
 --- Both are read again as the repository changes once the pane has been
 --- shown. Once told which Claude Code session the pane is for, the base and
 --- the saves are that session's, kept under the editor's state directory
---- (`aineo.changes.kept`).
+--- (`aineo.changes.kept`). In the files buffer, Enter and `l` show a file's
+--- diff against its previous version, `h` against `HEAD`
+--- (`aineo.changes.head_diff`), and `gf` opens the working tree's file or
+--- shows the file as the commit it is listed under has it
+--- (`aineo.changes.commit_file`).
 
 local git = require('aineo.git')
+local commit_file = require('aineo.changes.commit_file')
 local diff_position = require('aineo.changes.diff_position')
 local diffs = require('aineo.changes.diffs')
 local entry_diff = require('aineo.changes.entry_diff')
 local filter = require('aineo.changes.filter')
 local full_context = require('aineo.changes.full_context')
+local head_diff = require('aineo.changes.head_diff')
 local kept = require('aineo.changes.kept')
 local landed = require('aineo.changes.landed')
 local lines = require('aineo.changes.lines')
@@ -1324,23 +1330,59 @@ local function remember_diff(buffer, entry, context)
   })
 end
 
+--- Shows `buffer`, a buffer of what git gave (`aineo.changes.diffs`),
+--- through the session's `show_diff`, then moves the cursor to the window
+--- showing it, in the mode the user is in, while the cursor is still in
+--- `pressed_in`, the window the key was pressed in: the move answers that
+--- key, and a user who has gone elsewhere since stays there. When the
+--- middle column has no room for it, the buffer is wiped and the user
+--- warned, once; when showing it raises an error, the buffer is wiped and
+--- the user told the error, once; the cursor then stays where it is.
+--- `told` is what the user is told the buffer shows. Returns false, having
+--- told nothing, when Neovim refuses the wipe of a buffer it did not show,
+--- as it does while textlock holds and in the command-line window, where a
+--- window refuses the buffer too (`aineo.changes.scratch`' `wipe()`): the
+--- buffer is then kept, shown nowhere, for the next call to show. Returns
+--- true otherwise.
+---
+---@param buffer integer
+---@param pressed_in integer
+---@param told string
+---@return boolean allowed
+local function show_buffer(buffer, pressed_in, told)
+  local shown, window = pcall(session.settings.show_diff, buffer)
+  if shown and window then
+    if vim.api.nvim_get_current_win() == pressed_in then
+      vim.api.nvim_set_current_win(window)
+    end
+    return true
+  end
+  if not scratch.wipe(buffer) then
+    return false
+  end
+  if not shown then
+    vim.notify(
+      ('aineo: %s could not be shown: %s'):format(told, tostring(window)),
+      vim.log.levels.ERROR
+    )
+    return true
+  end
+  vim.notify(
+    ('aineo: the middle column has no room for %s, which is not shown'):format(told),
+    vim.log.levels.WARN
+  )
+  return true
+end
+
 --- Shows `diff`, the text git printed for the `selection`'s entry, in a
 --- diff buffer named for it (`entry_diff.name()`, `aineo.changes.diffs`)
---- through the session's `show_diff`, then moves the cursor to the window showing
---- it, in the mode the user is in, while the cursor is still in the window
---- Enter was pressed in: the move answers that Enter, and a user who has
---- gone elsewhere since stays there. When the middle column has no room
---- for it, the buffer is wiped and the user warned, once; when showing it
---- raises an error, the buffer is wiped and the user told the error, once;
---- the cursor then stays where it is. Returns false, having told nothing,
---- when Neovim refuses for now the diff buffer its text, as it does while
---- textlock holds, or the wipe of a diff it did not show, as it does while
---- textlock holds and in the command-line window, where a window refuses
---- the diff too (`aineo.changes.scratch`' `wipe()`): the buffer is then
---- kept, shown nowhere, for the next call to show. Returns true otherwise.
---- Once the buffer holds the diff it records the entry the buffer shows and
---- the context the diff was read in, and maps F in the buffer
---- (`remember_diff()`).
+--- through the session's `show_diff` (`show_buffer()`), the window Enter
+--- was pressed in being the `selection`'s. Returns false, having told
+--- nothing, when Neovim refuses for now the diff buffer its text, as it
+--- does while textlock holds, or the wipe of a diff it did not show; true
+--- otherwise. Once the buffer holds the diff it records the entry the
+--- buffer shows and the context the diff was read in, and maps F in the
+--- buffer (`remember_diff()`).
 ---
 ---@param selection aineo.changes.Selection
 ---@param diff string
@@ -1352,79 +1394,65 @@ local function show_diff(selection, diff)
     return false
   end
   remember_diff(buffer, entry, selection.context)
-  local shown, window = pcall(session.settings.show_diff, buffer)
-  if shown and window then
-    if vim.api.nvim_get_current_win() == selection.window then
-      vim.api.nvim_set_current_win(window)
-    end
-    return true
-  end
-  if not scratch.wipe(buffer) then
-    return false
-  end
-  if not shown then
-    vim.notify(
-      ('aineo: the diff of %s could not be shown: %s'):format(
-        entry_diff.told_name(entry),
-        tostring(window)
-      ),
-      vim.log.levels.ERROR
-    )
-    return true
-  end
-  vim.notify(
-    ('aineo: the middle column has no room for the diff of %s, which is not shown'):format(
-      entry_diff.told_name(entry)
-    ),
-    vim.log.levels.WARN
-  )
-  return true
+  return show_buffer(buffer, selection.window, 'the diff of ' .. entry_diff.told_name(entry))
 end
 
---- How many times Enter has asked for a diff (`open_entry()`).
+--- How many times a key of the files window has asked for a diff to be
+--- shown in the middle column, or for a file to be opened or shown
+--- (`show_diff_at_cursor()`, `show_commit_file()`, `open_file_at_cursor()`):
+--- what a key read is shown only while no later key has asked.
 local enters = 0
 
---- Shows `diff`, the diff of the `selection`'s entry the Enter numbered
---- `this_enter` read (`show_diff()`), while that Enter is the last. A diff
---- Neovim refused for now, as it does while textlock holds and, for a diff
---- it cannot show, in the command-line window, is shown at the editor's
---- next `SafeState`, if that Enter is the last still; otherwise the buffer
---- made for it, shown nowhere, is wiped (`aineo.changes.diffs`'
---- `wipe_unshown()`), at the next `SafeState` again while Neovim refuses
---- the wipe.
+--- What a key asked to show in the middle column.
+---@class aineo.changes.Showing
+---@field name string the name of the buffer that shows it
+---@field show fun(text: string): boolean makes the buffer hold `text` and shows it, returning false when Neovim refuses for now (`show_buffer()`)
+
+--- Shows `text`, what the `showing` stands for, which the key numbered
+--- `this_enter` read, while that key is the last. A text Neovim refused for
+--- now, as it does while textlock holds and, for a buffer it cannot show,
+--- in the command-line window, is shown at the editor's next `SafeState`,
+--- if that key is the last still; otherwise the buffer made for it, shown
+--- nowhere, is wiped (`aineo.changes.diffs`' `wipe_unshown()`), at the next
+--- `SafeState` again while Neovim refuses the wipe.
 ---
 ---@param this_enter integer
----@param selection aineo.changes.Selection
----@param diff string
-local function show_last_diff(this_enter, selection, diff)
+---@param showing aineo.changes.Showing
+---@param text string
+local function show_last(this_enter, showing, text)
   if this_enter ~= enters then
-    if diffs.wipe_unshown(entry_diff.name(selection.entry)) then
+    if diffs.wipe_unshown(showing.name) then
       return
     end
-  elseif show_diff(selection, diff) then
+  elseif showing.show(text) then
     return
   end
   vim.api.nvim_create_autocmd('SafeState', {
     once = true,
-    desc = 'aineo: show the diff Enter read once the editor allows it',
+    desc = 'aineo: show what a key read once the editor allows it',
     callback = function()
-      show_last_diff(this_enter, selection, diff)
+      show_last(this_enter, showing, text)
     end,
   })
 end
 
---- Reads the diff of the entry the line under the cursor lists in `buffer`
---- (`aineo.changes.entry_diff`) and shows it (`show_last_diff()`), the
---- current window kept as the one Enter was pressed in (`aineo.changes.Selection`), unless
---- Enter asked for another diff meanwhile: only the last Enter's diff is
---- shown, or its failure told. Does nothing on a line that lists none.
+--- Reads the diff of `diffed(listed)`, `listed` the entry the line under the
+--- cursor lists in `buffer` (`aineo.changes.entry_diff`), and shows it
+--- (`show_last()`), the current window kept as the one the key was pressed
+--- in (`aineo.changes.Selection`), unless a key asked for another diff or
+--- file meanwhile: only the last key's is shown, or its failure told. A
+--- diff against `HEAD` that is empty is not shown: the user is told, once,
+--- that the file is as `HEAD` has it, and the focus stays. Does nothing on a
+--- line that lists none.
 ---
 ---@param buffer integer
-local function open_entry(buffer)
-  local entry = pages.entry_at(buffer, vim.api.nvim_win_get_cursor(0)[1])
-  if not entry then
+---@param diffed fun(listed: aineo.changes.Entry): aineo.changes.Entry the entry standing for the diff to show
+local function show_diff_at_cursor(buffer, diffed)
+  local listed = pages.entry_at(buffer, vim.api.nvim_win_get_cursor(0)[1])
+  if not listed then
     return
   end
+  local entry = diffed(listed)
   enters = enters + 1
   local this_enter = enters
   local window = vim.api.nvim_get_current_win()
@@ -1442,14 +1470,93 @@ local function open_entry(buffer)
         tell_diff_unreadable(entry, failure)
         return
       end
-      show_last_diff(this_enter, { entry = entry, window = window, context = source.context }, diff)
+      if head_diff.is_against_head(entry) and diff == '' then
+        vim.notify(head_diff.told_unchanged(entry), vim.log.levels.INFO)
+        return
+      end
+      local selection = { entry = entry, window = window, context = source.context }
+      show_last(this_enter, {
+        name = entry_diff.name(entry),
+        show = function(text)
+          return show_diff(selection, text)
+        end,
+      }, diff)
     end)
   end
   read_in_current_context()
 end
 
+--- Shows the diff of the file the line under the cursor lists in `buffer`
+--- against its previous version, as Enter does (`show_diff_at_cursor()`).
+---
+---@param buffer integer
+local function open_entry(buffer)
+  show_diff_at_cursor(buffer, function(listed)
+    return listed
+  end)
+end
+
+--- Shows the diff of the file the line under the cursor lists in `buffer`
+--- against `HEAD` (`aineo.changes.head_diff`).
+---
+---@param buffer integer
+local function open_entry_against_head(buffer)
+  show_diff_at_cursor(buffer, head_diff.of)
+end
+
+--- Shows, in the middle column, the file `entry` lists as the commit it is
+--- listed under has it (`aineo.changes.commit_file`), read-only, in a buffer
+--- named for the commit and the file (`aineo.changes.diffs`' `file_buffer()`),
+--- the current window kept as the one the key was pressed in, unless a key
+--- asked for another diff or file meanwhile: only the last key's is shown,
+--- or its failure told, once, naming the file.
+---
+---@param entry aineo.changes.Entry an entry for which `commit_file.lists_file_at_a_commit()` holds
+local function show_commit_file(entry)
+  local path = entry.change.path
+  enters = enters + 1
+  local this_enter = enters
+  local revision, unreadable = commit_file.revision_of(entry, diff_source())
+  if not revision then
+    ---@cast unreadable aineo.git.Failure
+    vim.notify(
+      ('aineo: %s could not be read: %s'):format(
+        lines.quoted_path(path),
+        lines.words_of(unreadable)
+      ),
+      vim.log.levels.ERROR
+    )
+    return
+  end
+  local name = commit_file.name(revision, path)
+  local told = ('%s in %s'):format(lines.quoted_path(path), revision.told)
+  local window = vim.api.nvim_get_current_win()
+  commit_file.read(revision, path, session.settings.git, function(failure, text)
+    if this_enter ~= enters then
+      return
+    end
+    if failure then
+      local deleted = failure.reason == 'path_missing'
+      vim.notify(
+        commit_file.told_failure(revision, path, failure),
+        deleted and vim.log.levels.WARN or vim.log.levels.ERROR
+      )
+      return
+    end
+    show_last(this_enter, {
+      name = name,
+      show = function(content)
+        local buffer = diffs.file_buffer(name, path, content)
+        return buffer ~= nil and show_buffer(buffer, window, told)
+      end,
+    }, text)
+  end)
+end
+
 --- Opens the file the line under the cursor lists in `buffer`, the files
---- buffer (`aineo.changes.open_file`).
+--- buffer: the file as the commit it is listed under has it, shown in the
+--- middle column (`show_commit_file()`), or the working tree's file
+--- (`aineo.changes.open_file`).
 ---
 ---@param buffer integer
 local function open_file_at_cursor(buffer)
@@ -1457,6 +1564,11 @@ local function open_file_at_cursor(buffer)
   if not entry then
     return
   end
+  if commit_file.lists_file_at_a_commit(entry) then
+    show_commit_file(entry)
+    return
+  end
+  enters = enters + 1
   open_file.open_listed_file(entry, session.repository.top)
 end
 
@@ -1468,6 +1580,27 @@ local function map_open_file(buffer)
   vim.keymap.set('n', 'gf', function()
     open_file_at_cursor(buffer)
   end, { buffer = buffer, desc = 'aineo: open the file of the entry under the cursor' })
+end
+
+--- Maps `l` and `h` in `buffer`, the files buffer, in Normal mode: `l` to
+--- show the diff of the file the line under the cursor lists against its
+--- previous version, as Enter does (`open_entry()`), `h` against `HEAD`
+--- (`open_entry_against_head()`).
+---
+---@param buffer integer
+local function map_compare_keys(buffer)
+  vim.keymap.set('n', 'l', function()
+    open_entry(buffer)
+  end, {
+    buffer = buffer,
+    desc = 'aineo: show the diff of the file under the cursor against its previous version',
+  })
+  vim.keymap.set('n', 'h', function()
+    open_entry_against_head(buffer)
+  end, {
+    buffer = buffer,
+    desc = 'aineo: show the diff of the file under the cursor against HEAD',
+  })
 end
 
 --- A scratch buffer of the pane named `name` (`aineo.changes.scratch`),
@@ -1612,6 +1745,7 @@ function M.pane_buffers()
   if not (buffers.files and vim.api.nvim_buf_is_loaded(buffers.files)) then
     buffers.files = pane_buffer('aineo://changes-files', files_page)
     map_open_file(buffers.files)
+    map_compare_keys(buffers.files)
   end
   if not (buffers.commits and vim.api.nvim_buf_is_loaded(buffers.commits)) then
     buffers.commits = pane_buffer('aineo://changes-commits', commits_page)

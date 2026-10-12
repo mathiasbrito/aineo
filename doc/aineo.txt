@@ -332,16 +332,32 @@ does nothing. When the middle column has no room for the
 diff, aineo says so, shows nothing, and the cursor stays in the pane; so it
 does when showing the diff fails.
 
-`gf` on a file's line opens the working tree's file in the file column, as
-any file opened from one of the layout's windows is; with none of the
-layout's windows open, it opens in the window the pane is in, as |:edit|
-does. Under a commit it opens the working tree's file, not the file as that
-commit had it. On a file no longer in the working tree it opens nothing, and
-aineo says the file is gone; on a line whose path is a directory, a submodule,
-a nested repository or a worktree inside your tree, it opens nothing, and
-aineo says it is a directory, not a file; on a file listed for another
-worktree it opens nothing, and aineo says the changes pane opens no other
-worktree's file; on any other line it does nothing and says nothing. An edit
+`gf` on a file listed under a commit, one of yours, one that landed or one
+of another worktree's, shows the file as that commit has it, in the middle
+column as Enter shows a diff, in `aineo://show/{id}/{path}`, {id} the
+commit's full id and {path} quoted as the files window quotes it. Under the
+Landed heading it shows the file as the working branch's commit has it. The
+buffer is read-only, not modifiable, wiped once hidden, with the 'filetype'
+the path and the content give, so its syntax shows, and holds the bytes git
+printed, cut at 1 MiB; a virtual line under the last line shown says how much
+is, so that a yank or a `:write` of the buffer carries only the file's bytes.
+The cursor moves to its window as it does for a diff, and only the last key's
+file or diff is shown when you press keys again before one was read, a `gf`
+that opens the working tree's file included. A file the
+commit deleted opens nothing, and aineo says it was deleted in that commit;
+any other failure is told once, naming the file; and when the middle column
+has no room, aineo says so and shows nothing.
+
+Under Uncommitted and Session work, `gf` on a file's line opens the working
+tree's file in the file column, as any file opened from one of the layout's
+windows is; with none of the layout's windows open, it opens in the window
+the pane is in, as |:edit| does. On a file no longer in the working tree it
+opens nothing, and aineo says the file is gone; on a line whose path is a
+directory, a submodule, a nested repository or a worktree inside your tree,
+it opens nothing, and aineo says it is a directory, not a file; on a file
+listed under another worktree's whole change it opens nothing, and aineo
+says the changes pane opens no other worktree's file; on any other line it
+does nothing and says nothing. An edit
 Neovim refuses is told once, naming the file; one you abandon at a swap
 file's prompt is dropped without a word, as Vim's own |gf| drops it. It is a
 Normal-mode map of the files window's buffer alone, made again whenever that
@@ -350,6 +366,33 @@ the diffs included, is Vim's own, and no `<Plug>` mapping stands for it.
 Enter and `gf` take a file's name from the list itself, whatever characters
 it holds, spaces, quotes and an apostrophe among them: a name that fails to
 open from the pane is a fault to report.
+
+`l` and `h` on a file's line show that file's diff as Enter does, `l`
+against the file's previous version, `h` against `HEAD`. `l` shows what
+Enter shows on the line, in Enter's buffer. `h` shows, under a commit of
+yours or one that landed, the file from that commit straight to `HEAD`, a
+renamed file with both its paths, in `aineo://head/commit/{id}/{path}`;
+under a commit of another worktree, to that worktree's `HEAD`, in
+`aineo://worktree{top}//head/commit/{id}/{path}`; under the Landed heading,
+from `HEAD` straight to the working branch's commit, in
+`aineo://head/landed/{path}`; under Uncommitted and Session work, from
+`HEAD` to the working tree, in `aineo://uncommitted/{path}`, which is
+Enter's diff under Uncommitted; under another worktree's whole change, from
+that worktree's `HEAD` to its working tree, in
+`aineo://worktree{top}//head/{path}`. A file `HEAD` lacks is shown wholly
+added or removed. Both move the cursor to the diff, show only the last key's
+diff when you press keys again before one was read, and tell a failure or a
+middle column with no room as Enter does; `F` works in the diff they show.
+When `h` finds no difference from `HEAD` - every file of the newest commit,
+every file under Session work once the work is committed - it shows nothing
+and the cursor stays; aineo says "<path> is as HEAD has it", once. When
+`HEAD` names no commit, `h` says so under every filter, Landed included.
+On a line that lists no file they do nothing and say nothing. Each is a
+Normal-mode map of the files window's buffer alone, made again whenever that
+buffer is made anew, so it shadows Vim's `h` and `l` there, where the arrow
+keys, `0` and `$` still move along a line; in every other buffer, the
+commits window and the diffs included, they are Vim's own, and no `<Plug>`
+mapping stands for them.
 
 In a diff the pane showed, `F` reads that diff again with the whole file as
 its context when its text shows three lines, and again with three lines of
