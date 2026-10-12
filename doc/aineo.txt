@@ -23,7 +23,8 @@ interactive CLI runs in a terminal on the left; on the right, the Agent
 Report shows what Claude says it is doing, above an Input buffer where you
 write your next message. Files you open land in a column between the two.
 
-Every command sits behind one prefix key, `\` by default, in Normal mode:
+Every command sits behind one prefix key, `\` by default, in Normal mode (and
+most behind its twin in Terminal and Insert mode, below):
 `\s` sends Input to Claude, `\o` opens or restores the layout, and `\r`, `\i`
 and `\c` move to the Report, Input and Claude — `\c` in Terminal mode, so
 that what you type next goes to Claude, unless Claude Code has exited.
@@ -33,6 +34,10 @@ pick (|:Aineo-sessions|). `\pa` and `\g` switch the right column
 between the agent pane, the Report over Input, and the changes pane
 (|aineo-panes|). In Visual mode, in Input, `\s` sends the selection alone and
 removes it from Input (|aineo-v_\s|).
+
+In Terminal mode and in Insert mode, `<C-\>` followed by the same letters
+does the same: `<C-\>i` moves to Input, `<C-\>r` to the Report, `<C-\>c` to
+Claude, each after leaving the mode you were in (|aineo-terminal-keys|).
 
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
@@ -145,9 +150,10 @@ The changes pane ~
                                                                *aineo-changes*
 The changes pane lists what changed in your repository since the base of
 the Claude Code session it shows; below your own lines, its commits window
-lists each of the repository's other worktrees with its commits since a base
-of its own (below), and the line under its cursor chooses what the files
-window lists, a worktree's change included. Its repository is the one
+lists what landed in your working branch (below), then each of the
+repository's other worktrees with its commits since a base of its own
+(below), and the line under its cursor chooses what the files window lists,
+what landed or a worktree's change included. Its repository is the one
 Claude Code's working directory was in when aineo first started Claude Code
 in this editor, for the editor's life. A session
 aineo has not seen takes as its base the commit `HEAD` names when aineo
@@ -173,16 +179,17 @@ and keeps it for no session.
 The first line of the files window, `aineo://changes-files`, names what it
 lists: `Files in: Session work`, `Files in: Uncommitted`, or `Files in: `
 and a commit's line as the commits window shows it, its abbreviated id and
-subject; or, for another worktree, `Files in: ` and the worktree's heading
-as the commits window shows it, or a commit's line followed by `(worktree
-<folder>)`; the commits window chooses (below). The window lists the files
-of that one choice and nothing else, no other worktree's heading or files
-among them, whichever choice it is. It shows its first line, the cursor on
-it, each time the choice changes, and when a list is read again for the
-same choice the cursor stays on its file. Under Session work the window
-lists every file that differs from the base, committed since or not,
-staged or not, and every new file your ignore rules leave in, one per
-line, in git's order: >
+subject; `Files in: Landed in <branch>` for what landed in your working
+branch (below); or, for another worktree, `Files in: ` and the worktree's
+heading as the commits window shows it, or a commit's line followed by
+`(worktree <folder>)`; the commits window chooses (below). The window
+lists the files of that one choice and nothing else, no other worktree's
+heading or files among them, whichever choice it is. It shows its first
+line, the cursor on it, each time the choice changes, and when a list is
+read again for the same choice the cursor stays on its file. Under Session
+work the window lists every file that differs from the base, committed
+since or not, staged or not, and every new file your ignore rules leave
+in, one per line, in git's order: >
     * M lua/aineo/init.lua
       ? notes.txt
       R old.txt → new.txt
@@ -215,6 +222,14 @@ commit changed, against its first parent, with no `*` on any line: a merge
 lists what it brought in, a root commit its files; an empty commit says "No
 files in this commit".
 
+Under the Landed heading the window lists the files that differ between the
+merge base of the session's base and the commit the working branch named
+when the commits window last read it, and that commit, in the same form and
+with no `*` on any line, or says "No files changed in what landed"; with no
+base, every file of that commit is new. Under a commit that landed it
+lists the files that commit changed, against its first parent, with no `*`,
+as under any commit.
+
 Under another worktree's heading the window lists the files that differ in
 that worktree from its base, in the same form, with no `*` on any line, or
 says "No files changed in this worktree"; under one of its commits, the
@@ -230,21 +245,40 @@ and when the buffer is made anew; `\g` keeps your line. The line under
 the cursor chooses what the files window lists, once the cursor has stayed
 on it for 150 milliseconds, however it moves - keys, a click, or the mouse
 wheel over the window while the cursor is in another one: Uncommitted,
-Session work, that commit; on another worktree's heading, that worktree's
-whole change; on one of its commits, that commit, read in that worktree. The
-same commit listed under two worktrees is two choices. A line that lists
-none of these - a note - keeps the last choice. The files window keeps its
-first line and its list until the new list is read. The choice goes back to
-Session work, the cursor with it, when aineo follows another Claude Code
-session, when the chosen commit is no longer listed after a reset or a
-rebase, and when the chosen worktree is no longer listed; when the worktree
-is listed but a commit of it that was chosen is not - the agent amended or
-rebased it - the choice becomes that worktree's whole change, the cursor
-on its heading.
+Session work, that commit; on the Landed heading, everything that landed; on
+a commit that landed, that commit; on another worktree's heading, that
+worktree's whole change; on one of its commits, that commit, read in that
+worktree. The same commit listed under two worktrees, or among your own and
+among those that landed, is two choices. A line that lists none of these -
+a note - keeps the last choice. The files window keeps its first line and
+its list until the new list is read. The choice goes back to Session work,
+the cursor with it, when aineo follows another Claude Code session, when
+the chosen commit is no longer listed after a reset or a rebase, when the
+chosen commit that landed is no longer listed after the working branch was
+reset or pushed over, when the Landed section is no longer shown, and when
+the chosen worktree is no longer listed; when the worktree is listed but a
+commit of it that was chosen is not - the agent amended or rebased it - the
+choice becomes that worktree's whole change, the cursor on its heading.
 
-Below your own lines, which have no heading, the commits window lists the
-repository's other worktrees, in the order `git worktree list` gives them,
-each under a heading naming its folder and its branch, or `detached`: >
+Below your own lines, which have no heading, the commits window lists what
+landed in your working branch: the heading `Landed in <branch>`, then the
+commits of that branch your session's base cannot reach, newest first, each
+as your own are listed, a merge commit among them, or "Nothing landed in
+<branch> on this session". It is the work merged into the branch since,
+by anyone: the commits of a rebase merge are listed under their new ids.
+The working branch is the branch `changes.working_branch` names
+(|aineo-config-changes.working_branch|), as git reads a name, `origin/dev`
+say, or, when you set none, the default branch of the remote `origin`,
+which `origin/HEAD` names; a repository with neither shows no such section.
+When the name names no commit, the heading is followed by the line
+"<branch> names no commit". With no base, a session begun before the
+repository's first commit, every commit of the working branch is listed.
+aineo never fetches: the section shows the working branch as your
+repository last knew it (|aineo-limits|).
+
+Below those, the commits window lists the repository's other worktrees, in
+the order `git worktree list` gives them, each under a heading naming its
+folder and its branch, or `detached`: >
     Worktree agent-1 (feature/x)
     1a2b3c4 Add the report
 <
@@ -268,7 +302,12 @@ the commit's header and that file's change in it, in
 the whole diff from `HEAD` to the working tree, new files included, in
 `aineo://uncommitted`; on Session work the whole diff from the base, in
 `aineo://session-work`; on a commit that commit's diff, in
-`aineo://commit/{id}`, a merge's against its first parent. A new file
+`aineo://commit/{id}`, a merge's against its first parent. Enter on the
+Landed heading shows the whole diff from the merge base of the session's
+base and the working branch to the working branch, in `aineo://landed`; on
+a file listed under it, that file's change there, a renamed file with both
+paths, in `aineo://landed/{path}`; on a commit that landed, and on a file
+under it, the diff shows as for your own commits. A new file
 enters a whole diff through a copy of git's index, so your own index is
 never touched; an untracked repository with no commit yet is left out. A
 diff is read-only: a buffer with 'filetype' `diff`, wiped once hidden.
@@ -342,13 +381,17 @@ worktree, its `git add` or commit, a worktree added or removed, or a file
 written in one inside your top level; so are the files of the worktree
 whose whole change the files window lists; or in the repository, a
 reference written by anyone — a fetch, a tag, a branch made or deleted
-(but see |aineo-limits|). A worktree added shows at the next read, and one
-removed goes, its diffs left as they are. One read of each window runs at a
-time, in the commits window your own worktree's and the others' one after
-another, one git at a time; your own lines asked for meanwhile are read
-before the next worktree's, not after them all. The cursor stays on the
-line it was on while that line is listed. A diff already shown stays as it
-was until you press Enter on its line again.
+(but see |aineo-limits|). What landed is read again with your own commits:
+at every showing, when the session takes a new base, and whenever the watch
+sees a reference written, a fetch run from any worktree of the repository
+included; the files under its heading are read again when the working
+branch names another commit. A worktree added shows at the next read, and
+one removed goes, its diffs left as they are. One read of each window runs
+at a time, in the commits window your own worktree's with what landed, and
+the others', one after another, one git at a time; your own lines asked for
+meanwhile are read before the next worktree's, not after them all. The
+cursor stays on the line it was on while that line is listed. A diff
+already shown stays as it was until you press Enter on its line again.
 A list or a diff read while Neovim allows no change of text — an
 expression mapping waiting for a key or in |input()|, or a completion
 function still running — is shown once Neovim allows it again, with nothing
@@ -365,11 +408,14 @@ pane is shown or a file is saved, and a repository made since — by
 base is no longer behind `HEAD` — after a reset to before it, or a checkout
 of another branch — the commits window says so above what git lists, and
 the base stays. A read that fails keeps the list shown, under one line
-giving git's words; so does another worktree's, under its heading, the
-other worktrees as they are. When the other worktrees cannot be listed,
-one line in git's words follows your own lines, over the worktrees last
-listed. When aineo's watch of the repository fails, both
-windows say so until the pane is shown again, which starts it again.
+giving git's words; a read of the working branch that fails keeps what
+landed as it was, its line under the Landed heading, which reads `Landed
+in origin/HEAD` when no name was known yet; so does another worktree's,
+under its heading, the other worktrees as they are. When the
+other worktrees cannot be listed, one line in git's words follows your own
+lines, over the worktrees last listed. When aineo's watch of the repository
+fails, both windows say so until the pane is shown again, which starts it
+again.
 
 Colours ~
 A file's letter and path, a rename's `old → new` whole, show in the group of
@@ -381,13 +427,14 @@ commit's abbreviated id shows in |hl-AineoChangesCommitId|, and its subject in
 |hl-AineoChangesCommitSubject|, which is empty: the subject shows in the
 colours of its window, dimmed with it where a colour scheme dims a window
 not current (|hl-NormalNC|), until you colour the group. The commits
-window's two fixed lines, Uncommitted and Session work, and the files
-window's first line show whole in |hl-AineoChangesFilter|. A line that lists
-nothing, and another worktree's heading, show whole in
+window's two fixed lines, Uncommitted and Session work, its Landed heading,
+and the files window's first line show whole in |hl-AineoChangesFilter|. A
+line that lists nothing, and another worktree's heading, show whole in
 |hl-AineoChangesNote|: aineo reading the repository, no file changed, no
-commit, subdirectories not watched, the base no longer behind `HEAD`, no
-repository and git's words. A line that tells a failure,
-a refresh that failed or `git` not found, shows whole in
+commit, nothing landed, subdirectories not watched, the base no longer
+behind `HEAD`, no repository and git's words. A line that tells a failure,
+a refresh that failed, a working branch that names no commit or `git` not
+found, shows whole in
 |hl-AineoChangesFailure|. The colours follow every list written: a refresh,
 a save, a commit, `:edit` in the pane, a buffer of the pane made anew.
 Each group links to one of Neovim's own, the subject's excepted, unless a
@@ -419,8 +466,9 @@ AineoChangesCommitId     a commit's abbreviated id, linked to `Identifier`
                                                 *hl-AineoChangesCommitSubject*
 AineoChangesCommitSubject  a commit's subject, empty
                                                        *hl-AineoChangesFilter*
-AineoChangesFilter       the two fixed lines of the commits window and the
-                         files window's first line, linked to `Title`
+AineoChangesFilter       the two fixed lines of the commits window, its
+                         Landed heading and the files window's first line,
+                         linked to `Title`
                                                          *hl-AineoChangesNote*
 AineoChangesNote         a line that lists nothing, linked to `Comment`
                                                       *hl-AineoChangesFailure*
@@ -936,6 +984,67 @@ leader when |maplocalleader| is: a filetype plugin's `<Leader>` or
 Neovim's own ChangeLog plugin maps `<Leader>o`. `:checkhealth aineo` warns
 of both (|aineo-health|).
 
+Terminal and Insert mode keys ~
+                                                         *aineo-terminal-keys*
+Once the editor has started, aineo also maps the terminal prefix
+(|aineo-config-terminal_prefix|), `<C-\>` by default, followed by each prefix
+key above but Send's, globally, in Terminal mode, in any terminal and not
+only Claude's, and in Insert mode: from Claude's prompt, or while you type in
+any buffer, to move without leaving the mode by hand. A twin first leaves
+the mode it was pressed in, and then runs what its `<Plug>` mapping runs from
+Normal mode (|aineo-mappings|). In Terminal mode it leaves as `<C-\><C-n>`
+does (|CTRL-\_CTRL-N|). In Insert mode it leaves as `<Esc>` does: an
+abbreviation before the cursor is expanded (|i_CTRL-]|) and an insert given a
+count is repeated. `<C-\>c` enters Terminal mode in Claude's window again, as
+`\c` does, and the others leave you in Normal mode in the window they move
+to. Claude Code is sent none of the twin's keys.
+
+                                                                *aineo-<C-\>o*
+<C-\>o		|<Plug>(aineo-open)|
+                                                                *aineo-<C-\>r*
+<C-\>r		|<Plug>(aineo-report)|
+                                                                *aineo-<C-\>i*
+<C-\>i		|<Plug>(aineo-input)|
+                                                                *aineo-<C-\>c*
+<C-\>c		|<Plug>(aineo-claude)|
+                                                              *aineo-<C-\>tcn*
+<C-\>tcn	|<Plug>(aineo-claude-numbers)|
+                                                                *aineo-<C-\>S*
+<C-\>S		|<Plug>(aineo-sessions)|
+                                                               *aineo-<C-\>pa*
+<C-\>pa		|<Plug>(aineo-pane-agent)|
+                                                                *aineo-<C-\>g*
+<C-\>g		|<Plug>(aineo-pane-changes)|
+
+Send has no twin: it acts on a selection or on the line of Normal mode.
+`:Aineo claim` has no key of its own, so no twin either.
+
+Neovim's own `<C-\><C-n>` and `<C-\><C-o>` work as ever: aineo maps neither.
+
+The key after `<C-\>` must come within 'timeoutlen' (with 'notimeout' there
+is no limit). Typed later, it is not a twin's: in Terminal mode it reaches
+the terminal's program, Claude Code at Claude's prompt, and in Insert mode it
+is inserted as typed. A longer mapping of your own, such as `<C-\>gs`, makes
+`<C-\>g` wait for 'timeoutlen' as well.
+
+A mapping of `<C-\>` alone makes that key wait for the next key, and a
+twin's letter typed then runs aineo's action in place of yours. So in a mode
+where you have mapped the terminal prefix alone globally, as a terminal
+plugin's toggle is, aineo maps no twin. A mapping local to a buffer, such as
+that toggle in the plugin's own terminals, cannot be seen when the editor
+starts: the key waits there, and a twin's letter runs aineo's action. Set
+`terminal_prefix` to another key to have twins in that mode.
+`:checkhealth aineo` reports both (|aineo-health|).
+
+A `terminal_prefix` that is a printable key, such as `x`, runs a twin as you
+type it in Insert mode, and one that starts with `<C-\><C-n>` or
+`<C-\><C-o>` makes Neovim's own keys wait for the next key.
+`:checkhealth aineo` warns of both.
+
+Like the prefix, the terminal prefix is read once, when the editor has
+started (|VimEnter|), and a key sequence you mapped yourself — a global
+mapping in the same mode — stays yours while aineo maps the others.
+
 ==============================================================================
 6. CONFIGURATION                                         *aineo-configuration*
 
@@ -956,8 +1065,9 @@ The settings are checked when aineo uses them — when the editor has started,
 and at each action but Send, which uses no setting. A wrong value is one
 error naming the setting, such as
 `aineo: layout.report_height: expected a number strictly between 0 and 1,
-got 2`; at startup it also means no prefix keys and no autostart. A key
-aineo does not know is ignored, and `:checkhealth aineo` names it.
+got 2`; at startup it also means no prefix keys, no terminal prefix keys and
+no autostart. A key aineo does not know is ignored, and `:checkhealth aineo`
+names it.
 
                                                          *aineo-config-prefix*
 prefix			A non-empty string, or `false`. Default: `'\'`
@@ -965,6 +1075,16 @@ prefix			A non-empty string, or `false`. Default: `'\'`
 			(|aineo-keys|). `false` maps no key; |:Aineo| and the
 			`<Plug>` mappings remain. The empty string is
 			refused.
+
+                                                *aineo-config-terminal_prefix*
+terminal_prefix		A non-empty string, or `false`. Default: `'<C-\>'`
+			The key sequence, written as in a mapping, before each
+			of aineo's keys in Terminal mode and in Insert mode
+			(|aineo-terminal-keys|). `false` maps none; the prefix
+			keys remain. The empty string is refused. A printable
+			key, or one that starts with `<C-\><C-n>` or
+			`<C-\><C-o>`, is accepted and warned of
+			(|aineo-health|).
 
                                                       *aineo-config-autostart*
 autostart		A boolean. Default: `true`
@@ -1019,6 +1139,20 @@ layout.report_height	A number strictly between 0 and 1.
 			Default: `2/3`
 			The Agent Report's share of the right column's
 			rows; Input takes the rest.
+
+                  *aineo-config-changes* *aineo-config-changes.working_branch*
+changes.working_branch	A non-empty string.
+			Default: none
+			The branch work lands in, named as git reads a
+			name: `origin/dev`, say. The changes pane's commits
+			window lists the commits of that branch your
+			session's base cannot reach under a Landed heading
+			(|aineo-changes|). When it is not set, the branch is
+			the default branch of the remote `origin`, which
+			`origin/HEAD` names (`origin/main` in a clone), and
+			with neither the pane shows no Landed section. aineo
+			never fetches: the branch is what your repository
+			last fetched (|aineo-limits|).
 
 ==============================================================================
 7. SEND                                                           *aineo-send*
@@ -1418,6 +1552,19 @@ Prefix mappings ~
   warnings show. Neovim reads a leader that is a List, a Dictionary or
   longer than 48 bytes as a backslash, and so does the check.
 
+Terminal prefix mappings ~
+  For each key of the terminal prefix (|aineo-terminal-keys|), in Terminal
+  mode and in Insert mode, whether it leaves the mode and runs aineo's
+  `<Plug>` mapping; a warning when it runs something of yours, or nothing.
+  A warning for each mode where `terminal_prefix` alone is mapped
+  globally, which has no twins, or local to a buffer, which makes the key
+  wait; and when `terminal_prefix` is a printable key, or starts with
+  `<C-\><C-n>` or `<C-\><C-o>`.
+  While aineo's |VimEnter| handler has not run, or aineo was loaded after
+  startup and has not yet mapped them, one line says so in place of the
+  keys, as in the Prefix mappings section. With `terminal_prefix` set to
+  `false`, one line says that no key is mapped.
+
 Autostart ~
   Whether the autostart opened the layout at startup, or which reason kept
   it from running (|aineo-autostart|); while aineo's `VimEnter` handler has
@@ -1630,12 +1777,34 @@ The changes pane ~
   shows at the next showing of the pane, save or commit, and a branch moved
   by `git update-ref` from another worktree, a tag, and a fetch another
   worktree ran are missed too; a fetch run in your repository's main
-  worktree is seen. No timer reads the repository on a schedule; the
-  only timer is the pause before the files window follows the commits
-  window's cursor.
+  worktree is seen; what landed in your working branch then shows what
+  such a fetch brought at the next showing of the pane. No timer reads
+  the repository on a schedule; the only timer is the pause before the
+  files window follows the commits window's cursor.
 - Choosing another line in the commits window reads the files window again
   for it: another worktree's heading or commit is read in that worktree,
   and a heading's base with it.
+- What landed in your working branch is what your repository last fetched:
+  aineo never fetches, so work merged on the remote shows once a fetch, by
+  you, an agent's worktree or an editor's background fetch, has moved the
+  branch your repository holds. It counts from the session's base, not from
+  the start of the session: a session begun on a branch forked before the
+  working branch's last commits lists everything the working branch gained
+  since the fork. A checkout on the working branch itself lists its own
+  commits both among the session's and among what landed. A working branch
+  that shares no history with the base lists its commits, and the files
+  under its heading fail with git's `no merge base`. A name git finds
+  ambiguous is read as git reads it: with a local branch called
+  `origin/dev`, the setting `origin/dev` names that branch, and
+  `refs/remotes/origin/dev` names the remote one. When the default branch
+  of the remote was renamed and pruned, `origin/HEAD` names a branch that
+  is gone, and the section says it names no commit until
+  `git remote set-head origin -a` points `origin/HEAD` at the new default,
+  or `changes.working_branch` names it. Each read of the commits
+  window runs two or three more git processes for it (the default branch of
+  the remote, unless the setting names one; the commit the name names; the
+  commits between it and the base), and the files window under the heading
+  one.
 - The other worktrees have no watch of their own. A file written in a
   worktree outside your top level shows at the next change aineo's watch
   sees in your repository — that worktree's `git add` or commit, a file

@@ -285,8 +285,16 @@ T['the editor’s own worktree']['in a submodule’s linked worktree lists the s
   begin_and_show(linked)
 
   wait_for_the_reads()
-  eq(lines_of(COMMITS), commits_then({ 'Worktree lib (main)', 'No commits in this worktree' }))
-  go_to_commits_line(4)
+  expect_lines(
+    COMMITS,
+    commits_then({
+      'Landed in origin/main',
+      'Nothing landed in origin/main on this session',
+      'Worktree lib (main)',
+      'No commits in this worktree',
+    })
+  )
+  go_to_commits_line(6)
   expect_lines(FILES, { 'Files in: Worktree lib (main)', '  M notes.txt' })
 end
 
@@ -859,14 +867,16 @@ T['a worktree whose later read fails']['keeps the list it showed, under git’s 
 
   child.lua("require('aineo.changes').refresh_shown_pane()")
 
-  expect_lines(
-    COMMITS,
-    commits_then({
-      'Worktree agent (agent)',
-      'The last refresh failed: fatal: broken',
-      commit:sub(1, 7) .. ' The agent’s',
-    })
-  )
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Landed in origin/HEAD',
+    'The last refresh failed: fatal: broken',
+    'Worktree agent (agent)',
+    'The last refresh failed: fatal: broken',
+    commit:sub(1, 7) .. ' The agent’s',
+  })
 end
 
 T['a list of worktrees that fails'] = MiniTest.new_set()

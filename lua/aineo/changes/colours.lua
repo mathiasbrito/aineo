@@ -23,8 +23,8 @@ M.COMMIT_ID_GROUP = 'AineoChangesCommitId'
 --- The group a commit's subject shows in.
 M.COMMIT_SUBJECT_GROUP = 'AineoChangesCommitSubject'
 
---- The group the commits window's two fixed lines and the files window's
---- first line show in, whole.
+--- The group the commits window's two fixed lines and its Landed heading,
+--- and the files window's first line, show in, whole.
 M.FILTER_GROUP = 'AineoChangesFilter'
 
 --- The group a line that lists nothing shows in, whole.

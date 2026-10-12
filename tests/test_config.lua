@@ -6,9 +6,11 @@ local expect = MiniTest.expect
 
 local DEFAULTS = {
   prefix = '\\',
+  terminal_prefix = '<C-\\>',
   autostart = true,
   claude = { cmd = { 'claude' } },
   layout = { report_height = 2 / 3 },
+  changes = {},
 }
 
 local T = MiniTest.new_set()
@@ -57,7 +59,7 @@ end
 
 T['resolve_config()']['keeps false as a setting, never replacing it with the default'] =
   MiniTest.new_set({
-    parametrize = { { 'prefix' }, { 'autostart' } },
+    parametrize = { { 'prefix' }, { 'terminal_prefix' }, { 'autostart' } },
   })
 
 T['resolve_config()']['keeps false as a setting, never replacing it with the default']['from setup()'] = function(
@@ -72,6 +74,8 @@ T['resolve_config()']['refuses a wrong value, naming its full path'] = MiniTest.
   parametrize = {
     { { global = { prefix = true }, refusal = 'prefix: expected' } },
     { { global = { prefix = 1 }, refusal = 'prefix: expected' } },
+    { { global = { terminal_prefix = true }, refusal = 'terminal_prefix: expected' } },
+    { { global = { terminal_prefix = 1 }, refusal = 'terminal_prefix: expected' } },
     { { global = { autostart = 'yes' }, refusal = 'autostart: expected' } },
     { { global = { claude = { cmd = 'claude' } }, refusal = 'claude%.cmd: expected' } },
     { { global = { claude = { cmd = {} } }, refusal = 'claude%.cmd: expected' } },
@@ -82,6 +86,37 @@ T['resolve_config()']['refuses a wrong value, naming its full path'] = MiniTest.
         refusal = 'layout%.report_height: expected',
       },
     },
+    {
+      {
+        global = { changes = { working_branch = '' } },
+        refusal = 'changes%.working_branch: expected',
+      },
+    },
+    {
+      {
+        global = { changes = { working_branch = false } },
+        refusal = 'changes%.working_branch: expected',
+      },
+    },
+    {
+      {
+        global = { changes = { working_branch = 1 } },
+        refusal = 'changes%.working_branch: expected',
+      },
+    },
+    {
+      {
+        global = { changes = { working_branch = { 'origin/dev' } } },
+        refusal = 'changes%.working_branch: expected',
+      },
+    },
+    {
+      {
+        setup = { changes = { working_branch = '' } },
+        refusal = 'changes%.working_branch: expected',
+      },
+    },
+    { { global = { changes = 'origin/dev' }, refusal = 'changes: expected' } },
     { { global = { claude = 'claude' }, refusal = 'claude: expected' } },
     { { global = { layout = 0.5 }, refusal = 'layout: expected' } },
     { { global = 'aineo', refusal = 'vim%.g%.aineo: expected' } },
@@ -105,6 +140,12 @@ T['resolve_config()']['refuses an empty prefix, which would map the keys it pref
   end, 'prefix: expected a non%-empty string, or false')
 end
 
+T['resolve_config()']['refuses an empty terminal prefix, which would map the keys it prefixes themselves'] = function()
+  expect.error(function()
+    config.resolve_config({ terminal_prefix = '' }, nil)
+  end, 'terminal_prefix: expected a non%-empty string, or false')
+end
+
 T['resolve_config()']['refuses a report height not strictly between 0 and 1'] = MiniTest.new_set({
   parametrize = { { 0 }, { 1 }, { 1.5 }, { -0.25 } },
 })
@@ -115,6 +156,18 @@ T['resolve_config()']['refuses a report height not strictly between 0 and 1']['a
   expect.error(function()
     config.resolve_config({ layout = { report_height = height } }, nil)
   end, 'layout%.report_height: expected')
+end
+
+T['resolve_config()']['takes the working branch of the changes pane from either source, none by default'] = function()
+  local from_global = config.resolve_config({ changes = { working_branch = 'origin/dev' } }, nil)
+  local from_setup = config.resolve_config(
+    { changes = { working_branch = 'origin/dev' } },
+    { changes = { working_branch = 'dev' } }
+  )
+
+  eq(from_global.changes, { working_branch = 'origin/dev' })
+  eq(from_setup.changes, { working_branch = 'dev' })
+  eq(config.resolve_config(nil, nil).changes.working_branch, nil)
 end
 
 T['resolve_config()']['returns a key no setting knows, rather than refusing it'] = function()

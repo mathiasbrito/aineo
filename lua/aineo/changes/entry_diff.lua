@@ -2,6 +2,7 @@
 --- its buffer is named, and what the user is told it is called.
 
 local git = require('aineo.git')
+local landed = require('aineo.changes.landed')
 local lines = require('aineo.changes.lines')
 
 local M = {}
@@ -10,8 +11,25 @@ local M = {}
 ---@class aineo.changes.DiffSource
 ---@field repository aineo.git.Repository the editor's repository
 ---@field base string|nil the session's base
+---@field landed? aineo.changes.Landed what the commits window last read of the working branch
 ---@field options? aineo.git.Options how the git home runs git
 ---@field context? aineo.git.DiffContext how much of a file the diff shows around a change; three lines when not given
+
+--- Reads, for `source`, a diff between the session's base and the commit
+--- the working branch named when the commits window last read it, with
+--- `read(tip)`; calls `done(failure)` when that read has no commit
+--- (`landed.unreadable()`).
+---
+---@param source aineo.changes.DiffSource
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+---@param read fun(tip: string)
+local function with_landed_tip(source, done, read)
+  if source.landed and source.landed.tip then
+    read(source.landed.tip)
+  else
+    done(landed.unreadable(source.landed))
+  end
+end
 
 --- How the diff of an entry of the editor's own worktree is read, by the
 --- kind of the filter it is listed under and by what it is: a file in the
@@ -32,6 +50,25 @@ local OWN_READS = {
     end,
     whole = function(source, _, done)
       git.uncommitted_diff(source.repository, done, source.options)
+    end,
+  },
+  landed = {
+    file = function(source, entry, done)
+      with_landed_tip(source, done, function(tip)
+        git.file_diff_between(
+          source.repository,
+          source.base,
+          tip,
+          entry.change,
+          done,
+          source.options
+        )
+      end)
+    end,
+    whole = function(source, _, done)
+      with_landed_tip(source, done, function(tip)
+        git.diff_between(source.repository, source.base, tip, done, source.options)
+      end)
     end,
   },
   commit = {
@@ -114,6 +151,9 @@ local OWN_WHOLE_NAMES = {
   uncommitted = function()
     return 'uncommitted'
   end,
+  landed = function()
+    return 'landed'
+  end,
   commit = function(entry)
     return 'commit/' .. entry.commit.id
   end,
@@ -128,6 +168,9 @@ local OWN_FILE_NAMES = {
   end,
   uncommitted = function(entry)
     return 'uncommitted/' .. lines.quoted_path(entry.change.path)
+  end,
+  landed = function(entry)
+    return 'landed/' .. lines.quoted_path(entry.change.path)
   end,
   commit = function(entry)
     return ('commit/%s/%s'):format(entry.filter.commit.id, lines.quoted_path(entry.change.path))

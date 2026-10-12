@@ -6,9 +6,10 @@ local M = {}
 
 local recorded_setup_options = {}
 
---- Whether `value` is a prefix: a non-empty string, or `false` for no
---- prefix at all. An empty prefix would map the keys that follow it, such
---- as `i` and `o`, themselves.
+--- Whether `value` is a prefix, of Normal-mode keys or of Terminal-mode and
+--- Insert-mode keys: a non-empty string, or `false` for no prefix at all. An
+--- empty prefix would map the keys that follow it, such as `i` and `o`,
+--- themselves.
 ---
 ---@param value any
 ---@return boolean
@@ -36,6 +37,15 @@ local function is_share(value)
   return type(value) == 'number' and value > 0 and value < 1
 end
 
+--- Whether `value` names a branch as the git of the user's repository reads
+--- a name: a non-empty string.
+---
+---@param value any
+---@return boolean
+local function is_branch_name(value)
+  return type(value) == 'string' and value ~= ''
+end
+
 --- aineo's settings, each named by its path in `vim.g.aineo`, with its
 --- default and the check its value must pass (`vim.validate`'s validator and,
 --- for a function, the words that describe what it expects).
@@ -43,6 +53,12 @@ local SETTINGS = {
   {
     name = 'prefix',
     default = '\\',
+    validator = is_prefix,
+    expected = 'a non-empty string, or false',
+  },
+  {
+    name = 'terminal_prefix',
+    default = '<C-\\>',
     validator = is_prefix,
     expected = 'a non-empty string, or false',
   },
@@ -58,6 +74,12 @@ local SETTINGS = {
     default = 2 / 3,
     validator = is_share,
     expected = 'a number strictly between 0 and 1',
+  },
+  {
+    name = 'changes.working_branch',
+    default = nil,
+    validator = is_branch_name,
+    expected = 'a non-empty string naming a branch',
   },
 }
 

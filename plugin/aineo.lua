@@ -1,16 +1,17 @@
 --- aineo's composition root, sourced by Neovim at every startup: `:Aineo`, the
 --- `<Plug>(aineo-…)` mappings, and, once the editor has started, the prefix
---- mappings and the autostart. It stays cheap: sourcing it requires no aineo
---- module; once the editor has started it loads the configuration alone, to
---- read the prefix and `autostart`, and the other homes load when a command,
---- a mapping or the autostart first needs them.
+--- mappings, their twins in Terminal and Insert mode, and the autostart. It
+--- stays cheap: sourcing it requires no aineo module; once the editor has
+--- started it loads the configuration alone, to read the prefixes and
+--- `autostart`, and the other homes load when a command, a mapping or the
+--- autostart first needs them.
 ---
---- The prefix is mapped, and the autostart decided, from the configuration
+--- The prefixes are mapped, and the autostart decided, from the configuration
 --- as it stands when the editor has started (`VimEnter`) — after the user's
 --- init, and so after a plugin manager has run `setup()`. When this file is
---- sourced later, the prefix is mapped in the first scheduled callback after
---- it, once the plugin manager that sourced it has run `setup()` in the same
---- tick, as lazy.nvim does, and nothing starts by itself.
+--- sourced later, the prefixes are mapped in the first scheduled callback
+--- after it, once the plugin manager that sourced it has run `setup()` in the
+--- same tick, as lazy.nvim does, and nothing starts by itself.
 ---
 --- What the autostart decided, and why, is recorded in the editor variable
 --- `vim.g.aineo_startup` for `:checkhealth aineo` to report.
@@ -599,7 +600,7 @@ end
 --- changes home is told the session began there (`aineo.changes`'s
 --- `begin_session()`, which heeds its first call alone), in Claude Code's
 --- working directory, with the layout's `show_diff()` to show its diffs in
---- the middle column.
+--- the middle column and the configuration's `changes.working_branch`.
 ---
 ---@param config table the resolved configuration
 ---@return integer terminal
@@ -627,6 +628,7 @@ local function started_claude_terminal(config)
     show_diff = function(diff)
       return require('aineo.layout').show_diff(diff)
     end,
+    working_branch = config.changes.working_branch,
   })
   return claude_terminal
 end
@@ -1346,14 +1348,25 @@ local PREFIX_KEYS = {
   ['pane changes'] = 'g',
 }
 
+--- The keys that leave the mode a twin (`map_terminal_prefix()`) is pressed
+--- in, Terminal mode (`t`) or Insert mode (`i`), for Normal mode. In Terminal
+--- mode Neovim's own, which are not mapped. In Insert mode `<Esc>`'s effect:
+--- `<C-]>` first expands an abbreviation before the cursor, and `<Esc>`
+--- repeats an insert by its count, which `<C-\><C-n>` does neither.
+local LEAVE_MODE = { t = '<C-\\><C-n>', i = '<C-]><Esc>' }
+
+--- The prefix keys that have no twin in Terminal and Insert mode: Send acts
+--- on a selection or on Normal mode's line.
+local HAS_NO_TWIN = { send = true }
+
 --- Whether `keys`, written as in a mapping, have a global mapping in
---- `mode`, `n` for Normal mode or `x` for Visual mode. A mapping local to a
---- buffer does not count: it wins in its own buffer only. A mapping's keys
---- are compared in both the forms Neovim records: `lhsraw`, and
---- `lhsrawalt`, where a Ctrl key such as `<C-a>` has the one byte
---- `nvim_replace_termcodes()` gives it.
+--- `mode`: `n` for Normal mode, `x` for Visual mode, `t` for Terminal mode
+--- or `i` for Insert mode. A mapping local to a buffer does not count: it
+--- wins in its own buffer only. A mapping's keys are compared in both the
+--- forms Neovim records: `lhsraw`, and `lhsrawalt`, where a Ctrl key such as
+--- `<C-a>` has the one byte `nvim_replace_termcodes()` gives it.
 ---
----@param mode 'n'|'x'
+---@param mode 'n'|'x'|'t'|'i'
 ---@param keys string
 ---@return boolean
 local function has_global_mapping(mode, keys)
@@ -1363,15 +1376,22 @@ local function has_global_mapping(mode, keys)
   end)
 end
 
---- Maps `keys` in `mode` to `argument`'s `<Plug>` mapping, unless the user
---- has mapped `keys` globally in `mode` already (`has_global_mapping()`).
+--- Maps `keys` in `mode` to `argument`'s `<Plug>` mapping, typed after
+--- `typed_before`, unless the user has mapped `keys` globally in `mode`
+--- already (`has_global_mapping()`).
 ---
----@param mode 'n'|'x'
+---@param mode 'n'|'x'|'t'|'i'
 ---@param keys string
 ---@param argument string
-local function map_unless_mapped(mode, keys, argument)
+---@param typed_before string keys typed before the `<Plug>` mapping, `''` for none
+local function map_unless_mapped(mode, keys, argument, typed_before)
   if not has_global_mapping(mode, keys) then
-    vim.keymap.set(mode, keys, plug_mapping(argument), { desc = 'aineo: ' .. argument })
+    vim.keymap.set(
+      mode,
+      keys,
+      typed_before .. plug_mapping(argument),
+      { desc = 'aineo: ' .. argument }
+    )
   end
 end
 
@@ -1390,12 +1410,53 @@ local function map_prefix(prefix)
   end
   for _, argument in ipairs(ACTION_ARGUMENTS) do
     if PREFIX_KEYS[argument] then
-      map_unless_mapped('n', prefix .. PREFIX_KEYS[argument], argument)
+      map_unless_mapped('n', prefix .. PREFIX_KEYS[argument], argument, '')
     end
   end
   for argument in pairs(VISUAL_ACTIONS) do
-    map_unless_mapped('x', prefix .. PREFIX_KEYS[argument], argument)
+    map_unless_mapped('x', prefix .. PREFIX_KEYS[argument], argument, '')
   end
+end
+
+--- Maps `terminal_prefix` followed by each action's keys (`PREFIX_KEYS`) in
+--- Terminal mode and in Insert mode to the keys that leave that mode for
+--- Normal mode (`LEAVE_MODE`) and then the action's `<Plug>` mapping, so that
+--- the action runs as it does from Normal mode. Skips each key sequence the
+--- user has mapped globally in that mode already (`map_unless_mapped()`) and,
+--- in a mode where the user has mapped `terminal_prefix` alone globally, every
+--- twin: that key would otherwise wait for the next key, and a twin's letter
+--- typed then would run aineo's action. Maps nothing when `terminal_prefix`
+--- is `false`. Send, which has no twin (`HAS_NO_TWIN`), and `claim`, which
+--- has no keys, get none.
+---
+---@param terminal_prefix string|false
+local function map_terminal_prefix(terminal_prefix)
+  if terminal_prefix == false then
+    return
+  end
+  for _, mode in ipairs({ 't', 'i' }) do
+    if not has_global_mapping(mode, terminal_prefix) then
+      for _, argument in ipairs(ACTION_ARGUMENTS) do
+        if PREFIX_KEYS[argument] and not HAS_NO_TWIN[argument] then
+          map_unless_mapped(
+            mode,
+            terminal_prefix .. PREFIX_KEYS[argument],
+            argument,
+            LEAVE_MODE[mode]
+          )
+        end
+      end
+    end
+  end
+end
+
+--- Maps the keys the configuration `config` names: the prefix's
+--- (`map_prefix()`) and the terminal prefix's (`map_terminal_prefix()`).
+---
+---@param config table the resolved configuration
+local function map_keys(config)
+  map_prefix(config.prefix)
+  map_terminal_prefix(config.terminal_prefix)
 end
 
 --- Whether Neovim read its standard input into a buffer as it started
@@ -1529,7 +1590,7 @@ local function start_up()
     record_startup('wrong-setting')
     error(config, 0)
   end
-  map_prefix(config.prefix)
+  map_keys(config)
   if not config.autostart then
     record_startup('autostart-off')
     return
@@ -1547,7 +1608,7 @@ if vim.v.vim_did_enter == 1 then
   record_startup('mapping-late')
   vim.schedule(function()
     run(function()
-      map_prefix(resolved_config().prefix)
+      map_keys(resolved_config())
     end)
     record_startup('sourced-late')
   end)

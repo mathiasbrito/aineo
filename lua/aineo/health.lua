@@ -294,6 +294,8 @@ end
 --- The keys that follow the prefix for each of aineo's actions, with the
 --- `<Plug>` mapping each runs and the mode it is mapped in — `n`, Normal
 --- mode, or `x`, Visual mode — in the order `plugin/aineo.lua` maps them.
+--- Each `n` key but Send's also has a twin in Terminal and Insert mode
+--- (`TERMINAL_MODES`).
 local PREFIX_KEYS = {
   { key = 's', plug = '<Plug>(aineo-send)', mode = 'n' },
   { key = 'o', plug = '<Plug>(aineo-open)', mode = 'n' },
@@ -306,6 +308,22 @@ local PREFIX_KEYS = {
   { key = 'g', plug = '<Plug>(aineo-pane-changes)', mode = 'n' },
   { key = 's', plug = '<Plug>(aineo-send)', mode = 'x' },
 }
+
+--- The prefix keys that have no twin in Terminal and Insert mode, by their
+--- `<Plug>` mapping: Send acts on a selection or on Normal mode's line.
+local HAS_NO_TWIN = { ['<Plug>(aineo-send)'] = true }
+
+--- The modes a twin is mapped in, with how the Terminal prefix mappings
+--- section names each: Terminal mode first.
+local TERMINAL_MODES = {
+  { mode = 't', name = 'Terminal mode' },
+  { mode = 'i', name = 'Insert mode' },
+}
+
+--- The keys a twin runs before its `<Plug>` mapping, by the mode it is
+--- pressed in, to leave that mode for Normal mode (as `plugin/aineo.lua`'s
+--- `LEAVE_MODE` maps them).
+local LEAVE_MODE = { t = '<C-\\><C-n>', i = '<C-]><Esc>' }
 
 --- How the Prefix mappings section names a key sequence in each mode it
 --- maps: as it is in Normal mode, and followed by `in Visual mode` in
@@ -320,12 +338,12 @@ local function typed_keys(keys)
   return vim.api.nvim_replace_termcodes(keys, true, true, true)
 end
 
---- The global mapping of `keys`, written as in a mapping, in `mode` — `n`
---- or `x` — if any, compared in both the forms Neovim records, as
+--- The global mapping of `keys`, written as in a mapping, in `mode` — `n`,
+--- `x`, `t` or `i` — if any, compared in both the forms Neovim records, as
 --- `plugin/aineo.lua` compares them when it decides whether the user has
 --- mapped a key.
 ---
----@param mode 'n'|'x'
+---@param mode 'n'|'x'|'t'|'i'
 ---@param keys string
 ---@return table|nil mapping as `nvim_get_keymap()` gives it
 local function global_mapping(mode, keys)
@@ -350,6 +368,34 @@ local function what_mapping_runs(mapping)
   return 'a Lua function'
 end
 
+--- Reports what `keys`, written as in a mapping and named `label` in the
+--- report, runs in `mode`: ok when it runs `runs`, a warning when it runs
+--- anything else or is not mapped at all. The warning tells the user to map
+--- `plug`, the `<Plug>` mapping `runs` ends with, to a key of their own, or
+--- gives `not_mapped_advice`.
+---
+---@param label string
+---@param mode 'n'|'x'|'t'|'i'
+---@param keys string
+---@param runs string
+---@param plug string
+---@param not_mapped_advice string
+local function check_key(label, mode, keys, runs, plug, not_mapped_advice)
+  local mapping = global_mapping(mode, keys)
+  if mapping == nil then
+    vim.health.warn(('%s is not mapped'):format(label), not_mapped_advice)
+  elseif typed_keys(mapping.rhs or '') == typed_keys(runs) then
+    vim.health.ok(('%s runs %s'):format(label, runs))
+  else
+    vim.health.warn(
+      ('%s runs %s, not %s'):format(label, what_mapping_runs(mapping), runs),
+      ('aineo leaves a key you mapped alone; map %s to a key of your own: :help aineo-mappings'):format(
+        plug
+      )
+    )
+  end
+end
+
 --- Reports what the key sequence `prefix` followed by `prefix_key.key`
 --- runs in `prefix_key.mode`, naming the mode when it is Visual mode
 --- (`IN_MODE`): ok when it runs its `<Plug>` mapping, `prefix_key.plug`, a
@@ -358,24 +404,35 @@ end
 ---@param prefix string
 ---@param prefix_key { key: string, plug: string, mode: 'n'|'x' }
 local function check_prefix_key(prefix, prefix_key)
-  local keys = IN_MODE[prefix_key.mode]:format(prefix .. prefix_key.key)
-  local plug_mapping = prefix_key.plug
-  local mapping = global_mapping(prefix_key.mode, prefix .. prefix_key.key)
-  if mapping == nil then
-    vim.health.warn(
-      ('%s is not mapped'):format(keys),
-      'aineo maps its keys once, when the editor has started; a prefix changed or a key unmapped since stays so until the next start: :help aineo-config-prefix'
-    )
-  elseif mapping.rhs == plug_mapping then
-    vim.health.ok(('%s runs %s'):format(keys, plug_mapping))
-  else
-    vim.health.warn(
-      ('%s runs %s, not %s'):format(keys, what_mapping_runs(mapping), plug_mapping),
-      ('aineo leaves a key you mapped alone; map %s to a key of your own: :help aineo-mappings'):format(
-        plug_mapping
-      )
-    )
-  end
+  check_key(
+    IN_MODE[prefix_key.mode]:format(prefix .. prefix_key.key),
+    prefix_key.mode,
+    prefix .. prefix_key.key,
+    prefix_key.plug,
+    prefix_key.plug,
+    'aineo maps its keys once, when the editor has started; a prefix changed or a key unmapped since stays so until the next start: :help aineo-config-prefix'
+  )
+end
+
+--- Reports what the key sequence `terminal_prefix` followed by
+--- `prefix_key.key` runs in `terminal_mode.mode`, Terminal or Insert mode:
+--- ok when it runs the keys that leave that mode (`LEAVE_MODE`) and then
+--- `prefix_key.plug`, a warning when it runs anything else or is not mapped
+--- at all.
+---
+---@param terminal_prefix string
+---@param prefix_key { key: string, plug: string }
+---@param terminal_mode { mode: 't'|'i', name: string }
+local function check_terminal_key(terminal_prefix, prefix_key, terminal_mode)
+  local keys = terminal_prefix .. prefix_key.key
+  check_key(
+    ('%s in %s'):format(keys, terminal_mode.name),
+    terminal_mode.mode,
+    keys,
+    LEAVE_MODE[terminal_mode.mode] .. prefix_key.plug,
+    prefix_key.plug,
+    'aineo maps its keys once, when the editor has started; a terminal_prefix changed or a key unmapped since stays so until the next start: :help aineo-config-terminal_prefix'
+  )
 end
 
 --- The longest leader, in bytes, Neovim copies into a mapping; it maps a
@@ -535,6 +592,128 @@ local function check_prefix_mappings(resolved_config)
   check_leaders(resolved_config.prefix)
 end
 
+--- What the Terminal prefix mappings section says in place of a line per key
+--- while aineo's record (`startup_record()`) says it has not mapped them yet,
+--- by the record's reason.
+local TERMINAL_PREFIX_KEYS_PENDING = {
+  starting = 'the terminal prefix keys are not mapped: aineo maps them from its VimEnter handler, which has not run — the editor is still starting, or a VimEnter autocommand before it threw an exception',
+  ['mapping-late'] = 'the terminal prefix keys are not mapped yet: aineo was loaded after startup, and maps them in the next event-loop tick',
+}
+
+--- The numbers of the buffers that have a mapping of `keys`, written as in
+--- a mapping, local to them in `mode`.
+---
+---@param mode 't'|'i'
+---@param keys string
+---@return integer[]
+local function buffers_mapping(mode, keys)
+  local typed = typed_keys(keys)
+  return vim.tbl_filter(function(buffer)
+    return vim.iter(vim.api.nvim_buf_get_keymap(buffer, mode)):any(function(mapping)
+      return mapping.lhsraw == typed or mapping.lhsrawalt == typed
+    end)
+  end, vim.api.nvim_list_bufs())
+end
+
+--- Warns of each mode in `TERMINAL_MODES` where `terminal_prefix` alone is
+--- mapped: globally, so that aineo maps no twin there, and local to
+--- buffers, so that the key waits for 'timeoutlen' and a twin's letter typed
+--- then runs aineo's action. Returns the modes aineo maps no twin in.
+---
+---@param terminal_prefix string
+---@return table<string, boolean> skipped
+local function check_terminal_prefix_mapped_alone(terminal_prefix)
+  local skipped = {}
+  for _, terminal_mode in ipairs(TERMINAL_MODES) do
+    if global_mapping(terminal_mode.mode, terminal_prefix) then
+      skipped[terminal_mode.mode] = true
+      vim.health.warn(
+        ('%s is mapped in %s: aineo maps no twin there'):format(terminal_prefix, terminal_mode.name),
+        'A key you mapped alone makes the twins ambiguous with it, and aineo leaves it yours; set terminal_prefix to another key to have twins in that mode: :help aineo-terminal-keys'
+      )
+    end
+    local buffers = buffers_mapping(terminal_mode.mode, terminal_prefix)
+    if #buffers > 0 then
+      vim.health.warn(
+        ("%s is mapped in %s, local to buffers %s: it waits for 'timeoutlen', and a twin's letter typed then runs aineo's action"):format(
+          terminal_prefix,
+          terminal_mode.name,
+          table.concat(buffers, ', ')
+        ),
+        'Set terminal_prefix to another key, or map the keys of your buffer yourself: :help aineo-terminal-keys'
+      )
+    end
+  end
+  return skipped
+end
+
+--- Warns when `terminal_prefix` is a printable key, which Insert mode would
+--- run twins on while typing, or starts with `<C-\><C-n>` or `<C-\><C-o>`,
+--- which Neovim would then no longer act on at once.
+---
+---@param terminal_prefix string
+local function check_terminal_prefix_risks(terminal_prefix)
+  local typed = typed_keys(terminal_prefix)
+  if typed:match('^[%g ]$') then
+    vim.health.warn(
+      ('terminal_prefix is %s, a printable key: typing it in Insert mode runs a twin'):format(
+        terminal_prefix
+      ),
+      'Choose a key with a modifier, such as <C-\\>: :help aineo-config-terminal_prefix'
+    )
+  end
+  for _, neovims in ipairs({ typed_keys('<C-\\><C-n>'), typed_keys('<C-\\><C-o>') }) do
+    if vim.startswith(typed, neovims) then
+      vim.health.warn(
+        ('terminal_prefix %s starts with a key pair of Neovim: it waits for the next key'):format(
+          terminal_prefix
+        ),
+        "Neovim's own <C-\\><C-n> and <C-\\><C-o> would no longer act at once: :help aineo-config-terminal_prefix"
+      )
+      return
+    end
+  end
+end
+
+--- Reports on the twins of the prefix keys `resolved_config`'s
+--- `terminal_prefix` names, in Terminal and Insert mode: a warning for each
+--- mode where `terminal_prefix` alone is mapped
+--- (`check_terminal_prefix_mapped_alone()`), then each key in each mode
+--- aineo maps twins in — or, while aineo's record says it has not mapped
+--- them yet, one line saying why (`TERMINAL_PREFIX_KEYS_PENDING`) — then the
+--- risks of the prefix (`check_terminal_prefix_risks()`).
+---
+---@param resolved_config table|nil the configuration, `nil` when it is wrong
+local function check_terminal_prefix_mappings(resolved_config)
+  vim.health.start('Terminal prefix mappings')
+  if resolved_config == nil then
+    vim.health.info('the terminal prefix mappings are not checked while the configuration is wrong')
+    return
+  end
+  local terminal_prefix = resolved_config.terminal_prefix
+  if terminal_prefix == false then
+    vim.health.info('terminal_prefix is false: aineo maps no key in Terminal and Insert mode')
+    return
+  end
+  local record = startup_record()
+  local pending = record and TERMINAL_PREFIX_KEYS_PENDING[record.reason]
+  if pending then
+    vim.health.info(pending)
+    return
+  end
+  local skipped = check_terminal_prefix_mapped_alone(terminal_prefix)
+  for _, prefix_key in ipairs(PREFIX_KEYS) do
+    if prefix_key.mode == 'n' and not HAS_NO_TWIN[prefix_key.plug] then
+      for _, terminal_mode in ipairs(TERMINAL_MODES) do
+        if not skipped[terminal_mode.mode] then
+          check_terminal_key(terminal_prefix, prefix_key, terminal_mode)
+        end
+      end
+    end
+  end
+  check_terminal_prefix_risks(terminal_prefix)
+end
+
 --- Reports what the autostart decided when the editor started, and why, from
 --- aineo's record (`startup_record()`), with the error an open that failed
 --- met when the record holds it as text.
@@ -573,6 +752,7 @@ function M.check()
   check_claude(resolved_config)
   check_server_socket()
   check_prefix_mappings(resolved_config)
+  check_terminal_prefix_mappings(resolved_config)
   check_autostart()
   name_limits()
 end
