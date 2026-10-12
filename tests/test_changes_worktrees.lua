@@ -870,8 +870,9 @@ T['a worktree whose later read fails']['keeps the list it showed, under git’s 
   expect_lines(COMMITS, {
     'Uncommitted',
     'Session work',
-    'The last refresh failed: fatal: broken',
     'No commits on this session',
+    'Landed in origin/HEAD',
+    'The last refresh failed: fatal: broken',
     'Worktree agent (agent)',
     'The last refresh failed: fatal: broken',
     commit:sub(1, 7) .. ' The agent’s',

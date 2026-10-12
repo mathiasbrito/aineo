@@ -102,6 +102,7 @@ local TAGS = {
   'aineo-config-autostart',
   'aineo-config-claude.cmd',
   'aineo-config-layout.report_height',
+  'aineo-config-changes.working_branch',
   'aineo-layout',
   'aineo-panes',
   'aineo-changes',

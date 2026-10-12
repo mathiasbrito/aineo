@@ -53,6 +53,31 @@ local BEGIN_AND_SHOW = [[
   vim.api.nvim_open_win(pane.commits, false, { split = 'below' })
 ]]
 
+--- The Lua that counts, in the child, the reads of the working branch the
+--- changes home started and answered (`_G.landed_calls`,
+--- `_G.landed_answers`), an answer counted once the home has taken it, so
+--- that equal counts mean no such read is under way.
+local COUNT_LANDED_READS = [[
+  local landed = require('aineo.changes.landed')
+  local original = landed.read
+  _G.landed_calls, _G.landed_answers = 0, 0
+  landed.read = function(read, done)
+    _G.landed_calls = _G.landed_calls + 1
+    original(read, function(...)
+      done(...)
+      _G.landed_answers = _G.landed_answers + 1
+    end)
+  end
+]]
+
+--- Waits until every read of the working branch the child started has
+--- answered (`COUNT_LANDED_READS`).
+local function wait_for_landed_reads()
+  git_repo.wait_until('every read of the working branch answered', function()
+    return child.lua_get('_G.landed_answers == _G.landed_calls')
+  end)
+end
+
 --- The lines of the child's buffer named `name`.
 ---
 ---@param name string
@@ -392,7 +417,51 @@ T['the working branch']['lists every commit of it when the session has no base']
   })
 end
 
+T['the working branch']['lists a merge commit among the others, its files against its first parent'] = function()
+  local top, _, agent = with_remote('landed-merge')
+  git_repo.git(agent, { 'checkout', '--quiet', '-b', 'feature' })
+  git_repo.write(agent, 'c.txt', { 'sea' })
+  local feature = git_repo.commit_all(agent, 'Add c')
+  git_repo.git(agent, { 'checkout', '--quiet', 'dev' })
+  git_repo.git(agent, { 'merge', '--quiet', '--no-ff', '--message', 'Merge feature', 'feature' })
+  local merge = git_repo.git(agent, { 'rev-parse', 'HEAD' })
+  git_repo.git(agent, { 'push', '--quiet', 'origin', 'dev' })
+  fetch(top)
+
+  begin_and_show(top, { working_branch = WORKING_BRANCH })
+
+  expect_lines(COMMITS, {
+    UNCOMMITTED,
+    SESSION_WORK,
+    NO_COMMITS,
+    HEADING,
+    commit_line(merge, 'Merge feature'),
+    commit_line(feature, 'Add c'),
+  })
+  go_to_commits_line(5)
+  expect_lines(FILES, { 'Files in: ' .. commit_line(merge, 'Merge feature'), '  A c.txt' })
+end
+
 T['the filter'] = MiniTest.new_set()
+
+T['the filter']['of the heading lists every file of the working branch as new when the session has no base'] = function()
+  local _, _, agent = with_remote('landed-no-base-files')
+  land(agent, { ['b.txt'] = { 'bee' } }, 'Add b')
+  local fresh = git_repo.create_unborn('landed-no-base-files-fresh')
+  git_repo.git(
+    fresh,
+    { 'remote', 'add', 'origin', vim.fs.joinpath(vim.fs.dirname(agent), 'remote.git') }
+  )
+  fetch(fresh)
+  begin_and_show(fresh, { working_branch = WORKING_BRANCH })
+  git_repo.wait_until('the heading is shown', function()
+    return lines_of(COMMITS)[4] == HEADING
+  end)
+
+  go_to_commits_line(4)
+
+  expect_lines(FILES, { 'Files in: ' .. HEADING, '  A a.txt', '  A b.txt' })
+end
 
 T['the filter']['of the heading lists what changed between the base and the working branch, unmarked, and nothing of the working tree'] = function()
   local top, _, agent = with_remote('landed-heading-files')
@@ -733,6 +802,52 @@ T['The selection']['goes back to Session work when the heading selected is no lo
   eq(cursor_of(COMMITS), { 2, 0 })
 end
 
+T['The selection']['follows the heading to another working branch: the files window names the branch it lists'] = function()
+  local top, _, agent = with_remote('landed-retargeted')
+  land(agent, { ['b.txt'] = { 'bee' } }, 'Add b')
+  git_repo.git(agent, { 'checkout', '--quiet', '-b', 'trunk', 'HEAD~1' })
+  git_repo.write(agent, 'c.txt', { 'sea' })
+  local trunk_commit = git_repo.commit_all(agent, 'Add c on trunk')
+  git_repo.git(agent, { 'push', '--quiet', 'origin', 'trunk' })
+  fetch(top)
+  git_repo.git(top, { 'remote', 'set-head', 'origin', 'dev' })
+  begin_and_show(top)
+  git_repo.wait_until('the heading is shown', function()
+    return lines_of(COMMITS)[4] == HEADING
+  end)
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: ' .. HEADING, '  A b.txt' })
+
+  git_repo.git(top, { 'remote', 'set-head', 'origin', 'trunk' })
+
+  expect_lines(COMMITS, {
+    UNCOMMITTED,
+    SESSION_WORK,
+    NO_COMMITS,
+    'Landed in origin/trunk',
+    commit_line(trunk_commit, 'Add c on trunk'),
+  })
+  expect_lines(FILES, { 'Files in: Landed in origin/trunk', '  A c.txt' })
+end
+
+T['The selection']['follows the heading to another working branch at the same commit: the files window names the new one'] = function()
+  local top, _, agent = with_remote('landed-retargeted-same')
+  land(agent, { ['b.txt'] = { 'bee' } }, 'Add b')
+  git_repo.git(agent, { 'push', '--quiet', 'origin', 'dev:trunk' })
+  fetch(top)
+  git_repo.git(top, { 'remote', 'set-head', 'origin', 'dev' })
+  begin_and_show(top)
+  git_repo.wait_until('the heading is shown', function()
+    return lines_of(COMMITS)[4] == HEADING
+  end)
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: ' .. HEADING, '  A b.txt' })
+
+  git_repo.git(top, { 'remote', 'set-head', 'origin', 'trunk' })
+
+  expect_lines(FILES, { 'Files in: Landed in origin/trunk', '  A b.txt' })
+end
+
 T['The selection']['keeps the heading when the working branch names no commit any more, the files window saying so'] = function()
   local top = with_remote('landed-branch-deleted')
   begin_and_show(top, { working_branch = WORKING_BRANCH })
@@ -824,19 +939,44 @@ T['The selection']['keeps the list it shows, under git’s words, when a read of
   local commit = land(agent, { ['b.txt'] = { 'bee' } }, 'Add b')
   fetch(top)
   begin_and_show(top, { working_branch = WORKING_BRANCH, git = { executable = stand_in } })
-  local landed_lines = { HEADING, commit_line(commit, 'Add b') }
-  expect_lines(COMMITS, vim.list_extend({ UNCOMMITTED, SESSION_WORK, NO_COMMITS }, landed_lines))
+  local line = commit_line(commit, 'Add b')
+  expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, NO_COMMITS, HEADING, line })
   vim.fn.writefile({}, flag)
 
   refresh_pane()
 
-  expect_lines(
-    COMMITS,
-    vim.list_extend(
-      { UNCOMMITTED, SESSION_WORK, 'The last refresh failed: boom', NO_COMMITS },
-      landed_lines
-    )
-  )
+  expect_lines(COMMITS, {
+    UNCOMMITTED,
+    SESSION_WORK,
+    NO_COMMITS,
+    HEADING,
+    'The last refresh failed: boom',
+    line,
+  })
+end
+
+T['The selection']['says git’s words under the heading, and in the files window, when the first read of the working branch fails'] = function()
+  local flag = vim.fs.joinpath(git_repo.directory('landed-failing-first-bin-flag'), 'fail')
+  local stand_in = git_repo.script('landed-failing-first-bin', 'git', {
+    ('if [ -e %s ]; then case "$*" in *"^{commit}"*) echo "boom" >&2; exit 5 ;; esac; fi'):format(
+      flag
+    ),
+    ('exec %s "$@"'):format(vim.fn.exepath('git')),
+  })
+  local top = with_remote('landed-failing-first')
+  vim.fn.writefile({}, flag)
+
+  begin_and_show(top, { working_branch = WORKING_BRANCH, git = { executable = stand_in } })
+
+  expect_lines(COMMITS, {
+    UNCOMMITTED,
+    SESSION_WORK,
+    NO_COMMITS,
+    HEADING,
+    'The last refresh failed: boom',
+  })
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: ' .. HEADING, 'The last refresh failed: boom' })
 end
 
 T['Landed is read again']['and an earlier read that answers late does not replace the later one’s'] = function()
@@ -854,6 +994,7 @@ T['Landed is read again']['and an earlier read that answers late does not replac
     ('exec %s "$@"'):format(vim.fn.exepath('git')),
   })
   local top, _, agent = with_remote('landed-late')
+  child.lua(COUNT_LANDED_READS)
   local first = land(agent, { ['b.txt'] = { 'bee' } }, 'Add b')
   fetch(top)
   begin_and_show(top, { working_branch = WORKING_BRANCH, git = { executable = stand_in } })
@@ -872,9 +1013,96 @@ T['Landed is read again']['and an earlier read that answers late does not replac
   git_repo.wait_until('the earlier read is over', function()
     return vim.uv.fs_stat(slept) ~= nil
   end)
-  vim.wait(1000)
+  wait_for_landed_reads()
 
   eq(lines_of(COMMITS), { UNCOMMITTED, SESSION_WORK, NO_COMMITS, HEADING, second_line, first_line })
+end
+
+T['Landed is read again']['and an earlier read that answers while the new base is looked for shows nothing'] = function()
+  local fixture = git_repo.directory('landed-looking-marks')
+  local slow_for, started, slept, slow_head = unpack(vim.tbl_map(function(name)
+    return vim.fs.joinpath(fixture, name)
+  end, { 'slow-for', 'started', 'slept', 'slow-head' }))
+  local stand_in = git_repo.script('landed-looking-bin', 'git', {
+    ('if [ -e %s ]; then case "$*" in *"$(cat %s)"*) case " $* " in *" log "*) touch %s; sleep 1.5; touch %s ;; esac ;; esac; fi'):format(
+      slow_for,
+      slow_for,
+      started,
+      slept
+    ),
+    ('if [ -e %s ]; then case " $* " in *" HEAD "*) sleep 4 ;; esac; fi'):format(slow_head),
+    ('exec %s "$@"'):format(vim.fn.exepath('git')),
+  })
+  local top, _, agent = with_remote('landed-looking')
+  child.lua(COUNT_LANDED_READS)
+  local first = land(agent, { ['b.txt'] = { 'bee' } }, 'Add b')
+  fetch(top)
+  begin_and_show(top, { working_branch = WORKING_BRANCH, git = { executable = stand_in } })
+  expect_lines(
+    COMMITS,
+    { UNCOMMITTED, SESSION_WORK, NO_COMMITS, HEADING, commit_line(first, 'Add b') }
+  )
+  local second = land(agent, { ['c.txt'] = { 'sea' } }, 'Add c')
+  vim.fn.writefile({ second }, slow_for)
+  fetch(top)
+  git_repo.wait_until('the earlier read is under way', function()
+    return vim.uv.fs_stat(started) ~= nil
+  end)
+  vim.fn.writefile({}, slow_head)
+  child.lua(
+    "require('aineo.changes').follow_changes_session({ id = 'second', state_directory = ... })",
+    { git_repo.directory('landed-looking-state') }
+  )
+  git_repo.wait_until('the earlier read is over', function()
+    return vim.uv.fs_stat(slept) ~= nil
+  end)
+  wait_for_landed_reads()
+
+  eq(lines_of(COMMITS), { UNCOMMITTED, SESSION_WORK, 'aineo is reading the repository' })
+end
+
+T['Landed is read again']['when another editor kept another base: the heading stays selected, its files and diffs wait for the read'] = function()
+  local flag = vim.fs.joinpath(git_repo.directory('landed-kept-bin-flag'), 'slow')
+  local stand_in = git_repo.script('landed-kept-bin', 'git', {
+    ('if [ -e %s ]; then case " $* " in *" log "*) sleep 3 ;; esac; fi'):format(flag),
+    ('exec %s "$@"'):format(vim.fn.exepath('git')),
+  })
+  local state = git_repo.directory('landed-kept-state')
+  local top, _, agent = with_remote('landed-kept')
+  local first = land(agent, { ['b.txt'] = { 'bee' } }, 'Add b')
+  fetch(top)
+  child.lua('_G.told = {} vim.notify = function(message) table.insert(_G.told, message) end')
+  begin_and_show(top, { working_branch = WORKING_BRANCH, git = { executable = stand_in } })
+  child.lua(
+    "require('aineo.changes').follow_changes_session({ id = 'kept', state_directory = ... })",
+    { state }
+  )
+  expect_lines(
+    COMMITS,
+    { UNCOMMITTED, SESSION_WORK, NO_COMMITS, HEADING, commit_line(first, 'Add b') }
+  )
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: ' .. HEADING, '  A b.txt' })
+  press_enter_on(COMMITS, 4)
+  wait_for_diffs(1)
+  child.lua(
+    "assert(not require('aineo.changes.kept').keep_base(..., 'kept', { top = select(2, ...), base = select(3, ...), saved = {} }))",
+    { state, top, first }
+  )
+  vim.fn.writefile({}, flag)
+
+  save_in_editor(vim.fs.joinpath(top, 'a.txt'))
+
+  expect_lines(FILES, { 'Files in: ' .. HEADING, 'aineo is reading the repository' })
+  child.type_keys('F')
+  git_repo.wait_until('the failure told', function()
+    return child.lua_get('#_G.told') == 1
+  end)
+  eq(
+    child.lua_get('_G.told[1]'),
+    'aineo: the diff of Landed in origin/dev could not be read: what landed has not been read yet'
+  )
+  expect_lines(FILES, { 'Files in: ' .. HEADING, 'No files changed in what landed' })
 end
 
 T['Landed is read again']['from nothing at a new base: the window says it is reading until the commits are read'] = function()
@@ -920,6 +1148,26 @@ local PANE_COLOURS = [[(function(name)
 end)(...)]]
 
 T['The colours'] = MiniTest.new_set()
+
+T['The colours']['of the line saying nothing landed are the whole line in AineoChangesNote'] = function()
+  local top = with_remote('landed-colours-nothing')
+
+  begin_and_show(top, { working_branch = WORKING_BRANCH })
+
+  expect_lines(COMMITS, {
+    UNCOMMITTED,
+    SESSION_WORK,
+    NO_COMMITS,
+    HEADING,
+    'Nothing landed in origin/dev on this session',
+  })
+  eq(child.lua_get(PANE_COLOURS, { COMMITS })[5], {
+    4,
+    0,
+    #'Nothing landed in origin/dev on this session',
+    'AineoChangesNote',
+  })
+end
 
 T['The colours']['of the heading are the whole line in AineoChangesFilter, of a landed commit those of every commit'] = function()
   local top, _, agent = with_remote('landed-colours')
