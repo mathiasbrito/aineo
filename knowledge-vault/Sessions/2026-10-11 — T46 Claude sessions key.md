@@ -174,4 +174,22 @@ After the fix round's first run no mutant survived. In the first round two survi
 
 ## Commits
 
-Recorded after the merge, by the T46 knowledge pass.
+Recorded after the merge, by the wave 11 closing knowledge pass. PR #167 merged by rebase as `55e6d32` … `7278d07` (13 commits), now `83f3342` … `f319ff3` on `dev`. The orchestrator verified the pull request's head `3df71aa` on `dev` `a0627fe`: the whole suite 2708 cases, `Fails (0)`, lint clean, and the two session-id guards' mutants (in the list's reader, and at the pick) killed, by 3 and 1 failures. It then pushed one records commit, `7278d07`, which names A132 the user's decision without a pronoun. Released in v0.2.23 (PR #168, `main` `9d2e1ee`).
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `55e6d32` | `83f3342` | Record T46's dispatch amendment: built now, M7 and M8 measured |
+| `834cb01` | `4a88f87` | Read whether Claude Code's prompt shows text by the terminal's cursor |
+| `70c1b70` | `a0114b5` | List the sessions Claude Code lists, from claude agents --json |
+| `3b77737` | `4e505e4` | Mark each listed session by where a pick may take it |
+| `d39577f` | `2c024f8` | Add \cs, aineo's own list of Claude Code's sessions, and switch to a pick |
+| `51dc333` | `ee50b03` | Put Insert mode back after a refused \cs pick that came in Insert mode |
+| `8d02396` | `1ab5af1` | Move the suites' pins that \cs made stale: \c now waits for an s |
+| `1c15955` | `777e8d8` | Show the changes pane with \g, not \pc |
+| `d742c9a` | `26a82d2` | Record T46's session note, D52 and T47, and the amendment's widenings |
+| `3c449d4` | `3181233` | Open the session list with \S, so \c acts at once again |
+| `e2f5327` | `5c6eed0` | Answer the attack review of \S: guard the id, list again at the pick |
+| `3df71aa` | `ac25b4a` | Record T46's fix round: D53, the literal mutants and the settled counts |
+| `7278d07` | `f319ff3` | Name A132 the user's decision without a pronoun |
+
+The `Branch` column is the pull request's own commits (`refs/pull/167/head`); the orchestrator's `7278d07` is the last of them. The first commit carries the brief's dispatch amendment (A129). The subjects name `\cs` as they were written; the key became `\S` in the commit "Open the session list with \S" (D53).
