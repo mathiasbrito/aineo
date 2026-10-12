@@ -141,6 +141,21 @@ local function status()
   return child.lua_get("{ require('aineo.claude').session_status() }")
 end
 
+--- How long a case waits for a Claude Code that starts once a list has run
+--- out its bound of 5 s: the bound, and time for the launch.
+local LIST_BOUND_AND_LAUNCH_MS = 8000
+
+--- Whether the fake has recorded a run as Claude Code, and not only the
+--- `agents --json` of the list.
+---
+---@param fake { record: string }
+---@return boolean
+local function claude_code_has_started(fake)
+  return vim.iter(claude.record(fake)):any(function(entry)
+    return entry.argv ~= nil and entry.argv[1] ~= 'agents'
+  end)
+end
+
 --- Waits `NO_LAUNCH_WINDOW_MS`, the time a Claude Code that launched would
 --- need to show in the fake's record.
 local function wait_for_a_launch_that_must_not_come()
@@ -381,11 +396,12 @@ T['a start that waits for the list']['launches Claude Code all the same when the
   eq(told(), {})
 end
 
-T['a start that waits for the list']['launches nothing when its buffer was wiped before the list answered'] = function()
+T['a start that waits for the list']['launches nothing, and tells nothing, when its buffer was wiped before the list answered'] = function()
   local fake = fake_listing('resume-elsewhere-wiped', {})
   local gate = claude.list_gate('resume-elsewhere-wiped')
   local settings =
     vim.tbl_extend('force', keeping_the_session('resume-elsewhere-wiped'), { cmd = gate.cmd })
+  note_what_is_told()
   local buffer = claude.start(child, fake, settings)
   child.lua('vim.cmd.bwipeout({ tostring(...), bang = true })', { buffer })
 
@@ -394,6 +410,7 @@ T['a start that waits for the list']['launches nothing when its buffer was wiped
   wait_for_a_launch_that_must_not_come()
 
   eq(claude.wait_for_starts(fake, 0), {})
+  eq(told(), {})
 end
 
 T['a start that waits for the list']['launches nothing for a start that another has taken the place of, and the other launches'] = function()
@@ -496,8 +513,8 @@ T['a list that does not answer']['times out after 5 s, and the start resumes the
   note_what_is_told()
 
   claude.start(child, fake, settings)
-  vim.wait(7000, function()
-    return #claude.wait_for_starts(fake, 0) > 0
+  vim.wait(LIST_BOUND_AND_LAUNCH_MS, function()
+    return claude_code_has_started(fake)
   end, 50)
 
   eq(claude.words_after(claude.start_arguments(fake, 1), '--resume'), { KEPT_ID })
