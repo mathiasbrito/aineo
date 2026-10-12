@@ -978,4 +978,210 @@ T['a diff in the whole file’s context']['from HEAD is every uncommitted file w
   eq(hunk_headers(seen.result), { '@@ -1,20 +1,20 @@' })
 end
 
+--- The Lua that asks the git home in the child for the repository of the
+--- directory `...`, then for the diff `operation` names — one of the three
+--- between commits — with `request`'s `from` (nil for none), `to`, `change`
+--- and `context`, and returns `{ seen = <what `_G.await` saw> }`.
+local DIFF_BETWEEN = [[
+  local directory, operation, request = ...
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end).result
+  local options = { context = request.context }
+  local operations = {
+    diff_between = function(done)
+      git.diff_between(found, request.from, request.to, done, options)
+    end,
+    file_diff_between = function(done)
+      git.file_diff_between(found, request.from, request.to, request.change, done, options)
+    end,
+    file_diff_straight = function(done)
+      git.file_diff_straight(found, request.from, request.to, request.change, done, options)
+    end,
+  }
+  return { seen = _G.await(operations[operation]) }
+]]
+
+--- Makes a repository whose base holds `a.txt` of 20 lines and `old.txt`,
+--- then forks: `feature` adds `feature.txt` and `main` changes line 10 of
+--- `a.txt` and renames `old.txt` to `new.txt`; returns the top level and
+--- the three commits.
+---
+---@param name string
+---@return string top
+---@return { base: string, feature: string, main: string } commits
+local function create_fork(name)
+  local top, base =
+    git_repo.create(name, { ['a.txt'] = numbered_lines(20), ['old.txt'] = numbered_lines(8) })
+  git_repo.git(top, { 'switch', '--quiet', '--create', 'feature' })
+  git_repo.write(top, 'feature.txt', { 'feature' })
+  local feature = git_repo.commit_all(top, 'On the feature')
+  git_repo.git(top, { 'switch', '--quiet', 'main' })
+  local changed = numbered_lines(20)
+  changed[10] = 'line ten'
+  git_repo.write(top, 'a.txt', changed)
+  git_repo.git(top, { 'mv', 'old.txt', 'new.txt' })
+  local main = git_repo.commit_all(top, 'On main')
+  return top, { base = base, feature = feature, main = main }
+end
+
+T['the diff between two commits'] = MiniTest.new_set()
+
+T['the diff between two commits']['is what the second gained since it forked from the first, after no header'] = function()
+  local top, commits = create_fork('diffs-between')
+
+  local seen = child.lua(
+    DIFF_BETWEEN,
+    { top, 'diff_between', { from = commits.feature, to = commits.main } }
+  ).seen
+
+  eq({
+    failure = seen.failure,
+    header = vim.startswith(seen.result, 'diff --git a/a.txt b/a.txt\n'),
+    only_the_second = seen.result:find('feature.txt', 1, true) == nil,
+    rename = seen.result:find('rename from old.txt', 1, true) ~= nil,
+    hunks = hunk_headers(seen.result),
+  }, {
+    header = true,
+    only_the_second = true,
+    rename = true,
+    hunks = { '@@ -7,7 +7,7 @@' },
+  })
+end
+
+T['the diff between two commits']['is every file of the second, as new, when there is no first'] = function()
+  local top, commits = create_fork('diffs-between-no-from')
+
+  local seen = child.lua(DIFF_BETWEEN, { top, 'diff_between', { to = commits.feature } }).seen
+
+  eq(hunk_headers(seen.result), { '@@ -0,0 +1,20 @@', '@@ -0,0 +1 @@', '@@ -0,0 +1,8 @@' })
+end
+
+T['the diff between two commits']['has the whole file around a change when asked for it'] = function()
+  local top, commits = create_fork('diffs-between-whole')
+
+  local seen = child.lua(DIFF_BETWEEN, {
+    top,
+    'diff_between',
+    { from = commits.base, to = commits.main, context = 'whole_file' },
+  }).seen
+
+  eq(hunk_headers(seen.result), { '@@ -1,20 +1,20 @@' })
+end
+
+T['a file’s diff between two commits'] = MiniTest.new_set()
+
+T['a file’s diff between two commits']['is that file’s change since the two forked, and nothing of the other files'] = function()
+  local top, commits = create_fork('diffs-file-between')
+
+  local seen = child.lua(DIFF_BETWEEN, {
+    top,
+    'file_diff_between',
+    { from = commits.feature, to = commits.main, change = { path = 'a.txt', kind = 'modified' } },
+  }).seen
+
+  eq({
+    failure = seen.failure,
+    header = vim.startswith(seen.result, 'diff --git a/a.txt b/a.txt\n'),
+    only_a = seen.result:find('new.txt', 1, true) == nil,
+    hunks = hunk_headers(seen.result),
+  }, { header = true, only_a = true, hunks = { '@@ -7,7 +7,7 @@' } })
+end
+
+T['a file’s diff between two commits']['of a renamed file is its rename, asked with both paths'] = function()
+  local top, commits = create_fork('diffs-file-between-renamed')
+
+  local seen = child.lua(DIFF_BETWEEN, {
+    top,
+    'file_diff_between',
+    {
+      from = commits.feature,
+      to = commits.main,
+      change = { path = 'new.txt', kind = 'renamed', old_path = 'old.txt' },
+    },
+  }).seen
+
+  eq(seen.result:find('rename from old.txt\nrename to new.txt', 1, true) ~= nil, true)
+end
+
+T['a file’s diff between two commits']['straight is the change from the first to the second, as the merge base would hide it'] = function()
+  local top, commits = create_fork('diffs-file-straight')
+  local change = { path = 'a.txt', kind = 'modified' }
+
+  local straight = child.lua(
+    DIFF_BETWEEN,
+    { top, 'file_diff_straight', { from = commits.main, to = commits.base, change = change } }
+  ).seen
+  local from_the_merge_base = child.lua(
+    DIFF_BETWEEN,
+    { top, 'file_diff_between', { from = commits.main, to = commits.base, change = change } }
+  ).seen
+
+  eq({ straight = hunk_headers(straight.result), merge_base = from_the_merge_base.result }, {
+    straight = { '@@ -7,7 +7,7 @@' },
+    merge_base = '',
+  })
+end
+
+T['a file’s diff between two commits']['straight from no first commit is the file wholly added'] = function()
+  local top, commits = create_fork('diffs-file-straight-no-from')
+
+  local seen = child.lua(DIFF_BETWEEN, {
+    top,
+    'file_diff_straight',
+    { to = commits.feature, change = { path = 'a.txt', kind = 'added' } },
+  }).seen
+
+  eq(hunk_headers(seen.result), { '@@ -0,0 +1,20 @@' })
+end
+
+T['a diff between two commits'] = MiniTest.new_set({
+  parametrize = { { 'diff_between' }, { 'file_diff_between' }, { 'file_diff_straight' } },
+})
+
+T['a diff between two commits']['from a commit named like an option is refused, and writes nothing'] = function(
+  operation
+)
+  local top, commits = create_fork('diffs-between-option')
+  local written = vim.fs.joinpath(vim.fs.dirname(top), 'written')
+
+  local seen = child.lua(DIFF_BETWEEN, {
+    top,
+    operation,
+    {
+      from = '--output=' .. written,
+      to = commits.main,
+      change = { path = 'a.txt', kind = 'modified' },
+    },
+  }).seen
+
+  eq({
+    reason = vim.tbl_get(seen, 'failure', 'reason'),
+    beside = vim.fn.readdir(vim.fs.dirname(top)),
+  }, { reason = 'failed', beside = { 'repo' } })
+end
+
+T['a diff between two commits']['in a context git has no name for is refused, not run'] = function(
+  operation
+)
+  local top, commits = create_fork('diffs-between-context')
+
+  local refusal = child.lua(DIFF_BETWEEN, {
+    top,
+    operation,
+    {
+      from = commits.base,
+      to = commits.main,
+      change = { path = 'a.txt', kind = 'modified' },
+      context = 'wide',
+    },
+  })
+
+  eq({
+    raised = tostring(refusal.seen.raised):find('context', 1, true) ~= nil,
+    calls = refusal.seen.calls,
+  }, { raised = true, calls = 0 })
+end
+
 return T

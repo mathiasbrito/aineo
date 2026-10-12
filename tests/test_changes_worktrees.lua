@@ -132,16 +132,52 @@ local READS_ANSWERED = [[(function(lists)
   return _G.git_answered.list_worktrees >= lists
 end)(...)]]
 
---- Waits until the child has listed the worktrees `lists` times, once per
---- window when not given, and every read it asked of the git home has
---- answered (`COUNT_GIT_READS`), so that what the pane shows is what those
---- reads gave.
+--- Waits until the child has listed the worktrees `lists` times, once when
+--- not given, which the commits window does at each of its reads, and every
+--- read it asked of the git home has answered (`COUNT_GIT_READS`), so that
+--- what the pane shows is what those reads gave.
 ---
 ---@param lists? integer
 local function wait_for_the_reads(lists)
   git_repo.wait_until('every read answered', function()
-    return child.lua_get(READS_ANSWERED, { lists or 2 })
+    return child.lua_get(READS_ANSWERED, { lists or 1 })
   end)
+end
+
+--- Makes the window showing the child's buffer named `name` the current one.
+---
+---@param name string
+local function enter_window_of(name)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { name })
+end
+
+--- Makes the commits window the current one and puts its cursor on line
+--- `line`, as the user's keys do.
+---
+---@param line integer
+local function go_to_commits_line(line)
+  git_repo.wait_until('the commits window lists line ' .. line, function()
+    return child.lua_get('vim.api.nvim_buf_line_count(vim.fn.bufnr(...))', { COMMITS }) >= line
+  end)
+  enter_window_of(COMMITS)
+  child.type_keys(line .. 'G')
+end
+
+--- Puts the cursor of the files window, entered, on line `line`.
+---
+---@param line integer
+local function go_to_files_line(line)
+  enter_window_of(FILES)
+  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { line })
+end
+
+--- The commits window's lines for an editor with no commit of its own, then
+--- the lines `listed` for its worktrees.
+---
+---@param listed string[]
+---@return string[]
+local function commits_then(listed)
+  return vim.list_extend({ 'Uncommitted', 'Session work', 'No commits on this session' }, listed)
 end
 
 T['the editor’s own worktree'] = MiniTest.new_set()
@@ -218,12 +254,8 @@ T['the editor’s own worktree']['is shown once, a linked one whose folder moved
   begin_and_show(mine)
 
   wait_for_the_reads()
-  eq(lines_of(FILES), {
-    'Files in: Session work',
-    '  M notes.txt',
-    'Worktree repo (main)',
-    'No files changed in this worktree',
-  })
+  eq(lines_of(FILES), { 'Files in: Session work', '  M notes.txt' })
+  eq(lines_of(COMMITS), commits_then({ 'Worktree repo (main)', 'No commits in this worktree' }))
 end
 
 T['the editor’s own worktree']['is not listed as a locked one whose .git is gone, its folder inside the top level'] = function()
@@ -240,7 +272,7 @@ T['the editor’s own worktree']['is not listed as a locked one whose .git is go
   begin_and_show(top)
 
   wait_for_the_reads()
-  eq(lines_of(FILES), { 'Files in: Session work', '  M notes.txt' })
+  eq(lines_of(COMMITS), commits_then({}))
 end
 
 T['the editor’s own worktree']['in a submodule’s linked worktree lists the submodule’s checkout as another'] = function()
@@ -253,44 +285,27 @@ T['the editor’s own worktree']['in a submodule’s linked worktree lists the s
   begin_and_show(linked)
 
   wait_for_the_reads()
-  eq(lines_of(FILES), {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree lib (main)',
-    '  M notes.txt',
-  })
+  eq(lines_of(COMMITS), commits_then({ 'Worktree lib (main)', 'No commits in this worktree' }))
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree lib (main)', '  M notes.txt' })
 end
 
 T['the files window'] = MiniTest.new_set()
 
-T['the files window']['lists the editor’s files first, as ever, then each other worktree’s under its heading'] = function()
-  local top = git_repo.create('changesworktrees-files', { ['notes.txt'] = { 'one' } })
-  git_repo.write(top, 'notes.txt', { 'two' })
-  local agent = add_worktree(top, 'agent', 'agent')
-  git_repo.write(agent, 'agent.txt', { 'new' })
-
-  begin_and_show(top)
-
-  expect_lines(
-    FILES,
-    { 'Files in: Session work', '  M notes.txt', 'Worktree agent (agent)', '  ? agent.txt' }
-  )
-end
-
-T['the files window']['heads a detached worktree’s section so'] = function()
+T['the files window']['heads a detached worktree’s whole change so'] = function()
   local top = git_repo.create('changesworktrees-detached', { ['notes.txt'] = { 'one' } })
   local agent = vim.fs.joinpath(vim.fs.dirname(top), 'agent')
   git_repo.git(top, { 'worktree', 'add', '--quiet', '--detach', agent })
   git_repo.write(agent, 'agent.txt', { 'new' })
-
   begin_and_show(top)
+  expect_lines(
+    COMMITS,
+    commits_then({ 'Worktree agent (detached)', 'No commits in this worktree' })
+  )
 
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree agent (detached)',
-    '  ? agent.txt',
-  })
+  go_to_commits_line(4)
+
+  expect_lines(FILES, { 'Files in: Worktree agent (detached)', '  ? agent.txt' })
 end
 
 T['the files window']['lists another worktree with no shared history, every file new'] = function()
@@ -299,15 +314,12 @@ T['the files window']['lists another worktree with no shared history, every file
   git_repo.git(top, { 'worktree', 'add', '--quiet', '--orphan', '-b', 'unrelated', unrelated })
   git_repo.write(unrelated, 'b.txt', { 'b' })
   git_repo.commit_all(unrelated, 'Its own')
-
   begin_and_show(top)
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
 
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree unrelated (unrelated)',
-    '  A b.txt',
-  })
+  go_to_commits_line(4)
+
+  expect_lines(FILES, { 'Files in: Worktree unrelated (unrelated)', '  A b.txt' })
 end
 
 --- The Lua expression giving the colours of the child's buffer named
@@ -320,91 +332,72 @@ local COLOURS_OF = [[(function(name)
   end, marks)
 end)(...)]]
 
-T['the files window']['colours another worktree’s heading as a note, and its files as the editor’s'] = function()
+T['the files window']['colours the first line of another worktree’s whole change as a filter, and its files as the editor’s'] = function()
   local top = git_repo.create('changesworktrees-colours', { ['notes.txt'] = { 'one' } })
-  git_repo.write(top, 'notes.txt', { 'two' })
   local agent = add_worktree(top, 'agent', 'agent')
   git_repo.write(agent, 'notes.txt', { 'agent' })
   begin_and_show(top)
-  expect_lines(
-    FILES,
-    { 'Files in: Session work', '  M notes.txt', 'Worktree agent (agent)', '  M notes.txt' }
-  )
+  expect_lines(COMMITS, commits_then({ 'Worktree agent (agent)', 'No commits in this worktree' }))
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
 
   local colours = child.lua_get(COLOURS_OF, { FILES })
 
   eq(colours, {
-    { 0, 0, #'Files in: Session work', 'AineoChangesFilter' },
+    { 0, 0, #'Files in: Worktree agent (agent)', 'AineoChangesFilter' },
     { 1, 2, 13, 'AineoChangesModified' },
-    { 2, 0, #'Worktree agent (agent)', 'AineoChangesNote' },
-    { 3, 2, 13, 'AineoChangesModified' },
   })
 end
 
-T['the files window']['keeps the cursor on another worktree’s entry while one of the same path is listed above it'] = function()
-  local top = git_repo.create('changesworktrees-cursor', { ['notes.txt'] = { 'one' } })
-  local first = add_worktree(top, 'first', 'first')
-  git_repo.write(first, 'notes.txt', { 'first' })
-  local second = add_worktree(top, 'second', 'second')
-  git_repo.write(second, 'notes.txt', { 'second' })
+T['a worktree’s heading'] = MiniTest.new_set()
+
+T['a worktree’s heading']['is coloured as a note in the commits window'] = function()
+  local top = git_repo.create('changesworktrees-heading-colours', { ['notes.txt'] = { 'one' } })
+  add_worktree(top, 'agent', 'agent')
   begin_and_show(top)
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree first (first)',
-    '  M notes.txt',
-    'Worktree second (second)',
-    '  M notes.txt',
+  expect_lines(COMMITS, commits_then({ 'Worktree agent (agent)', 'No commits in this worktree' }))
+
+  local colours = child.lua_get(COLOURS_OF, { COMMITS })
+
+  eq(colours, {
+    { 0, 0, #'Uncommitted', 'AineoChangesFilter' },
+    { 1, 0, #'Session work', 'AineoChangesFilter' },
+    { 2, 0, #'No commits on this session', 'AineoChangesNote' },
+    { 3, 0, #'Worktree agent (agent)', 'AineoChangesNote' },
+    { 4, 0, #'No commits in this worktree', 'AineoChangesNote' },
   })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 6, 0 })')
-  git_repo.write(top, 'a.txt', { 'a' })
-  git_repo.write(top, 'b.txt', { 'b' })
+end
+
+T['the files window']['keeps the cursor on its entry when the same filter is read again'] = function()
+  local top = git_repo.create('changesworktrees-cursor', {
+    ['a.txt'] = { 'one' },
+    ['b.txt'] = { 'one' },
+    ['c.txt'] = { 'one' },
+  })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'b.txt', { 'agent' })
+  git_repo.write(agent, 'c.txt', { 'agent' })
+  begin_and_show(top)
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M b.txt', '  M c.txt' })
+  go_to_files_line(3)
+  git_repo.write(agent, 'a.txt', { 'agent' })
 
   child.lua("require('aineo.changes').refresh_shown_pane()")
 
-  expect_lines(FILES, {
-    'Files in: Session work',
-    '  ? a.txt',
-    '  ? b.txt',
-    'Worktree first (first)',
-    '  M notes.txt',
-    'Worktree second (second)',
-    '  M notes.txt',
-  })
-  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)[1]'), 7)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M a.txt', '  M b.txt', '  M c.txt' })
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)[1]'), 4)
 end
 
-T['a worktree with nothing changed'] = MiniTest.new_set({
-  parametrize = {
-    {
-      FILES,
-      {
-        'Files in: Session work',
-        'No files changed on this session',
-        'Worktree agent (agent)',
-        'No files changed in this worktree',
-      },
-    },
-    {
-      COMMITS,
-      {
-        'Uncommitted',
-        'Session work',
-        'No commits on this session',
-        'Worktree agent (agent)',
-        'No commits in this worktree',
-      },
-    },
-  },
-})
+T['a worktree with nothing changed'] = MiniTest.new_set()
 
-T['a worktree with nothing changed']['says so under its heading in'] = function(name, expected)
+T['a worktree with nothing changed']['says so under its heading in the commits window'] = function()
   local top = git_repo.create('changesworktrees-nothing', { ['notes.txt'] = { 'one' } })
   add_worktree(top, 'agent', 'agent')
 
   begin_and_show(top)
 
-  expect_lines(name, expected)
+  expect_lines(COMMITS, commits_then({ 'Worktree agent (agent)', 'No commits in this worktree' }))
 end
 
 T['Enter'] = MiniTest.new_set()
@@ -435,13 +428,9 @@ T['Enter']['on another worktree’s file shows its diff from that worktree’s b
   git_repo.write(top, 'main.txt', { 'main' })
   git_repo.commit_all(top, 'The editor’s')
   begin_and_show(top)
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree agent (agent)',
-    '  M notes.txt',
-  })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 4, 0 })')
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
+  go_to_files_line(2)
 
   child.type_keys('<CR>')
 
@@ -457,13 +446,9 @@ T['Enter']['on another worktree’s file shows its diff, named for the worktree'
   local before = git_repo.git(top, { 'rev-parse', base .. ':notes.txt' })
   local after = git_repo.git(agent, { 'hash-object', 'notes.txt' })
   begin_and_show(top)
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree agent (agent)',
-    '  M notes.txt',
-  })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 4, 0 })')
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
+  go_to_files_line(2)
 
   child.type_keys('<CR>')
 
@@ -487,13 +472,9 @@ T['Enter']['on another worktree’s file moves the cursor to its diff'] = functi
   local agent = add_worktree(top, 'agent', 'agent')
   git_repo.write(agent, 'notes.txt', { 'agent' })
   begin_and_show(top)
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree agent (agent)',
-    '  M notes.txt',
-  })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 4, 0 })')
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
+  go_to_files_line(2)
 
   child.type_keys('<CR>')
 
@@ -510,14 +491,11 @@ T['Enter']['on another worktree’s commit shows that commit’s diff, named for
   git_repo.write(agent, 'notes.txt', { 'agent' })
   local commit = git_repo.commit_all(agent, 'The agent’s')
   begin_and_show(top)
-  expect_lines(COMMITS, {
-    'Uncommitted',
-    'Session work',
-    'No commits on this session',
-    'Worktree agent (agent)',
-    commit:sub(1, 7) .. ' The agent’s',
-  })
-  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
+  expect_lines(
+    COMMITS,
+    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+  )
+  enter_window_of(COMMITS)
   child.lua('vim.api.nvim_win_set_cursor(0, { 5, 0 })')
 
   child.type_keys('<CR>')
@@ -554,26 +532,61 @@ local COUNT_DIFFS_AND_MESSAGES = [[
   end
 ]]
 
-T['Enter']['on another worktree’s heading does nothing and says nothing'] = function()
+T['Enter']['on another worktree’s heading shows its whole change from its base, new files included, named for the worktree'] = function()
   local top = git_repo.create('changesworktrees-enter-heading', { ['notes.txt'] = { 'one' } })
   local agent = add_worktree(top, 'agent', 'agent')
   git_repo.write(agent, 'notes.txt', { 'agent' })
-  child.lua(COUNT_DIFFS_AND_MESSAGES)
+  git_repo.write(agent, 'new.txt', { 'new' })
   begin_and_show(top)
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree agent (agent)',
-    '  M notes.txt',
-  })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
-  child.type_keys('<CR>')
+  expect_lines(COMMITS, commits_then({ 'Worktree agent (agent)', 'No commits in this worktree' }))
+  go_to_commits_line(4)
 
-  child.lua('vim.api.nvim_win_set_cursor(0, { 4, 0 })')
   child.type_keys('<CR>')
 
   wait_for_diffs(1)
-  eq(child.lua_get('{ _G.diffs_asked, _G.messages }'), { 1, {} })
+  local shown = child.lua_get(SHOWN_DIFF, { 1 })
+  eq({
+    name = shown.name,
+    headers = vim.tbl_filter(function(line)
+      return vim.startswith(line, 'diff --git')
+    end, shown.text),
+  }, {
+    name = ('aineo://worktree%s//since-base'):format(agent),
+    headers = { 'diff --git a/new.txt b/new.txt', 'diff --git a/notes.txt b/notes.txt' },
+  })
+end
+
+T['Enter']['on a file under another worktree’s commit shows the commit’s header and that file’s change, named for the worktree and the commit'] = function()
+  local top = git_repo.create('changesworktrees-enter-commit-file', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+  git_repo.write(agent, 'notes.txt', { 'later' })
+  begin_and_show(top)
+  expect_lines(
+    COMMITS,
+    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+  )
+  go_to_commits_line(5)
+  expect_lines(FILES, {
+    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    '  M notes.txt',
+  })
+  go_to_files_line(2)
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  local shown = child.lua_get(SHOWN_DIFF, { 1 })
+  eq({
+    name = shown.name,
+    first = shown.text[1],
+    last = { shown.text[#shown.text - 1], shown.text[#shown.text] },
+  }, {
+    name = ('aineo://worktree%s//commit/%s/notes.txt'):format(agent, commit),
+    first = 'commit ' .. commit,
+    last = { '-one', '+agent' },
+  })
 end
 
 T['Enter']['on one path in two worktrees shows two diff buffers, each its worktree’s'] = function()
@@ -583,20 +596,15 @@ T['Enter']['on one path in two worktrees shows two diff buffers, each its worktr
   local second = add_worktree(top, 'second', 'second')
   git_repo.write(second, 'notes.txt', { 'second' })
   begin_and_show(top)
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree first (first)',
-    '  M notes.txt',
-    'Worktree second (second)',
-    '  M notes.txt',
-  })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 4, 0 })')
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree first (first)', '  M notes.txt' })
+  go_to_files_line(2)
   child.type_keys('<CR>')
   wait_for_diffs(1)
-  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
 
-  child.lua('vim.api.nvim_win_set_cursor(0, { 6, 0 })')
+  go_to_commits_line(6)
+  expect_lines(FILES, { 'Files in: Worktree second (second)', '  M notes.txt' })
+  go_to_files_line(2)
   child.type_keys('<CR>')
 
   wait_for_diffs(2)
@@ -623,20 +631,15 @@ T['Enter']['on two worktrees’ files whose top level and path join alike shows 
   local editor = vim.fs.joinpath(fixture, 'editor')
   git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'editor', editor })
   begin_and_show(editor)
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree repo (main)',
-    '  M sub/diff/x.txt',
-    'Worktree sub (nested)',
-    '  ? x.txt',
-  })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 4, 0 })')
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree repo (main)', '  M sub/diff/x.txt' })
+  go_to_files_line(2)
   child.type_keys('<CR>')
   wait_for_diffs(1)
-  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
 
-  child.lua('vim.api.nvim_win_set_cursor(0, { 6, 0 })')
+  go_to_commits_line(6)
+  expect_lines(FILES, { 'Files in: Worktree sub (nested)', '  ? x.txt' })
+  go_to_files_line(2)
   child.type_keys('<CR>')
 
   wait_for_diffs(2)
@@ -683,19 +686,14 @@ T['the worktrees followed']['show one added after the pane first showed, once th
 
   add_worktree(top, 'agent', 'agent')
 
-  expect_lines(FILES, {
-    'Files in: Session work',
-    '  ? ' .. LIVE_MARKER,
-    'Worktree agent (agent)',
-    'No files changed in this worktree',
-  })
+  expect_lines(COMMITS, commits_then({ 'Worktree agent (agent)', 'No commits in this worktree' }))
 end
 
 T['the worktrees followed']['show a commit made in another worktree, once the watch calls back'] = function()
   local top = git_repo.create('changesworktrees-commit-followed', { ['notes.txt'] = { 'one' } })
   local agent = add_worktree(top, 'agent', 'agent')
   begin_and_show(top)
-  watch_live(top, { 'Worktree agent (agent)', 'No files changed in this worktree' })
+  watch_live(top)
 
   local commit = git_repo.commit_all(agent, 'The agent’s')
 
@@ -713,18 +711,20 @@ T['the worktrees followed']['drop one removed, once the watch calls back, its di
   local agent = add_worktree(top, 'agent', 'agent')
   git_repo.write(agent, 'notes.txt', { 'agent' })
   begin_and_show(top)
-  watch_live(top, { 'Worktree agent (agent)', '  M notes.txt' })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 4, 0 })')
+  expect_lines(COMMITS, commits_then({ 'Worktree agent (agent)', 'No commits in this worktree' }))
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
+  go_to_files_line(2)
   child.type_keys('<CR>')
   wait_for_diffs(1)
   local diff = child.lua_get(SHOWN_DIFF, { 1 })
 
   git_repo.git(top, { 'worktree', 'remove', '--force', agent })
 
-  expect_lines(FILES, { 'Files in: Session work', '  ? ' .. LIVE_MARKER })
+  expect_lines(COMMITS, commits_then({}))
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
   eq(child.lua_get(SHOWN_DIFF, { 1 }), diff)
 end
-
 --- The git the suites run, by its absolute path, for the stand-ins that
 --- run it in their turn.
 local REAL_GIT = vim.fn.exepath('git')
@@ -768,11 +768,9 @@ T['a diff of another worktree that fails']['is told naming its worktree'] = func
   local stand_in, switch = breakable_git_in('changesworktrees-diff-failed', agent, 'diff')
   child.lua(COUNT_DIFFS_AND_MESSAGES)
   begin_and_show(top, { executable = stand_in })
-  expect_lines(
-    FILES,
-    { 'Files in: Session work', '  M notes.txt', 'Worktree agent (agent)', '  M notes.txt' }
-  )
-  child.lua('vim.api.nvim_win_set_cursor(0, { 4, 0 })')
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
+  go_to_files_line(2)
   turn_on(switch)
 
   child.type_keys('<CR>')
@@ -789,7 +787,7 @@ T['a worktree whose read fails'] = MiniTest.new_set({
   parametrize = {
     { 'its repository found', 'rev-parse' },
     { 'its base read', 'merge-base' },
-    { 'its files listed', 'ls-files' },
+    { 'its commits listed', 'log' },
   },
 })
 
@@ -801,19 +799,21 @@ T['a worktree whose read fails']['shows git’s words under its heading, the oth
   local first = add_worktree(top, 'first', 'first')
   local second = add_worktree(top, 'second', 'second')
   git_repo.write(second, 'notes.txt', { 'second' })
+  local commit = git_repo.commit_all(second, 'The second’s')
   local stand_in, switch = breakable_git_in('changesworktrees-failed', first, subcommand)
   turn_on(switch)
 
   begin_and_show(top, { executable = stand_in })
 
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree first (first)',
-    'The last refresh failed: fatal: broken',
-    'Worktree second (second)',
-    '  M notes.txt',
-  })
+  expect_lines(
+    COMMITS,
+    commits_then({
+      'Worktree first (first)',
+      'The last refresh failed: fatal: broken',
+      'Worktree second (second)',
+      commit:sub(1, 7) .. ' The second’s',
+    })
+  )
 end
 
 T['a worktree whose later read fails'] = MiniTest.new_set()
@@ -822,64 +822,56 @@ T['a worktree whose later read fails']['keeps the list it showed, under git’s 
   local top = git_repo.create('changesworktrees-failed-later', { ['notes.txt'] = { 'one' } })
   local agent = add_worktree(top, 'agent', 'agent')
   git_repo.write(agent, 'notes.txt', { 'agent' })
-  local stand_in, switch = breakable_git_in('changesworktrees-failed-later', agent, 'ls-files')
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+  local stand_in, switch = breakable_git_in('changesworktrees-failed-later', agent, 'log')
   begin_and_show(top, { executable = stand_in })
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree agent (agent)',
-    '  M notes.txt',
-  })
+  expect_lines(
+    COMMITS,
+    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+  )
   turn_on(switch)
 
   child.lua("require('aineo.changes').refresh_shown_pane()")
 
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree agent (agent)',
-    'The last refresh failed: fatal: broken',
-    '  M notes.txt',
-  })
+  expect_lines(
+    COMMITS,
+    commits_then({
+      'Worktree agent (agent)',
+      'The last refresh failed: fatal: broken',
+      commit:sub(1, 7) .. ' The agent’s',
+    })
+  )
 end
 
 T['a worktree whose later read fails']['keeps the list it showed, under git’s words, when the editor’s branch cannot be read'] = function()
   local top = git_repo.create('changesworktrees-comparison-failed', { ['notes.txt'] = { 'one' } })
   local agent = add_worktree(top, 'agent', 'agent')
   git_repo.write(agent, 'notes.txt', { 'agent' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
   local stand_in, switch =
     breakable_git_in('changesworktrees-comparison-failed', top, 'symbolic-ref')
   begin_and_show(top, { executable = stand_in })
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree agent (agent)',
-    '  M notes.txt',
-  })
+  expect_lines(
+    COMMITS,
+    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+  )
   turn_on(switch)
 
   child.lua("require('aineo.changes').refresh_shown_pane()")
 
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree agent (agent)',
-    'The last refresh failed: fatal: broken',
-    '  M notes.txt',
-  })
+  expect_lines(
+    COMMITS,
+    commits_then({
+      'Worktree agent (agent)',
+      'The last refresh failed: fatal: broken',
+      commit:sub(1, 7) .. ' The agent’s',
+    })
+  )
 end
 
-T['a list of worktrees that fails'] = MiniTest.new_set({
-  parametrize = {
-    { FILES, { 'Files in: Session work', '  M notes.txt' } },
-    { COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' } },
-  },
-})
+T['a list of worktrees that fails'] = MiniTest.new_set()
 
-T['a list of worktrees that fails']['leaves the editor’s lines as ever, then says so in git’s words, in'] = function(
-  name,
-  own_lines
-)
+T['a list of worktrees that fails']['leaves the editor’s lines as ever, then says so in git’s words, in the commits window'] = function()
   local top = git_repo.create('changesworktrees-list-failed', { ['notes.txt'] = { 'one' } })
   git_repo.write(top, 'notes.txt', { 'two' })
   local stand_in, switch = breakable_git_in('changesworktrees-list-failed', top, 'worktree')
@@ -887,10 +879,8 @@ T['a list of worktrees that fails']['leaves the editor’s lines as ever, then s
 
   begin_and_show(top, { executable = stand_in })
 
-  expect_lines(
-    name,
-    vim.list_extend(own_lines, { 'The other worktrees could not be listed: fatal: broken' })
-  )
+  expect_lines(COMMITS, commits_then({ 'The other worktrees could not be listed: fatal: broken' }))
+  eq(lines_of(FILES), { 'Files in: Session work', '  M notes.txt' })
 end
 
 T['a later list of worktrees that fails'] = MiniTest.new_set()
@@ -899,29 +889,28 @@ T['a later list of worktrees that fails']['keeps the worktrees it showed, under 
   local top = git_repo.create('changesworktrees-list-failed-later', { ['notes.txt'] = { 'one' } })
   local agent = add_worktree(top, 'agent', 'agent')
   git_repo.write(agent, 'notes.txt', { 'agent' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
   local stand_in, switch = breakable_git_in('changesworktrees-list-failed-later', top, 'worktree')
   begin_and_show(top, { executable = stand_in })
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree agent (agent)',
-    '  M notes.txt',
-  })
+  expect_lines(
+    COMMITS,
+    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+  )
   turn_on(switch)
 
   child.lua("require('aineo.changes').refresh_shown_pane()")
 
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
-    'The other worktrees could not be listed: fatal: broken',
-    'Worktree agent (agent)',
-    '  M notes.txt',
-  })
+  expect_lines(
+    COMMITS,
+    commits_then({
+      'The other worktrees could not be listed: fatal: broken',
+      'Worktree agent (agent)',
+      commit:sub(1, 7) .. ' The agent’s',
+    })
+  )
 end
-
 --- Writes a stand-in for git under the fixture `git-<name>` that, asked
---- for an `ls-files` in the directory `held`, writes the file
+--- for a `log` in the directory `held`, writes the file
 --- `<stand-in>.waiting` and waits for the file `<stand-in>.gate` before it
 --- runs git, as it runs git at once for anything else; returns its path,
 --- the waiting file's and the gate's.
@@ -933,7 +922,7 @@ end
 ---@return string gate
 local function git_held_in(name, held)
   local stand_in = git_repo.script(name, 'git', {
-    ('case " $* " in *" -C %s "*" ls-files "*) : > "$0.waiting"; while [ ! -f "$0.gate" ]; do sleep 0.05; done ;; esac'):format(
+    ('case " $* " in *" -C %s "*" log "*) : > "$0.waiting"; while [ ! -f "$0.gate" ]; do sleep 0.05; done ;; esac'):format(
       held
     ),
     ('exec %s "$@"'):format(REAL_GIT),
@@ -943,17 +932,17 @@ end
 
 T['a worktree removed while it is read'] = MiniTest.new_set()
 
---- The Lua that counts, in the child, the reads of changed files the git
---- home has answered, in `_G.file_reads_answered`, each once its caller's
+--- The Lua that counts, in the child, the reads of commits the git home
+--- has answered, in `_G.commit_reads_answered`, each once its caller's
 --- `done` has run.
-local COUNT_FILE_READS = [[
+local COUNT_COMMIT_READS = [[
   local git = require('aineo.git')
-  local changed_files = git.changed_files
-  _G.file_reads_answered = 0
-  git.changed_files = function(found, base, done, options)
-    return changed_files(found, base, function(...)
+  local commits_since = git.commits_since
+  _G.commit_reads_answered = 0
+  git.commits_since = function(found, base, done, options)
+    return commits_since(found, base, function(...)
       done(...)
-      _G.file_reads_answered = _G.file_reads_answered + 1
+      _G.commit_reads_answered = _G.commit_reads_answered + 1
     end, options)
   end
 ]]
@@ -962,25 +951,25 @@ T['a worktree removed while it is read']['is dropped, not told as a failure'] = 
   local top = git_repo.create('changesworktrees-removed-meanwhile', { ['notes.txt'] = { 'one' } })
   local agent = add_worktree(top, 'agent', 'agent')
   local stand_in, waiting, gate = git_held_in('changesworktrees-removed-meanwhile', agent)
-  child.lua(COUNT_FILE_READS)
+  child.lua(COUNT_COMMIT_READS)
   begin_and_show(top, { executable = stand_in })
-  git_repo.wait_until('the worktree’s files asked for', function()
+  git_repo.wait_until('the worktree’s commits asked for', function()
     return vim.uv.fs_stat(waiting) ~= nil
   end)
   vim.fn.delete(agent, 'rf')
 
   assert(vim.fn.writefile({}, gate) == 0, 'cannot write ' .. gate)
 
-  git_repo.wait_until('the editor’s and the worktree’s files read', function()
-    return child.lua_get('_G.file_reads_answered') == 2
+  git_repo.wait_until('the editor’s and the worktree’s commits read', function()
+    return child.lua_get('_G.commit_reads_answered') == 2
   end)
-  eq(lines_of(FILES), { 'Files in: Session work', 'No files changed on this session' })
+  eq(lines_of(COMMITS), commits_then({}))
 end
 
 T['the reads'] = MiniTest.new_set()
 
 --- Writes a stand-in for git under the fixture `git-<name>` that runs
---- every `ls-files` — the last git of each worktree's read of the files
+--- every `log` — the last git of each worktree's read of the commits
 --- window — between a line `start` and a line `end` it appends to the file
 --- `<stand-in>.log`, after a pause of half a second; returns its path and
 --- the log's.
@@ -991,7 +980,7 @@ T['the reads'] = MiniTest.new_set()
 local function logging_git(name)
   local stand_in = git_repo.script(name, 'git', {
     'case " $* " in',
-    ('  *" ls-files "*) echo start >> "$0.log"; sleep 0.5; %s "$@"; code=$?; echo end >> "$0.log"; exit $code ;;'):format(
+    ('  *" log "*) echo start >> "$0.log"; sleep 0.5; %s "$@"; code=$?; echo end >> "$0.log"; exit $code ;;'):format(
       REAL_GIT
     ),
     'esac',
@@ -1000,7 +989,7 @@ local function logging_git(name)
   return stand_in, stand_in .. '.log'
 end
 
-T['the reads']['of a window stay one at a time with several worktrees, one asked meanwhile once more after'] = function()
+T['the reads']['of the commits window stay one at a time with several worktrees, one asked meanwhile once more after'] = function()
   local top = git_repo.create('changesworktrees-one-at-a-time', { ['notes.txt'] = { 'one' } })
   add_worktree(top, 'first', 'first')
   add_worktree(top, 'second', 'second')
@@ -1014,8 +1003,8 @@ T['the reads']['of a window stay one at a time with several worktrees, one asked
   child.lua("require('aineo.changes').refresh_shown_pane()")
   child.lua("require('aineo.changes').refresh_shown_pane()")
 
-  wait_for_the_reads(4)
-  eq({ vim.fn.readfile(log), child.lua_get('_G.git_asked.changed_files') }, {
+  wait_for_the_reads(2)
+  eq({ vim.fn.readfile(log), child.lua_get('_G.git_asked.commits_since') }, {
     {
       'start',
       'end',
@@ -1071,31 +1060,32 @@ local function touch(path)
   assert(vim.fn.writefile({}, path) == 0, 'cannot write ' .. path)
 end
 
-T['the reads']['of the editor’s own list, asked during the other worktrees’, show it before the next worktree is read'] = function()
+T['the reads']['of the editor’s own commits, asked during the other worktrees’, show them before the next worktree is read'] = function()
   local top = git_repo.create('changesworktrees-own-between', { ['notes.txt'] = { 'one' } })
   local first = add_worktree(top, 'first', 'first')
   local second = add_worktree(top, 'second', 'second')
-  local stand_in = git_holding('changesworktrees-own-between', 'ls-files', { first, second })
+  local stand_in = git_holding('changesworktrees-own-between', 'log', { first, second })
   child.lua(COUNT_GIT_READS)
   begin_and_show(top, { executable = stand_in })
   wait_for_the_reads()
   touch(stand_in .. '.first.hold')
   touch(stand_in .. '.second.hold')
   child.lua("require('aineo.changes').refresh_shown_pane()")
-  git_repo.wait_until('the first worktree’s files asked for', function()
+  git_repo.wait_until('the first worktree’s commits asked for', function()
     return vim.uv.fs_stat(stand_in .. '.first.waiting') ~= nil
   end)
   git_repo.write(top, 'saved.txt', { 'saved' })
+  local commit = git_repo.commit_all(top, 'Mine')
   child.lua("require('aineo.changes').refresh_shown_pane()")
 
   touch(stand_in .. '.first.gate')
 
-  git_repo.wait_until('the second worktree’s files asked for', function()
+  git_repo.wait_until('the second worktree’s commits asked for', function()
     return vim.uv.fs_stat(stand_in .. '.second.waiting') ~= nil
   end)
-  local shown = lines_of(FILES)[2]
+  local shown = lines_of(COMMITS)[3]
   touch(stand_in .. '.second.gate')
-  eq(shown, '  ? saved.txt')
+  eq(shown, commit:sub(1, 7) .. ' Mine')
 end
 
 --- The Lua that replaces, in the child, the git home's watch with one that
@@ -1168,7 +1158,7 @@ local function lines_holding(log, text)
   end, vim.fn.readfile(log))
 end
 
-T['the reads']['of a window read the editor’s branch once, however many worktrees'] = function()
+T['the reads']['of the commits window read the editor’s branch once, however many worktrees'] = function()
   local top = git_repo.create('changesworktrees-comparison-once', { ['notes.txt'] = { 'one' } })
   add_worktree(top, 'first', 'first')
   add_worktree(top, 'second', 'second')
@@ -1180,10 +1170,10 @@ T['the reads']['of a window read the editor’s branch once, however many worktr
   begin_and_show(top, { executable = stand_in })
 
   wait_for_the_reads()
-  eq(lines_holding(log, '@{upstream}'), 2)
+  eq(lines_holding(log, '@{upstream}'), 1)
 end
 
-T['the reads']['of a window read nothing of the editor’s branch with no other worktree'] = function()
+T['the reads']['of the commits window read nothing of the editor’s branch with no other worktree'] = function()
   local top = git_repo.create('changesworktrees-comparison-none', { ['notes.txt'] = { 'one' } })
   local stand_in, log = git_logging_every_run('changesworktrees-comparison-none')
   child.lua(WATCH_IN_HAND)
@@ -1258,32 +1248,221 @@ T['the commits window']['lists the editor’s commits first, as ever, then each 
   })
 end
 
-T['the commits window']['a cursor on another worktree’s commit or heading keeps the filter'] = function()
-  local top = git_repo.create('changesworktrees-cursor-keeps-filter', { ['notes.txt'] = { 'one' } })
+T['the selection of another worktree'] = MiniTest.new_set()
+
+T['the selection of another worktree']['goes back to Session work, the cursor with it, once its worktree is no longer listed'] = function()
+  local top = git_repo.create('wtsel-removed', { ['notes.txt'] = { 'one' } })
   local agent = add_worktree(top, 'agent', 'agent')
   git_repo.write(agent, 'notes.txt', { 'agent' })
   local commit = git_repo.commit_all(agent, 'The agent’s')
   begin_and_show(top)
-  expect_lines(COMMITS, {
-    'Uncommitted',
-    'Session work',
-    'No commits on this session',
-    'Worktree agent (agent)',
-    commit:sub(1, 7) .. ' The agent’s',
-  })
-  local listed = {
-    'Files in: Session work',
-    'No files changed on this session',
-    'Worktree agent (agent)',
+  expect_lines(
+    COMMITS,
+    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+  )
+  go_to_commits_line(5)
+  expect_lines(FILES, {
+    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
     '  M notes.txt',
-  }
-  expect_lines(FILES, listed)
-  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
+  })
+  git_repo.git(top, { 'worktree', 'remove', '--force', agent })
 
-  child.type_keys(10, '4G', '5G')
+  child.lua("require('aineo.changes').refresh_shown_pane()")
 
-  vim.wait(600)
-  eq(lines_of(FILES), listed)
+  expect_lines(COMMITS, commits_then({}))
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(vim.fn.bufwinid(...))', { COMMITS }), { 2, 0 })
+end
+
+T['the selection of another worktree']['stays its commit when the lists are read again'] = function()
+  local top = git_repo.create('wtsel-stays', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+  child.lua(COUNT_GIT_READS)
+  begin_and_show(top)
+  go_to_commits_line(5)
+  expect_lines(FILES, {
+    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    '  M notes.txt',
+  })
+  wait_for_the_reads()
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  wait_for_the_reads(2)
+  eq(lines_of(FILES), {
+    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    '  M notes.txt',
+  })
+end
+
+T['the selection of another worktree']['becomes the worktree’s whole change, the cursor on its heading, once its commit is no longer listed'] = function()
+  local top = git_repo.create('wtsel-amended', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+  begin_and_show(top)
+  expect_lines(
+    COMMITS,
+    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+  )
+  go_to_commits_line(5)
+  expect_lines(FILES, {
+    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    '  M notes.txt',
+  })
+  git_repo.git(agent, { 'commit', '--quiet', '--amend', '--message', 'Amended' })
+  local amended = git_repo.git(agent, { 'rev-parse', 'HEAD' })
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_lines(COMMITS, commits_then({ 'Worktree agent (agent)', amended:sub(1, 7) .. ' Amended' }))
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(vim.fn.bufwinid(...))', { COMMITS }), { 4, 0 })
+end
+
+T['the selection of another worktree']['names the worktree’s branch as the commits window last read it'] = function()
+  local top = git_repo.create('wtsel-renamed', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  begin_and_show(top)
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
+  git_repo.git(agent, { 'branch', '--move', 'renamed' })
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_lines(FILES, { 'Files in: Worktree agent (renamed)', '  M notes.txt' })
+end
+
+T['the files window under another worktree’s whole change'] = MiniTest.new_set()
+
+T['the files window under another worktree’s whole change']['reads the worktree’s base again at every read'] = function()
+  local top = git_repo.create('wtsel-base-again', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  git_repo.commit_all(agent, 'The agent’s')
+  begin_and_show(top)
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
+  git_repo.git(top, { 'merge', '--quiet', '--ff-only', 'agent' })
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', 'No files changed in this worktree' })
+end
+
+T['the files window under another worktree’s whole change']['is read again at every call of the watch, the editor’s own files unchanged'] = function()
+  local top = git_repo.create('wtsel-watch', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  child.lua(WATCH_IN_HAND)
+  begin_and_show(top)
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
+  git_repo.write(agent, 'new.txt', { 'new' })
+
+  child.lua('_G.on_change(nil, { files_changed = false, branch_moved = false })')
+
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt', '  ? new.txt' })
+end
+
+T['the files window under another worktree’s whole change']['keeps its files under git’s words when a later read fails'] = function()
+  local top = git_repo.create('wtsel-failed-later', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local stand_in, switch = breakable_git_in('wtsel-failed-later', agent, 'ls-files')
+  begin_and_show(top, { executable = stand_in })
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
+  turn_on(switch)
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_lines(FILES, {
+    'Files in: Worktree agent (agent)',
+    'The last refresh failed: fatal: broken',
+    '  M notes.txt',
+  })
+end
+
+T['the files window under another worktree’s whole change']['keeps its files under a line saying the worktree is gone when it is removed meanwhile'] = function()
+  local top = git_repo.create('wtsel-gone', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  child.lua(WATCH_IN_HAND)
+  begin_and_show(top)
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
+  git_repo.git(top, { 'worktree', 'remove', '--force', agent })
+
+  child.lua(
+    [[
+      local files = vim.api.nvim_get_current_win()
+      vim.cmd('aboveleft split ' .. vim.fn.fnameescape(... .. '/notes.txt'))
+      vim.cmd('write')
+      vim.api.nvim_set_current_win(files)
+    ]],
+    { top }
+  )
+
+  expect_lines(FILES, {
+    'Files in: Worktree agent (agent)',
+    'The last refresh failed: the worktree is gone',
+    '  M notes.txt',
+  })
+end
+
+T['the files window under another worktree’s whole change']['lists the filter with no files, under git’s words, when its first read fails'] = function()
+  local top = git_repo.create('wtsel-failed-first', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local stand_in, switch = breakable_git_in('wtsel-failed-first', agent, 'ls-files')
+  turn_on(switch)
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(COMMITS, commits_then({ 'Worktree agent (agent)', 'No commits in this worktree' }))
+
+  go_to_commits_line(4)
+
+  expect_lines(FILES, {
+    'Files in: Worktree agent (agent)',
+    'The last refresh failed: fatal: broken',
+  })
+end
+
+T['the files window under another worktree’s whole change']['lists its commit with no files, under git’s words, when the read of the commit’s files fails'] = function()
+  local top = git_repo.create('wtsel-commit-failed', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+  local stand_in, switch = breakable_git_in('wtsel-commit-failed', agent, 'show')
+  turn_on(switch)
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(
+    COMMITS,
+    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+  )
+
+  go_to_commits_line(5)
+
+  expect_lines(FILES, {
+    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    'The last refresh failed: fatal: broken',
+  })
+end
+
+T['the reads']['of the files window read the editor’s files alone, however many worktrees'] = function()
+  local top = git_repo.create('wtsel-files-alone', { ['notes.txt'] = { 'one' } })
+  add_worktree(top, 'first', 'first')
+  add_worktree(top, 'second', 'second')
+  child.lua(WATCH_IN_HAND)
+  child.lua(COUNT_GIT_READS)
+
+  begin_and_show(top)
+
+  wait_for_the_reads()
+  eq(child.lua_get('{ _G.git_asked.changed_files, _G.git_asked.commits_since }'), { 1, 3 })
 end
 
 return T

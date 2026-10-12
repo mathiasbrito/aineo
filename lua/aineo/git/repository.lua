@@ -145,6 +145,52 @@ function M.read_upstream(run, top, branch, done)
   )
 end
 
+--- Reads the full id of the commit the name `name` gives in the repository at
+--- `top`, as git reads a name — a branch, a remote-tracking branch, a tag
+--- (an annotated one gives the commit it tags), a reference by its full
+--- path, an id — and calls `done(nil, commit)`, nil when the name gives no
+--- commit, a negation (`^main`) or a range (`a..b`) included; or
+--- `done(failure)`. A name that begins with `-` is a name.
+---
+---@param run aineo.git.Run
+---@param top string
+---@param name string
+---@param done fun(failure: aineo.git.Failure|nil, commit: string?)
+function M.resolve_commit(run, top, name, done)
+  run(
+    {
+      directory = top,
+      arguments = { 'rev-parse', '--verify', '--quiet', '--end-of-options', name .. '^{commit}' },
+      answers = { 0, NONE_CODE },
+    },
+    process.or_fail(done, function(commit)
+      done(nil, commit.stdout:match('^(%x+)\n$'))
+    end)
+  )
+end
+
+--- Reads the short name of the branch the remote `origin`'s `HEAD` points at
+--- in the repository at `top` — `origin/main` — and calls `done(nil, name)`,
+--- nil when the repository has no `origin/HEAD`; or `done(failure)`. It is
+--- the remote's choice of default branch, whatever branch `top` has checked
+--- out.
+---
+---@param run aineo.git.Run
+---@param top string
+---@param done fun(failure: aineo.git.Failure|nil, name: string?)
+function M.read_remote_default_branch(run, top, done)
+  run(
+    {
+      directory = top,
+      arguments = { 'symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD' },
+      answers = { 0, NONE_CODE },
+    },
+    process.or_fail(done, function(reference)
+      done(nil, M.first_line(reference.stdout))
+    end)
+  )
+end
+
 --- Finds the repository `directory` is in, and calls `done(nil,
 --- repository)`, or `done(failure)`.
 ---
@@ -192,6 +238,44 @@ function M.comparison_base(run, top, base, done)
       done(nil, M.first_line(output.stdout))
     end)
   )
+end
+
+--- Calls `done(nil, revisions)` with the revision arguments `git diff` takes
+--- to compare the commit `to` straight with the commit `from`, or with the
+--- empty tree when `from` is nil; or `done(failure)`.
+---
+---@param run aineo.git.Run
+---@param top string
+---@param from string|nil
+---@param to string
+---@param done fun(failure: aineo.git.Failure|nil, revisions: string[]?)
+function M.straight_revisions(run, top, from, to, done)
+  M.comparison_base(
+    run,
+    top,
+    from,
+    process.or_fail(done, function(tree_ish)
+      done(nil, { tree_ish, to })
+    end)
+  )
+end
+
+--- Calls `done(nil, revisions)` with the revision arguments `git diff` takes
+--- to compare the commit `to` with the merge base of `from` and `to` —
+--- `from...to`, what `to` gained since the two forked — or with the empty
+--- tree when `from` is nil; or `done(failure)`.
+---
+---@param run aineo.git.Run
+---@param top string
+---@param from string|nil
+---@param to string
+---@param done fun(failure: aineo.git.Failure|nil, revisions: string[]?)
+function M.merge_base_revisions(run, top, from, to, done)
+  if from then
+    done(nil, { from .. '...' .. to })
+    return
+  end
+  M.straight_revisions(run, top, nil, to, done)
 end
 
 return M

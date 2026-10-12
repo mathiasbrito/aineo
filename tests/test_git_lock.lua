@@ -219,6 +219,49 @@ T['a read']['never holds the lock a commit started meanwhile needs'] = function(
   eq({ locks = seen.locks, commit_codes = seen.commit_codes }, { locks = 0, commit_codes = {} })
 end
 
+T['a read between commits'] = MiniTest.new_set({
+  parametrize = {
+    { 'files_between', { 'base', 'later' } },
+    { 'diff_between', { 'base', 'later' } },
+    { 'file_diff_between', { 'base', 'later', { path = 'touched-1.txt', kind = 'modified' } } },
+    { 'file_diff_straight', { 'base', 'later', { path = 'touched-1.txt', kind = 'modified' } } },
+    { 'commits_between', { 'base', 'later' } },
+    { 'file_at_commit', { 'later', 'changed.txt' } },
+    { 'resolve_commit', { 'later' } },
+  },
+})
+
+T['a read between commits']['never holds the lock a commit started meanwhile needs, nor touches the index'] = function(
+  operation,
+  arguments
+)
+  local top, base = create_stat_dirty('lock-between')
+  local later = git_repo.git(top, { 'commit-tree', base .. '^{tree}', '-p', base, '-m', 'Later' })
+  local commits = { base = base, later = later }
+  local index = vim.fs.joinpath(top, '.git', 'index')
+  local before = identity(index)
+  local seen, watch = start_committer(top)
+
+  local asked = child.lua(ASK, {
+    top,
+    operation,
+    vim.tbl_map(function(argument)
+      return commits[argument] or argument
+    end, arguments),
+  })
+  assert(vim.fn.writefile({}, vim.fs.joinpath(top, '.git', MARKER)) == 0, 'cannot write the marker')
+  git_repo.wait_until('the marker’s event', function()
+    return seen.marked
+  end)
+  watch:stop()
+  watch:close()
+
+  eq({ failure = asked.failure, locks = seen.locks, index = identity(index) }, {
+    locks = 0,
+    index = before,
+  })
+end
+
 T['a read']['in a repository with no index yet lists its untracked files'] = function()
   local top = git_repo.create_unborn('lock-no-index')
   git_repo.write(top, 'new.txt', { 'new' })

@@ -50,13 +50,43 @@ local OWN_READS = {
   },
 }
 
+--- What a diff of another worktree fails with when the worktree has no
+--- repository and no failure says why.
+---@type aineo.git.Failure
+local WORKTREE_UNREAD = { reason = 'failed', message = 'the worktree could not be read' }
+
+--- Reads the diff of `entry`, an entry of another worktree, in that
+--- worktree's repository: a file's change in the commit it is listed under,
+--- or from the worktree's base; a commit's own; the whole change of the
+--- worktree from its base to its working tree, for its heading. A worktree
+--- with no repository, because its read failed, gives that failure.
+---
+---@param entry aineo.changes.Entry
+---@param options aineo.git.DiffOptions
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+local function read_in_worktree(entry, options, done)
+  local worktree = entry.worktree
+  local repository = worktree.repository
+  if not repository then
+    done(worktree.failure or WORKTREE_UNREAD)
+  elseif entry.change and entry.filter.kind == 'commit' then
+    git.commit_file_diff(repository, entry.filter.commit.id, entry.change, done, options)
+  elseif entry.change then
+    git.file_diff(repository, worktree.base, entry.change, done, options)
+  elseif entry.commit then
+    git.commit_diff(repository, entry.commit.id, done, options)
+  else
+    git.diff_since(repository, worktree.base, done, options)
+  end
+end
+
 --- Reads the diff of `entry` and calls `done(failure, diff)`: for an entry
 --- of the editor's own worktree, within the filter it is listed under — a
 --- file's from the session's base, from `HEAD` or in its commit; the whole
 --- of *Session work*, of *Uncommitted* or of a commit — in `source`'s
---- repository; for an entry of another worktree, a file's from that
---- worktree's base or a commit's, in that worktree. Every diff is read in
---- the context `source` names.
+--- repository; for an entry of another worktree, in that worktree
+--- (`read_in_worktree()`). Every diff is read in the context `source`
+--- names.
 ---
 ---@param entry aineo.changes.Entry
 ---@param source aineo.changes.DiffSource
@@ -68,22 +98,7 @@ function M.read(entry, source, done)
     { options = vim.tbl_extend('force', source.options or {}, { context = source.context }) }
   )
   if entry.worktree then
-    local worktree_source = {
-      repository = entry.worktree.repository,
-      base = entry.worktree.base,
-      options = source.options,
-    }
-    if entry.commit then
-      git.commit_diff(worktree_source.repository, entry.commit.id, done, source.options)
-    else
-      git.file_diff(
-        worktree_source.repository,
-        worktree_source.base,
-        entry.change,
-        done,
-        source.options
-      )
-    end
+    read_in_worktree(entry, source.options, done)
     return
   end
   OWN_READS[entry.filter.kind][entry.change and 'file' or 'whole'](source, entry, done)
@@ -119,12 +134,30 @@ local OWN_FILE_NAMES = {
   end,
 }
 
+--- The name of the diff of `entry`, an entry of another worktree, after
+--- `worktree<top>//`: `diff/<path>` for a file read from the worktree's
+--- base, `commit/<id>/<path>` for a file in a commit, `commit/<id>` for the
+--- commit's own, `since-base` for the worktree's whole change.
+---
+---@param entry aineo.changes.Entry
+---@return string
+local function worktree_diff_name(entry)
+  if entry.change and entry.filter.kind == 'commit' then
+    return ('commit/%s/%s'):format(entry.filter.commit.id, lines.quoted_path(entry.change.path))
+  elseif entry.change then
+    return 'diff/' .. lines.quoted_path(entry.change.path)
+  elseif entry.commit then
+    return 'commit/' .. entry.commit.id
+  end
+  return 'since-base'
+end
+
 --- The name of the buffer showing `entry`'s diff, after `aineo://`:
 --- `diff/<path>` for a file read from the session's base, `uncommitted/<path>`
 --- from `HEAD`, `commit/<id>/<path>` in a commit, its path quoted as the
 --- files window shows it; `session-work`, `uncommitted` and `commit/<id>`
 --- for the whole diffs, a commit by its full id. For an entry of another
---- worktree, `worktree<top>//diff/<path>` and `worktree<top>//commit/<id>`,
+--- worktree, `worktree<top>//` and the name `worktree_diff_name()` gives,
 --- the worktree's top level quoted too, so that two worktrees' diffs are
 --- two buffers, whatever their paths: a resolved top level holds no `//`,
 --- and neither does a path git gives.
@@ -136,16 +169,18 @@ function M.name(entry)
     local names = entry.change and OWN_FILE_NAMES or OWN_WHOLE_NAMES
     return 'aineo://' .. names[entry.filter.kind](entry)
   end
-  local diff = entry.commit and 'commit/' .. entry.commit.id
-    or 'diff/' .. lines.quoted_path(entry.change.path)
-  return ('aineo://worktree%s//%s'):format(lines.quoted_path(entry.worktree.top), diff)
+  return ('aineo://worktree%s//%s'):format(
+    lines.quoted_path(entry.worktree.top),
+    worktree_diff_name(entry)
+  )
 end
 
 --- What the diff of `entry` is called in what aineo tells the user: the
 --- diff of a file's path, quoted as the files window shows it, or of the
 --- commit's abbreviated id, or of *Uncommitted* or *Session work*; for an
 --- entry of another worktree, followed by `in the worktree <folder>`, its
---- folder's name as its heading gives it.
+--- folder's name as its heading gives it, and for its heading the worktree
+--- itself, `the worktree <folder>`.
 ---
 ---@param entry aineo.changes.Entry
 ---@return string
@@ -155,6 +190,8 @@ function M.told_name(entry)
     name = lines.quoted_path(entry.change.path)
   elseif entry.commit then
     name = 'commit ' .. entry.commit.id:sub(1, lines.ABBREVIATED_ID_LENGTH)
+  elseif entry.worktree then
+    return 'the worktree ' .. lines.quoted_path(vim.fs.basename(entry.worktree.top))
   else
     name = lines.filter_name(entry.filter)
   end

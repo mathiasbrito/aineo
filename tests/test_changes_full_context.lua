@@ -676,14 +676,18 @@ T['F']['in the diff of another worktree’s file shows the whole file'] = functi
   git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'agent', agent })
   git_repo.write(agent, 'a.txt', numbered_lines(20, { 10 }))
   child.lua(BEGIN_AND_SHOW, { top })
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
     'Worktree agent (agent)',
-    '  M a.txt',
+    'No commits in this worktree',
   })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 4, 0 })')
-  child.type_keys('<CR>')
+  enter_window_of(COMMITS)
+  child.type_keys('4G')
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M a.txt' })
+  enter_window_of(FILES)
+  child.type_keys('2G', '<CR>')
   wait_for_diffs(1)
   expect_hunks_shown({ THREE_LINES_HUNK })
 
@@ -693,6 +697,67 @@ T['F']['in the diff of another worktree’s file shows the whole file'] = functi
   eq(
     child.lua_get('vim.api.nvim_buf_get_name(0)'),
     ('aineo://worktree%s//diff/a.txt'):format(agent)
+  )
+end
+
+T['F']['in the diff of another worktree’s heading shows every file whole'] = function()
+  local top = git_repo.create('fullcontext-worktree-heading', { ['a.txt'] = numbered_lines(20) })
+  local agent = vim.fs.joinpath(vim.fs.dirname(top), 'agent')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'agent', agent })
+  git_repo.write(agent, 'a.txt', numbered_lines(20, { 10 }))
+  child.lua(BEGIN_AND_SHOW, { top })
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent (agent)',
+    'No commits in this worktree',
+  })
+  enter_window_of(COMMITS)
+  child.type_keys('4G', '<CR>')
+  wait_for_diffs(1)
+  expect_hunks_shown({ THREE_LINES_HUNK })
+
+  child.type_keys('F')
+
+  expect_hunks_shown({ WHOLE_HUNK })
+  eq(
+    child.lua_get('vim.api.nvim_buf_get_name(0)'),
+    ('aineo://worktree%s//since-base'):format(agent)
+  )
+end
+
+T['F']['in the diff of a file under another worktree’s commit shows the whole file'] = function()
+  local top = git_repo.create('fullcontext-worktree-commit', { ['a.txt'] = numbered_lines(20) })
+  local agent = vim.fs.joinpath(vim.fs.dirname(top), 'agent')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'agent', agent })
+  git_repo.write(agent, 'a.txt', numbered_lines(20, { 10 }))
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+  child.lua(BEGIN_AND_SHOW, { top })
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent (agent)',
+    commit:sub(1, 7) .. ' The agent’s',
+  })
+  enter_window_of(COMMITS)
+  child.type_keys('5G')
+  expect_lines(FILES, {
+    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    '  M a.txt',
+  })
+  enter_window_of(FILES)
+  child.type_keys('2G', '<CR>')
+  wait_for_diffs(1)
+  expect_hunks_shown({ THREE_LINES_HUNK })
+
+  child.type_keys('F')
+
+  expect_hunks_shown({ WHOLE_HUNK })
+  eq(
+    child.lua_get('vim.api.nvim_buf_get_name(0)'),
+    ('aineo://worktree%s//commit/%s/a.txt'):format(agent, commit)
   )
 end
 

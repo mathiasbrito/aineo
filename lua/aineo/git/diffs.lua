@@ -1,4 +1,5 @@
---- Gives the unified diffs of a repository's changed files and commits.
+--- Gives the unified diffs of a repository's changed files, commits, and the
+--- changes between two commits.
 ---
 --- The attributes in force stay in force: the repository's own
 --- (`.gitattributes`, `.git/info/attributes`) and the user's
@@ -378,6 +379,119 @@ function M.diff_since(run, found, base, done, context)
     base,
     process.or_fail(done, function(tree_ish)
       whole_diff(run, found, tree_ish, unified, give_diff)
+    end)
+  )
+end
+
+--- Gives the diff between two commits of `found`, as `git diff` prints it
+--- for `revisions` (`repository.merge_base_revisions()` or
+--- `repository.straight_revisions()`), limited to `paths` or, when there are
+--- none, whole, and calls `done(nil, diff)`, or `done(failure)`. Only the
+--- commits are read, so no private index is needed.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param revisions string[]
+---@param paths string[]
+---@param unified string the option that sets the diff's context (`context_option()`)
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+local function diff_commits(run, found, revisions, paths, unified, done)
+  run(
+    {
+      directory = found.top,
+      arguments = joined({
+        { 'diff' },
+        UNIFIED_DIFF,
+        { unified },
+        { '--end-of-options' },
+        revisions,
+        { '--' },
+        paths,
+      }),
+    },
+    process.or_fail(done, function(output)
+      done(nil, output.stdout)
+    end)
+  )
+end
+
+--- The paths a diff limited to the file `change` names asks git for: a
+--- renamed one with both its paths, since git shows the rename only then.
+---
+---@param change aineo.git.Change
+---@return string[]
+local function paths_of(change)
+  return change.kind == 'renamed' and { change.old_path, change.path } or { change.path }
+end
+
+--- Gives the unified diff of every file of `found` between the merge base of
+--- the commits `from` and `to`, and `to`, and calls `done(nil, diff)`, or
+--- `done(failure)`.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param from string|nil the full id of the first commit; nil runs the diff from nothing
+---@param to string the full id of the second commit
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+---@param context? aineo.git.DiffContext the lines of context around a change; three when not given
+function M.diff_between(run, found, from, to, done, context)
+  local unified = context_option(context)
+  repository.merge_base_revisions(
+    run,
+    found.top,
+    from,
+    to,
+    process.or_fail(done, function(revisions)
+      diff_commits(run, found, revisions, {}, unified, done)
+    end)
+  )
+end
+
+--- Gives the unified diff of the file `change` names in `found` between the
+--- merge base of the commits `from` and `to`, and `to`, as
+--- `M.diff_between()` gives it, and calls `done(nil, diff)`, or
+--- `done(failure)`.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param from string|nil the full id of the first commit; nil runs the diff from nothing
+---@param to string the full id of the second commit
+---@param change aineo.git.Change
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+---@param context? aineo.git.DiffContext the lines of context around a change; three when not given
+function M.file_diff_between(run, found, from, to, change, done, context)
+  local unified = context_option(context)
+  repository.merge_base_revisions(
+    run,
+    found.top,
+    from,
+    to,
+    process.or_fail(done, function(revisions)
+      diff_commits(run, found, revisions, paths_of(change), unified, done)
+    end)
+  )
+end
+
+--- Gives the unified diff of the file `change` names in `found` straight
+--- from the commit `from` to the commit `to`, not from their merge base, and
+--- calls `done(nil, diff)`, or `done(failure)`.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param from string|nil the full id of the first commit; nil runs the diff from nothing
+---@param to string the full id of the second commit
+---@param change aineo.git.Change
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+---@param context? aineo.git.DiffContext the lines of context around a change; three when not given
+function M.file_diff_straight(run, found, from, to, change, done, context)
+  local unified = context_option(context)
+  repository.straight_revisions(
+    run,
+    found.top,
+    from,
+    to,
+    process.or_fail(done, function(revisions)
+      diff_commits(run, found, revisions, paths_of(change), unified, done)
     end)
   )
 end
