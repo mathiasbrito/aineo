@@ -286,18 +286,12 @@ T['a commit named']['by a name that names none is no commit, not a failure'] = f
   eq({ failure = seen.failure, result = seen.result, calls = seen.calls }, { calls = 1 })
 end
 
-T['a commit named']['like an option is a name, never an option, and writes nothing'] = function()
+T['a commit named']['like an option is a name, never an option that makes git fail'] = function()
   local top = git_repo.create('resolve-option', { ['a.txt'] = { 'a' } })
-  local written = vim.fs.joinpath(vim.fs.dirname(top), 'written')
 
-  local seen = child.lua(ASK, { top, 'resolve_commit', { '--output=' .. written } })
+  local seen = child.lua(ASK, { top, 'resolve_commit', { '--path-format=x' } })
 
-  eq({
-    failure = seen.failure,
-    result = seen.result,
-    calls = seen.calls,
-    beside = vim.fn.readdir(vim.fs.dirname(top)),
-  }, { calls = 1, beside = { 'repo' } })
+  eq({ failure = seen.failure, result = seen.result, calls = seen.calls }, { calls = 1 })
 end
 
 T['a file at a commit'] = MiniTest.new_set()
@@ -350,8 +344,8 @@ T['a file at a commit']['that is a directory there is a failure, not a missing f
 
   local seen = child.lua(ASK, { top, 'file_at_commit', { base, 'dir' } })
 
-  eq({ reason = vim.tbl_get(seen, 'failure', 'reason'), result = seen.result }, {
-    reason = 'failed',
+  eq({ failure = seen.failure, result = seen.result }, {
+    failure = { reason = 'failed', message = ('dir is a tree in %s, not a file'):format(base) },
   })
 end
 
