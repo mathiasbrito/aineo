@@ -213,7 +213,9 @@ commits, newest first, by abbreviated id and subject, or says "No commits
 on this session". Its cursor is on Session work when the pane first shows,
 and when the buffer is made anew; `\g` keeps your line. The line under
 the cursor chooses what the files window lists, once the cursor has stayed
-on it for 150 milliseconds: Uncommitted, Session work, or that commit. A
+on it for 150 milliseconds, however it moves - keys, a click, or the mouse
+wheel over the window while the cursor is in another one: Uncommitted,
+Session work, or that commit. A
 line that lists none of these - a note, another worktree's heading or one
 of its commits - keeps the last choice. The files window keeps its first
 line and its list until the new list is read. The choice goes back to
