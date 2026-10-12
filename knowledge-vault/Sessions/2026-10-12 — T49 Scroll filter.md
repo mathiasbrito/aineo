@@ -41,4 +41,8 @@ Run on `tests/test_changes_filter.lua` (the file the pull request modifies), eac
 
 ## Commits
 
-Recorded after the merge.
+Recorded after the merge, by the wave 13 knowledge pass. PR #171, a small fix under D30, merged by rebase as `306a8eb`, now `3df18ab` on `dev`. The orchestrator's check at `306a8eb`: the touched suites `Fails (0)`, lint clean, and the `window_moved` mutant killed; the diff was read in place of a guarantee review (A135). Released in v0.2.24 (PR #172, `main` `19e4be3`).
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `306a8eb` | `3df18ab` | Follow a scroll of the commits window in the files window |

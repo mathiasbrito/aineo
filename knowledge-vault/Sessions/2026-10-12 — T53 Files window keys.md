@@ -134,4 +134,21 @@ Fix round, on the tree pushed (Neovim 0.12.5, host, default jobs): **2899 cases*
 
 ## Commits
 
-Recorded after the merge.
+Recorded after the merge, by the wave 13 knowledge pass. PR #183 merged by rebase as `1a38fab` … `19f33dc` (14 commits), now `e728523` … `29f2f00` on `dev`. The orchestrator's check on `dev` `191f819` plus T53: the whole suite 3015 cases, `Fails (0)`, lint clean, and the last-key mutant killed. Released in v0.2.27 (PR #184, `main` `bfef6c9`).
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `1a38fab` | `e728523` | Record the dispatch amendment of T53's brief against dev 70a52bc |
+| `140dbe3` | `f957383` | Show a commit's file as that commit has it under gf |
+| `d49e1c8` | `6ae08b6` | Pin a late failure and the quoted name of a commit's file |
+| `d103e9d` | `20b2fe7` | Add h and l to the files window: a file against HEAD or its parent |
+| `8818993` | `e80521e` | Name the diffs against HEAD from one folder per filter kind |
+| `e9aea3f` | `08fc000` | Record the session of T53, the files window keys |
+| `36de2fd` | `efecaff` | Wait for the reads in the made-anew cursor case |
+| `88b4fa0` | `5da6e7b` | Count a working-tree gf as the last key, read a worktree's commit there |
+| `a283bcd` | `143bd50` | Refuse h when HEAD names no commit, under every filter |
+| `232ea18` | `b14f832` | Say a file is as HEAD has it instead of showing an empty h diff |
+| `7b7529b` | `386000e` | Tell the cut of a commit's file as a virtual line, not a buffer line |
+| `3e453f0` | `f581cff` | Pin the no-file guard by assertion and the quoted names in gf's messages |
+| `07d2d74` | `70b2f61` | Say in the help what the fix round of T53 changed |
+| `19f33dc` | `29f2f00` | Record T53's fix round in the session note |

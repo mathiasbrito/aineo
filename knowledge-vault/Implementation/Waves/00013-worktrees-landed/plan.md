@@ -1,14 +1,14 @@
 ---
 wave: 00013
-status: planned
+status: landed
 rolling: true
 planned_by: the orchestrator's planning agent (Claude, Opus 5.5) for the user
 planned_at: 2026-10-12 11:30 CEST
 base: 1dc3186
 claimed_by:
 claimed_at:
-landed_at:
-pull_requests:
+landed_at: 2026-10-12
+pull_requests: "#171, #174, #175, #177, #180, #181, #183"
 ---
 
 # Wave 13 — the changes pane for an orchestrator: a filter that shows one list, other worktrees in it, and *Landed*
@@ -242,3 +242,111 @@ Each ruling is the orchestrator's assumption under the user's instruction of 202
 With the user's answers and these rulings, no decision is open for any packet: the six-rules table's *decision open?* column reads "none" for T50–T53 from here.
 
 ## Landed
+
+Written 2026-10-12 by the wave 13 knowledge pass, on `dev` `29f2f00`. Every packet is merged and released; the wave's last release is v0.2.27. The rulings below are the orchestrator's assumptions under the user's instruction of 2026-10-06, none a decision of the user's and none a D row, except where a line says the user answered. The session notes hold each packet's commits, mutants and departures.
+
+### T49 — small fix under D30, PR #171, merged by rebase (`dev` `3df18ab`), released in v0.2.24 (PR #172, `main` `19e4be3`)
+
+Session note: [[Sessions/2026-10-12 — T49 Scroll filter]]. Dispatched before this wave's plan, on `dev` `1dc3186`, from the user's report that the files window did not follow a scroll of the commits window.
+- **The packet.** A `WinScrolled` autocmd for a window showing the commits buffer sets `window_moved` and restarts the selection pause (D47).
+- **Review.** None as a guarantee review: the orchestrator read the diff in place of one (A135).
+- **The orchestrator's check** at `306a8eb`: the touched suites `Fails (0)`, lint clean, the `window_moved` mutant killed.
+- **Departures.** None recorded. Its handler read `event.match` alone; T50's fix round widened it (A161).
+
+### Wave 13's plan — PR #173 re-applied as PR #174 (`dev` `42c0c3b`, `8a09eec`)
+
+PR #173 conflicted with T49's row in the plan note once T49 had merged, so its commits were re-applied unchanged in content on a new branch as PR #174, not rebased after the push. The user's answers U1–U4 and the rulings A136–A157 were recorded in its second commit.
+
+### T51 — PR #175, merged by rebase (`dev` `56e63ab`), released in v0.2.25 (PR #178, `main` `f59a7d8`)
+
+`9e48052` … `0e83ba9` on the branch, `7c3118a` … `56e63ab` on `dev` (4 commits). Session note: [[Sessions/2026-10-12 — T51 Landed reads]]. Dispatched on `dev` `8a09eec`, beside T50 (disjoint homes).
+- **The packet** (head `f36aef2`, whole suite 2762). The git home's new reads: commits between two commits, the files and the diff between the merge base and a commit, a file's diff between two commits, a file at a commit, a name resolved to a commit, the remote's default branch, and `references_changed` when a reference moves without `HEAD`.
+- **Reviews on `f36aef2`.**
+  - *Attack (`neovim-lua-reviewer`, Opus):* a top-level file named `--` made the file read return another file's bytes (HIGH); `.` and `dir/` returned a neighbour; names such as `^main` and `a..b` were taken as commits; reftable references and `FETCH_HEAD` were not seen by the watch.
+  - *Tests and records (`records-reviewer`, Sonnet):* five hostile-configuration flag removals survived; the help's sentences on the watch were left false.
+- **Fix round** by the author (A158–A160): the `ls-tree` call without `--`, the entry matched by its exact name; `resolve_commit` accepts one hex line; reftable paths and `FETCH_HEAD` count as references; three hostile-configuration cases; the help's sentences corrected in this packet. Whole suite 2779 at `0e83ba9`.
+- **The orchestrator's check** of T51 and T50 on one combined tree: whole suite 2798 cases, `Fails (0)`, lint clean, the mutant `name == path` → `true` killed.
+- **Departures.** The help's sentences were fixed here rather than in T52 (A160).
+
+### T50 — PR #176 re-applied as PR #177, merged by rebase (`dev` `322fc41`), released in v0.2.25
+
+`569a541` … `f272619` on the branch, `57d4473` … `322fc41` on `dev` (5 commits); the original PR #176 (`8f8466b` … `d75ab2a`) was closed. Session note: [[Sessions/2026-10-12 — T50 Worktree filter]]. After T51 merged, both packets had rewritten the same help passage, so the orchestrator merged the help by hand and re-applied T50's commits as PR #177 on the new `dev`, rather than rebasing the pushed branch.
+- **The packet** (head `e3b4206`, whole suite 2723, 18 mutants killed, 12 cases arrived green). The files window is one list, the selected filter's files alone (D57, U3); another worktree's heading and commits are filters read in that worktree (D55); the files window shows its first line at a change of filter.
+- **Reviews on `e3b4206`.**
+  - *Attack (`neovim-lua-reviewer`):* LOW. A worktree removed at the read listed "No files"; T49's scroll handler read `event.match` alone, which names only the first window scrolled in a turn.
+  - *Tests and records (`records-reviewer`):* `F` in the two new diffs and the failed read of a worktree commit's files were unpinned; mutant rows not replayable.
+- **Fix round** by the author (A161, A162): a gone worktree gives a failure and the list stays under it; the scroll handler loops over the event's window keys and starts the pause only for a scroll that carries the cursor onto another filter; the two reviewer patches adopted; mutants MA, MB, MG and MS. Whole suite 2728 at `d75ab2a`.
+- **The orchestrator's check:** see T51 (one combined tree); the mutant `done(WORKTREE_GONE, …)` → `done(nil, …)` killed.
+- **Departures.** The LIMITS cost figures were dropped until a re-measure (A162); a worktree removed mid-read; `lines.commit_rows` file-local again (A162).
+
+### T52 — PR #180, merged by rebase (`dev` `70a52bc`), released in v0.2.26 (PR #182, `main` `32c012c`)
+
+`c9641cc` … `7bfa5b4` on the branch, `30eee93` … `70a52bc` on `dev` (5 commits). Session note: [[Sessions/2026-10-12 — T52 Landed]]. Dispatched on `dev` `322fc41` after T50 and T51; its first commit is the dated dispatch amendment of the brief (A163).
+- **The packet** (head `f636888`, whole suite 2839, 27 mutants). *Landed in origin/dev*, the heading and each landed commit a filter, from `changes.working_branch` (default the remote's default branch, U1), under the session's commits (U2); read again at `references_changed`.
+- **Reviews on `f636888`.**
+  - *Attack (`neovim-lua-reviewer`):* the worst: after `git remote set-head`, the heading kept the old branch name over the new branch's files; the `is_current_base` guard (M14b) survived; a local branch named like the remote's shadowed it.
+  - *Tests and records (`records-reviewer`):* the same survivor, a fixed wait, `done(nil, nil)` unreached, gaps in the cases.
+- **Fix round** by the author (A171–A174): the heading is selected again from the read's branch name; a counting spy replaces the fixed waits; LIMITS names `refs/remotes/origin/dev` against a shadowing local branch and `git remote set-head origin -a`; a failed Landed read is told under the heading. Whole suite 2848 at `7bfa5b4`.
+- **The orchestrator's check** at `7bfa5b4`: whole suite 2848 cases, `Fails (0)`, lint clean, the `set-head` mutant killed (5 failures). The release was held to bundle with T54.
+- **Departures.** A working branch with no shared history shows git's "no merge base" words under the heading (A171).
+
+### T54 — the user's request taken into the wave, PR #181, merged by rebase (`dev` `191f819`), released in v0.2.26
+
+`a4ff641` … `ae9c122` on the branch, `72f842a` … `191f819` on `dev` (2 commits). Session note: [[Sessions/2026-10-12 — T54 Terminal keys]]. During the wave the user asked for `<C-\>` twins of the `\` keys so that a user typing could move at once, and answered the two questions put (Terminal and Insert mode; the same letters as `\`): D58 in the plan note. It touches the keys, not the changes home, so it ran beside T52 and T53 from `dev` `322fc41`; it has no brief in this folder, only the orchestrator's dispatch with A167–A170.
+- **The packet** (head `a4ff641`, whole suite 2889, 6 mutants killed). The setting `terminal_prefix`, the twins mapped in `t` and `i`, their lines in `:checkhealth aineo`, the help.
+- **Reviews on `a4ff641`.**
+  - *Attack (`neovim-claude-code-reviewer`):* HIGH. A user's global mapping of `<C-\>` alone (toggleterm's) made the twin keys wait, and a twin's letters run aineo's action instead of reaching the terminal; the help was wrong about the wait; an Insert-mode twin skipped abbreviations and a count; risky prefixes.
+  - *Tests and records (`records-reviewer`):* the A170 claim lacked killing mutants; small records.
+- **Fix round** by the author (A175–A178): no twin in a mode where the user maps `terminal_prefix` alone, and the health check says so; an Insert-mode twin leaves as `<Esc>` does; the health check warns of a single printable key or a `<C-\><C-n>` prefix; the help corrected. Whole suite 2914 at `ae9c122`.
+- **The orchestrator's check** on `dev` plus T54: the first whole run hit its 16-minute limit under host load (a virtual machine beside the run and T53's build; the failing files passed alone); rerun with `AINEO_TEST_JOBS=4` and a 45-minute limit: 2964 cases, `Fails (0)`; the A175 skip mutant killed.
+- **Departures.** The twins work in every terminal, not only Claude's (A178; the user chose "Terminal + Insert" over a Claude-only option); `send` has no twin (A168).
+
+### T53 — PR #183, merged by rebase (`dev` `29f2f00`), released in v0.2.27 (PR #184, `main` `bfef6c9`)
+
+`1a38fab` … `19f33dc` on the branch, `e728523` … `29f2f00` on `dev` (14 commits). Session note: [[Sessions/2026-10-12 — T53 Files window keys]]. Dispatched on `dev` `70a52bc`; its first commit is the dated dispatch amendment (A179).
+- **The packet** (head `e9aea3f`, whole suite 2892 with one failure, the flaky case `cursor on Session work when made anew`, also failing on `dev`). `gf` under a commit opens the file as that commit has it, not modifiable; `h` and `l` in the files window compare a file with `HEAD` and with its previous version (U4).
+- **Reviews on `e9aea3f`.**
+  - *Attack (`neovim-lua-reviewer`):* no wrong file or side; a later `gf` did not cancel an `l`, `h` or Enter still reading; `gf` under another worktree's commit read the editor's repository; `h` on a file equal to `HEAD` opened an empty diff; `HEAD` naming no commit; the 1 MiB cut told as a buffer line; a huge blob read whole before the cut.
+  - *Tests and records (`records-reviewer`):* the flaky case's cause found; the no-file guard and quoted-name cases in assertion form; mutant rows as literal edits.
+- **Fix round** by the author (A180–A184): the counter bumped before the open; `gf` reads in the commit's worktree; `h` on an unchanged file says so once; `h` refuses where `HEAD` names no commit; the cut told as a virtual line; the flaky case waits for the reads. 
+- **The orchestrator's check** on `dev` `191f819` plus T53: whole suite 3015 cases, `Fails (0)`, lint clean, the last-key mutant killed.
+- **Departures.** The commit's file is cut at 1 MiB; it is made not modifiable and not read-only (A182); the dispatch amendment (A179).
+
+### Rulings made after dispatch — the orchestrator's assumptions
+
+They continue *The orchestrator's rulings*, above, which is not edited after dispatch. A164–A166 belong to wave 12, which is parked, and are not recorded here.
+- **A135 (T49)** — the diff is read in place of a guarantee review.
+- **A158 (T51)** — mutant 17 is not equivalent: a file named `--` returns another file's bytes; the attack review's case governs.
+- **A159 (T51)** — `FETCH_HEAD` counts as a reference, so a fetch run in the worktree is seen where the watch is not recursive.
+- **A160 (T51)** — the help sentences T51 made incomplete are fixed in T51, not left to T52.
+- **A161 (T50)** — T49's scroll handler is fixed in T50's round: it loops over the event's window keys.
+- **A162 (T50)** — the LIMITS cost figures stay dropped until a re-measure; `lines.commit_rows` is file-local.
+- **A163 (T52)** — the implementer writes the brief's dated dispatch amendment as its first commit.
+- **A167 (T54)** — the setting `terminal_prefix`, default `<C-\>`, `false` maps none, read once at startup; the user's own global mapping of a twin's keys stays theirs.
+- **A168 (T54)** — `send` gets no twin.
+- **A169 (T54)** — a twin first leaves the mode it was pressed in, then runs the action; amended by A176 for Insert mode.
+- **A170 (T54)** — Neovim's own `<C-\><C-n>` and `<C-\><C-o>` keep working at once in both modes.
+- **A171 (T52)** — a working branch with no shared history shows git's "no merge base" words under the heading.
+- **A172 (T52)** — `done(nil, nil)` is reached by a case or deleted (A117).
+- **A173 (T52)** — the new setting's tag joins `tests/test_doc.lua`'s list, outside T52's boundary.
+- **A174 (T52)** — a failed Landed read is told under the heading, not on the editor's own failure line.
+- **A175 (T54)** — in a mode where the user maps `terminal_prefix` alone, aineo maps no twin, and the health check warns of it.
+- **A176 (T54)** — an Insert-mode twin leaves as `<Esc>` does, so an abbreviation expands and a count repeats.
+- **A177 (T54)** — the health check warns of a single printable key or a `<C-\><C-n>` or `<C-\><C-o>` prefix.
+- **A178 (T54)** — the twins work in every terminal, as the user chose.
+- **A179 (T53)** — the dispatch amendment, as A163.
+- **A180 (T53)** — `h` on a file identical to `HEAD` opens nothing and says so once.
+- **A181 (T53)** — `h` refuses where `HEAD` names no commit, under every filter.
+- **A182 (T53)** — the 1 MiB cut is told as a virtual line under the last line.
+- **A183 (T53)** — reading a huge blob whole before the cut is an open thread for the git home.
+- **A184 (T53)** — the flaky `tests/test_changes_filter.lua` case gets the reviewer's wait, though the file lies outside the boundary.
+
+### Wave 13 closed
+
+Wave 13 landed on 2026-10-12. Its packets are T49 (PR #171, v0.2.24), the commits filter following a scroll; T50 (PR #177, v0.2.25), the files window as one list with another worktree's lines in the filter; T51 (PR #175, v0.2.25), the git reads; T52 (PR #180, v0.2.26), *Landed*; T54 (PR #181, v0.2.26), the `<C-\>` twins, the user's request taken into the wave (D58); and T53 (PR #183, v0.2.27), `gf` from a commit and `h` and `l` in the files window. The suite grew from 2708 cases at the wave's base to 3015. Releases v0.2.24, v0.2.25, v0.2.26 and v0.2.27. Retrospective: [[Sessions/2026-10-12 — Wave 13 retrospective]].
+
+**Open threads at the close:**
+- **A154**, the worktree bases: D32's comparison is not changed to the working branch; that is the user's to decide.
+- **A183**: a huge blob is read whole before the 1 MiB cut, in `lua/aineo/git/`.
+- **Wave 12 is parked** at the user's word (the plan is PR #179, open; T48 held until the user reproduces the blank background-session window).
+- **T50's:** a worktree removed during a whole-change read lists "No files changed in this worktree" until the commits read selects Session work; the LIMITS cost figures wait for a re-measure.

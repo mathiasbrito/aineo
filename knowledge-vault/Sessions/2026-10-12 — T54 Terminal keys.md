@@ -117,4 +117,9 @@ Mutants 1, 2, 4, 4b, 5, 6, 7, 8 of the first round were run again on this tree: 
 
 ## Commits
 
-Recorded after the merge.
+Recorded after the merge, by the wave 13 knowledge pass. PR #181 merged by rebase as `a4ff641` … `ae9c122` (2 commits), now `72f842a` … `191f819` on `dev`. The orchestrator's check on `dev` plus T54: the first whole run hit its time limit under host load (a virtual machine running beside it); the rerun with `AINEO_TEST_JOBS=4` and a 45-minute limit gave 2964 cases, `Fails (0)`, and the A175 skip mutant was killed. Released in v0.2.26 (PR #182, `main` `32c012c`), bundled with T52.
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `a4ff641` | `72f842a` | Add <C-\> twins of the prefix keys in Terminal and Insert mode |
+| `ae9c122` | `191f819` | Skip twins where the terminal prefix is mapped; leave Insert mode as Esc |
