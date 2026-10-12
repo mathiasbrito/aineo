@@ -23,7 +23,8 @@ interactive CLI runs in a terminal on the left; on the right, the Agent
 Report shows what Claude says it is doing, above an Input buffer where you
 write your next message. Files you open land in a column between the two.
 
-Every command sits behind one prefix key, `\` by default, in Normal mode:
+Every command sits behind one prefix key, `\` by default, in Normal mode (and
+most behind its twin in Terminal and Insert mode, below):
 `\s` sends Input to Claude, `\o` opens or restores the layout, and `\r`, `\i`
 and `\c` move to the Report, Input and Claude — `\c` in Terminal mode, so
 that what you type next goes to Claude, unless Claude Code has exited.
@@ -944,14 +945,16 @@ Terminal and Insert mode keys ~
                                                          *aineo-terminal-keys*
 Once the editor has started, aineo also maps the terminal prefix
 (|aineo-config-terminal_prefix|), `<C-\>` by default, followed by each prefix
-key above but Send's, globally, in Terminal mode and in Insert mode: from
-Claude's prompt, or while you type in any buffer, to move without leaving
-the mode by hand. A twin first leaves the mode it was pressed in, as
-`<C-\><C-n>` does (|CTRL-\_CTRL-N|), and then runs what its `<Plug>`
-mapping runs from Normal mode (|aineo-mappings|): `<C-\>c` enters Terminal
-mode in Claude's window again, as `\c` does, and the others leave you in
-Normal mode in the window they move to. Claude Code is sent none of the
-twin's keys.
+key above but Send's, globally, in Terminal mode, in any terminal and not
+only Claude's, and in Insert mode: from Claude's prompt, or while you type in
+any buffer, to move without leaving the mode by hand. A twin first leaves
+the mode it was pressed in, and then runs what its `<Plug>` mapping runs from
+Normal mode (|aineo-mappings|). In Terminal mode it leaves as `<C-\><C-n>`
+does (|CTRL-\_CTRL-N|). In Insert mode it leaves as `<Esc>` does: an
+abbreviation before the cursor is expanded (|i_CTRL-]|) and an insert given a
+count is repeated. `<C-\>c` enters Terminal mode in Claude's window again, as
+`\c` does, and the others leave you in Normal mode in the window they move
+to. Claude Code is sent none of the twin's keys.
 
                                                                 *aineo-<C-\>o*
 <C-\>o		|<Plug>(aineo-open)|
@@ -974,9 +977,26 @@ Send has no twin: it acts on a selection or on the line of Normal mode.
 `:Aineo claim` has no key of its own, so no twin either.
 
 Neovim's own `<C-\><C-n>` and `<C-\><C-o>` work as ever: aineo maps neither.
-After `<C-\>`, Neovim waits for the key that follows. It waits for
-'timeoutlen' only when what was typed is a twin and also the start of a
-longer mapping: with your own `<C-\>gs`, `<C-\>g` waits.
+
+The key after `<C-\>` must come within 'timeoutlen' (with 'notimeout' there
+is no limit). Typed later, it is not a twin's: in Terminal mode it reaches
+the terminal's program, Claude Code at Claude's prompt, and in Insert mode it
+is inserted as typed. A longer mapping of your own, such as `<C-\>gs`, makes
+`<C-\>g` wait for 'timeoutlen' as well.
+
+A mapping of `<C-\>` alone makes that key wait for the next key, and a
+twin's letter typed then runs aineo's action in place of yours. So in a mode
+where you have mapped the terminal prefix alone globally, as a terminal
+plugin's toggle is, aineo maps no twin. A mapping local to a buffer, such as
+that toggle in the plugin's own terminals, cannot be seen when the editor
+starts: the key waits there, and a twin's letter runs aineo's action. Set
+`terminal_prefix` to another key to have twins in that mode.
+`:checkhealth aineo` reports both (|aineo-health|).
+
+A `terminal_prefix` that is a printable key, such as `x`, runs a twin as you
+type it in Insert mode, and one that starts with `<C-\><C-n>` or
+`<C-\><C-o>` makes Neovim's own keys wait for the next key.
+`:checkhealth aineo` warns of both.
 
 Like the prefix, the terminal prefix is read once, when the editor has
 started (|VimEnter|), and a key sequence you mapped yourself — a global
@@ -1002,8 +1022,9 @@ The settings are checked when aineo uses them — when the editor has started,
 and at each action but Send, which uses no setting. A wrong value is one
 error naming the setting, such as
 `aineo: layout.report_height: expected a number strictly between 0 and 1,
-got 2`; at startup it also means no prefix keys and no autostart. A key
-aineo does not know is ignored, and `:checkhealth aineo` names it.
+got 2`; at startup it also means no prefix keys, no terminal prefix keys and
+no autostart. A key aineo does not know is ignored, and `:checkhealth aineo`
+names it.
 
                                                          *aineo-config-prefix*
 prefix			A non-empty string, or `false`. Default: `'\'`
@@ -1017,7 +1038,10 @@ terminal_prefix		A non-empty string, or `false`. Default: `'<C-\>'`
 			The key sequence, written as in a mapping, before each
 			of aineo's keys in Terminal mode and in Insert mode
 			(|aineo-terminal-keys|). `false` maps none; the prefix
-			keys remain. The empty string is refused.
+			keys remain. The empty string is refused. A printable
+			key, or one that starts with `<C-\><C-n>` or
+			`<C-\><C-o>`, is accepted and warned of
+			(|aineo-health|).
 
                                                       *aineo-config-autostart*
 autostart		A boolean. Default: `true`
@@ -1475,6 +1499,10 @@ Terminal prefix mappings ~
   For each key of the terminal prefix (|aineo-terminal-keys|), in Terminal
   mode and in Insert mode, whether it leaves the mode and runs aineo's
   `<Plug>` mapping; a warning when it runs something of yours, or nothing.
+  A warning for each mode where `terminal_prefix` alone is mapped
+  globally, which has no twins, or local to a buffer, which makes the key
+  wait; and when `terminal_prefix` is a printable key, or starts with
+  `<C-\><C-n>` or `<C-\><C-o>`.
   While aineo's |VimEnter| handler has not run, or aineo was loaded after
   startup and has not yet mapped them, one line says so in place of the
   keys, as in the Prefix mappings section. With `terminal_prefix` set to

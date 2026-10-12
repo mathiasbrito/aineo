@@ -153,6 +153,12 @@ local TAGS_THE_PLUGIN_DEFINES = [[
   return vim.fn.uniq(tags)
 ]]
 
+--- How many tags the plugin defines at least, so that a lost mapping or
+--- setting cannot pass for a smaller help: 9 subcommands of `:Aineo`, 10
+--- `<Plug>` mappings, 9 prefix keys and `aineo-v_\s`, 8 twins and 5
+--- settings.
+local TAGS_THE_PLUGIN_DEFINES_AT_LEAST = 42
+
 --- The tags of `tags` that `:help` does not take to a line of the help
 --- holding them, in `child`.
 local TAGS_MISSING = [[
@@ -172,7 +178,7 @@ T['the help']['has a tag for every command, mapping, key and setting the plugin 
 
   local missing = child.lua(TAGS_MISSING, { tags })
 
-  eq(#tags >= 36, true)
+  eq(#tags >= TAGS_THE_PLUGIN_DEFINES_AT_LEAST, true)
   eq(missing, {})
 end
 
