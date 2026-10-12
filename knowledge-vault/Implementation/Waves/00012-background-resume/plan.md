@@ -425,6 +425,18 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 4. **Esc attaches.** `vim.ui.select`'s `nil` answer attaches instead of starting a new session.
 5. **The attached terminal's quit presses Ctrl-C.** The quit uses `stop_by_keys()` for an attached terminal, so the fake receives `\3` and no `\26`.
 
+## The orchestrator's rulings — 2026-10-12, before dispatch (round 4)
+
+Each is the orchestrator's assumption under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"), reported to the user; none is the user's decision. Each takes the recommendation (a).
+
+- **A185 (O11)** — two dispatches: part 1 (the list before the start, the waiting start, the warning, the reader's `pid` and short `id`) now; part 2 (the question, attach, the Ctrl+Z stop, new) after the user's M16, on its own branch.
+- **A186 (O12)** — the question is `vim.ui.select`, as `\S` uses; cancel means a new session.
+- **A187 (O13)** — while the list runs, Claude's window is empty and the status line is as at any start; no message.
+- **A188 (O14)** — an attached terminal shows a one-line note and `(attached)` in the status line.
+- **A189 (O15)** — an attached terminal's stop presses Ctrl+Z, waits as long as M16 step 4 measures, then hangs up as today; a wipe hangs up unless M16 step 6 shows that stops the session.
+- **A190 (O16)** — the warning's rule is the kept id, kind interactive, with a `pid`; it replaces A165. A166's text stands.
+- **A191 (O17)** — `claude attach` is given the entry's short `id`; an entry without one is not asked about.
+
 ## Briefs
 
 - `brief-t48-background-resume.md` — T48, rewritten 2026-10-12 for round 4: part 1, dispatched once O11–O17 are ruled, and part 2, held for M16. Its round-3 text, written for A164's re-scope with A165 and A166, is in this pull request's third commit.
