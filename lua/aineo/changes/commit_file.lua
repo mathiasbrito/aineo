@@ -45,9 +45,9 @@ end
 --- The commit the file `entry` lists is read at: the commit it is listed
 --- under, or, under *Landed*, the commit the working branch named when the
 --- commits window last read it (`source.landed`). A commit of another
---- worktree is read in the editor's repository, which shares its object
---- store. Returns nil and the failure when the working branch names no
---- commit (`aineo.changes.landed`'s `unreadable()`).
+--- worktree is read in that worktree's repository, as its other diffs are.
+--- Returns nil and the failure when the working branch names no commit
+--- (`aineo.changes.landed`'s `unreadable()`).
 ---
 ---@param entry aineo.changes.Entry an entry for which `M.lists_file_at_a_commit()` holds
 ---@param source aineo.changes.DiffSource
@@ -65,7 +65,7 @@ function M.revision_of(entry, source)
     }
   end
   return {
-    repository = source.repository,
+    repository = entry.worktree and entry.worktree.repository or source.repository,
     commit = entry.filter.commit.id,
     told = told_commit(entry),
   }

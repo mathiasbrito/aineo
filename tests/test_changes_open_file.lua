@@ -505,6 +505,36 @@ T['gf']['under a commit of another worktree shows the file as that commit has it
   eq(child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)'), { 'in the agent’s commit' })
 end
 
+T['gf']['under a commit of another worktree reads it in that worktree’s repository'] = function()
+  local top = git_repo.create('openfile-worktree-clone', { ['notes.txt'] = { 'one' } })
+  local agent = vim.fs.joinpath(vim.fs.dirname(top), 'agent')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'agent', agent })
+  vim.fn.delete(agent, 'rf')
+  git_repo.git(vim.fs.dirname(top), { 'clone', '--quiet', '--branch', 'main', top, agent })
+  git_repo.git(agent, { 'switch', '--quiet', '--create', 'agent' })
+  git_repo.write(agent, 'notes.txt', { 'in the clone’s commit' })
+  local commit = git_repo.commit_all(agent, 'Clone')
+  child.lua(BEGIN_AND_SHOW, { top })
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent (agent)',
+    commit:sub(1, 7) .. ' Clone',
+  })
+  go_to_commits_line(5)
+  expect_lines(FILES, {
+    'Files in: ' .. commit:sub(1, 7) .. ' Clone (worktree agent)',
+    '  M notes.txt',
+  })
+
+  press_gf_on(2)
+
+  wait_for_file_shown()
+  eq(current_buffer_name(), 'aineo://show/' .. commit .. '/notes.txt')
+  eq(child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)'), { 'in the clone’s commit' })
+end
+
 T['gf']['under Uncommitted opens the working tree’s file, as before'] = function()
   local top = pane_listing(
     'openfile-uncommitted',
@@ -591,6 +621,33 @@ T['gf']['under a commit, then on another file before the first is read, tells no
   child.lua('_G.pending["b.txt"](nil, "b text\\n")')
 
   eq({ child.lua_get(TOLD), child.lua_get('#_G.shown_diffs') }, { '', 1 })
+end
+
+T['gf']['on the working tree’s file, after l before its diff was read, leaves the file shown alone'] = function()
+  local top = pane_listing(
+    'openfile-after-l',
+    { ['notes.txt'] = { 'two' } },
+    { 'Files in: Session work', '  M notes.txt' }
+  )
+  child.lua([[
+    require('aineo.git').file_diff = function(_, _, _, done)
+      _G.finish = done
+    end
+  ]])
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
+  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.type_keys('l')
+  git_repo.wait_until('the diff asked for', function()
+    return child.lua_get('_G.finish ~= nil')
+  end)
+  press_gf_on(2)
+
+  child.lua('_G.finish(nil, "diff --git a/notes.txt b/notes.txt\\n-one\\n+two\\n")')
+
+  eq({ current_buffer_name(), child.lua_get('#_G.shown_diffs') }, {
+    vim.fs.joinpath(top, 'notes.txt'),
+    0,
+  })
 end
 
 T['gf']['under a commit names the buffer after the file as the files window quotes it'] = function()
