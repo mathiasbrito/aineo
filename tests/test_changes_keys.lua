@@ -414,13 +414,14 @@ T['Lines listing no file']['do nothing and say nothing under the key on'] = func
   begin_and_show(top)
   expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
 
-  press_on_files_line(key, line)
+  local pressed = pcall(press_on_files_line, key, line)
 
   eq({
+    pressed = pressed,
     cursor = child.lua_get('vim.api.nvim_win_get_cursor(0)'),
     shown = child.lua_get('#_G.shown_diffs'),
     told = child.lua_get(TOLD),
-  }, { cursor = { line, 0 }, shown = 0, told = '' })
+  }, { pressed = true, cursor = { line, 0 }, shown = 0, told = '' })
 end
 
 T['h']['moves the cursor to the diff it shows, and F there reads that diff again with the whole file'] = function()
