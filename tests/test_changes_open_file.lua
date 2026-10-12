@@ -432,11 +432,31 @@ T['gf']['under a commit whose file cannot be read tells git’s words once, nami
   eq({ current_buffer_name(), child.lua_get('#_G.shown_diffs') }, { FILES, 0 })
 end
 
+T['gf']['under a commit names a failure after the file as the files window quotes it'] = function()
+  local _, commit = pane_under_commit(
+    'openfile-commit-quoted-told',
+    { ['say "hi".txt'] = { 'text' } },
+    { '  A "say \\"hi\\".txt"' }
+  )
+  child.lua([[
+    require('aineo.git').file_at_commit = function(_, _, _, done)
+      done({ reason = 'path_missing' })
+    end
+  ]])
+
+  press_gf_on(2)
+
+  eq(
+    told_something(),
+    ('aineo: "say \\"hi\\".txt" was deleted in commit %s'):format(commit:sub(1, 7))
+  )
+end
+
 T['gf']['under a commit with no room in the middle column shows nothing and says so'] = function()
   local _, commit = pane_under_commit(
     'openfile-commit-no-room',
-    { ['has space.txt'] = { 'text' } },
-    { '  A has space.txt' }
+    { ['say "hi".txt'] = { 'text' } },
+    { '  A "say \\"hi\\".txt"' }
   )
   child.lua('_G.no_room = true')
 
@@ -444,12 +464,12 @@ T['gf']['under a commit with no room in the middle column shows nothing and says
 
   eq(
     told_something(),
-    ('aineo: the middle column has no room for has space.txt in commit %s, which is not shown'):format(
+    ('aineo: the middle column has no room for "say \\"hi\\".txt" in commit %s, which is not shown'):format(
       commit:sub(1, 7)
     )
   )
   local file_buffer =
-    child.lua_get('vim.fn.bufnr(...)', { 'aineo://show/' .. commit .. '/has space.txt' })
+    child.lua_get('vim.fn.bufnr(...)', { 'aineo://show/' .. commit .. '/"say \\"hi\\".txt"' })
   eq({ current_buffer_name(), file_buffer }, { FILES, -1 })
 end
 
@@ -596,14 +616,16 @@ end
 --- to list what landed. Returns the commits' full ids, the older first.
 ---
 ---@param case string the case's own name
+---@param file? string the file's name, `a.txt` when not given
 ---@return string first
 ---@return string second
-local function pane_with_landed(case)
-  local top = git_repo.create(case, { ['a.txt'] = { 'one' } })
+local function pane_with_landed(case, file)
+  file = file or 'a.txt'
+  local top = git_repo.create(case, { [file] = { 'one' } })
   git_repo.git(top, { 'switch', '--quiet', '--create', 'dev' })
-  git_repo.write(top, 'a.txt', { 'first' })
+  git_repo.write(top, file, { 'first' })
   local first = git_repo.commit_all(top, 'Land first')
-  git_repo.write(top, 'a.txt', { 'second' })
+  git_repo.write(top, file, { 'second' })
   local second = git_repo.commit_all(top, 'Land second')
   git_repo.git(top, { 'switch', '--quiet', 'main' })
   child.lua(BEGIN_AND_SHOW, { top, 'dev' })
@@ -704,9 +726,9 @@ T['gf']['under a commit names the buffer after the file as the files window quot
 end
 
 T['gf']['under Landed, once the working branch names no commit, shows nothing and says why'] = function()
-  pane_with_landed('openfile-landed-gone')
+  pane_with_landed('openfile-landed-gone', 'say "hi".txt')
   go_to_commits_line(4)
-  expect_lines(FILES, { 'Files in: Landed in dev', '  M a.txt' })
+  expect_lines(FILES, { 'Files in: Landed in dev', '  M "say \\"hi\\".txt"' })
   child.lua([[
     local landed = require('aineo.changes.landed')
     landed.read = function(_, done)
@@ -719,7 +741,7 @@ T['gf']['under Landed, once the working branch names no commit, shows nothing an
 
   child.lua("vim.fn.maparg('gf', 'n', false, true).callback()")
 
-  eq(child.lua_get(TOLD), 'aineo: a.txt could not be read: dev names no commit')
+  eq(child.lua_get(TOLD), 'aineo: "say \\"hi\\".txt" could not be read: dev names no commit')
   eq(child.lua_get('#_G.shown_diffs'), 0)
 end
 
