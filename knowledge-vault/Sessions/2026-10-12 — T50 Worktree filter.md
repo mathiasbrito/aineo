@@ -115,4 +115,12 @@ The attack and the tests-and-records reviews of PR #176 (orchestrator's rulings 
 
 ## Commits
 
-Recorded after the merge.
+Recorded after the merge, by the wave 13 knowledge pass. PR #176 conflicted with T51's rewrite of the same help passage once T51 had merged, so its commits were re-applied unchanged in content as PR #177 rather than rebasing the pushed branch (original heads: `8f8466b` … `d75ab2a`); PR #177 merged by rebase as `569a541` … `f272619`, now `57d4473` … `322fc41` on `dev` (5 commits). The orchestrator's check of T50 and T51 on one combined tree: the whole suite 2798 cases, `Fails (0)`, lint clean, and the mutant `done(WORKTREE_GONE, …)` → `done(nil, …)` killed. Released in v0.2.25 (PR #178, `main` `f59a7d8`).
+
+| Branch | `dev` | Subject |
+|---|---|---|
+| `569a541` | `57d4473` | List another worktree's lines as filters; show the files window as one list |
+| `c87792d` | `a43678c` | Record T50's session: the worktree filter, its mutants and open threads |
+| `bfeeee2` | `0f0d8f2` | Fix T50's review findings: gone worktree, same-turn scroll, F, failed commit read |
+| `82a1b60` | `d349437` | Start the selection pause only for a scroll that carries the cursor elsewhere |
+| `f272619` | `322fc41` | Record T50's fix round in the session note |
