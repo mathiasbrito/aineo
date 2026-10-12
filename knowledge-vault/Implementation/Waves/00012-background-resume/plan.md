@@ -4,7 +4,7 @@ status: planned
 rolling: false
 planned_by: the orchestrator's planning agent (Claude, Opus 5.5) for the user
 planned_at: 2026-10-12
-base: 1dc3186
+base: 0fa0116
 claimed_by:
 claimed_at:
 landed_at:
@@ -16,6 +16,8 @@ pull_requests:
 **Planned by:** the orchestrator's planning agent, 2026-10-12. **Base:** `dev` `1dc3186` (wave 11 landed).
 **Ask:** the user's fix request of 2026-10-12 (verbatim below).
 **Composition from:** [[Planning/aineo — v1 agent console]] › D23, D36–D38, D42, D45, D49, D51, D53, C3, R2 and the proposed D54 and T48 this plan writes; [[Implementation/Waves/00011-names-and-sessions/plan]] for the form and for T46, whose `claude agents --json` reader this packet reuses; [[Projects/aineo]].
+
+**Revised a third time 2026-10-12, with the user's reproduction and answer** (*Round 4*). The fault reproduced with a busy session running in the background service. The user chose: when the folder's kept session runs in the background service, aineo asks at start whether to attach to it or start a new one. The list now runs before the start, since its answer chooses the command. T48 has two parts: part 1 can be dispatched now, and part 2, the attach, waits for the user's check M16. Rounds 1–3 below are kept as they were written.
 
 **Revised again 2026-10-12 with the user's M11 and the orchestrator's rulings A164–A166** (*Round 3*). With an idle, small background session, aineo's start resumed it and its content showed, so the reported fault does not reproduce. It stays an open thread, with the user's check M15 for the next time it happens. T48 is re-scoped to the warning for a kept session open in another interactive Claude Code; a background session is resumed as today. Nothing holds the dispatch.
 
@@ -73,21 +75,23 @@ The options, each for the start (the quit follows):
 
 ## D54 — written into the plan note
 
-**Round 1** proposed a D54 holding only the request's decided part. **Round 2** rewrote it with the user's U1 and U2 answers, and **round 3** trimmed it to those decided parts once M11 was in. The row is not merged, so it is replaced, not superseded. Its decision column, as written into [[Planning/aineo — v1 agent console]]; its reasoning column quotes the request, both answers and M11.
+**Round 1** proposed a D54 holding only the request's decided part. **Round 2** rewrote it with the user's U1 and U2 answers, and **round 3** trimmed it to those decided parts once M11 was in. **Round 4** rewrites it with the user's answer after the reproduction, which replaces the background half of U1. The row is not merged, so it is replaced, not superseded. Its decision column, as written into [[Planning/aineo — v1 agent console]]; its reasoning column quotes the request, the answers, M11 and the new answer.
 
-> **D54** — A start of Claude Code always resumes the session kept for the working directory (D23, D38), wherever that session runs. When it runs in another interactive Claude Code, aineo tells the user so and resumes it all the same. When it runs in Claude Code's background service, aineo resumes it. The quit does not change until the user's checks M9 and M10 are in (confirms D23 and D38 for a session running elsewhere; touches C3)
+> **D54** — A start of Claude Code resumes the session kept for the working directory (D23, D38). When that session is open in another interactive Claude Code, aineo tells the user so and resumes it all the same. When it runs in Claude Code's background service, aineo asks at start, in a one-line choice, whether to attach to the running session or to start a new one. aineo's quit of its own session does not change until the user's checks M9 and M10 are in. The quit of a terminal attached to a background session changes only once the user has checked `Ctrl+Z` (U3) (confirms D23 and D38 for a session running elsewhere; touches C3)
 
 ## Packets — the six-rules table
 
 | packet | tasks | type / model | files | schema? | dependency change? | decision open? | task-line marks |
 |---|---|---|---|---|---|---|---|
-| T48 | T48 | `neovim-claude-code-integrator` / sonnet | *(round 3)* `lua/aineo/claude/init.lua` (the list beside a start that resumes, and its warning), `lua/aineo/claude/agents.lua` (`pid` and `startedAt` kept on a listed session, and the predicate of A165); `tests/helpers/claude_session.lua` (`wait_for_starts()` counts Claude Code's starts, not the list's runs); a new `tests/test_claude_resume_elsewhere.lua`, `tests/test_entry_sessions.lua` and `tests/test_claude_agents.lua` where the helper's change moves them; `doc/aineo.txt` › *aineo-claude-session* and *aineo-limits* (*Stopping Claude Code on quit*, *The session list*) | no | no | none: A164–A166 | own |
+| T48 part 1 *(round 4)* | T48 | `neovim-claude-code-integrator` / sonnet | `lua/aineo/claude/init.lua` (the list before a start that would resume, the start that waits for it, the warning), `lua/aineo/claude/agents.lua` (`pid` and the short `id` kept on a listed session); `tests/helpers/claude_session.lua` (a start is Claude Code's run, not the list's); a new `tests/test_claude_resume_elsewhere.lua`, and the suites the helper's change or the waiting start moves; `doc/aineo.txt` › *aineo-claude-session* and *aineo-limits* (*The session list*) | no | no | O11–O17, the orchestrator's | own |
+| T48 part 2 *(round 4)* | T48 | `neovim-claude-code-integrator` / sonnet | part 1's files, plus `lua/aineo/claude/stop.lua` (the detach), `lua/aineo/claude/session_name.lua` (the mark), `lua/aineo/claude/arguments.lua` if the attach command is built there, `tests/helpers/fake_claude.lua` (`attach`); `doc/aineo.txt` › *Stopping Claude Code on quit* | no | no | **M16**, the user's | own |
+| ~~T48 (round 3)~~ | T48 | `neovim-claude-code-integrator` / sonnet | *(round 3, replaced by round 4)* `lua/aineo/claude/init.lua` (the list beside a start that resumes, and its warning), `lua/aineo/claude/agents.lua` (`pid` and `startedAt` kept on a listed session, and the predicate of A165); `tests/helpers/claude_session.lua` (`wait_for_starts()` counts Claude Code's starts, not the list's runs); a new `tests/test_claude_resume_elsewhere.lua`, `tests/test_entry_sessions.lua` and `tests/test_claude_agents.lua` where the helper's change moves them; `doc/aineo.txt` › *aineo-claude-session* and *aineo-limits* (*Stopping Claude Code on quit*, *The session list*) | no | no | none: A164–A166 | own |
 
-**Rule 1, dependencies.** T48 rests on T46's reader, merged. ✓
-**Rule 2, files.** One packet. ✓
+**Rule 1, dependencies.** T48 rests on T46's reader, merged. ✓ *(round 4)* Part 2 rests on part 1, merged.
+**Rule 2, files.** One packet. ✓ *(round 4)* Two parts of one task, one after the other, on one branch name each. ✓
 **Rule 3, schema.** None. ✓
 **Rule 4, dependencies.** None. ✓
-**Rule 5, decisions.** *(round 3)* U1 and U2 are answered, M11 is in, and A164–A166 rule the rest. U3 does not hold T48. ✓
+**Rule 5, decisions.** *(round 3)* U1 and U2 are answered, M11 is in, and A164–A166 rule the rest. U3 does not hold T48. ✓ *(round 4)* The user's answer decides the behaviour; O11–O17 are the orchestrator's to rule before part 1 is dispatched. M16 holds part 2. ✓
 **Rule 6, task lines.** One packet: it marks its own line. ✓
 
 **Class: regular.** It changes what a start does (D23, D38, proposed D54). Its home is `lua/aineo/claude/` and it starts a process, both of which §3 of the orchestrate skill keeps from a small fix (D30's waves included).
@@ -96,7 +100,8 @@ The options, each for the start (the quit follows):
 
 | packet | implementer | reviews | session note | resource | branch |
 |---|---|---|---|---|---|
-| T48 | `neovim-claude-code-integrator`, model sonnet | attack by `neovim-claude-code-reviewer` (Opus); tests and records together by one `records-reviewer` (Sonnet); one fix round; the orchestrator's own check | `Sessions/<date> — T48 Resume elsewhere.md` *(round 3; `T48 Background resume.md` before)* | `impl_t48_background_resume` | `bugfix/t48-background-resume` |
+| T48 part 1 | `neovim-claude-code-integrator`, model sonnet | attack by `neovim-claude-code-reviewer` (Opus); tests and records together by one `records-reviewer` (Sonnet); one fix round; the orchestrator's own check | `Sessions/<date> — T48 Resume elsewhere.md` *(round 3; `T48 Background resume.md` before)* | `impl_t48_background_resume` | `bugfix/t48-background-resume` |
+| T48 part 2 *(round 4)* | the same | the same | `Sessions/<date> — T48 Attach.md` | `impl_t48_attach` | `bugfix/t48-attach` |
 
 D26: the whole suite once before each push. The start path is exercised by most entry suites, and the helper change moves every suite that counts starts.
 
@@ -301,7 +306,7 @@ The next time it happens, the user runs **M15**, before anything else in that wi
 
 What M15 shows decides whether (ii) — the redraw — or (i) — the typed `/resume` — from *Round 2* comes back as a packet of its own.
 
-## Verification mutants — round 3, for the re-scoped T48
+## Verification mutants — round 3, for the re-scoped T48 — withdrawn by round 4
 
 Each runs as its literal edit, shown applied, on the test files that exercise the code it breaks — `tests/test_claude_resume_elsewhere.lua` first — and on the whole suite only when it survives there. The round-1 and round-2 mutants are withdrawn.
 
@@ -311,9 +316,119 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 4. `kind` is ignored: a running `background` entry of the kept id warns.
 5. The list runs on a start that does not resume: the fake's record holds an `agents` run beside a `--session-id` start.
 
+## Round 4 — the reproduction, and the user's answer
+
+### The reproduction — 2026-10-12
+
+The user quit a session in aineo with `:qa!` and opened Neovim again in the same folder. The session was the user's own long-running session, busy, and running in Claude Code's background service. The user's words, verbatim: "I just quit this exat session with :qa!, I just hit :qa! aftr reopening nvim, I got this". The paste showed `/resume` typed into Claude's window four times. Each answered with the line below and showed nothing more. The session's name and id are replaced by placeholders, since this repository is public:
+
+> `Opening "[name] (3)", running in the background ([id])`
+
+The paste also shows a turn of that session ending with `Interrupted · What should Claude do instead?`, twice. That fits E3: aineo's quit pressing Ctrl-C into a terminal attached to a busy background session. It is not measured.
+
+### The user's answer — 2026-10-12, verbatim
+
+- Q: "When this folder's session is running in Claude Code's background service (like this orchestrator session), what should aineo show in Claude's window at start?" — A: "Ask at start" (option text: "A one-line choice at start: attach to the running session, or start a new one.")
+- Then: "also I renamed this session, not sure if this is the cause"
+
+**What follows.** This answer replaces the background half of U1 ("if it is running in the background, resume") and A164's "a background session is resumed as today". The interactive half of U1 stands: warn, and resume all the same. U2 stands: the quit of aineo's own session is unchanged until M9 and M10. U3 stands: the quit of an attached terminal changes only after a check of `Ctrl+Z`. M16 is that check.
+
+### Did the rename cause it? — the answer to the user
+
+No. aineo keeps the session's id for the folder, never its name. It starts Claude Code with `--resume <id>` (`kept_or_new_session()` and `session_arguments()`, `lua/aineo/claude/init.lua`). A rename changes the session's title and nothing else. The `Opening "…" (…)` line names the same id aineo resumes. The `(3)` in the name is Claude Code's own numbering, added when a session moves to the background while rows of the same name are already listed (D3). The cause is where the session runs: in the background service, and busy.
+
+### The design
+
+**1. Knowing before the start.**
+- A start that would resume first lists the folder's sessions with T46's reader. `list_sessions()` runs `claude.cmd` followed by `agents --json --cwd <folder> --all`, bounded at 5 s and 1 MiB, and is killed when Neovim quits.
+- Claude Code launches only once the list has answered. The list's answer chooses the command.
+- A start on a new id lists nothing and launches at once, as today.
+- A list that cannot run, fails, times out, prints too much or is not JSON resumes as today, and tells nothing.
+
+**What the editor shows meanwhile (O13).** `start_session()` still returns the terminal buffer at once. The layout shows it in Claude's window, empty, with the status line it has at any start (`Claude Code — <folder>`). `session_status()` is `'starting'`. Claude Code launches in that same buffer once the list answers. The buffer is then already shown at its window's size, which a start today does not promise (`start_session()`'s docstring, 5 rows). Every error `start_session()` raises today it still raises at once, before the list runs. While the start waits for the list:
+- a second `start_session()` returns the same buffer and starts nothing;
+- `write_to_session()` raises, as when no session runs;
+- a quit has nothing to stop;
+- a wiped buffer, or a quit, means nothing is launched when the list answers.
+
+**2. What the list decides.** It looks at the entries of the kept id.
+- **Running in the background service:** `kind` is `background`, there is a `pid` or a `status`, and the entry has the short `id` that `claude attach` takes (D5). Then aineo asks (O12):
+  - The prompt, at most 60 characters, for example `This folder's session runs in the background` (44).
+  - Two items, in the user's order: `Attach to it` and `Start a new session`.
+  - Esc, or an empty answer, starts a new session. It is the choice that leaves the background session untouched and gives aineo's own flags.
+  - The start at startup (`autostart`) asks too, once the list has answered.
+  - A background entry with no short `id` is not asked about. It resumes as today.
+- **Open in another interactive Claude Code:** `kind` is `interactive`, with a `pid`. aineo warns with A166's line, then resumes. When the list runs, no Claude Code of this editor is running yet, so every such entry is another one: an editor of the user's, or a plain terminal. A165's own-entry rule falls (O16).
+- **Both kinds listed:** the background entry is asked about, and no warning is told.
+- **Anything else:** resume as today.
+
+**3. Attach** *(part 2, held for M16)*.
+- The terminal's command is `claude.cmd` followed by `attach <short id>`, with none of aineo's flags.
+- The attached session runs with the flags it was started with (D4). This start's session hooks, the report server and its instructions, and `--allowedTools` are not given. Switches inside it are not followed. Its Report may get nothing, and Claude may ask permission for tools aineo allows.
+- How the panes show it (O14): one line at the attach, at most 60 characters, for example `aineo: attached to a background session (no Report)` (51). Claude's status line reads `<name> (attached) — <folder>` while it runs.
+- **Every stop of an attached terminal detaches with `Ctrl+Z` (`\26`) and never presses Ctrl-C.** In an attached terminal Ctrl-C cancels the background session's running turn (D2). `Ctrl+Z` "detaches but goes back to where you started … your shell if you ran `claude attach`" (D2). aineo's quit presses `Ctrl+Z`, waits for the attach to exit, and only then hangs up, as today's stop does after its keys. A wipe hangs up, as today; M16 step 6 measures what a hang-up does to the background session (O15).
+- **The kept id stays the background session's (D23, D38, D51).** Nothing in an attached terminal tells this start's hooks of a switch. A `/resume` typed in it only prints a `claude attach` command (D1). `\S` is left as it is. The next start asks again while the session still runs in the background.
+- A `←` typed in the attached terminal detaches it to agent view inside aineo's window (D2). That is Claude Code's own behaviour, and aineo leaves it alone.
+
+**4. New.**
+- A new session starts as a start with no kept id does: `--session-id` on a new id, kept for the folder (D23). The background session is not touched, attached, stopped or forked.
+- aineo tells one line, at most 60 characters, for example `aineo: started a new session; the background one runs on` (56).
+- The next start in the folder resumes the new session. The background one is reached with `claude attach` or agent view. `\S` lists it as running elsewhere.
+
+**5. The split (O11).**
+- **Part 1, dispatched now:** the list before the start, the start that waits for it, the interactive warning, and the fields the reader keeps (`pid`, the short `id`). A background session is still resumed as today in part 1.
+- **Part 2, after M16:** the question, the attach with its stop and mark, and the new session.
+
+So part 1 changes nothing the user sees at a background start, and part 2 changes it all at once.
+
+### Decisions for the orchestrator — round 4
+
+The orchestrator rules each before dispatch. The recommendation is (a), and the brief is written for it.
+
+- **O11 — The split.** (a) Two dispatches, as *The design* 5 says. Part 2 is a dated section of the same brief, on its own branch from `dev` once part 1 has merged. (b) One dispatch, held for M16. Simpler, but the warning and the waiting start wait for the user too.
+- **O12 — The question's form.** (a) `vim.ui.select`, as `\S` offers its list. The user's own picker shows it, and the suites can stub it. Cancel means a new session. (b) `confirm()` with the buttons `&Attach` and `&New session`, default New. That is closer to one line in the default UI, but it blocks, and the suites cannot answer it as easily.
+- **O13 — What the editor shows meanwhile.** (a) The empty window and the status line, as *The design* 1 says, with no message. The list's time on the user's machine is M16 step 2. (b) A line in the buffer while it waits. A terminal needs an unmodified buffer, so the line must be cleared before Claude Code launches.
+- **O14 — How an attached terminal shows.** (a) The one-line note at the attach, and `(attached)` in the status line. (b) The note only.
+- **O15 — The stop of an attached terminal.**
+  - (a) `Ctrl+Z`, then a wait of the time M16 step 4 measures, rounded up; then the hang-up and its wait, as today. A wipe hangs up as today, unless M16 step 6 shows that a hang-up stops the background session. That would be a later packet.
+  - (b) `Ctrl+Z` and its wait, with no hang-up after it.
+- **O16 — The warning's rule.** (a) An entry of the kept id, `kind` `interactive`, with a `pid`. The list runs before this editor's Claude Code exists, so no entry is its own. This replaces A165; A166's text stands. (b) Keep A165's `pid` and `startedAt` exclusions as a guard.
+- **O17 — Which id `claude attach` is given.** (a) The entry's short `id`, which the docs name as "usable with `claude attach`" (D5). An entry without one is not asked about. (b) The full `sessionId`. Nothing read says `claude attach` takes it.
+
+No question for the user: the answer settles the D row, and what remains is how the behaviour is built.
+
+### Manual check M16 — holds part 2
+
+In a scratch folder you trust, where no session you need runs. Read `<id>` as the short `id` that step 2 prints.
+
+1. In a plain terminal in the scratch folder, run `claude`. Send `say hi` and wait for the answer. On the empty prompt press `←` (twice if asked): Claude Code shows `Your conversation moved to the background`. Press `Ctrl+C` twice to leave agent view.
+2. Run `time claude agents --json --cwd . --all`. Note the time it took, and the entry's `id`, `sessionId`, `kind` and `pid`.
+3. Run `nvim --clean`, then `:terminal claude attach <id>`, then `i`.
+   - Does the conversation show?
+   - If not, press `Ctrl+L`. If it still does not show, run `:vertical resize -5`, then `<C-w>=`. Does it show now?
+4. Type `say hi again` and Enter: does it answer? Then press `Ctrl+Z`.
+   - Does the terminal end with `[Process exited <code>]`? Note the code, and about how long it took.
+5. In the plain terminal, run `claude agents --json --cwd . --all`. Is the entry still listed with a `pid`?
+6. In Neovim, run `:terminal claude attach <id>` again, then `:bwipe!`. This is the hang-up that wiping aineo's terminal gives. Repeat step 5: is it still running?
+7. Optional, a busy session. Attach as in step 3 and send `Run "sleep 30" in Bash, then say done`. While it runs, press `Ctrl+Z`. A few seconds later, step 5: is `status` `busy`? Attach again after 30 s: does the conversation show `done`?
+8. Clean up with `claude stop <id>`.
+
+Report steps 2–7 as you saw them, with names and ids left out. Part 2 is planned as written when steps 3, 4 and 5 hold. If step 3 shows nothing, even after `Ctrl+L`, the attach does not render in Neovim's terminal, and part 2 is re-planned.
+
+## Verification mutants — round 4
+
+Each runs as its literal edit, shown applied, on the test files that exercise the code it breaks — `tests/test_claude_resume_elsewhere.lua` first — and on the whole suite only when it survives there. Mutants 1–3 are part 1's, and 4–5 are part 2's.
+
+1. **The list after the launch.** Claude Code launches on `--resume` at once, and the list runs beside it: the fake's record holds Claude Code's start before the `agents` run.
+2. **A failed list launches nothing.** With `AINEO_FAKE_CLAUDE_AGENTS_EXIT` set, the start stays waiting, and Claude Code never starts.
+3. **The warning is dropped.** A listed `interactive` entry of the kept id with a `pid` tells nothing.
+4. **Esc attaches.** `vim.ui.select`'s `nil` answer attaches instead of starting a new session.
+5. **The attached terminal's quit presses Ctrl-C.** The quit uses `stop_by_keys()` for an attached terminal, so the fake receives `\3` and no `\26`.
+
 ## Briefs
 
-- `brief-t48-background-resume.md` — T48, rewritten 2026-10-12 for round 3: A164's re-scope, with A165 and A166. Nothing holds its dispatch. The round-1 brief, written for (A), and the round-2 brief, written for (ii), were never dispatched; their text is in this pull request's first and second commits.
+- `brief-t48-background-resume.md` — T48, rewritten 2026-10-12 for round 4: part 1, dispatched once O11–O17 are ruled, and part 2, held for M16. Its round-3 text, written for A164's re-scope with A165 and A166, is in this pull request's third commit.
+- *Round 3, as written:* `brief-t48-background-resume.md` — T48, rewritten 2026-10-12 for round 3: A164's re-scope, with A165 and A166. Nothing holds its dispatch. The round-1 brief, written for (A), and the round-2 brief, written for (ii), were never dispatched; their text is in this pull request's first and second commits.
 
 ## Landed
 
