@@ -1349,9 +1349,11 @@ local PREFIX_KEYS = {
 }
 
 --- The keys that leave the mode a twin (`map_terminal_prefix()`) is pressed
---- in, Terminal mode or Insert mode, for Normal mode: Neovim's own, which
---- are not mapped.
-local LEAVE_MODE = '<C-\\><C-n>'
+--- in, Terminal mode (`t`) or Insert mode (`i`), for Normal mode. In Terminal
+--- mode Neovim's own, which are not mapped. In Insert mode `<Esc>`'s effect:
+--- `<C-]>` first expands an abbreviation before the cursor, and `<Esc>`
+--- repeats an insert by its count, which `<C-\><C-n>` does neither.
+local LEAVE_MODE = { t = '<C-\\><C-n>', i = '<C-]><Esc>' }
 
 --- The prefix keys that have no twin in Terminal and Insert mode: Send acts
 --- on a selection or on Normal mode's line.
@@ -1419,20 +1421,30 @@ end
 --- Maps `terminal_prefix` followed by each action's keys (`PREFIX_KEYS`) in
 --- Terminal mode and in Insert mode to the keys that leave that mode for
 --- Normal mode (`LEAVE_MODE`) and then the action's `<Plug>` mapping, so that
---- the action runs as it does from Normal mode, for each key sequence the user
---- has mapped globally in that mode already (`map_unless_mapped()`); maps
---- nothing when `terminal_prefix` is `false`. Send, which has no twin
---- (`HAS_NO_TWIN`), and `claim`, which has no keys, get none.
+--- the action runs as it does from Normal mode. Skips each key sequence the
+--- user has mapped globally in that mode already (`map_unless_mapped()`) and,
+--- in a mode where the user has mapped `terminal_prefix` alone globally, every
+--- twin: that key would otherwise wait for the next key, and a twin's letter
+--- typed then would run aineo's action. Maps nothing when `terminal_prefix`
+--- is `false`. Send, which has no twin (`HAS_NO_TWIN`), and `claim`, which
+--- has no keys, get none.
 ---
 ---@param terminal_prefix string|false
 local function map_terminal_prefix(terminal_prefix)
   if terminal_prefix == false then
     return
   end
-  for _, argument in ipairs(ACTION_ARGUMENTS) do
-    if PREFIX_KEYS[argument] and not HAS_NO_TWIN[argument] then
-      for _, mode in ipairs({ 't', 'i' }) do
-        map_unless_mapped(mode, terminal_prefix .. PREFIX_KEYS[argument], argument, LEAVE_MODE)
+  for _, mode in ipairs({ 't', 'i' }) do
+    if not has_global_mapping(mode, terminal_prefix) then
+      for _, argument in ipairs(ACTION_ARGUMENTS) do
+        if PREFIX_KEYS[argument] and not HAS_NO_TWIN[argument] then
+          map_unless_mapped(
+            mode,
+            terminal_prefix .. PREFIX_KEYS[argument],
+            argument,
+            LEAVE_MODE[mode]
+          )
+        end
       end
     end
   end

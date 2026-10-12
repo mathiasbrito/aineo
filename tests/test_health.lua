@@ -1080,21 +1080,21 @@ T['the terminal prefix mappings'] = MiniTest.new_set()
 --- mode first.
 local TWIN_LINES = {
   '- ✅ OK <C-\\>o in Terminal mode runs <C-\\><C-n><Plug>(aineo-open)',
-  '- ✅ OK <C-\\>o in Insert mode runs <C-\\><C-n><Plug>(aineo-open)',
+  '- ✅ OK <C-\\>o in Insert mode runs <C-]><Esc><Plug>(aineo-open)',
   '- ✅ OK <C-\\>r in Terminal mode runs <C-\\><C-n><Plug>(aineo-report)',
-  '- ✅ OK <C-\\>r in Insert mode runs <C-\\><C-n><Plug>(aineo-report)',
+  '- ✅ OK <C-\\>r in Insert mode runs <C-]><Esc><Plug>(aineo-report)',
   '- ✅ OK <C-\\>i in Terminal mode runs <C-\\><C-n><Plug>(aineo-input)',
-  '- ✅ OK <C-\\>i in Insert mode runs <C-\\><C-n><Plug>(aineo-input)',
+  '- ✅ OK <C-\\>i in Insert mode runs <C-]><Esc><Plug>(aineo-input)',
   '- ✅ OK <C-\\>c in Terminal mode runs <C-\\><C-n><Plug>(aineo-claude)',
-  '- ✅ OK <C-\\>c in Insert mode runs <C-\\><C-n><Plug>(aineo-claude)',
+  '- ✅ OK <C-\\>c in Insert mode runs <C-]><Esc><Plug>(aineo-claude)',
   '- ✅ OK <C-\\>tcn in Terminal mode runs <C-\\><C-n><Plug>(aineo-claude-numbers)',
-  '- ✅ OK <C-\\>tcn in Insert mode runs <C-\\><C-n><Plug>(aineo-claude-numbers)',
+  '- ✅ OK <C-\\>tcn in Insert mode runs <C-]><Esc><Plug>(aineo-claude-numbers)',
   '- ✅ OK <C-\\>S in Terminal mode runs <C-\\><C-n><Plug>(aineo-sessions)',
-  '- ✅ OK <C-\\>S in Insert mode runs <C-\\><C-n><Plug>(aineo-sessions)',
+  '- ✅ OK <C-\\>S in Insert mode runs <C-]><Esc><Plug>(aineo-sessions)',
   '- ✅ OK <C-\\>pa in Terminal mode runs <C-\\><C-n><Plug>(aineo-pane-agent)',
-  '- ✅ OK <C-\\>pa in Insert mode runs <C-\\><C-n><Plug>(aineo-pane-agent)',
+  '- ✅ OK <C-\\>pa in Insert mode runs <C-]><Esc><Plug>(aineo-pane-agent)',
   '- ✅ OK <C-\\>g in Terminal mode runs <C-\\><C-n><Plug>(aineo-pane-changes)',
-  '- ✅ OK <C-\\>g in Insert mode runs <C-\\><C-n><Plug>(aineo-pane-changes)',
+  '- ✅ OK <C-\\>g in Insert mode runs <C-]><Esc><Plug>(aineo-pane-changes)',
 }
 
 T['the terminal prefix mappings']['are reported in place when aineo mapped each twin'] = function()
@@ -1137,6 +1137,90 @@ T['the terminal prefix mappings']['warn of a twin nobody mapped, as after one is
   )
   eq(health.advice(report, 'Terminal prefix mappings'), {
     'aineo maps its keys once, when the editor has started; a terminal_prefix changed or a key unmapped since stays so until the next start: :help |aineo-config-terminal_prefix|',
+  })
+end
+
+--- The Insert-mode lines of `TWIN_LINES`, without the Terminal-mode ones.
+local INSERT_TWIN_LINES = vim.tbl_filter(function(line)
+  return line:find('in Insert mode', 1, true) ~= nil
+end, TWIN_LINES)
+
+T['the terminal prefix mappings']['say a mode is skipped when the user mapped the terminal prefix alone in it'] = function()
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments({ autostart = false }), {
+      '--cmd',
+      'tnoremap <C-\\> <Nop>',
+    })
+  )
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Terminal prefix mappings'),
+    vim.list_extend(
+      { '- ⚠️ WARNING <C-\\> is mapped in Terminal mode: aineo maps no twin there' },
+      INSERT_TWIN_LINES
+    )
+  )
+  eq(health.advice(report, 'Terminal prefix mappings'), {
+    'A key you mapped alone makes the twins ambiguous with it, and aineo leaves it yours; set terminal_prefix to another key to have twins in that mode: :help |aineo-terminal-keys|',
+  })
+end
+
+T['the terminal prefix mappings']['warn of a mapping of the terminal prefix alone local to a buffer'] = function()
+  start_with({ autostart = false })
+  child.cmd('enew')
+  child.cmd([[inoremap <buffer> <C-\> <Nop>]])
+  local buffer = child.api.nvim_get_current_buf()
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Terminal prefix mappings')[1],
+    ("- ⚠️ WARNING <C-\\> is mapped in Insert mode, local to buffers %d: it waits for 'timeoutlen', and a twin's letter typed then runs aineo's action"):format(
+      buffer
+    )
+  )
+  eq(health.advice(report, 'Terminal prefix mappings'), {
+    'Set terminal_prefix to another key, or map the keys of your buffer yourself: :help |aineo-terminal-keys|',
+  })
+end
+
+T['the terminal prefix mappings']['warn of a terminal prefix that is a single printable key'] = function()
+  start_with({ autostart = false, terminal_prefix = 'x' })
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Terminal prefix mappings')[17],
+    '- ⚠️ WARNING terminal_prefix is x, a printable key: typing it in Insert mode runs a twin'
+  )
+  eq(health.advice(report, 'Terminal prefix mappings'), {
+    'Choose a key with a modifier, such as <C-\\>: :help |aineo-config-terminal_prefix|',
+  })
+end
+
+T['the terminal prefix mappings']['warn of a terminal prefix that starts with a key pair of Neovim'] =
+  MiniTest.new_set({
+    parametrize = { { '<C-\\><C-n>x' }, { '<C-\\><C-o>x' } },
+  })
+
+T['the terminal prefix mappings']['warn of a terminal prefix that starts with a key pair of Neovim']['such as'] = function(
+  prefix
+)
+  start_with({ autostart = false, terminal_prefix = prefix })
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Terminal prefix mappings')[17],
+    ('- ⚠️ WARNING terminal_prefix %s starts with a key pair of Neovim: it waits for the next key'):format(
+      prefix
+    )
+  )
+  eq(health.advice(report, 'Terminal prefix mappings'), {
+    "Neovim's own <C-\\><C-n> and <C-\\><C-o> would no longer act at once: :help |aineo-config-terminal_prefix|",
   })
 end
 
