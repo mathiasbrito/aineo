@@ -839,6 +839,44 @@ T['The selection']['keeps the list it shows, under git’s words, when a read of
   )
 end
 
+T['Landed is read again']['and an earlier read that answers late does not replace the later one’s'] = function()
+  local fixture = git_repo.directory('landed-late-bin-marks')
+  local slow_for, started, slept = unpack(vim.tbl_map(function(name)
+    return vim.fs.joinpath(fixture, name)
+  end, { 'slow-for', 'started', 'slept' }))
+  local stand_in = git_repo.script('landed-late-bin', 'git', {
+    ('if [ -e %s ]; then case "$*" in *"$(cat %s)"*) case " $* " in *" log "*) touch %s; sleep 1.5; touch %s ;; esac ;; esac; fi'):format(
+      slow_for,
+      slow_for,
+      started,
+      slept
+    ),
+    ('exec %s "$@"'):format(vim.fn.exepath('git')),
+  })
+  local top, _, agent = with_remote('landed-late')
+  local first = land(agent, { ['b.txt'] = { 'bee' } }, 'Add b')
+  fetch(top)
+  begin_and_show(top, { working_branch = WORKING_BRANCH, git = { executable = stand_in } })
+  local first_line = commit_line(first, 'Add b')
+  expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, NO_COMMITS, HEADING, first_line })
+  vim.fn.writefile({ first }, slow_for)
+  refresh_pane()
+  git_repo.wait_until('the earlier read is under way', function()
+    return vim.uv.fs_stat(started) ~= nil
+  end)
+  local second = land(agent, { ['c.txt'] = { 'sea' } }, 'Add c')
+  fetch(top)
+  local second_line = commit_line(second, 'Add c')
+  expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, NO_COMMITS, HEADING, second_line, first_line })
+
+  git_repo.wait_until('the earlier read is over', function()
+    return vim.uv.fs_stat(slept) ~= nil
+  end)
+  vim.wait(1000)
+
+  eq(lines_of(COMMITS), { UNCOMMITTED, SESSION_WORK, NO_COMMITS, HEADING, second_line, first_line })
+end
+
 T['Landed is read again']['from nothing at a new base: the window says it is reading until the commits are read'] = function()
   local flag = vim.fs.joinpath(git_repo.directory('landed-slow-bin-flag'), 'slow')
   local stand_in = git_repo.script('landed-slow-bin', 'git', {
