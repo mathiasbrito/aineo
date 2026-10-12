@@ -5,9 +5,10 @@
 --- watch read `HEAD` again and compare its commit and branch with the ones
 --- it knew, since no single file of git's is written by every move — a
 --- reflog can be replaced, missing, or not kept at all. A reference written
---- under `refs/` or in `packed-refs` — a fetch's remote-tracking branch, a
---- tag, a branch of another worktree — is noted as such, so that a caller
---- learns of it though `HEAD` did not move and no file changed.
+--- under `refs/` or `reftable/`, in `packed-refs`, or a fetch's `FETCH_HEAD`
+--- — a remote-tracking branch, a tag, a branch of another worktree — is
+--- noted as such, so that a caller learns of it though `HEAD` did not move
+--- and no file changed.
 
 local repository = require('aineo.git.repository')
 
@@ -32,11 +33,11 @@ local RECURSIVE_PLATFORMS = { Darwin = true, Windows_NT = true }
 ---@class aineo.git.RepositoryChange
 ---@field files_changed boolean the list of files changed may differ: a file of the working tree was written, created, removed or renamed, or an index or a submodule changed — which every commit, and a commit of another worktree's, does too
 ---@field branch_moved boolean `HEAD` names another commit or another branch than before
----@field references_changed boolean a reference of the repository was written or removed — a path under `refs/` of the common git directory, or `packed-refs` — by a commit, a branch or a tag made or deleted, or a fetch, in this worktree or another, whether `HEAD` moved or not
+---@field references_changed boolean a reference of the repository was written or removed — a path under `refs/` or `reftable/` of the common git directory, `packed-refs`, or `FETCH_HEAD` — by a commit, a branch or a tag made or deleted, or a fetch, in this worktree or another, whether `HEAD` moved or not; where `watches_subdirectories` is false, only `packed-refs` and a fetch of this worktree set it, and a commit's or a tag's reference under `refs/` does not
 
 --- A running watch.
 ---@class aineo.git.Watch
----@field watches_subdirectories boolean whether a change in a subdirectory of the working tree, or of the git directory, is seen; where it is not, a branch moved by `git update-ref` from another worktree, and a fetch, are missed too
+---@field watches_subdirectories boolean whether a change in a subdirectory of the working tree, or of the git directory, is seen; where it is not, a branch moved by `git update-ref` from another worktree, and any reference written under `refs/` (a tag, a fetch of another worktree), are missed too
 ---@field stop fun() stops the watch, and releases every handle it holds and every git it runs; stopping it again does nothing, and nothing is called after it, save one `no_git` failure when the watch is stopped in the turn in which its read of `HEAD` found no git
 
 --- What a running watch keeps.
@@ -90,13 +91,20 @@ local function changes_the_list(name)
 end
 
 --- Whether `name`, a path an event on the common git directory gave, is a
---- reference: a file under `refs/`, or the file `packed-refs`, where git
---- keeps the references it has packed.
+--- reference: a file under `refs/`, the file `packed-refs`, where git keeps
+--- the references it has packed, a file under `reftable/`, where a
+--- repository in that format keeps all of them, or `FETCH_HEAD`, which every
+--- fetch writes and which is a direct entry of the common git directory, so
+--- that a fetch of this worktree is seen where subdirectories are not
+--- watched.
 ---
 ---@param name string|nil
 ---@return boolean
 local function is_reference(name)
-  return name == 'packed-refs' or vim.startswith(name or '', 'refs/')
+  return name == 'packed-refs'
+    or name == 'FETCH_HEAD'
+    or vim.startswith(name or '', 'refs/')
+    or vim.startswith(name or '', 'reftable/')
 end
 
 --- Stops and closes each of `handles`.
@@ -248,8 +256,10 @@ end
 --- directory alone, so the watch says it cannot. There, as libuv's
 --- non-recursive watch was measured on macOS (Linux itself was not run),
 --- it misses a file changed in a subdirectory, a branch moved by
---- `git update-ref` from another worktree, and a reference a fetch wrote
---- under `refs/` (`references_changed`); it still sees a commit, a
+--- `git update-ref` from another worktree, and every reference written
+--- under `refs/` or `reftable/` — a commit's, a tag's, a fetch's — so that
+--- `references_changed` is true there only for `packed-refs` and for a
+--- fetch of this worktree (`FETCH_HEAD`); it still sees a commit, a
 --- `reset --soft` (`ORIG_HEAD`) and a linked worktree's commit
 --- (`packed-refs.lock`), each through a file written directly in the common
 --- git directory.

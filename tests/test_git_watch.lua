@@ -401,17 +401,52 @@ T['a watch']['takes a commit of another worktree on its own branch for no move o
 end
 
 --- Makes a repository `clone` of a repository that then gains a commit the
---- clone has not fetched; returns the clone's top level.
+--- clone has not fetched; returns the clone's top level. The clone keeps its
+--- references in `ref_format`, `files` when not given.
 ---
 ---@param name string
+---@param ref_format? 'files'|'reftable'
 ---@return string clone
-local function create_clone_behind(name)
+local function create_clone_behind(name, ref_format)
   local source = git_repo.create(name, { ['a.txt'] = { 'a' } })
   local clone = vim.fs.joinpath(vim.fs.dirname(source), 'clone')
-  git_repo.git(source, { 'clone', '--quiet', source, clone })
+  git_repo.git(
+    source,
+    { 'clone', '--quiet', '--ref-format=' .. (ref_format or 'files'), source, clone }
+  )
   git_repo.write(source, 'landed.txt', { 'landed' })
   git_repo.commit_all(source, 'Landed elsewhere')
   return clone
+end
+
+T['a watch that cannot see subdirectories'] = MiniTest.new_set()
+
+T['a watch']['calls back for a tag made in a repository that keeps its references in reftable'] = function()
+  local clone = create_clone_behind('watch-tag-reftable', 'reftable')
+  start_live_watch(clone)
+
+  git_repo.git(clone, { 'tag', 'made-in-reftable' })
+
+  eq(wait_for_changes(1), {
+    {
+      change = { files_changed = false, branch_moved = false, references_changed = true },
+      fast = false,
+    },
+  })
+end
+
+T['a watch that cannot see subdirectories']['calls back for a fetch this worktree ran'] = function()
+  local clone = create_clone_behind('watch-fetch-flat')
+  start_live_watch(clone, { system_name = 'Linux' })
+
+  git_repo.git(clone, { 'fetch', '--quiet' })
+
+  eq(wait_for_changes(1), {
+    {
+      change = { files_changed = false, branch_moved = false, references_changed = true },
+      fast = false,
+    },
+  })
 end
 
 T['a watch']['calls back for a fetch, which moves a reference and neither HEAD nor a file'] = function()
@@ -419,6 +454,20 @@ T['a watch']['calls back for a fetch, which moves a reference and neither HEAD n
   start_live_watch(clone)
 
   git_repo.git(clone, { 'fetch', '--quiet' })
+
+  eq(wait_for_changes(1), {
+    {
+      change = { files_changed = false, branch_moved = false, references_changed = true },
+      fast = false,
+    },
+  })
+end
+
+T['a watch']['calls back when a remote-tracking branch moves without a fetch'] = function()
+  local clone = create_clone_behind('watch-remote-tracking')
+  start_live_watch(clone)
+
+  git_repo.git(clone, { 'update-ref', 'refs/remotes/origin/elsewhere', 'HEAD' })
 
   eq(wait_for_changes(1), {
     {
