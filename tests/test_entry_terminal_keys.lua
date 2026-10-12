@@ -215,6 +215,22 @@ T['a twin']['has no Send among them']['in mode'] = function(mode)
   eq(child.fn.maparg('<C-\\>s', mode), '')
 end
 
+T['a twin']['is mapped in no other mode'] = MiniTest.new_set({
+  parametrize = vim.list_extend(
+    vim.tbl_map(function(twin)
+      return { 'n', twin[1] }
+    end, TWIN_KEYS),
+    vim.tbl_map(function(twin)
+      return { 'x', twin[1] }
+    end, TWIN_KEYS)
+  ),
+})
+
+T['a twin']['is mapped in no other mode']['in mode'] = function(mode, key)
+  eq(child.fn.maparg('<C-\\>' .. key, mode), '')
+  eq(child.cmd_capture('messages'), '')
+end
+
 T['Neovim’s own keys'] = MiniTest.new_set()
 
 T['Neovim’s own keys']['<C-\\><C-n> leaves Terminal mode, the twins mapped'] = function()
@@ -258,6 +274,27 @@ T['a twin']['sends Claude Code nothing of its keys'] = function()
     return vim.endswith(claude_session.received(fake), 'after')
   end, 20)
   eq(typed_text(claude_session.received(fake)), 'after')
+end
+
+T['a twin']['from Insert mode expands an abbreviation before the cursor, as <Esc> does'] = function()
+  child.cmd('enew')
+  child.cmd('iabbrev teh the')
+  child.api.nvim_buf_set_lines(0, 0, -1, true, { 'text' })
+
+  child.type_keys('A teh')
+  press_twin('S')
+
+  eq(child.api.nvim_buf_get_lines(0, 0, -1, true), { 'text the' })
+end
+
+T['a twin']['from Insert mode repeats the insert by its count, as <Esc> does'] = function()
+  child.cmd('enew')
+  child.api.nvim_buf_set_lines(0, 0, -1, true, { 'text' })
+
+  child.type_keys('3A x')
+  press_twin('S')
+
+  eq(child.api.nvim_buf_get_lines(0, 0, -1, true), { 'text x x x' })
 end
 
 T['the terminal prefix'] = MiniTest.new_set()
@@ -338,6 +375,38 @@ T["the user's own mapping"]['of a twin’s keys stays, and the other twins are m
 
   eq(child.fn.maparg('<C-\\>r', 't'), '<Cmd>let g:mine = 1<CR>')
   eq(vim.endswith(child.fn.maparg('<C-\\>i', 't'), '<Plug>(aineo-input)'), true)
+end
+
+T["the user's own mapping"]['of the terminal prefix alone in one mode leaves no twin there, and runs at once'] =
+  MiniTest.new_set({ parametrize = { { 't', 'terminal cat', 'i' }, { 'i', 'enew', 't' } } })
+
+T["the user's own mapping"]['of the terminal prefix alone in one mode leaves no twin there, and runs at once']['mapped in'] = function(
+  own_mode,
+  buffer_command,
+  other_mode
+)
+  entry.restart(child, {
+    '--cmd',
+    'set timeoutlen=5000',
+    '--cmd',
+    own_mode .. 'noremap <C-\\> <Cmd>let g:mine = 1<CR>',
+  })
+  child.cmd(buffer_command)
+  child.cmd('startinsert')
+  eq(child.lua_get(MODE), own_mode)
+
+  local own_twin = child.fn.maparg('<C-\\>i', own_mode)
+  local other_twin = child.fn.maparg('<C-\\>i', other_mode)
+
+  child.type_keys('<C-\\>')
+
+  eq({
+    vim.wait(1000, function()
+      return not child.is_blocked() and child.g.mine == 1
+    end, 20),
+    own_twin,
+    vim.endswith(other_twin, '<Plug>(aineo-input)'),
+  }, { true, '', true })
 end
 
 return T
