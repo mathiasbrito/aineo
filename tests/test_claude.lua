@@ -12,6 +12,31 @@ end, function(text, part)
   return string.format('Text: %s\nPart: %s', vim.inspect(text), vim.inspect(part))
 end)
 
+--- The settings `settings` with a state directory of its own,
+--- `.tests/fixtures/claude-<name>-state`, emptied, so that a start in them
+--- is a new session. A start that resumes first runs `claude.cmd` as
+--- `agents --json`, which a script of these tests standing in for Claude
+--- Code does not answer.
+---
+---@param name string the test's own name for its files
+---@param settings table
+---@return table
+local function on_a_new_session(name, settings)
+  return vim.tbl_extend(
+    'force',
+    { state_directory = fixture.directory('claude-' .. name .. '-state') },
+    settings
+  )
+end
+
+--- The settings that make `claude.cmd` the fake `claude` that ignores every
+--- key and the hangup (`claude.deaf_fake_command()`).
+---
+---@return table
+local function deaf_command()
+  return { cmd = claude.deaf_fake_command() }
+end
+
 --- The expression, run in a Neovim, that lists what the session reports.
 local STATUS = "{ require('aineo.claude').session_status() }"
 
@@ -331,7 +356,7 @@ T['start_session()']['starts Claude again in a new terminal once it has exited']
   local second = claude.start_again(child)
 
   MiniTest.expect.no_equality(second, first)
-  eq(claude.buftype(child, second), 'terminal')
+  eq(claude.wait_for_launch(child, second), true)
   eq(#claude.wait_for_starts(fake, 2), 2)
 end
 
@@ -370,7 +395,7 @@ T['start_session()']['starts Claude again after the old terminal was wiped'] = f
     second = claude.start_again(child)
   end)
 
-  eq(claude.buftype(child, second), 'terminal')
+  eq(claude.wait_for_launch(child, second), true)
 end
 
 T['session_status()'] = MiniTest.new_set()
@@ -707,7 +732,7 @@ end
 
 T['quitting Neovim']['leaves no deaf Claude running though Ctrl-C is pressed in the editor'] = function()
   local fake = claude.fake('quit-deaf-interrupted', 'deaf')
-  claude.start(child, fake, { cmd = claude.deaf_fake_command() })
+  claude.start(child, fake, on_a_new_session('quit-deaf-interrupted', deaf_command()))
   local pid = claude.wait_for_start(fake).pid
 
   claude.quit_pressing_ctrl_c(child)
@@ -717,7 +742,7 @@ end
 
 T['quitting Neovim']['leaves no Claude that ignores its keys and the hangup running'] = function()
   local fake = claude.fake('quit-deaf', 'deaf')
-  claude.start(child, fake, { cmd = claude.deaf_fake_command() })
+  claude.start(child, fake, on_a_new_session('quit-deaf', deaf_command()))
   local pid = claude.wait_for_start(fake).pid
 
   claude.quit(child)
@@ -728,7 +753,7 @@ end
 
 T['quitting Neovim']['leaves no deaf Claude running when its terminal is wiped as Neovim quits'] = function()
   local fake = claude.fake('quit-deaf-wiped', 'deaf')
-  local buffer = claude.start(child, fake, { cmd = claude.deaf_fake_command() })
+  local buffer = claude.start(child, fake, on_a_new_session('quit-deaf-wiped', deaf_command()))
   local pid = claude.wait_for_start(fake).pid
 
   claude.wipe_terminal_and_quit(child, buffer)
@@ -739,7 +764,7 @@ end
 T['quitting Neovim']['leaves no deaf Claude running when an earlier exit handler wipes its terminal'] = function()
   local fake = claude.fake('quit-deaf-wiped-by-handler', 'deaf')
   claude.add_terminal_wiping_exit_handler(child)
-  claude.start(child, fake, { cmd = claude.deaf_fake_command() })
+  claude.start(child, fake, on_a_new_session('quit-deaf-wiped-by-handler', deaf_command()))
   local pid = claude.wait_for_start(fake).pid
 
   claude.quit(child)
@@ -827,7 +852,11 @@ local IDLE_SCRIPT = { 'read _' }
 local function start_idle_session(name, directory)
   local fake = claude.fake(name, 'ready')
   local script = fixture.write('claude-' .. name .. '/idle.sh', IDLE_SCRIPT)
-  return claude.start(child, fake, { cmd = { 'sh', script }, cwd = directory })
+  return claude.start(
+    child,
+    fake,
+    on_a_new_session(name, { cmd = { 'sh', script }, cwd = directory })
+  )
 end
 
 T["the session's name"] = MiniTest.new_set()
@@ -962,7 +991,8 @@ local TITLE_SCRIPT = {
 T["the session's name"]['follows each title the terminal sets, back to Claude Code on an empty one'] = function()
   local fake = claude.fake('name-follows', 'ready')
   local script = fixture.write('claude-name-follows/titles.sh', TITLE_SCRIPT)
-  local buffer = claude.start(child, fake, { cmd = { 'sh', script } })
+  local buffer =
+    claude.start(child, fake, on_a_new_session('name-follows', { cmd = { 'sh', script } }))
   local names = { wait_for_session_name(buffer, 'aineo-title-probe') }
 
   claude.press_keys(child, buffer, '\r')
@@ -991,7 +1021,8 @@ T["the session's name"]['is Claude Code once Claude Code has ended, its title no
 )
   local fake = claude.fake('name-ended', 'ready')
   local script = fixture.write('claude-name-ended/ends.sh', script_ending_with(ending))
-  local buffer = claude.start(child, fake, { cmd = { 'sh', script } })
+  local buffer =
+    claude.start(child, fake, on_a_new_session('name-ended', { cmd = { 'sh', script } }))
   local named = wait_for_session_name(buffer, 'aineo-title-probe')
 
   claude.press_keys(child, buffer, '\r')
@@ -1003,7 +1034,8 @@ end
 T["the session's name"]['is Claude Code once Claude Code has been hung up, its title not cleared'] = function()
   local fake = claude.fake('name-hung-up', 'ready')
   local script = fixture.write('claude-name-hung-up/ends.sh', script_ending_with('exit 0'))
-  local buffer = claude.start(child, fake, { cmd = { 'sh', script } })
+  local buffer =
+    claude.start(child, fake, on_a_new_session('name-hung-up', { cmd = { 'sh', script } }))
   local named = wait_for_session_name(buffer, 'aineo-title-probe')
 
   child.lua('vim.fn.jobstop(vim.bo[...].channel)', { buffer })

@@ -542,6 +542,20 @@ no session gets a new one (`--session-id`). The ids are kept under
 `stdpath('state')` in `aineo/claude-sessions/`, one file per directory that
 only you can read and write, and are never removed.
 
+A start that would resume first asks Claude Code where the session runs, by
+`claude agents --json` for the directory (|aineo-limits|), and Claude's
+window stays empty, drawing its status line, until Claude Code answers: for
+up to 5 s, usually far less. Claude Code then starts in that same window. A
+session open in another interactive Claude Code is warned of, in one line,
+`aineo: this session is also open in another Claude Code`, and resumed all
+the same. A session running in Claude Code's background service is resumed
+as before. A list that cannot run, fails or does not answer in time tells
+nothing, and Claude Code resumes the session. A start on a new session lists
+nothing and starts Claude Code at once, as does the new session that takes
+the place of a resume with no conversation (below). While Claude's window
+waits, Send refuses as it does at any start before Claude Code is ready
+(|aineo-send|), and quitting Neovim has no Claude Code to stop.
+
 A session in which nothing was sent leaves no conversation, and Claude Code
 cannot resume it: it prints "No conversation found with session ID: …" and
 exits. aineo then starts a new session in its place, in the windows that
@@ -1730,7 +1744,12 @@ no more than that, not which file or why: |aineo-health| says why.
 The session list ~
 - Whether `claude agents --json` starts Claude Code's background service
   was not measured, and aineo does not guard against it: `:Aineo sessions`
-  runs it each time.
+  runs it each time, and so does each start that resumes
+  (|aineo-claude-session|). That run is bounded as the list of `:Aineo
+  sessions` is, at 5 s and 1 MiB of output. When it cannot run, exits with
+  a failure, runs past the bound, prints more or prints what is not JSON,
+  the start tells nothing and resumes the kept session once the run has
+  ended.
 - Whether it lists the session of aineo's own terminal was not measured.
   When it does not, the list holds the others alone and no row says
   `[this terminal]`.
