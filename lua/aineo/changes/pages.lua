@@ -51,8 +51,11 @@ end
 --- in its colours (`show_colours()`), leaving it not modifiable, and
 --- returns whether it was written. In each window showing `buffer`, the
 --- cursor stays on the entry it was on when the page lists it still, at the
---- same column. A page Neovim refused leaves the buffer, the entries its
---- lines list and their colours, as they were.
+--- same column, unless the page lists the files of another filter than the
+--- page before it did (`aineo.changes.Page`'s `filter_key`): the cursor is
+--- then on the first line, the view at the top. A page Neovim refused
+--- leaves the buffer, the entries its lines list and their colours, as
+--- they were.
 ---
 ---@param buffer integer
 ---@param page aineo.changes.Page
@@ -70,10 +73,15 @@ function M.write_page(buffer, page)
   end
   show_colours(buffer, page)
   pages[buffer] = page
+  local lists_another_filter = before ~= nil and before.filter_key ~= page.filter_key
   for window, cursor in pairs(kept) do
-    local line = line_listing(page, cursor.key)
-    if line then
-      vim.api.nvim_win_set_cursor(window, { line, cursor.column })
+    if lists_another_filter then
+      vim.api.nvim_win_set_cursor(window, { 1, 0 })
+    else
+      local line = line_listing(page, cursor.key)
+      if line then
+        vim.api.nvim_win_set_cursor(window, { line, cursor.column })
+      end
     end
   end
   return true

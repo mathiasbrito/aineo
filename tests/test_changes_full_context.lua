@@ -676,14 +676,18 @@ T['F']['in the diff of another worktree’s file shows the whole file'] = functi
   git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'agent', agent })
   git_repo.write(agent, 'a.txt', numbered_lines(20, { 10 }))
   child.lua(BEGIN_AND_SHOW, { top })
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
     'Worktree agent (agent)',
-    '  M a.txt',
+    'No commits in this worktree',
   })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 4, 0 })')
-  child.type_keys('<CR>')
+  enter_window_of(COMMITS)
+  child.type_keys('4G')
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M a.txt' })
+  enter_window_of(FILES)
+  child.type_keys('2G', '<CR>')
   wait_for_diffs(1)
   expect_hunks_shown({ THREE_LINES_HUNK })
 

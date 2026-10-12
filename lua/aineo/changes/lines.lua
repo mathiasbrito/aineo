@@ -105,8 +105,8 @@ end
 ---@field key string what tells the entry apart from one read to the next: a change's path, a commit's id, or the key of a fixed line's filter (`aineo.changes.filter`'s `key()`)
 ---@field change? aineo.git.Change
 ---@field commit? aineo.git.Commit
----@field filter? aineo.changes.Filter for an entry of the editor's own worktree: the filter a commits window line selects, or the filter a file is listed under; nil for another worktree's entries
----@field worktree? aineo.changes.WorktreeSection the worktree other than the editor's that lists it; nil for the editor's own
+---@field filter? aineo.changes.Filter the filter a commits window line selects, or the filter a file is listed under
+---@field worktree? aineo.changes.WorktreeSection the worktree other than the editor's that lists it, or whose files the entry's filter lists; nil for the editor's own
 
 --- A colour a line shows: its bytes from `first_column`, counted from 0, to
 --- `end_column`, excluded, in the highlight group `group`.
@@ -121,6 +121,7 @@ end
 ---@field text string[]
 ---@field entries table<integer, aineo.changes.Entry>
 ---@field colours table<integer, aineo.changes.Colour[]>
+---@field filter_key? string for the files window, the key of the filter whose files it lists (`aineo.changes.filter`'s `key()`); nil for a page of any other window or that lists no filter
 
 --- `failure`'s words on one line: every run of control characters in them,
 --- line breaks among them, written as one space.
@@ -247,6 +248,10 @@ M.NO_UNCOMMITTED_FILES = 'No uncommitted changes'
 --- What the files window says when the commit it lists changed no file.
 M.NO_COMMIT_FILES = 'No files in this commit'
 
+--- What the files window says when no file of another worktree differs from
+--- its base.
+M.NO_WORKTREE_FILES = 'No files changed in this worktree'
+
 --- What the files window says when no file of the filter it lists differs,
 --- by the kind of the filter.
 ---@type table<string, string>
@@ -254,14 +259,17 @@ local NO_FILES_OF = {
   session_work = M.NO_FILES,
   uncommitted = M.NO_UNCOMMITTED_FILES,
   commit = M.NO_COMMIT_FILES,
+  worktree = M.NO_WORKTREE_FILES,
 }
+
+--- The kinds of filter whose files carry the mark of a file the user
+--- saved: the files of the editor's own worktree that differ from `HEAD`
+--- or from the base, which the user's saves are counted from.
+---@type table<string, true>
+local MARKS_SAVES = { uncommitted = true, session_work = true }
 
 --- What the files window's first line says before the filter's name.
 local FILES_IN = 'Files in: '
-
---- What the files window says under another worktree's heading when no
---- file of it differs from its base.
-M.NO_WORKTREE_FILES = 'No files changed in this worktree'
 
 --- What the files window says first where the watch sees no subdirectory.
 M.NOT_WATCHED =
@@ -272,9 +280,9 @@ M.NOT_WATCHED =
 ---@field filter? aineo.changes.Filter what the window lists the files of, named on its first line; nil while the session has no repository to list
 ---@field changes? aineo.git.Change[] the files of the filter, as last read
 ---@field failure? aineo.git.Failure why the last read failed, when it did
----@field saved table<string, true> the paths, relative to the top level, of the files the user saved; marked under every filter but a commit
+---@field worktree? aineo.changes.WorktreeSection the worktree other than the editor's that the files were read in, for the files of another worktree's filter
+---@field saved table<string, true> the paths, relative to the top level, of the files the user saved; marked under *Uncommitted* and *Session work* alone
 ---@field unwatched_subdirectories boolean whether a change in a subdirectory goes unseen by the watch
----@field worktrees? aineo.changes.OtherWorktrees what the window knows of the other worktrees, none when not given
 
 --- The notes a window shows first when its last read failed: the line
 --- that says so (`M.refresh_failed()`, `failure_line()`); none otherwise.
@@ -301,47 +309,20 @@ function M.worktree_heading(section)
   )
 end
 
---- `rows` with the entry each lists made `section`'s: told apart from the
---- editor's own entries and from every other worktree's by the worktree's
---- top level, and carrying the worktree it is listed in.
----
----@param rows aineo.changes.Row[]
----@param section aineo.changes.WorktreeSection
----@return aineo.changes.Row[]
-local function in_worktree(rows, section)
-  return vim.tbl_map(function(row)
-    local entry = row.entry
-    return vim.tbl_extend('force', row, {
-      entry = {
-        key = section.top .. '\0' .. entry.key,
-        change = entry.change,
-        commit = entry.commit,
-        worktree = section,
-      },
-    })
-  end, rows)
-end
-
---- How one window shows a worktree other than the editor's.
----@class aineo.changes.SectionLines
----@field listed_rows fun(listed: any): aineo.changes.Row[] the rows of what the worktree's read gave
----@field empty string what the window says under the worktree's heading when its list is empty
-
 --- The rows under the heading of `section`, a worktree other than the
---- editor's: the line saying its last read failed, when it did; then the
---- rows of the list it last read (`in_worktree()`), or the window's empty
---- line, a note, when it has none, as `lines` says. Before any list of it
+--- editor's: the line saying its last read failed, when it did; then a
+--- line per commit it last read (`M.commit_rows()`), or
+--- `M.NO_WORKTREE_COMMITS`, a note, when it has none. Before any list of it
 --- was read, the line saying its read failed alone.
 ---
 ---@param section aineo.changes.WorktreeSection
----@param lines aineo.changes.SectionLines
 ---@return aineo.changes.Row[]
-local function section_rows(section, lines)
+local function section_rows(section)
   local notes = failure_notes(section.failure)
   if not section.listed then
     return notes
   end
-  return rows_of(notes, in_worktree(lines.listed_rows(section.listed), section), note(lines.empty))
+  return rows_of(notes, M.commit_rows(section.listed.commits, section), note(M.NO_WORKTREE_COMMITS))
 end
 
 --- The line that says the other worktrees could not be listed, in
@@ -353,22 +334,34 @@ local function worktrees_unlisted(failure)
   return 'The other worktrees could not be listed: ' .. M.words_of(failure)
 end
 
+--- The heading row of `section`, a worktree other than the editor's: its
+--- heading (`M.worktree_heading()`), a note, listing the filter of the
+--- worktree's whole change.
+---
+---@param section aineo.changes.WorktreeSection
+---@return aineo.changes.Row
+local function heading_row(section)
+  local row = note(M.worktree_heading(section))
+  local listed_under = filter.of_worktree(section)
+  row.entry = { key = filter.key(listed_under), filter = listed_under, worktree = section }
+  return row
+end
+
 --- The rows of the other worktrees, `others`: the line saying they could
 --- not be listed (`worktrees_unlisted()`), a failure, when they could
---- not; then, in their order, each one's heading (`M.worktree_heading()`),
---- a note, and its rows (`section_rows()`).
+--- not; then, in their order, each one's heading (`heading_row()`) and its
+--- rows (`section_rows()`).
 ---
 ---@param others aineo.changes.OtherWorktrees|nil
----@param lines aineo.changes.SectionLines
 ---@return aineo.changes.Row[]
-local function worktree_rows(others, lines)
+local function worktree_rows(others)
   local rows = {}
   if others and others.failure then
     table.insert(rows, failure_line(worktrees_unlisted(others.failure)))
   end
   for _, section in ipairs(others and others.sections or {}) do
-    table.insert(rows, note(M.worktree_heading(section)))
-    vim.list_extend(rows, section_rows(section, lines))
+    table.insert(rows, heading_row(section))
+    vim.list_extend(rows, section_rows(section))
   end
   return rows
 end
@@ -376,33 +369,47 @@ end
 --- The rows of `changes`, a line per file (`M.file_line()`), marked when
 --- `saved` holds its path, in its own colours (`file_colours()`), each
 --- listing the entry of its file under `listed_under`, the filter the
---- window lists, nil for another worktree's.
+--- window lists, and in `worktree`, the worktree other than the editor's it
+--- was read in, if any.
 ---
 ---@param changes aineo.git.Change[]
 ---@param saved table<string, true>
 ---@param listed_under? aineo.changes.Filter
+---@param worktree? aineo.changes.WorktreeSection
 ---@return aineo.changes.Row[]
-local function file_rows(changes, saved, listed_under)
+local function file_rows(changes, saved, listed_under, worktree)
   return vim.tbl_map(function(change)
     local is_saved = saved[change.path] == true
     local line = M.file_line(change, is_saved)
     return {
       line = line,
-      entry = { key = change.path, change = change, filter = listed_under },
+      entry = { key = change.path, change = change, filter = listed_under, worktree = worktree },
       colours = file_colours(line, change, is_saved),
     }
   end, changes)
 end
 
 --- The name of `selected`, a filter, as the pane says it: *Uncommitted* and
---- *Session work*, or for a commit its line as the commits window shows it
---- (`M.commit_line()`).
+--- *Session work*; for a commit its line as the commits window shows it
+--- (`M.commit_line()`), followed by `(worktree <folder>)` when the commit
+--- is another worktree's, the folder quoted as its heading quotes it; for
+--- another worktree's whole change, its heading (`M.worktree_heading()`).
 ---
 ---@param selected aineo.changes.Filter
 ---@return string
 function M.filter_name(selected)
+  if selected.kind == 'worktree' then
+    return M.worktree_heading(selected.worktree)
+  end
   if selected.kind == 'commit' then
-    return M.commit_line(selected.commit)
+    local name = M.commit_line(selected.commit)
+    if selected.worktree then
+      return ('%s (worktree %s)'):format(
+        name,
+        M.quoted_path(vim.fs.basename(selected.worktree.top))
+      )
+    end
+    return name
   end
   return selected.kind == 'uncommitted' and 'Uncommitted' or 'Session work'
 end
@@ -427,10 +434,10 @@ local function files_in_row(listed)
   return whole_line(FILES_IN .. M.filter_name(listed), colours.FILTER_GROUP)
 end
 
---- The rows below the first line of the files window's own worktree, for
---- `view`: the line saying its last read failed, when it did, and
---- `M.NOT_WATCHED` where subdirectories go unwatched; then a line per file
---- (`file_rows()`), marked as saved unless the filter is a commit, or the
+--- The rows below the first line of the files window, for `view`: the
+--- line saying its last read failed, when it did, and `M.NOT_WATCHED` where
+--- subdirectories go unwatched; then a line per file (`file_rows()`),
+--- marked as saved under *Uncommitted* and *Session work* alone, or the
 --- filter's line for no file (`NO_FILES_OF`). Before any list was read,
 --- `M.NOT_WATCHED` where it shows, then `M.READING`; or, once a read has
 --- failed, the line saying so alone.
@@ -446,17 +453,21 @@ local function listed_file_rows(view)
     return view.failure and { notes[1] } or rows_of(notes, {}, note(M.READING))
   end
   local kind = view.filter and view.filter.kind or 'session_work'
-  local saved = kind == 'commit' and {} or view.saved
-  return rows_of(notes, file_rows(view.changes, saved, view.filter), note(NO_FILES_OF[kind]))
+  local saved = MARKS_SAVES[kind] and view.saved or {}
+  return rows_of(
+    notes,
+    file_rows(view.changes, saved, view.filter, view.worktree),
+    note(NO_FILES_OF[kind])
+  )
 end
 
---- The rows of the editor's own worktree in the files window, for `view`:
---- the line naming the filter it lists (`files_in_row()`), when it has one,
---- then the rows below it (`listed_file_rows()`).
+--- The rows of the files window, for `view`: the line naming the filter it
+--- lists (`files_in_row()`), when it has one, then the rows below it
+--- (`listed_file_rows()`).
 ---
 ---@param view aineo.changes.FilesView
 ---@return aineo.changes.Row[]
-local function own_file_rows(view)
+local function file_window_rows(view)
   local rows = listed_file_rows(view)
   if view.filter then
     table.insert(rows, 1, files_in_row(view.filter))
@@ -464,24 +475,19 @@ local function own_file_rows(view)
   return rows
 end
 
---- The files window's page for `view`: the editor's own worktree's rows
---- first, under no heading (`own_file_rows()`), then each other worktree's
---- (`worktree_rows()`). The line saying a read failed is a failure
---- (`failure_line()`), a file's line shows its own colours
+--- The files window's page for `view`: the files of the one filter it
+--- lists, whichever worktree they are read in, under the line naming the
+--- filter (`file_window_rows()`), and the key of the filter
+--- (`aineo.changes.Page`'s `filter_key`). The line saying a read failed is
+--- a failure (`failure_line()`), a file's line shows its own colours
 --- (`file_colours()`), and every other line is a note (`note()`).
 ---
 ---@param view aineo.changes.FilesView
 ---@return aineo.changes.Page
 function M.files_window(view)
-  return page_of(vim.list_extend(
-    own_file_rows(view),
-    worktree_rows(view.worktrees, {
-      listed_rows = function(changes)
-        return file_rows(changes, {})
-      end,
-      empty = M.NO_WORKTREE_FILES,
-    })
-  ))
+  local files = page_of(file_window_rows(view))
+  files.filter_key = view.filter and filter.key(view.filter)
+  return files
 end
 
 --- What the commits window says when the session has no commit.
@@ -529,16 +535,27 @@ end
 ---@field worktrees? aineo.changes.OtherWorktrees what the window knows of the other worktrees, none when not given
 
 --- The rows of `commits`, a line per commit in their order
---- (`M.commit_line()`), in its own colours (`commit_colours()`).
+--- (`M.commit_line()`), in its own colours (`commit_colours()`), each
+--- listing the entry of its commit and the filter it selects: the commit's
+--- files in the editor's own worktree, or in `worktree`, the worktree other
+--- than the editor's that lists them, when given.
 ---
 ---@param commits aineo.git.Commit[]
+---@param worktree? aineo.changes.WorktreeSection
 ---@return aineo.changes.Row[]
-local function commit_rows(commits)
+function M.commit_rows(commits, worktree)
   return vim.tbl_map(function(commit)
     local line = M.commit_line(commit)
+    local listed_under = worktree and filter.of_worktree_commit(worktree, commit)
+      or filter.of_commit(commit)
     return {
       line = line,
-      entry = { key = commit.id, commit = commit, filter = filter.of_commit(commit) },
+      entry = {
+        key = filter.key(listed_under),
+        commit = commit,
+        filter = listed_under,
+        worktree = worktree,
+      },
       colours = commit_colours(line),
     }
   end, commits)
@@ -547,7 +564,7 @@ end
 --- The rows of the editor's own worktree in the commits window below the
 --- filters, for `view`: the line saying its last read failed, when it did,
 --- and one naming the base when it is no longer an ancestor of `HEAD`; then
---- a line per commit git lists (`commit_rows()`), or `M.NO_COMMITS` when
+--- a line per commit git lists (`M.commit_rows()`), or `M.NO_COMMITS` when
 --- there is none. Before any list was read, `M.READING`, or the failure's
 --- line alone.
 ---
@@ -568,7 +585,7 @@ local function listed_commit_rows(view)
   if not view.since then
     return view.failure and { notes[1] } or { note(M.READING) }
   end
-  return rows_of(notes, commit_rows(view.since.commits), note(M.NO_COMMITS))
+  return rows_of(notes, M.commit_rows(view.since.commits), note(M.NO_COMMITS))
 end
 
 --- The rows of the editor's own worktree in the commits window, for `view`:
@@ -596,15 +613,7 @@ end
 ---@param view aineo.changes.CommitsView
 ---@return aineo.changes.Page
 function M.commits_window(view)
-  return page_of(vim.list_extend(
-    own_commit_rows(view),
-    worktree_rows(view.worktrees, {
-      listed_rows = function(since)
-        return commit_rows(since.commits)
-      end,
-      empty = M.NO_WORKTREE_COMMITS,
-    })
-  ))
+  return page_of(vim.list_extend(own_commit_rows(view), worktree_rows(view.worktrees)))
 end
 
 return M

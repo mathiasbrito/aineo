@@ -106,6 +106,15 @@ local function pane_listing_one_file(case, name)
   return top
 end
 
+--- Makes the commits window the current one and puts its cursor on line
+--- `line`, as the user's keys do.
+---
+---@param line integer
+local function go_to_commits_line(line)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
+  child.type_keys(line .. 'G')
+end
+
 --- Puts the cursor on line `line` of the files window and presses `gf`
 --- there.
 ---
@@ -309,40 +318,70 @@ T['gf']['on another worktree’s file opens nothing, not the editor’s file of 
   git_repo.write(top, 'same.txt', { 'mine' })
   git_repo.write(agent, 'same.txt', { 'theirs' })
   child.lua(BEGIN_AND_SHOW, { top })
-  expect_lines(
-    FILES,
-    { 'Files in: Session work', '  ? same.txt', 'Worktree agent (agent)', '  ? same.txt' }
-  )
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent (agent)',
+    'No commits in this worktree',
+  })
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  ? same.txt' })
 
-  press_gf_on(4)
+  press_gf_on(2)
 
   eq(current_buffer_name(), FILES)
   eq(child.lua_get(TOLD), "aineo: the changes pane opens no other worktree's file")
 end
 
---- The lines of a files window that list no file, by what they are.
+--- The lines of a files window that list no file, by what they are: the
+--- line of the files window, the commits window's line to select first, and
+--- the files window's lines then.
 local LINES_LISTING_NO_FILE = {
-  { 'the line naming the filter', 1 },
-  { 'a note', 2 },
-  { 'another worktree’s heading', 3 },
-  { 'another worktree’s note', 4 },
+  {
+    'the line naming the filter',
+    1,
+    2,
+    { 'Files in: Session work', 'No files changed on this session' },
+  },
+  { 'a note', 2, 2, { 'Files in: Session work', 'No files changed on this session' } },
+  {
+    'the line naming another worktree’s change',
+    1,
+    4,
+    { 'Files in: Worktree agent (agent)', 'No files changed in this worktree' },
+  },
+  {
+    'a note under another worktree’s change',
+    2,
+    4,
+    { 'Files in: Worktree agent (agent)', 'No files changed in this worktree' },
+  },
 }
 
 T['gf']['on a line listing no file'] = MiniTest.new_set({ parametrize = LINES_LISTING_NO_FILE })
 
-T['gf']['on a line listing no file']['opens nothing and says nothing'] = function(_, line)
+T['gf']['on a line listing no file']['opens nothing and says nothing'] = function(
+  _,
+  line,
+  commits_line,
+  listed
+)
   local top = git_repo.create('openfile-no-file', { ['notes.txt'] = { 'one' } })
   git_repo.git(
     top,
     { 'worktree', 'add', '--quiet', '-b', 'agent', vim.fs.joinpath(vim.fs.dirname(top), 'agent') }
   )
   child.lua(BEGIN_AND_SHOW, { top })
-  expect_lines(FILES, {
-    'Files in: Session work',
-    'No files changed on this session',
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
     'Worktree agent (agent)',
-    'No files changed in this worktree',
+    'No commits in this worktree',
   })
+  go_to_commits_line(commits_line)
+  expect_lines(FILES, listed)
 
   MiniTest.expect.no_error(function()
     press_gf_on(line)
