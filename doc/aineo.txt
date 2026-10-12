@@ -365,6 +365,29 @@ Enter and `gf` take a file's name from the list itself, whatever characters
 it holds, spaces, quotes and an apostrophe among them: a name that fails to
 open from the pane is a fault to report.
 
+`l` and `h` on a file's line show that file's diff as Enter does, `l`
+against the file's previous version, `h` against `HEAD`. `l` shows what
+Enter shows on the line, in Enter's buffer. `h` shows, under a commit of
+yours or one that landed, the file from that commit straight to `HEAD`, a
+renamed file with both its paths, in `aineo://head/commit/{id}/{path}`;
+under a commit of another worktree, to that worktree's `HEAD`, in
+`aineo://worktree{top}//head/commit/{id}/{path}`; under the Landed heading,
+from `HEAD` straight to the working branch's commit, in
+`aineo://head/landed/{path}`; under Uncommitted and Session work, from
+`HEAD` to the working tree, in `aineo://uncommitted/{path}`, which is
+Enter's diff under Uncommitted; under another worktree's whole change, from
+that worktree's `HEAD` to its working tree, in
+`aineo://worktree{top}//head/{path}`. A file `HEAD` lacks is shown wholly
+added or removed. Both move the cursor to the diff, show only the last key's
+diff when you press keys again before one was read, and tell a failure or a
+middle column with no room as Enter does; `F` works in the diff they show.
+On a line that lists no file they do nothing and say nothing. Each is a
+Normal-mode map of the files window's buffer alone, made again whenever that
+buffer is made anew, so it shadows Vim's `h` and `l` there, where the arrow
+keys, `0` and `$` still move along a line; in every other buffer, the
+commits window and the diffs included, they are Vim's own, and no `<Plug>`
+mapping stands for them.
+
 In a diff the pane showed, `F` reads that diff again with the whole file as
 its context when its text shows three lines, and again with three lines of
 context when it shows the whole file, so that it always changes what the
