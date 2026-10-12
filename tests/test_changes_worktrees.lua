@@ -348,6 +348,7 @@ T['the files window']['colours the first line of another worktree’s whole chan
     { 1, 2, 13, 'AineoChangesModified' },
   })
 end
+
 T['a worktree’s heading'] = MiniTest.new_set()
 
 T['a worktree’s heading']['is coloured as a note in the commits window'] = function()
@@ -587,6 +588,7 @@ T['Enter']['on a file under another worktree’s commit shows the commit’s hea
     last = { '-one', '+agent' },
   })
 end
+
 T['Enter']['on one path in two worktrees shows two diff buffers, each its worktree’s'] = function()
   local top = git_repo.create('changesworktrees-enter-two', { ['notes.txt'] = { 'one' } })
   local first = add_worktree(top, 'first', 'first')
@@ -813,6 +815,7 @@ T['a worktree whose read fails']['shows git’s words under its heading, the oth
     })
   )
 end
+
 T['a worktree whose later read fails'] = MiniTest.new_set()
 
 T['a worktree whose later read fails']['keeps the list it showed, under git’s words'] = function()
@@ -839,6 +842,7 @@ T['a worktree whose later read fails']['keeps the list it showed, under git’s 
     })
   )
 end
+
 T['a worktree whose later read fails']['keeps the list it showed, under git’s words, when the editor’s branch cannot be read'] = function()
   local top = git_repo.create('changesworktrees-comparison-failed', { ['notes.txt'] = { 'one' } })
   local agent = add_worktree(top, 'agent', 'agent')
@@ -864,6 +868,7 @@ T['a worktree whose later read fails']['keeps the list it showed, under git’s 
     })
   )
 end
+
 T['a list of worktrees that fails'] = MiniTest.new_set()
 
 T['a list of worktrees that fails']['leaves the editor’s lines as ever, then says so in git’s words, in the commits window'] = function()
@@ -1382,6 +1387,33 @@ T['the files window under another worktree’s whole change']['keeps its files u
   })
 end
 
+T['the files window under another worktree’s whole change']['keeps its files under a line saying the worktree is gone when it is removed meanwhile'] = function()
+  local top = git_repo.create('wtsel-gone', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  child.lua(WATCH_IN_HAND)
+  begin_and_show(top)
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
+  git_repo.git(top, { 'worktree', 'remove', '--force', agent })
+
+  child.lua(
+    [[
+      local files = vim.api.nvim_get_current_win()
+      vim.cmd('aboveleft split ' .. vim.fn.fnameescape(... .. '/notes.txt'))
+      vim.cmd('write')
+      vim.api.nvim_set_current_win(files)
+    ]],
+    { top }
+  )
+
+  expect_lines(FILES, {
+    'Files in: Worktree agent (agent)',
+    'The last refresh failed: the worktree is gone',
+    '  M notes.txt',
+  })
+end
+
 T['the files window under another worktree’s whole change']['lists the filter with no files, under git’s words, when its first read fails'] = function()
   local top = git_repo.create('wtsel-failed-first', { ['notes.txt'] = { 'one' } })
   local agent = add_worktree(top, 'agent', 'agent')
@@ -1395,6 +1427,27 @@ T['the files window under another worktree’s whole change']['lists the filter 
 
   expect_lines(FILES, {
     'Files in: Worktree agent (agent)',
+    'The last refresh failed: fatal: broken',
+  })
+end
+
+T['the files window under another worktree’s whole change']['lists its commit with no files, under git’s words, when the read of the commit’s files fails'] = function()
+  local top = git_repo.create('wtsel-commit-failed', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+  local stand_in, switch = breakable_git_in('wtsel-commit-failed', agent, 'show')
+  turn_on(switch)
+  begin_and_show(top, { executable = stand_in })
+  expect_lines(
+    COMMITS,
+    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+  )
+
+  go_to_commits_line(5)
+
+  expect_lines(FILES, {
+    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
     'The last refresh failed: fatal: broken',
   })
 end
