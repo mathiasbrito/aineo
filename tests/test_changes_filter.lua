@@ -164,6 +164,29 @@ local function cursor_of(name)
   return child.lua_get('vim.api.nvim_win_get_cursor(vim.fn.bufwinid(...))', { name })
 end
 
+--- The first line the commits window shows.
+---
+---@return integer
+local function commits_top_line()
+  return child.lua_get('vim.fn.getwininfo(vim.fn.bufwinid(...))[1].topline', { COMMITS })
+end
+
+--- Scrolls the commits window, which the case has not entered, with the
+--- mouse wheel, one notch at a time, until its cursor is on line `line`; the
+--- cursor of the current window stays where it is.
+---
+---@param line integer
+local function wheel_commits_down_to_line(line)
+  local position = child.lua_get('vim.fn.win_screenpos(vim.fn.bufwinid(...))', { COMMITS })
+  while cursor_of(COMMITS)[1] < line do
+    local top = commits_top_line()
+    child.api.nvim_input_mouse('wheel', 'down', '', 0, position[1] - 1, position[2] - 1)
+    git_repo.wait_until('the wheel scrolled the commits window', function()
+      return commits_top_line() ~= top
+    end)
+  end
+end
+
 --- Reads both lists again, as a new showing of the pane does.
 local function refresh_pane()
   child.lua("require('aineo.changes').refresh_shown_pane()")
@@ -356,6 +379,15 @@ T['the filter']['is the commit under the cursor: the files window names it and l
   enter_window_of(COMMITS)
 
   go_to_line(4)
+
+  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Change a', '  M a.txt' })
+end
+
+T['the filter']['follows a scroll of the commits window made while the cursor is in the files window'] = function()
+  local _, first = session_with_two_commits('filter-wheel')
+  enter_window_of(FILES)
+
+  wheel_commits_down_to_line(4)
 
   expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Change a', '  M a.txt' })
 end

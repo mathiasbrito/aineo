@@ -1287,7 +1287,8 @@ local selection_pause = pause.restartable(SELECTION_PAUSE_MS, select_filter_at_c
 
 --- Makes the commits buffer `buffer` choose the filter of the files window:
 --- its cursor, once it has stayed on a line for a pause
---- (`selection_pause`).
+--- (`selection_pause`), whether the cursor moved in the current window or a
+--- scroll made from another window carried it.
 ---
 ---@param buffer integer
 local function select_filters_from(buffer)
@@ -1297,6 +1298,21 @@ local function select_filters_from(buffer)
     callback = function()
       window_moved = vim.api.nvim_get_current_win()
       selection_pause.restart()
+    end,
+  })
+  vim.api.nvim_create_autocmd('WinScrolled', {
+    group = vim.api.nvim_create_augroup('aineo_changes_commits_scroll', {}),
+    desc = 'aineo: select the filter of the files window after a pause, as a scroll carries the cursor',
+    callback = function(event)
+      local window = tonumber(event.match)
+      if
+        window
+        and vim.api.nvim_win_is_valid(window)
+        and vim.api.nvim_win_get_buf(window) == buffer
+      then
+        window_moved = window
+        selection_pause.restart()
+      end
     end,
   })
 end
