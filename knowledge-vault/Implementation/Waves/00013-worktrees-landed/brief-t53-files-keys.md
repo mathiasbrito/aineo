@@ -71,3 +71,9 @@ Medium: `gf`'s new path, two keys over the filters T43, T50 and T52 made, five n
 ## Report
 
 In your definition's shape, to `<scratchpad>/t53-report-packet.md`. Open the pull request into `dev` before you report. Put in its body every verification claim a reviewer can re-measure, each test file whose pins moved and why, and the whole suite's counts. The orchestrator's verification runs `plan.md`'s five T53 mutants: name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-12, before dispatch
+
+- **The user's answer** (`plan.md` › *The user's answers — 2026-10-12*, verbatim there): U4 (a), "Both, everywhere (Recommended)". It is the user's decision, recorded on D57; this body was written for it and stands unchanged, behaviours 6–10 included.
+- **The orchestrator's rulings**, each the (a) this body is written for: A136 (O1), A137 (O2), A152 (O17: `gf` shows the commit's file, read-only, in the middle column), A153 (O18: the buffer names of `h` and `l`); and A157 (the plan's A4: the commit's file is read-only — the body's "A4"). These are the orchestrator's assumptions under the user's instruction of 2026-10-06, to record in the session note and the PR body as such, never as the user's decisions.
+- No answer holds this packet: it is dispatched once T52 has merged, with the dispatch amendment its header names.
