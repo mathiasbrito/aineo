@@ -118,3 +118,12 @@ The orchestrator's assumption (A163, as A124 was), recorded by the implementer w
 4. `remote_default_branch` gives a dangling name after a remote's default branch is renamed and pruned: `resolve_commit` finds no commit, so the heading says `Landed in origin/<old>` and the failure line `origin/<old> names no commit` (item 5), and the help names `changes.working_branch` as the remedy.
 
 **A point for the report, not a conflict:** `tests/test_doc.lua` (not mine to edit) builds its tag list from the resolved defaults, and `vim.islist({})` is true, so the empty `changes = {}` a setting with a nil default leaves there counts as a leaf: that test requires `*aineo-config-changes*`, not `*aineo-config-changes.working_branch*` (measured at the first run with the setting: a red naming `aineo-config-changes`). The help item carries both tags on one line; the test would not notice the second one missing.
+
+## Note — 2026-10-12, after the reviews of PR #180: what the amendment above got wrong
+
+The amendment is left as written; this note corrects it.
+
+- Point 1 says *Landed* is read inside the commits window's own read. It is read **beside** it (`read_landed()`, started from `read_own`, answering on its own): read inside, it delayed the session's own list by the extra git processes and failed seven timing-bound cases of `test_changes.lua` and `test_changes_filter.lua`.
+- Point 3 (unrelated histories) is ruled as recommended: A171, the orchestrator's assumption under the user's instruction of 2026-10-06, not the user's decision.
+- Point 4 names `changes.working_branch` as the only remedy for a dangling `origin/HEAD`; `git remote set-head origin -a` is the other, and the help says both.
+- The `test_doc` point is measured, as the paragraph above says; the fix round adds the tag to that test's list (A173).
