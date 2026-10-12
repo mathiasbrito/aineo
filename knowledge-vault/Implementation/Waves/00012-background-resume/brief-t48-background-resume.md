@@ -182,3 +182,7 @@ In your definition's shape, to `<scratchpad>/t48-report-part<N>.md`. Open the pu
 - the whole suite's counts.
 
 The orchestrator's verification runs `plan.md`'s round-4 mutants for your part: 1–3 for part 1, 4–5 for part 2. Name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-12, before dispatch (round 4)
+
+`plan.md` › *The orchestrator's rulings — round 4* rules O11–O17 as their (a), which this brief is written for: A185–A191. They are the orchestrator's assumptions, to record in the session note and the PR body as such, never as the user's decisions. Part 1 is dispatched now; part 2 waits for the user's M16.
