@@ -62,10 +62,10 @@ Run from the committed tree, each restored in the same call, on a narrowed copy 
 | M1 | `lines.lua` `commit_rows()`: `filter = listed_under,` → `filter = not worktree and listed_under or nil,` (plan's T50 mutant 1) | killed, 3 of 6: *a cursor on its commit*, *says so when…*, *one filter per worktree* |
 | M2 | `filter.lua` `key()`: `return worktree .. filter.commit.id` → `return filter.commit.id` (plan 2) | killed, 1: *one filter per worktree for the same commit* |
 | M3 | `init.lua`: `git.commit_files(section.repository, …` → `git.commit_files(session.repository, …` (plan 3) | killed, 2: *a cursor on its commit* (the recorded top level), *one filter per worktree* |
-| M4 | the other worktrees' rows appended to the files window (`lines.lua`: `page_of(vim.list_extend(file_window_rows(view), worktree_rows(view.worktrees)))`; `init.lua`: `worktrees = session.commits_others`) (plan 4) | killed, 6 of 6 |
+| M4 | `lines.lua` `files_window()`: `  local files = page_of(file_window_rows(view))` → `  local files = page_of(vim.list_extend(file_window_rows(view), worktree_rows(view.worktrees)))`; `init.lua` `files_page()`: `    worktree = listed and listed.worktree,` → `    worktree = listed and listed.worktree,` and, on a line after it, `    worktrees = session.commits_others,` (plan 4) | killed, 6 of 6 |
 | M5 | `pages.lua`: `local lists_another_filter = false` (plan 5) | killed, 1: the view case |
-| M6 | `init.lua`: `select_session_work()` removed from the worktree-gone branch | killed, 1 |
-| M7 | `init.lua`: `select_filter(filter.of_worktree(section))` → `select_session_work()` | killed, 1 |
+| M6 | `init.lua` `reselect_in_worktrees()`: `  if not section then` / `    select_session_work()` / `    read_files(true)` → `  if not section then` / `    read_files(true)` | killed, 1 |
+| M7 | `init.lua` `reselect_in_worktrees()`: `    select_filter(filter.of_worktree(section))` → `    select_session_work()` | killed, 1 |
 | M8 | `init.lua`: `ask_for_files(with_own or session.selected.kind == 'worktree')` → `ask_for_files(with_own)` | killed, 1: the watch case |
 | M9 | `init.lua`: `and not session.selected.worktree` removed | killed, 2 |
 | M10 | `entry_diff.lua`: `return 'since-base'` → `return 'since_base'` | killed, 1 |
@@ -74,9 +74,20 @@ Run from the committed tree, each restored in the same call, on a narrowed copy 
 | M12 | `init.lua` `filter_named()`: `return filter.in_worktree(named, section_as_last_read(named.worktree))` → `return named` | killed, 1 |
 | M13 | `lines.lua`: `MARKS_SAVES` gains `worktree = true` | killed, 1: the heading case's `*` |
 | M14 | `worktrees.lua` `read_worktree()`: `read_section(read, worktree, comparison, done)` → `read_section(read, worktree, nil, done)` | killed, 5 |
-| M15 | `init.lua`: the files window's `window_read()` given a `read_list` and `others_field = 'commits_others'` again (the files window reads every worktree's files) | killed, 4 of 6 on the reads group, the new case among them |
+| M15 | `init.lua`, the files window's `window_read({`: `  read_own = read_selected_files,` → the same line followed by `  read_list = function(repository, base, done)`, `    git.changed_files(repository, base, done, session.settings.git)`, `  end,` and `  others_field = 'commits_others',` | killed, 4 of 6 on the reads group, the new case among them |
 | M16 | `init.lua` `take_own` of the files window: `if not failure or not (listed and filter.same(listed.filter, listing.filter)) then` → `if true then` | killed, 1: *keeps its files under git's words* |
-| M17 | `lines.lua` `heading_row()`: `filter = listed_under` removed from the entry | killed, 3 |
+| M17 | `lines.lua` `heading_row()`: `  row.entry = { key = filter.key(listed_under), filter = listed_under, worktree = section }` → `  row.entry = { key = filter.key(listed_under), worktree = section }` | killed, 3 |
+
+Fix round (review of PR #176), same method, `tests/test_changes_full_context.lua` whole and narrowed copies of the others:
+
+| # | Literal edit | Result |
+|---|---|---|
+| MA | `entry_diff.lua` `read_in_worktree()`: `git.commit_file_diff(repository, entry.filter.commit.id, entry.change, done, options)` → the same without `, options`; `git.diff_since(repository, worktree.base, done, options)` → the same without `, options` | survived the first round; killed by the two new F cases, 2 of 33 |
+| MB | `init.lua` `read_worktree_files()`: `done(failure, { filter = selected, changes = changes, worktree = section })` → `done(nil, { filter = selected, changes = changes, worktree = section })` | survived the first round; killed by the new case on a failed read of a commit's files, 1 |
+| MG | `init.lua` `read_worktree_files()`: `done(WORKTREE_GONE, { filter = selected, worktree = section })` → `done(nil, { filter = selected, changes = {}, worktree = section })` | killed by the new gone-worktree case, 1 |
+| MS | `init.lua` `select_filters_from()`: `for key in pairs(vim.v.event) do` → `for key in pairs({ [vim.fn.expand('<amatch>')] = true }) do` (the pattern's window alone, as before) | killed by the new same-turn scroll case, 1 |
+
+"No survivor" above holds for the edits listed, not for the code: MA and MB were two edits no one had listed.
 
 ## Open threads
 
@@ -84,7 +95,19 @@ Run from the committed tree, each restored in the same call, on a narrowed copy 
 - A worktree removed while its whole change is being read lists "No files changed in this worktree" until the commits read, which follows, selects Session work.
 - The files window under a worktree's commit is not read again at a watch call that moved nothing of the editor's (allowed, not required, by item 9).
 - The LIMITS paragraph's cost figures were removed; a re-measure with the commits window alone reading the worktrees is open.
-- `lines.commit_rows()` is public in the file (used before its definition by `section_rows()`); it is not exported by `aineo.changes`.
+
+## Fix round
+
+The attack and the tests-and-records reviews of PR #176 (orchestrator's rulings A161 and A162, assumptions under the user's instruction of 2026-10-06):
+
+- A worktree gone at the read gives a failure (`the worktree is gone`), so the files window keeps its last list under the failure line (attack 1); case seen red first.
+- T49's `WinScrolled` handler loops over the window keys of `vim.v.event` instead of reading `event.match` alone, which names only the first window that scrolled (attack 2, A161); case seen red first.
+- That handler starts the selection pause only when the line under the scrolled window's cursor lists a filter other than the selected one (`other_filter_at_cursor()`, shared with `select_filter_at_cursor()`): started on every scroll, it left a timer running after the reads, which `tests/test_changes.lua` › *the reads leave no timer running once they have answered* caught, red first.
+- `F` in the heading's diff and in a file under a worktree's commit, and a failed read of a worktree commit's files, adopted from the reviewer's patches; they arrived green on the tree and are killed by MA and MB.
+- `lines.commit_rows` is file-local again, moved above its first use (A162); the `Entry.key` docstring names the keys of a worktree's lines; the blank lines between the tests of `test_changes_worktrees.lua` are back. The duplicate `add_worktree` of the filter file stays: sharing it means an addition to `tests/helpers/git_repo.lua` and a run of every file that requires it.
+- The first commit's subject (75 characters) is pushed and left.
+- The LIMITS cost figures stay dropped until a re-measure (A162).
+- Neovim ran the suites with `git` resolved to a symbolic link to the Command Line Tools binary, because Apple's `git` and `make` stopped answering mid-session on an unaccepted Xcode license; the recipe of `make test` and `make test_file` was run by hand, with the same variables.
 
 ## Task lines
 
