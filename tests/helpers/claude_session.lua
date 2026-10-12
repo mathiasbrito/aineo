@@ -47,10 +47,11 @@ end
 
 --- The script that holds back each `agents --json` run of the fake until the
 --- file named by its first argument exists, after noting the run in that
---- file's `.seen`; `$5` is the first word `claude.cmd` is given after the
+--- file's `.seen`, or for 30 s, so that a run whose editor is gone does not
+--- wait for ever; `$5` is the first word `claude.cmd` is given after the
 --- fake's own four.
-local LIST_GATE_SCRIPT = 'case "$5" in agents) echo run >> "$0.seen";'
-  .. ' until [ -e "$0" ]; do sleep 0.02; done;; esac; exec "$@"'
+local LIST_GATE_SCRIPT = 'case "$5" in agents) echo run >> "$0.seen"; n=0;'
+  .. ' until [ -e "$0" ] || [ "$n" -ge 1500 ]; do sleep 0.02; n=$((n + 1)); done;; esac; exec "$@"'
 
 --- A gate on the list of sessions a start that resumes waits for, for one
 --- test: `cmd`, a `claude.cmd` that runs the fake as `fake_command()` does
