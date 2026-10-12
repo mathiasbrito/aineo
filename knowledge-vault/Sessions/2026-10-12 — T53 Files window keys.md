@@ -14,7 +14,7 @@
 
 A file listed under a commit opens as that commit has it, and the files window gains `h` and `l` (D57; the user's U4 (a)). The orchestrator's rulings O17 (a) = A152, O18 (a) = A153 and the plan's A4 = A157 are its assumptions under the user's instruction of 2026-10-06, not the user's decisions.
 
-- **`gf`** (`lua/aineo/changes/commit_file.lua`, new; `init.lua`'s `show_commit_file()`): on a file listed under a commit of the session, a landed one or another worktree's, or under *Landed*, the file as that commit (under *Landed*, the working branch's commit the commits window last read) has it, read through `git.file_at_commit()` in the editor's repository, which shares the object store of the others. The buffer is `aineo://show/{id}/{path}` (`diffs.file_buffer()`): read-only, not modifiable, wiped once hidden, `'filetype'` from `vim.filetype.match()` on the path and the content, shown in the middle column through the session's `show_diff` with the cursor moved to it. A file the commit deleted (`path_missing`) opens nothing and is told as deleted in that commit; any other failure is told once, naming the file. Under *Uncommitted*, *Session work* and another worktree's whole change `gf` is T45's.
+- **`gf`** (`lua/aineo/changes/commit_file.lua`, new; `init.lua`'s `show_commit_file()`): on a file listed under a commit of the session, a landed one or another worktree's, or under *Landed*, the file as that commit (under *Landed*, the working branch's commit the commits window last read) has it, read through `git.file_at_commit()` in the repository of the worktree that lists the commit, the editor's otherwise (first read in the editor's repository; corrected in the fix round). The buffer is `aineo://show/{id}/{path}` (`diffs.file_buffer()`): read-only, not modifiable, wiped once hidden, `'filetype'` from `vim.filetype.match()` on the path and the content, shown in the middle column through the session's `show_diff` with the cursor moved to it. A file the commit deleted (`path_missing`) opens nothing and is told as deleted in that commit; any other failure is told once, naming the file. Under *Uncommitted*, *Session work* and another worktree's whole change `gf` is T45's.
 - **`l`** is Enter's function on the same line: Enter's diff, in Enter's buffer.
 - **`h`** (`lua/aineo/changes/head_diff.lua`, new): the listed file's entry marked `against_head`; `entry_diff.read()` and `name()` hand a marked entry to `head_diff`, so `F`, the focus move, the last-key rule and the failure messages are Enter's. Per filter: a commit (session's or landed) straight to `HEAD` (`git.file_diff_straight()`, `HEAD` from `git.resolve_commit()`), `aineo://head/commit/{id}/{path}`; another worktree's commit, to that worktree's `HEAD`, in its repository, `aineo://worktree{top}//head/commit/{id}/{path}`; *Landed*, from `HEAD` straight to the working branch's commit, `aineo://head/landed/{path}`; *Uncommitted* and *Session work*, `git.uncommitted_file_diff()`, `aineo://uncommitted/{path}`; another worktree's whole change, `aineo://worktree{top}//head/{path}`.
 - **`diffs.lua`**: the one shown-buffer mechanism serves `diff_buffer()` and the new `file_buffer()`. **`init.lua`**: `show_buffer()` (the show, the focus move, the no-room and error messages) is split from `show_diff()`; `show_last()` takes a `Showing` (a name and a `show` function), so one counter orders the last of Enter, `l`, `h` and `gf`.
@@ -32,61 +32,101 @@ The first commit (A179) re-checks the brief against `dev` `70a52bc`; it found no
 
 Seen red, for the intended reason (read from the output): `gf` under a session commit (`aineo://show/...` expected, the working tree's path got); `gf` under *Landed* (the working tree's path got); deleted-file, unreadable and no-room cases of `gf` (the nil text or the missing `told` in the first design); `l` and `h` under a commit (nothing shown, the 20 s wait ran out); `h` under *Landed*, under *Session work*, under *Uncommitted*, under another worktree's commit (the name without the worktree), and under its whole change (the read for its kind missing).
 
-Arrived green, with the reason: the landed commit's file (the commit kind already covers it; killer T1 below); the `gf` filetype, not-modifiable and middle-column cases (`file_buffer()` and `show_commit_file()` were written in the same unit as the first case); the 1 MiB cut and the quoted name of `gf`, the late failure, *Landed* gone and another worktree's commit (code written ahead of their tests); `gf` under *Uncommitted* (unchanged code); for `h`, a renamed file, a file `HEAD` lacks, a landed commit (the commit kind covers them), the lines listing no file, the maps' scope and their return with the buffer, `HEAD` naming no commit, *Landed* gone, the unreadable diff, the last of `h` and `l`, the quoted name of `h`, the focus move and `F` (the shared pipeline). Each has its mutant below.
+Arrived green, with the reason: the landed commit's file (the commit kind already covers it; killer M1 below); the `gf` filetype, not-modifiable and middle-column cases (`file_buffer()` and `show_commit_file()` were written in the same unit as the first case); the 1 MiB cut and the quoted name of `gf`, the late failure, *Landed* gone and another worktree's commit (code written ahead of their tests); `gf` under *Uncommitted* (unchanged code); for `h`, a renamed file, a file `HEAD` lacks, a landed commit (the commit kind covers them), the lines listing no file, the maps' scope and their return with the buffer, `HEAD` naming no commit, *Landed* gone, the unreadable diff, the last of `h` and `l`, the quoted name of `h`, the focus move and `F` (the shared pipeline). Each has its mutant below.
 
 ## Mutants
 
-Literal edits (`.tests/t53-mut.lua`, ids T/G on the `gf` commits, T/H on the `h` and `l` commits; the `gf` ones ran on `test_changes_open_file.lua` before the keys existed, T1 re-run there, T2–T5 and H on `test_changes_keys.lua`), each applied to a copy and restored in the same call, run on the case's own file. Kinds are read from the output.
+Each row is the literal edit (file: before → after), applied to a copy of the file at the commit named, run on the test file that covers it, restored in the same call. A row run on `140dbe3`/`d49e1c8` (the `gf` commits) or on `d103e9d`/`8818993` (the `h` and `l` commits) names code that the fix round changed in places; the fix round's own mutants are F1–F11 below. Kinds are read from the output. The ids are M1–M30 in the order below; no id is skipped.
 
 | # | Edit | Killed by |
 |---|---|---|
-| T1 | `commit_file.lua`: `lists_file_at_a_commit` returns false (the plan's 1) | assertion, 13 (`gf` opens the working tree's file) |
-| T2 | `head_diff.lua`: `M.of()` returns `entry` (h is l; the plan's 2) | assertion, 13 |
-| T3 | `init.lua`: the keys `'l'` and `'h'` swapped (the plan's 3) | assertion, 15 |
-| T4 | `diffs.lua`: `file_buffer()` leaves `'modifiable'` on (the plan's 4) | assertion, 1 |
-| T5 | `init.lua`: `buffer = buffer,` removed from `h`'s options (the plan's 5) | assertion, 3 (the commits window, a diff, another buffer) |
-| G3 | `diffs.lua`: `filetype or ''` → `''` | assertion, 2 |
-| G4 | `diffs.lua`: `vim.filetype.match({ filename = path, contents = text })` → `{ filename = path }` | assertion, 1 (the shebang script) |
-| G5 | `commit_file.lua`: `'commit' or … == 'landed'` → `'commit'` | assertion, 2 |
-| G6 | `commit_file.lua`: `failure.reason == 'path_missing'` → `~=` | assertion, 2 |
-| G8 | `init.lua`: `show_last()`'s stale branch removed | survived `test_changes_open_file.lua`; assertion, 3, in `test_changes.lua` (the textlock-then-another-file cases) |
-| G8b | `init.lua`: the `this_enter ~= enters` guard of `show_commit_file()`'s read removed | assertion, 1 (the late failure, added after G8 showed the guard unpinned) |
-| G9 | `init.lua`: `buffer ~= nil and show_buffer(…)` → `buffer == nil or show_buffer(…)` | assertion, 1 (the textlock case; the wait ran out) |
-| G10 | `init.lua`: `lines.words_of(unreadable)` → `''` | assertion, 1 (*Landed* gone) |
-| G11 | `init.lua`: the no-room `told` → the path alone | assertion, 1 |
-| G12 | `commit_file.lua`: `return entry.change ~= nil and not entry.worktree and (…` | assertion, 1 (another worktree's commit) |
-| G13 | `diffs.lua`: `lines_shown_for(content, 'file')` → `'diff'` | assertion, 1 |
-| G15 | `commit_file.lua`: the path unquoted in `M.name()` | assertion, 1 |
-| H6 | `head_diff.lua`: `session_work` folder `'uncommitted'` → `'head'` | assertion, 1 |
-| H6b | `head_diff.lua`: `uncommitted` folder `'uncommitted'` → `'head'` | assertion, 1 (`h` under *Uncommitted*) |
-| H7 | `head_diff.lua`: `from HEAD, to the tip` swapped (landed) | assertion, 1 |
-| H8 | `head_diff.lua`: the commit and `HEAD` swapped (commit) | assertion, 6 |
-| H9 | `head_diff.lua`: `in_worktree.repository = source.repository` | assertion, 2 |
-| H10 | `head_diff.lua`: `if not entry.worktree then` → `if true then` in `M.name()` | assertion, 2 |
-| H11 | `entry_diff.lua`: the `head_diff.name()` dispatch removed | assertion, 10 |
-| H12 | `entry_diff.lua`: the `head_diff.read()` dispatch removed | assertion, 11 |
-| H15 | `head_diff.lua`: the `if not head then done(NO_HEAD)` block removed | assertion, 1 |
-| H16 | `head_diff.lua`: the unreadable-*Landed* guard removed | assertion, 1 |
-| H17 | `head_diff.lua`: the path unquoted in `M.name()` | assertion, 1 |
-| H18 | `init.lua`: `local entry = diffed(listed)` → `listed` | assertion, 14 |
-| H14 | `init.lua`: the `if not listed then return end` guard of `show_diff_at_cursor()` removed | **crash class**: the plugin's callback raised (`vim.validate` in `diffed`) and `type_keys` surfaced it; 4 cases |
+| M1 (plan 1) | `commit_file.lua`: `return entry.change ~= nil and (entry.filter.kind == 'commit' or entry.filter.kind == 'landed')` → `do return false end` | assertion, 13 |
+| M2 (plan 2) | `head_diff.lua`: `return vim.tbl_extend('force', entry, { against_head = true })` → `return entry` | assertion, 13 |
+| M3 (plan 3) | `init.lua`: in `map_compare_keys()`, `vim.keymap.set('n', 'l', function()` and `vim.keymap.set('n', 'h', function()` exchanged | assertion, 15 |
+| M4 (plan 4) | `diffs.lua`: `return shown_buffer(name, text, filetype or '')` → `local made = shown_buffer(name, text, filetype or '') if made then vim.bo[made].modifiable = true end return made` | assertion, 1 |
+| M5 (plan 5) | `init.lua`: `buffer = buffer,` deleted from the options of the `h` map | assertion, 3 (the commits window, a diff, another buffer) |
+| M6 | `diffs.lua`: `return shown_buffer(name, text, filetype or '')` → `return shown_buffer(name, text, '')` | assertion, 2 |
+| M7 | `diffs.lua`: `vim.filetype.match({ filename = path, contents = text })` → `vim.filetype.match({ filename = path })` | assertion, 1 (the shebang script) |
+| M8 | `commit_file.lua`: `entry.filter.kind == 'commit' or entry.filter.kind == 'landed'` → `entry.filter.kind == 'commit'` | assertion, 2 |
+| M9 | `commit_file.lua`: `failure.reason == 'path_missing'` → `failure.reason ~= 'path_missing'` | assertion, 2 |
+| M10 | `init.lua`: in `show_last()`, `if this_enter ~= enters then if diffs.wipe_unshown(showing.name) then return end elseif showing.show(text) then` → `if showing.show(text) then` | survived `test_changes_open_file.lua`; assertion, 3 in `test_changes.lua` (the textlock-then-another-file cases) |
+| M11 | `init.lua`: in `show_commit_file()`, the lines `if this_enter ~= enters then return end` after `commit_file.read(…, function(failure, text)` deleted | assertion, 1 (the late failure, added after M10 showed the guard unpinned) |
+| M12 | `init.lua`: `return buffer ~= nil and show_buffer(buffer, window, told)` → `return buffer == nil or show_buffer(buffer, window, told)` | assertion, 1 (the textlock case; the wait ran out) |
+| M13 | `init.lua`: `lines.words_of(unreadable)` → `''` | assertion, 1 |
+| M14 | `init.lua`: `local told = ('%s in %s'):format(lines.quoted_path(path), revision.told)` → `local told = lines.quoted_path(path)` | assertion, 1 |
+| M15 | `commit_file.lua`: `return entry.change ~= nil and (` → `return entry.change ~= nil and not entry.worktree and (` | assertion, 1 |
+| M16 | `diffs.lua`: `lines_shown_for(content, 'file')` → `lines_shown_for(content, 'diff')` (the code before the fix round) | assertion, 1 |
+| M17 | `commit_file.lua`: `revision.commit, lines.quoted_path(path))` → `revision.commit, path)` | assertion, 1 |
+| M18 | `head_diff.lua`: in the folders, `session_work = function() return 'uncommitted' end` → `… return 'head' end` | assertion, 1 |
+| M19 | `head_diff.lua`: in the folders, `uncommitted = function() return 'uncommitted' end` → `… return 'head' end` | assertion, 1 (`h` under Uncommitted) |
+| M20 | `head_diff.lua`: in `READS.landed`, `source.repository, head, source.landed.tip,` → `source.repository, source.landed.tip, head,` | assertion, 1 |
+| M21 | `head_diff.lua`: in `READS.commit`, `source.repository, entry.filter.commit.id, head,` → `source.repository, head, entry.filter.commit.id,` | assertion, 6 |
+| M22 | `head_diff.lua`: `in_worktree.repository = entry.worktree.repository` → `in_worktree.repository = source.repository` | assertion, 2 |
+| M23 | `head_diff.lua`: in `M.name()`, `if not entry.worktree then` → `if true then` | assertion, 2 |
+| M24 | `entry_diff.lua`: `if head_diff.is_against_head(entry) then return head_diff.name(entry) end` deleted from `M.name()` | assertion, 10 |
+| M25 | `entry_diff.lua`: `if head_diff.is_against_head(entry) then head_diff.read(entry, source, done) return end` deleted from `M.read()` | assertion, 11 |
+| M26 | `head_diff.lua`: `if not head then done(NO_HEAD) return end` deleted from `READS.commit` | assertion, 1 |
+| M27 | `head_diff.lua`: `if not (source.landed and source.landed.tip) then done(landed.unreadable(source.landed)) return end` deleted | assertion, 1 |
+| M28 | `head_diff.lua`: `'/' .. lines.quoted_path(entry.change.path)` → `'/' .. entry.change.path` in `M.name()` | assertion, 1 |
+| M29 | `init.lua`: `local entry = diffed(listed)` → `local entry = listed` | assertion, 14 |
+| M30 | `init.lua`: `if not listed then return end` deleted from `show_diff_at_cursor()` | crash class at `d103e9d` (the plugin's callback raised out of `type_keys`); assertion, 4, since the fix round's `pcall` form (`pressed` false) |
 
 ## Departures and unsettled
 
-- **The commit's file is cut at the 1 MiB the diffs are cut at**, with a last line `aineo cut this file at 1 MiB: …`, where the brief says the buffer holds "the bytes git printed". Syntax on a longer text costs the editor more than a reader gains; reported, one case pins it, and it is the orchestrator's to overrule.
-- A buffer's `'readonly'` is not set: "read-only" is read as the diffs' (`'modifiable'` off, a scratch buffer), the plan's mutant 4.
-- A commit of another worktree is read in the editor's repository (T51: the object store is shared) and `h` in the worktree's own repository; a worktree section with no repository cannot list a file, so `head_diff` has no branch for it and a nil repository would raise.
-- `gf` and `h` on a file of a commit keep no index of the files shown: each key reads the text again.
+- **The commit's file buffer is cut at the 1 MiB the diffs are cut at**, where the brief says the buffer holds "the bytes git printed". The fix round (A182) tells the cut as a virtual line under the last line shown, so the buffer holds only the file's bytes up to the bound.
+- `'readonly'` is left off: "read-only" is read as the diffs' (`'modifiable'` off, a scratch buffer), the plan's mutant 4.
+- A commit of another worktree was first read in the editor's repository (a departure from item 1 of the brief, "in the repository the filter names"); the fix round reads it in that worktree's (attack finding 2, corrected). A worktree section with no repository cannot list a file, so `head_diff` has no branch for it and a nil repository would raise; `commit_file` falls back to the editor's repository.
+- Reading a huge blob whole before the cut (`gf` on a 128 MiB file: 270 MiB resident in the child, a read git cannot print within its time limit fails as `timed_out`) is an open thread for the git home (`lua/aineo/git/`): `file_at_commit` could read the size with `ls-tree -l` and stop at the bound. Outside this packet (A183).
+- `gf` and `h` keep no index of the files shown: each key reads the text again.
 - The real layout was exercised in a scratch case, outside the suite (`tests/test_entry_changes.lua` is not in the boundary): `gf` under a commit showed `aineo://show/{id}/notes.txt` in the file column with `'filetype'` `text` and `'modifiable'` off; `h` then took the same middle window with `aineo://head/commit/{id}/notes.txt`.
+- The help's `h` and `l` paragraph sits after `a fault to report.`, the end of the plan's range for T53, before the paragraph on `F`: adjacent, merges clean with T54.
 
 ## Pins moved
 
 - `tests/test_changes_open_file.lua`: the case `under a commit filter opens the working tree's file` is replaced by `under a commit shows the file as the commit had it, not the working tree's file` (A2 of T45 is replaced by D57); `BEGIN_AND_SHOW` takes a working branch and a `_G.no_room`.
 - A race in the file's new helper: the session's base is read after `begin_session()`, so a commit made at once could become the base; the helpers wait for the commits window to say `No commits on this session` first.
 
+## Fix round — the reviews of PR #183
+
+The orchestrator's rulings A180–A184 are its assumptions under the user's instruction of 2026-10-06, not the user's decisions. Each change was driven by a case seen failing first.
+
+| Finding | Done |
+|---|---|
+| Attack 1 (a working-tree `gf` did not count as the last key) | Red: `after l before its diff was read, leaves the file shown alone` (the stale diff `aineo://diff/notes.txt` was shown, 1 buffer, in place of the opened file). `enters = enters + 1` in `open_file_at_cursor()` before `open_listed_file()`; the docstring of `enters` says what it counts. |
+| Attack 2 (`gf` under another worktree's commit read in the editor's repository) | Red: `reads it in that worktree's repository` (a clone at the worktree's path: nothing shown, a refusal told). `commit_file.revision_of()` reads in `entry.worktree.repository`, else the editor's; docstring too. A departure of the first round, corrected. |
+| A180 (attack 3, `h` on a file as `HEAD` has it) | Red: two cases (Session work once committed; the newest commit): no message in time. An empty diff against `HEAD` is not shown; `aineo: <quoted path> is as HEAD has it` once, INFO; the focus stays (`head_diff.told_unchanged()`). |
+| A181 (attack 4, `HEAD` naming no commit under Landed) | Red: `h` under Landed with `resolve_commit` giving nil showed a diff from nothing. The check is in `with_head()`, so every filter refuses with `HEAD names no commit`. |
+| A182 (attack 5, the 1 MiB note a buffer line) | Red: two cases (a virtual line under a last line that is the file's; one note after `:edit!`). `diffs.file_buffer()` tells the cut as an extmark `virt_lines` in its own namespace, cleared and set at each write; a cut diff keeps its last line. |
+| A183 (attack 6, the whole blob read before the cut) | An open thread for the git home, named under *Departures and unsettled*. |
+| A184 (tests 1, the flaky case) | `tests/test_changes_filter.lua` › *has its cursor on Session work again when its buffer is made anew*: with `git log` slowed to 0.5 s and the old wait it failed (`{1,0}` for `{2,0}`); with the wait of its neighbour (`QUIET_WATCH .. COUNT_GIT_CALLS`, then `git_asked > asked and git_asked == git_answered`) it passed twice. |
+| Tests 2 | The no-file guard's case presses through `pcall` and asserts `pressed`; with the guard removed (M30) it fails by assertion in 4 cases. |
+| Tests 3 | The deleted-file, no-room and Landed-gone cases name `say "hi".txt`; each of the reviewer's three unquoting edits fails one of them. |
+| Tests 4 | The PR body names `'readonly'` left off and counts 25 more mutants. |
+| Tests 5 | The mutant table above gives every row's literal edit, in order, with no pointer to an untracked file. |
+
+### Mutants of the fix round
+
+Literal edits at the commits of the round, each restored in the same call; every kill is an assertion.
+
+| # | Edit | Killed by |
+|---|---|---|
+| F1 | `init.lua`: `enters = enters + 1` deleted before `open_file.open_listed_file(entry, session.repository.top)` | 1 (`after l before its diff was read`) |
+| F2 | `commit_file.lua`: `repository = entry.worktree and entry.worktree.repository or source.repository,` → `repository = source.repository,` | 1 (the clone case) |
+| F3 | `head_diff.lua`: in `with_head()`, `elseif not head then done(NO_HEAD) else` → `else` | 2 (under a commit and under Landed) |
+| F4 | `init.lua`: `if head_diff.is_against_head(entry) and diff == '' then` → `if false then` | 2 |
+| F5 | `diffs.lua`: `if shown.note then vim.api.nvim_buf_set_extmark(` → `if false then vim.api.nvim_buf_set_extmark(` | 2 |
+| F6 | `diffs.lua`: `vim.api.nvim_buf_clear_namespace(buffer, NOTES, 0, -1)` deleted | 1 (`:edit!` leaves two notes) |
+| F7 | `diffs.lua`: `math.max(#shown.lines - 1, 0), 0, {` → `0, 0, {` | 1 |
+| F8 | `diffs.lua`: in `M.diff_buffer()`, `table.insert(shown.lines, shown.note) shown.note = nil` → `shown.note = shown.note` | 2 in `test_changes.lua` (a cut diff's last line) |
+| F9 | `commit_file.lua`: `local file = lines.quoted_path(path)` → `local file = path` | 1 |
+| F10 | `init.lua`: `('%s in %s'):format(lines.quoted_path(path), revision.told)` → `('%s in %s'):format(path, revision.told)` | 1 |
+| F11 | `init.lua`: the `could not be read` message's `lines.quoted_path(path),` → `path,` | 1 |
+
 ## Whole suite
 
-Once on the tree pushed (Neovim 0.12.5, host): **2892 cases**, 82 groups, `Fails (1)`: `test_changes_filter.lua` › *the commits window › has its cursor on Session work again when its buffer is made anew* (`{1,0}` for `{2,0}`). It is a timing flake of code this packet does not touch: that file alone, three runs on this tree, failed 1 of 3 (the same case); five runs on `origin/dev` `70a52bc` in a detached worktree, 1 of 5 (the same case). 2848 cases before this packet (T52's count), 44 added here.
+First push (`e9aea3f`; Neovim 0.12.5, host): 2892 cases, 82 groups, `Fails (1)`: the made-anew cursor case of `test_changes_filter.lua`, a timing flake (alone 1 of 3 runs on that tree, 1 of 5 on `origin/dev` `70a52bc`), fixed in the fix round (A184).
+
+Fix round, on the tree pushed (Neovim 0.12.5, host, default jobs): **2899 cases**, 82 groups, `Fails (0)`. 2848 before the packet; 44 added in the first round and 7 in the fix round (3 in `test_changes_keys.lua`, 4 in `test_changes_open_file.lua`).
 
 ## Task lines
 
