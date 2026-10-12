@@ -134,32 +134,27 @@ function M.read(entry, source, done)
   READS[entry.filter.kind](source_in_worktree_of(entry, source), entry, done)
 end
 
---- The name of the diff of the file `entry` lists from `HEAD` to the working
---- tree, after `aineo://`: the one *Uncommitted* shows.
----
----@param entry aineo.changes.Entry
----@return string
-local function named_for_the_working_tree(entry)
-  return 'uncommitted/' .. lines.quoted_path(entry.change.path)
-end
-
---- The names of the diffs against `HEAD`, by the kind of the filter the file
---- is listed under, after `aineo://`.
+--- The folders, after `aineo://`, of the names of the diffs against `HEAD`,
+--- by the kind of the filter the file is listed under: one folder for the
+--- files of a commit, one for those under *Landed*, the folder *Uncommitted*
+--- shows its diffs in for those read from `HEAD` to the working tree, and
+--- one for another worktree's whole change.
 ---@type table<string, fun(entry: aineo.changes.Entry): string>
-local NAMES = {
+local FOLDERS = {
   commit = function(entry)
-    return ('head/commit/%s/%s'):format(
-      entry.filter.commit.id,
-      lines.quoted_path(entry.change.path)
-    )
+    return 'head/commit/' .. entry.filter.commit.id
   end,
-  landed = function(entry)
-    return 'head/landed/' .. lines.quoted_path(entry.change.path)
+  landed = function()
+    return 'head/landed'
   end,
-  session_work = named_for_the_working_tree,
-  uncommitted = named_for_the_working_tree,
-  worktree = function(entry)
-    return 'head/' .. lines.quoted_path(entry.change.path)
+  session_work = function()
+    return 'uncommitted'
+  end,
+  uncommitted = function()
+    return 'uncommitted'
+  end,
+  worktree = function()
+    return 'head'
   end,
 }
 
@@ -175,7 +170,7 @@ local NAMES = {
 ---@param entry aineo.changes.HeadEntry
 ---@return string
 function M.name(entry)
-  local name = NAMES[entry.filter.kind](entry)
+  local name = FOLDERS[entry.filter.kind](entry) .. '/' .. lines.quoted_path(entry.change.path)
   if not entry.worktree then
     return 'aineo://' .. name
   end
