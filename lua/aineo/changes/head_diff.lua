@@ -36,15 +36,18 @@ end
 local NO_HEAD = { reason = 'failed', message = 'HEAD names no commit' }
 
 --- Reads the full id of `HEAD` in the repository of `source` and calls
---- `use(head)`, nil when `HEAD` names no commit yet, or `done(failure)`.
+--- `use(head)`, or `done(failure)`: git's, or `NO_HEAD` when `HEAD` names no
+--- commit yet, under every kind of filter.
 ---
 ---@param source aineo.changes.DiffSource
 ---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
----@param use fun(head: string|nil)
+---@param use fun(head: string)
 local function with_head(source, done, use)
   git.resolve_commit(source.repository, 'HEAD', function(failure, head)
     if failure then
       done(failure)
+    elseif not head then
+      done(NO_HEAD)
     else
       use(head)
     end
@@ -68,10 +71,6 @@ end
 local READS = {
   commit = function(source, entry, done)
     with_head(source, done, function(head)
-      if not head then
-        done(NO_HEAD)
-        return
-      end
       git.file_diff_straight(
         source.repository,
         entry.filter.commit.id,

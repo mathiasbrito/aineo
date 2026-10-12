@@ -584,6 +584,25 @@ T['h']['on a file under a commit, when HEAD names no commit, tells so and shows 
   eq(child.lua_get('#_G.shown_diffs'), 0)
 end
 
+T['h']['on a file under Landed, when HEAD names no commit, tells so and shows nothing'] = function()
+  pane_with_landed('keys-h-landed-no-head')
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Landed in dev', '  M a.txt' })
+  child.lua([[
+    require('aineo.git').resolve_commit = function(_, _, done)
+      done(nil, nil)
+    end
+  ]])
+  local told = 'aineo: the diff of a.txt could not be read: HEAD names no commit'
+
+  MiniTest.expect.error(function()
+    press_on_files_line('h', 2)
+  end, told)
+
+  eq(child.lua_get(TOLD), told)
+  eq(child.lua_get('#_G.shown_diffs'), 0)
+end
+
 T['h']['on a file under Landed, once the working branch names no commit, tells why and shows nothing'] = function()
   pane_with_landed('keys-h-landed-gone')
   go_to_commits_line(4)
