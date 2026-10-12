@@ -134,6 +134,19 @@ T['the configuration']['is reported wrong, naming the setting, when a value is']
   })
 end
 
+T['the configuration']['knows changes.working_branch: valid for a branch name, wrong for any other value'] = function()
+  start_with({ autostart = false, changes = { working_branch = 'origin/dev' } })
+  local valid = health.section(health.report(child), 'Configuration')
+  start_with({ autostart = false, changes = { working_branch = 3 } })
+
+  local wrong = health.section(health.report(child), 'Configuration')
+
+  eq(valid, { '- ✅ OK the configuration is valid' })
+  eq(wrong, {
+    '- ❌ ERROR changes.working_branch: expected a non-empty string naming a branch, got 3',
+  })
+end
+
 T['the configuration']['warns of each unknown key, in vim.g.aineo and setup() alike'] = function()
   start_with({ autostart = false, promt = '\\', claude = { command = { 'claude' } } })
   child.lua([[require('aineo').setup({ auto_start = true })]])

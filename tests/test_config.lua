@@ -9,6 +9,7 @@ local DEFAULTS = {
   autostart = true,
   claude = { cmd = { 'claude' } },
   layout = { report_height = 2 / 3 },
+  changes = {},
 }
 
 local T = MiniTest.new_set()
@@ -82,6 +83,37 @@ T['resolve_config()']['refuses a wrong value, naming its full path'] = MiniTest.
         refusal = 'layout%.report_height: expected',
       },
     },
+    {
+      {
+        global = { changes = { working_branch = '' } },
+        refusal = 'changes%.working_branch: expected',
+      },
+    },
+    {
+      {
+        global = { changes = { working_branch = false } },
+        refusal = 'changes%.working_branch: expected',
+      },
+    },
+    {
+      {
+        global = { changes = { working_branch = 1 } },
+        refusal = 'changes%.working_branch: expected',
+      },
+    },
+    {
+      {
+        global = { changes = { working_branch = { 'origin/dev' } } },
+        refusal = 'changes%.working_branch: expected',
+      },
+    },
+    {
+      {
+        setup = { changes = { working_branch = '' } },
+        refusal = 'changes%.working_branch: expected',
+      },
+    },
+    { { global = { changes = 'origin/dev' }, refusal = 'changes: expected' } },
     { { global = { claude = 'claude' }, refusal = 'claude: expected' } },
     { { global = { layout = 0.5 }, refusal = 'layout: expected' } },
     { { global = 'aineo', refusal = 'vim%.g%.aineo: expected' } },
@@ -115,6 +147,18 @@ T['resolve_config()']['refuses a report height not strictly between 0 and 1']['a
   expect.error(function()
     config.resolve_config({ layout = { report_height = height } }, nil)
   end, 'layout%.report_height: expected')
+end
+
+T['resolve_config()']['takes the working branch of the changes pane from either source, none by default'] = function()
+  local from_global = config.resolve_config({ changes = { working_branch = 'origin/dev' } }, nil)
+  local from_setup = config.resolve_config(
+    { changes = { working_branch = 'origin/dev' } },
+    { changes = { working_branch = 'dev' } }
+  )
+
+  eq(from_global.changes, { working_branch = 'origin/dev' })
+  eq(from_setup.changes, { working_branch = 'dev' })
+  eq(config.resolve_config(nil, nil).changes.working_branch, nil)
 end
 
 T['resolve_config()']['returns a key no setting knows, rather than refusing it'] = function()
