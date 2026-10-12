@@ -84,3 +84,9 @@ Large: the filter generalised to another worktree, the files window as one list,
 ## Report
 
 In your definition's shape, to `<scratchpad>/t50-report-packet.md`. Open the pull request into `dev` before you report. Put in its body every verification claim a reviewer can re-measure, each test file whose pins moved and why, and the whole suite's counts. The orchestrator's verification runs `plan.md`'s five T50 mutants: name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-12, before dispatch
+
+- **The user's answer** (`plan.md` › *The user's answers — 2026-10-12*, verbatim there): U3 (a), "No, one list always (Recommended)". It is the user's decision, recorded on D55 and D57; this body was written for it and stands unchanged.
+- **The orchestrator's rulings**, each the (a) this body is written for: A136 (O1), A137 (O2), A138 (O3), A139 (O4), A140 (O5), A141 (O6), A142 (O7); and the plan's assumptions as A154–A157. These are the orchestrator's assumptions under the user's instruction of 2026-10-06, to record in the session note and the PR body as such, never as the user's decisions. A154 (D32's worktree bases unchanged) stays an open thread for the user.
+- No answer holds this packet: it is dispatched once T49 has merged.
