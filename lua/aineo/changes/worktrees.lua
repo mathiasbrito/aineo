@@ -1,5 +1,6 @@
---- Reads, for one window of the changes pane, what each worktree of the
---- session's repository other than the editor's lists.
+--- Reads, for the changes pane, what each worktree of the session's
+--- repository other than the editor's lists: for the commits window, every
+--- worktree's commits; for the files window, one worktree's files.
 
 local git = require('aineo.git')
 
@@ -26,13 +27,16 @@ M.NONE = { sections = {} }
 --- Reads one window's list for a worktree.
 ---@alias aineo.changes.ReadList fun(repository: aineo.git.Repository, base: string|nil, done: fun(failure: aineo.git.Failure|nil, listed: any))
 
---- What a read of the other worktrees, for one window, starts from.
----@class aineo.changes.WorktreesRead
+--- What a read of one worktree starts from.
+---@class aineo.changes.WorktreeRead
 ---@field found aineo.git.Repository the editor's repository
 ---@field before aineo.changes.OtherWorktrees what the window knew of the other worktrees before this read
 ---@field read_list aineo.changes.ReadList reads the window's list for a worktree
----@field before_each_worktree fun(proceed: fun()) runs before each worktree's read, which starts once it calls `proceed()`
 ---@field git? aineo.git.Options how the git home runs git
+
+--- What a read of the other worktrees, for one window, starts from.
+---@class aineo.changes.WorktreesRead: aineo.changes.WorktreeRead
+---@field before_each_worktree fun(proceed: fun()) runs before each worktree's read, which starts once it calls `proceed()`
 
 --- The section of `before` for the worktree at `top`, or nil when it has
 --- none.
@@ -65,7 +69,7 @@ end
 --- The section of `worktree` before it is read: its top level and branch,
 --- and what the window last read for it (`section_before()`), if anything.
 ---
----@param read aineo.changes.WorktreesRead
+---@param read aineo.changes.WorktreeRead
 ---@param worktree aineo.git.Worktree
 ---@return aineo.changes.WorktreeSection
 local function unread_section(read, worktree)
@@ -85,7 +89,7 @@ end
 --- read, when it calls `done(nil)`, as it does when git finds the directory
 --- in another repository than that worktree (`is_listed_worktree()`).
 ---
----@param read aineo.changes.WorktreesRead
+---@param read aineo.changes.WorktreeRead
 ---@param worktree aineo.git.Worktree
 ---@param comparison string|nil
 ---@param done fun(section: aineo.changes.WorktreeSection|nil)
@@ -128,6 +132,28 @@ local function read_section(read, worktree, comparison, done)
     end),
     read.git
   )
+end
+
+--- Reads the list of `worktree` alone (`read.read_list`), from its base
+--- against the editor's repository's comparison commit, both read now
+--- (`git.comparison_commit()`, `read_section()`), and calls `done(section)`:
+--- the section holds the list, or says why it could not be read, over what
+--- `read.before` knew of the worktree (`unread_section()`); `done(nil)` when
+--- the worktree's directory is gone by then.
+---
+---@param read aineo.changes.WorktreeRead
+---@param worktree aineo.git.Worktree
+---@param done fun(section: aineo.changes.WorktreeSection|nil)
+function M.read_worktree(read, worktree, done)
+  git.comparison_commit(read.found, function(failure, comparison)
+    if failure then
+      local section = unread_section(read, worktree)
+      section.failure = failure
+      done(section)
+      return
+    end
+    read_section(read, worktree, comparison, done)
+  end, read.git)
 end
 
 --- Lists the worktrees of the editor's repository, `read.found`, other than
