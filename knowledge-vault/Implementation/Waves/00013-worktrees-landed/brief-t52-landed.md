@@ -92,3 +92,29 @@ In your definition's shape, to `<scratchpad>/t52-report-packet.md`. Open the pul
 - **The user's answers** (`plan.md` › *The user's answers — 2026-10-12*, verbatim there): U1 (a), "A setting (Recommended)", `changes.working_branch` defaulting to `origin/HEAD`; U2 (a), "Heading + its commits (Recommended)". They are the user's decisions, recorded on D56; this body was written for them and stands unchanged.
 - **The orchestrator's rulings**, each the (a) this body is written for: A136 (O1), A137 (O2), A143 (O8), A144 (O9: since the session's base), A146 (O11), A147 (O12), A148 (O13), A149 (O14), A150 (O15), A151 (O16); and A156 (the plan's A3: no `*` under *Landed*). These are the orchestrator's assumptions under the user's instruction of 2026-10-06, to record in the session note and the PR body as such, never as the user's decisions.
 - No answer holds this packet: it is dispatched once T50 and T51 have merged, with the dispatch amendment its header names.
+
+## Amendment — 2026-10-12, at dispatch: T50 and T51 merged
+
+The orchestrator's assumption (A163, as A124 was), recorded by the implementer who re-checked this brief against `origin/dev` `322fc41`, the `dev` T50 and T51 left. Nothing below changes what is built; one item (T51's point on unrelated histories) carries a recommendation for the orchestrator to rule on at the review.
+
+**Facts that moved** (`322fc41`; the body's numbers are `1dc3186`'s):
+
+- `lua/aineo/changes/init.lua`: `SessionSettings` 35–39; `commits_page()` 145; `lists_commit()` 452; `reselect_in_worktrees()` 468 (T50); `read_commits` 500 and its `take_own` (the reset of an editor's own commit gone now also requires `not session.selected.worktree`); `follow_change()` 532; `read_for_new_base()` 614; `read_selected_files()` 386 with `read_worktree_files()` 350 (T50); `diff_source()` 1096.
+- `lua/aineo/changes/lines.lua`: `commit_rows(commits, worktree)` 338; `filter_row()` 466; `CommitsView` 557; `own_commit_rows()` 598, then `worktree_rows()` in `commits_window()` 615; `files_window()` 531 lists the selected filter's files alone (`SectionLines` is gone, T50); `filter_name()` 444.
+- `lua/aineo/changes/filter.lua` (T50): `Filter` has `worktree`; `key()` is `<top>\0<id>` for another worktree's commit, `\0<kind>` for the editor's own fixed filters and `<top>\0\0<kind>` for a worktree's heading. A `landed` kind and a landed commit therefore need keys of their own: `\0landed` and `\0landed\0<id>` collide with none.
+- `lua/aineo/changes/pages.lua` (T50): a page for another filter than the one before puts every window's cursor on line 1 (`write_page()`), which covers a change to a *Landed* filter as to any other.
+- `lua/aineo/changes/entry_diff.lua`: `OWN_READS`, `OWN_WHOLE_NAMES`, `OWN_FILE_NAMES` are keyed by the filter's kind; a `landed` kind adds one row to each, and a landed commit uses the `commit` rows unchanged (`aineo://commit/{id}`, O14 (a)).
+- `lua/aineo/config/init.lua`: `SETTINGS` 42; `plugin/aineo.lua`: `resolved_config()` 150 and the `begin_session()` call 625; `lua/aineo/health.lua` reports unknown keys from `resolve_config`'s second result, so a key in `SETTINGS` is known to `:checkhealth aineo` with no change there.
+- T51's reads, as merged (`lua/aineo/git/init.lua`): `resolve_commit(found, name, done, options)` (one line of hex; `^x`, `a..b` give nothing; nil when the name names no commit), `remote_default_branch(found, done, options)` (`symbolic-ref --quiet --short refs/remotes/origin/HEAD`: `origin/main`, nil without `origin/HEAD`), `commits_between(found, from, to, done, options)` (no `--ignore-missing`: an unknown `to` is a failure; nil `from` lists all of `to`), `files_between`, `diff_between`, `file_diff_between` (`from...to`, a rename asked with both paths; nil `from` from the empty tree). `references_changed` is on every call of the watch, true for a path under `refs/` or `reftable/`, `packed-refs` or `FETCH_HEAD`.
+- The host's git is 2.54.0 (Apple Git-157); the suite's last whole run (T51) was 2779 cases.
+
+**Facts that hold:** every behaviour item 1–16 and the boundary stand as written.
+
+**T51's four points, and what this packet does:**
+
+1. `follow_change()` reads `references_changed` for *Landed*: the commits window's own read runs at a call whose change says `branch_moved` or `references_changed`, and *Landed* is read inside it (item 14). The files window under the heading is read again when the commit the branch resolves to changed since the last read (item 15 by its effect: it reads what a fetch moved, once, and not at a call that moved nothing).
+2. A fetch is missed on Linux except `FETCH_HEAD` in this worktree (A159): no code; LIMITS says so (the body's list names it).
+3. Unrelated histories: `commits_between` lists every commit of the working branch; the combined change (`base...branch`) and a file's diff under the heading fail with git's "no merge base". **Recommended:** the pane says git's words, as for any failed read (the files window's `The last refresh failed: …` line, and Enter's "the diff could not be read" notice), with no special wording; the rare case does not earn its own line. Built so; the orchestrator rules at the review if it is not plain.
+4. `remote_default_branch` gives a dangling name after a remote's default branch is renamed and pruned: `resolve_commit` finds no commit, so the heading says `Landed in origin/<old>` and the failure line `origin/<old> names no commit` (item 5), and the help names `changes.working_branch` as the remedy.
+
+**A point for the report, not a conflict:** `tests/test_doc.lua` (not mine to edit) builds its tag list from the resolved defaults; a setting whose default is nil leaves no leaf there, so that test does not require `*aineo-config-changes.working_branch*`. The help gets the tag all the same.
