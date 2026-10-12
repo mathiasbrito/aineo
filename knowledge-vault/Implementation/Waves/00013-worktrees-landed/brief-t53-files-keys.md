@@ -77,3 +77,26 @@ In your definition's shape, to `<scratchpad>/t53-report-packet.md`. Open the pul
 - **The user's answer** (`plan.md` › *The user's answers — 2026-10-12*, verbatim there): U4 (a), "Both, everywhere (Recommended)". It is the user's decision, recorded on D57; this body was written for it and stands unchanged, behaviours 6–10 included.
 - **The orchestrator's rulings**, each the (a) this body is written for: A136 (O1), A137 (O2), A152 (O17: `gf` shows the commit's file, read-only, in the middle column), A153 (O18: the buffer names of `h` and `l`); and A157 (the plan's A4: the commit's file is read-only — the body's "A4"). These are the orchestrator's assumptions under the user's instruction of 2026-10-06, to record in the session note and the PR body as such, never as the user's decisions.
 - No answer holds this packet: it is dispatched once T52 has merged, with the dispatch amendment its header names.
+
+## Amendment — 2026-10-12, at dispatch: T50–T52 merged
+
+The orchestrator's assumption (A179), as A163 was for T52; re-checked against `origin/dev` `70a52bc`. The body's line numbers are `1dc3186`'s and are not repeated here: the functions are found by name.
+
+**Facts that moved**
+
+- `lua/aineo/changes/init.lua` is 1626 lines. `open_entry()` is at 1423, `show_last_diff()` 1399, `show_diff()` 1348, `remember_diff()` 1312, `diff_source()` 1204, `open_file_at_cursor()` 1455, `map_open_file()` 1467, `pane_buffer()` 1480 (its `<CR>` map), and `pane_buffers()` 1611, which calls `map_open_file()` for the files buffer each time it is made anew.
+- `lua/aineo/changes/entry_diff.lua` (250 lines): `read()` dispatches on `entry.worktree` and then on `OWN_READS[entry.filter.kind]`, whose kinds are now `session_work`, `uncommitted`, `landed`, `commit`; `name()` has `OWN_FILE_NAMES` and `OWN_WHOLE_NAMES` by the same kinds, and another worktree's `worktree<top>//` with `diff/`, `commit/{id}/` or `since-base`. The landed kind reads at `source.landed.tip` (`with_landed_tip()`), and `landed.unreadable()` tells why there is none.
+- `lua/aineo/changes/lines.lua`: a file entry is `{ key, change, filter = listed_under, worktree }`, so every file line carries the filter it is listed under. Under *Landed* the filter is `{ kind = 'landed' }`; under a landed commit it is `{ kind = 'commit', landed = <branch name> }`; under another worktree's commit `{ kind = 'commit', worktree = <section> }`; under another worktree's whole change `{ kind = 'worktree', worktree = <section> }`. The worktree's `repository` is on the section.
+- `lua/aineo/git/` (T51): `file_at_commit(found, commit, path, done, options)` matches the name exactly and gives `done(nil, text)`, the bytes git printed; a path the commit lacks is a failure with `reason = 'path_missing'`, a directory or a submodule at the path a plain `failed`. `file_diff_straight(found, from, to, change, done, options)` gives a file from one commit straight to another (nil `from` from nothing); `resolve_commit(found, 'HEAD', done, options)` gives `HEAD`'s full id; `uncommitted_file_diff()` is unchanged.
+- `session.landed.tip` is the commit the working branch named when the commits window last read it; nil while unread or when the name names no commit (`aineo.changes.landed`).
+- `tests/test_changes_open_file.lua` pins, under a commit filter, `gf` opening the working tree's file (A2 of T45); this packet replaces that pin.
+
+**Facts that hold:** every behaviour item 1–10, the buffer names of items 1 and 9, and the boundary stand as written. `lines.lua` is outside the boundary: the `HEAD` reading of an entry is carried by a field of a table `aineo.changes` keeps itself, not by a new field of `aineo.changes.Entry`.
+
+**What `gf`, `h` and `l` do under *Landed* and a landed commit**
+
+- *Landed* (the heading's files): `gf` shows the file as the working branch's commit has it (`session.landed.tip`), in `aineo://show/{tip}/{path}`; `l` is Enter's diff, base to that commit (`aineo://landed/{path}`); `h` shows the file from `HEAD` straight to that commit (`aineo://head/landed/{path}`).
+- A landed commit's files: `gf` shows the file as that commit has it; `l` is Enter's diff (the commit's own change, `aineo://commit/{id}/{path}`); `h` shows it from that commit straight to `HEAD` (`aineo://head/commit/{id}/{path}`).
+- Under *Uncommitted*, `h` and Enter are one diff and one buffer (`aineo://uncommitted/{path}`).
+
+**No spec conflict.** The brief and the code agree; the one departure to report is that the commit's file buffer is cut at the 1 MiB the diffs are cut at (`aineo.changes.diffs`), with the same last line saying so, rather than holding a larger file whole: the bound is the one measured for syntax on a long text.
