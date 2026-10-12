@@ -156,23 +156,26 @@ local function last_shown_changes()
   end, last_shown_lines())
 end
 
---- Makes a repository whose base commit holds `notes.txt` with `one`, begins
---- the session there with the pane shown, commits `notes.txt` as `two`
+--- Makes a repository whose base commit holds the file `path` with `one`,
+--- begins the session there with the pane shown, commits the file as `two`
 --- (`first`) and as `three` (`second`), selects `first` in the commits
---- window and waits for the files window to list `notes.txt` under it.
---- Returns the top level, `first` and `second`.
+--- window and waits for the files window to list the file under it, as
+--- `listed_as`. Returns the top level, `first` and `second`.
 ---
 ---@param case string the case's own name
+---@param path? string `notes.txt` when not given
+---@param listed_as? string the file's name in the files window, `path` when not given
 ---@return string top
 ---@return string first
 ---@return string second
-local function pane_under_first_of_two_commits(case)
-  local top = git_repo.create(case, { ['notes.txt'] = { 'one' } })
+local function pane_under_first_of_two_commits(case, path, listed_as)
+  path = path or 'notes.txt'
+  local top = git_repo.create(case, { [path] = { 'one' } })
   begin_and_show(top)
   expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
-  git_repo.write(top, 'notes.txt', { 'two' })
+  git_repo.write(top, path, { 'two' })
   local first = git_repo.commit_all(top, 'First')
-  git_repo.write(top, 'notes.txt', { 'three' })
+  git_repo.write(top, path, { 'three' })
   local second = git_repo.commit_all(top, 'Second')
   child.lua("require('aineo.changes').refresh_shown_pane()")
   expect_lines(COMMITS, {
@@ -182,7 +185,10 @@ local function pane_under_first_of_two_commits(case)
     first:sub(1, 7) .. ' First',
   })
   go_to_commits_line(4)
-  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' First', '  M notes.txt' })
+  expect_lines(FILES, {
+    'Files in: ' .. first:sub(1, 7) .. ' First',
+    '  M ' .. (listed_as or path),
+  })
   return top, first, second
 end
 
@@ -595,6 +601,16 @@ T['h']['on a file under Landed, once the working branch names no commit, tells w
 
   eq(child.lua_get(TOLD), 'aineo: the diff of a.txt could not be read: dev names no commit')
   eq(child.lua_get('#_G.shown_diffs'), 0)
+end
+
+T['h']['names the buffer after the file as the files window quotes it'] = function()
+  local _, first =
+    pane_under_first_of_two_commits('keys-h-quoted', 'say "hi".txt', '"say \\"hi\\".txt"')
+
+  press_on_files_line('h', 2)
+
+  wait_for_shown(1)
+  eq(last_shown_name(), 'aineo://head/commit/' .. first .. '/"say \\"hi\\".txt"')
 end
 
 T['h']['on a file HEAD lacks shows it wholly removed'] = function()
