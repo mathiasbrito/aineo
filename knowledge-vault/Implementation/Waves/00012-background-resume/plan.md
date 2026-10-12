@@ -17,7 +17,9 @@ pull_requests:
 **Ask:** the user's fix request of 2026-10-12 (verbatim below).
 **Composition from:** [[Planning/aineo — v1 agent console]] › D23, D36–D38, D42, D45, D49, D51, D53, C3, R2 and the proposed D54 and T48 this plan writes; [[Implementation/Waves/00011-names-and-sessions/plan]] for the form and for T46, whose `claude agents --json` reader this packet reuses; [[Projects/aineo]].
 
-**One packet, T48, held for the user's answer U1.** The cause is established up to how the folder's kept session came to run in the background service, which only the user's manual checks can tell (M9–M11); the fix the plan recommends does not depend on that answer. The brief is written for this plan's recommendations; an answer that differs is a dated amendment before dispatch.
+**Revised 2026-10-12 with the user's round-1 answers** (*The user's answers — round 1*, *Round 2*). The user rejected every U1 option: aineo always resumes the folder's session, warns when it runs in another interactive Claude Code, and resumes a background one so that its content shows. U2: the quit stays as it is until M9 and M10. T48 is re-planned as the display fix. Its brief is rewritten for (ii), a redraw, and held for the user's check M11. The round-1 text below is kept as it was written.
+
+**One packet, T48, held for the user's answer U1** *(round 1)*. The cause is established up to how the folder's kept session came to run in the background service, which only the user's manual checks can tell (M9–M11); the fix the plan recommends does not depend on that answer. The brief is written for this plan's recommendations; an answer that differs is a dated amendment before dispatch.
 
 ## The user's request — 2026-10-12, verbatim
 
@@ -67,23 +69,23 @@ The options, each for the start (the quit follows):
 
 **Not in T48:** E3's harm when the user attaches aineo's terminal by hand — a `/resume` of a running background session, or agent view — and then quits. aineo's Ctrl-C then interrupts that session's turn. It is an open thread for the user (M11's last step measures it).
 
-## Proposed D54 — written into the plan note with the request's decided parts only
+## D54 — written into the plan note
 
-The row's decision column, as written into [[Planning/aineo — v1 agent console]]; its reasoning column quotes the request. What is undecided is named as open, for U1 and U2.
+**Round 1** proposed a D54 holding only the request's decided part: a start does not open the kept session while it runs in the background service. What the start did instead was left open for U1. **Rewritten 2026-10-12 with the user's round-1 answers.** The row is not merged, so it is replaced, not superseded. Its decision column, as written into [[Planning/aineo — v1 agent console]]; its reasoning column quotes the request, both answers and the user's observation.
 
-> **D54** — A start of Claude Code that would resume the folder's kept session (D23, D38) does not open that session in aineo's terminal while it runs in Claude Code's background service, where Claude Code 2.1.296 attaches aineo's terminal to it and the session's content does not show. Open, and not part of this row until the user answers them (wave 12's plan, *Questions for the user*): what the start does instead — recommended, a new session with the background one left untouched, found by a `claude agents --json` run before each start that resumes (U1); and whether aineo's quit changes (U2) (amends D23 and D38; touches C3)
+> **D54** — A start of Claude Code always resumes the session kept for the working directory (D23, D38), wherever that session runs. When it runs in another interactive Claude Code, aineo tells the user so and resumes it all the same. When it runs in Claude Code's background service — where Claude Code 2.1.296 attaches aineo's terminal to it, and the attached session's content did not show — aineo resumes it so that its content shows in aineo's terminal. The quit does not change until the user's checks M9 and M10 are in. Open, and not part of this row: how the content is made to show, which is the orchestrator's after the user's check M11 (wave 12's plan, *Round 2*, O6); and what aineo's quit does in a terminal attached to a background session (U3) (confirms D23 and D38 for a session running elsewhere; touches C3)
 
 ## Packets — the six-rules table
 
 | packet | tasks | type / model | files | schema? | dependency change? | decision open? | task-line marks |
 |---|---|---|---|---|---|---|---|
-| T48 | T48 | `neovim-claude-code-integrator` / sonnet | `lua/aineo/claude/init.lua` (the start: `start_session()`, `start_in_place()`, `launch()`, `kept_or_new_session()`), `lua/aineo/claude/agents.lua` (a predicate on a listed session, if needed); `tests/helpers/fake_claude.lua` (its `agents --json` answer: a delay, if a case needs one), `tests/helpers/claude_session.lua` (`wait_for_starts()` counts Claude Code's starts, not the list's runs); a new `tests/test_claude_background_resume.lua`, `tests/test_entry_sessions.lua` and `tests/test_claude_agents.lua` where a helper's change moves them; `doc/aineo.txt` › *aineo-claude-session* and *aineo-limits* (*Stopping Claude Code on quit*, *The session list*) | no | no | U1 (the user's) | own |
+| T48 | T48 | `neovim-claude-code-integrator` / sonnet | *(round 2)* `lua/aineo/claude/init.lua` (the start: the attach line read off the new terminal, the one redraw, the warning's list beside the start), `lua/aineo/claude/agents.lua` (a predicate for the warning's entry, if needed); `tests/helpers/fake_claude.lua` (an `Opening …` screen on `--resume` of an id it is told runs in the background, and the bytes it then receives), `tests/helpers/claude_session.lua` (`wait_for_starts()` counts Claude Code's starts, not the list's runs); a new `tests/test_claude_background_resume.lua`, `tests/test_entry_sessions.lua` and `tests/test_claude_agents.lua` where a helper's change moves them; `doc/aineo.txt` › *aineo-claude-session* and *aineo-limits* (*Stopping Claude Code on quit*, *The session list*) | no | no | M11, then O6 | own |
 
 **Rule 1, dependencies.** T48 rests on T46's reader, merged. ✓
 **Rule 2, files.** One packet. ✓
 **Rule 3, schema.** None. ✓
 **Rule 4, dependencies.** None. ✓
-**Rule 5, decisions.** U1 before dispatch; O1–O5 are the orchestrator's. ✓ once answered.
+**Rule 5, decisions.** *(round 2)* U1 and U2 are answered. M11 before dispatch, then O6; O7–O10 are the orchestrator's; U3 does not hold T48 under its (a). ✓ once M11 is in.
 **Rule 6, task lines.** One packet: it marks its own line. ✓
 
 **Class: regular.** It changes what a start does (D23, D38, proposed D54). Its home is `lua/aineo/claude/` and it starts a process, both of which §3 of the orchestrate skill keeps from a small fix (D30's waves included).
@@ -96,9 +98,9 @@ The row's decision column, as written into [[Planning/aineo — v1 agent console
 
 D26: the whole suite once before each push. The start path is exercised by most entry suites, and the helper change moves every suite that counts starts.
 
-## Decisions for the orchestrator
+## Decisions for the orchestrator — round 1, as written
 
-Numbered once, here. The recommendation is (a). The brief is written for it.
+Numbered once, here. Written for (A), which the user's U1 answer rejected (*The user's answers — round 1*). They are kept as they were written, and not ruled.
 
 - **O1 — What counts as running elsewhere at a start.**
   - (a) A listed entry whose `sessionId` is the kept id, whose `kind` is `background`, and whose process runs (`pid` or `status` present). An `interactive` entry — the session open in another terminal or another aineo Neovim — keeps today's resume: D38 and D42 already provide for two Neovims on one session.
@@ -116,7 +118,7 @@ Numbered once, here. The recommendation is (a). The brief is written for it.
   - (a) One warning of at most 60 characters, as `SETTINGS_UNREAD_WARNING` is limited (`init.lua` 254) so that it holds no 80-column start at a hit-enter prompt. For example `aineo: kept session runs in background; started a new one` (57). The help says how to reach the background session: `claude attach <id>`, or agent view.
   - (b) Two lines, naming the session.
 
-## Questions for the user
+## Questions for the user — round 1, as written
 
 Only what changes a D row, or needs the user's own measurement. Each recommendation is (a).
 
@@ -130,27 +132,134 @@ Only what changes a D row, or needs the user's own measurement. Each recommendat
 - (a) No change in T48. Measure first (M9, M10). If the quit does move such a session to the background, its work goes on there, and under U1 (a) the next start begins a new session and tells you. Recommended.
 - (b) After M9: if it does move it, change the quit so the session stays aineo's, and the work it was running ends. That changes R2 and C3's "clean stop on quit", and would be planned in a later wave.
 
+## The user's answers — round 1, 2026-10-12
+
+Verbatim, from the orchestrator's record of the `AskUserQuestion` on this plan's U1 and U2. The question was worded more briefly than this plan's U1, and offered only its options (a)–(c).
+
+- **U1** — Q: "The cause: aineo resumes this folder's recorded session without checking where it runs. When that session lives in Claude Code's background service, Claude attaches to it instead of resuming it in aineo. That's the 'Opening … running in the background' line. When this folder's recorded session is running in the background service, what should aineo's start do?" (options: start a new session; open a copy with --fork-session; stop it and resume here) — A: "none of this solution are desired, it must resume the session, if it is running in another claude-code session warn, if it is running in the background, resume."
+- **U2** — Q: "We don't know yet whether aineo's own quit (:qa!) can push a session into the background service. … Should T48 also change the quit?" — A: "Not yet; you check first (Recommended)" (option text: "T48 fixes the start only. You run two short checks in a scratch folder (M9: quit while a background Bash runs; M10: quit while idle), and we change the quit only if they show it backgrounds a session.")
+- Already in the request: "I have to do /resume then pick the session, only then it will appear." This is the user's own observation that a `/resume` typed into Claude Code shows the background session's content.
+
+What follows from them:
+
+- **U1 → the user's decision, recorded in D54.** aineo always resumes the folder's kept session (D23, D38 stand).
+  - When that session runs in another interactive Claude Code, aineo warns and resumes it all the same.
+  - When it runs in the background service, aineo resumes it so that its content shows.
+  - (A)–(C), the options offered, are rejected. (D) and (E) were not offered, but both end in a new session, which the answer rules out too. The fault left to fix is the display: after the start's `--resume`, the background session's content does not show.
+- **U2 → the user's decision.** T48 changes the start only. The quit stays as it is until M9 and M10 are in.
+- O1–O5 were written for (A) and fall with it. They are kept as they were written, and not ruled.
+
+## Round 2 — making a background session's content show in aineo's terminal
+
+**Evidence.** The user's report: a command-line `--resume` printed the `Opening …` line and showed nothing, and a `/resume` typed into that window, picking the session, showed its content. Beyond the report there is this:
+
+- Claude Code's documentation says an attached session always renders in fullscreen mode (D2). For fullscreen it says: "If the display looks garbled or partially blank, press `Ctrl+L` to redraw the screen. The redraw keeps the conversation and your input in place" (D9). It also names `CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT=1`, which repaints every cell on every frame (D9). `Ctrl+L` is "Redraw the screen … Use this to recover if the display becomes garbled or partially blank" (D10).
+- aineo's own start documents a size problem (`start_session()`'s docstring, `lua/aineo/claude/init.lua`). A terminal has the rows of a hidden window — 5 — until a window shows it, "though a size it reads as it starts can still be 5 rows". A fullscreen view first drawn for 5 rows, and drawn only in the cells that change afterwards (D9, *Stale or misplaced text on screen*), would leave the window blank. This is a hypothesis, not a measurement.
+- What the window held before the user's `/resume` is not known:
+  - **(α)** It was the background session itself, attached but not drawn. The docs say a `/resume` typed in an attached session "prints the `claude attach` command to run instead" (D1), which the user's observation contradicts.
+  - **(β)** It was a fresh, empty session that Claude Code started after printing the line. Then the typed `/resume` moved that empty session to the background and attached the window (D1). That fits the observation.
+
+  M11 tells which.
+
+**The options.**
+
+- **(i) Type the user's own `/resume`.** Once the start's screen shows Claude Code's `running in the background (` line, and Claude Code is ready with an empty prompt (T46's `prompt_shows_text()`), aineo writes `/resume <kept id>` and Enter as T46 writes a switch: a bracketed paste and `\r` in one write (A133). It does this once per start.
+  - It works only under (β). Under (α) the docs say the `/resume` prints a command instead (D1).
+  - Under (β), the empty session the start made is moved to the background service, as a row with no conversation in it. Whether Claude Code keeps such a row, at every start in that folder, is M12.
+  - D38: aineo follows the id it started on, the kept id. A `SessionStart` of an empty session with no `SessionEnd` of the followed id before it is not a switch (D37's note, A1). A `SessionEnd` of that empty session is not of the followed id. So the typed `/resume` records nothing, and the kept id stays. If Claude Code instead tells a `SessionEnd` of the kept id and then a `SessionStart` of the same id, that is no switch either.
+  - Cost: it types into Claude's prompt, with T46's refusals when text shows. If the line's wording changes, nothing is typed.
+- **(ii) Redraw.** Keep `--resume`. When the start's screen shows the `running in the background (` line, aineo writes one `Ctrl+L` (`\x0c`) to the terminal once the window has its size. This is the documented recovery for a partially blank fullscreen display (D9, D10).
+  - It works only under (α), and only if the content is there but undrawn.
+  - It changes no session, types nothing into the prompt, and leaves D38 alone. At an ordinary prompt `Ctrl+L` only redraws.
+  - Cost: one byte per start that attaches.
+- **(iii) Repaint every frame.** `CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT=1` in Claude Code's environment (`CHILD_ENVIRONMENT`, C3). That is documented for terminals that drop incremental fullscreen updates (D9).
+  - Cost: every fullscreen frame of every session in aineo's terminal is sent whole, not only an attached one's.
+  - It helps under (α) only if the blank comes from cells left undrawn, and is not a first frame drawn at the wrong size.
+- **(iv) Nudge the size.** Resize the terminal by one row and back (`jobresize()`), so that Claude Code gets a `SIGWINCH` and redraws. Works under (α). It has (ii)'s reach with more moving parts, and no documentation behind it.
+
+**The list.** None of (i)–(iv) needs `claude agents --json` to tell a background session: the `Opening …` line on the screen tells it, as `found_no_conversation()` tells a missing conversation from the screen. The warning does need the list, for an interactive session running elsewhere. That list runs beside the start, after Claude Code is launched, so the start does not wait for it. Its cost is a second `claude` run at each start that resumes, off the start's path, and A131's unmeasured question whether it starts the background service. The fake's record and `wait_for_starts()` must tell the list's run from Claude Code's (the brief's *Facts*).
+
+**Recommended: (ii), with (i) in its place if M11 shows (β).** It is documented for exactly this symptom, costs one byte, and moves no session. If M11 shows that `Ctrl+L` does not bring the content, and that the window held a fresh session (β), the brief is amended for (i) before dispatch: O6. M11 holds the dispatch either way. M12 holds it only under (i).
+
+**What an attached session is, under the user's decision.** E3 stands. The session in aineo's window runs in the background service with its own flags. aineo's report instructions and `--allowedTools` do not carry over (D4), so its Report may get nothing, and Claude may ask permission for the report tool. aineo's quit presses Ctrl-C into it, which interrupts a turn in progress (D2) — U3. The help says both.
+
+## Decisions for the orchestrator — round 2
+
+Not ruled; O1–O5 above fall with U1's answer. The recommendation is (a), and the brief is written for it.
+
+- **O6 — The mechanism, after M11.**
+  - (a) (ii), `Ctrl+L`, if M11 shows `Ctrl+L` brings the content. Else (i), the typed `/resume`, if M11 shows a fresh session and M12 shows it works.
+  - (b) (i) whatever M11 shows: it is what the user did by hand.
+  - (c) Both, `Ctrl+L` first and then `/resume` if the screen still shows no conversation. That needs aineo to read "no conversation" off a fullscreen screen, which nothing measures.
+- **O7 — What tells the start that it attached.**
+  - (a) The screen: Claude Code's `running in the background (` line, read with the white space removed, as `found_no_conversation()` reads its line. It costs no wait, and its wording is the user's report and D1's.
+  - (b) The list's answer: the kept id listed as `background` with a `pid`. That is on the list's time, up to 5 s after the start.
+- **O8 — When the key is written.**
+  - (a) Once per start, after the line, once Claude's window has shown the terminal at its size, and — under (i) — once `session_status()` is `'ready'` and the prompt shows no text. Nothing is written after 10 s, nor once the session has exited or Neovim is quitting.
+  - (b) Each time the line is redrawn.
+- **O9 — Which entry is "another Claude Code", for the warning.**
+  - (a) An entry of the kept id, `kind` `interactive`, with a `pid`, which is not aineo's own Claude Code. aineo's own is the one whose `pid` is the terminal job's (`jobpid()`), or whose `startedAt` is at or after aineo's launch, since a `claude.cmd` that wraps `claude` gives another pid. A list that fails tells nothing.
+  - (b) Any running entry of the kept id other than aineo's own, background ones included. The background case already shows itself on the screen.
+- **O10 — The warning's text.** (a) One line of at most 60 characters, as `SETTINGS_UNREAD_WARNING` is limited, for example `aineo: this session is also open in another Claude Code` (55). (b) Two lines, naming where.
+
+## Questions for the user — round 2
+
+**U3 — aineo's quit when its window is attached to a background session.** Under your U1 answer, every start in a folder whose session runs in the background attaches aineo's window to it. aineo's quit then presses Ctrl-C into it. Claude Code's documentation says Ctrl-C there "cancels a running response", and a double press on an empty prompt detaches. So a `:qa!` while that session is working interrupts its turn. `Ctrl+Z` detaches without interrupting (D2), but nothing measures it in aineo's terminal.
+- (a) Leave the quit as it is in T48, as your U2 answer says. Measure `Ctrl+Z` with M13 beside M9 and M10, and plan any quit change after them, in one later wave. Recommended.
+- (b) T48 also makes the quit press `Ctrl+Z` instead of Ctrl-C when the start attached, unmeasured.
+
 ## Manual checks — the user's, in a scratch folder you trust, where no session you need runs
 
-None of these touches a session of yours elsewhere. Afterwards, stop only the scratch folder's own background session, by the id `claude agents --json` printed for that folder.
+None of these touches a session of yours elsewhere. Afterwards, stop only the scratch folder's own background session, by the id `claude agents --json --cwd <scratch folder> --all` printed.
 
-- **M9 — does aineo's quit move a session with background work to the background service?** (H1 (a), U2) Open Neovim with aineo in the scratch folder. In Claude's window type `Start "sleep 900" with the Bash tool in the background, then tell me it runs.` and wait for Claude to say it runs. Then `:qa!`. In a shell, run `claude agents --json --cwd <scratch folder> --all`. Look for an entry with `"kind": "background"`, a `pid`, and a `sessionId` that `:lua print(require('aineo.claude').session_id())` printed before the quit. If there is one, the quit moved the session to the background. If there is none, it did not.
+**For U2 (the quit) — hold no dispatch:**
+
+- **M9 — does aineo's quit move a session with background work to the background service?** (H1 (a)) Open Neovim with aineo in the scratch folder. In Claude's window type `Start "sleep 900" with the Bash tool in the background, then tell me it runs.` and wait for Claude to say it runs. Before the quit, `:lua print(require('aineo.claude').session_id())`. Then `:qa!`. In a shell, run `claude agents --json --cwd <scratch folder> --all`. Look for an entry with `"kind": "background"`, a `pid`, and that `sessionId`. If there is one, the quit moved the session to the background; if none, it did not.
 - **M10 — the same with no background work.** Claude idle with nothing running, then `:qa!`, then the same command. A live entry for the session would mean the hang-up alone moves it.
-- **M11 — what aineo's window shows on the attach** (U1 (d); E2, E3). Only if M9 left a background session. Open Neovim in the scratch folder again. Look for `Opening "…", running in the background (…)` and note what the window shows below it. Then press `Ctrl+L` in Claude's window, then `<C-w>=`: does the conversation appear? Then type `say hi` and Enter, let it answer, and `:qa!`. In the shell run the same command again: is the session still listed with a `pid`? And in agent view, does its last turn show as interrupted?
+- **M13 — `Ctrl+Z` in an attached window** (U3). After M11, with Claude idle, press `Ctrl+Z` in Claude's window. Does that Claude Code exit (the window shows `[Process exited …]`), and does `claude agents --json …` still list the session with a `pid`?
 
-## Verification mutants
+**For T48 — the setup, then the checks that hold its dispatch:**
 
-Each runs as its literal edit, shown applied, on the test files that exercise the code it breaks — `tests/test_claude_background_resume.lua` first — and on the whole suite only when it survives there.
+- **Setup.**
+  1. Open Neovim with aineo in the scratch folder, send `say hi`, and wait for the answer.
+  2. `:lua print(require('aineo.claude').session_id())`.
+  3. On the empty prompt press `←` (twice if Claude Code asks): Claude Code shows `Your conversation moved to the background`.
+  4. `:qa!`.
+  5. In a shell, check that `claude agents --json --cwd <scratch folder> --all` lists that `sessionId` as `"kind": "background"` with a `pid`.
 
-1. The check is skipped: a kept id listed as a running background session is resumed (`--resume <kept>` in the fake's record).
-2. `running` is ignored: a background entry of the kept id with neither `pid` nor `status` makes a new session where it should resume.
-3. The failure path is inverted: `agents --json` exiting 3 makes a new session where it should resume.
-4. An `interactive` running entry of the kept id makes a new session (O1 (a)).
-5. The new session is handed the background session's Report records (D45's hand-over called).
+  M9, if it left a background session, is the same setup.
+- **M11 — holds the dispatch: what the attached window holds, and whether `Ctrl+L` draws it** (O6).
+  1. Open Neovim with aineo in the scratch folder. Wait for the `Opening "…", running in the background (…)` line.
+  2. Note what the window shows under the line: nothing; Claude Code's prompt box with an empty conversation; or the conversation.
+  3. Run `claude agents --json --cwd <scratch folder> --all` again. Is there now an `interactive` entry with a new `sessionId`? If so, the window holds a fresh session (β). If not, it is attached (α).
+  4. Press `Ctrl+L` in Claude's window: does the conversation appear?
+  5. If not, run `:vertical resize -5`, then `<C-w>=`: does it appear now?
+  6. If it appears, press `\s` on a line in a file buffer: does it reach Claude's prompt? (whether aineo sees the attached view as ready)
+- **M12 — holds the dispatch only if O6 comes to (i): the typed `/resume`.**
+  1. Repeat the setup and M11's step 1.
+  2. In Claude's window type `/resume <the sessionId from the setup>` and Enter: does the conversation appear?
+  3. Run `claude agents --json --cwd <scratch folder> --all`: is there a new background entry with no `name`, the empty session moved out?
+  4. Repeat steps 1–3 once more: does each start leave one more such entry?
+- **M14 — the warning's other Claude Code** (O9; does not hold the dispatch, the fake gives both shapes).
+  1. With aineo open in the scratch folder, in a plain terminal in that folder run `claude --resume <aineo's sessionId>`.
+  2. Run `claude agents --json --cwd <scratch folder> --all`: are both processes listed, each as `interactive` with its own `pid` and the same `sessionId`?
+  3. Then `/exit` the plain terminal's Claude Code.
+
+## Verification mutants — round 2, for (ii)
+
+Each runs as its literal edit, shown applied, on the test files that exercise the code it breaks — `tests/test_claude_background_resume.lua` first — and on the whole suite only when it survives there. If the brief is amended for (i), the amendment rewrites 1–3 for the typed `/resume`.
+
+1. The redraw is never written: after the line, the fake receives no `\x0c`.
+2. The redraw is written at every start, not only after the line: a plain resume receives `\x0c`.
+3. The redraw is written each time the line is redrawn: the fake receives `\x0c` more than once in a start.
+4. The interactive-elsewhere warning is dropped: a listed `interactive` entry of the kept id with another `pid` tells nothing.
+5. aineo's own entry is not excluded: the warning is told for the entry whose `pid` is aineo's own Claude Code.
+
+The round-1 mutants (for (A)) are withdrawn with it.
 
 ## Briefs
 
-- `brief-t48-background-resume.md` — T48, written for U1 (a), U2 (a) and O1–O5 (a). It is dispatched after the user answers U1; M9–M11 do not hold it.
+- `brief-t48-background-resume.md` — T48, rewritten 2026-10-12 for round 2: the user's U1 and U2, (ii) under O6 (a), and O7–O10 (a). It is dispatched after M11. If M11 shows (β), it is amended for (i) before dispatch, and M12 must be in as well. The round-1 brief, written for (A), was never dispatched; its text is in this pull request's first commit.
 
 ## Landed
 
