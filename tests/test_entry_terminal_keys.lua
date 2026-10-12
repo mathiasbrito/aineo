@@ -191,6 +191,29 @@ T['a twin']['shows the pane of its action']['from'] = function(mode, key, shown_
   eq(entry.windows(child), with_file(shown, file))
 end
 
+T['a twin']['moves the cursor into the window of the pane of its action, in Normal mode'] =
+  MiniTest.new_set({
+    parametrize = in_each_mode({
+      { 'pa', 'changes', 'aineo://report' },
+      { 'g', 'agent', 'aineo://changes-commits' },
+    }),
+  })
+
+T['a twin']['moves the cursor into the window of the pane of its action, in Normal mode']['from'] = function(
+  mode,
+  key,
+  shown_before,
+  window
+)
+  open_layout('terminal-keys-pane-cursor-' .. mode .. key)
+  entry.command(child, 'Aineo pane ' .. shown_before)
+  enter(mode)
+
+  press_twin(key)
+
+  eq({ entry.current_window(child), child.lua_get(MODE) }, { window, 'n' })
+end
+
 T['a twin']['<C-\\>S asks for the session list'] = MiniTest.new_set({
   parametrize = { { 't', 'terminal cat' }, { 'i', 'enew' } },
 })
