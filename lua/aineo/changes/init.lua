@@ -1440,8 +1440,10 @@ end
 --- cursor lists in `buffer` (`aineo.changes.entry_diff`), and shows it
 --- (`show_last()`), the current window kept as the one the key was pressed
 --- in (`aineo.changes.Selection`), unless a key asked for another diff or
---- file meanwhile: only the last key's is shown, or its failure told. Does
---- nothing on a line that lists none.
+--- file meanwhile: only the last key's is shown, or its failure told. A
+--- diff against `HEAD` that is empty is not shown: the user is told, once,
+--- that the file is as `HEAD` has it, and the focus stays. Does nothing on a
+--- line that lists none.
 ---
 ---@param buffer integer
 ---@param diffed fun(listed: aineo.changes.Entry): aineo.changes.Entry the entry standing for the diff to show
@@ -1466,6 +1468,10 @@ local function show_diff_at_cursor(buffer, diffed)
       end
       if failure then
         tell_diff_unreadable(entry, failure)
+        return
+      end
+      if head_diff.is_against_head(entry) and diff == '' then
+        vim.notify(head_diff.told_unchanged(entry), vim.log.levels.INFO)
         return
       end
       local selection = { entry = entry, window = window, context = source.context }

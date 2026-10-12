@@ -31,6 +31,15 @@ function M.is_against_head(entry)
   return entry.against_head == true
 end
 
+--- What the user is told when the diff of `entry` against `HEAD` is empty:
+--- the file is as `HEAD` has it.
+---
+---@param entry aineo.changes.HeadEntry
+---@return string
+function M.told_unchanged(entry)
+  return ('aineo: %s is as HEAD has it'):format(lines.quoted_path(entry.change.path))
+end
+
 --- What a diff against `HEAD` fails with when `HEAD` names no commit.
 ---@type aineo.git.Failure
 local NO_HEAD = { reason = 'failed', message = 'HEAD names no commit' }
