@@ -223,8 +223,8 @@ T['a read between commits'] = MiniTest.new_set({
   parametrize = {
     { 'files_between', { 'base', 'later' } },
     { 'diff_between', { 'base', 'later' } },
-    { 'file_diff_between', { 'base', 'later', { path = 'changed.txt', kind = 'modified' } } },
-    { 'file_diff_straight', { 'base', 'later', { path = 'changed.txt', kind = 'modified' } } },
+    { 'file_diff_between', { 'base', 'later', { path = 'touched-1.txt', kind = 'modified' } } },
+    { 'file_diff_straight', { 'base', 'later', { path = 'touched-1.txt', kind = 'modified' } } },
     { 'commits_between', { 'base', 'later' } },
     { 'file_at_commit', { 'later', 'changed.txt' } },
     { 'resolve_commit', { 'later' } },

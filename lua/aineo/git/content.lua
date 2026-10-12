@@ -8,14 +8,21 @@ local M = {}
 --- a link's target included.
 local FILE_OBJECT_TYPE = 'blob'
 
---- The object id and type of the entry `git ls-tree -z` gave as `output`,
---- one entry at most, as `<mode> <type> <id>\t<path>`; nil when it gave none.
+--- The object id and type of the entry named exactly `path` among those
+--- `git ls-tree -z` gave as `output`, each `<mode> <type> <id>\t<path>`; nil
+--- when none is: `ls-tree` also lists entries for a path it normalises
+--- (`.`, `dir/`), and for a second path it takes from the arguments.
 ---
 ---@param output string
+---@param path string
 ---@return { type: string, id: string }|nil
-local function parse_entry(output)
-  local kind, id = output:match('^%d+ (%a+) (%x+)\t')
-  return kind and { type = kind, id = id } or nil
+local function parse_entry(output, path)
+  for kind, id, name in output:gmatch('%d+ (%a+) (%x+)\t([^%z]*)%z') do
+    if name == path then
+      return { type = kind, id = id }
+    end
+  end
+  return nil
 end
 
 --- Calls `done` with the failure that says the commit `commit` has no file
@@ -44,8 +51,9 @@ end
 --- calls `done(nil, text)`, the bytes exactly as git printed them, or
 --- `done(failure)`: `path_missing` when the commit has nothing at `path`,
 --- told apart from any other failure, such as a commit the repository does
---- not have or a directory at `path`. The path is taken whole: never as a
---- pattern, never as an option.
+--- not have or a directory at `path`. The path is taken whole and as the
+--- commit names it: never as a pattern, never as an option, and `.`, a
+--- trailing slash or `./x` name nothing.
 ---
 ---@param run aineo.git.Run
 ---@param found aineo.git.Repository
@@ -56,10 +64,10 @@ function M.file_at_commit(run, found, commit, path, done)
   run(
     {
       directory = found.top,
-      arguments = { 'ls-tree', '-z', '--full-tree', '--end-of-options', commit, '--', path },
+      arguments = { 'ls-tree', '-z', '--full-tree', '--end-of-options', commit, path },
     },
     process.or_fail(done, function(listing)
-      local entry = parse_entry(listing.stdout)
+      local entry = parse_entry(listing.stdout, path)
       if not entry or entry.type ~= FILE_OBJECT_TYPE then
         report_no_file(commit, path, entry, done)
         return

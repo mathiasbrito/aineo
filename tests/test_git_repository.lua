@@ -294,6 +294,47 @@ T['a commit named']['like an option is a name, never an option that makes git fa
   eq({ failure = seen.failure, result = seen.result, calls = seen.calls }, { calls = 1 })
 end
 
+T['a commit named by something that is not one commit'] = MiniTest.new_set({
+  parametrize = { { '^main' }, { 'old..main' }, { 'main..old' }, { 'old...main' } },
+})
+
+T['a commit named by something that is not one commit']['is no commit'] = function(name)
+  local top = git_repo.create('resolve-range', { ['a.txt'] = { 'a' } })
+  git_repo.git(top, { 'branch', 'old' })
+  git_repo.write(top, 'a.txt', { 'a, again' })
+  git_repo.commit_all(top, 'Main moves on')
+
+  local seen = child.lua(ASK, { top, 'resolve_commit', { name } })
+
+  eq({ failure = seen.failure, result = seen.result, calls = seen.calls }, { calls = 1 })
+end
+
+T['a commit named by a remote-tracking branch or a full id'] = MiniTest.new_set({
+  parametrize = { { 'origin/main' }, { 'refs/remotes/origin/main' } },
+})
+
+T['a commit named by a remote-tracking branch or a full id']['is the commit it names'] = function(
+  name
+)
+  local source, base = git_repo.create('resolve-remote', { ['a.txt'] = { 'a' } })
+  local clone = vim.fs.joinpath(vim.fs.dirname(source), 'clone')
+  git_repo.git(source, { 'clone', '--quiet', source, clone })
+
+  local seen = child.lua(ASK, { clone, 'resolve_commit', { name } })
+
+  eq({ failure = seen.failure, result = seen.result }, { result = base })
+end
+
+T['a commit named by a full id'] = MiniTest.new_set()
+
+T['a commit named by a full id']['is the commit it names'] = function()
+  local top, base = git_repo.create('resolve-full-id', { ['a.txt'] = { 'a' } })
+
+  local seen = child.lua(ASK, { top, 'resolve_commit', { base } })
+
+  eq({ failure = seen.failure, result = seen.result }, { result = base })
+end
+
 T['a file at a commit'] = MiniTest.new_set()
 
 T['a file at a commit']['is the text the commit has, not the working tree’s'] = function()
@@ -347,6 +388,78 @@ T['a file at a commit']['that is a directory there is a failure, not a missing f
   eq({ failure = seen.failure, result = seen.result }, {
     failure = { reason = 'failed', message = ('dir is a tree in %s, not a file'):format(base) },
   })
+end
+
+T['a file at a commit']['gets its own text, and a missing path none, beside a top-level file named --'] = function()
+  local top = git_repo.create_unborn('content-dashdash')
+  git_repo.write(top, '--', { 'the file named --' })
+  git_repo.write(top, 'a.txt', { 'a' })
+  git_repo.write(top, 'dir/b.txt', { 'b' })
+  local commit = git_repo.commit_all(top, 'A file named --')
+
+  local answers = {}
+  for _, path in ipairs({ 'a.txt', 'dir/b.txt', '--', 'gone.txt' }) do
+    local seen = child.lua(ASK, { top, 'file_at_commit', { commit, path } })
+    answers[path] = seen.result or vim.tbl_get(seen, 'failure', 'reason')
+  end
+
+  eq(answers, {
+    ['a.txt'] = 'a\n',
+    ['dir/b.txt'] = 'b\n',
+    ['--'] = 'the file named --\n',
+    ['gone.txt'] = 'path_missing',
+  })
+end
+
+T['a file at a commit']['named by a path git would normalise is not that path'] = function()
+  local top = git_repo.create_unborn('content-normalised')
+  git_repo.write(top, '.gitignore', { 'ignored' })
+  git_repo.write(top, 'dir/a.txt', { 'inner a' })
+  git_repo.write(top, 'README.md', { 'readme' })
+  local commit = git_repo.commit_all(top, 'Files')
+
+  local answers = {}
+  for _, path in ipairs({ '.', 'dir/', './README.md', 'dir/../README.md' }) do
+    local seen = child.lua(ASK, { top, 'file_at_commit', { commit, path } })
+    answers[path] = seen.result or vim.tbl_get(seen, 'failure', 'reason')
+  end
+
+  eq(answers, {
+    ['.'] = 'path_missing',
+    ['dir/'] = 'path_missing',
+    ['./README.md'] = 'path_missing',
+    ['dir/../README.md'] = 'path_missing',
+  })
+end
+
+T['a file at a commit']['that is a submodule there is a failure, not a missing file'] = function()
+  local library = git_repo.create('content-submodule-library', { ['library.txt'] = { 'library' } })
+  local top = git_repo.create('content-submodule', { ['a.txt'] = { 'a' } })
+  git_repo.git(
+    top,
+    { '-c', 'protocol.file.allow=always', 'submodule', 'add', '--quiet', library, 'library' }
+  )
+  local commit = git_repo.commit_all(top, 'Add the library')
+
+  local seen = child.lua(ASK, { top, 'file_at_commit', { commit, 'library' } })
+
+  eq({ failure = seen.failure, result = seen.result }, {
+    failure = {
+      reason = 'failed',
+      message = ('library is a commit in %s, not a file'):format(commit),
+    },
+  })
+end
+
+T['a file at a commit']['that is a link is the link’s target'] = function()
+  local top = git_repo.create_unborn('content-link')
+  git_repo.write(top, 'target.txt', { 'target' })
+  assert(vim.uv.fs_symlink('target.txt', vim.fs.joinpath(top, 'link')))
+  local commit = git_repo.commit_all(top, 'A link')
+
+  local seen = child.lua(ASK, { top, 'file_at_commit', { commit, 'link' } })
+
+  eq({ failure = seen.failure, result = seen.result }, { result = 'target.txt' })
 end
 
 T['a file at a commit']['of a commit the repository does not have is a failure, not a missing file'] = function()
