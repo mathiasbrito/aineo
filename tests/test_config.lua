@@ -6,6 +6,7 @@ local expect = MiniTest.expect
 
 local DEFAULTS = {
   prefix = '\\',
+  terminal_prefix = '<C-\\>',
   autostart = true,
   claude = { cmd = { 'claude' } },
   layout = { report_height = 2 / 3 },
@@ -57,7 +58,7 @@ end
 
 T['resolve_config()']['keeps false as a setting, never replacing it with the default'] =
   MiniTest.new_set({
-    parametrize = { { 'prefix' }, { 'autostart' } },
+    parametrize = { { 'prefix' }, { 'terminal_prefix' }, { 'autostart' } },
   })
 
 T['resolve_config()']['keeps false as a setting, never replacing it with the default']['from setup()'] = function(
@@ -72,6 +73,8 @@ T['resolve_config()']['refuses a wrong value, naming its full path'] = MiniTest.
   parametrize = {
     { { global = { prefix = true }, refusal = 'prefix: expected' } },
     { { global = { prefix = 1 }, refusal = 'prefix: expected' } },
+    { { global = { terminal_prefix = true }, refusal = 'terminal_prefix: expected' } },
+    { { global = { terminal_prefix = 1 }, refusal = 'terminal_prefix: expected' } },
     { { global = { autostart = 'yes' }, refusal = 'autostart: expected' } },
     { { global = { claude = { cmd = 'claude' } }, refusal = 'claude%.cmd: expected' } },
     { { global = { claude = { cmd = {} } }, refusal = 'claude%.cmd: expected' } },
@@ -103,6 +106,12 @@ T['resolve_config()']['refuses an empty prefix, which would map the keys it pref
   expect.error(function()
     config.resolve_config({ prefix = '' }, nil)
   end, 'prefix: expected a non%-empty string, or false')
+end
+
+T['resolve_config()']['refuses an empty terminal prefix, which would map the keys it prefixes themselves'] = function()
+  expect.error(function()
+    config.resolve_config({ terminal_prefix = '' }, nil)
+  end, 'terminal_prefix: expected a non%-empty string, or false')
 end
 
 T['resolve_config()']['refuses a report height not strictly between 0 and 1'] = MiniTest.new_set({

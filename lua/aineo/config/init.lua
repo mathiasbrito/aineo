@@ -6,9 +6,10 @@ local M = {}
 
 local recorded_setup_options = {}
 
---- Whether `value` is a prefix: a non-empty string, or `false` for no
---- prefix at all. An empty prefix would map the keys that follow it, such
---- as `i` and `o`, themselves.
+--- Whether `value` is a prefix, of Normal-mode keys or of Terminal-mode and
+--- Insert-mode keys: a non-empty string, or `false` for no prefix at all. An
+--- empty prefix would map the keys that follow it, such as `i` and `o`,
+--- themselves.
 ---
 ---@param value any
 ---@return boolean
@@ -43,6 +44,12 @@ local SETTINGS = {
   {
     name = 'prefix',
     default = '\\',
+    validator = is_prefix,
+    expected = 'a non-empty string, or false',
+  },
+  {
+    name = 'terminal_prefix',
+    default = '<C-\\>',
     validator = is_prefix,
     expected = 'a non-empty string, or false',
   },
