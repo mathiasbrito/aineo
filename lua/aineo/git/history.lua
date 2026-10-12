@@ -1,4 +1,4 @@
---- Lists the commits of a repository since a base.
+--- Lists the commits of a repository since a base, or between two commits.
 
 local process = require('aineo.git.process')
 
@@ -76,6 +76,36 @@ function M.commits_since(run, found, base, done)
           })
         end)
       )
+    end)
+  )
+end
+
+--- Lists the commits of `found` reachable from the commit `to` and not from
+--- the commit `from`, newest first, and calls `done(nil, commits)`, or
+--- `done(failure)`. A commit a rebase merge made counts under its new id.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param from string|nil the full id of the commit the commits are counted from; nil counts every commit of `to`
+---@param to string the full id of the commit the commits are counted to
+---@param done fun(failure: aineo.git.Failure|nil, commits: aineo.git.Commit[]|nil)
+function M.commits_between(run, found, from, to, done)
+  run(
+    {
+      directory = found.top,
+      arguments = {
+        'log',
+        '-z',
+        '--format=%H %s',
+        '--no-show-signature',
+        '--encoding=UTF-8',
+        '--end-of-options',
+        from and from .. '..' .. to or to,
+        '--',
+      },
+    },
+    process.or_fail(done, function(log)
+      done(nil, parse_log(log.stdout))
     end)
   )
 end

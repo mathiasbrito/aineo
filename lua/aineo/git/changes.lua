@@ -1,5 +1,5 @@
---- Lists the files of a repository that differ from a base, from `HEAD`, or
---- that a commit changed.
+--- Lists the files of a repository that differ from a base, from `HEAD`,
+--- between two commits, or that a commit changed.
 
 local private_index = require('aineo.git.private_index')
 local process = require('aineo.git.process')
@@ -174,6 +174,43 @@ function M.commit_files(run, found, commit, done)
     },
     process.or_fail(done, function(output)
       done(nil, parse_name_status(output.stdout))
+    end)
+  )
+end
+
+--- Lists the files of `found` that differ between the merge base of the
+--- commits `from` and `to`, and `to` — what `to` gained since the two forked
+--- — and calls `done(nil, changes)`, or `done(failure)`. Neither the working
+--- tree nor the index is read.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param from string|nil the full id of the first commit; nil counts every file of `to` as new
+---@param to string the full id of the second commit
+---@param done fun(failure: aineo.git.Failure|nil, changes: aineo.git.Change[]|nil)
+function M.files_between(run, found, from, to, done)
+  repository.merge_base_revisions(
+    run,
+    found.top,
+    from,
+    to,
+    process.or_fail(done, function(revisions)
+      run(
+        {
+          directory = found.top,
+          arguments = vim.list_extend({
+            'diff',
+            '--name-status',
+            '-z',
+            '-M',
+            '-O/dev/null',
+            '--end-of-options',
+          }, vim.list_extend(revisions, { '--' })),
+        },
+        process.or_fail(done, function(output)
+          done(nil, parse_name_status(output.stdout))
+        end)
+      )
     end)
   )
 end

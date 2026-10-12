@@ -151,4 +151,239 @@ T['a directory']['outside every repository is told apart, in git’s words'] = f
   })
 end
 
+--- The Lua that asks the git home in the child for the repository of the
+--- directory `...`, then calls its operation named next with that repository
+--- and the arguments after the name, and returns what `_G.await` saw of the
+--- second.
+local ASK = [[
+  local directory, operation, arguments = ...
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end)
+  return _G.await(function(done)
+    local call = { found.result }
+    vim.list_extend(call, arguments)
+    table.insert(call, done)
+    git[operation](unpack(call))
+  end)
+]]
+
+--- The Lua that asks the git home in the child for the repository of the
+--- directory `...`, then, from a timer's callback — a fast event — for the
+--- read `operation` names, one of those that name a commit or two, with
+--- `commit` as the commit; returns what `_G.await` saw of the second, whether
+--- `done` ran before the call returned, and what the call raised, if it did.
+local READ_FROM_A_FAST_EVENT = [[
+  local directory, operation, commit = ...
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end).result
+  local change = { path = 'a.txt', kind = 'added' }
+  local reads = {
+    resolve_commit = function(done)
+      git.resolve_commit(found, 'main', done)
+    end,
+    remote_default_branch = function(done)
+      git.remote_default_branch(found, done)
+    end,
+    file_at_commit = function(done)
+      git.file_at_commit(found, commit, 'a.txt', done)
+    end,
+    commits_between = function(done)
+      git.commits_between(found, nil, commit, done)
+    end,
+    files_between = function(done)
+      git.files_between(found, nil, commit, done)
+    end,
+    diff_between = function(done)
+      git.diff_between(found, nil, commit, done)
+    end,
+    file_diff_between = function(done)
+      git.file_diff_between(found, nil, commit, change, done)
+    end,
+    file_diff_straight = function(done)
+      git.file_diff_straight(found, nil, commit, change, done)
+    end,
+  }
+  local raised, answered_early
+  local seen = _G.await(function(done)
+    local timer = assert(vim.uv.new_timer())
+    timer:start(0, 0, function()
+      timer:close()
+      local returned = false
+      local called, error_message = pcall(reads[operation], function(...)
+        answered_early = not returned
+        done(...)
+      end)
+      returned = true
+      raised = not called and tostring(error_message) or nil
+    end)
+  end)
+  return {
+    calls = seen.calls,
+    in_fast_event = seen.fast,
+    answered_early = answered_early,
+    failure = seen.failure,
+    raised = raised,
+  }
+]]
+
+T['a read of commits'] = MiniTest.new_set({
+  parametrize = {
+    { 'resolve_commit' },
+    { 'remote_default_branch' },
+    { 'file_at_commit' },
+    { 'commits_between' },
+    { 'files_between' },
+    { 'diff_between' },
+    { 'file_diff_between' },
+    { 'file_diff_straight' },
+  },
+})
+
+T['a read of commits']['asked from a fast event answers once, later, on the main loop, and raises nothing'] = function(
+  operation
+)
+  local top, base = git_repo.create('reads-fast-event', { ['a.txt'] = { 'a' } })
+
+  local seen = child.lua(READ_FROM_A_FAST_EVENT, { top, operation, base })
+
+  eq(seen, { calls = 1, in_fast_event = false, answered_early = false })
+end
+
+T['a commit named'] = MiniTest.new_set()
+
+T['a commit named by a name git reads'] = MiniTest.new_set({
+  parametrize = { { 'main' }, { 'refs/heads/main' }, { 'HEAD' } },
+})
+
+T['a commit named by a name git reads']['is the commit the name gives, by its full id'] = function(
+  name
+)
+  local top, base = git_repo.create('resolve-name', { ['a.txt'] = { 'a' } })
+
+  local seen = child.lua(ASK, { top, 'resolve_commit', { name } })
+
+  eq({ failure = seen.failure, result = seen.result }, { result = base })
+end
+
+T['a commit named']['by an annotated tag is the commit it tags, not the tag'] = function()
+  local top, base = git_repo.create('resolve-tag', { ['a.txt'] = { 'a' } })
+  git_repo.git(top, { 'tag', '--annotate', '--message=Tagged', 'release' })
+
+  local seen = child.lua(ASK, { top, 'resolve_commit', { 'release' } })
+
+  eq({ failure = seen.failure, result = seen.result }, { result = base })
+end
+
+T['a commit named']['by a name that names none is no commit, not a failure'] = function()
+  local top = git_repo.create('resolve-none', { ['a.txt'] = { 'a' } })
+
+  local seen = child.lua(ASK, { top, 'resolve_commit', { 'origin/nosuch' } })
+
+  eq({ failure = seen.failure, result = seen.result, calls = seen.calls }, { calls = 1 })
+end
+
+T['a commit named']['like an option is a name, never an option, and writes nothing'] = function()
+  local top = git_repo.create('resolve-option', { ['a.txt'] = { 'a' } })
+  local written = vim.fs.joinpath(vim.fs.dirname(top), 'written')
+
+  local seen = child.lua(ASK, { top, 'resolve_commit', { '--output=' .. written } })
+
+  eq({
+    failure = seen.failure,
+    result = seen.result,
+    calls = seen.calls,
+    beside = vim.fn.readdir(vim.fs.dirname(top)),
+  }, { calls = 1, beside = { 'repo' } })
+end
+
+T['a file at a commit'] = MiniTest.new_set()
+
+T['a file at a commit']['is the text the commit has, not the working tree’s'] = function()
+  local top, base = git_repo.create('content-commit', { ['a.txt'] = { 'as committed' } })
+  git_repo.write(top, 'a.txt', { 'changed since' })
+
+  local seen = child.lua(ASK, { top, 'file_at_commit', { base, 'a.txt' } })
+
+  eq({ failure = seen.failure, result = seen.result }, { result = 'as committed\n' })
+end
+
+T['a file at a commit']['is exactly what git printed: carriage returns, a missing last newline, NUL bytes'] = function()
+  local top = git_repo.create_unborn('content-bytes')
+  local exact = 'one\r\ntwo\0three\r\nlast line without a newline'
+  local file = assert(io.open(vim.fs.joinpath(top, 'bytes.bin'), 'wb'))
+  file:write(exact)
+  file:close()
+  local commit = git_repo.commit_all(top, 'Bytes')
+
+  local seen = child.lua(ASK, { top, 'file_at_commit', { commit, 'bytes.bin' } })
+
+  eq({ failure = seen.failure, result = seen.result }, { result = exact })
+end
+
+T['a file at a commit']['named like a pattern or an option is that file, not the files a pattern names'] = function()
+  local top = git_repo.create_unborn('content-names')
+  git_repo.write(top, '-dash [x]*.txt', { 'the one' })
+  git_repo.write(top, 'x1.txt', { 'a pattern’s match' })
+  local commit = git_repo.commit_all(top, 'Names')
+
+  local seen = child.lua(ASK, { top, 'file_at_commit', { commit, '-dash [x]*.txt' } })
+
+  eq({ failure = seen.failure, result = seen.result }, { result = 'the one\n' })
+end
+
+T['a file at a commit']['the commit does not have is told apart from any other failure'] = function()
+  local top, base = git_repo.create('content-missing', { ['a.txt'] = { 'a' } })
+
+  local seen = child.lua(ASK, { top, 'file_at_commit', { base, 'deleted-later.txt' } })
+
+  eq({ reason = vim.tbl_get(seen, 'failure', 'reason'), result = seen.result }, {
+    reason = 'path_missing',
+  })
+end
+
+T['a file at a commit']['that is a directory there is a failure, not a missing file'] = function()
+  local top, base = git_repo.create('content-directory', { ['dir/a.txt'] = { 'a' } })
+
+  local seen = child.lua(ASK, { top, 'file_at_commit', { base, 'dir' } })
+
+  eq({ reason = vim.tbl_get(seen, 'failure', 'reason'), result = seen.result }, {
+    reason = 'failed',
+  })
+end
+
+T['a file at a commit']['of a commit the repository does not have is a failure, not a missing file'] = function()
+  local top = git_repo.create('content-no-commit', { ['a.txt'] = { 'a' } })
+
+  local seen = child.lua(ASK, { top, 'file_at_commit', { string.rep('0', 40), 'a.txt' } })
+
+  eq({ reason = vim.tbl_get(seen, 'failure', 'reason'), result = seen.result }, {
+    reason = 'failed',
+  })
+end
+
+T['the remote’s default branch'] = MiniTest.new_set()
+
+T['the remote’s default branch']['is the short name of the branch origin/HEAD points at, not the one checked out'] = function()
+  local source = git_repo.create('default-branch-source', { ['a.txt'] = { 'a' } })
+  local clone = vim.fs.joinpath(vim.fs.dirname(source), 'clone')
+  git_repo.git(source, { 'clone', '--quiet', source, clone })
+  git_repo.git(clone, { 'checkout', '--quiet', '-b', 'feature' })
+
+  local seen = child.lua(ASK, { clone, 'remote_default_branch', {} })
+
+  eq({ failure = seen.failure, result = seen.result }, { result = 'origin/main' })
+end
+
+T['the remote’s default branch']['is none for a repository without origin/HEAD, whatever branch is checked out'] = function()
+  local top = git_repo.create('default-branch-none', { ['a.txt'] = { 'a' } })
+
+  local seen = child.lua(ASK, { top, 'remote_default_branch', {} })
+
+  eq({ failure = seen.failure, result = seen.result, calls = seen.calls }, { calls = 1 })
+end
+
 return T
