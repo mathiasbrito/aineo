@@ -102,7 +102,7 @@ end
 
 --- One entry a window lists: a file changed, or a commit.
 ---@class aineo.changes.Entry
----@field key string what tells the entry apart from one read to the next: a change's path, or the key of the filter the entry lists (`aineo.changes.filter`'s `key()`): a commit's id for the editor's own commit, `<top>\0<id>` for a worktree's commit, `<top>\0\0worktree` for its heading
+---@field key string what tells the entry apart from one read to the next: a change's path, or the key of the filter the entry lists (`aineo.changes.filter`'s `key()`): a commit's id for the editor's own commit, `<top>\0<id>` for a worktree's commit, `<top>\0\0worktree` for its heading, `\0landed\0<id>` for a commit that landed in the working branch, `\0landed` for its heading
 ---@field change? aineo.git.Change
 ---@field commit? aineo.git.Commit
 ---@field filter? aineo.changes.Filter the filter a commits window line selects, or the filter a file is listed under
@@ -252,6 +252,10 @@ M.NO_COMMIT_FILES = 'No files in this commit'
 --- its base.
 M.NO_WORKTREE_FILES = 'No files changed in this worktree'
 
+--- What the files window says when nothing that landed in the working
+--- branch changed a file.
+M.NO_LANDED_FILES = 'No files changed in what landed'
+
 --- What the files window says when no file of the filter it lists differs,
 --- by the kind of the filter.
 ---@type table<string, string>
@@ -260,6 +264,7 @@ local NO_FILES_OF = {
   uncommitted = M.NO_UNCOMMITTED_FILES,
   commit = M.NO_COMMIT_FILES,
   worktree = M.NO_WORKTREE_FILES,
+  landed = M.NO_LANDED_FILES,
 }
 
 --- The kinds of filter whose files carry the mark of a file the user
@@ -328,25 +333,24 @@ end
 
 --- The rows of `commits`, a line per commit in their order
 --- (`M.commit_line()`), in its own colours (`commit_colours()`), each
---- listing the entry of its commit and the filter it selects: the commit's
---- files in the editor's own worktree, or in `worktree`, the worktree other
---- than the editor's that lists them, when given.
+--- listing the entry of its commit and the filter `filter_of` gives it: the
+--- commit's files in the editor's own worktree, in another worktree, or
+--- among those that landed in the working branch.
 ---
 ---@param commits aineo.git.Commit[]
----@param worktree? aineo.changes.WorktreeSection
+---@param filter_of fun(commit: aineo.git.Commit): aineo.changes.Filter
 ---@return aineo.changes.Row[]
-local function commit_rows(commits, worktree)
+local function commit_rows(commits, filter_of)
   return vim.tbl_map(function(commit)
     local line = M.commit_line(commit)
-    local listed_under = worktree and filter.of_worktree_commit(worktree, commit)
-      or filter.of_commit(commit)
+    local listed_under = filter_of(commit)
     return {
       line = line,
       entry = {
         key = filter.key(listed_under),
         commit = commit,
         filter = listed_under,
-        worktree = worktree,
+        worktree = listed_under.worktree,
       },
       colours = commit_colours(line),
     }
@@ -366,7 +370,13 @@ local function section_rows(section)
   if not section.listed then
     return notes
   end
-  return rows_of(notes, commit_rows(section.listed.commits, section), note(M.NO_WORKTREE_COMMITS))
+  return rows_of(
+    notes,
+    commit_rows(section.listed.commits, function(commit)
+      return filter.of_worktree_commit(section, commit)
+    end),
+    note(M.NO_WORKTREE_COMMITS)
+  )
 end
 
 --- The line that says the other worktrees could not be listed, in
@@ -434,14 +444,19 @@ local function file_rows(changes, saved, listed_under, worktree)
 end
 
 --- The name of `selected`, a filter, as the pane says it: *Uncommitted* and
---- *Session work*; for a commit its line as the commits window shows it
---- (`M.commit_line()`), followed by `(worktree <folder>)` when the commit
---- is another worktree's, the folder quoted as its heading quotes it; for
---- another worktree's whole change, its heading (`M.worktree_heading()`).
+--- *Session work*; for what landed `Landed in ` and the working branch's
+--- name, quoted as a path is (`M.quoted_path()`); for a commit its line as
+--- the commits window shows it (`M.commit_line()`), followed by `(worktree
+--- <folder>)` when the commit is another worktree's, the folder quoted as
+--- its heading quotes it; for another worktree's whole change, its heading
+--- (`M.worktree_heading()`).
 ---
 ---@param selected aineo.changes.Filter
 ---@return string
 function M.filter_name(selected)
+  if selected.kind == 'landed' then
+    return 'Landed in ' .. M.quoted_path(selected.landed)
+  end
   if selected.kind == 'worktree' then
     return M.worktree_heading(selected.worktree)
   end
@@ -559,6 +574,7 @@ end
 ---@field failure? aineo.git.Failure why the last read failed, when it did
 ---@field base? string the session's base commit, nil before the repository's first commit
 ---@field lists_filters? boolean whether the window starts with the lines *Uncommitted* and *Session work*: once the session's repository is found
+---@field landed? aineo.changes.Landed what the window knows of the working branch, none when there is no working branch or it was not read
 ---@field worktrees? aineo.changes.OtherWorktrees what the window knows of the other worktrees, none when not given
 
 --- The rows of the editor's own worktree in the commits window below the
@@ -585,7 +601,7 @@ local function listed_commit_rows(view)
   if not view.since then
     return view.failure and { notes[1] } or { note(M.READING) }
   end
-  return rows_of(notes, commit_rows(view.since.commits), note(M.NO_COMMITS))
+  return rows_of(notes, commit_rows(view.since.commits, filter.of_commit), note(M.NO_COMMITS))
 end
 
 --- The rows of the editor's own worktree in the commits window, for `view`:
@@ -604,8 +620,39 @@ local function own_commit_rows(view)
   return rows
 end
 
+--- The rows of what landed in the working branch, `landed`: its heading,
+--- listing the filter of what landed (`filter_row()`), then a line per
+--- commit that landed (`commit_rows()`), or a note saying nothing did, or a
+--- failure saying the name names no commit. None when the window knows no
+--- working branch.
+---
+---@param landed aineo.changes.Landed|nil
+---@return aineo.changes.Row[]
+local function landed_rows(landed)
+  if not landed then
+    return {}
+  end
+  local rows = { filter_row(filter.of_landed(landed.name)) }
+  local name = M.quoted_path(landed.name)
+  if landed.names_no_commit then
+    table.insert(rows, failure_line(name .. ' names no commit'))
+    return rows
+  end
+  return vim.list_extend(
+    rows,
+    rows_of(
+      {},
+      commit_rows(landed.commits, function(commit)
+        return filter.of_landed_commit(landed.name, commit)
+      end),
+      note(('Nothing landed in %s on this session'):format(name))
+    )
+  )
+end
+
 --- The commits window's page for `view`: the editor's own worktree's rows
---- first, under no heading (`own_commit_rows()`), then each other
+--- first, under no heading (`own_commit_rows()`), then what landed in the
+--- working branch under its heading (`landed_rows()`), then each other
 --- worktree's (`worktree_rows()`). The line saying a read failed is a
 --- failure (`failure_line()`), a commit's line shows its own colours
 --- (`commit_colours()`), and every other line is a note (`note()`).
@@ -613,7 +660,10 @@ end
 ---@param view aineo.changes.CommitsView
 ---@return aineo.changes.Page
 function M.commits_window(view)
-  return page_of(vim.list_extend(own_commit_rows(view), worktree_rows(view.worktrees)))
+  local rows = own_commit_rows(view)
+  vim.list_extend(rows, landed_rows(view.landed))
+  vim.list_extend(rows, worktree_rows(view.worktrees))
+  return page_of(rows)
 end
 
 return M

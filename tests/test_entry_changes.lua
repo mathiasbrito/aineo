@@ -152,6 +152,31 @@ T['the session']['does not begin at a start that fails: the next start takes the
   expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
 end
 
+T['the session']['takes its working branch from changes.working_branch of the settings'] = function()
+  local top = in_repository('changespane-entry-working-branch', { ['notes.txt'] = { 'one' } })
+  local remote = vim.fs.joinpath(vim.fs.dirname(top), 'remote.git')
+  git_repo.git(
+    vim.fs.dirname(top),
+    { 'init', '--quiet', '--bare', '--initial-branch=main', remote }
+  )
+  git_repo.git(top, { 'remote', 'add', 'origin', remote })
+  git_repo.git(top, { 'push', '--quiet', 'origin', 'main:dev' })
+  child.lua(
+    "local settings = vim.g.aineo settings.changes = { working_branch = 'origin/dev' } vim.g.aineo = settings"
+  )
+  open_and_wait_for_the_base()
+
+  entry.press(child, '\\g')
+
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Landed in origin/dev',
+    'Nothing landed in origin/dev on this session',
+  })
+end
+
 T['the pane'] = MiniTest.new_set()
 
 --- Waits until every read of the files the child's git home was asked for
