@@ -1391,15 +1391,16 @@ end
 ---@type integer|nil
 local window_moved = nil
 
---- Selects the filter the line under the cursor of the window whose cursor
---- last moved in the commits buffer lists, when it is a filter other than
---- the selected one, and reads the files window for it. A line that lists
---- no filter — a note — leaves the selection as it was, and so does a
---- cursor not yet put on the selected filter's line
+--- The filter the line under the cursor of `window` lists, when `window`
+--- shows the commits buffer and the filter is another than the selected one;
+--- nil otherwise. A line that lists no filter — a note — gives none, and so
+--- does a cursor not yet put on the selected filter's line
 --- (`place_commits_cursor()`), which a commits page written before git
 --- answered shows on its first line.
-local function select_filter_at_cursor()
-  local window = window_moved
+---
+---@param window integer|nil
+---@return aineo.changes.Filter|nil
+local function other_filter_at_cursor(window)
   if
     not (
       session
@@ -1410,11 +1411,23 @@ local function select_filter_at_cursor()
       and vim.api.nvim_win_get_buf(window) == buffers.commits
     )
   then
-    return
+    return nil
   end
   local entry = pages.entry_at(buffers.commits, vim.api.nvim_win_get_cursor(window)[1])
   local at_cursor = entry and entry.filter
   if not at_cursor or filter.same(at_cursor, session.selected) then
+    return nil
+  end
+  return at_cursor
+end
+
+--- Selects the filter the line under the cursor of the window whose cursor
+--- last moved in the commits buffer lists, when it is a filter other than
+--- the selected one (`other_filter_at_cursor()`), and reads the files window
+--- for it.
+local function select_filter_at_cursor()
+  local at_cursor = other_filter_at_cursor(window_moved)
+  if not at_cursor then
     return
   end
   session.selected = at_cursor
@@ -1446,11 +1459,7 @@ local function select_filters_from(buffer)
     callback = function()
       for key in pairs(vim.v.event) do
         local window = tonumber(key)
-        if
-          window
-          and vim.api.nvim_win_is_valid(window)
-          and vim.api.nvim_win_get_buf(window) == buffer
-        then
+        if other_filter_at_cursor(window) then
           window_moved = window
           selection_pause.restart()
           return
