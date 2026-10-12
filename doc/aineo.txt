@@ -34,6 +34,10 @@ between the agent pane, the Report over Input, and the changes pane
 (|aineo-panes|). In Visual mode, in Input, `\s` sends the selection alone and
 removes it from Input (|aineo-v_\s|).
 
+In Terminal mode and in Insert mode, `<C-\>` followed by the same letters
+does the same: `<C-\>i` moves to Input, `<C-\>r` to the Report, `<C-\>c` to
+Claude, each after leaving the mode you were in (|aineo-terminal-keys|).
+
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
 aineo allows one tool of its own without asking, the report tool
@@ -979,6 +983,48 @@ leader when |maplocalleader| is: a filetype plugin's `<Leader>` or
 Neovim's own ChangeLog plugin maps `<Leader>o`. `:checkhealth aineo` warns
 of both (|aineo-health|).
 
+Terminal and Insert mode keys ~
+                                                         *aineo-terminal-keys*
+Once the editor has started, aineo also maps the terminal prefix
+(|aineo-config-terminal_prefix|), `<C-\>` by default, followed by each prefix
+key above but Send's, globally, in Terminal mode and in Insert mode: from
+Claude's prompt, or while you type in any buffer, to move without leaving
+the mode by hand. A twin first leaves the mode it was pressed in, as
+`<C-\><C-n>` does (|CTRL-\_CTRL-N|), and then runs what its `<Plug>`
+mapping runs from Normal mode (|aineo-mappings|): `<C-\>c` enters Terminal
+mode in Claude's window again, as `\c` does, and the others leave you in
+Normal mode in the window they move to. Claude Code is sent none of the
+twin's keys.
+
+                                                                *aineo-<C-\>o*
+<C-\>o		|<Plug>(aineo-open)|
+                                                                *aineo-<C-\>r*
+<C-\>r		|<Plug>(aineo-report)|
+                                                                *aineo-<C-\>i*
+<C-\>i		|<Plug>(aineo-input)|
+                                                                *aineo-<C-\>c*
+<C-\>c		|<Plug>(aineo-claude)|
+                                                              *aineo-<C-\>tcn*
+<C-\>tcn	|<Plug>(aineo-claude-numbers)|
+                                                                *aineo-<C-\>S*
+<C-\>S		|<Plug>(aineo-sessions)|
+                                                               *aineo-<C-\>pa*
+<C-\>pa		|<Plug>(aineo-pane-agent)|
+                                                                *aineo-<C-\>g*
+<C-\>g		|<Plug>(aineo-pane-changes)|
+
+Send has no twin: it acts on a selection or on the line of Normal mode.
+`:Aineo claim` has no key of its own, so no twin either.
+
+Neovim's own `<C-\><C-n>` and `<C-\><C-o>` work as ever: aineo maps neither.
+After `<C-\>`, Neovim waits for the key that follows. It waits for
+'timeoutlen' only when what was typed is a twin and also the start of a
+longer mapping: with your own `<C-\>gs`, `<C-\>g` waits.
+
+Like the prefix, the terminal prefix is read once, when the editor has
+started (|VimEnter|), and a key sequence you mapped yourself — a global
+mapping in the same mode — stays yours while aineo maps the others.
+
 ==============================================================================
 6. CONFIGURATION                                         *aineo-configuration*
 
@@ -1008,6 +1054,13 @@ prefix			A non-empty string, or `false`. Default: `'\'`
 			(|aineo-keys|). `false` maps no key; |:Aineo| and the
 			`<Plug>` mappings remain. The empty string is
 			refused.
+
+                                                *aineo-config-terminal_prefix*
+terminal_prefix		A non-empty string, or `false`. Default: `'<C-\>'`
+			The key sequence, written as in a mapping, before each
+			of aineo's keys in Terminal mode and in Insert mode
+			(|aineo-terminal-keys|). `false` maps none; the prefix
+			keys remain. The empty string is refused.
 
                                                       *aineo-config-autostart*
 autostart		A boolean. Default: `true`
@@ -1474,6 +1527,15 @@ Prefix mappings ~
   default prefix and |mapleader| or |maplocalleader| unset or `\`, these
   warnings show. Neovim reads a leader that is a List, a Dictionary or
   longer than 48 bytes as a backslash, and so does the check.
+
+Terminal prefix mappings ~
+  For each key of the terminal prefix (|aineo-terminal-keys|), in Terminal
+  mode and in Insert mode, whether it leaves the mode and runs aineo's
+  `<Plug>` mapping; a warning when it runs something of yours, or nothing.
+  While aineo's |VimEnter| handler has not run, or aineo was loaded after
+  startup and has not yet mapped them, one line says so in place of the
+  keys, as in the Prefix mappings section. With `terminal_prefix` set to
+  `false`, one line says that no key is mapped.
 
 Autostart ~
   Whether the autostart opened the layout at startup, or which reason kept

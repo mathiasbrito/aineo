@@ -96,9 +96,12 @@ local TAGS = {
   'aineo-\\pa',
   'aineo-\\g',
   'aineo-v_\\s',
+  'aineo-terminal-keys',
+  'aineo-<C-\\>i',
   'g:aineo',
   'aineo.setup()',
   'aineo-config-prefix',
+  'aineo-config-terminal_prefix',
   'aineo-config-autostart',
   'aineo-config-claude.cmd',
   'aineo-config-layout.report_height',
@@ -119,19 +122,20 @@ local TAGS = {
 --- The tags the running plugin says the help must hold, sorted: one per
 --- subcommand `:Aineo` completes, per `<Plug>(aineo-…)` mapping, per prefix
 --- key mapped to one — `aineo-{keys}` in Normal mode, `aineo-v_{keys}` in
---- Visual mode, after Vim's own `v_` tags — and per setting the
+--- Visual mode, after Vim's own `v_` tags — per twin of a prefix key, one
+--- `aineo-{keys}` for both Terminal and Insert mode, and per setting the
 --- configuration resolves.
 local TAGS_THE_PLUGIN_DEFINES = [[
   local tags = {}
   for _, subcommand in ipairs(vim.fn.getcompletion('Aineo ', 'cmdline')) do
     table.insert(tags, ':Aineo-' .. subcommand)
   end
-  for mode, key_tag in pairs({ n = 'aineo-', x = 'aineo-v_' }) do
+  for mode, key_tag in pairs({ n = 'aineo-', x = 'aineo-v_', t = 'aineo-', i = 'aineo-' }) do
     for _, mapping in ipairs(vim.api.nvim_get_keymap(mode)) do
       if vim.startswith(mapping.lhs, '<Plug>(aineo-') then
         table.insert(tags, mapping.lhs)
-      elseif mapping.rhs and vim.startswith(mapping.rhs, '<Plug>(aineo-') then
-        table.insert(tags, key_tag .. mapping.lhs)
+      elseif mapping.rhs and mapping.rhs:find('<Plug>(aineo-', 1, true) then
+        table.insert(tags, key_tag .. mapping.lhs:gsub('<C%-Bslash>', '<C-\\>'))
       end
     end
   end
@@ -147,7 +151,7 @@ local TAGS_THE_PLUGIN_DEFINES = [[
   end
   add_settings('', require('aineo.config').resolve_config(nil, nil))
   table.sort(tags)
-  return tags
+  return vim.fn.uniq(tags)
 ]]
 
 --- The tags of `tags` that `:help` does not take to a line of the help
@@ -169,7 +173,7 @@ T['the help']['has a tag for every command, mapping, key and setting the plugin 
 
   local missing = child.lua(TAGS_MISSING, { tags })
 
-  eq(#tags >= 19, true)
+  eq(#tags >= 36, true)
   eq(missing, {})
 end
 
