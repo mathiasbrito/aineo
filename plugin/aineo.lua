@@ -599,7 +599,7 @@ end
 --- changes home is told the session began there (`aineo.changes`'s
 --- `begin_session()`, which heeds its first call alone), in Claude Code's
 --- working directory, with the layout's `show_diff()` to show its diffs in
---- the middle column.
+--- the middle column and the configuration's `changes.working_branch`.
 ---
 ---@param config table the resolved configuration
 ---@return integer terminal
@@ -627,6 +627,7 @@ local function started_claude_terminal(config)
     show_diff = function(diff)
       return require('aineo.layout').show_diff(diff)
     end,
+    working_branch = config.changes.working_branch,
   })
   return claude_terminal
 end

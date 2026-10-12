@@ -64,7 +64,7 @@ local BEGIN_AND_SHOW = [[
 local SPY_ON_GIT = [[
   local git = require('aineo.git')
   _G.git_calls, _G.git_given, _G.git_answers = {}, {}, {}
-  local names = { 'find_repository', 'changed_files', 'commits_since', 'watch_repository', 'file_diff', 'commit_diff', 'list_worktrees' }
+  local names = { 'find_repository', 'changed_files', 'commits_since', 'watch_repository', 'file_diff', 'commit_diff', 'list_worktrees', 'remote_default_branch', 'resolve_commit', 'commits_between' }
   for _, name in ipairs(names) do
     local original = git[name]
     _G.git_calls[name], _G.git_given[name], _G.git_answers[name] = 0, 0, 0
@@ -106,11 +106,11 @@ end
 
 --- Waits until every read of the files and of the commits the child's git
 --- home was asked for has answered, the list of worktrees each window reads
---- last included (`SPY_ON_GIT`).
+--- last and the reads of the working branch included (`SPY_ON_GIT`).
 local function wait_for_the_reads()
   git_repo.wait_until('every read answered', function()
     return child.lua_get(
-      '_G.git_answers.changed_files == _G.git_calls.changed_files and _G.git_answers.commits_since == _G.git_calls.commits_since and _G.git_answers.list_worktrees == _G.git_calls.list_worktrees'
+      '_G.git_answers.changed_files == _G.git_calls.changed_files and _G.git_answers.commits_since == _G.git_calls.commits_since and _G.git_answers.list_worktrees == _G.git_calls.list_worktrees and _G.git_answers.remote_default_branch == _G.git_calls.remote_default_branch and _G.git_answers.resolve_commit == _G.git_calls.resolve_commit and _G.git_answers.commits_between == _G.git_calls.commits_between'
     )
   end)
 end
@@ -260,6 +260,9 @@ T['the pane']['starts no watch and reads no list until it is first shown, nor a 
       file_diff = 0,
       commit_diff = 0,
       list_worktrees = 0,
+      remote_default_branch = 0,
+      resolve_commit = 0,
+      commits_between = 0,
     },
     timers,
   })

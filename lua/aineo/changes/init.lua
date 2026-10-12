@@ -1,15 +1,18 @@
 --- The changes pane's content, `require('aineo.changes')`: the session's
 --- base, its commits — under the two lines *Uncommitted* and *Session work*
---- — and then each other worktree of its repository's commits since that
---- worktree's own base (`aineo.changes.worktrees`), listed in a buffer of
---- the pane; and in another, the files of the one filter the commits
---- window's cursor chose (`aineo.changes.filter`): what differs from
---- `HEAD`, what changed since the base — the user's saves marked — what one
---- commit changed, or, read in another worktree, what changed in it since
---- its base or in one of its commits. Both are read again as the
---- repository changes once the pane has been shown. Once told which Claude
---- Code session the pane is for, the base and the saves are that session's,
---- kept under the editor's state directory (`aineo.changes.kept`).
+--- — then the commits that landed in the working branch since that base
+--- (`aineo.changes.landed`), and then each other worktree of its
+--- repository's commits since that worktree's own base
+--- (`aineo.changes.worktrees`), listed in a buffer of the pane; and in
+--- another, the files of the one filter the commits window's cursor chose
+--- (`aineo.changes.filter`): what differs from `HEAD`, what changed since
+--- the base — the user's saves marked — what one commit changed, what landed
+--- in the working branch or one of its commits, or, read in another
+--- worktree, what changed in it since its base or in one of its commits.
+--- Both are read again as the repository changes once the pane has been
+--- shown. Once told which Claude Code session the pane is for, the base and
+--- the saves are that session's, kept under the editor's state directory
+--- (`aineo.changes.kept`).
 
 local git = require('aineo.git')
 local diff_position = require('aineo.changes.diff_position')
@@ -18,6 +21,7 @@ local entry_diff = require('aineo.changes.entry_diff')
 local filter = require('aineo.changes.filter')
 local full_context = require('aineo.changes.full_context')
 local kept = require('aineo.changes.kept')
+local landed = require('aineo.changes.landed')
 local lines = require('aineo.changes.lines')
 local open_file = require('aineo.changes.open_file')
 local pages = require('aineo.changes.pages')
@@ -37,6 +41,7 @@ local SELECTION_PAUSE_MS = 150
 ---@field directory string the directory whose repository the session is about: Claude Code's working directory at its first start
 ---@field show_diff fun(diff: integer): integer|nil shows `diff` in the middle column, the cursor left where it is, and returns its window, or nil when there is no room
 ---@field git? aineo.git.WatchOptions how the git home runs git; its defaults when not given
+---@field working_branch? string the branch work lands in, as the user's setting names it; the remote's default branch when not given
 
 --- The session, from `M.begin_session()` on.
 ---@class aineo.changes.Session
@@ -55,6 +60,8 @@ local SELECTION_PAUSE_MS = 150
 ---@field files_failure? aineo.git.Failure why the last read of the files failed, when it did
 ---@field commits? aineo.git.CommitsSince the commits since the base, as last read
 ---@field commits_failure? aineo.git.Failure why the last read of the commits failed, when it did
+---@field landed? aineo.changes.Landed what landed in the working branch, as last read; nil while unread, and when there is no working branch
+---@field landed_failure? aineo.git.Failure why the last read of what landed failed, when it did
 ---@field commits_others aineo.changes.OtherWorktrees what the commits window knows of the other worktrees
 ---@field saved table<string, true> the files the user saved under the base, by path relative to the top level: since the session began, or the Claude Code session's followed; none saved while no repository was found
 ---@field early_saves string[] the files the user saved, resolved, while the first look for the repository runs
@@ -149,8 +156,9 @@ local function commits_page()
   return lines.commits_window({
     since = session.commits,
     base = session.base,
-    failure = session.commits_failure or session.watch_failure,
+    failure = session.commits_failure or session.landed_failure or session.watch_failure,
     lists_filters = session.repository ~= nil,
+    landed = session.landed,
     worktrees = session.commits_others,
   })
 end
@@ -376,6 +384,26 @@ local function read_worktree_files(selected, done)
   )
 end
 
+--- Reads the files that landed in the working branch: those that differ
+--- between the merge base of `base` and the commit the working branch
+--- named when the commits window last read it, and that commit. Calls
+--- `done(failure, changes)`; with the working branch not read yet, with no
+--- change and no failure, which the window shows as still reading; with a
+--- name that names no commit, with the failure saying so.
+---
+---@param base string|nil
+---@param done fun(failure: aineo.git.Failure|nil, changes: aineo.git.Change[]|nil)
+local function read_landed_files(base, done)
+  local read = session.landed
+  if not read then
+    done(nil, nil)
+  elseif not read.tip then
+    done(landed.unreadable(read), nil)
+  else
+    git.files_between(session.repository, base, read.tip, done, session.settings.git)
+  end
+end
+
 --- Reads the files of the selected filter, in the editor's own repository
 --- or in the worktree it belongs to, and calls `done(failure, listing)`: the
 --- listing of the filter asked for, with no files on a failure. The
@@ -395,6 +423,8 @@ local function read_selected_files(base, done)
   end
   if selected.kind == 'uncommitted' then
     git.uncommitted_files(repository, listing_of, options)
+  elseif selected.kind == 'landed' then
+    read_landed_files(base, listing_of)
   elseif selected.kind == 'commit' then
     git.commit_files(repository, selected.commit.id, listing_of, options)
   else
@@ -491,14 +521,86 @@ local function reselect_in_worktrees(others)
   end
 end
 
+--- Whether `read`, what the commits window read of the working branch,
+--- still lists what `selected`, a filter of what landed, names: the heading
+--- while there is a working branch, a commit while it is among the
+--- commits that landed.
+---
+---@param selected aineo.changes.Filter a filter with a `landed`
+---@param read aineo.changes.Landed|nil
+---@return boolean
+local function lists_landed(selected, read)
+  if not read then
+    return false
+  end
+  return selected.kind == 'landed' or lists_commit(selected, read.commits or {})
+end
+
+--- Keeps `read`, what the commits window read of the working branch. When it
+--- no longer lists what the selected filter of what landed names — a
+--- working branch reset or pushed over, or none any more — *Session work* is
+--- selected again, and the files window read for it; when it lists what
+--- landed and the commit the working branch names is another than before,
+--- the files window is read again.
+---
+---@param read aineo.changes.Landed|nil
+local function take_landed(read)
+  local tip_before = session.landed and session.landed.tip
+  local selected = session.selected
+  session.landed = read
+  if selected.landed and not lists_landed(selected, read) then
+    select_session_work()
+    read_files(true)
+  elseif selected.kind == 'landed' and (read and read.tip) ~= tip_before then
+    read_files(true)
+  end
+end
+
+--- How many reads of what landed in the working branch were started
+--- (`read_landed()`).
+local landed_reads = 0
+
+--- Reads what landed in the working branch since `base`
+--- (`aineo.changes.landed`) beside the read of the commits that asked for
+--- it, and shows it (`take_landed()`, `show_commits()`) once the answer
+--- comes and differs from what the window knew, unless a later read was
+--- started or the session has another base by then (`is_current_base()`).
+--- A read that fails keeps what landed as it was, under the failure's line.
+---
+---@param base string|nil
+local function read_landed(base)
+  landed_reads = landed_reads + 1
+  local this_read = landed_reads
+  landed.read({
+    repository = session.repository,
+    base = base,
+    working_branch = session.settings.working_branch,
+    before = session.landed,
+    git = session.settings.git,
+  }, function(failure, read)
+    if this_read ~= landed_reads or not is_current_base(base) then
+      return
+    end
+    local unchanged = vim.deep_equal(session.landed, read)
+      and vim.deep_equal(session.landed_failure, failure)
+    session.landed_failure = failure
+    take_landed(read)
+    if not unchanged then
+      show_commits()
+    end
+  end)
+end
+
 --- Reads the commits since the base, and those of each other worktree
---- since its own, and shows them (`window_read()`). When the editor's own
---- commit the files window lists is no longer among them — after a reset, a
---- rebase — *Session work* is selected again, and the files window read for
---- it; when it is another worktree's, or that worktree is, see
+--- since its own, and shows them (`window_read()`), with what landed in the
+--- working branch read beside them (`read_landed()`). When the editor's own
+--- commit the files window lists is no longer among the commits — after a
+--- reset, a rebase — *Session work* is selected again, and the files window
+--- read for it; when it is another worktree's, or that worktree is, see
 --- `reselect_in_worktrees()`.
 local read_commits = window_read({
   read_own = function(base, done)
+    read_landed(base)
     git.commits_since(session.repository, base, done, session.settings.git)
   end,
   take_own = function(failure, since)
@@ -508,6 +610,7 @@ local read_commits = window_read({
       since
       and session.selected.kind == 'commit'
       and not session.selected.worktree
+      and not session.selected.landed
       and not lists_commit(session.selected, since.commits)
     then
       select_session_work()
@@ -526,12 +629,14 @@ local read_commits = window_read({
 --- other worktrees' commits at every call, as a commit in one of them
 --- moves no branch of the editor's, and their files when the files window
 --- lists one's whole change; the editor's own files when they may differ,
---- and its commits and files when its branch moved.
+--- and its commits and files when its branch moved; the editor's own
+--- commits and what landed in the working branch when a reference was
+--- written, as a fetch does.
 ---
 ---@param change aineo.git.RepositoryChange
 local function follow_change(change)
   read_files(change.files_changed or change.branch_moved)
-  read_commits(change.branch_moved)
+  read_commits(change.branch_moved or change.references_changed)
 end
 
 --- Tells both windows that `failure` stopped the watch, under the lists
@@ -610,10 +715,13 @@ local function merge_kept_saves(on_disk)
 end
 
 --- Reads both lists again for the session's new base, from nothing: until
---- they are read, each window says aineo is reading the repository.
+--- they are read, each window says aineo is reading the repository, and
+--- the commits window lists nothing of what landed in the working branch,
+--- which it counts from the base.
 local function read_for_new_base()
   session.listed, session.files_failure = nil, nil
   session.commits, session.commits_failure = nil, nil
+  session.landed, session.landed_failure = nil, nil
   show_files()
   show_commits()
   follow_repository()
@@ -1097,6 +1205,7 @@ local function diff_source()
   return {
     repository = session.repository,
     base = session.base,
+    landed = session.landed,
     options = session.settings.git,
     context = full_context.current(),
   }
