@@ -2,6 +2,7 @@
 --- its buffer is named, and what the user is told it is called.
 
 local git = require('aineo.git')
+local head_diff = require('aineo.changes.head_diff')
 local landed = require('aineo.changes.landed')
 local lines = require('aineo.changes.lines')
 
@@ -134,6 +135,10 @@ function M.read(entry, source, done)
     source,
     { options = vim.tbl_extend('force', source.options or {}, { context = source.context }) }
   )
+  if head_diff.is_against_head(entry) then
+    head_diff.read(entry, source, done)
+    return
+  end
   if entry.worktree then
     read_in_worktree(entry, source.options, done)
     return
@@ -208,6 +213,9 @@ end
 ---@param entry aineo.changes.Entry
 ---@return string
 function M.name(entry)
+  if head_diff.is_against_head(entry) then
+    return head_diff.name(entry)
+  end
   if not entry.worktree then
     local names = entry.change and OWN_FILE_NAMES or OWN_WHOLE_NAMES
     return 'aineo://' .. names[entry.filter.kind](entry)

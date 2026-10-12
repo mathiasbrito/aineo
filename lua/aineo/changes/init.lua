@@ -12,15 +12,20 @@
 --- Both are read again as the repository changes once the pane has been
 --- shown. Once told which Claude Code session the pane is for, the base and
 --- the saves are that session's, kept under the editor's state directory
---- (`aineo.changes.kept`).
+--- (`aineo.changes.kept`). In the files buffer, Enter and `l` show a file's
+--- diff against its previous version, `h` against `HEAD`
+--- (`aineo.changes.head_diff`), and `gf` opens the working tree's file or
+--- shows the file as the commit it is listed under has it
+--- (`aineo.changes.commit_file`).
 
 local git = require('aineo.git')
-local diff_position = require('aineo.changes.diff_position')
 local commit_file = require('aineo.changes.commit_file')
+local diff_position = require('aineo.changes.diff_position')
 local diffs = require('aineo.changes.diffs')
 local entry_diff = require('aineo.changes.entry_diff')
 local filter = require('aineo.changes.filter')
 local full_context = require('aineo.changes.full_context')
+local head_diff = require('aineo.changes.head_diff')
 local kept = require('aineo.changes.kept')
 local landed = require('aineo.changes.landed')
 local lines = require('aineo.changes.lines')
@@ -1429,19 +1434,21 @@ local function show_last(this_enter, showing, text)
   })
 end
 
---- Reads the diff of the entry the line under the cursor lists in `buffer`
---- (`aineo.changes.entry_diff`) and shows it (`show_last()`), the current
---- window kept as the one Enter was pressed in (`aineo.changes.Selection`),
---- unless a key asked for another diff or file meanwhile: only the last
---- key's is shown, or its failure told. Does nothing on a line that lists
---- none.
+--- Reads the diff of `diffed(listed)`, `listed` the entry the line under the
+--- cursor lists in `buffer` (`aineo.changes.entry_diff`), and shows it
+--- (`show_last()`), the current window kept as the one the key was pressed
+--- in (`aineo.changes.Selection`), unless a key asked for another diff or
+--- file meanwhile: only the last key's is shown, or its failure told. Does
+--- nothing on a line that lists none.
 ---
 ---@param buffer integer
-local function open_entry(buffer)
-  local entry = pages.entry_at(buffer, vim.api.nvim_win_get_cursor(0)[1])
-  if not entry then
+---@param diffed fun(listed: aineo.changes.Entry): aineo.changes.Entry the entry standing for the diff to show
+local function show_diff_at_cursor(buffer, diffed)
+  local listed = pages.entry_at(buffer, vim.api.nvim_win_get_cursor(0)[1])
+  if not listed then
     return
   end
+  local entry = diffed(listed)
   enters = enters + 1
   local this_enter = enters
   local window = vim.api.nvim_get_current_win()
@@ -1469,6 +1476,24 @@ local function open_entry(buffer)
     end)
   end
   read_in_current_context()
+end
+
+--- Shows the diff of the file the line under the cursor lists in `buffer`
+--- against its previous version, as Enter does (`show_diff_at_cursor()`).
+---
+---@param buffer integer
+local function open_entry(buffer)
+  show_diff_at_cursor(buffer, function(listed)
+    return listed
+  end)
+end
+
+--- Shows the diff of the file the line under the cursor lists in `buffer`
+--- against `HEAD` (`aineo.changes.head_diff`).
+---
+---@param buffer integer
+local function open_entry_against_head(buffer)
+  show_diff_at_cursor(buffer, head_diff.of)
 end
 
 --- Shows, in the middle column, the file `entry` lists as the commit it is
@@ -1546,6 +1571,27 @@ local function map_open_file(buffer)
   vim.keymap.set('n', 'gf', function()
     open_file_at_cursor(buffer)
   end, { buffer = buffer, desc = 'aineo: open the file of the entry under the cursor' })
+end
+
+--- Maps `l` and `h` in `buffer`, the files buffer, in Normal mode: `l` to
+--- show the diff of the file the line under the cursor lists against its
+--- previous version, as Enter does (`open_entry()`), `h` against `HEAD`
+--- (`open_entry_against_head()`).
+---
+---@param buffer integer
+local function map_compare_keys(buffer)
+  vim.keymap.set('n', 'l', function()
+    open_entry(buffer)
+  end, {
+    buffer = buffer,
+    desc = 'aineo: show the diff of the file under the cursor against its previous version',
+  })
+  vim.keymap.set('n', 'h', function()
+    open_entry_against_head(buffer)
+  end, {
+    buffer = buffer,
+    desc = 'aineo: show the diff of the file under the cursor against HEAD',
+  })
 end
 
 --- A scratch buffer of the pane named `name` (`aineo.changes.scratch`),
@@ -1690,6 +1736,7 @@ function M.pane_buffers()
   if not (buffers.files and vim.api.nvim_buf_is_loaded(buffers.files)) then
     buffers.files = pane_buffer('aineo://changes-files', files_page)
     map_open_file(buffers.files)
+    map_compare_keys(buffers.files)
   end
   if not (buffers.commits and vim.api.nvim_buf_is_loaded(buffers.commits)) then
     buffers.commits = pane_buffer('aineo://changes-commits', commits_page)
