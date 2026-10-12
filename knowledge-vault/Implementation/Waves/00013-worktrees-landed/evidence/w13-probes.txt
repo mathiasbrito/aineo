@@ -1,0 +1,86 @@
+git: git version 2.50.1 (Apple Git-155)
+== P1: a rebase merge, fetched by the agent's worktree, read from the editor's
+-- what the fetch wrote under the shared git directory (find -newer):
+./logs/refs/remotes/origin/dev
+./objects/0d/bbcde374c098e0905c688e369f6e278ed62198
+./objects/38/5bce09a2e1b1782618a2bca82ae411e48687cf
+./objects/a6/22f2bcb2fe23347b30ca157a470b8568973c7b
+./objects/b4/c2a7c4b1027f4b72e771935247ba9b88238f4e
+./objects/da/0f8ed91a8f2f0f067b3bdf26265d5ca48cf82c
+./refs/remotes/origin/dev
+./worktrees/agent/FETCH_HEAD
+-- the editor's HEAD before and after: 8087fac / 8087fac
+-- git log --format='%h %s' BASE..origin/dev
+385bce0 a2
+0dbbcde a1
+(exit 0)
+-- the agent's own commits, by id (not the landed ones):
+fe36230 a2
+d540223 a1
+(exit 0)
+-- git log --cherry-mark --format='%m %h %s' origin/dev...feature/a
+= 385bce0 a2
+= 0dbbcde a1
+= fe36230 a2
+= d540223 a1
+(exit 0)
+-- git diff --name-status -M BASE...origin/dev (their combined change)
+A	a1.txt
+R100	c1.txt	c1-renamed.txt
+(exit 0)
+-- the same, two dots
+A	a1.txt
+R100	c1.txt	c1-renamed.txt
+(exit 0)
+-- git diff BASE...origin/dev -- c1.txt c1-renamed.txt (a rename asked with both paths)
+ c1.txt => c1-renamed.txt | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+(exit 0)
+== P2: a working branch that does not exist
+(exit 1)
+fatal: bad revision '8087fac70a892ac3b3b2ae11ca788256705c0b14..origin/nosuch'
+(exit 128)
+== P3: a base that is not behind the working branch (a feature branch forked at c0)
+-- git log F..origin/dev: everything dev gained since the fork, not since the session
+385bce0 a2
+0dbbcde a1
+8087fac c2
+0eed3e2 c1
+(exit 0)
+== P4: the remote's default branch, origin/HEAD
+-- in a clone:
+refs/remotes/origin/main
+(exit 0)
+-- in a repository whose remote was added and fetched, not cloned:
+refs/remotes/origin/main
+(exit 0)
+-- after git remote set-head origin --auto:
+refs/remotes/origin/main
+(exit 0)
+== P5: the checkout on the working branch itself
+-- @{upstream}: origin/dev
+-- before a pull: BASE..HEAD
+(exit 0)
+-- after git merge --ff-only origin/dev: BASE..HEAD, then BASE..origin/dev
+385bce0 a2
+0dbbcde a1
+(exit 0)
+385bce0 a2
+0dbbcde a1
+(exit 0)
+== P6: a worktree's commit read from the editor's repository (one object store)
+d540223 a1
+
+A	a1.txt
+(exit 0)
+== P7: the local branch next to its remote-tracking one
+-- the editor's clone made no local dev before P5; after P5, dev at 385bce0, origin/dev at 385bce0
+== P8: this repository, read-only: the cost of the landed reads
+commits in FROM..origin/dev: 100
+log -z --format='%H %s' FROM..origin/dev: 33 ms (runs: 33 33 32 32 35)
+diff --name-status -z -M FROM...origin/dev: 36 ms (runs: 47 35 36 43 33)
+rev-parse --verify origin/dev: 25 ms (runs: 27 25 25 25 29)
+-- the local dev and main against their remote-tracking branches, on this host:
+dev: 167 commits behind origin/dev
+main: 25 commits behind origin/main
+-- origin/HEAD: refs/remotes/origin/main
