@@ -622,6 +622,44 @@ T['h']['on a file under Landed, once the working branch names no commit, tells w
   eq(child.lua_get('#_G.shown_diffs'), 0)
 end
 
+T['h']['on a file as HEAD has it, under Session work, shows nothing, says so once and leaves the focus'] = function()
+  local top = git_repo.create('keys-h-same-work', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local commit = git_repo.commit_all(top, 'Second')
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Second' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
+
+  press_on_files_line('h', 2)
+
+  git_repo.wait_until('the file told as HEAD has it', function()
+    return child.lua_get(TOLD) ~= ''
+  end)
+  eq({
+    told = child.lua_get(TOLD),
+    shown = child.lua_get('#_G.shown_diffs'),
+    current = child.lua_get('vim.api.nvim_buf_get_name(0)'),
+  }, { told = 'aineo: notes.txt is as HEAD has it', shown = 0, current = FILES })
+end
+
+T['h']['on a file of the newest commit, which is HEAD, shows nothing and says so'] = function()
+  local _, _, second = pane_under_first_of_two_commits('keys-h-same-commit')
+  go_to_commits_line(3)
+  expect_lines(FILES, { 'Files in: ' .. second:sub(1, 7) .. ' Second', '  M notes.txt' })
+
+  press_on_files_line('h', 2)
+
+  git_repo.wait_until('the file told as HEAD has it', function()
+    return child.lua_get(TOLD) ~= ''
+  end)
+  eq({ child.lua_get(TOLD), child.lua_get('#_G.shown_diffs') }, {
+    'aineo: notes.txt is as HEAD has it',
+    0,
+  })
+end
+
 T['h']['names the buffer after the file as the files window quotes it'] = function()
   local _, first =
     pane_under_first_of_two_commits('keys-h-quoted', 'say "hi".txt', '"say \\"hi\\".txt"')
