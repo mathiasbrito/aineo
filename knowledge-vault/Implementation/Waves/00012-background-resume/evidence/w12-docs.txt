@@ -7,7 +7,7 @@ touched. Each block below is the page's text, verbatim, under the line range
 it was cut from in the copy read that day. Line numbers move with the pages.
 
 What each block establishes is in plan.md › "What is established"; the labels
-D1–D8 are used there.
+D1–D10 are used there (D9 and D10 added in round 2).
 
 == D1 — sessions.md 30-44: resuming a running background session
 
@@ -130,3 +130,24 @@ To turn off background agents and agent view entirely, set the `disableAgentView
     - Improved `/resume` and `claude --resume` on a session that is running in the background: they now open that session instead of refusing, and a prompt given with `claude --resume <id> "prompt"` is sent to it as its next turn
     * Fixed Ctrl+C needing three or four presses to exit while background subagents are running; two presses now exit
     * Fixed `--resume` listing a backgrounded conversation twice and `--continue` reopening its stalled pre-background copy; `--continue` now also opens finished background sessions
+
+== D9 — fullscreen.md 217-224 and 280-284: redrawing a fullscreen display (added 2026-10-12, round 2)
+
+## Clear the conversation
+
+Run `/clear` to start a new conversation.
+
+If the display looks garbled or partially blank, press `Ctrl+L` to redraw the screen. The redraw keeps the conversation and your input in place.
+
+`Cmd+K` does the same as `Ctrl+L` when your terminal passes it through to Claude Code. iTerm2 and Terminal.app handle `Cmd+K` themselves and clear their own screen, and Claude Code detects the cleared screen and repaints the conversation. Before v2.1.280, starting with v2.1.260, pressing `Ctrl+L`, or `Cmd+K` where it reaches Claude Code, cleared the screen in fullscreen rendering. Before v2.1.238, pressing `Ctrl+L` twice within two seconds ran `/clear`.
+
+
+### Stale or misplaced text on screen
+
+Fullscreen rendering sends only the cells that changed between frames. Some terminals, most commonly Windows Terminal and other ConPTY-backed hosts, coalesce these positioned writes incorrectly and leave fragments of earlier output on screen until you resize the window.
+
+Set [`CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT=1`](/docs/en/env-vars) to repaint every cell on every frame instead of sending incremental updates.
+
+== D10 — interactive-mode.md 25: Ctrl+L (added 2026-10-12, round 2)
+
+| `Ctrl+L` | Redraw the screen | Forces a full terminal redraw, keeping input and conversation history. Use this to recover if the display becomes garbled or partially blank. See [Clear the conversation](/docs/en/fullscreen#clear-the-conversation) for fullscreen rendering |
