@@ -102,7 +102,7 @@ end
 
 --- One entry a window lists: a file changed, or a commit.
 ---@class aineo.changes.Entry
----@field key string what tells the entry apart from one read to the next: a change's path, a commit's id, or the key of a fixed line's filter (`aineo.changes.filter`'s `key()`)
+---@field key string what tells the entry apart from one read to the next: a change's path, or the key of the filter the entry lists (`aineo.changes.filter`'s `key()`): a commit's id for the editor's own commit, `<top>\0<id>` for a worktree's commit, `<top>\0\0worktree` for its heading
 ---@field change? aineo.git.Change
 ---@field commit? aineo.git.Commit
 ---@field filter? aineo.changes.Filter the filter a commits window line selects, or the filter a file is listed under
@@ -309,9 +309,53 @@ function M.worktree_heading(section)
   )
 end
 
+--- The colours of `line`, the commits window's line for a commit
+--- (`M.commit_line()`): its abbreviated id in its group, and its subject in
+--- its own; the space between them in neither.
+---
+---@param line string
+---@return aineo.changes.Colour[]
+local function commit_colours(line)
+  return {
+    { first_column = 0, end_column = M.ABBREVIATED_ID_LENGTH, group = colours.COMMIT_ID_GROUP },
+    {
+      first_column = M.ABBREVIATED_ID_LENGTH + 1,
+      end_column = #line,
+      group = colours.COMMIT_SUBJECT_GROUP,
+    },
+  }
+end
+
+--- The rows of `commits`, a line per commit in their order
+--- (`M.commit_line()`), in its own colours (`commit_colours()`), each
+--- listing the entry of its commit and the filter it selects: the commit's
+--- files in the editor's own worktree, or in `worktree`, the worktree other
+--- than the editor's that lists them, when given.
+---
+---@param commits aineo.git.Commit[]
+---@param worktree? aineo.changes.WorktreeSection
+---@return aineo.changes.Row[]
+local function commit_rows(commits, worktree)
+  return vim.tbl_map(function(commit)
+    local line = M.commit_line(commit)
+    local listed_under = worktree and filter.of_worktree_commit(worktree, commit)
+      or filter.of_commit(commit)
+    return {
+      line = line,
+      entry = {
+        key = filter.key(listed_under),
+        commit = commit,
+        filter = listed_under,
+        worktree = worktree,
+      },
+      colours = commit_colours(line),
+    }
+  end, commits)
+end
+
 --- The rows under the heading of `section`, a worktree other than the
 --- editor's: the line saying its last read failed, when it did; then a
---- line per commit it last read (`M.commit_rows()`), or
+--- line per commit it last read (`commit_rows()`), or
 --- `M.NO_WORKTREE_COMMITS`, a note, when it has none. Before any list of it
 --- was read, the line saying its read failed alone.
 ---
@@ -322,7 +366,7 @@ local function section_rows(section)
   if not section.listed then
     return notes
   end
-  return rows_of(notes, M.commit_rows(section.listed.commits, section), note(M.NO_WORKTREE_COMMITS))
+  return rows_of(notes, commit_rows(section.listed.commits, section), note(M.NO_WORKTREE_COMMITS))
 end
 
 --- The line that says the other worktrees could not be listed, in
@@ -509,23 +553,6 @@ function M.commit_line(commit)
   return ('%s %s'):format(commit.id:sub(1, M.ABBREVIATED_ID_LENGTH), commit.subject)
 end
 
---- The colours of `line`, the commits window's line for a commit
---- (`M.commit_line()`): its abbreviated id in its group, and its subject in
---- its own; the space between them in neither.
----
----@param line string
----@return aineo.changes.Colour[]
-local function commit_colours(line)
-  return {
-    { first_column = 0, end_column = M.ABBREVIATED_ID_LENGTH, group = colours.COMMIT_ID_GROUP },
-    {
-      first_column = M.ABBREVIATED_ID_LENGTH + 1,
-      end_column = #line,
-      group = colours.COMMIT_SUBJECT_GROUP,
-    },
-  }
-end
-
 --- What the commits window knows.
 ---@class aineo.changes.CommitsView
 ---@field since? aineo.git.CommitsSince the session's commits, as last read
@@ -534,37 +561,10 @@ end
 ---@field lists_filters? boolean whether the window starts with the lines *Uncommitted* and *Session work*: once the session's repository is found
 ---@field worktrees? aineo.changes.OtherWorktrees what the window knows of the other worktrees, none when not given
 
---- The rows of `commits`, a line per commit in their order
---- (`M.commit_line()`), in its own colours (`commit_colours()`), each
---- listing the entry of its commit and the filter it selects: the commit's
---- files in the editor's own worktree, or in `worktree`, the worktree other
---- than the editor's that lists them, when given.
----
----@param commits aineo.git.Commit[]
----@param worktree? aineo.changes.WorktreeSection
----@return aineo.changes.Row[]
-function M.commit_rows(commits, worktree)
-  return vim.tbl_map(function(commit)
-    local line = M.commit_line(commit)
-    local listed_under = worktree and filter.of_worktree_commit(worktree, commit)
-      or filter.of_commit(commit)
-    return {
-      line = line,
-      entry = {
-        key = filter.key(listed_under),
-        commit = commit,
-        filter = listed_under,
-        worktree = worktree,
-      },
-      colours = commit_colours(line),
-    }
-  end, commits)
-end
-
 --- The rows of the editor's own worktree in the commits window below the
 --- filters, for `view`: the line saying its last read failed, when it did,
 --- and one naming the base when it is no longer an ancestor of `HEAD`; then
---- a line per commit git lists (`M.commit_rows()`), or `M.NO_COMMITS` when
+--- a line per commit git lists (`commit_rows()`), or `M.NO_COMMITS` when
 --- there is none. Before any list was read, `M.READING`, or the failure's
 --- line alone.
 ---
@@ -585,7 +585,7 @@ local function listed_commit_rows(view)
   if not view.since then
     return view.failure and { notes[1] } or { note(M.READING) }
   end
-  return rows_of(notes, M.commit_rows(view.since.commits), note(M.NO_COMMITS))
+  return rows_of(notes, commit_rows(view.since.commits), note(M.NO_COMMITS))
 end
 
 --- The rows of the editor's own worktree in the commits window, for `view`:
