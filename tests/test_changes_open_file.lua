@@ -236,6 +236,7 @@ end
 local function pane_under_commit(case, files, listed)
   local top = git_repo.create(case, { ['notes.txt'] = { 'one' } })
   child.lua(BEGIN_AND_SHOW, { top })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
   for path, lines in pairs(files) do
     if lines then
       git_repo.write(top, path, lines)
