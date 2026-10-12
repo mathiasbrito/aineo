@@ -115,7 +115,7 @@ end
 --- Starts, in `child`, a session on a new id with `fake` and `settings`,
 --- stops it before anything was sent, so that Claude Code has no
 --- conversation for that id, and starts again, which resumes that id; returns
---- the terminal of that resume.
+--- the terminal of that resume, once Claude Code has launched in it.
 ---
 ---@param child table
 ---@param fake { record: string, environment: table<string, string> }
@@ -125,7 +125,9 @@ local function resume_with_no_conversation(child, fake, settings)
   local first = claude.start(child, fake, settings)
   claude.wait_for_start(fake)
   stop_claude_code(child, first)
-  return claude.start_again(child, settings)
+  local resumed = claude.start_again(child, settings)
+  claude.wait_for_launch(child, resumed)
+  return resumed
 end
 
 --- Waits, at most `claude.PATIENCE_MS`, until the buffer `buffer` of

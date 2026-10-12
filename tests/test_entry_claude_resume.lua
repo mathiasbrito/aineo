@@ -164,6 +164,27 @@ T["Claude's session"]["starts on \\o after an exit in Claude's window, which the
   }, { false, 'terminal', true })
 end
 
+T["Claude's session"]["keeps Claude's window in the layout while a restart waits for the list, then runs Claude Code there"] = function()
+  local fake = claude_session.fake('entry-resume-waits', 'ready')
+  local gate = claude_session.list_gate('entry-resume-waits')
+  use_state_directory(child, fixture.directory('entry-resume-waits-state'))
+  entry.use_fake(child, fake, { claude = { cmd = gate.cmd } })
+  child.cmd('Aineo open')
+  claude_session.wait_for_start(fake)
+  end_claude_code(child)
+
+  entry.command(child, 'Aineo open')
+  local waiting = child.lua_get(CLAUDE_WINDOW_BUFFER)
+  entry.command(child, 'sleep 100m')
+
+  eq(#entry.windows(child), 3)
+  eq(child.lua_get(CLAUDE_WINDOW_BUFFER), waiting)
+  gate.open()
+  eq(claude_session.wait_for_status(child, 'ready'), { 'ready' })
+  eq(entry.windows(child), { 'terminal', 'aineo://report', 'aineo://input' })
+  eq(child.lua_get(CLAUDE_WINDOW_BUFFER), waiting)
+end
+
 T['after a resume with no conversation'] = MiniTest.new_set()
 
 T['after a resume with no conversation, before any \\c'] = MiniTest.new_set()

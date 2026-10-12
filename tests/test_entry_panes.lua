@@ -72,7 +72,9 @@ local T = MiniTest.new_set({
 })
 
 --- Opens the layout in the child with aineo running the fake `claude` in its
---- `ready` mode under `name`, and returns the fake.
+--- `ready` mode under `name`, waits until Claude Code has launched (a start
+--- that resumes shows an empty window until the list of sessions has
+--- answered), and returns the fake.
 ---
 ---@param name string the case's own name for its files, starting `panes-`
 ---@return table fake
@@ -80,6 +82,7 @@ local function open_layout(name)
   local fake = claude_session.fake(name, 'ready')
   entry.use_fake(child, fake)
   child.cmd('Aineo open')
+  claude_session.wait_for_start(fake)
   return fake
 end
 
@@ -276,10 +279,12 @@ T['a buffer already named as a buffer of the changes pane']['gives the name up, 
   name,
   line
 )
-  entry.use_fake(child, claude_session.fake('panes-namesake', 'ready'))
+  local fake = claude_session.fake('panes-namesake', 'ready')
+  entry.use_fake(child, fake)
   child.lua('vim.api.nvim_buf_set_name(vim.api.nvim_create_buf(false, true), ...)', { name })
 
   entry.command(child, 'Aineo open')
+  claude_session.wait_for_start(fake)
   local opened = entry.windows(child)
   entry.press(child, '\\g')
 
@@ -292,7 +297,8 @@ end
 T['a buffer already named as a buffer of the changes pane']['keeps the text the user typed in it, unnamed, for'] = function(
   name
 )
-  entry.use_fake(child, claude_session.fake('panes-namesake-typed', 'ready'))
+  local fake = claude_session.fake('panes-namesake-typed', 'ready')
+  entry.use_fake(child, fake)
   local namesake = child.lua(
     [[
       local buffer = vim.api.nvim_create_buf(true, false)
@@ -304,6 +310,7 @@ T['a buffer already named as a buffer of the changes pane']['keeps the text the 
   )
 
   entry.command(child, 'Aineo open')
+  claude_session.wait_for_start(fake)
   entry.press(child, '\\g')
 
   eq(
@@ -566,9 +573,11 @@ T['a session saved while the changes pane shows']['restored, lets the layout ope
   entry.press(child, '\\g')
   child.cmd('mksession! ' .. session)
   entry.restart(child, { '-S', session })
-  entry.use_fake(child, claude_session.fake('panes-session-restored', 'ready'))
+  local fake = claude_session.fake('panes-session-restored', 'ready')
+  entry.use_fake(child, fake)
 
   entry.command(child, 'Aineo open')
+  claude_session.wait_for_start(fake)
   local opened = { entry.windows(child), entry.messages(child) }
   entry.press(child, '\\g')
 
@@ -596,6 +605,7 @@ T['the pane key, with the layout never opened,']['opens the layout, showing the 
   entry.use_fake(child, fake)
 
   entry.press(child, '\\' .. key)
+  claude_session.wait_for_start(fake)
 
   eq({ entry.windows(child), entry.messages(child) }, { windows, {} })
   eq(#claude_session.wait_for_starts(fake, 1), 1)
@@ -608,10 +618,12 @@ T['the pane key, with the layout never opened,']['from a window showing a file, 
   landing
 )
   local file = fixture.write('panes-from-a-file/file.txt', { 'a file' })
-  entry.use_fake(child, claude_session.fake('panes-from-a-file', 'ready'))
+  local fake = claude_session.fake('panes-from-a-file', 'ready')
+  entry.use_fake(child, fake)
   child.cmd('edit ' .. file)
 
   entry.press(child, '\\' .. key)
+  claude_session.wait_for_start(fake)
 
   eq(
     { entry.windows(child), entry.current_window(child), entry.messages(child) },
