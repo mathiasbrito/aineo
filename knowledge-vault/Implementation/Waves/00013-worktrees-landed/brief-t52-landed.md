@@ -86,3 +86,9 @@ Large: one setting through the composition root, a section of the commits window
 ## Report
 
 In your definition's shape, to `<scratchpad>/t52-report-packet.md`. Open the pull request into `dev` before you report. Put in its body every verification claim a reviewer can re-measure, each test file whose pins moved and why, and the whole suite's counts. The orchestrator's verification runs `plan.md`'s five T52 mutants: name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-12, before dispatch
+
+- **The user's answers** (`plan.md` › *The user's answers — 2026-10-12*, verbatim there): U1 (a), "A setting (Recommended)", `changes.working_branch` defaulting to `origin/HEAD`; U2 (a), "Heading + its commits (Recommended)". They are the user's decisions, recorded on D56; this body was written for them and stands unchanged.
+- **The orchestrator's rulings**, each the (a) this body is written for: A136 (O1), A137 (O2), A143 (O8), A144 (O9: since the session's base), A146 (O11), A147 (O12), A148 (O13), A149 (O14), A150 (O15), A151 (O16); and A156 (the plan's A3: no `*` under *Landed*). These are the orchestrator's assumptions under the user's instruction of 2026-10-06, to record in the session note and the PR body as such, never as the user's decisions.
+- No answer holds this packet: it is dispatched once T50 and T51 have merged, with the dispatch amendment its header names.

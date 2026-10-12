@@ -72,3 +72,9 @@ Medium: seven reads beside the home's own, one watch field, about eighteen new c
 ## Report
 
 In your definition's shape, to `<scratchpad>/t51-report-packet.md`. Open the pull request into `dev` before you report. Put in its body every verification claim a reviewer can re-measure, the new exports with their signatures, and the whole suite's counts. The orchestrator's verification runs `plan.md`'s five T51 mutants: name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-12, before dispatch
+
+- **The user's answers** (`plan.md` › *The user's answers — 2026-10-12*, verbatim there): U1–U4 each (a). They are the user's decisions, recorded on D55–D57, and none changes this packet's reads.
+- **The orchestrator's rulings**, each the (a) this body is written for: A136 (O1), A137 (O2), A143 (O8: aineo never fetches), A145 (O10: `references_changed`). These are the orchestrator's assumptions under the user's instruction of 2026-10-06, to record in the session note and the PR body as such, never as the user's decisions.
+- No answer holds this packet: it is dispatched at once.

@@ -107,6 +107,17 @@ Four, each with options and a recommendation. T50's brief is written for U3's re
 - (c) Neither: Enter stays the one key, and Vim's `h` and `l` stay whole.
 - **Recommended: (a).** It is what the user floated, it gives one new comparison (`h`), and `l` gives the comparison the user named under a key of its own, beside Enter.
 
+## The user's answers — 2026-10-12
+
+The user answered U1–U4 the same day, each with the recommendation, (a). Verbatim, from the orchestrator's record (the question, the option chosen, and the option's text):
+
+- **U1** — Q: ""Landed" lists the commits merged into your working branch since the session began. Which branch is the working branch?" — A: "A setting (Recommended)" (option text: "changes.working_branch, defaulting to origin/HEAD (the remote's default branch, origin/main here). You'd set 'origin/dev' for aineo. aineo never fetches, so it shows what your last fetch saw.")
+- **U2** — Q: "How should Landed appear in the commits window?" — A: "Heading + its commits (Recommended)" (option text: "A 'Landed in origin/dev' section under your session's commits. The heading selects everything landed since the session began; each landed commit below it is its own filter.")
+- **U3** — Q: "With the files window showing only the selected filter's files, should the other worktrees' file sections still appear under Uncommitted and Session work?" — A: "No, one list always (Recommended)" (option text: "Files window always lists the current filter only. To see an agent worktree's files, put the cursor on its heading (its whole change) or one of its commits; Enter on the heading shows its whole diff.")
+- **U4** — Q: "Add your h and l keys to the files window?" — A: "Both, everywhere (Recommended)" (option text: "h: the file compared with HEAD. l: against its previous version (under a commit, its parent; under Uncommitted, HEAD; under Session work/Landed, the base), the same as Enter. They replace Vim's h/l in that window only.")
+
+These are the user's decisions, recorded as dated notes on D55 (U3), D56 (U1, U2) and D57 (U3, U4) in the plan note. Every brief was written for them, so none needs an amendment for an answer, and no packet waits for the user any more: T50 waits only for T49's merge, T52 for T50 and T51, T53 for T52.
+
 ## Decisions for the orchestrator
 
 Numbered once, here. The recommendation is (a). Each brief is written for the recommendations; a ruling other than (a) is a dated amendment of the brief before dispatch.
@@ -219,5 +230,15 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 - D32's comparison made the working branch (A1).
 - Marking a worktree's commit that has landed (A2).
 - A fetch by aineo (O8 (b)).
+
+## The orchestrator's rulings — 2026-10-12, before dispatch
+
+Each ruling is the orchestrator's assumption under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"), reported to the user with the wave. None is the user's decision, and none is a D row.
+
+- **A136–A153 (O1–O18)** — each ruled as its (a), numbered in order: O1 → A136 (the rolling wave in three stages), O2 → A137 (Sonnet implementers; the attack on Opus, tests and records on Sonnet), O3 → A138, O4 → A139, O5 → A140, O6 → A141, O7 → A142, O8 → A143 (aineo never fetches), O9 → A144 (*Landed* since the session's base), O10 → A145 (`references_changed`), O11 → A146, O12 → A147, O13 → A148, O14 → A149, O15 → A150, O16 → A151, O17 → A152, O18 → A153.
+- **A154–A157** — this plan's *Assumptions to report to the user* A1–A4, adopted as written and renumbered: A1 → A154, A2 → A155, A3 → A156, A4 → A157. The briefs' citations of A1–A4 mean these.
+- **A154 stays an open thread for the user**: D32's worktree bases are not changed; whether D32's comparison should become the working branch is the user's to decide, not this wave's.
+
+With the user's answers and these rulings, no decision is open for any packet: the six-rules table's *decision open?* column reads "none" for T50–T53 from here.
 
 ## Landed
