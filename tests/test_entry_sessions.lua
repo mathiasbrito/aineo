@@ -328,18 +328,20 @@ end
 
 --- Presses `\cs` in the child, whose Claude Code is not ready, and checks
 --- that it tells the user `expected`, once, as a warning, runs no
---- `agents --json`, offers no list and writes nothing.
+--- `agents --json` beyond the one a start that resumed made before, offers
+--- no list and writes nothing.
 ---
 ---@param fake { record: string }
 ---@param expected string
 local function expect_refusal_before_the_list(fake, expected)
+  local runs_before = agents_runs(fake)
   pick_row(1)
 
   press_sessions()
 
   eq(messages_once_told(), { { message = NO_LIST .. expected, level = vim.log.levels.WARN } })
   eq(menus(), {})
-  eq(agents_runs(fake), {})
+  eq(agents_runs(fake), runs_before)
   eq(claude_session.received(fake):find('/resume', 1, true), nil)
 end
 

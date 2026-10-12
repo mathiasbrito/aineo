@@ -1991,7 +1991,7 @@ T['a start in place of the session followed']['in another directory is told as a
 
   claude.start_again_noting_switches(child, there)
 
-  eq(child.lua_get('_G.session_switches'), {
+  eq(claude.wait_for_session_switches(child, 1), {
     {
       id = first_session_id(fake),
       source = 'resume',

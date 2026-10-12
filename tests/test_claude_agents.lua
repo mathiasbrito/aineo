@@ -245,10 +245,12 @@ T['the listing']['delivers each session that carries an id, a running one and an
         kind = 'interactive',
         status = 'idle',
         running = true,
+        pid = 4242,
         cwd = '/work/project',
       },
       {
         session_id = '22222222-2222-4222-8222-222222222222',
+        short_id = 'a1b2c3d4',
         name = 'tests',
         kind = 'background',
         status = 'blocked',
@@ -278,7 +280,7 @@ T['the listing']['keeps the fields of an entry that have the type Claude Code do
   local fake = fake_listing(
     'agents-malformed',
     '[null, 5, "text", {"sessionId": 7}, {"sessionId": "33333333-3333-4333-8333-333333333333",'
-      .. ' "name": null, "kind": "interactive", "status": 5, "state": "blocked", "pid": "4242"}]'
+      .. ' "id": 5, "name": null, "kind": "interactive", "status": 5, "state": "blocked", "pid": "4242"}]'
   )
 
   local answer = list_sessions(fake, '/work/project')
