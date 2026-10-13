@@ -710,20 +710,30 @@ end
 --- How often `quit_pressing_ctrl_c()` presses Ctrl-C in the editor.
 local CTRL_C_EVERY_MS = 100
 
---- Quits `child` with `:qa` and, while it quits, presses Ctrl-C in the editor
---- every `CTRL_C_EVERY_MS`, as a user waiting on a slow quit might, until the
+--- Quits `child` with `:qa` and, once the stop has pressed its first Ctrl-C
+--- in `fake`'s terminal, presses Ctrl-C in the editor every
+--- `CTRL_C_EVERY_MS`, as a user waiting on a slow quit might, until the
 --- editor has exited or `STOP_PATIENCE_MS` has passed. A press that reaches an
 --- editor already exiting fails, and is dropped: the exit is what the presses
 --- wait for.
 ---
+--- No Ctrl-C is pressed before that key has come: a Ctrl-C that reaches an
+--- editor in the first milliseconds of its `:qa` can make it quit without
+--- running its `VimLeavePre` handlers (measured on Neovim 0.12.5), so that no
+--- stop runs at all. The first key reaching the fake shows that the stop is
+--- already pressing keys.
+---
 ---@param child table
-function M.quit_pressing_ctrl_c(child)
+---@param fake { record: string }
+function M.quit_pressing_ctrl_c(child, fake)
   M.quit(child)
   vim.wait(M.STOP_PATIENCE_MS, function()
     if vim.fn.jobwait({ child.job.id }, 0)[1] ~= -1 then
       return true
     end
-    pcall(child.api_notify.nvim_input, '<C-c>')
+    if M.ctrl_c_count(fake) > 0 then
+      pcall(child.api_notify.nvim_input, '<C-c>')
+    end
     return false
   end, CTRL_C_EVERY_MS)
 end
