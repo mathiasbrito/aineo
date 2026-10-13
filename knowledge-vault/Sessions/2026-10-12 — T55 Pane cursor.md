@@ -49,3 +49,8 @@ See the table below, run on `tests/test_entry_panes.lua`, `tests/test_layout_pan
 ## Task lines
 
 - T55 `[X]` (`bugfix/t55-pane-cursor`, into `dev`) — `\g` and `\pa`, `:Aineo pane`, their `<Plug>` mappings and `<C-\>` twins move the cursor into the pane they show (D59). The user's words: “it is fine, but sometimes the cursor do not move to the pane, this was manily to avoid moving through windows with ctrl+w”. Small fix of the user's prompt-driven waves (D30).
+
+## Commits
+
+- PR #187, `bugfix/t55-pane-cursor`, head `3c244aa` (1 commit), merged by rebase into `dev` as `090f6f6`.
+- Released in v0.2.28 (PR #188, `main` `1fc653d`).
