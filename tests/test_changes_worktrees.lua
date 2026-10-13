@@ -863,7 +863,7 @@ T['a worktree whose later read fails']['keeps the list it showed, under git’s 
   )
 end
 
-T['a worktree whose later read fails']['keeps the list it showed, under git’s words, when the editor’s branch cannot be read'] = function()
+T['a worktree whose later read fails']['keeps the list it showed, under git’s words, when the remote’s default branch cannot be read'] = function()
   local top = git_repo.create('changesworktrees-comparison-failed', { ['notes.txt'] = { 'one' } })
   local agent = add_worktree(top, 'agent', 'agent')
   git_repo.write(agent, 'notes.txt', { 'agent' })
@@ -1761,6 +1761,168 @@ T['a worktree’s base from the working branch']['moves with the working branch 
       { 'Worktree agent (agent)', 'No commits in this worktree' }
     )
   )
+end
+
+T['a worktree’s base from the working branch']['is not read at all for a worktree with no commit yet, the editor’s comparison commit neither'] = function()
+  local top, _, landed, mine = fork_after_landing('wtbase-fresh')
+  local fresh = vim.fs.joinpath(vim.fs.dirname(top), 'fresh')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '--orphan', '-b', 'fresh', fresh })
+  local stand_in, log = git_logging_every_run('wtbase-fresh')
+  child.lua(WATCH_IN_HAND)
+  child.lua(COUNT_GIT_READS)
+
+  begin_and_show_working_on(top, WORKING_BRANCH, { executable = stand_in })
+
+  wait_for_the_reads()
+  eq(lines_of(COMMITS), {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Landed in ' .. WORKING_BRANCH,
+    landed:sub(1, 7) .. ' Landed',
+    'Worktree agent (agent)',
+    mine:sub(1, 7) .. ' The agent’s',
+    'Worktree fresh (fresh)',
+    'No commits in this worktree',
+  })
+  eq(lines_holding(log, '@{upstream}'), 0)
+end
+
+T['a worktree’s base from the working branch']['says why under the worktree whose base needs the editor’s comparison commit when that cannot be read, the others as ever'] = function()
+  local top, _, landed, mine = fork_after_landing('wtbase-comparison-failed')
+  make_unrelated_branch(top)
+  local other = vim.fs.joinpath(vim.fs.dirname(top), 'other')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', other, 'unrelated' })
+  git_repo.write(other, 'other.txt', { 'other' })
+  local theirs = git_repo.commit_all(other, 'The other’s')
+  local unrelated = git_repo.git(top, { 'rev-parse', '--short=7', 'unrelated~1' })
+  local stand_in, switch = breakable_git_in('wtbase-comparison-failed', top, 'symbolic-ref')
+  begin_and_show_working_on(top, WORKING_BRANCH, { executable = stand_in })
+  local other_listed = {
+    'Worktree other (unrelated)',
+    theirs:sub(1, 7) .. ' The other’s',
+    unrelated .. ' Unrelated',
+  }
+  expect_lines(
+    COMMITS,
+    commits_landed_then(
+      { landed:sub(1, 7) .. ' Landed' },
+      vim.list_extend(
+        { 'Worktree agent (agent)', mine:sub(1, 7) .. ' The agent’s' },
+        other_listed
+      )
+    )
+  )
+  turn_on(switch)
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_lines(
+    COMMITS,
+    commits_landed_then({ landed:sub(1, 7) .. ' Landed' }, {
+      'Worktree agent (agent)',
+      mine:sub(1, 7) .. ' The agent’s',
+      'Worktree other (unrelated)',
+      'The last refresh failed: fatal: broken',
+      theirs:sub(1, 7) .. ' The other’s',
+      unrelated .. ' Unrelated',
+    })
+  )
+end
+
+T['a worktree’s base from the working branch']['says why under a worktree whose base needs the editor’s comparison commit, the setting naming no commit'] = function()
+  local top = git_repo.create('wtbase-comparison-failed-alone', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'agent.txt', { 'agent' })
+  local mine = git_repo.commit_all(agent, 'The agent’s')
+  local stand_in, switch = breakable_git_in('wtbase-comparison-failed-alone', top, 'symbolic-ref')
+  begin_and_show_working_on(top, 'origin/nothing', { executable = stand_in })
+  expect_lines(
+    COMMITS,
+    commits_then({
+      'Landed in origin/nothing',
+      'origin/nothing names no commit',
+      'Worktree agent (agent)',
+      mine:sub(1, 7) .. ' The agent’s',
+    })
+  )
+  turn_on(switch)
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_lines(
+    COMMITS,
+    commits_then({
+      'Landed in origin/nothing',
+      'origin/nothing names no commit',
+      'Worktree agent (agent)',
+      'The last refresh failed: fatal: broken',
+      mine:sub(1, 7) .. ' The agent’s',
+    })
+  )
+end
+
+T['a worktree’s base from the working branch']['says why when the merge base with the working branch’s commit cannot be read, not counting from the editor’s comparison commit'] = function()
+  local top, agent, landed, mine = fork_after_landing('wtbase-merge-base-failed')
+  local stand_in = git_repo.script('wtbase-merge-base-failed', 'git', {
+    ('case " $* " in *" -C %s "*" merge-base "*" %s "*) [ -f "$0.broken" ] && { echo "fatal: broken" >&2; exit 128; } ;; esac'):format(
+      agent,
+      landed
+    ),
+    ('exec %s "$@"'):format(REAL_GIT),
+  })
+  begin_and_show_working_on(top, WORKING_BRANCH, { executable = stand_in })
+  expect_lines(
+    COMMITS,
+    commits_landed_then(
+      { landed:sub(1, 7) .. ' Landed' },
+      { 'Worktree agent (agent)', mine:sub(1, 7) .. ' The agent’s' }
+    )
+  )
+  turn_on(stand_in .. '.broken')
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_lines(
+    COMMITS,
+    commits_landed_then({ landed:sub(1, 7) .. ' Landed' }, {
+      'Worktree agent (agent)',
+      'The last refresh failed: fatal: broken',
+      mine:sub(1, 7) .. ' The agent’s',
+    })
+  )
+end
+
+--- The added lines of the diff the home asked the child to show `index`-th.
+---
+---@param index integer
+---@return string[]
+local function added_lines_of_shown_diff(index)
+  return vim.tbl_filter(function(line)
+    return line:match('^%+[^+]') ~= nil
+  end, child.lua_get(SHOWN_DIFF, { index }).text)
+end
+
+T['a worktree’s base from the working branch']['shows the diff of a file of its whole change from the working branch on Enter and on l'] = function()
+  local top, _, clone = git_repo.create_with_remote('wtbase-file-diff')
+  git_repo.land_in_remote(clone, { ['a.txt'] = { 'one', 'landed' } }, 'Landed')
+  git_repo.fetch_remote(top)
+  local agent = add_worktree(top, 'agent', 'agent', WORKING_BRANCH)
+  git_repo.write(agent, 'a.txt', { 'one', 'landed', 'agent' })
+  git_repo.commit_all(agent, 'The agent’s')
+  begin_and_show_working_on(top, WORKING_BRANCH)
+  go_to_commits_line(6)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M a.txt' })
+  go_to_files_line(2)
+
+  child.type_keys('<CR>')
+  wait_for_diffs(1)
+  local on_enter = added_lines_of_shown_diff(1)
+  go_to_files_line(2)
+  child.type_keys('l')
+  wait_for_diffs(2)
+
+  eq({ on_enter, added_lines_of_shown_diff(2) }, { { '+agent' }, { '+agent' } })
 end
 
 return T
