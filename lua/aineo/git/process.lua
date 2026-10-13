@@ -90,10 +90,9 @@ local EDITOR_VARIABLES_LEFT_OUT = {
 
 --- How a git process ended when it answered.
 ---@class aineo.git.Output
----@field code integer its exit code, one of the request's answers unless `cut`
----@field stdout string what it wrote to its standard output, byte for byte; when `cut`, its first `Request.first_stdout_bytes` bytes
+---@field code integer its exit code, one of the request's answers unless the run was stopped because the bytes the request wanted had come
+---@field stdout string what it wrote to its standard output, byte for byte; when the run was stopped, its first `Request.first_stdout_bytes` bytes
 ---@field stderr string what it wrote to its standard error
----@field cut? boolean true when git was stopped because the bytes the request wanted had come
 
 --- Why git gave no answer.
 ---@class aineo.git.Failure
@@ -126,7 +125,7 @@ end
 --- What `done` is told of the process for `request` that ended with
 --- `result`, stopped at `limit_ms` when `timed_out`, having written `stdout`.
 --- A run `cut` because the bytes the request wanted had come is an answer,
---- whatever ended it.
+--- whatever ended it, the time limit included.
 ---
 ---@param executable string
 ---@param limit_ms integer
@@ -139,7 +138,7 @@ end
 ---@return aineo.git.Output|nil output
 local function outcome(executable, limit_ms, request, result, timed_out, stdout, cut)
   if cut then
-    return nil, { code = result.code, stdout = stdout, stderr = result.stderr, cut = true }
+    return nil, { code = result.code, stdout = stdout, stderr = result.stderr }
   end
   if timed_out then
     return {

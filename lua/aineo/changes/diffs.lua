@@ -11,8 +11,9 @@ local M = {}
 --- with syntax on, as measured in Neovim 0.12.5.
 local SHOWN_BYTES = 1048576
 
---- The longest a character is in UTF-8, in bytes.
-local LONGEST_CHARACTER_BYTES = 4
+--- The longest a character is as Neovim reads UTF-8, in bytes: its table of
+--- lead bytes admits the old five- and six-byte forms.
+local LONGEST_CHARACTER_BYTES = 6
 
 --- How many bytes of a file `M.file_buffer()` needs to show what it shows of
 --- the whole file: the bytes it shows, and the rest of the character a cut
