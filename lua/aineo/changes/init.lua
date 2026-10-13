@@ -327,6 +327,7 @@ local function window_read(reads)
         before = before,
         read_list = reads.read_list,
         before_each_worktree = read_own_then,
+        working_branch = session.settings.working_branch,
         git = session.settings.git,
       }, function(others)
         session[reads.others_field] = others
@@ -376,6 +377,7 @@ local function read_worktree_files(selected, done)
       read_list = function(repository, base, listed)
         git.changed_files(repository, base, listed, options)
       end,
+      working_branch = session.settings.working_branch,
       git = options,
     },
     selected.worktree,
