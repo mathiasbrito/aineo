@@ -1,0 +1,56 @@
+Wave 14 planning probes — 2026-10-13, macOS host, git 2.54.0 (Apple Git-157), NVIM v0.12.5.
+Script: w14-probes.sh (its steps run one by one from the checkout's root).
+
+== P1: ls-tree -l gives the size in the call that finds the entry
+big.txt bytes on disk: 134217728
+100644 blob a42d3449991e6ba99d2c4567265e8370595d739d 134217728	big.txt
+100644 blob ac790413e2d7a26c3767e78c57bb28716686eebc       6	small.txt
+160000 commit 0123456789012345678901234567890123456789       -	sub
+cat-file -s: 134217728
+
+Reading: with `-l`, each entry is `<mode> SP <type> SP <id> SP+ <size> TAB <path>`,
+the size right-aligned in at least 7 columns (so one or more spaces before it),
+`-` for an entry that is not a blob. The size is the blob's raw size, what
+`cat-file blob` prints. No second process is needed to learn it.
+
+== P2: a 128 MiB blob, whole against stopped at 1 MiB + 4 bytes (three runs)
+stopped: 22 ms, 1048580 bytes kept, rss 11 -> 15 MiB, signal 9, 39 chunks, first chunk 65536 bytes, result.stdout nil
+whole:   280 ms, 134217728 bytes, rss 13 -> 395 MiB
+stopped: 20 ms, 1048580 bytes kept, rss 11 -> 15 MiB, signal 9, 44 chunks, first chunk 49152 bytes, result.stdout nil
+whole:   174 ms, 134217728 bytes, rss 13 -> 396 MiB
+stopped: 19 ms, 1048580 bytes kept, rss 11 -> 15 MiB, signal 9, 45 chunks, first chunk 32768 bytes, result.stdout nil
+whole:   163 ms, 134217728 bytes, rss 13 -> 395 MiB
+
+Reading: the whole read, as `content.lua` makes it today through `process.lua`
+(`vim.system`, `text = false`, stdout collected), takes 163-280 ms and grows
+the editor by about 380 MiB; the read that takes `stdout` as a callback and
+kills git's process group once 1 MiB + 4 bytes have come takes about 20 ms
+and about 4 MiB. With a `stdout` callback `vim.system` collects nothing
+(`result.stdout` nil). The stopped git ends on signal 9, which
+`process.lua`'s `outcome()` reports today as `failed` ("git was ended by
+signal 9"): a read stopped at its bound must be told apart from a git killed
+by anything else. Chunks come in 32-64 KiB; bytes past the bound that arrive
+before the kill lands are dropped.
+
+== P3: a worktree's base, reconstructed from this repository's history
+T55's commit 090f6f6 stands for an agent worktree's HEAD, forked from
+8ea8f82 (origin/dev's tip when T55 was dispatched); 1dc3186 (wave 13's base)
+stands for an editor detached at an older dev.
+
+D32 today, against the editor's detached HEAD 1dc3186:
+  merge-base 1dc3186
+  commits listed under the worktree: 40
+  files in its whole change: 66
+Proposed (A154), against the working branch origin/dev at 8ea8f82:
+  merge-base 8ea8f82
+  commits listed under the worktree: 1
+  files in its whole change: 8
+
+Reading: from an editor detached at an older dev, every commit dev gained
+since then is listed under each agent's worktree (D32 takes the editor's
+HEAD when it is detached); counted from the working branch, only the
+agent's own. At the time of the probe this repository had two worktrees,
+the main checkout (detached at origin/dev's tip 7856882) and this planning
+agent's, so the two bases agree today: the long lists come back as soon as
+the editor's checkout falls behind origin/dev while agents fork from it
+(wave 13's P8: the local dev was 167 commits behind origin/dev).
