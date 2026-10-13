@@ -118,9 +118,9 @@ function M.comparison_commit(run, found, done)
 end
 
 --- Reads the base of `worktree`: the merge base of its `HEAD` and the
---- commit `comparison` (`M.comparison_commit()`). Calls `done(nil, base)`,
---- nil when they share no history or either has no commit yet, or
---- `done(failure)`.
+--- commit `comparison`, any commit: the one the working branch names, or the
+--- one `M.comparison_commit()` read. Calls `done(nil, base)`, nil when they
+--- share no history or either has no commit yet, or `done(failure)`.
 ---
 ---@param run aineo.git.Run
 ---@param worktree aineo.git.Worktree
