@@ -253,8 +253,9 @@ end
 ---
 --- With `first_bytes`, `text` is the file's first `first_bytes` bytes when
 --- the file is larger, and git is stopped once they have come, with every
---- process it started, so that a file of any size costs about as much as
---- `first_bytes` bytes; `text` is the whole file otherwise.
+--- process it started, so that the editor holds no more than `first_bytes`
+--- bytes of it, whatever its size; git itself may unpack a file stored in a
+--- pack whole before it prints a byte. `text` is the whole file otherwise.
 ---
 ---@param found aineo.git.Repository as `M.find_repository()` gave it
 ---@param commit string the commit's id

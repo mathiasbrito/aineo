@@ -356,6 +356,69 @@ T['a git that prints more than is asked for']['is stopped once the bytes asked f
   })
 end
 
+T['a git that prints more than is asked for']['is stopped with a process it started that holds its output'] = function()
+  local directory = git_repo.directory('process-bound-group')
+  local descendant_file = vim.fs.joinpath(directory, 'descendant')
+  local printing = stand_in_listing_a_big_file('process-bound-group', {
+    'sleep 30 &',
+    ('echo $! > %s'):format(descendant_file),
+    "head -c 200000 /dev/zero | tr '\\0' x",
+    'exec sleep 30',
+  })
+  MiniTest.finally(function()
+    kill_recorded(descendant_file)
+  end)
+
+  local seen = read_big_file('process-bound-group', printing, 50000)
+
+  eq({ failure = seen.failure, text = seen.result, in_time = seen.elapsed_ms < 5000 }, {
+    text = ('x'):rep(50000),
+    in_time = true,
+  })
+  git_repo.wait_until('the process git started gone', function()
+    return recorded_process(descendant_file) ~= 'running'
+  end)
+  eq(recorded_process(descendant_file), 'gone')
+end
+
+--- The Lua that reads `big.txt` through the stand-in git in `...` (the
+--- repository's directory, its commit, the stand-in, the bytes asked for and
+--- the limit), in a child whose main loop is held for 1.5 s once the read of
+--- the file has started, so that its limit has run out, and the bytes asked
+--- for have come, before either is seen.
+local READ_WHILE_THE_EDITOR_IS_BUSY = [[
+  local directory, commit, stand_in, first_bytes, limit_ms = ...
+  local system = vim.system
+  vim.system = function(command, ...)
+    local process = system(command, ...)
+    if vim.list_contains(command, 'cat-file') then
+      vim.schedule(function()
+        vim.uv.sleep(1500)
+      end)
+    end
+    return process
+  end
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end)
+  return _G.await(function(done)
+    git.file_at_commit(found.result, commit, 'big.txt', done, { executable = stand_in, limit_ms = limit_ms }, first_bytes)
+  end)
+]]
+
+T['a git that prints more than is asked for']['is answered, not timed out, when its limit runs out as the bytes asked for come'] = function()
+  local printing = stand_in_listing_a_big_file('process-bound-and-limit', {
+    "head -c 200000 /dev/zero | tr '\\0' x",
+    'exec sleep 30',
+  })
+  local top, base = git_repo.create('process-bound-and-limit-repository', { ['a.txt'] = { 'a' } })
+
+  local seen = child.lua(READ_WHILE_THE_EDITOR_IS_BUSY, { top, base, printing, 50000, 500 })
+
+  eq({ failure = seen.failure, text = seen.result }, { text = ('x'):rep(50000) })
+end
+
 T['a git that prints more than is asked for']['gives exactly the bytes asked for when they come in pieces'] = function()
   local printing = stand_in_listing_a_big_file('process-bound-pieces', {
     'for piece in 1 2 3 4 5; do',
@@ -420,9 +483,9 @@ T['a git that prints more than is asked for']['leaves no process, handle, timer 
   child.lua(git_repo.FILE_AT_COMMIT, { top, base, 'big.txt', options, 1000 })
   local before = child.lua(LEFT_OPEN)
 
-  child.lua(git_repo.FILE_AT_COMMIT, { top, base, 'big.txt', options, 1000 })
+  local seen = child.lua(git_repo.FILE_AT_COMMIT, { top, base, 'big.txt', options, 1000 })
 
-  eq(child.lua(LEFT_OPEN), before)
+  eq({ text = seen.result, left = child.lua(LEFT_OPEN) }, { text = ('x'):rep(1000), left = before })
 end
 
 return T

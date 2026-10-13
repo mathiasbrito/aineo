@@ -8,11 +8,18 @@ local M = {}
 --- a link's target included.
 local FILE_OBJECT_TYPE = 'blob'
 
+--- The settings that let `git cat-file` stream a file out of a pack, where it
+--- would otherwise unpack the whole file before printing a byte, when the
+--- read is bounded: git streams a file larger than `core.bigFileThreshold`,
+--- which the home sets to 512 MiB, and a bounded read is of files larger
+--- than a mebibyte. A file stored as a delta is still unpacked whole.
+local STREAMING_SETTINGS = { '-c', 'core.bigFileThreshold=1m' }
+
 --- The entry of a tree: what it is, its object id and, for a file, its size.
 ---@class aineo.git.TreeEntry
 ---@field type string the object type: `blob` for a file, `tree` for a directory, `commit` for a submodule
 ---@field id string the object's id
----@field size? integer the file's size in bytes; nil for an entry that is no file
+---@field size? integer the file's size in bytes; nil for an entry that is no file, and for a file whose object git cannot read, which `ls-tree -l` lists as `BAD`
 
 --- The entry named exactly `path` among those `git ls-tree -l -z` gave as
 --- `output`, each `<mode> <type> <id> <size>\t<path>`, the size right-aligned
@@ -54,6 +61,24 @@ local function report_no_file(commit, path, entry, done)
   })
 end
 
+--- The request that reads the blob `entry` names, in the repository at `top`:
+--- bounded to `first_bytes` bytes, and set to stream a file out of a pack,
+--- when the file is known to be larger; whole otherwise, as when git gave
+--- no size for it.
+---
+---@param top string
+---@param entry aineo.git.TreeEntry
+---@param first_bytes integer|nil
+---@return aineo.git.Request
+local function file_request(top, entry, first_bytes)
+  local request = { directory = top, arguments = { 'cat-file', FILE_OBJECT_TYPE, entry.id } }
+  if first_bytes ~= nil and entry.size ~= nil and entry.size > first_bytes then
+    request.first_stdout_bytes = first_bytes
+    request.arguments = vim.list_extend(vim.list_slice(STREAMING_SETTINGS), request.arguments)
+  end
+  return request
+end
+
 --- Reads the file at `path` as the commit `commit` of `found` has it, and
 --- calls `done(nil, text, size)`, the bytes exactly as git printed them and
 --- the file's size in bytes, or `done(failure)`: `path_missing` when the
@@ -63,7 +88,8 @@ end
 --- option, and `.`, a trailing slash or `./x` name nothing. When
 --- `first_bytes` is given and the file is larger, `text` is its first
 --- `first_bytes` bytes and git is stopped once they have come, the rest of
---- the file never read.
+--- the file never taken from git. A file stored in a pack may be unpacked
+--- whole by git before it prints a byte (`STREAMING_SETTINGS`).
 ---
 ---@param run aineo.git.Run
 ---@param found aineo.git.Repository
@@ -83,15 +109,10 @@ function M.file_at_commit(run, found, commit, path, done, first_bytes)
         report_no_file(commit, path, entry, done)
         return
       end
-      local is_cut = first_bytes ~= nil and entry.size > first_bytes
       run(
-        {
-          directory = found.top,
-          arguments = { 'cat-file', FILE_OBJECT_TYPE, entry.id },
-          first_stdout_bytes = is_cut and first_bytes or nil,
-        },
+        file_request(found.top, entry, first_bytes),
         process.or_fail(done, function(file)
-          done(nil, file.stdout, entry.size)
+          done(nil, file.stdout, entry.size or #file.stdout)
         end)
       )
     end)
