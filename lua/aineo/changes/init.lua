@@ -1531,26 +1531,32 @@ local function show_commit_file(entry)
   local name = commit_file.name(revision, path)
   local told = ('%s in %s'):format(lines.quoted_path(path), revision.told)
   local window = vim.api.nvim_get_current_win()
-  commit_file.read(revision, path, session.settings.git, function(failure, text)
-    if this_enter ~= enters then
-      return
+  commit_file.read(
+    revision,
+    path,
+    session.settings.git,
+    diffs.BYTES_NEEDED_OF_A_FILE,
+    function(failure, text, size)
+      if this_enter ~= enters then
+        return
+      end
+      if failure then
+        local deleted = failure.reason == 'path_missing'
+        vim.notify(
+          commit_file.told_failure(revision, path, failure),
+          deleted and vim.log.levels.WARN or vim.log.levels.ERROR
+        )
+        return
+      end
+      show_last(this_enter, {
+        name = name,
+        show = function(content)
+          local buffer = diffs.file_buffer(name, path, content, size)
+          return buffer ~= nil and show_buffer(buffer, window, told)
+        end,
+      }, text)
     end
-    if failure then
-      local deleted = failure.reason == 'path_missing'
-      vim.notify(
-        commit_file.told_failure(revision, path, failure),
-        deleted and vim.log.levels.WARN or vim.log.levels.ERROR
-      )
-      return
-    end
-    show_last(this_enter, {
-      name = name,
-      show = function(content)
-        local buffer = diffs.file_buffer(name, path, content)
-        return buffer ~= nil and show_buffer(buffer, window, told)
-      end,
-    }, text)
-  end)
+  )
 end
 
 --- Opens the file the line under the cursor lists in `buffer`, the files

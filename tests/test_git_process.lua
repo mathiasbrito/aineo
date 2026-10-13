@@ -284,4 +284,145 @@ T['an operation that ended']['by running past its limit leaves no process, handl
   )
 end
 
+T['a git that prints more than is asked for'] = MiniTest.new_set()
+
+--- The size the stand-in git's listing gives its one file, far above the
+--- bytes the cases ask for.
+local LISTED_SIZE = 1000000
+
+--- Writes a stand-in for git that lists one file, `big.txt`, of
+--- `LISTED_SIZE` bytes for `ls-tree`, and runs `lines` for anything else
+--- (`cat-file`).
+---
+---@param name string
+---@param lines string[]
+---@return string path
+local function stand_in_listing_a_big_file(name, lines)
+  local listing = ("printf '100644 blob 0123456789abcdef0123456789abcdef01234567 %%7d\\t%%s\\0' %d big.txt"):format(
+    LISTED_SIZE
+  )
+  return git_repo.script(
+    name,
+    'git',
+    vim.list_extend({
+      'for argument in "$@"; do',
+      '  if [ "$argument" = ls-tree ]; then',
+      '    ' .. listing,
+      '    exit 0',
+      '  fi',
+      'done',
+    }, lines)
+  )
+end
+
+--- Reads `big.txt` through `stand_in` asking for `first_bytes` bytes of it,
+--- in a repository the child can find, under `limit_ms` if given.
+---
+---@param name string
+---@param stand_in string
+---@param first_bytes integer
+---@param limit_ms integer|nil
+local function read_big_file(name, stand_in, first_bytes, limit_ms)
+  local top, base = git_repo.create(name .. '-repository', { ['a.txt'] = { 'a' } })
+  local options = { executable = stand_in, limit_ms = limit_ms }
+  return child.lua(git_repo.FILE_AT_COMMIT, { top, base, 'big.txt', options, first_bytes })
+end
+
+T['a git that prints more than is asked for']['is stopped once the bytes asked for have come, with every process it started'] = function()
+  local directory = git_repo.directory('process-bound')
+  local pid_file = vim.fs.joinpath(directory, 'pid')
+  local printing = stand_in_listing_a_big_file('process-bound', {
+    ('echo $$ > %s'):format(pid_file),
+    "head -c 200000 /dev/zero | tr '\\0' x",
+    'exec sleep 30',
+  })
+  MiniTest.finally(function()
+    kill_recorded(pid_file)
+  end)
+
+  local seen = read_big_file('process-bound', printing, 50000)
+
+  eq({
+    failure = seen.failure,
+    text = seen.result,
+    size = seen.size,
+    in_time = seen.elapsed_ms < 5000,
+    git = recorded_process(pid_file),
+  }, {
+    text = ('x'):rep(50000),
+    size = LISTED_SIZE,
+    in_time = true,
+    git = 'gone',
+  })
+end
+
+T['a git that prints more than is asked for']['gives exactly the bytes asked for when they come in pieces'] = function()
+  local printing = stand_in_listing_a_big_file('process-bound-pieces', {
+    'for piece in 1 2 3 4 5; do',
+    "  head -c 4000 /dev/zero | tr '\\0' x",
+    '  sleep 0.1',
+    'done',
+    'exec sleep 30',
+  })
+
+  local seen = read_big_file('process-bound-pieces', printing, 10000)
+
+  eq({ failure = seen.failure, text = seen.result }, { text = ('x'):rep(10000) })
+end
+
+T['a git that prints more than is asked for']['is answered as it is without a bound when it ends before reaching it'] = function()
+  local short = stand_in_listing_a_big_file('process-bound-short', { "printf 'short'" })
+
+  local seen = read_big_file('process-bound-short', short, 50000)
+
+  eq({ failure = seen.failure, text = seen.result }, { text = 'short' })
+end
+
+T['a git that prints more than is asked for']['ended by a signal before reaching the bound is a failure, never an answer'] = function()
+  local crashing = stand_in_listing_a_big_file('process-bound-signal', {
+    "printf 'some'",
+    'kill -KILL $$',
+  })
+
+  local seen = read_big_file('process-bound-signal', crashing, 50000)
+
+  eq({ failure = seen.failure, text = seen.result }, {
+    failure = {
+      reason = 'failed',
+      message = ('git was ended by signal 9: %s'):format(crashing),
+    },
+  })
+end
+
+T['a git that prints more than is asked for']['running past its limit before reaching the bound is timed out, never an answer'] = function()
+  local stalled = stand_in_listing_a_big_file('process-bound-slow', {
+    "printf 'some'",
+    'exec sleep 30',
+  })
+
+  local seen = read_big_file('process-bound-slow', stalled, 50000, 1000)
+
+  eq({ failure = seen.failure, text = seen.result }, {
+    failure = {
+      reason = 'timed_out',
+      message = ('git ran past its limit of 1000 ms: %s'):format(stalled),
+    },
+  })
+end
+
+T['a git that prints more than is asked for']['leaves no process, handle, timer or file behind'] = function()
+  local printing = stand_in_listing_a_big_file('process-bound-left', {
+    "head -c 200000 /dev/zero | tr '\\0' x",
+    'exec sleep 30',
+  })
+  local top, base = git_repo.create('process-bound-left-repository', { ['a.txt'] = { 'a' } })
+  local options = { executable = printing }
+  child.lua(git_repo.FILE_AT_COMMIT, { top, base, 'big.txt', options, 1000 })
+  local before = child.lua(LEFT_OPEN)
+
+  child.lua(git_repo.FILE_AT_COMMIT, { top, base, 'big.txt', options, 1000 })
+
+  eq(child.lua(LEFT_OPEN), before)
+end
+
 return T

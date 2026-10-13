@@ -153,6 +153,30 @@ local AWAIT = [[
   end
 ]]
 
+--- The Lua that reads, in the child, a file at a commit: `...` is the
+--- repository's directory, the commit, the path, the git options and the
+--- number of bytes asked for, the last two optional. It returns what
+--- `_G.await` saw, with the third value `done` was given as `size`, and as
+--- `elapsed_ms` how long the child waited for the answer.
+M.FILE_AT_COMMIT = [[
+  local directory, commit, path, options, first_bytes = ...
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end)
+  local size = nil
+  local started = vim.uv.hrtime()
+  local seen = _G.await(function(done)
+    git.file_at_commit(found.result, commit, path, function(failure, text, whole_size)
+      size = whole_size
+      done(failure, text)
+    end, options, first_bytes)
+  end)
+  seen.size = size
+  seen.elapsed_ms = (vim.uv.hrtime() - started) / 1e6
+  return seen
+]]
+
 --- Starts `child` afresh with the suites' minimal init, gives its
 --- environment `ENVIRONMENT`, so the git calls the home makes there are
 --- isolated too, and defines `_G.await` there (`AWAIT`).
