@@ -139,3 +139,12 @@ The orchestrator's verification runs `plan.md`'s five T56 mutants. Name the test
 ## The orchestrator's rulings — 2026-10-13, before dispatch
 
 `plan.md` › *The orchestrator's rulings* rules every open decision as its (a), which this brief is written for: A196–A203. They are the orchestrator's assumptions, to record in the session note and the PR body as such, never as the user's decisions.
+
+## The orchestrator's rulings — 2026-10-13, after the reviews of PR #192
+
+These are the orchestrator's assumptions under the user's instruction of 2026-10-06, not the user's decisions. They correct this brief; its body above is left as written.
+
+- **A213** (the attack review's finding 2). The help and the docstrings claim only the editor's bound: the editor holds about 1 MiB of a file of any size, and `git cat-file` may unpack a file stored in a pack whole before it prints a byte. A bounded `cat-file` runs with `-c core.bigFileThreshold=1m`, which lets git stream a packed file that is not a delta (34.8 MB: git's memory 40.9 MB to 4.6 MB); a delta is still unpacked whole, and LIMITS says so. It extends A200.
+- **A214** (finding 3, a spec conflict the brief caused). Behaviour 9's "plus 4" is wrong by Neovim's own UTF-8 rule, whose lead-byte table admits five- and six-byte forms: a file with a 0xFC lead at the bound showed one byte more than the whole text would. The bound is `SHOWN_BYTES` plus 6.
+- **A215** (finding 4). `Output.cut` is dropped: nothing reads it, so nothing can pin it. Behaviour 1's "says that it was cut" is withdrawn; the runner still tells a stop at the bound from a failure.
+- **A216.** The brief's P1, "a blob always has a size; `-` appears only for an entry that is no file", is false: `ls-tree -l` lists a blob whose object git cannot read with `BAD`, exit 0. A size that is not a number reads as unknown; the file is then read whole, and `cat-file`'s failure is told once, as on `dev`.
