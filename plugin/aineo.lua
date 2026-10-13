@@ -440,8 +440,9 @@ local start_confirmed = false
 --- Code runs — none has started, or the last has exited — and so the next
 --- start launches a new one, which must be confirmed in turn. Called before
 --- that start: the switch to a session another than the one followed,
---- which `aineo.claude`'s `start_session()` tells before it returns, is
---- then not followed.
+--- which `aineo.claude` tells before `start_session()` returns for a start on
+--- a new id, and when Claude Code launches for a start that resumes, is then
+--- not followed.
 local function forget_confirmation_unless_running()
   local status = require('aineo.claude').session_status()
   if status == nil or status == 'exited' then
@@ -740,11 +741,14 @@ end
 --- Whether the current buffer is the Claude session's terminal and that
 --- session has not ended: where a key typed in Terminal mode reaches Claude
 --- Code. A key typed in Terminal mode on an ended session's terminal closes
---- it; another buffer shown in Claude's window is not Claude's to type to.
+--- it; another buffer shown in Claude's window is not Claude's to type to,
+--- nor is the empty buffer a start that waits for the list of sessions shows
+--- until Claude Code launches in it.
 ---
 ---@return boolean
 local function can_type_to_claude()
   return vim.api.nvim_get_current_buf() == claude_terminal
+    and vim.bo.buftype == 'terminal'
     and require('aineo.claude').session_status() ~= 'exited'
 end
 

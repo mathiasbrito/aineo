@@ -65,8 +65,9 @@ end
 --- Terminal mode is entered: the height of the tallest of them, in any tab
 --- page — among them the autocommand window `jobstart()` runs a hidden
 --- buffer's terminal in, which gives it its first size. A terminal started in
---- a window that shows it has that window's height until one of those; the
---- session starts Claude Code's in a buffer no window shows. None while no
+--- a window that shows it has that window's height until one of those; a
+--- start on a new id starts Claude Code's in a buffer no window shows, and a
+--- start that resumes in the buffer a window shows already. None while no
 --- window shows it, when the terminal keeps its rows.
 ---
 ---@param buffer integer a terminal buffer

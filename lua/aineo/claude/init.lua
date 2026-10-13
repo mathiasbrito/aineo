@@ -302,7 +302,11 @@ local WAITING_BUFFER_NAME = 'aineo://claude/'
 --- Prepares a start of Claude Code with `settings` on the session `choice`
 --- names: the command that runs it, in a new, empty buffer named
 --- `WAITING_BUFFER_NAME` and the start's token, which keeps the session's
---- name and folder (`session_name.keep_name_and_folder()`).
+--- name and folder (`session_name.keep_name_and_folder()`). The buffer is not
+--- modifiable: text typed into it would keep `jobstart()` from turning it
+--- into a terminal, which needs an unmodified buffer. While Claude Code has
+--- not launched in it, a buffer the user unloads (`:bdelete`) is wiped, since
+--- a terminal cannot start in a buffer that is not loaded.
 --- Each start has a start token of its own, as random as a session id
 --- (`session_ids.new_session_id()`), so that no two starts on the host share
 --- one, which its session hooks and its report server name
@@ -321,6 +325,7 @@ local function prepare_start(settings, choice)
   local command, unread = arguments.claude_command(settings, session_arguments(choice), start_token)
   local buffer = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_name(buffer, WAITING_BUFFER_NAME .. start_token)
+  vim.bo[buffer].modifiable = false
   local prepared = {
     buffer = buffer,
     command = command,
@@ -332,6 +337,22 @@ local function prepare_start(settings, choice)
     unpaired = {},
   }
   session_name.keep_name_and_folder(prepared.buffer, settings.cwd)
+  vim.api.nvim_create_autocmd('BufUnload', {
+    buffer = buffer,
+    once = true,
+    desc = 'Wipe the buffer of a start that waits once the user unloads it',
+    callback = function()
+      vim.schedule(function()
+        if
+          prepared.job == nil
+          and vim.api.nvim_buf_is_valid(buffer)
+          and not vim.api.nvim_buf_is_loaded(buffer)
+        then
+          vim.api.nvim_buf_delete(buffer, { force = true })
+        end
+      end)
+    end,
+  })
   return prepared
 end
 
@@ -551,15 +572,17 @@ start_in_place = function(settings, choice)
 end
 
 --- Whether `waiting`, a start with no job yet, may launch Claude Code now: it
---- is still the session, its buffer has not been wiped, and Neovim is not
---- quitting (`v:exiting` set, as it is while `VimLeavePre` handlers wait).
+--- is still the session, its buffer has been neither wiped nor unloaded (a
+--- `:bdelete` unloads it, and wipes it a moment later, since a terminal
+--- cannot start in a buffer that is not loaded), and Neovim is not quitting
+--- (`v:exiting` set, as it is while `VimLeavePre` handlers wait).
 ---
 ---@param waiting aineo.claude.Start
 ---@return boolean
 local function may_launch(waiting)
   return session == waiting
     and waiting.job == nil
-    and vim.api.nvim_buf_is_valid(waiting.buffer)
+    and vim.api.nvim_buf_is_loaded(waiting.buffer)
     and vim.v.exiting == vim.NIL
 end
 
@@ -580,13 +603,17 @@ end
 --- callback that receives the answer — once the command-line window has
 --- closed, when it is open — launches Claude Code for `waiting`
 --- (`launch_start()`) and announces it from `left` (`announce_launch()`),
---- unless `waiting` may not launch (`may_launch()`). When the kept session
---- is open in another interactive Claude Code, the user is warned first, once
---- (`ALSO_OPEN_WARNING`). A list that could not run, failed, timed out or
---- was not JSON tells nothing and changes nothing: Claude Code resumes all
---- the same, as it did before the list was asked for. A launch that fails is
---- told the user once, as an error starting with `aineo:` and holding the
---- first line of what failed (`first_line_of()`).
+--- unless `waiting` may not launch (`may_launch()`). A user who is typing
+--- (`is_typing()`) goes on typing where they are; any other is kept out of
+--- Insert mode (`:stopinsert`), which a `TermOpen` autocommand of theirs
+--- would otherwise enter. When the kept session is open in another
+--- interactive Claude Code, the user is warned once (`ALSO_OPEN_WARNING`),
+--- after the launch, so that a notifier that raises cannot keep Claude Code
+--- from launching. A list that could not run, failed, timed out or was not
+--- JSON tells nothing and changes nothing: Claude Code resumes all the same,
+--- as it did before the list was asked for. A launch that fails is told the
+--- user once, as an error starting with `aineo:` and holding the first line
+--- of what failed (`first_line_of()`).
 ---
 ---@param waiting aineo.claude.Start
 ---@param left string? the id followed before the start
@@ -596,15 +623,19 @@ local function launch_once_listed(waiting, left)
       if not may_launch(waiting) then
         return
       end
-      if agents.is_open_in_another_claude_code(sessions or {}, waiting.choice.id) then
-        vim.notify(ALSO_OPEN_WARNING, vim.log.levels.WARN)
-      end
+      local was_typing = is_typing(vim.api.nvim_get_mode().mode)
       local launched, failure = pcall(launch_start, waiting)
+      if not was_typing then
+        vim.cmd.stopinsert()
+      end
       if not launched then
         vim.notify('aineo: ' .. first_line_of(failure), vim.log.levels.ERROR)
         return
       end
       announce_launch(left)
+      if agents.is_open_in_another_claude_code(sessions or {}, waiting.choice.id) then
+        vim.notify(ALSO_OPEN_WARNING, vim.log.levels.WARN)
+      end
     end)
   end)
 end
@@ -612,7 +643,9 @@ end
 --- Starts a resume of `choice` as the one session: its terminal buffer,
 --- still empty, takes the last session's place at once, and Claude Code
 --- launches in it once the list of the folder's sessions has answered
---- (`launch_once_listed()`).
+--- (`launch_once_listed()`). The list is asked for before the terminals are
+--- swapped: an error the swap raises, from an autocommand of the user's, then
+--- leaves a start that goes on to launch.
 ---
 ---@param settings aineo.claude.Settings
 ---@param choice aineo.claude.SessionChoice
@@ -621,8 +654,8 @@ end
 local function start_after_list(settings, choice, left)
   local previous = session
   local waiting = prepare_start(settings, choice)
-  become_the_session(waiting, previous)
   launch_once_listed(waiting, left)
+  become_the_session(waiting, previous)
   return waiting.buffer
 end
 
