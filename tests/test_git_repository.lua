@@ -479,6 +479,23 @@ T['a file at a commit']['is read whole when git gives no size for it'] = functio
   eq({ #requests, requests[2].bound }, { 2, false })
 end
 
+T['a file at a commit']['whose size git does not give has the length of its text for its size'] = function()
+  local size = child.lua([=[
+    local listing = '100644 blob 0123456789abcdef0123456789abcdef01234567     BAD\ta.txt\0'
+    local calls = 0
+    local size = nil
+    require('aineo.git.content').file_at_commit(function(_, done)
+      calls = calls + 1
+      done(nil, { code = 0, stdout = calls == 1 and listing or 'as committed\n', stderr = '' })
+    end, { top = '.' }, 'commit', 'a.txt', function(_, _, whole_size)
+      size = whole_size
+    end, 1000)
+    return size
+  ]=])
+
+  eq(size, 13)
+end
+
 T['a file at a commit']['read within a bound lets git stream a packed file that is not a delta'] = function()
   local bounded = child.lua(REQUESTS_FOR_A_LISTED_SIZE, { 13, 12 })
   local unbounded = child.lua(REQUESTS_FOR_A_LISTED_SIZE, { 13 })
