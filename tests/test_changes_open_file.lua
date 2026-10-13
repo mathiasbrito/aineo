@@ -351,6 +351,66 @@ T['gf']['under a commit shows a file larger than 1 MiB cut, a virtual line under
   })
 end
 
+T['gf']['under a commit tells in the note how much of the whole file is shown, by the size git gave'] = function()
+  show_a_file_over_1_mib('openfile-commit-long-size')
+
+  eq(
+    child.lua_get(VIRTUAL_NOTES).text,
+    'aineo cut this file at 1 MiB: 1048528 of its 1144000 bytes are shown'
+  )
+end
+
+T['gf']['under a commit asks git for the bytes it shows and six more, no more of the file'] = function()
+  pane_under_commit('openfile-commit-asks', { ['a.txt'] = { 'text' } }, { '  A a.txt' })
+  child.lua([=[
+    require('aineo.git').file_at_commit = function(_, _, _, done, _, first_bytes)
+      _G.asked_for = first_bytes
+      done(nil, 'text\n', 5)
+    end
+  ]=])
+
+  press_gf_on(2)
+
+  wait_for_file_shown()
+  eq(child.lua_get('_G.asked_for'), 1048576 + 6)
+end
+
+T['gf']['under a commit cuts a first line whose six-byte lead stands at the bound as it would be cut whole'] = function()
+  local line = ('a'):rep(1048575) .. '\252\128\128\128\128\128' .. ('a'):rep(100)
+  pane_under_commit(
+    'openfile-commit-six-byte-lead',
+    { ['blob.bin'] = { line } },
+    { '  A blob.bin' }
+  )
+
+  press_gf_on(2)
+
+  wait_for_file_shown()
+  eq({
+    shown = child.lua_get('#vim.api.nvim_buf_get_lines(0, 0, 1, true)[1]'),
+    note = child.lua_get(VIRTUAL_NOTES).text,
+  }, {
+    shown = 1048575,
+    note = 'aineo cut this file at 1 MiB: 1048575 of its 1048682 bytes are shown',
+  })
+end
+
+T['gf']['under a commit cuts a first line longer than 1 MiB on a character’s edge'] = function()
+  local euros = ('€'):rep(400000)
+  pane_under_commit('openfile-commit-long-line', { ['wide.txt'] = { euros } }, { '  A wide.txt' })
+
+  press_gf_on(2)
+
+  wait_for_file_shown()
+  eq({
+    shown = child.lua_get('#vim.api.nvim_buf_get_lines(0, 0, 1, true)[1]'),
+    note = child.lua_get(VIRTUAL_NOTES).text,
+  }, {
+    shown = 1048575,
+    note = 'aineo cut this file at 1 MiB: 1048575 of its 1200001 bytes are shown',
+  })
+end
+
 T['gf']['under a commit writes the note of a cut file once again after :edit!'] = function()
   show_a_file_over_1_mib('openfile-commit-long-again')
 
@@ -406,6 +466,29 @@ T['gf']['under a commit on a file the commit deleted shows nothing and says it w
 
   eq(told_something(), ('aineo: notes.txt was deleted in commit %s'):format(commit:sub(1, 7)))
   eq({ current_buffer_name(), child.lua_get('#_G.shown_diffs') }, { FILES, 0 })
+end
+
+T['gf']['under a commit whose object git cannot read tells git’s words once, naming the file'] = function()
+  local top, commit = pane_under_commit(
+    'openfile-commit-lost-object',
+    { ['lost.txt'] = { 'text' } },
+    { '  A lost.txt' }
+  )
+  local blob = git_repo.git(top, { 'rev-parse', commit .. ':lost.txt' })
+  assert(
+    vim.fn.delete(vim.fs.joinpath(top, '.git', 'objects', blob:sub(1, 2), blob:sub(3))) == 0,
+    'the blob’s loose object deleted'
+  )
+
+  press_gf_on(2)
+
+  eq(
+    told_something(),
+    ('aineo: lost.txt could not be read in commit %s: fatal: git cat-file %s: bad file'):format(
+      commit:sub(1, 7),
+      blob
+    )
+  )
 end
 
 T['gf']['under a commit whose file cannot be read tells git’s words once, naming the file'] = function()
@@ -496,7 +579,7 @@ T['gf']['under a commit read while textlock holds shows the file once the editor
     return child.lua_get('_G.holding == true')
   end)
 
-  child.lua('_G.finish(nil, "in the commit\\n")')
+  child.lua('_G.finish(nil, "in the commit\\n", 14)')
   local meanwhile = child.lua_get('#_G.shown_diffs')
   child.api.nvim_input('q')
 
@@ -526,8 +609,8 @@ T['gf']['under a commit, then on another file before the first is read, shows th
   press_gf_on(2)
   press_gf_on(3)
 
-  child.lua('_G.pending["b.txt"](nil, "b text\\n")')
-  child.lua('_G.pending["a.txt"](nil, "a text\\n")')
+  child.lua('_G.pending["b.txt"](nil, "b text\\n", 7)')
+  child.lua('_G.pending["a.txt"](nil, "a text\\n", 7)')
 
   eq(child.lua_get('#_G.shown_diffs'), 1)
   eq(
@@ -680,7 +763,7 @@ T['gf']['under a commit, then on another file before the first is read, tells no
   press_gf_on(3)
 
   child.lua('_G.pending["a.txt"]({ reason = "failed", message = "late" })')
-  child.lua('_G.pending["b.txt"](nil, "b text\\n")')
+  child.lua('_G.pending["b.txt"](nil, "b text\\n", 7)')
 
   eq({ child.lua_get(TOLD), child.lua_get('#_G.shown_diffs') }, { '', 1 })
 end

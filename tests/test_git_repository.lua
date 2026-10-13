@@ -346,6 +346,172 @@ T['a file at a commit']['is the text the commit has, not the working tree’s'] 
   eq({ failure = seen.failure, result = seen.result }, { result = 'as committed\n' })
 end
 
+T['a file at a commit']['gives the file’s size in bytes beside its text'] = function()
+  local top, base = git_repo.create('content-size', { ['a.txt'] = { 'as committed' } })
+
+  local seen = child.lua(git_repo.FILE_AT_COMMIT, { top, base, 'a.txt' })
+
+  eq({ failure = seen.failure, text = seen.result, size = seen.size }, {
+    text = 'as committed\n',
+    size = 13,
+  })
+end
+
+--- The lines `line 00001 xxxx…` to `line <count>`, each 50 bytes with its
+--- line break, and the text they make.
+---
+---@param count integer
+---@return string[] lines
+---@return string text
+local function numbered_lines(count)
+  local lines = {}
+  for number = 1, count do
+    lines[number] = ('line %05d %s'):format(number, ('x'):rep(38))
+  end
+  return lines, table.concat(lines, '\n') .. '\n'
+end
+
+T['a file at a commit']['larger than the bytes asked for gives exactly its first bytes and its whole size'] = function()
+  local lines, whole = numbered_lines(6000)
+  local top, base = git_repo.create('content-first-bytes', { ['big.txt'] = lines })
+
+  local seen = child.lua(git_repo.FILE_AT_COMMIT, { top, base, 'big.txt', {}, 100000 })
+
+  eq({ failure = seen.failure, text = seen.result, size = seen.size }, {
+    text = whole:sub(1, 100000),
+    size = 300000,
+  })
+end
+
+T['a file at a commit']['asked for no bytes gives a large file whole, with its size'] = function()
+  local lines, whole = numbered_lines(6000)
+  local top, base = git_repo.create('content-no-bound', { ['big.txt'] = lines })
+
+  local seen = child.lua(git_repo.FILE_AT_COMMIT, { top, base, 'big.txt' })
+
+  eq({ failure = seen.failure, text = seen.result, size = seen.size }, {
+    text = whole,
+    size = 300000,
+  })
+end
+
+T['a file at a commit']['no larger than the bytes asked for gives its whole text'] =
+  MiniTest.new_set({
+    parametrize = { { 13 }, { 14 }, { 1000000 } },
+  })
+
+T['a file at a commit']['no larger than the bytes asked for gives its whole text']['and its size'] = function(
+  first_bytes
+)
+  local top, base = git_repo.create('content-no-larger', { ['a.txt'] = { 'as committed' } })
+
+  local seen = child.lua(git_repo.FILE_AT_COMMIT, { top, base, 'a.txt', {}, first_bytes })
+
+  eq({ failure = seen.failure, text = seen.result, size = seen.size }, {
+    text = 'as committed\n',
+    size = 13,
+  })
+end
+
+T['a file at a commit']['whose object git cannot read is a failure in git’s words, never raised'] = function()
+  local top, base = git_repo.create('content-lost-object', { ['lost.txt'] = { 'text' } })
+  local blob = git_repo.git(top, { 'rev-parse', base .. ':lost.txt' })
+  assert(
+    vim.fn.delete(vim.fs.joinpath(top, '.git', 'objects', blob:sub(1, 2), blob:sub(3))) == 0,
+    'the blob’s loose object deleted'
+  )
+
+  local seen = child.lua(git_repo.FILE_AT_COMMIT, { top, base, 'lost.txt', {}, 1000 })
+
+  eq({ calls = seen.calls, failure = seen.failure, text = seen.result }, {
+    calls = 1,
+    failure = {
+      reason = 'failed',
+      message = ('fatal: git cat-file %s: bad file'):format(blob),
+      code = 128,
+    },
+  })
+end
+
+--- The Lua that runs the content module's read of a file the stand-in
+--- listing says has the size `...` (a number, or the word git prints for an
+--- object it cannot read), asking for the bytes that follow, and returns the
+--- `first_stdout_bytes` (false for none) and the arguments of each request
+--- it made.
+local REQUESTS_FOR_A_LISTED_SIZE = [[
+  local size, first_bytes = ...
+  local listing = ('100644 blob 0123456789abcdef0123456789abcdef01234567 %7s\ta.txt\0'):format(size)
+  local requests = {}
+  require('aineo.git.content').file_at_commit(function(request, done)
+    table.insert(requests, {
+      bound = request.first_stdout_bytes or false,
+      arguments = request.arguments,
+    })
+    done(nil, { code = 0, stdout = #requests == 1 and listing or 'as committed\n', stderr = '' })
+  end, { top = '.' }, 'commit', 'a.txt', function() end, first_bytes)
+  return requests
+]]
+
+T['a file at a commit']['bounds git’s output only when the file is larger than the bytes asked for'] =
+  MiniTest.new_set({
+    parametrize = { { 13, 12, 12 }, { 13, 13, false }, { 13, 14, false } },
+  })
+
+T['a file at a commit']['bounds git’s output only when the file is larger than the bytes asked for']['in the request it makes'] = function(
+  size,
+  first_bytes,
+  bound
+)
+  local requests = child.lua(REQUESTS_FOR_A_LISTED_SIZE, { size, first_bytes })
+
+  eq({ #requests, requests[2].bound }, { 2, bound })
+end
+
+T['a file at a commit']['is read whole when no bytes are asked for, whatever its size'] = function()
+  local requests = child.lua(REQUESTS_FOR_A_LISTED_SIZE, { 13 })
+
+  eq({ #requests, requests[2].bound }, { 2, false })
+end
+
+T['a file at a commit']['is read whole when git gives no size for it'] = function()
+  local requests = child.lua(REQUESTS_FOR_A_LISTED_SIZE, { 'BAD', 1000 })
+
+  eq({ #requests, requests[2].bound }, { 2, false })
+end
+
+T['a file at a commit']['whose size git does not give has the length of its text for its size'] = function()
+  local size = child.lua([=[
+    local listing = '100644 blob 0123456789abcdef0123456789abcdef01234567     BAD\ta.txt\0'
+    local calls = 0
+    local size = nil
+    require('aineo.git.content').file_at_commit(function(_, done)
+      calls = calls + 1
+      done(nil, { code = 0, stdout = calls == 1 and listing or 'as committed\n', stderr = '' })
+    end, { top = '.' }, 'commit', 'a.txt', function(_, _, whole_size)
+      size = whole_size
+    end, 1000)
+    return size
+  ]=])
+
+  eq(size, 13)
+end
+
+T['a file at a commit']['read within a bound lets git stream a packed file that is not a delta'] = function()
+  local bounded = child.lua(REQUESTS_FOR_A_LISTED_SIZE, { 13, 12 })
+  local unbounded = child.lua(REQUESTS_FOR_A_LISTED_SIZE, { 13 })
+
+  eq({ bounded[2].arguments, unbounded[2].arguments }, {
+    {
+      '-c',
+      'core.bigFileThreshold=1m',
+      'cat-file',
+      'blob',
+      '0123456789abcdef0123456789abcdef01234567',
+    },
+    { 'cat-file', 'blob', '0123456789abcdef0123456789abcdef01234567' },
+  })
+end
+
 T['a file at a commit']['is exactly what git printed: carriage returns, a missing last newline, NUL bytes'] = function()
   local top = git_repo.create_unborn('content-bytes')
   local exact = 'one\r\ntwo\0three\r\nlast line without a newline'

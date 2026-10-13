@@ -243,21 +243,28 @@ function M.remote_default_branch(found, done, options)
 end
 
 --- Reads the file at `path` as the commit `commit` of `found` has it, and
---- calls `done(nil, text)`, the bytes exactly as git printed them, or
---- `done(failure)`: a `path_missing` one when the commit has nothing at
---- `path` — a file deleted in it, say — told apart from any other failure,
---- a directory at `path` included. The path is taken whole and as the
---- commit names it, never as a pattern or an option: `.`, a trailing slash
---- and `./x` name nothing. A commit of another worktree is read in `found`,
---- which shares its object store.
+--- calls `done(nil, text, size)`, the bytes exactly as git printed them and
+--- the file's whole size in bytes, or `done(failure)`: a `path_missing` one
+--- when the commit has nothing at `path` — a file deleted in it, say — told
+--- apart from any other failure, a directory at `path` included. The path
+--- is taken whole and as the commit names it, never as a pattern or an
+--- option: `.`, a trailing slash and `./x` name nothing. A commit of
+--- another worktree is read in `found`, which shares its object store.
+---
+--- With `first_bytes`, `text` is the file's first `first_bytes` bytes when
+--- the file is larger, and git is stopped once they have come, with every
+--- process it started, so that the editor holds no more than `first_bytes`
+--- bytes of it, whatever its size; git itself may unpack a file stored in a
+--- pack whole before it prints a byte. `text` is the whole file otherwise.
 ---
 ---@param found aineo.git.Repository as `M.find_repository()` gave it
 ---@param commit string the commit's id
 ---@param path string relative to the repository's top level
----@param done fun(failure: aineo.git.Failure|nil, text: string|nil)
+---@param done fun(failure: aineo.git.Failure|nil, text: string|nil, size: integer|nil)
 ---@param options? aineo.git.Options
-function M.file_at_commit(found, commit, path, done, options)
-  content.file_at_commit(process.runner(options), found, commit, path, done)
+---@param first_bytes? integer how many bytes of the file are wanted, at least 1
+function M.file_at_commit(found, commit, path, done, options, first_bytes)
+  content.file_at_commit(process.runner(options), found, commit, path, done, first_bytes)
 end
 
 --- Gives the unified diff of every file of `found` between the merge base of
