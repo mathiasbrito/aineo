@@ -131,3 +131,7 @@ Write it in your definition's shape, to `<scratchpad>/t57-report-packet.md`. Ope
 - the number of git runs a read of the commits window makes with one other worktree, before and after.
 
 The orchestrator's verification runs `plan.md`'s five T57 mutants. Name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-13, before dispatch
+
+`plan.md` › *The orchestrator's rulings* rules every open decision as its (a), which this brief is written for: A196–A198, A204–A206. They are the orchestrator's assumptions, to record in the session note and the PR body as such, never as the user's decisions.
