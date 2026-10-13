@@ -33,6 +33,41 @@ local T = MiniTest.new_set({
   },
 })
 
+--- Waits, at most `claude_session.PATIENCE_MS`, until `child` has told the
+--- user `count` messages: a start that resumes tells what its launch raises
+--- once the list of sessions has answered.
+---
+---@param count integer
+local function wait_for_messages(count)
+  vim.wait(claude_session.PATIENCE_MS, function()
+    return #entry.messages(child) >= count
+  end, 20)
+end
+
+--- The session kept for the working directory in the tests that start Claude
+--- Code on a session kept before.
+local KEPT_SESSION_ID = '0f9e7c2a-1b3d-4e5f-8a9b-0c1d2e3f4a5b'
+
+--- Gives `child` a state directory of its own, `.tests/fixtures/<name>-state`,
+--- that holds `KEPT_SESSION_ID` for its working directory, so that the next
+--- start there resumes it and waits for the list of sessions first; with
+--- `keeps` false, an empty one, where the next start is on a new id.
+---
+---@param name string
+---@param keeps boolean
+local function use_state_directory(name, keeps)
+  local state = fixture.directory(name .. '-state')
+  child.lua('vim.env.XDG_STATE_HOME = ...', { state })
+  if keeps then
+    local directory = vim.fs.joinpath(state, 'nvim', 'aineo', 'claude-sessions')
+    vim.fn.mkdir(directory, 'p')
+    local file =
+      assert(io.open(vim.fs.joinpath(directory, vim.fn.sha256(child.fn.getcwd()) .. '.txt'), 'wb'))
+    file:write(KEPT_SESSION_ID)
+    file:close()
+  end
+end
+
 T[':Aineo'] = MiniTest.new_set()
 
 T[':Aineo']['without an argument tells the user its nine subcommands and does nothing else'] = function()
@@ -92,6 +127,7 @@ T[':Aineo']['followed by a bar runs the subcommand, then the command after the b
   entry.use_fake(child, fake)
 
   child.cmd('Aineo open | let g:entry_after_bar = 1')
+  claude_session.wait_for_start(fake)
 
   eq(entry.windows(child), { 'terminal', 'aineo://report', 'aineo://input' })
   eq(child.g.entry_after_bar, 1)
@@ -104,6 +140,7 @@ T[':Aineo open']['starts Claude in the layout, beside the Report above Input'] =
   entry.use_fake(child, fake)
 
   child.cmd('Aineo open')
+  claude_session.wait_for_start(fake)
 
   eq(entry.windows(child), { 'terminal', 'aineo://report', 'aineo://input' })
   eq(#claude_session.wait_for_starts(fake, 1), 1)
@@ -199,14 +236,22 @@ T[':Aineo open']['on a screen with no room tells the user Neovim’s error witho
   })
 end
 
---- What the user is told when a TermOpen autocommand of theirs fails: the
---- first line of the error, in the words Neovim 0.12 wraps an error raised
---- in a Lua callback in.
+--- What the user is told when a TermOpen autocommand of theirs fails as
+--- Claude Code launches once the list of sessions has answered, in a folder
+--- with a kept session: the first line of the error, in the words Neovim
+--- 0.12 wraps an error raised in a Lua callback in.
 local TERMOPEN_FAILURE =
+  'aineo: TermOpen Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:3: the user autocommand fails'
+
+--- What the user is told when a TermOpen autocommand of theirs fails as
+--- Claude Code launches at once, in a folder with no kept session: the first
+--- line of the error, with the context of the command that started it.
+local TERMOPEN_FAILURE_ON_A_NEW_SESSION =
   'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:3: the user autocommand fails'
 
-T[':Aineo open']['when a TermOpen autocommand of the user fails tells the user the first line of its error'] = function()
-  local fake = claude_session.fake('entry-open-termopen-fails', 'ready')
+T[':Aineo open']['when a TermOpen autocommand of the user fails on a new session tells the user the first line of its error'] = function()
+  local fake = claude_session.fake('entry-open-termopen-fails-new', 'ready')
+  use_state_directory('entry-open-termopen-fails-new', false)
   entry.use_fake(child, fake)
   child.lua([[
     vim.api.nvim_create_autocmd('TermOpen', {
@@ -219,6 +264,26 @@ T[':Aineo open']['when a TermOpen autocommand of the user fails tells the user t
   entry.command(child, 'Aineo open')
 
   eq(entry.messages(child), {
+    { message = TERMOPEN_FAILURE_ON_A_NEW_SESSION, level = vim.log.levels.ERROR },
+  })
+end
+
+T[':Aineo open']['when a TermOpen autocommand of the user fails tells the user the first line of its error'] = function()
+  local fake = claude_session.fake('entry-open-termopen-fails', 'ready')
+  use_state_directory('entry-open-termopen-fails', true)
+  entry.use_fake(child, fake)
+  child.lua([[
+    vim.api.nvim_create_autocmd('TermOpen', {
+      callback = function()
+        error('the user autocommand fails')
+      end,
+    })
+  ]])
+
+  entry.command(child, 'Aineo open')
+  wait_for_messages(1)
+
+  eq(entry.messages(child), {
     { message = TERMOPEN_FAILURE, level = vim.log.levels.ERROR },
   })
 end
@@ -226,10 +291,11 @@ end
 --- What the user is told when a TermOpen autocommand of theirs fails with
 --- words that only look like Neovim 0.12's framing: every one of them.
 local TERMOPEN_FAILURE_QUOTING_FRAMING =
-  'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:3: the user autocommand quotes Lua: here'
+  'aineo: TermOpen Autocommands for "*": Vim(append):Lua callback: [string "<nvim>"]:3: the user autocommand quotes Lua: here'
 
 T[':Aineo open']['when a TermOpen autocommand fails with words that only look like framing tells the user them all'] = function()
   local fake = claude_session.fake('entry-open-termopen-quotes', 'ready')
+  use_state_directory('entry-open-termopen-quotes', true)
   entry.use_fake(child, fake)
   child.lua([[
     vim.api.nvim_create_autocmd('TermOpen', {
@@ -240,6 +306,7 @@ T[':Aineo open']['when a TermOpen autocommand fails with words that only look li
   ]])
 
   entry.command(child, 'Aineo open')
+  wait_for_messages(1)
 
   eq(
     entry.messages(child),
@@ -286,10 +353,11 @@ end
 --- its error, whole after Neovim 0.12's framing, as for a callback given as
 --- a string.
 local TERMOPEN_FILE_FAILURE_NAMING_A_POSITION =
-  'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: user/term.lua:3: the user hook failed: user/util.lua:4: the setting is missing'
+  'aineo: TermOpen Autocommands for "*": Vim(append):Lua callback: user/term.lua:3: the user hook failed: user/util.lua:4: the setting is missing'
 
 T[':Aineo open']['when a TermOpen autocommand from a Lua file fails with words naming a position tells the user them all'] = function()
   local fake = claude_session.fake('entry-open-termopen-file', 'ready')
+  use_state_directory('entry-open-termopen-file', true)
   entry.use_fake(child, fake)
   child.lua([==[
     assert(load([[
@@ -302,6 +370,7 @@ T[':Aineo open']['when a TermOpen autocommand from a Lua file fails with words n
   ]==])
 
   entry.command(child, 'Aineo open')
+  wait_for_messages(1)
 
   eq(
     entry.messages(child),
@@ -314,10 +383,11 @@ end
 --- first line, which ends at the position of the failing code, whole after
 --- Neovim 0.12's framing, so that the user still learns where it failed.
 local TERMOPEN_FILE_FAILURE_ON_A_LATER_LINE =
-  'aineo: nvim_exec2()[1]..TermOpen Autocommands for "*": Vim(append):Lua callback: user/term.lua:3: '
+  'aineo: TermOpen Autocommands for "*": Vim(append):Lua callback: user/term.lua:3: '
 
 T[':Aineo open']['when a TermOpen autocommand from a Lua file fails with its words on a later line tells the user where it failed'] = function()
   local fake = claude_session.fake('entry-open-termopen-file-later-line', 'ready')
+  use_state_directory('entry-open-termopen-file-later-line', true)
   entry.use_fake(child, fake)
   child.lua([==[
     assert(load([[
@@ -330,6 +400,7 @@ T[':Aineo open']['when a TermOpen autocommand from a Lua file fails with its wor
   ]==])
 
   entry.command(child, 'Aineo open')
+  wait_for_messages(1)
 
   eq(
     entry.messages(child),
@@ -354,6 +425,7 @@ T[':Aineo open']['with a key no setting knows opens without a word'] = function(
   entry.use_fake(child, fake, { claude = { command = 'claude' }, autostrat = false })
 
   child.cmd('Aineo open')
+  claude_session.wait_for_start(fake)
 
   eq(entry.messages(child), {})
   eq(child.cmd_capture('messages'), '')
@@ -404,6 +476,7 @@ T[':Aineo report, input and claude']['move the cursor to their window of the lay
   local fake = claude_session.fake('entry-focus-' .. subcommand, 'ready')
   entry.use_fake(child, fake)
   child.cmd('Aineo open')
+  claude_session.wait_for_start(fake)
   child.cmd('tabnew')
 
   child.cmd('Aineo ' .. subcommand)
@@ -419,6 +492,7 @@ T[':Aineo report, input and claude']['open the layout around a new Claude when i
   entry.use_fake(child, fake)
 
   child.cmd('Aineo ' .. subcommand)
+  claude_session.wait_for_start(fake)
 
   eq(entry.windows(child), { 'terminal', 'aineo://report', 'aineo://input' })
   eq(entry.current_window(child), shown)
@@ -503,6 +577,7 @@ T['<Plug>(aineo-open)']['starts Claude in the layout, beside the Report above In
   entry.use_fake(child, fake)
 
   entry.press(child, '<Plug>(aineo-open)')
+  claude_session.wait_for_start(fake)
 
   eq(entry.windows(child), { 'terminal', 'aineo://report', 'aineo://input' })
   eq(#claude_session.wait_for_starts(fake, 1), 1)
@@ -518,6 +593,7 @@ T['<Plug>(aineo-report), (aineo-input) and (aineo-claude)']['move the cursor to 
   local fake = claude_session.fake('entry-plug-focus-' .. subcommand, 'ready')
   entry.use_fake(child, fake)
   child.cmd('Aineo open')
+  claude_session.wait_for_start(fake)
   child.cmd('tabnew')
 
   entry.press(child, '<Plug>(aineo-' .. subcommand .. ')')
@@ -532,6 +608,7 @@ T['the prefix typed']['\\o starts Claude in the layout, beside the Report above 
   entry.use_fake(child, fake)
 
   entry.press(child, '\\o')
+  claude_session.wait_for_start(fake)
 
   eq(entry.windows(child), { 'terminal', 'aineo://report', 'aineo://input' })
   eq(#claude_session.wait_for_starts(fake, 1), 1)

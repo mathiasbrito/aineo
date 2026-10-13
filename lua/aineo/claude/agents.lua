@@ -8,8 +8,11 @@ local M = {}
 --- and the directory it started in, where the entry has them, and whether
 --- a process runs it (`running`). An entry has a `pid` and a `status` only
 --- while its process is alive, so `running` is set when it has either,
---- whatever its type.
----@alias aineo.claude.ListedSession { session_id: string, name: string?, kind: string?, status: string?, running: boolean?, cwd: string? }
+--- whatever its type; `pid` is the process id, a number. A background
+--- session's entry also has Claude Code's short id (`short_id`), the one
+--- `claude attach`, `claude logs` and `claude stop` take, which is not the
+--- `session_id`.
+---@alias aineo.claude.ListedSession { session_id: string, short_id: string?, name: string?, kind: string?, status: string?, running: boolean?, pid: number?, cwd: string? }
 
 --- How long `claude agents --json` may run before it is killed, with every
 --- process in its process group.
@@ -55,10 +58,12 @@ local function listed_session(entry)
   end
   return {
     session_id = session_id,
+    short_id = typed_field(entry, 'id', 'string'),
     name = typed_field(entry, 'name', 'string'),
     kind = typed_field(entry, 'kind', 'string'),
     status = typed_field(entry, 'status', 'string') or typed_field(entry, 'state', 'string'),
     running = (entry.pid ~= nil or entry.status ~= nil) or nil,
+    pid = typed_field(entry, 'pid', 'number'),
     cwd = typed_field(entry, 'cwd', 'string'),
   }
 end
@@ -97,6 +102,20 @@ function M.standing(session, own_session_id, folder)
     return 'another_folder'
   end
   return 'switchable'
+end
+
+--- Whether `sessions`, as `list_sessions()` delivers them, hold the session
+--- `session_id` open in another interactive Claude Code: an entry of that
+--- session whose kind is `interactive` and which has a process (`pid`). A
+--- background session of it does not count.
+---
+---@param sessions aineo.claude.ListedSession[]
+---@param session_id string
+---@return boolean
+function M.is_open_in_another_claude_code(sessions, session_id)
+  return vim.iter(sessions):any(function(listed)
+    return listed.session_id == session_id and listed.kind == 'interactive' and listed.pid ~= nil
+  end)
 end
 
 --- What a row of the list marks a session with, by its standing.
@@ -221,7 +240,8 @@ local function run_bounded(words, on_ended)
     vim.schedule(function()
       timer:stop()
       timer:close()
-      vim.api.nvim_del_autocmd(quit_hook)
+      -- A user's `:autocmd! VimLeavePre` has removed the hook already.
+      pcall(vim.api.nvim_del_autocmd, quit_hook)
       run.code, run.signal = result.code, result.signal
       run.output, run.errors = table.concat(output), table.concat(errors)
       on_ended(run)

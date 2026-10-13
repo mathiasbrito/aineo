@@ -57,6 +57,21 @@ local function start_editor(fake, start)
   return entry_editor.start(child, children.restart, editor_start(fake, start))
 end
 
+--- What the editor's windows show once the layout is whole around Claude Code.
+local WHOLE_LAYOUT = { 'terminal', 'aineo://report', 'aineo://input' }
+
+--- Waits, at most `claude_session.PATIENCE_MS`, until the windows of `editor`
+--- show `WHOLE_LAYOUT`: a start that resumes the session an earlier editor of
+--- the same state directory kept shows Claude's window empty until the list
+--- of sessions has answered.
+---
+---@param editor aineo.test.Editor
+local function wait_for_whole_layout(editor)
+  vim.wait(claude_session.PATIENCE_MS, function()
+    return vim.deep_equal(entry_editor.get(editor, entry.WINDOWS), WHOLE_LAYOUT)
+  end, 50)
+end
+
 --- Starts an editor in a terminal of `child` (`editor_start()`), and returns
 --- it once it listens, asking it nothing (`entry_editor.launch()`).
 ---
@@ -301,8 +316,9 @@ T['a startup dashboard']['gives way to the layout around a new Claude'] = functi
   local fake = claude_session.fake('entry-dashboard-' .. name, 'ready')
 
   local editor = start_editor(fake, { args = dashboard_arguments(dashboard) })
+  wait_for_whole_layout(editor)
 
-  eq(entry_editor.get(editor, entry.WINDOWS), { 'terminal', 'aineo://report', 'aineo://input' })
+  eq(entry_editor.get(editor, entry.WINDOWS), WHOLE_LAYOUT)
   eq(entry_editor.request(editor, WINDOWS_OF_FILETYPE, { dashboard.filetype }), 0)
 end
 
@@ -321,8 +337,9 @@ T['mini.starter']['gives way to the layout around a new Claude'] = function()
   local fake = claude_session.fake('entry-mini-starter', 'ready')
 
   local editor = start_editor(fake, { args = MINI_STARTER })
+  wait_for_whole_layout(editor)
 
-  eq(entry_editor.get(editor, entry.WINDOWS), { 'terminal', 'aineo://report', 'aineo://input' })
+  eq(entry_editor.get(editor, entry.WINDOWS), WHOLE_LAYOUT)
   eq(entry_editor.request(editor, WINDOWS_OF_FILETYPE, { 'ministarter' }), 0)
 end
 

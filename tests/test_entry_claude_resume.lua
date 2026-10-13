@@ -58,6 +58,23 @@ local function open_after_a_resume_with_no_conversation(child, name)
   return fake
 end
 
+--- Waits, at most `claude_session.PATIENCE_MS`, until `child` has run the
+--- callbacks scheduled before this call, among them what the layout
+--- scheduled when a window or a buffer changed.
+---
+---@param child table
+local function wait_for_scheduled_callbacks(child)
+  child.lua([[
+    _G.scheduled_callbacks_ran = false
+    vim.schedule(function()
+      _G.scheduled_callbacks_ran = true
+    end)
+  ]])
+  vim.wait(claude_session.PATIENCE_MS, function()
+    return child.lua_get('_G.scheduled_callbacks_ran')
+  end, 20)
+end
+
 local child = MiniTest.new_child_neovim()
 
 local T = MiniTest.new_set({
@@ -162,6 +179,52 @@ T["Claude's session"]["starts on \\o after an exit in Claude's window, which the
     child.lua_get(('vim.bo[%s].buftype'):format(CLAUDE_WINDOW_BUFFER)),
     child.api.nvim_get_option_value('winfixbuf', { win = window }),
   }, { false, 'terminal', true })
+end
+
+T["Claude's session"]["keeps Claude's window in the layout while a restart waits for the list, then runs Claude Code there"] = function()
+  local fake = claude_session.fake('entry-resume-waits', 'ready')
+  local gate = claude_session.list_gate('entry-resume-waits')
+  use_state_directory(child, fixture.directory('entry-resume-waits-state'))
+  entry.use_fake(child, fake, { claude = { cmd = gate.cmd } })
+  child.cmd('Aineo open')
+  claude_session.wait_for_start(fake)
+  end_claude_code(child)
+
+  entry.command(child, 'Aineo open')
+  local waiting = child.lua_get(CLAUDE_WINDOW_BUFFER)
+  wait_for_scheduled_callbacks(child)
+
+  eq(#entry.windows(child), 3)
+  eq(child.lua_get(CLAUDE_WINDOW_BUFFER), waiting)
+  gate.open()
+  eq(claude_session.wait_for_status(child, 'ready'), { 'ready' })
+  eq(entry.windows(child), { 'terminal', 'aineo://report', 'aineo://input' })
+  eq(child.lua_get(CLAUDE_WINDOW_BUFFER), waiting)
+end
+
+T["Claude's session"]['leaves the user in Normal mode, typing nothing into Claude’s empty window, when \\c is pressed while the list runs'] = function()
+  local fake = claude_session.fake('entry-resume-waits-typed', 'ready')
+  local gate = claude_session.list_gate('entry-resume-waits-typed')
+  use_state_directory(child, fixture.directory('entry-resume-waits-typed-state'))
+  entry.use_fake(child, fake, { claude = { cmd = gate.cmd } })
+  child.cmd('Aineo open')
+  claude_session.wait_for_start(fake)
+  end_claude_code(child)
+
+  entry.command(child, 'Aineo open')
+  child.type_keys('\\c', 'hh')
+  local waiting = child.lua_get(CLAUDE_WINDOW_BUFFER)
+  local while_waiting = {
+    child.lua_get(MODE),
+    child.api.nvim_buf_get_lines(waiting, 0, -1, false),
+    claude_session.buftype(child, waiting),
+  }
+  gate.open()
+  claude_session.wait_for_launch(child, waiting)
+
+  eq(while_waiting, { 'n', { '' }, 'nofile' })
+  eq(claude_session.buftype(child, waiting), 'terminal')
+  eq(#claude_session.wait_for_starts(fake, 2), 2)
 end
 
 T['after a resume with no conversation'] = MiniTest.new_set()

@@ -45,6 +45,35 @@ function M.deaf_fake_command()
   return { 'sh', DEAF_FAKE_CLAUDE }
 end
 
+--- The script that holds back each `agents --json` run of the fake until the
+--- file named by its first argument exists, after noting the run in that
+--- file's `.seen`, or for 30 s, so that a run whose editor is gone does not
+--- wait for ever; `$5` is the first word `claude.cmd` is given after the
+--- fake's own four.
+local LIST_GATE_SCRIPT = 'case "$5" in agents) echo run >> "$0.seen"; n=0;'
+  .. ' until [ -e "$0" ] || [ "$n" -ge 1500 ]; do sleep 0.02; n=$((n + 1)); done;; esac; exec "$@"'
+
+--- A gate on the list of sessions a start that resumes waits for, for one
+--- test: `cmd`, a `claude.cmd` that runs the fake as `fake_command()` does
+--- but holds each of its `agents --json` runs back until `open()` is called,
+--- while a run as Claude Code is not held; and `lists_started()`, how many
+--- of the held runs have started.
+---
+---@param name string the test's own name for its gate
+---@return { cmd: string[], open: fun(), lists_started: fun(): integer }
+function M.list_gate(name)
+  local gate = vim.fs.joinpath(fixture.directory(name .. '-gate'), 'open')
+  return {
+    cmd = vim.list_extend({ 'sh', '-c', LIST_GATE_SCRIPT, gate }, M.fake_command()),
+    open = function()
+      vim.fn.writefile({}, gate)
+    end,
+    lists_started = function()
+      return vim.fn.filereadable(gate .. '.seen') == 1 and #vim.fn.readfile(gate .. '.seen') or 0
+    end,
+  }
+end
+
 --- The session's settings a test starts it with: the fake's command, the
 --- editor's working directory, state directory, server address and program,
 --- and stand-ins for the MCP servers, the tools to pre-allow and the
@@ -534,8 +563,24 @@ function M.record(fake)
   return vim.tbl_map(vim.json.decode, vim.fn.readfile(fake.record))
 end
 
---- Once `fake` has started, and so reads its keys raw, presses a double Ctrl-C
---- in the terminal `buffer` of `child`, as a user ending Claude Code would,
+--- Waits, at most `PATIENCE_MS`, until Claude Code has launched in the
+--- buffer `buffer` of `child`, which is a terminal then and, for a start that
+--- waits for the list of sessions, an empty scratch buffer until then; also
+--- ends when `buffer` is wiped. Returns whether `buffer` is a terminal.
+---
+---@param child table
+---@param buffer integer
+---@return boolean
+function M.wait_for_launch(child, buffer)
+  vim.wait(M.PATIENCE_MS, function()
+    return M.buftype(child, buffer) ~= 'nofile'
+  end, 20)
+  return M.buftype(child, buffer) == 'terminal'
+end
+
+--- Once `fake` has started, and so reads its keys raw, and Claude Code has
+--- launched in the terminal `buffer` (`wait_for_launch()`), presses a double
+--- Ctrl-C in `buffer` of `child`, as a user ending Claude Code would,
 --- and waits for the session to report `exited` — so that the test's teardown
 --- does not spend the whole stop on quit. Presses nothing when the session has
 --- exited already or `buffer` is gone: it runs from `MiniTest.finally()`, where
@@ -546,6 +591,7 @@ end
 ---@param buffer integer the session's terminal buffer
 function M.end_by_keys(child, fake, buffer)
   M.wait_for_start(fake)
+  M.wait_for_launch(child, buffer)
   child.lua(
     [[
       local buffer = ...
@@ -560,12 +606,14 @@ function M.end_by_keys(child, fake, buffer)
 end
 
 --- Presses `keys` in the terminal `buffer` of `child`, as a user typing in
---- Claude Code's window would.
+--- Claude Code's window would, once Claude Code has launched in it
+--- (`wait_for_launch()`).
 ---
 ---@param child table
 ---@param buffer integer the session's terminal buffer
 ---@param keys string the bytes the keys send, such as `'\r'` for Enter
 function M.press_keys(child, buffer, keys)
+  M.wait_for_launch(child, buffer)
   child.lua('local buffer, keys = ...; vim.api.nvim_chan_send(vim.bo[buffer].channel, keys)', {
     buffer,
     keys,
@@ -801,8 +849,18 @@ function M.ctrl_c_count(fake)
   return select(2, input:gsub('\3', ''))
 end
 
---- The record entries in which a fake started — its arguments, working
---- directory and variables — once there are `count` of them, waiting for that
+--- Whether the record `entry` is a run of the fake's `agents --json`
+--- (`answer_agents()`), the listing aineo asks Claude Code for.
+---
+---@param entry table
+---@return boolean
+local function is_listing(entry)
+  return entry.argv ~= nil and entry.argv[1] == 'agents'
+end
+
+--- The record entries in which a fake started as Claude Code does — its
+--- arguments, working directory and variables, and not those of a listing
+--- (`wait_for_listings()`) — once there are `count` of them, waiting for that
 --- at most `PATIENCE_MS`, or when the wait runs out.
 ---
 ---@param fake { record: string }
@@ -812,11 +870,27 @@ function M.wait_for_starts(fake, count)
   local starts
   vim.wait(M.PATIENCE_MS, function()
     starts = vim.tbl_filter(function(entry)
-      return entry.argv ~= nil
+      return entry.argv ~= nil and not is_listing(entry)
     end, M.record(fake))
     return #starts >= count
   end, 20)
   return starts
+end
+
+--- The record entries in which a fake ran `agents --json` — its arguments,
+--- working directory and variables — once there are `count` of them,
+--- waiting for that at most `PATIENCE_MS`, or when the wait runs out.
+---
+---@param fake { record: string }
+---@param count integer
+---@return table[]
+function M.wait_for_listings(fake, count)
+  local listings
+  vim.wait(M.PATIENCE_MS, function()
+    listings = vim.tbl_filter(is_listing, M.record(fake))
+    return #listings >= count
+  end, 20)
+  return listings
 end
 
 --- The arguments of the fake's `count`th start, after its own script, once
