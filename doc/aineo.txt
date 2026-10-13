@@ -30,7 +30,9 @@ and `\c` move to the Report, Input and Claude — `\c` in Terminal mode, so
 that what you type next goes to Claude, unless Claude Code has exited.
 `\tcn` hides or shows the line numbers of Claude's window. `\S` lists the
 sessions Claude Code lists for the folder and switches Claude to the one you
-pick (|:Aineo-sessions|). `\pa` and `\g` switch the right column
+pick (|:Aineo-sessions|). `\N` starts a new Claude Code session: on a new id
+once Claude Code has exited, where `\o` resumes the last, and with `/clear`
+while it runs (|:Aineo-new|). `\pa` and `\g` switch the right column
 between the agent pane, the Report over Input, and the changes pane, and move
 to the Report and to the changes pane's commits (|aineo-panes|). In Visual
 mode, in Input, `\s` sends the selection alone and removes it from Input
@@ -544,6 +546,10 @@ no session gets a new one (`--session-id`). The ids are kept under
 `stdpath('state')` in `aineo/claude-sessions/`, one file per directory that
 only you can read and write, and are never removed.
 
+`:Aineo new` (|:Aineo-new|) starts a session on a new id in place of that
+resume, once Claude Code has exited, and keeps the new id for the directory
+from then on: the next `\o` resumes it.
+
 A start that would resume first asks Claude Code where the session runs, by
 `claude agents --json` for the directory (|aineo-limits|), and Claude's
 window stays empty, drawing its status line, until Claude Code answers: for
@@ -786,8 +792,10 @@ stays on an empty buffer until `claude` opens the layout there again —
 `report` and `input` do so only when their own window is gone too. A file
 opened in Claude's window as the terminal is wiped stays in view, and moves to
 the file column when the layout opens again. Of the actions, only `open`
-restarts an exited Claude Code; aineo restarts one by itself only in place of
-a resume Claude Code has no conversation for (|aineo-claude-session|).
+and `new` restart an exited Claude Code, `open` on the session kept for the
+directory and `new` on a new one (|:Aineo-new|); aineo restarts one by itself
+only in place of a resume Claude Code has no conversation for
+(|aineo-claude-session|).
 
                                                        *:Aineo-claude-numbers*
 :Aineo claude-numbers	Hides the line numbers of Claude's window, 'number'
@@ -807,9 +815,9 @@ a resume Claude Code has no conversation for (|aineo-claude-session|).
 
 			aineo keeps your choice until the editor quits, and
 			gives it to every Claude terminal new to Claude's
-			window — Claude Code restarted by `open`, the new
-			session that takes the place of a resume with no
-			conversation, a wiped terminal started again, a
+			window — Claude Code restarted by `open` or `new`,
+			the new session that takes the place of a resume with
+			no conversation, a wiped terminal started again, a
 			terminal you bring back there yourself — and to
 			Claude's window when it is opened anew. Numbers you
 			set yourself in Claude's window afterwards stay as
@@ -881,6 +889,44 @@ a resume Claude Code has no conversation for (|aineo-claude-session|).
 			Claude Code lists no session. A pick made after the
 			state changed tells you the same, starting `aineo: not
 			switched`. What it cannot know is in |aineo-limits|.
+
+                                                                  *:Aineo-new*
+:Aineo new		Starts a new Claude Code session. It takes no word.
+			- When no Claude Code runs in this Neovim, because it
+			  has exited, has not started here, or its terminal
+			  was wiped, it starts one on a new session id
+			  (`--session-id`). It lists no session and resumes
+			  none, and keeps the new id for the directory, so
+			  that `:Aineo open` resumes it after the next exit
+			  (|aineo-claude-session|). The layout opens, or is
+			  restored, around the new terminal as `:Aineo open`
+			  does, and the cursor moves to Claude's window in
+			  Terminal mode (|:Aineo-claude|). The Report, Input's
+			  draft and the changes pane follow the new session,
+			  empty, with `HEAD` as its base, once it is ready
+			  (|aineo-claude-session|).
+			- When Claude Code runs, is ready for input and the
+			  prompt shows no text, it moves the cursor to
+			  Claude's window in Terminal mode and writes `/clear`
+			  as a bracketed paste, as Send writes text
+			  (|aineo-send|), and Enter, in one write, as
+			  |:Aineo-sessions| writes `/resume`. Claude Code
+			  switches to a new session and aineo follows it
+			  (|aineo-claude-session|), and the cleared session
+			  stays resumable. The prompt shows text as
+			  |:Aineo-sessions| reads it; aineo never clears it.
+			Nothing is written and nothing is started, the cursor
+			goes back to the window and the mode it came from, and
+			you are told once, with a warning starting `aineo: no
+			new session`, when the prompt shows text (clear it,
+			then press the key again), when Claude Code is
+			starting, behind a dialog or waiting for the session
+			list of a resume, when a claim of another session
+			holds (|:Aineo-claim|), and when Claude's window does
+			not enter Terminal mode within a second. While a turn
+			runs the prompt is on the screen and `/clear` is
+			written all the same; what Claude Code does with it
+			then is in |aineo-limits|.
 
                                                                  *:Aineo-pane*
 :Aineo pane {pane}	Shows {pane} in the right column, `agent` or
@@ -980,6 +1026,9 @@ you turn the prefix off, or when a prefix key is yours: >lua
                                                       *<Plug>(aineo-sessions)*
 <Plug>(aineo-sessions)	Does what |:Aineo-sessions| does.
 
+                                                          *<Plug>(aineo-new)*
+<Plug>(aineo-new)	Does what |:Aineo-new| does.
+
                                                     *<Plug>(aineo-pane-agent)*
 <Plug>(aineo-pane-agent)
 			Does what `:Aineo pane agent` does (|:Aineo-pane|).
@@ -1013,6 +1062,8 @@ which has none, globally, in Normal mode, and `\s` in Visual mode too:
 \tcn		|<Plug>(aineo-claude-numbers)|
                                                                     *aineo-\S*
 \S		|<Plug>(aineo-sessions)|
+                                                                    *aineo-\N*
+\N		|<Plug>(aineo-new)|
                                                                    *aineo-\pa*
 \pa		|<Plug>(aineo-pane-agent)|
                                                                     *aineo-\g*
@@ -1073,6 +1124,8 @@ Claude Code is sent none of the twin's keys.
 <C-\>tcn	|<Plug>(aineo-claude-numbers)|
                                                                 *aineo-<C-\>S*
 <C-\>S		|<Plug>(aineo-sessions)|
+                                                                *aineo-<C-\>N*
+<C-\>N		|<Plug>(aineo-new)|
                                                                *aineo-<C-\>pa*
 <C-\>pa		|<Plug>(aineo-pane-agent)|
                                                                 *aineo-<C-\>g*
@@ -1768,6 +1821,17 @@ The session list ~
 - The prompt is read in Terminal mode, where Neovim keeps the window's
   cursor on the terminal's, so the cursor moves to Claude's window before
   the read, and back when the prompt shows text.
+
+The new session key ~
+- That Claude Code takes the pasted `/clear` and Enter of `:Aineo new` as a
+  command was not measured, only by the fake `claude` of aineo's tests, as
+  for the `/resume` of `:Aineo sessions` (The session list, above).
+- What Claude Code does with a `/clear` written while a turn runs was not
+  measured: aineo has no sign of a turn on Claude Code's screen, since the
+  input box shows during one, and writes `/clear` as Send writes during a
+  turn (|aineo-send|). Claude Code may queue it, run it, or take it as text.
+- Where hooks do not run (Session switches, above), aineo hears of no switch
+  after a `/clear`, and the panes stay on the session left.
 
 Send and a dialog ~
 A permission dialog drawn in the few tens of milliseconds before aineo

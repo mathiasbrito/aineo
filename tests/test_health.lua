@@ -647,6 +647,7 @@ T['the prefix mappings']['are reported in place when aineo mapped each key'] = f
     '- ✅ OK \\c runs <Plug>(aineo-claude)',
     '- ✅ OK \\tcn runs <Plug>(aineo-claude-numbers)',
     '- ✅ OK \\S runs <Plug>(aineo-sessions)',
+    '- ✅ OK \\N runs <Plug>(aineo-new)',
     '- ✅ OK \\pa runs <Plug>(aineo-pane-agent)',
     '- ✅ OK \\g runs <Plug>(aineo-pane-changes)',
     '- ✅ OK \\s in Visual mode runs <Plug>(aineo-send)',
@@ -659,7 +660,7 @@ T['the prefix mappings']['warn that the leader, unset and so a backslash, is the
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[11], LEADER_WARNING)
+  eq(health.section(report, 'Prefix mappings')[12], LEADER_WARNING)
   eq(health.advice(report, 'Prefix mappings'), { LEADER_ADVICE })
 end
 
@@ -676,7 +677,7 @@ T['the prefix mappings']['warn that the leader, a Number, is the prefix'] = func
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[11], '- ⚠️ WARNING the leader is the prefix, 1')
+  eq(health.section(report, 'Prefix mappings')[12], '- ⚠️ WARNING the leader is the prefix, 1')
 end
 
 T['the prefix mappings']['warn that a leader longer than 48 bytes, which Neovim maps as a backslash, is the prefix'] = function()
@@ -692,7 +693,7 @@ T['the prefix mappings']['warn that a leader longer than 48 bytes, which Neovim 
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[11], LEADER_WARNING)
+  eq(health.section(report, 'Prefix mappings')[12], LEADER_WARNING)
 end
 
 T['the prefix mappings']['take a leader of 48 bytes as the characters Neovim maps it to'] = function()
@@ -708,7 +709,7 @@ T['the prefix mappings']['take a leader of 48 bytes as the characters Neovim map
 
   local report = health.report(child)
 
-  eq(#health.section(report, 'Prefix mappings'), 10)
+  eq(#health.section(report, 'Prefix mappings'), 11)
 end
 
 T['the prefix mappings']['warn that the leader, the same key as a prefix in key notation, is the prefix'] = function()
@@ -725,7 +726,7 @@ T['the prefix mappings']['warn that the leader, the same key as a prefix in key 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[11],
+    health.section(report, 'Prefix mappings')[12],
     '- ⚠️ WARNING the leader is the prefix, <space>'
   )
 end
@@ -743,7 +744,7 @@ T['the prefix mappings']['take a leader written in key notation as the character
 
   local report = health.report(child)
 
-  eq(#health.section(report, 'Prefix mappings'), 10)
+  eq(#health.section(report, 'Prefix mappings'), 11)
 end
 
 T['the prefix mappings']['report the keys plugin/aineo.lua mapped to aineo, no more and no fewer'] = function()
@@ -768,6 +769,7 @@ T['the prefix mappings']['warn that the local leader, the same key as a prefix i
     '- ✅ OK <space>c runs <Plug>(aineo-claude)',
     '- ✅ OK <space>tcn runs <Plug>(aineo-claude-numbers)',
     '- ✅ OK <space>S runs <Plug>(aineo-sessions)',
+    '- ✅ OK <space>N runs <Plug>(aineo-new)',
     '- ✅ OK <space>pa runs <Plug>(aineo-pane-agent)',
     '- ✅ OK <space>g runs <Plug>(aineo-pane-changes)',
     '- ✅ OK <space>s in Visual mode runs <Plug>(aineo-send)',
@@ -788,6 +790,7 @@ T['the prefix mappings']['take a local leader written in key notation as the cha
     '- ✅ OK <Space>c runs <Plug>(aineo-claude)',
     '- ✅ OK <Space>tcn runs <Plug>(aineo-claude-numbers)',
     '- ✅ OK <Space>S runs <Plug>(aineo-sessions)',
+    '- ✅ OK <Space>N runs <Plug>(aineo-new)',
     '- ✅ OK <Space>pa runs <Plug>(aineo-pane-agent)',
     '- ✅ OK <Space>g runs <Plug>(aineo-pane-changes)',
     '- ✅ OK <Space>s in Visual mode runs <Plug>(aineo-send)',
@@ -806,7 +809,7 @@ T['the prefix mappings']['warn that the local leader, a Number, is the prefix'] 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[11],
+    health.section(report, 'Prefix mappings')[12],
     '- ⚠️ WARNING the local leader is the prefix, 1'
   )
   eq(#health.section(report, 'Limits'), 1)
@@ -826,7 +829,7 @@ T['the prefix mappings']['warn that a List local leader, which Neovim maps as a 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[11],
+    health.section(report, 'Prefix mappings')[12],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
   eq(#health.section(report, 'Limits'), 1)
@@ -921,6 +924,7 @@ T['the prefix mappings']['warn of a key the user mapped, naming what it runs'] =
     '- ✅ OK \\c runs <Plug>(aineo-claude)',
     '- ✅ OK \\tcn runs <Plug>(aineo-claude-numbers)',
     '- ✅ OK \\S runs <Plug>(aineo-sessions)',
+    '- ✅ OK \\N runs <Plug>(aineo-new)',
     '- ✅ OK \\pa runs <Plug>(aineo-pane-agent)',
     '- ✅ OK \\g runs <Plug>(aineo-pane-changes)',
     '- ✅ OK \\s in Visual mode runs <Plug>(aineo-send)',
@@ -947,7 +951,7 @@ T['the prefix mappings']['warn of a Visual-mode key the user mapped, saying Visu
 
   eq({
     normal = health.section(report, 'Prefix mappings')[1],
-    visual = health.section(report, 'Prefix mappings')[10],
+    visual = health.section(report, 'Prefix mappings')[11],
   }, {
     normal = '- ✅ OK \\s runs <Plug>(aineo-send)',
     visual = '- ⚠️ WARNING \\s in Visual mode runs \':echo "mine"<CR>\', not <Plug>(aineo-send)',
@@ -1006,6 +1010,7 @@ T['the prefix mappings']['warn of each key nobody mapped, as after setup() chang
     '- ⚠️ WARNING ,c is not mapped',
     '- ⚠️ WARNING ,tcn is not mapped',
     '- ⚠️ WARNING ,S is not mapped',
+    '- ⚠️ WARNING ,N is not mapped',
     '- ⚠️ WARNING ,pa is not mapped',
     '- ⚠️ WARNING ,g is not mapped',
     '- ⚠️ WARNING ,s in Visual mode is not mapped',
@@ -1022,7 +1027,7 @@ T['the prefix mappings']['warn that the local leader, unset and so a backslash, 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[11],
+    health.section(report, 'Prefix mappings')[12],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
   eq(health.advice(report, 'Prefix mappings'), {
@@ -1037,7 +1042,7 @@ T['the prefix mappings']['warn that the local leader, empty and so a backslash, 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[11],
+    health.section(report, 'Prefix mappings')[12],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
 end
@@ -1048,7 +1053,7 @@ T['the prefix mappings']['warn that the local leader, set, is the prefix set'] =
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[11],
+    health.section(report, 'Prefix mappings')[12],
     '- ⚠️ WARNING the local leader is the prefix, ,'
   )
 end
@@ -1091,6 +1096,8 @@ local TWIN_LINES = {
   '- ✅ OK <C-\\>tcn in Insert mode runs <C-]><Esc><Plug>(aineo-claude-numbers)',
   '- ✅ OK <C-\\>S in Terminal mode runs <C-\\><C-n><Plug>(aineo-sessions)',
   '- ✅ OK <C-\\>S in Insert mode runs <C-]><Esc><Plug>(aineo-sessions)',
+  '- ✅ OK <C-\\>N in Terminal mode runs <C-\\><C-n><Plug>(aineo-new)',
+  '- ✅ OK <C-\\>N in Insert mode runs <C-]><Esc><Plug>(aineo-new)',
   '- ✅ OK <C-\\>pa in Terminal mode runs <C-\\><C-n><Plug>(aineo-pane-agent)',
   '- ✅ OK <C-\\>pa in Insert mode runs <C-]><Esc><Plug>(aineo-pane-agent)',
   '- ✅ OK <C-\\>g in Terminal mode runs <C-\\><C-n><Plug>(aineo-pane-changes)',
@@ -1193,7 +1200,7 @@ T['the terminal prefix mappings']['warn of a terminal prefix that is a single pr
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Terminal prefix mappings')[17],
+    health.section(report, 'Terminal prefix mappings')[19],
     '- ⚠️ WARNING terminal_prefix is x, a printable key: typing it in Insert mode runs a twin'
   )
   eq(health.advice(report, 'Terminal prefix mappings'), {
@@ -1214,7 +1221,7 @@ T['the terminal prefix mappings']['warn of a terminal prefix that starts with a 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Terminal prefix mappings')[17],
+    health.section(report, 'Terminal prefix mappings')[19],
     ('- ⚠️ WARNING terminal_prefix %s starts with a key pair of Neovim: it waits for the next key'):format(
       prefix
     )

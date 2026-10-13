@@ -238,6 +238,81 @@ T['start_session()']['resumes the kept session once Claude Code has exited'] = f
   eq(words_of_start(fake, 2, '--session-id'), {})
 end
 
+T['start_session()']['starts Claude Code on a new session id, not the kept one, when asked for a new session'] = function()
+  local fake = claude.fake('resume-asked-new', 'exit')
+  local settings = kept_in('resume-asked-new-state')
+  claude.start(child, fake, settings)
+  claude.wait_for_status(child, 'exited')
+
+  claude.start_again(child, vim.tbl_extend('force', settings, { new_session = true }))
+
+  is_one_session_id(words_of_start(fake, 2, '--session-id'))
+  MiniTest.expect.no_equality(
+    words_of_start(fake, 2, '--session-id'),
+    words_of_start(fake, 1, '--session-id')
+  )
+  eq(words_of_start(fake, 2, '--resume'), {})
+end
+
+T['start_session()']['keeps the new session id it was asked for, so that the next start resumes it'] = function()
+  local fake = claude.fake('resume-asked-new-kept', 'exit')
+  local settings = kept_in('resume-asked-new-kept-state')
+  claude.start(child, fake, settings)
+  claude.wait_for_status(child, 'exited')
+  claude.start_again(child, vim.tbl_extend('force', settings, { new_session = true }))
+  claude.wait_for_starts(fake, 2)
+  claude.wait_for_status(child, 'exited')
+
+  claude.start_again(child, settings)
+
+  eq(words_of_start(fake, 3, '--resume'), words_of_start(fake, 2, '--session-id'))
+end
+
+T['start_session()']['starts nothing when asked for a new session while Claude Code runs'] = function()
+  local fake = claude.fake('resume-asked-new-running', 'ready')
+  local settings = kept_in('resume-asked-new-running-state')
+  local terminal = claude.start(child, fake, settings)
+  claude.wait_for_status(child, 'ready')
+
+  local again = claude.start_again(child, vim.tbl_extend('force', settings, { new_session = true }))
+
+  vim.wait(400)
+  eq(again, terminal)
+  eq(#claude.wait_for_starts(fake, 1), 1)
+end
+
+T['start_session()']['tells on_session_switched of the new session it was asked for as a start'] = function()
+  local fake = claude.fake('resume-asked-new-told', 'exit')
+  local settings = kept_in('resume-asked-new-told-state')
+  claude.start_noting_switches(child, fake, settings)
+  claude.wait_for_status(child, 'exited')
+  local first_id = claude.followed_session_id(child)
+
+  claude.start_again_noting_switches(
+    child,
+    vim.tbl_extend('force', settings, { new_session = true })
+  )
+
+  local switches = claude.wait_for_session_switches(child, 1)
+  eq(#switches, 1)
+  eq(switches[1].left, first_id)
+  eq(switches[1].source, 'startup')
+  eq(switches[1].id, claude.followed_session_id(child))
+end
+
+T['start_session()']['raises an error naming new_session when it is not a boolean'] = function()
+  local fake = claude.fake('resume-asked-new-invalid', 'exit')
+  local settings = kept_in('resume-asked-new-invalid-state')
+  claude.start(child, fake, settings)
+  claude.wait_for_status(child, 'exited')
+
+  local raised, message =
+    pcall(claude.start_again, child, vim.tbl_extend('force', settings, { new_session = 'yes' }))
+
+  eq(raised, false)
+  contains(message, 'settings.new_session')
+end
+
 T['start_session()']['resumes the session an earlier editor kept in the directory'] = function()
   local fake = claude.fake('resume-other-editor', 'exit')
   local settings = kept_in('resume-other-editor-state')
