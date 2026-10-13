@@ -351,6 +351,31 @@ T['gf']['under a commit shows a file larger than 1 MiB cut, a virtual line under
   })
 end
 
+T['gf']['under a commit tells in the note how much of the whole file is shown, by the size git gave'] = function()
+  show_a_file_over_1_mib('openfile-commit-long-size')
+
+  eq(
+    child.lua_get(VIRTUAL_NOTES).text,
+    'aineo cut this file at 1 MiB: 1048528 of its 1144000 bytes are shown'
+  )
+end
+
+T['gf']['under a commit cuts a first line longer than 1 MiB on a character’s edge'] = function()
+  local euros = ('€'):rep(400000)
+  pane_under_commit('openfile-commit-long-line', { ['wide.txt'] = { euros } }, { '  A wide.txt' })
+
+  press_gf_on(2)
+
+  wait_for_file_shown()
+  eq({
+    shown = child.lua_get('#vim.api.nvim_buf_get_lines(0, 0, 1, true)[1]'),
+    note = child.lua_get(VIRTUAL_NOTES).text,
+  }, {
+    shown = 1048575,
+    note = 'aineo cut this file at 1 MiB: 1048575 of its 1200001 bytes are shown',
+  })
+end
+
 T['gf']['under a commit writes the note of a cut file once again after :edit!'] = function()
   show_a_file_over_1_mib('openfile-commit-long-again')
 
@@ -496,7 +521,7 @@ T['gf']['under a commit read while textlock holds shows the file once the editor
     return child.lua_get('_G.holding == true')
   end)
 
-  child.lua('_G.finish(nil, "in the commit\\n")')
+  child.lua('_G.finish(nil, "in the commit\\n", 14)')
   local meanwhile = child.lua_get('#_G.shown_diffs')
   child.api.nvim_input('q')
 
@@ -526,8 +551,8 @@ T['gf']['under a commit, then on another file before the first is read, shows th
   press_gf_on(2)
   press_gf_on(3)
 
-  child.lua('_G.pending["b.txt"](nil, "b text\\n")')
-  child.lua('_G.pending["a.txt"](nil, "a text\\n")')
+  child.lua('_G.pending["b.txt"](nil, "b text\\n", 7)')
+  child.lua('_G.pending["a.txt"](nil, "a text\\n", 7)')
 
   eq(child.lua_get('#_G.shown_diffs'), 1)
   eq(
@@ -680,7 +705,7 @@ T['gf']['under a commit, then on another file before the first is read, tells no
   press_gf_on(3)
 
   child.lua('_G.pending["a.txt"]({ reason = "failed", message = "late" })')
-  child.lua('_G.pending["b.txt"](nil, "b text\\n")')
+  child.lua('_G.pending["b.txt"](nil, "b text\\n", 7)')
 
   eq({ child.lua_get(TOLD), child.lua_get('#_G.shown_diffs') }, { '', 1 })
 end
