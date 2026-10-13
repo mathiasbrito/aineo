@@ -725,7 +725,7 @@ T['quitting Neovim']['ends a turn by keys though Ctrl-C is pressed in the editor
   claude.start(child, fake)
   claude.wait_for_start(fake)
 
-  claude.quit_pressing_ctrl_c(child)
+  claude.quit_pressing_ctrl_c(child, fake)
 
   eq(claude.wait_for_end(fake), { { turn = 'interrupted' }, { ended = 'keys', code = 0 } })
 end
@@ -735,7 +735,7 @@ T['quitting Neovim']['leaves no deaf Claude running though Ctrl-C is pressed in 
   claude.start(child, fake, on_a_new_session('quit-deaf-interrupted', deaf_command()))
   local pid = claude.wait_for_start(fake).pid
 
-  claude.quit_pressing_ctrl_c(child)
+  claude.quit_pressing_ctrl_c(child, fake)
 
   eq(claude.wait_for_process_end(pid), true)
 end
