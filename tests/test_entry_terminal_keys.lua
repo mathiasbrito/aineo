@@ -32,6 +32,7 @@ local TWIN_KEYS = {
   { 'c', '<Plug>(aineo-claude)' },
   { 'tcn', '<Plug>(aineo-claude-numbers)' },
   { 'S', '<Plug>(aineo-sessions)' },
+  { 'N', '<Plug>(aineo-new)' },
   { 'pa', '<Plug>(aineo-pane-agent)' },
   { 'g', '<Plug>(aineo-pane-changes)' },
 }

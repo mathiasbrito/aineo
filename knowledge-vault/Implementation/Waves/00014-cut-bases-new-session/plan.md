@@ -188,6 +188,7 @@ They come after T58 is released, with the real Claude Code. No suite runs the re
 
 - **M1.** In a scratch folder, with Claude Code idle and its prompt empty, press `\N`. Does Claude Code clear the conversation, and does Claude's status line show the new session? T46's pasted `/resume` is unmeasured too (wave 11, *Landed*).
 - **M2.** The same, with a turn running. Does Claude Code queue `/clear`, run it at once, or refuse it?
+- **M3** *(added 2026-10-13, T58's fix round, A218, the orchestrator's assumption)*. Type a one-line draft in Claude Code's prompt and move the cursor to its start (Home). aineo reads that prompt as empty (R2's known miss), so `\N` writes `/clear` and Enter in front of the draft. What does Claude Code do with `/clear` followed by the draft: run `/clear` and lose the draft, or send the line as a message?
 
 ## Packets — the six-rules table
 
