@@ -148,3 +148,7 @@ Write it in your definition's shape, to `<scratchpad>/t58-report-packet.md`. Ope
 - the whole suite's counts.
 
 The orchestrator's verification runs `plan.md`'s five T58 mutants. Name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-13, before dispatch
+
+`plan.md` › *The orchestrator's rulings* rules every open decision as its (a), which this brief is written for: A196–A198, A207–A212. They are the orchestrator's assumptions, to record in the session note and the PR body as such, never as the user's decisions.

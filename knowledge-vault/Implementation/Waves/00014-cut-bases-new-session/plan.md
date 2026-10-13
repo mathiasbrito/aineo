@@ -275,6 +275,28 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 4. Enter (`\r`) dropped from the write. The fake sees no command, and no switch follows.
 5. The claim refusal removed. `\N` under a claim of another session writes `/clear` to this Neovim's terminal.
 
+## The orchestrator's rulings — 2026-10-13, before dispatch
+
+Each is the orchestrator's assumption under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish") and the user's "go ahead implement them" of 2026-10-13; none is the user's decision, and D60's proposed parts stand as A204. Each takes the recommendation (a).
+
+- **A196 (O1)** — (a): the wave's shape: stage 1 T56 and T58 in parallel, stage 2 T57 after T56.
+- **A197 (O2)** — (a): models and reviews as planned.
+- **A198 (O3)** — (a): all three are regular packets (the whole suite before each push).
+- **A199 (O4)** — (a): the blob's size from `ls-tree -l`.
+- **A200 (O5)** — (a): a stdout bound in the git runner; a stop at the bound is an answer, a time limit or other signal still a failure.
+- **A201 (O6)** — (a): the commit's file buffer unchanged.
+- **A202 (O7)** — (a): `first_bytes` with `done(nil, text, size)`; the bound stays in the changes home.
+- **A203 (O8)** — (a): Enter's diffs left out of this wave, an open thread.
+- **A204 (O9)** — (a): another worktree's base is its merge base with the working branch, falling back to D32's.
+- **A205 (O10)** — (a): the heading and Enter unchanged.
+- **A206 (O11)** — (a): a failed working-branch read shown under each section.
+- **A207 (O12)** — (a): the key `\N` and its twin `<C-\>N`.
+- **A208 (O13)** — (a): the command `:Aineo new`.
+- **A209 (O14)** — (a): with nothing running, start on a new id, told as a switch.
+- **A210 (O15)** — (a): `/clear` written as a paste plus Enter.
+- **A211 (O16)** — (a): the four refusals, each prefixed `aineo: no new session — `.
+- **A212 (O17)** — (a): while a turn runs, `/clear` is written anyway, as Send writes during a turn (D14); the user's M2 measures what Claude Code does with it.
+
 ## Briefs
 
 - `brief-t56-commit-file-read.md`: T56, stage 1.
