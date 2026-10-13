@@ -20,6 +20,7 @@ local M = {}
 ---@field mcp_servers table<string, table> the MCP servers Claude Code starts, by name, each in its `--mcp-config` server format
 ---@field allowed_tools string[] the tools Claude Code may call without asking the user
 ---@field instructions string the text appended to Claude Code's system prompt
+---@field new_session? boolean start on a new session id even where one is kept for `cwd` (`start_session()`); absent or false resumes the kept session
 ---@field on_terminal_replaced? fun(terminal: integer) called with the new terminal when the session replaces its terminal on its own, as it does when Claude Code finds no conversation to resume (`start_session()`); never for a terminal `start_session()` returns
 ---@field state_directory string the directory under which the session id of each working directory is kept, in `aineo/claude-sessions/`: the editor's state directory
 ---@field editor_address string the editor's server address (`v:servername`), which Claude Code's session hooks tell
@@ -146,6 +147,7 @@ local function validate_settings(settings)
   end, 'a list of strings')
   vim.validate('settings.instructions', settings.instructions, 'string')
   vim.validate('settings.state_directory', settings.state_directory, 'string')
+  vim.validate('settings.new_session', settings.new_session, 'boolean', true)
   vim.validate('settings.on_terminal_replaced', settings.on_terminal_replaced, 'function', true)
   vim.validate('settings.editor_address', settings.editor_address, 'string')
   vim.validate('settings.editor_program', settings.editor_program, 'string')
@@ -192,14 +194,14 @@ end
 --- resume a session id it had no conversation for; it then exited 1.
 local NO_CONVERSATION = 'No conversation found with session ID: '
 
---- The session kept for `settings.cwd`, resumed, or, where none is kept, a
---- new session on a new id.
+--- The session kept for `settings.cwd`, resumed, or, where none is kept or
+--- `settings.new_session` asks for a new one, a new session on a new id.
 ---
 ---@param settings aineo.claude.Settings
 ---@return aineo.claude.SessionChoice
 local function kept_or_new_session(settings)
   local kept = session_ids.kept_session_id(settings.state_directory, settings.cwd)
-  if kept then
+  if kept and not settings.new_session then
     return { id = kept, resumed = true }
   end
   return { id = session_ids.new_session_id(), resumed = false }
@@ -667,10 +669,12 @@ end
 ---
 --- Claude Code resumes the session id kept for `settings.cwd` under
 --- `settings.state_directory` (`--resume`). Where none is kept — or the kept
---- file holds anything but an id of the form aineo makes — it starts on a
---- new id (`--session-id`), kept for that directory from then on, in place
---- of what was kept; an id that cannot be kept is told the user as a
---- warning, and the session starts all the same.
+--- file holds anything but an id of the form aineo makes, or
+--- `settings.new_session` is set — it starts on a new id (`--session-id`),
+--- kept for that directory from then on, in place of what was kept; an id
+--- that cannot be kept is told the user as a warning, and the session starts
+--- all the same. `settings.new_session` changes nothing while a session
+--- runs, and lists no sessions.
 ---
 --- A start that resumes first lists the sessions of `settings.cwd`
 --- (`agents.list_sessions()`, bounded at 5 s) and launches Claude Code, in

@@ -25,8 +25,18 @@ end
 vim.g.loaded_aineo = true
 
 --- `:Aineo`'s subcommands, in the order it offers them.
-local SUBCOMMANDS =
-  { 'send', 'open', 'report', 'input', 'claude', 'claude-numbers', 'sessions', 'pane', 'claim' }
+local SUBCOMMANDS = {
+  'send',
+  'open',
+  'report',
+  'input',
+  'claude',
+  'claude-numbers',
+  'sessions',
+  'new',
+  'pane',
+  'claim',
+}
 
 --- The words each subcommand that takes one is followed by, in the order
 --- `:Aineo` offers them: `pane` takes the pane to show.
@@ -597,15 +607,18 @@ end
 --- the hand-over on when they showed the dead one — and then each session
 --- Claude Code switches to; not before, and nothing for a start that never
 --- becomes ready (`follow_confirmed_start()`,
---- `follow_switch_once_confirmed()`). Once a start has succeeded, the
+--- `follow_switch_once_confirmed()`). With `new_session` the start is on a
+--- new session id, not the kept one, and lists no sessions (`aineo.claude`'s
+--- `start_session()`). Once a start has succeeded, the
 --- changes home is told the session began there (`aineo.changes`'s
 --- `begin_session()`, which heeds its first call alone), in Claude Code's
 --- working directory, with the layout's `show_diff()` to show its diffs in
 --- the middle column and the configuration's `changes.working_branch`.
 ---
 ---@param config table the resolved configuration
+---@param new_session? boolean start on a new session id rather than resume the kept one
 ---@return integer terminal
-local function started_claude_terminal(config)
+local function started_claude_terminal(config, new_session)
   local report = require('aineo.report')
   local mcp = require('aineo.mcp')
   local working_directory = vim.fn.getcwd()
@@ -618,6 +631,7 @@ local function started_claude_terminal(config)
     allowed_tools = mcp.allowed_mcp_tools(),
     instructions = report.report_instructions(mcp.report_tool_name()),
     state_directory = kept_places().state_directory,
+    new_session = new_session,
     editor_address = vim.v.servername,
     editor_program = vim.v.progpath,
     on_terminal_replaced = replacement.on_terminal_replaced,
@@ -681,15 +695,24 @@ local function arrangement(config, claude_buffer)
   }
 end
 
+--- Opens aineo's layout around `terminal`, Claude's, or restores the layout
+--- while it is open. Input is then handed to the draft home
+--- (`keep_input_draft()`).
+---
+---@param config table the resolved configuration
+---@param terminal integer
+local function open_layout_around(config, terminal)
+  require('aineo.layout').open(arrangement(config, terminal))
+  keep_input_draft()
+end
+
 --- Opens aineo's layout around the Claude session, starting it when none
 --- runs — a new one once the last has exited — or restores the layout while
 --- it is open. The session's terminal is shown in the tick it starts in
---- (`aineo.claude`'s `start_session()`). Input is then handed to the draft
---- home (`keep_input_draft()`).
+--- (`aineo.claude`'s `start_session()`).
 local function open()
   local config = resolved_config()
-  require('aineo.layout').open(arrangement(config, started_claude_terminal(config)))
-  keep_input_draft()
+  open_layout_around(config, started_claude_terminal(config))
 end
 
 --- Moves the cursor to the layout's window for `role`. When that window is
@@ -1013,13 +1036,15 @@ local TERMINAL_MODE_PATIENCE_MS = 1000
 --- in `terminal`, Claude's terminal: at once, scheduled, when it is
 --- entered already; else at the next `TermEnter` in it, which must come
 --- within `TERMINAL_MODE_PATIENCE_MS`. Past that time `callback` is never
---- called, `on_timeout` is, and the user is told Claude's window did not
---- enter Terminal mode.
+--- called, `on_timeout` is, and the user is told, with one warning that
+--- begins `outcome`, the words of what was not done, that Claude's window
+--- did not enter Terminal mode.
 ---
 ---@param terminal integer
+---@param outcome string
 ---@param callback fun()
 ---@param on_timeout fun()
-local function after_entering_terminal_mode(terminal, callback, on_timeout)
+local function after_entering_terminal_mode(terminal, outcome, callback, on_timeout)
   if vim.api.nvim_get_current_buf() == terminal and vim.api.nvim_get_mode().mode == 't' then
     vim.schedule(callback)
     return
@@ -1037,10 +1062,7 @@ local function after_entering_terminal_mode(terminal, callback, on_timeout)
     if not entered then
       vim.api.nvim_del_autocmd(autocommand)
       on_timeout()
-      vim.notify(
-        NOT_SWITCHED .. 'Claude’s window did not enter Terminal mode',
-        vim.log.levels.WARN
-      )
+      vim.notify(outcome .. 'Claude’s window did not enter Terminal mode', vim.log.levels.WARN)
     end
   end, TERMINAL_MODE_PATIENCE_MS)
 end
@@ -1075,15 +1097,45 @@ local function return_to(origin)
   end
 end
 
+--- Moves to Claude's window in Terminal mode (`focus_claude()`) and, once
+--- there, writes `command` as a bracketed paste followed by Enter, in one
+--- write as Send writes (`aineo.send`), unless the prompt shows text
+--- (`aineo.claude`'s `prompt_shows_text()`, read in Terminal mode). When it
+--- shows text it writes nothing, puts the cursor back where it was
+--- (`return_to()`) and tells the user `prompt_holds_text`, as a warning.
+--- When Terminal mode is not entered it writes nothing either, puts the
+--- cursor back, and tells the user so with a warning that begins `outcome`.
+--- Claude Code must be running and ready (`refuses_while_not_ready()`).
+---
+---@param outcome string the words that begin a warning of what was not done
+---@param prompt_holds_text string
+---@param command string
+local function write_command_at_empty_prompt(outcome, prompt_holds_text, command)
+  local claude = require('aineo.claude')
+  local terminal = claude_terminal
+  local origin = { window = vim.api.nvim_get_current_win(), mode = vim.api.nvim_get_mode().mode }
+  focus_claude()
+  after_entering_terminal_mode(terminal, outcome, function()
+    run(function()
+      if claude.prompt_shows_text(vim.api.nvim_get_current_win()) then
+        return_to(origin)
+        vim.notify(prompt_holds_text, vim.log.levels.WARN)
+        return
+      end
+      claude.write_to_session(PASTE_START .. command .. PASTE_END .. '\r')
+    end)
+  end, function()
+    return_to(origin)
+  end)
+end
+
 --- Switches Claude Code to `listed`, a session whose id is a session id:
---- moves to Claude's window in Terminal mode (`focus_claude()`) and, once
---- there, writes `/resume <session id>` as a bracketed paste followed by
---- Enter, in one write as Send writes (`aineo.send`), which Claude Code
---- answers by switching and aineo follows (`aineo.claude`'s
---- `on_session_switched`). Does nothing, and tells the user why, when Claude
---- Code is not ready (`refuses_while_not_ready()`), when a claim of another
---- session holds (`refuses_while_claimed()`), when the prompt shows text
---- (`aineo.claude`'s `prompt_shows_text()`, read in Terminal mode), and when
+--- writes `/resume {session id}` at Claude's empty prompt
+--- (`write_command_at_empty_prompt()`), which Claude Code answers by
+--- switching and aineo follows (`aineo.claude`'s `on_session_switched`).
+--- Does nothing, and tells the user why, when Claude Code is not ready
+--- (`refuses_while_not_ready()`), when a claim of another session holds
+--- (`refuses_while_claimed()`), when the prompt shows text, and when
 --- Terminal mode is not entered; then it also puts the cursor back where it
 --- was (`return_to()`).
 ---
@@ -1092,22 +1144,7 @@ local function switch_to_session(listed)
   if refuses_while_not_ready(NOT_SWITCHED) or refuses_while_claimed(NOT_SWITCHED) then
     return
   end
-  local claude = require('aineo.claude')
-  local terminal = claude_terminal
-  local origin = { window = vim.api.nvim_get_current_win(), mode = vim.api.nvim_get_mode().mode }
-  focus_claude()
-  after_entering_terminal_mode(terminal, function()
-    run(function()
-      if claude.prompt_shows_text(vim.api.nvim_get_current_win()) then
-        return_to(origin)
-        vim.notify(PROMPT_HOLDS_TEXT, vim.log.levels.WARN)
-        return
-      end
-      claude.write_to_session(PASTE_START .. '/resume ' .. listed.session_id .. PASTE_END .. '\r')
-    end)
-  end, function()
-    return_to(origin)
-  end)
+  write_command_at_empty_prompt(NOT_SWITCHED, PROMPT_HOLDS_TEXT, '/resume ' .. listed.session_id)
 end
 
 --- Whether a pick of `listed` must switch nothing for where the session
@@ -1220,6 +1257,47 @@ local function list_sessions()
   end)
 end
 
+--- What `:Aineo new` begins its warnings with when it does nothing.
+local NO_NEW_SESSION = 'aineo: no new session — '
+
+--- What `:Aineo new` tells the user, as a warning, when the prompt of
+--- Claude Code shows text.
+local NEW_PROMPT_HOLDS_TEXT = NO_NEW_SESSION
+  .. 'the prompt holds text; clear it, then press the key again'
+
+--- Starts Claude Code on a new session id (`aineo.claude`'s
+--- `start_session()` with a new session asked for) in the place of the one
+--- that has exited, or in a layout opened around it, and moves the cursor
+--- to Claude's window in Terminal mode (`focus_claude()`).
+local function start_new_session()
+  local config = resolved_config()
+  open_layout_around(config, started_claude_terminal(config, true))
+  focus_claude()
+end
+
+--- What `:Aineo new` does: a new Claude Code session. When Claude Code
+--- runs no session in this editor — it has not started, has exited, or its
+--- terminal was wiped — it starts one on a new id (`start_new_session()`);
+--- when it runs and is ready it writes `/clear` at its empty prompt
+--- (`write_command_at_empty_prompt()`). Does nothing, and tells the user
+--- why, with one warning that begins `NO_NEW_SESSION`, when a claim of
+--- another session holds, when Claude Code is starting or behind a dialog,
+--- when the prompt shows text, and when Terminal mode is not entered.
+local function new_session()
+  if refuses_while_claimed(NO_NEW_SESSION) then
+    return
+  end
+  local status = require('aineo.claude').session_status()
+  if status == nil or status == 'exited' then
+    start_new_session()
+    return
+  end
+  if refuses_while_not_ready(NO_NEW_SESSION) then
+    return
+  end
+  write_command_at_empty_prompt(NO_NEW_SESSION, NEW_PROMPT_HOLDS_TEXT, '/clear')
+end
+
 --- What each of `:Aineo`'s arguments in `ACTION_ARGUMENTS` does.
 ---@type table<string, fun()>
 local ACTIONS = {
@@ -1241,6 +1319,7 @@ local ACTIONS = {
     require('aineo.layout').toggle_claude_numbers()
   end,
   sessions = list_sessions,
+  new = new_session,
   ['pane agent'] = function()
     focus_pane('agent')
   end,
@@ -1350,6 +1429,7 @@ local PREFIX_KEYS = {
   claude = 'c',
   ['claude-numbers'] = 'tcn',
   sessions = 'S',
+  new = 'N',
   ['pane agent'] = 'pa',
   ['pane changes'] = 'g',
 }
@@ -1654,5 +1734,5 @@ end, {
   nargs = '*',
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, pane agent|changes or claim [id]',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes or claim [id]',
 })
