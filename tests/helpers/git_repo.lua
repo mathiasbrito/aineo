@@ -111,6 +111,55 @@ function M.create(name, files)
   return top, M.commit_all(top, 'base')
 end
 
+--- Makes `.tests/fixtures/git-<name>/repo` hold one commit, `base`, on
+--- `main`, with a remote `origin` whose branch `dev` is `base` too, and
+--- `.tests/fixtures/git-<name>/landing`, a clone of that remote on `dev`,
+--- where the work that lands in the remote is made (`M.land_in_remote()`).
+--- The base holds `files` (path to lines), `a.txt` with one line when not
+--- given.
+---
+---@param name string
+---@param files? table<string, string[]>
+---@return string top the repository's top level
+---@return string base the commit's full id
+---@return string clone the clone's top level
+function M.create_with_remote(name, files)
+  local top, base = M.create(name, files or { ['a.txt'] = { 'one' } })
+  local directory = vim.fs.dirname(top)
+  local remote = vim.fs.joinpath(directory, 'remote.git')
+  M.git(directory, { 'init', '--quiet', '--bare', '--initial-branch=main', remote })
+  M.git(top, { 'remote', 'add', 'origin', remote })
+  M.git(top, { 'push', '--quiet', 'origin', 'main:dev' })
+  local clone = vim.fs.joinpath(directory, 'landing')
+  M.git(directory, { 'clone', '--quiet', '--branch', 'dev', remote, clone })
+  return top, base, clone
+end
+
+--- Lands a commit in the remote's `dev`: `clone`, as `M.create_with_remote()`
+--- made it, commits `files` (path to lines) with `message` and pushes it.
+--- The repository `top` has not fetched it yet (`M.fetch_remote()`).
+---
+---@param clone string
+---@param files table<string, string[]>
+---@param message string
+---@return string commit the commit's full id
+function M.land_in_remote(clone, files, message)
+  for path, lines in pairs(files) do
+    M.write(clone, path, lines)
+  end
+  local commit = M.commit_all(clone, message)
+  M.git(clone, { 'push', '--quiet', 'origin', 'dev' })
+  return commit
+end
+
+--- Fetches the remote `origin` into the repository `top`, as any program of
+--- the user's does.
+---
+---@param top string
+function M.fetch_remote(top)
+  M.git(top, { 'fetch', '--quiet', 'origin' })
+end
+
 --- Writes the executable shell script `.tests/fixtures/git-<name>/<file>`
 --- with `lines` after its `#!/bin/sh` line: a stand-in for git, or a program
 --- a git setting names.
