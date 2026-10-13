@@ -463,6 +463,15 @@ T['a switch a window refuses']['leaves the column as it was, says why once, and 
   eq({ refused, entry.windows(child) }, { { AGENT_PANE, 1 }, CHANGES_PANE })
 end
 
+--- Waits, at most `claude_session.PATIENCE_MS`, until the command-line window
+--- of the child is closed: leaving it with `<C-c>` is handled after the keys
+--- have been typed.
+local function wait_for_command_line_window_to_close()
+  vim.wait(claude_session.PATIENCE_MS, function()
+    return child.fn.getcmdwintype() == ''
+  end, 20)
+end
+
 T['a switch refused in the command-line window'] = MiniTest.new_set()
 
 T['a switch refused in the command-line window']['leaves the column as it was, and the key switches once it is closed'] = function()
@@ -472,6 +481,7 @@ T['a switch refused in the command-line window']['leaves the column as it was, a
   child.type_keys('q:', '\\g')
   local told = #entry.messages(child)
   child.type_keys('<C-c>', '<Esc>')
+  wait_for_command_line_window_to_close()
   local after_closing = entry.windows(child)
   entry.press(child, '\\g')
 
@@ -897,6 +907,7 @@ T['a switch to the changes pane, refused'] = MiniTest.new_set({
       function()
         child.type_keys('q:', '\\g')
         child.type_keys('<C-c>', '<Esc>')
+        wait_for_command_line_window_to_close()
       end,
     },
     {
