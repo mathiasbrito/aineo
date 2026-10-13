@@ -133,6 +133,7 @@ T['\\c']["enters Terminal mode on the new Claude it starts once :bwipeout! wiped
 
   child.type_keys('\\c')
   claude_session.wait_for_launch(child, child.lua_get(CLAUDE_WINDOW_BUFFER))
+  child.type_keys('\\c')
   vim.wait(claude_session.PATIENCE_MS, function()
     return child.lua_get(MODE) == 't'
   end, 20)

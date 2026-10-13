@@ -412,8 +412,10 @@ In a scratch folder you trust, where no session you need runs. Read `<id>` as th
 6. In Neovim, run `:terminal claude attach <id>` again, then `:bwipe!`. This is the hang-up that wiping aineo's terminal gives. Repeat step 5: is it still running?
 7. Optional, a busy session. Attach as in step 3 and send `Run "sleep 30" in Bash, then say done`. While it runs, press `Ctrl+Z`. A few seconds later, step 5: is `status` `busy`? Attach again after 30 s: does the conversation show `done`?
 8. Clean up with `claude stop <id>`.
+9. *(added after part 1's attack review; the orchestrator's ruling A195)* A start right after a wipe. In Neovim in the scratch folder, `:Aineo open` and wait until Claude is ready, then `:bwipeout!` Claude's terminal and at once press `\o`. Does aineo tell `aineo: this session is also open in another Claude Code`? Run `claude agents --json --cwd . --all` straight after the wipe and note whether the entry is still listed with a `pid`, and for how long. Part 1 warns on any `interactive` entry of the kept id with a `pid`; if the hung-up Claude Code is still listed, that warning is false right after a wipe.
+10. *(same ruling)* Whether the list starts or stops Claude Code's background service. Part 1 runs `claude agents --json` before every start that resumes. With a background session running, start Neovim in the folder a few times and note, by `ps`, whether a background service process appears or goes away, and whether a running background session stops about a minute after (the changelog for 2.1.295 says a `claude agents` stopped with its background service does that).
 
-Report steps 2–7 as you saw them, with names and ids left out. Part 2 is planned as written when steps 3, 4 and 5 hold. If step 3 shows nothing, even after `Ctrl+L`, the attach does not render in Neovim's terminal, and part 2 is re-planned.
+Report steps 2–7, 9 and 10 as you saw them, with names and ids left out. Part 2 is planned as written when steps 3, 4 and 5 hold. If step 3 shows nothing, even after `Ctrl+L`, the attach does not render in Neovim's terminal, and part 2 is re-planned.
 
 ## Verification mutants — round 4
 
