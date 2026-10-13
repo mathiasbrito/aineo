@@ -135,3 +135,18 @@ The orchestrator's verification runs `plan.md`'s five T57 mutants. Name the test
 ## The orchestrator's rulings — 2026-10-13, before dispatch
 
 `plan.md` › *The orchestrator's rulings* rules every open decision as its (a), which this brief is written for: A196–A198, A204–A206. They are the orchestrator's assumptions, to record in the session note and the PR body as such, never as the user's decisions.
+
+## Amendment — 2026-10-13, at dispatch: T56 merged
+
+The orchestrator's assumption (A220, as A179 was), recorded by the implementer who re-checked this brief against `origin/dev` `0fa01e4`, the `dev` T56 left. Nothing below changes what is built.
+
+**Facts that moved** (`0fa01e4`; the body's numbers are `7856882`'s):
+
+- `tests/helpers/git_repo.lua` gained `FILE_AT_COMMIT` (T56). It is an addition the new helper sits beside; the brief's "additions only" holds.
+- `doc/aineo.txt`: *aineo-changes* gained T56's sentences on the commit file's cut, near line 345, and LIMITS › `The changes pane ~` gained a bullet on a large file under a commit, before `A large repository`. Neither touches the sentence on another worktree's base (lines 291–296 hold at their numbers); this packet's LIMITS lines go beside T56's.
+- `lua/aineo/changes/init.lua` changed in T56's regions only (the commit file's read and the size). `window_read()` (298), the call `worktrees.read_other_worktrees({ … })` (325), `read_worktree_files()` (363) and its `worktrees.read_worktree(…)` (372) keep the numbers the brief gives for the calls; `read_landed()` passes `session.settings.working_branch` as before (585).
+- `lua/aineo/changes/worktrees.lua` and `landed.lua` are untouched by T56: `read_section()` 96, `read_worktree()` 147, `read_other_worktrees()` 170, `find_name()` 37, `Landed.read()` 55.
+- Behaviour 6, checked in the source: `follow_change()` calls `read_files(change.files_changed or change.branch_moved)` and `read_commits(change.branch_moved or change.references_changed)`. A fetch (`references_changed`) therefore reads the other worktrees again through the commits window, and `read_files()` asks for the files window again whenever the selected filter is a worktree's whole change. Neither is a spec conflict.
+- Baseline, measured on `0fa01e4` with Neovim 0.12.5: `tests/test_changes_worktrees.lua` runs 50 cases, all green.
+
+**Facts that hold:** behaviours 1–7, the boundary and the tests stand as written.

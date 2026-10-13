@@ -291,11 +291,18 @@ commits in this worktree". With no other worktree, the pane shows only your
 own lines. A worktree git marks
 prunable, one whose directory is gone, locked or not, and the directory of
 a bare repository are left out; a locked one is listed. A worktree's base
-is read again at each read and never kept: its merge base with the
-upstream of the branch your own worktree is on, with that branch when it
-has no upstream, or with your `HEAD` when it is detached. A worktree that
-shares no history with yours, or has no commit yet, is listed with no
-base: every file new, every commit its own.
+is read again at each read and never kept: its merge base with the commit
+the working branch names now (above), so that its commits are what a pull
+request of its branch into the working branch would hold, and its whole
+change also includes the files changed in its working tree, uncommitted and
+untracked ones. Where the working branch gives no base - you have none, its
+name names no commit, or the worktree shares no history with it - the base
+is its merge base with the upstream of the branch your own worktree is on,
+with that branch when it has no upstream, or with your `HEAD` when it is
+detached. A worktree that shares no history with that either, or has no
+commit yet, is listed with no base: every file new, every commit its own.
+When the working branch cannot be read, each worktree's section says why,
+over what it listed before.
 
 Enter on a file's line shows its unified diff in the middle column (the
 file column, below), within what the files window lists: from the base
@@ -1975,6 +1982,15 @@ The changes pane ~
   only that its read failed: git gives that path on lines of its own.
   Once a worktree's branch is merged by rebase, its commits stay listed
   under it until the worktree is removed.
+- A worktree's base counts from the working branch, whatever your own
+  worktree is on: a worktree forked from your own feature branch lists that
+  branch's commits the working branch does not hold yet, besides its own,
+  and so do the files of its whole change. Each read of the commits window
+  reads the working branch's commit twice, once for the worktrees, however
+  many, and once for what landed (a git process each, and one more each to
+  find the remote's default branch unless the setting names a branch); the
+  files window under a worktree's whole change reads it once. Your upstream
+  is read only when a worktree gets no base from the working branch.
 - When the editor quits, aineo stops its watch, but a git it is running
   then runs to its end, outliving the editor.
 - A buffer named for a diff that aineo did not make, such as one a restored

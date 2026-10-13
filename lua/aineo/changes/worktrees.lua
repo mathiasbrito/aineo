@@ -3,6 +3,7 @@
 --- worktree's commits; for the files window, one worktree's files.
 
 local git = require('aineo.git')
+local working_branch = require('aineo.changes.working_branch')
 
 local M = {}
 
@@ -32,11 +33,58 @@ M.NONE = { sections = {} }
 ---@field found aineo.git.Repository the editor's repository
 ---@field before aineo.changes.OtherWorktrees what the window knew of the other worktrees before this read
 ---@field read_list aineo.changes.ReadList reads the window's list for a worktree
+---@field working_branch? string the branch the user's setting names; the remote's default branch when not given
 ---@field git? aineo.git.Options how the git home runs git
 
 --- What a read of the other worktrees, for one window, starts from.
 ---@class aineo.changes.WorktreesRead: aineo.changes.WorktreeRead
 ---@field before_each_worktree fun(proceed: fun()) runs before each worktree's read, which starts once it calls `proceed()`
+
+--- What the bases of one read are taken against.
+---@class aineo.changes.BaseSources
+---@field working_commit string|nil the commit the working branch names now; nil when it gives none: no working branch, or a name that names no commit
+---@field comparison fun(done: fun(failure: aineo.git.Failure|nil, commit: string|nil)) reads the editor's comparison commit (`git.comparison_commit()`), on its first call alone; a later call is answered with the first call's answer
+
+--- The function that reads the editor's comparison commit for one read, once
+--- however many worktrees need it, and answers every later call with the
+--- first answer, a failure included.
+---
+---@param read aineo.changes.WorktreeRead
+---@return fun(done: fun(failure: aineo.git.Failure|nil, commit: string|nil))
+local function comparison_read_once(read)
+  local answered, answered_failure, answered_commit = false, nil, nil
+  return function(done)
+    if answered then
+      done(answered_failure, answered_commit)
+      return
+    end
+    git.comparison_commit(read.found, function(failure, commit)
+      answered, answered_failure, answered_commit = true, failure, commit
+      done(failure, commit)
+    end, read.git)
+  end
+end
+
+--- Reads what the bases of one read are taken against: the commit the
+--- working branch names now (`working_branch.read()`), once, and calls
+--- `done(nil, sources)`; or `done(failure)` when the working branch's name
+--- or commit cannot be read.
+---
+---@param read aineo.changes.WorktreeRead
+---@param done fun(failure: aineo.git.Failure|nil, sources: aineo.changes.BaseSources|nil)
+local function read_base_sources(read, done)
+  working_branch.read({
+    repository = read.found,
+    working_branch = read.working_branch,
+    git = read.git,
+  }, function(failure, _, commit)
+    if failure then
+      done(failure)
+      return
+    end
+    done(nil, { working_commit = commit, comparison = comparison_read_once(read) })
+  end)
+end
 
 --- The section of `before` for the worktree at `top`, or nil when it has
 --- none.
@@ -81,19 +129,71 @@ local function unread_section(read, worktree)
   return section
 end
 
---- Reads `worktree`'s list (`read.read_list`) from its base against the
---- commit `comparison` (`git.worktree_base()`), and calls `done(section)`;
---- when the list cannot be read, the section says why and keeps what the
---- window last listed for the worktree (`unread_section()`), if anything —
---- unless the worktree's directory is gone by then, removed while it was
---- read, when it calls `done(nil)`, as it does when git finds the directory
---- in another repository than that worktree (`is_listed_worktree()`).
+--- The section of `worktree` for a read that failed before the worktree's
+--- own was begun: `unread_section()` saying why.
 ---
 ---@param read aineo.changes.WorktreeRead
 ---@param worktree aineo.git.Worktree
----@param comparison string|nil
+---@param failure aineo.git.Failure
+---@return aineo.changes.WorktreeSection
+local function failed_section(read, worktree, failure)
+  local section = unread_section(read, worktree)
+  section.failure = failure
+  return section
+end
+
+--- Reads the base of `repository`, the worktree's: its merge base with the
+--- commit the working branch names (`sources.working_commit`), else, where
+--- that gives none — no working branch, a name that names no commit, no
+--- shared history — its merge base with the editor's comparison commit
+--- (`sources.comparison`). Calls `done(nil, base)`, `base` nil when neither
+--- gives one, and at once, reading neither, for a worktree with no commit
+--- yet; or `done(failure)`.
+---
+---@param read aineo.changes.WorktreeRead
+---@param sources aineo.changes.BaseSources
+---@param repository aineo.git.Repository
+---@param done fun(failure: aineo.git.Failure|nil, base: string|nil)
+local function read_base(read, sources, repository, done)
+  if not repository.head then
+    done(nil, nil)
+    return
+  end
+  local function against_comparison()
+    sources.comparison(function(failure, comparison)
+      if failure then
+        done(failure)
+        return
+      end
+      git.worktree_base(repository, comparison, done, read.git)
+    end)
+  end
+  if not sources.working_commit then
+    against_comparison()
+    return
+  end
+  git.worktree_base(repository, sources.working_commit, function(failure, base)
+    if failure or base then
+      done(failure, base)
+    else
+      against_comparison()
+    end
+  end, read.git)
+end
+
+--- Reads `worktree`'s list (`read.read_list`) from its base
+--- (`read_base()`), and calls `done(section)`; when the list cannot be
+--- read, the section says why and keeps what the window last listed for the
+--- worktree (`unread_section()`), if anything — unless the worktree's
+--- directory is gone by then, removed while it was read, when it calls
+--- `done(nil)`, as it does when git finds the directory in another
+--- repository than that worktree (`is_listed_worktree()`).
+---
+---@param read aineo.changes.WorktreeRead
+---@param worktree aineo.git.Worktree
+---@param sources aineo.changes.BaseSources
 ---@param done fun(section: aineo.changes.WorktreeSection|nil)
-local function read_section(read, worktree, comparison, done)
+local function read_section(read, worktree, sources, done)
   local section = unread_section(read, worktree)
   local function or_failed(proceed)
     return function(failure, ...)
@@ -114,9 +214,10 @@ local function read_section(read, worktree, comparison, done)
         done(nil)
         return
       end
-      git.worktree_base(
+      read_base(
+        read,
+        sources,
         repository,
-        comparison,
         or_failed(function(base)
           read.read_list(
             repository,
@@ -126,8 +227,7 @@ local function read_section(read, worktree, comparison, done)
               done(section)
             end)
           )
-        end),
-        read.git
+        end)
       )
     end),
     read.git
@@ -135,35 +235,33 @@ local function read_section(read, worktree, comparison, done)
 end
 
 --- Reads the list of `worktree` alone (`read.read_list`), from its base
---- against the editor's repository's comparison commit, both read now
---- (`git.comparison_commit()`, `read_section()`), and calls `done(section)`:
---- the section holds the list, or says why it could not be read, over what
---- `read.before` knew of the worktree (`unread_section()`); `done(nil)` when
---- the worktree's directory is gone by then.
+--- (`read_base()`), the commit the working branch names read now
+--- (`read_base_sources()`), and calls `done(section)`: the section holds
+--- the list, or says why it could not be read, over what `read.before` knew
+--- of the worktree (`unread_section()`); `done(nil)` when the worktree's
+--- directory is gone by then.
 ---
 ---@param read aineo.changes.WorktreeRead
 ---@param worktree aineo.git.Worktree
 ---@param done fun(section: aineo.changes.WorktreeSection|nil)
 function M.read_worktree(read, worktree, done)
-  git.comparison_commit(read.found, function(failure, comparison)
+  read_base_sources(read, function(failure, sources)
     if failure then
-      local section = unread_section(read, worktree)
-      section.failure = failure
-      done(section)
+      done(failed_section(read, worktree, failure))
       return
     end
-    read_section(read, worktree, comparison, done)
-  end, read.git)
+    read_section(read, worktree, sources, done)
+  end)
 end
 
 --- Lists the worktrees of the editor's repository, `read.found`, other than
---- its own, reads once the commit their bases are taken against
---- (`git.comparison_commit()`), and reads each one's list
---- (`read_section()`), one after another, each once
---- `read.before_each_worktree` lets it start, then calls `done(others)`.
---- When the worktrees cannot be listed, `done(others)` says why, with the
---- sections the window knew before; when the commit cannot be read, each
---- section says why, over what the window last listed for it.
+--- its own, reads once what their bases are taken against
+--- (`read_base_sources()`), and reads each one's list (`read_section()`),
+--- one after another, each once `read.before_each_worktree` lets it start,
+--- then calls `done(others)`. When the worktrees cannot be listed,
+--- `done(others)` says why, with the sections the window knew before; when
+--- the working branch cannot be read, each section says why, over what the
+--- window last listed for it.
 ---
 ---@param read aineo.changes.WorktreesRead
 ---@param done fun(others: aineo.changes.OtherWorktrees)
@@ -180,13 +278,11 @@ function M.read_other_worktrees(read, done)
       done({ sections = {} })
       return
     end
-    git.comparison_commit(read.found, function(comparison_failure, comparison)
-      if comparison_failure then
+    read_base_sources(read, function(sources_failure, sources)
+      if sources_failure then
         done({
           sections = vim.tbl_map(function(worktree)
-            local section = unread_section(read, worktree)
-            section.failure = comparison_failure
-            return section
+            return failed_section(read, worktree, sources_failure)
           end, others),
         })
         return
@@ -198,7 +294,7 @@ function M.read_other_worktrees(read, done)
           return
         end
         read.before_each_worktree(function()
-          read_section(read, others[index], comparison, function(section)
+          read_section(read, others[index], sources, function(section)
             if section then
               table.insert(sections, section)
             end
@@ -207,7 +303,7 @@ function M.read_other_worktrees(read, done)
         end)
       end
       read_from(1)
-    end, read.git)
+    end)
   end, read.git)
 end
 

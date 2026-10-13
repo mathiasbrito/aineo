@@ -358,12 +358,13 @@ end
 
 --- Reads the base of `worktree`, a worktree of the repository other than
 --- the editor's: the merge base of its `HEAD` and the commit `comparison`,
---- as `M.comparison_commit()` read it from the editor's. Calls `done(nil,
+--- any commit: the one the working branch names, or the one
+--- `M.comparison_commit()` read from the editor's worktree. Calls `done(nil,
 --- base)`, nil when they share no history or either has no commit yet, or
 --- `done(failure)`.
 ---
 ---@param worktree aineo.git.Worktree as `M.list_worktrees()` or `M.find_repository()` gave it
----@param comparison string|nil the full id of the commit, nil when the editor's worktree has no commit yet
+---@param comparison string|nil the full id of the commit, nil when there is no commit to compare with
 ---@param done fun(failure: aineo.git.Failure|nil, base: string|nil)
 ---@param options? aineo.git.Options
 function M.worktree_base(worktree, comparison, done, options)
