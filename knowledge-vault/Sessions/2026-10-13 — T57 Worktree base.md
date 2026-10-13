@@ -31,7 +31,7 @@ Git processes started by the first showing of the pane, one other worktree, coun
 
 Seen red, for the intended reason (read from the output): units 1, 2 and 3 — the commits window and the files window listed the landed commit and `landed.txt` besides the agent's own (D32's base, the editor being at the older commit); Enter on the heading read the same.
 
-Arrived green, with the reason: units 4–12. Units 1–3 were made green by the whole of the base logic, because the fifty cases of `tests/test_changes_worktrees.lua` that were green before had to stay green, which needs the fallback to D32 in the same step; each of the later cases therefore passed when first run. Each was then seen red under a mutant (below): unit 4 under M8; 5 under M3; 6 under M2; 7 under M2 and M6; 8 under M2 and M9; 9 under M3, M8 and M6; 10 and 11 under M1, M3 and M8; 12 under M4.
+Arrived green, with the reason: units 4–12. Units 1–3 were made green by the whole of the base logic, because the fifty cases of `tests/test_changes_worktrees.lua` that were green before had to stay green, which needs the fallback to D32 in the same step; each of the later cases therefore passed when first run. Each was then seen red under a mutant (below): unit 4 under M10; 5 under M3; 6 under M2; 7 under M2 and M6; 8 under M2 and M9; 9 under M3, M8 and M6; 10 and 11 under M1, M3 and M8; 12 under M4.
 
 ## Mutants
 
@@ -43,10 +43,31 @@ Each row is the literal edit (file: before → after), applied to the tree as pu
 | M2 (plan 2) | `worktrees.lua`: `local function against_comparison()` → the same followed by `if true then done(nil, nil) return end` (no fallback) | killed by assertion: "…where there is no working branch" (`base` listed), "…names no commit" and "…shares no history" |
 | M3 (plan 3) | `worktrees.lua`: `working_branch = read.working_branch,` → `working_branch = nil,` (the setting ignored by the worktree reads) | killed by assertion: 8 cases, among them "…not from the remote’s default branch" |
 | M4 (plan 4) | `worktrees.lua`: `done(nil, { working_commit = commit,` → `KEPT_COMMIT = KEPT_COMMIT or commit` then `done(nil, { working_commit = KEPT_COMMIT,` (the commit kept from the first read) | killed by assertion: "moves with the working branch once a fetch moves it" (the files window keeps `A agent.txt`) |
-| M5 (plan 5) | `entry_diff.lua`: `git.diff_since(repository, worktree.base, done, options)` → `git.diff_since(repository, nil, done, options)` (Enter on the heading reads from a base that is not the list's; the stand-in for D32's base, which would need a second read of the worktree) | killed by assertion: "shows its whole change since the working branch on Enter on the heading" (`a.txt` in the diff) |
+| M5 (plan 5), first run | `entry_diff.lua`: `git.diff_since(repository, worktree.base, done, options)` → `git.diff_since(repository, nil, done, options)` (a stand-in: Enter on the heading reads from a base that is not the list's) | killed by assertion: "shows its whole change since the working branch on Enter on the heading" (`a.txt` in the diff) |
+| M5 (plan 5), literal | `worktrees.lua` `read_section()`: store `section.base` as the merge base with `sources.comparison` (D32's) instead of the base the list was read from, i.e. `section.repository, section.base, section.listed = repository, base, listed` → the same with `git.worktree_base(repository, comparison, …)`'s answer in place of `base`, inside `sources.comparison(function(_, comparison) … end)` | measured in the fix round, killed by assertion: 4 cases — Enter on the heading (`diff --git a/landed.txt` among the headers), the file diff on Enter and `l`, the read-once count (`@{upstream}` 1, not 0), the worktree with no commit |
 | M6 | `worktrees.lua`: `if answered then` → `if false then` (D32's comparison read for every worktree) | killed by assertion: "…names no commit" (the `@{upstream}` count is 2, not 1) |
+| M10 | `working_branch.lua`: `elseif name then` → `elseif false then` (the remote's default branch is never read as the working branch) | killed by assertion: unit 4, "is counted from the remote’s default branch when the setting names none" (M8 ignores the setting and does not touch it) |
 | M8 | `working_branch.lua`: `if read.working_branch then` → `if false then` (the setting ignored by the name read, *Landed* too) | killed by assertion: 10 cases |
 | M9 | `worktrees.lua`: `if failure or base then` → `if failure or true then` (no fallback where there is no shared history with the working branch) | killed by assertion: "…shares no history with the working branch" |
+
+## Fix round
+
+The two reviews of PR #196 (attack on Opus; tests and records on Sonnet) found the fallback and failure paths unpinned. The orchestrator's rulings A221 (the two git-home docstrings made false) and A222 (a worktree with no commit reads no base) are its assumptions under the user's instruction of 2026-10-06, not the user's decisions.
+
+- **Attack 1.** A failed read of D32's comparison was pinned by nothing: the old case ("…when the editor’s branch cannot be read") breaks `symbolic-ref`, which the name read of `origin/HEAD` now meets first. Added "…whose base needs the editor’s comparison commit, the setting naming no commit" and "…the worktree whose base needs the editor’s comparison commit when that cannot be read, the others as ever" (an unrelated worktree fails, the one based on the working branch keeps its list with no failure line). The old case is retitled "…when the remote’s default branch cannot be read". Green on the head; killed MA by assertion.
+- **Attack 2.** "…when the merge base with the working branch’s commit cannot be read, not counting from the editor’s comparison commit", a stand-in failing `merge-base` of that worktree against the landed commit. Green on the head; killed ME by assertion.
+- **Attack 3.** "shows the diff of a file of its whole change from the working branch on Enter and on l": the landed commit and the agent both change `a.txt`, and both keys show `+agent` alone. Green on the head; killed MF and the literal D32-base mutant by assertion.
+- **Attack 4 (A222).** Red first: "is not read at all for a worktree with no commit yet, the editor’s comparison commit neither" (one `@{upstream}` run where none is wanted). `read_base()` answers `done(nil, nil)` for a repository with no `head` before reading anything. Killed MH by assertion.
+- **Records.** LIMITS says the working branch's commit is read twice by a commits-window read (the worktrees and *Landed*) and once by the files window under a worktree's whole change; *aineo-changes* says a worktree's whole change includes its uncommitted and untracked files. The docstrings of `git.worktree_base()` (`git/init.lua` and `git/worktrees.lua`) say the commit is the working branch's or the editor's comparison; the git home's code is untouched (A221). This note's unit 4 is attributed to M10, and M5 is measured literally (rows above).
+
+Mutants of the fix round (literal edits, run on the 17 cases of the new group):
+
+| # | Edit | Result |
+|---|---|---|
+| MA | `worktrees.lua` `against_comparison()`: `done(failure)` → `done(nil, nil)` | killed by assertion: 2 cases (the two of attack 1) |
+| ME | `worktrees.lua` `read_base()`: `if failure or base then` → `if base then` | killed by assertion: 1 case (attack 2) |
+| MF | `entry_diff.lua`: `git.file_diff(repository, worktree.base, entry.change, done, options)` → `git.file_diff(repository, nil, entry.change, done, options)` | killed by assertion: 1 case (attack 3) |
+| MH | `worktrees.lua` `read_base()`: `if not repository.head then` → `if false then` | killed by assertion: 1 case (attack 4) |
 
 ## Pins that moved
 
@@ -56,7 +77,7 @@ None. The fifty cases of `tests/test_changes_worktrees.lua`, and `tests/test_cha
 
 - **Facts that held:** behaviour 6 needed nothing; the git home needed nothing; `aineo.changes` still requires `aineo.git` alone; the grep for deep requires prints two lines, both inside `aineo.changes` (`worktrees.lua` and `landed.lua` requiring `aineo.changes.working_branch`).
 - **The brief's step 4 reads D32's comparison "at most once per read of the window and only when it is needed".** It is read lazily by the first worktree that has no base from the working branch, and its answer, a failure included, serves the rest of the read. A failed comparison read now fails the sections that need it, where before it failed all of them upfront; with a working branch that gives every base it is never run.
-- **A worktree with no commit yet** (`worktree_base()` answers nil without running git) triggers the comparison read with the working branch's commit set; its base is nil either way. One avoidable git process in a rare case; not changed.
+- **A worktree with no commit yet** read the comparison commit although its base is nil either way; the fix round (A222) answers it with no base before any git is run.
 - **Follow-up (outside this packet's files):** `tests/test_changes_landed.lua`'s local `with_remote()`, `land()`, `fetch()` can use `git_repo.create_with_remote()`, `land_in_remote()`, `fetch_remote()`.
 - **Help for T58:** no hunk of `doc/aineo.txt` is outside *aineo-changes* and LIMITS › *The changes pane*.
 
