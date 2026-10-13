@@ -446,4 +446,28 @@ Each is the orchestrator's assumption under the user's instruction of 2026-10-06
 
 ## Landed
 
-Not yet.
+Not yet: the wave stays open for T48 part 2 (the question, the attach, the Ctrl+Z stop), which is held for the user's check M16. The frontmatter's status is not changed. Part 1 landed, and is recorded here on 2026-10-14 by the wave 14 knowledge pass, on `dev` `bdc33ce`.
+
+### Part 1 — T48 (the list before a start, the waiting start, the warning), PR #189, merged by rebase (`dev` `7856882`), released in v0.2.29 (PR #190, `main` `fa12b82`)
+
+`f15f80c` … `7856882` on `dev` (7 commits; the branch head was `3a9861b`). Session note: [[Sessions/2026-10-12 — T48 Resume elsewhere]]. The round-4 plan reached `dev` as PR #186, re-applied from PR #179, itself re-applied from PR #170 (no pushed branch was rebased); part 1 was dispatched on `dev` `8ea8f82`, beside T55.
+- **The packet** (whole suite 3040 at 4 jobs, 23 mutants). A start that would resume asks `claude agents --json` where the kept session runs before Claude Code launches, in a waiting buffer named `aineo://claude/<token>`; it warns once when another interactive Claude Code has the session open and resumes it all the same; a failed or slow list resumes as before.
+- **Reviews.**
+  - *Attack (`neovim-claude-code-reviewer`, Opus):* two HIGH. Typing after `\c` while the start waits made the later launch fail (`requires unmodified buffer`) and Claude Code never started; the waiting launch lacked D45's guard against a user typing in Insert mode. Also `:bdelete` of the waiting buffer, a raise in the swap of terminals, a user's `:autocmd! VimLeavePre`, a notifier that raises on the warning, and two stale comments.
+  - *Tests and records (`records-reviewer`, Sonnet):* four TermOpen-failure cases depended on the order of cases in their file; three cases asserted "no error" before the launch they now wait for; a missing case for a kept id with a non-executable `claude.cmd`; records.
+- **Fix round** by the author (A192–A195, below): the waiting buffer is not modifiable and `\c` enters Terminal mode only in a terminal buffer; D45's guard ported with four cases; the launch needs a loaded buffer; the list is asked for before the swap; the warning is told after the launch. Whole suite 3052 at the last code commit.
+- **The orchestrator's check** on `dev` `090f6f6` plus T48 part 1: whole suite 3072 cases, `Fails (0)`, lint clean, the modifiable mutant killed.
+- **Departures.** The fix round widened part 1's boundary to `plugin/aineo.lua`'s Claude focus (A192) and to `agents.lua` (A193). Mutant m4b (`may_launch()`'s "another start has taken this one's place" check) was recorded as equivalent, since the wiped-buffer check always answers first.
+
+### T55 — a small fix under D30 taken in beside part 1, PR #187, merged by rebase (`dev` `090f6f6`), released in v0.2.28 (PR #188, `main` `1fc653d`)
+
+Session note: [[Sessions/2026-10-12 — T55 Pane cursor]]. Dispatched on `dev` `8ea8f82`, from the user's report that the pane keys showed a pane but left the cursor where it was (D59): `\g` and `\pa` move the cursor into the pane they show. `layout.focus_pane()` and the pane action in `plugin/aineo.lua` carry it; part 1 and T55 both change `plugin/aineo.lua` in different places.
+- **The orchestrator's check:** the touched suites `Fails (0)`, lint clean, the cursor-move mutant killed (15). No guarantee review; the diff was read.
+- **Departures.** None recorded.
+
+### Rulings — the orchestrator's assumptions
+
+- **A192** the waiting buffer is not modifiable, and `\c` enters Terminal or Insert mode only in a terminal buffer (the attack review's finding 1).
+- **A193** `pcall` around `nvim_del_autocmd` in `agents.lua`, so a user's `:autocmd! VimLeavePre` cannot keep the list's callback from running.
+- **A194** the two stale comments (`readiness.lua`, `plugin/aineo.lua`) corrected.
+- **A195** the two points that need the real CLI (a hung-up Claude Code still listed right after a wipe; whether `claude agents --json` starts or stops the background service at every resume) are the user's checks, steps 9 and 10 of M16, and no code.

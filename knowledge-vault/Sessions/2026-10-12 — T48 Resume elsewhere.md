@@ -182,4 +182,6 @@ Mutants of the fix round (literal edits, from a copy, restored after, on the fin
 
 ## Commits
 
-Recorded after the merge.
+- PR #189, `bugfix/t48-background-resume`, head `3a9861b` (7 commits), merged by rebase into `dev` as `f15f80c` (the waiting start), `9af4a0a`, `8315098`, `71f4224`, `a44fb35`, `a0b43fe`, `7856882`.
+- Released in v0.2.29 (PR #190, `main` `fa12b82`).
+- Part 2 (ask, attach, stop) is held for the user's M16 and has no commit.

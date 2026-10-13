@@ -121,4 +121,5 @@ Whole suite of the round: `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 mak
 
 ## Commits
 
-Recorded after the merge.
+- PR #193, `feature/t58-new-session`, head `3be8a7f` (3 commits), merged by rebase into `dev` as `6cd29e5` (the key), `474eb32` (this note), `51ec1fa` (the fix round).
+- Released in v0.2.31 (PR #195, `main` `d2b6882`).
