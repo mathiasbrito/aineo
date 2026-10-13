@@ -135,3 +135,7 @@ Write it in your definition's shape, to `<scratchpad>/t56-report-packet.md`. Ope
 - a measurement of `gf` on a fixture file of a few MiB, before and after (time, and `vim.uv.resident_set_memory()`).
 
 The orchestrator's verification runs `plan.md`'s five T56 mutants. Name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-13, before dispatch
+
+`plan.md` › *The orchestrator's rulings* rules every open decision as its (a), which this brief is written for: A196–A203. They are the orchestrator's assumptions, to record in the session note and the PR body as such, never as the user's decisions.
