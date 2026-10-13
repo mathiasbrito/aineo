@@ -342,9 +342,11 @@ Landed heading it shows the file as the working branch's commit has it. The
 buffer is read-only, not modifiable, wiped once hidden, with the 'filetype'
 the path and the content give, so its syntax shows, and holds the bytes git
 printed, cut at 1 MiB; a virtual line under the last line shown says how much
-of the file's whole size is, so that a yank or a `:write` of the buffer
-carries only the file's bytes. git is stopped once the 1 MiB has come, so a
-file of any size costs about as much as 1 MiB.
+of the file's whole size is shown, so that a yank or a `:write` of the
+buffer carries only the file's bytes. aineo takes no more than that 1 MiB
+from git and stops it once it has come, so the editor's memory does not
+grow with the file; git itself may unpack a file stored in a pack whole
+first.
 The cursor moves to its window as it does for a diff, and only the last key's
 file or diff is shown when you press keys again before one was read, a `gf`
 that opens the working tree's file included. A file the
@@ -1812,9 +1814,12 @@ The changes pane ~
   diff first, which takes its time and memory. With the whole file as
   context (`F`) a diff is larger, and the whole diff of a long session is
   cut sooner.
-- A large file under a commit: `gf` reads no more than the 1 MiB it shows,
-  and stops git once it has come; the note under the file gives its whole
-  size, which git listed first.
+- A large file under a commit: `gf` takes no more than the 1 MiB it shows
+  from git and stops it once it has come, so the editor holds about 1 MiB
+  of a file of any size; the note under the file gives its whole size,
+  which git listed first. git itself may unpack a file stored in a pack
+  whole before it prints a byte: it streams one that is not a delta, and
+  unpacks a delta whole.
 - A large repository: each read runs git over the whole working tree. On a
   repository of 20 001 files whose every file had been rewritten with its
   own content, one read took 1.5 to 3.1 seconds. A git that runs past 10
