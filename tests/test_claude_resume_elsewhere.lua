@@ -212,6 +212,22 @@ T['a start that would resume']['lists nothing for the new session that takes the
   eq(#claude.wait_for_listings(fake, 0), 1)
 end
 
+T['a start that would resume']['raises at once, starting nothing, when claude.cmd is not executable'] = function()
+  local fake = fake_listing('resume-elsewhere-not-executable', {})
+  local settings = vim.tbl_extend(
+    'force',
+    keeping_the_session('resume-elsewhere-not-executable'),
+    { cmd = { 'aineo-no-such-claude' } }
+  )
+  local buffers = child.lua_get('#vim.api.nvim_list_bufs()')
+
+  local started, failure = pcall(claude.start, child, fake, settings)
+
+  eq(started, false)
+  eq(failure:find("claude.cmd: 'aineo-no-such-claude' is not executable", 1, true) ~= nil, true)
+  eq({ status(), child.lua_get('#vim.api.nvim_list_bufs()') }, { {}, buffers })
+end
+
 T['a start that waits for the list'] = MiniTest.new_set()
 
 T['a start that waits for the list']['returns its buffer at once, empty, starting on the kept session'] = function()
@@ -358,6 +374,112 @@ T['a start that waits for the list']['tells the user once, as an error, when Cla
   eq(child.api.nvim_buf_is_valid(buffer), false)
 end
 
+--- The Lua, run in the child, that leaves Insert mode and opens a window of
+--- the user's own beside Claude's, holding the lines `one` and `two`, the
+--- cursor on the first.
+local OPEN_USER_WINDOW = [[
+  vim.cmd.stopinsert()
+  vim.cmd('rightbelow vnew')
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'one', 'two' })
+  vim.api.nvim_win_set_cursor(0, { 1, 0 })
+]]
+
+--- The expression, run in the child, that tells the mode it is in, as
+--- `nvim_get_mode()` names it.
+local MODE = 'vim.api.nvim_get_mode().mode'
+
+--- Starts the session in the child, held at its list by a gate, with the
+--- user's window opened beside it (`OPEN_USER_WINDOW`) and `before` run
+--- there; opens the gate and waits for the launch. Returns the lines of the
+--- user's window and its mode once Claude Code has launched, after `keys`
+--- typed there.
+---
+---@param name string
+---@param before? string Lua run in the user's window before the launch
+---@param keys string[]
+---@return { mode: string, lines: string[] }
+local function user_window_after_the_launch(name, before, keys)
+  local fake = fake_listing(name, {})
+  local gate = claude.list_gate(name)
+  local settings = vim.tbl_extend('force', keeping_the_session(name), { cmd = gate.cmd })
+  local buffer = claude.start(child, fake, settings)
+  child.lua(OPEN_USER_WINDOW)
+  if before then
+    child.lua(before)
+  end
+  gate.open()
+  claude.wait_for_launch(child, buffer)
+  child.type_keys(unpack(keys))
+  return { mode = child.lua_get(MODE), lines = child.api.nvim_buf_get_lines(0, 0, -1, false) }
+end
+
+T['a start that waits for the list']['leaves a user in Normal mode, whose config enters Insert mode as a terminal opens, in Normal mode'] = function()
+  child.cmd('autocmd TermOpen * startinsert')
+
+  local after = user_window_after_the_launch('resume-elsewhere-startinsert', nil, { 'dd' })
+
+  eq(after, { mode = 'n', lines = { 'two' } })
+end
+
+T['a start that waits for the list']['leaves a user who leaves Visual mode, whose config enters Insert mode as a terminal opens, in Normal mode'] = function()
+  child.cmd('autocmd TermOpen * startinsert')
+
+  local after = user_window_after_the_launch('resume-elsewhere-visual', 'vim.cmd.normal("v")', {
+    '<Esc>',
+    'x',
+  })
+
+  eq(after, { mode = 'n', lines = { 'ne', 'two' } })
+end
+
+T['a start that waits for the list']['lets a user typing in Insert mode go on typing there'] = function()
+  local after =
+    user_window_after_the_launch('resume-elsewhere-insert', 'vim.cmd.startinsert()', { 'abc' })
+
+  eq(after, { mode = 'i', lines = { 'abcone', 'two' } })
+end
+
+T['a start that waits for the list']['lets a user typing in Replace mode go on typing there'] = function()
+  local after =
+    user_window_after_the_launch('resume-elsewhere-replace', 'vim.cmd.startreplace()', { 'X' })
+
+  eq(after, { mode = 'R', lines = { 'Xne', 'two' } })
+end
+
+T['a start that waits for the list']['launches although the user removed the list’s own quit hook'] = function()
+  local fake = fake_listing('resume-elsewhere-hook-removed', {})
+  local gate = claude.list_gate('resume-elsewhere-hook-removed')
+  local settings = vim.tbl_extend(
+    'force',
+    keeping_the_session('resume-elsewhere-hook-removed'),
+    { cmd = gate.cmd }
+  )
+  local buffer = claude.start(child, fake, settings)
+  child.cmd('autocmd! VimLeavePre')
+
+  gate.open()
+
+  eq(claude.wait_for_launch(child, buffer), true)
+end
+
+T['a start that waits for the list']['launches although the user typed into its empty window'] = function()
+  local fake = fake_listing('resume-elsewhere-typed-into', {})
+  local gate = claude.list_gate('resume-elsewhere-typed-into')
+  local settings =
+    vim.tbl_extend('force', keeping_the_session('resume-elsewhere-typed-into'), { cmd = gate.cmd })
+  note_what_is_told()
+  local buffer = claude.start(child, fake, settings)
+  child.api.nvim_input('iabc<Esc>')
+  local lines_while_waiting = child.api.nvim_buf_get_lines(buffer, 0, -1, false)
+
+  gate.open()
+  claude.wait_for_launch(child, buffer)
+
+  eq(lines_while_waiting, { '' })
+  eq(claude.buftype(child, buffer), 'terminal')
+  eq(told(), {})
+end
+
 T['a start that waits for the list']['keeps the job it launched when the options of its window cannot be put back'] = function()
   local fake = fake_listing('resume-elsewhere-options-fail', {})
   local gate = claude.list_gate('resume-elsewhere-options-fail')
@@ -394,6 +516,49 @@ T['a start that waits for the list']['launches Claude Code all the same when the
 
   eq(child.lua_get("{ pcall(require('aineo.claude').write_to_session, '') }"), { true })
   eq(told(), {})
+end
+
+T['a start that waits for the list']['launches nothing, and tells nothing, when the user deletes its buffer before the list answers'] = function()
+  local fake = fake_listing('resume-elsewhere-deleted', {})
+  local gate = claude.list_gate('resume-elsewhere-deleted')
+  local settings =
+    vim.tbl_extend('force', keeping_the_session('resume-elsewhere-deleted'), { cmd = gate.cmd })
+  note_what_is_told()
+  local buffer = claude.start(child, fake, settings)
+  child.cmd('bdelete')
+
+  gate.open()
+  claude.wait_for_listings(fake, 1)
+  wait_for_a_launch_that_must_not_come()
+
+  eq(claude.wait_for_starts(fake, 0), {})
+  eq(told(), {})
+  eq({ claude.buftype(child, buffer), status() }, { vim.NIL, { 'exited' } })
+end
+
+T['a start that waits for the list']['still lists, and launches, when a raise ends the swap of the terminals it takes the place of'] = function()
+  local fake = fake_listing('resume-elsewhere-swap-raises', {})
+  local gate = claude.list_gate('resume-elsewhere-swap-raises')
+  local state = keeping_the_session('resume-elsewhere-swap-raises')
+  local first = claude.start(child, fake, state)
+  claude.wait_for_start(fake)
+  child.lua('vim.fn.jobstop(vim.bo[...].channel)', { first })
+  claude.wait_for_status(child, 'exited')
+  child.lua([[
+    vim.api.nvim_create_autocmd('BufWinEnter', {
+      pattern = 'aineo://claude/*',
+      callback = function()
+        error('the user autocommand fails')
+      end,
+    })
+  ]])
+
+  local started =
+    pcall(claude.start_again, child, vim.tbl_extend('force', state, { cmd = gate.cmd }))
+  gate.open()
+
+  eq(started, false)
+  eq(#claude.wait_for_starts(fake, 2), 2)
 end
 
 T['a start that waits for the list']['launches nothing, and tells nothing, when its buffer was wiped before the list answered'] = function()
@@ -532,6 +697,19 @@ T['the kept session open in another interactive Claude Code']['is warned of once
 
   eq(told(), { { ALSO_OPEN_WARNING, WARN } })
   eq(#ALSO_OPEN_WARNING <= 60, true)
+  eq(claude.words_after(claude.start_arguments(fake, 1), '--resume'), { KEPT_ID })
+end
+
+T['the kept session open in another interactive Claude Code']['is resumed all the same when the user’s notifier raises on the warning'] = function()
+  local fake = fake_listing('resume-elsewhere-notifier-raises', { interactive_entry() })
+  child.lua([[
+    vim.notify = function()
+      error('the notifier of the user fails')
+    end
+  ]])
+
+  claude.start(child, fake, keeping_the_session('resume-elsewhere-notifier-raises'))
+
   eq(claude.words_after(claude.start_arguments(fake, 1), '--resume'), { KEPT_ID })
 end
 

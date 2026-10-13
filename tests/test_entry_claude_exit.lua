@@ -36,16 +36,16 @@ local function wait_for_claude_code_to_launch(child)
   claude_session.wait_for_launch(child, child.lua_get(CLAUDE_WINDOW_BUFFER))
 end
 
---- Waits until Claude Code has launched (`wait_for_claude_code_to_launch()`)
---- and the editor is in Terminal mode, which `\c` asks for before the
---- terminal exists and Neovim enters once it does. Typed as a user types
---- it (`child.type_keys()`): `entry.press()` runs the keys with
---- `nvim_feedkeys()`'s `x` flag, which ends the Insert mode that `\c`
---- asked for in a buffer that is not a terminal yet.
+--- Waits until Claude Code has launched (`wait_for_claude_code_to_launch()`),
+--- presses `\c` once more and waits until the editor is in Terminal mode.
+--- The `\c` that starts Claude Code leaves the editor in Normal mode while
+--- the start waits for the list of sessions, since there is no prompt to type
+--- to yet; the one pressed after the launch enters Terminal mode.
 ---
 ---@param child table
 local function wait_for_claude_code_in_terminal_mode(child)
   wait_for_claude_code_to_launch(child)
+  child.type_keys('\\c')
   layout.wait_until(child, MODE .. " == 't'")
 end
 
@@ -192,6 +192,10 @@ end
 
 T["Claude Code's exit"]["returns at once when i is typed in Claude's terminal whose stopped process still runs"] = function()
   local fake = claude_session.fake('entry-claude-exit-stopped', 'deaf')
+  child.lua(
+    'vim.env.XDG_STATE_HOME = ...',
+    { fixture.directory('entry-claude-exit-stopped-state') }
+  )
   entry.use_fake(child, fake, { claude = { cmd = claude_session.deaf_fake_command() } })
   child.cmd('Aineo open')
   eq(claude_session.wait_for_start(fake).argv, {})
@@ -368,6 +372,7 @@ T['a wiped Claude terminal']['lets \\c start Claude Code again, raising no error
   entry.use_fake(child, claude_session.fake('entry-claude-exit-other-tab-restarted', 'trust'))
 
   child.type_keys('\\c')
+  wait_for_claude_code_to_launch(child)
 
   eq(entry.messages(child), {})
   eq(child.v.errmsg, '')
@@ -400,9 +405,9 @@ T['a wiped Claude terminal']['keeps the window of the Claude Code that :Aineo op
   entry.use_fake(child, claude_session.fake('entry-claude-exit-reopened-new', 'trust'))
 
   entry.command(child, command .. ' | Aineo open')
+  wait_for_claude_code_to_launch(child)
 
   eq(entry.messages(child), {})
-  wait_for_claude_code_to_launch(child)
   eq(child.lua_get(SESSION_STATE), 'starting')
   eq(entry.windows(child), WHOLE_LAYOUT)
 end
@@ -414,9 +419,9 @@ T['a wiped Claude terminal']["keeps the window Claude's window reopened in the s
   entry.use_fake(child, claude_session.fake('entry-claude-exit-closed-reopened-new', 'trust'))
 
   entry.command(child, command .. ' | close | Aineo claude')
+  wait_for_claude_code_to_launch(child)
 
   eq(entry.messages(child), {})
-  wait_for_claude_code_to_launch(child)
   eq(child.lua_get(SESSION_STATE), 'starting')
   eq(entry.windows(child), WHOLE_LAYOUT)
 end

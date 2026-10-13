@@ -240,7 +240,8 @@ local function run_bounded(words, on_ended)
     vim.schedule(function()
       timer:stop()
       timer:close()
-      vim.api.nvim_del_autocmd(quit_hook)
+      -- A user's `:autocmd! VimLeavePre` has removed the hook already.
+      pcall(vim.api.nvim_del_autocmd, quit_hook)
       run.code, run.signal = result.code, result.signal
       run.output, run.errors = table.concat(output), table.concat(errors)
       on_ended(run)
