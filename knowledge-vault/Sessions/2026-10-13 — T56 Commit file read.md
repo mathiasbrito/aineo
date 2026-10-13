@@ -97,4 +97,5 @@ Mutants of the fix round (literal edits, on the tree at `a808552`, on the named 
 
 ## Commits
 
-*Recorded after the merge.*
+- PR #192, `bugfix/t56-commit-file-read`, head `934a3e5` (4 commits), merged by rebase into `dev` as `62ef90a` (the bounded read), `c2909c6` (this note), `e58133f` (the fix round), `0fa01e4`.
+- Released in v0.2.30 (PR #194, `main` `df18964`).

@@ -87,4 +87,5 @@ None. The fifty cases of `tests/test_changes_worktrees.lua`, and `tests/test_cha
 
 ## Commits
 
-*Recorded after the merge.*
+- PR #196, `feature/t57-worktree-base`, head `9551f88` (5 commits), merged by rebase into `dev` as `25597ed` (the dispatch amendment), `e296009` (the base from the working branch), `52b673d` (this note), `5b6eca9` (the fix round), `c170fcb`.
+- Released in v0.2.32 (PR #197, `main` `31a3b23`).

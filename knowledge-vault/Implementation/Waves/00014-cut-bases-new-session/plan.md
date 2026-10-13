@@ -1,14 +1,14 @@
 ---
 wave: 00014
-status: planned
+status: landed
 rolling: true
 planned_by: the orchestrator's planning agent (Claude, Opus 5.5) for the user
 planned_at: 2026-10-13
 base: 7856882
 claimed_by:
 claimed_at:
-landed_at:
-pull_requests:
+landed_at: 2026-10-14
+pull_requests: "#191, #192, #193, #196, #198"
 ---
 
 # Wave 14 — a commit's file read no further than shown, worktree bases from the working branch, and a key for a new session
@@ -310,3 +310,82 @@ Each is the orchestrator's assumption under the user's instruction of 2026-10-06
 - D60's (b), a worktree's base from both the working branch and D32's comparison.
 - A refusal of `\N` while a turn runs (O17 (b)).
 - T48 part 2 (wave 12), held for M16.
+
+## Landed
+
+Written 2026-10-14 by the wave 14 knowledge pass, on `dev` `bdc33ce`. Every packet is merged; the wave's releases are v0.2.30, v0.2.31 and v0.2.32, and T59 ships in the next. The rulings below are the orchestrator's assumptions under the user's instruction of 2026-10-06 and the go-ahead of 2026-10-13, none a decision of the user's and none a D row (D60 and D61 stay *proposed* until the user confirms them). The session notes hold each packet's commits, mutants and departures.
+
+### The plan — PR #191, merged by rebase (`dev` `97a9832`, `20def68`)
+
+The plan and the orchestrator's rulings A196–A212, as two commits. Stage 1 (T56 and T58) was dispatched on `dev` `20def68`; T57, stage 2, on `dev` `0fa01e4` after T56 merged, with its dispatch amendment (A220).
+
+### T56 — PR #192, merged by rebase (`dev` `0fa01e4`), released in v0.2.30 (PR #194, `main` `df18964`)
+
+`c4d8264` … `934a3e5` on the branch, `62ef90a` … `0fa01e4` on `dev` (4 commits). Session note: [[Sessions/2026-10-13 — T56 Commit file read]].
+- **The packet** (whole suite 3086 at 4 jobs, 11 mutants). The runner takes `first_stdout_bytes` and stops git's group at the bound; `ls-tree -l` gives the size with the entry; `gf` under a commit reads no more than it shows, and the cut note gives the file's whole size.
+- **Reviews.**
+  - *Attack (`neovim-lua-reviewer`, Opus):* HIGH, a regression: `ls-tree -l` prints `BAD` for a blob git cannot read, and the size compare crashed on it; MED, the help's cost claim was false for a packed file git unpacks whole; LOW, the bound's 4 extra bytes against a 6-byte UTF-8 character; `Output.cut` was set and read by nothing.
+  - *Tests and records (`records-reviewer`, Sonnet):* the `gf` bound and the group kill were unpinned, mutant 7 was not equivalent, and a word was missing in the help.
+- **Fix round** by the author (A213–A216): a size that is no number reads as unknown; the bounded `cat-file` runs with `-c core.bigFileThreshold=1m`; the bound is `SHOWN_BYTES` plus 6; `Output.cut` is dropped; a case that an answer wins over the time limit. Whole suite 3099 with one failure, the `test_claude.lua` Ctrl-C-while-quitting case, which passed alone.
+- **The orchestrator's check:** the failing case passed alone on `dev` (3 of 3) and on T56 (2 of 2); the `BAD`-size guard mutant killed (3).
+- **Departures.** The bound is 6 bytes, not the brief's 4 (A214); the brief's "a blob always has a size" was false (A216); unit 1's "says that it was cut" is withdrawn (A215). Enter's diffs are still read whole before their cut (A203).
+
+### T58 — PR #193, merged by rebase (`dev` `51ec1fa`), released in v0.2.31 (PR #195, `main` `d2b6882`)
+
+`9ba403b` … `3be8a7f` on the branch, `6cd29e5` … `51ec1fa` on `dev` (3 commits). Session note: [[Sessions/2026-10-13 — T58 New session key]]. Dispatched on `dev` `20def68`, beside T56.
+- **The packet** (whole suite 3117 at 4 jobs, 14 mutants). `:Aineo new`, `<Plug>(aineo-new)`, `\N` and `<C-\>N`: a new session on a new id once Claude Code has exited; `/clear` pasted at an empty prompt while it runs; four refusals; the health lines and the help.
+- **Reviews.**
+  - *Attack (`neovim-claude-code-reviewer`, Opus):* the guarantee holds; a draft whose cursor sits at its start reads as an empty prompt (R2's known miss); a permission dialog drawn just before the write gets the Enter; `<C-\>N` does nothing in Terminal mode after `/exit`.
+  - *Tests and records (`records-reviewer`):* no case that the changes pane follows the new session on the start path; the claim refusal unpinned in `starting`; a docstring; mutant rows.
+- **Fix round** by the author (A217–A219): the help says `\N` is the key after `/exit` and names both limits; a case for the pane following the start, one for the claim in `starting`, the docstring. Whole suite 3119.
+- **The orchestrator's check** on `dev` `0fa01e4` plus T58: 3146 cases, one failure, the `test_claude.lua` Ctrl-C quit case, which also failed alone on plain `dev` in 2 of 4 runs, so it predated T58 (T59); the mutant M1 killed (11).
+- **Departures.** None from the brief; the plan gained the user's check M3 (A218).
+
+### T57 — PR #196, merged by rebase (`dev` `c170fcb`), released in v0.2.32 (PR #197, `main` `31a3b23`)
+
+`d1a861c` … `9551f88` on the branch, `25597ed` … `c170fcb` on `dev` (5 commits). Session note: [[Sessions/2026-10-13 — T57 Worktree base]]. Dispatched on `dev` `0fa01e4`; its first commit is the dated dispatch amendment (A220).
+- **The packet** (whole suite 3111 before the last text edits, 5 mutants). Another worktree's base is its merge base with the working branch's commit (`changes.working_branch`, else `origin/HEAD`), read at every read; D32's base where that gives none; the heading, commits, files and diffs count from it. A new `changes/working_branch.lua` holds the name read that *Landed* shares.
+- **Reviews.**
+  - *Attack (`neovim-lua-reviewer`):* no breach. A failed read of D32's comparison, a failed merge base against the working branch's commit, and a file changed by both the landed commit and the agent were unpinned; a worktree with no commit read D32's base.
+  - *Tests and records (`records-reviewer`):* the session note credited unit 4 to the wrong mutant; two git-home docstrings T57 had made false.
+- **Fix round** by the author (A221, A222): the pins above with their killing cases; `read_base()` answers no base for a worktree with no commit; the two docstrings corrected; the help says the working branch's commit is read once for the worktrees and once by *Landed*, and that a worktree's whole change includes its uncommitted files. Whole suite 3163 on the orchestrator's tree.
+- **The orchestrator's check** on `dev` `51ec1fa` plus T57: 3163 cases, `Fails (0)`, lint clean, the fallback mutant killed.
+- **Departures.** The git home's docstrings were corrected though the brief put the git home outside the boundary (A221). The test helpers `create_with_remote()`, `land_in_remote()` and `fetch_remote()` duplicate three file-local helpers of `tests/test_changes_landed.lua`.
+
+### T59 — a small fix taken into the wave, PR #198, merged by rebase (`dev` `bdc33ce`), no release of its own
+
+`b318395` on the branch. Session note: [[Sessions/2026-10-13 — T59 Quit flake]]. Dispatched on `dev` `51ec1fa` (`neovim-claude-code-integrator`, Sonnet) after T58's check showed the Ctrl-C quit case failing alone on plain `dev`.
+- **The packet** (a small fix under D30, test-only). The cause was the test helper's: `quit_pressing_ctrl_c()` pressed Ctrl-C in the editor in the first milliseconds of `:qa`, and an editor that gets a Ctrl-C then can quit without running its `VimLeavePre` handlers, so the stop never runs and Claude Code is hung up (code 129). The helper now presses once the stop's first key has reached the fake: 5 of 40 runs failed before, 0 of 40 loaded and 10 of 10 alone after.
+- **Review.** None as a guarantee review; the orchestrator's check stood in.
+- **The orchestrator's check:** `test_claude.lua` passed 3 of 3 alone on `dev` plus T59, the helper's own test, lint.
+- **Departures.** Not isolated: why T48 part 1 raised the failure rate (5 of 40 against 0 of 40 on v0.2.28), and what Neovim does with an early Ctrl-C. A second load flake, *a list of worktrees that fails* › *leaves the editor's lines as ever*, failed 2 of 5 at a load average of 120 in T57's round and predates it.
+
+### Rulings made at the dispatches and fix rounds — the orchestrator's assumptions
+
+A196–A212 are in *The orchestrator's rulings*, above, each the plan's (a). In one line each:
+- **A196 (O1)** the shape: T56 and T58, then T57. **A197 (O2)** models and reviews as planned. **A198 (O3)** all three regular packets.
+- **A199 (O4)** the size from `ls-tree -l`. **A200 (O5)** a stdout bound in the git runner. **A201 (O6)** the commit file's buffer unchanged. **A202 (O7)** `first_bytes` and `done(nil, text, size)`. **A203 (O8)** Enter's diffs left out.
+- **A204 (O9)** a worktree's base from the working branch, D32's as the fallback. **A205 (O10)** the heading and Enter unchanged. **A206 (O11)** a failed working-branch read shown under each section.
+- **A207 (O12)** `\N` and `<C-\>N`. **A208 (O13)** `:Aineo new`. **A209 (O14)** a start on a new id, told as a switch. **A210 (O15)** `/clear` pasted with Enter. **A211 (O16)** four refusals. **A212 (O17)** `/clear` written during a turn too.
+- **A213 (T56)** the help and docstrings claim only the editor's bound; the bounded `cat-file` runs with `core.bigFileThreshold=1m`.
+- **A214 (T56)** the bound is `SHOWN_BYTES` plus 6, by Neovim's UTF-8 rule.
+- **A215 (T56)** `Output.cut` is dropped.
+- **A216 (T56)** the brief's "a blob always has a size" is false (`BAD`); a size that is no number reads as unknown.
+- **A217 (T58)** after `/exit` the twin does nothing in Terminal mode; `\N` is the key, and the help says so.
+- **A218 (T58)** a draft with the cursor at its start reads as empty; LIMITS says so and the plan gains the check M3.
+- **A219 (T58)** LIMITS names the permission-dialog race.
+- **A220 (T57)** the dated dispatch amendment, as A163 and A179.
+- **A221 (T57)** the git home's two false docstrings are corrected in T57.
+- **A222 (T57)** a worktree with no commit reads no base.
+
+### Wave 14 closed
+
+Wave 14 landed on 2026-10-14. Its packets are T56 (PR #192, v0.2.30), a commit's file read no further than `gf` shows it; T58 (PR #193, v0.2.31), the key for a new Claude Code session; T57 (PR #196, v0.2.32), another worktree's base from the working branch; and T59 (PR #198, ships in the next release), the quit flake, a small fix taken into the wave. The records of T55 and T48 part 1 were filled in this pass. The suite grew from 3072 cases at the wave's base to 3163 on the last whole run. Releases v0.2.30, v0.2.31 and v0.2.32. Retrospective: [[Sessions/2026-10-14 — Wave 14 retrospective]].
+
+**Open threads at the close:**
+- A user's Ctrl-C right after `:qa` skips the stop (the hangup still ends Claude Code); whether the plugin should handle it is undecided.
+- The user's checks M1–M3 for `\N`, with the real Claude Code, in *Checks for the user*.
+- The git home's packed-delta cost: a packed file stored as a delta is unpacked whole by git before the bound (A213).
+- Duplicated test helpers: `tests/test_changes_landed.lua` keeps file-local copies of `with_remote()`, `land()` and `fetch()` that `tests/helpers/git_repo.lua` now duplicates.
+- Enter's diffs are read whole before their 1 MiB cut (A203).
+- D60 and D61 stay proposed until the user confirms them.
