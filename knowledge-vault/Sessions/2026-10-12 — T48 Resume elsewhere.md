@@ -61,7 +61,7 @@ Each waits for the launch of a start that resumes (or, where noted, types a key)
 
 ## Red and green
 
-The suite is `tests/test_claude_resume_elsewhere.lua` (24 cases, 7 of them red first), `tests/test_claude_agents.lua` (1 changed case) and `tests/test_entry_claude_resume.lua` (1 new case). Every red was read.
+The suite is `tests/test_claude_resume_elsewhere.lua` (24 cases, 8 of them red first), `tests/test_claude_agents.lua` (1 changed case) and `tests/test_entry_claude_resume.lua` (1 new case). Every red was read.
 
 Seen red (9):
 
