@@ -147,13 +147,18 @@ end
 --- that gives none — no working branch, a name that names no commit, no
 --- shared history — its merge base with the editor's comparison commit
 --- (`sources.comparison`). Calls `done(nil, base)`, `base` nil when neither
---- gives one, or `done(failure)`.
+--- gives one, and at once, reading neither, for a worktree with no commit
+--- yet; or `done(failure)`.
 ---
 ---@param read aineo.changes.WorktreeRead
 ---@param sources aineo.changes.BaseSources
 ---@param repository aineo.git.Repository
 ---@param done fun(failure: aineo.git.Failure|nil, base: string|nil)
 local function read_base(read, sources, repository, done)
+  if not repository.head then
+    done(nil, nil)
+    return
+  end
   local function against_comparison()
     sources.comparison(function(failure, comparison)
       if failure then
