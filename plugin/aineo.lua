@@ -1036,9 +1036,9 @@ local TERMINAL_MODE_PATIENCE_MS = 1000
 --- in `terminal`, Claude's terminal: at once, scheduled, when it is
 --- entered already; else at the next `TermEnter` in it, which must come
 --- within `TERMINAL_MODE_PATIENCE_MS`. Past that time `callback` is never
---- called, `on_timeout` is, and the user is told, with one warning that
---- begins `outcome`, the words of what was not done, that Claude's window
---- did not enter Terminal mode.
+--- called, `on_timeout` is, and the user is told with a warning that
+--- begins `outcome`, the words of what was not done, and ends `Claude’s
+--- window did not enter Terminal mode`.
 ---
 ---@param terminal integer
 ---@param outcome string

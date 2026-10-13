@@ -1,7 +1,7 @@
 # 2026-10-13 — T58 New session key
 
 **Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-claude-code-integrator`, on Sonnet)
-**Branch:** `feature/t58-new-session` · **Pull request:** into `dev`
+**Branch:** `feature/t58-new-session` · **Pull request:** #193, into `dev`
 
 ## Links
 
@@ -45,7 +45,7 @@ Files:
 
 Seen red for the intended reason, before the code:
 
-- `tests/test_claude_resume.lua` (5 cases added): 4 red — `starts Claude Code on a new session id, not the kept one…` (`--session-id` words `{}`: the kept id was resumed), `keeps the new session id it was asked for…`, `tells on_session_switched of the new session…` (0 switches, expected 1), `raises an error naming new_session when it is not a boolean` (nothing raised). `starts nothing when asked for a new session while Claude Code runs` arrived green by nature (the running guard exists); its first form counted all the record's lines (5) and was corrected to count starts. Killer: the edit `if is_running() then` → `if false then` in `start_session()` (M13 below).
+- `tests/test_claude_resume.lua` (5 cases added): 4 red — `starts Claude Code on a new session id, not the kept one…` (`--session-id` words `{}`: the kept id was resumed), `keeps the new session id it was asked for…`, `tells on_session_switched of the new session…` (0 switches, expected 1), `raises an error naming new_session when it is not a boolean` (nothing raised). `starts nothing when asked for a new session while Claude Code runs` arrived green by nature (the running guard exists); its first form counted all the record's lines (5) and was corrected to count starts. Killer: M13 below.
 - `tests/test_entry_new_session.lua` (new, 26 cases), first run before any plugin code: 23 of 25 red (the file had 25 cases then); the two that passed, `lists no session and resumes nothing` and `keeps the new id for the folder…`, passed because they asserted on a second start that never came; both were corrected to assert that the start exists (`eq(#wait_for_starts(fake, 2), 2)`, `eq(#new_id_of_start(fake, 2), 1)`) and are killed by M1. The case `opens the layout around a new session when Claude’s terminal was wiped` was added after the code and arrived green; killed by M6 (and M1, M9).
 - `tests/test_health.lua`: 6 red with `N` missing from `health.lua` (the *Prefix mappings* and *Terminal prefix mappings* lines); after the production change 17 more pins moved by position (the leader warnings at line 12, the Visual line at 11, the twins' warning at 19, the not-mapped list) and were corrected.
 - The pins that list the subcommands, the keys and the mappings, run against the parent commit's `plugin/aineo.lua`, `lua/aineo/health.lua` and `lua/aineo/claude/init.lua` with the final tests (see *Pins run against the parent*, below).
@@ -66,14 +66,14 @@ Literal edits, one at a time, restored from a copy after each, on the final tree
 | M3 | `plugin/aineo.lua`: `if claude.prompt_shows_text(vim.api.nvim_get_current_win()) then` → `if false then` | 3: `while the prompt holds text…` and the twin's, `t` and `i` |
 | M4 | `claude.write_to_session(PASTE_START .. command .. PASTE_END .. '\r')` → `… PASTE_END)` | 3: `writes /clear and Enter as one paste…` and the twin's, `t` and `i` |
 | M5 | `if refuses_while_claimed(NO_NEW_SESSION) then` → `if false then` | 2: the claim in the ready state and in the exited state |
-| M6 | `if status == nil or status == 'exited' then` + `start_new_session()` → `if status == nil then` + `start_new_session()` | 10 (every case that starts after an exit; the exited session is refused as not ready) |
+| M6 | `new_session()`: `or status == 'exited'` dropped, one edit: `if status == nil or status == 'exited' then` → `if status == nil then` (the line followed by `start_new_session()`) | 10 (every case that starts after an exit; the exited session is refused as not ready) |
 | M7 | `if refuses_while_not_ready(NO_NEW_SESSION) then` → `if false then` | 2: `while Claude Code is starting or a dialog…` and `while a start waits for the session list…` |
 | M8 | `start_new_session()`: `focus_claude()` removed | 1: the cursor in Claude's window in Terminal mode after the start |
 | M9 | `started_claude_terminal(config, true)` → `started_claude_terminal(config)` | 10 (the start resumes the kept id) |
 | M10 | `PREFIX_KEYS`: `new = 'N',` → `new = 'M',` | `tests/test_entry_prefix.lua` 4 |
 | M11 | `HAS_NO_TWIN = { send = true }` → `{ send = true, new = true }` | entry file 6 (the twin cases); `tests/test_entry_terminal_keys.lua` 4 (`is <C-\> by default…`, `is the one vim.g.aineo names`, `N` in `t` and `i`) |
 | M12 | `vim.notify(outcome .. 'Claude’s window did not enter Terminal mode'` → `vim.notify(NOT_SWITCHED .. …` | 1: `when Claude’s window does not enter Terminal mode…` |
-| M13 | `start_session()`: `if is_running() then` → `if false then` | resume file 1 (`starts nothing when asked for a new session while Claude Code runs`) |
+| M13 | `start_session()`: the `if is_running() then` that follows `validate_settings(settings)` → `if false then`, one edit | resume file 1 (`starts nothing when asked for a new session while Claude Code runs`) |
 | M14 | `vim.validate('settings.new_session', settings.new_session, 'boolean', true)` removed | resume file 1 (`raises an error naming new_session…`) |
 
 The five mutants of `plan.md` › *Verification mutants* › T58 are M1 (its 1), M2 (its 2), M3 (its 3), M4 (its 4) and M5 (its 5).
@@ -86,6 +86,29 @@ The tests of this branch against the parent commit's `plugin/aineo.lua`, `lua/ai
 
 `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 make test` on Neovim 0.12.5 (the host, loaded: other agents' suites ran beside it), on the tree pushed, code and tests unchanged since the mutants: **3117 cases in 85 groups, `Fails (0) and Notes (0)`, exit 0**; `make lint`: 0 errors, 0 warnings. A first whole run at a load average of 70 failed one case, `tests/test_claude.lua | quitting Neovim | ends a turn by keys though Ctrl-C is pressed in the editor meanwhile` (the stop's keys, which this branch does not touch: the session ended on the hangup, 129, before the keys); the file alone passed (117 cases, `Fails (0)`) and so did the second whole run. The note was completed after the run; no other file changed.
 
+## Fix round
+
+One round on the two reviews of PR #193 (head `7d11dcc`), on Neovim 0.12.5. A217 to A219 are the orchestrator's assumptions under the user's instruction of 2026-10-06, not the user's decisions.
+
+| Finding | What was done |
+|---|---|
+| Attack 3 (A217) | `:Aineo-new` says it in one sentence: Claude Code's exit leaves Terminal mode in Claude's window, so `\N` is the key there, and the twin `<C-\>N` acts in Terminal and Insert mode only. No new mapping. |
+| Attack 1 (A218) | LIMITS › *The new session key* names the draft whose cursor sits at its start (read as an empty prompt, `/clear` written in front of it). No code fix exists. The plan's *Checks for the user* gained M3 (dated 2026-10-13). |
+| Attack 2 (A219) | LIMITS › *The new session key* names the permission-dialog race, as *Send and a dialog* does for Send. |
+| Tests 1 | `tests/test_entry_new_session.lua`: `takes HEAD as the changes pane’s base for the new session` (the changes pane's commit list loses the commit made before the new session). Seen failing against M15. |
+| Tests 3 | `while a claim of another session holds, with Claude Code starting, gives the claim’s words` (`trust` fake). Seen failing against M16. |
+| Tests 4 | The docstring of `after_entering_terminal_mode()` now says the user is told with a warning that begins `outcome` and ends `Claude’s window did not enter Terminal mode`. |
+| Tests 5 | M13 and M6 reworded above as one literal edit each; the task line names #193. |
+
+Mutants of the round (literal edits, one at a time, restored from a copy; both killed by an assertion, 1 `Failed expectation` each), on `tests/test_entry_new_session.lua` (28 cases):
+
+| # | Edit | Killed by |
+|---|---|---|
+| M15 | `plugin/aineo.lua`, `follow_session()`: the call `require('aineo.changes').follow_changes_session({ id = id, state_directory = kept_places().state_directory })` removed | `takes HEAD as the changes pane’s base for the new session` |
+| M16 | `new_session()`: `if require('aineo.claude').session_status() == 'starting' and refuses_while_not_ready(NO_NEW_SESSION) then return end` inserted before the first line, `if refuses_while_claimed(NO_NEW_SESSION) then` | `while a claim of another session holds, with Claude Code starting, gives the claim’s words` |
+
+Whole suite of the round: `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 make test` on Neovim 0.12.5 (the host, loaded): 3119 cases in 85 groups, `Fails (0) and Notes (0)`, exit 0; `make lint` clean; `tests/test_doc.lua` 48 cases, `Fails (0)`. This note was completed after the run; no other file changed.
+
 ## Open threads
 
 - That Claude Code takes a pasted `/clear` as a command (check M1) and what it does with `/clear` written during a turn (check M2) are unmeasured; both are in LIMITS, *The new session key*.
@@ -94,7 +117,7 @@ The tests of this branch against the parent commit's `plugin/aineo.lua`, `lua/ai
 
 ## Task lines
 
-- T58 `[X]` (`feature/t58-new-session`, into `dev`) — `:Aineo new`, `<Plug>(aineo-new)`, `\N` and `<C-\>N` (C1, C3; D61): a new session on a new id after the exit, `/clear` at an empty prompt while Claude Code runs, four refusals; the health lines and the help. D61's letters and states are the orchestrator's assumptions (A207–A212), not the user's decisions.
+- T58 `[X]` (`feature/t58-new-session`, PR #193, into `dev`) — `:Aineo new`, `<Plug>(aineo-new)`, `\N` and `<C-\>N` (C1, C3; D61): a new session on a new id after the exit, `/clear` at an empty prompt while Claude Code runs, four refusals; the health lines and the help. D61's letters and states are the orchestrator's assumptions (A207–A212), not the user's decisions.
 
 ## Commits
 
