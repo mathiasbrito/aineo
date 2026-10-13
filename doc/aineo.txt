@@ -904,7 +904,10 @@ only in place of a resume Claude Code has no conversation for
 			  Terminal mode (|:Aineo-claude|). The Report, Input's
 			  draft and the changes pane follow the new session,
 			  empty, with `HEAD` as its base, once it is ready
-			  (|aineo-claude-session|).
+			  (|aineo-claude-session|). Claude Code's exit leaves
+			  Terminal mode in Claude's window, so press `\N`
+			  there: the twin `<C-\>N` acts in Terminal and Insert
+			  mode only.
 			- When Claude Code runs, is ready for input and the
 			  prompt shows no text, it moves the cursor to
 			  Claude's window in Terminal mode and writes `/clear`
@@ -1832,6 +1835,15 @@ The new session key ~
   turn (|aineo-send|). Claude Code may queue it, run it, or take it as text.
 - Where hooks do not run (Session switches, above), aineo hears of no switch
   after a `/clear`, and the panes stay on the session left.
+- A draft whose cursor you moved back to the start of its first line reads
+  as an empty prompt, as for `:Aineo sessions` (The session list, above),
+  and `/clear` and Enter are written in front of it: Claude Code receives
+  `/clear` followed by your draft as one line, which it may run as `/clear`
+  with the draft lost. aineo cannot tell this from the grey example of an
+  empty prompt.
+- A permission dialog drawn in the few tens of milliseconds before aineo
+  notices it receives the paste and Enter of `/clear`, as Send's do (Send
+  and a dialog, below).
 
 Send and a dialog ~
 A permission dialog drawn in the few tens of milliseconds before aineo

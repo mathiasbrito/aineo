@@ -2,6 +2,7 @@ local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
+local git_repo = dofile('tests/helpers/git_repo.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -195,6 +196,54 @@ local function receive_report(task)
   )
 end
 
+--- The name of the changes pane's commits buffer.
+local COMMITS = 'aineo://changes-commits'
+
+--- How the commits window lists `commit`, made with the subject `subject`.
+---
+---@param commit string
+---@param subject string
+---@return string
+local function listed(commit, subject)
+  return commit:sub(1, 7) .. ' ' .. subject
+end
+
+--- Whether the child's commits window lists `line`, once it does so as
+--- `expected` says, waiting for that at most `git_repo.PATIENCE_MS`; else
+--- whether it does when the wait runs out.
+---
+---@param line string
+---@param expected boolean
+---@return boolean
+local function commits_list_once(line, expected)
+  local function lists()
+    return vim.tbl_contains(
+      child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { COMMITS }),
+      line
+    )
+  end
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return lists() == expected
+  end, 10)
+  return lists()
+end
+
+--- Makes the repository `.tests/fixtures/git-<name>/repo` holding one file
+--- in one commit, gives the child the repository isolation of the commits
+--- suites (`git_repo.ENVIRONMENT`) and moves its working directory into it,
+--- where Claude Code starts; returns the repository's top level.
+---
+---@param name string the case's own name for its files
+---@return string top
+local function enter_repository(name)
+  local top = git_repo.create(name, { ['notes.txt'] = { 'one' } })
+  child.lua('for name, value in pairs(...) do vim.env[name] = value end', {
+    git_repo.ENVIRONMENT,
+  })
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
+  return top
+end
+
 T['the entry points'] = MiniTest.new_set({
   parametrize = {
     {
@@ -307,6 +356,29 @@ T['with no Claude Code running']['opens the layout around a new session when Cla
   eq(#claude_session.wait_for_starts(fake, 2), 2)
   eq(#new_id_of_start(fake, 2), 1)
   eq(entry.windows(child), AGENT_PANE)
+end
+
+T['with no Claude Code running']['takes HEAD as the changes pane’s base for the new session'] = function()
+  local top = enter_repository('new-session-changes')
+  local fake = fake_running_hooks('new-session-changes', 'ready')
+  open_layout_on(fake)
+  local first = followed_session_id()
+  git_repo.write(top, 'notes.txt', { 'two' })
+  local commit = git_repo.commit_all(top, 'Write two')
+  entry.press(child, '\\g')
+  local listed_before = commits_list_once(listed(commit, 'Write two'), true)
+  entry.press(child, '\\pa')
+  end_claude_code()
+
+  entry.press(child, '\\N')
+
+  claude_session.wait_for_status(child, 'ready')
+  followed_session_once_changed(first)
+  entry.press(child, '\\g')
+  eq({
+    listed_before = listed_before,
+    listed = commits_list_once(listed(commit, 'Write two'), false),
+  }, { listed_before = true, listed = false })
 end
 
 T['with no Claude Code running']['makes the Report and Input follow the new session'] = function()
@@ -443,6 +515,20 @@ local CLAIMED_WORDS = NO_NEW_SESSION
 T['a refusal']['while a claim of another session holds writes nothing and says how to leave the claim'] = function()
   local fake = fake_running_hooks('new-session-refuse-claim', 'ready')
   open_layout_on(fake)
+  child.cmd('Aineo claim ' .. OTHER_ID)
+
+  entry.press(child, '\\N')
+
+  eq(messages_once_told(), { { message = CLAIMED_WORDS, level = vim.log.levels.WARN } })
+  vim.wait(300)
+  eq(claude_session.received(fake):find('/clear', 1, true), nil)
+end
+
+T['a refusal']['while a claim of another session holds, with Claude Code starting, gives the claim’s words'] = function()
+  local fake = fake_running_hooks('new-session-refuse-claim-starting', 'trust')
+  use_fake_in_own_state(fake)
+  child.cmd('Aineo open')
+  claude_session.wait_for_screen(child, child.lua_get(CLAUDE_WINDOW_BUFFER), 'trust')
   child.cmd('Aineo claim ' .. OTHER_ID)
 
   entry.press(child, '\\N')
