@@ -11,6 +11,14 @@ local M = {}
 --- with syntax on, as measured in Neovim 0.12.5.
 local SHOWN_BYTES = 1048576
 
+--- The longest a character is in UTF-8, in bytes.
+local LONGEST_CHARACTER_BYTES = 4
+
+--- How many bytes of a file `M.file_buffer()` needs to show what it shows of
+--- the whole file: the bytes it shows, and the rest of the character a cut
+--- falls in.
+M.BYTES_NEEDED_OF_A_FILE = SHOWN_BYTES + LONGEST_CHARACTER_BYTES
+
 --- The lines of `text`: one per line it ends with a line break, and its
 --- last, unended one, if any.
 ---
@@ -50,16 +58,22 @@ end
 
 --- What a buffer shows of `text`, the text git printed: its lines, or those
 --- of the part shown (`shown_part()`) and a note saying how much of the
---- whole is shown, `what` — `diff` or `file` — being what was cut.
+--- whole, `whole_size` bytes, is shown, `what` — `diff` or `file` — being
+--- what was cut.
 ---
 ---@param text string
 ---@param what 'diff'|'file'
+---@param whole_size integer how many bytes the whole has, at least `#text`
 ---@return aineo.changes.Shown
-local function shown_of(text, what)
+local function shown_of(text, what, whole_size)
   local shown = shown_part(text)
   local note = nil
-  if #shown < #text then
-    note = ('aineo cut this %s at 1 MiB: %d of its %d bytes are shown'):format(what, #shown, #text)
+  if #shown < whole_size then
+    note = ('aineo cut this %s at 1 MiB: %d of its %d bytes are shown'):format(
+      what,
+      #shown,
+      whole_size
+    )
   end
   return { lines = lines_of(shown), note = note }
 end
@@ -133,7 +147,7 @@ end
 ---@param diff string
 ---@return integer|nil buffer nil when Neovim refuses the text for now
 function M.diff_buffer(name, diff)
-  local shown = shown_of(diff, 'diff')
+  local shown = shown_of(diff, 'diff', #diff)
   if shown.note then
     table.insert(shown.lines, shown.note)
     shown.note = nil
@@ -145,14 +159,17 @@ end
 --- file at `path`, read-only (`shown_buffer()`), with the `'filetype'` the
 --- path and the content give (`vim.filetype.match()`), none when they give
 --- none. A file cut at 1 MiB is told so by a virtual line under the last
---- line shown, not by a line of the buffer.
+--- line shown, not by a line of the buffer, saying how much of the file's
+--- `size` bytes is shown. `content` may be the file's first
+--- `M.BYTES_NEEDED_OF_A_FILE` bytes alone, when the file is larger.
 ---
 ---@param name string
 ---@param path string the file's path, as the commit names it
 ---@param content string
+---@param size integer the whole file's size in bytes
 ---@return integer|nil buffer nil when Neovim refuses the text for now
-function M.file_buffer(name, path, content)
-  local shown = shown_of(content, 'file')
+function M.file_buffer(name, path, content, size)
+  local shown = shown_of(content, 'file', size)
   local filetype = vim.filetype.match({ filename = path, contents = shown.lines })
   return shown_buffer(name, shown, filetype or '')
 end

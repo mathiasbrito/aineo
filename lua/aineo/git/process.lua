@@ -86,12 +86,14 @@ local EDITOR_VARIABLES_LEFT_OUT = {
 ---@field arguments string[] what follows `-C <directory>` and the home's settings
 ---@field answers? integer[] the exit codes that are answers rather than failures; `{ 0 }` when not given
 ---@field environment? table<string, string> variables given to git over the editor's own and `ENVIRONMENT`
+---@field first_stdout_bytes? integer how many bytes of its standard output the request wants, at least 1; once that many have come, git is stopped with every process it started, and the run answers with them; its whole output when not given
 
 --- How a git process ended when it answered.
 ---@class aineo.git.Output
----@field code integer its exit code, one of the request's answers
----@field stdout string what it wrote to its standard output, byte for byte
+---@field code integer its exit code, one of the request's answers unless `cut`
+---@field stdout string what it wrote to its standard output, byte for byte; when `cut`, its first `Request.first_stdout_bytes` bytes
 ---@field stderr string what it wrote to its standard error
+---@field cut? boolean true when git was stopped because the bytes the request wanted had come
 
 --- Why git gave no answer.
 ---@class aineo.git.Failure
@@ -122,16 +124,23 @@ local function without_position(raised)
 end
 
 --- What `done` is told of the process for `request` that ended with
---- `result`, stopped at `limit_ms` when `timed_out`.
+--- `result`, stopped at `limit_ms` when `timed_out`, having written `stdout`.
+--- A run `cut` because the bytes the request wanted had come is an answer,
+--- whatever ended it.
 ---
 ---@param executable string
 ---@param limit_ms integer
 ---@param request aineo.git.Request
 ---@param result vim.SystemCompleted
 ---@param timed_out boolean
+---@param stdout string
+---@param cut boolean
 ---@return aineo.git.Failure|nil failure
 ---@return aineo.git.Output|nil output
-local function outcome(executable, limit_ms, request, result, timed_out)
+local function outcome(executable, limit_ms, request, result, timed_out, stdout, cut)
+  if cut then
+    return nil, { code = result.code, stdout = stdout, stderr = result.stderr, cut = true }
+  end
   if timed_out then
     return {
       reason = 'timed_out',
@@ -147,7 +156,7 @@ local function outcome(executable, limit_ms, request, result, timed_out)
   if not is_answer(result.code, request.answers) then
     return { reason = 'failed', message = vim.trim(result.stderr), code = result.code }
   end
-  return nil, { code = result.code, stdout = result.stdout, stderr = result.stderr }
+  return nil, { code = result.code, stdout = stdout, stderr = result.stderr }
 end
 
 --- The whole environment git runs with for `request`: the editor's own,
@@ -175,6 +184,44 @@ local function kill_group(process)
   vim.uv.kill(-process.pid, 'sigkill')
 end
 
+--- What a run collects of git's standard output when its request wants only
+--- the first bytes of it.
+---@class aineo.git.FirstBytes
+---@field receive fun(err: string|nil, data: string|nil) takes what git wrote, as `vim.system()` gives it to a `stdout` function; what comes after the bytes wanted, or after a read failed, is left out
+---@field text fun(): string the bytes collected: at most those wanted
+---@field reached fun(): boolean whether the bytes wanted have come
+
+--- Collects the first `wanted` bytes of what is `receive`d, and calls
+--- `on_reached` once they have come, in the fast event that gave the last
+--- of them.
+---
+---@param wanted integer
+---@param on_reached fun()
+---@return aineo.git.FirstBytes
+local function collect_first_bytes(wanted, on_reached)
+  local pieces, size, reached = {}, 0, false
+  return {
+    receive = function(err, data)
+      if err or not data or reached then
+        return
+      end
+      local piece = data:sub(1, wanted - size)
+      table.insert(pieces, piece)
+      size = size + #piece
+      if size >= wanted then
+        reached = true
+        on_reached()
+      end
+    end,
+    text = function()
+      return table.concat(pieces)
+    end,
+    reached = function()
+      return reached
+    end,
+  }
+end
+
 --- Runs `executable` for `request` and, once it ends, calls on the main loop
 --- either `done(nil, output)` or `done(failure)`; never before it returns,
 --- and never raising. git runs leading a process group of its own, and the
@@ -184,10 +231,13 @@ end
 --- any process it started that still holds its output. A process git
 --- started in a group or a session of its own escapes the kill, and one that
 --- holds git's output holds `done` back, past the limit, until it closes it.
---- A git ended by a signal is `failed`, never an answer. Returns a function
---- that cancels the run: it kills the group, unless the run has ended, and
---- `done` is not called — save when git could not be started at all, where
---- the cancel does nothing and `done(no_git)` still runs.
+--- A git ended by a signal is `failed`, never an answer; save one the run
+--- stopped itself because the bytes the request wanted of its standard
+--- output (`first_stdout_bytes`) had come, which answers with them, `cut`,
+--- though the time limit ended it as well. Returns a function that cancels
+--- the run: it kills the group, unless the run has ended, and `done` is not
+--- called — save when git could not be started at all, where the cancel does
+--- nothing and `done(no_git)` still runs.
 ---
 ---@param executable string
 ---@param limit_ms integer
@@ -201,19 +251,32 @@ local function run_git(executable, limit_ms, request, done)
   )
   local timer = assert(vim.uv.new_timer())
   local timed_out, cancelled, ended = false, false, false
-  local started, process = pcall(vim.system, command, {
+  local process
+  local function stop()
+    if not ended then
+      kill_group(process)
+    end
+  end
+  local first_bytes = request.first_stdout_bytes
+    and collect_first_bytes(request.first_stdout_bytes, stop)
+  local started
+  started, process = pcall(vim.system, command, {
     text = false,
     env = environment_for(request),
     clear_env = true,
     detach = true,
+    stdout = first_bytes and first_bytes.receive or nil,
   }, function(result)
     ended = true
     timer:stop()
     timer:close()
     vim.schedule(function()
-      if not cancelled then
-        done(outcome(executable, limit_ms, request, result, timed_out))
+      if cancelled then
+        return
       end
+      local stdout = first_bytes and first_bytes.text() or result.stdout
+      local cut = first_bytes ~= nil and first_bytes.reached()
+      done(outcome(executable, limit_ms, request, result, timed_out, stdout, cut))
     end)
   end)
   if not started then
@@ -222,11 +285,6 @@ local function run_git(executable, limit_ms, request, done)
       done({ reason = 'no_git', message = without_position(process) })
     end)
     return function() end
-  end
-  local function stop()
-    if not ended then
-      kill_group(process)
-    end
   end
   timer:start(limit_ms, 0, function()
     timed_out = not process:is_closing()

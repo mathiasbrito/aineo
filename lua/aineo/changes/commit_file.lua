@@ -82,15 +82,17 @@ function M.name(revision, path)
   return ('aineo://show/%s/%s'):format(revision.commit, lines.quoted_path(path))
 end
 
---- Reads the file `path` as `revision` has it and calls `done(nil, text)`,
---- the bytes git printed, or `done(failure)`.
+--- Reads the file `path` as `revision` has it and calls `done(nil, text, size)`,
+--- the bytes git printed, at most the first `first_bytes` of them, and the
+--- file's whole size, or `done(failure)`.
 ---
 ---@param revision aineo.changes.Revision
 ---@param path string relative to the repository's top level
 ---@param options? aineo.git.Options how the git home runs git
----@param done fun(failure: aineo.git.Failure|nil, text: string|nil)
-function M.read(revision, path, options, done)
-  git.file_at_commit(revision.repository, revision.commit, path, done, options)
+---@param first_bytes integer how many bytes of the file are wanted
+---@param done fun(failure: aineo.git.Failure|nil, text: string|nil, size: integer|nil)
+function M.read(revision, path, options, first_bytes, done)
+  git.file_at_commit(revision.repository, revision.commit, path, done, options, first_bytes)
 end
 
 --- What the user is told when the file `path` could not be read as
