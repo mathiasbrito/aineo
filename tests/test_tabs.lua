@@ -245,27 +245,31 @@ T['title()']['cuts the tail of a buffer name too'] = function()
   eq(title, '1 ' .. string.rep('b', 23) .. '…')
 end
 
-T['title()']["says the buffer's tail for a held tab whose name() gives no text"] = function()
+--- What a held tab's `name()` does, in Lua, when it gives no usable text.
+local NAMES_WITH_NO_TEXT = {
+  ['nothing'] = 'return nil',
+  ['an empty string'] = "return ''",
+  ['a number'] = 'return 5',
+  ['a table'] = 'return {}',
+  ['an error'] = "error('no name today')",
+}
+
+T['title()']["says the buffer's tail for a held tab whose name() gives no text"] =
+  MiniTest.new_set({
+    parametrize = vim.tbl_map(function(name)
+      return { name }
+    end, vim.fn.sort(vim.tbl_keys(NAMES_WITH_NO_TEXT))),
+  })
+
+T['title()']["says the buffer's tail for a held tab whose name() gives no text"][1] = function(name)
   child.cmd('edit /tmp/t65-folder/fallback.txt')
 
-  local title = in_child([[
+  local title = in_child(([[
     local handle = vim.api.nvim_get_current_tabpage()
-    tabs.hold(handle, function() return nil end)
-    return tabs.title(handle)
-  ]])
-
-  eq(title, '1 fallback.txt')
-end
-
-T['title()']["says the buffer's tail for a held tab whose name() raises"] = function()
-  child.cmd('edit /tmp/t65-folder/fallback.txt')
-
-  local title = in_child([[
-    local handle = vim.api.nvim_get_current_tabpage()
-    tabs.hold(handle, function() error('no name today') end)
+    tabs.hold(handle, function() %s end)
     local succeeded, title = pcall(tabs.title, handle)
     return succeeded and title or 'title() raised: ' .. title
-  ]])
+  ]]):format(NAMES_WITH_NO_TEXT[name]))
 
   eq(title, '1 fallback.txt')
 end
@@ -290,7 +294,10 @@ T['tabline()'] = MiniTest.new_set()
 ---@return { str: string, highlights: { group: string, start: integer }[], format: string }
 local function drawn_tabline(setup)
   return in_child(setup .. [[
-    local format = tabs.tabline()
+    local made, format = pcall(tabs.tabline)
+    if not made then
+      return { str = 'tabline() raised: ' .. format, format = '' }
+    end
     local succeeded, drawn =
       pcall(vim.api.nvim_eval_statusline, format, { use_tabline = true, highlights = true })
     drawn = succeeded and drawn or { str = 'the format cannot be drawn: ' .. drawn }
@@ -460,6 +467,9 @@ local NO_LIST = {
   ['one bad id after good ones'] = {
     '{"sessions":["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","bbbbbbbb-bbbb-4bbb-9bbb-bbbbbbbbbbbb","nope"],"current":1}',
   },
+  ['a repeated session id'] = {
+    '{"sessions":["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],"current":2}',
+  },
   ['a current place of 0'] = {
     '{"sessions":["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],"current":0}',
   },
@@ -554,6 +564,39 @@ T['keep_tabs()']['raises an error naming the file, and leaves the kept list as i
   eq(tabs.kept_tabs(state, '/work/project'), { sessions = { FIRST }, current = 1 })
 end
 
+--- Lists `keep_tabs()` refuses to write, because `kept_tabs()` would read
+--- none from them.
+local REFUSED_LISTS = {
+  ['an id of another form'] = { sessions = { 'nope' }, current = 1 },
+  ['an empty list'] = { sessions = {}, current = 1 },
+  ['a repeated id'] = { sessions = { FIRST, FIRST }, current = 1 },
+  ['a current place past the list'] = { sessions = { FIRST }, current = 2 },
+  ['no current place'] = { sessions = { FIRST } },
+  ['a hole in the list'] = { sessions = { [1] = FIRST, [5] = SECOND }, current = 1 },
+  ['something that is no id'] = { sessions = { FIRST, print }, current = 1 },
+}
+
+T['keep_tabs()']['refuses a list kept_tabs() would read as none, naming the file, and keeps the list as it was'] =
+  MiniTest.new_set({
+    parametrize = vim.tbl_map(function(name)
+      return { name }
+    end, vim.fn.sort(vim.tbl_keys(REFUSED_LISTS))),
+  })
+
+T['keep_tabs()']['refuses a list kept_tabs() would read as none, naming the file, and keeps the list as it was'][1] = function(
+  name
+)
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t65-keep-refuses')
+  tabs.keep_tabs(state, '/work/project', { sessions = { THIRD }, current = 1 })
+
+  local kept, failure = pcall(tabs.keep_tabs, state, '/work/project', REFUSED_LISTS[name])
+
+  eq(kept, false)
+  eq(failure:find(list_file_of(state, '/work/project'), 1, true) ~= nil, true)
+  eq(tabs.kept_tabs(state, '/work/project'), { sessions = { THIRD }, current = 1 })
+end
+
 T['keep_tabs()']['leaves no file of its own behind when the replacement fails'] = function()
   local tabs = require('aineo.tabs')
   local state = fixture.directory('t65-keep-leaves-none')
@@ -579,6 +622,116 @@ T['keep_tabs()']['raises an error naming the file when its directory cannot be m
 
   eq(kept, false)
   eq(failure:find(list_file_of(state, '/work/project'), 1, true) ~= nil, true)
+end
+
+T['tabline()']['numbers each click region by the place of its tab page, after :tabmove and a close'] = function()
+  child.cmd('tabnew')
+  child.cmd('tabnew')
+
+  local drawn = drawn_tabline("vim.cmd('tabclose 1')")
+
+  eq(drawn.format:find('%1T 1 [No Name] ', 1, true) ~= nil, true)
+  eq(drawn.format:find('%2T 2 [No Name] ', 1, true) ~= nil, true)
+end
+
+T['tabline()']['numbers the click regions in the order of the places after :tabmove'] = function()
+  child.cmd('tabnew')
+  child.cmd('tabnew')
+
+  local drawn = drawn_tabline("vim.cmd('tabmove 0')")
+
+  eq(drawn.format:find('%1T', 1, true) < drawn.format:find('%2T', 1, true), true)
+  eq(drawn.format:find('%2T', 1, true) < drawn.format:find('%3T', 1, true), true)
+end
+
+--- Draws the tab line at 80 columns over three held tabs named for 30 cells,
+--- with the tab page `current` current.
+---
+---@param current integer
+---@return string
+local function drawn_over_three_long_names(current)
+  return drawn_tabline(([[
+    vim.o.columns = 80
+    for number = 1, 3 do
+      if number > 1 then vim.cmd('tabnew') end
+      tabs.hold(vim.api.nvim_get_current_tabpage(), function()
+        return ('session %%d, fixing the tab line'):format(number)
+      end)
+    end
+    vim.cmd('%dtabnext')
+  ]]):format(current)).str
+end
+
+T['tabline()']['draws only whole titles, the first tab page current, when all would overflow'] = function()
+  eq(drawn_over_three_long_names(1), ' 1 session 1, fixing the t…  2 session 2, fixing the t… ')
+end
+
+T['tabline()']['draws the current tab page and the one before it when the one after would overflow'] = function()
+  eq(drawn_over_three_long_names(2), ' 1 session 1, fixing the t…  2 session 2, fixing the t… ')
+end
+
+T['tabline()']['draws the last tab page current, with the one before it, when all would overflow'] = function()
+  eq(drawn_over_three_long_names(3), ' 2 session 2, fixing the t…  3 session 3, fixing the t… ')
+end
+
+T['title()']["says the buffer's tail for a held tab whose name() holds a NUL, and the line still draws"] = function()
+  child.cmd('edit /tmp/t65-folder/fallback.txt')
+
+  local drawn = drawn_tabline([[
+    tabs.hold(vim.api.nvim_get_current_tabpage(), function() return 'a\0b' end)
+  ]])
+
+  eq(drawn.str, ' 1 fallback.txt ')
+end
+
+T['title()']['keeps a character with its accent when it cuts decomposed text'] = function()
+  local accented = 'e\204\129'
+
+  eq(title_named(string.rep(accented, 30)), '1 ' .. string.rep(accented, 23) .. '…')
+end
+
+T['title()']['keeps a family emoji whole when it cuts'] = function()
+  local family = '👨‍👩‍👧'
+
+  eq(title_named(string.rep(family, 13)), '1 ' .. string.rep(family, 11) .. '…')
+end
+
+T['title()']['says the last part of a buffer name that ends in a slash'] = function()
+  child.cmd('file oil:///work/project/')
+
+  local title = in_child('return tabs.title(vim.api.nvim_get_current_tabpage())')
+
+  eq(title, '1 project')
+end
+
+T['hold()']['raises, and holds nothing, for a tab handle below 1'] = MiniTest.new_set({
+  parametrize = { { 0 }, { -1 } },
+})
+
+T['hold()']['raises, and holds nothing, for a tab handle below 1'][1] = function(handle)
+  local result = in_child(([[
+    local held, failure = pcall(tabs.hold, %d, function() return 'a' end)
+    return { held = held, failure = failure, still_held = #tabs.held() }
+  ]]):format(handle))
+
+  eq(result.held, false)
+  eq(result.failure:find('tab', 1, true) ~= nil, true)
+  eq(result.still_held, 0)
+end
+
+T['closed()']['gives several closed tabs in the order of their handles, whichever was held first'] = function()
+  local result = in_child([[
+    for _ = 1, 16 do vim.cmd('tabnew') end
+    local handles = vim.api.nvim_list_tabpages()
+    for _, index in ipairs({ 17, 9, 2 }) do
+      tabs.hold(handles[index], function() return 'a' end)
+    end
+    vim.cmd('1tabnext')
+    vim.cmd('tabonly')
+    return { closed = tabs.closed(), handles = handles }
+  ]])
+
+  eq(result.closed, { result.handles[2], result.handles[9], result.handles[17] })
 end
 
 T['let_go()'] = MiniTest.new_set()
