@@ -307,6 +307,16 @@ local PREFIX_KEYS = {
   { key = 'N', plug = '<Plug>(aineo-new)', mode = 'n' },
   { key = 'pa', plug = '<Plug>(aineo-pane-agent)', mode = 'n' },
   { key = 'g', plug = '<Plug>(aineo-pane-changes)', mode = 'n' },
+  { key = 'T', plug = '<Plug>(aineo-tab-new)', mode = 'n' },
+  { key = '1', plug = '<Plug>(aineo-tab-1)', mode = 'n' },
+  { key = '2', plug = '<Plug>(aineo-tab-2)', mode = 'n' },
+  { key = '3', plug = '<Plug>(aineo-tab-3)', mode = 'n' },
+  { key = '4', plug = '<Plug>(aineo-tab-4)', mode = 'n' },
+  { key = '5', plug = '<Plug>(aineo-tab-5)', mode = 'n' },
+  { key = '6', plug = '<Plug>(aineo-tab-6)', mode = 'n' },
+  { key = '7', plug = '<Plug>(aineo-tab-7)', mode = 'n' },
+  { key = '8', plug = '<Plug>(aineo-tab-8)', mode = 'n' },
+  { key = '9', plug = '<Plug>(aineo-tab-9)', mode = 'n' },
   { key = 's', plug = '<Plug>(aineo-send)', mode = 'x' },
 }
 
@@ -715,6 +725,33 @@ local function check_terminal_prefix_mappings(resolved_config)
   check_terminal_prefix_risks(terminal_prefix)
 end
 
+--- What a 'tabline' that is aineo's begins with: the expression `aineo.tabs`
+--- sets (`draw_tabline()`), which health does not require.
+local AINEO_TABLINE_PREFIX = "%!v:lua.require'aineo.tabs'."
+
+--- Reports which tab line is in use: aineo's, which it draws while the user's
+--- 'tabline' is empty when the first aineo tab opens; the user's own, which
+--- aineo leaves in place; or Neovim's own, before aineo has drawn its own.
+local function check_tab_line()
+  vim.health.start('Tab line')
+  local tabline = vim.o.tabline
+  if vim.startswith(tabline, AINEO_TABLINE_PREFIX) then
+    vim.health.ok(
+      'aineo draws the tab line: each tab shows its place and, for an aineo tab, its session’s name'
+    )
+  elseif tabline ~= '' then
+    vim.health.info(
+      ("the tab line is yours ('tabline' is %s): aineo draws none; require('aineo').tab_title({n}) gives the title it would draw for a tab page: :help aineo-tabs"):format(
+        tabline
+      )
+    )
+  else
+    vim.health.info(
+      "the tab line is Neovim's own: aineo draws its own when the first aineo tab opens, while 'tabline' is empty: :help aineo-tabs"
+    )
+  end
+end
+
 --- Reports what the autostart decided when the editor started, and why, from
 --- aineo's record (`startup_record()`), with the error an open that failed
 --- met when the record holds it as text.
@@ -754,6 +791,7 @@ function M.check()
   check_server_socket()
   check_prefix_mappings(resolved_config)
   check_terminal_prefix_mappings(resolved_config)
+  check_tab_line()
   check_autostart()
   name_limits()
 end

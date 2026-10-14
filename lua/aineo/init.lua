@@ -21,4 +21,31 @@ function M.setup(opts)
   config.record_setup_options(opts or {})
 end
 
+--- Whether `value` is the number of a tab page: a whole number from 1.
+---
+---@param value any
+---@return boolean
+local function is_tab_page_number(value)
+  return type(value) == 'number' and value >= 1 and value % 1 == 0
+end
+
+--- The title aineo's tab line draws for the tab page numbered `number`, as
+--- `{n}gt` counts them: its number and, for an aineo tab, the name of its
+--- Claude session, for any other tab page the name of its current buffer, cut
+--- to fit (`:help aineo-tabs`). For a 'tabline' of your own to draw the same
+--- titles.
+---
+--- Raises an error naming `number` when it is not a whole number from 1.
+---
+---@param number integer
+---@return string|nil title nil when there is no such tab page
+function M.tab_title(number)
+  vim.validate('number', number, is_tab_page_number, 'a whole number from 1')
+  local tab_page = vim.api.nvim_list_tabpages()[number]
+  if not tab_page then
+    return nil
+  end
+  return require('aineo.tabs').title(tab_page)
+end
+
 return M
