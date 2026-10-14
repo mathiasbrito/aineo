@@ -142,6 +142,7 @@ Each mutant is its literal edit, applied to a copy and restored, run on the one 
 All on Neovim 0.12.5, on the host, from the tree pushed. The host's load average was 66 to 100 during the run, so the whole suite ran as `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 make test`.
 
 - `make test`: 3279 cases in 90 files, `Fails (0) and Notes (0)`, make exit status 0.
+- The branch was then rebased onto `dev` `3f18402` (T63's merge, which touches `lua/aineo/changes/` and its tests only); the two new test files, `tests/test_entry_session_handover.lua` and `make lint` were run again on the rebased tree, 0 fails and clean. The whole suite was not run again after the rebase.
 - While working, each with 0 fails: `tests/test_report_copies.lua` (23 cases), `tests/test_draft_copies.lua` (15), and the files that exercise the code the change touches, none edited: `tests/test_report.lua`, `tests/test_report_buffer.lua`, `tests/test_report_sessions.lua`, `tests/test_draft.lua`, `tests/test_draft_sessions.lua`, `tests/test_mcp_delivery.lua`, `tests/test_entry_session_handover.lua`.
 - `make lint`: StyLua check clean, selene 0 errors, 0 warnings, 0 parse errors.
 - The deep-`require` check prints no line outside a home; `aineo.report.init` requires `aineo.report.home`, `.warning`, `.format` and `.instructions`, and `aineo.draft.init` requires `aineo.draft.home`, inside their own homes.
