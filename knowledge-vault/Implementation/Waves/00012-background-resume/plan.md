@@ -417,6 +417,16 @@ In a scratch folder you trust, where no session you need runs. Read `<id>` as th
 
 Report steps 2–7, 9 and 10 as you saw them, with names and ids left out. Part 2 is planned as written when steps 3, 4 and 5 hold. If step 3 shows nothing, even after `Ctrl+L`, the attach does not render in Neovim's terminal, and part 2 is re-planned.
 
+### Manual check M17 — added 2026-10-14, after the attack review of PR #200; the user's result
+
+A231, the orchestrator's assumption: a terminal that Claude Code attaches by itself is not known to aineo as attached. The check was: in aineo's Claude, type `/resume` and pick a session that runs in the background; then, from another shell in the folder, `claude agents --json --cwd .`.
+
+**The user's result (2026-10-14):** the `/resume` showed the picked session in aineo's window, but the picked session did not appear in the list run from another shell under its own name. The list showed the session's id twice, as two **interactive** rows on one `sessionId` with two pids, and the session was also open in another interactive Claude Code. Reading, the orchestrator's: that `/resume` did not attach — it resumed the session interactively in aineo's own process, which D36–D38 follow as a switch, and aineo's own terminal process is one of the two pids.
+
+What follows (A232, the orchestrator's assumption):
+- an interactive resume is followed as a D38 switch;
+- only the screen line `Opening "<title>", running in the background (<id>)` tells aineo of a true attach, because the list does not show a terminal's own attach under the terminal's process. aineo reads that line from the terminal's screen, marks the terminal attached as its own attach does, and resolves `<id>` through the list for the kept id (`aineo.claude`'s `self_attach`).
+
 ## Verification mutants — round 4
 
 Each runs as its literal edit, shown applied, on the test files that exercise the code it breaks — `tests/test_claude_resume_elsewhere.lua` first — and on the whole suite only when it survives there. Mutants 1–3 are part 1's, and 4–5 are part 2's.
