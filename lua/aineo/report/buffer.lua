@@ -9,10 +9,6 @@ local M = {}
 --- paths' included.
 local REPORT_COLOURS = vim.api.nvim_create_namespace('aineo_report_colours')
 
---- The Report buffer's name. Not a file path: a named buffer is never reused
---- by `:edit` the way an unnamed, empty one is.
-local REPORT_BUFFER_NAME = 'aineo://report'
-
 --- The `'breakindentopt'` of a window showing the Report: a wrapped line
 --- continues after the part of its line that `'formatlistpat'` matches, and
 --- further left only where that would leave it fewer than 10 columns of text.
@@ -32,13 +28,14 @@ local function free_name_held_by(buffer)
   end
 end
 
---- Frees `REPORT_BUFFER_NAME` from every buffer holding it
---- (`free_name_held_by()`): one a restored session or the user made
---- (`:edit aineo://report`) is not the Report, and holds the name the Report
---- needs.
-local function free_report_buffer_name()
+--- Frees `name` from every buffer holding it (`free_name_held_by()`): one a
+--- restored session or the user made (`:edit aineo://report`) is not the
+--- Report, and holds the name the Report needs.
+---
+---@param name string
+local function free_buffer_name(name)
   for _, other in ipairs(vim.api.nvim_list_bufs()) do
-    if vim.api.nvim_buf_get_name(other) == REPORT_BUFFER_NAME then
+    if vim.api.nvim_buf_get_name(other) == name then
       free_name_held_by(other)
     end
   end
@@ -104,7 +101,13 @@ local function double_click(buffer, open_path)
   open_path(path)
 end
 
---- A new Report buffer: unlisted, named `REPORT_BUFFER_NAME` from the start,
+--- What a Report buffer holds that no other editor resource may: its name
+--- and the group of its handlers.
+---@class aineo.report.BufferIdentity
+---@field name string the buffer's name. Not a file path: a named buffer is never reused by `:edit` the way an unnamed, empty one is
+---@field group string the autocommand group of the buffer's handlers
+
+--- A new Report buffer: unlisted, named `identity.name` from the start,
 --- no file (`'buftype'` `nofile`), no swap file, kept when hidden, and
 --- read-only to the user (`'modifiable'` off; `append_rendering()` still
 --- writes).
@@ -114,9 +117,10 @@ end
 --- `:edit` in the Report empties it, as it does any buffer that is no file;
 --- `fill` is then called with the emptied buffer to show its reports again.
 --- The autocommand doing so belongs to the buffer, in the group
---- `aineo_report`, created anew with each Report: that clears the
---- autocommands of any Report before it, which by then is wiped out, or kept
---- unnamed for the text the user typed into it.
+--- `identity.group`, created anew with each Report of that identity: that
+--- clears the autocommands of any Report before it, which by then is wiped
+--- out, or kept unnamed for the text the user typed into it. A Report of
+--- another identity keeps its own.
 ---
 --- A window showing the Report wraps a long line under the text it starts
 --- (`render.CONTINUATION_PATTERN` as its `'formatlistpat'`): each time it
@@ -132,14 +136,15 @@ end
 ---
 ---@param fill fun(buffer: integer) shows the reports in the emptied buffer
 ---@param open_path fun(path: string) opens the file a path the Report draws names
+---@param identity aineo.report.BufferIdentity
 ---@return integer buffer
-function M.create_report_buffer(fill, open_path)
-  free_report_buffer_name()
+function M.create_report_buffer(fill, open_path, identity)
+  free_buffer_name(identity.name)
   local buffer = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_name(buffer, REPORT_BUFFER_NAME)
+  vim.api.nvim_buf_set_name(buffer, identity.name)
   vim.bo[buffer].modifiable = false
   vim.bo[buffer].formatlistpat = render.CONTINUATION_PATTERN
-  local group = vim.api.nvim_create_augroup('aineo_report', {})
+  local group = vim.api.nvim_create_augroup(identity.group, {})
   vim.api.nvim_create_autocmd('BufReadCmd', {
     group = group,
     buffer = buffer,
