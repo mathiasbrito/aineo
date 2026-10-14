@@ -35,6 +35,7 @@ local SELECTION_PAUSE_MS = 150
 ---@field hand_over_changes_session fun(hand_over: aineo.changes.HandOver)
 ---@field refresh_shown_pane fun()
 ---@field pane_buffers fun(): { files: integer, commits: integer }
+---@field let_go? fun() only on a home `require('aineo.changes').new()` made: stops its watch, removes its handlers and wipes its buffers
 
 --- Makes a changes home: its own session, base and saves, pane buffers,
 --- selection, diffs and watch. What the editor shares between homes is the
@@ -721,14 +722,19 @@ function M.new(label)
     end
   end
 
+  --- Whether the home has been let go (`home.let_go()`): nothing follows its
+  --- repository any more.
+  local released = false
+
   --- Starts what follows the repository once the pane has been shown: the
   --- watch, when none runs, and a read of each list; does nothing before the
-  --- repository is found or the pane first shown, nor once the editor is
+  --- repository is found or the pane first shown, nor once the home has been
+  --- let go, nor once the editor is
   --- quitting (`v:exiting`): a look answered then, while a later
   --- `VimLeavePre` waits, starts no watch and no read after the quit has
   --- stopped the watch.
   local function follow_repository()
-    if not (session.repository and session.shown) or vim.v.exiting ~= vim.NIL then
+    if not (session.repository and session.shown) or released or vim.v.exiting ~= vim.NIL then
       return
     end
     if not session.watch then
@@ -1805,6 +1811,37 @@ function M.new(label)
       end
     end
     return { files = buffers.files, commits = buffers.commits }
+  end
+
+  --- Lets the home go, as its tab page closes: stops its watch, removes its
+  --- handlers, by deleting their groups (a group the home never made is no
+  --- error), and wipes its pane's two buffers and the diffs it showed. The
+  --- bases and the saves it kept on disk stay. Nothing follows its repository
+  --- afterwards, whether a look for the repository is answered after this or
+  --- not. Only a home with a label, as `M.new()` makes them, has it. A home
+  --- let go is called no more.
+  ---
+  --- Raises what Neovim raises when a buffer cannot be wiped.
+  local function let_go()
+    released = true
+    if session and session.watch then
+      session.watch.stop()
+      session.watch = nil
+    end
+    pcall(vim.api.nvim_del_augroup_by_name, own_group('aineo_changes'))
+    pcall(vim.api.nvim_del_augroup_by_name, own_group('aineo_changes_commits_scroll'))
+    local to_wipe = vim.tbl_keys(shown_diffs)
+    table.insert(to_wipe, buffers.files)
+    table.insert(to_wipe, buffers.commits)
+    for _, buffer in ipairs(to_wipe) do
+      if vim.api.nvim_buf_is_valid(buffer) then
+        vim.api.nvim_buf_delete(buffer, { force = true })
+      end
+    end
+    shown_diffs, buffers = {}, {}
+  end
+  if label then
+    home.let_go = let_go
   end
 
   return home

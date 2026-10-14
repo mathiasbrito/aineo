@@ -495,4 +495,91 @@ T['two draft homes']['save the change pending in each Input as Neovim starts to 
   }, { first = 'Typed in the first\n', second = 'Typed in the second\n' })
 end
 
+T['a draft home let go'] = MiniTest.new_set()
+
+--- Whether the autocommand group `name` exists in the child.
+---
+---@param name string
+---@return boolean
+local function group_exists(name)
+  return child.lua_get('(pcall(vim.api.nvim_get_autocmds, { group = ... }))', { name })
+end
+
+T['a draft home let go']['is a field of a home new() made, and not of the module'] = function()
+  children.restart(child)
+
+  local kinds = child.lua_get([[(function()
+    local draft = require('aineo.draft')
+    return { home = type(draft.new().let_go), module = type(draft.let_go) }
+  end)()]])
+
+  eq(kinds, { home = 'function', module = 'nil' })
+end
+
+T['a draft home let go']['saves the change pending in its Input at once, and leaves the other home’s pending'] = function()
+  local state = fixture.directory('draft-copies-let-go-saves')
+  start_two_homes(state)
+  follow_and_keep('session-a', 'session-b')
+  set_lines('first_input', { 'Typed in the first' })
+  set_lines('second_input', { 'Typed in the second' })
+
+  child.lua('_G.second.let_go()')
+
+  eq({
+    second = read_text(session_draft_file(state, 'session-b')),
+    first_not_yet = read_text(session_draft_file(state, 'session-a')),
+  }, { second = 'Typed in the second\n', first_not_yet = nil })
+end
+
+T['a draft home let go']['removes its handlers and leaves the module’s'] = function()
+  local state = fixture.directory('draft-copies-let-go-handlers')
+  start_two_homes(state)
+  follow_and_keep('session-a', 'session-b')
+
+  child.lua('_G.second.let_go()')
+
+  eq(
+    { second = group_exists('aineo.draft.2'), module = group_exists('aineo.draft') },
+    { second = false, module = true }
+  )
+end
+
+T['a draft home let go']['saves no change made to its Input afterwards'] = function()
+  local state = fixture.directory('draft-copies-let-go-afterwards')
+  start_two_homes(state)
+  follow_and_keep('session-a', 'session-b')
+  child.lua('_G.second.let_go()')
+
+  set_lines('second_input', { 'Typed after' })
+  child.cmd('doautocmd QuitPre')
+  local saved = wait_for_text(session_draft_file(state, 'session-b'), 'Typed after\n')
+
+  eq(saved, nil)
+end
+
+T['a draft home let go']['removes the file it kept its text in before it followed a session when that holds no text'] = function()
+  local state = fixture.directory('draft-copies-let-go-empty-file')
+  start_two_homes(state)
+  child.lua('_G.second.keep_draft(_G.second_input)')
+  set_lines('second_input', { 'Typed' })
+  wait_for_text(copy_draft_file(state, '2'), 'Typed\n')
+  set_lines('second_input', { '' })
+  wait_for_text(copy_draft_file(state, '2'), '')
+
+  child.lua('_G.second.let_go()')
+
+  eq(read_text(copy_draft_file(state, '2')), nil)
+end
+
+T['a draft home let go']['keeps the file it kept its text in before it followed a session when that holds text'] = function()
+  local state = fixture.directory('draft-copies-let-go-kept-file')
+  start_two_homes(state)
+  child.lua('_G.second.keep_draft(_G.second_input)')
+  set_lines('second_input', { 'Typed' })
+
+  child.lua('_G.second.let_go()')
+
+  eq(read_text(copy_draft_file(state, '2')), 'Typed\n')
+end
+
 return T
