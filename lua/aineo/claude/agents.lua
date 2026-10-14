@@ -118,6 +118,18 @@ function M.is_open_in_another_claude_code(sessions, session_id)
   end)
 end
 
+--- Whether `listed` started in `folder`, the directory aineo lists: its `cwd`
+--- is that directory, links resolved when they exist. `claude agents --json
+--- --cwd` also lists the sessions started under a directory, subfolders
+--- among them, which this does not count.
+---
+---@param listed aineo.claude.ListedSession
+---@param folder string
+---@return boolean
+function M.started_in(listed, folder)
+  return listed.cwd ~= nil and same_directory(listed.cwd, folder)
+end
+
 --- How a start in the window of aineo's Claude Code joins `listed`, a
 --- session another process runs, where it does not resume it: `'attach'`
 --- for a session running in Claude Code's background service that has
