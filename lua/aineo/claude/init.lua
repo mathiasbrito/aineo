@@ -1,5 +1,11 @@
 --- aineo's Claude session home, `require('aineo.claude')`: Claude Code's
 --- interactive CLI running in a terminal buffer.
+---
+--- The module's session functions (`start_session()`, `session_status()`…)
+--- act on one session, the module's own. `new()` gives another copy of them,
+--- over a session of its own; the session hooks of Claude Code reach the copy
+--- whose start has the hook's token (`receive_session_event()`), and quitting
+--- Neovim stops every copy's Claude Code at once.
 
 local agents = require('aineo.claude.agents')
 local arguments = require('aineo.claude.arguments')
@@ -45,54 +51,105 @@ local CHILD_ENVIRONMENT = { AINEO_CHILD = '1' }
 --- for the list of the folder's sessions (`launch_once_listed()`).
 ---@alias aineo.claude.Start { buffer: integer, command: string[], job: integer?, choice: aineo.claude.SessionChoice, settings: aineo.claude.Settings, start_token: string, settings_unread: boolean, attached: boolean?, followed: string, unpaired: aineo.claude.SessionEvent[], ready: boolean?, ready_told: boolean?, exit_code: integer?, launched_at: number?, ended_at: number? }
 
---- The one Claude Code session, once one has started: its last start.
----@type aineo.claude.Start?
-local session
+--- One Claude Code session home: what one copy of this module keeps, its
+--- last start (`new()`).
+---@class aineo.claude.Home
+---@field session aineo.claude.Start? the home's one Claude Code session, once one has started: its last start
+
+--- The home the module itself is: the first copy of its session functions,
+--- which every caller and suite that does not ask for a copy of its own
+--- (`new()`) uses.
+---@type aineo.claude.Home
+local module_home = {}
+
+--- Every home that has made a start, in the order of its first start: the
+--- homes a session hook is routed among by its start's token
+--- (`receive_session_event()`). A home stays in it for good, so that a hook
+--- of its last start is told to it even after its Claude Code has exited.
+---@type aineo.claude.Home[]
+local started_homes = {}
 
 --- How many session hooks have reached this editor: the last one's place in
 --- the order they reached it (`receive_session_event()`).
 local hooks_received = 0
 
---- Whether a session's Claude Code process has not ended yet — whatever
---- became of its terminal.
+--- Whether the Claude Code process of `home`'s session has not ended yet —
+--- whatever became of its terminal.
 ---
+---@param home aineo.claude.Home
 ---@return boolean
-local function is_process_alive()
-  return session ~= nil and session.exit_code == nil
+local function is_process_alive(home)
+  return home.session ~= nil and home.session.exit_code == nil
 end
 
---- Whether a session's Claude Code is running: its process has not ended and
+--- Whether `home`'s Claude Code is running: its process has not ended and
 --- its terminal has not been wiped, which hangs the process up.
 ---
+---@param home aineo.claude.Home
 ---@return boolean
-local function is_running()
-  return is_process_alive() and vim.api.nvim_buf_is_valid(session.buffer)
+local function is_running(home)
+  return is_process_alive(home) and vim.api.nvim_buf_is_valid(home.session.buffer)
 end
 
---- Stops the running Claude Code by its keys, blocking the editor until it
---- has exited or the stop has run out: `stop.stop_by_keys()`'s, or, for a
---- Claude Code attached to a background session, Ctrl+Z alone
---- (`stop.detach()`), never Ctrl-C. Does nothing when its process has ended
---- and when the start has not launched Claude Code yet, so it has no process
---- to stop.
-local function stop_running_session()
-  if is_process_alive() and session.job then
-    local stop_session = session.attached and stop.detach or stop.stop_by_keys
-    stop_session(session.job, function()
-      return not is_process_alive()
-    end)
+--- What stops `home`'s running Claude Code (`stop.stop_together()`): by its
+--- keys or, for a Claude Code attached to a background session, Ctrl+Z
+--- alone, never Ctrl-C. Nothing when its process has ended and when the
+--- start has not launched Claude Code yet, so it has no process to stop.
+---
+---@param home aineo.claude.Home
+---@return aineo.claude.Stop?
+local function stop_of(home)
+  if not (is_process_alive(home) and home.session.job) then
+    return nil
   end
+  return {
+    job = home.session.job,
+    has_exited = function()
+      return not is_process_alive(home)
+    end,
+    way = home.session.attached and 'detach' or 'keys',
+  }
 end
 
---- Makes quitting Neovim stop Claude Code (`stop_running_session()`) while
---- its process has not ended, so that none outlives the editor — also when
+--- Stops the Claude Code of each of `homes` that runs (`stop_of()`) together
+--- (`stop.stop_together()`), blocking the editor until each has exited or its
+--- stop has run out.
+---
+---@param homes aineo.claude.Home[]
+local function stop_running_sessions(homes)
+  stop.stop_together(vim.iter(homes):map(stop_of):totable())
+end
+
+--- Stops `home`'s running Claude Code, as quitting Neovim stops it, blocking
+--- the editor until it has exited or the stop has run out — at most one
+--- stop, 11.8 s — and leaving every other home's Claude Code running
+--- (`stop_running_sessions()`). Does nothing when it does not run.
+---
+---@param home aineo.claude.Home
+local function stop_running_session(home)
+  stop_running_sessions({ home })
+end
+
+--- Whether the editor's one quit handler has been made (`stop_on_quit()`).
+local is_quit_handler_made = false
+
+--- Makes quitting Neovim stop the Claude Code of every home that has made a
+--- start (`started_homes`) while its process has not ended, all at once
+--- (`stop_running_sessions()`), so that none outlives the editor — also when
 --- its terminal was wiped just before, and the stop can only wait for the
---- hangup to end it. Registering it again replaces it.
+--- hangup to end it. Makes the editor's one handler on the first call; later
+--- calls, from any home's start, change nothing.
 local function stop_on_quit()
+  if is_quit_handler_made then
+    return
+  end
+  is_quit_handler_made = true
   vim.api.nvim_create_autocmd('VimLeavePre', {
     group = vim.api.nvim_create_augroup('aineo.claude', {}),
     desc = 'Stop Claude Code by its keys before Neovim quits',
-    callback = stop_running_session,
+    callback = function()
+      stop_running_sessions(started_homes)
+    end,
   })
 end
 
@@ -387,9 +444,10 @@ end
 --- When `jobstart()` cannot run the command, the buffer is wiped and the
 --- error is raised (`run_in_terminal()`).
 ---
+---@param home aineo.claude.Home
 ---@param prepared aineo.claude.Start
 ---@param on_exit fun(ended: aineo.claude.Start)
-local function launch(prepared, on_exit)
+local function launch(home, prepared, on_exit)
   local settings = prepared.settings
   prepared.launched_at = vim.uv.hrtime()
   readiness.watch(prepared.buffer, function(ready)
@@ -397,8 +455,8 @@ local function launch(prepared, on_exit)
     if
       ready
       and not prepared.ready_told
-      and session == prepared
-      and is_running()
+      and home.session == prepared
+      and is_running(home)
       and vim.v.exiting == vim.NIL
     then
       prepared.ready_told = true
@@ -420,12 +478,13 @@ local function launch(prepared, on_exit)
   end)
 end
 
---- Starts Claude Code with `settings` on the session `choice` names, as the
---- one session, its terminal taking the last session's place in every window
---- that showed it, and returns that terminal; keeps the id of a new session
---- for `settings.cwd`. When Claude Code then finds no conversation to resume,
---- a new session takes its place (`start_in_place_of_no_conversation()`).
----@type fun(settings: aineo.claude.Settings, choice: aineo.claude.SessionChoice): integer
+--- Starts Claude Code with `settings` on the session `choice` names, as
+--- `home`'s one session, its terminal taking the last session's place in
+--- every window that showed it, and returns that terminal; keeps the id of a
+--- new session for `settings.cwd`. When Claude Code then finds no
+--- conversation to resume, a new session takes its place
+--- (`start_in_place_of_no_conversation()`).
+---@type fun(home: aineo.claude.Home, settings: aineo.claude.Settings, choice: aineo.claude.SessionChoice): integer
 local start_in_place
 
 --- Calls `callback` from a callback scheduled now or, while the command-line
@@ -477,15 +536,17 @@ local function tell_switch(settings, switch)
 end
 
 --- Tells `settings.on_session_switched` (`tell_switch()`) of the session
---- followed now, once a start has put it in place of `left`, the session
---- followed before that start, and it is another: as a switch whose source
---- is `resume` when the start resumed it and `startup` when it is new, and
---- which gives no reason. Tells nothing after an editor's first start, which
+--- `home` follows now, once a start has put it in place of `left`, the
+--- session followed before that start, and it is another: as a switch whose
+--- source is `resume` when the start resumed it and `startup` when it is new,
+--- and which gives no reason. Tells nothing after a home's first start, which
 --- leaves no session.
 ---
+---@param home aineo.claude.Home
 ---@param settings aineo.claude.Settings
 ---@param left string? the id followed before the start
-local function tell_session_replaced(settings, left)
+local function tell_session_replaced(home, settings, left)
+  local session = home.session
   if left and left ~= session.followed then
     local source = session.choice.resumed and 'resume' or 'startup'
     tell_switch(settings, { id = session.followed, source = source, left = left })
@@ -512,12 +573,13 @@ end
 --- it, its id may not be kept, and neither `settings.on_terminal_replaced`
 --- nor `settings.on_session_switched` is called.
 ---
+---@param home aineo.claude.Home
 ---@param settings aineo.claude.Settings
 ---@param choice aineo.claude.SessionChoice
-local function start_in_place_of_ended_session(settings, choice)
+local function start_in_place_of_ended_session(home, settings, choice)
   local was_typing = is_typing(vim.api.nvim_get_mode().mode)
-  local left = session and session.followed
-  local started, terminal = pcall(start_in_place, settings, choice)
+  local left = home.session and home.session.followed
+  local started, terminal = pcall(start_in_place, home, settings, choice)
   if not was_typing then
     vim.cmd.stopinsert()
   end
@@ -528,7 +590,7 @@ local function start_in_place_of_ended_session(settings, choice)
   if settings.on_terminal_replaced then
     settings.on_terminal_replaced(terminal)
   end
-  tell_session_replaced(settings, left)
+  tell_session_replaced(home, settings, left)
 end
 
 --- When `ended`, a session whose process has ended, resumed an id Claude
@@ -539,17 +601,19 @@ end
 --- while `VimLeavePre` handlers wait, nor once another start has made a
 --- session of its own before the callback ran.
 ---
+---@param home aineo.claude.Home
 ---@param settings aineo.claude.Settings
 ---@param ended table
-local function start_in_place_of_no_conversation(settings, ended)
+local function start_in_place_of_no_conversation(home, settings, ended)
   if not found_no_conversation(ended) then
     return
   end
   schedule_outside_command_line_window(function()
-    if vim.v.exiting ~= vim.NIL or session ~= ended then
+    if vim.v.exiting ~= vim.NIL or home.session ~= ended then
       return
     end
     start_in_place_of_ended_session(
+      home,
       settings,
       { id = session_ids.new_session_id(), resumed = false }
     )
@@ -574,9 +638,10 @@ local ATTACH_FAILED_NOTE = 'aineo: the attach failed; resuming the session'
 --- start has made a session of its own, nor when the terminal was wiped,
 --- which hangs the attach up.
 ---
+---@param home aineo.claude.Home
 ---@param settings aineo.claude.Settings
 ---@param ended table
-local function resume_after_failed_attach(settings, ended)
+local function resume_after_failed_attach(home, settings, ended)
   if
     not ended.attached
     or ended.exit_code == 0
@@ -587,13 +652,13 @@ local function resume_after_failed_attach(settings, ended)
   schedule_outside_command_line_window(function()
     if
       vim.v.exiting ~= vim.NIL
-      or session ~= ended
+      or home.session ~= ended
       or not vim.api.nvim_buf_is_valid(ended.buffer)
     then
       return
     end
     vim.notify(ATTACH_FAILED_NOTE, vim.log.levels.INFO)
-    start_in_place_of_ended_session(settings, ended.choice)
+    start_in_place_of_ended_session(home, settings, ended.choice)
   end)
 end
 
@@ -603,32 +668,37 @@ end
 --- the session it was to attach to is resumed
 --- (`resume_after_failed_attach()`).
 ---
+---@param home aineo.claude.Home
 ---@param prepared aineo.claude.Start
-local function launch_start(prepared)
-  launch(prepared, function(ended)
-    start_in_place_of_no_conversation(prepared.settings, ended)
-    resume_after_failed_attach(prepared.settings, ended)
+local function launch_start(home, prepared)
+  launch(home, prepared, function(ended)
+    start_in_place_of_no_conversation(home, prepared.settings, ended)
+    resume_after_failed_attach(home, prepared.settings, ended)
   end)
 end
 
---- Makes `started` the one session, its terminal taking the place of
+--- Makes `started` `home`'s one session, its terminal taking the place of
 --- `previous`'s, the last session's, in every window that showed it.
 ---
+---@param home aineo.claude.Home
 ---@param started aineo.claude.Start
 ---@param previous aineo.claude.Start?
-local function become_the_session(started, previous)
-  session = started
+local function become_the_session(home, started, previous)
+  home.session = started
+  if not vim.tbl_contains(started_homes, home) then
+    table.insert(started_homes, home)
+  end
   stop_on_quit()
   if previous then
     replace_terminal(previous.buffer, started.buffer)
   end
 end
 
-start_in_place = function(settings, choice)
-  local previous = session
+start_in_place = function(home, settings, choice)
+  local previous = home.session
   local started = prepare_start(settings, choice)
-  launch_start(started)
-  become_the_session(started, previous)
+  launch_start(home, started)
+  become_the_session(home, started, previous)
   if not choice.resumed then
     keep_session_id(settings, choice.id)
   end
@@ -636,31 +706,33 @@ start_in_place = function(settings, choice)
 end
 
 --- Whether `waiting`, a start with no job yet, may launch Claude Code now: it
---- is still the session, its buffer has been neither wiped nor unloaded (a
+--- is still `home`'s session, its buffer has been neither wiped nor unloaded (a
 --- `:bdelete` unloads it, and wipes it a moment later, since a terminal
 --- cannot start in a buffer that is not loaded), and Neovim is not quitting
 --- (`v:exiting` set, as it is while `VimLeavePre` handlers wait).
 ---
+---@param home aineo.claude.Home
 ---@param waiting aineo.claude.Start
 ---@return boolean
-local function may_launch(waiting)
-  return session == waiting
+local function may_launch(home, waiting)
+  return home.session == waiting
     and waiting.job == nil
     and vim.api.nvim_buf_is_loaded(waiting.buffer)
     and vim.v.exiting == vim.NIL
 end
 
 --- Tells the user what the start that has just launched Claude Code, the
---- session now, calls for: a warning when its `claude.cmd`'s `--settings`
---- cannot be read, and the switch to its session
+--- session of `home` now, calls for: a warning when its `claude.cmd`'s
+--- `--settings` cannot be read, and the switch to its session
 --- (`tell_session_replaced()`) from `left`, the session followed before it.
 ---
+---@param home aineo.claude.Home
 ---@param left string? the id followed before the start
-local function announce_launch(left)
-  if session.settings_unread then
+local function announce_launch(home, left)
+  if home.session.settings_unread then
     vim.notify(SETTINGS_UNREAD_WARNING, vim.log.levels.WARN)
   end
-  tell_session_replaced(session.settings, left)
+  tell_session_replaced(home, home.session.settings, left)
 end
 
 --- Makes `waiting`, a start with no job yet, a start that attaches to
@@ -700,12 +772,13 @@ end
 --- user once, as an error starting with `aineo:` and holding the first line
 --- of what failed (`first_line_of()`).
 ---
+---@param home aineo.claude.Home
 ---@param waiting aineo.claude.Start
 ---@param left string? the id followed before the start
-local function launch_once_listed(waiting, left)
+local function launch_once_listed(home, waiting, left)
   agents.list_sessions(waiting.settings.cmd, waiting.settings.cwd, function(sessions)
     schedule_outside_command_line_window(function()
-      if not may_launch(waiting) then
+      if not may_launch(home, waiting) then
         return
       end
       local background = agents.running_in_background(sessions or {}, waiting.choice.id)
@@ -713,7 +786,7 @@ local function launch_once_listed(waiting, left)
         attach_to(waiting, background)
       end
       local was_typing = is_typing(vim.api.nvim_get_mode().mode)
-      local launched, failure = pcall(launch_start, waiting)
+      local launched, failure = pcall(launch_start, home, waiting)
       if not was_typing then
         vim.cmd.stopinsert()
       end
@@ -721,7 +794,7 @@ local function launch_once_listed(waiting, left)
         vim.notify('aineo: ' .. first_line_of(failure), vim.log.levels.ERROR)
         return
       end
-      announce_launch(left)
+      announce_launch(home, left)
       if background then
         vim.notify(ATTACHED_NOTE, vim.log.levels.INFO)
       elseif agents.is_open_in_another_claude_code(sessions or {}, waiting.choice.id) then
@@ -731,27 +804,28 @@ local function launch_once_listed(waiting, left)
   end)
 end
 
---- Starts a resume of `choice` as the one session: its terminal buffer,
+--- Starts a resume of `choice` as `home`'s one session: its terminal buffer,
 --- still empty, takes the last session's place at once, and Claude Code
 --- launches in it once the list of the folder's sessions has answered
 --- (`launch_once_listed()`). The list is asked for before the terminals are
 --- swapped: an error the swap raises, from an autocommand of the user's, then
 --- leaves a start that goes on to launch.
 ---
+---@param home aineo.claude.Home
 ---@param settings aineo.claude.Settings
 ---@param choice aineo.claude.SessionChoice
 ---@param left string? the id followed before the start
 ---@return integer buffer
-local function start_after_list(settings, choice, left)
-  local previous = session
+local function start_after_list(home, settings, choice, left)
+  local previous = home.session
   local waiting = prepare_start(settings, choice)
-  launch_once_listed(waiting, left)
-  become_the_session(waiting, previous)
+  launch_once_listed(home, waiting, left)
+  become_the_session(home, waiting, previous)
   return waiting.buffer
 end
 
 --- Whether a pick of `listed`, a session another process runs, can be joined
---- in aineo's window (`M.join_session()`): it can be attached to, or it is
+--- in aineo's window (`join_session()`): it can be attached to, or it is
 --- open in another interactive Claude Code and can be resumed
 --- (`agents.way_to_join()`) and, when `folder` is given, it started in it
 --- (`agents.started_in()`): a session started in another folder would be
@@ -760,20 +834,21 @@ end
 ---@param listed aineo.claude.ListedSession
 ---@param folder? string
 ---@return boolean
-function M.can_join_session(listed, folder)
+local function can_join_session(listed, folder)
   return agents.way_to_join(listed) ~= nil and (folder == nil or agents.started_in(listed, folder))
 end
 
---- Whether the running Claude Code is attached to a background session
+--- Whether `home`'s running Claude Code is attached to a background session
 --- (`attach_to()`): what aineo writes into it reaches that session, so
---- aineo replaces it (`M.replace_session()`) where it would write a command.
+--- aineo replaces it (`replace_session()`) where it would write a command.
 ---
+---@param home aineo.claude.Home
 ---@return boolean
-function M.is_attached()
-  return is_running() and session.attached == true
+local function is_attached(home)
+  return is_running(home) and home.session.attached == true
 end
 
---- Replaces the running Claude Code with a start prepared for `choice`, in
+--- Replaces `home`'s running Claude Code with a start prepared for `choice`, in
 --- the windows that show the running one's terminal, and returns the new
 --- terminal; keeps `choice`'s id for `settings.cwd`, so that the next start
 --- there lands in it. `background`, a listed background session, makes the
@@ -781,22 +856,23 @@ end
 --- stopped after the start is prepared, so that an error preparing it
 --- stops nothing (`stop_running_session()`): by Ctrl+Z, for an attached one.
 ---
+---@param home aineo.claude.Home
 ---@param settings aineo.claude.Settings
 ---@param choice aineo.claude.SessionChoice
 ---@param background? aineo.claude.ListedSession
 ---@return integer buffer
-local function replace_running_session(settings, choice, background)
-  local previous = session
+local function replace_running_session(home, settings, choice, background)
+  local previous = home.session
   local left = previous and previous.followed
   local replacement = prepare_start(settings, choice)
-  stop_running_session()
+  stop_running_session(home)
   if background then
     attach_to(replacement, background)
   end
-  launch_start(replacement)
-  become_the_session(replacement, previous)
+  launch_start(home, replacement)
+  become_the_session(home, replacement, previous)
   keep_session_id(settings, choice.id)
-  announce_launch(left)
+  announce_launch(home, left)
   return replacement.buffer
 end
 
@@ -804,24 +880,26 @@ end
 --- aineo's own start: a new session on a new id, or, with `choice`, that
 --- session resumed. It is what `:Aineo new` and a switch of `:Aineo
 --- sessions` do where the running Claude Code is attached
---- (`M.is_attached()`) and a command written into it would reach the
+--- (`is_attached()`) and a command written into it would reach the
 --- background session. Stops, launches and keeps the id as
 --- `replace_running_session()` does, and raises the errors `start_session()`
 --- raises, before it stops anything. Returns the new terminal.
 ---
+---@param home aineo.claude.Home
 ---@param settings aineo.claude.Settings
 ---@param choice? aineo.claude.SessionChoice a session to resume; nil for a new session
 ---@return integer buffer the terminal buffer Claude Code runs in
-function M.replace_session(settings, choice)
+local function replace_session(home, settings, choice)
   validate_settings(settings)
   return replace_running_session(
+    home,
     settings,
     choice or { id = session_ids.new_session_id(), resumed = false }
   )
 end
 
 --- Replaces the running Claude Code with one on `listed`, a session another
---- process runs that can be joined (`M.can_join_session()`, with
+--- process runs that can be joined (`can_join_session()`, with
 --- `settings.cwd` as the folder), in the windows that show the running
 --- one's terminal, and returns the new terminal; keeps the session's id for
 --- `settings.cwd`, so that the next start there lands in it. A session
@@ -832,26 +910,27 @@ end
 --- interactive Claude Code, which has no short id to attach to, is resumed
 --- with `--resume`, as a start resumes it, and the user is warned of the
 --- other Claude Code (`ALSO_OPEN_WARNING`). The running Claude Code is
---- stopped as `M.replace_session()` stops it. `settings.on_session_switched`
+--- stopped as `replace_session()` stops it. `settings.on_session_switched`
 --- is told the switch (`tell_session_replaced()`), and
 --- `settings.on_session_ready` is called when the new Claude Code is ready.
 --- Raises an error, starting nothing and stopping nothing, when `settings`
 --- is malformed, `claude.cmd` is not executable, or `listed` cannot be
 --- joined.
 ---
+---@param home aineo.claude.Home
 ---@param settings aineo.claude.Settings
 ---@param listed aineo.claude.ListedSession
 ---@param sessions aineo.claude.ListedSession[] the list read just now
 ---@return integer buffer the terminal buffer Claude Code runs in
-function M.join_session(settings, listed, sessions)
+local function join_session(home, settings, listed, sessions)
   validate_settings(settings)
   local background = agents.running_in_background(sessions, listed.session_id)
   local target = background or listed
-  if not M.can_join_session(target, settings.cwd) then
+  if not can_join_session(target, settings.cwd) then
     error('aineo.claude: the session ' .. listed.session_id .. ' cannot be joined', 2)
   end
   local buffer =
-    replace_running_session(settings, { id = listed.session_id, resumed = true }, background)
+    replace_running_session(home, settings, { id = listed.session_id, resumed = true }, background)
   if agents.way_to_join(target) == 'attach' then
     vim.notify(ATTACHED_NOTE, vim.log.levels.INFO)
   else
@@ -862,9 +941,10 @@ end
 
 --- Starts Claude Code in a new terminal buffer and returns that buffer. While
 --- a session runs it starts nothing and returns that session's buffer: one
---- Claude Code at a time. Once it has exited, it starts a new one, whose
---- terminal takes the old one's place in every window that showed it.
---- Quitting Neovim stops a running Claude Code by its keys first.
+--- Claude Code at a time for each copy of the session functions (`new()`).
+--- Once it has exited, it starts a new one, whose terminal takes the old
+--- one's place in every window that showed it. Quitting Neovim stops every
+--- copy's running Claude Code by its keys first, all at once.
 ---
 --- Claude Code resumes the session id kept for `settings.cwd` under
 --- `settings.state_directory` (`--resume`). Where none is kept — or the kept
@@ -970,20 +1050,21 @@ end
 --- missing — raises nothing: its session reports `'exited'` with 122, the
 --- code Neovim 0.12.5's terminal job exits with then.
 ---
+---@param home aineo.claude.Home
 ---@param settings aineo.claude.Settings
 ---@return integer buffer the terminal buffer Claude Code runs in
-function M.start_session(settings)
+local function start_session(home, settings)
   validate_settings(settings)
-  if is_running() then
-    return session.buffer
+  if is_running(home) then
+    return home.session.buffer
   end
-  local left = session and session.followed
+  local left = home.session and home.session.followed
   local choice = kept_or_new_session(settings)
   if choice.resumed then
-    return start_after_list(settings, choice, left)
+    return start_after_list(home, settings, choice, left)
   end
-  local terminal = start_in_place(settings, choice)
-  announce_launch(left)
+  local terminal = start_in_place(home, settings, choice)
+  announce_launch(home, left)
   return terminal
 end
 
@@ -996,16 +1077,17 @@ end
 --- hangs Claude Code up, and once its process has ended, with the exit code
 --- from then on. Nothing before a session has started.
 ---
+---@param home aineo.claude.Home
 ---@return string? state
 ---@return integer? exit_code
-function M.session_status()
-  if not session then
+local function session_status(home)
+  if not home.session then
     return nil
   end
-  if not is_running() then
-    return 'exited', session.exit_code
+  if not is_running(home) then
+    return 'exited', home.session.exit_code
   end
-  if session.ready then
+  if home.session.ready then
     return 'ready'
   end
   return 'starting'
@@ -1096,32 +1178,36 @@ local function follow_switches(running)
   end
 end
 
---- What `told` does to the session: held with the hooks of the running start
---- not paired yet, it may complete a switch (`follow_switches()`), whatever
---- order the hooks reach the editor in — each comes from a process of its
---- own. Anything else does nothing — a hook of another start than the
---- running one, a hook that ran after the running start's process ended
---- (another process Claude Code started with the start's `--settings`), an
---- id of another form than Claude Code's (`session_ids.is_session_id()`),
---- and every hook once Neovim is quitting (`v:exiting` set) among them.
+--- What `told` does to the session of the home whose last start has its
+--- token (`started_homes`): held with the hooks of that start not paired
+--- yet, it may complete a switch (`follow_switches()`), whatever order the
+--- hooks reach the editor in — each comes from a process of its own.
+--- Anything else does nothing — a hook of a start that is no home's last, a
+--- hook that ran after its start's process ended (another process Claude
+--- Code started with the start's `--settings`), an id of another form than
+--- Claude Code's (`session_ids.is_session_id()`), and every hook once Neovim
+--- is quitting (`v:exiting` set) among them.
 ---
 ---@param told aineo.claude.SessionEvent
 local function take_session_event(told)
+  local home = vim.iter(started_homes):find(function(started)
+    return started.session.start_token == told.start_token
+  end)
   if
     vim.v.exiting ~= vim.NIL
-    or not session
-    or session.start_token ~= told.start_token
+    or not home
     or not session_ids.is_session_id(told.id)
-    or (session.ended_at and told.ran and told.ran > session.ended_at)
+    or (home.session.ended_at and told.ran and told.ran > home.session.ended_at)
   then
     return
   end
-  table.insert(session.unpaired, told)
-  follow_switches(session)
+  table.insert(home.session.unpaired, told)
+  follow_switches(home.session)
 end
 
 --- Takes what a session hook of Claude Code told the editor through the hook
---- relay (`aineo.claude.hook_relay`): `event`, `SessionStart` or
+--- relay (`aineo.claude.hook_relay`), for the session functions whose last
+--- start has `start_token`, and for no others: `event`, `SessionStart` or
 --- `SessionEnd`; `session_id`, the session that started or ended; `cause`,
 --- its `source` or `reason` (nil or `vim.NIL` when the hook gave none);
 --- `start_token`, the token of the start whose hook ran; and `ran`, when the
@@ -1193,17 +1279,19 @@ end
 --- place of a resume Claude Code found no conversation for. Once Claude Code
 --- has exited it stays the last id followed. Nil before any start.
 ---
+---@param home aineo.claude.Home
 ---@return string?
-function M.session_id()
-  return session and session.followed
+local function session_id(home)
+  return home.session and home.session.followed
 end
 
 --- The directory the session's Claude Code started in, whatever the
 --- editor's working directory is now. Nil before any start.
 ---
+---@param home aineo.claude.Home
 ---@return string?
-function M.session_directory()
-  return session and session.settings.cwd
+local function session_directory(home)
+  return home.session and home.session.settings.cwd
 end
 
 --- Whether `text` is a session id of the form Claude Code gives, a
@@ -1260,7 +1348,7 @@ end
 ---
 ---@param window integer
 ---@return boolean
-function M.prompt_shows_text(window)
+local function prompt_shows_text(window)
   return prompt.shows_text(window)
 end
 
@@ -1312,12 +1400,93 @@ end
 --- `nvim_chan_send()`'s own error when the terminal's stream has closed
 --- before Neovim has seen the process end.
 ---
+---@param home aineo.claude.Home
 ---@param bytes string
-function M.write_to_session(bytes)
-  if not is_running() or not session.job then
+local function write_to_session(home, bytes)
+  if not is_running(home) or not home.session.job then
     error('aineo.claude: no Claude Code session is running to write to', 2)
   end
-  vim.api.nvim_chan_send(session.job, bytes)
+  vim.api.nvim_chan_send(home.session.job, bytes)
+end
+
+--- The token of the last start of `home`'s Claude Code: the one its session
+--- hooks and its report server name (`prepare_start()`). Nil before a start.
+---
+---@param home aineo.claude.Home
+---@return string?
+local function start_token(home)
+  return home.session and home.session.start_token
+end
+
+--- The functions of one session home, called as fields: each is the
+--- function of the same name above, for the home it was made with.
+---@class aineo.claude.Session
+---@field stop_session fun() stops the home's running Claude Code as quitting stops it (`stop_running_session()`), leaving every other home's running
+---@field start_token fun(): string? see `start_token()`
+---@field start_session fun(settings: aineo.claude.Settings): integer see `start_session()`
+---@field join_session fun(settings: aineo.claude.Settings, listed: aineo.claude.ListedSession, sessions: aineo.claude.ListedSession[]): integer see `join_session()`
+---@field can_join_session fun(listed: aineo.claude.ListedSession, folder?: string): boolean see `can_join_session()`
+---@field replace_session fun(settings: aineo.claude.Settings, choice?: aineo.claude.SessionChoice): integer see `replace_session()`
+---@field is_attached fun(): boolean see `is_attached()`
+---@field session_status fun(): string?, integer? see `session_status()`
+---@field session_id fun(): string? see `session_id()`
+---@field session_directory fun(): string? see `session_directory()`
+---@field prompt_shows_text fun(window: integer): boolean see `prompt_shows_text()`
+---@field write_to_session fun(bytes: string) see `write_to_session()`
+
+--- The session functions of `home`.
+---
+---@param home aineo.claude.Home
+---@return aineo.claude.Session
+local function session_functions_of(home)
+  return {
+    start_session = function(settings)
+      return start_session(home, settings)
+    end,
+    join_session = function(settings, listed, sessions)
+      return join_session(home, settings, listed, sessions)
+    end,
+    can_join_session = can_join_session,
+    replace_session = function(settings, choice)
+      return replace_session(home, settings, choice)
+    end,
+    is_attached = function()
+      return is_attached(home)
+    end,
+    session_status = function()
+      return session_status(home)
+    end,
+    session_id = function()
+      return session_id(home)
+    end,
+    session_directory = function()
+      return session_directory(home)
+    end,
+    prompt_shows_text = prompt_shows_text,
+    write_to_session = function(bytes)
+      write_to_session(home, bytes)
+    end,
+    stop_session = function()
+      stop_running_session(home)
+    end,
+    start_token = function()
+      return start_token(home)
+    end,
+  }
+end
+
+--- A session home of its own: the module's per-session functions
+--- (`aineo.claude.Session`), called as fields, over a session that no other
+--- copy and not the module shares. Each call gives a new copy; the module
+--- itself is one more, made when it loads.
+---
+---@return aineo.claude.Session
+function M.new()
+  return session_functions_of({})
+end
+
+for name, session_function in pairs(session_functions_of(module_home)) do
+  M[name] = session_function
 end
 
 return M
