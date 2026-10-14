@@ -35,7 +35,7 @@ The router: `aineo.report.set_report_router(router)` (nil takes it away). `recei
 Decisions made inside the packet, none of them spec:
 
 1. A copy has a sixth field, `receive_session_report`, beside the brief's five: the router's copy must be handed the report, and "the copy's rules of today decide" needs that function on the copy.
-2. A router may return `require('aineo.report')` for the first tab's copy. The module's copy is not reachable otherwise, and handing the report to the module would call the router again, in a tail-call loop without end (mutant m6). The module stands for its copy.
+2. A router may return `require('aineo.report')` for the first tab's copy. The module's copy is not reachable otherwise, and handing the report to the module would call the router again, in a tail-call loop without end (mutant m6). The module stands for its copy. A registry of the copies `new()` made (A275, fix round) decides what else a router may return: nothing but a copy or the module.
 3. `warned` (the draft's once-per-kind warnings) is per copy: its docstrings said "once per editor" and now say "once per home". The brief did not name it.
 4. No teardown: the groups and the Report of a copy whose tab closed stay. T66 and T67 decide when a copy goes, and may add a `let_go()` as the layout's.
 
@@ -107,7 +107,7 @@ Each mutant is its literal edit, applied to a copy and restored, run on the one 
 | m3. `buffer_group = ('aineo_report_%d'):format(copies_made)` → `buffer_group = 'aineo_report'` | killed by assertion: 1 |
 | m4. `retry_group = ('aineo.report.%d'):format(copies_made)` → `retry_group = 'aineo.report'` | killed by assertion: 1 |
 | m5. `report/home.lua`: `followed_session` hoisted | killed by assertion: 3 |
-| m6. `report/init.lua`: `if chosen == M then chosen = module_copy end` deleted | killed by a hang, not an assertion: the router returning the module loops in tail calls; the run was bounded with `AINEO_TEST_RUN_LIMIT_MS=100000` and ended with the file still running |
+| m6. `report/init.lua`: `if chosen == M then chosen = module_copy end` deleted | killed by a hang in the first round (the router returning the module loops in tail calls; the run was bounded with `AINEO_TEST_RUN_LIMIT_MS=100000`); killed by assertion since the fix round (f5) |
 | m7. `local asked, chosen = pcall(router, session_id, options)` → `local asked, chosen = true, router(session_id, options)` | killed by assertion: 1 (the first form of the case killed it by crash; the case now calls through `pcall`) |
 | m8. the `if chosen == nil then return false end` guard deleted | killed by assertion: 1 |
 | m9. `if not is_report_home(chosen) then` → `if false then` | killed by assertion: 1 |
@@ -131,7 +131,7 @@ Each mutant is its literal edit, applied to a copy and restored, run on the one 
 | d5. `followed_as_claim` hoisted | killed by assertion: 1 |
 | d6. `directory_draft_moved` hoisted | killed by assertion: 1 |
 | d7. `hand_overs_waiting` hoisted | killed by assertion: 1 |
-| d8. `replacements_waiting` hoisted | survived; equivalent on the state measured (two copies, each with its own buffers): the table is keyed by buffer number, which no two copies share |
+| d8. `replacements_waiting` hoisted | survived the first 15 cases, called equivalent on the state of two copies with a buffer each; the review built the input that separates it (one buffer kept by both copies, a swap held under textlock) and the fix round pins it: killed by assertion, see the fix round |
 | d9. `warned` hoisted | survived the first 14 cases; killed by assertion: 1 once `each tell the user once of a draft they cannot read` existed |
 | d11. `vim.api.nvim_clear_autocmds({ group = group, buffer = buffer })` → `vim.api.nvim_clear_autocmds({ group = 'aineo.draft' })` | killed by assertion: 2. A first form, `{ event = 'BufUnload' }`, changed nothing observable and was dropped: Neovim's clear with an event alone leaves buffer-local autocommands |
 | d12. the `BufWinEnter` callback's `copy.keep_draft(buffer)` → `require('aineo.draft').keep_draft(buffer)` | killed by assertion: 1 |
@@ -145,14 +145,53 @@ All on Neovim 0.12.5, on the host, from the tree pushed. The host's load average
 - The branch was then rebased onto `dev` `3f18402` (T63's merge, which touches `lua/aineo/changes/` and its tests only); the two new test files, `tests/test_entry_session_handover.lua` and `make lint` were run again on the rebased tree, 0 fails and clean. The whole suite was not run again after the rebase.
 - While working, each with 0 fails: `tests/test_report_copies.lua` (23 cases), `tests/test_draft_copies.lua` (15), and the files that exercise the code the change touches, none edited: `tests/test_report.lua`, `tests/test_report_buffer.lua`, `tests/test_report_sessions.lua`, `tests/test_draft.lua`, `tests/test_draft_sessions.lua`, `tests/test_mcp_delivery.lua`, `tests/test_entry_session_handover.lua`.
 - `make lint`: StyLua check clean, selene 0 errors, 0 warnings, 0 parse errors.
+- After the fix round, on the pushed tree, `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 make test` on Neovim 0.12.5: 3304 cases in 91 files, `Fails (0) and Notes (0)`, exit 0. A first run of that tree failed one case of `tests/test_health.lua` (the Ctrl-C of a check, timing on a host at a load average above 60); the file alone passed, and a second whole run passed. `tests/test_report_copies.lua` has 29 cases and `tests/test_draft_copies.lua` 17.
 - The deep-`require` check prints no line outside a home; `aineo.report.init` requires `aineo.report.home`, `.warning`, `.format` and `.instructions`, and `aineo.draft.init` requires `aineo.draft.home`, inside their own homes.
 
 ## Open threads
 
-- The cases are 38, not the brief's twelve: the extra are pins of state kept apart (claim, directory move, hand-overs, environment, warnings, an Input shown again), each from a hoisting mutant that survived without it.
+- The cases are 46 after the fix round (23 + 15 before it), not the brief's twelve: the extra are pins of state kept apart (claim, directory move, hand-overs, environment, warnings, an Input shown again), each from a hoisting mutant that survived without it.
 - `aineo.mcp.editor` still calls `require('aineo.report').receive_report(...)` for the path it names; it reaches the module's copy. Which copy it should reach is T64's and T66's.
 - The names `new` of `aineo.report` and `aineo.draft` repeat the one of `aineo.layout` (the brief names it so).
 - A copy's Report, groups and handlers stay when its tab closes (decision 4).
+
+## Fix round (review of PR #209)
+
+The orchestrator's rulings, assumptions under the user's instruction of 2026-10-06 and never the user's decisions: A274 (attack 1), A275 (attack 2), A276 (attack 3), A277 (attack 8, T64's, no change here). Each case below was run against the head the review read (`fef102f`) before the code that answers it was put back: the reds are from that run.
+
+**Attack 1, A274.** Only the module's copy uses the editor's directory records file and directory draft file. `aineo.report.Identity` and `aineo.draft.Identity` gained `label` (nil for the module's copy; the copy's number for a `new()` copy). A copy with a label:
+
+- keeps a report it takes before its first follow (`at_start`) in the records of the report's own session (`unfollowed_destination()`), which the offer names, and answers false to `keep_with_directory`;
+- keeps a report received otherwise before its first follow in `<sha256(wd)>-<label>.jsonl`, and the text of its Input before its first follow in `<sha256(wd)>-<label>.txt` (`records.records_file()` and `draft_file()` take the label); its first non-claim follow moves that file into the followed session as the module's copy does with the directory's.
+
+Two copies before their first follow never share a file. New or changed cases: report `hands an offer at the start to the home it chooses before it follows…` (red: the module's Report showed `B at start`), `leaves the working directory's records to the module…` (red: the report was kept in the directory's records), `each move what they kept before their first follow…` (replaces the directory-move case; red: the second copy took the directory's records); draft `keep the text typed before the first follow out of the module's draft…` (replaces the directory-move case; red: the module's Input showed `tab 2 notes`).
+
+**Attack 2, A275.** `report/home.lua` keeps a weak-keyed registry of the copies `new()` made (`is_copy()`), and `receive_through_router()` checks it after mapping the module to its copy, so a proxy, an object that delegates to a copy or the module, or a shallow copy is refused with one warning and answers false. Cases: `that chooses what only looks like a home…` (3 rows: a proxy of the module, a delegating object, a shallow copy; red against `fef102f` by a hang, the run did not finish within its 150 s bound, as the review measured) and `gives a home taking the module, which is asked once` (the counting router of the tests review, arrived green; its mutant f5 is the case's kill).
+
+**Attack 3, A276.** `new()` of each home creates its group itself (`nvim_create_augroup(…, { clear = false })`) after choosing the number, so a reloaded module skips a live copy's number whether or not its Report or Input exists. The two docstrings say "does not exist yet". Cases: report `keeps its names when the module is loaded again before its Report exists` (red: the new copy was `aineo://report-2` and wiped the old one's Report) and draft `keeps its group when the module is loaded again before it keeps an Input` (red: the newer copy's text was not saved at `QuitPre`).
+
+**Tests 1.** The `at_start` offer through the router reaching a chosen copy that follows nothing is the A274 case above; it kills the mutant that drops `options` (f8) by assertion.
+
+**Tests 2 / attack 4.** `leave a swap held under textlock to the home that asked for it, though one buffer is kept by both` pins d8 (two retries, the Input ends as `Delta`; arrived green on `fef102f`, killed d8 by assertion). d8 is no longer called equivalent: it is separated only by a buffer that two homes keep, which no composition does.
+
+**Tests 4, 5, 6.** The mutant count is 34 for the first round (22 `m`, 12 `d`), 44 with this round's ten. The draft docstring of the `SafeState` retry names the copy's group (`identity.group_name`; `aineo.draft` for the module's). `that raises takes nothing…` offers twice and expects two warnings, one for each failing offer.
+
+Fix-round mutants (literal edits, run on the home's copies file):
+
+| Mutant | Result |
+|---|---|
+| f1. `report/home.lua`: `, identity.label)` → `)` (both calls of `records.records_file()`) | killed by assertion: 1 |
+| f2. `report/home.lua`, `unfollowed_destination()`: `if not identity.label then` → `if true then` | killed by assertion: 1 (the first form of the case survived it, the label file carrying the report to the same place; the case now reads the session's records before the follow) |
+| f3. `report/home.lua`: `if identity.label then return false end` deleted | killed by assertion: 1 |
+| f4. `report/init.lua`: `if not home.is_copy(chosen) then` → `if false then` | killed by a hang (the three look-alike routers loop), run bounded |
+| f5. `report/init.lua`: `if chosen == M then chosen = module_copy end` deleted (m6 again) | killed by assertion: 1 |
+| f6. `report/home.lua`: `copies[copy] = true` deleted | killed by assertion: 3 |
+| f7. `report/init.lua`: the `nvim_create_augroup(('aineo_report_%d'):format(copies_made), { clear = false })` line deleted | killed by assertion: 1 |
+| f8. `report/init.lua`: `chosen.receive_session_report(arguments, session_id, options)` → `…(arguments, session_id)` | killed by assertion: 1 |
+| f9. `draft/home.lua`: `, identity.label)` → `)` | killed by assertion: 1 |
+| f10. `draft/init.lua`: the `nvim_create_augroup(group_name, { clear = false })` line deleted | killed by assertion: 1 |
+| d8 again | killed by assertion: 1 |
+| m1, m2, m15 (report), d2, d6 (draft) again on the changed code | killed by assertion: 12, 2 of 4 (the others by `E86`/`E216`), 1, 6, 1 |
 
 ## Task lines
 

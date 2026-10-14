@@ -77,8 +77,9 @@ local router
 ---
 --- The router is called with the report's session id and the offer's options,
 --- as `receive_session_report()` was given them, and returns the copy, a
---- `new()` copy or this module, which stands for its own; or nil when no
---- copy is to take the report.
+--- `new()` copy or this module, which stands for its own, and nothing else:
+--- a proxy of a copy, an object that delegates to one and a shallow copy of
+--- one are no copy; or nil when no copy is to take the report.
 ---
 --- Raises an error naming `router` when it is neither a function nor nil.
 ---
@@ -86,15 +87,6 @@ local router
 function M.set_report_router(chosen_router)
   vim.validate('router', chosen_router, 'function', true)
   router = chosen_router
-end
-
---- Whether `chosen`, what a router returned, is a copy of the home that can
---- take a report.
----
----@param chosen any
----@return boolean
-local function is_report_home(chosen)
-  return type(chosen) == 'table' and type(chosen.receive_session_report) == 'function'
 end
 
 --- Asks the router which copy takes the report, and hands it over. Answers
@@ -117,7 +109,7 @@ local function receive_through_router(arguments, session_id, options)
   if chosen == M then
     chosen = module_copy
   end
-  if not is_report_home(chosen) then
+  if not home.is_copy(chosen) then
     warning.warn_later(
       ('aineo: the report router chose no report home: %s'):format(vim.inspect(chosen))
     )
@@ -157,18 +149,25 @@ M.keep_session_report = home.keep_session_report
 --- `aineo://report-<n>`, its Report's handlers are in the group
 --- `aineo_report_<n>` and its retries in `aineo.report.<n>`, `<n>` being the
 --- next number after those the copies made since the module loaded took, and
---- one whose handlers' group exists: a module loaded again never takes the
---- names of a copy still alive.
+--- one whose handlers' group does not exist yet: the copy creates that group
+--- when it is made, so a module loaded again never takes the names of a copy
+--- still alive, whether or not its Report exists yet.
+---
+--- The copy keeps what it receives before it follows a session in files named
+--- `<n>` (`aineo.report.Identity`), never in the working directory's records,
+--- which are the module's copy's alone.
 ---
 ---@return aineo.report.Home
 function M.new()
   repeat
     copies_made = copies_made + 1
   until not has_group(('aineo_report_%d'):format(copies_made))
+  vim.api.nvim_create_augroup(('aineo_report_%d'):format(copies_made), { clear = false })
   return home.new({
     buffer_name = ('aineo://report-%d'):format(copies_made),
     buffer_group = ('aineo_report_%d'):format(copies_made),
     retry_group = ('aineo.report.%d'):format(copies_made),
+    label = tostring(copies_made),
   })
 end
 

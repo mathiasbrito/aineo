@@ -125,6 +125,21 @@ end
 ---@field buffer_name string the name of the copy's Report buffer
 ---@field buffer_group string the autocommand group of the Report buffer's handlers
 ---@field retry_group string the autocommand group of the copy's retries at `SafeState`
+---@field label? string the copy's own name: a copy with one keeps what it receives before it follows a session in a records file named after it, never in the editor's records of the working directory, which only the module's copy, with no label, uses
+
+--- The copies `M.new()` made, held weakly so that a copy nothing refers to
+--- goes.
+---@type table<table, true>
+local copies = setmetatable({}, { __mode = 'k' })
+
+--- Whether `candidate` is a copy of the report home `M.new()` made: a proxy
+--- of one, an object that delegates to one and a shallow copy of one are not.
+---
+---@param candidate any
+---@return boolean
+function M.is_copy(candidate)
+  return copies[candidate] == true
+end
 
 --- A new copy of the report home: its environment, the session it follows,
 --- its Report and its waiting hand-overs are its own, and its Report buffer,
@@ -136,6 +151,7 @@ end
 ---@return aineo.report.Home
 function M.new(identity)
   local copy = {}
+  copies[copy] = true
 
   ---@type aineo.report.Environment?
   local environment
@@ -172,7 +188,9 @@ function M.new(identity)
   end
 
   --- The records file reports are kept in, in `current`: the followed
-  --- session's, or the working directory's before the home follows one.
+  --- session's, or the working directory's before the home follows one; a
+  --- copy with a `label` keeps them in a file of its own then
+  --- (`records.records_file()`).
   ---
   ---@param current aineo.report.Environment
   ---@return string
@@ -180,12 +198,13 @@ function M.new(identity)
     if followed_session then
       return records.session_records_file(current.state_directory, followed_session)
     end
-    return records.records_file(current.state_directory, current.working_directory)
+    return records.records_file(current.state_directory, current.working_directory, identity.label)
   end
 
   --- Moves the working directory's records, in `current`, to the followed
   --- session the first time it is called (`records.move_records()`), and
-  --- tells the user, once, when they could not be moved.
+  --- tells the user, once, when they could not be moved. A copy with a
+  --- `label` moves the file of its own instead.
   ---
   ---@param current aineo.report.Environment
   local function move_directory_records_once(current)
@@ -194,7 +213,7 @@ function M.new(identity)
     end
     directory_records_moved = true
     local failure = records.move_records(
-      records.records_file(current.state_directory, current.working_directory),
+      records.records_file(current.state_directory, current.working_directory, identity.label),
       kept_records_file(current)
     )
     if failure then
@@ -456,15 +475,19 @@ function M.new(identity)
   --- the report cannot be kept; either way nothing is shown or kept. Raises an
   --- error until `set_report_environment()` was called.
   ---
+  --- It is kept in `records_file` when given, else in the file the home keeps
+  --- reports in (`kept_records_file()`).
+  ---
   ---@param arguments table
-  local function show_and_keep(arguments)
+  ---@param records_file? string
+  local function show_and_keep(arguments, records_file)
     local valid_report, refusal = format.validate_report(arguments)
     if not valid_report then
       error('aineo refused the report: ' .. refusal, 0)
     end
     local report_buffer = copy.report_buffer()
     local record = { time = current_environment().clock(), report = valid_report }
-    local cut_failure = records.append_record(report_view.records_file, record)
+    local cut_failure = records.append_record(records_file or report_view.records_file, record)
     show_rendering(report_buffer, render.render_records({ record }, file_check_for_one_rendering()))
     buffer.follow_last_line(report_buffer)
     if cut_failure then
@@ -482,12 +505,36 @@ function M.new(identity)
   --- the user can learn that the report is not shown.
   ---
   ---@param arguments table
-  function copy.receive_report(arguments)
-    local received, failure = pcall(show_and_keep, arguments)
+  ---@param records_file? string where to keep it instead of the file the home keeps reports in
+  local function receive_kept_in(arguments, records_file)
+    local received, failure = pcall(show_and_keep, arguments, records_file)
     if not received then
       warn_later(failure)
       error(failure, 0)
     end
+  end
+
+  --- Shows `arguments`, a report, at the end of the Report buffer, moves every
+  --- window showing the Report to it, and keeps it as a record
+  --- (`receive_kept_in()`).
+  ---
+  ---@param arguments table
+  function copy.receive_report(arguments)
+    receive_kept_in(arguments)
+  end
+
+  --- Where a report of the Claude session `session_id` is kept when the home
+  --- follows no session and takes it: nil, the file the home keeps reports in
+  --- (the working directory's records), for the module's copy; the session's
+  --- own records for a copy with a `label`.
+  ---
+  ---@param session_id string
+  ---@return string?
+  local function unfollowed_destination(session_id)
+    if not identity.label then
+      return nil
+    end
+    return records.session_records_file(current_environment().state_directory, session_id)
   end
 
   --- Takes `arguments`, a report of the Claude session `session_id`, as
@@ -495,7 +542,9 @@ function M.new(identity)
   --- true. With `options.at_start` — asked of the editor that started the
   --- report's Claude Code — it takes it too while the home follows no session
   --- yet: the report is then kept in the working directory's records, which
-  --- the first session followed takes. Otherwise it neither shows nor keeps
+  --- the first session followed takes; a copy with a `label` keeps it in the
+  --- report's own session's records instead, which no other copy shares.
+  --- Otherwise it neither shows nor keeps
   --- the report, and returns false: the report server then offers it to
   --- another editor that shows its session, or keeps it on disk
   --- (`keep_session_report()`).
@@ -508,7 +557,9 @@ function M.new(identity)
   --- own session then takes them whole, the report among them. Once they have
   --- moved, or when the report's session has a records file of its own, which
   --- that first follow would leave the directory's records beside, it returns
-  --- false, and the report is kept with its session.
+  --- false, and the report is kept with its session. A copy with a `label`
+  --- returns false then, as the working directory's records are the module's
+  --- copy's alone.
   ---
   --- Raises what `receive_report()` raises, and, for a report kept with the
   --- directory's records, an error naming the field at fault or the records
@@ -520,11 +571,18 @@ function M.new(identity)
   ---@return boolean taken
   function copy.receive_session_report(arguments, session_id, options)
     options = options or {}
-    if followed_session == session_id or (followed_session == nil and options.at_start) then
+    if followed_session == session_id then
       copy.receive_report(arguments)
       return true
     end
+    if followed_session == nil and options.at_start then
+      receive_kept_in(arguments, unfollowed_destination(session_id))
+      return true
+    end
     if not (options.at_start and options.keep_with_directory) or directory_records_moved then
+      return false
+    end
+    if identity.label then
       return false
     end
     local current = current_environment()

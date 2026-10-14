@@ -13,7 +13,7 @@ local home = require('aineo.draft.home')
 local M = {}
 
 --- The module's own copy of the home, which the module's functions are.
-local module_copy = home.new('aineo.draft')
+local module_copy = home.new({ group_name = 'aineo.draft' })
 
 --- The number of copies made, the module's included.
 local copies_made = 1
@@ -47,15 +47,23 @@ M.hand_over_draft_session = module_copy.hand_over_draft_session
 --- made before. Its functions are fields, as the module's own are. Its
 --- handlers, and its retries at `SafeState`, are in the group
 --- `aineo.draft.<n>`, `<n>` being the next number after those the copies made
---- since the module loaded took, and one whose group exists: a module loaded
---- again never takes the group of a copy still alive.
+--- since the module loaded took, and one whose group does not exist yet: the
+--- copy creates that group when it is made, so a module loaded again never
+--- takes the group of a copy still alive, whether or not it keeps an Input
+--- yet.
+---
+--- The copy keeps the text of its Input before it follows a session in a
+--- draft file named `<n>`, never in the working directory's draft, which is
+--- the module's copy's alone.
 ---
 ---@return aineo.draft.Home
 function M.new()
   repeat
     copies_made = copies_made + 1
   until not has_group(('aineo.draft.%d'):format(copies_made))
-  return home.new(('aineo.draft.%d'):format(copies_made))
+  local group_name = ('aineo.draft.%d'):format(copies_made)
+  vim.api.nvim_create_augroup(group_name, { clear = false })
+  return home.new({ group_name = group_name, label = tostring(copies_made) })
 end
 
 return M

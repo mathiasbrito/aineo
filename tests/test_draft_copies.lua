@@ -257,6 +257,21 @@ local function directory_draft_file(state)
   return vim.fs.joinpath(state, 'aineo', 'drafts', vim.fn.sha256(WORKING_DIRECTORY) .. '.txt')
 end
 
+--- The file that keeps the text of the Input of the draft home labelled
+--- `label` before it follows a session, under the state directory `state`.
+---
+---@param state string
+---@param label string
+---@return string
+local function copy_draft_file(state, label)
+  return vim.fs.joinpath(
+    state,
+    'aineo',
+    'drafts',
+    vim.fn.sha256(WORKING_DIRECTORY) .. '-' .. label .. '.txt'
+  )
+end
+
 --- The environment, as a Lua table constructor run in the child, that gives
 --- a home the state directory `state` and `WORKING_DIRECTORY`.
 ---
@@ -303,19 +318,33 @@ T['two draft homes']["hold a claim apart: a home told a claimed session leaves t
   }, { directory = 'Directory', claimed = nil })
 end
 
-T['two draft homes']["each move the directory's draft to the first session they follow"] = function()
+T['two draft homes']["keep the text typed before the first follow out of the module's draft, and bring it back under their first follow"] = function()
   local state = fixture.directory('draft-copies-directory')
-  plant_draft(directory_draft_file(state), 'First directory')
+  plant_draft(directory_draft_file(state), 'Directory')
   start_two_homes(state)
-  child.lua("require('aineo.draft').follow_draft_session('session-a')")
-  plant_draft(directory_draft_file(state), 'Second directory')
+  child.lua([[
+    require('aineo.draft').keep_draft(_G.first_input)
+    _G.second.keep_draft(_G.second_input)
+  ]])
+  set_lines('second_input', { 'tab 2 notes' })
+  wait_for_text(copy_draft_file(state, '2'), 'tab 2 notes\n')
 
+  child.lua("require('aineo.draft').follow_draft_session('session-a')")
   child.lua("_G.second.follow_draft_session('session-b')")
 
   eq({
-    first = read_text(session_draft_file(state, 'session-a')),
-    second = read_text(session_draft_file(state, 'session-b')),
-  }, { first = 'First directory', second = 'Second directory' })
+    first_session = read_text(session_draft_file(state, 'session-a')),
+    first_input = lines_of('first_input'),
+    second_session = read_text(session_draft_file(state, 'session-b')),
+    second_input = lines_of('second_input'),
+    directory = read_text(directory_draft_file(state)),
+  }, {
+    first_session = 'Directory',
+    first_input = { 'Directory' },
+    second_session = 'tab 2 notes\n',
+    second_input = { 'tab 2 notes' },
+    directory = nil,
+  })
 end
 
 T['two draft homes']['hold the hand-overs told before their environment apart'] = function()
@@ -389,6 +418,66 @@ T['two draft homes']["keep the retries of their swaps apart: clearing the module
     first = { 'Alpha' },
     second = { 'Delta' },
   })
+end
+
+T['two draft homes']['leave a swap held under textlock to the home that asked for it, though one buffer is kept by both'] = function()
+  local state = fixture.directory('draft-copies-one-buffer')
+  for session, draft in pairs({ a = 'Alpha', b = 'Beta', c = 'Gamma', d = 'Delta' }) do
+    plant_draft(session_draft_file(state, 'session-' .. session), draft)
+  end
+  start_two_homes(state)
+  child.lua([[
+    require('aineo.draft').follow_draft_session('session-a')
+    _G.second.follow_draft_session('session-c')
+    require('aineo.draft').keep_draft(_G.first_input)
+    _G.second.keep_draft(_G.first_input)
+  ]])
+  begin_hold()
+  child.lua("require('aineo.draft').follow_draft_session('session-b')")
+  child.lua("_G.second.follow_draft_session('session-d')")
+  local waiting = child.lua_get(RETRIES)
+
+  end_hold()
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(RETRIES) == 0
+  end, 10)
+
+  eq({ waiting = waiting, input = lines_of('first_input') }, { waiting = 2, input = { 'Delta' } })
+end
+
+T['a draft home of its own']['keeps its group when the module is loaded again before it keeps an Input'] = function()
+  local state = fixture.directory('draft-copies-reload')
+  children.restart(child)
+  child.lua(
+    [[
+      local state, working_directory = ...
+      _G.old = require('aineo.draft').new()
+      package.loaded['aineo.draft'] = nil
+      _G.newer = require('aineo.draft').new()
+      for _, home in ipairs({ _G.old, _G.newer }) do
+        home.set_draft_environment({
+          state_directory = state,
+          working_directory = working_directory,
+        })
+      end
+      _G.first_input = vim.api.nvim_create_buf(false, true)
+      _G.second_input = vim.api.nvim_create_buf(false, true)
+      _G.old.follow_draft_session('session-a')
+      _G.newer.follow_draft_session('session-b')
+      _G.old.keep_draft(_G.first_input)
+      _G.newer.keep_draft(_G.second_input)
+    ]],
+    { state, WORKING_DIRECTORY }
+  )
+  set_lines('first_input', { 'Typed in the old' })
+  set_lines('second_input', { 'Typed in the newer' })
+
+  child.cmd('doautocmd QuitPre')
+
+  eq({
+    old = read_text(session_draft_file(state, 'session-a')),
+    newer = read_text(session_draft_file(state, 'session-b')),
+  }, { old = 'Typed in the old\n', newer = 'Typed in the newer\n' })
 end
 
 T['two draft homes']['save the change pending in each Input as Neovim starts to quit'] = function()

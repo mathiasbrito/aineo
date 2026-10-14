@@ -200,6 +200,37 @@ T['a report home of its own']["makes the handlers of its Report apart from the m
   eq(report_editor.lines(child), { '09:00 [done] Task — Alpha' })
 end
 
+T['a report home of its own']['keeps its names when the module is loaded again before its Report exists'] = function()
+  local state = fixture.directory('report-copies-reload')
+  children.restart(child)
+
+  local names = child.lua_get(
+    [[(function(state, working_directory)
+      local environment = {
+        clock = function()
+          return '2026-10-07T11:00:00'
+        end,
+        state_directory = state,
+        working_directory = working_directory,
+      }
+      local old = require('aineo.report').new()
+      package.loaded['aineo.report'] = nil
+      local new = require('aineo.report').new()
+      old.set_report_environment(environment)
+      new.set_report_environment(environment)
+      local old_buffer, new_buffer = old.report_buffer(), new.report_buffer()
+      return {
+        old_valid = vim.api.nvim_buf_is_valid(old_buffer),
+        old_name = vim.api.nvim_buf_is_valid(old_buffer) and vim.api.nvim_buf_get_name(old_buffer) or '',
+        new_name = vim.api.nvim_buf_get_name(new_buffer),
+      }
+    end)(...)]],
+    { state, WORKING_DIRECTORY }
+  )
+
+  eq(names, { old_valid = true, old_name = 'aineo://report-2', new_name = 'aineo://report-3' })
+end
+
 T['two report homes'] = MiniTest.new_set()
 
 T['two report homes']['each show the records of the session they follow, and keep the reports they receive there'] = function()
@@ -332,20 +363,26 @@ T['two report homes']["hold a claim apart: a home told a claimed session leaves 
   }, { directory = { 'Directory' }, claimed = nil })
 end
 
-T['two report homes']["each move the directory's records to the first session they follow"] = function()
+T['two report homes']['each move what they kept before their first follow to the first session they follow'] = function()
   local state = fixture.directory('report-copies-directory')
-  plant_records(directory_records_file(state), { 'First directory' })
+  plant_records(directory_records_file(state), { 'Directory' })
   start_editor(state)
   make_second_home(state)
+  child.lua('_G.second.receive_report(...)', { report_of('Kept by the second') })
   child.lua("require('aineo.report').follow_report_session(...)", { 'session-a' })
-  plant_records(directory_records_file(state), { 'Second directory' })
+  plant_records(directory_records_file(state), { 'Directory again' })
 
   child.lua('_G.second.follow_report_session(...)', { 'session-b' })
 
   eq({
     first = summaries_in(session_records_file(state, 'session-a')),
     second = summaries_in(session_records_file(state, 'session-b')),
-  }, { first = { 'First directory' }, second = { 'Second directory' } })
+    directory = summaries_in(directory_records_file(state)),
+  }, {
+    first = { 'Directory' },
+    second = { 'Kept by the second' },
+    directory = { 'Directory again' },
+  })
 end
 
 T['two report homes']['hold the hand-overs told before their environment apart'] = function()
@@ -431,6 +468,51 @@ local function route_to_second_home()
 end
 
 T['a router for received reports'] = MiniTest.new_set()
+
+T['a router for received reports']["hands an offer at the start to the home it chooses before it follows, which keeps it with its own session and not with the module's"] = function()
+  local state = fixture.directory('report-copies-router-at-start')
+  start_editor(state)
+  make_second_home(state)
+  route_to_second_home()
+
+  local taken = offer('B at start', 'session-b', { at_start = true, start_token = 'tab-2' })
+  local kept_at_once = summaries_in(session_records_file(state, 'session-b'))
+  child.lua("require('aineo.report').follow_report_session(...)", { 'session-a' })
+  child.lua('_G.second.follow_report_session(...)', { 'session-b' })
+
+  eq({
+    taken = taken,
+    kept_at_once = kept_at_once,
+    first_lines = report_editor.lines(child),
+    second_lines = second_lines(),
+    first_kept = summaries_in(session_records_file(state, 'session-a')),
+    second_kept = summaries_in(session_records_file(state, 'session-b')),
+    directory = summaries_in(directory_records_file(state)),
+  }, {
+    taken = true,
+    kept_at_once = { 'B at start' },
+    first_lines = { '' },
+    second_lines = { '11:00 [done] Task — B at start' },
+    first_kept = nil,
+    second_kept = { 'B at start' },
+    directory = nil,
+  })
+end
+
+T['a router for received reports']["leaves the working directory's records to the module: a home that follows only a claimed session does not keep a report there"] = function()
+  local state = fixture.directory('report-copies-router-keep-with-directory')
+  start_editor(state)
+  make_second_home(state)
+  child.lua('_G.second.follow_report_session(..., { claim = true })', { 'session-c' })
+  route_to_second_home()
+
+  local taken = offer('B kept', 'session-b', { at_start = true, keep_with_directory = true })
+
+  eq({ taken = taken, directory = summaries_in(directory_records_file(state)) }, {
+    taken = false,
+    directory = nil,
+  })
+end
 
 T['a router for received reports']['hands the report to the home it chooses, and shows it there only'] = function()
   local state = fixture.directory('report-copies-router')
@@ -540,36 +622,89 @@ T['a router for received reports']['is asked with an empty table when the offer 
   eq(child.lua_get('_G.options_given'), vim.empty_dict())
 end
 
-T['a router for received reports']['gives a home taking the module'] = function()
+T['a router for received reports']['gives a home taking the module, which is asked once'] = function()
   local state = fixture.directory('report-copies-router-module')
   start_editor(state)
   child.lua("require('aineo.report').follow_report_session(...)", { 'session-a' })
-  child.lua(
-    "require('aineo.report').set_report_router(function() return require('aineo.report') end)"
-  )
+  child.lua([[
+    _G.calls = 0
+    require('aineo.report').set_report_router(function()
+      _G.calls = _G.calls + 1
+      if _G.calls == 1 then
+        return require('aineo.report')
+      end
+    end)
+  ]])
 
   local taken = offer('For alpha', 'session-a')
 
-  eq({ taken = taken, lines = report_editor.lines(child) }, {
+  eq({ taken = taken, calls = child.lua_get('_G.calls'), lines = report_editor.lines(child) }, {
     taken = true,
+    calls = 1,
     lines = { '10:00 [done] Task — For alpha' },
   })
 end
 
-T['a router for received reports']['that raises takes nothing, answers false and warns the user once'] = function()
+T['a router for received reports']['that chooses what only looks like a home takes nothing, answers false and warns the user once'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'a proxy of the module', "return setmetatable({}, { __index = require('aineo.report') })" },
+      {
+        'an object that delegates to the module',
+        "return { receive_session_report = function(...) return require('aineo.report').receive_session_report(...) end }",
+      },
+      {
+        'a shallow copy of the module',
+        "return vim.tbl_extend('force', {}, require('aineo.report'))",
+      },
+    },
+  })
+
+T['a router for received reports']['that chooses what only looks like a home takes nothing, answers false and warns the user once']['of'] = function(
+  _,
+  choice
+)
+  local state = fixture.directory('report-copies-router-look-alike')
+  start_editor(state)
+  child.lua(KEEP_WARNINGS)
+  child.lua("require('aineo.report').follow_report_session(...)", { 'session-a' })
+  child.lua(("require('aineo.report').set_report_router(function() %s end)"):format(choice))
+
+  local offered = try_offer('For alpha', 'session-a')
+  warnings_given(1)
+
+  eq({
+    offered = offered,
+    lines = report_editor.lines(child),
+    warnings = child.lua_get(
+      "#vim.tbl_filter(function(message) return vim.startswith(message, 'aineo: the report router chose no report home') end, _G.warnings)"
+    ),
+    all_warnings = child.lua_get('#_G.warnings'),
+  }, {
+    offered = { raised = false, taken = false },
+    lines = { '' },
+    warnings = 1,
+    all_warnings = 1,
+  })
+end
+
+T['a router for received reports']['that raises takes nothing, answers false and warns the user for each report'] = function()
   local state = fixture.directory('report-copies-router-raises')
   start_editor(state)
   child.lua(KEEP_WARNINGS)
   child.lua("require('aineo.report').follow_report_session(...)", { 'session-a' })
   child.lua("require('aineo.report').set_report_router(function() error('no tab for this', 0) end)")
 
-  local offered = try_offer('For alpha', 'session-a')
-  local warnings = warnings_given(1)
+  local offered = { try_offer('For alpha', 'session-a'), try_offer('For alpha', 'session-a') }
+  local warnings = warnings_given(2)
 
   eq({ offered = offered, lines = report_editor.lines(child), warnings = warnings }, {
-    offered = { raised = false, taken = false },
+    offered = { { raised = false, taken = false }, { raised = false, taken = false } },
     lines = { '' },
-    warnings = { 'aineo: the report router failed: no tab for this' },
+    warnings = {
+      'aineo: the report router failed: no tab for this',
+      'aineo: the report router failed: no tab for this',
+    },
   })
 end
 
