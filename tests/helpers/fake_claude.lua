@@ -76,11 +76,6 @@
 --- `--resume` or `--session-id`, so it keeps no conversation and runs no
 --- hook.
 ---
---- With `AINEO_FAKE_CLAUDE_SELF_ATTACH` set to a line, the keys `/attach-self`
---- and Enter, in one chunk, make it print that line and nothing more, as a
---- Claude Code does that attaches its own terminal to a background session:
---- `Opening "<title>", running in the background (<short id>)`.
----
 --- It answers Ctrl-C as Claude Code 2.1.281 did in a Neovim terminal: idle, a
 --- second press within `DOUBLE_PRESS_MS` of the first exits 0,
 --- `EXIT_AFTER_DOUBLE_PRESS_MS` later; in a turn, the first press ends the
@@ -213,14 +208,6 @@ local TURN_ENDING_MS = 1000
 --- exits.
 local ATTACH_SAYS = os.getenv('AINEO_FAKE_CLAUDE_ATTACH_SAYS')
 local ATTACH_SAYS_EXIT_AFTER_MS = 300
-
---- The line a `/resume` of a running background session makes Claude Code
---- print before it attaches the terminal, when
---- `AINEO_FAKE_CLAUDE_SELF_ATTACH` is set: the fake prints it, and nothing
---- more, when the keys `SELF_ATTACH_KEYS` reach it: on the screen's first row,
---- the cursor then back where it was, so that the prompt and its cursor stay.
-local SELF_ATTACH_LINE = os.getenv('AINEO_FAKE_CLAUDE_SELF_ATTACH')
-local SELF_ATTACH_KEYS = '/attach-self\r'
 
 --- The exit status of a process that a hangup ended.
 local HANGUP_CODE = 129
@@ -676,10 +663,6 @@ local report_typed = ''
 ---
 ---@param input string
 local function answer(input)
-  if SELF_ATTACH_LINE and input == SELF_ATTACH_KEYS then
-    stdout:write('\0277\27[H' .. SELF_ATTACH_LINE .. '\27[K\0278')
-    return
-  end
   if arg[1] == 'attach' and input:find(CTRL_Z, 1, true) and not MODE.ignores_detach then
     finish('detach', 0)
   end

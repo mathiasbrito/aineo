@@ -1788,20 +1788,17 @@ then by `jobstop()` when it has not exited in 4 seconds. aineo never presses
 is the wait after the second press of a double Ctrl-C, which exceeds the
 longest exit measured after it (2.5 seconds).
 
-aineo knows a Claude Code is attached when it attached it, and when
-Claude's screen says so: a `/resume` typed inside aineo's Claude for a
-session that runs in the background makes Claude Code print `Opening
-"{title}", running in the background ({id})` and attach the terminal, and
-aineo, reading that line from the screen, treats the terminal as attached from
-then on: the quit and `\N` act as for an attach of aineo's own, `(attached)`
-shows in the status line, and the session `{id}` names, found in the list of
-sessions, becomes the one followed and kept for the directory; when the list
-cannot be read or does not show it, the session followed stays. Only that
-screen line tells aineo: the list does not show the terminal's own attach.
-A `/resume` of a session open in another interactive Claude Code is no
-attach, and is followed as any switch is (|aineo-claude-session|). What
-`claude attach` prints, and how it exits, for a session that has ended was
-not measured.
+aineo knows a Claude Code is attached only when it attached it. A Claude
+Code that attaches by itself, as when you type `/resume` inside aineo's
+Claude for a session that runs in the background, is unknown to aineo:
+quitting Neovim presses `Ctrl-C` in it, which cancels that session's running
+turn, and `:Aineo new` writes `/clear` into it. Leave such a window with `←`
+or `Ctrl+Z` before quitting. Nothing on the screen tells it apart, since the
+line Claude Code prints, `Opening "{title}", running in the background
+({id})`, also shows in the history of a resumed conversation and after a
+`/resume` that attaches nothing; and the list of sessions does not show the
+terminal's own attach. What `claude attach` prints, and how it exits, for a
+session that has ended was not measured.
 
 Session switches ~
 aineo learns of a switch inside Claude Code from Claude Code's session
