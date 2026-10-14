@@ -567,13 +567,31 @@ window stays empty, drawing its status line, until Claude Code answers: for
 up to 5 s, usually far less. Claude Code then starts in that same window. A
 session open in another interactive Claude Code is warned of, in one line,
 `aineo: this session is also open in another Claude Code`, and resumed all
-the same. A session running in Claude Code's background service is resumed
-as before. A list that cannot run, fails or does not answer in time tells
+the same. A list that cannot run, fails or does not answer in time tells
 nothing, and Claude Code resumes the session. A start on a new session lists
 nothing and starts Claude Code at once, as does the new session that takes
 the place of a resume with no conversation (below). While Claude's window
 waits, Send refuses as it does at any start before Claude Code is ready
 (|aineo-send|), and quitting Neovim has no Claude Code to stop.
+
+A session that runs in Claude Code's background service is attached to
+instead of resumed, at once and without a question:
+Claude's window runs `claude attach` for it and shows its conversation, and
+aineo tells `aineo: attached to a background session (no Report)`. Claude's
+status line reads `<name> (attached) — <folder>` while it runs. The attached
+session keeps the arguments it was started with, so what aineo gives Claude
+Code at its own start is missing: the session hooks, so aineo follows no
+switch made inside it (|aineo-report|), the Report server, the instructions
+appended to the system prompt, and the tools aineo pre-allows, for which
+Claude Code may ask. The session stays the one kept for the directory, so
+the next start lands in it again while it runs; once it no longer runs, the
+start resumes it as above. `\N` (|:Aineo-new|) is the way to a new session
+when Claude Code runs none in this editor. When the list shows the session
+both open in another interactive Claude Code and in the background, aineo
+attaches and warns of nothing. Quitting Neovim detaches an attached Claude
+Code with `Ctrl+Z` and never presses `Ctrl-C`, which would cancel the
+background session's running turn (|aineo-limits|); the session runs on.
+Wiping Claude's terminal hangs it up, which leaves the session running too.
 
 A session in which nothing was sent leaves no conversation, and Claude Code
 cannot resume it: it prints "No conversation found with session ID: …" and
@@ -1726,6 +1744,11 @@ When Neovim quits, aineo stops a running Claude Code from its own
 before aineo's that raises an error makes Neovim skip aineo's: Claude Code
 then only gets Neovim's hangup, and a Claude Code that hangs outlives the
 editor. aineo cannot detect this.
+
+A Claude Code attached to a background session (|aineo-claude-session|) is
+stopped by `Ctrl+Z` alone, which detaches it and leaves the session running,
+then by `jobstop()` when it has not exited in 4 seconds. aineo never presses
+`Ctrl-C` in it. How soon `Ctrl+Z` ends the attach was not measured.
 
 Session switches ~
 aineo learns of a switch inside Claude Code from Claude Code's session

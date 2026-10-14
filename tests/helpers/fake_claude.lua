@@ -66,6 +66,16 @@
 ---   or, with `AINEO_FAKE_CLAUDE_AGENTS_EXIT` set, prints nothing and exits
 ---   with that code. It writes no `ended` line.
 ---
+--- Given `attach` as its first argument (`claude attach <id>`), it records its
+--- arguments, draws its mode's screens and reads its keys as it does at any
+--- start, but the key Ctrl+Z (the byte 26) detaches it, as a Claude Code
+--- attached to a background session did in a Neovim 0.12.5 terminal: it records
+--- `{ ended = 'detach', code = 0 }` and exits 0. In the mode `ignores-detach`
+--- it does not detach. With `AINEO_FAKE_CLAUDE_ATTACH_SAYS` set it instead
+--- prints that line, reads no key and exits 1 a moment later. It reads no
+--- `--resume` or `--session-id`, so it keeps no conversation and runs no
+--- hook.
+---
 --- It answers Ctrl-C as Claude Code 2.1.281 did in a Neovim terminal: idle, a
 --- second press within `DOUBLE_PRESS_MS` of the first exits 0,
 --- `EXIT_AFTER_DOUBLE_PRESS_MS` later; in a turn, the first press ends the
@@ -143,6 +153,7 @@ local MODES = {
   turn = { screens = { TURN }, in_turn = true },
   exit = { screens = { STARTUP }, exits_after_ms = 200 },
   ['mcp-client'] = { screens = { STARTUP }, calls_report_tool = true },
+  ['ignores-detach'] = { screens = { STARTUP }, ignores_detach = true },
   ['exit-below-box'] = { screens = { STARTUP, CURSOR_BELOW_BOX }, exits_after_ms = 2500 },
 }
 
@@ -170,8 +181,10 @@ local SCREEN_GAP_MS = 30
 --- The bytes that clear a terminal and put its cursor top left.
 local CLEAR_SCREEN = '\27[2J\27[H'
 
---- The bytes the Ctrl-C, Enter and Esc keys send to a terminal in raw mode.
+--- The bytes the Ctrl-C, Ctrl+Z, Enter and Esc keys send to a terminal in raw
+--- mode.
 local CTRL_C = '\3'
+local CTRL_Z = '\26'
 local ENTER = '\r'
 local ESCAPE = '\27'
 
@@ -189,6 +202,12 @@ local EXIT_AFTER_DOUBLE_PRESS_MS = 1600
 --- that time are lost. Chosen, not measured: longer than the 0.3 s between the
 --- presses of a double Ctrl-C, which did not exit Claude Code 2.1.281 in a turn.
 local TURN_ENDING_MS = 1000
+
+--- The line an attach prints before it exits 1, when
+--- `AINEO_FAKE_CLAUDE_ATTACH_SAYS` is set, and how long after it the attach
+--- exits.
+local ATTACH_SAYS = os.getenv('AINEO_FAKE_CLAUDE_ATTACH_SAYS')
+local ATTACH_SAYS_EXIT_AFTER_MS = 300
 
 --- The exit status of a process that a hangup ended.
 local HANGUP_CODE = 129
@@ -644,6 +663,9 @@ local report_typed = ''
 ---
 ---@param input string
 local function answer(input)
+  if arg[1] == 'attach' and input:find(CTRL_Z, 1, true) and not MODE.ignores_detach then
+    finish('detach', 0)
+  end
   local command = session_command(input)
   if command then
     vim.schedule(command)
@@ -826,6 +848,15 @@ record({
   env = requested_environment(),
   pid = vim.fn.getpid(),
 })
+if arg[1] == 'attach' and ATTACH_SAYS then
+  stdout:write(ATTACH_SAYS .. '\r\n')
+  vim.defer_fn(function()
+    finish('exit', 1)
+  end, ATTACH_SAYS_EXIT_AFTER_MS)
+  while true do
+    vim.wait(60000)
+  end
+end
 if resumes_no_conversation() then
   vim.defer_fn(function()
     local rows = rows_broken_at_blanks(NO_CONVERSATION .. SESSION_ID, terminal_columns())
