@@ -69,25 +69,30 @@ local function is_running()
   return is_process_alive() and vim.api.nvim_buf_is_valid(session.buffer)
 end
 
---- Makes quitting Neovim stop Claude Code by its keys first while its
---- process has not ended, so that none outlives the editor — also when its
---- terminal was wiped just before, and the stop can only wait for the hangup
---- to end it. The keys are `stop.stop_by_keys()`'s, or, for a Claude Code
---- attached to a background session, Ctrl+Z alone (`stop.detach()`), never
---- Ctrl-C. A start that has not launched Claude Code yet has no process to
---- stop. Registering it again replaces it.
+--- Stops the running Claude Code by its keys, blocking the editor until it
+--- has exited or the stop has run out: `stop.stop_by_keys()`'s, or, for a
+--- Claude Code attached to a background session, Ctrl+Z alone
+--- (`stop.detach()`), never Ctrl-C. Does nothing when its process has ended
+--- and when the start has not launched Claude Code yet, so it has no process
+--- to stop.
+local function stop_running_session()
+  if is_process_alive() and session.job then
+    local stop_session = session.attached and stop.detach or stop.stop_by_keys
+    stop_session(session.job, function()
+      return not is_process_alive()
+    end)
+  end
+end
+
+--- Makes quitting Neovim stop Claude Code (`stop_running_session()`) while
+--- its process has not ended, so that none outlives the editor — also when
+--- its terminal was wiped just before, and the stop can only wait for the
+--- hangup to end it. Registering it again replaces it.
 local function stop_on_quit()
   vim.api.nvim_create_autocmd('VimLeavePre', {
     group = vim.api.nvim_create_augroup('aineo.claude', {}),
     desc = 'Stop Claude Code by its keys before Neovim quits',
-    callback = function()
-      if is_process_alive() and session.job then
-        local stop_session = session.attached and stop.detach or stop.stop_by_keys
-        stop_session(session.job, function()
-          return not is_process_alive()
-        end)
-      end
-    end,
+    callback = stop_running_session,
   })
 end
 
@@ -691,6 +696,62 @@ local function start_after_list(settings, choice, left)
   launch_once_listed(waiting, left)
   become_the_session(waiting, previous)
   return waiting.buffer
+end
+
+--- Whether a pick of `listed`, a session another process runs, can be joined
+--- in aineo's window (`M.join_session()`): it can be attached to, or it is
+--- open in another interactive Claude Code and can be resumed
+--- (`agents.way_to_join()`).
+---
+---@param listed aineo.claude.ListedSession
+---@return boolean
+function M.can_join_session(listed)
+  return agents.way_to_join(listed) ~= nil
+end
+
+--- Replaces the running Claude Code with one on `listed`, a session another
+--- process runs (`M.can_join_session()`), in the windows that show the
+--- running one's terminal, and returns the new terminal; keeps the session's
+--- id for `settings.cwd`, so that the next start there lands in it. The
+--- running Claude Code is stopped first as quitting Neovim stops it
+--- (`stop_running_session()`): by Ctrl+Z, for an attached one. A session
+--- running in Claude Code's background service is attached to, as a start
+--- that resumes it is (`attach_to()`), and the user is told so; one open in
+--- another interactive Claude Code, which has no short id to attach to, is
+--- resumed with `--resume`, as a start resumes it, and the user is warned of
+--- the other Claude Code (`ALSO_OPEN_WARNING`). `settings.on_session_switched`
+--- is told the switch (`tell_session_replaced()`), and
+--- `settings.on_session_ready` is called when the new Claude Code is ready.
+--- Raises an error, starting nothing and stopping nothing, when `settings`
+--- is malformed, `claude.cmd` is not executable, or `listed` cannot be
+--- joined.
+---
+---@param settings aineo.claude.Settings
+---@param listed aineo.claude.ListedSession
+---@return integer buffer the terminal buffer Claude Code runs in
+function M.join_session(settings, listed)
+  validate_settings(settings)
+  local way = agents.way_to_join(listed)
+  if not way then
+    error('aineo.claude: the session ' .. listed.session_id .. ' cannot be joined', 2)
+  end
+  local previous = session
+  local left = previous and previous.followed
+  local joined = prepare_start(settings, { id = listed.session_id, resumed = true })
+  stop_running_session()
+  if way == 'attach' then
+    attach_to(joined, listed)
+  end
+  launch_start(joined)
+  become_the_session(joined, previous)
+  keep_session_id(settings, listed.session_id)
+  announce_launch(left)
+  if way == 'attach' then
+    vim.notify(ATTACHED_NOTE, vim.log.levels.INFO)
+  else
+    vim.notify(ALSO_OPEN_WARNING, vim.log.levels.WARN)
+  end
+  return joined.buffer
 end
 
 --- Starts Claude Code in a new terminal buffer and returns that buffer. While

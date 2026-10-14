@@ -886,10 +886,27 @@ only in place of a resume Claude Code has no conversation for
 			aineo tells you so in Claude Code's words.
 
 			A pick:
-			- of this terminal's row, a row running elsewhere or
-			  a row started in another folder switches nothing
-			  and tells you why: a switch to a session another
-			  process runs would pull it away from there.
+			- of this terminal's row, a row started in another
+			  folder, or a row running in the background with no
+			  short id for `claude attach` switches nothing and
+			  tells you why.
+			- of a row running elsewhere reads the list again and
+			  replaces Claude's Claude Code with one on that
+			  session, in Claude's window, unless the prompt shows
+			  text (below). A session running in Claude Code's
+			  background service is attached to, as a start
+			  attaches (|aineo-claude-session|): `claude attach`,
+			  none of aineo's arguments, `(attached)` in the
+			  status line, and `aineo: attached to a background
+			  session (no Report)`. A session open in another
+			  interactive Claude Code, which `claude attach` does
+			  not take, is resumed instead, and you are told
+			  `aineo: this session is also open in another Claude
+			  Code`: both terminals then drive it. The running
+			  Claude Code is stopped as quitting Neovim stops it
+			  (|aineo-limits|): by `Ctrl+Z` when it is attached
+			  itself, so that its session runs on. The session
+			  becomes the one the next start lands in.
 			- of any other row reads the list again, as the menu
 			  may have been open for long, and switches only if
 			  the session is still listed and still switchable.
@@ -1869,6 +1886,10 @@ The new session key ~
   turn (|aineo-send|). Claude Code may queue it, run it, or take it as text.
 - Where hooks do not run (Session switches, above), aineo hears of no switch
   after a `/clear`, and the panes stay on the session left.
+- In a Claude Code attached to a background session (|aineo-claude-session|),
+  `:Aineo new` writes `/clear` into that session like in any running Claude
+  Code: it clears the background session's conversation, and aineo, which has
+  no hooks there, hears of no switch.
 - A draft whose cursor you moved back to the start of its first line reads
   as an empty prompt, as for `:Aineo sessions` (The session list, above),
   and `/clear` and Enter are written in front of it: Claude Code receives

@@ -118,10 +118,29 @@ function M.is_open_in_another_claude_code(sessions, session_id)
   end)
 end
 
+--- How a start in the window of aineo's Claude Code joins `listed`, a
+--- session another process runs, where it does not resume it: `'attach'`
+--- for a session running in Claude Code's background service that has
+--- Claude Code's short id (`short_id`), the one `claude attach` takes, and
+--- `'resume'` for one open in another interactive Claude Code (`kind`
+--- `interactive`, with a `pid`), which has no short id and which `claude
+--- --resume` opens; nil for any other, a session that runs in the
+--- background without a short id among them.
+---
+---@param listed aineo.claude.ListedSession
+---@return 'attach'|'resume'|nil
+function M.way_to_join(listed)
+  if listed.kind == 'background' and listed.running == true and listed.short_id ~= nil then
+    return 'attach'
+  end
+  if listed.kind == 'interactive' and listed.pid ~= nil then
+    return 'resume'
+  end
+end
+
 --- The entry of `sessions`, as `list_sessions()` delivers them, that holds
 --- the session `session_id` running in Claude Code's background service and
---- that `claude attach` can be given: its kind is `background`, it has a
---- process (`running`) and it has Claude Code's short id (`short_id`). Nil
+--- that `claude attach` can be given (`way_to_join()` says `'attach'`). Nil
 --- when none does.
 ---
 ---@param sessions aineo.claude.ListedSession[]
@@ -129,10 +148,7 @@ end
 ---@return aineo.claude.ListedSession?
 function M.running_in_background(sessions, session_id)
   return vim.iter(sessions):find(function(listed)
-    return listed.session_id == session_id
-      and listed.kind == 'background'
-      and listed.running == true
-      and listed.short_id ~= nil
+    return listed.session_id == session_id and M.way_to_join(listed) == 'attach'
   end)
 end
 
