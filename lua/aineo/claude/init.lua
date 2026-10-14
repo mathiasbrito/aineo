@@ -5,7 +5,6 @@ local agents = require('aineo.claude.agents')
 local arguments = require('aineo.claude.arguments')
 local prompt = require('aineo.claude.prompt')
 local readiness = require('aineo.claude.readiness')
-local self_attach = require('aineo.claude.self_attach')
 local session_name = require('aineo.claude.session_name')
 local session_ids = require('aineo.claude.session_ids')
 local stop = require('aineo.claude.stop')
@@ -598,29 +597,17 @@ local function resume_after_failed_attach(settings, ended)
   end)
 end
 
---- Takes the terminal of `prepared` for attached to the background session
---- `short_id` that its screen says Claude Code attached it to
---- (`self_attach.watch()`), when `prepared` is the running session and was
---- not attached already. Defined below, with the switches.
----@type fun(prepared: aineo.claude.Start, short_id: string)
-local note_self_attach
-
 --- Runs Claude Code in the terminal buffer of `prepared` (`launch()`); when
 --- it then finds no conversation to resume, a new session takes its place
 --- (`start_in_place_of_no_conversation()`), and when an attach does not take,
 --- the session it was to attach to is resumed
---- (`resume_after_failed_attach()`). Where its screen says Claude Code
---- attached the terminal to a background session by itself, the terminal
---- counts as attached from then on (`note_self_attach()`).
+--- (`resume_after_failed_attach()`).
 ---
 ---@param prepared aineo.claude.Start
 local function launch_start(prepared)
   launch(prepared, function(ended)
     start_in_place_of_no_conversation(prepared.settings, ended)
     resume_after_failed_attach(prepared.settings, ended)
-  end)
-  self_attach.watch(prepared.buffer, function(short_id)
-    note_self_attach(prepared, short_id)
   end)
 end
 
@@ -1039,22 +1026,6 @@ local function follow_switch(running, id, source, reason)
   running.followed = id
   keep_session_id(running.settings, id)
   tell_switch(running.settings, { id = id, source = source, left = left, reason = reason })
-end
-
-note_self_attach = function(prepared, short_id)
-  if session ~= prepared or not is_running() or prepared.attached then
-    return
-  end
-  prepared.attached = true
-  session_name.mark_attached(prepared.buffer)
-  agents.list_sessions(prepared.settings.cmd, prepared.settings.cwd, function(sessions)
-    local background = vim.iter(sessions or {}):find(function(listed)
-      return listed.kind == 'background' and listed.short_id == short_id
-    end)
-    if background and session == prepared and background.session_id ~= prepared.followed then
-      follow_switch(prepared, background.session_id, 'resume', nil)
-    end
-  end)
 end
 
 --- What a session hook of Claude Code told (`receive_session_event()`): its
