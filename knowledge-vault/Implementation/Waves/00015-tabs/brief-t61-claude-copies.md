@@ -126,3 +126,13 @@ The orchestrator's verification runs `plan.md`'s T61 mutants. Name the test that
 ## The orchestrator's rulings — 2026-10-14, before dispatch
 
 `plan.md` › *The user's answers* (U1–U3, the user's decisions) and *The orchestrator's rulings* (O1–O22 → A234–A255, each its (a)) bind this brief, which is written for them. Record A234–A255 as the orchestrator's assumptions, never as the user's decisions.
+
+## Amendment — 2026-10-14, at dispatch
+
+The orchestrator's assumption A256: the brief's facts are re-checked against the `dev` this packet starts from, `9ca0abc`, which holds T48 part 2 as it merged (PR #200, with its fix round and A233).
+
+Moved:
+- `lua/aineo/claude/init.lua` is 1323 lines, not 1352. A233 withdrew the screen reading, so `lua/aineo/claude/self_attach.lua` does not exist and nothing reads a terminal's screen to mark it attached. A terminal Claude Code attaches by itself is unknown to aineo (A231).
+- The functions' places moved with the withdrawal: `stop_running_session()` 78, `stop_on_quit()` 91, `prepare_start()` 338, `launch_start()` 607, `become_the_session()` 619, `attach_to()` 676, `can_join_session` 763, `is_attached` 772, `replace_session` 815, `join_session` 846, `start_session` 975, `session_status` 1001, `take_session_event()` 1109, `receive_session_event` 1160, `session_id` 1197, `session_directory` 1205, `prompt_shows_text` 1263, `write_to_session` 1316. The file-level state is `session` (50) and `hooks_received` (54).
+
+Unchanged: `stop.lua` (`stop_by_keys` 92, `detach` 115), Send (`send()` 122, `send_selection()` 319, `layout.input_buffer()` 50, `claude.write_to_session` 93, `claude.session_status()` 131 and 329), the hook relay's call (`hook_relay.lua:62`), and every promise the brief builds on. No behaviour in the brief changes.
