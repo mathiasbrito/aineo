@@ -20,7 +20,7 @@ Wave 15, stage 1: the report server's offers carry the start's token, and an edi
 - `aineo.mcp.editors`: an entry may carry `tab` (a string). Its file is named from the address's SHA-256 and, for a tab, the tab's SHA-256 after it; the file of an entry with no tab is named as before. `write_entry()` raises when `tab` is not a string. `remove_entry(state_directory, address, tab)` removes that tab's file alone, and with no tab every entry of the address, the one with no tab included. The pruning of unreachable editors already worked per file, so it removes every tab's entry of an address and none of the writer's own.
 - `aineo.mcp`: `write_editor_entry()` and `remove_editor_entry()` document the new field and argument.
 
-Nothing outside `lua/aineo/mcp/`, its two test files and this note changed.
+Nothing outside `lua/aineo/mcp/`, its two test files, this note and the dated amendment to `brief-t64-mcp-tabs.md` (A256, A277) changed.
 
 ## Unit list
 
@@ -37,7 +37,7 @@ Nothing outside `lua/aineo/mcp/`, its two test files and this note changed.
 
 ## Red and green
 
-`tests/test_mcp_delivery.lua` (13 new cases of 39) and `tests/test_mcp_editors.lua` (7 new of 17).
+`tests/test_mcp_delivery.lua` (13 new cases of 38) and `tests/test_mcp_editors.lua` (7 new of 17).
 
 | # | Test | Red message, or why green; killer |
 |---|---|---|
@@ -59,7 +59,7 @@ Nothing outside `lua/aineo/mcp/`, its two test files and this note changed.
 | 16 | … written with a tab that is not a string raises, and writes nothing | red: `left = true, right = false` (written without an error) |
 | 17 | … removed with a tab leaves the address's other tabs and its entry with no tab | red: `left = nil` (the one file of the address was gone) |
 | 18 | … removed with no tab removes every entry of the address, and no other address's | green when written (every tab shared one file); killers E3 and E7 |
-| 19 | … written removes every tab's entry of an address that cannot be reached, and none of its own | red: `key branch 1->"session"` |
+| 19 | … written removes every tab's entry of an address that cannot be reached, and none of its own | red: `key branch 1->"session"`; as first written it did not pin a prune that stops after its first removal (tests review); rewritten in the fix round to plant the unreachable address's tabs and write once, killer FP |
 | 20 | a switch › is told once to an editor with a tab on the session left, and not to one whose tabs follow others | green by nature: `read_entries()` reads every file; killer E5 |
 
 The first run of cases 11 and 12 passed vacuously: `OTHER_SESSION_ID` was not defined in `tests/test_mcp_delivery.lua`, so the entries held no session; `make lint` (selene, `undefined_variable`) found it, and both were rerun with the constant defined. Both rows above are from that rerun.
@@ -93,9 +93,41 @@ M12's first edit (a call of the function before its guard) changed the behaviour
 
 ## Suites
 
-- Whole suite on the tree pushed (`42308dd`), `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 make test`, Neovim 0.12.5, host load 10–20: 3391 cases in 91 files, `Fails (1)`: `tests/test_changes_copies.lua` › *the commits window › of one copy selects the filter of its own files window alone* read `Files in: 6dc40bb Add b` where `Files in: d93a947 Change a` was expected (line 485). That file belongs to T63's home (`lua/aineo/changes/`), which this branch does not touch; run alone on the same tree it passes (17 cases, `Fails (0)`). It reads as a timing flake under load; not re-measured further.
-- Files run while working, all `Fails (0)`: `test_mcp_delivery` (38 at the last mutant run, 39 with the older-home case), `test_mcp_editors` (17), `test_mcp_lost_editor` (29), `test_mcp_blocked_editor` (5), `test_entry_claim` (22), `test_mcp` (5).
+- Whole suite on the code tree of `cba37ee`, the head first pushed (it differs from `42308dd` by this note alone), `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 make test`, Neovim 0.12.5, host load 10–20: 3391 cases in 91 files, `Fails (1)`: `tests/test_changes_copies.lua` › *the commits window › of one copy selects the filter of its own files window alone* read `Files in: 6dc40bb Add b` where `Files in: d93a947 Change a` was expected (line 485). That file belongs to T63's home (`lua/aineo/changes/`), which this branch does not touch; run alone on the same tree it passes (17 cases, `Fails (0)`). It reads as a timing flake under load; not re-measured further.
+- Files run while working, all `Fails (0)`: `test_mcp_delivery` (38), `test_mcp_editors` (17), `test_mcp_lost_editor` (29), `test_mcp_blocked_editor` (5), `test_entry_claim` (22), `test_mcp` (5).
 - `make lint` (stylua, selene): 0 errors, 0 warnings. The deep-require check prints no new line (no new `require` was added).
+
+## Fix round (PR #210)
+
+The attack and the tests-and-records reviews of `cba37ee`; A293 and A294 are the orchestrator's assumptions, not the user's decisions. The two commit subjects over 72 characters (`90abc86`, `b610ac9`) stay: pushed history is not rewritten.
+
+| Finding | What was done | Case |
+|---|---|---|
+| Attack 1: a report with no known session from tab 2's Claude Code shows in tab 1 whatever T66's router answers | A293: handed to T66. The copy rule that takes a no-session report (`options.at_start`) and the router's reading of the token's tab for a nil session are outside this home and need T62's merged code. No change here | none |
+| Attack 2: no pin that a tab key never reaches an entry's file name | the reviewer's case, adopted as written | `tests/test_mcp_editors.lua` › *of a tab whose key holds path characters or is long is a file of its own in the list*: green on the head; killer FM-l by assertion |
+| Attack 3: the unreachable editor's entries removed from a fresh read | A294: `offer_to_listed()` removes from the list it read before the loop, `offer_to_claimant()` from one read before its offer (`remove_entries_of(context, entries, address)`) | `tests/test_mcp_delivery.lua` › *to a listed editor that cannot be reached leaves an entry written since the list was read*: a declining stand-in editor writes a late entry for the dead address while it answers; red on the `cba37ee` code of `delivery.lua` (`Left: {}`, `Right: { "new" }`), green after; killer FA294. The claimant's path has no case: its offer is the first and nothing runs between its connect failure and the removal, so its read cannot be moved where a test sees it |
+| Tests 1: case 19 did not pin a prune that stops after its first removal | the rewrite: plant the unreachable address's two tab entries and one of the writer's own, then one `write_editor_entry` | case 19, killers FP and E6 by assertion |
+| Tests 2: the claimant's path has no tab pin | accepted, as the reviewer would: the shared helper is pinned for tabs through the listed path | none |
+| Tests 3: the `M.deliver` docstring named the claimant's options | it names the starting editor's (`at_start` and the start token) | none |
+| Tests 4: two commit subjects over 72 characters | stay, as above | none |
+| Tests 5, 6, attack records | this note names the brief's amendment among the changed files, "the tree pushed" names `cba37ee`, and the count of `test_mcp_delivery` is 38 before the fix round and 39 after | none |
+| Tests 7 | a note: an absent request fails the first cases by a Lua error, not an assertion; the shipped regressions were assertions | none |
+
+Mutants of the fix round, each the literal edit applied to the committed files:
+
+| # | Edit | Result |
+|---|---|---|
+| FM-l | `editors.lua` `entry_file()`: `name = name .. '-' .. tab` for `name = name .. '-' .. vim.fn.sha256(tab)` | killed by assertion: the tab-name case |
+| FP | `editors.lua` `prune_folder()`: `return` after `kept_files.remove_if_unchanged(path, text)` | killed by assertion: case 19 |
+| E6 | `prune_folder()`: delete `and address ~= own_address` | killed by assertion: case 19, rewritten |
+| FA294 | `delivery.lua` `offer_to_listed()`: `remove_entries_of(context, editors.read_entries(context.state_directory), address)` for `remove_entries_of(context, entries, address)` | killed by assertion: the late-entry case |
+
+A first run of the late-entry case read `Left: {}` on both versions of the code and proved nothing: writing the entries with `write_editor_entry` pruned the stand-in editor's own entry, and the stand-in handler ran `vim.fn.writefile` in a fast event. The case plants its files and writes with `io.open`.
+
+Suites of the fix round:
+
+- Whole suite on the code tree of `c7cc44b`, `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 make test`, Neovim 0.12.5, host load 12–17: 3393 cases in 91 files, `Fails (2)`, neither in this home: `tests/test_changes_keys.lua` › *h › on a file whose diff cannot be read tells git's words once, naming the file* (a notification read in the case; the file alone passes, 29 cases) and `tests/test_entry_panes.lua` › *a switch to the changes pane, refused › keeps the agent pane the pane shown… in the command-line window* (a known load flake: alone it failed once on the first run, `a switch refused in the command-line window › leaves the column as it was…`, and passed on the second, 98 cases).
+- Files run while working, all `Fails (0)`: `test_mcp_delivery` (39), `test_mcp_editors` (18), `test_mcp_lost_editor` (29), `test_entry_claim` (22). `make lint`: 0 errors.
 
 ## Decisions and assumptions
 
@@ -106,7 +138,7 @@ M12's first edit (a call of the function before its guard) changed the behaviour
 
 ## Open threads
 
-- T62's `receive_session_report()` and T66's router decide how a nil session is read; the fallback in `RECEIVE_REPORT` shows a report the router does not take in the module's first copy, as today. T66's review should say whether it wants that or a refusal.
+- A293, handed to T66: T62's copy rule takes a nil session only while the copy follows none, and the router's reading of a nil session is T66's, so `RECEIVE_REPORT`'s fallback shows a report with no known session in the module's first copy whatever the router answers (the attack review measured it on the merged tree). T66 needs the copy rule to take a no-session report when `options.at_start`, and a router that returns the token's tab for a nil session.
 - `prune_folder()` connects once per file, so an editor with several tabs is probed once per entry; a probe per address would need a cache.
 - `plugin/aineo.lua` still calls `remove_editor_entry(state, servername)`, which now removes every entry of the address: that is what quitting needs; T66 gives the tab key.
 
