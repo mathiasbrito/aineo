@@ -9,10 +9,11 @@
 --- A layout is all of that for one tab page: its three windows, Input, the
 --- pane it shows, its proportions, Claude's line numbers and status line,
 --- and the handlers that keep them. The module itself is one layout, made
---- when it loads, named as it always was: its functions are the functions
---- of a layout, and every caller of the module acts on it. `M.new()` makes
---- another, whose functions are called as fields too, with an Input of its
---- own and handlers that act on its own windows and buffers only.
+--- when it loads, with the Input `aineo://input` and the handler group
+--- `aineo.layout`: its functions are the functions of a layout, and every
+--- caller of the module acts on it. `M.new()` makes another, whose functions
+--- are called as fields too, with an Input of its own and handlers that act
+--- on its own windows and buffers only.
 
 local columns = require('aineo.layout.columns')
 
@@ -45,8 +46,10 @@ local columns = require('aineo.layout.columns')
 ---@field follow_claude_terminal fun(terminal: integer)
 ---@field toggle_claude_numbers fun()
 ---@field input_buffer fun(): integer|nil
+---@field let_go? fun() only on a layout `M.new()` made: removes its handlers and wipes its Input
 
---- Makes a layout: its state, and the functions that act on it.
+--- Makes a layout: its state, and the functions that act on it, and the
+--- function that lets it go (`let_go()`).
 ---
 --- What a layout holds once for the editor is named for it: `input_name`, the
 --- name of its Input buffer, which is not a file path, so `:edit` never takes
@@ -56,7 +59,8 @@ local columns = require('aineo.layout.columns')
 ---
 ---@param input_name string
 ---@param group_name string
----@return aineo.layout.Layout
+---@return aineo.layout.Layout layout
+---@return fun() let_go removes the layout's handlers and wipes its Input
 local function make_layout(input_name, group_name)
   local M = {}
 
@@ -1171,12 +1175,12 @@ local function make_layout(input_name, group_name)
   --- wiped once hidden and holds no changes, as a startup dashboard's buffer
   --- is, which Input replaces. Opened from a floating window, the layout is
   --- built from the first window of the tab that does not float. Input is a
-  --- scratch buffer named `aineo://input`, or, in a layout `M.new()` made,
-  --- under its own name, made once: from a buffer already
-  --- named so, such as one a restored session made, else from the unnamed,
+  --- scratch buffer named by `input_name` (`aineo://input` in the module's
+  --- layout, `aineo://input-<n>` in one `M.new()` made), made once: from a
+  --- buffer already so named, such as one a restored session made, else from the unnamed,
   --- empty buffer the current window shows, such as the one Neovim starts
   --- with, when it is not wiped once hidden, or else a new buffer; it is made
-  --- anew, from a buffer named so when there is one, when it was wiped, and
+  --- anew, from a buffer so named when there is one, when it was wiped, and
   --- made a scratch buffer again whenever it is shown. The Report's and Input's
   --- windows wrap long lines between words, a wrapped line keeping its indent
   --- (`'wrap'`, `'linebreak'`, `'breakindent'`), whatever the user's settings,
@@ -1500,7 +1504,18 @@ local function make_layout(input_name, group_name)
     return state.buffers.input
   end
 
-  return M
+  --- Lets the layout go, as its tab page closes: removes its handlers, by
+  --- deleting their group, and wipes its Input. Its windows are the tab
+  --- page's to close. What Input holds goes with it, so a caller that keeps
+  --- a draft saves it first.
+  local function let_go()
+    pcall(vim.api.nvim_del_augroup_by_name, group_name)
+    if has_input() then
+      vim.api.nvim_buf_delete(state.buffers.input, { force = true })
+    end
+  end
+
+  return M, let_go
 end
 
 --- The number of layouts made, the module's included.
@@ -1508,20 +1523,36 @@ local layouts_made = 1
 
 local M = make_layout('aineo://input', 'aineo.layout')
 
+--- Whether the autocommand group `name` exists.
+---
+---@param name string
+---@return boolean
+local function has_group(name)
+  return (pcall(vim.api.nvim_get_autocmds, { group = name }))
+end
+
 --- Makes a layout of its own, in addition to the module's and to every one
 --- made before: its three windows, Input, pane, proportions, Claude's line
 --- numbers and status line, and handlers are its own, and it opens in the tab
---- page its `open()` is called in. Its Input is named `aineo://input-<n>`, `<n>`
---- counting the layouts made since the module loaded, and its handlers are in
---- the group `aineo.layout.<n>`.
+--- page its `open()` is called in. Its Input is named `aineo://input-<n>` and
+--- its handlers are in the group `aineo.layout.<n>`, `<n>` being the next
+--- number after those the layouts made since the module loaded took, and
+--- one whose group exists: a module loaded again never takes the Input and
+--- the handlers of a layout still alive.
+---
+--- The layout has a `let_go()` of its own, which the module's layout lacks:
+--- it removes the layout's handlers and wipes its Input, for when its tab
+--- page has closed.
 ---
 ---@return aineo.layout.Layout layout
 function M.new()
-  layouts_made = layouts_made + 1
-  return make_layout(
-    ('aineo://input-%d'):format(layouts_made),
-    ('aineo.layout.%d'):format(layouts_made)
-  )
+  repeat
+    layouts_made = layouts_made + 1
+  until not has_group(('aineo.layout.%d'):format(layouts_made))
+  local layout, let_go =
+    make_layout(('aineo://input-%d'):format(layouts_made), ('aineo.layout.%d'):format(layouts_made))
+  layout.let_go = let_go
+  return layout
 end
 
 return M
