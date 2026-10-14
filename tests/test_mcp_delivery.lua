@@ -716,6 +716,70 @@ T['an offer']['to a listed editor that cannot be reached removes every tab’s e
   eq(listed_entry_count(state), 0)
 end
 
+--- The tab of each entry of the editor at `address` the list holds under
+--- `state`, sorted.
+---
+---@param state { directory: string }
+---@param address string
+---@return string[]
+local function tabs_listed_for(state, address)
+  local folder = vim.fs.joinpath(state.directory, 'aineo', 'editors')
+  local tabs = {}
+  for name in vim.fs.dir(folder) do
+    local entry =
+      vim.json.decode(table.concat(vim.fn.readfile(vim.fs.joinpath(folder, name)), '\n'))
+    if entry.address == address then
+      table.insert(tabs, entry.tab)
+    end
+  end
+  table.sort(tabs)
+  return tabs
+end
+
+--- Puts the file `file_name` into the list under `state`, an entry of the
+--- editor at `address` on `SESSION_ID`, last used at `used`, in the tab
+--- `tab` (none when nil), as an editor wrote it, without the pruning an
+--- editor's own write makes. The folder `aineo/editors` under
+--- `state.directory` exists already, so that a stand-in editor may call this
+--- from a fast event.
+---
+---@param state { directory: string }
+---@param file_name string
+---@param address string
+---@param used integer
+---@param tab string?
+local function plant_listed(state, file_name, address, used, tab)
+  local folder = vim.fs.joinpath(state.directory, 'aineo', 'editors')
+  local entry = vim.json.encode({
+    address = address,
+    working_directory = '/projects/alpha',
+    session = SESSION_ID,
+    own = true,
+    used = used,
+    tab = tab,
+  })
+  local file = assert(io.open(vim.fs.joinpath(folder, file_name), 'wb'))
+  file:write(entry)
+  file:close()
+end
+
+T['an offer']['to a listed editor that cannot be reached leaves an entry written since the list was read'] = function()
+  local state = case_state('mcp-offer-listed-gone-rewritten')
+  local gone = vim.fs.joinpath(state.home, 'gone.sock')
+  vim.fn.mkdir(vim.fs.joinpath(state.directory, 'aineo', 'editors'), 'p')
+  local declining = start_stand_in_editor(function(connection, request)
+    plant_listed(state, 'late.json', gone, 500, 'new')
+    connection:write(vim.mpack.encode({ RESPONSE, request[2], vim.NIL, false }))
+  end)
+  plant_listed(state, 'declining.json', declining, 3000)
+  plant_listed(state, 'old.json', gone, 1000, 'old')
+  local relay = start_relay_of(state, nil, TOKEN)
+
+  send_report_and_wait(relay)
+
+  eq(tabs_listed_for(state, gone), { 'new' })
+end
+
 T['an offer']['to a listed editor carries no options while the server knows no token'] = function()
   local state = case_state('mcp-offer-listed-no-token')
   local requests = {}
