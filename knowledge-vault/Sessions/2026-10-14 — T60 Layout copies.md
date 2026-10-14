@@ -1,7 +1,7 @@
 # 2026-10-14 — T60 Layout copies
 
 **Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-lua-developer`, on Sonnet)
-**Branch:** `feature/t60-layout-copies` · **Pull request:** recorded after it opens
+**Branch:** `feature/t60-layout-copies` · **Pull request:** #205, into `dev`
 
 ## Links
 
@@ -16,7 +16,7 @@ Stage 1 of wave 15 changes nothing the user sees: with one layout aineo acts as 
 
 ## What was done
 
-`aineo.layout` gained `new()`. The module body of `lua/aineo/layout/init.lua` became `make_layout(input_name, group_name)`, which returns a table of the eight functions (`open`, `focus`, `show_pane`, `focus_pane`, `show_diff`, `follow_claude_terminal`, `toggle_claude_numbers`, `input_buffer`) over a `state` of its own. The module is the first layout, `make_layout('aineo://input', 'aineo.layout')`, so every caller and suite of today stands; `new()` makes the next, counting the layouts made since the module loaded. The form is O4 (a)'s cheapest: the module body wrapped in a function, which is why `git diff -w` shows 68 added lines and 13 changed ones where plain `git diff` shows the whole file re-indented.
+`aineo.layout` gained `new()`. The module body of `lua/aineo/layout/init.lua` became `make_layout(input_name, group_name)`, which returns a table of the eight functions (`open`, `focus`, `show_pane`, `focus_pane`, `show_diff`, `follow_claude_terminal`, `toggle_claude_numbers`, `input_buffer`) over a `state` of its own. The module is the first layout, `make_layout('aineo://input', 'aineo.layout')`, so every caller and suite of today stands; `new()` makes the next, counting the layouts made since the module loaded. The form is O4 (a)'s cheapest: the module body wrapped in a function, which is why `git diff -w` is the readable diff where plain `git diff` shows the whole file re-indented (`git diff -w --numstat 9ca0abc -- lua`: 74 added and 18 removed lines before the fix round, 108 and 21 after it).
 
 Per-editor resources a layout holds, each made unique per layout:
 
@@ -30,7 +30,7 @@ The handlers needed no change beyond that: each reads its own `state`, so a wind
 
 A layout whose tab page was closed has no window (P1: the handle is invalid), and its next `open()` opens it in the current tab as a layout whose windows are all gone opens today; its handlers go on doing nothing once its windows are invalid.
 
-No file outside `lua/aineo/layout/init.lua`, `tests/test_layout_copies.lua` and this note changed; `plugin/aineo.lua` and the other homes are untouched, and the help needs nothing (nothing the user sees moved). The brief's facts were checked against `dev` `9ca0abc` and had not moved: `state` at line 46, `layout_tab()` at 165, `open()` at 1203, the input name at 529 and 588, `watch_windows()` at 849 — no amendment (A256).
+No file outside `lua/aineo/layout/init.lua`, `lua/aineo/layout/columns.lua` (the fix round), `tests/test_layout_copies.lua` and this note changed; `plugin/aineo.lua` and the other homes are untouched, and the help needs nothing (nothing the user sees moved). The brief's facts were checked against `dev` `9ca0abc` and had not moved: `state` at line 46, `layout_tab()` at 165, `open()` at 1203, the input name at 529 and 588, `watch_windows()` at 849 — no amendment (A256).
 
 ## Unit list
 
@@ -88,8 +88,8 @@ Each mutant is its literal edit to `lua/aineo/layout/init.lua`, applied to a cop
 |---|---|
 | 1. in `M.new()`, after `layouts_made = layouts_made + 1`: `if true then return M end` | killed: 23 of 34, 14 by assertion and 9 by crash (the table above) |
 | 2. in `M.new()`, `('aineo.layout.%d'):format(layouts_made)` → `'aineo.layout'` | killed by assertion: 6 (*proportions*, *first one's Input scratch*, *second one's Input scratch*, *file in the first one's Input*, *Terminal mode, first*, *wiped, first*); 5 before the wiped pair existed |
-| 3. in `layout_tab()`, `return vim.api.nvim_win_get_tabpage(existing_windows()[1])` → `return vim.api.nvim_list_tabpages()[1]` | killed by assertion: 1 (*proportions*); the file-column cases survive it, since a file column opens beside the layout's own Claude window whatever tab the layout tree is read from |
-| 3b. in `role_of()`, the final `return nil` → `return 'input'` (a layout takes any window for its Input's): the form plan mutant 3 takes in this design, where no table of layouts exists for a handler to look through | killed: 18, among them *a file opened in the second one's Input goes to the file column of its tab* by assertion (the file lands beside the first layout's Claude window) |
+| 3. in `layout_tab()`, `return vim.api.nvim_win_get_tabpage(existing_windows()[1])` → `return vim.api.nvim_list_tabpages()[1]` | killed by assertion: 1 (*proportions*) in the first round; its file-column survivor was a gap in the cases, not a clean absence (fix round, below) |
+| 3b. in `role_of()`, the final `return nil` → `return 'input'` (a layout takes any window for its Input's): the form plan mutant 3 takes in this design, where no table of layouts exists for a handler to look through | killed: 20 (18 in the first count, 20 in the reviewer's re-run and mine after it), among them *a file opened in the second one's Input goes to the file column of its tab* by assertion (the file lands beside the first layout's Claude window) |
 | 4. in `M.new()`, `('aineo://input-%d'):format(layouts_made)` → `'aineo://input'` | killed by assertion: 7 |
 | 5. in `M.new()`, the line `layouts_made = layouts_made + 1` deleted | killed by assertion: 1 (*a third layout*); a second layout alone survives it |
 | 6. in `close_claude_window_when_wiped()`, `if true then return end` first | killed by assertion: 2 of 2. Run before the cases unlisted the other buffers (`UNLIST_BUT`) it survived: Neovim itself closed the window while another buffer was listed, so the first form of the case pinned Neovim and not the handler |
@@ -98,7 +98,7 @@ Each mutant is its literal edit to `lua/aineo/layout/init.lua`, applied to a cop
 | N1. in `toggle_claude_numbers()`, `show_claude_numbers(state.windows.claude)` → `show_claude_numbers(vim.api.nvim_get_current_win())` | killed by assertion: 2 |
 | F1. in `keep_claude_window_on_entry()`, the line `keep_claude_statusline()` deleted | killed by assertion: 1 (*status line*) |
 | T1. in `toggle_claude_numbers()`, `if not has_window_and_buffer('claude') then` → `if false then` | killed by assertion: 1 |
-| I1. in `leave_terminal_mode_as_claude_exits()`, the `if … then vim.cmd.stopinsert() end` deleted | killed by assertion: 2 (both *Terminal mode* cases) |
+| I1. in `leave_terminal_mode_as_claude_exits()`, `if event.buf == state.buffers.claude and event.buf == vim.api.nvim_get_current_buf() then vim.cmd.stopinsert() end` → `do end` | killed by assertion: 2 (both *Terminal mode* cases) |
 
 Not covered by a case, named for the reviewers: `follow_claude_terminal()`'s own `state.buffers.claude = terminal` for a second layout (the status-line case reaches it only through `keep_claude_statusline()`), and a handler's behaviour after its layout's tab closed beyond doing nothing.
 
@@ -113,13 +113,47 @@ All on Neovim 0.12.5, on the host, from the tree pushed (`lua/aineo/layout/init.
 
 ## Open threads
 
-- A layout `new()` made that is never opened again after its tab page closed leaves its `aineo.layout.<n>` group (handlers that do nothing once its windows are invalid) and its `aineo://input-<n>` buffer behind. The module has no function that lets a layout go; T66's closing of a tab (U1) will want one, or to wipe the Input and clear the group itself.
-- The counter starts at 1 when the module loads. A test that clears `package.loaded['aineo.layout']` in one Neovim gets a new module whose `new()` reuses `aineo://input-2` and adopts a buffer left under that name, as `open()` adopts any buffer named so (`buffer_named_input()`). Nothing in the plugin reloads the module.
+- A closed tab's layout rebuilding itself in the current tab (attack 2 of the review): any call of a layout whose tab page closed — `open()`, `focus()`, `show_pane()`, `focus_pane()` — builds it in the current tab and hides that tab's other windows, the windows of another layout included; `show_diff()` of one opens a window above the current one. T66 must route every call to the current tab's layout, never call a closed one, and decide what the module's own layout becomes once tab 1 closes (A261; written into T66's dispatch).
 - Opening a layout in a tab closes the tab's other windows but floating ones (as today): opening the second layout in the first one's tab hides the first one's windows. Which tab a layout opens in is T66's.
+
+## Fix round (review of PR #205)
+
+The orchestrator's rulings below are assumptions under the user's instruction of 2026-10-06, not the user's decisions.
+
+| Finding | What was done |
+|---|---|
+| Attack 1 — no way to let a layout go (A258) | `let_go()` on a layout `new()` made: deletes its handler group (`pcall(nvim_del_augroup_by_name, …)`) and wipes its Input. The module's layout has none. Case *a layout let go* (3 cases). |
+| Attack 3 — a reloaded module's `new()` adopts a live layout's Input and handlers (A259) | `new()` skips any number whose group `aineo.layout.<n>` exists (`has_group()`). Case *a layout made after the module was loaded again*. |
+| Attack 4, tests F2 — plan mutant 3 survived the file-column cases; A260 | Cases *the file column of the second layout* (a second file opened in its Input reuses the column's window; a file opened while the first layout has a file column of its own) and a case on `columns.windows_between()` through the child (`require('aineo.layout.columns')`, as the changes suites reach their files; no other test reaches the layout home's file). `deepest_row_holding()` starts from `tree` only when it holds every window held, so no windows come back when no row holds them, as its docstring says. |
+| Tests F1 — five handlers of a `new()` layout pinned by no case | Cases *the proportions of the second layout* (tab entered, editor resized, window of a file column closed) and *the Claude terminal of the second layout* (Terminal mode refused once the process is gone; once its end was seen, with `vim.uv.kill()` answering that the id still runs). |
+| Tests F3–F6 — figures, count, PR field, literal I1, two docstrings | Fixed above and in the PR body; the header docstring names `aineo://input` and `aineo.layout`; `M.open`'s says "named by `input_name`" and "so named". |
+| Attack 2 — a closed tab's layout rebuilding in the current tab (A261) | No change here; T66's. |
+
+New cases, red first (against the head of the first round): the 3 *let go* cases (2 by a Lua error on the missing `let_go`, 1 by assertion), the reload case (assertion: the new layout's Input was the second layout's), the 2 `windows_between` rows (assertion: `{ 1001, 1002 }` against `{}`). The rest arrived green and are pinned by a mutant each.
+
+| Mutant (literal edit to `lua/aineo/layout/init.lua` unless said) | Result on `tests/test_layout_copies.lua` (47 cases) |
+|---|---|
+| 3 (plan). `layout_tab()`: `return vim.api.nvim_win_get_tabpage(existing_windows()[1])` → `return vim.api.nvim_list_tabpages()[1]` | killed by assertion: *takes a second file opened in its Input in the window of the first* (1). With the hardening of `columns.lua` reverted too (`local node = tree`): 9 killed, the cross-tab case among them by a Lua error only |
+| VR-c. `vim.api.nvim_create_autocmd('VimResized', { group = group, callback = keep_proportions })` → `callback = function() if group_name == 'aineo.layout' then keep_proportions() end end` | killed by assertion: *are put back as the editor is resized* |
+| TT-c. the same for `'TabEnter'` | killed by assertion: *are put back when its tab is entered* |
+| W-c. `vim.schedule(keep_proportions)` → `vim.schedule(function() if group_name == 'aineo.layout' then keep_proportions() end end)` | killed by assertion: *are put back as the window of a file column closes* |
+| TE-c. `{ group = group, callback = refuse_terminal_mode_once_claude_exited }` → `callback = function(e) if group_name == 'aineo.layout' then refuse_terminal_mode_once_claude_exited(e) end end` | killed by assertion: both *Terminal mode* cases |
+| TC-c. `{ group = group, callback = remember_claude_exit }` → the same shape | killed by assertion: *once its process ended and was seen to* |
+| L1. delete `pcall(vim.api.nvim_del_augroup_by_name, group_name)` | killed by assertion (*leaves no handler group…*) |
+| L2. delete the `if has_input() then … nvim_buf_delete … end` of `let_go()` | killed by assertion (same case) |
+| L3. delete `layout.let_go = let_go` in `M.new()` | killed: the *offered by* case by assertion, the two others by a Lua error |
+| L4. add `M.let_go = let_go` in `make_layout()` | killed by assertion (*is offered by the layouts new() makes, not by the module*) |
+| L5. `nvim_del_augroup_by_name, group_name` → `'aineo.layout'` | killed by assertion (*leaves the first one redirecting…*) |
+| R1. `new()`: the `repeat … until not has_group(…)` → `layouts_made = layouts_made + 1` | killed by assertion (the reload case) |
+| `columns.lua`: `local node = holds_all(tree, windows) and tree or nil` → `local node = tree` | killed by assertion (both `windows_between` rows) |
+
+Not killed by an assertion: the cross-tab file-column case (*takes a file opened in its Input while the first layout has a file column of its own*) fails under mutant 3 plus the reverted hardening only by a Lua error; with the hardening in place mutant 3 is harmless to it (the second layout's windows are no row of tab 1's tree), and the case that kills mutant 3 is the reuse case.
+
+Suites after the fix round: `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 make test` on Neovim 0.12.5, on the host, from the tree pushed: 3241 cases in 88 files, `Fails (0) and Notes (0)`, make exit status 0 (a first run was cut by the laptop's suspension, its files reporting that they never started, and was discarded); `tests/test_layout_copies.lua` 47 cases; `make lint` clean.
 
 ## Task lines
 
-- T60 `[X]` (`feature/t60-layout-copies`, into `dev`) — one layout per tab page (C2, C9, C12; D63): `aineo.layout.new()` makes a layout of its own — its three windows, Input (`aineo://input-<n>`), file column, pane, proportions, Claude's line numbers and status line, and its handlers (group `aineo.layout.<n>`) — the module serving as the first layout, so no caller and no suite moved. O4 and O5 are the orchestrator's assumptions (A234–A255), not the user's decisions.
+- T60 `[X]` (`feature/t60-layout-copies`, into `dev`) — one layout per tab page (C2, C9, C12; D63): `aineo.layout.new()` makes a layout of its own — its three windows, Input (`aineo://input-<n>`), file column, pane, proportions, Claude's line numbers and status line, and its handlers (group `aineo.layout.<n>`), and a `let_go()` that removes the handlers and wipes the Input — the module serving as the first layout, so no caller and no suite moved. O4 and O5 are the orchestrator's assumptions (A234–A255), not the user's decisions.
 
 ## Commits
 
