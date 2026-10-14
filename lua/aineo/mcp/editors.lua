@@ -10,13 +10,16 @@ local M = {}
 --- What the list keeps of a running editor: its server address, the
 --- directory it started in, the Claude session its panes follow, whether
 --- that is its own terminal's session (`own`) or one it claimed by its id,
---- and when it was last used, in microseconds of the wall clock.
+--- and when it was last used, in microseconds of the wall clock. An editor
+--- with several tabs keeps an entry for each, told apart by `tab`, the key
+--- the editor gives the tab; an entry with no `tab` is the editor's alone.
 ---@class aineo.mcp.EditorEntry
 ---@field address string
 ---@field working_directory string
 ---@field session string
 ---@field own boolean
 ---@field used integer
+---@field tab string?
 
 --- The folder of the list of running editors under `state_directory`.
 ---
@@ -26,13 +29,20 @@ local function editors_folder(state_directory)
   return vim.fs.joinpath(state_directory, 'aineo', 'editors')
 end
 
---- The file the list keeps for the editor at `address`.
+--- The file the list keeps for the editor at `address`, in its tab `tab`
+--- when it has one: named by the address's SHA-256, and, for a tab, by the
+--- tab's SHA-256 after it.
 ---
 ---@param state_directory string
 ---@param address string
+---@param tab string?
 ---@return string
-local function entry_file(state_directory, address)
-  return vim.fs.joinpath(editors_folder(state_directory), vim.fn.sha256(address) .. '.json')
+local function entry_file(state_directory, address, tab)
+  local name = vim.fn.sha256(address)
+  if tab then
+    name = name .. '-' .. vim.fn.sha256(tab)
+  end
+  return vim.fs.joinpath(editors_folder(state_directory), name .. '.json')
 end
 
 --- An entry as the list holds it: the entry, its file's name, and the text
@@ -80,12 +90,24 @@ function M.remove_listed(state_directory, listed)
   )
 end
 
---- Removes the list's entry of the editor at `address`.
+--- Removes the list's entry of the editor at `address` in its tab `tab`
+--- alone; with no `tab`, every entry of `address`, the one with no tab
+--- included, and none of another address.
 ---
 ---@param state_directory string
 ---@param address string
-function M.remove_entry(state_directory, address)
+---@param tab string?
+function M.remove_entry(state_directory, address, tab)
+  if tab then
+    vim.uv.fs_unlink(entry_file(state_directory, address, tab))
+    return
+  end
   vim.uv.fs_unlink(entry_file(state_directory, address))
+  for _, listed in ipairs(M.read_entries(state_directory)) do
+    if listed.entry.address == address then
+      M.remove_listed(state_directory, listed)
+    end
+  end
 end
 
 --- The folder of the claims under `state_directory`.
@@ -228,17 +250,23 @@ local function prune_folder(folder, own_address)
   end
 end
 
---- Writes `entry` as the list's entry of its editor, in place of the one
---- before, then removes every other entry, and every claim, whose editor
---- cannot be reached (`prune_folder()`).
+--- Writes `entry` as the list's entry of its editor and tab, in place of the
+--- one before and beside the editor's entries of other tabs, then removes
+--- every other entry, and every claim, whose editor cannot be reached
+--- (`prune_folder()`).
 ---
---- Raises an error naming the file when it cannot be written.
+--- Raises an error when `entry.tab` is not a string, and one naming the file
+--- when it cannot be written.
 ---
 ---@param state_directory string
 ---@param entry aineo.mcp.EditorEntry
 function M.write_entry(state_directory, entry)
+  vim.validate('entry.tab', entry.tab, 'string', true)
   kept_files.make_private_folder(editors_folder(state_directory))
-  kept_files.replace_file(entry_file(state_directory, entry.address), vim.json.encode(entry))
+  kept_files.replace_file(
+    entry_file(state_directory, entry.address, entry.tab),
+    vim.json.encode(entry)
+  )
   prune_folder(editors_folder(state_directory), entry.address)
   prune_folder(claims_folder(state_directory), entry.address)
 end

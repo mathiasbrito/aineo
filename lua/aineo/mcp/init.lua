@@ -75,9 +75,14 @@ end
 --- Lists the editor `entry` describes among the running aineo editors under
 --- `state_directory`, in place of its entry before, so that a report of the
 --- session it follows can reach it when the editor that started its Claude
---- Code cannot (`aineo.mcp.editors`).
+--- Code cannot (`aineo.mcp.editors`). An editor with several tabs lists
+--- each under the key it gives the tab, `entry.tab` (a string): the entries
+--- of one address and different tabs are files of their own, and writing one
+--- replaces only the entry of that address and tab; an entry with no `tab`
+--- is the editor's alone.
 ---
---- Raises an error naming the file when the entry cannot be written.
+--- Raises an error when `entry.tab` is not a string, and one naming the file
+--- when the entry cannot be written.
 ---
 ---@param state_directory string
 ---@param entry aineo.mcp.EditorEntry
@@ -86,12 +91,14 @@ function M.write_editor_entry(state_directory, entry)
 end
 
 --- Takes the editor at `address` off the list of running aineo editors, as
---- it quits.
+--- it quits: its entry of the tab `tab` alone when given one, else every
+--- entry of the address, the one with no tab included.
 ---
 ---@param state_directory string
 ---@param address string
-function M.remove_editor_entry(state_directory, address)
-  editors.remove_entry(state_directory, address)
+---@param tab string?
+function M.remove_editor_entry(state_directory, address, tab)
+  editors.remove_entry(state_directory, address, tab)
 end
 
 --- Makes the editor at `address` the claimant of `session`, the time of its
