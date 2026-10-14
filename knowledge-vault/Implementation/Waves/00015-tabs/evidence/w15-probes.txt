@@ -1,0 +1,135 @@
+Wave 15 planning probe — 2026-10-14, macOS host, NVIM v0.12.5.
+Script: w15-probes.sh, run from the checkout's root. P2-P8 are readings of the
+code, not runs. Their lines are those of `bugfix/t48-attach` at `e0989f2`
+(T48 part 2, PR #200, open), which branches from `dev` `1354cad`.
+
+== P1: Neovim tab pages (run)
+version 0.12.5
+default tabline "" showtabline 1
+handles 1 2 3 numbers 1 2 3
+TabClosed <afile> 2 closed handle valid in TabClosed false TabLeave current was the closed tab true
+third tab now number 2 its handle unchanged 3
+terminal buffer valid after its tab closed true job running true
+after tabmove 0: third tab number 1 first tab number 2
+tabclose on the only tab false E784: Cannot close last tab page
+tab variable after its tab closed false Invalid tabpage id: 4
+7gt from tab 1 with 2 tabs true  current number 1
+:tabnext 7 with 2 tabs false E475: Invalid argument: 7: tabnext 7
+:tcd makes getcwd() differ between tabs true
+second buffer named aineo://input false E95: Buffer with this name already exists
+
+Reading:
+- A tab page's handle is stable for its life, through `:tabmove` and the
+  closing of other tabs. Its number is its place and changes with both.
+- `TabClosed` gives the closed tab's *number* in <afile>, and its handle is
+  already invalid there. Code that keeps state per tab finds the closed one
+  by checking each handle it holds with `nvim_tabpage_is_valid()`.
+- A terminal job keeps running when the tab that showed it closes: its
+  buffer is only hidden. Closing a tab by any means leaves its Claude Code
+  running unless aineo stops it.
+- The last tab page cannot be closed (E784).
+- `{n}gt` past the last tab does nothing and raises nothing. `:tabnext {n}`
+  past it raises E475.
+- `:tcd` gives a tab its own working directory, so `getcwd()` differs
+  between tabs. A start that takes `getcwd()` could start in another folder.
+- Neovim's 'tabline' is empty by default, and 'showtabline' is 1: the line
+  shows only with two tabs or more.
+- A second buffer cannot take a name another buffer holds (E95). So a second
+  Report or Input made under today's fixed names fails.
+
+== P2: what a second Claude Code in one editor would share (read)
+- aineo hosts no IDE connection. No lock file, no WebSocket server, no `/ide`
+  support exists under `lua/`, `plugin/` or `doc/`. The only lock is the
+  process record's (`lua/aineo/mcp/processes.lua:138`). So two Claude Codes
+  in one editor share no IDE lock file, because there is none.
+- The report server is per Claude Code. Each start passes its own
+  `--mcp-config`, made by `aineo.mcp`'s `mcp_servers(vim.v.servername,
+  vim.v.progpath)` and `with_start_token()` (`lua/aineo/mcp/init.lua:27`,
+  `:49`). Claude Code runs it as its own child (`nvim --headless --clean -l`).
+  It finds the report's session from the record of its own Claude Code
+  process, by pid and start token (`delivery.lua`'s `report_session()`).
+- The session hook relay is per hook run. It calls
+  `require('aineo.claude').receive_session_event(...)` in the editor
+  (`hook_relay.lua:62`) with the start token. The claude home drops a hook
+  whose token is not the token of its one start (`take_session_event()`,
+  `claude/init.lua:1138-1142`). With one start per tab, the token names the
+  tab's Claude Code.
+- What one editor has once: its server address (`v:servername`), and its
+  one entry in the list of running editors, one file per address
+  (`editors.lua:34`, `entry_file()`). That entry holds one `session`.
+  Delivery offers a report to each listed editor whose `entry.session` is
+  the report's (`delivery.lua:151`).
+- What the editor runs for a report is
+  `require('aineo.report').receive_session_report(report, session, options)`
+  (`delivery.lua` `RECEIVE_SESSION_REPORT`, `RECEIVE_AT_START`). Its
+  `options` is a table (`AT_START`, `KEEP_WITH_DIRECTORY`). An older editor
+  ignores a key it does not know there.
+
+== P3: the stop at quit, one Claude Code after another (computed)
+`lua/aineo/claude/stop.lua`: KEY_PRESSES waits 2500 + 300 + 4000 ms, then a
+hangup waits up to EXIT_AFTER_HANGUP_MS 5000 ms. That is 11.8 s at worst per
+Claude Code, all of it blocking the editor (`wait_for_exit()`). Claude Code
+2.1.281 exited 1.6-2.5 s after the second Ctrl-C (the constants' docstrings),
+so about 4.4-5.3 s each in the usual case. A quit that stops N Claude Codes
+one after another blocks N times that: about 18-21 s for four tabs, 47 s at
+worst. A stop that presses each key to every terminal and shares the waits
+takes about one stop's time. `stop_on_quit()` (`claude/init.lua:92`) makes
+its `VimLeavePre` handler in the group `aineo.claude`, which
+`nvim_create_augroup(…, {})` clears: a second registration replaces the
+first.
+
+== P4: names and autocommand groups one per editor today (read)
+- Buffer names: `aineo://report` (`report/buffer.lua:14`), `aineo://input`
+  (`layout/init.lua:529`), `aineo://changes-files` and
+  `aineo://changes-commits` (`changes/init.lua:1754`, `:1759`).
+- The changes home names its buffers through `scratch.named_scratch_buffer()`,
+  whose `free_name()` (`changes/scratch.lua:11`) wipes every other buffer that
+  holds the name. A second changes pane under the same names would wipe the
+  first tab's pane buffers. A diff of the same name shown from a second tab
+  (`aineo://show/<commit>/<path>`, `aineo://worktree…`) would wipe the first
+  tab's diff and close the windows that show it.
+- Groups cleared when made again: `aineo_report` (`report/buffer.lua:142`),
+  `aineo.layout` (`layout/init.lua:850`), `aineo_changes`
+  (`changes/init.lua:1067`), `aineo_changes_commits_scroll` (`:1707`),
+  `aineo.claude` (`claude/init.lua:92`). A second copy of a home that makes
+  one of these again removes the first copy's handlers.
+
+== P5: each home's state, one per editor today (read)
+- `aineo.claude`: `session` (`claude/init.lua:51`), the one start.
+- `aineo.layout`: `state` (`layout/init.lua:46`), the one layout. Its
+  `TabEnter`, `VimResized` and `BufWinEnter` handlers are global.
+- `aineo.report`: `environment`, `followed_session`, `followed_as_claim`,
+  `directory_records_moved`, `report_view` (`report/init.lua:21-40`).
+- `aineo.draft`: `environment`, `kept` (already per buffer),
+  `followed_session`, `followed_as_claim`, `directory_draft_moved`
+  (`draft/init.lua:64-281`).
+- `aineo.changes`: `session`, `followed_before_beginning`, `held_bases`,
+  `buffers`, `shown_diffs` and the readers' counters (`changes/init.lua:79-1689`).
+- `aineo.send` keeps no state. It reads `layout.input_buffer()` and writes
+  with `claude.write_to_session()` (`send/init.lua:50`, `:93`), both
+  module-level.
+- `plugin/aineo.lua`: `places`, `claude_terminal`, `panes_session`,
+  `claimed_by_id`, `claimed`, `start_confirmed`, `session_read_in_flight`
+  and the environment flags, all file-level.
+- Suites that call a home's module-level functions directly: 17 test files
+  require `aineo.layout`, 13 `aineo.report`, 2 `aineo.draft`, 10
+  `aineo.changes`, 14 `aineo.claude` (of 87 test files).
+
+== P6: the session list at a start (read)
+`claude/agents.lua`: `list_sessions(command, folder, on_done)` runs
+`claude agents --json`, bounded at LIST_BOUND_MS 5000 ms (`:19`, `:343`).
+Every start that would resume runs one (T48 part 1). A reopening that
+starts N tabs at once runs N of them, side by side, unless one list is
+shared.
+
+== P7: the session list's rows (read)
+`agents.standing()` gives `own` for the session of aineo's terminal, and
+`elsewhere` for any session another process runs. So another tab's Claude
+Code of this editor would read as `[running elsewhere]`
+(`STANDING_MARKS`, `claude/agents.lua:168`). A pick of it would then attach
+or resume it (D62) in a second terminal of the same editor.
+
+== P8: the folder (read)
+`plugin/aineo.lua`'s `kept_places()` takes `getcwd()` the first time it is
+called and keeps it. `started_claude_terminal()` takes `vim.fn.getcwd()` at
+every start. With `:tcd` (P1), two tabs' starts could start in two folders.
