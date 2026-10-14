@@ -72,17 +72,20 @@ local FILES = {
 ---@field unreadable? string the draft file whose draft could not be read when a follow put the session's draft into it, which its saves never replace
 ---@field unsaved_told? boolean whether the user was told, since that follow, that its text is not saved (`tell_text_not_saved()`)
 
---- The file that keeps the draft for `working_directory`.
+--- The file that keeps the draft for `working_directory`; with a `label`, the
+--- file the labelled copy of the draft home keeps its text in before it
+--- follows a session, which no other label and no unlabelled file shares.
 ---
 ---@param state_directory string
 ---@param working_directory string
+---@param label? string
 ---@return string
-local function draft_file(state_directory, working_directory)
+local function draft_file(state_directory, working_directory, label)
   return vim.fs.joinpath(
     state_directory,
     'aineo',
     'drafts',
-    vim.fn.sha256(working_directory) .. '.txt'
+    vim.fn.sha256(working_directory) .. (label and '-' .. label or '') .. '.txt'
   )
 end
 
@@ -263,15 +266,21 @@ local function replace_file(files, file, text)
   end
 end
 
+--- The names a copy of the draft home keeps to itself, which no other copy
+--- may hold.
+---@class aineo.draft.Identity
+---@field group_name string the autocommand group of the copy's handlers and retries
+---@field label? string the copy's own name: a copy with one keeps the text of its Input before it follows a session in a draft file named after it, never in the editor's draft of the working directory, which only the module's copy, with no label, uses
+
 --- A new copy of the draft home: the buffers it keeps, the session it
 --- follows, its environment and its waiting hand-overs and retries are its
 --- own, and so are its handlers, which are in the autocommand group
---- `group_name`. Its functions are fields, as `require('aineo.draft')`'s own
---- are, and act on that copy only.
+--- `identity.group_name`. Its functions are fields, as
+--- `require('aineo.draft')`'s own are, and act on that copy only.
 ---
----@param group_name string
+---@param identity aineo.draft.Identity
 ---@return aineo.draft.Home
-function M.new(group_name)
+function M.new(identity)
   local copy = {}
 
   ---@type aineo.draft.Environment|nil
@@ -291,14 +300,15 @@ function M.new(group_name)
   local followed_as_claim = false
 
   --- The file the draft is kept in: the followed session's, or the working
-  --- directory's before the home follows one.
+  --- directory's before the home follows one; a copy with a `label` keeps it
+  --- in a file of its own then (`draft_file()`).
   ---
   ---@return string
   local function kept_draft_file()
     if followed_session then
       return session_draft_file(environment.state_directory, followed_session)
     end
-    return draft_file(environment.state_directory, environment.working_directory)
+    return draft_file(environment.state_directory, environment.working_directory, identity.label)
   end
 
   --- The kinds of failure the draft home has told the user of.
@@ -500,14 +510,15 @@ function M.new(group_name)
   --- Moves the working directory's draft to the followed session the first
   --- time it is called, when the session has no draft and the directory has
   --- one (`move_draft()`): the directory's draft is then the session's, and
-  --- its file is gone.
+  --- its file is gone. A copy with a `label` moves the file of its own
+  --- instead.
   local function move_directory_draft_once()
     if directory_draft_moved then
       return
     end
     directory_draft_moved = true
     move_draft(
-      draft_file(environment.state_directory, environment.working_directory),
+      draft_file(environment.state_directory, environment.working_directory, identity.label),
       kept_draft_file()
     )
   end
@@ -662,8 +673,9 @@ function M.new(group_name)
   --- A change Neovim refuses while textlock holds is made at the editor's
   --- next `SafeState`, once whatever was refused meanwhile, with the draft
   --- kept then, while the buffer is kept still; until it lands, the buffer's
-  --- changes are its file's still. That retry is in the group `aineo.draft`:
-  --- clearing the group while it waits (`:autocmd! aineo.draft`) drops it,
+  --- changes are its file's still. That retry is in the copy's group
+  --- (`identity.group_name`; `aineo.draft` for the module's): clearing the
+  --- group while it waits (`:autocmd! aineo.draft`) drops that copy's retry,
   --- and the buffer then keeps its text and saves to that file, and no later
   --- follow puts a draft into it, for the editor's life. A text that cannot
   --- be saved is left in the buffer, still its file's, and told to the user
@@ -717,7 +729,7 @@ function M.new(group_name)
     end
     replacements_waiting[buffer] = true
     vim.api.nvim_create_autocmd('SafeState', {
-      group = vim.api.nvim_create_augroup(group_name, { clear = false }),
+      group = vim.api.nvim_create_augroup(identity.group_name, { clear = false }),
       once = true,
       desc = "aineo: put the followed session's draft into Input once the editor allows it",
       callback = function()
@@ -843,7 +855,7 @@ function M.new(group_name)
         kept[buffer] = nil
       end,
     })
-    local group = vim.api.nvim_create_augroup(group_name, { clear = false })
+    local group = vim.api.nvim_create_augroup(identity.group_name, { clear = false })
     vim.api.nvim_clear_autocmds({ group = group, buffer = buffer })
     vim.api.nvim_create_autocmd('BufUnload', {
       group = group,
