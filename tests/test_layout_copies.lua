@@ -531,4 +531,251 @@ T['a layout whose tab page was closed']['has no window to toggle the line number
   eq(child.lua_get('pcall(_G.second.toggle_claude_numbers)'), true)
 end
 
+--- The expression, run in the child, that gives the names of the
+--- autocommand groups of the layouts, sorted.
+local LAYOUT_GROUPS = [[(function()
+  local names = {}
+  for _, autocmd in ipairs(vim.api.nvim_get_autocmds({})) do
+    if autocmd.group_name and autocmd.group_name:find('^aineo%.layout') then
+      names[autocmd.group_name] = true
+    end
+  end
+  local sorted = vim.tbl_keys(names)
+  table.sort(sorted)
+  return sorted
+end)()]]
+
+--- The expression, run in the child, that gives the names of the buffers
+--- that are Input of a layout, sorted.
+local INPUT_NAMES = [[(function()
+  local names = {}
+  for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+    local name = vim.api.nvim_buf_get_name(buffer)
+    if name:find('aineo://input', 1, true) then
+      table.insert(names, name:match('aineo://input.*$'))
+    end
+  end
+  table.sort(names)
+  return names
+end)()]]
+
+T['a layout let go'] = MiniTest.new_set()
+
+T['a layout let go']['leaves no handler group and no Input behind, the first one working'] = function()
+  local buffers = open_two_layouts()
+  child.cmd('tabclose')
+
+  call_second('let_go')
+
+  eq(#child.lua_get(LAYOUT_GROUPS), 1)
+  eq(child.lua_get(INPUT_NAMES), { 'aineo://input' })
+  layout.focus(child, 'input', layout.arrangement(buffers.first))
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers.first.input)
+end
+
+T['a layout let go']['is offered by the layouts new() makes, not by the module'] = function()
+  open_two_layouts()
+
+  eq(child.lua_get("type(require('aineo.layout').let_go)"), 'nil')
+  eq(child.lua_get('type(_G.second.let_go)'), 'function')
+end
+
+T['a layout let go']['leaves the first one redirecting files opened in its Input'] = function()
+  local buffers = open_two_layouts()
+  child.cmd('tabclose')
+  call_second('let_go')
+
+  local file = open_file_from_window_showing(buffers.first.input, 'first.txt')
+
+  eq(columns_right_of_claude(buffers.first.claude, file), 0)
+end
+
+T['a layout made after the module was loaded again'] = MiniTest.new_set()
+
+T['a layout made after the module was loaded again']['takes a number no live layout holds, leaving the older layout its Input and its handlers'] = function()
+  local buffers = open_two_layouts()
+  child.lua("package.loaded['aineo.layout'] = nil; _G.reloaded = require('aineo.layout')")
+  child.cmd('tabnew')
+  local third = {
+    claude = layout.terminal(child),
+    report = layout.named_scratch(child, 'aineo://report-third'),
+  }
+
+  child.lua('_G.third = _G.reloaded.new(); _G.third.open(...)', { layout.arrangement(third) })
+
+  no_eq(child.lua_get('_G.third.input_buffer()'), buffers.second.input)
+  eq(#child.lua_get('vim.fn.win_findbuf(...)', { buffers.second.input }), 1)
+  child.cmd('2tabnext')
+  local file = open_file_from_window_showing(buffers.second.input, 'first.txt')
+  eq(columns_right_of_claude(buffers.second.claude, file), 0)
+end
+
+T['the windows between two columns'] = MiniTest.new_set()
+
+T['the windows between two columns']['are none when no row of the tree holds the windows held'] =
+  MiniTest.new_set({
+    parametrize = {
+      { { held = { 1000, 9999 }, left = 1000 } },
+      { { held = { 9998, 9999 }, left = 9998, right = 9999 } },
+    },
+  })
+
+T['the windows between two columns']['are none when no row of the tree holds the windows held']['given'] = function(
+  bounds
+)
+  layout.start(child)
+
+  eq(
+    child.lua_get(
+      [[require('aineo.layout.columns').windows_between(
+        { 'row', { { 'leaf', 1000 }, { 'leaf', 1001 }, { 'leaf', 1002 } } }, ...)]],
+      { bounds }
+    ),
+    {}
+  )
+end
+
+--- The width of the first window showing `buffer`.
+---
+---@param buffer integer
+---@return integer width
+local function width_of_window_showing(buffer)
+  return child.lua_get('vim.api.nvim_win_get_width(vim.fn.win_findbuf(...)[1])', { buffer })
+end
+
+--- Sets the width of the first window showing `buffer`.
+---
+---@param buffer integer
+---@param width integer
+local function set_width_of_window_showing(buffer, width)
+  child.lua(
+    [[(function(buffer, width)
+      vim.api.nvim_win_set_width(vim.fn.win_findbuf(buffer)[1], width)
+    end)(...)]],
+    { buffer, width }
+  )
+end
+
+--- The expression, run in the child, that tells whether the first window
+--- showing the buffer the first argument names is within a cell of the width
+--- the second argument gives.
+local WIDTH_NEAR = [[(function(buffer, width)
+  return math.abs(vim.api.nvim_win_get_width(vim.fn.win_findbuf(buffer)[1]) - width) <= 1
+end)(...)]]
+
+--- How wide the editor is made where a case needs a width other than the
+--- child's default.
+local WIDE = 120
+
+T['the file column of the second layout'] = MiniTest.new_set()
+
+T['the file column of the second layout']['takes a second file opened in its Input in the window of the first'] = function()
+  local buffers = open_two_layouts()
+  open_file_from_window_showing(buffers.second.input, 'first.txt')
+  layout.enter_window_showing(child, buffers.second.input)
+
+  child.cmd('edit ' .. layout.file('second.txt'))
+
+  eq(
+    layout.wait_until(
+      child,
+      'vim.fn.bufnr(...) > 0 and #vim.fn.win_findbuf(vim.fn.bufnr(...)) == 1',
+      { layout.file('second.txt') }
+    ),
+    true
+  )
+  eq(#child.lua_get(TAB_WINDOWS, { 2 }), 4)
+end
+
+T['the file column of the second layout']['takes a file opened in its Input while the first layout has a file column of its own'] = function()
+  local buffers = open_two_layouts()
+  child.cmd('tabfirst')
+  open_file_from_window_showing(buffers.first.input, 'first.txt')
+  local first_tab = child.lua_get(TAB_WINDOWS, { 1 })
+  child.cmd('tablast')
+
+  local file = open_file_from_window_showing(buffers.second.input, 'second.txt')
+
+  eq(columns_right_of_claude(buffers.second.claude, file), 0)
+  eq(child.lua_get(TAB_WINDOWS, { 1 }), first_tab)
+end
+
+T['the proportions of the second layout'] = MiniTest.new_set()
+
+T['the proportions of the second layout']['are put back when its tab is entered'] = function()
+  local buffers = open_two_layouts()
+  child.o.columns = WIDE
+  set_width_of_window_showing(buffers.second.claude, 20)
+
+  child.cmd('tabfirst')
+  child.cmd('tablast')
+
+  layout.expect_near(width_of_window_showing(buffers.second.claude), WIDE / 2)
+end
+
+T['the proportions of the second layout']['are put back as the editor is resized'] = function()
+  local buffers = open_two_layouts()
+  child.o.columns = WIDE
+  set_width_of_window_showing(buffers.second.claude, 20)
+
+  child.o.columns = WIDE - 20
+
+  eq(layout.wait_until(child, WIDTH_NEAR, { buffers.second.claude, (WIDE - 20) / 2 }), true)
+end
+
+T['the proportions of the second layout']['are put back as the window of a file column closes'] = function()
+  local buffers = open_two_layouts()
+  child.o.columns = WIDE
+  local file = open_file_from_window_showing(buffers.second.input, 'first.txt')
+
+  child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)', { file })
+
+  eq(layout.wait_until(child, WIDTH_NEAR, { buffers.second.claude, WIDE / 2 }), true)
+end
+
+T['the Claude terminal of the second layout'] = MiniTest.new_set()
+
+T['the Claude terminal of the second layout']['is not entered in Terminal mode once its process ended and was seen to'] = function()
+  local buffers = open_two_layouts()
+  child.lua(
+    [[
+      vim.uv.kill = function()
+        return 0
+      end
+      _G.term_closed = false
+      vim.api.nvim_create_autocmd('TermClose', {
+        callback = function()
+          _G.term_closed = true
+        end,
+      })
+      vim.fn.jobstop(vim.bo[...].channel)
+    ]],
+    { buffers.second.claude }
+  )
+  eq(layout.wait_until(child, '_G.term_closed'), true)
+  layout.enter_window_showing(child, buffers.second.claude)
+
+  child.type_keys('i')
+
+  eq(child.lua_get(MODE), 'nt')
+end
+
+T['the Claude terminal of the second layout']['is not entered in Terminal mode once its process is gone'] = function()
+  local buffers = open_two_layouts()
+  child.lua('vim.fn.jobstop(vim.bo[...].channel)', { buffers.second.claude })
+  eq(
+    layout.wait_until(
+      child,
+      'vim.fn.jobwait({ vim.bo[...].channel }, 0)[1] ~= -1',
+      { buffers.second.claude }
+    ),
+    true
+  )
+  layout.enter_window_showing(child, buffers.second.claude)
+
+  child.type_keys('i')
+
+  eq(child.lua_get(MODE), 'nt')
+end
+
 return T
