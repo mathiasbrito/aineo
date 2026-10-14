@@ -137,6 +137,20 @@ Three, each with the recommendation first. Stage 1 and stage 2 do not wait for t
   - (a) *Its place, as `3gt` counts (Recommended).* Tab 1 is the leftmost. Closing a tab renumbers the ones after it, and the titles change with it.
   - (b) *A number it keeps.* A tab keeps the number it got when it opened, and closing one leaves a gap. A new tab takes the lowest free number. Only 1–9 have a key.
 
+## The user's answers — 2026-10-14, verbatim
+
+Each is the user's decision, and each was the recommendation:
+
+- **U1** — Q: "Closing a tab with \Q (or :tabclose): what happens to its session?" — A: "Stop, forget the tab (Recommended)" (option text: "Stops its Claude as :qa! does (Ctrl+Z if attached), keeps its Report and draft on disk, and drops it from the folder's tabs, so it doesn't reopen. \Q on the last aineo tab quits Neovim like :qa, so that session reopens next time.")
+- **U2** — Q: "When Neovim reopens in the folder, which tabs come back?" — A: "Every tab, all started (Recommended)" (option text: "Every tab in order, each landing in its session (attached if it runs in the background), all Claude Codes started at once, the last current tab current again.")
+- **U3** — Q: "What does the number in \<n> and the tab title mean?" — A: "Its position (Recommended)" (option text: "The tab's place, as Vim's 3gt counts; numbers shift after a tab closes.")
+
+So T67 and T68 no longer wait.
+
+## The orchestrator's rulings — 2026-10-14, before dispatch
+
+O1–O22 are each ruled as their recommended (a), numbered A234–A255 in order (O1 → A234 … O22 → A255): the orchestrator's assumptions under the user's instruction of 2026-10-06 ("assume your recommendations and report what they were after you finish"), never the user's decisions. The briefs are written for (a).
+
 ## Decisions for the orchestrator
 
 Numbered once, here. Each recommendation is (a), and each brief is written for the recommendations. A ruling other than (a) is a dated amendment of the brief before dispatch.
