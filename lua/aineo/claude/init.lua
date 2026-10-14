@@ -40,10 +40,10 @@ local CHILD_ENVIRONMENT = { AINEO_CHILD = '1' }
 --- follows now (`session_id()`), what its session hooks told that no switch
 --- has paired yet (`follow_switches()`); whether Claude Code is ready for
 --- input now, and whether `on_session_ready` was called for it; and, once
---- its process has ended, the process's exit code and when it ended, by
---- `vim.uv.hrtime()`. A start with no job yet waits for the list of the
---- folder's sessions (`launch_once_listed()`).
----@alias aineo.claude.Start { buffer: integer, command: string[], job: integer?, choice: aineo.claude.SessionChoice, settings: aineo.claude.Settings, start_token: string, settings_unread: boolean, followed: string, unpaired: aineo.claude.SessionEvent[], ready: boolean?, ready_told: boolean?, exit_code: integer?, ended_at: number? }
+--- its process has ended, the process's exit code and when it ended; and
+--- when it launched, both by `vim.uv.hrtime()`. A start with no job yet waits
+--- for the list of the folder's sessions (`launch_once_listed()`).
+---@alias aineo.claude.Start { buffer: integer, command: string[], job: integer?, choice: aineo.claude.SessionChoice, settings: aineo.claude.Settings, start_token: string, settings_unread: boolean, attached: boolean?, followed: string, unpaired: aineo.claude.SessionEvent[], ready: boolean?, ready_told: boolean?, exit_code: integer?, launched_at: number?, ended_at: number? }
 
 --- The one Claude Code session, once one has started: its last start.
 ---@type aineo.claude.Start?
@@ -69,23 +69,30 @@ local function is_running()
   return is_process_alive() and vim.api.nvim_buf_is_valid(session.buffer)
 end
 
---- Makes quitting Neovim stop Claude Code by its keys first
---- (`stop.stop_by_keys()`) while its process has not ended, so that none
---- outlives the editor — also when its terminal was wiped just before, and
---- the stop can only wait for the hangup to end it. A start that has not
---- launched Claude Code yet has no process to stop. Registering it again
---- replaces it.
+--- Stops the running Claude Code by its keys, blocking the editor until it
+--- has exited or the stop has run out: `stop.stop_by_keys()`'s, or, for a
+--- Claude Code attached to a background session, Ctrl+Z alone
+--- (`stop.detach()`), never Ctrl-C. Does nothing when its process has ended
+--- and when the start has not launched Claude Code yet, so it has no process
+--- to stop.
+local function stop_running_session()
+  if is_process_alive() and session.job then
+    local stop_session = session.attached and stop.detach or stop.stop_by_keys
+    stop_session(session.job, function()
+      return not is_process_alive()
+    end)
+  end
+end
+
+--- Makes quitting Neovim stop Claude Code (`stop_running_session()`) while
+--- its process has not ended, so that none outlives the editor — also when
+--- its terminal was wiped just before, and the stop can only wait for the
+--- hangup to end it. Registering it again replaces it.
 local function stop_on_quit()
   vim.api.nvim_create_autocmd('VimLeavePre', {
     group = vim.api.nvim_create_augroup('aineo.claude', {}),
     desc = 'Stop Claude Code by its keys before Neovim quits',
-    callback = function()
-      if is_process_alive() and session.job then
-        stop.stop_by_keys(session.job, function()
-          return not is_process_alive()
-        end)
-      end
-    end,
+    callback = stop_running_session,
   })
 end
 
@@ -229,19 +236,21 @@ local function keep_session_id(settings, id)
   end
 end
 
---- Whether `ended`, a session whose process has ended, resumed an id Claude
---- Code had no conversation for: it exited 1 with `NO_CONVERSATION` and its
+--- Whether `ended`, a session whose process has ended and which did not
+--- attach to a background session, resumed an id Claude Code had no
+--- conversation for: it exited 1 with `NO_CONVERSATION` and its
 --- id on its terminal. The terminal's lines and the message are compared with
 --- every white space removed, since Claude Code 2.1.283 breaks the message at
 --- a blank where the terminal is narrower than it, dropping that blank, and a
 --- terminal row may also end on a blank of its own; a terminal already wiped
 --- tells nothing.
 ---
----@param ended { buffer: integer, choice: aineo.claude.SessionChoice, exit_code: integer? }
+---@param ended { buffer: integer, choice: aineo.claude.SessionChoice, attached: boolean?, exit_code: integer? }
 ---@return boolean
 local function found_no_conversation(ended)
   if
     not ended.choice.resumed
+    or ended.attached
     or ended.exit_code ~= 1
     or not vim.api.nvim_buf_is_valid(ended.buffer)
   then
@@ -263,6 +272,11 @@ local SETTINGS_UNREAD_WARNING = "aineo: claude.cmd's --settings unread; switches
 --- another interactive Claude Code. One line of at most 60 characters, as
 --- `SETTINGS_UNREAD_WARNING` is.
 local ALSO_OPEN_WARNING = 'aineo: this session is also open in another Claude Code'
+
+--- What aineo tells the user when it attaches to the background session it
+--- would resume. One line of at most 60 characters, as
+--- `SETTINGS_UNREAD_WARNING` is.
+local ATTACHED_NOTE = 'aineo: attached to a background session (no Report)'
 
 --- The first line of `failure`, an error raised in Lua code, without the
 --- words Neovim puts before an error it passes on (`Lua: `) and without the
@@ -377,6 +391,7 @@ end
 ---@param on_exit fun(ended: aineo.claude.Start)
 local function launch(prepared, on_exit)
   local settings = prepared.settings
+  prepared.launched_at = vim.uv.hrtime()
   readiness.watch(prepared.buffer, function(ready)
     prepared.ready = ready
     if
@@ -477,10 +492,10 @@ local function tell_session_replaced(settings, left)
   end
 end
 
---- Starts a new session on a new id in place of the last (`start_in_place()`)
---- and hands its terminal to `settings.on_terminal_replaced`, then tells
---- `settings.on_session_switched` of it (`tell_session_replaced()`). Raises
---- nothing.
+--- Starts the session `choice` names in place of the last, which has ended
+--- (`start_in_place()`), and hands its terminal to
+--- `settings.on_terminal_replaced`, then tells `settings.on_session_switched`
+--- of it (`tell_session_replaced()`). Raises nothing.
 ---
 --- A user who is typing (`is_typing()`) goes on typing where they are. Any
 --- other user — in Normal, Visual or Select mode, on the command line, with
@@ -498,11 +513,11 @@ end
 --- nor `settings.on_session_switched` is called.
 ---
 ---@param settings aineo.claude.Settings
-local function start_new_session_in_place(settings)
+---@param choice aineo.claude.SessionChoice
+local function start_in_place_of_ended_session(settings, choice)
   local was_typing = is_typing(vim.api.nvim_get_mode().mode)
   local left = session and session.followed
-  local started, terminal =
-    pcall(start_in_place, settings, { id = session_ids.new_session_id(), resumed = false })
+  local started, terminal = pcall(start_in_place, settings, choice)
   if not was_typing then
     vim.cmd.stopinsert()
   end
@@ -518,7 +533,7 @@ end
 
 --- When `ended`, a session whose process has ended, resumed an id Claude
 --- Code found no conversation for (`found_no_conversation()`), starts a new
---- session on a new id in its place (`start_new_session_in_place()`) from a
+--- session on a new id in its place (`start_in_place_of_ended_session()`) from a
 --- scheduled callback — once the command-line window has closed, when it is
 --- open. It starts none once Neovim is quitting (`v:exiting` set), as it is
 --- while `VimLeavePre` handlers wait, nor once another start has made a
@@ -534,18 +549,65 @@ local function start_in_place_of_no_conversation(settings, ended)
     if vim.v.exiting ~= vim.NIL or session ~= ended then
       return
     end
-    start_new_session_in_place(settings)
+    start_in_place_of_ended_session(
+      settings,
+      { id = session_ids.new_session_id(), resumed = false }
+    )
+  end)
+end
+
+--- How soon after it launched an attach that exits with a failure counts as
+--- one that did not take: a session that ended between the list and the
+--- attach, say.
+local ATTACH_FAILURE_WINDOW_NS = 2e9
+
+--- What aineo tells the user when an attach did not take and it resumes the
+--- session in its place. One line of at most 60 characters.
+local ATTACH_FAILED_NOTE = 'aineo: the attach failed; resuming the session'
+
+--- When `ended`, an attach whose process exited with a failure within
+--- `ATTACH_FAILURE_WINDOW_NS` of its launch, resumes the session it was to
+--- attach to in its place (`start_in_place_of_ended_session()`), as a start
+--- resumes it, from a scheduled callback — once the command-line window has
+--- closed, when it is open — and tells the user (`ATTACH_FAILED_NOTE`). It
+--- resumes none once Neovim is quitting (`v:exiting` set), once another
+--- start has made a session of its own, nor when the terminal was wiped,
+--- which hangs the attach up.
+---
+---@param settings aineo.claude.Settings
+---@param ended table
+local function resume_after_failed_attach(settings, ended)
+  if
+    not ended.attached
+    or ended.exit_code == 0
+    or ended.ended_at - ended.launched_at > ATTACH_FAILURE_WINDOW_NS
+  then
+    return
+  end
+  schedule_outside_command_line_window(function()
+    if
+      vim.v.exiting ~= vim.NIL
+      or session ~= ended
+      or not vim.api.nvim_buf_is_valid(ended.buffer)
+    then
+      return
+    end
+    vim.notify(ATTACH_FAILED_NOTE, vim.log.levels.INFO)
+    start_in_place_of_ended_session(settings, ended.choice)
   end)
 end
 
 --- Runs Claude Code in the terminal buffer of `prepared` (`launch()`); when
 --- it then finds no conversation to resume, a new session takes its place
---- (`start_in_place_of_no_conversation()`).
+--- (`start_in_place_of_no_conversation()`), and when an attach does not take,
+--- the session it was to attach to is resumed
+--- (`resume_after_failed_attach()`).
 ---
 ---@param prepared aineo.claude.Start
 local function launch_start(prepared)
   launch(prepared, function(ended)
     start_in_place_of_no_conversation(prepared.settings, ended)
+    resume_after_failed_attach(prepared.settings, ended)
   end)
 end
 
@@ -601,6 +663,23 @@ local function announce_launch(left)
   tell_session_replaced(session.settings, left)
 end
 
+--- Makes `waiting`, a start with no job yet, a start that attaches to
+--- `background`, the listed background session of the session it resumes, in
+--- place of resuming it: its command becomes `claude.cmd` followed by `attach`
+--- and the session's short id (`arguments.attach_command()`), with none of
+--- the arguments aineo gives a Claude Code it starts, so that its session
+--- hooks, report server, instructions and allowed tools are not given and
+--- there is no `--settings` to warn about.
+---
+---@param waiting aineo.claude.Start
+---@param background aineo.claude.ListedSession
+local function attach_to(waiting, background)
+  waiting.command = arguments.attach_command(waiting.settings.cmd, background.short_id)
+  waiting.attached = true
+  waiting.settings_unread = false
+  session_name.mark_attached(waiting.buffer)
+end
+
 --- Lists the folder's sessions (`agents.list_sessions()`) and, from the
 --- callback that receives the answer — once the command-line window has
 --- closed, when it is open — launches Claude Code for `waiting`
@@ -608,10 +687,14 @@ end
 --- unless `waiting` may not launch (`may_launch()`). A user who is typing
 --- (`is_typing()`) goes on typing where they are; any other is kept out of
 --- Insert mode (`:stopinsert`), which a `TermOpen` autocommand of theirs
---- would otherwise enter. When the kept session is open in another
---- interactive Claude Code, the user is warned once (`ALSO_OPEN_WARNING`),
---- after the launch, so that a notifier that raises cannot keep Claude Code
---- from launching. A list that could not run, failed, timed out or was not
+--- would otherwise enter. When the list shows the kept session running in
+--- Claude Code's background service with a short id
+--- (`agents.running_in_background()`), the start attaches to it in place of
+--- resuming it (`attach_to()`) and tells `ATTACHED_NOTE`; else, when the
+--- kept session is open in another interactive Claude Code, the user is
+--- warned once (`ALSO_OPEN_WARNING`) and it is resumed. Either is told after
+--- the launch, so that a notifier that raises cannot keep Claude Code from
+--- launching. A list that could not run, failed, timed out or was not
 --- JSON tells nothing and changes nothing: Claude Code resumes all the same,
 --- as it did before the list was asked for. A launch that fails is told the
 --- user once, as an error starting with `aineo:` and holding the first line
@@ -625,6 +708,10 @@ local function launch_once_listed(waiting, left)
       if not may_launch(waiting) then
         return
       end
+      local background = agents.running_in_background(sessions or {}, waiting.choice.id)
+      if background then
+        attach_to(waiting, background)
+      end
       local was_typing = is_typing(vim.api.nvim_get_mode().mode)
       local launched, failure = pcall(launch_start, waiting)
       if not was_typing then
@@ -635,7 +722,9 @@ local function launch_once_listed(waiting, left)
         return
       end
       announce_launch(left)
-      if agents.is_open_in_another_claude_code(sessions or {}, waiting.choice.id) then
+      if background then
+        vim.notify(ATTACHED_NOTE, vim.log.levels.INFO)
+      elseif agents.is_open_in_another_claude_code(sessions or {}, waiting.choice.id) then
         vim.notify(ALSO_OPEN_WARNING, vim.log.levels.WARN)
       end
     end)
@@ -659,6 +748,116 @@ local function start_after_list(settings, choice, left)
   launch_once_listed(waiting, left)
   become_the_session(waiting, previous)
   return waiting.buffer
+end
+
+--- Whether a pick of `listed`, a session another process runs, can be joined
+--- in aineo's window (`M.join_session()`): it can be attached to, or it is
+--- open in another interactive Claude Code and can be resumed
+--- (`agents.way_to_join()`) and, when `folder` is given, it started in it
+--- (`agents.started_in()`): a session started in another folder would be
+--- resumed into the wrong project.
+---
+---@param listed aineo.claude.ListedSession
+---@param folder? string
+---@return boolean
+function M.can_join_session(listed, folder)
+  return agents.way_to_join(listed) ~= nil and (folder == nil or agents.started_in(listed, folder))
+end
+
+--- Whether the running Claude Code is attached to a background session
+--- (`attach_to()`): what aineo writes into it reaches that session, so
+--- aineo replaces it (`M.replace_session()`) where it would write a command.
+---
+---@return boolean
+function M.is_attached()
+  return is_running() and session.attached == true
+end
+
+--- Replaces the running Claude Code with a start prepared for `choice`, in
+--- the windows that show the running one's terminal, and returns the new
+--- terminal; keeps `choice`'s id for `settings.cwd`, so that the next start
+--- there lands in it. `background`, a listed background session, makes the
+--- start an attach to it (`attach_to()`). The running Claude Code is
+--- stopped after the start is prepared, so that an error preparing it
+--- stops nothing (`stop_running_session()`): by Ctrl+Z, for an attached one.
+---
+---@param settings aineo.claude.Settings
+---@param choice aineo.claude.SessionChoice
+---@param background? aineo.claude.ListedSession
+---@return integer buffer
+local function replace_running_session(settings, choice, background)
+  local previous = session
+  local left = previous and previous.followed
+  local replacement = prepare_start(settings, choice)
+  stop_running_session()
+  if background then
+    attach_to(replacement, background)
+  end
+  launch_start(replacement)
+  become_the_session(replacement, previous)
+  keep_session_id(settings, choice.id)
+  announce_launch(left)
+  return replacement.buffer
+end
+
+--- Replaces the running Claude Code with one on a session of `choice`'s,
+--- aineo's own start: a new session on a new id, or, with `choice`, that
+--- session resumed. It is what `:Aineo new` and a switch of `:Aineo
+--- sessions` do where the running Claude Code is attached
+--- (`M.is_attached()`) and a command written into it would reach the
+--- background session. Stops, launches and keeps the id as
+--- `replace_running_session()` does, and raises the errors `start_session()`
+--- raises, before it stops anything. Returns the new terminal.
+---
+---@param settings aineo.claude.Settings
+---@param choice? aineo.claude.SessionChoice a session to resume; nil for a new session
+---@return integer buffer the terminal buffer Claude Code runs in
+function M.replace_session(settings, choice)
+  validate_settings(settings)
+  return replace_running_session(
+    settings,
+    choice or { id = session_ids.new_session_id(), resumed = false }
+  )
+end
+
+--- Replaces the running Claude Code with one on `listed`, a session another
+--- process runs that can be joined (`M.can_join_session()`, with
+--- `settings.cwd` as the folder), in the windows that show the running
+--- one's terminal, and returns the new terminal; keeps the session's id for
+--- `settings.cwd`, so that the next start there lands in it. A session
+--- running in Claude Code's background service is attached to, as a start
+--- that resumes it is (`attach_to()`), and the user is told so; so is a
+--- session open in another interactive Claude Code that `sessions`, the list
+--- just read, also shows in the background. One only open in another
+--- interactive Claude Code, which has no short id to attach to, is resumed
+--- with `--resume`, as a start resumes it, and the user is warned of the
+--- other Claude Code (`ALSO_OPEN_WARNING`). The running Claude Code is
+--- stopped as `M.replace_session()` stops it. `settings.on_session_switched`
+--- is told the switch (`tell_session_replaced()`), and
+--- `settings.on_session_ready` is called when the new Claude Code is ready.
+--- Raises an error, starting nothing and stopping nothing, when `settings`
+--- is malformed, `claude.cmd` is not executable, or `listed` cannot be
+--- joined.
+---
+---@param settings aineo.claude.Settings
+---@param listed aineo.claude.ListedSession
+---@param sessions aineo.claude.ListedSession[] the list read just now
+---@return integer buffer the terminal buffer Claude Code runs in
+function M.join_session(settings, listed, sessions)
+  validate_settings(settings)
+  local background = agents.running_in_background(sessions, listed.session_id)
+  local target = background or listed
+  if not M.can_join_session(target, settings.cwd) then
+    error('aineo.claude: the session ' .. listed.session_id .. ' cannot be joined', 2)
+  end
+  local buffer =
+    replace_running_session(settings, { id = listed.session_id, resumed = true }, background)
+  if agents.way_to_join(target) == 'attach' then
+    vim.notify(ATTACHED_NOTE, vim.log.levels.INFO)
+  else
+    vim.notify(ALSO_OPEN_WARNING, vim.log.levels.WARN)
+  end
+  return buffer
 end
 
 --- Starts Claude Code in a new terminal buffer and returns that buffer. While
@@ -686,10 +885,18 @@ end
 --- `'starting'`, `write_to_session()` raises as when no session runs, and a
 --- quit has no Claude Code to stop. When the buffer is wiped meanwhile, when
 --- another start has taken the place of this one, or while Neovim is
---- quitting, nothing is launched. When the kept session is open in another
---- interactive Claude Code (`agents.is_open_in_another_claude_code()`), the
---- user is warned once, as `ALSO_OPEN_WARNING` says, and Claude Code resumes
---- it all the same; a list that cannot run, fails, times out or is not JSON
+--- quitting, nothing is launched. When the list shows the kept session
+--- running in Claude Code's background service with a short id, Claude Code
+--- attaches to it (`claude attach`, none of aineo's arguments, no session
+--- hooks, Report server, instructions or allowed tools) in place of
+--- resuming it, and `session_status()`, the quit and `session_id()` stand as
+--- for any start, but the quit presses Ctrl+Z and never Ctrl-C
+--- (`stop.detach()`); an attach that exits with a failure within 2 s of its
+--- launch is followed by a resume of the session. When the kept session is
+--- open in another interactive Claude Code
+--- (`agents.is_open_in_another_claude_code()`), the user is warned once, as
+--- `ALSO_OPEN_WARNING` says, and Claude Code resumes it all the same; a list
+--- that cannot run, fails, times out or is not JSON
 --- tells nothing and Claude Code resumes it. The warning about
 --- `claude.cmd`'s `--settings` and the switch to the session
 --- (`settings.on_session_switched`) are told when Claude Code launches. A
@@ -745,8 +952,10 @@ end
 ---
 --- Each terminal keeps the session's name and the directory it started in
 --- as `b:aineo_session_name` and `b:aineo_session_folder`, which
---- `session_statusline()` draws; the name is `Claude Code` again once Claude
---- Code has exited, however it ended.
+--- `session_statusline()` draws, and, while Claude Code is attached to a
+--- background session, `b:aineo_session_attached`; the name is `Claude Code`
+--- again, and the attached mark gone, once Claude Code has exited, however
+--- it ended.
 ---
 --- A session whose terminal has been wiped counts as ended, since the wipe
 --- hangs its Claude Code up: a start then launches a new one.
@@ -1061,8 +1270,10 @@ local SESSION_STATUSLINE = "%!v:lua.require'aineo.claude'.session_statusline_for
 
 --- A `'statusline'` that draws, for a window showing the session's terminal,
 --- the session's name, then the folder Claude Code started in:
---- `<name> — <folder>`, read from the terminal's `b:aineo_session_name` and
---- `b:aineo_session_folder`. The name is Claude Code's own for the session,
+--- `<name> — <folder>`, or `<name> (attached) — <folder>` while Claude Code
+--- is attached to a background session, read from the terminal's
+--- `b:aineo_session_name`, `b:aineo_session_folder` and
+--- `b:aineo_session_attached`. The name is Claude Code's own for the session,
 --- taken from its terminal title without the status glyph before it, and
 --- `Claude Code` while the title gives none — before Claude Code sets one,
 --- when it sets an empty one, and whenever it sets none at all — and once

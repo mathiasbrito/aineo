@@ -137,6 +137,65 @@ local function three_sessions()
   }
 end
 
+--- `entries`, as `three_sessions()` gives them, with the third — the
+--- background session — running: it has a process and a status.
+---
+---@param entries table[]
+---@return table[]
+local function running_in_the_background(entries)
+  entries[3].pid = 4003
+  entries[3].status = 'busy'
+  return entries
+end
+
+--- An entry of a background session `session_id` that runs, as Claude Code
+--- lists it, with the short id `short_id`.
+---
+---@param session_id string
+---@param short_id string
+---@return table
+local function background_entry(session_id, short_id)
+  return {
+    id = short_id,
+    cwd = child.fn.getcwd(),
+    kind = 'background',
+    startedAt = 1790000200000,
+    sessionId = session_id,
+    name = 'tests',
+    state = 'working',
+    pid = 4100,
+    status = 'busy',
+  }
+end
+
+--- The file under the state directory of the case's fake, in which aineo
+--- keeps the session id of the child's working directory.
+---
+---@param fake { record: string }
+---@return string
+local function kept_file(fake)
+  return vim.fs.joinpath(
+    vim.fs.dirname(fake.record),
+    'state',
+    'nvim',
+    'aineo',
+    'claude-sessions',
+    vim.fn.sha256(child.fn.getcwd()) .. '.txt'
+  )
+end
+
+--- Keeps `session_id` for the child's working directory, as the session the
+--- next start there resumes (`open_layout_on()` sets the state directory).
+---
+---@param fake { record: string }
+---@param session_id string
+local function keep_session(fake, session_id)
+  vim.fn.mkdir(vim.fs.dirname(kept_file(fake)), 'p')
+  local file = assert(io.open(kept_file(fake), 'wb'))
+  file:write(session_id)
+  file:close()
+end
+
 --- The rows `three_sessions()` give.
 local THREE_ROWS = {
   'main  interactive  idle  [this terminal]',
@@ -665,27 +724,18 @@ local function finish_pick_after_listing(fake, entries)
   finish_pick()
 end
 
-T['a pick']['of a row another process has taken since the list was read writes nothing and says it runs elsewhere'] = function()
+T['a pick']['of a row another process has taken since the list was read attaches to it'] = function()
   local fake = sessions_fake('sessions-pick-taken', 'ready')
   open_layout_on(fake)
   list_in(fake, three_sessions())
   pick_row_later(3)
   press_sessions()
-  local taken = three_sessions()
-  taken[3].pid = 4003
-  taken[3].status = 'busy'
 
-  finish_pick_after_listing(fake, taken)
+  finish_pick_after_listing(fake, running_in_the_background(three_sessions()))
 
-  eq(messages_once_told(), {
-    {
-      message = NOT_SWITCHED
-        .. 'tests runs in another terminal or in Claude Code’s background service,'
-        .. ' and a switch would pull it away from there',
-      level = vim.log.levels.WARN,
-    },
-  })
+  eq(claude_session.start_arguments(fake, 2), { 'attach', 'a1b2c3d4' })
   eq(claude_session.received(fake):find('/resume', 1, true), nil)
+  eq(claude_session.ctrl_c_count(fake) > 0, true)
 end
 
 T['a pick']['of a row the list no longer holds writes nothing and says so'] = function()
@@ -802,10 +852,117 @@ T['the list']['is read once at a time: a second press says so and starts nothing
   eq(#menus(), 2)
 end
 
-T['a pick']['of a row running elsewhere writes nothing and says why it cannot be switched to'] = function()
+T['a pick']['of a row open in another interactive Claude Code warns of it and resumes it in Claude’s window'] = function()
   local fake = sessions_fake('sessions-pick-elsewhere', 'ready')
   open_layout_on(fake)
   list_in(fake, three_sessions())
+  pick_row(2)
+
+  press_sessions()
+
+  eq(
+    claude_session.words_after(claude_session.start_arguments(fake, 2), '--resume'),
+    { ELSEWHERE_ID }
+  )
+  eq(messages_once_told(), {
+    {
+      message = 'aineo: this session is also open in another Claude Code',
+      level = vim.log.levels.WARN,
+    },
+  })
+  eq(own_session_id(), ELSEWHERE_ID)
+  eq(claude_session.received(fake):find('/resume', 1, true), nil)
+end
+
+T['a pick']['of a row running in the background attaches Claude’s window to it, which the next start lands in'] = function()
+  local fake = sessions_fake('sessions-pick-attach', 'ready')
+  open_layout_on(fake)
+  child.cmd('Aineo report')
+  list_in(fake, running_in_the_background(three_sessions()))
+  pick_row(3)
+
+  press_sessions()
+
+  eq(claude_session.start_arguments(fake, 2), { 'attach', 'a1b2c3d4' })
+  eq(own_session_id(), SWITCHABLE_ID)
+  eq(vim.fn.readfile(kept_file(fake)), { SWITCHABLE_ID })
+  eq(messages_once_told(), {
+    {
+      message = 'aineo: attached to a background session (no Report)',
+      level = vim.log.levels.INFO,
+    },
+  })
+  eq(claude_session.received(fake):find('/resume', 1, true), nil)
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(MODE) == 't'
+  end, 20)
+  eq(entry.current_window(child), 'terminal')
+  eq(child.lua_get(MODE), 't')
+end
+
+T['a pick']['of a row running in the background with no short id to attach to writes nothing and says why'] = function()
+  local fake = sessions_fake('sessions-pick-no-short-id', 'ready')
+  open_layout_on(fake)
+  local entries = running_in_the_background(three_sessions())
+  entries[3].id = nil
+  list_in(fake, entries)
+  pick_row(3)
+
+  press_sessions()
+
+  eq(messages_once_told(), {
+    {
+      message = NOT_SWITCHED
+        .. 'tests runs in another terminal or in Claude Code’s background service,'
+        .. ' and a switch would pull it away from there',
+      level = vim.log.levels.WARN,
+    },
+  })
+  eq(claude_session.received(fake):find('/resume', 1, true), nil)
+end
+
+T['a pick']['of a row running in the background while the prompt holds a draft attaches nothing and says so'] = function()
+  local fake = sessions_fake('sessions-pick-attach-draft', 'draft')
+  open_layout_on(fake)
+  child.cmd('Aineo report')
+  list_in(fake, running_in_the_background(three_sessions()))
+  pick_row(3)
+
+  press_sessions()
+
+  eq(messages_once_told(), {
+    {
+      message = NOT_SWITCHED .. 'the prompt holds text; clear it, then pick the session again',
+      level = vim.log.levels.WARN,
+    },
+  })
+  eq(claude_session.received(fake):find('\3', 1, true), nil)
+  eq(own_session_id() ~= SWITCHABLE_ID, true)
+end
+
+T['a pick']['of a row running in the background detaches an attached Claude’s window with Ctrl+Z and never presses Ctrl-C'] = function()
+  local fake = sessions_fake('sessions-pick-attach-attached', 'ready')
+  keep_session(fake, SWITCHABLE_ID)
+  list_in(
+    fake,
+    { background_entry(SWITCHABLE_ID, 'a1b2c3d4'), background_entry(OTHER_ID, 'e5f6a7b8') }
+  )
+  open_layout_on(fake)
+  pick_row(2)
+
+  press_sessions()
+
+  eq(claude_session.start_arguments(fake, 2), { 'attach', 'e5f6a7b8' })
+  eq(claude_session.ctrl_c_count(fake), 0)
+  eq(claude_session.received(fake):find('\26', 1, true) ~= nil, true)
+end
+
+T['a pick']['of a row with a status and no process refuses it as running elsewhere'] = function()
+  local fake = sessions_fake('sessions-pick-no-pid', 'ready')
+  open_layout_on(fake)
+  local entries = three_sessions()
+  entries[2].pid = nil
+  list_in(fake, entries)
   pick_row(2)
 
   press_sessions()
@@ -819,7 +976,151 @@ T['a pick']['of a row running elsewhere writes nothing and says why it cannot be
     },
   })
   eq(claude_session.received(fake):find('/resume', 1, true), nil)
-  eq(own_session_id() ~= ELSEWHERE_ID, true)
+end
+
+T['a pick']['of a running row started in another folder refuses it and says where it started'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'interactive', 2, 'refactor' },
+      { 'background', 3, 'tests' },
+    },
+  })
+
+T['a pick']['of a running row started in another folder refuses it and says where it started']['kind'] = function(
+  kind,
+  row,
+  name
+)
+  local fake = sessions_fake('sessions-pick-running-other-folder-' .. kind, 'ready')
+  open_layout_on(fake)
+  local entries = running_in_the_background(three_sessions())
+  entries[row].cwd = '/elsewhere/project'
+  list_in(fake, entries)
+  pick_row(row)
+
+  press_sessions()
+
+  eq(messages_once_told(), {
+    {
+      message = NOT_SWITCHED .. name .. ' was started in another folder, /elsewhere/project',
+      level = vim.log.levels.WARN,
+    },
+  })
+  eq(claude_session.received(fake):find('/resume', 1, true), nil)
+  eq(own_session_id() ~= ELSEWHERE_ID and own_session_id() ~= SWITCHABLE_ID, true)
+end
+
+T['a pick']['of the interactive row of a session the list also shows in the background attaches to that entry'] = function()
+  local fake = sessions_fake('sessions-pick-both-kinds', 'ready')
+  open_layout_on(fake)
+  local entries = three_sessions()
+  table.insert(entries, background_entry(ELSEWHERE_ID, 'b2c3d4e5'))
+  list_in(fake, entries)
+  pick_row(2)
+
+  press_sessions()
+
+  eq(claude_session.start_arguments(fake, 2), { 'attach', 'b2c3d4e5' })
+end
+
+--- The Lua, run in the child, that makes a join raise: `claude.cmd`'s program
+--- is not executable while it is stubbed.
+local MAKE_EXECUTABLE_FAIL = [[
+  _G.real_executable = vim.fn.executable
+  vim.fn.executable = function() return 0 end
+]]
+
+--- The lines of the Report, with each time of day replaced by `HH:MM`.
+local REPORT_LINES = [[vim.tbl_map(function(line)
+  return (line:gsub('^%d%d:%d%d ', 'HH:MM '))
+end, vim.api.nvim_buf_get_lines(vim.fn.bufnr('aineo://report'), 0, -1, true))]]
+
+T['a pick']['whose join raises leaves the panes following the session that runs on'] = function()
+  local fake = sessions_fake('sessions-pick-join-raises', 'ready')
+  open_layout_on(fake)
+  local first = own_session_id()
+  child.lua(
+    "require('aineo.report').receive_report(...)",
+    { { task = 'Rename the lexer', status = 'done', summary = 'All tests pass' } }
+  )
+  list_in(fake, running_in_the_background(three_sessions()))
+  pick_row(3)
+  child.lua(MAKE_EXECUTABLE_FAIL)
+  press_sessions()
+  messages_once_told()
+  child.lua('vim.fn.executable = _G.real_executable; _G.entry_test_messages = {}')
+  child.lua('vim.cmd.stopinsert()')
+  entry.press(child, '\\N')
+
+  vim.wait(PATIENCE_MS, function()
+    return own_session_id() ~= first
+  end, 20)
+  vim.wait(PATIENCE_MS, function()
+    return vim.deep_equal(child.lua_get(REPORT_LINES), { '' })
+  end, 20)
+
+  eq(child.lua_get(REPORT_LINES), { '' })
+end
+
+T['an attached window'] = MiniTest.new_set()
+
+--- Starts the child's Claude Code on `fake` attached to the background
+--- session `SWITCHABLE_ID` that its list shows, and waits until it is ready.
+---
+---@param fake { record: string, environment: table<string, string>, listing: string }
+---@param more? table[] further entries the list shows
+local function open_attached(fake, more)
+  keep_session(fake, SWITCHABLE_ID)
+  list_in(fake, vim.list_extend({ background_entry(SWITCHABLE_ID, 'a1b2c3d4') }, more or {}))
+  open_layout_on(fake)
+  eq(claude_session.start_arguments(fake, 1), { 'attach', 'a1b2c3d4' })
+end
+
+--- Whether the fake received the Ctrl+Z key and no text of a command.
+---
+---@param fake { record: string }
+---@param command string the command's text, such as `/clear`
+---@return boolean
+local function detached_and_wrote_no(fake, command)
+  local received = claude_session.received(fake)
+  return received:find('\26', 1, true) ~= nil and received:find(command, 1, true) == nil
+end
+
+T['an attached window']['gets a new session from \\N, which detaches it and writes no /clear'] = function()
+  local fake = sessions_fake('sessions-new-attached', 'ready')
+  open_attached(fake)
+
+  entry.press(child, '\\N')
+
+  local arguments = claude_session.start_arguments(fake, 2)
+  eq(arguments[1], '--session-id')
+  eq(detached_and_wrote_no(fake, '/clear'), true)
+  eq(claude_session.ctrl_c_count(fake), 0)
+  eq(vim.fn.readfile(kept_file(fake)), { arguments[2] })
+  eq(own_session_id(), arguments[2])
+end
+
+T['an attached window']['resumes a picked session that does not run, with Ctrl+Z and no /resume written'] = function()
+  local fake = sessions_fake('sessions-switch-attached', 'ready')
+  open_attached(fake, {
+    {
+      id = 'e5f6a7b8',
+      cwd = child.fn.getcwd(),
+      kind = 'background',
+      startedAt = 1790000300000,
+      sessionId = OTHER_ID,
+      name = 'old',
+      state = 'done',
+    },
+  })
+  pick_row(2)
+
+  press_sessions()
+
+  eq(claude_session.words_after(claude_session.start_arguments(fake, 2), '--resume'), { OTHER_ID })
+  eq(detached_and_wrote_no(fake, '/resume'), true)
+  eq(claude_session.ctrl_c_count(fake), 0)
+  eq(vim.fn.readfile(kept_file(fake)), { OTHER_ID })
 end
 
 return T

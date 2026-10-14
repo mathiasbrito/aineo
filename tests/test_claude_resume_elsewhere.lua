@@ -47,13 +47,12 @@ local function interactive_entry(overrides)
   }, overrides or {})
 end
 
---- An entry for the kept session as a background session that runs.
+--- An entry for the kept session as a background session that runs but has
+--- no short id, which `claude attach` takes, so that it is not attached to.
 ---
----@param overrides? table
 ---@return table
-local function background_entry(overrides)
-  return vim.tbl_extend('force', {
-    id = 'a1b2c3d4',
+local function background_entry_without_short_id()
+  return {
     cwd = '/work/project',
     kind = 'background',
     startedAt = 1790000100000,
@@ -62,7 +61,7 @@ local function background_entry(overrides)
     state = 'working',
     pid = 4343,
     status = 'busy',
-  }, overrides or {})
+  }
 end
 
 --- The settings overrides that make a session keep its ids under the state
@@ -717,7 +716,10 @@ T['the kept session open in another interactive Claude Code']['is told nothing o
   MiniTest.new_set({
     parametrize = {
       { 'nothing', {} },
-      { 'a background session of the kept id that runs', { background_entry() } },
+      {
+        'a background session of the kept id with no short id',
+        { background_entry_without_short_id() },
+      },
       { 'an interactive session of another id', { interactive_entry({ sessionId = OTHER_ID }) } },
       {
         'an interactive session of the kept id with no pid',

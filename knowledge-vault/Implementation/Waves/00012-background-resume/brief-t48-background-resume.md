@@ -186,3 +186,39 @@ The orchestrator's verification runs `plan.md`'s round-4 mutants for your part: 
 ## The orchestrator's rulings — 2026-10-12, before dispatch (round 4)
 
 `plan.md` › *The orchestrator's rulings — round 4* rules O11–O17 as their (a), which this brief is written for: A185–A191. They are the orchestrator's assumptions, to record in the session note and the PR body as such, never as the user's decisions. Part 1 is dispatched now; part 2 waits for the user's M16.
+
+## Amendment — 2026-10-14, at dispatch: M16 measured, the user's decisions
+
+Part 2 is dispatched on `dev` `1354cad`, with part 1 merged (PR #189) and T55–T58 on `dev`. This amendment wins over the body above, and **A223** (the orchestrator's assumption) is that it is a faithful reading of what follows. Part 2's branch is `bugfix/t48-attach`.
+
+**M16, the user's check, as reported** (names and ids left out; step 2's time was not reported, so the 5 s bound stays):
+- Step 3: `claude attach <id>` in a Neovim 0.12.5 terminal shows the conversation.
+- Step 4: after `Ctrl+Z` the terminal ends with `[Process exited 0]`.
+- Step 5: the session is still running, with the same `pid`.
+- Step 6: a `:bwipe!` of the attached terminal also leaves it running, and a new attach brings it back.
+- Step 7: `claude agents --json` prints its output and exits.
+
+**The user's decision (2026-10-14):** "when reopening I must land in the session to open on the window." The next start lands in the session that was on Claude's window when Neovim quit, an attached background session included. So after an attach **the kept id for the folder becomes the attached session's**. This replaces item 2's "the kept file is not written", and round 4's "the kept id stays the background session's" (A189's part): the kept id follows the window.
+
+**The user's decision (2026-10-14):** "Attach straight away", when the session runs in the background. `\N` gives a new session. So there is **no question at start**: item 1 (the `vim.ui.select` question, A186) and item 4 (the answer *Start a new session*) fall, as do their cases. This supersedes "Ask at start".
+
+**Part 2, as dispatched:**
+- At a start that would resume, when the list holds an entry of the kept id with `kind` `background`, a `pid` or a `status`, and a short `id` (A191), the terminal's command is `claude.cmd` followed by `attach <short id>`, with none of aineo's flags. A background entry without a short `id` resumes as today.
+- When both kinds are listed, the background entry attaches and no warning is told.
+- aineo tells one note of at most 60 characters at the attach, and says what the attached terminal lacks (session hooks, the Report server, aineo's instructions and allowed tools). Claude's status line reads `<name> (attached) — <folder>` while it runs (A188).
+- The stop and the quit of an attached terminal press `Ctrl+Z` and never Ctrl-C, then hang up as today (A189). M16 shows both leave the session running.
+- When the kept session is no longer running, the start resumes as today.
+- The "Start a new session" of the body is `\N`'s existing new session (T58, `new_session()`), unchanged.
+
+**Facts that moved on `dev` `1354cad`** (the body's *Facts* were written against `0fa0116`):
+- `launch()` no longer makes the buffer: `prepare_start()` makes it, named `aineo://claude/<start token>`, and `launch(prepared, on_exit)` runs the job in it. The list's answer is handled in `launch_once_listed()`, where the attach is decided. `start_session()` is at line 766 of `lua/aineo/claude/init.lua`, `stop_on_quit()` at 78, `found_no_conversation()` at 242.
+- The reader's field for Claude Code's short id is `short_id` (not `id`); `agents.is_open_in_another_claude_code()` is the warning's rule. `lua/aineo/claude/window_options.lua` exists (part 1).
+- `tests/helpers/claude_session.lua`: `wait_for_starts()` counts the fake's runs that are not `agents` runs; `wait_for_launch()` and `list_gate()` exist. A fake started as `attach <id>` is a start of the fake, and counts.
+- T58's `\N` (`new_session()` in `plugin/aineo.lua`) starts a new session on a new id where Claude Code runs no session, and writes `/clear` at the empty prompt where it runs and is ready. It is the user's way to a new session; part 2 does not touch it (see the report for what it does in an attached terminal).
+
+## Amendment — 2026-10-14, after dispatch: `\S` attaches to running sessions too
+
+The user's decision, verbatim, after the orchestrator offered it (R3 of 2026-10-11 refused a pick of a session running elsewhere): "yes, make \S attach to running sessions too". It is D62 in the plan note, and it adds to part 2, in the same pull request and after part 2's own units. **A224** (the orchestrator's assumption) is that the details below are the orchestrator's, not the user's.
+- A pick of a row marked `[running elsewhere]` replaces Claude's window's Claude Code with one on that session, through part 2's attach launch. The prompt check of D49 runs first and refuses with the same words; the Claude Code that ran is stopped as quitting Neovim stops it, by `Ctrl+Z` when it is attached itself; the kept id follows the window; a pick of this terminal's row still does nothing.
+- Widened boundary: `plugin/aineo.lua` (the pick path of `\S`), `tests/test_entry_sessions.lua`, `doc/aineo.txt` (`:Aineo-sessions`, the new-session limit) and the plan note (dated notes on D49 and D51, and D62).
+- **Spec conflict, reported and not chosen by the brief:** a session open in another interactive Claude Code has no short id (`claude agents --json` gives `id` to background sessions only), so `claude attach` cannot take it. The pick resumes it (`--resume`) in the window and warns (A166) instead; a background session without a short id stays refused.

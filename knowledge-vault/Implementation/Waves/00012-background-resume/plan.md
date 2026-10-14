@@ -417,6 +417,17 @@ In a scratch folder you trust, where no session you need runs. Read `<id>` as th
 
 Report steps 2–7, 9 and 10 as you saw them, with names and ids left out. Part 2 is planned as written when steps 3, 4 and 5 hold. If step 3 shows nothing, even after `Ctrl+L`, the attach does not render in Neovim's terminal, and part 2 is re-planned.
 
+### Manual check M17 — added 2026-10-14, after the attack review of PR #200; the user's result
+
+A231, the orchestrator's assumption: a terminal that Claude Code attaches by itself is not known to aineo as attached. The check was: in aineo's Claude, type `/resume` and pick a session that runs in the background; then, from another shell in the folder, `claude agents --json --cwd .`.
+
+**The user's result (2026-10-14):** the `/resume` showed the picked session in aineo's window, but the picked session did not appear in the list run from another shell under its own name. The list showed the session's id twice, as two **interactive** rows on one `sessionId` with two pids, and the session was also open in another interactive Claude Code. Reading, the orchestrator's: that `/resume` did not attach — it resumed the session interactively in aineo's own process, which D36–D38 follow as a switch, and aineo's own terminal process is one of the two pids.
+
+What followed, and was withdrawn (A232, then A233, the orchestrator's assumptions):
+- an interactive resume is followed as a D38 switch;
+- **A232** had aineo read the screen line `Opening "<title>", running in the background (<id>)` and mark the terminal attached. **A233 withdrew it, and its code was removed:** a resumed conversation's own history can hold such lines (the user's window on reopening showed two, for sessions that were never attached, one of them a running session of the user's), and the user's first paste shows the line printed after a `/resume` with no attach following it. So even a new line does not prove an attach, and a reopen would have marked the window attached, made another session the kept one and pressed Ctrl+Z at quit.
+- What stands (A231): a terminal Claude Code attaches by itself is unknown to aineo, and aineo's quit would press Ctrl-C into it. The help tells the user to leave such a window with `←` or Ctrl+Z before quitting.
+
 ## Verification mutants — round 4
 
 Each runs as its literal edit, shown applied, on the test files that exercise the code it breaks — `tests/test_claude_resume_elsewhere.lua` first — and on the whole suite only when it survives there. Mutants 1–3 are part 1's, and 4–5 are part 2's.
@@ -446,4 +457,28 @@ Each is the orchestrator's assumption under the user's instruction of 2026-10-06
 
 ## Landed
 
-Not yet.
+Not yet: the wave stays open for T48 part 2 (the question, the attach, the Ctrl+Z stop), which is held for the user's check M16. The frontmatter's status is not changed. Part 1 landed, and is recorded here on 2026-10-14 by the wave 14 knowledge pass, on `dev` `bdc33ce`.
+
+### Part 1 — T48 (the list before a start, the waiting start, the warning), PR #189, merged by rebase (`dev` `7856882`), released in v0.2.29 (PR #190, `main` `fa12b82`)
+
+`f15f80c` … `7856882` on `dev` (7 commits; the branch head was `3a9861b`). Session note: [[Sessions/2026-10-12 — T48 Resume elsewhere]]. The round-4 plan reached `dev` as PR #186, re-applied from PR #179, itself re-applied from PR #170 (no pushed branch was rebased); part 1 was dispatched on `dev` `8ea8f82`, beside T55.
+- **The packet** (whole suite 3040 at 4 jobs, 23 mutants). A start that would resume asks `claude agents --json` where the kept session runs before Claude Code launches, in a waiting buffer named `aineo://claude/<token>`; it warns once when another interactive Claude Code has the session open and resumes it all the same; a failed or slow list resumes as before.
+- **Reviews.**
+  - *Attack (`neovim-claude-code-reviewer`, Opus):* two HIGH. Typing after `\c` while the start waits made the later launch fail (`requires unmodified buffer`) and Claude Code never started; the waiting launch lacked D45's guard against a user typing in Insert mode. Also `:bdelete` of the waiting buffer, a raise in the swap of terminals, a user's `:autocmd! VimLeavePre`, a notifier that raises on the warning, and two stale comments.
+  - *Tests and records (`records-reviewer`, Sonnet):* four TermOpen-failure cases depended on the order of cases in their file; three cases asserted "no error" before the launch they now wait for; a missing case for a kept id with a non-executable `claude.cmd`; records.
+- **Fix round** by the author (A192–A195, below): the waiting buffer is not modifiable and `\c` enters Terminal mode only in a terminal buffer; D45's guard ported with four cases; the launch needs a loaded buffer; the list is asked for before the swap; the warning is told after the launch. Whole suite 3052 at the last code commit.
+- **The orchestrator's check** on `dev` `090f6f6` plus T48 part 1: whole suite 3072 cases, `Fails (0)`, lint clean, the modifiable mutant killed.
+- **Departures.** The fix round widened part 1's boundary to `plugin/aineo.lua`'s Claude focus (A192) and to `agents.lua` (A193). Mutant m4b (`may_launch()`'s "another start has taken this one's place" check) was recorded as equivalent, since the wiped-buffer check always answers first.
+
+### T55 — a small fix under D30 taken in beside part 1, PR #187, merged by rebase (`dev` `090f6f6`), released in v0.2.28 (PR #188, `main` `1fc653d`)
+
+Session note: [[Sessions/2026-10-12 — T55 Pane cursor]]. Dispatched on `dev` `8ea8f82`, from the user's report that the pane keys showed a pane but left the cursor where it was (D59): `\g` and `\pa` move the cursor into the pane they show. `layout.focus_pane()` and the pane action in `plugin/aineo.lua` carry it; part 1 and T55 both change `plugin/aineo.lua` in different places.
+- **The orchestrator's check:** the touched suites `Fails (0)`, lint clean, the cursor-move mutant killed (15). No guarantee review; the diff was read.
+- **Departures.** None recorded.
+
+### Rulings — the orchestrator's assumptions
+
+- **A192** the waiting buffer is not modifiable, and `\c` enters Terminal or Insert mode only in a terminal buffer (the attack review's finding 1).
+- **A193** `pcall` around `nvim_del_autocmd` in `agents.lua`, so a user's `:autocmd! VimLeavePre` cannot keep the list's callback from running.
+- **A194** the two stale comments (`readiness.lua`, `plugin/aineo.lua`) corrected.
+- **A195** the two points that need the real CLI (a hung-up Claude Code still listed right after a wipe; whether `claude agents --json` starts or stops the background service at every resume) are the user's checks, steps 9 and 10 of M16, and no code.
