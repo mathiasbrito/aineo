@@ -119,3 +119,7 @@ Write it in your definition's shape, to `<scratchpad>/t70-report-packet.md`. Ope
 - the whole suite's counts.
 
 The orchestrator's verification runs `plan.md`'s T70 mutants. Name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-14, before dispatch
+
+`plan.md` › *The orchestrator's rulings* rules O1–O14 as their (a), A279–A292, which this brief is written for. Record them as the orchestrator's assumptions, never as the user's decisions. Your first commit is a dated amendment re-checking this brief against the `dev` you start from.

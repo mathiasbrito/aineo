@@ -213,6 +213,10 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 4. The shell started in `getcwd()`. After `:tcd` to another folder, `pwd` in a new shell prints that folder.
 5. `terminal` left out of `SUBCOMMAND_WORDS`. `:Aineo pane terminal` is refused with the usage line.
 
+## The orchestrator's rulings — 2026-10-14, before dispatch
+
+The user told the orchestrator to finish wave 15 and this wave without waiting for answers ("finish the wave, do not wait for me. Also start the next one and move until the end..."). O1–O14 are each ruled as their recommended (a), numbered A279–A292 in order (O1 → A279 … O14 → A292): the orchestrator's assumptions under that instruction and the user's of 2026-10-06, never the user's decisions; the briefs are written for (a). Each brief's first commit re-checks it against the `dev` it starts from (T66, and for T70 T67 and T68, merged by then), as A256 did.
+
 ## Briefs
 
 - `brief-t69-terminal-pane.md`: T69, stage 1.
