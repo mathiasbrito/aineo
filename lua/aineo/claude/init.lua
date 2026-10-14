@@ -1464,7 +1464,7 @@ local function session_functions_of(home)
     end,
     prompt_shows_text = prompt_shows_text,
     write_to_session = function(bytes)
-      write_to_session(home, bytes)
+      return write_to_session(home, bytes)
     end,
     stop_session = function()
       stop_running_session(home)
