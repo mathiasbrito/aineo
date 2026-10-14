@@ -70,14 +70,14 @@ end
 
 T[':Aineo'] = MiniTest.new_set()
 
-T[':Aineo']['without an argument tells the user its ten subcommands and does nothing else'] = function()
+T[':Aineo']['without an argument tells the user its eleven subcommands and does nothing else'] = function()
   child.cmd('Aineo')
 
   eq(entry.messages(child), { { message = entry.USAGE, level = vim.log.levels.ERROR } })
   eq(entry.windows(child), { '' })
 end
 
-T[':Aineo']['completes its argument to its ten subcommands'] = function()
+T[':Aineo']['completes its argument to its eleven subcommands'] = function()
   eq(child.fn.getcompletion('Aineo ', 'cmdline'), {
     'send',
     'open',
@@ -89,13 +89,14 @@ T[':Aineo']['completes its argument to its ten subcommands'] = function()
     'new',
     'pane',
     'claim',
+    'tab',
   })
 end
 
 T[':Aineo']['is described with every subcommand it takes'] = function()
   eq(
     child.lua_get('vim.api.nvim_get_commands({}).Aineo.definition'),
-    'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes or claim [id]'
+    'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes, claim [id] or tab new|{n}'
   )
 end
 
@@ -103,14 +104,14 @@ T[':Aineo']['completes the subcommands that begin with what is typed'] = functio
   eq(child.fn.getcompletion('Aineo re', 'cmdline'), { 'report' })
 end
 
-T[':Aineo']['with another argument tells the user its ten subcommands and does nothing else'] = function()
+T[':Aineo']['with another argument tells the user its eleven subcommands and does nothing else'] = function()
   child.cmd('Aineo reports')
 
   eq(entry.messages(child), { { message = entry.USAGE, level = vim.log.levels.ERROR } })
   eq(entry.windows(child), { '' })
 end
 
-T[':Aineo']['with a subcommand and more tells the user its ten subcommands and does nothing else'] = function()
+T[':Aineo']['with a subcommand and more tells the user its eleven subcommands and does nothing else'] = function()
   local fake = claude_session.fake('entry-usage-extra', 'ready')
   entry.use_fake(child, fake)
 

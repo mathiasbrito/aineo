@@ -34,9 +34,10 @@ pick (|:Aineo-sessions|). `\N` starts a new Claude Code session: on a new id
 once Claude Code has exited, where `\o` resumes the last, and with `/clear`
 while it runs (|:Aineo-new|). `\pa` and `\g` switch the right column
 between the agent pane, the Report over Input, and the changes pane, and move
-to the Report and to the changes pane's commits (|aineo-panes|). In Visual
-mode, in Input, `\s` sends the selection alone and removes it from Input
-(|aineo-v_\s|).
+to the Report and to the changes pane's commits (|aineo-panes|). `\T` opens a
+tab page with a Claude Code session of its own, and `\1` to `\9` move to the
+tab page of that number (|aineo-tabs|). In Visual mode, in Input, `\s` sends
+the selection alone and removes it from Input (|aineo-v_\s|).
 
 In Terminal mode and in Insert mode, `<C-\>` followed by the same letters
 does the same: `<C-\>i` moves to Input, `<C-\>r` to the Report, `<C-\>c` to
@@ -149,6 +150,75 @@ Report in its window — by `\pa`, `\r`, `\i` or `\o`.
 
 aineo keeps the pane shown until the editor quits: `\o` restores the layout
 with it, and so does the layout opened anew once its windows were closed.
+
+Tabs ~
+                                                                  *aineo-tabs*
+aineo can hold several Claude Code sessions in one Neovim, one in each of
+several tab pages. A tab, in aineo's sense, is a tab page with the layout
+above in it. Every tab has a Claude Code, a Report, an Input and a changes
+pane of its own, and they follow that tab's session alone
+(|aineo-claude-session|): a `/clear` in one tab's Claude Code changes that
+tab's Report, Input and changes pane, and no other tab's. With one tab aineo
+behaves as it always has.
+
+The first open of aineo in a Neovim, the autostart or `\o`, makes the current
+tab page aineo's first tab; its buffers are `aineo://report` and
+`aineo://input`. `\T` (|:Aineo-tab|) opens a tab page after the current one,
+with an aineo tab in it: a layout of its own around a Claude Code started on a
+new session, and the cursor in its Claude window in Terminal mode. Its
+buffers are named with a number that is never given again
+(`aineo://report-2`, `aineo://input-2`). With no aineo tab yet, `\T` makes the
+current tab page the first one, on a new session. Starting a tab starts a
+Claude Code, which costs what a session costs, as `\o` does.
+
+Every tab after the first starts its Claude Code in the folder: the
+directory of this Neovim's first start of aineo, whatever `:cd` or `:tcd`
+say later, since a tab holds a session of that folder alone. The first tab
+starts where Neovim is, as it always has, each directory resuming its own
+session (|aineo-claude-session|).
+
+`\1` to `\9` (|:Aineo-tab|) move to the tab page of that number, an aineo tab
+or not, as `{n}gt` does; the cursor lands where it was in that tab page, in
+Normal mode. With no tab page of that number nothing moves and aineo says so.
+The number is the tab page's place: closing a tab page, or `:tabmove`,
+changes the numbers after it, and the titles with them.
+
+A tab's title is its number and, for an aineo tab, the name of its session,
+the name Claude Code gives it, cut to 24 cells; for any other tab page, the
+name of its current buffer. While 'tabline' is empty when the first aineo tab
+opens, aineo sets it to a tab line of its own that draws those titles, the
+current tab in |hl-TabLineSel|, the others in |hl-TabLine|, each clickable. A
+'tabline' you set is left in place.
+                                                             *aineo-tab_title*
+`require('aineo').tab_title({n})` gives the title aineo would draw for the
+tab page numbered {n}, for your own tab line; nil when there is no such tab
+page, and an error when {n} is not a whole number from 1. aineo leaves
+'showtabline' alone: the tab line shows from two tab pages on by default.
+`:checkhealth aineo` says which tab line is in use (|aineo-health|).
+
+What the actions do with tabs:
+- Every action acts on the current tab when the current tab page is an aineo
+  tab. From any other tab page it acts on the aineo tab used last, and moves
+  you there: `\o`, `\r`, `\i`, `\c`, `\g`, `\pa`, `\tcn`, `\N`, `\S`, `\s` and
+  `:Aineo claim`.
+- A report goes to the tab whose Claude Code sent it. A session hook goes to
+  the tab whose start it names. Each tab is listed among the running editors
+  for its own session (|aineo-report-claims|).
+- `:Aineo claim {id}` claims the session in the current tab. When another
+  tab of this Neovim runs the session, it moves you to that tab and claims
+  nothing.
+- Two tabs on one session, as when a `/resume` in one tab names the session
+  of another, both follow it; aineo warns once, `aineo: this session is also
+  open in tab {n}`.
+
+A tab page closed by Neovim's own commands, `:tabclose`, `:tabonly` or the
+close of its last window, closes its tab: its Claude Code is stopped as
+quitting stops it (Ctrl+Z alone for one attached to a background session), its
+Input's draft is saved, its buffers and handlers are let go, and its entry
+among the running editors is removed. Its Report, draft and changes base stay
+on disk, under its session. The other tabs go on as they were. Quitting
+stops every tab's Claude Code at once and saves every tab's draft
+(|aineo-limits|).
 
 The changes pane ~
                                                                *aineo-changes*
@@ -775,12 +845,13 @@ from another tab, `\o` moves you to it.
 
                                                                       *:Aineo*
 :Aineo {subcommand}	Runs one of aineo's actions. Completion offers the
-			subcommands, the panes after `pane`, and after
-			`claim` the sessions that have a running Claude Code
-			in the directory this Neovim started in
-			(|:Aineo-claim|). Without one of them, or with
-			anything else, it tells you, with one error, which
-			ones it takes.
+			subcommands, the panes after `pane`, after `claim` the
+			sessions that have a running Claude Code in the
+			directory this Neovim started in (|:Aineo-claim|), and
+			after `tab` `new` and the number of each tab page
+			(|:Aineo-tab|). Without one of them, or with anything
+			else, it tells you, with one error, which ones it
+			takes.
 
                                                                  *:Aineo-send*
 :Aineo send		Sends Input to Claude (|aineo-send|). It takes no
@@ -1060,6 +1131,29 @@ only in place of a resume Claude Code has no conversation for
 			holds is marked for the claimed session
 			(|aineo-changes|).
 
+With tabs (|aineo-tabs|) `:Aineo claim` acts in the current tab: the Report,
+the changes pane and Input of that tab follow the claimed session. When
+another tab of this Neovim runs the session {id} names, `:Aineo claim {id}`
+moves you to that tab instead and claims nothing.
+
+                                                                  *:Aineo-tab*
+:Aineo tab new		Opens a tab page after the current one with a tab of
+			aineo's in it (|aineo-tabs|): a layout of its own
+			around a Claude Code started in the folder on a new
+			session id, as |:Aineo-new| starts one when no Claude
+			Code runs, and the cursor in Claude's window in
+			Terminal mode (|:Aineo-claude|). With no aineo tab
+			yet it opens the first one in the current tab page.
+			When Claude Code cannot start, the tab page it made
+			is closed again and aineo tells you why.
+:Aineo tab {n}		Moves to the tab page numbered {n}, an aineo tab or
+			not, as `{n}gt` does. The cursor lands where it was in
+			that tab page, in Normal mode. With no tab page of
+			that number nothing moves, and aineo tells you once,
+			with a warning, `aineo: no tab {n}`. With any word
+			but `new` or a number it tells you, with one error,
+			what it takes.
+
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
 
@@ -1110,6 +1204,22 @@ you turn the prefix off, or when a prefix key is yours: >lua
 			(|:Aineo-claim|). It has no prefix key: map it to a
 			key of your own.
 
+                                                      *<Plug>(aineo-tab-new)*
+<Plug>(aineo-tab-new)	Does what `:Aineo tab new` does (|:Aineo-tab|).
+
+                                                        *<Plug>(aineo-tab-1)*
+                                                        *<Plug>(aineo-tab-2)*
+                                                        *<Plug>(aineo-tab-3)*
+                                                        *<Plug>(aineo-tab-4)*
+                                                        *<Plug>(aineo-tab-5)*
+                                                        *<Plug>(aineo-tab-6)*
+                                                        *<Plug>(aineo-tab-7)*
+                                                        *<Plug>(aineo-tab-8)*
+                                                        *<Plug>(aineo-tab-9)*
+<Plug>(aineo-tab-1) to <Plug>(aineo-tab-9)
+			Do what `:Aineo tab {n}` does for the number in their
+			names (|:Aineo-tab|).
+
 Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
@@ -1136,6 +1246,12 @@ which has none, globally, in Normal mode, and `\s` in Visual mode too:
 \pa		|<Plug>(aineo-pane-agent)|
                                                                     *aineo-\g*
 \g		|<Plug>(aineo-pane-changes)|
+                                                                    *aineo-\T*
+\T		|<Plug>(aineo-tab-new)|
+                                              *aineo-\1* *aineo-\2* *aineo-\3*
+                                              *aineo-\4* *aineo-\5* *aineo-\6*
+                                              *aineo-\7* *aineo-\8* *aineo-\9*
+\1 to \9	|<Plug>(aineo-tab-1)| to |<Plug>(aineo-tab-9)|
                                                                   *aineo-v_\s*
 \s		|<Plug>(aineo-send)| in Visual mode (|aineo-send|)
 
@@ -1198,6 +1314,12 @@ Claude Code is sent none of the twin's keys.
 <C-\>pa		|<Plug>(aineo-pane-agent)|
                                                                 *aineo-<C-\>g*
 <C-\>g		|<Plug>(aineo-pane-changes)|
+                                                                *aineo-<C-\>T*
+<C-\>T		|<Plug>(aineo-tab-new)|
+                                  *aineo-<C-\>1* *aineo-<C-\>2* *aineo-<C-\>3*
+                                  *aineo-<C-\>4* *aineo-<C-\>5* *aineo-<C-\>6*
+                                  *aineo-<C-\>7* *aineo-<C-\>8* *aineo-<C-\>9*
+<C-\>1 to <C-\>9	|<Plug>(aineo-tab-1)| to |<Plug>(aineo-tab-9)|
 
 Send has no twin: it acts on a selection or on the line of Normal mode.
 `:Aineo claim` has no key of its own, so no twin either.
@@ -1748,6 +1870,12 @@ Terminal prefix mappings ~
   keys, as in the Prefix mappings section. With `terminal_prefix` set to
   `false`, one line says that no key is mapped.
 
+Tab line ~
+  Which tab line is in use: aineo's own, which it draws while 'tabline' is
+  empty when the first aineo tab opens; yours, when you set 'tabline',
+  which aineo leaves in place; or Neovim's own, before aineo has drawn one
+  (|aineo-tabs|).
+
 Autostart ~
   Whether the autostart opened the layout at startup, or which reason kept
   it from running (|aineo-autostart|); while aineo's `VimEnter` handler has
@@ -1799,6 +1927,23 @@ line Claude Code prints, `Opening "{title}", running in the background
 `/resume` that attaches nothing; and the list of sessions does not show the
 terminal's own attach. What `claude attach` prints, and how it exits, for a
 session that has ended was not measured.
+
+Several tabs ~
+Quitting Neovim stops every tab's Claude Code together: each key of the stop
+is pressed to every Claude Code that runs, and the waits run side by side,
+so the quit takes about the time of one stop, up to about 12 seconds, not
+the sum. A tab page closed by `:tabclose` or `:tabonly` stops its Claude Code
+alone, which blocks the editor for that stop. Each tab runs a watch of its
+repository once its changes pane has been shown, and each Claude Code that
+starts lists the folder's sessions when it resumes one, so several tabs run
+several watches and several lists at once. What two real Claude Codes do in
+one Neovim, the report each sends and the time a quit takes with several
+tabs were not measured: the suites run a fake Claude Code.
+
+A tab opened after the first has buffers named with a number that is never
+given again (`aineo://report-2`), and a `:tabclose` of the first tab leaves
+its buffers `aineo://report` and `aineo://input` in place: the next tab
+opened is made of them again.
 
 Session switches ~
 aineo learns of a switch inside Claude Code from Claude Code's session
