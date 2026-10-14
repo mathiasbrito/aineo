@@ -98,6 +98,20 @@ local function start_editor_refusing(reason)
   end)
 end
 
+--- A stand-in editor (`start_stand_in_editor()`) that appends the arguments
+--- of each request it receives to `requests` and answers it with `taken`:
+--- `true` takes the report, `false` declines it.
+---
+---@param requests table[]
+---@param taken boolean
+---@return string address
+local function start_recording_editor(requests, taken)
+  return start_stand_in_editor(function(connection, request)
+    table.insert(requests, request[4][2])
+    connection:write(vim.mpack.encode({ RESPONSE, request[2], vim.NIL, taken }))
+  end)
+end
+
 --- Closes every socket and timer a stand-in editor opened.
 local function close_stand_in_handles()
   for _, handle in ipairs(stand_in_handles) do
@@ -443,6 +457,274 @@ T['a report']['with no editor address is a tool error saying so, and the relay k
     },
     3,
   })
+end
+
+--- Session ids of the form Claude Code gives.
+local SESSION_ID = 'c9d64d84-5f2b-4c3e-9a1d-2b7e8f0a6c31'
+local OTHER_SESSION_ID = '063cc43c-8e1a-4d2f-b5c7-91d0e3a4f852'
+
+--- The start token of the Claude Code whose report server a case runs.
+local TOKEN = '5b1c0f5e-2d7a-4c1b-9e3f-6a8d2c4b1e07'
+
+--- A case's own state: the `XDG_STATE_HOME` its relay reads, and the state
+--- directory under it, `stdpath('state')` for the relay.
+---
+---@param name string
+---@return { home: string, directory: string }
+local function case_state(name)
+  local home = fixture.directory(name)
+  return { home = home, directory = vim.fs.joinpath(home, 'nvim') }
+end
+
+--- Starts the report relay of a Claude Code, its first session `SESSION_ID`
+--- and its start token `token` (none when nil), whose editor is at
+--- `address`, with the state of `state`.
+---
+---@param state { home: string }
+---@param address string?
+---@param token string?
+---@return aineo.test.Relay
+local function start_relay_of(state, address, token)
+  return mcp_relay.start_relay({
+    XDG_STATE_HOME = state.home,
+    AINEO_EDITOR_ADDRESS = address,
+    AINEO_START_TOKEN = token,
+    CLAUDE_CODE_SESSION_ID = SESSION_ID,
+  })
+end
+
+--- Sends the relay a report and waits for its answer.
+---
+---@param relay aineo.test.Relay
+local function send_report_and_wait(relay)
+  relay:send(mcp_messages.recorded('tools/call'))
+  relay:next_line()
+end
+
+T['an offer'] = MiniTest.new_set()
+
+T['an offer']['to the editor that started Claude Code carries the start token, and keeps its other options'] = function()
+  local state = case_state('mcp-offer-starting')
+  local requests = {}
+  local relay = start_relay_of(state, start_recording_editor(requests, true), TOKEN)
+
+  send_report_and_wait(relay)
+
+  eq(
+    { #requests, requests[1][2], requests[1][3] },
+    { 1, SESSION_ID, { at_start = true, start_token = TOKEN } }
+  )
+end
+
+T['an offer']['to the editor that started Claude Code carries no start token while the server knows none'] = function()
+  local state = case_state('mcp-offer-starting-no-token')
+  local requests = {}
+  local relay = start_relay_of(state, start_recording_editor(requests, true), nil)
+
+  send_report_and_wait(relay)
+
+  eq({ #requests, requests[1][3] }, { 1, { at_start = true } })
+end
+
+T['an offer']['kept with the working directory carries the start token, and keeps its other options'] = function()
+  local state = case_state('mcp-offer-keep')
+  local requests = {}
+  local relay = start_relay_of(state, start_recording_editor(requests, false), TOKEN)
+
+  send_report_and_wait(relay)
+
+  eq({ #requests, requests[2][3] }, {
+    2,
+    { at_start = true, keep_with_directory = true, start_token = TOKEN },
+  })
+end
+
+--- Makes the editor at `address` the claimant of `SESSION_ID` under `state`.
+---
+---@param state { directory: string }
+---@param address string
+local function claim_session_for(state, address)
+  mcp.claim_session(state.directory, SESSION_ID, address, 5000)
+end
+
+--- Replaces `receive_session_report()` in the report home of the child
+--- `editor` with a function that records what it is asked, as
+--- `{ session_is_nil, options }`, into `_G.asked`, and answers `taken`.
+---
+---@param taken boolean
+local function stub_session_report_home(taken)
+  editor.lua(
+    [[
+      local taken = ...
+      _G.asked = {}
+      require('aineo.report').receive_session_report = function(_, session, options)
+        table.insert(_G.asked, { session == nil, options })
+        return taken
+      end
+    ]],
+    { taken }
+  )
+end
+
+--- Starts the relay of a Claude Code that knows no session, its editor the
+--- child `editor`, and its start token `TOKEN`.
+---
+---@return aineo.test.Relay
+local function start_relay_without_session()
+  return mcp_relay.start_relay({
+    XDG_STATE_HOME = fixture.directory('mcp-offer-no-session'),
+    AINEO_EDITOR_ADDRESS = editor.job.address,
+    AINEO_START_TOKEN = TOKEN,
+  })
+end
+
+T['an offer']['of a report with no known session goes to the editor’s report home with the start token'] = function()
+  start_editor()
+  stub_session_report_home(true)
+  local relay = start_relay_without_session()
+
+  send_report_and_wait(relay)
+
+  eq(editor.lua_get('_G.asked'), { { true, { at_start = true, start_token = TOKEN } } })
+end
+
+T['an offer']['of a report with no known session shows in the Report when the report home does not take it'] = function()
+  start_editor()
+  stub_session_report_home(false)
+  local relay = start_relay_without_session()
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq(
+    { get(decoded(relay:next_line()), 'result', 'isError'), report_editor.lines(editor) },
+    { false, { '09:05 [done] Refactor the parser — All tests pass' } }
+  )
+end
+
+T['an offer']['to the claimant carries the start token as its options'] = function()
+  local state = case_state('mcp-offer-claimant')
+  local requests = {}
+  claim_session_for(state, start_recording_editor(requests, true))
+  local relay = start_relay_of(state, nil, TOKEN)
+
+  send_report_and_wait(relay)
+
+  eq({ #requests, requests[1][2], requests[1][3] }, { 1, SESSION_ID, { start_token = TOKEN } })
+end
+
+T['an offer']['to the claimant carries no options while the server knows no token'] = function()
+  local state = case_state('mcp-offer-claimant-no-token')
+  local requests = {}
+  claim_session_for(state, start_recording_editor(requests, true))
+  local relay = start_relay_of(state, nil, nil)
+
+  send_report_and_wait(relay)
+
+  eq({ #requests, #requests[1] }, { 1, 2 })
+end
+
+--- Lists the editor at `address` among the running editors under `state`,
+--- as one following `session`, last used at `used`, in the tab `tab`.
+---
+---@param state { directory: string }
+---@param address string
+---@param session string
+---@param used integer
+---@param tab string?
+local function list_editor(state, address, session, used, tab)
+  mcp.write_editor_entry(state.directory, {
+    address = address,
+    working_directory = '/projects/alpha',
+    session = session,
+    own = true,
+    used = used,
+    tab = tab,
+  })
+end
+
+T['an offer']['to a listed editor carries the start token as its options'] = function()
+  local state = case_state('mcp-offer-listed')
+  local requests = {}
+  list_editor(state, start_recording_editor(requests, true), SESSION_ID, 1000)
+  local relay = start_relay_of(state, nil, TOKEN)
+
+  send_report_and_wait(relay)
+
+  eq({ #requests, requests[1][2], requests[1][3] }, { 1, SESSION_ID, { start_token = TOKEN } })
+end
+
+T['an offer']['to a listed editor with two tabs on the session is made once'] = function()
+  local state = case_state('mcp-offer-listed-two-tabs')
+  local requests = {}
+  local address = start_recording_editor(requests, false)
+  list_editor(state, address, SESSION_ID, 1000, 'a')
+  list_editor(state, address, SESSION_ID, 2000, 'b')
+  local relay = start_relay_of(state, nil, TOKEN)
+
+  send_report_and_wait(relay)
+
+  eq(#requests, 1)
+end
+
+T['an offer']['to a listed editor whose tabs are on other sessions is not made'] = function()
+  local state = case_state('mcp-offer-listed-other-tabs')
+  local requests = {}
+  local address = start_recording_editor(requests, true)
+  list_editor(state, address, OTHER_SESSION_ID, 1000, 'a')
+  list_editor(state, address, OTHER_SESSION_ID, 2000, 'b')
+  local relay = start_relay_of(state, nil, TOKEN)
+
+  send_report_and_wait(relay)
+
+  eq(#requests, 0)
+end
+
+T['an offer']['to a listed editor with a tab on the session and one on another is made once'] = function()
+  local state = case_state('mcp-offer-listed-mixed-tabs')
+  local requests = {}
+  local address = start_recording_editor(requests, true)
+  list_editor(state, address, OTHER_SESSION_ID, 2000, 'a')
+  list_editor(state, address, SESSION_ID, 1000, 'b')
+  local relay = start_relay_of(state, nil, TOKEN)
+
+  send_report_and_wait(relay)
+
+  eq(#requests, 1)
+end
+
+--- How many entries the list holds under `state`.
+---
+---@param state { directory: string }
+---@return integer
+local function listed_entry_count(state)
+  local count = 0
+  for _ in vim.fs.dir(vim.fs.joinpath(state.directory, 'aineo', 'editors')) do
+    count = count + 1
+  end
+  return count
+end
+
+T['an offer']['to a listed editor that cannot be reached removes every tab’s entry of it'] = function()
+  local state = case_state('mcp-offer-listed-gone')
+  local gone = vim.fs.joinpath(state.home, 'gone.sock')
+  list_editor(state, gone, SESSION_ID, 1000, 'a')
+  list_editor(state, gone, SESSION_ID, 2000, 'b')
+  local relay = start_relay_of(state, nil, TOKEN)
+
+  send_report_and_wait(relay)
+
+  eq(listed_entry_count(state), 0)
+end
+
+T['an offer']['to a listed editor carries no options while the server knows no token'] = function()
+  local state = case_state('mcp-offer-listed-no-token')
+  local requests = {}
+  list_editor(state, start_recording_editor(requests, true), SESSION_ID, 1000)
+  local relay = start_relay_of(state, nil, nil)
+
+  send_report_and_wait(relay)
+
+  eq({ #requests, #requests[1] }, { 1, 2 })
 end
 
 return T

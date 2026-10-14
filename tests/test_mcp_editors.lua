@@ -149,6 +149,134 @@ T['an editor entry']['removed is gone from the list, the others kept'] = functio
   }, { kept = true })
 end
 
+--- The entry of the editor at `address` in its tab `tab`, following `session`.
+---
+---@param address string
+---@param tab string
+---@param session string
+---@param used integer
+---@return table
+local function tab_entry_of(address, tab, session, used)
+  return vim.tbl_extend('force', entry_of(address, session, used), { tab = tab })
+end
+
+--- Every entry the list holds under `state`, ordered by address, tab and
+--- time of use, whatever the names of their files.
+---
+---@param state string
+---@return table[]
+local function listed_entries(state)
+  local folder = vim.fs.joinpath(state, 'aineo', 'editors')
+  local entries = {}
+  for name in vim.fs.dir(folder) do
+    table.insert(entries, decoded_file(vim.fs.joinpath(folder, name)))
+  end
+  table.sort(entries, function(a, b)
+    return vim.inspect({ a.address, a.tab, a.used }) < vim.inspect({ b.address, b.tab, b.used })
+  end)
+  return entries
+end
+
+--- Writes `entry`, which has a tab, into the list under `state` as an
+--- editor listening at its address left it, without the pruning an editor's
+--- own write makes, in a file named from its address and tab.
+---
+---@param state string
+---@param entry table
+local function plant_tab_entry(state, entry)
+  local file = vim.fs.joinpath(
+    state,
+    'aineo',
+    'editors',
+    vim.fn.sha256(entry.address .. '|' .. entry.tab) .. '.json'
+  )
+  vim.fn.mkdir(vim.fs.dirname(file), 'p')
+  assert(vim.fn.writefile({ vim.json.encode(entry) }, file) == 0, 'cannot write ' .. file)
+end
+
+T['an editor entry']['of two tabs of one address is two files, side by side'] = function()
+  local state = fixture.directory('mcp-editors-tabs')
+  local address = vim.v.servername
+
+  mcp.write_editor_entry(state, tab_entry_of(address, 'a', SESSION_ID, 1000))
+  mcp.write_editor_entry(state, tab_entry_of(address, 'b', OTHER_SESSION_ID, 2000))
+
+  eq(listed_entries(state), {
+    tab_entry_of(address, 'a', SESSION_ID, 1000),
+    tab_entry_of(address, 'b', OTHER_SESSION_ID, 2000),
+  })
+end
+
+T['an editor entry']['of a tab replaces the entry of that address and tab alone'] = function()
+  local state = fixture.directory('mcp-editors-tab-replace')
+  local address = vim.v.servername
+  mcp.write_editor_entry(state, entry_of(address, SESSION_ID, 500))
+  mcp.write_editor_entry(state, tab_entry_of(address, 'a', SESSION_ID, 1000))
+  mcp.write_editor_entry(state, tab_entry_of(address, 'b', OTHER_SESSION_ID, 2000))
+
+  mcp.write_editor_entry(state, tab_entry_of(address, 'a', OTHER_SESSION_ID, 3000))
+
+  eq(listed_entries(state), {
+    entry_of(address, SESSION_ID, 500),
+    tab_entry_of(address, 'a', OTHER_SESSION_ID, 3000),
+    tab_entry_of(address, 'b', OTHER_SESSION_ID, 2000),
+  })
+end
+
+T['an editor entry']['written with a tab that is not a string raises, and writes nothing'] = function()
+  local state = fixture.directory('mcp-editors-tab-type')
+
+  local written =
+    pcall(mcp.write_editor_entry, state, tab_entry_of(vim.v.servername, 7, SESSION_ID, 1))
+
+  eq({ written, listed_entries(state) }, { false, {} })
+end
+
+T['an editor entry']['removed with a tab leaves the address’s other tabs and its entry with no tab'] = function()
+  local state = fixture.directory('mcp-editors-remove-tab')
+  local address = vim.v.servername
+  mcp.write_editor_entry(state, entry_of(address, SESSION_ID, 500))
+  mcp.write_editor_entry(state, tab_entry_of(address, 'a', SESSION_ID, 1000))
+  mcp.write_editor_entry(state, tab_entry_of(address, 'b', OTHER_SESSION_ID, 2000))
+
+  mcp.remove_editor_entry(state, address, 'a')
+
+  eq(listed_entries(state), {
+    entry_of(address, SESSION_ID, 500),
+    tab_entry_of(address, 'b', OTHER_SESSION_ID, 2000),
+  })
+end
+
+T['an editor entry']['removed with no tab removes every entry of the address, and no other address’s'] = function()
+  local state = fixture.directory('mcp-editors-remove-all')
+  local address = vim.v.servername
+  local other = '127.0.0.1:9'
+  mcp.write_editor_entry(state, entry_of(address, SESSION_ID, 500))
+  mcp.write_editor_entry(state, tab_entry_of(address, 'a', SESSION_ID, 1000))
+  mcp.write_editor_entry(state, tab_entry_of(address, 'b', OTHER_SESSION_ID, 2000))
+  mcp.write_editor_entry(state, tab_entry_of(other, 'a', SESSION_ID, 3000))
+
+  mcp.remove_editor_entry(state, address)
+
+  eq(listed_entries(state), { tab_entry_of(other, 'a', SESSION_ID, 3000) })
+end
+
+T['an editor entry']['written removes every tab’s entry of an address that cannot be reached, and none of its own'] = function()
+  local state = fixture.directory('mcp-editors-prune-tabs')
+  local gone = dead_address(state)
+  local own = vim.fs.joinpath(state, 'own.sock')
+  mcp.write_editor_entry(state, tab_entry_of(gone, 'a', SESSION_ID, 1000))
+  mcp.write_editor_entry(state, tab_entry_of(gone, 'b', OTHER_SESSION_ID, 2000))
+  mcp.write_editor_entry(state, tab_entry_of(own, 'a', SESSION_ID, 3000))
+
+  mcp.write_editor_entry(state, tab_entry_of(own, 'b', OTHER_SESSION_ID, 4000))
+
+  eq(listed_entries(state), {
+    tab_entry_of(own, 'a', SESSION_ID, 3000),
+    tab_entry_of(own, 'b', OTHER_SESSION_ID, 4000),
+  })
+end
+
 T['a claim'] = MiniTest.new_set()
 
 T['a claim']['names the newest claimant alone, in a file only the user can read'] = function()
@@ -223,6 +351,38 @@ T['a switch']['is told to the claimant of the session left and to each editor th
 
   table.sort(followers)
   eq(followers, { by_claim, claimant })
+end
+
+T['a switch']['is told once to an editor with a tab on the session left, and not to one whose tabs follow others'] = function()
+  local state = fixture.directory('mcp-editors-followers-tabs')
+  local twice = vim.fs.joinpath(state, 'twice.sock')
+  local mixed = vim.fs.joinpath(state, 'mixed.sock')
+  local elsewhere = vim.fs.joinpath(state, 'elsewhere.sock')
+  plant_tab_entry(
+    state,
+    vim.tbl_extend('force', tab_entry_of(twice, 'a', SESSION_ID, 1), { own = false })
+  )
+  plant_tab_entry(
+    state,
+    vim.tbl_extend('force', tab_entry_of(twice, 'b', SESSION_ID, 2), { own = false })
+  )
+  plant_tab_entry(
+    state,
+    vim.tbl_extend('force', tab_entry_of(mixed, 'a', OTHER_SESSION_ID, 3), { own = false })
+  )
+  plant_tab_entry(
+    state,
+    vim.tbl_extend('force', tab_entry_of(mixed, 'b', SESSION_ID, 4), { own = false })
+  )
+  plant_tab_entry(
+    state,
+    vim.tbl_extend('force', tab_entry_of(elsewhere, 'a', OTHER_SESSION_ID, 5), { own = false })
+  )
+
+  local followers = mcp.switch_followers(state, SESSION_ID, nil)
+
+  table.sort(followers)
+  eq(followers, { mixed, twice })
 end
 
 T['a switch']['told to an editor reaches the handler registered there, from a scheduled callback'] = function()
