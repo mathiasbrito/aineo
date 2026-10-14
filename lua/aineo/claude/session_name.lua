@@ -127,11 +127,12 @@ local function literal(text)
 end
 
 --- The status line format that draws, for `window`, the name and the folder
---- of the terminal it shows: `<name> — <folder>`, each as written, a `%`,
---- digits alone, a leading comma or space among them; a control character
---- draws in caret notation, and a name longer than about 4 KB loses its
---- start. A status line too narrow for both cuts the folder first, from its
---- start, and the name only once no folder is left to cut.
+--- of the terminal it shows: `<name> — <folder>`, or `<name> (attached) —
+--- <folder>` while the terminal is marked attached (`mark_attached()`), each
+--- as written, a `%`, digits alone, a leading comma or space among them; a
+--- control character draws in caret notation, and a name longer than about
+--- 4 KB loses its start. A status line too narrow for both cuts the folder
+--- first, from its start, and the name only once no folder is left to cut.
 ---
 ---@param window integer
 ---@return string
@@ -139,7 +140,18 @@ function M.statusline_format(window)
   local buffer = vim.api.nvim_win_get_buf(window)
   local name = tostring(vim.b[buffer].aineo_session_name or '')
   local folder = tostring(vim.b[buffer].aineo_session_folder or '')
-  return literal(name) .. ' — %<' .. literal(folder)
+  local attached = vim.b[buffer].aineo_session_attached and ' (attached)' or ''
+  return literal(name) .. attached .. ' — %<' .. literal(folder)
+end
+
+--- Marks `buffer`, a terminal about to run `claude attach`, as attached to
+--- a session that runs on in Claude Code's background service: its status
+--- line says so (`statusline_format()`) until Claude Code has exited
+--- (`forget_name()`).
+---
+---@param buffer integer
+function M.mark_attached(buffer)
+  vim.b[buffer].aineo_session_attached = true
 end
 
 --- Gives `buffer`, the terminal of a Claude Code that has exited, the name
@@ -150,6 +162,7 @@ end
 ---@param buffer integer
 function M.forget_name(buffer)
   if vim.api.nvim_buf_is_valid(buffer) then
+    vim.b[buffer].aineo_session_attached = nil
     keep_name(buffer, nil)
   end
 end

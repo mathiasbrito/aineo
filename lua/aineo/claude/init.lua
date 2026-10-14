@@ -43,7 +43,7 @@ local CHILD_ENVIRONMENT = { AINEO_CHILD = '1' }
 --- its process has ended, the process's exit code and when it ended, by
 --- `vim.uv.hrtime()`. A start with no job yet waits for the list of the
 --- folder's sessions (`launch_once_listed()`).
----@alias aineo.claude.Start { buffer: integer, command: string[], job: integer?, choice: aineo.claude.SessionChoice, settings: aineo.claude.Settings, start_token: string, settings_unread: boolean, followed: string, unpaired: aineo.claude.SessionEvent[], ready: boolean?, ready_told: boolean?, exit_code: integer?, ended_at: number? }
+---@alias aineo.claude.Start { buffer: integer, command: string[], job: integer?, choice: aineo.claude.SessionChoice, settings: aineo.claude.Settings, start_token: string, settings_unread: boolean, attached: boolean?, followed: string, unpaired: aineo.claude.SessionEvent[], ready: boolean?, ready_told: boolean?, exit_code: integer?, ended_at: number? }
 
 --- The one Claude Code session, once one has started: its last start.
 ---@type aineo.claude.Start?
@@ -69,19 +69,21 @@ local function is_running()
   return is_process_alive() and vim.api.nvim_buf_is_valid(session.buffer)
 end
 
---- Makes quitting Neovim stop Claude Code by its keys first
---- (`stop.stop_by_keys()`) while its process has not ended, so that none
---- outlives the editor — also when its terminal was wiped just before, and
---- the stop can only wait for the hangup to end it. A start that has not
---- launched Claude Code yet has no process to stop. Registering it again
---- replaces it.
+--- Makes quitting Neovim stop Claude Code by its keys first while its
+--- process has not ended, so that none outlives the editor — also when its
+--- terminal was wiped just before, and the stop can only wait for the hangup
+--- to end it. The keys are `stop.stop_by_keys()`'s, or, for a Claude Code
+--- attached to a background session, Ctrl+Z alone (`stop.detach()`), never
+--- Ctrl-C. A start that has not launched Claude Code yet has no process to
+--- stop. Registering it again replaces it.
 local function stop_on_quit()
   vim.api.nvim_create_autocmd('VimLeavePre', {
     group = vim.api.nvim_create_augroup('aineo.claude', {}),
     desc = 'Stop Claude Code by its keys before Neovim quits',
     callback = function()
       if is_process_alive() and session.job then
-        stop.stop_by_keys(session.job, function()
+        local stop_session = session.attached and stop.detach or stop.stop_by_keys
+        stop_session(session.job, function()
           return not is_process_alive()
         end)
       end
@@ -229,19 +231,21 @@ local function keep_session_id(settings, id)
   end
 end
 
---- Whether `ended`, a session whose process has ended, resumed an id Claude
---- Code had no conversation for: it exited 1 with `NO_CONVERSATION` and its
+--- Whether `ended`, a session whose process has ended and which did not
+--- attach to a background session, resumed an id Claude Code had no
+--- conversation for: it exited 1 with `NO_CONVERSATION` and its
 --- id on its terminal. The terminal's lines and the message are compared with
 --- every white space removed, since Claude Code 2.1.283 breaks the message at
 --- a blank where the terminal is narrower than it, dropping that blank, and a
 --- terminal row may also end on a blank of its own; a terminal already wiped
 --- tells nothing.
 ---
----@param ended { buffer: integer, choice: aineo.claude.SessionChoice, exit_code: integer? }
+---@param ended { buffer: integer, choice: aineo.claude.SessionChoice, attached: boolean?, exit_code: integer? }
 ---@return boolean
 local function found_no_conversation(ended)
   if
     not ended.choice.resumed
+    or ended.attached
     or ended.exit_code ~= 1
     or not vim.api.nvim_buf_is_valid(ended.buffer)
   then
@@ -263,6 +267,11 @@ local SETTINGS_UNREAD_WARNING = "aineo: claude.cmd's --settings unread; switches
 --- another interactive Claude Code. One line of at most 60 characters, as
 --- `SETTINGS_UNREAD_WARNING` is.
 local ALSO_OPEN_WARNING = 'aineo: this session is also open in another Claude Code'
+
+--- What aineo tells the user when it attaches to the background session it
+--- would resume. One line of at most 60 characters, as
+--- `SETTINGS_UNREAD_WARNING` is.
+local ATTACHED_NOTE = 'aineo: attached to a background session (no Report)'
 
 --- The first line of `failure`, an error raised in Lua code, without the
 --- words Neovim puts before an error it passes on (`Lua: `) and without the
@@ -601,6 +610,23 @@ local function announce_launch(left)
   tell_session_replaced(session.settings, left)
 end
 
+--- Makes `waiting`, a start with no job yet, a start that attaches to
+--- `background`, the listed background session of the session it resumes, in
+--- place of resuming it: its command becomes `claude.cmd` followed by `attach`
+--- and the session's short id (`arguments.attach_command()`), with none of
+--- the arguments aineo gives a Claude Code it starts, so that its session
+--- hooks, report server, instructions and allowed tools are not given and
+--- there is no `--settings` to warn about.
+---
+---@param waiting aineo.claude.Start
+---@param background aineo.claude.ListedSession
+local function attach_to(waiting, background)
+  waiting.command = arguments.attach_command(waiting.settings.cmd, background.short_id)
+  waiting.attached = true
+  waiting.settings_unread = false
+  session_name.mark_attached(waiting.buffer)
+end
+
 --- Lists the folder's sessions (`agents.list_sessions()`) and, from the
 --- callback that receives the answer — once the command-line window has
 --- closed, when it is open — launches Claude Code for `waiting`
@@ -625,6 +651,10 @@ local function launch_once_listed(waiting, left)
       if not may_launch(waiting) then
         return
       end
+      local background = agents.running_in_background(sessions or {}, waiting.choice.id)
+      if background then
+        attach_to(waiting, background)
+      end
       local was_typing = is_typing(vim.api.nvim_get_mode().mode)
       local launched, failure = pcall(launch_start, waiting)
       if not was_typing then
@@ -635,7 +665,9 @@ local function launch_once_listed(waiting, left)
         return
       end
       announce_launch(left)
-      if agents.is_open_in_another_claude_code(sessions or {}, waiting.choice.id) then
+      if background then
+        vim.notify(ATTACHED_NOTE, vim.log.levels.INFO)
+      elseif agents.is_open_in_another_claude_code(sessions or {}, waiting.choice.id) then
         vim.notify(ALSO_OPEN_WARNING, vim.log.levels.WARN)
       end
     end)
