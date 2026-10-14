@@ -265,15 +265,49 @@ T['an editor entry']['written removes every tab’s entry of an address that can
   local state = fixture.directory('mcp-editors-prune-tabs')
   local gone = dead_address(state)
   local own = vim.fs.joinpath(state, 'own.sock')
-  mcp.write_editor_entry(state, tab_entry_of(gone, 'a', SESSION_ID, 1000))
-  mcp.write_editor_entry(state, tab_entry_of(gone, 'b', OTHER_SESSION_ID, 2000))
-  mcp.write_editor_entry(state, tab_entry_of(own, 'a', SESSION_ID, 3000))
+  plant_tab_entry(state, tab_entry_of(gone, 'a', SESSION_ID, 1000))
+  plant_tab_entry(state, tab_entry_of(gone, 'b', OTHER_SESSION_ID, 2000))
+  plant_tab_entry(state, tab_entry_of(own, 'b', OTHER_SESSION_ID, 4000))
 
-  mcp.write_editor_entry(state, tab_entry_of(own, 'b', OTHER_SESSION_ID, 4000))
+  mcp.write_editor_entry(state, tab_entry_of(own, 'a', SESSION_ID, 3000))
 
   eq(listed_entries(state), {
     tab_entry_of(own, 'a', SESSION_ID, 3000),
     tab_entry_of(own, 'b', OTHER_SESSION_ID, 4000),
+  })
+end
+
+T['an editor entry']['of a tab whose key holds path characters or is long is a file of its own in the list'] = function()
+  local state = fixture.directory('mcp-editors-tab-names')
+  local address = vim.v.servername
+  local tabs = { '../escape', 'a/b', '/', '..', 'line\nbreak', string.rep('x', 300) }
+  local written = {}
+  for index, tab in ipairs(tabs) do
+    table.insert(
+      written,
+      (pcall(mcp.write_editor_entry, state, tab_entry_of(address, tab, SESSION_ID, index)))
+    )
+  end
+  local hash = string.rep('%x', 64)
+  local paths = {}
+  for path, kind in vim.fs.dir(state, { depth = math.huge }) do
+    local named = path:match('^aineo/editors/' .. hash .. '%-' .. hash .. '%.json$') ~= nil
+    table.insert(paths, (kind == 'file' and named) and 'a tab entry' or path)
+  end
+  table.sort(paths)
+
+  eq({ written = written, paths = paths }, {
+    written = { true, true, true, true, true, true },
+    paths = {
+      'a tab entry',
+      'a tab entry',
+      'a tab entry',
+      'a tab entry',
+      'a tab entry',
+      'a tab entry',
+      'aineo',
+      'aineo/editors',
+    },
   })
 end
 

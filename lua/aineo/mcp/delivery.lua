@@ -148,13 +148,16 @@ local function passes_on(kind)
   return kind == 'unreachable' or kind == 'declined'
 end
 
---- Removes every entry of the editor at `address` from the list of running
---- editors, whatever its tab, each if it still holds what was read.
+--- Removes the entries of the editor at `address`, whatever their tab, from
+--- `entries`, the list of running editors as it was read before the offers
+--- (`editors.read_entries()`), each if its file still holds what was read:
+--- an entry an editor wrote since stays.
 ---
 ---@param context aineo.mcp.DeliveryContext
+---@param entries aineo.mcp.ListedEntry[]
 ---@param address string
-local function remove_entries_of(context, address)
-  for _, listed in ipairs(editors.read_entries(context.state_directory)) do
+local function remove_entries_of(context, entries, address)
+  for _, listed in ipairs(entries) do
     if listed.entry.address == address then
       editors.remove_listed(context.state_directory, listed)
     end
@@ -177,11 +180,12 @@ end
 ---@return 'delivered'|'unconfirmed'|'failed'|nil outcome
 ---@return string? explanation
 local function offer_to_listed(context, session, valid_report, tried)
+  local entries = editors.read_entries(context.state_directory)
   local candidates = vim.tbl_filter(function(listed)
     return listed.entry.session == session
       and not tried[listed.entry.address]
       and editors.may_be_tried(listed.entry.address)
-  end, editors.read_entries(context.state_directory))
+  end, entries)
   table.sort(candidates, function(a, b)
     if a.entry.used ~= b.entry.used then
       return a.entry.used > b.entry.used
@@ -197,7 +201,7 @@ local function offer_to_listed(context, session, valid_report, tried)
         arguments = { valid_report, session, offer_options(context) },
       })
       if kind == 'unreachable' then
-        remove_entries_of(context, address)
+        remove_entries_of(context, entries, address)
       end
       if not passes_on(kind) then
         return ended_by(kind, explanation, TOLD.shown_elsewhere)
@@ -230,6 +234,7 @@ local function offer_to_claimant(context, session, valid_report, tried)
     return nil
   end
   tried[claim.address] = true
+  local entries = editors.read_entries(context.state_directory)
   local kind, explanation = editor.offer_report(claim.address, {
     lua = RECEIVE_SESSION_REPORT,
     arguments = { valid_report, session, offer_options(context) },
@@ -239,7 +244,7 @@ local function offer_to_claimant(context, session, valid_report, tried)
   end
   editors.release(context.state_directory, session, claim.address)
   if kind == 'unreachable' then
-    remove_entries_of(context, claim.address)
+    remove_entries_of(context, entries, claim.address)
   end
 end
 
@@ -270,7 +275,8 @@ end
 --- of the server's Claude Code process names, else its first
 --- (`report_session()`). With none known, the report goes to the editor
 --- that started Claude Code (`editor.deliver_report()`), offered to its
---- report home with the options of the first offer below. With one, it is
+--- report home with the options of the offer to the starting editor (item
+--- 2 below: `at_start` and the start token). With one, it is
 --- offered in turn; every offer carries the server's start token as
 --- `options.start_token` while it knows one (`offer_options()`):
 ---
