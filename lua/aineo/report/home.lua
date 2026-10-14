@@ -25,6 +25,7 @@ local M = {}
 ---@field receive_session_report fun(arguments: table, session_id: string?, options?: { at_start: boolean?, keep_with_directory: boolean? }): boolean
 ---@field follow_report_session fun(session_id: string, options?: { claim: boolean? })
 ---@field hand_over_report_session fun(from: string, to: string)
+---@field let_go? fun() only on a home `require('aineo.report').new()` made: wipes its Report and removes its handlers
 
 --- The records kept in `records_file`, and how many of its lines were
 --- skipped. When the file cannot be read, the user is told why, once, and
@@ -684,6 +685,21 @@ function M.new(identity)
       return
     end
     hand_over(environment, from, to)
+  end
+
+  --- Lets the home go, as its tab page closes: wipes its Report, the text
+  --- the user changed in it included, and removes its handlers, by deleting
+  --- the groups of its Report's handlers and of its retries. The records it
+  --- kept stay on disk. A home let go is called no more.
+  ---
+  --- Raises what Neovim raises when the Report cannot be wiped.
+  function copy.let_go()
+    if report_view and vim.api.nvim_buf_is_valid(report_view.buffer) then
+      vim.api.nvim_buf_delete(report_view.buffer, { force = true })
+    end
+    report_view = nil
+    pcall(vim.api.nvim_del_augroup_by_name, identity.buffer_group)
+    pcall(vim.api.nvim_del_augroup_by_name, identity.retry_group)
   end
 
   return copy

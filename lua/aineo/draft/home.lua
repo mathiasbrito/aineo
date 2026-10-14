@@ -10,6 +10,7 @@ local M = {}
 ---@field keep_draft fun(buffer: integer)
 ---@field follow_draft_session fun(session_id: string, options?: { claim: boolean? })
 ---@field hand_over_draft_session fun(from: string, to: string)
+---@field let_go? fun() only on a home `require('aineo.draft').new()` made: saves what Input holds, removes its handlers and keeps no buffer
 
 --- How long after a change to the kept buffer its text is saved: a crash
 --- loses at most the changes of that last second.
@@ -289,6 +290,10 @@ function M.new(identity)
   --- The buffers whose text is kept as the draft, each with its watch.
   ---@type table<integer, aineo.draft.Watch>
   local kept = {}
+
+  --- Whether the home has been let go (`copy.let_go()`): the changes to a
+  --- buffer it kept are taken in no more.
+  local is_let_go = false
 
   --- The Claude session whose draft the home keeps, once it is told one
   --- (`follow_draft_session()`).
@@ -641,7 +646,7 @@ function M.new(identity)
   ---@param buffer integer
   ---@param watch aineo.draft.Watch
   local function take_in_change(buffer, watch)
-    if watch.replacing then
+    if watch.replacing or is_let_go then
       return
     end
     watch.pending = true
@@ -997,6 +1002,39 @@ function M.new(identity)
       return
     end
     hand_over(from, to)
+  end
+
+  --- Removes the file a labelled home kept its text in before it followed a
+  --- session when that file holds no text: nothing else reads it. A home
+  --- without a label, or without an environment, has none. A file that
+  --- cannot be removed stays.
+  local function remove_label_file_without_text()
+    if not (identity.label and environment) then
+      return
+    end
+    local file =
+      draft_file(environment.state_directory, environment.working_directory, identity.label)
+    local stat = vim.uv.fs_stat(file)
+    if stat and stat.size == 0 then
+      vim.uv.fs_unlink(file)
+    end
+  end
+
+  --- Lets the home go, as its tab page closes: a change of a kept buffer not
+  --- saved yet is saved at once (`save_pending_change()`), the handlers of the
+  --- home are removed, by deleting their group, the buffers are kept no more,
+  --- and a labelled home's file that holds no text is removed
+  --- (`remove_label_file_without_text()`). A buffer the home kept is the
+  --- layout's to wipe. The drafts it kept stay on disk. A home let go is
+  --- called no more.
+  function copy.let_go()
+    for buffer, watch in pairs(kept) do
+      save_pending_change(buffer, watch)
+    end
+    is_let_go = true
+    pcall(vim.api.nvim_del_augroup_by_name, identity.group_name)
+    kept = {}
+    remove_label_file_without_text()
   end
 
   return copy

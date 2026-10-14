@@ -670,6 +670,44 @@ T['stop_session()']['starts nothing in place of a Claude Code that found no conv
   eq(copy_answers(1, 'session_status'), { 'exited', 1 })
 end
 
+T['let_go()'] = MiniTest.new_set()
+
+T['let_go()']['is a field of a copy new() made, and not of the module'] = function()
+  eq(
+    child.lua([[
+      local claude = require('aineo.claude')
+      return { copy = type(claude.new().let_go), module = type(claude.let_go) }
+    ]]),
+    { copy = 'function', module = 'nil' }
+  )
+end
+
+T['let_go()']['stops the routing of session hooks to the copy, and leaves the other copy told'] = function()
+  local state = fixture.directory('copies-let-go-hooks-state')
+  local terminals, started_on = two_copies_running_hooks('copies-let-go-hooks', state)
+
+  child.lua('_G.copies[2].let_go()')
+  claude.press_keys(child, terminals[2], '/clear\r')
+  claude.wait_for_deliveries(child)
+  claude.press_keys(child, terminals[1], '/clear\r')
+  local first_switches = wait_for_copy_switches(1, 1)
+  claude.wait_for_deliveries(child)
+
+  eq(wait_for_copy_switches(2, 0), {})
+  eq(copy_answers(2, 'session_id'), { started_on[2] })
+  eq(#first_switches, 1)
+end
+
+T['let_go()']['stops nothing: the copy’s Claude Code runs on until the copy stops it'] = function()
+  local first_fake, second_fake, first, second = two_ready_copies('copies-let-go-runs', 'ready')
+  end_copy_after_case(1, first, first_fake)
+  end_copy_after_case(2, second, second_fake)
+
+  child.lua('_G.copies[1].let_go()')
+
+  eq(copy_answers(1, 'session_status'), { 'ready' })
+end
+
 T['start_token()'] = MiniTest.new_set()
 
 T['start_token()']['is nil before the copy has started'] = function()

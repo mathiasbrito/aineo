@@ -713,6 +713,86 @@ T['the watch']['of each copy runs once its pane is shown and stops at quit'] = f
   eq(child.lua_get('_G.watches'), { started = 2, stopped = 2 })
 end
 
+T['let_go()'] = MiniTest.new_set()
+
+--- Whether the autocommand group `name` exists in the child.
+---
+---@param name string
+---@return boolean
+local function group_exists(name)
+  return child.lua_get('(pcall(vim.api.nvim_get_autocmds, { group = ... }))', { name })
+end
+
+T['let_go()']['is a field of a home new() made, and not of the module'] = function()
+  eq(
+    child.lua_get([[(function()
+      local changes = require('aineo.changes')
+      return { home = type(changes.new().let_go), module = type(changes.let_go) }
+    end)()]]),
+    { home = 'function', module = 'nil' }
+  )
+end
+
+T['let_go()']['stops the watch, removes the handlers and wipes the two pane buffers of its copy, and leaves the other copy’s'] = function()
+  local top = git_repo.create('changescopies-let-go', { ['a.txt'] = { 'one' } })
+  start_copy('first', top)
+  start_copy('second', top)
+  git_repo.wait_until('both copies’ watches started', function()
+    return child.lua_get('_G.watches.started') == 2
+  end)
+
+  child.lua('_G.homes.second.let_go()')
+
+  eq(
+    child.lua_get([[{
+      watches = _G.watches,
+      first_panes = vim.api.nvim_buf_is_valid(_G.panes.first.files)
+        and vim.api.nvim_buf_is_valid(_G.panes.first.commits),
+      second_files = vim.api.nvim_buf_is_valid(_G.panes.second.files),
+      second_commits = vim.api.nvim_buf_is_valid(_G.panes.second.commits),
+    }]]),
+    {
+      watches = { started = 2, stopped = 1 },
+      first_panes = true,
+      second_files = false,
+      second_commits = false,
+    }
+  )
+  eq({
+    first_save = group_exists('aineo_changes_copy1'),
+    first_scroll = group_exists('aineo_changes_commits_scroll_copy1'),
+    second_save = group_exists('aineo_changes_copy2'),
+    second_scroll = group_exists('aineo_changes_commits_scroll_copy2'),
+  }, { first_save = true, first_scroll = true, second_save = false, second_scroll = false })
+end
+
+T['let_go()']['wipes the diffs of its copy, and leaves the other copy’s'] = function()
+  local top = git_repo.create('changescopies-let-go-diffs', { ['a.txt'] = numbered_lines(20) })
+  git_repo.write(top, 'a.txt', numbered_lines(20, { 10 }))
+  start_copy('first', top)
+  start_copy('second', top)
+  expect_pane_lines('first', 'files', { 'Files in: Session work', '  M a.txt' })
+  expect_pane_lines('second', 'files', { 'Files in: Session work', '  M a.txt' })
+  open_file_at('first', 2, 1)
+  open_file_at('second', 2, 1)
+
+  child.lua('_G.homes.second.let_go()')
+
+  eq(
+    { first = first_shown_of('first').valid, second = first_shown_of('second').valid },
+    { first = true, second = false }
+  )
+end
+
+T['let_go()']['starts no watch when the repository is found after it'] = function()
+  local top = git_repo.create('changescopies-let-go-late', { ['a.txt'] = { 'one' } })
+
+  child.lua('_G.start_copy(...); _G.homes.first.let_go()', { 'first', top })
+  wait_for_finds(1)
+
+  eq(child.lua_get('_G.watches'), { started = 0, stopped = 0 })
+end
+
 T['the scroll handlers'] = MiniTest.new_set()
 
 T['the scroll handlers']['of the commits windows are one for each copy'] = function()

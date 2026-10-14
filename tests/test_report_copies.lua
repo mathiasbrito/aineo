@@ -231,6 +231,89 @@ T['a report home of its own']['keeps its names when the module is loaded again b
   eq(names, { old_valid = true, old_name = 'aineo://report-2', new_name = 'aineo://report-3' })
 end
 
+T['a report home let go'] = MiniTest.new_set()
+
+--- What the child holds of the Report homes after `_G.second.let_go()`
+--- (`make_second_home()`, with `_G.second_buffer` its Report), a retry of it
+--- waiting at `SafeState`: whether the second home's Report is a buffer still
+--- and whether its handlers' groups exist, before and after, and the same of
+--- the module's.
+---
+---@return table
+local function holdings_after_letting_the_second_go()
+  return child.lua_get([[(function()
+    local function group_exists(name)
+      return (pcall(vim.api.nvim_get_autocmds, { group = name }))
+    end
+    local first = require('aineo.report').report_buffer()
+    local second = _G.second_buffer
+    local number = vim.api.nvim_buf_get_name(second):match('report%-(%d+)$')
+    vim.api.nvim_create_autocmd('SafeState', {
+      group = vim.api.nvim_create_augroup('aineo.report.' .. number, { clear = false }),
+      once = true,
+      callback = function() end,
+    })
+    local before = {
+      buffer_group = group_exists('aineo_report_' .. number),
+      retry_group = group_exists('aineo.report.' .. number),
+    }
+    _G.second.let_go()
+    return {
+      before = before,
+      second_buffer = vim.api.nvim_buf_is_valid(second),
+      second_buffer_group = group_exists('aineo_report_' .. number),
+      second_retry_group = group_exists('aineo.report.' .. number),
+      first_buffer = vim.api.nvim_buf_is_valid(first),
+      first_group = group_exists('aineo_report'),
+    }
+  end)()]])
+end
+
+T['a report home let go']['wipes its Report and removes its handlers, and leaves the module’s Report and handlers'] = function()
+  local state = fixture.directory('report-copies-let-go')
+  start_editor(state)
+  make_second_home(state)
+  child.lua('_G.second_buffer = _G.second.report_buffer()')
+  child.lua("require('aineo.report').follow_report_session(...)", { 'session-a' })
+  child.lua('_G.second.follow_report_session(...)', { 'session-b' })
+
+  eq(holdings_after_letting_the_second_go(), {
+    before = { buffer_group = true, retry_group = true },
+    second_buffer = false,
+    second_buffer_group = false,
+    second_retry_group = false,
+    first_buffer = true,
+    first_group = true,
+  })
+end
+
+T['a report home let go']['has no Report to wipe when it never showed one, and still removes its handlers'] = function()
+  children.restart(child)
+
+  local held = child.lua_get([[(function()
+    local home = require('aineo.report').new()
+    local function group_exists(name)
+      return (pcall(vim.api.nvim_get_autocmds, { group = name }))
+    end
+    local before = group_exists('aineo_report_2')
+    home.let_go()
+    return { before = before, after = group_exists('aineo_report_2') }
+  end)()]])
+
+  eq(held, { before = true, after = false })
+end
+
+T['a report home let go']['is a field of a home new() made, and not of the module'] = function()
+  children.restart(child)
+
+  local kinds = child.lua_get([[(function()
+    local report = require('aineo.report')
+    return { home = type(report.new().let_go), module = type(report.let_go) }
+  end)()]])
+
+  eq(kinds, { home = 'function', module = 'nil' })
+end
+
 T['two report homes'] = MiniTest.new_set()
 
 T['two report homes']['each show the records of the session they follow, and keep the reports they receive there'] = function()
