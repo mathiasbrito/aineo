@@ -1441,6 +1441,7 @@ end
 ---@class aineo.claude.Session
 ---@field stop_session fun() stops the home's Claude Code as quitting stops it, in every state (`stop_running_session()`): one that runs, one that waits for the list of sessions to launch, one that is about to be replaced by a restart; every other home's keeps running
 ---@field start_token fun(): string? see `start_token()`
+---@field let_go? fun() only on a copy `M.new()` made: takes it out of the homes a session hook is told and the quit stops, stopping no Claude Code
 ---@field start_session fun(settings: aineo.claude.Settings): integer see `start_session()`
 ---@field join_session fun(settings: aineo.claude.Settings, listed: aineo.claude.ListedSession, sessions: aineo.claude.ListedSession[]): integer see `join_session()`
 ---@field can_join_session fun(listed: aineo.claude.ListedSession, folder?: string): boolean see `can_join_session()`
@@ -1493,14 +1494,38 @@ local function session_functions_of(home)
   }
 end
 
+--- Takes `home` out of the homes a session hook is routed among and the quit
+--- stops (`started_homes`). Stops nothing: a Claude Code that runs on is
+--- stopped by `stop_running_session()` first. A home that has not started, or
+--- was dropped already, changes nothing.
+---
+---@param home aineo.claude.Home
+local function drop_started_home(home)
+  for index = #started_homes, 1, -1 do
+    if started_homes[index] == home then
+      table.remove(started_homes, index)
+    end
+  end
+end
+
 --- A session home of its own: the module's per-session functions
 --- (`aineo.claude.Session`), called as fields, over a session that no other
 --- copy and not the module shares. Each call gives a new copy; the module
 --- itself is one more, made when it loads.
 ---
+--- The copy has a `let_go()` of its own, which the module lacks: it takes the
+--- copy out of the homes a session hook is told (`receive_session_event()`)
+--- and the quit stops, for when its tab page has closed. It stops no Claude
+--- Code; `stop_session()` is called first.
+---
 ---@return aineo.claude.Session
 function M.new()
-  return session_functions_of({})
+  local home = {}
+  local copy = session_functions_of(home)
+  copy.let_go = function()
+    drop_started_home(home)
+  end
+  return copy
 end
 
 for name, session_function in pairs(session_functions_of(module_home)) do
