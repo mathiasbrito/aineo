@@ -44,28 +44,39 @@ local function is_session_id(text)
   return type(text) == 'string' and text:find(SESSION_ID_PATTERN) ~= nil and text == text:lower()
 end
 
---- Whether `value` is a non-empty list of session ids and `current` a place
---- in it.
+--- Whether `sessions` is a non-empty list, without a hole, of session ids
+--- none of which repeats: two tabs never show one session.
+---
+---@param sessions any
+---@return boolean
+local function is_list_of_distinct_session_ids(sessions)
+  if type(sessions) ~= 'table' or not vim.islist(sessions) or #sessions == 0 then
+    return false
+  end
+  local seen = {}
+  for _, session in ipairs(sessions) do
+    if not is_session_id(session) or seen[session] then
+      return false
+    end
+    seen[session] = true
+  end
+  return true
+end
+
+--- Whether `value` is a list of distinct session ids and a whole `current`
+--- place in it.
 ---
 ---@param value any
 ---@return boolean
 local function is_tab_list(value)
-  if type(value) ~= 'table' or type(value.sessions) ~= 'table' then
+  if type(value) ~= 'table' or not is_list_of_distinct_session_ids(value.sessions) then
     return false
   end
-  local sessions, current = value.sessions, value.current
-  if #sessions == 0 then
-    return false
-  end
-  if type(current) ~= 'number' or current < 1 or current > #sessions or current % 1 ~= 0 then
-    return false
-  end
-  for _, session in ipairs(sessions) do
-    if not is_session_id(session) then
-      return false
-    end
-  end
-  return true
+  local current = value.current
+  return type(current) == 'number'
+    and current >= 1
+    and current <= #value.sessions
+    and current % 1 == 0
 end
 
 --- The text of the file `path`, or nil when it is missing, unreadable, or
@@ -171,16 +182,23 @@ end
 --- Keeps `tab_list` as the list of `folder`, in place of any kept before,
 --- making the directories that lead to its file when missing. The file
 --- holds the whole list or, when the write fails, what it held before.
+--- Only a list `read_tab_list()` would give back is written.
 ---
---- Raises an error naming the file when it cannot be written.
+--- Raises an error naming the file when `tab_list` is no such list, or when
+--- the file cannot be written.
 ---
 ---@param state_directory string
 ---@param folder string
 ---@param tab_list aineo.tabs.TabList
 function M.write_tab_list(state_directory, folder, tab_list)
   local file = list_file(state_directory, folder)
-  local text = vim.json.encode({ sessions = tab_list.sessions, current = tab_list.current })
-  local failure = make_directory(vim.fs.dirname(file)) or replace_file(file, text)
+  local failure
+  if not is_tab_list(tab_list) then
+    failure = 'not a list of distinct session ids with a place in it'
+  else
+    local text = vim.json.encode({ sessions = tab_list.sessions, current = tab_list.current })
+    failure = make_directory(vim.fs.dirname(file)) or replace_file(file, text)
+  end
   if failure then
     error(("cannot keep the folder's tabs in %s: %s"):format(file, failure), 0)
   end

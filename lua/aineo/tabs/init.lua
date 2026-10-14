@@ -20,13 +20,25 @@ local TABLINE_EXPRESSION = "%!v:lua.require'aineo.tabs'.tabline()"
 ---@type table<integer, fun(): string|nil>
 local name_of_held = {}
 
+--- Whether `value` can be the handle of a tab page: 0 is not one, though the
+--- API takes it for the current tab page.
+---
+---@param value any
+---@return boolean
+local function is_tab_page_handle(value)
+  return type(value) == 'number' and value >= 1
+end
+
 --- Holds the tab page `tab`. Its title says `name()`, asked each time the
 --- title is drawn. A tab page held again takes the new `name`.
+---
+--- Raises an error when `tab` is not a tab page handle (a number from 1) or
+--- `name` is not a function.
 ---
 ---@param tab integer a tab page handle
 ---@param name fun(): string|nil
 function M.hold(tab, name)
-  vim.validate('tab', tab, 'number')
+  vim.validate('tab', tab, is_tab_page_handle, 'a tab page handle')
   vim.validate('name', name, 'function')
   name_of_held[tab] = name
 end
@@ -84,9 +96,9 @@ function M.number(tab)
 end
 
 --- What the name function of the held tab page `tab` gives, or nil when
---- `tab` is not held or its function gives no text. A function that raises
---- gives none too: the tab line is drawn on every redraw, and an error
---- there would repeat on each one.
+--- `tab` is not held or its function gives no text. A function that raises,
+--- or gives text with a NUL in it, gives none too: the tab line is drawn on
+--- every redraw, and an error there would repeat on each one.
 ---
 ---@param tab integer a tab page handle
 ---@return string|nil
@@ -96,7 +108,7 @@ local function name_of_held_tab(tab)
     return nil
   end
   local succeeded, name = pcall(name_of)
-  if succeeded and type(name) == 'string' and name ~= '' then
+  if succeeded and type(name) == 'string' and name ~= '' and not name:find('\0', 1, true) then
     return name
   end
   return nil
@@ -131,16 +143,18 @@ function M.tabline()
       current = tab == current,
     })
   end
-  return tabline_format.format(entries)
+  return tabline_format.format(entries, vim.o.columns)
 end
 
 --- Keeps `tab_list` as the list of the tabs of `folder`: the sessions of its
 --- tabs in the order of the tabs' places, and the place of the tab that is
 --- current. It goes into a file of its own under `state_directory`, readable
 --- by the user alone, written whole or not at all. The session id kept for
---- the folder is another file and stays as it is.
+--- the folder is another file and stays as it is. Only a list `kept_tabs()`
+--- would give back is written.
 ---
---- Raises an error naming the file when it cannot be written.
+--- Raises an error naming the file when `tab_list` is no such list, or when
+--- the file cannot be written.
 ---
 ---@param state_directory string
 ---@param folder string
@@ -154,9 +168,10 @@ end
 
 --- The list kept for the tabs of `folder` by `keep_tabs()`: its sessions in
 --- the same order, and its current place. Nil when none is kept: no file, an
---- unreadable one, one that is not a non-empty list of session ids (each a
---- lower-case version-4 UUID, since each becomes an argument to `--resume`)
---- with a place in it. A list kept for another folder is not read.
+--- unreadable one, one that is not a non-empty list of distinct session ids
+--- (each a lower-case version-4 UUID, since each becomes an argument to
+--- `--resume`, and no two tabs showing one session) with a place in it. A
+--- list kept for another folder is not read.
 ---
 --- Raises nothing.
 ---
