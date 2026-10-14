@@ -163,7 +163,8 @@ end
 --- them. Never raises: a key that cannot be sent, because the terminal has
 --- closed while its exit is not yet seen, ends the pressing, and the stop goes
 --- on to the hang-up and its wait — so the editor's later exit handlers still
---- run. Counterpart of `M.stop_together()` for several at once.
+--- run. Presses no key when `has_exited()` is true already. The one-job case
+--- of `M.stop_together()`.
 ---
 ---@param job integer the terminal job's id
 ---@param has_exited fun(): boolean whether Claude Code's process has ended
@@ -178,7 +179,9 @@ end
 --- turn; waits `DETACH_WAIT_MS` and, when the terminal has not ended, hangs it
 --- up as `stop_by_keys()` does. Returns as soon as `has_exited()` is true,
 --- and in any case within `DETACH_WAIT_MS` and `EXIT_AFTER_HANGUP_MS`. Never
---- raises: a key that cannot be sent goes straight to the hang-up.
+--- raises: a key that cannot be sent goes straight to the hang-up, and none is
+--- sent when `has_exited()` is true already. The one-job case of
+--- `M.stop_together()`.
 ---
 ---@param job integer the terminal job's id
 ---@param has_exited fun(): boolean whether Claude Code's process has ended

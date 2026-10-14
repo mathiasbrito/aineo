@@ -15,6 +15,20 @@ local M = {}
 ---@field input? integer an Input buffer
 ---@field session? aineo.claude.Session a Claude Code session home
 
+--- `target`, or an empty target when it is nil. Raises an error naming the
+--- field, as `vim.validate()` words it, when `target` is not a table, its
+--- `input` not a buffer number or its `session` not a table.
+---
+---@param target? aineo.send.Target
+---@return aineo.send.Target
+local function validated(target)
+  vim.validate('target', target, 'table', true)
+  target = target or {}
+  vim.validate('target.input', target.input, 'number', true)
+  vim.validate('target.session', target.session, 'table', true)
+  return target
+end
+
 --- The bytes that open and close a bracketed paste, and the Enter key's.
 local PASTE_START = '\27[200~'
 local PASTE_END = '\27[201~'
@@ -136,11 +150,13 @@ end
 --- With `target`, Send reads that Input buffer in place of the layout's, and
 --- writes to that session home's Claude Code and asks its status in place of
 --- the module's, with every refusal above: a session home that is not ready
---- is refused whatever any other is.
+--- is refused whatever any other is. Raises an error naming the field when
+--- `target`, its `input` or its `session` is of the wrong kind, before
+--- anything is read or sent.
 ---
 ---@param target? aineo.send.Target
 function M.send(target)
-  target = target or {}
+  target = validated(target)
   local session = target.session or claude
   local input = existing_input(target)
   if not input then
@@ -340,11 +356,12 @@ end
 --- one undo block, which `u` undoes with no change to see.
 ---
 --- With `target`, the Input is the buffer it names in place of the layout's,
---- and the Claude Code is that session home's, as `send()` takes them.
+--- and the Claude Code is that session home's, as `send()` takes them, with
+--- the same error for a `target` of the wrong kind.
 ---
 ---@param target? aineo.send.Target
 function M.send_selection(target)
-  target = target or {}
+  target = validated(target)
   local session = target.session or claude
   local input = vim.api.nvim_get_current_buf()
   if input ~= existing_input(target) then

@@ -282,30 +282,123 @@ local function id_kept_for_the_folder(state)
   return vim.fn.filereadable(file) == 1 and table.concat(vim.fn.readfile(file), '') or nil
 end
 
-T['session hooks']['reach the copy whose start has the hook’s token, and no other'] = function()
-  local state = fixture.directory('copies-hooks-state')
-  local first_fake = claude.fake('copies-hooks-first', 'ready', { AINEO_FAKE_CLAUDE_HOOKS = '1' })
-  local second_fake = claude.fake('copies-hooks-second', 'ready', { AINEO_FAKE_CLAUDE_HOOKS = '1' })
+--- Starts two copies against fakes that run Claude Code's session hooks,
+--- both on the state directory `state`, and waits for both to be ready.
+---
+---@param name string
+---@param state string
+---@return table terminals the two terminals, by copy number
+---@return table started_on the two session ids the copies started on, by copy number
+local function two_copies_running_hooks(name, state)
+  local first_fake = claude.fake(name .. '-first', 'ready', { AINEO_FAKE_CLAUDE_HOOKS = '1' })
+  local second_fake = claude.fake(name .. '-second', 'ready', { AINEO_FAKE_CLAUDE_HOOKS = '1' })
   local first = start_copy(1, first_fake, { state_directory = state })
   end_copy_after_case(1, first, first_fake)
   local second = start_copy(2, second_fake, { state_directory = state })
   end_copy_after_case(2, second, second_fake)
-  local first_started_on = claude.words_after(claude.arguments(first_fake), '--session-id')[1]
-  local second_started_on = claude.words_after(claude.arguments(second_fake), '--session-id')[1]
   wait_for_copy_status(1, 'ready')
   wait_for_copy_status(2, 'ready')
+  return { first, second }, {
+    claude.words_after(claude.arguments(first_fake), '--session-id')[1],
+    claude.words_after(claude.arguments(second_fake), '--session-id')[1],
+  }
+end
 
-  claude.press_keys(child, second, '/clear\r')
+T['session hooks']['reach the copy whose start has the hook’s token, and no other'] = function()
+  local state = fixture.directory('copies-hooks-state')
+  local terminals, started_on = two_copies_running_hooks('copies-hooks', state)
+
+  claude.press_keys(child, terminals[2], '/clear\r')
   local switches = wait_for_copy_switches(2, 1)
   claude.wait_for_deliveries(child)
 
   local cleared_to = copy_answers(2, 'session_id')[1]
   eq(switches, {
-    { id = cleared_to, source = 'clear', left = second_started_on, reason = 'clear' },
+    { id = cleared_to, source = 'clear', left = started_on[2], reason = 'clear' },
   })
-  eq(cleared_to ~= second_started_on, true)
+  eq(cleared_to ~= started_on[2], true)
   eq(id_kept_for_the_folder(state), cleared_to)
-  eq(copy_answers(1, 'session_id'), { first_started_on })
+  eq(copy_answers(1, 'session_id'), { started_on[1] })
+  eq(wait_for_copy_switches(1, 0), {})
+end
+
+T['session hooks']['reach the copy that started first as well'] = function()
+  local state = fixture.directory('copies-hooks-first-state')
+  local terminals, started_on = two_copies_running_hooks('copies-hooks-first-copy', state)
+
+  claude.press_keys(child, terminals[1], '/clear\r')
+  local switches = wait_for_copy_switches(1, 1)
+  claude.wait_for_deliveries(child)
+
+  local cleared_to = copy_answers(1, 'session_id')[1]
+  eq(switches, {
+    { id = cleared_to, source = 'clear', left = started_on[1], reason = 'clear' },
+  })
+  eq(cleared_to ~= started_on[1], true)
+  eq(copy_answers(2, 'session_id'), { started_on[2] })
+  eq(wait_for_copy_switches(2, 0), {})
+end
+
+--- Session ids of the form Claude Code gives, for the hooks a case tells.
+local NEW_ID = '11111111-2222-4333-8444-555555555555'
+
+--- Starts copy number `number` of `child` in place of what it runs, by
+--- `replace_session()` resuming the session `id`, against `fake`; shows its
+--- terminal beside the others, and returns it.
+---
+---@param number integer
+---@param fake { environment: table<string, string> }
+---@param id string
+---@return integer
+local function resume_copy_in_place(number, fake, id)
+  return child.lua(
+    [[
+      local helper, number, environment, id = dofile(...), select(2, ...)
+      for name, value in pairs(environment) do
+        vim.env[name] = value
+      end
+      _G.copies = _G.copies or {}
+      _G.copies[number] = _G.copies[number] or require('aineo.claude').new()
+      _G.switches = _G.switches or {}
+      _G.switches[number] = {}
+      local settings = helper.stand_in_settings({})
+      settings.on_session_switched = function(switched_to, source, left, reason)
+        table.insert(_G.switches[number], { id = switched_to, source = source, left = left, reason = reason })
+      end
+      local buffer = _G.copies[number].replace_session(settings, { id = id, resumed = true })
+      vim.cmd.vnew()
+      vim.api.nvim_win_set_buf(0, buffer)
+      return buffer
+    ]],
+    { 'tests/helpers/claude_session.lua', number, fake.environment, id }
+  )
+end
+
+T['session hooks']['follow the start’s token and not the session when two copies are on one session'] = function()
+  local first_fake = claude.fake('copies-hooks-shared-first', 'ready')
+  local second_fake = claude.fake('copies-hooks-shared-second', 'ready')
+  local first = start_copy(1, first_fake)
+  end_copy_after_case(1, first, first_fake)
+  wait_for_copy_status(1, 'ready')
+  local shared = copy_answers(1, 'session_id')[1]
+  local second = resume_copy_in_place(2, second_fake, shared)
+  end_copy_after_case(2, second, second_fake)
+  wait_for_copy_status(2, 'ready')
+
+  child.lua(
+    [[
+      local left, id, token = ...
+      local ran = vim.uv.hrtime()
+      local claude = require('aineo.claude')
+      claude.receive_session_event('SessionEnd', left, 'clear', token, ran)
+      claude.receive_session_event('SessionStart', id, 'clear', token, ran + 1)
+    ]],
+    { shared, NEW_ID, copy_answers(2, 'start_token')[1] }
+  )
+  wait_for_copy_switches(2, 1)
+
+  eq(copy_answers(2, 'session_id'), { NEW_ID })
+  eq(copy_answers(1, 'session_id'), { shared })
   eq(wait_for_copy_switches(1, 0), {})
 end
 
@@ -500,6 +593,10 @@ end
 --- stop.
 local NOTHING_TO_STOP_MS = 1000
 
+--- How long a case waits to be sure that no new start follows a stop: longer
+--- than the fake takes to find no conversation and exit.
+local NOTHING_STARTS_PATIENCE_MS = 1500
+
 T['stop_session()']['does nothing for a copy that has not started'] = function()
   child.lua('_G.copies = { require("aineo.claude").new() }')
 
@@ -514,6 +611,63 @@ T['stop_session()']['does nothing for a copy whose Claude Code has exited'] = fu
   wait_for_copy_status(1, 'exited')
 
   eq(milliseconds_to_stop_copy(1) < NOTHING_TO_STOP_MS, true)
+end
+
+--- The session id kept for the editor's folder under the state directory
+--- `state`, as the session a start that resumes lands in.
+local KEPT_ID = '11111111-2222-4333-8444-555555555555'
+
+--- Keeps `KEPT_ID` for the folder of `child` under `state`.
+---
+---@param state string
+local function keep_id_under(state)
+  local kept = vim.fs.joinpath(state, 'aineo', 'claude-sessions')
+  vim.fn.mkdir(kept, 'p')
+  vim.fn.writefile(
+    { KEPT_ID },
+    vim.fs.joinpath(kept, vim.fn.sha256(child.fn.getcwd()) .. '.txt'),
+    'b'
+  )
+end
+
+T['stop_session()']['keeps a start that waits for the list of sessions from launching'] = function()
+  local gate = claude.list_gate('copies-stop-waiting')
+  local fake = claude.fake('copies-stop-waiting', 'ready')
+  local state = fixture.directory('copies-stop-waiting-state')
+  keep_id_under(state)
+  local terminal =
+    start_copy(1, fake, { cmd = gate.cmd, state_directory = state, new_session = false })
+  vim.wait(claude.PATIENCE_MS, function()
+    return gate.lists_started() >= 1
+  end, 20)
+  local status_before = copy_answers(1, 'session_status')
+
+  child.lua('_G.copies[1].stop_session()')
+  gate.open()
+  end_copy_after_case(1, terminal, fake)
+
+  eq(status_before, { 'starting' })
+  eq(claude.wait_for_start(fake).argv, nil)
+  eq(copy_answers(1, 'session_status')[1], 'exited')
+end
+
+T['stop_session()']['starts nothing in place of a Claude Code that found no conversation'] = function()
+  local conversations = fixture.directory('copies-stop-noconversation-conversations')
+  local fake = claude.fake(
+    'copies-stop-noconversation',
+    'ready',
+    { AINEO_FAKE_CLAUDE_CONVERSATIONS = conversations }
+  )
+  local state = fixture.directory('copies-stop-noconversation-state')
+  keep_id_under(state)
+  start_copy(1, fake, { state_directory = state, new_session = false })
+  claude.wait_for_start(fake)
+
+  child.lua('_G.copies[1].stop_session()')
+  vim.wait(NOTHING_STARTS_PATIENCE_MS)
+
+  eq(#claude.wait_for_starts(fake, 2), 1)
+  eq(copy_answers(1, 'session_status'), { 'exited', 1 })
 end
 
 T['start_token()'] = MiniTest.new_set()
@@ -542,7 +696,54 @@ T['start_token()']['is the token the hooks of the copy’s last start name'] = f
   eq(first_token ~= second_token, true)
 end
 
+T['stop_together()'] = MiniTest.new_set()
+
+T['stop_together()']['presses the first key to every stop before it looks at an exit'] = function()
+  local pressed = child.lua([[
+    local pressed = {}
+    vim.api.nvim_chan_send = function(job)
+      table.insert(pressed, job)
+      return 1
+    end
+    local function has_exited()
+      return vim.tbl_contains(pressed, 1)
+    end
+    require('aineo.claude.stop').stop_together({
+      { job = 1, has_exited = has_exited, way = 'keys' },
+      { job = 2, has_exited = has_exited, way = 'keys' },
+    })
+    return pressed
+  ]])
+
+  eq(pressed, { 1, 2 })
+end
+
 T['Send with a given copy and Input'] = MiniTest.new_set()
+
+T['Send with a given copy and Input']['refuses a target of the wrong kind'] = MiniTest.new_set({
+  parametrize = {
+    { 'send', '5', 'target: expected table' },
+    { 'send', "{ input = 'x' }", 'target.input: expected number' },
+    { 'send', '{ session = 3 }', 'target.session: expected table' },
+    { 'send_selection', '5', 'target: expected table' },
+    { 'send_selection', "{ input = 'x' }", 'target.input: expected number' },
+    { 'send_selection', '{ session = 3 }', 'target.session: expected table' },
+  },
+})
+
+T['Send with a given copy and Input']['refuses a target of the wrong kind']['and names it'] = function(
+  name,
+  target,
+  parameter
+)
+  local result = child.lua(
+    "local name = ...; return { pcall(require('aineo.send')[name], " .. target .. ') }',
+    { name }
+  )
+
+  eq(result[1], false)
+  eq(result[2]:find(parameter, 1, true) ~= nil, true)
+end
 
 --- The bytes Send writes for `message`: one bracketed paste and its Enter.
 ---
@@ -620,9 +821,12 @@ T['Send with a given copy and Input']['refuses a copy that is not ready as it do
   make_input_of_its_own({ 'for nobody' })
   child.lua('_G.copies = { require("aineo.claude").new() }')
 
-  child.lua("require('aineo.send').send({ session = _G.copies[1], input = _G.input })")
+  local sent = child.lua(
+    "return { pcall(require('aineo.send').send, { session = _G.copies[1], input = _G.input }) }"
+  )
 
   vim.wait(NOTHING_SENT_PATIENCE_MS)
+  eq(sent, { true })
   eq(child.lua_get('_G.told'), {
     { 'aineo: nothing sent — Claude has not started', vim.log.levels.WARN },
   })
