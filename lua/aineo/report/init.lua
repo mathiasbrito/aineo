@@ -67,7 +67,7 @@ M.hand_over_report_session = module_copy.hand_over_report_session
 
 --- The function that chooses the copy of the home that takes a report
 --- received, once `set_report_router()` was given one.
----@type fun(session_id: string, options: table): aineo.report.Home|table|nil
+---@type fun(session_id: string?, options: table): aineo.report.Home|table|nil
 local router
 
 --- Gives the module the `router` that chooses, for each report the editor
@@ -75,15 +75,16 @@ local router
 --- nil takes the router away, and the module's own copy takes the reports
 --- again.
 ---
---- The router is called with the report's session id and the offer's options,
---- as `receive_session_report()` was given them, and returns the copy, a
+--- The router is called with the report's session id, nil for a report of no
+--- known session, and the offer's options, as `receive_session_report()` was
+--- given them, and returns the copy, a
 --- `new()` copy or this module, which stands for its own, and nothing else:
 --- a proxy of a copy, an object that delegates to one and a shallow copy of
 --- one are no copy; or nil when no copy is to take the report.
 ---
 --- Raises an error naming `router` when it is neither a function nor nil.
 ---
----@param chosen_router? fun(session_id: string, options: table): aineo.report.Home|table|nil
+---@param chosen_router? fun(session_id: string?, options: table): aineo.report.Home|table|nil
 function M.set_report_router(chosen_router)
   vim.validate('router', chosen_router, 'function', true)
   router = chosen_router
@@ -94,7 +95,7 @@ end
 --- no copy.
 ---
 ---@param arguments table
----@param session_id string
+---@param session_id string?
 ---@param options table
 ---@return boolean taken
 local function receive_through_router(arguments, session_id, options)
@@ -129,7 +130,7 @@ end
 --- report server goes on to another editor.
 ---
 ---@param arguments table
----@param session_id string
+---@param session_id string?
 ---@param options? { at_start: boolean?, keep_with_directory: boolean?, start_token: string? }
 ---@return boolean taken
 function M.receive_session_report(arguments, session_id, options)

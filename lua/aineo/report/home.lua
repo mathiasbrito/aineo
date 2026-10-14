@@ -22,7 +22,7 @@ local M = {}
 ---@field set_report_environment fun(report_environment: aineo.report.Environment)
 ---@field report_buffer fun(): integer
 ---@field receive_report fun(arguments: table)
----@field receive_session_report fun(arguments: table, session_id: string, options?: { at_start: boolean?, keep_with_directory: boolean? }): boolean
+---@field receive_session_report fun(arguments: table, session_id: string?, options?: { at_start: boolean?, keep_with_directory: boolean? }): boolean
 ---@field follow_report_session fun(session_id: string, options?: { claim: boolean? })
 ---@field hand_over_report_session fun(from: string, to: string)
 
@@ -539,14 +539,17 @@ function M.new(identity)
 
   --- Takes `arguments`, a report of the Claude session `session_id`, as
   --- `receive_report()` does when the home follows that session, and returns
-  --- true. With `options.at_start` — asked of the editor that started the
-  --- report's Claude Code — it takes it too while the home follows no session
-  --- yet: the report is then kept in the working directory's records, which
-  --- the first session followed takes; a copy with a `label` keeps it in the
-  --- report's own session's records instead, which no other copy shares.
-  --- Otherwise it neither shows nor keeps
-  --- the report, and returns false: the report server then offers it to
-  --- another editor that shows its session, or keeps it on disk
+  --- true. A report of no known session (`session_id` nil) is taken the same
+  --- way, whatever session the home follows, with `options.at_start`: it is
+  --- asked of the editor that started the report's Claude Code, and the
+  --- editor's router chooses the home of that Claude Code. With
+  --- `options.at_start` a report of a session is taken too while the home
+  --- follows no session yet: the report is then kept in the working
+  --- directory's records, which the first session followed takes; a copy
+  --- with a `label` keeps it in the report's own session's records instead,
+  --- which no other copy shares. Otherwise it neither shows nor keeps the
+  --- report, and returns false: the report server then offers it to another
+  --- editor that shows its session, or keeps it on disk
   --- (`keep_session_report()`).
   ---
   --- With `options.keep_with_directory` too — asked once no editor that shows
@@ -566,12 +569,12 @@ function M.new(identity)
   --- file.
   ---
   ---@param arguments table
-  ---@param session_id string
+  ---@param session_id string?
   ---@param options? { at_start: boolean?, keep_with_directory: boolean? }
   ---@return boolean taken
   function copy.receive_session_report(arguments, session_id, options)
     options = options or {}
-    if followed_session == session_id then
+    if followed_session == session_id or (session_id == nil and options.at_start) then
       copy.receive_report(arguments)
       return true
     end
