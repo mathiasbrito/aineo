@@ -29,20 +29,36 @@ local copy = require('aineo.changes.copy')
 ---@class aineo.changes: aineo.changes.Home
 local M = copy.new()
 
---- How many homes `M.new()` has made: each is told from the others by it.
-local homes_made = 0
+--- How many homes `M.new()` has counted: each is told from the others by it.
+local homes_counted = 0
+
+--- Whether no home that lives holds `label`: neither its autocommand group
+--- nor either of its pane's buffers exists. A home made before the module
+--- was loaded again holds its label still.
+---
+---@param label string
+---@return boolean
+local function is_label_free(label)
+  return vim.fn.exists('#aineo_changes_' .. label) == 0
+    and vim.fn.bufexists('aineo://' .. label .. '/changes-files') == 0
+    and vim.fn.bufexists('aineo://' .. label .. '/changes-commits') == 0
+end
 
 --- Makes a changes home of its own, which begins its own session and shows
 --- its own pane (`aineo.changes.Home`), beside the module's and every other
 --- home's, none of which it changes. Its pane's buffers are named
 --- `aineo://copy<n>/changes-files` and `aineo://copy<n>/changes-commits`, `n`
---- counting the homes made, where the module's keep `aineo://changes-files` and
---- `aineo://changes-commits`.
+--- the next number counted whose label no home that lives holds, where the
+--- module's keep `aineo://changes-files` and `aineo://changes-commits`.
 ---
 ---@return aineo.changes.Home
 function M.new()
-  homes_made = homes_made + 1
-  return copy.new('copy' .. homes_made)
+  local label
+  repeat
+    homes_counted = homes_counted + 1
+    label = 'copy' .. homes_counted
+  until is_label_free(label)
+  return copy.new(label)
 end
 
 return M
