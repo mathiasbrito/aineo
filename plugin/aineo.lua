@@ -591,6 +591,38 @@ local function replacement_callbacks(working_directory)
   }
 end
 
+--- The settings a start of Claude Code in `working_directory` is given
+--- (`aineo.claude`'s `start_session()` and `join_session()`): `config`'s
+--- `claude.cmd`, the report server and instructions, the state directory of
+--- `kept_places()`, the editor's address and program for the session hooks,
+--- and the callbacks that make the panes follow the session
+--- (`replacement_callbacks()`, `follow_confirmed_start()`). With
+--- `new_session` the start is on a new session id.
+---
+---@param config table the resolved configuration
+---@param working_directory string
+---@param new_session? boolean
+---@return aineo.claude.Settings
+local function claude_settings(config, working_directory, new_session)
+  local report = require('aineo.report')
+  local mcp = require('aineo.mcp')
+  local replacement = replacement_callbacks(working_directory)
+  return {
+    cmd = config.claude.cmd,
+    cwd = working_directory,
+    mcp_servers = mcp.mcp_servers(vim.v.servername, vim.v.progpath),
+    allowed_tools = mcp.allowed_mcp_tools(),
+    instructions = report.report_instructions(mcp.report_tool_name()),
+    state_directory = kept_places().state_directory,
+    new_session = new_session,
+    editor_address = vim.v.servername,
+    editor_program = vim.v.progpath,
+    on_terminal_replaced = replacement.on_terminal_replaced,
+    on_session_ready = follow_confirmed_start,
+    on_session_switched = replacement.on_session_switched,
+  }
+end
+
 --- Starts Claude Code with `config` when none runs — again once the last
 --- has exited — and returns its terminal, which it keeps as
 --- `claude_terminal`. While one runs it starts nothing and returns that
@@ -619,25 +651,10 @@ end
 ---@param new_session? boolean start on a new session id rather than resume the kept one
 ---@return integer terminal
 local function started_claude_terminal(config, new_session)
-  local report = require('aineo.report')
-  local mcp = require('aineo.mcp')
   local working_directory = vim.fn.getcwd()
-  local replacement = replacement_callbacks(working_directory)
   forget_confirmation_unless_running()
-  claude_terminal = require('aineo.claude').start_session({
-    cmd = config.claude.cmd,
-    cwd = working_directory,
-    mcp_servers = mcp.mcp_servers(vim.v.servername, vim.v.progpath),
-    allowed_tools = mcp.allowed_mcp_tools(),
-    instructions = report.report_instructions(mcp.report_tool_name()),
-    state_directory = kept_places().state_directory,
-    new_session = new_session,
-    editor_address = vim.v.servername,
-    editor_program = vim.v.progpath,
-    on_terminal_replaced = replacement.on_terminal_replaced,
-    on_session_ready = follow_confirmed_start,
-    on_session_switched = replacement.on_session_switched,
-  })
+  claude_terminal =
+    require('aineo.claude').start_session(claude_settings(config, working_directory, new_session))
   require('aineo.changes').begin_session({
     directory = working_directory,
     show_diff = function(diff)
@@ -1000,8 +1017,8 @@ end
 
 --- What `:Aineo sessions` tells the user, as a warning, when a pick
 --- switches nothing because another process runs the session picked, in
---- another terminal or in Claude Code's background service, and a switch
---- would pull it away from there.
+--- Claude Code's background service with no short id for `claude attach`
+--- to take, and a switch would pull it away from there.
 ---
 ---@param name string
 ---@return string
@@ -1098,19 +1115,18 @@ local function return_to(origin)
 end
 
 --- Moves to Claude's window in Terminal mode (`focus_claude()`) and, once
---- there, writes `command` as a bracketed paste followed by Enter, in one
---- write as Send writes (`aineo.send`), unless the prompt shows text
---- (`aineo.claude`'s `prompt_shows_text()`, read in Terminal mode). When it
---- shows text it writes nothing, puts the cursor back where it was
---- (`return_to()`) and tells the user `prompt_holds_text`, as a warning.
---- When Terminal mode is not entered it writes nothing either, puts the
---- cursor back, and tells the user so with a warning that begins `outcome`.
---- Claude Code must be running and ready (`refuses_while_not_ready()`).
+--- there, calls `act`, unless the prompt shows text (`aineo.claude`'s
+--- `prompt_shows_text()`, read in Terminal mode). When it shows text it
+--- acts on nothing, puts the cursor back where it was (`return_to()`) and
+--- tells the user `prompt_holds_text`, as a warning. When Terminal mode is
+--- not entered it acts on nothing either, puts the cursor back, and tells
+--- the user so with a warning that begins `outcome`. Claude Code must be
+--- running and ready (`refuses_while_not_ready()`).
 ---
 ---@param outcome string the words that begin a warning of what was not done
 ---@param prompt_holds_text string
----@param command string
-local function write_command_at_empty_prompt(outcome, prompt_holds_text, command)
+---@param act fun() what to do at the empty prompt, from Claude's window
+local function at_empty_prompt(outcome, prompt_holds_text, act)
   local claude = require('aineo.claude')
   local terminal = claude_terminal
   local origin = { window = vim.api.nvim_get_current_win(), mode = vim.api.nvim_get_mode().mode }
@@ -1122,10 +1138,23 @@ local function write_command_at_empty_prompt(outcome, prompt_holds_text, command
         vim.notify(prompt_holds_text, vim.log.levels.WARN)
         return
       end
-      claude.write_to_session(PASTE_START .. command .. PASTE_END .. '\r')
+      act()
     end)
   end, function()
     return_to(origin)
+  end)
+end
+
+--- Moves to Claude's window in Terminal mode and, at an empty prompt there
+--- (`at_empty_prompt()`), writes `command` as a bracketed paste followed by
+--- Enter, in one write as Send writes (`aineo.send`).
+---
+---@param outcome string the words that begin a warning of what was not done
+---@param prompt_holds_text string
+---@param command string
+local function write_command_at_empty_prompt(outcome, prompt_holds_text, command)
+  at_empty_prompt(outcome, prompt_holds_text, function()
+    require('aineo.claude').write_to_session(PASTE_START .. command .. PASTE_END .. '\r')
   end)
 end
 
@@ -1147,10 +1176,39 @@ local function switch_to_session(listed)
   write_command_at_empty_prompt(NOT_SWITCHED, PROMPT_HOLDS_TEXT, '/resume ' .. listed.session_id)
 end
 
+--- Replaces Claude's window's Claude Code with one on `listed`, a session
+--- another process runs and aineo can join (`aineo.claude`'s
+--- `join_session()`): attached to it, or resumed where it is open in
+--- another interactive Claude Code. Only at an empty prompt
+--- (`at_empty_prompt()`), since the running Claude Code is stopped and its
+--- prompt's text would be lost. The new terminal becomes Claude's
+--- (`claude_terminal`, the layout's), the panes follow the session once it
+--- is ready (`follow_confirmed_start()`), and Terminal mode is asked for in
+--- its window. Does nothing, and tells the user why, when Claude Code is
+--- not ready (`refuses_while_not_ready()`), when a claim of another session
+--- holds (`refuses_while_claimed()`), when the prompt shows text, and when
+--- Terminal mode is not entered.
+---
+---@param listed aineo.claude.ListedSession
+local function join_running_session(listed)
+  if refuses_while_not_ready(NOT_SWITCHED) or refuses_while_claimed(NOT_SWITCHED) then
+    return
+  end
+  at_empty_prompt(NOT_SWITCHED, PROMPT_HOLDS_TEXT, function()
+    local claude = require('aineo.claude')
+    start_confirmed = false
+    claude_terminal =
+      claude.join_session(claude_settings(resolved_config(), claude.session_directory()), listed)
+    require('aineo.layout').follow_claude_terminal(claude_terminal)
+    focus_claude()
+  end)
+end
+
 --- Whether a pick of `listed` must switch nothing for where the session
 --- stands (`aineo.claude`'s `session_standing()`): the session of Claude's
---- terminal, one another process runs, one started in another folder. Tells
---- the user why once, with one warning.
+--- terminal, one another process runs and aineo cannot join
+--- (`aineo.claude`'s `can_join_session()`), one started in another folder.
+--- Tells the user why once, with one warning.
 ---
 ---@param listed aineo.claude.ListedSession
 ---@return boolean refused
@@ -1161,6 +1219,9 @@ local function refuses_by_standing(listed)
   if standing == 'own' then
     vim.notify(already_shown(name), vim.log.levels.WARN)
   elseif standing == 'elsewhere' then
+    if claude.can_join_session(listed) then
+      return false
+    end
     vim.notify(runs_elsewhere(name), vim.log.levels.WARN)
   elseif standing == 'another_folder' then
     vim.notify(started_elsewhere(name, listed.cwd), vim.log.levels.WARN)
@@ -1168,13 +1229,31 @@ local function refuses_by_standing(listed)
   return standing ~= 'switchable'
 end
 
+--- Takes Claude's window to `listed`, a session that stands for a pick
+--- (`refuses_by_standing()` said no): joins it where another process runs
+--- it (`join_running_session()`), else switches Claude Code to it
+--- (`switch_to_session()`).
+---
+---@param listed aineo.claude.ListedSession
+local function take_listed_session(listed)
+  local claude = require('aineo.claude')
+  if
+    claude.session_standing(listed, claude.session_id(), claude.session_directory()) == 'elsewhere'
+  then
+    join_running_session(listed)
+    return
+  end
+  switch_to_session(listed)
+end
+
 --- Acts on the pick of `listed`, a session of the list `list_sessions()`
 --- offered. Switches nothing, and tells the user why, when `listed` is not a
 --- session id — a menu is another plugin's, and the id is typed into Claude
---- Code's terminal — and when it stands for no switch (`refuses_by_standing()`).
---- Otherwise reads the list again, since the menu may have been open for
---- long, and switches (`switch_to_session()`) only if the session is still
---- listed and still stands for a switch.
+--- Code's terminal — and when it stands for no switch and no join
+--- (`refuses_by_standing()`). Otherwise reads the list again, since the menu
+--- may have been open for long, and takes Claude's window to the session
+--- (`take_listed_session()`) only if it is still listed and still stands for
+--- a switch or a join.
 ---
 ---@param listed aineo.claude.ListedSession
 local function pick_listed_session(listed)
@@ -1200,7 +1279,7 @@ local function pick_listed_session(listed)
       return
     end
     if not refuses_by_standing(current) then
-      switch_to_session(current)
+      take_listed_session(current)
     end
   end)
 end
