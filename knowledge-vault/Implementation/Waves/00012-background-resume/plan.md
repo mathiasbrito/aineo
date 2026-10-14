@@ -423,9 +423,10 @@ A231, the orchestrator's assumption: a terminal that Claude Code attaches by its
 
 **The user's result (2026-10-14):** the `/resume` showed the picked session in aineo's window, but the picked session did not appear in the list run from another shell under its own name. The list showed the session's id twice, as two **interactive** rows on one `sessionId` with two pids, and the session was also open in another interactive Claude Code. Reading, the orchestrator's: that `/resume` did not attach — it resumed the session interactively in aineo's own process, which D36–D38 follow as a switch, and aineo's own terminal process is one of the two pids.
 
-What follows (A232, the orchestrator's assumption):
+What followed, and was withdrawn (A232, then A233, the orchestrator's assumptions):
 - an interactive resume is followed as a D38 switch;
-- only the screen line `Opening "<title>", running in the background (<id>)` tells aineo of a true attach, because the list does not show a terminal's own attach under the terminal's process. aineo reads that line from the terminal's screen, marks the terminal attached as its own attach does, and resolves `<id>` through the list for the kept id (`aineo.claude`'s `self_attach`).
+- **A232** had aineo read the screen line `Opening "<title>", running in the background (<id>)` and mark the terminal attached. **A233 withdrew it, and its code was removed:** a resumed conversation's own history can hold such lines (the user's window on reopening showed two, for sessions that were never attached, one of them a running session of the user's), and the user's first paste shows the line printed after a `/resume` with no attach following it. So even a new line does not prove an attach, and a reopen would have marked the window attached, made another session the kept one and pressed Ctrl+Z at quit.
+- What stands (A231): a terminal Claude Code attaches by itself is unknown to aineo, and aineo's quit would press Ctrl-C into it. The help tells the user to leave such a window with `←` or Ctrl+Z before quitting.
 
 ## Verification mutants — round 4
 
