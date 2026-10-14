@@ -114,3 +114,7 @@ Write it in your definition's shape, to `<scratchpad>/t68-report-packet.md`. Ope
 - the whole suite's counts.
 
 The orchestrator's verification runs `plan.md`'s T68 mutants. Name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-14, before dispatch
+
+`plan.md` › *The user's answers* (U1–U3, the user's decisions) and *The orchestrator's rulings* (O1–O22 → A234–A255, each its (a)) bind this brief, which is written for them. Record A234–A255 as the orchestrator's assumptions, never as the user's decisions.
