@@ -551,6 +551,57 @@ T['a router for received reports']['leaves the rules of the home it chooses to d
   eq({ taken = taken, second_lines = second_lines() }, { taken = false, second_lines = { '' } })
 end
 
+--- Offers the child's module a report that belongs to no known session, as
+--- the editor's `RECEIVE_REPORT` does, with `options`, and returns what it
+--- answers.
+---
+---@param summary string
+---@param options table
+---@return boolean|string taken
+local function offer_without_session(summary, options)
+  return child.lua_get(
+    [[(function(report, options)
+      return require('aineo.report').receive_session_report(report, nil, options)
+    end)(...)]],
+    { report_of(summary), options }
+  )
+end
+
+T['a router for received reports']['hands a report of no known session, offered at the start, to the home it chooses, which takes it whatever session it follows'] = function()
+  local state = fixture.directory('report-copies-router-no-session')
+  start_editor(state)
+  make_second_home(state)
+  child.lua("require('aineo.report').follow_report_session(...)", { 'session-a' })
+  child.lua('_G.second.follow_report_session(...)', { 'session-b' })
+  route_to_second_home()
+
+  local taken = offer_without_session('Of no session', { at_start = true, start_token = 'tab-2' })
+
+  eq({
+    taken = taken,
+    first_lines = report_editor.lines(child),
+    second_lines = second_lines(),
+    second_kept = summaries_in(session_records_file(state, 'session-b')),
+  }, {
+    taken = true,
+    first_lines = { '' },
+    second_lines = { '11:00 [done] Task — Of no session' },
+    second_kept = { 'Of no session' },
+  })
+end
+
+T['a router for received reports']['declines a report of no known session that is not offered at the start, to the home it chooses as to any'] = function()
+  local state = fixture.directory('report-copies-router-no-session-later')
+  start_editor(state)
+  make_second_home(state)
+  child.lua('_G.second.follow_report_session(...)', { 'session-b' })
+  route_to_second_home()
+
+  local taken = offer_without_session('Not at the start', { start_token = 'tab-2' })
+
+  eq({ taken = taken, second_lines = second_lines() }, { taken = false, second_lines = { '' } })
+end
+
 T['a router for received reports']['answers false, taking nothing, when it chooses no home'] = function()
   local state = fixture.directory('report-copies-router-none')
   start_editor(state)
