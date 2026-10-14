@@ -118,6 +118,24 @@ function M.is_open_in_another_claude_code(sessions, session_id)
   end)
 end
 
+--- The entry of `sessions`, as `list_sessions()` delivers them, that holds
+--- the session `session_id` running in Claude Code's background service and
+--- that `claude attach` can be given: its kind is `background`, it has a
+--- process (`running`) and it has Claude Code's short id (`short_id`). Nil
+--- when none does.
+---
+---@param sessions aineo.claude.ListedSession[]
+---@param session_id string
+---@return aineo.claude.ListedSession?
+function M.running_in_background(sessions, session_id)
+  return vim.iter(sessions):find(function(listed)
+    return listed.session_id == session_id
+      and listed.kind == 'background'
+      and listed.running == true
+      and listed.short_id ~= nil
+  end)
+end
+
 --- What a row of the list marks a session with, by its standing.
 local STANDING_MARKS = {
   own = '[this terminal]',

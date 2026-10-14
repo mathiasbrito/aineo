@@ -396,4 +396,16 @@ function M.claude_command(settings, session_words, start_token)
     given.unread == true
 end
 
+--- The command that attaches to the background session Claude Code calls
+--- `short_id`: `cmd`, `claude.cmd`, then `attach` and the id, with none of
+--- the arguments `claude_command()` adds. An attached Claude Code runs with
+--- the arguments its background session was started with.
+---
+---@param cmd string[]
+---@param short_id string
+---@return string[]
+function M.attach_command(cmd, short_id)
+  return vim.list_extend(vim.list_slice(cmd), { 'attach', short_id })
+end
+
 return M
