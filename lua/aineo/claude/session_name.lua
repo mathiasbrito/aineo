@@ -1,6 +1,7 @@
 --- The name and the folder of a Claude Code session, kept on its terminal
 --- buffer for status lines: `b:aineo_session_name` and
---- `b:aineo_session_folder`.
+--- `b:aineo_session_folder`; and, while it is attached to a background
+--- session, `b:aineo_session_attached`.
 
 local M = {}
 
