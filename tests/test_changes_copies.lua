@@ -350,6 +350,25 @@ T['new()']['gives a home of its own on each call, with the functions the module 
   })
 end
 
+T['new()']['after the module was loaded again does not take the label of a home that lives'] = function()
+  local panes = child.lua_get([[(function()
+    local old = require('aineo.changes').new().pane_buffers()
+    package.loaded['aineo.changes'] = nil
+    local new = require('aineo.changes').new().pane_buffers()
+    local valid = vim.api.nvim_buf_is_valid(old.files)
+    return {
+      old_valid = valid,
+      old_name = valid and vim.api.nvim_buf_get_name(old.files) or 'wiped',
+      new_name = vim.api.nvim_buf_get_name(new.files),
+    }
+  end)()]])
+  eq(panes, {
+    old_valid = true,
+    old_name = 'aineo://copy1/changes-files',
+    new_name = 'aineo://copy2/changes-files',
+  })
+end
+
 T['begin_session()'] = MiniTest.new_set()
 
 T['begin_session()']['of a second copy leaves the first copy’s lists as they were'] = function()
@@ -494,6 +513,106 @@ T['Enter']['on the same file in two copies’ panes shows each its own diff, in 
   eq(child.lua_get('_G.diffs.first[1] ~= _G.diffs.second[1]'), true)
 end
 
+T['Enter']['in two copies’ panes before git answers shows both diffs'] = function()
+  local top = git_repo.create('changescopies-enter-at-once', { ['a.txt'] = numbered_lines(20) })
+  git_repo.write(top, 'a.txt', numbered_lines(20, { 10 }))
+  start_copy('first', top)
+  start_copy('second', top)
+  expect_pane_lines('first', 'files', { 'Files in: Session work', '  M a.txt' })
+  expect_pane_lines('second', 'files', { 'Files in: Session work', '  M a.txt' })
+
+  child.lua([[
+    for _, key in ipairs({ 'first', 'second' }) do
+      vim.api.nvim_set_current_win(vim.fn.win_findbuf(_G.panes[key].files)[1])
+      vim.api.nvim_win_set_cursor(0, { 2, 0 })
+      vim.api.nvim_feedkeys(vim.keycode('<CR>'), 'x', false)
+    end
+  ]])
+
+  wait_for_diffs('first', 1)
+  wait_for_diffs('second', 1)
+end
+
+T['Enter']['in a copy, read while textlock holds, then on another file, keeps no buffer of the first diff'] = function()
+  local top =
+    git_repo.create('changescopies-enter-textlock', { ['a.txt'] = { 'a' }, ['b.txt'] = { 'b' } })
+  git_repo.write(top, 'a.txt', { 'a2' })
+  git_repo.write(top, 'b.txt', { 'b2' })
+  local stand_in = git_repo.script('changescopies-enter-textlock', 'git', {
+    'case " $* " in *" diff "*a.txt*) while [ ! -f "$0.gate" ]; do sleep 0.05; done ;; esac',
+    ('exec %s "$@"'):format(vim.fn.exepath('git')),
+  })
+  child.lua(
+    [[
+      _G.holding, _G.diffs_read = false, 0
+      local git = require('aineo.git')
+      local file_diff = git.file_diff
+      git.file_diff = function(...)
+        local arguments = { ... }
+        for index = 1, select('#', ...) do
+          if type(arguments[index]) == 'function' then
+            local done = arguments[index]
+            arguments[index] = function(...)
+              _G.diffs_read = _G.diffs_read + 1
+              done(...)
+            end
+          end
+        end
+        return file_diff(unpack(arguments, 1, select('#', ...)))
+      end
+      vim.keymap.set('n', 'X', function()
+        _G.holding = true
+        vim.fn.getcharstr()
+        _G.holding = false
+        return ''
+      end, { expr = true })
+      local home = require('aineo.changes').new()
+      home.begin_session({
+        directory = (...),
+        git = { executable = (select(2, ...)) },
+        show_diff = function(diff)
+          table.insert(_G.shown, diff)
+          return vim.api.nvim_open_win(diff, false, { split = 'below', win = -1 })
+        end,
+      })
+      _G.shown = {}
+      local panes = home.pane_buffers()
+      vim.cmd('tabnew')
+      vim.api.nvim_win_set_buf(0, panes.files)
+      _G.files = panes.files
+    ]],
+    { top, stand_in }
+  )
+  git_repo.wait_until('the files listed', function()
+    return vim.deep_equal(
+      child.lua_get('vim.api.nvim_buf_get_lines(_G.files, 0, -1, true)'),
+      { 'Files in: Session work', '  M a.txt', '  M b.txt' }
+    )
+  end)
+  child.type_keys('j<CR>')
+  child.api.nvim_input('X')
+  git_repo.wait_until('the hold', function()
+    return child.lua_get('_G.holding == true')
+  end)
+  vim.fn.writefile({}, stand_in .. '.gate')
+  git_repo.wait_until('the diff of a.txt read', function()
+    return child.lua_get('_G.diffs_read == 1')
+  end)
+
+  child.api.nvim_input('qj<CR>')
+
+  git_repo.wait_until('the diff of b.txt read', function()
+    return child.lua_get('_G.diffs_read == 2')
+  end)
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return child.fn.bufexists('aineo://copy1/diff/a.txt') == 0
+  end, 10)
+  eq({
+    shown = child.lua_get('vim.tbl_map(vim.api.nvim_buf_get_name, _G.shown)'),
+    kept = child.fn.bufexists('aineo://copy1/diff/a.txt'),
+  }, { shown = { 'aineo://copy1/diff/b.txt' }, kept = 0 })
+end
+
 T['Enter']['in the module’s pane names its diff as it always has'] = function()
   local top = git_repo.create('changescopies-enter-module', { ['a.txt'] = numbered_lines(20) })
   git_repo.write(top, 'a.txt', numbered_lines(20, { 10 }))
@@ -553,6 +672,29 @@ T['F']['in one copy’s diff opens the next diff of the other copy with the whol
   expect_hunks_shown('first', { WHOLE_HUNK })
   open_file_at('second', 2, 1)
 
+  expect_hunks_shown('second', { WHOLE_HUNK })
+end
+
+T['F']['in two copies’ diffs before git answers shows each the whole file'] = function()
+  local top = git_repo.create('changescopies-f-at-once', { ['a.txt'] = numbered_lines(20) })
+  git_repo.write(top, 'a.txt', numbered_lines(20, { 10 }))
+  start_copy('first', top)
+  start_copy('second', top)
+  expect_pane_lines('first', 'files', { 'Files in: Session work', '  M a.txt' })
+  expect_pane_lines('second', 'files', { 'Files in: Session work', '  M a.txt' })
+  open_file_at('first', 2, 1)
+  open_file_at('second', 2, 1)
+  expect_hunks_shown('first', { THREE_LINES_HUNK })
+  expect_hunks_shown('second', { THREE_LINES_HUNK })
+
+  child.lua([[
+    for _, key in ipairs({ 'first', 'second' }) do
+      vim.api.nvim_set_current_win(vim.fn.win_findbuf(_G.diffs[key][1])[1])
+      vim.api.nvim_feedkeys('F', 'x', false)
+    end
+  ]])
+
+  expect_hunks_shown('first', { WHOLE_HUNK })
   expect_hunks_shown('second', { WHOLE_HUNK })
 end
 
