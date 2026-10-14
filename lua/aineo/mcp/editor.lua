@@ -3,9 +3,21 @@
 
 local M = {}
 
---- The Lua the editor runs for each report. The report travels as its
---- argument, as data: nothing of it becomes code.
-local RECEIVE_REPORT = "require('aineo.report').receive_report(...)"
+--- The Lua the editor runs for a report of no known session, its arguments
+--- the report and the options of `receive_session_report()`. The report
+--- home is offered it with no session first, so that its router can choose
+--- where it shows; a home that does not take it, or lacks that function,
+--- shows it with `receive_report()`. The report travels as data: nothing of
+--- it becomes code.
+local RECEIVE_REPORT = [[
+  local home = require('aineo.report')
+  local report, options = ...
+  if home.receive_session_report and home.receive_session_report(report, nil, options) then
+    return true
+  end
+  home.receive_report(report)
+  return true
+]]
 
 --- How long the relay waits for the editor to confirm a report: 5 s, far
 --- above the time a report takes to show (tens of milliseconds, even for a
@@ -237,9 +249,10 @@ function M.offer_report(address, request)
   return offer_outcome(call, address)
 end
 
---- Hands `report` to the report home of the editor listening at `address`,
---- which shows it in its Report (`require('aineo.report').receive_report()`),
---- and says how it went:
+--- Hands `report`, which belongs to no known session, to the report home of
+--- the editor listening at `address`: first as `receive_session_report()`
+--- takes it with `options` and no session, then, when the home does not take
+--- it, shows it in its Report with `receive_report()`. Says how it went:
 ---
 --- - `'delivered'` when the editor confirmed it;
 --- - `'unconfirmed'` when the editor did not answer within
@@ -253,15 +266,16 @@ end
 ---
 ---@param address string? the editor's server address
 ---@param report table a valid report
+---@param options table? the options of `receive_session_report()`
 ---@return 'delivered'|'unconfirmed'|'failed' outcome
 ---@return string? explanation
 ---@return boolean? unreachable
-function M.deliver_report(address, report)
+function M.deliver_report(address, report, options)
   if address == nil then
     return 'failed', 'aineo has no editor address to deliver the report to'
   end
   local kind, explanation =
-    M.offer_report(address, { lua = RECEIVE_REPORT, arguments = { report } })
+    M.offer_report(address, { lua = RECEIVE_REPORT, arguments = { report, options } })
   if kind == 'taken' or kind == 'declined' then
     return 'delivered'
   end
