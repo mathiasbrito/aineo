@@ -41,9 +41,9 @@ local EXIT_AFTER_HANGUP_MS = 5000
 local CTRL_Z = '\26'
 
 --- How long a detach waits for the attached Claude Code to exit before it
---- hangs the terminal up. Not measured: the exit after Ctrl+Z was seen, not
---- timed. Chosen as the wait after the second press of a double Ctrl-C, the
---- longest exit of Claude Code 2.1.281 measured.
+--- hangs the terminal up: 4 s, as long as the wait after the second press of
+--- a double Ctrl-C (`KEY_PRESSES`), which exceeds the longest exit measured
+--- after it (2.5 s). The exit after Ctrl+Z was seen, not timed.
 local DETACH_WAIT_MS = 4000
 
 --- Blocks the editor until `has_exited()` is true or `wait_ms` has passed, and

@@ -224,6 +224,18 @@ T['Claude’s status line']['reads (attached) after the name while Claude Code i
   eq(shown, 'tests (attached) — ' .. vim.fn.fnamemodify(vim.fn.getcwd(), ':~'))
 end
 
+T['Claude’s status line']['drops (attached) once the attach has exited'] = function()
+  local name = 'attach-statusline-exited'
+  local fake = fake_listing(name, { background_entry() }, nil, 'exit')
+  local buffer = claude.start(child, fake, keeping_the_session(name))
+  claude.wait_for_status(child, 'exited')
+
+  eq(
+    child.lua_get(STATUSLINE_TEXT, { buffer }),
+    'Claude Code — ' .. vim.fn.fnamemodify(vim.fn.getcwd(), ':~')
+  )
+end
+
 T['Claude’s status line']['reads as at any start where Claude Code resumed the session'] = function()
   local shown = statusline_after_the_start('attach-statusline-resumed', {})
 
@@ -239,6 +251,23 @@ T['a start that resumes the session the list shows running in the background']['
 
   eq(claude.followed_session_id(child), KEPT_ID)
   eq(kept_session_id(settings), KEPT_ID)
+end
+
+T['a start that attaches'] = MiniTest.new_set()
+
+T['a start that attaches']['tells nothing of the --settings of claude.cmd that aineo cannot read'] = function()
+  local fake = fake_listing('attach-unread-settings', { background_entry() })
+  local settings = keeping_the_session('attach-unread-settings')
+  settings.cmd = vim.list_extend(
+    { 'sh', '-c', 'shift 2; exec "$@"', 'sh', '--settings', '/nonexistent/settings.json' },
+    claude.fake_command()
+  )
+  note_what_is_told()
+
+  claude.start(child, fake, settings)
+  claude.wait_for_start(fake)
+
+  eq(told(), { { ATTACHED_NOTE, INFO } })
 end
 
 T['quitting Neovim with Claude Code attached'] = MiniTest.new_set()
@@ -269,31 +298,75 @@ T['quitting Neovim with Claude Code attached']['hangs the terminal up once Ctrl+
   claude.start(child, fake, keeping_the_session('attach-quit-stays'))
   claude.wait_for_status(child, 'ready')
 
+  local alive_when_the_quit_goes_on =
+    vim.fs.joinpath(fixture.directory('attach-quit-stays-handler'), 'alive')
+  child.lua(
+    [[
+      local path, pid = ...
+      vim.api.nvim_create_autocmd('VimLeavePre', {
+        callback = function()
+          vim.fn.writefile({ vim.uv.kill(pid, 0) == 0 and 'alive' or 'dead' }, path)
+        end,
+      })
+    ]],
+    { alive_when_the_quit_goes_on, claude.wait_for_start(fake).pid }
+  )
+
   claude.quit(child)
   local events = claude.wait_for_end(fake)
 
   eq(claude.ctrl_c_count(fake), 0)
   eq(pressed_ctrl_z(fake), true)
   eq(events[#events], { ended = 'hangup', code = 129 })
+  eq(claude.wait_for_file(alive_when_the_quit_goes_on), { 'dead' })
 end
 
-T['an attach that prints that it found no conversation'] = MiniTest.new_set()
+T['an attach that exits with a failure at once'] = MiniTest.new_set()
 
-T['an attach that prints that it found no conversation']['leaves the session exited and starts no new session in its place'] = function()
-  local said = 'No conversation found with session ID: ' .. KEPT_ID
-  local fake = fake_listing(
-    'attach-no-conversation',
-    { background_entry() },
-    { AINEO_FAKE_CLAUDE_ATTACH_SAYS = said }
-  )
-  claude.start(child, fake, keeping_the_session('attach-no-conversation'))
+--- What aineo tells the user when an attach did not take and it resumes the
+--- session, with the level it tells it at.
+local ATTACH_FAILED_NOTE = 'aineo: the attach failed; resuming the session'
 
-  local exited = claude.wait_for_status(child, 'exited')
+--- The environment of a fake whose attach prints that it found no
+--- conversation and exits 1, as a session that ended between the list and the
+--- attach might make `claude attach` do.
+local ATTACH_FAILS = {
+  AINEO_FAKE_CLAUDE_ATTACH_SAYS = 'No conversation found with session ID: ' .. KEPT_ID,
+}
+
+T['an attach that exits with a failure at once']['is followed by a resume of the kept session, which starts no new session'] = function()
+  local fake = fake_listing('attach-fails', { background_entry() }, ATTACH_FAILS)
+  note_what_is_told()
+  local settings = keeping_the_session('attach-fails')
+
+  claude.start(child, fake, settings)
+  local resumed = claude.start_arguments(fake, 2)
+
+  eq(claude.words_after(resumed, '--resume'), { KEPT_ID })
+  eq(claude.flags(resumed), {
+    '--allowedTools',
+    '--append-system-prompt',
+    '--mcp-config',
+    '--resume',
+    '--settings',
+  })
+  eq(claude.wait_for_status(child, 'ready'), { 'ready' })
+  eq(claude.followed_session_id(child), KEPT_ID)
+  eq(kept_session_id(settings), KEPT_ID)
+  eq(told(), { { ATTACHED_NOTE, INFO }, { ATTACH_FAILED_NOTE, INFO } })
+end
+
+T['an attach that exits with a failure at once']['is not followed by a resume when its terminal was wiped, which hangs it up'] = function()
+  local fake = fake_listing('attach-wiped', { background_entry() })
+  local buffer = claude.start(child, fake, keeping_the_session('attach-wiped'))
+  claude.wait_for_status(child, 'ready')
+
+  child.lua('vim.cmd.bwipeout({ tostring(...), bang = true })', { buffer })
+  claude.wait_for_status(child, 'exited')
   vim.wait(NO_NEW_SESSION_WINDOW_MS, function()
     return false
   end, 20)
 
-  eq(exited, { 'exited', 1 })
   eq(#claude.wait_for_starts(fake, 0), 1)
 end
 
