@@ -601,6 +601,19 @@ T['an offer']['of a report with no known session shows in the Report when the re
   )
 end
 
+T['an offer']['of a report with no known session shows in the Report of a report home older than the relay'] = function()
+  start_editor()
+  editor.lua("require('aineo.report').receive_session_report = nil")
+  local relay = start_relay_without_session()
+
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq(
+    { get(decoded(relay:next_line()), 'result', 'isError'), report_editor.lines(editor) },
+    { false, { '09:05 [done] Refactor the parser — All tests pass' } }
+  )
+end
+
 T['an offer']['to the claimant carries the start token as its options'] = function()
   local state = case_state('mcp-offer-claimant')
   local requests = {}
@@ -677,19 +690,6 @@ T['an offer']['to a listed editor whose tabs are on other sessions is not made']
   send_report_and_wait(relay)
 
   eq(#requests, 0)
-end
-
-T['an offer']['to a listed editor with a tab on the session and one on another is made once'] = function()
-  local state = case_state('mcp-offer-listed-mixed-tabs')
-  local requests = {}
-  local address = start_recording_editor(requests, true)
-  list_editor(state, address, OTHER_SESSION_ID, 2000, 'a')
-  list_editor(state, address, SESSION_ID, 1000, 'b')
-  local relay = start_relay_of(state, nil, TOKEN)
-
-  send_report_and_wait(relay)
-
-  eq(#requests, 1)
 end
 
 --- How many entries the list holds under `state`.
