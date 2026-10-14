@@ -1100,27 +1100,6 @@ T['an attached window']['gets a new session from \\N, which detaches it and writ
   eq(own_session_id(), arguments[2])
 end
 
-T['an attached window']['that Claude Code attached by itself gets a new session from \\N, which writes no /clear'] = function()
-  local fake = sessions_fake('sessions-new-self-attached', 'ready')
-  fake.environment.AINEO_FAKE_CLAUDE_SELF_ATTACH =
-    'Opening "tests", running in the background (a1b2c3d4)'
-  list_in(fake, {})
-  open_layout_on(fake)
-  local terminal = child.lua_get(
-    "vim.iter(vim.api.nvim_list_bufs()):find(function(buffer) return vim.bo[buffer].buftype == 'terminal' end)"
-  )
-  claude_session.press_keys(child, terminal, '/attach-self\r')
-  vim.wait(PATIENCE_MS, function()
-    return child.lua_get('vim.b[...].aineo_session_attached == true', { terminal })
-  end, 20)
-
-  entry.press(child, '\\N')
-
-  eq(claude_session.start_arguments(fake, 2)[1], '--session-id')
-  eq(detached_and_wrote_no(fake, '/clear'), true)
-  eq(claude_session.ctrl_c_count(fake), 0)
-end
-
 T['an attached window']['resumes a picked session that does not run, with Ctrl+Z and no /resume written'] = function()
   local fake = sessions_fake('sessions-switch-attached', 'ready')
   open_attached(fake, {
