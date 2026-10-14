@@ -902,7 +902,7 @@ T['a list of worktrees that fails']['leaves the editor’s lines as ever, then s
   begin_and_show(top, { executable = stand_in })
 
   expect_lines(COMMITS, commits_then({ 'The other worktrees could not be listed: fatal: broken' }))
-  eq(lines_of(FILES), { 'Files in: Session work', '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
 end
 
 T['a later list of worktrees that fails'] = MiniTest.new_set()

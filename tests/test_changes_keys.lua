@@ -107,6 +107,19 @@ local function press_on_files_line(key, line)
   child.type_keys(key)
 end
 
+--- Puts the cursor on line `line` of the files window and runs the callback
+--- of the window's mapping of `key`, without typing it: `child.type_keys()`
+--- raises the error message a key leaves in the child, and a notification an
+--- asynchronous read tells while it still checks would raise it as well.
+---
+---@param key string
+---@param line integer
+local function call_files_mapping_on_line(key, line)
+  enter_window_of(FILES)
+  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { line })
+  child.lua("vim.fn.maparg(..., 'n', false, true).callback()", { key })
+end
+
 --- Waits until the child has been asked to show `count` buffers.
 ---
 ---@param count integer
@@ -558,7 +571,7 @@ T['h']['on a file whose diff cannot be read tells git’s words once, naming the
     end
   ]])
 
-  press_on_files_line('h', 2)
+  call_files_mapping_on_line('h', 2)
 
   git_repo.wait_until('the failure told', function()
     return child.lua_get(TOLD) ~= ''

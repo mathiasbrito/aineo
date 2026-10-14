@@ -476,6 +476,14 @@ T['the commits window']['of one copy selects the filter of its own files window 
   local add_b = commit_only(top, 'b.txt', 'one', 'Add b')
   expect_pane_lines('first', 'files', { 'Files in: Session work', '  M a.txt', '  A b.txt' })
   expect_pane_lines('second', 'files', { 'Files in: Session work', '  M a.txt', '  A b.txt' })
+  local both_commits = {
+    'Uncommitted',
+    'Session work',
+    commit_line(add_b, 'Add b'),
+    commit_line(change_a, 'Change a'),
+  }
+  expect_pane_lines('first', 'commits', both_commits)
+  expect_pane_lines('second', 'commits', both_commits)
 
   enter_window_of('first', 'commits')
   child.type_keys('4G')
