@@ -2561,7 +2561,8 @@ end
 --- finds no such list, open as they always have (returns false). A tab that
 --- cannot start raises an error that names its session and those not tried,
 --- leaves the tabs opened before it, and keeps the sessions not tried in the
---- list.
+--- list; a list of one session that cannot start raises that start's own
+--- error.
 ---
 ---@return boolean reopened
 local function reopen_folder_tabs()
@@ -2599,6 +2600,9 @@ local function reopen_folder_tabs()
   end
   keep_folder_tabs(untried)
   if not reopened then
+    if #untried == 0 and #opened == 0 then
+      error(failure, 0)
+    end
     local cause = tostring(failure):match('^[^\n]*')
     error(
       ('reopening stopped at %s: %s%s'):format(
