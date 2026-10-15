@@ -82,9 +82,8 @@ local function make_shell(group_name)
   local home = {}
   vim.api.nvim_create_augroup(group_name, { clear = false })
 
-  --- The home's shell: its terminal buffer and the terminal's job, while it
-  --- has one.
-  ---@type { buffer: integer, job: integer }|nil
+  --- The home's shell: its terminal buffer, while it has one.
+  ---@type { buffer: integer }|nil
   local shell
 
   --- Forgets the home's shell when it is the one whose terminal is `buffer`.
@@ -161,11 +160,10 @@ local function make_shell(group_name)
     local words = shell_words()
     ensure_executable(words[1] or '')
     local buffer = vim.api.nvim_create_buf(false, true)
-    local job
     vim.api.nvim_buf_call(buffer, function()
-      job = vim.fn.jobstart(words, { term = true, cwd = settings.cwd, env = CHILD_ENVIRONMENT })
+      vim.fn.jobstart(words, { term = true, cwd = settings.cwd, env = CHILD_ENVIRONMENT })
     end)
-    shell = { buffer = buffer, job = job }
+    shell = { buffer = buffer }
     watch(buffer)
     return buffer
   end
@@ -178,15 +176,15 @@ local function make_shell(group_name)
     return shell and shell.buffer
   end
 
-  --- Stops the home's shell and wipes its buffer at once, as a tab page's
-  --- close must; does nothing without a shell.
+  --- Stops the home's shell by wiping its buffer at once, as a tab page's
+  --- close must: Neovim ends the process of a terminal it wipes. Does nothing
+  --- without a shell.
   function home.stop()
     if not shell then
       return
     end
     local stopped = shell
     shell = nil
-    vim.fn.jobstop(stopped.job)
     if vim.api.nvim_buf_is_valid(stopped.buffer) then
       vim.api.nvim_buf_delete(stopped.buffer, { force = true })
     end
