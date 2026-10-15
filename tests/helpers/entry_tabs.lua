@@ -440,6 +440,9 @@ end
 function M.start_arguments_in_tab(child, fake, number)
   local arguments = {}
   vim.wait(M.PATIENCE_MS, function()
+    if M.tab_count(child) < number then
+      return false
+    end
     local buffer = M.claude_terminal_of_tab(child, number)
     if type(buffer) ~= 'number' then
       return false
