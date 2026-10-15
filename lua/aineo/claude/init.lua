@@ -238,19 +238,41 @@ local function validate_settings(settings)
   vim.validate('settings.on_session_ready', settings.on_session_ready, 'function', true)
 end
 
+--- A window that shows `buffer`, one in the current tab page when there is
+--- one; nil when none does.
+---
+---@param buffer integer
+---@return integer?
+local function window_showing(buffer)
+  local windows = vim.fn.win_findbuf(buffer)
+  local current_page = vim.api.nvim_get_current_tabpage()
+  return vim.iter(windows):find(function(window)
+    return vim.api.nvim_win_get_tabpage(window) == current_page
+  end) or windows[1]
+end
+
 --- Runs `command` as a terminal job in the new, empty `buffer` and returns the
---- job's id. When `jobstart()` cannot run it, wipes `buffer` and raises an error
---- naming the command: `jobstart()`'s own, or, when `:silent!` has silenced
---- that and `jobstart()` has returned 0 or -1 instead, one of its own.
+--- job's id. The job runs in a window that shows `buffer` (`window_showing()`),
+--- so that its terminal has the size of that window, also when the window is
+--- in another tab page; a buffer no window shows runs it in the autocommand
+--- window, where the terminal is 5 rows tall. When `jobstart()` cannot run it,
+--- wipes `buffer` and raises an error naming the command: `jobstart()`'s own,
+--- or, when `:silent!` has silenced that and `jobstart()` has returned 0 or -1
+--- instead, one of its own.
 ---
 ---@param buffer integer
 ---@param command string[]
 ---@param options table `jobstart()`'s options, `term = true` among them
 ---@return integer job
 local function run_in_terminal(buffer, command, options)
-  local started, job = pcall(vim.api.nvim_buf_call, buffer, function()
-    return vim.fn.jobstart(command, options)
-  end)
+  local window = window_showing(buffer)
+  local started, job = pcall(
+    window and vim.api.nvim_win_call or vim.api.nvim_buf_call,
+    window or buffer,
+    function()
+      return vim.fn.jobstart(command, options)
+    end
+  )
   if not started or job <= 0 then
     vim.api.nvim_buf_delete(buffer, { force = true })
     error(started and ('jobstart() cannot run ' .. command[1]) or job, 0)
@@ -983,9 +1005,11 @@ end
 ---
 --- With `settings.resume_session`, a session id of the form Claude Code
 --- gives, Claude Code resumes that session in place of the kept one — also
---- where none is kept — and nothing is kept for `settings.cwd`: the session
---- the next start there lands in stays what it was. The start is a resume in
---- every other way, below.
+--- where none is kept — and that start keeps nothing for `settings.cwd`: the
+--- session the next start there lands in stays what it was, until a new
+--- session takes the place of a resume with no conversation (below), a
+--- switch inside Claude Code is followed, or `keep_session()` is called. The
+--- start is a resume in every other way, below.
 ---
 --- A start that resumes first lists the sessions of `settings.cwd`
 --- (`agents.list_sessions()`, bounded at 5 s) and launches Claude Code, in
@@ -1336,6 +1360,18 @@ end
 ---@return string?
 function M.kept_session(state_directory, folder)
   return session_ids.kept_session_id(state_directory, folder)
+end
+
+--- Keeps `id` as the session id of the working directory `folder` under
+--- `state_directory`, in place of any kept before (`kept_session()` reads it):
+--- the session the next start there resumes. Raises an error naming the file
+--- when it cannot be written, and leaves the kept id as it was.
+---
+---@param state_directory string
+---@param folder string
+---@param id string a session id of the form Claude Code gives
+function M.keep_session(state_directory, folder, id)
+  session_ids.keep_session_id(state_directory, folder, id)
 end
 
 --- Whether `text` is a session id of the form Claude Code gives, a

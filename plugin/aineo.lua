@@ -481,9 +481,18 @@ local tabs_reopening = false
 --- `keep_tabs()`): the session of each tab whose layout is in a tab page, in
 --- the order of the tab pages, and the place of the tab whose tab page is
 --- current, or of the tab used last (`last_used_tab`) when the current tab
---- page is none of aineo's. Keeps nothing when no tab has a session; a list
+--- page is none of aineo's. `not_opened` are sessions a reopening has not
+--- opened (cut off, or not tried): they follow those of the tabs in the list.
+--- Keeps nothing when no tab and none of `not_opened` has a session; a list
 --- that cannot be kept is told the user once (`run()`).
-local function write_folder_tabs()
+---
+--- When the session kept for the folder (the one the next start without a
+--- list lands in) is not in the list, the session at the list's place is kept
+--- in its stead (`aineo.claude`'s `keep_session()`): a tab closed whose
+--- session was the kept one is not brought back alone by the next start.
+---
+---@param not_opened? string[]
+local function write_folder_tabs(not_opened)
   local current = tab_of_current_page()
   if not current and last_used_tab and last_used_tab.is_bound() then
     current = last_used_tab
@@ -501,24 +510,42 @@ local function write_folder_tabs()
   local list = tabs.list_of_tabs(vim.tbl_map(function(tab)
     return { session = tab.session_id(), current = tab == current }
   end, bound))
+  list = list or (not_opened and #not_opened > 0 and { sessions = {}, current = 1 }) or nil
   if not list then
     return
+  end
+  for _, session in ipairs(not_opened or {}) do
+    if not vim.tbl_contains(list.sessions, session) then
+      table.insert(list.sessions, session)
+    end
   end
   local folder = kept_places()
   run(function()
     tabs.keep_tabs(folder.state_directory, folder.working_directory, list)
+    local claude = require('aineo.claude')
+    local kept = claude.kept_session(folder.state_directory, folder.working_directory)
+    if not vim.tbl_contains(list.sessions, kept) then
+      claude.keep_session(
+        folder.state_directory,
+        folder.working_directory,
+        list.sessions[list.current]
+      )
+    end
   end)
 end
 
 --- Keeps the folder's list of tabs (`write_folder_tabs()`) as a tab opens or
 --- closes or a tab's session changes. Does nothing while tabs reopen, and
 --- once Neovim is quitting: the list is kept at the quit, before the Claude
---- Codes are stopped (`keep_folder_tabs_at_quit()`).
-local function keep_folder_tabs()
+--- Codes are stopped (`keep_folder_tabs_at_quit()`). `not_opened` as
+--- `write_folder_tabs()` takes it.
+---
+---@param not_opened? string[]
+local function keep_folder_tabs(not_opened)
   if tabs_reopening or vim.v.exiting ~= vim.NIL then
     return
   end
-  write_folder_tabs()
+  write_folder_tabs(not_opened)
 end
 
 --- The place of each tab page of this editor that shows a Claude session,
@@ -1128,6 +1155,10 @@ local function make_tab(homes, key, on_bound)
     }
   end
 
+  --- Whether the tab was opened from the folder's list (`open_on_session()`):
+  --- it starts in the folder, as every tab after the first.
+  local opened_from_list = false
+
   --- The directory a start of the tab's Claude Code runs in. The first tab
   --- starts where the editor is, as it always has: Claude Code follows `:cd`
   --- there, each directory resuming its own session. Every tab after it, and
@@ -1137,7 +1168,7 @@ local function make_tab(homes, key, on_bound)
   ---
   ---@return string
   local function start_directory()
-    if key == nil and not is_reopened then
+    if key == nil and not is_reopened and not opened_from_list then
       return vim.fn.getcwd()
     end
     return kept_places().working_directory
@@ -1807,6 +1838,7 @@ local function make_tab(homes, key, on_bound)
   ---
   ---@param id string
   local function open_on_session(id)
+    opened_from_list = true
     local config = resolved_config()
     open_layout_around(config, claude_terminal_resuming(config, id))
   end
@@ -2498,9 +2530,11 @@ local first_open_pending = true
 
 --- The list of tabs to reopen in the editor's folder: the list kept for it
 --- when it holds the session kept for the folder (`aineo.tabs`'
---- `tabs_to_reopen()`); nil when there is none.
+--- `tabs_to_reopen()`), cut to the most tabs a reopening opens, and the
+--- sessions cut off; nil when there is none.
 ---
 ---@return aineo.tabs.TabList|nil
+---@return string[]|nil left
 local function folder_tabs_to_reopen()
   local folder = kept_places()
   local kept =
@@ -2517,10 +2551,13 @@ end
 --- its order, the first in the current tab page and each next one after the
 --- tab before it (`open_new_tab()`), each with its Claude Code started on its
 --- session at once (`aineo.entry.Tab`'s `open_on_session()`), and moves to the
---- tab at the list's place among them. The list is kept once all have opened.
---- The first open uses the list once: later runs, and an open that finds no
---- such list, open as they always have (returns false). A tab that cannot
---- start raises its error and leaves the tabs opened before it.
+--- tab at the list's place among them. The list is kept once all have opened,
+--- with the sessions cut off by the most tabs a reopening opens, which the user
+--- is told of. The first open uses the list once: later runs, and an open that
+--- finds no such list, open as they always have (returns false). A tab that
+--- cannot start raises an error that names its session and those not tried,
+--- leaves the tabs opened before it, and keeps the sessions not tried in the
+--- list.
 ---
 ---@return boolean reopened
 local function reopen_folder_tabs()
@@ -2533,31 +2570,64 @@ local function reopen_folder_tabs()
   end) then
     return false
   end
-  local list = folder_tabs_to_reopen()
+  local list, left = folder_tabs_to_reopen()
   if not list then
     return false
   end
-  local opened = {}
+  local opened, failed_at = {}, nil
   tabs_reopening = true
   local reopened, failure = pcall(function()
-    for _, session in ipairs(list.sessions) do
+    for index, session in ipairs(list.sessions) do
+      failed_at = index
       open_new_tab(function(tab)
         tab.open_on_session(session)
         table.insert(opened, tab)
       end)
     end
+    failed_at = nil
   end)
   tabs_reopening = false
+  local untried = vim.list_slice(list.sessions, (failed_at or #list.sessions) + 1)
+  vim.list_extend(untried, left)
   local current = opened[list.current]
   if current and current.is_bound() then
     vim.api.nvim_set_current_tabpage(current.page())
   end
-  keep_folder_tabs()
+  keep_folder_tabs(untried)
   if not reopened then
-    error(failure, 0)
+    local cause = tostring(failure):match('^[^\n]*')
+    error(
+      ('reopening stopped at %s: %s%s'):format(
+        list.sessions[failed_at],
+        cause,
+        #untried > 0 and '; not tried: ' .. table.concat(untried, ', ') or ''
+      ),
+      0
+    )
+  end
+  if #left > 0 then
+    vim.notify(
+      ('aineo: reopened the first %d tabs of the list; %d more stay in the list'):format(
+        #list.sessions,
+        #left
+      ),
+      vim.log.levels.WARN
+    )
   end
   return true
 end
+
+--- The arguments of `:Aineo` that open a tab's pieces when none is open: the
+--- first run of one in an editor reopens the folder's tabs first
+--- (`reopen_folder_tabs()`), so that the list is not replaced by the one
+--- session it opens.
+local REOPENS_TABS_FIRST = {
+  claude = true,
+  report = true,
+  input = true,
+  ['pane agent'] = true,
+  ['pane changes'] = true,
+}
 
 --- What each of `:Aineo`'s arguments in `ACTION_ARGUMENTS` does: the actions
 --- that act on a tab (`aineo.entry.Tab`'s `actions`) on the tab to act on
@@ -2578,6 +2648,9 @@ for _, argument in ipairs({
   'pane changes',
 }) do
   ACTIONS[argument] = function()
+    if REOPENS_TABS_FIRST[argument] then
+      reopen_folder_tabs()
+    end
     acting_tab().actions[argument]()
   end
 end
@@ -2593,6 +2666,7 @@ ACTIONS.open = function()
 end
 
 ACTIONS['tab new'] = function()
+  reopen_folder_tabs()
   open_new_tab()
 end
 
