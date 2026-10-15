@@ -22,17 +22,20 @@ local RECORDS_KEPT_BYTES = 2 * 1024 * 1024
 
 --- The file that holds the records of the reports received in
 --- `working_directory`: one per directory, named by the directory's SHA-256
---- so that any path makes a valid file name of the same length.
+--- so that any path makes a valid file name of the same length. With a
+--- `label`, the file of the same directory that the labelled copy of the
+--- report home keeps, a name no other label and no unlabelled file shares.
 ---
 ---@param state_directory string
 ---@param working_directory string
+---@param label? string
 ---@return string
-function M.records_file(state_directory, working_directory)
+function M.records_file(state_directory, working_directory, label)
   return vim.fs.joinpath(
     state_directory,
     'aineo',
     'reports',
-    vim.fn.sha256(working_directory) .. '.jsonl'
+    vim.fn.sha256(working_directory) .. (label and '-' .. label or '') .. '.jsonl'
   )
 end
 

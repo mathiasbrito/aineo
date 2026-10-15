@@ -6,6 +6,29 @@ local layout = require('aineo.layout')
 
 local M = {}
 
+--- Where a Send reads from and writes to, when not the defaults: the Input
+--- buffer to read (`layout.input_buffer()` by default) and the Claude Code
+--- session home to write to and to ask whether Claude Code is ready (the
+--- `aineo.claude` module's own by default, which has the same functions as
+--- a home made by `claude.new()`).
+---@class aineo.send.Target
+---@field input? integer an Input buffer
+---@field session? aineo.claude.Session a Claude Code session home
+
+--- `target`, or an empty target when it is nil. Raises an error naming the
+--- field, as `vim.validate()` words it, when `target` is not a table, its
+--- `input` not a buffer number or its `session` not a table.
+---
+---@param target? aineo.send.Target
+---@return aineo.send.Target
+local function validated(target)
+  vim.validate('target', target, 'table', true)
+  target = target or {}
+  vim.validate('target.input', target.input, 'number', true)
+  vim.validate('target.session', target.session, 'table', true)
+  return target
+end
+
 --- The bytes that open and close a bracketed paste, and the Enter key's.
 local PASTE_START = '\27[200~'
 local PASTE_END = '\27[201~'
@@ -42,12 +65,14 @@ local function refuse(reason)
   vim.notify(REFUSALS[reason], vim.log.levels.WARN)
 end
 
---- The Input buffer, while there is one: `nil` before the layout has made
---- it, and once it has been wiped.
+--- The Input buffer `target` names, or the layout's when it names none,
+--- while there is one: `nil` before the layout has made it, and once it has
+--- been wiped.
 ---
+---@param target aineo.send.Target
 ---@return integer? input
-local function existing_input()
-  local input = layout.input_buffer()
+local function existing_input(target)
+  local input = target.input or layout.input_buffer()
   if input and vim.api.nvim_buf_is_valid(input) then
     return input
   end
@@ -82,15 +107,17 @@ local function pasteable_text(input)
   return without_control_bytes(table.concat(lines, '\n'))
 end
 
---- Writes `text` to Claude Code's terminal as one bracketed paste followed
---- by Enter, in one write. When the write fails, calls `put_back()`, which
---- puts Input back as it was before Send changed it, and raises the write's
---- error as it is.
+--- Writes `text` to the terminal of `session`'s Claude Code as one bracketed
+--- paste followed by Enter, in one write. When the write fails, calls
+--- `put_back()`, which puts Input back as it was before Send changed it, and
+--- raises the write's error as it is.
 ---
+---@param session aineo.claude.Session
 ---@param text string
 ---@param put_back fun()
-local function write_or_put_back(text, put_back)
-  local written, failure = pcall(claude.write_to_session, PASTE_START .. text .. PASTE_END .. ENTER)
+local function write_or_put_back(session, text, put_back)
+  local written, failure =
+    pcall(session.write_to_session, PASTE_START .. text .. PASTE_END .. ENTER)
   if not written then
     put_back()
     error(failure, 0)
@@ -119,8 +146,19 @@ end
 --- raises the write's error as it is (`Can't send data to closed stream`).
 --- While the stream is still open the write succeeds into the dead terminal:
 --- Input is emptied and nothing is raised.
-function M.send()
-  local input = existing_input()
+---
+--- With `target`, Send reads that Input buffer in place of the layout's, and
+--- writes to that session home's Claude Code and asks its status in place of
+--- the module's, with every refusal above: a session home that is not ready
+--- is refused whatever any other is. Raises an error naming the field when
+--- `target`, its `input` or its `session` is of the wrong kind, before
+--- anything is read or sent.
+---
+---@param target? aineo.send.Target
+function M.send(target)
+  target = validated(target)
+  local session = target.session or claude
+  local input = existing_input(target)
   if not input then
     return refuse('no_input')
   end
@@ -128,13 +166,13 @@ function M.send()
   if not text:find('%S') then
     return refuse('empty')
   end
-  local status = claude.session_status()
+  local status = session.session_status()
   if status ~= 'ready' then
     return refuse(status or 'not_started')
   end
   local lines = vim.api.nvim_buf_get_lines(input, 0, -1, false)
   vim.api.nvim_buf_set_lines(input, 0, -1, false, {})
-  write_or_put_back(text, function()
+  write_or_put_back(session, text, function()
     vim.api.nvim_buf_set_lines(input, 0, -1, false, lines)
   end)
 end
@@ -316,9 +354,17 @@ end
 --- `'<` and `'>`, so that `gv` selects it again, and raises the write's
 --- error as it is, as `send()` does: the removal and the put-back are then
 --- one undo block, which `u` undoes with no change to see.
-function M.send_selection()
+---
+--- With `target`, the Input is the buffer it names in place of the layout's,
+--- and the Claude Code is that session home's, as `send()` takes them, with
+--- the same error for a `target` of the wrong kind.
+---
+---@param target? aineo.send.Target
+function M.send_selection(target)
+  target = validated(target)
+  local session = target.session or claude
   local input = vim.api.nvim_get_current_buf()
-  if input ~= existing_input() then
+  if input ~= existing_input(target) then
     return refuse_selection('not_in_input')
   end
   local from, to = vim.fn.getpos('v'), vim.fn.getpos('.')
@@ -326,14 +372,14 @@ function M.send_selection()
   if not without_control_bytes(table.concat(selection.parts, '\n')):find('%S') then
     return refuse_selection('empty_selection')
   end
-  local status = claude.session_status()
+  local status = session.session_status()
   if status ~= 'ready' then
     return refuse_selection(status or 'not_started')
   end
   local lines = vim.api.nvim_buf_get_lines(input, 0, -1, false)
   vim.cmd.normal({ args = { '"_d' }, bang = true })
   local removed = removed_text(selection, #lines - vim.api.nvim_buf_line_count(input))
-  write_or_put_back(without_control_bytes(removed), function()
+  write_or_put_back(session, without_control_bytes(removed), function()
     vim.api.nvim_buf_set_lines(input, 0, -1, false, lines)
     vim.fn.setpos("'<", from)
     vim.fn.setpos("'>", to)

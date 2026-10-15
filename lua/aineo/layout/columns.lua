@@ -40,7 +40,7 @@ end
 ---@return table|nil row a `{ 'row', nodes }` node of `tree`
 local function deepest_row_holding(tree, windows)
   local row = nil
-  local node = tree
+  local node = holds_all(tree, windows) and tree or nil
   while node do
     if node[1] == 'row' then
       row = node

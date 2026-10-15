@@ -1,0 +1,34 @@
+shell: /bin/zsh | nvim 0.12.5
+Q1 exit 0, argv = shell | argv: /bin/zsh
+  buffer valid: false | Report window valid: false 
+  events: WinClosed(win 1001) BufUnload(buf 5) BufDelete(buf 5) BufWipeout(buf 5) TermClose(buf 5)
+Q2 exit 3, argv = shell | argv: /bin/zsh
+  buffer valid: true | Report window valid: true shows buffer 9
+  events: TermClose(buf 9)
+Q3 exit 0, argv = shell -i | argv: /bin/zsh -i
+  buffer valid: true | Report window valid: true shows buffer 13
+  events: TermClose(buf 13)
+Q4 :bdelete! while running | argv: /bin/zsh
+  buffer valid: false | Report window valid: false 
+  events: WinClosed(win 1007) TermClose(buf 17) BufUnload(buf 17) BufDelete(buf 17) BufWipeout(buf 17)
+Q5 :bwipeout! while running | argv: /bin/zsh
+  buffer valid: false | Report window valid: false 
+  events: WinClosed(win 1010) TermClose(buf 21) BufUnload(buf 21) BufDelete(buf 21) BufWipeout(buf 21)
+Q6 :bdelete raises: E89: term
+Q6 :bdelete while running | argv: /bin/zsh
+  buffer valid: true | Report window valid: true shows buffer 25
+  events: 
+Q7 :bwipeout! with the Report put back on BufUnload | argv: /bin/zsh
+  buffer valid: false | Report window valid: false 
+  events: WinClosed(win 1014) TermClose(buf 29) BufUnload(buf 29) BufDelete(buf 29) BufWipeout(buf 29)
+Q8 Report put back, then nvim_buf_delete | argv: /bin/zsh
+  buffer valid: false | Report window valid: true shows the Report
+  events: TermClose(buf 33) BufUnload(buf 33) BufDelete(buf 33) BufWipeout(buf 33)
+Q9 env 1 inherited -> NVIM|CLAUDE_PROBE|AINEO_CHILD = set|set|unset
+Q9 env 2 env AINEO_CHILD=1 -> NVIM|CLAUDE_PROBE|AINEO_CHILD = set|set|1
+Q9 env 3 clear_env, CLAUDE* left out -> NVIM|CLAUDE_PROBE|AINEO_CHILD = set|unset|unset
+Q10 cwd given: the given folder
+
+Q11 :qa with a running terminal: (nothing after the colon: Neovim quit)
+
+Q12 the shell at quit: hup

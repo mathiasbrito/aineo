@@ -16,6 +16,16 @@ local PREFIX_KEYS = {
   { 'N', '<Plug>(aineo-new)', 'n' },
   { 'pa', '<Plug>(aineo-pane-agent)', 'n' },
   { 'g', '<Plug>(aineo-pane-changes)', 'n' },
+  { 'T', '<Plug>(aineo-tab-new)', 'n' },
+  { '1', '<Plug>(aineo-tab-1)', 'n' },
+  { '2', '<Plug>(aineo-tab-2)', 'n' },
+  { '3', '<Plug>(aineo-tab-3)', 'n' },
+  { '4', '<Plug>(aineo-tab-4)', 'n' },
+  { '5', '<Plug>(aineo-tab-5)', 'n' },
+  { '6', '<Plug>(aineo-tab-6)', 'n' },
+  { '7', '<Plug>(aineo-tab-7)', 'n' },
+  { '8', '<Plug>(aineo-tab-8)', 'n' },
+  { '9', '<Plug>(aineo-tab-9)', 'n' },
   { 's', '<Plug>(aineo-send)', 'x' },
 }
 

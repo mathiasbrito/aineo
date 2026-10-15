@@ -1,14 +1,14 @@
 ---
 wave: 00012
-status: planned
+status: landed
 rolling: false
 planned_by: the orchestrator's planning agent (Claude, Opus 5.5) for the user
 planned_at: 2026-10-12
 base: 0fa0116
 claimed_by:
 claimed_at:
-landed_at:
-pull_requests:
+landed_at: 2026-10-14
+pull_requests: "#186, #187, #189, #200"
 ---
 
 # Wave 12 — a start that resumes a background session
@@ -457,7 +457,7 @@ Each is the orchestrator's assumption under the user's instruction of 2026-10-06
 
 ## Landed
 
-Not yet: the wave stays open for T48 part 2 (the question, the attach, the Ctrl+Z stop), which is held for the user's check M16. The frontmatter's status is not changed. Part 1 landed, and is recorded here on 2026-10-14 by the wave 14 knowledge pass, on `dev` `bdc33ce`.
+Written in two passes. Part 1 landed and was recorded on 2026-10-14 by the wave 14 knowledge pass, on `dev` `bdc33ce`. Part 2 landed and is recorded on 2026-10-14 by the wave 12 closing pass, on `dev` `9f11f11`, and the wave is landed. The rulings below are the orchestrator's assumptions under the user's instruction of 2026-10-06, none a decision of the user's; the user's own words are in *The user's answers* and in D62.
 
 ### Part 1 — T48 (the list before a start, the waiting start, the warning), PR #189, merged by rebase (`dev` `7856882`), released in v0.2.29 (PR #190, `main` `fa12b82`)
 
@@ -476,9 +476,40 @@ Session note: [[Sessions/2026-10-12 — T55 Pane cursor]]. Dispatched on `dev` `
 - **The orchestrator's check:** the touched suites `Fails (0)`, lint clean, the cursor-move mutant killed (15). No guarantee review; the diff was read.
 - **Departures.** None recorded.
 
-### Rulings — the orchestrator's assumptions
+### Part 2 — T48 (the attach, the Ctrl+Z stop, `(attached)`, the kept id, `\S` joining), PR #200, merged by rebase (`dev` `9f11f11`), released in v0.2.33 (PR #202, `main` `60e5ed6`)
+
+`9b39a0a` … `b868d84` on the branch (9 commits), `42f6db4` … `9f11f11` on `dev`. Session note: [[Sessions/2026-10-14 — T48 Attach]]. Dispatched on `dev` `1354cad` (`neovim-claude-code-integrator`, Sonnet), held until the user ran M16.
+- **The dispatch (A223).** The brief's two amendments of 2026-10-14 fold the user's words into part 2: M16's report, "when reopening I must land in the session to open on the window" (the kept id follows the window, superseding "kept id unchanged after an attach"), and the answer "Attach straight away" (no question at start; the user's decision replaced "Ask at start"). A223 is the orchestrator's reading that the amendment is faithful to those words.
+- **The `\S` addition (A224).** While the packet ran the user decided "yes, make \S attach to running sessions too", superseding R3's refusal; it reached the author by message and became D62. A session running in the background with a short id is attached to; one open only in another interactive Claude Code has no short id and is resumed with A166's warning; a pick of this terminal's row still switches nothing.
+- **The packet** (whole suite 3184 at 4 jobs, 12 cases seen red, 12 mutants of the first round). A start that would resume attaches (`claude attach <short id>`, none of aineo's flags) when the list shows the kept session running in the background; the status line reads `(attached)`; the quit presses Ctrl+Z and hangs the terminal up if it has not detached; an attach's "no conversation" starts nothing new; `\S` joins a session running elsewhere. The two failures of that run were `tests/test_entry_panes.lua` command-line-window cases, a load flake that fails on plain `dev` too and passes alone.
+- **Reviews.**
+  - *Attack (`neovim-claude-code-reviewer`, Opus):* eight findings, the guarantee holding for terminals aineo flags as attached but defeated by aineo's own writes. 1 and 2, Medium: `\N` in an attached window wrote `/clear`, and `\S`'s switch to a session that does not run wrote `/resume`, into the background session. 3, Medium: `\S` joined a running session of another folder. 4, Medium: the interactive row of a session also listed in the background was resumed, not attached. 5, Low: after a join the cursor was in Normal mode. 6, Low: a join that raised left `start_confirmed` false. 7, Low: an attach that exits at once left a dead window. 8, residual: a terminal Claude Code attaches by itself is not flagged.
+  - *Tests and records (`records-reviewer`, Sonnet):* the join's stop of an unattached window unpinned; the hang-up mutant P6 not equivalent, and the author's rule that a pin needs a process deaf to the hangup was wrong; two attach lines without a case; vacuous negative start counts; mutant E surviving; four stale docstrings; the 4 s derived two ways; a commit subject over the limit; a help wording.
+- **Fix round** by the author (A225–A231): one replace path for an attached window (`is_attached()`, `replace_session()`), so `\N` and `\S` write no slash command into it; `\S` refuses a running session of another folder; the picked id attaches when the re-read list holds its background entry; the refocus from a once-only `ModeChanged` autocommand; settings built first and the join under `pcall`; an attach that fails within 2 s is followed by a resume; the help names the self-attach limit; a case for each survivor (C3, P5, A, B, E); the stale docstrings corrected. Commit `9b39a0a`'s subject is 74 characters; it is pushed and was not amended.
+- **A232 and its withdrawal (A233).** After the user's M17 the orchestrator ruled (A232) that the terminal's own line `Opening "<title>", running in the background (<id>)` would mark a window attached, and the author built it. At its check on `e0989f2` the orchestrator found that the author's reading of the last 40 lines from the terminal's start would also match the lines a resumed conversation's own history holds, marking a reopened window attached, making another session the kept one and pressing Ctrl+Z at quit; the user's first paste also shows the line printed with no attach following. A233 withdrew A232 before merge: `self_attach.lua`, its wiring, its cases and its mutants SA1–SA3 were removed in one extra round, justified by a defect in the orchestrator's own ruling. A231 stands.
+- **The orchestrator's check** at `b868d84` on `dev` `1354cad`: whole suite 3194 cases, `Fails (0)`, lint clean; the attached-window replace mutants for `\N` (in `tests/test_entry_sessions.lua`) and `\S` killed by assertion. The fix round's mutant J (another start taking an attach's place before its callback runs) survived: no case builds it.
+- **Departures.** The brief's "attach too" for a session open only in another interactive Claude Code became a resume with the warning, since no short id exists for `claude attach` to take (A225). The boundary widened to `plugin/aineo.lua`, `tests/test_entry_sessions.lua` and the plan note's rows, by the orchestrator's `\S` message, and to `plugin/aineo.lua`'s `new_session()` by A226. `DETACH_WAIT_MS` (4 s) was chosen, not measured: M16 gave no time (A227). T59's test-only commit, merged before this part, reached `main` with v0.2.33.
+
+### Rulings of part 2 — the orchestrator's assumptions
+
+- **A223** the dispatch amendment is a faithful reading of the user's words. **A224** the details of `\S`'s join.
+- **A225** a session open only in another interactive Claude Code is resumed in the window with A166's warning. **A226** no aineo write of a slash command reaches an attached session: `\N` and `\S`'s switch go through one replace path. **A227** the Ctrl+Z wait stays 4 s, ending as the process exits.
+- **A228** `\S` refuses a running session of another folder. **A229** the pick attaches to the background entry when the re-read list holds one. **A230** an attach that exits with a failure within 2 s is followed by a resume; the real `claude attach` output for a gone session is unmeasured. **A231** a terminal Claude Code attaches by itself is unknown to aineo; the help says so; M17.
+- **A232** the screen line as the sign of a self-attach. **A233** withdraws A232.
+
+### Rulings of part 1 — the orchestrator's assumptions
 
 - **A192** the waiting buffer is not modifiable, and `\c` enters Terminal or Insert mode only in a terminal buffer (the attack review's finding 1).
 - **A193** `pcall` around `nvim_del_autocmd` in `agents.lua`, so a user's `:autocmd! VimLeavePre` cannot keep the list's callback from running.
 - **A194** the two stale comments (`readiness.lua`, `plugin/aineo.lua`) corrected.
 - **A195** the two points that need the real CLI (a hung-up Claude Code still listed right after a wipe; whether `claude agents --json` starts or stops the background service at every resume) are the user's checks, steps 9 and 10 of M16, and no code.
+
+### Wave 12 closed
+
+Wave 12 landed on 2026-10-14. Its packets are T48 part 1 (PR #189, v0.2.29), the session list before a start and the waiting start; T55 (PR #187, v0.2.28), a small fix taken in beside it; and T48 part 2 (PR #200, v0.2.33), the attach, the Ctrl+Z stop, the kept id following the window, and `\S` joining sessions that run elsewhere. Releases v0.2.29 and v0.2.33 (v0.2.28 carries T55). The suite grew from 3163 cases at part 2's base to 3194 on the last whole run. Retrospective: [[Sessions/2026-10-14 — Wave 12 retrospective]].
+
+**Open threads at the close:**
+- A terminal Claude Code attaches by itself (a `/resume` typed inside aineo's Claude) is unknown to aineo: its quit would press Ctrl-C into it (A231).
+- The real `claude attach` output for an ended session is unmeasured (A230); the 4 s wait of the Ctrl+Z stop is unmeasured (A227).
+- The user's checks M9 and M10 for aineo's quit of its own session are not in.
+- The `tests/test_entry_panes.lua` command-line-window cases fail under load on plain `dev` as well as on part 2's tree.

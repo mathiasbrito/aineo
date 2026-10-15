@@ -106,6 +106,21 @@ local RECEIVE_AT_START = [[
   return true
 ]]
 
+--- The options of an offer in `context`: `options`, and the start token of
+--- the server's Claude Code as `start_token` while the server knows one, so
+--- that the editor's report home can route the report to the tab whose
+--- Claude Code sent it. Without a token the options are `options` alone.
+---
+---@param context aineo.mcp.DeliveryContext
+---@param options table?
+---@return table?
+local function offer_options(context, options)
+  if not context.token then
+    return options
+  end
+  return vim.tbl_extend('force', options or {}, { start_token = context.token })
+end
+
 --- The outcome of a search that ended at an offer of `kind`, which said
 --- `explanation`, with `told` for Claude when it was taken.
 ---
@@ -133,12 +148,30 @@ local function passes_on(kind)
   return kind == 'unreachable' or kind == 'declined'
 end
 
+--- Removes the entries of the editor at `address`, whatever their tab, from
+--- `entries`, the list of running editors as it was read before the offers
+--- (`editors.read_entries()`), each if its file still holds what was read:
+--- an entry an editor wrote since stays.
+---
+---@param context aineo.mcp.DeliveryContext
+---@param entries aineo.mcp.ListedEntry[]
+---@param address string
+local function remove_entries_of(context, entries, address)
+  for _, listed in ipairs(entries) do
+    if listed.entry.address == address then
+      editors.remove_listed(context.state_directory, listed)
+    end
+  end
+end
+
 --- Offers `valid_report` of `session` to the editors listed as showing it,
 --- the most recently used first — a tie to the entry whose file name sorts
 --- first — but those in `tried` and those that may not be tried
---- (`editors.may_be_tried()`). An entry whose editor cannot be reached is
---- removed, if it still holds what was read. Returns how the offer that
---- ended the search went, or nil when every editor passed it on.
+--- (`editors.may_be_tried()`). An editor listed for several tabs on the
+--- session is offered it once, at its most recently used tab's turn, and is
+--- added to `tried`. An editor that cannot be reached loses every entry,
+--- each if it still holds what was read. Returns how the offer that ended
+--- the search went, or nil when every editor passed it on.
 ---
 ---@param context aineo.mcp.DeliveryContext
 ---@param session string
@@ -147,11 +180,12 @@ end
 ---@return 'delivered'|'unconfirmed'|'failed'|nil outcome
 ---@return string? explanation
 local function offer_to_listed(context, session, valid_report, tried)
+  local entries = editors.read_entries(context.state_directory)
   local candidates = vim.tbl_filter(function(listed)
     return listed.entry.session == session
       and not tried[listed.entry.address]
       and editors.may_be_tried(listed.entry.address)
-  end, editors.read_entries(context.state_directory))
+  end, entries)
   table.sort(candidates, function(a, b)
     if a.entry.used ~= b.entry.used then
       return a.entry.used > b.entry.used
@@ -159,15 +193,19 @@ local function offer_to_listed(context, session, valid_report, tried)
     return a.name < b.name
   end)
   for _, listed in ipairs(candidates) do
-    local kind, explanation = editor.offer_report(
-      listed.entry.address,
-      { lua = RECEIVE_SESSION_REPORT, arguments = { valid_report, session } }
-    )
-    if kind == 'unreachable' then
-      editors.remove_listed(context.state_directory, listed)
-    end
-    if not passes_on(kind) then
-      return ended_by(kind, explanation, TOLD.shown_elsewhere)
+    local address = listed.entry.address
+    if not tried[address] then
+      tried[address] = true
+      local kind, explanation = editor.offer_report(address, {
+        lua = RECEIVE_SESSION_REPORT,
+        arguments = { valid_report, session, offer_options(context) },
+      })
+      if kind == 'unreachable' then
+        remove_entries_of(context, entries, address)
+      end
+      if not passes_on(kind) then
+        return ended_by(kind, explanation, TOLD.shown_elsewhere)
+      end
     end
   end
 end
@@ -196,20 +234,17 @@ local function offer_to_claimant(context, session, valid_report, tried)
     return nil
   end
   tried[claim.address] = true
-  local kind, explanation = editor.offer_report(
-    claim.address,
-    { lua = RECEIVE_SESSION_REPORT, arguments = { valid_report, session } }
-  )
+  local entries = editors.read_entries(context.state_directory)
+  local kind, explanation = editor.offer_report(claim.address, {
+    lua = RECEIVE_SESSION_REPORT,
+    arguments = { valid_report, session, offer_options(context) },
+  })
   if not passes_on(kind) then
     return ended_by(kind, explanation, TOLD.claimant)
   end
   editors.release(context.state_directory, session, claim.address)
   if kind == 'unreachable' then
-    for _, listed in ipairs(editors.read_entries(context.state_directory)) do
-      if listed.entry.address == claim.address then
-        editors.remove_listed(context.state_directory, listed)
-      end
-    end
+    remove_entries_of(context, entries, claim.address)
   end
 end
 
@@ -239,8 +274,11 @@ end
 --- explanation always given. The report's session is the one the record
 --- of the server's Claude Code process names, else its first
 --- (`report_session()`). With none known, the report goes to the editor
---- that started Claude Code as it always has
---- (`editor.deliver_report()`). With one, it is offered in turn:
+--- that started Claude Code (`editor.deliver_report()`), offered to its
+--- report home with the options of the offer to the starting editor (item
+--- 2 below: `at_start` and the start token). With one, it is
+--- offered in turn; every offer carries the server's start token as
+--- `options.start_token` while it knows one (`offer_options()`):
 ---
 --- 1. to the editor at the address of the session's claim file, unless it
 ---    is the starting editor or may not be tried: taken, unconfirmed or
@@ -267,7 +305,7 @@ function M.deliver(context, valid_report)
   local session = report_session(context)
   if not session then
     local outcome, explanation, unreachable =
-      editor.deliver_report(context.editor_address, valid_report)
+      editor.deliver_report(context.editor_address, valid_report, offer_options(context, AT_START))
     if unreachable then
       explanation = explanation .. NO_SESSION
     end
@@ -283,10 +321,10 @@ function M.deliver(context, valid_report)
   local starting_declined = false
   if starting then
     tried[starting] = true
-    local kind, explanation = editor.offer_report(
-      starting,
-      { lua = RECEIVE_AT_START, arguments = { valid_report, session, AT_START } }
-    )
+    local kind, explanation = editor.offer_report(starting, {
+      lua = RECEIVE_AT_START,
+      arguments = { valid_report, session, offer_options(context, AT_START) },
+    })
     if not passes_on(kind) then
       return ended_by(kind, explanation, TOLD.delivered)
     end
@@ -297,10 +335,10 @@ function M.deliver(context, valid_report)
     return outcome, explanation
   end
   if starting_declined then
-    local kind, kept_explanation = editor.offer_report(
-      starting,
-      { lua = RECEIVE_AT_START, arguments = { valid_report, session, KEEP_WITH_DIRECTORY } }
-    )
+    local kind, kept_explanation = editor.offer_report(starting, {
+      lua = RECEIVE_AT_START,
+      arguments = { valid_report, session, offer_options(context, KEEP_WITH_DIRECTORY) },
+    })
     if not passes_on(kind) then
       return ended_by(kind, kept_explanation, TOLD.kept)
     end

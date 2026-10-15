@@ -35,6 +35,16 @@ local TWIN_KEYS = {
   { 'N', '<Plug>(aineo-new)' },
   { 'pa', '<Plug>(aineo-pane-agent)' },
   { 'g', '<Plug>(aineo-pane-changes)' },
+  { 'T', '<Plug>(aineo-tab-new)' },
+  { '1', '<Plug>(aineo-tab-1)' },
+  { '2', '<Plug>(aineo-tab-2)' },
+  { '3', '<Plug>(aineo-tab-3)' },
+  { '4', '<Plug>(aineo-tab-4)' },
+  { '5', '<Plug>(aineo-tab-5)' },
+  { '6', '<Plug>(aineo-tab-6)' },
+  { '7', '<Plug>(aineo-tab-7)' },
+  { '8', '<Plug>(aineo-tab-8)' },
+  { '9', '<Plug>(aineo-tab-9)' },
 }
 
 local child = MiniTest.new_child_neovim()

@@ -20,8 +20,13 @@ local T = MiniTest.new_set({
 
 T["require('aineo')"] = MiniTest.new_set()
 
-T["require('aineo')"]['exposes setup() alone'] = function()
-  eq(child.lua_get("vim.tbl_keys(require('aineo'))"), { 'setup' })
+T["require('aineo')"]['exposes setup() and tab_title() alone'] = function()
+  eq(
+    child.lua_get(
+      "(function() local keys = vim.tbl_keys(require('aineo')); table.sort(keys); return keys end)()"
+    ),
+    { 'setup', 'tab_title' }
+  )
 end
 
 T['setup()'] = MiniTest.new_set()
