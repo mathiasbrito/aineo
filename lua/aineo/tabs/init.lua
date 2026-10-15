@@ -1,12 +1,15 @@
 --- The tab pages aineo shows a Claude Code session in: which tab pages are
---- held, what their titles say, the tab line that draws them, and the
---- folder's ordered list of the tabs' sessions.
+--- held, what their titles say, what their Claude Codes are doing, the tab
+--- line that draws them, and the folder's ordered list of the tabs' sessions.
 ---
 --- Requires `aineo.config` alone, for the padding of the titles: the form
 --- check and the write of the folder's list are this home's own
---- (`tab_list.lua`).
+--- (`tab_list.lua`), and so are the activity of the tabs (`activity.lua`)
+--- and the clock that animates it (`animation.lua`).
 
 local config = require('aineo.config')
+local activities = require('aineo.tabs.activity')
+local animation = require('aineo.tabs.animation')
 local highlights = require('aineo.tabs.highlights')
 local tab_lists = require('aineo.tabs.tab_list')
 local tabline_format = require('aineo.tabs.tabline')
@@ -46,13 +49,49 @@ function M.hold(tab, name)
   name_of_held[tab] = name
 end
 
---- Lets the tab page `tab` go: it is held no more. A tab page that is not
---- held is let go without a word.
+--- Whether the tab page `tab` is held and still exists.
+---
+---@param tab integer a tab page handle
+---@return boolean
+local function is_live_held(tab)
+  return name_of_held[tab] ~= nil and vim.api.nvim_tabpage_is_valid(tab)
+end
+
+--- Has the tab line drawn again on the main loop's next turn, so that a
+--- caller inside a variable's watcher, as the one that tells the busy state
+--- is, draws nothing from within it.
+local function redraw_tabline_soon()
+  vim.schedule(function()
+    vim.cmd.redrawtabline()
+  end)
+end
+
+--- Has the animation run while a held tab page is busy, and not otherwise.
+--- Each frame draws the tab line again, and the animation ends at the frame
+--- that finds no busy tab page left, such as one that closed unheard of.
+local function keep_animation_for_busy_tabs()
+  if not activities.any_busy(is_live_held) then
+    animation.stop()
+    return
+  end
+  animation.run(function()
+    if activities.any_busy(is_live_held) then
+      vim.cmd.redrawtabline()
+    else
+      animation.stop()
+    end
+  end)
+end
+
+--- Lets the tab page `tab` go: it is held no more, and it has no activity.
+--- A tab page that is not held is let go without a word.
 ---
 ---@param tab integer a tab page handle
 function M.let_go(tab)
   vim.validate('tab', tab, 'number')
   name_of_held[tab] = nil
+  activities.forget(tab)
+  keep_animation_for_busy_tabs()
 end
 
 --- The held tab pages that still exist, in the order of their places.
@@ -80,7 +119,9 @@ function M.closed()
   table.sort(closed)
   for _, tab in ipairs(closed) do
     name_of_held[tab] = nil
+    activities.forget(tab)
   end
+  keep_animation_for_busy_tabs()
   return closed
 end
 
@@ -117,10 +158,68 @@ local function name_of_held_tab(tab)
   return nil
 end
 
---- The title of the tab page `tab`: its place and a name, `<number>: <name>`.
---- The name is what the held tab's name function gives, else the tail of the
---- name of the buffer in the tab page's current window, and is cut to fit; the
---- cut counts the name alone.
+--- Tells that the Claude Code of the held tab page `tab` is busy, or is not
+--- any more. A tab page that is busy has the activity `busy`. One that stops
+--- being busy while the user is in another tab page has the activity
+--- `unseen`, until `mark_seen()`; in the current tab page, none. The tab line
+--- is drawn again at once, and an animation of it runs while any held tab
+--- page is busy. A tab page that is not held, or does not exist, is left as
+--- it is.
+---
+--- Raises an error when `tab` is not a tab page handle (a number from 1) or
+--- `busy` is not a boolean.
+---
+---@param tab integer a tab page handle
+---@param busy boolean
+function M.set_busy(tab, busy)
+  vim.validate('tab', tab, is_tab_page_handle, 'a tab page handle')
+  vim.validate('busy', busy, 'boolean')
+  if not is_live_held(tab) then
+    return
+  end
+  activities.tell_busy(tab, busy, tab ~= vim.api.nvim_get_current_tabpage())
+  keep_animation_for_busy_tabs()
+  redraw_tabline_soon()
+end
+
+--- Tells that the user saw the held tab page `tab`: its `unseen` activity is
+--- gone, and the tab line is drawn again. A `busy` one goes on.
+---
+--- Raises an error when `tab` is not a tab page handle (a number from 1).
+---
+---@param tab integer a tab page handle
+function M.mark_seen(tab)
+  vim.validate('tab', tab, is_tab_page_handle, 'a tab page handle')
+  if not is_live_held(tab) then
+    return
+  end
+  activities.mark_seen(tab)
+  redraw_tabline_soon()
+end
+
+--- What the Claude Code of the held tab page `tab` is doing: `busy` while it
+--- works, `unseen` once it stopped while the user was in another tab page
+--- and until `mark_seen()`, nil otherwise, and for a tab page that is not
+--- held or does not exist.
+---
+--- Raises an error when `tab` is not a tab page handle (a number from 1).
+---
+---@param tab integer a tab page handle
+---@return 'busy'|'unseen'|nil
+function M.activity(tab)
+  vim.validate('tab', tab, is_tab_page_handle, 'a tab page handle')
+  if not is_live_held(tab) then
+    return nil
+  end
+  return activities.of(tab)
+end
+
+--- The title of the tab page `tab`: its place and a name, `<number>: <name>`,
+--- then a space and the indicator of its activity: ◒ or ◓ while it is busy,
+--- by the frame of the animation, ● while it is unseen. The name is what the
+--- held tab's name function gives, else the tail of the name of the buffer in
+--- the tab page's current window, and is cut to fit; the cut counts the name
+--- alone.
 ---
 ---@param tab integer a tab page handle
 ---@return string|nil title nil when no such tab page exists
@@ -129,7 +228,12 @@ function M.title(tab)
   if not number then
     return nil
   end
-  return ('%d: %s'):format(number, titles.cut(name_of_held_tab(tab) or titles.buffer_tail(tab)))
+  local title = ('%d: %s'):format(
+    number,
+    titles.cut(name_of_held_tab(tab) or titles.buffer_tail(tab))
+  )
+  local indicator = activities.indicator(tab, animation.glyph())
+  return indicator and ('%s %s'):format(title, indicator) or title
 end
 
 --- The `tabs.padding` setting, as `vim.g.aineo` and the options
