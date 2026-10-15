@@ -1,5 +1,7 @@
 --- The format of the tab line, in the language of 'statusline'.
 
+local highlights = require('aineo.tabs.highlights')
+
 local M = {}
 
 --- One tab page's place in the line.
@@ -8,15 +10,6 @@ local M = {}
 ---@field number integer the tab page's place, which a click on its title goes to
 ---@field title string
 ---@field current boolean whether it is the current tab page
-
---- The highlight group of the current tab page's title.
-local CURRENT_GROUP = 'TabLineSel'
-
---- The highlight group of every other title.
-local OTHER_GROUP = 'TabLine'
-
---- The highlight group of the rest of the line.
-local FILL_GROUP = 'TabLineFill'
 
 --- `text` as a 'statusline' format shows it written, `%` doubled.
 ---
@@ -27,22 +20,25 @@ local function literal(text)
 end
 
 --- The 'statusline' format of one title, in a click region of its tab page,
---- with a space either side.
+--- with `padding` spaces either side.
 ---
 ---@param entry aineo.tabs.TabLineEntry
+---@param padding integer
 ---@return string
-local function format_of(entry)
-  local group = entry.current and CURRENT_GROUP or OTHER_GROUP
-  return ('%%#%s#%%%dT %s '):format(group, entry.number, literal(entry.title))
+local function format_of(entry, padding)
+  local group = entry.current and highlights.GROUPS.current or highlights.GROUPS.other
+  local margin = (' '):rep(padding)
+  return ('%%#%s#%%%dT%s%s%s'):format(group, entry.number, margin, literal(entry.title), margin)
 end
 
---- The display cells `entry` takes in the line: its title and a space
---- either side.
+--- The display cells `entry` takes in the line: its title and `padding`
+--- spaces either side.
 ---
 ---@param entry aineo.tabs.TabLineEntry
+---@param padding integer
 ---@return integer
-local function width_of(entry)
-  return vim.api.nvim_strwidth(' ' .. entry.title .. ' ')
+local function width_of(entry, padding)
+  return vim.api.nvim_strwidth(entry.title) + 2 * padding
 end
 
 --- The places, as `first, last`, of the longest run of `entries` that holds
@@ -52,23 +48,24 @@ end
 ---
 ---@param entries aineo.tabs.TabLineEntry[]
 ---@param columns integer
+---@param padding integer
 ---@return integer first
 ---@return integer last
-local function run_around_current(entries, columns)
+local function run_around_current(entries, columns, padding)
   local current = 1
   for index, entry in ipairs(entries) do
     if entry.current then
       current = index
     end
   end
-  local first, last, used = current, current, width_of(entries[current])
-  while first > 1 and used + width_of(entries[first - 1]) <= columns do
+  local first, last, used = current, current, width_of(entries[current], padding)
+  while first > 1 and used + width_of(entries[first - 1], padding) <= columns do
     first = first - 1
-    used = used + width_of(entries[first])
+    used = used + width_of(entries[first], padding)
   end
-  while last < #entries and used + width_of(entries[last + 1]) <= columns do
+  while last < #entries and used + width_of(entries[last + 1], padding) <= columns do
     last = last + 1
-    used = used + width_of(entries[last])
+    used = used + width_of(entries[last], padding)
   end
   return first, last
 end
@@ -80,11 +77,14 @@ end
 ---
 ---@param entries aineo.tabs.TabLineEntry[] at least one
 ---@param columns integer the width of the line
+---@param padding integer the spaces either side of every title
 ---@return string
-function M.format(entries, columns)
-  local first, last = run_around_current(entries, columns)
-  local drawn = vim.list_slice(entries, first, last)
-  return table.concat(vim.tbl_map(format_of, drawn)) .. ('%%#%s#%%T'):format(FILL_GROUP)
+function M.format(entries, columns, padding)
+  local first, last = run_around_current(entries, columns, padding)
+  local formats = vim.tbl_map(function(entry)
+    return format_of(entry, padding)
+  end, vim.list_slice(entries, first, last))
+  return table.concat(formats) .. ('%%#%s#%%T'):format(highlights.GROUPS.fill)
 end
 
 return M

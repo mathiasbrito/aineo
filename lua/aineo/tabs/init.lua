@@ -2,9 +2,12 @@
 --- held, what their titles say, the tab line that draws them, and the
 --- folder's ordered list of the tabs' sessions.
 ---
---- Requires no other aineo home: the form check and the write of the
---- folder's list are this home's own (`tab_list.lua`).
+--- Requires `aineo.config` alone, for the padding of the titles: the form
+--- check and the write of the folder's list are this home's own
+--- (`tab_list.lua`).
 
+local config = require('aineo.config')
+local highlights = require('aineo.tabs.highlights')
 local tab_lists = require('aineo.tabs.tab_list')
 local tabline_format = require('aineo.tabs.tabline')
 local titles = require('aineo.tabs.titles')
@@ -128,9 +131,25 @@ function M.title(tab)
   return ('%d %s'):format(number, titles.cut(name_of_held_tab(tab) or titles.buffer_tail(tab)))
 end
 
+--- The `tabs.padding` setting, as `vim.g.aineo` and the options
+--- `require('aineo').setup()` recorded give it; its default when they give a
+--- wrong value, which `:checkhealth aineo` reports, so that a redraw of the
+--- line never raises.
+---
+---@return integer
+local function padding()
+  local is_valid, resolved =
+    pcall(config.resolve_config, vim.g.aineo, config.recorded_setup_options())
+  if not is_valid then
+    return config.resolve_config(nil, nil).tabs.padding
+  end
+  return resolved.tabs.padding
+end
+
 --- The 'tabline' format that draws the title of every tab page, each in the
---- click region of its tab page, the current tab page's in `TabLineSel`, the
---- others' in `TabLine`, and the rest of the line in `TabLineFill`.
+--- click region of its tab page with `tabs.padding` spaces either side, the
+--- current tab page's in `AineoTabLineSel`, the others' in `AineoTabLine`,
+--- and the rest of the line in `AineoTabLineFill`.
 ---
 ---@return string
 function M.tabline()
@@ -143,7 +162,7 @@ function M.tabline()
       current = tab == current,
     })
   end
-  return tabline_format.format(entries, vim.o.columns)
+  return tabline_format.format(entries, vim.o.columns, padding())
 end
 
 --- Keeps `tab_list` as the list of the tabs of `folder`: the sessions of its
@@ -186,7 +205,10 @@ function M.kept_tabs(state_directory, folder)
 end
 
 --- Has Neovim draw aineo's tab line while the user's 'tabline' is empty; a
---- 'tabline' the user set is left in place. Called again, it changes nothing.
+--- 'tabline' the user set is left in place. When it is aineo's, its highlight
+--- groups are defined (`AineoTabLineSel`, `AineoTabLine` and
+--- `AineoTabLineFill`, none that the user defined) and again after every
+--- `:colorscheme`. Called again, it changes nothing.
 --- It never touches 'showtabline', so the line shows from two tab pages on
 --- unless the user chose otherwise.
 ---
@@ -195,7 +217,11 @@ function M.draw_tabline()
   if vim.o.tabline == '' then
     vim.o.tabline = TABLINE_EXPRESSION
   end
-  return vim.o.tabline == TABLINE_EXPRESSION
+  local in_use = vim.o.tabline == TABLINE_EXPRESSION
+  if in_use then
+    highlights.keep_defined()
+  end
+  return in_use
 end
 
 return M
