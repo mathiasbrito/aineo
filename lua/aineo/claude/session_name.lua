@@ -1,12 +1,17 @@
---- The name and the folder of a Claude Code session, kept on its terminal
---- buffer for status lines: `b:aineo_session_name` and
---- `b:aineo_session_folder`; and, while it is attached to a background
---- session, `b:aineo_session_attached`.
+--- The name, the folder and the activity of a Claude Code session, kept on
+--- its terminal buffer for status lines and the tab line: `b:aineo_session_name`,
+--- `b:aineo_session_folder` and `b:aineo_session_busy`; and, while it is
+--- attached to a background session, `b:aineo_session_attached`.
 
 local M = {}
 
 --- The name a session has while Claude Code gives it none.
 local UNNAMED = 'Claude Code'
+
+--- The glyphs Claude Code 2.1.301 puts first in its terminal title while it
+--- works or a subagent of its runs, ◐ and ◑ in turn; at idle and while it
+--- waits for the user the glyph is ✳.
+local BUSY_GLYPHS = { '◐', '◑' }
 
 --- The `charclass()` of a word character, and of an emoji, which is not one.
 local WORD_CLASS = 2
@@ -46,6 +51,21 @@ local function is_letter_or_digit(character)
   return class == WORD_CLASS or class > EMOJI_CLASS
 end
 
+--- The first character of `title` and what follows it, when a space or
+--- nothing does: the shape of a title with a status glyph, `<glyph> <name>`.
+---
+---@param title string
+---@return string? glyph nil when the title is empty or its first character is followed by another
+---@return string rest
+local function status_glyph_and_rest(title)
+  local first = vim.fn.strcharpart(title, 0, 1)
+  local rest = title:sub(#first + 1)
+  if first ~= '' and (rest == '' or vim.startswith(rest, ' ')) then
+    return first, rest
+  end
+  return nil, title
+end
+
 --- `title` without the status glyph Claude Code puts first: its first
 --- character, when that is neither a letter nor a digit and a space or
 --- nothing follows it, left out with that space, once. Claude Code 2.1.292
@@ -54,16 +74,26 @@ end
 ---@param title string
 ---@return string
 local function without_status_glyph(title)
-  local first = vim.fn.strcharpart(title, 0, 1)
-  local rest = title:sub(#first + 1)
-  if
-    first ~= ''
-    and not is_letter_or_digit(first)
-    and (rest == '' or vim.startswith(rest, ' '))
-  then
+  local glyph, rest = status_glyph_and_rest(title)
+  if glyph and not is_letter_or_digit(glyph) then
     return rest:sub(2)
   end
   return title
+end
+
+--- Whether the terminal title `title` says Claude Code is busy: it begins
+--- with ◐ or ◑ and a space, or with one of them alone. Nothing else says so:
+--- not ✳, no title, a title still the terminal buffer's own name, nor any
+--- other first character.
+---
+---@param title string?
+---@return boolean
+local function is_busy_title(title)
+  if title == nil then
+    return false
+  end
+  local glyph = status_glyph_and_rest(title)
+  return vim.tbl_contains(BUSY_GLYPHS, glyph)
 end
 
 --- The session's name a terminal title `title` gives: the title without its
@@ -98,6 +128,18 @@ local function keep_name(buffer, title)
   vim.schedule(function()
     vim.cmd.redrawstatus({ bang = true })
   end)
+end
+
+--- Sets `b:aineo_session_busy` of `buffer` to whether `title` says Claude
+--- Code is busy (`is_busy_title()`), when that changes it.
+---
+---@param buffer integer
+---@param title string?
+local function keep_busy(buffer, title)
+  local busy = is_busy_title(title)
+  if vim.b[buffer].aineo_session_busy ~= busy then
+    vim.b[buffer].aineo_session_busy = busy
+  end
 end
 
 --- Calls `on_title(title)` with each new value of `b:term_title` of
@@ -156,31 +198,36 @@ function M.mark_attached(buffer)
 end
 
 --- Gives `buffer`, the terminal of a Claude Code that has exited, the name
---- `Claude Code`, as the empty title Claude Code sets as it exits does: one
---- that was killed or hung up leaves its last title in place. A terminal
---- already wiped, which hung its Claude Code up, is left as it is.
+--- `Claude Code` and no busy mark, as the empty title Claude Code sets as it
+--- exits does: one that was killed or hung up leaves its last title in
+--- place, a busy one included. A terminal already wiped, which hung its
+--- Claude Code up, is left as it is.
 ---
 ---@param buffer integer
 function M.forget_name(buffer)
   if vim.api.nvim_buf_is_valid(buffer) then
     vim.b[buffer].aineo_session_attached = nil
     keep_name(buffer, nil)
+    keep_busy(buffer, nil)
   end
 end
 
---- Keeps the session's name and folder on `buffer`, the terminal Claude Code
---- is about to run in, for its whole life: the name as each title Claude
---- Code sets gives it (`name_from_title()`), `Claude Code` until then, and
---- the folder `directory`, the one Claude Code starts in, written from the
---- home directory (`fnamemodify(…, ':~')`).
+--- Keeps the session's name, folder and busy mark on `buffer`, the terminal
+--- Claude Code is about to run in, for its whole life: the name as each
+--- title Claude Code sets gives it (`name_from_title()`), `Claude Code` until
+--- then; the folder `directory`, the one Claude Code starts in, written from
+--- the home directory (`fnamemodify(…, ':~')`); and whether the title says
+--- Claude Code is busy (`is_busy_title()`), not busy until the first title.
 ---
 ---@param buffer integer
 ---@param directory string
 function M.keep_name_and_folder(buffer, directory)
   vim.b[buffer].aineo_session_name = UNNAMED
   vim.b[buffer].aineo_session_folder = vim.fn.fnamemodify(directory, ':~')
+  vim.b[buffer].aineo_session_busy = false
   watch_title(buffer, function(title)
     keep_name(buffer, title)
+    keep_busy(buffer, title)
   end)
 end
 
