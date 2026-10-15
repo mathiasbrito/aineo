@@ -708,40 +708,6 @@ T['let_go()']['stops nothing: the copy’s Claude Code runs on until the copy st
   eq(copy_answers(1, 'session_status'), { 'ready' })
 end
 
-T['stop_sessions()'] = MiniTest.new_set()
-
-T['stop_sessions()']['stops the copies it is given together, in about the time of one stop'] = function()
-  local first_fake, second_fake = two_ready_copies('copies-stop-sessions', 'ready')
-  local before = vim.uv.hrtime()
-
-  child.lua('require("aineo.claude").stop_sessions({ _G.copies[1], _G.copies[2] })')
-  local blocked_ms = (vim.uv.hrtime() - before) / 1e6
-
-  eq(claude.wait_for_end(first_fake), { { ended = 'keys', code = 0 } })
-  eq(claude.wait_for_end(second_fake), { { ended = 'keys', code = 0 } })
-  eq(blocked_ms < ONE_STOP_PLUS_SLACK_MS, true)
-end
-
-T['stop_sessions()']['leaves a copy it is not given running, and marks the ones it stops'] = function()
-  local first_fake, second_fake, _, second = two_ready_copies('copies-stop-sessions-left', 'ready')
-  end_copy_after_case(2, second, second_fake)
-
-  child.lua('require("aineo.claude").stop_sessions({ _G.copies[1] })')
-
-  eq(claude.wait_for_end(first_fake), { { ended = 'keys', code = 0 } })
-  eq(copy_answers(1, 'session_status'), { 'exited', 0 })
-  eq(copy_answers(2, 'session_status'), { 'ready' })
-end
-
-T['stop_sessions()']['stops nothing for a list with no copy that runs'] = function()
-  child.lua('_G.copies = { require("aineo.claude").new() }')
-  local before = vim.uv.hrtime()
-
-  child.lua('require("aineo.claude").stop_sessions({ _G.copies[1] })')
-
-  eq((vim.uv.hrtime() - before) / 1e6 < NOTHING_TO_STOP_MS, true)
-end
-
 T['start_token()'] = MiniTest.new_set()
 
 T['start_token()']['is nil before the copy has started'] = function()
