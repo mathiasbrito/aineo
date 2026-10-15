@@ -475,7 +475,8 @@ end
 --- The place of each tab page of this editor that shows a Claude session,
 --- by the session's id: the session of the Claude Code of each tab
 --- (`aineo.entry.Tab`'s `session_id()`), and, where several tabs show one, the
---- lowest place. What the list of sessions marks and a pick moves to.
+--- lowest place. What the list of sessions marks and a pick moves to, unless
+--- the current tab shows the session itself (`settles_by_standing()`).
 ---
 ---@return aineo.claude.ShownInTabs
 local function sessions_shown_in_tabs()
@@ -494,6 +495,12 @@ end
 --- when none is given). Defined below, with the tabs it makes.
 ---@type fun(start?: fun(tab: aineo.entry.Tab))
 local open_new_tab
+
+--- Whether the Claude Code of a tab that has closed and has yet to stop
+--- (`closing`, `stopping`) is on the session `id`. Defined below, with the
+--- tabs that close.
+---@type fun(id: string): boolean
+local stops_in_closed_tab
 
 --- Has the tab line drawn again whenever the session's name on `terminal`,
 --- the terminal of a tab's Claude Code, changes: a title shows in the tab
@@ -1565,11 +1572,13 @@ local function make_tab(homes, key, on_bound)
 
   --- Whether a pick of `listed` opens no tab for where the session stands
   --- (`aineo.claude`'s `session_standing()`), the pick being settled here: a
-  --- session a tab of this editor shows moves to that tab, the current tab's
-  --- own included, and starts nothing; one another process runs and aineo
+  --- session a tab of this editor shows moves to that tab, the lowest numbered
+  --- of those that show it, and starts nothing, or stays where it is when the
+  --- current tab shows it itself; one another process runs and aineo
   --- cannot join (`aineo.claude`'s `can_join_session()`, which also needs it to
-  --- have started in the folder) or one started in another folder is refused
-  --- with one warning that says why.
+  --- have started in the folder), one started in another folder, and one
+  --- whose Claude Code a closed tab still stops (`stops_in_closed_tab()`) are
+  --- refused with one warning that says why.
   ---
   ---@param listed aineo.claude.ListedSession
   ---@param folder string
@@ -1581,10 +1590,17 @@ local function make_tab(homes, key, on_bound)
     local shown = sessions_shown_in_tabs()
     local standing = claude.session_standing(listed, shown, folder)
     if standing == 'shown' then
+      local current = tab_of_current_page()
       local page = vim.api.nvim_list_tabpages()[shown[listed.session_id]]
-      if page then
+      if page and not (current and current.session_id() == listed.session_id) then
         vim.api.nvim_set_current_tabpage(page)
       end
+    elseif stops_in_closed_tab(listed.session_id) then
+      vim.notify(
+        NOT_SWITCHED .. name .. ' still stops in a closed tab; pick it again in a moment',
+        vim.log.levels.WARN
+      )
+      return true
     elseif standing == 'elsewhere' then
       if session.can_join_session(listed, folder) then
         return false
@@ -1976,6 +1992,17 @@ end
 ---@type aineo.entry.Tab[]
 local closing = {}
 
+--- The tabs whose Claude Code a background stop is stopping now
+--- (`finish_closing()`), until it has stopped.
+---@type aineo.entry.Tab[]
+local stopping = {}
+
+stops_in_closed_tab = function(id)
+  return vim.iter({ closing, stopping }):flatten():any(function(tab)
+    return tab.session_id() == id
+  end)
+end
+
 --- Releases `tab`, whose tab page has closed: out of `tab_list` first, so
 --- that no report or switch is told to it, then its entry off the list of
 --- running editors, then its homes (`aineo.entry.Tab`'s `release()`). It
@@ -2009,8 +2036,15 @@ local function finish_closing()
   end
   local finishing = closing
   closing = {}
+  vim.list_extend(stopping, finishing)
   local function finish_each(already_stopped)
     for _, tab in ipairs(finishing) do
+      for index, listed in ipairs(stopping) do
+        if listed == tab then
+          table.remove(stopping, index)
+          break
+        end
+      end
       tab.finish(already_stopped)
     end
   end
@@ -2175,9 +2209,14 @@ end
 --- of copies (`copied_homes()`), keyed by the number it is made as, and held
 --- in the tabs home once its layout opens (`hold_tab()`). The first tab made
 --- has the report home route a report to the tab it is for (`route_report()`).
+--- The Claude Codes of the tabs closed so far are stopped first
+--- (`finish_closing()`), while the first tab's homes still hold the start they
+--- stop, so that taking them up again in the command that closed the first
+--- tab does not give its new Claude Code a stop meant for the old.
 ---
 ---@return aineo.entry.Tab
 local function new_tab()
+  finish_closing()
   tabs_made = tabs_made + 1
   local tab
   if module_tab == nil then
@@ -2316,11 +2355,10 @@ local NO_TAB_TO_CLOSE = 'aineo: this tab holds no Claude Code session'
 
 --- What `:Aineo tab close` does. In an aineo tab, while another aineo tab
 --- remains, it closes the tab page, which releases the tab and stops its
---- Claude Code as quitting stops it (`close_tabs_of_closed_pages()`); Neovim
---- refuses to close a tab page that holds a buffer with unsaved changes, and
---- nothing is stopped then. In the last aineo tab it quits Neovim as `:qa`
---- does, which refuses while a buffer has unsaved changes, and otherwise
---- stops every Claude Code as quitting stops it. From a tab page that is none
+--- Claude Code as quitting stops it (`close_tabs_of_closed_pages()`). In the
+--- last aineo tab it quits Neovim as `:qa` does, which refuses while a buffer
+--- has unsaved changes, and nothing is stopped then, and otherwise stops every
+--- Claude Code as quitting stops it. From a tab page that is none
 --- of aineo's it closes nothing and tells the user so.
 local function close_current_tab()
   if not tab_of_current_page() then

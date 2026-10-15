@@ -984,7 +984,12 @@ only in place of a resume Claude Code has no conversation for
 
 			A pick:
 			- of a row a tab shows, the current tab's own
-			  included, moves to that tab and starts nothing.
+			  included, moves to that tab and starts nothing;
+			  when several tabs show it, to the lowest numbered,
+			  or nowhere when the current tab is one of them.
+			- of a row whose Claude Code a tab just closed still
+			  stops opens no tab: aineo tells you to pick it
+			  again in a moment.
 			- of a row started in another folder, or a row running
 			  in the background with no short id for `claude
 			  attach`, opens no tab and tells you why.
@@ -1875,9 +1880,9 @@ Server socket ~
   listens nowhere, since Claude's reports could not reach it.
 
 Prefix mappings ~
-  For each prefix key, `\Q` for the close of a tab among them, whether it
-  runs aineo's `<Plug>` mapping; a warning
-  when it runs something of yours, or nothing. The Visual-mode `\s` comes
+  For each prefix key, `\Q` (the close of a tab) among them, whether it
+  runs aineo's `<Plug>` mapping; a warning when it runs something of yours,
+  or nothing. The Visual-mode `\s` comes
   last, its line saying `in Visual mode`. While aineo's |VimEnter|
   handler, which maps the keys, has not run — the editor is still
   starting, as when `nvim +checkhealth` runs the check before `VimEnter`,
@@ -1970,8 +1975,7 @@ Claude Codes stopped together once the command has ended, in the background:
 the editor is not held, and the stop takes the time of one stop, up to 12
 seconds, not the sum. The first tab's buffers are taken up again by the next
 tab opened only once its Claude Code has ended; a tab opened before is made of
-copies, with buffers named with a number. Each tab runs a
-watch of its
+copies, with buffers named with a number. Each tab runs a watch of its
 repository once its changes pane has been shown, and each Claude Code that
 starts lists the folder's sessions when it resumes one, so several tabs run
 several watches and several lists at once. What two real Claude Codes do in

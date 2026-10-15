@@ -23,9 +23,9 @@ local END_TERMINALS = [[
 --- a hangup (`END_TERMINALS`).
 local function stop_the_child()
   if child.is_running() then
-    child.lua(END_TERMINALS)
+    pcall(child.lua, END_TERMINALS)
   end
-  child.stop()
+  pcall(child.stop)
 end
 
 local T = MiniTest.new_set({
@@ -42,6 +42,11 @@ local T = MiniTest.new_set({
 --- closed: a stop of a Claude Code that ignores its keys and the hangup takes
 --- more than 12 s.
 local ANSWERS_WITHIN_MS = 1500
+
+--- How long a case waits for a stop that wrongly reached a new Claude Code to
+--- show: the keys of a stop press its second Ctrl-C 2.5 s after the first and
+--- the first may be discarded while the fake starts.
+local STALE_STOP_REACHES_MS = 6000
 
 --- A fake `claude` that ignores every key, the hangup and SIGTERM
 --- (`tests/helpers/fake_claude_deaf.sh`) for the case `name`, and the
@@ -81,6 +86,32 @@ T['closing a tab']['handles typed keys while a Claude Code that ignores its keys
 
   eq(tabs.probe_answered(child, ANSWERS_WITHIN_MS), true)
   eq(claude_session.wait_for_process_end(pid), true)
+end
+
+T['closing a tab']['opened in the same command as the close of the first tab, whose Claude Code had exited, reaches ready'] = function()
+  local state = tabs.use_own_state(child, 'close-same-tick')
+  local first = tabs.fake('close-same-tick-first')
+  entry.use_fake(child, first)
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  tabs.use_next_fake(child, tabs.fake('close-same-tick-second'))
+  child.cmd('Aineo tab new')
+  tabs.session_of_tab(state, child, '2')
+  child.lua('vim.fn.jobstop(vim.b[...].terminal_job_id)', { tabs.claude_terminal_of_tab(child, 1) })
+  claude_session.wait_for_status(child, 'exited')
+  local third = tabs.fake('close-same-tick-third')
+  tabs.use_next_fake(child, third)
+
+  entry.command(child, '1tabclose | Aineo tab new')
+
+  eq(#claude_session.wait_for_starts(third, 1), 1)
+  claude_session.wait_for_status(child, 'ready')
+  vim.wait(STALE_STOP_REACHES_MS, function()
+    return claude_session.ctrl_c_count(third) > 0
+      or child.lua_get("require('aineo.claude').session_status()") ~= 'ready'
+  end, 100)
+  eq(child.lua_get("require('aineo.claude').session_status()"), 'ready')
+  eq(claude_session.ctrl_c_count(third), 0)
 end
 
 T['closing a tab']['opens a tab made of copies while the first tab’s Claude Code still stops, refusing nothing'] = function()
@@ -172,6 +203,18 @@ local function press_and_quit(keys)
     "vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(..., true, false, true), 'mx', false)",
     { keys }
   )
+end
+
+--- Whether the child has told the user an E37 error, that a buffer has
+--- unsaved changes; false when the child cannot be asked, as when it quit.
+---
+---@return boolean
+local function told_e37()
+  local asked, messages = pcall(entry.messages, child)
+  return asked
+    and vim.iter(messages):any(function(told)
+      return told.message ~= nil and told.message:find('E37', 1, true) ~= nil
+    end)
 end
 
 T['the close of a tab'] = MiniTest.new_set()
@@ -306,7 +349,9 @@ T['the close of the last tab of aineo']['stops nothing and quits nothing while a
   child.cmd('tabfirst')
 
   press_and_quit('\\Q')
-  vim.wait(500)
+  vim.wait(tabs.PATIENCE_MS, function()
+    return claude_session.ctrl_c_count(first) > 0 or told_e37()
+  end, 20)
 
   eq(child.is_running(), true)
   eq(child.lua_get("require('aineo.claude').session_status()"), 'ready')
@@ -317,12 +362,7 @@ T['the close of the last tab of aineo']['stops nothing and quits nothing while a
     end, vim.api.nvim_list_bufs()), 'unsaved')]]),
     true
   )
-  eq(
-    vim.iter(entry.messages(child)):any(function(told)
-      return told.message ~= nil and told.message:find('E37', 1, true) ~= nil
-    end),
-    true
-  )
+  eq(told_e37(), true)
 end
 
 T['the close from a tab page that is not aineo’s'] = MiniTest.new_set()
