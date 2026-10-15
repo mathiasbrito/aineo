@@ -816,4 +816,108 @@ T['let_go()']['holds the tab no more, and leaves the others held'] = function()
   eq(result.held, { result.handles[2] })
 end
 
+T['list_of_tabs()'] = MiniTest.new_set()
+
+T['list_of_tabs()']['gives the sessions in the order of the tabs and the place of the current one'] = function()
+  local tabs = require('aineo.tabs')
+
+  local list = tabs.list_of_tabs({
+    { session = FIRST, current = false },
+    { session = SECOND, current = true },
+    { session = THIRD, current = false },
+  })
+
+  eq(list, { sessions = { FIRST, SECOND, THIRD }, current = 2 })
+end
+
+T['list_of_tabs()']['leaves out a tab that has no session yet, and counts the place among the rest'] = function()
+  local tabs = require('aineo.tabs')
+
+  local list = tabs.list_of_tabs({
+    { session = FIRST, current = false },
+    { current = false },
+    { session = SECOND, current = true },
+  })
+
+  eq(list, { sessions = { FIRST, SECOND }, current = 2 })
+end
+
+T['list_of_tabs()']['lists a session two tabs show once, at the lower place, and its place for the current one'] = function()
+  local tabs = require('aineo.tabs')
+
+  local list = tabs.list_of_tabs({
+    { session = FIRST, current = false },
+    { session = SECOND, current = false },
+    { session = FIRST, current = true },
+  })
+
+  eq(list, { sessions = { FIRST, SECOND }, current = 1 })
+end
+
+T['list_of_tabs()']['puts the place at the first tab when none is current, or the current one has no session'] = function()
+  local tabs = require('aineo.tabs')
+
+  local none_current = tabs.list_of_tabs({
+    { session = FIRST, current = false },
+    { session = SECOND, current = false },
+  })
+  local current_has_no_session = tabs.list_of_tabs({
+    { session = FIRST, current = false },
+    { current = true },
+  })
+
+  eq(none_current, { sessions = { FIRST, SECOND }, current = 1 })
+  eq(current_has_no_session, { sessions = { FIRST }, current = 1 })
+end
+
+T['list_of_tabs()']['gives nothing when no tab has a session'] = function()
+  local tabs = require('aineo.tabs')
+
+  eq(tabs.list_of_tabs({}), nil)
+  eq(tabs.list_of_tabs({ { current = true } }), nil)
+end
+
+T['list_of_tabs()']['gives a list keep_tabs() keeps and kept_tabs() reads back'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t68-list-of-tabs-round-trip')
+  local list = tabs.list_of_tabs({
+    { session = FIRST, current = false },
+    { session = FIRST, current = false },
+    { session = SECOND, current = true },
+  })
+
+  tabs.keep_tabs(state, '/work/project', list)
+
+  eq(tabs.kept_tabs(state, '/work/project'), { sessions = { FIRST, SECOND }, current = 2 })
+end
+
+T['tabs_to_reopen()'] = MiniTest.new_set()
+
+T['tabs_to_reopen()']['gives the kept list when it holds the session kept for the folder'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t68-reopen-holds')
+  tabs.keep_tabs(state, '/work/project', { sessions = { FIRST, SECOND, THIRD }, current = 3 })
+
+  local list = tabs.tabs_to_reopen(state, '/work/project', SECOND)
+
+  eq(list, { sessions = { FIRST, SECOND, THIRD }, current = 3 })
+end
+
+T['tabs_to_reopen()']['gives nothing when the kept list does not hold the session kept for the folder'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t68-reopen-lacks')
+  tabs.keep_tabs(state, '/work/project', { sessions = { FIRST, SECOND }, current = 1 })
+
+  eq(tabs.tabs_to_reopen(state, '/work/project', THIRD), nil)
+end
+
+T['tabs_to_reopen()']['gives nothing when no list is kept, or no session is kept for the folder'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t68-reopen-none')
+  tabs.keep_tabs(state, '/work/other', { sessions = { FIRST }, current = 1 })
+
+  eq(tabs.tabs_to_reopen(state, '/work/project', FIRST), nil)
+  eq(tabs.tabs_to_reopen(state, '/work/other', nil), nil)
+end
+
 return T
