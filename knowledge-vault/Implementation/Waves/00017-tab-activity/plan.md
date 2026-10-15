@@ -110,7 +110,7 @@ Two evidence files. `evidence/w17-claude-title.txt` (by `w17-claude-title.sh`) r
 
 > **D73** — An activity indicator on each aineo tab's title, where it can be had without slowing the editor (the user's decision). While the tab's Claude Code or any of its subagents is active, the title shows an indicator alternating ◒ (U+25D2) and ◓ (U+25D3) for as long as the activity lasts; when there is nothing new, it shows nothing. Open, and not part of this row until the user answers: what the full circle the user asked for shows, and its glyph (wave 17's U1); where the indicator sits in the title (U2); whether a terminal multiplexer must be served (U3). The signal, the frame rate, the clearing and the rest are the planning's proposals, ruled by the orchestrator (`Implementation/Waves/00017-tab-activity/plan.md`, O1–O13), and not part of this row (amends D69; C1, C3, C7)
 
-**A dated note, 2026-10-15,** on D69: the title gains the indicator (D73, planned). **Task rows:** T75 and T76, after T73.
+**A dated note, 2026-10-15,** on D69: the title gains the indicator (D73, planned). **A dated note, 2026-10-15,** on D73, after the user's answers: ● means unseen output and the indicator sits after the name, the user's decisions (U1, U2). The user's answer to U3 is about the user's own setup, not a design decision. **Task rows:** T75 and T76, after T73.
 
 ## Baseline
 
@@ -132,6 +132,21 @@ Each has a recommended option, (a). Both briefs are written for the (a)s. Anothe
   - (a) **No — the title is enough** (recommended). Under a multiplexer, the indicator shows nothing, and `:checkhealth aineo` says why.
   - (b) **Yes — add hooks.** aineo also relays Claude Code's `UserPromptSubmit`, `Stop`, `SubagentStart` and `SubagentStop` hooks under a multiplexer. Each turn then costs four to eight Neovim process starts, more with subagents. Whether an interrupt runs `Stop` is unmeasured. This is a third packet on the hook relay.
   - (c) **Yes — hide the multiplexer from Claude Code.** aineo removes `TMUX`, `STY` and `ZELLIJ` from the environment of the Claude Code it starts, so its title animates. Claude Code then does not know it is in tmux, which changes its agent teams' tmux panes, its key hints and its notifications.
+
+## The user's answers — 2026-10-15, verbatim
+
+From the orchestrator's record of the conversation (AskUserQuestion):
+
+1. **U1.** Q: "The activity indicator is feasible and cheap (a tab-line redraw costs ~50 µs; one 2 Hz timer runs only while some tab is busy). What should the full circle ● mean?" — A: "Unseen output (Recommended)" (option text: "● marks a tab whose Claude finished a turn while you were in another tab; it clears when you enter that tab.")
+2. **U2.** Q: "Where should the indicator sit in the tab title?" — A: "After the name (Recommended)" (option text: "2: fix-login ◒")
+3. **U3.** Q: "The busy signal is the spinner glyph Claude Code puts in its terminal title, which Claude Code freezes under tmux, screen or zellij. Do you run Neovim inside one of them?" — A: "No (Recommended)" (option text: "Use the title alone; :checkhealth warns when it cannot work.")
+
+**What the answers decide:**
+- ● (U+25CF) marks unseen output: a tab whose Claude Code finished a turn while the user was in another tab, cleared when the user enters that tab (U1 (a)). The user's decision.
+- The indicator sits after the name: `2: fix-login ◒` (U2 (a)). The user's decision.
+- The user does not run Neovim inside tmux, screen or zellij (U3 (a)). That is the user's answer about their setup, not a design decision. The title alone is the busy signal, and `:checkhealth aineo` warns where it cannot work, as O12 (a) has it.
+
+Every answer is the (a) both briefs were written for, so neither brief's body changes; each gains one line pointing to the rulings below.
 
 ## Decisions for the orchestrator
 
@@ -195,6 +210,25 @@ Numbered once, here. Each recommendation is (a), and both briefs are written for
 - **O13 — The fake and the recording.**
   - (a) A new fake mode, `busy-title`, that writes the 2.1.301 titles: `✳ Claude Code`, then `◐ Claude Code` and `◑ Claude Code` alternating, then `✳ Claude Code` again after a time the test sets, or on a key. It is a synthetic fake: its docstring cites `evidence/w17-claude-title.txt`, B1, as the source. The user's check M1 is the real measurement.
   - (b) Ask the user's leave to record one real turn of the installed Claude Code in a Neovim terminal (one model call), and replay that recording. Better evidence, at the cost of a model call and a wait for the answer.
+
+## The orchestrator's rulings — 2026-10-15
+
+After the user's answers, O1–O13 are each ruled as their (a), numbered A354–A366 in order (O1 → A354 … O13 → A366):
+- A354, two packets in sequence;
+- A355, models and reviews;
+- A356, both packets regular;
+- A357, the title glyph alone says busy;
+- A358, `b:aineo_session_busy`;
+- A359, unseen set away from the current tab page and cleared at `TabEnter`;
+- A360, one 2 Hz timer;
+- A361, ◒/◓ and ● after the cut name;
+- A362, the title's own group;
+- A363, `tab_title()` includes the indicator;
+- A364, `'showtabline'` left alone;
+- A365, the health line, its warnings and the help;
+- A366, a synthetic fake mode, with the user's check M1 as the real measurement.
+
+These are the orchestrator's assumptions, never the user's decisions. Both briefs are written for them.
 
 ## Checks for the user
 

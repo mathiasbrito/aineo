@@ -133,3 +133,7 @@ Write it in your definition's shape, to `<scratchpad>/t76-report-packet.md`. Ope
 - the whole suite's counts.
 
 The orchestrator's verification runs `plan.md`'s T76 mutants. Name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-15, before dispatch
+
+The user answered U1–U3 with their (a) (`plan.md` › *The user's answers*), and `plan.md` › *The orchestrator's rulings* rules O1–O13 as their (a), A354–A366, which this brief is written for. Record them as the orchestrator's assumptions, never as the user's decisions.
