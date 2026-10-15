@@ -62,7 +62,7 @@ Key: (1) the three doors show the shell in the Report's window; (2) Terminal mod
 - *opens the layout first, around a Claude Code it starts, when none is open* and *is shown again by `\o` once the layout's windows are gone*: the arrangement's shell was written with the first unit; M6.
 - *when 'shell' is not executable* (2): the order, start before the layout, was written with the first unit; M7.
 - *moves to the aineo tab used last, from a tab page that is none of aineo's*: `acting_tab()` is generic (T66); M10.
-- *while the terminal pane shows › the key of another pane or window* (5): T69's layout through the keys, O5; L6 kills the `\i` row, and the other four rows (`\pa`, `\g`, `\r`, `\c`) pin behaviour that existed, with no mutant of T70's code that reaches them.
+- *while the terminal pane shows › the key of another pane or window* (5): T69's layout through the keys, O5; L6 kills the `\i` row and X1 (a `\pa` that stops the shell, the tests review's) the `\pa` row; the `\g`, `\r` and `\c` rows pin behaviour that existed, with no mutant of T70's code that reaches them.
 - *a shell that ends › gives the Report back…*: T69's layout through the key; L1.
 - *each tab* (2): `new()` per tab (T66, T69); M11 kills the first, and the second (the other tab's pane is left as it was) has no mutant of T70's code that reaches it.
 - *the first tab that closes* (2: the reuse of the first tab, and the stop before a Claude Code that ignores its keys): the stop at the head of `finish_closing()`; M3a, M3c.
@@ -73,14 +73,14 @@ Pins that moved or were added in the other files, seen red where listed above an
 - `tests/test_entry_prefix.lua` (152, 144 before): `pt` in the key list; the user's own mapping of `\pt` and of `<C-\>pt` stays; `\p` of the user's leaves `\pt` mapped.
 - `tests/test_entry_terminal_keys.lua` (204, 196 before): `pt` among the twins, in each of the four tests that run over them.
 - `tests/test_plugin.lua` (5): the four mappings of the list. `tests/test_entry.lua` (50): the description.
-- `tests/test_health.lua` (113, 109 before): the `\pt` and `<C-\>pt` lines, the indexes of the leader warnings (23 to 24, 22 to 23, 41 to 43), the late-prefix list, the `inside-claude` line, and three new cases of *Shell terminal* (a plain `'shell'`, one with an argument and one with a quoted program, parametrized; and the warning).
+- `tests/test_health.lua` (113, 109 before): the `\pt` and `<C-\>pt` lines, the indexes of the leader warnings (23 to 24, 22 to 23, 41 to 43), the late-prefix list, the `inside-claude` line, and four new cases of *Shell terminal* (one parametrized case of three rows, a plain `'shell'`, one with an argument and one with a quoted program, and the warning).
 - `tests/test_doc.lua` (51, 48 before): the three tags.
 - `tests/helpers/entry_tabs.lua`: `aineo.shell.2` among the second tab's groups, which `test_entry_tabs_close.lua` (17), `test_entry_tab_close.lua` (15) and `test_entry_tabs.lua` (37) read; `tests/helpers/entry_shell.lua` is new (the shell's buffer and pid, typing and waiting).
 - The files that require `entry_tabs.lua` and were not run for the pin: `test_entry_sessions.lua` and `test_entry_tabs_routing.lua` run in the whole suite.
 
 ## Mutants
 
-Each is the literal edit applied to a copy of the working tree, run on a narrowed copy of the covering test file (`make test_file`), the copy removed after. Every kill is an assertion (`Failed expectation for equality`; the count of those equals the count of failures), not a crash. The wave plan's mutants are the rows marked W.
+Each is the literal edit applied to a copy of the working tree, run on a narrowed copy of the covering test file (`make test_file`), the copy removed after. Every kill is an assertion (`Failed expectation for equality`; the count of those equals the count of failures), not a crash, except where a row says otherwise. The wave plan's mutants are the rows marked W.
 
 | # | Edit | Killed by |
 |---|---|---|
@@ -89,10 +89,10 @@ Each is the literal edit applied to a copy of the working tree, run on a narrowe
 | M3a | the `for _, tab in ipairs(finishing) do run(tab.homes.shell.stop) end` loop of `finish_closing()` removed | *the first tab that closes*, both cases (2 of 6); the copies are let go by `release()` |
 | M3c (W3) | the loop of M3a removed and `homes.shell.let_go or leave_as_it_is,` removed from `release()` | all 6: the 4 *a tab that closes* and the 2 *the first tab that closes* |
 | M4 (W4) | `cwd = kept_places().working_directory` → `cwd = vim.fn.getcwd()` | *starts the shell in the folder, whatever `:tcd` says* |
-| M5 (W5) | `'terminal'` removed from `SUBCOMMAND_WORDS.pane` | 2 of the 3 doors (`\pt`, `<Plug>`): `ACTION_ARGUMENTS` is built from the words; `:Aineo pane terminal` still runs, as `ACTIONS` lists it by name |
+| M5 (W5) | `'terminal'` removed from `SUBCOMMAND_WORDS.pane` | narrowed to the doors group: 2 of the 3 doors (`\pt`, `<Plug>`) by assertion, `ACTION_ARGUMENTS` being built from the words; `:Aineo pane terminal` still runs, as `ACTIONS` lists it by name. On the cases of the doors and the twin (15) it fails 13: 11 by assertion and 2 by a Lua error (`bad argument #3 to '__index'`, where the shell buffer is nil), the tests review's measure |
 | P2 | the same edit, run on `tests/test_entry_panes.lua` › `:Aineo pane` | 10 of 18: the usage rows (4) and the completion rows (6) |
 | M6 | `shell = homes.shell.shell_buffer(),` removed from `arrangement()` | *opens the layout first…* and *is shown again by `\o`…* |
-| M7 | `focus_pane('terminal')` moved before `homes.shell.start(…)` | both *when 'shell' is not executable* cases (`arrangement.shell: expected…` told, the layout opened) |
+| M7 | the `pcall(focus_pane, 'terminal')` moved before `homes.shell.start(…)` | *opens no layout when none is open* (`arrangement.shell: expected…` told, the layout opened); run on the first version both cases died, on the fixed tree the other passes because the failure is re-raised the same way |
 | M8 | `homes.shell.let_go or leave_as_it_is,` removed from `release()` | `test_entry_tabs_close.lua › lets its copies go…` |
 | M9 | `['pane terminal'] = focus_terminal,` removed from `actions` | the 3 doors |
 | M10 | `acting_tab().actions[argument]()` → `tab_of_current_page().actions[argument]()` | *moves to the aineo tab used last…* |
@@ -114,11 +114,30 @@ Q1 is not a gap in T70's code: a pty job ends on the hangup of its terminal when
 
 - **The copy's `let_go()` runs from `release()`, the first tab's shell is stopped at the head of `finish_closing()`.** The first version ran `let_go()` from `finish()` and left the handlers until the Claude Code had stopped; T66's pin (a closed tab's copies are gone as soon as its entry is) failed with `aineo.shell.2`. Rejected: waiting in that pin for the stop, since it would loosen T66's contract for a home that is not T66's. A shell of a copy is thus stopped inside `TabClosed`, after the layout's handlers were let go; the first tab's, whose layout stays, outside it (T69, A308).
 - **No guard on the cursor landing before `startinsert`.** The first version tested that the current buffer was the shell's before asking for Terminal mode; no case could make it false (`focus_pane('terminal')` raises or lands in the shell's window), so it was removed.
-- **The program of `'shell'` in the health check is read in the check**, not asked of the shell home: the check loads only the configuration and the Claude session home (`tests/test_health.lua`), and the home's splitting is private. The two read the first word alike for a plain program and for a program in double quotes; a program with a backslash before a quote is read differently (the check takes it to the next quote).
+- **The program of `'shell'` in the health check is read in the check**, not asked of the shell home: the check loads only the configuration and the Claude session home (`tests/test_health.lua`), and the home's splitting is private. The first version took a leading quoted stretch or the first run of non-blanks and disagreed with `:terminal` on `/bin/s"h"` (a false warning), `"/bin/sh"x` (a false OK) and `"/bin/s\"h"`; the fix round (A342) copies the shell home's word rules, so the check and `:terminal` agree on those values. Exporting the program from `aineo.shell` is left for the refactor packet (A303).
+
+## Fix round (the attack and the tests-and-records reviews of the pull request; A341-A343, the orchestrator's assumptions)
+
+Each fix has a case seen red first, except where said. Measured on Neovim 0.12.5.
+
+- **A341, a layout that cannot open leaves no shell.** `focus_terminal()` starts the shell before the layout is touched; when `focus_pane('terminal')` then raises (Claude Code cannot start), the shell this call started is stopped and the layout's error re-raised. A shell that ran before the call stays. Cases: `claude.cmd` that cannot start, `\pt` -> one message, no terminal job, no shell buffer (red: one job, the shell); and the same with a shell that ran before and a Claude terminal wiped (arrived green: the shell stays, jobs and buffer as before; F2 kills it).
+- **A342, the health check reads `'shell'` by Neovim's own word rules.** Cases (red): `/bin/s"h"` is reported as running (it warned), `"/bin/sh"x` warns naming `/bin/shx` (it was reported OK), `"/bin/s\"h"` warns naming `/bin/s"h`.
+- **A343, a folder that is gone is said in the user's words.** `aineo: the folder aineo started in is gone, so no shell started: <dir>` (red: `settings.cwd: expected an existing directory…`; no pane changes, no shell starts).
+- **Tests review 2-5, 8:** the docstring of `focus_pane()` names the terminal pane; the help's overlap paragraph says `\pa` and `\pt`; the health case count is four; the mutant table says what M5 and X1 do (above); the plan's T70 mutant 5 ("`:Aineo pane terminal` is refused with the usage line") does not hold, because `ACTIONS` lists the command by name: the knowledge pass amends the plan.
+- **Tests review 6:** the same-shell case runs after `\pa` and after `\g` (arrived green; the nested-Neovim end-to-end case is not added, by the user's rule of 2026-10-11 against over-testing; the attack review's probe, a `nvim` typed into the shell, recorded `inside-claude`, and the same command under `env -u AINEO_CHILD` recorded `opened`).
+
+| # | Edit | Killed by |
+|---|---|---|
+| F1 | the `if not ran_one then homes.shell.stop() end` of `focus_terminal()` removed | *stops the shell it started, telling the user once* |
+| F2 | `if not ran_one then` -> `if true then` | *leaves a shell that ran before running* |
+| F3 | the `isdirectory` check of `focus_terminal()` removed | *tells the user, in its own words, when the folder … is gone* |
+| M1, M2, M4 | re-run on the fixed tree with the edits written for it (`homes.shell.stop()` before `start()`; `startinsert` removed; `local folder = vim.fn.getcwd()`) | M1 both rows of *after a key hid it*, M2 5 of 5, M4 the folder case |
+| H6 | `quoted = not quoted` -> `quoted = quoted` in `shell_program()` | the `"/bin/s\"h"` row |
+| H7 | the backslash branch of `shell_program()` -> `elseif false and …` | the `"/bin/s\"h"` row |
 
 ## Open threads
 
-- The nested Neovim of brief item 11 is pinned in parts, not end to end: the shell's `AINEO_CHILD` (T69, `tests/test_shell.lua`), the autostart's refusal on `AINEO_CHILD` (`tests/test_entry_startup.lua`) and the health line (`tests/test_health.lua`). No case starts a `nvim` inside the shell.
+- The nested Neovim of brief item 11 is pinned in parts, not end to end: the shell's `AINEO_CHILD` (T69, `tests/test_shell.lua`), the autostart's refusal on `AINEO_CHILD` (`tests/test_entry_startup.lua`) and the health line (`tests/test_health.lua`). No case starts a `nvim` inside the shell; the attack review's probe did, and confirmed it (see the fix round).
 
 ## Commits
 
