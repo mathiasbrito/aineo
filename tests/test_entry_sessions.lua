@@ -659,6 +659,23 @@ T['a pick']['of a switchable row opens a tab after the current one that resumes 
   eq(entry.messages(child), {})
 end
 
+T['a pick']['of a switchable row opens its tab at the end, so that no tab changes its number'] = function()
+  local fake = sessions_fake('sessions-pick-at-end', 'ready')
+  open_layout_on(fake)
+  local second = sessions_fake('sessions-pick-at-end-second', 'ready')
+  local second_id = open_second_tab(fake, second)
+  child.cmd('tabfirst')
+  local before = child.lua_get('vim.api.nvim_list_tabpages()')
+  list_in(second, two_tabs_sessions(second_id))
+  pick_row(3)
+
+  press_sessions()
+
+  eq(wait_for_tab_count(3), 3)
+  eq(tabs.current_tab(child), 3)
+  eq(vim.list_slice(child.lua_get('vim.api.nvim_list_tabpages()'), 1, 2), before)
+end
+
 T['a pick']['of a switchable row writes nothing into the current tab’s Claude Code and leaves it running'] = function()
   local fake = sessions_fake('sessions-pick-writes-nothing', 'ready')
   open_layout_on(fake)
