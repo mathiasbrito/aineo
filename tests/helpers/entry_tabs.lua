@@ -429,9 +429,9 @@ end
 --- The arguments the fake's Claude Code that runs in the tab page numbered
 --- `number` was started with, found by its process in `fake`'s record,
 --- waiting at most `M.PATIENCE_MS` for it to have started; none when it has
---- not. A Claude Code started in a tab page that is not the current one
---- draws no screen the fake's readiness check can read, so a case that
---- needs to know which session a tab started on asks the process.
+--- not. For a case that needs the command a tab's Claude Code was started
+--- with, as an attach is (`attach <short id>`), which a running editors'
+--- entry does not tell.
 ---
 ---@param child table
 ---@param fake { record: string }
