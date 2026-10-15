@@ -751,9 +751,55 @@ end
 --- sets (`draw_tabline()`), which health does not require.
 local AINEO_TABLINE_PREFIX = "%!v:lua.require'aineo.tabs'."
 
+--- The variables of the editor's environment under which Claude Code gives
+--- its terminal no title, or keeps it still, so that no tab shows activity
+--- (the activity indicator of `aineo.tabs` reads that title): what each
+--- means, and what the user can do. A variable Neovim holds is handed to
+--- every job it starts, Claude Code's included.
+local SILENT_TITLE_VARIABLES = {
+  {
+    name = 'CLAUDE_CODE_DISABLE_TERMINAL_TITLE',
+    meaning = 'Claude Code sets no terminal title',
+    advice = 'unset CLAUDE_CODE_DISABLE_TERMINAL_TITLE before starting Neovim',
+  },
+  {
+    name = 'TMUX',
+    meaning = 'Claude Code keeps its terminal title still under a terminal multiplexer',
+    advice = 'start Neovim outside tmux, screen and zellij',
+  },
+  {
+    name = 'STY',
+    meaning = 'Claude Code keeps its terminal title still under a terminal multiplexer',
+    advice = 'start Neovim outside tmux, screen and zellij',
+  },
+  {
+    name = 'ZELLIJ',
+    meaning = 'Claude Code keeps its terminal title still under a terminal multiplexer',
+    advice = 'start Neovim outside tmux, screen and zellij',
+  },
+}
+
+--- Says what the activity indicator on a tab reads, and warns, naming the
+--- variable, for each of `SILENT_TITLE_VARIABLES` the editor's environment
+--- holds: no tab shows activity then.
+local function check_activity_indicator()
+  vim.health.info(
+    'the activity indicator on a tab reads the title Claude Code sets on its terminal: :help aineo-tabs'
+  )
+  for _, variable in ipairs(SILENT_TITLE_VARIABLES) do
+    if vim.env[variable.name] ~= nil then
+      vim.health.warn(
+        ('%s is set: %s, so no tab shows activity'):format(variable.name, variable.meaning),
+        ('%s for the tabs to show activity: :help aineo-limits'):format(variable.advice)
+      )
+    end
+  end
+end
+
 --- Reports which tab line is in use: aineo's, which it draws while the user's
 --- 'tabline' is empty when the first aineo tab opens; the user's own, which
 --- aineo leaves in place; or Neovim's own, before aineo has drawn its own.
+--- Then what the activity indicator reads (`check_activity_indicator()`).
 local function check_tab_line()
   vim.health.start('Tab line')
   local tabline = vim.o.tabline
@@ -772,6 +818,7 @@ local function check_tab_line()
       "the tab line is Neovim's own: aineo draws its own when the first aineo tab opens, while 'tabline' is empty: :help aineo-tabs"
     )
   end
+  check_activity_indicator()
 end
 
 --- Reports what the autostart decided when the editor started, and why, from
