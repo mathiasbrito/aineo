@@ -223,8 +223,9 @@ T['start()']['reads a backslash before a double quote inside double quotes as th
   local program = program_named('a program', 'q"sh')
   child.o.shell = '"' .. program:gsub('"', '\\"') .. '"'
 
-  local buffer = start_shell({ cwd = working_directory('words') })
+  local started, buffer = pcall(start_shell, { cwd = working_directory('words') })
 
+  eq(started, true)
   eq(child.lua_get('vim.api.nvim_get_chan_info(vim.bo[...].channel).argv', { buffer }), { program })
 end
 
@@ -233,8 +234,9 @@ T['start()']['splits `shell` at spaces and tabs only, a newline staying in its w
   local program = program_named('newline', 'n\nsh')
   child.o.shell = program
 
-  local buffer = start_shell({ cwd = working_directory('words') })
+  local started, buffer = pcall(start_shell, { cwd = working_directory('words') })
 
+  eq(started, true)
   eq(child.lua_get('vim.api.nvim_get_chan_info(vim.bo[...].channel).argv', { buffer }), { program })
 end
 
@@ -409,9 +411,12 @@ T['the end of a shell']['leaves its buffer for the handlers of the TermClose tha
   eq(wait_until('not vim.api.nvim_buf_is_valid(...)', { buffer }), true)
 end
 
-T['a shell wiped where no handler sees it'] = MiniTest.new_set()
-
-T['a shell wiped where no handler sees it']['is forgotten by the next call, and a new shell starts'] = function()
+--- Starts a shell in `child` under a user's `TermClose` handler that deletes
+--- the terminal, which runs no handler of the shell home's, ends it, and
+--- returns its buffer once it is gone.
+---
+---@return integer buffer the wiped shell's
+local function start_and_end_a_shell_wiped_unseen()
   start_child()
   child.lua([[
     vim.api.nvim_create_autocmd('TermClose', {
@@ -420,14 +425,25 @@ T['a shell wiped where no handler sees it']['is forgotten by the next call, and 
       end,
     })
   ]])
-  local directory = working_directory('wiped-unseen')
-  local first = start_shell({ cwd = directory })
+  local buffer = start_shell({ cwd = working_directory('wiped-unseen') })
+  type_into_shell(buffer, 'exit 3')
+  wait_until('not vim.api.nvim_buf_is_valid(...)', { buffer })
+  return buffer
+end
 
-  type_into_shell(first, 'exit 3')
-  eq(wait_until('not vim.api.nvim_buf_is_valid(...)', { first }), true)
+T['a shell wiped where no handler sees it'] = MiniTest.new_set()
+
+T['a shell wiped where no handler sees it']['is no longer the shell_buffer()'] = function()
+  start_and_end_a_shell_wiped_unseen()
 
   eq(current_shell_buffer(), vim.NIL)
-  local second = start_shell({ cwd = directory })
+end
+
+T['a shell wiped where no handler sees it']['is replaced by a new, live shell at the next start()'] = function()
+  local first = start_and_end_a_shell_wiped_unseen()
+
+  local second = start_shell({ cwd = working_directory('wiped-unseen') })
+
   no_eq(second, first)
   eq(child.lua_get('vim.api.nvim_buf_is_valid(...)', { second }), true)
   eq(child.lua_get(TERMINAL_JOBS), 1)

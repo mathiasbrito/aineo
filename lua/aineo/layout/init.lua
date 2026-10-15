@@ -1493,9 +1493,9 @@ local function make_layout(input_name, group_name)
   --- otherwise, in whichever tab page; the Report's window the user had
   --- closed stays closed. The layout then forgets that shell, whichever pane
   --- shows, and a shell wiped where none of these handlers saw it, by a
-  --- command in an autocommand that is not nested, is forgotten by the next
-  --- call of `open()`, `focus()` or `show_pane()`, or by the end of its
-  --- process.
+  --- command in an autocommand that is not nested, is forgotten when the
+  --- process ends, or by the next `open()`, which `focus()` and `show_pane()`
+  --- call when a window is gone.
   ---
   --- Raises an error naming the setting, before changing anything, when
   --- `arrangement` is not a table, `claude` or `report` is not an existing
@@ -1586,7 +1586,6 @@ local function make_layout(input_name, group_name)
     vim.validate('role', role, function(value)
       return vim.list_contains(ROLES, value)
     end, false, "'claude', 'report' or 'input'")
-    forget_wiped_shell()
     if must_open_to_focus(role) then
       if type(arrangement) == 'function' then
         arrangement = arrangement()
@@ -1645,7 +1644,6 @@ local function make_layout(input_name, group_name)
     vim.validate('pane', pane, function(value)
       return PANE_BUFFERS[value] ~= nil
     end, false, "'agent', 'changes' or 'terminal'")
-    forget_wiped_shell()
     if not can_show_in_place(pane) then
       local current = vim.api.nvim_get_current_win()
       local restoring = has_any_window()

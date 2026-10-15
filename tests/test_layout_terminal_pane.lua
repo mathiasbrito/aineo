@@ -860,9 +860,21 @@ T['a shell wiped where no handler sees it']['leaves the Report shown again and t
   eq(layout.window_count(child), 3)
 end
 
-T['a shell stopped where no handler sees it'] = MiniTest.new_set()
+--- The calls that must work after a shell was stopped where no handler saw
+--- it, each written as a Lua chunk that is given the arrangement.
+local CALLS_AFTER_AN_UNSEEN_STOP = {
+  { [[require('aineo.layout').open(...)]] },
+  { [[require('aineo.layout').focus('report', ...)]] },
+  { [[require('aineo.layout').show_pane('agent', ...)]] },
+}
 
-T['a shell stopped where no handler sees it']['leaves the layout opening on the agent pane'] = function()
+T['a shell stopped where no handler sees it'] = MiniTest.new_set({
+  parametrize = CALLS_AFTER_AN_UNSEEN_STOP,
+})
+
+T['a shell stopped where no handler sees it']['leaves the layout working on the agent pane, for the call'] = function(
+  call
+)
   local buffers = open_with_panes()
   show_pane('terminal')
   child.lua([[
@@ -875,9 +887,9 @@ T['a shell stopped where no handler sees it']['leaves the layout opening on the 
     vim.api.nvim_exec_autocmds('User', { pattern = 'AineoTestStop' })
   ]])
 
-  local opened = pcall(layout.open, child, layout.arrangement(buffers))
+  local worked = pcall(child.lua, call, { layout.arrangement(buffers) })
 
-  eq(opened, true)
+  eq(worked, true)
   eq(child.api.nvim_win_get_buf(layout.window_showing(child, buffers.report)), buffers.report)
   eq(layout.window_count(child), 3)
 end
