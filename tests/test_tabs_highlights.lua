@@ -33,12 +33,12 @@ end
 --- The colours and boldness `group` shows in the child, links followed.
 ---
 ---@param group string
----@return { fg: integer?, bg: integer?, bold: boolean? }
+---@return { fg: integer?, bg: integer?, ctermfg: integer?, ctermbg: integer?, bold: boolean? }
 local function shown_by(group)
   return child.lua_get(([[
     (function()
       local hl = vim.api.nvim_get_hl(0, { name = '%s', link = false })
-      return { fg = hl.fg, bg = hl.bg, bold = hl.bold }
+      return { fg = hl.fg, bg = hl.bg, ctermfg = hl.ctermfg, ctermbg = hl.ctermbg, bold = hl.bold }
     end)()
   ]]):format(group))
 end
@@ -73,6 +73,21 @@ T['AineoTabLine']["shows Normal's foreground over TabLine's background"] = funct
   draw_tabline_after(KNOWN_COLOURS)
 
   eq(shown_by('AineoTabLine'), { fg = 0x112233, bg = 0x333333 })
+end
+
+T['AineoTabLine']["shows Normal's terminal foreground over TabLine's terminal background"] = function()
+  draw_tabline_after([[
+    vim.api.nvim_set_hl(0, 'Normal', { fg = 0x112233, ctermfg = 251 })
+    vim.api.nvim_set_hl(0, 'TabLine', { bg = 0x333333, ctermfg = 1, ctermbg = 243 })
+  ]])
+
+  eq(shown_by('AineoTabLine'), { fg = 0x112233, bg = 0x333333, ctermfg = 251, ctermbg = 243 })
+end
+
+T['AineoTabLine']['is no link when Normal has a terminal foreground alone'] = function()
+  draw_tabline_after("vim.api.nvim_set_hl(0, 'Normal', { ctermfg = 251 })")
+
+  eq(shown_by('AineoTabLine').ctermfg, 251)
 end
 
 T['AineoTabLine']['links TabLine when Normal has no foreground'] = function()
@@ -114,6 +129,23 @@ T['colour scheme']['has the defaults follow the colours the new scheme gives'] =
   child.cmd('doautocmd ColorScheme')
 
   eq(shown_by('AineoTabLine').fg, 0x778899)
+end
+
+T['colour scheme']['has the defaults follow a change of background that fires no ColorScheme'] = function()
+  draw_tabline_after("vim.o.background = 'dark'")
+
+  child.o.background = 'light'
+
+  eq(shown_by('AineoTabLine').bg, shown_by('TabLine').bg)
+end
+
+T['colour scheme']['keeps a group the user defined across a change of background'] = function()
+  draw_tabline_after("vim.o.background = 'dark'")
+  child.lua("vim.api.nvim_set_hl(0, 'AineoTabLine', { fg = 0x123456 })")
+
+  child.o.background = 'light'
+
+  eq(shown_by('AineoTabLine'), { fg = 0x123456 })
 end
 
 T['colour scheme']['keeps one autocommand however often aineo takes the tab line'] = function()

@@ -46,12 +46,19 @@ local function is_branch_name(value)
   return type(value) == 'string' and value ~= ''
 end
 
---- Whether `value` is a count of spaces: a whole number from 0.
+--- The most spaces a title of the tab line may be padded with either side.
+local MOST_PADDING = 8
+
+--- Whether `value` is a count of padding spaces: a whole number from 0 to
+--- `MOST_PADDING`.
 ---
 ---@param value any
 ---@return boolean
-local function is_space_count(value)
-  return type(value) == 'number' and value >= 0 and value == math.floor(value)
+local function is_padding(value)
+  return type(value) == 'number'
+    and value >= 0
+    and value <= MOST_PADDING
+    and value == math.floor(value)
 end
 
 --- aineo's settings, each named by its path in `vim.g.aineo`, with its
@@ -92,8 +99,8 @@ local SETTINGS = {
   {
     name = 'tabs.padding',
     default = 2,
-    validator = is_space_count,
-    expected = 'a whole number from 0',
+    validator = is_padding,
+    expected = 'a whole number from 0 to 8',
   },
 }
 

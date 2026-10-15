@@ -162,22 +162,25 @@ end
 T['resolve_config()']['takes the padding of the tab titles from either source, 2 by default'] = function()
   local from_global = config.resolve_config({ tabs = { padding = 0 } }, nil)
   local from_setup = config.resolve_config({ tabs = { padding = 0 } }, { tabs = { padding = 4 } })
+  local widest = config.resolve_config({ tabs = { padding = 8 } }, nil)
 
   eq(from_global.tabs, { padding = 0 })
   eq(from_setup.tabs, { padding = 4 })
+  eq(widest.tabs, { padding = 8 })
   eq(config.resolve_config(nil, nil).tabs, { padding = 2 })
 end
 
-T['resolve_config()']['refuses a padding that is not a whole number from 0'] = MiniTest.new_set({
-  parametrize = { { -1 }, { 1.5 }, { '2' }, { false } },
-})
+T['resolve_config()']['refuses a padding that is not a whole number from 0 to 8'] =
+  MiniTest.new_set({
+    parametrize = { { -1 }, { 1.5 }, { '2' }, { false }, { 9 }, { math.huge } },
+  })
 
-T['resolve_config()']['refuses a padding that is not a whole number from 0']['as tabs.padding'] = function(
+T['resolve_config()']['refuses a padding that is not a whole number from 0 to 8']['as tabs.padding'] = function(
   padding
 )
   expect.error(function()
     config.resolve_config({ tabs = { padding = padding } }, nil)
-  end, 'tabs%.padding: expected a whole number from 0')
+  end, 'tabs%.padding: expected a whole number from 0 to 8')
 end
 
 T['resolve_config()']['takes the working branch of the changes pane from either source, none by default'] = function()
