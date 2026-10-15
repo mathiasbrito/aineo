@@ -21,7 +21,7 @@ The user's two choices: the selected tab in bold, and the inactive tabs in the c
 
 ## Task lines
 
-- [X] T72 The tab line's look: bold current title, readable inactive titles, padding — done on `feature/t72-tabline-style`: `AineoTabLineSel` (TabLineSel's colours plus bold), `AineoTabLine` (Normal's foreground over TabLine's background; linked to TabLine when Normal has no foreground) and `AineoTabLineFill` (linked to TabLineFill) are defined by `lua/aineo/tabs/highlights.lua` when aineo takes the tab line and after every `:colorscheme`; the setting `tabs.padding` (a whole number from 0, default 2) is the spaces either side of every title and counts in the width the line fits; help `*aineo-tabline*` and `*aineo-config-tabs.padding*`; reviews and the pull request's merge are open.
+- [X] T72 The tab line's look: bold current title, readable inactive titles, padding — done on `feature/t72-tabline-style`: `AineoTabLineSel` (TabLineSel's colours plus bold), `AineoTabLine` (Normal's foreground over TabLine's background; linked to TabLine when Normal has no foreground) and `AineoTabLineFill` (linked to TabLineFill) are defined by `lua/aineo/tabs/highlights.lua` when aineo takes the tab line and after every `:colorscheme`; the setting `tabs.padding` (a whole number from 0 to 8, default 2) is the spaces either side of every title and counts in the width the line fits; help `*aineo-tabline*` and `*aineo-config-tabs.padding*`; reviews and the pull request's merge are open.
 
 ## What changed
 
@@ -61,8 +61,17 @@ The user's two choices: the selected tab in bold, and the inactive tabs in the c
 ## Open threads
 
 - The tabs home now requires `aineo.config`: a new edge of the modularity skill's direction table (A334), to be added by the orchestrator's `ai/` change.
-- The paragraph of `*aineo-tabs*` that says the current tab is drawn "in |hl-TabLineSel|, the others in |hl-TabLine|" is stale; T68 rewrites those paragraphs, so it is left alone here.
-- A colorscheme that does not `:highlight clear` before it sets its groups leaves the three groups as they were defined before it: a default does not replace an earlier definition.
+
+## Fix round (review of PR #219)
+
+Rulings are the orchestrator's assumptions, not the user's decisions.
+
+- **Finding 1, pinned.** Four survivors of the review are killed: two fitting cases (100 columns, padding 4, current tab 1 and 3, 2 titles each; mutants `width_of(entries[first], 0)` and `width_of(entries[last], 0)`); `AineoTabLine`'s `ctermfg` and `ctermbg` (mutants removing either); a `Normal` with `ctermfg` alone (mutant `if normal.fg then`).
+- **A338, finding 2.** `tabs.padding` is a whole number from 0 to 8, refused by the validator otherwise (8 accepted; 9 and `math.huge` refused), so `:checkhealth aineo` names it and the draw uses the default. The first commit's message said a wrong value never raises on a redraw; that overstated it, because `math.huge` passed the validator and raised from `string.rep` and `1e9` froze the line.
+- **A339, finding 3.** The sentence in `*aineo-tabs*` that named `hl-TabLineSel` and `hl-TabLine` now names `AineoTabLineSel` and `AineoTabLine` and points to `|aineo-tabline|`; that sentence only.
+- **Finding 4.** A332 is recorded above as an assumption.
+- **A340, finding 5.** The groups are defined again on `OptionSet background` as well as `ColorScheme`, in the same augroup. A group counts as aineo's while it still holds what aineo defined in it (kept per group); only such a group is replaced on a later event, since Neovim drops the `default` flag from a stored group when the background changes and a plain default definition no longer replaces it. A group the user defined stays. The same rule makes a colorscheme that does not `:highlight clear` update the groups too.
+- Mutants of the round: `used = used + width_of(entries[first], padding)` and the same with `last` → `0`; `ctermfg = normal.ctermfg,` removed; `ctermbg = tabline.ctermbg,` removed; `if normal.fg or normal.ctermfg then` → `if normal.fg then`; `'OptionSet'` → `'User'`; `is_aineos` returning `false`, then `true`; `value <= MOST_PADDING` removed; `MOST_PADDING` 9 and 7. All killed. The first-round mutants on `highlights.lua` were run again on the new code and are killed.
 
 ## Commits
 

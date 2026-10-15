@@ -16,9 +16,14 @@ M.GROUPS = {
   fill = 'AineoTabLineFill',
 }
 
---- The augroup of the `ColorScheme` autocommand that defines the groups
---- again.
+--- The augroup of the autocommands that define the groups again.
 local AUGROUP = 'aineo.tabs.highlights'
+
+--- What each group held right after aineo defined it, by group: a group that
+--- still holds that is aineo's, one that holds anything else is the user's.
+---
+---@type table<string, table>
+local defined = {}
 
 --- The colours and attributes `group` shows, a link followed.
 ---
@@ -28,13 +33,36 @@ local function resolved(group)
   return vim.api.nvim_get_hl(0, { name = group, link = false })
 end
 
---- Defines `group` as a default, which a definition of the user's, made
+--- What `group` holds as defined, a link kept as one, apart from whether it
+--- was defined as a default.
+---
+---@param group string
+---@return table
+local function held_by(group)
+  local held = vim.api.nvim_get_hl(0, { name = group })
+  held.default = nil
+  return held
+end
+
+--- Whether `group` still holds what aineo defined in it.
+---
+---@param group string
+---@return boolean
+local function is_aineos(group)
+  return defined[group] ~= nil and vim.deep_equal(held_by(group), defined[group])
+end
+
+--- Defines `group` as `definition`. A group that is aineo's is replaced; any
+--- other is defined as a default, which a definition of the user's, made
 --- before or after, replaces.
 ---
 ---@param group string
 ---@param definition vim.api.keyset.highlight
-local function define_default(group, definition)
-  vim.api.nvim_set_hl(0, group, vim.tbl_extend('force', definition, { default = true }))
+local function define_group(group, definition)
+  local replaces = is_aineos(group)
+  vim.api.nvim_set_hl(0, group, vim.tbl_extend('force', definition, { default = not replaces }))
+  local took_effect = replaces or vim.api.nvim_get_hl(0, { name = group }).default
+  defined[group] = took_effect and held_by(group) or nil
 end
 
 --- Defines the three groups of the tab line, each unless the user defined it:
@@ -43,29 +71,35 @@ end
 --- when `Normal` has no foreground; the rest of the line as `TabLineFill`.
 local function define()
   local sel = resolved('TabLineSel')
-  define_default(M.GROUPS.current, vim.tbl_extend('force', sel, { bold = true }))
+  define_group(M.GROUPS.current, vim.tbl_extend('force', sel, { bold = true }))
 
   local normal, tabline = resolved('Normal'), resolved('TabLine')
   if normal.fg or normal.ctermfg then
-    define_default(M.GROUPS.other, {
+    define_group(M.GROUPS.other, {
       fg = normal.fg,
       bg = tabline.bg,
       ctermfg = normal.ctermfg,
       ctermbg = tabline.ctermbg,
     })
   else
-    define_default(M.GROUPS.other, { link = 'TabLine' })
+    define_group(M.GROUPS.other, { link = 'TabLine' })
   end
 
-  define_default(M.GROUPS.fill, { link = 'TabLineFill' })
+  define_group(M.GROUPS.fill, { link = 'TabLineFill' })
 end
 
---- Defines the groups now and after every `:colorscheme`, which
---- clears them. Called again, it leaves the one autocommand it made.
+--- Defines the groups now and again after every `:colorscheme`, which clears
+--- them, and every change of 'background', which leaves them as they were
+--- while the colours they follow change. Called again, it leaves the
+--- autocommands it made.
 function M.keep_defined()
   define()
   local group = vim.api.nvim_create_augroup(AUGROUP, {})
   vim.api.nvim_create_autocmd('ColorScheme', { group = group, callback = define })
+  vim.api.nvim_create_autocmd(
+    'OptionSet',
+    { group = group, pattern = 'background', callback = define }
+  )
 end
 
 return M
