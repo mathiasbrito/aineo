@@ -122,7 +122,94 @@ local function kill_deaf_after_case(pid)
   end)
 end
 
+--- Stops the child and starts it afresh on the state `state`, which the case
+--- made (`tabs.use_own_state()`), as a new Neovim in the same folder.
+---
+---@param state string
+local function restart_on_state(state)
+  stop_the_child()
+  entry.restart(child)
+  child.lua('vim.env.XDG_STATE_HOME = ...', { vim.fs.dirname(state) })
+end
+
+--- Session `index` of a series of distinct ids of the form Claude Code gives.
+---
+---@param index integer
+---@return string
+local function numbered_session(index)
+  return ('%08x-0000-4000-8000-000000000000'):format(index)
+end
+
+--- The file that keeps Input's draft of the session `id` under `state`.
+---
+---@param state string
+---@param id string
+---@return string
+local function draft_file(state, id)
+  return vim.fs.joinpath(state, 'aineo', 'drafts', 'session-' .. vim.fn.sha256(id) .. '.txt')
+end
+
+--- The lines Input of the tab page numbered `number` holds.
+---
+---@param number integer
+---@return string[]
+local function input_lines_of_tab(number)
+  return child.lua_get(
+    'vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)',
+    { tabs.input_name_of_tab(child, number) }
+  )
+end
+
 T['the folder’s list'] = MiniTest.new_set()
+
+T['the folder’s list']['leaves a closed tab out of the next start, whose session was the kept one, and brings back the tab left open'] = function()
+  local state = tabs.open_first_tab(child, 'reopen-closed-kept')
+  local first = tabs.session_of_tab(state, child, tabs.FIRST_TAB)
+  tabs.use_next_fake(child, tabs.fake('reopen-closed-kept-second'))
+  child.cmd('Aineo tab new')
+  tabs.session_of_tab(state, child, '2')
+  child.cmd('Aineo tab close')
+  tabs.kept_tab_list_once(state, child.fn.getcwd(), function(list)
+    return list ~= nil and #list.sessions == 1
+  end)
+  restart_on_state(state)
+  local fake = tabs.fake('reopen-closed-kept-next')
+  entry.use_fake(child, fake)
+
+  child.cmd('Aineo open')
+
+  eq(sorted_words_after(fake, 1, '--resume'), { first })
+  eq(tabs.tab_count(child), 1)
+end
+
+T['the folder’s list']['leaves a closed tab out of the next start when it held the session that took the place of a dead one'] = function()
+  local conversations = fixture.directory('reopen-closed-dead-conversations')
+  vim.fn.writefile({}, vim.fs.joinpath(conversations, FIRST))
+  local state, folder = reopening_setup(
+    'reopen-closed-dead',
+    { sessions = { FIRST, SECOND }, current = 1 },
+    FIRST,
+    { mode = 'exit', environment = { AINEO_FAKE_CLAUDE_CONVERSATIONS = conversations } }
+  )
+  child.cmd('Aineo open')
+  tabs.kept_tab_list_once(state, folder, function(list)
+    return list ~= nil and list.sessions[2] ~= SECOND
+  end)
+  child.cmd('2tabclose')
+  tabs.kept_tab_list_once(state, folder, function(list)
+    return list ~= nil and #list.sessions == 1
+  end)
+  restart_on_state(state)
+  local fake = tabs.fake('reopen-closed-dead-next', 'ready', {
+    AINEO_FAKE_CLAUDE_CONVERSATIONS = conversations,
+  })
+  entry.use_fake(child, fake)
+
+  child.cmd('Aineo open')
+
+  eq(sorted_words_after(fake, 1, '--resume'), { FIRST })
+  eq(tabs.tab_count(child), 1)
+end
 
 T['the folder’s list']['is kept as tabs open and close, and a closed tab is no longer in it'] = function()
   local state = tabs.open_first_tab(child, 'reopen-keeps')
@@ -245,17 +332,149 @@ T['the folder’s list']['is kept at quit with the aineo tab used last when the 
   eq(#list.sessions, 2)
 end
 
+T['the folder’s list']['is not written again after the quit has kept it, by a tab that opens while Neovim quits'] = function()
+  local state = tabs.open_first_tab(child, 'reopen-after-quit')
+  local folder = child.fn.getcwd()
+  local address = child.v.servername
+  tabs.session_of_tab(state, child, tabs.FIRST_TAB)
+  tabs.use_next_fake(child, tabs.fake('reopen-after-quit-second'))
+  child.lua([[
+    vim.api.nvim_create_autocmd('VimLeavePre', {
+      callback = function()
+        pcall(vim.cmd, 'Aineo tab new')
+      end,
+    })
+  ]])
+
+  claude_session.quit(child)
+
+  vim.wait(claude_session.STOP_PATIENCE_MS, function()
+    return vim.uv.fs_stat(address) == nil
+  end, 20)
+  eq(#tabs.kept_tab_list(state, folder).sessions, 1)
+end
+
 T['the first open'] = MiniTest.new_set()
 
 T['the first open']['reopens every tab of the list in its order, each on its session, with the tab at the list’s place current'] = function()
-  local _, _, fake =
+  local state =
     reopening_setup('reopen-all', { sessions = { THIRD, FIRST, SECOND }, current = 2 }, SECOND)
 
   entry.press(child, '\\o')
 
-  eq(tabs.resumed_in_tabs(child, fake, { 1, 2, 3 }), { THIRD, FIRST, SECOND })
+  eq(sessions_of_tabs(state, { tabs.FIRST_TAB, '2', '3' }), { THIRD, FIRST, SECOND })
   eq(tabs.tab_count(child), 3)
   eq(tabs.current_tab(child), 2)
+end
+
+T['the first open']['starts every reopened tab’s terminal at its window’s size, so that each is ready and follows its own session’s draft'] = function()
+  local sessions = { FIRST, SECOND, THIRD }
+  local state = reopening_setup('reopen-ready', { sessions = sessions, current = 2 }, FIRST)
+  for _, id in ipairs(sessions) do
+    vim.fn.mkdir(vim.fs.dirname(draft_file(state, id)), 'p')
+    vim.fn.writefile({ 'draft of ' .. id }, draft_file(state, id))
+  end
+
+  child.cmd('Aineo open')
+
+  eq(sessions_of_tabs(state, { tabs.FIRST_TAB, '2', '3' }), sessions)
+  eq(vim.tbl_map(input_lines_of_tab, { 1, 2, 3 }), {
+    { 'draft of ' .. FIRST },
+    { 'draft of ' .. SECOND },
+    { 'draft of ' .. THIRD },
+  })
+end
+
+T['the first open']['starts every tab in the folder, the first included, whatever :cd said since aineo was first called'] = function()
+  local _, folder, fake =
+    reopening_setup('reopen-cd', { sessions = { FIRST, SECOND }, current = 1 }, FIRST)
+  child.cmd('Aineo claim ' .. SECOND)
+  child.cmd('cd lua')
+
+  child.cmd('Aineo open')
+
+  local starts = claude_session.wait_for_starts(fake, 2)
+  eq(
+    vim.tbl_map(function(start)
+      return start.cwd
+    end, starts),
+    { folder, folder }
+  )
+end
+
+T['the first open']['reopens the list before a first action that opens a tab’s pieces, so that the list is not replaced by one session'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'Aineo claude', 3 },
+      { 'Aineo input', 3 },
+      { 'Aineo report', 3 },
+      { 'Aineo tab new', 4 },
+    },
+  })
+
+T['the first open']['reopens the list before a first action that opens a tab’s pieces, so that the list is not replaced by one session'][1] = function(
+  command,
+  pages
+)
+  local state, folder = reopening_setup(
+    'reopen-first-action',
+    { sessions = { FIRST, SECOND, THIRD }, current = 2 },
+    FIRST
+  )
+
+  child.cmd(command)
+
+  eq(tabs.tab_count(child), pages)
+  eq(#tabs.kept_tab_list(state, folder).sessions, pages)
+end
+
+T['the first open']['tells which sessions failed and which were not tried when a tab cannot start, and keeps the untried in the list'] = function()
+  local state, folder =
+    reopening_setup('reopen-fails', { sessions = { FIRST, SECOND, THIRD }, current = 1 }, FIRST)
+  child.lua([[
+    local claude = require('aineo.claude')
+    local new = claude.new
+    claude.new = function()
+      local copy = new()
+      copy.start_session = function()
+        error('cannot start the probe', 0)
+      end
+      return copy
+    end
+  ]])
+  child.lua('_G.entry_test_messages = {}')
+
+  child.cmd('Aineo open')
+
+  eq(entry.messages(child), {
+    {
+      message = 'aineo: reopening stopped at '
+        .. SECOND
+        .. ': cannot start the probe; not tried: '
+        .. THIRD,
+      level = vim.log.levels.ERROR,
+    },
+  })
+  eq(tabs.kept_tab_list(state, folder), { sessions = { FIRST, THIRD }, current = 1 })
+  eq(tabs.tab_count(child), 1)
+end
+
+T['the first open']['opens at most 20 tabs, in the order of the list, and tells how many it left in the list'] = function()
+  local sessions = vim.tbl_map(numbered_session, vim.fn.range(1, 22))
+  local state, folder =
+    reopening_setup('reopen-cap', { sessions = sessions, current = 1 }, sessions[1])
+  child.lua('_G.entry_test_messages = {}')
+
+  child.cmd('Aineo open')
+
+  eq(tabs.tab_count(child), 20)
+  eq(entry.messages(child), {
+    {
+      message = 'aineo: reopened the first 20 tabs of the list; 2 more stay in the list',
+      level = vim.log.levels.WARN,
+    },
+  })
+  eq(tabs.kept_tab_list(state, folder).sessions, sessions)
 end
 
 T['the first open']['starts every tab’s Claude Code at once, each listing the folder’s sessions as a resuming start does'] = function()
@@ -329,7 +548,6 @@ T['the first open']['reopens nothing at a later \\o, when no tab is left'] = fun
   entry.press(child, '\\o')
 
   eq(#claude_session.wait_for_starts(fake, 3), 3)
-  vim.wait(1500)
   eq(#claude_session.wait_for_starts(fake, 4), 3)
   eq(tabs.tab_count(child), 1)
 end
@@ -350,9 +568,9 @@ T['the first open']['keeps the list once, when the last tab has opened, not as e
     end
   ]])
 
-  child.cmd('Aineo open')
+  local kept_during_open = child.lua("vim.cmd('Aineo open'); return _G.reopen_keeps")
 
-  eq(child.lua_get('_G.reopen_keeps'), { 3 })
+  eq(kept_during_open, { 3 })
   eq(tabs.kept_tab_list(state, folder), { sessions = { FIRST, SECOND, THIRD }, current = 1 })
   eq(#claude_session.wait_for_starts(fake, 3), 3)
 end
