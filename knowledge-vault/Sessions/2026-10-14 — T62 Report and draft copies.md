@@ -199,4 +199,5 @@ Fix-round mutants (literal edits, run on the home's copies file):
 
 ## Commits
 
-*Recorded after the merge.*
+- PR #209, `feature/t62-report-draft-copies`, head `1a1fb92` (3 commits), merged by rebase into `dev` as `a1b29fb` (the Report and Input's draft, one copy per tab), `c84c241` (the rebase onto `dev` and the runs after it, in this note), `e05a1e3` (the fix round: a copy's pre-follow files, router targets and names kept apart).
+- Released in v0.2.34 (PR #214, `main` `8fe30d0`).

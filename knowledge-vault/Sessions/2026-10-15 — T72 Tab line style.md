@@ -75,4 +75,5 @@ Rulings are the orchestrator's assumptions, not the user's decisions.
 
 ## Commits
 
-Recorded after the merge.
+- PR #219, `feature/t72-tabline-style`, head `72e0399` (2 commits), merged by rebase into `dev` as `532728c` (the tab line's groups, the bold current title, the padding), `12eb62c` (the fix round: the padding bounded, the fit and the cterm colours pinned).
+- Released in v0.2.36 (PR #221, `main` `984cc36`).

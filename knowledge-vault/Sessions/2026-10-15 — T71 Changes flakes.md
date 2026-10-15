@@ -45,4 +45,5 @@ A forced timing reproduces each cause every time, in a copy of the file kept out
 
 ## Commits
 
-Recorded after the merge.
+- PR #212, `bugfix/t71-changes-flakes`, head `cd6cc71` (1 commit), merged by rebase into `dev` as `21451a3` (waits for what three changes cases read once). A test-only packet (D28, A297): it ships in v0.2.34 beside T66 and has no release of its own.
+- Released in v0.2.34 (PR #214, `main` `8fe30d0`).
