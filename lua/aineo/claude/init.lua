@@ -1093,8 +1093,9 @@ end
 --- again, and the attached mark gone, once Claude Code has exited, however
 --- it ended. `b:aineo_session_busy` says whether Claude Code is busy, the
 --- main agent or a subagent of its working: `true` while its terminal title
---- begins with ◐ or ◑ (Claude Code 2.1.301's busy glyphs), `false` before
---- the first title, for every other title and once Claude Code has exited.
+--- begins with ◐ or ◑ followed by a space or nothing (Claude Code 2.1.301's
+--- busy glyphs), `false` before the first title, for every other title and
+--- once Claude Code has exited.
 ---
 --- A session whose terminal has been wiped counts as ended, since the wipe
 --- hangs its Claude Code up: a start then launches a new one.

@@ -34,13 +34,13 @@ local HOLD_TWO_TABS = [[
   vim.api.nvim_set_current_tabpage(first)
 ]]
 
---- The code, run in the child, that defines `active_timers()`: how many
---- `vim.uv` timers of the editor run now.
-local DEFINE_ACTIVE_TIMERS = [[
-  local function active_timers()
+--- The code, run in the child, that defines `open_timers()`: how many
+--- `vim.uv` timers of the editor are open: started and not closed, stopped or not.
+local DEFINE_OPEN_TIMERS = [[
+  local function open_timers()
     local count = 0
     vim.uv.walk(function(handle)
-      if handle:get_type() == 'timer' and handle:is_active() then
+      if handle:get_type() == 'timer' and not handle:is_closing() then
         count = count + 1
       end
     end)
@@ -51,6 +51,12 @@ local DEFINE_ACTIVE_TIMERS = [[
 --- How long a test waits for the animation to do what it is waiting for: a
 --- few frames, of 500 ms each.
 local PATIENCE_MS = 3000
+
+--- The band, in milliseconds, around the 500 ms of a frame that the time
+--- between two frames must fall in: wide enough for a loaded host, narrow
+--- enough to tell twice a second from once in two seconds or fifty times.
+local FRAME_MS_AT_LEAST = 350
+local FRAME_MS_AT_MOST = 1200
 
 --- Holds two tab pages in the child as `HOLD_TWO_TABS` does, and leaves
 --- their handles in its globals `first` and `second`.
@@ -148,27 +154,27 @@ T['activity()']['is unseen for a tab that was busy as the current tab page and e
 end
 
 T['activity()']['is none for a tab page that is not held, which set_busy() leaves alone'] = function()
-  local result = in_child(DEFINE_ACTIVE_TIMERS .. [[
+  local result = in_child(DEFINE_OPEN_TIMERS .. [[
     vim.cmd('tabnew')
     local not_held = vim.api.nvim_get_current_tabpage()
-    local timers = active_timers()
+    local timers = open_timers()
     tabs.set_busy(not_held, true)
-    return { activity = tabs.activity(not_held) or 'none', started_timers = active_timers() - timers }
+    return { activity = tabs.activity(not_held) or 'none', opened_timers = open_timers() - timers }
   ]])
 
-  eq(result, { activity = 'none', started_timers = 0 })
+  eq(result, { activity = 'none', opened_timers = 0 })
 end
 
 T['activity()']['is none for a held tab page that does not exist'] = function()
-  local result = in_child(DEFINE_ACTIVE_TIMERS .. [[
+  local result = in_child(DEFINE_OPEN_TIMERS .. [[
     local gone = 999
     tabs.hold(gone, function() return 'gone' end)
-    local timers = active_timers()
+    local timers = open_timers()
     tabs.set_busy(gone, true)
-    return { activity = tabs.activity(gone) or 'none', started_timers = active_timers() - timers }
+    return { activity = tabs.activity(gone) or 'none', opened_timers = open_timers() - timers }
   ]])
 
-  eq(result, { activity = 'none', started_timers = 0 })
+  eq(result, { activity = 'none', opened_timers = 0 })
 end
 
 T['activity()']['is forgotten by let_go(), also for a tab held again'] = function()
@@ -273,6 +279,19 @@ T['the animation']['flips the indicator of a busy tab between ◒ and ◓ twice 
   eq(titles, { '2: second ◒', '2: second ◓', '2: second ◒' })
 end
 
+T['the animation']['changes frame about every 500 ms'] = function()
+  hold_two_tabs_in_child()
+  child.lua("require('aineo.tabs').set_busy(_G.second, true)")
+  wait_for_second_title('2: second ◓')
+  local at_second_frame = vim.uv.hrtime()
+
+  wait_for_second_title('2: second ◒')
+  local frame_ms = (vim.uv.hrtime() - at_second_frame) / 1e6
+
+  eq(frame_ms >= FRAME_MS_AT_LEAST, true)
+  eq(frame_ms <= FRAME_MS_AT_MOST, true)
+end
+
 T['the animation']['starts at the first frame each time a tab becomes busy after none was'] = function()
   hold_two_tabs_in_child()
   child.lua("require('aineo.tabs').set_busy(_G.second, true)")
@@ -361,23 +380,23 @@ end
 T['the animation']['runs one timer for any number of busy tabs, and none when none is busy'] = function()
   child.cmd('tabnew')
   child.cmd('tabnew')
-  local counts = child.lua(DEFINE_ACTIVE_TIMERS .. [[
+  local counts = child.lua(DEFINE_OPEN_TIMERS .. [[
     local tabs = require('aineo.tabs')
     local handles = vim.api.nvim_list_tabpages()
     for _, handle in ipairs(handles) do
       tabs.hold(handle, function() return 'a tab' end)
     end
-    local before = active_timers()
+    local before = open_timers()
     tabs.set_busy(handles[1], true)
-    local one_busy = active_timers() - before
+    local one_busy = open_timers() - before
     tabs.set_busy(handles[2], true)
     tabs.set_busy(handles[3], true)
-    local three_busy = active_timers() - before
+    local three_busy = open_timers() - before
     tabs.set_busy(handles[1], false)
-    local two_busy = active_timers() - before
+    local two_busy = open_timers() - before
     tabs.set_busy(handles[2], false)
     tabs.set_busy(handles[3], false)
-    return { one_busy, three_busy, two_busy, active_timers() - before }
+    return { one_busy, three_busy, two_busy, open_timers() - before }
   ]])
 
   eq(counts, { 1, 1, 1, 0 })
@@ -391,16 +410,16 @@ T['the animation']['stops when the busy tab is let go, or closed'] = MiniTest.ne
 })
 
 T['the animation']['stops when the busy tab is let go, or closed'][1] = function(ending)
-  local timers = child.lua(DEFINE_ACTIVE_TIMERS .. ([[
+  local timers = child.lua(DEFINE_OPEN_TIMERS .. ([[
     local tabs = require('aineo.tabs')
     vim.cmd('tabnew')
     local handles = vim.api.nvim_list_tabpages()
     tabs.hold(handles[2], function() return 'a tab' end)
-    local before = active_timers()
+    local before = open_timers()
     tabs.set_busy(handles[2], true)
-    local running = active_timers() - before
+    local running = open_timers() - before
     %s
-    return { running, active_timers() - before }
+    return { running, open_timers() - before }
   ]]):format(ending))
 
   eq(timers, { 1, 0 })
@@ -484,19 +503,19 @@ T['tabline()']['counts the cells of the indicator when it fits the titles'][1] =
 end
 
 T['the animation']['stops at its next frame when the busy tab was closed unheard of'] = function()
-  child.lua(DEFINE_ACTIVE_TIMERS .. [[
+  child.lua(DEFINE_OPEN_TIMERS .. [[
     local tabs = require('aineo.tabs')
     vim.cmd('tabnew')
     local handles = vim.api.nvim_list_tabpages()
     tabs.hold(handles[2], function() return 'a tab' end)
-    _G.timers_before = active_timers()
+    _G.timers_before = open_timers()
     tabs.set_busy(handles[2], true)
     vim.cmd('tabclose 2')
-    _G.active_timers = active_timers
+    _G.open_timers = open_timers
   ]])
 
   local stopped = vim.wait(PATIENCE_MS, function()
-    return child.lua_get('_G.active_timers() - _G.timers_before') == 0
+    return child.lua_get('_G.open_timers() - _G.timers_before') == 0
   end, 20)
 
   eq(stopped, true)
@@ -521,17 +540,17 @@ T['set_busy(), mark_seen() and activity()']['raise, and change nothing, for argu
   name,
   arguments
 )
-  local result = in_child(DEFINE_ACTIVE_TIMERS .. HOLD_TWO_TABS .. ([[
-    local timers = active_timers()
+  local result = in_child(DEFINE_OPEN_TIMERS .. HOLD_TWO_TABS .. ([[
+    local timers = open_timers()
     local raised = not pcall(tabs.%s, %s)
     return {
       raised = raised,
       activity = tabs.activity(first) or 'none',
-      started_timers = active_timers() - timers,
+      opened_timers = open_timers() - timers,
     }
   ]]):format(name, arguments))
 
-  eq(result, { raised = true, activity = 'none', started_timers = 0 })
+  eq(result, { raised = true, activity = 'none', opened_timers = 0 })
 end
 
 return T
