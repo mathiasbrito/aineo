@@ -26,10 +26,14 @@ Wave 15, stage 3. D65 and D66 are the user's decisions on the shape ("\S loads i
 
 ## Decisions and spec conflicts
 
-- **The pick's refusals of the current tab (the implementer's reading, for the orchestrator).** The brief names three refusals that stay and drops the prompt check. The pick no longer refuses either when the current tab's Claude Code has exited, or when a claim was made, while the menu was open: both refused because the pick wrote into the current tab. The list itself still refuses while the current tab's Claude Code is not ready or a claim holds, as today. Two cases pin the new reading.
-- **The folder.** The list, the standing and a new tab's start use `kept_places().working_directory` (D63), not the current tab's `session_directory()`; for a single-tab Neovim after `:cd` the first tab keeps `getcwd()` (A298), the list does not.
+- **Rulings of the orchestrator on the packet's readings, 2026-10-15 (assumptions, never the user's decisions).**
+  - **A314:** a pick no longer refuses on "Claude Code exited" or "a claim made while the menu was open" (it writes into no current tab); the list still refuses while the current tab's Claude Code is not ready or a claim holds. Two cases pin it.
+  - **A315:** the list, the standing and a new tab's start use `kept_places().working_directory` (D63), not the current tab's `session_directory()`; for a single-tab Neovim after `:cd` the first tab keeps `getcwd()` (A298), the list does not.
+  - **A316:** `aineo.claude`'s now-unused `stop_sessions()` stays for the refactor packet (A303).
+  - **A318:** `finish_closing()` is the first line of `new_tab()`, so the pending close-stop runs while the first tab's homes still hold the start it stops.
+  - **A319:** a pick of a session whose closed tab's Claude Code still stops is refused, naming the session, via a `stopping` list beside `closing`.
+  - **A320:** with two tabs on one session, a pick from a tab that shows it stays there, otherwise it moves to the lowest numbered tab that shows it.
 - **The boundary was widened** to `lua/aineo/claude/stop.lua` and `lua/aineo/claude/init.lua` (A306, the standing and row forwards), to `tests/helpers/entry_tabs.lua` (`open_tab_when_stopped()` removed, a typed-key probe added), to `tests/test_entry.lua`, `tests/test_entry_prefix.lua`, `tests/test_entry_terminal_keys.lua`, `tests/test_plugin.lua` and `tests/test_health.lua` where a pin of the keys moved, and to a new `tests/test_claude_stop_background.lua`. Declared in the brief's amendment.
-- **`stop_sessions()` is unused** by the plugin now; its T61 cases stand. A candidate for removal in the `refactor/` packet.
 - **A blocked editor is told apart by typed keys, not by requests.** `vim.wait` serves the test's RPC requests while a stop waits, so `child.lua_get('1')` answers in 4 ms even under the old blocking stop (measured); only a typed key waits. The pin types `:lua …` and waits for the flag (`tabs.type_probe()`), and a first version that timed RPC requests passed on the old code and was dropped.
 - **`plugin/aineo.lua` grew and shrank:** the pick code is shorter than before (three functions and two messages gone), the close and the helpers add about 80 lines. The tab code stays in the file (A303).
 - **The folder's list of tabs** is T65's file and T68's to write: closing writes none, so "it leaves the folder's tabs" (U1) is T68's mutant 5.
@@ -40,9 +44,9 @@ One line per group of cases; *killer* is a mutant below, *—* says none was run
 
 | Cases | Status | Killer |
 |---|---|---|
-| `test_claude_agents`: row `[tab 1]`, `[tab 3]` ×2 (3 rows) | red `[running elsewhere]` / `[another folder]` for `[tab n]` | PM11 |
-| … standing `shown` ×3 (3 rows) | red `elsewhere` for `shown` | PM11 |
-| … the six other rows of both tables | green by nature: today's standings | — |
+| `test_claude_agents`: row `[tab 1]`, `[tab 3]` ×2 (3 of 7 rows) | red `[running elsewhere]` / `[another folder]` for `[tab n]` | PM11 |
+| … standing `shown` ×3 (3 of 7 rows) | red `elsewhere` for `shown` | PM11 |
+| … the eight other rows of both tables (14 in all) | green by nature: today's standings | — |
 | `test_claude_stop_background`: 7 cases | red `attempt to call field 'stop_sessions_in_background' (a nil value)` (the 6th, the raise, red on its message) | PM8 (returns at once), PM13 |
 | … a quit goes on without the background stop's keys (deaf) | written after the code, green; killed by PM13 (4 Ctrl-C expected, more seen) | PM13 |
 | `test_entry_tab_close`: handles typed keys while a deaf Claude Code stops, and that Claude Code still ends | red: the probe not answered in 1.5 s (the key waited 11.2 s) | PM8 via `test_claude_stop_background`; the entry case: `finish_closing()` blocking |
@@ -81,9 +85,35 @@ Each is the literal edit applied to the committed file, run on a narrowed copy o
 | PM12 | `settles_by_standing()`: delete `vim.api.nvim_set_current_tabpage(page)` | sessions › a row another tab shows |
 | PM13 | `stop.stop_together_in_background()`: delete the `v:exiting` guard | stop background › a quit goes on without the background stop's keys |
 
+## Fix round (A314–A320)
+
+Each new behaviour had its case seen failing first; the cases and mutants are literal below.
+
+| Case | Status | Killer |
+|---|---|---|
+| close › opened in the same command as the close of the first tab, whose Claude Code had exited, reaches ready (A318) | red: no start recorded for the new tab | FM1 |
+| sessions › a pick of the session of a tab just closed, whose Claude Code still stops, opens no tab and says so; once it has stopped it opens one (A319) | red: the old warning `also open in another Claude Code` | FM2, FM6 |
+| sessions › a pick of a session two tabs show, from a tab that shows it, stays in that tab (A320) | red: moved to tab 1 | FM4, FM3 |
+| sessions › … from a tab that does not, moves to the lowest numbered of them (A320) | green by nature: the lowest was the behaviour; it pins the mark and the move | FM3 |
+| stop background › marks none of the sessions stopped when one is no session home (tests 3) | written against the survivor M-B; first version survived because `start_copy()` waited 5 s for the gated fake, the list run timed out and the start had launched; `start_copy()` waits for nothing now | FM5 |
+| close › stops nothing and quits nothing while a buffer has unsaved changes: waits for the E37 message or a Ctrl-C (tests 6) | green, kept | PM4b |
+| hygiene: `stop_the_child()` with `pcall` (tests 2); help grammar and reflow (tests 7); two titles; docstring clause (attack 4 = tests 1) | — | — |
+
+The fixed waits that prove an absence stay where no event exists to wait on: `vim.wait(300)` in the three pick cases (this tab's own row, a row another tab shows, the write into the current tab) and the wait of the same-command case for a stale stop to show (`STALE_STOP_REACHES_MS`, 6 s, ending at the first Ctrl-C or exit).
+
+| # | Edit | Killed by |
+|---|---|---|
+| FM1 | `new_tab()`: delete the first line `finish_closing()` | close › opened in the same command |
+| FM2 | `settles_by_standing()`: `elseif false then` for `elseif stops_in_closed_tab(listed.session_id) then` | sessions › a pick of the session of a tab just closed |
+| FM3 | `sessions_shown_in_tabs()`: `math.max(shown[id] or 0, tab_number(tab))` for `math.min(shown[id] or math.huge, tab_number(tab))` | sessions › two tabs show ×2 |
+| FM4 | `settles_by_standing()`: `if page and current then` for `if page and not (current and current.session_id() == listed.session_id) then` | sessions › from a tab that shows it, stays |
+| FM5 | `homes_to_stop()`: mark `home.session.stopped = true` inside the validating loop, delete the second loop | stop background › marks none of the sessions |
+| FM6 | `finish_closing()`: delete the removal from `stopping` in `finish_each()` | sessions › a pick of the session of a tab just closed (it never opens one after the stop) |
+| PM4b | `close_current_tab()`: `vim.cmd('qall!')` for `vim.cmd.qall()` | close › unsaved changes, by the Ctrl-C count assertion (the lines before it pass under the mutant, as the tests review measured) |
+
 ## Suites
 
-- Whole suite, on the code tree `66d8709`, Neovim 0.12.5, on the host, `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 make test` (the host was loaded by other agents' suites, load average 35 and more): 3721 cases in 98 files, `Fails (0)`. The first whole run, before the last two test additions, ran 3720 cases in 98 files with one failure, the usage text pinned in `tests/test_entry.lua`, which was then moved.
+- Whole suite, on the code tree `66d8709`, Neovim 0.12.5, on the host, `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 make test` (the host was loaded by other agents' suites, load average 35 and more): 3721 cases in 98 files, `Fails (0)`. After the fix round, on the code tree of its last code commit, the same command: 3726 cases in 98 files, `Fails (0)` (load average 20 and more). The first whole run, before the last two test additions, ran 3720 cases in 98 files with one failure, the usage text pinned in `tests/test_entry.lua`, which was then moved.
 - `make lint`: stylua and selene clean.
 
 ## Open threads
