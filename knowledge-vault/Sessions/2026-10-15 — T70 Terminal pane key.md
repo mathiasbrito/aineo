@@ -65,7 +65,7 @@ Key: (1) the three doors show the shell in the Report's window; (2) Terminal mod
 - *while the terminal pane shows › the key of another pane or window* (5): T69's layout through the keys, O5; L6 kills the `\i` row, and the other four rows (`\pa`, `\g`, `\r`, `\c`) pin behaviour that existed, with no mutant of T70's code that reaches them.
 - *a shell that ends › gives the Report back…*: T69's layout through the key; L1.
 - *each tab* (2): `new()` per tab (T66, T69); M11 kills the first, and the second (the other tab's pane is left as it was) has no mutant of T70's code that reaches it.
-- *a tab that closes* with the first tab (*the first tab that closes*, 3): the stop at the head of `finish_closing()`; M3a, M3c.
+- *the first tab that closes* (2: the reuse of the first tab, and the stop before a Claude Code that ignores its keys): the stop at the head of `finish_closing()`; M3a, M3c.
 - *quitting › with a shell running quits, and leaves no shell process*: Neovim's hangup (Q11, Q12); Q1 survived, see below.
 
 Pins that moved or were added in the other files, seen red where listed above and green after:
