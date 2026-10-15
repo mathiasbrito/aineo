@@ -56,6 +56,8 @@ end
 
 T['the session is busy'] = MiniTest.new_set()
 
+T['the fake in the mode busy-title'] = MiniTest.new_set()
+
 --- Claude Code 2.1.301's busy titles: the glyph ◐ or ◑, then a space and
 --- the title, or nothing (`knowledge-vault/Implementation/Waves/
 --- 00017-tab-activity/evidence/w17-claude-title.txt`, B1).
@@ -246,6 +248,50 @@ T['the session is busy']['reads the title Claude Code sets by OSC 0'] = function
   table.insert(seen, wait_for_busy(buffer, false))
 
   eq(seen, { true, true, false })
+end
+
+--- The title of the terminal `buffer` of the child once it is `title`,
+--- waiting for that at most `claude.PATIENCE_MS`, or when the wait runs out.
+---
+---@param buffer integer
+---@param title string
+---@return string
+local function wait_for_title(buffer, title)
+  local held
+  vim.wait(claude.PATIENCE_MS, function()
+    held = child.lua_get('vim.b[...].term_title', { buffer })
+    return held == title
+  end, 20)
+  return held
+end
+
+T['the fake in the mode busy-title']['titles the terminal ✳, then ◐ and ◑ in turn, then ✳ again after the time it is given'] = function()
+  local fake = claude.fake('busy-title-timed', 'busy-title', { AINEO_FAKE_CLAUDE_BUSY_MS = '2000' })
+  local buffer = claude.start(child, fake)
+  local titles = {
+    wait_for_title(buffer, '◐ Claude Code'),
+    wait_for_title(buffer, '◑ Claude Code'),
+    wait_for_title(buffer, '✳ Claude Code'),
+  }
+
+  eq(
+    { titles, busy_of(buffer) },
+    { { '◐ Claude Code', '◑ Claude Code', '✳ Claude Code' }, false }
+  )
+end
+
+T['the fake in the mode busy-title']['is busy until Enter when it is given no time, then titles the terminal ✳'] = function()
+  local fake = claude.fake('busy-title-enter', 'busy-title')
+  local buffer = claude.start(child, fake)
+  local busy = wait_for_busy(buffer, true)
+
+  claude.press_keys(child, buffer, '\r')
+
+  eq({ busy, wait_for_busy(buffer, false), wait_for_title(buffer, '✳ Claude Code') }, {
+    true,
+    false,
+    '✳ Claude Code',
+  })
 end
 
 T['the session is not busy']['once Claude Code has ended while busy, by'] =
