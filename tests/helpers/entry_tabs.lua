@@ -369,4 +369,112 @@ function M.new_id_of_start(fake, count)
   return claude_session.words_after(claude_session.start_arguments(fake, count), '--session-id')[1]
 end
 
+--- The file that keeps the list of `folder`'s tabs under `state`
+--- (`aineo.tabs`): `aineo/claude-tabs/<the folder's SHA-256>.json`.
+---
+---@param state string
+---@param folder string
+---@return string
+function M.tab_list_file(state, folder)
+  return vim.fs.joinpath(state, 'aineo', 'claude-tabs', vim.fn.sha256(folder) .. '.json')
+end
+
+--- Keeps `list` as the list of `folder`'s tabs under `state`, as aineo keeps
+--- it (`aineo.tabs`' `keep_tabs()`).
+---
+---@param state string
+---@param folder string
+---@param list { sessions: string[], current: integer }
+function M.keep_tab_list(state, folder, list)
+  require('aineo.tabs').keep_tabs(state, folder, list)
+end
+
+--- The list kept for `folder`'s tabs under `state` (`aineo.tabs`'
+--- `kept_tabs()`); nil when none is kept.
+---
+---@param state string
+---@param folder string
+---@return { sessions: string[], current: integer }|nil
+function M.kept_tab_list(state, folder)
+  return require('aineo.tabs').kept_tabs(state, folder)
+end
+
+--- The list kept for `folder`'s tabs once `is_wanted` accepts it, waiting at
+--- most `M.PATIENCE_MS`; else what it is when the wait runs out.
+---
+---@param state string
+---@param folder string
+---@param is_wanted fun(list: { sessions: string[], current: integer }|nil): boolean
+---@return { sessions: string[], current: integer }|nil
+function M.kept_tab_list_once(state, folder, is_wanted)
+  vim.wait(M.PATIENCE_MS, function()
+    return is_wanted(M.kept_tab_list(state, folder))
+  end, 20)
+  return M.kept_tab_list(state, folder)
+end
+
+--- Keeps `id` as the session kept for `folder` under `state`, where the
+--- Claude home names its file: `aineo/claude-sessions/<the folder's
+--- SHA-256>.txt`.
+---
+---@param state string
+---@param folder string
+---@param id string
+function M.keep_session_id(state, folder, id)
+  local file = vim.fs.joinpath(state, 'aineo', 'claude-sessions', vim.fn.sha256(folder) .. '.txt')
+  vim.fn.mkdir(vim.fs.dirname(file), 'p')
+  assert(vim.fn.writefile({ id }, file, 'b') == 0, 'cannot write ' .. file)
+end
+
+--- The arguments the fake's Claude Code that runs in the tab page numbered
+--- `number` was started with, found by its process in `fake`'s record,
+--- waiting at most `M.PATIENCE_MS` for it to have started; none when it has
+--- not. For a case that needs the command a tab's Claude Code was started
+--- with, as an attach is (`attach <short id>`), which a running editors'
+--- entry does not tell.
+---
+---@param child table
+---@param fake { record: string }
+---@param number integer
+---@return string[]
+function M.start_arguments_in_tab(child, fake, number)
+  local arguments = {}
+  vim.wait(M.PATIENCE_MS, function()
+    if M.tab_count(child) < number then
+      return false
+    end
+    local buffer = M.claude_terminal_of_tab(child, number)
+    if type(buffer) ~= 'number' then
+      return false
+    end
+    local job = child.lua_get('vim.b[...].terminal_job_id', { buffer })
+    if type(job) ~= 'number' then
+      return false
+    end
+    local pid = child.fn.jobpid(job)
+    local start = vim.iter(claude_session.record(fake)):find(function(recorded)
+      return recorded.pid == pid and recorded.argv ~= nil
+    end)
+    arguments = start and start.argv or {}
+    return start ~= nil
+  end, 20)
+  return arguments
+end
+
+--- The sessions the Claude Codes of the tab pages numbered `numbers` were
+--- started on (`M.start_arguments_in_tab()`), each the id after `--resume`
+--- or, for a Claude Code attached to a background session, `attach`.
+---
+---@param child table
+---@param fake { record: string }
+---@param numbers integer[]
+---@return string[]
+function M.resumed_in_tabs(child, fake, numbers)
+  return vim.tbl_map(function(number)
+    local arguments = M.start_arguments_in_tab(child, fake, number)
+    return arguments[1] == 'attach' and 'attach'
+      or claude_session.words_after(arguments, '--resume')[1]
+  end, numbers)
+end
+
 return M

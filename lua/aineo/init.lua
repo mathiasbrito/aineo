@@ -30,9 +30,9 @@ local function is_tab_page_number(value)
 end
 
 --- The title aineo's tab line draws for the tab page numbered `number`, as
---- `{n}gt` counts them: its number and, for an aineo tab, the name of its
---- Claude session, for any other tab page the name of its current buffer, cut
---- to fit (`:help aineo-tabs`). For a 'tabline' of your own to draw the same
+--- `{n}gt` counts them: `<number>: <name>`, the name that of an aineo tab's
+--- Claude session, for any other tab page that of its current buffer, cut to
+--- fit (`:help aineo-tabs`). For a 'tabline' of your own to draw the same
 --- titles.
 ---
 --- Raises an error naming `number` when it is not a whole number from 1.

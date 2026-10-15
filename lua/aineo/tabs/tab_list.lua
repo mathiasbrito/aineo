@@ -27,6 +27,12 @@ local SESSION_ID_PATTERN =
 ---@field sessions string[] session ids, one per tab
 ---@field current integer a place in `sessions`
 
+--- One tab, as the editor lists its tabs in the order of their places.
+---
+---@class aineo.tabs.PlacedTab
+---@field session string? the session its Claude Code follows; nil before it has one
+---@field current boolean whether it is the tab to list as the current one
+
 --- The file that keeps the list of `folder`.
 ---
 ---@param state_directory string
@@ -77,6 +83,31 @@ local function is_tab_list(value)
     and current >= 1
     and current <= #value.sessions
     and current % 1 == 0
+end
+
+--- The list of `placed`, the editor's tabs in the order of their places: the
+--- session of each tab that has one, a session two tabs show once, at the
+--- lower place; the place of the current tab, or of the tab that shows its
+--- session first, else the first. Nil when no tab has a session.
+---
+---@param placed aineo.tabs.PlacedTab[]
+---@return aineo.tabs.TabList|nil
+function M.list_of_placed_tabs(placed)
+  local sessions, place_of = {}, {}
+  local current = 1
+  for _, tab in ipairs(placed) do
+    if tab.session and not place_of[tab.session] then
+      table.insert(sessions, tab.session)
+      place_of[tab.session] = #sessions
+    end
+    if tab.current and tab.session then
+      current = place_of[tab.session]
+    end
+  end
+  if #sessions == 0 then
+    return nil
+  end
+  return { sessions = sessions, current = current }
 end
 
 --- The text of the file `path`, or nil when it is missing, unreadable, or

@@ -27,6 +27,7 @@ local M = {}
 ---@field allowed_tools string[] the tools Claude Code may call without asking the user
 ---@field instructions string the text appended to Claude Code's system prompt
 ---@field new_session? boolean start on a new session id even where one is kept for `cwd` (`start_session()`); absent or false resumes the kept session
+---@field resume_session? string a session id to resume in place of the kept one (`start_session()`); absent resumes the session kept for `cwd`, or starts a new one where none is kept. Keeps nothing for `cwd`
 ---@field on_terminal_replaced? fun(terminal: integer) called with the new terminal when the session replaces its terminal on its own, as it does when Claude Code finds no conversation to resume (`start_session()`); never for a terminal `start_session()` returns
 ---@field state_directory string the directory under which the session id of each working directory is kept, in `aineo/claude-sessions/`: the editor's state directory
 ---@field editor_address string the editor's server address (`v:servername`), which Claude Code's session hooks tell
@@ -227,6 +228,9 @@ local function validate_settings(settings)
   vim.validate('settings.instructions', settings.instructions, 'string')
   vim.validate('settings.state_directory', settings.state_directory, 'string')
   vim.validate('settings.new_session', settings.new_session, 'boolean', true)
+  vim.validate('settings.resume_session', settings.resume_session, function(value)
+    return value == nil or session_ids.is_session_id(value)
+  end, 'a Claude session id')
   vim.validate('settings.on_terminal_replaced', settings.on_terminal_replaced, 'function', true)
   vim.validate('settings.editor_address', settings.editor_address, 'string')
   vim.validate('settings.editor_program', settings.editor_program, 'string')
@@ -234,19 +238,41 @@ local function validate_settings(settings)
   vim.validate('settings.on_session_ready', settings.on_session_ready, 'function', true)
 end
 
+--- A window that shows `buffer`, one in the current tab page when there is
+--- one; nil when none does.
+---
+---@param buffer integer
+---@return integer?
+local function window_showing(buffer)
+  local windows = vim.fn.win_findbuf(buffer)
+  local current_page = vim.api.nvim_get_current_tabpage()
+  return vim.iter(windows):find(function(window)
+    return vim.api.nvim_win_get_tabpage(window) == current_page
+  end) or windows[1]
+end
+
 --- Runs `command` as a terminal job in the new, empty `buffer` and returns the
---- job's id. When `jobstart()` cannot run it, wipes `buffer` and raises an error
---- naming the command: `jobstart()`'s own, or, when `:silent!` has silenced
---- that and `jobstart()` has returned 0 or -1 instead, one of its own.
+--- job's id. The job runs in a window that shows `buffer` (`window_showing()`),
+--- so that its terminal has the size of that window, also when the window is
+--- in another tab page; a buffer no window shows runs it in the autocommand
+--- window, where the terminal is 5 rows tall. When `jobstart()` cannot run it,
+--- wipes `buffer` and raises an error naming the command: `jobstart()`'s own,
+--- or, when `:silent!` has silenced that and `jobstart()` has returned 0 or -1
+--- instead, one of its own.
 ---
 ---@param buffer integer
 ---@param command string[]
 ---@param options table `jobstart()`'s options, `term = true` among them
 ---@return integer job
 local function run_in_terminal(buffer, command, options)
-  local started, job = pcall(vim.api.nvim_buf_call, buffer, function()
-    return vim.fn.jobstart(command, options)
-  end)
+  local window = window_showing(buffer)
+  local started, job = pcall(
+    window and vim.api.nvim_win_call or vim.api.nvim_buf_call,
+    window or buffer,
+    function()
+      return vim.fn.jobstart(command, options)
+    end
+  )
   if not started or job <= 0 then
     vim.api.nvim_buf_delete(buffer, { force = true })
     error(started and ('jobstart() cannot run ' .. command[1]) or job, 0)
@@ -273,12 +299,16 @@ end
 --- resume a session id it had no conversation for; it then exited 1.
 local NO_CONVERSATION = 'No conversation found with session ID: '
 
---- The session kept for `settings.cwd`, resumed, or, where none is kept or
+--- The session `settings.resume_session` names, resumed; else the session
+--- kept for `settings.cwd`, resumed, or, where none is kept or
 --- `settings.new_session` asks for a new one, a new session on a new id.
 ---
 ---@param settings aineo.claude.Settings
 ---@return aineo.claude.SessionChoice
 local function kept_or_new_session(settings)
+  if settings.resume_session then
+    return { id = settings.resume_session, resumed = true }
+  end
   local kept = session_ids.kept_session_id(settings.state_directory, settings.cwd)
   if kept and not settings.new_session then
     return { id = kept, resumed = true }
@@ -973,6 +1003,14 @@ end
 --- all the same. `settings.new_session` changes nothing while a session
 --- runs, and lists no sessions.
 ---
+--- With `settings.resume_session`, a session id of the form Claude Code
+--- gives, Claude Code resumes that session in place of the kept one — also
+--- where none is kept — and that start keeps nothing for `settings.cwd`: the
+--- session the next start there lands in stays what it was, until a new
+--- session takes the place of a resume with no conversation (below), a
+--- switch inside Claude Code is followed, or `keep_session()` is called. The
+--- start is a resume in every other way, below.
+---
 --- A start that resumes first lists the sessions of `settings.cwd`
 --- (`agents.list_sessions()`, bounded at 5 s) and launches Claude Code, in
 --- the buffer `start_session()` returned, from the callback that receives
@@ -1310,6 +1348,30 @@ end
 ---@return string?
 local function session_directory(home)
   return home.session and home.session.settings.cwd
+end
+
+--- The session id kept for the working directory `folder` under
+--- `state_directory` (`aineo/claude-sessions/`): the session the next start
+--- there resumes. Nil where none is kept, or the kept file holds anything but
+--- an id of the form Claude Code gives.
+---
+---@param state_directory string
+---@param folder string
+---@return string?
+function M.kept_session(state_directory, folder)
+  return session_ids.kept_session_id(state_directory, folder)
+end
+
+--- Keeps `id` as the session id of the working directory `folder` under
+--- `state_directory`, in place of any kept before (`kept_session()` reads it):
+--- the session the next start there resumes. Raises an error naming the file
+--- when it cannot be written, and leaves the kept id as it was.
+---
+---@param state_directory string
+---@param folder string
+---@param id string a session id of the form Claude Code gives
+function M.keep_session(state_directory, folder, id)
+  session_ids.keep_session_id(state_directory, folder, id)
 end
 
 --- Whether `text` is a session id of the form Claude Code gives, a

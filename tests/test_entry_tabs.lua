@@ -63,7 +63,7 @@ T['the first tab']['is the tab page the first open is in, held with a title of i
   eq(child.lua_get("#require('aineo.tabs').held()"), 1)
   eq(
     child.lua_get("require('aineo.tabs').title(vim.api.nvim_get_current_tabpage())"),
-    '1 Claude Code'
+    '1: Claude Code'
   )
 end
 
@@ -127,14 +127,28 @@ T[':Aineo tab new']['puts the cursor in its Claude window in Terminal mode'] = f
   eq(child.lua_get('vim.api.nvim_get_current_buf()') == tabs.claude_terminal_of_tab(child, 2), true)
 end
 
-T[':Aineo tab new']['opens the tab after the current one, not at the end'] = function()
-  tabs.open_first_tab(child, 'tabs-new-after-current')
+T[':Aineo tab new']['opens the tab at the end, after the last tab page, whatever tab page it runs in'] = function()
+  tabs.open_first_tab(child, 'tabs-new-at-end')
   child.cmd('tabnew')
   child.cmd('tabfirst')
 
-  open_second_tab(tabs.fake('tabs-new-after-current-second'))
+  open_second_tab(tabs.fake('tabs-new-at-end-second'))
 
-  eq({ tabs.current_tab(child), tabs.tab_count(child) }, { 2, 3 })
+  eq({ tabs.current_tab(child), tabs.tab_count(child) }, { 3, 3 })
+end
+
+T[':Aineo tab new']['leaves the number of every tab as it was, from the first of three tabs'] = function()
+  tabs.open_first_tab(child, 'tabs-new-numbers')
+  open_second_tab(tabs.fake('tabs-new-numbers-second'))
+  open_second_tab(tabs.fake('tabs-new-numbers-third'))
+  child.cmd('tabfirst')
+  local before = child.lua_get('vim.api.nvim_list_tabpages()')
+
+  open_second_tab(tabs.fake('tabs-new-numbers-fourth'))
+
+  local after = child.lua_get('vim.api.nvim_list_tabpages()')
+  eq({ tabs.current_tab(child), #after }, { 4, 4 })
+  eq(vim.list_slice(after, 1, 3), before)
 end
 
 T[':Aineo tab new']['opens the first tab of aineo in the current tab page when there is none, on a new session'] = function()
@@ -380,7 +394,7 @@ T['the titles']['give an aineo tab’s place and the session’s name, and any o
       require('aineo').tab_title(2),
       require('aineo').tab_title(3),
     }]]),
-    { '1 Claude Code', '2 Claude Code', '3 notes.txt' }
+    { '1: Claude Code', '2: Claude Code', '3: notes.txt' }
   )
 end
 
@@ -417,7 +431,7 @@ T['the titles']['follow the places when a tab page is moved'] = function()
       require('aineo').tab_title(2),
       require('aineo').tab_title(3),
     }]]),
-    { '1 Claude Code', '2 [No Name]', '3 Claude Code' }
+    { '1: Claude Code', '2: [No Name]', '3: Claude Code' }
   )
 end
 
@@ -441,7 +455,7 @@ T['the titles']['have the tab line drawn again when the session’s name changes
   end, 20)
 
   eq(child.lua_get('_G.tab_line_redraws'), 1)
-  eq(child.lua_get("require('aineo').tab_title(2)"), '2 Refactor the parser')
+  eq(child.lua_get("require('aineo').tab_title(2)"), '2: Refactor the parser')
 end
 
 return T

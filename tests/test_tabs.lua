@@ -65,7 +65,7 @@ T['hold()']['takes the new name when a tab is held again'] = function()
     return tabs.title(handle)
   ]])
 
-  eq(title, '1 new')
+  eq(title, '1: new')
 end
 
 T['hold()']['raises, and holds nothing, for a name that is not a function'] = function()
@@ -176,7 +176,7 @@ T['title()']['is the place and the name of a held tab'] = function()
     return { before, tabs.title(handles[2]) }
   ]])
 
-  eq(titles, { '2 fix the login', '1 fix the login' })
+  eq(titles, { '2: fix the login', '1: fix the login' })
 end
 
 T['title()']['is the place and the tail of the buffer name for a tab not held'] = function()
@@ -193,7 +193,7 @@ T['title()']['is the place and the tail of the buffer name for a tab not held'] 
     return result
   ]])
 
-  eq(titles, { '1 notes.txt', '2 todo.md', '3 [No Name]' })
+  eq(titles, { '1: notes.txt', '2: todo.md', '3: [No Name]' })
 end
 
 --- The title of the only tab page, held with the name `name`.
@@ -215,26 +215,26 @@ end
 T['title()']['keeps a name of 24 display cells whole'] = function()
   local name = string.rep('n', 24)
 
-  eq(title_named(name), '1 ' .. name)
+  eq(title_named(name), '1: ' .. name)
 end
 
 T['title()']['cuts a name of 25 display cells to 23 cells and an ellipsis'] = function()
-  eq(title_named(string.rep('n', 25)), '1 ' .. string.rep('n', 23) .. '…')
+  eq(title_named(string.rep('n', 25)), '1: ' .. string.rep('n', 23) .. '…')
 end
 
 T['title()']['cuts a 60-cell name'] = function()
-  eq(title_named(string.rep('n', 60)), '1 ' .. string.rep('n', 23) .. '…')
+  eq(title_named(string.rep('n', 60)), '1: ' .. string.rep('n', 23) .. '…')
 end
 
 T['title()']['cuts multibyte text by display cells, not by bytes'] = function()
-  eq(title_named(string.rep('é', 25)), '1 ' .. string.rep('é', 23) .. '…')
+  eq(title_named(string.rep('é', 25)), '1: ' .. string.rep('é', 23) .. '…')
 end
 
 T['title()']["cuts wide characters on a character's edge"] = function()
   local twelve_wide = string.rep('語', 12)
 
-  eq(title_named(twelve_wide), '1 ' .. twelve_wide)
-  eq(title_named(string.rep('語', 13)), '1 ' .. string.rep('語', 11) .. '…')
+  eq(title_named(twelve_wide), '1: ' .. twelve_wide)
+  eq(title_named(string.rep('語', 13)), '1: ' .. string.rep('語', 11) .. '…')
 end
 
 T['title()']['cuts the tail of a buffer name too'] = function()
@@ -242,7 +242,7 @@ T['title()']['cuts the tail of a buffer name too'] = function()
 
   local title = in_child('return tabs.title(vim.api.nvim_get_current_tabpage())')
 
-  eq(title, '1 ' .. string.rep('b', 23) .. '…')
+  eq(title, '1: ' .. string.rep('b', 23) .. '…')
 end
 
 --- What a held tab's `name()` does, in Lua, when it gives no usable text.
@@ -271,7 +271,7 @@ T['title()']["says the buffer's tail for a held tab whose name() gives no text"]
     return succeeded and title or 'title() raised: ' .. title
   ]]):format(NAMES_WITH_NO_TEXT[name]))
 
-  eq(title, '1 fallback.txt')
+  eq(title, '1: fallback.txt')
 end
 
 T['title()']['takes the buffer of the tab page itself, not of the current tab'] = function()
@@ -282,7 +282,7 @@ T['title()']['takes the buffer of the tab page itself, not of the current tab'] 
 
   local title = in_child('return tabs.title(vim.api.nvim_list_tabpages()[2])')
 
-  eq(title, '2 third.txt')
+  eq(title, '2: third.txt')
 end
 
 T['tabline()'] = MiniTest.new_set()
@@ -314,18 +314,18 @@ T['tabline()']['draws the title of every tab page, the current one in AineoTabLi
     tabs.hold(vim.api.nvim_get_current_tabpage(), function() return 'second' end)
   ]])
 
-  eq(drawn.str, '  1 notes.txt    2 second  ')
+  eq(drawn.str, '  1: notes.txt    2: second  ')
   eq(drawn.highlights, {
     { group = 'AineoTabLine', start = 0, groups = { 'TabLineFill', 'AineoTabLine' } },
-    { group = 'AineoTabLineSel', start = 15, groups = { 'TabLineFill', 'AineoTabLineSel' } },
-    { group = 'AineoTabLineFill', start = 27, groups = { 'TabLineFill', 'AineoTabLineFill' } },
+    { group = 'AineoTabLineSel', start = 16, groups = { 'TabLineFill', 'AineoTabLineSel' } },
+    { group = 'AineoTabLineFill', start = 29, groups = { 'TabLineFill', 'AineoTabLineFill' } },
   })
 end
 
 T['tabline()']['draws the padding setting either side of every title'] = MiniTest.new_set({
   parametrize = {
-    { 0, '1 notes.txt2 second' },
-    { 4, '    1 notes.txt        2 second    ' },
+    { 0, '1: notes.txt2: second' },
+    { 4, '    1: notes.txt        2: second    ' },
   },
 })
 
@@ -353,7 +353,7 @@ T['tabline()']['draws a percent sign in a name as written'] = function()
     tabs.hold(vim.api.nvim_get_current_tabpage(), function() return '100% done %{x}' end)
   ]])
 
-  eq(drawn.str, '  1 100% done %{x}  ')
+  eq(drawn.str, '  1: 100% done %{x}  ')
 end
 
 T['draw_tabline()'] = MiniTest.new_set()
@@ -367,7 +367,7 @@ T['draw_tabline()']["sets 'tabline' to draw aineo's line while it is empty"] = f
     return { in_use = in_use, str = drawn.str }
   ]])
 
-  eq(result, { in_use = true, str = '  1 [No Name]    2 [No Name]  ' })
+  eq(result, { in_use = true, str = '  1: [No Name]    2: [No Name]  ' })
 end
 
 T['draw_tabline()']["leaves a 'tabline' of the user's in place, and says it is not in use"] = function()
@@ -649,8 +649,8 @@ T['tabline()']['numbers each click region by the place of its tab page, after :t
 
   local drawn = drawn_tabline("vim.cmd('tabclose 1')")
 
-  eq(drawn.format:find('%1T  1 [No Name]  ', 1, true) ~= nil, true)
-  eq(drawn.format:find('%2T  2 [No Name]  ', 1, true) ~= nil, true)
+  eq(drawn.format:find('%1T  1: [No Name]  ', 1, true) ~= nil, true)
+  eq(drawn.format:find('%2T  2: [No Name]  ', 1, true) ~= nil, true)
 end
 
 T['tabline()']['numbers the click regions in the order of the places after :tabmove'] = function()
@@ -686,7 +686,7 @@ end
 T['tabline()']['draws only whole titles, the first tab page current, when all would overflow'] = function()
   eq(
     drawn_over_three_long_names(1),
-    '  1 session 1, fixing the t…    2 session 2, fixing the t…  '
+    '  1: session 1, fixing the t…    2: session 2, fixing the t…  '
   )
 end
 
@@ -694,18 +694,18 @@ T['tabline()']['takes the padding from the options setup() recorded'] = function
   local drawn =
     drawn_tabline("require('aineo').setup({ tabs = { padding = 0 } }) vim.cmd('tabnew')")
 
-  eq(drawn.str, '1 [No Name]2 [No Name]')
+  eq(drawn.str, '1: [No Name]2: [No Name]')
 end
 
 T['tabline()']['draws the default padding, and raises nothing, when the setting is wrong'] = function()
   local drawn = drawn_tabline('vim.g.aineo = { tabs = { padding = math.huge } }')
 
-  eq(drawn.str, '  1 [No Name]  ')
+  eq(drawn.str, '  1: [No Name]  ')
 end
 
 T['tabline()']['counts the padding in the width of the titles it fits'] = MiniTest.new_set({
   parametrize = {
-    { 80, 0, 1, 3 },
+    { 81, 0, 1, 3 },
     { 66, 4, 1, 1 },
     { 100, 4, 1, 2 },
     { 100, 4, 3, 2 },
@@ -729,14 +729,14 @@ end
 T['tabline()']['draws the current tab page and the one before it when the one after would overflow'] = function()
   eq(
     drawn_over_three_long_names(2),
-    '  1 session 1, fixing the t…    2 session 2, fixing the t…  '
+    '  1: session 1, fixing the t…    2: session 2, fixing the t…  '
   )
 end
 
 T['tabline()']['draws the last tab page current, with the one before it, when all would overflow'] = function()
   eq(
     drawn_over_three_long_names(3),
-    '  2 session 2, fixing the t…    3 session 3, fixing the t…  '
+    '  2: session 2, fixing the t…    3: session 3, fixing the t…  '
   )
 end
 
@@ -747,19 +747,19 @@ T['title()']["says the buffer's tail for a held tab whose name() holds a NUL, an
     tabs.hold(vim.api.nvim_get_current_tabpage(), function() return 'a\0b' end)
   ]])
 
-  eq(drawn.str, '  1 fallback.txt  ')
+  eq(drawn.str, '  1: fallback.txt  ')
 end
 
 T['title()']['keeps a character with its accent when it cuts decomposed text'] = function()
   local accented = 'e\204\129'
 
-  eq(title_named(string.rep(accented, 30)), '1 ' .. string.rep(accented, 23) .. '…')
+  eq(title_named(string.rep(accented, 30)), '1: ' .. string.rep(accented, 23) .. '…')
 end
 
 T['title()']['keeps a family emoji whole when it cuts'] = function()
   local family = '👨‍👩‍👧'
 
-  eq(title_named(string.rep(family, 13)), '1 ' .. string.rep(family, 11) .. '…')
+  eq(title_named(string.rep(family, 13)), '1: ' .. string.rep(family, 11) .. '…')
 end
 
 T['title()']['says the last part of a buffer name that ends in a slash'] = function()
@@ -767,7 +767,7 @@ T['title()']['says the last part of a buffer name that ends in a slash'] = funct
 
   local title = in_child('return tabs.title(vim.api.nvim_get_current_tabpage())')
 
-  eq(title, '1 project')
+  eq(title, '1: project')
 end
 
 T['hold()']['raises, and holds nothing, for a tab handle below 1'] = MiniTest.new_set({
@@ -814,6 +814,142 @@ T['let_go()']['holds the tab no more, and leaves the others held'] = function()
   ]])
 
   eq(result.held, { result.handles[2] })
+end
+
+T['list_of_tabs()'] = MiniTest.new_set()
+
+T['list_of_tabs()']['gives the sessions in the order of the tabs and the place of the current one'] = function()
+  local tabs = require('aineo.tabs')
+
+  local list = tabs.list_of_tabs({
+    { session = SECOND, current = false },
+    { session = FIRST, current = true },
+    { session = THIRD, current = false },
+  })
+
+  eq(list, { sessions = { SECOND, FIRST, THIRD }, current = 2 })
+end
+
+T['list_of_tabs()']['leaves out a tab that has no session yet, and counts the place among the rest'] = function()
+  local tabs = require('aineo.tabs')
+
+  local list = tabs.list_of_tabs({
+    { session = FIRST, current = false },
+    { current = false },
+    { session = SECOND, current = true },
+  })
+
+  eq(list, { sessions = { FIRST, SECOND }, current = 2 })
+end
+
+T['list_of_tabs()']['lists a session two tabs show once, at the lower place, and its place for the current one'] = function()
+  local tabs = require('aineo.tabs')
+
+  local list = tabs.list_of_tabs({
+    { session = FIRST, current = false },
+    { session = SECOND, current = false },
+    { session = FIRST, current = true },
+  })
+
+  eq(list, { sessions = { FIRST, SECOND }, current = 1 })
+end
+
+T['list_of_tabs()']['puts the place at the first tab when none is current, or the current one has no session'] = function()
+  local tabs = require('aineo.tabs')
+
+  local none_current = tabs.list_of_tabs({
+    { session = FIRST, current = false },
+    { session = SECOND, current = false },
+  })
+  local current_has_no_session = tabs.list_of_tabs({
+    { session = FIRST, current = false },
+    { current = true },
+  })
+
+  eq(none_current, { sessions = { FIRST, SECOND }, current = 1 })
+  eq(current_has_no_session, { sessions = { FIRST }, current = 1 })
+end
+
+T['list_of_tabs()']['gives nothing when no tab has a session'] = function()
+  local tabs = require('aineo.tabs')
+
+  eq(tabs.list_of_tabs({}), nil)
+  eq(tabs.list_of_tabs({ { current = true } }), nil)
+end
+
+T['list_of_tabs()']['gives a list keep_tabs() keeps and kept_tabs() reads back'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t68-list-of-tabs-round-trip')
+  local list = tabs.list_of_tabs({
+    { session = FIRST, current = false },
+    { session = FIRST, current = false },
+    { session = SECOND, current = true },
+  })
+
+  tabs.keep_tabs(state, '/work/project', list)
+
+  eq(tabs.kept_tabs(state, '/work/project'), { sessions = { FIRST, SECOND }, current = 2 })
+end
+
+T['tabs_to_reopen()'] = MiniTest.new_set()
+
+T['tabs_to_reopen()']['gives the kept list when it holds the session kept for the folder'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t68-reopen-holds')
+  tabs.keep_tabs(state, '/work/project', { sessions = { FIRST, SECOND, THIRD }, current = 3 })
+
+  local list = tabs.tabs_to_reopen(state, '/work/project', SECOND)
+
+  eq(list, { sessions = { FIRST, SECOND, THIRD }, current = 3 })
+end
+
+T['tabs_to_reopen()']['gives nothing when the kept list does not hold the session kept for the folder'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t68-reopen-lacks')
+  tabs.keep_tabs(state, '/work/project', { sessions = { FIRST, SECOND }, current = 1 })
+
+  eq(tabs.tabs_to_reopen(state, '/work/project', THIRD), nil)
+end
+
+T['tabs_to_reopen()']['gives nothing when no list is kept, or no session is kept for the folder'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t68-reopen-none')
+  tabs.keep_tabs(state, '/work/other', { sessions = { FIRST }, current = 1 })
+
+  eq(tabs.tabs_to_reopen(state, '/work/project', FIRST), nil)
+  eq(tabs.tabs_to_reopen(state, '/work/other', nil), nil)
+end
+
+--- Session `index` of a series of distinct ids of the form Claude Code gives.
+---
+---@param index integer
+---@return string
+local function numbered_session(index)
+  return ('%08x-0000-4000-8000-000000000000'):format(index)
+end
+
+T['tabs_to_reopen()']['gives at most 20 sessions, and the ones left over, in the order of the list'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t68-reopen-cap')
+  local sessions = vim.tbl_map(numbered_session, vim.fn.range(1, 22))
+  tabs.keep_tabs(state, '/work/project', { sessions = sessions, current = 22 })
+
+  local list, left = tabs.tabs_to_reopen(state, '/work/project', sessions[1])
+
+  eq(list, { sessions = vim.list_slice(sessions, 1, 20), current = 20 })
+  eq(left, { sessions[21], sessions[22] })
+end
+
+T['tabs_to_reopen()']['leaves none over for a list of 20'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t68-reopen-cap-none')
+  local sessions = vim.tbl_map(numbered_session, vim.fn.range(1, 20))
+  tabs.keep_tabs(state, '/work/project', { sessions = sessions, current = 5 })
+
+  local list, left = tabs.tabs_to_reopen(state, '/work/project', sessions[3])
+
+  eq(list, { sessions = sessions, current = 5 })
+  eq(left, {})
 end
 
 return T

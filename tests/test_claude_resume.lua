@@ -313,6 +313,92 @@ T['start_session()']['raises an error naming new_session when it is not a boolea
   contains(message, 'settings.new_session')
 end
 
+--- A session id of the form Claude Code gives, for the sessions a start is
+--- told to resume.
+local GIVEN_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+
+T['start_session()']['resumes the session it was given, not the kept one'] = function()
+  local fake = claude.fake('resume-given', 'exit')
+  local settings = kept_in('resume-given-state')
+  claude.start(child, fake, settings)
+  claude.wait_for_status(child, 'exited')
+
+  claude.start_again(child, vim.tbl_extend('force', settings, { resume_session = GIVEN_ID }))
+
+  eq(words_of_start(fake, 2, '--resume'), { GIVEN_ID })
+  eq(words_of_start(fake, 2, '--session-id'), {})
+end
+
+T['start_session()']['resumes the session it was given where none is kept'] = function()
+  local fake = claude.fake('resume-given-none-kept', 'exit')
+
+  claude.start(child, fake, kept_in('resume-given-none-kept-state', { resume_session = GIVEN_ID }))
+
+  eq(words_of_start(fake, 1, '--resume'), { GIVEN_ID })
+end
+
+T['start_session()']['keeps nothing for the folder when it resumes the session it was given'] = function()
+  local fake = claude.fake('resume-given-keeps-nothing', 'exit')
+  local settings = kept_in('resume-given-keeps-nothing-state')
+  claude.start(child, fake, settings)
+  claude.wait_for_status(child, 'exited')
+  claude.start_again(child, vim.tbl_extend('force', settings, { resume_session = GIVEN_ID }))
+  claude.wait_for_starts(fake, 2)
+  claude.wait_for_status(child, 'exited')
+
+  claude.start_again(child, settings)
+
+  eq(words_of_start(fake, 3, '--resume'), words_of_start(fake, 1, '--session-id'))
+end
+
+T['start_session()']['raises an error naming resume_session when it is no session id'] =
+  MiniTest.new_set({
+    parametrize = {
+      { true },
+      { '--dangerously-skip-permissions' },
+      { 'DDDDDDDD-DDDD-4DDD-8DDD-DDDDDDDDDDDD' },
+      { '' },
+    },
+  })
+
+T['start_session()']['raises an error naming resume_session when it is no session id'][1] = function(
+  given
+)
+  local fake = claude.fake('resume-given-invalid', 'exit')
+
+  local raised, message = pcall(
+    claude.start,
+    child,
+    fake,
+    kept_in('resume-given-invalid-state', { resume_session = given })
+  )
+
+  eq(raised, false)
+  contains(message, 'settings.resume_session')
+  eq(#claude.wait_for_starts(fake, 1), 0)
+end
+
+T['kept_session()'] = MiniTest.new_set()
+
+T['kept_session()']['gives the session id kept for the folder, and nothing where none is kept'] = function()
+  local fake = claude.fake('kept-session', 'exit')
+  local settings = kept_in('kept-session-state')
+  local kept_for = [[
+    local state_directory, folder = ...
+    return require('aineo.claude').kept_session(state_directory, folder)
+  ]]
+  local before = child.lua(kept_for, { settings.state_directory, vim.fn.getcwd() })
+  claude.start(child, fake, settings)
+  claude.wait_for_starts(fake, 1)
+
+  local after = child.lua(kept_for, { settings.state_directory, vim.fn.getcwd() })
+  local elsewhere = child.lua(kept_for, { settings.state_directory, '/work/elsewhere' })
+
+  eq(before, vim.NIL)
+  eq({ after }, claude.words_after(claude.arguments(fake), '--session-id'))
+  eq(elsewhere, vim.NIL)
+end
+
 T['start_session()']['resumes the session an earlier editor kept in the directory'] = function()
   local fake = claude.fake('resume-other-editor', 'exit')
   local settings = kept_in('resume-other-editor-state')

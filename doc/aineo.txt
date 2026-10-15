@@ -164,21 +164,22 @@ behaves as it always has.
 
 The first open of aineo in a Neovim, the autostart or `\o`, makes the current
 tab page aineo's first tab; its buffers are `aineo://report` and
-`aineo://input`. `\T` (|:Aineo-tab|) opens a tab page after the current one,
-with an aineo tab in it: a layout of its own around a Claude Code started on a
-new session, and the cursor in its Claude window in Terminal mode. Its
-buffers are named with a number that is never given again
-(`aineo://report-2`, `aineo://input-2`). With no aineo tab yet, `\T` makes the
-current tab page the first one, on a new session. Starting a tab starts a
-Claude Code, which costs what a session costs, as `\o` does.
+`aineo://input`. `\T` (|:Aineo-tab|) opens a tab page at the end, after the
+last tab page, so that no tab changes its number, with an aineo tab in it: a
+layout of its own around a Claude Code started on a new session, and the
+cursor in its Claude window in Terminal mode. Its buffers are named with a
+number that is never given again (`aineo://report-2`, `aineo://input-2`). With
+no aineo tab yet, `\T` makes the current tab page the first one, on a new
+session. Starting a tab starts a Claude Code, which costs what a session
+costs, as `\o` does.
 
-`\S` (|:Aineo-sessions|) opens the session you pick in a new tab after the
-current one, resumed, attached to where it runs in Claude Code's background
-service, or resumed with a warning where it is open in another interactive
-Claude Code; the cursor lands in its Claude window in Terminal mode. A
-session that a tab of this Neovim shows already, the current tab's own
-included, is not started again: the pick moves you to that tab. Nothing is
-written into the current tab's prompt, and its Claude Code goes on as it was.
+`\S` (|:Aineo-sessions|) opens the session you pick in a new tab at the end,
+resumed, attached to where it runs in Claude Code's background service, or
+resumed with a warning where it is open in another interactive Claude Code;
+the cursor lands in its Claude window in Terminal mode. A session that a tab
+of this Neovim shows already, the current tab's own included, is not started
+again: the pick moves you to that tab. Nothing is written into the current
+tab's prompt, and its Claude Code goes on as it was.
 
 Every tab after the first starts its Claude Code in the folder: the
 directory of this Neovim's first start of aineo, whatever `:cd` or `:tcd`
@@ -189,12 +190,14 @@ session (|aineo-claude-session|).
 `\1` to `\9` (|:Aineo-tab|) move to the tab page of that number, an aineo tab
 or not, as `{n}gt` does; the cursor lands where it was in that tab page, in
 Normal mode. With no tab page of that number nothing moves and aineo says so.
-The number is the tab page's place: closing a tab page, or `:tabmove`,
-changes the numbers after it, and the titles with them.
+The number is the tab page's place: closing a tab page, or `:tabmove`, changes
+the numbers after it, and the titles with them. A new tab opens at the end, so
+it changes no number; `:tabmove` reorders the tab pages.
 
-A tab's title is its number and, for an aineo tab, the name of its session,
-the name Claude Code gives it, cut to 24 cells; for any other tab page, the
-name of its current buffer. While 'tabline' is empty when the first aineo tab
+A tab's title is `<number>: <name>`: its number, a colon, and, for an aineo
+tab, the name of its session, the name Claude Code gives it (`Claude Code`
+until it gives one), cut to 24 cells; for any other tab page, the name of its
+current buffer. While 'tabline' is empty when the first aineo tab
 opens, aineo sets it to a tab line of its own that draws those titles, the
 current tab in `AineoTabLineSel`, the others in `AineoTabLine`
 (|aineo-tabline|), each clickable. A 'tabline' you set is left in place.
@@ -255,6 +258,34 @@ the next start lands in. From a tab page that is none of aineo's `\Q` closes
 nothing and says `aineo: this tab holds no Claude Code session`. Quitting
 stops every tab's Claude Code at once and saves every tab's draft
 (|aineo-limits|).
+
+The folder keeps the list of its tabs: the session of each aineo tab, in the
+order of the tab pages, and the place of the tab that is current (the aineo
+tab used last, when the current tab page is none of aineo's). A session two
+tabs show is listed once, at the lower place. It is kept as a tab opens or
+closes, when a tab's session changes, and when Neovim quits, in a file of its
+own beside the session kept for the folder (|aineo-claude-session|): under
+`stdpath('state')` in `aineo/claude-tabs/`, one file per folder that only you
+can read and write. Whenever it is kept without the session kept for the
+folder, the session at its place becomes the session kept for the folder, so
+that a tab you closed is not brought back alone by the next start. The first
+open of aineo in a Neovim reopens every tab of the list when the list holds
+the session kept for the folder: the autostart, or the first `\o`, `\c`, `\i`,
+`\r`, `\pa`, `\g` or `\T`, or the `:Aineo` command that is the same. The
+first tab is in the current tab page, the others in tab pages after it, in the
+order of the list, each with a Claude Code on its own session, resumed or
+attached to where it runs in Claude Code's background service, as a start does
+(|aineo-claude-session|), in the folder, whatever `:cd` said since; all start
+at once, each listing the folder's sessions. The tab that was current at the
+quit is current again, and a reopened tab shows the agent pane. At most 20
+tabs open; aineo says how many more stay in the list. A tab that cannot start
+stops the reopening: aineo names its session and the sessions not tried, which
+stay in the list. A list that is missing, unreadable or does not hold the kept
+session opens one tab on the kept session, as before. Only the first open
+reopens: a Neovim a session plugin restored opens no tab, and a later `\o`
+reopens nothing either. A tab closed with `\Q` or by Neovim's own commands is
+no longer in the list and does not reopen; `\S` brings its session back. `:qa`
+keeps every tab in the list, and so does `\Q` on the last tab.
 
 The changes pane ~
                                                                *aineo-changes*
@@ -667,6 +698,14 @@ only you can read and write, and are never removed.
 resume, once Claude Code has exited, and keeps the new id for the directory
 from then on: the next `\o` resumes it.
 
+With several tabs (|aineo-tabs|) the id kept for the directory is the one the
+last new session or switch in any tab made, and, whenever the folder's list of
+tabs is kept without it, the session at the list's place. The list is another
+file and is used only when it holds that id: the first open then starts each
+tab on its own session from the list. A tab started so keeps no id for the
+directory, except that the new session which takes the place of a session
+Claude Code has no conversation for is kept, as it is for any start.
+
 A start that would resume first asks Claude Code where the session runs, by
 `claude agents --json` for the directory (|aineo-limits|), and Claude's
 window stays empty, drawing its status line, until Claude Code answers: for
@@ -1010,7 +1049,7 @@ only in place of a resume Claude Code has no conversation for
 			  in the background with no short id for `claude
 			  attach`, opens no tab and tells you why.
 			- of a row running elsewhere reads the list again and
-			  opens a new tab after the current one on that
+			  opens a new tab at the end on that
 			  session. A session running in Claude Code's
 			  background service is attached to, as a start
 			  attaches (|aineo-claude-session|): `claude attach`,
@@ -1166,7 +1205,7 @@ another tab of this Neovim runs the session {id} names, `:Aineo claim {id}`
 moves you to that tab instead and claims nothing.
 
                                                                   *:Aineo-tab*
-:Aineo tab new		Opens a tab page after the current one with a tab of
+:Aineo tab new		Opens a tab page at the end with a tab of
 			aineo's in it (|aineo-tabs|): a layout of its own
 			around a Claude Code started in the folder on a new
 			session id, as |:Aineo-new| starts one when no Claude
@@ -2005,6 +2044,17 @@ starts lists the folder's sessions when it resumes one, so several tabs run
 several watches and several lists at once. What two real Claude Codes do in
 one Neovim, the report each sends and the time a quit takes with several
 tabs were not measured: the suites run a fake Claude Code.
+
+The folder's list of tabs is one file for the folder: two Neovims in one
+folder write one list, and the last to write wins, as it does for the session
+kept for the folder. A reopening of N tabs starts N Claude Codes at once and
+runs N lists of the folder's sessions at once (|aineo-claude-session|); the
+list is kept again once all have opened. Closing the last aineo tab page with
+`:tabclose`, while other tab pages remain, leaves the list as it was before
+that tab closed. A reopening resumes a session whose Claude Code in a tab just
+closed still stops, without waiting for the stop. A reopening of several real
+sessions, one of them attached in the background, was not measured: the suites
+run a fake Claude Code.
 
 A tab opened after the first has buffers named with a number that is never
 given again (`aineo://report-2`), and a `:tabclose` of the first tab leaves
