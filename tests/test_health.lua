@@ -603,6 +603,7 @@ T['the shell terminal']["names the 'shell' the terminal pane runs"] = MiniTest.n
     { '/bin/sh' },
     { '/bin/sh -l' },
     { '"/bin/sh" -l' },
+    { '/bin/s"h"' },
   },
 })
 
@@ -626,6 +627,30 @@ T['the shell terminal']["warns when the program of 'shell' is not executable"] =
   })
   eq(health.advice(report, 'Shell terminal'), {
     "Set 'shell' to a program that exists: :help |'shell'|",
+  })
+end
+
+T['the shell terminal']["warns, naming the program Neovim runs, when quotes shape the first word of 'shell'"] =
+  MiniTest.new_set({
+    parametrize = {
+      { '"/bin/sh"x', '/bin/shx' },
+      { '"/bin/s\\"h"', '/bin/s"h' },
+    },
+  })
+
+T['the shell terminal']["warns, naming the program Neovim runs, when quotes shape the first word of 'shell'"]['set to'] = function(
+  shell,
+  program
+)
+  start_with_shell(shell)
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Shell terminal'), {
+    ("- ⚠️ WARNING 'shell' is %s: '%s' is not executable, so the terminal pane cannot start a shell"):format(
+      shell,
+      program
+    ),
   })
 end
 
