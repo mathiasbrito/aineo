@@ -157,4 +157,5 @@ Suites after the fix round: `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 m
 
 ## Commits
 
-*Recorded after the merge.*
+- PR #205, `feature/t60-layout-copies`, head `ea12e54` (2 commits), merged by rebase into `dev` as `ac29341` (a layout per tab page through `new()`), `5942eba` (let a `new()` layout go; the fix round's test gaps).
+- Released in v0.2.34 (PR #214, `main` `8fe30d0`).
