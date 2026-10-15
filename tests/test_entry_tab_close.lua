@@ -164,7 +164,7 @@ local COPY_BUFFERS = [[vim.tbl_filter(function(name)
 end, vim.tbl_map(vim.api.nvim_buf_get_name, vim.api.nvim_list_bufs()))]]
 
 --- Presses `keys` in the child as `entry.press()` does, without waiting for
---- them to have run: they quit the child.
+--- them to have run: they may quit the child.
 ---
 ---@param keys string
 local function press_and_quit(keys)
@@ -305,13 +305,18 @@ T['the close of the last tab of aineo']['stops nothing and quits nothing while a
   child.lua('vim.api.nvim_buf_set_lines(0, 0, -1, true, { "unsaved" })')
   child.cmd('tabfirst')
 
-  entry.press(child, '\\Q')
+  press_and_quit('\\Q')
   vim.wait(500)
 
   eq(child.is_running(), true)
   eq(child.lua_get("require('aineo.claude').session_status()"), 'ready')
   eq(claude_session.ctrl_c_count(first), 0)
-  eq(child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)[1] ~= nil'), true)
+  eq(
+    child.lua_get([[vim.tbl_contains(vim.tbl_map(function(buffer)
+      return vim.api.nvim_buf_get_lines(buffer, 0, -1, true)[1]
+    end, vim.api.nvim_list_bufs()), 'unsaved')]]),
+    true
+  )
   eq(
     vim.iter(entry.messages(child)):any(function(told)
       return told.message ~= nil and told.message:find('E37', 1, true) ~= nil

@@ -907,6 +907,29 @@ T['the list']['is read once at a time: a second press says so and starts nothing
   eq(#menus(), 2)
 end
 
+T['a pick']['after the first tab closed opens the tab on the first tab’s homes, which follow the picked session'] = function()
+  local fake = sessions_fake('sessions-pick-reuses-first', 'ready')
+  open_layout_on(fake)
+  local second = sessions_fake('sessions-pick-reuses-first-second', 'ready')
+  local second_id = open_second_tab(fake, second)
+  child.cmd('1tabclose')
+  claude_session.wait_for_status(child, 'exited')
+  local third = sessions_fake('sessions-pick-reuses-first-third', 'ready')
+  entry.use_fake(child, third)
+  list_in(third, two_tabs_sessions(second_id))
+  pick_row(3)
+
+  press_sessions()
+
+  eq(wait_for_tab_count(2), 2)
+  eq(
+    claude_session.words_after(claude_session.start_arguments(third, 1), '--resume'),
+    { SWITCHABLE_ID }
+  )
+  eq(tabs.session_of_tab(state_of(fake), child, tabs.FIRST_TAB), SWITCHABLE_ID)
+  eq(tabs.windows_of_tab(child, 2), { 'terminal', '', 'aineo://report', 'aineo://input' })
+end
+
 T['a pick']['of a row open in another interactive Claude Code warns of it and resumes it in a new tab'] = function()
   local fake = sessions_fake('sessions-pick-elsewhere', 'ready')
   open_layout_on(fake)
