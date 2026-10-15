@@ -7,17 +7,39 @@ local M = {}
 --- The timer behind it is made at the first `restart()`, and is not running
 --- between a pause's end and the next `restart()`.
 ---
+--- `close()` stops the pause and closes its timer, if one was made; a pause
+--- closed starts no more, and `act` does not run after it.
+---
 ---@param milliseconds integer
 ---@param act fun()
----@return { restart: fun() } pause
+---@return { restart: fun(), close: fun() } pause
 function M.restartable(milliseconds, act)
   local timer
+  local is_closed = false
   local function restart()
+    if is_closed then
+      return
+    end
     timer = timer or vim.uv.new_timer()
     timer:stop()
-    timer:start(milliseconds, 0, vim.schedule_wrap(act))
+    timer:start(
+      milliseconds,
+      0,
+      vim.schedule_wrap(function()
+        if not is_closed then
+          act()
+        end
+      end)
+    )
   end
-  return { restart = restart }
+  local function close()
+    is_closed = true
+    if timer and not timer:is_closing() then
+      timer:stop()
+      timer:close()
+    end
+  end
+  return { restart = restart, close = close }
 end
 
 return M

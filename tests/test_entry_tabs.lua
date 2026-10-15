@@ -115,6 +115,7 @@ T[':Aineo tab new']['closes the tab page it made, and leaves no copy behind, whe
     {}
   )
   eq(child.lua_get("#require('aineo.tabs').held()"), 1)
+  eq(tabs.second_tab_groups_that_exist(child), {})
 end
 
 T[':Aineo tab new']['puts the cursor in its Claude window in Terminal mode'] = function()
@@ -279,6 +280,41 @@ T['the jumps']['move nowhere, and say so, to a tab page that does not exist'] = 
       return told.message
     end, entry.messages(child)),
     { 'aineo: no tab 7', 'aineo: no tab 9' }
+  )
+end
+
+T['the jumps']['move to a tab page past the ninth, by :Aineo tab {n}, and say which number is none'] = function()
+  tabs.open_first_tab(child, 'tabs-jump-tenth')
+  for _ = 1, 9 do
+    child.cmd('tabnew')
+  end
+  child.cmd('tabfirst')
+
+  child.cmd('Aineo tab 10')
+  local landed = tabs.current_tab(child)
+  child.cmd('Aineo tab 12')
+
+  eq(landed, 10)
+  eq(tabs.current_tab(child), 10)
+  eq(
+    vim.tbl_map(function(told)
+      return told.message
+    end, entry.messages(child)),
+    { 'aineo: no tab 12' }
+  )
+end
+
+T['the jumps']['say a number too long to count as typed, and move nowhere'] = function()
+  open_three_tab_pages('tabs-jump-overflow')
+
+  child.cmd('Aineo tab 99999999999999999999')
+
+  eq(tabs.current_tab(child), 1)
+  eq(
+    vim.tbl_map(function(told)
+      return told.message
+    end, entry.messages(child)),
+    { 'aineo: no tab 99999999999999999999' }
   )
 end
 

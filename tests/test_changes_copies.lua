@@ -784,6 +784,37 @@ T['let_go()']['wipes the diffs of its copy, and leaves the other copy’s'] = fu
   )
 end
 
+T['let_go()']['closes the timer of the pause its commits window’s cursor starts'] = function()
+  local top = git_repo.create('changescopies-let-go-timer', { ['a.txt'] = { 'one' } })
+  start_copy('first', top)
+  wait_for_finds(1)
+  child.lua([[
+    _G.timers = {}
+    local new_timer = vim.uv.new_timer
+    vim.uv.new_timer = function()
+      local timer = new_timer()
+      if debug.traceback():find('aineo/changes/pause.lua', 1, true) then
+        table.insert(_G.timers, timer)
+      end
+      return timer
+    end
+  ]])
+  enter_window_of('first', 'commits')
+  child.type_keys('j')
+  git_repo.wait_until('the pause started a timer', function()
+    return child.lua_get('#_G.timers') > 0
+  end)
+
+  child.lua('_G.homes.first.let_go()')
+
+  eq(
+    child.lua_get([[#vim.tbl_filter(function(timer)
+      return not timer:is_closing()
+    end, _G.timers)]]),
+    0
+  )
+end
+
 T['let_go()']['starts no watch when the repository is found after it'] = function()
   local top = git_repo.create('changescopies-let-go-late', { ['a.txt'] = { 'one' } })
 

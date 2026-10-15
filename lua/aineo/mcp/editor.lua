@@ -5,19 +5,24 @@ local M = {}
 
 --- The Lua the editor runs for a report of no known session, its arguments
 --- the report and the options of `receive_session_report()`. The report
---- home is offered it with no session first, so that its router can choose
---- where it shows; a home that does not take it, or lacks that function,
---- shows it with `receive_report()`. The report travels as data: nothing of
---- it becomes code.
+--- home is offered it with no session, so that its router can choose where it
+--- shows, and answers whether it took it; a home that lacks that function,
+--- older than this relay, shows it with `receive_report()`. The report
+--- travels as data: nothing of it becomes code.
 local RECEIVE_REPORT = [[
   local home = require('aineo.report')
   local report, options = ...
-  if home.receive_session_report and home.receive_session_report(report, nil, options) then
-    return true
+  if home.receive_session_report then
+    return home.receive_session_report(report, nil, options)
   end
   home.receive_report(report)
   return true
 ]]
+
+--- What the relay tells Claude when the editor's report home does not take a
+--- report of no known session: no tab of the editor runs the Claude Code
+--- that sent it.
+local NO_TAB_RUNS_IT = 'no tab of the editor runs the Claude Code that sent the report'
 
 --- How long the relay waits for the editor to confirm a report: 5 s, far
 --- above the time a report takes to show (tens of milliseconds, even for a
@@ -250,16 +255,17 @@ function M.offer_report(address, request)
 end
 
 --- Hands `report`, which belongs to no known session, to the report home of
---- the editor listening at `address`: first as `receive_session_report()`
---- takes it with `options` and no session, then, when the home does not take
---- it, shows it in its Report with `receive_report()`. Says how it went:
+--- the editor listening at `address`, as `receive_session_report()` takes it
+--- with `options` and no session; a home older than that function shows it
+--- with `receive_report()`. Says how it went:
 ---
 --- - `'delivered'` when the editor confirmed it;
 --- - `'unconfirmed'` when the editor did not answer within
 ---   `CONFIRMATION_TIMEOUT_MS` (`offer_report()`);
 --- - `'failed'` when there is no address, the editor cannot be reached,
----   closes the connection before answering, or does not take the report —
----   then with the first line of the reason it gave.
+---   closes the connection before answering, does not take the report
+---   because no tab of the editor runs the Claude Code that sent it, or
+---   refuses it — then with the reason.
 ---
 --- The second result says it in words, for Claude, and the third, for a
 --- failure, whether it was that the editor could not be reached.
@@ -276,8 +282,11 @@ function M.deliver_report(address, report, options)
   end
   local kind, explanation =
     M.offer_report(address, { lua = RECEIVE_REPORT, arguments = { report, options } })
-  if kind == 'taken' or kind == 'declined' then
+  if kind == 'taken' then
     return 'delivered'
+  end
+  if kind == 'declined' then
+    return 'failed', NO_TAB_RUNS_IT
   end
   if kind == 'unconfirmed' then
     return 'unconfirmed', explanation
