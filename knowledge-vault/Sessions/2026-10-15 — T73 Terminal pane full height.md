@@ -100,3 +100,9 @@ None.
 - **Finding 4**: the first round-trip case asserts the reopened Input's `winfixheight` and `winfixwidth`.
 
 Mutants, killed by assertion: the Report view's save removed (2 cases), `size_right_column()` removed (3), `pin_windows()` removed from `open_input_window()` (1).
+
+## Commits
+
+- PR #227, `feature/t73-terminal-full-height`, head `1cc5244` (3 commits), merged by rebase into `dev` as `0f9f599` (Give the terminal pane the whole right column, Input's window closed), `91828dc` (Keep the Report's view and share through the terminal pane's round trip), `3615d6e` (Record the fix round of the terminal pane's full height in its session note).
+- Released in v0.2.39 (PR #228, `main` `8544df5`).
+- The user's words are recorded as D72 in [[Planning/aineo — v1 agent console]].
