@@ -822,12 +822,12 @@ T['list_of_tabs()']['gives the sessions in the order of the tabs and the place o
   local tabs = require('aineo.tabs')
 
   local list = tabs.list_of_tabs({
-    { session = FIRST, current = false },
-    { session = SECOND, current = true },
+    { session = SECOND, current = false },
+    { session = FIRST, current = true },
     { session = THIRD, current = false },
   })
 
-  eq(list, { sessions = { FIRST, SECOND, THIRD }, current = 2 })
+  eq(list, { sessions = { SECOND, FIRST, THIRD }, current = 2 })
 end
 
 T['list_of_tabs()']['leaves out a tab that has no session yet, and counts the place among the rest'] = function()
