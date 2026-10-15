@@ -4,7 +4,10 @@
 --- stays cheap: sourcing it requires no aineo module; once the editor has
 --- started it loads the configuration alone, to read the prefixes and
 --- `autostart`, and the other homes load when a command, a mapping or the
---- autostart first needs them.
+--- autostart first needs them. `aineo.entry`, the body of this composition
+--- root, loads with the first command or mapping, and at startup only to
+--- tell the user an error (a wrong setting) or when a session plugin has
+--- restored a session.
 ---
 --- The prefixes are mapped, and the autostart decided, from the configuration
 --- as it stands when the editor has started (`VimEnter`) — after the user's
