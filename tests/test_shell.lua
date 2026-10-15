@@ -166,6 +166,78 @@ T['start()']['splits `shell` as `:terminal` does, a double-quoted word keeping i
   )
 end
 
+T['start()']['refuses settings that are not a table, naming them, and starts nothing'] =
+  MiniTest.new_set({
+    parametrize = { { 'nothing' }, { 'a string' } },
+  })
+
+T['start()']['refuses settings that are not a table, naming them, and starts nothing']['given'] = function(
+  kind
+)
+  start_child()
+  local settings = ({ ['a string'] = 'a string' })[kind]
+  local buffers_before = child.lua_get('#vim.api.nvim_list_bufs()')
+
+  local started, message = pcall(start_shell, settings)
+
+  eq(started, false)
+  eq(message:find('settings: expected table', 1, true) ~= nil, true)
+  eq(
+    { child.lua_get(TERMINAL_JOBS), child.lua_get('#vim.api.nvim_list_bufs()') },
+    { 0, buffers_before }
+  )
+end
+
+T['start()']['refuses a directory the shell cannot enter, naming settings.cwd, and starts nothing'] = function()
+  start_child()
+  local directory = working_directory('locked')
+  assert(vim.uv.fs_chmod(directory, tonumber('600', 8)))
+  local buffers_before = child.lua_get('#vim.api.nvim_list_bufs()')
+
+  local started, message = pcall(start_shell, { cwd = directory })
+
+  assert(vim.uv.fs_chmod(directory, tonumber('755', 8)))
+  eq(started, false)
+  eq(message:find('settings.cwd', 1, true) ~= nil, true)
+  eq(
+    { child.lua_get(TERMINAL_JOBS), child.lua_get('#vim.api.nvim_list_bufs()') },
+    { 0, buffers_before }
+  )
+end
+
+--- Writes an executable `/bin/sh` wrapper named `name` in the fixtures' directory
+--- `shell/<directory>/` and returns its absolute path.
+---
+---@param directory string
+---@param name string
+---@return string path
+local function program_named(directory, name)
+  local program =
+    fixture.write('shell/' .. directory .. '/' .. name, { '#!/bin/sh', 'exec /bin/sh "$@"' })
+  assert(vim.uv.fs_chmod(program, tonumber('755', 8)))
+  return program
+end
+
+T['start()']['reads a backslash before a double quote inside double quotes as the quote, as `:terminal` does'] = function()
+  start_child()
+  local program = program_named('a program', 'q"sh')
+  child.o.shell = '"' .. program:gsub('"', '\\"') .. '"'
+
+  local buffer = start_shell({ cwd = working_directory('words') })
+
+  eq(child.lua_get('vim.api.nvim_get_chan_info(vim.bo[...].channel).argv', { buffer }), { program })
+end
+
+T['start()']['splits `shell` at spaces and tabs only, a newline staying in its word, as `:terminal` does'] = function()
+  start_child()
+  local program = program_named('newline', 'n\nsh')
+  child.o.shell = program
+
+  local buffer = start_shell({ cwd = working_directory('words') })
+
+  eq(child.lua_get('vim.api.nvim_get_chan_info(vim.bo[...].channel).argv', { buffer }), { program })
+end
+
 T['start()']['starts the shell in settings.cwd'] = function()
   start_child()
   local directory = working_directory('cwd')
@@ -337,6 +409,30 @@ T['the end of a shell']['leaves its buffer for the handlers of the TermClose tha
   eq(wait_until('not vim.api.nvim_buf_is_valid(...)', { buffer }), true)
 end
 
+T['a shell wiped where no handler sees it'] = MiniTest.new_set()
+
+T['a shell wiped where no handler sees it']['is forgotten by the next call, and a new shell starts'] = function()
+  start_child()
+  child.lua([[
+    vim.api.nvim_create_autocmd('TermClose', {
+      callback = function(event)
+        vim.api.nvim_buf_delete(event.buf, { force = true })
+      end,
+    })
+  ]])
+  local directory = working_directory('wiped-unseen')
+  local first = start_shell({ cwd = directory })
+
+  type_into_shell(first, 'exit 3')
+  eq(wait_until('not vim.api.nvim_buf_is_valid(...)', { first }), true)
+
+  eq(current_shell_buffer(), vim.NIL)
+  local second = start_shell({ cwd = directory })
+  no_eq(second, first)
+  eq(child.lua_get('vim.api.nvim_buf_is_valid(...)', { second }), true)
+  eq(child.lua_get(TERMINAL_JOBS), 1)
+end
+
 T['a shell whose buffer is wiped'] = MiniTest.new_set({
   parametrize = { { 'bwipeout!' }, { 'bdelete!' } },
 })
@@ -372,6 +468,28 @@ T['stop()']['ends the shell’s process and wipes its buffer at once'] = functio
   eq(child.lua_get('vim.api.nvim_buf_is_valid(...)', { buffer }), false)
   eq({ current_shell_buffer(), child.lua_get(TERMINAL_JOBS) }, { vim.NIL, 0 })
   eq(wait_until('vim.uv.kill(..., 0) == nil', { pid }), true)
+end
+
+T['stop()']['called where Neovim refuses the wipe still ends the shell, and no second shell runs'] = function()
+  start_child()
+  local directory = working_directory('stop-refused')
+  local buffer = start_shell({ cwd = directory })
+  local pid = child.lua_get('vim.fn.jobpid(vim.b[...].terminal_job_id)', { buffer })
+
+  child.lua([[
+    vim.keymap.set('n', 'Q', function()
+      _G.stop_failed = not pcall(require('aineo.shell').stop)
+      return ''
+    end, { expr = true })
+    vim.api.nvim_feedkeys('Q', 'x', false)
+  ]])
+
+  eq(child.lua_get('_G.stop_failed'), true)
+  eq(wait_until('vim.uv.kill(..., 0) == nil', { pid }), true)
+  eq(wait_until('not vim.api.nvim_buf_is_valid(...)', { buffer }), true)
+  local second = start_shell({ cwd = directory })
+  no_eq(second, buffer)
+  eq(child.lua_get(TERMINAL_JOBS), 1)
 end
 
 T['stop()']['does nothing without a shell, and a shell can start after it'] = function()
