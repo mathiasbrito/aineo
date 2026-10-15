@@ -103,6 +103,17 @@ T['a tab page closed by Neovim’s own commands']['lets its copies go: no buffer
   eq(child.lua_get("#require('aineo.tabs').held()"), 1)
 end
 
+T['a tab page closed by Neovim’s own commands']['that was the tab used last, closed from a tab page of none of aineo’s, leaves the editor’s focus marking the first tab used'] = function()
+  local state = open_two_tabs('tabs-closed-last-used')
+  child.cmd('$tabnew')
+  child.cmd('2tabclose')
+  local before = tabs.entries(state, child.v.servername)[tabs.FIRST_TAB].used
+
+  child.api.nvim_exec_autocmds('FocusGained', {})
+
+  eq(tabs.entries(state, child.v.servername)[tabs.FIRST_TAB].used > before, true)
+end
+
 T['a tab page closed by Neovim’s own commands']['saves Input’s draft'] = function()
   local state = open_two_tabs('tabs-closed-draft')
   local second_session = tabs.entries(state, child.v.servername)['2'].session
