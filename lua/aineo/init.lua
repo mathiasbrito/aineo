@@ -32,11 +32,12 @@ end
 --- The title aineo's tab line draws for the tab page numbered `number`, as
 --- `{n}gt` counts them: `<number>: <name>`, the name that of an aineo tab's
 --- Claude session, for any other tab page that of its current buffer, cut to
---- fit (`:help aineo-tabs`). While the Claude Code of an aineo tab works the
---- title ends with a space and ◒ or ◓, alternating twice a second; while its
---- output has not been seen, with a space and ●; the tab line is drawn
---- again as the indicator changes, whichever 'tabline' draws it. For a
---- 'tabline' of your own to draw the same titles.
+--- fit (`:help aineo-tabs`). The tabs home holds an indicator for each tab, which
+--- the composition root tells it, and the title ends with a space and the
+--- indicator: ◒ or ◓, alternating twice a second, while the tab's Claude Code
+--- works; ● while its output has not been seen; the tab line is drawn again
+--- as the indicator changes, whichever 'tabline' draws it. For a 'tabline' of
+--- your own to draw the same titles.
 ---
 --- Raises an error naming `number` when it is not a whole number from 1.
 ---

@@ -56,8 +56,6 @@ end
 
 T['the session is busy'] = MiniTest.new_set()
 
-T['the fake in the mode busy-title'] = MiniTest.new_set()
-
 --- Claude Code 2.1.301's busy titles: the glyph ◐ or ◑, then a space and
 --- the title, or nothing (`knowledge-vault/Implementation/Waves/
 --- 00017-tab-activity/evidence/w17-claude-title.txt`, B1).
@@ -263,6 +261,17 @@ local function wait_for_title(buffer, title)
     return held == title
   end, 20)
   return held
+end
+
+T['the fake in the mode busy-title'] = MiniTest.new_set()
+
+T['the fake in the mode busy-title']['draws the startup screen as the mode ready does'] = function()
+  local fake = claude.fake('busy-title-screen', 'busy-title')
+  local buffer = claude.start(child, fake)
+
+  local screen = claude.wait_for_screen(child, buffer, 'for shortcuts')
+
+  eq(screen:find('for shortcuts', 1, true) ~= nil, true)
 end
 
 T['the fake in the mode busy-title']['titles the terminal ✳, then ◐ and ◑ in turn, then ✳ again after the time it is given'] = function()
