@@ -33,8 +33,9 @@ end
 --- The editor's first open, when the folder keeps a list of tabs that holds
 --- its kept session and no aineo tab exists yet: opens every tab of the list in
 --- its order, the first in the current tab page and each next one after the
---- tab before it (`opening.lua`'s `open_new_tab()`), each with its Claude Code started on its
---- session at once (`aineo.entry.Tab`'s `open_on_session()`), and moves to the
+--- tab before it (`opening.lua`'s `open_new_tab()`), each with its Claude
+--- Code started on its session at once (`aineo.entry.Tab`'s
+--- `open_on_session()`), and moves to the
 --- tab at the list's place among them. The list is kept once all have opened,
 --- with the sessions cut off by the most tabs a reopening opens, which the user
 --- is told of. The first open uses the list once: later runs, and an open that

@@ -13,7 +13,8 @@
 --- (`routing.lua`) — is held once, in this home.
 ---
 --- Loading it loads no other home: each is required when an action first
---- needs it.
+--- needs it. The home keeps the editor's tabs for the editor's life; loading
+--- aineo's modules again (clearing `package.loaded`) is not supported.
 
 local actions = require('aineo.entry.actions')
 local errors = require('aineo.entry.errors')
