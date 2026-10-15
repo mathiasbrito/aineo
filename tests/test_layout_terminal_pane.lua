@@ -750,4 +750,53 @@ T['the layout reopened after a shell was wiped']['shows the agent pane again as 
   eq(child.api.nvim_win_get_buf(report_window), buffers.report)
 end
 
+--- Makes, in the child, a terminal whose process ends with status 3 once it is
+--- sent a line, and that nothing wipes: the stand-in for a shell without the
+--- shell home, which wipes the buffer of a shell that ended. `_G.ended`
+--- becomes true in the child once Neovim has told that the process ended.
+---
+---@return integer buffer
+local function unwiped_terminal()
+  return child.lua_get([[(function()
+    _G.ended = false
+    local buffer = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_call(buffer, function()
+      vim.fn.jobstart({ '/bin/sh', '-c', 'read line; exit 3' }, { term = true })
+    end)
+    vim.api.nvim_create_autocmd('TermClose', {
+      buffer = buffer,
+      callback = function()
+        _G.ended = true
+      end,
+    })
+    return buffer
+  end)()]])
+end
+
+T['a shell that ends and is not wiped'] = MiniTest.new_set({
+  parametrize = { { 'agent' }, { 'changes' }, { 'terminal' } },
+})
+
+T['a shell that ends and is not wiped']['is forgotten, whichever pane showed, so that the terminal pane is refused without a new shell, for'] = function(
+  pane
+)
+  local buffers = open_with_panes()
+  buffers.shell = unwiped_terminal()
+  local arrangement = layout.arrangement(buffers)
+  arrangement.shell = buffers.shell
+  layout.open(child, arrangement)
+  show_pane(pane)
+
+  type_into_shell(buffers.shell, '')
+  eq(wait_until('_G.ended'), true)
+
+  local shown, message = pcall(
+    child.lua,
+    [[require('aineo.layout').show_pane('terminal', ...)]],
+    { layout.arrangement(buffers) }
+  )
+  eq(shown, false)
+  eq(message:find('arrangement.shell', 1, true) ~= nil, true)
+end
+
 return T

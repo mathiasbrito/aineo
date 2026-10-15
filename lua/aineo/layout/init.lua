@@ -1194,9 +1194,6 @@ local function make_layout(input_name, group_name)
   --- Forgets the shell the layout was handed: the terminal pane has no buffer
   --- to show until an arrangement hands another.
   local function forget_shell()
-    if state.buffers.shell then
-      state.views[state.buffers.shell] = nil
-    end
     state.buffers.shell = nil
   end
 
