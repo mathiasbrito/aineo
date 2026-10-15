@@ -1516,8 +1516,9 @@ end
 ---@field write_to_session fun(bytes: string) see `write_to_session()`
 
 --- The home each table of session functions was made for
---- (`session_functions_of()`), held weakly, so that `M.stop_sessions()` can
---- stop the Claude Codes of the tables it is given.
+--- (`session_functions_of()`), held weakly, so that
+--- `M.stop_sessions_in_background()` can stop the Claude Codes of the tables
+--- it is given.
 ---@type table<table, aineo.claude.Home>
 local home_of_session = setmetatable({}, { __mode = 'k' })
 
@@ -1628,25 +1629,14 @@ local function homes_to_stop(sessions)
 end
 
 --- Stops the Claude Codes of `sessions`, session homes (`M.new()`'s copies or
---- this module), together, as quitting stops them all (`stop_running_sessions()`):
---- every key of the stop is pressed to every Claude Code that runs and the
---- waits run side by side, so that it blocks the editor for about one stop,
---- up to 11.8 s, not the sum. Marks each start stopped, as `stop_session()`
---- does. Stops nothing for a session that does not run, and leaves every
---- other home's Claude Code running.
----
---- Raises an error naming `sessions` when one of them is no session home.
----
----@param sessions aineo.claude.Session[]
-function M.stop_sessions(sessions)
-  stop_running_sessions(homes_to_stop(sessions))
-end
-
---- Stops the Claude Codes of `sessions` as `M.stop_sessions()` does, but
---- without blocking the editor (`stop.stop_together_in_background()`): it
+--- this module), together, as quitting stops them all: every key of the stop
+--- is pressed to every Claude Code that runs and the waits run side by side,
+--- without blocking the editor (`stop.stop_together_in_background()`). It
 --- returns at once, and calls `on_done`, scheduled, once each has exited or
---- its stop has run out. When Neovim quits meanwhile the stop is left to the
---- quit, which stops every Claude Code that runs, and `on_done` is not
+--- its stop has run out. Marks each start stopped, as `stop_session()` does.
+--- Stops nothing for a session that does not run, and leaves every other
+--- home's Claude Code running. When Neovim quits meanwhile the stop is left to
+--- the quit, which stops every Claude Code that runs, and `on_done` is not
 --- called. Raises an error naming `sessions` when one of them is no session
 --- home, starting no stop.
 ---
