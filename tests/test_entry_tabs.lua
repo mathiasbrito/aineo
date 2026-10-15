@@ -63,7 +63,7 @@ T['the first tab']['is the tab page the first open is in, held with a title of i
   eq(child.lua_get("#require('aineo.tabs').held()"), 1)
   eq(
     child.lua_get("require('aineo.tabs').title(vim.api.nvim_get_current_tabpage())"),
-    '1 Claude Code'
+    '1: Claude Code'
   )
 end
 
@@ -380,7 +380,7 @@ T['the titles']['give an aineo tab’s place and the session’s name, and any o
       require('aineo').tab_title(2),
       require('aineo').tab_title(3),
     }]]),
-    { '1 Claude Code', '2 Claude Code', '3 notes.txt' }
+    { '1: Claude Code', '2: Claude Code', '3: notes.txt' }
   )
 end
 
@@ -417,7 +417,7 @@ T['the titles']['follow the places when a tab page is moved'] = function()
       require('aineo').tab_title(2),
       require('aineo').tab_title(3),
     }]]),
-    { '1 Claude Code', '2 [No Name]', '3 Claude Code' }
+    { '1: Claude Code', '2: [No Name]', '3: Claude Code' }
   )
 end
 
@@ -441,7 +441,7 @@ T['the titles']['have the tab line drawn again when the session’s name changes
   end, 20)
 
   eq(child.lua_get('_G.tab_line_redraws'), 1)
-  eq(child.lua_get("require('aineo').tab_title(2)"), '2 Refactor the parser')
+  eq(child.lua_get("require('aineo').tab_title(2)"), '2: Refactor the parser')
 end
 
 return T
