@@ -96,7 +96,7 @@ end
 T[':Aineo']['is described with every subcommand it takes'] = function()
   eq(
     child.lua_get('vim.api.nvim_get_commands({}).Aineo.definition'),
-    'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes, claim [id] or tab new|close|{n}'
+    'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal, claim [id] or tab new|close|{n}'
   )
 end
 

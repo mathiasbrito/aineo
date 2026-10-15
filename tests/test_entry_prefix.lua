@@ -16,6 +16,7 @@ local PREFIX_KEYS = {
   { 'N', '<Plug>(aineo-new)', 'n' },
   { 'pa', '<Plug>(aineo-pane-agent)', 'n' },
   { 'g', '<Plug>(aineo-pane-changes)', 'n' },
+  { 'pt', '<Plug>(aineo-pane-terminal)', 'n' },
   { 'T', '<Plug>(aineo-tab-new)', 'n' },
   { 'Q', '<Plug>(aineo-tab-close)', 'n' },
   { '1', '<Plug>(aineo-tab-1)', 'n' },
@@ -134,6 +135,24 @@ T["the user's own mapping"]['of a key sequence stays, and the other keys are map
   eq(child.fn.maparg('\\s', 'n'), '<Plug>(aineo-send)')
 end
 
+T["the user's own mapping"]['of \\pt stays, and aineo maps \\pa'] = function()
+  children.restart(child, { '--cmd', 'nnoremap \\pt <Cmd>let g:mine = 1<CR>' })
+
+  eq(
+    { child.fn.maparg('\\pt', 'n'), child.fn.maparg('\\pa', 'n') },
+    { '<Cmd>let g:mine = 1<CR>', '<Plug>(aineo-pane-agent)' }
+  )
+end
+
+T["the user's own mapping"]['of <C-\\>pt in Terminal mode stays, and aineo maps it in Insert mode'] = function()
+  children.restart(child, { '--cmd', 'tnoremap <C-\\>pt <Cmd>let g:mine = 1<CR>' })
+
+  eq({
+    child.fn.maparg('<C-\\>pt', 't'),
+    vim.endswith(child.fn.maparg('<C-\\>pt', 'i'), '<Plug>(aineo-pane-terminal)'),
+  }, { '<Cmd>let g:mine = 1<CR>', true })
+end
+
 T["the user's own mapping"]['of the start of a key sequence stays, and aineo maps the sequence too'] =
   MiniTest.new_set({
     parametrize = { { '\\t' }, { '\\tc' } },
@@ -150,12 +169,13 @@ T["the user's own mapping"]['of the start of a key sequence stays, and aineo map
   )
 end
 
-T["the user's own mapping"]['of \\p stays, and aineo maps \\pa too'] = function()
+T["the user's own mapping"]['of \\p stays, and aineo maps \\pa and \\pt too'] = function()
   children.restart(child, { '--cmd', 'nnoremap \\p <Cmd>let g:mine = 1<CR>' })
 
-  eq({ child.fn.maparg('\\p', 'n'), child.fn.maparg('\\pa', 'n') }, {
+  eq({ child.fn.maparg('\\p', 'n'), child.fn.maparg('\\pa', 'n'), child.fn.maparg('\\pt', 'n') }, {
     '<Cmd>let g:mine = 1<CR>',
     '<Plug>(aineo-pane-agent)',
+    '<Plug>(aineo-pane-terminal)',
   })
 end
 
