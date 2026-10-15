@@ -20,7 +20,7 @@ Where a boundary sits, what crosses it, and how the clients of a module are foun
 
   | Path | Holds |
   |---|---|
-  | `lua/aineo/<concern>/` | one concern behind its `init.lua` — `config` (C1), `layout` (C2, C9, C12), `claude` (C3), `send` (C4), `mcp` (C5), `report` (C6, C10), `draft` (C11), `git` (C13), `changes` (C15) |
+  | `lua/aineo/<concern>/` | one concern behind its `init.lua` — `config` (C1), `layout` (C2, C9, C12), `claude` (C3), `send` (C4), `mcp` (C5), `report` (C6, C10), `draft` (C11), `git` (C13), `changes` (C15), `tabs` (D63), `shell` (D68) |
   | `lua/aineo/init.lua` | the plugin's public Lua API, `require('aineo')` (C1); it calls into homes, it never re-exports their symbols |
   | `lua/aineo/health.lua` | the `:checkhealth aineo` entry (C7) — a file Neovim looks up by name, not a home |
   | `plugin/aineo.lua` | the composition root (C1): commands, `<Plug>` mappings, autocommands; it `require()`s a home only inside a callback |
@@ -41,7 +41,9 @@ Where a boundary sits, what crosses it, and how the clients of a module are foun
   | `aineo.mcp` | `aineo.config`, `aineo.report` (the relay renders into the Report buffer) |
   | `aineo.claude` | `aineo.config`, `aineo.mcp` (the session registers the report server) |
   | `aineo.send` | `aineo.config`, `aineo.claude`, `aineo.layout` (the Input buffer into the session's terminal) |
-  | `aineo` (`lua/aineo/init.lua`) | `aineo.config` |
+  | `aineo.tabs` | `aineo.config` (the tab line's `tabs.padding`, A334); it is handed the tabs' names and pages |
+  | `aineo.shell` | no aineo home (it is given a folder and runs `'shell'`) |
+  | `aineo` (`lua/aineo/init.lua`) | `aineo.config`, `aineo.tabs` (`tab_title()`, A301) |
   | `plugin/aineo.lua`, `lua/aineo/health.lua`, `scripts/`, `tests/` | any home's entry point |
 
   A packet that needs an edge this table lacks reports it as a spec conflict; the edge is added on an `ai/` branch, not in the packet.
