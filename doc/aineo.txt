@@ -192,9 +192,10 @@ Normal mode. With no tab page of that number nothing moves and aineo says so.
 The number is the tab page's place: closing a tab page, or `:tabmove`,
 changes the numbers after it, and the titles with them.
 
-A tab's title is its number and, for an aineo tab, the name of its session,
-the name Claude Code gives it, cut to 24 cells; for any other tab page, the
-name of its current buffer. While 'tabline' is empty when the first aineo tab
+A tab's title is `<number>: <name>`: its number, a colon, and, for an aineo
+tab, the name of its session, the name Claude Code gives it (`Claude Code`
+until it gives one), cut to 24 cells; for any other tab page, the name of its
+current buffer. While 'tabline' is empty when the first aineo tab
 opens, aineo sets it to a tab line of its own that draws those titles, the
 current tab in |hl-TabLineSel|, the others in |hl-TabLine|, each clickable. A
 'tabline' you set is left in place.

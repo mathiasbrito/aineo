@@ -65,7 +65,7 @@ T['hold()']['takes the new name when a tab is held again'] = function()
     return tabs.title(handle)
   ]])
 
-  eq(title, '1 new')
+  eq(title, '1: new')
 end
 
 T['hold()']['raises, and holds nothing, for a name that is not a function'] = function()
@@ -176,7 +176,7 @@ T['title()']['is the place and the name of a held tab'] = function()
     return { before, tabs.title(handles[2]) }
   ]])
 
-  eq(titles, { '2 fix the login', '1 fix the login' })
+  eq(titles, { '2: fix the login', '1: fix the login' })
 end
 
 T['title()']['is the place and the tail of the buffer name for a tab not held'] = function()
@@ -193,7 +193,7 @@ T['title()']['is the place and the tail of the buffer name for a tab not held'] 
     return result
   ]])
 
-  eq(titles, { '1 notes.txt', '2 todo.md', '3 [No Name]' })
+  eq(titles, { '1: notes.txt', '2: todo.md', '3: [No Name]' })
 end
 
 --- The title of the only tab page, held with the name `name`.
@@ -215,26 +215,26 @@ end
 T['title()']['keeps a name of 24 display cells whole'] = function()
   local name = string.rep('n', 24)
 
-  eq(title_named(name), '1 ' .. name)
+  eq(title_named(name), '1: ' .. name)
 end
 
 T['title()']['cuts a name of 25 display cells to 23 cells and an ellipsis'] = function()
-  eq(title_named(string.rep('n', 25)), '1 ' .. string.rep('n', 23) .. '…')
+  eq(title_named(string.rep('n', 25)), '1: ' .. string.rep('n', 23) .. '…')
 end
 
 T['title()']['cuts a 60-cell name'] = function()
-  eq(title_named(string.rep('n', 60)), '1 ' .. string.rep('n', 23) .. '…')
+  eq(title_named(string.rep('n', 60)), '1: ' .. string.rep('n', 23) .. '…')
 end
 
 T['title()']['cuts multibyte text by display cells, not by bytes'] = function()
-  eq(title_named(string.rep('é', 25)), '1 ' .. string.rep('é', 23) .. '…')
+  eq(title_named(string.rep('é', 25)), '1: ' .. string.rep('é', 23) .. '…')
 end
 
 T['title()']["cuts wide characters on a character's edge"] = function()
   local twelve_wide = string.rep('語', 12)
 
-  eq(title_named(twelve_wide), '1 ' .. twelve_wide)
-  eq(title_named(string.rep('語', 13)), '1 ' .. string.rep('語', 11) .. '…')
+  eq(title_named(twelve_wide), '1: ' .. twelve_wide)
+  eq(title_named(string.rep('語', 13)), '1: ' .. string.rep('語', 11) .. '…')
 end
 
 T['title()']['cuts the tail of a buffer name too'] = function()
@@ -242,7 +242,7 @@ T['title()']['cuts the tail of a buffer name too'] = function()
 
   local title = in_child('return tabs.title(vim.api.nvim_get_current_tabpage())')
 
-  eq(title, '1 ' .. string.rep('b', 23) .. '…')
+  eq(title, '1: ' .. string.rep('b', 23) .. '…')
 end
 
 --- What a held tab's `name()` does, in Lua, when it gives no usable text.
@@ -271,7 +271,7 @@ T['title()']["says the buffer's tail for a held tab whose name() gives no text"]
     return succeeded and title or 'title() raised: ' .. title
   ]]):format(NAMES_WITH_NO_TEXT[name]))
 
-  eq(title, '1 fallback.txt')
+  eq(title, '1: fallback.txt')
 end
 
 T['title()']['takes the buffer of the tab page itself, not of the current tab'] = function()
@@ -282,7 +282,7 @@ T['title()']['takes the buffer of the tab page itself, not of the current tab'] 
 
   local title = in_child('return tabs.title(vim.api.nvim_list_tabpages()[2])')
 
-  eq(title, '2 third.txt')
+  eq(title, '2: third.txt')
 end
 
 T['tabline()'] = MiniTest.new_set()
@@ -313,11 +313,11 @@ T['tabline()']['draws the title of every tab page, the current one in TabLineSel
     tabs.hold(vim.api.nvim_get_current_tabpage(), function() return 'second' end)
   ]])
 
-  eq(drawn.str, ' 1 notes.txt  2 second ')
+  eq(drawn.str, ' 1: notes.txt  2: second ')
   eq(drawn.highlights, {
     { group = 'TabLine', start = 0, groups = { 'TabLineFill', 'TabLine' } },
-    { group = 'TabLineSel', start = 13, groups = { 'TabLineFill', 'TabLineSel' } },
-    { group = 'TabLineFill', start = 23, groups = { 'TabLineFill', 'TabLineFill' } },
+    { group = 'TabLineSel', start = 14, groups = { 'TabLineFill', 'TabLineSel' } },
+    { group = 'TabLineFill', start = 25, groups = { 'TabLineFill', 'TabLineFill' } },
   })
 end
 
@@ -334,7 +334,7 @@ T['tabline()']['draws a percent sign in a name as written'] = function()
     tabs.hold(vim.api.nvim_get_current_tabpage(), function() return '100% done %{x}' end)
   ]])
 
-  eq(drawn.str, ' 1 100% done %{x} ')
+  eq(drawn.str, ' 1: 100% done %{x} ')
 end
 
 T['draw_tabline()'] = MiniTest.new_set()
@@ -348,7 +348,7 @@ T['draw_tabline()']["sets 'tabline' to draw aineo's line while it is empty"] = f
     return { in_use = in_use, str = drawn.str }
   ]])
 
-  eq(result, { in_use = true, str = ' 1 [No Name]  2 [No Name] ' })
+  eq(result, { in_use = true, str = ' 1: [No Name]  2: [No Name] ' })
 end
 
 T['draw_tabline()']["leaves a 'tabline' of the user's in place, and says it is not in use"] = function()
@@ -630,8 +630,8 @@ T['tabline()']['numbers each click region by the place of its tab page, after :t
 
   local drawn = drawn_tabline("vim.cmd('tabclose 1')")
 
-  eq(drawn.format:find('%1T 1 [No Name] ', 1, true) ~= nil, true)
-  eq(drawn.format:find('%2T 2 [No Name] ', 1, true) ~= nil, true)
+  eq(drawn.format:find('%1T 1: [No Name] ', 1, true) ~= nil, true)
+  eq(drawn.format:find('%2T 2: [No Name] ', 1, true) ~= nil, true)
 end
 
 T['tabline()']['numbers the click regions in the order of the places after :tabmove'] = function()
@@ -663,15 +663,24 @@ local function drawn_over_three_long_names(current)
 end
 
 T['tabline()']['draws only whole titles, the first tab page current, when all would overflow'] = function()
-  eq(drawn_over_three_long_names(1), ' 1 session 1, fixing the t…  2 session 2, fixing the t… ')
+  eq(
+    drawn_over_three_long_names(1),
+    ' 1: session 1, fixing the t…  2: session 2, fixing the t… '
+  )
 end
 
 T['tabline()']['draws the current tab page and the one before it when the one after would overflow'] = function()
-  eq(drawn_over_three_long_names(2), ' 1 session 1, fixing the t…  2 session 2, fixing the t… ')
+  eq(
+    drawn_over_three_long_names(2),
+    ' 1: session 1, fixing the t…  2: session 2, fixing the t… '
+  )
 end
 
 T['tabline()']['draws the last tab page current, with the one before it, when all would overflow'] = function()
-  eq(drawn_over_three_long_names(3), ' 2 session 2, fixing the t…  3 session 3, fixing the t… ')
+  eq(
+    drawn_over_three_long_names(3),
+    ' 2: session 2, fixing the t…  3: session 3, fixing the t… '
+  )
 end
 
 T['title()']["says the buffer's tail for a held tab whose name() holds a NUL, and the line still draws"] = function()
@@ -681,19 +690,19 @@ T['title()']["says the buffer's tail for a held tab whose name() holds a NUL, an
     tabs.hold(vim.api.nvim_get_current_tabpage(), function() return 'a\0b' end)
   ]])
 
-  eq(drawn.str, ' 1 fallback.txt ')
+  eq(drawn.str, ' 1: fallback.txt ')
 end
 
 T['title()']['keeps a character with its accent when it cuts decomposed text'] = function()
   local accented = 'e\204\129'
 
-  eq(title_named(string.rep(accented, 30)), '1 ' .. string.rep(accented, 23) .. '…')
+  eq(title_named(string.rep(accented, 30)), '1: ' .. string.rep(accented, 23) .. '…')
 end
 
 T['title()']['keeps a family emoji whole when it cuts'] = function()
   local family = '👨‍👩‍👧'
 
-  eq(title_named(string.rep(family, 13)), '1 ' .. string.rep(family, 11) .. '…')
+  eq(title_named(string.rep(family, 13)), '1: ' .. string.rep(family, 11) .. '…')
 end
 
 T['title()']['says the last part of a buffer name that ends in a slash'] = function()
@@ -701,7 +710,7 @@ T['title()']['says the last part of a buffer name that ends in a slash'] = funct
 
   local title = in_child('return tabs.title(vim.api.nvim_get_current_tabpage())')
 
-  eq(title, '1 project')
+  eq(title, '1: project')
 end
 
 T['hold()']['raises, and holds nothing, for a tab handle below 1'] = MiniTest.new_set({

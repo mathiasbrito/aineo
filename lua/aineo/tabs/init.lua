@@ -114,9 +114,10 @@ local function name_of_held_tab(tab)
   return nil
 end
 
---- The title of the tab page `tab`: its place and a name, `<number> <name>`.
+--- The title of the tab page `tab`: its place and a name, `<number>: <name>`.
 --- The name is what the held tab's name function gives, else the tail of the
---- name of the buffer in the tab page's current window, and is cut to fit.
+--- name of the buffer in the tab page's current window, and is cut to fit; the
+--- cut counts the name alone.
 ---
 ---@param tab integer a tab page handle
 ---@return string|nil title nil when no such tab page exists
@@ -125,7 +126,7 @@ function M.title(tab)
   if not number then
     return nil
   end
-  return ('%d %s'):format(number, titles.cut(name_of_held_tab(tab) or titles.buffer_tail(tab)))
+  return ('%d: %s'):format(number, titles.cut(name_of_held_tab(tab) or titles.buffer_tail(tab)))
 end
 
 --- The 'tabline' format that draws the title of every tab page, each in the
