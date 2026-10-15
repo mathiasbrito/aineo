@@ -57,7 +57,6 @@ local function start_copy(number, fake, overrides)
     ]],
     { 'tests/helpers/claude_session.lua', number, fake.environment, overrides or vim.empty_dict() }
   )
-  claude.wait_for_start(fake)
   return terminal
 end
 
