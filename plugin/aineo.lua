@@ -48,12 +48,13 @@ local SUBCOMMANDS = {
 }
 
 --- The words each subcommand that takes one is followed by, in the order
---- `:Aineo` offers them: `pane` takes the pane to show, and `tab` takes `new`
---- or the number of a tab page to move to; only the numbers 1 to 9 have a
---- `<Plug>` mapping, and `:Aineo tab` takes any number (`jump_to_tab()`).
+--- `:Aineo` offers them: `pane` takes the pane to show, and `tab` takes `new`,
+--- `close` or the number of a tab page to move to; only the numbers 1 to 9
+--- have a `<Plug>` mapping, and `:Aineo tab` takes any number
+--- (`jump_to_tab()`).
 local SUBCOMMAND_WORDS = {
   pane = { 'agent', 'changes' },
-  tab = { 'new', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
+  tab = { 'new', 'close', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
 }
 
 --- What `:Aineo` tells the user when it is not given one of its subcommands.
@@ -63,8 +64,8 @@ local USAGE = 'aineo: :Aineo takes one of ' .. table.concat(SUBCOMMANDS, ', ')
 local CLAIM_USAGE = 'aineo: :Aineo claim takes at most one Claude session id'
 
 --- What `:Aineo tab` tells the user when it is given no word, another word
---- than `new`, or more than one.
-local TAB_USAGE = 'aineo: :Aineo tab takes new, or the number of a tab to move to'
+--- than `new` or `close`, or more than one.
+local TAB_USAGE = 'aineo: :Aineo tab takes new, close, or the number of a tab to move to'
 
 --- What `:Aineo` tells the user when `words`, its arguments, run no action:
 --- for `claim`, that it takes at most one word; for `tab`, what it takes
@@ -109,12 +110,12 @@ end
 ---@type fun(): string[]
 local running_sessions_here
 
---- The words `:Aineo tab` offers: `new`, and the number of each tab page that
---- exists.
+--- The words `:Aineo tab` offers: `new`, `close`, and the number of each tab
+--- page that exists.
 ---
 ---@return string[]
 local function tab_words()
-  local words = { 'new' }
+  local words = { 'new', 'close' }
   for number = 1, #vim.api.nvim_list_tabpages() do
     table.insert(words, tostring(number))
   end
@@ -125,8 +126,8 @@ end
 --- cursor is in, the command's name first: its subcommands after the name
 --- alone, the words of a subcommand that takes them (`SUBCOMMAND_WORDS`)
 --- after that subcommand, the running sessions of this Neovim's directory
---- after `claim` (`running_sessions_here()`), `new` and the numbers of the
---- tab pages after `tab` (`tab_words()`), and nothing otherwise.
+--- after `claim` (`running_sessions_here()`), `new`, `close` and the numbers
+--- of the tab pages after `tab` (`tab_words()`), and nothing otherwise.
 ---
 ---@param typed string[]
 ---@return string[]
@@ -257,25 +258,15 @@ local NOT_READY = {
 }
 
 --- What the messages of `:Aineo sessions` begin with when it lists nothing,
---- and when a pick switches nothing.
+--- and when a pick opens no tab.
 local NO_LIST = 'aineo: no session list — '
 local NOT_SWITCHED = 'aineo: not switched — '
 
---- What the session list's write begins and ends a bracketed paste with: the
---- bytes Send pastes with (`aineo.send`), so that Claude Code takes the
---- command as text typed in one piece.
+--- What the command `:Aineo new` writes begins and ends a bracketed paste
+--- with: the bytes Send pastes with (`aineo.send`), so that Claude Code takes
+--- the command as text typed in one piece.
 local PASTE_START = '\27[200~'
 local PASTE_END = '\27[201~'
-
---- What `:Aineo sessions` tells the user, as a warning, when a pick
---- switches nothing because the session picked is the one Claude's
---- terminal already shows.
----
----@param name string
----@return string
-local function already_shown(name)
-  return (NOT_SWITCHED .. '%s is the session Claude’s terminal already shows'):format(name)
-end
 
 --- What `:Aineo sessions` tells the user, as a warning, when a pick
 --- switches nothing because another process runs the session picked, in
@@ -307,8 +298,8 @@ local function started_elsewhere(name, started_in)
   )
 end
 
---- How long a switch waits, after it asks for Terminal mode in Claude's
---- window, for Neovim to enter it.
+--- How long a command written into Claude Code waits, after it asks for
+--- Terminal mode in Claude's window, for Neovim to enter it.
 local TERMINAL_MODE_PATIENCE_MS = 1000
 
 --- Calls `callback` from a scheduled callback once Terminal mode is entered
@@ -346,16 +337,12 @@ local function after_entering_terminal_mode(terminal, outcome, callback, on_time
   end, TERMINAL_MODE_PATIENCE_MS)
 end
 
---- What `:Aineo sessions` tells the user, as a warning, when a pick
---- switches nothing because the prompt of Claude Code shows text.
-local PROMPT_HOLDS_TEXT = NOT_SWITCHED
-  .. 'the prompt holds text; clear it, then pick the session again'
-
---- Puts the cursor back where it was before a switch moved it: in the
---- window `origin` names, out of Terminal mode when that window is Claude's
---- and was in Normal mode, and in Insert mode when it was in Insert mode.
---- Moving to another window ends Terminal mode, and Insert mode is asked for
---- once it has ended: asked for sooner, it is lost to it.
+--- Puts the cursor back where it was before a command written into Claude
+--- Code moved it: in the window `origin` names, out of Terminal mode when
+--- that window is Claude's and was in Normal mode, and in Insert mode when it
+--- was in Insert mode. Moving to another window ends Terminal mode, and
+--- Insert mode is asked for once it has ended: asked for sooner, it is lost
+--- to it.
 ---
 ---@param origin { window: integer, mode: string }
 local function return_to(origin)
@@ -485,6 +472,29 @@ local function tab_of_current_page()
   end)
 end
 
+--- The place of each tab page of this editor that shows a Claude session,
+--- by the session's id: the session of the Claude Code of each tab
+--- (`aineo.entry.Tab`'s `session_id()`), and, where several tabs show one, the
+--- lowest place. What the list of sessions marks and a pick moves to.
+---
+---@return aineo.claude.ShownInTabs
+local function sessions_shown_in_tabs()
+  local shown = {}
+  for _, tab in ipairs(tab_list) do
+    local id = tab.is_bound() and tab.session_id()
+    if id then
+      shown[id] = math.min(shown[id] or math.huge, tab_number(tab))
+    end
+  end
+  return shown
+end
+
+--- Opens a tab page after the current one with a tab of aineo's in it, which
+--- `start` starts Claude Code in (`aineo.entry.Tab`'s `start_in_new_tab()`
+--- when none is given). Defined below, with the tabs it makes.
+---@type fun(start?: fun(tab: aineo.entry.Tab))
+local open_new_tab
+
 --- Has the tab line drawn again whenever the session's name on `terminal`,
 --- the terminal of a tab's Claude Code, changes: a title shows in the tab
 --- line, which Neovim draws again by itself on none of the name's changes.
@@ -590,6 +600,8 @@ end
 ---@field runs_session fun(id: string): boolean whether the tab's Claude Code runs the session `id`
 ---@field start_token fun(): string? see `aineo.claude.Session`'s `start_token()`
 ---@field start_in_new_tab fun() what `:Aineo tab new` does once the tab page exists
+---@field start_on_session fun(listed: aineo.claude.ListedSession, sessions: aineo.claude.ListedSession[]) what a pick of `\S` does once the tab page exists: starts Claude Code on that session
+---@field session_id fun(): string? the session the tab's Claude Code follows, nil before it has started
 ---@field session_name fun(): string? the name of the session the tab's Claude terminal shows (`b:aineo_session_name`), nil before it has one
 ---@field page fun(): integer? the tab page the tab is in, nil before its layout opens
 ---@field is_bound fun(): boolean whether the tab page it is in still exists
@@ -1072,6 +1084,38 @@ local function make_tab(homes, key, on_bound)
     return kept_places().working_directory
   end
 
+  --- Starts Claude Code as `start` does, in the directory `start_directory()`
+  --- names, and returns its terminal, which it keeps as `claude_terminal`.
+  --- `start` is called with the tab's Claude session home and the settings of
+  --- the start (`claude_settings()`, a new session id when `new_session`).
+  --- The panes follow the session the start is on once Claude Code is first
+  --- ready for input, and then each session it switches to; not before, and
+  --- nothing for a start that never becomes ready (`follow_confirmed_start()`,
+  --- `follow_switch_once_confirmed()`). Once the start has succeeded, the
+  --- changes home is told the session began there (`aineo.changes`'s
+  --- `begin_session()`, which heeds its first call alone), in Claude Code's
+  --- working directory, with the layout's `show_diff()` to show its diffs in
+  --- the middle column and the configuration's `changes.working_branch`.
+  ---
+  ---@param config table the resolved configuration
+  ---@param new_session boolean? start on a new session id
+  ---@param start fun(claude: table, settings: aineo.claude.Settings): integer
+  ---@return integer terminal
+  local function begin_claude(config, new_session, start)
+    local working_directory = start_directory()
+    forget_confirmation_unless_running()
+    claude_terminal = start(homes.claude, claude_settings(config, working_directory, new_session))
+    redraw_tab_line_when_named(claude_terminal)
+    homes.changes.begin_session({
+      directory = working_directory,
+      show_diff = function(diff)
+        return homes.layout.show_diff(diff)
+      end,
+      working_branch = config.changes.working_branch,
+    })
+    return claude_terminal
+  end
+
   --- Starts Claude Code with `config` when none runs — again once the last
   --- has exited — and returns its terminal, which it keeps as
   --- `claude_terminal`. While one runs it starts nothing and returns that
@@ -1082,37 +1126,38 @@ local function make_tab(homes, key, on_bound)
   --- new terminal in place of one whose resume found no conversation, that
   --- terminal becomes `claude_terminal` and the layout's Claude terminal,
   --- and the new session is handed what aineo kept for the dead one at once
-  --- (`replacement_callbacks()`). The panes follow the session the start is
-  --- on once Claude Code is first ready for input — the new session's that
-  --- takes the place of a resume with no conversation, which they show from
-  --- the hand-over on when they showed the dead one — and then each session
-  --- Claude Code switches to; not before, and nothing for a start that never
-  --- becomes ready (`follow_confirmed_start()`,
-  --- `follow_switch_once_confirmed()`). With `new_session` the start is on a
-  --- new session id, not the kept one, and lists no sessions (`aineo.claude`'s
-  --- `start_session()`). Once a start has succeeded, the
-  --- changes home is told the session began there (`aineo.changes`'s
-  --- `begin_session()`, which heeds its first call alone), in Claude Code's
-  --- working directory, with the layout's `show_diff()` to show its diffs in
-  --- the middle column and the configuration's `changes.working_branch`.
+  --- (`replacement_callbacks()`). With `new_session` the start is on a new
+  --- session id, not the kept one, and lists no sessions. The rest is
+  --- `begin_claude()`'s.
   ---
   ---@param config table the resolved configuration
   ---@param new_session? boolean start on a new session id rather than resume the kept one
   ---@return integer terminal
   local function started_claude_terminal(config, new_session)
-    local working_directory = start_directory()
-    forget_confirmation_unless_running()
-    claude_terminal =
-      homes.claude.start_session(claude_settings(config, working_directory, new_session))
-    redraw_tab_line_when_named(claude_terminal)
-    homes.changes.begin_session({
-      directory = working_directory,
-      show_diff = function(diff)
-        return homes.layout.show_diff(diff)
-      end,
-      working_branch = config.changes.working_branch,
-    })
-    return claude_terminal
+    return begin_claude(config, new_session, function(claude, settings)
+      return claude.start_session(settings)
+    end)
+  end
+
+  --- Starts Claude Code on `listed`, a session a pick of `\S` chose
+  --- (`begin_claude()`): joined where another process runs it and aineo can
+  --- (`aineo.claude`'s `join_session()`, given `sessions`, the list just
+  --- read) — attached to in Claude Code's background service, or resumed with
+  --- the warning where it is open in another interactive Claude Code — else
+  --- resumed (`aineo.claude`'s `replace_session()`). The tab's Claude Code has
+  --- none running, so both are a start; the session is kept for the folder.
+  ---
+  ---@param config table the resolved configuration
+  ---@param listed aineo.claude.ListedSession
+  ---@param sessions aineo.claude.ListedSession[]
+  ---@return integer terminal
+  local function claude_terminal_on_session(config, listed, sessions)
+    return begin_claude(config, false, function(claude, settings)
+      if claude.can_join_session(listed) then
+        return claude.join_session(settings, listed, sessions)
+      end
+      return claude.replace_session(settings, { id = listed.session_id, resumed = true })
+    end)
   end
 
   --- The terminal of the Claude session as it is, running or exited, while it
@@ -1466,24 +1511,6 @@ local function make_tab(homes, key, on_bound)
     end)
   end
 
-  --- Switches Claude Code to `listed`, a session whose id is a session id:
-  --- writes `/resume {session id}` at Claude's empty prompt
-  --- (`write_command_at_empty_prompt()`), which Claude Code answers by
-  --- switching and aineo follows (`aineo.claude`'s `on_session_switched`).
-  --- Does nothing, and tells the user why, when Claude Code is not ready
-  --- (`refuses_while_not_ready()`), when a claim of another session holds
-  --- (`refuses_while_claimed()`), when the prompt shows text, and when
-  --- Terminal mode is not entered; then it also puts the cursor back where it
-  --- was (`return_to()`).
-  ---
-  ---@param listed aineo.claude.ListedSession
-  local function switch_to_session(listed)
-    if refuses_while_not_ready(NOT_SWITCHED) or refuses_while_claimed(NOT_SWITCHED) then
-      return
-    end
-    write_command_at_empty_prompt(NOT_SWITCHED, PROMPT_HOLDS_TEXT, '/resume ' .. listed.session_id)
-  end
-
   --- Puts the terminal `replace` makes in Claude's window in place of the one
   --- that ran: `replace` is called with the tab's Claude session home and the
   --- settings of a start in the session's directory (`claude_settings()`), built first so that
@@ -1519,35 +1546,11 @@ local function make_tab(homes, key, on_bound)
     })
   end
 
-  --- Replaces Claude's window's Claude Code with one on `listed`, a session
-  --- another process runs and aineo can join (`aineo.claude`'s
-  --- `join_session()`, given `sessions`, the list just read): attached to it, or
-  --- resumed where it is open in another interactive Claude Code only. Only at
-  --- an empty prompt (`at_empty_prompt()`), since the running Claude Code is
-  --- stopped and its prompt's text would be lost (`replace_claude_terminal()`).
-  --- Does nothing, and tells the user why, when Claude Code is not ready
-  --- (`refuses_while_not_ready()`), when a claim of another session holds
-  --- (`refuses_while_claimed()`), when the prompt shows text, and when Terminal
-  --- mode is not entered.
-  ---
-  ---@param listed aineo.claude.ListedSession
-  ---@param sessions aineo.claude.ListedSession[]
-  local function join_running_session(listed, sessions)
-    if refuses_while_not_ready(NOT_SWITCHED) or refuses_while_claimed(NOT_SWITCHED) then
-      return
-    end
-    at_empty_prompt(NOT_SWITCHED, PROMPT_HOLDS_TEXT, function()
-      replace_claude_terminal(function(claude, settings)
-        return claude.join_session(settings, listed, sessions)
-      end)
-    end)
-  end
-
   --- Replaces Claude's window's Claude Code, which is attached to a background
   --- session, with a start of aineo's own (`aineo.claude`'s `replace_session()`):
   --- a new session when `choice` is nil, else the session it names, resumed. A
   --- command written into an attached Claude Code would reach the background
-  --- session. Only at an empty prompt (`at_empty_prompt()`), as a join is.
+  --- session. Only at an empty prompt (`at_empty_prompt()`).
   ---
   ---@param outcome string the words that begin a warning of what was not done
   ---@param prompt_holds_text string
@@ -1560,25 +1563,30 @@ local function make_tab(homes, key, on_bound)
     end)
   end
 
-  --- Whether a pick of `listed` must switch nothing for where the session
-  --- stands (`aineo.claude`'s `session_standing()`): the session of Claude's
-  --- terminal, one another process runs and aineo cannot join
-  --- (`aineo.claude`'s `can_join_session()`, which also needs it to have started
-  --- in the folder), one started in another folder. Tells the user why once,
-  --- with one warning.
+  --- Whether a pick of `listed` opens no tab for where the session stands
+  --- (`aineo.claude`'s `session_standing()`), the pick being settled here: a
+  --- session a tab of this editor shows moves to that tab, the current tab's
+  --- own included, and starts nothing; one another process runs and aineo
+  --- cannot join (`aineo.claude`'s `can_join_session()`, which also needs it to
+  --- have started in the folder) or one started in another folder is refused
+  --- with one warning that says why.
   ---
   ---@param listed aineo.claude.ListedSession
-  ---@return boolean refused
-  local function refuses_by_standing(listed)
+  ---@param folder string
+  ---@return boolean settled
+  local function settles_by_standing(listed, folder)
     local claude = require('aineo.claude')
     local session = homes.claude
     local name = claude.listed_session_name(listed)
-    local standing =
-      claude.session_standing(listed, session.session_id(), session.session_directory())
-    if standing == 'own' then
-      vim.notify(already_shown(name), vim.log.levels.WARN)
+    local shown = sessions_shown_in_tabs()
+    local standing = claude.session_standing(listed, shown, folder)
+    if standing == 'shown' then
+      local page = vim.api.nvim_list_tabpages()[shown[listed.session_id]]
+      if page then
+        vim.api.nvim_set_current_tabpage(page)
+      end
     elseif standing == 'elsewhere' then
-      if session.can_join_session(listed, session.session_directory()) then
+      if session.can_join_session(listed, folder) then
         return false
       end
       if session.can_join_session(listed) then
@@ -1592,47 +1600,15 @@ local function make_tab(homes, key, on_bound)
     return standing ~= 'switchable'
   end
 
-  --- Takes Claude's window to `listed`, a session that stands for a pick
-  --- (`refuses_by_standing()` said no): joins it where another process runs
-  --- it (`join_running_session()`, given `sessions`, the list just read),
-  --- else replaces an attached Claude Code with a resume of it
-  --- (`replace_attached_session()`), else switches Claude Code to it
-  --- (`switch_to_session()`).
-  ---
-  ---@param listed aineo.claude.ListedSession
-  ---@param sessions aineo.claude.ListedSession[]
-  local function take_listed_session(listed, sessions)
-    local session = homes.claude
-    if
-      require('aineo.claude').session_standing(
-        listed,
-        session.session_id(),
-        session.session_directory()
-      ) == 'elsewhere'
-    then
-      join_running_session(listed, sessions)
-    elseif session.is_attached() then
-      if refuses_while_not_ready(NOT_SWITCHED) or refuses_while_claimed(NOT_SWITCHED) then
-        return
-      end
-      replace_attached_session(
-        NOT_SWITCHED,
-        PROMPT_HOLDS_TEXT,
-        { id = listed.session_id, resumed = true }
-      )
-    else
-      switch_to_session(listed)
-    end
-  end
-
   --- Acts on the pick of `listed`, a session of the list `list_sessions()`
-  --- offered. Switches nothing, and tells the user why, when `listed` is not a
+  --- offered. Opens no tab, and tells the user why, when `listed` is not a
   --- session id — a menu is another plugin's, and the id is typed into Claude
-  --- Code's terminal — and when it stands for no switch and no join
-  --- (`refuses_by_standing()`). Otherwise reads the list again, since the menu
-  --- may have been open for long, and takes Claude's window to the session
-  --- (`take_listed_session()`) only if it is still listed and still stands for
-  --- a switch or a join.
+  --- Code's command — and when it stands for no new tab
+  --- (`settles_by_standing()`). Otherwise reads the list again, since the menu
+  --- may have been open for long, and opens a tab after the current one on the
+  --- session (`open_new_tab()`) only if it is still listed and still stands for
+  --- one: resumed, attached to, or resumed with a warning. The current tab's
+  --- Claude Code, prompt and panes are not touched.
   ---
   ---@param listed aineo.claude.ListedSession
   local function pick_listed_session(listed)
@@ -1641,11 +1617,12 @@ local function make_tab(homes, key, on_bound)
       vim.notify(NOT_SWITCHED .. 'what was picked is not a Claude session id', vim.log.levels.WARN)
       return
     end
-    if refuses_by_standing(listed) or refuses_while_reading_sessions(NOT_SWITCHED) then
+    local folder = kept_places().working_directory
+    if settles_by_standing(listed, folder) or refuses_while_reading_sessions(NOT_SWITCHED) then
       return
     end
     local name = claude.listed_session_name(listed)
-    read_sessions(homes.claude.session_directory(), function(now, problem)
+    read_sessions(folder, function(now, problem)
       if problem then
         vim.notify(NOT_SWITCHED .. problem, vim.log.levels.WARN)
         return
@@ -1657,34 +1634,38 @@ local function make_tab(homes, key, on_bound)
         vim.notify(NOT_SWITCHED .. name .. ' is no longer listed', vim.log.levels.WARN)
         return
       end
-      if not refuses_by_standing(current) then
-        take_listed_session(current, now)
+      if not settles_by_standing(current, folder) then
+        open_new_tab(function(opened)
+          opened.start_on_session(current, now)
+        end)
       end
     end)
   end
 
-  --- Offers `listed`, the sessions Claude Code lists for `directory`, in
-  --- `vim.ui.select`; a pick is acted on by `pick_listed_session()`, which
-  --- reports an error it raises once. Offers nothing, and tells the user why,
-  --- when Claude Code could not list them (`problem`) or lists none.
+  --- Offers `listed`, the sessions Claude Code lists for `folder`, in
+  --- `vim.ui.select`, each row marking the sessions the editor's tabs show;
+  --- a pick is acted on by `pick_listed_session()`, which reports an error it
+  --- raises once. Offers nothing, and tells the user why, when Claude Code
+  --- could not list them (`problem`) or lists none.
   ---
   ---@param listed aineo.claude.ListedSession[]?
   ---@param problem string?
-  ---@param directory string
-  local function offer_sessions(listed, problem, directory)
+  ---@param folder string
+  local function offer_sessions(listed, problem, folder)
     if problem then
       vim.notify(NO_LIST .. problem, vim.log.levels.WARN)
       return
     end
     if #listed == 0 then
-      vim.notify(NO_LIST .. 'Claude Code lists no session for ' .. directory, vim.log.levels.WARN)
+      vim.notify(NO_LIST .. 'Claude Code lists no session for ' .. folder, vim.log.levels.WARN)
       return
     end
     local claude = require('aineo.claude')
+    local shown = sessions_shown_in_tabs()
     vim.ui.select(listed, {
       prompt = 'Claude sessions',
       format_item = function(session)
-        return claude.session_row(session, homes.claude.session_id(), directory)
+        return claude.session_row(session, shown, folder)
       end,
     }, function(picked)
       if picked then
@@ -1695,8 +1676,8 @@ local function make_tab(homes, key, on_bound)
     end)
   end
 
-  --- Reads the sessions Claude Code lists for the directory it started in,
-  --- without waiting for them (`read_sessions()`), and offers them
+  --- Reads the sessions Claude Code lists for the editor's folder, without
+  --- waiting for them (`read_sessions()`), and offers them
   --- (`offer_sessions()`). Reads and offers nothing, and tells the user why,
   --- while Claude Code is not ready (`refuses_while_not_ready()`), a claim of
   --- another session holds (`refuses_while_claimed()`), or a read is running
@@ -1709,9 +1690,9 @@ local function make_tab(homes, key, on_bound)
     then
       return
     end
-    local directory = homes.claude.session_directory()
-    read_sessions(directory, function(listed, problem)
-      offer_sessions(listed, problem, directory)
+    local folder = kept_places().working_directory
+    read_sessions(folder, function(listed, problem)
+      offer_sessions(listed, problem, folder)
     end)
   end
 
@@ -1722,6 +1703,18 @@ local function make_tab(homes, key, on_bound)
   local function start_new_session()
     local config = resolved_config()
     open_layout_around(config, started_claude_terminal(config, true))
+    focus_claude()
+  end
+
+  --- Starts Claude Code on `listed` (`claude_terminal_on_session()`) in a
+  --- layout opened around it, and moves the cursor to Claude's window in
+  --- Terminal mode (`focus_claude()`).
+  ---
+  ---@param listed aineo.claude.ListedSession
+  ---@param sessions aineo.claude.ListedSession[]
+  local function start_session_on(listed, sessions)
+    local config = resolved_config()
+    open_layout_around(config, claude_terminal_on_session(config, listed, sessions))
     focus_claude()
   end
 
@@ -1890,13 +1883,15 @@ local function make_tab(homes, key, on_bound)
     shared_session_told = {}
   end
 
-  --- What `:Aineo tab new` does once the tab page exists: starts Claude Code
-  --- on a new session in the layout (`start_new_session()`). A tab taken up
-  --- again follows its new session at once, so that Input and the Report do
-  --- not keep the closed tab's, and shows the agent pane, not the pane the
-  --- closed tab showed.
-  local function start_in_new_tab()
-    start_new_session()
+  --- What opening a tab does once the tab page exists: `start` starts Claude
+  --- Code in the layout (`start_new_session()`, `start_session_on()`). A tab
+  --- taken up again follows its new session at once, so that Input and the
+  --- Report do not keep the closed tab's, and shows the agent pane, not the
+  --- pane the closed tab showed.
+  ---
+  ---@param start fun()
+  local function start_in_new_tab(start)
+    start()
     if not is_reopened then
       return
     end
@@ -1921,7 +1916,17 @@ local function make_tab(homes, key, on_bound)
   tab.start_token = function()
     return homes.claude.start_token()
   end
-  tab.start_in_new_tab = start_in_new_tab
+  tab.start_in_new_tab = function()
+    start_in_new_tab(start_new_session)
+  end
+  tab.start_on_session = function(listed, sessions)
+    start_in_new_tab(function()
+      start_session_on(listed, sessions)
+    end)
+  end
+  tab.session_id = function()
+    return homes.claude.session_id()
+  end
   tab.session_name = function()
     if claude_terminal and vim.api.nvim_buf_is_valid(claude_terminal) then
       return vim.b[claude_terminal].aineo_session_name
@@ -1992,30 +1997,35 @@ local function release_tab(tab)
   table.insert(closing, tab)
 end
 
---- Whether `finish_closing()` is stopping Claude Codes now: the editor
---- answers requests meanwhile, and a tab made then could be given the homes
---- of a Claude Code that has not stopped yet (`new_tab()`).
-local is_stopping = false
-
 --- Stops the Claude Codes of the tabs in `closing` together, as quitting
---- stops them (`aineo.claude`'s `stop_sessions()`), blocking the editor for
---- about one stop, and ends the tabs (`aineo.entry.Tab`'s `finish()`). Does
---- nothing while Neovim quits: the quit stops every Claude Code at once.
+--- stops them (`aineo.claude`'s `stop_sessions_in_background()`), without
+--- holding the editor, and ends the tabs (`aineo.entry.Tab`'s `finish()`)
+--- once each Claude Code has stopped. Does nothing while Neovim quits: the
+--- quit stops every Claude Code that runs, those of the tabs in `closing`
+--- and those still stopping among them.
 local function finish_closing()
   if #closing == 0 or vim.v.exiting ~= vim.NIL then
     return
   end
   local finishing = closing
   closing = {}
-  is_stopping = true
-  local stopped = run(function()
-    require('aineo.claude').stop_sessions(vim.tbl_map(function(tab)
-      return tab.homes.claude
-    end, finishing))
+  local function finish_each(already_stopped)
+    for _, tab in ipairs(finishing) do
+      tab.finish(already_stopped)
+    end
+  end
+  local started = run(function()
+    require('aineo.claude').stop_sessions_in_background(
+      vim.tbl_map(function(tab)
+        return tab.homes.claude
+      end, finishing),
+      function()
+        finish_each(true)
+      end
+    )
   end)
-  is_stopping = false
-  for _, tab in ipairs(finishing) do
-    tab.finish(stopped)
+  if not started then
+    finish_each(false)
   end
 end
 
@@ -2146,28 +2156,34 @@ end
 --- Whether the report home has been given its router yet.
 local report_router_given = false
 
+--- Whether the first tab (`module_tab`) can be taken up again: it is in no
+--- tab page, and its Claude Code has ended or never started, so that a tab
+--- made of its homes starts a Claude Code of its own and none is left running.
+---
+---@return boolean
+local function first_tab_can_be_taken_up_again()
+  if vim.tbl_contains(tab_list, module_tab) then
+    return false
+  end
+  local status = module_tab.homes.claude.session_status()
+  return status == nil or status == 'exited'
+end
+
 --- Makes a tab and adds it to `tab_list`: the first tab, made of the homes the
---- modules themselves are (`module_tab`), when it is not in `tab_list`; else
---- a tab of copies (`copied_homes()`), keyed by the number it is made as, and
---- held in the tabs home once its layout opens (`hold_tab()`). The first tab
---- made has the report home route a report to the tab it is for
---- (`route_report()`). The Claude Codes of the tabs closed so far are stopped
---- first (`finish_closing()`), so that the first tab, taken up again
---- (`aineo.entry.Tab`'s `reopen()`), is not given a Claude Code that still
---- runs; raises an error while they stop.
+--- modules themselves are (`module_tab`), when it is not in `tab_list` and its
+--- Claude Code has stopped (`first_tab_can_be_taken_up_again()`); else a tab
+--- of copies (`copied_homes()`), keyed by the number it is made as, and held
+--- in the tabs home once its layout opens (`hold_tab()`). The first tab made
+--- has the report home route a report to the tab it is for (`route_report()`).
 ---
 ---@return aineo.entry.Tab
 local function new_tab()
-  if is_stopping then
-    error('aineo: the Claude Code of a closed tab is still stopping; try again in a moment', 0)
-  end
-  finish_closing()
   tabs_made = tabs_made + 1
   local tab
   if module_tab == nil then
     module_tab = make_tab(module_homes(), nil, hold_tab)
     tab = module_tab
-  elseif not vim.tbl_contains(tab_list, module_tab) then
+  elseif first_tab_can_be_taken_up_again() then
     tab = module_tab
     tab.reopen()
   else
@@ -2208,23 +2224,29 @@ local function acting_tab()
   end) or new_tab()
 end
 
---- Opens a tab page after the current one, and a tab of aineo's in it: its
---- layout around a Claude Code on a new session id, in the folder, the
---- cursor in Claude's window in Terminal mode (`aineo.entry.Tab`'s
---- `start_in_new_tab()`). With no aineo tab yet, it opens the first one in
---- the current tab page. When the tab cannot start, the tab page it made is
---- closed again and the error raised.
-local function open_new_tab()
+--- Opens a tab page after the current one, and a tab of aineo's in it, which
+--- `start` starts Claude Code in (`aineo.entry.Tab`'s `start_in_new_tab()`,
+--- on a new session id in the folder, when none is given): its layout around
+--- the Claude Code, the cursor in Claude's window in Terminal mode. With no
+--- aineo tab yet, it opens the first one in the current tab page. When the
+--- tab cannot start, the tab page it made is closed again and the error
+--- raised.
+---
+---@param start? fun(tab: aineo.entry.Tab)
+open_new_tab = function(start)
+  start = start or function(tab)
+    tab.start_in_new_tab()
+  end
   if not vim.iter(tab_list):any(function(tab)
     return tab.is_bound()
   end) then
-    acting_tab().start_in_new_tab()
+    start(acting_tab())
     return
   end
   local tab = new_tab()
   vim.cmd.tabnew()
   local made_page = vim.api.nvim_get_current_tabpage()
-  local started, failure = pcall(tab.start_in_new_tab)
+  local started, failure = pcall(start, tab)
   if started then
     return
   end
@@ -2288,6 +2310,36 @@ local function claim_in_current_tab(id)
   tab.claim_session(id)
 end
 
+--- What `:Aineo tab close` tells the user, as a warning, from a tab page
+--- that is none of aineo's.
+local NO_TAB_TO_CLOSE = 'aineo: this tab holds no Claude Code session'
+
+--- What `:Aineo tab close` does. In an aineo tab, while another aineo tab
+--- remains, it closes the tab page, which releases the tab and stops its
+--- Claude Code as quitting stops it (`close_tabs_of_closed_pages()`); Neovim
+--- refuses to close a tab page that holds a buffer with unsaved changes, and
+--- nothing is stopped then. In the last aineo tab it quits Neovim as `:qa`
+--- does, which refuses while a buffer has unsaved changes, and otherwise
+--- stops every Claude Code as quitting stops it. From a tab page that is none
+--- of aineo's it closes nothing and tells the user so.
+local function close_current_tab()
+  if not tab_of_current_page() then
+    vim.notify(NO_TAB_TO_CLOSE, vim.log.levels.WARN)
+    return
+  end
+  local remaining = vim
+    .iter(tab_list)
+    :filter(function(tab)
+      return tab.is_bound()
+    end)
+    :totable()
+  if #remaining > 1 then
+    vim.cmd.tabclose()
+  else
+    vim.cmd.qall()
+  end
+end
+
 --- What each of `:Aineo`'s arguments in `ACTION_ARGUMENTS` does: the actions
 --- that act on a tab (`aineo.entry.Tab`'s `actions`) on the tab to act on
 --- (`acting_tab()`), and the actions of tabs themselves.
@@ -2312,7 +2364,11 @@ for _, argument in ipairs({
   end
 end
 
-ACTIONS['tab new'] = open_new_tab
+ACTIONS['tab new'] = function()
+  open_new_tab()
+end
+
+ACTIONS['tab close'] = close_current_tab
 
 for number = 1, 9 do
   ACTIONS['tab ' .. number] = function()
@@ -2376,6 +2432,7 @@ local PREFIX_KEYS = {
   ['pane agent'] = 'pa',
   ['pane changes'] = 'g',
   ['tab new'] = 'T',
+  ['tab close'] = 'Q',
   ['tab 1'] = '1',
   ['tab 2'] = '2',
   ['tab 3'] = '3',
@@ -2693,5 +2750,5 @@ end, {
   nargs = '*',
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes, claim [id] or tab new|{n}',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes, claim [id] or tab new|close|{n}',
 })

@@ -88,18 +88,27 @@ function M.second_tab_groups_that_exist(child)
   )
 end
 
---- Runs `:Aineo tab new` in `child` until a tab page has opened, waiting at
---- most `M.PATIENCE_MS`: the command is refused, with a message, while the
---- Claude Code of a tab just closed is still stopping, which the editor does
---- while it answers requests.
+--- Types a probe into `child`: keys that set a flag the child answers with
+--- `M.probe_answered()`. A child that is blocked, as while a stop waits for
+--- a Claude Code to exit, still answers requests of the test but handles no
+--- typed key, so the probe tells a blocked editor from one that is not.
 ---
 ---@param child table
-function M.open_tab_when_stopped(child)
-  local count = M.tab_count(child)
-  vim.wait(M.PATIENCE_MS, function()
-    entry.command(child, 'Aineo tab new')
-    return M.tab_count(child) > count
-  end, 200)
+function M.type_probe(child)
+  child.lua('_G.tabs_probe_answered = false')
+  child.api.nvim_input('<C-\\><C-n>:lua _G.tabs_probe_answered = true<CR>')
+end
+
+--- Whether the child handled the keys of `M.type_probe()` within `within_ms`
+--- of this call.
+---
+---@param child table
+---@param within_ms integer
+---@return boolean
+function M.probe_answered(child, within_ms)
+  return vim.wait(within_ms, function()
+    return child.lua_get('_G.tabs_probe_answered')
+  end, 20)
 end
 
 --- The keys of `entries` (`M.entries()`), sorted.

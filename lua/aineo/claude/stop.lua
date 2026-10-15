@@ -117,6 +117,34 @@ local function wait_for_an_exit(unfinished, wait_ms)
   end, 20)
 end
 
+--- The stops of `stops` as the progress of each, none yet made.
+---
+---@param stops aineo.claude.Stop[]
+---@return aineo.claude.StopProgress[]
+local function progresses_of(stops)
+  return vim.tbl_map(function(stop)
+    return { stop = stop, next_press = 1, act_at = 0, hung_up = false }
+  end, stops)
+end
+
+--- Takes the step of each of `progresses` whose time has come (`take_next_step()`)
+--- and returns those that were not over before it (`is_over()`).
+---
+---@param progresses aineo.claude.StopProgress[]
+---@return aineo.claude.StopProgress[] unfinished
+local function advance(progresses)
+  local now = now_ms()
+  local unfinished = vim.tbl_filter(function(progress)
+    return not is_over(progress, now)
+  end, progresses)
+  for _, progress in ipairs(unfinished) do
+    if not progress.hung_up and now >= progress.act_at then
+      take_next_step(progress, now)
+    end
+  end
+  return unfinished
+end
+
 --- Stops several Claude Codes together, blocking the editor until each has
 --- exited or its stop has run out. Each follows its way's keys with the
 --- waits of a stop of its own (`PRESSES_BY_WAY`): every key is pressed to
@@ -130,22 +158,11 @@ end
 ---
 ---@param stops aineo.claude.Stop[]
 function M.stop_together(stops)
-  ---@type aineo.claude.StopProgress[]
-  local progresses = vim.tbl_map(function(stop)
-    return { stop = stop, next_press = 1, act_at = 0, hung_up = false }
-  end, stops)
+  local progresses = progresses_of(stops)
   while true do
-    local now = now_ms()
-    local unfinished = vim.tbl_filter(function(progress)
-      return not is_over(progress, now)
-    end, progresses)
+    local unfinished = advance(progresses)
     if #unfinished == 0 then
       return
-    end
-    for _, progress in ipairs(unfinished) do
-      if not progress.hung_up and now >= progress.act_at then
-        take_next_step(progress, now)
-      end
     end
     local next_act_at = math.huge
     for _, progress in ipairs(unfinished) do
@@ -153,6 +170,49 @@ function M.stop_together(stops)
     end
     wait_for_an_exit(unfinished, next_act_at - now_ms())
   end
+end
+
+--- How often a stop in the background looks at its Claude Codes, as often as
+--- the blocking stop's wait does.
+local BACKGROUND_POLL_MS = 20
+
+--- Stops several Claude Codes together as `M.stop_together()` does, but
+--- without blocking the editor: the first key is pressed from the next
+--- iteration of the event loop, the others as their waits run out, and the
+--- editor answers meanwhile. `on_done` is called, scheduled, once each has
+--- exited or its stop has run out. Once Neovim is quitting (`v:exiting`) the
+--- stop goes no further and `on_done` is not called: the quit stops every
+--- Claude Code that runs itself. Never raises. Calls `on_done` for an empty
+--- list.
+---
+---@param stops aineo.claude.Stop[]
+---@param on_done fun()
+function M.stop_together_in_background(stops, on_done)
+  local progresses = progresses_of(stops)
+  local timer = assert(vim.uv.new_timer())
+  local is_finished = false
+  local function finish()
+    is_finished = true
+    timer:stop()
+    timer:close()
+  end
+  timer:start(
+    0,
+    BACKGROUND_POLL_MS,
+    vim.schedule_wrap(function()
+      if is_finished then
+        return
+      end
+      if vim.v.exiting ~= vim.NIL then
+        finish()
+        return
+      end
+      if #advance(progresses) == 0 then
+        finish()
+        on_done()
+      end
+    end)
+  )
 end
 
 --- Stops the Claude Code of terminal job `job`, blocking the editor until it
