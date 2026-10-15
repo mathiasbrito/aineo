@@ -355,7 +355,7 @@ T['the list']['writes nothing and tells nothing when the menu is left without a 
   eq(entry.messages(child), {})
 end
 
-T['the list']['rows name the folder’s sessions and mark this terminal’s and those running elsewhere'] = function()
+T['the list']['rows name the folder’s sessions and mark the session a tab shows and those running elsewhere'] = function()
   local fake = sessions_fake('sessions-rows', 'ready')
   open_layout_on(fake)
   list_in(fake, three_sessions())
@@ -595,7 +595,7 @@ end
 
 T['a pick'] = MiniTest.new_set()
 
-T['a pick']['of this terminal’s row starts nothing, tells nothing and leaves the cursor'] = function()
+T['a pick']['of the current tab’s own row starts nothing, tells nothing and leaves the cursor'] = function()
   local fake = sessions_fake('sessions-pick-own', 'ready')
   open_layout_on(fake)
   child.cmd('Aineo report')
@@ -1110,6 +1110,107 @@ T['a pick']['whose start raises opens no tab and leaves the panes following the 
   eq(tab_count(), 1)
   eq(own_session_id(), first)
   eq(child.lua_get(REPORT_LINES), report)
+end
+
+T['a pick']['of the session of a tab just closed, whose Claude Code still stops, opens no tab and says so; once it has stopped it opens one'] = function()
+  local fake = sessions_fake('sessions-pick-closing', 'ready')
+  open_layout_on(fake)
+  local second = sessions_fake('sessions-pick-closing-second', 'ready')
+  local second_id = open_second_tab(fake, second)
+  local third = sessions_fake('sessions-pick-closing-third', 'ready')
+  child.cmd('tabclose')
+  entry.use_fake(child, third)
+  list_in(third, two_tabs_sessions(second_id))
+  pick_row(2)
+
+  press_sessions()
+
+  eq(messages_once_told(), {
+    {
+      message = NOT_SWITCHED .. 'second still stops in a closed tab; pick it again in a moment',
+      level = vim.log.levels.WARN,
+    },
+  })
+  eq(tab_count(), 1)
+  eq(#starts_of(third), 0)
+  eq(tabs.ended_how(second), 'keys')
+  vim.wait(PATIENCE_MS, function()
+    press_sessions()
+    vim.wait(400)
+    return tab_count() == 2
+  end, 100)
+  eq(tab_count(), 2)
+  eq(
+    claude_session.words_after(claude_session.start_arguments(third, 1), '--resume'),
+    { second_id }
+  )
+end
+
+--- Opens tabs two and three after the first in the child, each on a fake of
+--- its own, with tab two's Claude Code resumed onto the session of tab one,
+--- so that two tabs show it, and goes to tab `to`. Returns the three
+--- sessions, the first being the one two tabs show, and the third fake,
+--- which answers the list.
+---
+---@param name string
+---@param to integer
+---@return string[] sessions
+---@return table listing_fake
+local function three_tabs_two_on_one_session(name, to)
+  local fake = sessions_fake(name, 'ready')
+  open_layout_on(fake)
+  local first_id = own_session_id()
+  local second = sessions_fake(name .. '-second', 'ready')
+  local second_id = open_second_tab(fake, second)
+  local third = sessions_fake(name .. '-third', 'ready')
+  entry.use_fake(child, third)
+  child.cmd('Aineo tab new')
+  local third_id = tabs.session_of_tab(state_of(fake), child, '3')
+  child.cmd('tabnext 2')
+  claude_session.press_keys(
+    child,
+    tabs.claude_terminal_of_tab(child, 2),
+    '/resume ' .. first_id .. '\r'
+  )
+  tabs.entries_once(state_of(fake), child, function(listed)
+    return listed['2'] ~= nil and listed['2'].session == first_id
+  end)
+  child.cmd('tabnext ' .. to)
+  child.type_keys('<C-\\><C-n>')
+  local entries = two_tabs_sessions(second_id)
+  entries[1].sessionId = first_id
+  table.insert(entries, background_entry(third_id, 'c3d4e5f6'))
+  list_in(third, entries)
+  return { first_id, second_id, third_id }, third
+end
+
+T['a pick']['of a session two tabs show, from a tab that shows it, stays in that tab'] = function()
+  local _, listing_fake = three_tabs_two_on_one_session('sessions-pick-two-on-one-stays', 2)
+  pick_row(1)
+
+  press_sessions()
+  vim.wait(PATIENCE_MS, function()
+    return #menus() > 0
+  end, 20)
+  vim.wait(300)
+
+  eq(menus()[1][1], 'main  interactive  idle  [tab 1]')
+  eq(tabs.current_tab(child), 2)
+  eq(tab_count(), 3)
+  eq(#starts_of(listing_fake), 1)
+end
+
+T['a pick']['of a session two tabs show, from a tab that does not, moves to the lowest numbered of them'] = function()
+  three_tabs_two_on_one_session('sessions-pick-two-on-one-lowest', 3)
+  pick_row(1)
+
+  press_sessions()
+  vim.wait(PATIENCE_MS, function()
+    return tabs.current_tab(child) ~= 3
+  end, 20)
+
+  eq(tabs.current_tab(child), 1)
+  eq(tab_count(), 3)
 end
 
 T['an attached window'] = MiniTest.new_set()

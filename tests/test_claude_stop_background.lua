@@ -1,6 +1,7 @@
 local MiniTest = require('mini.test')
 local children = dofile('tests/helpers/child.lua')
 local claude = dofile('tests/helpers/claude_session.lua')
+local fixture = dofile('tests/helpers/fixture.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -194,6 +195,34 @@ T['stop_sessions_in_background()']['raises, starting no stop, for what is no ses
 
   eq(failure:find('expected session homes', 1, true) ~= nil, true)
   eq(child.lua_get('_G.stopped_by_mistake'), vim.NIL)
+end
+
+T['stop_sessions_in_background()']['marks none of the sessions stopped when one is no session home: a start waiting for the list still launches'] = function()
+  local gate = claude.list_gate('stop-bg-marks-none')
+  local fake = claude.fake('stop-bg-marks-none', 'ready')
+  local state = fixture.directory('stop-bg-marks-none-state')
+  local kept = vim.fs.joinpath(state, 'aineo', 'claude-sessions')
+  vim.fn.mkdir(kept, 'p')
+  vim.fn.writefile(
+    { '11111111-2222-4333-8444-555555555555' },
+    vim.fs.joinpath(kept, vim.fn.sha256(child.fn.getcwd()) .. '.txt'),
+    'b'
+  )
+  start_copy(1, fake, { cmd = gate.cmd, state_directory = state, new_session = false })
+  vim.wait(claude.PATIENCE_MS, function()
+    return gate.lists_started() >= 1
+  end, 20)
+
+  local failure = child.lua_get([[
+    select(2, pcall(require('aineo.claude').stop_sessions_in_background, { _G.copies[1], {} }, function() end))
+  ]])
+  gate.open()
+
+  eq(failure:find('expected session homes', 1, true) ~= nil, true)
+  eq(#claude.wait_for_starts(fake, 1), 1)
+  wait_until_ready(1)
+  eq(status_of_copy(1), 'ready')
+  eq(claude.ctrl_c_count(fake), 0)
 end
 
 T['a quit during a background stop'] = MiniTest.new_set()
