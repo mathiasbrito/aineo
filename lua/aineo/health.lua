@@ -276,6 +276,36 @@ local function check_claude(resolved_config)
   )
 end
 
+--- The program of `'shell'`, the first word of the option as Neovim reads it
+--- to run `:terminal` without an argument: a word that starts with a double
+--- quote ends at the next one.
+---
+---@param shell string
+---@return string program `''` when the option holds no word
+local function shell_program(shell)
+  return shell:match('^%s*"([^"]*)"') or shell:match('^%s*(%S+)') or ''
+end
+
+--- Reports the 'shell' the terminal pane runs, and warns when its program is
+--- not executable (`executable()`), in the words the shell home uses when it
+--- refuses to start.
+local function check_shell()
+  vim.health.start('Shell terminal')
+  local shell = vim.o.shell
+  local program = shell_program(shell)
+  if vim.fn.executable(program) == 0 then
+    vim.health.warn(
+      ("'shell' is %s: '%s' is not executable, so the terminal pane cannot start a shell"):format(
+        shell,
+        program
+      ),
+      "Set 'shell' to a program that exists: :help 'shell'"
+    )
+    return
+  end
+  vim.health.ok(("the terminal pane runs 'shell': %s"):format(shell))
+end
+
 --- Reports the address the editor listens at, `v:servername`, where the
 --- report tool's relay delivers Claude's reports; an error when it listens
 --- nowhere.
@@ -307,6 +337,7 @@ local PREFIX_KEYS = {
   { key = 'N', plug = '<Plug>(aineo-new)', mode = 'n' },
   { key = 'pa', plug = '<Plug>(aineo-pane-agent)', mode = 'n' },
   { key = 'g', plug = '<Plug>(aineo-pane-changes)', mode = 'n' },
+  { key = 'pt', plug = '<Plug>(aineo-pane-terminal)', mode = 'n' },
   { key = 'T', plug = '<Plug>(aineo-tab-new)', mode = 'n' },
   { key = 'Q', plug = '<Plug>(aineo-tab-close)', mode = 'n' },
   { key = '1', plug = '<Plug>(aineo-tab-1)', mode = 'n' },
@@ -532,7 +563,7 @@ local AUTOSTART_FINDINGS = {
   },
   ['inside-claude'] = {
     level = 'info',
-    text = "the autostart did not run: this Neovim runs inside aineo's own Claude terminal ($AINEO_CHILD is set)",
+    text = "the autostart did not run: this Neovim runs inside aineo's own Claude terminal or shell terminal ($AINEO_CHILD is set)",
   },
   ['session-restored'] = {
     level = 'info',
@@ -789,6 +820,7 @@ function M.check()
   check_neovim()
   local resolved_config = check_configuration()
   check_claude(resolved_config)
+  check_shell()
   check_server_socket()
   check_prefix_mappings(resolved_config)
   check_terminal_prefix_mappings(resolved_config)
