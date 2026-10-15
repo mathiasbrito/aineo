@@ -459,6 +459,21 @@ T['the first open']['tells which sessions failed and which were not tried when a
   eq(tabs.tab_count(child), 1)
 end
 
+T['the first open']['tells the error of a single tab that cannot start as it is, naming no other session'] = function()
+  reopening_setup('reopen-single-fails', { sessions = { FIRST }, current = 1 }, FIRST)
+  child.lua("vim.g.aineo = { claude = { cmd = { 'aineo-no-such-claude' } } }")
+  child.lua('_G.entry_test_messages = {}')
+
+  child.cmd('Aineo open')
+
+  eq(entry.messages(child), {
+    {
+      message = "aineo: claude.cmd: 'aineo-no-such-claude' is not executable",
+      level = vim.log.levels.ERROR,
+    },
+  })
+end
+
 T['the first open']['keeps the sessions not tried in the list when the first tab cannot start'] = function()
   local state, folder = reopening_setup(
     'reopen-first-fails',
