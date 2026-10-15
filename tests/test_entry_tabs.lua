@@ -338,11 +338,12 @@ T['the jumps']['are run by their twins in Terminal and Insert mode, which leave 
   eq(vim.startswith(tabs.normal_mode_once(child), 'n'), true)
 end
 
-T['the jumps']['are completed by :Aineo tab with new and the number of each tab page'] = function()
+T['the jumps']['are completed by :Aineo tab with new, close and the number of each tab page'] = function()
   open_three_tab_pages('tabs-jump-complete')
 
-  eq(child.fn.getcompletion('Aineo tab ', 'cmdline'), { 'new', '1', '2', '3' })
+  eq(child.fn.getcompletion('Aineo tab ', 'cmdline'), { 'new', 'close', '1', '2', '3' })
   eq(child.fn.getcompletion('Aineo tab n', 'cmdline'), { 'new' })
+  eq(child.fn.getcompletion('Aineo tab c', 'cmdline'), { 'close' })
 end
 
 T['the jumps']['are refused by :Aineo tab for any other word, as :Aineo pane refuses one'] =
@@ -359,7 +360,7 @@ T['the jumps']['are refused by :Aineo tab for any other word, as :Aineo pane ref
 
   eq(entry.messages(child), {
     {
-      message = 'aineo: :Aineo tab takes new, or the number of a tab to move to',
+      message = 'aineo: :Aineo tab takes new, close, or the number of a tab to move to',
       level = 4,
     },
   })

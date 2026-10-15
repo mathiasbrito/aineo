@@ -78,22 +78,26 @@ local function same_directory(first, second)
   return (vim.uv.fs_realpath(first) or first) == (vim.uv.fs_realpath(second) or second)
 end
 
---- Where a listed session stands for a pick, given the session of aineo's
---- own terminal and the folder aineo listed: `'own'` when it is that
---- session, already shown; `'elsewhere'` when another process runs it, in
---- another terminal or in Claude Code's background service, which a switch
---- would pull it away from; `'another_folder'` when it started under a
---- directory other than the folder, or in none the entry names, since a
---- switch would resume it in the wrong project; else `'switchable'`, a
---- background session whose process has ended.
+--- The tab pages of the editor that show a session, by the session's id: the
+--- place of each tab page among the editor's tab pages, as `{n}gt` counts it.
+---@alias aineo.claude.ShownInTabs table<string, integer>
+
+--- Where a listed session stands for a pick, given the tab pages of the
+--- editor that show a session and the folder aineo listed: `'shown'` when a
+--- tab page shows it, which a pick moves to; `'elsewhere'` when another
+--- process runs it, in another terminal or in Claude Code's background
+--- service, which a pick joins where it can (`M.way_to_join()`); `'another_folder'`
+--- when it started under a directory other than the folder, or in none the
+--- entry names, since a pick would resume it in the wrong project; else
+--- `'switchable'`, a session whose process has ended, which a pick resumes.
 ---
 ---@param session aineo.claude.ListedSession
----@param own_session_id string?
+---@param shown_in_tabs aineo.claude.ShownInTabs
 ---@param folder string
----@return 'own'|'elsewhere'|'another_folder'|'switchable'
-function M.standing(session, own_session_id, folder)
-  if session.session_id == own_session_id then
-    return 'own'
+---@return 'shown'|'elsewhere'|'another_folder'|'switchable'
+function M.standing(session, shown_in_tabs, folder)
+  if shown_in_tabs[session.session_id] then
+    return 'shown'
   end
   if session.running then
     return 'elsewhere'
@@ -164,9 +168,9 @@ function M.running_in_background(sessions, session_id)
   end)
 end
 
---- What a row of the list marks a session with, by its standing.
+--- What a row of the list marks a session with, by its standing, when the
+--- mark is the same for every row of it.
 local STANDING_MARKS = {
-  own = '[this terminal]',
   elsewhere = '[running elsewhere]',
   another_folder = '[another folder]',
 }
@@ -184,20 +188,23 @@ end
 
 --- The row of the list for `session`: its name (`M.name()`); its kind and
 --- its status, where it has them; and the mark of its standing
---- (`M.standing()`) when a pick may not switch to it.
+--- (`M.standing()`) when a pick may not open a tab on it: `[tab <n>]` for the
+--- tab page `n` that shows it, which a pick moves to.
 ---
 ---@param session aineo.claude.ListedSession
----@param own_session_id string?
+---@param shown_in_tabs aineo.claude.ShownInTabs
 ---@param folder string
 ---@return string
-function M.row(session, own_session_id, folder)
+function M.row(session, shown_in_tabs, folder)
   local words = { M.name(session) }
   for _, word in ipairs({ session.kind or false, session.status or false }) do
     if word then
       table.insert(words, word)
     end
   end
-  local mark = STANDING_MARKS[M.standing(session, own_session_id, folder)]
+  local standing = M.standing(session, shown_in_tabs, folder)
+  local mark = standing == 'shown' and ('[tab %d]'):format(shown_in_tabs[session.session_id])
+    or STANDING_MARKS[standing]
   if mark then
     table.insert(words, mark)
   end

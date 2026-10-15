@@ -103,6 +103,17 @@ T['a listed session'] = MiniTest.new_set()
 --- The session of the child's own terminal in these cases.
 local OWN_SESSION_ID = '99999999-9999-4999-8999-999999999999'
 
+--- The tab pages of the editor that show a session, by the session's id: the
+--- own session in the first tab page and a session running elsewhere in the
+--- third.
+local SHOWN_IN_TABS = {
+  [OWN_SESSION_ID] = 1,
+  ['11111111-1111-4111-8111-111111111111'] = 3,
+}
+
+--- No tab page shows a session.
+local SHOWN_NOWHERE = {}
+
 --- The folder the rows are listed for in these cases.
 local FOLDER = '/work/project'
 
@@ -126,11 +137,13 @@ end
 
 T['a listed session']['row'] = MiniTest.new_set({
   parametrize = {
-    { RUNNING_ELSEWHERE, 'refactor  interactive  idle  [running elsewhere]' },
+    { RUNNING_ELSEWHERE, SHOWN_NOWHERE, 'refactor  interactive  idle  [running elsewhere]' },
     {
       running_elsewhere_with({ session_id = OWN_SESSION_ID }),
-      'refactor  interactive  idle  [this terminal]',
+      SHOWN_IN_TABS,
+      'refactor  interactive  idle  [tab 1]',
     },
+    { RUNNING_ELSEWHERE, SHOWN_IN_TABS, 'refactor  interactive  idle  [tab 3]' },
     {
       {
         session_id = RUNNING_ELSEWHERE.session_id,
@@ -138,54 +151,75 @@ T['a listed session']['row'] = MiniTest.new_set({
         kind = 'background',
         cwd = FOLDER,
       },
+      SHOWN_NOWHERE,
       '11111111  background  blocked',
     },
-    { { session_id = RUNNING_ELSEWHERE.session_id, name = 'tests', cwd = FOLDER }, 'tests' },
+    {
+      { session_id = RUNNING_ELSEWHERE.session_id, name = 'tests', cwd = FOLDER },
+      SHOWN_NOWHERE,
+      'tests',
+    },
     {
       { session_id = RUNNING_ELSEWHERE.session_id, name = 'tests', cwd = '/work/other' },
+      SHOWN_NOWHERE,
       'tests  [another folder]',
+    },
+    {
+      { session_id = RUNNING_ELSEWHERE.session_id, name = 'tests', cwd = '/work/other' },
+      SHOWN_IN_TABS,
+      'tests  [tab 3]',
     },
   },
 })
 
 T['a listed session']['row']['names the session, its kind and its status, and marks it'] = function(
   listed,
+  shown_in_tabs,
   expected
 )
   eq(
-    child.lua_get("require('aineo.claude').session_row(...)", { listed, OWN_SESSION_ID, FOLDER }),
+    child.lua_get("require('aineo.claude').session_row(...)", { listed, shown_in_tabs, FOLDER }),
     expected
   )
 end
 
 T['a listed session']['standing'] = MiniTest.new_set({
   parametrize = {
-    { running_elsewhere_with({ session_id = OWN_SESSION_ID }), 'own' },
-    { RUNNING_ELSEWHERE, 'elsewhere' },
+    { running_elsewhere_with({ session_id = OWN_SESSION_ID }), SHOWN_IN_TABS, 'shown' },
+    { RUNNING_ELSEWHERE, SHOWN_IN_TABS, 'shown' },
+    { RUNNING_ELSEWHERE, SHOWN_NOWHERE, 'elsewhere' },
     {
       { session_id = RUNNING_ELSEWHERE.session_id, kind = 'background', cwd = FOLDER },
+      SHOWN_NOWHERE,
       'switchable',
     },
     {
       { session_id = RUNNING_ELSEWHERE.session_id, kind = 'background', cwd = '/work/other' },
+      SHOWN_NOWHERE,
       'another_folder',
     },
-    { { session_id = RUNNING_ELSEWHERE.session_id, kind = 'background' }, 'another_folder' },
+    {
+      { session_id = RUNNING_ELSEWHERE.session_id, kind = 'background' },
+      SHOWN_NOWHERE,
+      'another_folder',
+    },
     {
       running_elsewhere_with({ session_id = OWN_SESSION_ID, cwd = '/work/other' }),
-      'own',
+      SHOWN_IN_TABS,
+      'shown',
     },
   },
 })
 
-T['a listed session']['standing']['tells whether a pick may switch to it'] = function(
+T['a listed session']['standing']['tells whether a pick opens a tab, moves to one, or is refused'] = function(
   listed,
+  shown_in_tabs,
   expected
 )
   eq(
     child.lua_get(
       "require('aineo.claude').session_standing(...)",
-      { listed, OWN_SESSION_ID, FOLDER }
+      { listed, shown_in_tabs, FOLDER }
     ),
     expected
   )
