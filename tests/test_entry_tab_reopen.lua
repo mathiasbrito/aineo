@@ -68,21 +68,23 @@ end
 
 --- Gives the child the state directory of the case `name`, keeps `list` as
 --- the folder's tabs and `kept` as the session kept for the folder in it,
---- and makes aineo run a fake `claude` for the case in `mode`.
+--- and makes aineo run a fake `claude` for the case, in `fake_options.mode`
+--- (`ready` by default) with `fake_options.environment` on top.
 ---
 ---@param name string
 ---@param list { sessions: string[], current: integer }
 ---@param kept string
----@param extra_environment? table<string, string> more of the fake's variables
+---@param fake_options? { mode: string?, environment: table<string, string>? }
 ---@return string state
 ---@return string folder
 ---@return { record: string, environment: table<string, string> } fake
-local function reopening_setup(name, list, kept, extra_environment)
+local function reopening_setup(name, list, kept, fake_options)
+  fake_options = fake_options or {}
   local state = tabs.use_own_state(child, name)
   local folder = child.fn.getcwd()
   tabs.keep_tab_list(state, folder, list)
   tabs.keep_session_id(state, folder, kept)
-  local fake = tabs.fake(name, 'ready', extra_environment)
+  local fake = tabs.fake(name, fake_options.mode, fake_options.environment)
   entry.use_fake(child, fake)
   return state, folder, fake
 end
@@ -140,6 +142,21 @@ T['the folder’s list']['is kept as tabs open and close, and a closed tab is no
   end)
   eq(opened, { sessions = { first, second }, current = 2 })
   eq(closed, { sessions = { first }, current = 1 })
+end
+
+T['the folder’s list']['is kept as a tab opens, before its Claude Code is ready'] = function()
+  local state = tabs.open_first_tab(child, 'reopen-keeps-unready')
+  local folder = child.fn.getcwd()
+  local first = tabs.session_of_tab(state, child, tabs.FIRST_TAB)
+  local unready = tabs.fake('reopen-keeps-unready-second', 'exit')
+  tabs.use_next_fake(child, unready)
+
+  child.cmd('Aineo tab new')
+
+  local list = tabs.kept_tab_list_once(state, folder, function(kept)
+    return kept ~= nil and #kept.sessions == 2
+  end)
+  eq(list, { sessions = { first, tabs.new_id_of_start(unready, 1) }, current = 2 })
 end
 
 T['the folder’s list']['is kept when a tab’s session changes'] = function()
@@ -363,7 +380,7 @@ T['the first open']['replaces a session Claude Code has no conversation for by a
     'reopen-dead',
     { sessions = { FIRST, SECOND }, current = 1 },
     FIRST,
-    { AINEO_FAKE_CLAUDE_CONVERSATIONS = conversations }
+    { mode = 'exit', environment = { AINEO_FAKE_CLAUDE_CONVERSATIONS = conversations } }
   )
   local dead_draft =
     vim.fs.joinpath(state, 'aineo', 'drafts', 'session-' .. vim.fn.sha256(SECOND) .. '.txt')
@@ -409,7 +426,7 @@ T['the first open']['attaches the tab whose session runs in Claude Code’s back
     'reopen-attach',
     { sessions = { FIRST, SECOND }, current = 1 },
     FIRST,
-    { AINEO_FAKE_CLAUDE_AGENTS = listing }
+    { environment = { AINEO_FAKE_CLAUDE_AGENTS = listing } }
   )
 
   child.cmd('Aineo open')
