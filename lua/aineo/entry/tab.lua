@@ -589,19 +589,13 @@ local function make_tab(homes, key, callbacks)
 
   --- Follows the Claude Code on `terminal`, now the tab's own: the tab line
   --- is drawn again whenever its session's name changes
-  --- (`redraw_tab_line_when_named()`), the tabs home is told whenever it
-  --- starts or stops being busy (`busy_watch`) — a terminal the tab has left
-  --- tells it nothing — and told how it stands now.
+  --- (`redraw_tab_line_when_named()`), and the tabs home is told whenever it
+  --- starts or stops being busy (`busy_watch`).
   ---
   ---@param terminal integer
   local function follow_claude_terminal_activity(terminal)
     redraw_tab_line_when_named(terminal)
-    busy_watch.tell_when_busy_changes(terminal, function(busy)
-      if terminal == claude_terminal then
-        tell_tabs_home_busy(busy)
-      end
-    end)
-    tell_tabs_home_busy(is_busy())
+    busy_watch.tell_when_busy_changes(terminal, tell_tabs_home_busy)
   end
 
   --- Makes the tab the one in the tab page the current window is in, once its
