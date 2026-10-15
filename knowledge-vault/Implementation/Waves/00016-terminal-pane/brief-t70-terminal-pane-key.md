@@ -139,3 +139,11 @@ Written by the implementer at dispatch, as A256 and A278 did for waves 15 and 16
 - **Pins that list the subcommands or keys, found by grep on this tree:** `tests/test_entry_panes.lua` (`PANE_USAGE`, the completion rows), `tests/test_entry.lua` (the command's description), `tests/test_entry_prefix.lua`, `tests/test_entry_terminal_keys.lua`, `tests/test_plugin.lua`, `tests/test_health.lua` (the prefix and terminal prefix lines, the autostart's `inside-claude` line), and `tests/test_doc.lua`.
 - **T68's hunks** are not in this tree. The orchestrator replays this branch after T68; my hunks in `plugin/aineo.lua` stay in `SUBCOMMAND_WORDS`, `ACTIONS`, `PREFIX_KEYS`, the command's description, `aineo.entry.Homes`, `arrangement()`, a new `focus_terminal()` and `actions` beside `focus_pane()`, `finish()`, `finish_closing()`, `module_homes()` and `copied_homes()`.
 - **The boundary stands.** No fact changes what is built.
+
+## Correction to the amendment — 2026-10-15, found by T66's pin
+
+The amendment above placed the copy's `let_go()` in `finish()`. T66's case *a tab page closed by Neovim's own commands › lets its copies go* reads the tab's handlers as gone as soon as its entry is removed, which happens in `release_tab()`, before `finish()` and before the Claude Code has stopped; with the shell's group listed among the second tab's groups (`tests/helpers/entry_tabs.lua`, `SECOND_TAB_GROUPS`) it failed with `aineo.shell.2` left. So, as the dispatch message asked:
+
+- `release()` lets the copy go (`let_go()`, after the layout's, whose handlers must not see the wipe), which stops the shell and removes the copy's handlers at once, as for every other copy;
+- `finish_closing()` still stops the shell of each closing tab at its head, before the background stop of the Claude Codes: the first tab's, whose module has no `let_go()`, and any shell still running (outside `TabClosed`, where a wipe runs none of the layout's handlers; T69, A308);
+- `finish()` is as it was.
