@@ -221,6 +221,16 @@ end
 
 local M = make_shell('aineo.shell')
 
+--- The program a shell home runs: the first word of `'shell'`, split as
+--- Neovim splits it to run `:terminal` without an argument (`shell_words()`),
+--- or `''` when the option holds no word. What `:checkhealth aineo` checks is
+--- executable.
+---
+---@return string program
+function M.shell_program()
+  return shell_words()[1] or ''
+end
+
 --- The number of homes made, the module's included.
 local homes_made = 1
 
