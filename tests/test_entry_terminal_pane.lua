@@ -125,13 +125,18 @@ T['the terminal pane']['leaves the cursor in the shell, in Terminal mode, by']['
   )
 end
 
-T['the terminal pane']['shows the same shell again, with its output, and starts none, after \\pa hid it'] = function()
+T['the terminal pane']['shows the same shell again, with its output, and starts none, after a key hid it'] =
+  MiniTest.new_set({ parametrize = { { '\\pa' }, { '\\g' } } })
+
+T['the terminal pane']['shows the same shell again, with its output, and starts none, after a key hid it']['the key'] = function(
+  hiding_key
+)
   open_layout('terminal-pane-again')
   entry.press(child, '\\pt')
   local shell = entry_shell.first_tab_buffer(child)
   entry_shell.type_into(child, shell, 'echo kept-output')
   eq(entry_shell.shows(child, shell, 'kept-output'), true)
-  entry.press(child, '\\pa')
+  entry.press(child, hiding_key)
 
   entry.press(child, '\\pt')
 
@@ -207,6 +212,64 @@ T['the terminal pane']["when 'shell' is not executable"]['opens no layout when n
   eq(
     { entry.messages(child), entry.windows(child) },
     { { { message = NOT_EXECUTABLE, level = vim.log.levels.ERROR } }, { '' } }
+  )
+end
+
+--- What the terminal pane tells the user when Claude Code cannot start.
+local CLAUDE_CANNOT_START = "aineo: claude.cmd: '/nonexistent/aineo-t70-claude' is not executable"
+
+T['the terminal pane']['when the layout cannot open'] = MiniTest.new_set()
+
+T['the terminal pane']['when the layout cannot open']['stops the shell it started, telling the user once'] = function()
+  child.lua([[vim.g.aineo = { claude = { cmd = { '/nonexistent/aineo-t70-claude' } } }]])
+
+  entry.press(child, '\\pt')
+
+  eq({
+    entry.messages(child),
+    child.lua_get(entry_shell.TERMINAL_JOBS),
+    entry_shell.first_tab_buffer(child),
+  }, { { { message = CLAUDE_CANNOT_START, level = vim.log.levels.ERROR } }, 0, vim.NIL })
+end
+
+T['the terminal pane']['when the layout cannot open']['leaves a shell that ran before running'] = function()
+  open_layout('terminal-pane-cannot-open')
+  entry.press(child, '\\pt')
+  local shell = entry_shell.first_tab_buffer(child)
+  local pid = entry_shell.pid_of(child, shell)
+  child.lua([[
+      local claude = vim.fn.winbufnr(1)
+      vim.g.aineo = { claude = { cmd = { '/nonexistent/aineo-t70-claude' } } }
+      vim.cmd.bwipeout({ tostring(claude), bang = true })
+      vim.cmd.only()
+    ]])
+
+  entry.press(child, '\\pt')
+
+  eq({
+    entry.messages(child),
+    entry_shell.first_tab_buffer(child),
+    entry_shell.is_running(pid),
+  }, { { { message = CLAUDE_CANNOT_START, level = vim.log.levels.ERROR } }, shell, true })
+end
+
+--- What the terminal pane tells the user when the folder aineo started in is
+--- gone.
+local function folder_is_gone(folder)
+  return ('aineo: the folder aineo started in is gone, so no shell started: %s'):format(folder)
+end
+
+T['the terminal pane']['tells the user, in its own words, when the folder aineo started in is gone'] = function()
+  local folder = fixture.directory('terminal-pane/gone')
+  child.cmd('cd ' .. vim.fn.fnameescape(folder))
+  open_layout('terminal-pane-gone')
+  vim.fn.delete(folder, 'rf')
+
+  entry.press(child, '\\pt')
+
+  eq(
+    { entry.messages(child), entry.windows(child), child.lua_get(entry_shell.TERMINAL_JOBS) },
+    { { { message = folder_is_gone(folder), level = vim.log.levels.ERROR } }, AGENT_PANE, 1 }
   )
 end
 

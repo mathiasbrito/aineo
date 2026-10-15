@@ -237,6 +237,10 @@ local function microseconds_now()
   return now.sec * 1000000 + math.floor(now.nsec / 1000)
 end
 
+--- What the terminal pane tells the user, as an error, when the folder aineo
+--- started in (`kept_places()`) is gone: the folder, in `%s`.
+local FOLDER_GONE = 'the folder aineo started in is gone, so no shell started: %s'
+
 --- What `:Aineo claim` tells the user, as a warning, when the tab's own
 --- Claude terminal runs no session — Claude Code never started in it — so
 --- that it has no session of its own to claim or return to.
@@ -1365,12 +1369,14 @@ local function make_tab(homes, key, on_bound)
 
   --- Shows `pane` in the layout's right column and moves the cursor into it
   --- (`aineo.layout`'s `focus_pane()`): into the Report under the agent pane,
-  --- into the commits window under the changes pane, though the pane was
-  --- shown already. When the layout must open first, it opens as `focus()`
-  --- opens it, around the Claude session's terminal as it is, and Input is
-  --- then handed to the draft home (`keep_input_draft()`). The changes pane,
-  --- already shown, is read again first (`aineo.changes`'s
-  --- `refresh_shown_pane()`), as showing it anew reads it.
+  --- into the commits window under the changes pane, into the Report's window
+  --- under the terminal pane, which shows the shell there (Terminal mode is
+  --- `focus_terminal()`'s), though the pane was shown already. When the layout
+  --- must open first, it opens as `focus()` opens it, around the Claude
+  --- session's terminal as it is, and Input is then handed to the draft home
+  --- (`keep_input_draft()`). The changes pane, already shown, is read again
+  --- first (`aineo.changes`'s `refresh_shown_pane()`), as showing it anew
+  --- reads it.
   ---
   ---@param pane aineo.layout.Pane
   local function focus_pane(pane)
@@ -1394,13 +1400,27 @@ local function make_tab(homes, key, on_bound)
   --- (`kept_places()`'s working directory, whatever `:cd` or `:tcd` says) when
   --- the tab runs none (`aineo.shell`'s `start()`), which starts nothing while
   --- the shell lives. The shell starts before the layout is touched, so that a
-  --- `'shell'` that cannot run, which raises, changes no pane. Terminal mode
-  --- is asked for as `focus_claude()` asks for it: Neovim enters it once the
-  --- outermost mapping or command around it has ended, in the window current
-  --- then, the shell's.
+  --- `'shell'` that cannot run, which raises, changes no pane; and a layout
+  --- that cannot open, as when Claude Code cannot start, stops the shell this
+  --- call started and raises the layout's error, so that no shell runs that
+  --- nothing shows. Raises `FOLDER_GONE` when the folder no longer exists.
+  --- Terminal mode is asked for as `focus_claude()` asks for it: Neovim enters
+  --- it once the outermost mapping or command around it has ended, in the
+  --- window current then, the shell's.
   local function focus_terminal()
-    homes.shell.start({ cwd = kept_places().working_directory })
-    focus_pane('terminal')
+    local folder = kept_places().working_directory
+    if vim.fn.isdirectory(folder) == 0 then
+      error(FOLDER_GONE:format(folder), 0)
+    end
+    local ran_one = homes.shell.shell_buffer() ~= nil
+    homes.shell.start({ cwd = folder })
+    local shown, failure = pcall(focus_pane, 'terminal')
+    if not shown then
+      if not ran_one then
+        homes.shell.stop()
+      end
+      error(failure, 0)
+    end
     vim.cmd.startinsert()
   end
 
