@@ -147,6 +147,19 @@ function M.tabline()
   return tabline_format.format(entries, vim.o.columns)
 end
 
+--- The list of `placed`, the editor's tabs in the order of their places: the
+--- session of each tab that has one, a session two tabs show listed once, at
+--- the lower place (no two tabs of a list show one session); and the place of
+--- the tab flagged current, or of the one that shows its session first, else
+--- the first. What `keep_tabs()` keeps. Nil when no tab has a session.
+---
+---@param placed aineo.tabs.PlacedTab[]
+---@return aineo.tabs.TabList|nil
+function M.list_of_tabs(placed)
+  vim.validate('placed', placed, 'table')
+  return tab_lists.list_of_placed_tabs(placed)
+end
+
 --- Keeps `tab_list` as the list of the tabs of `folder`: the sessions of its
 --- tabs in the order of the tabs' places, and the place of the tab that is
 --- current. It goes into a file of its own under `state_directory`, readable
@@ -184,6 +197,26 @@ function M.kept_tabs(state_directory, folder)
     return nil
   end
   return tab_lists.read_tab_list(state_directory, folder)
+end
+
+--- The tabs a Neovim reopens in `folder`: the list kept for it
+--- (`kept_tabs()`) when it holds `kept_session`, the session kept for the
+--- folder as the one the next start lands in. Nil when no list is kept, the
+--- list lacks that session, or none is kept for the folder: one tab then opens
+--- on the kept session, as before the list was kept.
+---
+--- Raises nothing.
+---
+---@param state_directory string
+---@param folder string
+---@param kept_session string|nil
+---@return aineo.tabs.TabList|nil
+function M.tabs_to_reopen(state_directory, folder, kept_session)
+  local list = kept_session and M.kept_tabs(state_directory, folder)
+  if list and vim.tbl_contains(list.sessions, kept_session) then
+    return list
+  end
+  return nil
 end
 
 --- Has Neovim draw aineo's tab line while the user's 'tabline' is empty; a
