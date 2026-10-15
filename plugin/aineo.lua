@@ -53,7 +53,7 @@ local SUBCOMMANDS = {
 --- have a `<Plug>` mapping, and `:Aineo tab` takes any number
 --- (`jump_to_tab()`).
 local SUBCOMMAND_WORDS = {
-  pane = { 'agent', 'changes' },
+  pane = { 'agent', 'changes', 'terminal' },
   tab = { 'new', 'close', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
 }
 
@@ -236,6 +236,10 @@ local function microseconds_now()
   local now = vim.uv.clock_gettime('realtime')
   return now.sec * 1000000 + math.floor(now.nsec / 1000)
 end
+
+--- What the terminal pane tells the user, as an error, when the folder aineo
+--- started in (`kept_places()`) is gone: the folder, in `%s`.
+local FOLDER_GONE = 'the folder aineo started in is gone, so no shell started: %s'
 
 --- What `:Aineo claim` tells the user, as a warning, when the tab's own
 --- Claude terminal runs no session — Claude Code never started in it — so
@@ -659,15 +663,16 @@ local function make_editor_handlers()
 end
 
 --- The homes one tab is made of: its layout, the Claude Code session home it
---- starts and follows, and its Report, Input's draft and changes pane. The
---- first tab's are the homes' own module-level copies; every tab after it is
---- given the copies each home's `new()` makes.
+--- starts and follows, its Report, Input's draft and changes pane, and its
+--- shell. The first tab's are the homes' own module-level copies; every tab
+--- after it is given the copies each home's `new()` makes.
 ---@class aineo.entry.Homes
 ---@field layout aineo.layout.Layout
 ---@field claude aineo.claude.Session
 ---@field report aineo.report.Home
 ---@field draft aineo.draft.Home
 ---@field changes aineo.changes.Home
+---@field shell aineo.shell.Home
 
 --- One tab of aineo, as the composition root holds it: what a tab does is
 --- called as fields, and acts on that tab's homes alone.
@@ -1295,9 +1300,11 @@ local function make_tab(homes, key, on_bound)
   --- The buffers aineo's layout shows: `claude_buffer`, the Claude session's
   --- terminal, the Report, taken from the report home, which this gives its
   --- environment the first time it is called (`give_report_environment()`),
-  --- and the changes pane's (`changes_pane()`); with the Report's share from
-  --- `config`, and the status line of Claude's window, which draws the
-  --- session's name and folder (`aineo.claude`'s `session_statusline()`).
+  --- the changes pane's (`changes_pane()`) and the terminal of the tab's
+  --- shell while it runs one (`aineo.shell`'s `shell_buffer()`), none
+  --- otherwise; with the Report's share from `config`, and the status line of
+  --- Claude's window, which draws the session's name and folder
+  --- (`aineo.claude`'s `session_statusline()`).
   ---
   ---@param config table the resolved configuration
   ---@param claude_buffer integer
@@ -1309,6 +1316,7 @@ local function make_tab(homes, key, on_bound)
       report = homes.report.report_buffer(),
       report_height = config.layout.report_height,
       changes = changes_pane(),
+      shell = homes.shell.shell_buffer(),
       claude_statusline = require('aineo.claude').session_statusline(),
     }
   end
@@ -1361,12 +1369,14 @@ local function make_tab(homes, key, on_bound)
 
   --- Shows `pane` in the layout's right column and moves the cursor into it
   --- (`aineo.layout`'s `focus_pane()`): into the Report under the agent pane,
-  --- into the commits window under the changes pane, though the pane was
-  --- shown already. When the layout must open first, it opens as `focus()`
-  --- opens it, around the Claude session's terminal as it is, and Input is
-  --- then handed to the draft home (`keep_input_draft()`). The changes pane,
-  --- already shown, is read again first (`aineo.changes`'s
-  --- `refresh_shown_pane()`), as showing it anew reads it.
+  --- into the commits window under the changes pane, into the Report's window
+  --- under the terminal pane, which shows the shell there (Terminal mode is
+  --- `focus_terminal()`'s), though the pane was shown already. When the layout
+  --- must open first, it opens as `focus()` opens it, around the Claude
+  --- session's terminal as it is, and Input is then handed to the draft home
+  --- (`keep_input_draft()`). The changes pane, already shown, is read again
+  --- first (`aineo.changes`'s `refresh_shown_pane()`), as showing it anew
+  --- reads it.
   ---
   ---@param pane aineo.layout.Pane
   local function focus_pane(pane)
@@ -1383,6 +1393,35 @@ local function make_tab(homes, key, on_bound)
       bind_to_current_page()
       keep_input_draft()
     end
+  end
+
+  --- Shows the tab's shell in the layout's terminal pane and moves the cursor
+  --- into it, in Terminal mode, starting the shell in the folder
+  --- (`kept_places()`'s working directory, whatever `:cd` or `:tcd` says) when
+  --- the tab runs none (`aineo.shell`'s `start()`), which starts nothing while
+  --- the shell lives. The shell starts before the layout is touched, so that a
+  --- `'shell'` that cannot run, which raises, changes no pane; and a layout
+  --- that cannot open, as when Claude Code cannot start, stops the shell this
+  --- call started and raises the layout's error, so that no shell runs that
+  --- nothing shows. Raises `FOLDER_GONE` when the folder no longer exists.
+  --- Terminal mode is asked for as `focus_claude()` asks for it: Neovim enters
+  --- it once the outermost mapping or command around it has ended, in the
+  --- window current then, the shell's.
+  local function focus_terminal()
+    local folder = kept_places().working_directory
+    if vim.fn.isdirectory(folder) == 0 then
+      error(FOLDER_GONE:format(folder), 0)
+    end
+    local ran_one = homes.shell.shell_buffer() ~= nil
+    homes.shell.start({ cwd = folder })
+    local shown, failure = pcall(focus_pane, 'terminal')
+    if not shown then
+      if not ran_one then
+        homes.shell.stop()
+      end
+      error(failure, 0)
+    end
+    vim.cmd.startinsert()
   end
 
   --- Whether the current buffer is the Claude session's terminal and that
@@ -1909,6 +1948,7 @@ local function make_tab(homes, key, on_bound)
     ['pane changes'] = function()
       focus_pane('changes')
     end,
+    ['pane terminal'] = focus_terminal,
   }
 
   --- What Send does in Visual mode: sends the selection alone, unless a claim
@@ -1960,17 +2000,19 @@ local function make_tab(homes, key, on_bound)
 
   --- Lets the tab's homes go as its tab page has closed, at once: its claim
   --- is let go, Input's draft is saved first (`aineo.draft`'s `let_go()`),
-  --- then the layout, the changes pane and the Report are let go. What its
-  --- Claude Code tells it afterwards writes nothing. The first tab is made of
-  --- the homes the modules themselves are, which have no `let_go()`: it
-  --- leaves them as they are, and is in no tab page any more. Its Claude Code
-  --- is stopped by `finish()`.
+  --- then the layout, the shell, the changes pane and the Report are let go,
+  --- the shell after the layout, whose handlers must not see its wipe. What
+  --- its Claude Code tells it afterwards writes nothing. The first tab is made
+  --- of the homes the modules themselves are, which have no `let_go()`: it
+  --- leaves them as they are, and is in no tab page any more. Its shell is
+  --- stopped by `finish_closing()`, and its Claude Code by `finish()`.
   local function release()
     is_released = true
     let_each_go({
       release_claim,
       homes.draft.let_go or leave_as_it_is,
       homes.layout.let_go or leave_as_it_is,
+      homes.shell.let_go or leave_as_it_is,
       homes.changes.let_go or leave_as_it_is,
       homes.report.let_go or leave_as_it_is,
     })
@@ -2139,12 +2181,18 @@ local function release_tab(tab)
   table.insert(closing, tab)
 end
 
---- Stops the Claude Codes of the tabs in `closing` together, as quitting
---- stops them (`aineo.claude`'s `stop_sessions_in_background()`), without
---- holding the editor, and ends the tabs (`aineo.entry.Tab`'s `finish()`)
---- once each Claude Code has stopped. Does nothing while Neovim quits: the
---- quit stops every Claude Code that runs, those of the tabs in `closing`
---- and those still stopping among them.
+--- Stops the shells of the tabs in `closing` that run one still
+--- (`aineo.shell`'s `stop()`): the first tab's, whose module has no
+--- `let_go()`, which a wipe inside `TabClosed` would hide from the layout's
+--- handlers; those of the other tabs were let go when their tab pages
+--- closed (`aineo.entry.Tab`'s `release()`). Then stops their Claude Codes
+--- together, as quitting stops them (`aineo.claude`'s
+--- `stop_sessions_in_background()`), without holding the editor, and ends
+--- the tabs (`aineo.entry.Tab`'s `finish()`) once each Claude Code has
+--- stopped. A shell stops at once, before the wait for a Claude Code that may
+--- take seconds. Does nothing while Neovim quits: the quit stops every Claude
+--- Code that runs, those of the tabs in `closing` and those still stopping
+--- among them, and Neovim hangs up every shell.
 local function finish_closing()
   if #closing == 0 or vim.v.exiting ~= vim.NIL then
     return
@@ -2152,6 +2200,9 @@ local function finish_closing()
   local finishing = closing
   closing = {}
   vim.list_extend(stopping, finishing)
+  for _, tab in ipairs(finishing) do
+    run(tab.homes.shell.stop)
+  end
   local function finish_each(already_stopped)
     for _, tab in ipairs(finishing) do
       for index, listed in ipairs(stopping) do
@@ -2244,6 +2295,7 @@ local function module_homes()
     report = require('aineo.report'),
     draft = require('aineo.draft'),
     changes = require('aineo.changes'),
+    shell = require('aineo.shell'),
   }
 end
 
@@ -2258,6 +2310,7 @@ local function copied_homes()
     report = require('aineo.report').new(),
     draft = require('aineo.draft').new(),
     changes = require('aineo.changes').new(),
+    shell = require('aineo.shell').new(),
   }
 end
 
@@ -2654,6 +2707,7 @@ for _, argument in ipairs({
   'new',
   'pane agent',
   'pane changes',
+  'pane terminal',
 }) do
   ACTIONS[argument] = function()
     if REOPENS_TABS_FIRST[argument] then
@@ -2741,6 +2795,7 @@ local PREFIX_KEYS = {
   new = 'N',
   ['pane agent'] = 'pa',
   ['pane changes'] = 'g',
+  ['pane terminal'] = 'pt',
   ['tab new'] = 'T',
   ['tab close'] = 'Q',
   ['tab 1'] = '1',
@@ -3061,5 +3116,5 @@ end, {
   nargs = '*',
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes, claim [id] or tab new|close|{n}',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal, claim [id] or tab new|close|{n}',
 })

@@ -583,6 +583,77 @@ T['Claude Code']['warns of a --settings in claude.cmd that cannot take aineo’s
   })
 end
 
+T['the shell terminal'] = MiniTest.new_set()
+
+--- Starts `child` afresh with autostart off and 'shell' set to `shell`.
+---
+---@param shell string
+local function start_with_shell(shell)
+  children.restart(
+    child,
+    vim.list_extend(
+      settings_arguments({ autostart = false }),
+      { '--cmd', 'let &shell = ' .. vim.fn.string(shell) }
+    )
+  )
+end
+
+T['the shell terminal']["names the 'shell' the terminal pane runs"] = MiniTest.new_set({
+  parametrize = {
+    { '/bin/sh' },
+    { '/bin/sh -l' },
+    { '"/bin/sh" -l' },
+    { '/bin/s"h"' },
+  },
+})
+
+T['the shell terminal']["names the 'shell' the terminal pane runs"]['set to'] = function(shell)
+  start_with_shell(shell)
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Shell terminal'), {
+    ("- ✅ OK the terminal pane runs 'shell': %s"):format(shell),
+  })
+end
+
+T['the shell terminal']["warns when the program of 'shell' is not executable"] = function()
+  start_with_shell('/nonexistent/aineo-t70-shell -l')
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Shell terminal'), {
+    "- ⚠️ WARNING 'shell' is /nonexistent/aineo-t70-shell -l: '/nonexistent/aineo-t70-shell' is not executable, so the terminal pane cannot start a shell",
+  })
+  eq(health.advice(report, 'Shell terminal'), {
+    "Set 'shell' to a program that exists: :help |'shell'|",
+  })
+end
+
+T['the shell terminal']["warns, naming the program Neovim runs, when quotes shape the first word of 'shell'"] =
+  MiniTest.new_set({
+    parametrize = {
+      { '"/bin/sh"x', '/bin/shx' },
+      { '"/bin/s\\"h"', '/bin/s"h' },
+    },
+  })
+
+T['the shell terminal']["warns, naming the program Neovim runs, when quotes shape the first word of 'shell'"]['set to'] = function(
+  shell,
+  program
+)
+  start_with_shell(shell)
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Shell terminal'), {
+    ("- ⚠️ WARNING 'shell' is %s: '%s' is not executable, so the terminal pane cannot start a shell"):format(
+      shell,
+      program
+    ),
+  })
+end
+
 T['the server socket'] = MiniTest.new_set()
 
 T['the server socket']['names the address the editor listens at'] = function()
@@ -650,6 +721,7 @@ T['the prefix mappings']['are reported in place when aineo mapped each key'] = f
     '- ✅ OK \\N runs <Plug>(aineo-new)',
     '- ✅ OK \\pa runs <Plug>(aineo-pane-agent)',
     '- ✅ OK \\g runs <Plug>(aineo-pane-changes)',
+    '- ✅ OK \\pt runs <Plug>(aineo-pane-terminal)',
     '- ✅ OK \\T runs <Plug>(aineo-tab-new)',
     '- ✅ OK \\Q runs <Plug>(aineo-tab-close)',
     '- ✅ OK \\1 runs <Plug>(aineo-tab-1)',
@@ -671,7 +743,7 @@ T['the prefix mappings']['warn that the leader, unset and so a backslash, is the
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[23], LEADER_WARNING)
+  eq(health.section(report, 'Prefix mappings')[24], LEADER_WARNING)
   eq(health.advice(report, 'Prefix mappings'), { LEADER_ADVICE })
 end
 
@@ -688,7 +760,7 @@ T['the prefix mappings']['warn that the leader, a Number, is the prefix'] = func
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[23], '- ⚠️ WARNING the leader is the prefix, 1')
+  eq(health.section(report, 'Prefix mappings')[24], '- ⚠️ WARNING the leader is the prefix, 1')
 end
 
 T['the prefix mappings']['warn that a leader longer than 48 bytes, which Neovim maps as a backslash, is the prefix'] = function()
@@ -704,7 +776,7 @@ T['the prefix mappings']['warn that a leader longer than 48 bytes, which Neovim 
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[23], LEADER_WARNING)
+  eq(health.section(report, 'Prefix mappings')[24], LEADER_WARNING)
 end
 
 T['the prefix mappings']['take a leader of 48 bytes as the characters Neovim maps it to'] = function()
@@ -720,7 +792,7 @@ T['the prefix mappings']['take a leader of 48 bytes as the characters Neovim map
 
   local report = health.report(child)
 
-  eq(#health.section(report, 'Prefix mappings'), 22)
+  eq(#health.section(report, 'Prefix mappings'), 23)
 end
 
 T['the prefix mappings']['warn that the leader, the same key as a prefix in key notation, is the prefix'] = function()
@@ -737,7 +809,7 @@ T['the prefix mappings']['warn that the leader, the same key as a prefix in key 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[23],
+    health.section(report, 'Prefix mappings')[24],
     '- ⚠️ WARNING the leader is the prefix, <space>'
   )
 end
@@ -755,7 +827,7 @@ T['the prefix mappings']['take a leader written in key notation as the character
 
   local report = health.report(child)
 
-  eq(#health.section(report, 'Prefix mappings'), 22)
+  eq(#health.section(report, 'Prefix mappings'), 23)
 end
 
 T['the prefix mappings']['report the keys plugin/aineo.lua mapped to aineo, no more and no fewer'] = function()
@@ -783,6 +855,7 @@ T['the prefix mappings']['warn that the local leader, the same key as a prefix i
     '- ✅ OK <space>N runs <Plug>(aineo-new)',
     '- ✅ OK <space>pa runs <Plug>(aineo-pane-agent)',
     '- ✅ OK <space>g runs <Plug>(aineo-pane-changes)',
+    '- ✅ OK <space>pt runs <Plug>(aineo-pane-terminal)',
     '- ✅ OK <space>T runs <Plug>(aineo-tab-new)',
     '- ✅ OK <space>Q runs <Plug>(aineo-tab-close)',
     '- ✅ OK <space>1 runs <Plug>(aineo-tab-1)',
@@ -815,6 +888,7 @@ T['the prefix mappings']['take a local leader written in key notation as the cha
     '- ✅ OK <Space>N runs <Plug>(aineo-new)',
     '- ✅ OK <Space>pa runs <Plug>(aineo-pane-agent)',
     '- ✅ OK <Space>g runs <Plug>(aineo-pane-changes)',
+    '- ✅ OK <Space>pt runs <Plug>(aineo-pane-terminal)',
     '- ✅ OK <Space>T runs <Plug>(aineo-tab-new)',
     '- ✅ OK <Space>Q runs <Plug>(aineo-tab-close)',
     '- ✅ OK <Space>1 runs <Plug>(aineo-tab-1)',
@@ -842,7 +916,7 @@ T['the prefix mappings']['warn that the local leader, a Number, is the prefix'] 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[23],
+    health.section(report, 'Prefix mappings')[24],
     '- ⚠️ WARNING the local leader is the prefix, 1'
   )
   eq(#health.section(report, 'Limits'), 1)
@@ -862,7 +936,7 @@ T['the prefix mappings']['warn that a List local leader, which Neovim maps as a 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[23],
+    health.section(report, 'Prefix mappings')[24],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
   eq(#health.section(report, 'Limits'), 1)
@@ -960,6 +1034,7 @@ T['the prefix mappings']['warn of a key the user mapped, naming what it runs'] =
     '- ✅ OK \\N runs <Plug>(aineo-new)',
     '- ✅ OK \\pa runs <Plug>(aineo-pane-agent)',
     '- ✅ OK \\g runs <Plug>(aineo-pane-changes)',
+    '- ✅ OK \\pt runs <Plug>(aineo-pane-terminal)',
     '- ✅ OK \\T runs <Plug>(aineo-tab-new)',
     '- ✅ OK \\Q runs <Plug>(aineo-tab-close)',
     '- ✅ OK \\1 runs <Plug>(aineo-tab-1)',
@@ -995,7 +1070,7 @@ T['the prefix mappings']['warn of a Visual-mode key the user mapped, saying Visu
 
   eq({
     normal = health.section(report, 'Prefix mappings')[1],
-    visual = health.section(report, 'Prefix mappings')[22],
+    visual = health.section(report, 'Prefix mappings')[23],
   }, {
     normal = '- ✅ OK \\s runs <Plug>(aineo-send)',
     visual = '- ⚠️ WARNING \\s in Visual mode runs \':echo "mine"<CR>\', not <Plug>(aineo-send)',
@@ -1057,6 +1132,7 @@ T['the prefix mappings']['warn of each key nobody mapped, as after setup() chang
     '- ⚠️ WARNING ,N is not mapped',
     '- ⚠️ WARNING ,pa is not mapped',
     '- ⚠️ WARNING ,g is not mapped',
+    '- ⚠️ WARNING ,pt is not mapped',
     '- ⚠️ WARNING ,T is not mapped',
     '- ⚠️ WARNING ,Q is not mapped',
     '- ⚠️ WARNING ,1 is not mapped',
@@ -1082,7 +1158,7 @@ T['the prefix mappings']['warn that the local leader, unset and so a backslash, 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[23],
+    health.section(report, 'Prefix mappings')[24],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
   eq(health.advice(report, 'Prefix mappings'), {
@@ -1097,7 +1173,7 @@ T['the prefix mappings']['warn that the local leader, empty and so a backslash, 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[23],
+    health.section(report, 'Prefix mappings')[24],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
 end
@@ -1108,7 +1184,7 @@ T['the prefix mappings']['warn that the local leader, set, is the prefix set'] =
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[23],
+    health.section(report, 'Prefix mappings')[24],
     '- ⚠️ WARNING the local leader is the prefix, ,'
   )
 end
@@ -1157,6 +1233,8 @@ local TWIN_LINES = {
   '- ✅ OK <C-\\>pa in Insert mode runs <C-]><Esc><Plug>(aineo-pane-agent)',
   '- ✅ OK <C-\\>g in Terminal mode runs <C-\\><C-n><Plug>(aineo-pane-changes)',
   '- ✅ OK <C-\\>g in Insert mode runs <C-]><Esc><Plug>(aineo-pane-changes)',
+  '- ✅ OK <C-\\>pt in Terminal mode runs <C-\\><C-n><Plug>(aineo-pane-terminal)',
+  '- ✅ OK <C-\\>pt in Insert mode runs <C-]><Esc><Plug>(aineo-pane-terminal)',
   '- ✅ OK <C-\\>T in Terminal mode runs <C-\\><C-n><Plug>(aineo-tab-new)',
   '- ✅ OK <C-\\>T in Insert mode runs <C-]><Esc><Plug>(aineo-tab-new)',
   '- ✅ OK <C-\\>Q in Terminal mode runs <C-\\><C-n><Plug>(aineo-tab-close)',
@@ -1277,7 +1355,7 @@ T['the terminal prefix mappings']['warn of a terminal prefix that is a single pr
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Terminal prefix mappings')[41],
+    health.section(report, 'Terminal prefix mappings')[43],
     '- ⚠️ WARNING terminal_prefix is x, a printable key: typing it in Insert mode runs a twin'
   )
   eq(health.advice(report, 'Terminal prefix mappings'), {
@@ -1298,7 +1376,7 @@ T['the terminal prefix mappings']['warn of a terminal prefix that starts with a 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Terminal prefix mappings')[41],
+    health.section(report, 'Terminal prefix mappings')[43],
     ('- ⚠️ WARNING terminal_prefix %s starts with a key pair of Neovim: it waits for the next key'):format(
       prefix
     )
@@ -1600,7 +1678,7 @@ local NOT_BARE_STARTS = {
   {
     'inside-claude',
     { environment = { AINEO_ENTRY_AINEO_CHILD = '1' } },
-    "- the autostart did not run: this Neovim runs inside aineo's own Claude terminal ($AINEO_CHILD is set)",
+    "- the autostart did not run: this Neovim runs inside aineo's own Claude terminal or shell terminal ($AINEO_CHILD is set)",
   },
 }
 

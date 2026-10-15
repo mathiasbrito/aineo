@@ -32,17 +32,19 @@ that what you type next goes to Claude, unless Claude Code has exited.
 sessions Claude Code lists for the folder and opens the one you pick in a new
 tab, or moves to the tab that has it (|:Aineo-sessions|). `\N` starts a new
 Claude Code session: on a new id once Claude Code has exited, where `\o`
-resumes the last, and with `/clear` while it runs (|:Aineo-new|). `\pa` and
-`\g` switch the right column between the agent pane, the Report over Input,
-and the changes pane, and move to the Report and to the changes pane's
-commits (|aineo-panes|). `\T` opens a tab page with a Claude Code session of
+resumes the last, and with `/clear` while it runs (|:Aineo-new|). `\pa`,
+`\g` and `\pt` switch the right column between the agent pane, the Report
+over Input, the changes pane, and a shell's terminal, and move to the Report,
+to the changes pane's commits and into the shell, in Terminal mode
+(|aineo-panes|). `\T` opens a tab page with a Claude Code session of
 its own, `\1` to `\9` move to the tab page of that number, and `\Q` closes the
 current tab (|aineo-tabs|). In Visual mode, in Input, `\s` sends the
 selection alone and removes it from Input (|aineo-v_\s|).
 
 In Terminal mode and in Insert mode, `<C-\>` followed by the same letters
 does the same: `<C-\>i` moves to Input, `<C-\>r` to the Report, `<C-\>c` to
-Claude, each after leaving the mode you were in (|aineo-terminal-keys|).
+Claude, `<C-\>pt` into the shell, each after leaving the mode you were in
+(|aineo-terminal-keys|).
 
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
@@ -90,8 +92,8 @@ show one pane at a time, here the agent pane:
 - Input, `aineo://input`, takes the rest: a scratch buffer, left out of
   `:ls` and `:bnext`, where you write what Send gives Claude (|aineo-send|),
   kept as a draft until you send it (|aineo-draft|).
-- The changes pane shows in the same two windows in their place
-  (|aineo-panes|).
+- The changes pane shows in the same two windows in their place, and a
+  shell's terminal in the Report's place (|aineo-panes|).
 
 The Report and Input wrap long lines between words, a wrapped line keeping
 its indent ('wrap', 'linebreak', 'breakindent'), whatever your own settings.
@@ -111,8 +113,8 @@ a file the current window shows stays, as the file column.
 
 Panes ~
                                                                  *aineo-panes*
-The right column's two windows show one of two panes, switched in place: the
-same two windows, at the same sizes, show the other pane's buffers.
+The right column's two windows show one of three panes, switched in place:
+the same two windows, at the same sizes, show the other pane's buffers.
 
 - The agent pane: the Agent Report over Input, as the layout opens.
 - The changes pane: `aineo://changes-files` in the Report's place, over
@@ -124,24 +126,43 @@ same two windows, at the same sizes, show the other pane's buffers.
   `:edit` there writes its list again. A buffer of yours under either name,
   such as one a restored session made, gives the name up: it is wiped out,
   or kept unnamed when you changed its text.
+- The terminal pane: a shell's terminal in the Report's place, over Input,
+  which stays as it is. Its window is the Report's, at the Report's size
+  (|aineo-config-layout.report_height|). The shell is your 'shell', run
+  in the folder aineo started in, whatever `:cd` or `:tcd` says since,
+  with `$AINEO_CHILD` set in its environment, as in Claude's terminal. Each
+  tab has a shell of its own (|aineo-tabs|).
 
-`\pa` (|:Aineo-pane|) shows the agent pane and `\g` the changes pane; the
-pane already shown stays as it is (the changes pane is read again,
-|aineo-changes|), unless one of its windows shows the other pane's buffer
-there, as a refused switch or you can leave it (the commits buffer in
-Input's window, say): they then show the pane's own buffer there. Either way
-the cursor moves into the pane: into the Report under the agent pane, into
-the commits window under the changes pane, where `j` and `k` choose the
-filter. From another tab page they switch the pane in the layout's tab page,
+`\pa` (|:Aineo-pane|) shows the agent pane, `\g` the changes pane and `\pt`
+the terminal pane; the pane already shown stays as it is (the changes pane
+is read again, |aineo-changes|), unless one of its windows shows the other
+pane's buffer there, as a refused switch or you can leave it (the commits
+buffer in Input's window, say): they then show the pane's own buffer there.
+Either way the cursor moves into the pane: into the Report under the agent
+pane, into the commits window under the changes pane, where `j` and `k`
+choose the filter, and into the shell under the terminal pane, in Terminal
+mode, as `\c` enters Claude's prompt: what you type next goes to the shell.
+From another tab page they switch the pane in the layout's tab page,
 restoring the layout there first when one of its windows is gone, and move
 you there. `\r` and `\i` show the agent pane first, then move
-to the Report or Input; `\c` and `\tcn` leave the pane as it is. Send sends
+to the Report or Input, but `\i` leaves the terminal pane as it is, since
+Input shows under it; `\c` and `\tcn` leave the pane as it is. Send sends
 Input while the changes pane hides it (|aineo-send|). When a window will
 not take its buffer — 'winfixbuf' is set there, say, or you are in the
 command-line window — aineo tells you why, once, and gives each window back
 the buffer it showed. A window that will not take that one back either
 keeps the other pane's buffer; `\pa` or `\g` then shows its pane in both
 windows.
+
+The shell lives until it ends: `\pa`, `\g` and `\r` hide it and leave it
+running, and `\pt` shows the same terminal again, with its output and where it
+was scrolled, starting nothing. `\pt` starts a shell only when the tab runs
+none. When the shell ends, by `exit` with any status, or when you wipe its
+buffer with `:bdelete!` or `:bwipeout!`, its buffer is gone and the agent pane
+shows again, the Report back in its window; the cursor goes to the Report when
+it was in the shell's window. When 'shell' names a program that is not
+executable, `\pt` tells you so, once, and changes no pane. Closing a tab stops
+its shell (|aineo-tabs|).
 
 The Report and Input are kept while hidden, with Input's text and its draft.
 A buffer shown again comes back as it was scrolled. When a report arrived
@@ -150,7 +171,8 @@ where an arriving report puts it, once the agent pane shows again with the
 Report in its window — by `\pa`, `\r`, `\i` or `\o`.
 
 aineo keeps the pane shown until the editor quits: `\o` restores the layout
-with it, and so does the layout opened anew once its windows were closed.
+with it, and so does the layout opened anew once its windows were closed;
+the terminal pane is kept while its shell lives.
 
 Tabs ~
                                                                   *aineo-tabs*
@@ -159,8 +181,9 @@ several tab pages. A tab, in aineo's sense, is a tab page with the layout
 above in it. Every tab has a Claude Code, a Report, an Input and a changes
 pane of its own, and they follow that tab's session alone
 (|aineo-claude-session|): a `/clear` in one tab's Claude Code changes that
-tab's Report, Input and changes pane, and no other tab's. With one tab aineo
-behaves as it always has.
+tab's Report, Input and changes pane, and no other tab's. Every tab has its
+own shell too, when you start one with `\pt` (|aineo-panes|). With one tab
+aineo behaves as it always has.
 
 The first open of aineo in a Neovim, the autostart or `\o`, makes the current
 tab page aineo's first tab; its buffers are `aineo://report` and
@@ -227,8 +250,8 @@ cannot be made taller or its letters larger; padding makes the titles wider.
 What the actions do with tabs:
 - Every action acts on the current tab when the current tab page is an aineo
   tab. From any other tab page it acts on the aineo tab used last, and moves
-  you there: `\o`, `\r`, `\i`, `\c`, `\g`, `\pa`, `\tcn`, `\N`, `\S`, `\s` and
-  `:Aineo claim`.
+  you there: `\o`, `\r`, `\i`, `\c`, `\g`, `\pa`, `\pt`, `\tcn`, `\N`, `\S`,
+  `\s` and `:Aineo claim`.
 - A report goes to the tab whose Claude Code sent it. A session hook goes to
   the tab whose start it names. Each tab is listed among the running editors
   for its own session (|aineo-report-claims|). A report of no known session
@@ -246,9 +269,10 @@ and a tab page closed by Neovim's own commands, `:tabclose`, `:tabonly` or the
 close of its last window, closes its tab the same way: its Input's draft is
 saved, its buffers and handlers are let go (the first tab's stay, for the next
 tab opened to take up; |aineo-limits|), and its entry among the running
-editors is removed. Its Claude Code is stopped as quitting stops it (Ctrl+Z
-alone for one attached to a background session) once the command has ended,
-those of all the tab pages the command closed together, without holding the
+editors is removed. Its shell, if it runs one, is stopped and its buffer
+wiped, before its Claude Code is stopped as quitting stops it (Ctrl+Z alone
+for one attached to a background session) once the command has ended, those
+of all the tab pages the command closed together, without holding the
 editor. Its Report, draft and changes base stay on disk, under its session,
 and `\S` brings the session back in a new tab. The other tabs go on as they
 were. On the last aineo tab `\Q` quits Neovim as `:qa` does: Neovim refuses
@@ -1136,16 +1160,19 @@ only in place of a resume Claude Code has no conversation for
 			then is in |aineo-limits|.
 
                                                                  *:Aineo-pane*
-:Aineo pane {pane}	Shows {pane} in the right column, `agent` or
-			`changes` (|aineo-panes|), and moves the cursor into
-			it: into the Report for `agent`, into the commits
-			window for `changes`. When it shows already, the
-			layout stays as it is (the changes pane is read
-			again, |aineo-changes|), unless one of its windows
-			shows the other pane's buffer there: it then shows
-			{pane}'s buffer there. The cursor moves all the same.
-			Without a pane, or with anything else, it tells you,
-			with one error, which ones it takes.
+:Aineo pane {pane}	Shows {pane} in the right column, `agent`,
+			`changes` or `terminal` (|aineo-panes|), and moves
+			the cursor into it: into the Report for `agent`, into
+			the commits window for `changes`, into the tab's
+			shell for `terminal`, in Terminal mode. `terminal`
+			starts the shell, in the folder, when the tab runs
+			none. When the pane shows already, the layout stays
+			as it is (the changes pane is read again,
+			|aineo-changes|), unless one of its windows shows
+			the other pane's buffer there: it then shows {pane}'s
+			buffer there. The cursor moves all the same. Without
+			a pane, or with anything else, it tells you, with one
+			error, which ones it takes.
 
                                                                 *:Aineo-claim*
 :Aineo claim [{id}]	Claims a Claude session for this Neovim: each report
@@ -1283,6 +1310,10 @@ you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-pane-changes)
 			Does what `:Aineo pane changes` does (|:Aineo-pane|).
 
+                                                 *<Plug>(aineo-pane-terminal)*
+<Plug>(aineo-pane-terminal)
+			Does what `:Aineo pane terminal` does (|:Aineo-pane|).
+
                                                        *<Plug>(aineo-claim)*
 <Plug>(aineo-claim)	Does what `:Aineo claim` without an id does
 			(|:Aineo-claim|). It has no prefix key: map it to a
@@ -1333,6 +1364,8 @@ which has none, globally, in Normal mode, and `\s` in Visual mode too:
 \pa		|<Plug>(aineo-pane-agent)|
                                                                     *aineo-\g*
 \g		|<Plug>(aineo-pane-changes)|
+                                                                   *aineo-\pt*
+\pt		|<Plug>(aineo-pane-terminal)|
                                                                     *aineo-\T*
 \T		|<Plug>(aineo-tab-new)|
                                                                     *aineo-\Q*
@@ -1355,8 +1388,8 @@ own buffer only. A mapping you make later replaces aineo's. A mapping that
 only overlaps aineo's key is not yours in this sense: with your own `\sa`,
 aineo still maps `\s`, and `\sa` then waits for 'timeoutlen' after `\s`;
 with your own `\t` or `\tc`, aineo still maps `\tcn`, with your own `\p` — or
-`<Leader>p` while the leader is `\` — it still maps `\pa`, and with your own
-`\gs` it still maps `\g`: yours then waits for 'timeoutlen'.
+`<Leader>p` while the leader is `\` — it still maps `\pa` and `\pt`, and with
+your own `\gs` it still maps `\g`: yours then waits for 'timeoutlen'.
 
 The prefix is read once, when the editor has started (|VimEnter|): a
 `setup()` or `vim.g.aineo` that changes it later maps nothing until the next
@@ -1383,7 +1416,8 @@ abbreviation before the cursor is expanded (|i_CTRL-]|) and an insert given a
 count is repeated. `<C-\>c` enters Terminal mode in Claude's window again, as
 `\c` does, and the others leave you in Normal mode in the window they move
 to: `<C-\>pa` in the Report and `<C-\>g` in the changes pane's commits.
-Claude Code is sent none of the twin's keys.
+`<C-\>pt` enters Terminal mode in the shell's window, as `\pt` does. Claude
+Code is sent none of the twin's keys.
 
                                                                 *aineo-<C-\>o*
 <C-\>o		|<Plug>(aineo-open)|
@@ -1403,6 +1437,8 @@ Claude Code is sent none of the twin's keys.
 <C-\>pa		|<Plug>(aineo-pane-agent)|
                                                                 *aineo-<C-\>g*
 <C-\>g		|<Plug>(aineo-pane-changes)|
+                                                               *aineo-<C-\>pt*
+<C-\>pt		|<Plug>(aineo-pane-terminal)|
                                                                 *aineo-<C-\>T*
 <C-\>T		|<Plug>(aineo-tab-new)|
                                                                 *aineo-<C-\>Q*
@@ -1893,8 +1929,8 @@ order aineo looks for them:
 - Neovim read its standard input: `echo text | nvim -`;
 - Neovim was given something to do besides edit: `-c`, `-S`, `-e`, `-s`,
   `-E`, alone or among other short options (`-Rc`), or a `+` command;
-- it runs inside aineo's own Claude terminal (`$AINEO_CHILD` set and not
-  empty);
+- it runs inside aineo's own Claude terminal or shell terminal
+  (`$AINEO_CHILD` set and not empty);
 - a session was restored at startup, by a plugin such as auto-session
   from its own `VimEnter` (|v:this_session| set) — `-S` is a startup task
   above;
@@ -1938,29 +1974,33 @@ Claude Code ~
   no value after the flag. Whether aineo can write the file it passes
   them in is not checked.
 
+Shell terminal ~
+  The 'shell' the terminal pane runs (|aineo-panes|); a warning when its
+  program, the first word of the option, is not executable.
+
 Server socket ~
   The address the editor listens at (|v:servername|); an error when it
   listens nowhere, since Claude's reports could not reach it.
 
 Prefix mappings ~
-  For each prefix key, `\Q` (the close of a tab) among them, whether it
-  runs aineo's `<Plug>` mapping; a warning when it runs something of yours,
-  or nothing. The Visual-mode `\s` comes
-  last, its line saying `in Visual mode`. While aineo's |VimEnter|
-  handler, which maps the keys, has not run — the editor is still
-  starting, as when `nvim +checkhealth` runs the check before `VimEnter`,
-  or a `VimEnter` autocommand before aineo's threw an exception — one line
-  says so in place of the keys; so does one in the tick a plugin manager
-  loads aineo after startup, since the keys are mapped in the next. A
-  warning when the leader or the local leader is the prefix: with the
-  default prefix and |mapleader| or |maplocalleader| unset or `\`, these
-  warnings show. Neovim reads a leader that is a List, a Dictionary or
-  longer than 48 bytes as a backslash, and so does the check.
+  For each prefix key, `\Q` (the close of a tab) and `\pt` (the terminal pane)
+  among them, whether it runs aineo's `<Plug>` mapping; a warning when it runs
+  something of yours, or nothing. The Visual-mode `\s` comes last, its line
+  saying `in Visual mode`. While aineo's |VimEnter| handler, which maps the
+  keys, has not run — the editor is still starting, as when `nvim
+  +checkhealth` runs the check before `VimEnter`, or a `VimEnter` autocommand
+  before aineo's threw an exception — one line says so in place of the keys;
+  so does one in the tick a plugin manager loads aineo after startup, since
+  the keys are mapped in the next. A warning when the leader or the local
+  leader is the prefix: with the default prefix and |mapleader| or
+  |maplocalleader| unset or `\`, these warnings show. Neovim reads a leader
+  that is a List, a Dictionary or longer than 48 bytes as a backslash, and so
+  does the check.
 
 Terminal prefix mappings ~
-  For each key of the terminal prefix (|aineo-terminal-keys|), `<C-\>Q`
-  among them, in Terminal mode and in Insert mode, whether it leaves the
-  mode and runs aineo's `<Plug>` mapping; a warning when it runs something
+  For each key of the terminal prefix (|aineo-terminal-keys|), `<C-\>Q` and
+  `<C-\>pt` among them, in Terminal mode and in Insert mode, whether it leaves
+  the mode and runs aineo's `<Plug>` mapping; a warning when it runs something
   of yours, or nothing.
   A warning for each mode where `terminal_prefix` alone is mapped
   globally, which has no twins, or local to a buffer, which makes the key
@@ -2060,6 +2100,22 @@ A tab opened after the first has buffers named with a number that is never
 given again (`aineo://report-2`), and a `:tabclose` of the first tab leaves
 its buffers `aineo://report` and `aineo://input` in place: the next tab
 opened is made of them again.
+
+The terminal pane ~
+- `:bdelete` of a shell's terminal needs a `!`: Neovim refuses it without
+  one for every terminal that runs a job (E89). `exit` ends the shell
+  without it, and so do `:bdelete!` and `:bwipeout!`.
+- A Neovim started inside the shell does not autostart aineo, since
+  `$AINEO_CHILD` is set there, as it is in Claude's terminal
+  (|aineo-autostart|).
+- The next start brings no shell back: a shell lives as long as the Neovim
+  that started it. Quitting ends it as Neovim ends every terminal's job:
+  it hangs the shell up after aineo has stopped Claude Code, and a program
+  of the shell's that ignores the hangup, or a job it started with `nohup`,
+  outlives the editor.
+- A shell that exits in a tab page you are not in makes Neovim visit that
+  tab page and come back, while aineo shows the Report again there. The
+  cursor and the mode stay where they were.
 
 Session switches ~
 aineo learns of a switch inside Claude Code from Claude Code's session
