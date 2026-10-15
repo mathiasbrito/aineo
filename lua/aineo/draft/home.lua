@@ -808,7 +808,8 @@ function M.new(identity)
   end
 
   --- Keeps `buffer`'s text as the draft from now on, and does nothing while
-  --- it keeps it already. `plugin/aineo.lua` hands it the layout's Input.
+  --- it keeps it already. The composition root (`aineo.entry`) hands it the
+  --- layout's Input.
   ---
   --- A buffer whose text is dropped — `:edit!`, `:bdelete` — is kept again,
   --- as if handed over anew, the next time a window shows it: `:edit!` shows
@@ -920,8 +921,9 @@ function M.new(identity)
   --- handed it holding text is not
   --- checked against a held session's draft that cannot be read, and its
   --- first change replaces that draft, unwarned. A caller that holds a
-  --- session hands `keep_draft()` an empty buffer, as `plugin/aineo.lua`
-  --- does with the Input it has just made, which keeps that unreached.
+  --- session hands `keep_draft()` an empty buffer, as the composition root
+  --- (`aineo.entry`) does with the Input it has just made, which keeps that
+  --- unreached.
   ---
   --- Raises an error naming `session_id` when it is not a string, or
   --- `options` when it is not a table, and nothing else; a draft that cannot
