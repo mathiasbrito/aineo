@@ -199,11 +199,16 @@ function M.kept_tabs(state_directory, folder)
   return tab_lists.read_tab_list(state_directory, folder)
 end
 
+--- The most tabs a Neovim reopens at once.
+M.MAX_REOPENED_TABS = 20
+
 --- The tabs a Neovim reopens in `folder`: the list kept for it
 --- (`kept_tabs()`) when it holds `kept_session`, the session kept for the
---- folder as the one the next start lands in. Nil when no list is kept, the
---- list lacks that session, or none is kept for the folder: one tab then opens
---- on the kept session, as before the list was kept.
+--- folder as the one the next start lands in, cut to its first
+--- `MAX_REOPENED_TABS` sessions with its place kept within them; and the
+--- sessions cut off, in order (none for a short list). Nil when no list is
+--- kept, the list lacks that session, or none is kept for the folder: one tab
+--- then opens on the kept session, as before the list was kept.
 ---
 --- Raises nothing.
 ---
@@ -211,12 +216,15 @@ end
 ---@param folder string
 ---@param kept_session string|nil
 ---@return aineo.tabs.TabList|nil
+---@return string[]|nil left
 function M.tabs_to_reopen(state_directory, folder, kept_session)
   local list = kept_session and M.kept_tabs(state_directory, folder)
-  if list and vim.tbl_contains(list.sessions, kept_session) then
-    return list
+  if not (list and vim.tbl_contains(list.sessions, kept_session)) then
+    return nil
   end
-  return nil
+  local reopened = vim.list_slice(list.sessions, 1, M.MAX_REOPENED_TABS)
+  local left = vim.list_slice(list.sessions, M.MAX_REOPENED_TABS + 1)
+  return { sessions = reopened, current = math.min(list.current, #reopened) }, left
 end
 
 --- Has Neovim draw aineo's tab line while the user's 'tabline' is empty; a

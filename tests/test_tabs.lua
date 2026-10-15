@@ -863,4 +863,36 @@ T['tabs_to_reopen()']['gives nothing when no list is kept, or no session is kept
   eq(tabs.tabs_to_reopen(state, '/work/other', nil), nil)
 end
 
+--- Session `index` of a series of distinct ids of the form Claude Code gives.
+---
+---@param index integer
+---@return string
+local function numbered_session(index)
+  return ('%08x-0000-4000-8000-000000000000'):format(index)
+end
+
+T['tabs_to_reopen()']['gives at most 20 sessions, and the ones left over, in the order of the list'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t68-reopen-cap')
+  local sessions = vim.tbl_map(numbered_session, vim.fn.range(1, 22))
+  tabs.keep_tabs(state, '/work/project', { sessions = sessions, current = 22 })
+
+  local list, left = tabs.tabs_to_reopen(state, '/work/project', sessions[1])
+
+  eq(list, { sessions = vim.list_slice(sessions, 1, 20), current = 20 })
+  eq(left, { sessions[21], sessions[22] })
+end
+
+T['tabs_to_reopen()']['leaves none over for a list of 20'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t68-reopen-cap-none')
+  local sessions = vim.tbl_map(numbered_session, vim.fn.range(1, 20))
+  tabs.keep_tabs(state, '/work/project', { sessions = sessions, current = 5 })
+
+  local list, left = tabs.tabs_to_reopen(state, '/work/project', sessions[3])
+
+  eq(list, { sessions = sessions, current = 5 })
+  eq(left, {})
+end
+
 return T
