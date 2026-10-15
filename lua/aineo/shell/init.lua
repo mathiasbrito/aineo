@@ -127,7 +127,7 @@ local function make_shell(group_name)
     end)
   end
 
-  --- Watches the terminal `buffer` for the end of its shell and for its wipe.
+  --- Watches the terminal `buffer` for the end of its shell.
   ---
   ---@param buffer integer
   local function watch(buffer)
@@ -138,14 +138,6 @@ local function make_shell(group_name)
       callback = function()
         forget(buffer)
         wipe_later(buffer)
-      end,
-    })
-    vim.api.nvim_create_autocmd('BufWipeout', {
-      group = group_name,
-      buffer = buffer,
-      once = true,
-      callback = function()
-        forget(buffer)
       end,
     })
   end
@@ -170,8 +162,9 @@ local function make_shell(group_name)
   --- When the shell's process ends, whatever its status, the home forgets it
   --- and wipes its buffer once the autocommands of that end are done; a
   --- buffer wiped sooner — by Neovim's own handler when a shell run as
-  --- `'shell'` alone exits with status 0, or by `:bdelete!` or `:bwipeout!` —
-  --- is forgotten as it goes.
+  --- `'shell'` alone exits with status 0, by `:bdelete!` or `:bwipeout!`, or
+  --- by a command in an autocommand that is not nested, which no handler of
+  --- the home's sees — is forgotten by the next `shell_buffer()` or `start()`.
   ---
   --- Raises an error naming the setting when `settings` is not a table or
   --- `settings.cwd` is not an existing directory the editor can enter, and one naming `'shell'`
