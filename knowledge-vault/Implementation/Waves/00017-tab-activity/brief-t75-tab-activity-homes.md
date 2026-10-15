@@ -147,3 +147,14 @@ The orchestrator's verification runs `plan.md`'s T75 mutants. Name the test that
 ## The orchestrator's rulings — 2026-10-15, before dispatch
 
 The user answered U1–U3 with their (a) (`plan.md` › *The user's answers*), and `plan.md` › *The orchestrator's rulings* rules O1–O13 as their (a), A354–A366, which this brief is written for. Record them as the orchestrator's assumptions, never as the user's decisions.
+
+## Amendment — 2026-10-15, at dispatch
+
+The packet's implementer re-checked the brief's facts against `dev` `33bb82b`, which T74 (the composition root's body, now `lua/aineo/entry/`) has merged. This is the orchestrator's assumption, as A256 was; nothing here changes what to build.
+
+- **Unchanged since `42b6b4c`**, read from `git diff 42b6b4c 33bb82b` over the packet's files:
+  - `lua/aineo/claude/session_name.lua` (187 lines), `lua/aineo/tabs/init.lua` (269), `lua/aineo/tabs/tabline.lua` (90), `lua/aineo/tabs/titles.lua` (67), `lua/aineo/init.lua` (51), `tests/helpers/fake_claude.lua` (907), `tests/test_claude.lua` (1146), `tests/test_tabs.lua` (955) and `tests/test_tabs_highlights.lua` (161) have no change;
+  - `session_name.lua` › `without_status_glyph()`, `keep_name()`, `watch_title()`, `forget_name()` and `keep_name_and_folder()` read as the brief describes them, and `lua/aineo/claude/init.lua` calls the last two at lines 457 and 519;
+  - the docstrings of `lua/aineo/claude/init.lua` that describe the terminal's `b:` variables (lines 1090 and 1443) are as before.
+- **Moved:** `lua/aineo/claude/init.lua` changed in the stop functions only (`stop_sessions()` is gone, `stop_sessions_in_background()` stays), outside the packet's lines. The watcher the plan calls `redraw_tab_line_when_named()` is now `lua/aineo/entry/tab.lua` › `redraw_tab_line_when_named()`, T76's file.
+- **Session note:** `knowledge-vault/Sessions/2026-10-15 — T75 Tab activity homes.md`.
