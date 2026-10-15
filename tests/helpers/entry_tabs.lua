@@ -65,9 +65,10 @@ function M.ended_how(fake)
 end
 
 --- The autocommand groups of the second tab's copies of the homes, which
---- exist while that tab does: the layout's, the Report's, the draft's and the
---- changes pane's two.
+--- exist while that tab does: the layout's, the Report's, the draft's, the
+--- changes pane's two and the shell's.
 M.SECOND_TAB_GROUPS = {
+  'aineo.shell.2',
   'aineo.layout.2',
   'aineo_report_2',
   'aineo.draft.2',

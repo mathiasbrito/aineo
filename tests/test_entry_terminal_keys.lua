@@ -35,6 +35,7 @@ local TWIN_KEYS = {
   { 'N', '<Plug>(aineo-new)' },
   { 'pa', '<Plug>(aineo-pane-agent)' },
   { 'g', '<Plug>(aineo-pane-changes)' },
+  { 'pt', '<Plug>(aineo-pane-terminal)' },
   { 'T', '<Plug>(aineo-tab-new)' },
   { 'Q', '<Plug>(aineo-tab-close)' },
   { '1', '<Plug>(aineo-tab-1)' },
