@@ -724,7 +724,9 @@ local function make_layout(input_name, group_name)
 
   --- Closes Input's window, when it exists, keeping the view of the buffer it
   --- shows (`state.views`) for the window that shows it again. A cursor in it
-  --- goes to the window above, the Report's.
+  --- goes to the window above, the Report's, which grows into the room and is
+  --- given back the view it had, since Neovim moves the top line of a window
+  --- that changes height.
   local function close_input_window()
     if not has_window('input') then
       return
@@ -732,7 +734,14 @@ local function make_layout(input_name, group_name)
     local window = state.windows.input
     state.views[vim.api.nvim_win_get_buf(window)] =
       vim.api.nvim_win_call(window, vim.fn.winsaveview)
+    local report_view = has_window('report')
+      and vim.api.nvim_win_call(state.windows.report, vim.fn.winsaveview)
     vim.api.nvim_win_close(window, false)
+    if report_view and has_window('report') then
+      vim.api.nvim_win_call(state.windows.report, function()
+        vim.fn.winrestview(report_view)
+      end)
+    end
   end
 
   --- Makes the layout's three windows in the current tab, closing its other
@@ -1182,8 +1191,9 @@ local function make_layout(input_name, group_name)
   end
 
   --- Opens Input's window below the Report's, or as the rightmost column when
-  --- the Report's is closed too, showing the buffer `pane` shows there, puts
-  --- the proportions back and gives the window the view kept for that buffer,
+  --- the Report's is closed too, showing the buffer `pane` shows there, gives
+  --- the Report its share of the column (also with Claude's window closed),
+  --- puts the proportions back and gives the window the view kept for that buffer,
   --- once the window has its size.
   ---
   ---@param pane aineo.layout.Pane
@@ -1193,6 +1203,9 @@ local function make_layout(input_name, group_name)
       or { split = 'right', win = -1 }
     state.windows.input = vim.api.nvim_open_win(buffer, false, place)
     pin_windows()
+    if has_window('report') then
+      size_right_column()
+    end
     keep_proportions()
     restore_view(state.windows.input, buffer)
   end
