@@ -1,14 +1,14 @@
 ---
 wave: 00016
-status: planned
+status: landed
 rolling: true
 planned_by: the orchestrator's planning agent (Claude, Opus 5.5) for the user
 planned_at: 2026-10-14
 base: e05a1e3
 claimed_by:
 claimed_at:
-landed_at:
-pull_requests:
+landed_at: 2026-10-15
+pull_requests: "#211, #215, #219, #220"
 ---
 
 # Wave 16 — a shell terminal pane in the right column
@@ -230,4 +230,63 @@ The user told the orchestrator to finish wave 15 and this wave without waiting f
 
 ## Landed
 
-*(Written by the knowledge pass.)*
+Written 2026-10-15 by the knowledge pass of waves 15 and 16, on `dev` `ab50818`. Both packets are merged; the wave's releases are v0.2.35 (T69, with wave 15's T67) and v0.2.38 (T70), and T72, a small packet outside the plan, shipped in v0.2.36. The rulings below are the orchestrator's assumptions under the user's instructions of 2026-10-06 and 2026-10-14 (“finish the wave, do not wait for me. Also start the next one and move until the end...”). The user's decisions are D68 (the third pane on the right, one per tab, of 2026-10-14) and, for T72, D71 (the tab line's look, of 2026-10-15); everything the plan's O1–O14 rule is the orchestrator's. The session notes hold each packet's commits, mutants and departures.
+
+### The plan — PR #211, merged by rebase (`dev` `5ab4cf4`, `4243d8c`)
+
+The plan and the orchestrator's rulings A279–A292 (O1–O14, each the plan's (a), in order), as two commits. It was written while wave 15's stage 1 ran, and built after T66 merged (A257).
+
+### T69 — PR #215, merged by rebase (`dev` `c551c1a`), released in v0.2.35 (PR #217, `main` `6ccd054`)
+
+`ee777a7` … `20511a9` on the branch, `6366eaa` … `c551c1a` on `dev` (10 commits). Session note: [[Sessions/2026-10-15 — T69 Terminal pane]]. Dispatched on `dev` `1f771ea` beside T67, with a dated amendment of the facts re-checked there.
+- **The packet** (whole suite 3764, 3781 after the fix round, 28 mutants). `aineo.layout` gains the pane `terminal`: the tab's shell in the Report's window over Input, switched in place as the other two, the agent pane shown again in place when the shell ends. A new `lua/aineo/shell/` starts `'shell'` in an unlisted terminal in the folder it is given, with `AINEO_CHILD=1`, wipes it when the shell ends, and stops it when let go; one copy per tab through `new()`. `plugin/aineo.lua` is untouched: no key, no help, no health line, so no behaviour change for the user.
+- **Reviews.**
+  - *Attack (`neovim-lua-reviewer`, Opus):* HIGH, a shell wiped where no handler sees it (the closed tab's page, a command) left the tab broken; the shell home's `jobstop()` before the delete was not equivalent under textlock; a folder the shell cannot enter, the `'shell'` split and the window that refuses the agent pane (`'winfixbuf'`) each left a smaller fault; one finding informational.
+  - *Tests and records (`records-reviewer`, Sonnet):* sound; five low findings — the `validate` call uncased, a case killing a mutant by a crash, the amendment's wording, gaps in the mutants' IDs, and the exit-status gap, left.
+- **Fix round** by the author (A308–A313): a shell wiped where no handler sees it leaves the tab working (A308); `jobstop()` stays in `stop()` before the delete (A309); a folder the shell cannot enter is refused before the start (A310); `'shell'` is split exactly as `:terminal` splits it (A311); when the shell ends only the windows its wipe closed are reopened (A312); under `'winfixbuf'` no warning for a failure that fixes itself a tick later (A313). The `BufWipeout` handler no case needed was dropped.
+- **The orchestrator's check** on `dev` `1f771ea` plus T69: 3781 cases, `Fails (0)`, lint clean; the mutants on A308 (4 failures) and A309 (1) killed.
+- **Departures.** The pane has no key until T70, so it has no release of its own (A317); it ships in v0.2.35 with T67, as T24 and T25 did. Terminal mode on arrival was probed only headless and is T70's.
+
+### T72 — the tab line's look, a small packet outside the plan, PR #219, merged by rebase (`dev` `12eb62c`), released in v0.2.36 (PR #221, `main` `984cc36`)
+
+`39c8acf` … `72e0399` on the branch, `532728c` … `12eb62c` on `dev` (2 commits). Session note: [[Sessions/2026-10-15 — T72 Tab line style]]. It belongs to neither wave's plan: it is the user's request of 2026-10-15 about the tab line, dispatched after the user's “ok, add these choices to aineo”, beside T68's fix round and T70 (A325, A333). It is written here, with wave 16, because the tab line is a pane's look and the wave's last packets ran with it.
+- **The user's words** are in D71, verbatim. The packet builds the selected tab in bold and the other tabs readable; the font size cannot change in a terminal, and the user was told so.
+- **The packet** (a small fix in the user's prompt-driven waves, D30; 15 mutants). `lua/aineo/tabs/highlights.lua` defines `AineoTabLineSel`, `AineoTabLine` and `AineoTabLineFill` as defaults and again after a colour scheme; the tab line draws with them; the setting `tabs.padding` (default 2) pads each title and counts in the width the line fits; the help's *aineo-tabline*.
+- **Review.** One review (`records-reviewer`, Sonnet): changes requested — four survivors (the padding in the fit, the cterm colours), the padding unbounded (`math.huge` raised from `string.rep`, `1e9` froze the line), the sentence of *aineo-tabs* naming the old groups, A332 not named as an assumption, and a flip of `'background'` that dropped the `default` flag.
+- **Fix round** by the author (A338–A340): `tabs.padding` is a whole number from 0 to 8, refused otherwise, so `:checkhealth aineo` names it and the draw uses the default (A338); T72 owns the one stale sentence of *aineo-tabs* (A339); the groups are defined again on `OptionSet background` as well as `ColorScheme`, and a group counts as aineo's while it still holds what aineo defined (A340). The four survivors are pinned.
+- **The orchestrator's check** on `dev` plus T72: 3856 cases, `Fails (0)`, lint clean; the fit mutant (1 failure) and the cterm mutant (2) killed.
+- **Departures.** A332 — “the color you proposed” read as the first proposal, Normal's foreground over TabLine's background — is the orchestrator's reading; the orchestrator told the user to say if the fixed colours were meant. The new edge `aineo.tabs` → `aineo.config` (A334) went into the modularity skill's direction table with PR #225.
+
+### T70 — PR #220, merged by rebase (`dev` `acc0b91`), released in v0.2.38 (PR #224, `main` `5722c77`)
+
+`4dc080e` … `7f05511` on the branch, `8aabd4d` … `acc0b91` on `dev` (9 commits). Session note: [[Sessions/2026-10-15 — T70 Terminal pane key]]. Dispatched on `dev` `5b99ffc` beside T68, with its hunks of `plugin/aineo.lua` and the help kept apart from T68's (A323), and replayed onto `dev` once T68's re-application had merged; its brief carries a dated amendment (the merged names, where the close stops the shell).
+- **The packet** (whole suite 3881, 3888 after the fix round, 27 mutants). `:Aineo pane terminal`, `<Plug>(aineo-pane-terminal)`, `\pt` and `<C-\>pt` start the current tab's shell in the folder when it runs none, show it in the terminal pane and land in it in Terminal mode; a tab's close stops its shell before its Claude Code's stop; `:checkhealth aineo` lists the keys and says which `'shell'` the pane runs; the help covers the pane, the command, the mappings, the health lines and LIMITS. 30 cases in the new `tests/test_entry_terminal_pane.lua`.
+- **Reviews.**
+  - *Attack (`neovim-lua-reviewer`, Opus):* no high or medium finding; a shell started by `\pt` leaked when the layout then could not open; the health check read `'shell'` by rules other than `:terminal`'s; the folder-gone message used the setting's words; four more findings refuted — the stop inside `TabClosed` is sound.
+  - *Tests and records (`records-reviewer`, Sonnet):* no blocker; five low text defects (the health check's claim about `'shell'`, docstrings, the help's overlap of `\p` with `\pt`, counts, the mutant table), and notes on a hiding case, on mutant Q1, and on the plan's mutant 5.
+- **Fix round** by the author (A341–A343): a shell this call started is stopped when the layout cannot open (A341); the health check reads `'shell'` by Neovim's word rules, and exporting the program from `aineo.shell` is left for the refactor packet (A342); a folder that is gone is told in the user's words (A343). The nested Neovim of the brief's item 11 is pinned in parts, not end to end, under the user's rule of 2026-10-11 against over-testing; the attack review's probe, a `nvim` typed into the shell, recorded `inside-claude`, and the same command under `env -u AINEO_CHILD` recorded `opened`.
+- **The orchestrator's check** on `dev` `579660a` plus T70: 3971 cases, `Fails (0)`, lint clean; the mutants on A341 (1 failure) and on the first tab's shell stop (2) killed.
+- **Departures.** Mutant Q1 (`detach = true` on the shell's job) survives the quit case: a pty job ends on the hangup of its terminal whether or not Neovim hangs it up first, so the case pins that nothing of aineo's keeps the shell alive through `:qa`, and no mutant of T70's code reaches it. The close first ran the copy's `let_go()` from `finish()`, which broke T66's pin of the second tab's groups; it runs from `release()` now, and the first tab's shell is stopped at the head of `finish_closing()` (the brief's amendment carries the correction). `plugin/aineo.lua` is the largest it has been (A303).
+
+### Dated note on the plan's mutant 5, 2026-10-15
+
+The plan's T70 mutant 5 reads: “`terminal` left out of `SUBCOMMAND_WORDS`. `:Aineo pane terminal` is refused with the usage line.” That does not hold on the merged tree. `ACTIONS` lists the command `pane terminal` by name, so `:Aineo pane terminal` still runs when `terminal` leaves `SUBCOMMAND_WORDS`. What the words feed — `ACTION_ARGUMENTS`, the completion and the `\pt` and `<Plug>` doors — does fail. The author narrowed the mutant to the doors group: two of its three doors (`\pt`, `<Plug>(aineo-pane-terminal)`) fail by assertion, and on the 15 cases of the doors and the twin it fails 13 (11 by assertion, 2 by a Lua error where the shell buffer is nil). The tests-and-records review measured the same.
+
+### Rulings made at the dispatches and fix rounds — the orchestrator's assumptions
+
+A279–A292 are O1–O14 of the plan's *Decisions for the orchestrator*, each the plan's (a), in order: two packets in two stages (A279); models and reviews (A280); both regular (A281); the Report's window with Input under it (A282); `\i` leaves the shell shown and `\r` shows the agent pane first (A283); `\pt` with its `<Plug>` and twin (A284); a home of its own, `lua/aineo/shell/` (A285); `'shell'` as `:terminal` runs it (A286); the folder (A287); the editor's environment with `AINEO_CHILD=1` (A288); Terminal mode on every arrival (A289); every end shows the agent pane (A290); a tab's close stops the shell, the quit adds nothing (A291); the health check and the help (A292). In one line each, after them:
+- **A308–A313 (T69)** a shell wiped unseen leaves the tab working; `jobstop()` kept before the delete; a folder the shell cannot enter refused; `'shell'` split as `:terminal` splits it; only the windows its wipe closed reopened; no warning for a failure that fixes itself.
+- **A317** T69 alone gets no release. **A323** T70 dispatched beside T68, replayed after it. **A325, A332–A334, A338–A340 (T72)** the packet's groups, the colour's reading, the dispatch beside T68 and T70, the edge to the configuration, the padding's bounds, the one sentence of *aineo-tabs*, the redefinition on `'background'`.
+- **A341–A343 (T70)** a shell the layout could not show is stopped; the health check's word rules; a gone folder in plain words.
+
+### Wave 16 closed
+
+Wave 16 landed on 2026-10-15. Its packets are T69 (PR #215, v0.2.35), the third pane and the shell home; T72 (PR #219, v0.2.36), the tab line's look, a small packet outside the plan; and T70 (PR #220, v0.2.38), the key, the close of a tab's shell, the health check and the help. The suite grew from 3826 cases on T67's check, where T69 was already merged, to 3971 on the last whole run. Retrospective: [[Sessions/2026-10-15 — Waves 15 and 16 retrospective]].
+
+**Open threads at the close:**
+- **The user's checks M1–M3 of this wave** (*Checks for the user*, above), with the real shell: the same shell after `\pa` and `\pt`, in Terminal mode; `exit` bringing the Report back with the cursor in it; one shell per tab. Wave 15's M1–M3 and M3 of T68, `\N`'s M1–M3, and M9 and M10 are listed in [[Implementation/Waves/00015-tabs/plan]] › *Wave 15 closed*.
+- **`plugin/aineo.lua` is past 2600 lines**, and the shell program's reading is copied between `aineo.shell` and the health check (A342): a refactor packet (A303, A316, A342).
+- **The nested Neovim** in the shell is pinned in parts (the shell's `AINEO_CHILD`, the autostart's refusal, the health line), not end to end.
+- **A shell that ignores the hangup** is T69's recorded limit; mutant Q1 cannot show otherwise on Neovim 0.12.5.
+- **Flakes still known:** the `test_entry_panes.lua` command-line-window cases, and the `test_changes_keys.lua` v:errmsg race in the cases T71 did not change.
+- **The colour of the inactive tabs** is the orchestrator's reading (A332); the user may say the fixed colours were meant.

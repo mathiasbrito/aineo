@@ -126,8 +126,9 @@ The fixed waits that prove an absence stay where no event exists to wait on: `vi
 
 ## Task lines
 
-- [ ] T67 — held; the knowledge pass marks it after the merge. Decided on the line: the pick no longer refuses when the current tab's Claude Code has exited or a claim was made meanwhile; the list still refuses while the current tab's Claude Code is not ready; `stop_sessions()` is unused and left; the stop of a closed tab is in the background (A306) and a tab opened while the first tab still stops is made of copies.
+- [X] T67 — held; the knowledge pass marks it after the merge. Decided on the line: the pick no longer refuses when the current tab's Claude Code has exited or a claim was made meanwhile; the list still refuses while the current tab's Claude Code is not ready; `stop_sessions()` is unused and left; the stop of a closed tab is in the background (A306) and a tab opened while the first tab still stops is made of copies.
 
 ## Commits
 
-*Recorded after the merge.*
+- PR #216, `feature/t67-tab-pick-close`, head `1732462` (7 commits), merged by rebase into `dev` as `48df991` (the brief's amendment at dispatch), `aa52db9` (a pick of `\S` in a new tab, and `\Q`), `4c9bb19` (the pick after the first tab closed, and the refused quit, pinned), `afcb72b` (this note), `c970f30` (the fix round: the close-stop of a reused tab, the closing pick, two tabs on one session), `d44ad8b` (the marks-none case sees a start still waiting for the list), `5b99ffc` (the fix round in this note).
+- Released in v0.2.35 (PR #217, `main` `6ccd054`).

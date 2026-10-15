@@ -141,4 +141,5 @@ Each fix has a case seen red first, except where said. Measured on Neovim 0.12.5
 
 ## Commits
 
-Recorded after the merge.
+- PR #220, `feature/t70-terminal-pane-key`, head `7f05511` (9 commits), merged by rebase into `dev` as `8aabd4d` (the brief's amendment at dispatch), `02ffb4d` (the key and the close of a tab's shell), `c974099` (the terminal pane's keys and shell in the health check), `4962d47` (the help), `0f49dd1` (this note and the correction of the amendment), `1b819b0` (the count of the first-tab cases corrected), `583e1ce` (a shell the layout could not show is stopped; a gone folder said in plain words), `f186812` (the health check reads `'shell'` by Neovim's word rules), `acc0b91` (the help's overlap of `\p` with `\pt`; the fix round in this note).
+- Released in v0.2.38 (PR #224, `main` `5722c77`).

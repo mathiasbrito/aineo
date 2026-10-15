@@ -1,14 +1,14 @@
 ---
 wave: 00015
-status: planned
+status: landed
 rolling: true
 planned_by: the orchestrator's planning agent (Claude, Opus 5.5) for the user
 planned_at: 2026-10-14
 base: 1354cad
 claimed_by:
 claimed_at:
-landed_at:
-pull_requests:
+landed_at: 2026-10-15
+pull_requests: "#203, #205, #206, #207, #208, #209, #210, #212, #213, #216, #222"
 ---
 
 # Wave 15 — tabs: several Claude Code sessions of one folder in one Neovim
@@ -405,4 +405,147 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 
 ## Landed
 
-*(Written by the knowledge pass.)*
+Written 2026-10-15 by the knowledge pass of waves 15 and 16, on `dev` `ab50818`. Every packet is merged; the wave's releases are v0.2.34, v0.2.35 and v0.2.37 (wave 16's, v0.2.36 and v0.2.38, are in [[Implementation/Waves/00016-terminal-pane/plan]] › *Landed*). The rulings below are the orchestrator's assumptions under the user's instruction of 2026-10-06 and of 2026-10-14 (“finish the wave, do not wait for me. Also start the next one and move until the end...”). None is a decision of the user's and none is a D row. The user's own decisions are three, all of 2026-10-15: D69 (a tab's title is `<number>: <session name>`), D70 (a new tab opens at the end) and D71 (the tab line's look, wave 16's T72), each quoted in [[Planning/aineo — v1 agent console]]. Wave 15's U1–U3 are the user's answers of 2026-10-14, given before dispatch. D63–D67 stay *proposed* where nothing the user said confirmed them (their dated notes say which parts). The session notes hold each packet's commits, mutants and departures.
+
+### The plan — PR #203, merged by rebase (`dev` `4f41051`, `9ca0abc`)
+
+PR #201 was closed and its plan applied again as #203 (a three-way merge of the rows, with `dev`'s own kept), together with the user's U1–U3 and the rulings O1–O22 as A234–A255, each the plan's (a). Stage 1 was dispatched on `dev` `9ca0abc`: T60, T61 and T63 first, then T62 and T65 as slots freed, T64 once T61 had merged.
+
+### T60 — PR #205, merged by rebase (`dev` `5942eba`), released in v0.2.34 (PR #214, `main` `8fe30d0`)
+
+`dc34136` … `ea12e54` on the branch, `ac29341` … `5942eba` on `dev` (2 commits). Session note: [[Sessions/2026-10-14 — T60 Layout copies]].
+- **The packet** (whole suite 3228, 3241 after the fix round). `aineo.layout.new()` makes a layout of its own — three windows, Input (`aineo://input-<n>`), file column, proportions, handlers (group `aineo.layout.<n>`) — and the module serves as the first, so no caller and no suite moved.
+- **Reviews.**
+  - *Attack (`neovim-lua-reviewer`, Opus):* the design holds; a layout had no way to be let go; a reloaded module's `new()` could adopt a live layout's Input; `columns.windows_between()` could answer windows no row held; a closed tab's layout rebuilds itself in the current tab (T66's).
+  - *Tests and records (`records-reviewer`, Sonnet):* five handlers of a `new()` layout were pinned by no case, and the plan's mutant 3 survived.
+- **Fix round** by the author (A258–A260; A261 handed to T66): `let_go()`; `new()` skips a number whose group exists; `windows_between()` returns no windows when no row holds them; cases for the five handlers and the file column. 47 cases in `tests/test_layout_copies.lua`.
+- **The orchestrator's check:** the whole run gave 3241 cases with one failure, the `test_entry_panes.lua` command-line-window case; alone it failed 2 of 3 on T60 and 0 of 2 on `dev` at a load of about 90. The merge was held (A264) until the author measured it 40 of 40 passing on T60 and 40 of 40 on `dev`: a flake, not a regression. Stage 1 was not released alone (A264); it shipped with stage 2.
+- **Departures.** None; A256's re-check of the brief's facts found none moved.
+
+### T63 — PR #206, merged by rebase (`dev` `3f18402`), released in v0.2.34
+
+`174b835` … `dc08a69` on the branch, `4a25e9c` … `3f18402` on `dev` (2 commits). Session note: [[Sessions/2026-10-14 — T63 Changes copies]].
+- **The packet** (whole suite 3207, 3211 after the fix round). `aineo.changes.new()`: a changes home of its own, its buffers under `aineo://copy<n>/…`, its groups suffixed `_copy<n>`; the module is the first home; `F`'s context stays one per editor (D48).
+- **Reviews.**
+  - *Attack:* no breach by code reading; a shared-counter gap (`mE`, `mR`) in the tests; a reload could reuse a live copy's label.
+  - *Tests and records (partial, saved when the host suspended):* mutant `m3b` survived, and its case was built; eight uses of a helper, not five.
+- **Fix round** by the author (A262, A263): `new()` takes the next label whose group and both pane names are free; `keeping_failure_told` stays per home, one warning per tab.
+- **The orchestrator's check** on `dev` `5942eba` plus T63: 3258 cases, `Fails (0)`, lint clean; the mutant `mE` (the enters hoisted) killed.
+- **Departures.** None from the brief. `changes/copy.lua` holds the home as one function of about 1800 lines; splitting it is a refactor for its own packet.
+
+### T61 — PR #207, merged by rebase (`dev` `5065812`), released in v0.2.34
+
+`577dc8f` … `abac959` on the branch, `1b38339` … `5065812` on `dev` (6 commits). Session note: [[Sessions/2026-10-14 — T61 Claude copies]]. Its brief carries a dated amendment at dispatch for the facts that had moved.
+- **The packet** (whole suite 3214, 3225 after the fix round). `aineo.claude.new()` makes a session home of its own — start, join, status, prompt, writes, hooks; a session hook reaches the copy whose start its token names; quitting stops every copy's Claude Code at once (two fakes: 4.4 s, against 8.9 s one after another); Send writes from a given Input to a given copy.
+- **Reviews.**
+  - *Attack (`neovim-claude-code-reviewer`, Opus):* a copy's stop failed while its start waited for the list and while an automatic restart raced it (T67's `\Q` builds on it); Send's target was unvalidated; two copies on one session were unpinned.
+  - *Tests and records:* the first copy's hook unpinned (B3); mutant M12 not equivalent; M9 killed by an error only.
+- **Fix round** by the author (A265, A266): a copy is stopped in every state (the start is marked `stopped`, and a launch or restart refuses it); Send's target is validated; the routing is pinned. A265 and its cases were written red first.
+- **The orchestrator's check** on `dev` `a00802f` plus T61: 3371 cases, `Fails (0)`, lint clean; the stopped-mark mutant killed (2). The one failure of the first run, `test_changes_worktrees.lua` › *a list of worktrees that fails*, was in a file the packet did not touch (T71).
+- **Departures.** Stopping a Claude Code that has already exited presses no key (A266). `started_homes` never forgets a home, which T67 needed.
+
+### T65 — PR #208, merged by rebase (`dev` `a00802f`), released in v0.2.34
+
+`b2b9a40` … `bfe7d23` on the branch, `e3806fa` … `a00802f` on `dev` (2 commits). Session note: [[Sessions/2026-10-14 — T65 Tabs home]].
+- **The packet** (whole suite 3300, 3323 after the fix round; `tests/test_tabs.lua` 59, then 82 cases). A new `lua/aineo/tabs/` — `init.lua`, `titles.lua`, `tabline.lua`, `tab_list.lua` — holds the tab pages aineo shows a session in, gives each its number (its place, U3) and title, draws the tab line while the user's `'tabline'` is empty, finds the tabs held that closed, and keeps the folder's list of tabs.
+- **Reviews.**
+  - *Attack (`neovim-lua-reviewer`):* the tab line could hide the numbers when titles were long; a NUL in a name broke the line; the cut split a grapheme; a list could repeat a session id; `hold(0)`; a buffer name's trailing `/`; `keep_tabs` wrote what it did not check.
+  - *Tests and records:* the click number of the tab line, and an empty or non-string name, were unpinned; records slips; a duplicated cut.
+- **Fix round** by the author (A267–A273): only whole titles are drawn, so every title shows its number; a NUL name falls back; the cut keeps whole characters; a list with a repeated id is refused; `hold()` refuses a handle below 1; a trailing `/` is stripped; `keep_tabs` writes only a valid list and says so.
+- **The orchestrator's check** on `dev` `3f18402` plus T65: 3340 cases, `Fails (0)`, lint clean; the NUL mutant killed.
+- **Departures.** None from the brief. The modularity skill's table of homes lacked `aineo.tabs`: an `ai/` change, made with PR #225 after wave 16. The packet's report was written outside its worktree, which did no harm.
+
+### T62 — PR #209, merged by rebase (`dev` `e05a1e3`), released in v0.2.34
+
+`9a10069` … `1a1fb92` on the branch, `a1b29fb` … `e05a1e3` on `dev` (3 commits). Session note: [[Sessions/2026-10-14 — T62 Report and draft copies]].
+- **The packet** (whole suite 3279, 3304 after the fix round). `aineo.report.new()` and `aineo.draft.new()`; a report the editor receives reaches the copy a router chooses, the module's own copy when none is given.
+- **Reviews.**
+  - *Attack (`neovim-lua-reviewer`):* a report or Input text before a copy's first follow landed in another tab through the directory files they share; a router that is a proxy could hang the delivery (mutant m6 reachable); a reload could take a live copy's names; a routerless report of no known session skipped the router (T64's).
+  - *Tests and records:* the router's options unpinned; mutant d8 not equivalent; m6 killed by an error, not an assertion; counts; a draft docstring.
+- **Fix round** by the author (A274–A276; A277 handed to T64): a copy before its first follow keeps its report in its own session's records and its draft in a file named for the copy; a weak-keyed registry of copies refuses a router that answers with a proxy; `new()` creates its group inside itself.
+- **The orchestrator's check** on `dev` `5065812` plus T62: 3417 cases, `Fails (0)`, lint clean; the label mutant killed.
+- **Departures.** 46 cases after the fix round, not the brief's twelve: the extra are pins of state kept apart, each from a mutant that survived without it.
+
+### T64 — PR #210, merged by rebase (`dev` `ef2ebaf`), released in v0.2.34
+
+`b610ac9` … `ba0d189` on the branch, `c659cde` … `ef2ebaf` on `dev` (6 commits). Session note: [[Sessions/2026-10-14 — T64 Report offers per tab]]. Dispatched on `dev` `5065812` with A277 folded into its brief.
+- **The packet** (whole suite 3391, 3393 after the fix round). Every report offer carries `options.start_token`; the list of running editors holds one file per tab; quitting removes every entry of the address; a relay of today's version reads the entries unchanged. Stage 1 was complete with it.
+- **Reviews.**
+  - *Attack (`neovim-claude-code-reviewer`):* a report with no known session from tab 2 landed in tab 1 even with a router, because T62's copy rule takes it only while a copy follows none (A293, handed to T66); `remove_entries_of()` read the list after the offers.
+  - *Tests and records:* the prune of case 19 unpinned; a docstring; two subjects over 72 characters, left since the history was pushed.
+- **Fix round** by the author (A294; A293 handed to T66): `remove_entries_of()` removes from the list read before the offers, with a case.
+- **The orchestrator's check** on `dev` `4243d8c` plus T64: 3439 cases, `Fails (0)`, lint clean; its mutant `M-l` killed. The packet's own whole runs failed one or two cases of other homes under load (`test_changes_copies.lua`, `test_changes_keys.lua`), which T71 hardened.
+- **Departures.** None from the brief; the facts T48 part 2 might have moved had not moved.
+
+### T71 — a test-only packet outside the plan, PR #212, merged by rebase (`dev` `21451a3`), released in v0.2.34 with T66
+
+`cd6cc71` on the branch. Session note: [[Sessions/2026-10-15 — T71 Changes flakes]]. Dispatched on `dev` `ef2ebaf` beside T66.
+- **The packet** (test-only under D28, A295). Three cases of the changes suites that failed in whole runs on a loaded host and passed alone: *a list of worktrees that fails* waits for the files window as it waits for the commits window; the changes copies' filter case waits for both commits windows before it presses a line; the keys case for `h` calls the mapping instead of typing the key, because `type_keys()` raises what `v:errmsg` holds after each key and a told failure sets it. The first two failed 3 of 8 runs under load before and 0 of 8 after; the third failed 0 of 8 under load and 1 of 10 alone before, and 0 of 8 and 0 of 30 after.
+- **Review.** `records-reviewer` (Sonnet): merge; three of three mutants killed; one wording nit in the session note, left (A296).
+- **The orchestrator's check** on `dev` plus T71: 3439 cases, `Fails (0)`, lint clean.
+- **Departures.** No release of its own: a test-only packet ships in the next feature release (A297). Other keys cases that stub a failing read and press a key share the `v:errmsg` race; none failed.
+
+### T66 — PR #213, merged by rebase (`dev` `1f771ea`), released in v0.2.34 (PR #214, `main` `8fe30d0`)
+
+`241ffb4` … `97cbaa5` on the branch, `b8c4583` … `1f771ea` on `dev` (6 commits). Session note: [[Sessions/2026-10-14 — T66 Tabs]]. Dispatched on `dev` `ef2ebaf` after T64, with its dated amendment (A278: the stage-1 names, A258, A261, A277, and the report of no known session, A293).
+- **The packet** (whole suite 3666 in 96 files, 66 entry cases). The composition root made per tab: one Claude Code, Report, Input and changes pane per tab from the homes' copies; `:Aineo tab new`, `\T` and `<C-\>T`; `\1`…`\9`, their twins and `:Aineo tab {n}`; titles and the tab line; reports routed to the tab whose Claude Code sent them, hooks to the tab whose start they name, one running-editor entry per tab; a tab closed by Neovim's commands stops its Claude Code and lets its copies go; the health check and the help.
+- **Spec conflicts** the author reported, ruled before the reviews (A298–A303): the first tab keeps `getcwd()`, every later tab starts in the folder (A298); when tab 1 closes the modules' homes are reused by the next tab (A299); the token's tab takes an `at_start` offer (A300); the edge `aineo` → `aineo.tabs` is accepted (A301); the 66 cases stand (A302); moving `make_tab` and the registry out of `plugin/aineo.lua` is deferred (A303).
+- **Reviews.**
+  - *Tests and records (`records-reviewer`):* HIGH, the closed first tab's running-editor entry was rewritten; MED, a reused module tab started in `getcwd()`; survivors `MA` and `MB`; two records slips.
+  - *Attack (`neovim-claude-code-reviewer`), eight findings:* a reused tab inherited the claim and draft; the same `getcwd()`; a close froze the editor for 4.5–22 s; a report of no known session was shown in tab 1; the entry rewrite; a Visual Send regression; a timer leak; a tab number past the count.
+- **Fix round** by the author (A304–A307): no fallback for a report of no known session that no tab takes, and the relay answers failed (A304); the close is deferred and every tab one command closed is stopped jointly (A305); the stop on a tab close must not hold the editor — T67's (A306); a tab number past the count warns with the words typed (A307).
+- **The orchestrator's check** on `dev` `21451a3` plus T66: 3681 cases, `Fails (0)`, lint clean; the `is_released` guard mutant (2 failures) and A304's declined-to-delivered mutant (1) killed.
+- **Departures.** 66 entry cases against the brief's thirty; the first tab keeps `getcwd()` where the brief's item 1 and O8 disagreed (A298). `plugin/aineo.lua` is about 2500 lines (A303).
+
+### T67 — PR #216, merged by rebase (`dev` `5b99ffc`), released in v0.2.35 (PR #217, `main` `6ccd054`)
+
+`3444ad6` … `1732462` on the branch, `48df991` … `5b99ffc` on `dev` (7 commits). Session note: [[Sessions/2026-10-15 — T67 Tab pick and close]]. Dispatched on `dev` `1f771ea` beside T69, with its dated amendment.
+- **The packet** (whole suite 3721 in 98 files, 13 mutants). `\S` opens its pick in a new tab, or moves to the tab that shows the session, and the list marks `[tab <n>]`; `:Aineo tab close`, `\Q` and `<C-\>Q` close the current tab as U1 answers (on the last aineo tab, `:qa`); the stop of a closed tab runs from a timer, so the editor keeps answering keys (A306), and the quit keeps its blocking stop; a new `tests/test_claude_stop_background.lua`.
+- **Rulings on the packet's readings** (A314–A316): a pick no longer refuses on “Claude Code exited” or a claim made while the menu was open; the list, the standing and a new tab's start use the editor's folder; the now-unused `stop_sessions()` stays for the refactor packet.
+- **Reviews.**
+  - *Tests and records:* MED, a false docstring (`:tabclose` with an unsaved buffer hidden); a cascade in the quit cases; survivor `M-B`; A314–A316 unrecorded; fixed waits.
+  - *Attack (`neovim-claude-code-reviewer`):* MED, a tab opened in the tick another closed killed the new Claude Code; a pick resumed a session whose closed tab still stopped; with two tabs on one session a pick could move the user; a docstring.
+- **Fix round** by the author (A318–A320): `finish_closing()` runs first in `new_tab()`; a pick of a session whose closed tab still stops is refused, naming it; with two tabs on one session a pick stays in a tab that shows it, else goes to the lowest-numbered one. 3726 cases.
+- **The orchestrator's check** on `dev` `c551c1a` plus T67: 3826 cases, `Fails (0)`, lint clean; the mutants on A318 (1 failure) and A320 (2) killed.
+- **Departures.** The boundary widened to `lua/aineo/claude/stop.lua` and `init.lua`, as the brief's amendment declares. The folder's list of tabs, which a close must leave (U1), is T68's.
+
+### T68 — PR #222 (#218 closed, applied again), merged by rebase (`dev` `579660a`), released in v0.2.37 (PR #223, `main` `b5aa8d4`)
+
+`2b51c0e` … `a76a4af` on the branch (14 commits), `a4851a3` … `579660a` on `dev`. Session note: [[Sessions/2026-10-15 — T68 Tab reopen]]. Dispatched on `dev` `5b99ffc` with its dated amendment and the user's title decision (D69, A321, A322).
+- **The packet** (whole suite 3861, 28 mutants). The folder keeps the ordered list of its tabs' sessions and the tab current at quit, written as tabs open, close and switch and at the quit, before the stops; the editor's first open reopens every tab in order, each landing in its session (attached where it runs in the background), the current tab current again (U2); `aineo.claude` takes `resume_session`. A tab's title is `<number>: <session name>` (D69).
+- **Reviews.**
+  - *Tests and records:* HIGH, `\Q` on the tab that held the kept id left the next open to reopen that closed session alone, losing the others; the fallback rows' true killer; a redundant wait; a guard unpinned.
+  - *Attack (`neovim-claude-code-reviewer`):* the same close; the first aineo action before the reopening replaced the list; a reopened tab that is not current started its terminal five rows tall, because the job ran in the autocommand window (A327; the author's first reading, the fake's width, was wrong); a tab opened from the list started in `getcwd()`; a reopening that stopped part-way lost the untried sessions; no cap on the number of tabs.
+- **Fix round** by the author (A324–A331, A335, A337): the list's current session becomes the kept id whenever the list is written without it (A324); the first `:Aineo claude`, `input`, `report`, `pane` and `tab new` reopen first (A326); every tab's terminal starts at its window's size (A327); every tab opened from the list starts in the folder (A328); a reopening that stops names the failed and the untried sessions and keeps the untried (A329); a LIMITS line on a closed tab that still stops (A330); at most 20 tabs reopen, the rest are told (A331). **The user's decision of 2026-10-15, D70,** was folded into this round as A335: a new tab opens at the end, a reopening keeps its saved order. **The user declined a second addition** (A336, withdrawn by A337): a reopened tab's title seeded from its last known name. 3879 cases.
+- **Re-application.** #218 conflicted with T72 (`dev` `12eb62c`) in `tests/test_tabs.lua`, where the padding pins met the colon pins. The author applied the commits again on a branch cut from that `dev` and #222 landed them; the colon and the padding hold together (highlight starts 16 and 29; the fit row of three titles at padding 0 needs 81 columns).
+- **The orchestrator's check** on `dev` `12eb62c` plus T68: the first run 3909 cases with one failure at a load of 35–50; a rerun of the 102 groups gave `Fails (0)`; lint clean; the mutants for the new tab at the end (2 failures) and A324 (2) killed.
+- **Departures.** The boundary widened to `lua/aineo/claude/init.lua`'s `kept_session()`, the docstring of `tab_title()` and the pins that read a title, as the amendment declares. `plugin/aineo.lua` grew by about 190 lines (A303). The fake's terminal never became ready in a tab that was not current, which hid A327 until the attack review.
+
+### Rulings made at the dispatches and fix rounds — the orchestrator's assumptions
+
+A234–A255 are O1–O22 of the plan's *Decisions for the orchestrator*, each the plan's (a), in order. In one line each:
+- **A256** the briefs' facts re-checked at each dispatch. **A257** the terminal pane is its own wave, planned after T66. **A264** the merge of T60 held until its flake was measured; stage 1 released with stage 2. **A278** T66's dispatch amendment.
+- **A258–A261 (T60)** `let_go()`; no adoption of a live layout after a reload; `windows_between()` hardened; a closed tab's layout rebuilding is T66's.
+- **A262, A263 (T63)** a free label at `new()`; the warning once per tab.
+- **A265, A266 (T61)** a copy stopped in every state; a stop of an exited Claude Code presses no key.
+- **A267–A273 (T65)** whole titles only; a NUL name; whole characters in the cut; a repeated id; `hold(0)`; a trailing `/`; `keep_tabs` checked.
+- **A274–A277 (T62)** a copy's files before its first follow; a registry of copies; `new()` creates its group; a routerless report of no known session is T64's.
+- **A293, A294 (T64)** a report of no known session is T66's; removal from the list read before the offers.
+- **A295–A297 (T71)** a test-only flake packet; the review's nit left; a test-only packet ships with the next release.
+- **A298–A303 (T66)** the first tab's `getcwd()`; tab 1's homes reused; the token's tab takes an `at_start` offer; the `aineo` → `aineo.tabs` edge; the 66 cases; the refactor of `plugin/aineo.lua` deferred.
+- **A304–A307 (T66)** no fallback; a joint deferred stop; a stop that does not hold the editor; the overflow wording.
+- **A314–A316, A318–A320 (T67)** the pick's refusals; the editor's folder; `stop_sessions()` kept; a close finished first; a closing session refused; two tabs on one session.
+- **A321, A322, A324, A326–A331, A335–A337 (T68)** the title's name and cut; the user's title; the kept id at a close; the first action reopens; the terminal's size; the folder; the failure's words; the limits line; the cap of 20; the tab at the end; the withdrawn seeded name.
+- **A323, A333** the dispatches of T70 and T72 beside T68, their hunks kept apart.
+
+### Wave 15 closed
+
+Wave 15 landed on 2026-10-15. Its packets are T60 (PR #205), T63 (PR #206), T61 (PR #207), T65 (PR #208), T62 (PR #209) and T64 (PR #210), the homes with one copy per tab; T71 (PR #212), a test-only packet outside the plan; T66 (PR #213), tabs in the composition root; T67 (PR #216), `\S` in a new tab and closing a tab; and T68 (PR #222), the folder reopening its tabs. Releases v0.2.34 (T60–T66 and T71), v0.2.35 (T67, with wave 16's T69) and v0.2.37 (T68). The suite grew from 3194 cases at wave 12's last whole run to 3971 on the last whole run of both waves. Retrospective: [[Sessions/2026-10-15 — Waves 15 and 16 retrospective]].
+
+**Open threads at the close:**
+- **The user's checks.** M1–M3 of wave 15 (*Checks for the user*, above), and M3 in particular for T68: the real Claude Code in a reopened tab that is not current, one attached in the background — the fake cannot tell whether such a tab becomes ready before it is entered. The user's checks M1–M3 for `\N` ([[Implementation/Waves/00014-cut-bases-new-session/plan]] › *Checks for the user*) and M9 and M10 for aineo's quit of its own session ([[Implementation/Waves/00012-background-resume/plan]]) are still not in.
+- **`plugin/aineo.lua` is past 2600 lines.** The tabs, the registry, `make_tab` and the close live there; a refactor packet moves them (A303, A316's `stop_sessions()`, and A342's export of the shell program from `aineo.shell`).
+- **Flakes still known.** The `test_entry_panes.lua` command-line-window cases fail under load on plain `dev`; the `test_changes_keys.lua` cases that stub a failing read and press a key share the `v:errmsg` race T71 removed from one case.
+- **Two Neovims on one folder** each run every session (design); the folder's list is written by the last to quit.
+- **A closed tab's Claude Code that still stops** can be resumed by a reopening (A330, a LIMITS line); a `:tabclose` of every aineo tab leaves the last in the list.
+- **D63–D67 stay proposed** where the dated notes on them say so; the keys, the letters and the repairs are the orchestrator's assumptions.

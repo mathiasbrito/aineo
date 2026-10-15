@@ -128,27 +128,43 @@ end
 local PANE_BUFFERS = {
   agent = { report = 'report', input = 'input' },
   changes = { report = 'files', input = 'commits' },
-  terminal = { report = 'shell', input = 'input' },
+  terminal = { report = 'shell' },
 }
+
+--- `list` sorted in place, returned.
+---
+---@param list integer[]
+---@return integer[] list
+local function sorted(list)
+  table.sort(list)
+  return list
+end
+
+--- Whether the child's Report is shown in a window.
+local REPORT_SHOWN = 'vim.fn.win_findbuf(...)[1] ~= nil'
 
 T['the terminal pane'] = MiniTest.new_set()
 
-T['the terminal pane']['shows the shell in the Report’s window and keeps Input in its own, every window in its place and at its size'] = function()
+T['the terminal pane']['shows the shell alone in the right column, as tall as Claude’s window, and Input in no window'] = function()
   local buffers = open_with_panes()
   local report_window = layout.window_showing(child, buffers.report)
-  local input_window = layout.window_showing(child, buffers.input)
   local claude_window = layout.window_showing(child, buffers.claude)
   local boxes_before = child.lua_get(BOXES_BY_WINDOW)
   layout.enter_window_showing(child, buffers.claude)
 
   show_pane('terminal')
 
+  local boxes = child.lua_get(BOXES_BY_WINDOW)
   eq(child.lua_get(SHOWN_BY_WINDOW), {
     [tostring(claude_window)] = buffers.claude,
     [tostring(report_window)] = buffers.shell,
-    [tostring(input_window)] = buffers.input,
   })
-  eq(child.lua_get(BOXES_BY_WINDOW), boxes_before)
+  eq(boxes[tostring(report_window)].height, boxes[tostring(claude_window)].height)
+  eq(boxes[tostring(report_window)].row, boxes_before[tostring(report_window)].row)
+  eq(boxes[tostring(report_window)].col, boxes_before[tostring(report_window)].col)
+  eq(boxes[tostring(report_window)].width, boxes_before[tostring(report_window)].width)
+  eq(boxes[tostring(claude_window)], boxes_before[tostring(claude_window)])
+  eq(child.lua_get('vim.fn.win_findbuf(...)', { buffers.input }), {})
   eq(child.api.nvim_get_current_buf(), buffers.claude)
 end
 
@@ -193,6 +209,158 @@ T['the terminal pane']['is refused, naming arrangement.shell, when no shell was 
   eq(child.api.nvim_win_get_buf(layout.window_showing(child, buffers.report)), buffers.report)
 end
 
+T['the terminal pane']['moves the cursor to the shell’s window when it was in Input’s as that window closes'] = function()
+  local buffers = open_with_panes()
+  layout.enter_window_showing(child, buffers.claude)
+  layout.enter_window_showing(child, buffers.input)
+
+  show_pane('terminal')
+
+  eq(child.api.nvim_get_current_buf(), buffers.shell)
+end
+
+T['the terminal pane']['makes three columns of a third each when a file opens beside it'] = function()
+  local buffers = open_with_panes()
+  show_pane('terminal')
+  layout.enter_window_showing(child, buffers.shell)
+
+  child.cmd('edit ' .. layout.file('first.txt'))
+
+  local third = (layout.COLUMNS - 2) / 3
+  layout.expect_near(layout.box(child, layout.window_showing(child, buffers.claude)).width, third)
+  layout.expect_near(layout.box(child, layout.window_showing(child, buffers.shell)).width, third)
+end
+
+T['leaving the terminal pane'] = MiniTest.new_set()
+
+T['leaving the terminal pane']['leaves the terminal pane shown, Input’s window closed, when the shell’s window refuses the Report’s buffer'] = function()
+  local buffers = open_with_panes()
+  show_pane('terminal')
+  layout.enter_window_showing(child, buffers.shell)
+  child.wo.winfixbuf = true
+
+  local shown = pcall(child.lua, [[require('aineo.layout').show_pane('agent')]])
+
+  eq(shown, false)
+  eq(layout.window_count(child), 2)
+  eq(child.lua_get('vim.fn.win_findbuf(...)', { buffers.input }), {})
+end
+
+--- Writes a three-line draft into the child's Input and puts its cursor on
+--- the second line, second column, in the window showing it.
+---
+---@param input integer Input's buffer
+local function write_a_draft(input)
+  child.api.nvim_buf_set_lines(input, 0, -1, false, { 'one', 'two', 'three' })
+  child.api.nvim_win_set_cursor(layout.window_showing(child, input), { 2, 1 })
+end
+
+--- Where the cursor of the child's Input is, and what it holds.
+---
+---@param input integer Input's buffer
+---@return { cursor: integer[], lines: string[] }
+local function draft_of(input)
+  return {
+    cursor = child.api.nvim_win_get_cursor(layout.window_showing(child, input)),
+    lines = child.api.nvim_buf_get_lines(input, 0, -1, false),
+  }
+end
+
+T['leaving the terminal pane']['shows the agent pane again, the Report over Input at the proportion, with the draft and its cursor kept'] = function()
+  local buffers = open_with_panes()
+  write_a_draft(buffers.input)
+  local boxes_before = layout.boxes(child, buffers)
+  show_pane('terminal')
+  eq(layout.window_count(child), 2)
+
+  show_pane('agent')
+
+  eq(layout.boxes(child, buffers), boxes_before)
+  eq(draft_of(buffers.input), { cursor = { 2, 1 }, lines = { 'one', 'two', 'three' } })
+  local input_window = layout.window_showing(child, buffers.input)
+  eq(child.lua_get('vim.wo[...].winfixheight', { input_window }), true)
+  eq(child.lua_get('vim.wo[...].winfixwidth', { input_window }), true)
+end
+
+--- The ways back from the terminal pane the share cases run, each a function
+--- of the buffers `open_with_panes()` returned that goes back and returns the
+--- buffers the right column's two windows then show.
+local WAYS_BACK = {
+  {
+    'the agent pane',
+    function(buffers)
+      show_pane('agent')
+      return buffers.report, buffers.input
+    end,
+  },
+  {
+    'the changes pane',
+    function(buffers)
+      show_pane('changes')
+      return buffers.files, buffers.commits
+    end,
+  },
+  {
+    'the shell’s exit',
+    function(buffers)
+      type_into_shell(buffers.shell, 'exit 3')
+      wait_until(REPORT_SHOWN, { buffers.report })
+      return buffers.report, buffers.input
+    end,
+  },
+}
+
+T['leaving the terminal pane']['gives the Report its share of the column when Claude’s window is closed, for'] =
+  MiniTest.new_set({ parametrize = WAYS_BACK })
+
+T['leaving the terminal pane']['gives the Report its share of the column when Claude’s window is closed, for']['the way back'] = function(
+  _,
+  way_back
+)
+  local buffers = open_with_panes()
+  show_pane('terminal')
+  layout.close_windows(child, buffers, { 'claude' })
+
+  local upper, lower = way_back(buffers)
+
+  local report = layout.box(child, layout.window_showing(child, upper))
+  local input = layout.box(child, layout.window_showing(child, lower))
+  layout.expect_near(report.height, (report.height + input.height) * layout.REPORT_HEIGHT)
+end
+
+T['leaving the terminal pane']['shows the changes pane in two windows that fill the right column, as the agent pane’s do'] = function()
+  local buffers = open_with_panes()
+  local boxes_before = layout.boxes(child, buffers)
+  show_pane('terminal')
+  eq(layout.window_count(child), 2)
+
+  show_pane('changes')
+
+  eq(layout.box(child, layout.window_showing(child, buffers.files)), boxes_before.report)
+  eq(layout.box(child, layout.window_showing(child, buffers.commits)), boxes_before.input)
+end
+
+T['leaving the terminal pane']['opens again the Input window the user closed before the terminal pane showed, when the agent pane is asked for'] = function()
+  local buffers = open_with_panes()
+  layout.close_windows(child, buffers, { 'input' })
+  show_pane('terminal')
+
+  show_pane('agent')
+
+  eq(layout.window_count(child), 3)
+end
+
+T['leaving the terminal pane']['opens again the Input window the user closed before the terminal pane showed, when Input is asked for'] = function()
+  local buffers = open_with_panes()
+  layout.close_windows(child, buffers, { 'input' })
+  show_pane('terminal')
+
+  layout.focus(child, 'input', layout.arrangement(buffers))
+
+  eq(layout.window_count(child), 3)
+  eq(child.api.nvim_get_current_buf(), buffers.input)
+end
+
 T['focusing the terminal pane'] = MiniTest.new_set()
 
 T['focusing the terminal pane']['shows it and moves the cursor into the shell’s window, entering no mode, hidden or shown before'] = function()
@@ -214,19 +382,13 @@ T['the terminal pane asked for again']['changes nothing, a buffer shown in the R
   local buffers = open_with_panes()
   show_pane('terminal')
   local report_window = layout.window_showing(child, buffers.shell)
-  local input_window = layout.window_showing(child, buffers.input)
   local by_hand = layout.named_scratch(child, 'aineo://shown-by-hand')
   child.api.nvim_win_set_buf(report_window, by_hand)
-  child.api.nvim_buf_set_lines(buffers.input, 0, -1, false, { 'one', 'two', 'three' })
-  child.api.nvim_win_set_cursor(input_window, { 2, 1 })
   local shown_before = child.lua_get(SHOWN_BY_WINDOW)
-  local input_view =
-    child.lua_get('vim.api.nvim_win_call(..., vim.fn.winsaveview)', { input_window })
 
   show_pane('terminal')
 
   eq(child.lua_get(SHOWN_BY_WINDOW), shown_before)
-  eq(child.lua_get('vim.api.nvim_win_call(..., vim.fn.winsaveview)', { input_window }), input_view)
 end
 
 T['the terminal pane asked for again']['shows the shell again in the Report’s window where the agent pane’s Report was put by hand'] = function()
@@ -240,38 +402,44 @@ T['the terminal pane asked for again']['shows the shell again in the Report’s 
   eq(child.api.nvim_win_get_buf(report_window), buffers.shell)
 end
 
-local SWITCHES = {}
-for _, from in ipairs({ 'agent', 'changes', 'terminal' }) do
-  for _, to in ipairs({ 'agent', 'changes', 'terminal' }) do
-    if from ~= to then
-      table.insert(SWITCHES, { from, to })
-    end
-  end
-end
+local SWITCHES = {
+  { 'agent', 'changes' },
+  { 'changes', 'agent' },
+  { 'agent', 'terminal' },
+  { 'changes', 'terminal' },
+  { 'terminal', 'agent' },
+  { 'terminal', 'changes' },
+}
+
+--- The buffers the layout's windows show under each pane, named as
+--- `open_with_panes()` returns them: Claude's window's, the right column's.
+local PANE_WINDOWS = {
+  agent = { 'claude', 'report', 'input' },
+  changes = { 'claude', 'files', 'commits' },
+  terminal = { 'claude', 'shell' },
+}
 
 T['a switch among the three panes'] = MiniTest.new_set({ parametrize = SWITCHES })
 
-T['a switch among the three panes']['shows the buffers of the pane in the same windows, at their sizes, from'] = function(
+T['a switch among the three panes']['shows the buffers of the pane in as many windows as it has, Claude’s and the Report’s the same windows, from'] = function(
   from,
   to
 )
   local buffers = open_with_panes()
-  local windows = {
-    claude = layout.window_showing(child, buffers.claude),
-    report = layout.window_showing(child, buffers.report),
-    input = layout.window_showing(child, buffers.input),
-  }
+  local claude_window = layout.window_showing(child, buffers.claude)
+  local report_window = layout.window_showing(child, buffers.report)
   show_pane(from)
-  local boxes_before = child.lua_get(BOXES_BY_WINDOW)
 
   show_pane(to)
 
-  eq(child.lua_get(SHOWN_BY_WINDOW), {
-    [tostring(windows.claude)] = buffers.claude,
-    [tostring(windows.report)] = buffers[PANE_BUFFERS[to].report],
-    [tostring(windows.input)] = buffers[PANE_BUFFERS[to].input],
-  })
-  eq(child.lua_get(BOXES_BY_WINDOW), boxes_before)
+  eq(
+    sorted(vim.tbl_values(child.lua_get(SHOWN_BY_WINDOW))),
+    sorted(vim.tbl_map(function(name)
+      return buffers[name]
+    end, PANE_WINDOWS[to]))
+  )
+  eq(layout.window_showing(child, buffers.claude), claude_window)
+  eq(layout.window_showing(child, buffers[PANE_BUFFERS[to].report]), report_window)
 end
 
 --- Fills the child's `buffer` with two hundred numbered lines and scrolls
@@ -310,6 +478,59 @@ local function view_of_window_showing(buffer)
   )
 end
 
+--- Shows the terminal pane and then the agent pane in the child, `count`
+--- times.
+---
+---@param count integer
+local function round_trips(count)
+  for _ = 1, count do
+    show_pane('terminal')
+    show_pane('agent')
+  end
+end
+
+--- Puts the child's Report window on top line 50 with the cursor on line 52,
+--- the Report holding two hundred lines, and returns the window.
+---
+---@param report integer the Report's buffer
+---@return integer window
+local function scroll_report_to_line_50(report)
+  child.o.scrolloff = 0
+  local lines = {}
+  for number = 1, 200 do
+    lines[number] = 'line ' .. number
+  end
+  child.api.nvim_buf_set_lines(report, 0, -1, true, lines)
+  local window = layout.window_showing(child, report)
+  child.lua(
+    [[vim.api.nvim_win_call(..., function()
+      vim.fn.winrestview({ topline = 50, lnum = 52 })
+    end)]],
+    { window }
+  )
+  return window
+end
+
+T['leaving the terminal pane']['keeps the Report’s top line through four round trips, the cursor in the Report’s window'] = function()
+  local buffers = open_with_panes()
+  scroll_report_to_line_50(buffers.report)
+  layout.enter_window_showing(child, buffers.report)
+
+  round_trips(4)
+
+  eq(view_of_window_showing(buffers.report), { topline = 50, lnum = 52 })
+end
+
+T['leaving the terminal pane']['keeps the Report’s top line through four round trips, the cursor in Claude’s window'] = function()
+  local buffers = open_with_panes()
+  scroll_report_to_line_50(buffers.report)
+  layout.enter_window_showing(child, buffers.claude)
+
+  round_trips(4)
+
+  eq(view_of_window_showing(buffers.report), { topline = 50, lnum = 52 })
+end
+
 T['the agent pane shown again after the terminal pane'] = MiniTest.new_set()
 
 T['the agent pane shown again after the terminal pane']['shows the Report and Input as they were scrolled'] =
@@ -321,6 +542,7 @@ T['the agent pane shown again after the terminal pane']['shows the Report and In
   role
 )
   local buffers = open_with_panes()
+  child.o.scrolloff = 0
   scroll_to_line_100(buffers[role])
 
   show_pane('terminal')
@@ -329,8 +551,9 @@ T['the agent pane shown again after the terminal pane']['shows the Report and In
   eq(view_of_window_showing(buffers[role]), { topline = 100, lnum = 100 })
 end
 
-T['the agent pane shown again after the terminal pane']['shows the shell as it was scrolled when the terminal pane shows again'] = function()
+T['the agent pane shown again after the terminal pane']['puts the cursor of the shell where it was when the terminal pane shows again'] = function()
   local buffers = open_with_panes()
+  child.o.scrolloff = 0
   show_pane('terminal')
   child.lua([[vim.fn.chansend(vim.b[(...)].terminal_job_id, 'seq 1 150\n')]], { buffers.shell })
   eq(layout.wait_until(child, 'vim.api.nvim_buf_line_count(...) >= 150', { buffers.shell }), true)
@@ -344,7 +567,7 @@ T['the agent pane shown again after the terminal pane']['shows the shell as it w
   show_pane('agent')
   show_pane('terminal')
 
-  eq(view_of_window_showing(buffers.shell), { topline = 60, lnum = 70 })
+  eq(view_of_window_showing(buffers.shell).lnum, 70)
 end
 
 --- Fills the child's Report stand-in with a hundred numbered lines and puts
@@ -436,8 +659,9 @@ end
 
 T['focus() while the terminal pane shows'] = MiniTest.new_set()
 
-T['focus() while the terminal pane shows']['moves the cursor to Input and leaves the shell shown'] = function()
+T['focus() while the terminal pane shows']['shows the agent pane, then moves the cursor to Input'] = function()
   local buffers = open_with_panes()
+  local boxes_before = layout.boxes(child, buffers)
   show_pane('terminal')
   local report_window = layout.window_showing(child, buffers.shell)
   layout.enter_window_showing(child, buffers.claude)
@@ -445,7 +669,8 @@ T['focus() while the terminal pane shows']['moves the cursor to Input and leaves
   layout.focus(child, 'input', layout.arrangement(buffers))
 
   eq(child.api.nvim_get_current_buf(), buffers.input)
-  eq(child.api.nvim_win_get_buf(report_window), buffers.shell)
+  eq(child.api.nvim_win_get_buf(report_window), buffers.report)
+  eq(layout.boxes(child, buffers), boxes_before)
 end
 
 T['focus() while the terminal pane shows']['shows the agent pane, then moves the cursor to the Report'] = function()
@@ -464,7 +689,7 @@ T['focus() while the terminal pane shows']['moves the cursor to Claude and leave
   local buffers = open_with_panes()
   show_pane('terminal')
   local report_window = layout.window_showing(child, buffers.shell)
-  layout.enter_window_showing(child, buffers.input)
+  layout.enter_window_showing(child, buffers.shell)
 
   layout.focus(child, 'claude', layout.arrangement(buffers))
 
@@ -472,10 +697,9 @@ T['focus() while the terminal pane shows']['moves the cursor to Claude and leave
   eq(child.api.nvim_win_get_buf(report_window), buffers.shell)
 end
 
-T['focus() while the terminal pane shows']['opens nothing for Input when the Report was wiped, which the pane does not show'] = function()
+T['focus() while the terminal pane shows']['opens nothing for Input, whose window is closed and whose buffer is there'] = function()
   local buffers = open_with_panes()
   show_pane('terminal')
-  child.cmd('bwipeout! ' .. buffers.report)
   child.lua('_G.arrangement_made = false')
 
   child.lua([[require('aineo.layout').focus('input', function()
@@ -486,27 +710,41 @@ T['focus() while the terminal pane shows']['opens nothing for Input when the Rep
   eq(child.api.nvim_get_current_buf(), buffers.input)
 end
 
+T['focus() while the terminal pane shows']['opens the layout first for Input when the Report was wiped, which the agent pane it shows needs'] = function()
+  local buffers = open_with_panes()
+  show_pane('terminal')
+  child.cmd('bwipeout! ' .. buffers.report)
+  child.lua('_G.arrangement_made = false')
+
+  pcall(
+    child.lua,
+    [[require('aineo.layout').focus('input', function()
+    _G.arrangement_made = true
+  end)]]
+  )
+
+  eq(child.lua_get('_G.arrangement_made'), true)
+end
+
 T['a shell that ends while the terminal pane shows'] = MiniTest.new_set()
 
-T['a shell that ends while the terminal pane shows']['gives the Report’s window back to the Report, the same window at the same size, before its buffer goes'] = function()
+T['a shell that ends while the terminal pane shows']['gives the Report’s window back to the Report, the same window, and opens Input’s again below it with the draft kept, before the shell’s buffer goes'] = function()
   local buffers = open_with_panes()
+  write_a_draft(buffers.input)
+  local boxes_before = layout.boxes(child, buffers)
   show_pane('terminal')
   local windows = {
     claude = layout.window_showing(child, buffers.claude),
     report = layout.window_showing(child, buffers.shell),
-    input = layout.window_showing(child, buffers.input),
   }
-  local boxes_before = child.lua_get(BOXES_BY_WINDOW)
 
   type_into_shell(buffers.shell, 'exit 3')
 
   eq(wait_until('not vim.api.nvim_buf_is_valid(...)', { buffers.shell }), true)
-  eq(child.lua_get(SHOWN_BY_WINDOW), {
-    [tostring(windows.claude)] = buffers.claude,
-    [tostring(windows.report)] = buffers.report,
-    [tostring(windows.input)] = buffers.input,
-  })
-  eq(child.lua_get(BOXES_BY_WINDOW), boxes_before)
+  eq(layout.window_showing(child, buffers.claude), windows.claude)
+  eq(layout.window_showing(child, buffers.report), windows.report)
+  eq(layout.boxes(child, buffers), boxes_before)
+  eq(draft_of(buffers.input), { cursor = { 2, 1 }, lines = { 'one', 'two', 'three' } })
 end
 
 --- The ways the shell's buffer goes while the terminal pane shows it, each
@@ -527,9 +765,6 @@ local function end_shell(how, shell)
     child.cmd(how .. ' ' .. shell)
   end
 end
-
---- Whether the child's Report is shown in a window.
-local REPORT_SHOWN = 'vim.fn.win_findbuf(...)[1] ~= nil'
 
 T['a shell wiped while the terminal pane shows'] = MiniTest.new_set({ parametrize = WIPES })
 
@@ -631,20 +866,32 @@ T['open() while the terminal pane shows'] = MiniTest.new_set()
 
 T['open() while the terminal pane shows']['shows the shell again in a Report’s window reopened, at the Report’s share'] = function()
   local buffers = open_with_panes()
-  local boxes_before = layout.boxes(child, buffers)
   show_pane('terminal')
+  local box_before = layout.box(child, layout.window_showing(child, buffers.shell))
   child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)', { buffers.shell })
 
   layout.open(child, layout.arrangement(buffers))
 
   eq(child.api.nvim_win_get_buf(layout.window_showing(child, buffers.shell)), buffers.shell)
-  eq(layout.box(child, layout.window_showing(child, buffers.shell)), boxes_before.report)
+  eq(layout.box(child, layout.window_showing(child, buffers.shell)), box_before)
+end
+
+T['open() while the terminal pane shows']['builds the layout anew with the shell alone in the right column once every window of the layout is gone'] = function()
+  local buffers = open_with_panes()
+  show_pane('terminal')
+  child.cmd('new')
+  child.cmd('only')
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(child.lua_get('vim.fn.win_findbuf(...)', { buffers.input }), {})
+  eq(child.api.nvim_win_get_buf(layout.window_showing(child, buffers.shell)), buffers.shell)
 end
 
 T['open() while the terminal pane shows']['opens on the agent pane when its shell is gone'] = function()
   local buffers = open_with_panes()
   show_pane('terminal')
-  layout.enter_window_showing(child, buffers.input)
+  layout.enter_window_showing(child, buffers.shell)
   child.cmd('edit ' .. fixture.write('terminal-pane/first.txt', { 'line 1', 'line 2' }))
   child.cmd('only')
   child.cmd('bwipeout! ' .. buffers.shell)
@@ -699,26 +946,26 @@ end
 
 T['two layouts'] = MiniTest.new_set()
 
---- `list` sorted in place, returned.
----
----@param list integer[]
----@return integer[] list
-local function sorted(list)
-  table.sort(list)
-  return list
-end
+--- Whether the first windows showing the child's buffers `first` and `second`
+--- are as tall as each other.
+local SAME_HEIGHT = [[(function(first, second)
+  return vim.api.nvim_win_get_height(vim.fn.win_findbuf(first)[1])
+    == vim.api.nvim_win_get_height(vim.fn.win_findbuf(second)[1])
+end)(...)]]
 
-T['two layouts']['show each its own shell under the terminal pane, in the windows of its own tab page'] = function()
+T['two layouts']['show each its own shell alone in the right column of its own tab page, as tall as its Claude’s window'] = function()
   local buffers = open_two_layouts_under_the_terminal_pane()
 
   eq(
     sorted(vim.tbl_values(child.lua_get(SHOWN_IN_TAB, { 1 }))),
-    sorted({ buffers.first.claude, buffers.first.shell, buffers.first.input })
+    sorted({ buffers.first.claude, buffers.first.shell })
   )
   eq(
     sorted(vim.tbl_values(child.lua_get(SHOWN_IN_TAB, { 2 }))),
-    sorted({ buffers.second.claude, buffers.second.shell, buffers.second.input })
+    sorted({ buffers.second.claude, buffers.second.shell })
   )
+  eq(child.lua_get(SAME_HEIGHT, { buffers.first.claude, buffers.first.shell }), true)
+  eq(child.lua_get(SAME_HEIGHT, { buffers.second.claude, buffers.second.shell }), true)
 end
 
 T['two layouts']['react to the end or wipe of their own shell only'] = MiniTest.new_set({
@@ -911,8 +1158,8 @@ end
 
 T['a shell that ends while the user closed windows of the layout']['reopens the Report’s window when its wipe closed it, and leaves Input’s closed'] = function()
   local buffers = open_with_panes()
+  layout.close_windows(child, buffers, { 'input' })
   show_pane('terminal')
-  child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)', { buffers.input })
 
   type_into_shell(buffers.shell, 'exit 0')
   eq(wait_until(REPORT_SHOWN, { buffers.report }), true)

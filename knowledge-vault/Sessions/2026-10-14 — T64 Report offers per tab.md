@@ -148,4 +148,5 @@ Suites of the fix round:
 
 ## Commits
 
-Recorded after the merge.
+- PR #210, `feature/t64-mcp-tabs`, head `ba0d189` (6 commits), merged by rebase into `dev` as `c659cde` (the brief's amendment), `7dc2432` (the start token in report offers, one running-editor entry per tab), `d899b95` (a report with no known session shown by an older report home, pinned), `a86c686` (this note), `e8b3664` (the fix round: removal from the list read before the offers, tighter pins), `ef2ebaf` (the fix round in this note).
+- Released in v0.2.34 (PR #214, `main` `8fe30d0`).

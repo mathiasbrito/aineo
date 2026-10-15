@@ -116,4 +116,5 @@ Four cases added to `tests/test_changes_copies.lua` (17 in all):
 
 ## Commits
 
-Recorded after the merge.
+- PR #206, `feature/t63-changes-copies`, head `dc08a69` (2 commits), merged by rebase into `dev` as `4a25e9c` (the changes pane, one home per tab), `3f18402` (what the reviews found: concurrent keys, textlock, a reload).
+- Released in v0.2.34 (PR #214, `main` `8fe30d0`).

@@ -34,12 +34,12 @@ tab, or moves to the tab that has it (|:Aineo-sessions|). `\N` starts a new
 Claude Code session: on a new id once Claude Code has exited, where `\o`
 resumes the last, and with `/clear` while it runs (|:Aineo-new|). `\pa`,
 `\g` and `\pt` switch the right column between the agent pane, the Report
-over Input, the changes pane, and a shell's terminal, and move to the Report,
-to the changes pane's commits and into the shell, in Terminal mode
-(|aineo-panes|). `\T` opens a tab page with a Claude Code session of
-its own, `\1` to `\9` move to the tab page of that number, and `\Q` closes the
-current tab (|aineo-tabs|). In Visual mode, in Input, `\s` sends the
-selection alone and removes it from Input (|aineo-v_\s|).
+over Input, the changes pane, and a shell's terminal, each filling the column,
+and move to the Report, to the changes pane's commits and into the shell, in
+Terminal mode (|aineo-panes|). `\T` opens a tab page with a Claude Code
+session of its own, `\1` to `\9` move to the tab page of that number, and
+`\Q` closes the current tab (|aineo-tabs|). In Visual mode, in Input, `\s`
+sends the selection alone and removes it from Input (|aineo-v_\s|).
 
 In Terminal mode and in Insert mode, `<C-\>` followed by the same letters
 does the same: `<C-\>i` moves to Input, `<C-\>r` to the Report, `<C-\>c` to
@@ -93,7 +93,7 @@ show one pane at a time, here the agent pane:
   `:ls` and `:bnext`, where you write what Send gives Claude (|aineo-send|),
   kept as a draft until you send it (|aineo-draft|).
 - The changes pane shows in the same two windows in their place, and a
-  shell's terminal in the Report's place (|aineo-panes|).
+  shell's terminal takes the whole column in place of both (|aineo-panes|).
 
 The Report and Input wrap long lines between words, a wrapped line keeping
 its indent ('wrap', 'linebreak', 'breakindent'), whatever your own settings.
@@ -108,13 +108,16 @@ windows, keep yours.
 Opening the layout closes the tab's other windows (floating ones stay); their
 buffers stay loaded. The cursor starts in Input's window, which shows the
 changes pane's commits instead when the layout is opened anew while the
-changes pane shows (|aineo-panes|). The Neovim startup buffer becomes Input;
-a file the current window shows stays, as the file column.
+changes pane shows, and in the shell's window while the terminal pane shows,
+which has no Input window (|aineo-panes|). The Neovim startup buffer becomes
+Input; a file the current window shows stays, as the file column.
 
 Panes ~
                                                                  *aineo-panes*
-The right column's two windows show one of three panes, switched in place:
-the same two windows, at the same sizes, show the other pane's buffers.
+The right column shows one of three panes, each filling its whole height: the
+agent pane and the changes pane in two windows, switched in place (the same
+two windows, at the same sizes, show the other pane's buffers), and the
+terminal pane in one.
 
 - The agent pane: the Agent Report over Input, as the layout opens.
 - The changes pane: `aineo://changes-files` in the Report's place, over
@@ -126,12 +129,12 @@ the same two windows, at the same sizes, show the other pane's buffers.
   `:edit` there writes its list again. A buffer of yours under either name,
   such as one a restored session made, gives the name up: it is wiped out,
   or kept unnamed when you changed its text.
-- The terminal pane: a shell's terminal in the Report's place, over Input,
-  which stays as it is. Its window is the Report's, at the Report's size
-  (|aineo-config-layout.report_height|). The shell is your 'shell', run
-  in the folder aineo started in, whatever `:cd` or `:tcd` says since,
-  with `$AINEO_CHILD` set in its environment, as in Claude's terminal. Each
-  tab has a shell of its own (|aineo-tabs|).
+- The terminal pane: a shell's terminal alone in the right column, which it
+  fills from top to bottom: the Report's window takes the whole column, and
+  Input's window is closed while the pane shows, Input kept as it is. The
+  shell is your 'shell', run in the folder aineo started in, whatever `:cd`
+  or `:tcd` says since, with `$AINEO_CHILD` set in its environment, as in
+  Claude's terminal. Each tab has a shell of its own (|aineo-tabs|).
 
 `\pa` (|:Aineo-pane|) shows the agent pane, `\g` the changes pane and `\pt`
 the terminal pane; the pane already shown stays as it is (the changes pane
@@ -144,23 +147,28 @@ choose the filter, and into the shell under the terminal pane, in Terminal
 mode, as `\c` enters Claude's prompt: what you type next goes to the shell.
 From another tab page they switch the pane in the layout's tab page,
 restoring the layout there first when one of its windows is gone, and move
-you there. `\r` and `\i` show the agent pane first, then move
-to the Report or Input, but `\i` leaves the terminal pane as it is, since
-Input shows under it; `\c` and `\tcn` leave the pane as it is. Send sends
-Input while the changes pane hides it (|aineo-send|). When a window will
+you there. `\r` and `\i` show the agent pane first, then move to the Report
+or Input, the terminal pane giving way to it too, which opens Input's window
+again, unless you had closed it before `\pt` and asked for the Report (`\pa`,
+`\g` and `\i` open it); `\c` and `\tcn` leave the pane as it is. Send sends
+Input while the changes pane or the terminal pane hides it (|aineo-send|).
+When a window will
 not take its buffer — 'winfixbuf' is set there, say, or you are in the
 command-line window — aineo tells you why, once, and gives each window back
 the buffer it showed. A window that will not take that one back either
 keeps the other pane's buffer; `\pa` or `\g` then shows its pane in both
 windows.
 
-The shell lives until it ends: `\pa`, `\g` and `\r` hide it and leave it
-running, and `\pt` shows the same terminal again, with its output and where it
-was scrolled, starting nothing. `\pt` starts a shell only when the tab runs
+The shell lives until it ends: `\pa`, `\g`, `\r` and `\i` hide it and leave
+it running, and `\pt` shows the same terminal again, with its output and its
+cursor line, starting nothing. `\pt` starts a shell only when the tab runs
 none. When the shell ends, by `exit` with any status, or when you wipe its
 buffer with `:bdelete!` or `:bwipeout!`, its buffer is gone and the agent pane
-shows again, the Report back in its window; the cursor goes to the Report when
-it was in the shell's window. When 'shell' names a program that is not
+shows again, the Report back in its window and Input in a window below it,
+at the Report's share, with its draft and cursor as they were; the cursor goes
+to the Report when it was in the shell's window. A window of the layout you
+had closed stays closed then, Input's included when you closed it before
+`\pt`. When 'shell' names a program that is not
 executable, `\pt` tells you so, once, and changes no pane. Closing a tab stops
 its shell (|aineo-tabs|).
 
@@ -1605,7 +1613,8 @@ text reaches Claude Code as a key.
 
 Send also works while Claude is in a turn: Claude Code queues the message and
 runs it after the turn. A draft already in Claude's prompt stays, and the
-paste joins it. It sends Input while the changes pane hides it, too.
+paste joins it. It sends Input while the changes pane or the terminal pane
+hides it, too.
 
 Visual Send ~
 In Visual mode, in Input, `\s` (|aineo-v_\s|, |<Plug>(aineo-send)|) sends
@@ -2113,6 +2122,10 @@ The terminal pane ~
   it hangs the shell up after aineo has stopped Claude Code, and a program
   of the shell's that ignores the hangup, or a job it started with `nohup`,
   outlives the editor.
+- The shell's window is as tall as the right column, taller than the Report's,
+  so the shell's terminal is resized as the pane shows and as it gives way:
+  the terminal redraws, and the top line of its window can differ from where
+  it was, the cursor line staying.
 - A shell that exits in a tab page you are not in makes Neovim visit that
   tab page and come back, while aineo shows the Report again there. The
   cursor and the mode stay where they were.
