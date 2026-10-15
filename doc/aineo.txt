@@ -164,21 +164,22 @@ behaves as it always has.
 
 The first open of aineo in a Neovim, the autostart or `\o`, makes the current
 tab page aineo's first tab; its buffers are `aineo://report` and
-`aineo://input`. `\T` (|:Aineo-tab|) opens a tab page after the current one,
-with an aineo tab in it: a layout of its own around a Claude Code started on a
-new session, and the cursor in its Claude window in Terminal mode. Its
-buffers are named with a number that is never given again
-(`aineo://report-2`, `aineo://input-2`). With no aineo tab yet, `\T` makes the
-current tab page the first one, on a new session. Starting a tab starts a
-Claude Code, which costs what a session costs, as `\o` does.
+`aineo://input`. `\T` (|:Aineo-tab|) opens a tab page at the end, after the
+last tab page, so that no tab changes its number, with an aineo tab in it: a
+layout of its own around a Claude Code started on a new session, and the
+cursor in its Claude window in Terminal mode. Its buffers are named with a
+number that is never given again (`aineo://report-2`, `aineo://input-2`). With
+no aineo tab yet, `\T` makes the current tab page the first one, on a new
+session. Starting a tab starts a Claude Code, which costs what a session
+costs, as `\o` does.
 
-`\S` (|:Aineo-sessions|) opens the session you pick in a new tab after the
-current one, resumed, attached to where it runs in Claude Code's background
-service, or resumed with a warning where it is open in another interactive
-Claude Code; the cursor lands in its Claude window in Terminal mode. A
-session that a tab of this Neovim shows already, the current tab's own
-included, is not started again: the pick moves you to that tab. Nothing is
-written into the current tab's prompt, and its Claude Code goes on as it was.
+`\S` (|:Aineo-sessions|) opens the session you pick in a new tab at the end,
+resumed, attached to where it runs in Claude Code's background service, or
+resumed with a warning where it is open in another interactive Claude Code;
+the cursor lands in its Claude window in Terminal mode. A session that a tab
+of this Neovim shows already, the current tab's own included, is not started
+again: the pick moves you to that tab. Nothing is written into the current
+tab's prompt, and its Claude Code goes on as it was.
 
 Every tab after the first starts its Claude Code in the folder: the
 directory of this Neovim's first start of aineo, whatever `:cd` or `:tcd`
@@ -189,8 +190,9 @@ session (|aineo-claude-session|).
 `\1` to `\9` (|:Aineo-tab|) move to the tab page of that number, an aineo tab
 or not, as `{n}gt` does; the cursor lands where it was in that tab page, in
 Normal mode. With no tab page of that number nothing moves and aineo says so.
-The number is the tab page's place: closing a tab page, or `:tabmove`,
-changes the numbers after it, and the titles with them.
+The number is the tab page's place: closing a tab page, or `:tabmove`, changes
+the numbers after it, and the titles with them. A new tab opens at the end, so
+it changes no number; `:tabmove` reorders the tab pages.
 
 A tab's title is `<number>: <name>`: its number, a colon, and, for an aineo
 tab, the name of its session, the name Claude Code gives it (`Claude Code`
@@ -1047,7 +1049,7 @@ only in place of a resume Claude Code has no conversation for
 			  in the background with no short id for `claude
 			  attach`, opens no tab and tells you why.
 			- of a row running elsewhere reads the list again and
-			  opens a new tab after the current one on that
+			  opens a new tab at the end on that
 			  session. A session running in Claude Code's
 			  background service is attached to, as a start
 			  attaches (|aineo-claude-session|): `claude attach`,
@@ -1203,7 +1205,7 @@ another tab of this Neovim runs the session {id} names, `:Aineo claim {id}`
 moves you to that tab instead and claims nothing.
 
                                                                   *:Aineo-tab*
-:Aineo tab new		Opens a tab page after the current one with a tab of
+:Aineo tab new		Opens a tab page at the end with a tab of
 			aineo's in it (|aineo-tabs|): a layout of its own
 			around a Claude Code started in the folder on a new
 			session id, as |:Aineo-new| starts one when no Claude

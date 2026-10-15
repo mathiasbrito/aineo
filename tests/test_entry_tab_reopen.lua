@@ -277,7 +277,7 @@ T['the folder’s list']['is kept in the order of the tab pages, not of the tabs
   local list = tabs.kept_tab_list_once(state, folder, function(kept)
     return kept ~= nil and #kept.sessions == 3
   end)
-  eq(list, { sessions = { second, third, first }, current = 2 })
+  eq(list, { sessions = { second, first, third }, current = 3 })
 end
 
 T['the folder’s list']['is kept at quit with the tab current then, before the Claude Codes are stopped'] = function()
@@ -504,6 +504,22 @@ T['the first open']['opens at most 20 tabs, in the order of the list, and tells 
     },
   })
   eq(tabs.kept_tab_list(state, folder).sessions, sessions)
+end
+
+T['the first open']['puts the reopened tabs after the first, before the tab pages that follow it'] = function()
+  reopening_setup(
+    'reopen-before-others',
+    { sessions = { FIRST, SECOND, THIRD }, current = 1 },
+    FIRST
+  )
+  child.cmd('tabnew')
+  child.cmd('tabfirst')
+
+  child.cmd('Aineo open')
+
+  eq(tabs.tab_count(child), 4)
+  eq(#tabs.windows_of_tab(child, 3), 3)
+  eq(#tabs.windows_of_tab(child, 4), 1)
 end
 
 T['the first open']['starts every tab’s Claude Code at once, each listing the folder’s sessions as a resuming start does'] = function()

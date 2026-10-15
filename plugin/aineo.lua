@@ -566,10 +566,11 @@ local function sessions_shown_in_tabs()
   return shown
 end
 
---- Opens a tab page after the current one with a tab of aineo's in it, which
---- `start` starts Claude Code in (`aineo.entry.Tab`'s `start_in_new_tab()`
---- when none is given). Defined below, with the tabs it makes.
----@type fun(start?: fun(tab: aineo.entry.Tab))
+--- Opens a tab page at the end, after the last tab page, with a tab of
+--- aineo's in it, which `start` starts Claude Code in (`aineo.entry.Tab`'s
+--- `start_in_new_tab()` when none is given); `after_current` puts it after
+--- the current tab page instead. Defined below, with the tabs it makes.
+---@type fun(start?: fun(tab: aineo.entry.Tab), after_current?: boolean)
 local open_new_tab
 
 --- Whether the Claude Code of a tab that has closed and has yet to stop
@@ -1719,7 +1720,7 @@ local function make_tab(homes, key, on_bound)
   --- session id — a menu is another plugin's, and the id is typed into Claude
   --- Code's command — and when it stands for no new tab
   --- (`settles_by_standing()`). Otherwise reads the list again, since the menu
-  --- may have been open for long, and opens a tab after the current one on the
+  --- may have been open for long, and opens a tab at the end on the
   --- session (`open_new_tab()`) only if it is still listed and still stands for
   --- one: resumed, attached to, or resumed with a warning. The current tab's
   --- Claude Code, prompt and panes are not touched.
@@ -2407,16 +2408,19 @@ local function acting_tab()
   end) or new_tab()
 end
 
---- Opens a tab page after the current one, and a tab of aineo's in it, which
---- `start` starts Claude Code in (`aineo.entry.Tab`'s `start_in_new_tab()`,
---- on a new session id in the folder, when none is given): its layout around
---- the Claude Code, the cursor in Claude's window in Terminal mode. With no
---- aineo tab yet, it opens the first one in the current tab page. When the
---- tab cannot start, the tab page it made is closed again and the error
---- raised.
+--- Opens a tab page at the end, after the last tab page, so that no tab
+--- changes its number, and a tab of aineo's in it, which `start` starts Claude
+--- Code in (`aineo.entry.Tab`'s `start_in_new_tab()`, on a new session id in
+--- the folder, when none is given): its layout around the Claude Code, the
+--- cursor in Claude's window in Terminal mode. With `after_current` the tab
+--- page is after the current one, as a reopening of the folder's tabs puts
+--- each after the one before it. With no aineo tab yet, it opens the first one
+--- in the current tab page. When the tab cannot start, the tab page it made is
+--- closed again and the error raised.
 ---
 ---@param start? fun(tab: aineo.entry.Tab)
-open_new_tab = function(start)
+---@param after_current? boolean
+open_new_tab = function(start, after_current)
   start = start or function(tab)
     tab.start_in_new_tab()
   end
@@ -2427,7 +2431,7 @@ open_new_tab = function(start)
     return
   end
   local tab = new_tab()
-  vim.cmd.tabnew()
+  vim.cmd(after_current and 'tabnew' or '$tabnew')
   local made_page = vim.api.nvim_get_current_tabpage()
   local started, failure = pcall(start, tab)
   if started then
@@ -2582,7 +2586,7 @@ local function reopen_folder_tabs()
       open_new_tab(function(tab)
         tab.open_on_session(session)
         table.insert(opened, tab)
-      end)
+      end, true)
     end
     failed_at = nil
   end)
