@@ -729,10 +729,9 @@ function M.new(label)
   --- Starts what follows the repository once the pane has been shown: the
   --- watch, when none runs, and a read of each list; does nothing before the
   --- repository is found or the pane first shown, nor once the home has been
-  --- let go, nor once the editor is
-  --- quitting (`v:exiting`): a look answered then, while a later
-  --- `VimLeavePre` waits, starts no watch and no read after the quit has
-  --- stopped the watch.
+  --- let go, nor once the editor is quitting (`v:exiting`): a look answered
+  --- then, while a later `VimLeavePre` waits, starts no watch and no read
+  --- after the quit has stopped the watch.
   local function follow_repository()
     if not (session.repository and session.shown) or released or vim.v.exiting ~= vim.NIL then
       return
@@ -1813,7 +1812,8 @@ function M.new(label)
     return { files = buffers.files, commits = buffers.commits }
   end
 
-  --- Lets the home go, as its tab page closes: stops its watch, removes its
+  --- Lets the home go, as its tab page closes: stops its watch and closes the
+  --- timer of the pause its commits window's cursor starts, removes its
   --- handlers, by deleting their groups (a group the home never made is no
   --- error), and wipes its pane's two buffers and the diffs it showed. The
   --- bases and the saves it kept on disk stay. Nothing follows its repository
@@ -1824,6 +1824,7 @@ function M.new(label)
   --- Raises what Neovim raises when a buffer cannot be wiped.
   local function let_go()
     released = true
+    selection_pause.close()
     if session and session.watch then
       session.watch.stop()
       session.watch = nil

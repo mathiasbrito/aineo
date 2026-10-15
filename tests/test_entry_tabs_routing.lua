@@ -135,12 +135,37 @@ T['a report']['of no known session, offered by the second tab’s Claude Code, s
   eq(tabs.report_lines_of_tab(child, 1), { '' })
 end
 
-T['a report']['of no known session and a token no tab’s Claude Code has is taken by no tab'] = function()
+--- Hands the editor's relay delivery a report of no known session, as the
+--- report server does, with `options`; returns how the delivery went and
+--- what it told Claude of it.
+---
+---@param summary string
+---@param options table
+---@return { outcome: string, explanation: string? }
+local function deliver_without_session(summary, options)
+  return child.lua_get(
+    [[(function(report, options)
+      local outcome, explanation = require('aineo.mcp.editor').deliver_report(
+        vim.v.servername,
+        report,
+        options
+      )
+      return { outcome = outcome, explanation = explanation }
+    end)(...)]],
+    { report_of(summary), options }
+  )
+end
+
+T['a report']['of no known session and a token no tab’s Claude Code has is delivered to no tab, and the relay says so'] = function()
   open_two_tabs('tabs-report-unknown-token')
 
-  local taken = offer_without_session('Of no tab', { at_start = true, start_token = 'unknown' })
+  local delivery =
+    deliver_without_session('Of no tab', { at_start = true, start_token = 'unknown' })
 
-  eq(taken, false)
+  eq(delivery, {
+    outcome = 'failed',
+    explanation = 'no tab of the editor runs the Claude Code that sent the report',
+  })
   eq({ tabs.report_lines_of_tab(child, 1), tabs.report_lines_of_tab(child, 2) }, { { '' }, { '' } })
 end
 
@@ -244,6 +269,22 @@ T['Send']['from the second tab’s Input while it claims another session is refu
   local written = claude_session.wait_for_received_after(first, 0, #pasted('for the first'))
   eq(written:find(pasted('for the first'), 1, true) ~= nil, true)
   eq(claude_session.received(second):find('for the claimed', 1, true), nil)
+end
+
+T['Send']['in Visual mode from a tab page that is not aineo’s warns, and the cursor stays there'] = function()
+  open_two_tabs('tabs-send-visual')
+  child.cmd('tabnew')
+  child.lua('vim.api.nvim_buf_set_lines(0, 0, -1, true, { "selected here" })')
+
+  child.type_keys('gg0', 'v', 'e', '\\s')
+
+  eq(tabs.current_tab(child), 3)
+  eq(
+    vim.tbl_map(function(told)
+      return { told.message, told.level }
+    end, entry.messages(child)),
+    { { 'aineo: nothing sent — Visual Send works in Input only', vim.log.levels.WARN } }
+  )
 end
 
 T['a /clear'] = MiniTest.new_set()
