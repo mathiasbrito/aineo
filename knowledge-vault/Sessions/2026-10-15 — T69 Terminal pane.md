@@ -160,4 +160,5 @@ None.
 
 ## Commits
 
-Recorded after the merge.
+- PR #215, `feature/t69-terminal-pane`, head `20511a9` (10 commits), merged by rebase into `dev` as `6366eaa` (the brief's amendment at dispatch), `b0c36d6` (the shell home), `1a0a6a6` (the layout's third pane), `7594c30` (the layout's forgetting of a shell that ends, pinned), `a405bdb` (this note), `8c0efd9` (the fix round: the shell home), `b5c4a23` (the fix round: the layout), `1a82f86` (the fix round tightened), `57f458a` (the shell home's `BufWipeout` handler dropped), `c551c1a` (the fix round in this note).
+- Released in v0.2.35 (PR #217, `main` `6ccd054`).

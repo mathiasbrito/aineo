@@ -127,8 +127,9 @@ Mutants of the fix round, run on `tests/test_claude_copies.lua`, all on the comm
 
 ## Task lines
 
-- T61 — implemented on `feature/t61-claude-copies` (PR #207); the line is marked by the knowledge pass after the merge (wave 15 holds its marks). Open on it: `started_homes` never forgets a home, which T67 will need when a tab closes (T67's); the start token's report-server side (the offer carrying it) is untouched (T64's).
+- [X] T61 — implemented on `feature/t61-claude-copies` (PR #207); the line is marked by the knowledge pass after the merge (wave 15 holds its marks). Open on it: `started_homes` never forgets a home, which T67 will need when a tab closes (T67's); the start token's report-server side (the offer carrying it) is untouched (T64's).
 
 ## Commits
 
-*Recorded after the merge.*
+- PR #207, `feature/t61-claude-copies`, head `abac959` (6 commits), merged by rebase into `dev` as `1b38339` (the brief's amendment at dispatch), `1e85d8f` (the Claude session home's copies, stopped together at quit), `79dc257` (`write_to_session()`'s error naming its caller), `b147acd` (this note), `93e0b61` (the fix round: a copy stopped in every state, Send's target validated, the routing pinned), `5065812` (the fix round in this note).
+- Released in v0.2.34 (PR #214, `main` `8fe30d0`).
