@@ -91,3 +91,12 @@ None.
 
 - The Input window's ID changes on every round trip; nothing in the repository reads it.
 - Left to the orchestrator's check: the whole suite (D30).
+
+## Fix round (the review of the pull request; the orchestrator's assumptions)
+
+- **Finding 1, the Report's top line drifted** on every round trip (50 became 39 after four `\pt` and `\pa`): closing Input's window grows the Report's window and Neovim moves its top line to keep the cursor at the same fraction of the height, and the moved view was saved. `close_input_window()` now saves the Report window's view before the close and restores it after. Cases: top line 50, cursor 52, `'scrolloff'` 0, four round trips, the cursor in the Report's window and in Claude's. Red first: 39 and 42 against 50.
+- **Finding 2, the share**: `open_input_window()` sized the column through `keep_proportions()`, which needs Claude's window; with it closed Input came back at 11 of 21 rows. It now calls `size_right_column()` when the Report's window exists. Case, for `\pa`, `\g` and the shell's `exit`, Claude's window closed first. Red first: 10 rows against 14.
+- **Finding 3**: the help says `\r` leaves Input closed when it was closed before `\pt`, and `\pa`, `\g` and `\i` open it.
+- **Finding 4**: the first round-trip case asserts the reopened Input's `winfixheight` and `winfixwidth`.
+
+Mutants, killed by assertion: the Report view's save removed (2 cases), `size_right_column()` removed (3), `pin_windows()` removed from `open_input_window()` (1).
