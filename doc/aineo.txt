@@ -1388,8 +1388,8 @@ own buffer only. A mapping you make later replaces aineo's. A mapping that
 only overlaps aineo's key is not yours in this sense: with your own `\sa`,
 aineo still maps `\s`, and `\sa` then waits for 'timeoutlen' after `\s`;
 with your own `\t` or `\tc`, aineo still maps `\tcn`, with your own `\p` — or
-`<Leader>p` while the leader is `\` — it still maps `\pa`, and with your own
-`\gs` it still maps `\g`: yours then waits for 'timeoutlen'.
+`<Leader>p` while the leader is `\` — it still maps `\pa` and `\pt`, and with
+your own `\gs` it still maps `\g`: yours then waits for 'timeoutlen'.
 
 The prefix is read once, when the editor has started (|VimEnter|): a
 `setup()` or `vim.g.aineo` that changes it later maps nothing until the next
