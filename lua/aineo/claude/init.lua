@@ -1331,15 +1331,15 @@ function M.list_sessions(command, folder, on_done)
 end
 
 --- Where `listed`, as `list_sessions()` delivers it, stands for a pick,
---- given the session of aineo's own terminal and the folder listed
+--- given the tab pages that show a session and the folder listed
 --- (`agents.standing()`).
 ---
 ---@param listed aineo.claude.ListedSession
----@param own_session_id string?
+---@param shown_in_tabs aineo.claude.ShownInTabs
 ---@param folder string
----@return 'own'|'elsewhere'|'another_folder'|'switchable'
-function M.session_standing(listed, own_session_id, folder)
-  return agents.standing(listed, own_session_id, folder)
+---@return 'shown'|'elsewhere'|'another_folder'|'switchable'
+function M.session_standing(listed, shown_in_tabs, folder)
+  return agents.standing(listed, shown_in_tabs, folder)
 end
 
 --- What names `listed`, as `list_sessions()` delivers it, to the user
@@ -1354,11 +1354,11 @@ end
 --- The row of the list of sessions for `listed` (`agents.row()`).
 ---
 ---@param listed aineo.claude.ListedSession
----@param own_session_id string?
+---@param shown_in_tabs aineo.claude.ShownInTabs
 ---@param folder string
 ---@return string
-function M.session_row(listed, own_session_id, folder)
-  return agents.row(listed, own_session_id, folder)
+function M.session_row(listed, shown_in_tabs, folder)
+  return agents.row(listed, shown_in_tabs, folder)
 end
 
 --- Whether the prompt of Claude Code's terminal that `window` shows holds
@@ -1541,6 +1541,30 @@ for name, session_function in pairs(session_functions_of(module_home)) do
 end
 home_of_session[M] = module_home
 
+--- The homes of `sessions`, session homes (`M.new()`'s copies or this
+--- module), each marked stopped as `stop_session()` marks it. Raises an error
+--- naming `sessions` when one of them is no session home, marking none.
+---
+---@param sessions aineo.claude.Session[]
+---@return aineo.claude.Home[]
+local function homes_to_stop(sessions)
+  vim.validate('sessions', sessions, 'table')
+  local homes = {}
+  for _, session in ipairs(sessions) do
+    local home = home_of_session[session]
+    if not home then
+      error('sessions: expected session homes, got ' .. vim.inspect(session), 3)
+    end
+    table.insert(homes, home)
+  end
+  for _, home in ipairs(homes) do
+    if home.session then
+      home.session.stopped = true
+    end
+  end
+  return homes
+end
+
 --- Stops the Claude Codes of `sessions`, session homes (`M.new()`'s copies or
 --- this module), together, as quitting stops them all (`stop_running_sessions()`):
 --- every key of the stop is pressed to every Claude Code that runs and the
@@ -1553,19 +1577,24 @@ home_of_session[M] = module_home
 ---
 ---@param sessions aineo.claude.Session[]
 function M.stop_sessions(sessions)
-  vim.validate('sessions', sessions, 'table')
-  local homes = {}
-  for _, session in ipairs(sessions) do
-    local home = home_of_session[session]
-    if not home then
-      error('sessions: expected session homes, got ' .. vim.inspect(session), 2)
-    end
-    if home.session then
-      home.session.stopped = true
-    end
-    table.insert(homes, home)
-  end
-  stop_running_sessions(homes)
+  stop_running_sessions(homes_to_stop(sessions))
+end
+
+--- Stops the Claude Codes of `sessions` as `M.stop_sessions()` does, but
+--- without blocking the editor (`stop.stop_together_in_background()`): it
+--- returns at once, and calls `on_done`, scheduled, once each has exited or
+--- its stop has run out. When Neovim quits meanwhile the stop is left to the
+--- quit, which stops every Claude Code that runs, and `on_done` is not
+--- called. Raises an error naming `sessions` when one of them is no session
+--- home, starting no stop.
+---
+---@param sessions aineo.claude.Session[]
+---@param on_done fun()
+function M.stop_sessions_in_background(sessions, on_done)
+  stop.stop_together_in_background(
+    vim.iter(homes_to_stop(sessions)):map(stop_of):totable(),
+    on_done
+  )
 end
 
 return M

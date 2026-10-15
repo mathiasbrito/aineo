@@ -308,6 +308,7 @@ local PREFIX_KEYS = {
   { key = 'pa', plug = '<Plug>(aineo-pane-agent)', mode = 'n' },
   { key = 'g', plug = '<Plug>(aineo-pane-changes)', mode = 'n' },
   { key = 'T', plug = '<Plug>(aineo-tab-new)', mode = 'n' },
+  { key = 'Q', plug = '<Plug>(aineo-tab-close)', mode = 'n' },
   { key = '1', plug = '<Plug>(aineo-tab-1)', mode = 'n' },
   { key = '2', plug = '<Plug>(aineo-tab-2)', mode = 'n' },
   { key = '3', plug = '<Plug>(aineo-tab-3)', mode = 'n' },
