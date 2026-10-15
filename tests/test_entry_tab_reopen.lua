@@ -459,6 +459,35 @@ T['the first open']['tells which sessions failed and which were not tried when a
   eq(tabs.tab_count(child), 1)
 end
 
+T['the first open']['keeps the sessions not tried in the list when the first tab cannot start'] = function()
+  local state, folder = reopening_setup(
+    'reopen-first-fails',
+    { sessions = { FIRST, SECOND, THIRD }, current = 1 },
+    FIRST
+  )
+  child.lua([[
+    require('aineo.claude').start_session = function()
+      error('cannot start the probe', 0)
+    end
+  ]])
+  child.lua('_G.entry_test_messages = {}')
+
+  child.cmd('Aineo open')
+
+  eq(entry.messages(child), {
+    {
+      message = 'aineo: reopening stopped at '
+        .. FIRST
+        .. ': cannot start the probe; not tried: '
+        .. SECOND
+        .. ', '
+        .. THIRD,
+      level = vim.log.levels.ERROR,
+    },
+  })
+  eq(tabs.kept_tab_list(state, folder).sessions, { SECOND, THIRD })
+end
+
 T['the first open']['opens at most 20 tabs, in the order of the list, and tells how many it left in the list'] = function()
   local sessions = vim.tbl_map(numbered_session, vim.fn.range(1, 22))
   local state, folder =
