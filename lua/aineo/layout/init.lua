@@ -81,9 +81,9 @@ local function make_layout(input_name, group_name)
   --- before it hid them, and the window and buffer those line numbers were
   --- last shown for; the status line Claude's window draws for Claude's
   --- terminal, the one handed last; the diffs `M.show_diff()` showed, by
-  --- buffer; and, while the Report's window closes with the shell's terminal
-  --- in it, whether the cursor was in that window
-  --- (`note_shell_window_closing()`).
+  --- buffer; while the Report's window closes with the shell's terminal in
+  --- it, whether the cursor was in that window, and the ID of such a window
+  --- that closed on its own (`note_shell_window_closing()`).
   local state = {
     ---@type table<aineo.layout.Role, integer>
     windows = {},
@@ -111,6 +111,8 @@ local function make_layout(input_name, group_name)
     diffs = {},
     ---@type { had_cursor: boolean }|nil
     closing_shell_window = nil,
+    ---@type integer|nil
+    left_closed_shell_window = nil,
   }
 
   --- The role of `window` in the layout, or `nil` when it is not one of its
@@ -725,6 +727,14 @@ local function make_layout(input_name, group_name)
     vim.api.nvim_set_current_win(input_window)
   end
 
+  --- Opens the Report's window again, showing its own buffer: above Input, or
+  --- as the rightmost column when Input is closed too.
+  local function open_report_window()
+    local place = has_window('input') and { split = 'above', win = state.windows.input }
+      or { split = 'right', win = -1 }
+    state.windows.report = vim.api.nvim_open_win(own_buffer('report'), false, place)
+  end
+
   --- Opens again, in their places, those of the layout's three windows that
   --- were closed, each showing its buffer: Claude's as the leftmost column, the
   --- Report above Input, or as the rightmost column when Input is closed too,
@@ -735,9 +745,7 @@ local function make_layout(input_name, group_name)
         vim.api.nvim_open_win(own_buffer('claude'), false, { split = 'left', win = -1 })
     end
     if not has_window('report') then
-      local place = has_window('input') and { split = 'above', win = state.windows.input }
-        or { split = 'right', win = -1 }
-      state.windows.report = vim.api.nvim_open_win(own_buffer('report'), false, place)
+      open_report_window()
     end
     if not has_window('input') then
       state.windows.input = vim.api.nvim_open_win(
@@ -1197,43 +1205,85 @@ local function make_layout(input_name, group_name)
     state.buffers.shell = nil
   end
 
-  --- Shows the agent pane in place as the process of the shell ends
-  --- while the terminal pane shows it, so that the Report's window stays the
-  --- window it is when the shell's buffer goes, and forgets the shell
-  --- (`forget_shell()`); while another pane shows, only forgets it. The
-  --- Report's window gone, as a wipe of the terminal that is running closes
-  --- it before the shell is told to end, or a window that refuses the agent
-  --- pane's buffer (the user is told), leaves the shell remembered and the
-  --- terminal pane shown: the terminal's wipe, which follows, then shows the
-  --- agent pane (`show_agent_pane_as_shell_is_wiped()`).
+  --- Makes the agent pane the pane shown, and forgets the shell, when the
+  --- shell's buffer was wiped where no handler of the layout's saw it: by a
+  --- command run in an autocommand that is not nested, such as a user's
+  --- `TermClose` handler that deletes the terminal, which runs no
+  --- `BufWipeout`. The windows are left as they are.
+  local function forget_wiped_shell()
+    if state.buffers.shell and not vim.api.nvim_buf_is_valid(state.buffers.shell) then
+      forget_shell()
+      if state.pane == 'terminal' then
+        state.pane = 'agent'
+      end
+    end
+  end
+
+  --- `message` without the file and line of Lua source a Neovim error carries
+  --- in front of its words.
   ---
-  ---@param event { buf: integer }
-  local function show_agent_pane_as_shell_ends(event)
-    if event.buf ~= state.buffers.shell then
+  ---@param message any
+  ---@return string
+  local function without_source_location(message)
+    return (tostring(message):gsub('^.-%.lua:%d+: ', ''))
+  end
+
+  --- Tells the user that the agent pane could not be shown, in the words of
+  --- the refusal.
+  ---
+  ---@param failure any
+  local function warn_agent_pane_cannot_show(failure)
+    vim.notify(
+      ('aineo: the agent pane could not be shown: %s'):format(without_source_location(failure)),
+      vim.log.levels.WARN
+    )
+  end
+
+  --- Shows the agent pane again with its windows, once the commands that
+  --- wiped the shell's terminal are done. The Report's window is opened again
+  --- in its place above Input when the wipe closed it, and not when the user
+  --- had closed it before (`state.left_closed_shell_window`); a window of the
+  --- layout the user closed stays closed. Every window of the right column
+  --- that exists shows the agent pane's buffer, and the proportions are put
+  --- back. The cursor goes to the Report when it was in the shell's window,
+  --- and stays in the window it is in otherwise, in whichever tab page. Does
+  --- nothing once the layout's windows are all gone; tells the user, raising
+  --- nothing, when the agent pane cannot be shown.
+  ---
+  ---@param cursor_was_in_shell_window boolean
+  local function reopen_agent_pane(cursor_was_in_shell_window)
+    if not has_any_window() then
       return
     end
-    if state.pane == 'terminal' then
-      if not has_window('report') then
-        return
+    local current = vim.api.nvim_get_current_win()
+    local reopened, failure = pcall(function()
+      if not has_window('report') and state.left_closed_shell_window ~= state.windows.report then
+        vim.api.nvim_set_current_tabpage(layout_tab())
+        open_report_window()
+        pin_windows()
       end
-      local shown, failure = pcall(switch_pane, 'agent')
-      if not shown then
-        vim.notify(
-          ('aineo: the agent pane could not be shown as the shell ended: %s'):format(failure),
-          vim.log.levels.WARN
-        )
-        return
-      end
+      show_buffers_of('agent')
+      wrap_agent_pane()
+      follow_reports_shown_again()
+      keep_proportions()
+    end)
+    if not reopened then
+      warn_agent_pane_cannot_show(failure)
     end
-    forget_shell()
+    if cursor_was_in_shell_window and has_window('report') then
+      vim.api.nvim_set_current_win(state.windows.report)
+    elseif vim.api.nvim_win_is_valid(current) then
+      vim.api.nvim_set_current_win(current)
+    end
   end
 
   --- Notes, as the Report's window closes with the shell's terminal in it,
   --- whether the cursor was in that window, for the wipe of the terminal that
   --- follows in the same command (`show_agent_pane_as_shell_is_wiped()`),
-  --- which finds the cursor moved to another window. The note is dropped once
-  --- the command is done, so that a window closed on its own leaves none for
-  --- a later wipe.
+  --- which finds the cursor moved to another window. When the command is done
+  --- and no wipe took the note, the window was closed on its own: the layout
+  --- keeps its ID as the Report's window left closed, which the wipe of the
+  --- terminal, later, does not open again (`reopen_agent_pane()`).
   ---
   ---@param event { match: string }
   local function note_shell_window_closing(event)
@@ -1245,50 +1295,22 @@ local function make_layout(input_name, group_name)
     then
       return
     end
-    state.closing_shell_window = { had_cursor = vim.api.nvim_get_current_win() == window }
+    local note = { had_cursor = vim.api.nvim_get_current_win() == window }
+    state.closing_shell_window = note
     vim.schedule(function()
-      state.closing_shell_window = nil
+      if state.closing_shell_window == note then
+        state.closing_shell_window = nil
+        state.left_closed_shell_window = window
+      end
     end)
-  end
-
-  --- Shows the agent pane again with its windows, once the commands that
-  --- wiped the shell's terminal are done: opens the layout again as `M.open()`
-  --- does, which opens the Report's window again in its place above Input
-  --- when Neovim closed it with the terminal, and puts the proportions back.
-  --- The cursor goes to the Report when it was in the shell's window, and
-  --- stays in the window it is in otherwise, in whichever tab page. Does
-  --- nothing once the layout's windows are all gone; tells the user, raising
-  --- nothing, when the layout cannot be opened again.
-  ---
-  ---@param cursor_was_in_shell_window boolean
-  local function reopen_agent_pane(cursor_was_in_shell_window)
-    if not has_any_window() then
-      return
-    end
-    local current = vim.api.nvim_get_current_win()
-    local reopened, failure = pcall(M.open, {
-      claude = state.buffers.claude,
-      report = state.buffers.report,
-      report_height = state.report_height,
-    })
-    if not reopened then
-      vim.notify(
-        ('aineo: the agent pane could not be shown again as the shell went: %s'):format(failure),
-        vim.log.levels.WARN
-      )
-    elseif cursor_was_in_shell_window then
-      vim.api.nvim_set_current_win(state.windows.report)
-    elseif vim.api.nvim_win_is_valid(current) then
-      vim.api.nvim_set_current_win(current)
-    end
   end
 
   --- Forgets the shell as its terminal is wiped, and, when the terminal pane
   --- showed it, makes the agent pane the pane shown at once and shows it
-  --- again with its windows (`reopen_agent_pane()`) once the command that wiped
-  --- the terminal is done: Neovim closes the Report's window with the
-  --- terminal, before any buffer event, so the window cannot be kept as it
-  --- is when the terminal's shell ends (`show_agent_pane_as_shell_ends()`).
+  --- again (`reopen_agent_pane()`) once the command that wiped the terminal is
+  --- done: Neovim closes the Report's window with the terminal, before any
+  --- buffer event, so the window cannot be kept as it is when the terminal's
+  --- shell ends (`show_agent_pane_as_shell_ends()`).
   ---
   ---@param event { buf: integer }
   local function show_agent_pane_as_shell_is_wiped(event)
@@ -1296,16 +1318,69 @@ local function make_layout(input_name, group_name)
       return
     end
     local was_shown = state.pane == 'terminal'
-    local cursor_was_in_shell_window = state.closing_shell_window ~= nil
-      and state.closing_shell_window.had_cursor
+    local note = state.closing_shell_window
+    state.closing_shell_window = nil
     forget_shell()
     if not was_shown then
       return
     end
     state.pane = 'agent'
     vim.schedule(function()
-      reopen_agent_pane(cursor_was_in_shell_window)
+      reopen_agent_pane(note ~= nil and note.had_cursor)
     end)
+  end
+
+  --- Tells the user that the agent pane could not be shown as the shell ended,
+  --- unless the wipe of the shell's terminal has shown it by then: the home of
+  --- the shell wipes the terminal from a scheduled callback, and the wipe that
+  --- follows makes the agent pane the pane shown. A failure that fixes itself
+  --- so is not told; the check waits two ticks, past a wipe scheduled after
+  --- it.
+  ---
+  ---@param buffer integer the shell's terminal
+  ---@param failure any
+  local function warn_unless_wiped_meanwhile(buffer, failure)
+    vim.schedule(function()
+      vim.schedule(function()
+        if state.buffers.shell == buffer then
+          warn_agent_pane_cannot_show(failure)
+        end
+      end)
+    end)
+  end
+
+  --- Shows the agent pane in place as the process of the shell ends
+  --- while the terminal pane shows it, so that the Report's window stays the
+  --- window it is when the shell's buffer goes, and forgets the shell
+  --- (`forget_shell()`); while another pane shows, only forgets it. A terminal
+  --- wiped already, where no handler saw it, is dealt with as a wipe is
+  --- (`show_agent_pane_as_shell_is_wiped()`). The Report's window gone, as a
+  --- wipe of the terminal that is running closes it before the shell is told
+  --- to end, or a window that refuses the agent pane's buffer, leaves the
+  --- shell remembered and the terminal pane shown: the terminal's wipe, which
+  --- follows, then shows the agent pane, and the user is told only if it does
+  --- not (`warn_unless_wiped_meanwhile()`).
+  ---
+  ---@param event { buf: integer }
+  local function show_agent_pane_as_shell_ends(event)
+    if event.buf ~= state.buffers.shell then
+      return
+    end
+    if not vim.api.nvim_buf_is_valid(event.buf) then
+      show_agent_pane_as_shell_is_wiped(event)
+      return
+    end
+    if state.pane == 'terminal' then
+      if not has_window('report') then
+        return
+      end
+      local shown, failure = pcall(switch_pane, 'agent')
+      if not shown then
+        warn_unless_wiped_meanwhile(event.buf, failure)
+        return
+      end
+    end
+    forget_shell()
   end
 
   --- Adds to the layout's group of handlers (`watch_windows()`) those that
@@ -1415,8 +1490,12 @@ local function make_layout(input_name, group_name)
   --- the command that wiped it is done, which opens the Report's window again
   --- in its place when Neovim closed it with the terminal. The cursor goes to
   --- the Report when it was in the shell's window, and stays where it is
-  --- otherwise, in whichever tab page. The layout then forgets that shell,
-  --- whichever pane shows.
+  --- otherwise, in whichever tab page; the Report's window the user had
+  --- closed stays closed. The layout then forgets that shell, whichever pane
+  --- shows, and a shell wiped where none of these handlers saw it, by a
+  --- command in an autocommand that is not nested, is forgotten by the next
+  --- call of `open()`, `focus()` or `show_pane()`, or by the end of its
+  --- process.
   ---
   --- Raises an error naming the setting, before changing anything, when
   --- `arrangement` is not a table, `claude` or `report` is not an existing
@@ -1429,6 +1508,7 @@ local function make_layout(input_name, group_name)
   function M.open(arrangement)
     validate_arrangement(arrangement)
     take_arrangement(arrangement)
+    forget_wiped_shell()
     if has_any_window() then
       vim.api.nvim_set_current_tabpage(layout_tab())
       if not has_input() then
@@ -1506,6 +1586,7 @@ local function make_layout(input_name, group_name)
     vim.validate('role', role, function(value)
       return vim.list_contains(ROLES, value)
     end, false, "'claude', 'report' or 'input'")
+    forget_wiped_shell()
     if must_open_to_focus(role) then
       if type(arrangement) == 'function' then
         arrangement = arrangement()
@@ -1564,6 +1645,7 @@ local function make_layout(input_name, group_name)
     vim.validate('pane', pane, function(value)
       return PANE_BUFFERS[value] ~= nil
     end, false, "'agent', 'changes' or 'terminal'")
+    forget_wiped_shell()
     if not can_show_in_place(pane) then
       local current = vim.api.nvim_get_current_win()
       local restoring = has_any_window()

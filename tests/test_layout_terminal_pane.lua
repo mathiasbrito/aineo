@@ -52,10 +52,13 @@ end
 --- of a shell the shell home started; returns every buffer the layout was
 --- handed or made, by name.
 ---
+---@param user_setup? string Lua the user's configuration would run in the child before aineo starts a shell
+---@param shell? string the child's `'shell'`; `TEST_SHELL` without it
 ---@return { claude: integer, report: integer, input: integer, files: integer, commits: integer, shell: integer } buffers
-local function open_with_panes()
+local function open_with_panes(user_setup, shell)
   layout.start(child)
-  child.o.shell = TEST_SHELL
+  child.o.shell = shell or TEST_SHELL
+  child.lua(user_setup or '')
   local buffers = layout.stand_ins(child)
   local changes = changes_stand_ins()
   buffers.shell = child.lua_get([[require('aineo.shell').start({ cwd = vim.uv.cwd() })]])
@@ -168,8 +171,9 @@ T['the terminal pane']['keeps the shell handed last when a later arrangement han
   local report_window = layout.window_showing(child, buffers.report)
 
   layout.open(child, layout.arrangement(buffers))
-  show_pane('terminal')
+  local shown = pcall(child.lua, [[require('aineo.layout').show_pane('terminal')]])
 
+  eq(shown, true)
   eq(child.api.nvim_win_get_buf(report_window), buffers.shell)
 end
 
@@ -797,6 +801,166 @@ T['a shell that ends and is not wiped']['is forgotten, whichever pane showed, so
   )
   eq(shown, false)
   eq(message:find('arrangement.shell', 1, true) ~= nil, true)
+end
+
+--- Runs, in the child, the scheduled callbacks queued so far, and those they
+--- queue in turn.
+local function flush_scheduled()
+  child.lua([[
+    local done = false
+    vim.schedule(function()
+      vim.schedule(function()
+        done = true
+      end)
+    end)
+    vim.wait(1000, function()
+      return done
+    end)
+  ]])
+end
+
+--- The ways a shell goes where no handler of aineo's sees it, which a
+--- command run in an autocommand that is not nested does: a user's `TermClose`
+--- handler that deletes the terminal, written in Lua and in Vimscript (with a
+--- `'shell'` that Neovim's own handler leaves alone), each with what ends the
+--- shell.
+local UNSEEN_WIPES = {
+  {
+    [[vim.api.nvim_create_autocmd('TermClose', {
+      callback = function(event)
+        vim.api.nvim_buf_delete(event.buf, { force = true })
+      end,
+    })]],
+    TEST_SHELL,
+    'exit 3',
+  },
+  {
+    [[vim.cmd("autocmd TermClose * if !v:event.status | exe 'bdelete! '..expand('<abuf>') | endif")]],
+    'sh',
+    'exit 0',
+  },
+}
+
+T['a shell wiped where no handler sees it'] = MiniTest.new_set({ parametrize = UNSEEN_WIPES })
+
+T['a shell wiped where no handler sees it']['leaves the Report shown again and the layout working, for a user’s handler'] = function(
+  user_setup,
+  shell,
+  ending
+)
+  local buffers = open_with_panes(user_setup, shell)
+  show_pane('terminal')
+
+  type_into_shell(buffers.shell, ending)
+
+  eq(wait_until(REPORT_SHOWN, { buffers.report }), true)
+  eq(child.lua_get([[require('aineo.shell').shell_buffer()]]), vim.NIL)
+  local focused = pcall(layout.focus, child, 'report', layout.arrangement(buffers))
+  eq(focused, true)
+  eq(layout.window_count(child), 3)
+end
+
+T['a shell stopped where no handler sees it'] = MiniTest.new_set()
+
+T['a shell stopped where no handler sees it']['leaves the layout opening on the agent pane'] = function()
+  local buffers = open_with_panes()
+  show_pane('terminal')
+  child.lua([[
+    vim.api.nvim_create_autocmd('User', {
+      pattern = 'AineoTestStop',
+      callback = function()
+        require('aineo.shell').stop()
+      end,
+    })
+    vim.api.nvim_exec_autocmds('User', { pattern = 'AineoTestStop' })
+  ]])
+
+  local opened = pcall(layout.open, child, layout.arrangement(buffers))
+
+  eq(opened, true)
+  eq(child.api.nvim_win_get_buf(layout.window_showing(child, buffers.report)), buffers.report)
+  eq(layout.window_count(child), 3)
+end
+
+T['a shell that ends while the user closed windows of the layout'] = MiniTest.new_set()
+
+T['a shell that ends while the user closed windows of the layout']['leaves the Report’s window closed'] = function()
+  local buffers = open_with_panes()
+  show_pane('terminal')
+  child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)', { buffers.shell })
+
+  type_into_shell(buffers.shell, 'exit 3')
+  eq(wait_until('not vim.api.nvim_buf_is_valid(...)', { buffers.shell }), true)
+  flush_scheduled()
+
+  eq(child.lua_get('vim.fn.win_findbuf(...)', { buffers.report }), {})
+  eq(layout.window_count(child), 2)
+end
+
+T['a shell that ends while the user closed windows of the layout']['reopens the Report’s window when its wipe closed it, and leaves Input’s closed'] = function()
+  local buffers = open_with_panes()
+  show_pane('terminal')
+  child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)', { buffers.input })
+
+  type_into_shell(buffers.shell, 'exit 0')
+  eq(wait_until(REPORT_SHOWN, { buffers.report }), true)
+  flush_scheduled()
+
+  eq(child.lua_get('vim.fn.win_findbuf(...)', { buffers.input }), {})
+  eq(layout.window_count(child), 2)
+end
+
+--- Records, in the child, what `vim.notify()` is told, in `_G.notices`.
+local function record_notices()
+  child.lua([[
+    _G.notices = {}
+    vim.notify = function(message)
+      table.insert(_G.notices, message)
+    end
+  ]])
+end
+
+T['a shell that ends in a window that refuses another buffer'] = MiniTest.new_set()
+
+T['a shell that ends in a window that refuses another buffer']['tells nothing when its wipe, a tick later, shows the agent pane'] = function()
+  local buffers = open_with_panes()
+  show_pane('terminal')
+  record_notices()
+  child.api.nvim_set_option_value(
+    'winfixbuf',
+    true,
+    { win = layout.window_showing(child, buffers.shell) }
+  )
+
+  type_into_shell(buffers.shell, 'exit 3')
+  eq(wait_until(REPORT_SHOWN, { buffers.report }), true)
+  flush_scheduled()
+
+  eq(child.lua_get('_G.notices'), {})
+end
+
+T['a shell that ends in a window that refuses another buffer']['tells once, without a file or a line of aineo’s, when the agent pane still cannot show'] = function()
+  local buffers = open_with_panes()
+  buffers.shell = unwiped_terminal()
+  local arrangement = layout.arrangement(buffers)
+  arrangement.shell = buffers.shell
+  layout.open(child, arrangement)
+  show_pane('terminal')
+  record_notices()
+  child.api.nvim_set_option_value(
+    'winfixbuf',
+    true,
+    { win = layout.window_showing(child, buffers.shell) }
+  )
+
+  type_into_shell(buffers.shell, '')
+  eq(wait_until('#_G.notices > 0'), true)
+  flush_scheduled()
+
+  local notices = child.lua_get('_G.notices')
+  eq(#notices, 1)
+  eq(notices[1]:find('winfixbuf', 1, true) ~= nil, true)
+  eq(notices[1]:find('.lua', 1, true), nil)
 end
 
 return T
