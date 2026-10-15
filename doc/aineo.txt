@@ -196,8 +196,8 @@ A tab's title is its number and, for an aineo tab, the name of its session,
 the name Claude Code gives it, cut to 24 cells; for any other tab page, the
 name of its current buffer. While 'tabline' is empty when the first aineo tab
 opens, aineo sets it to a tab line of its own that draws those titles, the
-current tab in |hl-TabLineSel|, the others in |hl-TabLine|, each clickable. A
-'tabline' you set is left in place.
+current tab in `AineoTabLineSel`, the others in `AineoTabLine`
+(|aineo-tabline|), each clickable. A 'tabline' you set is left in place.
                                                              *aineo-tab_title*
 `require('aineo').tab_title({n})` gives the title aineo would draw for the
 tab page numbered {n}, for your own tab line; nil when there is no such tab
@@ -211,9 +211,10 @@ defaults: `AineoTabLineSel` is |hl-TabLineSel|'s colours in bold;
 `AineoTabLine` is the foreground of |hl-Normal| over the background of
 |hl-TabLine|, linked to |hl-TabLine| when |hl-Normal| has no foreground;
 `AineoTabLineFill` is linked to |hl-TabLineFill|. aineo defines them when it
-takes the tab line and again after every |:colorscheme|, which clears them. A
-group you define is kept as you defined it; define it again in a
-|ColorScheme| autocommand to keep it across colorschemes: >lua
+takes the tab line and again after every |:colorscheme|, which clears them,
+and every change of 'background'. A group you define is kept as you defined
+it; define it again in a |ColorScheme| autocommand to keep it across
+colorschemes: >lua
     vim.api.nvim_set_hl(0, 'AineoTabLineSel', { fg = '#ffffff', bold = true })
 <
 Every title has `tabs.padding` spaces either side of it
@@ -1511,7 +1512,7 @@ changes.working_branch	A non-empty string.
 			last fetched (|aineo-limits|).
 
                                                    *aineo-config-tabs.padding*
-tabs.padding		A whole number from 0. Default: `2`
+tabs.padding		A whole number from 0 to 8. Default: `2`
 			The spaces either side of every title in aineo's tab
 			line (|aineo-tabline|). `0` leaves none. Titles that
 			do not all fit the width of the editor are drawn in

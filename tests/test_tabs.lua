@@ -698,25 +698,28 @@ T['tabline()']['takes the padding from the options setup() recorded'] = function
 end
 
 T['tabline()']['draws the default padding, and raises nothing, when the setting is wrong'] = function()
-  local drawn = drawn_tabline('vim.g.aineo = { tabs = { padding = -1 } }')
+  local drawn = drawn_tabline('vim.g.aineo = { tabs = { padding = math.huge } }')
 
   eq(drawn.str, '  1 [No Name]  ')
 end
 
 T['tabline()']['counts the padding in the width of the titles it fits'] = MiniTest.new_set({
   parametrize = {
-    { 80, 0, 3 },
-    { 66, 4, 1 },
+    { 80, 0, 1, 3 },
+    { 66, 4, 1, 1 },
+    { 100, 4, 1, 2 },
+    { 100, 4, 3, 2 },
   },
 })
 
 T['tabline()']['counts the padding in the width of the titles it fits'][1] = function(
   columns,
   padding,
+  current,
   titles_drawn
 )
   local line = drawn_over_three_long_names(
-    1,
+    current,
     ('vim.o.columns = %d vim.g.aineo = { tabs = { padding = %d } }'):format(columns, padding)
   )
 
