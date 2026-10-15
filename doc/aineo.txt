@@ -149,8 +149,10 @@ From another tab page they switch the pane in the layout's tab page,
 restoring the layout there first when one of its windows is gone, and move
 you there. `\r` and `\i` show the agent pane first, then move to the Report
 or Input, the terminal pane giving way to it too, which opens Input's window
-again; `\c` and `\tcn` leave the pane as it is. Send sends Input while the
-changes pane or the terminal pane hides it (|aineo-send|). When a window will
+again, unless you had closed it before `\pt` and asked for the Report (`\pa`,
+`\g` and `\i` open it); `\c` and `\tcn` leave the pane as it is. Send sends
+Input while the changes pane or the terminal pane hides it (|aineo-send|).
+When a window will
 not take its buffer — 'winfixbuf' is set there, say, or you are in the
 command-line window — aineo tells you why, once, and gives each window back
 the buffer it showed. A window that will not take that one back either

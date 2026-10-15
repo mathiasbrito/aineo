@@ -277,6 +277,55 @@ T['leaving the terminal pane']['shows the agent pane again, the Report over Inpu
 
   eq(layout.boxes(child, buffers), boxes_before)
   eq(draft_of(buffers.input), { cursor = { 2, 1 }, lines = { 'one', 'two', 'three' } })
+  local input_window = layout.window_showing(child, buffers.input)
+  eq(child.lua_get('vim.wo[...].winfixheight', { input_window }), true)
+  eq(child.lua_get('vim.wo[...].winfixwidth', { input_window }), true)
+end
+
+--- The ways back from the terminal pane the share cases run, each a function
+--- of the buffers `open_with_panes()` returned that goes back and returns the
+--- buffers the right column's two windows then show.
+local WAYS_BACK = {
+  {
+    'the agent pane',
+    function(buffers)
+      show_pane('agent')
+      return buffers.report, buffers.input
+    end,
+  },
+  {
+    'the changes pane',
+    function(buffers)
+      show_pane('changes')
+      return buffers.files, buffers.commits
+    end,
+  },
+  {
+    'the shell’s exit',
+    function(buffers)
+      type_into_shell(buffers.shell, 'exit 3')
+      wait_until(REPORT_SHOWN, { buffers.report })
+      return buffers.report, buffers.input
+    end,
+  },
+}
+
+T['leaving the terminal pane']['gives the Report its share of the column when Claude’s window is closed, for'] =
+  MiniTest.new_set({ parametrize = WAYS_BACK })
+
+T['leaving the terminal pane']['gives the Report its share of the column when Claude’s window is closed, for']['the way back'] = function(
+  _,
+  way_back
+)
+  local buffers = open_with_panes()
+  show_pane('terminal')
+  layout.close_windows(child, buffers, { 'claude' })
+
+  local upper, lower = way_back(buffers)
+
+  local report = layout.box(child, layout.window_showing(child, upper))
+  local input = layout.box(child, layout.window_showing(child, lower))
+  layout.expect_near(report.height, (report.height + input.height) * layout.REPORT_HEIGHT)
 end
 
 T['leaving the terminal pane']['shows the changes pane in two windows that fill the right column, as the agent pane’s do'] = function()
@@ -427,6 +476,59 @@ local function view_of_window_showing(buffer)
     end)]],
     { layout.window_showing(child, buffer) }
   )
+end
+
+--- Shows the terminal pane and then the agent pane in the child, `count`
+--- times.
+---
+---@param count integer
+local function round_trips(count)
+  for _ = 1, count do
+    show_pane('terminal')
+    show_pane('agent')
+  end
+end
+
+--- Puts the child's Report window on top line 50 with the cursor on line 52,
+--- the Report holding two hundred lines, and returns the window.
+---
+---@param report integer the Report's buffer
+---@return integer window
+local function scroll_report_to_line_50(report)
+  child.o.scrolloff = 0
+  local lines = {}
+  for number = 1, 200 do
+    lines[number] = 'line ' .. number
+  end
+  child.api.nvim_buf_set_lines(report, 0, -1, true, lines)
+  local window = layout.window_showing(child, report)
+  child.lua(
+    [[vim.api.nvim_win_call(..., function()
+      vim.fn.winrestview({ topline = 50, lnum = 52 })
+    end)]],
+    { window }
+  )
+  return window
+end
+
+T['leaving the terminal pane']['keeps the Report’s top line through four round trips, the cursor in the Report’s window'] = function()
+  local buffers = open_with_panes()
+  scroll_report_to_line_50(buffers.report)
+  layout.enter_window_showing(child, buffers.report)
+
+  round_trips(4)
+
+  eq(view_of_window_showing(buffers.report), { topline = 50, lnum = 52 })
+end
+
+T['leaving the terminal pane']['keeps the Report’s top line through four round trips, the cursor in Claude’s window'] = function()
+  local buffers = open_with_panes()
+  scroll_report_to_line_50(buffers.report)
+  layout.enter_window_showing(child, buffers.claude)
+
+  round_trips(4)
+
+  eq(view_of_window_showing(buffers.report), { topline = 50, lnum = 52 })
 end
 
 T['the agent pane shown again after the terminal pane'] = MiniTest.new_set()
