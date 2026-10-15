@@ -1,0 +1,56 @@
+Wave 17 — planning probes, run 2026-10-15 by the planning agent
+================================================================
+
+Host: macOS, Neovim 0.12.5. Run: `sh w17-probes.sh <checkout root>` on
+`dev` `42b6b4c` (the checkout's `lua/aineo/claude/session_name.lua` and
+`lua/aineo/tabs/`). No `claude` ran: A2 and A3 run `sh` scripts that write the
+sequences the probes need. The scratch directory's path in A2's first title is
+replaced by `…`; nothing else is edited.
+
+Output
+------
+Neovim 0.12.5
+A1 'ambiwidth'=single: U+25D2 ◒=1, U+25D3 ◓=1, U+25CF ●=1, U+25D0 ◐=1, U+25D1 ◑=1, U+2733 ✳=1
+A1 'ambiwidth'=double: U+25D2 ◒=1, U+25D3 ◓=1, U+25CF ●=2, U+25D0 ◐=2, U+25D1 ◑=2, U+2733 ✳=1
+A1 charclass(U+25D2) = 1
+A1 charclass(U+25D3) = 1
+A1 charclass(U+25CF) = 1
+A1 charclass(U+25D0) = 1
+A1 charclass(U+25D1) = 1
+A1 charclass(U+2733) = 3
+A2 titles seen by a b:term_title watcher (11): term://…//65560:/bin/sh | ✳ probe | ◐ probe | ◑ probe | ◐ probe | ◑ probe | ◐ probe | ◑ probe | ◐ probe | ◑ probe | ✳ probe
+A2 b:aineo_session_name changes (1): probe; final probe
+A3 on_lines calls for 30 spinner repaints in ~3 s: 31; buffer line counts seen: 5
+A4 the measured Neovim has 1 UI attached
+A4  2 tab pages: tabline() 40.9 µs; :redrawtabline 44.7 µs, tabline() evaluated 1.00 times per redraw
+A4  6 tab pages: tabline() 43.6 µs; :redrawtabline 49.6 µs, tabline() evaluated 1.00 times per redraw
+A4 20 tab pages: tabline() 53.0 µs; :redrawtabline 59.6 µs, tabline() evaluated 1.00 times per redraw
+A5 6 tab pages, 10 s, timer at 0 Hz: 2.6 ms of CPU in the UI-attached Neovim
+A5 6 tab pages, 10 s, timer at 2 Hz: 6.3 ms of CPU in the UI-attached Neovim
+A5 6 tab pages, 10 s, timer at 4 Hz: 9.6 ms of CPU in the UI-attached Neovim
+Error in TermRequest Autocommands for "*":
+Lua callback: vim/_core/defaults:670: Can't send data to closed stream
+
+(The last two lines are the probe's own teardown: Neovim's default
+`TermRequest` handler answering a query of the measured Neovim's TUI after
+its socket was closed. They measure nothing.)
+
+Readings
+--------
+A1  ◒ and ◓, the user's glyphs, take one cell whatever 'ambiwidth' says. ●,
+    and Claude Code's own ◐ and ◑, take two under 'ambiwidth'=double. None of
+    the six is a letter or a digit (`charclass()` 1, ✳ 3), so
+    `session_name.lua`'s `without_status_glyph()` strips each of them.
+A2  A program alternating `◐ probe` and `◑ probe` as its OSC 0 title is seen
+    by a `b:term_title` watcher at every change (11 changes), while
+    `b:aineo_session_name` changes once: aineo's kept name already ignores the
+    busy glyphs, and its tab-line redraw on a name change does not fire on
+    them. The busy state is readable from the same watcher at no extra cost.
+A3  `on_lines` fires on every repaint of a spinner line (31 calls for 30
+    repaints) with the buffer's line count unchanged: it cannot tell new text
+    from a spinner without reading and comparing the screen at each call.
+A4  One draw of aineo's tab line costs 45–60 µs with a UI attached, 2 to 20
+    tab pages; `:redrawtabline` evaluates `tabline()` once per call.
+A5  A timer redrawing the tab line costs about 0.35 ms of CPU per tick in the
+    drawing Neovim, TUI output included: 0.04 % of one core at 2 Hz, 0.07 % at
+    4 Hz, against 0.03 % idle.

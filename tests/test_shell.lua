@@ -133,6 +133,17 @@ local function current_shell_buffer()
   return child.lua_get([[require('aineo.shell').shell_buffer()]])
 end
 
+T['shell_program()'] = MiniTest.new_set()
+
+T['shell_program()']['is the first word of `shell` as `:terminal` reads it, its quotes and escapes resolved'] = function()
+  start_child()
+  child.o.shell = [[ "/a dir/q\"sh" -l]]
+
+  local program = child.lua_get("require('aineo.shell').shell_program()")
+
+  eq(program, '/a dir/q"sh')
+end
+
 T['start()'] = MiniTest.new_set()
 
 T['start()']['returns a terminal buffer that runs the program `shell` names'] = function()

@@ -1,0 +1,65 @@
+Wave 17 — Claude Code 2.1.301's terminal title while busy, read from its binary
+================================================================================
+
+Read 2026-10-15 by the planning agent, by `sh w17-claude-title.sh <binary>`
+on the Claude Code 2.1.301 binary installed on the planning host. Read,
+never run: tier 2
+(`.claude/agents/neovim-claude-code-integrator.md`), true of 2.1.301 alone
+until a recording or a later read says otherwise. The minified names below
+are the binary's own and change with every build; the quotes are cut to
+what the reading needs.
+
+B1  The glyphs. The title component writes `<glyph> <title>` with
+        var u8=["◐","◑"],m8="✳",qlt=960;
+        ... let Ge=M&&!Ie?u8[Ee]??m8:m8; ... vAe(ce?null:L?ee:`${Ge} ${ee}`)
+    While it is animating (M), the glyph is ◐ (U+25D0) or ◑ (U+25D1), the
+    frame index stepping every 960 ms; otherwise it is ✳ (U+2733), the glyph
+    every recording so far holds (2.1.281's start, 2.1.292's titles, T33-6
+    and wave 9's M6).
+
+B2  When it animates. The component is given
+        isAnimating: status === "busy"
+    and the status is
+        waiting  — a dialog, a question, a permission or worker request,
+                   an elicitation ("input needed");
+        busy     — otherwise, while isLoading || delegatedActive;
+        idle     — otherwise.
+    delegatedActive is true while a task of one of these types runs:
+        local_agent, remote_agent, in_process_teammate, local_workflow
+    (a subagent is a local_agent; an idle teammate and a long-running
+    remote agent do not count). A background shell task (local_bash) does
+    not count. So: the busy glyphs show while the main agent works or a
+    subagent runs, also after the main turn ended; ✳ shows at idle and
+    while Claude Code waits for the user.
+
+B3  When the frames stop. The 960 ms tick runs only while the terminal
+    counts as focused (`isTerminalFocused`, which defaults to true until
+    Claude Code hears a focus event); unfocused, the glyph stays on the frame
+    it reached, still ◐ or ◑. The busy/idle split holds focused or not.
+
+B4  When the title never animates.
+    - Under a terminal multiplexer: the glyph is ✳ always when `TMUX`, `STY`
+      or `ZELLIJ` is set in Claude Code's environment (or its terminal probe
+      reports one), behind a remote flag that defaults to on
+      (`tengu_static_title_under_mux`). A Neovim run inside tmux, screen or
+      zellij hands its variable to every job, Claude Code's included.
+    - With no glyph: an experimental setting, "Show status in terminal tab"
+      (`showStatusInTerminalTab`, behind a remote flag that defaults to off),
+      and a terminal that answers Claude Code's program-status probe (OSC
+      7501), drop the glyph from the title.
+    - With no title: `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` (T33-6).
+
+B5  Other channels read and not chosen.
+    - OSC 9;4 progress (`terminalProgressBarEnabled`, default on: "Emit
+      OSC 9;4 progress sequences during long operations"): emitted only where
+      Claude Code judges the terminal supports it; the 2.1.281 recording
+      holds four clears (`9;4;0;`) and no other state.
+    - Hooks (code.claude.com docs/en/hooks.md, read 2026-10-15):
+      UserPromptSubmit ("When a prompt is submitted ... Also fires on turns
+      Claude Code starts on its own"), Stop ("When Claude finishes
+      responding"), SubagentStart, SubagentStop, Notification (matchers
+      include `permission_prompt`, `idle_prompt`). Each is one more
+      `--settings` hook entry, and aineo's relay starts two Neovim processes
+      per hook run (20–43 ms on an idle host, `aineo.claude.arguments`).
+      Whether Stop runs on an interrupt was not found in the part of the page
+      read.
