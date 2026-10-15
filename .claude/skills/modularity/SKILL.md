@@ -24,6 +24,7 @@ Where a boundary sits, what crosses it, and how the clients of a module are foun
   | `lua/aineo/init.lua` | the plugin's public Lua API, `require('aineo')` (C1); it calls into homes, it never re-exports their symbols |
   | `lua/aineo/health.lua` | the `:checkhealth aineo` entry (C7) — a file Neovim looks up by name, not a home |
   | `plugin/aineo.lua` | the composition root (C1): commands, `<Plug>` mappings, autocommands; it `require()`s a home only inside a callback |
+  | `lua/aineo/entry/` | the composition root's body (A349): the tabs' homes made, routed, closed and reopened, behind `require('aineo.entry')`; `plugin/aineo.lua` keeps the registrations and calls it |
   | `scripts/` | the test runner's minimal init — the suites' composition root — and tooling scripts (C8); not a home, nothing requires it |
   | `tests/` | the mini.test suites (C8); support several suites share lives in `tests/helpers/` (the orchestrator's layout), the fake `claude` among it (C3) |
   | `doc/` | the vimdoc (T8); not a home |
@@ -44,6 +45,7 @@ Where a boundary sits, what crosses it, and how the clients of a module are foun
   | `aineo.tabs` | `aineo.config` (the tab line's `tabs.padding`, A334); it is handed the tabs' names and pages |
   | `aineo.shell` | no aineo home (it is given a folder and runs `'shell'`) |
   | `aineo` (`lua/aineo/init.lua`) | `aineo.config`, `aineo.tabs` (`tab_title()`, A301) |
+  | `aineo.entry` (the composition root's body: each tab's homes made, routed, closed and reopened; A349) | any home's entry point — it is part of the composition root, which `plugin/aineo.lua` registers; no home requires it |
   | `plugin/aineo.lua`, `lua/aineo/health.lua`, `scripts/`, `tests/` | any home's entry point |
 
   A packet that needs an edge this table lacks reports it as a spec conflict; the edge is added on an `ai/` branch, not in the packet.
