@@ -203,6 +203,31 @@ T['the folder’s list']['is kept at quit with the tab current then, before the 
   eq(vim.uv.kill(first_pid, 0), 0)
 end
 
+T['the folder’s list']['is kept at quit with the aineo tab used last when the current tab page is none of aineo’s'] = function()
+  local state = tabs.open_first_tab(child, 'reopen-quit-last-used')
+  local folder = child.fn.getcwd()
+  local first = tabs.session_of_tab(state, child, tabs.FIRST_TAB)
+  tabs.use_next_fake(child, tabs.fake('reopen-quit-last-used-second'))
+  child.cmd('Aineo tab new')
+  tabs.session_of_tab(state, child, '2')
+  child.cmd('1tabnext')
+  claude_session.press_keys(child, tabs.claude_terminal_of_tab(child, 1), '/clear\r')
+  local cleared = tabs.kept_tab_list_once(state, folder, function(list)
+    return list ~= nil and list.sessions[1] ~= first
+  end)
+  child.cmd('2tabnext')
+  child.cmd('tablast | tabnew')
+
+  claude_session.quit(child)
+
+  local list = tabs.kept_tab_list_once(state, folder, function(kept)
+    return kept ~= nil and kept.current == 2
+  end)
+  eq(cleared.current, 1)
+  eq(list.current, 2)
+  eq(#list.sessions, 2)
+end
+
 T['the first open'] = MiniTest.new_set()
 
 T['the first open']['reopens every tab of the list in its order, each on its session, with the tab at the list’s place current'] = function()
