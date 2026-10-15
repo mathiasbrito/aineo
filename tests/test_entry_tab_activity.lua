@@ -271,6 +271,55 @@ T['a busy Claude Code']['is not busy once its terminal is wiped, and its tab’s
   })
 end
 
+T['a busy Claude Code']['is no longer busy in the tab once an attached terminal is replaced by one that is not'] = function()
+  track_animation_timers()
+  local state = tabs.use_own_state(child, 'activity-attached')
+  local session = '22222222-2222-4222-8222-222222222222'
+  tabs.keep_session_id(state, child.fn.getcwd(), session)
+  local attached = tabs.fake('activity-attached', 'busy-title')
+  attached.listing = vim.fs.joinpath(vim.fs.dirname(attached.record), 'agents.json')
+  attached.environment.AINEO_FAKE_CLAUDE_AGENTS = attached.listing
+  vim.fn.writefile({
+    vim.json.encode({
+      {
+        id = 'a1b2c3d4',
+        cwd = child.fn.getcwd(),
+        kind = 'background',
+        startedAt = 1790000200000,
+        sessionId = session,
+        name = 'tests',
+        state = 'working',
+        pid = 4100,
+        status = 'busy',
+      },
+    }),
+  }, attached.listing)
+  entry.use_fake(child, attached)
+  child.cmd('Aineo open')
+  title_once(1, shows_busy)
+  claude_session.wait_for_status(child, 'ready')
+  entry.use_fake(child, tabs.fake('activity-attached-new', 'ready'))
+
+  entry.press(child, '\\N')
+
+  eq(
+    title_once(1, function(title)
+      return not shows_busy(title)
+    end),
+    '1: Claude Code'
+  )
+  eq(animation_runs_until_it_stops(), false)
+end
+
+T['a busy Claude Code']['is not busy once its variable is removed, and the user is told nothing'] = function()
+  open_busy_second_tab_from_the_first('activity-removed')
+  title_once(2, shows_busy)
+
+  child.lua('vim.b[...].aineo_session_busy = nil', { tabs.claude_terminal_of_tab(child, 2) })
+
+  eq({ shows_busy(title_of(2)), entry.messages(child) }, { false, {} })
+end
+
 T['the close of a busy tab'] = MiniTest.new_set({
   parametrize = {
     { 'by Neovim’s :tabclose', 'tabclose 2' },
@@ -288,7 +337,7 @@ T['the close of a busy tab']['lets its animation go, so that no timer of aineo�
 
   child.cmd(command)
 
-  eq({ runs_while_busy, animation_runs_until_it_stops() }, { true, false })
+  eq({ runs_while_busy, animation_runs() }, { true, false })
   eq(child.lua_get("#require('aineo.tabs').held()"), 1)
 end
 
