@@ -64,7 +64,7 @@ local EDITOR_STATE = [[(function()
   }
 end)()]]
 
-T['the check']['starts nothing, maps nothing and loads only the configuration and the Claude session'] = function()
+T['the check']['starts nothing, maps nothing and loads only the configuration, the Claude session and the shell home'] = function()
   start_with({ autostart = false })
   local before = child.lua_get(EDITOR_STATE)
 
@@ -73,7 +73,7 @@ T['the check']['starts nothing, maps nothing and loads only the configuration an
   eq(
     child.lua_get(EDITOR_STATE),
     vim.tbl_extend('force', before, {
-      modules = { 'aineo.claude', 'aineo.config', 'aineo.health' },
+      modules = { 'aineo.claude', 'aineo.config', 'aineo.health', 'aineo.shell' },
     })
   )
 end

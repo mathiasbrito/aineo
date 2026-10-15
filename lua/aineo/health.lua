@@ -276,43 +276,13 @@ local function check_claude(resolved_config)
   )
 end
 
---- The program of `'shell'`, its first word as Neovim reads the option to
---- run `:terminal` without an argument and as `aineo.shell` reads it: words
---- end at a space or a tab outside double quotes, a double quote opens and
---- closes a stretch that keeps its spaces wherever it sits in the word, and
---- inside one a backslash before a double quote or a backslash stands for
---- that character. The rules are the shell home's, copied because the check
---- requires no home.
----
----@param shell string
----@return string program `''` when the option holds no word
-local function shell_program(shell)
-  local program, quoted = '', false
-  local index = shell:find('[^ \t]') or #shell + 1
-  while index <= #shell do
-    local character = shell:sub(index, index)
-    if character == '"' then
-      quoted = not quoted
-    elseif quoted and character == '\\' and shell:sub(index + 1, index + 1):match('["\\]') then
-      index = index + 1
-      program = program .. shell:sub(index, index)
-    elseif (character == ' ' or character == '\t') and not quoted then
-      break
-    else
-      program = program .. character
-    end
-    index = index + 1
-  end
-  return program
-end
-
---- Reports the 'shell' the terminal pane runs, and warns when its program is
---- not executable (`executable()`), in the words the shell home uses when it
---- refuses to start.
+--- Reports the 'shell' the terminal pane runs, and warns when its program
+--- (`aineo.shell`'s `shell_program()`) is not executable (`executable()`), in
+--- the words the shell home uses when it refuses to start.
 local function check_shell()
   vim.health.start('Shell terminal')
   local shell = vim.o.shell
-  local program = shell_program(shell)
+  local program = require('aineo.shell').shell_program()
   if vim.fn.executable(program) == 0 then
     vim.health.warn(
       ("'shell' is %s: '%s' is not executable, so the terminal pane cannot start a shell"):format(
