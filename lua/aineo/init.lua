@@ -32,8 +32,11 @@ end
 --- The title aineo's tab line draws for the tab page numbered `number`, as
 --- `{n}gt` counts them: `<number>: <name>`, the name that of an aineo tab's
 --- Claude session, for any other tab page that of its current buffer, cut to
---- fit (`:help aineo-tabs`). For a 'tabline' of your own to draw the same
---- titles.
+--- fit (`:help aineo-tabs`). While the Claude Code of an aineo tab works the
+--- title ends with a space and ◒ or ◓, alternating twice a second; while its
+--- output has not been seen, with a space and ●; the tab line is drawn
+--- again as the indicator changes, whichever 'tabline' draws it. For a
+--- 'tabline' of your own to draw the same titles.
 ---
 --- Raises an error naming `number` when it is not a whole number from 1.
 ---
