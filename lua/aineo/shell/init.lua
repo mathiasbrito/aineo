@@ -6,7 +6,7 @@
 --- another, each tab's own.
 
 ---@class aineo.shell.Settings
----@field cwd string the existing directory the shell starts in
+---@field cwd string the existing directory, one the editor can enter, the shell starts in
 
 --- The functions of a shell home, as the module and `M.new()` give them.
 ---@class aineo.shell.Home
@@ -21,17 +21,25 @@
 local CHILD_ENVIRONMENT = { AINEO_CHILD = '1' }
 
 --- The words of `'shell'`, split as Neovim splits them to run `:terminal`
---- without an argument: at whitespace, a double quote opening and closing a
---- stretch that keeps its whitespace, the quotes themselves dropped.
+--- without an argument: at spaces and tabs, a double quote opening and closing
+--- a stretch that keeps its spaces, the quotes themselves dropped, and inside
+--- one a backslash before a double quote or a backslash standing for that
+--- character.
 ---
 ---@return string[] words
 local function shell_words()
   local words, word, quoted = {}, nil, false
-  for character in vim.o.shell:gmatch('.') do
+  local text = vim.o.shell
+  local index = 1
+  while index <= #text do
+    local character = text:sub(index, index)
     if character == '"' then
       quoted = not quoted
       word = word or ''
-    elseif character:match('%s') and not quoted then
+    elseif quoted and character == '\\' and text:sub(index + 1, index + 1):match('["\\]') then
+      index = index + 1
+      word = (word or '') .. text:sub(index, index)
+    elseif (character == ' ' or character == '\t') and not quoted then
       if word then
         table.insert(words, word)
         word = nil
@@ -39,6 +47,7 @@ local function shell_words()
     else
       word = (word or '') .. character
     end
+    index = index + 1
   end
   if word then
     table.insert(words, word)
@@ -46,12 +55,15 @@ local function shell_words()
   return words
 end
 
---- Whether `value` is the path of an existing directory.
+--- Whether `value` is the path of an existing directory the editor can enter,
+--- which a shell started in it needs.
 ---
 ---@param value any
 ---@return boolean
-local function is_directory(value)
-  return type(value) == 'string' and vim.fn.isdirectory(value) == 1
+local function is_directory_to_enter(value)
+  return type(value) == 'string'
+    and vim.fn.isdirectory(value) == 1
+    and vim.uv.fs_access(value, 'X') == true
 end
 
 --- Raises an error naming the first of `settings` the home cannot start a
@@ -60,7 +72,13 @@ end
 ---@param settings any
 local function validate_settings(settings)
   vim.validate('settings', settings, 'table')
-  vim.validate('settings.cwd', settings.cwd, is_directory, false, 'an existing directory')
+  vim.validate(
+    'settings.cwd',
+    settings.cwd,
+    is_directory_to_enter,
+    false,
+    'an existing directory it can enter'
+  )
 end
 
 --- Raises an error naming `'shell'` and `program` when `program` is not
@@ -132,6 +150,16 @@ local function make_shell(group_name)
     })
   end
 
+  --- Forgets the home's shell when its buffer was wiped where none of the
+  --- home's handlers saw it: by a command run in an autocommand that is not
+  --- nested, such as a user's `TermClose` handler that deletes the terminal,
+  --- runs no autocommand, and takes a buffer's own handlers with it.
+  local function forget_wiped_shell()
+    if shell and not vim.api.nvim_buf_is_valid(shell.buffer) then
+      shell = nil
+    end
+  end
+
   --- Starts the home's shell and returns its terminal buffer: `'shell'`, as
   --- `:terminal` runs it without an argument, in `settings.cwd`, with the
   --- editor's own environment and `AINEO_CHILD=1` added. The buffer is
@@ -146,7 +174,7 @@ local function make_shell(group_name)
   --- is forgotten as it goes.
   ---
   --- Raises an error naming the setting when `settings` is not a table or
-  --- `settings.cwd` is not an existing directory, and one naming `'shell'`
+  --- `settings.cwd` is not an existing directory the editor can enter, and one naming `'shell'`
   --- and the program when that program is not executable; it then starts
   --- nothing.
   ---
@@ -154,6 +182,7 @@ local function make_shell(group_name)
   ---@return integer buffer
   function home.start(settings)
     validate_settings(settings)
+    forget_wiped_shell()
     if shell then
       return shell.buffer
     end
@@ -173,12 +202,15 @@ local function make_shell(group_name)
   ---
   ---@return integer|nil buffer
   function home.shell_buffer()
+    forget_wiped_shell()
     return shell and shell.buffer
   end
 
-  --- Stops the home's shell by wiping its buffer at once, as a tab page's
-  --- close must: Neovim ends the process of a terminal it wipes. Does nothing
-  --- without a shell.
+  --- Stops the home's shell and wipes its buffer at once, as a tab page's
+  --- close must. The process is stopped first, so that a wipe Neovim refuses
+  --- (inside an expression mapping, say) leaves no shell running that nothing
+  --- owns: the handlers then wipe the buffer once the process has ended. Does
+  --- nothing without a shell.
   function home.stop()
     if not shell then
       return
@@ -186,6 +218,7 @@ local function make_shell(group_name)
     local stopped = shell
     shell = nil
     if vim.api.nvim_buf_is_valid(stopped.buffer) then
+      vim.fn.jobstop(vim.bo[stopped.buffer].channel)
       vim.api.nvim_buf_delete(stopped.buffer, { force = true })
     end
   end
