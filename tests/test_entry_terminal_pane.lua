@@ -44,8 +44,8 @@ local T = MiniTest.new_set({
 })
 
 --- What the layout's windows show under the terminal pane, as
---- `entry.windows()` lists them: Claude's terminal, the shell's, Input.
-local TERMINAL_PANE = { 'terminal', 'terminal', 'aineo://input' }
+--- `entry.windows()` lists them: Claude's terminal and the shell's alone.
+local TERMINAL_PANE = { 'terminal', 'terminal' }
 
 --- What the layout's windows show under the agent pane, as `entry.windows()`
 --- lists them.
@@ -105,6 +105,40 @@ T['the terminal pane']['shows a shell in the Report’s window, telling the user
   door()
 
   eq({ entry.windows(child), entry.messages(child) }, { TERMINAL_PANE, {} })
+end
+
+--- The rows, top and one past the bottom, that Claude's window (the one at
+--- column 0) takes in the child's current tab page, and those the windows right
+--- of it take together.
+local VERTICAL_EXTENTS = [[(function()
+  local extents = { claude = {}, right = { math.huge, 0 } }
+  for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local row, column = unpack(vim.api.nvim_win_get_position(window))
+    local bottom = row + vim.api.nvim_win_get_height(window)
+    if column == 0 then
+      extents.claude = { row, bottom }
+    else
+      extents.right = { math.min(extents.right[1], row), math.max(extents.right[2], bottom) }
+    end
+  end
+  return extents
+end)()]]
+
+T['the terminal pane']['every pane takes the whole vertical space of the right column, after'] =
+  MiniTest.new_set({
+    parametrize = { { { '\\g', '\\pt' } }, { { '\\pt', '\\pa' } }, { { '\\pt', '\\g' } } },
+  })
+
+T['the terminal pane']['every pane takes the whole vertical space of the right column, after']['the keys'] = function(
+  keys
+)
+  open_layout('terminal-pane-height')
+
+  entry.press(child, keys[1])
+  entry.press(child, keys[2])
+
+  local extents = child.lua_get(VERTICAL_EXTENTS)
+  eq(extents.right, extents.claude)
 end
 
 T['the terminal pane']['leaves the cursor in the shell, in Terminal mode, by'] = MiniTest.new_set({
@@ -237,12 +271,16 @@ T['the terminal pane']['when the layout cannot open']['leaves a shell that ran b
   entry.press(child, '\\pt')
   local shell = entry_shell.first_tab_buffer(child)
   local pid = entry_shell.pid_of(child, shell)
-  child.lua([[
+  child.lua(
+    [[
       local claude = vim.fn.winbufnr(1)
       vim.g.aineo = { claude = { cmd = { '/nonexistent/aineo-t70-claude' } } }
       vim.cmd.bwipeout({ tostring(claude), bang = true })
-      vim.cmd.only()
-    ]])
+      vim.cmd.new()
+      vim.api.nvim_win_close(vim.fn.bufwinid(...), true)
+    ]],
+    { shell }
+  )
 
   entry.press(child, '\\pt')
 
@@ -327,7 +365,7 @@ T['while the terminal pane shows']['the key of another pane or window acts as it
       { '\\pa', AGENT_PANE, 'aineo://report' },
       { '\\g', CHANGES_PANE, 'aineo://changes-commits' },
       { '\\r', AGENT_PANE, 'aineo://report' },
-      { '\\i', TERMINAL_PANE, 'aineo://input' },
+      { '\\i', AGENT_PANE, 'aineo://input' },
       { '\\c', TERMINAL_PANE, 'terminal' },
     },
   })
@@ -348,6 +386,23 @@ T['while the terminal pane shows']['the key of another pane or window acts as it
     { entry.windows(child), entry.current_window(child), entry_shell.is_running(pid) },
     { windows, current, true }
   )
+end
+
+--- What Claude's terminal receives when Send sends an Input holding `hello`:
+--- one bracketed paste, then Enter.
+local SENT_HELLO = '\27[200~hello\27[201~\r'
+
+T['while the terminal pane shows']['Send sends Input, which has no window, and the terminal pane stays'] = function()
+  local fake = open_layout('terminal-pane-send')
+  claude_session.wait_for_status(child, 'ready')
+  entry.set_input(child, { 'hello' })
+  entry.press(child, '\\pt')
+  local received_before = #claude_session.received(fake)
+
+  entry.press(child, '\\s')
+
+  eq(claude_session.wait_for_received_after(fake, received_before, #SENT_HELLO), SENT_HELLO)
+  eq(entry.windows(child), TERMINAL_PANE)
 end
 
 T['a shell that ends'] = MiniTest.new_set()
@@ -486,7 +541,7 @@ T['the first tab that closes'] = MiniTest.new_set()
 --- under the agent pane and under the terminal pane: the empty window the tab
 --- page was opened with sits left of the Report's window.
 local TAKEN_UP_AGAIN_AGENT_PANE = { 'terminal', '', 'aineo://report', 'aineo://input' }
-local TAKEN_UP_AGAIN_TERMINAL_PANE = { 'terminal', '', 'terminal', 'aineo://input' }
+local TAKEN_UP_AGAIN_TERMINAL_PANE = { 'terminal', '', 'terminal' }
 
 T['the first tab that closes']['stops its shell, and the tab opened in its place starts a new one under the agent pane'] = function()
   local first = open_two_tabs('terminal-pane-first')

@@ -1,8 +1,8 @@
 --- aineo's layout, `require('aineo.layout')`: the Claude terminal in a column
---- on the left, and a column on the right whose two windows show one pane at
+--- on the left, and a column on the right whose windows show one pane at
 --- a time — the agent pane, the Report above Input; the changes pane; or the
---- terminal pane, a shell's terminal in the Report's window, Input staying
---- in its own.
+--- terminal pane, a shell's terminal in the Report's window alone, taking the
+--- whole column, with Input's window closed while the pane shows.
 ---
 --- The layout shows the Claude and Report buffers, the changes pane's, the
 --- shell's terminal, and the diffs it is asked to show in the file column, it
@@ -25,7 +25,7 @@ local columns = require('aineo.layout.columns')
 ---@field report integer the Report buffer
 ---@field report_height number the Report's share of the right column's height, strictly between 0 and 1
 ---@field changes? aineo.layout.ChangesPane the changes pane's buffers; without them the layout keeps those it was handed last
----@field shell? integer the terminal pane's buffer, the terminal of a shell, shown in the Report's window; without it the layout keeps the one it was handed last, if its shell lives
+---@field shell? integer the terminal pane's buffer, the terminal of a shell, shown alone in the right column, in the Report's window; without it the layout keeps the one it was handed last, if its shell lives
 ---@field claude_statusline? string the 'statusline' Claude's window draws for Claude's terminal; without it the layout keeps the one it was handed last, and before any, Claude's window draws the user's own
 
 ---@class aineo.layout.ChangesPane
@@ -83,7 +83,9 @@ local function make_layout(input_name, group_name)
   --- terminal, the one handed last; the diffs `M.show_diff()` showed, by
   --- buffer; while the Report's window closes with the shell's terminal in
   --- it, whether the cursor was in that window, and the ID of such a window
-  --- that closed on its own (`note_shell_window_closing()`).
+  --- that closed on its own (`note_shell_window_closing()`); whether Input's
+  --- window was already closed when the terminal pane took the column, which
+  --- the agent pane then leaves closed as the shell ends.
   local state = {
     ---@type table<aineo.layout.Role, integer>
     windows = {},
@@ -113,6 +115,8 @@ local function make_layout(input_name, group_name)
     closing_shell_window = nil,
     ---@type integer|nil
     left_closed_shell_window = nil,
+    ---@type boolean|nil
+    input_closed_by_user = nil,
   }
 
   --- The role of `window` in the layout, or `nil` when it is not one of its
@@ -137,15 +141,26 @@ local function make_layout(input_name, group_name)
   ---@type aineo.layout.Role[]
   local RIGHT_COLUMN_ROLES = { 'report', 'input' }
 
-  --- The buffer each pane shows in each of the right column's two windows,
-  --- named as `state.buffers` keys them, by the window's role. Input's is the
-  --- same buffer in the agent pane and the terminal pane.
+  --- The buffer each pane shows in each of the right column's windows it
+  --- shows, named as `state.buffers` keys them, by the window's role. The
+  --- terminal pane shows one window, the Report's, and none for Input.
   ---@type table<aineo.layout.Pane, table<aineo.layout.Role, string>>
   local PANE_BUFFERS = {
     agent = { report = 'report', input = 'input' },
     changes = { report = 'files', input = 'commits' },
-    terminal = { report = 'shell', input = 'input' },
+    terminal = { report = 'shell' },
   }
+
+  --- The roles of the right column's windows `pane` shows, the Report's
+  --- first.
+  ---
+  ---@param pane aineo.layout.Pane
+  ---@return aineo.layout.Role[] roles
+  local function pane_roles(pane)
+    return vim.tbl_filter(function(role)
+      return PANE_BUFFERS[pane][role] ~= nil
+    end, RIGHT_COLUMN_ROLES)
+  end
 
   --- The buffer the layout's window for `role` shows as its own: Claude's
   --- terminal in Claude's window, and the shown pane's buffer for that window
@@ -177,11 +192,13 @@ local function make_layout(input_name, group_name)
     return has_window(role) and vim.api.nvim_buf_is_valid(state.buffers[role])
   end
 
-  --- Whether the layout is open: its three windows exist.
+  --- Whether the layout is open: Claude's window and the windows of the pane
+  --- shown exist, the three under the agent and changes panes, and not Input's
+  --- under the terminal pane.
   ---
   ---@return boolean
   local function is_open()
-    return vim.iter(ROLES):all(has_window)
+    return has_window('claude') and vim.iter(pane_roles(state.pane)):all(has_window)
   end
 
   --- Whether any of the layout's three windows exists.
@@ -286,16 +303,17 @@ local function make_layout(input_name, group_name)
   end
 
   --- Gives the Report its share of the rows the Report and Input hold together.
+  --- Needs both windows.
   local function size_right_column()
     local rows = vim.api.nvim_win_get_height(state.windows.report)
       + vim.api.nvim_win_get_height(state.windows.input)
     vim.api.nvim_win_set_height(state.windows.report, math.floor(rows * state.report_height + 0.5))
   end
 
-  --- Keeps Neovim from resizing the layout's three windows when it makes
+  --- Keeps Neovim from resizing the layout's windows that exist when it makes
   --- windows equal (`:wincmd =`, `'equalalways'`).
   local function pin_windows()
-    for _, window in pairs(state.windows) do
+    for _, window in ipairs(existing_windows()) do
       vim.wo[window].winfixwidth = true
       vim.wo[window].winfixheight = true
     end
@@ -416,14 +434,17 @@ local function make_layout(input_name, group_name)
     end
   end
 
-  --- Puts the layout's proportions back.
+  --- Puts the layout's proportions back: the columns' widths, and the
+  --- Report's share of the right column's rows when Input's window shows.
   local function apply_proportions()
     size_columns()
-    size_right_column()
+    if has_window('input') then
+      size_right_column()
+    end
   end
 
   --- Puts the layout's proportions back while it is open, and does nothing
-  --- once one of its three windows is gone.
+  --- once a window the pane shown needs is gone.
   local function keep_proportions()
     if is_open() then
       apply_proportions()
@@ -527,7 +548,7 @@ local function make_layout(input_name, group_name)
   --- Moves `file` from the layout's `window` to the file column (see
   --- `place_in_file_column()`), with the cursor there on the position it had in
   --- `window`, gives `window` its own buffer back, and puts the proportions back
-  --- while the layout's three windows are open. When the file column has no
+  --- while the layout is open (`is_open()`). When the file column has no
   --- room for `file`, leaves it in `window` and warns. Does nothing when
   --- `window` is no longer one of the layout's windows — closed, or replaced
   --- by a window the layout reopened — no longer shows `file`, or has no
@@ -701,6 +722,19 @@ local function make_layout(input_name, group_name)
     return is_file(buffer) and (vim.bo[buffer].bufhidden ~= 'wipe' or vim.bo[buffer].modified)
   end
 
+  --- Closes Input's window, when it exists, keeping the view of the buffer it
+  --- shows (`state.views`) for the window that shows it again. A cursor in it
+  --- goes to the window above, the Report's.
+  local function close_input_window()
+    if not has_window('input') then
+      return
+    end
+    local window = state.windows.input
+    state.views[vim.api.nvim_win_get_buf(window)] =
+      vim.api.nvim_win_call(window, vim.fn.winsaveview)
+    vim.api.nvim_win_close(window, false)
+  end
+
   --- Makes the layout's three windows in the current tab, closing its other
   --- windows but the floating ones, with the cursor in the window in Input's
   --- place, each window showing its own buffer (`own_buffer()`). The window it
@@ -725,6 +759,9 @@ local function make_layout(input_name, group_name)
       vim.api.nvim_open_win(own_buffer('claude'), false, { split = 'left', win = -1 })
     state.windows = { claude = claude_window, report = report_window, input = input_window }
     vim.api.nvim_set_current_win(input_window)
+    if not PANE_BUFFERS[state.pane].input then
+      close_input_window()
+    end
   end
 
   --- Opens the Report's window again, showing its own buffer: above Input, or
@@ -735,10 +772,10 @@ local function make_layout(input_name, group_name)
     state.windows.report = vim.api.nvim_open_win(own_buffer('report'), false, place)
   end
 
-  --- Opens again, in their places, those of the layout's three windows that
-  --- were closed, each showing its buffer: Claude's as the leftmost column, the
+  --- Opens again, in their places, those of the layout's windows that were
+  --- closed, each showing its buffer: Claude's as the leftmost column, the
   --- Report above Input, or as the rightmost column when Input is closed too,
-  --- and Input below the Report.
+  --- and Input below the Report, unless the pane shown has none for Input.
   local function reopen_closed_windows()
     if not has_window('claude') then
       state.windows.claude =
@@ -747,7 +784,7 @@ local function make_layout(input_name, group_name)
     if not has_window('report') then
       open_report_window()
     end
-    if not has_window('input') then
+    if not has_window('input') and PANE_BUFFERS[state.pane].input then
       state.windows.input = vim.api.nvim_open_win(
         own_buffer('input'),
         false,
@@ -770,13 +807,13 @@ local function make_layout(input_name, group_name)
       and #vim.fn.win_findbuf(buffer) == 1
   end
 
-  --- Shows each of the layout's buffers in its window, where another took its
-  --- place; a file that took it (`is_file_to_move()`) moves to the file column
-  --- first, when the column has room for it (`place_in_file_column()`). The
-  --- cursor stays in the window it was in.
+  --- Shows each of the layout's buffers in its window that exists, where
+  --- another took its place; a file that took it (`is_file_to_move()`) moves to
+  --- the file column first, when the column has room for it
+  --- (`place_in_file_column()`). The cursor stays in the window it was in.
   local function show_buffers()
     local current = vim.api.nvim_get_current_win()
-    for _, role in ipairs(ROLES) do
+    for _, role in ipairs(vim.tbl_filter(has_window, ROLES)) do
       local window = state.windows[role]
       local shown = vim.api.nvim_win_get_buf(window)
       if shown ~= own_buffer(role) then
@@ -1042,6 +1079,21 @@ local function make_layout(input_name, group_name)
     state.report_when_hidden = nil
   end
 
+  --- Gives `window`, which shows `buffer`, the view kept for `buffer` in
+  --- `state.views` when it last left a window, and forgets that view.
+  ---
+  ---@param window integer
+  ---@param buffer integer
+  local function restore_view(window, buffer)
+    local view = state.views[buffer]
+    state.views[buffer] = nil
+    if view then
+      vim.api.nvim_win_call(window, function()
+        vim.fn.winrestview(view)
+      end)
+    end
+  end
+
   --- Shows `buffer` in `window` in place of the buffer it shows, as a switch
   --- does: the view of the buffer leaving — its cursor and its top line
   --- (`winsaveview()`) — is kept in `state.views`, and `buffer` is given the
@@ -1054,13 +1106,7 @@ local function make_layout(input_name, group_name)
     state.views[vim.api.nvim_win_get_buf(window)] =
       vim.api.nvim_win_call(window, vim.fn.winsaveview)
     vim.api.nvim_win_set_buf(window, buffer)
-    local view = state.views[buffer]
-    state.views[buffer] = nil
-    if view then
-      vim.api.nvim_win_call(window, function()
-        vim.fn.winrestview(view)
-      end)
-    end
+    restore_view(window, buffer)
   end
 
   --- Shows, in the layout's window for `role`, one of the right column's two,
@@ -1078,14 +1124,14 @@ local function make_layout(input_name, group_name)
     end
   end
 
-  --- Shows, in each of the right column's two windows that exist and shows
-  --- another buffer, the buffer `pane` shows there (`show_pane_buffer_in()`).
-  --- Raises the error a window raises as it is given its buffer, leaving the
-  --- windows after it as they are.
+  --- Shows, in each of the right column's windows `pane` shows that exists
+  --- and shows another buffer, the buffer `pane` shows there
+  --- (`show_pane_buffer_in()`). Raises the error a window raises as it is given
+  --- its buffer, leaving the windows after it as they are.
   ---
   ---@param pane aineo.layout.Pane
   local function show_buffers_of(pane)
-    for _, role in ipairs(vim.tbl_filter(has_window, RIGHT_COLUMN_ROLES)) do
+    for _, role in ipairs(vim.tbl_filter(has_window, pane_roles(pane))) do
       show_pane_buffer_in(pane, role)
     end
   end
@@ -1099,44 +1145,97 @@ local function make_layout(input_name, group_name)
   ---@return boolean
   local function is_buffer_of_another_pane(pane, role, buffer)
     for other, buffers in pairs(PANE_BUFFERS) do
-      if other ~= pane and state.buffers[buffers[role]] == buffer then
+      if other ~= pane and buffers[role] and state.buffers[buffers[role]] == buffer then
         return true
       end
     end
     return false
   end
 
-  --- Whether one of the right column's two windows that exist shows, in place
-  --- of the buffer `pane` shows there (`PANE_BUFFERS`), the buffer another
-  --- pane shows there. A window showing a buffer `pane` shows there never
-  --- counts, whichever other pane shows it too: Input's window under the
-  --- terminal pane shows the agent pane's Input.
+  --- Whether one of the right column's windows `pane` shows that exists
+  --- shows, in place of the buffer `pane` shows there (`PANE_BUFFERS`), the
+  --- buffer another pane shows there. A window showing a buffer `pane` shows
+  --- there never counts, whichever other pane shows it too.
   ---
   ---@param pane aineo.layout.Pane
   ---@return boolean
   local function shows_a_buffer_of_another_pane(pane)
-    return vim.iter(vim.tbl_filter(has_window, RIGHT_COLUMN_ROLES)):any(function(role)
+    return vim.iter(vim.tbl_filter(has_window, pane_roles(pane))):any(function(role)
       local shown = vim.api.nvim_win_get_buf(state.windows[role])
       return shown ~= state.buffers[PANE_BUFFERS[pane][role]]
         and is_buffer_of_another_pane(pane, role, shown)
     end)
   end
 
-  --- Shows again, in each of the right column's two windows that exist, the
-  --- buffer `pane` shows there, as `show_buffers_of()` does, each window on
-  --- its own: a window that raises as its buffer enters it, or refuses it,
-  --- leaves the other window to be shown its buffer still. The errors are
-  --- dropped: this undoes a switch whose own error is the one raised.
+  --- Shows again, in each of the right column's windows `pane` shows that
+  --- exists, the buffer `pane` shows there, as `show_buffers_of()` does, each
+  --- window on its own: a window that raises as its buffer enters it, or
+  --- refuses it, leaves the other window to be shown its buffer still. The
+  --- errors are dropped: this undoes a switch whose own error is the one
+  --- raised.
   ---
   ---@param pane aineo.layout.Pane
   local function show_buffers_of_each_window(pane)
-    for _, role in ipairs(vim.tbl_filter(has_window, RIGHT_COLUMN_ROLES)) do
+    for _, role in ipairs(vim.tbl_filter(has_window, pane_roles(pane))) do
       pcall(show_pane_buffer_in, pane, role)
     end
   end
 
-  --- Shows `pane` in those of the right column's two windows that exist, in
-  --- place of the pane they show, and makes it the pane shown. Asked for the
+  --- Opens Input's window below the Report's, or as the rightmost column when
+  --- the Report's is closed too, showing the buffer `pane` shows there, puts
+  --- the proportions back and gives the window the view kept for that buffer,
+  --- once the window has its size.
+  ---
+  ---@param pane aineo.layout.Pane
+  local function open_input_window(pane)
+    local buffer = state.buffers[PANE_BUFFERS[pane].input]
+    local place = has_window('report') and { split = 'below', win = state.windows.report }
+      or { split = 'right', win = -1 }
+    state.windows.input = vim.api.nvim_open_win(buffer, false, place)
+    pin_windows()
+    keep_proportions()
+    restore_view(state.windows.input, buffer)
+  end
+
+  --- Gives the right column to the Report's window, for the terminal pane:
+  --- closes Input's window (`close_input_window()`), and notes whether it was
+  --- closed already, by the user, so that the agent pane shown again as the
+  --- shell ends leaves it closed (`show_input_window_after_terminal_pane()`).
+  local function close_input_window_for_terminal_pane()
+    local was_closed = not has_window('input')
+    close_input_window()
+    state.input_closed_by_user = was_closed
+  end
+
+  --- Opens Input's window again for `pane`, once the terminal pane that closed
+  --- it gave way, unless the user had closed it before the terminal pane showed.
+  ---
+  ---@param pane aineo.layout.Pane the pane now shown, which shows Input
+  local function show_input_window_after_terminal_pane(pane)
+    if not state.input_closed_by_user and not has_window('input') then
+      open_input_window(pane)
+    end
+    state.input_closed_by_user = nil
+  end
+
+  --- Closes or opens Input's window as the pane shown changes from `from` to
+  --- `to`: closed as the terminal pane takes the column, opened again as it
+  --- gives way. Nothing between panes that all show Input.
+  ---
+  ---@param from aineo.layout.Pane
+  ---@param to aineo.layout.Pane
+  local function switch_input_window(from, to)
+    if to == 'terminal' and from ~= 'terminal' then
+      close_input_window_for_terminal_pane()
+    elseif from == 'terminal' and to ~= 'terminal' then
+      show_input_window_after_terminal_pane(to)
+    end
+  end
+
+  --- Shows `pane` in the right column, in place of the pane shown, and makes it
+  --- the pane shown: in the windows of the column that exist, which show one
+  --- pane's buffers or the other's, Input's window closing as the terminal pane
+  --- takes the column and opening again as it gives way. Asked for the
   --- pane shown, it changes nothing, unless one of those windows shows
   --- another pane's buffer there, and not one `pane` shows there too, as a
   --- refused switch can leave it (below): it then shows `pane`'s. Shown
@@ -1175,9 +1274,13 @@ local function make_layout(input_name, group_name)
       }
     end
     state.pane = pane
-    local switched, failure = pcall(show_buffers_of, pane)
+    local switched, failure = pcall(function()
+      switch_input_window(shown, pane)
+      show_buffers_of(pane)
+    end)
     if not switched then
       state.pane = shown
+      pcall(switch_input_window, pane, shown)
       show_buffers_of_each_window(shown)
       follow_reports_shown_again()
       error(failure, 0)
@@ -1186,16 +1289,20 @@ local function make_layout(input_name, group_name)
     follow_reports_shown_again()
   end
 
-  --- Whether the right column's two windows exist, and the buffers `pane`
-  --- shows in them are loaded: neither wiped nor unloaded, as `:bdelete`
-  --- unloads a buffer, which then comes back empty.
+  --- Whether the windows of the right column `pane` shows exist, Input's
+  --- being closed on purpose under the terminal pane and so opened by the
+  --- switch, and the buffers `pane` shows in them are loaded: neither wiped
+  --- nor unloaded, as `:bdelete` unloads a buffer, which then comes back empty.
   ---
   ---@param pane aineo.layout.Pane
   ---@return boolean
   local function can_show_in_place(pane)
-    return vim.iter(RIGHT_COLUMN_ROLES):all(function(role)
+    return vim.iter(pane_roles(pane)):all(function(role)
       local buffer = state.buffers[PANE_BUFFERS[pane][role]]
-      return has_window(role) and buffer ~= nil and vim.api.nvim_buf_is_loaded(buffer)
+      local closed_on_purpose = role == 'input' and PANE_BUFFERS[state.pane].input == nil
+      return (has_window(role) or closed_on_purpose)
+        and buffer ~= nil
+        and vim.api.nvim_buf_is_loaded(buffer)
     end)
   end
 
@@ -1243,7 +1350,9 @@ local function make_layout(input_name, group_name)
   --- wiped the shell's terminal are done. The Report's window is opened again
   --- in its place above Input when the wipe closed it, and not when the user
   --- had closed it before (`state.left_closed_shell_window`); a window of the
-  --- layout the user closed stays closed. Every window of the right column
+  --- layout the user closed stays closed, Input's included when it was closed
+  --- before the terminal pane showed; Input's window the terminal pane closed
+  --- opens again below the Report's. Every window of the right column
   --- that exists shows the agent pane's buffer, and the proportions are put
   --- back. The cursor goes to the Report when it was in the shell's window,
   --- and stays in the window it is in otherwise, in whichever tab page. Does
@@ -1262,6 +1371,7 @@ local function make_layout(input_name, group_name)
         open_report_window()
         pin_windows()
       end
+      show_input_window_after_terminal_pane('agent')
       show_buffers_of('agent')
       wrap_agent_pane()
       follow_reports_shown_again()
@@ -1420,8 +1530,8 @@ local function make_layout(input_name, group_name)
   --- for the editor's life, the agent pane until then: under the changes pane
   --- its two windows show `arrangement.changes`' files and commits buffers in
   --- the Report's and Input's places; under the terminal pane the Report's
-  --- window shows `arrangement.shell`, the terminal of a shell, and Input's
-  --- shows Input. The tab's
+  --- window shows `arrangement.shell`, the terminal of a shell, alone over the
+  --- whole right column, and Input has no window. The tab's
   --- other windows close, but floating ones; their buffers stay loaded. A file
   --- the current window shows stays there, as the file column, unless it is
   --- wiped once hidden and holds no changes, as a startup dashboard's buffer
@@ -1452,9 +1562,10 @@ local function make_layout(input_name, group_name)
   ---
   --- While any of the three windows exists, opening again restores the layout
   --- instead, in the tab that holds it: it creates only the windows that were
-  --- closed, in their places, shows in each window its buffer under the pane
-  --- shown — the Claude and Report buffers it is handed this time, and the
-  --- changes pane's and the shell's when it hands them — a file shown there in its place
+  --- closed, in their places, Input's not under the terminal pane, shows in
+  --- each window its buffer under the pane shown — the Claude and Report
+  --- buffers it is handed this time, and the changes pane's and the shell's
+  --- when it hands them — a file shown there in its place
   --- moving to the file column first (`show_buffers()`), makes the Report and
   --- Input wrap again while the agent pane shows, and puts the proportions
   --- back. Opened or restored under the agent pane, the Report's window shows
@@ -1469,9 +1580,9 @@ local function make_layout(input_name, group_name)
   ---
   --- From then on a file shown in one of the three windows moves to a file
   --- column beside them, while any of them exists, and the window gets back
-  --- the buffer it shows under the pane shown; with the three open, the
-  --- columns take a third of the screen each while the file column is open,
-  --- and the proportions are put back whenever a window closes, the editor is
+  --- the buffer it shows under the pane shown; with the windows of the pane
+  --- shown open, the columns take a third of the screen each while the file
+  --- column is open, and the proportions are put back whenever a window closes, the editor is
   --- resized or the layout's tab is entered.
   ---
   --- From then on, too, Claude's terminal, once its process has ended, stays
@@ -1486,12 +1597,14 @@ local function make_layout(input_name, group_name)
   --- From then on, too, the terminal pane gives way to the agent pane when
   --- its shell ends or its terminal is wiped (`watch_shell()`): as the shell's
   --- process ends, the agent pane shows in place, the Report's window staying
-  --- the window it is; as the terminal is wiped, the layout opens again once
-  --- the command that wiped it is done, which opens the Report's window again
-  --- in its place when Neovim closed it with the terminal. The cursor goes to
-  --- the Report when it was in the shell's window, and stays where it is
-  --- otherwise, in whichever tab page; the Report's window the user had
-  --- closed stays closed. The layout then forgets that shell, whichever pane
+  --- the window it is, and Input's window opens again below it; as the terminal
+  --- is wiped, the layout opens again once the command that wiped it is done,
+  --- which opens the Report's window again in its place when Neovim closed it
+  --- with the terminal, and Input's below it. The cursor goes to the Report
+  --- when it was in the shell's window, and stays where it is otherwise, in
+  --- whichever tab page; the Report's window the user had
+  --- closed stays closed, and so does Input's when it was closed before the
+  --- terminal pane showed. The layout then forgets that shell, whichever pane
   --- shows, and a shell wiped where none of these handlers saw it, by a
   --- command in an autocommand that is not nested, is forgotten when the
   --- process ends, or by the next `open()`, which `focus()` and `show_pane()`
@@ -1540,26 +1653,37 @@ local function make_layout(input_name, group_name)
     end)
   end
 
-  --- Whether focusing `role` shows the agent pane first: the Report's window
-  --- always, Input's unless the terminal pane shows, which has Input in its
-  --- window already; Claude's never.
+  --- Whether focusing `role` shows the agent pane first: the Report's and
+  --- Input's windows always; Claude's never.
   ---
   ---@param role aineo.layout.Role
   ---@return boolean
   local function focus_shows_agent_pane(role)
-    return role == 'report' or (role == 'input' and state.pane ~= 'terminal')
+    return role == 'report' or role == 'input'
+  end
+
+  --- Whether the layout's window for `role` is closed on purpose by the pane
+  --- shown: Input's under the terminal pane, which showing the agent pane
+  --- opens again.
+  ---
+  ---@param role aineo.layout.Role
+  ---@return boolean
+  local function is_closed_by_pane(role)
+    return role == 'input' and PANE_BUFFERS[state.pane].input == nil
   end
 
   --- Whether focusing `role` must open the layout first: its window is gone,
-  --- or its own buffer was wiped (`has_window_and_buffer()`); or, when it
-  --- shows the agent pane first (`focus_shows_agent_pane()`) while another
-  --- pane shows, the agent pane it must show again lost the Report or Input,
-  --- wiped or unloaded (`has_agent_pane_buffers()`).
+  --- or its own buffer was wiped (`has_window_and_buffer()`), a window the pane
+  --- shown closed on purpose (`is_closed_by_pane()`) aside, which needs only
+  --- its buffer; or, when it shows the agent pane first
+  --- (`focus_shows_agent_pane()`) while another pane shows, the agent pane it
+  --- must show again lost the Report or Input, wiped or unloaded
+  --- (`has_agent_pane_buffers()`).
   ---
   ---@param role aineo.layout.Role
   ---@return boolean
   local function must_open_to_focus(role)
-    if not has_window_and_buffer(role) then
+    if not has_window_and_buffer(role) and not (is_closed_by_pane(role) and has_input()) then
       return true
     end
     return focus_shows_agent_pane(role) and state.pane ~= 'agent' and not has_agent_pane_buffers()
@@ -1569,11 +1693,11 @@ local function make_layout(input_name, group_name)
   --- with `arrangement` first when that window is gone, or its buffer was
   --- wiped, or, for a window that shows the agent pane first while another
   --- pane shows, the Report or Input was wiped or unloaded (see `open()`). The
-  --- Report's window shows the agent pane first (`M.show_pane()`), those of
-  --- the right column's two windows that are open, and so does Input's unless
-  --- the terminal pane shows, which has Input in its window already: the
-  --- cursor moves to Input and the shell stays shown. Claude's leaves the
-  --- pane shown.
+  --- Report's and Input's windows show the agent pane first (`M.show_pane()`),
+  --- those of the right column's windows that are open, the terminal pane
+  --- giving way to it, which opens Input's window again, a window the user
+  --- closed before the terminal pane showed included when Input is asked for.
+  --- Claude's leaves the pane shown.
   --- `arrangement` may be a function that returns it, which is called only
   --- then, so that what it makes — a session's terminal, say — is made only
   --- when the layout opens.
@@ -1592,25 +1716,34 @@ local function make_layout(input_name, group_name)
       end
       M.open(arrangement)
     end
+    if role == 'input' then
+      state.input_closed_by_user = nil
+    end
     if focus_shows_agent_pane(role) then
       switch_pane('agent')
     end
     vim.api.nvim_set_current_win(state.windows[role])
   end
 
-  --- Shows `pane` in the right column's two windows, in place: the agent
-  --- pane, the Report above Input; the changes pane, its files buffer in
-  --- the Report's window and its commits buffer in Input's; or the terminal
-  --- pane, the shell's terminal in the Report's window and Input in its own.
-  --- The windows stay, by window ID, at their sizes, and the cursor stays in
-  --- the window it was in. The pane shown is kept for the editor's life:
-  --- opening the layout again shows it (`open()`), unless it is the terminal
-  --- pane and its shell is gone. Asked for the pane it shows, it changes
+  --- Shows `pane` in the right column, in place: the agent pane, the Report
+  --- above Input; the changes pane, its files buffer in the Report's window and
+  --- its commits buffer in Input's; or the terminal pane, the shell's terminal
+  --- alone in the Report's window, which takes the whole column while Input's
+  --- window is closed. The windows that show again stay, by window ID, at their
+  --- sizes; Input's window closes as the terminal pane shows and a new one,
+  --- below the Report's, shows Input's buffer again as it gives way, at the
+  --- Report's share with Input's cursor and top line as they were, unless the
+  --- user had closed Input's window before the terminal pane showed, which stays
+  --- closed as the shell ends but opens again here when the agent pane or the
+  --- changes pane is asked for. The cursor stays in the window it was in, and
+  --- moves to the Report's window when it was in Input's as that closes. The
+  --- pane shown is kept for the editor's life: opening the layout again shows
+  --- it (`open()`), unless it is the terminal pane and its shell is gone.
+  --- Asked for the pane it shows, it changes
   --- nothing, unless one of the right column's windows shows another pane's
   --- buffer there, and not one the pane asked for shows there too, as a
   --- refused switch or the user can leave it: it then shows the pane asked
-  --- for there. Input in Input's window under the terminal pane is the pane's
-  --- own buffer.
+  --- for there.
   ---
   --- Each buffer a switch shows again comes back with the view it had when a
   --- switch took it out: its cursor and its top line. Shown again, the agent
@@ -1619,8 +1752,9 @@ local function make_layout(input_name, group_name)
   --- arrival puts it in a window showing the Report, once the agent pane shows
   --- with the Report in the Report's window, by a switch or by `open()`.
   ---
-  --- Opens the layout with `arrangement` first when either of the right
-  --- column's windows is gone, or a buffer of `pane` was wiped or unloaded
+  --- Opens the layout with `arrangement` first when a window of the right
+  --- column `pane` shows is gone, Input's under the terminal pane aside, or a
+  --- buffer of `pane` was wiped or unloaded
   --- (see `open()`). `arrangement` may be a function that returns it, which is
   --- called only then. A layout restored so, while any of its windows was
   --- left, leaves the cursor in the window it was in, in whichever tab page,
@@ -1657,6 +1791,9 @@ local function make_layout(input_name, group_name)
     end
     if not can_show_in_place(pane) then
       error(MISSING_BUFFERS_ERROR[pane] or MISSING_BUFFERS_ERROR.changes, 0)
+    end
+    if pane ~= 'terminal' then
+      state.input_closed_by_user = nil
     end
     switch_pane(pane)
   end
