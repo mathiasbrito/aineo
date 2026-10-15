@@ -106,6 +106,8 @@ local TAGS = {
   'aineo-config-claude.cmd',
   'aineo-config-layout.report_height',
   'aineo-config-changes.working_branch',
+  'aineo-config-tabs.padding',
+  'aineo-tabline',
   'aineo-layout',
   'aineo-panes',
   'aineo-changes',

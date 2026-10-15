@@ -46,6 +46,14 @@ local function is_branch_name(value)
   return type(value) == 'string' and value ~= ''
 end
 
+--- Whether `value` is a count of spaces: a whole number from 0.
+---
+---@param value any
+---@return boolean
+local function is_space_count(value)
+  return type(value) == 'number' and value >= 0 and value == math.floor(value)
+end
+
 --- aineo's settings, each named by its path in `vim.g.aineo`, with its
 --- default and the check its value must pass (`vim.validate`'s validator and,
 --- for a function, the words that describe what it expects).
@@ -80,6 +88,12 @@ local SETTINGS = {
     default = nil,
     validator = is_branch_name,
     expected = 'a non-empty string naming a branch',
+  },
+  {
+    name = 'tabs.padding',
+    default = 2,
+    validator = is_space_count,
+    expected = 'a whole number from 0',
   },
 }
 
