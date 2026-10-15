@@ -29,15 +29,16 @@ most behind its twin in Terminal and Insert mode, below):
 and `\c` move to the Report, Input and Claude — `\c` in Terminal mode, so
 that what you type next goes to Claude, unless Claude Code has exited.
 `\tcn` hides or shows the line numbers of Claude's window. `\S` lists the
-sessions Claude Code lists for the folder and switches Claude to the one you
-pick (|:Aineo-sessions|). `\N` starts a new Claude Code session: on a new id
-once Claude Code has exited, where `\o` resumes the last, and with `/clear`
-while it runs (|:Aineo-new|). `\pa` and `\g` switch the right column
-between the agent pane, the Report over Input, and the changes pane, and move
-to the Report and to the changes pane's commits (|aineo-panes|). `\T` opens a
-tab page with a Claude Code session of its own, and `\1` to `\9` move to the
-tab page of that number (|aineo-tabs|). In Visual mode, in Input, `\s` sends
-the selection alone and removes it from Input (|aineo-v_\s|).
+sessions Claude Code lists for the folder and opens the one you pick in a new
+tab, or moves to the tab that has it (|:Aineo-sessions|). `\N` starts a new
+Claude Code session: on a new id once Claude Code has exited, where `\o`
+resumes the last, and with `/clear` while it runs (|:Aineo-new|). `\pa` and
+`\g` switch the right column between the agent pane, the Report over Input,
+and the changes pane, and move to the Report and to the changes pane's
+commits (|aineo-panes|). `\T` opens a tab page with a Claude Code session of
+its own, `\1` to `\9` move to the tab page of that number, and `\Q` closes the
+current tab (|aineo-tabs|). In Visual mode, in Input, `\s` sends the
+selection alone and removes it from Input (|aineo-v_\s|).
 
 In Terminal mode and in Insert mode, `<C-\>` followed by the same letters
 does the same: `<C-\>i` moves to Input, `<C-\>r` to the Report, `<C-\>c` to
@@ -171,6 +172,14 @@ buffers are named with a number that is never given again
 current tab page the first one, on a new session. Starting a tab starts a
 Claude Code, which costs what a session costs, as `\o` does.
 
+`\S` (|:Aineo-sessions|) opens the session you pick in a new tab after the
+current one, resumed, attached to where it runs in Claude Code's background
+service, or resumed with a warning where it is open in another interactive
+Claude Code; the cursor lands in its Claude window in Terminal mode. A
+session that a tab of this Neovim shows already, the current tab's own
+included, is not started again: the pick moves you to that tab. Nothing is
+written into the current tab's prompt, and its Claude Code goes on as it was.
+
 Every tab after the first starts its Claude Code in the folder: the
 directory of this Neovim's first start of aineo, whatever `:cd` or `:tcd`
 say later, since a tab holds a session of that folder alone. The first tab
@@ -213,14 +222,21 @@ What the actions do with tabs:
   of another, both follow it; aineo warns once, `aineo: this session is also
   open in tab {n}`.
 
-A tab page closed by Neovim's own commands, `:tabclose`, `:tabonly` or the
-close of its last window, closes its tab: its Input's draft is saved, its
-buffers and handlers are let go (the first tab's stay, for the next tab opened
-to take up; |aineo-limits|), and its entry among the running editors is
-removed. Its Claude Code is stopped as quitting stops it (Ctrl+Z alone for one
-attached to a background session) once the command has ended, those of all the
-tab pages the command closed together. Its Report, draft and changes base stay
-on disk, under its session. The other tabs go on as they were. Quitting
+`\Q` (|:Aineo-tab|) closes the current tab while another aineo tab remains,
+and a tab page closed by Neovim's own commands, `:tabclose`, `:tabonly` or the
+close of its last window, closes its tab the same way: its Input's draft is
+saved, its buffers and handlers are let go (the first tab's stay, for the next
+tab opened to take up; |aineo-limits|), and its entry among the running
+editors is removed. Its Claude Code is stopped as quitting stops it (Ctrl+Z
+alone for one attached to a background session) once the command has ended,
+those of all the tab pages the command closed together, without holding the
+editor. Its Report, draft and changes base stay on disk, under its session,
+and `\S` brings the session back in a new tab. The other tabs go on as they
+were. On the last aineo tab `\Q` quits Neovim as `:qa` does: Neovim refuses
+while a buffer has unsaved changes, and nothing is stopped then; otherwise
+every Claude Code is stopped as quitting stops it, and the session is the one
+the next start lands in. From a tab page that is none of aineo's `\Q` closes
+nothing and says `aineo: this tab holds no Claude Code session`. Quitting
 stops every tab's Claude Code at once and saves every tab's draft
 (|aineo-limits|).
 
@@ -940,22 +956,23 @@ only in place of a resume Claude Code has no conversation for
 			keeps your own numbers.
 
                                                              *:Aineo-sessions*
-:Aineo sessions		Lists the sessions Claude Code lists for the
-			directory it started in, which `:cd` does not change,
-			and offers them in |vim.ui.select()|, one row each:
+:Aineo sessions		Lists the sessions Claude Code lists for the folder
+			(|aineo-tabs|), which `:cd` does not change, and
+			offers them in |vim.ui.select()|, one row each:
 			the session's name, or the first eight characters of
 			its id, its kind, `interactive` or `background`, and
-			its status. The row of the session Claude's terminal
-			is on says `[this terminal]`, and that of every other
-			session some process runs says `[running elsewhere]`,
-			in another terminal or in Claude Code's background
-			service, and that of a session started in another
-			directory than the folder says `[another folder]`.
-			A session whose process has ended, a background one,
-			has no mark. Only an entry whose session id is one
-			Claude Code gives is listed. It takes no word, and
-			only one list is read at a time: pressed again
-			meanwhile, it says so and starts nothing.
+			its status. The row of a session a tab of this Neovim
+			shows says `[tab {n}]`, with the number of that tab
+			page, and that of every other session some process
+			runs says `[running elsewhere]`, in another terminal
+			or in Claude Code's background service, and that of a
+			session started in another directory than the folder
+			says `[another folder]`. A session whose process has
+			ended, a background one, has no mark. Only an entry
+			whose session id is one Claude Code gives is listed.
+			It takes no word, and only one list is read at a
+			time: pressed again meanwhile, it says so and starts
+			nothing.
 
 			The list comes from `claude.cmd` followed by `agents
 			--json --cwd {folder} --all`, which aineo runs
@@ -966,16 +983,19 @@ only in place of a resume Claude Code has no conversation for
 			aineo tells you so in Claude Code's words.
 
 			A pick:
-			- of this terminal's row, a row started in another
-			  folder, or a row running in the background with no
-			  short id for `claude attach` switches nothing and
-			  tells you why.
+			- of a row a tab shows, the current tab's own
+			  included, moves to that tab and starts nothing;
+			  when several tabs show it, to the lowest numbered,
+			  or nowhere when the current tab is one of them.
+			- of a row whose Claude Code a tab just closed still
+			  stops opens no tab: aineo tells you to pick it
+			  again in a moment.
+			- of a row started in another folder, or a row running
+			  in the background with no short id for `claude
+			  attach`, opens no tab and tells you why.
 			- of a row running elsewhere reads the list again and
-			  replaces the Claude Code in Claude's window with one
-			  on that session, unless the prompt shows text
-			  (below). A session started in another folder than
-			  the folder listed is refused as a row of another
-			  folder is. A session running in Claude Code's
+			  opens a new tab after the current one on that
+			  session. A session running in Claude Code's
 			  background service is attached to, as a start
 			  attaches (|aineo-claude-session|): `claude attach`,
 			  none of aineo's arguments, `(attached)` in the
@@ -986,44 +1006,31 @@ only in place of a resume Claude Code has no conversation for
 			  shows it in the background, which is attached to,
 			  and you are told
 			  `aineo: this session is also open in another Claude
-			  Code`: both terminals then drive it. The running
-			  Claude Code is stopped as quitting Neovim stops it
-			  (|aineo-limits|): by `Ctrl+Z` when it is attached
-			  itself, so that its session runs on. The session
-			  becomes the one the next start lands in.
-			- of any other row, while the window is attached,
-			  does the same as a row running elsewhere: it does
-			  not write `/resume` into the attached session. It
-			  detaches by `Ctrl+Z` and resumes the session in
-			  Claude's window, unless the prompt shows text.
+			  Code`: both terminals then drive it.
 			- of any other row reads the list again, as the menu
-			  may have been open for long, and switches only if
-			  the session is still listed and still switchable.
-			  It moves the cursor to Claude's window in Terminal
-			  mode (|:Aineo-claude|) and, unless the prompt shows
-			  text, writes `/resume {id}` as a bracketed paste,
-			  as Send writes text (|aineo-send|), and Enter, in
-			  one write. Claude Code switches to the session,
-			  aineo follows it, and the next start resumes it
-			  (|aineo-claude-session|).
-			The prompt shows text unless the input box is one line
-			and Claude Code's cursor sits right after its `❯`: the
-			grey example it draws in an empty prompt is not text.
-			Aineo never clears the prompt. When it shows text,
-			nothing is written, the cursor goes back to the
-			window and the mode it came from, and you are told to
-			clear the prompt and pick again.
+			  may have been open for long, and opens a new tab
+			  that resumes the session only if it is still listed
+			  and still stands for a new tab.
+			A tab a pick opens is a tab as `:Aineo tab new` opens
+			one (|:Aineo-tab|), with a Claude Code on the session
+			in the folder, and the cursor lands in its Claude
+			window in Terminal mode. The session becomes the one
+			the next start lands in (|aineo-claude-session|). The
+			current tab is not touched: nothing is written into
+			its prompt, whether the prompt holds text or not, and
+			its Claude Code goes on.
 
 			It lists nothing, and tells you once, with a warning
-			starting `aineo: no session list`, while Claude Code
-			is not ready for input — it has not started, is
-			starting or behind a dialog, or has exited, as for
-			Send (|aineo-send|) — while a claim of another session
-			holds (|:Aineo-claim|), when `claude agents` fails,
-			is stopped or prints what is not a JSON list, and when
-			Claude Code lists no session. A pick made after the
-			state changed tells you the same, starting `aineo: not
-			switched`. What it cannot know is in |aineo-limits|.
+			starting `aineo: no session list`, while the current
+			tab's Claude Code is not ready for input — it has not
+			started, is starting or behind a dialog, or has
+			exited, as for Send (|aineo-send|) — while a claim of
+			another session holds (|:Aineo-claim|), when `claude
+			agents` fails, is stopped or prints what is not a
+			JSON list, and when Claude Code lists no session. A
+			pick made after the state changed tells you the same,
+			starting `aineo: not switched`. What it cannot know
+			is in |aineo-limits|.
 
                                                                   *:Aineo-new*
 :Aineo new		Starts a new Claude Code session. It takes no word.
@@ -1047,8 +1054,7 @@ only in place of a resume Claude Code has no conversation for
 			  prompt shows no text, it moves the cursor to
 			  Claude's window in Terminal mode and writes `/clear`
 			  as a bracketed paste, as Send writes text
-			  (|aineo-send|), and Enter, in one write, as
-			  |:Aineo-sessions| writes `/resume`. Claude Code
+			  (|aineo-send|), and Enter, in one write. Claude Code
 			  switches to a new session and aineo follows it
 			  (|aineo-claude-session|), and the cleared session
 			  stays resumable. In a window attached to a
@@ -1056,8 +1062,11 @@ only in place of a resume Claude Code has no conversation for
 			  is written: the attached Claude Code is detached by
 			  `Ctrl+Z` and a new session starts in its place, kept
 			  for the directory, with the prompt checked as
-			  above. The prompt shows text as
-			  |:Aineo-sessions| reads it; aineo never clears it.
+			  above.
+			The prompt shows text unless the input box is one line
+			and Claude Code's cursor sits right after its `❯`: the
+			grey example it draws in an empty prompt is not text.
+			Aineo never clears the prompt.
 			Nothing is written and nothing is started, the cursor
 			goes back to the window and the mode it came from, and
 			you are told once, with a warning starting `aineo: no
@@ -1150,13 +1159,29 @@ moves you to that tab instead and claims nothing.
 			yet it opens the first one in the current tab page.
 			When Claude Code cannot start, the tab page it made
 			is closed again and aineo tells you why.
+:Aineo tab close	Closes the current tab (|aineo-tabs|), while another
+			aineo tab remains: its Claude Code is stopped as
+			quitting stops it, by its keys or, for one attached
+			to a background session, by `Ctrl+Z` alone, so that
+			the session runs on; its Input's draft is saved, its
+			copies are let go, its entry among the running
+			editors is removed, and its tab page closes, without
+			holding the editor. Its Report, draft and changes
+			base stay on disk, and |:Aineo-sessions| brings the
+			session back in a new tab. The cursor lands in the tab
+			page Neovim makes current. On the last aineo tab it
+			quits Neovim as `:qa` does, which Neovim refuses
+			while a buffer has unsaved changes, stopping nothing.
+			From a tab page that is none of aineo's it closes
+			nothing and warns you once, `aineo: this tab holds no
+			Claude Code session`.
 :Aineo tab {n}		Moves to the tab page numbered {n}, an aineo tab or
 			not, as `{n}gt` does. The cursor lands where it was in
 			that tab page, in Normal mode. With no tab page of
 			that number nothing moves, and aineo tells you once,
 			with a warning, `aineo: no tab {n}`. With any word
-			but `new` or a number it tells you, with one error,
-			what it takes.
+			but `new`, `close` or a number it tells you, with one
+			error, what it takes.
 
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
@@ -1211,6 +1236,9 @@ you turn the prefix off, or when a prefix key is yours: >lua
                                                       *<Plug>(aineo-tab-new)*
 <Plug>(aineo-tab-new)	Does what `:Aineo tab new` does (|:Aineo-tab|).
 
+                                                     *<Plug>(aineo-tab-close)*
+<Plug>(aineo-tab-close)	Does what `:Aineo tab close` does (|:Aineo-tab|).
+
                                                         *<Plug>(aineo-tab-1)*
                                                         *<Plug>(aineo-tab-2)*
                                                         *<Plug>(aineo-tab-3)*
@@ -1252,6 +1280,8 @@ which has none, globally, in Normal mode, and `\s` in Visual mode too:
 \g		|<Plug>(aineo-pane-changes)|
                                                                     *aineo-\T*
 \T		|<Plug>(aineo-tab-new)|
+                                                                    *aineo-\Q*
+\Q		|<Plug>(aineo-tab-close)|
                                               *aineo-\1* *aineo-\2* *aineo-\3*
                                               *aineo-\4* *aineo-\5* *aineo-\6*
                                               *aineo-\7* *aineo-\8* *aineo-\9*
@@ -1320,6 +1350,8 @@ Claude Code is sent none of the twin's keys.
 <C-\>g		|<Plug>(aineo-pane-changes)|
                                                                 *aineo-<C-\>T*
 <C-\>T		|<Plug>(aineo-tab-new)|
+                                                                *aineo-<C-\>Q*
+<C-\>Q		|<Plug>(aineo-tab-close)|
                                   *aineo-<C-\>1* *aineo-<C-\>2* *aineo-<C-\>3*
                                   *aineo-<C-\>4* *aineo-<C-\>5* *aineo-<C-\>6*
                                   *aineo-<C-\>7* *aineo-<C-\>8* *aineo-<C-\>9*
@@ -1848,8 +1880,9 @@ Server socket ~
   listens nowhere, since Claude's reports could not reach it.
 
 Prefix mappings ~
-  For each prefix key, whether it runs aineo's `<Plug>` mapping; a warning
-  when it runs something of yours, or nothing. The Visual-mode `\s` comes
+  For each prefix key, `\Q` (the close of a tab) among them, whether it
+  runs aineo's `<Plug>` mapping; a warning when it runs something of yours,
+  or nothing. The Visual-mode `\s` comes
   last, its line saying `in Visual mode`. While aineo's |VimEnter|
   handler, which maps the keys, has not run — the editor is still
   starting, as when `nvim +checkhealth` runs the check before `VimEnter`,
@@ -1862,9 +1895,10 @@ Prefix mappings ~
   longer than 48 bytes as a backslash, and so does the check.
 
 Terminal prefix mappings ~
-  For each key of the terminal prefix (|aineo-terminal-keys|), in Terminal
-  mode and in Insert mode, whether it leaves the mode and runs aineo's
-  `<Plug>` mapping; a warning when it runs something of yours, or nothing.
+  For each key of the terminal prefix (|aineo-terminal-keys|), `<C-\>Q`
+  among them, in Terminal mode and in Insert mode, whether it leaves the
+  mode and runs aineo's `<Plug>` mapping; a warning when it runs something
+  of yours, or nothing.
   A warning for each mode where `terminal_prefix` alone is mapped
   globally, which has no twins, or local to a buffer, which makes the key
   wait; and when `terminal_prefix` is a printable key, or starts with
@@ -1937,9 +1971,11 @@ Quitting Neovim stops every tab's Claude Code together: each key of the stop
 is pressed to every Claude Code that runs, and the waits run side by side,
 so the quit takes about the time of one stop, up to about 12 seconds, not
 the sum. The tab pages one command closes, such as `:tabonly`, have their
-Claude Codes stopped together once the command has ended, which blocks the
-editor for about one stop, up to 12 seconds, not for each. Each tab runs a
-watch of its
+Claude Codes stopped together once the command has ended, in the background:
+the editor is not held, and the stop takes the time of one stop, up to 12
+seconds, not the sum. The first tab's buffers are taken up again by the next
+tab opened only once its Claude Code has ended; a tab opened before is made of
+copies, with buffers named with a number. Each tab runs a watch of its
 repository once its changes pane has been shown, and each Claude Code that
 starts lists the folder's sessions when it resumes one, so several tabs run
 several watches and several lists at once. What two real Claude Codes do in
@@ -2046,36 +2082,31 @@ The session list ~
   a failure, runs past the bound, prints more or prints what is not JSON,
   the start tells nothing and resumes the kept session once the run has
   ended.
-- Whether it lists the session of aineo's own terminal was not measured.
+- Whether it lists the session of each tab's Claude Code was not measured.
   When it does not, the list holds the others alone and no row says
-  `[this terminal]`.
+  `[tab {n}]`.
 - Claude Code's documentation says what an entry holds; only the fields
   aineo reads are checked, and an entry with no session id is not listed.
-- Send's paste and Enter in one write was measured with Claude Code
-  2.1.281; that it is taken as a `/resume` command was not, only by the
-  fake `claude` of aineo's tests.
-- A draft whose cursor you moved back to the start of its first line reads
-  as an empty prompt, and `/resume {id}` is written in front of it.
-- The prompt is read in Terminal mode, where Neovim keeps the window's
-  cursor on the terminal's, so the cursor moves to Claude's window before
-  the read, and back when the prompt shows text.
 
 The new session key ~
-- That Claude Code takes the pasted `/clear` and Enter of `:Aineo new` as a
-  command was not measured, only by the fake `claude` of aineo's tests, as
-  for the `/resume` of `:Aineo sessions` (The session list, above).
+- Send's paste and Enter in one write was measured with Claude Code
+  2.1.281; that Claude Code takes the pasted `/clear` and Enter of `:Aineo
+  new` as a command was not measured, only by the fake `claude` of aineo's
+  tests.
 - What Claude Code does with a `/clear` written while a turn runs was not
   measured: aineo has no sign of a turn on Claude Code's screen, since the
   input box shows during one, and writes `/clear` as Send writes during a
   turn (|aineo-send|). Claude Code may queue it, run it, or take it as text.
 - Where hooks do not run (Session switches, above), aineo hears of no switch
   after a `/clear`, and the panes stay on the session left.
+- The prompt is read in Terminal mode, where Neovim keeps the window's
+  cursor on the terminal's, so the cursor moves to Claude's window before
+  the read, and back when the prompt shows text.
 - A draft whose cursor you moved back to the start of its first line reads
-  as an empty prompt, as for `:Aineo sessions` (The session list, above),
-  and `/clear` and Enter are written in front of it: Claude Code receives
-  `/clear` followed by your draft as one line, which it may run as `/clear`
-  with the draft lost. aineo cannot tell this from the grey example of an
-  empty prompt.
+  as an empty prompt, and `/clear` and Enter are written in front of it:
+  Claude Code receives `/clear` followed by your draft as one line, which it
+  may run as `/clear` with the draft lost. aineo cannot tell this from the
+  grey example of an empty prompt.
 - A permission dialog drawn in the few tens of milliseconds before aineo
   notices it receives the paste and Enter of `/clear`, as Send's do (Send
   and a dialog, below).

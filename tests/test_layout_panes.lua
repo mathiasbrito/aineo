@@ -598,7 +598,7 @@ T['show_pane() refuses a pane the layout does not have'] = function()
 
   MiniTest.expect.error(function()
     show_pane('files', arrangement_with_panes(buffers))
-  end, "pane: expected 'agent' or 'changes'")
+  end, "pane: expected 'agent', 'changes' or 'terminal'")
 end
 
 T['open() refuses changes it cannot show, naming the setting'] = MiniTest.new_set({

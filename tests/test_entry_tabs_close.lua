@@ -147,8 +147,9 @@ T['a tab page closed by Neovim’s own commands']['that was the first tab leaves
   eq({ tabs.tab_count(child), tabs.current_tab(child) }, { 1, 1 })
   eq(claude_session.ctrl_c_count(second), 0)
 
+  claude_session.wait_for_status(child, 'exited')
   tabs.use_next_fake(child, tabs.fake('tabs-closed-first-third'))
-  tabs.open_tab_when_stopped(child)
+  child.cmd('Aineo tab new')
 
   eq({ tabs.tab_count(child), tabs.windows_of_tab(child, 2), tabs.input_name_of_tab(child, 2) }, {
     2,
@@ -180,16 +181,18 @@ local NEW_ID = '22222222-3333-4444-8555-666666666666'
 local ONE_STOP_PLUS_SLACK_MS = 7500
 
 --- Closes the first tab of the two `open_two_tabs()` opened, as `:1tabclose`
---- does, and opens a tab after it on the fake `name` names, which is made of
---- the homes the first tab was; returns that fake.
+--- does, waits until its Claude Code has stopped, and opens a tab after it on
+--- the fake `name` names, which is made of the homes the first tab was;
+--- returns that fake.
 ---
 ---@param name string
 ---@return table third
 local function take_up_the_first_tab_again(name)
   child.cmd('1tabclose')
   local third = tabs.fake(name .. '-third')
+  claude_session.wait_for_status(child, 'exited')
   tabs.use_next_fake(child, third)
-  tabs.open_tab_when_stopped(child)
+  child.cmd('Aineo tab new')
   return third
 end
 
@@ -325,14 +328,13 @@ T['a tab page closed by Neovim’s own commands']['leaves no entry of it when it
   eq(tabs.keys_of(tabs.entries(state, address)), { tabs.FIRST_TAB })
 end
 
-T['a tab page closed by Neovim’s own commands']['does not hold the editor while its Claude Code stops'] = function()
+T['a tab page closed by Neovim’s own commands']['handles typed keys while its Claude Code stops'] = function()
   local _, _, second = open_two_tabs('tabs-closed-not-held')
-  local before = vim.uv.hrtime()
 
   child.cmd('tabclose')
-  local held_ms = (vim.uv.hrtime() - before) / 1e6
+  tabs.type_probe(child)
 
-  eq(held_ms < 2000, true)
+  eq(tabs.probe_answered(child, 2000), true)
   eq(tabs.ended_how(second), 'keys')
 end
 
