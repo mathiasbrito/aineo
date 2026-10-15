@@ -259,24 +259,25 @@ stops every tab's Claude Code at once and saves every tab's draft
 
 The folder keeps the list of its tabs: the session of each aineo tab, in the
 order of the tab pages, and the place of the tab that is current (the aineo
-tab used last, when the current tab page is none of aineo's). It is kept as a
-tab opens or closes, when a tab's session changes, and when Neovim quits, in a
-file of its own beside the session kept for the folder
-(|aineo-claude-session|): under `stdpath('state')` in `aineo/claude-tabs/`,
-one file per folder that only you can read and write. The first open of aineo
-in a Neovim, the autostart or `\o`, reopens every tab of the list when the
-list holds the session kept for the folder: the first in the current tab page,
-the others in tab pages after it, in the order of the list, each with a Claude
-Code on its own session, resumed or attached to where it runs in Claude Code's
-background service, as a start does (|aineo-claude-session|); all start at
-once, each listing the folder's sessions. The tab that was current at the quit
-is current again, and a reopened tab shows the agent pane. A list that is
-missing, unreadable or does not hold the kept session opens one tab on the
-kept session, as before. Only the first open reopens: a Neovim a session
-plugin restored opens no tab, and a later `\o` reopens nothing either. A tab
-closed with `\Q` or by Neovim's own commands is no longer in the list and does
-not reopen; `\S` brings its session back. `:qa` keeps every tab in the list,
-and so does `\Q` on the last tab.
+tab used last, when the current tab page is none of aineo's). A session two
+tabs show is listed once, at the lower place. It is kept as a tab opens or
+closes, when a tab's session changes, and when Neovim quits, in a file of its
+own beside the session kept for the folder (|aineo-claude-session|): under
+`stdpath('state')` in `aineo/claude-tabs/`, one file per folder that only you
+can read and write. The first open of aineo in a Neovim, the autostart or
+`\o`, reopens every tab of the list when the list holds the session kept for
+the folder: the first in the current tab page, the others in tab pages after
+it, in the order of the list, each with a Claude Code on its own session,
+resumed or attached to where it runs in Claude Code's background service, as a
+start does (|aineo-claude-session|); all start at once, each listing the
+folder's sessions. The tab that was current at the quit is current again, and
+a reopened tab shows the agent pane. A list that is missing, unreadable or
+does not hold the kept session opens one tab on the kept session, as before.
+Only the first open reopens: a Neovim a session plugin restored opens no tab,
+and a later `\o` reopens nothing either. A tab closed with `\Q` or by Neovim's
+own commands is no longer in the list and does not reopen; `\S` brings its
+session back. `:qa` keeps every tab in the list, and so does `\Q` on the last
+tab.
 
 The changes pane ~
                                                                *aineo-changes*
