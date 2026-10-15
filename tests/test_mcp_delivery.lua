@@ -588,7 +588,7 @@ T['an offer']['of a report with no known session goes to the editor’s report h
   eq(editor.lua_get('_G.asked'), { { true, { at_start = true, start_token = TOKEN } } })
 end
 
-T['an offer']['of a report with no known session shows in the Report when the report home does not take it'] = function()
+T['an offer']['of a report with no known session is refused, and shown in no Report, when the report home does not take it'] = function()
   start_editor()
   stub_session_report_home(false)
   local relay = start_relay_without_session()
@@ -597,7 +597,7 @@ T['an offer']['of a report with no known session shows in the Report when the re
 
   eq(
     { get(decoded(relay:next_line()), 'result', 'isError'), report_editor.lines(editor) },
-    { false, { '09:05 [done] Refactor the parser — All tests pass' } }
+    { true, { '' } }
   )
 end
 

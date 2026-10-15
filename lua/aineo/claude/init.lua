@@ -1453,12 +1453,18 @@ end
 ---@field prompt_shows_text fun(window: integer): boolean see `prompt_shows_text()`
 ---@field write_to_session fun(bytes: string) see `write_to_session()`
 
+--- The home each table of session functions was made for
+--- (`session_functions_of()`), held weakly, so that `M.stop_sessions()` can
+--- stop the Claude Codes of the tables it is given.
+---@type table<table, aineo.claude.Home>
+local home_of_session = setmetatable({}, { __mode = 'k' })
+
 --- The session functions of `home`.
 ---
 ---@param home aineo.claude.Home
 ---@return aineo.claude.Session
 local function session_functions_of(home)
-  return {
+  local functions = {
     start_session = function(settings)
       return start_session(home, settings)
     end,
@@ -1492,6 +1498,8 @@ local function session_functions_of(home)
       return start_token(home)
     end,
   }
+  home_of_session[functions] = home
+  return functions
 end
 
 --- Takes `home` out of the homes a session hook is routed among and the quit
@@ -1530,6 +1538,34 @@ end
 
 for name, session_function in pairs(session_functions_of(module_home)) do
   M[name] = session_function
+end
+home_of_session[M] = module_home
+
+--- Stops the Claude Codes of `sessions`, session homes (`M.new()`'s copies or
+--- this module), together, as quitting stops them all (`stop_running_sessions()`):
+--- every key of the stop is pressed to every Claude Code that runs and the
+--- waits run side by side, so that it blocks the editor for about one stop,
+--- up to 11.8 s, not the sum. Marks each start stopped, as `stop_session()`
+--- does. Stops nothing for a session that does not run, and leaves every
+--- other home's Claude Code running.
+---
+--- Raises an error naming `sessions` when one of them is no session home.
+---
+---@param sessions aineo.claude.Session[]
+function M.stop_sessions(sessions)
+  vim.validate('sessions', sessions, 'table')
+  local homes = {}
+  for _, session in ipairs(sessions) do
+    local home = home_of_session[session]
+    if not home then
+      error('sessions: expected session homes, got ' .. vim.inspect(session), 2)
+    end
+    if home.session then
+      home.session.stopped = true
+    end
+    table.insert(homes, home)
+  end
+  stop_running_sessions(homes)
 end
 
 return M

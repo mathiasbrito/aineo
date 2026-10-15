@@ -64,6 +64,44 @@ function M.ended_how(fake)
   return events[#events] and events[#events].ended
 end
 
+--- The autocommand groups of the second tab's copies of the homes, which
+--- exist while that tab does: the layout's, the Report's, the draft's and the
+--- changes pane's two.
+M.SECOND_TAB_GROUPS = {
+  'aineo.layout.2',
+  'aineo_report_2',
+  'aineo.draft.2',
+  'aineo_changes_copy1',
+  'aineo_changes_commits_scroll_copy1',
+}
+
+--- The groups of `M.SECOND_TAB_GROUPS` that exist in `child`.
+---
+---@param child table
+---@return string[]
+function M.second_tab_groups_that_exist(child)
+  return child.lua_get(
+    [[vim.tbl_filter(function(name)
+      return (pcall(vim.api.nvim_get_autocmds, { group = name }))
+    end, ...)]],
+    { M.SECOND_TAB_GROUPS }
+  )
+end
+
+--- Runs `:Aineo tab new` in `child` until a tab page has opened, waiting at
+--- most `M.PATIENCE_MS`: the command is refused, with a message, while the
+--- Claude Code of a tab just closed is still stopping, which the editor does
+--- while it answers requests.
+---
+---@param child table
+function M.open_tab_when_stopped(child)
+  local count = M.tab_count(child)
+  vim.wait(M.PATIENCE_MS, function()
+    entry.command(child, 'Aineo tab new')
+    return M.tab_count(child) > count
+  end, 200)
+end
+
 --- The keys of `entries` (`M.entries()`), sorted.
 ---
 ---@param entries table<string, table>

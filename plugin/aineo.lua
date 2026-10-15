@@ -436,6 +436,12 @@ local function run(action)
   return false, line
 end
 
+--- The buffer number Send is given for a tab whose Input does not exist yet,
+--- and for a selection outside every tab: no buffer has it, so Send refuses,
+--- saying there is no Input or that Visual Send works in Input only, rather
+--- than read the Input of another tab.
+local NO_INPUT_BUFFER = -1
+
 --- The tabs of this editor, in the order they were made (`new_tab()`): the
 --- tabs whose layout has opened in a tab page of their own, and at most one
 --- that has none yet, which a claim made before aineo opened uses.
@@ -587,7 +593,9 @@ end
 ---@field session_name fun(): string? the name of the session the tab's Claude terminal shows (`b:aineo_session_name`), nil before it has one
 ---@field page fun(): integer? the tab page the tab is in, nil before its layout opens
 ---@field is_bound fun(): boolean whether the tab page it is in still exists
----@field close fun() lets the tab go: stops its Claude Code as quitting stops it and lets its homes go
+---@field release fun() lets the tab's homes go as its tab page closes, at once
+---@field finish fun(already_stopped: boolean) stops the tab's Claude Code as quitting stops it unless it was stopped, and ends the tab
+---@field reopen fun() takes the first tab up again, with nothing of what it held
 
 --- Makes one tab of aineo from `homes`: the Claude Code session it starts,
 --- and the Report, Input, changes pane and layout that follow that session.
@@ -595,8 +603,10 @@ end
 --- session, the confirmation of a start — is held here, in this tab, and the
 --- homes' module-level functions are not called: a tab acts on `homes` alone.
 ---
---- `on_bound` is called with the tab once its layout opens in a tab page for
---- the first time, which is the tab page the tab is in from then on.
+--- `on_bound` is called with the tab each time its layout opens in a tab page
+--- it was not in, which is the tab page the tab is in from then on: once for
+--- a tab of copies, and again for the first tab each time it is taken up
+--- after its tab page closed.
 ---
 ---@param homes aineo.entry.Homes
 ---@param key string? see `aineo.entry.Tab`
@@ -609,6 +619,15 @@ local function make_tab(homes, key, on_bound)
   --- The tab page the tab is in, once its layout has opened in it; nil before.
   ---@type integer?
   local bound_page = nil
+
+  --- Whether the tab has been released (`release()`): what its Claude Code
+  --- tells it while it stops writes nothing. Cleared when the first tab is
+  --- opened again (`reopen()`).
+  local is_released = false
+
+  --- Whether the first tab has been opened again after it closed
+  --- (`reopen()`): it starts in the folder, as every tab after the first.
+  local is_reopened = false
 
   --- Whether the report home has been given its environment yet.
   local report_environment_given = false
@@ -722,7 +741,7 @@ local function make_tab(homes, key, on_bound)
   ---
   ---@param session string
   local function claim(session)
-    if vim.v.exiting ~= vim.NIL then
+    if is_released or vim.v.exiting ~= vim.NIL then
       return
     end
     if claimed ~= session then
@@ -823,7 +842,7 @@ local function make_tab(homes, key, on_bound)
   end
 
   write_entry = function()
-    if vim.v.exiting ~= vim.NIL or not panes_session or vim.v.servername == '' then
+    if is_released or vim.v.exiting ~= vim.NIL or not panes_session or vim.v.servername == '' then
       return
     end
     make_editor_handlers()
@@ -956,8 +975,8 @@ local function make_tab(homes, key, on_bound)
   local claude_terminal = nil
 
   --- Makes the tab the one in the tab page the current window is in, once its
-  --- layout has opened there; and tells `on_bound` of it, the first time. Does
-  --- nothing for a tab bound to a tab page that exists still.
+  --- layout has opened there; and tells `on_bound` of it. Does nothing for a
+  --- tab bound to a tab page that exists still.
   local function bind_to_current_page()
     if bound_page and vim.api.nvim_tabpage_is_valid(bound_page) then
       return
@@ -1040,14 +1059,14 @@ local function make_tab(homes, key, on_bound)
 
   --- The directory a start of the tab's Claude Code runs in. The first tab
   --- starts where the editor is, as it always has: Claude Code follows `:cd`
-  --- there, each directory resuming its own session. Every tab after it
-  --- starts in the folder, the working directory of `kept_places()`, whatever
+  --- there, each directory resuming its own session. Every tab after it, and
+  --- the first tab opened again after it closed, starts in the folder, the working directory of `kept_places()`, whatever
   --- `:cd` and `:tcd` say later, since a tab holds a session of the folder
   --- alone.
   ---
   ---@return string
   local function start_directory()
-    if key == nil then
+    if key == nil and not is_reopened then
       return vim.fn.getcwd()
     end
     return kept_places().working_directory
@@ -1735,11 +1754,6 @@ local function make_tab(homes, key, on_bound)
     write_command_at_empty_prompt(NO_NEW_SESSION, NEW_PROMPT_HOLDS_TEXT, '/clear')
   end
 
-  --- The buffer number Send is given for a tab whose Input does not exist
-  --- yet: no buffer has it, so Send refuses, saying there is no Input, rather
-  --- than read the Input of another tab.
-  local NO_INPUT_BUFFER = -1
-
   --- What Send is handed: the tab's Input and the tab's Claude Code session.
   ---
   ---@return aineo.send.Target
@@ -1825,29 +1839,73 @@ local function make_tab(homes, key, on_bound)
   --- `let_go()` those homes lack, and its terminal.
   local function leave_as_it_is() end
 
-  --- Lets the tab go as its tab page has closed: stops its Claude Code as
-  --- quitting stops it (`aineo.claude`'s `stop_session()`, which presses
-  --- Ctrl+Z alone to one attached to a background session), wipes its
-  --- terminal, lets go its claim, and then lets its homes go: Input's draft is
-  --- saved first (`aineo.draft`'s `let_go()`), then the layout, the changes
-  --- pane, the Report and the Claude home are let go. The first tab is made of
-  --- the homes the modules themselves are, which have no `let_go()`: it leaves
-  --- them as they are, its terminal included, is in no tab page any more, and
-  --- goes on when its layout opens again (`new_tab()`).
-  local function close()
+  --- Lets the tab's homes go as its tab page has closed, at once: its claim
+  --- is let go, Input's draft is saved first (`aineo.draft`'s `let_go()`),
+  --- then the layout, the changes pane and the Report are let go. What its
+  --- Claude Code tells it afterwards writes nothing. The first tab is made of
+  --- the homes the modules themselves are, which have no `let_go()`: it
+  --- leaves them as they are, and is in no tab page any more. Its Claude Code
+  --- is stopped by `finish()`.
+  local function release()
+    is_released = true
     let_each_go({
-      homes.claude.stop_session,
-      key == nil and leave_as_it_is or wipe_claude_terminal,
       release_claim,
       homes.draft.let_go or leave_as_it_is,
       homes.layout.let_go or leave_as_it_is,
       homes.changes.let_go or leave_as_it_is,
       homes.report.let_go or leave_as_it_is,
-      homes.claude.let_go or leave_as_it_is,
     })
     if key == nil then
       bound_page = nil
     end
+  end
+
+  --- Ends what `release()` left of the tab: stops its Claude Code as quitting
+  --- stops it (`aineo.claude`'s `stop_session()`, which presses Ctrl+Z alone
+  --- to one attached to a background session) unless the caller stopped it
+  --- together with others (`already_stopped`), wipes its terminal and lets
+  --- its Claude home go. The first tab keeps its terminal and its Claude
+  --- home, which cannot be let go; the next tab opened takes them up.
+  ---
+  ---@param already_stopped boolean
+  local function finish(already_stopped)
+    let_each_go({
+      already_stopped and leave_as_it_is or homes.claude.stop_session,
+      key == nil and leave_as_it_is or wipe_claude_terminal,
+      homes.claude.let_go or leave_as_it_is,
+    })
+  end
+
+  --- Takes up the first tab again, as the tab the next tab opened is made of
+  --- once it has closed: what the closed tab held — the session its panes
+  --- followed, its claim, the confirmation of its start, the sessions it
+  --- warned of — is forgotten, so that it follows its new session at once
+  --- (`start_in_new_tab()`) and starts in the folder.
+  local function reopen()
+    is_released = false
+    is_reopened = true
+    panes_session = nil
+    claimed_by_id = nil
+    start_confirmed = false
+    shared_session_told = {}
+  end
+
+  --- What `:Aineo tab new` does once the tab page exists: starts Claude Code
+  --- on a new session in the layout (`start_new_session()`). A tab taken up
+  --- again follows its new session at once, so that Input and the Report do
+  --- not keep the closed tab's, and shows the agent pane, not the pane the
+  --- closed tab showed.
+  local function start_in_new_tab()
+    start_new_session()
+    if not is_reopened then
+      return
+    end
+    if not panes_session then
+      follow_own_session(homes.claude.session_id())
+    end
+    homes.layout.show_pane('agent', function()
+      return arrangement(resolved_config(), claude_terminal)
+    end)
   end
 
   tab.actions = actions
@@ -1863,7 +1921,7 @@ local function make_tab(homes, key, on_bound)
   tab.start_token = function()
     return homes.claude.start_token()
   end
-  tab.start_in_new_tab = start_new_session
+  tab.start_in_new_tab = start_in_new_tab
   tab.session_name = function()
     if claude_terminal and vim.api.nvim_buf_is_valid(claude_terminal) then
       return vim.b[claude_terminal].aineo_session_name
@@ -1875,7 +1933,9 @@ local function make_tab(homes, key, on_bound)
   tab.is_bound = function()
     return bound_page ~= nil and vim.api.nvim_tabpage_is_valid(bound_page)
   end
-  tab.close = close
+  tab.release = release
+  tab.finish = finish
+  tab.reopen = reopen
   return tab
 end
 
@@ -1906,12 +1966,18 @@ local function remove_entry_of(tab)
   end
 end
 
---- Lets `tab` go: out of `tab_list` first, so that no report or switch is
---- told to a tab that is closing, then its entry off the list of running
---- editors, then what the tab lets go itself (`aineo.entry.Tab`'s `close()`).
+--- The tabs released (`release_tab()`) whose Claude Code has yet to stop
+--- (`finish_closing()`).
+---@type aineo.entry.Tab[]
+local closing = {}
+
+--- Releases `tab`, whose tab page has closed: out of `tab_list` first, so
+--- that no report or switch is told to it, then its entry off the list of
+--- running editors, then its homes (`aineo.entry.Tab`'s `release()`). It
+--- waits in `closing` for its Claude Code to stop.
 ---
 ---@param tab aineo.entry.Tab
-local function close_tab(tab)
+local function release_tab(tab)
   for index, listed in ipairs(tab_list) do
     if listed == tab then
       table.remove(tab_list, index)
@@ -1922,13 +1988,43 @@ local function close_tab(tab)
     last_used_tab = nil
   end
   remove_entry_of(tab)
-  tab.close()
+  tab.release()
+  table.insert(closing, tab)
 end
 
---- Closes each tab whose tab page has closed (`aineo.tabs`' `closed()`), as
+--- Whether `finish_closing()` is stopping Claude Codes now: the editor
+--- answers requests meanwhile, and a tab made then could be given the homes
+--- of a Claude Code that has not stopped yet (`new_tab()`).
+local is_stopping = false
+
+--- Stops the Claude Codes of the tabs in `closing` together, as quitting
+--- stops them (`aineo.claude`'s `stop_sessions()`), blocking the editor for
+--- about one stop, and ends the tabs (`aineo.entry.Tab`'s `finish()`). Does
+--- nothing while Neovim quits: the quit stops every Claude Code at once.
+local function finish_closing()
+  if #closing == 0 or vim.v.exiting ~= vim.NIL then
+    return
+  end
+  local finishing = closing
+  closing = {}
+  is_stopping = true
+  local stopped = run(function()
+    require('aineo.claude').stop_sessions(vim.tbl_map(function(tab)
+      return tab.homes.claude
+    end, finishing))
+  end)
+  is_stopping = false
+  for _, tab in ipairs(finishing) do
+    tab.finish(stopped)
+  end
+end
+
+--- Releases each tab whose tab page has closed (`aineo.tabs`' `closed()`), as
 --- `:tabclose`, `:tabonly` and the close of a tab page's last window close
---- one. Does nothing while Neovim quits: the quit stops every Claude Code at
---- once.
+--- one, and has their Claude Codes stopped together once the command that
+--- closed them has ended (`finish_closing()`): the editor is not held inside
+--- `TabClosed`, and a command that closes several tab pages stops them once.
+--- Does nothing while Neovim quits.
 local function close_tabs_of_closed_pages()
   if vim.v.exiting ~= vim.NIL then
     return
@@ -1938,9 +2034,10 @@ local function close_tabs_of_closed_pages()
       return listed.page() == page
     end)
     if tab then
-      close_tab(tab)
+      release_tab(tab)
     end
   end
+  vim.schedule(finish_closing)
 end
 
 --- Whether the handler of closed tab pages has been made (`hold_tab()`).
@@ -2054,10 +2151,17 @@ local report_router_given = false
 --- a tab of copies (`copied_homes()`), keyed by the number it is made as, and
 --- held in the tabs home once its layout opens (`hold_tab()`). The first tab
 --- made has the report home route a report to the tab it is for
---- (`route_report()`).
+--- (`route_report()`). The Claude Codes of the tabs closed so far are stopped
+--- first (`finish_closing()`), so that the first tab, taken up again
+--- (`aineo.entry.Tab`'s `reopen()`), is not given a Claude Code that still
+--- runs; raises an error while they stop.
 ---
 ---@return aineo.entry.Tab
 local function new_tab()
+  if is_stopping then
+    error('aineo: the Claude Code of a closed tab is still stopping; try again in a moment', 0)
+  end
+  finish_closing()
   tabs_made = tabs_made + 1
   local tab
   if module_tab == nil then
@@ -2065,6 +2169,7 @@ local function new_tab()
     tab = module_tab
   elseif not vim.tbl_contains(tab_list, module_tab) then
     tab = module_tab
+    tab.reopen()
   else
     tab = make_tab(copied_homes(), tostring(tabs_made), hold_tab)
   end
@@ -2129,7 +2234,8 @@ local function open_new_tab()
       break
     end
   end
-  tab.close()
+  tab.release()
+  tab.finish(false)
   if vim.api.nvim_tabpage_is_valid(made_page) and #vim.api.nvim_list_tabpages() > 1 then
     vim.cmd.tabclose(vim.api.nvim_tabpage_get_number(made_page))
   end
@@ -2137,23 +2243,25 @@ local function open_new_tab()
 end
 
 --- What `:Aineo tab {n}` tells the user, as a warning, when there is no tab
---- page `n`.
+--- page `n`: the number as the user typed it.
 ---
----@param number integer
+---@param typed string
 ---@return string
-local function no_such_tab(number)
-  return ('aineo: no tab %d'):format(number)
+local function no_such_tab(typed)
+  return ('aineo: no tab %s'):format(typed)
 end
 
 --- Moves to the tab page `number`, as `{n}gt` counts them, an aineo tab or
 --- not; the cursor lands where it was in that tab page. With no such tab page
---- it moves nowhere and warns the user.
+--- it moves nowhere and warns the user, naming the number as `typed`, which
+--- is `number` as it is written when not given.
 ---
----@param number integer
-local function jump_to_tab(number)
+---@param number number
+---@param typed? string
+local function jump_to_tab(number, typed)
   local page = vim.api.nvim_list_tabpages()[number]
   if not page then
-    vim.notify(no_such_tab(number), vim.log.levels.WARN)
+    vim.notify(no_such_tab(typed or tostring(number)), vim.log.levels.WARN)
     return
   end
   vim.api.nvim_set_current_tabpage(page)
@@ -2229,12 +2337,22 @@ for _, argument in ipairs(ACTION_ARGUMENTS) do
 end
 
 --- What each action that has a Visual-mode form does in Visual mode, by its
---- argument in `ACTION_ARGUMENTS`: Send sends the selection alone, in the tab
---- to act on (`aineo.entry.Tab`'s `send_selection()`).
+--- argument in `ACTION_ARGUMENTS`: Send sends the selection alone, in the
+--- tab the selection is in (`aineo.entry.Tab`'s `send_selection()`). A
+--- selection in a tab page that is not an aineo tab's is in no Input: Send
+--- says so, and the cursor stays where it is.
 ---@type table<string, fun()>
 local VISUAL_ACTIONS = {
   send = function()
-    acting_tab().send_selection()
+    local tab = tab_of_current_page()
+    if tab then
+      tab.send_selection()
+      return
+    end
+    require('aineo.send').send_selection({
+      input = NO_INPUT_BUFFER,
+      session = require('aineo.claude'),
+    })
   end,
 }
 
@@ -2566,7 +2684,7 @@ vim.api.nvim_create_user_command('Aineo', function(command)
   end
   if command.fargs[1] == 'tab' and #command.fargs == 2 and command.fargs[2]:match('^%d+$') then
     run(function()
-      jump_to_tab(tonumber(command.fargs[2]))
+      jump_to_tab(tonumber(command.fargs[2]), command.fargs[2])
     end)
     return
   end

@@ -203,7 +203,9 @@ What the actions do with tabs:
   `:Aineo claim`.
 - A report goes to the tab whose Claude Code sent it. A session hook goes to
   the tab whose start it names. Each tab is listed among the running editors
-  for its own session (|aineo-report-claims|).
+  for its own session (|aineo-report-claims|). A report of no known session
+  from a Claude Code that no tab of this Neovim runs is shown in no tab: the
+  report server tells Claude that it was not delivered.
 - `:Aineo claim {id}` claims the session in the current tab. When another
   tab of this Neovim runs the session, it moves you to that tab and claims
   nothing.
@@ -212,10 +214,12 @@ What the actions do with tabs:
   open in tab {n}`.
 
 A tab page closed by Neovim's own commands, `:tabclose`, `:tabonly` or the
-close of its last window, closes its tab: its Claude Code is stopped as
-quitting stops it (Ctrl+Z alone for one attached to a background session), its
-Input's draft is saved, its buffers and handlers are let go, and its entry
-among the running editors is removed. Its Report, draft and changes base stay
+close of its last window, closes its tab: its Input's draft is saved, its
+buffers and handlers are let go (the first tab's stay, for the next tab opened
+to take up; |aineo-limits|), and its entry among the running editors is
+removed. Its Claude Code is stopped as quitting stops it (Ctrl+Z alone for one
+attached to a background session) once the command has ended, those of all the
+tab pages the command closed together. Its Report, draft and changes base stay
 on disk, under its session. The other tabs go on as they were. Quitting
 stops every tab's Claude Code at once and saves every tab's draft
 (|aineo-limits|).
@@ -1932,8 +1936,10 @@ Several tabs ~
 Quitting Neovim stops every tab's Claude Code together: each key of the stop
 is pressed to every Claude Code that runs, and the waits run side by side,
 so the quit takes about the time of one stop, up to about 12 seconds, not
-the sum. A tab page closed by `:tabclose` or `:tabonly` stops its Claude Code
-alone, which blocks the editor for that stop. Each tab runs a watch of its
+the sum. The tab pages one command closes, such as `:tabonly`, have their
+Claude Codes stopped together once the command has ended, which blocks the
+editor for about one stop, up to 12 seconds, not for each. Each tab runs a
+watch of its
 repository once its changes pane has been shown, and each Claude Code that
 starts lists the folder's sessions when it resumes one, so several tabs run
 several watches and several lists at once. What two real Claude Codes do in
