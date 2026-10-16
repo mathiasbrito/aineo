@@ -117,3 +117,25 @@ Write it in your definition's shape, to `<scratchpad>/t81-report-packet.md`. Ope
 - the deep-require check's output.
 
 The orchestrator's verification runs `plan.md`'s T81 mutants. Name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-16, before dispatch
+
+`plan.md` › *The orchestrator's rulings* rules O1–O12 as their (a), A392–A403, and adds A391 (how the list marks its items), which this brief is written for. Record them as the orchestrator's assumptions, never as the user's decisions.
+
+## Amendment — 2026-10-16, the user's answers, before dispatch
+
+The user answered U1–U3 (`plan.md` › *The user's answers*, D76's dated note). U1 and U3 are not the (a)s this body was written for; where the body and this section differ, this section wins.
+
+- **The task row now reads**, verbatim:
+
+  > | T81 | The changes pane shows one worktree alone (C1, C15; D76): each changes home keeps a scope, none or one other worktree; `s` in either window of the pane offers one list in `vim.ui.select`, each item marked by its kind, the other worktrees marked `[worktree]`; a scope's view is the worktree's name on the first line — its whole change — and its commits below, nothing else; picking selects its whole change and the files window follows; `\g` (`:Aineo pane changes`) pressed while the pane shows clears the scope and shows the default view, the choice kept when that view lists it, and pressed from another pane shows the scope view again; a worktree no longer listed, or another Claude Code session followed, clears it, the first told once; per tab, never on disk; with the help | T63, T74 | planned — wave 18 |
+
+- **Behaviour 5, the list (U1, the user's decision; A391).** `s` offers one list, which T82 extends with branches; build it so. Each item is marked by its kind: a worktree reads `[worktree] <folder> (<branch>)`, or `(detached)`, the folder and branch quoted as `worktree_heading()` quotes them. `format_item` gives that text, so a picker that searches (telescope, fzf-lua, snacks, dressing…) searches it. The items carry what a pick needs (the worktree's top level), never a parse of the text. Pin the text of each item.
+- **Behaviour 10, `\g` (U3 (b), the user's decision).** Replace it with:
+  - 10a. `\g` pressed while the changes pane already shows — either of the home's pane buffers in a window, as `refresh_shown_pane()` tells it, checked before the pane is shown — clears the scope and shows the default view, read again as today.
+  - 10b. `\g` pressed from another pane — after `\pa` or `\pt`, or with the layout closed — shows the changes pane in its scope view, read again, the scope kept (mutant 3 of `plan.md`, as amended).
+
+  The home's new call does both: it clears the scope only while its pane is shown, and reads the shown pane again as `refresh_shown_pane()` does; `focus_pane('changes')` calls it in that function's place.
+- **Behaviour 11** applies to the `\g` of 10a alone. **Behaviour 12** is unchanged.
+- **The help** says, under *aineo-changes*: `s` and its one list, each item marked; that Neovim's own `vim.ui.select` is a numbered list with no search, and a picker plugin that replaces it searches the list; the scope view; `\g` from the pane and from elsewhere (and `*aineo-\g*` likewise).
+- **Rejected by the answers:** a subcommand (U1 (b)); every `\g` clearing (U3 (a)).
