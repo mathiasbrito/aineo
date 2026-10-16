@@ -1607,7 +1607,7 @@ claude.hide_multiplexer	A boolean. Default: `true`
 			the multiplexer; no tab shows activity there, and
 			`:checkhealth aineo` warns (|aineo-health|). Under
 			tmux a copy made in Claude's window then prints
-			`52;c;<text>` there. What the default costs is in
+			`52;c;<base64>` there. What the default costs is in
 			|aineo-limits|.
 
                                            *aineo-config-layout.report_height*
@@ -1648,7 +1648,9 @@ tabs.always_show	A boolean. Default: `true`
 			set afterwards is kept, and aineo sets nothing back
 			when its tabs close. With `false` 'showtabline' is
 			left as you have it, so the tab line shows from two
-			tab pages on by default.
+			tab pages on by default. The setting takes effect at
+			the first aineo tab: a change made after it, by
+			|aineo.setup()| or `vim.g.aineo`, needs a restart.
 
 ==============================================================================
 7. SEND                                                           *aineo-send*
@@ -2083,8 +2085,8 @@ Tab line ~
   `claude.hide_multiplexer` set to `false`, for `TMUX`, `STY` and `ZELLIJ`
   when it holds them with more than white space: Claude Code then sets no
   title, or keeps it still, so that no tab shows activity (|aineo-limits|);
-  for `TMUX`, it adds that a copy made in Claude's window prints `52;c;<text>`
-  there.
+  for `TMUX`, it adds that a copy made in Claude's window prints
+  `52;c;<base64>` there.
 
 Autostart ~
   Whether the autostart opened the layout at startup, or which reason kept
@@ -2502,7 +2504,7 @@ The activity indicator ~
   knows, and no tab shows activity; `:checkhealth aineo` warns. Under tmux
   Claude Code then copies a mouse selection with a clipboard sequence
   wrapped for tmux, which Neovim's terminal prints in Claude's window as
-  `52;c;<text>`; the plain one it sends otherwise reaches the clipboard.
+  `52;c;<base64>`; the plain one it sends otherwise reaches the clipboard.
 - A shell command Claude Code runs in the background is not activity; a
   subagent running in the background is, and keeps the tab busy after the
   reply.

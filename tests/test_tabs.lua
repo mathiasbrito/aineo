@@ -423,6 +423,16 @@ T['show_tabline_once()']["keeps a 'showtabline' set after the first call"] = fun
   eq(child.o.showtabline, 0)
 end
 
+T['show_tabline_once()']["leaves 'showtabline' after a later setup() turns tabs.always_show on, the first call having found it off"] = function()
+  child.lua('vim.g.aineo = { tabs = { always_show = false } }')
+  in_child('tabs.show_tabline_once()')
+  child.lua("require('aineo').setup({ tabs = { always_show = true } })")
+
+  in_child('tabs.show_tabline_once()')
+
+  eq(child.o.showtabline, 1)
+end
+
 T['show_tabline_once()']['takes tabs.always_show from setup() over vim.g.aineo'] = function()
   child.lua('vim.g.aineo = { tabs = { always_show = true } }')
   child.lua("require('aineo').setup({ tabs = { always_show = false } })")
