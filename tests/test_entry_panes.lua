@@ -463,13 +463,40 @@ T['a switch a window refuses']['leaves the column as it was, says why once, and 
   eq({ refused, entry.windows(child) }, { { AGENT_PANE, 1 }, CHANGES_PANE })
 end
 
---- Waits, at most `claude_session.PATIENCE_MS`, until the command-line window
---- of the child is closed: leaving it with `<C-c>` is handled after the keys
---- have been typed.
-local function wait_for_command_line_window_to_close()
-  vim.wait(claude_session.PATIENCE_MS, function()
-    return child.fn.getcmdwintype() == ''
-  end, 20)
+--- Waits, at most `claude_session.PATIENCE_MS`, until `predicate` is true, and
+--- says whether it became true.
+---
+---@param predicate fun(): boolean
+---@return boolean became_true
+local function wait_until(predicate)
+  return vim.wait(claude_session.PATIENCE_MS, predicate, 20)
+end
+
+--- Opens the command-line window in the child and presses `\g` in it, and
+--- waits until aineo has told the user that it refused the switch.
+local function press_g_in_a_command_line_window()
+  local told_before = #entry.messages(child)
+  child.type_keys('q:', '\\g')
+  eq(
+    wait_until(function()
+      return #entry.messages(child) > told_before
+    end),
+    true
+  )
+end
+
+--- Closes the command-line window of the child with `:quit`, and waits until
+--- it is closed. The command is typed text: a `<C-c>` that reaches a child
+--- while it checks for an interrupt, as one busy under load does, is taken as
+--- one, and is lost.
+local function close_the_command_line_window()
+  child.type_keys(':quit<CR>')
+  eq(
+    wait_until(function()
+      return child.fn.getcmdwintype() == ''
+    end),
+    true
+  )
 end
 
 T['a switch refused in the command-line window'] = MiniTest.new_set()
@@ -478,10 +505,9 @@ T['a switch refused in the command-line window']['leaves the column as it was, a
   open_layout('panes-refused-cmdwin')
   enter_window_showing('aineo://input')
 
-  child.type_keys('q:', '\\g')
+  press_g_in_a_command_line_window()
   local told = #entry.messages(child)
-  child.type_keys('<C-c>', '<Esc>')
-  wait_for_command_line_window_to_close()
+  close_the_command_line_window()
   local after_closing = entry.windows(child)
   entry.press(child, '\\g')
 
@@ -905,9 +931,8 @@ T['a switch to the changes pane, refused'] = MiniTest.new_set({
     {
       'in the command-line window',
       function()
-        child.type_keys('q:', '\\g')
-        child.type_keys('<C-c>', '<Esc>')
-        wait_for_command_line_window_to_close()
+        press_g_in_a_command_line_window()
+        close_the_command_line_window()
       end,
     },
     {
@@ -1165,8 +1190,8 @@ local function refuse_switch_with_report_shown_by_hand()
   child.api.nvim_set_current_win(child.fn.bufwinid('aineo://changes-files'))
   child.cmd('buffer aineo://report')
   child.api.nvim_win_set_cursor(0, { 3, 0 })
-  child.type_keys('q:', '\\g')
-  child.type_keys('<C-c>', '<Esc>')
+  press_g_in_a_command_line_window()
+  close_the_command_line_window()
 end
 
 T['the Report shown by hand under the changes pane, a switch to the changes pane refused,'] =
