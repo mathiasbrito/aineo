@@ -129,3 +129,15 @@ The user answered U1–U3 (`plan.md` › *The user's answers*, D76's dated note)
 ## Amendment — 2026-10-16, `\g` toggles, before dispatch
 
 The user: "the \g as a toggle is fine" (`plan.md` › *The model*, items 5 and 9 as amended; T81's brief, its last amendment). **Behaviour 15 now reads:** `\g` treats a branch scope as T81 treats a worktree's: pressed while the pane shows, it toggles between the branch's scope view and the default view, the scope kept; the choice in the default view is *Session work*, as it lists no branch; pressed from another pane, it shows the view last left. A deleted branch still ends the scope (behaviour as written).
+
+## Amendment — 2026-10-17, at dispatch, on `dev` `bbf4400`
+
+The orchestrator's assumption, re-checked against this `dev` by the implementer (A256's way). T81 has merged; nothing below changes the behaviour the brief asks for, and none is a spec conflict. Facts that change *how* it is built:
+
+- **`worktrees.lua` › `read_base()` is local and takes a repository with a `head`**; `git.worktree_base()` needs only a `top` and a `head`. The seam the brief allows: a public `read_base_of(read, commit, done)` beside `read_worktree()`, reading what the base is taken against and the base of any commit of the editor's repository. A branch's tip is such a commit; nothing of the worktrees' base rule is restated.
+- **T81's scope is a worktree's alone.** `Scope` is `{ top, heading }`, `scope.sections_shown()` gives `WorktreeSection[]`, and `lines.commits_window()` takes that list as `view.scope`. A branch is not a section of `commits_others`, so the shown members become a list of `{ worktree }` or `{ branch }` (`aineo.changes.ScopeMember`), and `Scope` gains `branch`. T84's reported set joins the same list.
+- **A423 removed the default view's fallback to *Session work*, because the default view lists every filter the scope view lists.** A branch breaks that: the default view lists no branch. The fallback comes back for a selected filter of a branch (behaviour 15), not for the others.
+- **`read_commits`'s `take_own` selects *Session work* again for any `commit` filter that is neither a worktree's nor a landed one's and is not among the session's own commits.** A commit of a branch is a `commit` filter carrying `branch`, as a landed one carries `landed`; the rule must leave it alone.
+- **`copy.lua` is 2005 lines**, not in the brief's list of facts; the branch's state (`session.branch`) and its read live there beside `session.landed`, with the read itself in a new `lua/aineo/changes/branch.lua`.
+- **The brief's facts hold on this `dev`:** `git/init.lua` 404 lines, `entry_diff.lua` 258, `head_diff.lua` 188, `commit_file.lua` 118; `README.md` lists `\g` among the layout's keys and no key of the pane, so it is unchanged. The tests' baseline on `bbf4400`, run by the implementer, is in the session note.
+- **Checked-out branches are read fresh** (`git.list_worktrees()`) when `s` is pressed: `session.repository.branch` is the branch found at the session's start, and goes stale at a checkout.
