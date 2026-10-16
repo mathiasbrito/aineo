@@ -1,8 +1,9 @@
 --- The git home: what a repository holds, asked of git — the files changed
 --- since a base commit, the commits since it or between two commits, their
 --- diffs, a file as a commit has it, a name resolved to a commit, its
---- worktrees and the base of each — and a watch that calls back when the
---- branch moves, a reference is written or a working-tree file changes.
+--- worktrees and the base of each, its local branches — and a watch that
+--- calls back when the branch moves, a reference is written or a
+--- working-tree file changes.
 ---
 --- Every operation returns at once, runs git asynchronously with each process
 --- bounded in time, and calls its `done` exactly once, on the main loop, with
@@ -19,6 +20,7 @@
 --- that adds a 100 MB file gives a 100 MB diff. The home keeps no state but
 --- its watches: the base is its caller's.
 
+local branches = require('aineo.git.branches')
 local changes = require('aineo.git.changes')
 local content = require('aineo.git.content')
 local diffs = require('aineo.git.diffs')
@@ -369,6 +371,19 @@ end
 ---@param options? aineo.git.Options
 function M.worktree_base(worktree, comparison, done, options)
   worktrees.worktree_base(process.runner(options), worktree, comparison, done)
+end
+
+--- Lists the local branches of the repository `found` is in, newest commit
+--- first, those whose commits are equally new in name order, each by its
+--- short name and the full id of the commit it names, and calls
+--- `done(nil, branches)`, or `done(failure)`. A repository with no commit
+--- yet lists none, and no remote-tracking branch is listed.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param done fun(failure: aineo.git.Failure|nil, branches: aineo.git.Branch[]|nil)
+---@param options? aineo.git.Options
+function M.list_branches(found, done, options)
+  branches.list_branches(process.runner(options), found, done)
 end
 
 --- Starts watching `found`, and calls `on_change(nil, change)` on the main
