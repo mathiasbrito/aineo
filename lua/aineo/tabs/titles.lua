@@ -23,7 +23,7 @@ local function longest_prefix_within(text, room)
   local fitting, too_long = 0, vim.fn.strcharlen(text)
   while fitting < too_long do
     local middle = math.ceil((fitting + too_long) / 2)
-    if vim.fn.strdisplaywidth(vim.fn.strcharpart(text, 0, middle, 1)) <= room then
+    if vim.api.nvim_strwidth(vim.fn.strcharpart(text, 0, middle, 1)) <= room then
       fitting = middle
     else
       too_long = middle - 1
@@ -42,10 +42,10 @@ end
 ---@param cap number the most display cells the result fills; `math.huge` for no cut
 ---@return string
 function M.cut(name, cap)
-  if vim.fn.strdisplaywidth(name) <= cap then
+  if vim.api.nvim_strwidth(name) <= cap then
     return name
   end
-  local room = cap - vim.fn.strdisplaywidth(ELLIPSIS)
+  local room = cap - vim.api.nvim_strwidth(ELLIPSIS)
   return longest_prefix_within(name, room) .. ELLIPSIS
 end
 

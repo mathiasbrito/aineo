@@ -236,12 +236,14 @@ clickable. A 'tabline' you set is left in place.
 aineo's tab line draws every name whole while the titles fit the width of the
 editor. When they do not, it cuts the longest names first, all to one width,
 the widest at which the line fits, with `…` at the end of each name it cut; a
-name no wider than that stays whole. The number, the indicator and the
-`tabs.padding` spaces are never cut. No name is cut below 8 cells, `…`
-included; when the titles overflow even then, the line draws the run of them
-that holds the current tab and fits. The line is fitted again at every
-redraw, so a resize, a tab opened or closed, and a name or an indicator that
-changes all move the cut.
+name no wider than that stays whole. A wide character that would cross the
+edge is left out, so a cut name may take a cell less than that width. The
+number, the indicator and the `tabs.padding` spaces are never cut. No name is
+cut to fewer than 8 cells, `…` included, apart from such a left-out cell. When
+the titles overflow even then, the line draws the run of them that holds the
+current tab and fits. The line is fitted again at every redraw, so a resize, a
+tab opened or closed, and a name or an indicator that changes all move the
+cut.
 
 An aineo tab's title ends with an indicator of what its Claude Code is doing,
 after a space: ◒ and ◓ in turn, twice a second, while the tab's Claude Code

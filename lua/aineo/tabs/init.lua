@@ -271,7 +271,8 @@ end
 --- current tab page's in `AineoTabLineSel`, the others' in `AineoTabLine`,
 --- and the rest of the line in `AineoTabLineFill`. Names are whole while the
 --- titles fit the line; when they do not, `tabline_format.format()` cuts the
---- longest first.
+--- longest first. A control character in a name is drawn as `^X`, and is
+--- counted so.
 ---
 ---@return string
 function M.tabline()
@@ -280,7 +281,7 @@ function M.tabline()
   for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
     table.insert(entries, {
       number = vim.api.nvim_tabpage_get_number(tab),
-      name = name_of_tab(tab),
+      name = vim.fn.strtrans(name_of_tab(tab)),
       indicator = activities.indicator(tab, animation.glyph()),
       current = tab == current,
     })

@@ -719,12 +719,13 @@ end
 ---@field current? integer defaults to the first tab page
 ---@field busy? integer
 ---@field setup? string Lua run in the child before the tab pages are made
+---@field in_current_tab? string Lua run in the child once the current tab page is current
 
---- The text of the tab line over `line`, drawn the way a window draws it.
+--- The tab line over `line`, drawn the way a window draws it.
 ---
 ---@param line LineOver
----@return string
-local function text_of_line_over(line)
+---@return { str: string, width: integer }
+local function drawn_over(line)
   local quoted = vim.tbl_map(function(name)
     return ('%q'):format(name)
   end, line.names)
@@ -741,6 +742,7 @@ local function text_of_line_over(line)
       tabs.set_busy(vim.api.nvim_list_tabpages()[%d], true)
     end
     vim.cmd('%dtabnext')
+    %s
   ]]):format(
       line.columns,
       line.padding or 2,
@@ -748,9 +750,18 @@ local function text_of_line_over(line)
       table.concat(quoted, ', '),
       line.busy or 0,
       line.busy or 0,
-      line.current or 1
+      line.current or 1,
+      line.in_current_tab or ''
     )
-  ).str
+  )
+end
+
+--- The text of the tab line over `line`.
+---
+---@param line LineOver
+---@return string
+local function text_of_line_over(line)
+  return drawn_over(line).str
 end
 
 --- Three names of 30 cells, the width of a tab line that holds them whole at
@@ -816,6 +827,77 @@ T['tabline()']['gives the room a short name leaves to the long one'] = function(
   local line = text_of_line_over({ names = { 'a', string.rep('n', 70) }, columns = 80 })
 
   eq(line, '  1: a    2: ' .. string.rep('n', 64) .. '…  ')
+end
+
+T['tabline()']['draws a name as wide as the cap whole'] = function()
+  local line = text_of_line_over({
+    names = { string.rep('a', 20), string.rep('b', 40), string.rep('c', 40) },
+    columns = 81,
+  })
+
+  eq(
+    line,
+    '  1: '
+      .. string.rep('a', 20)
+      .. '    2: '
+      .. string.rep('b', 19)
+      .. '…    3: '
+      .. string.rep('c', 19)
+      .. '…  '
+  )
+end
+
+--- Makes the current window 30 cells wide, narrower than a name, with the
+--- cursor in it.
+local IN_NARROW_WINDOW = "vim.cmd('vsplit') vim.cmd('vertical resize 30')"
+
+T['tabline()']['cuts the same in a narrow current window with wide characters'] = function()
+  local cjk = 'a' .. string.rep('漢', 20)
+
+  local line = text_of_line_over({
+    names = { cjk, string.rep('n', 100) },
+    columns = 88,
+    padding = 0,
+    in_current_tab = IN_NARROW_WINDOW,
+  })
+
+  eq(line, '1: ' .. cjk .. '2: ' .. string.rep('n', 40) .. '…')
+end
+
+T['tabline()']['cuts wide characters on the same edge in a narrow current window'] = function()
+  local line = text_of_line_over({
+    names = { 'a' .. string.rep('漢', 30), string.rep('n', 100) },
+    columns = 88,
+    padding = 0,
+    in_current_tab = IN_NARROW_WINDOW,
+  })
+
+  eq(line, '1: a' .. string.rep('漢', 19) .. '…2: ' .. string.rep('n', 40) .. '…')
+end
+
+T['tabline()']["cuts the same in a narrow current window with 'linebreak' set"] = function()
+  local name = 'Refactor the parser to support streaming input and output'
+  local names = { name, string.rep('n', 100) }
+
+  local in_narrow_window = text_of_line_over({
+    names = names,
+    columns = 120,
+    padding = 0,
+    in_current_tab = IN_NARROW_WINDOW .. ' vim.wo.linebreak = true',
+  })
+
+  eq(in_narrow_window, '1: ' .. name .. '2: ' .. string.rep('n', 56) .. '…')
+end
+
+T['tabline()']['keeps the line within the screen for names with a control character'] = function()
+  local names = {}
+  for number, word in ipairs({ 'one', 'two', 'three' }) do
+    names[number] = word .. '\1' .. string.rep('x', 40)
+  end
+
+  local drawn = drawn_over({ names = names, columns = 80, padding = 2 })
+
+  eq({ drawn.str:sub(1, 1), drawn.width <= 80 }, { ' ', true })
 end
 
 T['tabline()']['counts the padding in the width of the titles it fits'] = MiniTest.new_set({
