@@ -751,29 +751,56 @@ end
 --- sets (`draw_tabline()`), which health does not require.
 local AINEO_TABLINE_PREFIX = "%!v:lua.require'aineo.tabs'."
 
+--- The values Claude Code 2.1.301 reads as true in a variable that is a flag,
+--- compared in lower case and without surrounding white space.
+local CLAUDE_CODE_TRUE_VALUES = { '1', 'true', 'yes', 'on' }
+
+--- Whether `value`, a variable's value, is true as Claude Code reads a flag:
+--- `1`, `true`, `yes` or `on`, in any case, with white space around it.
+---
+---@param value string
+---@return boolean
+local function is_claude_code_flag_on(value)
+  return vim.tbl_contains(CLAUDE_CODE_TRUE_VALUES, vim.trim(value):lower())
+end
+
+--- Whether `value`, a variable's value, is more than white space: Claude
+--- Code 2.1.301 reads a blank value as the variable being unset.
+---
+---@param value string
+---@return boolean
+local function is_not_blank(value)
+  return vim.trim(value) ~= ''
+end
+
 --- The variables of the editor's environment under which Claude Code gives
 --- its terminal no title, or keeps it still, so that no tab shows activity
 --- (the activity indicator of `aineo.tabs` reads that title): what each
---- means, and what the user can do. A variable Neovim holds is handed to
---- every job it starts, Claude Code's included.
+--- means, what the user can do, and which of its values Claude Code acts on
+--- (read from its 2.1.301 binary, not run). A variable Neovim holds is handed
+--- to every job it starts, Claude Code's included.
 local SILENT_TITLE_VARIABLES = {
   {
     name = 'CLAUDE_CODE_DISABLE_TERMINAL_TITLE',
+    is_acted_on = is_claude_code_flag_on,
     meaning = 'Claude Code sets no terminal title',
     advice = 'unset CLAUDE_CODE_DISABLE_TERMINAL_TITLE before starting Neovim',
   },
   {
     name = 'TMUX',
+    is_acted_on = is_not_blank,
     meaning = 'Claude Code keeps its terminal title still under a terminal multiplexer',
     advice = 'start Neovim outside tmux, screen and zellij',
   },
   {
     name = 'STY',
+    is_acted_on = is_not_blank,
     meaning = 'Claude Code keeps its terminal title still under a terminal multiplexer',
     advice = 'start Neovim outside tmux, screen and zellij',
   },
   {
     name = 'ZELLIJ',
+    is_acted_on = is_not_blank,
     meaning = 'Claude Code keeps its terminal title still under a terminal multiplexer',
     advice = 'start Neovim outside tmux, screen and zellij',
   },
@@ -781,13 +808,14 @@ local SILENT_TITLE_VARIABLES = {
 
 --- Says what the activity indicator on a tab reads, and warns, naming the
 --- variable, for each of `SILENT_TITLE_VARIABLES` the editor's environment
---- holds: no tab shows activity then.
+--- holds with a value Claude Code acts on: no tab shows activity then.
 local function check_activity_indicator()
   vim.health.info(
     'the activity indicator on a tab reads the title Claude Code sets on its terminal: :help aineo-tabs'
   )
   for _, variable in ipairs(SILENT_TITLE_VARIABLES) do
-    if vim.env[variable.name] ~= nil then
+    local value = vim.env[variable.name]
+    if value ~= nil and variable.is_acted_on(value) then
       vim.health.warn(
         ('%s is set: %s, so no tab shows activity'):format(variable.name, variable.meaning),
         ('%s for the tabs to show activity: :help aineo-limits'):format(variable.advice)
