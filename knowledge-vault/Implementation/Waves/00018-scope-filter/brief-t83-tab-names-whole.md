@@ -106,3 +106,7 @@ Write it in your definition's shape, to `<scratchpad>/t83-report-packet.md`. Ope
 - the deep-require check's output.
 
 The orchestrator's verification runs `plan.md`'s T83 mutants. Name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-16, before dispatch
+
+`plan.md` › *The orchestrator's rulings — amendment* rules O20–O23 as their (a), A412–A415, which this brief is written for. Record them as the orchestrator's assumptions, never as the user's decisions.
