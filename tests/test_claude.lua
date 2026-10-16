@@ -278,10 +278,10 @@ end
 
 --- Runs the session in `child` with a command that writes its whole
 --- environment, sorted, one variable to a line, into a file; the child has
---- every `MULTIPLEXER_VARIABLES` set, a `TERM`, a `COLORTERM` and a `VIM` of
---- its own, 'termguicolors' as `has_true_colour` says, and `hide_multiplexer`
---- as given. Returns the lines of the file, once
---- the command has written them.
+--- every `MULTIPLEXER_VARIABLES` set, and a `TERM`, `COLORTERM`, `VIM`,
+--- `COLUMNS`, `LINES`, `TERMCAP`, `COLORFGBG` and `NVIM_LISTEN_ADDRESS` of its
+--- own, 'termguicolors' as `has_true_colour` says, and `hide_multiplexer` as
+--- given. Returns the lines of the file, once the command has written them.
 ---
 ---@param name string the test's own name for the files
 ---@param has_true_colour boolean
@@ -301,6 +301,11 @@ local function environment_written_by_the_command(name, has_true_colour, hide_mu
     vim.env.TERM = 'screen'
     vim.env.VIM = '/aineo-test-vim'
     vim.env.COLORTERM = '24bit'
+    vim.env.COLUMNS = '211'
+    vim.env.LINES = '57'
+    vim.env.TERMCAP = 'SC|screen|VT 100:co#80:li#24:'
+    vim.env.COLORFGBG = '15;0'
+    vim.env.NVIM_LISTEN_ADDRESS = '/aineo-test-listen'
   ]],
     { has_true_colour, MULTIPLEXER_VARIABLES }
   )
@@ -328,7 +333,7 @@ end
 T['start_session()']['gives the process the environment of a terminal job, the multiplexer variables apart, when told to hide the multiplexer'] =
   MiniTest.new_set({ parametrize = { { true }, { false } } })
 
-T['start_session()']['gives the process the environment of a terminal job, the multiplexer variables apart, when told to hide the multiplexer']['with true colour'] = function(
+T['start_session()']['gives the process the environment of a terminal job, the multiplexer variables apart, when told to hide the multiplexer']['with and without true colour'] = function(
   has_true_colour
 )
   local kept = environment_written_by_the_command('job-kept', has_true_colour, false)

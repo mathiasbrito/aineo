@@ -793,21 +793,21 @@ local SILENT_TITLE_VARIABLES = {
     is_hidden_by_aineo = true,
     is_acted_on = is_not_blank,
     meaning = 'Claude Code keeps its terminal title still under a terminal multiplexer',
-    advice = 'start Neovim outside tmux, screen and zellij',
+    advice = 'set claude.hide_multiplexer to true, or start Neovim outside tmux, screen and zellij',
   },
   {
     name = 'STY',
     is_hidden_by_aineo = true,
     is_acted_on = is_not_blank,
     meaning = 'Claude Code keeps its terminal title still under a terminal multiplexer',
-    advice = 'start Neovim outside tmux, screen and zellij',
+    advice = 'set claude.hide_multiplexer to true, or start Neovim outside tmux, screen and zellij',
   },
   {
     name = 'ZELLIJ',
     is_hidden_by_aineo = true,
     is_acted_on = is_not_blank,
     meaning = 'Claude Code keeps its terminal title still under a terminal multiplexer',
-    advice = 'start Neovim outside tmux, screen and zellij',
+    advice = 'set claude.hide_multiplexer to true, or start Neovim outside tmux, screen and zellij',
   },
 }
 

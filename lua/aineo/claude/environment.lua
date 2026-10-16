@@ -11,11 +11,13 @@ local M = {}
 --- its terminal title still, which the activity indicator of a tab reads.
 local MULTIPLEXER_VARIABLES = { 'TMUX', 'TMUX_PANE', 'STY', 'ZELLIJ' }
 
---- The variables Neovim 0.12.5 removes from the environment of a job it
---- starts, as measured on a terminal job (`:help jobstart-env` lists
---- `NVIM_LISTEN_ADDRESS`, `NVIM_LOG_FILE`, `VIM` and `VIMRUNTIME`; a job
---- started there kept `NVIM_LOG_FILE`).
-local VARIABLES_NEOVIM_REMOVES = { 'NVIM_LISTEN_ADDRESS', 'VIM', 'VIMRUNTIME' }
+--- The variables Neovim 0.12.5 removes from the environment of a terminal
+--- job: its `pty_ignored_env_vars` (`src/nvim/eval/funcs.c`), less
+--- `COLORTERM`, which `terminal_job_environment()` sets itself. A variable
+--- `:help jobstart-env` lists but this does not (`NVIM_LISTEN_ADDRESS`,
+--- `NVIM_LOG_FILE`) reaches a terminal job when the editor's environment
+--- holds it.
+local PTY_IGNORED_VARIABLES = { 'COLUMNS', 'LINES', 'TERMCAP', 'COLORFGBG', 'VIM', 'VIMRUNTIME' }
 
 --- The terminal type Neovim 0.12.5 gives the terminal job it starts as `TERM`.
 local TERMINAL_JOB_TERM = 'xterm-256color'
@@ -32,15 +34,15 @@ local CHILD_MARKER = { AINEO_CHILD = '1' }
 --- The environment a terminal job of Neovim 0.12.5 gets from `editor`, as
 --- Neovim makes it when it merges `env` into the editor's environment:
 --- `TERM` is `xterm-256color`, `COLORTERM` is `truecolor` with true colour
---- and absent without it, and `VIM`, `VIMRUNTIME` and `NVIM_LISTEN_ADDRESS`
---- are absent. `NVIM`, the editor's server address, is left out: Neovim sets
---- it itself in a job whose environment `clear_env` defines, as in any other.
+--- and absent without it, and `PTY_IGNORED_VARIABLES` are absent. `NVIM`, the
+--- editor's server address, is left out: Neovim sets it itself in a job whose
+--- environment `clear_env` defines, as in any other.
 ---
 ---@param editor aineo.claude.EditorEnvironment
 ---@return table<string, string>
 local function terminal_job_environment(editor)
   local environment = vim.deepcopy(editor.variables)
-  for _, variable in ipairs(VARIABLES_NEOVIM_REMOVES) do
+  for _, variable in ipairs(PTY_IGNORED_VARIABLES) do
     environment[variable] = nil
   end
   environment.NVIM = nil

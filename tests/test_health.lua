@@ -1544,17 +1544,17 @@ T['the tab line']['warns, naming the variable, that no tab shows activity when']
       {
         'TMUX',
         'Claude Code keeps its terminal title still under a terminal multiplexer',
-        'start Neovim outside tmux, screen and zellij',
+        'set claude.hide_multiplexer to true, or start Neovim outside tmux, screen and zellij',
       },
       {
         'STY',
         'Claude Code keeps its terminal title still under a terminal multiplexer',
-        'start Neovim outside tmux, screen and zellij',
+        'set claude.hide_multiplexer to true, or start Neovim outside tmux, screen and zellij',
       },
       {
         'ZELLIJ',
         'Claude Code keeps its terminal title still under a terminal multiplexer',
-        'start Neovim outside tmux, screen and zellij',
+        'set claude.hide_multiplexer to true, or start Neovim outside tmux, screen and zellij',
       },
     },
   })

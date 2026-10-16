@@ -216,12 +216,10 @@ end
 T['a busy Claude Code']['puts nothing on the title of its tab when the editor runs inside tmux and claude.hide_multiplexer is false'] = function()
   run_the_editor_inside_tmux()
   tabs.open_first_tab(child, 'activity-inside-tmux-kept')
-  entry.use_fake(
-    child,
-    tabs.fake('activity-inside-tmux-kept-second', 'busy-title'),
-    { claude = { hide_multiplexer = false } }
-  )
+  local second = tabs.fake('activity-inside-tmux-kept-second', 'busy-title')
+  entry.use_fake(child, second, { claude = { hide_multiplexer = false } })
   child.cmd('Aineo tab new')
+  eq(vim.tbl_isempty(claude_session.wait_for_start(second)), false)
   child.cmd('1tabnext')
 
   vim.wait(1500, function()
