@@ -110,3 +110,18 @@ Write it in your definition's shape, to `<scratchpad>/t82-report-packet.md`. Ope
 - the deep-require check's output.
 
 The orchestrator's verification runs `plan.md`'s T82 mutants. Name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-16, before dispatch
+
+`plan.md` › *The orchestrator's rulings* rules O1–O12 as their (a), A392–A403, and adds A391 (how the list marks its items), which this brief is written for. Record them as the orchestrator's assumptions, never as the user's decisions.
+
+## Amendment — 2026-10-16, the user's answers, before dispatch
+
+The user answered U1–U3 (`plan.md` › *The user's answers*, D76's dated note): U2 is (a), as this body is written for; U1 and U3 change what T81 builds, which this packet extends. Where the body and this section differ, this section wins.
+
+- **The task row now reads**, verbatim:
+
+  > | T82 | The changes pane shows one branch alone (C13, C15; D76): `aineo.git` lists the local branches, newest commit first; `s`'s one list also offers, marked `[branch]`, each local branch no worktree has checked out, other than the working branch; a branch's scope view is `Branch <name>` and its commits since its base — its merge base with the working branch's commit, else D32's comparison — its whole change the committed files from that base to its tip, with Enter, `l`, `h` and `gf` as under Landed; a branch that names no commit clears the scope, told once; with the help | T81 | planned — wave 18 |
+
+- **Behaviour 3, the list (U1, the user's decision; A391).** The branches go into T81's one list, after its `[worktree]` items, each reading `[branch] <name>`, the name quoted as `lines.quoted_path()` quotes a branch. The exclusions stand. Pin the text of each item.
+- **Behaviour 15** reads: `\g` treats a branch scope as T81 treats a worktree's — pressed while the pane shows, it clears the scope and the choice is then *Session work*, as the default view lists no branch; pressed from another pane, it shows the branch's scope view again.
