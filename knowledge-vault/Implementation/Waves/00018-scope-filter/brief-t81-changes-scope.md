@@ -1,0 +1,119 @@
+**Your role: implement.** Your worktree starts from `main`. Check out your branch from `origin/dev` before you read anything under `.claude/`. A specialist reads `.claude/agents/implementer.md` first, and it binds unchanged. Then read `.claude/agents/neovim-lua-developer.md`.
+
+The orchestrator dispatches you to implement **one packet** of `knowledge-vault/Planning/aineo — v1 agent console.md`. Your definition tells you how to work. This brief tells you what.
+
+> This brief is written for D76, for the recommended answers U1 (a) and U3 (a), and for O4–O9 and O12 (a) of `plan.md` in this folder. Before dispatch the orchestrator writes a dated amendment at the end of this brief for each fact that moved, and for any answer or ruling other than (a). The amendment wins over the body.
+
+## Objective
+
+The task, verbatim from the task list:
+
+> | T81 | The changes pane shows one worktree alone (C1, C15; D76): each changes home keeps a scope, none or one other worktree; `s` in either window of the pane offers the other worktrees in `vim.ui.select`; a scope's view is the worktree's name on the first line — its whole change — and its commits below, nothing else; picking selects its whole change and the files window follows; `\g` (`:Aineo pane changes`) clears the scope and shows the default view, the choice kept when that view lists it; a worktree no longer listed, or another Claude Code session followed, clears it, the first told once; per tab, never on disk; with the help | T63, T74 | planned — wave 18 |
+
+It rests on:
+- **D76**, the user's decision: one worktree or branch alone, its name first, nothing else, `\g` back to the default view;
+- D33–D35, **D47** (the commits window as the files window's filter), D55, **D60** (a worktree's base);
+- C1, C15; C8, D10, D26, D29.
+
+### The behaviour — one test each, seen failing first
+
+**The scope view (D76; O4)**
+
+1. With a scope on another worktree, the commits window's first line is that worktree's heading as `lua/aineo/changes/lines.lua` › `worktree_heading()` writes it, `Worktree <folder> (<branch>)` or `(detached)`, whole in `AineoChangesFilter`. Its entry is that worktree's whole-change filter (`filter.of_worktree()`), so that Enter on it shows `aineo://worktree{top}//since-base` as the heading does today.
+2. Below it, the worktree's commits as its section lists them today, or `No commits in this worktree`, and the failure line its section shows when its read failed. Pin with a worktree of two commits.
+3. Nothing else is listed: not *Uncommitted*, not *Session work*, not the session's commits or their notes (the base no longer behind `HEAD`), not Landed, not another worktree, not the line saying the worktrees could not be listed (mutant 1). Pin the whole page's text.
+4. Without a scope, the page is today's, unchanged: every existing pin of `tests/test_changes*.lua` holds.
+
+**Picking (U1 (a); O5, O12)**
+
+5. `s` in Normal mode, in the commits window and in the files window, calls `vim.ui.select` with the other worktrees the commits window last listed, in that order, each shown by its heading (`format_item`), prompt `Show alone in the changes pane`. It is a buffer-local map of each pane buffer, made again whenever the buffer is made anew, as Enter is (`copy.lua` › `pane_buffer()`); `s` stays Vim's own in every other buffer. Test it as `tests/test_entry_sessions.lua` does, by replacing `vim.ui.select` in the child.
+6. Picking a worktree sets the scope, selects its whole change, puts the cursor on the first line, and the files window's first line reads `Files in: Worktree <folder> (<branch>)` with that worktree's files (mutant 5). Dismissing the picker (`on_choice(nil)`) changes nothing.
+7. Moving the cursor onto one of the scope's commits chooses it as today: `Files in: <id> <subject> (worktree <folder>)`.
+8. `s` under a scope offers the same list; picking another worktree replaces the scope.
+9. With no other worktree listed, `s` opens no picker and tells `aineo: no other worktree or branch to show alone`, once, at `INFO`. While the session has no repository, `s` opens no picker and tells why, in the words the windows show. A `vim.ui.select` that raises is told once, as `\S`'s failing menu is (`tests/test_entry_sessions.lua`, *the menu failed*).
+
+**Leaving the scope (D76; U3 (a); O6)**
+
+10. `\g` — the `pane changes` action, `lua/aineo/entry/tab.lua` › `focus_pane('changes')` — clears the scope of the acting tab's changes home and shows the default view, read again as today. Whether the changes pane or another pane was shown before (U3 (a)). Test through `:Aineo pane changes` in `tests/test_entry_changes.lua` (mutant 3). The home gains one call for it (name it for what it does: `show_default_view()`, say); `refresh_shown_pane()` stays as it is.
+11. After `\g`, the choice stays when the default view lists it — the worktree's heading or one of its commits — and the cursor is on its line; when it does not, *Session work* is chosen, the cursor on it.
+12. `\g` with no scope behaves as today: `\g keeps your line` (the help) holds.
+
+**The scope gone, another session, per tab (O7, O8, O9)**
+
+13. A read of the worktrees that no longer lists the scope's worktree — `git worktree remove`, or its directory removed and pruned — clears the scope, chooses *Session work*, shows the default view, and tells `aineo: Worktree <folder> (<branch>) is gone; the changes pane shows the default view`, once, at `INFO` (mutant 4). This takes the place of `copy.lua` › `reselect_in_worktrees()`'s *Session work* rule under a scope; without a scope that rule is unchanged and tells nothing.
+14. A scope's commit no longer listed (the agent amended or rebased it) becomes the scope's whole change, the cursor on the first line, as the rule is today.
+15. Following another Claude Code session (`follow_changes_session()`) clears the scope, with the choice back to *Session work* as today; nothing is told.
+16. Two tabs' changes homes scope apart: a scope set in one tab's pane leaves the other's default view (mutant 2). Test with `require('aineo.changes').new()` as `tests/test_changes_copies.lua` does.
+17. The reads are those of today, whatever the scope: under a scope, the commits window still reads the session's commits, Landed and every worktree, and `\g` shows the default view from what was read before it reads again (O8). Pin it by a commit made in the editor's worktree under a scope, listed at once after `\g`.
+
+### Where the code goes
+
+- **`lua/aineo/changes/scope.lua`** (new, private to the home): the scope's values and the pure rules — the picker's items from what the commits window last listed, the name of a scope, and what a read that no longer lists the scope comes to. No state, no git.
+- **`lua/aineo/changes/lines.lua`** › `commits_window(view)`: `aineo.changes.CommitsView` gains the scope; the page under a scope is the scope's heading row (in the filter group) and its section's rows.
+- **`lua/aineo/changes/copy.lua`**: the home's state (`aineo.changes.Session` or the home, as the code reads better: the scope must not outlive the home, and `follow_changes_session()` clears it), the `s` map, the picker, the default-view call, the clearing in `reselect_in_worktrees()`. `aineo.changes.Home` gains that call in its `---@class`. Keep each function one job; `copy.lua` is long already, so put every rule that needs no state in `scope.lua`.
+- **`lua/aineo/entry/tab.lua`** › `focus_pane()`: under `pane == 'changes'`, the new call in place of `refresh_shown_pane()` (it reads the pane again itself).
+
+### Facts, checked against `dev` `b10b47a` — re-check them at dispatch
+
+- `lua/aineo/changes/copy.lua` (1851 lines): `pane_buffer()` at 1667 maps Enter in both pane buffers; `reselect_in_worktrees()` at 540; `follow_changes_session()` at 1152; `refresh_shown_pane()` at 1780; `select_filter()`, `select_session_work()`, `place_commits_cursor()` and `cursor_unplaced` place the cursor on a chosen line.
+- `lua/aineo/changes/lines.lua` (673 lines): `commits_window()`, `own_commit_rows()`, `landed_rows()`, `worktree_rows()`, `heading_row()` (a note today), `filter_row()`, `worktree_heading()`, `filter_name()`.
+- `lua/aineo/changes/filter.lua` (111 lines): `of_worktree()`, `key()`, `same()`, `in_worktree()`.
+- `lua/aineo/entry/tab.lua` (1645 lines): `focus_pane()` at 903 calls `homes.changes.refresh_shown_pane()` for `changes`; the `pane changes` action at 1469.
+- The pane's keys today: Enter (both windows), `gf`, `l`, `h` (files window), `F` (diffs). `s` is mapped nowhere in the pane.
+- `tests/test_changes_worktrees.lua` (1928 lines) holds `add_worktree()` and the reading helpers; `tests/test_entry_changes.lua` (482 lines) drives the pane through `:Aineo`; `tests/test_entry_sessions.lua` replaces `vim.ui.select`.
+
+**Test isolation.** Never run the real `claude`; the suites' `PATH` guard stops a bare `claude`. Repositories and worktrees are made under the test's own directory. Every wait is bounded (`vim.wait` or the helpers' timed attempts).
+
+### Baseline
+
+The dispatch message pastes the counts of `tests/test_changes_worktrees.lua`, `tests/test_changes_keys.lua`, `tests/test_changes_copies.lua` and `tests/test_entry_changes.lua` on the `dev` you start from.
+
+Read first:
+- `plan.md` in this folder: *The user's words*, *Today's pane*, *The model*, U1, U3, O4–O9, O12;
+- the v1 plan note's **D76**, D47, D60, and C15;
+- `doc/aineo.txt` › *aineo-changes*;
+- `knowledge-vault/Projects/aineo.md`.
+
+## Boundary
+
+- **Branch:** `feature/t81-changes-scope` from `origin/dev`.
+- **Class:** regular (O3), keeping D26: the whole suite once before each push.
+- **Model:** `sonnet`, as the orchestrator dispatches it (`plan.md` › O2).
+- **Resources:** `impl_t81_changes_scope`. Pass it to `.claude/scripts/prepare-worktree.sh`.
+- **You may touch:**
+  - `lua/aineo/changes/copy.lua`, `lua/aineo/changes/lines.lua`, `lua/aineo/changes/filter.lua` where needed, a new `lua/aineo/changes/scope.lua`, and `lua/aineo/changes/init.lua`'s docstring;
+  - `lua/aineo/entry/tab.lua`: `focus_pane()` and its docstring alone;
+  - `doc/aineo.txt`: *aineo-changes* — a paragraph on `s`, the scope view and `\g`; the sentence on `\g` and the cursor; the *Colours* paragraph where the first line's group is named; and the entry `*aineo-\g*` (and `:Aineo-pane`'s, if it says what `changes` does);
+  - a new `tests/test_changes_scope.lua`, a new case set in `tests/test_entry_changes.lua`, and `tests/test_changes_worktrees.lua` and `tests/test_changes_keys.lua` where a pin moves;
+  - your session note.
+- **You must not touch:**
+  - `aineo.git` and every other home; `lua/aineo/config/`, since no setting is added;
+  - `plugin/aineo.lua`: `\g` keeps its action, and no subcommand is added (U1 (a));
+  - `README.md`: it lists no key of the pane (checked on `b10b47a`); re-check, and report if it does;
+  - the plan notes, the project note and the task list (write a `## Task lines` section in your session note);
+  - `.claude/`, `.githooks/`, `CLAUDE.md`, `.worktreeinclude`, `.gitignore`.
+- **No new edge between homes.** Print and list §1's deep-require check in your pull request.
+- **Session note:** `knowledge-vault/Sessions/<date> — T81 Changes scope worktree.md`, where `<date>` is the dispatch message's. It has a `## Task lines` section.
+- **Scratch prefix:** `t81-`.
+- **How the suite runs (D26, D29):** on the newest Neovim release. While you work, run the test files you touch and `tests/test_changes_copies.lua`. Run the whole suite (`make test`) once before each push. Run mutants on their covering files.
+
+## What was decided already
+
+- **The user's decisions, 2026-10-16 (D76):** a worktree or a branch chosen "as sort of a filter"; "only the commits on this work tree or branch would be displayed"; "no distractions, first line is the worktree or branch name, to return the user does \g again, and comes back to the default view". The words are quoted in `plan.md` › *The user's words*.
+- **The user's answers** U1 and U3, as the dispatch's amendment gives them. This body is written for the (a)s: `s` in the pane; every `\g` leaves the scope.
+- **The orchestrator's assumptions:** O4–O9 and O12. Record them in the session note and the pull request as the orchestrator's rulings, never as the user's decisions.
+- **Rejected:** a `Scope:` line above the heading (two lines for one choice); a picker entry to leave the scope (the user's way back is `\g`); reading only what is shown (O8 (b)); a scope on disk (O9 (b)).
+
+## Budget
+
+Medium: one new pure file, a page variant, a key and a picker, one composition-root line, about twenty cases. If it grows past that, stop at a green, reviewed, pushed state and report a true partial: the scope view first, then picking, then `\g`, then the scope gone.
+
+## Report
+
+Write it in your definition's shape, to `<scratchpad>/t81-report-packet.md`. Open the pull request into `dev` before you report. Put in its body:
+- every verification claim a reviewer can re-measure;
+- each test file whose pins moved, and why;
+- the whole suite's counts;
+- the deep-require check's output.
+
+The orchestrator's verification runs `plan.md`'s T81 mutants. Name the test that kills each.
