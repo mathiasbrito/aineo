@@ -1,13 +1,14 @@
 ---
 wave: 00017
-status: planned
+status: landed
 rolling: false
 planned_by: the orchestrator's planning agent (Claude, Opus 5.5) for the user
 planned_at: 2026-10-15 20:48 CEST
 base: 42b6b4c
 claimed_by:
 claimed_at:
-landed_at:
+landed_at: 2026-10-16
+pull_requests: "#230, #231, #232, #234, #235, #236"
 ---
 
 # Wave 17 — an activity indicator on each tab's title
@@ -301,3 +302,68 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 
 ## Landed
 
+
+Written 2026-10-16 by the knowledge pass of wave 17, on `dev` `192c34f`. All four packets are merged; the wave's releases are v0.2.40 (T74, PR #233) and v0.2.41 (T75, T76 and T77, PR #237). The user's decision is D73 and its answers U1–U3 (the full circle ● means output not yet seen, after the name, no Neovim inside tmux, screen or zellij); the rulings below are the orchestrator's assumptions under the user's instructions, never the user's decisions. The session notes hold each packet's commits, mutants and departures.
+
+### The `ai/` change and the plan — PR #230 and PR #231
+
+PR #230 (`42b6b4c` on `dev`) put `aineo.entry` into the modularity tables, ahead of T74. The plan and the user's answers with the orchestrator's rulings A354–A366 went in as PR #231 (`6fe87ff`, `87e6af1`).
+
+### T74 — the composition root's body into `aineo.entry`, the refactor that ran before the wave, PR #232, merged by rebase (`dev` `33bb82b`), released in v0.2.40 (PR #233, `main` `681d940`)
+
+`dbf976a` … `549df86` on the branch, `174f1f2` … `33bb82b` on `dev` (8 commits). Session note: [[Sessions/2026-10-15 — T74 Entry home]]. T74 is the refactor packet that waves 15 and 16 asked for (A303, A316, A342). It was dispatched on the user's word “go ahead with the refactor packet” and ran before this wave's packets, because the plan builds T75 and T76 on its result; it is recorded here, with the wave it enabled.
+- **The packet** (whole suite 3988 after the fix round). `plugin/aineo.lua` went from 3,120 to 595 lines and keeps `:Aineo` with its completion, the `<Plug>` mappings, the prefix keys and the autostart with its record. The body is in 13 files of `lua/aineo/entry/` behind one entry point, moved mechanically first and then split by concern (A349, A350). `aineo.claude`'s unused `stop_sessions()` and its three cases are gone (A351). `aineo.shell` exports `shell_program()` and the health check calls it (A352, done as A367). The suite passes unchanged except the removed cases (A353).
+- **Reviews.**
+  - *Attack:* the claim “no behaviour changes” holds on every path a user reaches through the plugin. One low finding: reloading aineo's modules without sourcing the plugin again now resets the tab registry, where it reset the plugin file's locals only on a new source before; the entry home's header says so, and that a reload is not supported. A second difference is in `package.loaded` only, which the pull request declared.
+  - *Tests and records:* A353 holds (one test file touched, 34 deletions). One confirmed survivor, `dev`'s own gap carried by the move: the clearing of the tab used last in `release_tab()` was pinned by no case. The new interfaces the move made are each reached through the plugin.
+- **Fix round** by the author (A367, A368): A352 done as the orchestrator ruled the conflict between the brief's A352 and its A353 (the health check calls `aineo.shell`, and the pin of the homes it loads gains `aineo.shell`, an intended change; A367); a case pins the release of the tab used last (red against the deleted clearing); the entry home's and the plugin file's headers say when `aineo.entry` loads and that its tabs live for the editor's life; the split of `entry/tab.lua` is left to a follow-up packet (A368).
+- **The orchestrator's check** on `dev` plus T74: 3988 cases, `Fails (0)`; the mutants on the tab-used-last clearing (1 failure) and on the exported program (7) killed.
+- **Departures.** The brief asked for both A352 and A353 and they conflicted; the orchestrator ruled it (A367), not the author. `entry/tab.lua` is about 1,600 lines, almost all `make_tab()`, one closure whose state every action shares; splitting it is A368.
+
+### T75 — the tab activity in its homes, PR #234, merged by rebase (`dev` `82d3b65`), released in v0.2.41 (PR #237, `main` `8a1f46e`)
+
+`ac8e3f8` … `1747021` on the branch, `6dedf71` … `82d3b65` on `dev` (6 commits). Session note: [[Sessions/2026-10-15 — T75 Tab activity homes]]. Dispatched on `dev` `33bb82b` with a dated amendment of the facts T74 had moved.
+- **The packet** (whole suite 4060 after the fix round, 38 mutants). `aineo.claude` keeps `b:aineo_session_busy` on each Claude terminal: true for a title beginning ◐ or ◑ and a space or nothing, false before any title and at every exit, written on a change only (A357, A358). `aineo.tabs` keeps each held tab's activity, in two thin files (`activity.lua`, `animation.lua`): busy while told busy, unseen when told not busy while another tab page is current, none otherwise, until marked seen (A359). The title shows ◒ or ◓ after the cut name while busy and ● while unseen, in the title's own group, and `tab_title()` includes it (A361–A363). One `vim.uv` timer for the editor ticks every 500 ms only while a held, existing tab page is busy (A360). The fake `claude` gains the mode `busy-title` and `AINEO_FAKE_CLAUDE_BUSY_MS` (A366). Nothing is wired: no behaviour change for the user.
+- **Reviews.**
+  - *Attack:* nothing defeats the guarantee: the busy mark is never left true after an exit the process can cause, the timer is one and runs only while a tab is busy, idle costs nothing (0 timers, 0 redraws in 60 s). One low finding: the timer tests count only active timers, so a `stop()` that never closes its timer passes the whole file and leaks one handle per busy spell.
+  - *Tests and records:* the 500 ms rate is pinned by no case; the fake's startup screen in `busy-title` is pinned by none, and the case's name claims it; the departure from test-first is not stated plainly; the note's mutant labels collide with the plan's numbering.
+- **Fix round** by the author (A369–A371): the helper counts timers not closing, so a `stop()` without the close fails four cases; a case times the second frame to the first inside a band of 350 to 1200 ms (A369); a case reads the startup screen; the note says plainly that code came before most of the tests (A370) and labels the plan's five mutants P1 to P5; `tab_title()`'s docstring says the tabs home holds the indicator and the composition root tells it (A371).
+- **The orchestrator's check** on `dev` plus T75: 4060 cases and `Fails (1)`, the panes command-line-window case. That is the known flake, not this packet's (A373): the author measured it 0 of 84 on the head and 0 of 52 on `dev`. It was first read as a regression; the measurement is why it was not. T77 followed.
+- **Departures.** No release of its own: nothing is wired, so it ships in v0.2.41 with T76. Most of the units arrived green because the production code was written before its tests, which the root rule forbids, and the note states it plainly (A370); the 38 mutants are the compensation. The glyphs, the pace and the tick are read from the 2.1.301 program and measured on a Neovim terminal, never recorded from a running Claude Code; the user's check M1 is the real measurement.
+
+### T77 — the command-line window cases and the changes keys race, test-only, PR #235, merged by rebase (`dev` `4b8c7c4`), released in v0.2.41 (PR #237, `main` `8a1f46e`)
+
+`9ffc007` on the branch (1 commit). Session note: [[Sessions/2026-10-16 — T77 Command-line window flakes]]. Test-only under D28, dispatched on the measurement of T75's check (A374); it changes two test files and its own note, no production code and no helper.
+- **The packet** (panes 100 cases, keys 29, both `Fails (0)`). The cases of `tests/test_entry_panes.lua` that closed the command-line window with `<C-c><Esc>` close it with the typed command `:quit<CR>` and wait for it to be closed, and wait for aineo's refusal to be told before reading it; three cases of `tests/test_changes_keys.lua` wait for the state their keys produce (the cursor; the second read begun) or call the mapping (the two `HEAD names no commit` cases, which keep the ERROR level through `v:errmsg`). The cause, measured: a `<C-c>` that reaches a child inside a loop that checks for an interrupt is taken as the interrupt and lost with the keys typed before it, and a request sent to the same child is served inside that loop, before the keys are read.
+- **Review.** One review (records and test integrity): merge, no blocking finding. Two low findings, both left as pushed (A375): a second bounded-wait helper in the panes file where `git_repo.wait_until` already exists, and two counts that did not match the code. **The count correction:** the note, the commit message and the pull request said “the five places” and “the 7 command-line window cases”; the original file has three code sites, run by five cases, and seven is the whole parametrised set with its two `by winfixbuf` cases, which never open the window. The right wording is “three sites, five cases”. The session note carries the correction; the commit message and the pull request stay as pushed.
+- **The orchestrator's check** on `dev` plus T77: 4060 cases, `Fails (0)`. The author's mutants of each wait are killed by assertion under a modelled busy child, except the second-read wait, killed by a crash.
+- **Departures.** The natural rate of the original is low (2 of 736 runs), and the sample does not separate the cause from the model: the lost `<C-c>` rests on the extra window in the failing run and on the model. Two mutants survive on an unloaded host and die only under the modelled child, as the cases guard a load condition. `<C-c>` typed on purpose elsewhere in the suite was not examined.
+
+### T76 — the tab activity wired, PR #236, merged by rebase (`dev` `192c34f`), released in v0.2.41 (PR #237, `main` `8a1f46e`)
+
+`3357d84` … `779dffd` on the branch, `2c530b4` … `192c34f` on `dev` (10 commits). Session note: [[Sessions/2026-10-16 — T76 Tab activity wiring]]. Dispatched on `dev` `82d3b65` with a dated amendment: the names where the wiring lives after T74, T75's merged interface, and three declared widenings (the `TabEnter` mark in a handler made with `hold_tab()`, one new file `entry/busy_watch.lua`, and the items T75's attack review handed on, A372).
+- **The packet** (whole suite 4103 after the fix round). `entry/busy_watch.lua` watches `b:aineo_session_busy` of every Claude terminal a tab runs, at each place a terminal comes to a tab, and tells `aineo.tabs` through `set_busy()` (passing `change.new == true`, so a removed variable reads as not busy); the tab tells its state again at `hold_tab()`; a wiped busy terminal tells not busy; `TabEnter` marks the tab page the user stays in seen. `:checkhealth aineo` says what the indicator reads and warns where it cannot show; the help covers it in `aineo-tabs`, `aineo-tab_title`, the health check and a limits entry. 25 cases in the new `tests/test_entry_tab_activity.lua`; the health file gains 18.
+- **Reviews.**
+  - *Attack:* changes requested. MEDIUM: a busy terminal wiped where `BufWipeout` does not run (a user's `TermClose` handler that deletes the ended buffer without `nested`, or `:noautocmd bwipeout!`) left ◒ or ◓ stuck with the timer running, and a restart did not clear it. Three low: the health check warned for `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` set to `0`, `false` or `no`, and for a blank multiplexer variable; a ● was cleared by aineo's own pass through a background tab page; the note's B2 row claimed a kill that does not happen.
+  - *Tests and records:* five cases pass with the wiring absent (an unasserted precondition before an absence assertion); `errors.run` in `busy_watch.lua` is unpinned though its docstring claims it; the re-tell at `hold_tab()` is proven only through a stub that builds the order; the limits entry and the warning say more than was measured; two limits entries disagree about the busy glyph; A372 and A354–A366 are not named as the orchestrator's rulings; the departure from test-first is understated in scope; two fixed sleeps.
+- **Fix round** by the author (A376–A378): the wipe is heard through `nvim_buf_attach`'s `on_detach`, which ran in every case measured, in place of the `BufWipeout` autocommand (A376); the health check warns only for the values Claude Code 2.1.301 acts on, `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` of `1`, `true`, `yes` or `on` in any case and trimmed, and a non-blank `TMUX`, `STY` or `ZELLIJ` (A377); the `TabEnter` mark is scheduled and marks only a page still current, so aineo's own pass through a background tab page keeps its dot while each way of entering a tab still clears it (A378). The four cases with an unasserted precondition now assert it, a case pins that a raising tabs home is told once, and both fixed sleeps are gone. The note is corrected (B2 replaced by D1, the rulings named, the scope of the test-first departure stated).
+- **The orchestrator's check** on `dev` plus T76: 4103 cases, `Fails (0)`; the mutants on the detach hearing (3 failures) and on the still-current mark (1) killed.
+- **Departures.** The `hold_tab()` re-tell is defensive: it is proven only through a stubbed slow `layout.open`, and no natural flow reaches it. The health values are the attack review's read of the 2.1.301 program, not a run. The guards the wiring first had, against a terminal the tab has left and a re-tell as the tab follows a terminal, were removed: a terminal a tab leaves is wiped inside the swap that replaces it, so no flow reached either.
+
+### Rulings made at the dispatches and fix rounds — the orchestrator's assumptions
+
+A354–A366 are the plan's O1–O13, each ruled as its (a), listed in *The orchestrator's rulings*, above. In one line each, after them:
+- **A349–A353, A367, A368 (T74)** the body of the composition root into `aineo.entry`, mechanical first and in steps; `stop_sessions()` removed; the shell program exported; the suite unchanged but for the removed cases; A352 done with the pin of the health check's homes gaining `aineo.shell`; the split of `entry/tab.lua` left to a follow-up packet.
+- **A369–A371, A373 (T75)** the frame rate pinned in a band of 350 to 1200 ms; the note states plainly that code came before most tests; `tab_title()`'s docstring names the home that tells the indicator; the panes failure in the check is the known flake.
+- **A372, A376–A378 (T76)** the handover of T75's attack review (a wiped busy terminal, `set_busy(change.new == true)`, the state told again at `hold()`); the wipe heard through `on_detach`; the health warnings only for the values Claude Code acts on; the seen mark scheduled and for a page still current.
+- **A374, A375 (T77)** a test-only packet for the command-line window cases and the keys race; the review's two low findings left.
+
+### Wave 17 closed
+
+Wave 17 landed on 2026-10-16. Its packets are T74 (PR #232, v0.2.40), the composition root's body in `aineo.entry`, which ran first; T75 (PR #234), the tab activity in its homes; T77 (PR #235), the command-line window cases, test-only; and T76 (PR #236), the wiring. T75, T76 and T77 are in v0.2.41 (PR #237, `main` `8a1f46e`); v0.2.40 is PR #233 (`main` `681d940`). The suite grew from 3988 cases on T74's check to 4103 on the last whole run. Retrospective: [[Sessions/2026-10-16 — Wave 17 retrospective]].
+
+**Open threads at the close:**
+- **The user's checks M1–M4 of this wave** (*Checks for the user*, above), in a real Neovim with two aineo tabs: the indicator alternating and then ●, ● going on entering the tab, a background subagent keeping the indicator going, a permission dialog showing ●, and Esc stopping it. Wave 15's M1–M3 and M3 of T68, wave 16's M1–M3, `\N`'s M1–M3, and M9 and M10 stay open in their plans.
+- **A368, the split of `entry/tab.lua`** (about 1,600 lines, `make_tab()`), is a follow-up packet along the seams T74's tests review lists.
+- **The health values are read, not run.** The glyphs, the reading of the title and the values the health check warns for come from Claude Code 2.1.301's program, never from a running Claude Code; the user's checks are the real measurement.
+- **Flakes:** T77 hardened the command-line window cases and the keys race; `<C-c>` typed on purpose in `tests/test_health.lua`, `tests/test_claude_resume.lua` and `tests/test_draft.lua` was not examined.

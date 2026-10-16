@@ -20,7 +20,7 @@ The user's decision, 2026-10-15 (D73), and answers U1 (a: ● marks unseen outpu
 
 ## Task lines
 
-- [X] T75 The tab activity in its homes — done on `feature/t75-tab-activity-homes`: `aineo.claude` keeps `b:aineo_session_busy` (true for a title beginning ◐ or ◑ and a space or nothing, false before any title and at every exit, written on a change only); `aineo.tabs` keeps each held tab's activity (`set_busy()`, `activity()`, `mark_seen()`; `let_go()` and `closed()` forget it), draws it after the cut name (◒ or ◓ by the editor's one frame while busy, ● while unseen) and runs one `vim.uv` timer at 500 ms only while a held, existing tab page is busy; the fake `claude` has the mode `busy-title` and `AINEO_FAKE_CLAUDE_BUSY_MS`; reviews pending.
+- [X] T75 The tab activity in its homes — done on `feature/t75-tab-activity-homes`: `aineo.claude` keeps `b:aineo_session_busy` (true for a title beginning ◐ or ◑ and a space or nothing, false before any title and at every exit, written on a change only); `aineo.tabs` keeps each held tab's activity (`set_busy()`, `activity()`, `mark_seen()`; `let_go()` and `closed()` forget it), draws it after the cut name (◒ or ◓ by the editor's one frame while busy, ● while unseen) and runs one `vim.uv` timer at 500 ms only while a held, existing tab page is busy; the fake `claude` has the mode `busy-title` and `AINEO_FAKE_CLAUDE_BUSY_MS`; reviewed twice (attack, tests and records) and fixed in one round; merged as PR #234.
 
 ## The steps
 
@@ -124,4 +124,5 @@ None found. The brief's facts held against `dev` `33bb82b` (its amendment).
 
 ## Commits
 
-Recorded after the merge.
+- PR #234, `feature/t75-tab-activity-homes`, head `1747021` (6 commits), merged by rebase into `dev` as `6dedf71` (Re-check T75's brief against dev after T74, at dispatch), `77d1857` (Keep b:aineo_session_busy on each Claude terminal from its title), `592392d` (Keep each tab's activity and draw it after the title), `581c4b7` (Add the busy-title mode to the fake claude), `6f2d942` (Record T75's session: the homes, their mutants and the suite), `82d3b65` (Pin the frame rate, the timer's close and the fake's screen (T75 fix round)). The orchestrator's check on the tree: 4060 cases, `Fails (1)`, the panes command-line-window case, which is the known flake and not this packet's: the author measured it 0 of 84 on the head and 0 of 52 on `dev` (A373); T77 hardened it.
+- No release of its own: it ships in v0.2.41 (PR #237, `main` `8a1f46e`) with T76 and T77, since the indicator has no wiring until T76.
