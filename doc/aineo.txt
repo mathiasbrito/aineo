@@ -1600,11 +1600,11 @@ claude.hide_multiplexer	A boolean. Default: `true`
 			reaches any terminal job of Neovim; the shell
 			terminal and the other jobs Neovim starts keep the
 			editor's whole environment. With `false` Claude
-			Code gets the editor's environment as it is, and
-			knows it runs inside the multiplexer; no tab
-			shows activity there, and `:checkhealth aineo`
-			warns (|aineo-health|). What the default costs is
-			in |aineo-limits|.
+			Code gets the environment every terminal job of
+			Neovim gets, as before, and knows it runs inside
+			the multiplexer; no tab shows activity there, and
+			`:checkhealth aineo` warns (|aineo-health|). What
+			the default costs is in |aineo-limits|.
 
                                            *aineo-config-layout.report_height*
 layout.report_height	A number strictly between 0 and 1.
