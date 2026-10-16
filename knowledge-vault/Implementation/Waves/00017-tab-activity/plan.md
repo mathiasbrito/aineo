@@ -367,6 +367,19 @@ Session note: [[Sessions/2026-10-16 — T79 README]]. Documentation only (A383):
 - **Fix round** by the author: the eleven findings worded as the review had them and checked against the help and the code; the lazy.nvim example is a spec with an `init` function that sets `vim.g.aineo`, with no claim about `opts` (A384).
 - **Departures.** No test pins a README, so none was added. The README says the indicator is read from Claude Code 2.1.301's program and not seen in a real turn. No licence is named: the repository has none.
 
+### T80 — aineo always shows the tab line, after the wave, PR #243, merged by rebase (`dev` `ad8b7de`; released in v0.2.43, PR #244, `main` `d66e3da`)
+
+Session note: [[Sessions/2026-10-16 — T80 Always show the tab line]]. Not a packet of this wave's plan: a small fix (D30) the user asked for, "make aineo to always show it." (D75, the user's decision), which supersedes A364, O11 (a).
+- **The packet.** `tabs.always_show` (boolean, default `true`); `aineo.tabs` gains `show_tabline_once()`, which sets `'showtabline'` to 2 the first time the entry holds a tab and never again, called from `hold_tab()`; `draw_tabline()` still never touches the option. With `false` the option is left as the user has it. The Tab line section of `:checkhealth aineo` says whether aineo shows the line and what `'showtabline'` is; the help and the README document the setting (A387, A388, A390).
+- **Review.** Records dimension: changes requested, four findings. The OSC 52 sentence said `52;c;<text>` where Neovim's terminal prints the base64 of the copy; the once-flag set even with `false` was unpinned; the health line after the first open was untrue once the user had changed the option; A387–A390 were not marked as the orchestrator's assumptions.
+- **Fix round** by the author: `<base64>` in the help (three places), the README and the health string; the once-flag pinned by a case that arrived green and is killed by a mutant; the health wording true before and after the first open; A387–A390 marked in the note, the commit and the PR body.
+- **The orchestrator's check** on `dev` with T80: 4142 cases, `Fails (0)`; `make lint` clean; the mutants on the set and on the once-flag killed (two each).
+- **Departures.** The setting takes effect at the first aineo tab, so a later change needs a restart (A390). The OSC 52 sentence rests on the investigation's measurements on Claude Code 2.1.301 and Neovim 0.12.5, and is under `TMUX` only: screen's form printed nothing.
+
+#### The base64 report
+
+The user reported, after v0.2.42, a base64 string at the base of the Claude window when selecting text with the mouse. The investigation (no code run beyond probes; Claude Code 2.1.301 read from its program, Neovim 0.12.5 measured) found Claude Code's copy of a mouse selection, with `TMUX` set, writes a plain OSC 52 and a tmux-wrapped copy of it, and Neovim's terminal prints the wrapped one as `52;c;<base64>`. v0.2.42 removes `TMUX` from Claude Code's environment (D74), so the string went away once the user's sessions were restarted; the sessions the user saw had started before v0.2.42. No code change followed. A389 adds a sentence to the help, LIMITS, the README and the health warning for `TMUX`: under `claude.hide_multiplexer = false` inside tmux the string comes back.
+
 ### Rulings made at the dispatches and fix rounds — the orchestrator's assumptions
 
 A354–A366 are the plan's O1–O13, each ruled as its (a), listed in *The orchestrator's rulings*, above. In one line each, after them:
@@ -376,6 +389,7 @@ A354–A366 are the plan's O1–O13, each ruled as its (a), listed in *The orche
 - **A374, A375 (T77)** a test-only packet for the command-line window cases and the keys race; the review's two low findings left.
 - **A379–A382, A385, A386 (T78)** hide `TMUX`, `TMUX_PANE`, `STY`, `ZELLIJ` and nothing else, only from Claude Code; the health check says so and warns only with `false`; the help documents it; the setting is `claude.hide_multiplexer`, boolean, default `true`; the environment mirrors Neovim 0.12.5's terminal-job environment from its source; the check's single failure is a load flake.
 - **A383, A384 (T79)** the README is a packet of its own after T78; its lazy.nvim example sets `vim.g.aineo` in `init`.
+- **A387–A390 (T80)** the setting is `tabs.always_show`, boolean, default `true`, and sets `'showtabline'` to 2 when the first aineo tab opens (A387); set once and never set back, even when the setting was off at the first tab (A388); the help, the README and the `TMUX` health warning say that a copy in the Claude window prints `52;c;<base64>` under `claude.hide_multiplexer = false` (A389); a change of the setting takes effect at the first tab, so it needs a restart (A390).
 
 ### Wave 17 closed
 
@@ -388,3 +402,5 @@ Wave 17 landed on 2026-10-16. Its packets are T74 (PR #232, v0.2.40), the compos
 - **Flakes:** T77 hardened the command-line window cases and the keys race; `<C-c>` typed on purpose in `tests/test_health.lua`, `tests/test_claude_resume.lua` and `tests/test_draft.lua` was not examined.
 
 **2026-10-16, after the close.** Two small fixes followed on the user's report that the indicator showed nothing inside tmux: T78 (PR #239, `claude.hide_multiplexer`, D74) and T79 (PR #240, the README), merged by rebase and released in v0.2.42 (PR #241, `main` `6f710e3`). The user's answer to U3 is corrected: the user runs Neovim inside tmux. The checks M1–M4 above stay the user's.
+
+**2026-10-16, after v0.2.43.** T80 (PR #243, `tabs.always_show`, D75), merged by rebase and released in v0.2.43 (PR #244, `main` `d66e3da`). The user's check after v0.2.43 passed for the tab line and for the copy: “base64 is gone, tab is always visible... all seems fine”. The checks M1–M4 above stay the user's.
