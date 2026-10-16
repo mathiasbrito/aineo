@@ -20,7 +20,7 @@ The user's decision, 2026-10-15 (D73), and the answers U1 (a: ● marks unseen o
 
 ## Task lines
 
-- [X] T76 The tab activity wired — done on `feature/t76-tab-activity-wiring`: the composition root watches `b:aineo_session_busy` of every Claude terminal a tab runs (`lua/aineo/entry/busy_watch.lua`, followed from `tab.lua` at a start, a replacement and an attached terminal's replacement) and tells `aineo.tabs` through `set_busy()`, again at `hold_tab()`; a wiped busy terminal tells not busy, heard as the buffer's detach; `TabEnter` marks the tab page the user stays in seen; `:checkhealth aineo` says what the indicator reads and warns for `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` set to `1`, `true`, `yes` or `on`, and for a non-blank `TMUX`, `STY` or `ZELLIJ`; the help covers the indicator in `aineo-tabs`, `aineo-tab_title`, the health check and a limits entry; reviews pending.
+- [X] T76 The tab activity wired — done on `feature/t76-tab-activity-wiring`: the composition root watches `b:aineo_session_busy` of every Claude terminal a tab runs (`lua/aineo/entry/busy_watch.lua`, followed from `tab.lua` at a start, a replacement and an attached terminal's replacement) and tells `aineo.tabs` through `set_busy()`, again at `hold_tab()`; a wiped busy terminal tells not busy, heard as the buffer's detach; `TabEnter` marks the tab page the user stays in seen; `:checkhealth aineo` says what the indicator reads and warns for `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` set to `1`, `true`, `yes` or `on`, and for a non-blank `TMUX`, `STY` or `ZELLIJ`; the help covers the indicator in `aineo-tabs`, `aineo-tab_title`, the health check and a limits entry; reviewed twice (attack, tests and records) and fixed in one round; merged as PR #236.
 
 ## The steps
 
@@ -135,4 +135,5 @@ None found. The brief's facts moved by name only (its amendment); the `TabEnter`
 
 ## Commits
 
-Recorded after the merge.
+- PR #236, `feature/t76-tab-activity-wiring`, head `779dffd` (10 commits), merged by rebase into `dev` as `2c530b4` (Amend T76's brief at dispatch against dev 82d3b65), `838ea68` (Wire each tab's busy state to the tabs home and mark a tab seen on entry), `f40a4a9` (Say what the activity indicator reads and warn where it cannot show), `7f4688d` (Document the activity indicator in the help), `7172059` (Tell the tab only what its terminals say, and pin three more flows), `3cdf9fe` (Pin the replacement follow and the once-per-terminal watch), `ed17d4b` (Record T76's session: the wiring, its mutants and the suite), `2bbf366` (Hear a wiped terminal as its detach, and mark a tab seen after the turn), `1369314` (Warn only for the values Claude Code acts on), `192c34f` (Correct T76's session note after its reviews). The orchestrator's check on the tree: 4103 cases, `Fails (0)`; the mutants on the detach hearing (3 failures) and the still-current mark (1) killed.
+- Released in v0.2.41 (PR #237, `main` `8a1f46e`), with T75 and T77: the first release the user can see the indicator in.
