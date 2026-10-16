@@ -212,37 +212,28 @@ local function title_named(name)
   )
 end
 
-T['title()']['keeps a name of 24 display cells whole'] = function()
-  local name = string.rep('n', 24)
+T['title()']['gives a name whole, however long and whatever it is made of'] = MiniTest.new_set({
+  parametrize = {
+    { string.rep('n', 24) },
+    { string.rep('n', 25) },
+    { string.rep('n', 60) },
+    { string.rep('é', 60) },
+    { string.rep('語', 30) },
+    { string.rep('e\204\129', 60) },
+    { string.rep('👨‍👩‍👧', 30) },
+  },
+})
 
+T['title()']['gives a name whole, however long and whatever it is made of'][1] = function(name)
   eq(title_named(name), '1: ' .. name)
 end
 
-T['title()']['cuts a name of 25 display cells to 23 cells and an ellipsis'] = function()
-  eq(title_named(string.rep('n', 25)), '1: ' .. string.rep('n', 23) .. '…')
-end
-
-T['title()']['cuts a 60-cell name'] = function()
-  eq(title_named(string.rep('n', 60)), '1: ' .. string.rep('n', 23) .. '…')
-end
-
-T['title()']['cuts multibyte text by display cells, not by bytes'] = function()
-  eq(title_named(string.rep('é', 25)), '1: ' .. string.rep('é', 23) .. '…')
-end
-
-T['title()']["cuts wide characters on a character's edge"] = function()
-  local twelve_wide = string.rep('語', 12)
-
-  eq(title_named(twelve_wide), '1: ' .. twelve_wide)
-  eq(title_named(string.rep('語', 13)), '1: ' .. string.rep('語', 11) .. '…')
-end
-
-T['title()']['cuts the tail of a buffer name too'] = function()
+T['title()']['gives the tail of a buffer name whole too'] = function()
   child.cmd('edit /tmp/t65-folder/' .. string.rep('b', 30) .. '.txt')
 
   local title = in_child('return tabs.title(vim.api.nvim_get_current_tabpage())')
 
-  eq(title, '1: ' .. string.rep('b', 23) .. '…')
+  eq(title, '1: ' .. string.rep('b', 30) .. '.txt')
 end
 
 --- What a held tab's `name()` does, in Lua, when it gives no usable text.
@@ -717,31 +708,244 @@ T['tabline()']['numbers the click regions in the order of the places after :tabm
   eq(drawn.format:find('%2T', 1, true) < drawn.format:find('%3T', 1, true), true)
 end
 
---- Draws the tab line at 80 columns over three held tabs named for 30 cells,
---- with the tab page `current` current.
+--- What the tab line is drawn over: held tabs named `names`, in a window
+--- `columns` cells wide, with `tabs.padding` `padding`, the tab page `current`
+--- current and the tab page `busy`, when given, working.
 ---
----@param current integer
----@param setup? string Lua run after the columns are set
+---@class LineOver
+---@field names string[]
+---@field columns integer
+---@field padding? integer defaults to 2
+---@field current? integer defaults to the first tab page
+---@field busy? integer
+---@field setup? string Lua run in the child before the tab pages are made
+
+--- The text of the tab line over `line`, drawn the way a window draws it.
+---
+---@param line LineOver
 ---@return string
-local function drawn_over_three_long_names(current, setup)
-  return drawn_tabline(([[
-    vim.o.columns = 80
+local function text_of_line_over(line)
+  local quoted = vim.tbl_map(function(name)
+    return ('%q'):format(name)
+  end, line.names)
+  return drawn_tabline(
+    ([[
+    vim.o.columns = %d
+    vim.g.aineo = { tabs = { padding = %d } }
     %s
-    for number = 1, 3 do
+    for number, name in ipairs({ %s }) do
       if number > 1 then vim.cmd('tabnew') end
-      tabs.hold(vim.api.nvim_get_current_tabpage(), function()
-        return ('session %%d, fixing the tab line'):format(number)
-      end)
+      tabs.hold(vim.api.nvim_get_current_tabpage(), function() return name end)
+    end
+    if %d > 0 then
+      tabs.set_busy(vim.api.nvim_list_tabpages()[%d], true)
     end
     vim.cmd('%dtabnext')
-  ]]):format(setup or '', current)).str
+  ]]):format(
+      line.columns,
+      line.padding or 2,
+      line.setup or '',
+      table.concat(quoted, ', '),
+      line.busy or 0,
+      line.busy or 0,
+      line.current or 1
+    )
+  ).str
 end
 
-T['tabline()']['draws only whole titles, the first tab page current, when all would overflow'] = function()
+--- Three names of 30 cells, the width of a tab line that holds them whole at
+--- padding 2: 111 cells.
+local THREE_LONG_NAMES = {
+  'session 1, fixing the tab line',
+  'session 2, fixing the tab line',
+  'session 3, fixing the tab line',
+}
+
+local THREE_LONG_TITLES_WHOLE = '  1: session 1, fixing the tab line'
+  .. '    2: session 2, fixing the tab line'
+  .. '    3: session 3, fixing the tab line  '
+
+T['tabline()']['draws every name whole while all the titles fit, whichever tab page is current'] =
+  MiniTest.new_set({
+    parametrize = { { 1 }, { 2 }, { 3 } },
+  })
+
+T['tabline()']['draws every name whole while all the titles fit, whichever tab page is current'][1] = function(
+  current
+)
+  local line = text_of_line_over({ names = THREE_LONG_NAMES, columns = 200, current = current })
+
+  eq(line, THREE_LONG_TITLES_WHOLE)
+end
+
+T['tabline()']['draws every name whole when the titles fill the line exactly'] = function()
+  local line = text_of_line_over({ names = THREE_LONG_NAMES, columns = 111 })
+
+  eq(line, THREE_LONG_TITLES_WHOLE)
+end
+
+local THREE_LONG_TITLES_CUT_TO_19 = '  1: session 1, fixing …'
+  .. '    2: session 2, fixing …'
+  .. '    3: session 3, fixing …  '
+
+T['tabline()']['cuts the names to one cap when the titles do not fit, whichever tab page is current'] =
+  MiniTest.new_set({
+    parametrize = { { 1 }, { 2 }, { 3 } },
+  })
+
+T['tabline()']['cuts the names to one cap when the titles do not fit, whichever tab page is current'][1] = function(
+  current
+)
+  local line = text_of_line_over({ names = THREE_LONG_NAMES, columns = 80, current = current })
+
+  eq(line, THREE_LONG_TITLES_CUT_TO_19)
+end
+
+T['tabline()']['cuts the names when the titles overflow the line by one cell'] = function()
+  local line = text_of_line_over({ names = THREE_LONG_NAMES, columns = 110 })
+
   eq(
-    drawn_over_three_long_names(1),
-    '  1: session 1, fixing the t…    2: session 2, fixing the t…  '
+    line,
+    '  1: session 1, fixing the tab li…'
+      .. '    2: session 2, fixing the tab li…'
+      .. '    3: session 3, fixing the tab li…  '
   )
+end
+
+T['tabline()']['gives the room a short name leaves to the long one'] = function()
+  local line = text_of_line_over({ names = { 'a', string.rep('n', 70) }, columns = 80 })
+
+  eq(line, '  1: a    2: ' .. string.rep('n', 64) .. '…  ')
+end
+
+T['tabline()']['counts the padding in the width of the titles it fits'] = MiniTest.new_set({
+  parametrize = {
+    {
+      0,
+      '1: session 1, fixing the …'
+        .. '2: session 2, fixing the …'
+        .. '3: session 3, fixing the …',
+    },
+    { 2, THREE_LONG_TITLES_CUT_TO_19 },
+    {
+      4,
+      '    1: session 1, fix…'
+        .. '        2: session 2, fix…'
+        .. '        3: session 3, fix…    ',
+    },
+  },
+})
+
+T['tabline()']['counts the padding in the width of the titles it fits'][1] = function(
+  padding,
+  drawn
+)
+  local line = text_of_line_over({ names = THREE_LONG_NAMES, columns = 80, padding = padding })
+
+  eq(line, drawn)
+end
+
+T['tabline()']['counts the indicator in the width of the titles and never cuts it'] = function()
+  local line = text_of_line_over({ names = THREE_LONG_NAMES, columns = 81, busy = 3 })
+
+  eq(
+    line,
+    '  1: session 1, fixing …'
+      .. '    2: session 2, fixing …'
+      .. '    3: session 3, fixing … ◒  '
+  )
+end
+
+T['tabline()']["counts the ellipsis as 'ambiwidth' gives it"] = function()
+  local line = text_of_line_over({
+    names = THREE_LONG_NAMES,
+    columns = 80,
+    setup = 'vim.o.ambiwidth = "double"',
+  })
+
+  eq(
+    line,
+    '  1: session 1, fixing…' .. '    2: session 2, fixing…' .. '    3: session 3, fixing…  '
+  )
+end
+
+--- The tab line over one tab named `name`, in a line of `columns` cells.
+---
+---@param name string
+---@param columns integer
+---@return string
+local function text_of_line_over_one(name, columns)
+  return text_of_line_over({ names = { name }, columns = columns })
+end
+
+T['tabline()']['cuts multibyte text by display cells, not by bytes'] = function()
+  eq(text_of_line_over_one(string.rep('é', 40), 31), '  1: ' .. string.rep('é', 23) .. '…  ')
+end
+
+T['tabline()']["cuts wide characters on a character's edge"] = function()
+  local twelve_wide = string.rep('語', 12)
+
+  eq(text_of_line_over_one(twelve_wide, 31), '  1: ' .. twelve_wide .. '  ')
+  eq(text_of_line_over_one(string.rep('語', 13), 31), '  1: ' .. string.rep('語', 11) .. '…  ')
+end
+
+T['tabline()']['keeps a character with its accent when it cuts decomposed text'] = function()
+  local accented = 'e\204\129'
+
+  eq(
+    text_of_line_over_one(string.rep(accented, 30), 31),
+    '  1: ' .. string.rep(accented, 23) .. '…  '
+  )
+end
+
+T['tabline()']['keeps a family emoji whole when it cuts'] = function()
+  local family = '👨‍👩‍👧'
+
+  eq(
+    text_of_line_over_one(string.rep(family, 13), 31),
+    '  1: ' .. string.rep(family, 11) .. '…  '
+  )
+end
+
+T['tabline()']['cuts the tail of a buffer name too'] = function()
+  child.cmd('edit /tmp/t65-folder/' .. string.rep('b', 30) .. '.txt')
+  child.o.columns = 31
+
+  local drawn = drawn_tabline('')
+
+  eq(drawn.str, '  1: ' .. string.rep('b', 23) .. '…  ')
+end
+
+T['tabline()']['cuts no name below 8 cells, and draws the run around the current tab page when the titles still overflow'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 1, '  1: session…    2: session…  ' },
+      { 2, '  1: session…    2: session…  ' },
+      { 3, '  2: session…    3: session…  ' },
+    },
+  })
+
+T['tabline()']['cuts no name below 8 cells, and draws the run around the current tab page when the titles still overflow'][1] = function(
+  current,
+  drawn
+)
+  local line = text_of_line_over({ names = THREE_LONG_NAMES, columns = 30, current = current })
+
+  eq(line, drawn)
+end
+
+T['tabline()']['cuts the names to 8 cells when that is what lets all the titles fit'] = function()
+  local line = text_of_line_over({ names = THREE_LONG_NAMES, columns = 45 })
+
+  eq(line, '  1: session…    2: session…    3: session…  ')
+end
+
+T['tabline()']['never pads or cuts a name shorter than 8 cells'] = MiniTest.new_set({
+  parametrize = { { 200 }, { 30 }, { 12 } },
+})
+
+T['tabline()']['never pads or cuts a name shorter than 8 cells'][1] = function(columns)
+  eq(text_of_line_over_one('a', columns), '  1: a  ')
 end
 
 T['tabline()']['takes the padding from the options setup() recorded'] = function()
@@ -757,43 +961,6 @@ T['tabline()']['draws the default padding, and raises nothing, when the setting 
   eq(drawn.str, '  1: [No Name]  ')
 end
 
-T['tabline()']['counts the padding in the width of the titles it fits'] = MiniTest.new_set({
-  parametrize = {
-    { 81, 0, 1, 3 },
-    { 66, 4, 1, 1 },
-    { 100, 4, 1, 2 },
-    { 100, 4, 3, 2 },
-  },
-})
-
-T['tabline()']['counts the padding in the width of the titles it fits'][1] = function(
-  columns,
-  padding,
-  current,
-  titles_drawn
-)
-  local line = drawn_over_three_long_names(
-    current,
-    ('vim.o.columns = %d vim.g.aineo = { tabs = { padding = %d } }'):format(columns, padding)
-  )
-
-  eq(select(2, line:gsub('session %d', '')), titles_drawn)
-end
-
-T['tabline()']['draws the current tab page and the one before it when the one after would overflow'] = function()
-  eq(
-    drawn_over_three_long_names(2),
-    '  1: session 1, fixing the t…    2: session 2, fixing the t…  '
-  )
-end
-
-T['tabline()']['draws the last tab page current, with the one before it, when all would overflow'] = function()
-  eq(
-    drawn_over_three_long_names(3),
-    '  2: session 2, fixing the t…    3: session 3, fixing the t…  '
-  )
-end
-
 T['title()']["says the buffer's tail for a held tab whose name() holds a NUL, and the line still draws"] = function()
   child.cmd('edit /tmp/t65-folder/fallback.txt')
 
@@ -802,18 +969,6 @@ T['title()']["says the buffer's tail for a held tab whose name() holds a NUL, an
   ]])
 
   eq(drawn.str, '  1: fallback.txt  ')
-end
-
-T['title()']['keeps a character with its accent when it cuts decomposed text'] = function()
-  local accented = 'e\204\129'
-
-  eq(title_named(string.rep(accented, 30)), '1: ' .. string.rep(accented, 23) .. '…')
-end
-
-T['title()']['keeps a family emoji whole when it cuts'] = function()
-  local family = '👨‍👩‍👧'
-
-  eq(title_named(string.rep(family, 13)), '1: ' .. string.rep(family, 11) .. '…')
 end
 
 T['title()']['says the last part of a buffer name that ends in a slash'] = function()

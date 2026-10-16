@@ -31,8 +31,9 @@ end
 
 --- The title aineo's tab line draws for the tab page numbered `number`, as
 --- `{n}gt` counts them: `<number>: <name>`, the name that of an aineo tab's
---- Claude session, for any other tab page that of its current buffer, cut to
---- fit (`:help aineo-tabs`). The tabs home holds an indicator for each tab, which
+--- Claude session, for any other tab page that of its current buffer, whole:
+--- only aineo's own tab line cuts names, when it has no room for them
+--- (`:help aineo-tabs`). The tabs home holds an indicator for each tab, which
 --- the composition root tells it, and the title ends with a space and the
 --- indicator: ◒ or ◓, alternating twice a second, while the tab's Claude Code
 --- works; ● while its output has not been seen; the tab line is drawn again
