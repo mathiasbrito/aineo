@@ -11,7 +11,7 @@
 
 A small fix in the user's prompt-driven waves (D30). The user's words, 2026-10-16: "can we configure nvim to always show the tabs?" and, told that aineo leaves `'showtabline'` alone, "make aineo to always show it." Recorded as the user's decision; the knowledge pass gives it a D-number. It supersedes A364 (wave 17's O11 (a)).
 
-Assumptions the brief gave: A387 (`tabs.always_show`, boolean, default `true`; `'showtabline'` set to `2` when aineo's first tab opens, whoever draws the tab line; `false` leaves it), A388 (set once, never set back), and A389 (added while the packet ran: with `claude.hide_multiplexer = false` inside tmux, Claude Code's mouse-selection copy is wrapped for tmux, and Neovim 0.12.5's terminal prints `52;c;<text>` in Claude's window; the help, LIMITS and the health warning say so).
+The orchestrator's assumptions, not the user's decisions: A387 (`tabs.always_show`, boolean, default `true`; `'showtabline'` set to `2` when aineo's first tab opens, whoever draws the tab line; `false` leaves it), A388 (set once, never set back), and A389 (the orchestrator's assumption, added while the packet ran: with `claude.hide_multiplexer = false` inside tmux, Claude Code's mouse-selection copy is wrapped for tmux, and Neovim 0.12.5's terminal prints `52;c;<text>` in Claude's window; the help, LIMITS and the health warning say so).
 
 ## Task lines
 
@@ -59,6 +59,27 @@ No survivor.
 
 - Called from `hold_tab()`, not from `draw_tabline()`: the latter is documented, tested and idempotent without touching the option, and its callers (health's tests, the highlight tests) stay as they are.
 - A389's sentence is under `TMUX` only (the evidence measured tmux's form; screen's printed nothing).
+
+## Fix round
+
+The review of PR #243 (records dimension) found four things; A390 is the orchestrator's assumption that answers the second.
+
+- **`52;c;<text>` is `52;c;<base64>`** — what Neovim's terminal prints is the base64 of the copy, not the text. Corrected in the help (three places), the README, health's string and its test row.
+- **The once-flag set even with `false` is pinned** — `leaves 'showtabline' after a later setup() turns tabs.always_show on, the first call having found it off` in `tests/test_tabs.lua`. It arrived green (the code already behaved so); mutant M-A kills it. A390 (the orchestrator's assumption): the setting takes effect at the first aineo tab, so a later change needs a restart; the help's setting entry and the README's row say so.
+- **Health after the first open** — the line for a `'showtabline'` other than 2 with `tabs.always_show` on now reads "'showtabline' is N now; aineo sets it to 2 once, when the first aineo tab opens, and leaves it after (tabs.always_show)", true before the open and after the user changed it; pinned by the two tests that reach it (before the open, 1; changed after the open, 0).
+- **Attribution** — A387–A390 are marked as the orchestrator's assumptions here, in the fix commit and in the PR body.
+
+Mutants of the fix round, on the final tree: see *Mutants, fix round* below.
+
+## Mutants, fix round
+
+Each the literal edit, on the final tree, restored from a copy.
+
+| # | Edit | Run on | Result |
+|---|---|---|---|
+| M-A | `lua/aineo/tabs/init.lua`: delete the line `  tabline_shown_once = true` before the `if` in `show_tabline_once()` and add `    tabline_shown_once = true` as the first line inside `if tabs_settings().always_show then` | `tests/test_tabs.lua` | killed by assertion: `leaves 'showtabline' after a later setup() turns tabs.always_show on, the first call having found it off` (the review's survivor) |
+| M-B | `lua/aineo/health.lua`: `prints 52;c;<base64> there` → `prints 52;c;<text> there` | `tests/test_health.lua` | killed by assertion: the `TMUX` row |
+| M-C | `lua/aineo/health.lua`: `and leaves it after (tabs.always_show)` → `(tabs.always_show)` | `tests/test_health.lua` | killed by assertion: 5 failures, among them the changed-after-open case |
 
 ## Open threads
 
