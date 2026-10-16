@@ -35,19 +35,17 @@ end
 --- `name` cut to at most `cap` display cells: whole when it fills no more,
 --- else its longest prefix of whole characters that leaves room for `…`,
 --- then `…`. A character is never cut in two, nor parted from its composing
---- characters, so a wide one that would cross the edge is left out. A `cap`
---- below `SHORTEST_CUT_CELLS` is taken as that many cells, so that a name is
---- never cut to little more than its ellipsis.
+--- characters, so a wide one that would cross the edge is left out. Callers
+--- keep `cap` at `SHORTEST_CUT_CELLS` or more.
 ---
 ---@param name string text with no NUL in it
 ---@param cap number the most display cells the result fills; `math.huge` for no cut
 ---@return string
 function M.cut(name, cap)
-  local cells = math.max(cap, M.SHORTEST_CUT_CELLS)
-  if vim.fn.strdisplaywidth(name) <= cells then
+  if vim.fn.strdisplaywidth(name) <= cap then
     return name
   end
-  local room = cells - vim.fn.strdisplaywidth(ELLIPSIS)
+  local room = cap - vim.fn.strdisplaywidth(ELLIPSIS)
   return longest_prefix_within(name, room) .. ELLIPSIS
 end
 
