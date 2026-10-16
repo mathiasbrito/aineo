@@ -776,9 +776,11 @@ end
 --- The variables of the editor's environment under which Claude Code gives
 --- its terminal no title, or keeps it still, so that no tab shows activity
 --- (the activity indicator of `aineo.tabs` reads that title): what each
---- means, what the user can do, and which of its values Claude Code acts on
---- (read from its 2.1.301 binary, not run). A variable Neovim holds is handed
---- to every job it starts, Claude Code's included.
+--- means, what the user can do, which of its values Claude Code acts on
+--- (read from its 2.1.301 binary, not run), and whether aineo hides it from
+--- Claude Code while `claude.hide_multiplexer` holds. A variable Neovim holds
+--- is handed to every job it starts, Claude Code's included, except where
+--- aineo hides it.
 local SILENT_TITLE_VARIABLES = {
   {
     name = 'CLAUDE_CODE_DISABLE_TERMINAL_TITLE',
@@ -788,34 +790,49 @@ local SILENT_TITLE_VARIABLES = {
   },
   {
     name = 'TMUX',
+    is_hidden_by_aineo = true,
     is_acted_on = is_not_blank,
     meaning = 'Claude Code keeps its terminal title still under a terminal multiplexer',
     advice = 'start Neovim outside tmux, screen and zellij',
   },
   {
     name = 'STY',
+    is_hidden_by_aineo = true,
     is_acted_on = is_not_blank,
     meaning = 'Claude Code keeps its terminal title still under a terminal multiplexer',
     advice = 'start Neovim outside tmux, screen and zellij',
   },
   {
     name = 'ZELLIJ',
+    is_hidden_by_aineo = true,
     is_acted_on = is_not_blank,
     meaning = 'Claude Code keeps its terminal title still under a terminal multiplexer',
     advice = 'start Neovim outside tmux, screen and zellij',
   },
 }
 
---- Says what the activity indicator on a tab reads, and warns, naming the
---- variable, for each of `SILENT_TITLE_VARIABLES` the editor's environment
---- holds with a value Claude Code acts on: no tab shows activity then.
-local function check_activity_indicator()
+--- Says what the activity indicator on a tab reads and, while
+--- `resolved_config.claude.hide_multiplexer` holds, that aineo starts Claude
+--- Code without the multiplexer's variables; and warns, naming the variable,
+--- for each of `SILENT_TITLE_VARIABLES` the editor's environment holds with a
+--- value Claude Code acts on, and aineo does not hide: no tab shows activity
+--- then.
+---
+---@param resolved_config table|nil the configuration, `nil` when it is wrong
+local function check_activity_indicator(resolved_config)
   vim.health.info(
     'the activity indicator on a tab reads the title Claude Code sets on its terminal: :help aineo-tabs'
   )
+  local is_hiding = resolved_config ~= nil and resolved_config.claude.hide_multiplexer
+  if is_hiding then
+    vim.health.info(
+      'aineo starts Claude Code without TMUX, TMUX_PANE, STY and ZELLIJ (claude.hide_multiplexer), so the activity indicator works inside tmux, screen and zellij: :help aineo-limits'
+    )
+  end
   for _, variable in ipairs(SILENT_TITLE_VARIABLES) do
     local value = vim.env[variable.name]
-    if value ~= nil and variable.is_acted_on(value) then
+    local is_hidden = is_hiding and variable.is_hidden_by_aineo
+    if not is_hidden and value ~= nil and variable.is_acted_on(value) then
       vim.health.warn(
         ('%s is set: %s, so no tab shows activity'):format(variable.name, variable.meaning),
         ('%s for the tabs to show activity: :help aineo-limits'):format(variable.advice)
@@ -828,7 +845,9 @@ end
 --- 'tabline' is empty when the first aineo tab opens; the user's own, which
 --- aineo leaves in place; or Neovim's own, before aineo has drawn its own.
 --- Then what the activity indicator reads (`check_activity_indicator()`).
-local function check_tab_line()
+---
+---@param resolved_config table|nil the configuration, `nil` when it is wrong
+local function check_tab_line(resolved_config)
   vim.health.start('Tab line')
   local tabline = vim.o.tabline
   if vim.startswith(tabline, AINEO_TABLINE_PREFIX) then
@@ -846,7 +865,7 @@ local function check_tab_line()
       "the tab line is Neovim's own: aineo draws its own when the first aineo tab opens, while 'tabline' is empty: :help aineo-tabs"
     )
   end
-  check_activity_indicator()
+  check_activity_indicator(resolved_config)
 end
 
 --- Reports what the autostart decided when the editor started, and why, from
@@ -889,7 +908,7 @@ function M.check()
   check_server_socket()
   check_prefix_mappings(resolved_config)
   check_terminal_prefix_mappings(resolved_config)
-  check_tab_line()
+  check_tab_line(resolved_config)
   check_autostart()
   name_limits()
 end

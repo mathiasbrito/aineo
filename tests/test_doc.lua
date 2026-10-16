@@ -107,6 +107,7 @@ local TAGS = {
   'aineo-config-terminal_prefix',
   'aineo-config-autostart',
   'aineo-config-claude.cmd',
+  'aineo-config-claude.hide_multiplexer',
   'aineo-config-layout.report_height',
   'aineo-config-changes.working_branch',
   'aineo-config-tabs.padding',
