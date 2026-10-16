@@ -110,3 +110,13 @@ The orchestrator's verification runs `plan.md`'s T83 mutants. Name the test that
 ## The orchestrator's rulings — 2026-10-16, before dispatch
 
 `plan.md` › *The orchestrator's rulings — amendment* rules O20–O23 as their (a), A412–A415, which this brief is written for. Record them as the orchestrator's assumptions, never as the user's decisions.
+
+## Amendment — 2026-10-16, at dispatch
+
+Re-checked against `dev` `55fd4f7` (the brief names `2a74b16`; the commits between them touch the vault alone). Every fact holds, so nothing in the body moves:
+- `lua/aineo/tabs/titles.lua` is 67 lines (`MAX_NAME_CELLS = 24`, `ELLIPSIS`, `longest_prefix_within()`, `cut(name)`, `buffer_tail(tab)`); `lua/aineo/tabs/tabline.lua` is 90 lines; `lua/aineo/tabs/init.lua` is 398 lines, `title()` cutting with `titles.cut()` at line 237 and `tabline()` calling `tabline_format.format(entries, vim.o.columns, padding())` at line 281.
+- `titles.cut` and `tabline_format` have no caller outside the `tabs` home; no test file but `tests/test_tabs.lua` and `tests/test_tabs_activity.lua` pins a cut name.
+- `doc/aineo.txt` says "cut to 24 cells" once (line 230, *aineo-tabs*); *aineo-tab_title* is at line 246 and says nothing of a cut; `README.md` says no cut.
+- Baseline on Neovim 0.12.5: `tests/test_tabs.lua` 107 cases and `tests/test_tabs_activity.lua` 42, no failure.
+
+How the entry carries the title's parts (the brief leaves it open): `aineo.tabs.TabLineEntry` carries `number`, `name`, `indicator` (nil when none) and `current`; `titles.lua` owns the shape `<number>: <name>[ <indicator>]`, which `title()` and the line both use.
