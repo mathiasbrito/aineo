@@ -215,6 +215,134 @@ T['start_session()']['marks the process as aineo’s child with AINEO_CHILD=1'] 
   eq(claude.wait_for_start(fake).env, { AINEO_CHILD = '1' })
 end
 
+--- The variables of the editor's environment that tell a program it runs
+--- inside a terminal multiplexer.
+local MULTIPLEXER_VARIABLES = { 'TMUX', 'TMUX_PANE', 'STY', 'ZELLIJ' }
+
+--- A variable of the editor's environment that has nothing to do with a
+--- multiplexer, which the session passes on whatever it hides.
+local UNRELATED_VARIABLE = 'AINEO_TEST_UNRELATED'
+
+--- Starts the session in `child`, whose environment holds every
+--- `MULTIPLEXER_VARIABLES` and `UNRELATED_VARIABLE`, with the stand-in
+--- settings changed by `overrides`, against a fake that records those
+--- variables and `AINEO_CHILD` as it finds them. Returns the record of its
+--- one start.
+---
+---@param name string the test's own name for the fake's files
+---@param overrides table<string, any>
+---@return table
+local function start_in_multiplexer(name, overrides)
+  local watched = vim.list_extend({ 'AINEO_CHILD', UNRELATED_VARIABLE }, MULTIPLEXER_VARIABLES)
+  local fake = claude.fake(name, 'exit', { AINEO_FAKE_CLAUDE_ENV = table.concat(watched, ',') })
+  child.lua(
+    [[
+    for _, variable in ipairs(...) do
+      vim.env[variable] = 'set-in-the-editor'
+    end
+    vim.env[select(2, ...)] = 'set-in-the-editor'
+  ]],
+    { MULTIPLEXER_VARIABLES, UNRELATED_VARIABLE }
+  )
+
+  claude.start(child, fake, overrides)
+
+  return claude.wait_for_start(fake)
+end
+
+T['start_session()']['runs Claude Code without the multiplexer variables, the rest of the environment kept, when told to hide the multiplexer'] = function()
+  local started = start_in_multiplexer('hide-multiplexer', { hide_multiplexer = true })
+
+  eq(started.env, {
+    AINEO_CHILD = '1',
+    AINEO_TEST_UNRELATED = 'set-in-the-editor',
+    TMUX = vim.NIL,
+    TMUX_PANE = vim.NIL,
+    STY = vim.NIL,
+    ZELLIJ = vim.NIL,
+  })
+end
+
+T['start_session()']['gives Claude Code the editor’s multiplexer variables when told to keep the multiplexer'] = function()
+  local started = start_in_multiplexer('keep-multiplexer', { hide_multiplexer = false })
+
+  eq(started.env, {
+    AINEO_CHILD = '1',
+    AINEO_TEST_UNRELATED = 'set-in-the-editor',
+    TMUX = 'set-in-the-editor',
+    TMUX_PANE = 'set-in-the-editor',
+    STY = 'set-in-the-editor',
+    ZELLIJ = 'set-in-the-editor',
+  })
+end
+
+--- Runs the session in `child` with a command that writes its whole
+--- environment, sorted, one variable to a line, into a file; the child has
+--- every `MULTIPLEXER_VARIABLES` set, and a `TERM`, `COLORTERM`, `VIM`,
+--- `COLUMNS`, `LINES`, `TERMCAP`, `COLORFGBG` and `NVIM_LISTEN_ADDRESS` of its
+--- own, 'termguicolors' as `has_true_colour` says, and `hide_multiplexer` as
+--- given. Returns the lines of the file, once the command has written them.
+---
+---@param name string the test's own name for the files
+---@param has_true_colour boolean
+---@param hide_multiplexer boolean
+---@return string[]
+local function environment_written_by_the_command(name, has_true_colour, hide_multiplexer)
+  local fake = claude.fake('job-environment', 'exit')
+  local written = vim.fs.joinpath(fixture.directory('claude-' .. name .. '-env'), 'environment')
+  local script = fixture.write('claude-' .. name .. '/env.sh', { 'env | sort > "$1"' })
+  child.lua(
+    [[
+    local has_true_colour, variables = ...
+    vim.o.termguicolors = has_true_colour
+    for _, variable in ipairs(variables) do
+      vim.env[variable] = 'set-in-the-editor'
+    end
+    vim.env.TERM = 'screen'
+    vim.env.VIM = '/aineo-test-vim'
+    vim.env.COLORTERM = '24bit'
+    vim.env.COLUMNS = '211'
+    vim.env.LINES = '57'
+    vim.env.TERMCAP = 'SC|screen|VT 100:co#80:li#24:'
+    vim.env.COLORFGBG = '15;0'
+    vim.env.NVIM_LISTEN_ADDRESS = '/aineo-test-listen'
+  ]],
+    { has_true_colour, MULTIPLEXER_VARIABLES }
+  )
+  claude.start(child, fake, {
+    hide_multiplexer = hide_multiplexer,
+    cmd = { 'sh', script, written },
+    state_directory = fixture.directory('claude-' .. name .. '-state'),
+  })
+  claude.wait_for_status(child, 'exited')
+  return vim.fn.readfile(written)
+end
+
+--- The lines of `environment` that do not set a multiplexer variable.
+---
+---@param environment string[]
+---@return string[]
+local function without_multiplexer_variables(environment)
+  return vim.tbl_filter(function(line)
+    return not vim.iter(MULTIPLEXER_VARIABLES):any(function(variable)
+      return vim.startswith(line, variable .. '=')
+    end)
+  end, environment)
+end
+
+T['start_session()']['gives the process the environment of a terminal job, the multiplexer variables apart, when told to hide the multiplexer'] =
+  MiniTest.new_set({ parametrize = { { true }, { false } } })
+
+T['start_session()']['gives the process the environment of a terminal job, the multiplexer variables apart, when told to hide the multiplexer']['with and without true colour'] = function(
+  has_true_colour
+)
+  local kept = environment_written_by_the_command('job-kept', has_true_colour, false)
+
+  local hidden = environment_written_by_the_command('job-hidden', has_true_colour, true)
+
+  eq(hidden, without_multiplexer_variables(kept))
+end
+
 T['start_session()']['gives the process the editor’s server address as NVIM'] = function()
   local fake = claude.fake('servername', 'exit', { AINEO_FAKE_CLAUDE_ENV = 'NVIM' })
 
@@ -298,6 +426,8 @@ T['start_session()']['names the setting that is malformed'] = MiniTest.new_set({
     { 'cmd', 'claude' },
     { 'cmd', {} },
     { 'cmd', { 'claude', 1 } },
+    { 'hide_multiplexer', 'yes' },
+    { 'hide_multiplexer', 1 },
     { 'cwd', 1 },
     { 'cwd', '/nonexistent/aineo/directory' },
     { 'cwd', '/bin/sh' },

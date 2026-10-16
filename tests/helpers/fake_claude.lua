@@ -76,7 +76,10 @@
 --- after `AINEO_FAKE_CLAUDE_BUSY_MS`, or at the key Enter. The glyphs, their
 --- order and their pace are read from the 2.1.301 binary, never recorded
 --- (`knowledge-vault/Implementation/Waves/00017-tab-activity/evidence/
---- w17-claude-title.txt`, B1 and B2).
+--- w17-claude-title.txt`, B1 and B2). With `TMUX`, `STY` or `ZELLIJ` in its
+--- environment, with a value, Claude Code 2.1.301 keeps its title still, and
+--- so does the fake: it titles the terminal `✳ Claude Code` through its busy
+--- spell (B4).
 ---
 --- Given `attach` as its first argument (`claude attach <id>`), it records its
 --- arguments, draws its mode's screens and reads its keys as it does at any
@@ -663,10 +666,26 @@ local function resumes_no_conversation()
   return CONVERSATIONS ~= nil and resumed ~= nil and vim.uv.fs_stat(conversation_file()) == nil
 end
 
+--- The variables with a value under which Claude Code 2.1.301 keeps its
+--- title still, as it is at idle, through a busy spell too.
+local MULTIPLEXER_VARIABLES = { 'TMUX', 'STY', 'ZELLIJ' }
+
+--- Whether the fake's environment holds a multiplexer variable with a value
+--- (`MULTIPLEXER_VARIABLES`).
+---
+---@return boolean
+local function runs_under_a_multiplexer()
+  return vim.iter(MULTIPLEXER_VARIABLES):any(function(variable)
+    return (os.getenv(variable) or '') ~= ''
+  end)
+end
+
 --- The title Claude Code 2.1.301 gives its terminal at idle, and the two it
---- gives it in turn while it is busy.
+--- gives it in turn while it is busy, or, under a multiplexer, the idle title
+--- alone (`runs_under_a_multiplexer()`).
 local IDLE_TITLE = '✳ Claude Code'
-local BUSY_TITLES = { '◐ Claude Code', '◑ Claude Code' }
+local BUSY_TITLES = runs_under_a_multiplexer() and { IDLE_TITLE }
+  or { '◐ Claude Code', '◑ Claude Code' }
 
 --- How long a busy title stays before the other: Claude Code 2.1.301 steps
 --- its frame every 960 ms.

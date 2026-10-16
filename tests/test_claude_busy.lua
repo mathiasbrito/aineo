@@ -303,6 +303,21 @@ T['the fake in the mode busy-title']['is busy until Enter when it is given no ti
   })
 end
 
+T['the fake in the mode busy-title']['keeps the title ✳ through a busy spell when TMUX is in its environment'] = function()
+  local fake = claude.fake('busy-title-tmux', 'busy-title', { TMUX = '/tmp/aineo-test-tmux,1,0' })
+  local buffer = claude.start(child, fake, { hide_multiplexer = false })
+  wait_for_title(buffer, '✳ Claude Code')
+
+  vim.wait(1200, function()
+    return busy_of(buffer) == true
+  end, 50)
+
+  eq(
+    { child.lua_get('vim.b[...].term_title', { buffer }), busy_of(buffer) },
+    { '✳ Claude Code', false }
+  )
+end
+
 T['the session is not busy']['once Claude Code has ended while busy, by'] =
   MiniTest.new_set({ parametrize = { { 'exit 0' }, { 'kill -KILL $$' } } })
 

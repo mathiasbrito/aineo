@@ -198,6 +198,37 @@ T['a busy Claude Code']['shows ◒ and ◓ in turn on the title of its tab'] = f
   eq({ seen['◒'], seen['◓'] }, { true, true })
 end
 
+--- Puts `TMUX` into the environment of `child`, as a Neovim run inside tmux
+--- has it, for every Claude Code it starts.
+local function run_the_editor_inside_tmux()
+  child.lua("vim.env.TMUX = '/tmp/aineo-test-tmux,1,0'")
+end
+
+T['a busy Claude Code']['puts ◒ or ◓ on the title of its tab when the editor runs inside tmux'] = function()
+  run_the_editor_inside_tmux()
+  open_busy_second_tab_from_the_first('activity-inside-tmux')
+
+  local second = title_once(2, shows_busy)
+
+  eq(shows_busy(second), true)
+end
+
+T['a busy Claude Code']['puts nothing on the title of its tab when the editor runs inside tmux and claude.hide_multiplexer is false'] = function()
+  run_the_editor_inside_tmux()
+  tabs.open_first_tab(child, 'activity-inside-tmux-kept')
+  local second = tabs.fake('activity-inside-tmux-kept-second', 'busy-title')
+  entry.use_fake(child, second, { claude = { hide_multiplexer = false } })
+  child.cmd('Aineo tab new')
+  eq(vim.tbl_isempty(claude_session.wait_for_start(second)), false)
+  child.cmd('1tabnext')
+
+  vim.wait(1500, function()
+    return shows_busy(title_of(2))
+  end, 50)
+
+  eq(title_of(2), '2: Claude Code')
+end
+
 T['a busy Claude Code']['leaves no indicator on the title of the tab the user is in, when its spell ends'] = function()
   open_busy_second_tab('activity-current')
   eq(shows_busy(title_once(2, shows_busy)), true)

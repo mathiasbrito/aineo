@@ -8,7 +8,7 @@ local DEFAULTS = {
   prefix = '\\',
   terminal_prefix = '<C-\\>',
   autostart = true,
-  claude = { cmd = { 'claude' } },
+  claude = { cmd = { 'claude' }, hide_multiplexer = true },
   layout = { report_height = 2 / 3 },
   changes = {},
   tabs = { padding = 2 },
@@ -71,6 +71,13 @@ T['resolve_config()']['keeps false as a setting, never replacing it with the def
   eq(resolved[key], false)
 end
 
+T['resolve_config()']['keeps claude.hide_multiplexer false, never replacing it with the default'] = function()
+  local from_setup = config.resolve_config({}, { claude = { hide_multiplexer = false } })
+  local from_global = config.resolve_config({ claude = { hide_multiplexer = false } }, nil)
+
+  eq({ from_setup.claude.hide_multiplexer, from_global.claude.hide_multiplexer }, { false, false })
+end
+
 T['resolve_config()']['refuses a wrong value, naming its full path'] = MiniTest.new_set({
   parametrize = {
     { { global = { prefix = true }, refusal = 'prefix: expected' } },
@@ -79,6 +86,18 @@ T['resolve_config()']['refuses a wrong value, naming its full path'] = MiniTest.
     { { global = { terminal_prefix = 1 }, refusal = 'terminal_prefix: expected' } },
     { { global = { autostart = 'yes' }, refusal = 'autostart: expected' } },
     { { global = { claude = { cmd = 'claude' } }, refusal = 'claude%.cmd: expected' } },
+    {
+      {
+        global = { claude = { hide_multiplexer = 'yes' } },
+        refusal = 'claude%.hide_multiplexer: expected',
+      },
+    },
+    {
+      {
+        setup = { claude = { hide_multiplexer = 1 } },
+        refusal = 'claude%.hide_multiplexer: expected',
+      },
+    },
     { { global = { claude = { cmd = {} } }, refusal = 'claude%.cmd: expected' } },
     { { global = { claude = { cmd = { 'claude', 1 } } }, refusal = 'claude%.cmd: expected' } },
     {
