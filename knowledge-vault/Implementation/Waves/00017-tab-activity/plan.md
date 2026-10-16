@@ -350,6 +350,23 @@ PR #230 (`42b6b4c` on `dev`) put `aineo.entry` into the modularity tables, ahead
 - **The orchestrator's check** on `dev` plus T76: 4103 cases, `Fails (0)`; the mutants on the detach hearing (3 failures) and on the still-current mark (1) killed.
 - **Departures.** The `hold_tab()` re-tell is defensive: it is proven only through a stubbed slow `layout.open`, and no natural flow reaches it. The health values are the attack review's read of the 2.1.301 program, not a run. The guards the wiring first had, against a terminal the tab has left and a re-tell as the tab follows a terminal, were removed: a terminal a tab leaves is wiped inside the swap that replaces it, so no flow reached either.
 
+### T78 — hide the multiplexer from the Claude Code aineo starts, after the wave, PR #239, merged by rebase (released in v0.2.42, PR #241, `main` `6f710e3`)
+
+Session note: [[Sessions/2026-10-16 — T78 Hide the multiplexer]]. Not a packet of this wave's plan: a small fix (D30) the user asked for after v0.2.41, when the indicator showed nothing inside tmux (D74, the user's decision, which answers U3 as (c)).
+- **The packet.** `claude.hide_multiplexer` (boolean, default `true`); `aineo.claude.environment` builds the environment of every start of Claude Code with `clear_env`: the editor's environment as Neovim gives a terminal job, minus `TMUX`, `TMUX_PANE`, `STY` and `ZELLIJ`, plus `AINEO_CHILD=1` (A379, A382); with `false` the editor's environment as before. The health check's Tab line section says aineo starts Claude Code without the variables, and warns of them only with `false` (A380); the help has the setting's entry, the paragraph and the limits entry (A381). The shell terminal and every other job keep the editor's environment. The fake `claude` in `busy-title` keeps its title still under `TMUX`, `STY` or `ZELLIJ`, as Claude Code 2.1.301 does.
+- **Review.** One review (attack and test integrity, with a records glance): changes requested. MEDIUM: with the default, `COLUMNS`, `LINES`, `TERMCAP` and `COLORFGBG` reached Claude Code (it reads `COLORFGBG` to pick dark or light), which Neovim strips from every terminal job, and a runtime `NVIM_LISTEN_ADDRESS` did not. Lower findings: the multiplexer warnings' advice under `false`, the help's wording, a bounded wait in a case, and the session note's records.
+- **Fix round** by the author (A385): the environment mirrors `pty_ignored_env_vars` from Neovim 0.12.5's source (`COLUMNS`, `LINES`, `TERMCAP`, `COLORFGBG`, `VIM`, `VIMRUNTIME`), with `TERM` and `COLORTERM` as Neovim sets them; the fidelity case was seen red first; the warnings' advice names the setting; the help and the note are corrected.
+- **The orchestrator's check** on `dev` with T78 and T79: 4121 cases, `Fails (1)`, the tabs-routing *Send* case; the same case fails at the same rate on `dev` without T78 (1 of 6 each, interleaved), so a load flake (A386). `make lint` clean; the mutants on `COLORFGBG` (2 failures) and on `TMUX` (3) killed.
+- **Departures.** The variables are read from Claude Code 2.1.301's program, not from a run; its probe of the terminal can also report a multiplexer through a reply Neovim's terminal does not give, which no variable hides. `environment.lua` mirrors Neovim 0.12.5; a later Neovim that changes what it gives a terminal job fails the fidelity case.
+
+### T79 — aineo's README, after the wave, PR #240, merged by rebase (released in v0.2.42, PR #241, `main` `6f710e3`)
+
+Session note: [[Sessions/2026-10-16 — T79 README]]. Documentation only (A383): the repository had no root README, and the user asked for one that covers `claude.hide_multiplexer` (D74).
+- **The packet.** `README.md` at the root: what aineo is, requirements, installation with lazy.nvim, getting started, every setting with its default, the highlight groups, the activity indicator with `claude.hide_multiplexer` and what turning it off costs, the health check, a pointer to `:help aineo`, the `make` commands. Every statement read from `doc/aineo.txt` and the code.
+- **Review.** One review (records and reader): approve after the fixes. Eleven findings that the README was looser than the help, among them Visual `\s` sends only in Input, `<C-\>s` does not exist, `report_height` is strictly between 0 and 1, the health check warns only inside a multiplexer, a wrong setting also means no keys and no autostart, the list of starts that do not autostart, the lazy.nvim example, and a pointer to the Claude Code version; no setting, default, key or command was invented.
+- **Fix round** by the author: the eleven findings worded as the review had them and checked against the help and the code; the lazy.nvim example is a spec with an `init` function that sets `vim.g.aineo`, with no claim about `opts` (A384).
+- **Departures.** No test pins a README, so none was added. The README says the indicator is read from Claude Code 2.1.301's program and not seen in a real turn. No licence is named: the repository has none.
+
 ### Rulings made at the dispatches and fix rounds — the orchestrator's assumptions
 
 A354–A366 are the plan's O1–O13, each ruled as its (a), listed in *The orchestrator's rulings*, above. In one line each, after them:
@@ -357,6 +374,8 @@ A354–A366 are the plan's O1–O13, each ruled as its (a), listed in *The orche
 - **A369–A371, A373 (T75)** the frame rate pinned in a band of 350 to 1200 ms; the note states plainly that code came before most tests; `tab_title()`'s docstring names the home that tells the indicator; the panes failure in the check is the known flake.
 - **A372, A376–A378 (T76)** the handover of T75's attack review (a wiped busy terminal, `set_busy(change.new == true)`, the state told again at `hold()`); the wipe heard through `on_detach`; the health warnings only for the values Claude Code acts on; the seen mark scheduled and for a page still current.
 - **A374, A375 (T77)** a test-only packet for the command-line window cases and the keys race; the review's two low findings left.
+- **A379–A382, A385, A386 (T78)** hide `TMUX`, `TMUX_PANE`, `STY`, `ZELLIJ` and nothing else, only from Claude Code; the health check says so and warns only with `false`; the help documents it; the setting is `claude.hide_multiplexer`, boolean, default `true`; the environment mirrors Neovim 0.12.5's terminal-job environment from its source; the check's single failure is a load flake.
+- **A383, A384 (T79)** the README is a packet of its own after T78; its lazy.nvim example sets `vim.g.aineo` in `init`.
 
 ### Wave 17 closed
 
@@ -367,3 +386,5 @@ Wave 17 landed on 2026-10-16. Its packets are T74 (PR #232, v0.2.40), the compos
 - **A368, the split of `entry/tab.lua`** (about 1,600 lines, `make_tab()`), is a follow-up packet along the seams T74's tests review lists.
 - **The health values are read, not run.** The glyphs, the reading of the title and the values the health check warns for come from Claude Code 2.1.301's program, never from a running Claude Code; the user's checks are the real measurement.
 - **Flakes:** T77 hardened the command-line window cases and the keys race; `<C-c>` typed on purpose in `tests/test_health.lua`, `tests/test_claude_resume.lua` and `tests/test_draft.lua` was not examined.
+
+**2026-10-16, after the close.** Two small fixes followed on the user's report that the indicator showed nothing inside tmux: T78 (PR #239, `claude.hide_multiplexer`, D74) and T79 (PR #240, the README), merged by rebase and released in v0.2.42 (PR #241, `main` `6f710e3`). The user's answer to U3 is corrected: the user runs Neovim inside tmux. The checks M1–M4 above stay the user's.
