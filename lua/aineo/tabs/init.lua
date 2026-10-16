@@ -218,12 +218,21 @@ function M.activity(tab)
   return activities.of(tab)
 end
 
+--- The name of the tab page `tab`: what the held tab's name function gives,
+--- else the tail of the name of the buffer in the tab page's current window.
+---
+---@param tab integer a tab page handle of a tab page that exists
+---@return string
+local function name_of_tab(tab)
+  return name_of_held_tab(tab) or titles.buffer_tail(tab)
+end
+
 --- The title of the tab page `tab`: its place and a name, `<number>: <name>`,
 --- then a space and the indicator of its activity: ◒ or ◓ while it is busy,
 --- by the frame of the animation, ● while it is unseen. The name is what the
 --- held tab's name function gives, else the tail of the name of the buffer in
---- the tab page's current window, and is cut to fit; the cut counts the name
---- alone.
+--- the tab page's current window, and is whole: aineo's own tab line cuts
+--- names when it has no room for them (`tabline()`).
 ---
 ---@param tab integer a tab page handle
 ---@return string|nil title nil when no such tab page exists
@@ -232,12 +241,7 @@ function M.title(tab)
   if not number then
     return nil
   end
-  local title = ('%d: %s'):format(
-    number,
-    titles.cut(name_of_held_tab(tab) or titles.buffer_tail(tab))
-  )
-  local indicator = activities.indicator(tab, animation.glyph())
-  return indicator and ('%s %s'):format(title, indicator) or title
+  return titles.title_of(number, name_of_tab(tab), activities.indicator(tab, animation.glyph()))
 end
 
 --- The `tabs` settings, as `vim.g.aineo` and the options
@@ -265,7 +269,10 @@ end
 --- The 'tabline' format that draws the title of every tab page, each in the
 --- click region of its tab page with `tabs.padding` spaces either side, the
 --- current tab page's in `AineoTabLineSel`, the others' in `AineoTabLine`,
---- and the rest of the line in `AineoTabLineFill`.
+--- and the rest of the line in `AineoTabLineFill`. Names are whole while the
+--- titles fit the line; when they do not, `tabline_format.format()` cuts the
+--- longest first. A control character in a name is drawn as `^X`, and is
+--- counted so.
 ---
 ---@return string
 function M.tabline()
@@ -274,7 +281,8 @@ function M.tabline()
   for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
     table.insert(entries, {
       number = vim.api.nvim_tabpage_get_number(tab),
-      title = M.title(tab),
+      name = vim.fn.strtrans(name_of_tab(tab)),
+      indicator = activities.indicator(tab, animation.glyph()),
       current = tab == current,
     })
   end

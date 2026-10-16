@@ -88,4 +88,7 @@ Each the literal edit, on the final tree, restored from a copy.
 
 ## Commits
 
-*Recorded after the merge.*
+`feature/t80-always-show-tabline` → `dev`, pull request #243, merged by rebase 2026-10-16; released in v0.2.43 (PR #244, `main` `d66e3da`). By subject, in order:
+
+- `b52a16f` Show the tab line with one tab page: tabs.always_show
+- `ad8b7de` Correct the OSC 52 wording, pin the once-flag, say what health knows (the fix round: `52;c;<base64>` in the help, the README and the health string; the once-flag pinned, A390; health's wording after the first open; A387–A390 marked as the orchestrator's assumptions)

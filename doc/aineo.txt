@@ -227,11 +227,23 @@ it changes no number; `:tabmove` reorders the tab pages.
 
 A tab's title is `<number>: <name>`: its number, a colon, and, for an aineo
 tab, the name of its session, the name Claude Code gives it (`Claude Code`
-until it gives one), cut to 24 cells; for any other tab page, the name of its
-current buffer. While 'tabline' is empty when the first aineo tab
-opens, aineo sets it to a tab line of its own that draws those titles, the
-current tab in `AineoTabLineSel`, the others in `AineoTabLine`
-(|aineo-tabline|), each clickable. A 'tabline' you set is left in place.
+until it gives one); for any other tab page, the name of its current buffer.
+While 'tabline' is empty when the first aineo tab opens, aineo sets it to a
+tab line of its own that draws those titles, the current tab in
+`AineoTabLineSel`, the others in `AineoTabLine` (|aineo-tabline|), each
+clickable. A 'tabline' you set is left in place.
+
+aineo's tab line draws every name whole while the titles fit the width of the
+editor. When they do not, it cuts the longest names first, all to one width,
+the widest at which the line fits, with `…` at the end of each name it cut; a
+name no wider than that stays whole. A wide character that would cross the
+edge is left out, so a cut name may take a cell less than that width. The
+number, the indicator and the `tabs.padding` spaces are never cut. No name is
+cut to fewer than 8 cells, `…` included, apart from such a left-out cell. When
+the titles overflow even then, the line draws the run of them that holds the
+current tab and fits. The line is fitted again at every redraw, so a resize, a
+tab opened or closed, and a name or an indicator that changes all move the
+cut.
 
 An aineo tab's title ends with an indicator of what its Claude Code is doing,
 after a space: ◒ and ◓ in turn, twice a second, while the tab's Claude Code
@@ -246,13 +258,15 @@ with one tab page too (|aineo-config-tabs.always_show|).
                                                              *aineo-tab_title*
 `require('aineo').tab_title({n})` gives the title aineo would draw for the
 tab page numbered {n}, for your own tab line, the activity indicator of
-|aineo-tabs| included; nil when there is no such tab page, and an error when
-{n} is not a whole number from 1. While a tab's Claude Code works aineo draws
-the tab line again twice a second, whoever draws it. Whoever draws the tab
-line, aineo sets 'showtabline' to 2 once, when its first tab opens, unless
-`tabs.always_show` is `false` (|aineo-config-tabs.always_show|); a value you
-set afterwards is kept. `:checkhealth aineo` says which tab line is in use
-and what 'showtabline' is (|aineo-health|).
+|aineo-tabs| included and the name whole: a tab line of your own knows its
+width and fits the titles itself; nil when there is no such tab page, and an
+error when {n} is not a whole number from 1. While a tab's Claude Code works
+aineo draws the tab line again twice a second, whoever draws it. Whoever
+draws the tab line, aineo sets 'showtabline' to 2 once, when its first tab
+opens, unless `tabs.always_show` is `false`
+(|aineo-config-tabs.always_show|); a value you set afterwards is kept.
+`:checkhealth aineo` says which tab line is in use and what 'showtabline' is
+(|aineo-health|).
                                                                *aineo-tabline*
 aineo's tab line draws the current title in `AineoTabLineSel`, the other
 titles in `AineoTabLine` and the rest of the line in `AineoTabLineFill`. Their
@@ -1633,10 +1647,9 @@ changes.working_branch	A non-empty string.
                                                    *aineo-config-tabs.padding*
 tabs.padding		A whole number from 0 to 8. Default: `2`
 			The spaces either side of every title in aineo's tab
-			line (|aineo-tabline|). `0` leaves none. Titles that
-			do not all fit the width of the editor are drawn in
-			a run of whole titles that holds the current one,
-			the padding counted.
+			line (|aineo-tabline|). `0` leaves none. The padding
+			counts in the width the titles must fit, before any
+			name is cut (|aineo-tabs|).
 
                                                *aineo-config-tabs.always_show*
 tabs.always_show	A boolean. Default: `true`

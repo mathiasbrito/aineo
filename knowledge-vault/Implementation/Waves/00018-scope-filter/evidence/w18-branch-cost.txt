@@ -1,0 +1,39 @@
+Wave 18's planning probe, 2026-10-16: w18-branch-cost.sh, run once on the
+planning host (macOS, Apple silicon) with its defaults, in a scratch
+directory of the planning worktree's .tests/.
+
+C1. The cost of listing the branches and of reading one branch, in a
+synthetic repository of 50000 commits on main and 2000 branches of 5
+commits each, packed (git gc):
+
+git 2.54.0 (Apple Git-157); commits on main: 50000; local branches: 2001
+run 1
+   77.6 ms  git for-each-ref --sort=-committerdate --format=%(refname:short) refs/heads/
+   38.0 ms  git merge-base b1000 main
+   46.6 ms  git log -z --format=%H %s --no-show-signature main..b1000 --
+   46.5 ms  git diff --name-status -z -M main...b1000 --
+  168.8 ms  git log -z --format=%H %s --no-show-signature b1000 --
+run 2
+   77.1 ms  git for-each-ref --sort=-committerdate --format=%(refname:short) refs/heads/
+   37.6 ms  git merge-base b1000 main
+   34.1 ms  git log -z --format=%H %s --no-show-signature main..b1000 --
+   32.4 ms  git diff --name-status -z -M main...b1000 --
+  164.4 ms  git log -z --format=%H %s --no-show-signature b1000 --
+run 3
+   70.2 ms  git for-each-ref --sort=-committerdate --format=%(refname:short) refs/heads/
+   35.3 ms  git merge-base b1000 main
+   39.7 ms  git log -z --format=%H %s --no-show-signature main..b1000 --
+   32.4 ms  git diff --name-status -z -M main...b1000 --
+  179.1 ms  git log -z --format=%H %s --no-show-signature b1000 --
+
+Read: listing 2001 branches newest first costs about 75 ms, once per
+press of the key that opens the picker. Reading one branch from its merge
+base with the working branch (merge-base, log, diff) costs about 40 ms a
+git, each run off the main loop as every read of the pane is. A branch
+that shares no history with the working branch lists every commit it
+reaches: about 170 ms for 50000 commits here, and a page of 50000 lines.
+The repository is synthetic (one-line files, short messages); a real
+repository's commits cost more to read, its branch listing about the same.
+
+C2. This repository, for scale, from the planning worktree on 2026-10-16:
+76 local branches, 27 remote-tracking ones, 836 commits on origin/dev.
