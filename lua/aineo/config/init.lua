@@ -84,6 +84,7 @@ local SETTINGS = {
     validator = is_command,
     expected = 'a list of at least one string',
   },
+  { name = 'claude.hide_multiplexer', default = true, validator = 'boolean' },
   {
     name = 'layout.report_height',
     default = 2 / 3,

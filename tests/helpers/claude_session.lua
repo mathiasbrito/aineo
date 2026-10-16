@@ -85,6 +85,7 @@ end
 function M.stand_in_settings(overrides)
   return vim.tbl_extend('force', {
     cmd = M.fake_command(),
+    hide_multiplexer = true,
     cwd = vim.fn.getcwd(),
     state_directory = vim.fn.stdpath('state'),
     editor_address = vim.v.servername,

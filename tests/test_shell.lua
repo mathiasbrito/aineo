@@ -280,6 +280,16 @@ T['start()']['leaves the editor’s own environment to the shell'] = function()
   eq(shell_shows(buffer, 'own=[kept]'), true)
 end
 
+T['start()']['leaves the editor’s multiplexer variables to the shell'] = function()
+  start_child()
+  child.lua([[vim.fn.setenv('TMUX', '/tmp/aineo-test-tmux,1,0')]])
+
+  local buffer = start_shell({ cwd = working_directory('environment') })
+  type_into_shell(buffer, 'echo "mux=[$TMUX]"')
+
+  eq(shell_shows(buffer, 'mux=[/tmp/aineo-test-tmux,1,0]'), true)
+end
+
 T['start()']['makes an unlisted buffer that stays loaded while hidden, whatever the user’s hidden'] = function()
   start_child()
   child.o.hidden = false

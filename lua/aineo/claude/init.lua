@@ -9,6 +9,7 @@
 
 local agents = require('aineo.claude.agents')
 local arguments = require('aineo.claude.arguments')
+local environment = require('aineo.claude.environment')
 local prompt = require('aineo.claude.prompt')
 local readiness = require('aineo.claude.readiness')
 local session_name = require('aineo.claude.session_name')
@@ -22,6 +23,7 @@ local M = {}
 --- from the configuration and from the homes that own each value.
 ---@class aineo.claude.Settings
 ---@field cmd string[] the command that runs Claude Code, as `claude.cmd`
+---@field hide_multiplexer boolean whether Claude Code starts without the environment variables that name a terminal multiplexer (`TMUX`, `TMUX_PANE`, `STY`, `ZELLIJ`), as `claude.hide_multiplexer`; else it inherits the editor's environment
 ---@field cwd string the directory Claude Code runs in, which must exist and be enterable: the editor's working directory
 ---@field mcp_servers table<string, table> the MCP servers Claude Code starts, by name, each in its `--mcp-config` server format
 ---@field allowed_tools string[] the tools Claude Code may call without asking the user
@@ -34,11 +36,6 @@ local M = {}
 ---@field editor_program string the editor's own program (`v:progpath`), which runs the hook relay
 ---@field on_session_switched? fun(id: string, source: string?, left: string, reason: string?) called when the session followed changes (`session_id()`): with the new id, how Claude Code started it (`clear`, `resume`, `fork`; `startup` or `resume` for a start that takes the place of the session followed), the id left, and why Claude Code left it (`clear`, `resume`; none for a start). Never for an editor's first start. For a start that resumes, it is called when Claude Code launches, once the list of the folder's sessions has answered, not before `start_session()` returns. An error it raises is told the user as a warning and goes no further
 ---@field on_session_ready? fun(id: string) called once per start of Claude Code — the new session's in place of a resume with no conversation among them — the first time it is ready for input (`session_status()` turns `'ready'`), with the session it follows then (`session_id()`): before that status is read, from the callback that sets it. Never for a start that is not the session any more, whose process has ended or whose terminal was wiped, or once Neovim is quitting (`v:exiting`): not for a resume Claude Code found no conversation for, a dialog never answered, or a Claude Code that exits before its input box settles. An error it raises is told the user as a warning and goes no further
-
---- The variables Claude Code's process gets on top of the editor's own, which
---- it inherits unchanged: `AINEO_CHILD` tells aineo, should Claude Code start a
---- Neovim, that it runs inside aineo's own session.
-local CHILD_ENVIRONMENT = { AINEO_CHILD = '1' }
 
 --- A start of Claude Code: its terminal buffer, the command that runs Claude
 --- Code in it and, once Claude Code has launched (`launch()`), the terminal
@@ -216,6 +213,7 @@ local function validate_settings(settings)
   vim.validate('settings.cmd', settings.cmd, function(value)
     return is_word_list(value, 1)
   end, 'a list of at least one string')
+  vim.validate('settings.hide_multiplexer', settings.hide_multiplexer, 'boolean')
   vim.validate('settings.cwd', settings.cwd, function(value)
     return type(value) == 'string'
       and vim.fn.isdirectory(value) == 1
@@ -480,6 +478,9 @@ end
 --- the `TermOpen` autocommands of Neovim and of the user change for the
 --- window a terminal opens in (`window_options.keep_while()`), as the window
 --- a terminal started in a hidden buffer opens in is not theirs.
+--- The job's environment is that of any terminal job of the editor, marked
+--- `AINEO_CHILD=1` and, with `settings.hide_multiplexer`, without the
+--- multiplexer variables (`environment.job_environment()`).
 --- The first time Claude Code is ready for input (`readiness.watch()`) while
 --- the start is still the session, it runs (`is_running()`) and Neovim is
 --- not quitting, `settings.on_session_ready` is called with the session the
@@ -509,17 +510,20 @@ local function launch(home, prepared, on_exit)
     end
   end)
   window_options.keep_while(prepared.buffer, function()
-    prepared.job = run_in_terminal(prepared.buffer, prepared.command, {
-      term = true,
-      cwd = settings.cwd,
-      env = CHILD_ENVIRONMENT,
-      on_exit = function(_, exit_code)
-        prepared.exit_code = exit_code
-        prepared.ended_at = vim.uv.hrtime()
-        session_name.forget_name(prepared.buffer)
-        on_exit(prepared)
-      end,
-    })
+    local job_options = environment.job_environment({
+      variables = vim.fn.environ(),
+      address = settings.editor_address,
+      has_true_colour = vim.o.termguicolors,
+    }, settings.hide_multiplexer)
+    job_options.term = true
+    job_options.cwd = settings.cwd
+    job_options.on_exit = function(_, exit_code)
+      prepared.exit_code = exit_code
+      prepared.ended_at = vim.uv.hrtime()
+      session_name.forget_name(prepared.buffer)
+      on_exit(prepared)
+    end
+    prepared.job = run_in_terminal(prepared.buffer, prepared.command, job_options)
   end)
 end
 

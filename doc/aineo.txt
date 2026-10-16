@@ -1587,6 +1587,25 @@ claude.cmd		A list of at least one string. Default: `{ 'claude' }`
 			        '@anthropic-ai/claude-code' } },
 			    }
 <
+                                        *aineo-config-claude.hide_multiplexer*
+claude.hide_multiplexer	A boolean. Default: `true`
+			Whether aineo starts Claude Code without the
+			environment variables that tell it a terminal
+			multiplexer runs it: `TMUX`, `TMUX_PANE`, `STY` and
+			`ZELLIJ`. Claude Code 2.1.301 keeps its terminal title
+			still under tmux, screen or zellij, and the activity
+			indicator of a tab (|aineo-tabs|) reads that title, so
+			a Neovim inside a multiplexer would show no activity.
+			Every other variable reaches Claude Code as it
+			reaches any terminal job of Neovim; the shell
+			terminal and the other jobs Neovim starts keep the
+			editor's whole environment. With `false` Claude
+			Code gets the editor's environment as it is, and
+			knows it runs inside the multiplexer; no tab
+			shows activity there, and `:checkhealth aineo`
+			warns (|aineo-health|). What the default costs is
+			in |aineo-limits|.
+
                                            *aineo-config-layout.report_height*
 layout.report_height	A number strictly between 0 and 1.
 			Default: `2/3`
@@ -2038,11 +2057,14 @@ Tab line ~
   empty when the first aineo tab opens; yours, when you set 'tabline',
   which aineo leaves in place; or Neovim's own, before aineo has drawn one
   (|aineo-tabs|). That the activity indicator on a tab reads the title
-  Claude Code sets on its terminal. A warning, naming the variable, for
-  `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` when Neovim's environment holds it as
-  `1`, `true`, `yes` or `on`, and for `TMUX`, `STY` and `ZELLIJ` when it holds
-  them with more than white space: Claude Code then sets no title, or keeps
-  it still, so that no tab shows activity (|aineo-limits|).
+  Claude Code sets on its terminal, and, while `claude.hide_multiplexer`
+  holds (|aineo-config-claude.hide_multiplexer|), that aineo starts Claude
+  Code without `TMUX`, `TMUX_PANE`, `STY` and `ZELLIJ`. A warning, naming the
+  variable, for `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` when Neovim's
+  environment holds it as `1`, `true`, `yes` or `on`, and, with
+  `claude.hide_multiplexer` set to `false`, for `TMUX`, `STY` and `ZELLIJ`
+  when it holds them with more than white space: Claude Code then sets no
+  title, or keeps it still, so that no tab shows activity (|aineo-limits|).
 
 Autostart ~
   Whether the autostart opened the layout at startup, or which reason kept
@@ -2446,11 +2468,18 @@ The activity indicator ~
   thing, until aineo is changed to read it.
 - With `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` set to `1`, `true`, `yes` or `on`
   (in any case), Claude Code sets no title; `0`, `false` and any other value
-  leave it on. Under tmux, screen or zellij, which Neovim hands to Claude
-  Code as `TMUX`, `STY` or `ZELLIJ` with a value, Claude Code keeps its
-  title still. Either way no tab shows activity; `:checkhealth aineo` warns
-  (|aineo-health|). Start Neovim outside the multiplexer, and without that
-  variable, to have it.
+  leave it on. Either way no tab shows activity; `:checkhealth aineo` warns
+  (|aineo-health|). Unset the variable before starting Neovim to have it.
+- The indicator works inside tmux, screen and zellij. Under them, which
+  Neovim hands to Claude Code as `TMUX`, `STY` or `ZELLIJ` with a value,
+  Claude Code 2.1.301 keeps its title still, so aineo starts Claude Code
+  without `TMUX`, `TMUX_PANE`, `STY` and `ZELLIJ` (`claude.hide_multiplexer`,
+  on by default: |aineo-config-claude.hide_multiplexer|). Claude Code inside
+  aineo then does not know about the multiplexer, and its features that
+  depend on knowing — agent teams opening panes in tmux, say — are off
+  there. The shell terminal and every other job keep the editor's
+  environment. With `claude.hide_multiplexer` set to `false` Claude Code
+  knows, and no tab shows activity; `:checkhealth aineo` warns.
 - A shell command Claude Code runs in the background is not activity; a
   subagent running in the background is, and keeps the tab busy after the
   reply.
