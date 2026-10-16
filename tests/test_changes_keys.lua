@@ -70,6 +70,19 @@ local function expect_lines(name, expected)
   eq(lines_of(name), expected)
 end
 
+--- Waits until the cursor of the child's current window is at `expected`, at
+--- most `git_repo.PATIENCE_MS`, and asserts that it is: keys typed in the
+--- child are run when it reads its input, which a request sent after them may
+--- precede.
+---
+---@param expected integer[] the line, 1-based, and the byte column, 0-based
+local function expect_cursor(expected)
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return vim.deep_equal(child.lua_get('vim.api.nvim_win_get_cursor(0)'), expected)
+  end, 10)
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), expected)
+end
+
 --- Begins the session in the child for `directory`, with the working branch
 --- that follows it, if any, and shows the pane (`BEGIN_AND_SHOW`).
 ---
@@ -514,7 +527,7 @@ T['h and l']['stay Vim’s own in']['the buffer'] = function(_, make_current)
 
   child.type_keys('l', 'l', 'h')
 
-  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 1, 5 })
+  expect_cursor({ 1, 5 })
 end
 
 T['h and l']['work in the files buffer made anew'] = function()
@@ -554,6 +567,9 @@ T['h']['then l on the same file before the first is read shows the last key’s 
     return child.lua_get('_G.pending.head ~= nil')
   end)
   press_on_files_line('l', 2)
+  git_repo.wait_until('the read of the previous version begun', function()
+    return child.lua_get('_G.pending.previous ~= nil')
+  end)
 
   child.lua('_G.pending.previous(nil, "diff of the previous version\\n")')
   child.lua('_G.pending.head(nil, "diff against HEAD\\n")')
@@ -590,11 +606,10 @@ T['h']['on a file under a commit, when HEAD names no commit, tells so and shows 
 
   local told = 'aineo: the diff of notes.txt could not be read: HEAD names no commit'
 
-  MiniTest.expect.error(function()
-    press_on_files_line('h', 2)
-  end, told)
+  child.v.errmsg = ''
+  call_files_mapping_on_line('h', 2)
 
-  eq(child.lua_get(TOLD), told)
+  eq({ child.lua_get(TOLD), child.v.errmsg }, { told, told })
   eq(child.lua_get('#_G.shown_diffs'), 0)
 end
 
@@ -609,11 +624,10 @@ T['h']['on a file under Landed, when HEAD names no commit, tells so and shows no
   ]])
   local told = 'aineo: the diff of a.txt could not be read: HEAD names no commit'
 
-  MiniTest.expect.error(function()
-    press_on_files_line('h', 2)
-  end, told)
+  child.v.errmsg = ''
+  call_files_mapping_on_line('h', 2)
 
-  eq(child.lua_get(TOLD), told)
+  eq({ child.lua_get(TOLD), child.v.errmsg }, { told, told })
   eq(child.lua_get('#_G.shown_diffs'), 0)
 end
 
