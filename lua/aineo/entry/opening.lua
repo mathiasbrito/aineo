@@ -34,7 +34,9 @@ local tab_page_handlers_made = false
 --- Has the tabs home hold the tab page `tab` is in, called with the tab as
 --- its layout opens there for the first time: its title says the name of the
 --- session its Claude terminal shows and whether its Claude Code is busy;
---- aineo's tab line is drawn while the user's own is empty; a tab page that
+--- aineo's tab line is drawn while the user's own is empty, and the line
+--- shows with a single tab page unless `tabs.always_show` is off
+--- (`aineo.tabs`' `show_tabline_once()`); a tab page that
 --- closes closes the tab (`close_tabs_of_closed_pages()`); a tab page the user
 --- enters and is still in once the event loop has turned is seen
 --- (`aineo.tabs`' `mark_seen()`), so that aineo's own pass through a tab page
@@ -46,6 +48,7 @@ local function hold_tab(tab)
   tabs.hold(tab.page(), tab.session_name)
   tabs.set_busy(tab.page(), tab.is_busy())
   tabs.draw_tabline()
+  tabs.show_tabline_once()
   registry.last_used_tab = tab
   folder_tabs.keep_folder_tabs()
   if not tab_page_handlers_made then
