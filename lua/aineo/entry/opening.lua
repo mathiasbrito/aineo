@@ -35,8 +35,10 @@ local tab_page_handlers_made = false
 --- its layout opens there for the first time: its title says the name of the
 --- session its Claude terminal shows and whether its Claude Code is busy;
 --- aineo's tab line is drawn while the user's own is empty; a tab page that
---- closes closes the tab (`close_tabs_of_closed_pages()`); a tab page entered
---- is seen (`aineo.tabs`' `mark_seen()`).
+--- closes closes the tab (`close_tabs_of_closed_pages()`); a tab page the user
+--- enters and is still in once the event loop has turned is seen
+--- (`aineo.tabs`' `mark_seen()`), so that aineo's own pass through a tab page
+--- marks none.
 ---
 ---@param tab aineo.entry.Tab
 local function hold_tab(tab)
@@ -56,9 +58,14 @@ local function hold_tab(tab)
     })
     vim.api.nvim_create_autocmd('TabEnter', {
       group = group,
-      desc = 'aineo: the tab of a tab page entered has been seen',
+      desc = 'aineo: the tab of a tab page the user stays in has been seen',
       callback = function()
-        require('aineo.tabs').mark_seen(vim.api.nvim_get_current_tabpage())
+        local entered = vim.api.nvim_get_current_tabpage()
+        vim.schedule(function()
+          if vim.api.nvim_get_current_tabpage() == entered then
+            require('aineo.tabs').mark_seen(entered)
+          end
+        end)
       end,
     })
   end

@@ -178,7 +178,7 @@ end
 
 T['a busy Claude Code']['leaves ● on the title of its tab when its spell ends while another tab is current'] = function()
   open_busy_second_tab_from_the_first('activity-unseen')
-  title_once(2, shows_busy)
+  eq(shows_busy(title_once(2, shows_busy)), true)
 
   end_busy_spell_of_tab(2)
 
@@ -200,7 +200,7 @@ end
 
 T['a busy Claude Code']['leaves no indicator on the title of the tab the user is in, when its spell ends'] = function()
   open_busy_second_tab('activity-current')
-  title_once(2, shows_busy)
+  eq(shows_busy(title_once(2, shows_busy)), true)
 
   end_busy_spell_of_tab(2)
 
@@ -210,8 +210,6 @@ T['a busy Claude Code']['leaves no indicator on the title of the tab the user is
     end),
     '2: Claude Code'
   )
-  vim.uv.sleep(300)
-  eq(title_of(2), '2: Claude Code')
 end
 
 T['a busy Claude Code']['is told again when its tab page is held, if it went busy while the layout opened'] = function()
@@ -257,7 +255,7 @@ end
 
 T['a busy Claude Code']['is not busy once its terminal is wiped, and its tab’s animation ends'] = function()
   open_busy_second_tab_from_the_first('activity-wiped')
-  title_once(2, shows_busy)
+  eq(shows_busy(title_once(2, shows_busy)), true)
   local runs_while_busy = animation_runs()
 
   child.lua('vim.api.nvim_buf_delete(..., { force = true })', {
@@ -269,6 +267,36 @@ T['a busy Claude Code']['is not busy once its terminal is wiped, and its tab’s
     false,
     false,
   })
+end
+
+T['a busy Claude Code']['is not busy once a TermClose handler of the user’s, not nested, wipes its ended terminal'] = function()
+  open_busy_second_tab_from_the_first('activity-termclose')
+  eq(shows_busy(title_once(2, shows_busy)), true)
+  child.lua([[
+    vim.api.nvim_create_autocmd('TermClose', {
+      callback = function(event)
+        vim.api.nvim_buf_delete(event.buf, { force = true })
+      end,
+    })
+  ]])
+
+  child.lua('vim.fn.jobstop(vim.b[...].terminal_job_id)', { tabs.claude_terminal_of_tab(child, 2) })
+
+  eq({ animation_runs_until_it_stops(), shows_busy(title_of(2)) }, { false, false })
+  child.cmd('2tabnext')
+  entry.use_fake(child, tabs.fake('activity-termclose-new', 'ready'))
+  entry.press(child, '\\N')
+  claude_session.wait_for_status(child, 'ready')
+  eq({ animation_runs_until_it_stops(), shows_busy(title_of(2)) }, { false, false })
+end
+
+T['a busy Claude Code']['is not busy once its terminal is wiped without autocommands'] = function()
+  open_busy_second_tab_from_the_first('activity-noautocmd')
+  eq(shows_busy(title_once(2, shows_busy)), true)
+
+  child.cmd('noautocmd bwipeout! ' .. tabs.claude_terminal_of_tab(child, 2))
+
+  eq({ animation_runs_until_it_stops(), shows_busy(title_of(2)) }, { false, false })
 end
 
 --- Opens the first tab attached to a background session on a fake in the
@@ -301,7 +329,7 @@ local function open_attached_and_busy(name)
   }, attached.listing)
   entry.use_fake(child, attached)
   child.cmd('Aineo open')
-  title_once(1, shows_busy)
+  eq(shows_busy(title_once(1, shows_busy)), true)
   claude_session.wait_for_status(child, 'ready')
 end
 
@@ -336,7 +364,7 @@ end
 
 T['a busy Claude Code']['tells the tabs home once for each change, however often the tab is opened'] = function()
   tabs.open_first_tab(child, 'activity-opened-twice', 'busy-title')
-  title_once(1, shows_busy)
+  eq(shows_busy(title_once(1, shows_busy)), true)
   child.cmd('Aineo open')
   child.cmd('Aineo open')
   child.lua([[
@@ -353,14 +381,26 @@ T['a busy Claude Code']['tells the tabs home once for each change, however often
   vim.wait(tabs.PATIENCE_MS, function()
     return #child.lua_get('_G.busy_told') > 0
   end, 20)
-  vim.uv.sleep(300)
 
   eq(child.lua_get('_G.busy_told'), { false })
 end
 
+T['a busy Claude Code']['tells the user once, with one error, when the tabs home raises as it is told'] = function()
+  open_busy_second_tab_from_the_first('activity-raises')
+  eq(shows_busy(title_once(2, shows_busy)), true)
+  child.lua("require('aineo.tabs').set_busy = function() error('boom', 0) end")
+
+  end_busy_spell_of_tab(2)
+  vim.wait(tabs.PATIENCE_MS, function()
+    return #entry.messages(child) > 0
+  end, 20)
+
+  eq(entry.messages(child), { { level = vim.log.levels.ERROR, message = 'aineo: boom' } })
+end
+
 T['a busy Claude Code']['is not busy once its variable is removed, and the user is told nothing'] = function()
   open_busy_second_tab_from_the_first('activity-removed')
-  title_once(2, shows_busy)
+  eq(shows_busy(title_once(2, shows_busy)), true)
 
   child.lua('vim.b[...].aineo_session_busy = nil', { tabs.claude_terminal_of_tab(child, 2) })
 
@@ -379,7 +419,7 @@ T['the close of a busy tab']['lets its animation go, so that no timer of aineo�
   command
 )
   open_busy_second_tab('activity-closed')
-  title_once(2, shows_busy)
+  eq(shows_busy(title_once(2, shows_busy)), true)
   local runs_while_busy = animation_runs()
 
   child.cmd(command)
@@ -424,7 +464,7 @@ T['entering a tab'] = MiniTest.new_set()
 
 T['entering a tab']['by its number takes the ● off its title'] = function()
   open_busy_second_tab_from_the_first('activity-seen')
-  title_once(2, shows_busy)
+  eq(shows_busy(title_once(2, shows_busy)), true)
   end_busy_spell_of_tab(2)
   title_once(2, shows_unseen)
 
@@ -438,9 +478,63 @@ T['entering a tab']['by its number takes the ● off its title'] = function()
   )
 end
 
+T['entering a tab']['by'] = MiniTest.new_set({
+  parametrize = {
+    { ':tabnext', 'tabnext' },
+    { ':2tabnext', '2tabnext' },
+    { 'gt', 'normal! gt' },
+    {
+      'nvim_set_current_tabpage()',
+      'lua vim.api.nvim_set_current_tabpage(vim.api.nvim_list_tabpages()[2])',
+    },
+    {
+      'win_gotoid()',
+      'lua vim.fn.win_gotoid(vim.api.nvim_tabpage_list_wins(vim.api.nvim_list_tabpages()[2])[1])',
+    },
+  },
+})
+
+T['entering a tab']['by']['takes the ● off its title'] = function(_, command)
+  open_busy_second_tab_from_the_first('activity-seen-by')
+  eq(shows_busy(title_once(2, shows_busy)), true)
+  end_busy_spell_of_tab(2)
+  eq(shows_unseen(title_once(2, shows_unseen)), true)
+
+  child.cmd(command)
+
+  eq(
+    title_once(2, function(title)
+      return not shows_unseen(title)
+    end),
+    '2: Claude Code'
+  )
+end
+
+T['entering a tab']['for a moment, as aineo itself does, leaves the ● on its title'] = function()
+  open_busy_second_tab_from_the_first('activity-seen-passing')
+  eq(shows_busy(title_once(2, shows_busy)), true)
+  end_busy_spell_of_tab(2)
+  eq(shows_unseen(title_once(2, shows_unseen)), true)
+
+  child.lua([[
+    local pages = vim.api.nvim_list_tabpages()
+    vim.api.nvim_set_current_tabpage(pages[2])
+    vim.api.nvim_set_current_tabpage(pages[1])
+    _G.event_loop_turned = false
+    vim.schedule(function()
+      _G.event_loop_turned = true
+    end)
+  ]])
+  vim.wait(tabs.PATIENCE_MS, function()
+    return child.lua_get('_G.event_loop_turned')
+  end, 20)
+
+  eq({ child.lua_get('_G.event_loop_turned'), title_of(2) }, { true, '2: Claude Code ●' })
+end
+
 T['entering a tab']['that is not aineo’s takes the ● off no title'] = function()
   open_busy_second_tab_from_the_first('activity-other-page')
-  title_once(2, shows_busy)
+  eq(shows_busy(title_once(2, shows_busy)), true)
   end_busy_spell_of_tab(2)
   title_once(2, shows_unseen)
 
