@@ -138,7 +138,8 @@ terminal pane in one.
 
 `\pa` (|:Aineo-pane|) shows the agent pane, `\g` the changes pane and `\pt`
 the terminal pane; the pane already shown stays as it is (the changes pane
-is read again, |aineo-changes|), unless one of its windows shows the other
+is read again, and `\g` in it switches its views, |aineo-changes-s|), unless
+one of its windows shows the other
 pane's buffer there, as a refused switch or you can leave it (the commits
 buffer in Input's window, say): they then show the pane's own buffer there.
 Either way the cursor moves into the pane: into the Report under the agent
@@ -501,33 +502,41 @@ of the two buffers of the pane alone; in every other buffer it is Vim's own.
 With no other worktree listed, `s` opens nothing and says "aineo: no other
 worktree or branch to show alone", or, when they could not be listed, the
 line the commits window shows; while there is no repository, or aineo is
-reading it, `s` opens nothing and says what the windows say. A picker that
-raises is told once, as an error. Dismissing the picker changes nothing.
+reading it, or has not read the other worktrees yet, `s` opens nothing and
+says what the windows say. A picker that raises is told once, as an error;
+an answer that is none of the items offered is ignored. Dismissing the picker
+changes nothing. `s` does not wait for 'timeoutlen', whatever global maps
+begin with `s`.
 
 Picking a worktree shows it alone. The commits window then lists nothing
 but its heading, `Worktree <folder> (<branch>)`, whole in
 |hl-AineoChangesFilter|, and below it that worktree's commits, newest
 first, or "No commits in this worktree", with the line saying its last read
 failed when it did: no Uncommitted, Session work, commit of your own, Landed
-section, other worktree, or line saying the worktrees could not be listed.
+section, other worktree, or line saying the worktrees could not be listed;
+nor the lines saying the session's own read failed, the watch stopped, or the
+base is no longer behind `HEAD`, which the default view shows.
 The heading is chosen, the cursor on it, and the files window lists the
 worktree's whole change, `Files in: Worktree <folder> (<branch>)`; the
 cursor chooses among its commits as ever. `s` under it offers the same
 list, and a pick replaces the worktree shown. aineo reads what it reads
 without it; only what the commits window shows differs.
 
-`\g` (|:Aineo-pane|), pressed while the changes pane shows, switches between
-the default view and the worktree shown alone, read again each time. The
-worktree is kept while the default view shows. Back in the default view,
-the choice stays where that view lists it, the worktree's heading or one of
-its commits, the cursor on its line; else Session work is chosen. Back in
-the scope view, the choice stays when it lists it, else the worktree's whole
-change is chosen. Pressed from another pane, `\g` shows the changes pane in
-the view it was last left in. The worktree is shown alone until `s` picks
-another, until it is no longer listed, until aineo follows another Claude
-Code session, or until the tab closes or the editor quits; each tab keeps
-its own, and none is kept on disk. When a read no longer lists the worktree,
-the default view shows, Session work is chosen, and aineo says once "aineo:
+`\g` (|:Aineo-pane|), pressed with the cursor in one of the pane's two
+windows, switches between the default view and the worktree shown alone,
+read again each time. The worktree is kept while the default view shows.
+Back in the default view, the choice stays, the worktree's heading or one of
+its commits, the cursor on its line. Back in the scope view, the choice
+stays when it lists it, else the worktree's whole change is chosen. Pressed
+anywhere else — Claude's window, Input, the Report, a diff in the file
+column — `\g` does not switch: it moves the cursor into the commits window,
+the pane in the view it was last shown, read again; when the pane is not on
+screen it is shown in that view. The worktree is shown alone until `s`
+picks another, until it is no longer listed, until aineo follows another
+Claude Code session than one it followed before (the first session followed
+keeps it), or until the tab closes or the editor quits; each tab keeps its
+own, and none is kept on disk. When a read no longer lists the worktree, the
+default view shows, Session work is chosen, and aineo says once "aineo:
 Worktree <folder> (<branch>) is gone; the changes pane shows the default
 view". Following another session says nothing.
 
@@ -1236,13 +1245,13 @@ only in place of a resume Claude Code has no conversation for
 			starts the shell, in the folder, when the tab runs
 			none. When the pane shows already, the layout stays
 			as it is (the changes pane is read again, and
-			`changes` switches it between the default view and
-			the worktree shown alone, |aineo-changes-s|), unless
-			one of its windows shows the other pane's buffer
-			there: it then shows {pane}'s buffer there. The
-			cursor moves all the same. Without
-			a pane, or with anything else, it tells you, with one
-			error, which ones it takes.
+			`changes` from one of its two windows switches it
+			between the default view and the worktree shown
+			alone, |aineo-changes-s|), unless one of its windows
+			shows the other pane's buffer there: it then shows
+			{pane}'s buffer there. The cursor moves all the
+			same. Without a pane, or with anything else, it
+			tells you, with one error, which ones it takes.
 
                                                                 *:Aineo-claim*
 :Aineo claim [{id}]	Claims a Claude session for this Neovim: each report

@@ -481,7 +481,9 @@ end
 
 T['s']['tells once that there is no other worktree to show alone, and opens no picker'] = function()
   local top = git_repo.create('changesscope-none', { ['notes.txt'] = { 'one' } })
+  child.lua(COUNT_GIT_CALLS)
   start_copy('module', top)
+  wait_for_the_reads()
   expect_pane_lines(
     'module',
     'commits',
@@ -495,6 +497,79 @@ T['s']['tells once that there is no other worktree to show alone, and opens no p
     {
       { message = 'aineo: no other worktree or branch to show alone', level = vim.log.levels.INFO },
     },
+  })
+end
+
+T['s']['tells that the list is still being read before the other worktrees were read'] = function()
+  local top = git_repo.create('changesscope-unread', { ['notes.txt'] = { 'one' } })
+  add_worktree(top, 'agent', 'agent')
+  child.lua("require('aineo.git').list_worktrees = function() end")
+  start_copy('module', top)
+  expect_pane_lines(
+    'module',
+    'commits',
+    { 'Uncommitted', 'Session work', 'No commits on this session' }
+  )
+
+  press_s('module', 'commits')
+
+  eq({ offered(), messages_told() }, {
+    {},
+    { { message = 'aineo is reading the repository', level = vim.log.levels.INFO } },
+  })
+end
+
+T['s']['opens its picker at once while a global map starts with s'] = function()
+  local top = git_repo.create('changesscope-nowait', { ['notes.txt'] = { 'one' } })
+  add_worktree(top, 'agent', 'agent')
+  start_copy('module', top)
+  expect_pane_lines('module', 'commits', {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent (agent)',
+    'No commits in this worktree',
+  })
+  child.lua("vim.o.timeoutlen = 20000; vim.keymap.set('n', 'sa', function() end)")
+  enter_window_of('module', 'commits')
+
+  child.api.nvim_input('s')
+
+  vim.wait(3000, function()
+    return not child.is_blocked()
+  end, 20)
+  eq(child.is_blocked(), false)
+  eq(#offered(), 1)
+end
+
+T['s']['ignores an answer of the picker that is not an item it offered'] = MiniTest.new_set({
+  parametrize = { { 1 }, { '[worktree] agent (agent)' }, { {} }, { { top = 42 } } },
+})
+
+T['s']['ignores an answer of the picker that is not an item it offered']['answer'] = function(
+  answer
+)
+  local top = git_repo.create('changesscope-bad-answer', { ['notes.txt'] = { 'one' } })
+  add_worktree(top, 'agent', 'agent')
+  start_copy('module', top)
+  expect_pane_lines('module', 'commits', {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent (agent)',
+    'No commits in this worktree',
+  })
+  press_s('module', 'commits')
+
+  local answered = child.lua_get('(pcall(_G.pickers[#_G.pickers].on_choice, ...))', { answer })
+
+  eq({ answered, messages_told() }, { true, {} })
+  expect_pane_lines('module', 'commits', {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent (agent)',
+    'No commits in this worktree',
   })
 end
 
@@ -924,6 +999,33 @@ local SESSION_B = '22222222-2222-4222-8222-222222222222'
 
 T['following another session'] = MiniTest.new_set()
 
+T['following another session']['keeps a scope picked before the first session was followed'] = function()
+  local work = start_on_work('changesscope-first-follow')
+  local state = git_repo.directory('changesscope-first-follow-state')
+  press_s('module', 'commits')
+  child.lua('_G.choose(1)')
+  expect_pane_lines('module', 'files', {
+    'Files in: Worktree agent (agent)',
+    '  A agent.txt',
+    '  M notes.txt',
+  })
+  child.lua(COUNT_GIT_CALLS)
+
+  follow('module', SESSION_A, state)
+
+  wait_for_the_reads()
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent (agent)',
+    commit_line(work.agent_two, 'Agent two'),
+    commit_line(work.agent_one, 'Agent one'),
+  })
+  expect_pane_lines('module', 'files', {
+    'Files in: Worktree agent (agent)',
+    '  A agent.txt',
+    '  M notes.txt',
+  })
+end
+
 T['following another session']['clears the scope, Session work chosen, and tells nothing'] = function()
   local work = start_on_work('changesscope-follow')
   local state = git_repo.directory('changesscope-follow-state')
@@ -1007,6 +1109,49 @@ T['a scope']['lists the failure line of its worktree’s read under its heading,
     'The last refresh failed: broken',
     commit_line(work.agent_two, 'Agent two'),
     commit_line(work.agent_one, 'Agent one'),
+  })
+end
+
+T['a scope']['leaves out the line saying the session’s own read failed, which the default view shows'] = function()
+  local work = start_on_work('changesscope-own-failed')
+  press_s('module', 'commits')
+  child.lua('_G.choose(1)')
+  expect_pane_lines('module', 'files', {
+    'Files in: Worktree agent (agent)',
+    '  A agent.txt',
+    '  M notes.txt',
+  })
+  child.lua([[local git = require('aineo.git')
+    local commits_since = git.commits_since
+    git.commits_since = function(repository, base, done, options)
+      if vim.endswith(repository.top, '/agent') or vim.endswith(repository.top, '/other') then
+        return commits_since(repository, base, done, options)
+      end
+      done({ reason = 'failed', message = 'broken' }, nil)
+    end]])
+  child.lua(COUNT_GIT_CALLS)
+
+  refresh('module')
+  wait_for_the_reads()
+
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent (agent)',
+    commit_line(work.agent_two, 'Agent two'),
+    commit_line(work.agent_one, 'Agent one'),
+  })
+  toggle('module')
+  expect_pane_lines('module', 'commits', {
+    'Uncommitted',
+    'Session work',
+    'The last refresh failed: broken',
+    commit_line(work.own, 'Own'),
+    'Landed in origin/dev',
+    commit_line(work.landed, 'Landed'),
+    'Worktree agent (agent)',
+    commit_line(work.agent_two, 'Agent two'),
+    commit_line(work.agent_one, 'Agent one'),
+    'Worktree other (other)',
+    commit_line(work.other_one, 'Other one'),
   })
 end
 

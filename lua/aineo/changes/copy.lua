@@ -35,7 +35,7 @@ local SELECTION_PAUSE_MS = 150
 ---@field follow_changes_session fun(followed: aineo.changes.FollowedSession)
 ---@field hand_over_changes_session fun(hand_over: aineo.changes.HandOver)
 ---@field refresh_shown_pane fun()
----@field toggle_focused_view fun() switches the shown pane between its default view and the worktree shown alone, and reads it again
+---@field toggle_focused_view fun() reads the shown pane again, and, with the cursor in one of its windows, switches it between its default view and the worktree shown alone
 ---@field pane_buffers fun(): { files: integer, commits: integer }
 ---@field let_go? fun() only on a home `require('aineo.changes').new()` made: stops its watch, removes its handlers and wipes its buffers
 
@@ -534,7 +534,8 @@ function M.new(label)
   end
 
   --- Selects what the commits window's view chooses when nothing else
-  --- does: the whole change of the worktree shown alone, in the focused view
+  --- does — a commits buffer made anew, a session followed with a scope
+  --- kept: the whole change of the worktree shown alone, in the focused view
   --- (`scope_shown()`); else *Session work* (`select_session_work()`).
   local function select_view_default()
     local shown = scope_shown()
@@ -1194,10 +1195,11 @@ function M.new(label)
   --- its base once the repository is found (`find`); while no repository is
   --- found, nothing is kept. The home keeps a copy of `followed`, whose id a
   --- hand-over renames (`hand_over_changes_session()`), and never changes
-  --- the table it is given. Following another session clears the scope, and
-  --- says nothing. Called on the main loop only: from a fast event
-  --- (a `vim.uv` callback) it raises E5560, as the Vimscript functions it
-  --- calls do there.
+  --- the table it is given. Following another session than one followed
+  --- before clears the scope, and says nothing; the first session followed
+  --- keeps the scope picked before it. Called on the main loop only: from a
+  --- fast event (a `vim.uv` callback) it raises E5560, as the Vimscript
+  --- functions it calls do there.
   ---
   ---@param followed aineo.changes.FollowedSession
   function home.follow_changes_session(followed)
@@ -1210,9 +1212,11 @@ function M.new(label)
       return
     end
     hold_unkept_base()
+    if session.followed then
+      session.scope, session.focused = nil, false
+    end
     session.followed = followed
-    session.scope, session.focused = nil, false
-    select_session_work()
+    select_view_default()
     session.looking_for_head, session.head_look_failed, session.keeping_failed = false, false, false
     if not session.repository then
       return
@@ -1728,21 +1732,22 @@ function M.new(label)
 
   --- Chooses again, after the focused view was switched on or off, what the
   --- commits window now shows: the filter selected stays, the cursor put on
-  --- its line, when the page lists it; else the view's own choice
-  --- (`select_view_default()`). The files window is read again for a filter
-  --- chosen anew.
+  --- its line, as the default view lists every filter the focused view lists.
+  --- In the focused view, a filter it does not list gives way to the whole
+  --- change of the worktree shown alone, and the files window is read again.
   local function choose_for_shown_view()
-    if scope.page_lists(commits_page(), session.selected) then
-      session.cursor_unplaced = true
+    local shown = scope_shown()
+    if shown and not scope.page_lists(commits_page(), session.selected) then
+      select_filter(filter.of_worktree(shown[1]))
+      read_files(true)
       return
     end
-    select_view_default()
-    read_files(true)
+    session.cursor_unplaced = true
   end
 
   --- Offers the other worktrees the commits window last listed, in
   --- `vim.ui.select` (`aineo.changes.scope`); a pick is shown alone
-  --- (`show_alone()`).
+  --- (`show_alone()`), an answer that is no item offered is ignored.
   local function offer_scopes()
     if not session then
       vim.notify(lines.READING, vim.log.levels.INFO)
@@ -1753,6 +1758,7 @@ function M.new(label)
       absence = session.absence,
       directory = session.settings.directory,
       others = session.commits_others,
+      others_read = session.commits_others ~= worktrees.NONE,
     })
     if why_none then
       vim.notify(why_none, vim.log.levels.INFO)
@@ -1764,7 +1770,7 @@ function M.new(label)
         return item.text
       end,
     }, function(item)
-      if item then
+      if type(item) == 'table' and type(item.top) == 'string' then
         show_alone(item)
       end
     end)
@@ -1801,6 +1807,7 @@ function M.new(label)
     end, { buffer = buffer, desc = 'aineo: show the diff of the entry under the cursor' })
     vim.keymap.set('n', 's', offer_scopes, {
       buffer = buffer,
+      nowait = true,
       desc = 'aineo: show one worktree alone in the changes pane',
     })
     return buffer
@@ -1906,19 +1913,22 @@ function M.new(label)
     end
   end
 
-  --- Switches the commits window, while the pane is shown in a window of any
-  --- tab page (`is_shown()`), between the default view and the focused view
-  --- — the scope the user picked, kept while the default view shows — and
-  --- chooses again what the new view lists (`choose_for_shown_view()`); reads
-  --- both lists again, as a showing of the pane does. With no scope picked it
-  --- only reads them again, as `refresh_shown_pane()` does. Does nothing while
-  --- the pane is not shown, or before the session has begun: the pane is then
-  --- shown, and read, in the view it was left in.
+  --- Reads both lists again, as a showing of the pane does, while the pane
+  --- is shown in a window of any tab page (`is_shown()`); and, when the
+  --- current buffer is one of the pane's two, switches the commits window
+  --- between the default view and the focused view — the scope the user
+  --- picked, kept while the default view shows — chosen again for what the
+  --- new view lists (`choose_for_shown_view()`). With the cursor anywhere
+  --- else — Claude's window, Input, the Report, a diff — or with no scope
+  --- picked, it only reads them again, as `refresh_shown_pane()` does. Does
+  --- nothing while the pane is not shown, or before the session has begun:
+  --- the pane is then shown, and read, in the view it was left in.
   function home.toggle_focused_view()
     if not (session and (is_shown(buffers.files) or is_shown(buffers.commits))) then
       return
     end
-    if session.scope then
+    local current = vim.api.nvim_get_current_buf()
+    if session.scope and (current == buffers.files or current == buffers.commits) then
       session.focused = not session.focused
       choose_for_shown_view()
       show_commits()
