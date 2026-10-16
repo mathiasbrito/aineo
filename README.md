@@ -33,7 +33,9 @@ between the two.
 ## Requirements
 
 - Neovim 0.12 or newer. aineo is tested on the newest Neovim release only.
-- Claude Code installed and signed in: the `claude` command.
+- Claude Code installed and signed in: the `claude` command. The help
+  records the Claude Code versions aineo was measured on (`:help
+  aineo-install`); it states no minimum.
 - `git` 2.36 or newer, for the changes pane.
 
 ## Installation
@@ -48,20 +50,33 @@ that the autostart can run:
 aineo works without a `setup()` call. It has to be loaded at startup for
 the autostart: loaded later, it maps its keys but opens nothing.
 
+To configure it, set `vim.g.aineo` in the spec's `init` function, which
+runs before the plugin loads (see Settings):
+
+```lua
+{
+  'mathiasbrito/aineo',
+  lazy = false,
+  init = function()
+    vim.g.aineo = { autostart = false }
+  end,
+}
+```
+
 ## Getting started
 
 A bare `nvim` opens the layout and starts Claude Code in the folder Neovim
 started in. It does not when Neovim is given a file, a command, standard
-input or no user interface, nor inside aineo's own terminals. To turn the
-autostart off, set `autostart = false` (see Settings); `\o` opens the layout
-by hand.
+input, no user interface or a session restored by a plugin, nor inside
+aineo's own terminals. To turn the autostart off, set `autostart = false`
+(see Settings); `\o` opens the layout by hand.
 
 Every key sits behind the prefix `\`, in Normal mode:
 
 | Keys | Does |
 |---|---|
 | `\o` | opens or restores the layout |
-| `\s` | sends Input to Claude (in Visual mode, the selection) |
+| `\s` | sends Input to Claude (in Visual mode, in Input, the selection alone) |
 | `\r`, `\i` | move to the Report, to Input |
 | `\c` | moves to Claude's terminal, in Terminal mode |
 | `\pa`, `\g`, `\pt` | show the agent pane, the changes pane, the terminal pane |
@@ -72,8 +87,8 @@ Every key sits behind the prefix `\`, in Normal mode:
 | `\N` | starts a new Claude Code session |
 | `\tcn` | hides or shows the line numbers of Claude's window |
 
-In Terminal mode and in Insert mode, `<C-\>` followed by the same letters
-does the same: `<C-\>i` moves to Input, `<C-\>c` to Claude.
+In Terminal mode and in Insert mode, `<C-\>` followed by the same letters,
+but `s`, does the same: `<C-\>i` moves to Input, `<C-\>c` to Claude.
 
 Each key is a `<Plug>` mapping too, such as `<Plug>(aineo-send)`, and each
 action is a subcommand of `:Aineo`, such as `:Aineo send`. `\` is also
@@ -87,7 +102,8 @@ resumes it.
 
 aineo reads `vim.g.aineo`, a table set before it loads, or the options
 passed to `require('aineo').setup()`, which win over `vim.g.aineo`. A wrong
-value is reported once, naming the setting.
+value is reported once, naming the setting; at startup it also means no
+keys and no autostart.
 
 ```lua
 vim.g.aineo = {
@@ -111,8 +127,8 @@ vim.g.aineo = {
 | `autostart` | `true` | Whether a bare `nvim` opens the layout by itself. |
 | `claude.cmd` | `{ 'claude' }` | The command run in the left terminal, a list of words, never through a shell. It must not hold `--continue`, `--resume` or `--session-id`: aineo picks the session. |
 | `claude.hide_multiplexer` | `true` | Whether Claude Code starts without the variables that tell it a terminal multiplexer runs it (see below). |
-| `layout.report_height` | `2/3` | The Report's share of the right column, a number between 0 and 1. |
-| `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. aineo never fetches. |
+| `layout.report_height` | `2/3` | The Report's share of the right column, a number strictly between 0 and 1. |
+| `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
 | `tabs.padding` | `2` | Spaces either side of each title in aineo's tab line, from 0 to 8. |
 
 The highlight groups can be overridden in a colorscheme or with
@@ -121,7 +137,7 @@ The highlight groups can be overridden in a colorscheme or with
 `AineoReportStarted`, `AineoReportProgress`, `AineoReportBlocked`,
 `AineoReportDone`, `AineoReportFailed`, `AineoReportStatusBold`,
 `AineoReportLink` and `AineoReportPath`. The changes pane uses the
-`AineoChanges*` groups. `:help aineo` lists each with its default link.
+`AineoChanges*` groups. `:help aineo` lists each with its default.
 
 ## The activity indicator and tmux
 
@@ -133,8 +149,8 @@ tab, and nothing otherwise.
 `require('aineo').tab_title(n)` gives the title for a tab line of your own.
 
 The indicator reads the title Claude Code sets on its terminal. Under tmux,
-screen or zellij, Claude Code keeps that title still, so no tab would show
-activity. By default, `claude.hide_multiplexer = true`, aineo starts Claude
+screen or zellij, Claude Code 2.1.301 keeps that title still, so no tab would
+show activity. By default, `claude.hide_multiplexer = true`, aineo starts Claude
 Code without `TMUX`, `TMUX_PANE`, `STY` and `ZELLIJ`, and the indicator works
 inside a multiplexer.
 
@@ -145,8 +161,8 @@ the shell terminal and every other job keep the editor's.
 
 To keep those features, set `claude = { hide_multiplexer = false }`. Claude
 Code then gets the editor's environment as it is, no tab shows activity inside
-a multiplexer, and `:checkhealth aineo` warns. The indicator also does not
-work when `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` is set to `1`, `true`, `yes`
+a multiplexer, and, when Neovim runs inside one, `:checkhealth aineo` warns.
+The indicator also does not work when `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` is set to `1`, `true`, `yes`
 or `on`. It reads the title of Claude Code 2.1.301 from that version's
 program; it has not been seen in a real turn, and a later version may change
 the title.
