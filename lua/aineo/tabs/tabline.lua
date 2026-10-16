@@ -9,7 +9,7 @@ local M = {}
 ---
 ---@class aineo.tabs.TabLineEntry
 ---@field number integer the tab page's place, which a click on its title goes to
----@field name string the whole name, which the line may cut (`titles.cut()`)
+---@field name string the whole name as `strtrans()` shows it, which the line may cut (`titles.cut()`)
 ---@field indicator string|nil what the tab page's activity says, which is never cut
 ---@field current boolean whether it is the current tab page
 
@@ -130,7 +130,7 @@ local function cap_that_fits(entries, columns, padding)
   end
   local overflowing = 0
   for _, entry in ipairs(entries) do
-    overflowing = math.max(overflowing, vim.fn.strdisplaywidth(entry.name))
+    overflowing = math.max(overflowing, vim.api.nvim_strwidth(entry.name))
   end
   while overflowing - fitting > 1 do
     local middle = math.floor((fitting + overflowing) / 2)
