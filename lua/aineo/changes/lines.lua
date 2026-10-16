@@ -302,16 +302,25 @@ end
 --- detached.
 local DETACHED = 'detached'
 
---- The heading line of `section`, a worktree other than the editor's: its
+--- How `section`, a worktree other than the editor's, is named: its
 --- folder's name and its branch, or `DETACHED` (`M.quoted_path()`).
 ---
 ---@param section aineo.changes.WorktreeSection
 ---@return string
-function M.worktree_heading(section)
-  return ('Worktree %s (%s)'):format(
+function M.worktree_name(section)
+  return ('%s (%s)'):format(
     M.quoted_path(vim.fs.basename(section.top)),
     section.branch and M.quoted_path(section.branch) or DETACHED
   )
+end
+
+--- The heading line of `section`, a worktree other than the editor's: its
+--- name (`M.worktree_name()`) after `Worktree`.
+---
+---@param section aineo.changes.WorktreeSection
+---@return string
+function M.worktree_heading(section)
+  return 'Worktree ' .. M.worktree_name(section)
 end
 
 --- The colours of `line`, the commits window's line for a commit
@@ -384,37 +393,38 @@ end
 ---
 ---@param failure aineo.git.Failure
 ---@return string
-local function worktrees_unlisted(failure)
+function M.worktrees_unlisted(failure)
   return 'The other worktrees could not be listed: ' .. M.words_of(failure)
 end
 
 --- The heading row of `section`, a worktree other than the editor's: its
---- heading (`M.worktree_heading()`), a note, listing the filter of the
---- worktree's whole change.
+--- heading (`M.worktree_heading()`), whole in `group`, listing the filter of
+--- the worktree's whole change.
 ---
 ---@param section aineo.changes.WorktreeSection
+---@param group string
 ---@return aineo.changes.Row
-local function heading_row(section)
-  local row = note(M.worktree_heading(section))
+local function heading_row(section, group)
+  local row = whole_line(M.worktree_heading(section), group)
   local listed_under = filter.of_worktree(section)
   row.entry = { key = filter.key(listed_under), filter = listed_under, worktree = section }
   return row
 end
 
 --- The rows of the other worktrees, `others`: the line saying they could
---- not be listed (`worktrees_unlisted()`), a failure, when they could
---- not; then, in their order, each one's heading (`heading_row()`) and its
---- rows (`section_rows()`).
+--- not be listed (`M.worktrees_unlisted()`), a failure, when they could
+--- not; then, in their order, each one's heading (`heading_row()`, a note)
+--- and its rows (`section_rows()`).
 ---
 ---@param others aineo.changes.OtherWorktrees|nil
 ---@return aineo.changes.Row[]
 local function worktree_rows(others)
   local rows = {}
   if others and others.failure then
-    table.insert(rows, failure_line(worktrees_unlisted(others.failure)))
+    table.insert(rows, failure_line(M.worktrees_unlisted(others.failure)))
   end
   for _, section in ipairs(others and others.sections or {}) do
-    table.insert(rows, heading_row(section))
+    table.insert(rows, heading_row(section, colours.NOTE_GROUP))
     vim.list_extend(rows, section_rows(section))
   end
   return rows
@@ -576,6 +586,7 @@ end
 ---@field lists_filters? boolean whether the window starts with the lines *Uncommitted* and *Session work*: once the session's repository is found
 ---@field landed? aineo.changes.Landed what the window knows of the working branch, none when there is no working branch or it was not read
 ---@field worktrees? aineo.changes.OtherWorktrees what the window knows of the other worktrees, none when not given
+---@field scope? aineo.changes.WorktreeSection[] the worktrees the window shows alone, each under its heading, in the order given; none for the default view
 
 --- The rows of the editor's own worktree in the commits window below the
 --- filters, for `view`: the line saying its last read failed, when it did,
@@ -654,16 +665,35 @@ local function landed_rows(landed)
   )
 end
 
---- The commits window's page for `view`: the editor's own worktree's rows
---- first, under no heading (`own_commit_rows()`), then what landed in the
---- working branch under its heading (`landed_rows()`), then each other
---- worktree's (`worktree_rows()`). The line saying a read failed is a
---- failure (`failure_line()`), a commit's line shows its own colours
+--- The rows of the worktrees `scope` names, shown alone: each one's
+--- heading, whole in the group of filters (`heading_row()`), then its rows
+--- (`section_rows()`).
+---
+---@param scope aineo.changes.WorktreeSection[]
+---@return aineo.changes.Row[]
+local function scope_rows(scope)
+  local rows = {}
+  for _, section in ipairs(scope) do
+    table.insert(rows, heading_row(section, colours.FILTER_GROUP))
+    vim.list_extend(rows, section_rows(section))
+  end
+  return rows
+end
+
+--- The commits window's page for `view`: for a view with a scope, the
+--- worktrees of the scope alone (`scope_rows()`); else the editor's own
+--- worktree's rows first, under no heading (`own_commit_rows()`), then what
+--- landed in the working branch under its heading (`landed_rows()`), then
+--- each other worktree's (`worktree_rows()`). The line saying a read failed
+--- is a failure (`failure_line()`), a commit's line shows its own colours
 --- (`commit_colours()`), and every other line is a note (`note()`).
 ---
 ---@param view aineo.changes.CommitsView
 ---@return aineo.changes.Page
 function M.commits_window(view)
+  if view.scope then
+    return page_of(scope_rows(view.scope))
+  end
   local rows = own_commit_rows(view)
   vim.list_extend(rows, landed_rows(view.landed))
   vim.list_extend(rows, worktree_rows(view.worktrees))
