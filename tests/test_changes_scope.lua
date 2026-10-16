@@ -166,7 +166,17 @@ end
 ---@param which 'files'|'commits'
 local function press_s(key, which)
   enter_window_of(key, which)
-  child.type_keys('s')
+  child.lua("pcall(vim.api.nvim_feedkeys, 's', 'mx', false)")
+end
+
+--- Answers the last picker the child was asked for with its item at
+--- `position`, or with none when not given, and returns whether answering
+--- raised no error.
+---
+---@param position? integer
+---@return boolean answered
+local function answer_picker(position)
+  return child.lua_get('(pcall(_G.choose, ...))', { position })
 end
 
 --- What every picker the child was asked for offered: its prompt and the
@@ -374,7 +384,7 @@ T['s']['is mapped again in a pane buffer made anew'] = function()
     'No commits in this worktree',
   })
 
-  child.type_keys('s')
+  child.lua("pcall(vim.api.nvim_feedkeys, 's', 'mx', false)")
 
   eq(#offered(), 1)
 end
@@ -416,7 +426,7 @@ T['picking']['nothing, by dismissing the picker, changes nothing'] = function()
   local work = start_on_work('changesscope-dismiss')
   press_s('module', 'commits')
 
-  child.lua('_G.choose(nil)')
+  eq(answer_picker(nil), true)
 
   expect_pane_lines('module', 'commits', default_view_of(work, work.own))
   expect_pane_lines('module', 'files', { 'Files in: Session work', '  A own.txt' })
@@ -558,6 +568,26 @@ T['s']['tells that the repository is being read, before the session has begun'] 
   })
 end
 
+T['s']['tells a picker that raises from a Lua file without the position, on its first line'] = function()
+  local top = git_repo.create('changesscope-raises-position', { ['notes.txt'] = { 'one' } })
+  add_worktree(top, 'agent', 'agent')
+  start_copy('module', top)
+  expect_pane_lines('module', 'commits', {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent (agent)',
+    'No commits in this worktree',
+  })
+  child.lua(
+    "vim.ui.select = function() error('picker/init.lua:12: the menu failed\\nstack', 0) end"
+  )
+
+  press_s('module', 'commits')
+
+  eq(messages_told(), { { message = 'aineo: the menu failed', level = vim.log.levels.ERROR } })
+end
+
 T['s']['tells once, as an error, a picker that raises'] = function()
   local top = git_repo.create('changesscope-raises', { ['notes.txt'] = { 'one' } })
   add_worktree(top, 'agent', 'agent')
@@ -655,6 +685,41 @@ T['toggling']['keeps a commit of the scope chosen, the cursor on its line in the
     'Files in: ' .. commit_line(work.agent_one, 'Agent one') .. ' (worktree agent)',
     '  M notes.txt',
   })
+end
+
+T['toggling']['puts the cursor on the choice, wherever it was, as the default view returns'] = function()
+  local work = start_on_work('changesscope-toggle-cursor')
+  press_s('module', 'commits')
+  child.lua('_G.choose(1)')
+  expect_pane_lines('module', 'files', {
+    'Files in: Worktree agent (agent)',
+    '  A agent.txt',
+    '  M notes.txt',
+  })
+  enter_window_of('module', 'commits')
+
+  child.lua([[
+    vim.api.nvim_win_set_cursor(0, { 3, 0 })
+    _G.homes.module.toggle_focused_view()
+  ]])
+
+  eq(pane_lines('module', 'commits'), default_view_of(work, work.own))
+  eq(commits_cursor('module'), { 6, 0 })
+end
+
+T['toggling']['with no scope reads both lists again, though nothing changed'] = function()
+  local top = git_repo.create('changesscope-toggle-reads-none', { ['notes.txt'] = { 'one' } })
+  start_copy('module', top)
+  expect_pane_lines(
+    'module',
+    'files',
+    { 'Files in: Session work', 'No files changed on this session' }
+  )
+  child.lua(COUNT_GIT_CALLS)
+
+  toggle('module')
+
+  wait_for_the_reads()
 end
 
 T['toggling']['with no scope reads the shown pane again, as it did'] = function()
@@ -802,7 +867,7 @@ T['a scope gone']['between the picker and the pick tells that the worktree is go
     commit_line(work.other_one, 'Other one'),
   })
 
-  child.lua('_G.choose(1)')
+  eq(answer_picker(1), true)
 
   eq(messages_told(), {
     { message = 'aineo: [worktree] agent (agent) is gone', level = vim.log.levels.INFO },
@@ -1001,9 +1066,12 @@ T['a scope']['is a changes home’s own: another tab’s home still shows the de
 
   press_s('first', 'commits')
   child.lua('_G.choose(1)')
-
   expect_pane_lines('first', 'commits', { 'Worktree agent (agent)', 'No commits in this worktree' })
+  child.lua(COUNT_GIT_CALLS)
+
   refresh('second')
+  wait_for_the_reads()
+
   expect_pane_lines('second', 'commits', default)
   expect_pane_lines(
     'second',
