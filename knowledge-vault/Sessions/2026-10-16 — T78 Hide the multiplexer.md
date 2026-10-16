@@ -125,4 +125,12 @@ The orchestrator's rulings, all assumptions: **A385** (finding 1: mirror `pty_ig
 
 ## Commits
 
-Recorded after the merge.
+`feature/t78-hide-multiplexer` → `dev`, pull request #239, merged by rebase 2026-10-16; released in v0.2.42 (PR #241, `main` `6f710e3`). By subject, in order:
+
+- `d3ee42b` Hide the terminal multiplexer from the Claude Code aineo starts
+- `6ff8b7f` Leave NVIM to Neovim in the environment aineo gives Claude Code
+- `7bcc5f6` Record the T78 session: hiding the multiplexer from Claude Code
+- `2e72806` Mirror Neovim's terminal-job environment from its source (the fix round, A385)
+- `0af9ba5` Record the fix round of T78 in its session note
+
+The orchestrator's check on `dev` with T78 and T79 (`d6f9667`): 4121 cases, `Fails (1)`, the tabs-routing *Send* case, which fails at the same rate on `dev` without T78 (1 run of 6 on each, interleaved), so a load flake (A386); `make lint` clean; the mutants on `COLORFGBG` (2 failures) and on `TMUX` (3) killed.
