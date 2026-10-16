@@ -137,3 +137,19 @@ The orchestrator's verification runs `plan.md`'s T76 mutants. Name the test that
 ## The orchestrator's rulings — 2026-10-15, before dispatch
 
 The user answered U1–U3 with their (a) (`plan.md` › *The user's answers*), and `plan.md` › *The orchestrator's rulings* rules O1–O13 as their (a), A354–A366, which this brief is written for. Record them as the orchestrator's assumptions, never as the user's decisions.
+
+## Amendment — 2026-10-16, at dispatch
+
+The packet's implementer re-checked the brief's facts against `dev` `82d3b65`, which T74 (the composition root's body, now `lua/aineo/entry/`) and T75 (the homes) have merged. This is the orchestrator's assumption, as A256 was. One fact changes where a line goes, not what is built; the rest moved by name only.
+
+- **Where the wiring lives now** (all in `lua/aineo/entry/`; `plugin/aineo.lua` is 598 lines of registrations and holds none of it):
+  - `tab.lua` › `redraw_tab_line_when_named()` (line 121), called at 603 (`on_terminal_replaced`), 689 (`begin_claude()`, which every start, a pick of `\S` and a reopening go through) and 1168 (`replace_claude_terminal()`). The busy watch goes beside these three.
+  - `tab.lua` › `tab.session_name` (1588), `tab.page` and `bound_page`, and `callbacks.on_bound` (574), which `opening.lua` › `hold_tab()` answers with `tabs.hold(tab.page(), tab.session_name)`.
+  - `closing.lua` › `close_tabs_of_closed_pages()` calls `require('aineo.tabs').closed()`; the `TabClosed` handler is made in `hold_tab()`.
+  - `editors.lua` › `make_editor_handlers()` holds the `TabEnter` handler, but `tab.lua` › `write_entry()` makes it, and it returns before that when the panes follow no session yet or the editor has no server address.
+- **T75's merged names** are the brief's: `tabs.set_busy(tab, busy)` (a boolean, else it raises), `tabs.mark_seen(tab)`, `tabs.activity(tab)`, `tabs.let_go()` and `tabs.closed()` forgetting the activity and stopping the timer, `require('aineo').tab_title()` through `tabs.title()`; `b:aineo_session_busy` on the Claude terminal; the fake `claude`'s mode `busy-title` with `AINEO_FAKE_CLAUDE_BUSY_MS`. `set_busy()` leaves a tab page that is not held or does not exist as it is.
+- **Where the brief is widened, and why:**
+  - the `TabEnter` mark goes in a handler of its own in `opening.lua` › `hold_tab()`, beside the `TabClosed` one, and not in `editors.lua`: the handler there may not exist yet when the first tab ends a busy spell away from the user, and then nothing would clear the ●;
+  - one new file in the entry home, `busy_watch.lua`, holds the watcher on `b:aineo_session_busy`, so that `tab.lua` (1608 lines) gains calls and no logic of its own;
+  - the handed items of the dispatch (A372) are built: a `BufWipeout` path for a wiped busy terminal, `change.new == true`, and the state told again at `hold()`.
+- **Health:** `lua/aineo/health.lua` › `check_tab_line()` (line 757) and its pins in `tests/test_health.lua` (1443, 1453, 1464) are as the brief reads. The suites do not remove `TMUX`, `STY` or `ZELLIJ` from a case's environment, so a case of the Tab line section clears them in its child.

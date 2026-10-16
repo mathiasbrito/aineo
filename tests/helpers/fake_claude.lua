@@ -16,6 +16,8 @@
 ---   `tests/helpers/fake_claude_deaf.sh`.
 --- - `AINEO_FAKE_CLAUDE_EXIT_CODE` — the code the modes that exit by
 ---   themselves exit with; 0 by default.
+--- - `AINEO_FAKE_CLAUDE_BUSY_MS` — how long the mode `busy-title` is busy, in
+---   milliseconds; unset, until the key Enter.
 --- - `AINEO_FAKE_CLAUDE_FOLDER` — the folder its screens name, in place of the
 ---   recordings' `~/project/aineo`.
 --- - `AINEO_FAKE_CLAUDE_ENV` — the names, separated by commas, of the variables
@@ -65,6 +67,16 @@
 ---   `AINEO_FAKE_CLAUDE_AGENTS` names, `[]` when that is unset, and exits 0;
 ---   or, with `AINEO_FAKE_CLAUDE_AGENTS_EXIT` set, prints nothing and exits
 ---   with that code. It writes no `ended` line.
+---
+--- The mode `busy-title` is synthetic: no recording holds Claude Code's busy
+--- titles. It draws the startup screen as `ready` does, which titles the
+--- terminal `✳ Claude Code`, then titles it `◐ Claude Code` and `◑ Claude
+--- Code` in turn, `BUSY_FRAME_MS` apart, as Claude Code 2.1.301 titles its
+--- terminal while it works or a subagent runs; and `✳ Claude Code` again
+--- after `AINEO_FAKE_CLAUDE_BUSY_MS`, or at the key Enter. The glyphs, their
+--- order and their pace are read from the 2.1.301 binary, never recorded
+--- (`knowledge-vault/Implementation/Waves/00017-tab-activity/evidence/
+--- w17-claude-title.txt`, B1 and B2).
 ---
 --- Given `attach` as its first argument (`claude attach <id>`), it records its
 --- arguments, draws its mode's screens and reads its keys as it does at any
@@ -155,6 +167,7 @@ local MODES = {
   ['mcp-client'] = { screens = { STARTUP }, calls_report_tool = true },
   ['ignores-detach'] = { screens = { STARTUP }, ignores_detach = true },
   ['exit-below-box'] = { screens = { STARTUP, CURSOR_BELOW_BOX }, exits_after_ms = 2500 },
+  ['busy-title'] = { screens = { STARTUP }, titles_busy = true },
 }
 
 --- The directory of the conversations the fake has, or nil when it keeps
@@ -650,6 +663,69 @@ local function resumes_no_conversation()
   return CONVERSATIONS ~= nil and resumed ~= nil and vim.uv.fs_stat(conversation_file()) == nil
 end
 
+--- The title Claude Code 2.1.301 gives its terminal at idle, and the two it
+--- gives it in turn while it is busy.
+local IDLE_TITLE = '✳ Claude Code'
+local BUSY_TITLES = { '◐ Claude Code', '◑ Claude Code' }
+
+--- How long a busy title stays before the other: Claude Code 2.1.301 steps
+--- its frame every 960 ms.
+local BUSY_FRAME_MS = 960
+
+--- How long the busy spell of the mode `busy-title` lasts, in milliseconds,
+--- or nil when it lasts until the key Enter (`AINEO_FAKE_CLAUDE_BUSY_MS`).
+local BUSY_MS = tonumber(os.getenv('AINEO_FAKE_CLAUDE_BUSY_MS'))
+
+--- Sets the title of the fake's terminal to `title`, by `OSC 0` as the
+--- recordings do.
+---
+---@param title string
+local function set_terminal_title(title)
+  stdout:write('\27]0;' .. title .. '\7')
+end
+
+--- The timer that steps the busy titles while a busy spell lasts.
+---
+---@type uv.uv_timer_t|nil
+local busy_timer = nil
+
+--- Ends the busy spell, if one lasts: stops its timer and titles the terminal
+--- `IDLE_TITLE`.
+local function end_busy_spell()
+  if not busy_timer then
+    return
+  end
+  busy_timer:stop()
+  busy_timer:close()
+  busy_timer = nil
+  set_terminal_title(IDLE_TITLE)
+end
+
+--- Begins a busy spell: titles the terminal `BUSY_TITLES[1]`, the other one
+--- `BUSY_FRAME_MS` later, and so on, until `BUSY_MS` have passed, if it is
+--- set, or the key Enter (`answer()`).
+local function begin_busy_spell()
+  local frame = 0
+  local function show_next_frame()
+    set_terminal_title(BUSY_TITLES[frame % #BUSY_TITLES + 1])
+    frame = frame + 1
+  end
+  show_next_frame()
+  busy_timer = assert(vim.uv.new_timer())
+  busy_timer:start(
+    BUSY_FRAME_MS,
+    BUSY_FRAME_MS,
+    vim.schedule_wrap(function()
+      if busy_timer then
+        show_next_frame()
+      end
+    end)
+  )
+  if BUSY_MS then
+    vim.defer_fn(end_busy_spell, BUSY_MS)
+  end
+end
+
 --- What has been typed of a `/report <task>` key whose Enter has not come
 --- yet: a terminal can hand the keys over in more than one chunk.
 local report_typed = ''
@@ -663,6 +739,9 @@ local report_typed = ''
 ---
 ---@param input string
 local function answer(input)
+  if input == ENTER then
+    end_busy_spell()
+  end
   if arg[1] == 'attach' and input:find(CTRL_Z, 1, true) and not MODE.ignores_detach then
     finish('detach', 0)
   end
@@ -881,6 +960,9 @@ if current_session_id then
 end
 if os.getenv('AINEO_FAKE_CLAUDE_MCP') == 'kept' then
   keep_mcp_server()
+end
+if MODE.titles_busy then
+  begin_busy_spell()
 end
 
 stdin:read_start(function(_, input)

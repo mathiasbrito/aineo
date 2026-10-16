@@ -232,10 +232,23 @@ current buffer. While 'tabline' is empty when the first aineo tab
 opens, aineo sets it to a tab line of its own that draws those titles, the
 current tab in `AineoTabLineSel`, the others in `AineoTabLine`
 (|aineo-tabline|), each clickable. A 'tabline' you set is left in place.
+
+An aineo tab's title ends with an indicator of what its Claude Code is doing,
+after a space: ◒ and ◓ in turn, twice a second, while the tab's Claude Code
+works or a subagent of its runs; ● once that has ended while you were in
+another tab, until you enter that tab; nothing otherwise, so that an idle
+title has no trailing space. The tab you are in shows ◒ and ◓ while its
+Claude Code works, and never ●. The indicator reads the title Claude Code sets
+on its terminal (|aineo-limits|), and is part of the title, so it takes the
+tab's highlight group and counts in the cells the line fits. It shows where
+the tab line does: from two tab pages on, with the default 'showtabline',
+which aineo leaves alone.
                                                              *aineo-tab_title*
 `require('aineo').tab_title({n})` gives the title aineo would draw for the
-tab page numbered {n}, for your own tab line; nil when there is no such tab
-page, and an error when {n} is not a whole number from 1. aineo leaves
+tab page numbered {n}, for your own tab line, the activity indicator of
+|aineo-tabs| included; nil when there is no such tab page, and an error when
+{n} is not a whole number from 1. While a tab's Claude Code works aineo draws
+the tab line again twice a second, whoever draws it. aineo leaves
 'showtabline' alone: the tab line shows from two tab pages on by default.
 `:checkhealth aineo` says which tab line is in use (|aineo-health|).
                                                                *aineo-tabline*
@@ -2024,7 +2037,12 @@ Tab line ~
   Which tab line is in use: aineo's own, which it draws while 'tabline' is
   empty when the first aineo tab opens; yours, when you set 'tabline',
   which aineo leaves in place; or Neovim's own, before aineo has drawn one
-  (|aineo-tabs|).
+  (|aineo-tabs|). That the activity indicator on a tab reads the title
+  Claude Code sets on its terminal. A warning, naming the variable, for
+  `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` when Neovim's environment holds it as
+  `1`, `true`, `yes` or `on`, and for `TMUX`, `STY` and `ZELLIJ` when it holds
+  them with more than white space: Claude Code then sets no title, or keeps
+  it still, so that no tab shows activity (|aineo-limits|).
 
 Autostart ~
   Whether the autostart opened the layout at startup, or which reason kept
@@ -2411,13 +2429,34 @@ Claude's window name ~
 - Claude Code 2.1.292 titles a session after its first turn, and the
   name then follows the session: after an in-session `/resume` it is the
   resumed session's title, and after `/branch` `{first prompt} (Branch)`.
-  Not measured, and so not known to show: a name `/rename` gives, the
-  title of a start with `--resume`, and the glyph while Claude Code is
-  busy. A glyph is left out
+  Not measured, and so not known to show: a name `/rename` gives and the
+  title of a start with `--resume`. The glyph while Claude Code is busy is
+  read from the program, not seen (|aineo-limits|, The activity indicator).
+  A glyph is left out
   when the title's first character is neither a letter nor a digit and a
   space or nothing follows it: a title `✳` alone reads `Claude Code`.
   Below U+0100 the letters are the ASCII and Latin-1 ones, `×` and `÷`
   not among them, whatever 'iskeyword' holds.
+
+The activity indicator ~
+- It reads the title Claude Code 2.1.301 puts on its terminal, a spinner
+  glyph in front of the name while it works, as read from that version's
+  program: it has not been seen in a real turn. A later version of Claude
+  Code may change that title: the indicator then shows nothing, or the wrong
+  thing, until aineo is changed to read it.
+- With `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` set to `1`, `true`, `yes` or `on`
+  (in any case), Claude Code sets no title; `0`, `false` and any other value
+  leave it on. Under tmux, screen or zellij, which Neovim hands to Claude
+  Code as `TMUX`, `STY` or `ZELLIJ` with a value, Claude Code keeps its
+  title still. Either way no tab shows activity; `:checkhealth aineo` warns
+  (|aineo-health|). Start Neovim outside the multiplexer, and without that
+  variable, to have it.
+- A shell command Claude Code runs in the background is not activity; a
+  subagent running in the background is, and keeps the tab busy after the
+  reply.
+- A question or a permission dialog ends a busy spell: a tab whose Claude
+  Code waits for you while you are in another tab shows ●, not ◒ or ◓; in
+  the tab you are in, it shows nothing.
 
 The first follow's move ~
 - Where the file system refuses hard links — exFAT, FAT, some network and

@@ -27,28 +27,46 @@ local open_new_tab
 ---@type aineo.entry.Tab?
 local module_tab = nil
 
---- Whether the handler of closed tab pages has been made (`hold_tab()`).
-local tab_close_handler_made = false
+--- Whether the handlers of closed and entered tab pages have been made
+--- (`hold_tab()`).
+local tab_page_handlers_made = false
 
 --- Has the tabs home hold the tab page `tab` is in, called with the tab as
 --- its layout opens there for the first time: its title says the name of the
---- session its Claude terminal shows; aineo's tab line is drawn while the
---- user's own is empty; a tab page that closes closes the tab
---- (`close_tabs_of_closed_pages()`).
+--- session its Claude terminal shows and whether its Claude Code is busy;
+--- aineo's tab line is drawn while the user's own is empty; a tab page that
+--- closes closes the tab (`close_tabs_of_closed_pages()`); a tab page the user
+--- enters and is still in once the event loop has turned is seen
+--- (`aineo.tabs`' `mark_seen()`), so that aineo's own pass through a tab page
+--- marks none.
 ---
 ---@param tab aineo.entry.Tab
 local function hold_tab(tab)
   local tabs = require('aineo.tabs')
   tabs.hold(tab.page(), tab.session_name)
+  tabs.set_busy(tab.page(), tab.is_busy())
   tabs.draw_tabline()
   registry.last_used_tab = tab
   folder_tabs.keep_folder_tabs()
-  if not tab_close_handler_made then
-    tab_close_handler_made = true
+  if not tab_page_handlers_made then
+    tab_page_handlers_made = true
+    local group = vim.api.nvim_create_augroup('aineo.tabs', {})
     vim.api.nvim_create_autocmd('TabClosed', {
-      group = vim.api.nvim_create_augroup('aineo.tabs', {}),
+      group = group,
       desc = 'aineo: close the tab of a tab page that closed',
       callback = closing.close_tabs_of_closed_pages,
+    })
+    vim.api.nvim_create_autocmd('TabEnter', {
+      group = group,
+      desc = 'aineo: the tab of a tab page the user stays in has been seen',
+      callback = function()
+        local entered = vim.api.nvim_get_current_tabpage()
+        vim.schedule(function()
+          if vim.api.nvim_get_current_tabpage() == entered then
+            require('aineo.tabs').mark_seen(entered)
+          end
+        end)
+      end,
     })
   end
 end

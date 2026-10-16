@@ -2,6 +2,7 @@
 --- Report, Input, changes pane and shell that follow it, in a tab page, and
 --- every action that acts on it.
 
+local busy_watch = require('aineo.entry.busy_watch')
 local closing = require('aineo.entry.closing')
 local editors = require('aineo.entry.editors')
 local errors = require('aineo.entry.errors')
@@ -165,6 +166,7 @@ end
 ---@field open_on_session fun(id: string) what reopening the folder's tabs does for each tab once its tab page exists: starts Claude Code on the session `id`, resumed or attached to where it runs in the background, in a layout of its own
 ---@field session_id fun(): string? the session the tab's Claude Code follows, nil before it has started
 ---@field session_name fun(): string? the name of the session the tab's Claude terminal shows (`b:aineo_session_name`), nil before it has one
+---@field is_busy fun(): boolean whether the Claude Code on the tab's terminal is busy
 ---@field page fun(): integer? the tab page the tab is in, nil before its layout opens
 ---@field is_bound fun(): boolean whether the tab page it is in still exists
 ---@field release fun() lets the tab's homes go as its tab page closes, at once
@@ -563,6 +565,39 @@ local function make_tab(homes, key, callbacks)
   ---@type integer|nil
   local claude_terminal = nil
 
+  --- Whether the Claude Code on the tab's terminal is busy now
+  --- (`b:aineo_session_busy`); false before a terminal exists, and once it is
+  --- wiped.
+  ---
+  ---@return boolean
+  local function is_busy()
+    return claude_terminal ~= nil
+      and vim.api.nvim_buf_is_valid(claude_terminal)
+      and vim.b[claude_terminal].aineo_session_busy == true
+  end
+
+  --- Tells the tabs home whether the tab's Claude Code is busy, for the tab
+  --- page the tab is in; nothing before the tab is in one, which
+  --- `callbacks.on_bound` answers by telling it again.
+  ---
+  ---@param busy boolean
+  local function tell_tabs_home_busy(busy)
+    if bound_page then
+      require('aineo.tabs').set_busy(bound_page, busy)
+    end
+  end
+
+  --- Follows the Claude Code on `terminal`, now the tab's own: the tab line
+  --- is drawn again whenever its session's name changes
+  --- (`redraw_tab_line_when_named()`), and the tabs home is told whenever it
+  --- starts or stops being busy (`busy_watch`).
+  ---
+  ---@param terminal integer
+  local function follow_claude_terminal_activity(terminal)
+    redraw_tab_line_when_named(terminal)
+    busy_watch.tell_when_busy_changes(terminal, tell_tabs_home_busy)
+  end
+
   --- Makes the tab the one in the tab page the current window is in, once its
   --- layout has opened there; and tells `callbacks.on_bound` of it. Does nothing for a
   --- tab bound to a tab page that exists still.
@@ -600,7 +635,7 @@ local function make_tab(homes, key, callbacks)
       on_terminal_replaced = function(terminal)
         replacing_session = homes.claude.session_id()
         claude_terminal = terminal
-        redraw_tab_line_when_named(terminal)
+        follow_claude_terminal_activity(terminal)
         homes.layout.follow_claude_terminal(terminal)
       end,
       on_session_switched = function(id, source, left)
@@ -686,7 +721,7 @@ local function make_tab(homes, key, callbacks)
     local working_directory = start_directory()
     forget_confirmation_unless_running()
     claude_terminal = start(homes.claude, claude_settings(config, working_directory, new_session))
-    redraw_tab_line_when_named(claude_terminal)
+    follow_claude_terminal_activity(claude_terminal)
     homes.changes.begin_session({
       directory = working_directory,
       show_diff = function(diff)
@@ -1165,7 +1200,7 @@ local function make_tab(homes, key, callbacks)
       error(terminal, 0)
     end
     claude_terminal = terminal
-    redraw_tab_line_when_named(terminal)
+    follow_claude_terminal_activity(terminal)
     homes.layout.follow_claude_terminal(claude_terminal)
     vim.api.nvim_create_autocmd('ModeChanged', {
       pattern = 't:*',
@@ -1590,6 +1625,7 @@ local function make_tab(homes, key, callbacks)
       return vim.b[claude_terminal].aineo_session_name
     end
   end
+  tab.is_busy = is_busy
   tab.page = function()
     return bound_page
   end

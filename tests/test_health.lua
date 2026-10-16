@@ -1440,13 +1440,49 @@ end
 
 T['the tab line'] = MiniTest.new_set()
 
+--- The line the Tab line section shows, whichever tab line is in use, about
+--- what the activity indicator reads.
+local INDICATOR_READS_THE_TITLE =
+  '- the activity indicator on a tab reads the title Claude Code sets on its terminal: :help |aineo-tabs|'
+
+--- The variables that make the Tab line section warn that no tab shows
+--- activity.
+local TITLE_VARIABLES = {
+  'CLAUDE_CODE_DISABLE_TERMINAL_TITLE',
+  'TMUX',
+  'STY',
+  'ZELLIJ',
+}
+
+--- The report `:checkhealth aineo` shows in `child` with the environment of
+--- its editor holding the variables of `environment` and none other of
+--- `TITLE_VARIABLES`.
+---
+---@param environment table<string, string>
+---@return string[]
+local function report_with_environment(environment)
+  child.lua(
+    [[
+    for _, name in ipairs(...) do
+      vim.env[name] = nil
+    end
+    for name, value in pairs(select(2, ...)) do
+      vim.env[name] = value
+    end
+  ]],
+    { TITLE_VARIABLES, environment }
+  )
+  return health.report(child)
+end
+
 T['the tab line']['is said to be Neovim’s own while no aineo tab has drawn one'] = function()
   start_with({ autostart = false })
 
-  local report = health.report(child)
+  local report = report_with_environment({})
 
   eq(health.section(report, 'Tab line'), {
     "- the tab line is Neovim's own: aineo draws its own when the first aineo tab opens, while 'tabline' is empty: :help |aineo-tabs|",
+    INDICATOR_READS_THE_TITLE,
   })
 end
 
@@ -1454,10 +1490,11 @@ T['the tab line']['is said to be aineo’s once the tabs home draws it'] = funct
   start_with({ autostart = false })
   child.lua("require('aineo.tabs').draw_tabline()")
 
-  local report = health.report(child)
+  local report = report_with_environment({})
 
   eq(health.section(report, 'Tab line'), {
     '- ✅ OK aineo draws the tab line: each tab shows its place and, for an aineo tab, its session’s name',
+    INDICATOR_READS_THE_TITLE,
   })
 end
 
@@ -1470,11 +1507,104 @@ T['the tab line']['is said to be the user’s own when they set one'] = function
     })
   )
 
-  local report = health.report(child)
+  local report = report_with_environment({})
 
   eq(health.section(report, 'Tab line'), {
     "- the tab line is yours ('tabline' is %t): aineo draws none; require('aineo').tab_title({n}) gives the title it would draw for a tab page: :help |aineo-tabs|",
+    INDICATOR_READS_THE_TITLE,
   })
+end
+
+T['the tab line']['warns, naming the variable, that no tab shows activity when'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        'CLAUDE_CODE_DISABLE_TERMINAL_TITLE',
+        'Claude Code sets no terminal title',
+        'unset CLAUDE_CODE_DISABLE_TERMINAL_TITLE before starting Neovim',
+      },
+      {
+        'TMUX',
+        'Claude Code keeps its terminal title still under a terminal multiplexer',
+        'start Neovim outside tmux, screen and zellij',
+      },
+      {
+        'STY',
+        'Claude Code keeps its terminal title still under a terminal multiplexer',
+        'start Neovim outside tmux, screen and zellij',
+      },
+      {
+        'ZELLIJ',
+        'Claude Code keeps its terminal title still under a terminal multiplexer',
+        'start Neovim outside tmux, screen and zellij',
+      },
+    },
+  })
+
+T['the tab line']['warns, naming the variable, that no tab shows activity when']['is set'] = function(
+  variable,
+  reason,
+  advice
+)
+  start_with({ autostart = false })
+
+  local report = report_with_environment({ [variable] = '1' })
+
+  eq(health.section(report, 'Tab line')[2], INDICATOR_READS_THE_TITLE)
+  eq(
+    health.section(report, 'Tab line')[3],
+    ('- ⚠️ WARNING %s is set: %s, so no tab shows activity'):format(variable, reason)
+  )
+  eq(
+    health.advice(report, 'Tab line'),
+    { ('%s for the tabs to show activity: :help |aineo-limits|'):format(advice) }
+  )
+end
+
+T['the tab line']['warns that no tab shows activity when CLAUDE_CODE_DISABLE_TERMINAL_TITLE is'] =
+  MiniTest.new_set({
+    parametrize = { { '1' }, { 'true' }, { 'yes' }, { 'on' }, { 'TRUE' }, { ' On ' } },
+  })
+
+T['the tab line']['warns that no tab shows activity when CLAUDE_CODE_DISABLE_TERMINAL_TITLE is']['set to'] = function(
+  value
+)
+  start_with({ autostart = false })
+
+  local report = report_with_environment({ CLAUDE_CODE_DISABLE_TERMINAL_TITLE = value })
+
+  eq(#health.advice(report, 'Tab line'), 1)
+end
+
+T['the tab line']['does not warn about activity when'] = MiniTest.new_set({
+  parametrize = {
+    { 'CLAUDE_CODE_DISABLE_TERMINAL_TITLE', '0' },
+    { 'CLAUDE_CODE_DISABLE_TERMINAL_TITLE', 'false' },
+    { 'CLAUDE_CODE_DISABLE_TERMINAL_TITLE', 'no' },
+    { 'CLAUDE_CODE_DISABLE_TERMINAL_TITLE', '2' },
+    { 'TMUX', ' ' },
+    { 'STY', '  ' },
+    { 'ZELLIJ', ' ' },
+  },
+})
+
+T['the tab line']['does not warn about activity when']['a variable Claude Code does not act on is set'] = function(
+  variable,
+  value
+)
+  start_with({ autostart = false })
+
+  local report = report_with_environment({ [variable] = value })
+
+  eq(health.advice(report, 'Tab line'), {})
+end
+
+T['the tab line']['does not warn about activity when none of the variables is set'] = function()
+  start_with({ autostart = false })
+
+  local report = report_with_environment({})
+
+  eq(health.advice(report, 'Tab line'), {})
 end
 
 T['the autostart'] = MiniTest.new_set()
