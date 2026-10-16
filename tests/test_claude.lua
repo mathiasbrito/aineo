@@ -278,8 +278,9 @@ end
 
 --- Runs the session in `child` with a command that writes its whole
 --- environment, sorted, one variable to a line, into a file; the child has
---- every `MULTIPLEXER_VARIABLES` set, 'termguicolors' as `has_true_colour`
---- says, and `hide_multiplexer` as given. Returns the lines of the file, once
+--- every `MULTIPLEXER_VARIABLES` set, a `TERM`, a `COLORTERM` and a `VIM` of
+--- its own, 'termguicolors' as `has_true_colour` says, and `hide_multiplexer`
+--- as given. Returns the lines of the file, once
 --- the command has written them.
 ---
 ---@param name string the test's own name for the files
@@ -297,6 +298,7 @@ local function environment_written_by_the_command(name, has_true_colour, hide_mu
     for _, variable in ipairs(variables) do
       vim.env[variable] = 'set-in-the-editor'
     end
+    vim.env.TERM = 'screen'
     vim.env.VIM = '/aineo-test-vim'
     vim.env.COLORTERM = '24bit'
   ]],

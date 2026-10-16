@@ -512,7 +512,6 @@ local function launch(home, prepared, on_exit)
   window_options.keep_while(prepared.buffer, function()
     local job_options = environment.job_environment({
       variables = vim.fn.environ(),
-      address = settings.editor_address,
       has_true_colour = vim.o.termguicolors,
     }, settings.hide_multiplexer)
     job_options.term = true
