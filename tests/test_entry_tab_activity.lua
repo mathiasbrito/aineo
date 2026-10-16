@@ -271,12 +271,17 @@ T['a busy Claude Code']['is not busy once its terminal is wiped, and its tab’s
   })
 end
 
-T['a busy Claude Code']['is no longer busy in the tab once an attached terminal is replaced by one that is not'] = function()
+--- Opens the first tab attached to a background session on a fake in the
+--- mode `busy-title`, as `name` names it, and waits until it is ready and the
+--- title shows it busy.
+---
+---@param name string
+local function open_attached_and_busy(name)
   track_animation_timers()
-  local state = tabs.use_own_state(child, 'activity-attached')
+  local state = tabs.use_own_state(child, name)
   local session = '22222222-2222-4222-8222-222222222222'
   tabs.keep_session_id(state, child.fn.getcwd(), session)
-  local attached = tabs.fake('activity-attached', 'busy-title')
+  local attached = tabs.fake(name, 'busy-title')
   attached.listing = vim.fs.joinpath(vim.fs.dirname(attached.record), 'agents.json')
   attached.environment.AINEO_FAKE_CLAUDE_AGENTS = attached.listing
   vim.fn.writefile({
@@ -298,6 +303,10 @@ T['a busy Claude Code']['is no longer busy in the tab once an attached terminal 
   child.cmd('Aineo open')
   title_once(1, shows_busy)
   claude_session.wait_for_status(child, 'ready')
+end
+
+T['a busy Claude Code']['is no longer busy in the tab once an attached terminal is replaced by one that is not'] = function()
+  open_attached_and_busy('activity-attached')
   entry.use_fake(child, tabs.fake('activity-attached-new', 'ready'))
 
   entry.press(child, '\\N')
@@ -309,6 +318,44 @@ T['a busy Claude Code']['is no longer busy in the tab once an attached terminal 
     '1: Claude Code'
   )
   eq(animation_runs_until_it_stops(), false)
+end
+
+T['a busy Claude Code']['is followed in the terminal that replaces an attached one'] = function()
+  open_attached_and_busy('activity-attached-followed')
+  local attached = tabs.claude_terminal_of_tab(child, 1)
+  entry.use_fake(child, tabs.fake('activity-attached-followed-new', 'busy-title'))
+
+  entry.press(child, '\\N')
+  vim.wait(tabs.PATIENCE_MS, function()
+    local terminal = tabs.claude_terminal_of_tab(child, 1)
+    return terminal ~= attached and child.lua_get('vim.b[...].aineo_session_busy', { terminal })
+  end, 20)
+
+  eq(shows_busy(title_once(1, shows_busy)), true)
+end
+
+T['a busy Claude Code']['tells the tabs home once for each change, however often the tab is opened'] = function()
+  tabs.open_first_tab(child, 'activity-opened-twice', 'busy-title')
+  title_once(1, shows_busy)
+  child.cmd('Aineo open')
+  child.cmd('Aineo open')
+  child.lua([[
+    _G.busy_told = {}
+    local tabs = require('aineo.tabs')
+    local set_busy = tabs.set_busy
+    tabs.set_busy = function(tab, busy)
+      table.insert(_G.busy_told, busy)
+      return set_busy(tab, busy)
+    end
+  ]])
+
+  end_busy_spell_of_tab(1)
+  vim.wait(tabs.PATIENCE_MS, function()
+    return #child.lua_get('_G.busy_told') > 0
+  end, 20)
+  vim.uv.sleep(300)
+
+  eq(child.lua_get('_G.busy_told'), { false })
 end
 
 T['a busy Claude Code']['is not busy once its variable is removed, and the user is told nothing'] = function()
