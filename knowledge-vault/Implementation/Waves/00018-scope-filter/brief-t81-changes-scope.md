@@ -151,3 +151,13 @@ The user, verbatim, while D77 was adjusted: "the \g as a toggle is fine" (`plan.
 - **Mutant 3** of `plan.md` stands as written. Add a case: `\g` twice in the pane returns to the scope view, its first line `Worktree …`.
 - **T84**, later, adds a second kind of focused view, the reported set; build the toggle on "the focused view", not on the scope alone, so that T84 extends it without rewriting it. Name the home's call for what it does (`toggle_focused_view()`, say).
 - **The help** says that `\g` in the pane toggles, and what it brings back from another pane.
+
+## Amendment — 2026-10-16, at dispatch
+
+The implementer's re-check of this brief against `dev` `55fd4f7` (A256). Nothing that changes what to build moved.
+
+- **Code:** `git diff b10b47a 55fd4f7` touches nothing under `lua/`, `plugin/`, `doc/`, `tests/` or `README.md` (vault notes only), so every line number in *Facts* holds: `copy.lua` 1851 lines with `reselect_in_worktrees()` at 540, `follow_changes_session()` at 1152, `pane_buffer()` at 1667, `refresh_shown_pane()` at 1780; `lines.lua` 673; `filter.lua` 111; `tab.lua` 1645 with `focus_pane()` at 903 and the `pane changes` action at 1469.
+- **Keys:** the pane's buffer-local maps are `<CR>` (both windows, `pane_buffer()`), `gf`, `l`, `h` (files window) and `F` (a diff); `s` is mapped nowhere under `lua/`.
+- **The help:** `doc/aineo.txt` has the entry `*aineo-\g*` (line 1388) and `:Aineo-pane` (line 1185), whose text says the changes pane "is read again" when shown; the sentence the brief calls "`\g` and the cursor" is in *aineo-changes* ("`\g` keeps your line"). `README.md` lists `\g` once, among the pane keys of the layout (line 82), and no key of the pane itself.
+- **No edge between homes** is needed: `scope.lua` requires `aineo.changes.lines` and `aineo.changes.filter`, its own home's files. `aineo.entry.errors` is the composition root's, which no home may require, so the picker's raising is told from `copy.lua` itself.
+- **Baseline on `55fd4f7`, Neovim 0.12.5:** `tests/test_changes_copies.lua` 22 cases, `tests/test_entry_changes.lua` 16, `tests/test_changes_keys.lua` 29, `tests/test_changes_worktrees.lua` 67, all passing. The dispatch message pasted no counts.

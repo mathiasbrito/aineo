@@ -321,6 +321,7 @@ T['new()']['gives a home of its own on each call, with the functions the module 
       'follow_changes_session',
       'hand_over_changes_session',
       'refresh_shown_pane',
+      'toggle_focused_view',
       'pane_buffers',
     }
     local shape = { functions = {}, apart = {} }
@@ -337,6 +338,7 @@ T['new()']['gives a home of its own on each call, with the functions the module 
       follow_changes_session = true,
       hand_over_changes_session = true,
       refresh_shown_pane = true,
+      toggle_focused_view = true,
       pane_buffers = true,
     },
     apart = {
@@ -344,6 +346,7 @@ T['new()']['gives a home of its own on each call, with the functions the module 
       follow_changes_session = true,
       hand_over_changes_session = true,
       refresh_shown_pane = true,
+      toggle_focused_view = true,
       pane_buffers = true,
     },
     tables = { true, true, true },

@@ -18,6 +18,7 @@ local lines = require('aineo.changes.lines')
 local open_file = require('aineo.changes.open_file')
 local pages = require('aineo.changes.pages')
 local pause = require('aineo.changes.pause')
+local scope = require('aineo.changes.scope')
 local scratch = require('aineo.changes.scratch')
 local serial = require('aineo.changes.serial')
 local worktrees = require('aineo.changes.worktrees')
@@ -34,6 +35,7 @@ local SELECTION_PAUSE_MS = 150
 ---@field follow_changes_session fun(followed: aineo.changes.FollowedSession)
 ---@field hand_over_changes_session fun(hand_over: aineo.changes.HandOver)
 ---@field refresh_shown_pane fun()
+---@field toggle_focused_view fun() reads the shown pane again, and, with the cursor in one of its windows, switches it between its default view and the worktree shown alone
 ---@field pane_buffers fun(): { files: integer, commits: integer }
 ---@field let_go? fun() only on a home `require('aineo.changes').new()` made: stops its watch, removes its handlers and wipes its buffers
 
@@ -103,6 +105,8 @@ function M.new(label)
   ---@field commits_failure? aineo.git.Failure why the last read of the commits failed, when it did
   ---@field landed? aineo.changes.Landed what landed in the working branch, as last read; nil while unread, and when there is no working branch
   ---@field commits_others aineo.changes.OtherWorktrees what the commits window knows of the other worktrees
+  ---@field scope? aineo.changes.Scope the other worktree the user picked to show alone, kept while the default view is shown too
+  ---@field focused boolean whether the commits window shows the scope alone, in place of the default view; false while there is no scope
   ---@field saved table<string, true> the files the user saved under the base, by path relative to the top level: since the session began, or the Claude Code session's followed; none saved while no repository was found
   ---@field early_saves string[] the files the user saved, resolved, while the first look for the repository runs
   ---@field shown boolean whether the pane has been shown
@@ -185,6 +189,18 @@ function M.new(label)
     })
   end
 
+  --- The worktrees the commits window shows alone: those of the session's
+  --- scope while the focused view is the one shown, as the commits window
+  --- last listed them; nil for the default view.
+  ---
+  ---@return aineo.changes.WorktreeSection[]|nil
+  local function scope_shown()
+    if not (session.scope and session.focused) then
+      return nil
+    end
+    return scope.sections_shown(session.scope, session.commits_others)
+  end
+
   --- The commits window's page for what the session knows: why it has no
   --- repository, when it has none, or its commits.
   ---
@@ -194,6 +210,7 @@ function M.new(label)
       return lines.no_repository(session.absence, session.settings.directory)
     end
     return lines.commits_window({
+      scope = scope_shown(),
       since = session.commits,
       base = session.base,
       failure = session.commits_failure or session.watch_failure,
@@ -516,6 +533,19 @@ function M.new(label)
     select_filter(filter.SESSION_WORK)
   end
 
+  --- Selects what the commits window's view chooses when nothing else
+  --- does — a commits buffer made anew, a session followed with a scope
+  --- kept: the whole change of the worktree shown alone, in the focused view
+  --- (`scope_shown()`); else *Session work* (`select_session_work()`).
+  local function select_view_default()
+    local shown = scope_shown()
+    if shown then
+      select_filter(filter.of_worktree(shown[1]))
+    else
+      select_session_work()
+    end
+  end
+
   --- Whether `commits`, as last read, still list the commit `selected` names.
   ---
   ---@param selected aineo.changes.Filter a `commit` filter
@@ -527,6 +557,24 @@ function M.new(label)
     end)
   end
 
+  --- Keeps the scope as `others`, what the commits window now knows of the
+  --- other worktrees, lists its worktree, or, when it lists it no more,
+  --- clears the scope with the focused view and tells the user, once, that
+  --- the worktree is gone (`aineo.changes.scope`).
+  ---
+  ---@param others aineo.changes.OtherWorktrees
+  local function keep_scope_listed_in(others)
+    if not session.scope then
+      return
+    end
+    local still_listed, gone = scope.after_read(session.scope, others)
+    session.scope = still_listed
+    if gone then
+      session.focused = false
+      vim.notify(gone, vim.log.levels.INFO)
+    end
+  end
+
   --- Selects again, and reads the files window for it, what the selection
   --- comes to when `others`, what the commits window now knows of the other
   --- worktrees, no longer lists what it names: *Session work* when the
@@ -534,10 +582,12 @@ function M.new(label)
   --- lists the worktree but not the selected commit any more — after an
   --- amend, a rebase. A worktree still listed becomes the selected filter's
   --- as it was last read, and the files window is written again when its
-  --- branch changed, for its first line names it.
+  --- branch changed, for its first line names it. The scope is kept or
+  --- cleared first (`keep_scope_listed_in()`).
   ---
   ---@param others aineo.changes.OtherWorktrees
   local function reselect_in_worktrees(others)
+    keep_scope_listed_in(others)
     local selected = session.selected
     if not selected.worktree then
       return
@@ -1108,6 +1158,7 @@ function M.new(label)
       saved = {},
       early_saves = {},
       commits_others = worktrees.NONE,
+      focused = false,
     }
     local group = vim.api.nvim_create_augroup(own_group('aineo_changes'), {})
     vim.api.nvim_create_autocmd({ 'BufWritePost', 'FileWritePost', 'FileAppendPost' }, {
@@ -1144,9 +1195,11 @@ function M.new(label)
   --- its base once the repository is found (`find`); while no repository is
   --- found, nothing is kept. The home keeps a copy of `followed`, whose id a
   --- hand-over renames (`hand_over_changes_session()`), and never changes
-  --- the table it is given. Called on the main loop only: from a fast event
-  --- (a `vim.uv` callback) it raises E5560, as the Vimscript functions it
-  --- calls do there.
+  --- the table it is given. Following another session than one followed
+  --- before clears the scope, and says nothing; the first session followed
+  --- keeps the scope picked before it. Called on the main loop only: from a
+  --- fast event (a `vim.uv` callback) it raises E5560, as the Vimscript
+  --- functions it calls do there.
   ---
   ---@param followed aineo.changes.FollowedSession
   function home.follow_changes_session(followed)
@@ -1159,8 +1212,11 @@ function M.new(label)
       return
     end
     hold_unkept_base()
+    if session.followed then
+      session.scope, session.focused = nil, false
+    end
     session.followed = followed
-    select_session_work()
+    select_view_default()
     session.looking_for_head, session.head_look_failed, session.keeping_failed = false, false, false
     if not session.repository then
       return
@@ -1657,9 +1713,78 @@ function M.new(label)
     })
   end
 
+  --- Shows the worktree `item` names alone, and chooses its whole change
+  --- (`select_filter()`), which the files window then lists. A worktree the
+  --- commits window no longer lists is told gone, and nothing changes.
+  ---
+  ---@param item aineo.changes.ScopeItem
+  local function show_alone(item)
+    local section = scope.section_on(session.commits_others, item.top)
+    if not section then
+      vim.notify(scope.picked_gone(item), vim.log.levels.INFO)
+      return
+    end
+    session.scope, session.focused = scope.of(section), true
+    select_filter(filter.of_worktree(section))
+    show_commits()
+    read_files(true)
+  end
+
+  --- Chooses again, after the focused view was switched on or off, what the
+  --- commits window now shows: the filter selected stays, the cursor put on
+  --- its line, as the default view lists every filter the focused view lists.
+  --- In the focused view, a filter it does not list gives way to the whole
+  --- change of the worktree shown alone, and the files window is read again.
+  local function choose_for_shown_view()
+    local shown = scope_shown()
+    if shown and not scope.page_lists(commits_page(), session.selected) then
+      select_filter(filter.of_worktree(shown[1]))
+      read_files(true)
+      return
+    end
+    session.cursor_unplaced = true
+  end
+
+  --- Offers the other worktrees the commits window last listed, in
+  --- `vim.ui.select` (`aineo.changes.scope`); a pick is shown alone
+  --- (`show_alone()`), an answer that is no item offered is ignored.
+  local function offer_scopes()
+    if not session then
+      vim.notify(lines.READING, vim.log.levels.INFO)
+      return
+    end
+    local why_none = scope.why_none_is_offered({
+      has_repository = session.repository ~= nil,
+      absence = session.absence,
+      directory = session.settings.directory,
+      others = session.commits_others,
+      others_read = session.commits_others ~= worktrees.NONE,
+    })
+    if why_none then
+      vim.notify(why_none, vim.log.levels.INFO)
+      return
+    end
+    local asked, failure = pcall(vim.ui.select, scope.items_of(session.commits_others), {
+      prompt = scope.PROMPT,
+      format_item = function(item)
+        return item.text
+      end,
+    }, function(item)
+      if type(item) == 'table' and type(item.top) == 'string' then
+        show_alone(item)
+      end
+    end)
+    if not asked then
+      vim.notify(scope.picker_failed(failure), vim.log.levels.ERROR)
+    end
+  end
+
   --- A scratch buffer of the pane named `name` (`aineo.changes.scratch`),
   --- written with `page()` whenever it is made or read, which tells the
   --- session the pane is shown whenever it enters a window (`pane_shown()`).
+  --- Enter shows the diff of the entry under the cursor (`open_entry()`), and
+  --- `s` offers the worktrees to show alone (`offer_scopes()`), in Normal
+  --- mode, in this buffer alone.
   ---
   ---@param name string
   ---@param page fun(): aineo.changes.Page
@@ -1680,6 +1805,11 @@ function M.new(label)
     vim.keymap.set('n', '<CR>', function()
       open_entry(buffer)
     end, { buffer = buffer, desc = 'aineo: show the diff of the entry under the cursor' })
+    vim.keymap.set('n', 's', offer_scopes, {
+      buffer = buffer,
+      nowait = true,
+      desc = 'aineo: show one worktree alone in the changes pane',
+    })
     return buffer
   end
 
@@ -1783,6 +1913,29 @@ function M.new(label)
     end
   end
 
+  --- Reads both lists again, as a showing of the pane does, while the pane
+  --- is shown in a window of any tab page (`is_shown()`); and, when the
+  --- current buffer is one of the pane's two, switches the commits window
+  --- between the default view and the focused view — the scope the user
+  --- picked, kept while the default view shows — chosen again for what the
+  --- new view lists (`choose_for_shown_view()`). With the cursor anywhere
+  --- else — Claude's window, Input, the Report, a diff — or with no scope
+  --- picked, it only reads them again, as `refresh_shown_pane()` does. Does
+  --- nothing while the pane is not shown, or before the session has begun:
+  --- the pane is then shown, and read, in the view it was left in.
+  function home.toggle_focused_view()
+    if not (session and (is_shown(buffers.files) or is_shown(buffers.commits))) then
+      return
+    end
+    local current = vim.api.nvim_get_current_buf()
+    if session.scope and (current == buffers.files or current == buffers.commits) then
+      session.focused = not session.focused
+      choose_for_shown_view()
+      show_commits()
+    end
+    pane_shown()
+  end
+
   --- The changes pane's two buffers, each written for what the session
   --- knows: the files buffer, `aineo://changes-files`, and the commits
   --- buffer, `aineo://changes-commits`, as the module's home names them
@@ -1793,7 +1946,8 @@ function M.new(label)
   --- a window, the pane is shown: the first time, the watch starts, and each
   --- time both lists are read again, once for every showing in one turn of
   --- the main loop (`pane_shown()`). A commits buffer made anew selects
-  --- *Session work* again, its cursor to be put there when it is shown.
+  --- *Session work* again, or the whole change of the worktree shown alone,
+  --- its cursor to be put there when it is shown (`select_view_default()`).
   ---
   ---@return { files: integer, commits: integer }
   function home.pane_buffers()
@@ -1806,7 +1960,7 @@ function M.new(label)
       buffers.commits = pane_buffer(own_name('aineo://changes-commits'), commits_page)
       select_filters_from(buffers.commits)
       if session then
-        select_session_work()
+        select_view_default()
       end
     end
     return { files = buffers.files, commits = buffers.commits }

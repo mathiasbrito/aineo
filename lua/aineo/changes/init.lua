@@ -16,7 +16,13 @@
 --- diff against its previous version, `h` against `HEAD`
 --- (`aineo.changes.head_diff`), and `gf` opens the working tree's file or
 --- shows the file as the commit it is listed under has it
---- (`aineo.changes.commit_file`).
+--- (`aineo.changes.commit_file`). `s` in either buffer offers the other
+--- worktrees in `vim.ui.select` and shows the one picked alone in the commits
+--- buffer — its heading, then its commits, nothing else — until `s` picks
+--- another, it is no longer listed, or a Claude Code session is followed
+--- after another; `toggle_focused_view()` (`\g`) switches between
+--- that view and the default one, from the pane's own windows, and reads the
+--- pane again while it is shown (`aineo.changes.scope`).
 ---
 --- One changes pane is a home (`aineo.changes.Home`): the module is the first,
 --- and `new()` makes another, for another tab, whose session, base and saves,
