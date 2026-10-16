@@ -139,3 +139,15 @@ The user answered U1–U3 (`plan.md` › *The user's answers*, D76's dated note)
 - **Behaviour 11** applies to the `\g` of 10a alone. **Behaviour 12** is unchanged.
 - **The help** says, under *aineo-changes*: `s` and its one list, each item marked; that Neovim's own `vim.ui.select` is a numbered list with no search, and a picker plugin that replaces it searches the list; the scope view; `\g` from the pane and from elsewhere (and `*aineo-\g*` likewise).
 - **Rejected by the answers:** a subcommand (U1 (b)); every `\g` clearing (U3 (a)).
+
+## Amendment — 2026-10-16, `\g` toggles, before dispatch
+
+The user, verbatim, while D77 was adjusted: "the \g as a toggle is fine" (`plan.md` › *The user's additions*; *The model*, items 5 and 9 as amended). Where the body, the amendment above and this section differ, this section wins.
+
+- **Behaviour 10a now reads:** `\g` pressed while the changes pane already shows switches between the default view and the scope view. From the scope view it shows the default view, read again; the scope is **kept**, hidden, not cleared. From the default view it shows the scope view again, read again, when a scope is kept; with none, it reads the pane again as today.
+- **Behaviour 10b is unchanged:** from another pane, `\g` shows the changes pane in the view it was last left in — the scope view when the user left it there, the default view when the user had toggled to it — read again.
+- **Behaviour 11** applies to the switch to the default view. **Behaviour 12** holds with no scope kept.
+- **What ends a scope:** `s` replacing it, the scope gone (13), another session followed (15), the tab closed, the editor quit. `\g` no longer does.
+- **Mutant 3** of `plan.md` stands as written. Add a case: `\g` twice in the pane returns to the scope view, its first line `Worktree …`.
+- **T84**, later, adds a second kind of focused view, the reported set; build the toggle on "the focused view", not on the scope alone, so that T84 extends it without rewriting it. Name the home's call for what it does (`toggle_focused_view()`, say).
+- **The help** says that `\g` in the pane toggles, and what it brings back from another pane.

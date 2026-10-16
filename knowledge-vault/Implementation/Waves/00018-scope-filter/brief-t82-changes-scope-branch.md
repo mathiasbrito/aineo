@@ -125,3 +125,7 @@ The user answered U1–U3 (`plan.md` › *The user's answers*, D76's dated note)
 
 - **Behaviour 3, the list (U1, the user's decision; A391).** The branches go into T81's one list, after its `[worktree]` items, each reading `[branch] <name>`, the name quoted as `lines.quoted_path()` quotes a branch. The exclusions stand. Pin the text of each item.
 - **Behaviour 15** reads: `\g` treats a branch scope as T81 treats a worktree's — pressed while the pane shows, it clears the scope and the choice is then *Session work*, as the default view lists no branch; pressed from another pane, it shows the branch's scope view again.
+
+## Amendment — 2026-10-16, `\g` toggles, before dispatch
+
+The user: "the \g as a toggle is fine" (`plan.md` › *The model*, items 5 and 9 as amended; T81's brief, its last amendment). **Behaviour 15 now reads:** `\g` treats a branch scope as T81 treats a worktree's: pressed while the pane shows, it toggles between the branch's scope view and the default view, the scope kept; the choice in the default view is *Session work*, as it lists no branch; pressed from another pane, it shows the view last left. A deleted branch still ends the scope (behaviour as written).
