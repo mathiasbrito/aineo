@@ -130,7 +130,7 @@ vim.g.aineo = {
 | `layout.report_height` | `2/3` | The Report's share of the right column, a number strictly between 0 and 1. |
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
 | `tabs.padding` | `2` | Spaces either side of each title in aineo's tab line, from 0 to 8. |
-| `tabs.always_show` | `true` | Whether the tab line shows with a single tab page: aineo sets `'showtabline'` to `2` once, when its first tab opens, and a value you set afterwards is kept. `false` leaves `'showtabline'` as you have it. |
+| `tabs.always_show` | `true` | Whether the tab line shows with a single tab page: aineo sets `'showtabline'` to `2` once, when its first tab opens, and a value you set afterwards is kept. `false` leaves `'showtabline'` as you have it. Read at the first tab: a later change needs a restart. |
 
 The highlight groups can be overridden in a colorscheme or with
 `:highlight`. The tab line uses `AineoTabLineSel`, `AineoTabLine` and
@@ -165,7 +165,7 @@ To keep those features, set `claude = { hide_multiplexer = false }`. Claude
 Code then gets the editor's environment as it is, no tab shows activity inside
 a multiplexer, and, when Neovim runs inside one, `:checkhealth aineo` warns.
 Under tmux, a mouse selection copied in Claude's window then prints
-`52;c;<text>` there.
+`52;c;<base64>` there (the copy, base64-encoded).
 The indicator also does not work when `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` is set to `1`, `true`, `yes`
 or `on`. It reads the title of Claude Code 2.1.301 from that version's
 program; it has not been seen in a real turn, and a later version may change

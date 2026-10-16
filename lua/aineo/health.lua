@@ -794,7 +794,7 @@ local SILENT_TITLE_VARIABLES = {
     is_hidden_by_aineo = true,
     is_acted_on = is_not_blank,
     meaning = 'Claude Code keeps its terminal title still under a terminal multiplexer',
-    side_effect = ', and a copy made in the Claude window prints 52;c;<text> there',
+    side_effect = ', and a copy made in the Claude window prints 52;c;<base64> there',
     advice = 'set claude.hide_multiplexer to true, or start Neovim outside tmux, screen and zellij',
   },
   {
@@ -850,8 +850,9 @@ end
 --- Says whether aineo has the tab line show with a single tab page, from
 --- `resolved_config.tabs.always_show` and the current 'showtabline': aineo
 --- sets 'showtabline' to 2 once, when the first aineo tab opens, so a value it
---- finds other than 2 is the user's, or comes before that open. Says nothing
---- while the configuration is wrong.
+--- finds other than 2 is the user's, or comes before that open; the wording
+--- for it holds in both states. Says nothing while the configuration is
+--- wrong.
 ---
 ---@param resolved_config table|nil the configuration, `nil` when it is wrong
 local function check_tabline_shown(resolved_config)
@@ -871,7 +872,7 @@ local function check_tabline_shown(resolved_config)
     )
   else
     vim.health.info(
-      ("aineo sets 'showtabline' to 2 when the first aineo tab opens, so that the tab line shows with one tab page (tabs.always_show); it is %d now: :help aineo-tabs"):format(
+      ("'showtabline' is %d now; aineo sets it to 2 once, when the first aineo tab opens, and leaves it after (tabs.always_show): :help aineo-tabs"):format(
         showtabline
       )
     )

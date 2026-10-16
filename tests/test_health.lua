@@ -1450,10 +1450,11 @@ end
 
 T['the tab line'] = MiniTest.new_set()
 
---- The line the Tab line section shows while no aineo tab has opened and
---- `tabs.always_show` holds its default, `true`: 'showtabline' is Neovim's 1.
+--- The line the Tab line section shows while 'showtabline' is not 2 and
+--- `tabs.always_show` holds its default, `true`, before any aineo tab has
+--- opened: 'showtabline' is Neovim's 1.
 local TAB_LINE_SHOWN_WHEN_A_TAB_OPENS =
-  "- aineo sets 'showtabline' to 2 when the first aineo tab opens, so that the tab line shows with one tab page (tabs.always_show); it is 1 now: :help |aineo-tabs|"
+  "- 'showtabline' is 1 now; aineo sets it to 2 once, when the first aineo tab opens, and leaves it after (tabs.always_show): :help |aineo-tabs|"
 
 --- The line the Tab line section shows, whichever tab line is in use, about
 --- what the activity indicator reads.
@@ -1553,7 +1554,7 @@ T['the tab line']["says the tab line shows with one tab page, with 'showtabline'
   )
 end
 
-T['the tab line']["says aineo sets 'showtabline' once, and what it is now, when the user changed it after the first open"] = function()
+T['the tab line']["says what 'showtabline' is now, and that aineo sets it once, when the user changed it after the first open"] = function()
   start_with({ autostart = false })
   child.lua("require('aineo.tabs').show_tabline_once() vim.o.showtabline = 0")
 
@@ -1561,7 +1562,7 @@ T['the tab line']["says aineo sets 'showtabline' once, and what it is now, when 
 
   eq(
     health.section(report, 'Tab line')[2],
-    "- aineo sets 'showtabline' to 2 when the first aineo tab opens, so that the tab line shows with one tab page (tabs.always_show); it is 0 now: :help |aineo-tabs|"
+    "- 'showtabline' is 0 now; aineo sets it to 2 once, when the first aineo tab opens, and leaves it after (tabs.always_show): :help |aineo-tabs|"
   )
 end
 
@@ -1598,7 +1599,7 @@ T['the tab line']['warns, naming the variable, that no tab shows activity when']
         'TMUX',
         'Claude Code keeps its terminal title still under a terminal multiplexer',
         'set claude.hide_multiplexer to true, or start Neovim outside tmux, screen and zellij',
-        ', and a copy made in the Claude window prints 52;c;<text> there',
+        ', and a copy made in the Claude window prints 52;c;<base64> there',
       },
       {
         'STY',
