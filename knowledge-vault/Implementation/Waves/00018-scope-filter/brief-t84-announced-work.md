@@ -139,3 +139,18 @@ Write it in your definition's shape, to `<scratchpad>/t84-report-packet.md`. Ope
 - the deep-require check's output.
 
 The orchestrator's verification runs `plan.md`'s T84 mutants. Name the test that kills each.
+
+## The orchestrator's rulings — 2026-10-16, before dispatch
+
+`plan.md` › *The orchestrator's rulings — amendment* rules O13–O19 and O24–O26 as their (a), A405–A411 and A416–A418, which this brief is written for, and adds A404, below. Record them as the orchestrator's assumptions, never as the user's decisions.
+
+## Amendment — 2026-10-16, the user's answers, before dispatch
+
+The user answered U4–U6 (`plan.md` › *The user's answers — amendment*; D77's dated note): U4 (a) and U6 (a), as this body is written; U5, verbatim, "yes, but only for informing the working tree, no need for the agent to proccess any request to avoid consuming tokens." — the tool is pre-allowed and only informs. A404 is the orchestrator's reading of it. Where the body and this section differ, this section wins.
+
+- **Behaviour 1:** the tool's description is, verbatim, 15 words, 80 bytes: "Informs aineo of a git branch or worktree just created for new work; replies ok."
+- **Behaviour 5:** the paragraph appended after the report's instructions is, verbatim, 37 words, 204 bytes: "When you, or a subagent you start, create a git branch or worktree for new work, call `mcp__aineo__announce_work` once with its kind and its path or branch. It only informs aineo; do not act on its reply."
+- **Behaviour 6:** the `SubagentStart` context is that paragraph, a space, then, verbatim, "If you started in a git worktree made for your task, call it once, now, with that worktree's path." — 56 words, 303 bytes in all.
+- **Behaviour 9:** a taken report is answered `ok`, nothing more. A declined one is a tool error whose text is `not taken`, nothing more; the cause goes to no agent. No data is ever returned.
+- **Behaviour 7** stands: `--allowedTools` names both tools (U5).
+- Pin each text, and its size in bytes, so that a later change of the words is a change a reviewer sees.

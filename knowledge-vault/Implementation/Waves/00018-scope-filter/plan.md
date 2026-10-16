@@ -361,6 +361,44 @@ After the user's answers:
 
 These are the orchestrator's assumptions, never the user's decisions. Under U3 (b), A397 and A399 apply to the `\g` pressed while the pane shows, the one that clears. Both briefs are written for them, with the user's answers in each brief's dated amendment.
 
+## The user's answers — amendment, 2026-10-16, verbatim
+
+From the orchestrator's record of the questions put to the user:
+
+- **U4.** *"When an agent reports new work while the changes pane shows the default view, or something you picked with s, should the pane switch to the reported work?"* — "Yes, tell me once (Recommended)".
+- **U5.** *"May Claude and its subagents call aineo's new report-work tool without a permission prompt?"* (*Yes, pre-allowed (Recommended)* / *No, ask each time*) — in free text: "yes, but only for informing the working tree, no need for the agent to proccess any request to avoid consuming tokens."
+- **U6.** *"When a report arrives and the changes pane isn't on screen (e.g. the agent pane shows), should aineo bring the changes pane into view?"* — "No (Recommended)".
+
+**What the answers decide** (D77's dated note): U4 (a), a report switches the pane to the reported work and tells the user once; U5, the tool is pre-allowed, and it only informs — the agent processes nothing it returns, so that it spends no tokens on it; U6 (a), the changes pane is not brought into view.
+
+## The orchestrator's rulings — amendment, 2026-10-16
+
+After the user's answers to U4–U6:
+
+- **A404**, the reading of U5: `announce_work` joins `--allowedTools`. It only informs aineo: its result to the agent is the shortest acknowledgement, `ok`, with no data and nothing to act on; a report aineo cannot take is a tool error of one short line, `not taken`, which the agent is told not to act on either. The words that teach the tool are kept short:
+  - the paragraph appended to the system prompt, 37 words, 204 bytes: "When you, or a subagent you start, create a git branch or worktree for new work, call `mcp__aineo__announce_work` once with its kind and its path or branch. It only informs aineo; do not act on its reply."
+  - the `SubagentStart` context, that paragraph and one sentence more, 56 words, 303 bytes: "If you started in a git worktree made for your task, call it once, now, with that worktree's path."
+  - the tool's description, 15 words, 80 bytes: "Informs aineo of a git branch or worktree just created for new work; replies ok."
+
+  These replace the longer words of *The model*, items 10–14, and of T84's brief, behaviours 1, 5, 6 and 9.
+- O13–O26 are each ruled as their (a), numbered A405–A418 in order (O13 → A405 … O26 → A418):
+  - A405, the tool's name and input: `announce_work`, `kind` and `path` or `branch`, no base;
+  - A406, the main agent taught by the appended prompt and the tool's description;
+  - A407, the editor that started the Claude Code alone, the tab by start token, declined otherwise;
+  - A408, a worktree or branch not listed yet matched for 60 s, then let go and told once;
+  - A409, the editor's own worktree or its branch not added;
+  - A410, told once per member added; the agents' strings compared with git's output only;
+  - A411, T84 regular, its models and reviews;
+  - A412, the longest names cut first, to one shared cap;
+  - A413, the floor of 8 cells, then the run around the current tab;
+  - A414, `tab_title()` gives the whole name;
+  - A415, T83 regular, in the lean review shape;
+  - A416, subagents taught by a `SubagentStart` hook's `additionalContext`;
+  - A417, the set per tab, never on disk, emptied when another session is followed; `s`'s `[reported]` item;
+  - A418, the members in the order first reported, the new one chosen.
+
+These are the orchestrator's assumptions, never the user's decisions. T83's and T84's briefs point to them; T84's brief carries A404 as a dated amendment.
+
 ## Checks for the user
 
 After T81 is released, in a repository with two or three agent worktrees:

@@ -129,6 +129,8 @@ The orchestrator put the first to the user at 00:03 CEST (“tell me if you mean
 
 *Dated note on D76, 2026-10-16, the toggle.* While adjusting D77, the user answered “the \g as a toggle is fine”: `\g` toggles between the default view and the focused view — a scope picked with `s`, or D77's reported set. Pressed while the changes pane shows, it switches view and keeps the scope, where U3 (b)'s reading had it clear the scope; pressed from another pane, it shows the view last left, as U3 (b) said. This is the user's decision; T81's and T82's briefs carry it as a dated amendment, and D77's row states it.
 
+*Dated note on D77, 2026-10-16, after the user's answers.* The user answered wave 18's U4–U6 (verbatim in `Implementation/Waves/00018-scope-filter/plan.md` › *The user's answers — amendment*). U4 (a): a report switches the changes pane to the reported work, from the default view or a pick, and tells the user once — “Yes, tell me once (Recommended)”. U5: the tool is pre-allowed, and only informs — “yes, but only for informing the working tree, no need for the agent to proccess any request to avoid consuming tokens.” This amends D11: aineo pre-allows `mcp__aineo__announce_work` beside its report tool. U6 (a): the changes pane is not brought into view — “No (Recommended)”. These are the user's decisions. How the tool only informs — the reply `ok`, the short words that teach it — is the orchestrator's assumption A404, and O13–O26 are ruled as A405–A418, not part of D77.
+
 *Dated note on D69, 2026-10-16.* D78, the user's decision, supersedes its “cut to 24 cells with `…`”: a name is cut only when the tab line has no room for the titles whole — T83 (planned).
 
 ## Architecture
