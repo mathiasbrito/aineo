@@ -1561,6 +1561,44 @@ T['the tab line']['warns, naming the variable, that no tab shows activity when']
   )
 end
 
+T['the tab line']['warns that no tab shows activity when CLAUDE_CODE_DISABLE_TERMINAL_TITLE is'] =
+  MiniTest.new_set({
+    parametrize = { { '1' }, { 'true' }, { 'yes' }, { 'on' }, { 'TRUE' }, { ' On ' } },
+  })
+
+T['the tab line']['warns that no tab shows activity when CLAUDE_CODE_DISABLE_TERMINAL_TITLE is']['set to'] = function(
+  value
+)
+  start_with({ autostart = false })
+
+  local report = report_with_environment({ CLAUDE_CODE_DISABLE_TERMINAL_TITLE = value })
+
+  eq(#health.advice(report, 'Tab line'), 1)
+end
+
+T['the tab line']['does not warn about activity when'] = MiniTest.new_set({
+  parametrize = {
+    { 'CLAUDE_CODE_DISABLE_TERMINAL_TITLE', '0' },
+    { 'CLAUDE_CODE_DISABLE_TERMINAL_TITLE', 'false' },
+    { 'CLAUDE_CODE_DISABLE_TERMINAL_TITLE', 'no' },
+    { 'CLAUDE_CODE_DISABLE_TERMINAL_TITLE', '2' },
+    { 'TMUX', ' ' },
+    { 'STY', '  ' },
+    { 'ZELLIJ', ' ' },
+  },
+})
+
+T['the tab line']['does not warn about activity when']['a variable Claude Code does not act on is set'] = function(
+  variable,
+  value
+)
+  start_with({ autostart = false })
+
+  local report = report_with_environment({ [variable] = value })
+
+  eq(health.advice(report, 'Tab line'), {})
+end
+
 T['the tab line']['does not warn about activity when none of the variables is set'] = function()
   start_with({ autostart = false })
 
