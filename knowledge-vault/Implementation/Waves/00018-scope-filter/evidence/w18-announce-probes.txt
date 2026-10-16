@@ -1,0 +1,45 @@
+== P1: git 2.54.0 (Apple Git-157)
+/tmp is: private/tmp
+announced: /tmp/w18-announce-probe/wt-a and ../wt-b (relative to the repository)
+worktree /private/tmp/w18-announce-probe/repo
+worktree /private/tmp/w18-announce-probe/wt-a
+worktree /private/tmp/w18-announce-probe/wt-b
+== P2: Claude Code binary
+version (from the file name the install links to): 2.1.301
+found    a search hint read from a tool's _meta: B._meta?.["anthropic/searchHint"]
+found    a tool is always loaded when its _meta says so: alwaysLoad:!T&&(w&&!(r==="dynamic"&&B._meta?.["anthropic/alwaysLoad"]===!1)||B._meta?.["anthropic/alwaysLoad"]===!0)
+found    the server option, and the default: deferred: Default: tools are deferred when tool search is enabled.
+found    a deferred tool description is cut: The model receives only about the first
+found    the description length limits: CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH
+found    a server's initialize instructions join the prompt: # MCP Server Instructions
+found    P3: the subagent prompt flag, and its limit: --append-subagent-system-prompt <prompt>
+Append a system prompt to every Task-tool subagent's system prompt, propagated to nested subagents (only works with --p
+found    P3: the SubagentStart hook gives the subagent context: When a subagent (Agent tool call) is started
+Input to command is JSON with agent_id and agent_type.
+Exit code 0 - JSON additionalContext shown to subagent
+found    P3: an agent with no tools list inherits the parent: If omitted, inherits all tools from parent
+
+(Run on the planning host, 2026-10-16. Separately observed the same day: a
+Claude Code 2.1.301 session that runs under aineo listed `mcp__aineo__report`
+among its deferred tools, by name alone, until loaded through tool search.)
+
+== P3, documented: code.claude.com, read 2026-10-16 (tier 1)
+docs/en/sub-agents.md:
+- "Subagents receive only this system prompt plus basic environment details
+  like the working directory, not the Claude Code system prompt."
+- "Subagents inherit the built-in tools and MCP tools available in the main
+  conversation, narrowed by two filters..."
+- On an agent's `mcpServers`: "Inline servers defined here are connected when
+  the subagent starts... and disconnected when it finishes. String references
+  share the parent session's connection."
+- `isolation: worktree`: "run the subagent in a temporary git worktree ...
+  The worktree is automatically cleaned up if the subagent makes no changes."
+- "an in-process teammate follows your session the same way, while a teammate
+  in its own split pane runs as a separate Claude Code process."
+docs/en/hooks.md:
+- "SessionStart, SubagentStart, PostModelSwitch | Context only |
+  `hookSpecificOutput.additionalContext` adds context for Claude."
+- additionalContext of "SessionStart and SubagentStart: at the start of the
+  conversation, before the first prompt".
+- "When a subagent calls a tool, tool events such as `PreToolUse` and
+  `PostToolUse` fire the same configured hooks as in the main conversation".
