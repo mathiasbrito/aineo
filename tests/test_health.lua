@@ -1450,6 +1450,12 @@ end
 
 T['the tab line'] = MiniTest.new_set()
 
+--- The line the Tab line section shows while 'showtabline' is not 2 and
+--- `tabs.always_show` holds its default, `true`, before any aineo tab has
+--- opened: 'showtabline' is Neovim's 1.
+local TAB_LINE_SHOWN_WHEN_A_TAB_OPENS =
+  "- 'showtabline' is 1 now; aineo sets it to 2 once, when the first aineo tab opens, and leaves it after (tabs.always_show): :help |aineo-tabs|"
+
 --- The line the Tab line section shows, whichever tab line is in use, about
 --- what the activity indicator reads.
 local INDICATOR_READS_THE_TITLE =
@@ -1497,6 +1503,7 @@ T['the tab line']['is said to be Neovim’s own while no aineo tab has drawn one
 
   eq(health.section(report, 'Tab line'), {
     "- the tab line is Neovim's own: aineo draws its own when the first aineo tab opens, while 'tabline' is empty: :help |aineo-tabs|",
+    TAB_LINE_SHOWN_WHEN_A_TAB_OPENS,
     INDICATOR_READS_THE_TITLE,
     AINEO_HIDES_THE_MULTIPLEXER,
   })
@@ -1510,6 +1517,7 @@ T['the tab line']['is said to be aineo’s once the tabs home draws it'] = funct
 
   eq(health.section(report, 'Tab line'), {
     '- ✅ OK aineo draws the tab line: each tab shows its place and, for an aineo tab, its session’s name',
+    TAB_LINE_SHOWN_WHEN_A_TAB_OPENS,
     INDICATOR_READS_THE_TITLE,
     AINEO_HIDES_THE_MULTIPLEXER,
   })
@@ -1528,9 +1536,53 @@ T['the tab line']['is said to be the user’s own when they set one'] = function
 
   eq(health.section(report, 'Tab line'), {
     "- the tab line is yours ('tabline' is %t): aineo draws none; require('aineo').tab_title({n}) gives the title it would draw for a tab page: :help |aineo-tabs|",
+    TAB_LINE_SHOWN_WHEN_A_TAB_OPENS,
     INDICATOR_READS_THE_TITLE,
     AINEO_HIDES_THE_MULTIPLEXER,
   })
+end
+
+T['the tab line']["says the tab line shows with one tab page, with 'showtabline' as it is, once an aineo tab has opened"] = function()
+  start_with({ autostart = false })
+  child.lua("require('aineo.tabs').show_tabline_once()")
+
+  local report = report_with_environment({})
+
+  eq(
+    health.section(report, 'Tab line')[2],
+    "- aineo shows the tab line with one tab page: 'showtabline' is 2 (tabs.always_show): :help |aineo-tabs|"
+  )
+end
+
+T['the tab line']["says what 'showtabline' is now, and that aineo sets it once, when the user changed it after the first open"] = function()
+  start_with({ autostart = false })
+  child.lua("require('aineo.tabs').show_tabline_once() vim.o.showtabline = 0")
+
+  local report = report_with_environment({})
+
+  eq(
+    health.section(report, 'Tab line')[2],
+    "- 'showtabline' is 0 now; aineo sets it to 2 once, when the first aineo tab opens, and leaves it after (tabs.always_show): :help |aineo-tabs|"
+  )
+end
+
+T['the tab line']["says aineo leaves 'showtabline' as the user has it when tabs.always_show is false"] = function()
+  start_with({ autostart = false, tabs = { always_show = false } })
+
+  local report = report_with_environment({})
+
+  eq(
+    health.section(report, 'Tab line')[2],
+    "- aineo leaves 'showtabline' as you have it (tabs.always_show is false): it is 1 now: :help |aineo-tabs|"
+  )
+end
+
+T['the tab line']['says nothing of tabs.always_show while the configuration is wrong'] = function()
+  start_with({ autostart = false, tabs = { always_show = 'yes' } })
+
+  local report = report_with_environment({})
+
+  eq(health.section(report, 'Tab line')[2], INDICATOR_READS_THE_TITLE)
 end
 
 T['the tab line']['warns, naming the variable, that no tab shows activity when'] =
@@ -1540,21 +1592,28 @@ T['the tab line']['warns, naming the variable, that no tab shows activity when']
         'CLAUDE_CODE_DISABLE_TERMINAL_TITLE',
         'Claude Code sets no terminal title',
         'unset CLAUDE_CODE_DISABLE_TERMINAL_TITLE before starting Neovim',
+
+        '',
       },
       {
         'TMUX',
         'Claude Code keeps its terminal title still under a terminal multiplexer',
         'set claude.hide_multiplexer to true, or start Neovim outside tmux, screen and zellij',
+        ', and a copy made in the Claude window prints 52;c;<base64> there',
       },
       {
         'STY',
         'Claude Code keeps its terminal title still under a terminal multiplexer',
         'set claude.hide_multiplexer to true, or start Neovim outside tmux, screen and zellij',
+
+        '',
       },
       {
         'ZELLIJ',
         'Claude Code keeps its terminal title still under a terminal multiplexer',
         'set claude.hide_multiplexer to true, or start Neovim outside tmux, screen and zellij',
+
+        '',
       },
     },
   })
@@ -1562,16 +1621,17 @@ T['the tab line']['warns, naming the variable, that no tab shows activity when']
 T['the tab line']['warns, naming the variable, that no tab shows activity when']['is set'] = function(
   variable,
   reason,
-  advice
+  advice,
+  also
 )
   start_with({ autostart = false, claude = { hide_multiplexer = false } })
 
   local report = report_with_environment({ [variable] = '1' })
 
-  eq(health.section(report, 'Tab line')[2], INDICATOR_READS_THE_TITLE)
+  eq(health.section(report, 'Tab line')[3], INDICATOR_READS_THE_TITLE)
   eq(
-    health.section(report, 'Tab line')[3],
-    ('- ⚠️ WARNING %s is set: %s, so no tab shows activity'):format(variable, reason)
+    health.section(report, 'Tab line')[4],
+    ('- ⚠️ WARNING %s is set: %s, so no tab shows activity%s'):format(variable, reason, also)
   )
   eq(
     health.advice(report, 'Tab line'),
@@ -1585,7 +1645,7 @@ T['the tab line']['warns of no multiplexer variable, and says aineo hides them, 
   local report = report_with_environment({ TMUX = '1', STY = '1', ZELLIJ = '1' })
 
   eq(health.advice(report, 'Tab line'), {})
-  eq(health.section(report, 'Tab line')[3], AINEO_HIDES_THE_MULTIPLEXER)
+  eq(health.section(report, 'Tab line')[4], AINEO_HIDES_THE_MULTIPLEXER)
 end
 
 T['the tab line']['still warns of CLAUDE_CODE_DISABLE_TERMINAL_TITLE while claude.hide_multiplexer is true'] = function()
@@ -1603,6 +1663,7 @@ T['the tab line']['does not say aineo hides the multiplexer while claude.hide_mu
 
   eq(health.section(report, 'Tab line'), {
     "- the tab line is Neovim's own: aineo draws its own when the first aineo tab opens, while 'tabline' is empty: :help |aineo-tabs|",
+    TAB_LINE_SHOWN_WHEN_A_TAB_OPENS,
     INDICATOR_READS_THE_TITLE,
   })
 end

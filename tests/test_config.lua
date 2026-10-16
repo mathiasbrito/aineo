@@ -11,7 +11,7 @@ local DEFAULTS = {
   claude = { cmd = { 'claude' }, hide_multiplexer = true },
   layout = { report_height = 2 / 3 },
   changes = {},
-  tabs = { padding = 2 },
+  tabs = { padding = 2, always_show = true },
 }
 
 local T = MiniTest.new_set()
@@ -183,10 +183,10 @@ T['resolve_config()']['takes the padding of the tab titles from either source, 2
   local from_setup = config.resolve_config({ tabs = { padding = 0 } }, { tabs = { padding = 4 } })
   local widest = config.resolve_config({ tabs = { padding = 8 } }, nil)
 
-  eq(from_global.tabs, { padding = 0 })
-  eq(from_setup.tabs, { padding = 4 })
-  eq(widest.tabs, { padding = 8 })
-  eq(config.resolve_config(nil, nil).tabs, { padding = 2 })
+  eq(from_global.tabs.padding, 0)
+  eq(from_setup.tabs.padding, 4)
+  eq(widest.tabs.padding, 8)
+  eq(config.resolve_config(nil, nil).tabs.padding, 2)
 end
 
 T['resolve_config()']['refuses a padding that is not a whole number from 0 to 8'] =
@@ -200,6 +200,30 @@ T['resolve_config()']['refuses a padding that is not a whole number from 0 to 8'
   expect.error(function()
     config.resolve_config({ tabs = { padding = padding } }, nil)
   end, 'tabs%.padding: expected a whole number from 0 to 8')
+end
+
+T['resolve_config()']['takes whether the tab line always shows from either source, true by default'] = function()
+  local from_global = config.resolve_config({ tabs = { always_show = false } }, nil)
+  local from_setup = config.resolve_config(
+    { tabs = { always_show = false } },
+    { tabs = { always_show = true } }
+  )
+
+  eq(from_global.tabs.always_show, false)
+  eq(from_setup.tabs.always_show, true)
+  eq(config.resolve_config(nil, nil).tabs.always_show, true)
+end
+
+T['resolve_config()']['refuses an always_show that is not a boolean'] = MiniTest.new_set({
+  parametrize = { { 1 }, { 'true' }, { {} } },
+})
+
+T['resolve_config()']['refuses an always_show that is not a boolean']['as tabs.always_show'] = function(
+  always_show
+)
+  expect.error(function()
+    config.resolve_config({ tabs = { always_show = always_show } }, nil)
+  end, 'tabs%.always_show: expected boolean')
 end
 
 T['resolve_config()']['takes the working branch of the changes pane from either source, none by default'] = function()

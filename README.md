@@ -116,7 +116,7 @@ vim.g.aineo = {
   },
   layout = { report_height = 2 / 3 },
   -- changes = { working_branch = 'origin/dev' },
-  tabs = { padding = 2 },
+  tabs = { padding = 2, always_show = true },
 }
 ```
 
@@ -130,6 +130,7 @@ vim.g.aineo = {
 | `layout.report_height` | `2/3` | The Report's share of the right column, a number strictly between 0 and 1. |
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
 | `tabs.padding` | `2` | Spaces either side of each title in aineo's tab line, from 0 to 8. |
+| `tabs.always_show` | `true` | Whether the tab line shows with a single tab page: aineo sets `'showtabline'` to `2` once, when its first tab opens, and a value you set afterwards is kept. `false` leaves `'showtabline'` as you have it. Read at the first tab: a later change needs a restart. |
 
 The highlight groups can be overridden in a colorscheme or with
 `:highlight`. The tab line uses `AineoTabLineSel`, `AineoTabLine` and
@@ -141,8 +142,9 @@ The highlight groups can be overridden in a colorscheme or with
 
 ## The activity indicator and tmux
 
-When 'tabline' is empty, aineo draws a tab line of its own, from two tab
-pages on. An aineo tab's title ends with an indicator of what its Claude Code
+When 'tabline' is empty, aineo draws a tab line of its own, and, with
+`tabs.always_show` (on by default), has it show with a single tab page too.
+An aineo tab's title ends with an indicator of what its Claude Code
 is doing: `◒` and `◓` in turn while it works or a subagent of its runs, `●`
 once it has stopped while you were in another tab, until you enter that
 tab, and nothing otherwise.
@@ -162,6 +164,8 @@ the shell terminal and every other job keep the editor's.
 To keep those features, set `claude = { hide_multiplexer = false }`. Claude
 Code then gets the editor's environment as it is, no tab shows activity inside
 a multiplexer, and, when Neovim runs inside one, `:checkhealth aineo` warns.
+Under tmux, a mouse selection copied in Claude's window then prints
+`52;c;<base64>` there (the copy, base64-encoded).
 The indicator also does not work when `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` is set to `1`, `true`, `yes`
 or `on`. It reads the title of Claude Code 2.1.301 from that version's
 program; it has not been seen in a real turn, and a later version may change

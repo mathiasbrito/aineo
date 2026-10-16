@@ -777,8 +777,9 @@ end
 --- its terminal no title, or keeps it still, so that no tab shows activity
 --- (the activity indicator of `aineo.tabs` reads that title): what each
 --- means, what the user can do, which of its values Claude Code acts on
---- (read from its 2.1.301 binary, not run), and whether aineo hides it from
---- Claude Code while `claude.hide_multiplexer` holds. A variable Neovim holds
+--- (read from its 2.1.301 binary, not run), whether aineo hides it from
+--- Claude Code while `claude.hide_multiplexer` holds, and any other harm of
+--- it reaching Claude Code (`side_effect`). A variable Neovim holds
 --- is handed to every job it starts, Claude Code's included, except where
 --- aineo hides it.
 local SILENT_TITLE_VARIABLES = {
@@ -793,6 +794,7 @@ local SILENT_TITLE_VARIABLES = {
     is_hidden_by_aineo = true,
     is_acted_on = is_not_blank,
     meaning = 'Claude Code keeps its terminal title still under a terminal multiplexer',
+    side_effect = ', and a copy made in the Claude window prints 52;c;<base64> there',
     advice = 'set claude.hide_multiplexer to true, or start Neovim outside tmux, screen and zellij',
   },
   {
@@ -834,17 +836,54 @@ local function check_activity_indicator(resolved_config)
     local is_hidden = is_hiding and variable.is_hidden_by_aineo
     if not is_hidden and value ~= nil and variable.is_acted_on(value) then
       vim.health.warn(
-        ('%s is set: %s, so no tab shows activity'):format(variable.name, variable.meaning),
+        ('%s is set: %s, so no tab shows activity%s'):format(
+          variable.name,
+          variable.meaning,
+          variable.side_effect or ''
+        ),
         ('%s for the tabs to show activity: :help aineo-limits'):format(variable.advice)
       )
     end
   end
 end
 
+--- Says whether aineo has the tab line show with a single tab page, from
+--- `resolved_config.tabs.always_show` and the current 'showtabline': aineo
+--- sets 'showtabline' to 2 once, when the first aineo tab opens, so a value it
+--- finds other than 2 is the user's, or comes before that open; the wording
+--- for it holds in both states. Says nothing while the configuration is
+--- wrong.
+---
+---@param resolved_config table|nil the configuration, `nil` when it is wrong
+local function check_tabline_shown(resolved_config)
+  if resolved_config == nil then
+    return
+  end
+  local showtabline = vim.o.showtabline
+  if not resolved_config.tabs.always_show then
+    vim.health.info(
+      ("aineo leaves 'showtabline' as you have it (tabs.always_show is false): it is %d now: :help aineo-tabs"):format(
+        showtabline
+      )
+    )
+  elseif showtabline == 2 then
+    vim.health.info(
+      "aineo shows the tab line with one tab page: 'showtabline' is 2 (tabs.always_show): :help aineo-tabs"
+    )
+  else
+    vim.health.info(
+      ("'showtabline' is %d now; aineo sets it to 2 once, when the first aineo tab opens, and leaves it after (tabs.always_show): :help aineo-tabs"):format(
+        showtabline
+      )
+    )
+  end
+end
+
 --- Reports which tab line is in use: aineo's, which it draws while the user's
 --- 'tabline' is empty when the first aineo tab opens; the user's own, which
 --- aineo leaves in place; or Neovim's own, before aineo has drawn its own.
---- Then what the activity indicator reads (`check_activity_indicator()`).
+--- Then whether the tab line shows with one tab page (`check_tabline_shown()`)
+--- and what the activity indicator reads (`check_activity_indicator()`).
 ---
 ---@param resolved_config table|nil the configuration, `nil` when it is wrong
 local function check_tab_line(resolved_config)
@@ -865,6 +904,7 @@ local function check_tab_line(resolved_config)
       "the tab line is Neovim's own: aineo draws its own when the first aineo tab opens, while 'tabline' is empty: :help aineo-tabs"
     )
   end
+  check_tabline_shown(resolved_config)
   check_activity_indicator(resolved_config)
 end
 
