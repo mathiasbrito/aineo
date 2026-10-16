@@ -27,14 +27,14 @@ local CHILD_MARKER = { AINEO_CHILD = '1' }
 --- What the editor holds that a job's environment is made from.
 ---@class aineo.claude.EditorEnvironment
 ---@field variables table<string, string> the editor's environment (`vim.fn.environ()`)
----@field address string the editor's server address (`v:servername`), which a job gets as `NVIM`
 ---@field has_true_colour boolean whether the editor draws true colour ('termguicolors'), in which case a terminal job gets `COLORTERM=truecolor`
 
 --- The environment a terminal job of Neovim 0.12.5 gets from `editor`, as
 --- Neovim makes it when it merges `env` into the editor's environment:
---- `NVIM` is the editor's address, `TERM` is `xterm-256color`, `COLORTERM`
---- is `truecolor` with true colour and absent without it, and `VIM`,
---- `VIMRUNTIME` and `NVIM_LISTEN_ADDRESS` are absent.
+--- `TERM` is `xterm-256color`, `COLORTERM` is `truecolor` with true colour
+--- and absent without it, and `VIM`, `VIMRUNTIME` and `NVIM_LISTEN_ADDRESS`
+--- are absent. `NVIM`, the editor's server address, is left out: Neovim sets
+--- it itself in a job whose environment `clear_env` defines, as in any other.
 ---
 ---@param editor aineo.claude.EditorEnvironment
 ---@return table<string, string>
@@ -43,7 +43,7 @@ local function terminal_job_environment(editor)
   for _, variable in ipairs(VARIABLES_NEOVIM_REMOVES) do
     environment[variable] = nil
   end
-  environment.NVIM = editor.address
+  environment.NVIM = nil
   environment.TERM = TERMINAL_JOB_TERM
   environment.COLORTERM = editor.has_true_colour and 'truecolor' or nil
   return environment
