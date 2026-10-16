@@ -111,6 +111,7 @@ local TAGS = {
   'aineo-config-layout.report_height',
   'aineo-config-changes.working_branch',
   'aineo-config-tabs.padding',
+  'aineo-config-tabs.always_show',
   'aineo-tabline',
   'aineo-layout',
   'aineo-panes',

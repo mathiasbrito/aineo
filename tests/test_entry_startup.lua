@@ -93,6 +93,22 @@ T['a bare interactive start']['opens the layout around a new Claude'] = function
   eq(#claude_session.wait_for_starts(fake, 1), 1)
 end
 
+T['a bare interactive start']["shows the tab line by setting 'showtabline' to 2"] = function()
+  local fake = claude_session.fake('entry-autostart-tabline-shown', 'ready')
+
+  local editor = start_editor(fake)
+
+  eq(entry_editor.get(editor, 'vim.o.showtabline'), 2)
+end
+
+T['a bare interactive start']["leaves 'showtabline' as it is when tabs.always_show is false"] = function()
+  local fake = claude_session.fake('entry-autostart-tabline-left', 'ready')
+
+  local editor = start_editor(fake, { settings = { tabs = { always_show = false } } })
+
+  eq(entry_editor.get(editor, 'vim.o.showtabline'), 1)
+end
+
 T['a bare interactive start']['with a command that cannot run tells the user on one line, without a prompt'] = function()
   local fake = claude_session.fake('entry-autostart-no-such-command', 'ready')
 

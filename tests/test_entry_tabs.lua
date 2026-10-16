@@ -81,6 +81,31 @@ T['the first tab']['leaves a tab line the user set in place'] = function()
   eq(child.lua_get('vim.o.tabline'), '%t')
 end
 
+T['the first tab']["shows the tab line with the one tab page, by setting 'showtabline' to 2"] = function()
+  tabs.open_first_tab(child, 'tabs-first-always-shown')
+
+  eq(child.o.showtabline, 2)
+end
+
+T['the first tab']["leaves 'showtabline' as it is when tabs.always_show is false"] = function()
+  tabs.use_own_state(child, 'tabs-first-not-always-shown')
+  entry.use_fake(child, tabs.fake('tabs-first-not-always-shown-first'), {
+    tabs = { always_show = false },
+  })
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+
+  eq(child.o.showtabline, 1)
+end
+
+T['the first tab']["shows the tab line with the one tab page even when the user's own 'tabline' draws it"] = function()
+  child.o.tabline = '%t'
+
+  tabs.open_first_tab(child, 'tabs-first-own-line-shown')
+
+  eq(child.o.showtabline, 2)
+end
+
 T[':Aineo tab new'] = MiniTest.new_set()
 
 T[':Aineo tab new']['opens a tab page after the current one, its layout of its own around a Claude Code on a new session'] = function()
@@ -238,6 +263,15 @@ local function open_three_tab_pages(name)
   open_second_tab(tabs.fake(name .. '-second'))
   child.cmd('tabnew')
   child.cmd('tabfirst')
+end
+
+T[':Aineo tab new']["keeps a 'showtabline' the user set after the first open"] = function()
+  tabs.open_first_tab(child, 'tabs-new-keeps-showtabline')
+  child.o.showtabline = 1
+
+  open_second_tab(tabs.fake('tabs-new-keeps-showtabline-second'))
+
+  eq(child.o.showtabline, 1)
 end
 
 T['the jumps'] = MiniTest.new_set()

@@ -241,16 +241,18 @@ title has no trailing space. The tab you are in shows ◒ and ◓ while its
 Claude Code works, and never ●. The indicator reads the title Claude Code sets
 on its terminal (|aineo-limits|), and is part of the title, so it takes the
 tab's highlight group and counts in the cells the line fits. It shows where
-the tab line does: from two tab pages on, with the default 'showtabline',
-which aineo leaves alone.
+the tab line does: aineo sets 'showtabline' to 2 when its first tab opens, so
+with one tab page too (|aineo-config-tabs.always_show|).
                                                              *aineo-tab_title*
 `require('aineo').tab_title({n})` gives the title aineo would draw for the
 tab page numbered {n}, for your own tab line, the activity indicator of
 |aineo-tabs| included; nil when there is no such tab page, and an error when
 {n} is not a whole number from 1. While a tab's Claude Code works aineo draws
-the tab line again twice a second, whoever draws it. aineo leaves
-'showtabline' alone: the tab line shows from two tab pages on by default.
-`:checkhealth aineo` says which tab line is in use (|aineo-health|).
+the tab line again twice a second, whoever draws it. Whoever draws the tab
+line, aineo sets 'showtabline' to 2 once, when its first tab opens, unless
+`tabs.always_show` is `false` (|aineo-config-tabs.always_show|); a value you
+set afterwards is kept. `:checkhealth aineo` says which tab line is in use
+and what 'showtabline' is (|aineo-health|).
                                                                *aineo-tabline*
 aineo's tab line draws the current title in `AineoTabLineSel`, the other
 titles in `AineoTabLine` and the rest of the line in `AineoTabLineFill`. Their
@@ -1603,8 +1605,10 @@ claude.hide_multiplexer	A boolean. Default: `true`
 			Code gets the environment every terminal job of
 			Neovim gets, as before, and knows it runs inside
 			the multiplexer; no tab shows activity there, and
-			`:checkhealth aineo` warns (|aineo-health|). What
-			the default costs is in |aineo-limits|.
+			`:checkhealth aineo` warns (|aineo-health|). Under
+			tmux a copy made in Claude's window then prints
+			`52;c;<text>` there. What the default costs is in
+			|aineo-limits|.
 
                                            *aineo-config-layout.report_height*
 layout.report_height	A number strictly between 0 and 1.
@@ -1633,6 +1637,18 @@ tabs.padding		A whole number from 0 to 8. Default: `2`
 			do not all fit the width of the editor are drawn in
 			a run of whole titles that holds the current one,
 			the padding counted.
+
+                                               *aineo-config-tabs.always_show*
+tabs.always_show	A boolean. Default: `true`
+			Whether aineo has the tab line show with a single
+			tab page. With `true` aineo sets 'showtabline' to
+			`2` once, when its first tab opens (the autostart,
+			|aineo-\o| or |aineo-\T|), whether aineo or you draw
+			the tab line (|aineo-tabline|); a 'showtabline' you
+			set afterwards is kept, and aineo sets nothing back
+			when its tabs close. With `false` 'showtabline' is
+			left as you have it, so the tab line shows from two
+			tab pages on by default.
 
 ==============================================================================
 7. SEND                                                           *aineo-send*
@@ -2059,12 +2075,16 @@ Tab line ~
   (|aineo-tabs|). That the activity indicator on a tab reads the title
   Claude Code sets on its terminal, and, while `claude.hide_multiplexer`
   holds (|aineo-config-claude.hide_multiplexer|), that aineo starts Claude
-  Code without `TMUX`, `TMUX_PANE`, `STY` and `ZELLIJ`. A warning, naming the
-  variable, for `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` when Neovim's
+  Code without `TMUX`, `TMUX_PANE`, `STY` and `ZELLIJ`. Whether aineo has
+  the tab line show with one tab page (`tabs.always_show`,
+  |aineo-config-tabs.always_show|), and what 'showtabline' is. A warning,
+  naming the variable, for `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` when Neovim's
   environment holds it as `1`, `true`, `yes` or `on`, and, with
   `claude.hide_multiplexer` set to `false`, for `TMUX`, `STY` and `ZELLIJ`
   when it holds them with more than white space: Claude Code then sets no
-  title, or keeps it still, so that no tab shows activity (|aineo-limits|).
+  title, or keeps it still, so that no tab shows activity (|aineo-limits|);
+  for `TMUX`, it adds that a copy made in Claude's window prints `52;c;<text>`
+  there.
 
 Autostart ~
   Whether the autostart opened the layout at startup, or which reason kept
@@ -2479,7 +2499,10 @@ The activity indicator ~
   depend on knowing — agent teams opening panes in tmux, say — are off
   there. The shell terminal and every other job keep the editor's
   environment. With `claude.hide_multiplexer` set to `false` Claude Code
-  knows, and no tab shows activity; `:checkhealth aineo` warns.
+  knows, and no tab shows activity; `:checkhealth aineo` warns. Under tmux
+  Claude Code then copies a mouse selection with a clipboard sequence
+  wrapped for tmux, which Neovim's terminal prints in Claude's window as
+  `52;c;<text>`; the plain one it sends otherwise reaches the clipboard.
 - A shell command Claude Code runs in the background is not activity; a
   subagent running in the background is, and keeps the tab busy after the
   reply.

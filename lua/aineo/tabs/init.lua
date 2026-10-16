@@ -2,7 +2,8 @@
 --- held, what their titles say, what their Claude Codes are doing, the tab
 --- line that draws them, and the folder's ordered list of the tabs' sessions.
 ---
---- Requires `aineo.config` alone, for the padding of the titles: the form
+--- Requires `aineo.config` alone, for the padding of the titles and whether
+--- the line always shows: the form
 --- check and the write of the folder's list are this home's own
 --- (`tab_list.lua`), and so are the activity of the tabs (`activity.lua`)
 --- and the clock that animates it (`animation.lua`).
@@ -20,6 +21,9 @@ local M = {}
 --- The 'tabline' value that has Neovim ask `tabline()` for the line each time
 --- it draws it.
 local TABLINE_EXPRESSION = "%!v:lua.require'aineo.tabs'.tabline()"
+
+--- Whether `show_tabline_once()` has been called.
+local tabline_shown_once = false
 
 --- The name function of each held tab page, by the tab page's handle.
 ---
@@ -236,19 +240,26 @@ function M.title(tab)
   return indicator and ('%s %s'):format(title, indicator) or title
 end
 
---- The `tabs.padding` setting, as `vim.g.aineo` and the options
---- `require('aineo').setup()` recorded give it; its default when they give a
---- wrong value, which `:checkhealth aineo` reports, so that a redraw of the
---- line never raises.
+--- The `tabs` settings, as `vim.g.aineo` and the options
+--- `require('aineo').setup()` recorded give them; their defaults when those
+--- give a wrong value, which `:checkhealth aineo` reports, so that a redraw
+--- of the line never raises.
 ---
----@return integer
-local function padding()
+---@return { padding: integer, always_show: boolean }
+local function tabs_settings()
   local is_valid, resolved =
     pcall(config.resolve_config, vim.g.aineo, config.recorded_setup_options())
   if not is_valid then
-    return config.resolve_config(nil, nil).tabs.padding
+    return config.resolve_config(nil, nil).tabs
   end
-  return resolved.tabs.padding
+  return resolved.tabs
+end
+
+--- The `tabs.padding` setting (`tabs_settings()`).
+---
+---@return integer
+local function padding()
+  return tabs_settings().padding
 end
 
 --- The 'tabline' format that draws the title of every tab page, each in the
@@ -355,8 +366,7 @@ end
 --- groups are defined (`AineoTabLineSel`, `AineoTabLine` and
 --- `AineoTabLineFill`, none that the user defined) and again after every
 --- `:colorscheme`. Called again, it changes nothing.
---- It never touches 'showtabline', so the line shows from two tab pages on
---- unless the user chose otherwise.
+--- It never touches 'showtabline' (`show_tabline_once()` does).
 ---
 ---@return boolean in_use whether 'tabline' draws aineo's line
 function M.draw_tabline()
@@ -368,6 +378,21 @@ function M.draw_tabline()
     highlights.keep_defined()
   end
   return in_use
+end
+
+--- The first time it is called, sets 'showtabline' to 2, so that the tab line
+--- shows with a single tab page, when `tabs.always_show` holds; with it
+--- `false` it leaves 'showtabline' as it is. Every later call does nothing,
+--- so that a 'showtabline' the user sets afterwards is kept, and nothing sets
+--- it back when the tabs close.
+function M.show_tabline_once()
+  if tabline_shown_once then
+    return
+  end
+  tabline_shown_once = true
+  if tabs_settings().always_show then
+    vim.o.showtabline = 2
+  end
 end
 
 return M

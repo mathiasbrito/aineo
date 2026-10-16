@@ -103,6 +103,7 @@ local SETTINGS = {
     validator = is_padding,
     expected = 'a whole number from 0 to 8',
   },
+  { name = 'tabs.always_show', default = true, validator = 'boolean' },
 }
 
 --- The keys leading to a setting, from the outermost table inwards.

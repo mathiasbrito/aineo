@@ -397,6 +397,50 @@ T['draw_tabline()']["leaves 'showtabline' as it was"] = function()
   eq(child.o.showtabline, 2)
 end
 
+T['show_tabline_once()'] = MiniTest.new_set()
+
+T['show_tabline_once()']["sets 'showtabline' to 2 by default"] = function()
+  in_child('tabs.show_tabline_once()')
+
+  eq(child.o.showtabline, 2)
+end
+
+T['show_tabline_once()']["leaves 'showtabline' as it was when tabs.always_show is false"] = function()
+  child.o.showtabline = 1
+  child.lua('vim.g.aineo = { tabs = { always_show = false } }')
+
+  in_child('tabs.show_tabline_once()')
+
+  eq(child.o.showtabline, 1)
+end
+
+T['show_tabline_once()']["keeps a 'showtabline' set after the first call"] = function()
+  in_child('tabs.show_tabline_once()')
+  child.o.showtabline = 0
+
+  in_child('tabs.show_tabline_once()')
+
+  eq(child.o.showtabline, 0)
+end
+
+T['show_tabline_once()']['takes tabs.always_show from setup() over vim.g.aineo'] = function()
+  child.lua('vim.g.aineo = { tabs = { always_show = true } }')
+  child.lua("require('aineo').setup({ tabs = { always_show = false } })")
+  child.o.showtabline = 1
+
+  in_child('tabs.show_tabline_once()')
+
+  eq(child.o.showtabline, 1)
+end
+
+T['show_tabline_once()']['shows the line by default when tabs.always_show is wrong, as health reports'] = function()
+  child.lua('vim.g.aineo = { tabs = { always_show = 1 } }')
+
+  in_child('tabs.show_tabline_once()')
+
+  eq(child.o.showtabline, 2)
+end
+
 T['kept_tabs()'] = MiniTest.new_set()
 
 local FIRST = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
