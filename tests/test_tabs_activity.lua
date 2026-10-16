@@ -220,14 +220,24 @@ T['title()']['says ● after the name of an unseen tab, until it is marked seen'
   eq(titles, { '2: second ●', '2: second' })
 end
 
-T['title()']['says the indicator after the 23 cells and the ellipsis of a cut name'] = function()
+T['title()']['says the indicator after the whole name of a long name'] = function()
   local title = in_child(HOLD_TWO_TABS .. [[
     tabs.hold(second, function() return ('x'):rep(60) end)
     tabs.set_busy(second, true)
     return tabs.title(second)
   ]])
 
-  eq(title, '2: ' .. ('x'):rep(23) .. '… ◒')
+  eq(title, '2: ' .. ('x'):rep(60) .. ' ◒')
+end
+
+T['title()']['is what require("aineo").tab_title() says for a long name, whole'] = function()
+  local titles = in_child(HOLD_TWO_TABS .. [[
+    tabs.hold(second, function() return ('x'):rep(30) end)
+    tabs.set_busy(second, true)
+    return { tabs.title(second), require('aineo').tab_title(2) }
+  ]])
+
+  eq(titles, { '2: ' .. ('x'):rep(30) .. ' ◒', '2: ' .. ('x'):rep(30) .. ' ◒' })
 end
 
 T['title()']['says the same as require("aineo").tab_title() for a tab with an indicator'] = function()
