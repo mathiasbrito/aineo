@@ -18,7 +18,7 @@ pull_requests:
 **Composition from:** [[Planning/aineo — v1 agent console]] › D32, D33–D35, D47, D55, D60, C1, C13, C15, and the D76 and T81–T82 this plan writes. See also [[Projects/aineo]], [[Implementation/Waves/00013-worktrees-landed/plan]] (the Landed section and the worktrees' bases) and [[Implementation/Waves/00014-cut-bases-new-session/plan]] (D60).
 
 **Feasible, at little cost.** Two regular packets, one after the other:
-- **T81 — a worktree alone.** `s` in the changes pane opens a picker of the other worktrees; the commits window then shows that worktree alone, its name on the first line, and the files window and the diffs follow it as they do today; `\g` shows the default view again.
+- **T81 — a worktree alone.** `s` in the changes pane opens a picker of the other worktrees; the commits window then shows that worktree alone, its name on the first line, and the files window and the diffs follow it as they do today; `\g` pressed while the pane shows returns to the default view, and from another pane brings the scope view back.
 - **T82 — a branch alone.** The picker also offers the local branches no worktree has checked out; a branch shows its commits since its merge base with the working branch, and its files and diffs from there.
 
 ## The user's words — 2026-10-16
@@ -68,18 +68,22 @@ Told that those are the user's own commits since the session's base, then Landed
 ## The model
 
 1. **The scope** (T81). Each changes home keeps a scope: none (the default view, today's pane), one other worktree, by its top level, or (T82) one local branch, by its name. A home's scope is its own: two tabs scope apart (O9).
-2. **The key** (U1 (a)). `s`, in Normal mode, in either window of the pane, offers in `vim.ui.select` (prompt `Show alone in the changes pane`):
-   - each other worktree the commits window last listed, by its heading, `Worktree <folder> (<branch>)`, in that order;
-   - (T82; U2 (a)) `Branch <name>` for each local branch no worktree has checked out and other than the working branch, the newest commit first.
+2. **The key** (U1, the user's answer; A391). `s`, in Normal mode, in either window of the pane, offers one list of worktrees and branches together in `vim.ui.select` (prompt `Show alone in the changes pane`), each item marked by its kind:
+   - `[worktree] <folder> (<branch>)`, or `(detached)`, for each other worktree the commits window last listed, in that order (T81);
+   - `[branch] <name>` for each local branch no worktree has checked out and other than the working branch, the newest commit first (T82; U2 (a)).
 
-   Picking sets the scope; dismissing the picker changes nothing. `s` under a scope offers the same list, so that one scope can replace another.
+   The list is searchable with whatever picker the user's `vim.ui.select` is (telescope, fzf-lua, snacks, dressing…); Neovim's own `vim.ui.select` is a numbered list with no search, which the help says. Picking sets the scope; dismissing the picker changes nothing. `s` under a scope offers the same list, so that one scope can replace another.
 3. **The scope view** (D76; O4). The commits window's first line is the name, as the pane names a worktree or a branch: `Worktree <folder> (<branch>)` or `Branch <name>`, in `AineoChangesFilter`. It is the line of the scope's whole change, as a worktree's heading is today. Below it, the scope's commits, newest first, or its note (`No commits in this worktree`, `No commits on this branch`), and any failure line its section shows today. Nothing else.
 4. **The choice under a scope** (O5). Setting a scope selects its whole change, the cursor on the first line; the files window follows, `Files in: Worktree <folder> (<branch>)` or `Files in: Branch <name>`. Moving the cursor chooses as today.
-5. **Leaving the scope** (D76; U3 (a); O6). `\g`, `<C-\>g`, `:Aineo pane changes` and its `<Plug>` mapping, in a tab whose changes home has a scope, clear the scope and show the default view, read again as `\g` reads it today. The choice stays when the default view lists it (the worktree's heading or one of its commits), the cursor on its line; otherwise *Session work* is chosen.
+5. **Leaving the scope** (D76; U3, the user's answer (b); O6). `\g`, `<C-\>g`, `:Aineo pane changes` and its `<Plug>` mapping, in a tab whose changes home has a scope:
+   - pressed while the changes pane already shows — either of its buffers in a window, as `refresh_shown_pane()` tells it — clear the scope and show the default view, read again as `\g` reads it today;
+   - pressed from another pane (the agent pane, the terminal pane, Claude, the Report, Input, a file), show the changes pane in its scope view, read again, the scope kept.
+
+   After a clearing, the choice stays when the default view lists it (the worktree's heading or one of its commits), the cursor on its line; otherwise *Session work* is chosen.
 6. **A branch** (T82; O10). Its base is its merge base with the commit the working branch names, else D32's comparison, as a worktree's (D60). Its commits are those of its tip that base cannot reach; its whole change is the files that differ from that base to its tip, committed files only. Enter, `l`, `h` and `gf` under it behave as under Landed, the branch's tip in place of the working branch's commit and its base in place of Landed's merge base, in buffers named `aineo://branch/{name}//…`.
 7. **When the scope goes** (O7). A worktree no longer listed, or a branch that names no commit, clears the scope at the read that finds it, chooses *Session work*, and tells the user once, at `INFO`: `aineo: <name> is gone; the changes pane shows the default view`. Following another Claude Code session clears the scope too (O8).
 8. **The reads** (O8). The pane reads what it reads today, whatever the scope; a branch scope adds that branch's read to the commits window's. Only the page differs.
-9. **Never on disk** (O9). The scope lasts until `\g`, until it goes, until the tab closes, or until the editor quits.
+9. **Never on disk** (O9). The scope lasts until a `\g` pressed while the pane shows, until it goes, until the tab closes, or until the editor quits.
 
 ## The cost — measured
 
@@ -95,6 +99,8 @@ A worktree scope costs nothing new: its section is read today.
 > **D76** — The changes pane can show one worktree, or one branch, alone (the user's decision). The user chooses a worktree or a branch "as sort of a filter"; the scope view then shows that worktree's or that branch's commits and nothing else — none of *Uncommitted*, *Session work*, the user's own commits, Landed or the other worktrees — and the commits window's first line is the worktree's or the branch's name. `\g` again leaves the scope and shows the default view. The files window and its diffs follow the choice, counted from the commit the worktree started from: D60's base, unchanged. Open, and not part of this row until the user answers: the key that picks (wave 18's U1), what the picker offers (U2), whether a `\g` from another pane leaves the scope (U3). The name's exact form, the choice under a scope, a vanished scope, a branch's base and the rest are the planning's proposals, ruled by the orchestrator (`Implementation/Waves/00018-scope-filter/plan.md`, O1–O12), and not part of this row (amends D33–D35, D47, D55, D60; C1, C13, C15)
 
 **Task rows:** T81 and T82, after T80.
+
+**A dated note, 2026-10-16,** on D76, after the user's answers (*The user's answers*, below): `s` in the changes pane opens one searchable list of worktrees and branches together, each marked as a worktree or a branch (U1); the list offers the other worktrees and the local branches no worktree has checked out, without the working branch (U2 (a)); while a scope is set, `\g` pressed from another pane brings the scope view back, and only a `\g` pressed while the changes pane already shows clears the scope and shows the default view (U3 (b)). How the items are marked is the orchestrator's assumption A391. Task rows T81 and T82 say so.
 
 ## Baseline
 
@@ -115,6 +121,21 @@ Each has a recommended option, (a). Both briefs are written for the (a)s. Anothe
 - **U3 — Does `\g` from another pane leave the scope too?** You choose a worktree, go to the agent pane (`\pa`), then press `\g`.
   - (a) **Yes: every `\g` shows the default view** (recommended). One rule: `\g` always brings you to the default view; `s` brings the scope back.
   - (b) No: `\g` shows the scope again; only a `\g` while the changes pane is already shown leaves it.
+
+## The user's answers — 2026-10-16, verbatim
+
+From the orchestrator's record of the questions put to the user:
+
+1. *"How should you pick the worktree or branch to focus on?"* (*s in the changes pane (Recommended)* / *s and a command* / *Another key*) — "like 1, but it can be a single search, for worktrees and branchs with some sort of hint for the user to see what is a worktree or what is a branch if necessary."
+2. *"What should the list offer?"* — "Worktrees + local branches (Recommended)" (the option's text: "The other worktrees, plus local branches no worktree has checked out, without your working branch.")
+3. *"While a scope is set, what should \g do when you press it from another pane (Claude, Report, Input)?"* — "Back to the scope" (the option's text: "\g from another pane brings you back to the scoped view; only \g pressed while the changes pane already shows clears it.")
+
+**What the answers decide** (D76's dated note):
+- U1: `s` in the changes pane opens one searchable list of worktrees and branches together, each marked as a worktree or a branch. No subcommand.
+- U2 (a): the other worktrees and the local branches no worktree has checked out, without the working branch.
+- U3 (b): while a scope is set, `\g` from another pane brings the scope view back; only a `\g` pressed while the changes pane already shows clears the scope and shows the default view.
+
+**How T81 and T82 divide the one list.** T81 builds the list as it will stay: one `vim.ui.select`, every item marked, the worktrees marked `[worktree]`. T82 adds the `[branch]` items to that same list, after the worktrees. Between the two releases the list holds worktrees alone; nothing in T81 is written to be replaced.
 
 ## Decisions for the orchestrator
 
@@ -156,11 +177,31 @@ Numbered once, here. Each recommendation is (a), and both briefs are written for
   - (a) Worktrees in the order the commits window lists them; branches by their newest commit, newest first (`git for-each-ref --sort=-committerdate refs/heads/`). With nothing to offer, no picker: `aineo: no other worktree or branch to show alone`. A branch listing that fails offers the worktrees and tells the failure once. A picker that raises is told once, as `\S`'s is. With no repository, `s` says so and offers nothing.
   - (b) Branches by name.
 
+## The orchestrator's rulings — 2026-10-16
+
+After the user's answers:
+- **A391**, how the one list marks its items: `vim.ui.select` with each item marked `[worktree]` or `[branch]`, then the name and, for a worktree, its branch (`[worktree] <folder> (<branch>)`, `[branch] <name>`), searchable with whatever picker the user's `vim.ui.select` is; the help says that Neovim's own `vim.ui.select` is a numbered list with no search.
+- O1–O12 are each ruled as their (a), numbered A392–A403 in order (O1 → A392 … O12 → A403):
+  - A392, two packets in sequence, T82 adding its items to T81's one list;
+  - A393, models and reviews;
+  - A394, both packets regular;
+  - A395, the first line is the pane's own name for the worktree or branch, `Worktree <folder> (<branch>)` or `Branch <name>`;
+  - A396, setting a scope chooses its whole change;
+  - A397, after the clearing `\g` the choice stays where the default view lists it, else *Session work*;
+  - A398, a scope gone is cleared and told once;
+  - A399, the reads unchanged, and another session followed clears the scope;
+  - A400, per tab, never on disk;
+  - A401, a branch's base from the working branch, else D32's comparison, and its diffs as under Landed;
+  - A402, no cap on a branch with no base;
+  - A403, the list's order and failures.
+
+These are the orchestrator's assumptions, never the user's decisions. Under U3 (b), A397 and A399 apply to the `\g` pressed while the pane shows, the one that clears. Both briefs are written for them, with the user's answers in each brief's dated amendment.
+
 ## Checks for the user
 
 After T81 is released, in a repository with two or three agent worktrees:
-- **M1.** In the changes pane, press `s` and pick a worktree. Does the commits window show only `Worktree …` on its first line and that worktree's commits below? Does the files window list its whole change, and Enter on a file show its diff from the worktree's base?
-- **M2.** Press `\g`. Is the default view back, the cursor on that worktree's heading?
+- **M1.** In the changes pane, press `s`. Does the list mark each worktree `[worktree]`, and does your picker search it? Pick one. Does the commits window show only `Worktree …` on its first line and that worktree's commits below? Does the files window list its whole change, and Enter on a file show its diff from the worktree's base?
+- **M2.** Press `\pa`, then `\g`. Is the scope view back? Press `\g` again. Is the default view back, the cursor on that worktree's heading?
 - **M3.** Pick a worktree again, then remove it (`git worktree remove`). Does the pane show the default view again, and say so once?
 
 After T82: **M4.** Pick a branch. Are its commits the ones a pull request of it would hold?
@@ -180,7 +221,7 @@ After T82: **M4.** Pick a branch. Are its commits the ones a pull request of it 
 
 **Rule 4, dependencies.** None. ✓
 
-**Rule 5, decisions.** ✓ once U1–U3 are answered and O1–O12 ruled. The scope, its view alone, its name first and `\g` back to the default view are the user's (D76).
+**Rule 5, decisions.** ✓ U1–U3 are answered (*The user's answers*) and O1–O12 ruled (A391–A403). The scope, its view alone, its name first, one marked list, and `\g` back to the default view from the pane and to the scope view from elsewhere are the user's (D76 and its dated note).
 
 **Rule 6, task lines.** ✓ Each packet holds its mark and writes a `## Task lines` section in its session note. The knowledge pass marks each line after its merge.
 
@@ -202,13 +243,13 @@ Each runs as its literal edit, shown applied, on the test files that exercise th
 **T81** (on `tests/test_changes_scope.lua`, `tests/test_entry_changes.lua`):
 1. The page ignores the scope: under a worktree scope, the commits window still lists *Session work*.
 2. The scope held by the module, not the home: a scope set in one tab's pane scopes another tab's.
-3. `\g` keeps the scope: after `\g`, the commits window's first line is still `Worktree …`.
+3. `\g` blind to where it is pressed — the check of whether the changes pane already shows dropped, so that every `\g` clears: after `\pa` then `\g`, the commits window's first line is no longer `Worktree …`. (A `\g` that never clears is killed by the case of the `\g` pressed in the pane.)
 4. The scope kept when its worktree is removed (`git worktree remove`): the commits window's first line is still `Worktree …`.
 5. The selection not following: after a worktree is picked, the files window's first line still reads `Files in: Session work`.
 
 **T82** (on `tests/test_changes_scope.lua`, `tests/test_git_branches.lua`):
-1. A branch a worktree has checked out offered as a branch: the picker offers `Branch <name>` for the branch of a listed worktree.
-2. The working branch offered: the picker offers `Branch <working branch>`.
+1. A branch a worktree has checked out offered as a branch: the list offers `[branch] <name>` for the branch of a listed worktree.
+2. The working branch offered: the list offers `[branch] <working branch>`.
 3. A branch's base taken from the session's base: a branch forked from the working branch before commits the session has not seen lists those commits.
 4. The branch's whole change read against the working tree: an uncommitted edit in the editor's worktree shows under `Files in: Branch <name>`.
 5. A deleted branch's scope kept: after `git branch -D`, the commits window's first line is still `Branch …`.
