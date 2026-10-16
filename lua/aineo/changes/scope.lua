@@ -40,11 +40,12 @@ end
 ---@field absence? aineo.git.Failure why no repository was found, when none was
 ---@field directory string the directory the session looked in
 ---@field others aineo.changes.OtherWorktrees what the commits window last listed of the other worktrees
+---@field others_read boolean whether the commits window has read the other worktrees once
 
 --- Why `s` offers nothing, when it does not: the words to tell the user. With
---- no repository they are the words the windows show; with the other
---- worktrees not listed, the words the commits window shows; with no other
---- worktree, `M.NONE_TO_SHOW`.
+--- no repository, or the other worktrees not read yet, they are the words
+--- the windows show; with the other worktrees not listed, the words the
+--- commits window shows; with no other worktree, `M.NONE_TO_SHOW`.
 ---
 ---@param known aineo.changes.OfferedFrom
 ---@return string|nil
@@ -55,6 +56,9 @@ function M.why_none_is_offered(known)
     end
     local page = lines.no_repository(known.absence, known.directory)
     return 'aineo: ' .. table.concat(page.text, '; ')
+  end
+  if not known.others_read then
+    return lines.READING
   end
   if #known.others.sections > 0 then
     return nil

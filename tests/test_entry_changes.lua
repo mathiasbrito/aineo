@@ -490,8 +490,10 @@ local PICK_THE_FIRST = [[
 
 --- Opens the layout around a repository with one other worktree, `agent`,
 --- of one commit, shows the changes pane, and shows that worktree alone
---- with `s`. Returns the commits window's lines in the default view and in
---- the scope view.
+--- with `s`, once Claude Code is ready: its first readiness follows the
+--- session, which takes its base then, so a pick made before it would
+--- be read again against a base that is not yet the session's. Returns the
+--- commits window's lines in the default view and in the scope view.
 ---
 ---@param name string
 ---@return string[] default_view
@@ -553,6 +555,45 @@ T['the focused view']['shows the default view from another pane once \\g switche
   entry.press(child, '\\g')
 
   expect_lines(COMMITS, default_view)
+end
+
+--- Makes the window showing Claude's terminal the current one.
+local function enter_claude_window()
+  child.lua([[
+    for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      local buffer = vim.api.nvim_win_get_buf(window)
+      if vim.bo[buffer].buftype == 'terminal' then
+        vim.api.nvim_set_current_win(window)
+        return
+      end
+    end
+    error('no terminal window')
+  ]])
+end
+
+T['the focused view']['is kept by \\g from Claude’s window, with the pane on screen: the cursor moves into the pane'] = function()
+  local _, scope_view = scoped_to_the_agent_worktree('changespane-entry-from-claude')
+  enter_claude_window()
+  eq(entry.current_window(child), 'terminal')
+
+  entry.press(child, '\\g')
+
+  eq({ entry.current_window(child), lines_of(COMMITS) }, { COMMITS, scope_view })
+end
+
+T['the focused view']['is kept by \\g from a diff Enter opened, with the pane on screen: the cursor moves into the pane'] = function()
+  local _, scope_view = scoped_to_the_agent_worktree('changespane-entry-from-diff')
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  A agent.txt' })
+  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  entry.press(child, '<CR>')
+  git_repo.wait_until('the diff shown and entered', function()
+    return entry.current_window(child):find('//diff/', 1, true) ~= nil
+  end)
+
+  entry.press(child, '\\g')
+
+  eq({ entry.current_window(child), lines_of(COMMITS) }, { COMMITS, scope_view })
 end
 
 return T

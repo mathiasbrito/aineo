@@ -895,10 +895,11 @@ local function make_tab(homes, key, callbacks)
   --- `focus_terminal()`'s), though the pane was shown already. When the layout
   --- must open first, it opens as `focus()` opens it, around the Claude
   --- session's terminal as it is, and Input is then handed to the draft home
-  --- (`keep_input_draft()`). The changes pane, already shown, is switched
-  --- between its default view and its focused view and read again first
-  --- (`aineo.changes`'s `toggle_focused_view()`), as showing it anew reads
-  --- it, in the view it was left in.
+  --- (`keep_input_draft()`). The changes pane, already shown, is read again
+  --- first (`aineo.changes`'s `toggle_focused_view()`), as showing it anew
+  --- reads it, in the view it was left in; pressed with the cursor in one of
+  --- its two windows, it switches between its default view and its focused
+  --- view as well.
   ---
   ---@param pane aineo.layout.Pane
   local function focus_pane(pane)
