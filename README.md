@@ -37,6 +37,9 @@ between the two.
   records the Claude Code versions aineo was measured on (`:help
   aineo-install`); it states no minimum.
 - `git` 2.36 or newer, for the changes pane.
+- Optionally, a file picker for `\f`: snacks.nvim, fzf-lua, telescope.nvim or
+  mini.pick. With none installed, `\f` lists the files through
+  `vim.ui.select()`.
 
 ## Installation
 
@@ -84,6 +87,7 @@ Every key sits behind the prefix `\`, in Normal mode:
 | `\1` to `\9` | move to the tab page of that number |
 | `\Q` | closes the current tab |
 | `\d` | closes the diff the changes pane shows |
+| `\f` | finds a file under the folder Claude works in and opens it in the middle column |
 | `\S` | lists Claude Code's sessions for the folder and opens the one you pick |
 | `\N` | starts a new Claude Code session |
 | `\tcn` | hides or shows the line numbers of Claude's window |
@@ -118,6 +122,7 @@ vim.g.aineo = {
   layout = { report_height = 2 / 3 },
   -- changes = { working_branch = 'origin/dev' },
   tabs = { padding = 2, always_show = true },
+  find = { picker = 'auto' },
 }
 ```
 
@@ -132,6 +137,7 @@ vim.g.aineo = {
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
 | `tabs.padding` | `2` | Spaces either side of each title in aineo's tab line, from 0 to 8. |
 | `tabs.always_show` | `true` | Whether the tab line shows with a single tab page: aineo sets `'showtabline'` to `2` once, when its first tab opens, and a value you set afterwards is kept. `false` leaves `'showtabline'` as you have it. Read at the first tab: a later change needs a restart. |
+| `find.picker` | `'auto'` | The picker `\f` hands its search to: `'auto'` takes the first installed of snacks.nvim, fzf-lua, telescope.nvim and mini.pick; `'snacks'`, `'fzf-lua'`, `'telescope'` or `'mini.pick'` takes that one alone. With none installed, or the one named missing, aineo lists the files through `vim.ui.select()`. None is a dependency. |
 
 The highlight groups can be overridden in a colorscheme or with
 `:highlight`. The tab line uses `AineoTabLineSel`, `AineoTabLine` and

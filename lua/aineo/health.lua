@@ -341,6 +341,7 @@ local PREFIX_KEYS = {
   { key = '8', plug = '<Plug>(aineo-tab-8)', mode = 'n' },
   { key = '9', plug = '<Plug>(aineo-tab-9)', mode = 'n' },
   { key = 'd', plug = '<Plug>(aineo-diff-close)', mode = 'n' },
+  { key = 'f', plug = '<Plug>(aineo-find)', mode = 'n' },
   { key = 's', plug = '<Plug>(aineo-send)', mode = 'x' },
 }
 
@@ -910,6 +911,35 @@ local function check_tab_line(resolved_config)
   check_activity_indicator(resolved_config)
 end
 
+--- Reports which picker the file finder uses for `find.picker`
+--- (`aineo.find`'s `picker_in_use()`): the one it takes, or that it lists the
+--- files itself, with a warning when the picker forced is not installed.
+--- Nothing while the configuration is wrong.
+---
+---@param resolved_config table|nil the configuration, `nil` when it is wrong
+local function check_find(resolved_config)
+  if not resolved_config then
+    return
+  end
+  vim.health.start('Find a file')
+  local setting = resolved_config.find.picker
+  local picker = require('aineo.find').picker_in_use(setting)
+  if picker then
+    vim.health.ok(('the file finder uses %s (find.picker is %s)'):format(picker, setting))
+  elseif setting == 'auto' then
+    vim.health.info(
+      'the file finder lists the files through vim.ui.select: none of snacks, fzf-lua, telescope or mini.pick is installed (find.picker is auto): :help |aineo-find|'
+    )
+  else
+    vim.health.warn(
+      ('find.picker is %s, which is not installed: the file finder lists the files through vim.ui.select'):format(
+        setting
+      ),
+      "Install it, or set find.picker to 'auto': :help |aineo-config-find.picker|"
+    )
+  end
+end
+
 --- Reports what the autostart decided when the editor started, and why, from
 --- aineo's record (`startup_record()`), with the error an open that failed
 --- met when the record holds it as text.
@@ -951,6 +981,7 @@ function M.check()
   check_prefix_mappings(resolved_config)
   check_terminal_prefix_mappings(resolved_config)
   check_tab_line(resolved_config)
+  check_find(resolved_config)
   check_autostart()
   name_limits()
 end
