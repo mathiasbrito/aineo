@@ -27,7 +27,11 @@ local PICKERS = {
     name = 'snacks',
     load = function()
       local snacks = required('snacks')
-      return snacks and snacks.picker and snacks or nil
+      local has_picker = snacks ~= nil
+        and pcall(function()
+          return assert(snacks.picker, 'snacks has no picker')
+        end)
+      return has_picker and snacks or nil
     end,
     open = function(snacks, directory)
       snacks.picker.files({ cwd = directory })

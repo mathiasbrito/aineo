@@ -1,5 +1,5 @@
---- The git home: what a repository holds, asked of git — the files changed
---- since a base commit, the commits since it or between two commits, their
+--- The git home: what a repository holds, asked of git — the files it lists,
+--- the files changed since a base commit, the commits since it or between two commits, their
 --- diffs, a file as a commit has it, a name resolved to a commit, its
 --- worktrees and the base of each, its local branches — and a watch that
 --- calls back when the branch moves, a reference is written or a
@@ -24,6 +24,7 @@ local branches = require('aineo.git.branches')
 local changes = require('aineo.git.changes')
 local content = require('aineo.git.content')
 local diffs = require('aineo.git.diffs')
+local files = require('aineo.git.files')
 local history = require('aineo.git.history')
 local process = require('aineo.git.process')
 local repository = require('aineo.git.repository')
@@ -84,6 +85,17 @@ end
 ---@param options? aineo.git.Options
 function M.uncommitted_files(found, done, options)
   changes.uncommitted_files(process.runner(options), found, done)
+end
+
+--- Lists the files of `found`, the tracked ones and the untracked ones its
+--- ignore rules leave in, with paths relative to its top level, in git's
+--- order; calls `done(nil, paths)`, or `done(failure)`.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param done fun(failure: aineo.git.Failure|nil, paths: string[]|nil)
+---@param options? aineo.git.Options
+function M.list_files(found, done, options)
+  files.list_files(process.runner(options), found, done)
 end
 
 --- Lists the files the commit `commit` changed in `found`, against its
