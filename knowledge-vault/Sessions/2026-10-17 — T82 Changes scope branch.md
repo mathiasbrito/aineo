@@ -30,7 +30,7 @@ D76 and the answers U1–U3 and the toggle are the user's. A391–A403 are the o
 
 ## Decided beyond the brief
 
-For the orchestrator to rule; none is the user's decision.
+Taken beyond the brief; the orchestrator ruled on them after the reviews (below). None is the user's decision.
 
 1. **`s` reads the worktrees afresh** (`git.list_worktrees()`) for the checked-out set, not `session.commits_others` and not the repository found at the session's start (`session.repository.branch`, which goes stale at a checkout). Pinned by a case that checks out `late` in the editor's worktree after the session began.
 2. **With the worktrees unlisted and none known, no branch is read** and T81's words are told (`scope.why_not_ready()`): nothing then says which branches are checked out. T81's case for that line is unchanged. With the worktrees listed but the branches failing, the worktrees are offered and `aineo: the local branches could not be listed: <words>` is told once at `WARN` (A403's wording was not pinned by the brief). A failure of the second read of the worktrees, or of the working branch's name, counts as a failure of the branch listing.
@@ -38,7 +38,16 @@ For the orchestrator to rule; none is the user's decision.
 4. **A second press of `s` while the branches are read opens no second picker**, and a home let go (a tab closed) meanwhile opens none.
 5. **A branch deleted between the picker and the pick** is found gone by the read the pick asks for and told as any gone branch is (`aineo: Branch <name> is gone…`), not by T81's `picked_gone()` words.
 6. **Words the brief left open:** `No files changed on this branch`, `Files in: <id> <subject> (branch <name>)`, `told` for `gf`'s failures `the branch <name>`.
-7. **`Scope`, `lines.commits_window()`'s `scope`, `scope.sections_shown()`** changed shape (members instead of worktree sections; `sections_shown()` became `members_shown()`): no test pinned them directly.
+7. **`Scope`, `lines.commits_window()`'s `scope`, `scope.sections_shown()`** changed shape (members instead of worktree sections; `sections_shown()` became `members_shown()`): no test pinned them directly. **`scope.why_none_is_offered()` became `scope.why_not_ready()`** — it no longer says the last two things, an empty list and the worktrees unlisted with some known: an empty list is told by `pick_among()` in `copy.lua` with `scope.NONE_TO_SHOW`, after the branches are read. T81's note (M36) names the old function.
+
+## Rulings after the reviews of PR #252
+
+All assumptions of the orchestrator, never the user's decisions:
+
+- **A429** — a branch deleted between the picker and the pick is told as any gone branch is (decision 5 above); the rest of decisions 1–7 stand.
+- **A430** — the working branch is hidden whatever valid spelling `changes.working_branch` uses: `refs/heads/`, `heads/`, `refs/remotes/` and `remotes/` are normalised before the short names are compared.
+- **A431** — a branch a detached worktree is rebasing or bisecting may be offered as `[branch]`; not fixed, a line in the help's LIMITS.
+- **A432** — Enter on a branch's heading before its first read tells `aineo is reading the repository` at `INFO`, not a failure at `ERROR`.
 
 ## Baseline
 
@@ -71,16 +80,17 @@ Each is the literal edit, applied to the final tree (after the last production e
 | B2 | 2 | `scope.lua`: `return not checked_out[branch.name] and not is_working_branch(…)` → `return not checked_out[branch.name]` (the working branch offered) | killed ×2 |
 | B3 | | `scope.lua`: `return not listed[working] and name == working:match('^[^/]+/(.+)$')` → `return false` | killed ×1 |
 | B4 | | the same line → `return name == working:match('^[^/]+/(.+)$')` | killed ×1 |
-| B5 | | `scope.lua`: the loop over the offered branches wrapped in `vim.fn.reverse(…)` | killed ×1 |
+| B5 | | `scope.lua`: `for _, branch in ipairs(candidates and branches_offered(candidates) or {}) do` → `for _, branch in ipairs(vim.fn.reverse(candidates and branches_offered(candidates) or {})) do` | killed ×1 |
 | B6 | | `scope.lua`: `text = '[branch] ' .. lines.quoted_path(branch.name)` → `text = lines.quoted_path(branch.name)` | killed ×6 |
 | B7 | | the same → `text = '[branch] ' .. branch.name` | killed ×1 |
 | B8 | | `copy.lua`: `if failure then vim.notify(scope.branches_unlisted(failure), …)` → `if false then …` | killed ×1 |
-| B9 | | `branch.lua`: the worktrees of the candidates → the editor's own branch as found at the session's start, the others as read | killed ×1 |
+| B9 | | `branch.lua`: `done(nil, { branches = branches, worktrees = listed, working_branch = name })` → `done(nil, { branches = branches, worktrees = vim.list_extend({ { branch = read.repository.branch } }, vim.list_slice(listed, 2)), working_branch = name })` | killed ×1 |
 | B10 | | `scope.lua`: `if #known.others.sections == 0 and known.others.failure then` → `if false then` | killed ×2 |
 | B11 | | `copy.lua`: delete `if offering then return end` | killed ×1 |
 | B12 | | `copy.lua`: `if #items == 0 then` → `if false then` | killed ×1 |
 | B13 | | `copy.lua`: delete `if released then return end` | killed ×1 |
-| M1 | 3 | `branch.lua`: the base from `read.session_base`, handed `session.base` by `copy.lua` (the session's base, not the working branch's) | killed ×21 |
+| M1 | 3 | `copy.lua`, `read_branch_scope()`: delete the line `working_branch = session.settings.working_branch,` between `before = session.branch,` and `git = session.settings.git,` (no working branch, so the base falls back to the comparison commit, which here is the session's base) | killed ×23 |
+| M1b | 3 | two edits: `branch.lua`: `worktrees.read_base_of(read, tip, function(base_failure, base)` → `(function(_, _, answer) answer(nil, read.session_base) end)(read, tip, function(base_failure, base)`; `copy.lua`, `read_branch_scope()`: after `before = session.branch,` add the line `session_base = session.base,` (the field is the edit's own) | killed ×24 |
 | M2 | | `worktrees.lua`, `read_base_of()`: `sources.comparison` → an answer of nil | killed ×1 |
 | M4 | 4 | `copy.lua`, `read_branch_files()`: `git.files_between(…)` → `git.changed_files(session.repository, read.base, done, …)` (the working tree) | killed ×20 |
 | M5 | | `lines.lua`: `MARKS_SAVES` gains `branch = true` | killed ×1 |
@@ -98,10 +108,10 @@ Each is the literal edit, applied to the final tree (after the last production e
 | M21 | 5 | `copy.lua`: `if read.names_no_commit then` → `if false then` (a deleted branch's scope kept) | killed ×3 |
 | M22 | | `copy.lua`: delete the `vim.notify(scope.gone(current), …)` | killed ×3 |
 | M23 | | `copy.lua`: delete the reselection of *Session work* in the gone branch | killed ×1 |
-| M24 | | `copy.lua`: the branch read only `and session.focused` | killed ×1 (after the case was tightened) |
+| M24 | | `copy.lua`, `read_branch_scope()`: `if not (current and current.branch) then` → `if not (current and current.branch and session.focused) then` | killed ×1 (after the case was tightened) |
 | M25 | | `copy.lua`: `if not lists_commit(selected, read.commits) then` → `if false then` | killed ×1 |
 | M26 | | `copy.lua`: delete the default view's fallback to *Session work* for a branch's selection | killed ×1 |
-| M27 | | `copy.lua`: a scope cleared when a worktree lists its branch | killed ×1 |
+| M27 | | `copy.lua`, `read_branch_scope()`: after its first guard, insert `for _, section in ipairs(session.commits_others.sections) do if section.branch == current.branch then session.scope, session.focused, session.branch = nil, false, nil; done(true); return end end` | killed ×1 |
 | M28 | | `copy.lua`: the scope view's choice `scope.whole_change_of(shown[1])` → `select_session_work()` | killed ×1 |
 | E1 | | `entry_diff.lua`: `git.diff_between(…)` → `git.diff_since(source.repository, read.base, …)` (the working tree) | killed ×1 |
 | E2 | | `entry_diff.lua`: a file's `git.file_diff_between(…)` → `git.file_diff(source.repository, read.base, …)` | killed ×2 |
@@ -123,6 +133,36 @@ The plan's mutants: 1 is B1/B1a/B1b, 2 is B2, 3 is M1, 4 is M4, 5 is M21. 56 mut
 ## Suites
 
 On Neovim 0.12.5, the host loaded, `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 make test` on the tree pushed (its code and tests as the last production and test commits left them; the note is the only file added after): 4258 cases in 108 files, `Fails (0) and Notes (0)`, exit 0. `tests/test_changes_scope.lua` 77 cases (42 before), `tests/test_git_branches.lua` 7 (new); the first whole run, before the help was wrapped, failed one case, *the help fits in 78 columns* — three lines of the new help were wider than 78 columns — and nothing else of 4258. `make lint`: StyLua and selene clean. Files run alone on `dev` `bbf4400`, for the baseline: see above.
+
+## Fix round
+
+After the attack and the tests-and-records reviews of PR #252 (new commits; the history pushed is not rewritten).
+
+- **A430, red first.** Parametrized case *leave out the working branch whatever valid spelling the setting uses* for `dev`, `heads/dev`, `origin/dev`, `refs/heads/dev`, `remotes/origin/dev` and `refs/remotes/origin/dev`: **seen red ×3** — `refs/heads/dev`, `remotes/origin/dev` and `refs/remotes/origin/dev` left `[branch] dev` offered; `dev`, `origin/dev` and `heads/dev` arrived green (the last by accident: its first component dropped leaves `dev`). Green by the prefixes normalised in `scope.is_working_branch()`.
+- **A432, red first.** *Enter on its heading before its first read tells that aineo is reading, not that a diff failed*: **seen red** (the ERROR `the diff of Branch feature/x could not be read: the branch has not been read yet`); the read of the branch is held by a stub until the case has pressed Enter and then released, and the commits window then lists the branch.
+- **Arrived green, pinning what was already right:** *a branch that shares no history … lists every commit and every file of it* (an orphan root and a child made with `hash-object`, `mktree` and `commit-tree`; commits, `A orphan.txt`, `A second.txt`, and Enter on the heading shows both files' diffs), killers N1 and N2; *deleted between the picker and the pick is told gone*, killer D1; *a tag of its name does not stand for it*, killer R1 (by assertion: the pick lists the tag's commit otherwise). The three are the reviewers' or the attack's cases, adopted as they measured them.
+- ***are not offered once the home was let go*** no longer waits a fixed second: it installs the git home's call counter, presses `s`, lets the home go, waits until every call the home made was answered (`wait_for_the_reads()`), and asserts no picker and no message. B13 is killed by assertion.
+- **A431** is a bullet of the help's LIMITS, no code.
+- **Records:** the mutant rows B5, B9, M1, M24 and M27 are literal edits now; M1 is a single edit of a field the code has (the working branch handed to the branch's read), M1b the two-edit version with the field it adds; the note names `why_none_is_offered()` → `why_not_ready()` and `pick_among()`; A429–A432 are the orchestrator's.
+
+| # | Edit | Result |
+|---|---|---|
+| W1 | `scope.lua`: `working:match('^refs/heads/(.+)$') or working:match('^heads/(.+)$')` → `working:match('^heads/(.+)$')` | killed ×1: `refs/heads/dev` |
+| W2 | `scope.lua`: `working:match('^refs/remotes/(.+)$') or working:match('^remotes/(.+)$') or working` → `working:match('^remotes/(.+)$') or working` | killed ×1: `refs/remotes/origin/dev` |
+| W3 | the same → `working:match('^refs/remotes/(.+)$') or working` | killed ×1: `remotes/origin/dev` |
+| W4 | `scope.lua`: delete ` or working:match('^heads/(.+)$')` | **survives**, equivalent: `heads/dev` with its first component dropped is `dev` too |
+| B13 | `copy.lua`: delete `if released then return end` | killed ×1: *are not offered once the home was let go* (the new form) |
+| N1 | `branch.lua`: `git.commits_between(read.found, base, tip,` → `git.commits_between(read.found, base or tip, tip,` | killed ×1 |
+| N2 | `copy.lua`, `read_branch_files()`: `git.files_between(session.repository, read.base, read.tip, done, session.settings.git)` → `git.files_between(session.repository, read.base or read.tip, read.tip, done, session.settings.git)` | killed ×1 |
+| A432 | `copy.lua`: delete the guard `if entry.filter and entry.filter.kind == 'branch' and not session.branch then vim.notify(lines.READING, vim.log.levels.INFO) return end` of `show_diff_at_cursor()` | killed ×1 |
+| D1 | `copy.lua`, `show_branch_alone()`: delete `read_commits(false)` | killed ×22 |
+| R1 | `branch.lua`: `git.resolve_commit(read.found, 'refs/heads/' .. read.name,` → `git.resolve_commit(read.found, read.name,` | killed ×3, among them *a tag of its name does not stand for it* |
+| M1 | as in the table above | killed ×23 |
+| M1b | as in the table above | killed ×24 |
+
+N1 and N2 are the attack review's mutants, run as it gave them. Every kill is an assertion; no run printed a Lua error or E5560. 11 mutants ran on the final tree, G2 and W4 survive as equivalent.
+
+The suite after the fix round, Neovim 0.12.5, the host loaded, `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 make test` on the tree pushed (the note's commit is the only one after it): 4268 cases in 108 files, `Fails (0) and Notes (0)`; `tests/test_changes_scope.lua` 87 cases (77 before the round; ten more: the six spellings, A432, the orphan branch, the branch deleted between picker and pick, the tag), `tests/test_git_branches.lua` 7. `make lint` clean.
 
 ## Open threads
 
