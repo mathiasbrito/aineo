@@ -139,7 +139,7 @@ end
 --- A branch's announcement is returned as it is.
 ---
 ---@param work aineo.mcp.Work
----@param working_directory string
+---@param working_directory string? nil only for a work whose path, if any, is absolute
 ---@return aineo.mcp.Work
 function M.with_absolute_path(work, working_directory)
   if not work.path then
