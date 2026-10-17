@@ -681,12 +681,21 @@ T['the focused view']['of the reported set stays, untold, when the worktree pick
   expect_pane_lines('module', 'commits', AGENT_VIEW)
 
   git_repo.git(top, { 'worktree', 'remove', picked })
+  local late = commit_only(agent, 'late.txt', 'late', 'Late a')
+  local agent_view = { 'Worktree agent-1 (feature/a)', commit_line(late, 'Late a') }
+  expect_pane_lines('module', 'commits', agent_view)
+  eq(messages(), {})
   toggle_in_pane()
-  expect_pane_lines('module', 'commits', DEFAULT_VIEW_WITH_AGENT)
+  expect_pane_lines('module', 'commits', {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent-1 (feature/a)',
+    commit_line(late, 'Late a'),
+  })
   toggle_in_pane()
 
-  expect_pane_lines('module', 'commits', AGENT_VIEW)
-  eq(messages(), {})
+  expect_pane_lines('module', 'commits', agent_view)
 end
 
 T['the focused view']['of the reported set stays, untold, when the branch picked behind it is deleted'] = function()
@@ -707,12 +716,21 @@ T['the focused view']['of the reported set stays, untold, when the branch picked
   expect_pane_lines('module', 'commits', AGENT_VIEW)
 
   git_repo.git(top, { 'branch', '-D', 'feature/p' })
+  local late = commit_only(agent, 'late.txt', 'late', 'Late a')
+  local agent_view = { 'Worktree agent-1 (feature/a)', commit_line(late, 'Late a') }
+  expect_pane_lines('module', 'commits', agent_view)
+  eq(messages(), {})
   toggle_in_pane()
-  expect_pane_lines('module', 'commits', DEFAULT_VIEW_WITH_AGENT)
+  expect_pane_lines('module', 'commits', {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent-1 (feature/a)',
+    commit_line(late, 'Late a'),
+  })
   toggle_in_pane()
 
-  expect_pane_lines('module', 'commits', AGENT_VIEW)
-  eq(messages(), {})
+  expect_pane_lines('module', 'commits', agent_view)
 end
 
 T['the focused view']['offers the reported set first in s, and keeps it behind a worktree picked'] = function()
