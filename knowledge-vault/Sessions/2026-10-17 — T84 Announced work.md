@@ -3,6 +3,10 @@
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-claude-code-integrator`, on Opus)
 **Branch:** `feature/t84-announced-work` · **Pull request:** into `dev`
 
+The agent ran on Opus, as dispatched. The commits' `Co-Authored-By` trailers name Claude Sonnet 5.5 because the dispatch message gave that trailer; the pushed ones stay as they are.
+
+The tests' `tools/call` lines are built by `tests/helpers/mcp_messages.lua` › `tools_call()` from Claude Code 2.1.281's `tools/call` line, whose envelope the fixture's header marks as reconstructed around aineo's own tool; `announce_work`'s arguments are synthetic: no real Claude Code was recorded calling it.
+
 ## Links
 
 - [[Projects/aineo]]
@@ -20,12 +24,12 @@ D77 and the answers U4 (a), U5 and U6 (a) are the user's decisions. A404–A418 
 ## What was done, and why
 
 - **The tool** (A404, A405). `tools/list` gives `report`, then `announce_work`, its description the 80-byte sentence of A404, its schema `kind` (`worktree`, `branch`), `path`, `branch`, `kind` required, no other property. A valid call is a `kind` and the one string of that kind, non-empty, at most 4096 bytes, no NUL, no line break; everything else is `aineo refused the announcement: <field>: …`, a null in any field included. A relative path is joined to the relay's working directory and normalised with `expand_env = false`, so neither `~` nor `$VAR` is expanded.
-- **The offer** (A407). The relay offers `{ work, token }` as the arguments of a constant chunk, `require('aineo.mcp').receive_work_announcement(...)`, through `editor.offer_report()` (bounded at 5 s), to `AINEO_EDITOR_ADDRESS` alone. No address or no token: not offered. `taken` → `ok`; `unconfirmed` → the offer's own words, not an error (behaviour 9 of the body; the amendment says nothing of it); anything else → the tool error `not taken`. An aineo older than the relay raises in the chunk, and that is `not taken` too.
+- **The offer** (A407). The relay offers `{ work, token }` as the arguments of a constant chunk, `require('aineo.mcp').receive_work_announcement(...)`, through `editor.offer_report()` (bounded at 5 s), to `AINEO_EDITOR_ADDRESS` alone. No address or no token: not offered. `taken` → `ok`; `unconfirmed` → the offer's own words, not an error, until the fix round made it `not taken` (A438); anything else → the tool error `not taken`. An aineo older than the relay raises in the chunk, and that is `not taken` too.
 - **The tab.** `editors.lua` registers `take_announced_work()`: the tab whose Claude Code has the token, whichever is current, and bound; it answers at once and hands the work to the tab's changes home at the next turn, with a teller that writes `tab <n>: ` before the words when that tab is not the current one when told.
 - **What Claude is told** (A406, A416). The appended prompt is the report's instructions, a blank line, then the paragraph; the `SubagentStart` hook (no matcher, timeout 5 s) is `printf '%s' '<json>'`, the JSON quoted by `shell_word()`; it is added after a `claude.cmd` `--settings`' own `SubagentStart` hooks, and `hooks_problem()` refuses settings whose `SubagentStart` is not a list.
 - **The set** (A408–A410, A417, A418). `add_reported_work(work, tell)` puts the report in `session.waiting`, with a 60 s timer (`SessionSettings.start_timer`, a `vim.uv` timer when not given), and reads `branch.read_candidates()` — what `s` reads — at once. Every read is numbered and only the newest started applies, so an older listing never drops or misses a member. A worktree is matched by `vim.uv.fs_realpath()` of the reported path against git's tops; a branch by name, as the worktree that has it checked out when one has; the editor's own work is let go untold. Unmatched reports are matched again at every read of the commits window (its scope stage now reads the reported branches and the candidates) and once the repository is found; at 60 s each is let go and told once. Members drop out at a read that no longer lists them, untold; an emptied set under the focused view gives way to the default view, told once. Following another session empties the set and drops the waiting reports; a home let go drops them too.
 - **The view.** `session.shows_reported` says whether the focused view is the set or the pick, whichever was chosen last; `scope_shown()` gives `lines.commits_window()` the members (each worktree as the commits window last listed it, else as git listed it), so `lines.lua` needed no change. `s` offers `[reported] All reported work (<n>)` first; `\g` toggles while there is a scope or a set.
-- **Boundary.** `lua/aineo/mcp/` (names, protocol, relay, server, init, editor's docstring, new `work.lua` and `announcement.lua`), `lua/aineo/claude/arguments.lua` and `init.lua`, `lua/aineo/changes/copy.lua`, `scope.lua`, `init.lua`'s docstring, `lua/aineo/entry/editors.lua`, `routing.lua`, `tab.lua` › `claude_settings()`, `doc/aineo.txt`, the tests named. Widened and declared: `doc/aineo.txt`'s introduction and its health paragraph (invalidated by U5 and by `hooks_problem()`). `README.md` names neither the allowed tools nor the hooks: unchanged. `lua/aineo/health.lua`'s docstring says "session hooks" where `SubagentStart` now joins them; it is outside the boundary and is left for the records review.
+- **Boundary.** `lua/aineo/mcp/` (names, protocol, relay, server, init, editor's docstring, new `work.lua` and `announcement.lua`), `lua/aineo/claude/arguments.lua` and `init.lua`, `lua/aineo/changes/copy.lua`, `scope.lua`, `init.lua`'s docstring, `lua/aineo/entry/editors.lua`, `routing.lua`, `tab.lua` › `claude_settings()`, `doc/aineo.txt`, the tests named. Widened and declared: `doc/aineo.txt`'s introduction and its health paragraph (invalidated by U5 and by `hooks_problem()`). `README.md` names neither the allowed tools nor the hooks: unchanged. `lua/aineo/health.lua` and its pins were brought in by the fix round (below).
 - **Deep requires.** `grep -rnE "require\(['\"]aineo\.[a-z_]+\." lua plugin tests scripts` prints 170 lines (164 after T82); the six new ones are each a home's own file: `entry/editors.lua` → `aineo.entry.routing`, `mcp/protocol.lua` → `aineo.mcp.work`, `mcp/relay.lua` → `aineo.mcp.announcement`, `mcp/announcement.lua` → `aineo.mcp.editor` and `aineo.mcp.work`, `mcp/work.lua` → `aineo.mcp.names`. No new edge between homes.
 
 ## Decided beyond the brief
@@ -112,9 +116,41 @@ On Neovim 0.12.5, the host loaded (load average about 5.4), `AINEO_TEST_JOBS=4 A
 
 Pins that moved, and why: `tests/test_mcp_relay.lua` › *tools/list* (two tools now); `tests/test_mcp.lua` › *allowed_mcp_tools()* (both tools, U5); `tests/test_entry.lua` › the instructions expression (the paragraph after the report's) and the case's name; `tests/test_claude.lua` › *names the setting that is malformed* gains a `subagent_context` row. `tests/test_claude_switch.lua`'s hook shape does not move: its stand-in settings give no subagent text.
 
+## Fix round — after the reviews of PR #254
+
+The orchestrator's rulings, never the user's decisions: A435–A439 and the fix-round message's items.
+
+- **The wrong tab** (attack 1). The routing case now asserts both tabs' commits panes: the report shows in its own tab's, the other's is unchanged. The attack's mutant A1 (`tab.homes.changes.add_reported_work(…)` → `registry.tab_of_current_page().homes.changes.add_reported_work(…)`) survived every file before; it is killed by assertion now.
+- **A435.** A report the same as one waiting is taken and adds nothing (one timer, told once); at most 32 distinct reports wait per tab (`MOST_WAITING`), a 33rd is not taken, untold. `add_reported_work()` returns whether it took the report, and the composition root's handler answers the relay with that verdict, calling the home synchronously (its git reads start without being waited on). The help's "the same report made again … changes nothing" is now true.
+- **A436.** With no relay working directory, a relative path is not taken and no editor is asked.
+- **A437.** A branch `s` would not offer that no worktree has checked out (the working branch) is the editor's own work: not added, nothing told. A branch a worktree has checked out keeps behaviour 14 — added as that worktree, or the editor's own when the worktree is its own — so the ruling's parenthetical ("or one a worktree has checked out") is read as the cases that reach the branch path; the orchestrator should say if it meant otherwise.
+- **A438.** An offer the editor does not confirm in time answers `not taken`; the help lists exactly the three replies.
+- **A439.** The agent's path is resolved with the asynchronous `vim.uv.fs_realpath(path, callback)` before the match, all waiting paths at once, then matched in order on the main loop; a read superseded meanwhile applies nothing.
+- **The hooks' wording.** `doc/aineo.txt` (the `claude.cmd` setting, the health paragraph), `lua/aineo/claude/init.lua` (two docstrings and `SETTINGS_UNREAD_WARNING`, now "aineo: claude.cmd's --settings unread; aineo hooks left out", 59 characters) and `lua/aineo/health.lua` (docstring and messages) name the session hooks and the `SubagentStart` hook. `health.lua`, `tests/test_health.lua` and `tests/test_claude_switch.lua` were outside the brief: widened by the fix round's ruling.
+- **Behaviour 8.** A second stand-in editor, claiming the session and listed as running, that would take the announcement, is asked nothing.
+- **Help layout.** `aineo-changes-s` mentions the `[reported]` item; the *aineo-changes-reported* block moved after the pane's diff paragraphs, before *Colours*, so the `s` and Enter paragraphs read together.
+
+Red first: *for an editor that does not answer in time is not taken, nothing more* (`left = "aineo sent the report…"`); *with a relative path is not taken … when the relay has no working directory* ×2 (`left = "ok"`); *made again while it waits…* and *waits, at most 32…* (`left = nil`: no verdict returned); *beyond 32 waiting in a tab is not taken* (`left = true`); *includes the working branch…* (`left = "Branch main"`); the health wording cases (`left = "…aineo's session hooks"`). Arrived green, killer run: *declined by the starting editor is offered to no other…* (absence of code; killed by F42); the routing pane pin (killed by A1); *has its path resolved off the main loop…* — its first runs were red, then green once the stub kept the callback's `(err, path)` order and stopped stubbing the paths git lists; F41 (the synchronous call put back) kills it.
+
+| # | Edit | Run on | Result |
+|---|---|---|---|
+| A1 | `entry/editors.lua`: `return tab.homes.changes.add_reported_work(work, teller_for(tab)) == true` → `return registry.tab_of_current_page().homes.changes.add_reported_work(work, teller_for(tab)) == true` | routing | killed: *…goes to the second tab while the first is current…* |
+| F35 | `changes/copy.lua`: delete `if waits_already then read_reported() return true end` | G3 | killed: *made again while it waits…* |
+| F36 | `changes/copy.lua`: `if #session.waiting >= MOST_WAITING then` → `if false then` | G3 | killed: *waits, at most 32…* |
+| F37 | `entry/editors.lua`: the verdict ignored — `tab.homes.changes.add_reported_work(work, teller_for(tab))` then `return true` | routing | killed: *beyond 32 waiting in a tab is not taken* |
+| F38 | `mcp/announcement.lua`: delete `if relative and not context.working_directory then return 'declined' end` | test_mcp_announce | killed ×2 |
+| F39 | `mcp/announcement.lua`: `return kind == 'taken' and 'taken' or 'declined'` → `return kind == 'declined' and 'declined' or 'taken'` | test_mcp_announce | killed ×3, *…does not answer in time…* among them |
+| F40 | `changes/scope.lua`: `return offered and { branch = listed } or M.OWN_WORK` → `return { branch = listed }` | G6 | killed: *includes the working branch…* |
+| F41 | `changes/copy.lua`: `local real_path = real_paths[waiting]` → `local real_path = waiting.work.path and vim.uv.fs_realpath(waiting.work.path)` | G1 | killed: *has its path resolved off the main loop…* |
+| F42 | `mcp/relay.lua`: a declined announcement also handed to `delivery.deliver(context, work)` | test_mcp_announce | killed ×4, *declined by the starting editor is offered to no other…* among them |
+| F43 | `health.lua`: the OK message back to "…takes aineo's session hooks" | test_health narrowed | killed |
+
+Every kill an assertion; none survived.
+
+Suites of the fix round: Neovim 0.12.5, host loaded (load average 5.8–6.4), `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=2700000 make test` on the fix round's tree: the first run gave 4346 cases with `Fails (2)`, both in files the round does not touch — `tests/test_entry_tabs.lua` › *the jumps … in + args { "t" }* (`Left: "nt"`, a mode read under load) and `tests/test_entry_terminal_pane.lua` › *the first tab that closes …* (buffer names) — each green when run alone (42 and 38 cases); a second whole run on the same tree: 4346 cases, `Fails (0) and Notes (0)`, exit 0. The round adds 8 cases: `tests/test_mcp_announce.lua` 42 (39), `tests/test_changes_announce.lua` 27 (23), `tests/test_entry_tabs_routing.lua` 27 (26); `tests/test_health.lua` 142 and `tests/test_claude_switch.lua` 100 unchanged in count, their wording pins moved. `make lint` clean.
+
 ## Open threads
 
-- `lua/aineo/health.lua`'s docstring of the `--settings` check still says "session hooks"; outside the boundary.
 - A report waiting while the pane was never shown is matched only at its own read, once the repository is found, and at the pane's first showing: the home starts no watch before that (the amendment at dispatch).
 - That a subagent's call is allowed by the session's `--allowedTools` is not measured here (plan, model item 13; the user's check M7).
 
