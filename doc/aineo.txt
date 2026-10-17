@@ -291,7 +291,8 @@ What the actions do with tabs:
 - Every action acts on the current tab when the current tab page is an aineo
   tab. From any other tab page it acts on the aineo tab used last, and moves
   you there: `\o`, `\r`, `\i`, `\c`, `\g`, `\pa`, `\pt`, `\tcn`, `\N`, `\S`,
-  `\s` and `:Aineo claim`.
+  `\s`, `\d` and `:Aineo claim`. `\d` makes no tab: with no aineo tab it
+  only tells you there is no diff to close.
 - A report goes to the tab whose Claude Code sent it. A session hook goes to
   the tab whose start it names. Each tab is listed among the running editors
   for its own session (|aineo-report-claims|). A report of no known session
@@ -1493,6 +1494,9 @@ moves you to that tab instead and claims nothing.
 			closes, and the layout puts its columns back as for
 			any closed window (|aineo-file-column|). A diff that
 			is the only window of its tab page is not closed.
+			From a tab page that is none of aineo's it acts on
+			the aineo tab used last and moves you there
+			(|aineo-tabs|); with no aineo tab it makes none.
 			With no diff to close aineo tells you once, `aineo:
 			no diff to close`. With any word but `close` it
 			tells you, with one error, what it takes. `\d` and,
