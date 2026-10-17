@@ -152,6 +152,8 @@ function M.new(label)
   ---@field reported aineo.changes.ScopeMember[] the reported set: the worktrees and branches the agents of the tab's Claude Code reported and git listed, each once, in the order first reported
   ---@field shows_reported boolean whether the focused view is the reported set, chosen last, rather than the scope
   ---@field waiting aineo.changes.WaitingReport[] the reports git did not list yet, each matched again at every read until its timer lets it go
+  ---@field kept_view? aineo.changes.KeptView the view as last kept for the session followed, or as it was when the pane began following it; nil until the pane follows a session in a repository it found, and while it follows none
+  ---@field restoring_view? boolean whether the view kept for the session followed is being read back, which keeps what the pane shows from being kept over it
   ---@field saved table<string, true> the files the user saved under the base, by path relative to the top level: since the session began, or the Claude Code session's followed; none saved while no repository was found
   ---@field early_saves string[] the files the user saved, resolved, while the first look for the repository runs
   ---@field shown boolean whether the pane has been shown
@@ -346,11 +348,64 @@ function M.new(label)
     session.cursor_unplaced = false
   end
 
+  --- Whether the user was told that a session's view could not be kept
+  --- (`tell_view_failure()`).
+  local view_failure_told = false
+
+  --- Tells the user, as a warning, that a session's view could not be kept,
+  --- and why: `failure`. Told once for the home's life; the pane goes on
+  --- from what it holds.
+  ---
+  ---@param failure string
+  local function tell_view_failure(failure)
+    if view_failure_told then
+      return
+    end
+    view_failure_told = true
+    vim.notify(
+      ("aineo: the changes pane cannot keep this session's view, and goes on without: %s"):format(
+        failure
+      ),
+      vim.log.levels.WARN
+    )
+  end
+
+  --- Keeps the view the pane shows for the Claude Code session it follows
+  --- (`aineo.changes.kept`), when it differs from the view last kept or
+  --- taken: a view that did not change is not written again, and a write
+  --- that fails is told once (`tell_view_failure()`) and tried again when
+  --- the view next changes. Keeps nothing while the pane follows no session,
+  --- before its repository is found, or while the view kept is read back
+  --- (`begin_view()`).
+  local function keep_view()
+    local followed = session.followed
+    if not (followed and session.repository and session.kept_view) or session.restoring_view then
+      return
+    end
+    local view = scope.kept_view_of(session.repository.top, {
+      scope = session.scope,
+      focused = session.focused,
+      reported = session.reported,
+      shows_reported = session.shows_reported,
+    })
+    if vim.deep_equal(view, session.kept_view) then
+      return
+    end
+    session.kept_view = view
+    local failure = kept.keep_view(followed.state_directory, followed.id, view)
+    if failure then
+      tell_view_failure(failure)
+    end
+  end
+
   --- Writes the commits buffer for what the session knows (`commits_page()`,
   --- `show_page()`), then puts the cursor on the selected filter's line when
-  --- it is still to be put there (`place_commits_cursor()`).
+  --- it is still to be put there (`place_commits_cursor()`), and keeps the
+  --- view the page shows (`keep_view()`): every change of the view is
+  --- shown here.
   local function show_commits()
     show_page(buffers.commits, commits_page, place_commits_cursor)
+    keep_view()
   end
 
   --- Whether the session's base is the one a read was asked from: not once
@@ -1248,6 +1303,67 @@ function M.new(label)
     return true
   end
 
+  --- Whether the pane shows the default view and has picked and reported
+  --- nothing.
+  ---
+  ---@return boolean
+  local function has_no_view()
+    return session.scope == nil
+      and not session.focused
+      and not session.shows_reported
+      and #session.reported == 0
+  end
+
+  --- Begins keeping the view for the Claude Code session the pane follows,
+  --- once it follows one in a repository it found. When a view was kept for
+  --- the session in this repository and the pane has picked and reported
+  --- nothing since, the pane shows it as git now allows it
+  --- (`scope.restored_view()`), telling nothing of what is gone, once the
+  --- worktrees and branches are read; until then nothing is kept. A view
+  --- that is missing, malformed, another repository's, or cannot be read
+  --- back, leaves the pane as it is, and the view kept is written over once
+  --- the view changes.
+  local function begin_view()
+    local followed = session.followed
+    if not (followed and session.repository) then
+      return
+    end
+    local repository = session.repository.top
+    local current = { focused = false, shows_reported = false, reported = {} }
+    session.kept_view = scope.kept_view_of(repository, current)
+    local on_disk = kept.read_kept_view(followed.state_directory, followed.id)
+    if not (on_disk and on_disk.repository == repository and has_no_view()) then
+      return
+    end
+    session.kept_view, session.restoring_view = on_disk, true
+    branch.read_candidates({
+      repository = session.repository,
+      working_branch = session.settings.working_branch,
+      git = session.settings.git,
+    }, function(_, candidates)
+      if released or session.followed ~= followed then
+        return
+      end
+      session.restoring_view = false
+      if not candidates or not has_no_view() then
+        session.kept_view = scope.kept_view_of(repository, current)
+        keep_view()
+        return
+      end
+      local restored = scope.restored_view(on_disk, candidates)
+      session.scope, session.focused = restored.scope, restored.focused
+      session.reported, session.shows_reported = restored.reported, restored.shows_reported
+      if restored.selected then
+        select_filter(restored.selected)
+        read_files(true)
+      end
+      show_commits()
+      if session.shown then
+        read_commits(false)
+      end
+    end)
+  end
+
   --- Looks for the repository of the session's directory, one look at a time
   --- (`aineo.changes.serial`). The first found is the session's for the
   --- editor's life: its `HEAD` is the base — or the base kept for the Claude
@@ -1271,6 +1387,7 @@ function M.new(label)
           session.base = repository.head
           keep()
         end
+        begin_view()
         for _, file in ipairs(session.early_saves) do
           mark_saved(file)
         end
@@ -1456,9 +1573,11 @@ function M.new(label)
   --- the table it is given. Following another session than one followed
   --- before clears the scope and empties the reported set, the reports
   --- still waiting dropped (`drop_waiting()`), and says nothing; the first
-  --- session followed keeps the scope picked before it. Called on the main loop only: from a
-  --- fast event (a `vim.uv` callback) it raises E5560, as the Vimscript
-  --- functions it calls do there.
+  --- session followed keeps the scope picked before it. The view kept for the
+  --- session followed, in the repository found, is shown again once read
+  --- (`begin_view()`), and kept from then on as it changes (`keep_view()`).
+  --- Called on the main loop only: from a fast event (a `vim.uv` callback) it
+  --- raises E5560, as the Vimscript functions it calls do there.
   ---
   ---@param followed aineo.changes.FollowedSession
   function home.follow_changes_session(followed)
@@ -1477,11 +1596,13 @@ function M.new(label)
       drop_waiting()
     end
     session.followed = followed
+    session.kept_view, session.restoring_view = nil, false
     select_view_default()
     session.looking_for_head, session.head_look_failed, session.keeping_failed = false, false, false
     if not session.repository then
       return
     end
+    begin_view()
     if use_held_base() or use_kept_base() then
       read_for_new_base()
       return
@@ -1504,7 +1625,8 @@ function M.new(label)
   --- has nothing kept of its own, what is kept for `from` becomes `to`'s,
   --- whole and unread, whatever repository it names — a file that cannot be
   --- read included, which `to` then meets as `from` would have — and no file
-  --- is left under `from`'s name (`aineo.changes.kept`'s `move_kept_base()`).
+  --- is left under `from`'s name (`aineo.changes.kept`'s `move_kept_base()`);
+  --- the view kept for `from` moves to `to` the same way (`move_kept_view()`).
   --- Nothing is made when neither has a file. What this editor holds in
   --- memory for `from` (`held_bases`) is held for `to`. When `to` has a file
   --- of its own, nothing moves, and the pane goes on following `from`.
@@ -1541,6 +1663,11 @@ function M.new(label)
     local failure = kept.move_kept_base(hand_over.state_directory, hand_over.from, hand_over.to)
     if failure then
       tell_keeping_failure(failure)
+    end
+    local view_failure =
+      kept.move_kept_view(hand_over.state_directory, hand_over.from, hand_over.to)
+    if view_failure then
+      tell_view_failure(view_failure)
     end
     held_bases[hand_over.to], held_bases[hand_over.from] = held_bases[hand_over.from], nil
     if follows_from then

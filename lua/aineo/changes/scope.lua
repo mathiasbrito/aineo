@@ -445,4 +445,85 @@ function M.whole_change_of(member)
   return filter.of_branch(member.branch.name)
 end
 
+--- What the changes pane's view of a session is made of.
+---@class aineo.changes.View
+---@field scope? aineo.changes.Scope the worktree or branch picked to show alone
+---@field focused boolean whether the focused view shows rather than the default view
+---@field reported aineo.changes.ScopeMember[] the reported set
+---@field shows_reported boolean whether the focused view is the reported set rather than the pick
+
+--- `view` as it is kept for a session (`aineo.changes.kept`): what it picked
+--- and reported, each by the worktree's top level or the branch's name.
+---
+---@param repository string the session's repository's top level
+---@param view aineo.changes.View
+---@return aineo.changes.KeptView
+function M.kept_view_of(repository, view)
+  local scope_kept
+  if view.scope then
+    scope_kept = { top = view.scope.top, branch = view.scope.branch }
+  end
+  return {
+    repository = repository,
+    focused = view.focused,
+    shows_reported = view.shows_reported,
+    scope = scope_kept,
+    reported = vim.tbl_map(function(member)
+      if member.worktree then
+        return { top = member.worktree.top }
+      end
+      return { branch = member.branch.name }
+    end, view.reported),
+  }
+end
+
+--- The member `pick`, kept, names, as `M.still_listed()` takes it.
+---
+---@param pick aineo.changes.KeptPick
+---@return aineo.changes.ScopeMember
+local function member_of_pick(pick)
+  if pick.top then
+    return { worktree = { top = pick.top } }
+  end
+  return { branch = { name = pick.branch } }
+end
+
+--- What `M.restored_view()` gives.
+---@class aineo.changes.RestoredView: aineo.changes.View
+---@field selected? aineo.changes.Filter the whole change of the first thing the focused view shows, which it chooses; nil for the default view
+
+--- The view `kept` keeps, as `candidates`, what git now lists, still allows
+--- it: a member of the reported set that git no longer lists is dropped, so
+--- is a pick of a worktree or a branch it no longer lists, all untold. The
+--- focused view shows only while what it was of — the set, or the pick — is
+--- left.
+---
+---@param kept aineo.changes.KeptView
+---@param candidates aineo.changes.BranchCandidates
+---@return aineo.changes.RestoredView
+function M.restored_view(kept, candidates)
+  local reported = M.still_listed(vim.tbl_map(member_of_pick, kept.reported), candidates)
+  local picked = kept.scope and M.still_listed({ member_of_pick(kept.scope) }, candidates)[1]
+  local scope
+  if picked and picked.worktree then
+    scope = M.of(picked.worktree)
+  elseif picked then
+    scope = M.of_branch(picked.branch.name)
+  end
+  local shows_reported = kept.shows_reported and #reported > 0
+  local shown
+  if kept.focused and kept.shows_reported then
+    shown = reported[1]
+  elseif kept.focused then
+    shown = picked
+  end
+  return {
+    scope = scope,
+    focused = shown ~= nil,
+    reported = reported,
+    shows_reported = shows_reported,
+    selected = shown and M.whole_change_of(shown) or nil,
+  }
+end
+
 return M
