@@ -329,6 +329,7 @@ T['<S-CR> on a file whose name holds']['opens it in the worktree picked, the pat
 
   expect_current_buffer(vim.fs.joinpath(agent, name))
   eq(vim.uv.fs_stat(vim.fs.joinpath(agent, 'pwned')), nil)
+  eq(vim.uv.fs_stat(vim.fs.joinpath(child.fn.getcwd(), 'pwned')), nil)
 end
 
 --- Makes the local branch `name` in the repository at `top`, holding one
