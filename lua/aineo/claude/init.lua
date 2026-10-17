@@ -364,11 +364,12 @@ local function found_no_conversation(ended)
 end
 
 --- What aineo tells the user when Claude Code starts without aineo's
---- session hooks, since the `--settings` of `claude.cmd` cannot be read or
---- added to: a session switch inside Claude Code is not followed. One line of
---- 60 characters, so that at startup it holds no 80-column screen at a
+--- hooks, since the `--settings` of `claude.cmd` cannot be read or added
+--- to: a session switch inside Claude Code is not followed, and its
+--- subagents are not told of the announcement tool. One line of 59
+--- characters, so that at startup it holds no 80-column screen at a
 --- hit-enter prompt, whose `v:echospace` is 68.
-local SETTINGS_UNREAD_WARNING = "aineo: claude.cmd's --settings unread; switches not followed"
+local SETTINGS_UNREAD_WARNING = "aineo: claude.cmd's --settings unread; aineo hooks left out"
 
 --- What aineo tells the user when the session it resumes is also open in
 --- another interactive Claude Code. One line of at most 60 characters, as
@@ -1325,7 +1326,8 @@ end
 
 --- What becomes of the `--settings` that `cmd`, a `claude.cmd`, gives when
 --- Claude Code starts in `cwd`: nil when `cmd` gives none; else a verdict
---- whose `problem` says why aineo cannot add its session hooks to them —
+--- whose `problem` says why aineo cannot add its hooks to them — its
+--- session hooks and its `SubagentStart` hook —
 --- so that a start passes them as they are, without its hooks, and warns —
 --- nil when it can (`arguments.given_settings_verdict()`).
 ---
