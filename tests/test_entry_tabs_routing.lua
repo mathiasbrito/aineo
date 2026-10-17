@@ -1,6 +1,7 @@
 local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
+local git_repo = dofile('tests/helpers/git_repo.lua')
 local tabs = dofile('tests/helpers/entry_tabs.lua')
 
 local eq = MiniTest.expect.equality
@@ -458,6 +459,135 @@ T[':Aineo claim']['of a session another tab runs moves to that tab and claims no
   eq(tabs.current_tab(child), 1)
   eq(tabs.entries(state, child.v.servername)['2'].session, second_session)
   eq(vim.fn.glob(vim.fs.joinpath(state, 'aineo', 'claims', '*'), true, true), {})
+end
+
+T['an announcement'] = MiniTest.new_set()
+
+--- Makes the repository `.tests/fixtures/git-<name>/repo`, with the
+--- worktree `agent-1` on the new branch `feature/a` beside it, gives the
+--- child the git isolation of the git home's suites and moves its working
+--- directory to the repository, where the tabs' Claude Codes start; returns
+--- the worktree's top level.
+---
+---@param name string
+---@return string worktree
+local function in_repository_with_a_worktree(name)
+  local top = git_repo.create(name, { ['notes.txt'] = { 'one' } })
+  local worktree = vim.fs.joinpath(vim.fs.dirname(top), 'agent-1')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'feature/a', worktree })
+  child.lua('for name, value in pairs(...) do vim.env[name] = value end', { git_repo.ENVIRONMENT })
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
+  return worktree
+end
+
+--- Offers the child's MCP home the announcement `work` of the start
+--- `token`, as the relay's offer does, and returns whether a tab took it.
+---
+---@param work table
+---@param token string?
+---@return boolean
+local function announce_to_child(work, token)
+  return child.lua_get(
+    [[require('aineo.mcp').receive_work_announcement(...)]],
+    { work, token or vim.NIL }
+  )
+end
+
+--- The messages the child told whose words hold `part`.
+---
+---@param part string
+---@return string[]
+local function messages_holding(part)
+  return vim.tbl_map(
+    function(told)
+      return told.message
+    end,
+    vim.tbl_filter(function(told)
+      return type(told.message) == 'string' and told.message:find(part, 1, true) ~= nil
+    end, entry.messages(child))
+  )
+end
+
+--- The first line of the commits buffer of the changes pane of the child's
+--- tab numbered `number` in the order the tabs were made.
+---
+---@param number integer
+---@return string
+local function first_commits_line_of_tab(number)
+  return child.lua_get(
+    [[(function(number)
+      local home = require('aineo.entry.registry').tab_list[number].homes.changes
+      return vim.api.nvim_buf_get_lines(home.pane_buffers().commits, 0, 1, true)[1]
+    end)(...)]],
+    { number }
+  )
+end
+
+T['an announcement']['of the second tab’s Claude Code goes to the second tab while the first is current, told with its number'] = function()
+  local worktree = in_repository_with_a_worktree('tabs-announce')
+  local _, _, second = open_two_tabs('tabs-announce')
+  child.cmd('tabfirst')
+
+  local taken =
+    announce_to_child({ kind = 'worktree', path = worktree }, claude_session.start_token(second, 1))
+
+  eq(taken, true)
+  git_repo.wait_until('the announcement told', function()
+    return #messages_holding('started work') > 0
+  end)
+  eq(messages_holding('started work'), {
+    'tab 2: aineo: Claude Code started work in Worktree agent-1 (feature/a); the changes pane shows the reported work',
+  })
+  git_repo.wait_until('the second tab’s pane shows the reported work', function()
+    return first_commits_line_of_tab(2) == 'Worktree agent-1 (feature/a)'
+  end)
+  eq(
+    { first_commits_line_of_tab(1), first_commits_line_of_tab(2) },
+    { 'Uncommitted', 'Worktree agent-1 (feature/a)' }
+  )
+end
+
+T['an announcement']['beyond 32 waiting in a tab is not taken'] = function()
+  local worktree = in_repository_with_a_worktree('tabs-announce-at-most')
+  local _, _, second = open_two_tabs('tabs-announce-at-most')
+  local token = claude_session.start_token(second, 1)
+
+  local taken = child.lua_get(
+    [[(function(directory, token)
+      local taken = {}
+      for index = 1, 33 do
+        local work = { kind = 'worktree', path = directory .. '/never-made-' .. index }
+        taken[index] = require('aineo.mcp').receive_work_announcement(work, token)
+      end
+      return taken
+    end)(...)]],
+    { vim.fs.dirname(worktree), token }
+  )
+
+  eq(vim.list_slice(taken, 32), { true, false })
+end
+
+T['an announcement']['of the current tab’s Claude Code is told without a tab number'] = function()
+  local worktree = in_repository_with_a_worktree('tabs-announce-current')
+  local _, _, second = open_two_tabs('tabs-announce-current')
+
+  announce_to_child({ kind = 'worktree', path = worktree }, claude_session.start_token(second, 1))
+
+  git_repo.wait_until('the announcement told', function()
+    return #messages_holding('started work') > 0
+  end)
+  eq(messages_holding('started work'), {
+    'aineo: Claude Code started work in Worktree agent-1 (feature/a); the changes pane shows the reported work',
+  })
+end
+
+T['an announcement']['whose start token no tab’s Claude Code has is declined'] = function()
+  local worktree = in_repository_with_a_worktree('tabs-announce-unknown')
+  open_two_tabs('tabs-announce-unknown')
+
+  local taken = announce_to_child({ kind = 'worktree', path = worktree }, 'no-such-token')
+
+  eq(taken, false)
 end
 
 return T

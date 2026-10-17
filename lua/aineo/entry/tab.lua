@@ -651,7 +651,10 @@ local function make_tab(homes, key, callbacks)
 
   --- The settings a start of Claude Code in `working_directory` is given
   --- (`aineo.claude`'s `start_session()` and `join_session()`): `config`'s
-  --- `claude.cmd` and `claude.hide_multiplexer`, the report server and instructions, the state directory of
+  --- `claude.cmd` and `claude.hide_multiplexer`, the report server, its two
+  --- tools allowed, the instructions — the report's, then, after a blank
+  --- line, the announcement tool's paragraph — and the subagents' context
+  --- for the `SubagentStart` hook (`aineo.mcp`), the state directory of
   --- `kept_places()`, the editor's address and program for the session hooks,
   --- and the callbacks that make the panes follow the session
   --- (`replacement_callbacks()`, `follow_confirmed_start()`). With
@@ -671,7 +674,10 @@ local function make_tab(homes, key, callbacks)
       cwd = working_directory,
       mcp_servers = mcp.mcp_servers(vim.v.servername, vim.v.progpath),
       allowed_tools = mcp.allowed_mcp_tools(),
-      instructions = report.report_instructions(mcp.report_tool_name()),
+      instructions = report.report_instructions(mcp.report_tool_name())
+        .. '\n\n'
+        .. mcp.announce_instructions(),
+      subagent_context = mcp.subagent_announce_context(),
       state_directory = places.kept_places().state_directory,
       new_session = new_session,
       editor_address = vim.v.servername,

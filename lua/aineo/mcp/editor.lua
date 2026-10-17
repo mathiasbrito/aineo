@@ -208,9 +208,9 @@ local function offer_outcome(call, address)
   return 'unconfirmed', UNCONFIRMED
 end
 
---- A request an editor runs to take a report: Lua code, which reaches the
---- report home through its entry point, and its arguments, the report
---- among them.
+--- A request an editor runs to take a report or an announcement: Lua code,
+--- which reaches an aineo home through its entry point, and its arguments,
+--- the report or the announcement among them.
 ---@alias aineo.mcp.ReportRequest { lua: string, arguments: any[] }
 
 --- Offers the editor listening at `address` to run `request`, which takes

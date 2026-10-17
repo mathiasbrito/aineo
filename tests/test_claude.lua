@@ -194,6 +194,75 @@ T['start_session()']['appends the instructions to the system prompt byte for byt
   )
 end
 
+--- A subagent context holding what a shell or JSON would read otherwise: a
+--- single quote, a double quote, a backslash, a backtick and a variable.
+local SUBAGENT_CONTEXT = [[Call 'announce' "now" \ `tick` $HOME %s]]
+
+--- The `SubagentStart` entries of the settings of `--settings` the fake was
+--- given, inline.
+---
+---@param fake table
+---@return table?
+local function subagent_start_entries(fake)
+  local given = claude.decoded_words_after(claude.arguments(fake), '--settings')[1]
+  return given and given.hooks and given.hooks.SubagentStart
+end
+
+--- What `command` prints when a POSIX shell runs it, decoded from JSON.
+---
+---@param command string
+---@return any
+local function printed_by(command)
+  local run = vim.system({ 'sh', '-c', command }, { text = true }):wait(5000)
+  local decoded, printed = pcall(vim.json.decode, run.stdout or '')
+  return decoded and printed or { unreadable = run.stdout, code = run.code }
+end
+
+T['start_session()']['gives a SubagentStart command hook with no matcher that prints the subagent context'] = function()
+  local fake = claude.fake('subagent-start', 'exit')
+
+  claude.start(child, fake, { subagent_context = SUBAGENT_CONTEXT })
+
+  local entries = subagent_start_entries(fake) or {}
+  local hook = vim.tbl_get(entries, 1, 'hooks', 1) or {}
+  eq({ #entries, vim.tbl_get(entries, 1, 'matcher'), hook.type }, { 1, nil, 'command' })
+  eq(printed_by(hook.command or 'false'), {
+    hookSpecificOutput = { hookEventName = 'SubagentStart', additionalContext = SUBAGENT_CONTEXT },
+  })
+end
+
+--- Settings of the user's own, as a `--settings` of `claude.cmd` gives them,
+--- with a `SubagentStart` hook of their own.
+local USER_SUBAGENT_SETTINGS =
+  '{"hooks":{"SubagentStart":[{"matcher":"Explore","hooks":[{"type":"command","command":"true"}]}]}}'
+
+T['start_session()']['adds the SubagentStart hook after those of a --settings in claude.cmd'] = function()
+  local fake = claude.fake('subagent-start-merged', 'exit')
+
+  claude.start(child, fake, {
+    cmd = claude.fake_command({ '--settings', USER_SUBAGENT_SETTINGS }),
+    subagent_context = SUBAGENT_CONTEXT,
+  })
+
+  local file = claude.words_after(claude.arguments(fake), '--settings')[1]
+  local entries = vim.json.decode(table.concat(vim.fn.readfile(file), '\n')).hooks.SubagentStart
+  eq(#entries, 2)
+  eq(entries[1], vim.json.decode(USER_SUBAGENT_SETTINGS).hooks.SubagentStart[1])
+  eq(printed_by(entries[2].hooks[1].command).hookSpecificOutput.additionalContext, SUBAGENT_CONTEXT)
+end
+
+T['start_session()']['adds no hook to a --settings in claude.cmd whose SubagentStart hooks are not a list'] = function()
+  local fake = claude.fake('subagent-start-unread', 'exit')
+  local user_settings = '{"hooks":{"SubagentStart":{"matcher":"Explore"}}}'
+
+  claude.start(child, fake, {
+    cmd = claude.fake_command({ '--settings', user_settings }),
+    subagent_context = SUBAGENT_CONTEXT,
+  })
+
+  eq(claude.words_after(claude.arguments(fake), '--settings'), { user_settings })
+end
+
 T['start_session()']['passes no flag beyond the session, the servers, the instructions, the hooks and the tools'] = function()
   local fake = claude.fake('no-other-flag', 'exit')
 
@@ -435,6 +504,7 @@ T['start_session()']['names the setting that is malformed'] = MiniTest.new_set({
     { 'allowed_tools', 'mcp__aineo__report' },
     { 'allowed_tools', { 1 } },
     { 'instructions', false },
+    { 'subagent_context', false },
     { 'state_directory', 1 },
     { 'on_terminal_replaced', 'a callback' },
     { 'editor_address', 1 },
