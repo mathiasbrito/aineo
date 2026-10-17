@@ -28,6 +28,7 @@ local M = {}
 ---@field mcp_servers table<string, table> the MCP servers Claude Code starts, by name, each in its `--mcp-config` server format
 ---@field allowed_tools string[] the tools Claude Code may call without asking the user
 ---@field instructions string the text appended to Claude Code's system prompt
+---@field subagent_context? string the text a `SubagentStart` hook adds at the start of each subagent's conversation, which Claude Code's system prompt never reaches; no such hook when not given
 ---@field new_session? boolean start on a new session id even where one is kept for `cwd` (`start_session()`); absent or false resumes the kept session
 ---@field resume_session? string a session id to resume in place of the kept one (`start_session()`); absent resumes the session kept for `cwd`, or starts a new one where none is kept. Keeps nothing for `cwd`
 ---@field on_terminal_replaced? fun(terminal: integer) called with the new terminal when the session replaces its terminal on its own, as it does when Claude Code finds no conversation to resume (`start_session()`); never for a terminal `start_session()` returns
@@ -224,6 +225,7 @@ local function validate_settings(settings)
     return is_word_list(value, 0)
   end, 'a list of strings')
   vim.validate('settings.instructions', settings.instructions, 'string')
+  vim.validate('settings.subagent_context', settings.subagent_context, 'string', true)
   vim.validate('settings.state_directory', settings.state_directory, 'string')
   vim.validate('settings.new_session', settings.new_session, 'boolean', true)
   vim.validate('settings.resume_session', settings.resume_session, function(value)
