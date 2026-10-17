@@ -41,9 +41,9 @@ session of its own, `\1` to `\9` move to the tab page of that number, and
 `\Q` closes the current tab (|aineo-tabs|). `\d` closes the diff the changes
 pane shows in the middle column, from any window of the tab (|:Aineo-diff|).
 `\f` finds a file under the folder Claude Code works in and opens it in the
-middle column, from any window of the tab (|aineo-find|). In Visual mode, in
-Input, `\s` sends the selection alone and removes it from Input
-(|aineo-v_\s|).
+middle column, from any window of the tab but a floating one (|aineo-find|).
+In Visual mode, in Input, `\s` sends the selection alone and removes it from
+Input (|aineo-v_\s|).
 
 In Terminal mode and in Insert mode, `<C-\>` followed by the same letters
 does the same: `<C-\>i` moves to Input, `<C-\>r` to the Report, `<C-\>c` to
@@ -937,26 +937,35 @@ Finding a file ~
 under the top of the repository that folder is in, and opens the one you pick
 in the file column as any file opened from the layout (|aineo-file-column|):
 modifiable, written by `:w`, with the cursor in it in Normal mode. It works
-from any window of the tab, Claude's terminal included, where its twin
-`<C-\>f` leaves Terminal mode first (|aineo-terminal-keys|); a diff shown in
-the file column gives its place to the file as it does to any other file. From
-a tab page that is none of aineo's it acts on the aineo tab used last and
-moves you there; with no aineo tab it tells you once, `aineo: there is no
-aineo tab to find a file in`, and opens nothing (|:Aineo-find|).
+from any window of the tab but a floating one, Claude's terminal included,
+where its twin `<C-\>f` leaves Terminal mode first (|aineo-terminal-keys|);
+from a floating window, a picker's own among them, it starts nothing and
+tells you, with one warning, `aineo: a file is found from a window of the tab,
+not from a floating one`. A diff shown in the file column gives its place to
+the file as it does to any other file. From a tab page that is none of
+aineo's it acts on the aineo tab used last and moves you there; with no
+aineo tab it tells you, with one warning, `aineo: there is no aineo tab to
+find a file in`, and opens nothing (|:Aineo-find|).
 
 aineo has no picker of its own and depends on none. With `find.picker` set to
 `auto`, it hands the search to the first of snacks.nvim
 (`Snacks.picker.files`), fzf-lua (`files`), telescope.nvim
 (`builtin.find_files`) and mini.pick (`builtin.files`) that is installed,
 each given the folder as its working directory; the picker's own keys choose
-the file and open it, as it opens a file anywhere. Set `find.picker` to one
-of their names to use that one alone (|aineo-config-find.picker|). With none
-installed, or with the one forced missing, aineo lists the files through
-|vim.ui.select()|: the files of the repository that `git ls-files` lists,
-the tracked ones and the untracked ones its ignore rules leave in, or,
-outside a repository, the files found by a walk of the folder; in byte
-order, at most 20000, and aineo tells you once when the list stops there. A
-`vim.ui.select` of yours, from a picker plugin, then gives the search its
+the file and open it in a window of the tab, which the file column's
+redirect moves to the file column. Set `find.picker` to one of their names
+to use that one alone (|aineo-config-find.picker|). With none installed, or
+with the one forced missing, aineo lists the files through
+|vim.ui.select()|: the files of the repository, as the git home lists them
+(the tracked ones and the untracked ones its ignore rules leave in), and,
+whenever git cannot list them (outside a repository, or git failing or
+running past its limit), the files found by a walk of the folder; in byte
+order, at most 20000. In a search, aineo tells you once, with a warning,
+that the picker forced is missing; once, that git could not list the files
+of a repository and the list is a walk of the folder; once, when the list
+stops at 20000; and once, with an error, when the file picked cannot be
+opened, as `:edit` refuses a window whose unsaved buffer cannot be hidden.
+A `vim.ui.select` of yours, from a picker plugin, then gives the search its
 matching. `:checkhealth aineo` says which picker aineo will use
 (|aineo-health|).
 
@@ -1551,12 +1560,13 @@ moves you to that tab instead and claims nothing.
 			Code works in, or under the top of the repository that
 			folder is in, with the picker `find.picker` names
 			(|aineo-config-find.picker|), and opens the file
-			picked in the file column, from any window of the tab
-			(|aineo-find|). From a tab page that is none of
-			aineo's it acts on the aineo tab used last and moves
-			you there (|aineo-tabs|); with no aineo tab it makes
-			none and tells you once, `aineo: there is no aineo tab
-			to find a file in`. With any word after `find` it
+			picked in the file column, from any window of the
+			tab but a floating one (|aineo-find|). From a tab page
+			that is none of aineo's it acts on the aineo tab used
+			last and moves you there (|aineo-tabs|); with no aineo
+			tab it makes none and tells you, with one warning,
+			`aineo: there is no aineo tab to find a file in`. With
+			any word after `find` it
 			tells you, with one error, what `:Aineo` takes. `\f`
 			and, in Terminal mode and in Insert mode, `<C-\>f` do
 			the same (|aineo-keys|).
@@ -1949,9 +1959,9 @@ find.picker		One of `'auto'`, `'snacks'`, `'fzf-lua'`,
 			telescope.nvim and mini.pick that is installed; a name
 			takes that picker alone. With no picker installed, or
 			the one named missing, `\f` lists the files through
-			|vim.ui.select()|, and with a name it tells you once
-			that the picker is missing. None of them is a
-			dependency of aineo.
+			|vim.ui.select()|, and with a name it tells you, in
+			each search, with one warning, that the picker is
+			missing. None of them is a dependency of aineo.
 
 ==============================================================================
 7. SEND                                                           *aineo-send*

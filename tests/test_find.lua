@@ -75,7 +75,26 @@ T['picker_in_use()']['takes none when the picker that is forced is not installed
   eq(child.lua_get("require('aineo.find').picker_in_use(...)", { forced }), vim.NIL)
 end
 
-T['start()'] = MiniTest.new_set()
+T['picker_in_use()']['counts a snacks without a picker module as not installed, for auto and when forced'] =
+  MiniTest.new_set({
+    parametrize = {
+      { { 'snacks-without-picker' }, 'auto', vim.NIL },
+      { { 'snacks-without-picker', 'fzf-lua' }, 'auto', 'fzf-lua' },
+      { { 'snacks-without-picker', 'fzf-lua' }, 'snacks', vim.NIL },
+    },
+  })
+
+T['picker_in_use()']['counts a snacks without a picker module as not installed, for auto and when forced']['installed'] = function(
+  installed,
+  setting,
+  taken
+)
+  find_pickers.install(child, installed)
+
+  eq(child.lua_get("require('aineo.find').picker_in_use(...)", { setting }), taken)
+end
+
+T['find_file()'] = MiniTest.new_set()
 
 --- Each picker, the options its call is given for the directory `/tmp/root`.
 local OPTIONS_OF_THE_CALL = {
@@ -85,10 +104,10 @@ local OPTIONS_OF_THE_CALL = {
   { 'mini.pick', { source = { cwd = '/tmp/root' } } },
 }
 
-T['start()']['asks the picker for the files under the directory, whichever picker is forced'] =
+T['find_file()']['asks the picker for the files under the directory, whichever picker is forced'] =
   MiniTest.new_set({ parametrize = OPTIONS_OF_THE_CALL })
 
-T['start()']['asks the picker for the files under the directory, whichever picker is forced']['picker'] = function(
+T['find_file()']['asks the picker for the files under the directory, whichever picker is forced']['picker'] = function(
   picker,
   options
 )
@@ -102,7 +121,7 @@ T['start()']['asks the picker for the files under the directory, whichever picke
   eq(find_pickers.calls(child), { { picker = picker, options = options } })
 end
 
-T['start()']['asks the first installed picker, and no other, when the picker is auto'] = function()
+T['find_file()']['asks the first installed picker, and no other, when the picker is auto'] = function()
   find_pickers.install(child, { 'fzf-lua', 'telescope', 'mini.pick' })
 
   child.lua("require('aineo.find').find_file({ directory = '/tmp/root', picker = 'auto' })")
@@ -110,7 +129,7 @@ T['start()']['asks the first installed picker, and no other, when the picker is 
   eq(find_pickers.calls(child), { { picker = 'fzf-lua', options = { cwd = '/tmp/root' } } })
 end
 
-T['start() with no picker installed'] = MiniTest.new_set()
+T['find_file() with no picker installed'] = MiniTest.new_set()
 
 --- The Lua that replaces `vim.ui.select()` in the child with a recorder: each
 --- call is kept in `_G.selections` as its items and prompt, and the choice
@@ -133,16 +152,21 @@ local RECORD_SELECTIONS = [[
 ---
 ---@param directory string
 ---@param picker? string `auto` when not given
+---@param listing? string a Lua expression, evaluated in the child, for the function that lists the files of a repository (`list_files`); none when not given
 ---@return string[]
-local function offered_files(directory, picker)
+local function offered_files(directory, picker, listing)
   find_pickers.install(child, {})
   child.lua(RECORD_SELECTIONS)
   child.lua(
     [=[
-      local directory, picker = ...
-      require('aineo.find').find_file({ directory = directory, picker = picker })
+      local directory, picker, listing = ...
+      require('aineo.find').find_file({
+        directory = directory,
+        picker = picker,
+        list_files = listing and load('return ' .. listing)() or nil,
+      })
     ]=],
-    { directory, picker or 'auto' }
+    { directory, picker or 'auto', listing or false }
   )
   git_repo.wait_until('the files to be offered', function()
     return child.lua_get('#_G.selections') > 0
@@ -150,21 +174,19 @@ local function offered_files(directory, picker)
   return child.lua_get('_G.selections[1].items')
 end
 
-T['start() with no picker installed']['offers the files of the repository through vim.ui.select, the untracked ones and not the ignored'] = function()
-  local top = git_repo.create('find-repository', {
-    ['tracked.txt'] = { 'one' },
-    ['src/nested file.lua'] = { 'two' },
-    ['.gitignore'] = { 'ignored.log' },
-  })
-  git_repo.write(top, 'untracked.txt', { 'three' })
-  git_repo.write(top, 'ignored.log', { 'four' })
+T['find_file() with no picker installed']['offers the files the repository lists through vim.ui.select, in the order of their bytes'] = function()
+  local directory = git_repo.directory('find-listed')
 
-  local files = offered_files(top)
+  local files = offered_files(
+    directory,
+    'auto',
+    "function(done) done(nil, { 'src/b.lua', 'a.txt', 'src/a.lua' }) end"
+  )
 
-  eq(files, { '.gitignore', 'src/nested file.lua', 'tracked.txt', 'untracked.txt' })
+  eq(files, { 'a.txt', 'src/a.lua', 'src/b.lua' })
 end
 
-T['start() with no picker installed']['offers the files found walking a directory that is in no repository, leaving .git out'] = function()
+T['find_file() with no picker installed']['offers the files found walking a directory that is in no repository, leaving .git out'] = function()
   local directory = git_repo.directory('find-walk')
   git_repo.write(directory, 'a.txt', { 'one' })
   git_repo.write(directory, 'sub/deeper/b.txt', { 'two' })
@@ -188,7 +210,60 @@ local function record_notifications()
   ]])
 end
 
-T['start() with no picker installed']['tells the user once that the picker forced is not installed, and offers the files all the same'] = function()
+T['find_file() with no picker installed']['tells the user once that git could not list the files, and offers what a walk of the folder finds'] = function()
+  local directory = git_repo.directory('find-git-failed')
+  git_repo.write(directory, 'a.txt', { 'one' })
+  record_notifications()
+
+  local files = offered_files(
+    directory,
+    'auto',
+    "function(done) done({ reason = 'timed_out', message = 'git ran past its limit of 10000 ms: git' }) end"
+  )
+
+  eq({ child.lua_get(NOTIFICATIONS), files }, {
+    {
+      {
+        message = ('aineo: git could not list the files under %s (git ran past its limit of 10000 ms: git): the list is what a walk of the folder finds'):format(
+          directory
+        ),
+        level = vim.log.levels.WARN,
+      },
+    },
+    { 'a.txt' },
+  })
+end
+
+T['find_file() with no picker installed']['tells the user once, with one error, when the file picked cannot replace the buffer of its window'] = function()
+  local directory = git_repo.directory('find-unsaved')
+  git_repo.write(directory, 'a.txt', { 'one' })
+  child.o.hidden = false
+  child.cmd('enew')
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { 'unsaved' })
+  record_notifications()
+  offered_files(directory)
+
+  child.lua('_G.choose(1)')
+
+  eq(child.lua_get(NOTIFICATIONS), {
+    {
+      message = 'aineo: E37: No write since last change (add ! to override)',
+      level = vim.log.levels.ERROR,
+    },
+  })
+end
+
+T['find_file() with no picker installed']['tells nothing of git when the directory is in no repository'] = function()
+  local directory = git_repo.directory('find-no-repository')
+  git_repo.write(directory, 'a.txt', { 'one' })
+  record_notifications()
+
+  offered_files(directory)
+
+  eq(child.lua_get(NOTIFICATIONS), {})
+end
+
+T['find_file() with no picker installed']['tells the user once that the picker forced is not installed, and offers the files all the same'] = function()
   local top = git_repo.create('find-forced', { ['a.txt'] = { 'one' } })
   record_notifications()
 
@@ -212,7 +287,7 @@ local function wait_for_a_notification()
   end)
 end
 
-T['start() with no picker installed']['tells the user once, and offers nothing, when the directory holds no file'] = function()
+T['find_file() with no picker installed']['tells the user once, and offers nothing, when the directory holds no file'] = function()
   local directory = git_repo.directory('find-empty')
   find_pickers.install(child, {})
   child.lua(RECORD_SELECTIONS)
@@ -246,7 +321,7 @@ local function make_files(directory, count)
   )
 end
 
-T['start() with no picker installed']['offers the first files only, and tells the user once, when the directory holds more'] = function()
+T['find_file() with no picker installed']['offers the first files only, and tells the user once, when the directory holds more'] = function()
   local directory = git_repo.directory('find-many')
   make_files(directory, MOST_FILES + 1)
   record_notifications()
@@ -267,7 +342,7 @@ T['start() with no picker installed']['offers the first files only, and tells th
   })
 end
 
-T['start() with no picker installed']['tells nothing when the picker is auto'] = function()
+T['find_file() with no picker installed']['tells nothing when the picker is auto'] = function()
   local top = git_repo.create('find-auto', { ['a.txt'] = { 'one' } })
   record_notifications()
 
@@ -276,7 +351,7 @@ T['start() with no picker installed']['tells nothing when the picker is auto'] =
   eq(child.lua_get(NOTIFICATIONS), {})
 end
 
-T['start() with no picker installed']['opens the file picked in the window the search began in, modifiable, where it has the cursor'] = function()
+T['find_file() with no picker installed']['opens the file picked in the window the search began in, modifiable, where it has the cursor'] = function()
   local top = git_repo.create('find-pick', { ['a.txt'] = { 'one' }, ['b.txt'] = { 'two' } })
   child.cmd('vsplit')
   local began_in = child.api.nvim_get_current_win()
