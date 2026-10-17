@@ -1,6 +1,7 @@
 local MiniTest = require('mini.test')
 local mcp = require('aineo.mcp')
 local children = dofile('tests/helpers/child.lua')
+local fixture = dofile('tests/helpers/fixture.lua')
 local mcp_messages = dofile('tests/helpers/mcp_messages.lua')
 local mcp_relay = dofile('tests/helpers/mcp_relay.lua')
 
@@ -339,20 +340,86 @@ T['announce_work']['for an editor that cannot be reached is not taken'] = functi
   eq(get(decoded(relay:next_line()), 'result'), result_of('not taken', true))
 end
 
-T['announce_work']['for an editor that does not answer in time is answered with the offer’s own words'] = function()
+--- A session id of the form Claude Code gives.
+local SESSION_ID = '063cc43c-8e1a-4d2f-b5c7-91d0e3a4f852'
+
+T['announce_work']['declined by the starting editor is offered to no other, though another claims the session and would take it'] = function()
+  local home = fixture.directory('mcp-announce-other-editor')
+  local state = vim.fs.joinpath(home, 'nvim')
+  local others = {}
+  local other = start_recording_editor(others, true)
+  mcp.claim_session(state, SESSION_ID, other, 5000)
+  mcp.write_editor_entry(state, {
+    address = other,
+    working_directory = vim.uv.cwd(),
+    session = SESSION_ID,
+    own = true,
+    used = 1000,
+  })
+  local relay = mcp_relay.start_relay({
+    XDG_STATE_HOME = home,
+    AINEO_EDITOR_ADDRESS = start_recording_editor({}, false),
+    AINEO_START_TOKEN = TOKEN,
+    CLAUDE_CODE_SESSION_ID = SESSION_ID,
+  })
+
+  relay:send(announce({ kind = 'branch', branch = 'feature/x' }))
+
+  eq(get(decoded(relay:next_line()), 'result'), result_of('not taken', true))
+  eq(others, {})
+end
+
+--- A relay told the editor `address` and the start token `TOKEN`, started in
+--- a directory removed once it is there, so that it cannot read its working
+--- directory.
+---
+---@param address string
+---@return aineo.test.Relay
+local function relay_with_no_working_directory(address)
+  local entry = mcp.mcp_servers('', vim.v.progpath).aineo
+  local gone = vim.fs.joinpath(fixture.directory('mcp-announce-gone-cwd'), 'gone')
+  return mcp_relay.start(
+    vim.list_extend({
+      'sh',
+      '-c',
+      'mkdir -p "$1" && cd "$1" && rmdir "$1" && shift && exec "$@"',
+      'sh',
+      gone,
+      entry.command,
+    }, entry.args),
+    { AINEO_EDITOR_ADDRESS = address, AINEO_START_TOKEN = TOKEN }
+  )
+end
+
+T['announce_work']['with a relative path is not taken, and no editor asked, when the relay has no working directory'] =
+  MiniTest.new_set({
+    parametrize = { { 'agent-wt' }, { '~/agent-wt' } },
+  })
+
+T['announce_work']['with a relative path is not taken, and no editor asked, when the relay has no working directory']['given'] = function(
+  path
+)
+  local requests = {}
+  local relay = relay_with_no_working_directory(start_recording_editor(requests, true))
+
+  relay:send(announce({ kind = 'worktree', path = path }))
+  relay:send(announce({ kind = 'worktree', path = '/projects/agent-wt' }))
+
+  eq(
+    vim.tbl_map(function(line)
+      return get(decoded(line), 'result')
+    end, relay:next_lines(2)),
+    { result_of('not taken', true), result_of('ok', false) }
+  )
+  eq(#requests, 1)
+end
+
+T['announce_work']['for an editor that does not answer in time is not taken, nothing more'] = function()
   local relay = relay_for(start_silent_editor())
 
   relay:send(announce({ kind = 'branch', branch = 'feature/x' }))
 
-  eq(
-    get(decoded(relay:next_line(10000)), 'result'),
-    result_of(
-      'aineo sent the report, but the editor did not confirm it within 5 s:'
-        .. ' it may be waiting for the user, at a hit-enter prompt for one.'
-        .. ' The report is sent, not confirmed; do not send it again.',
-      false
-    )
-  )
+  eq(get(decoded(relay:next_line(10000)), 'result'), result_of('not taken', true))
 end
 
 return T
