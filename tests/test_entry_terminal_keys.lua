@@ -48,6 +48,7 @@ local TWIN_KEYS = {
   { '8', '<Plug>(aineo-tab-8)' },
   { '9', '<Plug>(aineo-tab-9)' },
   { 'd', '<Plug>(aineo-diff-close)' },
+  { 'f', '<Plug>(aineo-find)' },
 }
 
 local child = MiniTest.new_child_neovim()

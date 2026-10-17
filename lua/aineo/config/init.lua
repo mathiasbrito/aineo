@@ -61,6 +61,18 @@ local function is_padding(value)
     and value == math.floor(value)
 end
 
+--- The values of `find.picker`: `auto`, which takes the first third-party
+--- picker installed, and the name of each picker that can be forced.
+local FIND_PICKERS = { 'auto', 'snacks', 'fzf-lua', 'telescope', 'mini.pick' }
+
+--- Whether `value` names a file picker the file finder can use, or `auto`.
+---
+---@param value any
+---@return boolean
+local function is_find_picker(value)
+  return vim.list_contains(FIND_PICKERS, value)
+end
+
 --- aineo's settings, each named by its path in `vim.g.aineo`, with its
 --- default and the check its value must pass (`vim.validate`'s validator and,
 --- for a function, the words that describe what it expects).
@@ -104,6 +116,12 @@ local SETTINGS = {
     expected = 'a whole number from 0 to 8',
   },
   { name = 'tabs.always_show', default = true, validator = 'boolean' },
+  {
+    name = 'find.picker',
+    default = 'auto',
+    validator = is_find_picker,
+    expected = 'one of ' .. table.concat(FIND_PICKERS, ', '),
+  },
 }
 
 --- The keys leading to a setting, from the outermost table inwards.

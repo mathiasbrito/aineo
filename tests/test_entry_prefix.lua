@@ -29,6 +29,7 @@ local PREFIX_KEYS = {
   { '8', '<Plug>(aineo-tab-8)', 'n' },
   { '9', '<Plug>(aineo-tab-9)', 'n' },
   { 'd', '<Plug>(aineo-diff-close)', 'n' },
+  { 'f', '<Plug>(aineo-find)', 'n' },
   { 's', '<Plug>(aineo-send)', 'x' },
 }
 

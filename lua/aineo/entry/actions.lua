@@ -1,6 +1,7 @@
 --- What `:Aineo`'s arguments do, and the actions of tabs themselves: move to
 --- a tab, claim a session in the current tab, close the current tab.
 
+local finding = require('aineo.entry.finding')
 local opening = require('aineo.entry.opening')
 local registry = require('aineo.entry.registry')
 local reopening = require('aineo.entry.reopening')
@@ -144,6 +145,21 @@ ACTIONS['diff close'] = function()
   else
     require('aineo.changes').close_shown_diff()
   end
+end
+
+--- What `:Aineo find` tells the user, as a warning, when there is no aineo tab.
+local NO_TAB_TO_FIND_IN = 'aineo: there is no aineo tab to find a file in'
+
+--- What `:Aineo find` does: searches for a file in the folder of the existing
+--- aineo tab to act on (`aineo.entry.opening`'s `existing_acting_tab()`,
+--- `aineo.entry.finding`), and never makes a tab. With none, tells the user.
+ACTIONS.find = function()
+  local tab = opening.existing_acting_tab()
+  if not tab then
+    vim.notify(NO_TAB_TO_FIND_IN, vim.log.levels.WARN)
+    return
+  end
+  finding.find_in(tab)
 end
 
 ACTIONS['tab new'] = function()
