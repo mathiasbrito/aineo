@@ -2163,14 +2163,74 @@ function M.new(label)
     open_file.open_listed_file(entry, session.repository.top)
   end
 
-  --- Maps `gf` in `buffer`, the files buffer, in Normal mode, to open the
-  --- file the line under the cursor lists (`open_file_at_cursor()`).
+  --- Opens for edition the file the line under the cursor lists in `buffer`,
+  --- the files buffer, as it is now in the working tree its line belongs to
+  --- (`open_file.edit_place()`), whatever filter lists it. A file of a local
+  --- branch that no worktree has checked out cannot be edited: the user is
+  --- told so (`open_file.branch_checked_out_nowhere()`) and the file is
+  --- shown as the branch's tip has it, read-only (`show_commit_file()`).
+  --- Where a branch is checked out is read when the key is pressed, as the
+  --- editor's own worktree may have checked it out since; only the last
+  --- key's file is opened, and none when the cursor has left the window the
+  --- key was pressed in by the time git answers. A read that fails is told
+  --- as an error and opens nothing.
+  ---
+  ---@param buffer integer
+  local function edit_file_at_cursor(buffer)
+    local entry = pages.entry_at(buffer, vim.api.nvim_win_get_cursor(0)[1])
+    if not entry then
+      return
+    end
+    enters = enters + 1
+    local this_key = enters
+    local pressed_in = vim.api.nvim_get_current_win()
+    local top = session.repository.top
+    local function edit_in(place)
+      if place.top then
+        open_file.open_working_file(place.top, entry.change.path)
+        return
+      end
+      vim.notify(
+        open_file.branch_checked_out_nowhere(place.branch, entry.change.path),
+        vim.log.levels.INFO
+      )
+      show_commit_file(vim.tbl_extend('force', entry, { filter = filter.of_branch(place.branch) }))
+    end
+    if not open_file.branch_of(entry) then
+      edit_in(open_file.edit_place(entry, top, {}))
+      return
+    end
+    git.list_worktrees(session.repository, function(failure, listed)
+      if released or this_key ~= enters or vim.api.nvim_get_current_win() ~= pressed_in then
+        return
+      end
+      if failure then
+        vim.notify(
+          ('aineo: the worktrees could not be listed: %s'):format(lines.words_of(failure)),
+          vim.log.levels.ERROR
+        )
+        return
+      end
+      edit_in(open_file.edit_place(entry, top, listed))
+    end, session.settings.git)
+  end
+
+  --- Maps `gf` and `<S-CR>` in `buffer`, the files buffer, in Normal mode:
+  --- `gf` to open the file the line under the cursor lists
+  --- (`open_file_at_cursor()`), `<S-CR>` to open it for edition
+  --- (`edit_file_at_cursor()`).
   ---
   ---@param buffer integer
   local function map_open_file(buffer)
     vim.keymap.set('n', 'gf', function()
       open_file_at_cursor(buffer)
     end, { buffer = buffer, desc = 'aineo: open the file of the entry under the cursor' })
+    vim.keymap.set('n', '<S-CR>', function()
+      edit_file_at_cursor(buffer)
+    end, {
+      buffer = buffer,
+      desc = 'aineo: edit the file of the entry under the cursor as it is in its working tree',
+    })
   end
 
   --- Maps `l` and `h` in `buffer`, the files buffer, in Normal mode: `l` to
