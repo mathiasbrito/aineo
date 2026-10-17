@@ -48,8 +48,8 @@ Claude, `<C-\>pt` into the shell, each after leaving the mode you were in
 
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
-aineo allows one tool of its own without asking, the report tool
-(|aineo-report|), and nothing else.
+aineo allows its two tools of its own without asking, the report tool and
+`announce_work` (|aineo-report|), and nothing else.
 
 ==============================================================================
 2. REQUIREMENTS AND INSTALLATION                               *aineo-install*
@@ -591,6 +591,52 @@ disk. When a read no longer lists the worktree, the default view shows,
 Session work is chosen, and aineo says once "aineo: Worktree <folder>
 (<branch>) is gone; the changes pane shows the default view". Following
 another session says nothing.
+
+                                                   *aineo-changes-reported*
+Claude Code and its subagents tell aineo of each git worktree or branch
+they create for new work, through aineo's tool `announce_work`
+(|aineo-report|). A report goes to the tab whose Claude Code made it,
+whichever tab is current, and to no other editor; one no tab of this
+editor runs is not taken. That tab's changes pane matches it against what
+git lists, as `s` reads it: a worktree by its folder with every link
+resolved, a branch by its name — a branch a worktree has checked out
+counts as that worktree. Your own worktree, or the branch it has checked
+out, is not added, and nothing is said. What git does not list yet is
+looked for again at every read of the commits window for 60 seconds from
+the report, then let go, and aineo says once "aineo: Claude Code announced
+<kind> <path or branch>, which git does not list; the changes pane is
+unchanged". Before the pane is first shown, aineo watches nothing, so such
+a report is looked for when it comes and when the pane is first shown.
+What an agent reports is only compared with what git printed: no git, no
+shell and no buffer name is made of it.
+
+Each worktree or branch found joins the tab's reported work, in the order
+first reported; one reported again changes nothing. The reported work then
+becomes the focused view, from the default view or from a worktree or
+branch picked with `s`, its whole change chosen, the cursor on its
+heading, and aineo says once "aineo: Claude Code started work in Worktree
+<folder> (<branch>); the changes pane shows the reported work", or
+`Branch <name>`, with "tab <n>: " before it when that tab is not the
+current one. The changes pane is not brought into view: when it is not on
+screen, the next `\g` shows the reported work. The focused view of the
+reported work shows each member under its own heading, `Worktree <folder>
+(<branch>)` or `Branch <name>`, in |hl-AineoChangesFilter|, and below it
+its commits, or its note and the line saying its last read failed, as a
+worktree or branch shown alone does; nothing else. Enter, `l`, `h` and
+`gf` under a branch's lines read that branch, as under a branch picked.
+
+While there is reported work, `s` offers it first, "[reported] All
+reported work (<n>)"; picking it makes it the focused view again, and
+picking a worktree or a branch shows that one alone, the reported work
+kept behind it. `\g` switches between the default view and whichever of
+the two was chosen last. A member drops out, untold, at the read that no
+longer lists it — a worktree removed, a branch deleted. When the last one
+goes while the reported work is shown, the default view shows, and aineo
+says once "aineo: the reported work is gone; the changes pane shows the
+default view". A worktree or branch picked behind the reported work that
+goes is let go untold. Following another Claude Code session than one
+followed before empties the reported work and drops the reports still
+looked for; each tab keeps its own, and none is kept on disk.
 
 Enter on a file's line shows its unified diff in the middle column (the
 file column, below), within what the files window lists: from the base
@@ -1858,18 +1904,37 @@ aineo starts Claude Code with five additions of its own:
 - the session it resumes, or the id of a new one: `--resume` or
   `--session-id` (|aineo-claude-session|);
 - instructions appended to its system prompt, telling Claude when to call
-  the report tool and how to write a report (below);
+  the report tool and how to write a report (below), then, after a blank
+  line, one paragraph on `announce_work` (below);
 - aineo's MCP server, which Claude Code runs as a headless `nvim`, given
-  through `--mcp-config`;
+  through `--mcp-config`, with two tools: `report` and `announce_work`;
 - a `SessionStart` and a `SessionEnd` hook, which Claude Code also runs as
   a headless `nvim`, given through `--settings`: they tell the editor when
   Claude Code switches session (|aineo-claude-session|). Claude Code
   2.1.292 ran them beside a project's own hooks, not in their place.
+  Beside them, a `SubagentStart` hook, which runs as each subagent starts,
+  of any type, and only prints the paragraph on `announce_work` and one
+  sentence more for the subagent: a subagent gets neither Claude Code's
+  system prompt nor what aineo appends to it. It contacts no editor.
   aineo puts nothing else in `--settings`, and adds them after the hooks
   of a `--settings` in `claude.cmd`, passing the two together in a file
   only you can read (|aineo-config-claude.cmd|);
-- the report tool allowed without asking: `--allowedTools
-  mcp__aineo__report`.
+- both tools allowed without asking: `--allowedTools mcp__aineo__report
+  mcp__aineo__announce_work`.
+
+`announce_work` is how Claude Code and its subagents tell aineo of a git
+worktree or branch they just created for new work (|aineo-changes-reported|):
+its arguments are `kind`, `worktree` or `branch`, and the folder, `path`,
+or the name, `branch`; nothing else. Each string must be non-empty, at most
+4096 bytes, and hold no NUL and no line break, or the call is refused,
+naming the field. A path that is not absolute is taken from the directory
+Claude Code runs in. The server offers it to the editor that started
+Claude Code alone, with the token of that start. The tool only informs: it
+answers `ok` when a tab took it, and `not taken`, as an error, when none
+did; the paragraph appended to the system prompt reads "When you, or a
+subagent you start, create a git branch or worktree for new work, call
+`mcp__aineo__announce_work` once with its kind and its path or branch. It
+only informs aineo; do not act on its reply."
 The server and the hooks are given this editor's address, |v:servername|,
 and a token of this start of Claude Code; the hooks are also given the
 directory Claude Code runs in and its process id, which the shell that runs
@@ -2154,7 +2219,8 @@ Claude Code ~
   start reads it (|aineo-config-claude.cmd|): a warning naming why it
   cannot — the file missing, not a regular file or unreadable, settings
   that are not valid JSON or hold no object, `hooks` that are not an
-  object, a `SessionStart` or `SessionEnd` entry that is not a list, or
+  object, a `SessionStart`, `SessionEnd` or `SubagentStart` entry that is
+  not a list, or
   no value after the flag. Whether aineo can write the file it passes
   them in is not checked.
 
