@@ -595,5 +595,168 @@ T['the focused view']['is kept by \\g from a diff Enter opened, with the pane on
 
   eq({ entry.current_window(child), lines_of(COMMITS) }, { COMMITS, scope_view })
 end
+T['Diff close'] = MiniTest.new_set()
+
+--- Each door to the closing of the diff the pane shows, as a set's
+--- `parametrize`: its name, and the function that goes through it.
+local DIFF_CLOSE_DOORS = {
+  {
+    'pressing \\d',
+    function()
+      entry.press(child, '\\d')
+    end,
+  },
+  {
+    'pressing <Plug>(aineo-diff-close)',
+    function()
+      entry.press(child, '<Plug>(aineo-diff-close)')
+    end,
+  },
+  {
+    'running :Aineo diff close',
+    function()
+      entry.command(child, 'Aineo diff close')
+    end,
+  },
+}
+
+T['Diff close']['closes the diff the cursor is in and puts the cursor on the file’s line of the files window, by'] =
+  MiniTest.new_set({ parametrize = DIFF_CLOSE_DOORS })
+
+T['Diff close']['closes the diff the cursor is in and puts the cursor on the file’s line of the files window, by']['door'] = function(
+  _,
+  door
+)
+  changes_pane_listing_a_file('changespane-entry-diff-close')
+  entry.press(child, '<CR>')
+  wait_for_window_showing('aineo://diff/notes.txt')
+
+  door()
+
+  eq({
+    entry.windows(child),
+    entry.current_window(child),
+    child.api.nvim_win_get_cursor(0),
+    child.api.nvim_get_mode().mode,
+  }, { { 'terminal', FILES, COMMITS }, FILES, { 2, 0 }, 'n' })
+end
+
+T['Diff close']['closes the diff from Claude’s window, the cursor staying there, by'] =
+  MiniTest.new_set({
+    parametrize = DIFF_CLOSE_DOORS,
+  })
+
+T['Diff close']['closes the diff from Claude’s window, the cursor staying there, by']['door'] = function(
+  _,
+  door
+)
+  changes_pane_listing_a_file('changespane-entry-diff-close-claude')
+  entry.press(child, '<CR>')
+  wait_for_window_showing('aineo://diff/notes.txt')
+  child.lua('vim.api.nvim_set_current_win(vim.fn.win_getid(1))')
+  child.cmd('stopinsert')
+
+  door()
+
+  eq(
+    { entry.windows(child), entry.current_window(child) },
+    { { 'terminal', FILES, COMMITS }, 'terminal' }
+  )
+end
+
+T['Diff close']['with no aineo tab tells there is no diff and makes no tab, by'] =
+  MiniTest.new_set({
+    parametrize = { DIFF_CLOSE_DOORS[1], DIFF_CLOSE_DOORS[3] },
+  })
+
+T['Diff close']['with no aineo tab tells there is no diff and makes no tab, by']['door'] = function(
+  _,
+  door
+)
+  door()
+
+  eq({
+    entry.messages(child),
+    child.lua_get("#require('aineo.entry.registry').tab_list"),
+    entry.windows(child),
+  }, {
+    { { message = 'aineo: no diff to close', level = vim.log.levels.INFO } },
+    0,
+    { '' },
+  })
+end
+
+T['Diff close']['from a tab page of no aineo tab closes the diff of the tab used last and moves there'] = function()
+  changes_pane_listing_a_file('changespane-entry-diff-close-plain-tab')
+  entry.press(child, '<CR>')
+  wait_for_window_showing('aineo://diff/notes.txt')
+  child.cmd('tabnew')
+
+  entry.press(child, '\\d')
+
+  eq({ child.fn.tabpagenr(), entry.windows(child) }, { 1, { 'terminal', FILES, COMMITS } })
+end
+
+T['Diff close']['gives the file column back: Claude’s column takes half of the screen again'] = function()
+  changes_pane_listing_a_file('changespane-entry-diff-close-columns')
+  entry.press(child, '<CR>')
+  wait_for_window_showing('aineo://diff/notes.txt')
+  local with_the_column = child.lua_get('vim.api.nvim_win_get_width(vim.fn.win_getid(1))')
+
+  entry.press(child, '\\d')
+
+  git_repo.wait_until('Claude’s column half of the screen', function()
+    return child.lua_get('vim.api.nvim_win_get_width(vim.fn.win_getid(1))')
+      == math.floor(entry.COLUMNS / 2)
+  end)
+  eq(with_the_column < math.floor(entry.COLUMNS / 2), true)
+end
+
+T['Diff close']['tells once that there is no diff to close when none is shown'] = function()
+  changes_pane_listing_a_file('changespane-entry-diff-close-none')
+  local windows = entry.windows(child)
+
+  entry.press(child, '\\d')
+
+  eq({ entry.messages(child), entry.windows(child) }, {
+    { { message = 'aineo: no diff to close', level = vim.log.levels.INFO } },
+    windows,
+  })
+end
+
+--- What `:Aineo diff` tells the user when it is not given `close`.
+local DIFF_USAGE = 'aineo: :Aineo diff takes one of close'
+
+T[':Aineo diff'] = MiniTest.new_set()
+
+T[':Aineo diff']['tells the user once which word it takes, and does nothing else, given'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'no word', 'Aineo diff' },
+      { 'another word', 'Aineo diff open' },
+      { 'more words after close', 'Aineo diff close now' },
+    },
+  })
+
+T[':Aineo diff']['tells the user once which word it takes, and does nothing else, given']['the command'] = function(
+  _,
+  command
+)
+  child.cmd(command)
+
+  eq(
+    { entry.messages(child), entry.windows(child) },
+    { { { message = DIFF_USAGE, level = vim.log.levels.ERROR } }, { '' } }
+  )
+end
+
+T[':Aineo diff']['completes close, filtered by what is typed, and nothing after it'] = function()
+  eq({
+    child.fn.getcompletion('Aineo diff ', 'cmdline'),
+    child.fn.getcompletion('Aineo diff c', 'cmdline'),
+    child.fn.getcompletion('Aineo diff x', 'cmdline'),
+    child.fn.getcompletion('Aineo diff close ', 'cmdline'),
+  }, { { 'close' }, { 'close' }, {}, {} })
+end
 
 return T

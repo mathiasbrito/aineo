@@ -76,6 +76,7 @@ end
 ---@field toggle_focused_view fun() reads the shown pane again, and, with the cursor in one of its windows, switches it between its default view and the focused view
 ---@field add_reported_work fun(work: aineo.changes.ReportedWork, tell: fun(message: string)): boolean whether the home took the report
 ---@field pane_buffers fun(): { files: integer, commits: integer }
+---@field close_shown_diff fun() closes the windows of the current tab page that show a diff the home showed, and tells once when none was closed
 ---@field let_go? fun() only on a home `require('aineo.changes').new()` made: stops its watch, removes its handlers and wipes its buffers
 
 --- Makes a changes home: its own session, base and saves, pane buffers,
@@ -1547,11 +1548,12 @@ function M.new(label)
     end
   end
 
-  --- An entry the user selected with Enter, the window Enter was pressed in, and
-  --- the context its diff was read in.
+  --- An entry the user selected, the window whose cursor moves to its diff
+  --- once shown (none when the key leaves the cursor in the pane), and the
+  --- context the diff was read in.
   ---@class aineo.changes.Selection
   ---@field entry aineo.changes.Entry
-  ---@field window integer
+  ---@field window integer|nil
   ---@field context aineo.git.DiffContext
 
   --- What a diff buffer the home showed is the diff of, the context its text
@@ -1698,11 +1700,58 @@ function M.new(label)
     })
   end
 
+  --- The windows of the current tab page that show a diff the home showed.
+  ---
+  ---@return integer[]
+  local function windows_showing_a_diff()
+    return vim.tbl_filter(function(window)
+      return shown_diffs[vim.api.nvim_win_get_buf(window)] ~= nil
+    end, vim.api.nvim_tabpage_list_wins(0))
+  end
+
+  --- Puts the cursor in the window of the current tab page that shows the
+  --- files buffer, on the line it was on; nowhere when none does.
+  local function return_cursor_to_the_files_window()
+    local files = vim.tbl_filter(function(window)
+      return vim.api.nvim_win_get_tabpage(window) == vim.api.nvim_get_current_tabpage()
+    end, vim.fn.win_findbuf(buffers.files))
+    if files[1] then
+      vim.api.nvim_set_current_win(files[1])
+    end
+  end
+
+  --- What the user is told when there is no diff to close.
+  local NO_DIFF_TO_CLOSE = 'aineo: no diff to close'
+
+  --- Closes the windows of the current tab page that show a diff the home
+  --- showed (`windows_showing_a_diff()`), the diff buffer with each, wiped once
+  --- hidden, and no other window; the cursor stays where it was, unless it was
+  --- in one of them, and then goes to the files window
+  --- (`return_cursor_to_the_files_window()`), when the tab page shows it.
+  --- A window that is the only one of its tab page is not closed. Tells the
+  --- user, once, when no window was closed.
+  function home.close_shown_diff()
+    local was_in = vim.api.nvim_get_current_win()
+    local closed = vim.tbl_filter(function(window)
+      if #vim.api.nvim_tabpage_list_wins(0) == 1 then
+        return false
+      end
+      vim.api.nvim_win_close(window, false)
+      return true
+    end, windows_showing_a_diff())
+    if #closed == 0 then
+      vim.notify(NO_DIFF_TO_CLOSE, vim.log.levels.INFO)
+    elseif vim.tbl_contains(closed, was_in) then
+      return_cursor_to_the_files_window()
+    end
+  end
+
   --- Shows `buffer`, a buffer of what git gave (`aineo.changes.diffs`),
   --- through the session's `show_diff`, then moves the cursor to the window
   --- showing it, in the mode the user is in, while the cursor is still in
   --- `pressed_in`, the window the key was pressed in: the move answers that
-  --- key, and a user who has gone elsewhere since stays there. When the
+  --- key, and a user who has gone elsewhere since stays there. A nil
+  --- `pressed_in` is a key that leaves the cursor where it is. When the
   --- middle column has no room for it, the buffer is wiped and the user
   --- warned, once; when showing it raises an error, the buffer is wiped and
   --- the user told the error, once; the cursor then stays where it is.
@@ -1714,13 +1763,13 @@ function M.new(label)
   --- true otherwise.
   ---
   ---@param buffer integer
-  ---@param pressed_in integer
+  ---@param pressed_in integer|nil
   ---@param told string
   ---@return boolean allowed
   local function show_buffer(buffer, pressed_in, told)
     local shown, window = pcall(session.settings.show_diff, buffer)
     if shown and window then
-      if vim.api.nvim_get_current_win() == pressed_in then
+      if pressed_in and vim.api.nvim_get_current_win() == pressed_in then
         vim.api.nvim_set_current_win(window)
       end
       return true
@@ -1744,8 +1793,8 @@ function M.new(label)
 
   --- Shows `diff`, the text git printed for the `selection`'s entry, in a
   --- diff buffer named for it (`entry_diff.name()`, `aineo.changes.diffs`)
-  --- through the session's `show_diff` (`show_buffer()`), the window Enter
-  --- was pressed in being the `selection`'s. Returns false, having told
+  --- through the session's `show_diff` (`show_buffer()`), the `selection`'s
+  --- window the one whose cursor moves to it. Returns false, having told
   --- nothing, when Neovim refuses for now the diff buffer its text, as it
   --- does while textlock holds, or the wipe of a diff it did not show; true
   --- otherwise. Once the buffer holds the diff it records the entry the
@@ -1804,10 +1853,28 @@ function M.new(label)
     })
   end
 
+  --- The window whose cursor moves to the diff a key shows, given the window
+  --- the key was pressed in (`show_diff_at_cursor()`): Enter's, the one it was
+  --- pressed in.
+  ---
+  ---@param pressed_in integer
+  ---@return integer
+  local function cursor_follows_the_key(pressed_in)
+    return pressed_in
+  end
+
+  --- The same for a key that shows a diff and leaves the cursor in the pane,
+  --- as `l` and `h` do: none.
+  ---
+  ---@return nil
+  local function cursor_stays()
+    return nil
+  end
+
   --- Reads the diff of `diffed(listed)`, `listed` the entry the line under the
   --- cursor lists in `buffer` (`aineo.changes.entry_diff`), and shows it
-  --- (`show_last()`), the current window kept as the one the key was pressed
-  --- in (`aineo.changes.Selection`), unless a key asked for another diff or
+  --- (`show_last()`), the cursor moving to it as `moving_cursor_of` says
+  --- (`aineo.changes.Selection`), unless a key asked for another diff or
   --- file meanwhile: only the last key's is shown, or its failure told. A
   --- diff against `HEAD` that is empty is not shown: the user is told, once,
   --- that the file is as `HEAD` has it, and the focus stays. On the heading of
@@ -1817,7 +1884,8 @@ function M.new(label)
   ---
   ---@param buffer integer
   ---@param diffed fun(listed: aineo.changes.Entry): aineo.changes.Entry the entry standing for the diff to show
-  local function show_diff_at_cursor(buffer, diffed)
+  ---@param moving_cursor_of fun(pressed_in: integer): integer|nil the window whose cursor moves to the diff, given the window the key was pressed in (`cursor_follows_the_key()`, `cursor_stays()`)
+  local function show_diff_at_cursor(buffer, diffed, moving_cursor_of)
     local listed = pages.entry_at(buffer, vim.api.nvim_win_get_cursor(0)[1])
     if not listed then
       return
@@ -1829,7 +1897,7 @@ function M.new(label)
     end
     enters = enters + 1
     local this_enter = enters
-    local window = vim.api.nvim_get_current_win()
+    local window = moving_cursor_of(vim.api.nvim_get_current_win())
     local function read_in_current_context()
       local source = diff_source(entry)
       entry_diff.read(entry, source, function(failure, diff)
@@ -1860,22 +1928,38 @@ function M.new(label)
     read_in_current_context()
   end
 
-  --- Shows the diff of the file the line under the cursor lists in `buffer`
-  --- against its previous version, as Enter does (`show_diff_at_cursor()`).
+  --- The entry itself: the diff of a file against its previous version.
+  ---
+  ---@param listed aineo.changes.Entry
+  ---@return aineo.changes.Entry
+  local function as_listed(listed)
+    return listed
+  end
+
+  --- Shows the diff of the entry under the cursor in `buffer` and moves the
+  --- cursor to it (`show_diff_at_cursor()`): what Enter does.
   ---
   ---@param buffer integer
   local function open_entry(buffer)
-    show_diff_at_cursor(buffer, function(listed)
-      return listed
-    end)
+    show_diff_at_cursor(buffer, as_listed, cursor_follows_the_key)
   end
 
   --- Shows the diff of the file the line under the cursor lists in `buffer`
-  --- against `HEAD` (`aineo.changes.head_diff`).
+  --- against its previous version, the cursor staying in the pane
+  --- (`show_diff_at_cursor()`).
   ---
   ---@param buffer integer
-  local function open_entry_against_head(buffer)
-    show_diff_at_cursor(buffer, head_diff.of)
+  local function preview_entry(buffer)
+    show_diff_at_cursor(buffer, as_listed, cursor_stays)
+  end
+
+  --- Shows the diff of the file the line under the cursor lists in `buffer`
+  --- against `HEAD` (`aineo.changes.head_diff`), the cursor staying in the
+  --- pane.
+  ---
+  ---@param buffer integer
+  local function preview_entry_against_head(buffer)
+    show_diff_at_cursor(buffer, head_diff.of, cursor_stays)
   end
 
   --- Shows, in the middle column, the file `entry` lists as the commit it is
@@ -1964,19 +2048,19 @@ function M.new(label)
 
   --- Maps `l` and `h` in `buffer`, the files buffer, in Normal mode: `l` to
   --- show the diff of the file the line under the cursor lists against its
-  --- previous version, as Enter does (`open_entry()`), `h` against `HEAD`
-  --- (`open_entry_against_head()`).
+  --- previous version (`preview_entry()`), `h` against `HEAD`
+  --- (`preview_entry_against_head()`), the cursor staying in the pane.
   ---
   ---@param buffer integer
   local function map_compare_keys(buffer)
     vim.keymap.set('n', 'l', function()
-      open_entry(buffer)
+      preview_entry(buffer)
     end, {
       buffer = buffer,
       desc = 'aineo: show the diff of the file under the cursor against its previous version',
     })
     vim.keymap.set('n', 'h', function()
-      open_entry_against_head(buffer)
+      preview_entry_against_head(buffer)
     end, {
       buffer = buffer,
       desc = 'aineo: show the diff of the file under the cursor against HEAD',

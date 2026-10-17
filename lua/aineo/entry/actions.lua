@@ -133,6 +133,19 @@ ACTIONS.open = function()
   end
 end
 
+--- What `:Aineo diff close` does: closes the diff of the existing aineo tab to
+--- act on (`aineo.entry.opening`'s `existing_acting_tab()`), and never makes
+--- a tab. With none, the module's own changes home, which shows no diff,
+--- tells the user there is none to close.
+ACTIONS['diff close'] = function()
+  local tab = opening.existing_acting_tab()
+  if tab then
+    tab.actions['diff close']()
+  else
+    require('aineo.changes').close_shown_diff()
+  end
+end
+
 ACTIONS['tab new'] = function()
   reopening.reopen_folder_tabs()
   opening.open_new_tab()

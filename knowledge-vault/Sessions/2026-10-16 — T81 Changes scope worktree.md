@@ -128,4 +128,11 @@ On Neovim 0.12.5, the host loaded, `AINEO_TEST_JOBS=4 AINEO_TEST_RUN_LIMIT_MS=27
 
 ## Commits
 
-Recorded after the merge.
+PR #249, merged by rebase; released in `v0.2.45` (PR #251, `main` `cb58183`). On `dev`, in order:
+
+- `d76f5e9` Re-check T81's brief against dev 55fd4f7 at dispatch
+- `8c70ef3` Show one worktree alone in the changes pane, with s and \g
+- `36aceab` Pin the scope's survivors and crash-kills as assertions
+- `c863fcc` Record T81's session: the scope, its mutants and its open rulings
+- `caf7630` Switch the scope's view only from the pane, and fix what the reviews found
+- `bbf4400` Record the fix round in T81's session note

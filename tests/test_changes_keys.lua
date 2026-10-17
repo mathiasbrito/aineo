@@ -423,6 +423,330 @@ T['h']['on a file under another worktree’s whole change shows the file from th
   eq(last_shown_changes(), { '-agent 1', '+agent 2' })
 end
 
+--- What the child's cursor is at: the name of the current buffer, its
+--- position and the mode.
+---
+---@return { buffer: string, cursor: integer[], mode: string }
+local function where_the_cursor_is()
+  return {
+    buffer = child.lua_get('vim.api.nvim_buf_get_name(0)'),
+    cursor = child.lua_get('vim.api.nvim_win_get_cursor(0)'),
+    mode = child.lua_get('vim.api.nvim_get_mode().mode'),
+  }
+end
+
+--- Asserts that the child's cursor stayed on line `line` of the files
+--- window, in Normal mode, while a diff was shown.
+---
+---@param line integer
+local function expect_cursor_stayed_in_files(line)
+  eq(where_the_cursor_is(), { buffer = FILES, cursor = { line, 0 }, mode = 'n' })
+end
+
+T['l']['on a file under a commit keeps the cursor in the files window, on its line'] = function()
+  pane_under_first_of_two_commits('keys-l-stays-commit')
+
+  press_on_files_line('l', 2)
+
+  wait_for_shown(1)
+  expect_cursor_stayed_in_files(2)
+end
+
+T['h']['on a file under a commit keeps the cursor in the files window, on its line'] = function()
+  pane_under_first_of_two_commits('keys-h-stays-commit')
+
+  press_on_files_line('h', 2)
+
+  wait_for_shown(1)
+  expect_cursor_stayed_in_files(2)
+end
+
+T['l']['on a file under Session work keeps the cursor in the files window, on its line'] = function()
+  pane_with_a_commit_and_an_edit('keys-l-stays-session-work')
+
+  press_on_files_line('l', 2)
+
+  wait_for_shown(1)
+  expect_cursor_stayed_in_files(2)
+end
+
+T['h']['on a file under Session work keeps the cursor in the files window, on its line'] = function()
+  pane_with_a_commit_and_an_edit('keys-h-stays-session-work')
+
+  press_on_files_line('h', 2)
+
+  wait_for_shown(1)
+  expect_cursor_stayed_in_files(2)
+end
+
+T['l']['on a file under Uncommitted keeps the cursor in the files window, on its line'] = function()
+  pane_with_a_commit_and_an_edit('keys-l-stays-uncommitted')
+  go_to_commits_line(1)
+  expect_lines(FILES, { 'Files in: Uncommitted', '  M notes.txt' })
+
+  press_on_files_line('l', 2)
+
+  wait_for_shown(1)
+  expect_cursor_stayed_in_files(2)
+end
+
+T['h']['on a file under Uncommitted keeps the cursor in the files window, on its line'] = function()
+  pane_with_a_commit_and_an_edit('keys-h-stays-uncommitted')
+  go_to_commits_line(1)
+  expect_lines(FILES, { 'Files in: Uncommitted', '  M notes.txt' })
+
+  press_on_files_line('h', 2)
+
+  wait_for_shown(1)
+  expect_cursor_stayed_in_files(2)
+end
+
+T['l']['on a file under Landed keeps the cursor in the files window, on its line'] = function()
+  pane_with_landed('keys-l-stays-landed')
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Landed in dev', '  M a.txt' })
+
+  press_on_files_line('l', 2)
+
+  wait_for_shown(1)
+  expect_cursor_stayed_in_files(2)
+end
+
+T['h']['on a file under Landed keeps the cursor in the files window, on its line'] = function()
+  pane_with_landed('keys-h-stays-landed')
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Landed in dev', '  M a.txt' })
+
+  press_on_files_line('h', 2)
+
+  wait_for_shown(1)
+  expect_cursor_stayed_in_files(2)
+end
+
+--- Makes a repository with a worktree `agent` whose whole change is one
+--- file, begins the session there, and waits for the files window to list
+--- that file under the worktree's heading.
+---
+---@param case string the case's own name
+local function pane_under_another_worktree(case)
+  local top = git_repo.create(case, { ['notes.txt'] = { 'one' } })
+  local agent = add_agent_worktree(top)
+  git_repo.write(agent, 'notes.txt', { 'agent 1' })
+  local first = git_repo.commit_all(agent, 'Agent first')
+  git_repo.write(agent, 'notes.txt', { 'agent 2' })
+  begin_and_show(top)
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent (agent)',
+    first:sub(1, 7) .. ' Agent first',
+  })
+  go_to_commits_line(4)
+  expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
+end
+
+T['l']['on a file under another worktree’s whole change keeps the cursor in the files window, on its line'] = function()
+  pane_under_another_worktree('keys-l-stays-worktree')
+
+  press_on_files_line('l', 2)
+
+  wait_for_shown(1)
+  expect_cursor_stayed_in_files(2)
+end
+
+T['h']['on a file under another worktree’s whole change keeps the cursor in the files window, on its line'] = function()
+  pane_under_another_worktree('keys-h-stays-worktree')
+
+  press_on_files_line('h', 2)
+
+  wait_for_shown(1)
+  expect_cursor_stayed_in_files(2)
+end
+
+T['l']['on the same file again keeps the cursor in the files window, the diff showing already'] = function()
+  pane_with_a_commit_and_an_edit('keys-l-stays-again')
+  press_on_files_line('l', 2)
+  wait_for_shown(1)
+
+  press_on_files_line('l', 2)
+
+  wait_for_shown(2)
+  expect_cursor_stayed_in_files(2)
+end
+
+T['l']['then Enter on the file moves the cursor to the diff it shows'] = function()
+  pane_with_a_commit_and_an_edit('keys-l-then-enter')
+  press_on_files_line('l', 2)
+  wait_for_shown(1)
+
+  press_on_files_line('<CR>', 2)
+
+  wait_for_shown(2)
+  eq(where_the_cursor_is().buffer, last_shown_name())
+end
+
+T['h']['then l on another line before the first is read keeps the cursor in the files window, on that line'] = function()
+  local top = git_repo.create('keys-stays-quick', { ['a.txt'] = { 'one' }, ['b.txt'] = { 'one' } })
+  begin_and_show(top)
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
+  git_repo.write(top, 'a.txt', { 'two' })
+  git_repo.write(top, 'b.txt', { 'two' })
+  git_repo.commit_all(top, 'Second')
+  git_repo.write(top, 'a.txt', { 'three' })
+  git_repo.write(top, 'b.txt', { 'three' })
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt' })
+  press_on_files_line('h', 2)
+  press_on_files_line('l', 3)
+
+  wait_for_shown(1)
+
+  expect_cursor_stayed_in_files(3)
+  eq(last_shown_name(), 'aineo://diff/b.txt')
+end
+
+--- The number of windows in the child's current tab page.
+---
+---@return integer
+local function window_count()
+  return child.lua_get('#vim.api.nvim_tabpage_list_wins(0)')
+end
+
+--- Shows the diff of the file on line 2 of the files window, under Session
+--- work, as `key` asks, and waits until it is shown.
+---
+---@param key string
+local function show_a_diff_by(key)
+  pane_with_a_commit_and_an_edit('keys-close-' .. key:gsub('[<>]', ''))
+  press_on_files_line(key, 2)
+  wait_for_shown(1)
+end
+
+--- Closes the diff the pane shows, as the editor's action does.
+local function close_shown_diff()
+  child.lua("require('aineo.changes').close_shown_diff()")
+end
+
+local KEYS_SHOWING_A_DIFF = { { '<CR>' }, { 'l' }, { 'h' } }
+
+T['close_shown_diff()'] = MiniTest.new_set()
+
+T['close_shown_diff()']['closes the window of a diff shown by'] = MiniTest.new_set({
+  parametrize = KEYS_SHOWING_A_DIFF,
+})
+
+T['close_shown_diff()']['closes the window of a diff shown by']['the key'] = function(key)
+  show_a_diff_by(key)
+  local windows = window_count()
+  local name = last_shown_name()
+
+  close_shown_diff()
+
+  eq({
+    windows = window_count(),
+    shown = child.lua_get('vim.fn.bufwinid(...)', { name }),
+  }, { windows = windows - 1, shown = -1 })
+end
+
+T['close_shown_diff()']['moves the cursor from the diff to the files window, on the line it came from'] = function()
+  show_a_diff_by('<CR>')
+  enter_window_of(last_shown_name())
+
+  close_shown_diff()
+
+  expect_cursor_stayed_in_files(2)
+end
+
+T['close_shown_diff()']['leaves the cursor where it was when it was not in the diff'] = function()
+  show_a_diff_by('l')
+  enter_window_of(COMMITS)
+  local before = where_the_cursor_is()
+
+  close_shown_diff()
+
+  eq(where_the_cursor_is(), before)
+end
+
+T['close_shown_diff()']['closes no window that shows no diff of the pane'] = function()
+  show_a_diff_by('l')
+  child.cmd('new')
+  child.lua('vim.api.nvim_buf_set_lines(0, 0, -1, true, { "a file" })')
+  local windows = window_count()
+
+  close_shown_diff()
+
+  eq({
+    windows = window_count(),
+    current = child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)'),
+  }, { windows = windows - 1, current = { 'a file' } })
+end
+
+T['close_shown_diff()']['closes every window of the tab page that shows the diff'] = function()
+  show_a_diff_by('l')
+  enter_window_of(last_shown_name())
+  child.cmd('vsplit')
+  enter_window_of(FILES)
+  local windows = window_count()
+
+  close_shown_diff()
+
+  eq(window_count(), windows - 2)
+end
+
+T['close_shown_diff()']['closes the diff of the current tab page only'] = function()
+  show_a_diff_by('l')
+  local diff = child.lua_get('vim.fn.bufnr(...)', { last_shown_name() })
+  child.cmd('tab sbuffer ' .. diff)
+  child.cmd('tabnext 1')
+
+  close_shown_diff()
+
+  eq({
+    first_page_shows_it = vim.tbl_contains(child.lua_get('vim.fn.tabpagebuflist(1)'), diff),
+    second_page = child.lua_get('vim.fn.tabpagebuflist(2)'),
+  }, { first_page_shows_it = false, second_page = { diff } })
+end
+
+T['close_shown_diff()']['closes the diff shown again after it was closed'] = function()
+  show_a_diff_by('<CR>')
+  close_shown_diff()
+  press_on_files_line('<CR>', 2)
+  wait_for_shown(2)
+  local windows = window_count()
+
+  close_shown_diff()
+
+  eq(window_count(), windows - 1)
+end
+
+T['close_shown_diff()']['tells once that there is no diff to close when none is shown'] = function()
+  pane_with_a_commit_and_an_edit('keys-close-none')
+  local windows = window_count()
+
+  close_shown_diff()
+
+  eq(
+    { windows = window_count(), told = child.lua_get(TOLD) },
+    { windows = windows, told = 'aineo: no diff to close' }
+  )
+end
+
+T['close_shown_diff()']['leaves a diff that is the only window of the tab page, telling there is none to close'] = function()
+  show_a_diff_by('<CR>')
+  enter_window_of(last_shown_name())
+  child.cmd('only')
+
+  local ran = child.lua_get("(pcall(require('aineo.changes').close_shown_diff))")
+
+  eq({
+    ran = ran,
+    windows = window_count(),
+    buffer = where_the_cursor_is().buffer,
+    told = child.lua_get(TOLD),
+  }, { ran = true, windows = 1, buffer = last_shown_name(), told = 'aineo: no diff to close' })
+end
+
 --- The files window's lines that list no file, by what they are, and the
 --- keys pressed on them: the cursor is put on `line` of the files window
 --- under Session work, which lists no file.
@@ -450,7 +774,7 @@ T['Lines listing no file']['do nothing and say nothing under the key on'] = func
   }, { pressed = true, cursor = { line, 0 }, shown = 0, told = '' })
 end
 
-T['h']['moves the cursor to the diff it shows, and F there reads that diff again with the whole file'] = function()
+T['h']['shows a diff in which F reads that diff again with the whole file'] = function()
   local numbers = {}
   for number = 1, 30 do
     numbers[number] = 'line ' .. number
@@ -479,7 +803,7 @@ T['h']['moves the cursor to the diff it shows, and F there reads that diff again
   wait_for_shown(1)
   local name = 'aineo://head/commit/' .. first .. '/notes.txt'
   local three_lines = last_shown_lines()
-  eq(child.lua_get('vim.api.nvim_buf_get_name(0)'), name)
+  enter_window_of(name)
 
   child.type_keys('F')
 
