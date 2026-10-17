@@ -606,6 +606,121 @@ T['h']['then l on another line before the first is read keeps the cursor in the 
   eq(last_shown_name(), 'aineo://diff/b.txt')
 end
 
+--- The number of windows in the child's current tab page.
+---
+---@return integer
+local function window_count()
+  return child.lua_get('#vim.api.nvim_tabpage_list_wins(0)')
+end
+
+--- Shows the diff of the file on line 2 of the files window, under Session
+--- work, as `key` asks, and waits until it is shown.
+---
+---@param key string
+local function show_a_diff_by(key)
+  pane_with_a_commit_and_an_edit('keys-close-' .. key:gsub('[<>]', ''))
+  press_on_files_line(key, 2)
+  wait_for_shown(1)
+end
+
+--- Closes the diff the pane shows, as the editor's action does.
+local function close_shown_diff()
+  child.lua("require('aineo.changes').close_shown_diff()")
+end
+
+local KEYS_SHOWING_A_DIFF = { { '<CR>' }, { 'l' }, { 'h' } }
+
+T['close_shown_diff()'] = MiniTest.new_set()
+
+T['close_shown_diff()']['closes the window of a diff shown by'] = MiniTest.new_set({
+  parametrize = KEYS_SHOWING_A_DIFF,
+})
+
+T['close_shown_diff()']['closes the window of a diff shown by']['the key'] = function(key)
+  show_a_diff_by(key)
+  local windows = window_count()
+  local name = last_shown_name()
+
+  close_shown_diff()
+
+  eq({
+    windows = window_count(),
+    shown = child.lua_get('vim.fn.bufwinid(...)', { name }),
+  }, { windows = windows - 1, shown = -1 })
+end
+
+T['close_shown_diff()']['moves the cursor from the diff to the files window, on the line it came from'] = function()
+  show_a_diff_by('<CR>')
+  enter_window_of(last_shown_name())
+
+  close_shown_diff()
+
+  expect_cursor_stayed_in_files(2)
+end
+
+T['close_shown_diff()']['leaves the cursor where it was when it was not in the diff'] = function()
+  show_a_diff_by('l')
+  enter_window_of(COMMITS)
+  local before = where_the_cursor_is()
+
+  close_shown_diff()
+
+  eq(where_the_cursor_is(), before)
+end
+
+T['close_shown_diff()']['closes no window that shows no diff of the pane'] = function()
+  show_a_diff_by('l')
+  child.cmd('new')
+  child.lua('vim.api.nvim_buf_set_lines(0, 0, -1, true, { "a file" })')
+  local windows = window_count()
+
+  close_shown_diff()
+
+  eq({
+    windows = window_count(),
+    current = child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)'),
+  }, { windows = windows - 1, current = { 'a file' } })
+end
+
+T['close_shown_diff()']['closes the diff shown again after it was closed'] = function()
+  show_a_diff_by('<CR>')
+  close_shown_diff()
+  press_on_files_line('<CR>', 2)
+  wait_for_shown(2)
+  local windows = window_count()
+
+  close_shown_diff()
+
+  eq(window_count(), windows - 1)
+end
+
+T['close_shown_diff()']['tells once that there is no diff to close when none is shown'] = function()
+  pane_with_a_commit_and_an_edit('keys-close-none')
+  local windows = window_count()
+
+  close_shown_diff()
+
+  eq(
+    { windows = window_count(), told = child.lua_get(TOLD) },
+    { windows = windows, told = 'aineo: no diff to close' }
+  )
+end
+
+T['close_shown_diff()']['leaves a diff that is the only window of the tab page, telling there is none to close'] = function()
+  show_a_diff_by('<CR>')
+  enter_window_of(last_shown_name())
+  child.cmd('only')
+
+  local ran = child.lua_get("(pcall(require('aineo.changes').close_shown_diff))")
+
+  eq({
+    ran = ran,
+    windows = window_count(),
+    buffer = where_the_cursor_is().buffer,
+    told = child.lua_get(TOLD),
+  }, { ran = true, windows = 1, buffer = last_shown_name(), told = 'aineo: no diff to close' })
+end
+
 --- The files window's lines that list no file, by what they are, and the
 --- keys pressed on them: the cursor is put on `line` of the files window
 --- under Session work, which lists no file.

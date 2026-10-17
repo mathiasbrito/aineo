@@ -114,6 +114,7 @@ for _, argument in ipairs({
   'pane agent',
   'pane changes',
   'pane terminal',
+  'diff close',
 }) do
   ACTIONS[argument] = function()
     if REOPENS_TABS_FIRST[argument] then

@@ -83,6 +83,7 @@ Every key sits behind the prefix `\`, in Normal mode:
 | `\T` | opens a tab with a Claude Code session of its own |
 | `\1` to `\9` | move to the tab page of that number |
 | `\Q` | closes the current tab |
+| `\d` | closes the diff the changes pane shows |
 | `\S` | lists Claude Code's sessions for the folder and opens the one you pick |
 | `\N` | starts a new Claude Code session |
 | `\tcn` | hides or shows the line numbers of Claude's window |

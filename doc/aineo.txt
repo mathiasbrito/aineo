@@ -38,8 +38,10 @@ over Input, the changes pane, and a shell's terminal, each filling the column,
 and move to the Report, to the changes pane's commits and into the shell, in
 Terminal mode (|aineo-panes|). `\T` opens a tab page with a Claude Code
 session of its own, `\1` to `\9` move to the tab page of that number, and
-`\Q` closes the current tab (|aineo-tabs|). In Visual mode, in Input, `\s`
-sends the selection alone and removes it from Input (|aineo-v_\s|).
+`\Q` closes the current tab (|aineo-tabs|). `\d` closes the diff the changes
+pane shows in the middle column, from any window of the tab (|:Aineo-diff|).
+In Visual mode, in Input, `\s` sends the selection alone and removes it from
+Input (|aineo-v_\s|).
 
 In Terminal mode and in Insert mode, `<C-\>` followed by the same letters
 does the same: `<C-\>i` moves to Input, `<C-\>r` to the Report, `<C-\>c` to
@@ -704,7 +706,8 @@ that worktree's `HEAD` to its working tree, in
 `aineo://worktree{top}//head/{path}`. A file `HEAD` lacks is shown wholly
 added or removed. Both show only the last key's diff when you press keys
 again before one was read, and tell a failure or a middle column with no
-room as Enter does; `F` works in the diff they show, once the cursor is there.
+room as Enter does; `F` works in the diff they show, once the cursor is there,
+and `\d` closes it from wherever the cursor is (|:Aineo-diff|).
 When `h` finds no difference from `HEAD` - every file of the newest commit,
 every file under Session work once the work is committed - it shows nothing
 and the cursor stays; aineo says "<path> is as HEAD has it", once. When
@@ -898,6 +901,7 @@ AineoChangesFailure      a line that tells a failure, linked to
                          `DiagnosticWarn`
 
 The file column ~
+                                                          *aineo-file-column*
 A file you open from one of the three windows — `:edit`, a picker, a jump —
 moves to a column between Claude's and the right column, created on first
 use and reused afterwards; the aineo window keeps its own buffer. While the
@@ -908,7 +912,9 @@ were opened until `\o` restores the layout.
 A diff Enter shows from the changes pane (|aineo-changes|) takes the file
 column's window as a file does, and the next file or diff takes its place:
 the column keeps one window for both. A changed file that cannot leave that
-window keeps it, and the diff opens above it.
+window keeps it, and the diff opens above it. `\d` closes the diff's window
+(|:Aineo-diff|); when it was the file column's last window the column goes,
+and the two columns left take half of the screen each again.
 
 Claude's session ~
                                                         *aineo-claude-session*
@@ -1151,7 +1157,8 @@ from another tab, `\o` moves you to it.
 			sessions that have a running Claude Code in the
 			directory this Neovim started in (|:Aineo-claim|), and
 			after `tab` `new` and the number of each tab page
-			(|:Aineo-tab|). Without one of them, or with anything
+			(|:Aineo-tab|), and `close` after `diff`
+			(|:Aineo-diff|). Without one of them, or with anything
 			else, it tells you, with one error, which ones it
 			takes.
 
@@ -1471,6 +1478,27 @@ moves you to that tab instead and claims nothing.
 			but `new`, `close` or a number it tells you, with one
 			error, what it takes.
 
+                                                                 *:Aineo-diff*
+:Aineo diff close	Closes the diff the changes pane shows in the
+			middle column (|aineo-changes|): every window of the
+			current tab page that shows one of the pane's
+			`aineo://` diffs, from any window, whatever the cursor
+			is in, and no other window or buffer, a file of yours
+			included. A diff is wiped once hidden, so the next
+			Enter, `l` or `h` shows it again. The cursor stays
+			where it was, unless it was in the diff: it goes to
+			the changes pane's files window, on the line it was
+			on, when that window is open; with the pane not on
+			screen it goes where Neovim puts it when a window
+			closes, and the layout puts its columns back as for
+			any closed window (|aineo-file-column|). A diff that
+			is the only window of its tab page is not closed.
+			With no diff to close aineo tells you once, `aineo:
+			no diff to close`. With any word but `close` it
+			tells you, with one error, what it takes. `\d` and,
+			in Terminal mode and in Insert mode, `<C-\>d` do the
+			same (|aineo-keys|).
+
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
 
@@ -1544,6 +1572,10 @@ you turn the prefix off, or when a prefix key is yours: >lua
 			Do what `:Aineo tab {n}` does for the number in their
 			names (|:Aineo-tab|).
 
+                                                    *<Plug>(aineo-diff-close)*
+<Plug>(aineo-diff-close)
+			Does what `:Aineo diff close` does (|:Aineo-diff|).
+
 Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
@@ -1580,6 +1612,8 @@ which has none, globally, in Normal mode, and `\s` in Visual mode too:
                                               *aineo-\4* *aineo-\5* *aineo-\6*
                                               *aineo-\7* *aineo-\8* *aineo-\9*
 \1 to \9	|<Plug>(aineo-tab-1)| to |<Plug>(aineo-tab-9)|
+                                                                    *aineo-\d*
+\d		|<Plug>(aineo-diff-close)|
                                                                   *aineo-v_\s*
 \s		|<Plug>(aineo-send)| in Visual mode (|aineo-send|)
 
@@ -1653,6 +1687,8 @@ Code is sent none of the twin's keys.
                                   *aineo-<C-\>4* *aineo-<C-\>5* *aineo-<C-\>6*
                                   *aineo-<C-\>7* *aineo-<C-\>8* *aineo-<C-\>9*
 <C-\>1 to <C-\>9	|<Plug>(aineo-tab-1)| to |<Plug>(aineo-tab-9)|
+                                                                *aineo-<C-\>d*
+<C-\>d		|<Plug>(aineo-diff-close)|
 
 Send has no twin: it acts on a selection or on the line of Normal mode.
 `:Aineo claim` has no key of its own, so no twin either.
