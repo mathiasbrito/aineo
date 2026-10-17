@@ -36,6 +36,12 @@ local SELECTION_PAUSE_MS = 150
 --- does not change the pane long after.
 local REPORT_WAIT_MS = 60000
 
+--- How many distinct reports may wait at once in one home: far more than
+--- the worktrees and branches an agent and its subagents start together,
+--- and a bound on the timers, reads and messages a flood of reports git
+--- never lists can make.
+local MOST_WAITING = 32
+
 --- Starts a `vim.uv` timer that runs `act` once, on the main loop, after
 --- `milliseconds`, and returns what stops and closes it.
 ---
@@ -68,7 +74,7 @@ end
 ---@field hand_over_changes_session fun(hand_over: aineo.changes.HandOver)
 ---@field refresh_shown_pane fun()
 ---@field toggle_focused_view fun() reads the shown pane again, and, with the cursor in one of its windows, switches it between its default view and the focused view
----@field add_reported_work fun(work: aineo.changes.ReportedWork, tell: fun(message: string))
+---@field add_reported_work fun(work: aineo.changes.ReportedWork, tell: fun(message: string)): boolean whether the home took the report
 ---@field pane_buffers fun(): { files: integer, commits: integer }
 ---@field let_go? fun() only on a home `require('aineo.changes').new()` made: stops its watch, removes its handlers and wipes its buffers
 
@@ -2092,17 +2098,53 @@ function M.new(label)
     show_commits()
   end
 
+  --- Resolves, off the main loop, the path of each report of `waitings` that
+  --- has one, every link in it followed (`vim.uv.fs_realpath()` with a
+  --- callback, so that a path under a mount that does not answer holds no
+  --- keystroke), and calls `done(real_paths)` on the main loop once all
+  --- have answered: each report's real path, none for a path that resolves
+  --- to nothing.
+  ---
+  ---@param waitings aineo.changes.WaitingReport[]
+  ---@param done fun(real_paths: table<aineo.changes.WaitingReport, string>)
+  local function resolve_real_paths(waitings, done)
+    local real_paths = {}
+    local with_paths = vim.tbl_filter(function(waiting)
+      return waiting.work.path ~= nil
+    end, waitings)
+    local pending = #with_paths
+    if pending == 0 then
+      done(real_paths)
+      return
+    end
+    for _, waiting in ipairs(with_paths) do
+      vim.uv.fs_realpath(waiting.work.path, function(_, real_path)
+        real_paths[waiting] = real_path
+        pending = pending - 1
+        if pending == 0 then
+          vim.schedule(function()
+            done(real_paths)
+          end)
+        end
+      end)
+    end
+  end
+
   --- Matches each report still waiting against `candidates`, what git now
   --- lists of the worktrees and the branches (`scope.match_report()`): a
   --- match joins the reported set (`add_member()`), the editor's own work is
   --- let go untold, each with its timer stopped, and anything else waits on.
+  --- A worktree's report is compared by `real_paths`, its path with every
+  --- link resolved; one with none there, as one made since they were
+  --- resolved, waits on.
   ---
   ---@param candidates aineo.changes.BranchCandidates
-  local function take_reported(candidates)
+  ---@param real_paths table<aineo.changes.WaitingReport, string> `resolve_real_paths()`
+  local function take_reported(candidates, real_paths)
     keep_reported_listed_in(candidates)
     local still_waiting = {}
     for _, waiting in ipairs(session.waiting) do
-      local real_path = waiting.work.path and vim.uv.fs_realpath(waiting.work.path)
+      local real_path = real_paths[waiting]
       local matched =
         scope.match_report(waiting.work, real_path, candidates, session.repository.top)
       if not matched then
@@ -2156,10 +2198,16 @@ function M.new(label)
       working_branch = session.settings.working_branch,
       git = session.settings.git,
     }, function(failure, candidates)
-      if not (failure or released or this_read ~= reported_reads) then
-        take_reported(candidates)
+      if failure or released or this_read ~= reported_reads then
+        done()
+        return
       end
-      done()
+      resolve_real_paths(session.waiting, function(real_paths)
+        if not released and this_read == reported_reads then
+          take_reported(candidates, real_paths)
+        end
+        done()
+      end)
     end)
   end
 
@@ -2168,14 +2216,30 @@ function M.new(label)
   --- worktrees and the branches, whether or not the pane shows or was ever
   --- shown (`read_reported()`). What git does not list yet waits, matched
   --- again at every read of the commits window, for `REPORT_WAIT_MS` from
-  --- the call, then is let go (`let_report_go()`). Before the session has
-  --- begun it does nothing.
+  --- the call, then is let go (`let_report_go()`). Returns whether the home
+  --- took it: a report the same as one waiting is taken, reads again and
+  --- adds nothing; one more than `MOST_WAITING` distinct reports waiting is
+  --- not taken, nor is any before the session has begun, and nothing is
+  --- told of either.
   ---
   ---@param work aineo.changes.ReportedWork
   ---@param tell fun(message: string)
+  ---@return boolean taken
   function home.add_reported_work(work, tell)
     if not session then
-      return
+      return false
+    end
+    local waits_already = vim.iter(session.waiting):any(function(other)
+      return other.work.kind == work.kind
+        and other.work.path == work.path
+        and other.work.branch == work.branch
+    end)
+    if waits_already then
+      read_reported()
+      return true
+    end
+    if #session.waiting >= MOST_WAITING then
+      return false
     end
     local waiting = { work = work, tell = tell }
     local start_timer = session.settings.start_timer or start_uv_timer
@@ -2184,6 +2248,7 @@ function M.new(label)
     end)
     table.insert(session.waiting, waiting)
     read_reported()
+    return true
   end
 
   --- Makes the reported set the focused view again, shown at once, its first
