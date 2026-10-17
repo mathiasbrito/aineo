@@ -29,12 +29,9 @@ M.NONE = { sections = {} }
 ---@alias aineo.changes.ReadList fun(repository: aineo.git.Repository, base: string|nil, done: fun(failure: aineo.git.Failure|nil, listed: any))
 
 --- What a read of one worktree starts from.
----@class aineo.changes.WorktreeRead
----@field found aineo.git.Repository the editor's repository
+---@class aineo.changes.WorktreeRead: aineo.changes.CommitBaseRead
 ---@field before aineo.changes.OtherWorktrees what the window knew of the other worktrees before this read
 ---@field read_list aineo.changes.ReadList reads the window's list for a worktree
----@field working_branch? string the branch the user's setting names; the remote's default branch when not given
----@field git? aineo.git.Options how the git home runs git
 
 --- What a read of the other worktrees, for one window, starts from.
 ---@class aineo.changes.WorktreesRead: aineo.changes.WorktreeRead
@@ -49,7 +46,7 @@ M.NONE = { sections = {} }
 --- however many worktrees need it, and answers every later call with the
 --- first answer, a failure included.
 ---
----@param read aineo.changes.WorktreeRead
+---@param read aineo.changes.CommitBaseRead
 ---@return fun(done: fun(failure: aineo.git.Failure|nil, commit: string|nil))
 local function comparison_read_once(read)
   local answered, answered_failure, answered_commit = false, nil, nil
@@ -70,7 +67,7 @@ end
 --- `done(nil, sources)`; or `done(failure)` when the working branch's name
 --- or commit cannot be read.
 ---
----@param read aineo.changes.WorktreeRead
+---@param read aineo.changes.CommitBaseRead
 ---@param done fun(failure: aineo.git.Failure|nil, sources: aineo.changes.BaseSources|nil)
 local function read_base_sources(read, done)
   working_branch.read({
@@ -150,9 +147,9 @@ end
 --- gives one, and at once, reading neither, for a worktree with no commit
 --- yet; or `done(failure)`.
 ---
----@param read aineo.changes.WorktreeRead
+---@param read { git?: aineo.git.Options }
 ---@param sources aineo.changes.BaseSources
----@param repository aineo.git.Repository
+---@param repository { top: string, head: string|nil } a worktree, or the top level of the editor's repository with a commit as its `head`
 ---@param done fun(failure: aineo.git.Failure|nil, base: string|nil)
 local function read_base(read, sources, repository, done)
   if not repository.head then
@@ -251,6 +248,31 @@ function M.read_worktree(read, worktree, done)
       return
     end
     read_section(read, worktree, sources, done)
+  end)
+end
+
+--- What the base of a commit of the editor's repository is read from.
+---@class aineo.changes.CommitBaseRead
+---@field found aineo.git.Repository the editor's repository
+---@field working_branch? string the branch the user's setting names; the remote's default branch when not given
+---@field git? aineo.git.Options how the git home runs git
+
+--- Reads the base of `commit`, any commit of the editor's repository, as the
+--- base of a worktree whose `HEAD` it is is read (`read_base()`): its merge
+--- base with the commit the working branch names now
+--- (`read_base_sources()`), else with the editor's comparison commit. Calls
+--- `done(nil, base)`, `base` nil when neither gives one; or `done(failure)`.
+---
+---@param read aineo.changes.CommitBaseRead
+---@param commit string the commit's full id
+---@param done fun(failure: aineo.git.Failure|nil, base: string|nil)
+function M.read_base_of(read, commit, done)
+  read_base_sources(read, function(failure, sources)
+    if failure then
+      done(failure)
+      return
+    end
+    read_base(read, sources, { top = read.found.top, head = commit }, done)
   end)
 end
 

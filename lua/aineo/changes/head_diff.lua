@@ -4,6 +4,7 @@
 --- against the file's previous version.
 
 local git = require('aineo.git')
+local branch = require('aineo.changes.branch')
 local landed = require('aineo.changes.landed')
 local lines = require('aineo.changes.lines')
 
@@ -75,9 +76,26 @@ end
 --- How a file's diff against `HEAD` is read, by the kind of the filter the
 --- file is listed under: from the commit it is listed under straight to
 --- `HEAD`; from `HEAD` straight to the commit the working branch named when
---- the commits window last read it; from `HEAD` to the working tree.
+--- the commits window last read it, or the local branch shown alone its tip;
+--- from `HEAD` to the working tree.
 ---@type table<string, fun(source: aineo.changes.DiffSource, entry: aineo.changes.Entry, done: fun(failure: aineo.git.Failure|nil, diff: string|nil))>
 local READS = {
+  branch = function(source, entry, done)
+    if not (source.branch and source.branch.tip) then
+      done(branch.unreadable(source.branch))
+      return
+    end
+    with_head(source, done, function(head)
+      git.file_diff_straight(
+        source.repository,
+        head,
+        source.branch.tip,
+        entry.change,
+        done,
+        source.options
+      )
+    end)
+  end,
   commit = function(source, entry, done)
     with_head(source, done, function(head)
       git.file_diff_straight(
@@ -144,11 +162,15 @@ end
 
 --- The folders, after `aineo://`, of the names of the diffs against `HEAD`,
 --- by the kind of the filter the file is listed under: one folder for the
---- files of a commit, one for those under *Landed*, the folder *Uncommitted*
---- shows its diffs in for those read from `HEAD` to the working tree, and
---- one for another worktree's whole change.
+--- files of a commit, one for those under *Landed*, one for those under a
+--- local branch's whole change, named for the branch, the folder
+--- *Uncommitted* shows its diffs in for those read from `HEAD` to the working
+--- tree, and one for another worktree's whole change.
 ---@type table<string, fun(entry: aineo.changes.Entry): string>
 local FOLDERS = {
+  branch = function(entry)
+    return ('branch/%s//head'):format(lines.quoted_path(entry.filter.branch))
+  end,
   commit = function(entry)
     return 'head/commit/' .. entry.filter.commit.id
   end,
@@ -170,8 +192,10 @@ local FOLDERS = {
 --- `aineo://`: `head/commit/<id>/<path>` for a file in a commit,
 --- `head/landed/<path>` under *Landed*, `uncommitted/<path>` — the diff
 --- *Uncommitted* shows — under *Uncommitted* and *Session work*, and
---- `head/<path>` under another worktree's whole change; the path quoted as
---- the files window shows it. For a file of another worktree, after
+--- `head/<path>` under another worktree's whole change, and
+--- `branch/<name>//head/<path>` under a local branch's, the name quoted as a
+--- path is; the path quoted as the files window shows it. For a file of
+--- another worktree, after
 --- `worktree<top>//`, as that worktree's other diffs are named, the top
 --- level quoted too.
 ---
