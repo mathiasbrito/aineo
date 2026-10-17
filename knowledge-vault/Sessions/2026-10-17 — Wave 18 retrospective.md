@@ -38,7 +38,7 @@ On 2026-10-16 the user found worktrees hard to find in a long session and asked 
 ### What to change
 
 - **Ask the toggle and scope questions together before planning.** What `\g` does from another pane and what an agent's report does to a pick were settled across the plan's amendments, one answer at a time; asked together, the plan would be written once.
-- **Keep resource names without hyphens,** the orchestrator's guidance for the next wave's packets.
+- **Keep resource names without hyphens.** T83's tests-and-records review found that `prepare-worktree.sh` refuses a resource name with a hyphen (`review_tests-records_t83` was refused, `review_tests_records_t83` accepted).
 - **Say in the brief which window a measure belongs to.** A width read in the current window differs from the same width in the tab line; T83's first cut used the call that follows the window and the attack review found it.
 
 ## Deviations and disclosures
