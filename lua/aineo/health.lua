@@ -219,7 +219,8 @@ local function check_claude_version(command)
 end
 
 --- Reports, when `command` gives Claude Code a `--settings`, whether aineo
---- can add its session hooks to them, read from the editor's working
+--- can add its hooks to them — its session hooks and its `SubagentStart`
+--- hook — read from the editor's working
 --- directory as a start of Claude Code reads them
 --- (`aineo.claude`'s `given_settings_verdict()`): a warning naming
 --- why when it cannot.
@@ -232,12 +233,12 @@ local function check_claude_settings(command)
   end
   if verdict.problem then
     vim.health.warn(
-      "claude.cmd's --settings cannot take aineo's session hooks: " .. verdict.problem,
-      "Claude Code starts with them as they are, without aineo's hooks, so a session switch inside it is not followed: :help aineo-config-claude.cmd"
+      "claude.cmd's --settings cannot take aineo's hooks: " .. verdict.problem,
+      "Claude Code starts with them as they are, without aineo's hooks, so a session switch inside it is not followed and its subagents are not told of announce_work: :help aineo-config-claude.cmd"
     )
     return
   end
-  vim.health.ok("claude.cmd's --settings takes aineo's session hooks")
+  vim.health.ok("claude.cmd's --settings takes aineo's hooks")
 end
 
 --- Reports on the command that runs Claude Code, `claude.cmd`: an error when
