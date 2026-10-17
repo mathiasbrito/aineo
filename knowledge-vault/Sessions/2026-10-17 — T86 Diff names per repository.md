@@ -65,4 +65,6 @@ Existing pins, run on `tests/test_changes_copies.lua` (22 cases, green): the `ow
 
 ## Commits
 
-Recorded after the merge.
+PR #260, merged by rebase; released in `v0.2.49` (PR #261, `main` `86fac7f`). On `dev`:
+
+- `22a3ac4` Pin the per-tab diff buffer names and say them in the help
