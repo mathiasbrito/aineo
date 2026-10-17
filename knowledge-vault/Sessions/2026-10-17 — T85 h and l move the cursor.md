@@ -77,4 +77,8 @@ None.
 
 ## Commits
 
-Recorded after the merge.
+PR #257, merged by rebase; released in `v0.2.48` (PR #258, `main` `82bbb6f`). On `dev`, in order:
+
+- `bf6c277` Keep the cursor in the files window on l and h
+- `0eb1df5` Close the diff of the changes pane with a global key
+- `5c06044` Make \d find its tab without making one
