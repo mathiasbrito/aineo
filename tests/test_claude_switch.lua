@@ -65,11 +65,11 @@ local AINEO_HOOKS_SHAPE = {
 }
 
 --- What aineo tells the user when it cannot add its hooks to a `--settings`
---- of `claude.cmd`, as `NOTE_NOTIFICATIONS` keeps it: one line of 60
+--- of `claude.cmd`, as `NOTE_NOTIFICATIONS` keeps it: one line of 59
 --- characters, which fits an 80-column screen at startup.
 local UNREAD_SETTINGS_WARNINGS = {
   {
-    message = "aineo: claude.cmd's --settings unread; switches not followed",
+    message = "aineo: claude.cmd's --settings unread; aineo hooks left out",
     level = vim.log.levels.WARN,
   },
 }

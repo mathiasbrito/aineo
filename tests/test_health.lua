@@ -503,7 +503,7 @@ T['Claude Code']['keeps the first 1024 bytes of what claude.cmd --version writes
   eq(health.advice(report, 'Claude Code'), { string.rep('x', 1024) })
 end
 
-T['Claude Code']['reports that a --settings in claude.cmd takes aineo’s session hooks'] = function()
+T['Claude Code']['reports that a --settings in claude.cmd takes aineo’s hooks'] = function()
   local file = vim.fs.joinpath(fixture.directory('health-settings'), 'settings.json')
   vim.fn.writefile({ '{"permissions":{"deny":["Bash(rm:*)"]}}' }, file)
   start_with({ autostart = false, claude = { cmd = { HEALTH_CLAUDE, '--settings', file } } })
@@ -512,7 +512,7 @@ T['Claude Code']['reports that a --settings in claude.cmd takes aineo’s sessio
 
   eq(health.section(report, 'Claude Code'), {
     '- ✅ OK claude.cmd --version: 9.9.9 (health stand-in)',
-    "- ✅ OK claude.cmd's --settings takes aineo's session hooks",
+    "- ✅ OK claude.cmd's --settings takes aineo's hooks",
     "- aineo's behaviour was measured on Claude Code 2.1.281",
   })
 end
@@ -530,20 +530,20 @@ T['Claude Code']['reads a relative --settings in claude.cmd from the editor’s 
 
   eq(
     health.section(report, 'Claude Code')[2],
-    "- ⚠️ WARNING claude.cmd's --settings cannot take aineo's session hooks: the hooks in "
+    "- ⚠️ WARNING claude.cmd's --settings cannot take aineo's hooks: the hooks in "
       .. vim.fs.joinpath(directory, 'settings.json')
       .. ' are not an object'
   )
 end
 
 --- The fixture directory of the cases on a `--settings` aineo cannot add
---- its session hooks to, and the files they name in it.
+--- its hooks to, and the files they name in it.
 local UNUSABLE_SETTINGS = fixture.directory('health-unusable-settings')
 local SETTINGS_LIST = vim.fs.joinpath(UNUSABLE_SETTINGS, 'list.json')
 local SETTINGS_BROKEN = vim.fs.joinpath(UNUSABLE_SETTINGS, 'broken.json')
 local SETTINGS_MISSING = vim.fs.joinpath(UNUSABLE_SETTINGS, 'missing.json')
 
-T['Claude Code']['warns of a --settings in claude.cmd that cannot take aineo’s session hooks, saying why'] =
+T['Claude Code']['warns of a --settings in claude.cmd that cannot take aineo’s hooks, saying why'] =
   MiniTest.new_set({
     parametrize = {
       {
@@ -573,7 +573,7 @@ T['Claude Code']['warns of a --settings in claude.cmd that cannot take aineo’s
     },
   })
 
-T['Claude Code']['warns of a --settings in claude.cmd that cannot take aineo’s session hooks, saying why']['given'] = function(
+T['Claude Code']['warns of a --settings in claude.cmd that cannot take aineo’s hooks, saying why']['given'] = function(
   words,
   why
 )
@@ -585,11 +585,11 @@ T['Claude Code']['warns of a --settings in claude.cmd that cannot take aineo’s
 
   eq(health.section(report, 'Claude Code'), {
     '- ✅ OK claude.cmd --version: 9.9.9 (health stand-in)',
-    "- ⚠️ WARNING claude.cmd's --settings cannot take aineo's session hooks: " .. why,
+    "- ⚠️ WARNING claude.cmd's --settings cannot take aineo's hooks: " .. why,
     "- aineo's behaviour was measured on Claude Code 2.1.281",
   })
   eq(health.advice(report, 'Claude Code'), {
-    "Claude Code starts with them as they are, without aineo's hooks, so a session switch inside it is not followed: :help |aineo-config-claude.cmd|",
+    "Claude Code starts with them as they are, without aineo's hooks, so a session switch inside it is not followed and its subagents are not told of announce_work: :help |aineo-config-claude.cmd|",
   })
 end
 
