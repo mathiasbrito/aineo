@@ -23,7 +23,7 @@ local INSTALL = [[
   _G.picker_calls = {}
   local function fake(picker)
     return function(...)
-      local options = (select(select('#', ...), ...))
+      local options = (select(picker == 'mini.pick' and 2 or 1, ...))
       table.insert(_G.picker_calls, { picker = picker, options = options })
       if picked then
         vim.cmd.edit(vim.fn.fnameescape(picked))
@@ -37,6 +37,14 @@ local INSTALL = [[
     if name == 'snacks' then
       package.preload['snacks'] = function()
         return { picker = { files = fake('snacks') } }
+      end
+    elseif name == 'snacks-without-picker' then
+      package.preload['snacks'] = function()
+        return setmetatable({}, {
+          __index = function(_, key)
+            error(("module 'snacks.%s' not found"):format(key))
+          end,
+        })
       end
     elseif name == 'fzf-lua' then
       package.preload['fzf-lua'] = function()
@@ -59,7 +67,7 @@ local INSTALL = [[
 --- picker `names` leaves out is not installed, mini.pick included.
 ---
 ---@param child table a child from `MiniTest.new_child_neovim()`
----@param names string[] some of `M.NAMES`
+---@param names string[] some of `M.NAMES`, and `snacks-without-picker`: a snacks.nvim that has no picker module, whose every field is read through an `__index` that raises as `require('snacks.<field>')` does for a missing file
 ---@param picked? string
 function M.install(child, names, picked)
   child.lua(INSTALL, { names, picked or false })

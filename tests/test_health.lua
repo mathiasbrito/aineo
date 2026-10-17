@@ -1781,6 +1781,18 @@ T['the file finder']['warns when the picker forced is not installed, though anot
   )
 end
 
+T['the file finder']['counts a snacks without a picker module as not installed, and the check goes on to its last section'] = function()
+  start_with({ autostart = false })
+  find_pickers.install(child, { 'snacks-without-picker' })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Find a file'), {
+    '- the file finder lists the files through vim.ui.select: none of snacks, fzf-lua, telescope or mini.pick is installed (find.picker is auto): :help |aineo-find|',
+  })
+  eq(#health.section(report, 'Limits'), 1)
+end
+
 T['the file finder']['says nothing while the configuration is wrong'] = function()
   start_with({ autostart = false, find = { picker = 'ctrlp' } })
 

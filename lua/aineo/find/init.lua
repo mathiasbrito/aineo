@@ -25,6 +25,7 @@ end
 ---@class aineo.find.Options
 ---@field directory string the directory whose files are searched: an absolute path
 ---@field picker string `find.picker`: `auto`, or the name of the one picker to use
+---@field list_files? aineo.find.ListFiles how the files of the repository the directory is in are listed, for the finder's own list; nil when the directory is in none, and the files are those a walk of it finds
 
 --- What the user is told when the picker `find.picker` forces, `name`, is not
 --- installed.
@@ -41,7 +42,9 @@ end
 local PROMPT = 'Find file'
 
 --- Opens `path`, relative to `directory`, in `window` when it still exists,
---- else in the current window, as `:edit` does.
+--- else in the current window, as `:edit` does. Tells the user once, with an
+--- error, when `:edit` refuses — the buffer in the window holds unsaved changes
+--- and cannot be hidden, say.
 ---
 ---@param directory string
 ---@param path string
@@ -50,17 +53,39 @@ local function open_file(directory, path, window)
   if vim.api.nvim_win_is_valid(window) then
     vim.api.nvim_set_current_win(window)
   end
-  vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(directory, path)))
+  local opened, failure = pcall(vim.cmd.edit, vim.fn.fnameescape(vim.fs.joinpath(directory, path)))
+  if not opened then
+    vim.notify(('aineo: %s'):format((tostring(failure):gsub('^Vim:', ''))), vim.log.levels.ERROR)
+  end
+end
+
+--- What the user is told when `failure` kept the repository's files from
+--- being listed under `directory`.
+---
+---@param directory string
+---@param failure aineo.find.ListFailure
+---@return string
+local function git_could_not_list(directory, failure)
+  return ('aineo: git could not list the files under %s (%s): the list is what a walk of the folder finds'):format(
+    directory,
+    failure.message
+  )
 end
 
 --- Offers the files under `directory` through `vim.ui.select()`, once they
---- are listed (`aineo.find.files`'s `list()`), and opens the one picked in the
---- window the cursor is in now.
+--- are listed (`aineo.find.files`'s `list()`, given `list_files`), and opens
+--- the one picked in the window the cursor is in now. Tells the user once, with
+--- a warning, when listing the repository's files failed and a walk of the
+--- folder stands in.
 ---
 ---@param directory string
-local function select_from_files(directory)
+---@param list_files aineo.find.ListFiles|nil
+local function select_from_files(directory, list_files)
   local window = vim.api.nvim_get_current_win()
-  files.list(directory, function(listed, cut)
+  files.list(directory, list_files, function(listed, cut, failure)
+    if failure then
+      vim.notify(git_could_not_list(directory, failure), vim.log.levels.WARN)
+    end
     if #listed == 0 then
       vim.notify(('aineo: no file under %s'):format(directory), vim.log.levels.INFO)
       return
@@ -98,7 +123,7 @@ function M.find_file(options)
   if options.picker ~= 'auto' then
     vim.notify(not_installed(options.picker), vim.log.levels.WARN)
   end
-  select_from_files(options.directory)
+  select_from_files(options.directory, options.list_files)
 end
 
 return M

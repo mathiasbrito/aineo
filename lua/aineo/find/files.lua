@@ -1,27 +1,15 @@
---- The files under a directory, for the finder's own list: the files of the
---- repository the directory is in, else the files found walking it. Both are
---- bounded, so that a directory of a million files does not hold the editor.
+--- The files under a directory, for the finder's own list: the files a
+--- repository lists, when the caller hands in how to list them, else the
+--- files found walking the directory. Both are bounded, so that a directory
+--- of a million files does not hold the editor.
 
 local M = {}
-
---- How long `git` may run before it is stopped.
-local GIT_LIMIT_MS = 10000
 
 --- How many files a list holds at most.
 M.MOST_FILES = 20000
 
 --- How many directories deep a walk goes.
 local WALK_DEPTH = 8
-
---- What `git ls-files` lists in `directory`: the tracked files, and the
---- untracked ones its ignore rules leave in, each path relative to
---- `directory` and ended by a NUL byte.
----
----@param directory string
----@return string[]
-local function list_files_command(directory)
-  return { 'git', '-C', directory, 'ls-files', '-z', '--cached', '--others', '--exclude-standard' }
-end
 
 --- `files` in the order of their bytes, cut to the first `M.MOST_FILES`, and
 --- whether there were more.
@@ -63,30 +51,39 @@ local function walk(directory)
   return sorted_and_bounded(files)
 end
 
---- Calls `done(files, cut)`, never before it returns, with the files under
---- `directory` as paths relative to it: those `git ls-files` lists when
---- `directory` is in a repository, else those a walk finds (`walk()`);
---- `cut` tells whether the list stops at `M.MOST_FILES` with more to follow.
+--- Why a repository's files could not be listed.
+---@class aineo.find.ListFailure
+---@field message string the words for it
+
+--- How a repository's files are listed: calls `done(nil, paths)`, never
+--- before it returns, with the paths relative to the directory searched, or
+--- `done(failure)`.
+---@alias aineo.find.ListFiles fun(done: fun(failure: aineo.find.ListFailure|nil, paths: string[]|nil))
+
+--- Calls `done(files, cut, failure)`, never before it returns, with the files
+--- under `directory` as paths relative to it: those `list_files` gives, in the
+--- order of their bytes, or, when `list_files` is nil or fails, those a walk
+--- finds (`walk()`). `cut` tells whether the list stops at `M.MOST_FILES` with
+--- more to follow; `failure` is why `list_files` failed, when it did.
 ---
 ---@param directory string
----@param done fun(files: string[], cut: boolean)
-function M.list(directory, done)
-  local started = pcall(vim.system, list_files_command(directory), {
-    timeout = GIT_LIMIT_MS,
-  }, function(result)
-    vim.schedule(function()
-      if result.code == 0 then
-        done(sorted_and_bounded(vim.split(result.stdout, '\0', { plain = true, trimempty = true })))
-      else
-        done(walk(directory))
-      end
-    end)
-  end)
-  if not started then
+---@param list_files aineo.find.ListFiles|nil
+---@param done fun(files: string[], cut: boolean, failure: aineo.find.ListFailure|nil)
+function M.list(directory, list_files, done)
+  if not list_files then
     vim.schedule(function()
       done(walk(directory))
     end)
+    return
   end
+  list_files(function(failure, paths)
+    if failure then
+      local files, cut = walk(directory)
+      done(files, cut, failure)
+      return
+    end
+    done(sorted_and_bounded(paths))
+  end)
 end
 
 return M

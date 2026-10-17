@@ -171,6 +171,126 @@ end
 
 T['A file picked'] = MiniTest.new_set()
 
+--- What the finder tells the user when asked from a floating window.
+local FROM_A_FLOAT = 'aineo: a file is found from a window of the tab, not from a floating one'
+
+--- Opens a floating window in `child`'s current tab page, with the cursor in
+--- it.
+local function enter_a_float()
+  child.lua([[
+    local buffer = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_open_win(buffer, true, {
+      relative = 'editor',
+      row = 1,
+      col = 1,
+      width = 20,
+      height = 3,
+    })
+  ]])
+end
+
+T['Find']['tells the user once, and asks no picker, when asked from a floating window'] = function()
+  local _, directory = repository_with_a_directory('entry-find-float')
+  open_layout_in('entry-find-float', directory, { 'telescope' })
+  enter_a_float()
+  local float = child.api.nvim_get_current_win()
+
+  entry.press(child, '\\f')
+
+  eq({
+    entry.messages(child),
+    find_pickers.calls(child),
+    child.api.nvim_get_current_win() == float,
+  }, { { { message = FROM_A_FLOAT, level = vim.log.levels.WARN } }, {}, true })
+end
+
+T['Find']['leaves the picker it started open when asked again from inside it'] = function()
+  local top, directory = repository_with_a_directory('entry-find-again')
+  open_layout_in('entry-find-again', directory, { 'telescope' })
+  child.lua([[
+    local git = require('aineo.git')
+    local find_repository = git.find_repository
+    _G.roots_asked = 0
+    git.find_repository = function(...)
+      _G.roots_asked = _G.roots_asked + 1
+      return find_repository(...)
+    end
+  ]])
+  entry.press(child, '\\f')
+  eq(picker_calls(), { { picker = 'telescope', options = { cwd = top } } })
+  enter_a_float()
+  local float = child.api.nvim_get_current_win()
+
+  entry.press(child, '\\f')
+
+  eq({
+    child.lua_get('_G.roots_asked'),
+    child.api.nvim_win_is_valid(float),
+    child.api.nvim_get_current_win() == float,
+  }, { 1, true, true })
+end
+
+--- The Lua that replaces `vim.ui.select()` in the child with a recorder:
+--- each call's items are kept in `_G.selections`.
+local RECORD_SELECTIONS = [[
+  _G.selections = {}
+  vim.ui.select = function(items)
+    table.insert(_G.selections, items)
+  end
+]]
+
+--- Waits until `child`'s `vim.ui.select()` has been called, and returns the
+--- items of the call.
+---
+---@return string[]
+local function selected_from()
+  git_repo.wait_until('the files to be offered', function()
+    return child.lua_get('#_G.selections') > 0
+  end)
+  return child.lua_get('_G.selections[1]')
+end
+
+T['Find']['lists the files of the repository found through the git home, whatever GIT_DIR names in the editor’s environment, when no picker is installed'] = function()
+  local top = git_repo.create('entry-find-git-dir', {
+    ['top.txt'] = { 'at the top' },
+    ['.gitignore'] = { 'ignored.log' },
+  })
+  git_repo.write(top, 'ignored.log', { 'ignored' })
+  local other = git_repo.create('entry-find-git-dir-other', { ['alien.txt'] = { 'elsewhere' } })
+  open_layout_in('entry-find-git-dir', top, {})
+  child.lua(RECORD_SELECTIONS)
+  child.lua('vim.env.GIT_DIR = ...', { vim.fs.joinpath(other, '.git') })
+
+  entry.press(child, '\\f')
+
+  eq(selected_from(), { '.gitignore', 'top.txt' })
+end
+
+T['Find']['lists the files found walking a folder in no repository, and tells nothing of git, when no picker is installed'] = function()
+  local directory = git_repo.directory('entry-find-walk')
+  git_repo.write(directory, 'a.txt', { 'one' })
+  open_layout_in('entry-find-walk', directory, {})
+  child.lua(RECORD_SELECTIONS)
+
+  entry.press(child, '\\f')
+
+  eq({ selected_from(), entry.messages(child) }, { { 'a.txt' }, {} })
+end
+
+T['Find']['acts on the aineo tab used last, and moves to it, from a tab page that is none of aineo’s'] = function()
+  local top, directory = repository_with_a_directory('entry-find-other-page')
+  open_layout_in('entry-find-other-page', directory, { 'telescope' })
+  local aineo_page = child.api.nvim_get_current_tabpage()
+  child.cmd('tabnew')
+
+  entry.press(child, '\\f')
+
+  eq({ picker_calls(), child.api.nvim_get_current_tabpage() == aineo_page }, {
+    { { picker = 'telescope', options = { cwd = top } } },
+    true,
+  })
+end
+
 T['Find']['tells the user once there is no aineo tab to find a file in, and asks no picker'] = function()
   entry.restart(child)
   find_pickers.install(child, { 'telescope' })
