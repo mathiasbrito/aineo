@@ -172,4 +172,13 @@ The suite after the fix round, Neovim 0.12.5, the host loaded, `AINEO_TEST_JOBS=
 
 ## Commits
 
-Recorded after the merge.
+PR #252, merged by rebase; released in `v0.2.46` (PR #253, `main` `0785409`). On `dev`, in order:
+
+- `e1750e0` Amend T82's brief at dispatch against dev bbf4400
+- `040bd23` List the local branches in the git home
+- `c6f7148` Show one local branch alone in the changes pane
+- `e5b838c` Wrap the help's branch paragraphs to 78 columns
+- `462a81a` Pin the diff text Enter shows on a commit of a branch
+- `fe4b067` Record T82's session: the branch scope, its mutants and its rulings
+- `4afeeab` Fix PR 252's review findings: spellings, no base, reading, limits
+- `813e17c` Record the fix round of PR 252 in T82's session note

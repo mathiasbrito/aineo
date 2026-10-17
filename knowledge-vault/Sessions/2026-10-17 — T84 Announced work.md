@@ -156,4 +156,16 @@ Suites of the fix round: Neovim 0.12.5, host loaded (load average 5.8–6.4), `A
 
 ## Commits
 
-Recorded after the merge.
+PR #254, merged by rebase; released in `v0.2.47` (PR #255, `main` `32a7060`). On `dev`, in order:
+
+- `5360966` Amend T84's brief at dispatch against dev after T81 and T82
+- `22415a3` Serve announce_work from aineo's MCP server and offer it by token
+- `b80323d` Tell subagents of announce_work through a SubagentStart hook
+- `d0c1011` Show the reported work in the tab's changes pane
+- `62a2d88` Document announce_work and the reported work in the help
+- `869224f` Wait for the read that finds a pick gone before asserting silence
+- `0f8a172` Record T84's session: announced work, its tests and mutants
+- `b5f4db6` Answer an unconfirmed or cwd-less announcement not taken
+- `ffe2219` Bound the waiting reports and pin the tab whose pane shows them
+- `be0cd18` Name aineo's hooks as they now are, and list every announce reply
+- `4bf80e3` Record T84's fix round in its session note
