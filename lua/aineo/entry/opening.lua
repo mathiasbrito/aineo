@@ -166,14 +166,13 @@ local function new_tab()
   return tab
 end
 
---- The tab an action acts on: the tab whose tab page the current window is
---- in; from a tab page that is none of aineo's, the aineo tab used last,
---- which the cursor moves to (O5); with no aineo tab at all, the tab a
---- claim made before aineo opened (`aineo.entry.Tab`'s `claim_session()`),
---- else a new one, whose layout opens in the current tab page.
+--- The aineo tab an action acts on, without making one: the tab whose tab
+--- page the current window is in; from a tab page that is none of aineo's,
+--- the aineo tab used last, else the first, which the cursor moves to (O5).
+--- Nil with no aineo tab bound.
 ---
----@return aineo.entry.Tab
-local function acting_tab()
+---@return aineo.entry.Tab|nil
+local function existing_acting_tab()
   local current = registry.tab_of_current_page()
   if current then
     registry.last_used_tab = current
@@ -191,9 +190,21 @@ local function acting_tab()
     registry.last_used_tab = to_return_to
     return to_return_to
   end
-  return vim.iter(registry.tab_list):find(function(tab)
-    return not tab.is_bound()
-  end) or new_tab()
+  return nil
+end
+
+--- The tab an action acts on: the existing aineo tab
+--- (`existing_acting_tab()`); with no aineo tab at all, the tab a claim made
+--- before aineo opened (`aineo.entry.Tab`'s `claim_session()`), else a new
+--- one, whose layout opens in the current tab page.
+---
+---@return aineo.entry.Tab
+local function acting_tab()
+  return existing_acting_tab()
+    or vim.iter(registry.tab_list):find(function(tab)
+      return not tab.is_bound()
+    end)
+    or new_tab()
 end
 
 --- Opens a tab page at the end, after the last tab page, so that no tab
@@ -240,6 +251,7 @@ open_new_tab = function(start, after_current)
 end
 
 M.acting_tab = acting_tab
+M.existing_acting_tab = existing_acting_tab
 M.open_new_tab = open_new_tab
 
 return M
