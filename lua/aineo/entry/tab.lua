@@ -1478,6 +1478,9 @@ local function make_tab(homes, key, callbacks)
       focus_pane('changes')
     end,
     ['pane terminal'] = focus_terminal,
+    ['diff close'] = function()
+      homes.changes.close_shown_diff()
+    end,
   }
 
   --- What Send does in Visual mode: sends the selection alone, unless a claim

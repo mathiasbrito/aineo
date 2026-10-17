@@ -76,6 +76,7 @@ end
 ---@field toggle_focused_view fun() reads the shown pane again, and, with the cursor in one of its windows, switches it between its default view and the focused view
 ---@field add_reported_work fun(work: aineo.changes.ReportedWork, tell: fun(message: string)): boolean whether the home took the report
 ---@field pane_buffers fun(): { files: integer, commits: integer }
+---@field close_shown_diff fun() closes the windows of the current tab page that show a diff the home showed, and tells once when none was closed
 ---@field let_go? fun() only on a home `require('aineo.changes').new()` made: stops its watch, removes its handlers and wipes its buffers
 
 --- Makes a changes home: its own session, base and saves, pane buffers,
@@ -1697,6 +1698,52 @@ function M.new(label)
       buffer = buffer,
       desc = 'aineo: show this diff with the whole file as context, or with three lines',
     })
+  end
+
+  --- The windows of the current tab page that show a diff the home showed.
+  ---
+  ---@return integer[]
+  local function windows_showing_a_diff()
+    return vim.tbl_filter(function(window)
+      return shown_diffs[vim.api.nvim_win_get_buf(window)] ~= nil
+    end, vim.api.nvim_tabpage_list_wins(0))
+  end
+
+  --- Puts the cursor in the window of the current tab page that shows the
+  --- files buffer, on the line it was on; nowhere when none does.
+  local function return_cursor_to_the_files_window()
+    local files = vim.tbl_filter(function(window)
+      return vim.api.nvim_win_get_tabpage(window) == vim.api.nvim_get_current_tabpage()
+    end, vim.fn.win_findbuf(buffers.files))
+    if files[1] then
+      vim.api.nvim_set_current_win(files[1])
+    end
+  end
+
+  --- What the user is told when there is no diff to close.
+  local NO_DIFF_TO_CLOSE = 'aineo: no diff to close'
+
+  --- Closes the windows of the current tab page that show a diff the home
+  --- showed (`windows_showing_a_diff()`), the diff buffer with each, wiped once
+  --- hidden, and no other window; the cursor stays where it was, unless it was
+  --- in one of them, and then goes to the files window
+  --- (`return_cursor_to_the_files_window()`), when the tab page shows it.
+  --- A window that is the only one of its tab page is not closed. Tells the
+  --- user, once, when no window was closed.
+  function home.close_shown_diff()
+    local was_in = vim.api.nvim_get_current_win()
+    local closed = vim.tbl_filter(function(window)
+      if #vim.api.nvim_tabpage_list_wins(0) == 1 then
+        return false
+      end
+      vim.api.nvim_win_close(window, false)
+      return true
+    end, windows_showing_a_diff())
+    if #closed == 0 then
+      vim.notify(NO_DIFF_TO_CLOSE, vim.log.levels.INFO)
+    elseif vim.tbl_contains(closed, was_in) then
+      return_cursor_to_the_files_window()
+    end
   end
 
   --- Shows `buffer`, a buffer of what git gave (`aineo.changes.diffs`),
