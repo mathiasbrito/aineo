@@ -340,6 +340,7 @@ local PREFIX_KEYS = {
   { key = '7', plug = '<Plug>(aineo-tab-7)', mode = 'n' },
   { key = '8', plug = '<Plug>(aineo-tab-8)', mode = 'n' },
   { key = '9', plug = '<Plug>(aineo-tab-9)', mode = 'n' },
+  { key = 'd', plug = '<Plug>(aineo-diff-close)', mode = 'n' },
   { key = 's', plug = '<Plug>(aineo-send)', mode = 'x' },
 }
 

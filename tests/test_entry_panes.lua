@@ -1320,6 +1320,7 @@ local SUBCOMMANDS = {
   'pane',
   'claim',
   'tab',
+  'diff',
 }
 
 T[':Aineo pane']['completes after a command modifier or a range as it does without one'] =
