@@ -2,6 +2,7 @@
 --- its buffer is named, and what the user is told it is called.
 
 local git = require('aineo.git')
+local branch = require('aineo.changes.branch')
 local head_diff = require('aineo.changes.head_diff')
 local landed = require('aineo.changes.landed')
 local lines = require('aineo.changes.lines')
@@ -13,6 +14,7 @@ local M = {}
 ---@field repository aineo.git.Repository the editor's repository
 ---@field base string|nil the session's base
 ---@field landed? aineo.changes.Landed what the commits window last read of the working branch
+---@field branch? aineo.changes.BranchSection what the commits window last read of the local branch shown alone
 ---@field options? aineo.git.Options how the git home runs git
 ---@field context? aineo.git.DiffContext how much of a file the diff shows around a change; three lines when not given
 
@@ -29,6 +31,21 @@ local function with_landed_tip(source, done, read)
     read(source.landed.tip)
   else
     done(landed.unreadable(source.landed))
+  end
+end
+
+--- Reads, for `source`, a diff of the local branch shown alone, between its
+--- base and the tip the commits window last read, with `read(section)`;
+--- calls `done(failure)` when that read has no tip (`branch.unreadable()`).
+---
+---@param source aineo.changes.DiffSource
+---@param done fun(failure: aineo.git.Failure|nil, diff: string|nil)
+---@param read fun(section: aineo.changes.BranchSection)
+local function with_branch_tip(source, done, read)
+  if source.branch and source.branch.tip then
+    read(source.branch)
+  else
+    done(branch.unreadable(source.branch))
   end
 end
 
@@ -69,6 +86,25 @@ local OWN_READS = {
     whole = function(source, _, done)
       with_landed_tip(source, done, function(tip)
         git.diff_between(source.repository, source.base, tip, done, source.options)
+      end)
+    end,
+  },
+  branch = {
+    file = function(source, entry, done)
+      with_branch_tip(source, done, function(read)
+        git.file_diff_between(
+          source.repository,
+          read.base,
+          read.tip,
+          entry.change,
+          done,
+          source.options
+        )
+      end)
+    end,
+    whole = function(source, _, done)
+      with_branch_tip(source, done, function(read)
+        git.diff_between(source.repository, read.base, read.tip, done, source.options)
       end)
     end,
   },
@@ -120,8 +156,9 @@ end
 
 --- Reads the diff of `entry` and calls `done(failure, diff)`: for an entry
 --- of the editor's own worktree, within the filter it is listed under — a
---- file's from the session's base, from `HEAD` or in its commit; the whole
---- of *Session work*, of *Uncommitted* or of a commit — in `source`'s
+--- file's from the session's base, from `HEAD`, in its commit, or between a
+--- local branch's base and its tip; the whole of *Session work*, of
+--- *Uncommitted*, of a commit or of a branch — in `source`'s
 --- repository; for an entry of another worktree, in that worktree
 --- (`read_in_worktree()`). Every diff is read in the context `source`
 --- names.
@@ -159,6 +196,9 @@ local OWN_WHOLE_NAMES = {
   landed = function()
     return 'landed'
   end,
+  branch = function(entry)
+    return ('branch/%s//since-base'):format(lines.quoted_path(entry.filter.branch))
+  end,
   commit = function(entry)
     return 'commit/' .. entry.commit.id
   end,
@@ -176,6 +216,12 @@ local OWN_FILE_NAMES = {
   end,
   landed = function(entry)
     return 'landed/' .. lines.quoted_path(entry.change.path)
+  end,
+  branch = function(entry)
+    return ('branch/%s//diff/%s'):format(
+      lines.quoted_path(entry.filter.branch),
+      lines.quoted_path(entry.change.path)
+    )
   end,
   commit = function(entry)
     return ('commit/%s/%s'):format(entry.filter.commit.id, lines.quoted_path(entry.change.path))
@@ -204,7 +250,9 @@ end
 --- `diff/<path>` for a file read from the session's base, `uncommitted/<path>`
 --- from `HEAD`, `commit/<id>/<path>` in a commit, its path quoted as the
 --- files window shows it; `session-work`, `uncommitted` and `commit/<id>`
---- for the whole diffs, a commit by its full id. For an entry of another
+--- for the whole diffs, a commit by its full id. For the whole change of a
+--- local branch, `branch/<name>//since-base`, and for a file under it
+--- `branch/<name>//diff/<path>`, the name quoted as a path is. For an entry of another
 --- worktree, `worktree<top>//` and the name `worktree_diff_name()` gives,
 --- the worktree's top level quoted too, so that two worktrees' diffs are
 --- two buffers, whatever their paths: a resolved top level holds no `//`,

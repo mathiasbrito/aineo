@@ -5,6 +5,7 @@
 --- told there.
 
 local git = require('aineo.git')
+local branch = require('aineo.changes.branch')
 local commit_file = require('aineo.changes.commit_file')
 local diff_position = require('aineo.changes.diff_position')
 local diffs = require('aineo.changes.diffs')
@@ -35,7 +36,7 @@ local SELECTION_PAUSE_MS = 150
 ---@field follow_changes_session fun(followed: aineo.changes.FollowedSession)
 ---@field hand_over_changes_session fun(hand_over: aineo.changes.HandOver)
 ---@field refresh_shown_pane fun()
----@field toggle_focused_view fun() reads the shown pane again, and, with the cursor in one of its windows, switches it between its default view and the worktree shown alone
+---@field toggle_focused_view fun() reads the shown pane again, and, with the cursor in one of its windows, switches it between its default view and the worktree or branch shown alone
 ---@field pane_buffers fun(): { files: integer, commits: integer }
 ---@field let_go? fun() only on a home `require('aineo.changes').new()` made: stops its watch, removes its handlers and wipes its buffers
 
@@ -105,7 +106,8 @@ function M.new(label)
   ---@field commits_failure? aineo.git.Failure why the last read of the commits failed, when it did
   ---@field landed? aineo.changes.Landed what landed in the working branch, as last read; nil while unread, and when there is no working branch
   ---@field commits_others aineo.changes.OtherWorktrees what the commits window knows of the other worktrees
-  ---@field scope? aineo.changes.Scope the other worktree the user picked to show alone, kept while the default view is shown too
+  ---@field scope? aineo.changes.Scope the other worktree or the local branch the user picked to show alone, kept while the default view is shown too
+  ---@field branch? aineo.changes.BranchSection what the commits window last read of the branch the scope names; nil while it has read none, and for any other scope
   ---@field focused boolean whether the commits window shows the scope alone, in place of the default view; false while there is no scope
   ---@field saved table<string, true> the files the user saved under the base, by path relative to the top level: since the session began, or the Claude Code session's followed; none saved while no repository was found
   ---@field early_saves string[] the files the user saved, resolved, while the first look for the repository runs
@@ -189,16 +191,16 @@ function M.new(label)
     })
   end
 
-  --- The worktrees the commits window shows alone: those of the session's
-  --- scope while the focused view is the one shown, as the commits window
-  --- last listed them; nil for the default view.
+  --- What the commits window shows alone: the worktree or branch of the
+  --- session's scope while the focused view is the one shown, as the commits
+  --- window last read it; nil for the default view.
   ---
-  ---@return aineo.changes.WorktreeSection[]|nil
+  ---@return aineo.changes.ScopeMember[]|nil
   local function scope_shown()
     if not (session.scope and session.focused) then
       return nil
     end
-    return scope.sections_shown(session.scope, session.commits_others)
+    return scope.members_shown(session.scope, session.commits_others, session.branch)
   end
 
   --- The commits window's page for what the session knows: why it has no
@@ -327,6 +329,7 @@ function M.new(label)
   ---@field read_list? aineo.changes.ReadList asks git for another worktree's list; nil for a window that lists no other worktree
   ---@field others_field? 'commits_others' the field of the session that keeps what the window knows of the other worktrees; nil for a window that lists no other worktree
   ---@field took_others? fun(others: aineo.changes.OtherWorktrees) told what the window now knows of the other worktrees, before it is shown
+  ---@field read_scope? fun(done: fun(shown: boolean)) reads what the scope shows besides the worktrees, after theirs, and calls `done(true)` when it read something the window shows; nil for a window that has none
   ---@field show fun() writes the window for what the session knows
 
   --- Returns the function that asks for one read of a window as `reads`
@@ -334,8 +337,9 @@ function M.new(label)
   --- own list from the session's base, when asked with `with_own`, kept and
   --- shown as soon as git answers, then, for a window that lists them, the
   --- other worktrees' (`aineo.changes.worktrees`), kept and told to
-  --- `reads.took_others`, and shown once all are read, when the window shows
-  --- any of them, or did. A read asked for with the own list while another
+  --- `reads.took_others`, then what `reads.read_scope` reads, and shown once
+  --- all are read, when the window shows any of them, or did, or shows what
+  --- the scope read. A read asked for with the own list while another
   --- runs reads it before the next other worktree's, or, when none is left,
   --- once more after; a read asked for without it runs once more after. The
   --- own list is not read while the session looks for its base, and an
@@ -386,9 +390,16 @@ function M.new(label)
           if reads.took_others then
             reads.took_others(others)
           end
-          ended()
-          if shows_any(before) or shows_any(others) then
-            reads.show()
+          local function finish(shows_scope)
+            ended()
+            if shows_scope or shows_any(before) or shows_any(others) then
+              reads.show()
+            end
+          end
+          if reads.read_scope then
+            reads.read_scope(finish)
+          else
+            finish(false)
           end
         end)
       end)
@@ -463,6 +474,24 @@ function M.new(label)
     end
   end
 
+  --- Reads the files of the local branch shown alone: those that differ
+  --- between its base and its tip, as the commits window last read them,
+  --- committed files only. Calls `done(failure, changes)`; with the branch not
+  --- read yet, with no change and no failure, which the window shows as still
+  --- reading; after a first read that failed, with that failure.
+  ---
+  ---@param done fun(failure: aineo.git.Failure|nil, changes: aineo.git.Change[]|nil)
+  local function read_branch_files(done)
+    local read = session.branch
+    if not read then
+      done(nil, nil)
+    elseif not read.tip then
+      done(branch.unreadable(read), nil)
+    else
+      git.files_between(session.repository, read.base, read.tip, done, session.settings.git)
+    end
+  end
+
   --- Reads the files of the selected filter, in the editor's own repository
   --- or in the worktree it belongs to, and calls `done(failure, listing)`: the
   --- listing of the filter asked for, with no files on a failure. The
@@ -484,6 +513,8 @@ function M.new(label)
       git.uncommitted_files(repository, listing_of, options)
     elseif selected.kind == 'landed' then
       read_landed_files(base, listing_of)
+    elseif selected.kind == 'branch' then
+      read_branch_files(listing_of)
     elseif selected.kind == 'commit' then
       git.commit_files(repository, selected.commit.id, listing_of, options)
     else
@@ -535,12 +566,13 @@ function M.new(label)
 
   --- Selects what the commits window's view chooses when nothing else
   --- does — a commits buffer made anew, a session followed with a scope
-  --- kept: the whole change of the worktree shown alone, in the focused view
-  --- (`scope_shown()`); else *Session work* (`select_session_work()`).
+  --- kept: the whole change of the worktree or branch shown alone, in the
+  --- focused view (`scope_shown()`); else *Session work*
+  --- (`select_session_work()`).
   local function select_view_default()
     local shown = scope_shown()
     if shown then
-      select_filter(filter.of_worktree(shown[1]))
+      select_filter(scope.whole_change_of(shown[1]))
     else
       select_session_work()
     end
@@ -557,14 +589,15 @@ function M.new(label)
     end)
   end
 
-  --- Keeps the scope as `others`, what the commits window now knows of the
-  --- other worktrees, lists its worktree, or, when it lists it no more,
-  --- clears the scope with the focused view and tells the user, once, that
-  --- the worktree is gone (`aineo.changes.scope`).
+  --- Keeps the scope, when it is a worktree's, as `others`, what the commits
+  --- window now knows of the other worktrees, lists its worktree, or, when it
+  --- lists it no more, clears the scope with the focused view and tells the
+  --- user, once, that the worktree is gone (`aineo.changes.scope`). A
+  --- branch's scope is kept by what is read of the branch (`take_branch()`).
   ---
   ---@param others aineo.changes.OtherWorktrees
   local function keep_scope_listed_in(others)
-    if not session.scope then
+    if not (session.scope and session.scope.top) then
       return
     end
     local still_listed, gone = scope.after_read(session.scope, others)
@@ -611,6 +644,73 @@ function M.new(label)
         show_files()
       end
     end
+  end
+
+  --- Keeps `read`, what the commits window read of the local branch shown
+  --- alone, unless the scope is no longer that branch's. A branch that names
+  --- no commit is gone: the scope is cleared with the focused view and what
+  --- was kept of the branch, *Session work* is selected again when the
+  --- selection was the branch's, and the user is told once
+  --- (`aineo.changes.scope`). Otherwise, when the selection is a commit of the
+  --- branch it no longer lists — the branch was reset or rebased — the
+  --- branch's whole change is selected; and the files window is read again
+  --- when the whole change is selected and the tip or the base moved, the
+  --- first read included.
+  ---
+  ---@param read aineo.changes.BranchSection
+  local function take_branch(read)
+    local current = session.scope
+    if not (current and current.branch == read.name) then
+      return
+    end
+    if read.names_no_commit then
+      session.scope, session.focused, session.branch = nil, false, nil
+      if session.selected.branch then
+        select_session_work()
+        read_files(true)
+      end
+      vim.notify(scope.gone(current), vim.log.levels.INFO)
+      return
+    end
+    local before = session.branch
+    session.branch = read
+    local selected = session.selected
+    if selected.kind == 'commit' and selected.branch and read.commits then
+      if not lists_commit(selected, read.commits) then
+        select_filter(filter.of_branch(read.name))
+        read_files(true)
+      end
+    elseif selected.kind == 'branch' then
+      if not (before and before.tip == read.tip and before.base == read.base) then
+        read_files(true)
+      end
+    end
+  end
+
+  --- Reads the local branch the scope names, when it names one
+  --- (`aineo.changes.branch`), keeps what it read (`take_branch()`), and
+  --- calls `done(true)`; calls `done(false)` at once for any other scope or
+  --- none. The branch is read at every read of the commits window, shown
+  --- alone or not, so that a branch deleted behind the default view is
+  --- noticed too.
+  ---
+  ---@param done fun(read: boolean)
+  local function read_branch_scope(done)
+    local current = session.scope
+    if not (current and current.branch) then
+      done(false)
+      return
+    end
+    branch.read({
+      found = session.repository,
+      name = current.branch,
+      before = session.branch,
+      working_branch = session.settings.working_branch,
+      git = session.settings.git,
+    }, function(read)
+      take_branch(read)
+      done(true)
+    end)
   end
 
   --- Whether `read`, what the commits window read of the working branch,
@@ -692,7 +792,8 @@ function M.new(label)
   --- commit the files window lists is no longer among the commits — after a
   --- reset, a rebase — *Session work* is selected again, and the files window
   --- read for it; when it is another worktree's, or that worktree is, see
-  --- `reselect_in_worktrees()`.
+  --- `reselect_in_worktrees()`. The local branch the scope names, when it
+  --- names one, is read after the worktrees (`read_branch_scope()`).
   local read_commits = window_read({
     read_own = function(base, done)
       read_landed(base)
@@ -706,6 +807,7 @@ function M.new(label)
         and session.selected.kind == 'commit'
         and not session.selected.worktree
         and not session.selected.landed
+        and not session.selected.branch
         and not lists_commit(session.selected, since.commits)
       then
         select_session_work()
@@ -717,6 +819,7 @@ function M.new(label)
     end,
     others_field = 'commits_others',
     took_others = reselect_in_worktrees,
+    read_scope = read_branch_scope,
     show = show_commits,
   })
 
@@ -1213,7 +1316,7 @@ function M.new(label)
     end
     hold_unkept_base()
     if session.followed then
-      session.scope, session.focused = nil, false
+      session.scope, session.focused, session.branch = nil, false, nil
     end
     session.followed = followed
     select_view_default()
@@ -1315,6 +1418,7 @@ function M.new(label)
       repository = session.repository,
       base = session.base,
       landed = session.landed,
+      branch = session.branch,
       options = session.settings.git,
       context = full_context.current(),
     }
@@ -1546,8 +1650,10 @@ function M.new(label)
   --- in (`aineo.changes.Selection`), unless a key asked for another diff or
   --- file meanwhile: only the last key's is shown, or its failure told. A
   --- diff against `HEAD` that is empty is not shown: the user is told, once,
-  --- that the file is as `HEAD` has it, and the focus stays. Does nothing on a
-  --- line that lists none.
+  --- that the file is as `HEAD` has it, and the focus stays. On the heading of
+  --- a branch the commits window has not read yet, tells the user, at `INFO`,
+  --- that aineo is reading the repository, and reads nothing. Does nothing on
+  --- a line that lists none.
   ---
   ---@param buffer integer
   ---@param diffed fun(listed: aineo.changes.Entry): aineo.changes.Entry the entry standing for the diff to show
@@ -1557,6 +1663,10 @@ function M.new(label)
       return
     end
     local entry = diffed(listed)
+    if entry.filter and entry.filter.kind == 'branch' and not session.branch then
+      vim.notify(lines.READING, vim.log.levels.INFO)
+      return
+    end
     enters = enters + 1
     local this_enter = enters
     local window = vim.api.nvim_get_current_win()
@@ -1718,60 +1828,79 @@ function M.new(label)
   --- commits window no longer lists is told gone, and nothing changes.
   ---
   ---@param item aineo.changes.ScopeItem
-  local function show_alone(item)
+  local function show_worktree_alone(item)
     local section = scope.section_on(session.commits_others, item.top)
     if not section then
       vim.notify(scope.picked_gone(item), vim.log.levels.INFO)
       return
     end
-    session.scope, session.focused = scope.of(section), true
+    session.scope, session.focused, session.branch = scope.of(section), true, nil
     select_filter(filter.of_worktree(section))
     show_commits()
     read_files(true)
   end
 
+  --- Shows the local branch `item` names alone, and chooses its whole change
+  --- (`select_filter()`), which the files window then lists once the commits
+  --- window has read the branch (`take_branch()`), the reads asked for
+  --- without the editor's own lists. A branch deleted since the picker
+  --- opened is found gone by that read, and told so.
+  ---
+  ---@param item aineo.changes.ScopeItem
+  local function show_branch_alone(item)
+    session.scope, session.focused, session.branch = scope.of_branch(item.branch), true, nil
+    select_filter(filter.of_branch(item.branch))
+    show_commits()
+    read_files(true)
+    read_commits(false)
+  end
+
   --- Chooses again, after the focused view was switched on or off, what the
   --- commits window now shows: the filter selected stays, the cursor put on
-  --- its line, as the default view lists every filter the focused view lists.
-  --- In the focused view, a filter it does not list gives way to the whole
-  --- change of the worktree shown alone, and the files window is read again.
+  --- its line, as the default view lists every filter the focused view lists
+  --- but a local branch's. In the focused view, a filter it does not list
+  --- gives way to the whole change of the worktree or branch shown alone; in
+  --- the default view, a filter of a branch gives way to *Session work*; the
+  --- files window is read again either way.
   local function choose_for_shown_view()
     local shown = scope_shown()
     if shown and not scope.page_lists(commits_page(), session.selected) then
-      select_filter(filter.of_worktree(shown[1]))
+      select_filter(scope.whole_change_of(shown[1]))
+      read_files(true)
+      return
+    end
+    if not shown and session.selected.branch then
+      select_session_work()
       read_files(true)
       return
     end
     session.cursor_unplaced = true
   end
 
-  --- Offers the other worktrees the commits window last listed, in
-  --- `vim.ui.select` (`aineo.changes.scope`); a pick is shown alone
-  --- (`show_alone()`), an answer that is no item offered is ignored.
-  local function offer_scopes()
-    if not session then
-      vim.notify(lines.READING, vim.log.levels.INFO)
+  --- Opens `vim.ui.select` on `items`, what `s` offers
+  --- (`aineo.changes.scope`); a pick is shown alone (`show_worktree_alone()`,
+  --- `show_branch_alone()`), an answer that is no item offered is ignored.
+  --- With no item, tells the user there is none.
+  ---
+  ---@param items aineo.changes.ScopeItem[]
+  local function pick_among(items)
+    if #items == 0 then
+      vim.notify(scope.NONE_TO_SHOW, vim.log.levels.INFO)
       return
     end
-    local why_none = scope.why_none_is_offered({
-      has_repository = session.repository ~= nil,
-      absence = session.absence,
-      directory = session.settings.directory,
-      others = session.commits_others,
-      others_read = session.commits_others ~= worktrees.NONE,
-    })
-    if why_none then
-      vim.notify(why_none, vim.log.levels.INFO)
-      return
-    end
-    local asked, failure = pcall(vim.ui.select, scope.items_of(session.commits_others), {
+    local asked, failure = pcall(vim.ui.select, items, {
       prompt = scope.PROMPT,
       format_item = function(item)
         return item.text
       end,
     }, function(item)
-      if type(item) == 'table' and type(item.top) == 'string' then
-        show_alone(item)
+      if type(item) ~= 'table' then
+        return
+      end
+      if type(item.top) == 'string' then
+        show_worktree_alone(item)
+      elseif type(item.branch) == 'string' then
+        show_branch_alone(item)
       end
     end)
     if not asked then
@@ -1779,12 +1908,59 @@ function M.new(label)
     end
   end
 
+  --- Whether `s` is reading what it offers: a second press waits for the
+  --- first.
+  local offering = false
+
+  --- Offers the other worktrees the commits window last listed and the local
+  --- branches no worktree has checked out (`pick_among()`), the branches read
+  --- when `s` is pressed (`aineo.changes.branch`), off the main loop: the
+  --- picker opens once they are. Branches that cannot be read leave the
+  --- worktrees alone, the failure told once. While the session has no
+  --- repository, or the other worktrees are unread or unlisted, tells why
+  --- instead (`aineo.changes.scope`).
+  local function offer_scopes()
+    if not session then
+      vim.notify(lines.READING, vim.log.levels.INFO)
+      return
+    end
+    local why_not = scope.why_not_ready({
+      has_repository = session.repository ~= nil,
+      absence = session.absence,
+      directory = session.settings.directory,
+      others = session.commits_others,
+      others_read = session.commits_others ~= worktrees.NONE,
+    })
+    if why_not then
+      vim.notify(why_not, vim.log.levels.INFO)
+      return
+    end
+    if offering then
+      return
+    end
+    offering = true
+    branch.read_candidates({
+      repository = session.repository,
+      working_branch = session.settings.working_branch,
+      git = session.settings.git,
+    }, function(failure, candidates)
+      offering = false
+      if released then
+        return
+      end
+      if failure then
+        vim.notify(scope.branches_unlisted(failure), vim.log.levels.WARN)
+      end
+      pick_among(scope.items_of(session.commits_others, candidates))
+    end)
+  end
+
   --- A scratch buffer of the pane named `name` (`aineo.changes.scratch`),
   --- written with `page()` whenever it is made or read, which tells the
   --- session the pane is shown whenever it enters a window (`pane_shown()`).
   --- Enter shows the diff of the entry under the cursor (`open_entry()`), and
-  --- `s` offers the worktrees to show alone (`offer_scopes()`), in Normal
-  --- mode, in this buffer alone.
+  --- `s` offers the worktrees and branches to show alone (`offer_scopes()`),
+  --- in Normal mode, in this buffer alone.
   ---
   ---@param name string
   ---@param page fun(): aineo.changes.Page
@@ -1808,7 +1984,7 @@ function M.new(label)
     vim.keymap.set('n', 's', offer_scopes, {
       buffer = buffer,
       nowait = true,
-      desc = 'aineo: show one worktree alone in the changes pane',
+      desc = 'aineo: show one worktree or branch alone in the changes pane',
     })
     return buffer
   end
@@ -1946,7 +2122,7 @@ function M.new(label)
   --- a window, the pane is shown: the first time, the watch starts, and each
   --- time both lists are read again, once for every showing in one turn of
   --- the main loop (`pane_shown()`). A commits buffer made anew selects
-  --- *Session work* again, or the whole change of the worktree shown alone,
+  --- *Session work* again, or the whole change of the worktree or branch shown alone,
   --- its cursor to be put there when it is shown (`select_view_default()`).
   ---
   ---@return { files: integer, commits: integer }

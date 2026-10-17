@@ -445,7 +445,7 @@ are always there, Uncommitted and Session work, then lists the session's
 commits, newest first, by abbreviated id and subject, or says "No commits
 on this session". Its cursor is on Session work when the pane first shows,
 and when the buffer is made anew; `\g` keeps your line, and switches the
-view while a worktree is shown alone (below). The line under
+view while a worktree or a branch is shown alone (below). The line under
 the cursor chooses what the files window lists, once the cursor has stayed
 on it for 150 milliseconds, however it moves - keys, a click, or the mouse
 wheel over the window while the cursor is in another one: Uncommitted,
@@ -506,21 +506,33 @@ over what it listed before.
 
                                                           *aineo-changes-s*
 `s`, in the commits window or the files window, offers the other worktrees
-to show alone, in |vim.ui.select()| under the prompt "Show alone in the
-changes pane": one list, each worktree marked and named as its heading
-names it, `[worktree] agent-1 (feature/x)`, or `(detached)`, in the order
-the commits window lists them. Neovim's own |vim.ui.select()| is a numbered
-list with no search; a picker plugin that replaces it (telescope, fzf-lua,
-snacks, dressing and the like) searches that text. `s` is a Normal-mode map
-of the two buffers of the pane alone; in every other buffer it is Vim's own.
-With no other worktree listed, `s` opens nothing and says "aineo: no other
-worktree or branch to show alone", or, when they could not be listed, the
-line the commits window shows; while there is no repository, or aineo is
-reading it, or has not read the other worktrees yet, `s` opens nothing and
-says what the windows say. A picker that raises is told once, as an error;
-an answer that is none of the items offered is ignored. Dismissing the picker
-changes nothing. `s` does not wait for 'timeoutlen', whatever global maps
-begin with `s`.
+and the local branches to show alone, in |vim.ui.select()| under the prompt
+"Show alone in the changes pane": one list, each item marked by its kind.
+The worktrees come first, each named as its heading names it,
+`[worktree] agent-1 (feature/x)`, or `(detached)`, in the order the commits
+window lists them; then the branches, `[branch] feature/x`, the name quoted
+as a path is, the one with the newest commit first. A branch is offered
+unless a worktree has it checked out, yours included — that is read when you
+press `s`, so a branch you have checked out since is left out — or it is the
+working branch (below), their short names compared: `origin/dev` leaves out
+the local branch `dev`, as do `refs/heads/dev`, `heads/dev`,
+`refs/remotes/origin/dev` and `remotes/origin/dev`. Neovim's own
+|vim.ui.select()| is a numbered list with no search; a picker plugin that
+replaces it (telescope, fzf-lua, snacks, dressing and the like) searches
+that text. `s` is a Normal-mode map of the two buffers of the pane alone;
+in every other buffer it is Vim's own.
+The branches are listed off the main loop and the picker opens once they
+are; pressing `s` again meanwhile opens no second picker. Branches that
+cannot be listed leave the worktrees alone, and aineo says so once, as a
+warning. With neither a worktree nor a branch to offer, `s` opens nothing
+and says "aineo: no other worktree or branch to show alone"; when the other
+worktrees could not be listed and none is known, it says the line the
+commits window shows, and reads no branch, as nothing then says which are
+checked out; while there is no repository, or aineo is reading it, or has not
+read the other worktrees yet, `s` opens nothing and says what the windows
+say. A picker that raises is told once, as an error; an answer that is none
+of the items offered is ignored. Dismissing the picker changes nothing. `s`
+does not wait for 'timeoutlen', whatever global maps begin with `s`.
 
 Picking a worktree shows it alone. The commits window then lists nothing
 but its heading, `Worktree <folder> (<branch>)`, whole in
@@ -536,23 +548,49 @@ cursor chooses among its commits as ever. `s` under it offers the same
 list, and a pick replaces the worktree shown. aineo reads what it reads
 without it; only what the commits window shows differs.
 
+Picking a branch shows it alone the same way. The commits window lists its
+heading, `Branch <name>`, whole in |hl-AineoChangesFilter|, and below it the
+branch's commits since its base, newest first, or "No commits on this
+branch", with the line saying its last read failed when it did: nothing else.
+The branch's base is its merge base with the commit the working branch names
+now (|aineo-changes|, Landed), so that its commits are what a pull request
+of it into the working branch would hold, not what the working branch holds
+that your session has not seen; where that gives none — no working branch, a
+name that names no commit, no shared history — it is the branch's merge base
+with the same comparison commit the other worktrees' bases fall back on
+(above). A branch with no base lists every commit it reaches. The tip and the
+base are read again at every read of the commits window and never kept: a
+commit added to the branch shows at the next one. The heading is chosen, and
+the files window lists the branch's whole change, `Files in: Branch <name>`:
+the committed files that differ from its base to its tip, with no `*` and
+none of what is uncommitted in your worktree; the cursor chooses among its
+commits, `Files in: <id> <subject> (branch <name>)`, read in your repository.
+A commit the branch no longer lists, after a reset or a rebase, gives way to
+the branch's whole change. A branch checked out in a new worktree stays the
+scope; one deleted or renamed so that its name names no commit is gone, as
+a worktree no longer listed is (below): the default view shows, Session
+work is chosen, and aineo says once "aineo: Branch <name> is gone; the
+changes pane shows the default view" - also when the default view hides it.
+
 `\g` (|:Aineo-pane|), pressed with the cursor in one of the pane's two
-windows, switches between the default view and the worktree shown alone,
-read again each time. The worktree is kept while the default view shows.
+windows, switches between the default view and the worktree or branch shown
+alone, read again each time. It is kept while the default view shows.
 Back in the default view, the choice stays, the worktree's heading or one of
-its commits, the cursor on its line. Back in the scope view, the choice
-stays when it lists it, else the worktree's whole change is chosen. Pressed
-anywhere else — Claude's window, Input, the Report, a diff in the file
+its commits, the cursor on its line; the default view lists no branch, so a
+choice of a branch's gives way there to Session work. Back in the scope
+view, the choice stays when it lists it, else the whole change is chosen.
+Pressed anywhere else — Claude's window, Input, the Report, a diff in the file
 column — `\g` does not switch: it moves the cursor into the commits window,
 the pane in the view it was last shown, read again; when the pane is not on
-screen it is shown in that view. The worktree is shown alone until `s`
-picks another, until it is no longer listed, until aineo follows another
-Claude Code session than one it followed before (the first session followed
-keeps it), or until the tab closes or the editor quits; each tab keeps its
-own, and none is kept on disk. When a read no longer lists the worktree, the
-default view shows, Session work is chosen, and aineo says once "aineo:
-Worktree <folder> (<branch>) is gone; the changes pane shows the default
-view". Following another session says nothing.
+screen it is shown in that view. The worktree or branch is shown alone until
+`s` picks another, until it is no longer listed (a branch: until it names no
+commit), until aineo follows another Claude Code session than one it
+followed before (the first session followed keeps it), or until the tab
+closes or the editor quits; each tab keeps its own, and none is kept on
+disk. When a read no longer lists the worktree, the default view shows,
+Session work is chosen, and aineo says once "aineo: Worktree <folder>
+(<branch>) is gone; the changes pane shows the default view". Following
+another session says nothing.
 
 Enter on a file's line shows its unified diff in the middle column (the
 file column, below), within what the files window lists: from the base
@@ -583,7 +621,16 @@ its heading the whole diff of the worktree from its base to its working
 tree, its untracked files included, in `aineo://worktree{top}//since-base`.
 All are read in that worktree, and {top} is its top level, so two
 worktrees' diffs of one path are two buffers; no key opens another
-worktree's file. Once the diff is shown, the
+worktree's file. For a branch shown alone, Enter on its heading shows the
+whole diff from its base to its tip, committed changes only, in
+`aineo://branch/{name}//since-base` (before the branch's first read, aineo
+says it is reading the repository and shows nothing); on a file under its
+whole change, that file's change between them, a renamed file with both
+paths, in `aineo://branch/{name}//diff/{path}`; on one of its commits, and
+on a file under one, the diff shows as for your own commits, in
+`aineo://commit/{id}` and `aineo://commit/{id}/{path}`. {name} is the
+branch's name quoted as a path is; git refuses `//` in one, so the
+separator is safe. Once the diff is shown, the
 cursor moves to its window, in the mode you were in: Normal mode, as in the
 pane; no Insert mode starts. When you have left the pane's window before the
 diff is shown, the diff is shown and the cursor stays where you are, in
@@ -597,7 +644,9 @@ does when showing the diff fails.
 of another worktree's, shows the file as that commit has it, in the middle
 column as Enter shows a diff, in `aineo://show/{id}/{path}`, {id} the
 commit's full id and {path} quoted as the files window quotes it. Under the
-Landed heading it shows the file as the working branch's commit has it. The
+Landed heading it shows the file as the working branch's commit has it, and
+under the whole change of a branch shown alone as the branch's tip has it,
+in `aineo://show/{tip}/{path}`. The
 buffer is read-only, not modifiable, wiped once hidden, with the 'filetype'
 the path and the content give, so its syntax shows, and holds the bytes git
 printed, cut at 1 MiB; a virtual line under the last line shown says how much
@@ -640,7 +689,10 @@ renamed file with both its paths, in `aineo://head/commit/{id}/{path}`;
 under a commit of another worktree, to that worktree's `HEAD`, in
 `aineo://worktree{top}//head/commit/{id}/{path}`; under the Landed heading,
 from `HEAD` straight to the working branch's commit, in
-`aineo://head/landed/{path}`; under Uncommitted and Session work, from
+`aineo://head/landed/{path}`; under the whole change of a branch shown alone,
+from `HEAD` straight to the branch's tip, in
+`aineo://branch/{name}//head/{path}`, and under one of its commits as under
+one of yours; under Uncommitted and Session work, from
 `HEAD` to the working tree, in `aineo://uncommitted/{path}`, which is
 Enter's diff under Uncommitted; under another worktree's whole change, from
 that worktree's `HEAD` to its working tree, in
@@ -651,7 +703,8 @@ middle column with no room as Enter does; `F` works in the diff they show.
 When `h` finds no difference from `HEAD` - every file of the newest commit,
 every file under Session work once the work is committed - it shows nothing
 and the cursor stays; aineo says "<path> is as HEAD has it", once. When
-`HEAD` names no commit, `h` says so under every filter, Landed included.
+`HEAD` names no commit, `h` says so under every filter, Landed and a
+branch's whole change included.
 On a line that lists no file they do nothing and say nothing. Each is a
 Normal-mode map of the files window's buffer alone, made again whenever that
 buffer is made anew, so it shadows Vim's `h` and `l` there, where the arrow
@@ -693,7 +746,9 @@ reference written by anyone — a fetch, a tag, a branch made or deleted
 at every showing, when the session takes a new base, and whenever the watch
 sees a reference written, a fetch run from any worktree of the repository
 included; the files under its heading are read again when the working
-branch names another commit. A worktree added shows at the next read, and
+branch names another commit. The branch shown alone is read after the
+worktrees, at every read of the commits window, its tip and base anew. A
+worktree added shows at the next read, and
 one removed goes, its diffs left as they are. One read of each window runs
 at a time, in the commits window your own worktree's with what landed, and
 the others', one after another, one git at a time; your own lines asked for
@@ -736,8 +791,8 @@ commit's abbreviated id shows in |hl-AineoChangesCommitId|, and its subject in
 colours of its window, dimmed with it where a colour scheme dims a window
 not current (|hl-NormalNC|), until you colour the group. The commits
 window's two fixed lines, Uncommitted and Session work, its Landed heading,
-the heading of a worktree shown alone, and the files window's first line
-show whole in |hl-AineoChangesFilter|. A
+the heading of a worktree or branch shown alone, and the files window's first
+line show whole in |hl-AineoChangesFilter|. A
 line that lists nothing, and another worktree's heading, show whole in
 |hl-AineoChangesNote|: aineo reading the repository, no file changed, no
 commit, nothing landed, subdirectories not watched, the base no longer
@@ -1260,12 +1315,13 @@ only in place of a resume Claude Code has no conversation for
 			none. When the pane shows already, the layout stays
 			as it is (the changes pane is read again, and
 			`changes` from one of its two windows switches it
-			between the default view and the worktree shown
-			alone, |aineo-changes-s|), unless one of its windows
-			shows the other pane's buffer there: it then shows
-			{pane}'s buffer there. The cursor moves all the
-			same. Without a pane, or with anything else, it
-			tells you, with one error, which ones it takes.
+			between the default view and the worktree or branch
+			shown alone, |aineo-changes-s|), unless one of
+			its windows shows the other pane's buffer there:
+			it then shows {pane}'s buffer there. The cursor
+			moves all the same. Without a pane, or with
+			anything else, it tells you, with one error,
+			which ones it takes.
 
                                                                 *:Aineo-claim*
 :Aineo claim [{id}]	Claims a Claude session for this Neovim: each report
@@ -2520,6 +2576,10 @@ The changes pane ~
   find the remote's default branch unless the setting names a branch); the
   files window under a worktree's whole change reads it once. Your upstream
   is read only when a worktree gets no base from the working branch.
+- A branch a worktree is rebasing or bisecting: git lists that worktree as
+  detached, so |aineo-changes-s| may offer its branch as `[branch]`, though
+  git refuses to delete it. Shown alone, it is the branch as it stands, at
+  its tip from before the rebase until the rebase ends.
 - When the editor quits, aineo stops its watch, but a git it is running
   then runs to its end, outliving the editor.
 - A buffer named for a diff that aineo did not make, such as one a restored

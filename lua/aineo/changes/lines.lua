@@ -102,7 +102,7 @@ end
 
 --- One entry a window lists: a file changed, or a commit.
 ---@class aineo.changes.Entry
----@field key string what tells the entry apart from one read to the next: a change's path, or the key of the filter the entry lists (`aineo.changes.filter`'s `key()`): a commit's id for the editor's own commit, `<top>\0<id>` for a worktree's commit, `<top>\0\0worktree` for its heading, `\0landed\0<id>` for a commit that landed in the working branch, `\0landed` for its heading
+---@field key string what tells the entry apart from one read to the next: a change's path, or the key of the filter the entry lists (`aineo.changes.filter`'s `key()`): a commit's id for the editor's own commit, `<top>\0<id>` for a worktree's commit, `<top>\0\0worktree` for its heading, `\0landed\0<id>` for a commit that landed in the working branch, `\0landed` for its heading, `\0branch\0<name>` for a local branch's heading and `\0branch\0<name>\0<id>` for one of its commits
 ---@field change? aineo.git.Change
 ---@field commit? aineo.git.Commit
 ---@field filter? aineo.changes.Filter the filter a commits window line selects, or the filter a file is listed under
@@ -256,6 +256,10 @@ M.NO_WORKTREE_FILES = 'No files changed in this worktree'
 --- branch changed a file.
 M.NO_LANDED_FILES = 'No files changed in what landed'
 
+--- What the files window says when no file of a local branch differs from
+--- its base.
+M.NO_BRANCH_FILES = 'No files changed on this branch'
+
 --- What the files window says when no file of the filter it lists differs,
 --- by the kind of the filter.
 ---@type table<string, string>
@@ -265,6 +269,7 @@ local NO_FILES_OF = {
   commit = M.NO_COMMIT_FILES,
   worktree = M.NO_WORKTREE_FILES,
   landed = M.NO_LANDED_FILES,
+  branch = M.NO_BRANCH_FILES,
 }
 
 --- The kinds of filter whose files carry the mark of a file the user
@@ -458,8 +463,10 @@ end
 --- name, quoted as a path is (`M.quoted_path()`); for a commit its line as
 --- the commits window shows it (`M.commit_line()`), followed by `(worktree
 --- <folder>)` when the commit is another worktree's, the folder quoted as
---- its heading quotes it; for another worktree's whole change, its heading
---- (`M.worktree_heading()`).
+--- its heading quotes it, or `(branch <name>)` when it is a local branch's,
+--- the name quoted as a path is; for another worktree's whole change, its
+--- heading (`M.worktree_heading()`); for a local branch's, `Branch ` and its
+--- name, quoted as a path is.
 ---
 ---@param selected aineo.changes.Filter
 ---@return string
@@ -470,6 +477,9 @@ function M.filter_name(selected)
   if selected.kind == 'worktree' then
     return M.worktree_heading(selected.worktree)
   end
+  if selected.kind == 'branch' then
+    return 'Branch ' .. M.quoted_path(selected.branch)
+  end
   if selected.kind == 'commit' then
     local name = M.commit_line(selected.commit)
     if selected.worktree then
@@ -477,6 +487,9 @@ function M.filter_name(selected)
         name,
         M.quoted_path(vim.fs.basename(selected.worktree.top))
       )
+    end
+    if selected.branch then
+      return ('%s (branch %s)'):format(name, M.quoted_path(selected.branch))
     end
     return name
   end
@@ -578,6 +591,12 @@ function M.commit_line(commit)
   return ('%s %s'):format(commit.id:sub(1, M.ABBREVIATED_ID_LENGTH), commit.subject)
 end
 
+--- One thing the commits window shows alone: a worktree other than the
+--- editor's, or a local branch; one field is given.
+---@class aineo.changes.ScopeMember
+---@field worktree? aineo.changes.WorktreeSection
+---@field branch? aineo.changes.BranchSection
+
 --- What the commits window knows.
 ---@class aineo.changes.CommitsView
 ---@field since? aineo.git.CommitsSince the session's commits, as last read
@@ -586,7 +605,7 @@ end
 ---@field lists_filters? boolean whether the window starts with the lines *Uncommitted* and *Session work*: once the session's repository is found
 ---@field landed? aineo.changes.Landed what the window knows of the working branch, none when there is no working branch or it was not read
 ---@field worktrees? aineo.changes.OtherWorktrees what the window knows of the other worktrees, none when not given
----@field scope? aineo.changes.WorktreeSection[] the worktrees the window shows alone, each under its heading, in the order given; none for the default view
+---@field scope? aineo.changes.ScopeMember[] the worktrees and branches the window shows alone, each under its heading, in the order given; none for the default view
 
 --- The rows of the editor's own worktree in the commits window below the
 --- filters, for `view`: the line saying its last read failed, when it did,
@@ -665,17 +684,49 @@ local function landed_rows(landed)
   )
 end
 
---- The rows of the worktrees `scope` names, shown alone: each one's
---- heading, whole in the group of filters (`heading_row()`), then its rows
---- (`section_rows()`).
+--- What the commits window says under a local branch's heading when it has
+--- no commit since its base.
+M.NO_BRANCH_COMMITS = 'No commits on this branch'
+
+--- The rows under the heading of `branch`, a local branch shown alone: the
+--- line saying its last read failed, when it did; then a line per commit it
+--- last read (`commit_rows()`), or `M.NO_BRANCH_COMMITS`, a note, when it
+--- has none. Before any list of it was read, `M.READING`, or the line saying
+--- its read failed alone.
 ---
----@param scope aineo.changes.WorktreeSection[]
+---@param branch aineo.changes.BranchSection
+---@return aineo.changes.Row[]
+local function branch_rows(branch)
+  local notes = failure_notes(branch.failure)
+  if not branch.commits then
+    return branch.failure and notes or { note(M.READING) }
+  end
+  return rows_of(
+    notes,
+    commit_rows(branch.commits, function(commit)
+      return filter.of_branch_commit(branch.name, commit)
+    end),
+    note(M.NO_BRANCH_COMMITS)
+  )
+end
+
+--- The rows of the members `scope` names, shown alone: each one's heading,
+--- whole in the group of filters — a worktree's (`heading_row()`) or a
+--- branch's, listing the filter of its whole change (`filter_row()`) — then
+--- its rows (`section_rows()`, `branch_rows()`).
+---
+---@param scope aineo.changes.ScopeMember[]
 ---@return aineo.changes.Row[]
 local function scope_rows(scope)
   local rows = {}
-  for _, section in ipairs(scope) do
-    table.insert(rows, heading_row(section, colours.FILTER_GROUP))
-    vim.list_extend(rows, section_rows(section))
+  for _, member in ipairs(scope) do
+    if member.worktree then
+      table.insert(rows, heading_row(member.worktree, colours.FILTER_GROUP))
+      vim.list_extend(rows, section_rows(member.worktree))
+    else
+      table.insert(rows, filter_row(filter.of_branch(member.branch.name)))
+      vim.list_extend(rows, branch_rows(member.branch))
+    end
   end
   return rows
 end

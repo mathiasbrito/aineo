@@ -16,9 +16,10 @@ local PROMPT = 'Show alone in the changes pane'
 --- below it. Its pane's buffers are in `_G.panes[key]`. `vim.ui.select` is
 --- replaced by a picker that keeps every request it is given in
 --- `_G.pickers`, to be answered by `_G.choose()`, and `vim.notify` by one
---- that keeps every message in `_G.messages`.
+--- that keeps every message in `_G.messages`. Every buffer the home is asked
+--- to show in the middle column is kept in `_G.shown_diffs`.
 local COPIES = [[
-  _G.homes, _G.panes, _G.pickers, _G.messages = {}, {}, {}, {}
+  _G.homes, _G.panes, _G.pickers, _G.messages, _G.shown_diffs = {}, {}, {}, {}, {}
   vim.ui.select = function(items, options, on_choice)
     table.insert(_G.pickers, { items = items, options = options, on_choice = on_choice })
   end
@@ -37,6 +38,7 @@ local COPIES = [[
       directory = directory,
       working_branch = working_branch,
       show_diff = function(diff)
+        table.insert(_G.shown_diffs, diff)
         local showing = vim.fn.bufwinid(diff)
         if showing ~= -1 then
           return showing
@@ -159,14 +161,44 @@ local function commit_line(commit, subject)
   return commit:sub(1, 7) .. ' ' .. subject
 end
 
+--- How many pickers the child was asked for and messages it was told.
+---
+---@return integer
+local function answers_to_s()
+  return child.lua_get('#_G.pickers + #_G.messages')
+end
+
+--- Waits until `s` was answered, as `answers_to_s()` counts more than
+--- `before`: a picker opened or the user told why none is, at most
+--- `git_repo.PATIENCE_MS`.
+---
+---@param before integer
+local function wait_for_the_answer_to_s(before)
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return answers_to_s() > before
+  end, 10)
+end
+
 --- Presses `s` in the window `which` of the pane of the changes home `key`
 --- names.
 ---
 ---@param key string
 ---@param which 'files'|'commits'
-local function press_s(key, which)
+local function press_s_without_waiting(key, which)
   enter_window_of(key, which)
   child.lua("pcall(vim.api.nvim_feedkeys, 's', 'mx', false)")
+end
+
+--- Presses `s` in the window `which` of the pane of the changes home `key`
+--- names, and waits until it was answered: the lists it offers are read off
+--- the main loop.
+---
+---@param key string
+---@param which 'files'|'commits'
+local function press_s(key, which)
+  local before = answers_to_s()
+  press_s_without_waiting(key, which)
+  wait_for_the_answer_to_s(before)
 end
 
 --- Answers the last picker the child was asked for with its item at
@@ -386,6 +418,7 @@ T['s']['is mapped again in a pane buffer made anew'] = function()
 
   child.lua("pcall(vim.api.nvim_feedkeys, 's', 'mx', false)")
 
+  wait_for_the_answer_to_s(0)
   eq(#offered(), 1)
 end
 
@@ -539,6 +572,7 @@ T['s']['opens its picker at once while a global map starts with s'] = function()
     return not child.is_blocked()
   end, 20)
   eq(child.is_blocked(), false)
+  wait_for_the_answer_to_s(0)
   eq(#offered(), 1)
 end
 
@@ -1253,6 +1287,952 @@ T['a scope']['leaves the reads as they are: a commit of the editor’s own is li
     commit_line(work.agent_one, 'Agent one'),
     'Worktree other (other)',
     commit_line(work.other_one, 'Other one'),
+  })
+end
+
+--- Commits the files staged in `top` as `subject`, as made at `epoch`
+--- seconds after 1970, and returns the commit's full id.
+---
+---@param top string
+---@param subject string
+---@param epoch integer
+---@return string commit
+local function commit_dated(top, subject, epoch)
+  local committed = vim
+    .system({ 'git', 'commit', '--quiet', '--message', subject }, {
+      cwd = top,
+      env = vim.tbl_extend('force', git_repo.ENVIRONMENT, {
+        GIT_COMMITTER_DATE = ('%d +0000'):format(epoch),
+      }),
+      text = true,
+    })
+    :wait()
+  assert(committed.code == 0, committed.stderr)
+  return git_repo.git(top, { 'rev-parse', 'HEAD' })
+end
+
+--- What a commit of `make_branch()` is: a file written and committed, or a
+--- file renamed.
+---@class ScopeBranchCommit
+---@field subject string
+---@field path? string the file written with `text`
+---@field text? string
+---@field rename? string[] the file renamed: from its path, to its path
+
+--- Epoch seconds after every commit the fixtures make as they run, from
+--- which the commits of `make_branch()` are dated, so that the order of the
+--- branches by their newest commit is the one the case says.
+local AFTER_THE_FIXTURES = os.time() + 3600
+
+--- Puts `commits` on the branch `name` in the repository at `top`, dated one
+--- second apart from `epoch` on, making the branch from `start`, a commit or
+--- a branch, when `start` is given, and taking it as it is when it is not;
+--- no worktree has it checked out afterwards. Returns the commits' ids, the
+--- first made first.
+---
+---@param top string
+---@param name string
+---@param start string|nil
+---@param commits ScopeBranchCommit[]
+---@param epoch? integer
+---@return string[] ids
+local function make_branch(top, name, start, commits, epoch)
+  local worktree = vim.fs.joinpath(vim.fs.dirname(top), 'making-' .. (name:gsub('%W', '-')))
+  if start then
+    git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', name, worktree, start })
+  else
+    git_repo.git(top, { 'worktree', 'add', '--quiet', worktree, name })
+  end
+  local ids = {}
+  for index, commit in ipairs(commits) do
+    if commit.rename then
+      git_repo.git(worktree, { 'mv', commit.rename[1], commit.rename[2] })
+    else
+      git_repo.write(worktree, commit.path, { commit.text })
+      git_repo.git(worktree, { 'add', '--', commit.path })
+    end
+    ids[index] = commit_dated(worktree, commit.subject, (epoch or AFTER_THE_FIXTURES) + index)
+  end
+  git_repo.git(top, { 'worktree', 'remove', '--force', worktree })
+  return ids
+end
+
+T['branches in s'] = MiniTest.new_set()
+
+T['branches in s']['are offered after the worktrees, each marked, the one with the newest commit first'] = function()
+  local work = create_work('changesscope-branches')
+  make_branch(
+    work.top,
+    'feature/x',
+    'origin/dev',
+    { { path = 'x.txt', text = 'x', subject = 'X' } }
+  )
+  git_repo.git(work.top, { 'branch', 'idle', 'main' })
+  start_copy('module', work.top, 'origin/dev')
+  expect_pane_lines('module', 'commits', default_view_of(work))
+
+  press_s('module', 'commits')
+
+  eq(offered(), {
+    {
+      prompt = PROMPT,
+      texts = {
+        '[worktree] agent (agent)',
+        '[worktree] other (other)',
+        '[branch] feature/x',
+        '[branch] idle',
+      },
+    },
+  })
+end
+
+T['branches in s']['leave out each branch a worktree has checked out as it is now, the editor’s own included'] = function()
+  local work = create_work('changesscope-branches-checked-out')
+  start_copy('module', work.top, 'origin/dev')
+  expect_pane_lines('module', 'commits', default_view_of(work))
+  git_repo.git(work.top, { 'checkout', '--quiet', '-b', 'late' })
+
+  press_s('module', 'commits')
+
+  eq(offered()[1].texts, {
+    '[worktree] agent (agent)',
+    '[worktree] other (other)',
+    '[branch] main',
+  })
+end
+
+T['branches in s']['leave out the working branch, its short name compared with the remote left off'] = function()
+  local work = create_work('changesscope-branches-working')
+  git_repo.git(work.top, { 'branch', 'dev', 'origin/dev' })
+  git_repo.git(work.top, { 'branch', 'feature/dev', 'origin/dev' })
+  start_copy('module', work.top, 'origin/dev')
+  expect_pane_lines('module', 'commits', default_view_of(work))
+
+  press_s('module', 'commits')
+
+  eq(offered()[1].texts, {
+    '[worktree] agent (agent)',
+    '[worktree] other (other)',
+    '[branch] feature/dev',
+  })
+end
+
+T['branches in s']['leave out a working branch that names a local branch alone, not the branch its last component names'] = function()
+  local work = create_work('changesscope-branches-working-local')
+  git_repo.git(work.top, { 'branch', 'dev', 'origin/dev' })
+  git_repo.git(work.top, { 'branch', 'feature/dev', 'origin/dev' })
+  start_copy('module', work.top, 'feature/dev')
+  expect_pane_lines('module', 'commits', {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Landed in feature/dev',
+    commit_line(work.landed, 'Landed'),
+    'Worktree agent (agent)',
+    commit_line(work.agent_two, 'Agent two'),
+    commit_line(work.agent_one, 'Agent one'),
+    'Worktree other (other)',
+    commit_line(work.other_one, 'Other one'),
+  })
+
+  press_s('module', 'commits')
+
+  eq(offered()[1].texts, {
+    '[worktree] agent (agent)',
+    '[worktree] other (other)',
+    '[branch] dev',
+  })
+end
+
+T['branches in s']['leave out the working branch whatever valid spelling the setting uses'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'dev' },
+      { 'heads/dev' },
+      { 'origin/dev' },
+      { 'refs/heads/dev' },
+      { 'remotes/origin/dev' },
+      { 'refs/remotes/origin/dev' },
+    },
+  })
+
+T['branches in s']['leave out the working branch whatever valid spelling the setting uses']['spelling'] = function(
+  spelling
+)
+  local work = create_work('changesscope-branches-spelled')
+  git_repo.git(work.top, { 'branch', 'dev', 'origin/dev' })
+  git_repo.git(work.top, { 'branch', 'other-branch', 'main' })
+  start_copy('module', work.top, spelling)
+  local default_view = default_view_of(work)
+  default_view[4] = 'Landed in ' .. spelling
+  expect_pane_lines('module', 'commits', default_view)
+
+  press_s('module', 'commits')
+
+  eq(offered()[1].texts, {
+    '[worktree] agent (agent)',
+    '[worktree] other (other)',
+    '[branch] other-branch',
+  })
+end
+
+T['branches in s']['a second press while the branches are read opens no second picker'] = function()
+  local work = create_work('changesscope-branches-twice')
+  git_repo.git(work.top, { 'branch', 'feature/x' })
+  start_copy('module', work.top, 'origin/dev')
+  expect_pane_lines('module', 'commits', default_view_of(work))
+  child.lua([=[
+    local git = require('aineo.git')
+    local list_branches = git.list_branches
+    _G.branch_reads = {}
+    git.list_branches = function(found, done, options)
+      table.insert(_G.branch_reads, function()
+        list_branches(found, done, options)
+      end)
+    end
+  ]=])
+  enter_window_of('module', 'commits')
+
+  child.lua("pcall(vim.api.nvim_feedkeys, 'ss', 'mx', false)")
+  local started = child.lua_get('#_G.branch_reads')
+  child.lua('for _, answer in ipairs(_G.branch_reads) do answer() end')
+  wait_for_the_answer_to_s(0)
+
+  eq({ started, #offered() }, { 1, 1 })
+end
+
+T['branches in s']['are not offered once the home was let go while they were read'] = function()
+  local work = create_work('changesscope-branches-let-go')
+  git_repo.git(work.top, { 'branch', 'feature/x' })
+  start_copy('second', work.top, 'origin/dev')
+  expect_pane_lines('second', 'commits', default_view_of(work))
+  child.lua(COUNT_GIT_CALLS)
+  press_s_without_waiting('second', 'commits')
+
+  child.lua('_G.homes.second.let_go()')
+  wait_for_the_reads()
+
+  eq({ offered(), messages_told() }, { {}, {} })
+end
+
+--- Starts the module's home on the repository at `top`, which has no other
+--- worktree, and waits until the commits window has read it.
+---
+---@param top string
+local function start_without_other_worktrees(top)
+  child.lua(COUNT_GIT_CALLS)
+  start_copy('module', top)
+  wait_for_the_reads()
+  expect_pane_lines(
+    'module',
+    'commits',
+    { 'Uncommitted', 'Session work', 'No commits on this session' }
+  )
+end
+
+T['branches in s']['are the only items where no other worktree is listed'] = function()
+  local top = git_repo.create('changesscope-branches-alone', { ['notes.txt'] = { 'one' } })
+  git_repo.git(top, { 'branch', 'feature/x' })
+  start_without_other_worktrees(top)
+
+  press_s('module', 'commits')
+
+  eq(offered(), { { prompt = PROMPT, texts = { '[branch] feature/x' } } })
+end
+
+T['branches in s']['are quoted as a path is quoted'] = function()
+  local top = git_repo.create('changesscope-branches-quoted', { ['notes.txt'] = { 'one' } })
+  git_repo.git(top, { 'branch', 'say"hi"' })
+  start_without_other_worktrees(top)
+
+  press_s('module', 'commits')
+
+  eq(offered()[1].texts, { '[branch] "say\\"hi\\""' })
+end
+
+--- The commits window's lines when the branch `feature/x` of `work_with_branch()`
+--- is shown alone.
+---
+---@param work table
+---@return string[]
+local function branch_view_of(work)
+  return {
+    'Branch feature/x',
+    commit_line(work.x_two, 'X two'),
+    commit_line(work.x_one, 'X one'),
+  }
+end
+
+--- Makes the repository `name` the work `create_work()` makes, with the
+--- branch `feature/x` forked from the commit of the working branch,
+--- `origin/dev`, that holds `landed.txt`, and two commits on it — `X one`
+--- adds `x.txt`, `X two` changes `notes.txt` — and the branch `idle`, which
+--- holds what `main` does; starts the module's home on it, with
+--- `working_branch` as the working branch, and waits until its commits
+--- window lists the default view. Returns the work, with the ids of the two
+--- commits as `x_one` and `x_two`.
+---
+---@param name string
+---@param working_branch? string `origin/dev` when not given, none when `false`
+---@return table work
+local function work_with_branch(name, working_branch)
+  local work = create_work(name)
+  local made = make_branch(work.top, 'feature/x', 'origin/dev', {
+    { path = 'x.txt', text = 'x', subject = 'X one' },
+    { path = 'notes.txt', text = 'x notes', subject = 'X two' },
+  })
+  work.x_one, work.x_two = made[1], made[2]
+  git_repo.git(work.top, { 'branch', 'idle', 'main' })
+  start_copy('module', work.top, working_branch == nil and 'origin/dev' or working_branch or nil)
+  local default_view = default_view_of(work)
+  if working_branch == false then
+    default_view = vim.tbl_filter(function(line)
+      return line ~= 'Landed in origin/dev' and line ~= commit_line(work.landed, 'Landed')
+    end, default_view)
+  end
+  expect_pane_lines('module', 'commits', default_view)
+  return work
+end
+
+--- Picks the item of the list `s` offers that reads `text`, in the module's
+--- home.
+---
+---@param text string
+local function pick(text)
+  press_s('module', 'commits')
+  local position = vim.fn.index(offered()[#offered()].texts, text) + 1
+  assert(position > 0, text .. ' is not offered')
+  child.lua('_G.choose(...)', { position })
+end
+
+T['a branch'] = MiniTest.new_set()
+
+T['a branch']['shown alone lists its name, whole in the colour of filters, then its commits since its merge base with the working branch, newest first'] = function()
+  local work = work_with_branch('changesscope-branch-pick')
+
+  pick('[branch] feature/x')
+
+  expect_pane_lines('module', 'commits', branch_view_of(work))
+  eq(colours_on('module', 'commits', 1), { { 0, #'Branch feature/x', 'AineoChangesFilter' } })
+end
+
+--- The files window's lines when the whole change of the branch
+--- `feature/x` of `work_with_branch()` is chosen.
+local BRANCH_FILES = { 'Files in: Branch feature/x', '  M notes.txt', '  A x.txt' }
+
+T['a branch']['shown alone chooses its whole change, which the files window lists, the cursor on the first line'] = function()
+  work_with_branch('changesscope-branch-files')
+
+  pick('[branch] feature/x')
+
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+  eq(
+    child.lua_get('vim.api.nvim_win_get_cursor(vim.fn.bufwinid(_G.panes.module.commits))'),
+    { 1, 0 }
+  )
+end
+
+T['a branch']['lists committed files only, unmarked: what the editor’s worktree changed and what the user saved is not among them'] = function()
+  local work = work_with_branch('changesscope-branch-committed')
+  git_repo.write(work.top, 'scratch.txt', { 'untracked' })
+  git_repo.write(work.top, 'notes.txt', { 'edited, not committed' })
+  child.lua('vim.cmd.edit(...)', { vim.fs.joinpath(work.top, 'notes.txt') })
+  child.lua("vim.cmd('write')")
+
+  pick('[branch] feature/x')
+
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+end
+
+T['a branch']['says no file changed on a branch whose merge base is its tip'] = function()
+  work_with_branch('changesscope-branch-no-files')
+
+  pick('[branch] idle')
+
+  expect_pane_lines(
+    'module',
+    'files',
+    { 'Files in: Branch idle', 'No files changed on this branch' }
+  )
+end
+
+T['a branch']['shows the cursor on a commit of it as the files of that commit, naming the branch'] = function()
+  local work = work_with_branch('changesscope-branch-commit')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+
+  enter_window_of('module', 'commits')
+  child.type_keys('3G')
+
+  expect_pane_lines('module', 'files', {
+    'Files in: ' .. commit_line(work.x_one, 'X one') .. ' (branch feature/x)',
+    '  A x.txt',
+  })
+end
+
+T['a branch']['keeps the commit selected when the lists are read again'] = function()
+  local work = work_with_branch('changesscope-branch-commit-kept')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+  enter_window_of('module', 'commits')
+  child.type_keys('3G')
+  expect_pane_lines('module', 'files', {
+    'Files in: ' .. commit_line(work.x_one, 'X one') .. ' (branch feature/x)',
+    '  A x.txt',
+  })
+  commit_only(work.top, 'own.txt', 'own', 'Own')
+  child.lua(COUNT_GIT_CALLS)
+
+  refresh('module')
+  wait_for_the_reads()
+
+  expect_pane_lines('module', 'files', {
+    'Files in: ' .. commit_line(work.x_one, 'X one') .. ' (branch feature/x)',
+    '  A x.txt',
+  })
+  eq(commits_cursor('module'), { 3, 0 })
+end
+
+T['a branch']['shown alone says it has no commits when its merge base is its tip'] = function()
+  work_with_branch('changesscope-branch-none')
+
+  pick('[branch] idle')
+
+  expect_pane_lines('module', 'commits', { 'Branch idle', 'No commits on this branch' })
+end
+
+T['a branch']['lists every commit since its merge base with the comparison commit where the working branch gives none'] = function()
+  local work = work_with_branch('changesscope-branch-comparison', false)
+
+  pick('[branch] feature/x')
+
+  expect_pane_lines('module', 'commits', {
+    'Branch feature/x',
+    commit_line(work.x_two, 'X two'),
+    commit_line(work.x_one, 'X one'),
+    commit_line(work.landed, 'Landed'),
+  })
+end
+
+T['a branch']['is read again with its tip: a commit added to it shows at the next read, in both windows'] = function()
+  local work = work_with_branch('changesscope-branch-tip')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+
+  local added = make_branch(
+    work.top,
+    'feature/x',
+    nil,
+    { { path = 'y.txt', text = 'y', subject = 'X three' } },
+    AFTER_THE_FIXTURES + 100
+  )
+  refresh('module')
+
+  expect_pane_lines('module', 'commits', {
+    'Branch feature/x',
+    commit_line(added[1], 'X three'),
+    commit_line(work.x_two, 'X two'),
+    commit_line(work.x_one, 'X one'),
+  })
+  expect_pane_lines(
+    'module',
+    'files',
+    { 'Files in: Branch feature/x', '  M notes.txt', '  A x.txt', '  A y.txt' }
+  )
+end
+
+T['a branch']['reset below the commit selected has its whole change selected, the cursor on the first line'] = function()
+  local work = work_with_branch('changesscope-branch-reset')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+  enter_window_of('module', 'commits')
+  child.type_keys('2G')
+  expect_pane_lines('module', 'files', {
+    'Files in: ' .. commit_line(work.x_two, 'X two') .. ' (branch feature/x)',
+    '  M notes.txt',
+  })
+
+  git_repo.git(work.top, { 'branch', '--force', 'feature/x', work.x_one })
+  refresh('module')
+
+  expect_pane_lines('module', 'commits', { 'Branch feature/x', commit_line(work.x_one, 'X one') })
+  expect_pane_lines('module', 'files', { 'Files in: Branch feature/x', '  A x.txt' })
+  eq(commits_cursor('module'), { 1, 0 })
+end
+
+T['a branch']['checked out in a new worktree stays the scope'] = function()
+  local work = work_with_branch('changesscope-branch-checked-out')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+
+  local checked_out = vim.fs.joinpath(vim.fs.dirname(work.top), 'checked-out')
+  git_repo.git(work.top, { 'worktree', 'add', '--quiet', checked_out, 'feature/x' })
+  child.lua(COUNT_GIT_CALLS)
+  refresh('module')
+  wait_for_the_reads()
+
+  expect_pane_lines('module', 'commits', branch_view_of(work))
+  eq(messages_told(), {})
+end
+
+--- What the user is told when the branch `feature/x` is gone.
+local FEATURE_X_GONE = 'aineo: Branch feature/x is gone; the changes pane shows the default view'
+
+T['a branch']['that names no commit any more clears the scope: the default view, Session work chosen, the user told once'] = function()
+  local work = work_with_branch('changesscope-branch-gone')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+
+  git_repo.git(work.top, { 'branch', '-D', 'feature/x' })
+  refresh('module')
+
+  expect_pane_lines('module', 'commits', default_view_of(work))
+  expect_pane_lines(
+    'module',
+    'files',
+    { 'Files in: Session work', 'No files changed on this session' }
+  )
+  child.lua(COUNT_GIT_CALLS)
+  refresh('module')
+  wait_for_the_reads()
+  eq(messages_told(), { { message = FEATURE_X_GONE, level = vim.log.levels.INFO } })
+end
+
+T['a branch']['renamed is gone as deleted is'] = function()
+  local work = work_with_branch('changesscope-branch-renamed')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+
+  git_repo.git(work.top, { 'branch', '--move', 'feature/x', 'feature/y' })
+  refresh('module')
+
+  expect_pane_lines('module', 'commits', default_view_of(work))
+  eq(messages_told(), { { message = FEATURE_X_GONE, level = vim.log.levels.INFO } })
+end
+
+T['a branch']['that names no commit any more is gone while the default view hides it too'] = function()
+  local work = work_with_branch('changesscope-branch-gone-hidden')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+  toggle('module')
+  expect_pane_lines('module', 'commits', default_view_of(work))
+
+  git_repo.git(work.top, { 'branch', '-D', 'feature/x' })
+  child.lua(COUNT_GIT_CALLS)
+  refresh('module')
+  wait_for_the_reads()
+
+  eq(messages_told(), { { message = FEATURE_X_GONE, level = vim.log.levels.INFO } })
+  toggle('module')
+  expect_pane_lines('module', 'commits', default_view_of(work))
+end
+
+T['a branch']['is switched with \\g like a worktree: the default view chooses Session work, the scope view its whole change again'] = function()
+  local work = work_with_branch('changesscope-branch-toggle')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+
+  toggle('module')
+
+  expect_pane_lines('module', 'commits', default_view_of(work))
+  expect_pane_lines(
+    'module',
+    'files',
+    { 'Files in: Session work', 'No files changed on this session' }
+  )
+
+  toggle('module')
+
+  expect_pane_lines('module', 'commits', branch_view_of(work))
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+end
+
+--- Waits until the child was asked to show `count` buffers in the middle
+--- column.
+---
+---@param count integer
+local function wait_for_diffs(count)
+  git_repo.wait_until(('%d buffers shown'):format(count), function()
+    return child.lua_get('#_G.shown_diffs') >= count
+  end)
+end
+
+--- The name of the buffer the child was asked to show last.
+---
+---@return string
+local function last_diff_name()
+  return child.lua_get('vim.api.nvim_buf_get_name(_G.shown_diffs[#_G.shown_diffs])')
+end
+
+--- The lines of the buffer the child was asked to show last.
+---
+---@return string[]
+local function last_diff_lines()
+  return child.lua_get('vim.api.nvim_buf_get_lines(_G.shown_diffs[#_G.shown_diffs], 0, -1, true)')
+end
+
+--- The lines of `lines` that begin with `prefix`.
+---
+---@param lines string[]
+---@param prefix string
+---@return string[]
+local function lines_beginning(lines, prefix)
+  return vim.tbl_filter(function(line)
+    return vim.startswith(line, prefix)
+  end, lines)
+end
+
+--- Types `keys` in the window `which` of the pane of the changes home
+--- `module`, its cursor on line `line`.
+---
+---@param which 'files'|'commits'
+---@param line integer
+---@param keys string
+local function type_on(which, line, keys)
+  enter_window_of('module', which)
+  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { line })
+  child.type_keys(keys)
+end
+
+T['a branch']['Enter on its heading shows its whole change from its base to its tip, the editor’s own changes left out, in aineo://branch/{name}//since-base'] = function()
+  local work = work_with_branch('changesscope-branch-enter-heading')
+  git_repo.write(work.top, 'scratch.txt', { 'untracked' })
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+
+  type_on('commits', 1, '<CR>')
+
+  wait_for_diffs(1)
+  eq(last_diff_name(), 'aineo://branch/feature/x//since-base')
+  eq(lines_beginning(last_diff_lines(), 'diff --git'), {
+    'diff --git a/notes.txt b/notes.txt',
+    'diff --git a/x.txt b/x.txt',
+  })
+  eq(child.lua_get('vim.api.nvim_get_current_buf() == _G.shown_diffs[1]'), true)
+end
+
+T['a branch']['Enter on a file under its whole change shows that file’s change, in aineo://branch/{name}//diff/{path}'] = function()
+  work_with_branch('changesscope-branch-enter-file')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+
+  type_on('files', 2, '<CR>')
+
+  wait_for_diffs(1)
+  eq(last_diff_name(), 'aineo://branch/feature/x//diff/notes.txt')
+  eq(lines_beginning(last_diff_lines(), '+'), { '+++ b/notes.txt', '+x notes' })
+end
+
+T['a branch']['Enter on a renamed file shows the rename with both paths'] = function()
+  local work = work_with_branch('changesscope-branch-enter-rename')
+  make_branch(
+    work.top,
+    'mover',
+    'origin/dev',
+    { { rename = { 'notes.txt', 'moved.txt' }, subject = 'Move notes' } }
+  )
+  pick('[branch] mover')
+  expect_pane_lines('module', 'files', { 'Files in: Branch mover', '  R notes.txt → moved.txt' })
+
+  type_on('files', 2, '<CR>')
+
+  wait_for_diffs(1)
+  eq(last_diff_name(), 'aineo://branch/mover//diff/moved.txt')
+  eq(
+    lines_beginning(last_diff_lines(), 'rename'),
+    { 'rename from notes.txt', 'rename to moved.txt' }
+  )
+end
+
+T['a branch']['Enter on one of its commits, and on a file under it, shows them as your own commits are shown'] = function()
+  local work = work_with_branch('changesscope-branch-enter-commit')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+
+  type_on('commits', 3, '<CR>')
+  wait_for_diffs(1)
+  eq(last_diff_name(), 'aineo://commit/' .. work.x_one)
+  eq(lines_beginning(last_diff_lines(), 'diff --git'), { 'diff --git a/x.txt b/x.txt' })
+  expect_pane_lines('module', 'files', {
+    'Files in: ' .. commit_line(work.x_one, 'X one') .. ' (branch feature/x)',
+    '  A x.txt',
+  })
+  type_on('files', 2, '<CR>')
+  wait_for_diffs(2)
+
+  eq(last_diff_name(), 'aineo://commit/' .. work.x_one .. '/x.txt')
+end
+
+T['a branch']['l on a file shows what Enter shows, in Enter’s buffer'] = function()
+  work_with_branch('changesscope-branch-l')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+
+  type_on('files', 3, 'l')
+
+  wait_for_diffs(1)
+  eq(last_diff_name(), 'aineo://branch/feature/x//diff/x.txt')
+end
+
+T['a branch']['h on a file under its whole change shows it from HEAD straight to its tip, in aineo://branch/{name}//head/{path}'] = function()
+  local work = work_with_branch('changesscope-branch-h')
+  commit_only(work.top, 'x.txt', 'own x', 'Own x')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+
+  type_on('files', 3, 'h')
+
+  wait_for_diffs(1)
+  eq(last_diff_name(), 'aineo://branch/feature/x//head/x.txt')
+  eq(lines_beginning(last_diff_lines(), '+'), { '+++ b/x.txt', '+x' })
+  eq(lines_beginning(last_diff_lines(), '-'), { '--- a/x.txt', '-own x' })
+end
+
+T['a branch']['h on a file under one of its commits shows it from that commit straight to HEAD, as for any commit'] = function()
+  local work = work_with_branch('changesscope-branch-h-commit')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+  enter_window_of('module', 'commits')
+  child.type_keys('3G')
+  expect_pane_lines('module', 'files', {
+    'Files in: ' .. commit_line(work.x_one, 'X one') .. ' (branch feature/x)',
+    '  A x.txt',
+  })
+
+  type_on('files', 2, 'h')
+
+  wait_for_diffs(1)
+  eq(last_diff_name(), 'aineo://head/commit/' .. work.x_one .. '/x.txt')
+  eq(lines_beginning(last_diff_lines(), '-'), { '--- a/x.txt', '-x' })
+end
+
+T['a branch']['gf on a file under its whole change shows the file as its tip has it, in aineo://show/{tip}/{path}'] = function()
+  local work = work_with_branch('changesscope-branch-gf')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+
+  type_on('files', 3, 'gf')
+
+  wait_for_diffs(1)
+  eq(last_diff_name(), 'aineo://show/' .. work.x_two .. '/x.txt')
+  eq(last_diff_lines(), { 'x' })
+end
+
+T['a branch']['gf on a file under one of its commits shows the file as that commit has it'] = function()
+  local work = work_with_branch('changesscope-branch-gf-commit')
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+  enter_window_of('module', 'commits')
+  child.type_keys('3G')
+  expect_pane_lines('module', 'files', {
+    'Files in: ' .. commit_line(work.x_one, 'X one') .. ' (branch feature/x)',
+    '  A x.txt',
+  })
+
+  type_on('files', 2, 'gf')
+
+  wait_for_diffs(1)
+  eq(last_diff_name(), 'aineo://show/' .. work.x_one .. '/x.txt')
+end
+
+T['a branch']['tells that the diff of its whole change cannot be read when its first read failed'] = function()
+  work_with_branch('changesscope-branch-unread')
+  child.lua([[
+    local git = require('aineo.git')
+    local resolve_commit = git.resolve_commit
+    git.resolve_commit = function(found, name, done, options)
+      if vim.startswith(name, 'refs/heads/') then
+        done({ reason = 'failed', message = 'refs are broken' }, nil)
+        return
+      end
+      resolve_commit(found, name, done, options)
+    end
+  ]])
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'commits', {
+    'Branch feature/x',
+    'The last refresh failed: refs are broken',
+  })
+
+  type_on('commits', 1, '<CR>')
+
+  git_repo.wait_until('the failure told', function()
+    return #messages_told() > 0
+  end)
+  eq(messages_told(), {
+    {
+      message = 'aineo: the diff of Branch feature/x could not be read: refs are broken',
+      level = vim.log.levels.ERROR,
+    },
+  })
+end
+
+T['a branch']['Enter on its heading before its first read tells that aineo is reading, not that a diff failed'] = function()
+  local work = work_with_branch('changesscope-branch-enter-unread')
+  child.lua([=[
+    local git = require('aineo.git')
+    local resolve_commit = git.resolve_commit
+    _G.held = {}
+    git.resolve_commit = function(found, name, done, options)
+      if vim.startswith(name, 'refs/heads/') then
+        table.insert(_G.held, function()
+          resolve_commit(found, name, done, options)
+        end)
+        return
+      end
+      resolve_commit(found, name, done, options)
+    end
+  ]=])
+  pick('[branch] feature/x')
+  expect_pane_lines('module', 'commits', { 'Branch feature/x', 'aineo is reading the repository' })
+
+  type_on('commits', 1, '<CR>')
+
+  eq(messages_told(), {
+    { message = 'aineo is reading the repository', level = vim.log.levels.INFO },
+  })
+  git_repo.wait_until('the read of the branch asked for', function()
+    return child.lua_get('#_G.held') > 0
+  end)
+  child.lua('for _, release in ipairs(_G.held) do release() end')
+  expect_pane_lines('module', 'commits', branch_view_of(work))
+end
+
+T['a branch']['deleted between the picker and the pick is told gone'] = function()
+  local work = work_with_branch('changesscope-branch-picked-gone')
+  press_s('module', 'commits')
+  local position = vim.fn.index(offered()[1].texts, '[branch] feature/x') + 1
+  git_repo.git(work.top, { 'branch', '-D', 'feature/x' })
+
+  eq(answer_picker(position), true)
+
+  git_repo.wait_until('the failure told', function()
+    return #messages_told() > 0
+  end)
+  eq(messages_told(), { { message = FEATURE_X_GONE, level = vim.log.levels.INFO } })
+  expect_pane_lines('module', 'commits', default_view_of(work))
+end
+
+T['a branch']['a tag of its name does not stand for it'] = function()
+  local work = work_with_branch('changesscope-branch-tag')
+  git_repo.git(work.top, { 'tag', 'feature/x', 'main' })
+
+  pick('[branch] feature/x')
+
+  expect_pane_lines('module', 'commits', branch_view_of(work))
+  expect_pane_lines('module', 'files', BRANCH_FILES)
+end
+
+--- Runs `git <args…>` in `top` under the suites' environment, with `input`
+--- on its standard input, and returns its output less its last newline.
+---
+---@param top string
+---@param args string[]
+---@param input string
+---@return string
+local function git_with_input(top, args, input)
+  local result = vim
+    .system(vim.list_extend({ 'git' }, args), {
+      cwd = top,
+      env = git_repo.ENVIRONMENT,
+      stdin = input,
+      text = true,
+    })
+    :wait()
+  assert(result.code == 0, result.stderr)
+  return (result.stdout:gsub('\n$', ''))
+end
+
+T['a branch']['that shares no history with the working branch or the comparison commit lists every commit and every file of it'] = function()
+  local work = work_with_branch('changesscope-branch-no-base')
+  local blob = git_with_input(work.top, { 'hash-object', '-w', '--stdin' }, 'orphan line\n')
+  local second_blob = git_with_input(work.top, { 'hash-object', '-w', '--stdin' }, 'second line\n')
+  local root_tree =
+    git_with_input(work.top, { 'mktree' }, ('100644 blob %s\torphan.txt\n'):format(blob))
+  local root = git_with_input(work.top, { 'commit-tree', root_tree, '-m', 'Orphan root' }, '')
+  local second_tree = git_with_input(
+    work.top,
+    { 'mktree' },
+    ('100644 blob %s\torphan.txt\n100644 blob %s\tsecond.txt\n'):format(blob, second_blob)
+  )
+  local second =
+    git_with_input(work.top, { 'commit-tree', second_tree, '-p', root, '-m', 'Orphan second' }, '')
+  git_repo.git(work.top, { 'update-ref', 'refs/heads/lonely', second })
+
+  pick('[branch] lonely')
+
+  expect_pane_lines('module', 'commits', {
+    'Branch lonely',
+    commit_line(second, 'Orphan second'),
+    commit_line(root, 'Orphan root'),
+  })
+  expect_pane_lines(
+    'module',
+    'files',
+    { 'Files in: Branch lonely', '  A orphan.txt', '  A second.txt' }
+  )
+  type_on('commits', 1, '<CR>')
+  wait_for_diffs(1)
+  eq(lines_beginning(last_diff_lines(), 'diff --git'), {
+    'diff --git a/orphan.txt b/orphan.txt',
+    'diff --git a/second.txt b/second.txt',
+  })
+end
+
+T['branches in s']['that cannot be listed leave the worktrees alone, the failure told once as a warning'] = function()
+  local work = create_work('changesscope-branches-failed')
+  git_repo.git(work.top, { 'branch', 'feature/x' })
+  child.lua([[require('aineo.git').list_branches = function(_, done)
+    done({ reason = 'failed', message = 'refs are broken' }, nil)
+  end]])
+  start_copy('module', work.top, 'origin/dev')
+  expect_pane_lines('module', 'commits', default_view_of(work))
+
+  press_s('module', 'commits')
+
+  eq(offered()[1].texts, { '[worktree] agent (agent)', '[worktree] other (other)' })
+  eq(messages_told(), {
+    {
+      message = 'aineo: the local branches could not be listed: refs are broken',
+      level = vim.log.levels.WARN,
+    },
+  })
+end
+
+T['branches in s']['are not read once the worktrees could not be listed: nothing says which are checked out'] = function()
+  local top = git_repo.create('changesscope-branches-unlisted', { ['notes.txt'] = { 'one' } })
+  git_repo.git(top, { 'branch', 'feature/x' })
+  child.lua([=[
+    local git = require('aineo.git')
+    _G.branch_reads = 0
+    local list_branches = git.list_branches
+    git.list_branches = function(...)
+      _G.branch_reads = _G.branch_reads + 1
+      return list_branches(...)
+    end
+    git.list_worktrees = function(_, done)
+      done({ reason = 'failed', message = 'broken' }, nil)
+    end
+  ]=])
+  start_copy('module', top)
+  expect_pane_lines('module', 'commits', {
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'The other worktrees could not be listed: broken',
+  })
+
+  press_s('module', 'commits')
+
+  eq({ offered(), messages_told(), child.lua_get('_G.branch_reads') }, {
+    {},
+    {
+      {
+        message = 'aineo: The other worktrees could not be listed: broken',
+        level = vim.log.levels.INFO,
+      },
+    },
+    0,
   })
 end
 
