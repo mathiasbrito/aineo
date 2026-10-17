@@ -1,14 +1,16 @@
 --- The filters the commits window selects and the files window lists
 --- under: *Uncommitted*, *Session work*, one commit of the session, what
---- landed in the working branch or one commit of it, or another worktree's
---- whole change or one of its commits.
+--- landed in the working branch or one commit of it, another worktree's
+--- whole change or one of its commits, or a local branch's whole change or
+--- one of its commits.
 
 local M = {}
 
 --- What the files window lists the files of.
 ---@class aineo.changes.Filter
----@field kind 'uncommitted'|'session_work'|'commit'|'worktree'|'landed' what differs from `HEAD`; what differs from the session's base; what one commit changed; what differs in another worktree from its own base; or what landed in the working branch since the session's base
+---@field kind 'uncommitted'|'session_work'|'commit'|'worktree'|'landed'|'branch' what differs from `HEAD`; what differs from the session's base; what one commit changed; what differs in another worktree from its own base; what landed in the working branch since the session's base; or what a local branch gained since its base
 ---@field commit? aineo.git.Commit the commit, for a `commit` filter
+---@field branch? string the local branch's name, for a `branch` filter and for a `commit` filter of one of its commits; nil for every other
 ---@field landed? string the working branch's name, for a `landed` filter and for a `commit` filter of one of the commits that landed in it; nil for every other
 ---@field worktree? aineo.changes.WorktreeSection the worktree other than the editor's that the files are read in, for a `worktree` filter and for a `commit` filter of one of its commits; nil for the editor's own
 
@@ -68,6 +70,26 @@ function M.of_landed_commit(working_branch, commit)
   return { kind = 'commit', commit = commit, landed = working_branch }
 end
 
+--- The filter of the files that differ between the base of the local branch
+--- `branch` and its tip: what it gained.
+---
+---@param branch string the branch's name
+---@return aineo.changes.Filter
+function M.of_branch(branch)
+  return { kind = 'branch', branch = branch }
+end
+
+--- The filter of the files `commit` changed, one of the commits of the local
+--- branch `branch`: another filter than the session's own commit of the same
+--- id, as the two are listed apart.
+---
+---@param branch string the branch's name
+---@param commit aineo.git.Commit
+---@return aineo.changes.Filter
+function M.of_branch_commit(branch, commit)
+  return { kind = 'commit', commit = commit, branch = branch }
+end
+
 --- `selected`, a filter of another worktree, as that worktree's section
 --- `worktree` now reads: the same filter, told by the same key.
 ---
@@ -85,14 +107,23 @@ end
 --- `landed`. Another worktree's are told from the editor's own, and from
 --- each other, by the worktree's top level and a byte no path holds, then
 --- the commit's id, or two such bytes and the kind for the worktree's
---- whole change.
+--- whole change. A local branch's whole change and its commits are told
+--- by that byte, `branch`, a second such byte and the branch's name, then,
+--- for a commit, a third and its id.
 ---
 ---@param filter aineo.changes.Filter
 ---@return string
 function M.key(filter)
+  if filter.kind == 'branch' then
+    return '\0branch\0' .. filter.branch
+  end
   local worktree = filter.worktree and filter.worktree.top .. '\0' or ''
   if filter.kind == 'commit' then
-    return worktree .. (filter.landed and '\0landed\0' or '') .. filter.commit.id
+    local listed_under = filter.landed and '\0landed\0' or ''
+    if filter.branch then
+      listed_under = '\0branch\0' .. filter.branch .. '\0'
+    end
+    return worktree .. listed_under .. filter.commit.id
   end
   return worktree .. '\0' .. filter.kind
 end

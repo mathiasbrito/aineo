@@ -3,6 +3,7 @@
 --- named, and what the user is told when it cannot be read.
 
 local git = require('aineo.git')
+local branch = require('aineo.changes.branch')
 local landed = require('aineo.changes.landed')
 local lines = require('aineo.changes.lines')
 
@@ -14,15 +15,21 @@ local M = {}
 ---@field commit string the commit's full id
 ---@field told string what the user is told the commit is called
 
+--- The kinds of filter whose files are listed under a commit, or under what
+--- stands for one.
+---@type table<string, true>
+local LISTED_AT_A_COMMIT = { commit = true, landed = true, branch = true }
+
 --- Whether `entry`, a line of the files window, lists a file under a
 --- commit: one of the session's, one that landed in the working branch, or
---- one of another worktree; or under *Landed*, which the working branch's
---- own commit stands for.
+--- one of another worktree or of a local branch; or under *Landed*, which the
+--- working branch's own commit stands for, or under a local branch's whole
+--- change, which its tip stands for.
 ---
 ---@param entry aineo.changes.Entry
 ---@return boolean
 function M.lists_file_at_a_commit(entry)
-  return entry.change ~= nil and (entry.filter.kind == 'commit' or entry.filter.kind == 'landed')
+  return entry.change ~= nil and LISTED_AT_A_COMMIT[entry.filter.kind] == true
 end
 
 --- What the user is told the commit `entry` is listed under is called: its
@@ -44,10 +51,12 @@ end
 
 --- The commit the file `entry` lists is read at: the commit it is listed
 --- under, or, under *Landed*, the commit the working branch named when the
---- commits window last read it (`source.landed`). A commit of another
---- worktree is read in that worktree's repository, as its other diffs are.
---- Returns nil and the failure when the working branch names no commit
---- (`aineo.changes.landed`'s `unreadable()`).
+--- commits window last read it (`source.landed`), or, under a local branch's
+--- whole change, the tip the commits window last read (`source.branch`). A
+--- commit of another worktree is read in that worktree's repository, as its
+--- other diffs are. Returns nil and the failure when the working branch names
+--- no commit (`aineo.changes.landed`'s `unreadable()`) or the branch has no
+--- tip read (`aineo.changes.branch`'s `unreadable()`).
 ---
 ---@param entry aineo.changes.Entry an entry for which `M.lists_file_at_a_commit()` holds
 ---@param source aineo.changes.DiffSource
@@ -62,6 +71,16 @@ function M.revision_of(entry, source)
       repository = source.repository,
       commit = source.landed.tip,
       told = 'the working branch ' .. lines.quoted_path(source.landed.name),
+    }
+  end
+  if entry.filter.kind == 'branch' then
+    if not (source.branch and source.branch.tip) then
+      return nil, branch.unreadable(source.branch)
+    end
+    return {
+      repository = source.repository,
+      commit = source.branch.tip,
+      told = 'the branch ' .. lines.quoted_path(source.branch.name),
     }
   end
   return {
