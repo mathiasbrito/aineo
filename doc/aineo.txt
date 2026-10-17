@@ -700,6 +700,35 @@ Enter and `gf` take a file's name from the list itself, whatever characters
 it holds, spaces, quotes and an apostrophe among them: a name that fails to
 open from the pane is a fault to report.
 
+                                                       *aineo-changes-edit*
+`<S-CR>` (Shift and Enter) on a file's line opens the file for edition, as
+it is now in the working tree its line belongs to, with no diff and no
+commit's version: a file of your own worktree, whatever filter lists it, a
+commit of yours included; a file listed under another worktree, in that
+worktree (`<top>/<path>`, which `gf` refuses); a file of a local branch, in
+the worktree that has the branch checked out, which aineo asks git for when
+you press the key (when git cannot list the worktrees, aineo says so and
+opens nothing; when you press another key or leave the window meanwhile,
+nothing opens). It opens in the file column,
+as `gf` opens the working tree's file, a normal buffer that `:write` writes
+into that worktree, the cursor in it, in Normal mode. A branch no worktree
+has checked out has no file to edit: the file opens as the branch's tip has
+it, read-only, as `gf` shows a branch's file, in `aineo://show/{tip}/{path}`,
+and aineo says once "aineo: the branch <name> is checked out in no
+worktree, so <path> cannot be edited; it is shown as the branch's tip has
+it". A file no longer in that working tree opens nothing, and aineo says the
+file is gone; a path that is a directory, a submodule or a nested repository
+opens nothing, and aineo says it is a directory, not a file. The path is
+taken whole, as for `gf`: no character of it is a wildcard or the end of a
+command. Enter, `h`, `l` and `gf` are unchanged, and `<S-CR>` on any line
+that lists no file does nothing.
+Neovim receives `<S-CR>` only when your terminal tells it apart from Enter,
+which many terminals do only once asked for extended keys. Inside tmux, tmux
+must pass them on: set `extended-keys` to `on` (or `always`) in your tmux
+configuration, and `extended-keys-format` to `csi-u` when the terminal sends
+that format; a terminal tmux does not recognise as sending them is told so
+with the `extkeys` feature of `terminal-features`.
+
 `l` and `h` on a file's line show that file's diff as Enter does, `l`
 against the file's previous version, `h` against `HEAD`, and keep the cursor
 in the files window, on that line, in Normal mode, so that you can move down
