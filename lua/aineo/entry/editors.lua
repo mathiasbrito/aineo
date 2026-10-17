@@ -30,9 +30,10 @@ end
 --- Takes `work`, an announcement a relay offers with the start token
 --- `start_token`, for the tab whose Claude Code has that token, whichever
 --- tab is current (`routing.lua`'s `tab_for_work()`), and answers at once
---- whether one does: its changes home is handed the work, with what tells
---- the user for that tab (`teller_for()`), at the main loop's next turn, so
---- that the editor answers the relay before any git runs.
+--- whether it took it: with no such tab, false; else that tab's changes home
+--- is handed the work, with what tells the user for that tab
+--- (`teller_for()`), and answers, starting its git reads without waiting on
+--- them (`aineo.changes.Home`'s `add_reported_work()`).
 ---
 ---@param work aineo.changes.ReportedWork
 ---@param start_token string
@@ -42,10 +43,7 @@ local function take_announced_work(work, start_token)
   if not tab then
     return false
   end
-  vim.schedule(function()
-    tab.homes.changes.add_reported_work(work, teller_for(tab))
-  end)
-  return true
+  return tab.homes.changes.add_reported_work(work, teller_for(tab)) == true
 end
 
 --- Makes, once, the handlers this Neovim's entries in the list of running

@@ -303,7 +303,9 @@ end
 --- level is `real_path`, the reported path with every link resolved (git
 --- lists worktrees by their real paths); for a branch, the local branch of
 --- that name — as the worktree that has it checked out, when one has, else
---- as the branch. The editor's own worktree, `own_top`, gives `OWN_WORK`;
+--- as the branch when `s` would offer it (`branches_offered()`). The
+--- editor's own worktree, `own_top`, and a branch no worktree has checked
+--- out that `s` would not offer — the working branch — give `OWN_WORK`;
 --- nothing listed gives nil. The agent's strings are compared with what git
 --- printed, never handed on: a member holds git's own worktree or branch.
 ---
@@ -321,8 +323,14 @@ function M.match_report(work, real_path, candidates, own_top)
       return worktree.top == real_path
     end)
   end
-  if not (listed and listed.top) then
-    return listed and { branch = listed } or nil
+  if not listed then
+    return nil
+  end
+  if not listed.top then
+    local offered = vim.iter(branches_offered(candidates)):any(function(offered_branch)
+      return offered_branch.name == listed.name
+    end)
+    return offered and { branch = listed } or M.OWN_WORK
   end
   if listed.top == own_top then
     return M.OWN_WORK

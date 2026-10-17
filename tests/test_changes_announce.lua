@@ -9,10 +9,11 @@ local child = MiniTest.new_child_neovim()
 --- What `s` asks the picker for.
 local PROMPT = 'Show alone in the changes pane'
 
---- The Lua that defines, in the child, `_G.start_copy(key, directory)`: it
---- makes the changes home `key` names — the module's own for `'module'`, a
---- copy of its own (`new()`) for any other — in `_G.homes[key]`, begins its
---- session for `directory` with a stand-in timer that keeps each timer it is
+--- The Lua that defines, in the child, `_G.start_copy(key, directory,
+--- working_branch)`: it makes the changes home `key` names — the module's
+--- own for `'module'`, a copy of its own (`new()`) for any other — in
+--- `_G.homes[key]`, begins its session for `directory`, with the working
+--- branch `working_branch` when given and a stand-in timer that keeps each timer it is
 --- asked for in `_G.timers` (`{ milliseconds, act, stopped }`), to be run by
 --- `_G.fire(index)`, and shows its two buffers in a tab page of its own: the
 --- files buffer in the tab's window, the commits buffer in a window below it.
@@ -38,16 +39,17 @@ local COPIES = [[
   end
   _G.report = function(key, work)
     _G.told[key] = _G.told[key] or {}
-    _G.homes[key].add_reported_work(work, function(message)
+    return _G.homes[key].add_reported_work(work, function(message)
       table.insert(_G.told[key], message)
     end)
   end
-  _G.start_copy = function(key, directory)
+  _G.start_copy = function(key, directory, working_branch)
     local changes = require('aineo.changes')
     local home = key == 'module' and changes or changes.new()
     _G.homes[key] = home
     home.begin_session({
       directory = directory,
+      working_branch = working_branch,
       show_diff = function(diff)
         return vim.api.nvim_open_win(diff, false, { split = 'below', win = -1 })
       end,
@@ -77,12 +79,14 @@ local T = MiniTest.new_set({
 })
 
 --- Makes the changes home `key` names (`COPIES`) in the child for
---- `directory`, its pane shown.
+--- `directory`, its pane shown, with the working branch `working_branch`
+--- when given.
 ---
 ---@param key string
 ---@param directory string
-local function start_copy(key, directory)
-  child.lua('_G.start_copy(...)', { key, directory })
+---@param working_branch? string
+local function start_copy(key, directory, working_branch)
+  child.lua('_G.start_copy(...)', { key, directory, working_branch })
 end
 
 --- Hands the changes home `key` names the report `work`.
@@ -272,6 +276,49 @@ T['a reported worktree']['is matched by its real path when reported through a sy
   )
 end
 
+T['a reported worktree']['has its path resolved off the main loop, the reports kept in their order'] = function()
+  local top = start_on_repository('announce-async-realpath')
+  local links = fixture.directory('announce-async-realpath-links')
+  local slow = vim.fs.joinpath(links, 'slow')
+  local fast = vim.fs.joinpath(links, 'fast')
+  assert(vim.uv.fs_symlink(add_worktree(top, 'agent-1', 'feature/a'), slow))
+  assert(vim.uv.fs_symlink(add_worktree(top, 'agent-2', 'feature/b'), fast))
+  child.lua(
+    [[
+      local slow, fast = ...
+      local realpath = vim.uv.fs_realpath
+      vim.uv.fs_realpath = function(path, callback)
+        local reported = path == slow or path == fast
+        if not callback then
+          if reported then
+            return nil, 'resolved on the main loop'
+          end
+          return realpath(path)
+        end
+        vim.defer_fn(function()
+          local real_path, failure = realpath(path)
+          callback(failure, real_path)
+        end, path == slow and 300 or 0)
+      end
+    ]],
+    { slow, fast }
+  )
+
+  report('module', { kind = 'worktree', path = slow })
+  report('module', { kind = 'worktree', path = fast })
+
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-1 (feature/a)',
+    'No commits in this worktree',
+    'Worktree agent-2 (feature/b)',
+    'No commits in this worktree',
+  })
+  eq(told('module'), {
+    started_in('Worktree agent-1 (feature/a)'),
+    started_in('Worktree agent-2 (feature/b)'),
+  })
+end
+
 T['a reported branch'] = MiniTest.new_set()
 
 --- Makes the local branch `name` in the repository at `top`, holding one
@@ -402,6 +449,48 @@ T['a report git does not list yet']['waits 60 s from the call, then is let go an
     ),
     'aineo: Claude Code announced branch feature/never, which git does not list; the changes pane is unchanged',
   })
+end
+
+T['a report git does not list yet']['made again while it waits is taken and changes nothing: one timer, told once'] = function()
+  local top = start_on_repository('announce-again-waiting')
+  local missing = vim.fs.joinpath(vim.fs.dirname(top), 'never-made')
+
+  local taken = child.lua_get(
+    [[{
+    _G.report('module', { kind = 'worktree', path = ... }),
+    _G.report('module', { kind = 'worktree', path = ... }),
+  }]],
+    { missing }
+  )
+  child.lua('_G.fire(1)')
+
+  eq(taken, { true, true })
+  eq(timers(), { { milliseconds = 60000, stopped = false } })
+  eq(told('module'), {
+    ('aineo: Claude Code announced worktree %s, which git does not list; the changes pane is unchanged'):format(
+      missing
+    ),
+  })
+end
+
+T['a report git does not list yet']['waits, at most 32 at once; a 33rd is not taken, and nothing is told of it'] = function()
+  local top = start_on_repository('announce-at-most-32')
+  local directory = vim.fs.dirname(top)
+
+  local taken = child.lua_get(
+    [[(function(directory)
+      local taken = {}
+      for index = 1, 33 do
+        taken[index] = _G.report('module', { kind = 'worktree', path = directory .. '/never-made-' .. index })
+      end
+      return taken
+    end)(...)]],
+    { directory }
+  )
+
+  eq(vim.list_slice(taken, 32), { true, false })
+  eq(#timers(), 32)
+  eq(told('module'), {})
 end
 
 T['a report git does not list yet']['holding words git or a shell would read is compared, never run'] = function()
@@ -820,6 +909,19 @@ T['the editor’s own work']['reported as its worktree or as its branch is not a
     'commits',
     { 'Worktree agent-1 (feature/a)', 'No commits in this worktree' }
   )
+  eq(told('module'), { started_in('Worktree agent-1 (feature/a)') })
+end
+
+T['the editor’s own work']['includes the working branch, which s never offers, though no worktree has it checked out'] = function()
+  local top = git_repo.create('announce-working-branch', { ['notes.txt'] = { 'one' } })
+  git_repo.git(top, { 'checkout', '--quiet', '-b', 'other' })
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  start_copy('module', top, 'main')
+
+  report('module', { kind = 'branch', branch = 'main' })
+  report('module', { kind = 'worktree', path = agent })
+
+  expect_pane_lines('module', 'commits', AGENT_VIEW)
   eq(told('module'), { started_in('Worktree agent-1 (feature/a)') })
 end
 

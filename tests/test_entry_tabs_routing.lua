@@ -508,6 +508,21 @@ local function messages_holding(part)
   )
 end
 
+--- The first line of the commits buffer of the changes pane of the child's
+--- tab numbered `number` in the order the tabs were made.
+---
+---@param number integer
+---@return string
+local function first_commits_line_of_tab(number)
+  return child.lua_get(
+    [[(function(number)
+      local home = require('aineo.entry.registry').tab_list[number].homes.changes
+      return vim.api.nvim_buf_get_lines(home.pane_buffers().commits, 0, 1, true)[1]
+    end)(...)]],
+    { number }
+  )
+end
+
 T['an announcement']['of the second tab’s Claude Code goes to the second tab while the first is current, told with its number'] = function()
   local worktree = in_repository_with_a_worktree('tabs-announce')
   local _, _, second = open_two_tabs('tabs-announce')
@@ -523,6 +538,33 @@ T['an announcement']['of the second tab’s Claude Code goes to the second tab w
   eq(messages_holding('started work'), {
     'tab 2: aineo: Claude Code started work in Worktree agent-1 (feature/a); the changes pane shows the reported work',
   })
+  git_repo.wait_until('the second tab’s pane shows the reported work', function()
+    return first_commits_line_of_tab(2) == 'Worktree agent-1 (feature/a)'
+  end)
+  eq(
+    { first_commits_line_of_tab(1), first_commits_line_of_tab(2) },
+    { 'Uncommitted', 'Worktree agent-1 (feature/a)' }
+  )
+end
+
+T['an announcement']['beyond 32 waiting in a tab is not taken'] = function()
+  local worktree = in_repository_with_a_worktree('tabs-announce-at-most')
+  local _, _, second = open_two_tabs('tabs-announce-at-most')
+  local token = claude_session.start_token(second, 1)
+
+  local taken = child.lua_get(
+    [[(function(directory, token)
+      local taken = {}
+      for index = 1, 33 do
+        local work = { kind = 'worktree', path = directory .. '/never-made-' .. index }
+        taken[index] = require('aineo.mcp').receive_work_announcement(work, token)
+      end
+      return taken
+    end)(...)]],
+    { vim.fs.dirname(worktree), token }
+  )
+
+  eq(vim.list_slice(taken, 32), { true, false })
 end
 
 T['an announcement']['of the current tab’s Claude Code is told without a tab number'] = function()
