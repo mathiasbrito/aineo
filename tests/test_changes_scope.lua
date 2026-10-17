@@ -1931,6 +1931,7 @@ T['a branch']['Enter on one of its commits, and on a file under it, shows them a
   type_on('commits', 3, '<CR>')
   wait_for_diffs(1)
   eq(last_diff_name(), 'aineo://commit/' .. work.x_one)
+  eq(lines_beginning(last_diff_lines(), 'diff --git'), { 'diff --git a/x.txt b/x.txt' })
   expect_pane_lines('module', 'files', {
     'Files in: ' .. commit_line(work.x_one, 'X one') .. ' (branch feature/x)',
     '  A x.txt',
