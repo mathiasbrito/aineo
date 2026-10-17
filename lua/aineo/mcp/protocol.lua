@@ -48,9 +48,8 @@ local function tool_result(text, is_error)
 end
 
 --- How the server hands a valid announcement on: whether the editor that
---- started Claude Code took it (`'taken'`), did not (`'declined'`), or did
---- not answer in time (`'unconfirmed'`, with the words for Claude).
----@alias aineo.mcp.DeliverAnnouncement fun(work: aineo.mcp.Work): 'taken'|'declined'|'unconfirmed', string?
+--- started Claude Code took it (`'taken'`) or not (`'declined'`).
+---@alias aineo.mcp.DeliverAnnouncement fun(work: aineo.mcp.Work): 'taken'|'declined'
 
 --- What the server hands each valid call of a tool on to, by tool.
 ---@class aineo.mcp.Deliverers
@@ -79,8 +78,7 @@ end
 
 --- The result of a `tools/call` of the announcement tool: a valid
 --- announcement is handed on, and answered `ok` when taken, a tool error
---- `not taken` when not, nothing more; an offer the editor did not confirm
---- in time with the words the deliverer gives.
+--- `not taken` when not, nothing more.
 ---
 ---@param arguments any
 ---@param deliver_announcement aineo.mcp.DeliverAnnouncement
@@ -90,12 +88,8 @@ local function call_announcement(arguments, deliver_announcement)
   if not valid_work then
     return tool_result('aineo refused the announcement: ' .. refusal, true)
   end
-  local outcome, explanation = deliver_announcement(valid_work)
-  if outcome == 'taken' then
+  if deliver_announcement(valid_work) == 'taken' then
     return tool_result('ok', false)
-  end
-  if outcome == 'unconfirmed' then
-    return tool_result(explanation, false)
   end
   return tool_result('not taken', true)
 end
