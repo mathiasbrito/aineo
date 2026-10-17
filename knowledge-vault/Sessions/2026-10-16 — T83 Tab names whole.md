@@ -88,4 +88,11 @@ Rulings are the orchestrator's assumptions, not the user's decisions.
 
 ## Commits
 
-*Recorded after the merge.*
+PR #248, merged by rebase; released in `v0.2.44` (PR #250, `main` `e7e6d25`). On `dev`, in order:
+
+- `067a0fa` Amend T83's brief at dispatch with the facts re-checked on dev
+- `ea1e358` Draw a tab's name whole while the tab line has room, cut it only when not
+- `84f383d` Leave the floor to the fit, not to cut()
+- `2128b53` Record the session of T83, the tab names whole while the line has room
+- `006b654` Measure tab names in the tab line, not in the current window
+- `b3a7a09` Record T83's fix round in its session note
