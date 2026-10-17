@@ -202,9 +202,13 @@ tab page aineo's first tab; its buffers are `aineo://report` and
 last tab page, so that no tab changes its number, with an aineo tab in it: a
 layout of its own around a Claude Code started on a new session, and the
 cursor in its Claude window in Terminal mode. Its buffers are named with a
-number that is never given again (`aineo://report-2`, `aineo://input-2`). With
-no aineo tab yet, `\T` makes the current tab page the first one, on a new
-session. Starting a tab starts a Claude Code, which costs what a session
+number that is never given again (`aineo://report-2`, `aineo://input-2`), and
+so are its changes pane's buffers and the diffs it shows, which carry
+`copy{n}/` after `aineo://` (`aineo://copy1/changes-files`,
+`aineo://copy1/diff/{path}`), {n} counted the same way: two tabs never share
+a diff buffer, whether their changes panes follow one repository or two.
+With no aineo tab yet, `\T` makes the current tab page the first one, on a
+new session. Starting a tab starts a Claude Code, which costs what a session
 costs, as `\o` does.
 
 `\S` (|:Aineo-sessions|) opens the session you pick in a new tab at the end,
@@ -644,6 +648,11 @@ was read, only the last Enter's diff is shown. Enter on any other line
 does nothing. When the middle column has no room for the
 diff, aineo says so, shows nothing, and the cursor stays in the pane; so it
 does when showing the diff fails.
+
+The name of every diff and of every file `gf` shows, here and below, is the
+first tab's. A tab after it names them with `copy{n}/` after `aineo://`, as it
+does its pane's buffers (|aineo-tabs|): `aineo://copy1/diff/{path}`,
+`aineo://copy1/session-work`, `aineo://copy1/show/{id}/{path}`.
 
 `gf` on a file listed under a commit, one of yours, one that landed or one
 of another worktree's, shows the file as that commit has it, in the middle
