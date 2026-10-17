@@ -22,7 +22,12 @@
 --- another, it is no longer listed, or a Claude Code session is followed
 --- after another; `toggle_focused_view()` (`\g`) switches between
 --- that view and the default one, from the pane's own windows, and reads the
---- pane again while it is shown (`aineo.changes.scope`).
+--- pane again while it is shown (`aineo.changes.scope`). The worktrees and
+--- branches the agents of the tab's Claude Code report
+--- (`add_reported_work()`) and git lists, matched for up to 60 s, make the
+--- reported set: each joins it and makes it the focused view, every member
+--- under its own heading, until git no longer lists it or another session
+--- is followed; `s` offers the set back.
 ---
 --- One changes pane is a home (`aineo.changes.Home`): the module is the first,
 --- and `new()` makes another, for another tab, whose session, base and saves,

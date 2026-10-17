@@ -21,11 +21,12 @@ M.NONE_TO_SHOW = 'aineo: no other worktree or branch to show alone'
 ---@field branch? string the name of the branch
 ---@field heading string the worktree's heading as the commits window last listed it, or `Branch ` and the branch's name
 
---- One choice of the list `s` offers: a worktree, by its top level, or a
---- local branch, by its name.
+--- One choice of the list `s` offers: a worktree, by its top level, a local
+--- branch, by its name, or the reported set.
 ---@class aineo.changes.ScopeItem
 ---@field top? string the top level of the worktree it shows alone
 ---@field branch? string the name of the branch it shows alone
+---@field reported? boolean whether it shows the reported set
 ---@field text string how the picker shows it: its kind, then its name
 
 --- What the list `s` chooses its branches from, read when `s` is pressed.
@@ -82,19 +83,32 @@ local function branches_offered(candidates)
   end, candidates.branches)
 end
 
---- The list `s` offers: one item per worktree of `others`, what the commits
---- window last listed of the other worktrees, in the order listed, then one
---- per branch of `candidates` that is offered (`branches_offered()`), in the
---- order given. `candidates` is nil when the branches could not be read:
---- the worktrees alone.
+--- The list `s` offers: while `reported`, the reported set, is not empty,
+--- first its one item, `[reported] All reported work (<n>)`; then one item
+--- per worktree of `others`, what the commits window last listed of the
+--- other worktrees, in the order listed, then one per branch of
+--- `candidates` that is offered (`branches_offered()`), in the order given.
+--- `candidates` is nil when the branches could not be read: the worktrees
+--- alone.
 ---
 ---@param others aineo.changes.OtherWorktrees
 ---@param candidates aineo.changes.BranchCandidates|nil
+---@param reported aineo.changes.ScopeMember[]
 ---@return aineo.changes.ScopeItem[]
-function M.items_of(others, candidates)
-  local items = vim.tbl_map(function(section)
-    return { top = section.top, text = '[worktree] ' .. lines.worktree_name(section) }
-  end, others.sections)
+function M.items_of(others, candidates, reported)
+  local items = {}
+  if #reported > 0 then
+    table.insert(items, {
+      reported = true,
+      text = ('[reported] All reported work (%d)'):format(#reported),
+    })
+  end
+  vim.list_extend(
+    items,
+    vim.tbl_map(function(section)
+      return { top = section.top, text = '[worktree] ' .. lines.worktree_name(section) }
+    end, others.sections)
+  )
   for _, branch in ipairs(candidates and branches_offered(candidates) or {}) do
     table.insert(
       items,
@@ -251,6 +265,164 @@ function M.members_shown(scope, others, branch)
   end
   local section = M.section_on(others, scope.top)
   return section and { { worktree = section } } or nil
+end
+
+--- A worktree or a branch an agent of the tab's Claude Code reported, as
+--- `aineo.mcp` hands it on: the worktree's folder, absolute, or the
+--- branch's name, each the agent's own string.
+---@class aineo.changes.ReportedWork
+---@field kind 'worktree'|'branch'
+---@field path? string the worktree's folder, with `kind` `worktree`
+---@field branch? string the branch's name, with `kind` `branch`
+
+--- What `match_report()` gives for a report of the editor's own worktree, or
+--- of the branch it has checked out: the default view shows that work.
+M.OWN_WORK = { own = true }
+
+--- The local branch `name` as `candidates`, what git listed, give it: the
+--- worktree that has it checked out, when one has, else the branch by its
+--- name alone (`{ name }`); nil when git lists no local branch of that name.
+---
+---@param name string
+---@param candidates aineo.changes.BranchCandidates
+---@return aineo.git.Worktree|{ name: string }|nil
+local function listed_branch_of(name, candidates)
+  local named = vim.iter(candidates.branches):find(function(listed)
+    return listed.name == name
+  end)
+  if not named then
+    return nil
+  end
+  return vim.iter(candidates.worktrees):find(function(worktree)
+    return worktree.branch == named.name
+  end) or { name = named.name }
+end
+
+--- What `work`, a report, comes to against `candidates`, what git listed of
+--- the worktrees and the branches: for a worktree, the worktree whose top
+--- level is `real_path`, the reported path with every link resolved (git
+--- lists worktrees by their real paths); for a branch, the local branch of
+--- that name — as the worktree that has it checked out, when one has, else
+--- as the branch. The editor's own worktree, `own_top`, gives `OWN_WORK`;
+--- nothing listed gives nil. The agent's strings are compared with what git
+--- printed, never handed on: a member holds git's own worktree or branch.
+---
+---@param work aineo.changes.ReportedWork
+---@param real_path string|nil the reported path with every link resolved; nil when it resolves to nothing
+---@param candidates aineo.changes.BranchCandidates
+---@param own_top string the editor's own worktree's top level
+---@return aineo.changes.ScopeMember|table|nil
+function M.match_report(work, real_path, candidates, own_top)
+  local listed
+  if work.kind == 'branch' then
+    listed = listed_branch_of(work.branch, candidates)
+  else
+    listed = vim.iter(candidates.worktrees):find(function(worktree)
+      return worktree.top == real_path
+    end)
+  end
+  if not (listed and listed.top) then
+    return listed and { branch = listed } or nil
+  end
+  if listed.top == own_top then
+    return M.OWN_WORK
+  end
+  return { worktree = listed }
+end
+
+--- The members of `members`, the reported set, that `candidates`, what git
+--- now lists, still lists, in their order: a worktree by its top level, as
+--- git now lists it, its branch included; a branch by its name.
+---
+---@param members aineo.changes.ScopeMember[]
+---@param candidates aineo.changes.BranchCandidates
+---@return aineo.changes.ScopeMember[]
+function M.still_listed(members, candidates)
+  local worktrees_by_top, branch_names = {}, {}
+  for _, worktree in ipairs(candidates.worktrees) do
+    worktrees_by_top[worktree.top] = worktree
+  end
+  for _, listed_branch in ipairs(candidates.branches) do
+    branch_names[listed_branch.name] = true
+  end
+  local still = {}
+  for _, member in ipairs(members) do
+    if member.worktree and worktrees_by_top[member.worktree.top] then
+      table.insert(still, { worktree = worktrees_by_top[member.worktree.top] })
+    elseif member.branch and branch_names[member.branch.name] then
+      table.insert(still, member)
+    end
+  end
+  return still
+end
+
+--- The words that tell the user the reported set is empty, all of it gone,
+--- while the pane showed it.
+M.REPORTED_GONE = 'aineo: the reported work is gone; the changes pane shows the default view'
+
+--- The key that tells `member`, one of the reported set, from every other:
+--- a worktree by its top level, a branch by its name.
+---
+---@param member aineo.changes.ScopeMember
+---@return string
+function M.member_key(member)
+  if member.worktree then
+    return 'worktree\0' .. member.worktree.top
+  end
+  return 'branch\0' .. member.branch.name
+end
+
+--- What the focused view shows of `members`, the reported set, in its
+--- order: each worktree as `others`, what the commits window last listed of
+--- the other worktrees, lists it, else as git listed it when it was
+--- reported; each branch as the commits window last read it.
+---
+---@param members aineo.changes.ScopeMember[]
+---@param others aineo.changes.OtherWorktrees
+---@return aineo.changes.ScopeMember[]
+function M.members_reported(members, others)
+  return vim.tbl_map(function(member)
+    if member.worktree then
+      return { worktree = M.section_on(others, member.worktree.top) or member.worktree }
+    end
+    return member
+  end, members)
+end
+
+--- The heading of `member`, as the commits window names it.
+---
+---@param member aineo.changes.ScopeMember
+---@return string
+local function member_heading(member)
+  if member.worktree then
+    return lines.worktree_heading(member.worktree)
+  end
+  return lines.filter_name(filter.of_branch(member.branch.name))
+end
+
+--- The words that tell the user an agent started work in `member`, which
+--- joined the reported set.
+---
+---@param member aineo.changes.ScopeMember
+---@return string
+function M.started_work(member)
+  return ('aineo: Claude Code started work in %s; the changes pane shows the reported work'):format(
+    member_heading(member)
+  )
+end
+
+--- The words that tell the user git did not list what `work` reported in
+--- the time it waited: its kind and its path or branch, quoted as a path is
+--- (`lines.quoted_path()`), so that no character of the agent's string
+--- shows as anything but text.
+---
+---@param work aineo.changes.ReportedWork
+---@return string
+function M.unlisted_report(work)
+  return ('aineo: Claude Code announced %s %s, which git does not list; the changes pane is unchanged'):format(
+    work.kind,
+    lines.quoted_path(work.path or work.branch)
+  )
 end
 
 --- The filter of the whole change of `member`, one of what a scope shows

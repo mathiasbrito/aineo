@@ -1,5 +1,6 @@
 --- Which tab a report is for, as the report home's router asks
---- (`aineo.report`'s `set_report_router()`).
+--- (`aineo.report`'s `set_report_router()`), and which tab an announcement
+--- of work is for.
 
 local registry = require('aineo.entry.registry')
 
@@ -52,6 +53,20 @@ local function route_report(session_id, options)
   return tab and tab.homes.report
 end
 
+--- The tab of `tab_list` whose Claude Code has the start token
+--- `start_token`, whichever tab is current, in a tab page that exists; nil
+--- when there is none: an announcement of work is about the tab whose
+--- Claude Code works, not about the session a report narrates.
+---
+---@param start_token string
+---@return aineo.entry.Tab?
+local function tab_for_work(start_token)
+  return vim.iter(registry.tab_list):find(function(tab)
+    return tab.is_bound() and tab.start_token() == start_token
+  end)
+end
+
 M.route_report = route_report
+M.tab_for_work = tab_for_work
 
 return M
