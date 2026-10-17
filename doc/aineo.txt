@@ -515,10 +515,12 @@ as a path is, the one with the newest commit first. A branch is offered
 unless a worktree has it checked out, yours included — that is read when you
 press `s`, so a branch you have checked out since is left out — or it is the
 working branch (below), their short names compared: `origin/dev` leaves out
-the local branch `dev`. Neovim's own |vim.ui.select()| is a numbered
-list with no search; a picker plugin that replaces it (telescope, fzf-lua,
-snacks, dressing and the like) searches that text. `s` is a Normal-mode map
-of the two buffers of the pane alone; in every other buffer it is Vim's own.
+the local branch `dev`, as do `refs/heads/dev`, `heads/dev`,
+`refs/remotes/origin/dev` and `remotes/origin/dev`. Neovim's own
+|vim.ui.select()| is a numbered list with no search; a picker plugin that
+replaces it (telescope, fzf-lua, snacks, dressing and the like) searches
+that text. `s` is a Normal-mode map of the two buffers of the pane alone;
+in every other buffer it is Vim's own.
 The branches are listed off the main loop and the picker opens once they
 are; pressing `s` again meanwhile opens no second picker. Branches that
 cannot be listed leave the worktrees alone, and aineo says so once, as a
@@ -621,13 +623,14 @@ All are read in that worktree, and {top} is its top level, so two
 worktrees' diffs of one path are two buffers; no key opens another
 worktree's file. For a branch shown alone, Enter on its heading shows the
 whole diff from its base to its tip, committed changes only, in
-`aineo://branch/{name}//since-base`; on a file under its whole change, that
-file's change between them, a renamed file with both paths, in
-`aineo://branch/{name}//diff/{path}`; on one of its commits, and on a file
-under one, the diff shows as for your own commits, in `aineo://commit/{id}`
-and `aineo://commit/{id}/{path}`. {name} is the branch's name quoted as a
-path is; git refuses `//` in one, so the separator is safe. Once the diff is
-shown, the
+`aineo://branch/{name}//since-base` (before the branch's first read, aineo
+says it is reading the repository and shows nothing); on a file under its
+whole change, that file's change between them, a renamed file with both
+paths, in `aineo://branch/{name}//diff/{path}`; on one of its commits, and
+on a file under one, the diff shows as for your own commits, in
+`aineo://commit/{id}` and `aineo://commit/{id}/{path}`. {name} is the
+branch's name quoted as a path is; git refuses `//` in one, so the
+separator is safe. Once the diff is shown, the
 cursor moves to its window, in the mode you were in: Normal mode, as in the
 pane; no Insert mode starts. When you have left the pane's window before the
 diff is shown, the diff is shown and the cursor stays where you are, in
@@ -2573,6 +2576,10 @@ The changes pane ~
   find the remote's default branch unless the setting names a branch); the
   files window under a worktree's whole change reads it once. Your upstream
   is read only when a worktree gets no base from the working branch.
+- A branch a worktree is rebasing or bisecting: git lists that worktree as
+  detached, so |aineo-changes-s| may offer its branch as `[branch]`, though
+  git refuses to delete it. Shown alone, it is the branch as it stands, at
+  its tip from before the rebase until the rebase ends.
 - When the editor quits, aineo stops its watch, but a git it is running
   then runs to its end, outliving the editor.
 - A buffer named for a diff that aineo did not make, such as one a restored
