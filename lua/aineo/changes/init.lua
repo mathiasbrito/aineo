@@ -27,7 +27,10 @@
 --- (`add_reported_work()`) and git lists, matched for up to 60 s, make the
 --- reported set: each joins it and makes it the focused view, every member
 --- under its own heading, until git no longer lists it or another session
---- is followed; `s` offers the set back.
+--- is followed; `s` offers the set back. What `s` picked, the reported set
+--- and whether the focused view showed are kept for the Claude Code session
+--- followed, beside its base and saves, and shown again once that session is
+--- followed again (`aineo.changes.kept`).
 ---
 --- One changes pane is a home (`aineo.changes.Home`): the module is the first,
 --- and `new()` makes another, for another tab, whose session, base and saves,

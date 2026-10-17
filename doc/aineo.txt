@@ -853,7 +853,33 @@ says once "aineo: the reported work is gone; the changes pane shows the
 default view". A worktree or branch picked behind the reported work that
 goes is let go untold. Following another Claude Code session than one
 followed before empties the reported work and drops the reports still
-looked for; each tab keeps its own, and none is kept on disk.
+looked for; each tab keeps its own set, and the focused view is kept
+on disk for each Claude Code session (|aineo-changes-view-kept|).
+
+                                                  *aineo-changes-view-kept*
+The changes pane remembers its focused view for each Claude Code session,
+beside the session's base and saves, under `stdpath('state')` in
+`aineo/changes-sessions/`, in `<sha256 of the session id>.view.json`. It
+keeps what you picked with `s` (a worktree by its folder, a branch by its
+name), the members of the reported work, and whether the focused view or
+the default view showed; nothing else: not the pane the right column
+shows, not a cursor, not a commit expanded. The file is written at once,
+whole, whenever one of these changes, through a file beside it that then
+replaces it, so a crash keeps what the last change left, and not when
+nothing changed. Quitting aineo and coming back (the tab reopened at start,
+`\S`, a resume of that session) shows the view again as soon as git has
+listed the worktrees and the branches: a worktree or a branch that is gone
+is dropped, untold, and the default view shows when what the focused view
+showed is gone. A restore tells nothing, the reported work included. A
+session with no view kept starts with the default view, as does one whose
+file is missing, unreadable, malformed, or of another repository; that file
+is written over once the view changes. A worktree or branch picked before
+the pane follows the session is not given up for the view kept. Two tabs on
+two sessions keep two files, and a tab that follows another session shows
+that session's view. When a session's Claude Code finds no conversation and
+another session takes its place, the view moves with its base and saves.
+When the file cannot be written, aineo warns once, "aineo: the changes pane
+cannot keep this session's view, and goes on without: <why>".
 
 Colours ~
 A file's letter and path, a rename's `old → new` whole, show in the group of

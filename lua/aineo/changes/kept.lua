@@ -1,6 +1,7 @@
---- The changes pane's base and the user's saves, kept for each Claude Code
---- session under the editor's state directory, one file per session, so
---- that a later editor following the session shows them again.
+--- The changes pane's base and the user's saves, and the view it showed,
+--- kept for each Claude Code session under the editor's state directory,
+--- one file of each per session, so that a later editor following the
+--- session shows them again.
 
 local M = {}
 
@@ -56,6 +57,23 @@ local function as_kept_base(decoded)
   return { top = decoded.top, base = decoded.base, saved = decoded.saved }
 end
 
+--- The JSON of the file `path`, decoded, or nil when it is not there or
+--- holds none. A file that is there but cannot be read says so.
+---
+---@param path string
+---@return any decoded
+---@return boolean unreadable whether a file is there that could not be read
+local function read_decoded(path)
+  local file = io.open(path, 'rb')
+  if not file then
+    return nil, vim.uv.fs_stat(path) ~= nil
+  end
+  local text = file:read('*a')
+  file:close()
+  local decoded, value = pcall(vim.json.decode, text, { luanil = { object = true, array = true } })
+  return decoded and value or nil, false
+end
+
 --- What is kept for the session `id`, or nil when nothing is: a file that
 --- holds anything but what `M.keep_base()` writes counts as nothing kept.
 --- A file that is there but cannot be read is nil too, and says so.
@@ -65,15 +83,8 @@ end
 ---@return aineo.changes.KeptBase|nil kept
 ---@return boolean unreadable whether a file is there that could not be read
 function M.read_kept_base(state_directory, id)
-  local path = M.kept_base_file(state_directory, id)
-  local file = io.open(path, 'rb')
-  if not file then
-    return nil, vim.uv.fs_stat(path) ~= nil
-  end
-  local text = file:read('*a')
-  file:close()
-  local decoded, value = pcall(vim.json.decode, text, { luanil = { object = true, array = true } })
-  return decoded and as_kept_base(value) or nil, false
+  local value, unreadable = read_decoded(M.kept_base_file(state_directory, id))
+  return as_kept_base(value), unreadable
 end
 
 --- Makes the directory `path` and the directories leading to it, unless it
@@ -141,6 +152,20 @@ local function replace_file(file, text)
   return failure
 end
 
+--- Replaces the whole of `file` with the JSON of `value`, making the
+--- directories that lead to it when missing. The file holds the whole of
+--- `value` or, when the write fails, what it held before.
+---
+---@param file string
+---@param value table
+---@return string? failure why it could not be kept, naming the file; nil once kept
+local function keep_file(file, value)
+  local failure = make_directory(vim.fs.dirname(file)) or replace_file(file, vim.json.encode(value))
+  if failure then
+    return ('%s: %s'):format(file, failure)
+  end
+end
+
 --- Keeps `kept` for the session `id`, in place of what was kept before,
 --- making the directories that lead to its file when missing. The file
 --- holds the whole of `kept` or, when the write fails, what it held before.
@@ -150,29 +175,24 @@ end
 ---@param kept aineo.changes.KeptBase
 ---@return string? failure why it could not be kept, naming the file; nil once kept
 function M.keep_base(state_directory, id, kept)
-  local file = M.kept_base_file(state_directory, id)
-  local failure = make_directory(vim.fs.dirname(file))
-    or replace_file(file, vim.json.encode({ top = kept.top, base = kept.base, saved = kept.saved }))
-  if failure then
-    return ('%s: %s'):format(file, failure)
-  end
+  return keep_file(
+    M.kept_base_file(state_directory, id),
+    { top = kept.top, base = kept.base, saved = kept.saved }
+  )
 end
 
---- Moves what is kept for the session `from` to the session `to`, under
---- `state_directory`, when `to` has no file and `from` has one: `from`'s
---- file, unread — a symbolic link as a link — is then `to`'s, and `from`'s
---- is gone. Neither is touched otherwise. `to`'s file is looked for first
---- and then `from`'s renamed to it, in one step: two editors moving one
---- `from` at the same moment leave it with one of them, never shared, and
---- the one that finds it gone moves nothing, which is no failure.
+--- Moves the file `from_file` to `to_file`, when `to_file` has none and
+--- `from_file` has one: `from_file` unread — a symbolic link as a link — is
+--- then `to_file`, and `from_file` is gone. Neither is touched otherwise.
+--- `to_file` is looked for first and then `from_file` renamed to it, in one
+--- step: two editors moving one `from_file` at the same moment leave it with
+--- one of them, never shared, and the one that finds it gone moves nothing,
+--- which is no failure.
 ---
----@param state_directory string
----@param from string
----@param to string
----@return string? failure why it could not be moved, naming both files; nil when it was moved, or when `to`'s file exists or `from`'s does not
-function M.move_kept_base(state_directory, from, to)
-  local from_file = M.kept_base_file(state_directory, from)
-  local to_file = M.kept_base_file(state_directory, to)
+---@param from_file string
+---@param to_file string
+---@return string? failure why it could not be moved, naming both files; nil when it was moved, or when `to_file` exists or `from_file` does not
+local function move_file(from_file, to_file)
   if vim.uv.fs_stat(to_file) then
     return nil
   end
@@ -181,6 +201,145 @@ function M.move_kept_base(state_directory, from, to)
     return nil
   end
   return ('cannot move %s to %s: %s'):format(from_file, to_file, failure)
+end
+
+--- Moves what is kept for the session `from` to the session `to`, under
+--- `state_directory`, when `to` has no file and `from` has one (`move_file()`).
+---
+---@param state_directory string
+---@param from string
+---@param to string
+---@return string? failure why it could not be moved, naming both files; nil when it was moved, or when `to`'s file exists or `from`'s does not
+function M.move_kept_base(state_directory, from, to)
+  return move_file(M.kept_base_file(state_directory, from), M.kept_base_file(state_directory, to))
+end
+
+--- What the changes pane kept of one worktree or one local branch: either
+--- the worktree's top level, or the branch's name.
+---@class aineo.changes.KeptPick
+---@field top? string the worktree's top level
+---@field branch? string the local branch's name
+
+--- The view the changes pane showed, kept for a session.
+---@class aineo.changes.KeptView
+---@field repository string the repository's top level the view is of
+---@field focused boolean whether the focused view showed, rather than the default view
+---@field shows_reported boolean whether the focused view was the reported set, rather than the pick
+---@field scope? aineo.changes.KeptPick the worktree or branch picked to show alone
+---@field reported aineo.changes.KeptPick[] the reported set's members, in their order
+
+--- The file that keeps the view of the session `id`, beside the file that
+--- keeps its base: named by the id's SHA-256 as that file is
+--- (`M.kept_base_file()`).
+---
+---@param state_directory string
+---@param id string
+---@return string
+function M.kept_view_file(state_directory, id)
+  return vim.fs.joinpath(
+    state_directory,
+    'aineo',
+    'changes-sessions',
+    vim.fn.sha256(id) .. '.view.json'
+  )
+end
+
+--- `decoded` as a pick: a table holding one non-empty string, `top` or
+--- `branch`, not both; nil when it is not.
+---
+---@param decoded any
+---@return aineo.changes.KeptPick|nil
+local function as_kept_pick(decoded)
+  if type(decoded) ~= 'table' then
+    return nil
+  end
+  local top, branch = decoded.top, decoded.branch
+  if type(top) == 'string' and top ~= '' and branch == nil then
+    return { top = top }
+  end
+  if type(branch) == 'string' and branch ~= '' and top == nil then
+    return { branch = branch }
+  end
+  return nil
+end
+
+--- `decoded`, a kept view file's JSON, as the view it keeps, or nil when it
+--- is not of that shape.
+---
+---@param decoded any
+---@return aineo.changes.KeptView|nil
+local function as_kept_view(decoded)
+  if
+    type(decoded) ~= 'table'
+    or type(decoded.repository) ~= 'string'
+    or type(decoded.focused) ~= 'boolean'
+    or type(decoded.shows_reported) ~= 'boolean'
+    or not vim.islist(decoded.reported)
+  then
+    return nil
+  end
+  local scope
+  if decoded.scope ~= nil then
+    scope = as_kept_pick(decoded.scope)
+    if not scope then
+      return nil
+    end
+  end
+  local reported = {}
+  for _, member in ipairs(decoded.reported) do
+    local pick = as_kept_pick(member)
+    if not pick then
+      return nil
+    end
+    table.insert(reported, pick)
+  end
+  return {
+    repository = decoded.repository,
+    focused = decoded.focused,
+    shows_reported = decoded.shows_reported,
+    scope = scope,
+    reported = reported,
+  }
+end
+
+--- The view kept for the session `id`, or nil when none is: a file that is
+--- missing, cannot be read, or holds anything but what `M.keep_view()`
+--- writes counts as none.
+---
+---@param state_directory string
+---@param id string
+---@return aineo.changes.KeptView|nil
+function M.read_kept_view(state_directory, id)
+  return as_kept_view((read_decoded(M.kept_view_file(state_directory, id))))
+end
+
+--- Keeps `view` for the session `id`, in place of what was kept before,
+--- making the directories that lead to its file when missing. The file holds
+--- the whole of `view` or, when the write fails, what it held before.
+---
+---@param state_directory string
+---@param id string
+---@param view aineo.changes.KeptView
+---@return string? failure why it could not be kept, naming the file; nil once kept
+function M.keep_view(state_directory, id, view)
+  return keep_file(M.kept_view_file(state_directory, id), {
+    repository = view.repository,
+    focused = view.focused,
+    shows_reported = view.shows_reported,
+    scope = view.scope,
+    reported = view.reported,
+  })
+end
+
+--- Moves the view kept for the session `from` to the session `to`, under
+--- `state_directory`, when `to` has none and `from` has one (`move_file()`).
+---
+---@param state_directory string
+---@param from string
+---@param to string
+---@return string? failure why it could not be moved, naming both files; nil when it was moved, or when `to`'s file exists or `from`'s does not
+function M.move_kept_view(state_directory, from, to)
+  return move_file(M.kept_view_file(state_directory, from), M.kept_view_file(state_directory, to))
 end
 
 return M
