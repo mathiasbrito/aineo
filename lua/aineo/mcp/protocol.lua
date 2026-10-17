@@ -3,6 +3,7 @@
 
 local names = require('aineo.mcp.names')
 local report = require('aineo.report')
+local work = require('aineo.mcp.work')
 
 local M = {}
 
@@ -46,20 +47,26 @@ local function tool_result(text, is_error)
   return { content = { { type = 'text', text = text } }, isError = is_error }
 end
 
---- The result of a `tools/call`: a report whose arguments are valid is
---- delivered; a delivery the editor did not confirm in time says so, and one
---- that fails is a tool error saying why; refused arguments are a tool error
---- naming the field; any tool but `report` is an error -32602.
+--- How the server hands a valid announcement on: whether the editor that
+--- started Claude Code took it (`'taken'`), did not (`'declined'`), or did
+--- not answer in time (`'unconfirmed'`, with the words for Claude).
+---@alias aineo.mcp.DeliverAnnouncement fun(work: aineo.mcp.Work): 'taken'|'declined'|'unconfirmed', string?
+
+--- What the server hands each valid call of a tool on to, by tool.
+---@class aineo.mcp.Deliverers
+---@field report aineo.mcp.DeliverReport
+---@field announcement aineo.mcp.DeliverAnnouncement
+
+--- The result of a `tools/call` of the report tool: a report whose
+--- arguments are valid is delivered; a delivery the editor did not confirm
+--- in time says so, and one that fails is a tool error saying why; refused
+--- arguments are a tool error naming the field.
 ---
----@param params table
+---@param arguments any
 ---@param deliver_report aineo.mcp.DeliverReport
----@return table? result
----@return aineo.mcp.Error? failure
-local function call_tool(params, deliver_report)
-  if params.name ~= names.REPORT_TOOL then
-    return nil, { code = INVALID_PARAMS, message = 'Unknown tool: ' .. tostring(params.name) }
-  end
-  local valid_report, refusal = report.validate_report(params.arguments)
+---@return table result
+local function call_report(arguments, deliver_report)
+  local valid_report, refusal = report.validate_report(arguments)
   if not valid_report then
     return tool_result('aineo refused the report: ' .. refusal, true)
   end
@@ -70,9 +77,49 @@ local function call_tool(params, deliver_report)
   return tool_result(explanation, outcome == 'failed')
 end
 
+--- The result of a `tools/call` of the announcement tool: a valid
+--- announcement is handed on, and answered `ok` when taken, a tool error
+--- `not taken` when not, nothing more; an offer the editor did not confirm
+--- in time with the words the deliverer gives.
+---
+---@param arguments any
+---@param deliver_announcement aineo.mcp.DeliverAnnouncement
+---@return table result
+local function call_announcement(arguments, deliver_announcement)
+  local valid_work, refusal = work.validate_work(arguments)
+  if not valid_work then
+    return tool_result('aineo refused the announcement: ' .. refusal, true)
+  end
+  local outcome, explanation = deliver_announcement(valid_work)
+  if outcome == 'taken' then
+    return tool_result('ok', false)
+  end
+  if outcome == 'unconfirmed' then
+    return tool_result(explanation, false)
+  end
+  return tool_result('not taken', true)
+end
+
+--- The result of a `tools/call`, by the tool it names (`call_report()`,
+--- `call_announcement()`); any other tool is an error -32602.
+---
+---@param params table
+---@param deliverers aineo.mcp.Deliverers
+---@return table? result
+---@return aineo.mcp.Error? failure
+local function call_tool(params, deliverers)
+  if params.name == names.REPORT_TOOL then
+    return call_report(params.arguments, deliverers.report)
+  end
+  if params.name == names.ANNOUNCE_TOOL then
+    return call_announcement(params.arguments, deliverers.announcement)
+  end
+  return nil, { code = INVALID_PARAMS, message = 'Unknown tool: ' .. tostring(params.name) }
+end
+
 --- The result of each method the server answers, by method name, or the
 --- error it is answered with instead.
----@type table<string, fun(params: table, deliver_report: aineo.mcp.DeliverReport): table?, aineo.mcp.Error?>
+---@type table<string, fun(params: table, deliverers: aineo.mcp.Deliverers): table?, aineo.mcp.Error?>
 local RESULTS = {
   initialize = function()
     return {
@@ -85,7 +132,7 @@ local RESULTS = {
     return vim.empty_dict()
   end,
   ['tools/list'] = function()
-    return { tools = { report_tool() } }
+    return { tools = { report_tool(), work.announce_tool() } }
   end,
   ['tools/call'] = call_tool,
 }
@@ -105,9 +152,9 @@ end
 --- takes none.
 ---
 ---@param message table
----@param deliver_report aineo.mcp.DeliverReport
+---@param deliverers aineo.mcp.Deliverers
 ---@return table? answer
-local function answer_message(message, deliver_report)
+local function answer_message(message, deliverers)
   if message.id == nil then
     return nil
   end
@@ -120,7 +167,7 @@ local function answer_message(message, deliver_report)
     )
   end
   local params = type(message.params) == 'table' and message.params or {}
-  local result, failure = result_of(params, deliver_report)
+  local result, failure = result_of(params, deliverers)
   if failure then
     return error_response(message.id, failure.code, failure.message)
   end
@@ -146,9 +193,11 @@ end
 --- `id`; JSON that is not an object, and a request whose `id` is null (MCP
 --- 2025-11-25 forbids a null id), with error -32600 and no `id`; a method the
 --- server does not have with error -32601; a `tools/call` of a
---- tool other than `report` with error -32602; a `report` whose arguments
---- are refused with a tool error naming the field; and a valid `report` is
---- handed to `deliver_report`. `params` that are not an object count as none.
+--- tool other than `report` and `announce_work` with error -32602; a call
+--- whose arguments are refused with a tool error naming the field; and a
+--- valid `report` is handed to `deliverers.report`, a valid `announce_work`
+--- to `deliverers.announcement`. `params` that are not an object count as
+--- none.
 ---
 --- `initialize` is answered with the protocol version the server speaks,
 --- 2025-11-25, whatever the client asks for: a client that cannot speak it
@@ -156,9 +205,9 @@ end
 --- Negotiation", a SHOULD).
 ---
 ---@param line string
----@param deliver_report aineo.mcp.DeliverReport
+---@param deliverers aineo.mcp.Deliverers
 ---@return table? answer
-function M.answer_line(line, deliver_report)
+function M.answer_line(line, deliverers)
   local decoded, message = pcall(vim.json.decode, line)
   if not decoded then
     return error_response(nil, PARSE_ERROR, 'Parse error: the message is not JSON')
@@ -169,7 +218,7 @@ function M.answer_line(line, deliver_report)
   if message.id == vim.NIL then
     return error_response(nil, INVALID_REQUEST, 'Invalid Request: the id is null')
   end
-  return answer_message(message, deliver_report)
+  return answer_message(message, deliverers)
 end
 
 return M

@@ -6,7 +6,10 @@
 --- stdout, handing each report on as `aineo.mcp.delivery` searches for where
 --- it goes, from what its environment tells it: the editor that started
 --- Claude Code, the token of that start, and the session Claude Code started
---- on. Its Claude Code process is its parent, and its state directory its
+--- on; and each announcement to the editor that started Claude Code alone,
+--- with that token, a relative path made absolute against its own working
+--- directory, Claude Code's (`aineo.mcp.announcement`). Its Claude Code
+--- process is its parent, and its state directory its
 --- own `stdpath('state')`, the editors'. As it starts, it records that
 --- process on its first session, unless a session hook did already
 --- (`aineo.mcp.processes`).
@@ -22,6 +25,7 @@ end
 
 vim.opt.runtimepath:prepend(vim.fn.fnamemodify(this_script, ':h:h:h:h'))
 
+local announcement = require('aineo.mcp.announcement')
 local delivery = require('aineo.mcp.delivery')
 local names = require('aineo.mcp.names')
 local processes = require('aineo.mcp.processes')
@@ -58,6 +62,15 @@ if context.token and context.first_session then
   })
 end
 
-require('aineo.mcp.server').serve_stdio(function(report)
-  return delivery.deliver(context, report)
-end)
+require('aineo.mcp.server').serve_stdio({
+  report = function(report)
+    return delivery.deliver(context, report)
+  end,
+  announcement = function(work)
+    return announcement.announce({
+      editor_address = context.editor_address,
+      token = context.token,
+      working_directory = vim.uv.cwd(),
+    }, work)
+  end,
+})

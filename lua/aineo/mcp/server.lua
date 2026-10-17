@@ -28,7 +28,7 @@ local function answer_safely(answer)
 end
 
 --- Serves MCP on this process's stdin and stdout until stdin closes,
---- handing each valid report to `deliver_report`.
+--- handing each valid call of a tool to its deliverer in `deliverers`.
 ---
 --- Lines are answered in the order they came: while a delivery waits on an
 --- editor (`aineo.mcp.delivery`, bounded), Neovim does not run the stdin
@@ -37,8 +37,8 @@ end
 --- past the limit is read (`lines.new_line_reader()`). A line whose answer
 --- fails gets none; the next line is answered as usual.
 ---
----@param deliver_report aineo.mcp.DeliverReport
-function M.serve_stdio(deliver_report)
+---@param deliverers aineo.mcp.Deliverers
+function M.serve_stdio(deliverers)
   local closed = false
   local stdio
   local function send(answer)
@@ -48,7 +48,7 @@ function M.serve_stdio(deliver_report)
     limit = LINE_LIMIT,
     on_line = function(line)
       answer_safely(function()
-        local answer = line ~= '' and protocol.answer_line(line, deliver_report)
+        local answer = line ~= '' and protocol.answer_line(line, deliverers)
         if answer then
           send(answer)
         end

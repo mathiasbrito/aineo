@@ -136,7 +136,7 @@ end
 
 T['tools/list'] = MiniTest.new_set()
 
-T['tools/list']['lists one tool, report, whose input schema is the report format'] = function()
+T['tools/list']['lists two tools, report, whose input schema is the report format, then announce_work'] = function()
   local relay = mcp_relay.start_relay()
 
   relay:send(mcp_messages.recorded('tools/list'))
@@ -159,6 +159,20 @@ T['tools/list']['lists one tool, report, whose input schema is the report format
           details = { type = { 'string', 'null' } },
         },
         required = { 'task', 'status', 'summary' },
+        additionalProperties = false,
+      },
+    },
+    {
+      name = 'announce_work',
+      description = 'Informs aineo of a git branch or worktree just created for new work; replies ok.',
+      inputSchema = {
+        type = 'object',
+        properties = {
+          kind = { type = 'string', enum = { 'worktree', 'branch' } },
+          path = { type = 'string' },
+          branch = { type = 'string' },
+        },
+        required = { 'kind' },
         additionalProperties = false,
       },
     },
