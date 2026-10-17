@@ -682,6 +682,32 @@ T['close_shown_diff()']['closes no window that shows no diff of the pane'] = fun
   }, { windows = windows - 1, current = { 'a file' } })
 end
 
+T['close_shown_diff()']['closes every window of the tab page that shows the diff'] = function()
+  show_a_diff_by('l')
+  enter_window_of(last_shown_name())
+  child.cmd('vsplit')
+  enter_window_of(FILES)
+  local windows = window_count()
+
+  close_shown_diff()
+
+  eq(window_count(), windows - 2)
+end
+
+T['close_shown_diff()']['closes the diff of the current tab page only'] = function()
+  show_a_diff_by('l')
+  local diff = child.lua_get('vim.fn.bufnr(...)', { last_shown_name() })
+  child.cmd('tab sbuffer ' .. diff)
+  child.cmd('tabnext 1')
+
+  close_shown_diff()
+
+  eq({
+    first_page_shows_it = vim.tbl_contains(child.lua_get('vim.fn.tabpagebuflist(1)'), diff),
+    second_page = child.lua_get('vim.fn.tabpagebuflist(2)'),
+  }, { first_page_shows_it = false, second_page = { diff } })
+end
+
 T['close_shown_diff()']['closes the diff shown again after it was closed'] = function()
   show_a_diff_by('<CR>')
   close_shown_diff()

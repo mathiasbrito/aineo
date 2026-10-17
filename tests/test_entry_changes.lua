@@ -664,6 +664,39 @@ T['Diff close']['closes the diff from Claude’s window, the cursor staying ther
   )
 end
 
+T['Diff close']['with no aineo tab tells there is no diff and makes no tab, by'] =
+  MiniTest.new_set({
+    parametrize = { DIFF_CLOSE_DOORS[1], DIFF_CLOSE_DOORS[3] },
+  })
+
+T['Diff close']['with no aineo tab tells there is no diff and makes no tab, by']['door'] = function(
+  _,
+  door
+)
+  door()
+
+  eq({
+    entry.messages(child),
+    child.lua_get("#require('aineo.entry.registry').tab_list"),
+    entry.windows(child),
+  }, {
+    { { message = 'aineo: no diff to close', level = vim.log.levels.INFO } },
+    0,
+    { '' },
+  })
+end
+
+T['Diff close']['from a tab page of no aineo tab closes the diff of the tab used last and moves there'] = function()
+  changes_pane_listing_a_file('changespane-entry-diff-close-plain-tab')
+  entry.press(child, '<CR>')
+  wait_for_window_showing('aineo://diff/notes.txt')
+  child.cmd('tabnew')
+
+  entry.press(child, '\\d')
+
+  eq({ child.fn.tabpagenr(), entry.windows(child) }, { 1, { 'terminal', FILES, COMMITS } })
+end
+
 T['Diff close']['gives the file column back: Claude’s column takes half of the screen again'] = function()
   changes_pane_listing_a_file('changespane-entry-diff-close-columns')
   entry.press(child, '<CR>')
