@@ -53,10 +53,10 @@ end
 
 T['allowed_mcp_tools()'] = MiniTest.new_set()
 
-T['allowed_mcp_tools()']['pre-allows the report tool and nothing else'] = function()
+T['allowed_mcp_tools()']['pre-allows the report tool and the announcement tool, and nothing else'] = function()
   local tools = mcp.allowed_mcp_tools()
 
-  eq(tools, { 'mcp__aineo__report' })
+  eq(tools, { 'mcp__aineo__report', 'mcp__aineo__announce_work' })
 end
 
 return T

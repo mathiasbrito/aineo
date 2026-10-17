@@ -1,5 +1,8 @@
 --- aineo's MCP home, `require('aineo.mcp')`: the report server Claude Code
---- runs, described for Claude Code's `--mcp-config` and `--allowedTools`.
+--- runs, described for Claude Code's `--mcp-config` and `--allowedTools`,
+--- with its two tools — the report and the announcement of a worktree or a
+--- branch an agent created — and the words that tell Claude Code's agents of
+--- the second.
 
 local editors = require('aineo.mcp.editors')
 local names = require('aineo.mcp.names')
@@ -64,12 +67,44 @@ function M.report_tool_name()
   return ('mcp__%s__%s'):format(names.SERVER_NAME, names.REPORT_TOOL)
 end
 
+--- The name Claude Code gives the announcement tool: `mcp__<server>__<tool>`.
+---
+---@return string
+function M.announce_tool_name()
+  return ('mcp__%s__%s'):format(names.SERVER_NAME, names.ANNOUNCE_TOOL)
+end
+
 --- The tools Claude Code may call without asking the user (its
---- `--allowedTools`): the report tool, and nothing else.
+--- `--allowedTools`): the report tool and the announcement tool, in that
+--- order, and nothing else.
 ---
 ---@return string[]
 function M.allowed_mcp_tools()
-  return { M.report_tool_name() }
+  return { M.report_tool_name(), M.announce_tool_name() }
+end
+
+--- The paragraph appended to Claude Code's system prompt after the report's
+--- instructions, which tells the main agent when to call the announcement
+--- tool and that its reply asks for nothing.
+---
+---@return string
+function M.announce_instructions()
+  return (
+    'When you, or a subagent you start, create a git branch or worktree for new work,'
+    .. ' call `%s` once with its kind and its path or branch.'
+    .. ' It only informs aineo; do not act on its reply.'
+  ):format(M.announce_tool_name())
+end
+
+--- The context a `SubagentStart` hook adds for each subagent, which never
+--- gets the appended system prompt: the paragraph of
+--- `announce_instructions()`, then one sentence for a subagent started in a
+--- worktree made for its task.
+---
+---@return string
+function M.subagent_announce_context()
+  return M.announce_instructions()
+    .. " If you started in a git worktree made for your task, call it once, now, with that worktree's path."
 end
 
 --- Lists the editor `entry` describes among the running aineo editors under
@@ -183,6 +218,41 @@ function M.receive_followed_switch(left, new)
       followed_switch_handler(left, new)
     end
   end)
+end
+
+--- The handler `on_work_announced()` registered, called with each
+--- announcement a relay offers this editor.
+---@type fun(work: aineo.mcp.Work, start_token: string): boolean?
+local work_announced_handler
+
+--- Registers `handler`, in place of any before, as what this editor does
+--- with each announcement of a worktree or a branch an agent created, which
+--- the relay of a Claude Code this editor started offers it
+--- (`receive_work_announcement()`): `handler(work, start_token)`, with the
+--- announcement — its path absolute — and the token of the start of Claude
+--- Code whose agent made it, returns whether it took it, at once. Its
+--- strategy is the composition root's: plain dependency inversion, bound
+--- once at start.
+---
+---@param handler fun(work: aineo.mcp.Work, start_token: string): boolean
+function M.on_work_announced(handler)
+  work_announced_handler = handler
+end
+
+--- Takes an announcement a relay offers, `work` of the start `start_token`,
+--- and answers at once whether this editor took it: what the handler
+--- `on_work_announced()` registered answers; false with no handler
+--- registered. Called in the RPC request that offers it, so the handler
+--- answers without waiting on anything.
+---
+---@param work aineo.mcp.Work
+---@param start_token string
+---@return boolean taken
+function M.receive_work_announcement(work, start_token)
+  if not work_announced_handler then
+    return false
+  end
+  return work_announced_handler(work, start_token) == true
 end
 
 --- Records what a session hook of the Claude Code process `hook.pid` told —
