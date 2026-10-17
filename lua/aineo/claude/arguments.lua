@@ -20,6 +20,9 @@ local HOOK_TIMEOUT_SECONDS = 5
 --- The Claude Code hook events the hook relay runs for.
 local RELAYED_EVENTS = { 'SessionStart', 'SessionEnd' }
 
+--- The Claude Code hook event that runs as a subagent starts.
+local SUBAGENT_START_EVENT = 'SubagentStart'
+
 --- The flag that gives Claude Code settings, and the prefix of its spelling
 --- joined to its value in one word.
 local SETTINGS_FLAG = '--settings'
@@ -67,10 +70,27 @@ local function relay_command(settings, start_token, event)
   return table.concat(quoted, ' ')
 end
 
+--- The shell command that prints, on its standard output, the JSON object
+--- by which a `SubagentStart` command hook adds `context` to the subagent's
+--- conversation: `printf` of the object, quoted as one word
+--- (`shell_word()`), so that the shell reads none of it. It contacts no
+--- editor.
+---
+---@param context string
+---@return string
+local function subagent_context_command(context)
+  local output = vim.json.encode({
+    hookSpecificOutput = { hookEventName = SUBAGENT_START_EVENT, additionalContext = context },
+  })
+  return "printf '%s' " .. shell_word(output)
+end
+
 --- aineo's hook entry for each of `RELAYED_EVENTS`, by event: a command hook
 --- with no matcher, so that it runs whatever the event's source or reason,
 --- that runs the hook relay (`relay_command()`) and is stopped after
---- `HOOK_TIMEOUT_SECONDS`.
+--- `HOOK_TIMEOUT_SECONDS`; and, when `settings` give a subagent context, one
+--- for `SUBAGENT_START_EVENT`, with no matcher, so that it runs for every
+--- subagent whatever its type, that prints it (`subagent_context_command()`).
 ---
 ---@param settings aineo.claude.Settings
 ---@param start_token string
@@ -84,6 +104,14 @@ local function hook_entries(settings, start_token)
       timeout = HOOK_TIMEOUT_SECONDS,
     }
     entries[event] = { hooks = { hook } }
+  end
+  if settings.subagent_context then
+    local hook = {
+      type = 'command',
+      command = subagent_context_command(settings.subagent_context),
+      timeout = HOOK_TIMEOUT_SECONDS,
+    }
+    entries[SUBAGENT_START_EVENT] = { hooks = { hook } }
   end
   return entries
 end
@@ -191,9 +219,10 @@ local function read_settings(value, cwd)
   return settings, nil, source
 end
 
---- Why aineo's hook entries for `RELAYED_EVENTS` cannot be added after the
---- hooks `settings`, from `source`, already gives: its `hooks` not an
---- object, or an event's entries in it not a list; nil when they can.
+--- Why aineo's hook entries for `RELAYED_EVENTS` and `SUBAGENT_START_EVENT`
+--- cannot be added after the hooks `settings`, from `source`, already gives:
+--- its `hooks` not an object, or an event's entries in it not a list; nil
+--- when they can.
 ---
 ---@param settings table settings decoded from JSON
 ---@param source string where they came from, as `read_settings()` names it
@@ -205,7 +234,7 @@ local function hooks_problem(settings, source)
   if not is_object(settings.hooks) then
     return ('the hooks in %s are not an object'):format(source)
   end
-  for _, event in ipairs(RELAYED_EVENTS) do
+  for _, event in ipairs(vim.list_extend(vim.list_slice(RELAYED_EVENTS), { SUBAGENT_START_EVENT })) do
     local given = settings.hooks[event]
     if given and not (type(given) == 'table' and vim.islist(given)) then
       return ('the %s hooks in %s are not a list'):format(event, source)
@@ -307,7 +336,7 @@ end
 --- What becomes of the `--settings` that `cmd` gives when Claude Code starts
 --- in `cwd`, read as `M.claude_command()` reads it: nil when `cmd` gives
 --- none; else a verdict whose `problem` says why aineo cannot add its
---- session hooks to them, nil when it can. Whether the file aineo writes
+--- hooks to them (`hooks_problem()`), nil when it can. Whether the file aineo writes
 --- them to can be written is not part of it.
 ---
 ---@param cmd string[]
@@ -375,7 +404,9 @@ end
 --- `session_words` pick: `settings.cmd`, then `session_words`, then aineo's
 --- arguments (`claude_arguments()`), among them `--settings` with a
 --- `SessionStart` and a `SessionEnd` hook that tell the editor of each,
---- naming `start_token`: inline when `settings.cmd` gives no `--settings`.
+--- naming `start_token`, and, when `settings.subagent_context` is given, a
+--- `SubagentStart` hook that prints it (`hook_entries()`): inline when
+--- `settings.cmd` gives no `--settings`.
 --- A `--settings` of `settings.cmd`, in a file or inline, gets aineo's hooks
 --- after its own, nothing of it dropped, and is written to a new file only
 --- the user can read, in Neovim's temporary directory, which that one
