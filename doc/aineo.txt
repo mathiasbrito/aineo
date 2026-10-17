@@ -684,11 +684,14 @@ it holds, spaces, quotes and an apostrophe among them: a name that fails to
 open from the pane is a fault to report.
 
 `l` and `h` on a file's line show that file's diff as Enter does, `l`
-against the file's previous version, `h` against `HEAD`. `l` shows what
-Enter shows on the line, in Enter's buffer. `h` shows, under a commit of
-yours or one that landed, the file from that commit straight to `HEAD`, a
-renamed file with both its paths, in `aineo://head/commit/{id}/{path}`;
-under a commit of another worktree, to that worktree's `HEAD`, in
+against the file's previous version, `h` against `HEAD`, and keep the cursor
+in the files window, on that line, in Normal mode, so that you can move down
+the files with the diff following; only Enter moves the cursor to the diff.
+`l` shows what Enter shows on the line, in Enter's buffer. `h` shows,
+under a commit of yours or one that landed, the file from that commit
+straight to `HEAD`, a renamed file with both its paths, in
+`aineo://head/commit/{id}/{path}`; under a commit of another worktree, to
+that worktree's `HEAD`, in
 `aineo://worktree{top}//head/commit/{id}/{path}`; under the Landed heading,
 from `HEAD` straight to the working branch's commit, in
 `aineo://head/landed/{path}`; under the whole change of a branch shown alone,
@@ -699,9 +702,9 @@ one of yours; under Uncommitted and Session work, from
 Enter's diff under Uncommitted; under another worktree's whole change, from
 that worktree's `HEAD` to its working tree, in
 `aineo://worktree{top}//head/{path}`. A file `HEAD` lacks is shown wholly
-added or removed. Both move the cursor to the diff, show only the last key's
-diff when you press keys again before one was read, and tell a failure or a
-middle column with no room as Enter does; `F` works in the diff they show.
+added or removed. Both show only the last key's diff when you press keys
+again before one was read, and tell a failure or a middle column with no
+room as Enter does; `F` works in the diff they show, once the cursor is there.
 When `h` finds no difference from `HEAD` - every file of the newest commit,
 every file under Session work once the work is committed - it shows nothing
 and the cursor stays; aineo says "<path> is as HEAD has it", once. When
