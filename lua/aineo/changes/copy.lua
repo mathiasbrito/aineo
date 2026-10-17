@@ -1650,8 +1650,10 @@ function M.new(label)
   --- in (`aineo.changes.Selection`), unless a key asked for another diff or
   --- file meanwhile: only the last key's is shown, or its failure told. A
   --- diff against `HEAD` that is empty is not shown: the user is told, once,
-  --- that the file is as `HEAD` has it, and the focus stays. Does nothing on a
-  --- line that lists none.
+  --- that the file is as `HEAD` has it, and the focus stays. On the heading of
+  --- a branch the commits window has not read yet, tells the user, at `INFO`,
+  --- that aineo is reading the repository, and reads nothing. Does nothing on
+  --- a line that lists none.
   ---
   ---@param buffer integer
   ---@param diffed fun(listed: aineo.changes.Entry): aineo.changes.Entry the entry standing for the diff to show
@@ -1661,6 +1663,10 @@ function M.new(label)
       return
     end
     local entry = diffed(listed)
+    if entry.filter and entry.filter.kind == 'branch' and not session.branch then
+      vim.notify(lines.READING, vim.log.levels.INFO)
+      return
+    end
     enters = enters + 1
     local this_enter = enters
     local window = vim.api.nvim_get_current_win()

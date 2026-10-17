@@ -35,9 +35,11 @@ M.NONE_TO_SHOW = 'aineo: no other worktree or branch to show alone'
 ---@field working_branch? string the working branch's name, as the setting names it or as the remote's default branch is named; nil when there is none
 
 --- Whether the branch `name` is the working branch `working`, their short
---- names compared: `origin/dev` is `dev`. A working branch that names a
---- local branch is that branch alone; otherwise its first component is the
---- remote's name, left off.
+--- names compared: `origin/dev` is `dev`. The setting may spell the name as
+--- git reads one: `refs/heads/dev` and `heads/dev` are the local branch
+--- `dev` alone; `refs/remotes/origin/dev` and `remotes/origin/dev` are
+--- `origin/dev`. A working branch that names a local branch is that branch
+--- alone; otherwise its first component is the remote's name, left off.
 ---
 ---@param name string
 ---@param working string|nil
@@ -47,6 +49,11 @@ local function is_working_branch(name, working, listed)
   if not working then
     return false
   end
+  local local_branch = working:match('^refs/heads/(.+)$') or working:match('^heads/(.+)$')
+  if local_branch then
+    return name == local_branch
+  end
+  working = working:match('^refs/remotes/(.+)$') or working:match('^remotes/(.+)$') or working
   if name == working then
     return true
   end
