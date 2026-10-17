@@ -40,6 +40,8 @@ Terminal mode (|aineo-panes|). `\T` opens a tab page with a Claude Code
 session of its own, `\1` to `\9` move to the tab page of that number, and
 `\Q` closes the current tab (|aineo-tabs|). `\d` closes the diff the changes
 pane shows in the middle column, from any window of the tab (|:Aineo-diff|).
+`\f` finds a file under the folder Claude Code works in and opens it in the
+middle column, from any window of the tab but a floating one (|aineo-find|).
 In Visual mode, in Input, `\s` sends the selection alone and removes it from
 Input (|aineo-v_\s|).
 
@@ -66,6 +68,9 @@ Requirements:
   Claude Code tells of a session switch, on 2.1.292.
 - git 2.36 or later, the `git` command, for the changes pane
   (|aineo-changes|). aineo is tested with git 2.50.1.
+- Optional: a file picker, snacks.nvim, fzf-lua, telescope.nvim or mini.pick,
+  for `\f` (|aineo-find|). With none installed `\f` lists the files through
+  |vim.ui.select()|.
 
 With lazy.nvim, load aineo at startup, so that its autostart can run
 (|aineo-autostart|): >lua
@@ -912,12 +917,12 @@ AineoChangesFailure      a line that tells a failure, linked to
 
 The file column ~
                                                           *aineo-file-column*
-A file you open from one of the three windows — `:edit`, a picker, a jump —
-moves to a column between Claude's and the right column, created on first
-use and reused afterwards; the aineo window keeps its own buffer. While the
-file column is open, the three columns take a third of the screen each.
-Only file buffers move: help, terminals and scratch buffers stay where they
-were opened until `\o` restores the layout.
+A file you open from one of the three windows — `:edit`, a picker, a jump,
+`\f` (|aineo-find|) — moves to a column between Claude's and the right
+column, created on first use and reused afterwards; the aineo window keeps
+its own buffer. While the file column is open, the three columns take a
+third of the screen each. Only file buffers move: help, terminals and
+scratch buffers stay where they were opened until `\o` restores the layout.
 
 A diff Enter shows from the changes pane (|aineo-changes|) takes the file
 column's window as a file does, and the next file or diff takes its place:
@@ -925,6 +930,44 @@ the column keeps one window for both. A changed file that cannot leave that
 window keeps it, and the diff opens above it. `\d` closes the diff's window
 (|:Aineo-diff|); when it was the file column's last window the column goes,
 and the two columns left take half of the screen each again.
+
+Finding a file ~
+                                                                  *aineo-find*
+`\f` searches the files under the folder the tab's Claude Code works in, or
+under the top of the repository that folder is in, and opens the one you pick
+in the file column as any file opened from the layout (|aineo-file-column|):
+modifiable, written by `:w`, with the cursor in it in Normal mode. It works
+from any window of the tab but a floating one, Claude's terminal included,
+where its twin `<C-\>f` leaves Terminal mode first (|aineo-terminal-keys|);
+from a floating window, a picker's own among them, it starts nothing and
+tells you, with one warning, `aineo: a file is found from a window of the tab,
+not from a floating one`. A diff shown in the file column gives its place to
+the file as it does to any other file. From a tab page that is none of
+aineo's it acts on the aineo tab used last and moves you there; with no
+aineo tab it tells you, with one warning, `aineo: there is no aineo tab to
+find a file in`, and opens nothing (|:Aineo-find|).
+
+aineo has no picker of its own and depends on none. With `find.picker` set to
+`auto`, it hands the search to the first of snacks.nvim
+(`Snacks.picker.files`), fzf-lua (`files`), telescope.nvim
+(`builtin.find_files`) and mini.pick (`builtin.files`) that is installed,
+each given the folder as its working directory; the picker's own keys choose
+the file and open it in a window of the tab, which the file column's
+redirect moves to the file column. Set `find.picker` to one of their names
+to use that one alone (|aineo-config-find.picker|). With none installed, or
+with the one forced missing, aineo lists the files through
+|vim.ui.select()|: the files of the repository, as the git home lists them
+(the tracked ones and the untracked ones its ignore rules leave in), and,
+whenever git cannot list them (outside a repository, or git failing or
+running past its limit), the files found by a walk of the folder; in byte
+order, at most 20000. In a search, aineo tells you once, with a warning,
+that the picker forced is missing; once, that git could not list the files
+of a repository and the list is a walk of the folder; once, when the list
+stops at 20000; and once, with an error, when the file picked cannot be
+opened, as `:edit` refuses a window whose unsaved buffer cannot be hidden.
+A `vim.ui.select` of yours, from a picker plugin, then gives the search its
+matching. `:checkhealth aineo` says which picker aineo will use
+(|aineo-health|).
 
 Claude's session ~
                                                         *aineo-claude-session*
@@ -1512,6 +1555,22 @@ moves you to that tab instead and claims nothing.
 			in Terminal mode and in Insert mode, `<C-\>d` do the
 			same (|aineo-keys|).
 
+                                                                 *:Aineo-find*
+:Aineo find		Searches for a file under the folder the tab's Claude
+			Code works in, or under the top of the repository that
+			folder is in, with the picker `find.picker` names
+			(|aineo-config-find.picker|), and opens the file
+			picked in the file column, from any window of the
+			tab but a floating one (|aineo-find|). From a tab page
+			that is none of aineo's it acts on the aineo tab used
+			last and moves you there (|aineo-tabs|); with no aineo
+			tab it makes none and tells you, with one warning,
+			`aineo: there is no aineo tab to find a file in`. With
+			any word after `find` it
+			tells you, with one error, what `:Aineo` takes. `\f`
+			and, in Terminal mode and in Insert mode, `<C-\>f` do
+			the same (|aineo-keys|).
+
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
 
@@ -1589,6 +1648,10 @@ you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-diff-close)
 			Does what `:Aineo diff close` does (|:Aineo-diff|).
 
+                                                          *<Plug>(aineo-find)*
+<Plug>(aineo-find)
+			Does what `:Aineo find` does (|:Aineo-find|).
+
 Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
@@ -1627,6 +1690,8 @@ which has none, globally, in Normal mode, and `\s` in Visual mode too:
 \1 to \9	|<Plug>(aineo-tab-1)| to |<Plug>(aineo-tab-9)|
                                                                     *aineo-\d*
 \d		|<Plug>(aineo-diff-close)|
+                                                                    *aineo-\f*
+\f		|<Plug>(aineo-find)|
                                                                   *aineo-v_\s*
 \s		|<Plug>(aineo-send)| in Visual mode (|aineo-send|)
 
@@ -1702,6 +1767,8 @@ Code is sent none of the twin's keys.
 <C-\>1 to <C-\>9	|<Plug>(aineo-tab-1)| to |<Plug>(aineo-tab-9)|
                                                                 *aineo-<C-\>d*
 <C-\>d		|<Plug>(aineo-diff-close)|
+                                                                *aineo-<C-\>f*
+<C-\>f		|<Plug>(aineo-find)|
 
 Send has no twin: it acts on a selection or on the line of Normal mode.
 `:Aineo claim` has no key of its own, so no twin either.
@@ -1883,6 +1950,18 @@ tabs.always_show	A boolean. Default: `true`
 			tab pages on by default. The setting takes effect at
 			the first aineo tab: a change made after it, by
 			|aineo.setup()| or `vim.g.aineo`, needs a restart.
+
+                                *aineo-config-find* *aineo-config-find.picker*
+find.picker		One of `'auto'`, `'snacks'`, `'fzf-lua'`,
+			`'telescope'` and `'mini.pick'`. Default: `'auto'`
+			The picker `\f` hands its search to (|aineo-find|).
+			`'auto'` takes the first of snacks.nvim, fzf-lua,
+			telescope.nvim and mini.pick that is installed; a name
+			takes that picker alone. With no picker installed, or
+			the one named missing, `\f` lists the files through
+			|vim.ui.select()|, and with a name it tells you, in
+			each search, with one warning, that the picker is
+			missing. None of them is a dependency of aineo.
 
 ==============================================================================
 7. SEND                                                           *aineo-send*
@@ -2345,6 +2424,15 @@ Tab line ~
   title, or keeps it still, so that no tab shows activity (|aineo-limits|);
   for `TMUX`, it adds that a copy made in Claude's window prints
   `52;c;<base64>` there.
+
+Find a file ~
+  Which picker `\f` uses (|aineo-find|), for `find.picker`
+  (|aineo-config-find.picker|): the one `auto` takes, or the one a name
+  forces, as an OK; with none installed under `auto`, that the files are
+  listed through |vim.ui.select()|; a warning when the picker a name forces
+  is not installed. Nothing while the configuration is wrong. To tell, the
+  check loads the pickers it looks for, in the order `auto` does, up to the
+  first that is installed.
 
 Autostart ~
   Whether the autostart opened the layout at startup, or which reason kept

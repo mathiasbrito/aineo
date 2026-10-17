@@ -12,6 +12,7 @@ local DEFAULTS = {
   layout = { report_height = 2 / 3 },
   changes = {},
   tabs = { padding = 2, always_show = true },
+  find = { picker = 'auto' },
 }
 
 local T = MiniTest.new_set()
@@ -224,6 +225,40 @@ T['resolve_config()']['refuses an always_show that is not a boolean']['as tabs.a
   expect.error(function()
     config.resolve_config({ tabs = { always_show = always_show } }, nil)
   end, 'tabs%.always_show: expected boolean')
+end
+
+T['resolve_config()']['takes the picker of the file finder from either source, auto by default'] = function()
+  local from_global = config.resolve_config({ find = { picker = 'telescope' } }, nil)
+  local from_setup = config.resolve_config(
+    { find = { picker = 'telescope' } },
+    { find = { picker = 'fzf-lua' } }
+  )
+
+  eq(from_global.find.picker, 'telescope')
+  eq(from_setup.find.picker, 'fzf-lua')
+  eq(config.resolve_config(nil, nil).find.picker, 'auto')
+end
+
+T['resolve_config()']['takes each picker the file finder knows'] = MiniTest.new_set({
+  parametrize = { { 'auto' }, { 'snacks' }, { 'fzf-lua' }, { 'telescope' }, { 'mini.pick' } },
+})
+
+T['resolve_config()']['takes each picker the file finder knows']['as find.picker'] = function(
+  picker
+)
+  eq(config.resolve_config({ find = { picker = picker } }, nil).find.picker, picker)
+end
+
+T['resolve_config()']['refuses a picker the file finder does not know'] = MiniTest.new_set({
+  parametrize = { { 'ctrlp' }, { '' }, { false }, { 1 }, { {} } },
+})
+
+T['resolve_config()']['refuses a picker the file finder does not know']['as find.picker'] = function(
+  picker
+)
+  expect.error(function()
+    config.resolve_config({ find = { picker = picker } }, nil)
+  end, 'find%.picker: expected one of auto, snacks, fzf%-lua, telescope, mini%.pick')
 end
 
 T['resolve_config()']['takes the working branch of the changes pane from either source, none by default'] = function()
