@@ -14,9 +14,10 @@ local CLAUDE_WINDOW_BUFFER = 'vim.api.nvim_win_get_buf(vim.fn.win_getid(1))'
 --- program, as Claude Code's `--mcp-config` takes them, read in the child.
 local REPORT_SERVERS = "require('aineo.mcp').mcp_servers(vim.v.servername, vim.v.progpath)"
 
---- The instructions for the report tool, read in the child.
-local REPORT_INSTRUCTIONS =
-  "require('aineo.report').report_instructions(require('aineo.mcp').report_tool_name())"
+--- The instructions for the report tool, then, after a blank line, the
+--- paragraph for the announcement tool, read in the child.
+local REPORT_INSTRUCTIONS = "require('aineo.report').report_instructions(require('aineo.mcp').report_tool_name())"
+  .. " .. '\\n\\n' .. require('aineo.mcp').announce_instructions()"
 
 --- What Claude's terminal receives when Send sends an Input holding `hello`:
 --- one bracketed paste, then Enter.
@@ -181,7 +182,26 @@ T[':Aineo open']['lets Claude call the report tool without asking'] = function()
   )
 end
 
-T[':Aineo open']['tells Claude when and how to call the report tool'] = function()
+T[':Aineo open']['tells each subagent of Claude when to call the announcement tool, in a SubagentStart hook'] = function()
+  local fake = claude_session.fake('entry-open-subagents', 'ready')
+  entry.use_fake(child, fake)
+
+  child.cmd('Aineo open')
+
+  local given = claude_session.decoded_words_after(claude_session.arguments(fake), '--settings')
+  local command = vim.tbl_get(given, 1, 'hooks', 'SubagentStart', 1, 'hooks', 1, 'command')
+  local printed = vim.system({ 'sh', '-c', command or 'false' }, { text = true }):wait(5000).stdout
+  eq(
+    vim.tbl_get(
+      vim.json.decode(printed ~= '' and printed or '{}'),
+      'hookSpecificOutput',
+      'additionalContext'
+    ),
+    child.lua_get("require('aineo.mcp').subagent_announce_context()")
+  )
+end
+
+T[':Aineo open']['tells Claude when and how to call the report tool and the announcement tool'] = function()
   local fake = claude_session.fake('entry-open-instructions', 'ready')
   entry.use_fake(child, fake)
 
