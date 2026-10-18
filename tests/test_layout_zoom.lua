@@ -566,6 +566,17 @@ T['toggling the zoom after the editor was resized']['gives the recorded heights 
   eq(heights_of({ buffers.report, buffers.input }), before)
 end
 
+T['toggling the zoom after the editor was resized']['rounds the scaled heights to the nearest row'] = function()
+  local buffers = open_every_pane()
+  enter(buffers.report)
+  toggle_zoom()
+
+  child.o.lines = layout.LINES - 8
+  toggle_zoom()
+
+  eq(heights_of({ buffers.report, buffers.input }), { 9, 4 })
+end
+
 T['toggling the zoom']['zooms again after it was toggled off'] = function()
   local buffers = open_every_pane()
   local height = zoomed_height({ buffers.report, buffers.input })
