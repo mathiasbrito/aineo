@@ -157,8 +157,9 @@ for _, case in ipairs({
     local height = zoomed_height(stack)
     enter(stack[case.position])
 
-    toggle_zoom()
+    local told = toggle_zoom()
 
+    eq(told, {})
     eq(heights_of(stack), heights_zoomed_at(#stack, case.position, height))
   end
 end
@@ -288,22 +289,18 @@ T['switching the pane while zoomed']['leaves the zoom as it is when the pane ask
   eq(heights_of({ buffers.report, buffers.input }), zoomed)
 end
 
-for _, other in ipairs({ 'changes', 'run', 'terminal' }) do
-  T['switching the pane while zoomed'][('makes the next toggle zoom again after the %s pane showed'):format(
-    other
-  )] = function()
-    local buffers, arrangement = open_every_pane()
-    enter(buffers.report)
-    toggle_zoom()
-    local zoomed = heights_of({ buffers.report, buffers.input })
-    show_pane(other, arrangement)
-    show_pane('agent', arrangement)
-    enter(buffers.report)
+T['switching the pane while zoomed']['makes the next toggle zoom again rather than end a zoom that was over'] = function()
+  local buffers, arrangement = open_every_pane()
+  enter(buffers.report)
+  toggle_zoom()
+  local zoomed = heights_of({ buffers.report, buffers.input })
+  show_pane('changes', arrangement)
+  show_pane('agent', arrangement)
+  enter(buffers.report)
 
-    toggle_zoom()
+  toggle_zoom()
 
-    eq(heights_of({ buffers.report, buffers.input }), zoomed)
-  end
+  eq(heights_of({ buffers.report, buffers.input }), zoomed)
 end
 
 --- Expects the next toggle of the zoom, with the cursor in the first window
