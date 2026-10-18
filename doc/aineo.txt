@@ -727,7 +727,9 @@ taken whole, as for `gf`: no character of it is a wildcard or the end of a
 command. Enter, `h`, `l` and `gf` are unchanged, and `\<CR>` and `<S-CR>`
 on any line that lists no file do nothing. `\<CR>` follows the prefix
 (|aineo-config-prefix|) and is a map of the files window's buffer alone;
-with the prefix `false` it is not mapped, and `<S-CR>` is the only key.
+with the prefix `false` it is not mapped, and `<S-CR>` is the only key. In
+that buffer it replaces a global mapping of your own on the same keys; in
+every other buffer your mapping stays.
 
 Neovim receives `<S-CR>` only when your terminal tells it apart from Enter,
 which many terminals do only once asked for extended keys. Inside tmux, tmux
@@ -736,7 +738,8 @@ configuration. `extended-keys-format` (`csi-u` or `xterm`) is the format
 tmux uses to report modified keys to the program in the pane. A terminal
 tmux does not recognise as sending extended keys is told so with the
 `extkeys` feature of `terminal-features`. In iTerm2, give Shift+Return a key
-mapping (Settings, Profiles, Keys) that sends the escape sequence `[13;2u`.
+mapping (Settings, Profiles, Keys) whose action is "Send Escape Sequence"
+with `[13;2u`.
 
 `l` and `h` on a file's line show that file's diff as Enter does, `l`
 against the file's previous version, `h` against `HEAD`, and keep the cursor
