@@ -8,7 +8,8 @@
 --- Claude Code, the token of that start, and the session Claude Code started
 --- on; and each announcement to the editor that started Claude Code alone,
 --- with that token, a relative path made absolute against its own working
---- directory, Claude Code's (`aineo.mcp.announcement`). Its Claude Code
+--- directory, Claude Code's (`aineo.mcp.announcement`); and each call of a
+--- run tool likewise (`aineo.mcp.run_calls`). Its Claude Code
 --- process is its parent, and its state directory its
 --- own `stdpath('state')`, the editors'. As it starts, it records that
 --- process on its first session, unless a session hook did already
@@ -29,6 +30,7 @@ local announcement = require('aineo.mcp.announcement')
 local delivery = require('aineo.mcp.delivery')
 local names = require('aineo.mcp.names')
 local processes = require('aineo.mcp.processes')
+local run_calls = require('aineo.mcp.run_calls')
 
 --- The value of the environment variable `name`, or nil when it is unset or
 --- empty.
@@ -72,5 +74,11 @@ require('aineo.mcp.server').serve_stdio({
       token = context.token,
       working_directory = vim.uv.cwd(),
     }, work)
+  end,
+  run_call = function(run_call)
+    return run_calls.offer({
+      editor_address = context.editor_address,
+      token = context.token,
+    }, run_call)
   end,
 })

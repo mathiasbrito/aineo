@@ -174,22 +174,25 @@ local function send_request(connection, request, call)
   )
 end
 
---- What the relay tells Claude when an editor did not confirm a report in
---- time.
-local UNCONFIRMED = ('aineo sent the report, but the editor did not confirm it within %d s:'):format(
-  CONFIRMATION_TIMEOUT_MS / 1000
-) .. ' it may be waiting for the user, at a hit-enter prompt for one.' .. ' The report is sent, not confirmed; do not send it again.'
+--- What the relay tells Claude when an editor did not confirm a report, or
+--- another request, in time, given the words that name it (`%s`, twice).
+local UNCONFIRMED_FORMAT = 'aineo sent the %s, but the editor did not confirm it within '
+  .. CONFIRMATION_TIMEOUT_MS / 1000
+  .. ' s: it may be waiting for the user, at a hit-enter prompt for one.'
+  .. ' The %s is sent, not confirmed; do not send it again.'
 
 ---@alias aineo.mcp.OfferKind 'taken'|'declined'|'refused'|'unreachable'|'closed'|'unconfirmed'
 
 --- How the offer `call` to the editor at `address` went, in the terms of
---- `offer_report()`.
+--- `offer_report()`, `subject` naming what was offered.
 ---
 ---@param call aineo.mcp.Call
 ---@param address string
+---@param subject string
 ---@return aineo.mcp.OfferKind kind
 ---@return string? explanation
-local function offer_outcome(call, address)
+---@return any result what the editor answered when it took the offer
+local function offer_outcome(call, address, subject)
   if call.unreachable then
     return 'unreachable',
       ('aineo could not reach the editor at %s: %s'):format(address, call.unreachable)
@@ -198,27 +201,33 @@ local function offer_outcome(call, address)
     local failure = call.response[3]
     if failure ~= vim.NIL then
       return 'refused',
-        'the editor did not take the report: ' .. editor_reason(tostring(failure[2]))
+        ('the editor did not take the %s: %s'):format(subject, editor_reason(tostring(failure[2])))
     end
-    return call.response[4] == false and 'declined' or 'taken'
+    if call.response[4] == false then
+      return 'declined'
+    end
+    return 'taken', nil, call.response[4]
   end
   if call.closed then
     return 'closed', ('the editor at %s closed the connection before it answered'):format(address)
   end
-  return 'unconfirmed', UNCONFIRMED
+  return 'unconfirmed', UNCONFIRMED_FORMAT:format(subject, subject)
 end
 
---- A request an editor runs to take a report or an announcement: Lua code,
---- which reaches an aineo home through its entry point, and its arguments,
---- the report or the announcement among them.
----@alias aineo.mcp.ReportRequest { lua: string, arguments: any[] }
+--- A request an editor runs to take a report, an announcement or a call of a
+--- run tool: Lua code, which reaches an aineo home through its entry point,
+--- its arguments, the report, announcement or call among them, and the word
+--- that names what is offered in the words for Claude (`report` when not
+--- given).
+---@alias aineo.mcp.ReportRequest { lua: string, arguments: any[], subject: string? }
 
 --- Offers the editor listening at `address` to run `request`, which takes
---- a report, and says how it went:
+--- a report, an announcement or a call, and says how it went:
 ---
---- - `'taken'` when the editor ran it and it returned anything but `false`;
---- - `'declined'` when it returned `false`: the editor does not take the
----   report, and has not shown it;
+--- - `'taken'` when the editor ran it and it returned anything but `false`,
+---   what it returned being the third result;
+--- - `'declined'` when it returned `false`: the editor does not take what
+---   was offered, and has not shown it;
 --- - `'refused'` when it raised an error, with the first line of its reason;
 --- - `'unreachable'` when the editor cannot be reached;
 --- - `'closed'` when the editor closed the connection before it answered;
@@ -227,13 +236,15 @@ end
 ---   it when it is free, and the connection stays open until it answers.
 ---
 --- The second result says it in words, for Claude, but for `'taken'` and
---- `'declined'`.
+--- `'declined'`, naming what was offered as `request.subject` does.
 ---
 ---@param address string the editor's server address
 ---@param request aineo.mcp.ReportRequest
 ---@return aineo.mcp.OfferKind kind
 ---@return string? explanation
+---@return any result what the editor returned, for `'taken'`
 function M.offer_report(address, request)
+  local subject = request.subject or 'report'
   local call = { closed = false }
   local connection, failure
   connection, failure = connect(address, function(connect_failure)
@@ -246,12 +257,12 @@ function M.offer_report(address, request)
   end)
   if not connection then
     call.unreachable = failure
-    return offer_outcome(call, address)
+    return offer_outcome(call, address, subject)
   end
   vim.wait(CONFIRMATION_TIMEOUT_MS, function()
     return call.unreachable ~= nil or call.response ~= nil or call.closed
   end, 10)
-  return offer_outcome(call, address)
+  return offer_outcome(call, address, subject)
 end
 
 --- Hands `report`, which belongs to no known session, to the report home of
