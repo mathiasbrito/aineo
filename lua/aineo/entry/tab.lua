@@ -718,7 +718,9 @@ local function make_tab(homes, key, callbacks)
   --- changes home is told the session began there (`aineo.changes`'s
   --- `begin_session()`, which heeds its first call alone), in Claude Code's
   --- working directory, with the layout's `show_diff()` to show its diffs in
-  --- the middle column and the configuration's `changes.working_branch`.
+  --- the middle column, the configuration's `changes.working_branch`, and the
+  --- files window's key `prefix` followed by `<CR>`, none when `prefix` is
+  --- `false`, that opens a file for edition.
   ---
   ---@param config table the resolved configuration
   ---@param new_session boolean? start on a new session id
@@ -735,6 +737,7 @@ local function make_tab(homes, key, callbacks)
         return homes.layout.show_diff(diff)
       end,
       working_branch = config.changes.working_branch,
+      edit_file_key = config.prefix and config.prefix .. '<CR>' or nil,
     })
     return claude_terminal
   end
