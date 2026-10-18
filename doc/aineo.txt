@@ -350,7 +350,7 @@ is taken from the folder. Nothing else is accepted: a subfolder, or a folder
 whose name only begins like a worktree's, is refused. A `command` is at most
 16384 bytes and holds no control character but the tab and the line feed (DEL
 and U+0080 to U+009F are refused too); the other arguments are strings of at
-most 4096 bytes.
+most 4096 bytes, and `name` and `directory` hold no control character at all.
 
 `run_output` {name, pattern?, exclude?, ignore_case?, last?, after_line?,
 context?} reads what a process printed, so that the agent reads only what it
