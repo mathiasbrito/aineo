@@ -192,6 +192,7 @@ T['zooming']['gives the terminal pane’s one window the column’s height, whic
 
   entry.press(child, '\\z')
 
+  eq(entry.messages(child), {})
   eq(column_heights(), before)
 end
 
