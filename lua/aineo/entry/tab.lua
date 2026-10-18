@@ -156,6 +156,7 @@ end
 ---@field key string? what tells the tab's entry in the list of running editors from the editor's other tabs; nil for the first tab, whose entry keeps the name it has always had
 ---@field homes aineo.entry.Homes
 ---@field running_processes fun(): string[] the names of the processes the tab's run pane runs, the oldest first
+---@field start_in_run_stack fun(command: string, options: { name: string, directory: string? }): integer starts `command` at the bottom of the tab's run stack as a call of a run tool asks, the pane left as it is (`aineo.entry.run_pane`'s `start_in_stack()`)
 ---@field actions table<string, fun()> what each of `:Aineo`'s arguments that acts on a tab does, by the argument
 ---@field send_selection fun() what Send does in Visual mode
 ---@field claim_session fun(id: string) what `:Aineo claim {id}` does
@@ -655,14 +656,15 @@ local function make_tab(homes, key, callbacks)
 
   --- The settings a start of Claude Code in `working_directory` is given
   --- (`aineo.claude`'s `start_session()` and `join_session()`): `config`'s
-  --- `claude.cmd` and `claude.hide_multiplexer`, the report server, its two
-  --- tools allowed, the instructions — the report's, then, after a blank
-  --- line, the announcement tool's paragraph — and the subagents' context
-  --- for the `SubagentStart` hook (`aineo.mcp`), the state directory of
-  --- `kept_places()`, the editor's address and program for the session hooks,
-  --- and the callbacks that make the panes follow the session
-  --- (`replacement_callbacks()`, `follow_confirmed_start()`). With
-  --- `new_session` the start is on a new session id.
+  --- `claude.cmd` and `claude.hide_multiplexer`, the report server, the tools
+  --- that need no approval allowed, the instructions — the report's, then,
+  --- after a blank line each, the announcement tool's paragraph and the run
+  --- tools' — and the subagents' context for the `SubagentStart` hook
+  --- (`aineo.mcp`), the state directory of `kept_places()`, the editor's
+  --- address and program for the session hooks, and the callbacks that make
+  --- the panes follow the session (`replacement_callbacks()`,
+  --- `follow_confirmed_start()`). With `new_session` the start is on a new
+  --- session id.
   ---
   ---@param config table the resolved configuration
   ---@param working_directory string
@@ -680,7 +682,9 @@ local function make_tab(homes, key, callbacks)
       allowed_tools = mcp.allowed_mcp_tools(),
       instructions = report.report_instructions(mcp.report_tool_name())
         .. '\n\n'
-        .. mcp.announce_instructions(),
+        .. mcp.announce_instructions()
+        .. '\n\n'
+        .. mcp.run_instructions(),
       subagent_context = mcp.subagent_announce_context(),
       state_directory = places.kept_places().state_directory,
       new_session = new_session,
@@ -1676,6 +1680,7 @@ local function make_tab(homes, key, callbacks)
   run.watch(run_group)
   tab.actions = actions
   tab.running_processes = homes.run.running
+  tab.start_in_run_stack = run.start_in_stack
   tab.send_selection = send_selection
   tab.claim_session = claim_session
   tab.follow_told_switch = follow_told_switch
