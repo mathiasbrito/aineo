@@ -1,6 +1,6 @@
 --- Which tab a report is for, as the report home's router asks
 --- (`aineo.report`'s `set_report_router()`), and which tab an announcement
---- of work is for.
+--- of work, or a call of a run tool, is for.
 
 local registry = require('aineo.entry.registry')
 
@@ -55,8 +55,9 @@ end
 
 --- The tab of `tab_list` whose Claude Code has the start token
 --- `start_token`, whichever tab is current, in a tab page that exists; nil
---- when there is none: an announcement of work is about the tab whose
---- Claude Code works, not about the session a report narrates.
+--- when there is none: an announcement of work, or a call of a run tool, is
+--- about the tab whose Claude Code works, not about the session a report
+--- narrates.
 ---
 ---@param start_token string
 ---@return aineo.entry.Tab?

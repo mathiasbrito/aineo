@@ -14,10 +14,12 @@ local CLAUDE_WINDOW_BUFFER = 'vim.api.nvim_win_get_buf(vim.fn.win_getid(1))'
 --- program, as Claude Code's `--mcp-config` takes them, read in the child.
 local REPORT_SERVERS = "require('aineo.mcp').mcp_servers(vim.v.servername, vim.v.progpath)"
 
---- The instructions for the report tool, then, after a blank line, the
---- paragraph for the announcement tool, read in the child.
+--- The instructions for the report tool, then, after a blank line each, the
+--- paragraphs for the announcement tool and for the run tools, read in the
+--- child.
 local REPORT_INSTRUCTIONS = "require('aineo.report').report_instructions(require('aineo.mcp').report_tool_name())"
   .. " .. '\\n\\n' .. require('aineo.mcp').announce_instructions()"
+  .. " .. '\\n\\n' .. require('aineo.mcp').run_instructions()"
 
 --- What Claude's terminal receives when Send sends an Input holding `hello`:
 --- one bracketed paste, then Enter.
@@ -204,7 +206,7 @@ T[':Aineo open']['tells each subagent of Claude when to call the announcement to
   )
 end
 
-T[':Aineo open']['tells Claude when and how to call the report tool and the announcement tool'] = function()
+T[':Aineo open']['tells Claude when and how to call the report tool, the announcement tool and the run tools'] = function()
   local fake = claude_session.fake('entry-open-instructions', 'ready')
   entry.use_fake(child, fake)
 
