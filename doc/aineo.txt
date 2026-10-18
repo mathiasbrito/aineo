@@ -302,8 +302,9 @@ aineo started in when not given, and is refused unless it is that folder or a
 worktree of its repository, as `git worktree list` gives them; a relative one
 is taken from the folder. Nothing else is accepted: a subfolder, or a folder
 whose name only begins like a worktree's, is refused. A `command` is at most
-16384 bytes and holds no control character but the tab and the line feed; the
-other arguments are strings of at most 4096 bytes.
+16384 bytes and holds no control character but the tab and the line feed (DEL
+and U+0080 to U+009F are refused too); the other arguments are strings of at
+most 4096 bytes.
 
 `run_output` {name, pattern?, exclude?, ignore_case?, last?, after_line?,
 context?} reads what a process printed, so that the agent reads only what it
@@ -331,8 +332,12 @@ substitute string. Two more differences from PCRE: lookarounds are written
 `ignore_case` takes its place. A regex that does not parse is answered with
 the editor's error, as an error. The matching of one call is stopped after 2
 seconds in all, and answered as an error that names the field and suggests a
-simpler pattern; nothing partial is read. The time is bounded, the volume is
-not: `last`, `context` and the lines of an answer have no limit.
+simpler pattern; nothing partial is read. Any other error of the search, as
+the engine giving up on memory early, is answered as the editor words it. The
+time is bounded, the volume is not: `last`, `context` and the lines of an
+answer have no limit. The search runs in a scratch copy of the rows with the
+editor's autocommands ignored, so a pattern may span rows with `\n`, and a
+positional atom such as `\%23l` counts the rows of the output, from 1.
 
 The answer starts with `backend: running; 120 lines in total` (or `exited 1`),
 then the numbered lines, `12: text` for a match and `13- text` for context,
@@ -340,13 +345,13 @@ then the numbered lines, `12: text` for a match and `13- text` for context,
 terminal wraps them: each line is a row of the process's terminal, from 1,
 without the empty rows the terminal pads its last screen with. A line longer
 than the terminal is wide spans several rows, no one of which holds it whole
-for a pattern, and a resize of the pane (showing the stack narrows its
-terminals, a wider pane widens them) or the 'scrollback' limit renumbers the
-rows: once the output outgrows 'scrollback' Neovim drops the oldest rows and
-the numbers shift. `after_line` is valid only while `total` has not dropped;
-when it is past the last line the answer says the rows were renumbered, and
-the agent is told to read again without it. A progress bar that redraws
-itself is several rows.
+for a pattern without `\n`, and a resize of the pane (showing the stack
+narrows its terminals, a wider pane widens them) or the 'scrollback' limit
+renumbers the rows: once the output outgrows 'scrollback' Neovim drops the
+oldest rows and the numbers shift. `after_line` is valid only while `total`
+has not dropped; when it is past the last line the answer says the rows were
+renumbered, and the agent is told to read again without it. A progress bar
+that redraws itself is several rows.
 
 The tool reads every process of the tab's stack but the interactive shell of
 `\X`, whose screen may hold what you typed and which it refuses. A command you
