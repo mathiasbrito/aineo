@@ -21,6 +21,7 @@
 --- on its own windows and buffers only.
 
 local columns = require('aineo.layout.columns')
+local zoom = require('aineo.layout.zoom')
 
 ---@class aineo.layout.Arrangement
 ---@field claude integer the Claude session's terminal buffer
@@ -57,6 +58,7 @@ local columns = require('aineo.layout.columns')
 ---@field show_diff fun(diff: integer): integer|nil
 ---@field follow_claude_terminal fun(terminal: integer)
 ---@field toggle_claude_numbers fun()
+---@field toggle_zoom fun()
 ---@field input_buffer fun(): integer|nil
 ---@field let_go? fun() only on a layout `M.new()` made: removes its handlers and wipes its Input
 
@@ -95,7 +97,8 @@ local function make_layout(input_name, group_name)
   --- window was already closed when the terminal pane took the column, which
   --- the agent pane then leaves closed as the shell ends; the terminals and
   --- winbar the run pane was handed last, and the windows it opened below
-  --- the Report's, top to bottom.
+  --- the Report's, top to bottom; and the zoom of the right column, if it is
+  --- zoomed (`M.toggle_zoom()`).
   local state = {
     ---@type table<aineo.layout.Role, integer>
     windows = {},
@@ -131,6 +134,8 @@ local function make_layout(input_name, group_name)
     run = nil,
     ---@type integer[]
     run_windows = {},
+    ---@type aineo.layout.Zoom|nil
+    zoom = nil,
   }
 
   --- The role of `window` in the layout, or `nil` when it is not one of its
@@ -469,13 +474,63 @@ local function make_layout(input_name, group_name)
     return vim.list_extend(windows, vim.tbl_filter(vim.api.nvim_win_is_valid, state.run_windows))
   end
 
+  --- The windows of the right column that exist under the pane shown, top to
+  --- bottom: the run pane's stack, or the Report's window and Input's.
+  ---
+  ---@return integer[] windows
+  local function column_windows()
+    if state.pane == 'run' then
+      return run_stack_windows()
+    end
+    return vim
+      .iter(pane_roles(state.pane))
+      :filter(has_window)
+      :map(function(role)
+        return state.windows[role]
+      end)
+      :totable()
+  end
+
+  --- Whether the right column's windows are those that were zoomed.
+  ---
+  ---@return boolean
+  local function is_zoom_of_column()
+    return state.zoom ~= nil and vim.deep_equal(column_windows(), state.zoom.windows)
+  end
+
+  --- Ends the zoom, if the right column is zoomed, giving its windows the
+  --- heights they had before it. Gives back none when the column's windows are
+  --- no longer the ones that were zoomed, which have taken their rows to their
+  --- neighbours already.
+  local function end_zoom()
+    if is_zoom_of_column() then
+      zoom.restore(state.zoom)
+    end
+    state.zoom = nil
+  end
+
+  --- Keeps the right column zoomed as its rows changed, or ends the zoom,
+  --- without giving back any height, when the column's windows are no longer
+  --- the ones that were zoomed: the layout's proportions are what the windows
+  --- take then.
+  ---
+  ---@return boolean zoomed whether the column is zoomed
+  local function keep_zoom()
+    if not is_zoom_of_column() then
+      state.zoom = nil
+      return false
+    end
+    zoom.keep(state.zoom)
+    return true
+  end
+
   --- Gives the windows of the run pane's stack the rows they hold together in
   --- equal shares, the first windows one row more when the rows do not divide.
-  --- Does nothing under another pane, which has no stack, or for a stack of
-  --- one window.
+  --- Does nothing under another pane, which has no stack, for a stack of one
+  --- window, or while the stack is zoomed.
   local function equalize_run_windows()
     local windows = run_stack_windows()
-    if state.pane ~= 'run' or #windows < 2 then
+    if state.pane ~= 'run' or #windows < 2 or state.zoom then
       return
     end
     local rows = 0
@@ -490,9 +545,13 @@ local function make_layout(input_name, group_name)
 
   --- Puts the layout's proportions back: the columns' widths, the Report's
   --- share of the right column's rows when Input's window shows, and the
-  --- equal shares of the run pane's stack.
+  --- equal shares of the run pane's stack; with the right column zoomed, the
+  --- zoom is kept in their place (`keep_zoom()`).
   local function apply_proportions()
     size_columns()
+    if keep_zoom() then
+      return
+    end
     if has_window('input') then
       size_right_column()
     end
@@ -1327,6 +1386,19 @@ local function make_layout(input_name, group_name)
     end
   end
 
+  --- Whether the windows of the run pane's stack show `buffers`, one window
+  --- for each, top to bottom.
+  ---
+  ---@param buffers integer[]
+  ---@return boolean
+  local function run_stack_shows(buffers)
+    local windows = run_stack_windows()
+    return #windows == #buffers
+      and vim.iter(ipairs(windows)):all(function(index, window)
+        return vim.api.nvim_win_get_buf(window) == buffers[index]
+      end)
+  end
+
   --- Makes the run pane's windows show its terminals: the first in the
   --- Report's window, each next in a window below the one before it, a window
   --- a terminal already has kept, a window shown another buffer or no longer
@@ -1337,6 +1409,9 @@ local function make_layout(input_name, group_name)
   local function sync_run_windows()
     if not state.run or not has_window('report') then
       return
+    end
+    if state.zoom and not run_stack_shows(state.run.buffers) then
+      end_zoom()
     end
     show_pane_buffer_in('run', 'report')
     local kept = {}
@@ -1473,6 +1548,7 @@ local function make_layout(input_name, group_name)
     if pane == shown and not shows_a_buffer_of_another_pane(pane) then
       return
     end
+    end_zoom()
     if shown == 'agent' and state.report_when_hidden == nil then
       state.report_when_hidden = {
         buffer = state.buffers.report,
@@ -1801,7 +1877,8 @@ local function make_layout(input_name, group_name)
   --- the buffer it shows under the pane shown; with the windows of the pane
   --- shown open, the columns take a third of the screen each while the file
   --- column is open, and the proportions are put back whenever a window closes, the editor is
-  --- resized or the layout's tab is entered.
+  --- resized or the layout's tab is entered; a zoomed right column
+  --- (`M.toggle_zoom()`) is kept zoomed then, until its windows change.
   ---
   --- From then on, too, Claude's terminal, once its process has ended, stays
   --- in Normal mode, so that no key closes it and its exit stays on screen:
@@ -2178,6 +2255,50 @@ local function make_layout(input_name, group_name)
       state.claude_numbers = state.claude_numbers_before_hiding or ABSOLUTE_LINE_NUMBERS
     end
     show_claude_numbers(state.windows.claude)
+  end
+
+  --- What `M.toggle_zoom()` tells the user, as a warning, when the cursor is
+  --- in none of the right column's windows.
+  local NOT_IN_THE_COLUMN =
+    'aineo: nothing zoomed — the cursor is in none of the windows aineo shows in the right column (the agent, changes, terminal and run panes)'
+
+  --- Zooms the window of the right column the cursor is in, under whichever
+  --- pane is shown: the window takes every row the column's other windows can
+  --- spare, and they keep `'winminheight'` lines each (one by default, none at
+  --- 0), their winbar and status line still showing what they are. Rows are
+  --- taken from the column alone: a window across the whole width below the
+  --- layout keeps its height, as does Claude's window. Zoomed already, it gives
+  --- the windows the heights they had when the zoom began, a manual resize
+  --- before it included, scaled to the rows the windows hold now when the
+  --- editor was resized meanwhile.
+  ---
+  --- The zoom stays with the window it began in while the cursor goes
+  --- elsewhere, and toggled with the cursor in another window of the column
+  --- it moves there. It stays through a resize of the editor and through
+  --- entering the layout's tab, the zoomed window taking the rows the column
+  --- gained or lost, and through `:wincmd =`, which equalizes the run pane's
+  --- stack on screen but not in the layout: the next toggle then gives back the
+  --- recorded heights. It ends, giving back the heights, as another pane shows
+  --- (`switch_pane()`) and as the run pane's stack gains or loses a window
+  --- (`sync_run_windows()`); it ends, the proportions put back, as a window of
+  --- the column closes (`keep_zoom()`). The column is the layout's windows: one
+  --- the user splits off it by hand is outside it.
+  ---
+  --- With the cursor in none of the column's windows — Claude's window, the
+  --- file column, a window split off the column by hand, a tab page that is
+  --- not the layout's, or no layout open — it changes nothing and warns the
+  --- user once.
+  function M.toggle_zoom()
+    local current = vim.api.nvim_get_current_win()
+    if not vim.list_contains(column_windows(), current) then
+      vim.notify(NOT_IN_THE_COLUMN, vim.log.levels.WARN)
+      return
+    end
+    local zoomed = is_zoom_of_column() and state.zoom.window or nil
+    end_zoom()
+    if zoomed ~= current then
+      state.zoom = zoom.start(column_windows(), current)
+    end
   end
 
   --- The Input buffer, or `nil` before the layout was first opened.

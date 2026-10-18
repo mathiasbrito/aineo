@@ -48,6 +48,7 @@ local SUBCOMMANDS = {
   'tab',
   'diff',
   'find',
+  'zoom',
 }
 
 --- The words each subcommand that takes one is followed by, in the order
@@ -292,6 +293,7 @@ local PREFIX_KEYS = {
   ['tab 9'] = '9',
   ['diff close'] = 'd',
   find = 'f',
+  zoom = 'z',
 }
 
 --- The keys that leave the mode a twin (`map_terminal_prefix()`) is pressed
@@ -603,5 +605,5 @@ end, {
   nargs = '*',
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run, run shell, claim [id], tab new|close|{n}, diff close or find',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run, run shell, claim [id], tab new|close|{n}, diff close, find or zoom',
 })
