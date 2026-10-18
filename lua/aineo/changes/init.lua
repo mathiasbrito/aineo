@@ -16,8 +16,9 @@
 --- diff against its previous version, `h` against `HEAD`
 --- (`aineo.changes.head_diff`), and `gf` opens the working tree's file or
 --- shows the file as the commit it is listed under has it
---- (`aineo.changes.commit_file`), and `<S-CR>` opens it for edition as it is
---- now in the working tree its line belongs to (`aineo.changes.open_file`).
+--- (`aineo.changes.commit_file`), and `<S-CR>`, and the prefix followed by
+--- `<CR>` when the session is given it, open it for edition as it is now in
+--- the working tree its line belongs to (`aineo.changes.open_file`).
 --- `s` in either buffer offers the other
 --- worktrees in `vim.ui.select` and shows the one picked alone in the commits
 --- buffer — its heading, then its commits, nothing else — until `s` picks
