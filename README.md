@@ -124,7 +124,8 @@ until you close it. To stop one, press Ctrl-C in its terminal or run
 `:bdelete!` on it. Each tab has a stack of its own.
 
 When you quit, aineo asks once, naming the commands, before it stops them with
-their children; `:qa!` stops them without asking. Closing a tab with `\Q` asks
+their children; a `:qa!` you type for that quit stops them without asking,
+and any other quit asks. Closing a tab with `\Q` asks
 the same about that tab's processes. Processes do not start again at the next
 start. `:help aineo-run` has the details.
 

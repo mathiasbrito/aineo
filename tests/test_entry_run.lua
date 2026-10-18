@@ -684,6 +684,8 @@ end
 
 T['quitting'] = MiniTest.new_set()
 
+T['a real quit'] = MiniTest.new_set()
+
 T['quitting']['asks once, listing the commands, and stops every process with its children when the user quits'] = function()
   local fake = open_layout('run-pane-quit')
   local folder = fixture.directory('run-pane/quit')
@@ -845,6 +847,265 @@ T['quitting']['stops the processes when the editor leaves, whatever else runs, a
   eq(#messages, 1)
   eq(messages[1].level, vim.log.levels.WARN)
   eq(messages[1].message:find('aineo: stopping 2 processes (', 1, true), 1)
+end
+
+--- The service that ignores the termination and the hangup signals, as does
+--- the child it starts and waits for, which writes its process id to
+--- `stubborn.pid` in `folder`.
+---
+---@param folder string
+---@return string
+local function stubborn_service(folder)
+  return "trap '' TERM HUP; sleep 405 & echo $! > " .. folder .. '/stubborn.pid; wait'
+end
+
+--- Runs the stubborn service of `folder` by `\x` and returns the process ids
+--- of the process and of its child, which are killed when the case ends.
+---
+---@param folder string
+---@return integer[] pids
+local function start_stubborn_service(folder)
+  run_all({ stubborn_service(folder) })
+  vim.wait(entry_shell.PATIENCE_MS, function()
+    return vim.fn.filereadable(folder .. '/stubborn.pid') == 1
+      and #vim.fn.readfile(folder .. '/stubborn.pid') == 1
+  end, 20)
+  local pids = {
+    tonumber(vim.fn.readfile(folder .. '/stubborn.pid')[1]),
+    entry_shell.pid_of(child, process_buffers()[1]),
+  }
+  kill_when_done(pids)
+  return pids
+end
+
+T['a real quit']['kills what ignores the termination, with its child, when the user quits'] = function()
+  local fake = open_layout('run-pane-real-quit')
+  local folder = fixture.directory('run-pane/real-quit')
+  answer_questions(1, folder .. '/questions')
+  local pids = start_stubborn_service(folder)
+  end_claude(fake)
+
+  claude_session.quit(child)
+  vim.fn.jobwait({ child.job.id }, claude_session.STOP_PATIENCE_MS)
+
+  eq(survivors_of(pids), {})
+  child.stop()
+end
+
+T['a real quit']['kills what ignores the termination, with its child, on a typed :qa!'] = function()
+  local fake = open_layout('run-pane-real-quit-forced')
+  local folder = fixture.directory('run-pane/real-quit-forced')
+  local pids = start_stubborn_service(folder)
+  end_claude(fake)
+
+  pcall(child.type_keys, ':qa!<CR>')
+  vim.fn.jobwait({ child.job.id }, claude_session.STOP_PATIENCE_MS)
+
+  eq(survivors_of(pids), {})
+  child.stop()
+end
+
+T['a real quit']['kills what ignores the termination on :cquit, and tells the user once'] = function()
+  local fake = open_layout('run-pane-real-cquit')
+  local folder = fixture.directory('run-pane/real-cquit')
+  local notices = folder .. '/notices'
+  child.lua(
+    [[
+      local notices = ...
+      vim.notify = function(message)
+        vim.fn.writefile({ message }, notices, 'a')
+      end
+    ]],
+    { notices }
+  )
+  local pids = start_stubborn_service(folder)
+  end_claude(fake)
+
+  child.lua_notify('vim.cmd.cquit()')
+  vim.fn.jobwait({ child.job.id }, claude_session.STOP_PATIENCE_MS)
+  local told = vim.fn.filereadable(notices) == 1 and vim.fn.readfile(notices) or {}
+
+  eq(survivors_of(pids), {})
+  eq(#told, 1)
+  eq(vim.startswith(told[1], 'aineo: stopping 1 process ('), true)
+  child.stop()
+end
+
+--- The command that starts, in a process group of its own, a job that ignores
+--- the hangup, as a shell does under job control, writes its process id to
+--- `job.pid` in `folder`, and sets the shell on that job.
+---
+---@param folder string
+---@return string
+local function job_in_a_shell(folder)
+  return 'nohup sleep 406 >/dev/null 2>&1 & echo $! > ' .. folder .. '/job.pid'
+end
+
+T['a real quit']['kills the job an interactive shell of the stack started in a group of its own'] = function()
+  local fake = open_layout('run-pane-real-quit-job')
+  local folder = fixture.directory('run-pane/real-quit-job')
+  answer_questions(1, folder .. '/questions')
+  entry.press(child, '\\X')
+  entry_shell.type_into(child, process_buffers()[1], job_in_a_shell(folder))
+  vim.wait(entry_shell.PATIENCE_MS, function()
+    return vim.fn.filereadable(folder .. '/job.pid') == 1
+      and #vim.fn.readfile(folder .. '/job.pid') == 1
+  end, 20)
+  local pids = { tonumber(vim.fn.readfile(folder .. '/job.pid')[1]) }
+  kill_when_done(pids)
+  end_claude(fake)
+
+  claude_session.quit(child)
+  vim.fn.jobwait({ child.job.id }, claude_session.STOP_PATIENCE_MS)
+
+  eq(survivors_of(pids), {})
+  child.stop()
+end
+
+T['a process that ends']['leaves nothing behind, a child that ignored the hangup, when Ctrl-C ends it'] = function()
+  open_layout('run-pane-ctrl-c-child')
+  local folder = fixture.directory('run-pane/ctrl-c-child')
+  run_all({ "(trap '' INT HUP; exec sleep 407) & echo $! > " .. folder .. '/child.pid; wait' })
+  vim.wait(entry_shell.PATIENCE_MS, function()
+    return vim.fn.filereadable(folder .. '/child.pid') == 1
+      and #vim.fn.readfile(folder .. '/child.pid') == 1
+  end, 20)
+  local pids = { tonumber(vim.fn.readfile(folder .. '/child.pid')[1]) }
+  kill_when_done(pids)
+
+  child.lua([[vim.fn.chansend(vim.b[(...)].terminal_job_id, '\3')]], { process_buffers()[1] })
+  local exited = vim.wait(entry_shell.PATIENCE_MS, function()
+    return winbars()[1] ~= nil and winbars()[1]:find('— exited', 1, true) ~= nil
+  end, 20)
+
+  eq(exited, true)
+  eq(survivors_of(pids), {})
+end
+
+T['a process that ends']['says exited 130 in its winbar when Ctrl-C stops it, keeping its window'] = function()
+  open_layout('run-pane-ctrl-c')
+  run_all({ 'sleep 31' })
+  local pid = entry_shell.pid_of(child, process_buffers()[1])
+  kill_when_done({ pid })
+
+  child.lua([[vim.fn.chansend(vim.b[(...)].terminal_job_id, '\3')]], { process_buffers()[1] })
+
+  eq(winbar_becomes(1, 'sleep 31 — exited 130'), true)
+  eq(entry.windows(child), run_pane(1))
+end
+
+T['quitting']['is never silent for a bang typed before this quit, however old'] = MiniTest.new_set({
+  parametrize = {
+    { 'ZZ in the last window' },
+    { '\\Q in the last tab' },
+  },
+})
+
+T['quitting']['is never silent for a bang typed before this quit, however old']['quit'] = function(
+  quit
+)
+  open_layout('run-pane-stale-bang')
+  local folder = fixture.directory('run-pane/stale-bang')
+  local record = folder .. '/questions'
+  answer_questions(2, record)
+  run_all({ 'sleep 301' })
+  kill_when_done({ entry_shell.pid_of(child, process_buffers()[1]) })
+  child.cmd('only')
+  child.type_keys(':split<CR>:q!<CR>')
+
+  if quit == 'ZZ in the last window' then
+    pcall(child.type_keys, 'ZZ')
+  else
+    pcall(entry.press, child, '\\Q')
+  end
+  vim.wait(entry_shell.PATIENCE_MS, function()
+    return #questions_asked(record) == 3
+  end, 20)
+
+  eq(#questions_asked(record), 3)
+  eq(cursor_and_page_count() ~= nil, true)
+end
+
+T['quitting']['keeps no empty buffer listed after a Cancel'] = function()
+  open_layout('run-pane-cancel-buffers')
+  local folder = fixture.directory('run-pane/cancel-buffers')
+  local record = folder .. '/questions'
+  answer_questions(2, record)
+  run_all({ 'sleep 301' })
+  kill_when_done({ entry_shell.pid_of(child, process_buffers()[1]) })
+  child.cmd('only')
+  local listed = '#vim.fn.getbufinfo({ buflisted = 1 })'
+  local before = child.lua_get(listed)
+
+  child.lua_notify('vim.cmd.quit()')
+  vim.wait(entry_shell.PATIENCE_MS, function()
+    return #questions_asked(record) == 3
+  end, 20)
+  local settled = vim.wait(entry_shell.PATIENCE_MS, function()
+    local state = cursor_and_page_count()
+    return state ~= nil and state[2] == 1
+  end, 20)
+
+  eq(settled, true)
+  eq(child.lua_get(listed), before)
+end
+
+T['quitting']['tells the user the processes are stopped after a Cancel, when a later exit never asks'] = function()
+  local fake = open_layout('run-pane-cancel-then-leave')
+  local folder = fixture.directory('run-pane/cancel-then-leave')
+  local record = folder .. '/questions'
+  answer_questions(2, record)
+  run_all({ 'sleep 301' })
+  kill_when_done({ entry_shell.pid_of(child, process_buffers()[1]) })
+  end_claude(fake)
+  child.cmd('only')
+  child.lua_notify('vim.cmd.quit()')
+  vim.wait(entry_shell.PATIENCE_MS, function()
+    return #questions_asked(record) == 3
+  end, 20)
+  vim.wait(entry_shell.PATIENCE_MS, function()
+    local state = cursor_and_page_count()
+    return state ~= nil and state[2] == 1
+  end, 20)
+
+  child.lua('vim.api.nvim_exec_autocmds("VimLeavePre", {})')
+
+  local messages = entry.messages(child)
+  eq(#messages, 1)
+  eq(vim.startswith(messages[1].message, 'aineo: stopping 1 process ('), true)
+end
+
+T['quitting']['stops the processes even when the notice of it raises'] = function()
+  local fake = open_layout('run-pane-notice-raises')
+  local folder = fixture.directory('run-pane/notice-raises')
+  local pids = start_services_with_children(folder)
+  end_claude(fake)
+  child.lua('vim.notify = function() error("the notice broke") end')
+
+  pcall(child.lua, 'vim.api.nvim_exec_autocmds("VimLeavePre", {})')
+
+  eq(survivors_of(pids), {})
+end
+
+T['quitting']['registers its handler after Claude Code’s stop, which the first process opens the layout for'] = function()
+  local fake = claude_session.fake('run-pane-handler-order', 'ready')
+  entry.use_fake(child, fake)
+  answer_prompts({ 'sleep 30' })
+
+  entry.press(child, '\\x')
+  claude_session.wait_for_start(fake)
+  local order = child.lua_get([[(function()
+    local groups = vim.tbl_map(function(autocmd)
+      return autocmd.group_name
+    end, vim.api.nvim_get_autocmds({ event = 'VimLeavePre' }))
+    return {
+      vim.fn.index(groups, 'aineo.claude'),
+      vim.fn.index(groups, 'aineo.entry.quit'),
+    }
+  end)()]])
+
+  eq(order[1] >= 0, true)
+  eq(order[2] > order[1], true)
 end
 
 T['a process that cannot start'] = MiniTest.new_set()

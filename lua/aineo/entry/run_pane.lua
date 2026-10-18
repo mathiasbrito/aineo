@@ -97,12 +97,14 @@ function M.make(tab)
 
   --- Starts a process with `start`, given the settings of one
   --- (`process_settings()`), and shows it (`show_started()`). The quit of the
-  --- editor is guarded from the first process on (`aineo.entry.quitting`).
+  --- editor is guarded from the first process on (`aineo.entry.quitting`),
+  --- once showing it has opened the layout and Claude Code has registered its
+  --- own stop, so that the handler of the processes comes after it.
   ---
   ---@param start fun(settings: aineo.run.Settings): integer
   local function start_and_show(start)
-    quitting.guard()
     show_started(start(process_settings()))
+    quitting.guard()
   end
 
   --- What `:Aineo pane run` does. With processes running and the cursor
