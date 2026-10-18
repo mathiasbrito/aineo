@@ -600,11 +600,12 @@ screen it is shown in that view. The worktree or branch is shown alone until
 `s` picks another, until it is no longer listed (a branch: until it names no
 commit), until aineo follows another Claude Code session than one it
 followed before (the first session followed keeps it), or until the tab
-closes or the editor quits; each tab keeps its own, and none is kept on
-disk. When a read no longer lists the worktree, the default view shows,
-Session work is chosen, and aineo says once "aineo: Worktree <folder>
-(<branch>) is gone; the changes pane shows the default view". Following
-another session says nothing.
+closes; each tab keeps its own, and the pick is kept on disk for each
+Claude Code session and shown again when aineo follows that session
+(|aineo-changes-view-kept|). When a read no longer lists the worktree,
+the default view shows, Session work is chosen, and aineo says once
+"aineo: Worktree <folder> (<branch>) is gone; the changes pane shows the
+default view". Following another session says nothing.
 
 Enter on a file's line shows its unified diff in the middle column (the
 file column, below), within what the files window lists: from the base
@@ -714,10 +715,12 @@ as `gf` opens the working tree's file, a normal buffer that `:write` writes
 into that worktree, the cursor in it, in Normal mode. A branch no worktree
 has checked out has no file to edit: the file opens as the branch's tip has
 it, read-only, as `gf` shows a branch's file, in `aineo://show/{tip}/{path}`,
-and aineo says once "aineo: the branch <name> is checked out in no
-worktree, so <path> cannot be edited; it is shown as the branch's tip has
-it". A file no longer in that working tree opens nothing, and aineo says the
-file is gone; a path that is a directory, a submodule or a nested repository
+and, once the tip's file is read, aineo says once "aineo: the branch <name>
+is checked out in no worktree, so <path> cannot be edited; it is shown as
+the branch's tip has it". A file the branch's tip no longer has opens
+nothing, and aineo says only that it was deleted in the branch. A file no
+longer in that working tree opens nothing, and aineo says the file is
+gone; a path that is a directory, a submodule or a nested repository
 opens nothing, and aineo says it is a directory, not a file. The path is
 taken whole, as for `gf`: no character of it is a wildcard or the end of a
 command. Enter, `h`, `l` and `gf` are unchanged, and `<S-CR>` on any line
@@ -725,9 +728,10 @@ that lists no file does nothing.
 Neovim receives `<S-CR>` only when your terminal tells it apart from Enter,
 which many terminals do only once asked for extended keys. Inside tmux, tmux
 must pass them on: set `extended-keys` to `on` (or `always`) in your tmux
-configuration, and `extended-keys-format` to `csi-u` when the terminal sends
-that format; a terminal tmux does not recognise as sending them is told so
-with the `extkeys` feature of `terminal-features`.
+configuration. `extended-keys-format` (`csi-u` or `xterm`) is the format
+tmux uses to report modified keys to the program in the pane. A terminal
+tmux does not recognise as sending extended keys is told so with the
+`extkeys` feature of `terminal-features`.
 
 `l` and `h` on a file's line show that file's diff as Enter does, `l`
 against the file's previous version, `h` against `HEAD`, and keep the cursor
