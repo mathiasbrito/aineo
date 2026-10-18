@@ -19,20 +19,24 @@ of its own, and a tab line tells which ones are working.
 |                    |                    | Input              |
 |                    |                    | \s sends it        |
 +--------------------+--------------------+--------------------+
+```
 
-The right column shows one pane at a time, each behind a key:
+The right column shows one pane at a time, each behind a key; the run
+pane stacks one window per process, each with a winbar naming the command
+and its state:
 
- \pa  agent          \g  changes         \pt  terminal    \x  run
+```
+ \pa  agent          \g  changes         \pt  terminal    \x  run, \X  shell
 +----------------+  +----------------+  +-------------+  +----------------+
-| Agent Report   |  | files          |  | your shell  |  | npm run dev    |
-|                |  |  * M auth.lua  |  |             |  | running        |
+| Agent Report   |  | files          |  | your shell  |  | vite — running |
+|                |  |  * M auth.lua  |  |             |  |                |
 |                |  |    ? notes.md  |  | $ _         |  +----------------+
-+----------------+  +----------------+  |             |  | cargo watch    |
-| Input          |  | commits        |  |             |  | running        |
++----------------+  +----------------+  |             |  | api — running  |
+| Input          |  | commits        |  |             |  |                |
 |                |  | Uncommitted    |  +-------------+  +----------------+
-+----------------+  | Session work   |                   | shell  (\X)    |
-                    | a1b2c3 Fix ... |                   +----------------+
-                    +----------------+
++----------------+  | Session work   |                   | shell          |
+                    | a1b2c3 Fix ... |                   |                |
+                    +----------------+                   +----------------+
 ```
 
 - **Tab line.** One title for each tab page, `<number>: <session name>`, and
@@ -87,9 +91,9 @@ that the autostart can run:
 `version = '*'` takes the newest release tag (`vX.Y.Z`). The next start of
 Neovim clones aineo by itself, and `:Lazy update` moves it to a newer release
 when one is tagged. To stay on one release, give a `tag`, such as
-`tag = 'v0.2.52'`, in place of `version`. To get the same commit on another host, commit lazy.nvim's
-`lazy-lock.json` with the rest of your configuration and run `:Lazy restore`
-there.
+`tag = 'v0.2.53'`, in place of `version`. To get the same commit on another
+host, commit lazy.nvim's `lazy-lock.json` with the rest of your configuration
+and run `:Lazy restore` there.
 
 aineo works without a `setup()` call. It has to be loaded at startup for
 the autostart: loaded later, it maps its keys but opens nothing.
@@ -121,15 +125,17 @@ input, no user interface or a session restored by a plugin, nor inside
 aineo's own terminals. To turn the autostart off, set `autostart = false`
 (see Settings); `\o` opens the layout by hand.
 
-Every key sits behind the prefix `\`, in Normal mode, and each panel's table
-below lists the keys that act in it or open it. In Terminal mode and in
-Insert mode, `<C-\>` followed by the same letters, but `s`, does the same:
+Each panel's table below lists the keys that act in it or open it. Those
+that start with `\` sit behind the prefix, in Normal mode. In Terminal mode and
+in Insert mode, `<C-\>` followed by the same letters, but `s`, does the same:
 `<C-\>i` moves to Input, `<C-\>c` to Claude, `<C-\>x` runs a command.
 
-Each key is a `<Plug>` mapping too, such as `<Plug>(aineo-send)`, and each
-action is a subcommand of `:Aineo`, such as `:Aineo send`. `\` is also
-Neovim's default leader; `:checkhealth aineo` warns when the leader or a
-mapping of yours collides with aineo's keys.
+Each prefix key is a `<Plug>` mapping too, such as `<Plug>(aineo-send)`, and
+each action is a subcommand of `:Aineo`, such as `:Aineo send`. The changes
+pane's own keys (`s`, Enter, `j`/`k`, `l`, `h`, `gf`, `<S-CR>` and `F`) are
+keys of the pane's buffers alone, with no prefix, no `<Plug>` mapping and no
+subcommand. `\` is also Neovim's default leader; `:checkhealth aineo` warns
+when the leader or a mapping of yours collides with aineo's keys.
 
 Each session aineo starts is kept for its folder: the next start there
 resumes it.
@@ -142,7 +148,7 @@ resumes it.
 | `\f` | finds a file under the folder Claude works in and opens it in the file column |
 | `\T` | opens a tab with a Claude Code session of its own |
 | `\1` to `\9` | move to the tab page of that number |
-| `\Q` | closes the current tab |
+| `\Q` | closes the current tab; on the last aineo tab, quits Neovim as `:qa` does |
 | `\S` | lists Claude Code's sessions for the folder and opens the one you pick |
 | `\N` | starts a new Claude Code session |
 
@@ -168,7 +174,7 @@ resumes it.
 | `\g` | shows the changes pane and moves to its commits; inside the pane, switches between the default view and the worktree or branch shown alone |
 | `s` | in either window of the pane: picks a worktree or a branch to show alone |
 | `j`, `k` | in the commits window: the line under the cursor chooses which files the files window lists |
-| Enter | in the files window: shows the file's diff in the file column and moves there |
+| Enter | in the files window: shows the file's diff in the file column and moves there; in the commits window: on Uncommitted, Session work, a commit or the Landed heading, shows that whole diff |
 | `l`, `h` | in the files window: show the diff against the file's previous version, against `HEAD`, and keep the cursor on the list |
 | `gf` | in the files window: opens the working tree's file, or, under a commit, the file as that commit has it |
 | `\<CR>`, `<S-CR>` | in the files window: open the file for editing, in the working tree it belongs to |
@@ -190,8 +196,9 @@ resumes it.
 
 ## The changes pane
 
-`\g` shows two windows in place of the Report and Input. The upper one lists the files
-that changed in your repository since the session began, committed or not,
+`\g` shows two windows in place of the Report and Input. The upper one lists
+the files that changed in your repository since the session began, committed or
+not,
 one per line with a letter for the kind of change (`A` added, `M` modified,
 `D` deleted, `R` renamed, `?` new and untracked) and a `*` on a file you saved
 from this editor. The lower one lists Uncommitted and Session work, then the
@@ -201,7 +208,9 @@ chooses what the upper window lists. aineo never fetches: what landed is what
 your repository last knew.
 
 - **Look at a change.** Enter on a file shows its diff in the file column,
-  and the cursor goes there. `l` and `h` show the diff against the previous
+  and the cursor goes there; in the commits window, Enter on Uncommitted,
+  Session work, a commit or the Landed heading shows the whole diff of that
+  choice. `l` and `h` show the diff against the previous
   version and against `HEAD` and keep the cursor on the list, so you can move
   down the files with the diff following. `F` in a diff widens its context
   to the whole file and back. `\d` closes the diff.
@@ -352,18 +361,18 @@ Code then gets the editor's environment as it is, no tab shows activity inside
 a multiplexer, and, when Neovim runs inside one, `:checkhealth aineo` warns.
 Under tmux, a mouse selection copied in Claude's window then prints
 `52;c;<base64>` there (the copy, base64-encoded).
-The indicator also does not work when `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` is set to `1`, `true`, `yes`
-or `on`. It reads the title of Claude Code 2.1.301 from that version's
-program; it has not been seen in a real turn, and a later version may change
-the title.
+The indicator also does not work when `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` is
+set to `1`, `true`, `yes` or `on`. It reads the title of Claude Code 2.1.301
+from that version's program; it has not been seen in a real turn, and a later
+version may change the title.
 
 ## Health check
 
 `:checkhealth aineo` reports the Neovim version, the configuration (an unknown
 key is named), whether `claude` runs, the shell, the server socket, the prefix
 mappings, the tab line, the activity indicator, the picker `\f` uses and why
-the autostart did or did not run. It starts no Claude session and opens no layout; the one command
-it runs is `claude.cmd` with `--version` appended.
+the autostart did or did not run. It starts no Claude session and opens no
+layout; the one command it runs is `claude.cmd` with `--version` appended.
 
 ## More
 
