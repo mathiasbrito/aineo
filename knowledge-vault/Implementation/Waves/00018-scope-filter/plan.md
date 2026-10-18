@@ -587,6 +587,15 @@ A follow-up after the wave closed: the user's prompt of 2026-10-17, with five co
 - **The orchestrator's check** on `dev` plus T88: 4493 cases, `Fails (0)`, `make lint` clean; the float-guard mutant killed (2) and the snacks-cwd mutant killed (1).
 - **Departures.** The tests fake the four pickers through `package.preload`; the code reads `require('snacks')`, not the `Snacks` global A453 names, because selene refuses `_G`. A forced picker that is missing falls back to `vim.ui.select` after telling once: the author's choice, kept (A454). The real telescope.nvim and fzf-lua stay unmeasured. The modularity skill's tables lack `lua/aineo/find/`: an `ai/` change, not done here.
 
+### T89 — the changes pane keeps its focused view, and `<S-CR>` edits a listed file, PR #265, merged by rebase (`dev` `1c1ed61`), released in v0.2.51 (PR #266, `main` `8dc549b`)
+
+A follow-up after the wave closed: the user's prompts of 2026-10-18, with seven commits on `dev`, `9db7239` … `1c1ed61`. Session note: [[Sessions/2026-10-18 — T89 Keep the changes view]]. D82 is its decision row. Built on Sonnet (D30).
+- **The packet.** The changes pane keeps, for each Claude session, the focused view's pick (a worktree, a branch or the reported set), whether the focused or the default view showed, and the reported set's members, in a record beside the session's base and saves (`aineo.changes.kept`). The record is written when the view changes, atomically, and read back silently once git has been read; what no longer exists is dropped untold. `<S-CR>` in the files window opens the listed file editable in the worktree its line belongs to; a branch checked out nowhere opens at its tip, read-only, with one message. The help names tmux's extended keys.
+- **Reviews** (attack; tests and records): no blocker. Restores through the real entry point told nothing; the record writes are atomic and the files are `0600`; no record value reaches git or a shell.
+- **Fix round** by the author: the follow-guard, the reported-set term, the empty-string guards of the record, a pick that is the editor's own worktree, the file gone at a branch tip with one message, the backtick file name run under `.tests/`, and a `:w` case for a branch checked out in a worktree; the records findings (the `\g` paragraph of the help, the release docstring, the note's commit count and open threads, literal mutants, D82's user column).
+- **The orchestrator's check** on `dev` plus T89: 4568 cases, `Fails (0)`, `make lint` clean; the follow-guard mutant killed (1) and the other-worktree `<S-CR>` mutant killed (6).
+- **Limit.** `<S-CR>` needs tmux's extended keys, which the user's tmux has off; the user was told.
+
 ### T87 — withdrawn
 
 The user asked for Enter to keep the cursor and Shift+Enter to move it, then withdrew the request on 2026-10-17 (`h` and `l` already keep the cursor, D79). Nothing was edited, committed or pushed; no decision was recorded and no PR exists.
@@ -600,6 +609,8 @@ The user asked for Enter to keep the cursor and Shift+Enter to move it, then wit
 - **A454 (T88)** the author's deviations accepted.
 - **A455 (T88)** F7, the submodule edge, left open.
 - **A456 (T88)** on a git failure the finder tells once; the walk stays as it is.
+- **A457 (T89)** D81's row keeps no release, because rows are never edited in place.
+- **A458–A464 (T89)** the orchestrator's assumptions, recorded in D82: the view kept per Claude session beside the base and saves (A458); what is kept, the pick, which view showed and the reported set's members, and what a restore drops untold (A459); nothing else kept (A460); written when the view changes, atomically, a bad record ignored silently, the session id through the base's path helper (A461); `<S-CR>` opens the file editable in the worktree its line belongs to (A462); a branch checked out nowhere opens at its tip read-only, told once, a deleted file told once (A463); the help says `<S-CR>` needs a terminal that tells it from Enter, and tmux's extended keys (A464).
 
 ### Rulings made at the dispatches and fix rounds — the orchestrator's assumptions
 
