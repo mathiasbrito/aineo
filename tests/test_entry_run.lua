@@ -710,39 +710,76 @@ T['quitting']['asks once, listing the commands, and stops every process with its
   child.stop()
 end
 
+--- The window the child's cursor is in and the number of its tab pages, or
+--- `nil` when the child has quit.
+---
+---@return { [1]: integer, [2]: integer }|nil
+local function cursor_and_page_count()
+  local answered, state =
+    pcall(child.lua_get, '{ vim.api.nvim_get_current_win(), #vim.api.nvim_list_tabpages() }')
+  return answered and state or nil
+end
+
+--- Kills `pids` when the case ends, whatever it did, so that no service
+--- outlives it.
+---
+---@param pids integer[]
+local function kill_when_done(pids)
+  MiniTest.finally(function()
+    for _, pid in ipairs(pids) do
+      pcall(vim.uv.kill, pid, 'sigkill')
+    end
+  end)
+end
+
 T['quitting']['keeps the editor open, the cursor where it was and the processes running, when the user cancels'] = function()
   local fake = open_layout('run-pane-quit-cancel')
   local folder = fixture.directory('run-pane/quit-cancel')
   local record = folder .. '/questions'
   answer_questions(2, record)
   local pids = start_services_with_children(folder)
-  local window = child.lua_get('vim.api.nvim_get_current_win()')
-  local page_count = child.lua_get('#vim.api.nvim_list_tabpages()')
+  kill_when_done(pids)
+  local before = cursor_and_page_count()
 
   claude_session.quit(child)
   vim.wait(entry_shell.PATIENCE_MS, function()
     return #questions_asked(record) == 3
   end, 20)
   local settled = vim.wait(entry_shell.PATIENCE_MS, function()
-    return child.is_running() and child.lua_get('#vim.api.nvim_list_tabpages()') == page_count
+    local state = cursor_and_page_count()
+    return state ~= nil and state[2] == before[2]
   end, 20)
-  local kept = {
-    child.lua_get('vim.api.nvim_get_current_win()'),
-    child.lua_get('#vim.api.nvim_list_tabpages()'),
+
+  eq(settled, true)
+  eq(cursor_and_page_count(), before)
+  eq(
     vim.tbl_map(function(pid)
       return vim.uv.kill(pid, 0) == 0
     end, pids),
-    #questions_asked(record),
-  }
+    { true, true, true, true }
+  )
+  eq(#questions_asked(record), 3)
   end_claude(fake)
   answer_questions(1, record)
   claude_session.quit(child)
   vim.fn.jobwait({ child.job.id }, claude_session.STOP_PATIENCE_MS)
-  local survivors = survivors_of(pids)
+  eq(survivors_of(pids), {})
+  child.stop()
+end
 
-  eq(settled, true)
-  eq(kept, { window, page_count, { true, true, true, true }, 3 })
-  eq(survivors, {})
+T['quitting']['stops Claude Code as quitting stops it, besides the processes'] = function()
+  local fake = open_layout('run-pane-quit-claude')
+  local folder = fixture.directory('run-pane/quit-claude')
+  answer_questions(1, folder .. '/questions')
+  local pids = start_services_with_children(folder)
+  kill_when_done(pids)
+
+  claude_session.quit(child)
+  local ended = tabs.ended_how(fake)
+  vim.fn.jobwait({ child.job.id }, claude_session.STOP_PATIENCE_MS)
+
+  eq(ended, 'keys')
+  eq(survivors_of(pids), {})
   child.stop()
 end
 
