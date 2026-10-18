@@ -18,6 +18,7 @@ local output = require('aineo.run.output')
 ---@class aineo.run.Entry
 ---@field buffer integer the terminal that shows the process
 ---@field name string what the process is called
+---@field is_interactive_shell boolean whether it is the shell `start_shell()` starts, not a command
 ---@field status integer|nil the status the process exited with, nil while it runs
 
 --- What a caller reads of the output of a process: the lines it asks for
@@ -55,6 +56,7 @@ local SHELL_NAME = 'shell'
 ---@field name string what the process is called: the name in its settings, else the command the user gave, or `shell`
 ---@field pid integer the process id of the terminal's process, which leads a process group of its own
 ---@field job integer the job of the terminal's process
+---@field is_interactive_shell boolean whether it is the shell `start_shell()` starts, not a command
 ---@field is_group_gone boolean whether the process group has been seen empty, after which it is never signalled again: its id may belong to another process by now
 ---@field status integer|nil the status the process exited with, nil while it runs
 
@@ -288,8 +290,9 @@ local function make_run(group_name)
   ---@param name string what the process is called
   ---@param command string[]
   ---@param settings aineo.run.Settings
+  ---@param is_interactive_shell boolean whether the process is the shell `start_shell()` starts
   ---@return integer buffer
-  local function start(name, command, settings)
+  local function start(name, command, settings, is_interactive_shell)
     validate_settings(settings)
     local buffer = vim.api.nvim_create_buf(false, true)
     local job
@@ -306,6 +309,7 @@ local function make_run(group_name)
       pid = vim.fn.jobpid(job),
       job = job,
       is_group_gone = false,
+      is_interactive_shell = is_interactive_shell,
     }
     table.insert(processes, process)
     vim.b[buffer].aineo_run_title = title_of(process)
@@ -341,7 +345,7 @@ local function make_run(group_name)
     vim.validate('settings', settings, 'table')
     vim.validate('settings.shell', settings.shell, 'table')
     local words = vim.list_extend(vim.list_slice(settings.shell), shell_command_flag())
-    return start(settings.name or command, vim.list_extend(words, { command }), settings)
+    return start(settings.name or command, vim.list_extend(words, { command }), settings, false)
   end
 
   --- Starts an interactive shell, `settings.shell`, named `shell`, in a
@@ -352,7 +356,7 @@ local function make_run(group_name)
   function home.start_shell(settings)
     vim.validate('settings', settings, 'table')
     vim.validate('settings.shell', settings.shell, 'table')
-    return start(SHELL_NAME, settings.shell, settings)
+    return start(SHELL_NAME, settings.shell, settings, true)
   end
 
   --- The terminal of every process of the home, the oldest first.
@@ -365,13 +369,19 @@ local function make_run(group_name)
   end
 
   --- The processes of the home, the oldest first, each as its terminal, its
-  --- name and the status it exited with, nil while it runs. The tables are
+  --- name, whether it is the interactive shell and the status it exited with, nil
+  --- while it runs. The tables are
   --- copies: changing one changes nothing of the home.
   ---
   ---@return aineo.run.Entry[] entries
   function home.entries()
     return vim.tbl_map(function(process)
-      return { buffer = process.buffer, name = process.name, status = process.status }
+      return {
+        buffer = process.buffer,
+        name = process.name,
+        is_interactive_shell = process.is_interactive_shell,
+        status = process.status,
+      }
     end, processes)
   end
 

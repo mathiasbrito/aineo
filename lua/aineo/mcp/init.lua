@@ -117,11 +117,15 @@ function M.run_instructions()
     'aineo can run commands in its run pane in Neovim.'
     .. ' Call `%s` only when the user explicitly asks you to run something,'
     .. ' for example "run the backend", and `%s` only when the user explicitly asks you to stop it;'
-    .. ' never on your own initiative. The user approves each call.'
+    .. ' never on your own initiative. Claude Code asks the user to approve every such call.'
     .. ' To see what a process printed, call `%s`, which needs no approval:'
-    .. ' filter first with `pattern`, a Vim regex such as `error|warn|fail`, keep `last` small,'
-    .. ' and then pass `after_line`, the `total` of the answer before, to read only what is new;'
-    .. ' do not read whole logs.'
+    .. ' filter first to keep your context small, with `pattern`, a Vim regex such as `error|warn|fail`'
+    .. ' (very magic: escape `= @ %% & ~ { < >` with a backslash to match them literally, as in `level\\=error`),'
+    .. ' a small `last` (40 by default, with no maximum), and then `after_line`,'
+    .. ' the `total` of the answer before, to read only what is new; `ignore_case` is true by default.'
+    .. ' Each line is a terminal row, and a resize renumbers the rows:'
+    .. ' if `total` is smaller than your last `after_line`, read again without it.'
+    .. ' The interactive shell of the run pane is not read.'
   ):format(M.run_tool_name(), M.run_stop_tool_name(), M.run_output_tool_name())
 end
 

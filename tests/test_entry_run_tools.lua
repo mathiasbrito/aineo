@@ -146,6 +146,33 @@ T['run']['gives a name the stack holds already a numeric suffix'] = function()
   eq(third.text:find('Started "sleep-3"', 1, true), 1)
 end
 
+T['run']['names the process by the first word of the command without its control characters'] = function()
+  start_child_in_repository('run-tools-name-controls')
+
+  call('run', { command = '\27[2J\7evil; sleep 20' })
+
+  eq(process_names(), { '[2Jevil;' })
+end
+
+T['run']['names the process by a word of its own when the first word is all control characters'] = function()
+  start_child_in_repository('run-tools-name-only-controls')
+
+  call('run', { command = '\7 sleep 20' })
+
+  eq(process_names(), { 'command' })
+end
+
+T['run']['gives a command called shell a suffix, as the interactive shell holds the name'] = function()
+  start_child_in_repository('run-tools-name-shell')
+  child.lua(
+    [[_G.stub_tab.homes.run.start_shell({ cwd = _G.folder, env = { A = '1' }, shell = { '/bin/sh' } })]]
+  )
+
+  call('run', { command = 'shell-script.sh', name = 'shell' })
+
+  eq(process_names(), { 'shell', 'shell-2' })
+end
+
 T['run']['tells the user once that it started the process in the run pane'] = function()
   start_child_in_repository('run-tools-told')
 
@@ -188,18 +215,28 @@ end
 
 T['run']['refuses a directory that is neither the folder nor a worktree, and starts nothing'] =
   MiniTest.new_set({
-    parametrize = { { 'inside' }, { 'outside' }, { 'missing' } },
+    parametrize = {
+      { 'inside' },
+      { 'outside' },
+      { 'missing' },
+      { 'worktree_sibling' },
+      { 'folder_sibling' },
+    },
   })
 
 T['run']['refuses a directory that is neither the folder nor a worktree, and starts nothing']['given'] = function(
   which
 )
-  local folder = start_child_in_repository('run-tools-refused-' .. which)
+  local folder, worktree = start_child_in_repository('run-tools-refused-' .. which)
   vim.fn.mkdir(vim.fs.joinpath(folder, 'sub'))
+  vim.fn.mkdir(worktree .. '-evil')
+  vim.fn.mkdir(folder .. '-evil')
   local directories = {
     inside = 'sub',
     outside = vim.fs.dirname(folder),
     missing = vim.fs.joinpath(folder, 'nowhere'),
+    worktree_sibling = worktree .. '-evil',
+    folder_sibling = folder .. '-evil',
   }
 
   local answer = call('run', { command = 'sleep 30', directory = directories[which] })
@@ -320,6 +357,21 @@ T['run_output']['reads what its arguments ask for']['given'] = function(argument
   eq(answer, { text = text, is_error = false })
 end
 
+T['run_output']['says the rows were renumbered when after_line is past the last row'] = function()
+  start_child_in_repository('run-tools-output-renumbered')
+  start_printing()
+
+  local answer = call('run_output', { name = 'printing', after_line = 50 })
+
+  eq(answer, {
+    text = 'printing: running; 9 lines in total\n'
+      .. '(after_line 50 is past the last line, 9: the rows were renumbered, by a resize of the pane'
+      .. " or by 'scrollback'; read again without after_line)\n"
+      .. '(no matching lines)',
+    is_error = false,
+  })
+end
+
 T['run_output']['answers a pattern that is no regex with the error, as an error'] = function()
   start_child_in_repository('run-tools-output-invalid')
   start_printing()
@@ -340,6 +392,31 @@ T['run_output']['says how a process that ended exited, and counts one line as on
   local answer = call('run_output', { name = 'short' })
 
   eq(answer, { text = 'short: exited 3; 1 line in total\n1: done', is_error = false })
+end
+
+T['run_output']['refuses the interactive shell, whose screen may hold what the user typed'] = function()
+  start_child_in_repository('run-tools-output-shell')
+  child.lua(
+    [[_G.stub_tab.homes.run.start_shell({ cwd = _G.folder, env = { A = '1' }, shell = { '/bin/sh' } })]]
+  )
+
+  local answer = call('run_output', { name = 'shell' })
+
+  eq(answer, {
+    text = '"shell" is an interactive shell; its screen is not read, as it may hold what you typed',
+    is_error = true,
+  })
+end
+
+T['run_output']['reads a command that is an interactive program, as the command it is'] = function()
+  start_child_in_repository('run-tools-output-interactive-program')
+  call('run', { command = 'echo hi; sh -i', name = 'repl' })
+  wait_for_line('repl', 'hi')
+
+  local answer = call('run_output', { name = 'repl', pattern = '^hi$' })
+
+  eq(answer.is_error, false)
+  eq(answer.text:find('1: hi', 1, true) ~= nil, true)
 end
 
 T['run_output']['answers a name no process has with the names there are'] = function()
