@@ -1261,7 +1261,7 @@ T['while the changes pane shows']['the key of Claude’s line numbers toggles th
 end
 
 --- What `:Aineo pane` tells the user when it is not given one of its panes.
-local PANE_USAGE = 'aineo: :Aineo pane takes one of agent, changes, terminal'
+local PANE_USAGE = 'aineo: :Aineo pane takes one of agent, changes, terminal, run'
 
 T[':Aineo pane'] = MiniTest.new_set()
 
@@ -1292,7 +1292,7 @@ end
 T[':Aineo pane']['completes its pane, filtered by what is typed, and nothing after it'] =
   MiniTest.new_set({
     parametrize = {
-      { 'Aineo pane ', { 'agent', 'changes', 'terminal' } },
+      { 'Aineo pane ', { 'agent', 'changes', 'terminal', 'run' } },
       { 'Aineo pane c', { 'changes' } },
       { 'Aineo pane t', { 'terminal' } },
       { 'Aineo  pane  a', { 'agent' } },
@@ -1318,6 +1318,7 @@ local SUBCOMMANDS = {
   'sessions',
   'new',
   'pane',
+  'run',
   'claim',
   'tab',
   'diff',
@@ -1328,12 +1329,12 @@ T[':Aineo pane']['completes after a command modifier or a range as it does witho
   MiniTest.new_set({
     parametrize = {
       { 'silent Aineo ', SUBCOMMANDS },
-      { 'silent Aineo pane ', { 'agent', 'changes', 'terminal' } },
+      { 'silent Aineo pane ', { 'agent', 'changes', 'terminal', 'run' } },
       { 'vertical Aineo p', { 'pane' } },
       { 'keepalt botright Aineo pane c', { 'changes' } },
       { 'silent! Ain pane a', { 'agent' } },
-      { 'silent 5Aineo pane ', { 'agent', 'changes', 'terminal' } },
-      { "'A Aineo pane ", { 'agent', 'changes', 'terminal' } },
+      { 'silent 5Aineo pane ', { 'agent', 'changes', 'terminal', 'run' } },
+      { "'A Aineo pane ", { 'agent', 'changes', 'terminal', 'run' } },
     },
   })
 
@@ -1341,7 +1342,7 @@ T[':Aineo pane']['completes after an earlier command and a bar as it does alone'
   MiniTest.new_set({
     parametrize = {
       { 'Aineo open | Aineo ', SUBCOMMANDS },
-      { 'Aineo pane changes | Aineo pane ', { 'agent', 'changes', 'terminal' } },
+      { 'Aineo pane changes | Aineo pane ', { 'agent', 'changes', 'terminal', 'run' } },
     },
   })
 

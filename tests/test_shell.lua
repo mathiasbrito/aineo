@@ -144,6 +144,27 @@ T['shell_program()']['is the first word of `shell` as `:terminal` reads it, its 
   eq(program, '/a dir/q"sh')
 end
 
+T['shell_command()'] = MiniTest.new_set()
+
+T['shell_command()']['is the words of `shell` as `:terminal` reads them, quotes and escapes resolved'] = function()
+  start_child()
+  child.o.shell = [[ "/a dir/q\"sh" -l  -i]]
+
+  local words = child.lua_get("require('aineo.shell').shell_command()")
+
+  eq(words, { '/a dir/q"sh', '-l', '-i' })
+end
+
+T['child_environment()'] = MiniTest.new_set()
+
+T['child_environment()']['names the variable that tells aineo it runs in its own terminal'] = function()
+  start_child()
+
+  local environment = child.lua_get("require('aineo.shell').child_environment()")
+
+  eq(environment, { AINEO_CHILD = '1' })
+end
+
 T['start()'] = MiniTest.new_set()
 
 T['start()']['returns a terminal buffer that runs the program `shell` names'] = function()
