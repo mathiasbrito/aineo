@@ -17,7 +17,7 @@ The aineo prefix followed by Enter (`\<CR>` by default) opens the file under the
 
 ## The user's words
 
-"ok the iTerm trick works, but this is to much muscles, we need something that works out of the box maybe <enter>?"
+"ok the iTerm trick works, but this is to much muscles, we need something that works out of the box maybe \<enter>?"
 
 ## Design
 
@@ -36,6 +36,7 @@ The aineo prefix followed by Enter (`\<CR>` by default) opens the file under the
 |---|---|---|
 | M1 | `lua/aineo/entry/tab.lua`: `edit_file_key = config.prefix and config.prefix .. '<CR>' or nil,` → `edit_file_key = '\\<CR>',` | `the prefix and Enter | follows the prefix vim.g.aineo names`, `… maps nothing, <S-CR> staying, when the prefix is false` |
 | M2 | `lua/aineo/changes/copy.lua`: `if session and session.settings.edit_file_key then` → `if false then` | `edit_file_key | opens the file as <S-CR> does …`, `edit_file_key | is the key the settings name, in the files buffer alone` |
+| M3 | `lua/aineo/entry/tab.lua`, `begin_claude()`: add `homes.changes.pane_buffers()` ⏎ before `local working_directory = start_directory()` | `tests/test_entry_changes.lua` narrowed to the group `the prefix and Enter`: 2 of 3 cases (the third expects no map); found by the review of PR #268 |
 
 ## Verification
 
@@ -45,7 +46,7 @@ The aineo prefix followed by Enter (`\<CR>` by default) opens the file under the
 
 ## Limits
 
-- A files buffer made before the session begins holds no `\<CR>` (the map is made when the buffer is); the composition root begins the session first, and the case is not pinned.
+- A files buffer made before the session begins holds no `\<CR>` (the map is made when the buffer is); the composition root begins the session first, and the entry cases pin that order for `:Aineo open` (mutant M3).
 - A prefix changed after the editor has started is not followed, as the global prefix keys are not (*aineo-config-prefix*).
 
 ## Commits
