@@ -495,15 +495,25 @@ end
 --- The view `kept` keeps, as `candidates`, what git now lists, still allows
 --- it: a member of the reported set that git no longer lists is dropped, so
 --- is a pick of a worktree or a branch it no longer lists, all untold. The
---- focused view shows only while what it was of — the set, or the pick — is
---- left.
+--- editor's own worktree, which `s` never offers and the pane never keeps,
+--- is never restored. The focused view shows only while what it was of — the
+--- set, or the pick — is left.
 ---
 ---@param kept aineo.changes.KeptView
 ---@param candidates aineo.changes.BranchCandidates
+---@param own_top string the top level of the editor's own worktree
 ---@return aineo.changes.RestoredView
-function M.restored_view(kept, candidates)
-  local reported = M.still_listed(vim.tbl_map(member_of_pick, kept.reported), candidates)
-  local picked = kept.scope and M.still_listed({ member_of_pick(kept.scope) }, candidates)[1]
+function M.restored_view(kept, candidates, own_top)
+  local function is_not_own(pick)
+    return pick.top ~= own_top
+  end
+  local reported = M.still_listed(
+    vim.tbl_map(member_of_pick, vim.tbl_filter(is_not_own, kept.reported)),
+    candidates
+  )
+  local picked = kept.scope
+    and is_not_own(kept.scope)
+    and M.still_listed({ member_of_pick(kept.scope) }, candidates)[1]
   local scope
   if picked and picked.worktree then
     scope = M.of(picked.worktree)

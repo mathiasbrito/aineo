@@ -1350,7 +1350,7 @@ function M.new(label)
         keep_view()
         return
       end
-      local restored = scope.restored_view(on_disk, candidates)
+      local restored = scope.restored_view(on_disk, candidates, repository)
       session.scope, session.focused = restored.scope, restored.focused
       session.reported, session.shows_reported = restored.reported, restored.shows_reported
       if restored.selected then
@@ -2097,7 +2097,8 @@ function M.new(label)
   --- or its failure told, once, naming the file.
   ---
   ---@param entry aineo.changes.Entry an entry for which `commit_file.lists_file_at_a_commit()` holds
-  local function show_commit_file(entry)
+  ---@param note? string what the user is told once the file was read, before it is shown, unless a later key asked for another
+  local function show_commit_file(entry, note)
     local path = entry.change.path
     enters = enters + 1
     local this_enter = enters
@@ -2133,6 +2134,9 @@ function M.new(label)
           )
           return
         end
+        if note then
+          vim.notify(note, vim.log.levels.INFO)
+        end
         show_last(this_enter, {
           name = name,
           show = function(content)
@@ -2166,9 +2170,11 @@ function M.new(label)
   --- Opens for edition the file the line under the cursor lists in `buffer`,
   --- the files buffer, as it is now in the working tree its line belongs to
   --- (`open_file.edit_place()`), whatever filter lists it. A file of a local
-  --- branch that no worktree has checked out cannot be edited: the user is
-  --- told so (`open_file.branch_checked_out_nowhere()`) and the file is
-  --- shown as the branch's tip has it, read-only (`show_commit_file()`).
+  --- branch that no worktree has checked out cannot be edited: the file is
+  --- shown as the branch's tip has it, read-only, and the user is told so
+  --- (`open_file.branch_checked_out_nowhere()`) once the tip's file was read
+  --- (`show_commit_file()`); a file the tip no longer has is told as deleted
+  --- there, and nothing else.
   --- Where a branch is checked out is read when the key is pressed, as the
   --- editor's own worktree may have checked it out since; only the last
   --- key's file is opened, and none when the cursor has left the window the
@@ -2190,11 +2196,10 @@ function M.new(label)
         open_file.open_working_file(place.top, entry.change.path)
         return
       end
-      vim.notify(
-        open_file.branch_checked_out_nowhere(place.branch, entry.change.path),
-        vim.log.levels.INFO
+      show_commit_file(
+        vim.tbl_extend('force', entry, { filter = filter.of_branch(place.branch) }),
+        open_file.branch_checked_out_nowhere(place.branch, entry.change.path)
       )
-      show_commit_file(vim.tbl_extend('force', entry, { filter = filter.of_branch(place.branch) }))
     end
     if not open_file.branch_of(entry) then
       edit_in(open_file.edit_place(entry, top, {}))
@@ -2809,7 +2814,8 @@ function M.new(label)
   --- timer of the pause its commits window's cursor starts, removes its
   --- handlers, by deleting their groups (a group the home never made is no
   --- error), and wipes its pane's two buffers and the diffs it showed. The
-  --- bases and the saves it kept on disk stay. Nothing follows its repository
+  --- bases, the saves and the views it kept on disk stay (`aineo.changes.kept`).
+  --- Nothing follows its repository
   --- afterwards, whether a look for the repository is answered after this or
   --- not. Only a home with a label, as `M.new()` makes them, has it. A home
   --- let go is called no more.
