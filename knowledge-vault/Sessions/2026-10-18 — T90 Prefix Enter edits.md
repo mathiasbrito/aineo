@@ -1,7 +1,7 @@
 # 2026-10-18 — T90 Prefix Enter edits
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`, on Sonnet)
-**Branch:** `feature/t90-prefix-enter` · **Pull request:** into `dev`
+**Branch:** `feature/t90-prefix-enter` · **Pull request:** #268 (into `dev`)
 
 The aineo prefix followed by Enter (`\<CR>` by default) opens the file under the cursor in the changes pane's files window for edition, as `<S-CR>` does, so that the key works in a terminal with no setup. A small fix in the user's prompt-driven waves (D30).
 
