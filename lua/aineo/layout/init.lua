@@ -97,7 +97,8 @@ local function make_layout(input_name, group_name)
   --- window was already closed when the terminal pane took the column, which
   --- the agent pane then leaves closed as the shell ends; the terminals and
   --- winbar the run pane was handed last, and the windows it opened below
-  --- the Report's, top to bottom.
+  --- the Report's, top to bottom; and the zoom of the right column, if it is
+  --- zoomed (`M.toggle_zoom()`).
   local state = {
     ---@type table<aineo.layout.Role, integer>
     windows = {},
@@ -544,7 +545,8 @@ local function make_layout(input_name, group_name)
 
   --- Puts the layout's proportions back: the columns' widths, the Report's
   --- share of the right column's rows when Input's window shows, and the
-  --- equal shares of the run pane's stack.
+  --- equal shares of the run pane's stack; with the right column zoomed, the
+  --- zoom is kept in their place (`keep_zoom()`).
   local function apply_proportions()
     size_columns()
     if keep_zoom() then
@@ -1875,7 +1877,8 @@ local function make_layout(input_name, group_name)
   --- the buffer it shows under the pane shown; with the windows of the pane
   --- shown open, the columns take a third of the screen each while the file
   --- column is open, and the proportions are put back whenever a window closes, the editor is
-  --- resized or the layout's tab is entered.
+  --- resized or the layout's tab is entered; a zoomed right column
+  --- (`M.toggle_zoom()`) is kept zoomed then, until its windows change.
   ---
   --- From then on, too, Claude's terminal, once its process has ended, stays
   --- in Normal mode, so that no key closes it and its exit stays on screen:
