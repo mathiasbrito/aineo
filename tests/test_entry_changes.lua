@@ -69,13 +69,14 @@ local COUNT_FINDS = [[
 ---@param name string the case's own name, starting `changespane-`
 ---@param files table<string, string[]>
 ---@param mode? string the fake's mode, `ready` when not given
+---@param settings? table more of `vim.g.aineo` (`entry.use_fake()`)
 ---@return string top
 ---@return string base
-local function in_repository(name, files, mode)
+local function in_repository(name, files, mode, settings)
   local top, base = git_repo.create(name, files)
   child.lua('for name, value in pairs(...) do vim.env[name] = value end', { git_repo.ENVIRONMENT })
   child.cmd('cd ' .. vim.fn.fnameescape(top))
-  entry.use_fake(child, claude_session.fake(name, mode or 'ready'))
+  entry.use_fake(child, claude_session.fake(name, mode or 'ready'), settings)
   child.lua(COUNT_FINDS)
   return top, base
 end
@@ -295,17 +296,28 @@ T['Enter'] = MiniTest.new_set()
 
 --- Opens the layout around a repository whose `notes.txt` changed since the
 --- base, shows the changes pane and waits for it to list the file, then
---- moves the cursor to the files window, onto the file's line.
+--- moves the cursor to the files window, onto the file's line. The pane is
+--- shown by typing `pane_keys`, `\g` when not given; a configuration with
+--- no prefix gives `:Aineo pane changes` instead (`pane_keys` = `false`).
+--- `settings` are more of `vim.g.aineo` (`in_repository()`).
 ---
 ---@param name string
-local function changes_pane_listing_a_file(name)
-  local top = in_repository(name, { ['notes.txt'] = { 'one' } })
+---@param pane_keys? string|false
+---@param settings? table
+---@return string top the repository's top level
+local function changes_pane_listing_a_file(name, pane_keys, settings)
+  local top = in_repository(name, { ['notes.txt'] = { 'one' } }, nil, settings)
   git_repo.write(top, 'notes.txt', { 'two' })
   open_and_wait_for_the_base()
-  entry.press(child, '\\g')
+  if pane_keys == false then
+    child.cmd('Aineo pane changes')
+  else
+    entry.press(child, pane_keys or '\\g')
+  end
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
   child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  return top
 end
 
 --- Waits until a window of the child shows the buffer named `name`.
@@ -431,6 +443,49 @@ T['Enter']['while the command-line window is open shows the diff once it closes,
       told = '',
     }
   )
+end
+
+T['the prefix and Enter'] = MiniTest.new_set()
+
+T['the prefix and Enter']['opens the file for edition in the file column, as <S-CR> does'] = function()
+  local top = changes_pane_listing_a_file('changespane-entry-prefix-enter')
+  local path = vim.fs.joinpath(top, 'notes.txt')
+
+  entry.press(child, '\\<CR>')
+
+  wait_for_window_showing(path)
+  eq({ entry.windows(child), entry.current_window(child) }, {
+    { 'terminal', path, FILES, COMMITS },
+    path,
+  })
+  eq(child.lua_get('vim.bo.modifiable'), true)
+end
+
+T['the prefix and Enter']['follows the prefix vim.g.aineo names'] = function()
+  entry.restart(child, { '--cmd', "lua vim.g.aineo = { prefix = ',', autostart = false }" })
+  local top = changes_pane_listing_a_file(
+    'changespane-entry-prefix-enter-custom',
+    ',g',
+    { prefix = ',', autostart = false }
+  )
+  local path = vim.fs.joinpath(top, 'notes.txt')
+
+  entry.press(child, ',<CR>')
+
+  wait_for_window_showing(path)
+  eq(entry.current_window(child), path)
+end
+
+T['the prefix and Enter']['maps nothing, <S-CR> staying, when the prefix is false'] = function()
+  entry.restart(child, { '--cmd', 'lua vim.g.aineo = { prefix = false, autostart = false }' })
+  changes_pane_listing_a_file(
+    'changespane-entry-prefix-enter-off',
+    false,
+    { prefix = false, autostart = false }
+  )
+
+  eq(child.lua_get('vim.fn.maparg(..., "n")', { '\\<CR>' }), '')
+  eq(child.lua_get('vim.fn.maparg(..., "n", false, true).buffer', { '<S-CR>' }), 1)
 end
 
 T['gf'] = MiniTest.new_set()

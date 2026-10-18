@@ -702,7 +702,8 @@ it holds, spaces, quotes and an apostrophe among them: a name that fails to
 open from the pane is a fault to report.
 
                                                        *aineo-changes-edit*
-`<S-CR>` (Shift and Enter) on a file's line opens the file for edition, as
+`\<CR>` (the prefix, `\` by default, and Enter) on a file's line opens the
+file for edition, as does `<S-CR>` (Shift and Enter). The file is opened as
 it is now in the working tree its line belongs to, with no diff and no
 commit's version: a file of your own worktree, whatever filter lists it, a
 commit of yours included; a file listed under another worktree, in that
@@ -723,15 +724,22 @@ longer in that working tree opens nothing, and aineo says the file is
 gone; a path that is a directory, a submodule or a nested repository
 opens nothing, and aineo says it is a directory, not a file. The path is
 taken whole, as for `gf`: no character of it is a wildcard or the end of a
-command. Enter, `h`, `l` and `gf` are unchanged, and `<S-CR>` on any line
-that lists no file does nothing.
+command. Enter, `h`, `l` and `gf` are unchanged, and `\<CR>` and `<S-CR>`
+on any line that lists no file do nothing. `\<CR>` follows the prefix
+(|aineo-config-prefix|) and is a map of the files window's buffer alone;
+with the prefix `false` it is not mapped, and `<S-CR>` is the only key. In
+that buffer it replaces a global mapping of your own on the same keys; in
+every other buffer your mapping stays.
+
 Neovim receives `<S-CR>` only when your terminal tells it apart from Enter,
 which many terminals do only once asked for extended keys. Inside tmux, tmux
 must pass them on: set `extended-keys` to `on` (or `always`) in your tmux
 configuration. `extended-keys-format` (`csi-u` or `xterm`) is the format
 tmux uses to report modified keys to the program in the pane. A terminal
 tmux does not recognise as sending extended keys is told so with the
-`extkeys` feature of `terminal-features`.
+`extkeys` feature of `terminal-features`. In iTerm2, give Shift+Return a key
+mapping (Settings, Profiles, Keys) whose action is "Send Escape Sequence"
+with `[13;2u`.
 
 `l` and `h` on a file's line show that file's diff as Enter does, `l`
 against the file's previous version, `h` against `HEAD`, and keep the cursor

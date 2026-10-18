@@ -135,4 +135,12 @@ None beyond the limits above: the restore reads the worktrees and branches once 
 
 ## Commits
 
-*Recorded after the merge.*
+PR #265, merged by rebase after one fix round; released in `v0.2.51` (PR #266, `main` `8dc549b`). On `dev`, in order:
+
+- `9db7239` Keep the changes pane's focused view for each Claude session
+- `c11b9d6` Open a listed file for edition with Shift+Enter in the changes pane
+- `524fa31` Pin that <S-CR> never runs a file name as a command
+- `765c01f` Record D82 and T89: the kept view and Shift+Enter, with the session note
+- `33911d6` Fill in the pull request number of D82 and T89
+- `ced362f` Fix the review findings of PR 265: guards pinned, one message, help
+- `1c1ed61` Record the fix round of PR 265 in D82 and the T89 session note
