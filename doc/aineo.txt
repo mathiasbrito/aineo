@@ -55,8 +55,9 @@ leaving the mode you were in (|aineo-terminal-keys|).
 
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
-aineo allows its two tools of its own without asking, the report tool and
-`announce_work` (|aineo-report|), and nothing else.
+aineo allows three tools of its own without asking, the report tool,
+`announce_work` and `run_output` (|aineo-report|, |aineo-run-tools|), and
+nothing else: Claude Code asks you before it runs or stops a process.
 
 ==============================================================================
 2. REQUIREMENTS AND INSTALLATION                               *aineo-install*
@@ -243,7 +244,12 @@ terminal, which stops it with its children and takes it out of the stack.
 (`\X`, or a command run under 'shellcmdflag' with `-i`) started in a group of
 its own, and that ignores the hangup, outlives it, since Neovim has freed the
 shell's job and hung up its terminal before aineo can find what runs below
-the shell; a quit, `\Q` and the close of a tab page do reach it. Closing the
+the shell; a quit, `\Q` and the close of a tab page do reach it while the
+shell is still there. A job that outlives its shell is reached by none of
+them, a quit included, since no code can find it: a command that runs
+`set -m` and is then stopped with Ctrl-C, and the job of a `\X` shell that
+exits (`sleep &` and `exit`, under sh or bash) are such. zsh hangs up its
+jobs when it exits, by default. Closing the
 window of a process that runs, with `:q`, only hides it: it runs on and comes
 back with the next `\x`. When the screen has no room for another window, the
 process runs on, hidden, and aineo says so. Each tab has a stack of its own
@@ -261,6 +267,70 @@ Close and Cancel, and Cancel keeps the tab. Every process is stopped with its
 children: a termination signal to its process group and to what its shell
 started below it, and a kill to what has not ended within a second and a
 half, at a quit, at `\Q` and when the tab page closes (|aineo-limits|).
+
+The agent's run tools ~
+                                                             *aineo-run-tools*
+Say "run the backend" to Claude Code and its agent can start the command in
+this stack, through three tools of aineo's server, `run`, `run_output` and
+`run_stop`. The tab whose Claude Code makes the call is the tab that acts: the
+start token of the call routes it, as it routes `announce_work`
+(|aineo-report|), and a call that no tab of the editor runs is answered `not
+taken`, as an error. The agent is told, in what aineo appends to Claude Code's
+system prompt and in each tool's description, to run or stop a process only
+when you explicitly ask it to, and never on its own initiative. Instructions
+cannot guarantee that, so the gate is Claude Code's permission prompt: `run`
+and `run_stop` are not allowed without asking, and Claude Code asks you to
+approve each call, showing the command. `run_output` only reads, and is
+allowed without asking.
+
+`run` {command, name?, directory?} starts `command` through your 'shell', as
+`\x` does, at the bottom of the stack, and answers at once without waiting for
+it to end. The run pane is not brought into view and the cursor stays where
+it is; aineo tells you once, `aineo: started backend in the run pane`, and a
+run pane shown in the tab page you are in lists the process at once (in
+another tab page, the next time it is shown). `name`, what `run_output` and
+`run_stop` call the process and the winbar shows, is the command's first word
+when not given, and a name the stack holds already, a process that ended
+included, gets `-2`, `-3`. `directory` is the folder aineo started in when
+not given, and is refused unless it is that folder or a worktree of its
+repository, as `git worktree list` gives them; a relative one is taken from
+the folder. Nothing else is accepted: a subfolder is refused.
+
+`run_output` {name, pattern?, exclude?, ignore_case?, last?, after_line?,
+context?} reads what a process printed, so that the agent reads only what it
+needs. There is no limit but the one the agent chooses: it is told to filter
+first, keep `last` small, and then follow with `after_line`.
+- `pattern`: only the lines that match are read; every line when not given.
+- `exclude`: the lines that match are not read, `DEBUG` for example.
+- `ignore_case`: true when not given, for `pattern` and `exclude`.
+- `last`: how many of the matching lines are read, the last ones; 40 when not
+  given, with no maximum. How many earlier ones were left out is said.
+- `after_line`: only lines numbered after it are read; the `total` of the
+  answer before, to follow a process.
+- `context`: lines read around each match, once where they overlap, those
+  that are not matches marked with a dash instead of a colon; no maximum.
+`pattern` and `exclude` are Vim regexes, taken very magic: aineo puts `\v` in
+front (|/\v|), so `error|warn`, `(GET|POST) /api` and `\d{3}$` work as in most
+regex flavours. Two differences from PCRE: lookarounds are written `(x)@=`,
+`(x)@!`, `(x)@<=` and `(x)@<!`, and there is no `(?i)`, so `ignore_case` takes
+its place. A regex that does not parse is answered with the editor's error,
+as an error. The answer starts with `backend: running; 120 lines in total` (or
+`exited 1`), then the numbered lines, `12: text` for a match and `13- text`
+for context, `--` between lines that do not follow one another. The line
+numbers are the rows of the process's terminal buffer, from 1, without the
+empty rows the terminal pads its last screen with; once the output outgrows
+'scrollback' Neovim drops the oldest rows, the numbers shift, and
+`after_line` misses what came before. A progress bar that redraws itself is
+several rows. Vim's regex engine has no time limit: a pattern that takes very
+long to match holds the editor until it is done.
+
+The tool reads every process of the tab's stack, the interactive shell of
+`\X` included, whatever the screen of its terminal shows. A name that two
+processes have, as two `\x` runs of one command do, is refused rather than
+guessed.
+
+`run_stop` {name} stops the process as `:bdelete!` does, with its children,
+and takes it out of the stack (|aineo-run|, |aineo-limits|).
 
 Tabs ~
                                                                   *aineo-tabs*
@@ -2216,9 +2286,11 @@ aineo starts Claude Code with five additions of its own:
   `--session-id` (|aineo-claude-session|);
 - instructions appended to its system prompt, telling Claude when to call
   the report tool and how to write a report (below), then, after a blank
-  line, one paragraph on `announce_work` (below);
+  line each, one paragraph on `announce_work` (below) and one on the run
+  tools (|aineo-run-tools|);
 - aineo's MCP server, which Claude Code runs as a headless `nvim`, given
-  through `--mcp-config`, with two tools: `report` and `announce_work`;
+  through `--mcp-config`, with five tools: `report`, `announce_work`, and
+  `run`, `run_output` and `run_stop` (|aineo-run-tools|);
 - a `SessionStart` and a `SessionEnd` hook, which Claude Code also runs as
   a headless `nvim`, given through `--settings`: they tell the editor when
   Claude Code switches session (|aineo-claude-session|). Claude Code
@@ -2230,8 +2302,9 @@ aineo starts Claude Code with five additions of its own:
   aineo puts nothing else in `--settings`, and adds them after the hooks
   of a `--settings` in `claude.cmd`, passing the two together in a file
   only you can read (|aineo-config-claude.cmd|);
-- both tools allowed without asking: `--allowedTools mcp__aineo__report
-  mcp__aineo__announce_work`.
+- three tools allowed without asking: `--allowedTools mcp__aineo__report
+  mcp__aineo__announce_work mcp__aineo__run_output`. `run` and `run_stop`
+  are not: Claude Code asks you for each call.
 
 `announce_work` is how Claude Code and its subagents tell aineo of a git
 worktree or branch they just created for new work (|aineo-changes-reported|):
@@ -2635,9 +2708,11 @@ Stopping Claude Code on quit ~
 When Neovim quits, aineo stops a running Claude Code from its own
 |VimLeavePre| handler, by its keys: one Ctrl-C, then a double Ctrl-C, then
 `jobstop()` — up to about 12 seconds. A `VimLeavePre` handler registered
-before aineo's that raises an error makes Neovim skip aineo's: Claude Code
-then only gets Neovim's hangup, and a Claude Code that hangs outlives the
-editor. aineo cannot detect this.
+before aineo's that raises an error makes Neovim skip aineo's when the error
+is a Vimscript `throw`, or a Lua error and the quit runs from Lua, as aineo's
+`\Q` in the last tab does; a Lua error does not when the quit is typed
+(`:qa`). Claude Code then only gets Neovim's hangup, and a Claude Code that
+hangs outlives the editor. aineo cannot detect this.
 
 A Claude Code attached to a background session (|aineo-claude-session|) is
 stopped by `Ctrl+Z` alone, which detaches it and leaves the session running,
@@ -2677,13 +2752,18 @@ which makes Neovim give the quit up, and triggers |TabNew|, |TabEnter| and
 is not stopped by Neovim: aineo stops what is left from a |VimLeavePre|
 handler, registered once the first process has opened the layout and Claude
 Code has registered its own stop, so that it comes after it. A handler before
-it that raises an error makes Neovim skip the handlers after it (measured on
-Neovim 0.12.5 for a Lua callback that raises and for a Vimscript `throw`, with
-`:qa`, `:qa!`, `:x`, `:wq` and `:cquit`), and aineo's stop with them. A
-process that leaves its process group and is no descendant of the shell, as a
-daemon that calls `setsid` does, is not reached by the stop; neither is a job
-that an interactive shell started under job control and that ignores the
-hangup, when you `:bdelete!` the shell's terminal (|aineo-run|).
+it that raises an error makes Neovim skip the handlers after it, and aineo's
+stop with them, when the error is a Vimscript `throw`, or a Lua error and the
+quit runs from Lua; a Lua error does not when the quit is typed (measured on
+Neovim 0.12.5 with `:qa`, `:qa!`, `:x`, `:wq` and `:cquit`, each typed and run
+from Lua). A process that leaves its process group and is no descendant of
+the shell, as a daemon that calls `setsid` does, is not reached by the stop;
+neither is a job that an interactive shell started under job control and
+that ignores the hangup, when you `:bdelete!` the shell's terminal, nor a job
+that outlives its shell, at a quit or not: a command that runs `set -m` and
+is then stopped with Ctrl-C, or the job of a `\X` shell that exits (`sleep &`
+and `exit`, under sh or bash), which no code can find (|aineo-run|). zsh hangs
+up its jobs at exit by default.
 
 Several tabs ~
 Quitting Neovim stops every tab's Claude Code together: each key of the stop

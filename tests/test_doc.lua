@@ -112,6 +112,7 @@ local TAGS = {
   'aineo-<C-\\>x',
   'aineo-<C-\\>X',
   'aineo-run',
+  'aineo-run-tools',
   'aineo-<C-\\>f',
   'g:aineo',
   'aineo.setup()',
