@@ -40,4 +40,6 @@ The README gains a subsection of the changes-pane section, "Which branch the cha
 
 ## Commits
 
-Recorded after the merge.
+PR #277, merged by rebase; released in `v0.2.55` (PR #278, `main` `e017211`). On `dev`:
+
+- `38ca7b2` Document which branch the changes pane counts a worktree's work from
