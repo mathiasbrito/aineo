@@ -393,6 +393,14 @@ end
 local DEFAULT_VIEW_WITH_BOTH =
   default_view_with(bare_worktree('agent-1', 'feature/a'), bare_worktree('agent-2', 'feature/b'))
 
+--- The default view of the repository with a third worktree, `agent-3` on
+--- `feature/c`.
+local DEFAULT_VIEW_WITH_THREE = default_view_with(
+  bare_worktree('agent-1', 'feature/a'),
+  bare_worktree('agent-2', 'feature/b'),
+  bare_worktree('agent-3', 'feature/c')
+)
+
 --- Waits until the commits window of the module's home lists `count` lines.
 ---
 ---@param count integer
@@ -651,6 +659,14 @@ local MALFORMED_RECORDS = {
   {
     'a member that is no table',
     '{"repository":"<repository>","focused":true,"shows_reported":false,"reported":[7],"scope":{"top":"<worktree>"}}',
+  },
+  {
+    'a pick of a worktree with an empty name',
+    '{"repository":"<repository>","focused":true,"shows_reported":false,"reported":[],"scope":{"top":""}}',
+  },
+  {
+    'a member of a branch with an empty name',
+    '{"repository":"<repository>","focused":true,"shows_reported":true,"reported":[{"branch":""}],"scope":{"top":"<worktree>"}}',
   },
 }
 
@@ -971,6 +987,69 @@ T['a restart']['gives way to a pick made while the view kept is read back'] = fu
   expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
 end
 
+T['a restart']['gives way to a reported set made before the session was followed, though nothing shows it'] = function()
+  local state = fixture.directory('keep-view-early-set-state')
+  local top = start_on_repository('keep-view-early-set', state)
+  add_worktree(top, 'agent-1', 'feature/a')
+  add_worktree(top, 'agent-2', 'feature/b')
+  add_worktree(top, 'agent-3', 'feature/c')
+  child.lua('_G.homes.module.refresh_shown_pane()')
+  wait_for_lines(9)
+  pick('module', 3)
+  expect_pane_lines('module', 'commits', bare_worktree('agent-3', 'feature/c'))
+  restart_editor()
+  child.lua(COUNT_BRANCH_LISTINGS)
+  start_copy('module', top)
+  expect_pane_lines('module', 'commits', DEFAULT_VIEW_WITH_THREE)
+  report('module', { kind = 'worktree', path = worktree_at(top, 'agent-1') })
+  expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
+  pick('module', 3)
+  expect_pane_lines('module', 'commits', bare_worktree('agent-2', 'feature/b'))
+  git_repo.git(top, { 'worktree', 'remove', worktree_at(top, 'agent-2') })
+  expect_pane_lines(
+    'module',
+    'commits',
+    default_view_with(bare_worktree('agent-1', 'feature/a'), bare_worktree('agent-3', 'feature/c'))
+  )
+
+  local listings_before = child.lua_get('_G.branch_listings')
+  follow('module', SESSION_A, state)
+
+  eq(child.lua_get('_G.branch_listings'), listings_before)
+  expect_pane_lines(
+    'module',
+    'commits',
+    default_view_with(bare_worktree('agent-1', 'feature/a'), bare_worktree('agent-3', 'feature/c'))
+  )
+end
+
+T['a restart']['drops, untold, a pick of the editor’s own worktree a record holds'] = function()
+  local state = fixture.directory('keep-view-own-pick-state')
+  local top = git_repo.create('keep-view-own-pick', { ['notes.txt'] = { 'one' } })
+  add_worktree(top, 'agent-1', 'feature/a')
+  add_worktree(top, 'agent-2', 'feature/b')
+  write_view_file(
+    state,
+    SESSION_A,
+    vim.json.encode({
+      repository = top,
+      focused = true,
+      shows_reported = false,
+      reported = {},
+      scope = { top = top },
+    })
+  )
+  child.lua(COUNT_BRANCH_LISTINGS)
+  start_copy('module', top)
+
+  follow('module', SESSION_A, state)
+  wait_for_restore()
+
+  expect_record_without(state, '"scope"')
+  expect_pane_lines('module', 'commits', DEFAULT_VIEW_WITH_BOTH)
+  eq(messages(), {})
+end
+
 T['a restart']['gives way to a pick made before the session was followed'] = function()
   local state = fixture.directory('keep-view-early-state')
   local top = start_with_two_worktrees('keep-view-early', state)
@@ -1003,6 +1082,30 @@ T['the record']['is replaced whole: a write that fails leaves the view as it was
   eq(#messages(), 1)
   restart_on(top, SESSION_A, state)
   expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
+end
+
+T['two sessions']['followed while the view of another is read back never shows it'] = function()
+  local state = fixture.directory('keep-view-other-restore-state')
+  local top = start_with_two_worktrees('keep-view-other-restore', state)
+  pick('module', 2)
+  expect_pane_lines('module', 'commits', bare_worktree('agent-2', 'feature/b'))
+  restart_editor()
+  child.lua(COUNT_BRANCH_LISTINGS)
+  start_copy('module', top)
+  expect_pane_lines('module', 'commits', DEFAULT_VIEW_WITH_BOTH)
+
+  child.lua(
+    [[
+    local home = _G.homes.module
+    home.follow_changes_session({ id = select(1, ...), state_directory = select(3, ...) })
+    home.follow_changes_session({ id = select(2, ...), state_directory = select(3, ...) })
+  ]],
+    { SESSION_A, SESSION_B, state }
+  )
+  wait_for_restore()
+
+  expect_pane_lines('module', 'commits', DEFAULT_VIEW_WITH_BOTH)
+  eq(vim.uv.fs_stat(view_file(state, SESSION_B)), nil)
 end
 
 T['two sessions']['followed while the view of another is read back keep their own'] = function()

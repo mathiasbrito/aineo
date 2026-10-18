@@ -1,4 +1,5 @@
 local MiniTest = require('mini.test')
+local fixture = dofile('tests/helpers/fixture.lua')
 local git_repo = dofile('tests/helpers/git_repo.lua')
 
 local eq = MiniTest.expect.equality
@@ -44,6 +45,7 @@ local T = MiniTest.new_set({
     pre_case = function()
       git_repo.start_editor(child)
       child.lua(PANE)
+      child.fn.chdir(fixture.directory('edit-file-cwd'))
     end,
     post_once = child.stop,
   },
@@ -163,13 +165,14 @@ local function file_line(suffix)
 end
 
 --- Puts the cursor on line `line` of the files window and presses `<S-CR>`
---- there.
+--- there. An error the key raises is left to show in the editor's messages,
+--- and in what the case asserts of its state, as a user would see it.
 ---
 ---@param line integer
 local function press_shift_enter_on(line)
   enter_files_window()
   child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { line })
-  child.type_keys('<S-CR>')
+  child.lua("pcall(vim.api.nvim_feedkeys, vim.keycode('<S-CR>'), 'mx', false)")
 end
 
 --- The name of the buffer in the child's current window.
@@ -380,7 +383,77 @@ T['<S-CR>']['opens the file as it is now in the worktree where the branch picked
 
   expect_current_buffer(vim.fs.joinpath(vim.uv.fs_realpath(checkout), 'branch.txt'))
   eq(child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)'), { 'live' })
+  child.lua('vim.api.nvim_buf_set_lines(0, 0, -1, false, { "saved" })')
+  child.cmd('write')
+  eq(vim.fn.readfile(vim.fs.joinpath(checkout, 'branch.txt')), { 'saved' })
+  eq(vim.uv.fs_stat(vim.fs.joinpath(top, 'branch.txt')), nil)
   eq(messages(), {})
+end
+
+--- Makes the repository `name` with the worktree `agent-1` and the branch
+--- `feature/p`, which `make_branch` fills, checked out nowhere, waits until
+--- the commits window lists the worktree, shows the branch alone with `s`
+--- and waits until the commits window heads the branch.
+---
+---@param name string
+---@param make_branch fun(top: string, branch: string) makes the branch's commits, in a worktree of its own it leaves
+---@return string top
+local function start_with_made_branch_shown_alone(name, make_branch)
+  local top = start_on_repository(name)
+  add_worktree(top, 'agent-1', 'feature/a')
+  local making = add_worktree(top, 'making-p', 'feature/p')
+  make_branch(making, 'feature/p')
+  git_repo.git(top, { 'worktree', 'remove', '--force', making })
+  child.lua('_G.home.refresh_shown_pane()')
+  git_repo.wait_until('the worktree listed', function()
+    return #pane_lines('commits') > 3
+  end)
+  pick(2)
+  git_repo.wait_until('the branch shown', function()
+    return pane_lines('commits')[1] == 'Branch feature/p'
+  end)
+  return top
+end
+
+T['<S-CR>']['on a file the branch tip no longer has tells once that it was deleted, not that it is shown'] = function()
+  start_with_made_branch_shown_alone('edit-branch-deleted-at-tip', function(making)
+    commit_only(making, 'branch.txt', { 'first' }, 'Add branch.txt')
+    git_repo.git(making, { 'rm', '--quiet', 'branch.txt' })
+    git_repo.git(making, { 'commit', '--quiet', '--message', 'Remove branch.txt' })
+  end)
+  enter_commits_window()
+  child.type_keys('3G')
+  git_repo.wait_until('the older commit’s files listed', function()
+    local listed = pane_lines('files')
+    return listed[1] ~= 'Files in: Branch feature/p' and #listed > 1
+  end)
+
+  press_shift_enter_on(file_line('branch.txt'))
+
+  git_repo.wait_until('the failure told', function()
+    return vim.iter(messages()):any(function(told)
+      return told:find('was deleted', 1, true) ~= nil
+    end)
+  end)
+  eq(messages(), { 'aineo: branch.txt was deleted in the branch feature/p' })
+  eq(current_buffer_name(), 'aineo://changes-files')
+end
+
+T['<S-CR>']['on a file the branch deletes tells once that it was deleted, not that it is shown'] = function()
+  start_with_made_branch_shown_alone('edit-branch-deletes', function(making)
+    git_repo.git(making, { 'rm', '--quiet', 'notes.txt' })
+    git_repo.git(making, { 'commit', '--quiet', '--message', 'Remove notes.txt' })
+  end)
+
+  press_shift_enter_on(file_line('notes.txt'))
+
+  git_repo.wait_until('the failure told', function()
+    return vim.iter(messages()):any(function(told)
+      return told:find('was deleted', 1, true) ~= nil
+    end)
+  end)
+  eq(messages(), { 'aineo: notes.txt was deleted in the branch feature/p' })
+  eq(current_buffer_name(), 'aineo://changes-files')
 end
 
 T['<S-CR>']['on a file of a branch checked out nowhere shows the branch tip, read-only, and says so once'] = function()
