@@ -3,6 +3,7 @@
 
 local finding = require('aineo.entry.finding')
 local opening = require('aineo.entry.opening')
+local quitting = require('aineo.entry.quitting')
 local registry = require('aineo.entry.registry')
 local reopening = require('aineo.entry.reopening')
 local one_tab = require('aineo.entry.tab')
@@ -61,13 +62,17 @@ local NO_TAB_TO_CLOSE = 'aineo: this tab holds no Claude Code session'
 
 --- What `:Aineo tab close` does. In an aineo tab, while another aineo tab
 --- remains, it closes the tab page, which releases the tab and stops its
---- Claude Code as quitting stops it (`close_tabs_of_closed_pages()`). In the
---- last aineo tab it quits Neovim as `:qa` does, which refuses while a buffer
---- has unsaved changes, and nothing is stopped then, and otherwise stops every
---- Claude Code as quitting stops it. From a tab page that is none
---- of aineo's it closes nothing and tells the user so.
+--- Claude Code as quitting stops it (`close_tabs_of_closed_pages()`), after
+--- asking once when the tab's run pane runs processes, which the close stops
+--- with it, and keeping the tab if the user cancels. In the last aineo tab it
+--- quits Neovim as `:qa` does, which asks about the processes of the run panes
+--- (`aineo.entry.quitting`) and refuses while a buffer has unsaved changes,
+--- and nothing is stopped then, and otherwise stops every Claude Code as
+--- quitting stops it. From a tab page that is none of aineo's it closes
+--- nothing and tells the user so.
 local function close_current_tab()
-  if not registry.tab_of_current_page() then
+  local current = registry.tab_of_current_page()
+  if not current then
     vim.notify(NO_TAB_TO_CLOSE, vim.log.levels.WARN)
     return
   end
@@ -78,7 +83,9 @@ local function close_current_tab()
     end)
     :totable()
   if #remaining > 1 then
-    vim.cmd.tabclose()
+    if quitting.confirm_closing(current) then
+      vim.cmd.tabclose()
+    end
   else
     vim.cmd.qall()
   end
@@ -115,6 +122,8 @@ for _, argument in ipairs({
   'pane agent',
   'pane changes',
   'pane terminal',
+  'pane run',
+  'run shell',
 }) do
   ACTIONS[argument] = function()
     if REOPENS_TABS_FIRST[argument] then

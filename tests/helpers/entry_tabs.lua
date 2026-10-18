@@ -66,9 +66,11 @@ end
 
 --- The autocommand groups of the second tab's copies of the homes, which
 --- exist while that tab does: the layout's, the Report's, the draft's, the
---- changes pane's two and the shell's.
+--- changes pane's two, the shell's and the run pane's two.
 M.SECOND_TAB_GROUPS = {
   'aineo.shell.2',
+  'aineo.run.2',
+  'aineo.entry.run.2',
   'aineo.layout.2',
   'aineo_report_2',
   'aineo.draft.2',
