@@ -600,11 +600,12 @@ screen it is shown in that view. The worktree or branch is shown alone until
 `s` picks another, until it is no longer listed (a branch: until it names no
 commit), until aineo follows another Claude Code session than one it
 followed before (the first session followed keeps it), or until the tab
-closes or the editor quits; each tab keeps its own, and none is kept on
-disk. When a read no longer lists the worktree, the default view shows,
-Session work is chosen, and aineo says once "aineo: Worktree <folder>
-(<branch>) is gone; the changes pane shows the default view". Following
-another session says nothing.
+closes; each tab keeps its own, and the pick is kept on disk for each
+Claude Code session and shown again when aineo follows that session
+(|aineo-changes-view-kept|). When a read no longer lists the worktree,
+the default view shows, Session work is chosen, and aineo says once
+"aineo: Worktree <folder> (<branch>) is gone; the changes pane shows the
+default view". Following another session says nothing.
 
 Enter on a file's line shows its unified diff in the middle column (the
 file column, below), within what the files window lists: from the base
@@ -699,6 +700,38 @@ the diffs included, is Vim's own, and no `<Plug>` mapping stands for it.
 Enter and `gf` take a file's name from the list itself, whatever characters
 it holds, spaces, quotes and an apostrophe among them: a name that fails to
 open from the pane is a fault to report.
+
+                                                       *aineo-changes-edit*
+`<S-CR>` (Shift and Enter) on a file's line opens the file for edition, as
+it is now in the working tree its line belongs to, with no diff and no
+commit's version: a file of your own worktree, whatever filter lists it, a
+commit of yours included; a file listed under another worktree, in that
+worktree (`<top>/<path>`, which `gf` refuses); a file of a local branch, in
+the worktree that has the branch checked out, which aineo asks git for when
+you press the key (when git cannot list the worktrees, aineo says so and
+opens nothing; when you press another key or leave the window meanwhile,
+nothing opens). It opens in the file column,
+as `gf` opens the working tree's file, a normal buffer that `:write` writes
+into that worktree, the cursor in it, in Normal mode. A branch no worktree
+has checked out has no file to edit: the file opens as the branch's tip has
+it, read-only, as `gf` shows a branch's file, in `aineo://show/{tip}/{path}`,
+and, once the tip's file is read, aineo says once "aineo: the branch <name>
+is checked out in no worktree, so <path> cannot be edited; it is shown as
+the branch's tip has it". A file the branch's tip no longer has opens
+nothing, and aineo says only that it was deleted in the branch. A file no
+longer in that working tree opens nothing, and aineo says the file is
+gone; a path that is a directory, a submodule or a nested repository
+opens nothing, and aineo says it is a directory, not a file. The path is
+taken whole, as for `gf`: no character of it is a wildcard or the end of a
+command. Enter, `h`, `l` and `gf` are unchanged, and `<S-CR>` on any line
+that lists no file does nothing.
+Neovim receives `<S-CR>` only when your terminal tells it apart from Enter,
+which many terminals do only once asked for extended keys. Inside tmux, tmux
+must pass them on: set `extended-keys` to `on` (or `always`) in your tmux
+configuration. `extended-keys-format` (`csi-u` or `xterm`) is the format
+tmux uses to report modified keys to the program in the pane. A terminal
+tmux does not recognise as sending extended keys is told so with the
+`extkeys` feature of `terminal-features`.
 
 `l` and `h` on a file's line show that file's diff as Enter does, `l`
 against the file's previous version, `h` against `HEAD`, and keep the cursor
@@ -853,7 +886,33 @@ says once "aineo: the reported work is gone; the changes pane shows the
 default view". A worktree or branch picked behind the reported work that
 goes is let go untold. Following another Claude Code session than one
 followed before empties the reported work and drops the reports still
-looked for; each tab keeps its own, and none is kept on disk.
+looked for; each tab keeps its own set, and the focused view is kept
+on disk for each Claude Code session (|aineo-changes-view-kept|).
+
+                                                  *aineo-changes-view-kept*
+The changes pane remembers its focused view for each Claude Code session,
+beside the session's base and saves, under `stdpath('state')` in
+`aineo/changes-sessions/`, in `<sha256 of the session id>.view.json`. It
+keeps what you picked with `s` (a worktree by its folder, a branch by its
+name), the members of the reported work, and whether the focused view or
+the default view showed; nothing else: not the pane the right column
+shows, not a cursor, not a commit expanded. The file is written at once,
+whole, whenever one of these changes, through a file beside it that then
+replaces it, so a crash keeps what the last change left, and not when
+nothing changed. Quitting aineo and coming back (the tab reopened at start,
+`\S`, a resume of that session) shows the view again as soon as git has
+listed the worktrees and the branches: a worktree or a branch that is gone
+is dropped, untold, and the default view shows when what the focused view
+showed is gone. A restore tells nothing, the reported work included. A
+session with no view kept starts with the default view, as does one whose
+file is missing, unreadable, malformed, or of another repository; that file
+is written over once the view changes. A worktree or branch picked before
+the pane follows the session is not given up for the view kept. Two tabs on
+two sessions keep two files, and a tab that follows another session shows
+that session's view. When a session's Claude Code finds no conversation and
+another session takes its place, the view moves with its base and saves.
+When the file cannot be written, aineo warns once, "aineo: the changes pane
+cannot keep this session's view, and goes on without: <why>".
 
 Colours ~
 A file's letter and path, a rename's `old → new` whole, show in the group of

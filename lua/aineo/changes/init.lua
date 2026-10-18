@@ -16,7 +16,9 @@
 --- diff against its previous version, `h` against `HEAD`
 --- (`aineo.changes.head_diff`), and `gf` opens the working tree's file or
 --- shows the file as the commit it is listed under has it
---- (`aineo.changes.commit_file`). `s` in either buffer offers the other
+--- (`aineo.changes.commit_file`), and `<S-CR>` opens it for edition as it is
+--- now in the working tree its line belongs to (`aineo.changes.open_file`).
+--- `s` in either buffer offers the other
 --- worktrees in `vim.ui.select` and shows the one picked alone in the commits
 --- buffer — its heading, then its commits, nothing else — until `s` picks
 --- another, it is no longer listed, or a Claude Code session is followed
@@ -27,7 +29,10 @@
 --- (`add_reported_work()`) and git lists, matched for up to 60 s, make the
 --- reported set: each joins it and makes it the focused view, every member
 --- under its own heading, until git no longer lists it or another session
---- is followed; `s` offers the set back.
+--- is followed; `s` offers the set back. What `s` picked, the reported set
+--- and whether the focused view showed are kept for the Claude Code session
+--- followed, beside its base and saves, and shown again once that session is
+--- followed again (`aineo.changes.kept`).
 ---
 --- One changes pane is a home (`aineo.changes.Home`): the module is the first,
 --- and `new()` makes another, for another tab, whose session, base and saves,

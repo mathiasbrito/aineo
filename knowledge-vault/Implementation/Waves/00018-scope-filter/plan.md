@@ -570,6 +570,37 @@ A follow-up after the wave closed: the user's prompt of 2026-10-17, outside the 
 - **The orchestrator's check** on `dev` plus T85: 4399 cases, `Fails (0)`, `make lint` clean; the h/l mutants killed (7) and the A444 mutants killed (2); the tabs-routing case that failed once on the author's whole run: 0 of 6 on `dev` and 0 of 6 with T85, a load flake.
 - **Departures.** The brief's first reading, that `h` and `l` should move the cursor, was withdrawn by the user; the help's “Both move the cursor to the diff” is changed to the opposite. The author's choices (A445) are kept.
 
+### T86 — the per-tab diff names pinned, the premise refuted, PR #260, merged by rebase (`dev` `22a3ac4`), released in v0.2.49 (PR #261, `main` `86fac7f`)
+
+A follow-up after the wave closed: the user's prompt of 2026-10-17 (the diff bug and the tab line), outside the four packets above, with one commit on `dev`. Session note: [[Sessions/2026-10-17 — T86 Diff names per repository]]. Built on Sonnet (D30). The user's "diff bug" was read as the defect T82's attack review noted as read, not measured: diff buffer names carry no repository label, so two tabs share one.
+- **The packet.** The premise does not hold. Every diff name passes the home's `own_name()`: the first tab's home is unlabelled and a later tab's names are `aineo://copy{n}/…`, so two tabs never share a diff buffer. No production code changed. `tests/test_entry_tab_diffs.lua` pins two real tabs (each shows its own diff buffer; `:Aineo diff close` in the second tab leaves the first tab's diff shown), and the help says a later tab's buffers carry `copy{n}/`.
+- **Review.** None separate: A446, the orchestrator's, merged T86 on its own check, the packet being a test and the help only.
+- **The orchestrator's check.** An `own_name` mutant was killed by both new cases.
+- **Departures.** The user's symptom, if there was one beyond T82's note, is still unnamed; the open thread of the close above (diff names carrying no repository label) is refuted by this measurement, not by a change.
+
+### T88 — the fuzzy file finder, PR #262, merged by rebase (`dev` `d5897ae`), released in v0.2.50 (PR #263, `main` `05a675c`)
+
+A follow-up after the wave closed: the user's prompt of 2026-10-17, with five commits on `dev`, `bec001b` … `d5897ae`. Session note: [[Sessions/2026-10-17 — T88 Find a file]]. D81 is its decision row. Built on Sonnet (D30).
+- **The packet.** `\f`, `<C-\>f`, `<Plug>(aineo-find)` and `:Aineo find` search the files under the tab's Claude working directory, or the top of its repository, and open the pick in the file column, editable and savable. A third-party picker does the matching (`find.picker`: `auto`, `snacks`, `fzf-lua`, `telescope`, `mini.pick`); with none installed, `vim.ui.select` offers the files git lists, else a walk of the folder. `lua/aineo/layout/` is untouched: C9's redirect routes the pick.
+- **Reviews** (attack; tests and records): changes requested. Attack measured the real snacks.nvim from 20 starting windows (every pick landed in the file column, editable, `:w` wrote it) and the real mini.pick twice, and found F1–F7: a search from a floating window opened the file in the float (F1) and a second search from inside the open picker closed both (F4); the fallback ran `git ls-files` with the editor's `GIT_DIR` (F2); a snacks without a picker module made `\f` fail and aborted `:checkhealth aineo` (F3); E37 under `'nohidden'` raised as a stack trace (F5); git failing fell back silently to a walk (F6); a submodule is offered as a file (F7). The records review found a mini.pick fake that took the wrong argument, mis-named groups, counts missing from the note and "once" worded loosely.
+- **Fix round** by the author: F1 and F4 by a guard that refuses a floating window and says so once; F2 by `list_files` in the git home, handed in from the composition root; F3 by a `pcall` that counts such a snacks as not installed; F5 by a `pcall` on the fallback's `:edit`, told once; F6, in part: git's failure is told once and the list is a walk; the records findings. F7 is not fixed (A455).
+- **The orchestrator's check** on `dev` plus T88: 4493 cases, `Fails (0)`, `make lint` clean; the float-guard mutant killed (2) and the snacks-cwd mutant killed (1).
+- **Departures.** The tests fake the four pickers through `package.preload`; the code reads `require('snacks')`, not the `Snacks` global A453 names, because selene refuses `_G`. A forced picker that is missing falls back to `vim.ui.select` after telling once: the author's choice, kept (A454). The real telescope.nvim and fzf-lua stay unmeasured. The modularity skill's tables lack `lua/aineo/find/`: an `ai/` change, not done here.
+
+### T87 — withdrawn
+
+The user asked for Enter to keep the cursor and Shift+Enter to move it, then withdrew the request on 2026-10-17 (`h` and `l` already keep the cursor, D79). Nothing was edited, committed or pushed; no decision was recorded and no PR exists.
+
+### Rulings of the follow-ups after the wave closed — the orchestrator's, never the user's
+
+- **A446 (T86)** merged on the orchestrator's own check, with no separate review (test and help only).
+- **A447 (T87)** `<S-CR>` reaches Neovim only when the terminal reports it apart from `<CR>`, which inside tmux needs its extended keys; the help would say so, and a `<Plug>` map would let the user bind another key.
+- **A448 (T87)** the request withdrawn: the worktree and branches removed, no PR.
+- **A449–A453 (T88)** the finder's key and its twins (A449); the `find.picker` option, `auto` order snacks, fzf-lua, telescope, mini.pick, a forced missing one told once, `vim.ui.select` when none (A450); the root, the tab's Claude working directory or the top of its repository, no tab acting as `\d` does (A451); the pick opens in the file column as a normal file buffer, routed by C9's redirect (A452); the tests fake each picker through `package.preload` (A453). To these as reported the user answered "sounds good".
+- **A454 (T88)** the author's deviations accepted.
+- **A455 (T88)** F7, the submodule edge, left open.
+- **A456 (T88)** on a git failure the finder tells once; the walk stays as it is.
+
 ### Rulings made at the dispatches and fix rounds — the orchestrator's assumptions
 
 A391–A418 are the plan's O1–O26, each ruled as its (a), listed in *The orchestrator's rulings*, above. In one line each, after them:
