@@ -114,7 +114,10 @@ T['a run call']['guards the quit of the editor from the first process on'] = fun
   call(token, 'run', { command = 'sleep 30' })
 
   eq(
-    child.lua_get([[#vim.api.nvim_get_autocmds({ group = 'aineo.entry.quit', event = 'ExitPre' })]]),
+    child.lua_get([[(function()
+      local found, handlers = pcall(vim.api.nvim_get_autocmds, { group = 'aineo.entry.quit', event = 'ExitPre' })
+      return found and #handlers or 0
+    end)()]]),
     1
   )
 end
