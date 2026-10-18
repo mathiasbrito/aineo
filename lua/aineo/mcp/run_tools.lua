@@ -8,21 +8,34 @@ local names = require('aineo.mcp.names')
 local M = {}
 
 --- What the descriptions of `run` and `run_stop` say about when to call
---- them.
+--- them, and about the approval Claude Code asks of the user (`asks_every_call()`).
 local ONLY_ON_REQUEST = 'Call this only when the user explicitly asks you to %s;'
   .. ' never on your own initiative, and never to %s something you chose yourself.'
-  .. ' The user is asked to approve each call.'
+  .. ' Claude Code asks the user to approve every call, even in auto and bypass-permissions modes;'
+  .. ' in dontAsk mode the call is denied.'
 
 --- What the description of `run_output` teaches of the regexes it takes.
 local REGEX_HELP = table.concat({
-  '`pattern` and `exclude` are Vim regexes, taken very magic (`\\v`),',
-  'so that `error|warn`, `(GET|POST) /api` and `\\d{3}` work as in most regex flavours;',
-  'lookarounds are written `(x)@=`, `(x)@!`, `(x)@<=` and `(x)@<!`, and there is no `(?i)`:',
+  '`pattern` and `exclude` are Vim regexes, taken very magic (`\\v`):',
+  '`error|warn`, `(GET|POST) /api` and `\\d{3}` work as written, and `<` and `>` are word boundaries;',
+  'the characters `= @ % & ~ {` are operators and must be escaped with a backslash to match',
+  'themselves: `level\\=error`, `\\~/project`, `a \\&\\& b`.',
+  'Lookarounds are written `(x)@=`, `(x)@!`, `(x)@<=` and `(x)@<!`, and there is no `(?i)`:',
   'use `ignore_case`, true by default.',
 }, ' ')
 
 --- A string argument of at least one character.
 local NON_EMPTY_STRING = { type = 'string', minLength = 1 }
+
+--- The `_meta` that makes Claude Code show the tool's permission prompt on
+--- every call, in every permission mode but `dontAsk`, which denies the call
+--- instead, whatever allow rules or "don't ask again" choices say: a call of
+--- `run` or `run_stop` is never skipped by anything but the user's answer.
+---
+---@return table
+local function asks_every_call()
+  return { ['anthropic/requiresUserInteraction'] = true }
+end
 
 --- The tool that starts a command, as `tools/list` describes it.
 ---
@@ -30,9 +43,13 @@ local NON_EMPTY_STRING = { type = 'string', minLength = 1 }
 local function run_tool()
   return {
     name = names.RUN_TOOL,
+    _meta = asks_every_call(),
     description = table.concat({
       "Starts a shell command in aineo's run pane in Neovim, at the bottom of the run stack,",
-      'in the project folder, and returns at once without waiting for it to finish.',
+      'and returns at once without waiting for it to finish.',
+      '`command` is at most 16384 bytes; `name`, what `run_output` and `run_stop` call the process,',
+      'is the first word of the command by default; `directory` is the project folder by default',
+      'and may be a git worktree of its repository; `name` and `directory` are at most 4096 bytes.',
       ONLY_ON_REQUEST:format('run something', 'run'),
       'Read what it prints with `run_output`, and stop it with `run_stop`.',
     }, ' '),
@@ -56,13 +73,24 @@ local function run_output_tool()
   return {
     name = names.RUN_OUTPUT_TOOL,
     description = table.concat({
-      'Reads what a process of the run pane printed, filtered, so that you read only what you need.',
-      'Filter first: pass `pattern`, for example `error|warn|fail`, and a small `last`',
-      '(how many of the matching lines to read, the last ones; 40 by default),',
-      'then pass `after_line`, the `total` of the answer before, to read only what came after it.',
-      '`exclude` drops lines, `DEBUG` for example; `context` adds lines around each match.',
+      'Reads what a process of the run pane printed, filtered, so that you read only what you need;',
+      'it needs no approval.',
+      'Filter first to keep your context small: pass `pattern`, for example `error|warn|fail`,',
+      'and a small `last` (how many of the matching lines to read, the last ones;',
+      '40 by default, with no maximum), then pass `after_line`, the `total` of the answer before,',
+      'to read only what came after it.',
+      '`exclude` drops lines, `DEBUG` for example, and a dropped line is never read, not even as context;',
+      '`context` adds lines around each match, with no maximum.',
+      'Each line is a terminal row: a line longer than the terminal is wrapped over several rows,',
+      "and a resize of the pane or the 'scrollback' limit renumbers the rows,",
+      'so `after_line` is valid only while `total` has not dropped:',
+      'if `total` is smaller than the `after_line` you passed, read again without it.',
       'The answer holds the numbered lines, the total number of lines, whether the process runs',
-      'or how it exited, and how many matching lines were left out.',
+      'or how it exited, and how many earlier matching lines were left out.',
+      'The interactive shell of the run pane, `shell`, is not read; any other process is,',
+      'an interactive program included.',
+      'Matching is stopped after 2000 ms in all, and answered as an error: try a simpler pattern.',
+      '`name`, `pattern` and `exclude` are at most 4096 bytes.',
       REGEX_HELP,
     }, ' '),
     inputSchema = {
@@ -88,6 +116,7 @@ end
 local function run_stop_tool()
   return {
     name = names.RUN_STOP_TOOL,
+    _meta = asks_every_call(),
     description = table.concat({
       'Stops a process of the run pane with its children, as closing its terminal does.',
       ONLY_ON_REQUEST:format('stop something', 'stop'),
@@ -109,6 +138,10 @@ end
 
 --- The longest command a call may give, in bytes.
 local LONGEST_COMMAND_BYTES = 16384
+
+--- The characters a command may not hold: the C0 control characters but the
+--- tab and the line feed. A Lua character class (`%z` is the NUL).
+local COMMAND_FORBIDDEN = '[%z\1-\8\11-\31]'
 
 --- The longest string any other argument may give, in bytes.
 local LONGEST_STRING_BYTES = 4096
@@ -143,7 +176,7 @@ local KINDS = {
       if type(value) ~= 'string' or value == '' then
         return 'expected a non-empty string'
       end
-      return string_refusal(value, LONGEST_COMMAND_BYTES, '%z', 'a NUL')
+      return string_refusal(value, LONGEST_COMMAND_BYTES, COMMAND_FORBIDDEN, 'a control character')
     end,
   },
   label = {
