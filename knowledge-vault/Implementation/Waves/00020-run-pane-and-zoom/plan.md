@@ -8,7 +8,7 @@ base: b3c3e5b
 claimed_by:
 claimed_at:
 landed_at: 2026-10-19
-pull_requests: "#268, #270, #272, #276, #277, #279"
+pull_requests: "#268, #270, #272, #276, #277, #279, #281"
 ---
 
 # Wave 20 — the `\<CR>` edit key, the run pane, the agents' run tools, the zoom and the README
@@ -35,7 +35,7 @@ The requests, in the order they came, with the decision each produced. The wordi
 - **2026-10-18, the run panel:** `\x` shows the running applications as a stack, a command typed there runs in the project folder in a new terminal, and quitting stops them after telling the user (D84, T91); `\X` opens a terminal to run a command by hand.
 - **2026-10-18, the agent's run tools:** let the agent run a command in the `\x` pane when the user asks, and only then; later, let it read the output through a filter so a huge log does not fill its context; then "pre-allow run_output, but do not limit the agent", with Vim regex as the filter (D85, D87, T92).
 - **2026-10-18, the zoom:** `\z` takes the whole vertical space for the window with the cursor, in the git, the agent and the run panels (D86, T93).
-- **2026-10-18, the README:** "seems completely outdated", then, corrected, "missing some points" and the richer chart, then a table with a section per panel, then the installation (T94).
+- **2026-10-18, the README:** "the project README seems completly outdated", then, corrected, "missing some points" and the richer chart, then a table with a section per panel, then the installation (T94).
 - **2026-10-18, a worktree's base:** the user asked which branch the changes pane counts a worktree from, and chose `git remote set-head origin dev` over a per-branch base; "please document in the README" (T96; T95 not built).
 
 ## The orchestrator's rulings — never the user's
@@ -71,7 +71,7 @@ Written 2026-10-19 by the knowledge pass, on `dev` `8919719`. All packets are me
 
 Session note: [[Sessions/2026-10-18 — T90 Prefix Enter edits]]. Three commits on `dev`.
 - **The packet.** The prefix followed by Enter does what `<S-CR>` does in the changes pane's files window (D83): a buffer-local Normal map of the files buffer, handed by the entry to the changes home as `edit_file_key`, none when the prefix is `false`. The help leads with it and adds the iTerm2 key mapping for Shift+Return.
-- **Review.** A guarantee review passed it, with three optional records and test items fixed in the second commit and a report that aineo's `\<CR>` overrides a user's own global `\<CR>` inside the files buffer only (A467, accepted).
+- **Review.** A guarantee review passed it. The third commit (`5d5dbe6`) fixed the review's findings 2, 4 and 5 and recorded A467 (aineo's `\<CR>` overrides a user's own global `\<CR>` inside the files buffer only, accepted); the optional extra test (finding 3) was not built.
 
 ### T91 — the run pane, PR #270, merged by rebase (`dev` `25e6e88`), released in v0.2.53 (PR #271, `main` `f3dd04a`)
 
@@ -95,7 +95,7 @@ Session note: [[Sessions/2026-10-18 — T96 README base]]. One commit on `dev`. 
 
 Session note: [[Sessions/2026-10-18 — T93 Zoom]]. Ten commits on `dev`; whole suite 4781 cases after the fix round.
 - **The packet.** `\z`, `<C-\>z`, `:Aineo zoom` and `<Plug>(aineo-zoom)` (D86).
-- **Reviews and fix round.** Attack: the zoom took rows from full-width windows outside the right column (the most severe); an unzoom after a resize left the heights stuck (A500); `<C-w>=` while zoomed leaves the zoom on. All fixed with the rulings A492–A495 and A501 written into the help and the D86 row.
+- **Reviews and fix round.** Attack: the zoom took rows from full-width windows outside the right column (the most severe); an unzoom after a resize left the heights stuck (A500); `<C-w>=` while zoomed leaves the zoom on. The two defects were fixed, and `<C-w>=` was documented, not changed, with the rulings A492–A495 and A501 written into the help and the D86 row.
 
 ### T92 — the agents' run tools, PR #279 (re-applied from #275), merged by rebase (`dev` `5066407`), released in v0.2.56 (PR #280, `main` `5bfc679`)
 
@@ -118,12 +118,12 @@ Session note: [[Sessions/2026-10-19 — T97 README run tools and zoom]]. One com
 
 ### Flaky under load
 
-Two cases failed under load without a code cause: `tests/test_health.lua`'s 1-second bound at `AINEO_TEST_JOBS=4`, and `tests/test_layout_terminal_pane.lua` once. Neither was changed.
+Two cases failed under load without a code cause. `tests/test_health.lua`'s 1-second bound failed one case twice at `AINEO_TEST_JOBS=4` under a host load of 6 to 11 and passed alone (the T92 author's report of the second fix round); `tests/test_layout_terminal_pane.lua` failed once.
 
 ### Wave 20 closed
 
 Wave 20 landed on 2026-10-19. Its packets are T90 (PR #268, v0.2.52), T91 (PR #270, v0.2.53), T94 (PR #272, v0.2.54), T96 and T93 (PRs #277 and #276, v0.2.55), T92 (PR #279, v0.2.56) and T97 (PR #281, v0.2.57).
 
 **Open threads at the close:**
-- **The user's checks** with the real Claude Code on the run tools: the approval on every `run` and `run_stop` call in auto mode, and `run_output`'s filter on a real log.
+- **The user's checks** with the real Claude Code on the run tools: the approval on every `run` and `run_stop` call in auto mode.
 - **The assumptions go to the user:** A484–A504.
