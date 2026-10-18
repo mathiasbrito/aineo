@@ -278,6 +278,9 @@ T['a call']['whose arguments are refused is a tool error naming the field, and n
       { 'run', { command = 'a\0b' }, 'command: holds a control character' },
       { 'run', { command = 'ls\27[2J' }, 'command: holds a control character' },
       { 'run', { command = 'ls\r' }, 'command: holds a control character' },
+      { 'run', { command = 'ls\127' }, 'command: holds a control character' },
+      { 'run', { command = 'ls\194\133' }, 'command: holds a control character' },
+      { 'run', { command = 'ls\194\159' }, 'command: holds a control character' },
       { 'run', { command = ('a'):rep(16385) }, 'command: longer than 16384 bytes' },
       { 'run', { command = 'ls', name = ('a'):rep(4097) }, 'name: longer than 4096 bytes' },
       { 'run', { command = 'ls', cwd = '/' }, 'cwd: not a field of run' },
@@ -358,6 +361,20 @@ T['a valid call']['is offered to the editor that started Claude Code, the tool, 
   )
   eq(requests[1].lua, requests[2].lua)
   eq(requests[1].lua:find('npm', 1, true), nil)
+end
+
+T['a valid call']['may hold accented text and the no-break space in its command'] = function()
+  local requests = {}
+  local relay = relay_for(start_recording_editor(requests, answer_of('ok', false)))
+
+  relay:send(call('run', { command = 'echo \195\169\194\160\194\160\226\130\172\194\191' }))
+  relay:next_line()
+
+  eq(#requests, 1)
+  eq(
+    requests[1].arguments[1],
+    { tool = 'run', arguments = { command = 'echo \195\169\194\160\194\160\226\130\172\194\191' } }
+  )
 end
 
 T['a valid call']['may hold tabs and line breaks in its command'] = function()
