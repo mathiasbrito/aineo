@@ -52,9 +52,9 @@ local NOT_IN_THE_COLUMN =
 
 --- Toggles the zoom of the window the child's cursor is in and returns what
 --- the layout told the user meanwhile through `vim.notify()`, each
---- notification as its message and level.
+--- notification as its message and level, and the error it raised, if it did.
 ---
----@return { message: string, level: integer }[] told
+---@return { message: string?, level: integer?, error: string? }[] told
 local function toggle_zoom()
   return child.lua_get([[(function()
     local told = {}
@@ -64,7 +64,9 @@ local function toggle_zoom()
     end
     local succeeded, failure = pcall(require('aineo.layout').toggle_zoom)
     vim.notify = notify
-    assert(succeeded, failure)
+    if not succeeded then
+      table.insert(told, { error = failure })
+    end
     return told
   end)()]])
 end
