@@ -344,6 +344,7 @@ local PREFIX_KEYS = {
   { key = '9', plug = '<Plug>(aineo-tab-9)', mode = 'n' },
   { key = 'd', plug = '<Plug>(aineo-diff-close)', mode = 'n' },
   { key = 'f', plug = '<Plug>(aineo-find)', mode = 'n' },
+  { key = 'z', plug = '<Plug>(aineo-zoom)', mode = 'n' },
   { key = 's', plug = '<Plug>(aineo-send)', mode = 'x' },
 }
 
