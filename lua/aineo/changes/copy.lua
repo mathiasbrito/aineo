@@ -125,6 +125,7 @@ function M.new(label)
   ---@field show_diff fun(diff: integer): integer|nil shows `diff` in the middle column, the cursor left where it is, and returns its window, or nil when there is no room
   ---@field git? aineo.git.WatchOptions how the git home runs git; its defaults when not given
   ---@field working_branch? string the branch work lands in, as the user's setting names it; the remote's default branch when not given
+  ---@field edit_file_key? string a Normal-mode key, written as in a mapping, that opens the file under the cursor in the files buffer for edition as `<S-CR>` does; none when not given. Mapped when the files buffer is made, so a session holds it when begun before the buffer
   ---@field start_timer? fun(milliseconds: integer, act: fun()): fun() starts a timer that runs `act` once, on the main loop, after `milliseconds`, and returns what stops it; a `vim.uv` timer when not given
 
   --- The session, from `begin_session()` on.
@@ -2223,19 +2224,26 @@ function M.new(label)
   --- Maps `gf` and `<S-CR>` in `buffer`, the files buffer, in Normal mode:
   --- `gf` to open the file the line under the cursor lists
   --- (`open_file_at_cursor()`), `<S-CR>` to open it for edition
-  --- (`edit_file_at_cursor()`).
+  --- (`edit_file_at_cursor()`), and the session's `edit_file_key` to do the
+  --- same, when it names one.
   ---
   ---@param buffer integer
   local function map_open_file(buffer)
     vim.keymap.set('n', 'gf', function()
       open_file_at_cursor(buffer)
     end, { buffer = buffer, desc = 'aineo: open the file of the entry under the cursor' })
-    vim.keymap.set('n', '<S-CR>', function()
-      edit_file_at_cursor(buffer)
-    end, {
-      buffer = buffer,
-      desc = 'aineo: edit the file of the entry under the cursor as it is in its working tree',
-    })
+    local keys = { '<S-CR>' }
+    if session and session.settings.edit_file_key then
+      table.insert(keys, session.settings.edit_file_key)
+    end
+    for _, key in ipairs(keys) do
+      vim.keymap.set('n', key, function()
+        edit_file_at_cursor(buffer)
+      end, {
+        buffer = buffer,
+        desc = 'aineo: edit the file of the entry under the cursor as it is in its working tree',
+      })
+    end
   end
 
   --- Maps `l` and `h` in `buffer`, the files buffer, in Normal mode: `l` to

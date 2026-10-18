@@ -6,8 +6,9 @@ local eq = MiniTest.expect.equality
 
 local child = MiniTest.new_child_neovim()
 
---- The Lua that defines, in the child, `_G.start_copy(directory)`: it begins
---- the changes home's session for `directory` and shows its two buffers in a
+--- The Lua that defines, in the child, `_G.start_copy(directory, settings)`:
+--- it begins the changes home's session for `directory`, with `settings` more
+--- of the session's settings when given, and shows its two buffers in a
 --- tab page of its own, the files buffer in the tab's window, the commits
 --- buffer in a window below it. `vim.ui.select` is replaced by a picker that
 --- keeps every request in `_G.pickers`, answered by `_G.choose()`, and
@@ -24,15 +25,15 @@ local PANE = [[
     local request = _G.pickers[#_G.pickers]
     request.on_choice(request.items[position])
   end
-  _G.start_copy = function(directory)
+  _G.start_copy = function(directory, settings)
     local changes = require('aineo.changes')
     _G.home = changes
-    changes.begin_session({
+    changes.begin_session(vim.tbl_extend('force', {
       directory = directory,
       show_diff = function(diff)
         return vim.api.nvim_open_win(diff, false, { split = 'below', win = -1 })
       end,
-    })
+    }, settings or {}))
     vim.cmd('tabnew')
     _G.pane = changes.pane_buffers()
     vim.api.nvim_win_set_buf(0, _G.pane.files)
@@ -109,13 +110,15 @@ local function commit_only(top, path, lines, subject)
 end
 
 --- Makes the repository `name` with one commit, starts the changes home on
---- it with its pane shown, and returns its top level.
+--- it, given `settings` more of the session's settings, with its pane shown,
+--- and returns its top level.
 ---
 ---@param name string
+---@param settings? table
 ---@return string top
-local function start_on_repository(name)
+local function start_on_repository(name, settings)
   local top = git_repo.create(name, { ['notes.txt'] = { 'one' } })
-  child.lua('_G.start_copy(...)', { top })
+  child.lua('_G.start_copy(...)', { top, settings })
   expect_pane_lines('commits', { 'Uncommitted', 'Session work', 'No commits on this session' })
   return top
 end
@@ -164,15 +167,25 @@ local function file_line(suffix)
   end
 end
 
+--- Puts the cursor on line `line` of the files window and presses `keys`,
+--- written as in a mapping, there. An error the keys raise is left to show in
+--- the editor's messages, and in what the case asserts of its state, as a
+--- user would see it.
+---
+---@param line integer
+---@param keys string
+local function press_on(line, keys)
+  enter_files_window()
+  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { line })
+  child.lua("pcall(vim.api.nvim_feedkeys, vim.keycode(...), 'mx', false)", { keys })
+end
+
 --- Puts the cursor on line `line` of the files window and presses `<S-CR>`
---- there. An error the key raises is left to show in the editor's messages,
---- and in what the case asserts of its state, as a user would see it.
+--- there (`press_on()`).
 ---
 ---@param line integer
 local function press_shift_enter_on(line)
-  enter_files_window()
-  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { line })
-  child.lua("pcall(vim.api.nvim_feedkeys, vim.keycode('<S-CR>'), 'mx', false)")
+  press_on(line, '<S-CR>')
 end
 
 --- The name of the buffer in the child's current window.
@@ -204,6 +217,38 @@ end
 local function commit_then_edit(worktree, path, committed, edited)
   commit_only(worktree, path, { committed }, 'Add ' .. path)
   git_repo.write(worktree, path, { edited })
+end
+
+T['edit_file_key'] = MiniTest.new_set()
+
+T['edit_file_key']['opens the file as <S-CR> does: editable, in its worktree, the cursor in it in Normal mode'] = function()
+  local top = start_on_repository('edit-key', { edit_file_key = '\\<CR>' })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  expect_pane_lines('files', { 'Files in: Session work', '  M notes.txt' })
+
+  press_on(2, '\\<CR>')
+
+  expect_current_buffer(vim.fs.joinpath(vim.uv.fs_realpath(top), 'notes.txt'))
+  eq(child.lua_get('vim.api.nvim_buf_get_lines(0, 0, -1, true)'), { 'two' })
+  eq(child.lua_get('vim.bo.modifiable and vim.bo.buftype == ""'), true)
+  eq(child.lua_get('vim.fn.mode()'), 'n')
+  eq(messages(), {})
+end
+
+T['edit_file_key']['is the key the settings name, in the files buffer alone'] = function()
+  start_on_repository('edit-key-custom', { edit_file_key = ',<CR>' })
+
+  eq(child.lua_get('vim.fn.maparg(..., "n", false, true).buffer', { ',<CR>' }), 1)
+  eq(child.lua_get('vim.fn.maparg(..., "n")', { '\\<CR>' }), '')
+  enter_commits_window()
+  eq(child.lua_get('vim.fn.maparg(..., "n")', { ',<CR>' }), '')
+end
+
+T['edit_file_key']['maps nothing when the settings name none; <S-CR> stays'] = function()
+  start_on_repository('edit-key-none')
+
+  eq(child.lua_get('vim.fn.maparg(..., "n")', { '\\<CR>' }), '')
+  eq(child.lua_get('vim.fn.maparg(..., "n", false, true).buffer', { '<S-CR>' }), 1)
 end
 
 T['<S-CR>'] = MiniTest.new_set()
