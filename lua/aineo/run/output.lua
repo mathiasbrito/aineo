@@ -81,7 +81,7 @@ local function timed_out(field)
 end
 
 --- How close to the end of its time, in milliseconds, a search that raises
---- is taken to have run out of it: the engine reports a search whose time ran
+--- is taken to have run out of it, at most half of the time it was allowed: the engine reports a search whose time ran
 --- out with the error it gives for exhausting its memory (E363).
 local TIMEOUT_SLACK_MS = 100
 
@@ -97,7 +97,7 @@ local TIMEOUT_SLACK_MS = 100
 ---@return string
 local function search_failure(field, failure, started, left_ms)
   local elapsed_ms = (vim.uv.hrtime() - started) / 1e6
-  if elapsed_ms >= left_ms - TIMEOUT_SLACK_MS then
+  if elapsed_ms >= left_ms - math.min(TIMEOUT_SLACK_MS, left_ms / 2) then
     return timed_out(field)
   end
   return ('%s: %s'):format(field, (tostring(failure):gsub("^couldn't parse regex: ", '')))
@@ -181,10 +181,15 @@ local function search_in_scratch_buffer(printed, after_line, regexes)
   return matches, failure
 end
 
---- `search_in_scratch_buffer()` with the autocommands of the editor ignored,
---- so that the user's `BufNew`, `BufEnter` or `BufWipeout` handlers do not run
---- for the scratch buffer on every read. `eventignore` is the user's again
---- when this returns or raises.
+--- The key in `package.loaded` under which `search_printed()` leaves its work
+--- for the `:lua` command that runs it, for the length of that work.
+local WORK_KEY = 'aineo.run.output.work'
+
+--- `search_in_scratch_buffer()` run with `:noautocmd`, so that no autocommand
+--- of the user runs for the scratch buffer on every read: not `BufNew`,
+--- `BufEnter` or `BufWipeout`, and not `OptionSet`, which setting and
+--- restoring `eventignore` would trigger. The user's `eventignore` is not
+--- touched. An error the work raises is raised again once the command is over.
 ---
 ---@param printed string[]
 ---@param after_line integer
@@ -192,14 +197,23 @@ end
 ---@return table<string, table<integer, true>|false>|nil matches by field; false for a regex not given
 ---@return string|nil failure
 local function search_printed(printed, after_line, regexes)
-  local saved_ignore = vim.o.eventignore
-  vim.o.eventignore = 'all'
-  local searched, matches, failure = pcall(search_in_scratch_buffer, printed, after_line, regexes)
-  vim.o.eventignore = saved_ignore
-  if not searched then
-    error(matches, 0)
+  local outcome
+  package.loaded[WORK_KEY] = function()
+    outcome = { pcall(search_in_scratch_buffer, printed, after_line, regexes) }
   end
-  return matches, failure
+  local ran, failure = pcall(vim.api.nvim_cmd, {
+    cmd = 'lua',
+    args = { ('package.loaded[%q]()'):format(WORK_KEY) },
+    mods = { noautocmd = true },
+  }, {})
+  package.loaded[WORK_KEY] = nil
+  if not ran then
+    error(failure, 0)
+  end
+  if not outcome[1] then
+    error(outcome[2], 0)
+  end
+  return outcome[2], outcome[3]
 end
 
 --- The numbers of the lines of `printed` after `after_line` that are read
