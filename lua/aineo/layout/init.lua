@@ -2260,29 +2260,34 @@ local function make_layout(input_name, group_name)
   --- What `M.toggle_zoom()` tells the user, as a warning, when the cursor is
   --- in none of the right column's windows.
   local NOT_IN_THE_COLUMN =
-    'aineo: nothing zoomed — zoom takes a window of the right column, and the cursor is in another window'
+    'aineo: nothing zoomed — the cursor is in none of the windows aineo shows in the right column (the agent, changes, terminal and run panes)'
 
   --- Zooms the window of the right column the cursor is in, under whichever
-  --- pane is shown: the window takes every row of the column, and the column's
-  --- other windows shrink to one line each — more where `'winminheight'` or a
-  --- winbar asks for more, their winbar and status line still showing what
-  --- they are. Zoomed already, it gives the windows the heights they had when
-  --- the zoom began, a manual resize before it included.
+  --- pane is shown: the window takes every row the column's other windows can
+  --- spare, and they keep `'winminheight'` lines each (one by default, none at
+  --- 0), their winbar and status line still showing what they are. Rows are
+  --- taken from the column alone: a window across the whole width below the
+  --- layout keeps its height, as does Claude's window. Zoomed already, it gives
+  --- the windows the heights they had when the zoom began, a manual resize
+  --- before it included, scaled to the rows the windows hold now when the
+  --- editor was resized meanwhile.
   ---
   --- The zoom stays with the window it began in while the cursor goes
   --- elsewhere, and toggled with the cursor in another window of the column
   --- it moves there. It stays through a resize of the editor and through
-  --- entering the layout's tab, the zoomed window taking the rows the
-  --- column gained or lost (the heights given back by the next toggle are the
-  --- ones recorded, the last window taking the rows that remain). It ends,
-  --- giving back the heights, as another pane shows (`switch_pane()`) and as
-  --- the run pane's stack gains or loses a window (`sync_run_windows()`); it
-  --- ends, the proportions put back, as a window of the column closes
-  --- (`keep_zoom()`).
+  --- entering the layout's tab, the zoomed window taking the rows the column
+  --- gained or lost, and through `:wincmd =`, which equalizes the run pane's
+  --- stack on screen but not in the layout: the next toggle then gives back the
+  --- recorded heights. It ends, giving back the heights, as another pane shows
+  --- (`switch_pane()`) and as the run pane's stack gains or loses a window
+  --- (`sync_run_windows()`); it ends, the proportions put back, as a window of
+  --- the column closes (`keep_zoom()`). The column is the layout's windows: one
+  --- the user splits off it by hand is outside it.
   ---
   --- With the cursor in none of the column's windows — Claude's window, the
-  --- file column, a tab page that is not the layout's, or no layout open — it
-  --- changes nothing and warns the user once.
+  --- file column, a window split off the column by hand, a tab page that is
+  --- not the layout's, or no layout open — it changes nothing and warns the
+  --- user once.
   function M.toggle_zoom()
     local current = vim.api.nvim_get_current_win()
     if not vim.list_contains(column_windows(), current) then
