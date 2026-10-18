@@ -35,4 +35,6 @@ None.
 
 ## Commits
 
-Recorded after the merge.
+PR #281, merged by rebase; released in `v0.2.57` (PR #282, `main` `ce4c5d7`). On `dev`:
+
+- `8919719` Document the run tools and the zoom in the README, and the layout in the help
