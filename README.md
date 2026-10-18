@@ -151,6 +151,11 @@ resumes it.
 | `\Q` | closes the current tab; on the last aineo tab, quits Neovim as `:qa` does |
 | `\S` | lists Claude Code's sessions for the folder and opens the one you pick |
 | `\N` | starts a new Claude Code session |
+| `\z` | zooms the window of the right column the cursor is in, and gives the heights back when pressed again |
+
+`\z` gives the right-column window with the cursor the column's whole height,
+in every pane, and the other windows of the column shrink to a line or so;
+`\z` again gives every window the height it had.
 
 ### Claude terminal
 
@@ -313,8 +318,10 @@ start. `:help aineo-run` has the details.
 
 ## What Claude tells aineo
 
-aineo starts Claude Code with an MCP server of its own, which has two tools,
-both allowed without asking:
+aineo starts Claude Code with an MCP server of its own. Its tools `report` and
+`announce_work` tell aineo what Claude does, and `run`, `run_output` and
+`run_stop` give Claude the run pane. `report`, `announce_work` and
+`run_output` are allowed without asking; `run` and `run_stop` are not.
 
 - **`report`.** Claude calls it to tell you what it does: a `task`, a `status`
   (`started`, `progress`, `blocked`, `done` or `failed`), a one-line `summary`
@@ -326,6 +333,15 @@ both allowed without asking:
   worktree or branch they create for new work. It only informs aineo: the
   changes pane shows that work as its focused view (see The changes pane), and
   `s` lists it first.
+- **`run`, `run_output` and `run_stop`.** Claude starts a command in the run
+  pane with `run`, reads what a process printed with `run_output`, and stops
+  it with `run_stop`. `run` and `run_stop` are for your explicit request only:
+  Claude Code asks you for every call, even in its auto and bypass-permissions
+  modes, and denies them in `dontAsk` mode. `run_output` needs no approval. It
+  reads the output of a process you started with `\x` or Claude with `run`,
+  never of the `\X` shells, and filters it by a Vim regex (`pattern`,
+  `exclude`, `ignore_case`, `last`, `after_line`, `context`); the matching is
+  stopped after 2 seconds. `:help aineo-run-tools` has the details.
 
 aineo also gives Claude Code hooks that tell aineo when you switch session
 inside Claude Code with `/clear`, `/resume` or `/branch`, so the Report,
