@@ -2,43 +2,74 @@
 
 aineo turns Neovim into a console for [Claude Code](https://claude.com/claude-code).
 Claude Code's own interactive CLI runs in a terminal on the left. On the
-right, the Agent Report shows what Claude says it is doing, above an Input
-buffer where you write your next message. Files you open land in a column
-between the two.
+right, a column of panes you switch between: the Agent Report, which shows
+what Claude says it is doing, above an Input buffer where you write your next
+message; what changed in your repository; a shell; and the services you run.
+Files you open land in a column between the two. Each tab page is a session
+of its own, and a tab line tells which ones are working.
 
 ```
-+--------------------+--------------------+
-|                    |    Agent Report    |
-|    Claude Code     |                    |
-|    (terminal)      +--------------------+
-|                    |       Input        |
-+--------------------+--------------------+
+ 1: Fix the login ◒    2: Add tests ●    3: Notes
++--------------------+--------------------+--------------------+
+| Claude Code        | lua/auth.lua       | Agent Report       |
+| (terminal)         |                    | 10:42 [started] .. |
+|                    | a file, or a diff  | 10:51 [done] ..    |
+| your prompt and    | of one, opened by  |                    |
+| its dialogs        | \f, Enter or gf    +--------------------+
+|                    |                    | Input              |
+|                    |                    | \s sends it        |
++--------------------+--------------------+--------------------+
+
+The right column shows one pane at a time, each behind a key:
+
+ \pa  agent          \g  changes         \pt  terminal    \x  run
++----------------+  +----------------+  +-------------+  +----------------+
+| Agent Report   |  | files          |  | your shell  |  | npm run dev    |
+|                |  |  * M auth.lua  |  |             |  | running        |
+|                |  |    ? notes.md  |  | $ _         |  +----------------+
++----------------+  +----------------+  |             |  | cargo watch    |
+| Input          |  | commits        |  |             |  | running        |
+|                |  | Uncommitted    |  +-------------+  +----------------+
++----------------+  | Session work   |                   | shell  (\X)    |
+                    | a1b2c3 Fix ... |                   +----------------+
+                    +----------------+
 ```
 
+- **Tab line.** One title for each tab page, `<number>: <session name>`, and
+  after it `◒` and `◓` in turn while that Claude works, `●` once it stopped
+  while you were in another tab.
 - **Claude terminal.** The real Claude Code CLI. aineo answers none of its
   questions: permission prompts and dialogs are yours to answer there.
-- **Agent Report.** Claude Code calls a report tool aineo gives it, and each
-  report shows as a line: time, status (`started`, `progress`, `blocked`,
-  `done`, `failed`), task and summary. Reports are kept per session.
-- **Input.** A buffer for your next message. `\s` sends it to Claude, also
-  while Claude is in a turn, and the text is kept as a draft until you send it.
-  In Visual mode `\s` sends the selection alone.
-- **Changes pane.** In place of the Report and Input: what changed in your
-  repository since the session began, its commits, what landed in your
-  working branch and the other worktrees, with a diff of each file.
+- **File column.** Files you open, and the diffs the changes pane shows, take
+  a column between Claude's terminal and the right column. `\f` finds a file
+  to open there.
+- **Agent pane.** The Agent Report over Input.
+  - *Agent Report.* Claude Code calls a report tool aineo gives it, and each
+    report shows as a line: time, status (`started`, `progress`, `blocked`,
+    `done`, `failed`), task and summary. Reports are kept per session. A path
+    in a report opens at its line on a double-click, and a web link opens
+    from the keyboard with `gx`.
+  - *Input.* A buffer for your next message. `\s` sends it to Claude, also
+    while Claude is in a turn, and the text is kept as a draft until you send
+    it. In Visual mode `\s` sends the selection alone.
+- **Changes pane.** In place of the Report and Input: the files that changed
+  in your repository since the session began, above its commits, what landed
+  in your working branch and the other worktrees, with a diff of each file.
 - **Terminal pane.** A shell in the right column.
 - **Run pane.** The services you run while you develop, a backend and a
   frontend with watch, say, each in a terminal of its own, stacked in the
   right column.
 - **Tabs.** Several Claude Code sessions in one Neovim, one in each tab page,
-  and a tab line that shows each session's name and whether it is working.
+  each with its own panes.
 
 ## Requirements
 
+What each new host needs:
+
 - Neovim 0.12 or newer. aineo is tested on the newest Neovim release only.
-- Claude Code installed and signed in: the `claude` command. The help
-  records the Claude Code versions aineo was measured on (`:help
-  aineo-install`); it states no minimum.
+- Claude Code installed and signed in: the `claude` command must run from
+  Neovim's `PATH`. The help records the Claude Code versions aineo was
+  measured on (`:help aineo-install`); it states no minimum.
 - `git` 2.36 or newer, for the changes pane.
 - Optionally, a file picker for `\f`: snacks.nvim, fzf-lua, telescope.nvim or
   mini.pick. With none installed, `\f` lists the files through
@@ -50,8 +81,15 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim), loaded at startup so
 that the autostart can run:
 
 ```lua
-{ 'mathiasbrito/aineo', lazy = false }
+{ 'mathiasbrito/aineo', version = '*', lazy = false }
 ```
+
+`version = '*'` takes the newest release tag (`vX.Y.Z`). The next start of
+Neovim clones aineo by itself, and `:Lazy update` moves it to a newer release
+when one is tagged. To stay on one release, give a `tag`, such as
+`tag = 'v0.2.52'`, in place of `version`. To get the same commit on another host, commit lazy.nvim's
+`lazy-lock.json` with the rest of your configuration and run `:Lazy restore`
+there.
 
 aineo works without a `setup()` call. It has to be loaded at startup for
 the autostart: loaded later, it maps its keys but opens nothing.
@@ -62,12 +100,18 @@ runs before the plugin loads (see Settings):
 ```lua
 {
   'mathiasbrito/aineo',
+  version = '*',
   lazy = false,
   init = function()
     vim.g.aineo = { autostart = false }
   end,
 }
 ```
+
+Then run `:checkhealth aineo`: it reports the Neovim version, whether `claude`
+runs, your settings and your keys (see Health check). `<S-CR>` in the changes
+pane needs your terminal to tell Shift+Return from Return (see The changes
+pane); `\<CR>` needs nothing.
 
 ## Getting started
 
@@ -77,28 +121,10 @@ input, no user interface or a session restored by a plugin, nor inside
 aineo's own terminals. To turn the autostart off, set `autostart = false`
 (see Settings); `\o` opens the layout by hand.
 
-Every key sits behind the prefix `\`, in Normal mode:
-
-| Keys | Does |
-|---|---|
-| `\o` | opens or restores the layout |
-| `\s` | sends Input to Claude (in Visual mode, in Input, the selection alone) |
-| `\r`, `\i` | move to the Report, to Input |
-| `\c` | moves to Claude's terminal, in Terminal mode |
-| `\pa`, `\g`, `\pt` | show the agent pane, the changes pane, the terminal pane |
-| `\x` | asks for a command and runs it in the project folder, in a terminal of the run pane |
-| `\X` | adds an interactive shell to the run pane |
-| `\T` | opens a tab with a Claude Code session of its own |
-| `\1` to `\9` | move to the tab page of that number |
-| `\Q` | closes the current tab |
-| `\d` | closes the diff the changes pane shows |
-| `\f` | finds a file under the folder Claude works in and opens it in the middle column |
-| `\S` | lists Claude Code's sessions for the folder and opens the one you pick |
-| `\N` | starts a new Claude Code session |
-| `\tcn` | hides or shows the line numbers of Claude's window |
-
-In Terminal mode and in Insert mode, `<C-\>` followed by the same letters,
-but `s`, does the same: `<C-\>i` moves to Input, `<C-\>c` to Claude.
+Every key sits behind the prefix `\`, in Normal mode, and each panel's table
+below lists the keys that act in it or open it. In Terminal mode and in
+Insert mode, `<C-\>` followed by the same letters, but `s`, does the same:
+`<C-\>i` moves to Input, `<C-\>c` to Claude, `<C-\>x` runs a command.
 
 Each key is a `<Plug>` mapping too, such as `<Plug>(aineo-send)`, and each
 action is a subcommand of `:Aineo`, such as `:Aineo send`. `\` is also
@@ -107,6 +133,113 @@ mapping of yours collides with aineo's keys.
 
 Each session aineo starts is kept for its folder: the next start there
 resumes it.
+
+### Global
+
+| Keys | Does |
+|---|---|
+| `\o` | opens or restores the layout |
+| `\f` | finds a file under the folder Claude works in and opens it in the file column |
+| `\T` | opens a tab with a Claude Code session of its own |
+| `\1` to `\9` | move to the tab page of that number |
+| `\Q` | closes the current tab |
+| `\S` | lists Claude Code's sessions for the folder and opens the one you pick |
+| `\N` | starts a new Claude Code session |
+
+### Claude terminal
+
+| Keys | Does |
+|---|---|
+| `\c` | moves to Claude's terminal, in Terminal mode |
+| `\tcn` | hides or shows the line numbers of Claude's window |
+
+### Agent pane
+
+| Keys | Does |
+|---|---|
+| `\pa` | shows the agent pane and moves to the Report |
+| `\r`, `\i` | move to the Report, to Input |
+| `\s` | sends Input to Claude (in Visual mode, in Input, the selection alone) |
+
+### Changes pane
+
+| Keys | Does |
+|---|---|
+| `\g` | shows the changes pane and moves to its commits; inside the pane, switches between the default view and the worktree or branch shown alone |
+| `s` | in either window of the pane: picks a worktree or a branch to show alone |
+| `j`, `k` | in the commits window: the line under the cursor chooses which files the files window lists |
+| Enter | in the files window: shows the file's diff in the file column and moves there |
+| `l`, `h` | in the files window: show the diff against the file's previous version, against `HEAD`, and keep the cursor on the list |
+| `gf` | in the files window: opens the working tree's file, or, under a commit, the file as that commit has it |
+| `\<CR>`, `<S-CR>` | in the files window: open the file for editing, in the working tree it belongs to |
+| `F` | in a diff: reads it again with the whole file as context, and back to three lines |
+| `\d` | closes the diff, from any window of the tab |
+
+### Terminal pane
+
+| Keys | Does |
+|---|---|
+| `\pt` | shows the terminal pane and moves into the shell, in Terminal mode |
+
+### Run pane
+
+| Keys | Does |
+|---|---|
+| `\x` | asks for a command and runs it in the project folder, in a terminal of the run pane; with processes running and the cursor elsewhere, shows the stack |
+| `\X` | adds an interactive shell to the run pane |
+
+## The changes pane
+
+`\g` shows two windows in place of the Report and Input. The upper one lists the files
+that changed in your repository since the session began, committed or not,
+one per line with a letter for the kind of change (`A` added, `M` modified,
+`D` deleted, `R` renamed, `?` new and untracked) and a `*` on a file you saved
+from this editor. The lower one lists Uncommitted and Session work, then the
+session's commits, then what landed in your working branch, then each other
+worktree of the repository with its commits. The line under the cursor
+chooses what the upper window lists. aineo never fetches: what landed is what
+your repository last knew.
+
+- **Look at a change.** Enter on a file shows its diff in the file column,
+  and the cursor goes there. `l` and `h` show the diff against the previous
+  version and against `HEAD` and keep the cursor on the list, so you can move
+  down the files with the diff following. `F` in a diff widens its context
+  to the whole file and back. `\d` closes the diff.
+- **Open a file.** `gf` opens the working tree's file in the file column;
+  under a commit it shows the file as that commit has it, read-only.
+  `\<CR>` and `<S-CR>` open the file for editing in the working tree its line
+  belongs to: another worktree's file in that worktree, a branch's file in the
+  worktree that has the branch checked out.
+- **Show one worktree or branch alone.** `s` offers the other worktrees and
+  the local branches, and shows the one you pick alone; `\g` in the pane
+  switches back to the default view and forth again.
+- **Work Claude reports.** When Claude Code or a subagent creates a worktree
+  or a branch, it tells aineo (see What Claude tells aineo), and the pane
+  shows that work as its focused view. `s` then lists it first, as
+  `[reported] All reported work`.
+- **The remembered view.** For each Claude Code session, the pane keeps the
+  worktree or branch you picked with `s`, the work Claude reported and whether
+  the focused view or the default view showed. Quit and come back, reopen the
+  tab or resume the session with `\S`, and the view is back; a worktree or
+  branch that is gone is dropped. The line chosen in the commits window, the
+  pane the right column shows and the cursor are not kept.
+
+`<S-CR>` reaches Neovim only when your terminal tells Shift+Return from
+Return, which many terminals do only once asked for extended keys. Inside
+tmux, set `extended-keys` to `on` (or `always`) in your tmux configuration;
+if tmux does not recognise your terminal as one that sends them, add the
+`extkeys` feature to `terminal-features`. In iTerm2, give Shift+Return a key
+mapping (Settings, Profiles, Keys) whose action is "Send Escape Sequence"
+with `[13;2u`. `\<CR>` does the same and needs none of this.
+
+## Find a file
+
+`\f` hands the search to the first of snacks.nvim, fzf-lua, telescope.nvim
+and mini.pick that is installed (`find.picker` picks one by name), and opens
+the file you pick in the file column, modifiable, from any window of the tab,
+Claude's terminal included. With none installed it lists the files through
+`vim.ui.select()`: the repository's tracked files and the untracked ones your
+ignore rules leave in, or, outside a repository, a walk of the folder.
 
 ## Run your services
 
@@ -128,6 +261,26 @@ their children; a `:qa!` you type for that quit stops them without asking,
 and any other quit asks. Closing a tab with `\Q` asks
 the same about that tab's processes. Processes do not start again at the next
 start. `:help aineo-run` has the details.
+
+## What Claude tells aineo
+
+aineo starts Claude Code with an MCP server of its own, which has two tools,
+both allowed without asking:
+
+- **`report`.** Claude calls it to tell you what it does: a `task`, a `status`
+  (`started`, `progress`, `blocked`, `done` or `failed`), a one-line `summary`
+  and, optionally, `details`. Each report is a line in the Agent Report,
+  `HH:MM [status] task — summary`, with its details as items below. A report
+  goes to the tab whose Claude sent it.
+- **`announce_work`.** Claude, and the subagents it starts, call it with the
+  `kind` (`worktree` or `branch`) and the `path` or `branch` name of each git
+  worktree or branch they create for new work. It only informs aineo: the
+  changes pane shows that work as its focused view (see The changes pane), and
+  `s` lists it first.
+
+aineo also gives Claude Code hooks that tell aineo when you switch session
+inside Claude Code with `/clear`, `/resume` or `/branch`, so the Report,
+Input's draft and the changes pane follow the session Claude Code is on.
 
 ## Settings
 
@@ -208,14 +361,15 @@ the title.
 
 `:checkhealth aineo` reports the Neovim version, the configuration (an unknown
 key is named), whether `claude` runs, the shell, the server socket, the prefix
-mappings, the tab line, the activity indicator and why the autostart did or
-did not run. It starts no Claude session and opens no layout; the one command
+mappings, the tab line, the activity indicator, the picker `\f` uses and why
+the autostart did or did not run. It starts no Claude session and opens no layout; the one command
 it runs is `claude.cmd` with `--version` appended.
 
 ## More
 
 `:help aineo` is the reference: the layout, every command and mapping, the
-Report, Send, the changes pane, tabs, sessions, the autostart and the limits.
+Report, Send, the changes pane, the run pane, tabs, sessions, finding a file,
+the autostart and the limits.
 
 ## Development
 
