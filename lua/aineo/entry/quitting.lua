@@ -64,13 +64,30 @@ for _, name in ipairs({
   FORCING_COMMANDS[name] = true
 end
 
---- Whether the command line the user typed last quits with a bang (`:qa!`),
---- in any of the commands it joins with a bar. A quit run by a mapping's
---- `<Cmd>` or by Lua leaves no command line behind and counts as unforced.
+--- The command line the user entered (`:` and Enter, not abandoned) while the
+--- command it runs runs, nil otherwise: recorded by `CmdlineLeave` and
+--- dropped by the next scheduled callback, so that a quit sees the command
+--- line that asks for it and no older one.
+---@type string|nil
+local entered_command_line = nil
+
+--- Records the command line being entered, when it is entered and not
+--- abandoned, until the command it runs is done.
+local function record_entered_command_line()
+  entered_command_line = (not vim.v.event.abort) and vim.fn.getcmdline() or nil
+  vim.schedule(function()
+    entered_command_line = nil
+  end)
+end
+
+--- Whether the command line the user entered for this very quit
+--- (`entered_command_line`) quits with a bang (`:qa!`), in any of the
+--- commands it joins with a bar. A quit run by a mapping's `<Cmd>`, by Lua,
+--- by `ZZ` or `ZQ` is no command line entered and counts as unforced.
 ---
 ---@return boolean
 local function is_forced_quit()
-  for command in vim.fn.histget(':', -1):gmatch('[^|]+') do
+  for command in (entered_command_line or ''):gmatch('[^|]+') do
     local name = command:match('^[%s:]*(%a+)!')
     if name and FORCING_COMMANDS[name] then
       return true
@@ -122,11 +139,13 @@ end
 --- Keeps the editor open, from an `ExitPre` handler: opens a tab page at the
 --- end, which makes Neovim abandon the quit, and closes it again, with the
 --- cursor back in the window and tab page it was in, once the command that
---- asked to quit is done.
+--- asked to quit is done. The page's empty buffer is wiped with it, not left
+--- listed.
 local function keep_editor_open()
   local origin_page, origin_window =
     vim.api.nvim_get_current_tabpage(), vim.api.nvim_get_current_win()
   vim.cmd('$tabnew')
+  vim.bo.bufhidden = 'wipe'
   local temporary_page = vim.api.nvim_get_current_tabpage()
   vim.schedule(function()
     if vim.api.nvim_tabpage_is_valid(temporary_page) then
@@ -170,7 +189,10 @@ end
 local function stop_processes_at_exit()
   local names = running_processes()
   if #names > 0 and not is_exit_asked then
-    vim.notify(
+    -- A notification handler that raises must not keep the stops, nor the
+    -- handlers after this one, from running; its error has no one to tell.
+    pcall(
+      vim.notify,
       ('aineo: stopping %d %s (%s)'):format(
         #names,
         #names == 1 and 'process' or 'processes',
@@ -196,6 +218,12 @@ function M.guard()
   end
   is_guarding = true
   local group = vim.api.nvim_create_augroup('aineo.entry.quit', {})
+  vim.api.nvim_create_autocmd('CmdlineLeave', {
+    group = group,
+    pattern = ':',
+    desc = 'aineo: note the command line that may quit',
+    callback = record_entered_command_line,
+  })
   vim.api.nvim_create_autocmd('ExitPre', {
     group = group,
     desc = 'aineo: ask before the processes of the run pane are stopped',

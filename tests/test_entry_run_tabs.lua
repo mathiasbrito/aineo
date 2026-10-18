@@ -176,6 +176,34 @@ T['each tab']['leaves no handler of its run pane behind once its tab page closes
   eq({ before, closed }, { true, true })
 end
 
+T['the next start'] = MiniTest.new_set()
+
+T['the next start']['starts no process again, however many the tabs ran, as it reopens the tabs'] = function()
+  local state = tabs.open_first_tab(child, 'run-tabs-next')
+  local second = tabs.fake('run-tabs-next-second')
+  tabs.use_next_fake(child, second)
+  child.cmd('Aineo tab new')
+  claude_session.wait_for_start(second)
+  run('sleep 302')
+  local folder = child.fn.getcwd()
+  tabs.kept_tab_list_once(state, folder, function(list)
+    return list ~= nil and #list.sessions == 2
+  end)
+  stop_the_child()
+  entry.restart(child)
+  child.o.shell = entry_shell.TEST_SHELL
+  child.lua('vim.env.XDG_STATE_HOME = ...', { vim.fs.dirname(state) })
+  local again = tabs.fake('run-tabs-next-again')
+  entry.use_fake(child, again)
+
+  child.cmd('Aineo open')
+  claude_session.wait_for_starts(again, 2)
+
+  eq(tabs.tab_count(child), 2)
+  eq(child.lua_get("require('aineo.run').buffers()"), {})
+  eq(child.lua_get(entry_shell.TERMINAL_JOBS), 2)
+end
+
 T['closing a tab with \\Q'] = MiniTest.new_set()
 
 T['closing a tab with \\Q']['asks once, listing the tab’s commands, and keeps the tab and its processes on Cancel'] = function()
@@ -220,11 +248,12 @@ end
 ---
 ---@param folder string
 ---@return integer
-local function child_pid_in(folder)
+local function child_pid_in(folder, name)
+  name = name or 'child.pid'
   local pid
   vim.wait(entry_shell.PATIENCE_MS, function()
-    local lines = vim.fn.filereadable(folder .. '/child.pid') == 1
-        and vim.fn.readfile(folder .. '/child.pid')
+    local lines = vim.fn.filereadable(folder .. '/' .. name) == 1
+        and vim.fn.readfile(folder .. '/' .. name)
       or {}
     pid = tonumber(lines[1])
     return pid ~= nil
@@ -253,6 +282,27 @@ T['closing a tab with \\Q']['stops the processes of the closed tab with their ch
   pcall(vim.uv.kill, child_pid, 'sigkill')
 
   eq(ended, { true, true })
+  eq(tabs.tab_count(child), 1)
+end
+
+T['closing a tab with \\Q']['stops the job an interactive shell of the tab started in a group of its own'] = function()
+  open_two_tabs('run-tabs-close-job')
+  local folder = fixture.directory('run-tabs/close-job')
+  entry.press(child, '\\X')
+  local buffer = child.lua_get('vim.api.nvim_get_current_buf()')
+  entry_shell.type_into(
+    child,
+    buffer,
+    'nohup sleep 408 >/dev/null 2>&1 & echo $! > ' .. folder .. '/job.pid'
+  )
+  local job_pid = child_pid_in(folder, 'job.pid')
+  answer_questions(1)
+
+  entry.press(child, '\\Q')
+  local ended = entry_shell.has_ended(job_pid)
+  pcall(vim.uv.kill, job_pid, 'sigkill')
+
+  eq(ended, true)
   eq(tabs.tab_count(child), 1)
 end
 

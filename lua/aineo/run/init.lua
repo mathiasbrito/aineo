@@ -37,6 +37,8 @@ local SHELL_NAME = 'shell'
 ---@field buffer integer the terminal that shows the process
 ---@field name string the command the user gave, or `shell`
 ---@field pid integer the process id of the terminal's process, which leads a process group of its own
+---@field job integer the job of the terminal's process
+---@field is_group_gone boolean whether the process group has been seen empty, after which it is never signalled again: its id may belong to another process by now
 ---@field status integer|nil the status the process exited with, nil while it runs
 
 --- The status `TermClose` reports for a process the editor stopped itself, as
@@ -46,6 +48,73 @@ local STOPPED_BY_EDITOR = -1
 --- How long the processes of a stop have, in milliseconds, to end on a
 --- termination signal before they are killed.
 local GRACE_MS = 1500
+
+--- How often, in milliseconds, a stop looks whether what it signalled has
+--- ended.
+local POLL_MS = 20
+
+--- The process ids of everything below the process `pid`: its children, their
+--- children, and so on, as the editor finds them by parentage.
+---
+---@param pid integer
+---@return integer[] pids
+local function descendants_of(pid)
+  local found = {}
+  for _, child in ipairs(vim.api.nvim_get_proc_children(pid)) do
+    table.insert(found, child)
+    vim.list_extend(found, descendants_of(child))
+  end
+  return found
+end
+
+--- Whether anything is left of `target`, a process group (its id negated) or a
+--- process.
+---
+---@param target integer
+---@return boolean
+local function is_present(target)
+  return vim.uv.kill(target, 0) == 0
+end
+
+--- Keeps what is left of `targets` (`is_present()`): a target seen gone is
+--- forgotten for good, since its id may belong to another process by now.
+---
+---@param targets integer[]
+---@return integer[] present
+local function present_of(targets)
+  return vim.tbl_filter(is_present, targets)
+end
+
+--- Sends the termination signal to each of `targets`.
+---
+---@param targets integer[]
+local function ask_to_end(targets)
+  for _, target in ipairs(targets) do
+    vim.uv.kill(target, 'sigterm')
+  end
+end
+
+--- Kills what is left of `targets` once it has had `GRACE_MS` to end on its
+--- own, looking every `POLL_MS`, from timers: it stops looking at the first
+--- look that finds nothing. `waited` is how long it has waited.
+---
+---@param targets integer[]
+---@param waited integer
+local function kill_what_stays(targets, waited)
+  local present = present_of(targets)
+  if #present == 0 then
+    return
+  end
+  if waited >= GRACE_MS then
+    for _, target in ipairs(present) do
+      vim.uv.kill(target, 'sigkill')
+    end
+    return
+  end
+  vim.defer_fn(function()
+    kill_what_stays(present, waited + POLL_MS)
+  end, POLL_MS)
+end
 
 --- The winbar of every window that shows a process: the title the home keeps
 --- for the process (`b:aineo_run_title`), which names its command and says
@@ -111,16 +180,6 @@ local function make_run(group_name)
     end
   end
 
-  --- Whether the process group of `process` has a member left: the terminal's
-  --- process leads a group of its own, which holds what it started and did
-  --- not move out of it, and exists until the last of them ends.
-  ---
-  ---@param process aineo.run.Process
-  ---@return boolean
-  local function has_group(process)
-    return vim.uv.kill(-process.pid, 0) == 0
-  end
-
   --- Whether `process` is left to stop: it runs, or the editor stopped it as
   --- its terminal unloaded. A process that ended on its own is left alone:
   --- its process group may have been taken by another process since.
@@ -131,36 +190,51 @@ local function make_run(group_name)
     return process.status == nil or process.status == STOPPED_BY_EDITOR
   end
 
-  --- Sends `signal` to the process group of `process`, which reaches its
-  --- children, if the group has a member.
+  --- What a stop of `process` signals, and what is left of it: the process
+  --- group of the terminal's process, which leads a group of its own that
+  --- holds what it started and did not move out of it (its id negated), and,
+  --- while its job runs, everything below it by parentage, since a shell
+  --- under job control moves its jobs to groups of their own. Once the job
+  --- has ended or been freed the shell is gone, and the group is all there is
+  --- to find.
+  ---
+  --- A group seen empty is not looked at again.
   ---
   ---@param process aineo.run.Process
-  ---@param signal string
-  local function signal_group(process, signal)
-    if has_group(process) then
-      vim.uv.kill(-process.pid, signal)
+  ---@return integer[] targets
+  local function targets_of(process)
+    local targets = process.is_group_gone and {} or { -process.pid }
+    if vim.fn.jobwait({ process.job }, 0)[1] == -1 then
+      vim.list_extend(targets, descendants_of(process.pid))
     end
+    local present = present_of(targets)
+    process.is_group_gone = process.is_group_gone or not vim.list_contains(present, -process.pid)
+    return present
   end
 
-  --- Stops the process of `process` and its children by a termination signal
-  --- to its process group, and by a kill once they have had `GRACE_MS` to end.
+  --- Stops what is left of `process` by a termination signal and, from timers,
+  --- a kill for what has not ended within `GRACE_MS` (`kill_what_stays()`).
   ---
   ---@param process aineo.run.Process
   local function terminate(process)
-    signal_group(process, 'sigterm')
-    vim.defer_fn(function()
-      signal_group(process, 'sigkill')
-    end, GRACE_MS)
+    local targets = targets_of(process)
+    ask_to_end(targets)
+    kill_what_stays(targets, 0)
   end
 
   --- Takes `process` out of the home, stopping what is left of it
   --- (`is_to_stop()`, `terminate()`), and wipes its terminal and tells the
   --- watcher of the home (`home.watch_leaving()`) once the command that
   --- unloaded it is done. Done when the terminal unloads: the user's
-  --- `:bdelete`, a wipe, or a process the editor wipes as it ends.
+  --- `:bdelete`, a wipe, or a process the editor wipes as it ends. Does
+  --- nothing while the editor exits: Neovim unloads every buffer before
+  --- `VimLeavePre`, where `stop_all()` stops what is left, with its kill.
   ---
   ---@param process aineo.run.Process
   local function leave(process)
+    if vim.v.exiting ~= vim.NIL then
+      return
+    end
     for index, listed in ipairs(processes) do
       if listed == process then
         table.remove(processes, index)
@@ -205,7 +279,13 @@ local function make_run(group_name)
       vim.api.nvim_buf_delete(buffer, { force = true })
       error(failure, 0)
     end
-    local process = { buffer = buffer, name = name, pid = vim.fn.jobpid(job) }
+    local process = {
+      buffer = buffer,
+      name = name,
+      pid = vim.fn.jobpid(job),
+      job = job,
+      is_group_gone = false,
+    }
     table.insert(processes, process)
     vim.b[buffer].aineo_run_title = title_of(process)
     vim.api.nvim_create_autocmd('TermClose', {
@@ -214,6 +294,7 @@ local function make_run(group_name)
       once = true,
       callback = function()
         note_exit(process)
+        terminate(process)
       end,
     })
     vim.api.nvim_create_autocmd('BufUnload', {
@@ -308,21 +389,24 @@ local function make_run(group_name)
   end
 
   --- Stops every process of the home with its children: a termination signal
-  --- to each process group, a kill to what has not ended within `GRACE_MS`;
-  --- then wipes every terminal, and holds the editor until then. A process
-  --- that ended on its own is not signalled (`is_to_stop()`). The watcher of
+  --- to each process group and to what its shell started under job control
+  --- (`targets_of()`), a kill to what has not ended within `GRACE_MS`; then
+  --- wipes every terminal, and holds the editor until then. A process that
+  --- ended on its own is not signalled (`is_to_stop()`). The watcher of
   --- `watch_leaving()` is not called.
   function home.stop_all()
     is_stopping_all = true
-    local stopping = vim.tbl_filter(is_to_stop, processes)
-    for _, process in ipairs(stopping) do
-      signal_group(process, 'sigterm')
+    local targets = {}
+    for _, process in ipairs(vim.tbl_filter(is_to_stop, processes)) do
+      vim.list_extend(targets, targets_of(process))
     end
+    ask_to_end(targets)
     vim.wait(GRACE_MS, function()
-      return not vim.iter(stopping):any(has_group)
-    end, 20)
-    for _, process in ipairs(stopping) do
-      signal_group(process, 'sigkill')
+      targets = present_of(targets)
+      return #targets == 0
+    end, POLL_MS)
+    for _, target in ipairs(targets) do
+      vim.uv.kill(target, 'sigkill')
     end
     for _, process in ipairs(vim.list_slice(processes)) do
       vim.api.nvim_buf_delete(process.buffer, { force = true })
