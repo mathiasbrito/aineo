@@ -134,6 +134,19 @@ T['the run pane']['draws no winbar in the Report’s window once the agent pane 
   eq(winbar, '')
 end
 
+T['the run pane']['leaves the editor’s own winbar alone, for any other buffer shown in its windows'] = function()
+  local buffers, arrangement = open_with_run_terminals(2)
+  show_pane('run', arrangement)
+  layout.enter_window_showing(child, buffers.run[1])
+
+  local own = child.lua_get([[(function()
+      vim.cmd.enew()
+      return { vim.go.winbar, vim.api.nvim_get_option_value('winbar', { win = 0 }) }
+    end)()]])
+
+  eq(own, { '', '' })
+end
+
 T['the run pane']['shows the same stack again, in the same order, when it is shown after another pane'] = function()
   local buffers, arrangement = open_with_run_terminals(3)
   show_pane('run', arrangement)
@@ -220,8 +233,9 @@ T['the run pane']['gives way to the agent pane when an arrangement hands no term
   show_pane('run', arrangement)
   arrangement.run = nil
 
-  child.lua([[require('aineo.layout').open(...)]], { arrangement })
+  local opened = pcall(child.lua, [[require('aineo.layout').open(...)]], { arrangement })
 
+  eq(opened, true)
   eq(child.lua_get("require('aineo.layout').shown_pane()"), 'agent')
   eq(layout.window_count(child), 3)
   eq(layout.window_showing(child, buffers.run[2]), vim.NIL)
@@ -256,6 +270,7 @@ T['the run pane']['refuses an arrangement whose run is not a list of buffers wit
       { { buffers = {}, winbar = '' }, 'arrangement.run.buffers' },
       { { buffers = { 9999 }, winbar = '' }, 'arrangement.run.buffers' },
       { { buffers = 'x', winbar = '' }, 'arrangement.run.buffers' },
+      { { buffers = { 1 }, winbar = false }, 'arrangement.run.winbar' },
     },
   })
 

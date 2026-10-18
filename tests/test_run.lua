@@ -207,16 +207,31 @@ local function child_pid_in(folder)
 end
 
 --- Waits until the process `pid` has ended, and says whether it had within
+--- `milliseconds`.
+---
+---@param pid integer
+---@param milliseconds integer
+---@return boolean
+local function ends_within(pid, milliseconds)
+  local ended = vim.wait(milliseconds, function()
+    return vim.uv.kill(pid, 0) ~= 0
+  end, 20)
+  return ended
+end
+
+--- Waits until the process `pid` has ended, and says whether it had within
 --- `PATIENCE_MS`.
 ---
 ---@param pid integer
 ---@return boolean
 local function has_ended(pid)
-  local ended = vim.wait(PATIENCE_MS, function()
-    return vim.uv.kill(pid, 0) ~= 0
-  end, 20)
-  return ended
+  return ends_within(pid, PATIENCE_MS)
 end
+
+--- How long a process may take to be gone after a stop returned: the time
+--- its terminal's process, killed, takes to be reaped, well under the two
+--- seconds the editor gives a process before it kills it itself.
+local SETTLE_MS = 700
 
 --- Ends `pids` by a kill, whatever a case did before, so that no process
 --- outlives it.
@@ -269,7 +284,7 @@ T['stop_all()']['stops every process with its children, those that ignore signal
 
   child.lua("require('aineo.run').stop_all()")
   local remaining = vim.tbl_filter(function(pid)
-    return not has_ended(pid)
+    return not ends_within(pid, SETTLE_MS)
   end, pids)
   kill_all(pids)
 
