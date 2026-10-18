@@ -1544,6 +1544,9 @@ local function make_tab(homes, key, callbacks)
     ['diff close'] = function()
       homes.changes.close_shown_diff()
     end,
+    zoom = function()
+      homes.layout.toggle_zoom()
+    end,
   }
 
   --- What Send does in Visual mode: sends the selection alone, unless a claim

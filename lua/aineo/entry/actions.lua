@@ -171,6 +171,20 @@ ACTIONS.find = function()
   finding.find_in(tab)
 end
 
+--- What `:Aineo zoom` does: zooms the window of the right column the cursor
+--- is in, or gives back the heights it took (`aineo.layout`'s `toggle_zoom()`),
+--- in the aineo tab of the current tab page, and never makes a tab. From a tab
+--- page that is none of aineo's, the module's own layout, which has no such
+--- window there, tells the user so.
+ACTIONS.zoom = function()
+  local tab = registry.tab_of_current_page()
+  if tab then
+    tab.actions.zoom()
+  else
+    require('aineo.layout').toggle_zoom()
+  end
+end
+
 ACTIONS['tab new'] = function()
   reopening.reopen_folder_tabs()
   opening.open_new_tab()
