@@ -416,8 +416,8 @@ T['watch_leaving()']['calls back once when the user deletes a process, and for n
   count_leavings()
   local first = start_command('sleep 30', settings_for('leaving-delete'))
   start_command('sleep 31', settings_for('leaving-delete'))
-  start_command('exit 0', settings_for('leaving-delete'))
-  child.lua('vim.wait(300)')
+  local ended = start_command('exit 0', settings_for('leaving-delete'))
+  wait_until([[vim.b[(...)].aineo_run_title == 'exit 0 — exited 0']], { ended })
   local before = child.lua_get('_G.run_leavings')
 
   child.cmd('bdelete! ' .. first)
@@ -444,9 +444,116 @@ T['watch_leaving()']['does not call back when stop_all() empties the stack'] = f
   start_command('sleep 30', settings_for('leaving-stop-all'))
 
   child.lua("require('aineo.run').stop_all()")
-  child.lua('vim.wait(300)')
+  child.lua(
+    '_G.run_scheduled_after = false; vim.schedule(function() _G.run_scheduled_after = true end)'
+  )
+  wait_until('_G.run_scheduled_after')
 
   eq(child.lua_get('_G.run_leavings'), 0)
+end
+
+--- Makes `vim.uv.kill` in the child answer the first look at each process
+--- group (a signal 0) as if the group were empty and every later look as if
+--- another process had taken its id, and record every other signal sent, in
+--- `_G.run_signals`: a stop that sends a kill after it saw a group empty
+--- would reach that other process.
+local function spy_on_signals()
+  child.lua([[
+    _G.run_signals = {}
+    local seen = {}
+    local kill = vim.uv.kill
+    vim.uv.kill = function(pid, signal)
+      if signal == 0 then
+        if seen[pid] then
+          return 0
+        end
+        seen[pid] = true
+        return nil, 'ESRCH'
+      end
+      table.insert(_G.run_signals, { pid, signal })
+      return kill(pid, signal)
+    end
+  ]])
+end
+
+--- The kills the child sent since `spy_on_signals()`.
+---
+---@return table[]
+local function kills_sent()
+  return child.lua_get(
+    [[vim.tbl_filter(function(sent) return sent[2] == 'sigkill' end, _G.run_signals)]]
+  )
+end
+
+T['a group seen empty'] = MiniTest.new_set()
+
+T['a group seen empty']['is sent no kill when a stop of one process finds it so, though its id is taken later'] = function()
+  start_child()
+  spy_on_signals()
+  local buffer = start_command('sleep 30', settings_for('empty-group-delete'))
+  local pid = child.lua_get('vim.fn.jobpid(vim.b[...].terminal_job_id)', { buffer })
+
+  child.cmd('bdelete! ' .. buffer)
+  vim.wait(1800)
+  local kills = kills_sent()
+  kill_all({ pid })
+
+  eq(kills, {})
+end
+
+T['a group seen empty']['is sent no kill when stop_all() finds it so, though its id is taken later'] = function()
+  start_child()
+  spy_on_signals()
+  local buffer = start_command('sleep 30', settings_for('empty-group-stop-all'))
+  local pid = child.lua_get('vim.fn.jobpid(vim.b[...].terminal_job_id)', { buffer })
+
+  child.lua("require('aineo.run').stop_all()")
+  local kills = kills_sent()
+  kill_all({ pid })
+
+  eq(kills, {})
+end
+
+T['a process that ends'] = MiniTest.new_set()
+
+T['a process that ends']['has what its group has left stopped, a child that ignored the hangup, after Ctrl-C'] = function()
+  start_child()
+  local settings = settings_for('ends-leaves-child')
+  local buffer =
+    start_command("(trap '' INT HUP; exec sleep 403) & echo $! > child.pid; wait", settings)
+  local child_pid = child_pid_in(settings.cwd)
+
+  child.lua([[vim.fn.chansend(vim.b[(...)].terminal_job_id, '\3')]], { buffer })
+  wait_until([[vim.b[(...)].aineo_run_title:find('exited', 1, true) ~= nil]], { buffer })
+  local ended = has_ended(child_pid)
+  kill_all({ child_pid })
+
+  eq(ended, true)
+end
+
+--- The command that starts, with job control, a child in a process group
+--- of its own, as a shell does for the jobs the user starts, writes its
+--- process id to `job.pid` in the folder the process runs in, and waits.
+local SERVICE_WITH_JOB = 'set -m; nohup sleep 404 >/dev/null 2>&1 & echo $! > job.pid; wait'
+
+T['stop_all()']['stops a job of its own group too, that the shell started with job control'] = function()
+  start_child()
+  local settings = settings_for('stop-all-job')
+  start_command(SERVICE_WITH_JOB, settings)
+  local job_pid
+  vim.wait(PATIENCE_MS, function()
+    local lines = vim.fn.filereadable(settings.cwd .. '/job.pid') == 1
+        and vim.fn.readfile(settings.cwd .. '/job.pid')
+      or {}
+    job_pid = tonumber(lines[1])
+    return job_pid ~= nil
+  end, 20)
+
+  child.lua("require('aineo.run').stop_all()")
+  local ended = ends_within(job_pid, SETTLE_MS)
+  kill_all({ job_pid })
+
+  eq(ended, true)
 end
 
 return T

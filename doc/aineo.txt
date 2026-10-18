@@ -237,22 +237,30 @@ output. A process that ends keeps its window and its output, its winbar
 saying `exited` and its status, until you close the window, and then it
 leaves the stack; with the last one gone the agent pane shows again. To stop a
 process press Ctrl-C in its terminal, which leaves the window with its status
-shown, or run `:bdelete!` on its terminal, which stops it with its children
-and takes it out of the stack. Closing the window of a process that runs, with
-`:q`, only hides it: it runs on and comes back with the next `\x`. When the
-screen has no room for another window, the process runs on, hidden, and aineo
-says so. Each tab has a stack of its own (|aineo-tabs|). Processes are not
-started again at the next start.
+shown, with what is left of its group stopped, or run `:bdelete!` on its
+terminal, which stops it with its children and takes it out of the stack.
+`:bdelete!` reaches the process group alone: a job that an interactive shell
+(`\X`, or a command run under 'shellcmdflag' with `-i`) started in a group of
+its own, and that ignores the hangup, outlives it, since Neovim has freed the
+shell's job and hung up its terminal before aineo can find what runs below
+the shell; a quit, `\Q` and the close of a tab page do reach it. Closing the
+window of a process that runs, with `:q`, only hides it: it runs on and comes
+back with the next `\x`. When the screen has no room for another window, the
+process runs on, hidden, and aineo says so. Each tab has a stack of its own
+(|aineo-tabs|). Processes are not started again at the next start.
 
 Quitting stops them. Before `:qa`, `:q` in the last window, `:wq` or `:x`
 quits Neovim with processes running, aineo asks once, listing the commands:
 `aineo: 2 processes will be stopped (npm run dev, cargo watch) — quit?`, with
-Quit and Cancel. Cancel keeps Neovim open, as it was. `:qa!` and the other
-quits typed with a bang stop them without asking. `\Q` on a tab that runs
-processes asks the same, with Close and Cancel, and Cancel keeps the tab.
-Every process is stopped with its children: a termination signal to its
-process group, and a kill to what has not ended within a second and a half
-(|aineo-limits|).
+Quit and Cancel. Cancel keeps Neovim open, as it was. A quit you typed with a
+bang for this very quit, `:qa!` or `:q!` on the last window, stops them
+without asking; any other quit asks, `ZZ` and `ZQ` and a quit run by a
+mapping or by Lua among them, and so does one after a `:q!` you typed earlier
+for another purpose. `\Q` on a tab that runs processes asks the same, with
+Close and Cancel, and Cancel keeps the tab. Every process is stopped with its
+children: a termination signal to its process group and to what its shell
+started below it, and a kill to what has not ended within a second and a
+half, at a quit, at `\Q` and when the tab page closes (|aineo-limits|).
 
 Tabs ~
                                                                   *aineo-tabs*
@@ -2654,20 +2662,28 @@ The run pane on quit ~
 The question before a quit that stops the run pane's processes (|aineo-run|)
 is asked from the |ExitPre| event, which `:qa`, `:q` in the last window, `:wq`
 and `:x` trigger and `:cquit` and a signal that ends Neovim do not. Neither
-that event nor |QuitPre| says whether the command had a bang: aineo reads the
-last command line you typed, so `:qa!` skips the question when typed, and a
-`:qa!` run by a mapping's `<Cmd>` or by Lua, or `ZQ`, asks. A quit nothing
-asked about stops the processes all the same, from |VimLeavePre|, and aineo
-tells you once, as it begins, that they are being stopped. Neovim has no way
-to cancel a quit from a handler: on Cancel aineo opens a tab page and closes
-it again once the command is done, which makes Neovim give the quit up, and
-triggers |TabNew|, |TabEnter| and |TabClosed| autocommands for that page. The
-processes are stopped from a |VimLeavePre| handler registered when the first
-process starts, after the handlers aineo made before it, Claude Code's stop
-among them; a handler before it that raises an error makes Neovim skip it,
-and Neovim's own hangup is then all the processes get. A process that leaves
-its process group, as a daemon that calls `setsid` does, is not reached by the
-stop of its group.
+that event nor |QuitPre| says whether the command had a bang: aineo notes the
+command line you enter (|CmdlineLeave|) until the command it runs is done, so
+`:qa!` typed for this quit skips the question, and every other quit asks: a
+`:qa!` run by a mapping's `<Cmd>` or by Lua, `ZZ`, `ZQ`, and any quit after a
+`:q!` you typed before. A quit that never reaches |ExitPre| (`:cquit`, a
+signal) asks nothing, stops the processes all the same, from |VimLeavePre|,
+and aineo tells you once, as it begins, that they are being stopped. Neovim
+has no way to cancel a quit from a handler: on Cancel aineo opens a tab page,
+wipes its empty buffer with it, and closes it again once the command is done,
+which makes Neovim give the quit up, and triggers |TabNew|, |TabEnter| and
+|TabClosed| autocommands for that page. Neovim unloads every terminal before
+|VimLeavePre| and only hangs its pty up, so a process that ignores the hangup
+is not stopped by Neovim: aineo stops what is left from a |VimLeavePre|
+handler, registered once the first process has opened the layout and Claude
+Code has registered its own stop, so that it comes after it. A handler before
+it that raises an error makes Neovim skip the handlers after it (measured on
+Neovim 0.12.5 for a Lua callback that raises and for a Vimscript `throw`, with
+`:qa`, `:qa!`, `:x`, `:wq` and `:cquit`), and aineo's stop with them. A
+process that leaves its process group and is no descendant of the shell, as a
+daemon that calls `setsid` does, is not reached by the stop; neither is a job
+that an interactive shell started under job control and that ignores the
+hangup, when you `:bdelete!` the shell's terminal (|aineo-run|).
 
 Several tabs ~
 Quitting Neovim stops every tab's Claude Code together: each key of the stop
