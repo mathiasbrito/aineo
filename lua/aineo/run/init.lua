@@ -1,20 +1,37 @@
 --- aineo's run home, `require('aineo.run')`: the services a tab runs in
 --- terminals of their own, one concern — starting each one, keeping what the
---- stack needs to show of it, and stopping it with its children.
+--- stack needs to show of it, reading what it printed, and stopping it with
+--- its children.
 ---
 --- The module is one copy of the home, the first tab's; `M.new()` gives
 --- another, each tab's own.
+
+local output = require('aineo.run.output')
 
 ---@class aineo.run.Settings
 ---@field cwd string the existing directory, one the editor can enter, the process starts in
 ---@field env table<string, string> the variables the process gets on top of the editor's own
 ---@field shell string[] the program and arguments `'shell'` names, which runs a command and is the interactive shell
+---@field name? string what a command is called, which the winbar and `entries()` show; the command itself when not given
+
+--- What a caller may read of one process of the stack.
+---@class aineo.run.Entry
+---@field buffer integer the terminal that shows the process
+---@field name string what the process is called
+---@field status integer|nil the status the process exited with, nil while it runs
+
+--- What a caller reads of the output of a process: the lines it asks for
+--- (`aineo.run.Selection`) and how the process is.
+---@class aineo.run.Output: aineo.run.Selection
+---@field state string `running`, or `exited <status>`
 
 --- The functions of a run home, as the module and `M.new()` give them.
 ---@class aineo.run.Home
 ---@field start_command fun(command: string, settings: aineo.run.Settings): integer
 ---@field start_shell fun(settings: aineo.run.Settings): integer
 ---@field buffers fun(): integer[]
+---@field entries fun(): aineo.run.Entry[]
+---@field read_output fun(buffer: integer, query: aineo.run.OutputQuery): aineo.run.Output|nil, string|nil
 ---@field running fun(): string[]
 ---@field stop_all fun()
 ---@field discard_ended fun(buffer: integer): boolean
@@ -35,7 +52,7 @@ local SHELL_NAME = 'shell'
 --- One process of the stack.
 ---@class aineo.run.Process
 ---@field buffer integer the terminal that shows the process
----@field name string the command the user gave, or `shell`
+---@field name string what the process is called: the name in its settings, else the command the user gave, or `shell`
 ---@field pid integer the process id of the terminal's process, which leads a process group of its own
 ---@field job integer the job of the terminal's process
 ---@field is_group_gone boolean whether the process group has been seen empty, after which it is never signalled again: its id may belong to another process by now
@@ -96,12 +113,16 @@ end
 
 --- Kills what is left of `targets` once it has had `GRACE_MS` to end on its
 --- own, looking every `POLL_MS`, from timers: it stops looking at the first
---- look that finds nothing. `waited` is how long it has waited.
+--- look that finds nothing. `waited` is how long it has waited. A look that
+--- finds the process group of `process` empty notes it
+--- (`aineo.run.Process`'s `is_group_gone`).
 ---
 ---@param targets integer[]
 ---@param waited integer
-local function kill_what_stays(targets, waited)
+---@param process aineo.run.Process
+local function kill_what_stays(targets, waited, process)
   local present = present_of(targets)
+  process.is_group_gone = process.is_group_gone or not vim.list_contains(present, -process.pid)
   if #present == 0 then
     return
   end
@@ -112,7 +133,7 @@ local function kill_what_stays(targets, waited)
     return
   end
   vim.defer_fn(function()
-    kill_what_stays(present, waited + POLL_MS)
+    kill_what_stays(present, waited + POLL_MS, process)
   end, POLL_MS)
 end
 
@@ -219,7 +240,7 @@ local function make_run(group_name)
   local function terminate(process)
     local targets = targets_of(process)
     ask_to_end(targets)
-    kill_what_stays(targets, 0)
+    kill_what_stays(targets, 0, process)
   end
 
   --- Takes `process` out of the home, stopping what is left of it
@@ -309,8 +330,9 @@ local function make_run(group_name)
   end
 
   --- Starts `command` through `settings.shell`, with the flag that makes
-  --- `'shell'` run a command (`'shellcmdflag'`), named by the command, in a
-  --- terminal buffer of its own (`start()`).
+  --- `'shell'` run a command (`'shellcmdflag'`), named by `settings.name`, the
+  --- command when that is not given, in a terminal buffer of its own
+  --- (`start()`).
   ---
   ---@param command string
   ---@param settings aineo.run.Settings
@@ -319,7 +341,7 @@ local function make_run(group_name)
     vim.validate('settings', settings, 'table')
     vim.validate('settings.shell', settings.shell, 'table')
     local words = vim.list_extend(vim.list_slice(settings.shell), shell_command_flag())
-    return start(command, vim.list_extend(words, { command }), settings)
+    return start(settings.name or command, vim.list_extend(words, { command }), settings)
   end
 
   --- Starts an interactive shell, `settings.shell`, named `shell`, in a
@@ -342,8 +364,45 @@ local function make_run(group_name)
     end, processes)
   end
 
-  --- The names of the processes that still run, the oldest first: the command
-  --- the user gave, or `shell`.
+  --- The processes of the home, the oldest first, each as its terminal, its
+  --- name and the status it exited with, nil while it runs. The tables are
+  --- copies: changing one changes nothing of the home.
+  ---
+  ---@return aineo.run.Entry[] entries
+  function home.entries()
+    return vim.tbl_map(function(process)
+      return { buffer = process.buffer, name = process.name, status = process.status }
+    end, processes)
+  end
+
+  --- Reads the output of the process of the terminal `buffer`, the lines
+  --- `query` asks for (`aineo.run.output`'s `select()`), and says how the
+  --- process is: `running`, or `exited <status>`. Answers nil and why when
+  --- `buffer` is none of the home's processes.
+  ---
+  ---@param buffer integer
+  ---@param query aineo.run.OutputQuery
+  ---@return aineo.run.Output|nil read
+  ---@return string|nil failure
+  function home.read_output(buffer, query)
+    local process = vim.iter(processes):find(function(listed)
+      return listed.buffer == buffer
+    end)
+    if not process then
+      return nil, 'not a process of the run pane'
+    end
+    local selection, failure =
+      output.select(vim.api.nvim_buf_get_lines(buffer, 0, -1, false), query)
+    if not selection then
+      return nil, failure
+    end
+    selection.state = process.status and ('exited %d'):format(process.status) or 'running'
+    return selection
+  end
+
+  --- The names of the processes that still run, the oldest first: the name
+  --- in the settings it started with, else the command the user gave, or
+  --- `shell`.
   ---
   ---@return string[] names
   function home.running()
@@ -397,12 +456,17 @@ local function make_run(group_name)
   function home.stop_all()
     is_stopping_all = true
     local targets = {}
-    for _, process in ipairs(vim.tbl_filter(is_to_stop, processes)) do
+    local stopping = vim.tbl_filter(is_to_stop, processes)
+    for _, process in ipairs(stopping) do
       vim.list_extend(targets, targets_of(process))
     end
     ask_to_end(targets)
     vim.wait(GRACE_MS, function()
       targets = present_of(targets)
+      for _, process in ipairs(stopping) do
+        process.is_group_gone = process.is_group_gone
+          or not vim.list_contains(targets, -process.pid)
+      end
       return #targets == 0
     end, POLL_MS)
     for _, target in ipairs(targets) do
