@@ -171,6 +171,16 @@ T['tools/list']['teaches run_output to filter first, and documents the Vim regex
       { '(x)@=' },
       { 'ignore_case' },
       { 'after_line' },
+      { 'needs no approval' },
+      { 'with no maximum' },
+      { '`level\\=error`' },
+      { '`= @ % & ~ {`' },
+      { 'terminal row' },
+      { 'renumbers the rows' },
+      { 'never read, not even as context' },
+      { 'interactive shell' },
+      { '2000 ms' },
+      { 'at most 4096 bytes' },
     },
   })
 
@@ -180,6 +190,40 @@ T['tools/list']['teaches run_output to filter first, and documents the Vim regex
   local description = listed_tools().run_output.description
 
   eq(description:find(taught, 1, true) ~= nil, true)
+end
+
+T['tools/list']['says run and run_stop are asked of the user on every call, in every mode but dontAsk, which denies'] =
+  MiniTest.new_set({
+    parametrize = { { 'run' }, { 'run_stop' } },
+  })
+
+T['tools/list']['says run and run_stop are asked of the user on every call, in every mode but dontAsk, which denies']['tool'] = function(
+  tool
+)
+  local description = listed_tools()[tool].description
+
+  eq(
+    description:find('asks the user to approve every call, even in auto and bypass', 1, true) ~= nil,
+    true
+  )
+  eq(description:find('dontAsk', 1, true) ~= nil, true)
+end
+
+T['tools/list']['gives the size of a command run may start'] = function()
+  eq(listed_tools().run.description:find('at most 16384 bytes', 1, true) ~= nil, true)
+end
+
+T['tools/list']['marks run and run_stop to ask the user on every call, and no other tool'] = function()
+  local relay = mcp_relay.start_relay()
+
+  relay:send(mcp_messages.recorded('tools/list'))
+
+  eq(
+    vim.tbl_map(function(tool)
+      return vim.tbl_get(tool, '_meta', 'anthropic/requiresUserInteraction')
+    end, get(decoded(relay:next_line()), 'result', 'tools')),
+    { nil, nil, true, nil, true }
+  )
 end
 
 T['tools/list']['describes the arguments of each run tool as an object with no other property'] = function()
@@ -231,7 +275,9 @@ T['a call']['whose arguments are refused is a tool error naming the field, and n
       { 'run', { command = 'ls', name = 'a\nb' }, 'name: holds a control character' },
       { 'run', { command = 'ls', directory = '' }, 'directory: expected a non-empty string' },
       { 'run', { command = 'ls', directory = 'a\27b' }, 'directory: holds a control character' },
-      { 'run', { command = 'a\0b' }, 'command: holds a NUL' },
+      { 'run', { command = 'a\0b' }, 'command: holds a control character' },
+      { 'run', { command = 'ls\27[2J' }, 'command: holds a control character' },
+      { 'run', { command = 'ls\r' }, 'command: holds a control character' },
       { 'run', { command = ('a'):rep(16385) }, 'command: longer than 16384 bytes' },
       { 'run', { command = 'ls', name = ('a'):rep(4097) }, 'name: longer than 4096 bytes' },
       { 'run', { command = 'ls', cwd = '/' }, 'cwd: not a field of run' },
@@ -312,6 +358,16 @@ T['a valid call']['is offered to the editor that started Claude Code, the tool, 
   )
   eq(requests[1].lua, requests[2].lua)
   eq(requests[1].lua:find('npm', 1, true), nil)
+end
+
+T['a valid call']['may hold tabs and line breaks in its command'] = function()
+  local requests = {}
+  local relay = relay_for(start_recording_editor(requests, answer_of('ok', false)))
+
+  relay:send(call('run', { command = 'cd x\n\tnpm start' }))
+  relay:next_line()
+
+  eq(requests[1].arguments[1], { tool = 'run', arguments = { command = 'cd x\n\tnpm start' } })
 end
 
 T['a valid call']['is answered with the words the editor gives, an error or not'] =

@@ -30,6 +30,9 @@ local PRINTED = {
 --- the cases read it.
 local PRINTING = "printf '%s\\n' '" .. table.concat(PRINTED, "' '") .. "'; sleep 300"
 
+--- The columns of the child's screen, so that a terminal row holds a long line.
+local WIDE_COLUMNS = 1000
+
 --- The buffer of the process the cases read, started once for all of them.
 ---@type integer
 local printing_buffer
@@ -76,6 +79,8 @@ local T = MiniTest.new_set({
     pre_once = function()
       children.restart(child)
       child.o.shell = TEST_SHELL
+      child.o.columns = WIDE_COLUMNS
+      wait_until('vim.api.nvim_win_get_width(0) == ' .. WIDE_COLUMNS)
       printing_buffer = start_and_wait(PRINTING, 'printing')
     end,
     post_once = function()
@@ -269,6 +274,98 @@ T['read_output()']['answers nil for a buffer that is no process of the home'] = 
   )
 
   eq(answer, { failure = 'not a process of the run pane' })
+end
+
+--- The command that prints `rows` rows, `row 1` to `row <rows>`, then `end`,
+--- and waits.
+---
+---@param rows integer
+---@return string
+local function counting(rows)
+  return ('i=1; while [ $i -le %d ]; do echo "row $i"; i=$((i+1)); done; echo end; sleep 300'):format(
+    rows
+  )
+end
+
+T['read_output()']['reads more than 200 matching lines when asked for them'] = function()
+  local buffer = start_and_wait(counting(250), 'unlimited-last')
+
+  local output = child.lua_get(
+    [[require('aineo.run').read_output(..., { last = 250, pattern = '^row' })]],
+    { buffer }
+  )
+
+  eq({ #output.lines, output.omitted }, { 250, 0 })
+end
+
+T['read_output()']['reads more than 5 lines of context around a match when asked for them'] = function()
+  local buffer = start_and_wait(counting(250), 'unlimited-context')
+
+  local output = child.lua_get(
+    [[require('aineo.run').read_output(..., { pattern = '^row 30$', context = 9 })]],
+    { buffer }
+  )
+
+  eq({ output.lines[1].number, output.lines[#output.lines].number, #output.lines }, { 21, 39, 19 })
+end
+
+T['read_output()']['reads a line of 700 characters whole when the terminal row holds it'] = function()
+  local buffer = start_and_wait("printf '%0700d\\n' 0 | tr 0 x; echo end; sleep 300", 'wide-line')
+
+  local output =
+    child.lua_get([[require('aineo.run').read_output(..., { pattern = '^x+$' })]], { buffer })
+
+  eq(#output.lines[1].text, 700)
+end
+
+T['read_output()']['never reads a line the exclusion drops, not even as context'] = function()
+  local output = read({ pattern = 'ERROR', exclude = 'DEBUG|GET', context = 1 })
+
+  eq(output.lines, { line(5, false), line(6, true) })
+end
+
+T['read_output()']['takes the operators of very magic as operators, and an escaped one as the character'] = function()
+  local buffer = start_and_wait(
+    "printf '%s\\n' 'level=error msg' '~/x ran' 'plain'; echo end; sleep 300",
+    'operators'
+  )
+
+  local function numbers(pattern)
+    local output = child.lua_get(
+      [[require('aineo.run').read_output(..., { pattern = select(2, ...) })]],
+      { buffer, pattern }
+    )
+    return vim.tbl_map(function(read_line)
+      return read_line.number
+    end, output.lines)
+  end
+
+  eq(numbers('level=error'), {})
+  eq(numbers('level\\=error'), { 1 })
+  eq(numbers('\\~/x'), { 2 })
+end
+
+T['read_output()']['stops a pattern that takes longer than 2 seconds to match, and answers saying so'] = function()
+  local buffer = start_and_wait(
+    'awk \'BEGIN { s = sprintf("%200s", ""); gsub(/ /, "a", s); for (i = 0; i < 2000; i++) print s }\''
+      .. '; echo end; sleep 300',
+    'slow-pattern'
+  )
+  local started = vim.uv.hrtime()
+
+  local answer = child.lua_get(
+    [[(function(buffer)
+      local output, failure = require('aineo.run').read_output(buffer, { pattern = '(a+)+\\1x' })
+      return { output = output, failure = failure }
+    end)(...)]],
+    { buffer }
+  )
+  local seconds = (vim.uv.hrtime() - started) / 1e9
+
+  eq(answer.output, nil)
+  eq(answer.failure:find('pattern: matching took longer than 2000 ms', 1, true), 1)
+  eq(seconds < 8, true)
+  eq(child.lua_get('1 + 1'), 2)
 end
 
 return T

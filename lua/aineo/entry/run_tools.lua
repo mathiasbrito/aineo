@@ -150,6 +150,16 @@ local function names_in_stack(tab)
   end, tab.homes.run.entries())
 end
 
+--- The name a command is given when the call gives none: its first word
+--- without the control characters it holds, `command` when nothing is left.
+---
+---@param command string
+---@return string
+local function first_word_of(command)
+  local word = (command:match('%S+') or ''):gsub('%c', '')
+  return word ~= '' and word or 'command'
+end
+
 --- Starts the command a `run` call gives at the bottom of the tab's run
 --- stack (`aineo.entry.Tab`'s `start_in_run_stack()`), named as the call
 --- says, else by the command's first word, a name the stack holds already
@@ -171,7 +181,7 @@ local function run(tab, arguments, context)
       return failed('refused: ' .. refusal)
     end
   end
-  local wanted = arguments.name or arguments.command:match('%S+') or arguments.command
+  local wanted = arguments.name or first_word_of(arguments.command)
   local name = unused_name(wanted, names_in_stack(tab))
   local started, failure =
     pcall(tab.start_in_run_stack, arguments.command, { name = name, directory = directory })
@@ -232,15 +242,26 @@ end
 --- all, which is what `after_line` follows from; how many earlier matching
 --- lines were left out; then each line read, its number and a colon for a
 --- line that matches or a dash for one that only lies around a match, a
---- `--` between lines that do not follow one another.
+--- `--` between lines that do not follow one another. When `after_line` is
+--- past the last line, the rows were renumbered, and the words say so.
 ---
 ---@param name string
 ---@param output aineo.run.Output
+---@param after_line integer? the `after_line` the read was asked with
 ---@return string
-local function describe_output(name, output)
+local function describe_output(name, output, after_line)
   local described = {
     ('%s: %s; %s in total'):format(name, output.state, counted(output.total, 'line')),
   }
+  if after_line and after_line > output.total then
+    table.insert(
+      described,
+      ("(after_line %d is past the last line, %d: the rows were renumbered, by a resize of the pane or by 'scrollback'; read again without after_line)"):format(
+        after_line,
+        output.total
+      )
+    )
+  end
   if output.omitted > 0 then
     table.insert(
       described,
@@ -277,11 +298,18 @@ local function run_output(tab, arguments)
   if not entry then
     return refusal
   end
+  if entry.is_interactive_shell then
+    return failed(
+      ('"%s" is an interactive shell; its screen is not read, as it may hold what you typed'):format(
+        entry.name
+      )
+    )
+  end
   local output, failure = tab.homes.run.read_output(entry.buffer, arguments)
   if not output then
     return failed(failure)
   end
-  return done(describe_output(entry.name, output))
+  return done(describe_output(entry.name, output, arguments.after_line))
 end
 
 --- Stops the process a `run_stop` call names as closing its terminal does
