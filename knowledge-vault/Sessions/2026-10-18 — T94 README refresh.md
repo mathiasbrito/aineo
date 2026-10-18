@@ -39,3 +39,10 @@ The README is brought up to date with the help (`doc/aineo.txt`) and the code as
 
 - A short README addition for T92 and T93 when they land.
 - Items in the help that look wrong or doubtful are listed in the packet's report, not changed here.
+
+## Commits
+
+PR #272, merged by rebase after one fix round; released in `v0.2.54` (PR #274, `main` `bc8b814`). On `dev`, in order:
+
+- `fe63eaa` Bring the README up to date with the help and the install
+- `1993246` Correct the README where the key tables outgrew its sentences

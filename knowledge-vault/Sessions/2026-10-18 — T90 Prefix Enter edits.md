@@ -51,4 +51,8 @@ The aineo prefix followed by Enter (`\<CR>` by default) opens the file under the
 
 ## Commits
 
-Recorded after the merge.
+PR #268, merged by rebase; released in `v0.2.52` (PR #269, `main` `af53ca7`). On `dev`, in order:
+
+- `4da3109` Open a listed file for edition with the prefix and Enter in the changes pane
+- `f0b9cc1` Fill in the pull request number of D83 and T90
+- `5d5dbe6` Fix the records findings of the review of PR 268
