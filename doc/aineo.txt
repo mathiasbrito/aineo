@@ -59,7 +59,7 @@ aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
 aineo allows three tools of its own without asking, the report tool,
 `announce_work` and `run_output` (|aineo-report|, |aineo-run-tools|), and
-nothing else: Claude Code asks you before it runs or stops a process.
+nothing else: Claude Code asks you before every run or stop of a process.
 
 ==============================================================================
 2. REQUIREMENTS AND INSTALLATION                               *aineo-install*
@@ -251,11 +251,11 @@ shell is still there. A job that outlives its shell is reached by none of
 them, a quit included, since no code can find it: a command that runs
 `set -m` and is then stopped with Ctrl-C, and the job of a `\X` shell that
 exits (`sleep &` and `exit`, under sh or bash) are such. zsh hangs up its
-jobs when it exits, by default. Closing the
-window of a process that runs, with `:q`, only hides it: it runs on and comes
-back with the next `\x`. When the screen has no room for another window, the
-process runs on, hidden, and aineo says so. Each tab has a stack of its own
-(|aineo-tabs|). Processes are not started again at the next start.
+jobs when it exits, by default. Closing the window of a process that runs,
+with `:q`, only hides it: it runs on and comes back with the next `\x`. When
+the screen has no room for another window, the process runs on, hidden, and
+aineo says so. Each tab has a stack of its own (|aineo-tabs|). Processes are
+not started again at the next start.
 
 Quitting stops them. Before `:qa`, `:q` in the last window, `:wq` or `:x`
 quits Neovim with processes running, aineo asks once, listing the commands:
@@ -325,9 +325,14 @@ taken`, as an error. The agent is told, in what aineo appends to Claude Code's
 system prompt and in each tool's description, to run or stop a process only
 when you explicitly ask it to, and never on its own initiative. Instructions
 cannot guarantee that, so the gate is Claude Code's permission prompt: `run`
-and `run_stop` are not allowed without asking, and Claude Code asks you to
-approve each call, showing the command. `run_output` only reads, and is
-allowed without asking.
+and `run_stop` are not allowed without asking, and aineo marks them in the
+tool list (`_meta["anthropic/requiresUserInteraction"]`) so that Claude Code
+asks you for every call, showing the command, even in its auto and
+bypass-permissions modes, and offers no "don't ask again" for them; an allow
+rule that matches them does not skip the prompt either. In `dontAsk` mode,
+which never prompts, the call is denied. The marker was read from Claude Code
+2.1.302's program, not run. `run_output` only reads, and is allowed without
+asking.
 
 `run` {command, name?, directory?} starts `command` through your 'shell', as
 `\x` does, at the bottom of the stack, and answers at once without waiting for
@@ -336,18 +341,24 @@ it is; aineo tells you once, `aineo: started backend in the run pane`, and a
 run pane shown in the tab page you are in lists the process at once (in
 another tab page, the next time it is shown). `name`, what `run_output` and
 `run_stop` call the process and the winbar shows, is the command's first word
-when not given, and a name the stack holds already, a process that ended
-included, gets `-2`, `-3`. `directory` is the folder aineo started in when
-not given, and is refused unless it is that folder or a worktree of its
-repository, as `git worktree list` gives them; a relative one is taken from
-the folder. Nothing else is accepted: a subfolder is refused.
+(without its control characters) when not given, and a name the stack holds
+already, a process that ended included, gets `-2`, `-3`: a command called
+`shell` becomes `shell-2` beside the `\X` shell. `directory` is the folder
+aineo started in when not given, and is refused unless it is that folder or a
+worktree of its repository, as `git worktree list` gives them; a relative one
+is taken from the folder. Nothing else is accepted: a subfolder, or a folder
+whose name only begins like a worktree's, is refused. A `command` is at most
+16384 bytes and holds no control character but the tab and the line feed; the
+other arguments are strings of at most 4096 bytes.
 
 `run_output` {name, pattern?, exclude?, ignore_case?, last?, after_line?,
 context?} reads what a process printed, so that the agent reads only what it
 needs. There is no limit but the one the agent chooses: it is told to filter
-first, keep `last` small, and then follow with `after_line`.
+first to keep its context small, keep `last` small, and then follow with
+`after_line`.
 - `pattern`: only the lines that match are read; every line when not given.
-- `exclude`: the lines that match are not read, `DEBUG` for example.
+- `exclude`: the lines that match are not read, `DEBUG` for example, and not
+  as context either.
 - `ignore_case`: true when not given, for `pattern` and `exclude`.
 - `last`: how many of the matching lines are read, the last ones; 40 when not
   given, with no maximum. How many earlier ones were left out is said.
@@ -356,24 +367,39 @@ first, keep `last` small, and then follow with `after_line`.
 - `context`: lines read around each match, once where they overlap, those
   that are not matches marked with a dash instead of a colon; no maximum.
 `pattern` and `exclude` are Vim regexes, taken very magic: aineo puts `\v` in
-front (|/\v|), so `error|warn`, `(GET|POST) /api` and `\d{3}$` work as in most
-regex flavours. Two differences from PCRE: lookarounds are written `(x)@=`,
-`(x)@!`, `(x)@<=` and `(x)@<!`, and there is no `(?i)`, so `ignore_case` takes
-its place. A regex that does not parse is answered with the editor's error,
-as an error. The answer starts with `backend: running; 120 lines in total` (or
-`exited 1`), then the numbered lines, `12: text` for a match and `13- text`
-for context, `--` between lines that do not follow one another. The line
-numbers are the rows of the process's terminal buffer, from 1, without the
-empty rows the terminal pads its last screen with; once the output outgrows
-'scrollback' Neovim drops the oldest rows, the numbers shift, and
-`after_line` misses what came before. A progress bar that redraws itself is
-several rows. Vim's regex engine has no time limit: a pattern that takes very
-long to match holds the editor until it is done.
+front (|/\v|). `error|warn`, `(GET|POST) /api` and `\d{3}$` work as written,
+and `<` and `>` are word boundaries. The characters `= @ % & ~ {` are
+operators there, which other regex flavours take as themselves, and must be
+escaped with a backslash to match themselves: `level\=error`, `\~/project`,
+`a \&\& b`; written bare, `level=error` matches nothing and `~` is the last
+substitute string. Two more differences from PCRE: lookarounds are written
+`(x)@=`, `(x)@!`, `(x)@<=` and `(x)@<!`, and there is no `(?i)`, so
+`ignore_case` takes its place. A regex that does not parse is answered with
+the editor's error, as an error. The matching of one call is stopped after 2
+seconds in all, and answered as an error that names the field and suggests a
+simpler pattern; nothing partial is read. The time is bounded, the volume is
+not: `last`, `context` and the lines of an answer have no limit.
 
-The tool reads every process of the tab's stack, the interactive shell of
-`\X` included, whatever the screen of its terminal shows. A name that two
-processes have, as two `\x` runs of one command do, is refused rather than
-guessed.
+The answer starts with `backend: running; 120 lines in total` (or `exited 1`),
+then the numbered lines, `12: text` for a match and `13- text` for context,
+`--` between lines that do not follow one another. aineo cuts no line, but the
+terminal wraps them: each line is a row of the process's terminal, from 1,
+without the empty rows the terminal pads its last screen with. A line longer
+than the terminal is wide spans several rows, no one of which holds it whole
+for a pattern, and a resize of the pane (showing the stack narrows its
+terminals, a wider pane widens them) or the 'scrollback' limit renumbers the
+rows: once the output outgrows 'scrollback' Neovim drops the oldest rows and
+the numbers shift. `after_line` is valid only while `total` has not dropped;
+when it is past the last line the answer says the rows were renumbered, and
+the agent is told to read again without it. A progress bar that redraws
+itself is several rows.
+
+The tool reads every process of the tab's stack but the interactive shell of
+`\X`, whose screen may hold what you typed and which it refuses. A command you
+started with `\x` or the agent started with `run` is read even when it is an
+interactive program (`sh -i`, `python`, `psql`): what its screen shows, and
+what you type into it, can be read without asking. A name that two processes
+have, as two `\x` runs of one command do, is refused rather than guessed.
 
 `run_stop` {name} stops the process as `:bdelete!` does, with its children,
 and takes it out of the stack (|aineo-run|, |aineo-limits|).
@@ -2377,7 +2403,8 @@ aineo starts Claude Code with five additions of its own:
   only you can read (|aineo-config-claude.cmd|);
 - three tools allowed without asking: `--allowedTools mcp__aineo__report
   mcp__aineo__announce_work mcp__aineo__run_output`. `run` and `run_stop`
-  are not: Claude Code asks you for each call.
+  are not, and carry a marker that makes Claude Code ask you for each call
+  in every mode (|aineo-run-tools|).
 
 `announce_work` is how Claude Code and its subagents tell aineo of a git
 worktree or branch they just created for new work (|aineo-changes-reported|):
