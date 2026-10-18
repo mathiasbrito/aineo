@@ -1,7 +1,7 @@
 # 2026-10-18 — T96 README base
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`, on Sonnet)
-**Branch:** `feature/t96-readme-base` · **Pull request:** into `dev` (number recorded after the merge)
+**Branch:** `feature/t96-readme-base` · **Pull request:** #277 (into `dev`)
 
 The README gains a subsection of the changes-pane section, "Which branch the changes are counted from": the rule that fixes a worktree's or branch's base, why a worktree made from `dev` can show `main`'s difference, and the two ways to change it. Docs only.
 
