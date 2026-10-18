@@ -48,7 +48,7 @@ local T = MiniTest.new_set({
 --- What `\z` tells the user when the cursor is in none of the right
 --- column's windows.
 local NOT_IN_THE_COLUMN =
-  'aineo: nothing zoomed — zoom takes a window of the right column, and the cursor is in another window'
+  'aineo: nothing zoomed — the cursor is in none of the windows aineo shows in the right column (the agent, changes, terminal and run panes)'
 
 --- Opens the layout in the child with aineo running the fake `claude` in its
 --- `ready` mode under `name`, and waits until Claude Code is ready.
@@ -313,6 +313,30 @@ T['a zoomed column']['gives the changes pane its heights back as the agent pane 
   entry.press(child, '\\g')
 
   eq(column_heights(), before)
+end
+
+T['a zoomed column']['keeps its zoom as \\pa asks for the agent pane it shows'] = function()
+  open_layout('zoom-pane-shown-agent')
+  entry.press(child, '\\r')
+  entry.press(child, '\\z')
+  local zoomed = column_heights()
+
+  entry.press(child, '\\pa')
+
+  eq(column_heights(), zoomed)
+end
+
+T['a zoomed column']['keeps its zoom as \\x moves the cursor into the run pane it shows'] = function()
+  open_layout('zoom-pane-shown-run')
+  run_all({ 'sleep 30', 'sleep 31' })
+  entry.press(child, '\\z')
+  local zoomed = column_heights()
+  entry.press(child, '\\c')
+  child.type_keys('<C-\\><C-n>')
+
+  entry.press(child, '\\x')
+
+  eq(column_heights(), zoomed)
 end
 
 T['a zoomed column']['ends its zoom as a process starts in the run pane, the windows sharing the column'] = function()

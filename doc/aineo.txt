@@ -267,35 +267,46 @@ half, at a quit, at `\Q` and when the tab page closes (|aineo-limits|).
 Zoom ~
                                                                   *aineo-zoom*
 `\z` (|:Aineo-zoom|) zooms the window of the right column the cursor is in,
-under any pane: it takes the column's whole height, and the column's other
-windows shrink to one line each. Their winbars and status lines stay, so each
-still says what it shows: a run pane window, whose winbar takes a row, keeps
-the winbar and one line of text. Where 'winminheight' is above one, the other
-windows keep that height instead, and the zoomed window takes the rest. `\z`
+under any pane: it takes the rows the column's other windows can spare, which
+is the column's whole height, and they shrink to the least height Neovim gives
+a window, 'winminheight' lines (one by default; none where it is 0). Their
+winbars and status lines stay, so each still says what it shows: a run pane
+window, whose winbar takes a row, keeps the winbar and one line of text. Rows
+come from the right column alone: a window across the whole width below the
+layout, the quickfix list say, and Claude's window keep their heights. `\z`
 again gives every window the height it had when you zoomed, a resize you made
 by hand before it included, not the layout's own proportions.
 
-The zoom stays with the window it began in while the cursor goes elsewhere,
-as tmux's zoom does, so that you can look into Claude's window or the file
-column and come back. `\z` pressed in another window of the column moves the
-zoom there; `\z` in the zoomed window ends it. With the cursor in no window
-of the right column — Claude's window, the file column, a tab page that is
-none of aineo's — `\z` changes nothing and tells you once that it zooms a
-window of the right column.
+The zoom stays with the window it began in while the cursor goes elsewhere, as
+tmux's zoom does, so that you can look into Claude's window or the file column
+and come back. `\z` pressed in another window of the column moves the zoom
+there; `\z` in the zoomed window ends it. With the cursor in none of the
+windows aineo shows in the right column — Claude's window, the file column, a
+tab page that is none of aineo's, or a window you split off the column by hand
+(`:split`) — `\z` changes nothing and tells you once so. A window split off by
+hand is outside the zoom: it neither changes the zoom nor ends it, and `\z`
+there does not zoom it.
 
 The zoom ends by itself, the windows given back the heights they had, when
-another pane shows (`\pa`, `\g`, `\pt`, `\x`, and `\r` and `\i` when they
-show the agent pane) and when a process joins the run pane or leaves its
-stack, which changes the windows of the column. When you close one of the
-column's windows, the zoom ends and the layout puts its proportions back, as
-it does for any closed window. The terminal pane's one window fills the
-column already, so `\z` there changes nothing visible; it still toggles, and
-ends as the pane changes.
+another pane shows (`\pa`, `\g`, `\pt`, `\x`, and `\r` and `\i` when they show
+the agent pane) and when a process joins the run pane or leaves its stack,
+which changes the windows of the column. Asking for the pane already shown —
+`\pa` under the agent pane, `\x` under the run pane when it only moves the
+cursor into it — keeps the zoom; a `\x` that starts a process ends it, as any
+process joining the stack does. When you close one of the column's windows,
+the zoom ends and the layout puts its proportions back, as it does for any
+closed window. The terminal pane's one window fills the column already, so
+`\z` there changes nothing visible and tells you nothing; it still toggles,
+and ends as the pane changes.
 
 When the editor is resized, the zoom stays: the zoomed window takes the rows
-the column gains or loses, and the others stay at one line. The heights `\z`
-gives back then are the ones recorded when you zoomed, the last window of the
-column taking the rows that remain.
+the column gains or loses, and the others stay at their least height. `\z`
+then gives back the heights recorded when you zoomed, scaled to the rows the
+column holds now, proportionally, with the last window taking the rows that
+remain; with the same rows as when you zoomed they come back exactly. `<C-w>=`
+while the run pane is zoomed equalizes the stack on screen but not the zoom:
+it stays on, and the next `\z` gives back the recorded heights, not the equal
+ones.
 
 Tabs ~
                                                                   *aineo-tabs*
@@ -1761,17 +1772,20 @@ moves you to that tab instead and claims nothing.
 			the same (|aineo-keys|).
 
                                                                  *:Aineo-zoom*
-:Aineo zoom		Zooms the window of the right column the cursor is in
-			to the column's whole height, the column's other
-			windows shrinking to one line each, or, when that
-			window is zoomed, gives every window the height it had
-			(|aineo-zoom|). With the cursor in another window
-			of the column, the zoom moves there. It acts on the
-			aineo tab of the current tab page and makes none:
-			with the cursor in no window of the right column,
-			including a tab page that is none of aineo's, it
-			changes nothing and tells you, with one warning, that
-			it zooms a window of the right column. With any word
+:Aineo zoom		Zooms the window of the right column the cursor is
+			in to the rows the column's other windows can spare,
+			they keeping 'winminheight' lines each (one by
+			default), or, when that window is zoomed, gives
+			every window the height it had (|aineo-zoom|). With
+			the cursor in another window of the column, the zoom
+			moves there. It acts on the aineo tab of the current
+			tab page and makes none: with the cursor in none of
+			the windows aineo shows in the right column,
+			including a window you split off it by hand and a
+			tab page that is none of aineo's, it changes nothing
+			and tells you, with one warning, so. Under the
+			terminal pane, whose one window fills the column, it
+			changes nothing and tells you nothing. With any word
 			after `zoom` it tells you, with one error, what
 			`:Aineo` takes. `\z` and, in Terminal mode and in
 			Insert mode, `<C-\>z` do the same (|aineo-keys|).

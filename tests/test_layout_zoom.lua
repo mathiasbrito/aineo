@@ -48,7 +48,7 @@ end
 --- What the layout tells the user when the cursor is in none of the right
 --- column's windows.
 local NOT_IN_THE_COLUMN =
-  'aineo: nothing zoomed — zoom takes a window of the right column, and the cursor is in another window'
+  'aineo: nothing zoomed — the cursor is in none of the windows aineo shows in the right column (the agent, changes, terminal and run panes)'
 
 --- Toggles the zoom of the window the child's cursor is in and returns what
 --- the layout told the user meanwhile through `vim.notify()`, each
@@ -371,6 +371,19 @@ T['changing the windows of the run pane while zoomed']['keeps the zoom when the 
   eq(heights_of(buffers.run), zoomed)
 end
 
+T['toggling the zoom outside the right column']['tells the user once from a window split off the column by hand, and leaves the zoom as it is'] = function()
+  local buffers = open_every_pane()
+  enter(buffers.report)
+  toggle_zoom()
+  local zoomed = heights_of({ buffers.report, buffers.input })
+  child.cmd('split')
+
+  local told = toggle_zoom()
+
+  eq(told, { { message = NOT_IN_THE_COLUMN, level = 3 } })
+  eq(heights_of({ buffers.report, buffers.input })[2], zoomed[2])
+end
+
 T['closing a window of the column while zoomed'] = MiniTest.new_set()
 
 T['closing a window of the column while zoomed']['ends the zoom, the windows left sharing the column'] = function()
@@ -433,6 +446,136 @@ T['closing a window of the column while zoomed']['zooms the window the cursor is
   toggle_zoom()
 
   eq(heights_of(left), { height, 1 })
+end
+
+--- Opens a window across the whole width at the bottom of the screen, six
+--- lines high, as `:botright new` or `:copen` do, and puts the cursor back in
+--- the window it was in.
+---
+---@return integer window
+local function open_full_width_window()
+  return child.lua_get([[(function()
+    local current = vim.api.nvim_get_current_win()
+    vim.cmd('botright new | resize 6')
+    local window = vim.api.nvim_get_current_win()
+    vim.api.nvim_set_current_win(current)
+    return window
+  end)()]])
+end
+
+--- The text heights of the window `outside` and of Claude's window.
+---
+---@param outside integer
+---@param claude integer the buffer of Claude's window
+---@return integer[] heights
+local function heights_outside_the_column(outside, claude)
+  return child.lua_get(
+    [[(function(outside, claude)
+      return { vim.fn.winheight(outside), vim.fn.winheight(vim.fn.bufwinid(claude)) }
+    end)(...)]],
+    { outside, claude }
+  )
+end
+
+T['zooming beside a window across the whole width'] = MiniTest.new_set()
+
+T['zooming beside a window across the whole width']['takes rows from the right column alone, and gives them back'] = function()
+  local buffers = open_every_pane()
+  local outside = open_full_width_window()
+  local before = heights_outside_the_column(outside, buffers.claude)
+  enter(buffers.report)
+
+  toggle_zoom()
+  local zoomed = heights_outside_the_column(outside, buffers.claude)
+  toggle_zoom()
+
+  eq({ zoomed, heights_outside_the_column(outside, buffers.claude) }, { before, before })
+end
+
+for _, event in ipairs({
+  {
+    'a window closes',
+    "vim.api.nvim_win_close(vim.api.nvim_open_win(0, false, { relative = 'editor', row = 1, col = 1, width = 5, height = 2 }), true)",
+  },
+  { 'the layout’s tab is entered', "vim.cmd('doautocmd TabEnter')" },
+  { 'a resize is reported', "vim.cmd('doautocmd VimResized')" },
+}) do
+  T['zooming beside a window across the whole width'][('keeps that window and Claude’s as they were when %s'):format(
+    event[1]
+  )] = function()
+    local buffers = open_every_pane()
+    local outside = open_full_width_window()
+    local before = heights_outside_the_column(outside, buffers.claude)
+    enter(buffers.report)
+    toggle_zoom()
+
+    child.lua(event[2])
+
+    eq(heights_outside_the_column(outside, buffers.claude), before)
+  end
+end
+
+T['toggling the zoom after the editor was resized'] = MiniTest.new_set()
+
+--- The rows of the first windows showing `buffers`, in the order given, a
+--- winbar counted: the heights the layout records.
+---
+---@param buffers integer[]
+---@return integer[] rows
+local function rows_of(buffers)
+  return vim.tbl_map(function(buffer)
+    return layout.box(child, layout.window_showing(child, buffer)).height
+  end, buffers)
+end
+
+for _, pane in ipairs({ 'agent', 'run' }) do
+  T['toggling the zoom after the editor was resized'][('gives the %s pane’s windows the recorded heights, scaled to the rows the column has'):format(
+    pane
+  )] = function()
+    local buffers, arrangement = open_every_pane()
+    show_pane(pane, arrangement)
+    local stack = stacks_of(buffers)[pane]
+    local before = rows_of(stack)
+    enter(stack[1])
+    toggle_zoom()
+
+    child.o.lines = layout.LINES - 10
+    toggle_zoom()
+
+    local after = rows_of(stack)
+    local lines_before, lines_after = 0, 0
+    for index = 1, #stack do
+      lines_before = lines_before + before[index]
+      lines_after = lines_after + after[index]
+    end
+    for index = 1, #stack do
+      layout.expect_near(after[index], before[index] * lines_after / lines_before)
+    end
+  end
+end
+
+T['toggling the zoom after the editor was resized']['gives the recorded heights back exactly when the rows are the same'] = function()
+  local buffers = open_every_pane()
+  local before = heights_of({ buffers.report, buffers.input })
+  enter(buffers.report)
+  toggle_zoom()
+
+  child.lua('vim.cmd("doautocmd VimResized")')
+  toggle_zoom()
+
+  eq(heights_of({ buffers.report, buffers.input }), before)
+end
+
+T['toggling the zoom']['zooms again after it was toggled off'] = function()
+  local buffers = open_every_pane()
+  local height = zoomed_height({ buffers.report, buffers.input })
+  enter(buffers.report)
+
+  toggle_zoom()
+  toggle_zoom()
+  toggle_zoom()
+
+  eq(heights_of({ buffers.report, buffers.input }), { height, 1 })
 end
 
 return T
