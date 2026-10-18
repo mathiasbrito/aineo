@@ -246,10 +246,10 @@ T['read_output()']['answers a pattern that is not a regex with the error, naming
 end
 
 T['read_output()']['answers an exclusion that is not a regex with the error, naming the exclusion'] = function()
-  local output, failure = read({ exclude = '[' })
+  local output, failure = read({ exclude = '(' })
 
   eq(output, nil)
-  eq(failure:find('exclude: ', 1, true) == 1 and failure:find('E769', 1, true) ~= nil, true)
+  eq(failure:find('exclude: ', 1, true) == 1 and failure:find('E54', 1, true) ~= nil, true)
 end
 
 T['read_output()']['says how the process exited once it has'] = function()
@@ -366,6 +366,68 @@ T['read_output()']['stops a pattern that takes longer than 2 seconds to match, a
   eq(answer.failure:find('pattern: matching took longer than 2000 ms', 1, true), 1)
   eq(seconds < 8, true)
   eq(child.lua_get('1 + 1'), 2)
+end
+
+T['read_output()']['reports a search error that is no timeout as the error it is'] = function()
+  child.lua([[
+    _G.real_search = vim.fn.search
+    rawset(vim.fn, 'search', function()
+      error('E363: pattern uses more memory than \'maxmempattern\'', 0)
+    end)
+  ]])
+
+  local output, failure = read({ pattern = 'error' })
+  child.lua([[rawset(vim.fn, 'search', _G.real_search)]])
+
+  eq(output, nil)
+  eq(failure, "pattern: E363: pattern uses more memory than 'maxmempattern'")
+end
+
+T['read_output()']['makes no buffer events for the scratch buffer it matches in'] = function()
+  child.lua([[
+    _G.buffer_events = 0
+    vim.api.nvim_create_autocmd(
+      { 'BufNew', 'BufAdd', 'BufEnter', 'BufLeave', 'BufWipeout', 'BufDelete', 'WinEnter' },
+      {
+        callback = function()
+          _G.buffer_events = _G.buffer_events + 1
+        end,
+      }
+    )
+  ]])
+
+  read({ pattern = 'error', exclude = 'DEBUG' })
+  local events = child.lua_get('_G.buffer_events')
+  local ignoring = child.lua_get('vim.o.eventignore')
+
+  eq({ events, ignoring }, { 0, '' })
+end
+
+T['read_output()']['reads a pattern that spans rows, and counts rows in positional atoms'] = function()
+  eq(read({ pattern = 'start\\nGET' }).lines, { line(1, true) })
+  eq(read({ pattern = '%6l' }).lines, { line(6, true) })
+end
+
+T['read_output()']['answers a nested counted repetition that crashes the regex compiler without ending the editor'] = function()
+  local crashed = MiniTest.new_child_neovim()
+  children.restart(crashed)
+
+  local answered, answer = pcall(
+    crashed.lua_get,
+    [[(function()
+    local lines = { 'a', 'b' }
+    local output, failure = require('aineo.run.output').select(lines, {
+      pattern = '(((a{1,1000}){1,1000}){1,1000})',
+      exclude = '(((b{1,1000}){1,1000}){1,1000})',
+    })
+    return { read = output and #output.lines or -1, failure = failure }
+  end)()]]
+  )
+  local is_running = crashed.is_running()
+  pcall(crashed.stop)
+
+  eq({ answered, is_running }, { true, true })
+  eq(answer, { read = 1 })
 end
 
 return T
