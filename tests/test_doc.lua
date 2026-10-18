@@ -115,6 +115,7 @@ local TAGS = {
   'aineo-<C-\\>x',
   'aineo-<C-\\>X',
   'aineo-run',
+  'aineo-run-tools',
   'aineo-<C-\\>f',
   'aineo-<C-\\>z',
   'aineo-zoom',
