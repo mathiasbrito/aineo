@@ -49,7 +49,9 @@ end
 
 --- The regex `expression`, taken very magic, ignoring case or not, as the
 --- editor's search takes it; nil when `expression` is nil. Raises the
---- editor's error for a regex it cannot parse, naming `field`.
+--- editor's error for a regex it cannot parse, naming `field`. The regex is
+--- tried with `match()`, never with `vim.regex()`, whose compiler ends the
+--- editor on a nested counted repetition such as `((a{1,1000}){1,1000}){1,1000}`.
 ---
 ---@param field string
 ---@param expression string|nil
@@ -60,7 +62,7 @@ local function compile(field, expression, ignore_case)
     return nil
   end
   local regex = (ignore_case and IGNORING_CASE or KEEPING_CASE) .. expression
-  local parsed, failure = pcall(vim.regex, regex)
+  local parsed, failure = pcall(vim.fn.match, '', regex)
   if not parsed then
     error(('%s: %s'):format(field, (tostring(failure):gsub("^couldn't parse regex: ", ''))), 0)
   end
@@ -78,10 +80,34 @@ local function timed_out(field)
   )
 end
 
+--- How close to the end of its time, in milliseconds, a search that raises
+--- is taken to have run out of it: the engine reports a search whose time ran
+--- out with the error it gives for exhausting its memory (E363).
+local TIMEOUT_SLACK_MS = 100
+
+--- The words for the error `failure` a search raised for `field` since
+--- `started` (`vim.uv.hrtime()`), given `left_ms`, the time it was allowed:
+--- the timeout words when the search ran out of its time, else the editor's
+--- error as it is, such as one for the engine giving up on memory early.
+---
+---@param field string
+---@param failure any
+---@param started integer
+---@param left_ms integer
+---@return string
+local function search_failure(field, failure, started, left_ms)
+  local elapsed_ms = (vim.uv.hrtime() - started) / 1e6
+  if elapsed_ms >= left_ms - TIMEOUT_SLACK_MS then
+    return timed_out(field)
+  end
+  return ('%s: %s'):format(field, (tostring(failure):gsub("^couldn't parse regex: ", '')))
+end
+
 --- The numbers of the lines from `first` to `last` of the current buffer
 --- that `regex` matches, as a set, found by the editor's search with the time
 --- that is left of `deadline` (`vim.uv.hrtime()` nanoseconds); nil and why
---- when the time runs out or the engine gives up on memory, naming `field`.
+--- when the time runs out, or the search raises an error such as the engine
+--- giving up on memory (E363), naming `field`.
 ---
 ---@param field string
 ---@param regex string
@@ -98,9 +124,10 @@ local function matching_in_buffer(field, regex, first, last, deadline)
       return nil, timed_out(field)
     end
     vim.fn.cursor(position, 1)
+    local started = vim.uv.hrtime()
     local searched, hit = pcall(vim.fn.search, regex, 'cW', last, left_ms)
     if not searched then
-      return nil, timed_out(field)
+      return nil, search_failure(field, hit, started, left_ms)
     end
     if hit == 0 then
       if vim.uv.hrtime() >= deadline then
@@ -114,17 +141,18 @@ local function matching_in_buffer(field, regex, first, last, deadline)
   return found
 end
 
---- The numbers of the lines of `printed` after `after_line` that `regex`
---- matches, as a set, each regex given found within the budget
---- (`matching_in_buffer()`) in a scratch buffer that holds `printed`; every
---- one of them when `regex` is nil.
+--- The numbers of the lines of `printed` after `after_line` that each regex
+--- given matches, as a set, found within the budget (`matching_in_buffer()`)
+--- in a scratch buffer that holds `printed`. The buffer is wiped before this
+--- returns. A pattern may span rows (`\n`), and a positional atom (`\%23l`)
+--- counts the rows of `printed`.
 ---
 ---@param printed string[]
 ---@param after_line integer
 ---@param regexes { field: string, regex: string|nil }[]
 ---@return table<string, table<integer, true>|false>|nil matches by field; false for a regex not given
 ---@return string|nil failure
-local function search_printed(printed, after_line, regexes)
+local function search_in_scratch_buffer(printed, after_line, regexes)
   local scratch = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(scratch, 0, -1, false, printed)
   local deadline = vim.uv.hrtime() + M.MATCH_BUDGET_MS * 1e6
@@ -147,6 +175,27 @@ local function search_printed(printed, after_line, regexes)
     return by_field
   end)
   vim.api.nvim_buf_delete(scratch, { force = true })
+  if not searched then
+    error(matches, 0)
+  end
+  return matches, failure
+end
+
+--- `search_in_scratch_buffer()` with the autocommands of the editor ignored,
+--- so that the user's `BufNew`, `BufEnter` or `BufWipeout` handlers do not run
+--- for the scratch buffer on every read. `eventignore` is the user's again
+--- when this returns or raises.
+---
+---@param printed string[]
+---@param after_line integer
+---@param regexes { field: string, regex: string|nil }[]
+---@return table<string, table<integer, true>|false>|nil matches by field; false for a regex not given
+---@return string|nil failure
+local function search_printed(printed, after_line, regexes)
+  local saved_ignore = vim.o.eventignore
+  vim.o.eventignore = 'all'
+  local searched, matches, failure = pcall(search_in_scratch_buffer, printed, after_line, regexes)
+  vim.o.eventignore = saved_ignore
   if not searched then
     error(matches, 0)
   end

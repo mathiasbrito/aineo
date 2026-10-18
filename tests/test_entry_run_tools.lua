@@ -372,6 +372,23 @@ T['run_output']['says the rows were renumbered when after_line is past the last 
   })
 end
 
+T['run_output']['answers a nested counted repetition that crashes the regex compiler, the editor staying alive'] =
+  MiniTest.new_set({ parametrize = { { 'pattern' }, { 'exclude' } } })
+
+T['run_output']['answers a nested counted repetition that crashes the regex compiler, the editor staying alive']['field'] = function(
+  field
+)
+  start_child_in_repository('run-tools-output-crash-' .. field)
+  start_printing()
+
+  local answered, answer =
+    pcall(call, 'run_output', { name = 'printing', [field] = '(((a{1,1000}){1,1000}){1,1000})' })
+  local is_running = child.is_running()
+
+  eq({ answered, is_running }, { true, true })
+  eq(answer.is_error, false)
+end
+
 T['run_output']['answers a pattern that is no regex with the error, as an error'] = function()
   start_child_in_repository('run-tools-output-invalid')
   start_printing()

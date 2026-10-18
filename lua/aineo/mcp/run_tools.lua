@@ -140,8 +140,12 @@ end
 local LONGEST_COMMAND_BYTES = 16384
 
 --- The characters a command may not hold: the C0 control characters but the
---- tab and the line feed. A Lua character class (`%z` is the NUL).
-local COMMAND_FORBIDDEN = '[%z\1-\8\11-\31]'
+--- tab and the line feed, and DEL. A Lua character class (`%z` is the NUL).
+local COMMAND_FORBIDDEN = '[%z\1-\8\11-\31\127]'
+
+--- The C1 control characters, U+0080 to U+009F, in UTF-8: a command may not
+--- hold them either. A Lua pattern.
+local C1_CONTROL = '\194[\128-\159]'
 
 --- The longest string any other argument may give, in bytes.
 local LONGEST_STRING_BYTES = 4096
@@ -176,7 +180,12 @@ local KINDS = {
       if type(value) ~= 'string' or value == '' then
         return 'expected a non-empty string'
       end
-      return string_refusal(value, LONGEST_COMMAND_BYTES, COMMAND_FORBIDDEN, 'a control character')
+      local refusal =
+        string_refusal(value, LONGEST_COMMAND_BYTES, COMMAND_FORBIDDEN, 'a control character')
+      if refusal then
+        return refusal
+      end
+      return value:find(C1_CONTROL) and 'holds a control character' or nil
     end,
   },
   label = {
