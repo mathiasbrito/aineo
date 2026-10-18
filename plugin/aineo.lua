@@ -43,6 +43,7 @@ local SUBCOMMANDS = {
   'sessions',
   'new',
   'pane',
+  'run',
   'claim',
   'tab',
   'diff',
@@ -50,12 +51,13 @@ local SUBCOMMANDS = {
 }
 
 --- The words each subcommand that takes one is followed by, in the order
---- `:Aineo` offers them: `pane` takes the pane to show, and `tab` takes `new`,
---- `close` or the number of a tab page to move to; only the numbers 1 to 9
---- have a `<Plug>` mapping, and `:Aineo tab` takes any number
---- (`aineo.entry`'s `jump_to_tab()`); `diff` takes `close`.
+--- `:Aineo` offers them: `pane` takes the pane to show, `run` takes `shell`,
+--- and `tab` takes `new`, `close` or the number of a tab page to move to; only
+--- the numbers 1 to 9 have a `<Plug>` mapping, and `:Aineo tab` takes any
+--- number (`aineo.entry`'s `jump_to_tab()`); `diff` takes `close`.
 local SUBCOMMAND_WORDS = {
-  pane = { 'agent', 'changes', 'terminal' },
+  pane = { 'agent', 'changes', 'terminal', 'run' },
+  run = { 'shell' },
   tab = { 'new', 'close', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
   diff = { 'close' },
 }
@@ -275,6 +277,8 @@ local PREFIX_KEYS = {
   ['pane agent'] = 'pa',
   ['pane changes'] = 'g',
   ['pane terminal'] = 'pt',
+  ['pane run'] = 'x',
+  ['run shell'] = 'X',
   ['tab new'] = 'T',
   ['tab close'] = 'Q',
   ['tab 1'] = '1',
@@ -599,5 +603,5 @@ end, {
   nargs = '*',
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal, claim [id], tab new|close|{n}, diff close or find',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run, run shell, claim [id], tab new|close|{n}, diff close or find',
 })

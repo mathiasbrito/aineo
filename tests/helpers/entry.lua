@@ -16,7 +16,7 @@ M.LINES = 42
 
 --- What `:Aineo` tells the user when it is not given one of its subcommands.
 M.USAGE =
-  'aineo: :Aineo takes one of send, open, report, input, claude, claude-numbers, sessions, new, pane, claim, tab, diff, find'
+  'aineo: :Aineo takes one of send, open, report, input, claude, claude-numbers, sessions, new, pane, run, claim, tab, diff, find'
 
 --- Starts `child` afresh at `M.COLUMNS` by `M.LINES`, with every notification
 --- it gives from then on kept for `messages()` rather than shown.

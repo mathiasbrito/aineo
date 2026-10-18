@@ -231,6 +231,24 @@ function M.shell_program()
   return shell_words()[1] or ''
 end
 
+--- The words of `'shell'`, split as Neovim splits it to run `:terminal`
+--- without an argument (`shell_words()`): the program and its arguments, an
+--- empty list when the option holds no word. What other terminals that run
+--- the user's shell are started with.
+---
+---@return string[] words
+function M.shell_command()
+  return shell_words()
+end
+
+--- The variables a process started in aineo's own terminal gets on top of the
+--- editor's own (`AINEO_CHILD`), as the shell's process does.
+---
+---@return table<string, string> environment
+function M.child_environment()
+  return vim.deepcopy(CHILD_ENVIRONMENT)
+end
+
 --- The number of homes made, the module's included.
 local homes_made = 1
 

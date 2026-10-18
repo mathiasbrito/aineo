@@ -27,6 +27,9 @@ between the two.
   repository since the session began, its commits, what landed in your
   working branch and the other worktrees, with a diff of each file.
 - **Terminal pane.** A shell in the right column.
+- **Run pane.** The services you run while you develop, a backend and a
+  frontend with watch, say, each in a terminal of its own, stacked in the
+  right column.
 - **Tabs.** Several Claude Code sessions in one Neovim, one in each tab page,
   and a tab line that shows each session's name and whether it is working.
 
@@ -83,6 +86,8 @@ Every key sits behind the prefix `\`, in Normal mode:
 | `\r`, `\i` | move to the Report, to Input |
 | `\c` | moves to Claude's terminal, in Terminal mode |
 | `\pa`, `\g`, `\pt` | show the agent pane, the changes pane, the terminal pane |
+| `\x` | asks for a command and runs it in the project folder, in a terminal of the run pane |
+| `\X` | adds an interactive shell to the run pane |
 | `\T` | opens a tab with a Claude Code session of its own |
 | `\1` to `\9` | move to the tab page of that number |
 | `\Q` | closes the current tab |
@@ -102,6 +107,26 @@ mapping of yours collides with aineo's keys.
 
 Each session aineo starts is kept for its folder: the next start there
 resumes it.
+
+## Run your services
+
+`\x` asks for a command, with shell-command completion, and runs it through
+your `'shell'` in the folder Neovim started in, in a terminal of its own in the
+right column. Press `\x` again, with the cursor in the stack, for another
+command: each new terminal joins the bottom of the stack, the windows share
+the column's rows equally, and each winbar names the command and says
+`running` or `exited {code}`. `\X` adds an interactive shell to the stack
+instead, with no question.
+
+Switching to another pane hides the stack and leaves the processes running;
+`\x` shows them again, with their output. A process that ends keeps its window
+until you close it. To stop one, press Ctrl-C in its terminal or run
+`:bdelete!` on it. Each tab has a stack of its own.
+
+When you quit, aineo asks once, naming the commands, before it stops them with
+their children; `:qa!` stops them without asking. Closing a tab with `\Q` asks
+the same about that tab's processes. Processes do not start again at the next
+start. `:help aineo-run` has the details.
 
 ## Settings
 

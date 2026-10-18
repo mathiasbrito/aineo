@@ -98,6 +98,7 @@ local function module_homes()
     draft = require('aineo.draft'),
     changes = require('aineo.changes'),
     shell = require('aineo.shell'),
+    run = require('aineo.run'),
   }
 end
 
@@ -113,6 +114,7 @@ local function copied_homes()
     draft = require('aineo.draft').new(),
     changes = require('aineo.changes').new(),
     shell = require('aineo.shell').new(),
+    run = require('aineo.run').new(),
   }
 end
 
