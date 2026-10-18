@@ -80,23 +80,45 @@ Requirements:
 
 With lazy.nvim, load aineo at startup, so that its autostart can run
 (|aineo-autostart|): >lua
-    { 'mathiasbrito/aineo', lazy = false }
+    { 'mathiasbrito/aineo', version = '*', lazy = false }
 <
+`version = '*'` takes the newest release tag (`vX.Y.Z`). The next start of
+Neovim clones aineo by itself, and `:Lazy update` moves it to a newer release
+when one is tagged. To stay on one release, give a `tag`, such as
+`tag = 'v0.2.53'`, in place of `version`. To get the same commit on another
+host, commit lazy.nvim's `lazy-lock.json` with the rest of your configuration
+and run `:Lazy restore` there.
+
 aineo works without a `setup()` call. To configure it, see
 |aineo-configuration|; then run `:checkhealth aineo` (|aineo-health|).
 
 ==============================================================================
 3. THE LAYOUT                                                   *aineo-layout*
 
-The layout fills one tab page with three windows; the right column's two
-show one pane at a time, here the agent pane:
+The layout fills one tab page with three windows, and a file column between
+the two sides while a file or a diff is open; the right column's two show one
+pane at a time, here the agent pane, with the file column open:
 
-    +--------------------+--------------------+
-    |                    |    Agent Report    |
-    |    Claude Code     |                    |
-    |    (terminal)      +--------------------+
-    |                    |       Input        |
-    +--------------------+--------------------+
+    +--------------------+--------------------+--------------------+
+    |                    |                    |    Agent Report    |
+    |    Claude Code     |    File column     |                    |
+    |    (terminal)      |    a file, or a    +--------------------+
+    |                    |    diff of one     |       Input        |
+    +--------------------+--------------------+--------------------+
+
+The right column's four panes, each behind a key and each filling the column:
+
+     \pa  agent        \g  changes        \pt  terminal    \x  run, \X  shell
+    +--------------+  +--------------+  +-------------+  +--------------+
+    | Agent Report |  | files        |  | your shell  |  | vite         |
+    |              |  |  * M auth.lua|  |             |  |              |
+    |              |  |    ? notes.md|  | $ _         |  +--------------+
+    +--------------+  +--------------+  |             |  | api          |
+    | Input        |  | commits      |  |             |  |              |
+    |              |  | Uncommitted  |  +-------------+  +--------------+
+    +--------------+  | Session work |                   | shell        |
+                      | a1b2c3 Fix.. |                   |              |
+                      +--------------+                   +--------------+
 
 - Claude Code's terminal takes the left half of the columns.
 - The Agent Report, `aineo://report`, takes the top of the right column:
