@@ -177,9 +177,25 @@ T['entries()']['lists the buffer, the name and the exit status of every process,
   local entries = child.lua_get("require('aineo.run').entries()")
 
   eq(entries, {
-    { buffer = first, name = 'backend' },
-    { buffer = ended, name = 'exit 3', status = 3 },
+    { buffer = first, name = 'backend', is_interactive_shell = false },
+    { buffer = ended, name = 'exit 3', is_interactive_shell = false, status = 3 },
   })
+end
+
+T['entries()']['tells the interactive shell from a command'] = function()
+  start_child()
+  local command = start_command('sleep 30', settings_for('entries-shell'))
+  local shell =
+    child.lua_get([[require('aineo.run').start_shell(...)]], { settings_for('entries-shell') })
+
+  local entries = child.lua_get("require('aineo.run').entries()")
+
+  eq({
+    entries[1].buffer,
+    entries[1].is_interactive_shell,
+    entries[2].buffer,
+    entries[2].is_interactive_shell,
+  }, { command, false, shell, true })
 end
 
 T['running()'] = MiniTest.new_set()
