@@ -241,6 +241,46 @@ if tmux does not recognise your terminal as one that sends them, add the
 mapping (Settings, Profiles, Keys) whose action is "Send Escape Sequence"
 with `[13;2u`. `\<CR>` does the same and needs none of this.
 
+### Which branch the changes are counted from
+
+The pane counts the work of another worktree or of a branch from its base,
+the merge base with the *working branch*, so that what it lists is what a pull
+request of that work into the working branch would hold. The working branch is
+`changes.working_branch` when you set it, else the default branch of the remote
+`origin`, which `origin/HEAD` names. Where that gives no base - neither is
+set, the name names no commit, or the work shares no history with it - the
+base is the merge base with the upstream of the branch your own worktree is
+on.
+
+That is why a worktree made from `dev` can show the difference against `main`:
+when `origin/HEAD` points at `main`, `main` is the working branch, and
+everything `dev` has that `main` lacks counts as that worktree's work. Check
+what git has with:
+
+```sh
+git symbolic-ref refs/remotes/origin/HEAD
+```
+
+To count from another branch, either:
+
+- **Point `origin/HEAD` at it**, in the repository you work in:
+
+  ```sh
+  git remote set-head origin dev
+  ```
+
+  The change is to your clone alone and moves nothing on the remote. The pane
+  reads `origin/HEAD` again at each read of its lists, so it follows, with no
+  restart. `git remote set-head origin --auto` puts it back to what the remote
+  says. Other tools that read `origin/HEAD` see the new branch too.
+- **Set `changes.working_branch`**, to `'origin/dev'`, say. It is a setting
+  for every repository, which your configuration can choose by folder, and it
+  is read when a tab's Claude Code starts: a tab that runs keeps the branch it
+  started with, and a tab opened afterwards with `\T` takes the new one.
+
+aineo never fetches, so the working branch is as your repository last knew it:
+run `git fetch` to bring it up to date.
+
 ## Find a file
 
 `\f` hands the search to the first of snacks.nvim, fzf-lua, telescope.nvim
