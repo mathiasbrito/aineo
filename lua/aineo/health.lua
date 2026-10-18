@@ -970,7 +970,7 @@ end
 local function name_limits()
   vim.health.start('Limits')
   vim.health.info(
-    "aineo stops Claude Code, and the processes of the run pane, from its own VimLeavePre handlers when Neovim quits; a VimLeavePre handler registered before them that raises an error makes Neovim skip aineo's, and a Claude Code that hangs then outlives the editor; aineo cannot detect this: :help aineo-limits"
+    "aineo stops Claude Code, and the processes of the run pane, from its own VimLeavePre handlers when Neovim quits; a VimLeavePre handler registered before them that raises an error makes Neovim skip aineo's when the error is a Vimscript throw, or a Lua error and the quit runs from Lua, as aineo's \\Q in the last tab does, but not when the quit is typed, and a Claude Code that hangs then outlives the editor; aineo cannot detect this: :help aineo-limits"
   )
 end
 

@@ -1,8 +1,9 @@
 --- aineo's MCP home, `require('aineo.mcp')`: the report server Claude Code
 --- runs, described for Claude Code's `--mcp-config` and `--allowedTools`,
---- with its two tools — the report and the announcement of a worktree or a
---- branch an agent created — and the words that tell Claude Code's agents of
---- the second.
+--- with its tools — the report, the announcement of a worktree or a branch
+--- an agent created, and the three that run a command in the run pane, read
+--- what it printed and stop it — and the words that tell Claude Code's
+--- agents of the last four.
 
 local editors = require('aineo.mcp.editors')
 local names = require('aineo.mcp.names')
@@ -74,13 +75,58 @@ function M.announce_tool_name()
   return ('mcp__%s__%s'):format(names.SERVER_NAME, names.ANNOUNCE_TOOL)
 end
 
+--- The name Claude Code gives the tool that runs a command: `mcp__<server>__<tool>`.
+---
+---@return string
+function M.run_tool_name()
+  return ('mcp__%s__%s'):format(names.SERVER_NAME, names.RUN_TOOL)
+end
+
+--- The name Claude Code gives the tool that reads output: `mcp__<server>__<tool>`.
+---
+---@return string
+function M.run_output_tool_name()
+  return ('mcp__%s__%s'):format(names.SERVER_NAME, names.RUN_OUTPUT_TOOL)
+end
+
+--- The name Claude Code gives the tool that stops a process: `mcp__<server>__<tool>`.
+---
+---@return string
+function M.run_stop_tool_name()
+  return ('mcp__%s__%s'):format(names.SERVER_NAME, names.RUN_STOP_TOOL)
+end
+
 --- The tools Claude Code may call without asking the user (its
---- `--allowedTools`): the report tool and the announcement tool, in that
---- order, and nothing else.
+--- `--allowedTools`): the report tool, the announcement tool and the tool
+--- that reads the output of a process, in that order, and nothing else —
+--- the tools that run a command and stop one stay with the user's approval.
 ---
 ---@return string[]
 function M.allowed_mcp_tools()
-  return { M.report_tool_name(), M.announce_tool_name() }
+  return { M.report_tool_name(), M.announce_tool_name(), M.run_output_tool_name() }
+end
+
+--- The paragraph appended to Claude Code's system prompt after the
+--- announcement's, which tells the main agent to run and stop a process only
+--- when the user explicitly asks, and how to read what a process printed
+--- without filling its context.
+---
+---@return string
+function M.run_instructions()
+  return (
+    'aineo can run commands in its run pane in Neovim.'
+    .. ' Call `%s` only when the user explicitly asks you to run something,'
+    .. ' for example "run the backend", and `%s` only when the user explicitly asks you to stop it;'
+    .. ' never on your own initiative. Claude Code asks the user to approve every such call.'
+    .. ' To see what a process printed, call `%s`, which needs no approval:'
+    .. ' filter first to keep your context small, with `pattern`, a Vim regex such as `error|warn|fail`'
+    .. ' (very magic: escape `= @ %% & ~ { < >` with a backslash to match them literally, as in `level\\=error`),'
+    .. ' a small `last` (40 by default, with no maximum), and then `after_line`,'
+    .. ' the `total` of the answer before, to read only what is new; `ignore_case` is true by default.'
+    .. ' Each line is a terminal row, and a resize renumbers the rows:'
+    .. ' if `total` is smaller than your last `after_line`, read again without it.'
+    .. ' The interactive shell of the run pane is not read.'
+  ):format(M.run_tool_name(), M.run_stop_tool_name(), M.run_output_tool_name())
 end
 
 --- The paragraph appended to Claude Code's system prompt after the report's
@@ -253,6 +299,42 @@ function M.receive_work_announcement(work, start_token)
     return false
   end
   return work_announced_handler(work, start_token) == true
+end
+
+--- The handler `on_run_called()` registered, called with each call of a run
+--- tool a relay offers this editor.
+---@type fun(run_call: aineo.mcp.RunCall, start_token: string): { text: string, is_error: boolean }|false
+local run_called_handler
+
+--- Registers `handler`, in place of any before, as what this editor does
+--- with each call of a run tool, which the relay of a Claude Code this
+--- editor started offers it (`receive_run_call()`): `handler(run_call,
+--- start_token)`, with the call and the token of the start of the Claude
+--- Code whose agent made it, answers at once the words for the agent and
+--- whether they are an error, or `false` when it does not take the call. Its
+--- strategy is the composition root's: plain dependency inversion, bound
+--- once at start.
+---
+---@param handler fun(run_call: aineo.mcp.RunCall, start_token: string): { text: string, is_error: boolean }|false
+function M.on_run_called(handler)
+  run_called_handler = handler
+end
+
+--- Takes a call of a run tool a relay offers, `run_call` of the start
+--- `start_token`, and answers what the handler `on_run_called()` registered
+--- answers: the words for the agent and whether they are an error, or
+--- `false` when it does not take the call or none is registered. Called in
+--- the RPC request that offers it, so the handler answers without waiting on
+--- anything that waits on the relay.
+---
+---@param run_call aineo.mcp.RunCall
+---@param start_token string
+---@return { text: string, is_error: boolean }|false
+function M.receive_run_call(run_call, start_token)
+  if not run_called_handler then
+    return false
+  end
+  return run_called_handler(run_call, start_token)
 end
 
 --- Records what a session hook of the Claude Code process `hook.pid` told —

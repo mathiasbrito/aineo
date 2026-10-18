@@ -1,7 +1,7 @@
 --- The handlers this Neovim's entries in the list of running editors need,
 --- and those of what other processes tell this editor — a switch of a
---- session it follows, the work an agent of a tab's Claude Code announced —
---- made once for every tab.
+--- session it follows, the work an agent of a tab's Claude Code announced, a
+--- call of a run tool — made once for every tab.
 
 local places = require('aineo.entry.places')
 local registry = require('aineo.entry.registry')
@@ -46,6 +46,28 @@ local function take_announced_work(work, start_token)
   return tab.homes.changes.add_reported_work(work, teller_for(tab)) == true
 end
 
+--- Takes `run_call`, a call of a run tool a relay offers with the start token
+--- `start_token`, for the tab whose Claude Code has that token, whichever tab
+--- is current (`routing.lua`'s `tab_for_work()`), and answers at once with
+--- the words for the agent and whether they are an error: with no such tab,
+--- false; else what that tab's run pane does (`aineo.entry.run_tools`'s
+--- `call()`), in the project folder, telling the user for that tab
+--- (`teller_for()`).
+---
+---@param run_call aineo.mcp.RunCall
+---@param start_token string
+---@return aineo.entry.RunToolAnswer|false
+local function take_run_call(run_call, start_token)
+  local tab = type(start_token) == 'string' and routing.tab_for_work(start_token)
+  if not tab then
+    return false
+  end
+  return require('aineo.entry.run_tools').call(tab, run_call, {
+    folder = places.kept_places().working_directory,
+    tell = teller_for(tab),
+  })
+end
+
 --- Makes, once, the handlers this Neovim's entries in the list of running
 --- editors need: `FocusGained` writes the entry of the tab used last again,
 --- marking it used; `TabEnter` writes the entry of an aineo tab entered;
@@ -53,8 +75,9 @@ end
 --- every tab's claim; a switch told by another Claude Code's hook is
 --- followed by each tab it concerns (`aineo.entry.Tab`'s
 --- `follow_told_switch()`); and work an agent announced goes to the tab
---- whose Claude Code has its start token (`take_announced_work()`). Made at
---- the first entry write, so that sourcing this file makes none.
+--- whose Claude Code has its start token (`take_announced_work()`), and so
+--- does a call of a run tool (`take_run_call()`). Made at the first entry
+--- write, so that sourcing this file makes none.
 local function make_editor_handlers()
   if editor_handlers_made then
     return
@@ -101,6 +124,7 @@ local function make_editor_handlers()
     end
   end)
   require('aineo.mcp').on_work_announced(take_announced_work)
+  require('aineo.mcp').on_run_called(take_run_call)
 end
 
 M.make_editor_handlers = make_editor_handlers

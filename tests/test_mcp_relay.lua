@@ -136,14 +136,14 @@ end
 
 T['tools/list'] = MiniTest.new_set()
 
-T['tools/list']['lists two tools, report, whose input schema is the report format, then announce_work'] = function()
+T['tools/list']['starts with report, whose input schema is the report format, then announce_work'] = function()
   local relay = mcp_relay.start_relay()
 
   relay:send(mcp_messages.recorded('tools/list'))
 
   local answer = decoded(relay:next_line())
   eq(get(answer, 'id'), 1)
-  eq(get(answer, 'result', 'tools'), {
+  eq(vim.list_slice(get(answer, 'result', 'tools'), 1, 2), {
     {
       name = 'report',
       description = "Reports your work on a task to the user's Agent Report in Neovim.",

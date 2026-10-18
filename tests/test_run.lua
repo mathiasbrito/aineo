@@ -140,6 +140,17 @@ T['the winbar']['says how the process exited once it has ended, whatever the sta
   )
 end
 
+T['start_command()']['calls the process by the name in the settings, not by the command, when it has one'] = function()
+  start_child()
+  local settings = settings_for('named')
+  settings.name = 'backend'
+
+  local buffer = start_command('sleep 30', settings)
+
+  eq(winbar_of(buffer), 'backend — running')
+  eq(child.lua_get("require('aineo.run').running()"), { 'backend' })
+end
+
 T['buffers()'] = MiniTest.new_set()
 
 T['buffers()']['lists the terminal of every process, the oldest first'] = function()
@@ -151,6 +162,40 @@ T['buffers()']['lists the terminal of every process, the oldest first'] = functi
   local buffers = child.lua_get("require('aineo.run').buffers()")
 
   eq(buffers, { first, second, third })
+end
+
+T['entries()'] = MiniTest.new_set()
+
+T['entries()']['lists the buffer, the name and the exit status of every process, the oldest first'] = function()
+  start_child()
+  local named = settings_for('entries')
+  named.name = 'backend'
+  local first = start_command('sleep 30', named)
+  local ended = start_command('exit 3', settings_for('entries'))
+  wait_until([[vim.b[(...)].aineo_run_title == 'exit 3 — exited 3']], { ended })
+
+  local entries = child.lua_get("require('aineo.run').entries()")
+
+  eq(entries, {
+    { buffer = first, name = 'backend', is_interactive_shell = false },
+    { buffer = ended, name = 'exit 3', is_interactive_shell = false, status = 3 },
+  })
+end
+
+T['entries()']['tells the interactive shell from a command'] = function()
+  start_child()
+  local command = start_command('sleep 30', settings_for('entries-shell'))
+  local shell =
+    child.lua_get([[require('aineo.run').start_shell(...)]], { settings_for('entries-shell') })
+
+  local entries = child.lua_get("require('aineo.run').entries()")
+
+  eq({
+    entries[1].buffer,
+    entries[1].is_interactive_shell,
+    entries[2].buffer,
+    entries[2].is_interactive_shell,
+  }, { command, false, shell, true })
 end
 
 T['running()'] = MiniTest.new_set()
@@ -508,6 +553,71 @@ T['a group seen empty']['is sent no kill when stop_all() finds it so, though its
   local pid = child.lua_get('vim.fn.jobpid(vim.b[...].terminal_job_id)', { buffer })
 
   child.lua("require('aineo.run').stop_all()")
+  local kills = kills_sent()
+  kill_all({ pid })
+
+  eq(kills, {})
+end
+
+--- Makes `vim.uv.kill` in the child answer the first `present_looks` looks
+--- at each process group (a signal 0) as if the group were there, the next
+--- one as if it were empty, and every later one as if another process had
+--- taken its id, and record every other signal sent, in `_G.run_signals`: a
+--- stop that looks at a group again after one saw it empty would reach that
+--- other process.
+---
+---@param present_looks integer
+local function spy_on_looks_after(present_looks)
+  child.lua(
+    [[
+      local present_looks = ...
+      _G.run_signals = {}
+      local looks = {}
+      local kill = vim.uv.kill
+      vim.uv.kill = function(pid, signal)
+        if signal ~= 0 then
+          table.insert(_G.run_signals, { pid, signal })
+          return kill(pid, signal)
+        end
+        if pid > 0 then
+          return kill(pid, signal)
+        end
+        looks[pid] = (looks[pid] or 0) + 1
+        if looks[pid] <= present_looks then
+          return 0
+        end
+        if looks[pid] == present_looks + 1 then
+          return nil, 'ESRCH'
+        end
+        return 0
+      end
+    ]],
+    { present_looks }
+  )
+end
+
+T['a group seen empty']['is sent no kill when the wait of stop_all() finds it so, though its id is taken later'] = function()
+  start_child()
+  spy_on_looks_after(1)
+  local buffer = start_command('sleep 30', settings_for('empty-group-wait'))
+  local pid = child.lua_get('vim.fn.jobpid(vim.b[...].terminal_job_id)', { buffer })
+
+  child.lua("require('aineo.run').stop_all()")
+  vim.wait(1800)
+  local kills = kills_sent()
+  kill_all({ pid })
+
+  eq(kills, {})
+end
+
+T['a group seen empty']['is sent no kill when the wait of a stop of one process finds it so, though its id is taken later'] = function()
+  start_child()
+  spy_on_looks_after(1)
+  local buffer = start_command('sleep 30', settings_for('empty-group-poll'))
+  local pid = child.lua_get('vim.fn.jobpid(vim.b[...].terminal_job_id)', { buffer })
+
+  child.cmd('bdelete! ' .. buffer)
+  vim.wait(1800)
   local kills = kills_sent()
   kill_all({ pid })
 
