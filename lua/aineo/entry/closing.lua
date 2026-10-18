@@ -90,6 +90,7 @@ local function finish_closing()
   vim.list_extend(stopping, finishing)
   for _, tab in ipairs(finishing) do
     errors.run(tab.homes.shell.stop)
+    errors.run(tab.homes.run.stop_all)
   end
   local function finish_each(already_stopped)
     for _, tab in ipairs(finishing) do

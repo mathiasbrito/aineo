@@ -10,6 +10,7 @@ local folder_tabs = require('aineo.entry.folder_tabs')
 local places = require('aineo.entry.places')
 local prompt = require('aineo.entry.prompt')
 local registry = require('aineo.entry.registry')
+local run_pane = require('aineo.entry.run_pane')
 
 local M = {}
 
@@ -136,9 +137,10 @@ local function redraw_tab_line_when_named(terminal)
 end
 
 --- The homes one tab is made of: its layout, the Claude Code session home it
---- starts and follows, its Report, Input's draft and changes pane, and its
---- shell. The first tab's are the homes' own module-level copies; every tab
---- after it is given the copies each home's `new()` makes.
+--- starts and follows, its Report, Input's draft and changes pane, its shell
+--- and the processes of its run pane. The first tab's are the homes' own
+--- module-level copies; every tab after it is given the copies each home's
+--- `new()` makes.
 ---@class aineo.entry.Homes
 ---@field layout aineo.layout.Layout
 ---@field claude aineo.claude.Session
@@ -146,12 +148,14 @@ end
 ---@field draft aineo.draft.Home
 ---@field changes aineo.changes.Home
 ---@field shell aineo.shell.Home
+---@field run aineo.run.Home
 
 --- One tab of aineo, as the composition root holds it: what a tab does is
 --- called as fields, and acts on that tab's homes alone.
 ---@class aineo.entry.Tab
 ---@field key string? what tells the tab's entry in the list of running editors from the editor's other tabs; nil for the first tab, whose entry keeps the name it has always had
 ---@field homes aineo.entry.Homes
+---@field running_processes fun(): string[] the names of the processes the tab's run pane runs, the oldest first
 ---@field actions table<string, fun()> what each of `:Aineo`'s arguments that acts on a tab does, by the argument
 ---@field send_selection fun() what Send does in Visual mode
 ---@field claim_session fun(id: string) what `:Aineo claim {id}` does
@@ -827,13 +831,27 @@ local function make_tab(homes, key, callbacks)
     return changes.pane_buffers()
   end
 
+  --- The run pane's terminals for the layout: the tab's processes, the oldest
+  --- first, with the winbar that names each one; `nil` while it runs none.
+  ---
+  ---@return aineo.layout.RunPane|nil
+  local function run_stack()
+    local buffers = homes.run.buffers()
+    if #buffers == 0 then
+      return nil
+    end
+    return { buffers = buffers, winbar = require('aineo.run').WINBAR }
+  end
+
   --- The buffers aineo's layout shows: `claude_buffer`, the Claude session's
   --- terminal, the Report, taken from the report home, which this gives its
   --- environment the first time it is called (`give_report_environment()`),
   --- the changes pane's (`changes_pane()`) and the terminal of the tab's
   --- shell while it runs one (`aineo.shell`'s `shell_buffer()`), none
-  --- otherwise; with the Report's share from `config`, and the status line of
-  --- Claude's window, which draws the session's name and folder
+  --- otherwise; the terminals of the tab's run pane, with the winbar that
+  --- names each process (`aineo.run`'s `buffers()`, `WINBAR`), none while it
+  --- runs nothing; with the Report's share from `config`, and the status line
+  --- of Claude's window, which draws the session's name and folder
   --- (`aineo.claude`'s `session_statusline()`).
   ---
   ---@param config table the resolved configuration
@@ -847,6 +865,7 @@ local function make_tab(homes, key, callbacks)
       report_height = config.layout.report_height,
       changes = changes_pane(),
       shell = homes.shell.shell_buffer(),
+      run = run_stack(),
       claude_statusline = require('aineo.claude').session_statusline(),
     }
   end
@@ -897,6 +916,26 @@ local function make_tab(homes, key, callbacks)
     end
   end
 
+  --- Calls `show`, which shows a pane through the layout, with the function
+  --- that makes the arrangement the layout opens with when it must, around the
+  --- Claude session's terminal as it is (`current_claude_terminal()`). When
+  --- the layout asked for it, it opened, and the tab is bound to the tab page
+  --- and Input is handed to the draft home (`keep_input_draft()`).
+  ---
+  ---@param show fun(make_arrangement: fun(): aineo.layout.Arrangement)
+  local function with_pane_arrangement(show)
+    local config = resolved_config()
+    local opened = false
+    show(function()
+      opened = true
+      return arrangement(config, current_claude_terminal(config))
+    end)
+    if opened then
+      bind_to_current_page()
+      keep_input_draft()
+    end
+  end
+
   --- Shows `pane` in the layout's right column and moves the cursor into it
   --- (`aineo.layout`'s `focus_pane()`): into the Report under the agent pane,
   --- into the commits window under the changes pane, into the Report's window
@@ -912,19 +951,22 @@ local function make_tab(homes, key, callbacks)
   ---
   ---@param pane aineo.layout.Pane
   local function focus_pane(pane)
-    local config = resolved_config()
     if pane == 'changes' then
       homes.changes.toggle_focused_view()
     end
-    local opened = false
-    homes.layout.focus_pane(pane, function()
-      opened = true
-      return arrangement(config, current_claude_terminal(config))
+    with_pane_arrangement(function(make_arrangement)
+      homes.layout.focus_pane(pane, make_arrangement)
     end)
-    if opened then
-      bind_to_current_page()
-      keep_input_draft()
-    end
+  end
+
+  --- Shows `pane` in the layout's right column as `focus_pane()` shows it,
+  --- the cursor staying where it is (`aineo.layout`'s `show_pane()`).
+  ---
+  ---@param pane aineo.layout.Pane
+  local function show_pane(pane)
+    with_pane_arrangement(function(make_arrangement)
+      homes.layout.show_pane(pane, make_arrangement)
+    end)
   end
 
   --- Shows the tab's shell in the layout's terminal pane and moves the cursor
@@ -1451,6 +1493,22 @@ local function make_tab(homes, key, callbacks)
     return { input = homes.layout.input_buffer() or NO_INPUT_BUFFER, session = homes.claude }
   end
 
+  --- The autocommand group of the tab's run pane handlers, one for each tab
+  --- (`run_pane.watch()`).
+  local run_group = 'aineo.entry.run.' .. (key or 'first')
+
+  --- The tab's run pane (`aineo.entry.run_pane`): what it does for the tab's
+  --- run home and layout.
+  local run = run_pane.make({
+    run = homes.run,
+    layout = homes.layout,
+    focus_pane = focus_pane,
+    show_pane = show_pane,
+    is_current = function()
+      return bound_page ~= nil and bound_page == vim.api.nvim_get_current_tabpage()
+    end,
+  })
+
   --- What each of `:Aineo`'s arguments that acts on the tab does, by the
   --- argument, its words joined by a space (`pane agent`).
   ---@type table<string, fun()>
@@ -1481,6 +1539,8 @@ local function make_tab(homes, key, callbacks)
       focus_pane('changes')
     end,
     ['pane terminal'] = focus_terminal,
+    ['pane run'] = run.run_command,
+    ['run shell'] = run.run_shell,
     ['diff close'] = function()
       homes.changes.close_shown_diff()
     end,
@@ -1548,6 +1608,10 @@ local function make_tab(homes, key, callbacks)
       homes.draft.let_go or leave_as_it_is,
       homes.layout.let_go or leave_as_it_is,
       homes.shell.let_go or leave_as_it_is,
+      homes.run.let_go or leave_as_it_is,
+      key == nil and leave_as_it_is or function()
+        pcall(vim.api.nvim_del_augroup_by_name, run_group)
+      end,
       homes.changes.let_go or leave_as_it_is,
       homes.report.let_go or leave_as_it_is,
     })
@@ -1606,7 +1670,9 @@ local function make_tab(homes, key, callbacks)
     end)
   end
 
+  run.watch(run_group)
   tab.actions = actions
+  tab.running_processes = homes.run.running
   tab.send_selection = send_selection
   tab.claim_session = claim_session
   tab.follow_told_switch = follow_told_switch

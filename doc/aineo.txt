@@ -36,7 +36,10 @@ resumes the last, and with `/clear` while it runs (|:Aineo-new|). `\pa`,
 `\g` and `\pt` switch the right column between the agent pane, the Report
 over Input, the changes pane, and a shell's terminal, each filling the column,
 and move to the Report, to the changes pane's commits and into the shell, in
-Terminal mode (|aineo-panes|). `\T` opens a tab page with a Claude Code
+Terminal mode (|aineo-panes|). `\x` asks for a command and runs it in the
+folder, in a terminal of the run pane, a stack of the services you run while
+you develop, and `\X` adds a shell to that stack (|aineo-run|). `\T` opens a
+tab page with a Claude Code
 session of its own, `\1` to `\9` move to the tab page of that number, and
 `\Q` closes the current tab (|aineo-tabs|). `\d` closes the diff the changes
 pane shows in the middle column, from any window of the tab (|:Aineo-diff|).
@@ -47,8 +50,8 @@ Input (|aineo-v_\s|).
 
 In Terminal mode and in Insert mode, `<C-\>` followed by the same letters
 does the same: `<C-\>i` moves to Input, `<C-\>r` to the Report, `<C-\>c` to
-Claude, `<C-\>pt` into the shell, each after leaving the mode you were in
-(|aineo-terminal-keys|).
+Claude, `<C-\>pt` into the shell, `<C-\>x` to run a command, each after
+leaving the mode you were in (|aineo-terminal-keys|).
 
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
@@ -100,7 +103,8 @@ show one pane at a time, here the agent pane:
   `:ls` and `:bnext`, where you write what Send gives Claude (|aineo-send|),
   kept as a draft until you send it (|aineo-draft|).
 - The changes pane shows in the same two windows in their place, and a
-  shell's terminal takes the whole column in place of both (|aineo-panes|).
+  shell's terminal, or the stack of the run pane's terminals, takes the
+  whole column in place of both (|aineo-panes|).
 
 The Report and Input wrap long lines between words, a wrapped line keeping
 its indent ('wrap', 'linebreak', 'breakindent'), whatever your own settings.
@@ -121,10 +125,10 @@ Input; a file the current window shows stays, as the file column.
 
 Panes ~
                                                                  *aineo-panes*
-The right column shows one of three panes, each filling its whole height: the
+The right column shows one of four panes, each filling its whole height: the
 agent pane and the changes pane in two windows, switched in place (the same
-two windows, at the same sizes, show the other pane's buffers), and the
-terminal pane in one.
+two windows, at the same sizes, show the other pane's buffers), the terminal
+pane in one, and the run pane in one window for each process.
 
 - The agent pane: the Agent Report over Input, as the layout opens.
 - The changes pane: `aineo://changes-files` in the Report's place, over
@@ -142,11 +146,13 @@ terminal pane in one.
   shell is your 'shell', run in the folder aineo started in, whatever `:cd`
   or `:tcd` says since, with `$AINEO_CHILD` set in its environment, as in
   Claude's terminal. Each tab has a shell of its own (|aineo-tabs|).
+- The run pane: the processes you run, each in a terminal and a window of its
+  own, stacked from the top of the column to the bottom (|aineo-run|).
 
-`\pa` (|:Aineo-pane|) shows the agent pane, `\g` the changes pane and `\pt`
-the terminal pane; the pane already shown stays as it is (the changes pane
-is read again, and `\g` in it switches its views, |aineo-changes-s|), unless
-one of its windows shows the other
+`\pa` (|:Aineo-pane|) shows the agent pane, `\g` the changes pane, `\pt`
+the terminal pane and `\x` the run pane; the pane already shown stays as it
+is (the changes pane is read again, and `\g` in it switches its views,
+|aineo-changes-s|), unless one of its windows shows the other
 pane's buffer there, as a refused switch or you can leave it (the commits
 buffer in Input's window, say): they then show the pane's own buffer there.
 Either way the cursor moves into the pane: into the Report under the agent
@@ -156,10 +162,11 @@ mode, as `\c` enters Claude's prompt: what you type next goes to the shell.
 From another tab page they switch the pane in the layout's tab page,
 restoring the layout there first when one of its windows is gone, and move
 you there. `\r` and `\i` show the agent pane first, then move to the Report
-or Input, the terminal pane giving way to it too, which opens Input's window
-again, unless you had closed it before `\pt` and asked for the Report (`\pa`,
-`\g` and `\i` open it); `\c` and `\tcn` leave the pane as it is. Send sends
-Input while the changes pane or the terminal pane hides it (|aineo-send|).
+or Input, the terminal pane and the run pane giving way to it too, which
+opens Input's window again, unless you had closed it before `\pt` or `\x` and
+asked for the Report (`\pa`, `\g` and `\i` open it); `\c` and `\tcn` leave the
+pane as it is. Send sends Input while the changes pane, the terminal pane or
+the run pane hides it (|aineo-send|).
 When a window will
 not take its buffer — 'winfixbuf' is set there, say, or you are in the
 command-line window — aineo tells you why, once, and gives each window back
@@ -188,7 +195,64 @@ Report in its window — by `\pa`, `\r`, `\i` or `\o`.
 
 aineo keeps the pane shown until the editor quits: `\o` restores the layout
 with it, and so does the layout opened anew once its windows were closed;
-the terminal pane is kept while its shell lives.
+the terminal pane is kept while its shell lives, and the run pane while a
+process of it remains.
+
+Run pane ~
+                                                                   *aineo-run*
+`\x` (|:Aineo-pane|) runs a command in the right column, which the run pane
+takes whole as the terminal pane does, with Input's window closed and Input
+kept as it is. Each process has a terminal and a window of its own. The
+windows are stacked from the top of the column to the bottom at equal heights
+(a row more for the first ones when the rows do not divide), the oldest at
+the top and the newest at the bottom. The winbar of each window names the
+command and the state of the process, `sleep 30 — running` or `sleep 30 —
+exited 1`.
+
+What `\x` does depends on where the cursor is:
+- With no process in the tab, or with the cursor in one of the run pane's
+  windows, it asks for a command (|vim.ui.input()|, completing shell
+  commands), and runs it in a terminal that joins the bottom of the stack.
+  An empty answer or Esc starts nothing, and with no process the pane is not
+  shown. The cursor moves to the new window, in Normal mode: press `i` to
+  type to the process. With the cursor in the stack, the windows you closed
+  with `:q` come back first.
+- With processes running and the cursor anywhere else, it shows the run pane
+  and moves the cursor to the bottom window, asking nothing.
+`\X` (|:Aineo-run|) adds a shell, your 'shell', to the bottom of the stack
+instead, asking nothing; the cursor goes into it in Terminal mode, and its
+winbar says `shell`. A shell that exits with status 0 is wiped by Neovim and
+leaves the stack; one that exits otherwise stays with its status, like any
+other process.
+
+A command runs through your 'shell' (the words of 'shellcmdflag' and the
+command after it), in the folder aineo started in, whatever `:cd` or `:tcd`
+says since, with `$AINEO_CHILD` set in its environment, as the terminal pane's
+shell is. A shell that is not executable, or a folder that is gone, is told
+once, and nothing starts or shows.
+
+The processes live until they end or you stop them. `\pa`, `\g`, `\r` and `\i`
+hide the stack and leave them running, and `\x` shows them again with their
+output. A process that ends keeps its window and its output, its winbar
+saying `exited` and its status, until you close the window, and then it
+leaves the stack; with the last one gone the agent pane shows again. To stop a
+process press Ctrl-C in its terminal, which leaves the window with its status
+shown, or run `:bdelete!` on its terminal, which stops it with its children
+and takes it out of the stack. Closing the window of a process that runs, with
+`:q`, only hides it: it runs on and comes back with the next `\x`. When the
+screen has no room for another window, the process runs on, hidden, and aineo
+says so. Each tab has a stack of its own (|aineo-tabs|). Processes are not
+started again at the next start.
+
+Quitting stops them. Before `:qa`, `:q` in the last window, `:wq` or `:x`
+quits Neovim with processes running, aineo asks once, listing the commands:
+`aineo: 2 processes will be stopped (npm run dev, cargo watch) — quit?`, with
+Quit and Cancel. Cancel keeps Neovim open, as it was. `:qa!` and the other
+quits typed with a bang stop them without asking. `\Q` on a tab that runs
+processes asks the same, with Close and Cancel, and Cancel keeps the tab.
+Every process is stopped with its children: a termination signal to its
+process group, and a kill to what has not ended within a second and a half
+(|aineo-limits|).
 
 Tabs ~
                                                                   *aineo-tabs*
@@ -198,7 +262,8 @@ above in it. Every tab has a Claude Code, a Report, an Input and a changes
 pane of its own, and they follow that tab's session alone
 (|aineo-claude-session|): a `/clear` in one tab's Claude Code changes that
 tab's Report, Input and changes pane, and no other tab's. Every tab has its
-own shell too, when you start one with `\pt` (|aineo-panes|). With one tab
+own shell too, when you start one with `\pt` (|aineo-panes|), and its own
+stack of processes, when you run some with `\x` (|aineo-run|). With one tab
 aineo behaves as it always has.
 
 The first open of aineo in a Neovim, the autostart or `\o`, makes the current
@@ -299,9 +364,9 @@ cannot be made taller or its letters larger; padding makes the titles wider.
 What the actions do with tabs:
 - Every action acts on the current tab when the current tab page is an aineo
   tab. From any other tab page it acts on the aineo tab used last, and moves
-  you there: `\o`, `\r`, `\i`, `\c`, `\g`, `\pa`, `\pt`, `\tcn`, `\N`, `\S`,
-  `\s`, `\d` and `:Aineo claim`. `\d` makes no tab: with no aineo tab it
-  only tells you there is no diff to close.
+  you there: `\o`, `\r`, `\i`, `\c`, `\g`, `\pa`, `\pt`, `\x`, `\X`, `\tcn`,
+  `\N`, `\S`, `\s`, `\d` and `:Aineo claim`. `\d` makes no tab: with no aineo
+  tab it only tells you there is no diff to close.
 - A report goes to the tab whose Claude Code sent it. A session hook goes to
   the tab whose start it names. Each tab is listed among the running editors
   for its own session (|aineo-report-claims|). A report of no known session
@@ -1491,12 +1556,16 @@ only in place of a resume Claude Code has no conversation for
 
                                                                  *:Aineo-pane*
 :Aineo pane {pane}	Shows {pane} in the right column, `agent`,
-			`changes` or `terminal` (|aineo-panes|), and moves
-			the cursor into it: into the Report for `agent`, into
-			the commits window for `changes`, into the tab's
-			shell for `terminal`, in Terminal mode. `terminal`
-			starts the shell, in the folder, when the tab runs
-			none. When the pane shows already, the layout stays
+			`changes`, `terminal` or `run` (|aineo-panes|), and
+			moves the cursor into it: into the Report for
+			`agent`, into the commits window for `changes`, into
+			the tab's shell for `terminal`, in Terminal mode.
+			`terminal` starts the shell, in the folder, when the
+			tab runs none. `run` shows the stack and moves the
+			cursor to its bottom window when processes run, and
+			otherwise, or with the cursor in the stack, asks for
+			a command and runs it (|aineo-run|). When the pane
+			shows already, the layout stays
 			as it is (the changes pane is read again, and
 			`changes` from one of its two windows switches it
 			between the default view and the worktree or branch
@@ -1506,6 +1575,16 @@ only in place of a resume Claude Code has no conversation for
 			moves all the same. Without a pane, or with
 			anything else, it tells you, with one error,
 			which ones it takes.
+
+                                                                  *:Aineo-run*
+:Aineo run shell	Adds an interactive shell, your 'shell', to the
+			bottom of the run pane's stack, in the folder aineo
+			started in and with `$AINEO_CHILD` set, shows the pane
+			and moves the cursor into the shell, in Terminal mode
+			(|aineo-run|). Without the word, or with anything
+			else, it tells you, with one error, what it takes.
+			`\X` and, in Terminal mode and in Insert mode,
+			`<C-\>X` do the same (|aineo-keys|).
 
                                                                 *:Aineo-claim*
 :Aineo claim [{id}]	Claims a Claude session for this Neovim: each report
@@ -1687,6 +1766,14 @@ you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-pane-terminal)
 			Does what `:Aineo pane terminal` does (|:Aineo-pane|).
 
+                                                    *<Plug>(aineo-pane-run)*
+<Plug>(aineo-pane-run)
+			Does what `:Aineo pane run` does (|:Aineo-pane|).
+
+                                                     *<Plug>(aineo-run-shell)*
+<Plug>(aineo-run-shell)
+			Does what `:Aineo run shell` does (|:Aineo-run|).
+
                                                        *<Plug>(aineo-claim)*
 <Plug>(aineo-claim)	Does what `:Aineo claim` without an id does
 			(|:Aineo-claim|). It has no prefix key: map it to a
@@ -1747,6 +1834,10 @@ which has none, globally, in Normal mode, and `\s` in Visual mode too:
 \g		|<Plug>(aineo-pane-changes)|
                                                                    *aineo-\pt*
 \pt		|<Plug>(aineo-pane-terminal)|
+                                                                    *aineo-\x*
+\x		|<Plug>(aineo-pane-run)|
+                                                                    *aineo-\X*
+\X		|<Plug>(aineo-run-shell)|
                                                                     *aineo-\T*
 \T		|<Plug>(aineo-tab-new)|
                                                                     *aineo-\Q*
@@ -1801,8 +1892,9 @@ abbreviation before the cursor is expanded (|i_CTRL-]|) and an insert given a
 count is repeated. `<C-\>c` enters Terminal mode in Claude's window again, as
 `\c` does, and the others leave you in Normal mode in the window they move
 to: `<C-\>pa` in the Report and `<C-\>g` in the changes pane's commits.
-`<C-\>pt` enters Terminal mode in the shell's window, as `\pt` does. Claude
-Code is sent none of the twin's keys.
+`<C-\>pt` enters Terminal mode in the shell's window, as `\pt` does, and
+`<C-\>X` in the new shell of the run pane's. Claude Code is sent none of the
+twin's keys.
 
                                                                 *aineo-<C-\>o*
 <C-\>o		|<Plug>(aineo-open)|
@@ -1824,6 +1916,10 @@ Code is sent none of the twin's keys.
 <C-\>g		|<Plug>(aineo-pane-changes)|
                                                                *aineo-<C-\>pt*
 <C-\>pt		|<Plug>(aineo-pane-terminal)|
+                                                                *aineo-<C-\>x*
+<C-\>x		|<Plug>(aineo-pane-run)|
+                                                                *aineo-<C-\>X*
+<C-\>X		|<Plug>(aineo-run-shell)|
                                                                 *aineo-<C-\>T*
 <C-\>T		|<Plug>(aineo-tab-new)|
                                                                 *aineo-<C-\>Q*
@@ -2438,8 +2534,9 @@ Claude Code ~
   them in is not checked.
 
 Shell terminal ~
-  The 'shell' the terminal pane runs (|aineo-panes|); a warning when its
-  program, the first word of the option, is not executable.
+  The 'shell' the terminal pane and the run pane run (|aineo-panes|,
+  |aineo-run|); a warning when its program, the first word of the option, is
+  not executable.
 
 Server socket ~
   The address the editor listens at (|v:servername|); an error when it
@@ -2519,7 +2616,7 @@ Autostart ~
   The health check reads it; aineo never does.
 
 Limits ~
-  The stop on quit of |aineo-limits|, which a check cannot detect.
+  The stops on quit of |aineo-limits|, which a check cannot detect.
 
 The check passes when it shows no error; warnings are advice.
 
@@ -2552,6 +2649,25 @@ line Claude Code prints, `Opening "{title}", running in the background
 `/resume` that attaches nothing; and the list of sessions does not show the
 terminal's own attach. What `claude attach` prints, and how it exits, for a
 session that has ended was not measured.
+
+The run pane on quit ~
+The question before a quit that stops the run pane's processes (|aineo-run|)
+is asked from the |ExitPre| event, which `:qa`, `:q` in the last window, `:wq`
+and `:x` trigger and `:cquit` and a signal that ends Neovim do not. Neither
+that event nor |QuitPre| says whether the command had a bang: aineo reads the
+last command line you typed, so `:qa!` skips the question when typed, and a
+`:qa!` run by a mapping's `<Cmd>` or by Lua, or `ZQ`, asks. A quit nothing
+asked about stops the processes all the same, from |VimLeavePre|, and aineo
+tells you once, as it begins, that they are being stopped. Neovim has no way
+to cancel a quit from a handler: on Cancel aineo opens a tab page and closes
+it again once the command is done, which makes Neovim give the quit up, and
+triggers |TabNew|, |TabEnter| and |TabClosed| autocommands for that page. The
+processes are stopped from a |VimLeavePre| handler registered when the first
+process starts, after the handlers aineo made before it, Claude Code's stop
+among them; a handler before it that raises an error makes Neovim skip it,
+and Neovim's own hangup is then all the processes get. A process that leaves
+its process group, as a daemon that calls `setsid` does, is not reached by the
+stop of its group.
 
 Several tabs ~
 Quitting Neovim stops every tab's Claude Code together: each key of the stop

@@ -277,7 +277,7 @@ local function check_claude(resolved_config)
   )
 end
 
---- Reports the 'shell' the terminal pane runs, and warns when its program
+--- Reports the 'shell' the terminal pane and the run pane run, and warns when its program
 --- (`aineo.shell`'s `shell_program()`) is not executable (`executable()`), in
 --- the words the shell home uses when it refuses to start.
 local function check_shell()
@@ -286,7 +286,7 @@ local function check_shell()
   local program = require('aineo.shell').shell_program()
   if vim.fn.executable(program) == 0 then
     vim.health.warn(
-      ("'shell' is %s: '%s' is not executable, so the terminal pane cannot start a shell"):format(
+      ("'shell' is %s: '%s' is not executable, so the terminal pane and the run pane cannot start a shell"):format(
         shell,
         program
       ),
@@ -294,7 +294,7 @@ local function check_shell()
     )
     return
   end
-  vim.health.ok(("the terminal pane runs 'shell': %s"):format(shell))
+  vim.health.ok(("the terminal pane and the run pane run 'shell': %s"):format(shell))
 end
 
 --- Reports the address the editor listens at, `v:servername`, where the
@@ -329,6 +329,8 @@ local PREFIX_KEYS = {
   { key = 'pa', plug = '<Plug>(aineo-pane-agent)', mode = 'n' },
   { key = 'g', plug = '<Plug>(aineo-pane-changes)', mode = 'n' },
   { key = 'pt', plug = '<Plug>(aineo-pane-terminal)', mode = 'n' },
+  { key = 'x', plug = '<Plug>(aineo-pane-run)', mode = 'n' },
+  { key = 'X', plug = '<Plug>(aineo-run-shell)', mode = 'n' },
   { key = 'T', plug = '<Plug>(aineo-tab-new)', mode = 'n' },
   { key = 'Q', plug = '<Plug>(aineo-tab-close)', mode = 'n' },
   { key = '1', plug = '<Plug>(aineo-tab-1)', mode = 'n' },
@@ -967,7 +969,7 @@ end
 local function name_limits()
   vim.health.start('Limits')
   vim.health.info(
-    "aineo stops Claude Code from its own VimLeavePre handler when Neovim quits; a VimLeavePre handler registered before it that raises an error makes Neovim skip aineo's, and a Claude Code that hangs then outlives the editor; aineo cannot detect this: :help aineo-limits"
+    "aineo stops Claude Code, and the processes of the run pane, from its own VimLeavePre handlers when Neovim quits; a VimLeavePre handler registered before them that raises an error makes Neovim skip aineo's, and a Claude Code that hangs then outlives the editor; aineo cannot detect this: :help aineo-limits"
   )
 end
 
