@@ -194,7 +194,11 @@ local KINDS = {
       if type(value) ~= 'string' or value == '' then
         return 'expected a non-empty string'
       end
-      return string_refusal(value, LONGEST_STRING_BYTES, '%c', 'a control character')
+      local refusal = string_refusal(value, LONGEST_STRING_BYTES, '%c', 'a control character')
+      if refusal then
+        return refusal
+      end
+      return value:find(C1_CONTROL) and 'holds a control character' or nil
     end,
   },
   text = {

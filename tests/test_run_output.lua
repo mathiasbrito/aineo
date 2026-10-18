@@ -430,4 +430,47 @@ T['read_output()']['answers a nested counted repetition that crashes the regex c
   eq(answer, { read = 1 })
 end
 
+T['read_output()']['names a memory error late in the budget as the error it is, not as a timeout'] = function()
+  child.lua([[
+    require('aineo.run.output').MATCH_BUDGET_MS = 60
+    _G.real_search = vim.fn.search
+    rawset(vim.fn, 'search', function()
+      error('E363: pattern uses more memory than \'maxmempattern\'', 0)
+    end)
+  ]])
+
+  local output, failure = read({ pattern = 'error' })
+  child.lua([[
+    require('aineo.run.output').MATCH_BUDGET_MS = 2000
+    rawset(vim.fn, 'search', _G.real_search)
+  ]])
+
+  eq(output, nil)
+  eq(failure, "pattern: E363: pattern uses more memory than 'maxmempattern'")
+end
+
+T['read_output()']['fires no OptionSet for the user, a read that raises included, and leaves eventignore as it was'] = function()
+  child.lua([[
+    vim.o.eventignore = 'FileType'
+    _G.option_sets = 0
+    vim.api.nvim_create_autocmd('OptionSet', {
+      callback = function()
+        _G.option_sets = _G.option_sets + 1
+      end,
+    })
+    _G.real_set_lines = vim.api.nvim_buf_set_lines
+  ]])
+
+  read({ pattern = 'error' })
+  child.lua([[rawset(vim.api, 'nvim_buf_set_lines', function() error('injected', 0) end)]])
+  local raised = pcall(read, { pattern = 'error' })
+  child.lua([[rawset(vim.api, 'nvim_buf_set_lines', _G.real_set_lines)]])
+
+  eq(
+    { raised, child.lua_get('_G.option_sets'), child.lua_get('vim.o.eventignore') },
+    { false, 0, 'FileType' }
+  )
+  child.lua([[vim.o.eventignore = '']])
+end
+
 return T

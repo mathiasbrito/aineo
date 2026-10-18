@@ -273,6 +273,13 @@ T['a call']['whose arguments are refused is a tool error naming the field, and n
       { 'run', { command = 'ls', name = '' }, 'name: expected a non-empty string' },
       { 'run', { command = 'ls', name = 5 }, 'name: expected a non-empty string' },
       { 'run', { command = 'ls', name = 'a\nb' }, 'name: holds a control character' },
+      { 'run', { command = 'ls', name = 'a\127b' }, 'name: holds a control character' },
+      { 'run', { command = 'ls', name = 'a\194\155b' }, 'name: holds a control character' },
+      {
+        'run',
+        { command = 'ls', directory = 'a\194\133b' },
+        'directory: holds a control character',
+      },
       { 'run', { command = 'ls', directory = '' }, 'directory: expected a non-empty string' },
       { 'run', { command = 'ls', directory = 'a\27b' }, 'directory: holds a control character' },
       { 'run', { command = 'a\0b' }, 'command: holds a control character' },
