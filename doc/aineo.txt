@@ -232,7 +232,9 @@ windows are stacked from the top of the column to the bottom at equal heights
 (a row more for the first ones when the rows do not divide), the oldest at
 the top and the newest at the bottom. The winbar of each window names the
 command and the state of the process, `sleep 30 — running` or `sleep 30 —
-exited 1`.
+exited 1`. Each window starts at the end of its output and follows it, as a
+terminal window does while its cursor is on the last line; a window you
+scroll up in Normal mode stops following.
 
 What `\x` does depends on where the cursor is:
 - With no process in the tab, or with the cursor in one of the run pane's
