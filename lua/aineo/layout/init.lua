@@ -21,6 +21,7 @@
 --- on its own windows and buffers only.
 
 local columns = require('aineo.layout.columns')
+local full_zoom = require('aineo.layout.full_zoom')
 local zoom = require('aineo.layout.zoom')
 
 ---@class aineo.layout.Arrangement
@@ -59,6 +60,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field follow_claude_terminal fun(terminal: integer)
 ---@field toggle_claude_numbers fun()
 ---@field toggle_zoom fun()
+---@field toggle_full_zoom fun()
 ---@field input_buffer fun(): integer|nil
 ---@field let_go? fun() only on a layout `M.new()` made: removes its handlers and wipes its Input
 
@@ -97,8 +99,9 @@ local function make_layout(input_name, group_name)
   --- window was already closed when the terminal pane took the column, which
   --- the agent pane then leaves closed as the shell ends; the terminals and
   --- winbar the run pane was handed last, and the windows it opened below
-  --- the Report's, top to bottom; and the zoom of the right column, if it is
-  --- zoomed (`M.toggle_zoom()`).
+  --- the Report's, top to bottom; the zoom of the right column, if it is
+  --- zoomed (`M.toggle_zoom()`); and the window zoomed fully, if one is
+  --- (`M.toggle_full_zoom()`).
   local state = {
     ---@type table<aineo.layout.Role, integer>
     windows = {},
@@ -136,6 +139,8 @@ local function make_layout(input_name, group_name)
     run_windows = {},
     ---@type aineo.layout.Zoom|nil
     zoom = nil,
+    ---@type aineo.layout.FullZoom|nil
+    full_zoom = nil,
   }
 
   --- The role of `window` in the layout, or `nil` when it is not one of its
@@ -509,6 +514,32 @@ local function make_layout(input_name, group_name)
     state.zoom = nil
   end
 
+  --- Ends the full zoom, if a window is zoomed fully, giving every window the
+  --- size it had before it; a zoom of the right column that was on stays on.
+  local function end_full_zoom()
+    if state.full_zoom then
+      full_zoom.restore(state.full_zoom)
+      state.full_zoom = nil
+    end
+  end
+
+  --- Keeps the zoomed window zoomed fully as the tab page's cells changed, or
+  --- ends the zoom, without giving back any size, when the window that was
+  --- zoomed is gone: the layout's proportions are what the windows take then.
+  ---
+  ---@return boolean zoomed whether a window is zoomed fully
+  local function keep_full_zoom()
+    if not state.full_zoom then
+      return false
+    end
+    if not vim.api.nvim_win_is_valid(state.full_zoom.window) then
+      state.full_zoom = nil
+      return false
+    end
+    full_zoom.keep(state.full_zoom)
+    return true
+  end
+
   --- Keeps the right column zoomed as its rows changed, or ends the zoom,
   --- without giving back any height, when the column's windows are no longer
   --- the ones that were zoomed: the layout's proportions are what the windows
@@ -530,7 +561,7 @@ local function make_layout(input_name, group_name)
   --- window, or while the stack is zoomed.
   local function equalize_run_windows()
     local windows = run_stack_windows()
-    if state.pane ~= 'run' or #windows < 2 or state.zoom then
+    if state.pane ~= 'run' or #windows < 2 or state.zoom or state.full_zoom then
       return
     end
     local rows = 0
@@ -546,8 +577,12 @@ local function make_layout(input_name, group_name)
   --- Puts the layout's proportions back: the columns' widths, the Report's
   --- share of the right column's rows when Input's window shows, and the
   --- equal shares of the run pane's stack; with the right column zoomed, the
-  --- zoom is kept in their place (`keep_zoom()`).
+  --- zoom is kept in their place (`keep_zoom()`), and with a window zoomed
+  --- fully, that zoom is kept in place of all of them (`keep_full_zoom()`).
   local function apply_proportions()
+    if keep_full_zoom() then
+      return
+    end
     size_columns()
     if keep_zoom() then
       return
@@ -1429,7 +1464,8 @@ local function make_layout(input_name, group_name)
     if not state.run or not has_window('report') then
       return
     end
-    if state.zoom and not run_stack_shows(state.run.buffers) then
+    if (state.zoom or state.full_zoom) and not run_stack_shows(state.run.buffers) then
+      end_full_zoom()
       end_zoom()
     end
     show_pane_buffer_in('run', 'report')
@@ -1567,6 +1603,7 @@ local function make_layout(input_name, group_name)
     if pane == shown and not shows_a_buffer_of_another_pane(pane) then
       return
     end
+    end_full_zoom()
     end_zoom()
     if shown == 'agent' and state.report_when_hidden == nil then
       state.report_when_hidden = {
@@ -1897,7 +1934,8 @@ local function make_layout(input_name, group_name)
   --- shown open, the columns take a third of the screen each while the file
   --- column is open, and the proportions are put back whenever a window closes, the editor is
   --- resized or the layout's tab is entered; a zoomed right column
-  --- (`M.toggle_zoom()`) is kept zoomed then, until its windows change.
+  --- (`M.toggle_zoom()`) or a window zoomed fully (`M.toggle_full_zoom()`) is
+  --- kept zoomed then, until its windows change.
   ---
   --- From then on, too, Claude's terminal, once its process has ended, stays
   --- in Normal mode, so that no key closes it and its exit stays on screen:
@@ -2301,7 +2339,9 @@ local function make_layout(input_name, group_name)
   --- (`switch_pane()`) and as the run pane's stack gains or loses a window
   --- (`sync_run_windows()`); it ends, the proportions put back, as a window of
   --- the column closes (`keep_zoom()`). The column is the layout's windows: one
-  --- the user splits off it by hand is outside it.
+  --- the user splits off it by hand is outside it. A window zoomed fully
+  --- (`M.toggle_full_zoom()`) is given its size back first, and the zoom of the
+  --- column goes on from the heights it had.
   ---
   --- With the cursor in none of the column's windows — Claude's window, the
   --- file column, a window split off the column by hand, a tab page that is
@@ -2313,10 +2353,77 @@ local function make_layout(input_name, group_name)
       vim.notify(NOT_IN_THE_COLUMN, vim.log.levels.WARN)
       return
     end
+    end_full_zoom()
     local zoomed = is_zoom_of_column() and state.zoom.window or nil
     end_zoom()
     if zoomed ~= current then
       state.zoom = zoom.start(column_windows(), current)
+    end
+  end
+
+  --- Whether `window` is not floating.
+  ---
+  ---@param window integer
+  ---@return boolean
+  local function is_tiled(window)
+    return vim.api.nvim_win_get_config(window).relative == ''
+  end
+
+  --- The windows of the layout's tab page that are not floating, in the order
+  --- the tab page lists them.
+  ---
+  ---@return integer[] windows
+  local function tab_windows()
+    return vim.iter(vim.api.nvim_tabpage_list_wins(layout_tab())):filter(is_tiled):totable()
+  end
+
+  --- What `M.toggle_full_zoom()` tells the user, as a warning, when the cursor
+  --- is in no window it can zoom.
+  local NOTHING_TO_ZOOM_FULLY =
+    'aineo: nothing zoomed — the cursor is in no window of an aineo tab page, or in a floating window'
+
+  --- Whether `window` is one the layout's tab page holds, not floating.
+  ---
+  ---@param window integer
+  ---@return boolean
+  local function is_zoomable_in_layout_tab(window)
+    return has_any_window()
+      and vim.api.nvim_win_get_tabpage(window) == layout_tab()
+      and is_tiled(window)
+  end
+
+  --- Zooms the window the cursor is in fully: it takes every column and row
+  --- the other windows of the layout's tab page can spare, and they shrink to
+  --- `'winminwidth'` columns or `'winminheight'` lines each, wherever they
+  --- sit, their winbars and status lines still showing, `'winfixwidth'` and
+  --- `'winfixheight'` as they were. Zoomed fully already, it gives every
+  --- window the size it had when the zoom began, a manual resize before it
+  --- included, scaled to the editor's size now when the editor was resized
+  --- meanwhile; toggled with the cursor in another window, the zoom moves
+  --- there. A zoom of the right column (`M.toggle_zoom()`) that was on stays
+  --- on, as it was, once the full zoom ends.
+  ---
+  --- The zoom stays with the window it began in while the cursor goes
+  --- elsewhere, through a resize of the editor, entering the layout's tab and
+  --- the closing of a window other than the zoomed one. It ends, giving back
+  --- the sizes, as another pane shows (`switch_pane()`), as the run pane's
+  --- stack gains or loses a window (`sync_run_windows()`) and as
+  --- `M.toggle_zoom()` zooms the right column; it ends, the proportions put
+  --- back, as the zoomed window closes (`keep_full_zoom()`).
+  ---
+  --- With the cursor in a floating window, in a tab page that is not the
+  --- layout's, or with no layout open, it changes nothing and warns the user
+  --- once.
+  function M.toggle_full_zoom()
+    local current = vim.api.nvim_get_current_win()
+    if not is_zoomable_in_layout_tab(current) then
+      vim.notify(NOTHING_TO_ZOOM_FULLY, vim.log.levels.WARN)
+      return
+    end
+    local zoomed = state.full_zoom and state.full_zoom.window
+    end_full_zoom()
+    if zoomed ~= current then
+      state.full_zoom = full_zoom.start(tab_windows(), current)
     end
   end
 

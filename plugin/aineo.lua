@@ -55,13 +55,20 @@ local SUBCOMMANDS = {
 --- `:Aineo` offers them: `pane` takes the pane to show, `run` takes `shell`,
 --- and `tab` takes `new`, `close` or the number of a tab page to move to; only
 --- the numbers 1 to 9 have a `<Plug>` mapping, and `:Aineo tab` takes any
---- number (`aineo.entry`'s `jump_to_tab()`); `diff` takes `close`.
+--- number (`aineo.entry`'s `jump_to_tab()`); `diff` takes `close`, and `zoom`
+--- takes `full` (`ACTS_WITHOUT_A_WORD`).
 local SUBCOMMAND_WORDS = {
   pane = { 'agent', 'changes', 'terminal', 'run' },
   run = { 'shell' },
   tab = { 'new', 'close', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
   diff = { 'close' },
+  zoom = { 'full' },
 }
+
+--- The subcommands that take words (`SUBCOMMAND_WORDS`) and run an action
+--- without one too: `:Aineo zoom` zooms the right column's window, and
+--- `:Aineo zoom full` the window of the whole tab page.
+local ACTS_WITHOUT_A_WORD = { zoom = true }
 
 --- What `:Aineo` tells the user when it is not given one of its subcommands.
 local USAGE = 'aineo: :Aineo takes one of ' .. table.concat(SUBCOMMANDS, ', ')
@@ -96,17 +103,17 @@ end
 
 --- `:Aineo`'s arguments that each run an action, in `SUBCOMMANDS`' order:
 --- each subcommand alone, or followed by each of its words
---- (`SUBCOMMAND_WORDS`), as `pane agent`. Built with plain loops, so that
+--- (`SUBCOMMAND_WORDS`), as `pane agent`; a subcommand that runs without a
+--- word too (`ACTS_WITHOUT_A_WORD`) has both. Built with plain loops, so that
 --- sourcing this file loads no module Neovim has not loaded (`vim.iter`).
 local ACTION_ARGUMENTS = {}
 for _, subcommand in ipairs(SUBCOMMANDS) do
   local words = SUBCOMMAND_WORDS[subcommand]
-  if words then
-    for _, word in ipairs(words) do
-      table.insert(ACTION_ARGUMENTS, subcommand .. ' ' .. word)
-    end
-  else
+  if not words or ACTS_WITHOUT_A_WORD[subcommand] then
     table.insert(ACTION_ARGUMENTS, subcommand)
+  end
+  for _, word in ipairs(words or {}) do
+    table.insert(ACTION_ARGUMENTS, subcommand .. ' ' .. word)
   end
 end
 
@@ -294,6 +301,7 @@ local PREFIX_KEYS = {
   ['diff close'] = 'd',
   find = 'f',
   zoom = 'z',
+  ['zoom full'] = 'Z',
 }
 
 --- The keys that leave the mode a twin (`map_terminal_prefix()`) is pressed
@@ -605,5 +613,5 @@ end, {
   nargs = '*',
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run, run shell, claim [id], tab new|close|{n}, diff close, find or zoom',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full',
 })

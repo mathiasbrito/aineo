@@ -185,6 +185,21 @@ ACTIONS.zoom = function()
   end
 end
 
+--- What `:Aineo zoom full` does: zooms the window the cursor is in to every
+--- column and row the tab page's other windows can spare, or gives back the
+--- sizes they had (`aineo.layout`'s `toggle_full_zoom()`), in the aineo tab of
+--- the current tab page, and never makes a tab. From a tab page that is none
+--- of aineo's, the module's own layout, which has no window there, tells the
+--- user so.
+ACTIONS['zoom full'] = function()
+  local tab = registry.tab_of_current_page()
+  if tab then
+    tab.actions['zoom full']()
+  else
+    require('aineo.layout').toggle_full_zoom()
+  end
+end
+
 ACTIONS['tab new'] = function()
   reopening.reopen_folder_tabs()
   opening.open_new_tab()

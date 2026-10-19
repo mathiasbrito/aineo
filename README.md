@@ -154,10 +154,16 @@ resumes it.
 | `\S` | lists Claude Code's sessions for the folder and opens the one you pick |
 | `\N` | starts a new Claude Code session |
 | `\z` | zooms the window of the right column the cursor is in, and gives the heights back when pressed again |
+| `\Z` | zooms the window the cursor is in to the whole tab page, and gives the sizes back when pressed again |
 
 `\z` gives the right-column window with the cursor the column's whole height,
 in every pane, and the other windows of the column shrink to a line or so;
 `\z` again gives every window the height it had.
+
+`\Z` gives the window with the cursor, in any window of an aineo tab, every
+column and row it can: the other windows shrink to slivers that stay open and
+visible; `\Z` again gives every window the size it had. `:Aineo zoom full`
+and, in Terminal mode, `<C-\>Z` do the same.
 
 ### Claude terminal
 

@@ -31,6 +31,7 @@ local PREFIX_KEYS = {
   { 'd', '<Plug>(aineo-diff-close)', 'n' },
   { 'f', '<Plug>(aineo-find)', 'n' },
   { 'z', '<Plug>(aineo-zoom)', 'n' },
+  { 'Z', '<Plug>(aineo-zoom-full)', 'n' },
   { 's', '<Plug>(aineo-send)', 'x' },
 }
 
