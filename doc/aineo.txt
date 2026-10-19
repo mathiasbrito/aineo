@@ -1390,16 +1390,15 @@ Terminal or Normal mode, or press |gx| on it in Normal mode. A link is a
 path, found as the Report finds one (|aineo-report|), with a `:<line>` or a
 `#L<line>` at its end naming its line; a `file://` address; or a web
 address. A relative path is looked up in the folder Claude Code started in.
-A regular text file of the tab's project opens in the middle column, at its
-line, as `<S-CR>` opens a file from the changes pane: the project is the
-git working tree of that folder, or the folder itself when it is in none,
-and a file is text when its first 8 KiB hold no NUL byte. Anything else
-goes to your system, through |vim.ui.open()|: a file that is not text, such
-as an image or a PDF, a file outside the project, a directory, and a web
-address. A link that names nothing that exists opens nothing, and you are
-told so once. A double-click on no link does what Neovim's own does: in
-Normal mode it selects the word, and in Terminal mode it reaches Claude
-Code. A ⌘-click is not aineo's: see |aineo-limits|.
+A regular text file opens in the middle column, at its line, as `<S-CR>`
+opens a file from the changes pane, whether it lies in the project or not;
+a file is text when its first 8 KiB hold no NUL byte. Anything else goes to
+your system, through |vim.ui.open()|: a file that is not text, such as an
+image or a PDF, a directory, and a web address. A link that names nothing
+that exists opens nothing, and you are told so once. A double-click on no
+link does what Neovim's own does: in Normal mode it selects the word, and
+in Terminal mode it reaches Claude Code. A ⌘-click is not aineo's: see
+|aineo-limits|.
 
 aineo follows a switch you make inside Claude Code: `/clear`, `/resume`
 and `/branch` each put Claude Code on another session, and the Report,
@@ -2575,8 +2574,8 @@ Paths ~
 A path in a task, a summary or details that names a regular file that
 exists — not a directory, a FIFO or a device — is underlined, in
 |hl-AineoReportPath|. Double-click it to open the file in the middle column,
-at its line when it names one, when it is a text file of the tab's project,
-as a link in Claude's terminal opens (|aineo-links|); any other file goes to
+at its line when it names one, when it is a text file, as a link in
+Claude's terminal opens (|aineo-links|); a file that is not text goes to
 your system, through |vim.ui.open()|:
 `render.lua:112` opens `render.lua` at line 112, a line past the file's end
 at its last line, and `:0` at its first. A double-click works from Normal
