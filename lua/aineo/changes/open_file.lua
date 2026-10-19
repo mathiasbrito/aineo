@@ -9,9 +9,20 @@ local M = {}
 --- which Vim's own `gf` drops without a word.
 local ABANDONED = 'Keyboard interrupt'
 
+--- Puts the cursor of the current window on line `line` of its buffer, from
+--- 1: a line past the buffer's end on its last line, a line before its first
+--- on its first.
+---
+---@param line integer
+local function put_cursor_on_line(line)
+  local last_line = vim.api.nvim_buf_line_count(0)
+  vim.api.nvim_win_set_cursor(0, { math.min(math.max(line, 1), last_line), 0 })
+end
+
 --- Opens in the current window the file `path`, relative to `top`, the top
 --- level of a working tree, as `:edit` does, the path taken whole: no
---- character of it is a wildcard, a modifier or the end of the command.
+--- character of it is a wildcard, a modifier or the end of the command; then,
+--- when `line` is given, puts the cursor on that line (`put_cursor_on_line()`).
 --- Opens nothing, and warns the user once, for a file no longer in the
 --- working tree and for a path that is a directory (a submodule, a nested
 --- repository, a worktree inside the tree), links to directories included.
@@ -22,7 +33,8 @@ local ABANDONED = 'Keyboard interrupt'
 ---
 ---@param top string the top level of the working tree
 ---@param path string the file's path relative to `top`, as git gave it
-function M.open_working_file(top, path)
+---@param line? integer the line to put the cursor on, from 1
+function M.open_working_file(top, path, line)
   local file = vim.fs.joinpath(top, path)
   if not vim.uv.fs_lstat(file) then
     vim.notify(
@@ -44,6 +56,9 @@ function M.open_working_file(top, path)
     { cmd = 'edit', args = { file }, magic = { file = false, bar = false } },
     {}
   )
+  if opened and line then
+    put_cursor_on_line(line)
+  end
   if not opened and not tostring(failure):find(ABANDONED, 1, true) then
     vim.notify(
       ('aineo: %s could not be opened: %s'):format(lines.quoted_path(path), failure),
