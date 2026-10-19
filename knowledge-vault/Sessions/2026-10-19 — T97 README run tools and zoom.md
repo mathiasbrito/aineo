@@ -1,7 +1,7 @@
 # 2026-10-19 — T97 README run tools and zoom
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`, on Sonnet)
-**Branch:** `feature/t97-readme-tools-zoom` · **Pull request:** into `dev` (number recorded after the merge)
+**Branch:** `feature/t97-readme-tools-zoom` · **Pull request:** #281 (into `dev`)
 
 The README's section on what Claude tells aineo gains the run tools, its Global key table gains `\z` with a short paragraph on the zoom, and the help's install section gains the release-tag sentences and its layout section the file column and the four panes. Docs only.
 
@@ -35,4 +35,6 @@ None.
 
 ## Commits
 
-Recorded after the merge.
+PR #281, merged by rebase; released in `v0.2.57` (PR #282, `main` `ce4c5d7`). On `dev`:
+
+- `8919719` Document the run tools and the zoom in the README, and the layout in the help

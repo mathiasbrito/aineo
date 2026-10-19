@@ -1,7 +1,7 @@
 # 2026-10-18 — T94 README refresh
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`, on Sonnet)
-**Branch:** `feature/t94-readme` · **Pull request:** into `dev` (number recorded after the merge)
+**Branch:** `feature/t94-readme` · **Pull request:** #272 (into `dev`)
 
 The README is brought up to date with the help (`doc/aineo.txt`) and the code as they stand on `dev` after T91: a richer opening chart, the key tables split by panel, the changes pane's own keys and remembered view, the agents' MCP tools, the tmux and iTerm2 notes for `<S-CR>`, the finder, and the installation. Docs only.
 
@@ -37,5 +37,12 @@ The README is brought up to date with the help (`doc/aineo.txt`) and the code as
 
 ## Open threads
 
-- A short README addition for T92 and T93 when they land.
+- A short README addition for T92 and T93 when they land: done by T97 (#281).
 - Items in the help that look wrong or doubtful are listed in the packet's report, not changed here.
+
+## Commits
+
+PR #272, merged by rebase after one fix round; released in `v0.2.54` (PR #274, `main` `bc8b814`). On `dev`, in order:
+
+- `fe63eaa` Bring the README up to date with the help and the install
+- `1993246` Correct the README where the key tables outgrew its sentences
