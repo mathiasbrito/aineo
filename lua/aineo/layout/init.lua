@@ -1254,11 +1254,25 @@ local function make_layout(input_name, group_name)
     end
   end
 
+  --- Puts the cursor of `window`, which shows a terminal of the run pane, on
+  --- the last line of the terminal's buffer, the last line in view: a
+  --- terminal window follows new output while its cursor is on the last
+  --- line, so a window the run pane shows afresh starts at the end of the
+  --- output and goes on with it.
+  ---
+  ---@param window integer
+  local function follow_output_in(window)
+    local last_line = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(window))
+    vim.api.nvim_win_set_cursor(window, { last_line, 0 })
+  end
+
   --- Shows `buffer` in `window` in place of the buffer it shows, as a switch
   --- does: the view of the buffer leaving — its cursor and its top line
   --- (`winsaveview()`) — is kept in `state.views`, and `buffer` is given the
   --- view kept for it there when it last left by a switch, which is then
   --- forgotten. Neovim itself keeps a buffer's cursor line, not its top line.
+  --- A terminal of the run pane starts at the end of its output instead
+  --- (`follow_output_in()`).
   ---
   ---@param window integer
   ---@param buffer integer
@@ -1267,6 +1281,9 @@ local function make_layout(input_name, group_name)
       vim.api.nvim_win_call(window, vim.fn.winsaveview)
     vim.api.nvim_win_set_buf(window, buffer)
     restore_view(window, buffer)
+    if state.run and vim.list_contains(state.run.buffers, buffer) then
+      follow_output_in(window)
+    end
   end
 
   --- Shows, in the layout's window for `role`, one of the right column's two,
@@ -1350,9 +1367,10 @@ local function make_layout(input_name, group_name)
     vim.wo[window][0].winbar = state.run.winbar
   end
 
-  --- Opens a window below `above` showing `buffer`, without entering it, or
-  --- returns `nil`, changing nothing, when the screen has no room for another
-  --- window there (E36). Raises any other error the split raises.
+  --- Opens a window below `above` showing `buffer`, without entering it, its
+  --- cursor at the end of the output (`follow_output_in()`), or returns
+  --- `nil`, changing nothing, when the screen has no room for another window
+  --- there (E36). Raises any other error the split raises.
   ---
   ---@param buffer integer
   ---@param above integer
@@ -1362,6 +1380,7 @@ local function make_layout(input_name, group_name)
       pcall(vim.api.nvim_open_win, buffer, false, { split = 'below', win = above })
     if opened then
       vim.wo[result].winfixheight = false
+      follow_output_in(result)
       return result
     end
     if not tostring(result):find('E36:', 1, true) then
