@@ -354,21 +354,25 @@ of the right column under any pane, or a window you split off by hand
 `\Z` changes nothing and tells you once so.
 
 `\Z` again gives every window the size it had when you zoomed, a resize you
-made by hand before it included. `\Z` pressed in another window moves the
-zoom there; `\Z` in the zoomed window ends it. `\z` (|aineo-zoom|) pressed
-with the cursor in a window of the right column ends the full zoom first and
-then does what it does; a `\z` zoom that was on before the full zoom is on
-again once it ends. A `\z` that would change nothing leaves the full zoom as
-it is.
+made by hand before it included, unless a window opened or closed meanwhile —
+the file column when Claude opens a file, the quickfix list, a split of the
+zoomed window: the sizes recorded no longer fit, and the layout's proportions
+are put back instead, the new windows keeping the size they have. `\Z`
+pressed in another window moves the zoom there; `\Z` in the zoomed window ends
+it. `\z` (|aineo-zoom|) pressed with the cursor in a window of the right
+column ends the full zoom first and then does what it does; a `\z` zoom that
+was on before the full zoom is on again once it ends. A `\z` that would change
+nothing leaves the full zoom as it is.
 
 The full zoom stays with the window it began in while the cursor goes
 elsewhere, as `\z`'s does. A window you split off by hand takes at least
 'winwidth' columns as you enter it, as Neovim does for any window; aineo's own
 windows keep their sizes. It ends by itself, every window given back the size
 it had, when another pane shows and when a process joins the run pane or
-leaves its stack, as the zoom of `\z` does (|aineo-zoom|). When the zoomed
-window closes, the zoom ends and the layout puts its proportions back; when
-another window closes, the zoom stays.
+leaves its stack, as the zoom of `\z` does (|aineo-zoom|), and when the
+terminal pane's shell ends or its terminal is wiped and the agent pane shows
+in its place. When the zoomed window closes, the zoom ends and the layout puts
+its proportions back; when another window closes, the zoom stays.
 
 When the editor is resized, the zoom stays: the zoomed window takes the
 columns and rows the tab page gains or loses. `\Z` then gives back the sizes
