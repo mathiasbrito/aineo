@@ -514,15 +514,6 @@ local function make_layout(input_name, group_name)
     state.zoom = nil
   end
 
-  --- Ends the full zoom, if a window is zoomed fully, giving every window the
-  --- size it had before it; a zoom of the right column that was on stays on.
-  local function end_full_zoom()
-    if state.full_zoom then
-      full_zoom.restore(state.full_zoom)
-      state.full_zoom = nil
-    end
-  end
-
   --- Keeps the zoomed window zoomed fully as the tab page's cells changed, or
   --- ends the zoom, without giving back any size, when the window that was
   --- zoomed is gone: the layout's proportions are what the windows take then.
@@ -593,9 +584,51 @@ local function make_layout(input_name, group_name)
     equalize_run_windows()
   end
 
+  --- Whether `window` is not floating.
+  ---
+  ---@param window integer
+  ---@return boolean
+  local function is_tiled(window)
+    return vim.api.nvim_win_get_config(window).relative == ''
+  end
+
+  --- The windows of the layout's tab page that are not floating, in the order
+  --- the tab page lists them.
+  ---
+  ---@return integer[] windows
+  local function tab_windows()
+    return vim.iter(vim.api.nvim_tabpage_list_wins(layout_tab())):filter(is_tiled):totable()
+  end
+
+  --- Ends the full zoom, if a window is zoomed fully. When the tab page holds
+  --- the windows it held as the zoom began, every window gets the size it had
+  --- (a zoom of the right column that was on stays on). When a window opened
+  --- or closed meanwhile, those sizes no longer apply: the layout's
+  --- proportions are put back (`apply_proportions()`), and, while the layout
+  --- is not open, because the zoomed window of the layout closed, the windows
+  --- that remain get the sizes they had.
+  local function end_full_zoom()
+    local zoomed = state.full_zoom
+    if not zoomed then
+      return
+    end
+    state.full_zoom = nil
+    local holds_the_same_windows = has_any_window()
+      and vim.deep_equal(tab_windows(), zoomed.windows)
+    if not holds_the_same_windows and is_open() then
+      apply_proportions()
+    else
+      full_zoom.restore(zoomed)
+    end
+  end
+
   --- Puts the layout's proportions back while it is open, and does nothing
-  --- once a window the pane shown needs is gone.
+  --- once a window the pane shown needs is gone. A full zoom whose window is
+  --- gone ends first (`end_full_zoom()`), the layout open or not.
   local function keep_proportions()
+    if state.full_zoom and not vim.api.nvim_win_is_valid(state.full_zoom.window) then
+      end_full_zoom()
+    end
     if is_open() then
       apply_proportions()
     end
@@ -1665,6 +1698,7 @@ local function make_layout(input_name, group_name)
     if state.buffers.shell and not vim.api.nvim_buf_is_valid(state.buffers.shell) then
       forget_shell()
       if state.pane == 'terminal' then
+        end_full_zoom()
         state.pane = 'agent'
       end
     end
@@ -1778,6 +1812,7 @@ local function make_layout(input_name, group_name)
     if not was_shown then
       return
     end
+    end_full_zoom()
     state.pane = 'agent'
     vim.schedule(function()
       reopen_agent_pane(note ~= nil and note.had_cursor)
@@ -2361,22 +2396,6 @@ local function make_layout(input_name, group_name)
     end
   end
 
-  --- Whether `window` is not floating.
-  ---
-  ---@param window integer
-  ---@return boolean
-  local function is_tiled(window)
-    return vim.api.nvim_win_get_config(window).relative == ''
-  end
-
-  --- The windows of the layout's tab page that are not floating, in the order
-  --- the tab page lists them.
-  ---
-  ---@return integer[] windows
-  local function tab_windows()
-    return vim.iter(vim.api.nvim_tabpage_list_wins(layout_tab())):filter(is_tiled):totable()
-  end
-
   --- What `M.toggle_full_zoom()` tells the user, as a warning, when the cursor
   --- is in no window it can zoom.
   local NOTHING_TO_ZOOM_FULLY =
@@ -2396,20 +2415,23 @@ local function make_layout(input_name, group_name)
   --- the other windows of the layout's tab page can spare, and they shrink to
   --- `'winminwidth'` columns or `'winminheight'` lines each, wherever they
   --- sit, their winbars and status lines still showing, `'winfixwidth'` and
-  --- `'winfixheight'` as they were. Zoomed fully already, it gives every
-  --- window the size it had when the zoom began, a manual resize before it
-  --- included, scaled to the editor's size now when the editor was resized
-  --- meanwhile; toggled with the cursor in another window, the zoom moves
-  --- there. A zoom of the right column (`M.toggle_zoom()`) that was on stays
-  --- on, as it was, once the full zoom ends.
+  --- `'winfixheight'` as they were, and `'cmdheight'` untouched. Zoomed fully
+  --- already, it gives every window the size it had when the zoom began, a
+  --- manual resize before it included, scaled to the editor's size now when
+  --- the editor was resized meanwhile; toggled with the cursor in another
+  --- window, the zoom moves there. A zoom of the right column
+  --- (`M.toggle_zoom()`) that was on stays on, as it was, once the full zoom
+  --- ends. When a window opened or closed meanwhile, the recorded sizes no
+  --- longer fit, and the layout's proportions are put back instead
+  --- (`end_full_zoom()`).
   ---
   --- The zoom stays with the window it began in while the cursor goes
   --- elsewhere, through a resize of the editor, entering the layout's tab and
-  --- the closing of a window other than the zoomed one. It ends, giving back
-  --- the sizes, as another pane shows (`switch_pane()`), as the run pane's
-  --- stack gains or loses a window (`sync_run_windows()`) and as
-  --- `M.toggle_zoom()` zooms the right column; it ends, the proportions put
-  --- back, as the zoomed window closes (`keep_full_zoom()`).
+  --- the closing of a window other than the zoomed one. It ends as another
+  --- pane shows (`switch_pane()`, and the terminal pane's shell ending or
+  --- being wiped), as the run pane's stack gains or loses a window
+  --- (`sync_run_windows()`), as `M.toggle_zoom()` zooms the right column and
+  --- as the zoomed window closes (`keep_proportions()`).
   ---
   --- With the cursor in a floating window, in a tab page that is not the
   --- layout's, or with no layout open, it changes nothing and warns the user
