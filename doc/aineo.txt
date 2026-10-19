@@ -1384,6 +1384,23 @@ a listed buffer. For a status-line plugin, the name and the folder are
 kept, current, on Claude's terminal as `b:aineo_session_name` and
 `b:aineo_session_folder`. See |aineo-limits| for what can replace it.
 
+                                                                 *aineo-links*
+A link in Claude's terminal opens in aineo when you double-click it, in
+Terminal or Normal mode, or press |gx| on it in Normal mode. A link is a
+path, found as the Report finds one (|aineo-report|), with a `:<line>` or a
+`#L<line>` at its end naming its line; a `file://` address; or a web
+address. A relative path is looked up in the folder Claude Code started in.
+A regular text file of the tab's project opens in the middle column, at its
+line, as `<S-CR>` opens a file from the changes pane: the project is the
+git working tree of that folder, or the folder itself when it is in none,
+and a file is text when its first 8 KiB hold no NUL byte. Anything else
+goes to your system, through |vim.ui.open()|: a file that is not text, such
+as an image or a PDF, a file outside the project, a directory, and a web
+address. A link that names nothing that exists opens nothing, and you are
+told so once. A double-click on no link does what Neovim's own does: in
+Normal mode it selects the word, and in Terminal mode it reaches Claude
+Code. A ⌘-click is not aineo's: see |aineo-limits|.
+
 aineo follows a switch you make inside Claude Code: `/clear`, `/resume`
 and `/branch` each put Claude Code on another session, and the Report,
 Input's draft (|aineo-draft|) and the changes pane (|aineo-changes|) then
@@ -2558,7 +2575,9 @@ Paths ~
 A path in a task, a summary or details that names a regular file that
 exists — not a directory, a FIFO or a device — is underlined, in
 |hl-AineoReportPath|. Double-click it to open the file in the middle column,
-at its line when it names one:
+at its line when it names one, when it is a text file of the tab's project,
+as a link in Claude's terminal opens (|aineo-links|); any other file goes to
+your system, through |vim.ui.open()|:
 `render.lua:112` opens `render.lua` at line 112, a line past the file's end
 at its last line, and `:0` at its first. A double-click works from Normal
 mode, from Insert mode, as when you click from Input, and from Claude's
@@ -2830,6 +2849,19 @@ The check passes when it shows no error; warnings are advice.
 
 ==============================================================================
 11. LIMITS                                                      *aineo-limits*
+
+Links in Claude's terminal ~
+Neovim keeps the address of a link a program prints in a terminal (OSC 8)
+only in what it draws on the screen: no extmark or other state of the
+terminal's buffer holds it (measured on Neovim 0.12.5). aineo reads the text
+a link shows (|aineo-links|), not its address, so a link whose text is no
+path is not found, and neither is a path the terminal wrapped onto a second
+line. A ⌘-click on a link is not aineo's: whether Neovim sees it depends on
+the terminal Neovim runs in, which opens the address itself when it opens
+OSC 8 hyperlinks, as iTerm2 does (not measured: aineo's tests run without
+such a terminal). Claude Code turns the mouse on in its terminal, so in
+Terminal mode a single click reaches Claude Code, and only the double-click
+is aineo's.
 
 Stopping Claude Code on quit ~
 When Neovim quits, aineo stops a running Claude Code from its own

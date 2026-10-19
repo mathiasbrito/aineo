@@ -9,6 +9,7 @@
 local format = require('aineo.report.format')
 local home = require('aineo.report.home')
 local instructions = require('aineo.report.instructions')
+local paths = require('aineo.report.paths')
 local warning = require('aineo.report.warning')
 
 local M = {}
@@ -35,6 +36,11 @@ end
 --- The report `arguments` describe, or nil and why they are refused
 --- (`format.validate_report()`).
 M.validate_report = format.validate_report
+
+--- Every text in a line that could name a file, as the Report finds the
+--- paths it draws, each with the line it names when it names one
+--- (`paths.find_path_candidates()`).
+M.find_path_candidates = paths.find_path_candidates
 
 --- The report format as a JSON Schema, the report tool's input schema
 --- (`format.report_schema()`).
