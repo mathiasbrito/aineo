@@ -119,6 +119,15 @@ local function is_at_its_least(buffer)
   )
 end
 
+--- Expects the window showing `buffer` to be zoomed fully in a tab page of two
+--- columns: it holds the screen's width less the other column at its least
+--- and the separator.
+---
+---@param buffer integer
+local function expect_zoomed(buffer)
+  eq(sizes_of({ buffer })[1].width, layout.COLUMNS - child.o.winminwidth - 1)
+end
+
 T['zooming a window fully'] = MiniTest.new_set()
 
 for _, case in ipairs({
@@ -183,6 +192,7 @@ T['toggling the full zoom']['gives every window back the size it had, a manual r
   enter(buffers.report)
 
   toggle_full_zoom()
+  expect_zoomed(buffers.report)
   toggle_full_zoom()
 
   eq(sizes(), resized)
@@ -270,6 +280,7 @@ T['a zoomed right column']['is zoomed again as it was once the full zoom ends'] 
   enter(buffers.claude)
 
   toggle_full_zoom()
+  expect_zoomed(buffers.claude)
   toggle_full_zoom()
 
   eq(sizes(), column_zoomed)
@@ -281,6 +292,7 @@ T['a zoomed right column']['is ended by the next \\z once the full zoom has ende
   enter(buffers.report)
   toggle_column_zoom()
   toggle_full_zoom()
+  expect_zoomed(buffers.report)
   toggle_full_zoom()
 
   toggle_column_zoom()
@@ -296,6 +308,7 @@ T['toggling the column zoom while a window is zoomed fully']['ends the full zoom
   local column_rows = before[2].height + before[3].height
   enter(buffers.report)
   toggle_full_zoom()
+  expect_zoomed(buffers.report)
 
   toggle_column_zoom()
 
@@ -348,6 +361,7 @@ T['toggling the full zoom in another window']['gives every window back its size 
   toggle_full_zoom()
   enter(buffers.input)
   toggle_full_zoom()
+  expect_zoomed(buffers.input)
 
   toggle_full_zoom()
 
@@ -461,6 +475,7 @@ T['switching the pane while zoomed fully']['leaves the zoom as it is when the pa
   local buffers, arrangement = open_every_pane()
   enter(buffers.report)
   toggle_full_zoom()
+  expect_zoomed(buffers.report)
   local zoomed = sizes()
 
   show_pane('agent', arrangement)
@@ -509,6 +524,7 @@ T['changing the windows of the run pane while zoomed fully']['keeps the zoom whe
   show_pane('run', arrangement)
   enter(buffers.run[2])
   toggle_full_zoom()
+  expect_zoomed(buffers.run[2])
   local zoomed = sizes()
 
   show_pane('run', arrangement)
@@ -582,6 +598,7 @@ T['zooming a window with fixed sizes fully']['leaves ’winfixwidth’ and ’wi
   enter(buffers.report)
 
   toggle_full_zoom()
+  expect_zoomed(buffers.report)
   local zoomed = fixed_sizes()
   toggle_full_zoom()
 
@@ -604,33 +621,154 @@ T['resizing the editor while zoomed fully']['keeps the window zoomed, taking the
   eq(is_at_its_least(buffers.input), true)
 end
 
-T['resizing the editor while zoomed fully']['gives the windows back their sizes scaled to the editor’s new size'] = function()
+T['resizing the editor while zoomed fully']['gives the windows back their sizes scaled to the editor’s new size, the command line one line high'] =
+  MiniTest.new_set({ parametrize = { { 30 }, { 31 }, { 48 } } })
+
+T['resizing the editor while zoomed fully']['gives the windows back their sizes scaled to the editor’s new size, the command line one line high']['at'] = function(
+  lines
+)
   local buffers = open_every_pane()
   local before = sizes_of({ buffers.claude, buffers.report, buffers.input })
   enter(buffers.report)
   toggle_full_zoom()
-  child.o.lines = layout.LINES + 6
+  expect_zoomed(buffers.report)
+  child.o.lines = lines
+  local gained = lines - layout.LINES
 
   toggle_full_zoom()
 
   local after = sizes_of({ buffers.claude, buffers.report, buffers.input })
-  eq(after[1], { width = before[1].width, height = before[1].height + 6 })
+  eq(child.o.cmdheight, 1)
+  eq(after[1], { width = before[1].width, height = before[1].height + gained })
   eq(after[2].width, before[2].width)
-  eq(after[2].height + after[3].height, before[2].height + before[3].height + 6)
+  eq(after[2].height + after[3].height, before[2].height + before[3].height + gained)
+end
+
+T['a window opened while zoomed fully'] = MiniTest.new_set()
+
+T['a window opened while zoomed fully']['puts the layout’s proportions back as the zoom ends, a file column among them'] = function()
+  local buffers = open_every_pane()
+  enter(buffers.claude)
+  toggle_full_zoom()
+  local diff = layout.named_scratch(child, 'aineo://full-zoom-opened-file')
+  child.lua([[require('aineo.layout').show_diff(...)]], { diff })
+  enter(buffers.claude)
+
+  toggle_full_zoom()
+
+  local widths = sizes_of({ buffers.claude, diff, buffers.report })
+  layout.expect_near(widths[1].width, widths[2].width)
+  layout.expect_near(widths[2].width, widths[3].width)
+  eq(child.o.cmdheight, 1)
+end
+
+T['a window opened while zoomed fully']['leaves a quickfix list its height as the zoom ends'] = function()
+  local buffers = open_every_pane()
+  enter(buffers.claude)
+  toggle_full_zoom()
+  child.lua(
+    [[vim.fn.setqflist({ { text = 'x' } }) vim.cmd('botright copen 6') vim.cmd('wincmd p')]]
+  )
+  local quickfix = child.lua_get([[vim.fn.getqflist({ winid = 0 }).winid]])
+
+  toggle_full_zoom()
+
+  eq(child.lua_get('vim.fn.winheight(...)', { quickfix }), 6)
+end
+
+T['a window opened while zoomed fully']['leaves a split of the zoomed window its rows and puts the columns back as the zoom ends'] = function()
+  local buffers = open_every_pane()
+  local before = sizes_of({ buffers.claude })
+  enter(buffers.claude)
+  toggle_full_zoom()
+  local zoomed = child.lua_get('vim.api.nvim_get_current_win()')
+  child.cmd('split')
+  local halves =
+    child.lua_get('vim.tbl_map(vim.api.nvim_win_get_height, vim.api.nvim_tabpage_list_wins(0))')
+  child.lua('vim.api.nvim_set_current_win(...)', { zoomed })
+
+  toggle_full_zoom()
+
+  local after = child.lua_get([[vim.tbl_map(function(window)
+    return { width = vim.api.nvim_win_get_width(window), height = vim.api.nvim_win_get_height(window) }
+  end, vim.api.nvim_tabpage_list_wins(0))]])
+  eq(after[1].height, halves[1])
+  eq(after[2].height, halves[2])
+  eq(after[1].width, before[1].width)
+end
+
+T['closing the zoomed window of the layout'] = MiniTest.new_set()
+
+for _, role in ipairs({ 'report', 'input' }) do
+  T['closing the zoomed window of the layout'][('ends the zoom and puts the proportions back when the %s window closes'):format(
+    role
+  )] = function()
+    local buffers = open_every_pane()
+    local before = sizes_of({ buffers.claude })
+    enter(buffers[role])
+    toggle_full_zoom()
+
+    child.lua('vim.api.nvim_win_close(vim.fn.bufwinid(...), false)', { buffers[role] })
+
+    layout.wait_until(child, 'vim.o.cmdheight == 1')
+    eq(sizes_of({ buffers.claude })[1].width, before[1].width)
+    eq(child.o.cmdheight, 1)
+  end
+end
+
+T['changing the pane without a switch while zoomed fully'] = MiniTest.new_set()
+
+T['changing the pane without a switch while zoomed fully']['ends the zoom as the shell’s terminal is wiped under the terminal pane'] = function()
+  local buffers, arrangement = open_every_pane()
+  show_pane('terminal', arrangement)
+  local before = sizes_of({ buffers.claude })
+  enter(buffers.claude)
+  toggle_full_zoom()
+  expect_zoomed(buffers.claude)
+
+  child.lua('vim.api.nvim_buf_delete(..., { force = true })', { buffers.shell })
+
+  layout.wait_until(child, '#vim.api.nvim_tabpage_list_wins(0) == 3')
+  eq(sizes_of({ buffers.claude })[1].width, before[1].width)
+  expect_next_toggle_to_zoom(buffers.claude)
+end
+
+T['changing the pane without a switch while zoomed fully']['ends the zoom as a wiped shell is forgotten when the layout opens again'] = function()
+  local buffers, arrangement = open_every_pane()
+  show_pane('terminal', arrangement)
+  local before = sizes_of({ buffers.claude })
+  enter(buffers.claude)
+  toggle_full_zoom()
+  expect_zoomed(buffers.claude)
+  child.lua(
+    [[vim.o.eventignore = 'BufWipeout,BufDelete,TermClose'
+    vim.api.nvim_buf_delete(..., { force = true })
+    vim.o.eventignore = '']],
+    { buffers.shell }
+  )
+  arrangement.shell = nil
+
+  layout.open(child, arrangement)
+
+  eq(child.lua_get([[require('aineo.layout').shown_pane()]]), 'agent')
+  eq(sizes_of({ buffers.claude })[1].width, before[1].width)
 end
 
 T['moving the cursor while zoomed fully'] = MiniTest.new_set()
 
 T['moving the cursor while zoomed fully']['keeps the zoom on the window that was zoomed'] = function()
   local buffers = open_every_pane()
+  local before = sizes()
   enter(buffers.report)
   toggle_full_zoom()
+  expect_zoomed(buffers.report)
   local zoomed = sizes()
 
   enter(buffers.input)
   enter(buffers.claude)
   enter(buffers.report)
 
+  MiniTest.expect.no_equality(zoomed, before)
   eq(sizes(), zoomed)
 end
 
@@ -639,6 +777,7 @@ T['moving the cursor while zoomed fully']['lets the next toggle in the zoomed wi
   local before = sizes()
   enter(buffers.report)
   toggle_full_zoom()
+  expect_zoomed(buffers.report)
   enter(buffers.claude)
   enter(buffers.report)
 
