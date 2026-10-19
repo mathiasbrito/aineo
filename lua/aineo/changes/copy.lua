@@ -76,7 +76,6 @@ end
 ---@field toggle_focused_view fun() reads the shown pane again, and, with the cursor in one of its windows, switches it between its default view and the focused view
 ---@field add_reported_work fun(work: aineo.changes.ReportedWork, tell: fun(message: string)): boolean whether the home took the report
 ---@field pane_buffers fun(): { files: integer, commits: integer }
----@field working_tree_top fun(): string? the top level of the working tree the session's directory is in, once found
 ---@field close_shown_diff fun() closes the windows of the current tab page that show a diff the home showed, and tells once when none was closed
 ---@field let_go? fun() only on a home `require('aineo.changes').new()` made: stops its watch, removes its handlers and wipes its buffers
 
@@ -2787,15 +2786,6 @@ function M.new(label)
       show_commits()
     end
     pane_shown()
-  end
-
-  --- The top level of the working tree the session's directory is in, as
-  --- the pane reads it; nil before the session began, while its repository
-  --- is still being looked for, and when its directory is in none.
-  ---
-  ---@return string?
-  function home.working_tree_top()
-    return session and session.repository and session.repository.top
   end
 
   --- The changes pane's two buffers, each written for what the session

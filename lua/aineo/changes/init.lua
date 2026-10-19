@@ -47,8 +47,9 @@ local open_file = require('aineo.changes.open_file')
 ---@class aineo.changes: aineo.changes.Home
 local M = copy.new()
 
---- Opens a working tree's file in the current window, at a line when given,
---- as the files window's `<S-CR>` opens a file there
+--- Opens a file in the current window, given a folder above it — the top
+--- level of its working tree, for the files window — and its path from
+--- there, at a line when given, as the files window's `<S-CR>` opens a file
 --- (`open_file.open_working_file()`).
 M.open_working_file = open_file.open_working_file
 

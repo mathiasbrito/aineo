@@ -1,9 +1,9 @@
---- Where a link the user follows in a tab's panes goes: a regular text file
---- of the tab's project opens in the current window, which the layout hands
---- to the middle column, as the files window's `<S-CR>` opens a file
+--- Where a link the user follows in a tab's panes goes: a regular text file,
+--- wherever it lies, opens in the current window, which the layout hands to
+--- the middle column, as the files window's `<S-CR>` opens a file
 --- (`aineo.changes`'s `open_working_file()`); anything else — a file that is
---- not text, a file outside the project, a directory — goes to the operating
---- system (`vim.ui.open()`).
+--- not text, a directory, a web address — goes to the operating system
+--- (`vim.ui.open()`).
 
 local M = {}
 
@@ -35,23 +35,6 @@ local function is_text_file(file)
   return not sample:find('\0', 1, true)
 end
 
---- Where the file `file` lies in the project whose top level is `project`,
---- both taken with every symbolic link resolved: the project's resolved top
---- level and the file's path from there, or nil when the file lies outside
---- it or either cannot be resolved.
----
----@param file string
----@param project string
----@return { top: string, path: string }?
-local function place_in_project(file, project)
-  local top, resolved = vim.uv.fs_realpath(project), vim.uv.fs_realpath(file)
-  local path = top and resolved and vim.fs.relpath(top, resolved)
-  if not path or path == '.' then
-    return nil
-  end
-  return { top = top, path = path }
-end
-
 --- Hands `target`, a file or an address, to the operating system
 --- (`vim.ui.open()`), and tells the user, once, when it cannot.
 ---
@@ -64,40 +47,32 @@ local function open_with_system(target)
 end
 
 --- Opens the regular file `file`, an absolute path, at line `line` when
---- given: in the current window when it is a text file (`is_text_file()`)
---- of the project whose top level is `project` (`place_in_project()`),
---- else with the operating system (`open_with_system()`), which is also
---- where a file goes when there is no project.
+--- given: in the current window when it is a text file (`is_text_file()`),
+--- wherever it lies, else with the operating system (`open_with_system()`).
 ---
 ---@param file string
 ---@param line integer?
----@param project string?
-function M.open_file(file, line, project)
-  local place = project and place_in_project(file, project)
-  if place and is_text_file(file) then
-    require('aineo.changes').open_working_file(place.top, place.path, line)
+function M.open_file(file, line)
+  if is_text_file(file) then
+    require('aineo.changes').open_working_file(vim.fs.dirname(file), vim.fs.basename(file), line)
     return
   end
   open_with_system(file)
 end
 
---- Where a tab's links are looked up and opened: the directory a relative
---- path is in, and the top level of the tab's project, nil when it has none.
----@class aineo.entry.LinkContext
----@field directory string
----@field project string?
-
 --- Follows the link `text`, as a pane shows it, naming line `line` when the
 --- text set one apart (`aineo.report`'s `find_path_candidates()`): a path,
---- in `context.directory` when relative, or a `file://` address, either
---- naming its line by a `#L<line>` at its end, opens as `M.open_file()`
---- opens a file; an address of any other scheme, such as a web link, goes
---- to the operating system.
+--- in `directory` when relative, or a `file://` address, either naming its
+--- line by a `#L<line>` at its end, opens as `M.open_file()` opens a regular
+--- file; a directory, any other file that is no regular file, and an address
+--- of any other scheme, such as a web link, go to the operating system. A
+--- link that names nothing that exists opens nothing, and the user is told
+--- so once.
 ---
 ---@param text string
 ---@param line integer?
----@param context aineo.entry.LinkContext
-function M.open_link(text, line, context)
+---@param directory string the directory a relative path is in
+function M.open_link(text, line, directory)
   if text:match(ADDRESS) and not vim.startswith(text, FILE_ADDRESS) then
     open_with_system(text)
     return
@@ -107,7 +82,7 @@ function M.open_link(text, line, context)
   if vim.startswith(path, FILE_ADDRESS) then
     path = vim.uri_to_fname(path)
   end
-  local file = vim.startswith(path, '/') and path or vim.fs.joinpath(context.directory, path)
+  local file = vim.startswith(path, '/') and path or vim.fs.joinpath(directory, path)
   local stat = vim.uv.fs_stat(file)
   if not stat then
     vim.notify(('aineo: %s names no file'):format(text), vim.log.levels.WARN)
@@ -117,7 +92,7 @@ function M.open_link(text, line, context)
     open_with_system(file)
     return
   end
-  M.open_file(file, tonumber(line_named) or line, context.project)
+  M.open_file(file, tonumber(line_named) or line)
 end
 
 --- The link that covers byte `byte`, from 0, of line `row`, from 0, of

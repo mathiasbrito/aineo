@@ -19,12 +19,10 @@ local TEXT_SAMPLE_BYTES = 8192
 --- The files of the project each case opens aineo in, path to lines, as
 --- `writefile()` writes them: a line feed inside a line is written as a NUL.
 --- `nul-inside.dat` holds a NUL as the last of its first `TEXT_SAMPLE_BYTES`
---- bytes, and `nul-after.txt` its first NUL just after them; `sub/here.txt`
---- makes the directory `sub`, which a case starts Claude Code in.
+--- bytes, and `nul-after.txt` its first NUL just after them.
 local PROJECT_FILES = {
   ['notes.txt'] = { 'one', 'two', 'three', 'four' },
   ['lua/x.lua'] = { 'return {}', 'local y = 2', 'return y' },
-  ['sub/here.txt'] = { 'here' },
   ['nul-inside.dat'] = { string.rep('a', TEXT_SAMPLE_BYTES - 1) .. '\n' .. 'tail' },
   ['nul-after.txt'] = { string.rep('a', TEXT_SAMPLE_BYTES) .. '\n' .. 'tail' },
 }
@@ -57,23 +55,22 @@ local COUNT_FINDS = [[
 --- Makes the repository `.tests/fixtures/git-<name>/repo` holding
 --- `PROJECT_FILES` in one commit, and `outside.txt` beside it, outside it;
 --- starts the child afresh with the git isolation of the git home's suites,
---- in the repository's directory `directory` (its top level when not given),
---- where Claude Code starts; keeps what `vim.ui.open()` is given
+--- in the repository's top level, where Claude Code starts; keeps what
+--- `vim.ui.open()` is given
 --- (`KEEP_EXTERNAL_OPENS`); opens the layout around the fake `claude`
 --- (`:Aineo open`) and waits until Claude Code is ready and the changes
 --- pane's repository was looked for. Returns the repository's top level.
 ---
 ---@param name string the case's own name, starting `links-`
----@param directory? string a directory of the repository, relative to its top level
 ---@return string top
-local function open_layout_in_project(name, directory)
+local function open_layout_in_project(name)
   local top = git_repo.create(name, PROJECT_FILES)
   git_repo.write(vim.fs.dirname(top), 'outside.txt', { 'outside' })
   entry.restart(child)
   child.o.columns = COLUMNS
   child.lua('for name, value in pairs(...) do vim.env[name] = value end', { git_repo.ENVIRONMENT })
   child.lua('vim.env.XDG_STATE_HOME = ...', { fixture.directory(name .. '-state') })
-  child.cmd('cd ' .. vim.fn.fnameescape(vim.fs.joinpath(top, directory or '.')))
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
   entry.use_fake(child, claude_session.fake(name, 'ready'))
   child.lua(COUNT_FINDS)
   child.lua(KEEP_EXTERNAL_OPENS)
@@ -251,20 +248,18 @@ T['a double-click in the Report']['on a file whose first NUL comes after 8 KiB o
   )
 end
 
-T['a double-click in the Report']['on a text file outside the project hands it to the system'] = function()
+T['a double-click in the Report']['on a text file outside the project opens it in the file column'] = function()
   local top = open_layout_in_project('links-report-outside')
   local outside = vim.fs.joinpath(vim.fs.dirname(top), 'outside.txt')
   receive_details_and_enter_report('See ' .. outside .. ' now')
 
   double_click(cell_of(REPORT, 'outside.txt', 0))
 
-  wait_until_settled()
-  eq(what_followed(), {
-    windows = LAYOUT_ALONE,
-    current = 'aineo://report',
-    external = { outside },
-    told = {},
-  })
+  wait_until_current_file_is(outside)
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(outside), line = 1 }
+  )
 end
 
 --- Has the fake `claude` print `text` on its screen, which it does with the
@@ -384,16 +379,17 @@ T["a double-click in Claude's terminal"]['on no link, in Normal mode, selects th
   )
 end
 
-T["a double-click in Claude's terminal"]['on a text file of the working tree above where Claude Code started opens it in the file column'] = function()
-  local top = open_layout_in_project('links-terminal-tree', 'sub')
-  show_in_claude_terminal('See ../notes.txt:2 now')
+T["a double-click in Claude's terminal"]['on a text file outside the project opens it in the file column, at its line'] = function()
+  local top = open_layout_in_project('links-terminal-outside')
+  local outside = vim.fs.joinpath(vim.fs.dirname(top), 'outside.txt')
+  show_in_claude_terminal('See ../outside.txt:1 now')
 
-  double_click(cell_of(CLAUDE_TERMINAL, '../notes.txt:2', 4))
+  double_click(cell_of(CLAUDE_TERMINAL, '../outside.txt:1', 4))
 
-  wait_until_current_file_is(vim.fs.joinpath(top, 'notes.txt'))
+  wait_until_current_file_is(outside)
   eq(
     { followed = what_followed(), line = cursor_line() },
-    { followed = opened_in_file_column(vim.fs.joinpath(top, 'notes.txt')), line = 2 }
+    { followed = opened_in_file_column(outside), line = 1 }
   )
 end
 

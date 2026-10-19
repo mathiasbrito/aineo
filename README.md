@@ -52,9 +52,9 @@ and its state:
     report shows as a line: time, status (`started`, `progress`, `blocked`,
     `done`, `failed`), task and summary. Reports are kept per session. A path
     in a report opens at its line on a double-click, and a web link opens
-    from the keyboard with `gx`. A text file of the project opens in the
-    middle column, in Claude's terminal too, on a double-click or `gx`;
-    anything else, such as an image, opens with your system.
+    from the keyboard with `gx`. A link to a text file opens in the middle
+    column, in Claude's terminal too, on a double-click or `gx`; anything
+    else, such as an image, opens with your system.
   - *Input.* A buffer for your next message. `\s` sends it to Claude, also
     while Claude is in a turn, and the text is kept as a draft until you send
     it. In Visual mode `\s` sends the selection alone.
