@@ -17,6 +17,7 @@ local M = {}
 ---@field clock fun(): string the local time, as `YYYY-MM-DDTHH:MM:SS`
 ---@field state_directory string where the records are kept
 ---@field working_directory string the editor's working directory, which a report's relative paths are in
+---@field open_file? fun(file: string, line: integer?) opens the regular file `file`, an absolute path, that a double-clicked path names, at the line the path names when it names one; when not given, the file opens in the current window
 
 ---@class aineo.report.Home
 ---@field set_report_environment fun(report_environment: aineo.report.Environment)
@@ -258,13 +259,15 @@ function M.new(identity)
   end
 
   --- Gives the report home what it reads from the editor: the clock, called
-  --- for each report received, and the state and working directories, read
-  --- when the Report buffer is first created. The working directory is read
-  --- again whenever the Report shows reports, to find the files their relative
-  --- paths name, and at each double-click on a path, to open its file. The
-  --- composition root calls it before anything else in the home is used but
-  --- `follow_report_session()` and `hand_over_report_session()`, which it
-  --- then holds: the hand-overs told meanwhile are made now, in their order
+  --- for each report received, the state and working directories, read
+  --- when the Report buffer is first created, and, when given, how the file
+  --- a double-clicked path names is opened (`open_drawn_path()`). The working
+  --- directory is read again whenever the Report shows reports, to find the
+  --- files their relative paths name, and at each double-click on a path, to
+  --- open its file. The composition root calls it before anything else in
+  --- the home is used but `follow_report_session()` and
+  --- `hand_over_report_session()`, which it then holds: the hand-overs told
+  --- meanwhile are made now, in their order
   --- (`hand_over()`), and then, when the home follows a session, told
   --- otherwise than as a claim's, the working directory's records are moved
   --- to it (`move_directory_records_once()`).
@@ -278,6 +281,7 @@ function M.new(identity)
     vim.validate('environment.clock', report_environment.clock, 'function')
     vim.validate('environment.state_directory', report_environment.state_directory, 'string')
     vim.validate('environment.working_directory', report_environment.working_directory, 'string')
+    vim.validate('environment.open_file', report_environment.open_file, 'function', true)
     environment = report_environment
     for _, waiting in ipairs(hand_overs_waiting) do
       hand_over(environment, waiting.from, waiting.to)
@@ -352,11 +356,26 @@ function M.new(identity)
     )
   end
 
-  --- Opens, in the current window, the file `path`, a path as the Report
-  --- draws it, names (`file_named_by()`), at the line it names when it names
-  --- one: a line past the file's end at its last line, line 0 at its first.
-  --- The file is the one the Report underlined, whatever Neovim's current
-  --- directory is now.
+  --- Opens, in the current window, the file `file`, at line `line` when
+  --- given: a line past the file's end at its last line, line 0 at its first.
+  --- What a double-clicked path opens when the environment gives no
+  --- `open_file`.
+  ---
+  ---@param file string
+  ---@param line integer?
+  local function edit_in_current_window(file, line)
+    vim.cmd('edit ' .. vim.fn.fnameescape(file))
+    if line then
+      local last_line = vim.api.nvim_buf_line_count(0)
+      vim.api.nvim_win_set_cursor(0, { math.min(math.max(line, 1), last_line), 0 })
+    end
+  end
+
+  --- Opens the file `path`, a path as the Report draws it, names
+  --- (`file_named_by()`), at the line it names when it names one, as the
+  --- environment's `open_file` does, in the current window when it gives
+  --- none (`edit_in_current_window()`). The file is the one the Report
+  --- underlined, whatever Neovim's current directory is now.
   ---
   --- Opens nothing, and warns the user why, when that file is no regular file
   --- any more or cannot be looked up now (`refusal_to_open()`).
@@ -369,11 +388,8 @@ function M.new(identity)
       vim.notify(refusal, vim.log.levels.WARN)
       return
     end
-    vim.cmd('edit ' .. vim.fn.fnameescape(file_named_by(candidate.path)))
-    if candidate.line then
-      local last_line = vim.api.nvim_buf_line_count(0)
-      vim.api.nvim_win_set_cursor(0, { math.min(math.max(candidate.line, 1), last_line), 0 })
-    end
+    local open_file = current_environment().open_file or edit_in_current_window
+    open_file(file_named_by(candidate.path), candidate.line)
   end
 
   --- Shows the records kept in `records_file` in `report_buffer`, an empty

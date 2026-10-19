@@ -42,9 +42,15 @@
 --- diffs' context `F` toggles stays one for the editor (`aineo.changes.full_context`).
 
 local copy = require('aineo.changes.copy')
+local open_file = require('aineo.changes.open_file')
 
 ---@class aineo.changes: aineo.changes.Home
 local M = copy.new()
+
+--- Opens a working tree's file in the current window, at a line when given,
+--- as the files window's `<S-CR>` opens a file there
+--- (`open_file.open_working_file()`).
+M.open_working_file = open_file.open_working_file
 
 --- How many homes `M.new()` has counted: each is told from the others by it.
 local homes_counted = 0

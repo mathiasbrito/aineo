@@ -7,6 +7,7 @@ local closing = require('aineo.entry.closing')
 local editors = require('aineo.entry.editors')
 local errors = require('aineo.entry.errors')
 local folder_tabs = require('aineo.entry.folder_tabs')
+local links = require('aineo.entry.links')
 local places = require('aineo.entry.places')
 local prompt = require('aineo.entry.prompt')
 local registry = require('aineo.entry.registry')
@@ -221,8 +222,29 @@ local function make_tab(homes, key, callbacks)
   --- Whether the report home has been given its environment yet.
   local report_environment_given = false
 
-  --- Gives the report home the editor's clock, and the state directory and
-  --- working directory of `kept_places()`, the first time only.
+  --- The top level of the tab's project: the working tree the changes pane
+  --- reads for the tab's session (`aineo.changes`'s `working_tree_top()`),
+  --- else, while it has found none, the directory the session's Claude Code
+  --- started in (`aineo.claude`'s `session_directory()`); nil before any start.
+  ---
+  ---@return string?
+  local function project_top()
+    return homes.changes.working_tree_top() or homes.claude.session_directory()
+  end
+
+  --- Opens the file `file`, an absolute path, at line `line` when given, as
+  --- a link to it in one of the tab's panes opens it (`links.open_file()`),
+  --- in the tab's project (`project_top()`).
+  ---
+  ---@param file string
+  ---@param line integer?
+  local function open_linked_file(file, line)
+    links.open_file(file, line, project_top())
+  end
+
+  --- Gives the report home the editor's clock, the state directory and
+  --- working directory of `kept_places()`, and the opening of a file a
+  --- double-clicked path names (`open_linked_file()`), the first time only.
   local function give_report_environment()
     if report_environment_given then
       return
@@ -233,6 +255,7 @@ local function make_tab(homes, key, callbacks)
       end,
       state_directory = places.kept_places().state_directory,
       working_directory = places.kept_places().working_directory,
+      open_file = open_linked_file,
     })
     report_environment_given = true
   end
@@ -592,15 +615,31 @@ local function make_tab(homes, key, callbacks)
     end
   end
 
+  --- Follows the link `text` shown in Claude's terminal, naming line `line`
+  --- when it names one (`links.open_link()`): a relative path is in the
+  --- directory the session's Claude Code started in, and a file opens in the
+  --- tab's project (`project_top()`).
+  ---
+  ---@param text string
+  ---@param line integer?
+  local function follow_link(text, line)
+    links.open_link(text, line, {
+      directory = homes.claude.session_directory(),
+      project = project_top(),
+    })
+  end
+
   --- Follows the Claude Code on `terminal`, now the tab's own: the tab line
   --- is drawn again whenever its session's name changes
-  --- (`redraw_tab_line_when_named()`), and the tabs home is told whenever it
-  --- starts or stops being busy (`busy_watch`).
+  --- (`redraw_tab_line_when_named()`), the tabs home is told whenever it
+  --- starts or stops being busy (`busy_watch`), and a link it shows is
+  --- followed on a double-click (`links.map_link_keys()`, `follow_link()`).
   ---
   ---@param terminal integer
   local function follow_claude_terminal_activity(terminal)
     redraw_tab_line_when_named(terminal)
     busy_watch.tell_when_busy_changes(terminal, tell_tabs_home_busy)
+    links.map_link_keys(terminal, follow_link)
   end
 
   --- Makes the tab the one in the tab page the current window is in, once its
