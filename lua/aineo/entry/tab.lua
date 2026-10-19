@@ -1567,6 +1567,9 @@ local function make_tab(homes, key, callbacks)
     zoom = function()
       homes.layout.toggle_zoom()
     end,
+    ['zoom full'] = function()
+      homes.layout.toggle_full_zoom()
+    end,
   }
 
   --- What Send does in Visual mode: sends the selection alone, unless a claim
