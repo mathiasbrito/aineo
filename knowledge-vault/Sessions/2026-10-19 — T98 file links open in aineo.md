@@ -1,7 +1,7 @@
 # 2026-10-19 — T98 file links open in aineo
 
-**Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`, on Opus)
-**Branch:** `feature/t98-file-links` · **Pull request:** #285 (into `dev`), one fix round
+**Author:** Mathias Santos de Brito, with Claude — implementer agent (`neovim-lua-developer`, on Opus)
+**Branch:** `feature/t98-file-links` · **Pull request:** #285 (into `dev`), two fix rounds
 
 A link to a text file now opens in aineo's middle column, at the line it names, from Claude's terminal (a double-click in Terminal or Normal mode, or `gx` in Normal mode) and from the Agent Report (a double-click). Anything else goes to the operating system through `vim.ui.open()`: a file that is not text, a directory, a web address. A D30 small fix of wave 21, from the user's request of 2026-10-19 and the orchestrator's rulings A505 and A506 (D88). The first round opened only a file of the project in aineo; the fix round, on A506, opens a text file wherever it lies.
 
@@ -50,7 +50,7 @@ Fix round (A506), seen red before the change: *a double-click in the Report on a
 
 Each run alone from the committed tree, on a copy of `tests/test_entry_links.lua` narrowed to the cases that target it, the file restored from a pristine copy after each.
 
-First round, on the first round's tree (`e74fe0a`). Mutants 4, 5 and 7 edit code the fix round removed or changed; the rest edit code it kept.
+First round, on the tree of the commit *Open project text files from links in aineo's middle column*. Mutants 4, 5 and 7 edit code the fix round removed or changed; the rest edit code it kept.
 
 | # | Literal edit | Killed by |
 |---|---|---|
@@ -75,17 +75,24 @@ Fix round, on the tree pushed after it:
 | B | links.lua `if is_text_file(file) then` → `if true then` | assertion — Report and terminal binary cases |
 | C | links.lua `open_working_file(vim.fs.dirname(file), vim.fs.basename(file), line)` without `line` | assertion — `line` 1, not 3 (terminal text and `gx`) |
 
+Fix round 2, from the tests-and-records review of PR #285: two mutants survived `tests/test_entry_links.lua`, each shown surviving on the tree before the round, then killed by a case added for it. Both cases arrived green, since they pin code that already existed.
+
+| # | Literal edit | Before | After |
+|---|---|---|---|
+| R | report/home.lua `open_file(file_named_by(candidate.path), candidate.line)` → `open_file(file_named_by(candidate.path))` | survived the Report cases of the links file (`Fails (0)`); killed by `tests/test_report_paths.lua`, 11 failures, `line` 1 not 3, through the same wiring | killed (assertion) by *a double-click in the Report on a path naming a line opens its file in the file column, at the line*: `line` 1, not 3 |
+| N | links.lua `vim.keymap.set({ 'n', 't' }, '<2-LeftMouse>', …)` → `vim.keymap.set({ 't' }, '<2-LeftMouse>', …)` | survived the whole links file (`Fails (0)`) | killed (assertion) by *a double-click in Claude's terminal on a text file of the project, in Normal mode, opens it in the file column, at its line*: current `terminal` |
+
 The brief's “open in the current window” has no separate edit in this design: every open is an `:edit` in the window the click came from, which the layout's redirect moves to the middle column; mutant 4 is the Report going back to its own opener.
 
 ## Checks
 
-- `make test_file FILE=tests/test_entry_links.lua` — 12 cases, `Fails (0) and Notes (0)`, after the fix round as after the first.
+- `make test_file FILE=tests/test_entry_links.lua` — 14 cases after fix round 2, `Fails (0) and Notes (0)`.
 - `tests/test_report_paths.lua`, `tests/test_changes_edit_file.lua`, `tests/test_changes_open_file.lua`, `tests/test_entry_report.lua`, `tests/test_doc.lua` — each `Fails (0) and Notes (0)`.
 - `make lint` — clean. No whole suite (D30).
 
 ## Commits
 
-Branch commits `e74fe0a` (the code, help and tests), `52ea7d1` (the records) and the fix round's commit (A506); `dev` hashes are recorded after the merge, which replays them.
+Recorded after the merge, which replays the branch's commits under new hashes. On the branch: *Open project text files from links in aineo's middle column* (the code, help and tests), *Record D88, T98 and the session note for links opening in aineo* (the records), *Open a linked text file in aineo wherever it lies (A506)* (fix round 1) and *Pin the Report's line and a Normal-mode double-click on a link* (fix round 2).
 
 ## Open threads
 

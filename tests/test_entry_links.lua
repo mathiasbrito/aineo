@@ -248,6 +248,19 @@ T['a double-click in the Report']['on a file whose first NUL comes after 8 KiB o
   )
 end
 
+T['a double-click in the Report']['on a path naming a line opens its file in the file column, at the line'] = function()
+  local top = open_layout_in_project('links-report-line')
+  receive_details_and_enter_report('See lua/x.lua:3 now')
+
+  double_click(cell_of(REPORT, 'lua/x.lua:3', 0))
+
+  wait_until_current_file_is(vim.fs.joinpath(top, 'lua/x.lua'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(top, 'lua/x.lua')), line = 3 }
+  )
+end
+
 T['a double-click in the Report']['on a text file outside the project opens it in the file column'] = function()
   local top = open_layout_in_project('links-report-outside')
   local outside = vim.fs.joinpath(vim.fs.dirname(top), 'outside.txt')
@@ -288,6 +301,21 @@ T["a double-click in Claude's terminal"]['on a text file of the project opens it
   eq(
     { followed = what_followed(), line = cursor_line() },
     { followed = opened_in_file_column(vim.fs.joinpath(top, 'notes.txt')), line = 3 }
+  )
+end
+
+T["a double-click in Claude's terminal"]['on a text file of the project, in Normal mode, opens it in the file column, at its line'] = function()
+  local top = open_layout_in_project('links-terminal-normal')
+  show_in_claude_terminal('See notes.txt:2 now')
+  local cell = cell_of(CLAUDE_TERMINAL, 'notes.txt:2', 2)
+  child.cmd('stopinsert')
+
+  double_click(cell)
+
+  wait_until_current_file_is(vim.fs.joinpath(top, 'notes.txt'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(top, 'notes.txt')), line = 2 }
   )
 end
 
