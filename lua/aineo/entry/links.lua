@@ -48,11 +48,12 @@ end
 
 --- `path` with a leading `~`, alone or before a `/`, replaced by the home
 --- folder; any other path as it is, as is every path when the home folder is
---- unknown. A `~` anywhere else, and `~name/`, is part of a name.
+--- unknown. A `~` anywhere else, and `~name/`, is part of a name. The
+--- Report reads its paths by the same rule (`aineo.report`'s environment).
 ---
 ---@param path string
 ---@return string
-local function with_home_expanded(path)
+function M.with_home_expanded(path)
   local home = vim.uv.os_homedir()
   if home and (path == '~' or vim.startswith(path, '~/')) then
     return home .. path:sub(2)
@@ -97,7 +98,7 @@ function M.open_link(text, line, directory)
   if vim.startswith(path, FILE_ADDRESS) then
     path = vim.uri_to_fname(path)
   end
-  path = with_home_expanded(path)
+  path = M.with_home_expanded(path)
   local file = vim.startswith(path, '/') and path or vim.fs.joinpath(directory, path)
   local stat = vim.uv.fs_stat(file)
   if not stat then

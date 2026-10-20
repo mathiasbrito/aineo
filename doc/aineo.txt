@@ -2830,8 +2830,9 @@ character: `lua/x.lua`, `./Makefile`, `/etc/hosts`, `README.md` and
 `.luarc.json` are paths, `Makefile` and `.gitignore` are not. A `:<line>` or
 `:<line>:<column>` at its end is part of it and names the line; a range,
 `x.lua:12-20`, or `x.lua#L12` names no file. A relative path is looked up in
-the working directory (below), an absolute one as it is; `~` is not
-expanded. After a `:cd`, the relative paths a new Claude Code writes may not
+the working directory (below), an absolute one as it is; a leading `~/` is
+your home folder, and a `~` anywhere else, or `~name/`, is left as
+written. After a `:cd`, the relative paths a new Claude Code writes may not
 be found. A file name holding a space is never found whole, and text inside
 a web link is never a path. A path is looked up when the Report shows its
 report: a file made later is underlined the next time the Report shows it,
