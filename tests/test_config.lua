@@ -10,7 +10,7 @@ local DEFAULTS = {
   autostart = true,
   claude = { cmd = { 'claude' }, hide_multiplexer = true },
   layout = { report_height = 2 / 3 },
-  changes = {},
+  changes = { graph_limit = 1000 },
   tabs = { padding = 2, always_show = true },
   find = { picker = 'auto' },
 }
@@ -268,9 +268,34 @@ T['resolve_config()']['takes the working branch of the changes pane from either 
     { changes = { working_branch = 'dev' } }
   )
 
-  eq(from_global.changes, { working_branch = 'origin/dev' })
-  eq(from_setup.changes, { working_branch = 'dev' })
+  eq(from_global.changes, { working_branch = 'origin/dev', graph_limit = 1000 })
+  eq(from_setup.changes, { working_branch = 'dev', graph_limit = 1000 })
   eq(config.resolve_config(nil, nil).changes.working_branch, nil)
+end
+
+T['resolve_config()']['takes the commit graph’s limit from either source, 1000 by default'] = function()
+  local from_global = config.resolve_config({ changes = { graph_limit = 50 } }, nil)
+  local from_setup = config.resolve_config(
+    { changes = { graph_limit = 50 } },
+    { changes = { graph_limit = 1 } }
+  )
+
+  eq(from_global.changes.graph_limit, 50)
+  eq(from_setup.changes.graph_limit, 1)
+  eq(config.resolve_config(nil, nil).changes.graph_limit, 1000)
+end
+
+T['resolve_config()']['refuses a graph limit that is not a whole number of at least 1'] =
+  MiniTest.new_set({
+    parametrize = { { 0 }, { -5 }, { 2.5 }, { '100' }, { false }, { math.huge } },
+  })
+
+T['resolve_config()']['refuses a graph limit that is not a whole number of at least 1']['as changes.graph_limit'] = function(
+  limit
+)
+  expect.error(function()
+    config.resolve_config({ changes = { graph_limit = limit } }, nil)
+  end, 'changes%.graph_limit: expected a whole number of at least 1')
 end
 
 T['resolve_config()']['returns a key no setting knows, rather than refusing it'] = function()
