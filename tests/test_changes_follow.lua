@@ -148,6 +148,7 @@ end
 ---
 ---@param case string the case's own name
 ---@param before_beginning? string Lua run in the child before the session begins
+---@return string top the repository's top level
 local function pane_with_three_edited_files(case, before_beginning)
   local top =
     git_repo.create(case, { ['a.txt'] = { 'one' }, ['b.txt'] = { 'one' }, ['c.txt'] = { 'one' } })
@@ -167,6 +168,7 @@ local function pane_with_three_edited_files(case, before_beginning)
   expect_lines(COMMITS, { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Second') })
   expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt', '  M c.txt' })
   enter_window_of(FILES)
+  return top
 end
 
 --- The Lua that keeps, in `_G.timers`, every timer the pause behind a diff
@@ -188,7 +190,7 @@ T['moving the cursor in the files window'] = MiniTest.new_set()
 T['moving the cursor in the files window']['shows the diff of the file it reaches'] = function()
   pane_with_three_edited_files('follow-shows')
 
-  child.type_keys('j', 'j')
+  child.type_keys('j', 'l', 'j')
 
   expect_last_shown_name('aineo://diff/b.txt')
   eq(last_shown_changes(), { '-one', '+three' })
@@ -197,7 +199,7 @@ end
 T['moving the cursor in the files window']['leaves the cursor in the files window, on its line'] = function()
   pane_with_three_edited_files('follow-cursor-stays')
 
-  child.type_keys('j', 'j')
+  child.type_keys('j', 'l', 'j')
 
   expect_last_shown_name('aineo://diff/b.txt')
   eq(
@@ -206,14 +208,67 @@ T['moving the cursor in the files window']['leaves the cursor in the files windo
   )
 end
 
+T['moving the cursor in the files window']['draws nothing while no diff is open'] = function()
+  pane_with_three_edited_files('follow-none-open')
+
+  child.type_keys('j', 'j')
+
+  vim.wait(QUIET_MS)
+  eq({ draws = draws(), reads = child.lua_get('_G.reads') }, { draws = 0, reads = 0 })
+end
+
+T['moving the cursor in the files window']['follows once l opened a diff'] = function()
+  pane_with_three_edited_files('follow-after-l')
+  child.type_keys('j', 'l')
+  expect_last_shown_name('aineo://diff/a.txt')
+
+  child.type_keys('j')
+
+  expect_last_shown_name('aineo://diff/b.txt')
+end
+
+T['moving the cursor in the files window']['draws nothing while the file column holds a file opened for edition'] = function()
+  local top = pane_with_three_edited_files('follow-edited-file')
+  child.type_keys('j', 'l')
+  expect_last_shown_name('aineo://diff/a.txt')
+  child.lua(
+    [[
+    local top = ...
+    local column = vim.fn.bufwinid(_G.shown_diffs[#_G.shown_diffs])
+    vim.api.nvim_win_call(column, function()
+      vim.cmd.edit(vim.fs.joinpath(top, 'a.txt'))
+    end)
+  ]],
+    { top }
+  )
+  local drawn = draws()
+
+  child.type_keys('j')
+
+  vim.wait(QUIET_MS)
+  eq(draws(), drawn)
+end
+
+T['moving the cursor in the files window']['draws nothing when l in the commits window moved the cursor to the files window'] = function()
+  pane_with_three_edited_files('follow-from-commits')
+  enter_window_of(COMMITS)
+
+  child.type_keys('l')
+
+  vim.wait(QUIET_MS)
+  eq({ current = current_buffer_name(), draws = draws() }, { current = FILES, draws = 0 })
+end
+
 T['moving the cursor in the files window']['draws only the last file of the moves within the pause'] = function()
   pane_with_three_edited_files('follow-debounce')
+  child.type_keys('j', 'l')
+  expect_last_shown_name('aineo://diff/a.txt')
 
-  child.type_keys(KEY_GAP_MS, 'j', 'j', 'j')
+  child.type_keys(KEY_GAP_MS, 'j', 'j')
 
   expect_last_shown_name('aineo://diff/c.txt')
   vim.wait(QUIET_MS)
-  eq({ draws = draws(), reads = child.lua_get('_G.reads') }, { draws = 1, reads = 1 })
+  eq({ draws = draws(), reads = child.lua_get('_G.reads') }, { draws = 2, reads = 2 })
 end
 
 T['moving the cursor in the files window']['shows nothing when the cursor left the window within the pause'] = function()
@@ -229,7 +284,7 @@ end
 T['moving the cursor in the files window']['keeps the diff against the previous version until h chooses HEAD'] = function()
   pane_with_three_edited_files('follow-previous')
 
-  child.type_keys('j')
+  child.type_keys('j', 'l')
   expect_last_shown_name('aineo://diff/a.txt')
   child.type_keys('j')
 
@@ -270,7 +325,7 @@ end
 
 T['moving the cursor in the files window']['shows nothing new on the header'] = function()
   pane_with_three_edited_files('follow-header')
-  child.type_keys('j')
+  child.type_keys('j', 'l')
   expect_last_shown_name('aineo://diff/a.txt')
 
   child.type_keys('k')
@@ -297,7 +352,7 @@ T['moving the cursor in the files window']['leaves the commits window’s choice
   local commits_cursor = 'vim.api.nvim_win_get_cursor(vim.fn.bufwinid(...))'
   local before = child.lua_get(commits_cursor, { COMMITS })
 
-  child.type_keys('j', 'j')
+  child.type_keys('j', 'l', 'j')
   expect_last_shown_name('aineo://diff/b.txt')
 
   vim.wait(QUIET_MS)
@@ -307,9 +362,9 @@ T['moving the cursor in the files window']['leaves the commits window’s choice
   )
 end
 
-T['moving the cursor in the files window']['shows a diff again after the diff was closed'] = function()
+T['moving the cursor in the files window']['draws nothing after the diff was closed'] = function()
   pane_with_three_edited_files('follow-after-close')
-  child.type_keys('j')
+  child.type_keys('j', 'l')
   expect_last_shown_name('aineo://diff/a.txt')
   child.lua("require('aineo.changes').close_shown_diff()")
   child.type_keys('k')
@@ -318,27 +373,19 @@ T['moving the cursor in the files window']['shows a diff again after the diff wa
 
   child.type_keys('j')
 
-  git_repo.wait_until('the diff is drawn again', function()
-    return draws() > drawn
-  end)
-  eq(
-    child.lua_get(
-      'vim.fn.bufwinid(vim.api.nvim_buf_get_name(_G.shown_diffs[#_G.shown_diffs])) ~= -1'
-    ),
-    true
-  )
+  vim.wait(QUIET_MS)
+  eq(draws(), drawn)
 end
 
 T['moving the cursor in the files window']['draws the diff once while it is shown already'] = function()
   pane_with_three_edited_files('follow-already-shown')
-  child.type_keys('j')
+  child.type_keys('j', 'l')
   expect_last_shown_name('aineo://diff/a.txt')
 
-  child.type_keys('l')
   child.type_keys('k', 'j')
 
   vim.wait(QUIET_MS)
-  eq(draws(), 2)
+  eq(draws(), 1)
 end
 
 --- Wipes the child's files buffer and tells how many pause timers there were
@@ -365,7 +412,7 @@ end
 
 T['moving the cursor in the files window']['closes its timer once the files buffer is wiped'] = function()
   pane_with_three_edited_files('follow-wiped', TRACK_PAUSE_TIMERS)
-  child.type_keys('j')
+  child.type_keys('j', 'l')
   expect_last_shown_name('aineo://diff/a.txt')
 
   local timers = wipe_files_buffer_counting_pause_timers()
@@ -453,21 +500,20 @@ T['a file as HEAD has it']['is told once by h, and shows no diff'] = function()
 end
 
 T['a file as HEAD has it']['is told nothing while the diffs against HEAD follow the cursor'] = function()
-  pane_with_three_committed_files('quiet-follow')
+  local top = pane_with_three_edited_files('quiet-follow')
   child.type_keys('j', 'h')
-  git_repo.wait_until('the file told as HEAD has it', function()
-    return told():find('is as HEAD has it', 1, true) ~= nil
-  end)
+  expect_last_shown_name('aineo://uncommitted/a.txt')
+  git_repo.write(top, 'b.txt', { 'two' })
   child.cmd('messages clear')
-  local reads = child.lua_get('_G.reads')
+  local reads, drawn = child.lua_get('_G.reads'), draws()
 
-  child.type_keys(KEY_GAP_MS, 'j', 'j')
+  child.type_keys('j')
 
-  git_repo.wait_until('the diffs were read', function()
+  git_repo.wait_until('the diff was read', function()
     return child.lua_get('_G.reads') > reads
   end)
   vim.wait(QUIET_MS)
-  eq({ told = told(), draws = draws() }, { told = '', draws = 0 })
+  eq({ told = told(), draws = draws() }, { told = '', draws = drawn })
 end
 
 T['<BS> in a diff'] = MiniTest.new_set()
@@ -487,7 +533,7 @@ end
 
 T['<BS> in a diff']['shown by following the cursor moves the cursor to the files window, on the line of its file'] = function()
   pane_with_three_edited_files('back-follow')
-  child.type_keys('j', 'j', 'j')
+  child.type_keys('j', 'l', 'j', 'j')
   expect_last_shown_name('aineo://diff/c.txt')
   enter_last_diff_with_files_cursor_on(1)
 
@@ -535,7 +581,7 @@ end
 
 T['<BS> in a diff']['stays Vim’s own in a file opened for editing'] = function()
   pane_with_three_edited_files('back-edited-file')
-  child.type_keys('j')
+  child.type_keys('j', 'l')
   expect_last_shown_name('aineo://diff/a.txt')
   child.lua("vim.fn.maparg('gf', 'n', false, true).callback()")
   vim.wait(git_repo.PATIENCE_MS, function()
