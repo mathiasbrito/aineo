@@ -130,14 +130,16 @@ function M.run_instructions()
 end
 
 --- The paragraph appended to Claude Code's system prompt after the report's
---- instructions, which tells the main agent when to call the announcement
---- tool and that its reply asks for nothing.
+--- instructions: the announcement tool's own rule, which every agent and
+--- subagent follows — when to call it and with what — and that its reply
+--- asks for nothing.
 ---
 ---@return string
 function M.announce_instructions()
   return (
-    'When you, or a subagent you start, create a git branch or worktree for new work,'
-    .. ' call `%s` once with its kind and its path or branch.'
+    'Required for every agent and subagent: call `%s` once right after you create'
+    .. ' a git branch or worktree for new work, with kind, its path or branch,'
+    .. ' the base commit it was created from, and a short label.'
     .. ' It only informs aineo; do not act on its reply.'
   ):format(M.announce_tool_name())
 end
@@ -150,7 +152,8 @@ end
 ---@return string
 function M.subagent_announce_context()
   return M.announce_instructions()
-    .. " If you started in a git worktree made for your task, call it once, now, with that worktree's path."
+    .. ' If you started in a git worktree made for your task, call it once, now,'
+    .. " with that worktree's path and the commit it was made from."
 end
 
 --- Lists the editor `entry` describes among the running aineo editors under
@@ -268,37 +271,43 @@ end
 
 --- The handler `on_work_announced()` registered, called with each
 --- announcement a relay offers this editor.
----@type fun(work: aineo.mcp.Work, start_token: string): boolean?
+---@type fun(work: aineo.mcp.Work, start_token: string): boolean|string|nil
 local work_announced_handler
 
 --- Registers `handler`, in place of any before, as what this editor does
 --- with each announcement of a worktree or a branch an agent created, which
---- the relay of a Claude Code this editor started offers it
---- (`receive_work_announcement()`): `handler(work, start_token)`, with the
---- announcement — its path absolute — and the token of the start of Claude
---- Code whose agent made it, returns whether it took it, at once. Its
+--- the relay of a Claude Code this editor started offers it, or aineo's own
+--- hook in that Claude Code (`receive_work_announcement()`):
+--- `handler(work, start_token)`, with the announcement — its path absolute —
+--- and the token of the start of Claude Code whose agent made it, returns
+--- whether it took it, or why it refuses it, in words for the agent. Its
 --- strategy is the composition root's: plain dependency inversion, bound
 --- once at start.
 ---
----@param handler fun(work: aineo.mcp.Work, start_token: string): boolean
+---@param handler fun(work: aineo.mcp.Work, start_token: string): boolean|string
 function M.on_work_announced(handler)
   work_announced_handler = handler
 end
 
 --- Takes an announcement a relay offers, `work` of the start `start_token`,
---- and answers at once whether this editor took it: what the handler
---- `on_work_announced()` registered answers; false with no handler
+--- and answers whether this editor took it, or why it refuses it: what the
+--- handler `on_work_announced()` registered answers — a string is the
+--- refusal, `true` taken, anything else not; false with no handler
 --- registered. Called in the RPC request that offers it, so the handler
---- answers without waiting on anything.
+--- answers without waiting on the relay; it may wait a bounded time on git.
 ---
 ---@param work aineo.mcp.Work
 ---@param start_token string
----@return boolean taken
+---@return boolean|string taken `true` when taken, or the words of its refusal
 function M.receive_work_announcement(work, start_token)
   if not work_announced_handler then
     return false
   end
-  return work_announced_handler(work, start_token) == true
+  local answer = work_announced_handler(work, start_token)
+  if type(answer) == 'string' then
+    return answer
+  end
+  return answer == true
 end
 
 --- The handler `on_run_called()` registered, called with each call of a run

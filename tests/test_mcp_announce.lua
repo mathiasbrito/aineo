@@ -9,6 +9,9 @@ local eq = MiniTest.expect.equality
 local get = vim.tbl_get
 local decoded = mcp_relay.decoded
 
+--- The commit each valid announcement says its work was made from.
+local BASE = 'origin/dev'
+
 --- The child Neovim a relay offers announcements to: the user's editor.
 local editor = MiniTest.new_child_neovim()
 
@@ -119,9 +122,9 @@ T['announce_work']['is offered to the editor that started Claude Code, the work 
   local requests = {}
   local relay = relay_for(start_recording_editor(requests, true))
 
-  relay:send(announce({ kind = 'worktree', path = '/projects/alpha-wt' }))
+  relay:send(announce({ kind = 'worktree', path = '/projects/alpha-wt', base = BASE }))
   relay:next_line()
-  relay:send(announce({ kind = 'branch', branch = 'feature/x' }))
+  relay:send(announce({ kind = 'branch', branch = 'feature/x', base = BASE }))
   relay:next_line()
 
   eq(
@@ -129,8 +132,8 @@ T['announce_work']['is offered to the editor that started Claude Code, the work 
       return request.arguments
     end, requests),
     {
-      { { kind = 'worktree', path = '/projects/alpha-wt' }, TOKEN },
-      { { kind = 'branch', branch = 'feature/x' }, TOKEN },
+      { { kind = 'worktree', path = '/projects/alpha-wt', base = BASE }, TOKEN },
+      { { kind = 'branch', branch = 'feature/x', base = BASE }, TOKEN },
     }
   )
   eq(requests[1].lua, requests[2].lua)
@@ -152,17 +155,46 @@ T['announce_work']['whose arguments are refused is a tool error naming the field
       { { kind = 'worktree', path = 42 }, 'path: expected a non-empty string' },
       { { kind = 'branch' }, 'branch: expected a non-empty string' },
       { { kind = 'branch', branch = vim.NIL }, 'branch: expected a non-empty string' },
-      { { kind = 'worktree', path = '/w', branch = 'b' }, 'branch: not given with kind worktree' },
       {
-        { kind = 'worktree', path = '/w', branch = vim.NIL },
+        { kind = 'worktree', path = '/w', branch = 'b', base = 'main' },
         'branch: not given with kind worktree',
       },
-      { { kind = 'branch', branch = 'b', path = '/w' }, 'path: not given with kind branch' },
-      { { kind = 'branch', branch = 'b', base = 'main' }, 'base: not a field of the announcement' },
+      {
+        { kind = 'worktree', path = '/w', branch = vim.NIL, base = 'main' },
+        'branch: not given with kind worktree',
+      },
+      {
+        { kind = 'branch', branch = 'b', path = '/w', base = 'main' },
+        'path: not given with kind branch',
+      },
+      { { kind = 'branch', branch = 'b' }, 'base: expected a non-empty string' },
+      { { kind = 'worktree', path = '/w', base = vim.NIL }, 'base: expected a non-empty string' },
+      { { kind = 'worktree', path = '/w', base = '' }, 'base: expected a non-empty string' },
+      { { kind = 'branch', branch = 'b', base = 'a\nb' }, 'base: holds a NUL or a line break' },
+      {
+        { kind = 'branch', branch = 'b', base = 'main', note = 'x' },
+        'note: not a field of the announcement',
+      },
       { { kind = 'worktree', path = '/' .. ('a'):rep(4096) }, 'path: longer than 4096 bytes' },
       { { kind = 'branch', branch = 'a\0b' }, 'branch: holds a NUL or a line break' },
       { { kind = 'branch', branch = 'a\nb' }, 'branch: holds a NUL or a line break' },
       { { kind = 'worktree', path = '/w\r' }, 'path: holds a NUL or a line break' },
+      {
+        { kind = 'branch', branch = 'b', base = 'main', label = vim.NIL },
+        'label: expected a non-empty string',
+      },
+      {
+        { kind = 'branch', branch = 'b', base = 'main', label = '' },
+        'label: expected a non-empty string',
+      },
+      {
+        { kind = 'branch', branch = 'b', base = 'main', label = 7 },
+        'label: expected a non-empty string',
+      },
+      {
+        { kind = 'branch', branch = 'b', base = 'main', label = 'a\rb' },
+        'label: holds a NUL or a line break',
+      },
     },
   })
 
@@ -187,10 +219,23 @@ T['announce_work']['whose string is exactly 4096 bytes long is offered'] = funct
   local relay = relay_for(start_recording_editor(requests, true))
   local path = '/' .. ('a'):rep(4095)
 
-  relay:send(announce({ kind = 'worktree', path = path }))
+  relay:send(announce({ kind = 'worktree', path = path, base = BASE }))
 
   eq(get(decoded(relay:next_line()), 'result'), result_of('ok', false))
-  eq(requests[1].arguments[1], { kind = 'worktree', path = path })
+  eq(requests[1].arguments[1], { kind = 'worktree', path = path, base = BASE })
+end
+
+T['announce_work']['offers the base and the label as the agent gave them'] = function()
+  local requests = {}
+  local relay = relay_for(start_recording_editor(requests, true))
+
+  relay:send(announce({ kind = 'branch', branch = 'feature/x', base = 'HEAD~1', label = 'T108' }))
+  relay:next_line()
+
+  eq(
+    requests[1].arguments[1],
+    { kind = 'branch', branch = 'feature/x', base = 'HEAD~1', label = 'T108' }
+  )
 end
 
 T['announce_work']['offers a path made absolute against the relay’s working directory, and normalised'] =
@@ -210,10 +255,10 @@ T['announce_work']['offers a path made absolute against the relay’s working di
   local requests = {}
   local relay = relay_for(start_recording_editor(requests, true))
 
-  relay:send(announce({ kind = 'worktree', path = path }))
+  relay:send(announce({ kind = 'worktree', path = path, base = BASE }))
   relay:next_line()
 
-  eq(requests[1].arguments[1], { kind = 'worktree', path = offered })
+  eq(requests[1].arguments[1], { kind = 'worktree', path = offered, base = BASE })
 end
 
 T['the words'] = MiniTest.new_set()
@@ -224,27 +269,29 @@ T['the words']['name the tool as Claude Code names it'] = function()
   eq(name, 'mcp__aineo__announce_work')
 end
 
-T['the words']['appended to the system prompt are one paragraph of 204 bytes'] = function()
+T['the words']['appended to the system prompt are one paragraph of 273 bytes, the tool’s rule'] = function()
   local paragraph = mcp.announce_instructions()
 
   eq(
     paragraph,
-    'When you, or a subagent you start, create a git branch or worktree for new work,'
-      .. ' call `mcp__aineo__announce_work` once with its kind and its path or branch.'
+    'Required for every agent and subagent: call `mcp__aineo__announce_work` once right after you create'
+      .. ' a git branch or worktree for new work, with kind, its path or branch,'
+      .. ' the base commit it was created from, and a short label.'
       .. ' It only informs aineo; do not act on its reply.'
   )
-  eq(#paragraph, 204)
+  eq(#paragraph, 273)
 end
 
-T['the words']['for a subagent are the paragraph and one sentence, 303 bytes'] = function()
+T['the words']['for a subagent are the paragraph and one sentence, 404 bytes'] = function()
   local context = mcp.subagent_announce_context()
 
   eq(
     context,
     mcp.announce_instructions()
-      .. " If you started in a git worktree made for your task, call it once, now, with that worktree's path."
+      .. ' If you started in a git worktree made for your task, call it once, now,'
+      .. " with that worktree's path and the commit it was made from."
   )
-  eq(#context, 303)
+  eq(#context, 404)
 end
 
 T['in the editor'] = MiniTest.new_set()
@@ -257,10 +304,13 @@ T['in the editor']['an announcement reaches the handler aineo.mcp registered, wh
   end)]])
   local relay = relay_for(editor.job.address)
 
-  relay:send(announce({ kind = 'branch', branch = 'feature/x' }))
+  relay:send(announce({ kind = 'branch', branch = 'feature/x', base = BASE }))
 
   eq(get(decoded(relay:next_line()), 'result'), result_of('ok', false))
-  eq(editor.lua_get('_G.announced'), { { kind = 'branch', branch = 'feature/x' }, TOKEN })
+  eq(
+    editor.lua_get('_G.announced'),
+    { { kind = 'branch', branch = 'feature/x', base = BASE }, TOKEN }
+  )
 end
 
 T['in the editor']['an announcement the handler declines is not taken'] = function()
@@ -270,16 +320,31 @@ T['in the editor']['an announcement the handler declines is not taken'] = functi
   end)]])
   local relay = relay_for(editor.job.address)
 
-  relay:send(announce({ kind = 'branch', branch = 'feature/x' }))
+  relay:send(announce({ kind = 'branch', branch = 'feature/x', base = BASE }))
 
   eq(get(decoded(relay:next_line()), 'result'), result_of('not taken', true))
+end
+
+T['in the editor']['an announcement the handler refuses is a tool error in the handler’s words'] = function()
+  children.restart(editor)
+  editor.lua([[require('aineo.mcp').on_work_announced(function()
+    return 'base: "nowhere" names no commit'
+  end)]])
+  local relay = relay_for(editor.job.address)
+
+  relay:send(announce({ kind = 'branch', branch = 'feature/x', base = 'nowhere' }))
+
+  eq(
+    get(decoded(relay:next_line()), 'result'),
+    result_of('aineo refused the announcement: base: "nowhere" names no commit', true)
+  )
 end
 
 T['in the editor']['an announcement with no handler registered is not taken'] = function()
   children.restart(editor)
   local relay = relay_for(editor.job.address)
 
-  relay:send(announce({ kind = 'branch', branch = 'feature/x' }))
+  relay:send(announce({ kind = 'branch', branch = 'feature/x', base = BASE }))
 
   eq(get(decoded(relay:next_line()), 'result'), result_of('not taken', true))
 end
@@ -289,7 +354,7 @@ T['in the editor']['an announcement to an aineo older than the relay is not take
   editor.lua([[require('aineo.mcp').receive_work_announcement = nil]])
   local relay = relay_for(editor.job.address)
 
-  relay:send(announce({ kind = 'branch', branch = 'feature/x' }))
+  relay:send(announce({ kind = 'branch', branch = 'feature/x', base = BASE }))
 
   eq(get(decoded(relay:next_line()), 'result'), result_of('not taken', true))
 end
@@ -297,7 +362,7 @@ end
 T['announce_work']['taken by the editor is answered ok, nothing more'] = function()
   local relay = relay_for(start_recording_editor({}, true))
 
-  relay:send(announce({ kind = 'worktree', path = '/projects/alpha-wt' }))
+  relay:send(announce({ kind = 'worktree', path = '/projects/alpha-wt', base = BASE }))
 
   local answer = decoded(relay:next_line())
   eq({ get(answer, 'id'), get(answer, 'result') }, { 7, result_of('ok', false) })
@@ -306,7 +371,7 @@ end
 T['announce_work']['declined by the editor is a tool error, not taken, nothing more'] = function()
   local relay = relay_for(start_recording_editor({}, false))
 
-  relay:send(announce({ kind = 'branch', branch = 'feature/x' }))
+  relay:send(announce({ kind = 'branch', branch = 'feature/x', base = BASE }))
 
   eq(get(decoded(relay:next_line()), 'result'), result_of('not taken', true))
 end
@@ -318,7 +383,7 @@ T['announce_work']['with no start token is not taken, and no editor is asked'] =
     AINEO_START_TOKEN = '',
   })
 
-  relay:send(announce({ kind = 'branch', branch = 'feature/x' }))
+  relay:send(announce({ kind = 'branch', branch = 'feature/x', base = BASE }))
 
   eq(get(decoded(relay:next_line()), 'result'), result_of('not taken', true))
   eq(requests, {})
@@ -327,7 +392,7 @@ end
 T['announce_work']['with no editor address is not taken'] = function()
   local relay = mcp_relay.start_relay({ AINEO_EDITOR_ADDRESS = '', AINEO_START_TOKEN = TOKEN })
 
-  relay:send(announce({ kind = 'branch', branch = 'feature/x' }))
+  relay:send(announce({ kind = 'branch', branch = 'feature/x', base = BASE }))
 
   eq(get(decoded(relay:next_line()), 'result'), result_of('not taken', true))
 end
@@ -335,7 +400,7 @@ end
 T['announce_work']['for an editor that cannot be reached is not taken'] = function()
   local relay = relay_for(vim.fn.tempname() .. '.sock')
 
-  relay:send(announce({ kind = 'branch', branch = 'feature/x' }))
+  relay:send(announce({ kind = 'branch', branch = 'feature/x', base = BASE }))
 
   eq(get(decoded(relay:next_line()), 'result'), result_of('not taken', true))
 end
@@ -363,7 +428,7 @@ T['announce_work']['declined by the starting editor is offered to no other, thou
     CLAUDE_CODE_SESSION_ID = SESSION_ID,
   })
 
-  relay:send(announce({ kind = 'branch', branch = 'feature/x' }))
+  relay:send(announce({ kind = 'branch', branch = 'feature/x', base = BASE }))
 
   eq(get(decoded(relay:next_line()), 'result'), result_of('not taken', true))
   eq(others, {})
@@ -402,8 +467,8 @@ T['announce_work']['with a relative path is not taken, and no editor asked, when
   local requests = {}
   local relay = relay_with_no_working_directory(start_recording_editor(requests, true))
 
-  relay:send(announce({ kind = 'worktree', path = path }))
-  relay:send(announce({ kind = 'worktree', path = '/projects/agent-wt' }))
+  relay:send(announce({ kind = 'worktree', path = path, base = BASE }))
+  relay:send(announce({ kind = 'worktree', path = '/projects/agent-wt', base = BASE }))
 
   eq(
     vim.tbl_map(function(line)
@@ -417,7 +482,7 @@ end
 T['announce_work']['for an editor that does not answer in time is not taken, nothing more'] = function()
   local relay = relay_for(start_silent_editor())
 
-  relay:send(announce({ kind = 'branch', branch = 'feature/x' }))
+  relay:send(announce({ kind = 'branch', branch = 'feature/x', base = BASE }))
 
   eq(get(decoded(relay:next_line(10000)), 'result'), result_of('not taken', true))
 end

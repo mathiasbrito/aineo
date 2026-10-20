@@ -10,34 +10,48 @@ local M = {}
 --- them.
 local KINDS = { 'worktree', 'branch' }
 
---- The announcement tool, as `tools/list` describes it: an object of `kind`,
---- one of `KINDS`, and the one string of that kind, `path` or `branch`; no
---- other property.
+--- What the announcement tool says of itself: the rule every agent and
+--- subagent follows, first, as a client that shortens a description keeps
+--- its start.
+M.ANNOUNCE_RULE = 'Required for every agent and subagent: call once right after you create'
+  .. ' a git branch or worktree for new work, with kind, its path or branch,'
+  .. ' the base commit it was created from, and a short label.'
+
+--- The announcement tool, as `tools/list` describes it, by `ANNOUNCE_RULE`:
+--- an object of `kind`, one of `KINDS`, the one string of that kind, `path`
+--- or `branch`, and `base`, with `label` optional; no other property.
 ---
 ---@return table
 function M.announce_tool()
   return {
     name = names.ANNOUNCE_TOOL,
-    description = 'Informs aineo of a git branch or worktree just created for new work; replies ok.',
+    description = M.ANNOUNCE_RULE,
     inputSchema = {
       type = 'object',
       properties = {
         kind = { type = 'string', enum = vim.list_slice(KINDS) },
-        path = { type = 'string' },
-        branch = { type = 'string' },
+        path = { type = 'string', description = 'The worktree’s folder, for kind worktree.' },
+        branch = { type = 'string', description = 'The branch’s name, for kind branch.' },
+        base = {
+          type = 'string',
+          description = 'The commit the work was created from: an id, or a name git reads, such as origin/dev.',
+        },
+        label = { type = 'string', description = 'A short name for the task.' },
       },
-      required = { 'kind' },
+      required = { 'kind', 'base' },
       additionalProperties = false,
     },
   }
 end
 
---- A git worktree or branch an agent announced: its `kind`, and the one
---- string of that kind.
+--- A git worktree or branch an agent announced: its `kind`, the one string
+--- of that kind, the commit it was made from, and the agent's label for it.
 ---@class aineo.mcp.Work
 ---@field kind 'worktree'|'branch'
 ---@field path? string the worktree's folder, with `kind` `worktree`
 ---@field branch? string the branch's name, with `kind` `branch`
+---@field base string the commit the work was made from, as the agent names it: an id or any name git reads
+---@field label? string the agent's short name for the work's task
 
 --- The field each kind of work gives, by kind.
 local FIELD_OF = { worktree = 'path', branch = 'branch' }
@@ -65,14 +79,17 @@ local function string_refusal(field, value)
   return nil
 end
 
---- The first of `arguments`' keys, in sorted order, that no kind gives, or
---- nil when there is none.
+--- The fields an announcement may give.
+local FIELDS = { kind = true, path = true, branch = true, base = true, label = true }
+
+--- The first of `arguments`' keys, in sorted order, that is no field of an
+--- announcement (`FIELDS`), or nil when there is none.
 ---
 ---@param arguments table
 ---@return string?
 local function first_unknown_field(arguments)
   local unknown = vim.tbl_filter(function(key)
-    return key ~= 'kind' and key ~= FIELD_OF.worktree and key ~= FIELD_OF.branch
+    return not FIELDS[key]
   end, vim.tbl_keys(arguments))
   table.sort(unknown, function(left, right)
     return tostring(left) < tostring(right)
@@ -82,8 +99,9 @@ end
 
 --- Why `arguments` are not an announcement, naming the field at fault, or
 --- nil when they are one. Checked in this order: an object; its `kind`; the
---- string of that kind (`string_refusal()`); the other kind's field, given
---- at all, a JSON null included; any other key.
+--- string of that kind (`string_refusal()`); its `base`, as that string is;
+--- the other kind's field, given at all, a JSON null included; its `label`,
+--- when given, a JSON null included, as that string is; any other key.
 ---
 ---@param arguments any
 ---@return string?
@@ -95,13 +113,19 @@ local function refusal_of(arguments)
   if not field then
     return 'kind: expected one of ' .. table.concat(KINDS, ', ')
   end
-  local refusal = string_refusal(field, arguments[field])
+  local refusal = string_refusal(field, arguments[field]) or string_refusal('base', arguments.base)
   if refusal then
     return refusal
   end
   local other = field == FIELD_OF.worktree and FIELD_OF.branch or FIELD_OF.worktree
   if arguments[other] ~= nil then
     return ('%s: not given with kind %s'):format(other, arguments.kind)
+  end
+  if arguments.label ~= nil then
+    refusal = string_refusal('label', arguments.label)
+    if refusal then
+      return refusal
+    end
   end
   local unknown = first_unknown_field(arguments)
   if unknown then
@@ -112,13 +136,14 @@ end
 
 --- The announcement `arguments` describe, or nil and why they are refused.
 ---
---- An announcement is a table of `kind`, `worktree` or `branch`, and the one
---- string of that kind: `path` for a worktree, `branch` for a branch; each
---- non-empty, at most 4096 bytes, with no NUL and no line break. The other
---- kind's field, given at all, and any other key are refused, and so is a
---- JSON null (`vim.NIL`) in any field. The reason names the field at fault,
---- such as `path: expected a non-empty string`. The announcement returned is
---- a new table.
+--- An announcement is a table of `kind`, `worktree` or `branch`, the one
+--- string of that kind — `path` for a worktree, `branch` for a branch — and
+--- `base`, the commit the work was made from, with `label` optional; each
+--- string non-empty, at most 4096 bytes, with no NUL and no line break. The
+--- other kind's field, given at all, and any other key are refused, and so
+--- is a JSON null (`vim.NIL`) in any field. The reason names the field at
+--- fault, such as `base: expected a non-empty string`. The announcement
+--- returned is a new table.
 ---
 ---@param arguments any
 ---@return aineo.mcp.Work? work
@@ -129,7 +154,12 @@ function M.validate_work(arguments)
     return nil, refusal
   end
   local field = FIELD_OF[arguments.kind]
-  return { kind = arguments.kind, [field] = arguments[field] }
+  return {
+    kind = arguments.kind,
+    [field] = arguments[field],
+    base = arguments.base,
+    label = arguments.label,
+  }
 end
 
 --- `work` with its `path`, when it has one, made absolute against
@@ -147,7 +177,7 @@ function M.with_absolute_path(work, working_directory)
   end
   local path = vim.startswith(work.path, '/') and work.path
     or vim.fs.joinpath(working_directory, work.path)
-  return { kind = work.kind, path = vim.fs.normalize(path, { expand_env = false }) }
+  return vim.tbl_extend('force', work, { path = vim.fs.normalize(path, { expand_env = false }) })
 end
 
 return M
