@@ -237,7 +237,13 @@ local EVERY_STATUS_FAULTS = [[(function()
     end
   end
   for _, line in ipairs(vim.api.nvim_buf_get_lines(report.report_buffer(), 0, -1, false)) do
-    if not (line:find('^%d%d:%d%d %[%l+%] Task — Summary$') or line == '      - Detail') then
+    if
+      not (
+        line:find('^%d%d:%d%d %[%l+%] Task — Summary$')
+        or line == '      - Detail'
+        or line == '── Today ──'
+      )
+    then
       table.insert(faults, line)
     end
   end
@@ -501,6 +507,10 @@ local LONG_REPORT = {
   details = 'a details line long enough to wrap in a narrow Report, twice over',
 }
 
+--- The lines of the Report that a report's header and its details line are,
+--- from 1, under the separator of its day, which is the first line.
+local HEADER_LINE, DETAILS_LINE = 2, 3
+
 T['a wrapped report'] = MiniTest.new_set()
 
 T['a wrapped report']['continues its first line under the [ of its status'] = function()
@@ -508,7 +518,7 @@ T['a wrapped report']['continues its first line under the [ of its status'] = fu
   report_editor.receive(child, LONG_REPORT)
   local window = show_report_wrapping(30)
 
-  local column = continuation_column(window, 1)
+  local column = continuation_column(window, HEADER_LINE)
 
   eq(column, 7)
 end
@@ -519,7 +529,7 @@ T['a wrapped report']["continues its first line under the [ of its status with '
   local window = show_report_wrapping(30)
   child.lua('vim.wo[...].number = true', { window })
 
-  local column = continuation_column(window, 1)
+  local column = continuation_column(window, HEADER_LINE)
 
   eq(column, 7 + child.lua_get('vim.wo[...].numberwidth', { window }))
 end
@@ -530,7 +540,7 @@ T['a wrapped report']["continues its first line the width of the user's 'showbre
   report_editor.receive(child, LONG_REPORT)
   local window = show_report_wrapping(30)
 
-  local column = continuation_column(window, 1)
+  local column = continuation_column(window, HEADER_LINE)
 
   eq(column, 9)
 end
@@ -540,7 +550,7 @@ T['a wrapped report']['continues a details line under its text, not under its -'
   report_editor.receive(child, LONG_REPORT)
   local window = show_report_wrapping(30)
 
-  local column = continuation_column(window, 2)
+  local column = continuation_column(window, DETAILS_LINE)
 
   eq(column, 9)
 end
@@ -550,7 +560,7 @@ T['a wrapped report']['continues its first line under the [ of its status in a R
   report_editor.receive(child, LONG_REPORT)
   local window = show_report_wrapping(26)
 
-  local column = continuation_column(window, 1)
+  local column = continuation_column(window, HEADER_LINE)
 
   eq(column, 7)
 end
@@ -560,7 +570,7 @@ T['a wrapped report']['continues a details line under its text in a Report 26 co
   report_editor.receive(child, LONG_REPORT)
   local window = show_report_wrapping(26)
 
-  local column = continuation_column(window, 2)
+  local column = continuation_column(window, DETAILS_LINE)
 
   eq(column, 9)
 end
@@ -570,7 +580,7 @@ T['a wrapped report']['narrower than 18 columns continues a details line further
   report_editor.receive(child, LONG_REPORT)
   local window = show_report_wrapping(16)
 
-  local column = continuation_column(window, 2)
+  local column = continuation_column(window, DETAILS_LINE)
 
   eq(column, 7)
 end
@@ -581,7 +591,7 @@ T['a wrapped report']["continues a details line under its text in a window split
   show_report_wrapping(30)
   child.cmd('split')
 
-  local column = continuation_column(child.api.nvim_get_current_win(), 2)
+  local column = continuation_column(child.api.nvim_get_current_win(), DETAILS_LINE)
 
   eq(column, 9)
 end
@@ -633,7 +643,7 @@ T['a wrapped report']["continues a details line under its text again when shown 
 
   child.lua([[vim.api.nvim_win_set_buf(..., require('aineo.report').report_buffer())]], { window })
 
-  eq(continuation_column(window, 2), 9)
+  eq(continuation_column(window, DETAILS_LINE), 9)
 end
 
 T['a wrapped report']['continues a details line under its text after the user edits the Report again'] = function()
@@ -643,7 +653,7 @@ T['a wrapped report']['continues a details line under its text after the user ed
 
   child.cmd('edit')
 
-  eq(continuation_column(window, 2), 9)
+  eq(continuation_column(window, DETAILS_LINE), 9)
 end
 
 T['a wrapped report']['continues a details line under its text in a Report made anew after the user wipes it out'] = function()
@@ -654,7 +664,7 @@ T['a wrapped report']['continues a details line under its text in a Report made 
 
   local window = show_report_wrapping(30)
 
-  eq(continuation_column(window, 2), 9)
+  eq(continuation_column(window, DETAILS_LINE), 9)
 end
 
 --- The expression, run in the child, that opens a window on its Report
@@ -677,7 +687,7 @@ T['a wrapped report']['continues a details line under its text in a window opene
 
   local window = child.lua_get(OPEN_REPORT_WRAPPING, { 30 })
 
-  eq(continuation_column(window, 2), 9)
+  eq(continuation_column(window, DETAILS_LINE), 9)
 end
 
 T['a wrapped report']['continues a details line under its text in a second window opened on it while another shows it'] = function()
@@ -688,7 +698,7 @@ T['a wrapped report']['continues a details line under its text in a second windo
 
   local window = child.lua_get(OPEN_REPORT_WRAPPING, { 30 })
 
-  eq(continuation_column(window, 2), 9)
+  eq(continuation_column(window, DETAILS_LINE), 9)
 end
 
 T['the Report buffer'] = MiniTest.new_set()
@@ -799,7 +809,7 @@ T['the Report buffer']['moves every window showing it to the newest report'] = f
     child.lua_get([[vim.tbl_map(function(window)
       return vim.api.nvim_win_get_cursor(window)[1]
     end, vim.fn.win_findbuf(require('aineo.report').report_buffer()))]]),
-    { 4, 4 }
+    { 5, 5 }
   )
 end
 
@@ -984,10 +994,10 @@ local function records_file_holding(child_editor, state_directory, first, last)
 end
 
 --- The expression, run in the child, that lists the header line of each
---- report its Report shows, leaving out the lines of their details: a
---- header starts with its time, a details line with its indent.
+--- report its Report shows, leaving out the lines of their details and the
+--- separators of their days: a header starts with its time.
 local REPORT_HEADERS = [[vim.tbl_filter(function(line)
-  return line:find('^%S')
+  return line:find('^%d%d:%d%d ')
 end, vim.api.nvim_buf_get_lines(require('aineo.report').report_buffer(), 0, -1, false))]]
 
 T['the records']['show the newest 2 MiB of them'] = function()

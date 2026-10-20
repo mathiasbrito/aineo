@@ -51,10 +51,14 @@ local INPUT_LINES =
   "vim.api.nvim_buf_get_lines(require('aineo.layout').input_buffer(), 0, -1, true)"
 
 --- The expression, run in the child, that gives the Report's lines, each
---- time of day, which starts a header, written `HH:MM`.
+--- time of day, which starts a header, written `HH:MM`, and the separators
+--- of its days left out: the day a kept report is under depends on the date
+--- of the day the suite runs.
 local REPORT_LINES = [[vim.tbl_map(function(line)
   return (line:gsub('^%d%d:%d%d ', 'HH:MM '))
-end, vim.api.nvim_buf_get_lines(vim.fn.bufnr('aineo://report'), 0, -1, true))]]
+end, vim.tbl_filter(function(line)
+  return not vim.startswith(line, '── ')
+end, vim.api.nvim_buf_get_lines(vim.fn.bufnr('aineo://report'), 0, -1, true)))]]
 
 --- The expression, run in the child, that gives what the Claude home says of
 --- the session (`session_status()`).

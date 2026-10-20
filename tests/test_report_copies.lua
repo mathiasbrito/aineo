@@ -181,7 +181,7 @@ T['a report home of its own']["has a Report under a name no other buffer holds, 
     made = true,
     first_valid = true,
     first_name = 'aineo://report',
-    first_lines = { '10:00 [done] Task — Kept in the first' },
+    first_lines = { '── Today ──', '10:00 [done] Task — Kept in the first' },
     second_has_other_name = true,
   })
 end
@@ -335,7 +335,11 @@ T['two report homes']['each show the records of the session they follow, and kee
     second_kept = summaries_in(session_records_file(state, 'session-b')),
   }, {
     first_lines = { '09:00 [done] Task — Alpha', '10:00 [done] Task — For alpha' },
-    second_lines = { '09:00 [done] Task — Beta', '11:00 [done] Task — For beta' },
+    second_lines = {
+      '── Today ──',
+      '09:00 [done] Task — Beta',
+      '11:00 [done] Task — For beta',
+    },
     first_kept = { 'Alpha', 'For alpha' },
     second_kept = { 'Beta', 'For beta' },
   })
@@ -399,7 +403,7 @@ T['two report homes']["keep the retries of their swaps apart: clearing the modul
     {
       waiting = 2,
       first_lines = { '09:00 [done] Task — Alpha' },
-      second_lines = { '09:00 [done] Task — Delta' },
+      second_lines = { '── Today ──', '09:00 [done] Task — Delta' },
     }
   )
 end
@@ -575,7 +579,7 @@ T['a router for received reports']["hands an offer at the start to the home it c
     taken = true,
     kept_at_once = { 'B at start' },
     first_lines = { '' },
-    second_lines = { '11:00 [done] Task — B at start' },
+    second_lines = { '── Today ──', '11:00 [done] Task — B at start' },
     first_kept = nil,
     second_kept = { 'B at start' },
     directory = nil,
@@ -616,7 +620,7 @@ T['a router for received reports']['hands the report to the home it chooses, and
   }, {
     taken = true,
     first_lines = { '' },
-    second_lines = { '11:00 [done] Task — For beta' },
+    second_lines = { '── Today ──', '11:00 [done] Task — For beta' },
     first_kept = nil,
     second_kept = { 'For beta' },
   })
@@ -668,7 +672,7 @@ T['a router for received reports']['hands a report of no known session, offered 
   }, {
     taken = true,
     first_lines = { '' },
-    second_lines = { '11:00 [done] Task — Of no session' },
+    second_lines = { '── Today ──', '11:00 [done] Task — Of no session' },
     second_kept = { 'Of no session' },
   })
 end

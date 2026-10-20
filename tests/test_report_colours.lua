@@ -30,11 +30,13 @@ local REPORT_COLOURS = [[(function()
   end, marks)
 end)()]]
 
---- Every colour the child's Report shows (`REPORT_COLOURS`).
+--- Every colour the child's Report shows (`REPORT_COLOURS`), the separators of
+--- its days left out, on the lines as the Report counts them when it counts no
+--- day separator.
 ---
 ---@return any[][]
 local function all_colours()
-  return child.lua_get(REPORT_COLOURS)
+  return report_editor.counting_no_separators(child, child.lua_get(REPORT_COLOURS))
 end
 
 --- Where the child's Report shows `group`: each span as `{ line, first
@@ -77,6 +79,10 @@ local SCREEN_CELL = [[(function(row, column)
   return { foreground = attributes.foreground, bold = attributes.bold == true }
 end)(...)]]
 
+--- The row of the screen, from 0, that the header of the first report is on
+--- when the Report shows from its first line, under the separator of its day.
+local HEADER_ROW = 1
+
 --- Shows the child's Report in its only window, from its first line, and
 --- reads on the screen the `[` and the `]` of the `[status]` of its first
 --- report, a `[status]` ending before `end_column`: each as `SCREEN_CELL`
@@ -91,8 +97,8 @@ local function first_status_on_screen(end_column)
   child.lua([[vim.api.nvim__inspect_cell(1, 0, 0)]])
   child.cmd('redraw')
   return {
-    child.lua_get(SCREEN_CELL, { 0, 6 }),
-    child.lua_get(SCREEN_CELL, { 0, end_column - 1 }),
+    child.lua_get(SCREEN_CELL, { HEADER_ROW, 6 }),
+    child.lua_get(SCREEN_CELL, { HEADER_ROW, end_column - 1 }),
   }
 end
 

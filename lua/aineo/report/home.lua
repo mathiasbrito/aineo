@@ -3,6 +3,8 @@
 
 local buffer = require('aineo.report.buffer')
 local colours = require('aineo.report.colours')
+local day_separators = require('aineo.report.day_separators')
+local days = require('aineo.report.days')
 local format = require('aineo.report.format')
 local paths = require('aineo.report.paths')
 local records = require('aineo.report.records')
@@ -18,6 +20,7 @@ local M = {}
 ---@field state_directory string where the records are kept
 ---@field working_directory string the editor's working directory, which a report's relative paths are in
 ---@field with_home_expanded? fun(path: string): string a path with its leading `~` replaced by the home folder, as a report's `~/` paths are read; when not given, a path is read as written
+---@field schedule_after? fun(delay_ms: integer, callback: fun()): fun() calls `callback`, on the main loop, once `delay_ms` milliseconds have passed, and returns what cancels the wait; when not given, a timer waits (`schedule_with_timer()`)
 ---@field open_file? fun(file: string, line: integer?) opens the regular file `file`, an absolute path, that a double-clicked path names, at the line the path names when it names one; when not given, the file opens in the current window
 
 ---@class aineo.report.Home
@@ -44,6 +47,24 @@ local function readable_records(records_file)
   end
   return records_or_failure, skipped
 end
+
+--- Waits `delay_ms` milliseconds with a timer of the editor's loop, then
+--- calls `callback` on the main loop. What it returns cancels the wait and
+--- closes the timer, and may be called after the wait is over.
+---
+---@param delay_ms integer
+---@param callback fun()
+---@return fun() cancel
+local function schedule_with_timer(delay_ms, callback)
+  local timer = vim.defer_fn(callback, delay_ms)
+  return function()
+    if not timer:is_closing() then
+      timer:stop()
+      timer:close()
+    end
+  end
+end
+
 --- The reason in an error message of `vim.uv`, `<CODE>: <reason>: <name>`.
 local UV_ERROR_REASON = '^%u+: ([^:]*)'
 
@@ -260,9 +281,11 @@ function M.new(identity)
   end
 
   --- Gives the report home what it reads from the editor: the clock, called
-  --- for each report received, the state and working directories, read
-  --- when the Report buffer is first created, and, when given, how the file
-  --- a double-clicked path names is opened (`open_drawn_path()`). The working
+  --- for each report received and whenever the Report shows the records kept,
+  --- if there are any, to name their days, the state and working directories,
+  --- read when the Report buffer is first created, when given, how the file
+  --- a double-clicked path names is opened (`open_drawn_path()`), and, when
+  --- given, how the wait for midnight is made (`wait_for_midnight()`). The working
   --- directory is read again whenever the Report shows reports, to find the
   --- files their relative paths name, and at each double-click on a path, to
   --- open its file. The composition root calls it before anything else in
@@ -289,6 +312,7 @@ function M.new(identity)
       true
     )
     vim.validate('environment.open_file', report_environment.open_file, 'function', true)
+    vim.validate('environment.schedule_after', report_environment.schedule_after, 'function', true)
     environment = report_environment
     for _, waiting in ipairs(hand_overs_waiting) do
       hand_over(environment, waiting.from, waiting.to)
@@ -402,6 +426,51 @@ function M.new(identity)
     open_file(file_named_by(candidate.path), candidate.line)
   end
 
+  --- What cancels the wait for the next midnight, while the Report waits for
+  --- it (`wait_for_midnight()`).
+  ---@type fun()?
+  local cancel_wait_for_midnight
+
+  --- Cancels the wait for the next midnight, when the Report waits for it.
+  local function stop_waiting_for_midnight()
+    if cancel_wait_for_midnight then
+      cancel_wait_for_midnight()
+      cancel_wait_for_midnight = nil
+    end
+  end
+
+  ---@type fun(now: string)
+  local wait_for_midnight
+
+  --- Names the days of the Report again as of the clock, once midnight has
+  --- come, while it can show reports (`buffer.is_showing()`), and waits for
+  --- the midnight after (`wait_for_midnight()`).
+  local function name_days_at_midnight()
+    cancel_wait_for_midnight = nil
+    if not (report_view and buffer.is_showing(report_view.buffer)) then
+      return
+    end
+    local now = current_environment().clock()
+    day_separators.name_days_as_of(report_view.buffer, now)
+    wait_for_midnight(now)
+  end
+
+  --- Has the Report name its days again at the next midnight after `now`, a
+  --- time as `days.day_of()` reads it, as the environment's `schedule_after`
+  --- (`schedule_with_timer()` when it gives none) waits, in place of any
+  --- earlier wait. When `now` holds no day, the earlier wait goes on.
+  ---
+  ---@param now string
+  function wait_for_midnight(now)
+    local seconds = days.seconds_until_midnight(now)
+    if not seconds then
+      return
+    end
+    stop_waiting_for_midnight()
+    local schedule_after = current_environment().schedule_after or schedule_with_timer
+    cancel_wait_for_midnight = schedule_after(seconds * 1000, name_days_at_midnight)
+  end
+
   --- Shows the records kept in `records_file` in `report_buffer`, an empty
   --- Report. Tells the user, once, how many of its lines held no record and
   --- were skipped, or why the file could not be read.
@@ -410,7 +479,14 @@ function M.new(identity)
   ---@param records_file string
   local function show_records(report_buffer, records_file)
     local kept, skipped = readable_records(records_file)
-    show_rendering(report_buffer, render.render_records(kept, file_check_for_one_rendering()))
+    local now = kept[1] and current_environment().clock()
+    show_rendering(
+      report_buffer,
+      render.render_records(kept, file_check_for_one_rendering(), { now = now })
+    )
+    if now then
+      wait_for_midnight(now)
+    end
     if skipped > 0 then
       warn_later(
         ('aineo: skipped %d unreadable report record(s) in %s'):format(skipped, records_file)
@@ -420,8 +496,9 @@ function M.new(identity)
 
   --- A new Report buffer showing the records kept in `records_file`, showing
   --- the records of the file the home keeps reports in then when the user
-  --- edits it anew (`:edit`), and opening the file a path it draws names when
-  --- the user double-clicks the path (`open_drawn_path()`).
+  --- edits it anew (`:edit`), opening the file a path it draws names when
+  --- the user double-clicks the path (`open_drawn_path()`), and ending the
+  --- wait for midnight when it is wiped out (`stop_waiting_for_midnight()`).
   ---
   ---@param records_file string
   ---@return integer
@@ -429,6 +506,11 @@ function M.new(identity)
     local report_buffer = buffer.create_report_buffer(function(emptied)
       show_records(emptied, report_view.records_file)
     end, open_drawn_path, { name = identity.buffer_name, group = identity.buffer_group })
+    vim.api.nvim_create_autocmd('BufWipeout', {
+      group = identity.buffer_group,
+      buffer = report_buffer,
+      callback = stop_waiting_for_midnight,
+    })
     show_records(report_buffer, records_file)
     return report_buffer
   end
@@ -515,7 +597,13 @@ function M.new(identity)
     local report_buffer = copy.report_buffer()
     local record = { time = current_environment().clock(), report = valid_report }
     local cut_failure = records.append_record(records_file or report_view.records_file, record)
-    show_rendering(report_buffer, render.render_records({ record }, file_check_for_one_rendering()))
+    local context = { now = record.time, previous_day = day_separators.last_day(report_buffer) }
+    show_rendering(
+      report_buffer,
+      render.render_records({ record }, file_check_for_one_rendering(), context)
+    )
+    day_separators.name_days_as_of(report_buffer, record.time)
+    wait_for_midnight(record.time)
     buffer.follow_last_line(report_buffer)
     if cut_failure then
       warn_later(cut_failure)

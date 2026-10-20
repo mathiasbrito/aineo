@@ -45,8 +45,11 @@ local DELIVERED = 'Delivered to the Agent Report.'
 local SHOWN_ELSEWHERE = 'Delivered to the Agent Report of another Neovim that shows this session,'
   .. ' because the one Claude Code started in is gone or follows another session.'
 
---- How each Report shows the recorded report (`mcp_messages.recorded()`).
+--- How each Report shows the recorded report (`mcp_messages.recorded()`),
+--- without the separator of its day, which `report_editor.lines()` leaves
+--- out, and with it, as an editor with a screen shows it.
 local SHOWN = { '09:05 [done] Refactor the parser — All tests pass' }
+local SHOWN_UNDER_ITS_DAY = { '── Today ──', unpack(SHOWN) }
 
 --- A case's own state: the `XDG_STATE_HOME` its relay and editors share,
 --- and the state directory under it, `stdpath('state')` for each.
@@ -339,12 +342,12 @@ T['a report whose starting editor is gone']['held by a listed Neovim at a hit-en
   eq({
     answer = answered,
     elsewhere = report_editor.lines(first),
-    held = held:report_lines(SHOWN),
+    held = held:report_lines(SHOWN_UNDER_ITS_DAY),
     kept = kept_tasks(session_records(state, SESSION_ID)),
   }, {
     answer = { text = NOT_CONFIRMED, error = false },
     elsewhere = { '' },
-    held = SHOWN,
+    held = SHOWN_UNDER_ITS_DAY,
     kept = { 'Refactor the parser' },
   })
 end
@@ -617,12 +620,12 @@ T['a report of a claimed session']['held by a claimant at a hit-enter prompt is 
   eq({
     answer = answered,
     starting = starting_lines,
-    held = held:report_lines(SHOWN),
+    held = held:report_lines(SHOWN_UNDER_ITS_DAY),
     kept = kept_tasks(session_records(state, SESSION_ID)),
   }, {
     answer = { text = NOT_CONFIRMED, error = false },
     starting = { '' },
-    held = SHOWN,
+    held = SHOWN_UNDER_ITS_DAY,
     kept = { 'Refactor the parser' },
   })
 end

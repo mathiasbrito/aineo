@@ -43,11 +43,12 @@ local REPORT_LINKS = [[(function()
   return links
 end)()]]
 
---- Every link the child's Report carries (`REPORT_LINKS`).
+--- Every link the child's Report carries (`REPORT_LINKS`), on the lines as the
+--- Report counts them when it counts no day separator.
 ---
 ---@return any[][]
 local function report_links()
-  return child.lua_get(REPORT_LINKS)
+  return report_editor.counting_no_separators(child, child.lua_get(REPORT_LINKS))
 end
 
 local T = MiniTest.new_set({
@@ -139,7 +140,7 @@ T['a link']['in the header leaves the time and the status their colours'] = func
     summary = 'at https://x.y/s',
   })
 
-  eq(child.lua_get(REPORT_MARKS), {
+  eq(report_editor.counting_no_separators(child, child.lua_get(REPORT_MARKS)), {
     { 0, 0, 5, 'AineoReportTime', vim.NIL },
     { 0, 6, 12, 'AineoReportStatusBold', vim.NIL },
     { 0, 6, 12, 'AineoReportDone', vim.NIL },
@@ -404,6 +405,10 @@ local RECORD_OPENED = [[
   end
 ]]
 
+--- The line of the Report, from 1, that a report's first details line is on,
+--- under the report's header and the separator of its day.
+local DETAILS_LINE = 3
+
 T['gx'] = MiniTest.new_set({
   parametrize = {
     {
@@ -426,7 +431,7 @@ T['gx']['on a link in the Report opens exactly the link'] = function(details, co
   )
   child.lua([[vim.api.nvim_set_current_buf(require('aineo.report').report_buffer())]])
   child.lua(RECORD_OPENED)
-  child.api.nvim_win_set_cursor(0, { 2, column })
+  child.api.nvim_win_set_cursor(0, { DETAILS_LINE, column })
 
   child.cmd('normal gx')
 

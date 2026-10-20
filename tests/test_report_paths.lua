@@ -78,11 +78,12 @@ local REPORT_PATHS = ([[(function()
   return paths
 end)()]]):format(PATH_GROUP)
 
---- Every path the child's Report draws (`REPORT_PATHS`).
+--- Every path the child's Report draws (`REPORT_PATHS`), on the lines as the
+--- Report counts them when it counts no day separator.
 ---
 ---@return integer[][]
 local function report_paths()
-  return child.lua_get(REPORT_PATHS)
+  return report_editor.counting_no_separators(child, child.lua_get(REPORT_PATHS))
 end
 
 --- The text of every path the child's Report draws (`REPORT_PATHS`), in
@@ -97,7 +98,7 @@ local function drawn_paths()
         return vim.api.nvim_buf_get_text(buffer, path[1], path[2], path[1], path[3], {})[1]
       end, paths)
     end)(...)]],
-    { report_paths() }
+    { child.lua_get(REPORT_PATHS) }
   )
 end
 
@@ -506,6 +507,10 @@ local function open_layout()
   child.cmd('Aineo open')
 end
 
+--- The line of the Report, from 1, that a report's first details line is on,
+--- under the report's header and the separator of its day.
+local DETAILS_LINE = 3
+
 --- Double-clicks, in the child, with the left button, on byte `byte`, from
 --- 0, of line `line`, from 1, of the first window showing the Report: two
 --- presses and releases on its screen cell, as a mouse sends them.
@@ -640,7 +645,7 @@ T['a double-click']['on a path with a line']['opens its file in the file column,
   receive_details('See notes.txt:3 now')
   PLACES_A_CLICK_COMES_FROM[place]()
 
-  double_click_in_report(2, 14)
+  double_click_in_report(DETAILS_LINE, 14)
 
   wait_until_current_file_is(in_project('notes.txt'))
   eq(where_the_file_opened(), opened_in_file_column(in_project('notes.txt'), 3))
@@ -684,7 +689,7 @@ T['a double-click']['on a path with no line opens its file in the file column'] 
   receive_details('See lua/x.lua now')
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
-  double_click_in_report(2, 14)
+  double_click_in_report(DETAILS_LINE, 14)
 
   wait_until_current_file_is(in_project('lua/x.lua'))
   eq(where_the_file_opened(), opened_in_file_column(in_project('lua/x.lua'), 1))
@@ -695,7 +700,7 @@ T['a double-click']['on a path after a comma opens that path, not the one before
   receive_details('lua/x.lua,notes.txt:3')
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
-  double_click_in_report(2, 22)
+  double_click_in_report(DETAILS_LINE, 22)
 
   wait_until_current_file_is(in_project('notes.txt'))
   eq(where_the_file_opened(), opened_in_file_column(in_project('notes.txt'), 3))
@@ -706,7 +711,7 @@ T['a double-click']['on a path holding a % opens the file it names'] = function(
   receive_details('See inj/p%q.lua now')
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
-  double_click_in_report(2, 14)
+  double_click_in_report(DETAILS_LINE, 14)
 
   wait_until_current_file_is(in_project('inj/p%q.lua'))
   eq(where_the_file_opened(), opened_in_file_column(in_project('inj/p%q.lua'), 1))
@@ -728,7 +733,7 @@ T['a double-click']['on a path with a line outside the file']['opens it at its n
   receive_details('See ' .. path .. ' now')
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
-  double_click_in_report(2, 14)
+  double_click_in_report(DETAILS_LINE, 14)
 
   wait_until_current_file_is(in_project('notes.txt'))
   eq(where_the_file_opened(), opened_in_file_column(in_project('notes.txt'), line))
@@ -747,7 +752,7 @@ T['a double-click']['on the Report made anew after the user deletes it']['opens 
   child.cmd('Aineo report')
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
-  double_click_in_report(2, 14)
+  double_click_in_report(DETAILS_LINE, 14)
 
   wait_until_current_file_is(in_project('notes.txt'))
   eq(where_the_file_opened(), opened_in_file_column(in_project('notes.txt'), 3))
@@ -760,7 +765,7 @@ T['a double-click']["opens the file in the Report's working directory, after Neo
   fixture.write('report-paths-elsewhere/notes.txt', { 'elsewhere' })
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
-  double_click_in_report(2, 14)
+  double_click_in_report(DETAILS_LINE, 14)
 
   wait_until_current_file_is(in_project('notes.txt'))
   eq(entry.current_window(child), in_project('notes.txt'))
@@ -777,9 +782,9 @@ T['a double-click']['elsewhere in the Report']['selects the word, as Neovim does
   receive_details('See notes.txt:3 now')
   PLACES_A_CLICK_COMES_FROM[place]()
 
-  double_click_in_report(2, 9)
+  double_click_in_report(DETAILS_LINE, 9)
 
-  eq(selection(), { 'v', 9, 11, 2 })
+  eq(selection(), { 'v', 9, 11, DETAILS_LINE })
 end
 
 T['a double-click']['on the first or the last byte of a path'] = MiniTest.new_set({
@@ -793,7 +798,7 @@ T['a double-click']['on the first or the last byte of a path']['opens its file, 
   receive_details('See notes.txt:3 now')
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
-  double_click_in_report(2, byte)
+  double_click_in_report(DETAILS_LINE, byte)
 
   wait_until_current_file_is(in_project('notes.txt'))
   eq(where_the_file_opened(), opened_in_file_column(in_project('notes.txt'), 3))
@@ -810,7 +815,7 @@ T['a double-click']['on the space just before or after a path']['opens nothing, 
   receive_details('See notes.txt:3 now')
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
-  double_click_in_report(2, byte)
+  double_click_in_report(DETAILS_LINE, byte)
 
   eq(
     { selection()[1], entry.windows(child) },
@@ -836,7 +841,7 @@ T['a double-click']['past the end of a line that ends in a path opens nothing'] 
   receive_details('See notes.txt:3')
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
-  double_click_in_report(2, 30)
+  double_click_in_report(DETAILS_LINE, 30)
 
   selection()
   eq(what_the_layout_shows(), NOTHING_OPENED)
@@ -847,7 +852,7 @@ T['a double-click']['on a web link opens no file and selects the word, as Neovim
   receive_details('See https://x.y/a now')
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
-  double_click_in_report(2, 16)
+  double_click_in_report(DETAILS_LINE, 16)
 
   eq(
     { mode = selection()[1], shown = what_the_layout_shows(), told = entry.messages(child) },
@@ -1011,7 +1016,7 @@ T['a double-click']['on a path whose file became a FIFO since it was drawn opens
   local fifo_was_read = keep_releasing_readers_of(in_project('swap.lua'))
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
-  double_click_in_report(2, 14)
+  double_click_in_report(DETAILS_LINE, 14)
 
   wait_until_told()
   eq(
@@ -1031,7 +1036,7 @@ T['a double-click']['on a path whose file was removed since it was drawn opens n
   assert(os.remove(in_project('gone.lua')))
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
-  double_click_in_report(2, 14)
+  double_click_in_report(DETAILS_LINE, 14)
 
   wait_until_told()
   eq({ shown = what_the_layout_shows(), told = entry.messages(child) }, {
@@ -1089,7 +1094,7 @@ T['a double-click']['on a path whose lookup broke since it was drawn']['opens no
   LOOKUPS_BROKEN_SINCE_THE_DRAWING[how](in_project(path))
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
-  double_click_in_report(2, 14)
+  double_click_in_report(DETAILS_LINE, 14)
 
   wait_until_told()
   eq({ shown = what_the_layout_shows(), told = entry.messages(child) }, {
