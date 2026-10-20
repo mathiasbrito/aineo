@@ -33,7 +33,7 @@ A fifth pane of the right column: the folder Claude works in as a tree, with git
 - The explorer requires no aineo home: git, the folder, the opener, the paste and the pick are handed by the composition root. So the direction table needs no new edge; the module table needs a row for `aineo.explorer` (an `ai/` change, below).
 - The pure tree is tested by requiring `aineo.explorer.tree` directly, as `tests/test_run_output.lua` requires `aineo.run.output`; no export was added to the entry point for a test.
 - `l` on a file does nothing; A515 names `<CR>` for opening a file.
-- `I` outside git tells the user at each press, one notice per press.
+- `I` outside git first told the user at each press. That departed from A515 ("says so once") and was not reported as a spec conflict; the records review of PR #293 found it, and A518 restates A515: it now tells once per tab.
 - After `<CR>` opens a file, the explorer window's cursor is put back on its line once the layout has moved the file to the file column (the window would otherwise show the buffer's first line).
 
 ## Red and green
@@ -46,7 +46,8 @@ Arrived green, each with the mutant that kills it (all run, all assertion kills)
 |---|---|---|
 | tree *hides what git ignores…* | no ignored entry built before | `ignored` |
 | layout *gives way to the agent pane…* | shared switch code | `giveway` |
-| entry *swap places…* (4), *zoomed* (2) | layout written in the unit before | `whole` |
+| entry *swap places…* (4), *zoomed \z* | layout written in the unit before | `whole` |
+| entry *zoomed \Z* | shared zoom code, which has no branch of its own for the explorer | no explorer-specific killer: `whole` leaves it green (measured by the test review of PR #293); it guards the shared code |
 | entry *h on an unfolded folder folds it* | `l` did nothing when first run | `hfold` |
 | entry *a file that is not text…* | its first red was a fixture error | `open` |
 | entry *git's marks…* | marks built in the tree unit | `marks` |
@@ -81,9 +82,37 @@ Each run alone, from a copy of the file, on a copy of its test file narrowed to 
 
 `followwin` first ran unguarded and crashed (no explorer window during the redirect); the guarded edit above is the one recorded.
 
+The table covers 19 cases; 18 of them have a killer run, the `\Z` case none.
+
+## Fix round of PR #293 (A518)
+
+The three reviews (attack, test integrity, records) and the orchestrator's rulings A518. Each fix was driven by a test seen red first, except the test review's three pins, which were measured red under their mutants by that review and again here.
+
+| Fix | Test (red first) | Killer, run alone on its narrowed group |
+|---|---|---|
+| A name with a line feed showed nothing and raised at every read and window switch: names show quoted through the changes home's `quoted_path()`, now on its entry point and handed to the explorer as `quote_name` | entry *a name with a line feed shows quoted, and following a file raises nothing* | `quote = settings.quote_name,` → `quote = nil,`: assertion |
+| A submodule showed as a file, a nested repository as a folder holding a nameless file: git's `submodule_paths()` (`ls-files --stage`, mode 160000), and a path ending in `/` taken as a folder listed from disk; a folder's own mark first | git *the submodules of a repository…*; tree *shows a nested repository and a submodule as folders…*; entry *a submodule and a nested repository…* | `local listed = submodules[path] and path .. '/' or path` → `local listed = path`: assertion (tree), crash in the entry case's arrange; `if view.marks[entry.path] then` → `if entry.kind == 'file' and view.marks[entry.path] then`: assertion |
+| `<CR>` on a deleted file, and on a file that is a folder on disk, opens nothing and says why | entry *a file deleted opens nothing…*, *a file turned into a link to a folder…* | `if state.marks[entry.path] == 'D' then` → `if false then`: assertion; `if vim.fn.isdirectory(file) == 1 then` → `if false then`: assertion |
+| Following into a folder git ignores whole, `I` on, listed it empty: the folders above are listed from disk in git too | entry *the current file in a folder git ignores whole…* (strengthened to follow without the read a window's return makes, after the first version let the guard survive) | the guard `if not state.in_git then … end` put back: assertion |
+| A hidden explorer read the tree at every watch burst: it watches only while shown and reads as it shows | entry *a change on disk while the pane is hidden is read once the pane shows again* | `if not is_shown() then` (BufWinLeave) → `if false then`: assertion; BufWinEnter reading only before the first read: assertion |
+| `.git` hidden as a file too | tree *never shows a file named .git…* | `if entry.name == '.git' then` → `if entry.kind == 'folder' and entry.name == '.git' then`: assertion |
+| `I` outside git says so once per tab (A515 as written) | entry *says once for the tab…, I pressed twice* | `if not state.nothing_ignored_told then` → `if true then`: assertion |
+| `s` in the explorer before Claude Code has started says so | pick *s in the explorer before Claude Code has started…* | `if homes.claude.session_status() == nil then` → `if false then`: assertion |
+| The test review's pins | pick *of a branch checked out in a worktree since…*; entry *the folder shown is the one Claude works in…*; entry *the filter is kept as the tree is read again…* | `branchcheckout`, `cwdroot`, `filterreset` (the review's literal edits): each an assertion |
+
+Also: the *git's marks* case asserts its tree (`eq(wait_for_tree(expected), expected)`), and the pick case's `eq(repository.worktree ~= nil, true)`, which could not fail, is gone. The help's changes-pane `s` section says the explorer maps `s` too and that an early `s` offers the list once read; `\e` joins the help's lists of pane keys and the README's diagram; the LIMITS name the submodule rule and the cost of a read on a very large repository.
+
+### The modularity check
+
+`grep -rnE "require\(['\"]aineo\.[a-z_]+\." lua plugin tests scripts`, its lines about the explorer:
+
+- `lua/aineo/explorer/init.lua:10` `aineo.explorer.home`, `lua/aineo/explorer/home.lua:4-5` `aineo.explorer.folders`, `aineo.explorer.tree`: inside their own home.
+- `lua/aineo/entry/explorer.lua:9` `aineo.entry.links`, `lua/aineo/entry/tab.lua:9` and `lua/aineo/entry/opening.lua:6` `aineo.entry.explorer`: inside the entry home.
+- `tests/test_explorer_tree.lua:5` `aineo.explorer.tree` and `tests/test_entry_explorer_pick.lua:285` `aineo.entry.explorer`: tests reaching a home's file, as `tests/test_run_output.lua` reaches `aineo.run.output` and other tests `aineo.entry.registry`; outside a home by the skill's text, so named here for the follow-up below.
+
 ## Open threads
 
-- **Modularity tables** (`.claude/skills/modularity/SKILL.md` §1): `aineo.explorer` needs a row in the module table and in the direction table (`aineo.explorer` | no aineo home; it is handed git, the folder, the opener, the paste and the changes pane's pick). An `ai/` change for the orchestrator, as for `aineo.run` and `aineo.find`.
+- **Modularity tables, an `ai/` follow-up** (`.claude/skills/modularity/SKILL.md` §1), as the records review of PR #293 worded them: in the module table's `lua/aineo/<concern>/` row, add `explorer` (the right column's explorer pane, C2, C12, C15; D92); in the direction table, after `aineo.shell`, add `| aineo.explorer | no aineo home (it is handed the git home, the folder Claude works in, the opener of a file, the paste into Claude's prompt, the quoting of a name and the changes pane's pick by the composition root, aineo.entry) |`; in the same pass, rows for `aineo.run` and `aineo.find`, and a line on a test reaching a pure module of a home (`aineo.explorer.tree`, `aineo.run.output`).
 - The explorer's `s` before the changes pane was shown makes the changes home read, and so start its watch, as a showing of the pane does.
 
 ## Commits
