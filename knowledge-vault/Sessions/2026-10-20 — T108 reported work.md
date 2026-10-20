@@ -84,6 +84,25 @@ All run one at a time, each on the narrowed copy of its test file (`.tests/t108-
 | M28 | `work_commands.lua`: drop ` or (character == '~' and word ~= nil)` | `test_claude_work_commands` › a command that makes work | killed |
 | M29 | `lines.lua`: `if not reports or #reports == 0 then` → `if not reports then` | `test_changes_reports` › the Reported section | killed |
 
+## Fix round (2026-10-21, A531)
+
+The three reviews of PR #302 (attack, test integrity, records) and the orchestrator's rulings A531. Rebased onto `dev` with T109's "follow only while a diff is open"; both behaviours kept, D98/T109 rows kept before D97/T108.
+
+| Fix | Test (seen red, then green) |
+|---|---|
+| A base resolves in the worktree's folder first (a branch in the folder of the worktree that has it checked out), then in the session's repository | `test_entry_reported_work` › is taken by the tab with its base as the full id it names in the reported worktree's folder (red: the session's HEAD); of a branch a worktree has checked out (red); refusal naming both places (red); the session fallback (green by nature; N3) |
+| Effective base: the reported base while behind the tip and descending from the pane's own, else the pane's own; the line shows it | `test_changes_reports` › the base a report is read from (red: function missing), shows the base its work was last read from (red); `test_changes_announce` › gives way to the pane's own after a rebase (red: the dev commit listed — the attack's case); unknown base for a worktree and a branch (written with the code; N8, N7) |
+| A branch made in a reported worktree gives its branch and base | `test_changes_reports` › by the hook for a branch made in that work (red); `test_changes_announce` › takes the branch and base of a branch made in a reported worktree (red: `One` listed); `test_changes_keep_view` › keeps the branch each report was on (red: `One` listed after a restart) |
+| `git branch x` then `git worktree add p x` is one line | `test_changes_announce` › takes a branch reported and then a worktree made of it as one line (red: two lines) |
+| The instructions ask for a corrected call | `test_mcp_announce` › the words (red: 351 and 482 bytes) |
+| The hook relay ends itself after 6 s | `test_claude_hook_work` › an editor that does not answer (red: killed at 10 s, code 124) |
+| Failed `git checkout -b <existing>` | not pinnable at the relay: Claude Code 2.1.304 throws a non-zero Bash exit as a shell error ("Exit code N"), a tool failure that runs `PostToolUseFailure`, which aineo does not hook (read in the program; the hooks reference says the same) |
+| `-C` worktree path; silence pinned | `test_claude_hook_work` › is told as a worktree whose path is read in the folder -C names (X2), `SILENT_END` in each case (N18) |
+| Full id handed to the tab | the spy case above (X1) |
+| Help: `PostToolUse` named; repeat report moves to the top; `--quiet`; health advice | `test_health` (red: the old words, 9 cases); `test_doc` |
+
+Mutants on the fix round's tree, each on its narrowed test file, one at a time: all 30 of the first round still killed (M23 and M24 dropped, their code gone into N6/N7; M9a/b re-run with the current text), and 27 new ones (N1–N19, the reviewers' X1 and X2), all killed by assertion. One planned survivor: N7 (branch read straight from its reported base) against the group without the branch unknown-base case, which is why that case was added.
+
 ## Tests changed
 
 - `tests/test_mcp_announce.lua` — every valid call gives `base`; the refusal rows gain `base` and `label` cases; the old row refusing `base` as an unknown field now refuses `note`; the instructions' words and byte counts are the new rule.
