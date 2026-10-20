@@ -6,16 +6,17 @@ local eq = MiniTest.expect.equality
 local child = MiniTest.new_child_neovim()
 
 --- The Lua that asks the git home in the child for the repository of the
---- directory `...`, then for its commit graph with the limit that follows
---- it, and returns what `_G.await` saw of the second.
+--- directory `...`, then for its commit graph with the limit and the git
+--- options that follow it, the options optional, and returns what
+--- `_G.await` saw of the second.
 local COMMIT_GRAPH = [[
-  local directory, limit = ...
+  local directory, limit, options = ...
   local git = require('aineo.git')
   local found = _G.await(function(done)
     git.find_repository(directory, done)
   end)
   return _G.await(function(done)
-    git.commit_graph(found.result, limit, done)
+    git.commit_graph(found.result, limit, done, options)
   end)
 ]]
 
@@ -148,6 +149,19 @@ T['the commit graph']['leaves nothing out when the repository has exactly the li
 
   eq({ cut = seen.result.cut, lines = #seen.result.lines }, { cut = false, lines = 7 })
   eq(seen.result.lines[7].commit.id, commits.begin)
+end
+
+T['the commit graph']['asks git for one commit more than the limit, never the whole history'] = function()
+  local top = git_repo.create_graph('graph-asked')
+  local asked = vim.fs.joinpath(vim.fs.dirname(top), 'asked')
+  local stand_in = git_repo.script('graph-asked', 'git', {
+    ('printf "%%s\\n" "$@" >> %s'):format(asked),
+    ('exec %s "$@"'):format(vim.fn.exepath('git')),
+  })
+
+  child.lua(COMMIT_GRAPH, { top, 2, { executable = stand_in } })
+
+  eq(vim.list_contains(vim.fn.readfile(asked), '--max-count=3'), true)
 end
 
 T['the commit graph']['has no line before the first commit'] = function()
