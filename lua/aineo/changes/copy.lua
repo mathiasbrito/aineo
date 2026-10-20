@@ -1249,7 +1249,6 @@ function M.new(label)
         and not session.selected.worktree
         and not session.selected.landed
         and not session.selected.branch
-        and not session.selected.graph
         and not lists_commit(session.selected, since.commits)
       then
         select_session_work()
