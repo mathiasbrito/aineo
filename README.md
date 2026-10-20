@@ -370,8 +370,9 @@ aineo starts Claude Code with an MCP server of its own. Its tools `report` and
 - **`report`.** Claude calls it to tell you what it does: a `task`, a `status`
   (`started`, `progress`, `blocked`, `done` or `failed`), a one-line `summary`
   and, optionally, `details`. Each report is a line in the Agent Report,
-  `HH:MM [status] task — summary`, with its details as items below. A report
-  goes to the tab whose Claude sent it.
+  `HH:MM [status] task — summary`, with its details as items below, under a
+  separator line for its day (`── Today ──`, `── Yesterday ──`, `── Mon 19 Oct ──`).
+  A report goes to the tab whose Claude sent it.
 - **`announce_work`.** Claude, and the subagents it starts, call it with the
   `kind` (`worktree` or `branch`) and the `path` or `branch` name of each git
   worktree or branch they create for new work. It only informs aineo: the
@@ -432,7 +433,7 @@ The highlight groups can be overridden in a colorscheme or with
 `AineoTabLineFill`. The Report uses `AineoReportTime`,
 `AineoReportStarted`, `AineoReportProgress`, `AineoReportBlocked`,
 `AineoReportDone`, `AineoReportFailed`, `AineoReportStatusBold`,
-`AineoReportLink` and `AineoReportPath`. The changes pane uses the
+`AineoReportLink`, `AineoReportPath` and `AineoReportDay`. The changes pane uses the
 `AineoChanges*` groups. `:help aineo` lists each with its default.
 
 ## The activity indicator and tmux
