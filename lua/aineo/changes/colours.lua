@@ -33,6 +33,15 @@ M.COMMIT_AGE_GROUP = 'AineoChangesCommitAge'
 --- and the files window's first line, show in, whole.
 M.FILTER_GROUP = 'AineoChangesFilter'
 
+--- The group the commits window's Reported heading shows in, whole.
+M.REPORTED_HEADING_GROUP = 'AineoChangesReportedHeading'
+
+--- The group a report's label shows in.
+M.REPORTED_LABEL_GROUP = 'AineoChangesReportedLabel'
+
+--- The group a report's age shows in.
+M.REPORTED_AGE_GROUP = 'AineoChangesReportedAge'
+
 --- The group a line that lists nothing shows in, whole.
 M.NOTE_GROUP = 'AineoChangesNote'
 
@@ -53,6 +62,9 @@ local DEFAULT_LINKS = {
   [M.COMMIT_AUTHOR_GROUP] = 'Identifier',
   [M.COMMIT_AGE_GROUP] = 'Comment',
   [M.FILTER_GROUP] = 'Title',
+  [M.REPORTED_HEADING_GROUP] = 'Title',
+  [M.REPORTED_LABEL_GROUP] = 'Identifier',
+  [M.REPORTED_AGE_GROUP] = 'Comment',
   [M.NOTE_GROUP] = 'Comment',
   [M.FAILURE_GROUP] = 'DiagnosticWarn',
 }
