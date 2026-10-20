@@ -123,4 +123,117 @@ function M.commits_between(run, found, from, to, done)
   )
 end
 
+--- A commit of the commit graph, as the home lists it: a commit, and how
+--- git tells it in its graph.
+---@class aineo.git.GraphCommit: aineo.git.Commit
+---@field abbreviated_id string its id as `--abbrev-commit` shortens it
+---@field age string how long ago its author wrote it, as `--date=relative` tells it: `3 hours ago`
+---@field refs? string the names that point at it, as `%D` gives them: `HEAD -> main, tag: v1, origin/main`; nil when none does
+
+--- One line of the commit graph: what git draws of the graph on it, and the
+--- commit it shows, when it shows one.
+---@class aineo.git.GraphLine
+---@field graph string the graph's part of the line, as git draws it: `| * ` before a commit, `|/| ` on a line that shows none
+---@field commit? aineo.git.GraphCommit the commit the line shows; nil on a line of the graph alone
+
+--- The commit graph of a repository.
+---@class aineo.git.CommitGraph
+---@field lines aineo.git.GraphLine[] its lines, as git draws them, newest commit first
+---@field cut boolean whether older commits were left out, past the limit
+
+--- Where a commit's fields begin, after the graph, and what ends each: a
+--- byte no graph, id, time, age, name, reference or subject holds — git
+--- refuses it in a commit's message and in an identity, and a reference's
+--- name holds none.
+local FIELD = '\0'
+
+--- What `git log --graph` writes after the graph for each commit: its id,
+--- abbreviated id, author time, relative age, author's name, the names
+--- that point at it and its subject, each after `FIELD`. None holds a line
+--- break: a subject is the first paragraph on one line.
+local GRAPH_FORMAT = '--format=format:%x00%H%x00%h%x00%at%x00%ar%x00%an%x00%D%x00%s'
+
+--- The line of the graph `line`, as git wrote it in `GRAPH_FORMAT`.
+---
+---@param line string
+---@return aineo.git.GraphLine
+local function parse_graph_line(line)
+  local start = line:find(FIELD, 1, true)
+  if not start then
+    return { graph = line }
+  end
+  local fields = vim.split(line:sub(start + 1), FIELD, { plain = true })
+  local id, abbreviated_id, authored_at, age, author, refs, subject = unpack(fields)
+  return {
+    graph = line:sub(1, start - 1),
+    commit = {
+      id = id,
+      abbreviated_id = abbreviated_id,
+      authored_at = tonumber(authored_at),
+      age = age,
+      author = author,
+      refs = refs ~= '' and refs or nil,
+      subject = subject,
+    },
+  }
+end
+
+--- The commit graph git wrote as `output` in `GRAPH_FORMAT`, having been
+--- asked for one commit more than `limit`: its lines up to the `limit`th
+--- commit's — the graph's lines after it, which lead to the commit left
+--- out, left out too — and whether the one more came, which says older
+--- commits were left out.
+---
+---@param output string
+---@param limit integer
+---@return aineo.git.CommitGraph
+local function parse_graph(output, limit)
+  local lines, commits, last_commit_line = {}, 0, 0
+  for _, written in ipairs(vim.split(output, '\n', { plain = true, trimempty = true })) do
+    local line = parse_graph_line(written)
+    if line.commit then
+      commits = commits + 1
+      if commits > limit then
+        return { lines = vim.list_slice(lines, 1, last_commit_line), cut = true }
+      end
+      last_commit_line = #lines + 1
+    end
+    table.insert(lines, line)
+  end
+  return { lines = lines, cut = false }
+end
+
+--- Draws the commit graph of `found` — every branch, tag and remote-tracking
+--- branch, as `git log --graph --all --abbrev-commit --date=relative` draws
+--- it — of its newest `limit` commits, and calls `done(nil, graph)`, or
+--- `done(failure)`. Before the first commit it has no line.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param limit integer how many commits to draw, at least 1
+---@param done fun(failure: aineo.git.Failure|nil, graph: aineo.git.CommitGraph|nil)
+function M.commit_graph(run, found, limit, done)
+  run(
+    {
+      directory = found.top,
+      arguments = {
+        'log',
+        '--graph',
+        '--all',
+        '--abbrev-commit',
+        '--date=relative',
+        GRAPH_FORMAT,
+        '--no-show-signature',
+        '--encoding=UTF-8',
+        '--max-count=' .. (limit + 1),
+        '--end-of-options',
+        '--',
+      },
+    },
+    process.or_fail(done, function(log)
+      done(nil, parse_graph(log.stdout, limit))
+    end)
+  )
+end
+
 return M
