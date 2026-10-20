@@ -101,4 +101,37 @@ T['the ignored entries of a repository']['are the untracked files its ignore rul
   eq(seen.result, { 'build/out.o', 'debug.log', 'node_modules/' })
 end
 
+T['the submodules of a repository'] = MiniTest.new_set()
+
+T['the submodules of a repository']['are the paths its index holds as commits of another repository'] = function()
+  local top = git_repo.create('files-submodules', { ['a.txt'] = { 'a' } })
+  local other = git_repo.create('files-submodules-other', { ['s.txt'] = { 's' } })
+  git_repo.git(top, {
+    '-c',
+    'protocol.file.allow=always',
+    'submodule',
+    'add',
+    '--quiet',
+    other,
+    'vendor/lib',
+  })
+  git_repo.commit_all(top, 'Add the submodule')
+
+  local seen = child.lua(
+    [[
+      local directory = ...
+      local git = require('aineo.git')
+      local found = _G.await(function(done)
+        git.find_repository(directory, done)
+      end)
+      return _G.await(function(done)
+        git.submodule_paths(found.result, done)
+      end)
+    ]],
+    { top }
+  )
+
+  eq(seen.result, { 'vendor/lib' })
+end
+
 return T

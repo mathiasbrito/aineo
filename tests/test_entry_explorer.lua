@@ -387,7 +387,7 @@ T['git’s marks']['show modified, untracked and deleted files, and folders hold
     '  ? new.txt',
     '  M README.md',
   }
-  wait_for_tree(expected)
+  eq(wait_for_tree(expected), expected)
   put_cursor_on('docs/')
   entry.press(child, 'l')
 
@@ -416,6 +416,21 @@ T['a change on disk']['reads the tree again, the folds and the cursor’s entry 
   }
   eq(wait_for_tree(expected), expected)
   eq(line_at_cursor(), '    M main.lua')
+end
+
+T['a change on disk']['while the pane is hidden is read once the pane shows again'] = function()
+  local top = explore('hidden')
+  entry.press(child, '\\pa')
+
+  git_repo.write(top, 'later.txt', { 'later' })
+  vim.wait(2000)
+  local while_hidden = vim.list_slice(explorer_lines(), 2)
+  entry.press(child, '\\e')
+
+  local expected =
+    { '▸   docs/', '▸   src/', '    .gitignore', '  ? later.txt', '    README.md' }
+  eq(while_hidden, FOLDED_TREE)
+  eq(wait_for_tree(expected), expected)
 end
 
 T['R'] = MiniTest.new_set()
@@ -477,9 +492,10 @@ T['a folder outside git']['lists a folder when it unfolds, .git hidden, with no 
   })
 end
 
-T['a folder outside git']['says once that nothing is ignored there as I is pressed'] = function()
+T['a folder outside git']['says once for the tab that nothing is ignored there, I pressed twice'] = function()
   explore_folder('plain-ignored', PLAIN_FILES, FOLDED_TREE)
 
+  entry.press(child, 'I')
   entry.press(child, 'I')
 
   eq(entry.messages(child), {
@@ -642,6 +658,26 @@ T['@']['pastes nothing, and says so once, while Claude is not ready'] = function
   })
 end
 
+--- Opens the layout in the repository `explorer-<name>` holding `FILES` after
+--- `change(top)` changed it on disk, shows the explorer and waits for
+--- `expected`; returns the repository's top.
+---
+---@param name string
+---@param change fun(top: string)
+---@param expected string[]
+---@return string top
+local function explore_changed(name, change, expected)
+  local top = git_repo.create('explorer-' .. name, FILES)
+  change(top)
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
+  entry.use_fake(child, claude_session.fake('explorer-' .. name, 'ready'))
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  entry.press(child, '\\e')
+  wait_for_tree(expected)
+  return top
+end
+
 T['the current file'] = MiniTest.new_set()
 
 --- The line of the explorer's buffer the followed file's highlight is on,
@@ -690,6 +726,27 @@ T['the current file']['is unfolded to and highlighted, the cursors staying where
   )
 end
 
+T['the current file']['in a folder git ignores whole, ignored entries shown, is unfolded to'] = function()
+  local top = explore_changed('follow-ignored', function(repository)
+    git_repo.write(repository, 'build/out.js', { 'out' })
+  end, FOLDED_TREE)
+  entry.press(child, 'I')
+  wait_for_tree({ '▸   build/', '▸   docs/', '▸   src/', '    .gitignore', '    README.md' })
+
+  child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'build', 'out.js')))
+
+  local expected = {
+    '▾   build/',
+    '      out.js',
+    '▸   docs/',
+    '▸   src/',
+    '    .gitignore',
+    '    README.md',
+  }
+  eq(wait_for_tree(expected), expected)
+  eq(child.lua_get(FOLLOWED_LINE), 3)
+end
+
 T['the current file']['outside the folder shown changes nothing'] = function()
   explore('follow-outside')
   local outside = fixture.write('explorer-follow-outside-file.txt', { 'outside' })
@@ -701,6 +758,159 @@ T['the current file']['outside the folder shown changes nothing'] = function()
   vim.wait(300)
   eq(vim.list_slice(explorer_lines(), 2), FOLDED_TREE)
   eq(child.lua_get(FOLLOWED_LINE), 5)
+end
+
+T['a name with a line feed'] = MiniTest.new_set()
+
+T['a name with a line feed']['shows quoted, and following a file raises nothing'] = function()
+  local top = git_repo.create('explorer-line-feed', FILES)
+  local handle = assert(io.open(vim.fs.joinpath(top, 'bad\nname.txt'), 'w'))
+  handle:write('x')
+  handle:close()
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
+  entry.use_fake(child, claude_session.fake('explorer-line-feed', 'ready'))
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  entry.press(child, '\\e')
+  local expected = {
+    '▸   docs/',
+    '▸   src/',
+    '    .gitignore',
+    '  ? "bad\\nname.txt"',
+    '    README.md',
+  }
+  eq(wait_for_tree(expected), expected)
+  put_cursor_on('README.md')
+  child.lua('vim.v.errmsg = ""')
+
+  entry.press(child, '<CR>')
+
+  eq(wait_for_current_window(vim.fs.joinpath(top, 'README.md')), vim.fs.joinpath(top, 'README.md'))
+  eq(child.lua_get('vim.v.errmsg'), '')
+  eq(entry.messages(child), {})
+end
+
+T['a submodule and a nested repository'] = MiniTest.new_set()
+
+T['a submodule and a nested repository']['show as folders listed from disk, Enter opening no folder'] = function()
+  local top = git_repo.create('explorer-nested', { ['a.txt'] = { 'a' } })
+  local other = git_repo.create('explorer-nested-other', { ['s.txt'] = { 's' } })
+  git_repo.git(top, {
+    '-c',
+    'protocol.file.allow=always',
+    'submodule',
+    'add',
+    '--quiet',
+    other,
+    'vendor/lib',
+  })
+  git_repo.commit_all(top, 'Add the submodule')
+  local nested = vim.fs.joinpath(top, 'nested')
+  vim.fn.mkdir(nested, 'p')
+  git_repo.git(nested, { 'init', '--quiet' })
+  git_repo.write(nested, 'n.txt', { 'n' })
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
+  entry.use_fake(child, claude_session.fake('explorer-nested', 'ready'))
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  entry.press(child, '\\e')
+  wait_for_tree({ '▸ ? nested/', '▸   vendor/', '    .gitmodules', '    a.txt' })
+  put_cursor_on('vendor/')
+  entry.press(child, 'l')
+  put_cursor_on('lib/')
+
+  entry.press(child, '<CR>')
+  put_cursor_on('nested/')
+  entry.press(child, '<CR>')
+
+  eq(vim.list_slice(explorer_lines(), 2), {
+    '▾ ? nested/',
+    '      n.txt',
+    '▾   vendor/',
+    '  ▾   lib/',
+    '        s.txt',
+    '    .gitmodules',
+    '    a.txt',
+  })
+  eq(entry.current_window(child), 'aineo://explorer')
+end
+
+T['the folder shown'] = MiniTest.new_set()
+
+T['the folder shown']['is the one Claude works in, wherever the editor moved since'] = function()
+  local top = open_in_repository('cwd-elsewhere')
+  child.cmd('cd ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'src')))
+
+  entry.press(child, '\\e')
+
+  eq(wait_for_tree(FOLDED_TREE), FOLDED_TREE)
+end
+
+T['the filter']['is kept as the tree is read again after a change on disk'] = function()
+  local top = explore('filter-refresh')
+  child.lua([[
+    vim.ui.input = function(_, on_confirm)
+      on_confirm('main')
+    end
+  ]])
+  entry.press(child, 'f')
+
+  git_repo.write(top, 'src/main.lua', { 'changed' })
+
+  local expected = { '▾ • src/', '    M main.lua' }
+  eq(wait_for_tree(expected), expected)
+  eq(explorer_lines()[1]:find('filter “main”', 1, true) ~= nil, true)
+end
+
+T['a file']['deleted opens nothing with Enter, and says so'] = function()
+  explore_changed('open-deleted', function(top)
+    vim.fn.delete(vim.fs.joinpath(top, 'README.md'))
+  end, { '▸   docs/', '▸   src/', '    .gitignore', '  D README.md' })
+  child.lua([[
+    _G.opened = {}
+    vim.ui.open = function(path)
+      table.insert(_G.opened, path)
+      return nil, nil
+    end
+  ]])
+  put_cursor_on('README.md')
+
+  entry.press(child, '<CR>')
+
+  eq(child.lua_get('_G.opened'), {})
+  eq(entry.current_window(child), 'aineo://explorer')
+  eq(entry.messages(child), {
+    {
+      message = 'aineo: README.md is deleted; \\g shows its diff',
+      level = vim.log.levels.INFO,
+    },
+  })
+end
+
+T['a file']['turned into a link to a folder opens nothing with Enter'] = function()
+  explore_changed('open-folder-link', function(top)
+    vim.fn.delete(vim.fs.joinpath(top, 'README.md'))
+    vim.uv.fs_symlink('src', vim.fs.joinpath(top, 'README.md'))
+  end, { '▸   docs/', '▸   src/', '    .gitignore', '  T README.md' })
+  child.lua([[
+    _G.opened = {}
+    vim.ui.open = function(path)
+      table.insert(_G.opened, path)
+      return nil, nil
+    end
+  ]])
+  put_cursor_on('README.md')
+
+  entry.press(child, '<CR>')
+
+  eq(child.lua_get('_G.opened'), {})
+  eq(entry.current_window(child), 'aineo://explorer')
+  eq(entry.messages(child), {
+    {
+      message = 'aineo: README.md is a folder on disk, not a file to open',
+      level = vim.log.levels.INFO,
+    },
+  })
 end
 
 T['the explorer pane, zoomed,'] = MiniTest.new_set()

@@ -170,7 +170,7 @@ end
 T['one pick'] = MiniTest.new_set()
 
 T['one pick']['in the changes pane moves the explorer to the worktree picked'] = function()
-  local repository = open_with_worktree('from-changes')
+  open_with_worktree('from-changes')
   entry.press(child, '\\e')
   wait_for_tree(OWN_TREE)
   show_changes_pane()
@@ -180,7 +180,6 @@ T['one pick']['in the changes pane moves the explorer to the worktree picked'] =
 
   eq(wait_for_tree(FEATURE_TREE), FEATURE_TREE)
   eq(vim.startswith(lines_of('aineo://explorer')[1], 'Worktree feature (feature)'), true)
-  eq(repository.worktree ~= nil, true)
 end
 
 T['one pick']['in the explorer moves the changes pane, which shows the worktree alone'] = function()
@@ -238,6 +237,28 @@ T['one pick']['of a branch with no worktree shows the folder Claude works in, th
   eq(vim.list_slice(lines_of('aineo://explorer'), 2), OWN_TREE)
 end
 
+T['one pick']['of a branch checked out in a worktree since shows that worktree'] = function()
+  local repository = open_with_worktree('branch-checkout')
+  entry.press(child, '\\e')
+  wait_for_tree(OWN_TREE)
+  eq(pick('[branch] lonely'), true)
+  eq(
+    wait_until(function()
+      return lines_of('aineo://explorer')[1]:find('no folder on disk', 1, true) ~= nil
+    end),
+    true
+  )
+  local lonely = vim.fs.joinpath(vim.fs.dirname(repository.top), 'lonely')
+  git_repo.git(repository.top, { 'worktree', 'add', '--quiet', lonely, 'lonely' })
+  git_repo.write(lonely, 'lonely.txt', { 'lonely' })
+
+  entry.press(child, 'R')
+
+  local expected = { '  ? lonely.txt', '    main.txt' }
+  eq(wait_for_tree(expected), expected)
+  eq(lines_of('aineo://explorer')[1]:find('no folder on disk', 1, true), nil)
+end
+
 T['one pick']['gives way to the folder Claude works in in the changes pane’s default view'] = function()
   open_with_worktree('default-view')
   entry.press(child, '\\e')
@@ -251,6 +272,39 @@ T['one pick']['gives way to the folder Claude works in in the changes pane’s d
   entry.press(child, '\\e')
 
   eq(wait_for_tree(OWN_TREE), OWN_TREE)
+end
+
+T['s in the explorer'] = MiniTest.new_set()
+
+T['s in the explorer']['before Claude Code has started offers nothing and says why'] = function()
+  child.lua([[
+    _G.notified, _G.offered = {}, 0
+    vim.notify = function(message, level)
+      table.insert(_G.notified, { message = message, level = level })
+    end
+    local explorer = require('aineo.entry.explorer').make_explorer({
+      claude = {
+        session_status = function() return nil end,
+        session_directory = function() return nil end,
+      },
+      changes = {
+        focused_work = function() return nil end,
+        offer_scopes = function() _G.offered = _G.offered + 1 end,
+        watch_focused_work = function() end,
+      },
+    })
+    vim.api.nvim_set_current_buf(explorer.buffer())
+  ]])
+
+  entry.press(child, 's')
+
+  eq(child.lua_get('_G.offered'), 0)
+  eq(child.lua_get('_G.notified'), {
+    {
+      message = 'aineo: nothing to pick yet: Claude Code has not started',
+      level = vim.log.levels.INFO,
+    },
+  })
 end
 
 T['one pick']['of reported work shows the first worktree reported'] = function()
