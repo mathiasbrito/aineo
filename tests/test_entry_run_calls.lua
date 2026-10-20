@@ -2,6 +2,7 @@ local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local entry_shell = dofile('tests/helpers/entry_shell.lua')
+local tabs = dofile('tests/helpers/entry_tabs.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -95,16 +96,64 @@ end
 
 T['a run call'] = MiniTest.new_set()
 
-T['a run call']['starts the process in the first tab’s stack, leaves the run pane unshown, and tells the user once'] = function()
+T['a run call']['starts the process in the first tab’s stack, shows the run pane, and tells the user once'] = function()
   local token = open_layout('run-calls-start')
 
   local answer = call(token, 'run', { command = 'sleep 30', name = 'svc' })
 
   eq(answer.is_error, false)
   eq(process_names(), { 'svc' })
-  eq(entry.windows(child), AGENT_PANE)
+  eq(entry.windows(child), { 'terminal', 'terminal' })
   eq(entry.messages(child), {
     { message = 'aineo: started svc in the run pane', level = vim.log.levels.INFO },
+  })
+end
+
+T['a run call']['shows the run pane over the agent pane, the cursor staying in the window it was in'] = function()
+  local token = open_layout('run-calls-cursor')
+  local cursor_window = child.lua_get([[(function()
+    local window = vim.iter(vim.api.nvim_tabpage_list_wins(0)):find(function(candidate)
+      return vim.bo[vim.api.nvim_win_get_buf(candidate)].buftype == 'terminal'
+    end)
+    vim.api.nvim_set_current_win(window)
+    return window
+  end)()]])
+
+  call(token, 'run', { command = 'sleep 30', name = 'svc' })
+
+  eq(entry.windows(child), { 'terminal', 'terminal' })
+  eq(child.lua_get('vim.api.nvim_get_current_win()'), cursor_window)
+end
+
+T['a run call']['shows the run pane over the changes pane'] = function()
+  local token = open_layout('run-calls-changes')
+  entry.press(child, '\\g')
+
+  call(token, 'run', { command = 'sleep 30', name = 'svc' })
+
+  eq(entry.windows(child), { 'terminal', 'terminal' })
+end
+
+T['a run call']['leaves the layout of a tab the user is not in as it is'] = function()
+  local _, first = tabs.open_first_tab(child, 'run-calls-other-tab')
+  local second = tabs.fake('run-calls-other-tab-second')
+  tabs.use_next_fake(child, second)
+  child.cmd('Aineo tab new')
+  claude_session.wait_for_start(second)
+  vim.wait(entry_shell.PATIENCE_MS, function()
+    return child.lua_get([[(pcall(vim.api.nvim_get_autocmds, { group = 'aineo.editors' }))]])
+  end, 20)
+  local agent_pane_of_first = tabs.windows_of_tab(child, 1)
+
+  local answer =
+    call(claude_session.start_token(first, 1), 'run', { command = 'sleep 30', name = 'svc' })
+
+  eq(answer.is_error, false)
+  eq(tabs.windows_of_tab(child, 1), agent_pane_of_first)
+  eq(tabs.windows_of_tab(child, 2), AGENT_PANE)
+  eq(tabs.current_tab(child), 2)
+  eq(entry.messages(child), {
+    { message = 'tab 1: aineo: started svc in the run pane', level = vim.log.levels.INFO },
   })
 end
 
