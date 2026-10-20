@@ -114,6 +114,34 @@ T['the Reported section']['lists on each line the whole change of its work, and 
   })
 end
 
+T['the Reported section']['shows the base its work was last read from, in place of the reported one'] = function()
+  local read_from = ('c'):rep(40)
+  local reports = {
+    {
+      member = {
+        worktree = {
+          top = AGENT.top,
+          branch = AGENT.branch,
+          base = read_from,
+          listed = { commits = {} },
+        },
+      },
+      report = { kind = 'worktree', base = BASE, at = NOW },
+    },
+    {
+      member = { branch = { name = 'feature/b', tip = BASE, base = read_from, commits = {} } },
+      report = { kind = 'branch', base = BASE, at = NOW },
+    },
+  }
+
+  local page = lines.commits_window(view_with(reports))
+
+  eq(
+    { page.text[2], page.text[3] },
+    { 'worktree feature/a from ccccccc now', 'branch feature/b from ccccccc now' }
+  )
+end
+
 T['the Reported section']['names a detached worktree by its folder'] = function()
   local reports = {
     {
@@ -197,6 +225,67 @@ T['the list s offers']['holds each report first, then all reported work, then th
       '[branch] feature/b',
       '[branch] lonely',
     }
+  )
+end
+
+T['the base a report is read from'] = MiniTest.new_set()
+
+--- Two commits: the base an agent reported, and the pane's own base for the
+--- same work.
+local REPORTED, OWN = ('a'):rep(40), ('b'):rep(40)
+
+T['the base a report is read from']['is the reported one or the pane’s own, as their history says'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        'the reported base descends from the pane’s',
+        REPORTED,
+        OWN,
+        { reported_in_tip = true, own_before_reported = true },
+        REPORTED,
+      },
+      {
+        'the pane’s base descends from the reported one',
+        REPORTED,
+        OWN,
+        { reported_in_tip = true, own_before_reported = false },
+        OWN,
+      },
+      {
+        'the reported base is no longer behind the tip',
+        REPORTED,
+        OWN,
+        { reported_in_tip = false, own_before_reported = true },
+        OWN,
+      },
+    },
+  })
+
+T['the base a report is read from']['is the reported one where the pane has no base of its own'] = function()
+  eq(
+    report_rules.effective_base(
+      REPORTED,
+      nil,
+      { reported_in_tip = true, own_before_reported = false }
+    ),
+    REPORTED
+  )
+end
+
+T['the base a report is read from']['is the reported one or the pane’s own, as their history says']['when'] = function(
+  _,
+  reported,
+  own,
+  ancestry,
+  expected
+)
+  eq(report_rules.effective_base(reported, own, ancestry), expected)
+end
+
+T['the base a report is read from']['is the pane’s own for a report that gave none'] = function()
+  eq(
+    report_rules.effective_base(nil, OWN, { reported_in_tip = false, own_before_reported = false }),
+    OWN
   )
 end
 

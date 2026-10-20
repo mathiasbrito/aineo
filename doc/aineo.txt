@@ -1384,10 +1384,14 @@ worktree or branch shown alone does; nothing else. Enter, `l`, `h` and
 `gf` under a branch's lines read that branch, as under a branch picked.
 
 A reported worktree or branch is read from the base its report gives,
-wherever the pane shows it, in place of a base of its own: a worktree's
-commits from that base to its `HEAD`, and, under its heading, its files
-since that base, the uncommitted ones included; a branch's commits from
-that base to its tip, and its files between the two. A branch no worktree
+wherever the pane shows it, in place of a base of its own, while that
+base is behind its tip and descends from the pane's own base; else — the
+reported base older than the pane's, unrelated to it, or left behind by a
+rebase onto newer work — from the pane's own, so that it never lists
+commits the agent did not make: a worktree's commits from that base to
+its `HEAD`, and, under its heading, its files since that base, the
+uncommitted ones included; a branch's commits from that base to its tip,
+and its files between the two. A branch no worktree
 has checked out has nothing uncommitted, and its heading says so:
 `Branch <name> (no worktree: commits only)`. A report made before reports
 gave a base is read from a base of its own, as any worktree or branch is.
@@ -1402,7 +1406,8 @@ first: >
 <
 Each line gives the kind reported, the branch the worktree is on — or its
 folder when its `HEAD` is detached — or the branch's name, `from` and the
-base's abbreviated id, or `from ?` for a report made before reports gave
+abbreviated id of the base its work is read from (above), or `from ?` for
+a report made before reports gave
 one, the agent's label when it gave one, and how long ago the report came,
 as a commit's age is told (|aineo-changes-author-column|). The line under
 the cursor chooses the files window's list, the whole change of its

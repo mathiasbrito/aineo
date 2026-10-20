@@ -28,6 +28,34 @@ function M.newest_first(entries)
   return ordered
 end
 
+--- What git says of a reported base, the tip of its work and the pane's own
+--- base for that work.
+---@class aineo.changes.BaseAncestry
+---@field reported_in_tip boolean whether the reported base is an ancestor of the tip, or the tip itself
+---@field own_before_reported boolean whether the pane's own base is an ancestor of the reported base, or that base itself
+
+--- The base a reported worktree or branch is read from, of `reported`, the
+--- base its report gave, and `own`, the one the pane reads for it without a
+--- report: the reported base while it is behind the tip and descends from
+--- the pane's own, or the pane has none; else the pane's own — the reported
+--- base older than the pane's, unrelated to it, or no longer behind the tip
+--- after a rebase, so that a pick never lists commits the agent did not make.
+--- The pane's own for a report that gave no base.
+---
+---@param reported string|nil
+---@param own string|nil
+---@param ancestry aineo.changes.BaseAncestry
+---@return string|nil
+function M.effective_base(reported, own, ancestry)
+  if not (reported and ancestry.reported_in_tip) then
+    return own
+  end
+  if own == nil or ancestry.own_before_reported then
+    return reported
+  end
+  return own
+end
+
 --- The report a worktree or branch keeps when `again` is reported of it
 --- after `before`, nil when nothing was: an agent's call replaces whatever
 --- was before, its base and label with it; a report of aineo's own hook
