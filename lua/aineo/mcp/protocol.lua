@@ -49,8 +49,9 @@ local function tool_result(text, is_error)
 end
 
 --- How the server hands a valid announcement on: whether the editor that
---- started Claude Code took it (`'taken'`) or not (`'declined'`).
----@alias aineo.mcp.DeliverAnnouncement fun(work: aineo.mcp.Work): 'taken'|'declined'
+--- started Claude Code took it (`'taken'`), refused it, with its words
+--- (`'refused'`), or not (`'declined'`).
+---@alias aineo.mcp.DeliverAnnouncement fun(work: aineo.mcp.Work): 'taken'|'refused'|'declined', string?
 
 --- How the server hands a valid call of a run tool on: the words for Claude
 --- that answer it, and whether they are an error.
@@ -83,8 +84,9 @@ local function call_report(arguments, deliver_report)
 end
 
 --- The result of a `tools/call` of the announcement tool: a valid
---- announcement is handed on, and answered `ok` when taken, a tool error
---- `not taken` when not, nothing more.
+--- announcement is handed on, and answered `ok` when taken, a tool error in
+--- the editor's words when it refused it, a tool error `not taken` when not,
+--- nothing more; refused arguments are a tool error naming the field.
 ---
 ---@param arguments any
 ---@param deliver_announcement aineo.mcp.DeliverAnnouncement
@@ -94,8 +96,12 @@ local function call_announcement(arguments, deliver_announcement)
   if not valid_work then
     return tool_result('aineo refused the announcement: ' .. refusal, true)
   end
-  if deliver_announcement(valid_work) == 'taken' then
+  local outcome, editor_refusal = deliver_announcement(valid_work)
+  if outcome == 'taken' then
     return tool_result('ok', false)
+  end
+  if outcome == 'refused' then
+    return tool_result('aineo refused the announcement: ' .. editor_refusal, true)
   end
   return tool_result('not taken', true)
 end
