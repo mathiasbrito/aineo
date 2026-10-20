@@ -187,6 +187,23 @@ local function pane_showing_the_graph(case, settings)
   return top, commits
 end
 
+--- Waits until the first line of the commits window ends with `ending`, at
+--- most `git_repo.PATIENCE_MS`, and asserts that it does.
+---
+---@param ending string
+local function expect_first_commits_line_ending(ending)
+  local function first_line()
+    return lines_of(COMMITS)[1]
+  end
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return vim.endswith(first_line(), ending)
+  end, 10)
+  eq({ line = first_line(), ends = vim.endswith(first_line(), ending) }, {
+    line = first_line(),
+    ends = true,
+  })
+end
+
 T['t'] = MiniTest.new_set()
 
 T['t']['in the commits window shows the commit graph of every branch in place of the sections'] = function()
@@ -232,7 +249,8 @@ T['t']['again shows the sections as they were, the choice made before the graph 
 end
 
 T['t']['shows the graph again after the sections, read anew'] = function()
-  local top, commits = pane_showing_the_graph('graphpane-again')
+  local top, commits =
+    pane_showing_the_graph('graphpane-again', { git = { system_name = 'Linux' } })
   expect_lines(COMMITS, whole_graph(top, commits))
   child.type_keys('t')
   expect_lines(COMMITS, SECTIONS)
@@ -262,6 +280,32 @@ T['t']['leaves the graph shown in a commits buffer made anew, j and k going from
   expect_cursor({ 4, 0 })
   child.type_keys('k')
   expect_cursor({ 2, 0 })
+end
+
+T['t']['leaves a commits buffer made anew in another window choosing the commit its cursor is put on'] = function()
+  local top, commits = pane_showing_the_graph('graphpane-anew-elsewhere')
+  expect_lines(COMMITS, whole_graph(top, commits))
+  expect_lines(FILES, {
+    'Files in: ' .. git_repo.commit_line_of(commits.other, CAROL, 'Other work'),
+    '  A more.txt',
+    '  A other.txt',
+  })
+  enter_window_of(FILES)
+  child.lua('vim.cmd.bwipeout(vim.fn.bufnr(...))', { COMMITS })
+  git_repo.git(top, { 'tag', '--delete', 'v1' })
+  git_repo.git(top, { 'branch', '--delete', '--force', 'other' })
+
+  child.lua([[
+    local pane = require('aineo.changes').pane_buffers()
+    vim.api.nvim_open_win(pane.commits, false, { split = 'below' })
+  ]])
+
+  expect_first_commits_line_ending('Merge side - Ada (HEAD -> main)')
+  expect_in_window_of(FILES)
+  expect_lines(FILES, {
+    'Files in: ' .. git_repo.commit_line_of(commits.merge, ADA, 'Merge side'),
+    '  A side.txt',
+  })
 end
 
 T['j and k'] = MiniTest.new_set()
@@ -411,23 +455,6 @@ T['l and <BS>']['the diff follows the cursor over a graph commit’s files once 
 end
 
 T['the graph'] = MiniTest.new_set()
-
---- Waits until the first line of the commits window ends with `ending`, at
---- most `git_repo.PATIENCE_MS`, and asserts that it does.
----
----@param ending string
-local function expect_first_commits_line_ending(ending)
-  local function first_line()
-    return lines_of(COMMITS)[1]
-  end
-  vim.wait(git_repo.PATIENCE_MS, function()
-    return vim.endswith(first_line(), ending)
-  end, 10)
-  eq({ line = first_line(), ends = vim.endswith(first_line(), ending) }, {
-    line = first_line(),
-    ends = true,
-  })
-end
 
 T['the graph']['is read again as the repository changes, the cursor kept on its commit'] = function()
   local top, commits = pane_showing_the_graph('graphpane-watch')
