@@ -6,6 +6,7 @@ local busy_watch = require('aineo.entry.busy_watch')
 local closing = require('aineo.entry.closing')
 local editors = require('aineo.entry.editors')
 local errors = require('aineo.entry.errors')
+local explorer = require('aineo.entry.explorer')
 local folder_tabs = require('aineo.entry.folder_tabs')
 local links = require('aineo.entry.links')
 local places = require('aineo.entry.places')
@@ -138,10 +139,10 @@ local function redraw_tab_line_when_named(terminal)
 end
 
 --- The homes one tab is made of: its layout, the Claude Code session home it
---- starts and follows, its Report, Input's draft and changes pane, its shell
---- and the processes of its run pane. The first tab's are the homes' own
---- module-level copies; every tab after it is given the copies each home's
---- `new()` makes.
+--- starts and follows, its Report, Input's draft and changes pane, its shell,
+--- the processes of its run pane and its explorer. The first tab's are the
+--- homes' own module-level copies, and an explorer made for it; every tab
+--- after it is given the copies each home's `new()` makes.
 ---@class aineo.entry.Homes
 ---@field layout aineo.layout.Layout
 ---@field claude aineo.claude.Session
@@ -150,6 +151,7 @@ end
 ---@field changes aineo.changes.Home
 ---@field shell aineo.shell.Home
 ---@field run aineo.run.Home
+---@field explorer aineo.explorer.Home
 
 --- One tab of aineo, as the composition root holds it: what a tab does is
 --- called as fields, and acts on that tab's homes alone.
@@ -870,7 +872,9 @@ local function make_tab(homes, key, callbacks)
   --- shell while it runs one (`aineo.shell`'s `shell_buffer()`), none
   --- otherwise; the terminals of the tab's run pane, with the winbar that
   --- names each process (`aineo.run`'s `buffers()`, `WINBAR`), none while it
-  --- runs nothing; with the Report's share from `config`, and the status line
+  --- runs nothing; the explorer's buffer once it was made
+  --- (`aineo.explorer`'s `made_buffer()`), none before; with the Report's
+  --- share from `config`, and the status line
   --- of Claude's window, which draws the session's name and folder
   --- (`aineo.claude`'s `session_statusline()`).
   ---
@@ -886,6 +890,7 @@ local function make_tab(homes, key, callbacks)
       changes = changes_pane(),
       shell = homes.shell.shell_buffer(),
       run = run_stack(),
+      explorer = homes.explorer.made_buffer(),
       claude_statusline = require('aineo.claude').session_statusline(),
     }
   end
@@ -1517,6 +1522,10 @@ local function make_tab(homes, key, callbacks)
   --- (`run_pane.watch()`).
   local run_group = 'aineo.entry.run.' .. (key or 'first')
 
+  --- The autocommand group of the handler that has the tab's explorer follow
+  --- the current file (`aineo.entry.explorer`'s `follow_current_file()`).
+  local explorer_group = 'aineo.entry.explorer.' .. (key or 'first')
+
   --- The tab's run pane (`aineo.entry.run_pane`): what it does for the tab's
   --- run home and layout.
   local run = run_pane.make({
@@ -1560,6 +1569,10 @@ local function make_tab(homes, key, callbacks)
     end,
     ['pane terminal'] = focus_terminal,
     ['pane run'] = run.run_command,
+    ['pane explorer'] = function()
+      homes.explorer.buffer()
+      focus_pane('explorer')
+    end,
     ['run shell'] = run.run_shell,
     ['diff close'] = function()
       homes.changes.close_shown_diff()
@@ -1637,9 +1650,11 @@ local function make_tab(homes, key, callbacks)
       homes.run.let_go or leave_as_it_is,
       key == nil and leave_as_it_is or function()
         pcall(vim.api.nvim_del_augroup_by_name, run_group)
+        pcall(vim.api.nvim_del_augroup_by_name, explorer_group)
       end,
       homes.changes.let_go or leave_as_it_is,
       homes.report.let_go or leave_as_it_is,
+      homes.explorer.let_go,
     })
     if key == nil then
       bound_page = nil
@@ -1697,6 +1712,13 @@ local function make_tab(homes, key, callbacks)
   end
 
   run.watch(run_group)
+  explorer.follow_current_file({
+    group = explorer_group,
+    explorer = homes.explorer,
+    page = function()
+      return bound_page
+    end,
+  })
   tab.actions = actions
   tab.running_processes = homes.run.running
   tab.start_in_run_stack = run.start_in_stack
