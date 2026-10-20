@@ -102,6 +102,18 @@ T['the tree']['hides dotfiles and dot folders while dotfiles are hidden'] = func
   })
 end
 
+T['the tree']['never shows a file named .git, as a linked worktree has'] = function()
+  local read = tree.add_listing(
+    { children = {} },
+    '',
+    { { name = '.git', kind = 'file' }, { name = 'a.txt', kind = 'file' } }
+  )
+
+  local lines = tree.render(read, view()).lines
+
+  eq(vim.list_slice(lines, 2), { '    a.txt' })
+end
+
 T['the tree']['never shows a folder named .git, dotfiles shown or not'] = function()
   local paths = { '.git/config', '.gitignore', 'a.txt' }
 
@@ -220,6 +232,23 @@ T['a repository’s listing']['at the repository’s top gives every file'] = fu
   local lines = tree.render(read.tree, view()).lines
 
   eq(vim.list_slice(lines, 2), { '▸   sub/', '    a' })
+end
+
+T['a repository’s listing']['shows a nested repository and a submodule as folders read from disk, the untracked one marked'] = function()
+  local listing = {
+    files = { 'a.txt', 'nested/', 'vendor/lib' },
+    changes = { { path = 'nested/', kind = 'untracked' } },
+    submodules = { 'vendor/lib' },
+  }
+
+  local read = tree.from_repository(listing, '')
+  local lines = tree.render(read.tree, view({ marks = read.marks, open = { vendor = true } })).lines
+
+  eq(vim.list_slice(lines, 2), { '▸ ? nested/', '▾   vendor/', '  ▸   lib/', '    a.txt' })
+  eq(
+    { tree.is_known(read.tree, 'nested'), tree.is_known(read.tree, 'vendor/lib') },
+    { false, false }
+  )
 end
 
 T['a folder read from disk'] = MiniTest.new_set()

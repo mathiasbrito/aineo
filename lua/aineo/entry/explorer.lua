@@ -10,8 +10,14 @@ local links = require('aineo.entry.links')
 
 local M = {}
 
+--- What the explorer's `s` tells the user before the tab's Claude Code has
+--- started: the changes pane's list is read once it has.
+local NOT_STARTED = 'aineo: nothing to pick yet: Claude Code has not started'
+
 --- The explorer of the tab whose homes are `homes`, all but the explorer
---- itself made.
+--- itself made. Its `s` offers the changes pane's list (`offer_scopes()`)
+--- once the tab's Claude Code has started, and before that tells the user
+--- so (`NOT_STARTED`).
 ---
 ---@param homes aineo.entry.Homes
 ---@return aineo.explorer.Home
@@ -22,8 +28,15 @@ function M.make_explorer(homes)
       return homes.claude.session_directory() or vim.fn.getcwd()
     end,
     focused_work = homes.changes.focused_work,
-    offer_work = homes.changes.offer_scopes,
+    offer_work = function()
+      if homes.claude.session_status() == nil then
+        vim.notify(NOT_STARTED, vim.log.levels.INFO)
+        return
+      end
+      homes.changes.offer_scopes()
+    end,
     open_file = links.open_file,
+    quote_name = require('aineo.changes').quoted_path,
     paste = function(text)
       require('aineo.send').paste(text, { session = homes.claude })
     end,

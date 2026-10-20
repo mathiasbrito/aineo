@@ -1,7 +1,8 @@
---- The git home: what a repository holds, asked of git — the files it lists
---- and those it ignores, the files changed since a base commit, the commits
---- since it or between two commits, their diffs, a file as a commit has it, a name resolved to a commit, its
---- worktrees and the base of each, its local branches — and a watch that
+--- The git home: what a repository holds, asked of git — the files it lists,
+--- those it ignores and its submodules, the files changed since a base
+--- commit, the commits since it or between two commits, their diffs, a file
+--- as a commit has it, a name resolved to a commit, its worktrees and the
+--- base of each, its local branches — and a watch that
 --- calls back when the branch moves, a reference is written or a
 --- working-tree file changes.
 ---
@@ -108,6 +109,17 @@ end
 ---@param options? aineo.git.Options
 function M.ignored_files(found, done, options)
   files.ignored_files(process.runner(options), found, done)
+end
+
+--- Lists the submodules of `found`, the entries of its index that are
+--- commits of another repository, with paths relative to its top level;
+--- calls `done(nil, paths)`, or `done(failure)`.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param done fun(failure: aineo.git.Failure|nil, paths: string[]|nil)
+---@param options? aineo.git.Options
+function M.submodule_paths(found, done, options)
+  files.submodule_paths(process.runner(options), found, done)
 end
 
 --- Lists the files the commit `commit` changed in `found`, against its
