@@ -13,6 +13,7 @@ local M = {}
 ---@field list_files fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, paths: string[]|nil))
 ---@field uncommitted_files fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, changes: aineo.git.Change[]|nil))
 ---@field ignored_files fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, paths: string[]|nil))
+---@field submodule_paths fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, paths: string[]|nil))
 ---@field list_worktrees fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, worktrees: aineo.git.Worktree[]|nil))
 ---@field watch_repository fun(found: aineo.git.Repository, on_change: fun(failure: aineo.git.Failure|nil, change: aineo.git.RepositoryChange|nil)): aineo.git.Watch|nil
 
@@ -37,6 +38,7 @@ local M = {}
 ---@field offer_work? fun() offers the changes pane's list of worktrees, branches and reported work, whose pick it shows alone
 ---@field open_file fun(path: string) opens the file `path`, absolute, in the file column
 ---@field paste fun(text: string) pastes `text` into Claude Code's prompt, with no Enter
+---@field quote_name fun(name: string): string how a name shows on its line, a control character in it escaped
 
 --- The functions of an explorer, as `M.new()` gives them.
 ---@class aineo.explorer.Home
@@ -116,7 +118,8 @@ function M.new(settings)
   --- the number of the last read asked for; the watch of the repository and
   --- its top; whether the last read went through git; the file followed,
   --- by its path from the folder shown, and one followed before the first
-  --- read, absolute.
+  --- read, absolute; whether `I` told the user nothing is ignored outside
+  --- git.
   local state = {
     ---@type integer|nil
     buffer = nil,
@@ -152,6 +155,7 @@ function M.new(settings)
     followed = nil,
     ---@type string|nil
     pending_follow = nil,
+    nothing_ignored_told = false,
   }
 
   ---@type aineo.explorer.Home
@@ -168,6 +172,7 @@ function M.new(settings)
       show_dotfiles = state.show_dotfiles,
       filter = state.filter,
       title = state.place and state.place.title or '',
+      quote = settings.quote_name,
     }
   end
 
@@ -374,11 +379,25 @@ function M.new(settings)
     return true
   end
 
+  --- Whether a window of any tab page shows the explorer's buffer.
+  ---
+  ---@return boolean
+  local function is_shown()
+    return state.buffer ~= nil
+      and vim.api.nvim_buf_is_valid(state.buffer)
+      and #vim.fn.win_findbuf(state.buffer) > 0
+  end
+
   --- Starts the watch of `repository`, which reads the tree again at each
-  --- change, unless one watches its top already.
+  --- change, unless one watches its top already; while no window shows the
+  --- explorer, it watches nothing.
   ---
   ---@param repository aineo.git.Repository
   local function watch(repository)
+    if not is_shown() then
+      stop_watch()
+      return
+    end
     if state.watched_top == repository.top then
       return
     end
@@ -413,10 +432,11 @@ function M.new(settings)
     watch(repository)
   end
 
-  --- Reads what git lists of `repository` — its files, those that changed
-  --- and, while ignored entries show, those it ignores — and takes it for
-  --- the folder `prefix` of it (`take_repository()`), unless another read
-  --- was asked for meanwhile. A failure of git is shown in the buffer.
+  --- Reads what git lists of `repository` — its files, those that changed,
+  --- its submodules and, while ignored entries show, those it ignores — and
+  --- takes it for the folder `prefix` of it (`take_repository()`), unless
+  --- another read was asked for meanwhile. A failure of git is shown in the
+  --- buffer.
   ---
   ---@param read integer
   ---@param repository aineo.git.Repository
@@ -424,7 +444,7 @@ function M.new(settings)
   local function read_repository(read, repository, prefix)
     local git = settings.git
     local listing = {}
-    local asked = { 'files', 'changes' }
+    local asked = { 'files', 'changes', 'submodules' }
     if state.show_ignored then
       table.insert(asked, 'ignored')
     end
@@ -449,6 +469,7 @@ function M.new(settings)
     end
     git.list_files(repository, answered('files'))
     git.uncommitted_files(repository, answered('changes'))
+    git.submodule_paths(repository, answered('submodules'))
     if state.show_ignored then
       git.ignored_files(repository, answered('ignored'))
     end
@@ -511,10 +532,8 @@ function M.new(settings)
     if not take_followed(file) then
       return
     end
-    if not state.in_git then
-      for _, folder in ipairs(tree.folders_above(state.followed)) do
-        list_when_unknown(folder)
-      end
+    for _, folder in ipairs(tree.folders_above(state.followed)) do
+      list_when_unknown(folder)
     end
     render()
   end
@@ -593,9 +612,17 @@ function M.new(settings)
     end)
   end
 
+  --- What Enter tells the user on a file git sees deleted, by its path.
+  local DELETED = 'aineo: %s is deleted; \\g shows its diff'
+
+  --- What Enter tells the user on a file that is a folder on disk, as a
+  --- tracked file turned into a link to a folder is, by its path.
+  local A_FOLDER = 'aineo: %s is a folder on disk, not a file to open'
+
   --- What Enter does: unfolds or folds the folder under the cursor, or opens
   --- the file under it (`settings.open_file`), the explorer's cursor kept
-  --- on its line; nothing on the header.
+  --- on its line; nothing on the header. A file git sees deleted, and one
+  --- that is a folder on disk, opens nothing: the user is told why.
   local function on_enter()
     local entry = entry_in(0)
     if not entry then
@@ -605,8 +632,17 @@ function M.new(settings)
       toggle_folder(entry)
       return
     end
+    local file = vim.fs.joinpath(state.place.directory, entry.path)
+    if state.marks[entry.path] == 'D' then
+      vim.notify(DELETED:format(entry.path), vim.log.levels.INFO)
+      return
+    end
+    if vim.fn.isdirectory(file) == 1 then
+      vim.notify(A_FOLDER:format(entry.path), vim.log.levels.INFO)
+      return
+    end
     local window, line = vim.api.nvim_get_current_win(), vim.api.nvim_win_get_cursor(0)[1]
-    settings.open_file(vim.fs.joinpath(state.place.directory, entry.path))
+    settings.open_file(file)
     keep_cursor_line(window, line)
   end
 
@@ -615,11 +651,14 @@ function M.new(settings)
   local NOTHING_IGNORED = 'aineo: the explorer shows a folder outside git, where nothing is ignored'
 
   --- What `I` does: shows the entries git ignores, read again with them, or
-  --- hides them; over a folder outside git it changes nothing and tells the
-  --- user so.
+  --- hides them; over a folder outside git it changes nothing, and tells the
+  --- user so the first time only, for the explorer's life.
   local function toggle_ignored()
     if not state.in_git then
-      vim.notify(NOTHING_IGNORED, vim.log.levels.INFO)
+      if not state.nothing_ignored_told then
+        state.nothing_ignored_told = true
+        vim.notify(NOTHING_IGNORED, vim.log.levels.INFO)
+      end
       return
     end
     state.show_ignored = not state.show_ignored
@@ -714,19 +753,38 @@ function M.new(settings)
         desc = 'aineo explorer: ' .. key.desc,
       })
     end
+    vim.api.nvim_create_autocmd('BufWinEnter', {
+      buffer = buffer,
+      desc = 'aineo: read the explorer again as it shows',
+      callback = function()
+        read_tree()
+      end,
+    })
+    vim.api.nvim_create_autocmd('BufWinLeave', {
+      buffer = buffer,
+      desc = 'aineo: stop watching while the explorer is hidden',
+      callback = function()
+        vim.schedule(function()
+          if not is_shown() then
+            stop_watch()
+          end
+        end)
+      end,
+    })
     return buffer
   end
 
   --- The explorer's buffer, made the first time, and again once it was
-  --- wiped; the tree is read when the buffer is made, and when the folder
-  --- shown is no longer the one read.
+  --- wiped. The tree is read each time a window comes to show the buffer,
+  --- and, while one shows it, when the folder to show is no longer the one
+  --- read; the repository is watched while a window shows it, and not
+  --- otherwise.
   ---
   ---@return integer
   function home.buffer()
     if not (state.buffer and vim.api.nvim_buf_is_valid(state.buffer)) then
       state.buffer = make_buffer()
-      read_tree()
-    elseif state.place_key ~= place_key() then
+    elseif is_shown() and state.place_key ~= place_key() then
       read_tree()
     end
     return state.buffer
@@ -744,10 +802,11 @@ function M.new(settings)
   end
 
   --- Reads the tree again, keeping the folds, the toggles, the filter and
-  --- each window's cursor on its entry; does nothing before the buffer was
-  --- made.
+  --- each window's cursor on its entry, while a window shows the explorer;
+  --- does nothing otherwise, as the explorer reads its tree whenever it
+  --- shows.
   function home.refresh()
-    if state.buffer and vim.api.nvim_buf_is_valid(state.buffer) then
+    if is_shown() then
       read_tree()
     end
   end

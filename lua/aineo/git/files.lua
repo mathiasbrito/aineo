@@ -1,5 +1,5 @@
---- The files a repository holds, and those it ignores, as `git ls-files`
---- lists them.
+--- The files a repository holds, those it ignores, and its submodules, as
+--- `git ls-files` lists them.
 
 local process = require('aineo.git.process')
 
@@ -55,6 +55,43 @@ function M.ignored_files(run, found, done)
     },
     process.or_fail(done, function(output)
       done(nil, parse_paths(output.stdout))
+    end)
+  )
+end
+
+--- The mode git gives an entry of the index that is a commit of another
+--- repository: a submodule (gitlink).
+local GITLINK_MODE = '160000'
+
+--- The paths of `output`, what `git ls-files -z --stage` printed, whose
+--- entry has `GITLINK_MODE`, each once.
+---
+---@param output string
+---@return string[]
+local function gitlink_paths(output)
+  local paths, seen = {}, {}
+  for _, entry in ipairs(parse_paths(output)) do
+    local mode, path = entry:match('^(%d+) %x+ %d+\t(.*)$')
+    if mode == GITLINK_MODE and not seen[path] then
+      seen[path] = true
+      table.insert(paths, path)
+    end
+  end
+  return paths
+end
+
+--- Lists the submodules of `found`, the entries of its index that are
+--- commits of another repository, as paths relative to its top level, and
+--- calls `done(nil, paths)`, or `done(failure)`.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param done fun(failure: aineo.git.Failure|nil, paths: string[]|nil)
+function M.submodule_paths(run, found, done)
+  run(
+    { directory = found.top, arguments = { 'ls-files', '-z', '--stage' } },
+    process.or_fail(done, function(output)
+      done(nil, gitlink_paths(output.stdout))
     end)
   )
 end
