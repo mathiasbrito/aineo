@@ -485,6 +485,22 @@ T['the prefix and Enter']['opens the file for edition in the file column, as <S-
   eq(child.lua_get('vim.bo.modifiable'), true)
 end
 
+T['the prefix and Enter']['leaves the file in the file column when the cursor then moves in the files window'] = function()
+  local top = changes_pane_listing_a_file('changespane-entry-prefix-enter-follow')
+  local path = vim.fs.joinpath(top, 'notes.txt')
+  entry.press(child, 'l')
+  wait_for_window_showing('aineo://diff/notes.txt')
+  entry.press(child, '\\<CR>')
+  wait_for_window_showing(path)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
+
+  entry.press(child, 'k')
+  entry.press(child, 'j')
+
+  vim.wait(500)
+  eq(entry.windows(child), { 'terminal', path, FILES, COMMITS })
+end
+
 T['the prefix and Enter']['follows the prefix vim.g.aineo names'] = function()
   entry.restart(child, { '--cmd', "lua vim.g.aineo = { prefix = ',', autostart = false }" })
   local top = changes_pane_listing_a_file(

@@ -1175,16 +1175,21 @@ tmux does not recognise as sending extended keys is told so with the
 mapping (Settings, Profiles, Keys) whose action is "Send Escape Sequence"
 with `[13;2u`.
 
-The diff of the file under the cursor follows the cursor in the files window:
-it appears in the middle column as the cursor moves, with no key, whether
-`j`, `k`, the mouse, a search, `gg` or `G` moved it, once the cursor has
-stayed on a line for 120 ms, so that holding `j` draws only the file it stops
-on. The cursor stays in the files window, on its line, and the commits
-window's choice is not changed. The diff is the kind `l` or `h` chose last:
-against the file's previous version until one of them is pressed. A line that
-lists no file, a heading, a note or an empty one, shows nothing new, and the
-last diff stays; a diff a window of the tab page shows already is not drawn
-again, and once `\d` closed it, moving the cursor shows one again. The cursor
+The diff of the file under the cursor follows the cursor in the files window
+while a diff is open: once Enter, `l` or `h` showed one in the middle column,
+the diff appears there as the cursor moves, with no key, whether `j`, `k`, the
+mouse, a search, `gg` or `G` moved it, once the cursor has stayed on a line
+for 120 ms, so that holding `j` draws only the file it stops on. While no diff
+is open, moving the cursor opens none: not as the cursor lands in the files
+window, nor after `l` in the commits window moved it there. No diff is open
+when the middle column shows another buffer, a file opened for edition, `gf`'s
+file or nothing, and following stops once `\d` closed the diff or a file
+replaced it, until Enter, `l` or `h` shows a diff again. The cursor stays in
+the files window, on its line, and the commits window's choice is not
+changed. The diff is the kind `l` or `h` chose last: against the file's
+previous version until one of them is pressed. A line that lists no file, a
+heading, a note or an empty one, shows nothing new, and the last diff stays; a
+diff a window of the tab page shows already is not drawn again. The cursor
 must still be in the files window when the 120 ms end.
 
 `<BS>` in a diff the pane showed in the middle column, whether Enter, `l`, `h`
