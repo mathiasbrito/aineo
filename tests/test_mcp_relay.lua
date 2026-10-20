@@ -164,15 +164,22 @@ T['tools/list']['starts with report, whose input schema is the report format, th
     },
     {
       name = 'announce_work',
-      description = 'Informs aineo of a git branch or worktree just created for new work; replies ok.',
+      description = 'Required for every agent and subagent: call once right after you create'
+        .. ' a git branch or worktree for new work, with kind, its path or branch,'
+        .. ' the base commit it was created from, and a short label.',
       inputSchema = {
         type = 'object',
         properties = {
           kind = { type = 'string', enum = { 'worktree', 'branch' } },
-          path = { type = 'string' },
-          branch = { type = 'string' },
+          path = { type = 'string', description = 'The worktree’s folder, for kind worktree.' },
+          branch = { type = 'string', description = 'The branch’s name, for kind branch.' },
+          base = {
+            type = 'string',
+            description = 'The commit the work was created from: an id, or a name git reads, such as origin/dev.',
+          },
+          label = { type = 'string', description = 'A short name for the task.' },
         },
-        required = { 'kind' },
+        required = { 'kind', 'base' },
         additionalProperties = false,
       },
     },
