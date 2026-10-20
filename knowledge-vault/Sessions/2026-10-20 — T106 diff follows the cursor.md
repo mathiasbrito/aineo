@@ -14,7 +14,7 @@ In the changes pane's files window, the middle column shows the diff of the file
 
 ## Task lines
 
-- [X] T106 The diff follows the cursor in the changes pane's files window (C15; D95, A523, A525, D30): a pause restarted by `CursorMoved` in the files buffer shows the diff of the file under the cursor through the read `l` and `h` use, in the kind `l` or `h` chose last (`l` by default), the cursor staying in the list; the pause is closed when the files buffer is wiped; `<BS>` in the pane's diff buffers moves back to the files window, onto the file's line; help and README — done, PR to follow
+- [X] T106 The diff follows the cursor in the changes pane's files window (C15; D95, A523, A525, A526, D30): a pause restarted by `CursorMoved` in the files buffer shows the diff of the file under the cursor through the read `l` and `h` use, in the kind `l` or `h` chose last (`l` by default), the cursor staying in the list; the pause is closed when the files buffer is wiped; `<BS>` in the pane's diff buffers moves back to the files window, onto the file's line; help and README — done, PR to follow
 
 ## What was done
 
@@ -25,7 +25,8 @@ In the changes pane's files window, the middle column shows the diff of the file
 
 ## Decisions
 
-- D95, A523, A525 (read from the user's words and the orchestrator's rulings; rows appended to the plan note).
+- D95, A523, A525, A526 (read from the user's words and the orchestrator's rulings; rows appended to the plan note).
+- A526: `show_diff_at_cursor()` takes what to do with an empty diff against `HEAD` (`tell_file_is_as_head_has_it()` for Enter, `l` and `h`; `tell_nothing()` for following), not a flag.
 - "Differs from the one shown" is read from the windows of the tab page, not remembered: a remembered name would stay "shown" after `\d` closed the diff, and A523 says moving shows a diff again then.
 - The pause is built per files buffer, not per home: `pause.close()` is final, and the files buffer can be made anew.
 - `<BS>` brings the pane back through a setting the composition root gives, not through the layout: the home has no layout (`modularity`: no edge from `aineo.changes` to `aineo.layout`).
@@ -46,7 +47,6 @@ Added: `tests/test_changes_follow.lua` (the following and `<BS>`), one case in `
 
 ## Open threads
 
-- With the diffs following in the `HEAD` kind, a file whose diff against `HEAD` is empty tells "<path> is as HEAD has it" each time the cursor reaches it (the read `h` uses); A523 asks for no different behaviour.
 - A list written under the cursor, or `l` in the commits window, moves the cursor in the files window and so shows a diff after the pause.
 
 ## Commits

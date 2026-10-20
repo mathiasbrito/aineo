@@ -411,6 +411,65 @@ local function enter_last_diff_with_files_cursor_on(line)
   )
 end
 
+--- Makes a repository whose base commit holds `a.txt`, `b.txt` and `c.txt`
+--- with `one`, begins the session there with the pane shown, commits the three
+--- as `two` and waits for the files window to list them under Session work:
+--- the working tree is as `HEAD` has it, so a diff against `HEAD` is empty.
+--- The cursor is left in the files window, on its header.
+---
+---@param case string the case's own name
+local function pane_with_three_committed_files(case)
+  local top =
+    git_repo.create(case, { ['a.txt'] = { 'one' }, ['b.txt'] = { 'one' }, ['c.txt'] = { 'one' } })
+  child.lua(BEGIN_AND_SHOW, { top })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
+  for _, path in ipairs({ 'a.txt', 'b.txt', 'c.txt' }) do
+    git_repo.write(top, path, { 'two' })
+  end
+  local commit = git_repo.commit_all(top, 'Second')
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Second') })
+  expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt', '  M c.txt' })
+  enter_window_of(FILES)
+end
+
+--- Everything the child's messages hold.
+---
+---@return string
+local function told()
+  return child.lua_get("vim.api.nvim_exec2('messages', { output = true }).output")
+end
+
+T['a file as HEAD has it'] = MiniTest.new_set()
+
+T['a file as HEAD has it']['is told once by h, and shows no diff'] = function()
+  pane_with_three_committed_files('quiet-explicit-h')
+  child.type_keys('j', 'h')
+
+  git_repo.wait_until('the file told as HEAD has it', function()
+    return told():find('aineo: a.txt is as HEAD has it', 1, true) ~= nil
+  end)
+  eq(draws(), 0)
+end
+
+T['a file as HEAD has it']['is told nothing while the diffs against HEAD follow the cursor'] = function()
+  pane_with_three_committed_files('quiet-follow')
+  child.type_keys('j', 'h')
+  git_repo.wait_until('the file told as HEAD has it', function()
+    return told():find('is as HEAD has it', 1, true) ~= nil
+  end)
+  child.cmd('messages clear')
+  local reads = child.lua_get('_G.reads')
+
+  child.type_keys(KEY_GAP_MS, 'j', 'j')
+
+  git_repo.wait_until('the diffs were read', function()
+    return child.lua_get('_G.reads') > reads
+  end)
+  vim.wait(QUIET_MS)
+  eq({ told = told(), draws = draws() }, { told = '', draws = 0 })
+end
+
 T['<BS> in a diff'] = MiniTest.new_set()
 
 T['<BS> in a diff']['shown by Enter moves the cursor to the files window, on the line of its file'] = function()
