@@ -38,7 +38,9 @@ over Input, the changes pane, and a shell's terminal, each filling the column,
 and move to the Report, to the changes pane's commits and into the shell, in
 Terminal mode (|aineo-panes|). `\x` asks for a command and runs it in the
 folder, in a terminal of the run pane, a stack of the services you run while
-you develop, and `\X` adds a shell to that stack (|aineo-run|). `\T` opens a
+you develop, and `\X` adds a shell to that stack (|aineo-run|). `\e` shows
+the explorer, a tree of the folder Claude works in, and moves into it
+(|aineo-explorer|). `\T` opens a
 tab page with a Claude Code
 session of its own, `\1` to `\9` move to the tab page of that number, and
 `\Q` closes the current tab (|aineo-tabs|). `\d` closes the diff the changes
@@ -327,9 +329,14 @@ when there is one. Folders come first, then files, each alphabetically,
 git's mark sits before a file's name: `M` modified, `A` added, `D` deleted
 (a file gone from disk still shows, with its mark), `R` renamed, `T` its
 type changed, `?` untracked; a folder holding a change, at any depth, has
-`•`. What git ignores is hidden, dotfiles show, and `.git` never does. The
-tree is read again whenever the repository changes (a file written, a
-commit, a checkout), the folds, the filter and each cursor's entry kept.
+`•`. A submodule, and a repository nested in it, is a folder listed from
+disk as it unfolds (|aineo-limits|). What git ignores is hidden, dotfiles
+show, and `.git` never does, a folder or a file. A name holding a control
+character shows quoted, as the changes pane shows such a path. While the
+explorer shows, the tree is read again whenever the repository changes (a
+file written, a commit, a checkout), the folds, the filter and each
+cursor's entry kept; hidden, it watches nothing, and reads the tree again
+as it shows.
 
 Outside git the tree lists a folder, one level, as you unfold it, with no
 mark; `R` reads it again.
@@ -340,7 +347,8 @@ The keys of the tree, in Normal mode, in its buffer alone:
     `<CR>`     unfold or fold a folder; on a file, open it in the file
              column and move the cursor there, as a link opens
              (|aineo-links|): a text file in aineo, anything else with
-             your system
+             your system; a deleted file, or one that is a folder on
+             disk, opens nothing, and aineo says why
     `h`        fold an unfolded folder; on a file or a folded folder, fold
              the folder that holds it and move to it
     `@`        paste `@` and the path of the entry under the cursor, from
@@ -349,7 +357,7 @@ The keys of the tree, in Normal mode, in its buffer alone:
              the tree; while Claude is not ready it pastes nothing and
              tells you so, once (|aineo-send|)
     `I`        show what git ignores, or hide it again; outside git it
-             tells you nothing is ignored there
+             tells you, once for the tab, that nothing is ignored there
     `H`        hide dotfiles, or show them again
     `f`        ask for a filter (|vim.ui.input()|): only the files whose
              path from the folder shown holds it, ignoring case, show, in
@@ -407,16 +415,17 @@ hand is outside the zoom: it neither changes the zoom nor ends it, and `\z`
 there does not zoom it.
 
 The zoom ends by itself, the windows given back the heights they had, when
-another pane shows (`\pa`, `\g`, `\pt`, `\x`, and `\r` and `\i` when they show
-the agent pane) and when a process joins the run pane or leaves its stack,
-which changes the windows of the column. Asking for the pane already shown —
-`\pa` under the agent pane, `\x` under the run pane when it only moves the
-cursor into it — keeps the zoom; a `\x` that starts a process ends it, as any
-process joining the stack does. When you close one of the column's windows,
-the zoom ends and the layout puts its proportions back, as it does for any
-closed window. The terminal pane's one window fills the column already, so
-`\z` there changes nothing visible and tells you nothing; it still toggles,
-and ends as the pane changes.
+another pane shows (`\pa`, `\g`, `\pt`, `\x`, `\e`, and `\r` and `\i` when
+they show the agent pane) and when a process joins the run pane or leaves its
+stack, which changes the windows of the column. Asking for the pane already
+shown — `\pa` under the agent pane, `\x` under the run pane when it only
+moves the cursor into it — keeps the zoom; a `\x` that starts a process ends
+it, as any process joining the stack does. When you close one of the
+column's windows, the zoom ends and the layout puts its proportions back, as
+it does for any closed window. The terminal pane's one window, and the
+explorer pane's, fill the column already, so `\z` there changes nothing
+visible and tells you nothing; it still toggles, and ends as the pane
+changes.
 
 When the editor is resized, the zoom stays: the zoomed window takes the rows
 the column gains or loses, and the others stay at their least height. `\z`
@@ -671,9 +680,9 @@ cannot be made taller or its letters larger; padding makes the titles wider.
 What the actions do with tabs:
 - Every action acts on the current tab when the current tab page is an aineo
   tab. From any other tab page it acts on the aineo tab used last, and moves
-  you there: `\o`, `\r`, `\i`, `\c`, `\g`, `\pa`, `\pt`, `\x`, `\X`, `\tcn`,
-  `\N`, `\S`, `\s`, `\d` and `:Aineo claim`. `\d` makes no tab: with no aineo
-  tab it only tells you there is no diff to close.
+  you there: `\o`, `\r`, `\i`, `\c`, `\g`, `\pa`, `\pt`, `\x`, `\X`, `\e`,
+  `\tcn`, `\N`, `\S`, `\s`, `\d` and `:Aineo claim`. `\d` makes no tab: with
+  no aineo tab it only tells you there is no diff to close.
 - A report goes to the tab whose Claude Code sent it. A session hook goes to
   the tab whose start it names. Each tab is listed among the running editors
   for its own session (|aineo-report-claims|). A report of no known session
@@ -905,8 +914,9 @@ the local branch `dev`, as do `refs/heads/dev`, `heads/dev`,
 replaces it (telescope, fzf-lua, snacks, dressing and the like) searches
 that text. While Claude Code has reported work, the list begins with
 `[reported] All reported work (<n>)` (|aineo-changes-reported|). `s` is a
-Normal-mode map of the two buffers of the pane alone; in every other buffer
-it is Vim's own.
+Normal-mode map of the two buffers of the pane and of the explorer's buffer,
+where it is the same pick (|aineo-explorer|); in every other buffer it is
+Vim's own.
 The branches are listed off the main loop and the picker opens once they
 are; pressing `s` again meanwhile opens no second picker. Branches that
 cannot be listed leave the worktrees alone, and aineo says so once, as a
@@ -914,9 +924,11 @@ warning. With neither a worktree nor a branch to offer, `s` opens nothing
 and says "aineo: no other worktree or branch to show alone"; when the other
 worktrees could not be listed and none is known, it says the line the
 commits window shows, and reads no branch, as nothing then says which are
-checked out; while there is no repository, or aineo is reading it, or has not
-read the other worktrees yet, `s` opens nothing and says what the windows
-say. A picker that raises is told once, as an error; an answer that is none
+checked out; while there is no repository, or aineo is reading it, `s`
+opens nothing and says what the windows say. When aineo has not read the
+other worktrees yet, as before the pane was first shown, `s` says it is
+reading the repository, reads them, and opens the picker once they are. A
+picker that raises is told once, as an error; an answer that is none
 of the items offered is ignored. Dismissing the picker changes nothing. `s`
 does not wait for 'timeoutlen', whatever global maps begin with `s`.
 
@@ -3022,6 +3034,15 @@ matches only the folders already listed, and the tree is read again only by
 `R`, as no watch runs there. A path `@` pastes is pasted as it is, spaces
 included, which Claude Code may read as the end of the path. The picker `s`
 opens is |vim.ui.select()|, whichever picker you installed answers it.
+
+A submodule, and a repository nested in the one shown that git lists as a
+folder of its own, shows as a folder listed from disk, one level at a time,
+as it unfolds, with no marks inside: its own changes are its repository's;
+an untracked nested repository's folder keeps its `?`. Each read of the tree
+costs time on Neovim's main loop in proportion to the number of files the
+repository lists (some 80 ms for 100 000 files, measured on Neovim 0.12.5),
+and so does showing the explorer again, which reads it; the explorer
+watches the repository only while it shows.
 
 Links in Claude's terminal ~
 Neovim keeps the address of a link a program prints in a terminal (OSC 8)
