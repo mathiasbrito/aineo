@@ -58,7 +58,7 @@ local SUBCOMMANDS = {
 --- number (`aineo.entry`'s `jump_to_tab()`); `diff` takes `close`, and `zoom`
 --- takes `full` (`ACTS_WITHOUT_A_WORD`).
 local SUBCOMMAND_WORDS = {
-  pane = { 'agent', 'changes', 'terminal', 'run' },
+  pane = { 'agent', 'changes', 'terminal', 'run', 'explorer' },
   run = { 'shell' },
   tab = { 'new', 'close', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
   diff = { 'close' },
@@ -286,6 +286,7 @@ local PREFIX_KEYS = {
   ['pane changes'] = 'g',
   ['pane terminal'] = 'pt',
   ['pane run'] = 'x',
+  ['pane explorer'] = 'e',
   ['run shell'] = 'X',
   ['tab new'] = 'T',
   ['tab close'] = 'Q',
@@ -613,5 +614,5 @@ end, {
   nargs = '*',
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full',
 })

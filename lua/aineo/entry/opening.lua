@@ -3,6 +3,7 @@
 --- and the tab pages a new tab opens in.
 
 local closing = require('aineo.entry.closing')
+local explorer = require('aineo.entry.explorer')
 local folder_tabs = require('aineo.entry.folder_tabs')
 local registry = require('aineo.entry.registry')
 local routing = require('aineo.entry.routing')
@@ -87,11 +88,21 @@ end
 --- made of copies is keyed by the number it was made as.
 local tabs_made = 0
 
---- The homes the modules themselves are: the first tab's.
+--- `homes` with the explorer made of them (`aineo.entry.explorer`).
+---
+---@param homes aineo.entry.Homes
+---@return aineo.entry.Homes
+local function with_explorer(homes)
+  homes.explorer = explorer.make_explorer(homes)
+  return homes
+end
+
+--- The homes the modules themselves are: the first tab's, with an explorer
+--- of its own, as the explorer home has no module copy.
 ---
 ---@return aineo.entry.Homes
 local function module_homes()
-  return {
+  return with_explorer({
     layout = require('aineo.layout'),
     claude = require('aineo.claude'),
     report = require('aineo.report'),
@@ -99,15 +110,15 @@ local function module_homes()
     changes = require('aineo.changes'),
     shell = require('aineo.shell'),
     run = require('aineo.run'),
-  }
+  })
 end
 
 --- The copies each home's `new()` makes, for a tab made while the first tab
---- is in `tab_list`.
+--- is in `tab_list`, with an explorer of their own.
 ---
 ---@return aineo.entry.Homes
 local function copied_homes()
-  return {
+  return with_explorer({
     layout = require('aineo.layout').new(),
     claude = require('aineo.claude').new(),
     report = require('aineo.report').new(),
@@ -115,7 +126,7 @@ local function copied_homes()
     changes = require('aineo.changes').new(),
     shell = require('aineo.shell').new(),
     run = require('aineo.run').new(),
-  }
+  })
 end
 
 --- Whether the report home has been given its router yet.
