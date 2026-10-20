@@ -305,7 +305,7 @@ local COMMITS = 'aineo://changes-commits'
 ---@param subject string
 ---@return string
 local function listed(commit, subject)
-  return commit:sub(1, 7) .. ' ' .. subject
+  return git_repo.commit_line(commit, subject)
 end
 
 --- A session id of the form Claude Code gives, for a session an earlier

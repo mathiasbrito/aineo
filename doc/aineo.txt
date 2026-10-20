@@ -793,10 +793,11 @@ and keeps it for no session.
 
 The first line of the files window, `aineo://changes-files`, names what it
 lists: `Files in: Session work`, `Files in: Uncommitted`, or `Files in: `
-and a commit's line as the commits window shows it, its abbreviated id and
-subject; `Files in: Landed in <branch>` for what landed in your working
-branch (below); or, for another worktree, `Files in: ` and the worktree's
-heading as the commits window shows it, or a commit's line followed by
+and a commit's line as the commits window shows it, its abbreviated id,
+author and age, and subject; `Files in: Landed in <branch>` for what landed
+in your working branch (below); or, for another worktree, `Files in: ` and
+the worktree's heading as the commits window shows it, or a commit's line
+followed by
 `(worktree <folder>)`; the commits window chooses (below). The window
 lists the files of that one choice and nothing else, no other worktree's
 heading or files among them, whichever choice it is. It shows its first
@@ -854,13 +855,13 @@ base is read again each time the files are, and never kept (below).
 
 The commits window, `aineo://changes-commits`, starts with two lines that
 are always there, Uncommitted and Session work, then lists the session's
-commits, newest first, by abbreviated id and subject, or says "No commits
-on this session". Its cursor is on Session work when the pane first shows,
-and when the buffer is made anew; `\g` keeps your line, and switches the
-view while a worktree or a branch is shown alone (below). The line under
-the cursor chooses what the files window lists, once the cursor has stayed
-on it for 150 milliseconds, however it moves - keys, a click, or the mouse
-wheel over the window while the cursor is in another one: Uncommitted,
+commits, newest first, by abbreviated id, author and age, and subject (below),
+or says "No commits on this session". Its cursor is on Session work when the
+pane first shows, and when the buffer is made anew; `\g` keeps your line, and
+switches the view while a worktree or a branch is shown alone (below). The
+line under the cursor chooses what the files window lists, once the cursor has
+stayed on it for 150 milliseconds, however it moves - keys, a click, or the
+mouse wheel over the window while the cursor is in another one: Uncommitted,
 Session work, that commit; on the Landed heading, everything that landed; on
 a commit that landed, that commit; on another worktree's heading, that
 worktree's whole change; on one of its commits, that commit, read in that
@@ -875,6 +876,36 @@ reset or pushed over, when the Landed section is no longer shown, and when
 the chosen worktree is no longer listed; when the worktree is listed but a
 commit of it that was chosen is not - the agent amended or rebased it - the
 choice becomes that worktree's whole change, the cursor on its heading.
+
+                                                *aineo-changes-author-column*
+Every commit line the pane draws - your own, those that landed, another
+worktree's or branch's, and the commit named on the first line of the files
+window - is the abbreviated id, a space, a column of the commit's author and
+age, a space, and the subject: >
+    1a2b3c4 Ada Lovelace 3h      Add the report
+    5d6e7f8 Bartholomew Mont… 2d Fix the build
+<
+The column is 20 display cells wide whatever the name, so the subjects line
+up: the author's name as git recorded it (`%an`), a space and the age of the
+commit's author date, padded with spaces. The age is told in whole units,
+rounded down: `now` under a minute, then `<n>m`, `<n>h`, `<n>d`, `<n>w`,
+`<n>mo` (30 days) and `<n>y` (365 days); a date ahead of the clock is `now`.
+The age is never cut; a name too long for what it leaves is cut, by display
+width, with `…`, and a control character of a name shows as a space. The
+ages are told as of the moment a list is written: they move on when the pane
+writes a list again, not by themselves. The name shows in
+|hl-AineoChangesCommitAuthor| and the age in |hl-AineoChangesCommitAge|.
+Uncommitted, Session work, the headings and the notes are as they were.
+
+                                                           *aineo-changes-l*
+`l` in the commits window moves the cursor to the files window, the choice
+the line under the cursor makes kept: it makes it at once, without waiting
+for the 150 milliseconds, and the files window then lists it. The cursor goes
+to its first file, or to the file it was on when the window already listed
+that choice; on a line that lists no file, a note, it still moves. `<BS>` in
+the files window moves the cursor back to the commits window, onto the line
+that chose what the files window lists. `h` in the files window keeps
+showing the diff against `HEAD` (|aineo-changes|).
 
 Below your own lines, which have no heading, the commits window lists what
 landed in your working branch: the heading `Landed in <branch>`, then the
@@ -1331,10 +1362,11 @@ its kind, and the `*` of a file you saved in |hl-AineoChangesSaved|; the
 blank before a file you did not save has no colour. The space between a
 file's letter and its path is in the group of its kind too, so a background
 you give that group runs unbroken from the letter to the end of the line. A
-commit's abbreviated id shows in |hl-AineoChangesCommitId|, and its subject in
-|hl-AineoChangesCommitSubject|, which is empty: the subject shows in the
-colours of its window, dimmed with it where a colour scheme dims a window
-not current (|hl-NormalNC|), until you colour the group. The commits
+commit's abbreviated id shows in |hl-AineoChangesCommitId|, its author's name
+in |hl-AineoChangesCommitAuthor|, its age in |hl-AineoChangesCommitAge|, and
+its subject in |hl-AineoChangesCommitSubject|, which is empty: the subject
+shows in the colours of its window, dimmed with it where a colour scheme dims
+a window not current (|hl-NormalNC|), until you colour the group. The commits
 window's two fixed lines, Uncommitted and Session work, its Landed heading,
 the heading of a worktree or branch shown alone, and the files window's first
 line show whole in |hl-AineoChangesFilter|. A
@@ -1372,6 +1404,10 @@ AineoChangesDeleted      a deleted file, linked to `Removed`
 AineoChangesSaved        the `*` of a file you saved, linked to `WarningMsg`
                                                      *hl-AineoChangesCommitId*
 AineoChangesCommitId     a commit's abbreviated id, linked to `Identifier`
+                                                 *hl-AineoChangesCommitAuthor*
+AineoChangesCommitAuthor a commit's author, linked to `Identifier`
+                                                    *hl-AineoChangesCommitAge*
+AineoChangesCommitAge    a commit's age, linked to `Comment`
                                                 *hl-AineoChangesCommitSubject*
 AineoChangesCommitSubject  a commit's subject, empty
                                                        *hl-AineoChangesFilter*

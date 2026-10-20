@@ -158,7 +158,7 @@ end
 ---@param subject string
 ---@return string
 local function commit_line(commit, subject)
-  return commit:sub(1, 7) .. ' ' .. subject
+  return git_repo.commit_line(commit, subject)
 end
 
 --- How many pickers the child was asked for and messages it was told.

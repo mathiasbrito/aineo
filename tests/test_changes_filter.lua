@@ -242,8 +242,8 @@ local function session_with_two_commits(name, before_beginning, git_options)
   expect_lines(COMMITS, {
     UNCOMMITTED,
     SESSION_WORK,
-    second:sub(1, 7) .. ' Add b',
-    first:sub(1, 7) .. ' Change a',
+    git_repo.commit_line(second, 'Add b'),
+    git_repo.commit_line(first, 'Change a'),
   })
   expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  A b.txt' })
   return top, first, second
@@ -265,8 +265,8 @@ T['the commits window']['lists the session’s commits under the two fixed lines
   eq(lines_of(COMMITS), {
     UNCOMMITTED,
     SESSION_WORK,
-    second:sub(1, 7) .. ' Add b',
-    first:sub(1, 7) .. ' Change a',
+    git_repo.commit_line(second, 'Add b'),
+    git_repo.commit_line(first, 'Change a'),
   })
 end
 
@@ -310,7 +310,7 @@ T['the commits window']['has its cursor on Session work again when its buffer is
   )
   enter_window_of(COMMITS)
   go_to_line(4)
-  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Change a', '  M a.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(first, 'Change a'), '  M a.txt' })
   vim.fn.writefile({}, flag)
   local asked = child.lua_get('_G.git_asked')
   child.cmd(('bwipeout! %d'):format(child.fn.bufnr(COMMITS)))
@@ -373,9 +373,9 @@ T['the commits window']['keeps the user’s line when the pane is shown again'] 
   expect_lines(COMMITS, {
     UNCOMMITTED,
     SESSION_WORK,
-    third:sub(1, 7) .. ' Add c',
-    second:sub(1, 7) .. ' Add b',
-    first:sub(1, 7) .. ' Change a',
+    git_repo.commit_line(third, 'Add c'),
+    git_repo.commit_line(second, 'Add b'),
+    git_repo.commit_line(first, 'Change a'),
   })
   eq(cursor_of(COMMITS), { 5, 0 })
 end
@@ -394,7 +394,7 @@ T['the filter']['is the commit under the cursor: the files window names it and l
 
   go_to_line(4)
 
-  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Change a', '  M a.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(first, 'Change a'), '  M a.txt' })
 end
 
 T['the filter']['follows a scroll of the commits window made while the cursor is in the files window'] = function()
@@ -403,7 +403,7 @@ T['the filter']['follows a scroll of the commits window made while the cursor is
 
   wheel_commits_down_to_line(4)
 
-  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Change a', '  M a.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(first, 'Change a'), '  M a.txt' })
 end
 
 T['the filter']['puts the cursor of every files window on its first line, the view at the top, at a change of filter'] = function()
@@ -458,7 +458,7 @@ T['the filter']['follows a scroll of the commits window made in the turn another
   local forty = git_repo.commit_all(top, 'Forty')
   git_repo.write(top, 'f01.txt', { 'three' })
   refresh_pane()
-  expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, forty:sub(1, 7) .. ' Forty' })
+  expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, git_repo.commit_line(forty, 'Forty') })
   git_repo.wait_until('forty files listed', function()
     return #lines_of(FILES) == 41
   end)
@@ -483,7 +483,7 @@ T['the filter']['follows a scroll of the commits window made in the turn another
   ]])
 
   git_repo.wait_until('the files window follows the scroll', function()
-    return lines_of(FILES)[1] == 'Files in: ' .. forty:sub(1, 7) .. ' Forty'
+    return lines_of(FILES)[1] == 'Files in: ' .. git_repo.commit_line(forty, 'Forty')
   end)
   eq(cursor_of(COMMITS), { 3, 0 })
 end
@@ -514,12 +514,15 @@ T['the filter']['a commit that changed no file says so'] = function()
   expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, NO_COMMITS })
   local empty = git_repo.commit_all(top, 'Nothing')
   refresh_pane()
-  expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, empty:sub(1, 7) .. ' Nothing' })
+  expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, git_repo.commit_line(empty, 'Nothing') })
   enter_window_of(COMMITS)
 
   go_to_line(3)
 
-  expect_lines(FILES, { 'Files in: ' .. empty:sub(1, 7) .. ' Nothing', 'No files in this commit' })
+  expect_lines(
+    FILES,
+    { 'Files in: ' .. git_repo.commit_line(empty, 'Nothing'), 'No files in this commit' }
+  )
 end
 
 T['the filter']['is read after a pause, once, for the last of the lines the cursor crossed'] = function()
@@ -532,7 +535,7 @@ T['the filter']['is read after a pause, once, for the last of the lines the curs
 
   child.type_keys(KEY_GAP_MS, 'gg', 'j', 'j', 'j')
 
-  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Change a', '  M a.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(first, 'Change a'), '  M a.txt' })
   eq(child.lua_get('_G.file_reads'), { 'commit_files' })
 end
 
@@ -546,7 +549,7 @@ T['the filter']['restarts its pause at every move of the cursor, reading once af
 
   child.type_keys(60, 'gg', 'j', 'j', 'j')
 
-  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Change a', '  M a.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(first, 'Change a'), '  M a.txt' })
   eq(child.lua_get('_G.file_reads'), { 'commit_files' })
 end
 
@@ -561,7 +564,7 @@ T['the filter']['failing to read the files of a commit says so under that commit
   go_to_line(4)
 
   expect_lines(FILES, {
-    'Files in: ' .. first:sub(1, 7) .. ' Change a',
+    'Files in: ' .. git_repo.commit_line(first, 'Change a'),
     'The last refresh failed: cannot read this commit',
   })
 end
@@ -634,12 +637,12 @@ T['the filter']['goes back to Session work, the cursor with it, when the selecte
   local top, first, second = session_with_two_commits('filter-commit-gone')
   enter_window_of(COMMITS)
   go_to_line(3)
-  expect_lines(FILES, { 'Files in: ' .. second:sub(1, 7) .. ' Add b', '  A b.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(second, 'Add b'), '  A b.txt' })
 
   git_repo.git(top, { 'reset', '--quiet', '--hard', first })
   refresh_pane()
 
-  expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, first:sub(1, 7) .. ' Change a' })
+  expect_lines(COMMITS, { UNCOMMITTED, SESSION_WORK, git_repo.commit_line(first, 'Change a') })
   expect_lines(FILES, { 'Files in: Session work', '  M a.txt' })
   eq(cursor_of(COMMITS), { 2, 0 })
 end
@@ -703,12 +706,12 @@ T['the filter in another worktree']['a cursor on its commit lists that commit’
   local commit = git_repo.commit_all(agent, 'The agent’s')
   child.lua(RECORD_COMMIT_FILES_REPOSITORIES)
   begin_and_show(top)
-  expect_lines(COMMITS, commits_with_agent({ commit:sub(1, 7) .. ' The agent’s' }))
+  expect_lines(COMMITS, commits_with_agent({ git_repo.commit_line(commit, 'The agent’s') }))
 
   go_to_commits_line(5)
 
   expect_lines(FILES, {
-    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    'Files in: ' .. git_repo.commit_line(commit, 'The agent’s (worktree agent)'),
     '  A new.txt',
     '  M notes.txt',
   })
@@ -744,14 +747,14 @@ T['the filter in another worktree']['says so when its whole change, or its commi
   local agent = add_worktree(top, 'agent', 'agent')
   local commit = git_repo.commit_all(agent, 'Nothing')
   begin_and_show(top)
-  expect_lines(COMMITS, commits_with_agent({ commit:sub(1, 7) .. ' Nothing' }))
+  expect_lines(COMMITS, commits_with_agent({ git_repo.commit_line(commit, 'Nothing') }))
 
   go_to_commits_line(4)
   expect_lines(FILES, { 'Files in: Worktree agent (agent)', 'No files changed in this worktree' })
   go_to_commits_line(5)
 
   expect_lines(FILES, {
-    'Files in: ' .. commit:sub(1, 7) .. ' Nothing (worktree agent)',
+    'Files in: ' .. git_repo.commit_line(commit, 'Nothing (worktree agent)'),
     'No files in this commit',
   })
 end
@@ -767,7 +770,7 @@ T['the filter in another worktree']['leaves no other worktree’s section in the
   expect_lines(COMMITS, {
     UNCOMMITTED,
     SESSION_WORK,
-    own:sub(1, 7) .. ' Mine',
+    git_repo.commit_line(own, 'Mine'),
     'Worktree agent (agent)',
     'No commits in this worktree',
   })
@@ -777,7 +780,7 @@ T['the filter in another worktree']['leaves no other worktree’s section in the
   expect_lines(FILES, { 'Files in: Uncommitted', 'No uncommitted changes' })
   go_to_commits_line(3)
 
-  expect_lines(FILES, { 'Files in: ' .. own:sub(1, 7) .. ' Mine', '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(own, 'Mine'), '  M notes.txt' })
 end
 
 T['the filter in another worktree']['is one filter per worktree for the same commit'] = function()
@@ -793,9 +796,9 @@ T['the filter in another worktree']['is one filter per worktree for the same com
     SESSION_WORK,
     NO_COMMITS,
     'Worktree first (first)',
-    commit:sub(1, 7) .. ' Shared',
+    git_repo.commit_line(commit, 'Shared'),
     'Worktree second (second)',
-    commit:sub(1, 7) .. ' Shared',
+    git_repo.commit_line(commit, 'Shared'),
   })
   go_to_commits_line(5)
   git_repo.wait_until('the first worktree’s commit read', function()
@@ -809,7 +812,7 @@ T['the filter in another worktree']['is one filter per worktree for the same com
   end)
   eq(child.lua_get('_G.commit_files_tops'), { first, second })
   expect_lines(FILES, {
-    'Files in: ' .. commit:sub(1, 7) .. ' Shared (worktree second)',
+    'Files in: ' .. git_repo.commit_line(commit, 'Shared (worktree second)'),
     '  M notes.txt',
   })
 end
@@ -866,7 +869,7 @@ T['the save marks']['are dropped under a commit'] = function()
 
   go_to_line(4)
 
-  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Change a', '  M a.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(first, 'Change a'), '  M a.txt' })
 end
 
 T['Enter'] = MiniTest.new_set()
@@ -893,7 +896,7 @@ T['Enter']['on a file under a commit shows the commit’s header and that file�
   local _, first = session_with_two_commits('filter-enter-commit-file')
   enter_window_of(COMMITS)
   go_to_line(4)
-  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Change a', '  M a.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(first, 'Change a'), '  M a.txt' })
   enter_window_of(FILES)
   child.type_keys('2G')
 

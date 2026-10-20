@@ -28,7 +28,50 @@ local T = MiniTest.new_set({
   },
 })
 
+--- `commits`, as the home lists them, each as its id and subject alone.
+---
+---@param commits aineo.git.Commit[]
+---@return { id: string, subject: string }[]
+local function identified(commits)
+  return vim.tbl_map(function(commit)
+    return { id = commit.id, subject = commit.subject }
+  end, commits)
+end
+
+--- The time the commits with an author's name are written at.
+local AUTHORED_AT = 1700000000
+
 T['the commits since a base'] = MiniTest.new_set()
+
+T['the commits since a base']['carry their author’s name and the time it was written, as recorded'] = function()
+  local top = git_repo.create_unborn('commits-authors')
+  local spaced = git_repo.commit_all_authored(top, 'Spaced', 'Ada King Lovelace', AUTHORED_AT)
+  local accented =
+    git_repo.commit_all_authored(top, 'Accented', 'Zoë Åkesson 山田', AUTHORED_AT + 5)
+
+  local seen = child.lua(COMMITS_SINCE, { top, vim.NIL })
+
+  eq(seen.result.commits, {
+    {
+      id = accented,
+      subject = 'Accented',
+      author = 'Zoë Åkesson 山田',
+      authored_at = AUTHORED_AT + 5,
+    },
+    { id = spaced, subject = 'Spaced', author = 'Ada King Lovelace', authored_at = AUTHORED_AT },
+  })
+end
+
+T['the commits since a base']['keep a subject that holds separators the log could be split on'] = function()
+  local top = git_repo.create_unborn('commits-separators')
+  local commit = git_repo.commit_all_authored(top, 'a b\1c d', 'N 1 2', AUTHORED_AT)
+
+  local seen = child.lua(COMMITS_SINCE, { top, vim.NIL })
+
+  eq(seen.result.commits, {
+    { id = commit, subject = 'a b\1c d', author = 'N 1 2', authored_at = AUTHORED_AT },
+  })
+end
 
 T['the commits since a base']['are those reachable from the head, newest first, with their subjects'] = function()
   local top, base = git_repo.create('commits-since', { ['a.txt'] = { 'a' } })
@@ -38,13 +81,16 @@ T['the commits since a base']['are those reachable from the head, newest first, 
 
   local seen = child.lua(COMMITS_SINCE, { top, base })
 
-  eq(seen.result, {
-    commits = {
-      { id = second, subject = 'Record nothing: an empty commit' },
-      { id = first, subject = 'Change a' },
-    },
-    base_is_ancestor = true,
-  })
+  eq(
+    { commits = identified(seen.result.commits), base_is_ancestor = seen.result.base_is_ancestor },
+    {
+      commits = {
+        { id = second, subject = 'Record nothing: an empty commit' },
+        { id = first, subject = 'Change a' },
+      },
+      base_is_ancestor = true,
+    }
+  )
 end
 
 T['the commits since a base']['tell when a reset left the base behind'] = function()
@@ -55,10 +101,13 @@ T['the commits since a base']['tell when a reset left the base behind'] = functi
 
   local seen = child.lua(COMMITS_SINCE, { top, base })
 
-  eq(seen.result, {
-    commits = { { id = after, subject = 'After the reset' } },
-    base_is_ancestor = false,
-  })
+  eq(
+    { commits = identified(seen.result.commits), base_is_ancestor = seen.result.base_is_ancestor },
+    {
+      commits = { { id = after, subject = 'After the reset' } },
+      base_is_ancestor = false,
+    }
+  )
 end
 
 T['the commits since a base']['are every commit when there is no base'] = function()
@@ -68,10 +117,13 @@ T['the commits since a base']['are every commit when there is no base'] = functi
 
   local seen = child.lua(COMMITS_SINCE, { top, vim.NIL })
 
-  eq(seen.result, {
-    commits = { { id = second, subject = 'Second' }, { id = first, subject = 'First' } },
-    base_is_ancestor = true,
-  })
+  eq(
+    { commits = identified(seen.result.commits), base_is_ancestor = seen.result.base_is_ancestor },
+    {
+      commits = { { id = second, subject = 'Second' }, { id = first, subject = 'First' } },
+      base_is_ancestor = true,
+    }
+  )
 end
 
 T['the commits since a base']['are none before the first commit'] = function()
@@ -113,6 +165,22 @@ local COMMITS_BETWEEN = [[
 
 T['the commits between two commits'] = MiniTest.new_set()
 
+T['the commits between two commits']['carry their author’s name and the time it was written, as recorded'] = function()
+  local top = git_repo.create_unborn('between-authors')
+  local commit = git_repo.commit_all_authored(top, 'Accented', 'Zoë Åkesson 山田', AUTHORED_AT)
+
+  local seen = child.lua(COMMITS_BETWEEN, { top, vim.NIL, commit })
+
+  eq(seen.result, {
+    {
+      id = commit,
+      subject = 'Accented',
+      author = 'Zoë Åkesson 山田',
+      authored_at = AUTHORED_AT,
+    },
+  })
+end
+
 T['the commits between two commits']['are those reachable from the second and not from the first, newest first'] = function()
   local top, base = git_repo.create('between-commits', { ['a.txt'] = { 'a' } })
   git_repo.write(top, 'a.txt', { 'a, again' })
@@ -121,7 +189,7 @@ T['the commits between two commits']['are those reachable from the second and no
 
   local seen = child.lua(COMMITS_BETWEEN, { top, base, second })
 
-  eq({ failure = seen.failure, commits = seen.result }, {
+  eq({ failure = seen.failure, commits = identified(seen.result) }, {
     commits = {
       { id = second, subject = 'Record nothing: an empty commit' },
       { id = first, subject = 'Change a' },
@@ -136,7 +204,7 @@ T['the commits between two commits']['are every commit of the second when there 
 
   local seen = child.lua(COMMITS_BETWEEN, { top, vim.NIL, second })
 
-  eq({ failure = seen.failure, commits = seen.result }, {
+  eq({ failure = seen.failure, commits = identified(seen.result) }, {
     commits = { { id = second, subject = 'Second' }, { id = first, subject = 'First' } },
   })
 end
@@ -156,7 +224,7 @@ T['the commits between two commits']['list a rebase merge’s commits under thei
 
   local seen = child.lua(COMMITS_BETWEEN, { top, base, landed })
 
-  eq({ failure = seen.failure, commits = seen.result }, {
+  eq({ failure = seen.failure, commits = identified(seen.result) }, {
     commits = {
       { id = landed, subject = 'Feature work' },
       { id = ahead, subject = 'Main moves on' },

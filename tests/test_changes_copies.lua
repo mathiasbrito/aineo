@@ -214,7 +214,7 @@ end
 ---@param subject string
 ---@return string
 local function commit_line(commit, subject)
-  return commit:sub(1, 7) .. ' ' .. subject
+  return git_repo.commit_line(commit, subject)
 end
 
 --- The lines `1…count` of a file, line `n` reading `line n`, the lines
@@ -496,12 +496,16 @@ T['the commits window']['of one copy selects the filter of its own files window 
   expect_pane_lines(
     'first',
     'files',
-    { 'Files in: ' .. change_a:sub(1, 7) .. ' Change a', '  M a.txt' }
+    { 'Files in: ' .. git_repo.commit_line(change_a, 'Change a'), '  M a.txt' }
   )
-  expect_pane_lines('second', 'files', { 'Files in: ' .. add_b:sub(1, 7) .. ' Add b', '  A b.txt' })
+  expect_pane_lines(
+    'second',
+    'files',
+    { 'Files in: ' .. git_repo.commit_line(add_b, 'Add b'), '  A b.txt' }
+  )
   eq(
     pane_lines('first', 'files'),
-    { 'Files in: ' .. change_a:sub(1, 7) .. ' Change a', '  M a.txt' }
+    { 'Files in: ' .. git_repo.commit_line(change_a, 'Change a'), '  M a.txt' }
   )
 end
 
@@ -643,7 +647,7 @@ T['gf']['on the same commit’s file in two copies’ panes shows each its own f
   start_copy('second', top)
   wait_for_finds(2)
   local commit = commit_only(top, 'a.txt', 'two', 'Change a')
-  local commit_files = { 'Files in: ' .. commit:sub(1, 7) .. ' Change a', '  M a.txt' }
+  local commit_files = { 'Files in: ' .. git_repo.commit_line(commit, 'Change a'), '  M a.txt' }
   for _, key in ipairs({ 'first', 'second' }) do
     expect_pane_lines(
       key,
