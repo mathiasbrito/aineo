@@ -2791,6 +2791,29 @@ details is an item, `- ` and its text; a line Claude wrote as an item, after
 that is empty, white space alone or a marker alone shows as an empty line.
 The Report follows the newest report.
 
+                                                           *aineo-report-days*
+Days ~
+A line of its own, a separator, starts each day of reports: >
+    ── Sun 18 Oct ──
+    09:05 [done] task — summary
+    ── Yesterday ──
+    10:00 [done] task — summary
+    ── Today ──
+    11:30 [done] task — summary
+<
+A report is under the day it arrived on, by your clock. The separator reads
+`Today` or `Yesterday` for those days, else the weekday, the day of the month
+and the month, `Mon 19 Oct`, with the year, `Sun 19 Oct 2025`, when it is not
+this year; the weekday and the month are in English whatever your locale. Two
+reports on one day have one separator. The names move on with the days: the
+Report names them again whenever it shows a report, and at midnight while it
+stays open, so what was `Today` reads `Yesterday` the next morning. A report
+with no readable time goes under the separator of the report before it. A
+separator is a line of the Report like any other, in |hl-AineoReportDay|, but
+it carries no web link and no path: a double-click on it selects its word, as
+anywhere else in the Report that is not a path, and it has no address for
+⌘-click.
+
 A long line wraps between words: a wrapped first line continues under the
 `[` of its `[status]`, and a wrapped item under its text, not under its `-`.
 A Report narrower than 18 columns continues a wrapped line further left, to
@@ -2868,7 +2891,8 @@ Colours ~
 The Report shows the time in |hl-AineoReportTime|, and the `[status]`,
 brackets included, bold, in the group of its status, only where it placed
 them, never text like them in a task, a summary or details; web links in
-|hl-AineoReportLink|; and paths to files in |hl-AineoReportPath|. The bold
+|hl-AineoReportLink|; paths to files in |hl-AineoReportPath|; and the
+separators of its days (|aineo-report-days|) in |hl-AineoReportDay|. The bold
 is |hl-AineoReportStatusBold|, beneath the group of the status, linked to
 Markdown bold, `@markup.strong`: the bold, and whatever else a colour scheme
 gives Markdown bold — a background, italic, underline, or no bold at all —
@@ -2928,6 +2952,8 @@ AineoReportStatusBold  the bold of a `[status]`, linked to `@markup.strong`
 AineoReportLink      a web link, linked to `Underlined`
                                                           *hl-AineoReportPath*
 AineoReportPath      a path to a file, linked to `Underlined`
+                                                           *hl-AineoReportDay*
+AineoReportDay       a day separator, linked to `Comment`
 
 Reports are kept per Claude session, under `stdpath('state')` in
 `aineo/reports/`, one file for each session, named `session-` and the

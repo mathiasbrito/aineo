@@ -45,7 +45,10 @@ T['the report tool']['called by Claude shows its report in the Report'] = functi
   child.cmd('Aineo open')
 
   wait_for_report()
-  eq(child.lua_get(REPORT_LINES), { 'HH:MM [done] Refactor the parser — All tests pass' })
+  eq(
+    child.lua_get(REPORT_LINES),
+    { '── Today ──', 'HH:MM [done] Refactor the parser — All tests pass' }
+  )
 end
 
 T['the report tool']["stamps Claude's report with the editor's local time"] = function()
@@ -67,7 +70,7 @@ T['the report tool']["stamps Claude's report with the editor's local time"] = fu
   wait_for_report()
   eq(
     child.lua_get("vim.api.nvim_buf_get_lines(vim.fn.bufnr('aineo://report'), 0, -1, true)"),
-    { '09:05 [done] Refactor the parser — All tests pass' }
+    { '── Today ──', '09:05 [done] Refactor the parser — All tests pass' }
   )
 end
 

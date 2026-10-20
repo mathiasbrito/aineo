@@ -93,8 +93,12 @@ T['a report']['of the second tab’s Claude Code shows in the second tab’s Rep
   child.cmd('Aineo tab new')
 
   eq(
-    tabs.report_lines_once(child, 2, { 'HH:MM [done] Refactor the parser — All tests pass' }),
-    { 'HH:MM [done] Refactor the parser — All tests pass' }
+    tabs.report_lines_once(
+      child,
+      2,
+      { '── Today ──', 'HH:MM [done] Refactor the parser — All tests pass' }
+    ),
+    { '── Today ──', 'HH:MM [done] Refactor the parser — All tests pass' }
   )
   eq(tabs.report_lines_of_tab(child, 1), { '' })
 end
@@ -130,9 +134,17 @@ T['a report']['of no known session, offered by the second tab’s Claude Code, s
   local taken = offer_without_session('Of no session', { at_start = true, start_token = token })
 
   eq(taken, true)
-  eq(tabs.report_lines_once(child, 2, { 'HH:MM [done] Task — Of no session' }), {
-    'HH:MM [done] Task — Of no session',
-  })
+  eq(
+    tabs.report_lines_once(
+      child,
+      2,
+      { '── Today ──', 'HH:MM [done] Task — Of no session' }
+    ),
+    {
+      '── Today ──',
+      'HH:MM [done] Task — Of no session',
+    }
+  )
   eq(tabs.report_lines_of_tab(child, 1), { '' })
 end
 
@@ -182,9 +194,17 @@ T['a report']['of a session another tab follows, offered by the first tab’s Cl
   )
 
   eq(taken, true)
-  eq(tabs.report_lines_once(child, 2, { 'HH:MM [done] Task — For the second' }), {
-    'HH:MM [done] Task — For the second',
-  })
+  eq(
+    tabs.report_lines_once(
+      child,
+      2,
+      { '── Today ──', 'HH:MM [done] Task — For the second' }
+    ),
+    {
+      '── Today ──',
+      'HH:MM [done] Task — For the second',
+    }
+  )
   eq({ tabs.report_lines_of_tab(child, 1), first_session ~= second_session }, { { '' }, true })
 end
 
@@ -204,9 +224,13 @@ T['a report']['of a session two tabs follow goes to the tab whose Claude Code se
   )
 
   eq(taken, true)
-  eq(tabs.report_lines_once(child, 2, { 'HH:MM [done] Task — For both' }), {
-    'HH:MM [done] Task — For both',
-  })
+  eq(
+    tabs.report_lines_once(child, 2, { '── Today ──', 'HH:MM [done] Task — For both' }),
+    {
+      '── Today ──',
+      'HH:MM [done] Task — For both',
+    }
+  )
   eq(tabs.report_lines_of_tab(child, 1), { '' })
 end
 

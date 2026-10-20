@@ -1,6 +1,7 @@
 --- The Report buffer: where reports are shown.
 
 local colours = require('aineo.report.colours')
+local day_separators = require('aineo.report.day_separators')
 local render = require('aineo.report.render')
 
 local M = {}
@@ -218,9 +219,11 @@ end
 --- does, and its colours on them, a web link's carrying its address (an
 --- extmark's `url`, which the terminal is given as a hyperlink and `gx`
 --- opens). The colours are placed in their order, at one priority, so where
---- two cover the same text the later shows over the earlier. An empty
---- `buffer` first loses every colour still on it: `:edit` empties the Report
---- of its text, not of its colours.
+--- two cover the same text the later shows over the earlier. The lines of the
+--- rendering's separators are kept as the Report's day separators
+--- (`day_separators.record()`). An empty `buffer` first loses every colour
+--- and separator still on it: `:edit` empties the Report of its text, not of
+--- its colours.
 ---
 ---@param buffer integer
 ---@param rendering aineo.report.Rendering
@@ -229,8 +232,10 @@ function M.append_rendering(buffer, rendering)
   if is_empty(buffer) then
     first_line = 0
     vim.api.nvim_buf_clear_namespace(buffer, REPORT_COLOURS, 0, -1)
+    day_separators.clear(buffer)
   end
   append_lines(buffer, rendering.lines)
+  day_separators.record(buffer, first_line, rendering)
   for _, colour in ipairs(rendering.colours) do
     vim.api.nvim_buf_set_extmark(
       buffer,
