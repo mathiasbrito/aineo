@@ -678,7 +678,7 @@ T['a double-click']['on a ~ path with a line opens the file of the home folder a
   receive_details('See ~/only-home.txt:2 now')
   PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
 
-  double_click_in_report(2, 14)
+  double_click_in_report(DETAILS_LINE, 14)
 
   wait_until_current_file_is(vim.fs.joinpath(home, 'only-home.txt'))
   eq(where_the_file_opened(), opened_in_file_column(vim.fs.joinpath(home, 'only-home.txt'), 2))
