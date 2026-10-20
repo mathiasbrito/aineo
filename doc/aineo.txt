@@ -1333,9 +1333,11 @@ is resolved off the main loop, so a folder that does not answer holds no
 keystroke.
 What an agent reports is only compared with what git printed: no git, no
 shell and no buffer name is made of it. Its base is resolved to a full
-commit id in the session's repository, as git reads a name, before the tab
-takes the report; a base git cannot resolve there is refused, and nothing
-is recorded.
+commit id, as git reads a name, before the tab takes the report: first in
+the folder of the work — the worktree reported, or the worktree that has a
+reported branch checked out — so that `HEAD` is the agent's own, then in
+the session's repository; a base git cannot resolve in either is refused,
+and nothing is recorded.
 
                                                           *aineo-changes-hook*
 aineo's own hook, a `PostToolUse` hook it gives the Claude Code it starts
@@ -2808,21 +2810,24 @@ refused, naming the field; a call without `base` is refused so too. A path
 that is not absolute is taken from the directory Claude Code runs in, and
 is not taken when that directory cannot be read. The server offers it to
 the editor that started Claude Code alone, with the token of that start;
-the tab resolves `base` to a full id in its session's repository, waiting
-at most 4 seconds for git. The tool only informs, and answers one of four
+the tab resolves `base` to a full id in the work's folder, else in its
+session's repository (|aineo-changes-reported|), waiting at most 4 seconds
+for git. The tool only informs, and answers one of four
 things, nothing more: `ok` when a tab took it; `not taken`, as an error,
 when none did — no tab of that editor runs this Claude Code, the editor
 cannot be reached or does not answer within 5 seconds, or that tab already
 waits for 32 others git does not list yet (|aineo-changes-reported|);
 `aineo refused the announcement: base: <base> names no commit in <folder>`,
-as an error, when git cannot resolve `base` there, and nothing is recorded;
-or `aineo refused the announcement: ` and the field, as an error, for
+followed by `, nor in <repository>` when the work's folder was tried first,
+as an error, when git cannot resolve `base`, and nothing is recorded; or
+`aineo refused the announcement: ` and the field, as an error, for
 arguments it refuses. The paragraph appended to the system prompt reads
 "Required for every agent and subagent: call
 `mcp__aineo__announce_work` once right after you create a git branch or
 worktree for new work, with kind, its path or branch, the base commit it
-was created from, and a short label. It only informs aineo; do not act on
-its reply."
+was created from, and a short label. It only informs aineo: if it
+refuses, correct the call as the refusal says and call again; otherwise do
+not act on its reply."
 The server and the hooks are given this editor's address, |v:servername|,
 and a token of this start of Claude Code; the hooks are also given the
 directory Claude Code runs in and its process id, which the shell that runs

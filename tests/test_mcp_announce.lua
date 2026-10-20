@@ -269,7 +269,7 @@ T['the words']['name the tool as Claude Code names it'] = function()
   eq(name, 'mcp__aineo__announce_work')
 end
 
-T['the words']['appended to the system prompt are one paragraph of 273 bytes, the tool’s rule'] = function()
+T['the words']['appended to the system prompt are one paragraph of 351 bytes, the tool’s rule and a refusal corrected'] = function()
   local paragraph = mcp.announce_instructions()
 
   eq(
@@ -277,12 +277,13 @@ T['the words']['appended to the system prompt are one paragraph of 273 bytes, th
     'Required for every agent and subagent: call `mcp__aineo__announce_work` once right after you create'
       .. ' a git branch or worktree for new work, with kind, its path or branch,'
       .. ' the base commit it was created from, and a short label.'
-      .. ' It only informs aineo; do not act on its reply.'
+      .. ' It only informs aineo: if it refuses, correct the call as the refusal says and call again;'
+      .. ' otherwise do not act on its reply.'
   )
-  eq(#paragraph, 273)
+  eq(#paragraph, 351)
 end
 
-T['the words']['for a subagent are the paragraph and one sentence, 404 bytes'] = function()
+T['the words']['for a subagent are the paragraph and one sentence, 482 bytes'] = function()
   local context = mcp.subagent_announce_context()
 
   eq(
@@ -291,7 +292,7 @@ T['the words']['for a subagent are the paragraph and one sentence, 404 bytes'] =
       .. ' If you started in a git worktree made for your task, call it once, now,'
       .. " with that worktree's path and the commit it was made from."
   )
-  eq(#context, 404)
+  eq(#context, 482)
 end
 
 T['in the editor'] = MiniTest.new_set()
