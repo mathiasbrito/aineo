@@ -229,6 +229,7 @@ end
 ---@field label? string the agent's short name for the work's task
 ---@field at? integer when the report was taken, in seconds since the epoch
 ---@field by_hook? boolean whether aineo's own hook made the report
+---@field on_branch? string the branch the work was on when it was reported
 
 --- The view the changes pane showed, kept for a session.
 ---@class aineo.changes.KeptView
@@ -276,10 +277,18 @@ end
 --- The kinds of work a report names.
 local REPORT_KINDS = { worktree = true, branch = true }
 
+--- Whether `value` is nil or a non-empty string.
+---
+---@param value any
+---@return boolean
+local function is_absent_or_name(value)
+  return value == nil or (type(value) == 'string' and value ~= '')
+end
+
 --- `decoded` as a member of the reported set: a pick (`as_kept_pick()`)
 --- with, each when given, a `kind` of `REPORT_KINDS`, a `base` of
---- hexadecimal digits, a non-empty `label`, an integer `at` and a boolean
---- `by_hook`; nil when it is not.
+--- hexadecimal digits, a non-empty `label`, an integer `at`, a boolean
+--- `by_hook` and a non-empty `on_branch`; nil when it is not.
 ---
 ---@param decoded any
 ---@return aineo.changes.KeptReport|nil
@@ -288,17 +297,18 @@ local function as_kept_report(decoded)
   if not pick then
     return nil
   end
-  local kind, base, label, at, by_hook =
-    decoded.kind, decoded.base, decoded.label, decoded.at, decoded.by_hook
+  local kind, base, at, by_hook = decoded.kind, decoded.base, decoded.at, decoded.by_hook
   local valid = (kind == nil or REPORT_KINDS[kind] == true)
     and (base == nil or (type(base) == 'string' and base:match('^%x+$') ~= nil))
-    and (label == nil or (type(label) == 'string' and label ~= ''))
+    and is_absent_or_name(decoded.label)
     and (at == nil or (type(at) == 'number' and at == math.floor(at)))
     and (by_hook == nil or type(by_hook) == 'boolean')
+    and is_absent_or_name(decoded.on_branch)
   if not valid then
     return nil
   end
-  pick.kind, pick.base, pick.label, pick.at, pick.by_hook = kind, base, label, at, by_hook
+  pick.kind, pick.base, pick.label, pick.at = kind, base, decoded.label, at
+  pick.by_hook, pick.on_branch = by_hook, decoded.on_branch
   return pick
 end
 

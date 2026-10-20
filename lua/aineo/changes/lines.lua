@@ -632,6 +632,7 @@ end
 ---@field label? string the agent's short name for the work's task
 ---@field at? integer when the report was taken, in seconds since the epoch; nil for a report kept before reports were timed
 ---@field by_hook? boolean whether aineo's own hook made the report, rather than the agent's call
+---@field on_branch? string the branch the work was on when it was reported, as git listed it
 
 --- One report of the reported set: the worktree or branch git listed for
 --- it, and what was reported of it.

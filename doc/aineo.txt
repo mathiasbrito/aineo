@@ -1366,10 +1366,15 @@ could read without taking that creation over: the subagent is asked to call
 Each worktree or branch found joins the tab's reported work, in the order
 first reported, once however often it is reported. A report made again of
 the same worktree or branch — by its path or by the branch it has checked
-out — keeps its place and is told nothing; an agent's call puts its base
-and label in place of those before, and a report of aineo's hook keeps
-those before, so the agent's call wins over the hook's either way. The
-reported work then
+out — is told nothing. An agent's call puts its base, label and time in
+place of those before, so that its line moves to the top of the Reported
+section and its age starts again; a report of aineo's hook keeps those
+before, so the agent's call wins over the hook's either way — but a
+hook's report of a branch made in a reported worktree since gives that
+worktree the new branch and its base, keeping the label. A worktree made
+of a reported branch (`git branch x`, then `git worktree add <path> x`)
+takes that branch's line: one piece of work, one line. The reported work
+then
 becomes the focused view, from the default view or from a worktree or
 branch picked with `s`, its whole change chosen, the cursor on its
 heading, and aineo says once "aineo: Claude Code started work in Worktree
