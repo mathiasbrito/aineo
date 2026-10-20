@@ -25,6 +25,8 @@ local PROJECT_FILES = {
   ['lua/x.lua'] = { 'return {}', 'local y = 2', 'return y' },
   ['nul-inside.dat'] = { string.rep('a', TEXT_SAMPLE_BYTES - 1) .. '\n' .. 'tail' },
   ['nul-after.txt'] = { string.rep('a', TEXT_SAMPLE_BYTES) .. '\n' .. 'tail' },
+  ['a/~b.txt'] = { 'tilde inside' },
+  ['~user/x.txt'] = { 'named user' },
 }
 
 --- The Lua that keeps, in the child, every target `vim.ui.open()` is given,
@@ -437,6 +439,130 @@ T["gx in Claude's terminal"]['on a text file of the project opens it in the file
     { followed = what_followed(), line = cursor_line() },
     { followed = opened_in_file_column(vim.fs.joinpath(top, 'lua/x.lua')), line = 3 }
   )
+end
+
+--- Makes the child's home folder a folder of its own holding `x.txt`, four
+--- lines long, and returns its path: `~` is looked up there.
+---
+---@param name string the case's own name, starting `links-`
+---@return string home
+local function use_home_with_x_txt(name)
+  local home = fixture.directory(name .. '-home')
+  fixture.write(vim.fs.basename(home) .. '/x.txt', { 'one', 'two', 'three', 'four' })
+  child.lua('vim.env.HOME = ...', { home })
+  return home
+end
+
+T["a double-click in Claude's terminal"]['on a path in the home folder, written with ~, opens it in the file column'] = function()
+  open_layout_in_project('links-terminal-tilde')
+  local home = use_home_with_x_txt('links-terminal-tilde')
+  show_in_claude_terminal('See ~/x.txt now')
+
+  double_click(cell_of(CLAUDE_TERMINAL, '~/x.txt', 1))
+
+  wait_until_current_file_is(vim.fs.joinpath(home, 'x.txt'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(home, 'x.txt')), line = 1 }
+  )
+end
+
+T["a double-click in Claude's terminal"]['on a ~ path naming a line opens its file in the file column, at the line'] = function()
+  open_layout_in_project('links-terminal-tilde-line')
+  local home = use_home_with_x_txt('links-terminal-tilde-line')
+  show_in_claude_terminal('See ~/x.txt:3 now')
+
+  double_click(cell_of(CLAUDE_TERMINAL, '~/x.txt:3', 1))
+
+  wait_until_current_file_is(vim.fs.joinpath(home, 'x.txt'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(home, 'x.txt')), line = 3 }
+  )
+end
+
+T["gx in Claude's terminal"]['on a ~ path naming a line opens its file in the file column, at the line'] = function()
+  open_layout_in_project('links-terminal-tilde-gx')
+  local home = use_home_with_x_txt('links-terminal-tilde-gx')
+  show_in_claude_terminal('See ~/x.txt:2 now')
+  local cell = cell_of(CLAUDE_TERMINAL, '~/x.txt:2', 3)
+  child.cmd('stopinsert')
+  child.api.nvim_win_set_cursor(0, { cell.line, cell.byte })
+
+  entry.press(child, 'gx')
+
+  wait_until_current_file_is(vim.fs.joinpath(home, 'x.txt'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(home, 'x.txt')), line = 2 }
+  )
+end
+
+T["a double-click in Claude's terminal"]['on the home folder, written ~/, hands it to the system'] = function()
+  open_layout_in_project('links-terminal-tilde-folder')
+  local home = use_home_with_x_txt('links-terminal-tilde-folder')
+  show_in_claude_terminal('See ~/ now')
+
+  double_click(cell_of(CLAUDE_TERMINAL, 'See ~/ now', 4))
+
+  wait_until_settled()
+  eq(what_followed(), handed_to_the_system_from_the_terminal({ home .. '/' }))
+end
+
+T["a double-click in Claude's terminal"]['on a ~ path that names no file opens nothing and says so once'] = function()
+  open_layout_in_project('links-terminal-tilde-missing')
+  use_home_with_x_txt('links-terminal-tilde-missing')
+  show_in_claude_terminal('See ~/nope now')
+
+  double_click(cell_of(CLAUDE_TERMINAL, '~/nope', 1))
+
+  wait_until_settled()
+  eq(what_followed(), {
+    windows = LAYOUT_ALONE,
+    current = 'terminal',
+    external = {},
+    told = { { message = 'aineo: ~/nope names no file', level = vim.log.levels.WARN } },
+  })
+end
+
+T["a double-click in Claude's terminal"]['on a path with a ~ inside it keeps the ~ and looks it up in the project'] = function()
+  local top = open_layout_in_project('links-terminal-tilde-inside')
+  use_home_with_x_txt('links-terminal-tilde-inside')
+  show_in_claude_terminal('See a/~b.txt now')
+
+  double_click(cell_of(CLAUDE_TERMINAL, 'a/~b.txt', 0))
+
+  wait_until_current_file_is(vim.fs.joinpath(top, 'a/~b.txt'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(top, 'a/~b.txt')), line = 1 }
+  )
+end
+
+T["a double-click in Claude's terminal"]['on a ~user path leaves the ~user and looks it up in the project'] = function()
+  local top = open_layout_in_project('links-terminal-tilde-user')
+  use_home_with_x_txt('links-terminal-tilde-user')
+  show_in_claude_terminal('See ~user/x.txt now')
+
+  double_click(cell_of(CLAUDE_TERMINAL, '~user/x.txt', 1))
+
+  wait_until_current_file_is(vim.fs.joinpath(top, '~user/x.txt'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(top, '~user/x.txt')), line = 1 }
+  )
+end
+
+T['following the link ~ alone'] = MiniTest.new_set()
+
+T['following the link ~ alone']['hands the home folder to the system'] = function()
+  local top = open_layout_in_project('links-tilde-alone')
+  local home = use_home_with_x_txt('links-tilde-alone')
+
+  child.lua([[require('aineo.entry.links').open_link('~', nil, ...)]], { top })
+
+  local followed = what_followed()
+  eq({ external = followed.external, told = followed.told }, { external = { home }, told = {} })
 end
 
 return T
