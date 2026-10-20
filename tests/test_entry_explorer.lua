@@ -448,6 +448,38 @@ T['the colours']['show a changed file in its change’s group and a folder in th
   })
 end
 
+T['the colours']['show an entry git ignores whole in the ignored group, once I shows it'] = function()
+  local top = git_repo.create('explorer-colours-ignored', FILES)
+  git_repo.write(top, 'debug.log', { 'log' })
+  git_repo.write(top, 'build/out.o', { 'out' })
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
+  entry.use_fake(child, claude_session.fake('explorer-colours-ignored', 'ready'))
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  entry.press(child, '\\e')
+  wait_for_tree(FOLDED_TREE)
+  local shown = {
+    '▸   build/',
+    '▸   docs/',
+    '▸   src/',
+    '    .gitignore',
+    '    debug.log',
+    '    README.md',
+  }
+
+  entry.press(child, 'I')
+  eq(wait_for_tree(shown), shown)
+
+  eq(child.lua_get(COLOURS), {
+    { 2, 0, 12, 'AineoExplorerIgnored' },
+    { 3, 0, 3, 'AineoExplorerFolder' },
+    { 3, 6, 11, 'AineoExplorerFolder' },
+    { 4, 0, 3, 'AineoExplorerFolder' },
+    { 4, 6, 10, 'AineoExplorerFolder' },
+    { 6, 0, 13, 'AineoExplorerIgnored' },
+  })
+end
+
 --- The groups the explorer colours with, by the group each links to by
 --- default.
 local EXPLORER_GROUP_LINKS = {
@@ -474,6 +506,30 @@ T['the colours']['are each linked to its default'] = function()
     child.lua_get(EXPLORER_GROUPS_IN_CHILD, { vim.tbl_keys(EXPLORER_GROUP_LINKS) }),
     EXPLORER_GROUP_LINKS
   )
+end
+
+T['the colours']['ask for the groups of the file colours to be defined, once, as the explorer is made'] = function()
+  local asked = child.lua_get([[(function()
+    local asked = 0
+    require('aineo.explorer').new({
+      git = {},
+      claude_folder = function()
+        return vim.fn.getcwd()
+      end,
+      open_file = function() end,
+      paste = function() end,
+      quote_name = function(name)
+        return name
+      end,
+      change_groups = {},
+      define_change_groups = function()
+        asked = asked + 1
+      end,
+    })
+    return asked
+  end)()]])
+
+  eq(asked, 1)
 end
 
 T['the colours']['keep a group the user coloured before the explorer was made'] = function()
