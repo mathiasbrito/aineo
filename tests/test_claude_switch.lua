@@ -58,10 +58,26 @@ local function settings_in_file(path)
 end
 
 --- The shape of aineo's own hooks in its `--settings` (`shape_of()`): a
---- `SessionStart` and a `SessionEnd` command hook, with no matcher.
+--- `SessionStart` and a `SessionEnd` command hook, with no matcher, and a
+--- `PostToolUse` command hook for `Bash` calls of git, run in the
+--- background.
 local AINEO_HOOKS_SHAPE = {
   SessionStart = { { hooks = { { type = 'command', command = 'command', timeout = 5 } } } },
   SessionEnd = { { hooks = { { type = 'command', command = 'command', timeout = 5 } } } },
+  PostToolUse = {
+    {
+      matcher = 'Bash',
+      hooks = {
+        {
+          type = 'command',
+          command = 'command',
+          timeout = 5,
+          async = true,
+          ['if'] = 'Bash(git *)',
+        },
+      },
+    },
+  },
 }
 
 --- What aineo tells the user when it cannot add its hooks to a `--settings`
@@ -361,7 +377,7 @@ local T = MiniTest.new_set({
 
 T['start_session()'] = MiniTest.new_set()
 
-T['start_session()']['gives Claude Code a SessionStart and a SessionEnd command hook as --settings, and no other setting'] = function()
+T['start_session()']['gives Claude Code a SessionStart, a SessionEnd and a PostToolUse command hook as --settings, and no other setting'] = function()
   local fake = claude.fake('switch-settings', 'exit')
 
   claude.start(child, fake, kept_in('switch-settings-state'))
@@ -385,7 +401,11 @@ T['start_session()']['gives each hook a command of words quoted for the shell, b
       claude.hook_command(fake, 1, 'SessionEnd'),
       ("'SessionEnd' \"$PPID\" '%s'"):format(cwd)
     ),
-  }, { session_start = true, session_end = true })
+    post_tool_use = vim.endswith(
+      claude.hook_command(fake, 1, 'PostToolUse'),
+      ("'PostToolUse' \"$PPID\" '%s'"):format(cwd)
+    ),
+  }, { session_start = true, session_end = true, post_tool_use = true })
 end
 
 T['start_session()']['gives the first starts of two editors different start tokens'] = function()
@@ -814,6 +834,7 @@ T['start_session()']['keeps the user’s own session hooks beside its own'] = fu
       AINEO_HOOKS_SHAPE.SessionStart[1],
     },
     SessionEnd = AINEO_HOOKS_SHAPE.SessionEnd,
+    PostToolUse = AINEO_HOOKS_SHAPE.PostToolUse,
   })
 end
 
@@ -825,6 +846,7 @@ T['start_session()']['passes settings of claude.cmd it cannot read as they are, 
       { 'JSON that does not parse', '{"permissions":}' },
       { 'hooks that are not an object', '{"hooks":[]}' },
       { 'an event whose hooks are not a list', '{"hooks":{"SessionEnd":{}}}' },
+      { 'tool-use hooks that are not a list', '{"hooks":{"PostToolUse":{"matcher":"Bash"}}}' },
       { 'a directory', '.' },
       { 'a device', '/dev/null' },
     },
