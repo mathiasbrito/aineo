@@ -402,10 +402,10 @@ asking.
 
 `run` {command, name?, directory?} starts `command` through your 'shell', as
 `\x` does, at the bottom of the stack, and answers at once without waiting for
-it to end. The run pane is not brought into view and the cursor stays where
-it is; aineo tells you once, `aineo: started backend in the run pane`, and a
-run pane shown in the tab page you are in lists the process at once (in
-another tab page, the next time it is shown). `name`, what `run_output` and
+it to end. The run pane is shown, in the tab page you are in, and the cursor
+stays where it is; aineo tells you once, `aineo: started backend in the run
+pane`. In another tab page the layout is left as it is, and the pane lists the
+process the next time it is shown. `name`, what `run_output` and
 `run_stop` call the process and the winbar shows, is the command's first word
 (without its control characters) when not given, and a name the stack holds
 already, a process that ended included, gets `-2`, `-3`: a command called

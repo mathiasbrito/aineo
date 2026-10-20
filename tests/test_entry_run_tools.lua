@@ -119,7 +119,7 @@ T['run']['starts the command in the stack, named by its first word, and answers 
   local answer = call('run', { command = 'sleep 30' })
 
   eq(answer, {
-    text = 'Started "sleep" in the run pane, which stays where it is.'
+    text = 'Started "sleep" in the run pane, which is now shown, the cursor staying where it is.'
       .. ' Read what it prints with run_output, name "sleep".',
     is_error = false,
   })
