@@ -58,7 +58,7 @@ Test files run: `test_entry_run_follow`, `test_entry_run`, `test_entry_run_tabs`
 
 ## Commits
 
-Recorded after the merge.
+The `dev` hash, recorded after the merge (PR #287, merged by rebase): `f89866f`. Released in v0.2.60 (PR #289, `main` `77a3860`).
 
 ## Open threads
 

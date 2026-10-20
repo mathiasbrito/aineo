@@ -18,7 +18,7 @@ local WORKTREES_WAIT_MS = 5000
 --- What a call needs of the tab it is made for.
 ---@class aineo.entry.RunToolsTab
 ---@field homes { run: aineo.run.Home } the tab's run home
----@field start_in_run_stack fun(command: string, options: { name: string, directory: string? }): integer starts the command at the bottom of the tab's run stack, the pane staying as it is, and returns its terminal; raises the error that kept it from starting
+---@field start_in_run_stack fun(command: string, options: { name: string, directory: string? }): integer starts the command at the bottom of the tab's run stack, shows the run pane when the tab page is the current one, the cursor staying where it is, and returns its terminal; raises the error that kept it from starting
 
 --- What a call needs of the editor.
 ---@class aineo.entry.RunToolsContext
@@ -164,7 +164,8 @@ end
 --- stack (`aineo.entry.Tab`'s `start_in_run_stack()`), named as the call
 --- says, else by the command's first word, a name the stack holds already
 --- made unused (`unused_name()`), in the project folder or the directory the
---- call gives; tells the user once. Answers at once, the pane left as it is.
+--- call gives; tells the user once. Answers at once; the run pane is shown when
+--- the tab page is the one the user is in, the cursor staying where it is.
 --- An error that keeps it from starting, or a directory not allowed, is
 --- answered as a refusal that says why.
 ---
@@ -190,8 +191,9 @@ local function run(tab, arguments, context)
   end
   context.tell(('aineo: started %s in the run pane'):format(name))
   return done(
-    ('Started "%s" in the run pane, which stays where it is.'):format(name)
-      .. (' Read what it prints with run_output, name "%s".'):format(name)
+    ('Started "%s" in the run pane, which aineo brings into view when the user is in its tab page, the cursor staying where it is.'):format(
+      name
+    ) .. (' Read what it prints with run_output, name "%s".'):format(name)
   )
 end
 
