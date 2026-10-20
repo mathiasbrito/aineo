@@ -1348,9 +1348,10 @@ agent's call of `announce_work` would, with no label. It reads these plain
 forms alone, each optionally after `git -C <folder>`:
     `git worktree add [-b|-B <branch>] <path> [<commit>]`, with `-f`,
         `--force`, `-q`, `--quiet`, `--detach` and `--` allowed — a worktree
-    `git checkout -b|-B <branch> [<start>]`, with `-q` — a branch
+    `git checkout -b|-B <branch> [<start>]`, with `-q` or `--quiet`
+        — a branch
     `git switch -c|-C|--create|--force-create <branch> [<start>]`, with
-        `-q` — a branch
+        `-q` or `--quiet` — a branch
     `git branch <name> [<start>]` — a branch
 The base is the start point or commit the command names, else `HEAD`,
 resolved in the folder the command ran in when the hook runs. A command
@@ -1358,7 +1359,9 @@ joined to another (`cd x && git …`, `;`, `|`), redirected, holding anything
 the shell expands (`$`, a backtick, a leading `~`), with another option or
 more words, or whose base git cannot resolve, is reported by nothing: the
 agent's call still is. The hook runs in the background, never holds or
-changes the tool call, and says nothing when it fails. A worktree Claude
+changes the tool call, says nothing when it fails, and ends itself after
+6 seconds whatever the editor does, one held at a prompt say. A failed
+command runs no `PostToolUse` hook at all. A worktree Claude
 Code makes itself for a subagent (`isolation: worktree`) runs no hook aineo
 could read without taking that creation over: the subagent is asked to call
 `announce_work` with its worktree's path instead.
@@ -2594,8 +2597,9 @@ claude.cmd		A list of at least one string. Default: `{ 'claude' }`
 			--resume if --fork-session is also specified.", and
 			exits 1. A `--settings` in it, inline JSON or a file
 			(named from the directory Claude Code starts in), is
-			kept whole: aineo adds its session hooks and its
-			`SubagentStart` hook after the hooks it gives,
+			kept whole: aineo adds its session hooks, its
+			`SubagentStart` hook and its `PostToolUse` hook
+			after the hooks it gives,
 			writes the result to a file only you can read and
 			write, in Neovim's own temporary
 			directory, which Neovim removes when it exits, and
@@ -3147,13 +3151,13 @@ Claude Code ~
   process it starts that leaves the group, by starting a session or a
   group of its own, is not killed and can outlive the check.
   When `claude.cmd` gives a `--settings`, whether aineo can add its
-  hooks to it, the session hooks and the `SubagentStart` hook, read from
-  the editor's working directory as a start reads it
-  (|aineo-config-claude.cmd|): a warning naming why it cannot — the file
-  missing, not a regular file or unreadable, settings
-  that are not valid JSON or hold no object, `hooks` that are not an
-  object, a `SessionStart`, `SessionEnd` or `SubagentStart` entry that is
-  not a list, or
+  hooks to it, the session hooks, the `SubagentStart` hook and the
+  `PostToolUse` hook, read from the editor's working directory as a start
+  reads it (|aineo-config-claude.cmd|): a warning naming why it cannot —
+  the file missing, not a regular file or unreadable, settings that are
+  not valid JSON or hold no object, `hooks` that are not an object, a
+  `SessionStart`, `SessionEnd`, `SubagentStart` or `PostToolUse` entry
+  that is not a list, or
   no value after the flag. Whether aineo can write the file it passes
   them in is not checked.
 
