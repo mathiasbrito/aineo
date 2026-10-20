@@ -33,18 +33,18 @@ end
 --- report server waits for the editor.
 local BASE_WAIT_MS = 4000
 
---- The full id of the commit `base` names in the session's repository of
---- `changes`, a tab's changes home (`aineo.changes.Home`'s
---- `resolve_reported_base()`), waited for at most `BASE_WAIT_MS`; or nil and
---- why it is refused, in words for the agent.
+--- The full id of the commit the base of `work` names, in the work's own
+--- folder, else in the session's repository of `changes`, a tab's changes
+--- home (`aineo.changes.Home`'s `resolve_reported_base()`), waited for at
+--- most `BASE_WAIT_MS`; or nil and why it is refused, in words for the agent.
 ---
 ---@param changes aineo.changes.Home
----@param base string
+---@param work aineo.changes.ReportedWork a report whose `base` is given
 ---@return string|nil commit
 ---@return string|nil refusal
-local function resolved_base(changes, base)
+local function resolved_base(changes, work)
   local answered, commit, refusal = false, nil, nil
-  changes.resolve_reported_base(base, function(resolved, why)
+  changes.resolve_reported_base(work, function(resolved, why)
     answered, commit, refusal = true, resolved, why
   end)
   if not vim.wait(BASE_WAIT_MS, function()
@@ -59,8 +59,9 @@ end
 --- start token `start_token`, for the tab whose Claude Code has that token,
 --- whichever tab is current (`routing.lua`'s `tab_for_work()`), and answers
 --- whether it took it, or why it refuses it: with no such tab, false; else
---- the base it gives is resolved to its full id in that tab's session's
---- repository (`resolved_base()`) — a base that cannot be is refused, and
+--- the base it gives is resolved to its full id in the work's own folder,
+--- else in that tab's session's repository (`resolved_base()`) — a base
+--- that cannot be is refused, and
 --- nothing is recorded — and the tab's changes home is handed the work, with
 --- what tells the user for that tab (`teller_for()`), and answers, starting
 --- its git reads without waiting on them (`aineo.changes.Home`'s
@@ -77,7 +78,7 @@ local function take_announced_work(work, start_token)
   end
   local changes = tab.homes.changes
   if type(work.base) == 'string' then
-    local commit, refusal = resolved_base(changes, work.base)
+    local commit, refusal = resolved_base(changes, work)
     if not commit then
       return refusal
     end
