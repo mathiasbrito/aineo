@@ -305,7 +305,7 @@ T['the pane']['counts every file as new and every commit as the session’s befo
   child.lua(SHOW_FILES_AGAIN)
 
   expect_lines(FILES, { 'Files in: Session work', '  A notes.txt' })
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', first:sub(1, 7) .. ' First' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', git_repo.commit_line(first, 'First') })
 end
 
 T['the files window'] = MiniTest.new_set()
@@ -686,7 +686,7 @@ T['outside a repository']['keeps the base the first look found, a look asked for
   git_repo.wait_until('every read of the commits answered', function()
     return child.lua_get('_G.git_answers.commits_since == _G.git_calls.commits_since')
   end)
-  eq(lines_of(COMMITS), { 'Uncommitted', 'Session work', second:sub(1, 7) .. ' Second' })
+  eq(lines_of(COMMITS), { 'Uncommitted', 'Session work', git_repo.commit_line(second, 'Second') })
 end
 
 T['a failed read'] = MiniTest.new_set()
@@ -757,13 +757,16 @@ T['a failed watch']['is told in both windows and started again the next time the
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', live:sub(1, 7) .. ' Add the marker' })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', git_repo.commit_line(live, 'Add the marker') }
+  )
   local again = git_repo.git(top, { 'commit-tree', 'HEAD^{tree}', '-p', 'HEAD', '-m', 'Again' })
   expect_lines_after(COMMITS, {
     'Uncommitted',
     'Session work',
-    again:sub(1, 7) .. ' Again',
-    live:sub(1, 7) .. ' Add the marker',
+    git_repo.commit_line(again, 'Again'),
+    git_repo.commit_line(live, 'Add the marker'),
   }, function()
     git_repo.git(top, { 'update-ref', 'refs/heads/main', again })
     git_repo.git(top, { 'update-ref', 'refs/heads/main', live })
@@ -831,7 +834,7 @@ T['the base no longer behind HEAD']['is said above the commits git lists, the fi
     'Uncommitted',
     'Session work',
     ("The session's base, %s, is no longer behind HEAD"):format(base:sub(1, 7)),
-    other:sub(1, 7) .. ' Add other',
+    git_repo.commit_line(other, 'Add other'),
   }
   child.lua(SHOW_FILES_AGAIN)
   expect_lines(COMMITS, left_behind)
@@ -979,7 +982,7 @@ T['a buffer of the pane']['gone as its list is read, lists what is read later on
   eq({ told, lines_of(FILES), lines_of(COMMITS) }, {
     '',
     { 'Files in: Session work', '  A other.txt' },
-    { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Add other' },
+    { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Add other') },
   })
 end
 
@@ -1415,7 +1418,10 @@ T['Enter']['on a commit shows that commit’s diff'] = function()
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
   child.lua(SHOW_FILES_AGAIN)
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Write two') }
+  )
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
 
   child.type_keys('j<CR>')
@@ -1440,7 +1446,10 @@ T['Enter']['on a commit moves the cursor to that commit’s diff'] = function()
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
   child.lua(SHOW_FILES_AGAIN)
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Write two') }
+  )
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
 
   child.type_keys('j<CR>')
@@ -1879,7 +1888,10 @@ T['Enter']['with no room in the middle column warns once, naming the commit'] = 
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
   child.lua(SHOW_FILES_AGAIN)
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Write two') }
+  )
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
   child.lua('_G.no_room = true')
 
@@ -1905,7 +1917,10 @@ T['Enter']['tells once, in git’s words, a diff that cannot be read'] = functio
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
   child.lua(SHOW_FILES_AGAIN)
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Write two') }
+  )
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
   turn_on(switch)
 
@@ -2371,8 +2386,8 @@ T['the commits window']['lists the session’s commits, newest first, by abbrevi
   expect_lines(COMMITS, {
     'Uncommitted',
     'Session work',
-    second:sub(1, 7) .. ' Write three',
-    first:sub(1, 7) .. ' Write two',
+    git_repo.commit_line(second, 'Write three'),
+    git_repo.commit_line(first, 'Write two'),
   })
 end
 
@@ -2381,7 +2396,10 @@ T['the commits window']['lists a commit that changes no file nor the index, as t
   begin_and_show(top)
   watch_live(top)
   local live = git_repo.commit_all(top, 'Add the marker')
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', live:sub(1, 7) .. ' Add the marker' })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', git_repo.commit_line(live, 'Add the marker') }
+  )
 
   local empty = git_repo.git(top, { 'commit-tree', 'HEAD^{tree}', '-p', 'HEAD', '-m', 'Nothing' })
   git_repo.git(top, { 'update-ref', 'refs/heads/main', empty })
@@ -2389,8 +2407,8 @@ T['the commits window']['lists a commit that changes no file nor the index, as t
   expect_lines(COMMITS, {
     'Uncommitted',
     'Session work',
-    empty:sub(1, 7) .. ' Nothing',
-    live:sub(1, 7) .. ' Add the marker',
+    git_repo.commit_line(empty, 'Nothing'),
+    git_repo.commit_line(live, 'Add the marker'),
   })
 end
 
@@ -2525,12 +2543,17 @@ T['the colours']['of a commit are its abbreviated id in AineoChangesCommitId and
 
   child.lua(SHOW_FILES_AGAIN)
 
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Write two') }
+  )
   eq(
     colours_of(COMMITS),
     below_commit_filters({
       { 0, 0, 7, 'AineoChangesCommitId' },
-      { 0, 8, 17, 'AineoChangesCommitSubject' },
+      { 0, 8, 19, 'AineoChangesCommitAuthor' },
+      { 0, 20, 23, 'AineoChangesCommitAge' },
+      { 0, 29, 38, 'AineoChangesCommitSubject' },
     })
   )
 end
@@ -2704,14 +2727,16 @@ T['the colours']['of the line saying the base is no longer behind HEAD are the w
   local left_behind = ("The session's base, %s, is no longer behind HEAD"):format(base:sub(1, 7))
   expect_lines(
     COMMITS,
-    { 'Uncommitted', 'Session work', left_behind, other:sub(1, 7) .. ' Add other' }
+    { 'Uncommitted', 'Session work', left_behind, git_repo.commit_line(other, 'Add other') }
   )
   eq(
     colours_of(COMMITS),
     below_commit_filters({
       { 0, 0, #left_behind, 'AineoChangesNote' },
       { 1, 0, 7, 'AineoChangesCommitId' },
-      { 1, 8, 17, 'AineoChangesCommitSubject' },
+      { 1, 8, 19, 'AineoChangesCommitAuthor' },
+      { 1, 20, 23, 'AineoChangesCommitAge' },
+      { 1, 29, 38, 'AineoChangesCommitSubject' },
     })
   )
 end
@@ -2722,7 +2747,8 @@ local PANE_GROUPS = [[(function()
   local names = {
     'AineoChangesAdded', 'AineoChangesUntracked', 'AineoChangesModified', 'AineoChangesRenamed',
     'AineoChangesTypeChanged', 'AineoChangesDeleted', 'AineoChangesSaved', 'AineoChangesCommitId',
-    'AineoChangesCommitSubject', 'AineoChangesFilter', 'AineoChangesNote', 'AineoChangesFailure',
+    'AineoChangesCommitAuthor', 'AineoChangesCommitAge', 'AineoChangesCommitSubject',
+    'AineoChangesFilter', 'AineoChangesNote', 'AineoChangesFailure',
   }
   local groups = {}
   for _, name in ipairs(names) do
@@ -2742,6 +2768,8 @@ local DEFAULT_GROUPS = {
   AineoChangesDeleted = { link = 'Removed' },
   AineoChangesSaved = { link = 'WarningMsg' },
   AineoChangesCommitId = { link = 'Identifier' },
+  AineoChangesCommitAuthor = { link = 'Identifier' },
+  AineoChangesCommitAge = { link = 'Comment' },
   AineoChangesCommitSubject = { default = true },
   AineoChangesFilter = { link = 'Title' },
   AineoChangesNote = { link = 'Comment' },
@@ -2816,7 +2844,10 @@ T['the colours']['leave a commit’s subject on the background of a window not c
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Write two')
   child.lua(SHOW_FILES_AGAIN)
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Write two') }
+  )
   child.cmd('highlight Normal guibg=#101010')
   child.cmd('highlight NormalNC guibg=#202040')
   local commits_window = child.fn.bufwinid(COMMITS)

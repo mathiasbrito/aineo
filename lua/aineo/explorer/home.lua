@@ -39,6 +39,8 @@ local M = {}
 ---@field open_file fun(path: string) opens the file `path`, absolute, in the file column
 ---@field paste fun(text: string) pastes `text` into Claude Code's prompt, with no Enter
 ---@field quote_name fun(name: string): string how a name shows on its line, a control character in it escaped
+---@field change_groups table<string, string> the highlight group a file's mark and name show in, by the kind of its change (`'added'`, `'modified'`, `'deleted'`, `'renamed'`, `'type_changed'`, `'untracked'`)
+---@field define_change_groups fun() defines `change_groups`' groups as default links, as the pane that owns them does
 
 --- The functions of an explorer, as `M.new()` gives them.
 ---@class aineo.explorer.Home
@@ -53,6 +55,17 @@ local M = {}
 local HIGHLIGHTS = {
   AineoExplorerHeader = 'Comment',
   AineoExplorerFollowed = 'Visual',
+  AineoExplorerFolder = 'Directory',
+  AineoExplorerChanged = 'AineoChangesModified',
+  AineoExplorerIgnored = 'Comment',
+}
+
+--- The group each role of a span that is not the kind of a change shows in
+--- (`aineo.explorer.Span`).
+local ROLE_GROUPS = {
+  folder = 'AineoExplorerFolder',
+  changed_folder = 'AineoExplorerChanged',
+  ignored = 'AineoExplorerIgnored',
 }
 
 --- The namespace of the explorer's highlights.
@@ -161,6 +174,9 @@ function M.new(settings)
   ---@type aineo.explorer.Home
   local home = {}
 
+  --- The group each role of a span shows in (`aineo.explorer.Span`).
+  local role_groups = vim.tbl_extend('force', ROLE_GROUPS, settings.change_groups)
+
   --- The view the tree renders under.
   ---
   ---@return aineo.explorer.View
@@ -218,7 +234,11 @@ function M.new(settings)
     end
     local rendering = tree.render(state.tree, view())
     if state.failure then
-      rendering = { lines = { rendering.lines[1], '  ' .. state.failure }, entries = {} }
+      rendering = {
+        lines = { rendering.lines[1], '  ' .. state.failure },
+        entries = {},
+        spans = {},
+      }
     end
     state.rendering = rendering
     vim.bo[buffer].modifiable = true
@@ -227,6 +247,14 @@ function M.new(settings)
     vim.bo[buffer].modified = false
     vim.api.nvim_buf_clear_namespace(buffer, NAMESPACE, 0, -1)
     vim.api.nvim_buf_set_extmark(buffer, NAMESPACE, 0, 0, { line_hl_group = 'AineoExplorerHeader' })
+    for line, spans in pairs(rendering.spans) do
+      for _, span in ipairs(spans) do
+        vim.api.nvim_buf_set_extmark(buffer, NAMESPACE, line - 1, span.first_column, {
+          end_col = span.end_column,
+          hl_group = role_groups[span.role],
+        })
+      end
+    end
     local followed_line = state.followed and line_of(rendering, state.followed)
     if followed_line then
       vim.api.nvim_buf_set_extmark(
@@ -822,6 +850,7 @@ function M.new(settings)
     state.buffer, state.place, state.rendering = nil, nil, nil
   end
 
+  settings.define_change_groups()
   for group, link in pairs(HIGHLIGHTS) do
     vim.api.nvim_set_hl(0, group, { link = link, default = true })
   end

@@ -394,6 +394,169 @@ T['git’s marks']['show modified, untracked and deleted files, and folders hold
   eq(vim.list_slice(explorer_lines(), 2, 3), { '▾ • docs/', '    D guide.md' })
 end
 
+T['the colours'] = MiniTest.new_set()
+
+--- The colours the explorer's buffer shows in the child, as
+--- `{ line, first_column, end_column, group }` (line from 1, columns in
+--- bytes from 0) in the order of the lines, the header's and the followed
+--- file's whole-line highlights left out.
+local COLOURS = [[(function()
+  for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_get_name(buffer) == 'aineo://explorer' then
+      local namespace = vim.api.nvim_get_namespaces()['aineo.explorer']
+      local colours = {}
+      for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(buffer, namespace, 0, -1, { details = true })) do
+        if mark[4].end_col then
+          table.insert(colours, { mark[2] + 1, mark[3], mark[4].end_col, mark[4].hl_group })
+        end
+      end
+      return colours
+    end
+  end
+  return {}
+end)()]]
+
+T['the colours']['show a changed file in its change’s group and a folder in the folder’s, by column'] = function()
+  local top = git_repo.create('explorer-colours', FILES)
+  git_repo.write(top, 'README.md', { 'changed' })
+  git_repo.write(top, 'new.txt', { 'new' })
+  git_repo.write(top, 'src/lib/util.lua', { 'changed' })
+  vim.fn.delete(vim.fs.joinpath(top, 'docs', 'guide.md'))
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
+  entry.use_fake(child, claude_session.fake('explorer-colours', 'ready'))
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  entry.press(child, '\\e')
+  local expected = {
+    '▸ • docs/',
+    '▸ • src/',
+    '    .gitignore',
+    '  ? new.txt',
+    '  M README.md',
+  }
+  eq(wait_for_tree(expected), expected)
+
+  eq(child.lua_get(COLOURS), {
+    { 2, 0, 3, 'AineoExplorerFolder' },
+    { 2, 4, 7, 'AineoExplorerChanged' },
+    { 2, 8, 13, 'AineoExplorerFolder' },
+    { 3, 0, 3, 'AineoExplorerFolder' },
+    { 3, 4, 7, 'AineoExplorerChanged' },
+    { 3, 8, 12, 'AineoExplorerFolder' },
+    { 5, 2, 11, 'AineoChangesUntracked' },
+    { 6, 2, 13, 'AineoChangesModified' },
+  })
+end
+
+T['the colours']['show an entry git ignores whole in the ignored group, once I shows it'] = function()
+  local top = git_repo.create('explorer-colours-ignored', FILES)
+  git_repo.write(top, 'debug.log', { 'log' })
+  git_repo.write(top, 'build/out.o', { 'out' })
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
+  entry.use_fake(child, claude_session.fake('explorer-colours-ignored', 'ready'))
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  entry.press(child, '\\e')
+  wait_for_tree(FOLDED_TREE)
+  local shown = {
+    '▸   build/',
+    '▸   docs/',
+    '▸   src/',
+    '    .gitignore',
+    '    debug.log',
+    '    README.md',
+  }
+
+  entry.press(child, 'I')
+  eq(wait_for_tree(shown), shown)
+
+  eq(child.lua_get(COLOURS), {
+    { 2, 0, 12, 'AineoExplorerIgnored' },
+    { 3, 0, 3, 'AineoExplorerFolder' },
+    { 3, 6, 11, 'AineoExplorerFolder' },
+    { 4, 0, 3, 'AineoExplorerFolder' },
+    { 4, 6, 10, 'AineoExplorerFolder' },
+    { 6, 0, 13, 'AineoExplorerIgnored' },
+  })
+end
+
+--- The groups the explorer colours with, by the group each links to by
+--- default.
+local EXPLORER_GROUP_LINKS = {
+  AineoExplorerFolder = 'Directory',
+  AineoExplorerChanged = 'AineoChangesModified',
+  AineoExplorerIgnored = 'Comment',
+}
+
+--- What each group of `EXPLORER_GROUP_LINKS` is in the child: the group it
+--- links to, or its own colours when it links to none.
+local EXPLORER_GROUPS_IN_CHILD = [[(function(names)
+  local groups = {}
+  for _, name in ipairs(names) do
+    local hl = vim.api.nvim_get_hl(0, { name = name, link = true })
+    groups[name] = hl.link or hl
+  end
+  return groups
+end)(...)]]
+
+T['the colours']['are each linked to its default'] = function()
+  explore('colour-links')
+
+  eq(
+    child.lua_get(EXPLORER_GROUPS_IN_CHILD, { vim.tbl_keys(EXPLORER_GROUP_LINKS) }),
+    EXPLORER_GROUP_LINKS
+  )
+end
+
+T['the colours']['ask for the groups of the file colours to be defined, once, as the explorer is made'] = function()
+  local asked = child.lua_get([[(function()
+    local asked = 0
+    require('aineo.explorer').new({
+      git = {},
+      claude_folder = function()
+        return vim.fn.getcwd()
+      end,
+      open_file = function() end,
+      paste = function() end,
+      quote_name = function(name)
+        return name
+      end,
+      change_groups = {},
+      define_change_groups = function()
+        asked = asked + 1
+      end,
+    })
+    return asked
+  end)()]])
+
+  eq(asked, 1)
+end
+
+T['the colours']['keep a group the user coloured before the explorer was made'] = function()
+  child.cmd('highlight AineoExplorerFolder guifg=#ff0000')
+  explore('colour-own')
+
+  local groups = child.lua_get(EXPLORER_GROUPS_IN_CHILD, { vim.tbl_keys(EXPLORER_GROUP_LINKS) })
+
+  eq(
+    groups,
+    vim.tbl_extend('force', EXPLORER_GROUP_LINKS, { AineoExplorerFolder = { fg = 0xff0000 } })
+  )
+end
+
+T['the colours']['are each linked to its default again once a colour scheme clears them'] = function()
+  explore('colour-scheme')
+  child.cmd('highlight AineoExplorerFolder guifg=#ff0000')
+  child.cmd('highlight AineoExplorerIgnored guifg=#00ff00')
+
+  child.cmd('colorscheme default')
+
+  eq(
+    child.lua_get(EXPLORER_GROUPS_IN_CHILD, { vim.tbl_keys(EXPLORER_GROUP_LINKS) }),
+    EXPLORER_GROUP_LINKS
+  )
+end
+
 T['a change on disk'] = MiniTest.new_set()
 
 T['a change on disk']['reads the tree again, the folds and the cursor’s entry kept'] = function()

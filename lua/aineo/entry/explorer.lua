@@ -37,6 +37,8 @@ function M.make_explorer(homes)
     end,
     open_file = links.open_file,
     quote_name = require('aineo.changes').quoted_path,
+    change_groups = require('aineo.changes').kind_groups,
+    define_change_groups = require('aineo.changes').define_colours,
     paste = function(text)
       require('aineo.send').paste(text, { session = homes.claude })
     end,

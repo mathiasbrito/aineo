@@ -246,11 +246,14 @@ local function pane_under_commit(case, files, listed)
   end
   local commit = git_repo.commit_all(top, 'Add the files')
   child.lua("require('aineo.changes').refresh_shown_pane()")
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Add the files' })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Add the files') }
+  )
   go_to_commits_line(3)
   expect_lines(
     FILES,
-    vim.list_extend({ 'Files in: ' .. commit:sub(1, 7) .. ' Add the files' }, listed)
+    vim.list_extend({ 'Files in: ' .. git_repo.commit_line(commit, 'Add the files') }, listed)
   )
   return top, commit
 end
@@ -633,11 +636,11 @@ T['gf']['under a commit of another worktree shows the file as that commit has it
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
-    commit:sub(1, 7) .. ' The agent’s',
+    git_repo.commit_line(commit, 'The agent’s'),
   })
   go_to_commits_line(5)
   expect_lines(FILES, {
-    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    'Files in: ' .. git_repo.commit_line(commit, 'The agent’s (worktree agent)'),
     '  M notes.txt',
   })
 
@@ -663,11 +666,11 @@ T['gf']['under a commit of another worktree reads it in that worktree’s reposi
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
-    commit:sub(1, 7) .. ' Clone',
+    git_repo.commit_line(commit, 'Clone'),
   })
   go_to_commits_line(5)
   expect_lines(FILES, {
-    'Files in: ' .. commit:sub(1, 7) .. ' Clone (worktree agent)',
+    'Files in: ' .. git_repo.commit_line(commit, 'Clone (worktree agent)'),
     '  M notes.txt',
   })
 
@@ -717,8 +720,8 @@ local function pane_with_landed(case, file)
     'Session work',
     'No commits on this session',
     'Landed in dev',
-    second:sub(1, 7) .. ' Land second',
-    first:sub(1, 7) .. ' Land first',
+    git_repo.commit_line(second, 'Land second'),
+    git_repo.commit_line(first, 'Land first'),
   })
   return first, second
 end
@@ -738,7 +741,7 @@ end
 T['gf']['under a landed commit shows the file as that commit has it'] = function()
   local first = pane_with_landed('openfile-landed-commit')
   go_to_commits_line(6)
-  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Land first', '  M a.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(first, 'Land first'), '  M a.txt' })
 
   press_gf_on(2)
 

@@ -138,6 +138,7 @@ function M.new(label)
   ---@field working_branch? string the branch work lands in, as the user's setting names it; the remote's default branch when not given
   ---@field edit_file_key? string a Normal-mode key, written as in a mapping, that opens the file under the cursor in the files buffer for edition as `<S-CR>` does; none when not given. Mapped when the files buffer is made, so a session holds it when begun before the buffer
   ---@field start_timer? fun(milliseconds: integer, act: fun()): fun() starts a timer that runs `act` once, on the main loop, after `milliseconds`, and returns what stops it; a `vim.uv` timer when not given
+  ---@field now? fun(): integer the time the pane tells the ages of commits at, in seconds since the epoch; `os.time` when not given
 
   --- The session, from `begin_session()` on.
   ---@class aineo.changes.Session
@@ -228,6 +229,14 @@ function M.new(label)
     return named
   end
 
+  --- The time the pane tells the ages of commits at: the session's own
+  --- clock (`aineo.changes.SessionSettings`' `now`).
+  ---
+  ---@return integer seconds since the epoch
+  local function clock_now()
+    return (session.settings.now or os.time)()
+  end
+
   --- The files window's page for what the session knows: why it has no
   --- repository, when it has none, or the files of the one filter it lists
   --- (`filter_named()`).
@@ -245,6 +254,7 @@ function M.new(label)
       worktree = listed and listed.worktree,
       saved = session.saved,
       unwatched_subdirectories = session.watch ~= nil and not session.watch.watches_subdirectories,
+      now = clock_now(),
     })
   end
 
@@ -283,6 +293,7 @@ function M.new(label)
       lists_filters = session.repository ~= nil,
       landed = session.landed,
       worktrees = session.commits_others,
+      now = clock_now(),
     })
   end
 
@@ -335,10 +346,59 @@ function M.new(label)
     })
   end
 
+  --- The key of the filter whose files the cursor of the files window goes
+  --- to the first of once the window lists them (`move_to_files_window()`);
+  --- nil while the cursor waits for none.
+  ---@type string|nil
+  local awaited_files_key = nil
+
+  --- Whether the files window lists the files of the selected filter, as
+  --- read.
+  ---
+  ---@return boolean
+  local function lists_selected_files()
+    return session.listed ~= nil and filter.same(session.listed.filter, session.selected)
+  end
+
+  --- Puts the cursor of `window`, showing the files buffer, on a line that
+  --- lists a file: where it is when it is on one, else the first such line.
+  --- A page that lists no file leaves it where it is.
+  ---
+  ---@param window integer
+  local function put_cursor_on_a_file(window)
+    local at_cursor = pages.entry_at(buffers.files, vim.api.nvim_win_get_cursor(window)[1])
+    local first = pages.first_file_line(buffers.files)
+    if first and not (at_cursor and at_cursor.change) then
+      vim.api.nvim_win_set_cursor(window, { first, 0 })
+    end
+  end
+
+  --- Carries out the wait for the files of a filter that `move_to_files_window()`
+  --- began, once the files window lists the files of the selected filter and
+  --- that filter is the one awaited: the cursor of each window showing the
+  --- files buffer goes to a file (`put_cursor_on_a_file()`), and the wait ends.
+  local function place_awaited_files_cursor()
+    if
+      not (
+        awaited_files_key
+        and is_writable(buffers.files)
+        and lists_selected_files()
+        and filter.key(session.selected) == awaited_files_key
+      )
+    then
+      return
+    end
+    awaited_files_key = nil
+    for _, window in ipairs(vim.fn.win_findbuf(buffers.files)) do
+      put_cursor_on_a_file(window)
+    end
+  end
+
   --- Writes the files buffer for what the session knows (`files_page()`,
-  --- `show_page()`).
+  --- `show_page()`), then keeps the wait of the cursor for its files
+  --- (`place_awaited_files_cursor()`).
   local function show_files()
-    show_page(buffers.files, files_page)
+    show_page(buffers.files, files_page, place_awaited_files_cursor)
   end
 
   --- Puts the cursor of each window showing the commits buffer on the line of
@@ -2800,17 +2860,25 @@ function M.new(label)
     return at_cursor
   end
 
-  --- Selects the filter the line under the cursor of the window whose cursor
-  --- last moved in the commits buffer lists, when it is a filter other than
-  --- the selected one (`other_filter_at_cursor()`), and reads the files window
+  --- Selects the filter the line under the cursor of `window`, a window
+  --- showing the commits buffer, lists, when it is a filter other than the
+  --- selected one (`other_filter_at_cursor()`), and reads the files window
   --- for it.
-  local function select_filter_at_cursor()
-    local at_cursor = other_filter_at_cursor(window_moved)
+  ---
+  ---@param window integer|nil
+  local function select_filter_at_cursor_of(window)
+    local at_cursor = other_filter_at_cursor(window)
     if not at_cursor then
       return
     end
     session.selected = at_cursor
     read_files(true)
+  end
+
+  --- Selects the filter the line under the cursor of the window whose cursor
+  --- last moved in the commits buffer lists (`select_filter_at_cursor_of()`).
+  local function select_filter_at_cursor()
+    select_filter_at_cursor_of(window_moved)
   end
 
   --- The pause after the last move of the cursor in the commits buffer, at
@@ -2845,6 +2913,77 @@ function M.new(label)
           end
         end
       end,
+    })
+  end
+
+  --- The first window of the current tab page that shows `buffer`, a buffer
+  --- of the pane; nil when none does.
+  ---
+  ---@param buffer integer|nil
+  ---@return integer|nil
+  local function window_showing(buffer)
+    if not (buffer and vim.api.nvim_buf_is_valid(buffer)) then
+      return nil
+    end
+    local current_tab = vim.api.nvim_get_current_tabpage()
+    return vim.tbl_filter(function(window)
+      return vim.api.nvim_win_get_tabpage(window) == current_tab
+    end, vim.fn.win_findbuf(buffer))[1]
+  end
+
+  --- Moves the cursor from the commits window to the files window, the choice
+  --- the line under the cursor makes kept: it is made at once, without the
+  --- pause (`select_filter_at_cursor_of()`), and the cursor of the files
+  --- window goes to a file once the window lists the choice's files
+  --- (`place_awaited_files_cursor()`). Does nothing when the tab page shows
+  --- no files window; on a line that lists no filter it only moves.
+  local function move_to_files_window()
+    local files = window_showing(buffers.files)
+    if not (session and files) then
+      return
+    end
+    select_filter_at_cursor_of(vim.api.nvim_get_current_win())
+    vim.api.nvim_set_current_win(files)
+    awaited_files_key = filter.key(session.selected)
+    place_awaited_files_cursor()
+  end
+
+  --- Moves the cursor from the files window to the commits window, onto the
+  --- line that chose what the files window lists, the selected filter's, when
+  --- the commits window lists it. Does nothing when the tab page shows no
+  --- commits window.
+  local function move_to_commits_window()
+    local commits = window_showing(buffers.commits)
+    if not (session and commits) then
+      return
+    end
+    awaited_files_key = nil
+    vim.api.nvim_set_current_win(commits)
+    local line = pages.line_of(buffers.commits, filter.key(session.selected))
+    if line then
+      vim.api.nvim_win_set_cursor(commits, { line, 0 })
+    end
+  end
+
+  --- Maps `l` in `buffer`, the commits buffer, in Normal mode, to move the
+  --- cursor to the files window (`move_to_files_window()`).
+  ---
+  ---@param buffer integer
+  local function map_move_to_files(buffer)
+    vim.keymap.set('n', 'l', move_to_files_window, {
+      buffer = buffer,
+      desc = 'aineo: move to the files window, the choice under the cursor kept',
+    })
+  end
+
+  --- Maps `<BS>` in `buffer`, the files buffer, in Normal mode, to move the
+  --- cursor back to the commits window (`move_to_commits_window()`).
+  ---
+  ---@param buffer integer
+  local function map_move_to_commits(buffer)
+    vim.keymap.set('n', '<BS>', move_to_commits_window, {
+      buffer = buffer,
+      desc = 'aineo: move back to the commit that chose the files listed',
     })
   end
 
@@ -2910,10 +3049,12 @@ function M.new(label)
       buffers.files = pane_buffer(own_name('aineo://changes-files'), files_page)
       map_open_file(buffers.files)
       map_compare_keys(buffers.files)
+      map_move_to_commits(buffers.files)
     end
     if not (buffers.commits and vim.api.nvim_buf_is_loaded(buffers.commits)) then
       buffers.commits = pane_buffer(own_name('aineo://changes-commits'), commits_page)
       select_filters_from(buffers.commits)
+      map_move_to_files(buffers.commits)
       if session then
         select_view_default()
       end

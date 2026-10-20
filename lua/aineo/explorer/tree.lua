@@ -30,6 +30,17 @@ local M = {}
 ---@class aineo.explorer.Rendering
 ---@field lines string[] the buffer's lines, the header first
 ---@field entries table<integer, aineo.explorer.Entry> the entry each line shows, by line number, from 1
+---@field spans table<integer, aineo.explorer.Span[]> the colours of each entry's line, by line number, from 1; none for a line with no colour
+
+--- A run of an entry's line shown in one colour: what it is, as a role.
+--- A role is the kind of a file's change (`'added'`, `'modified'`,
+--- `'deleted'`, `'renamed'`, `'type_changed'`, `'untracked'`), a folder's
+--- sign and name (`'folder'`), the mark of a folder that holds a change
+--- (`'changed_folder'`), or a whole line git ignores (`'ignored'`).
+---@class aineo.explorer.Span
+---@field first_column integer the byte column it starts at, from 0
+---@field end_column integer the byte column it ends before
+---@field role string
 
 --- The folder that holds `path`, `''` for an entry of the root.
 ---
@@ -113,6 +124,13 @@ local CHANGE_MARKS = {
   type_changed = 'T',
   untracked = '?',
 }
+
+--- The kind of change each mark stands for.
+---@type table<string, string>
+local MARK_KINDS = {}
+for kind, mark in pairs(CHANGE_MARKS) do
+  MARK_KINDS[mark] = kind
+end
 
 --- The paths of `paths` under the folder `prefix`, a path from the
 --- repository's top, `''` for the top itself, each from `prefix`.
@@ -228,21 +246,76 @@ local function comes_before(a, b)
   return a.name < b.name
 end
 
+--- The mark of a folder that holds a changed file, at any depth.
+M.FOLDER_MARK = '•'
+
+--- Where the parts of an entry's line start, by byte column from 0.
+---@class aineo.explorer.LineColumns
+---@field sign integer
+---@field mark integer
+---@field mark_end integer
+---@field name integer
+---@field name_end integer
+
+--- The colours of the line of `entry`, whose parts are at `columns`: an
+--- entry git ignores shows whole in one role, and its mark does not
+--- colour; else a folder's sign and name show as a folder, and its mark
+--- and a file's mark and name as the kind of the change the mark stands
+--- for, a folder's `M.FOLDER_MARK` as a folder holding a change.
+---
+---@param entry aineo.explorer.Entry
+---@param columns aineo.explorer.LineColumns
+---@param mark string|nil
+---@return aineo.explorer.Span[]
+local function entry_spans(entry, columns, mark)
+  if entry.ignored then
+    return { { first_column = 0, end_column = columns.name_end, role = 'ignored' } }
+  end
+  local function span(first_column, end_column, role)
+    return { first_column = first_column, end_column = end_column, role = role }
+  end
+  local spans = {}
+  local is_folder = entry.kind == 'folder'
+  if is_folder then
+    table.insert(spans, span(columns.sign, columns.sign + #'▸', 'folder'))
+  end
+  if mark then
+    local role = mark == M.FOLDER_MARK and 'changed_folder' or MARK_KINDS[mark]
+    table.insert(
+      spans,
+      span(columns.mark, is_folder and columns.mark_end or columns.name_end, role)
+    )
+  end
+  if is_folder then
+    table.insert(spans, span(columns.name, columns.name_end, 'folder'))
+  end
+  return spans
+end
+
 --- The line that shows `entry` at `depth` folders below the root: its
 --- indent, a folder's sign — `▾` unfolded, `▸` folded — then `mark`, a
 --- space when it has none, then its name as `quote` shows it, a folder's
---- ending in `/`.
+--- ending in `/`; and its colours (`entry_spans()`).
 ---
 ---@param entry aineo.explorer.Entry
 ---@param depth integer
 ---@param unfolded boolean
 ---@param mark string|nil
 ---@param quote fun(name: string): string
----@return string
+---@return string line
+---@return aineo.explorer.Span[] spans
 local function entry_line(entry, depth, unfolded, mark, quote)
+  local indent = string.rep('  ', depth)
   local sign = entry.kind == 'file' and ' ' or (unfolded and '▾' or '▸')
+  local shown_mark = mark or ' '
   local name = quote(entry.name) .. (entry.kind == 'folder' and '/' or '')
-  return ('%s%s %s %s'):format(string.rep('  ', depth), sign, mark or ' ', name)
+  local line = ('%s%s %s %s'):format(indent, sign, shown_mark, name)
+  local columns = { sign = #indent }
+  columns.mark = columns.sign + #sign + 1
+  columns.mark_end = columns.mark + #shown_mark
+  columns.name = columns.mark_end + 1
+  columns.name_end = #line
+  return line, entry_spans(entry, columns, mark)
 end
 
 --- A name as it is: the quoting of a view that names none.
@@ -270,9 +343,6 @@ local function is_shown(entry, view)
   end
   return view.show_dotfiles or entry.name:sub(1, 1) ~= '.'
 end
-
---- The mark of a folder that holds a changed file, at any depth.
-M.FOLDER_MARK = '•'
 
 --- The folders that hold a file `marks` marks, at any depth, by path.
 ---
@@ -355,13 +425,15 @@ end
 --- it has one — an untracked nested repository's — else, when it holds a
 --- marked file, with `M.FOLDER_MARK`. Under a filter, only the files whose path holds it,
 --- ignoring case, show, in their folders, every one unfolded, and a line
---- says so when none does.
+--- says so when none does. Each entry's line has its colours as spans
+--- (`aineo.explorer.Span`); the header and the line that says no file
+--- matches have none.
 ---
 ---@param tree aineo.explorer.Tree
 ---@param view aineo.explorer.View
 ---@return aineo.explorer.Rendering
 function M.render(tree, view)
-  local lines, entries = { header_line(view) }, {}
+  local lines, entries, spans = { header_line(view) }, {}, {}
   local quote = view.quote or as_it_is
   local filter = view.filter and view.filter ~= '' and view.filter:lower() or nil
   local holds_match = filter and folder_match_finder(tree, view, filter)
@@ -388,8 +460,12 @@ function M.render(tree, view)
     table.sort(sorted, comes_before)
     for _, entry in ipairs(sorted) do
       local unfolded = entry.kind == 'folder' and (filter ~= nil or view.open[entry.path] == true)
-      table.insert(lines, entry_line(entry, depth, unfolded, mark_of(entry), quote))
+      local line, line_spans = entry_line(entry, depth, unfolded, mark_of(entry), quote)
+      table.insert(lines, line)
       entries[#lines] = entry
+      if #line_spans > 0 then
+        spans[#lines] = line_spans
+      end
       if unfolded then
         add_folder(entry.path, depth + 1)
       end
@@ -399,7 +475,7 @@ function M.render(tree, view)
   if filter and #lines == 1 then
     table.insert(lines, no_match_line(view.filter))
   end
-  return { lines = lines, entries = entries }
+  return { lines = lines, entries = entries, spans = spans }
 end
 
 return M

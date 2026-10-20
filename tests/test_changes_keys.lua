@@ -207,12 +207,12 @@ local function pane_under_first_of_two_commits(case, path, listed_as)
   expect_lines(COMMITS, {
     'Uncommitted',
     'Session work',
-    second:sub(1, 7) .. ' Second',
-    first:sub(1, 7) .. ' First',
+    git_repo.commit_line(second, 'Second'),
+    git_repo.commit_line(first, 'First'),
   })
   go_to_commits_line(4)
   expect_lines(FILES, {
-    'Files in: ' .. first:sub(1, 7) .. ' First',
+    'Files in: ' .. git_repo.commit_line(first, 'First'),
     '  M ' .. (listed_as or path),
   })
   return top, first, second
@@ -267,8 +267,8 @@ local function pane_with_landed(case)
     'Session work',
     'No commits on this session',
     'Landed in dev',
-    second:sub(1, 7) .. ' Land second',
-    first:sub(1, 7) .. ' Land first',
+    git_repo.commit_line(second, 'Land second'),
+    git_repo.commit_line(first, 'Land first'),
   })
   return first, second
 end
@@ -276,7 +276,7 @@ end
 T['h']['on a file under a landed commit shows the file from that commit to HEAD'] = function()
   local first = pane_with_landed('keys-h-landed-commit')
   go_to_commits_line(6)
-  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Land first', '  M a.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(first, 'Land first'), '  M a.txt' })
 
   press_on_files_line('h', 2)
 
@@ -311,7 +311,7 @@ local function pane_with_a_commit_and_an_edit(case)
   local commit = git_repo.commit_all(top, 'Second')
   git_repo.write(top, 'notes.txt', { 'three' })
   child.lua("require('aineo.changes').refresh_shown_pane()")
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Second' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Second') })
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
 end
 
@@ -383,12 +383,12 @@ T['h']['on a file under another worktree’s commit shows the file from that com
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
-    second:sub(1, 7) .. ' Agent second',
-    first:sub(1, 7) .. ' Agent first',
+    git_repo.commit_line(second, 'Agent second'),
+    git_repo.commit_line(first, 'Agent first'),
   })
   go_to_commits_line(6)
   expect_lines(FILES, {
-    'Files in: ' .. first:sub(1, 7) .. ' Agent first (worktree agent)',
+    'Files in: ' .. git_repo.commit_line(first, 'Agent first (worktree agent)'),
     '  M notes.txt',
   })
 
@@ -411,7 +411,7 @@ T['h']['on a file under another worktree’s whole change shows the file from th
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
-    first:sub(1, 7) .. ' Agent first',
+    git_repo.commit_line(first, 'Agent first'),
   })
   go_to_commits_line(4)
   expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
@@ -540,7 +540,7 @@ local function pane_under_another_worktree(case)
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
-    first:sub(1, 7) .. ' Agent first',
+    git_repo.commit_line(first, 'Agent first'),
   })
   go_to_commits_line(4)
   expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
@@ -792,11 +792,11 @@ T['h']['shows a diff in which F reads that diff again with the whole file'] = fu
   expect_lines(COMMITS, {
     'Uncommitted',
     'Session work',
-    second:sub(1, 7) .. ' Second',
-    first:sub(1, 7) .. ' First',
+    git_repo.commit_line(second, 'Second'),
+    git_repo.commit_line(first, 'First'),
   })
   go_to_commits_line(4)
-  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' First', '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(first, 'First'), '  M notes.txt' })
 
   press_on_files_line('h', 2)
 
@@ -816,14 +816,8 @@ end
 
 --- The buffers `h` and `l` stay Vim's own in, each with what makes it the
 --- current one in the child, with a changed file listed under Session work:
---- the commits window; the diff Enter showed; a buffer of text.
+--- the diff Enter showed; a buffer of text.
 local OTHER_BUFFERS = {
-  {
-    'the commits window',
-    function()
-      enter_window_of(COMMITS)
-    end,
-  },
   {
     'a diff',
     function()
@@ -865,7 +859,7 @@ T['h and l']['work in the files buffer made anew'] = function()
     ]],
     { FILES }
   )
-  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' First', '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(first, 'First'), '  M notes.txt' })
 
   child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
   child.type_keys('h')
@@ -981,7 +975,7 @@ T['h']['on a file as HEAD has it, under Session work, shows nothing, says so onc
   git_repo.write(top, 'notes.txt', { 'two' })
   local commit = git_repo.commit_all(top, 'Second')
   child.lua("require('aineo.changes').refresh_shown_pane()")
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Second' })
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Second') })
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
 
   press_on_files_line('h', 2)
@@ -999,7 +993,7 @@ end
 T['h']['on a file of the newest commit, which is HEAD, shows nothing and says so'] = function()
   local _, _, second = pane_under_first_of_two_commits('keys-h-same-commit')
   go_to_commits_line(3)
-  expect_lines(FILES, { 'Files in: ' .. second:sub(1, 7) .. ' Second', '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(second, 'Second'), '  M notes.txt' })
 
   press_on_files_line('h', 2)
 
@@ -1027,7 +1021,7 @@ T['h']['on a file HEAD lacks shows it wholly removed'] = function()
   vim.fn.delete(vim.fs.joinpath(top, 'notes.txt'))
   git_repo.commit_all(top, 'Delete')
   child.lua("require('aineo.changes').refresh_shown_pane()")
-  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' First', '  M notes.txt' })
+  expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(first, 'First'), '  M notes.txt' })
 
   press_on_files_line('h', 2)
 
@@ -1048,11 +1042,14 @@ T['h']['on a file renamed in the commit and renamed back since shows the rename 
   expect_lines(COMMITS, {
     'Uncommitted',
     'Session work',
-    second:sub(1, 7) .. ' Rename back',
-    first:sub(1, 7) .. ' Rename away',
+    git_repo.commit_line(second, 'Rename back'),
+    git_repo.commit_line(first, 'Rename away'),
   })
   go_to_commits_line(4)
-  expect_lines(FILES, { 'Files in: ' .. first:sub(1, 7) .. ' Rename away', '  R a.txt → z.txt' })
+  expect_lines(
+    FILES,
+    { 'Files in: ' .. git_repo.commit_line(first, 'Rename away'), '  R a.txt → z.txt' }
+  )
 
   press_on_files_line('h', 2)
 
