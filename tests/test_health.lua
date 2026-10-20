@@ -590,7 +590,7 @@ T['Claude Code']['warns of a --settings in claude.cmd that cannot take aineo’s
     "- aineo's behaviour was measured on Claude Code 2.1.281",
   })
   eq(health.advice(report, 'Claude Code'), {
-    "Claude Code starts with them as they are, without aineo's hooks, so a session switch inside it is not followed and its subagents are not told of announce_work: :help |aineo-config-claude.cmd|",
+    "Claude Code starts with them as they are, without aineo's hooks, so a session switch inside it is not followed, its subagents are not told of announce_work, and the branches and worktrees its Bash tool makes are not caught by the PostToolUse hook: :help |aineo-config-claude.cmd|",
   })
 end
 
