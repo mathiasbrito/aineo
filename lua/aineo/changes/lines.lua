@@ -41,6 +41,25 @@ local C_ESCAPES = {
 --- quote or a backslash.
 local NEEDS_QUOTING = '[%c"\\]'
 
+--- `character`, one byte, as C escapes it, in octal when C has no letter
+--- for it.
+---
+---@param character string
+---@return string
+local function c_escaped(character)
+  return C_ESCAPES[character] or ('\\%03o'):format(character:byte())
+end
+
+--- `text` as a buffer line can hold it: each control character in it — a
+--- line break among them — escaped as C escapes it (`\t`, `\033`), every
+--- other character as it is.
+---
+---@param text string
+---@return string
+function M.escaped_controls(text)
+  return (text:gsub('%c', c_escaped))
+end
+
 --- `path` as a buffer line can hold it and a reader can tell it whole: as it
 --- is, or, when it holds a control character — a line break among them — a
 --- double quote or a backslash, between double quotes with each of those
@@ -53,9 +72,7 @@ function M.quoted_path(path)
   if not path:find(NEEDS_QUOTING) then
     return path
   end
-  local escaped = path:gsub(NEEDS_QUOTING, function(character)
-    return C_ESCAPES[character] or ('\\%03o'):format(character:byte())
-  end)
+  local escaped = path:gsub(NEEDS_QUOTING, c_escaped)
   return '"' .. escaped .. '"'
 end
 
