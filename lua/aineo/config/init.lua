@@ -46,6 +46,17 @@ local function is_branch_name(value)
   return type(value) == 'string' and value ~= ''
 end
 
+--- Whether `value` is a count of commits: a whole number of at least 1.
+---
+---@param value any
+---@return boolean
+local function is_commit_count(value)
+  return type(value) == 'number'
+    and value >= 1
+    and value ~= math.huge
+    and value == math.floor(value)
+end
+
 --- The most spaces a title of the tab line may be padded with either side.
 local MOST_PADDING = 8
 
@@ -108,6 +119,12 @@ local SETTINGS = {
     default = nil,
     validator = is_branch_name,
     expected = 'a non-empty string naming a branch',
+  },
+  {
+    name = 'changes.graph_limit',
+    default = 1000,
+    validator = is_commit_count,
+    expected = 'a whole number of at least 1',
   },
   {
     name = 'tabs.padding',
