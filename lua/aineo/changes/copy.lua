@@ -2709,18 +2709,27 @@ function M.new(label)
   end
 
   --- Adds `member` to the reported set with `report`, what was reported of
-  --- it: the set becomes the focused view, shown at once, `member`'s whole
-  --- change chosen, the cursor on its heading, and the user is told once
-  --- with `tell`. The other worktrees are read again while the pane has been
-  --- shown, so that `member`'s commits show. A member the set holds already
-  --- keeps its place and is told nothing: it keeps the report
-  --- `reports.merged()` gives — an agent's call replaces the one before —
-  --- and the pane is written and read again for it.
+  --- it, marked with the branch the work is on now (`on_branch`): the set
+  --- becomes the focused view, shown at once, `member`'s whole change chosen,
+  --- the cursor on its heading, and the user is told once with `tell`. The
+  --- other worktrees are read again while the pane has been shown, so that
+  --- `member`'s commits show. A member the set holds already keeps its place
+  --- in the set and is told nothing: it keeps the report `reports.merged()`
+  --- gives — an agent's call replaces the one before, its time included,
+  --- and a hook's report of a branch made in that worktree gives its branch
+  --- and base — and the pane is written and read again for it. A worktree
+  --- that has a branch of the set checked out takes that branch's place,
+  --- one piece of work on one line: its report keeps the branch's label
+  --- when it gives none.
   ---
   ---@param member aineo.changes.ScopeMember
   ---@param report aineo.changes.Report
   ---@param tell fun(message: string)
   local function add_member(member, report, tell)
+    report = vim.tbl_extend('force', report, {
+      on_branch = member.worktree and member.worktree.branch
+        or member.branch and member.branch.name,
+    })
     local key = scope.member_key(member)
     for _, listed in ipairs(session.reported) do
       if scope.member_key(listed) == key then
@@ -2732,8 +2741,23 @@ function M.new(label)
         return
       end
     end
+    local branch_position = member.worktree
+      and member.worktree.branch
+      and vim.iter(ipairs(session.reported)):find(function(_, listed)
+        return listed.branch ~= nil and listed.branch.name == member.worktree.branch
+      end)
+    if branch_position then
+      local branch_key = scope.member_key(session.reported[branch_position])
+      local before = session.reports[branch_key] or {}
+      session.reports[branch_key] = nil
+      report = vim.tbl_extend('force', report, {
+        base = report.base or before.base,
+        label = report.label or before.label,
+      })
+      table.remove(session.reported, branch_position)
+    end
     session.reports[key] = report
-    table.insert(session.reported, member)
+    table.insert(session.reported, branch_position or #session.reported + 1, member)
     session.shows_reported, session.focused = true, true
     select_filter(
       scope.whole_change_of(scope.members_reported({ member }, session.commits_others)[1])

@@ -319,4 +319,31 @@ T['a report made again']['by the tool replaces any before; by the hook keeps the
   eq(report_rules.merged(before, again), kept)
 end
 
+T['a report made again']['by the hook for a branch made in that work takes the branch and its base, the label kept'] = function()
+  local before =
+    { kind = 'worktree', base = BASE, label = 'task', at = NOW - 60, on_branch = 'feature/a' }
+  local again =
+    { kind = 'branch', base = ('e'):rep(40), at = NOW, by_hook = true, on_branch = 'feature/b' }
+
+  local kept = report_rules.merged(before, again)
+
+  eq(kept, {
+    kind = 'worktree',
+    base = ('e'):rep(40),
+    label = 'task',
+    at = NOW,
+    by_hook = true,
+    on_branch = 'feature/b',
+  })
+end
+
+T['a report made again']['by the hook on the branch the work was on keeps the one before'] = function()
+  local before =
+    { kind = 'worktree', base = BASE, label = 'task', at = NOW - 60, on_branch = 'feature/a' }
+  local again =
+    { kind = 'branch', base = ('e'):rep(40), at = NOW, by_hook = true, on_branch = 'feature/a' }
+
+  eq(report_rules.merged(before, again), before)
+end
+
 return T

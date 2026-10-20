@@ -1193,6 +1193,54 @@ T['a reported base']['missing, as in a report made before reports gave one, show
   expect_reported_lines({ 'Reported', 'worktree feature/a from ? now' })
 end
 
+T['the Reported section']['takes the branch and base of a branch made in a reported worktree, the label kept'] = function()
+  local top = start_on_repository('announce-new-branch')
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  report('module', { kind = 'worktree', path = agent, base = base, label = 'task' })
+  wait_until('the report told', function()
+    return #told('module') == 1
+  end)
+  local one = commit_only(agent, 'one.txt', 'one', 'One')
+  git_repo.git(agent, { 'checkout', '--quiet', '-b', 'feature/b' })
+
+  report('module', { kind = 'branch', branch = 'feature/b', base = one, by_hook = true })
+  child.lua('_G.homes.module.refresh_shown_pane()')
+
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-1 (feature/b)',
+    'No commits in this worktree',
+  })
+  expect_reported_lines({
+    'Reported',
+    ('worktree feature/b from %s task now'):format(short(one)),
+    'Uncommitted',
+  })
+end
+
+T['the Reported section']['takes a branch reported and then a worktree made of it as one line'] = function()
+  local top = start_on_repository('announce-branch-then-worktree')
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  git_repo.git(top, { 'branch', 'feature/w' })
+  report('module', { kind = 'branch', branch = 'feature/w', base = base, label = 'task' })
+  wait_until('the branch told', function()
+    return #told('module') == 1
+  end)
+  local worktree = vim.fs.joinpath(vim.fs.dirname(top), 'agent-w')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', worktree, 'feature/w' })
+
+  report('module', { kind = 'worktree', path = worktree, base = base, by_hook = true })
+  wait_until('the worktree told', function()
+    return #told('module') == 2
+  end)
+
+  press_s()
+  eq(vim.list_slice(last_offered().texts, 1, 2), {
+    ('[reported] feature/w from %s  task'):format(short(base)),
+    '[reported] All reported work (1)',
+  })
+end
+
 T['the Reported section']['takes the agent’s base and label over the report of aineo’s hook, both ways'] = function()
   local top = start_on_repository('announce-hook-then-call')
   local agent, one, two = agent_with_two_commits(top)
