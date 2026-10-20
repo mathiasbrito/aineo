@@ -1141,6 +1141,44 @@ T['a reported base']['shows a branch no worktree has checked out from it, commit
   expect_pane_lines('module', 'files', { 'Files in: Branch feature/a', '  A two.txt' })
 end
 
+T['a reported base']['gives way to the pane’s own after a rebase onto newer work, which lists none of that work'] = function()
+  local top = start_on_repository('announce-base-rebase')
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  report('module', { kind = 'worktree', path = agent, base = base })
+  expect_pane_lines('module', 'commits', AGENT_VIEW)
+  local moved_on = commit_only(top, 'dev.txt', 'dev', 'Dev moved on, not the agent')
+  commit_only(agent, 'agent.txt', 'agent', 'Agent work')
+  git_repo.git(agent, { 'rebase', '--quiet', 'main' })
+  local rebased = git_repo.git(agent, { 'rev-parse', 'HEAD' })
+
+  child.lua('_G.homes.module.refresh_shown_pane()')
+
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-1 (feature/a)',
+    commit_line(rebased, 'Agent work'),
+  })
+  expect_pane_lines(
+    'module',
+    'files',
+    { 'Files in: Worktree agent-1 (feature/a)', '  A agent.txt' }
+  )
+  expect_reported_lines({ 'Reported', ('worktree feature/a from %s now'):format(short(moved_on)) })
+end
+
+T['a reported base']['that the repository does not have gives way to the pane’s own, with no failure shown'] = function()
+  local top = start_on_repository('announce-base-unknown')
+  local agent, one, two = agent_with_two_commits(top)
+
+  report('module', { kind = 'worktree', path = agent, base = ('0'):rep(40) })
+
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-1 (feature/a)',
+    commit_line(two, 'Two'),
+    commit_line(one, 'One'),
+  })
+end
+
 T['a reported base']['missing, as in a report made before reports gave one, shows from ? and the base of today’s rule'] = function()
   local top = start_on_repository('announce-base-none')
   local agent, one, two = agent_with_two_commits(top)

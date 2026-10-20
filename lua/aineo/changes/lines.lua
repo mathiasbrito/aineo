@@ -659,12 +659,26 @@ function M.reported_name(member)
   return M.quoted_path(member.branch.name)
 end
 
---- The abbreviated base of `report`, or `?` when it gave none.
+--- The base the work of `reported` shows from, abbreviated: the one its
+--- worktree or branch was last read from, which is the reported base or
+--- the pane's own as `aineo.changes.reports`' `effective_base()` chose it;
+--- the reported base while it has not been read; `?` for a report that gave
+--- none.
 ---
----@param report aineo.changes.Report
+---@param reported aineo.changes.ReportedEntry
 ---@return string
-local function reported_base(report)
-  return report.base and report.base:sub(1, M.ABBREVIATED_ID_LENGTH) or UNKNOWN_BASE
+local function reported_base(reported)
+  local report, member = reported.report, reported.member
+  if not report.base then
+    return UNKNOWN_BASE
+  end
+  local read_from
+  if member.worktree and member.worktree.listed then
+    read_from = member.worktree.base
+  elseif member.branch and member.branch.tip then
+    read_from = member.branch.base
+  end
+  return (read_from or report.base):sub(1, M.ABBREVIATED_ID_LENGTH)
 end
 
 --- The label of `report` as a line shows it, each control character a
@@ -679,14 +693,15 @@ end
 --- The choice of the list `s` offers, and of Enter on its line in the
 --- Reported section, that shows `reported`'s work alone: its worktree by
 --- its top level, or its branch by its name, as `[reported] <name> from
---- <base>`, then two spaces and its label when it has one.
+--- <base>`, the base its work shows from (`reported_base()`), then two
+--- spaces and its label when it has one.
 ---
 ---@param reported aineo.changes.ReportedEntry
 ---@return aineo.changes.ScopeItem
 function M.report_item(reported)
   local text = ('[reported] %s from %s'):format(
     M.reported_name(reported.member),
-    reported_base(reported.report)
+    reported_base(reported)
   )
   local label = shown_label(reported.report)
   if label then
@@ -700,8 +715,8 @@ function M.report_item(reported)
 end
 
 --- The row of `reported`, one report of the reported set, at the time `now`:
---- its kind, its name (`M.reported_name()`), `from` and its base
---- abbreviated, or `?` without one, its label when it has one, each control
+--- its kind, its name (`M.reported_name()`), `from` and the base its work
+--- shows from (`reported_base()`), its label when it has one, each control
 --- character of it shown as a space, and its age
 --- (`aineo.changes.author_column`'s `age()`) when it was timed; the base
 --- in the group of commit ids, the label and the age in theirs, the rest
@@ -733,7 +748,7 @@ local function report_row(reported, now)
     end
     line = line .. text
   end
-  add(reported_base(report), report.base and colours.COMMIT_ID_GROUP)
+  add(reported_base(reported), report.base and colours.COMMIT_ID_GROUP)
   local label = shown_label(report)
   if label then
     add(' ')

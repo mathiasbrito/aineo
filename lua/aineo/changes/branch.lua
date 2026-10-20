@@ -49,7 +49,7 @@ end
 ---@class aineo.changes.BranchSection
 ---@field name string the branch's name
 ---@field tip? string the full id of the commit the branch named when it was last read
----@field base? string the branch's base at that read: the base an agent reported for it, else its merge base with the commit the working branch names, else with the editor's comparison commit; nil when none gave one, which counts every file and commit of the branch
+---@field base? string the branch's base at that read: the base an agent reported for it, when `worktrees.read_effective_base()` chose it, else its merge base with the commit the working branch names, else with the editor's comparison commit; nil when none gave one, which counts every file and commit of the branch
 ---@field reported_base? boolean whether `base` is the one an agent reported
 ---@field commits? aineo.git.Commit[] the commits reachable from `tip` and not from `base`, newest first
 ---@field names_no_commit? boolean whether the name named no commit when it was read: the branch was deleted or renamed
@@ -72,11 +72,12 @@ end
 ---@class aineo.changes.BranchRead: aineo.changes.CommitBaseRead
 ---@field name string the branch's name
 ---@field before? aineo.changes.BranchSection what the commits window knew before this read
----@field base? string the base an agent reported for the branch, read from in place of the one `worktrees.read_base_of()` reads
+---@field base? string the base an agent reported for the branch, read from in place of the one `worktrees.read_base_of()` reads when `worktrees.read_effective_base()` chooses it
 
 --- Reads the branch `read.name`: the commit it names now (`refs/heads/`
 --- and its name, never another reference of the same name), its base
---- (`read.base`, else `worktrees.read_base_of()`), and the commits of the
+--- (`worktrees.read_base_of()`, or the one `worktrees.read_effective_base()`
+--- chooses between it and `read.base`), and the commits of the
 --- tip the base cannot reach, every commit of it when there is no base.
 --- Calls `done(section)`:
 --- `names_no_commit` when the name names no commit. When a read fails, the
@@ -117,11 +118,13 @@ function M.read(read, done)
           end
         end, read.git)
       end
-      if read.base then
-        read_from(nil, read.base)
-      else
-        worktrees.read_base_of(read, tip, read_from)
-      end
+      worktrees.read_base_of(read, tip, function(own_failure, own)
+        if own_failure then
+          failed(own_failure)
+          return
+        end
+        worktrees.read_effective_base(read, read.found.top, read.base, own, tip, read_from)
+      end)
     end
   end, read.git)
 end
