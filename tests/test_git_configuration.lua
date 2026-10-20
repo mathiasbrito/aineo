@@ -98,6 +98,13 @@ local function commit_signed(name, top, message)
   return git_repo.git(top, { 'rev-parse', 'HEAD' })
 end
 
+--- The author of every commit these cases make: the suites' git identity.
+local AUTHOR = 'aineo tests'
+
+--- When `commit_signed()` writes its commit, 2026-09-27T12:00:00+02:00, in
+--- seconds since the epoch.
+local SIGNED_AT = 1790503200
+
 --- The id git gives the content of the file `path` under `top` as it is on
 --- disk now.
 ---
@@ -163,7 +170,10 @@ T['a user’s git configuration']['does not change the commits between two commi
 
   local seen = child.lua(ASK, { top, 'commits_between', { base, signed } })
 
-  eq(seen.result, { { id = signed, subject = 'Café, signed' } })
+  eq(
+    seen.result,
+    { { id = signed, subject = 'Café, signed', author = AUTHOR, authored_at = SIGNED_AT } }
+  )
 end
 
 T['a user’s git configuration']['does not change the diff between two commits'] = function()
@@ -324,7 +334,9 @@ T['a user’s git configuration']['does not change the commits since a base'] = 
   local seen = child.lua(ASK, { top, 'commits_since', { base } })
 
   eq(seen.result, {
-    commits = { { id = signed, subject = 'Café, signed' } },
+    commits = {
+      { id = signed, subject = 'Café, signed', author = AUTHOR, authored_at = SIGNED_AT },
+    },
     base_is_ancestor = true,
   })
 end
