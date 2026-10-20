@@ -383,10 +383,29 @@ The changes pane's default view (`\g` in that pane) shows the folder Claude
 works in again. A worktree shown that is gone from disk gives way to the
 folder Claude works in, and aineo tells you once.
 
+The tree shows in colour. A file git sees changed has its mark and its name
+in the group the changes pane gives that kind of change, the groups `\g`
+shows its files in (|hl-AineoChangesAdded|, |hl-AineoChangesModified|,
+|hl-AineoChangesDeleted|, |hl-AineoChangesRenamed|,
+|hl-AineoChangesTypeChanged|, |hl-AineoChangesUntracked|), so that the
+colours you give those groups apply to both panes. A folder's sign and name
+show in |hl-AineoExplorerFolder|, and the `•` of a folder holding a change in
+|hl-AineoExplorerChanged|. An entry git ignores, shown by `I`, shows whole in
+|hl-AineoExplorerIgnored|, its own mark's colour not applied. Each of the
+explorer's groups is a default link, which a colour scheme or you may
+replace.
+
+                                                     *hl-AineoExplorerChanged*
+AineoExplorerChanged	The `•` of a folder holding a change, linked to
+			|hl-AineoChangesModified|.
+                                                      *hl-AineoExplorerFolder*
+AineoExplorerFolder	A folder's sign and name, linked to |hl-Directory|.
                                                     *hl-AineoExplorerFollowed*
 AineoExplorerFollowed	The line of the current file in the tree.
                                                       *hl-AineoExplorerHeader*
 AineoExplorerHeader	The tree's first line.
+                                                     *hl-AineoExplorerIgnored*
+AineoExplorerIgnored	An entry git ignores, whole, linked to |hl-Comment|.
 
 The explorer opens, renames and deletes no file. See |aineo-limits| for what
 it does not show.

@@ -44,6 +44,7 @@
 --- has is called as a field, `home.pane_buffers()`, never as a method. The
 --- diffs' context `F` toggles stays one for the editor (`aineo.changes.full_context`).
 
+local colours = require('aineo.changes.colours')
 local copy = require('aineo.changes.copy')
 local lines = require('aineo.changes.lines')
 local open_file = require('aineo.changes.open_file')
@@ -56,6 +57,16 @@ local M = copy.new()
 --- there, at a line when given, as the files window's `<S-CR>` opens a file
 --- (`open_file.open_working_file()`).
 M.open_working_file = open_file.open_working_file
+
+--- The highlight group a file's letter and path show in, by the kind of its
+--- change (`'added'`, `'modified'`, `'deleted'`, `'renamed'`, `'type_changed'`,
+--- `'untracked'`), as the files window shows them.
+M.kind_groups = colours.KIND_GROUPS
+
+--- Defines the pane's highlight groups, each linked by default
+--- (`aineo.changes.colours`' `define_changes_colours()`), so that another
+--- pane may show in them before this one has been shown.
+M.define_colours = colours.define_changes_colours
 
 --- A path as a buffer line can hold it and a reader can tell it whole,
 --- quoted and escaped when it holds a control character, a double quote or
