@@ -477,13 +477,14 @@ end
 T['<BS> in a diff']['stays Vim’s own in a file opened for editing'] = function()
   pane_with_three_edited_files('back-edited-file')
   child.type_keys('j')
+  expect_last_shown_name('aineo://diff/a.txt')
   child.lua("vim.fn.maparg('gf', 'n', false, true).callback()")
   vim.wait(git_repo.PATIENCE_MS, function()
     return vim.fs.basename(current_buffer_name()) == 'a.txt'
   end, 10)
   eq(vim.fs.basename(current_buffer_name()), 'a.txt')
 
-  eq(child.lua_get("vim.fn.maparg('<BS>', 'n', false, true)"), {})
+  eq(child.lua_get("next(vim.fn.maparg('<BS>', 'n', false, true)) == nil"), true)
 end
 
 return T
