@@ -147,6 +147,98 @@ function M.commit_all_authored(top, message, name, authored_at)
   return M.git(top, { 'rev-parse', 'HEAD' })
 end
 
+--- Stages every file under `top` and commits them with `message`, written
+--- and committed by the author `name` at `at`, seconds since the epoch, so
+--- that git orders the commit by that time; returns the new commit's full
+--- id.
+---
+---@param top string
+---@param message string
+---@param name string
+---@param at integer
+---@return string commit
+function M.commit_all_dated(top, message, name, at)
+  local environment = vim.tbl_extend('force', M.ENVIRONMENT, {
+    GIT_COMMITTER_DATE = at .. ' +0000',
+  })
+  local function run(args)
+    local result = vim
+      .system(vim.list_extend({ 'git' }, args), { cwd = top, env = environment, text = true })
+      :wait()
+    assert(result.code == 0, ('git %s: %s'):format(table.concat(args, ' '), result.stderr))
+    return (result.stdout:gsub('\n$', ''))
+  end
+  run({ 'add', '--all' })
+  run({
+    'commit',
+    '--quiet',
+    '--allow-empty',
+    '--message',
+    message,
+    '--author',
+    name .. ' <author@aineo.invalid>',
+    '--date',
+    at .. ' +0000',
+  })
+  return run({ 'rev-parse', 'HEAD' })
+end
+
+--- The commits of a repository `M.create_graph()` made, by their subjects'
+--- first word, each a full id.
+---@class aineo.tests.GraphCommits
+---@field begin string `Begin`, on `main`, the first commit
+---@field side string `Side work`, on the branch `side`, from `Begin`
+---@field main string `Main work`, on `main`, after `Begin`
+---@field merge string `Merge side`, `main`'s head, merging `side`
+---@field other string `Other work`, on the branch `other` and tagged `v1`, after `Main work`
+
+--- The time the first commit of `M.create_graph()` is written at; each
+--- later one is a minute after the one before.
+M.GRAPH_STARTS_AT = 1500000000
+
+--- Makes `.tests/fixtures/git-<name>/repo` a repository with two branches
+--- beside `main` and a merge: `Begin` by Ada; `Side work` by Bartholomew on
+--- `side`, holding `side.txt`; `Main work` by Ada on `main`, holding
+--- `main.txt`; `Merge side`, `side` merged into `main` by Ada; and
+--- `Other work` by Carol on `other`, from `Main work`, tagged `v1`, holding
+--- `other.txt` and `more.txt`. `main` is checked out, at `Merge side`.
+---
+---@param name string
+---@return string top the repository's top level
+---@return aineo.tests.GraphCommits commits
+function M.create_graph(name)
+  local top = M.create_unborn(name)
+  local at = M.GRAPH_STARTS_AT
+  local commits = {}
+  M.write(top, 'a.txt', { 'one' })
+  commits.begin = M.commit_all_dated(top, 'Begin', 'Ada', at)
+  M.git(top, { 'checkout', '--quiet', '-b', 'side' })
+  M.write(top, 'side.txt', { 'side' })
+  commits.side = M.commit_all_dated(top, 'Side work', 'Bartholomew', at + 60)
+  M.git(top, { 'checkout', '--quiet', 'main' })
+  M.write(top, 'main.txt', { 'main' })
+  commits.main = M.commit_all_dated(top, 'Main work', 'Ada', at + 120)
+  M.git(top, { 'merge', '--quiet', '--no-ff', '--no-commit', 'side' })
+  commits.merge = M.commit_all_dated(top, 'Merge side', 'Ada', at + 180)
+  M.git(top, { 'checkout', '--quiet', '-b', 'other', commits.main })
+  M.write(top, 'other.txt', { 'other' })
+  M.write(top, 'more.txt', { 'more' })
+  commits.other = M.commit_all_dated(top, 'Other work', 'Carol', at + 240)
+  M.git(top, { 'tag', 'v1' })
+  M.git(top, { 'checkout', '--quiet', 'main' })
+  return top, commits
+end
+
+--- How git tells the age of `commit`, a full id of the repository `top`,
+--- now: `%ar`, as `git log --date=relative` writes it.
+---
+---@param top string
+---@param commit string
+---@return string
+function M.relative_age(top, commit)
+  return M.git(top, { 'log', '-1', '--format=%ar', commit })
+end
+
 --- Makes `.tests/fixtures/git-<name>/repo` a repository whose one commit,
 --- `base`, holds `files` (path to lines).
 ---
