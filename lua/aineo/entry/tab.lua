@@ -1634,8 +1634,10 @@ local function make_tab(homes, key, callbacks)
 
   --- Lets the tab's homes go as its tab page has closed, at once: its claim
   --- is let go, Input's draft is saved first (`aineo.draft`'s `let_go()`),
-  --- then the layout, the shell, the changes pane and the Report are let go,
-  --- the shell after the layout, whose handlers must not see its wipe. What
+  --- then the layout, the shell, the changes pane, the Report and the
+  --- explorer are let go, the shell after the layout, whose handlers must
+  --- not see its wipe; the first tab's explorer too, which makes its buffer
+  --- again when the tab is taken up. What
   --- its Claude Code tells it afterwards writes nothing. The first tab is made
   --- of the homes the modules themselves are, which have no `let_go()`: it
   --- leaves them as they are, and is in no tab page any more. Its shell is

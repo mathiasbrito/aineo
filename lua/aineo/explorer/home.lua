@@ -13,12 +13,28 @@ local M = {}
 ---@field list_files fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, paths: string[]|nil))
 ---@field uncommitted_files fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, changes: aineo.git.Change[]|nil))
 ---@field ignored_files fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, paths: string[]|nil))
+---@field list_worktrees fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, worktrees: aineo.git.Worktree[]|nil))
 ---@field watch_repository fun(found: aineo.git.Repository, on_change: fun(failure: aineo.git.Failure|nil, change: aineo.git.RepositoryChange|nil)): aineo.git.Watch|nil
+
+--- What the changes pane's focused view shows alone, first of all
+--- (`aineo.changes`' `focused_work()`): a worktree by its top level, or a
+--- branch by its name, with its heading.
+---@class aineo.explorer.Work
+---@field top? string
+---@field branch? string
+---@field heading string
+
+--- What the explorer shows: a folder, and the title its header gives it.
+---@class aineo.explorer.Place
+---@field directory string absolute
+---@field title string
 
 --- What an explorer is handed.
 ---@class aineo.explorer.Settings
 ---@field git aineo.explorer.Git
 ---@field claude_folder fun(): string the folder Claude works in, absolute
+---@field focused_work? fun(): aineo.explorer.Work|nil what the changes pane's focused view shows alone, nil for its default view
+---@field offer_work? fun() offers the changes pane's list of worktrees, branches and reported work, whose pick it shows alone
 ---@field open_file fun(path: string) opens the file `path`, absolute, in the file column
 ---@field paste fun(text: string) pastes `text` into Claude Code's prompt, with no Enter
 
@@ -93,7 +109,8 @@ end
 ---@return aineo.explorer.Home
 function M.new(settings)
   --- The explorer's buffer and the name it takes; the folder shown and the
-  --- header's title for it, as the last read took them; the tree, the marks
+  --- header's title for it, as the last read took them, what it was asked
+  --- for (`place_key()`), and the gone worktree last told of; the tree, the marks
   --- and, when git failed, why, as last read; the folders unfolded, the
   --- toggles and the filter the user set; what the buffer shows, by line;
   --- the number of the last read asked for; the watch of the repository and
@@ -105,8 +122,12 @@ function M.new(settings)
     buffer = nil,
     ---@type string|nil
     name = nil,
-    ---@type { directory: string, title: string }|nil
+    ---@type aineo.explorer.Place|nil
     place = nil,
+    ---@type string|nil
+    place_key = nil,
+    ---@type string|nil
+    gone_told = nil,
     ---@type aineo.explorer.Tree
     tree = { children = {} },
     ---@type table<string, string>
@@ -254,6 +275,88 @@ function M.new(settings)
 
   local read_tree
 
+  --- What the explorer shows: the folder Claude works in, and what the
+  --- changes pane's focused view shows alone, as one text; a read is asked
+  --- for again when it differs from the last read's.
+  ---
+  ---@return string
+  local function place_key()
+    local work = settings.focused_work and settings.focused_work()
+    return settings.claude_folder() .. '\n' .. vim.inspect(work)
+  end
+
+  --- The place of the folder Claude works in, its title the folder, `note`
+  --- after it when given.
+  ---
+  ---@param note? string
+  ---@return aineo.explorer.Place
+  local function claude_place(note)
+    local directory = settings.claude_folder()
+    local title = vim.fn.fnamemodify(directory, ':~')
+    return { directory = directory, title = note and ('%s (%s)'):format(title, note) or title }
+  end
+
+  --- Calls `done` with the place of the worktree of `repository` that has
+  --- the branch `work` names checked out, or with the folder Claude works in,
+  --- its title saying the branch has no folder on disk, when none has.
+  ---
+  ---@param work aineo.explorer.Work
+  ---@param done fun(place: aineo.explorer.Place)
+  local function resolve_branch(work, done)
+    local no_folder = ('%s has no folder on disk'):format(work.heading)
+    settings.git.find_repository(settings.claude_folder(), function(_, repository)
+      if not repository then
+        done(claude_place(no_folder))
+        return
+      end
+      settings.git.list_worktrees(repository, function(_, worktrees)
+        local checkout = vim.iter(worktrees or {}):find(function(worktree)
+          return worktree.branch == work.branch
+        end)
+        done(
+          checkout and { directory = checkout.top, title = work.heading } or claude_place(no_folder)
+        )
+      end)
+    end)
+  end
+
+  --- What the explorer tells the user, once, when the worktree the changes
+  --- pane shows alone is no longer on disk.
+  ---
+  ---@param work aineo.explorer.Work
+  ---@return string
+  local function gone_notice(work)
+    return ('aineo: %s is gone; the explorer shows the folder Claude works in'):format(work.heading)
+  end
+
+  --- Calls `done` with the place the explorer shows: what the changes pane's
+  --- focused view shows alone (`settings.focused_work`) — a worktree, or the
+  --- worktree a branch is checked out in (`resolve_branch()`) — or, for the
+  --- default view, the folder Claude works in. A worktree that is no longer
+  --- on disk gives the folder Claude works in, the user told once.
+  ---
+  ---@param done fun(place: aineo.explorer.Place)
+  local function resolve_place(done)
+    local work = settings.focused_work and settings.focused_work()
+    if not work then
+      done(claude_place())
+      return
+    end
+    if work.branch and not work.top then
+      resolve_branch(work, done)
+      return
+    end
+    if vim.fn.isdirectory(work.top) == 1 then
+      done({ directory = work.top, title = work.heading })
+      return
+    end
+    if state.gone_told ~= work.top then
+      state.gone_told = work.top
+      vim.notify(gone_notice(work), vim.log.levels.WARN)
+    end
+    done(claude_place())
+  end
+
   --- Makes `file`, absolute, the file followed when it lies under the folder
   --- shown, and unfolds the folders above it; says whether it lies there.
   ---
@@ -357,22 +460,28 @@ function M.new(settings)
   read_tree = function()
     state.reads = state.reads + 1
     local read = state.reads
-    local directory = settings.claude_folder()
-    state.place = { directory = directory, title = vim.fn.fnamemodify(directory, ':~') }
-    if state.pending_follow then
-      take_followed(state.pending_follow)
-      state.pending_follow = nil
-    end
-    settings.git.find_repository(directory, function(_, repository)
+    state.place_key = place_key()
+    resolve_place(function(place)
       if not is_last_read(read) then
         return
       end
-      local prefix = repository and path_from(repository.top, directory)
-      if not prefix then
-        take_folders(directory)
-        return
+      local directory = place.directory
+      state.place = place
+      if state.pending_follow then
+        take_followed(state.pending_follow)
+        state.pending_follow = nil
       end
-      read_repository(read, repository, prefix)
+      settings.git.find_repository(directory, function(_, repository)
+        if not is_last_read(read) then
+          return
+        end
+        local prefix = repository and path_from(repository.top, directory)
+        if not prefix then
+          take_folders(directory)
+          return
+        end
+        read_repository(read, repository, prefix)
+      end)
     end)
   end
 
@@ -571,6 +680,15 @@ function M.new(settings)
     { lhs = 'H', rhs = toggle_dotfiles, desc = 'hide or show dotfiles' },
     { lhs = 'f', rhs = ask_filter, desc = 'filter the files by their path' },
     { lhs = '@', rhs = paste_path, desc = "paste the entry's path into Claude's prompt" },
+    {
+      lhs = 's',
+      rhs = function()
+        if settings.offer_work then
+          settings.offer_work()
+        end
+      end,
+      desc = 'pick the worktree or branch to show, as the changes pane does',
+    },
   }
 
   --- Makes the explorer's buffer: a scratch buffer no one edits, named
@@ -608,7 +726,7 @@ function M.new(settings)
     if not (state.buffer and vim.api.nvim_buf_is_valid(state.buffer)) then
       state.buffer = make_buffer()
       read_tree()
-    elseif not state.place or state.place.directory ~= settings.claude_folder() then
+    elseif state.place_key ~= place_key() then
       read_tree()
     end
     return state.buffer
