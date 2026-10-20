@@ -1,6 +1,8 @@
 --- A tab's explorer, made of the tab's other homes: the explorer
 --- (`aineo.explorer`) reads through the git home, shows the folder the
---- tab's Claude Code works in, opens a file as a link to it opens
+--- tab's Claude Code works in or what the tab's changes pane shows alone,
+--- whose pick its `s` shares (`aineo.changes`' `focused_work()`,
+--- `offer_scopes()`), opens a file as a link to it opens
 --- (`aineo.entry.links`), and pastes into that Claude Code's prompt through
 --- the Send home (`aineo.send`'s `paste()`).
 
@@ -14,16 +16,20 @@ local M = {}
 ---@param homes aineo.entry.Homes
 ---@return aineo.explorer.Home
 function M.make_explorer(homes)
-  return require('aineo.explorer').new({
+  local explorer = require('aineo.explorer').new({
     git = require('aineo.git'),
     claude_folder = function()
       return homes.claude.session_directory() or vim.fn.getcwd()
     end,
+    focused_work = homes.changes.focused_work,
+    offer_work = homes.changes.offer_scopes,
     open_file = links.open_file,
     paste = function(text)
       require('aineo.send').paste(text, { session = homes.claude })
     end,
   })
+  homes.changes.watch_focused_work(explorer.refresh)
+  return explorer
 end
 
 --- What has a tab's explorer follow the current file.

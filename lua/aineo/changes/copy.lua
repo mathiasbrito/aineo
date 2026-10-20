@@ -67,6 +67,14 @@ local function start_uv_timer(milliseconds, act)
   return stop
 end
 
+--- What the focused view shows alone, first of all: the worktree picked, or
+--- the first reported, by its top level; or the local branch picked, or the
+--- first reported, by its name; with its heading in the commits window.
+---@class aineo.changes.FocusedWork
+---@field top? string the worktree's top level
+---@field branch? string the branch's name
+---@field heading string
+
 --- A changes home, whose functions are called as fields, never as methods.
 ---@class aineo.changes.Home
 ---@field begin_session fun(settings: aineo.changes.SessionSettings)
@@ -77,6 +85,9 @@ end
 ---@field add_reported_work fun(work: aineo.changes.ReportedWork, tell: fun(message: string)): boolean whether the home took the report
 ---@field pane_buffers fun(): { files: integer, commits: integer }
 ---@field close_shown_diff fun() closes the windows of the current tab page that show a diff the home showed, and tells once when none was closed
+---@field focused_work fun(): aineo.changes.FocusedWork|nil what the focused view shows alone, nil for the default view
+---@field watch_focused_work fun(watcher: fun()) calls `watcher` each time what `focused_work()` gives changes
+---@field offer_scopes fun() what `s` does in the pane: offers the worktrees, branches and reported work to show alone
 ---@field let_go? fun() only on a home `require('aineo.changes').new()` made: stops its watch, removes its handlers and wipes its buffers
 
 --- Makes a changes home: its own session, base and saves, pane buffers,
@@ -399,14 +410,62 @@ function M.new(label)
     end
   end
 
+  --- What the focused view shows alone (`home.focused_work()`); nil for the
+  --- default view, and before the session has begun.
+  ---
+  ---@return aineo.changes.FocusedWork|nil
+  local function focused_work()
+    if not (session and session.focused) then
+      return nil
+    end
+    if session.shows_reported then
+      local first = session.reported[1]
+      if not first then
+        return nil
+      end
+      if first.worktree then
+        return { top = first.worktree.top, heading = lines.worktree_heading(first.worktree) }
+      end
+      local name = first.branch.name
+      return { branch = name, heading = scope.of_branch(name).heading }
+    end
+    local picked = session.scope
+    if not picked then
+      return nil
+    end
+    return { top = picked.top, branch = picked.branch, heading = picked.heading }
+  end
+
+  --- The functions told each time what the focused view shows alone changes
+  --- (`home.watch_focused_work()`), and what they were told last.
+  ---@type fun()[]
+  local focused_work_watchers = {}
+  ---@type aineo.changes.FocusedWork|nil
+  local focused_work_told = nil
+
+  --- Calls each function `home.watch_focused_work()` was given when what the
+  --- focused view shows alone is no longer what they were told last.
+  local function tell_focused_work()
+    local now = focused_work()
+    if vim.deep_equal(now, focused_work_told) then
+      return
+    end
+    focused_work_told = now
+    for _, watcher in ipairs(focused_work_watchers) do
+      watcher()
+    end
+  end
+
   --- Writes the commits buffer for what the session knows (`commits_page()`,
   --- `show_page()`), then puts the cursor on the selected filter's line when
-  --- it is still to be put there (`place_commits_cursor()`), and keeps the
-  --- view the page shows (`keep_view()`): every change of the view is
-  --- shown here.
+  --- it is still to be put there (`place_commits_cursor()`), keeps the
+  --- view the page shows (`keep_view()`) and tells those who watch what the
+  --- focused view shows alone (`tell_focused_work()`): every change of the
+  --- view is shown here.
   local function show_commits()
     show_page(buffers.commits, commits_page, place_commits_cursor)
     keep_view()
+    tell_focused_work()
   end
 
   --- Whether the session's base is the one a read was asked from: not once
@@ -735,6 +794,12 @@ function M.new(label)
     end
   end
 
+  --- Offers what `s` offers, when `s` was pressed before the other worktrees
+  --- were read (`home.offer_scopes()`); does nothing otherwise. Defined
+  --- with `home.offer_scopes()`.
+  ---@type fun()
+  local offer_once_read
+
   --- Selects again, and reads the files window for it, what the selection
   --- comes to when `others`, what the commits window now knows of the other
   --- worktrees, no longer lists what it names: *Session work* when the
@@ -990,6 +1055,8 @@ function M.new(label)
   --- `reselect_in_worktrees()`. The local branch the scope names, when it
   --- names one, and the reported set's branches, are read after the
   --- worktrees, and the reports matched again (`read_scope_and_reported()`).
+  --- Once the other worktrees are read, the list `s` asked for before they
+  --- were is offered (`offer_once_read()`).
   local read_commits = window_read({
     read_own = function(base, done)
       read_landed(base)
@@ -1014,7 +1081,10 @@ function M.new(label)
       git.commits_since(repository, base, done, session.settings.git)
     end,
     others_field = 'commits_others',
-    took_others = reselect_in_worktrees,
+    took_others = function(others)
+      reselect_in_worktrees(others)
+      offer_once_read()
+    end,
     read_scope = read_scope_and_reported,
     show = show_commits,
   })
@@ -2586,16 +2656,29 @@ function M.new(label)
   --- first.
   local offering = false
 
+  --- Whether `s` was pressed before the other worktrees were read, and waits
+  --- for them (`offer_once_read()`).
+  local offer_asked = false
+
   --- Offers the other worktrees the commits window last listed and the local
   --- branches no worktree has checked out (`pick_among()`), the branches read
   --- when `s` is pressed (`aineo.changes.branch`), off the main loop: the
   --- picker opens once they are. Branches that cannot be read leave the
-  --- worktrees alone, the failure told once. While the session has no
-  --- repository, or the other worktrees are unread or unlisted, tells why
-  --- instead (`aineo.changes.scope`).
+  --- worktrees alone, the failure told once. With the repository found and
+  --- the other worktrees not read yet, as before the pane was first shown,
+  --- it tells the user they are being read, reads them as a showing of the
+  --- pane does (`pane_shown()`) and offers the list once they are. While the
+  --- session has no repository, or the other worktrees are unlisted, tells
+  --- why instead (`aineo.changes.scope`).
   local function offer_scopes()
     if not session then
       vim.notify(lines.READING, vim.log.levels.INFO)
+      return
+    end
+    if session.repository and session.commits_others == worktrees.NONE then
+      vim.notify(lines.READING, vim.log.levels.INFO)
+      offer_asked = true
+      pane_shown()
       return
     end
     local why_not = scope.why_not_ready({
@@ -2627,6 +2710,26 @@ function M.new(label)
       end
       pick_among(scope.items_of(session.commits_others, candidates, session.reported))
     end)
+  end
+
+  offer_once_read = function()
+    if offer_asked then
+      offer_asked = false
+      vim.schedule(offer_scopes)
+    end
+  end
+
+  home.offer_scopes = offer_scopes
+  home.focused_work = focused_work
+
+  --- Calls `watcher` each time what the focused view shows alone
+  --- (`home.focused_work()`) changes: a pick of `s`, the switch between the
+  --- default view and the focused view, a report joining the reported set,
+  --- and a worktree or branch shown alone that is gone.
+  ---
+  ---@param watcher fun()
+  function home.watch_focused_work(watcher)
+    table.insert(focused_work_watchers, watcher)
   end
 
   --- A scratch buffer of the pane named `name` (`aineo.changes.scratch`),

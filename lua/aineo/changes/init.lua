@@ -33,7 +33,10 @@
 --- is followed; `s` offers the set back. What `s` picked, the reported set
 --- and whether the focused view showed are kept for the Claude Code session
 --- followed, beside its base and saves, and shown again once that session is
---- followed again (`aineo.changes.kept`).
+--- followed again (`aineo.changes.kept`). What the focused view shows alone
+--- is read with `focused_work()` and watched with `watch_focused_work()`,
+--- and `offer_scopes()` is what `s` does, so that the explorer shares the
+--- pick (`aineo.explorer`).
 ---
 --- One changes pane is a home (`aineo.changes.Home`): the module is the first,
 --- and `new()` makes another, for another tab, whose session, base and saves,
