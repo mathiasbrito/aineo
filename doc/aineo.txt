@@ -880,7 +880,8 @@ choice becomes that worktree's whole change, the cursor on its heading.
                                                 *aineo-changes-author-column*
 Every commit line the pane draws - your own, those that landed, another
 worktree's or branch's, and the commit named on the first line of the files
-window - is the abbreviated id, a space, a column of the commit's author and
+window, the commit graph's excepted (|aineo-changes-graph|) - is the
+abbreviated id, a space, a column of the commit's author and
 age, a space, and the subject: >
     1a2b3c4 Ada Lovelace 3h      Add the report
     5d6e7f8 Bartholomew Mont… 2d Fix the build
@@ -906,6 +907,48 @@ that choice; on a line that lists no file, a note, it still moves. `<BS>` in
 the files window moves the cursor back to the commits window, onto the line
 that chose what the files window lists. `h` in the files window keeps
 showing the diff against `HEAD` (|aineo-changes|).
+
+                                                   *aineo-changes-graph*
+`t` in the commits window shows the commit graph in place of its sections,
+and `t` again shows the sections as they were, the line chosen before the
+graph chosen again. The graph is what this command draws: >
+    git log --graph --all --abbrev-commit --date=relative
+<
+of every branch, tag and remote-tracking branch, newest first: the graph as
+git draws it, then, on each commit's line, its abbreviated id, its age, its
+subject, its author and the names that point at it: >
+    * 1a2b3c4 - (3 hours ago) Add the report - Ada (HEAD -> main)
+    | * 5d6e7f8 - (2 days ago) Fix the build - Grace (origin/fix)
+    |/
+<
+A control character of a subject, an author or a name shows escaped, as C
+escapes it (`\t`, `\033`). The graph lasts for the tab: it stays shown as you
+move between windows and the pane is shown again, and a new editor starts on
+the sections. It is read again each time `t` shows it, as the pane is shown
+again, and as the repository changes: a commit, a checkout, a branch or tag
+made or deleted, a fetch. A read keeps the cursor on its commit while the
+graph lists it; a read that fails keeps the graph shown and says so above it.
+
+`j` and `k` go from commit line to commit line, over the graph's own lines,
+such as `|/` and `|\`, and take a count: `3j` goes three commits down. The
+cursor never rests on a line of the graph alone: a click there, `G`, or any
+other move puts it on the nearest commit line, the one below when two are as
+near. The commit under the cursor chooses what the files window lists, as a
+commit line of the sections does (|aineo-changes|), and `l`, `<BS>`, Enter,
+the diff that follows the cursor of the files window and `F` work on it as
+on any commit. `s` does not change the graph.
+
+The graph draws the newest 1000 commits, or as many as
+`changes.graph_limit` says (|aineo-config-changes.graph_limit|), and ends
+with "Older commits not shown" when it left older ones out.
+
+Every colour of the graph comes from your colour scheme: the abbreviated id
+in |hl-AineoChangesCommitId|, the age in |hl-AineoChangesGraphAge|, the
+subject in |hl-AineoChangesCommitSubject|, the author in
+|hl-AineoChangesGraphAuthor|, the names in |hl-AineoChangesGraphRef|, and
+each mark of the graph in the group of its lane, |hl-AineoChangesGraphLane1|
+to |hl-AineoChangesGraphLane6|, the seventh lane coloured as the first, a
+`/` or a `\` as the lane on its right.
 
 Below your own lines, which have no heading, the commits window lists what
 landed in your working branch: the heading `Landed in <branch>`, then the
@@ -1490,7 +1533,8 @@ commit, nothing landed, subdirectories not watched, the base no longer
 behind `HEAD`, no repository and git's words. A line that tells a failure,
 a refresh that failed, a working branch that names no commit or `git` not
 found, shows whole in
-|hl-AineoChangesFailure|. The colours follow every list written: a refresh,
+|hl-AineoChangesFailure|. The commit graph's colours are told with it
+(|aineo-changes-graph|). The colours follow every list written: a refresh,
 a save, a commit, `:edit` in the pane, a buffer of the pane made anew.
 Each group links to one of Neovim's own, the subject's excepted, unless a
 colour scheme or a `:highlight` of your own colours it.
@@ -1541,6 +1585,27 @@ AineoChangesNote         a line that lists nothing, linked to `Comment`
                                                       *hl-AineoChangesFailure*
 AineoChangesFailure      a line that tells a failure, linked to
                          `DiagnosticWarn`
+                                                     *hl-AineoChangesGraphAge*
+AineoChangesGraphAge     a commit's age in the commit graph, linked to
+                         `String`
+                                                  *hl-AineoChangesGraphAuthor*
+AineoChangesGraphAuthor  a commit's author in the commit graph, linked to
+                         `Comment`
+                                                     *hl-AineoChangesGraphRef*
+AineoChangesGraphRef     the names that point at a commit in the commit
+                         graph, linked to `Label`
+                                                   *hl-AineoChangesGraphLane1*
+AineoChangesGraphLane1   the graph's first lane, linked to `Identifier`
+                                                   *hl-AineoChangesGraphLane2*
+AineoChangesGraphLane2   its second lane, linked to `String`
+                                                   *hl-AineoChangesGraphLane3*
+AineoChangesGraphLane3   its third lane, linked to `Function`
+                                                   *hl-AineoChangesGraphLane4*
+AineoChangesGraphLane4   its fourth lane, linked to `Type`
+                                                   *hl-AineoChangesGraphLane5*
+AineoChangesGraphLane5   its fifth lane, linked to `Constant`
+                                                   *hl-AineoChangesGraphLane6*
+AineoChangesGraphLane6   its sixth lane, linked to `Statement`
 
 The file column ~
                                                           *aineo-file-column*
@@ -2669,6 +2734,13 @@ changes.working_branch	A non-empty string.
 			with neither the pane shows no Landed section. aineo
 			never fetches: the branch is what your repository
 			last fetched (|aineo-limits|).
+
+                                            *aineo-config-changes.graph_limit*
+changes.graph_limit	A whole number of at least 1. Default: `1000`
+			How many commits the commit graph of the changes
+			pane's commits window draws, newest first
+			(|aineo-changes-graph|); it says "Older commits not
+			shown" when it left older ones out.
 
                                                    *aineo-config-tabs.padding*
 tabs.padding		A whole number from 0 to 8. Default: `2`

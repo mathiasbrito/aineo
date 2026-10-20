@@ -487,6 +487,20 @@ T['the graph']['is read again when the pane is shown again, where the watch sees
   expect_lines(COMMITS, again)
 end
 
+T['Enter'] = MiniTest.new_set()
+
+T['Enter']['on a graph commit shows that commit’s whole diff'] = function()
+  local top, commits = pane_showing_the_graph('graphpane-enter')
+  expect_lines(COMMITS, whole_graph(top, commits))
+  child.type_keys('jj')
+  expect_cursor({ 4, 0 })
+
+  child.type_keys('<CR>')
+
+  wait_for_shown(1)
+  eq(last_shown_name(), 'aineo://commit/' .. commits.side)
+end
+
 T['the cursor'] = MiniTest.new_set()
 
 T['the cursor']['put on a line of the graph alone goes to the nearest commit line'] = function()
