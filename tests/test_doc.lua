@@ -145,6 +145,8 @@ local TAGS = {
   'aineo-keys',
   'aineo-send',
   'aineo-report',
+  'aineo-report-days',
+  'hl-AineoReportDay',
   'aineo-autostart',
   'aineo-health',
   'g:aineo_startup',

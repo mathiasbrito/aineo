@@ -20,7 +20,7 @@ local M = {}
 ---@field state_directory string where the records are kept
 ---@field working_directory string the editor's working directory, which a report's relative paths are in
 ---@field with_home_expanded? fun(path: string): string a path with its leading `~` replaced by the home folder, as a report's `~/` paths are read; when not given, a path is read as written
----@field schedule_after? fun(delay_ms: integer, callback: fun()): fun() calls `callback`, on the main loop, once `delay_ms` milliseconds have passed, and returns what cancels the wait; when not given, a timer waits (`schedule_with_timer()`)
+---@field schedule_after? fun(delay_ms: integer, callback: fun()): fun() calls `callback`, on the main loop, once `delay_ms` milliseconds have passed, and returns what cancels the wait, which may be called after the wait is over; when not given, a timer waits (`schedule_with_timer()`)
 ---@field open_file? fun(file: string, line: integer?) opens the regular file `file`, an absolute path, that a double-clicked path names, at the line the path names when it names one; when not given, the file opens in the current window
 
 ---@class aineo.report.Home
@@ -446,7 +446,6 @@ function M.new(identity)
   --- come, while it can show reports (`buffer.is_showing()`), and waits for
   --- the midnight after (`wait_for_midnight()`).
   local function name_days_at_midnight()
-    cancel_wait_for_midnight = nil
     if not (report_view and buffer.is_showing(report_view.buffer)) then
       return
     end
