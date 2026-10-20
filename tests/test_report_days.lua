@@ -199,7 +199,8 @@ end
 --- the one that waits.
 ---
 ---@param now string
-local function start_with_timers_it_fires(now)
+---@param state_directory? string the state directory the reports are kept under; a new one when not given
+local function start_with_timers_it_fires(now, state_directory)
   children.restart(child)
   child.lua(
     [[
@@ -221,8 +222,16 @@ local function start_with_timers_it_fires(now)
         end,
       })
     ]],
-    { fixture.directory('report-days-timers-state'), now }
+    { state_directory or fixture.directory('report-days-timers-state'), now }
   )
+end
+
+--- How many milliseconds the wait that is last in the child's `_G.timers`
+--- is for, or nil when no wait was made.
+---
+---@return integer?
+local function waiting_delay_ms()
+  return child.lua_get([[(_G.timers[#_G.timers] or {}).delay_ms]])
 end
 
 T['midnight'] = MiniTest.new_set()
@@ -230,13 +239,36 @@ T['midnight'] = MiniTest.new_set()
 T['midnight']['redraws the separators of a Report left open, and waits for the next'] = function()
   start_with_timers_it_fires('2026-10-19T23:59:30')
   receive('A')
-  eq(child.lua_get([[_G.timers[#_G.timers].delay_ms]]), 30000)
+  eq(waiting_delay_ms(), 30000)
 
   child.lua([[_G.now = '2026-10-20T00:00:00']])
   child.lua([[_G.timers[#_G.timers].callback()]])
 
   eq(report_editor.lines_with_days(child), { '── Yesterday ──', '23:59 [done] A — S' })
-  eq(child.lua_get([[_G.timers[#_G.timers].delay_ms]]), 86400000)
+  eq(waiting_delay_ms(), 86400000)
+end
+
+T['midnight']['is waited for by a Report that opens on saved reports too'] = function()
+  local state_directory = fixture.directory('report-days-reopened-timers-state')
+  start_with_timers_it_fires('2026-10-19T23:59:30', state_directory)
+  receive('A')
+
+  start_with_timers_it_fires('2026-10-19T23:59:40', state_directory)
+  child.lua([[require('aineo.report').report_buffer()]])
+
+  eq(waiting_delay_ms(), 20000)
+end
+
+T['midnight']['leaves a Report that was unloaded by then alone, and waits no more'] = function()
+  start_with_timers_it_fires('2026-10-19T23:59:30')
+  receive('A')
+  child.cmd(('bunload %d'):format(child.lua_get([[require('aineo.report').report_buffer()]])))
+  local timers_before = child.lua_get([[#_G.timers]])
+
+  child.lua([[_G.now = '2026-10-20T00:00:00']])
+  child.lua([[_G.timers[#_G.timers].callback()]])
+
+  eq(child.lua_get([[#_G.timers]]), timers_before)
 end
 
 T['midnight']['is no longer waited for once the Report is wiped'] = function()
@@ -245,7 +277,7 @@ T['midnight']['is no longer waited for once the Report is wiped'] = function()
 
   child.lua([[vim.api.nvim_buf_delete(require('aineo.report').report_buffer(), { force = true })]])
 
-  eq(child.lua_get([[_G.timers[#_G.timers].cancelled]]), true)
+  eq(child.lua_get([[(_G.timers[#_G.timers] or {}).cancelled]]), true)
 end
 
 --- How many timers of the child's loop are open and not closing.
@@ -272,6 +304,16 @@ T['midnight']['leaves no timer of the editor once the Report is wiped'] = functi
   child.lua([[vim.api.nvim_buf_delete(require('aineo.report').report_buffer(), { force = true })]])
 
   eq(timers_open(), timers_before)
+end
+
+T['midnight']['is waited for once, whatever the number of reports, until the Report is wiped'] = function()
+  start_editor({ '2026-10-20T09:05:00', '2026-10-20T09:06:00' })
+  local timers_before = timers_open()
+
+  receive('A')
+  receive('B')
+
+  eq(timers_open(), timers_before + 1)
 end
 
 return T
