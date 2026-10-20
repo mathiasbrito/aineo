@@ -12,6 +12,7 @@ local diffs = require('aineo.changes.diffs')
 local entry_diff = require('aineo.changes.entry_diff')
 local filter = require('aineo.changes.filter')
 local full_context = require('aineo.changes.full_context')
+local graph = require('aineo.changes.graph')
 local head_diff = require('aineo.changes.head_diff')
 local kept = require('aineo.changes.kept')
 local landed = require('aineo.changes.landed')
@@ -34,6 +35,10 @@ local SELECTION_PAUSE_MS = 150
 --- How long the cursor must stay on a line of the files window before the
 --- diff of the file listed there is shown in the middle column.
 local FOLLOW_PAUSE_MS = 120
+
+--- How many commits the commit graph draws when the session's settings name
+--- no limit: as `changes.graph_limit` is by default.
+local DEFAULT_GRAPH_LIMIT = 1000
 
 --- How long a report git does not list yet is matched again at every read,
 --- from the call: 60 s, time enough for an agent that reports a worktree a
@@ -153,6 +158,7 @@ function M.new(label)
   ---@field show_changes_pane? fun() shows the changes pane in the layout's right column, the cursor staying where it is; the pane stays hidden when not given
   ---@field start_timer? fun(milliseconds: integer, act: fun()): fun() starts a timer that runs `act` once, on the main loop, after `milliseconds`, and returns what stops it; a `vim.uv` timer when not given
   ---@field now? fun(): integer the time the pane tells the ages of commits at, in seconds since the epoch; `os.time` when not given
+  ---@field graph_limit? integer how many commits the commit graph draws, at least 1; `DEFAULT_GRAPH_LIMIT` when not given
 
   --- The session, from `begin_session()` on.
   ---@class aineo.changes.Session
@@ -188,6 +194,11 @@ function M.new(label)
   ---@field following_soon boolean whether the pane's showing is followed at the main loop's next turn
   ---@field watch? aineo.git.Watch the running watch, from the pane's first showing; nil once it failed
   ---@field watch_failure? aineo.git.Failure why the watch failed, until one starts again
+  ---@field graph_shown boolean whether the commits window shows the commit graph in place of its sections, which `t` switches
+  ---@field graph? aineo.git.CommitGraph the commit graph, as last read; nil while none was read
+  ---@field graph_failure? aineo.git.Failure why the last read of the commit graph failed, when it did
+  ---@field graph_cursor_unplaced boolean whether the commits window's cursor is still to be put on a commit of the graph, as it is once `t` shows the graph, until the graph lists one in a window
+  ---@field selected_before_graph? aineo.changes.Filter the filter selected when `t` showed the graph, selected again when `t` shows the sections
 
   ---@type aineo.changes.Session|nil
   local session = nil
@@ -311,13 +322,21 @@ function M.new(label)
   end
 
   --- The commits window's page for what the session knows: why it has no
-  --- repository, when it has none, or its commits, under the Reported
-  --- section in the default view (`reported_entries()`).
+  --- repository, when it has none; the commit graph, while it is shown
+  --- (`aineo.changes.graph`), in place of the whole list, the Reported
+  --- section included; or its commits, under the Reported section in the
+  --- default view (`reported_entries()`).
   ---
   ---@return aineo.changes.Page
   local function commits_page()
     if session.absence then
       return lines.no_repository(session.absence, session.settings.directory)
+    end
+    if session.graph_shown and session.repository then
+      return graph.page({
+        graph = session.graph,
+        failure = session.graph_failure or session.watch_failure,
+      })
     end
     return lines.commits_window({
       reports = reported_entries(),
@@ -552,14 +571,32 @@ function M.new(label)
     end
   end
 
+  --- Puts the commits window's cursor on a commit of the graph once the
+  --- graph is written (`aineo.changes.graph`); defined with the keys of the
+  --- graph, as it selects what the cursor is put on.
+  ---@type fun()
+  local place_graph_cursor
+
+  --- Puts the commits window's cursor where the page just written asks:
+  --- on a commit of the graph while it is shown (`place_graph_cursor()`),
+  --- else on the selected filter's line when it is still to be put there
+  --- (`place_commits_cursor()`).
+  local function place_cursor_after_writing()
+    if session.graph_shown then
+      place_graph_cursor()
+    else
+      place_commits_cursor()
+    end
+  end
+
   --- Writes the commits buffer for what the session knows (`commits_page()`,
-  --- `show_page()`), then puts the cursor on the selected filter's line when
-  --- it is still to be put there (`place_commits_cursor()`), keeps the
+  --- `show_page()`), then puts the cursor where the page asks
+  --- (`place_cursor_after_writing()`), keeps the
   --- view the page shows (`keep_view()`) and tells those who watch what the
   --- focused view shows alone (`tell_focused_work()`): every change of the
   --- view is shown here.
   local function show_commits()
-    show_page(buffers.commits, commits_page, place_commits_cursor)
+    show_page(buffers.commits, commits_page, place_cursor_after_writing)
     keep_view()
     tell_focused_work()
   end
@@ -867,10 +904,16 @@ function M.new(label)
   end
 
   --- Selects `selected`, the commits window's cursor to be put on its line
-  --- (`place_commits_cursor()`).
+  --- (`place_commits_cursor()`). While the commit graph is shown, whose
+  --- cursor chooses, it is selected once `t` shows the sections again, in
+  --- place of what was selected before the graph.
   ---
   ---@param selected aineo.changes.Filter
   local function select_filter(selected)
+    if session.graph_shown then
+      session.selected_before_graph = selected
+      return
+    end
     session.selected = selected
     session.cursor_unplaced = true
   end
@@ -1206,6 +1249,7 @@ function M.new(label)
         and not session.selected.worktree
         and not session.selected.landed
         and not session.selected.branch
+        and not session.selected.graph
         and not lists_commit(session.selected, since.commits)
       then
         select_session_work()
@@ -1224,18 +1268,44 @@ function M.new(label)
     show = show_commits,
   })
 
+  --- Reads the commit graph (`aineo.git`'s `commit_graph()`), of as many
+  --- commits as the session's settings say, one read at a time
+  --- (`aineo.changes.serial`), while the commits window shows it, and shows
+  --- it (`show_commits()`) once git answers, unless the graph is no longer
+  --- shown by then. A read that fails keeps the graph last read, with the
+  --- failure, which the window tells above it.
+  local read_graph = serial.one_at_a_time(function(ended)
+    if not (session.graph_shown and session.repository) then
+      ended()
+      return
+    end
+    local limit = session.settings.graph_limit or DEFAULT_GRAPH_LIMIT
+    git.commit_graph(session.repository, limit, function(failure, drawn)
+      ended()
+      session.graph = drawn or session.graph
+      session.graph_failure = failure
+      if session.graph_shown then
+        show_commits()
+      end
+    end, session.settings.git)
+  end)
+
   --- Reads again what `change`, a call of the watch, may have changed: the
   --- other worktrees' commits at every call, as a commit in one of them
   --- moves no branch of the editor's, and their files when the files window
   --- lists one's whole change; the editor's own files when they may differ,
   --- and its commits and files when its branch moved; the editor's own
   --- commits and what landed in the working branch when a reference was
-  --- written, as a fetch does.
+  --- written, as a fetch does; and the commit graph, while it is shown, when
+  --- the branch moved or a reference was written (`read_graph()`).
   ---
   ---@param change aineo.git.RepositoryChange
   local function follow_change(change)
     read_files(change.files_changed or change.branch_moved)
     read_commits(change.branch_moved or change.references_changed)
+    if change.branch_moved or change.references_changed then
+      read_graph()
+    end
   end
 
   --- Tells both windows that `failure` stopped the watch, under the lists
@@ -1281,7 +1351,8 @@ function M.new(label)
   local released = false
 
   --- Starts what follows the repository once the pane has been shown: the
-  --- watch, when none runs, and a read of each list; does nothing before the
+  --- watch, when none runs, and a read of each list, the commit graph's
+  --- while it is shown (`read_graph()`); does nothing before the
   --- repository is found or the pane first shown, nor once the home has been
   --- let go, nor once the editor is quitting (`v:exiting`): a look answered
   --- then, while a later `VimLeavePre` waits, starts no watch and no read
@@ -1295,6 +1366,7 @@ function M.new(label)
     end
     read_files(true)
     read_commits(true)
+    read_graph()
   end
 
   --- `path` with every symbolic link it leads through resolved, or as it is
@@ -1734,6 +1806,8 @@ function M.new(label)
       shows_reported = false,
       reports = {},
       waiting = {},
+      graph_shown = false,
+      graph_cursor_unplaced = false,
     }
     local group = vim.api.nvim_create_augroup(own_group('aineo_changes'), {})
     vim.api.nvim_create_autocmd({ 'BufWritePost', 'FileWritePost', 'FileAppendPost' }, {
@@ -3359,6 +3433,170 @@ function M.new(label)
     })
   end
 
+  --- The keys of the commit graph that move the cursor, each with the line
+  --- it goes to from a line of the graph's page, given a count
+  --- (`aineo.changes.graph`).
+  ---@type { key: string, target: fun(page: aineo.changes.Page, line: integer, count: integer): integer|nil, desc: string }[]
+  local GRAPH_MOVES = {
+    {
+      key = 'j',
+      target = graph.commit_line_below,
+      desc = 'aineo: move to the next commit line of the commit graph',
+    },
+    {
+      key = 'k',
+      target = graph.commit_line_above,
+      desc = 'aineo: move to the previous commit line of the commit graph',
+    },
+  }
+
+  --- Moves the cursor of the current window, showing the commits buffer, to
+  --- the line `target` gives from the line it is on with the count typed,
+  --- one when none was; leaves it where it is when `target` gives none.
+  ---
+  ---@param target fun(page: aineo.changes.Page, line: integer, count: integer): integer|nil
+  local function move_in_graph(target)
+    local page = pages.page_of(buffers.commits)
+    local line = page and target(page, vim.api.nvim_win_get_cursor(0)[1], vim.v.count1)
+    if line then
+      vim.api.nvim_win_set_cursor(0, { line, 0 })
+    end
+  end
+
+  --- Maps `j` and `k` in `buffer`, the commits buffer, in Normal mode, to
+  --- move from commit line to commit line of the graph (`GRAPH_MOVES`,
+  --- `move_in_graph()`) while the graph is shown, and unmaps them while it
+  --- is not, so that they are Vim's own over the sections.
+  ---
+  ---@param buffer integer
+  local function map_graph_moves(buffer)
+    for _, move in ipairs(GRAPH_MOVES) do
+      if session.graph_shown then
+        vim.keymap.set('n', move.key, function()
+          move_in_graph(move.target)
+        end, { buffer = buffer, desc = move.desc })
+      else
+        pcall(vim.keymap.del, 'n', move.key, { buffer = buffer })
+      end
+    end
+  end
+
+  --- Puts the cursor of `window`, showing the commits buffer while the graph
+  --- is shown, on the commit line nearest the line it is on
+  --- (`aineo.changes.graph`'s `nearest_commit_line()`): it never rests on a
+  --- line of the graph alone, nor on a note. Leaves it where it is on a page
+  --- that lists no commit.
+  ---
+  ---@param window integer
+  local function keep_on_a_commit_line(window)
+    local page = pages.page_of(buffers.commits)
+    local cursor = vim.api.nvim_win_get_cursor(window)
+    local line = page and graph.nearest_commit_line(page, cursor[1])
+    if line and line ~= cursor[1] then
+      vim.api.nvim_win_set_cursor(window, { line, 0 })
+    end
+  end
+
+  --- Makes the cursor of the commits buffer `buffer` go to the nearest commit
+  --- line whenever it moves while the graph is shown — a click, `G`, a
+  --- search — so that it never rests on a line of the graph alone
+  --- (`keep_on_a_commit_line()`).
+  ---
+  ---@param buffer integer
+  local function keep_cursor_on_commits(buffer)
+    vim.api.nvim_create_autocmd('CursorMoved', {
+      buffer = buffer,
+      desc = 'aineo: keep the cursor of the commit graph on a commit line',
+      callback = function()
+        if session and session.graph_shown then
+          keep_on_a_commit_line(vim.api.nvim_get_current_win())
+        end
+      end,
+    })
+  end
+
+  --- Selects again the filter selected when `t` showed the graph, the
+  --- commits window's cursor to be put on its line (`select_filter()`), and
+  --- reads the files window for it when the graph chose another meanwhile.
+  local function choose_again_before_graph()
+    local before = session.selected_before_graph or filter.SESSION_WORK
+    session.selected_before_graph = nil
+    local chose_another = not filter.same(before, session.selected)
+    select_filter(before)
+    if chose_another then
+      read_files(true)
+    end
+  end
+
+  --- Switches the commits window between its sections and the commit graph
+  --- (`aineo.changes.graph`), for the home's life, and writes it again, with
+  --- `j` and `k` mapped to the graph's moves while it shows
+  --- (`map_graph_moves()`). The graph is read anew each time it is shown
+  --- (`read_graph()`), the cursor to be put on a commit
+  --- (`place_graph_cursor()`); the sections are shown with the filter
+  --- selected before the graph selected again (`choose_again_before_graph()`).
+  --- Does nothing before the session's repository is found.
+  local function toggle_graph()
+    if not (session and session.repository) then
+      return
+    end
+    session.graph_shown = not session.graph_shown
+    map_graph_moves(buffers.commits)
+    if session.graph_shown then
+      session.selected_before_graph = session.selected
+      session.graph_cursor_unplaced = true
+      read_graph()
+    else
+      choose_again_before_graph()
+    end
+    show_commits()
+  end
+
+  --- The line of `page`, the commit graph the commits buffer shows, that
+  --- the cursor goes to once `t` shows it: the line of the commit the
+  --- selected filter names, when the graph lists it, else the first commit
+  --- line; nil while the graph lists none.
+  ---
+  ---@param page aineo.changes.Page
+  ---@return integer|nil
+  local function graph_line_chosen(page)
+    local selected = session.selected
+    local line = selected.kind == 'commit'
+      and pages.line_of(buffers.commits, filter.key(filter.of_graph_commit(selected.commit)))
+    return line or graph.commit_line_below(page, 0, 1)
+  end
+
+  --- Puts the cursor of each window showing the commits buffer on the line
+  --- `graph_line_chosen()` gives, while the session says it is still to be
+  --- put there (`aineo.changes.Session`'s `graph_cursor_unplaced`), the
+  --- graph lists a commit and a window shows it; and selects that commit,
+  --- whose files the files window then lists (`select_filter_at_cursor_of()`).
+  place_graph_cursor = function()
+    local page = pages.page_of(buffers.commits)
+    local windows = vim.fn.win_findbuf(buffers.commits)
+    local line = session.graph_cursor_unplaced and page and graph_line_chosen(page)
+    if not line or #windows == 0 then
+      return
+    end
+    for _, window in ipairs(windows) do
+      vim.api.nvim_win_set_cursor(window, { line, 0 })
+    end
+    session.graph_cursor_unplaced, session.cursor_unplaced = false, false
+    select_filter_at_cursor_of(windows[1])
+  end
+
+  --- Maps `t` in `buffer`, the commits buffer, in Normal mode, to switch
+  --- between the sections and the commit graph (`toggle_graph()`).
+  ---
+  ---@param buffer integer
+  local function map_toggle_graph(buffer)
+    vim.keymap.set('n', 't', toggle_graph, {
+      buffer = buffer,
+      nowait = true,
+      desc = 'aineo: show the commit graph in the commits window, or its sections again',
+    })
+  end
+
   --- Maps `<BS>` in `buffer`, the files buffer, in Normal mode, to move the
   --- cursor back to the commits window (`move_to_commits_window()`).
   ---
@@ -3424,7 +3662,11 @@ function M.new(label)
   --- time both lists are read again, once for every showing in one turn of
   --- the main loop (`pane_shown()`). A commits buffer made anew selects
   --- *Session work* again, or the whole change of the worktree or branch shown alone,
-  --- its cursor to be put there when it is shown (`select_view_default()`).
+  --- its cursor to be put there when it is shown (`select_view_default()`);
+  --- while the commit graph is shown, it shows the graph, its `j` and `k`
+  --- mapped (`map_graph_moves()`), its cursor to be put on a commit
+  --- (`place_graph_cursor()`). `t` in it switches between the sections and
+  --- the graph (`toggle_graph()`).
   ---
   ---@return { files: integer, commits: integer }
   function home.pane_buffers()
@@ -3439,7 +3681,12 @@ function M.new(label)
       buffers.commits = pane_buffer(own_name('aineo://changes-commits'), commits_page)
       select_filters_from(buffers.commits)
       map_move_to_files(buffers.commits)
-      if session then
+      map_toggle_graph(buffers.commits)
+      keep_cursor_on_commits(buffers.commits)
+      if session and session.graph_shown then
+        map_graph_moves(buffers.commits)
+        session.graph_cursor_unplaced = true
+      elseif session then
         select_view_default()
       end
     end
