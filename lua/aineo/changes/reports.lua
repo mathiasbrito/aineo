@@ -58,17 +58,24 @@ end
 
 --- The report a worktree or branch keeps when `again` is reported of it
 --- after `before`, nil when nothing was: an agent's call replaces whatever
---- was before, its base and label with it; a report of aineo's own hook
---- keeps the one before, the agent's or the hook's own first.
+--- was before, its base, label and time with it; a report of aineo's own
+--- hook keeps the one before, the agent's or the hook's own first — unless
+--- it names another branch than the one the work was on when `before` was
+--- reported (`on_branch`), a branch made in that worktree since: then the
+--- work takes the hook's branch, base and time, and keeps its kind and
+--- label.
 ---
 ---@param before aineo.changes.Report|nil
 ---@param again aineo.changes.Report
 ---@return aineo.changes.Report
 function M.merged(before, again)
-  if before and again.by_hook then
-    return before
+  if not (before and again.by_hook) then
+    return again
   end
-  return again
+  if again.on_branch and again.on_branch ~= before.on_branch then
+    return vim.tbl_extend('force', again, { kind = before.kind, label = before.label })
+  end
+  return before
 end
 
 return M

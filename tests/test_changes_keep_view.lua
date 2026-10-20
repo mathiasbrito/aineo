@@ -536,6 +536,33 @@ T['a restart']['shows each report again with its base, label and age, its work r
   })
 end
 
+--- How long a case watches a pane that should not change, in
+--- milliseconds: far longer than a read of the other worktrees takes.
+local KEPT_STILL_MS = 3000
+
+T['a restart']['keeps the branch each report was on, so a hook’s report on it changes nothing'] = function()
+  local state = fixture.directory('keep-view-report-branch-state')
+  local top = start_on_repository('keep-view-report-branch', state)
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  local one = commit_only(agent, 'one.txt', 'one', 'One')
+  report('module', { kind = 'worktree', path = agent, base = one, label = 'task' })
+  expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
+  restart_on(top, SESSION_A, state)
+  expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
+
+  report('module', { kind = 'worktree', path = agent, base = base, by_hook = true })
+  wait_until('the hook’s report matched', function()
+    return child.lua_get('#_G.timers == 1 and _G.timers[1].stopped')
+  end)
+
+  local still_from_one = bare_worktree('agent-1', 'feature/a')
+  vim.wait(KEPT_STILL_MS, function()
+    return not vim.deep_equal(pane_lines('module', 'commits'), still_from_one)
+  end, 20)
+  eq(pane_lines('module', 'commits'), still_from_one)
+end
+
 T['a restart']['keeps the worktree picked behind the reported set, shown alone once the set is gone'] = function()
   local state = fixture.directory('keep-view-behind-state')
   local top = start_with_two_worktrees('keep-view-behind', state)
@@ -708,6 +735,10 @@ local MALFORMED_RECORDS = {
   {
     'a member whose time is no whole number',
     '{"repository":"<repository>","focused":true,"shows_reported":true,"reported":[{"top":"<worktree>","at":1.5}]}',
+  },
+  {
+    'a member on a branch with an empty name',
+    '{"repository":"<repository>","focused":true,"shows_reported":true,"reported":[{"top":"<worktree>","on_branch":""}]}',
   },
   {
     'a member whose hook flag is no boolean',

@@ -485,6 +485,7 @@ function M.kept_view_of(repository, view)
         label = report.label,
         at = report.at,
         by_hook = report.by_hook,
+        on_branch = report.on_branch,
       }
       if member.worktree then
         kept.top = member.worktree.top
@@ -514,7 +515,8 @@ end
 --- What was reported of the members `picks`, the reported set as it was
 --- kept, by each member's key (`M.member_key()`): its kind as reported, or
 --- the kind of the member for a record kept before reports kept theirs, and
---- its base, label, time and whether aineo's hook made it, as kept.
+--- its base, label, time, whether aineo's hook made it and the branch the
+--- work was on, as kept.
 ---
 ---@param picks aineo.changes.KeptReport[]
 ---@return table<string, aineo.changes.Report>
@@ -527,6 +529,7 @@ local function reports_of(picks)
       label = pick.label,
       at = pick.at,
       by_hook = pick.by_hook,
+      on_branch = pick.on_branch,
     }
   end
   return reports
