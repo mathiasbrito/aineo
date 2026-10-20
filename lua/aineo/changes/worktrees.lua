@@ -32,6 +32,7 @@ M.NONE = { sections = {} }
 ---@class aineo.changes.WorktreeRead: aineo.changes.CommitBaseRead
 ---@field before aineo.changes.OtherWorktrees what the window knew of the other worktrees before this read
 ---@field read_list aineo.changes.ReadList reads the window's list for a worktree
+---@field base_of? fun(top: string): string|nil the base the worktree at `top` is read from in place of the one `read_base()` reads, when it gives one: the commit an agent reported the worktree was made from
 
 --- What a read of the other worktrees, for one window, starts from.
 ---@class aineo.changes.WorktreesRead: aineo.changes.WorktreeRead
@@ -178,8 +179,9 @@ local function read_base(read, sources, repository, done)
   end, read.git)
 end
 
---- Reads `worktree`'s list (`read.read_list`) from its base
---- (`read_base()`), and calls `done(section)`; when the list cannot be
+--- Reads `worktree`'s list (`read.read_list`) from its base — the one
+--- `read.base_of` gives it, else the one `read_base()` reads — and calls
+--- `done(section)`; when the list cannot be
 --- read, the section says why and keeps what the window last listed for the
 --- worktree (`unread_section()`), if anything — unless the worktree's
 --- directory is gone by then, removed while it was read, when it calls
@@ -211,21 +213,22 @@ local function read_section(read, worktree, sources, done)
         done(nil)
         return
       end
-      read_base(
-        read,
-        sources,
-        repository,
-        or_failed(function(base)
-          read.read_list(
-            repository,
-            base,
-            or_failed(function(listed)
-              section.repository, section.base, section.listed = repository, base, listed
-              done(section)
-            end)
-          )
-        end)
-      )
+      local read_from = or_failed(function(base)
+        read.read_list(
+          repository,
+          base,
+          or_failed(function(listed)
+            section.repository, section.base, section.listed = repository, base, listed
+            done(section)
+          end)
+        )
+      end)
+      local given = read.base_of and read.base_of(worktree.top)
+      if given then
+        read_from(nil, given)
+      else
+        read_base(read, sources, repository, read_from)
+      end
     end),
     read.git
   )

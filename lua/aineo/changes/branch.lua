@@ -49,7 +49,8 @@ end
 ---@class aineo.changes.BranchSection
 ---@field name string the branch's name
 ---@field tip? string the full id of the commit the branch named when it was last read
----@field base? string the branch's base at that read: its merge base with the commit the working branch names, else with the editor's comparison commit; nil when neither gave one, which counts every file and commit of the branch
+---@field base? string the branch's base at that read: the base an agent reported for it, else its merge base with the commit the working branch names, else with the editor's comparison commit; nil when none gave one, which counts every file and commit of the branch
+---@field reported_base? boolean whether `base` is the one an agent reported
 ---@field commits? aineo.git.Commit[] the commits reachable from `tip` and not from `base`, newest first
 ---@field names_no_commit? boolean whether the name named no commit when it was read: the branch was deleted or renamed
 ---@field failure? aineo.git.Failure why the last read failed, when it did; the other fields are then what the window knew before
@@ -71,11 +72,13 @@ end
 ---@class aineo.changes.BranchRead: aineo.changes.CommitBaseRead
 ---@field name string the branch's name
 ---@field before? aineo.changes.BranchSection what the commits window knew before this read
+---@field base? string the base an agent reported for the branch, read from in place of the one `worktrees.read_base_of()` reads
 
 --- Reads the branch `read.name`: the commit it names now (`refs/heads/`
 --- and its name, never another reference of the same name), its base
---- (`worktrees.read_base_of()`), and the commits of the tip the base cannot
---- reach, every commit of it when there is no base. Calls `done(section)`:
+--- (`read.base`, else `worktrees.read_base_of()`), and the commits of the
+--- tip the base cannot reach, every commit of it when there is no base.
+--- Calls `done(section)`:
 --- `names_no_commit` when the name names no commit. When a read fails, the
 --- section is what the window knew before of the same branch, if anything,
 --- with the `failure`. Nothing is kept: every call reads the tip and the
@@ -95,7 +98,7 @@ function M.read(read, done)
     elseif not tip then
       done({ name = read.name, names_no_commit = true })
     else
-      worktrees.read_base_of(read, tip, function(base_failure, base)
+      local function read_from(base_failure, base)
         if base_failure then
           failed(base_failure)
           return
@@ -104,10 +107,21 @@ function M.read(read, done)
           if commits_failure then
             failed(commits_failure)
           else
-            done({ name = read.name, tip = tip, base = base, commits = commits })
+            done({
+              name = read.name,
+              tip = tip,
+              base = base,
+              reported_base = read.base ~= nil or nil,
+              commits = commits,
+            })
           end
         end, read.git)
-      end)
+      end
+      if read.base then
+        read_from(nil, read.base)
+      else
+        worktrees.read_base_of(read, tip, read_from)
+      end
     end
   end, read.git)
 end

@@ -108,6 +108,7 @@ end
 ---@field commit? aineo.git.Commit
 ---@field filter? aineo.changes.Filter the filter a commits window line selects, or the filter a file is listed under
 ---@field worktree? aineo.changes.WorktreeSection the worktree other than the editor's that lists it, or whose files the entry's filter lists; nil for the editor's own
+---@field picks? aineo.changes.ScopeItem for a line of the Reported section, the worktree or branch Enter on it shows alone
 
 --- A colour a line shows: its bytes from `first_column`, counted from 0, to
 --- `end_column`, excluded, in the highlight group `group`.
@@ -623,6 +624,146 @@ end
 ---@field worktree? aineo.changes.WorktreeSection
 ---@field branch? aineo.changes.BranchSection
 
+--- What an agent reported of a worktree or a branch, beside the member git
+--- listed for it (`aineo.changes.ReportedEntry`).
+---@class aineo.changes.Report
+---@field kind 'worktree'|'branch' the kind of work as it was reported
+---@field base? string the full id of the commit the work was made from; nil for a report made before reports gave one
+---@field label? string the agent's short name for the work's task
+---@field at? integer when the report was taken, in seconds since the epoch; nil for a report kept before reports were timed
+---@field by_hook? boolean whether aineo's own hook made the report, rather than the agent's call
+
+--- One report of the reported set: the worktree or branch git listed for
+--- it, and what was reported of it.
+---@class aineo.changes.ReportedEntry
+---@field member aineo.changes.ScopeMember
+---@field report aineo.changes.Report
+
+--- What the commits window's Reported section is headed.
+M.REPORTED_HEADING = 'Reported'
+
+--- What a report's line says in place of the base of a report that gave none.
+local UNKNOWN_BASE = '?'
+
+--- How `member`, a worktree or a branch of the reported set, is named in its
+--- report's line: the branch the worktree is on, or the worktree's folder
+--- when its `HEAD` is detached; the branch's name; each quoted as a path is
+--- (`M.quoted_path()`).
+---
+---@param member aineo.changes.ScopeMember
+---@return string
+function M.reported_name(member)
+  if member.worktree then
+    return M.quoted_path(member.worktree.branch or vim.fs.basename(member.worktree.top))
+  end
+  return M.quoted_path(member.branch.name)
+end
+
+--- The abbreviated base of `report`, or `?` when it gave none.
+---
+---@param report aineo.changes.Report
+---@return string
+local function reported_base(report)
+  return report.base and report.base:sub(1, M.ABBREVIATED_ID_LENGTH) or UNKNOWN_BASE
+end
+
+--- The label of `report` as a line shows it, each control character a
+--- space; nil when it has none.
+---
+---@param report aineo.changes.Report
+---@return string|nil
+local function shown_label(report)
+  return report.label and (report.label:gsub('%c', ' '))
+end
+
+--- The choice of the list `s` offers, and of Enter on its line in the
+--- Reported section, that shows `reported`'s work alone: its worktree by
+--- its top level, or its branch by its name, as `[reported] <name> from
+--- <base>`, then two spaces and its label when it has one.
+---
+---@param reported aineo.changes.ReportedEntry
+---@return aineo.changes.ScopeItem
+function M.report_item(reported)
+  local text = ('[reported] %s from %s'):format(
+    M.reported_name(reported.member),
+    reported_base(reported.report)
+  )
+  local label = shown_label(reported.report)
+  if label then
+    text = text .. '  ' .. label
+  end
+  local member = reported.member
+  if member.worktree then
+    return { top = member.worktree.top, text = text }
+  end
+  return { branch = member.branch.name, text = text }
+end
+
+--- The row of `reported`, one report of the reported set, at the time `now`:
+--- its kind, its name (`M.reported_name()`), `from` and its base
+--- abbreviated, or `?` without one, its label when it has one, each control
+--- character of it shown as a space, and its age
+--- (`aineo.changes.author_column`'s `age()`) when it was timed; the base
+--- in the group of commit ids, the label and the age in theirs, the rest
+--- in none. It lists the whole change of its worktree or branch, and the
+--- choice Enter on it picks (`M.report_item()`).
+---
+---@param reported aineo.changes.ReportedEntry
+---@param now integer seconds since the epoch
+---@return aineo.changes.Row
+local function report_row(reported, now)
+  local report = reported.report
+  local member = reported.member
+  local listed_under = member.worktree and filter.of_worktree(member.worktree)
+    or filter.of_branch(member.branch.name)
+  local entry = {
+    key = filter.key(listed_under),
+    filter = listed_under,
+    worktree = member.worktree,
+    picks = M.report_item(reported),
+  }
+  local line = ('%s %s from '):format(report.kind, M.reported_name(reported.member))
+  local line_colours = {}
+  local function add(text, group)
+    if group then
+      table.insert(
+        line_colours,
+        { first_column = #line, end_column = #line + #text, group = group }
+      )
+    end
+    line = line .. text
+  end
+  add(reported_base(report), report.base and colours.COMMIT_ID_GROUP)
+  local label = shown_label(report)
+  if label then
+    add(' ')
+    add(label, colours.REPORTED_LABEL_GROUP)
+  end
+  if report.at then
+    add(' ')
+    add(author_column.age(report.at, now), colours.REPORTED_AGE_GROUP)
+  end
+  return { line = line, colours = line_colours, entry = entry }
+end
+
+--- The rows of the Reported section, for `reports`, in their order: its
+--- heading, whole in its group, and a row per report (`report_row()`); none
+--- without a report.
+---
+---@param reports aineo.changes.ReportedEntry[]|nil
+---@param now integer seconds since the epoch
+---@return aineo.changes.Row[]
+local function reported_rows(reports, now)
+  if not reports or #reports == 0 then
+    return {}
+  end
+  local rows = { whole_line(M.REPORTED_HEADING, colours.REPORTED_HEADING_GROUP) }
+  for _, reported in ipairs(reports) do
+    table.insert(rows, report_row(reported, now))
+  end
+  return rows
+end
+
 --- What the commits window knows.
 ---@class aineo.changes.CommitsView
 ---@field since? aineo.git.CommitsSince the session's commits, as last read
@@ -632,6 +773,7 @@ end
 ---@field landed? aineo.changes.Landed what the window knows of the working branch, none when there is no working branch or it was not read
 ---@field worktrees? aineo.changes.OtherWorktrees what the window knows of the other worktrees, none when not given
 ---@field scope? aineo.changes.ScopeMember[] the worktrees and branches the window shows alone, each under its heading, in the order given; none for the default view
+---@field reports? aineo.changes.ReportedEntry[] the reports the default view lists first, in the order given; none when not given
 ---@field now integer the time the ages of commits are told at, in seconds since the epoch
 
 --- The rows of the editor's own worktree in the commits window below the
@@ -743,10 +885,16 @@ local function branch_rows(branch, now)
   )
 end
 
+--- What a branch's heading says after its name when the branch is read
+--- from the base an agent reported: no worktree has it checked out, so it
+--- shows its commits and nothing uncommitted.
+local COMMITS_ONLY = ' (no worktree: commits only)'
+
 --- The rows of the members `scope` names, shown alone: each one's heading,
 --- whole in the group of filters — a worktree's (`heading_row()`) or a
---- branch's, listing the filter of its whole change (`filter_row()`) — then
---- its rows (`section_rows()`, `branch_rows()`).
+--- branch's, listing the filter of its whole change (`filter_row()`), and
+--- saying `COMMITS_ONLY` when it is read from a reported base — then its
+--- rows (`section_rows()`, `branch_rows()`).
 ---
 ---@param scope aineo.changes.ScopeMember[]
 ---@param now integer seconds since the epoch
@@ -758,7 +906,12 @@ local function scope_rows(scope, now)
       table.insert(rows, heading_row(member.worktree, colours.FILTER_GROUP))
       vim.list_extend(rows, section_rows(member.worktree, now))
     else
-      table.insert(rows, filter_row(filter.of_branch(member.branch.name)))
+      local heading = filter_row(filter.of_branch(member.branch.name))
+      if member.branch.reported_base then
+        heading.line = heading.line .. COMMITS_ONLY
+        heading.colours[1].end_column = #heading.line
+      end
+      table.insert(rows, heading)
       vim.list_extend(rows, branch_rows(member.branch, now))
     end
   end
@@ -766,8 +919,9 @@ local function scope_rows(scope, now)
 end
 
 --- The commits window's page for `view`: for a view with a scope, the
---- worktrees of the scope alone (`scope_rows()`); else the editor's own
---- worktree's rows first, under no heading (`own_commit_rows()`), then what
+--- worktrees of the scope alone (`scope_rows()`); else the Reported
+--- section, when there are reports (`reported_rows()`), then the editor's
+--- own worktree's rows, under no heading (`own_commit_rows()`), then what
 --- landed in the working branch under its heading (`landed_rows()`), then
 --- each other worktree's (`worktree_rows()`). The line saying a read failed
 --- is a failure (`failure_line()`), a commit's line shows its own colours
@@ -779,7 +933,8 @@ function M.commits_window(view)
   if view.scope then
     return page_of(scope_rows(view.scope, view.now))
   end
-  local rows = own_commit_rows(view)
+  local rows = reported_rows(view.reports, view.now)
+  vim.list_extend(rows, own_commit_rows(view))
   vim.list_extend(rows, landed_rows(view.landed, view.now))
   vim.list_extend(rows, worktree_rows(view.worktrees, view.now))
   return page_of(rows)
