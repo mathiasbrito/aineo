@@ -37,6 +37,15 @@ and its state:
 +----------------+  | Session work   |                   | shell          |
                     | a1b2c3 Fix ... |                   |                |
                     +----------------+                   +----------------+
+
+ \e  explorer
++--------------------+
+| ~/project  ·  ...  |
+| ▾ • lua/           |
+|     M init.lua     |
+| ▸   tests/         |
+|   ? notes.md       |
++--------------------+
 ```
 
 - **Tab line.** One title for each tab page, `<number>: <session name>`, and
@@ -138,8 +147,9 @@ Each prefix key is a `<Plug>` mapping too, such as `<Plug>(aineo-send)`, and
 each action is a subcommand of `:Aineo`, such as `:Aineo send`. The changes
 pane's own keys (`s`, Enter, `j`/`k`, `l`, `h`, `gf`, `<S-CR>` and `F`) are
 keys of the pane's buffers alone, with no prefix, no `<Plug>` mapping and no
-subcommand, and so are the explorer's. `\` is also Neovim's default leader; `:checkhealth aineo` warns
-when the leader or a mapping of yours collides with aineo's keys.
+subcommand, and so are the explorer's. `\` is also Neovim's default leader;
+`:checkhealth aineo` warns when the leader or a mapping of yours collides
+with aineo's keys.
 
 Each session aineo starts is kept for its folder: the next start there
 resumes it.
