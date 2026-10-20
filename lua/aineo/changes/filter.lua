@@ -13,6 +13,7 @@ local M = {}
 ---@field branch? string the local branch's name, for a `branch` filter and for a `commit` filter of one of its commits; nil for every other
 ---@field landed? string the working branch's name, for a `landed` filter and for a `commit` filter of one of the commits that landed in it; nil for every other
 ---@field worktree? aineo.changes.WorktreeSection the worktree other than the editor's that the files are read in, for a `worktree` filter and for a `commit` filter of one of its commits; nil for the editor's own
+---@field graph? true for a `commit` filter of a commit of the commit graph; nil for every other
 
 --- The filter of the files that differ from `HEAD`, staged or not, and the
 --- untracked ones.
@@ -90,6 +91,16 @@ function M.of_branch_commit(branch, commit)
   return { kind = 'commit', commit = commit, branch = branch }
 end
 
+--- The filter of the files `commit` changed, a commit of the commit graph:
+--- another filter than the session's own commit of the same id, as the
+--- graph lists every branch's commits, the session's or not.
+---
+---@param commit aineo.git.Commit
+---@return aineo.changes.Filter
+function M.of_graph_commit(commit)
+  return { kind = 'commit', commit = commit, graph = true }
+end
+
 --- `selected`, a filter of another worktree, as that worktree's section
 --- `worktree` now reads: the same filter, told by the same key.
 ---
@@ -109,7 +120,8 @@ end
 --- the commit's id, or two such bytes and the kind for the worktree's
 --- whole change. A local branch's whole change and its commits are told
 --- by that byte, `branch`, a second such byte and the branch's name, then,
---- for a commit, a third and its id.
+--- for a commit, a third and its id. A commit of the commit graph is told
+--- by that byte, `graph`, a second such byte and its id.
 ---
 ---@param filter aineo.changes.Filter
 ---@return string
@@ -120,7 +132,9 @@ function M.key(filter)
   local worktree = filter.worktree and filter.worktree.top .. '\0' or ''
   if filter.kind == 'commit' then
     local listed_under = filter.landed and '\0landed\0' or ''
-    if filter.branch then
+    if filter.graph then
+      listed_under = '\0graph\0'
+    elseif filter.branch then
       listed_under = '\0branch\0' .. filter.branch .. '\0'
     end
     return worktree .. listed_under .. filter.commit.id
