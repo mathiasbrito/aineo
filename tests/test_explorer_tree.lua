@@ -306,4 +306,95 @@ T['the header']['names the toggles turned and the filter'] = function()
   eq(lines[1], 'project  ·  ignored shown  ·  dotfiles hidden  ·  filter “x”')
 end
 
+T['the colours'] = MiniTest.new_set()
+
+--- The spans `tree.render()` gives for the folders `paths` make, with the
+--- entries `ignored` git ignores, under `shown`, by line, the header's line
+--- first.
+---
+---@param paths string[]
+---@param ignored? string[]
+---@param shown aineo.explorer.View
+---@return table<integer, aineo.explorer.Span[]>
+local function spans(paths, ignored, shown)
+  return tree.render(tree.from_paths(paths, ignored), shown).spans
+end
+
+T['the colours']['span a changed file’s mark and name in the kind of its change'] = function()
+  local shown = view({ marks = { ['README.md'] = 'M' } })
+
+  local by_line = spans({ 'README.md' }, nil, shown)
+
+  eq(by_line, { [2] = { { first_column = 2, end_column = 13, role = 'modified' } } })
+end
+
+T['the colours']['name the kind of each mark git gives'] = MiniTest.new_set({
+  parametrize = {
+    { 'A', 'added' },
+    { 'M', 'modified' },
+    { 'D', 'deleted' },
+    { 'R', 'renamed' },
+    { 'T', 'type_changed' },
+    { '?', 'untracked' },
+  },
+})
+
+T['the colours']['name the kind of each mark git gives']['by its letter'] = function(mark, role)
+  local by_line = spans({ 'a.txt' }, nil, view({ marks = { ['a.txt'] = mark } }))
+
+  eq(by_line[2][1].role, role)
+end
+
+T['the colours']['span a file git does not see changed in none'] = function()
+  eq(spans({ 'a.txt' }, nil, view()), {})
+end
+
+T['the colours']['span a folder’s sign and name, not the blank where its mark goes'] = function()
+  local by_line = spans({ 'src/main.lua' }, nil, view({ open = { src = true } }))
+
+  eq(by_line[2], {
+    { first_column = 0, end_column = 3, role = 'folder' },
+    { first_column = 6, end_column = 10, role = 'folder' },
+  })
+end
+
+T['the colours']['span a folder holding a change with its dot apart, from the indent on'] = function()
+  local shown = view({ open = { src = true }, marks = { ['src/lib/util.lua'] = 'M' } })
+
+  local by_line = spans({ 'src/lib/util.lua' }, nil, shown)
+
+  eq(by_line[3], {
+    { first_column = 2, end_column = 5, role = 'folder' },
+    { first_column = 6, end_column = 9, role = 'changed_folder' },
+    { first_column = 10, end_column = 14, role = 'folder' },
+  })
+end
+
+T['the colours']['span a folder’s own mark in its kind, its name in the folder’s'] = function()
+  local by_line = spans({ 'nested/' }, nil, view({ marks = { nested = '?' } }))
+
+  eq(by_line[2], {
+    { first_column = 0, end_column = 3, role = 'folder' },
+    { first_column = 4, end_column = 5, role = 'untracked' },
+    { first_column = 6, end_column = 13, role = 'folder' },
+  })
+end
+
+T['the colours']['span an entry git ignores whole, whatever its mark'] = function()
+  local shown = view({ show_ignored = true, marks = { ['out.log'] = '?' } })
+
+  local by_line = spans({ 'a.txt' }, { 'build/', 'out.log' }, shown)
+
+  eq(by_line, {
+    [2] = { { first_column = 0, end_column = #'▸   build/', role = 'ignored' } },
+    [4] = { { first_column = 0, end_column = #'    out.log', role = 'ignored' } },
+  })
+end
+
+T['the colours']['span nothing on the header or the line that says no file matches'] = function()
+  local by_line = spans({ 'a.txt' }, nil, view({ filter = 'zzz' }))
+
+  eq(by_line, {})
+end
+
 return T
