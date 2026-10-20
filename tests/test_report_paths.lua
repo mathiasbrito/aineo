@@ -217,14 +217,6 @@ T['a path']['that names a symbolic link to a file is drawn'] = function()
   eq(drawn_paths(), { 'link.lua' })
 end
 
-T['a path']['that starts with ~ is looked up in a directory named ~ in the working directory'] = function()
-  start_editor({ '2026-09-24T09:05:00' })
-
-  receive_details('See ~/x.lua now')
-
-  eq(drawn_paths(), { '~/x.lua' })
-end
-
 T['a stop'] = MiniTest.new_set({
   parametrize = {
     { '\1' },
@@ -652,6 +644,39 @@ T['a double-click']['on a path with a line']['opens its file in the file column,
 
   wait_until_current_file_is(in_project('notes.txt'))
   eq(where_the_file_opened(), opened_in_file_column(in_project('notes.txt'), 3))
+end
+
+--- Makes the child's home folder a folder of its own holding `only-home.txt`,
+--- four lines long, and returns its path. The Report's working directory has
+--- a directory named `~` holding `x.lua`, which the home folder lacks.
+---
+---@return string home
+local function use_home_with_only_home_txt()
+  local home = fixture.directory('report-paths-home')
+  fixture.write('report-paths-home/only-home.txt', { 'one', 'two', 'three', 'four' })
+  child.lua('vim.env.HOME = ...', { home })
+  return home
+end
+
+T['a path']['that starts with ~/ is looked up in the home folder, not in a directory named ~'] = function()
+  open_layout()
+  use_home_with_only_home_txt()
+
+  receive_details('See ~/only-home.txt and ~/x.lua now')
+
+  eq(drawn_paths(), { '~/only-home.txt' })
+end
+
+T['a double-click']['on a ~ path with a line opens the file of the home folder at the line'] = function()
+  open_layout()
+  local home = use_home_with_only_home_txt()
+  receive_details('See ~/only-home.txt:2 now')
+  PLACES_A_CLICK_COMES_FROM['the Report in Normal mode']()
+
+  double_click_in_report(2, 14)
+
+  wait_until_current_file_is(vim.fs.joinpath(home, 'only-home.txt'))
+  eq(where_the_file_opened(), opened_in_file_column(vim.fs.joinpath(home, 'only-home.txt'), 2))
 end
 
 T['a double-click']['on a path with no line opens its file in the file column'] = function()

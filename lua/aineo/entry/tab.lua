@@ -225,8 +225,9 @@ local function make_tab(homes, key, callbacks)
   local report_environment_given = false
 
   --- Gives the report home the editor's clock, the state directory and
-  --- working directory of `kept_places()`, and the opening of a file a
-  --- double-clicked path names, as a link to it opens (`links.open_file()`),
+  --- working directory of `kept_places()`, the reading of a leading `~` as a
+  --- link reads it (`links.with_home_expanded()`), and the opening of a file
+  --- a double-clicked path names, as a link to it opens (`links.open_file()`),
   --- the first time only.
   local function give_report_environment()
     if report_environment_given then
@@ -238,6 +239,7 @@ local function make_tab(homes, key, callbacks)
       end,
       state_directory = places.kept_places().state_directory,
       working_directory = places.kept_places().working_directory,
+      with_home_expanded = links.with_home_expanded,
       open_file = links.open_file,
     })
     report_environment_given = true

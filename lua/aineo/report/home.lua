@@ -17,6 +17,7 @@ local M = {}
 ---@field clock fun(): string the local time, as `YYYY-MM-DDTHH:MM:SS`
 ---@field state_directory string where the records are kept
 ---@field working_directory string the editor's working directory, which a report's relative paths are in
+---@field with_home_expanded? fun(path: string): string a path with its leading `~` replaced by the home folder, as a report's `~/` paths are read; when not given, a path is read as written
 ---@field open_file? fun(file: string, line: integer?) opens the regular file `file`, an absolute path, that a double-clicked path names, at the line the path names when it names one; when not given, the file opens in the current window
 
 ---@class aineo.report.Home
@@ -281,6 +282,12 @@ function M.new(identity)
     vim.validate('environment.clock', report_environment.clock, 'function')
     vim.validate('environment.state_directory', report_environment.state_directory, 'string')
     vim.validate('environment.working_directory', report_environment.working_directory, 'string')
+    vim.validate(
+      'environment.with_home_expanded',
+      report_environment.with_home_expanded,
+      'function',
+      true
+    )
     vim.validate('environment.open_file', report_environment.open_file, 'function', true)
     environment = report_environment
     for _, waiting in ipairs(hand_overs_waiting) do
@@ -293,16 +300,19 @@ function M.new(identity)
   end
 
   --- The file `path`, as a report writes it, names: `path` itself when it is
-  --- absolute, else `path` in the environment's working directory. A `~` is
-  --- not expanded.
+  --- absolute, else `path` in the environment's working directory, once a
+  --- leading `~` is replaced by the home folder as the environment's
+  --- `with_home_expanded` does (as written when it gives none).
   ---
   ---@param path string
   ---@return string
   local function file_named_by(path)
-    if vim.startswith(path, '/') then
-      return path
+    local current = current_environment()
+    local expanded = current.with_home_expanded and current.with_home_expanded(path) or path
+    if vim.startswith(expanded, '/') then
+      return expanded
     end
-    return vim.fs.joinpath(current_environment().working_directory, path)
+    return vim.fs.joinpath(current.working_directory, expanded)
   end
 
   --- Whether `path`, as a report writes it, names a regular file
