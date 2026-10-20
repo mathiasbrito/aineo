@@ -2485,15 +2485,24 @@ function M.new(label)
     end)
   end
 
+  --- Whether a window of the current tab page shows a diff the home showed:
+  --- none does while the file column holds another buffer, as a file opened
+  --- for edition, or nothing, as after `close_shown_diff()`.
+  ---
+  ---@return boolean
+  local function is_a_diff_open()
+    return #windows_showing_a_diff() > 0
+  end
+
   --- Shows the diff of the file the line under the cursor lists in `buffer`
   --- as `l` or `h` showed last (`followed_diffed`), the cursor staying in the
   --- pane (`show_diff_at_cursor()`). Does nothing when the cursor is not in
-  --- `buffer`, on a line that lists no file, or when a window of the tab
-  --- page shows that diff already.
+  --- `buffer`, when no diff is open (`is_a_diff_open()`), on a line that
+  --- lists no file, or when a window of the tab page shows that diff already.
   ---
   ---@param buffer integer
   local function show_diff_following_the_cursor(buffer)
-    if vim.api.nvim_get_current_buf() ~= buffer then
+    if vim.api.nvim_get_current_buf() ~= buffer or not is_a_diff_open() then
       return
     end
     local listed = pages.entry_at(buffer, vim.api.nvim_win_get_cursor(0)[1])
@@ -2508,8 +2517,8 @@ function M.new(label)
 
   --- Makes the files buffer `buffer` show the diff of the file its cursor
   --- stays on for a pause (`FOLLOW_PAUSE_MS`), restarted at each move of the
-  --- cursor (`show_diff_following_the_cursor()`). The pause is closed when
-  --- `buffer` is wiped.
+  --- cursor, while a diff is open (`show_diff_following_the_cursor()`). The
+  --- pause is closed when `buffer` is wiped.
   ---
   ---@param buffer integer
   local function follow_cursor_of(buffer)

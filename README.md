@@ -202,7 +202,7 @@ and, in Terminal mode, `<C-\>Z` do the same.
 | Enter | in the files window: shows the file's diff in the file column and moves there; in the commits window: on Uncommitted, Session work, a commit or the Landed heading, shows that whole diff |
 | `l` | in the commits window: moves the cursor to the files window, the line under the cursor still chosen |
 | `<BS>` | in the files window: moves the cursor back to the commits window, onto the line that chose the files listed |
-| `j`, `k` | in the files window: the diff of the file under the cursor follows the cursor in the file column, which stays where it is; headings and notes show nothing new |
+| `j`, `k` | in the files window, while a diff is open in the file column: the diff of the file under the cursor follows the cursor there, which stays where it is; headings and notes show nothing new; with no diff open, nothing opens |
 | `l`, `h` | in the files window: show the diff at once against the file's previous version, against `HEAD`, and choose which of the two follows the cursor; the cursor stays on the list |
 | `<BS>` | in a diff of the file column: moves the cursor back to the files window, onto that file's line (showing the changes pane first when another pane is on screen) |
 | `gf` | in the files window: opens the working tree's file, or, under a commit, the file as that commit has it |
@@ -257,8 +257,9 @@ kept, and `<BS>` there moves back to the line that made it.
 - **Look at a change.** Enter on a file shows its diff in the file column,
   and the cursor goes there; in the commits window, Enter on Uncommitted,
   Session work, a commit or the Landed heading shows the whole diff of that
-  choice. Moving the cursor in the files window shows the diff
-  of the file under it, so you can go down the files with the diff following;
+  choice. Once a diff is open, moving the cursor in the files window shows
+  the diff of the file under it, so you can go down the files with the diff
+  following; with none open, moving opens none, and `\d` stops the following;
   `l` and `h` choose the diff against the previous version or against `HEAD`
   and show it at once, and the cursor stays on the list. `<BS>` in the diff
   moves back to the list, onto that file's line. `F` in a diff widens its
