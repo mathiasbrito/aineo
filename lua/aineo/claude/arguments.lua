@@ -23,6 +23,20 @@ local RELAYED_EVENTS = { 'SessionStart', 'SessionEnd' }
 --- The Claude Code hook event that runs as a subagent starts.
 local SUBAGENT_START_EVENT = 'SubagentStart'
 
+--- The Claude Code hook event that runs after a tool call succeeded, and the
+--- one call of it the hook relay runs for: a `Bash` call (the matcher)
+--- whose command is git's (the hook's `if`, in Claude Code's permission rule
+--- syntax, which keeps every other command from starting a Neovim), in
+--- the background (`async`), so that the call goes on without waiting for
+--- it — the relay reads the git command it ran as work made (`aineo.claude`
+--- `work_commands`).
+local TOOL_USE_EVENT = 'PostToolUse'
+local TOOL_USE_MATCHER = 'Bash'
+local TOOL_USE_CONDITION = 'Bash(git *)'
+
+--- Every event aineo gives a hook for.
+local HOOKED_EVENTS = { 'SessionStart', 'SessionEnd', SUBAGENT_START_EVENT, TOOL_USE_EVENT }
+
 --- The flag that gives Claude Code settings, and the prefix of its spelling
 --- joined to its value in one word.
 local SETTINGS_FLAG = '--settings'
@@ -88,9 +102,11 @@ end
 --- aineo's hook entry for each of `RELAYED_EVENTS`, by event: a command hook
 --- with no matcher, so that it runs whatever the event's source or reason,
 --- that runs the hook relay (`relay_command()`) and is stopped after
---- `HOOK_TIMEOUT_SECONDS`; and, when `settings` give a subagent context, one
---- for `SUBAGENT_START_EVENT`, with no matcher, so that it runs for every
---- subagent whatever its type, that prints it (`subagent_context_command()`).
+--- `HOOK_TIMEOUT_SECONDS`; one for `TOOL_USE_EVENT`, for git's `Bash` calls
+--- alone, in the background, that runs the hook relay too; and, when
+--- `settings` give a subagent context, one for `SUBAGENT_START_EVENT`, with
+--- no matcher, so that it runs for every subagent whatever its type, that
+--- prints it (`subagent_context_command()`).
 ---
 ---@param settings aineo.claude.Settings
 ---@param start_token string
@@ -105,6 +121,18 @@ local function hook_entries(settings, start_token)
     }
     entries[event] = { hooks = { hook } }
   end
+  entries[TOOL_USE_EVENT] = {
+    matcher = TOOL_USE_MATCHER,
+    hooks = {
+      {
+        type = 'command',
+        command = relay_command(settings, start_token, TOOL_USE_EVENT),
+        timeout = HOOK_TIMEOUT_SECONDS,
+        async = true,
+        ['if'] = TOOL_USE_CONDITION,
+      },
+    },
+  }
   if settings.subagent_context then
     local hook = {
       type = 'command',
@@ -219,8 +247,8 @@ local function read_settings(value, cwd)
   return settings, nil, source
 end
 
---- Why aineo's hook entries for `RELAYED_EVENTS` and `SUBAGENT_START_EVENT`
---- cannot be added after the hooks `settings`, from `source`, already gives:
+--- Why aineo's hook entries for `HOOKED_EVENTS` cannot be added after the
+--- hooks `settings`, from `source`, already gives:
 --- its `hooks` not an object, or an event's entries in it not a list; nil
 --- when they can.
 ---
@@ -234,7 +262,7 @@ local function hooks_problem(settings, source)
   if not is_object(settings.hooks) then
     return ('the hooks in %s are not an object'):format(source)
   end
-  for _, event in ipairs(vim.list_extend(vim.list_slice(RELAYED_EVENTS), { SUBAGENT_START_EVENT })) do
+  for _, event in ipairs(HOOKED_EVENTS) do
     local given = settings.hooks[event]
     if given and not (type(given) == 'table' and vim.islist(given)) then
       return ('the %s hooks in %s are not a list'):format(event, source)
