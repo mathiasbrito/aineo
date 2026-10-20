@@ -732,18 +732,23 @@ T['the current file']['in a folder git ignores whole, ignored entries shown, is 
   end, FOLDED_TREE)
   entry.press(child, 'I')
   wait_for_tree({ '▸   build/', '▸   docs/', '▸   src/', '    .gitignore', '    README.md' })
+  put_cursor_on('README.md')
+  entry.press(child, '<CR>')
+  wait_for_current_window(vim.fs.joinpath(top, 'README.md'))
+  -- The explorer reads its tree again as its window gets its buffer back;
+  -- the follow below is to be seen without that read.
+  vim.wait(1500)
 
   child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'build', 'out.js')))
 
-  local expected = {
+  eq(vim.list_slice(explorer_lines(), 2), {
     '▾   build/',
     '      out.js',
     '▸   docs/',
     '▸   src/',
     '    .gitignore',
     '    README.md',
-  }
-  eq(wait_for_tree(expected), expected)
+  })
   eq(child.lua_get(FOLLOWED_LINE), 3)
 end
 

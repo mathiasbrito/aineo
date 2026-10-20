@@ -1583,7 +1583,7 @@ local function make_layout(input_name, group_name)
   end
 
   --- Whether `pane` takes the whole right column, with no window for Input:
-  --- the terminal pane and the run pane.
+  --- the terminal pane, the run pane and the explorer pane.
   ---
   ---@param pane aineo.layout.Pane
   ---@return boolean
@@ -1593,8 +1593,9 @@ local function make_layout(input_name, group_name)
 
   --- Closes or opens Input's window as the pane shown changes from `from` to
   --- `to`: closed as a pane that takes the whole column (the terminal pane,
-  --- the run pane) takes it, opened again as it gives way. Nothing between
-  --- panes that all show Input, nor between panes that all take the column.
+  --- the run pane, the explorer pane) takes it, opened again as it gives
+  --- way. Nothing between panes that all show Input, nor between panes that
+  --- all take the column.
   ---
   ---@param from aineo.layout.Pane
   ---@param to aineo.layout.Pane
