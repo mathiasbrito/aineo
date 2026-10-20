@@ -3,6 +3,7 @@
 --- worktree's commits; for the files window, one worktree's files.
 
 local git = require('aineo.git')
+local reports = require('aineo.changes.reports')
 local working_branch = require('aineo.changes.working_branch')
 
 local M = {}
@@ -32,7 +33,7 @@ M.NONE = { sections = {} }
 ---@class aineo.changes.WorktreeRead: aineo.changes.CommitBaseRead
 ---@field before aineo.changes.OtherWorktrees what the window knew of the other worktrees before this read
 ---@field read_list aineo.changes.ReadList reads the window's list for a worktree
----@field base_of? fun(top: string): string|nil the base the worktree at `top` is read from in place of the one `read_base()` reads, when it gives one: the commit an agent reported the worktree was made from
+---@field base_of? fun(top: string): string|nil the commit an agent reported the worktree at `top` was made from, nil when none was: read from in place of the one `read_base()` reads when `M.read_effective_base()` chooses it
 
 --- What a read of the other worktrees, for one window, starts from.
 ---@class aineo.changes.WorktreesRead: aineo.changes.WorktreeRead
@@ -179,8 +180,73 @@ local function read_base(read, sources, repository, done)
   end, read.git)
 end
 
+--- Whether the commit `older` is an ancestor of the commit `newer`, or
+--- `newer` itself, in the repository at `top`: their merge base is `older`
+--- (`git.worktree_base()`). Calls `done(nil, is_ancestor)` or
+--- `done(failure)`.
+---
+---@param read { git?: aineo.git.Options }
+---@param top string
+---@param older string
+---@param newer string
+---@param done fun(failure: aineo.git.Failure|nil, is_ancestor: boolean|nil)
+local function read_is_ancestor(read, top, older, newer, done)
+  git.worktree_base({ top = top, head = older }, newer, function(failure, merge_base)
+    done(failure, not failure and merge_base == older or nil)
+  end, read.git)
+end
+
+--- Reads which base a reported worktree or branch is read from: of
+--- `reported`, the base its report gave, and `own`, the one the pane reads
+--- for it, as `aineo.changes.reports`' `effective_base()` chooses by
+--- whether `reported` is behind `tip` and `own` behind `reported`, read in
+--- the repository at `top`. Calls `done(nil, base)`: at once with `own`
+--- for no reported base or no tip, and with `own` too when git cannot tell
+--- the history of the reported base — a commit the repository no longer
+--- has, say — as a base the pane cannot place is no base to read from.
+---
+---@param read { git?: aineo.git.Options }
+---@param top string
+---@param reported string|nil
+---@param own string|nil
+---@param tip string|nil
+---@param done fun(failure: nil, base: string|nil)
+function M.read_effective_base(read, top, reported, own, tip, done)
+  if not (reported and tip) then
+    done(nil, own)
+    return
+  end
+  read_is_ancestor(read, top, reported, tip, function(failure, reported_in_tip)
+    if failure then
+      done(nil, own)
+      return
+    end
+    local function chosen(own_before_reported)
+      done(
+        nil,
+        reports.effective_base(reported, own, {
+          reported_in_tip = reported_in_tip,
+          own_before_reported = own_before_reported,
+        })
+      )
+    end
+    if not (reported_in_tip and own) then
+      chosen(false)
+      return
+    end
+    read_is_ancestor(read, top, own, reported, function(own_failure, own_before_reported)
+      if own_failure then
+        done(nil, own)
+      else
+        chosen(own_before_reported)
+      end
+    end)
+  end)
+end
+
 --- Reads `worktree`'s list (`read.read_list`) from its base — the one
---- `read.base_of` gives it, else the one `read_base()` reads — and calls
+--- `read_base()` reads, or, when `read.base_of` gives a reported one, the
+--- one `M.read_effective_base()` chooses — and calls
 --- `done(section)`; when the list cannot be
 --- read, the section says why and keeps what the window last listed for the
 --- worktree (`unread_section()`), if anything — unless the worktree's
@@ -223,12 +289,15 @@ local function read_section(read, worktree, sources, done)
           end)
         )
       end)
-      local given = read.base_of and read.base_of(worktree.top)
-      if given then
-        read_from(nil, given)
-      else
-        read_base(read, sources, repository, read_from)
-      end
+      local reported = read.base_of and read.base_of(worktree.top)
+      read_base(
+        read,
+        sources,
+        repository,
+        or_failed(function(own)
+          M.read_effective_base(read, repository.top, reported, own, repository.head, read_from)
+        end)
+      )
     end),
     read.git
   )
