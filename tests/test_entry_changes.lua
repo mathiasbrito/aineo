@@ -348,6 +348,24 @@ T['Enter']['shows a file’s diff in the middle column and moves the cursor ther
   })
 end
 
+T['Enter']['then <BS> in the diff, with the agent pane on screen, shows the changes pane and moves to the file’s line'] = function()
+  changes_pane_listing_a_file('changespane-entry-back-other-pane')
+  entry.press(child, '<CR>')
+  wait_for_window_showing('aineo://diff/notes.txt')
+  entry.press(child, '\\pa')
+  git_repo.wait_until('the changes pane left the screen', function()
+    return child.lua_get('vim.fn.bufwinid(...)', { FILES }) == -1
+  end)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { 'aineo://diff/notes.txt' })
+
+  entry.press(child, '<BS>')
+
+  git_repo.wait_until('the files window entered', function()
+    return entry.current_window(child) == FILES
+  end)
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 2, 0 })
+end
+
 T['Enter']['with none of the layout’s windows open moves the cursor to the diff above the pane'] = function()
   changes_pane_listing_a_file('changespane-entry-enter-alone')
   child.cmd('new')

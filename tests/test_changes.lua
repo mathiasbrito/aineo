@@ -515,6 +515,9 @@ T['the reads']['leave no timer running once they have answered, while the pane s
 
   expect_lines(FILES, { 'Files in: Session work', NOT_WATCHED, 'No files changed on this session' })
   wait_for_the_reads()
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return vim.deep_equal(child.lua_get(RUNNING_TIMERS), timers)
+  end, 10)
   eq(child.lua_get(RUNNING_TIMERS), timers)
 end
 

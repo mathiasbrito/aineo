@@ -336,6 +336,11 @@ local function make_tab(homes, key, callbacks)
   ---@type fun()
   local write_entry
 
+  --- Shows the changes pane in the layout's right column, the cursor staying
+  --- where it is (`show_pane()`). Defined below, with it.
+  ---@type fun()
+  local show_changes_pane
+
   --- Makes this Neovim the claimant of `session` (`aineo.mcp`'s
   --- `claim_session()`) for the tab, letting go any session the tab claimed
   --- before, unless Neovim is quitting.
@@ -746,9 +751,10 @@ local function make_tab(homes, key, callbacks)
   --- changes home is told the session began there (`aineo.changes`'s
   --- `begin_session()`, which heeds its first call alone), in Claude Code's
   --- working directory, with the layout's `show_diff()` to show its diffs in
-  --- the middle column, the configuration's `changes.working_branch`, and the
+  --- the middle column, the configuration's `changes.working_branch`, the
   --- files window's key `prefix` followed by `<CR>`, none when `prefix` is
-  --- `false`, that opens a file for edition.
+  --- `false`, that opens a file for edition, and `show_changes_pane()`, which
+  --- `<BS>` in a diff uses to bring the pane back on screen.
   ---
   ---@param config table the resolved configuration
   ---@param new_session boolean? start on a new session id
@@ -766,6 +772,7 @@ local function make_tab(homes, key, callbacks)
       end,
       working_branch = config.changes.working_branch,
       edit_file_key = config.prefix and config.prefix .. '<CR>' or nil,
+      show_changes_pane = show_changes_pane,
     })
     return claude_terminal
   end
@@ -994,6 +1001,10 @@ local function make_tab(homes, key, callbacks)
     with_pane_arrangement(function(make_arrangement)
       homes.layout.show_pane(pane, make_arrangement)
     end)
+  end
+
+  show_changes_pane = function()
+    show_pane('changes')
   end
 
   --- Shows the tab's shell in the layout's terminal pane and moves the cursor
