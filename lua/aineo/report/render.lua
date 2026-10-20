@@ -1,7 +1,9 @@
 --- How a report reads in the Report buffer: its lines, the colours of its
---- time and status, its web links, and its paths to files.
+--- time and status, its web links, and its paths to files, and the lines
+--- that start each day of reports.
 
 local colours = require('aineo.report.colours')
+local days = require('aineo.report.days')
 local links = require('aineo.report.links')
 local paths = require('aineo.report.paths')
 
@@ -14,9 +16,19 @@ local M = {}
 ---@field group string the highlight group it shows in
 ---@field url string? the address it opens, when it is a web link
 
+---@class aineo.report.Separator
+---@field line integer the line of the rendering it is, from 0
+---@field day string the day it starts, `YYYY-MM-DD`
+
 ---@class aineo.report.Rendering
 ---@field lines string[] lines holding no newline
 ---@field colours aineo.report.Colour[] where two cover the same text, the later shows over the earlier
+---@field separators aineo.report.Separator[] the lines that start a day, in order
+---@field last_day string? the day of the last report with one, or the day before the rendering when none has
+
+---@class aineo.report.DayContext
+---@field now string? the local time the days are named from, `YYYY-MM-DDTHH:MM:SS`; given whenever a record starts a day
+---@field previous_day string? the day of the report the rendering follows, which a report of that day does not start again
 
 --- How many bytes a report's time, `HH:MM`, takes in its header.
 local CLOCK_TIME_LENGTH = #'HH:MM'
@@ -247,16 +259,29 @@ local function render_report(report, time, names_file)
 end
 
 --- The lines and colours of `records`, one report after another, each as
---- `render_report()` renders it. `names_file` is asked about each path the
---- reports hold, as they write it, however often it occurs: the renderer
---- itself reads no file.
+--- `render_report()` renders it, and before each report whose day
+--- (`days.day_of()`) is not the day of the report before it, or of
+--- `context.previous_day` for the first, the line that starts that day
+--- (`days.separator_text()`), named as of `context.now`. A report whose time
+--- holds no day follows the report before it with no line of its own. The
+--- separators' lines are the rendering's `separators`: they hold no path and
+--- no web link and carry no colour of the reports'. `names_file` is asked
+--- about each path the reports hold, as they write it, however often it
+--- occurs: the renderer itself reads no file.
 ---
 ---@param records aineo.report.Record[] records of valid reports
 ---@param names_file fun(path: string): boolean whether a path, as a report writes it, names a regular file
+---@param context aineo.report.DayContext
 ---@return aineo.report.Rendering
-function M.render_records(records, names_file)
-  local rendering = { lines = {}, colours = {} }
+function M.render_records(records, names_file, context)
+  local rendering = { lines = {}, colours = {}, separators = {}, last_day = context.previous_day }
   for _, record in ipairs(records) do
+    local day = days.day_of(record.time)
+    if day and day ~= rendering.last_day then
+      table.insert(rendering.separators, { line = #rendering.lines, day = day })
+      table.insert(rendering.lines, days.separator_text(days.label_of_day(day, context.now)))
+      rendering.last_day = day
+    end
     local report_rendering = render_report(record.report, record.time, names_file)
     for _, colour in ipairs(report_rendering.colours) do
       local line = #rendering.lines + colour.line

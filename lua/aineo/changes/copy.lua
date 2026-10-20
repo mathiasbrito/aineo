@@ -30,6 +30,10 @@ local M = {}
 --- window is read for the line under it.
 local SELECTION_PAUSE_MS = 150
 
+--- How long the cursor must stay on a line of the files window before the
+--- diff of the file listed there is shown in the middle column.
+local FOLLOW_PAUSE_MS = 120
+
 --- How long a report git does not list yet is matched again at every read,
 --- from the call: 60 s, time enough for an agent that reports a worktree a
 --- moment before git lists it, and short enough that a mistyped report
@@ -137,6 +141,7 @@ function M.new(label)
   ---@field git? aineo.git.WatchOptions how the git home runs git; its defaults when not given
   ---@field working_branch? string the branch work lands in, as the user's setting names it; the remote's default branch when not given
   ---@field edit_file_key? string a Normal-mode key, written as in a mapping, that opens the file under the cursor in the files buffer for edition as `<S-CR>` does; none when not given. Mapped when the files buffer is made, so a session holds it when begun before the buffer
+  ---@field show_changes_pane? fun() shows the changes pane in the layout's right column, the cursor staying where it is; the pane stays hidden when not given
   ---@field start_timer? fun(milliseconds: integer, act: fun()): fun() starts a timer that runs `act` once, on the main loop, after `milliseconds`, and returns what stops it; a `vim.uv` timer when not given
   ---@field now? fun(): integer the time the pane tells the ages of commits at, in seconds since the epoch; `os.time` when not given
 
@@ -1936,9 +1941,50 @@ function M.new(label)
     end)
   end
 
+  --- The first window of the current tab page that shows `buffer`, a buffer
+  --- of the pane; nil when none does.
+  ---
+  ---@param buffer integer|nil
+  ---@return integer|nil
+  local function window_showing(buffer)
+    if not (buffer and vim.api.nvim_buf_is_valid(buffer)) then
+      return nil
+    end
+    local current_tab = vim.api.nvim_get_current_tabpage()
+    return vim.tbl_filter(function(window)
+      return vim.api.nvim_win_get_tabpage(window) == current_tab
+    end, vim.fn.win_findbuf(buffer))[1]
+  end
+
+  --- Moves the cursor from `buffer`, a diff the home showed, to the files
+  --- window, onto the line that lists the file the diff shows, when the files
+  --- window still lists it; the window keeps its line otherwise. When the tab
+  --- page shows no files window, the settings' `show_changes_pane()` shows
+  --- the pane first. Does nothing when there is still none.
+  ---
+  ---@param buffer integer
+  local function move_back_to_files_window(buffer)
+    local files = window_showing(buffers.files)
+    if not files and session and session.settings.show_changes_pane then
+      session.settings.show_changes_pane()
+      files = window_showing(buffers.files)
+    end
+    if not files then
+      return
+    end
+    vim.api.nvim_set_current_win(files)
+    local shown = shown_diffs[buffer]
+    local line = shown and pages.line_of(buffers.files, shown.entry.key)
+    if line then
+      vim.api.nvim_win_set_cursor(files, { line, 0 })
+    end
+  end
+
   --- Records that `buffer` holds the diff of `entry` read in `context`, and
   --- maps F in it, in Normal mode, to read that diff again in the other context
-  --- (`reread_diff()`); the buffers of diffs since wiped are forgotten.
+  --- (`reread_diff()`), and `<BS>` to move back to the files window
+  --- (`move_back_to_files_window()`); the buffers of diffs since wiped are
+  --- forgotten.
   ---
   ---@param buffer integer
   ---@param entry aineo.changes.Entry
@@ -1955,6 +2001,12 @@ function M.new(label)
     end, {
       buffer = buffer,
       desc = 'aineo: show this diff with the whole file as context, or with three lines',
+    })
+    vim.keymap.set('n', '<BS>', function()
+      move_back_to_files_window(buffer)
+    end, {
+      buffer = buffer,
+      desc = 'aineo: move back to the files window, onto the line of this diff’s file',
     })
   end
 
@@ -2129,13 +2181,27 @@ function M.new(label)
     return nil
   end
 
+  --- Tells the user that the file `entry` stands for, a diff against `HEAD`,
+  --- is as `HEAD` has it.
+  ---
+  ---@param entry aineo.changes.HeadEntry
+  local function tell_file_is_as_head_has_it(entry)
+    vim.notify(head_diff.told_unchanged(entry), vim.log.levels.INFO)
+  end
+
+  --- Tells the user nothing of a diff that has nothing to show, as the diff
+  --- that follows the cursor does.
+  ---
+  ---@param _ aineo.changes.HeadEntry
+  local function tell_nothing(_) end
+
   --- Reads the diff of `diffed(listed)`, `listed` the entry the line under the
   --- cursor lists in `buffer` (`aineo.changes.entry_diff`), and shows it
   --- (`show_last()`), the cursor moving to it as `moving_cursor_of` says
   --- (`aineo.changes.Selection`), unless a key asked for another diff or
   --- file meanwhile: only the last key's is shown, or its failure told. A
-  --- diff against `HEAD` that is empty is not shown: the user is told, once,
-  --- that the file is as `HEAD` has it, and the focus stays. On the heading of
+  --- diff against `HEAD` that is empty is not shown, and the focus stays:
+  --- `tell_unchanged` is called with its entry. On the heading of
   --- a branch the commits window has not read yet, tells the user, at `INFO`,
   --- that aineo is reading the repository, and reads nothing. Does nothing on
   --- a line that lists none.
@@ -2143,7 +2209,8 @@ function M.new(label)
   ---@param buffer integer
   ---@param diffed fun(listed: aineo.changes.Entry): aineo.changes.Entry the entry standing for the diff to show
   ---@param moving_cursor_of fun(pressed_in: integer): integer|nil the window whose cursor moves to the diff, given the window the key was pressed in (`cursor_follows_the_key()`, `cursor_stays()`)
-  local function show_diff_at_cursor(buffer, diffed, moving_cursor_of)
+  ---@param tell_unchanged fun(entry: aineo.changes.HeadEntry) what is done when the diff against `HEAD` is empty (`tell_file_is_as_head_has_it()`, `tell_nothing()`)
+  local function show_diff_at_cursor(buffer, diffed, moving_cursor_of, tell_unchanged)
     local listed = pages.entry_at(buffer, vim.api.nvim_win_get_cursor(0)[1])
     if not listed then
       return
@@ -2171,7 +2238,7 @@ function M.new(label)
           return
         end
         if head_diff.is_against_head(entry) and diff == '' then
-          vim.notify(head_diff.told_unchanged(entry), vim.log.levels.INFO)
+          tell_unchanged(entry)
           return
         end
         local selection = { entry = entry, window = window, context = source.context }
@@ -2199,25 +2266,35 @@ function M.new(label)
   ---
   ---@param buffer integer
   local function open_entry(buffer)
-    show_diff_at_cursor(buffer, as_listed, cursor_follows_the_key)
+    show_diff_at_cursor(buffer, as_listed, cursor_follows_the_key, tell_file_is_as_head_has_it)
   end
+
+  --- The entry standing for the diff that follows the cursor of the files
+  --- window (`show_diff_following_the_cursor()`), given the entry a line
+  --- lists: the kind of diff `l` or `h` showed last, against the previous
+  --- version until one of them is pressed.
+  ---@type fun(listed: aineo.changes.Entry): aineo.changes.Entry
+  local followed_diffed = as_listed
 
   --- Shows the diff of the file the line under the cursor lists in `buffer`
   --- against its previous version, the cursor staying in the pane
-  --- (`show_diff_at_cursor()`).
+  --- (`show_diff_at_cursor()`), and makes it the kind of diff that follows the
+  --- cursor from then on.
   ---
   ---@param buffer integer
   local function preview_entry(buffer)
-    show_diff_at_cursor(buffer, as_listed, cursor_stays)
+    followed_diffed = as_listed
+    show_diff_at_cursor(buffer, as_listed, cursor_stays, tell_file_is_as_head_has_it)
   end
 
   --- Shows the diff of the file the line under the cursor lists in `buffer`
   --- against `HEAD` (`aineo.changes.head_diff`), the cursor staying in the
-  --- pane.
+  --- pane, and makes it the kind of diff that follows the cursor from then on.
   ---
   ---@param buffer integer
   local function preview_entry_against_head(buffer)
-    show_diff_at_cursor(buffer, head_diff.of, cursor_stays)
+    followed_diffed = head_diff.of
+    show_diff_at_cursor(buffer, head_diff.of, cursor_stays, tell_file_is_as_head_has_it)
   end
 
   --- Shows, in the middle column, the file `entry` lists as the commit it is
@@ -2394,6 +2471,65 @@ function M.new(label)
     end, {
       buffer = buffer,
       desc = 'aineo: show the diff of the file under the cursor against HEAD',
+    })
+  end
+
+  --- Whether a window of the current tab page shows a diff the home showed
+  --- in the buffer named `name`.
+  ---
+  ---@param name string
+  ---@return boolean
+  local function is_diff_shown(name)
+    return vim.iter(windows_showing_a_diff()):any(function(window)
+      return vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(window)) == name
+    end)
+  end
+
+  --- Shows the diff of the file the line under the cursor lists in `buffer`
+  --- as `l` or `h` showed last (`followed_diffed`), the cursor staying in the
+  --- pane (`show_diff_at_cursor()`). Does nothing when the cursor is not in
+  --- `buffer`, on a line that lists no file, or when a window of the tab
+  --- page shows that diff already.
+  ---
+  ---@param buffer integer
+  local function show_diff_following_the_cursor(buffer)
+    if vim.api.nvim_get_current_buf() ~= buffer then
+      return
+    end
+    local listed = pages.entry_at(buffer, vim.api.nvim_win_get_cursor(0)[1])
+    if not listed then
+      return
+    end
+    if is_diff_shown(own_name(entry_diff.name(followed_diffed(listed)))) then
+      return
+    end
+    show_diff_at_cursor(buffer, followed_diffed, cursor_stays, tell_nothing)
+  end
+
+  --- Makes the files buffer `buffer` show the diff of the file its cursor
+  --- stays on for a pause (`FOLLOW_PAUSE_MS`), restarted at each move of the
+  --- cursor (`show_diff_following_the_cursor()`). The pause is closed when
+  --- `buffer` is wiped.
+  ---
+  ---@param buffer integer
+  local function follow_cursor_of(buffer)
+    local following = pause.restartable(FOLLOW_PAUSE_MS, function()
+      show_diff_following_the_cursor(buffer)
+    end)
+    vim.api.nvim_create_autocmd('CursorMoved', {
+      buffer = buffer,
+      desc = 'aineo: show the diff of the file under the cursor after a pause',
+      callback = function()
+        following.restart()
+      end,
+    })
+    vim.api.nvim_create_autocmd('BufWipeout', {
+      buffer = buffer,
+      once = true,
+      desc = 'aineo: stop the pause before the diff follows the cursor',
+      callback = function()
+        following.close()
+      end,
     })
   end
 
@@ -2916,21 +3052,6 @@ function M.new(label)
     })
   end
 
-  --- The first window of the current tab page that shows `buffer`, a buffer
-  --- of the pane; nil when none does.
-  ---
-  ---@param buffer integer|nil
-  ---@return integer|nil
-  local function window_showing(buffer)
-    if not (buffer and vim.api.nvim_buf_is_valid(buffer)) then
-      return nil
-    end
-    local current_tab = vim.api.nvim_get_current_tabpage()
-    return vim.tbl_filter(function(window)
-      return vim.api.nvim_win_get_tabpage(window) == current_tab
-    end, vim.fn.win_findbuf(buffer))[1]
-  end
-
   --- Moves the cursor from the commits window to the files window, the choice
   --- the line under the cursor makes kept: it is made at once, without the
   --- pause (`select_filter_at_cursor_of()`), and the cursor of the files
@@ -3049,6 +3170,7 @@ function M.new(label)
       buffers.files = pane_buffer(own_name('aineo://changes-files'), files_page)
       map_open_file(buffers.files)
       map_compare_keys(buffers.files)
+      follow_cursor_of(buffers.files)
       map_move_to_commits(buffers.files)
     end
     if not (buffers.commits and vim.api.nvim_buf_is_loaded(buffers.commits)) then

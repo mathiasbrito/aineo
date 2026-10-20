@@ -46,6 +46,21 @@ local function open_with_system(target)
   end
 end
 
+--- `path` with a leading `~`, alone or before a `/`, replaced by the home
+--- folder; any other path as it is, as is every path when the home folder is
+--- unknown. A `~` anywhere else, and `~name/`, is part of a name. The
+--- Report reads its paths by the same rule (`aineo.report`'s environment).
+---
+---@param path string
+---@return string
+function M.with_home_expanded(path)
+  local home = vim.uv.os_homedir()
+  if home and (path == '~' or vim.startswith(path, '~/')) then
+    return home .. path:sub(2)
+  end
+  return path
+end
+
 --- Opens the regular file `file`, an absolute path, at line `line` when
 --- given: in the current window when it is a text file (`is_text_file()`),
 --- wherever it lies, else with the operating system (`open_with_system()`).
@@ -62,12 +77,13 @@ end
 
 --- Follows the link `text`, as a pane shows it, naming line `line` when the
 --- text set one apart (`aineo.report`'s `find_path_candidates()`): a path,
---- in `directory` when relative, or a `file://` address, either naming its
---- line by a `#L<line>` at its end, opens as `M.open_file()` opens a regular
---- file; a directory, any other file that is no regular file, and an address
---- of any other scheme, such as a web link, go to the operating system. A
---- link that names nothing that exists opens nothing, and the user is told
---- so once.
+--- in `directory` when relative, or in the home folder when it starts with
+--- `~/` (a `~` alone is the home folder; `~name/` is a relative path), or a
+--- `file://` address, either naming its line by a `#L<line>` at its end,
+--- opens as `M.open_file()` opens a regular file; a directory, any other file
+--- that is no regular file, and an address of any other scheme, such as a web
+--- link, go to the operating system. A link that names nothing that exists
+--- opens nothing, and the user is told so once.
 ---
 ---@param text string
 ---@param line integer?
@@ -82,6 +98,7 @@ function M.open_link(text, line, directory)
   if vim.startswith(path, FILE_ADDRESS) then
     path = vim.uri_to_fname(path)
   end
+  path = M.with_home_expanded(path)
   local file = vim.startswith(path, '/') and path or vim.fs.joinpath(directory, path)
   local stat = vim.uv.fs_stat(file)
   if not stat then

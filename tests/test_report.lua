@@ -382,6 +382,15 @@ T['set_report_environment()']['refuses an environment it cannot use, naming what
         { clock = clock, state_directory = '/state' },
         'environment%.working_directory: expected string, got nil',
       },
+      {
+        {
+          clock = clock,
+          state_directory = '/state',
+          working_directory = '/work',
+          schedule_after = 3,
+        },
+        'environment%.schedule_after: expected function, got number',
+      },
     },
   })
 
