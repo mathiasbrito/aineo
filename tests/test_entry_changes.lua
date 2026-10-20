@@ -184,6 +184,26 @@ T['the session']['takes its working branch from changes.working_branch of the se
   })
 end
 
+T['the session']['draws as many commits in the commit graph as changes.graph_limit of the settings'] = function()
+  local top = in_repository('changespane-entry-graph-limit', { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'notes.txt', { 'two' })
+  git_repo.commit_all(top, 'Write two')
+  child.lua(
+    'local settings = vim.g.aineo settings.changes = { graph_limit = 1 } vim.g.aineo = settings'
+  )
+  open_and_wait_for_the_base()
+  entry.press(child, '\\g')
+  expect_lines(COMMITS, { 'Uncommitted', 'Session work', 'No commits on this session' })
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
+
+  child.type_keys('t')
+
+  git_repo.wait_until('the graph drawn', function()
+    return #lines_of(COMMITS) == 2
+  end)
+  eq(lines_of(COMMITS)[2], 'Older commits not shown')
+end
+
 T['the pane'] = MiniTest.new_set()
 
 --- Waits until every read of the files the child's git home was asked for
