@@ -49,7 +49,8 @@
 --- command ran in (`made_work()`), and tells the editor, as an agent's call
 --- of `announce_work` reaches it, waiting for its answer
 --- (`tell_made_work()`). Any other call, and any failure, tells nothing; the
---- hook writes nothing on stdout or stderr and exits 0.
+--- hook writes nothing on stdout or stderr and exits 0, and ends itself after
+--- `TOOL_USE_LIFETIME_MS` whatever the editor does (`end_after()`).
 ---
 --- It runs only when it is the script `-l` runs (`arg[0]`, `:h lua-args`):
 --- loaded inside an editor, by `require` or `dofile`, it does nothing.
@@ -227,6 +228,23 @@ local TOOL_USE_EVENT = 'PostToolUse'
 --- How long the hook waits for git to resolve the base of work made.
 local BASE_RESOLUTION_MS = 3000
 
+--- How long the `PostToolUse` hook may run before it ends itself, exit 0,
+--- whatever the editor does: Claude Code enforces no timeout on a hook run
+--- in the background, and an editor held at a hit-enter prompt never
+--- answers.
+local TOOL_USE_LIFETIME_MS = 6000
+
+--- Ends this process, exit 0 and nothing written, `milliseconds` from now,
+--- whatever it is waiting on then.
+---
+---@param milliseconds integer
+local function end_after(milliseconds)
+  local timer = assert(vim.uv.new_timer())
+  timer:start(milliseconds, 0, function()
+    os.exit(0)
+  end)
+end
+
 --- The Lua the editor runs for work the hook read, its arguments the
 --- announcement and the start token: `aineo.mcp`'s
 --- `receive_work_announcement()`, as an agent's call of `announce_work`
@@ -364,6 +382,7 @@ local event = arg[3]
 local ran = vim.uv.hrtime()
 local input = hook_input()
 if input and event == TOOL_USE_EVENT then
+  end_after(TOOL_USE_LIFETIME_MS)
   -- Whatever fails here is the hook's alone: the agent's call went on.
   pcall(tell_made_work, place, input)
 elseif input then
