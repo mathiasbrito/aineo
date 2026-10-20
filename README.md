@@ -198,7 +198,8 @@ and, in Terminal mode, `<C-\>Z` do the same.
 |---|---|
 | `\g` | shows the changes pane and moves to its commits; inside the pane, switches between the default view and the worktree or branch shown alone |
 | `s` | in either window of the pane: picks a worktree or a branch to show alone |
-| `j`, `k` | in the commits window: the line under the cursor chooses which files the files window lists |
+| `j`, `k` | in the commits window: the line under the cursor chooses which files the files window lists; in the commit graph, they go from commit line to commit line, over the graph's own lines, and take a count |
+| `t` | in the commits window: shows the commit graph of every branch in place of the sections, and the sections again |
 | Enter | in the files window: shows the file's diff in the file column and moves there; in the commits window: on Uncommitted, Session work, a commit or the Landed heading, shows that whole diff |
 | `l` | in the commits window: moves the cursor to the files window, the line under the cursor still chosen |
 | `<BS>` | in the files window: moves the cursor back to the commits window, onto the line that chose the files listed |
@@ -253,6 +254,25 @@ age never is), so the subjects line up. The age is `now`, then `<n>m`, `<n>h`,
 `<n>d`, `<n>w`, `<n>mo` (30 days) or `<n>y` (365 days) since the commit was
 written. `l` in the commits window moves to the files window, with the choice
 kept, and `<BS>` there moves back to the line that made it.
+
+`t` in the commits window shows the commit graph instead of the sections, as
+`git log --graph --all --abbrev-commit --date=relative` draws it, each commit
+as `<graph> <id> - (<age>) <subject> - <author> (<names>)`:
+
+```
+* 1a2b3c4 - (3 hours ago) Add the report - Ada (HEAD -> main)
+| * 5d6e7f8 - (2 days ago) Fix the build - Grace (origin/fix)
+|/
+```
+
+`j` and `k` go straight from commit to commit, with a count, and the cursor
+never rests on a line of the graph alone; the commit under the cursor lists
+its files in the files window, and `l`, `<BS>` and Enter work on it as on any
+commit. `t` again shows the sections as they were. The graph draws the newest
+1000 commits (`changes.graph_limit`) and says when older ones are not shown;
+it is read again as the repository changes, the cursor kept on its commit.
+Every part takes its colour from your colour scheme, through the
+`AineoChangesGraph*` groups and `AineoChangesCommitId`.
 
 - **Look at a change.** Enter on a file shows its diff in the file column,
   and the cursor goes there; in the commits window, Enter on Uncommitted,
@@ -422,7 +442,10 @@ vim.g.aineo = {
     hide_multiplexer = true,
   },
   layout = { report_height = 2 / 3 },
-  -- changes = { working_branch = 'origin/dev' },
+  changes = {
+    -- working_branch = 'origin/dev',
+    graph_limit = 1000,
+  },
   tabs = { padding = 2, always_show = true },
   find = { picker = 'auto' },
 }
@@ -437,6 +460,7 @@ vim.g.aineo = {
 | `claude.hide_multiplexer` | `true` | Whether Claude Code starts without the variables that tell it a terminal multiplexer runs it (see below). |
 | `layout.report_height` | `2/3` | The Report's share of the right column, a number strictly between 0 and 1. |
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
+| `changes.graph_limit` | `1000` | How many commits the commit graph (`t` in the commits window) draws, newest first, a whole number of at least 1. The graph says when older ones are not shown. |
 | `tabs.padding` | `2` | Spaces either side of each title in aineo's tab line, from 0 to 8. |
 | `tabs.always_show` | `true` | Whether the tab line shows with a single tab page: aineo sets `'showtabline'` to `2` once, when its first tab opens, and a value you set afterwards is kept. `false` leaves `'showtabline'` as you have it. Read at the first tab: a later change needs a restart. |
 | `find.picker` | `'auto'` | The picker `\f` hands its search to: `'auto'` takes the first installed of snacks.nvim, fzf-lua, telescope.nvim and mini.pick; `'snacks'`, `'fzf-lua'`, `'telescope'` or `'mini.pick'` takes that one alone. With none installed, or the one named missing, aineo lists the files through `vim.ui.select()`. None is a dependency. |
