@@ -120,7 +120,10 @@ T['the session']['begins at the first start of Claude Code: a commit made since 
 
   entry.press(child, '\\g')
 
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Write two') }
+  )
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
 end
 
@@ -134,7 +137,10 @@ T['the session']['outlives a restart of Claude Code: its commits stay the sessio
   child.cmd('Aineo open')
   entry.press(child, '\\g')
 
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Write two' })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Write two') }
+  )
 end
 
 T['the session']['does not begin at a start that fails: the next start takes the base'] = function()
@@ -567,9 +573,9 @@ local function scoped_to_the_agent_worktree(name)
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
-    commit:sub(1, 7) .. ' Agent one',
+    git_repo.commit_line(commit, 'Agent one'),
   }
-  local scope_view = { 'Worktree agent (agent)', commit:sub(1, 7) .. ' Agent one' }
+  local scope_view = { 'Worktree agent (agent)', git_repo.commit_line(commit, 'Agent one') }
   entry.press(child, '\\g')
   expect_lines(COMMITS, default_view)
   entry.press(child, 's')

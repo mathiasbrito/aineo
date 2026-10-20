@@ -2,6 +2,7 @@
 --- each line shows, for what the session knows: pure functions of their
 --- inputs.
 
+local author_column = require('aineo.changes.author_column')
 local colours = require('aineo.changes.colours')
 local filter = require('aineo.changes.filter')
 
@@ -293,6 +294,7 @@ M.NOT_WATCHED =
 ---@field worktree? aineo.changes.WorktreeSection the worktree other than the editor's that the files were read in, for the files of another worktree's filter
 ---@field saved table<string, true> the paths, relative to the top level, of the files the user saved; marked under *Uncommitted* and *Session work* alone
 ---@field unwatched_subdirectories boolean whether a change in a subdirectory goes unseen by the watch
+---@field now integer the time the ages of commits are told at, in seconds since the epoch
 
 --- The notes a window shows first when its last read failed: the line
 --- that says so (`M.refresh_failed()`, `failure_line()`); none otherwise.
@@ -328,35 +330,52 @@ function M.worktree_heading(section)
   return 'Worktree ' .. M.worktree_name(section)
 end
 
---- The colours of `line`, the commits window's line for a commit
---- (`M.commit_line()`): its abbreviated id in its group, and its subject in
---- its own; the space between them in neither.
+--- The commits window's line for `commit` and the colours of its parts: its
+--- abbreviated id in its group, the author's name and the age in theirs
+--- (`aineo.changes.author_column`), and its subject in its own; the spaces
+--- between them, and those that fill the column, in none.
 ---
----@param line string
+---@param commit aineo.git.Commit
+---@param now integer seconds since the epoch
+---@return string line
 ---@return aineo.changes.Colour[]
-local function commit_colours(line)
-  return {
-    { first_column = 0, end_column = M.ABBREVIATED_ID_LENGTH, group = colours.COMMIT_ID_GROUP },
+local function commit_text(commit, now)
+  local column = author_column.of(commit, now)
+  local id = commit.id:sub(1, M.ABBREVIATED_ID_LENGTH)
+  local name_start = #id + 1
+  local age_start = name_start + #column.name + 1
+  local subject_start = name_start + #column.text + 1
+  local line = ('%s %s %s'):format(id, column.text, commit.subject)
+  return line,
     {
-      first_column = M.ABBREVIATED_ID_LENGTH + 1,
-      end_column = #line,
-      group = colours.COMMIT_SUBJECT_GROUP,
-    },
-  }
+      { first_column = 0, end_column = #id, group = colours.COMMIT_ID_GROUP },
+      {
+        first_column = name_start,
+        end_column = name_start + #column.name,
+        group = colours.COMMIT_AUTHOR_GROUP,
+      },
+      {
+        first_column = age_start,
+        end_column = age_start + #column.age,
+        group = colours.COMMIT_AGE_GROUP,
+      },
+      { first_column = subject_start, end_column = #line, group = colours.COMMIT_SUBJECT_GROUP },
+    }
 end
 
---- The rows of `commits`, a line per commit in their order
---- (`M.commit_line()`), in its own colours (`commit_colours()`), each
---- listing the entry of its commit and the filter `filter_of` gives it: the
---- commit's files in the editor's own worktree, in another worktree, or
---- among those that landed in the working branch.
+--- The rows of `commits`, a line per commit in their order, as of the time
+--- `now`, in its own colours (`commit_text()`), each listing the entry of
+--- its commit and the filter `filter_of` gives it: the commit's files in
+--- the editor's own worktree, in another worktree, or among those that
+--- landed in the working branch.
 ---
 ---@param commits aineo.git.Commit[]
 ---@param filter_of fun(commit: aineo.git.Commit): aineo.changes.Filter
+---@param now integer seconds since the epoch
 ---@return aineo.changes.Row[]
-local function commit_rows(commits, filter_of)
+local function commit_rows(commits, filter_of, now)
   return vim.tbl_map(function(commit)
-    local line = M.commit_line(commit)
+    local line, line_colours = commit_text(commit, now)
     local listed_under = filter_of(commit)
     return {
       line = line,
@@ -366,7 +385,7 @@ local function commit_rows(commits, filter_of)
         filter = listed_under,
         worktree = listed_under.worktree,
       },
-      colours = commit_colours(line),
+      colours = line_colours,
     }
   end, commits)
 end
@@ -378,8 +397,9 @@ end
 --- was read, the line saying its read failed alone.
 ---
 ---@param section aineo.changes.WorktreeSection
+---@param now integer seconds since the epoch
 ---@return aineo.changes.Row[]
-local function section_rows(section)
+local function section_rows(section, now)
   local notes = failure_notes(section.failure)
   if not section.listed then
     return notes
@@ -388,7 +408,7 @@ local function section_rows(section)
     notes,
     commit_rows(section.listed.commits, function(commit)
       return filter.of_worktree_commit(section, commit)
-    end),
+    end, now),
     note(M.NO_WORKTREE_COMMITS)
   )
 end
@@ -422,15 +442,16 @@ end
 --- and its rows (`section_rows()`).
 ---
 ---@param others aineo.changes.OtherWorktrees|nil
+---@param now integer seconds since the epoch
 ---@return aineo.changes.Row[]
-local function worktree_rows(others)
+local function worktree_rows(others, now)
   local rows = {}
   if others and others.failure then
     table.insert(rows, failure_line(M.worktrees_unlisted(others.failure)))
   end
   for _, section in ipairs(others and others.sections or {}) do
     table.insert(rows, heading_row(section, colours.NOTE_GROUP))
-    vim.list_extend(rows, section_rows(section))
+    vim.list_extend(rows, section_rows(section, now))
   end
   return rows
 end
@@ -466,11 +487,13 @@ end
 --- its heading quotes it, or `(branch <name>)` when it is a local branch's,
 --- the name quoted as a path is; for another worktree's whole change, its
 --- heading (`M.worktree_heading()`); for a local branch's, `Branch ` and its
---- name, quoted as a path is.
+--- name, quoted as a path is. The time `now` is needed for a commit's
+--- alone: the line tells its age.
 ---
 ---@param selected aineo.changes.Filter
+---@param now? integer seconds since the epoch
 ---@return string
-function M.filter_name(selected)
+function M.filter_name(selected, now)
   if selected.kind == 'landed' then
     return 'Landed in ' .. M.quoted_path(selected.landed)
   end
@@ -481,7 +504,7 @@ function M.filter_name(selected)
     return 'Branch ' .. M.quoted_path(selected.branch)
   end
   if selected.kind == 'commit' then
-    local name = M.commit_line(selected.commit)
+    local name = M.commit_line(selected.commit, now)
     if selected.worktree then
       return ('%s (worktree %s)'):format(
         name,
@@ -511,9 +534,10 @@ end
 --- in: ` and its name, whole in the group of filters, listing no entry.
 ---
 ---@param listed aineo.changes.Filter
+---@param now integer seconds since the epoch
 ---@return aineo.changes.Row
-local function files_in_row(listed)
-  return whole_line(FILES_IN .. M.filter_name(listed), colours.FILTER_GROUP)
+local function files_in_row(listed, now)
+  return whole_line(FILES_IN .. M.filter_name(listed, now), colours.FILTER_GROUP)
 end
 
 --- The rows below the first line of the files window, for `view`: the
@@ -552,7 +576,7 @@ end
 local function file_window_rows(view)
   local rows = listed_file_rows(view)
   if view.filter then
-    table.insert(rows, 1, files_in_row(view.filter))
+    table.insert(rows, 1, files_in_row(view.filter, view.now))
   end
   return rows
 end
@@ -582,13 +606,15 @@ M.NO_WORKTREE_COMMITS = 'No commits in this worktree'
 --- How many characters of a commit's id stand for it in the pane.
 M.ABBREVIATED_ID_LENGTH = 7
 
---- The commits window's line for `commit`: its abbreviated id and its
+--- The commits window's line for `commit`: its abbreviated id, its author
+--- and age at the time `now` (`aineo.changes.author_column`), and its
 --- subject.
 ---
 ---@param commit aineo.git.Commit
+---@param now integer seconds since the epoch
 ---@return string
-function M.commit_line(commit)
-  return ('%s %s'):format(commit.id:sub(1, M.ABBREVIATED_ID_LENGTH), commit.subject)
+function M.commit_line(commit, now)
+  return (commit_text(commit, now))
 end
 
 --- One thing the commits window shows alone: a worktree other than the
@@ -606,6 +632,7 @@ end
 ---@field landed? aineo.changes.Landed what the window knows of the working branch, none when there is no working branch or it was not read
 ---@field worktrees? aineo.changes.OtherWorktrees what the window knows of the other worktrees, none when not given
 ---@field scope? aineo.changes.ScopeMember[] the worktrees and branches the window shows alone, each under its heading, in the order given; none for the default view
+---@field now integer the time the ages of commits are told at, in seconds since the epoch
 
 --- The rows of the editor's own worktree in the commits window below the
 --- filters, for `view`: the line saying its last read failed, when it did,
@@ -631,7 +658,11 @@ local function listed_commit_rows(view)
   if not view.since then
     return view.failure and { notes[1] } or { note(M.READING) }
   end
-  return rows_of(notes, commit_rows(view.since.commits, filter.of_commit), note(M.NO_COMMITS))
+  return rows_of(
+    notes,
+    commit_rows(view.since.commits, filter.of_commit, view.now),
+    note(M.NO_COMMITS)
+  )
 end
 
 --- The rows of the editor's own worktree in the commits window, for `view`:
@@ -658,8 +689,9 @@ end
 --- failure's line alone. None when the window knows no working branch.
 ---
 ---@param landed aineo.changes.Landed|nil
+---@param now integer seconds since the epoch
 ---@return aineo.changes.Row[]
-local function landed_rows(landed)
+local function landed_rows(landed, now)
   if not landed then
     return {}
   end
@@ -678,7 +710,7 @@ local function landed_rows(landed)
       notes,
       commit_rows(landed.commits, function(commit)
         return filter.of_landed_commit(landed.name, commit)
-      end),
+      end, now),
       note(('Nothing landed in %s on this session'):format(name))
     )
   )
@@ -695,8 +727,9 @@ M.NO_BRANCH_COMMITS = 'No commits on this branch'
 --- its read failed alone.
 ---
 ---@param branch aineo.changes.BranchSection
+---@param now integer seconds since the epoch
 ---@return aineo.changes.Row[]
-local function branch_rows(branch)
+local function branch_rows(branch, now)
   local notes = failure_notes(branch.failure)
   if not branch.commits then
     return branch.failure and notes or { note(M.READING) }
@@ -705,7 +738,7 @@ local function branch_rows(branch)
     notes,
     commit_rows(branch.commits, function(commit)
       return filter.of_branch_commit(branch.name, commit)
-    end),
+    end, now),
     note(M.NO_BRANCH_COMMITS)
   )
 end
@@ -716,16 +749,17 @@ end
 --- its rows (`section_rows()`, `branch_rows()`).
 ---
 ---@param scope aineo.changes.ScopeMember[]
+---@param now integer seconds since the epoch
 ---@return aineo.changes.Row[]
-local function scope_rows(scope)
+local function scope_rows(scope, now)
   local rows = {}
   for _, member in ipairs(scope) do
     if member.worktree then
       table.insert(rows, heading_row(member.worktree, colours.FILTER_GROUP))
-      vim.list_extend(rows, section_rows(member.worktree))
+      vim.list_extend(rows, section_rows(member.worktree, now))
     else
       table.insert(rows, filter_row(filter.of_branch(member.branch.name)))
-      vim.list_extend(rows, branch_rows(member.branch))
+      vim.list_extend(rows, branch_rows(member.branch, now))
     end
   end
   return rows
@@ -737,17 +771,17 @@ end
 --- landed in the working branch under its heading (`landed_rows()`), then
 --- each other worktree's (`worktree_rows()`). The line saying a read failed
 --- is a failure (`failure_line()`), a commit's line shows its own colours
---- (`commit_colours()`), and every other line is a note (`note()`).
+--- (`commit_text()`), and every other line is a note (`note()`).
 ---
 ---@param view aineo.changes.CommitsView
 ---@return aineo.changes.Page
 function M.commits_window(view)
   if view.scope then
-    return page_of(scope_rows(view.scope))
+    return page_of(scope_rows(view.scope, view.now))
   end
   local rows = own_commit_rows(view)
-  vim.list_extend(rows, landed_rows(view.landed))
-  vim.list_extend(rows, worktree_rows(view.worktrees))
+  vim.list_extend(rows, landed_rows(view.landed, view.now))
+  vim.list_extend(rows, worktree_rows(view.worktrees, view.now))
   return page_of(rows)
 end
 

@@ -513,7 +513,7 @@ T['Enter']['on another worktree’s commit shows that commit’s diff, named for
   begin_and_show(top)
   expect_lines(
     COMMITS,
-    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+    commits_then({ 'Worktree agent (agent)', git_repo.commit_line(commit, 'The agent’s') })
   )
   enter_window_of(COMMITS)
   child.lua('vim.api.nvim_win_set_cursor(0, { 5, 0 })')
@@ -585,11 +585,11 @@ T['Enter']['on a file under another worktree’s commit shows the commit’s hea
   begin_and_show(top)
   expect_lines(
     COMMITS,
-    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+    commits_then({ 'Worktree agent (agent)', git_repo.commit_line(commit, 'The agent’s') })
   )
   go_to_commits_line(5)
   expect_lines(FILES, {
-    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    'Files in: ' .. git_repo.commit_line(commit, 'The agent’s (worktree agent)'),
     '  M notes.txt',
   })
   go_to_files_line(2)
@@ -722,7 +722,7 @@ T['the worktrees followed']['show a commit made in another worktree, once the wa
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
-    commit:sub(1, 7) .. ' The agent’s',
+    git_repo.commit_line(commit, 'The agent’s'),
   })
 end
 
@@ -831,7 +831,7 @@ T['a worktree whose read fails']['shows git’s words under its heading, the oth
       'Worktree first (first)',
       'The last refresh failed: fatal: broken',
       'Worktree second (second)',
-      commit:sub(1, 7) .. ' The second’s',
+      git_repo.commit_line(commit, 'The second’s'),
     })
   )
 end
@@ -847,7 +847,7 @@ T['a worktree whose later read fails']['keeps the list it showed, under git’s 
   begin_and_show(top, { executable = stand_in })
   expect_lines(
     COMMITS,
-    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+    commits_then({ 'Worktree agent (agent)', git_repo.commit_line(commit, 'The agent’s') })
   )
   turn_on(switch)
 
@@ -858,7 +858,7 @@ T['a worktree whose later read fails']['keeps the list it showed, under git’s 
     commits_then({
       'Worktree agent (agent)',
       'The last refresh failed: fatal: broken',
-      commit:sub(1, 7) .. ' The agent’s',
+      git_repo.commit_line(commit, 'The agent’s'),
     })
   )
 end
@@ -873,7 +873,7 @@ T['a worktree whose later read fails']['keeps the list it showed, under git’s 
   begin_and_show(top, { executable = stand_in })
   expect_lines(
     COMMITS,
-    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+    commits_then({ 'Worktree agent (agent)', git_repo.commit_line(commit, 'The agent’s') })
   )
   turn_on(switch)
 
@@ -887,7 +887,7 @@ T['a worktree whose later read fails']['keeps the list it showed, under git’s 
     'The last refresh failed: fatal: broken',
     'Worktree agent (agent)',
     'The last refresh failed: fatal: broken',
-    commit:sub(1, 7) .. ' The agent’s',
+    git_repo.commit_line(commit, 'The agent’s'),
   })
 end
 
@@ -916,7 +916,7 @@ T['a later list of worktrees that fails']['keeps the worktrees it showed, under 
   begin_and_show(top, { executable = stand_in })
   expect_lines(
     COMMITS,
-    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+    commits_then({ 'Worktree agent (agent)', git_repo.commit_line(commit, 'The agent’s') })
   )
   turn_on(switch)
 
@@ -927,7 +927,7 @@ T['a later list of worktrees that fails']['keeps the worktrees it showed, under 
     commits_then({
       'The other worktrees could not be listed: fatal: broken',
       'Worktree agent (agent)',
-      commit:sub(1, 7) .. ' The agent’s',
+      git_repo.commit_line(commit, 'The agent’s'),
     })
   )
 end
@@ -1107,7 +1107,7 @@ T['the reads']['of the editor’s own commits, asked during the other worktrees�
   end)
   local shown = lines_of(COMMITS)[3]
   touch(stand_in .. '.second.gate')
-  eq(shown, commit:sub(1, 7) .. ' Mine')
+  eq(shown, git_repo.commit_line(commit, 'Mine'))
 end
 
 --- The Lua that replaces, in the child, the git home's watch with one that
@@ -1148,7 +1148,7 @@ T['the reads']['of the editor’s commits, asked during a read, stay asked when 
   expect_lines(COMMITS, {
     'Uncommitted',
     'Session work',
-    commit:sub(1, 7) .. ' Mine',
+    git_repo.commit_line(commit, 'Mine'),
     'Worktree agent (agent)',
     'No commits in this worktree',
   })
@@ -1220,7 +1220,7 @@ T['the commits window']['no longer lists another worktree’s commit once the ed
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
-    commit:sub(1, 7) .. ' The agent’s',
+    git_repo.commit_line(commit, 'The agent’s'),
   })
   git_repo.git(top, { 'merge', '--quiet', '--ff-only', 'agent' })
 
@@ -1229,7 +1229,7 @@ T['the commits window']['no longer lists another worktree’s commit once the ed
   expect_lines(COMMITS, {
     'Uncommitted',
     'Session work',
-    commit:sub(1, 7) .. ' The agent’s',
+    git_repo.commit_line(commit, 'The agent’s'),
     'Worktree agent (agent)',
     'No commits in this worktree',
   })
@@ -1249,7 +1249,7 @@ T['the commits window']['lists another worktree with no shared history, every co
     'Session work',
     'No commits on this session',
     'Worktree unrelated (unrelated)',
-    commit:sub(1, 7) .. ' Its own',
+    git_repo.commit_line(commit, 'Its own'),
   })
 end
 
@@ -1266,7 +1266,7 @@ T['the commits window']['lists the editor’s commits first, as ever, then each 
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
-    commit:sub(1, 7) .. ' The agent’s',
+    git_repo.commit_line(commit, 'The agent’s'),
   })
 end
 
@@ -1280,11 +1280,11 @@ T['the selection of another worktree']['goes back to Session work, the cursor wi
   begin_and_show(top)
   expect_lines(
     COMMITS,
-    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+    commits_then({ 'Worktree agent (agent)', git_repo.commit_line(commit, 'The agent’s') })
   )
   go_to_commits_line(5)
   expect_lines(FILES, {
-    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    'Files in: ' .. git_repo.commit_line(commit, 'The agent’s (worktree agent)'),
     '  M notes.txt',
   })
   git_repo.git(top, { 'worktree', 'remove', '--force', agent })
@@ -1305,7 +1305,7 @@ T['the selection of another worktree']['stays its commit when the lists are read
   begin_and_show(top)
   go_to_commits_line(5)
   expect_lines(FILES, {
-    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    'Files in: ' .. git_repo.commit_line(commit, 'The agent’s (worktree agent)'),
     '  M notes.txt',
   })
   wait_for_the_reads()
@@ -1314,7 +1314,7 @@ T['the selection of another worktree']['stays its commit when the lists are read
 
   wait_for_the_reads(2)
   eq(lines_of(FILES), {
-    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    'Files in: ' .. git_repo.commit_line(commit, 'The agent’s (worktree agent)'),
     '  M notes.txt',
   })
 end
@@ -1327,11 +1327,11 @@ T['the selection of another worktree']['becomes the worktree’s whole change, t
   begin_and_show(top)
   expect_lines(
     COMMITS,
-    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+    commits_then({ 'Worktree agent (agent)', git_repo.commit_line(commit, 'The agent’s') })
   )
   go_to_commits_line(5)
   expect_lines(FILES, {
-    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    'Files in: ' .. git_repo.commit_line(commit, 'The agent’s (worktree agent)'),
     '  M notes.txt',
   })
   git_repo.git(agent, { 'commit', '--quiet', '--amend', '--message', 'Amended' })
@@ -1339,7 +1339,10 @@ T['the selection of another worktree']['becomes the worktree’s whole change, t
 
   child.lua("require('aineo.changes').refresh_shown_pane()")
 
-  expect_lines(COMMITS, commits_then({ 'Worktree agent (agent)', amended:sub(1, 7) .. ' Amended' }))
+  expect_lines(
+    COMMITS,
+    commits_then({ 'Worktree agent (agent)', git_repo.commit_line(amended, 'Amended') })
+  )
   expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
   eq(child.lua_get('vim.api.nvim_win_get_cursor(vim.fn.bufwinid(...))', { COMMITS }), { 4, 0 })
 end
@@ -1463,13 +1466,13 @@ T['the files window under another worktree’s whole change']['lists its commit 
   begin_and_show(top, { executable = stand_in })
   expect_lines(
     COMMITS,
-    commits_then({ 'Worktree agent (agent)', commit:sub(1, 7) .. ' The agent’s' })
+    commits_then({ 'Worktree agent (agent)', git_repo.commit_line(commit, 'The agent’s') })
   )
 
   go_to_commits_line(5)
 
   expect_lines(FILES, {
-    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    'Files in: ' .. git_repo.commit_line(commit, 'The agent’s (worktree agent)'),
     'The last refresh failed: fatal: broken',
   })
 end
@@ -1534,8 +1537,8 @@ T['a worktree’s base from the working branch']['lists the commits since the wo
   expect_lines(
     COMMITS,
     commits_landed_then(
-      { landed:sub(1, 7) .. ' Landed' },
-      { 'Worktree agent (agent)', mine:sub(1, 7) .. ' The agent’s' }
+      { git_repo.commit_line(landed, 'Landed') },
+      { 'Worktree agent (agent)', git_repo.commit_line(mine, 'The agent’s') }
     )
   )
 end
@@ -1578,8 +1581,8 @@ T['a worktree’s base from the working branch']['is counted from the remote’s
   expect_lines(
     COMMITS,
     commits_landed_then(
-      { landed:sub(1, 7) .. ' Landed' },
-      { 'Worktree agent (agent)', mine:sub(1, 7) .. ' The agent’s' }
+      { git_repo.commit_line(landed, 'Landed') },
+      { 'Worktree agent (agent)', git_repo.commit_line(mine, 'The agent’s') }
     )
   )
 end
@@ -1595,8 +1598,8 @@ T['a worktree’s base from the working branch']['is counted from the branch the
   expect_lines(
     COMMITS,
     commits_landed_then(
-      { landed:sub(1, 7) .. ' Landed' },
-      { 'Worktree agent (agent)', mine:sub(1, 7) .. ' The agent’s' }
+      { git_repo.commit_line(landed, 'Landed') },
+      { 'Worktree agent (agent)', git_repo.commit_line(mine, 'The agent’s') }
     )
   )
 end
@@ -1616,7 +1619,7 @@ T['a worktree’s base from the working branch']['is the editor’s comparison c
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
-    mine:sub(1, 7) .. ' The agent’s',
+    git_repo.commit_line(mine, 'The agent’s'),
   })
 end
 
@@ -1640,7 +1643,7 @@ T['a worktree’s base from the working branch']['is the editor’s comparison c
     'Landed in origin/nothing',
     'origin/nothing names no commit',
     'Worktree first (first)',
-    mine:sub(1, 7) .. ' The first’s',
+    git_repo.commit_line(mine, 'The first’s'),
     'Worktree second (second)',
     'No commits in this worktree',
   })
@@ -1671,9 +1674,9 @@ T['a worktree’s base from the working branch']['is the editor’s comparison c
     'Session work',
     'No commits on this session',
     'Landed in unrelated',
-    git_repo.git(top, { 'rev-parse', '--short=7', 'unrelated' }) .. ' Unrelated',
+    git_repo.commit_line(git_repo.git(top, { 'rev-parse', 'unrelated' }), 'Unrelated'),
     'Worktree agent (agent)',
-    mine:sub(1, 7) .. ' The agent’s',
+    git_repo.commit_line(mine, 'The agent’s'),
   })
 end
 
@@ -1702,8 +1705,8 @@ T['a worktree’s base from the working branch']['says why under every worktree 
   expect_lines(
     COMMITS,
     commits_landed_then(
-      { landed:sub(1, 7) .. ' Landed' },
-      { 'Worktree agent (agent)', mine:sub(1, 7) .. ' The agent’s' }
+      { git_repo.commit_line(landed, 'Landed') },
+      { 'Worktree agent (agent)', git_repo.commit_line(mine, 'The agent’s') }
     )
   )
   turn_on(switch)
@@ -1716,10 +1719,10 @@ T['a worktree’s base from the working branch']['says why under every worktree 
     'No commits on this session',
     'Landed in origin/dev',
     'The last refresh failed: fatal: broken',
-    landed:sub(1, 7) .. ' Landed',
+    git_repo.commit_line(landed, 'Landed'),
     'Worktree agent (agent)',
     'The last refresh failed: fatal: broken',
-    mine:sub(1, 7) .. ' The agent’s',
+    git_repo.commit_line(mine, 'The agent’s'),
   })
 end
 
@@ -1757,7 +1760,7 @@ T['a worktree’s base from the working branch']['moves with the working branch 
   expect_lines(
     COMMITS,
     commits_landed_then(
-      { mine:sub(1, 7) .. ' The agent’s', landed:sub(1, 7) .. ' Landed' },
+      { git_repo.commit_line(mine, 'The agent’s'), git_repo.commit_line(landed, 'Landed') },
       { 'Worktree agent (agent)', 'No commits in this worktree' }
     )
   )
@@ -1779,9 +1782,9 @@ T['a worktree’s base from the working branch']['is not read at all for a workt
     'Session work',
     'No commits on this session',
     'Landed in ' .. WORKING_BRANCH,
-    landed:sub(1, 7) .. ' Landed',
+    git_repo.commit_line(landed, 'Landed'),
     'Worktree agent (agent)',
-    mine:sub(1, 7) .. ' The agent’s',
+    git_repo.commit_line(mine, 'The agent’s'),
     'Worktree fresh (fresh)',
     'No commits in this worktree',
   })
@@ -1800,15 +1803,15 @@ T['a worktree’s base from the working branch']['says why under the worktree wh
   begin_and_show_working_on(top, WORKING_BRANCH, { executable = stand_in })
   local other_listed = {
     'Worktree other (unrelated)',
-    theirs:sub(1, 7) .. ' The other’s',
-    unrelated .. ' Unrelated',
+    git_repo.commit_line(theirs, 'The other’s'),
+    git_repo.commit_line(unrelated, 'Unrelated'),
   }
   expect_lines(
     COMMITS,
     commits_landed_then(
-      { landed:sub(1, 7) .. ' Landed' },
+      { git_repo.commit_line(landed, 'Landed') },
       vim.list_extend(
-        { 'Worktree agent (agent)', mine:sub(1, 7) .. ' The agent’s' },
+        { 'Worktree agent (agent)', git_repo.commit_line(mine, 'The agent’s') },
         other_listed
       )
     )
@@ -1819,13 +1822,13 @@ T['a worktree’s base from the working branch']['says why under the worktree wh
 
   expect_lines(
     COMMITS,
-    commits_landed_then({ landed:sub(1, 7) .. ' Landed' }, {
+    commits_landed_then({ git_repo.commit_line(landed, 'Landed') }, {
       'Worktree agent (agent)',
-      mine:sub(1, 7) .. ' The agent’s',
+      git_repo.commit_line(mine, 'The agent’s'),
       'Worktree other (unrelated)',
       'The last refresh failed: fatal: broken',
-      theirs:sub(1, 7) .. ' The other’s',
-      unrelated .. ' Unrelated',
+      git_repo.commit_line(theirs, 'The other’s'),
+      git_repo.commit_line(unrelated, 'Unrelated'),
     })
   )
 end
@@ -1843,7 +1846,7 @@ T['a worktree’s base from the working branch']['says why under a worktree whos
       'Landed in origin/nothing',
       'origin/nothing names no commit',
       'Worktree agent (agent)',
-      mine:sub(1, 7) .. ' The agent’s',
+      git_repo.commit_line(mine, 'The agent’s'),
     })
   )
   turn_on(switch)
@@ -1857,7 +1860,7 @@ T['a worktree’s base from the working branch']['says why under a worktree whos
       'origin/nothing names no commit',
       'Worktree agent (agent)',
       'The last refresh failed: fatal: broken',
-      mine:sub(1, 7) .. ' The agent’s',
+      git_repo.commit_line(mine, 'The agent’s'),
     })
   )
 end
@@ -1875,8 +1878,8 @@ T['a worktree’s base from the working branch']['says why when the merge base w
   expect_lines(
     COMMITS,
     commits_landed_then(
-      { landed:sub(1, 7) .. ' Landed' },
-      { 'Worktree agent (agent)', mine:sub(1, 7) .. ' The agent’s' }
+      { git_repo.commit_line(landed, 'Landed') },
+      { 'Worktree agent (agent)', git_repo.commit_line(mine, 'The agent’s') }
     )
   )
   turn_on(stand_in .. '.broken')
@@ -1885,10 +1888,10 @@ T['a worktree’s base from the working branch']['says why when the merge base w
 
   expect_lines(
     COMMITS,
-    commits_landed_then({ landed:sub(1, 7) .. ' Landed' }, {
+    commits_landed_then({ git_repo.commit_line(landed, 'Landed') }, {
       'Worktree agent (agent)',
       'The last refresh failed: fatal: broken',
-      mine:sub(1, 7) .. ' The agent’s',
+      git_repo.commit_line(mine, 'The agent’s'),
     })
   )
 end
