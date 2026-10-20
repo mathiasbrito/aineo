@@ -382,7 +382,8 @@ aineo starts Claude Code with an MCP server of its own. Its tools `report` and
   creates a git worktree or branch for new work, with the `kind` (`worktree`
   or `branch`), the `path` or `branch` name, the `base` commit it was created
   from, and, optionally, a short `label`. A call without `base`, or with one
-  git cannot resolve in the session's repository, is refused. It only informs
+  git cannot resolve in the worktree's folder nor in the session's repository,
+  is refused; the agent corrects it and calls again. It only informs
   aineo: the changes pane lists the report in its `Reported` section and shows
   that work as its focused view (see The changes pane), and `s` lists it
   first. A later call for the same worktree or branch replaces its base and

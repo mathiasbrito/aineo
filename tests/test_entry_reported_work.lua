@@ -63,6 +63,7 @@ local T = MiniTest.new_set({
 ---@field top string
 ---@field worktree string
 ---@field head string the full id of the repository's `HEAD`
+---@field worktree_head string the full id of the worktree's `HEAD`, one commit past `head`
 
 --- Makes the repository of `ReportedWorkRepository`, opens the layout in it
 --- with the fake `claude` once Claude Code is ready, and returns where it
@@ -84,7 +85,9 @@ local function open_with_worktree(name)
   child.cmd('Aineo open')
   claude_session.wait_for_status(child, 'ready')
   local head = git_repo.git(top, { 'rev-parse', 'HEAD' })
-  return { top = top, worktree = worktree, head = head }, claude_session.start_token(fake, 1)
+  local worktree_head = git_repo.git(worktree, { 'rev-parse', 'HEAD' })
+  return { top = top, worktree = worktree, head = head, worktree_head = worktree_head },
+    claude_session.start_token(fake, 1)
 end
 
 --- Offers the child's MCP home the announcement `work` of the start
@@ -128,14 +131,52 @@ end
 
 T['an announcement'] = MiniTest.new_set()
 
-T['an announcement']['has its base resolved to a full id in the session’s repository before the tab takes it'] = function()
+--- The Lua that keeps, in `_G.bases`, the base of each report the first
+--- tab's changes home is handed, as it is handed it, and hands it on.
+local KEEP_BASES_TAKEN = [[
+  local changes = require('aineo.entry.registry').tab_list[1].homes.changes
+  local add = changes.add_reported_work
+  _G.bases = {}
+  changes.add_reported_work = function(work, tell)
+    table.insert(_G.bases, work.base)
+    return add(work, tell)
+  end
+]]
+
+--- The bases the first tab's changes home was handed (`KEEP_BASES_TAKEN`).
+---
+---@return string[]
+local function bases_taken()
+  return child.lua_get('_G.bases')
+end
+
+T['an announcement']['is taken by the tab with its base as the full id it names in the reported worktree’s folder'] = function()
   local repository, token = open_with_worktree('resolved')
+  child.lua(KEEP_BASES_TAKEN)
 
   local taken = announce({ kind = 'worktree', path = repository.worktree, base = 'HEAD' }, token)
 
-  eq(taken, true)
-  local expected = { ('[reported] feature from %s'):format(repository.head:sub(1, 7)) }
-  eq(wait_for_offered(expected), expected)
+  eq({ taken, bases_taken() }, { true, { repository.worktree_head } })
+end
+
+T['an announcement']['of a branch a worktree has checked out has its base resolved in that worktree’s folder'] = function()
+  local repository, token = open_with_worktree('resolved-branch')
+  child.lua(KEEP_BASES_TAKEN)
+
+  announce({ kind = 'branch', branch = 'feature', base = 'HEAD' }, token)
+
+  eq(bases_taken(), { repository.worktree_head })
+end
+
+T['an announcement']['of a branch with no worktree, or of a folder that is no repository yet, has its base resolved in the session’s repository'] = function()
+  local repository, token = open_with_worktree('resolved-session')
+  child.lua(KEEP_BASES_TAKEN)
+  local not_yet = vim.fs.joinpath(vim.fs.dirname(repository.top), 'not-yet')
+
+  announce({ kind = 'branch', branch = 'lonely', base = 'HEAD' }, token)
+  announce({ kind = 'worktree', path = not_yet, base = 'HEAD' }, token)
+
+  eq(bases_taken(), { repository.head, repository.head })
 end
 
 T['an announcement']['whose base git cannot resolve is refused in words naming it, and nothing is recorded'] = function()
@@ -145,7 +186,13 @@ T['an announcement']['whose base git cannot resolve is refused in words naming i
     announce({ kind = 'worktree', path = repository.worktree, base = 'no-such-ref' }, token)
   announce({ kind = 'branch', branch = 'lonely', base = 'HEAD' }, token)
 
-  eq(answer, ('base: no-such-ref names no commit in %s'):format(repository.top))
+  eq(
+    answer,
+    ('base: no-such-ref names no commit in %s, nor in %s'):format(
+      repository.worktree,
+      repository.top
+    )
+  )
   local only_lonely = {
     ('[reported] lonely from %s'):format(repository.head:sub(1, 7)),
     '[reported] All reported work (1)',

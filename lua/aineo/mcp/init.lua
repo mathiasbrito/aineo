@@ -132,7 +132,7 @@ end
 --- The paragraph appended to Claude Code's system prompt after the report's
 --- instructions: the announcement tool's own rule, which every agent and
 --- subagent follows — when to call it and with what — and that its reply
---- asks for nothing.
+--- asks for nothing but a refusal, which the agent corrects and calls again.
 ---
 ---@return string
 function M.announce_instructions()
@@ -140,7 +140,8 @@ function M.announce_instructions()
     'Required for every agent and subagent: call `%s` once right after you create'
     .. ' a git branch or worktree for new work, with kind, its path or branch,'
     .. ' the base commit it was created from, and a short label.'
-    .. ' It only informs aineo; do not act on its reply.'
+    .. ' It only informs aineo: if it refuses, correct the call as the refusal says and call again;'
+    .. ' otherwise do not act on its reply.'
   ):format(M.announce_tool_name())
 end
 

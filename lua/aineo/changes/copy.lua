@@ -47,11 +47,12 @@ local REPORT_WAIT_MS = 60000
 --- never lists can make.
 local MOST_WAITING = 32
 
---- How long git may take to resolve a reported base before it is stopped:
---- far longer than `rev-parse` takes, and short enough that the editor,
---- which waits for the answer before it answers the agent, answers well
---- inside the 5 s the report server waits for it.
-local BASE_RESOLUTION_LIMIT_MS = 3000
+--- How long each git run that resolves a reported base may take before it
+--- is stopped: far longer than `rev-parse` takes, and short enough that the
+--- four runs a resolution may make end before the editor, which waits for
+--- the answer before it answers the agent, stops waiting at 4 s, inside
+--- the 5 s the report server waits for it.
+local BASE_RESOLUTION_LIMIT_MS = 900
 
 --- Starts a `vim.uv` timer that runs `act` once, on the main loop, after
 --- `milliseconds`, and returns what stops and closes it.
@@ -94,7 +95,7 @@ end
 ---@field refresh_shown_pane fun()
 ---@field toggle_focused_view fun() reads the shown pane again, and, with the cursor in one of its windows, switches it between its default view and the focused view
 ---@field add_reported_work fun(work: aineo.changes.ReportedWork, tell: fun(message: string)): boolean whether the home took the report
----@field resolve_reported_base fun(base: string, done: fun(commit: string|nil, refusal: string|nil)) resolves a reported base to its full id in the session's repository, or says why it is refused
+---@field resolve_reported_base fun(work: aineo.changes.ReportedWork, done: fun(commit: string|nil, refusal: string|nil)) resolves a report's base to its full id in the work's folder, else in the session's repository, or says why it is refused
 ---@field pane_buffers fun(): { files: integer, commits: integer }
 ---@field close_shown_diff fun() closes the windows of the current tab page that show a diff the home showed, and tells once when none was closed
 ---@field focused_work fun(): aineo.changes.FocusedWork|nil what the focused view shows alone, nil for the default view
@@ -2938,17 +2939,22 @@ function M.new(label)
     return true
   end
 
-  --- Resolves `base`, the commit an agent says its work was made from, as
-  --- git reads a name in the session's repository (`aineo.git`'s
-  --- `resolve_commit()`), each git run stopped after
-  --- `BASE_RESOLUTION_LIMIT_MS`, and calls `done(commit)` with its full id,
-  --- or `done(nil, refusal)` with why it is refused, in words for the agent
-  --- that name the field: no session yet, no repository found for it, a name
-  --- that gives no commit there, or git's own failure.
+  --- Resolves `work.base`, the commit an agent says its work was made from,
+  --- as git reads a name (`aineo.git`'s `resolve_commit()`): first in the
+  --- folder of the work — a worktree's own folder, or the folder of the
+  --- worktree that has a reported branch checked out — so that `HEAD` is the
+  --- agent's own, then, when that folder is no repository or gives no commit,
+  --- in the session's repository; a git failure there, or in listing the
+  --- worktrees, is passed by for the session's repository, whose own
+  --- answer, a failure included, is the one given. Each git run is stopped after
+  --- `BASE_RESOLUTION_LIMIT_MS`. Calls `done(commit)` with the full id, or
+  --- `done(nil, refusal)` with why it is refused, in words for the agent that
+  --- name the field: no session yet, no repository found for it, a name that
+  --- gives no commit in either place, or git's own failure.
   ---
-  ---@param base string
+  ---@param work aineo.changes.ReportedWork a report whose `base` is given
   ---@param done fun(commit: string|nil, refusal: string|nil)
-  function home.resolve_reported_base(base, done)
+  function home.resolve_reported_base(work, done)
     if not (session and session.repository) then
       done(nil, 'base: aineo has found no repository for this session to read it in')
       return
@@ -2957,20 +2963,58 @@ function M.new(label)
     local options = vim.tbl_extend('force', session.settings.git or {}, {
       limit_ms = BASE_RESOLUTION_LIMIT_MS,
     })
-    git.resolve_commit(repository, base, function(failure, commit)
-      if failure then
-        done(nil, 'base: ' .. lines.words_of(failure))
-      elseif not commit then
-        done(
-          nil,
-          ('base: %s names no commit in %s'):format(
-            lines.quoted_path(base),
-            lines.quoted_path(repository.top)
+    local base = lines.quoted_path(work.base)
+    local function in_repository(tried_top)
+      git.resolve_commit(repository, work.base, function(failure, commit)
+        if failure then
+          done(nil, 'base: ' .. lines.words_of(failure))
+        elseif commit then
+          done(commit)
+        elseif tried_top and tried_top ~= repository.top then
+          done(
+            nil,
+            ('base: %s names no commit in %s, nor in %s'):format(
+              base,
+              lines.quoted_path(tried_top),
+              lines.quoted_path(repository.top)
+            )
           )
-        )
-      else
-        done(commit)
+        else
+          done(
+            nil,
+            ('base: %s names no commit in %s'):format(base, lines.quoted_path(repository.top))
+          )
+        end
+      end, options)
+    end
+    local function in_folder(folder)
+      if not folder then
+        in_repository(nil)
+        return
       end
+      git.find_repository(folder, function(failure, found)
+        if failure or not found then
+          in_repository(nil)
+          return
+        end
+        git.resolve_commit(found, work.base, function(_, commit)
+          if commit then
+            done(commit)
+          else
+            in_repository(found.top)
+          end
+        end, options)
+      end, options)
+    end
+    if work.kind == 'worktree' then
+      in_folder(work.path)
+      return
+    end
+    git.list_worktrees(repository, function(_, listed)
+      local checked_out = vim.iter(listed or {}):find(function(worktree)
+        return worktree.branch == work.branch
+      end)
+      in_folder(checked_out and checked_out.top)
     end, options)
   end
 
