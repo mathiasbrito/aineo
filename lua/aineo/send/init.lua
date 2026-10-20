@@ -1,5 +1,6 @@
 --- aineo's Send home, `require('aineo.send')`: the Input buffer's text, or
---- a Visual selection of it, into Claude Code's prompt.
+--- a Visual selection of it, into Claude Code's prompt, and a text pasted
+--- there with no Enter, such as the explorer's `@path` (`paste()`).
 
 local claude = require('aineo.claude')
 local layout = require('aineo.layout')
@@ -175,6 +176,31 @@ function M.send(target)
   write_or_put_back(session, text, function()
     vim.api.nvim_buf_set_lines(input, 0, -1, false, lines)
   end)
+end
+
+--- Writes `text`, without control bytes (`without_control_bytes()`), to the
+--- terminal of Claude Code as one bracketed paste with no Enter after it,
+--- in one write, so that it waits in Claude Code's prompt, after any draft
+--- there, for the user to go on typing. Writes nothing, and tells the user
+--- why with one `vim.notify()` warning, when Claude Code is not ready for
+--- input as `claude.session_status()` reports it, as `send()` tells it.
+--- Raises the write's error as it is when the write fails.
+---
+--- With `target`, writes to that session home's Claude Code and asks its
+--- status in place of the module's; its `input` is not read. Raises an error
+--- naming the field when `target` or its `session` is of the wrong kind.
+---
+---@param text string
+---@param target? aineo.send.Target
+function M.paste(text, target)
+  vim.validate('text', text, 'string')
+  target = validated(target)
+  local session = target.session or claude
+  local status = session.session_status()
+  if status ~= 'ready' then
+    return refuse(status or 'not_started')
+  end
+  session.write_to_session(PASTE_START .. without_control_bytes(text) .. PASTE_END)
 end
 
 --- The line `lnum` of the current buffer, a NUL byte in it kept as one.

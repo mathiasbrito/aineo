@@ -598,4 +598,58 @@ T['send()']['says Input is empty before saying Claude is not ready'] = function(
   })
 end
 
+--- Pastes `text` into Claude's prompt in `child` (`aineo.send`'s `paste()`),
+--- keeping an error it raises for `send.messages()`.
+---
+---@param text string
+local function paste(text)
+  child.lua(
+    [[
+      local pasted, failure = pcall(require('aineo.send').paste, ...)
+      if not pasted then
+        table.insert(_G.aineo_test_messages, { error = failure })
+      end
+    ]],
+    { text }
+  )
+end
+
+T['paste()'] = MiniTest.new_set()
+
+T['paste()']['writes the text as one bracketed paste and no Enter, its control bytes removed'] = function()
+  local fake = claude.fake('paste', 'ready')
+  start_ready_session(fake)
+  local before = #claude.received(fake)
+  local expected = '\27[200~@src/a b.lua \27[201~'
+
+  paste('@src/a\27 b.lua ')
+
+  eq(claude.wait_for_received_after(fake, before, #expected + 1, ONE_WRITE_PATIENCE_MS), expected)
+  eq(send.messages(child), {})
+end
+
+T['paste()']['refuses, saying so once, before Claude has started'] = function()
+  send.open_layout_without_session(child)
+
+  paste('@a.txt ')
+
+  eq(send.messages(child), {
+    { message = 'aineo: nothing sent — Claude has not started', level = WARN },
+  })
+end
+
+T['paste()']['refuses, saying so once, behind the workspace-trust dialog'] = function()
+  local fake = claude.fake('paste-trust', 'trust')
+  local buffer = start_session(fake)
+  claude.wait_for_screen(child, buffer, 'Yes, I trust this folder')
+  local before = #claude.received(fake)
+
+  paste('@a.txt ')
+
+  eq({ sent = sent_after(fake, before), messages = send.messages(child) }, {
+    sent = '',
+    messages = { { message = NOT_READY, level = WARN } },
+  })
+end
+
 return T

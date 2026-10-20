@@ -1,4 +1,5 @@
---- The files a repository holds, as `git ls-files` lists them.
+--- The files a repository holds, and those it ignores, as `git ls-files`
+--- lists them.
 
 local process = require('aineo.git.process')
 
@@ -24,6 +25,33 @@ function M.list_files(run, found, done)
     {
       directory = found.top,
       arguments = { 'ls-files', '-z', '--cached', '--others', '--exclude-standard' },
+    },
+    process.or_fail(done, function(output)
+      done(nil, parse_paths(output.stdout))
+    end)
+  )
+end
+
+--- Lists the entries of `found` its ignore rules leave out and git does not
+--- track, as paths relative to its top level, a folder whose every entry is
+--- ignored given as itself, ending in `/`, and calls `done(nil, paths)`, or
+--- `done(failure)`.
+---
+---@param run aineo.git.Run
+---@param found aineo.git.Repository
+---@param done fun(failure: aineo.git.Failure|nil, paths: string[]|nil)
+function M.ignored_files(run, found, done)
+  run(
+    {
+      directory = found.top,
+      arguments = {
+        'ls-files',
+        '-z',
+        '--others',
+        '--ignored',
+        '--exclude-standard',
+        '--directory',
+      },
     },
     process.or_fail(done, function(output)
       done(nil, parse_paths(output.stdout))
