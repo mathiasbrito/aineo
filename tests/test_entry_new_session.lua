@@ -205,7 +205,7 @@ local COMMITS = 'aineo://changes-commits'
 ---@param subject string
 ---@return string
 local function listed(commit, subject)
-  return commit:sub(1, 7) .. ' ' .. subject
+  return git_repo.commit_line(commit, subject)
 end
 
 --- Whether the child's commits window lists `line`, once it does so as

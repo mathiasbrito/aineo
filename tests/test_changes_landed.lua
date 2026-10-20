@@ -168,7 +168,7 @@ end
 ---@param subject string
 ---@return string
 local function commit_line(commit, subject)
-  return commit:sub(1, 7) .. ' ' .. subject
+  return git_repo.commit_line(commit, subject)
 end
 
 --- Makes the current window the one showing the child's buffer named
@@ -1180,10 +1180,12 @@ T['The colours']['of the heading are the whole line in AineoChangesFilter, of a 
     COMMITS,
     { UNCOMMITTED, SESSION_WORK, NO_COMMITS, HEADING, commit_line(commit, 'Add b') }
   )
-  eq(vim.list_slice(child.lua_get(PANE_COLOURS, { COMMITS }), 4, 6), {
+  eq(vim.list_slice(child.lua_get(PANE_COLOURS, { COMMITS }), 4, 8), {
     { 3, 0, #HEADING, 'AineoChangesFilter' },
     { 4, 0, 7, 'AineoChangesCommitId' },
-    { 4, 8, #commit_line(commit, 'Add b'), 'AineoChangesCommitSubject' },
+    { 4, 8, 19, 'AineoChangesCommitAuthor' },
+    { 4, 20, 23, 'AineoChangesCommitAge' },
+    { 4, 29, #commit_line(commit, 'Add b'), 'AineoChangesCommitSubject' },
   })
 end
 

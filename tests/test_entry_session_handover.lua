@@ -256,7 +256,7 @@ local COMMITS = 'aineo://changes-commits'
 ---@param subject string
 ---@return string
 local function commit_line(commit, subject)
-  return commit:sub(1, 7) .. ' ' .. subject
+  return git_repo.commit_line(commit, subject)
 end
 
 T['a resume with no conversation'] = MiniTest.new_set()

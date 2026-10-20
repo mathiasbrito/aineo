@@ -23,6 +23,12 @@ M.COMMIT_ID_GROUP = 'AineoChangesCommitId'
 --- The group a commit's subject shows in.
 M.COMMIT_SUBJECT_GROUP = 'AineoChangesCommitSubject'
 
+--- The group a commit's author name shows in.
+M.COMMIT_AUTHOR_GROUP = 'AineoChangesCommitAuthor'
+
+--- The group a commit's age shows in.
+M.COMMIT_AGE_GROUP = 'AineoChangesCommitAge'
+
 --- The group the commits window's two fixed lines and its Landed heading,
 --- and the files window's first line, show in, whole.
 M.FILTER_GROUP = 'AineoChangesFilter'
@@ -44,6 +50,8 @@ local DEFAULT_LINKS = {
   [M.KIND_GROUPS.deleted] = 'Removed',
   [M.SAVED_GROUP] = 'WarningMsg',
   [M.COMMIT_ID_GROUP] = 'Identifier',
+  [M.COMMIT_AUTHOR_GROUP] = 'Identifier',
+  [M.COMMIT_AGE_GROUP] = 'Comment',
   [M.FILTER_GROUP] = 'Title',
   [M.NOTE_GROUP] = 'Comment',
   [M.FAILURE_GROUP] = 'DiagnosticWarn',

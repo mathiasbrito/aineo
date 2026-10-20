@@ -589,7 +589,10 @@ local function session_with_a_commit(name)
   git_repo.write(top, 'a.txt', numbered_lines(20, { 10 }))
   local commit = git_repo.commit_all(top, 'Change ten')
   child.lua("require('aineo.changes').refresh_shown_pane()")
-  expect_lines(COMMITS, { 'Uncommitted', 'Session work', commit:sub(1, 7) .. ' Change ten' })
+  expect_lines(
+    COMMITS,
+    { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Change ten') }
+  )
   return top, commit
 end
 
@@ -606,7 +609,7 @@ end
 
 T['F']['in a file’s diff within a commit keeps the commit’s header and shows the whole file'] = function()
   local _, commit = session_with_a_commit('fullcontext-commit-file')
-  select_filter_at(3, { 'Files in: ' .. commit:sub(1, 7) .. ' Change ten', '  M a.txt' })
+  select_filter_at(3, { 'Files in: ' .. git_repo.commit_line(commit, 'Change ten'), '  M a.txt' })
   enter_window_of(FILES)
   child.type_keys('2G', '<CR>')
   wait_for_diffs(1)
@@ -739,12 +742,12 @@ T['F']['in the diff of a file under another worktree’s commit shows the whole 
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
-    commit:sub(1, 7) .. ' The agent’s',
+    git_repo.commit_line(commit, 'The agent’s'),
   })
   enter_window_of(COMMITS)
   child.type_keys('5G')
   expect_lines(FILES, {
-    'Files in: ' .. commit:sub(1, 7) .. ' The agent’s (worktree agent)',
+    'Files in: ' .. git_repo.commit_line(commit, 'The agent’s (worktree agent)'),
     '  M a.txt',
   })
   enter_window_of(FILES)

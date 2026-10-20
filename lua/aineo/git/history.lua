@@ -8,6 +8,8 @@ local M = {}
 ---@class aineo.git.Commit
 ---@field id string its full id
 ---@field subject string the first line of its message
+---@field author string its author's name, as recorded
+---@field authored_at integer when its author wrote it, in seconds since the epoch
 
 --- The commits since a base.
 ---@class aineo.git.CommitsSince
@@ -21,15 +23,26 @@ local IS_ANCESTOR_CODE = 0
 --- The code it exits with when the first is not: an answer, not a failure.
 local NOT_ANCESTOR_CODE = 1
 
---- The commits `git log -z --format='%H %s'` gave as `output`, in its order.
+--- What `git log -z` writes for each commit: its id, the time its author
+--- wrote it and the author's name, a line break, then its subject. A name
+--- holds no line break, and a subject, the first paragraph of a message
+--- on one line, holds none either, so the first line break ends the name.
+local LOG_FORMAT = '--format=%H %at %an%n%s'
+
+--- The commits `git log -z` gave as `output` in `LOG_FORMAT`, in its order.
 ---
 ---@param output string
 ---@return aineo.git.Commit[]
 local function parse_log(output)
   local commits = {}
   for _, record in ipairs(vim.split(output, '\0', { plain = true, trimempty = true })) do
-    local id, subject = record:match('^(%x+) (.*)$')
-    table.insert(commits, { id = id, subject = subject })
+    local id, authored_at, author, subject = record:match('^(%x+) (%d+) ([^\n]*)\n(.*)$')
+    table.insert(commits, {
+      id = id,
+      subject = subject,
+      author = author,
+      authored_at = tonumber(authored_at),
+    })
   end
   return commits
 end
@@ -49,7 +62,7 @@ function M.commits_since(run, found, base, done)
       arguments = {
         'log',
         '-z',
-        '--format=%H %s',
+        LOG_FORMAT,
         '--no-show-signature',
         '--encoding=UTF-8',
         '--ignore-missing',
@@ -96,7 +109,7 @@ function M.commits_between(run, found, from, to, done)
       arguments = {
         'log',
         '-z',
-        '--format=%H %s',
+        LOG_FORMAT,
         '--no-show-signature',
         '--encoding=UTF-8',
         '--end-of-options',

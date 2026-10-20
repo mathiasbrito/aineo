@@ -275,13 +275,13 @@ T['<S-CR>']['on a file listed under a commit of the editor’s own opens the wor
   expect_pane_lines('commits', {
     'Uncommitted',
     'Session work',
-    commit:sub(1, 7) .. ' Change notes',
+    git_repo.commit_line(commit, 'Change notes'),
   })
   enter_commits_window()
   child.type_keys('3G')
   expect_pane_lines(
     'files',
-    { 'Files in: ' .. commit:sub(1, 7) .. ' Change notes', '  M notes.txt' }
+    { 'Files in: ' .. git_repo.commit_line(commit, 'Change notes'), '  M notes.txt' }
   )
 
   press_shift_enter_on(2)
@@ -411,7 +411,7 @@ local function start_with_branch_shown_alone(name)
     return #pane_lines('commits') > 3
   end)
   pick(2)
-  expect_pane_lines('commits', { 'Branch feature/p', tip:sub(1, 7) .. ' Work feature/p' })
+  expect_pane_lines('commits', { 'Branch feature/p', git_repo.commit_line(tip, 'Work feature/p') })
   git_repo.wait_until('the branch file listed', function()
     return vim.tbl_contains(pane_lines('files'), '  A branch.txt')
   end)
@@ -552,8 +552,8 @@ T['<S-CR>']['on a file under a commit of a branch checked out nowhere shows the 
   child.lua('_G.home.refresh_shown_pane()')
   expect_pane_lines('commits', {
     'Branch feature/p',
-    tip:sub(1, 7) .. ' Later work',
-    first:sub(1, 7) .. ' Work feature/p',
+    git_repo.commit_line(tip, 'Later work'),
+    git_repo.commit_line(first, 'Work feature/p'),
   })
   enter_commits_window()
   child.type_keys('3G')

@@ -98,6 +98,22 @@ function M.line_of(buffer, key)
   return page and line_listing(page, key)
 end
 
+--- The first line of `buffer` that lists a file in the page it was last
+--- given, or nil when none does.
+---
+---@param buffer integer
+---@return integer|nil line
+function M.first_file_line(buffer)
+  local page = pages[buffer]
+  local first = nil
+  for line, entry in pairs(page and page.entries or {}) do
+    if entry.change and (not first or line < first) then
+      first = line
+    end
+  end
+  return first
+end
+
 --- The entry line `line` of `buffer` lists in the page it was last given,
 --- or nil when that line lists none.
 ---

@@ -200,6 +200,8 @@ and, in Terminal mode, `<C-\>Z` do the same.
 | `s` | in either window of the pane: picks a worktree or a branch to show alone |
 | `j`, `k` | in the commits window: the line under the cursor chooses which files the files window lists |
 | Enter | in the files window: shows the file's diff in the file column and moves there; in the commits window: on Uncommitted, Session work, a commit or the Landed heading, shows that whole diff |
+| `l` | in the commits window: moves the cursor to the files window, the line under the cursor still chosen |
+| `<BS>` | in the files window: moves the cursor back to the commits window, onto the line that chose the files listed |
 | `l`, `h` | in the files window: show the diff against the file's previous version, against `HEAD`, and keep the cursor on the list |
 | `gf` | in the files window: opens the working tree's file, or, under a commit, the file as that commit has it |
 | `\<CR>`, `<S-CR>` | in the files window: open the file for editing, in the working tree it belongs to |
@@ -242,6 +244,13 @@ session's commits, then what landed in your working branch, then each other
 worktree of the repository with its commits. The line under the cursor
 chooses what the upper window lists. aineo never fetches: what landed is what
 your repository last knew.
+
+Each commit line reads `<id> <author and age> <subject>`: the author and age
+fill a column 20 cells wide whatever the name (a long name is cut with `…`, the
+age never is), so the subjects line up. The age is `now`, then `<n>m`, `<n>h`,
+`<n>d`, `<n>w`, `<n>mo` (30 days) or `<n>y` (365 days) since the commit was
+written. `l` in the commits window moves to the files window, with the choice
+kept, and `<BS>` there moves back to the line that made it.
 
 - **Look at a change.** Enter on a file shows its diff in the file column,
   and the cursor goes there; in the commits window, Enter on Uncommitted,

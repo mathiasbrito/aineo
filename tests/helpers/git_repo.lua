@@ -96,6 +96,57 @@ function M.commit_all(top, message)
   return M.git(top, { 'rev-parse', 'HEAD' })
 end
 
+--- The author and age column (`aineo.changes.author_column`) of a commit
+--- the suites' git has just made: the suites' author, `now`, and the spaces
+--- that fill the column to 20 cells.
+M.JUST_MADE_COLUMN = 'aineo tests now     '
+
+--- The commits window's line for `commit`, a full id, with `column`, the
+--- 20 cells of its author and age, and `subject`.
+---
+---@param commit string
+---@param column string
+---@param subject string
+---@return string
+function M.commit_line_of(commit, column, subject)
+  return ('%s %s %s'):format(commit:sub(1, 7), column, subject)
+end
+
+--- The commits window's line for `commit`, a full id, that the suites' git
+--- has just made, with `subject`.
+---
+---@param commit string
+---@param subject string
+---@return string
+function M.commit_line(commit, subject)
+  return M.commit_line_of(commit, M.JUST_MADE_COLUMN, subject)
+end
+
+--- Stages every file under `top` and commits them with `message`, written
+--- by the author `name` at `authored_at`, seconds since the epoch; returns
+--- the new commit's full id.
+---
+---@param top string
+---@param message string
+---@param name string
+---@param authored_at integer
+---@return string commit
+function M.commit_all_authored(top, message, name, authored_at)
+  M.git(top, { 'add', '--all' })
+  M.git(top, {
+    'commit',
+    '--quiet',
+    '--allow-empty',
+    '--message',
+    message,
+    '--author',
+    name .. ' <author@aineo.invalid>',
+    '--date',
+    authored_at .. ' +0000',
+  })
+  return M.git(top, { 'rev-parse', 'HEAD' })
+end
+
 --- Makes `.tests/fixtures/git-<name>/repo` a repository whose one commit,
 --- `base`, holds `files` (path to lines).
 ---
