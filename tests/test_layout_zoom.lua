@@ -48,7 +48,7 @@ end
 --- What the layout tells the user when the cursor is in none of the right
 --- column's windows.
 local NOT_IN_THE_COLUMN =
-  'aineo: nothing zoomed — the cursor is in none of the windows aineo shows in the right column (the agent, changes, terminal and run panes)'
+  'aineo: nothing zoomed — the cursor is in none of the windows aineo shows in the right column (the agent, changes, terminal, run and explorer panes)'
 
 --- Toggles the zoom of the window the child's cursor is in and returns what
 --- the layout told the user meanwhile through `vim.notify()`, each

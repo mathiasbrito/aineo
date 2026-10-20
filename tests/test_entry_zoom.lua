@@ -48,7 +48,7 @@ local T = MiniTest.new_set({
 --- What `\z` tells the user when the cursor is in none of the right
 --- column's windows.
 local NOT_IN_THE_COLUMN =
-  'aineo: nothing zoomed — the cursor is in none of the windows aineo shows in the right column (the agent, changes, terminal and run panes)'
+  'aineo: nothing zoomed — the cursor is in none of the windows aineo shows in the right column (the agent, changes, terminal, run and explorer panes)'
 
 --- What `:Aineo zoom` tells the user when it is given a word it does not take.
 local ZOOM_USAGE = 'aineo: :Aineo zoom takes one of full'
