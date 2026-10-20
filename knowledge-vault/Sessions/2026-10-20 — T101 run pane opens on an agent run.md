@@ -23,7 +23,7 @@ When the agent's `run` tool starts a process, the run pane is now shown in the t
 ## What was done
 
 - `refresh_shown_stack()` showed the run pane again only when it was already shown. It is now `show_stack_in_current_tab()`: it shows the pane whichever pane was shown, when `tab.is_current()`, through `tab.show_pane('run')`, and tells an error once through `errors.run`. A calling tab in another tab page is left as it is. `run_stop` and `follow_processes()` are untouched.
-- The answer to the agent reads `Started "<name>" in the run pane, which is now shown, the cursor staying where it is.` The MCP tool description (`lua/aineo/mcp/run_tools.lua`) and the README did not say where the pane stays and are unchanged.
+- The answer to the agent reads `Started "<name>" in the run pane, which aineo brings into view when the user is in its tab page, the cursor staying where it is.` (true in both cases; the fix round changed it from "which is now shown", which was false for a tab in another tab page). The MCP tool description (`lua/aineo/mcp/run_tools.lua`) and the README did not say where the pane stays and are unchanged.
 
 ## Red and green
 
@@ -41,7 +41,7 @@ When the agent's `run` tool starts a process, the run pane is now shown in the t
 
 ## Open threads
 
-- The answer to the agent says the pane is shown also when the calling tab is in another tab page, where it is not; the run tools do not know the tab page the user is in.
+None.
 
 ## Commits
 

@@ -191,7 +191,7 @@ local function run(tab, arguments, context)
   end
   context.tell(('aineo: started %s in the run pane'):format(name))
   return done(
-    ('Started "%s" in the run pane, which is now shown, the cursor staying where it is.'):format(
+    ('Started "%s" in the run pane, which aineo brings into view when the user is in its tab page, the cursor staying where it is.'):format(
       name
     ) .. (' Read what it prints with run_output, name "%s".'):format(name)
   )
