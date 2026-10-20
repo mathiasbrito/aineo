@@ -47,6 +47,9 @@ pane shows in the middle column, from any window of the tab (|:Aineo-diff|).
 middle column, from any window of the tab but a floating one (|aineo-find|).
 `\z` zooms the window of the right column the cursor is in, to the column's
 whole height, and gives the heights back when pressed again (|aineo-zoom|).
+`\Z` zooms the window the cursor is in to the whole tab page, every other
+window shrinking to a sliver, and gives the sizes back when pressed again
+(|aineo-zoom-full|).
 In Visual mode, in Input, `\s` sends the selection alone and removes it from
 Input (|aineo-v_\s|).
 
@@ -232,7 +235,9 @@ windows are stacked from the top of the column to the bottom at equal heights
 (a row more for the first ones when the rows do not divide), the oldest at
 the top and the newest at the bottom. The winbar of each window names the
 command and the state of the process, `sleep 30 — running` or `sleep 30 —
-exited 1`.
+exited 1`. Each window starts at the end of its output and follows it, as a
+terminal window does while its cursor is on the last line; a window you
+scroll up in Normal mode stops following.
 
 What `\x` does depends on where the cursor is:
 - With no process in the tab, or with the cursor in one of the run pane's
@@ -335,6 +340,45 @@ remain; with the same rows as when you zoomed they come back exactly. `<C-w>=`
 while the run pane is zoomed equalizes the stack on screen but not the zoom:
 it stays on, and the next `\z` gives back the recorded heights, not the equal
 ones.
+
+Full zoom ~
+                                                             *aineo-zoom-full*
+`\Z` (|:Aineo-zoom-full|) zooms the window the cursor is in to the whole tab
+page: every other window shrinks to the least size Neovim gives a window,
+'winminwidth' columns or 'winminheight' lines (one of each by default), and
+the zoomed window takes the rest. The others stay open and visible as
+slivers, their winbars and status lines kept. It works in any window of an
+aineo tab page that does not float: Claude's window, the file column, a window
+of the right column under any pane, or a window you split off by hand
+(`:split`). In a tab page that is none of aineo's, or in a floating window,
+`\Z` changes nothing and tells you once so.
+
+`\Z` again gives every window the size it had when you zoomed, a resize you
+made by hand before it included, unless a window opened or closed meanwhile —
+the file column when Claude opens a file, the quickfix list, a split of the
+zoomed window: the sizes recorded no longer fit, and the layout's proportions
+are put back instead, the new windows keeping the size they have. `\Z`
+pressed in another window moves the zoom there; `\Z` in the zoomed window ends
+it. `\z` (|aineo-zoom|) pressed with the cursor in a window of the right
+column ends the full zoom first and then does what it does; a `\z` zoom that
+was on before the full zoom is on again once it ends. A `\z` that would change
+nothing leaves the full zoom as it is.
+
+The full zoom stays with the window it began in while the cursor goes
+elsewhere, as `\z`'s does. A window you split off by hand takes at least
+'winwidth' columns as you enter it, as Neovim does for any window; aineo's own
+windows keep their sizes. It ends by itself, every window given back the size
+it had, when another pane shows and when a process joins the run pane or
+leaves its stack, as the zoom of `\z` does (|aineo-zoom|), and when the
+terminal pane's shell ends or its terminal is wiped and the agent pane shows
+in its place. When the zoomed window closes, the zoom ends and the layout puts
+its proportions back; when another window closes, the zoom stays.
+
+When the editor is resized, the zoom stays: the zoomed window takes the
+columns and rows the tab page gains or loses. `\Z` then gives back the sizes
+recorded when you zoomed, scaled to the editor's size now, the last window of
+each row and column taking the cells that remain; with the same size as when
+you zoomed they come back exactly.
 
 The agent's run tools ~
                                                              *aineo-run-tools*
@@ -1925,9 +1969,25 @@ moves you to that tab instead and claims nothing.
 			and tells you, with one warning, so. Under the
 			terminal pane, whose one window fills the column, it
 			changes nothing and tells you nothing. With any word
-			after `zoom` it tells you, with one error, what
-			`:Aineo` takes. `\z` and, in Terminal mode and in
-			Insert mode, `<C-\>z` do the same (|aineo-keys|).
+			after `zoom` but `full` it tells you, with one error,
+			what `:Aineo zoom` takes. `\z` and, in Terminal mode
+			and in Insert mode, `<C-\>z` do the same
+			(|aineo-keys|).
+
+                                                            *:Aineo-zoom-full*
+:Aineo zoom full	Zooms the window the cursor is in to the whole tab
+			page, every other window shrinking to the least size
+			Neovim gives a window, or, when that window is zoomed
+			fully, gives every window the size it had
+			(|aineo-zoom-full|). With the cursor in another
+			window, the zoom moves there. It acts on the aineo
+			tab of the current tab page and makes none: from a
+			tab page that is none of aineo's, or a floating
+			window, it changes nothing and tells you, with one
+			warning, so. With any word after `full` it tells
+			you, with one error, what `:Aineo zoom` takes. `\Z`
+			and, in Terminal mode and in Insert mode, `<C-\>Z`
+			do the same (|aineo-keys|).
 
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
@@ -2022,6 +2082,11 @@ you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-zoom)
 			Does what `:Aineo zoom` does (|:Aineo-zoom|).
 
+                                                     *<Plug>(aineo-zoom-full)*
+<Plug>(aineo-zoom-full)
+			Does what `:Aineo zoom full` does
+			(|:Aineo-zoom-full|).
+
 Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
@@ -2068,6 +2133,8 @@ which has none, globally, in Normal mode, and `\s` in Visual mode too:
 \f		|<Plug>(aineo-find)|
                                                                     *aineo-\z*
 \z		|<Plug>(aineo-zoom)|
+                                                                    *aineo-\Z*
+\Z		|<Plug>(aineo-zoom-full)|
                                                                   *aineo-v_\s*
 \s		|<Plug>(aineo-send)| in Visual mode (|aineo-send|)
 
@@ -2152,6 +2219,8 @@ twin's keys.
 <C-\>f		|<Plug>(aineo-find)|
                                                                 *aineo-<C-\>z*
 <C-\>z		|<Plug>(aineo-zoom)|
+                                                                *aineo-<C-\>Z*
+<C-\>Z		|<Plug>(aineo-zoom-full)|
 
 Send has no twin: it acts on a selection or on the line of Normal mode.
 `:Aineo claim` has no key of its own, so no twin either.

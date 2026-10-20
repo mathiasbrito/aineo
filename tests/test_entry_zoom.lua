@@ -50,6 +50,9 @@ local T = MiniTest.new_set({
 local NOT_IN_THE_COLUMN =
   'aineo: nothing zoomed — the cursor is in none of the windows aineo shows in the right column (the agent, changes, terminal and run panes)'
 
+--- What `:Aineo zoom` tells the user when it is given a word it does not take.
+local ZOOM_USAGE = 'aineo: :Aineo zoom takes one of full'
+
 --- Opens the layout in the child with aineo running the fake `claude` in its
 --- `ready` mode under `name`, and waits until Claude Code is ready.
 ---
@@ -266,7 +269,7 @@ T['zooming']['with a word after zoom tells the user what :Aineo takes and zooms 
 
   child.cmd('Aineo zoom now')
 
-  eq(entry.messages(child), { { message = entry.USAGE, level = vim.log.levels.ERROR } })
+  eq(entry.messages(child), { { message = ZOOM_USAGE, level = vim.log.levels.ERROR } })
   eq(column_heights(), before)
 end
 
