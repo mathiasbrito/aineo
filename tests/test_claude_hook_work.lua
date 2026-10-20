@@ -40,11 +40,12 @@ local T = MiniTest.new_set({
 
 --- Runs the hook relay as Claude Code runs aineo's `PostToolUse` hook, after
 --- a `Bash` call of `command` in `cwd`, telling the editor, and waits for it
---- to end; returns its exit code.
+--- to end, at most `PATIENCE_MS`; returns its exit code and what it wrote
+--- on stdout and stderr.
 ---
 ---@param command string
 ---@param cwd string
----@return integer
+---@return { code: integer, stdout: string, stderr: string }
 local function run_hook(command, cwd)
   local input = vim.json.encode({
     session_id = 'c9d64d84-5f2b-4c3e-9a1d-2b7e8f0a6c31',
@@ -70,10 +71,13 @@ local function run_hook(command, cwd)
       'PostToolUse',
       '4242',
       cwd,
-    }, { stdin = input })
+    }, { stdin = input, text = true })
     :wait(PATIENCE_MS)
-  return ended.code
+  return { code = ended.code, stdout = ended.stdout, stderr = ended.stderr }
 end
+
+--- How a run of the hook ends when it ends well: exit 0, nothing written.
+local SILENT_END = { code = 0, stdout = '', stderr = '' }
 
 --- What the editor was offered, each announcement beside its start token.
 ---
@@ -89,9 +93,9 @@ T['a git command that makes work']['is told as a worktree, from the HEAD of the 
   local head = git_repo.git(top, { 'rev-parse', 'HEAD' })
   git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'feature/x', '../wt' })
 
-  local code = run_hook('git worktree add -b feature/x ../wt', top)
+  local ended = run_hook('git worktree add -b feature/x ../wt', top)
 
-  eq(code, 0)
+  eq(ended, SILENT_END)
   eq(announced(), {
     {
       {
@@ -133,22 +137,56 @@ T['a git command that makes work']['is told from the HEAD of the folder -C names
   )
 end
 
+T['a git command that makes work']['is told as a worktree whose path is read in the folder -C names'] = function()
+  local top = git_repo.create('hook-work-folder-worktree', { ['main.txt'] = { 'main' } })
+  local head = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'feature/c', '../wt' })
+
+  run_hook('git -C repo worktree add -b feature/c ../wt', vim.fs.dirname(top))
+
+  eq(announced(), {
+    {
+      {
+        kind = 'worktree',
+        path = vim.fs.joinpath(vim.fs.dirname(top), 'wt'),
+        base = head,
+        by_hook = true,
+      },
+      TOKEN,
+    },
+  })
+end
+
 T['a command the hook cannot read'] = MiniTest.new_set()
 
 T['a command the hook cannot read']['tells nothing, and the hook ends well'] = function()
   local top = git_repo.create('hook-work-unread', { ['main.txt'] = { 'main' } })
 
-  local code = run_hook('cd . && git branch feature/q', top)
+  local ended = run_hook('cd . && git branch feature/q', top)
 
-  eq({ code, announced() }, { 0, {} })
+  eq({ ended, announced() }, { SILENT_END, {} })
 end
 
 T['a command the hook cannot read']['tells nothing when its start point names no commit'] = function()
   local top = git_repo.create('hook-work-no-start', { ['main.txt'] = { 'main' } })
 
-  local code = run_hook('git branch feature/q no-such-start', top)
+  local ended = run_hook('git branch feature/q no-such-start', top)
 
-  eq({ code, announced() }, { 0, {} })
+  eq({ ended, announced() }, { SILENT_END, {} })
+end
+
+T['an editor that does not answer'] = MiniTest.new_set()
+
+T['an editor that does not answer']['leaves the hook ending well within 6 s, silent'] = function()
+  local top = git_repo.create('hook-work-blocked', { ['main.txt'] = { 'main' } })
+  git_repo.git(top, { 'branch', 'feature/hang' })
+  vim.rpcnotify(editor.job.channel, 'nvim_exec_lua', 'vim.uv.sleep(12000)', {})
+  local started = vim.uv.hrtime()
+
+  local ended = run_hook('git branch feature/hang', top)
+
+  local within_ms = (vim.uv.hrtime() - started) / 1e6
+  eq({ ended, within_ms < 8000 }, { SILENT_END, true })
 end
 
 return T
