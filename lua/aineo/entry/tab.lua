@@ -157,7 +157,7 @@ end
 ---@field key string? what tells the tab's entry in the list of running editors from the editor's other tabs; nil for the first tab, whose entry keeps the name it has always had
 ---@field homes aineo.entry.Homes
 ---@field running_processes fun(): string[] the names of the processes the tab's run pane runs, the oldest first
----@field start_in_run_stack fun(command: string, options: { name: string, directory: string? }): integer starts `command` at the bottom of the tab's run stack as a call of a run tool asks, the pane left as it is (`aineo.entry.run_pane`'s `start_in_stack()`)
+---@field start_in_run_stack fun(command: string, options: { name: string, directory: string? }): integer starts `command` at the bottom of the tab's run stack as a call of a run tool asks, the run pane shown when the tab page is the current one, the cursor staying where it is (`aineo.entry.run_pane`'s `start_in_stack()`)
 ---@field actions table<string, fun()> what each of `:Aineo`'s arguments that acts on a tab does, by the argument
 ---@field send_selection fun() what Send does in Visual mode
 ---@field claim_session fun(id: string) what `:Aineo claim {id}` does
