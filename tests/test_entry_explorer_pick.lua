@@ -277,6 +277,8 @@ T['one pick']['of a worktree that is gone falls back to the folder Claude works 
   vim.fn.delete(repository.worktree, 'rf')
   entry.press(child, '\\e')
   entry.press(child, 'R')
+  wait_for_tree(OWN_TREE)
+  entry.press(child, 'R')
 
   eq(wait_for_tree(OWN_TREE), OWN_TREE)
   local told = vim.tbl_filter(function(message)
