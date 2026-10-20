@@ -2181,13 +2181,27 @@ function M.new(label)
     return nil
   end
 
+  --- Tells the user that the file `entry` stands for, a diff against `HEAD`,
+  --- is as `HEAD` has it.
+  ---
+  ---@param entry aineo.changes.HeadEntry
+  local function tell_file_is_as_head_has_it(entry)
+    vim.notify(head_diff.told_unchanged(entry), vim.log.levels.INFO)
+  end
+
+  --- Tells the user nothing of a diff that has nothing to show, as the diff
+  --- that follows the cursor does.
+  ---
+  ---@param _ aineo.changes.HeadEntry
+  local function tell_nothing(_) end
+
   --- Reads the diff of `diffed(listed)`, `listed` the entry the line under the
   --- cursor lists in `buffer` (`aineo.changes.entry_diff`), and shows it
   --- (`show_last()`), the cursor moving to it as `moving_cursor_of` says
   --- (`aineo.changes.Selection`), unless a key asked for another diff or
   --- file meanwhile: only the last key's is shown, or its failure told. A
-  --- diff against `HEAD` that is empty is not shown: the user is told, once,
-  --- that the file is as `HEAD` has it, and the focus stays. On the heading of
+  --- diff against `HEAD` that is empty is not shown, and the focus stays:
+  --- `tell_unchanged` is called with its entry. On the heading of
   --- a branch the commits window has not read yet, tells the user, at `INFO`,
   --- that aineo is reading the repository, and reads nothing. Does nothing on
   --- a line that lists none.
@@ -2195,7 +2209,8 @@ function M.new(label)
   ---@param buffer integer
   ---@param diffed fun(listed: aineo.changes.Entry): aineo.changes.Entry the entry standing for the diff to show
   ---@param moving_cursor_of fun(pressed_in: integer): integer|nil the window whose cursor moves to the diff, given the window the key was pressed in (`cursor_follows_the_key()`, `cursor_stays()`)
-  local function show_diff_at_cursor(buffer, diffed, moving_cursor_of)
+  ---@param tell_unchanged fun(entry: aineo.changes.HeadEntry) what is done when the diff against `HEAD` is empty (`tell_file_is_as_head_has_it()`, `tell_nothing()`)
+  local function show_diff_at_cursor(buffer, diffed, moving_cursor_of, tell_unchanged)
     local listed = pages.entry_at(buffer, vim.api.nvim_win_get_cursor(0)[1])
     if not listed then
       return
@@ -2223,7 +2238,7 @@ function M.new(label)
           return
         end
         if head_diff.is_against_head(entry) and diff == '' then
-          vim.notify(head_diff.told_unchanged(entry), vim.log.levels.INFO)
+          tell_unchanged(entry)
           return
         end
         local selection = { entry = entry, window = window, context = source.context }
@@ -2251,7 +2266,7 @@ function M.new(label)
   ---
   ---@param buffer integer
   local function open_entry(buffer)
-    show_diff_at_cursor(buffer, as_listed, cursor_follows_the_key)
+    show_diff_at_cursor(buffer, as_listed, cursor_follows_the_key, tell_file_is_as_head_has_it)
   end
 
   --- The entry standing for the diff that follows the cursor of the files
@@ -2269,7 +2284,7 @@ function M.new(label)
   ---@param buffer integer
   local function preview_entry(buffer)
     followed_diffed = as_listed
-    show_diff_at_cursor(buffer, as_listed, cursor_stays)
+    show_diff_at_cursor(buffer, as_listed, cursor_stays, tell_file_is_as_head_has_it)
   end
 
   --- Shows the diff of the file the line under the cursor lists in `buffer`
@@ -2279,7 +2294,7 @@ function M.new(label)
   ---@param buffer integer
   local function preview_entry_against_head(buffer)
     followed_diffed = head_diff.of
-    show_diff_at_cursor(buffer, head_diff.of, cursor_stays)
+    show_diff_at_cursor(buffer, head_diff.of, cursor_stays, tell_file_is_as_head_has_it)
   end
 
   --- Shows, in the middle column, the file `entry` lists as the commit it is
@@ -2488,7 +2503,7 @@ function M.new(label)
     if is_diff_shown(own_name(entry_diff.name(followed_diffed(listed)))) then
       return
     end
-    show_diff_at_cursor(buffer, followed_diffed, cursor_stays)
+    show_diff_at_cursor(buffer, followed_diffed, cursor_stays, tell_nothing)
   end
 
   --- Makes the files buffer `buffer` show the diff of the file its cursor
