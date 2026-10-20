@@ -37,6 +37,15 @@ and its state:
 +----------------+  | Session work   |                   | shell          |
                     | a1b2c3 Fix ... |                   |                |
                     +----------------+                   +----------------+
+
+ \e  explorer
++--------------------+
+| ~/project  ·  ...  |
+| ▾ • lua/           |
+|     M init.lua     |
+| ▸   tests/         |
+|   ? notes.md       |
++--------------------+
 ```
 
 - **Tab line.** One title for each tab page, `<number>: <session name>`, and
@@ -65,6 +74,8 @@ and its state:
 - **Run pane.** The services you run while you develop, a backend and a
   frontend with watch, say, each in a terminal of its own, stacked in the
   right column.
+- **Explorer pane.** `\e`: the folder Claude works in as a tree, folders
+  first, with git's marks, over the right column's whole height.
 - **Tabs.** Several Claude Code sessions in one Neovim, one in each tab page,
   each with its own panes.
 
@@ -136,8 +147,9 @@ Each prefix key is a `<Plug>` mapping too, such as `<Plug>(aineo-send)`, and
 each action is a subcommand of `:Aineo`, such as `:Aineo send`. The changes
 pane's own keys (`s`, Enter, `j`/`k`, `l`, `h`, `gf`, `<S-CR>` and `F`) are
 keys of the pane's buffers alone, with no prefix, no `<Plug>` mapping and no
-subcommand. `\` is also Neovim's default leader; `:checkhealth aineo` warns
-when the leader or a mapping of yours collides with aineo's keys.
+subcommand, and so are the explorer's. `\` is also Neovim's default leader;
+`:checkhealth aineo` warns when the leader or a mapping of yours collides
+with aineo's keys.
 
 Each session aineo starts is kept for its folder: the next start there
 resumes it.
@@ -206,6 +218,17 @@ and, in Terminal mode, `<C-\>Z` do the same.
 |---|---|
 | `\x` | asks for a command and runs it in the project folder, in a terminal of the run pane; with processes running and the cursor elsewhere, shows the stack |
 | `\X` | adds an interactive shell to the run pane |
+
+### Explorer pane
+
+| Keys | Does |
+|---|---|
+| `\e` | shows the explorer, a tree of the folder Claude works in, and moves into it |
+| `l`, Enter | in the tree: unfold or fold a folder; Enter on a file opens it in the file column |
+| `h` | folds the folder, or the folder above |
+| `@` | pastes `@path ` into Claude's prompt, with no Enter |
+| `I`, `H`, `f`, `R` | show ignored files, hide dotfiles, filter by path, read again |
+| `s` | picks the worktree or branch shown, the same pick as the changes pane's `s` |
 
 ## The changes pane
 

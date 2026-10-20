@@ -65,4 +65,73 @@ T['the files of a repository']['are those of the repository found, whatever GIT_
   eq(seen.result, { 'here.txt' })
 end
 
+--- The Lua that asks the git home in the child for the repository of the
+--- directory `...`, then for the entries it ignores, and returns what
+--- `_G.await` saw of the second, the entries sorted by their bytes.
+local IGNORED_FILES = [[
+  local directory = ...
+  local git = require('aineo.git')
+  local found = _G.await(function(done)
+    git.find_repository(directory, done)
+  end)
+  local seen = _G.await(function(done)
+    git.ignored_files(found.result, done)
+  end)
+  if seen.result then
+    table.sort(seen.result)
+  end
+  return seen
+]]
+
+T['the ignored entries of a repository'] = MiniTest.new_set()
+
+T['the ignored entries of a repository']['are the untracked files its ignore rules leave out, a wholly ignored folder given as itself'] = function()
+  local top = git_repo.create('files-ignored', {
+    ['tracked.txt'] = { 'one' },
+    ['build/kept.txt'] = { 'two' },
+    ['.gitignore'] = { '*.log', 'build/*.o', 'node_modules/' },
+  })
+  git_repo.write(top, 'debug.log', { 'three' })
+  git_repo.write(top, 'build/out.o', { 'four' })
+  git_repo.write(top, 'node_modules/pkg/index.js', { 'five' })
+  git_repo.write(top, 'untracked.txt', { 'six' })
+
+  local seen = child.lua(IGNORED_FILES, { top })
+
+  eq(seen.result, { 'build/out.o', 'debug.log', 'node_modules/' })
+end
+
+T['the submodules of a repository'] = MiniTest.new_set()
+
+T['the submodules of a repository']['are the paths its index holds as commits of another repository'] = function()
+  local top = git_repo.create('files-submodules', { ['a.txt'] = { 'a' } })
+  local other = git_repo.create('files-submodules-other', { ['s.txt'] = { 's' } })
+  git_repo.git(top, {
+    '-c',
+    'protocol.file.allow=always',
+    'submodule',
+    'add',
+    '--quiet',
+    other,
+    'vendor/lib',
+  })
+  git_repo.commit_all(top, 'Add the submodule')
+
+  local seen = child.lua(
+    [[
+      local directory = ...
+      local git = require('aineo.git')
+      local found = _G.await(function(done)
+        git.find_repository(directory, done)
+      end)
+      return _G.await(function(done)
+        git.submodule_paths(found.result, done)
+      end)
+    ]],
+    { top }
+  )
+
+  eq(seen.result, { 'vendor/lib' })
+end
+
 return T

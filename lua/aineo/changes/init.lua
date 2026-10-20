@@ -33,7 +33,10 @@
 --- is followed; `s` offers the set back. What `s` picked, the reported set
 --- and whether the focused view showed are kept for the Claude Code session
 --- followed, beside its base and saves, and shown again once that session is
---- followed again (`aineo.changes.kept`).
+--- followed again (`aineo.changes.kept`). What the focused view shows alone
+--- is read with `focused_work()` and watched with `watch_focused_work()`,
+--- and `offer_scopes()` is what `s` does, so that the explorer shares the
+--- pick (`aineo.explorer`).
 ---
 --- One changes pane is a home (`aineo.changes.Home`): the module is the first,
 --- and `new()` makes another, for another tab, whose session, base and saves,
@@ -42,6 +45,7 @@
 --- diffs' context `F` toggles stays one for the editor (`aineo.changes.full_context`).
 
 local copy = require('aineo.changes.copy')
+local lines = require('aineo.changes.lines')
 local open_file = require('aineo.changes.open_file')
 
 ---@class aineo.changes: aineo.changes.Home
@@ -52,6 +56,12 @@ local M = copy.new()
 --- there, at a line when given, as the files window's `<S-CR>` opens a file
 --- (`open_file.open_working_file()`).
 M.open_working_file = open_file.open_working_file
+
+--- A path as a buffer line can hold it and a reader can tell it whole,
+--- quoted and escaped when it holds a control character, a double quote or
+--- a backslash, as the files window shows it (`aineo.changes.lines`'
+--- `quoted_path()`).
+M.quoted_path = lines.quoted_path
 
 --- How many homes `M.new()` has counted: each is told from the others by it.
 local homes_counted = 0
