@@ -92,7 +92,7 @@ The brief's “open in the current window” has no separate edit in this design
 
 ## Commits
 
-Recorded after the merge, which replays the branch's commits under new hashes. On the branch: *Open project text files from links in aineo's middle column* (the code, help and tests), *Record D88, T98 and the session note for links opening in aineo* (the records), *Open a linked text file in aineo wherever it lies (A506)* (fix round 1) and *Pin the Report's line and a Normal-mode double-click on a link* (fix round 2).
+The `dev` hashes, recorded after the merge, which replayed the branch's commits under new hashes (PR #285, merged by rebase): `be52ef7` (the code, help and tests), `7b9c5e7` (the records), `ac32218` (fix round 1, A506) and `9ab7eee` (fix round 2, the Report's line and a Normal-mode double-click). Released in v0.2.59 (PR #286, `main` `70d56dd`).
 
 ## Open threads
 
