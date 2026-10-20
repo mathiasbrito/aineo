@@ -1179,6 +1179,20 @@ T['a reported base']['that the repository does not have gives way to the pane’
   })
 end
 
+T['a reported base']['of a branch, that the repository does not have, gives way to the pane’s own'] = function()
+  local top = start_on_repository('announce-base-unknown-branch')
+  local agent, one, two = agent_with_two_commits(top)
+  git_repo.git(top, { 'worktree', 'remove', '--force', agent })
+
+  report('module', { kind = 'branch', branch = 'feature/a', base = ('0'):rep(40) })
+
+  expect_pane_lines('module', 'commits', {
+    'Branch feature/a (no worktree: commits only)',
+    commit_line(two, 'Two'),
+    commit_line(one, 'One'),
+  })
+end
+
 T['a reported base']['missing, as in a report made before reports gave one, shows from ? and the base of today’s rule'] = function()
   local top = start_on_repository('announce-base-none')
   local agent, one, two = agent_with_two_commits(top)
