@@ -142,9 +142,11 @@ end
 ---@param editor? table
 ---@return string[]
 local function lines_of(name, editor)
-  return (editor or child).lua_get(
-    'vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)',
-    { name }
+  return git_repo.without_against_line(
+    (editor or child).lua_get(
+      'vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)',
+      { name }
+    )
   )
 end
 

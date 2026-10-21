@@ -73,7 +73,9 @@ end
 ---@param name string
 ---@return string[]
 local function lines_of(name)
-  return child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  return git_repo.without_against_line(
+    child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  )
 end
 
 --- Waits until the child's buffer named `name` holds `expected`, at most
@@ -175,12 +177,13 @@ local function go_to_commits_line(line)
   child.type_keys(line .. 'G')
 end
 
---- Puts the cursor of the files window, entered, on line `line`.
+--- Puts the cursor of the files window, entered, on line `line`, counted
+--- without its `Against:` line (`git_repo.files_window_line()`).
 ---
 ---@param line integer
 local function go_to_files_line(line)
   enter_window_of(FILES)
-  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { line })
+  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { git_repo.files_window_line(line) })
 end
 
 --- The commits window's lines for an editor with no commit of its own, then
@@ -361,7 +364,7 @@ T['the files window']['colours the first line of another worktree’s whole chan
   go_to_commits_line(4)
   expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
 
-  local colours = child.lua_get(COLOURS_OF, { FILES })
+  local colours = git_repo.without_against_colours(child.lua_get(COLOURS_OF, { FILES }))
 
   eq(colours, {
     { 0, 0, #'Files in: Worktree agent (agent)', 'AineoChangesFilter' },
@@ -406,7 +409,7 @@ T['the files window']['keeps the cursor on its entry when the same filter is rea
   child.lua("require('aineo.changes').refresh_shown_pane()")
 
   expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M a.txt', '  M b.txt', '  M c.txt' })
-  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)[1]'), 4)
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)[1]'), 5)
 end
 
 T['a worktree with nothing changed'] = MiniTest.new_set()

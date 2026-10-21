@@ -5,6 +5,8 @@
 --- told there.
 
 local git = require('aineo.git')
+local against = require('aineo.changes.against')
+local against_read = require('aineo.changes.against_read')
 local branch = require('aineo.changes.branch')
 local commit_file = require('aineo.changes.commit_file')
 local diff_position = require('aineo.changes.diff_position')
@@ -264,9 +266,79 @@ function M.new(label)
     return (session.settings.now or os.time)()
   end
 
+  --- What the commits window last read of the local branch `name`: of the
+  --- branch the scope names, or of a reported branch read alone; nil while
+  --- it has read none.
+  ---
+  ---@param name string|nil
+  ---@return aineo.changes.BranchSection|nil
+  local function branch_named(name)
+    if session.branch and session.branch.name == name then
+      return session.branch
+    end
+    local read = name and session.reported_branches[name]
+    if read and (read.tip ~= nil or read.failure ~= nil) then
+      return read
+    end
+    return nil
+  end
+
+  --- Where the diff of `entry` is read from now, in the context the diffs
+  --- are read in now (`aineo.changes.full_context`): the branch it is listed
+  --- under, when it is, as the commits window last read it
+  --- (`branch_named()`).
+  ---
+  ---@param entry aineo.changes.Entry
+  ---@return aineo.changes.DiffSource
+  local function diff_source(entry)
+    return {
+      repository = session.repository,
+      base = session.base,
+      landed = session.landed,
+      branch = branch_named(entry.filter and entry.filter.branch),
+      options = session.settings.git,
+      context = full_context.current(),
+    }
+  end
+
+  --- The filter whose files the files window lists, as the diffs of those
+  --- files are read: `filter_named()`'s, with the worktree the files were
+  --- read in, which their diffs are read from.
+  ---
+  ---@param listed aineo.changes.Listing|nil
+  ---@return aineo.changes.Filter
+  local function listed_filter(listed)
+    local named = filter_named(listed)
+    if named.worktree and listed and listed.worktree then
+      return filter.in_worktree(named, listed.worktree)
+    end
+    return named
+  end
+
+  --- What git told of what the files window's diffs compare, and the key of
+  --- the filter it was told for (`read_against()`).
+  ---@type { key: string, resolved: aineo.changes.Resolved }|nil
+  local told_against = nil
+
+  --- The files window's second line for `listed`: what the diffs of its
+  --- files compare against (`aineo.changes.against`), as far as the session
+  --- and git have told.
+  ---
+  ---@param listed aineo.changes.Listing|nil
+  ---@return aineo.changes.Row
+  local function against_row(listed)
+    local named = listed_filter(listed)
+    local told = told_against and told_against.key == filter.key(named) and told_against.resolved
+      or {}
+    local sides = against.sides(named, false, diff_source({ filter = named }), told)
+    local line, line_colours = against.heading(sides, told.names)
+    return { line = line, colours = line_colours }
+  end
+
   --- The files window's page for what the session knows: why it has no
   --- repository, when it has none, or the files of the one filter it lists
-  --- (`filter_named()`).
+  --- (`filter_named()`), and what their diffs compare against
+  --- (`against_row()`).
   ---
   ---@return aineo.changes.Page
   local function files_page()
@@ -276,6 +348,7 @@ function M.new(label)
     local listed = session.listed
     return lines.files_window({
       filter = session.repository and filter_named(listed) or nil,
+      against = session.repository and against_row(listed) or nil,
       changes = listed and listed.changes,
       failure = session.files_failure or session.watch_failure,
       worktree = listed and listed.worktree,
@@ -512,6 +585,34 @@ function M.new(label)
   --- (`place_awaited_files_cursor()`).
   local function show_files()
     show_page(buffers.files, files_page, place_awaited_files_cursor)
+  end
+
+  --- How many times what the files window's diffs compare has been asked of
+  --- git (`read_against()`): only the last answer is kept.
+  local against_reads = 0
+
+  --- Asks git what the diffs of the files the files window lists compare
+  --- (`aineo.changes.against_read`), off the main loop, and shows the files
+  --- window again once it answers, unless a later ask has been made.
+  local function read_against()
+    if not (session and session.repository) then
+      return
+    end
+    local named = listed_filter(session.listed)
+    against_reads = against_reads + 1
+    local this_read = against_reads
+    against_read.read({
+      listed = named,
+      against_head = false,
+      source = diff_source({ filter = named }),
+      options = session.settings.git,
+    }, function(resolved)
+      if this_read ~= against_reads or not session then
+        return
+      end
+      told_against = { key = filter.key(named), resolved = resolved }
+      show_files()
+    end)
   end
 
   --- Puts the cursor of each window showing the commits buffer on the line of
@@ -875,23 +976,6 @@ function M.new(label)
     end
   end
 
-  --- What the commits window last read of the local branch `name`: of the
-  --- branch the scope names, or of a reported branch read alone; nil while
-  --- it has read none.
-  ---
-  ---@param name string|nil
-  ---@return aineo.changes.BranchSection|nil
-  local function branch_named(name)
-    if session.branch and session.branch.name == name then
-      return session.branch
-    end
-    local read = name and session.reported_branches[name]
-    if read and (read.tip ~= nil or read.failure ~= nil) then
-      return read
-    end
-    return nil
-  end
-
   --- Reads the files of the local branch shown alone: those that differ
   --- between its base and its tip, as the commits window last read them,
   --- committed files only. Calls `done(failure, changes)`; with the branch not
@@ -953,7 +1037,10 @@ function M.new(label)
       end
       session.files_failure = failure
     end,
-    show = show_files,
+    show = function()
+      show_files()
+      read_against()
+    end,
   })
 
   --- Reads the files of the selected filter again, and shows them
@@ -2039,6 +2126,7 @@ function M.new(label)
   ---@field entry aineo.changes.Entry
   ---@field window integer|nil
   ---@field context aineo.git.DiffContext
+  ---@field source aineo.changes.DiffSource where the diff was read from
 
   --- What a diff buffer the home showed is the diff of, the context its text
   --- is in, and the context F last asked it to be read in, which is the
@@ -2047,27 +2135,71 @@ function M.new(label)
   ---@field entry aineo.changes.Entry
   ---@field context aineo.git.DiffContext
   ---@field asked aineo.git.DiffContext
+  ---@field against? aineo.changes.ShownAgainst what the diff compares, as its bar says
 
   --- The diff each buffer the home showed holds, by buffer.
   ---@type table<integer, aineo.changes.ShownDiff>
   local shown_diffs = {}
 
-  --- Where the diff of `entry` is read from now, in the context the diffs
-  --- are read in now (`aineo.changes.full_context`): the branch it is listed
-  --- under, when it is, as the commits window last read it
-  --- (`branch_named()`).
+  --- What the bar of a diff window says of the diff its buffer holds: whether
+  --- it is the diff against `HEAD`, where it was read from, and what git has
+  --- told of the commits on its sides (`aineo.changes.against_read`), once it
+  --- has.
+  ---@class aineo.changes.ShownAgainst
+  ---@field head boolean
+  ---@field source aineo.changes.DiffSource
+  ---@field resolved? aineo.changes.Resolved
+
+  --- Draws the bar of the diff `buffer` holds into each window showing it:
+  --- both sides of the diff, as it was read, then the path of its file
+  --- (`aineo.changes.against`'s `bar()`). The 'winbar' is the window's for
+  --- the buffer it shows, so that a diff kept in a window says what it
+  --- compares, and another buffer later shown there draws the user's own.
+  --- Does nothing for a buffer that holds no diff the home showed.
   ---
+  ---@param buffer integer
+  local function draw_bar(buffer)
+    local shown = shown_diffs[buffer]
+    if not (shown and shown.against and vim.api.nvim_buf_is_valid(buffer)) then
+      return
+    end
+    local told = shown.against
+    local read = told.resolved or {}
+    local sides = against.sides(shown.entry.filter, told.head, told.source, read)
+    local path = shown.entry.change and lines.quoted_path(shown.entry.change.path)
+    local bar = against.bar(sides, read.names, path)
+    for _, window in ipairs(vim.fn.win_findbuf(buffer)) do
+      vim.api.nvim_set_option_value('winbar', bar, { scope = 'local', win = window })
+    end
+  end
+
+  --- Records what the diff of `entry`, read from `source`, which `buffer`
+  --- holds, compares, and asks git for what the sides need
+  --- (`aineo.changes.against_read`), off the main loop; the bar is drawn again
+  --- once git answers, unless the buffer holds another diff by then.
+  --- `earlier` is what was told of the diff before, if any, kept on show
+  --- until git answers.
+  ---
+  ---@param buffer integer
   ---@param entry aineo.changes.Entry
-  ---@return aineo.changes.DiffSource
-  local function diff_source(entry)
-    return {
-      repository = session.repository,
-      base = session.base,
-      landed = session.landed,
-      branch = branch_named(entry.filter and entry.filter.branch),
-      options = session.settings.git,
-      context = full_context.current(),
-    }
+  ---@param source aineo.changes.DiffSource
+  ---@param earlier? aineo.changes.Resolved
+  local function track_against(buffer, entry, source, earlier)
+    local shown = shown_diffs[buffer]
+    local told = { head = head_diff.is_against_head(entry), source = source, resolved = earlier }
+    shown.against = told
+    against_read.read({
+      listed = entry.filter,
+      against_head = told.head,
+      source = source,
+      options = source.options,
+    }, function(read)
+      if shown_diffs[buffer] ~= shown or shown.against ~= told then
+        return
+      end
+      told.resolved = read
+      draw_bar(buffer)
+    end)
   end
 
   --- Tells the user, once, that the diff of `entry` could not be read.
@@ -2120,7 +2252,10 @@ function M.new(label)
       })
       return
     end
+    local before_resolved = shown_diffs[buffer] and shown_diffs[buffer].against
     shown_diffs[buffer] = { entry = entry, context = context, asked = context }
+    track_against(buffer, entry, diff_source(entry), before_resolved and before_resolved.resolved)
+    draw_bar(buffer)
     local shown = vim.api.nvim_buf_get_lines(buffer, 0, -1, true)
     for window, before_write in pairs(cursors) do
       if vim.api.nvim_win_is_valid(window) and vim.api.nvim_win_get_buf(window) == buffer then
@@ -2342,7 +2477,11 @@ function M.new(label)
       return false
     end
     remember_diff(buffer, entry, selection.context)
-    return show_buffer(buffer, selection.window, 'the diff of ' .. entry_diff.told_name(entry))
+    track_against(buffer, entry, selection.source)
+    local allowed =
+      show_buffer(buffer, selection.window, 'the diff of ' .. entry_diff.told_name(entry))
+    draw_bar(buffer)
+    return allowed
   end
 
   --- How many times a key of the files window has asked for a diff to be
@@ -2462,7 +2601,8 @@ function M.new(label)
           tell_unchanged(entry)
           return
         end
-        local selection = { entry = entry, window = window, context = source.context }
+        local selection =
+          { entry = entry, window = window, context = source.context, source = source }
         show_last(this_enter, {
           name = own_name(entry_diff.name(entry)),
           show = function(text)

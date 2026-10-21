@@ -109,7 +109,9 @@ local COUNT_GIT_CALLS = [[
 ---@param name string
 ---@return string[]
 local function lines_of(name)
-  return child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  return git_repo.without_against_line(
+    child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  )
 end
 
 --- Waits until the child's buffer named `name` holds `expected`, at most
@@ -881,7 +883,7 @@ T['Enter']['on a file under Uncommitted shows its diff from HEAD, in its own buf
   go_to_line(1)
   expect_lines(FILES, { 'Files in: Uncommitted', '  M a.txt' })
   enter_window_of(FILES)
-  child.type_keys('2G')
+  child.type_keys('3G')
 
   child.type_keys('<CR>')
 
@@ -898,7 +900,7 @@ T['Enter']['on a file under a commit shows the commitâ€™s header and that fileâ€
   go_to_line(4)
   expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(first, 'Change a'), '  M a.txt' })
   enter_window_of(FILES)
-  child.type_keys('2G')
+  child.type_keys('3G')
 
   child.type_keys('<CR>')
 
@@ -913,7 +915,7 @@ end
 T['Enter']['on a file under Session work shows its diff from the base, as before'] = function()
   session_with_two_commits('filter-enter-session-file')
   enter_window_of(FILES)
-  child.type_keys('2G')
+  child.type_keys('3G')
 
   child.type_keys('<CR>')
 

@@ -307,6 +307,7 @@ M.NOT_WATCHED =
 --- What the files window knows.
 ---@class aineo.changes.FilesView
 ---@field filter? aineo.changes.Filter what the window lists the files of, named on its first line; nil while the session has no repository to list
+---@field against? aineo.changes.Row the second line, saying what the diffs of those files compare against (`aineo.changes.against`'s `heading()`); none while the session has no repository to list
 ---@field changes? aineo.git.Change[] the files of the filter, as last read
 ---@field failure? aineo.git.Failure why the last read failed, when it did
 ---@field worktree? aineo.changes.WorktreeSection the worktree other than the editor's that the files were read in, for the files of another worktree's filter
@@ -599,13 +600,17 @@ local function listed_file_rows(view)
 end
 
 --- The rows of the files window, for `view`: the line naming the filter it
---- lists (`files_in_row()`), when it has one, then the rows below it
+--- lists (`files_in_row()`), when it has one, and under it the line saying
+--- what its diffs compare against, when `view` has one, then the rows below
 --- (`listed_file_rows()`).
 ---
 ---@param view aineo.changes.FilesView
 ---@return aineo.changes.Row[]
 local function file_window_rows(view)
   local rows = listed_file_rows(view)
+  if view.against then
+    table.insert(rows, 1, view.against)
+  end
   if view.filter then
     table.insert(rows, 1, files_in_row(view.filter, view.now))
   end
