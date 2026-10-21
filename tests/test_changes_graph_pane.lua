@@ -282,6 +282,31 @@ T['t']['again chooses the session’s commit chosen before the graph'] = functio
   expect_lines(FILES, chosen)
 end
 
+T['t']['shows the graph in place of the whole list, the Reported section included, and back'] = function()
+  local top, commits = git_repo.create_graph('graphpane-reported')
+  begin_and_show(top)
+  expect_lines(COMMITS, SECTIONS)
+  child.lua(
+    "require('aineo.changes').add_reported_work(..., function() end)",
+    { { kind = 'branch', branch = 'side', base = commits.begin } }
+  )
+  enter_window_of(COMMITS)
+  git_repo.wait_until('the reported branch shown alone', function()
+    return not vim.deep_equal(lines_of(COMMITS), SECTIONS)
+  end)
+  child.lua("require('aineo.changes').toggle_focused_view()")
+  git_repo.wait_until('the Reported section atop the default view', function()
+    return lines_of(COMMITS)[1] == 'Reported'
+  end)
+  local listed = lines_of(COMMITS)
+
+  child.type_keys('t')
+
+  expect_lines(COMMITS, whole_graph(top, commits))
+  child.type_keys('t')
+  expect_lines(COMMITS, listed)
+end
+
 T['t']['shows the graph again after the sections, read anew'] = function()
   local top, commits =
     pane_showing_the_graph('graphpane-again', { git = { system_name = 'Linux' } })

@@ -909,10 +909,11 @@ that chose what the files window lists. `h` in the files window keeps
 showing the diff against `HEAD` (|aineo-changes|).
 
                                                    *aineo-changes-graph*
-`t` in the commits window shows the commit graph in place of its sections,
-and `t` again shows the sections as they were, the line chosen before the
-graph chosen again. There it replaces Vim's |t|{char}, in Normal mode. The
-graph is what this command draws: >
+`t` in the commits window shows the commit graph in place of its whole list,
+the Reported section included (|aineo-changes-reported|), and `t` again shows
+the list as it was, the line chosen before the graph chosen again. There it
+replaces Vim's |t|{char}, in Normal mode. The graph is what this command
+draws: >
     git log --graph --all --abbrev-commit --date=relative
 <
 of every branch, tag and remote-tracking branch, newest first: the graph as
