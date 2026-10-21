@@ -120,7 +120,9 @@ end
 ---@param name string
 ---@return string[]
 local function lines_of(name)
-  return child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  return git_repo.without_against_line(
+    child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  )
 end
 
 --- Waits until the child's buffer named `name` holds `expected`, at most
@@ -482,7 +484,7 @@ T['the reads']['keep the cursor on its entry when it is listed still'] = functio
   git_repo.write(top, 'sub/c.txt', { 'changed' })
   begin_and_show(top, { system_name = 'Linux' })
   expect_lines(FILES, { 'Files in: Session work', NOT_WATCHED, '  M sub/a.txt', '  M sub/c.txt' })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 4, 4 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 5, 4 })')
 
   child.lua(SAVE_IN_SUB, { top, 'b.txt' })
 
@@ -490,7 +492,7 @@ T['the reads']['keep the cursor on its entry when it is listed still'] = functio
     FILES,
     { 'Files in: Session work', NOT_WATCHED, '  M sub/a.txt', '* M sub/b.txt', '  M sub/c.txt' }
   )
-  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 5, 4 })
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 6, 4 })
 end
 
 T['the reads']['run only when asked for, never on a timer, while the pane shows'] = function()
@@ -853,6 +855,17 @@ end
 
 T['a buffer of the pane'] = MiniTest.new_set()
 
+--- The expression, run in the child, that gives the lines of the buffer it
+--- is applied to, less the second line of the files window, `Against: …`
+--- (`git_repo.without_against_line()`).
+local LINES_WITHOUT_AGAINST = [[(function(buffer)
+  local lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, true)
+  if vim.startswith(lines[1] or '', 'Files in: ') and vim.startswith(lines[2] or '', 'Against: ') then
+    table.remove(lines, 2)
+  end
+  return lines
+end)]]
+
 --- What the buffer whose name is the argument is, read in the child: its
 --- options and its lines.
 local BUFFER_STATE = [[(function(name)
@@ -863,7 +876,7 @@ local BUFFER_STATE = [[(function(name)
     bufhidden = vim.bo[buffer].bufhidden,
     swapfile = vim.bo[buffer].swapfile,
     modifiable = vim.bo[buffer].modifiable,
-    lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, true),
+    lines = ]] .. LINES_WITHOUT_AGAINST .. [[(buffer),
   }
 end)(...)]]
 
@@ -1104,7 +1117,7 @@ end
 --- What the child's buffer named `...` shows and whether it is modifiable.
 local SHOWN_AND_MODIFIABLE = [[(function(name)
   local buffer = vim.fn.bufnr(name)
-  return { lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, true), modifiable = vim.bo[buffer].modifiable }
+  return { lines = ]] .. LINES_WITHOUT_AGAINST .. [[(buffer), modifiable = vim.bo[buffer].modifiable }
 end)(...)]]
 
 T['a buffer of the pane']['its lists read while textlock holds'] =
@@ -1369,7 +1382,7 @@ T['Enter']['on a file shows its diff from the base, the cursor moving to it'] = 
   begin_and_show(top)
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
 
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
 
   wait_for_diffs(1)
   eq({
@@ -1400,7 +1413,7 @@ T['Enter']['on a file committed since the base shows its diff from the base'] = 
   child.lua(SHOW_FILES_AGAIN)
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
 
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
 
   wait_for_diffs(1)
   eq(child.lua_get('vim.api.nvim_buf_get_lines(_G.shown_diffs[1], 0, -1, true)'), {
@@ -1427,7 +1440,7 @@ T['Enter']['on a commit shows that commit’s diff'] = function()
   )
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
 
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
 
   wait_for_diffs(1)
   local shown = child.lua_get([[(function()
@@ -1455,7 +1468,7 @@ T['Enter']['on a commit moves the cursor to that commit’s diff'] = function()
   )
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
 
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
 
   wait_for_diffs(1)
   eq(child.lua_get('vim.api.nvim_buf_get_name(0)'), 'aineo://commit/' .. commit)
@@ -1479,7 +1492,7 @@ T['Enter']['on a line that lists nothing does nothing and says nothing'] = funct
   expect_lines(FILES, { 'Files in: Session work', NOT_WATCHED, '  M notes.txt' })
   child.type_keys('<CR>')
 
-  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 4, 0 })')
   child.type_keys('<CR>')
 
   wait_for_diffs(1)
@@ -1509,7 +1522,7 @@ T['Enter']['shows the diff in a read-only scratch buffer named for the file'] = 
   begin_and_show(top)
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
 
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
 
   wait_for_diffs(1)
   eq(child.lua_get(DIFF_BUFFER, { child.lua_get('_G.shown_diffs[1]') }), {
@@ -1534,7 +1547,7 @@ T['Enter']['shows the diff again once a command run in its window emptied it']['
   git_repo.write(top, 'notes.txt', { 'two' })
   begin_and_show(top)
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
   wait_for_diffs(1)
   local diff = child.lua_get('_G.shown_diffs[1]')
   local shown = {
@@ -1559,7 +1572,7 @@ local ENTER_TEN_TIMES_ONE_BY_ONE = [[
   local patience = ...
   for count = 1, 10 do
     vim.api.nvim_set_current_win(vim.fn.bufwinid('aineo://changes-files'))
-    vim.api.nvim_win_set_cursor(0, { 2, 0 })
+    vim.api.nvim_win_set_cursor(0, { 3, 0 })
     vim.api.nvim_feedkeys(vim.keycode('<CR>'), 'x', false)
     vim.wait(patience, function()
       return _G.git_answers.file_diff == count
@@ -1596,7 +1609,7 @@ T['Enter']['twice in quick succession shows only the last Enter’s diff, the fi
   begin_and_show(top, { executable = slow })
   expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt' })
 
-  child.type_keys('j', '<CR>', 'j', '<CR>')
+  child.type_keys('jj', '<CR>', 'j', '<CR>')
 
   git_repo.wait_until('both diffs read', function()
     return child.lua_get('_G.git_answers.file_diff') == 2
@@ -1632,7 +1645,7 @@ T['Enter']['read while textlock holds']['shows the diff once it ends, telling no
   child.lua(ready)
   begin_and_show(top, { executable = gated })
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
   begin_hold(hold)
   vim.fn.writefile({}, gate)
   git_repo.wait_until('the diff read', function()
@@ -1667,7 +1680,7 @@ T['Enter']['read while textlock holds, then on another file before the editor al
   child.lua(ready)
   begin_and_show(top, { executable = gated })
   expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt' })
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
   begin_hold(hold)
   vim.fn.writefile({}, gate)
   git_repo.wait_until('the diff of a.txt read', function()
@@ -1697,7 +1710,7 @@ T['Enter']['again on a shown diff while textlock holds, then on another file, ke
   begin_and_show(top, { executable = gated })
   expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt' })
   vim.fn.writefile({}, gate)
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
   wait_for_diffs(1)
   vim.fn.delete(gate)
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
@@ -1744,7 +1757,7 @@ T['Enter']['read while textlock holds, then on another file']['wipes the first d
   child.lua(ready)
   begin_and_show(top, { executable = stand_in })
   expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt' })
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
   begin_hold(first_hold)
   vim.fn.writefile({}, stand_in .. '.gate-a')
   git_repo.wait_until('the diff of a.txt read', function()
@@ -1795,7 +1808,7 @@ T['Enter']['twice in quick succession tells nothing of the first Enter’s diff 
   child.lua(KEEP_MESSAGES)
   begin_and_show(top, { executable = stand_in })
   expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt' })
-  child.type_keys('j', '<CR>', 'j', '<CR>')
+  child.type_keys('jj', '<CR>', 'j', '<CR>')
   git_repo.wait_until('the diff of b.txt read', function()
     return child.lua_get('_G.git_answers.file_diff') == 1
   end)
@@ -1816,7 +1829,7 @@ T['Enter']['again on the same file keeps no undo history of the diff it showed']
   git_repo.write(top, 'notes.txt', { 'two' })
   begin_and_show(top)
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
   wait_for_diffs(1)
   git_repo.write(top, 'notes.txt', { 'three' })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
@@ -1850,7 +1863,7 @@ local function enter_on_a_commit_whose_diff_is(name, diff)
     return lines_of(COMMITS)[3] ~= 'No commits on this session'
   end)
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
   wait_for_diffs(1)
 end
 
@@ -1869,7 +1882,7 @@ T['Enter']['with no room in the middle column warns once, naming the file, and k
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
   child.lua('_G.no_room = true')
 
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
 
   wait_for_diffs(1)
   eq(child.lua_get('{ _G.messages, vim.fn.bufnr("aineo://diff/notes.txt") }'), {
@@ -1898,7 +1911,7 @@ T['Enter']['with no room in the middle column warns once, naming the commit'] = 
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
   child.lua('_G.no_room = true')
 
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
 
   wait_for_diffs(1)
   eq(child.lua_get('_G.messages'), {
@@ -1927,7 +1940,7 @@ T['Enter']['tells once, in git’s words, a diff that cannot be read'] = functio
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
   turn_on(switch)
 
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
 
   git_repo.wait_until('the user told', function()
     return #child.lua_get('_G.messages') > 0
@@ -2102,7 +2115,7 @@ T['Enter']['once its diff is shown, leaves the cursor where it is as the pane is
   child.lua(SPY_ON_GIT)
   begin_and_show(top)
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
   wait_for_diffs(1)
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
 
@@ -2122,7 +2135,7 @@ T['Enter']['read once the cursor left the pane shows the diff, the cursor stayin
   local gated, gate = gated_git('changespane-left-pane', '*" diff "*notes.txt*')
   begin_and_show(top, { executable = gated })
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { COMMITS })
 
   vim.fn.writefile({}, gate)
@@ -2137,7 +2150,7 @@ T['Enter']['read once the cursor went to a terminal in Terminal mode leaves it t
   local gated, gate = gated_git('changespane-left-to-terminal', '*" diff "*notes.txt*')
   begin_and_show(top, { executable = gated })
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
   child.lua([[
     vim.cmd('botright new')
     vim.fn.jobstart({ 'sh' }, { term = true })
@@ -2164,7 +2177,7 @@ T['Enter']['leaves the cursor in the pane when the diff is not shown, as']['the 
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
   child.lua(not_shown)
 
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
 
   wait_for_diffs(1)
   eq(child.lua_get('{ vim.api.nvim_buf_get_name(0), #_G.messages }'), { FILES, 1 })
@@ -2178,7 +2191,7 @@ T['Enter']['tells once the error a window raised as it took the diff, and keeps 
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
   child.lua("_G.refusal = 'refused here'")
 
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
 
   wait_for_diffs(1)
   eq(child.lua_get('{ _G.messages, vim.fn.bufnr("aineo://diff/notes.txt") }'), {
@@ -2428,12 +2441,20 @@ local PANE_COLOURS = [[(function(name)
   end, marks)
 end)(...)]]
 
---- Every colour the child's buffer named `name` shows (`PANE_COLOURS`).
+--- Every colour the child's buffer named `name` shows (`PANE_COLOURS`), less
+--- those of the files window's `Against:` line, with the lines below it
+--- counted without it (`git_repo.without_against_colours()`).
 ---
 ---@param name string
 ---@return any[][]
 local function colours_of(name)
-  return child.lua_get(PANE_COLOURS, { name })
+  local colours = child.lua_get(PANE_COLOURS, { name })
+  local second =
+    child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 1, 2, false)[1] or ""', { name })
+  if vim.startswith(second, 'Against: ') then
+    return git_repo.without_against_colours(colours)
+  end
+  return colours
 end
 
 --- `colours` moved down by `lines` lines.

@@ -55,7 +55,9 @@ local BEGIN_AND_SHOW = [[
 ---@param name string
 ---@return string[]
 local function lines_of(name)
-  return child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  return git_repo.without_against_line(
+    child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  )
 end
 
 --- Waits until the child's buffer named `name` holds `expected`, at most
@@ -109,18 +111,19 @@ local function go_to_commits_line(line)
   child.type_keys(line .. 'G')
 end
 
---- Puts the cursor on line `line` of the files window and presses `key`
---- there.
+--- Puts the cursor on line `line` of the files window, counted without the
+--- `Against:` line (`git_repo.files_window_line()`), and presses `key` there.
 ---
 ---@param key string
 ---@param line integer
 local function press_on_files_line(key, line)
   enter_window_of(FILES)
-  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { line })
+  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { git_repo.files_window_line(line) })
   child.type_keys(key)
 end
 
---- Puts the cursor on line `line` of the files window and runs the callback
+--- Puts the cursor on line `line` of the files window, counted without the
+--- `Against:` line (`git_repo.files_window_line()`), and runs the callback
 --- of the window's mapping of `key`, without typing it: `child.type_keys()`
 --- raises the error message a key leaves in the child, and a notification an
 --- asynchronous read tells while it still checks would raise it as well.
@@ -129,7 +132,7 @@ end
 ---@param line integer
 local function call_files_mapping_on_line(key, line)
   enter_window_of(FILES)
-  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { line })
+  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { git_repo.files_window_line(line) })
   child.lua("vim.fn.maparg(..., 'n', false, true).callback()", { key })
 end
 
@@ -436,11 +439,16 @@ local function where_the_cursor_is()
 end
 
 --- Asserts that the child's cursor stayed on line `line` of the files
---- window, in Normal mode, while a diff was shown.
+--- window, counted without the `Against:` line, in Normal mode, while a diff
+--- was shown.
 ---
 ---@param line integer
 local function expect_cursor_stayed_in_files(line)
-  eq(where_the_cursor_is(), { buffer = FILES, cursor = { line, 0 }, mode = 'n' })
+  eq(where_the_cursor_is(), {
+    buffer = FILES,
+    cursor = { git_repo.files_window_line(line), 0 },
+    mode = 'n',
+  })
 end
 
 T['l']['on a file under a commit keeps the cursor in the files window, on its line'] = function()
@@ -771,7 +779,7 @@ T['Lines listing no file']['do nothing and say nothing under the key on'] = func
     cursor = child.lua_get('vim.api.nvim_win_get_cursor(0)'),
     shown = child.lua_get('#_G.shown_diffs'),
     told = child.lua_get(TOLD),
-  }, { pressed = true, cursor = { line, 0 }, shown = 0, told = '' })
+  }, { pressed = true, cursor = { git_repo.files_window_line(line), 0 }, shown = 0, told = '' })
 end
 
 T['h']['shows a diff in which F reads that diff again with the whole file'] = function()
@@ -861,7 +869,7 @@ T['h and l']['work in the files buffer made anew'] = function()
   )
   expect_lines(FILES, { 'Files in: ' .. git_repo.commit_line(first, 'First'), '  M notes.txt' })
 
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
   child.type_keys('h')
 
   wait_for_shown(1)
@@ -959,7 +967,7 @@ T['h']['on a file under Landed, once the working branch names no commit, tells w
     end
     require('aineo.changes').refresh_shown_pane()
     vim.api.nvim_set_current_win(vim.fn.bufwinid('aineo://changes-files'))
-    vim.api.nvim_win_set_cursor(0, { 2, 0 })
+    vim.api.nvim_win_set_cursor(0, { 3, 0 })
   ]])
 
   child.lua("vim.fn.maparg('h', 'n', false, true).callback()")

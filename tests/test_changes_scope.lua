@@ -80,9 +80,11 @@ end
 ---@param which 'files'|'commits'
 ---@return string[]
 local function pane_lines(key, which)
-  return child.lua_get(
-    'vim.api.nvim_buf_get_lines(_G.panes[...][select(2, ...)], 0, -1, true)',
-    { key, which }
+  return git_repo.without_against_line(
+    child.lua_get(
+      'vim.api.nvim_buf_get_lines(_G.panes[...][select(2, ...)], 0, -1, true)',
+      { key, which }
+    )
   )
 end
 
@@ -1883,14 +1885,16 @@ local function lines_beginning(lines, prefix)
 end
 
 --- Types `keys` in the window `which` of the pane of the changes home
---- `module`, its cursor on line `line`.
+--- `module`, its cursor on line `line`; a line of the files window is counted
+--- without its `Against:` line (`git_repo.files_window_line()`).
 ---
 ---@param which 'files'|'commits'
 ---@param line integer
 ---@param keys string
 local function type_on(which, line, keys)
   enter_window_of('module', which)
-  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { line })
+  local at = which == 'files' and git_repo.files_window_line(line) or line
+  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { at })
   child.type_keys(keys)
 end
 

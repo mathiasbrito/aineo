@@ -59,7 +59,9 @@ local BEGIN_AND_SHOW = [[
 ---@param name string
 ---@return string[]
 local function lines_of(name)
-  return child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  return git_repo.without_against_line(
+    child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  )
 end
 
 --- Waits until the child's buffer named `name` holds `expected`, at most
@@ -471,7 +473,7 @@ T['l and <BS>']['on a commit of the graph go to its files and back to its line']
   child.type_keys('l')
 
   expect_in_window_of(FILES)
-  expect_cursor({ 2, 0 })
+  expect_cursor({ 3, 0 })
   expect_lines(FILES, {
     'Files in: '
       .. git_repo.commit_line_of(commits.side, 'Bartholomew 9y' .. (' '):rep(6), 'Side work'),
@@ -481,6 +483,24 @@ T['l and <BS>']['on a commit of the graph go to its files and back to its line']
   child.type_keys('<BS>')
   expect_in_window_of(COMMITS)
   expect_cursor({ 4, 0 })
+end
+
+T['l and <BS>']['on a commit of the graph list its files under a second line: the commit’s parent and the commit'] = function()
+  local top, commits = pane_showing_the_graph('graphpane-against')
+  expect_lines(COMMITS, whole_graph(top, commits))
+  child.type_keys('jj')
+
+  child.type_keys('l')
+
+  expect_in_window_of(FILES)
+  local expected = ('Against: %s parent → %s (side)'):format(
+    commits.begin:sub(1, 7),
+    commits.side:sub(1, 7)
+  )
+  git_repo.wait_until('the Against line is told', function()
+    return child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 1, 2, true)[1]', { FILES })
+      == expected
+  end)
 end
 
 --- Waits until the child has been asked to show `count` buffers.
@@ -504,7 +524,7 @@ T['l and <BS>']['the diff follows the cursor over a graph commit’s files once 
   expect_lines(COMMITS, whole_graph(top, commits))
   child.type_keys('l')
   expect_in_window_of(FILES)
-  expect_cursor({ 2, 0 })
+  expect_cursor({ 3, 0 })
   child.type_keys('l')
   wait_for_shown(1)
   eq(last_shown_name(), 'aineo://commit/' .. commits.other .. '/more.txt')
