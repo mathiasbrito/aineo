@@ -704,4 +704,53 @@ T['the Reported section']['keeps the cursor on a commit of a branch listed under
   eq(commits_cursor_line(), 12)
 end
 
+T['a commit of the Reported section']['stays selected, its line kept, when the focused view that listed it gives way to the default view'] = function()
+  local top = start_on_repository('treepane-switch')
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  local one = commit_only(agent, 'one.txt', 'one', 'One')
+  local two = commit_only(agent, 'two.txt', 'two', 'Two')
+  local three = commit_only(agent, 'three.txt', 'three', 'Three')
+  git_repo.git(top, { 'branch', 'feature/b', three })
+  git_repo.git(agent, { 'checkout', '--quiet', '--detach' })
+  local other = add_worktree(top, 'agent-2', 'feature/o')
+  child.lua('_G.report(...)', {
+    {
+      worktree = other,
+      label = 'T',
+      branches = { { name = 'feature/o' }, { name = 'feature/b', base = one } },
+    },
+  })
+  git_repo.wait_until('the report taken', function()
+    return vim.tbl_contains(pane_lines('commits'), 'Worktree agent-2 (feature/o)')
+  end)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(_G.pane.commits))')
+  local default_view = {
+    'Reported',
+    'T now',
+    '  agent-2',
+    '    feature/o * from ?',
+    ('    feature/b from %s'):format(short(one)),
+    tree_commit_line(three, 'Three'),
+    tree_commit_line(two, 'Two'),
+  }
+  child.lua('require("aineo.changes").toggle_focused_view()')
+  expect_pane_starting_with('commits', default_view)
+  child.lua('require("aineo.changes").toggle_focused_view()')
+  git_repo.wait_until('the focused view shown', function()
+    return pane_lines('commits')[1] ~= 'Reported'
+  end)
+  go_to_commits_line(vim.fn.index(pane_lines('commits'), git_repo.commit_line(two, 'Two')) + 1)
+  local files_of_two = {
+    'Files in: ' .. git_repo.commit_line(two, 'Two') .. ' (branch feature/b)',
+    '  A two.txt',
+  }
+  expect_pane_lines('files', files_of_two)
+
+  child.lua('require("aineo.changes").toggle_focused_view()')
+
+  expect_pane_starting_with('commits', default_view)
+  eq(commits_cursor_line(), 7)
+  expect_pane_lines('files', files_of_two)
+end
+
 return T
