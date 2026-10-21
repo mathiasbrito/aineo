@@ -3676,12 +3676,13 @@ The changes pane ~
 - Where aineo cannot watch the working tree's subdirectories (Linux), the
   files window says so below its first line: a change in a subdirectory
   shows at the next showing of the pane, save or commit, and a branch moved
-  by `git update-ref` from another worktree, a tag, and a fetch another
-  worktree ran are missed too; a fetch run in your repository's main
-  worktree is seen; what landed in your working branch then shows what
-  such a fetch brought at the next showing of the pane. No timer reads
-  the repository on a schedule; the only timer is the pause before the
-  files window follows the commits window's cursor.
+  by `git update-ref` from another worktree, a tag, a commit on another
+  worktree's detached `HEAD`, and a fetch another worktree ran are missed
+  too, the commit graph's included (|aineo-changes-graph|); a fetch run in
+  your repository's main worktree is seen; what landed in your working
+  branch then shows what such a fetch brought at the next showing of the
+  pane. No timer reads the repository on a schedule; the only timer is the
+  pause before the files window follows the commits window's cursor.
 - Choosing another line in the commits window reads the files window again
   for it: another worktree's heading or commit is read in that worktree,
   and a heading's base with it.
