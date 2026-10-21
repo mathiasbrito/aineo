@@ -1363,9 +1363,10 @@ again.
 
                                                    *aineo-changes-reported*
 Claude Code and its subagents tell aineo, through aineo's tool
-`announce_work` (|aineo-report|), of each git worktree they work in: its
-folder, a short label for their task, and every branch they are working on
-there, each with the commit it was made from; every agent and subagent
+`announce_work` (|aineo-report|), of each git worktree they work in: the
+absolute path of its folder, a short label for their task, and every
+branch they are working on there, each with the commit it was made from;
+every agent and subagent
 must, once per worktree, right after it makes the worktree or a branch in
 it, and again whenever the set of branches it works on there changes. An
 agent with several worktrees calls once for each. aineo's own hook tells it
@@ -1425,7 +1426,7 @@ seconds whatever the editor does, one held at a prompt say. A failed
 command runs no `PostToolUse` hook at all. A worktree Claude Code makes
 itself for a subagent (`isolation: worktree`) runs no hook aineo could read
 without taking that creation over: the subagent is asked to call
-`announce_work` with its worktree's folder instead.
+`announce_work` with the absolute path of its worktree's folder instead.
 
 An agent's call for a worktree replaces that worktree's label and every
 branch reported of it: a branch it no longer lists leaves the Reported
@@ -2946,11 +2947,13 @@ git worktree they work in and the branches they work on there
 which subagents see too, begins "Required for every agent and subagent:
 call once per worktree you work in, right after you create the worktree or
 a branch in it, and again whenever the set of branches you are working on
-there changes, with the worktree's folder, a short label, and every branch
-you are working on there with the commit it was created from." Its
-arguments, all three required, are `worktree`, the worktree's folder,
-relative to Claude Code's working folder or absolute, the main checkout's
-folder for work there; `label`, a short name for the task; and `branches`,
+there changes, with the absolute path of the worktree's folder, a short
+label, and every branch you are working on there with the commit it was
+created from." Its arguments, all three required, are `worktree`, the
+absolute path of the worktree's folder, the main checkout's folder for
+work there — a relative one is refused, "worktree: expected an absolute
+path", since every agent and subagent shares one server whose working
+folder is no agent's own; `label`, a short name for the task; and `branches`,
 at most 32 objects of `name`, the branch's name, and `base`, the commit it
 was created from, an id or any name git reads, such as `origin/dev`;
 nothing else. `branches` may be empty: the agent is done with that
@@ -2959,10 +2962,8 @@ non-empty, at most 4096 bytes, and hold no NUL and no line break, and no
 two branches may share a name, or the call is refused, naming the field or
 the item, `branches[2].base` say. A call replaces what the worktree's
 calls before reported: an agent with several worktrees calls once for
-each. A folder that is not absolute is taken from the directory Claude
-Code runs in, and is not taken when that directory cannot be read. The
-server offers it to the editor that started Claude Code alone, with the
-token of that start; the tab checks each branch is a local branch and
+each. The server offers it to the editor that started Claude Code alone,
+with the token of that start; the tab checks each branch is a local branch and
 resolves its base to a full id in the worktree's folder, else in its
 session's repository (|aineo-changes-reported|), waiting at most 4 seconds
 for git. The tool only informs, and answers one of four things, nothing
@@ -2979,8 +2980,9 @@ refuses. The paragraph appended to the system prompt reads "Required for
 every agent and subagent: call `mcp__aineo__announce_work` once per
 worktree you work in, right after you create the worktree or a branch in
 it, and again whenever the set of branches you are working on there
-changes, with the worktree's folder, a short label, and every branch you
-are working on there with the commit it was created from. It only informs
+changes, with the absolute path of the worktree's folder, a short label,
+and every branch you are working on there with the commit it was created
+from. It only informs
 aineo: if it refuses, correct the call as the refusal says and call again;
 otherwise do not act on its reply."
 The server and the hooks are given this editor's address, |v:servername|,

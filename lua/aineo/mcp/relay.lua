@@ -7,8 +7,8 @@
 --- it goes, from what its environment tells it: the editor that started
 --- Claude Code, the token of that start, and the session Claude Code started
 --- on; and each announcement to the editor that started Claude Code alone,
---- with that token, a relative path made absolute against its own working
---- directory, Claude Code's (`aineo.mcp.announcement`); and each call of a
+--- with that token, its worktree's absolute path normalised
+--- (`aineo.mcp.announcement`); and each call of a
 --- run tool likewise (`aineo.mcp.run_calls`). Its Claude Code
 --- process is its parent, and its state directory its
 --- own `stdpath('state')`, the editors'. As it starts, it records that
@@ -72,7 +72,6 @@ require('aineo.mcp.server').serve_stdio({
     return announcement.announce({
       editor_address = context.editor_address,
       token = context.token,
-      working_directory = vim.uv.cwd(),
     }, work)
   end,
   run_call = function(run_call)
