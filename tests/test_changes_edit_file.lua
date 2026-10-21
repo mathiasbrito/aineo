@@ -57,7 +57,9 @@ local T = MiniTest.new_set({
 ---@param which 'files'|'commits'
 ---@return string[]
 local function pane_lines(which)
-  return child.lua_get('vim.api.nvim_buf_get_lines(_G.pane[...], 0, -1, true)', { which })
+  return git_repo.without_against_line(
+    child.lua_get('vim.api.nvim_buf_get_lines(_G.pane[...], 0, -1, true)', { which })
+  )
 end
 
 --- Waits until the buffer `which` of the pane holds `expected`, at most
@@ -167,16 +169,27 @@ local function file_line(suffix)
   end
 end
 
---- Puts the cursor on line `line` of the files window and presses `keys`,
---- written as in a mapping, there. An error the keys raise is left to show in
---- the editor's messages, and in what the case asserts of its state, as a
---- user would see it.
+--- Puts the cursor on line `line` of the files window, counted as
+--- `pane_lines()` counts, without the line saying what the diffs compare
+--- against, and presses `keys`, written as in a mapping, there. An error the
+--- keys raise is left to show in the editor's messages, and in what the case
+--- asserts of its state, as a user would see it.
 ---
 ---@param line integer
 ---@param keys string
 local function press_on(line, keys)
   enter_files_window()
-  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { line })
+  child.lua(
+    [[
+    local line = ...
+    local second = vim.api.nvim_buf_get_lines(0, 1, 2, true)[1] or ''
+    if line >= 2 and vim.startswith(second, 'Against: ') then
+      line = line + 1
+    end
+    vim.api.nvim_win_set_cursor(0, { line, 0 })
+  ]],
+    { line }
+  )
   child.lua("pcall(vim.api.nvim_feedkeys, vim.keycode(...), 'mx', false)", { keys })
 end
 

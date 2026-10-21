@@ -57,7 +57,9 @@ local BEGIN_AND_SHOW = [[
 ---@param name string
 ---@return string[]
 local function lines_of(name)
-  return child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  return git_repo.without_against_line(
+    child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  )
 end
 
 --- Waits until the child's buffer named `name` holds `expected`, at most
@@ -260,7 +262,7 @@ T['l']['on a commit moves the cursor to the files window, to its first file, the
   child.type_keys('l')
 
   expect_in_window_of(FILES)
-  expect_cursor({ 2, 0 })
+  expect_cursor({ 3, 0 })
   expect_lines(FILES, listed)
 end
 
@@ -276,7 +278,7 @@ T['l']['pressed at once on a commit lists that commit, without waiting for the c
     '  M b.txt',
   })
   expect_in_window_of(FILES)
-  expect_cursor({ 2, 0 })
+  expect_cursor({ 3, 0 })
 end
 
 T['l']['on a commit of another worktree moves to the files window listing it'] = function()
@@ -290,7 +292,7 @@ T['l']['on a commit of another worktree moves to the files window listing it'] =
     '  M a.txt',
   })
   expect_in_window_of(FILES)
-  expect_cursor({ 2, 0 })
+  expect_cursor({ 3, 0 })
 end
 
 T['l']['on a line that lists no file still moves to the files window'] = function()
@@ -310,16 +312,16 @@ T['l']['moves back to where the cursor was in the files window, while the choice
   go_to_commits_line(4)
   child.type_keys('l')
   expect_in_window_of(FILES)
-  expect_cursor({ 2, 0 })
-  child.type_keys('j')
   expect_cursor({ 3, 0 })
+  child.type_keys('j')
+  expect_cursor({ 4, 0 })
   child.type_keys('<BS>')
   expect_in_window_of(COMMITS)
 
   child.type_keys('l')
 
   expect_in_window_of(FILES)
-  expect_cursor({ 3, 0 })
+  expect_cursor({ 4, 0 })
 end
 
 T['<BS>'] = MiniTest.new_set()
@@ -367,7 +369,7 @@ T['h']['in the files window still shows the file against HEAD, after l brought t
   go_to_commits_line(4)
   child.type_keys('l')
   expect_in_window_of(FILES)
-  expect_cursor({ 2, 0 })
+  expect_cursor({ 3, 0 })
 
   child.type_keys('h')
 

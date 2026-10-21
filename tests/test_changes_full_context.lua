@@ -59,7 +59,9 @@ local BEGIN_AND_SHOW = [[
 ---@param name string
 ---@return string[]
 local function lines_of(name)
-  return child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  return git_repo.without_against_line(
+    child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  )
 end
 
 --- Waits until the child's buffer named `name` holds `expected`, at most
@@ -151,14 +153,15 @@ local function session_with_two_changed_files(name)
   return top
 end
 
---- Presses Enter on line `line` of the files window and waits for the
+--- Presses Enter on line `line` of the files window, counted without the
+--- `Against:` line (`git_repo.files_window_line()`), and waits for the
 --- diff, the cursor then in the window that shows it.
 ---
 ---@param line integer
 ---@param count integer how many diffs the child has been asked to show once this one is
 local function open_file_at(line, count)
   enter_window_of(FILES)
-  child.type_keys(line .. 'G', '<CR>')
+  child.type_keys(git_repo.files_window_line(line) .. 'G', '<CR>')
   wait_for_diffs(count)
 end
 
@@ -434,7 +437,7 @@ local HOLD_FILE_DIFFS = [[
 ---@param line integer
 local function open_held_file_at(line)
   enter_window_of(FILES)
-  child.type_keys(line .. 'G', '<CR>')
+  child.type_keys(git_repo.files_window_line(line) .. 'G', '<CR>')
   git_repo.wait_until('the read held', function()
     return child.lua_get('#_G.held') >= 1
   end)
@@ -530,7 +533,7 @@ T['F']['flips the context all the same when it cannot read the diff again'] = fu
   child.lua('_G.fail_reads = false')
 
   enter_window_of(FILES)
-  child.type_keys('3G', '<CR>')
+  child.type_keys('4G', '<CR>')
 
   git_repo.wait_until('the third read asked', function()
     return #child.lua_get('_G.contexts') == 3
@@ -611,7 +614,7 @@ T['F']['in a file’s diff within a commit keeps the commit’s header and shows
   local _, commit = session_with_a_commit('fullcontext-commit-file')
   select_filter_at(3, { 'Files in: ' .. git_repo.commit_line(commit, 'Change ten'), '  M a.txt' })
   enter_window_of(FILES)
-  child.type_keys('2G', '<CR>')
+  child.type_keys('3G', '<CR>')
   wait_for_diffs(1)
   expect_hunks_shown({ THREE_LINES_HUNK })
 
@@ -690,7 +693,7 @@ T['F']['in the diff of another worktree’s file shows the whole file'] = functi
   child.type_keys('4G')
   expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M a.txt' })
   enter_window_of(FILES)
-  child.type_keys('2G', '<CR>')
+  child.type_keys('3G', '<CR>')
   wait_for_diffs(1)
   expect_hunks_shown({ THREE_LINES_HUNK })
 
@@ -751,7 +754,7 @@ T['F']['in the diff of a file under another worktree’s commit shows the whole 
     '  M a.txt',
   })
   enter_window_of(FILES)
-  child.type_keys('2G', '<CR>')
+  child.type_keys('3G', '<CR>')
   wait_for_diffs(1)
   expect_hunks_shown({ THREE_LINES_HUNK })
 
@@ -817,7 +820,7 @@ T['F']['makes an Enter already reading when it is pressed read again in the new 
   expect_hunks_shown({ THREE_LINES_HUNK })
   child.lua('_G.held, _G.delivered = {}, 0')
   enter_window_of(FILES)
-  child.type_keys('3G', '<CR>')
+  child.type_keys('4G', '<CR>')
   git_repo.wait_until('the Enter’s read held', function()
     return child.lua_get('#_G.held') == 1
   end)
@@ -843,7 +846,7 @@ T['F']['is not undone by an Enter on the same file already reading when it is pr
   expect_hunks_shown({ THREE_LINES_HUNK })
   child.lua('_G.held, _G.delivered = {}, 0')
   enter_window_of(FILES)
-  child.type_keys('2G', '<CR>')
+  child.type_keys('3G', '<CR>')
   git_repo.wait_until('the Enter’s read held', function()
     return child.lua_get('#_G.held') == 1
   end)
