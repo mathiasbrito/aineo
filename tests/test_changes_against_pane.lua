@@ -460,6 +460,39 @@ T['the bar of a diff window']['shows the ids alone as the diff is shown, before 
   expect_bar(id_in_bar(base) .. ' ' .. words_in_bar('session start') .. ' ↔ working tree  a.txt')
 end
 
+T['the bar of a diff window']['of another worktree’s file names the base its diff is read from, not the one the commits window last read'] = function()
+  local top, base = git_repo.create('against-bar-worktree-fresh', { ['a.txt'] = { 'one' } })
+  local worktree, commit = with_agent_worktree(top)
+  git_repo.write(worktree, 'agent.txt', { 'agent', 'more' })
+  begin_and_show(top, { working_branch = 'main' })
+  go_to_commits_line(6, 'Worktree agent')
+  expect_line(
+    FILES,
+    2,
+    ('Against: %s (main) merge base with main → working tree'):format(short(base))
+  )
+  child.lua("require('aineo.changes.worktrees').read_other_worktrees = function() end")
+  git_repo.git(top, { 'merge', '--quiet', '--ff-only', 'feature/a' })
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  expect_line(
+    FILES,
+    2,
+    ('Against: %s (feature/a, main) merge base with main → working tree'):format(short(commit))
+  )
+  expect_line(FILES, 3, '  M agent.txt')
+
+  press_in_files_window(3, '<CR>')
+
+  expect_bar(
+    id_in_bar(commit)
+      .. ' '
+      .. names_in_bar('feature/a, main')
+      .. ' '
+      .. words_in_bar('merge base with main')
+      .. ' ↔ working tree  agent.txt'
+  )
+end
+
 T['the bar of a diff window']['under a commit says the parent and the commit, then the path'] = function()
   local top, base = git_repo.create('against-bar-commit', { ['a.txt'] = { 'one' } })
   begin_and_show(top)
