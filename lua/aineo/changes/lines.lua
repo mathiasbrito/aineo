@@ -760,6 +760,75 @@ function M.report_item(line, now)
   return vim.tbl_extend('force', line.picks, { text = '[reported] ' .. tree_text(line, now) })
 end
 
+--- How many of a branch's commits the Reported section lists below its
+--- line.
+M.MOST_TREE_COMMITS = 20
+
+--- `shown`, colours, moved `cells` to the right.
+---
+---@param shown aineo.changes.Colour[]
+---@param cells integer
+---@return aineo.changes.Colour[]
+local function shifted(shown, cells)
+  return vim.tbl_map(function(colour)
+    return vim.tbl_extend('force', colour, {
+      first_column = colour.first_column + cells,
+      end_column = colour.end_column + cells,
+    })
+  end, shown)
+end
+
+--- The line below the commits of a branch's line that lists more of them
+--- than `M.MOST_TREE_COMMITS`, `left_out` of them: it picks what the
+--- branch's line does.
+---
+---@param left_out integer
+---@param indent string
+---@param entry aineo.changes.Entry the entry of the branch's line
+---@return aineo.changes.Row
+local function more_commits_row(left_out, indent, entry)
+  local text = ('… %d more'):format(left_out)
+  return {
+    line = indent .. text,
+    colours = {
+      { first_column = #indent, end_column = #indent + #text, group = colours.NOTE_GROUP },
+    },
+    entry = entry,
+  }
+end
+
+--- The rows below the line of a branch, `line`, a line of the Reported
+--- section, at the time `now`: a row per commit it was given
+--- (`aineo.changes.TreeLine`'s `commits`), the newest `M.MOST_TREE_COMMITS`
+--- of them, as the window's other commit lines (`commit_text()`), indented
+--- a depth below the line's and listing the files of the commit in that
+--- branch; and, for more commits than that, a row saying how many are left
+--- out (`more_commits_row()`). `entry` is the entry of the branch's line.
+---
+---@param line aineo.changes.TreeLine
+---@param now integer seconds since the epoch
+---@param entry aineo.changes.Entry
+---@return aineo.changes.Row[]
+local function tree_commit_rows(line, now, entry)
+  local commits = line.commits or {}
+  local indent = (' '):rep((line.depth + 1) * INDENT_CELLS)
+  local rows = {}
+  for position = 1, math.min(#commits, M.MOST_TREE_COMMITS) do
+    local commit = commits[position]
+    local text, line_colours = commit_text(commit, now)
+    local listed_under = filter.of_branch_commit(line.branch.name, commit)
+    table.insert(rows, {
+      line = indent .. text,
+      colours = shifted(line_colours, #indent),
+      entry = { key = filter.key(listed_under), commit = commit, filter = listed_under },
+    })
+  end
+  if #commits > M.MOST_TREE_COMMITS then
+    table.insert(rows, more_commits_row(#commits - M.MOST_TREE_COMMITS, indent, entry))
+  end
+  return rows
+end
+
 --- The filter the files window lists for the line `line` of the Reported
 --- section: *Session work* for the editor's own work, a worktree's whole
 --- change, or a branch's; nil for a group's line, which picks more than one.
@@ -798,7 +867,8 @@ end
 
 --- The rows of the Reported section, for `reported`, its lines in their
 --- order (`aineo.changes.reports`' `tree_lines()`): its heading, whole in
---- its group, and a row per line (`tree_row()`); none without a line.
+--- its group, and a row per line (`tree_row()`), a branch's followed by
+--- its commits (`tree_commit_rows()`); none without a line.
 ---
 ---@param reported aineo.changes.TreeLine[]|nil
 ---@param now integer seconds since the epoch
@@ -809,7 +879,11 @@ local function reported_rows(reported, now)
   end
   local rows = { whole_line(M.REPORTED_HEADING, colours.REPORTED_HEADING_GROUP) }
   for _, line in ipairs(reported) do
-    table.insert(rows, tree_row(line, now))
+    local row = tree_row(line, now)
+    table.insert(rows, row)
+    if line.branch then
+      vim.list_extend(rows, tree_commit_rows(line, now, row.entry))
+    end
   end
   return rows
 end

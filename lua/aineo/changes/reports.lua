@@ -196,6 +196,7 @@ end
 ---@field checked_out? boolean on a branch's line, whether its worktree has it checked out now
 ---@field picks aineo.changes.TreePick
 ---@field read_base? string on a branch's line, the base its work was last read from, which the pane gives once it has read it
+---@field commits? aineo.git.Commit[] on a branch's line, the commits from `read_base` to the branch's tip, newest first, which the pane gives once it has read them
 
 --- What the line of `node` picks: its worktree, or the editor's own work
 --- when it is the editor's own worktree, `own_top`.
