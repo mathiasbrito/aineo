@@ -397,6 +397,26 @@ T['the diff bar']['doubles every percent sign, which the winbar would read as a 
   )
 end
 
+T['what stays of a read while the next is pending'] = MiniTest.new_set()
+
+T['what stays of a read while the next is pending']['are its names alone, which belong to ids, not the commits that may have moved'] = function()
+  local names = { [BASE] = { 'main' } }
+
+  eq(
+    against.kept_while_reading({
+      head = HEAD,
+      parent = PARENT,
+      merge_base = MERGE_BASE,
+      names = names,
+    }),
+    { names = names }
+  )
+end
+
+T['what stays of a read while the next is pending']['is nothing before any read'] = function()
+  eq(against.kept_while_reading(nil), {})
+end
+
 T['the names of a commit'] = MiniTest.new_set({
   parametrize = {
     { {}, '' },
