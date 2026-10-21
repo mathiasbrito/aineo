@@ -14,15 +14,17 @@ local KINDS = {
   { prefix = 'refs/tags/' },
 }
 
---- What the full name of a remote's `HEAD` ends with: a name that only
---- repeats a branch of the remote.
-local REMOTE_HEAD = '/HEAD'
+--- What `git for-each-ref` is asked to print for each reference: its full
+--- name, the id of the object it names, the id of the commit an annotated tag
+--- points at, and the reference a symbolic one points to.
+local FORMAT = '--format=%(refname)%00%(objectname)%00%(*objectname)%00%(symref)'
 
 --- The names `git for-each-ref` gave as `output`, for the commits `ids`: a
---- line each, the full name of a reference, a NUL, the id of the object it
---- names, a NUL, and the id of the commit an annotated tag points at, if it
---- is one. Each commit's names are grouped by kind (`KINDS`), those of a
---- kind in git's order. A name holds no line break, which git refuses in one.
+--- line each, the fields of `FORMAT` NUL separated. Each commit's names are
+--- grouped by kind (`KINDS`), those of a kind in git's order; a symbolic
+--- reference, a remote's `HEAD`, is left out, as it only repeats a branch,
+--- while a branch or tag whose name ends in `/HEAD` is named. A name holds
+--- no line break, which git refuses in one.
 ---
 ---@param output string
 ---@param ids string[]
@@ -34,9 +36,9 @@ local function parse_references(output, ids)
   end
   local by_kind = {}
   for _, line in ipairs(vim.split(output, '\n', { plain = true, trimempty = true })) do
-    local reference, object, peeled = line:match('^(.-)%z(%x+)%z(%x*)$')
+    local reference, object, peeled, symbolic = line:match('^(.-)%z(%x+)%z(%x*)%z(.*)$')
     local id = wanted[peeled] and peeled or object
-    if reference and wanted[id] and not vim.endswith(reference, REMOTE_HEAD) then
+    if reference and wanted[id] and symbolic == '' then
       for kind_index, kind in ipairs(KINDS) do
         if vim.startswith(reference, kind.prefix) then
           by_kind[id] = by_kind[id] or { {}, {}, {} }
@@ -56,8 +58,8 @@ end
 --- `git for-each-ref`, and calls `done(nil, names)`: for each commit with
 --- any, its local branches, then its remote-tracking branches, then its
 --- tags (an annotated tag names the commit it tags), each kind in name
---- order, each by its name without the kind's prefix; a remote's `HEAD` is
---- left out, and so is every other reference. A commit nothing points at
+--- order, each by its name without the kind's prefix; a remote's `HEAD`, a
+--- symbolic reference, is left out, and so is every other reference. A commit nothing points at
 --- has no entry. With no commit asked about, git is not run. Calls
 --- `done(failure)` when git fails.
 ---
@@ -70,7 +72,7 @@ function M.names_at(run, found, ids, done)
     done(nil, {})
     return
   end
-  local arguments = { 'for-each-ref', '--format=%(refname)%00%(objectname)%00%(*objectname)' }
+  local arguments = { 'for-each-ref', FORMAT }
   for _, id in ipairs(ids) do
     table.insert(arguments, '--points-at=' .. id)
   end
