@@ -1456,6 +1456,7 @@ T['the Reported section']['adds a branch aineo’s hook saw made in a reported w
     'task now',
     '  agent-1',
     ('    feature/a from %s'):format(short(base)),
+    '      ' .. commit_line(one, 'One'),
     ('    feature/b * from %s'):format(short(one)),
     'Uncommitted',
   })

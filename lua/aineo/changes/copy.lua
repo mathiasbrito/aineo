@@ -26,6 +26,7 @@ local reports = require('aineo.changes.reports')
 local scope = require('aineo.changes.scope')
 local scratch = require('aineo.changes.scratch')
 local serial = require('aineo.changes.serial')
+local tree_commits = require('aineo.changes.tree_commits')
 local worktrees = require('aineo.changes.worktrees')
 
 local M = {}
@@ -186,6 +187,7 @@ function M.new(label)
   ---@field focused boolean whether the commits window shows the focused view — the scope alone, or the reported work — in place of the default view; false while there is neither
   ---@field nodes aineo.changes.ReportedNode[] the Reported section's worktrees, the agents of the tab's Claude Code reported and git lists, in the order their last reports were taken (`aineo.changes.reports`)
   ---@field reported_branches table<string, aineo.changes.BranchSection> what the commits window last read of each reported branch no reported worktree has checked out, by name
+  ---@field tree_commits table<string, aineo.git.Commit[]> what the commits window last read of the commits each branch's line of the Reported section lists, by branch and base (`aineo.changes.tree_commits`)
   ---@field shows_reported boolean whether the focused view is the reported work, chosen last, rather than the scope
   ---@field shown_label? string while the focused view is the reported work, the label of the worktrees it shows, `''` for those with none; nil for every worktree
   ---@field waiting aineo.changes.WaitingReport[] the reports git did not list yet, by worktree, each matched again at every read until its timer lets it go
@@ -454,13 +456,15 @@ function M.new(label)
 
   --- The lines of the Reported section (`reports.tree_lines()`), each
   --- branch's with the base its work was last read from
-  --- (`read_base_of()`).
+  --- (`read_base_of()`) and the commits last read from that base
+  --- (`aineo.changes.tree_commits`).
   ---
   ---@return aineo.changes.TreeLine[]
   local function reported_lines()
     return vim.tbl_map(function(line)
       if line.branch then
         line.read_base = read_base_of(line)
+        line.commits = tree_commits.commits_of(session.tree_commits, line)
       end
       return line
     end, reports.tree_lines(session.nodes, own_top()))
@@ -1303,6 +1307,55 @@ function M.new(label)
     read_from(1)
   end
 
+  --- Keeps `kept_reads`, what was read of the commits the Reported section
+  --- lists below its branches' lines. A commit of a branch that the files
+  --- window lists and the default view no longer lists — the branch moved,
+  --- was reset or rebased — gives way to *Session work*, and the files
+  --- window is read for it, unless the focused view or the commit graph
+  --- shows. Returns whether what was kept differs from what the window
+  --- listed.
+  ---
+  ---@param kept_reads table<string, aineo.git.Commit[]>
+  ---@return boolean changed
+  local function take_tree_commits(kept_reads)
+    local changed = not vim.deep_equal(session.tree_commits, kept_reads)
+    session.tree_commits = kept_reads
+    local selected = session.selected
+    if
+      selected.kind == 'commit'
+      and selected.branch
+      and not session.graph_shown
+      and not scope_shown()
+      and not scope.page_lists(commits_page(), selected)
+    then
+      select_session_work()
+      read_files(true)
+    end
+    return changed
+  end
+
+  --- Reads the commits the Reported section lists below the lines of the
+  --- branches the pane has read the work of (`tree_commits.wanted()`), off
+  --- the main loop, keeps them (`take_tree_commits()`) unless the session
+  --- ended meanwhile, and calls `done(changed)`: whether they differ from
+  --- what the window listed.
+  ---
+  ---@param done fun(changed: boolean)
+  local function read_tree_commits(done)
+    local reading = session
+    if not reading.repository then
+      done(false)
+      return
+    end
+    tree_commits.read(
+      { found = reading.repository, git = reading.settings.git },
+      tree_commits.wanted(reported_lines()),
+      function(kept_reads)
+        done(session == reading and take_tree_commits(kept_reads))
+      end
+    )
+  end
+
   --- Reads what reports are matched against and matches them; made below,
   --- as it adds what it matches to the Reported section and reads the commits
   --- window again for it.
@@ -1320,12 +1373,14 @@ function M.new(label)
   local function read_scope_and_reported(done)
     read_branch_scope(function(read_pick)
       read_reported_branches(function(read_reported_any)
-        if #session.waiting == 0 and #session.nodes == 0 then
-          done(read_pick or read_reported_any)
-          return
-        end
-        read_reported(function()
-          done(true)
+        read_tree_commits(function(read_tree_commits_any)
+          if #session.waiting == 0 and #session.nodes == 0 then
+            done(read_pick or read_reported_any or read_tree_commits_any)
+            return
+          end
+          read_reported(function()
+            done(true)
+          end)
         end)
       end)
     end)
@@ -1985,6 +2040,7 @@ function M.new(label)
       focused = false,
       nodes = {},
       reported_branches = {},
+      tree_commits = {},
       shows_reported = false,
       waiting = {},
       graph_shown = false,
@@ -2055,7 +2111,7 @@ function M.new(label)
     hold_unkept_base()
     if session.followed then
       session.scope, session.focused, session.branch = nil, false, nil
-      session.nodes, session.reported_branches = {}, {}
+      session.nodes, session.reported_branches, session.tree_commits = {}, {}, {}
       session.shows_reported, session.shown_label = false, nil
       drop_waiting()
     end
