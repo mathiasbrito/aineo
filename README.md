@@ -284,6 +284,17 @@ Every part takes its colour from your colour scheme, through the
   and show it at once, and the cursor stays on the list. `<BS>` in the diff
   moves back to the list, onto that file's line. `F` in a diff widens its
   context to the whole file and back. `\d` closes the diff.
+- **See what a diff compares against.** The second line of the files window,
+  `Against: <left> → <right>`, and the bar at the top of every diff window,
+  `<left> ↔ <right>  <path>`, say both sides of the diff: the abbreviated id of
+  the commit it runs from, the branches, remote-tracking branches and tags
+  that point at it (up to three), and where it came from, one of `reported
+  base` (what an agent reported), `merge base with <ref>` (what aineo worked
+  out for a worktree or branch), `session start` (Session work's commit),
+  `HEAD` (Uncommitted) or `parent` (a commit's first parent, `empty tree` for
+  a root commit); the right side is `working tree` when the diff reads files
+  on disk, else the commit it reads. The ids show first, the names once git
+  has told them.
 - **Open a file.** `gf` opens the working tree's file in the file column;
   under a commit it shows the file as that commit has it, read-only.
   `\<CR>` and `<S-CR>` open the file for editing in the working tree its line
