@@ -2858,7 +2858,8 @@ function M.new(label)
   --- new to the section, other than the editor's own, makes every reported
   --- worktree the focused view, shown at once, that worktree's whole change
   --- chosen, the cursor on its heading, and the user is told once with
-  --- `waiting.tell`; any other change is written and read again, the
+  --- `waiting.tell`, the worktree named with the branches reported of it
+  --- (`scope.started_work()`); any other change is written and read again, the
   --- focused view settled (`settle_reported_view()`). The other worktrees
   --- are read again while the pane has been shown, so that the work's
   --- commits show.
@@ -2876,14 +2877,18 @@ function M.new(label)
         by_hook = taken.work.by_hook,
       })
     end
-    local joined = not was_reported and node_at(worktree.top) ~= nil
+    local node = node_at(worktree.top)
+    local joined = not was_reported and node ~= nil
     if joined and worktree.top ~= own_top() then
       session.shows_reported, session.shown_label, session.focused = true, nil, true
       local section = scope.section_on(session.commits_others, worktree.top) or worktree
       select_filter(filter.of_worktree(section))
       show_commits()
       read_files(true)
-      waiting.tell(scope.started_work(worktree))
+      local reported_names = vim.tbl_map(function(reported)
+        return reported.name
+      end, node.branches)
+      waiting.tell(scope.started_work(worktree.top, reported_names))
     else
       settle_reported_view(false)
       show_commits()

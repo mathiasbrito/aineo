@@ -433,6 +433,31 @@ T['a reported worktree']['shows under its heading with its commits, nothing else
   eq(told('module'), { started_in('Worktree agent-1 (feature/a)') })
 end
 
+T['a reported worktree']['is told with the branch the report gave while git lists it detached'] = function()
+  local top = start_on_repository('announce-detached')
+  local agent = vim.fs.joinpath(vim.fs.dirname(top), 'agent-1')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '--detach', agent })
+
+  report('module', agent_call(agent))
+
+  wait_until('the user is told', function()
+    return #told('module') > 0
+  end)
+  eq(told('module'), { started_in('Worktree agent-1 (feature/a)') })
+end
+
+T['a reported worktree']['is told with every branch the report gave, joined by a comma'] = function()
+  local top = start_on_repository('announce-branches')
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+
+  report('module', call_for(agent, 'T', { on('feature/a'), on('feature/b') }))
+
+  wait_until('the user is told', function()
+    return #told('module') > 0
+  end)
+  eq(told('module'), { started_in('Worktree agent-1 (feature/a, feature/b)') })
+end
+
 T['a reported worktree']['is matched by its real path when reported through a symbolic link'] = function()
   local top = start_on_repository('announce-link')
   local agent = add_worktree(top, 'agent-1', 'feature/a')
