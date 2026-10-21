@@ -504,4 +504,62 @@ T['the Reported section']['draws the tree without the commits until they are rea
   })
 end
 
+--- The Lua that makes `s` pick, in the child, the item whose text is
+--- `_G.wanted_item`.
+local PICKER = [[
+  _G.wanted_item = nil
+  vim.ui.select = function(items, _, on_choice)
+    for _, item in ipairs(items) do
+      if item.text == _G.wanted_item then
+        on_choice(item)
+        return
+      end
+    end
+    on_choice(nil)
+  end
+]]
+
+T['a commit of the Reported section']['keeps its files through a read while a branch picked with s waits behind the default view'] = function()
+  local top, base = start_on_repository('treepane-behind')
+  child.lua(PICKER)
+  git_repo.git(top, { 'checkout', '--quiet', '-b', 'feature/s' })
+  commit_only(top, 's.txt', 's', 'S work')
+  git_repo.git(top, { 'checkout', '--quiet', 'main' })
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  local one = commit_only(agent, 'one.txt', 'one', 'One')
+  local two = commit_only(agent, 'two.txt', 'two', 'Two')
+  report_and_show_default_view(call_for(agent, 'feature/a', base), 'Worktree agent-1 (feature/a)')
+  child.lua('_G.wanted_item = "[branch] feature/s"')
+  child.type_keys('s')
+  git_repo.wait_until('feature/s shown alone', function()
+    return pane_lines('commits')[1] == 'Branch feature/s'
+  end)
+  child.lua('require("aineo.changes").toggle_focused_view()')
+  expect_pane_starting_with('commits', {
+    'Reported',
+    'T now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
+    tree_commit_line(two, 'Two'),
+    tree_commit_line(one, 'One'),
+  })
+  go_to_commits_line(6)
+  expect_pane_lines('files', { files_of_branch_commit(one, 'One'), '  A one.txt' })
+
+  local three = commit_only(agent, 'three.txt', 'three', 'Three')
+  child.lua('require("aineo.changes").refresh_shown_pane()')
+
+  expect_pane_starting_with('commits', {
+    'Reported',
+    'T now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
+    tree_commit_line(three, 'Three'),
+    tree_commit_line(two, 'Two'),
+    tree_commit_line(one, 'One'),
+  })
+  vim.wait(500)
+  expect_pane_lines('files', { files_of_branch_commit(one, 'One'), '  A one.txt' })
+end
+
 return T
