@@ -301,18 +301,31 @@ function M.new(label)
     }
   end
 
+  --- `selected`, a filter, as a diff of its files is read: with `worktree`,
+  --- the worktree other than the editor's that the files were read in, in
+  --- place of the copy the filter holds, when the filter is another
+  --- worktree's. The files window's fresh read of that worktree, not the
+  --- commits window's last, is what a diff reads from, so it is what both the
+  --- heading and a diff's bar name.
+  ---
+  ---@param selected aineo.changes.Filter
+  ---@param worktree aineo.changes.WorktreeSection|nil
+  ---@return aineo.changes.Filter
+  local function filter_read_in(selected, worktree)
+    if selected.worktree and worktree then
+      return filter.in_worktree(selected, worktree)
+    end
+    return selected
+  end
+
   --- The filter whose files the files window lists, as the diffs of those
-  --- files are read: `filter_named()`'s, with the worktree the files were
-  --- read in, which their diffs are read from.
+  --- files are read: `filter_named()`'s, read in the worktree the files were
+  --- (`filter_read_in()`).
   ---
   ---@param listed aineo.changes.Listing|nil
   ---@return aineo.changes.Filter
   local function listed_filter(listed)
-    local named = filter_named(listed)
-    if named.worktree and listed and listed.worktree then
-      return filter.in_worktree(named, listed.worktree)
-    end
-    return named
+    return filter_read_in(filter_named(listed), listed and listed.worktree)
   end
 
   --- What git told of what the files window's diffs compare, and the key of
@@ -2165,7 +2178,12 @@ function M.new(label)
     end
     local told = shown.against
     local read = told.resolved or {}
-    local sides = against.sides(shown.entry.filter, told.head, told.source, read)
+    local sides = against.sides(
+      filter_read_in(shown.entry.filter, shown.entry.worktree),
+      told.head,
+      told.source,
+      read
+    )
     local path = shown.entry.change and lines.quoted_path(shown.entry.change.path)
     local bar = against.bar(sides, read.names, path)
     for _, window in ipairs(vim.fn.win_findbuf(buffer)) do
@@ -2189,7 +2207,7 @@ function M.new(label)
     local told = { head = head_diff.is_against_head(entry), source = source, resolved = earlier }
     shown.against = told
     against_read.read({
-      listed = entry.filter,
+      listed = filter_read_in(entry.filter, entry.worktree),
       against_head = told.head,
       source = source,
       options = source.options,
