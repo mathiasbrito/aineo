@@ -206,7 +206,8 @@ end
 --- Draws the commit graph of `found` — every branch, tag and remote-tracking
 --- branch, as `git log --graph --all --abbrev-commit --date=relative` draws
 --- it — of its newest `limit` commits, and calls `done(nil, graph)`, or
---- `done(failure)`. Before the first commit it has no line.
+--- `done(failure)`. Before the first commit it has no line. It holds no
+--- colour, whatever colour the user's git settings ask for.
 ---
 ---@param run aineo.git.Run
 ---@param found aineo.git.Repository
@@ -223,6 +224,7 @@ function M.commit_graph(run, found, limit, done)
         '--abbrev-commit',
         '--date=relative',
         GRAPH_FORMAT,
+        '--no-color',
         '--no-show-signature',
         '--encoding=UTF-8',
         '--max-count=' .. (limit + 1),
