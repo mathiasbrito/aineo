@@ -139,7 +139,8 @@ function M.announce_instructions()
   return (
     'Required for every agent and subagent: call `%s` once per worktree you work in,'
     .. ' right after you create the worktree or a branch in it, and again whenever the set of'
-    .. " branches you are working on there changes, with the worktree's folder, a short label,"
+    .. " branches you are working on there changes, with the absolute path of the worktree's"
+    .. ' folder, a short label,'
     .. ' and every branch you are working on there with the commit it was created from.'
     .. ' It only informs aineo: if it refuses, correct the call as the refusal says and call again;'
     .. ' otherwise do not act on its reply.'
@@ -155,7 +156,7 @@ end
 function M.subagent_announce_context()
   return M.announce_instructions()
     .. ' If you started in a git worktree made for your task, call it once, now,'
-    .. " with that worktree's folder, a short label, and the branch you are on"
+    .. " with the absolute path of that worktree's folder, a short label, and the branch you are on"
     .. ' with the commit it was made from.'
 end
 
@@ -281,7 +282,7 @@ local work_announced_handler
 --- with each announcement of a worktree an agent works in, and its branches, which
 --- the relay of a Claude Code this editor started offers it, or aineo's own
 --- hook in that Claude Code (`receive_work_announcement()`):
---- `handler(work, start_token)`, with the announcement — its folder absolute —
+--- `handler(work, start_token)`, with the announcement — its folder normalised —
 --- and the token of the start of Claude Code whose agent made it, returns
 --- whether it took it, or why it refuses it, in words for the agent. Its
 --- strategy is the composition root's: plain dependency inversion, bound

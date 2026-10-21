@@ -201,6 +201,10 @@ T['announce_work']['whose arguments are refused is a tool error naming the field
       { work_with({ worktree = 42 }), 'worktree: expected a non-empty string' },
       { work_with({ worktree = '/' .. ('a'):rep(4096) }), 'worktree: longer than 4096 bytes' },
       { work_with({ worktree = '/w\r' }), 'worktree: holds a NUL or a line break' },
+      { work_with({ worktree = 'agent-wt' }), 'worktree: expected an absolute path' },
+      { work_with({ worktree = '.' }), 'worktree: expected an absolute path' },
+      { work_with({ worktree = '~/agent-wt' }), 'worktree: expected an absolute path' },
+      { work_with({ worktree = '$HOME/agent-wt' }), 'worktree: expected an absolute path' },
       { work_without('label'), 'label: expected a non-empty string' },
       { work_with({ label = vim.NIL }), 'label: expected a non-empty string' },
       { work_with({ label = '' }), 'label: expected a non-empty string' },
@@ -305,17 +309,14 @@ T['announce_work']['offers each branch’s base and the label as the agent gave 
   eq(requests[1].arguments[1], work)
 end
 
-T['announce_work']['offers a path made absolute against the relay’s working directory, and normalised'] =
-  MiniTest.new_set({
-    parametrize = {
-      { 'sub/../agent-wt', vim.fs.joinpath(vim.uv.cwd(), 'agent-wt') },
-      { '~/agent-wt', vim.fs.joinpath(vim.uv.cwd(), '~/agent-wt') },
-      { '$HOME/agent-wt', vim.fs.joinpath(vim.uv.cwd(), '$HOME/agent-wt') },
-      { '/projects/./alpha/../agent-wt/', '/projects/agent-wt' },
-    },
-  })
+T['announce_work']['offers the worktree’s absolute path normalised'] = MiniTest.new_set({
+  parametrize = {
+    { '/projects/./alpha/../agent-wt/', '/projects/agent-wt' },
+    { '/projects/agent-wt', '/projects/agent-wt' },
+  },
+})
 
-T['announce_work']['offers a path made absolute against the relay’s working directory, and normalised']['given'] = function(
+T['announce_work']['offers the worktree’s absolute path normalised']['given'] = function(
   path,
   offered
 )
@@ -336,32 +337,33 @@ T['the words']['name the tool as Claude Code names it'] = function()
   eq(name, 'mcp__aineo__announce_work')
 end
 
-T['the words']['appended to the system prompt are one paragraph of 478 bytes, the tool’s rule and a refusal corrected'] = function()
+T['the words']['appended to the system prompt are one paragraph of 499 bytes, the tool’s rule and a refusal corrected'] = function()
   local paragraph = mcp.announce_instructions()
 
   eq(
     paragraph,
     'Required for every agent and subagent: call `mcp__aineo__announce_work` once per worktree you work in,'
       .. ' right after you create the worktree or a branch in it, and again whenever the set of'
-      .. " branches you are working on there changes, with the worktree's folder, a short label,"
+      .. " branches you are working on there changes, with the absolute path of the worktree's folder,"
+      .. ' a short label,'
       .. ' and every branch you are working on there with the commit it was created from.'
       .. ' It only informs aineo: if it refuses, correct the call as the refusal says and call again;'
       .. ' otherwise do not act on its reply.'
   )
-  eq(#paragraph, 478)
+  eq(#paragraph, 499)
 end
 
-T['the words']['for a subagent are the paragraph and one sentence, 654 bytes'] = function()
+T['the words']['for a subagent are the paragraph and one sentence, 696 bytes'] = function()
   local context = mcp.subagent_announce_context()
 
   eq(
     context,
     mcp.announce_instructions()
       .. ' If you started in a git worktree made for your task, call it once, now,'
-      .. " with that worktree's folder, a short label, and the branch you are on"
+      .. " with the absolute path of that worktree's folder, a short label, and the branch you are on"
       .. ' with the commit it was made from.'
   )
-  eq(#context, 654)
+  eq(#context, 696)
 end
 
 T['in the editor'] = MiniTest.new_set()
@@ -523,25 +525,21 @@ local function relay_with_no_working_directory(address)
   )
 end
 
-T['announce_work']['with a relative path is not taken, and no editor asked, when the relay has no working directory'] =
-  MiniTest.new_set({
-    parametrize = { { 'agent-wt' }, { '~/agent-wt' } },
-  })
-
-T['announce_work']['with a relative path is not taken, and no editor asked, when the relay has no working directory']['given'] = function(
-  path
-)
+T['announce_work']['with an absolute worktree is offered when the relay cannot read its working directory'] = function()
   local requests = {}
   local relay = relay_with_no_working_directory(start_recording_editor(requests, true))
 
-  relay:send(announce(work_in(path)))
+  relay:send(announce(work_in('agent-wt')))
   relay:send(announce(work_in('/projects/agent-wt')))
 
   eq(
     vim.tbl_map(function(line)
       return get(decoded(line), 'result')
     end, relay:next_lines(2)),
-    { result_of('not taken', true), result_of('ok', false) }
+    {
+      result_of('aineo refused the announcement: worktree: expected an absolute path', true),
+      result_of('ok', false),
+    }
   )
   eq(#requests, 1)
 end

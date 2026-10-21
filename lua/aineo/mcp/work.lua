@@ -12,7 +12,8 @@ local M = {}
 --- its start.
 M.ANNOUNCE_RULE = 'Required for every agent and subagent: call once per worktree you work in,'
   .. ' right after you create the worktree or a branch in it, and again whenever the set of'
-  .. " branches you are working on there changes, with the worktree's folder, a short label,"
+  .. " branches you are working on there changes, with the absolute path of the worktree's"
+  .. ' folder, a short label,'
   .. ' and every branch you are working on there with the commit it was created from.'
 
 --- The most branches one announcement may list.
@@ -33,7 +34,7 @@ function M.announce_tool()
       properties = {
         worktree = {
           type = 'string',
-          description = 'The worktree’s folder, relative to your working folder or absolute;'
+          description = 'The absolute path of the worktree’s folder;'
             .. ' the main checkout’s folder for work there.',
         },
         label = { type = 'string', description = 'A short name for the task.' },
@@ -72,7 +73,7 @@ end
 --- A worktree an agent announced: its folder, the agent's label for the
 --- task, and every branch the agent works on there, in the order given.
 ---@class aineo.mcp.Work
----@field worktree string the worktree's folder
+---@field worktree string the absolute path of the worktree's folder
 ---@field label? string the agent's short name for the task; nil only in a report of aineo's own hook
 ---@field branches aineo.mcp.WorkBranch[] the branches, none when the agent is done with the worktree
 ---@field by_hook? boolean whether aineo's own hook made the report, rather than the agent's call
@@ -184,10 +185,29 @@ local function branches_refusal(branches)
   return nil
 end
 
+--- Why `worktree`, an announcement's, is refused, naming the field: a
+--- string refused as any is (`string_refusal()`), or one that is no
+--- absolute path, as the relay that would read a relative one shares its
+--- working folder with every agent and is no agent's own; nil when it is
+--- accepted.
+---
+---@param worktree any
+---@return string?
+local function worktree_refusal(worktree)
+  local refusal = string_refusal('worktree', worktree)
+  if refusal then
+    return refusal
+  end
+  if not vim.startswith(worktree, '/') then
+    return 'worktree: expected an absolute path'
+  end
+  return nil
+end
+
 --- Why `arguments` are not an announcement, naming the field at fault, or
 --- nil when they are one. Checked in this order: an object; its `worktree`
---- and its `label` (`string_refusal()`); its `branches`
---- (`branches_refusal()`); any other key.
+--- (`worktree_refusal()`) and its `label` (`string_refusal()`); its
+--- `branches` (`branches_refusal()`); any other key.
 ---
 ---@param arguments any
 ---@return string?
@@ -195,7 +215,7 @@ local function refusal_of(arguments)
   if not is_object(arguments) then
     return 'arguments: expected an object'
   end
-  local refusal = string_refusal('worktree', arguments.worktree)
+  local refusal = worktree_refusal(arguments.worktree)
     or string_refusal('label', arguments.label)
     or branches_refusal(arguments.branches)
   if refusal then
@@ -210,7 +230,8 @@ end
 
 --- The announcement `arguments` describe, or nil and why they are refused.
 ---
---- An announcement is a table of `worktree`, the worktree's folder, `label`,
+--- An announcement is a table of `worktree`, the absolute path of the
+--- worktree's folder, `label`,
 --- the task's short name, and `branches`, a list of at most 32 tables of a
 --- `name` and a `base`, the commit that branch was made from — none when the
 --- agent is done with the worktree; each string non-empty, at most 4096
@@ -237,21 +258,18 @@ function M.validate_work(arguments)
   }
 end
 
---- `work` with its `worktree` made absolute against `working_directory`
---- when it is not, and normalised: `.` and `..` resolved and a trailing
---- slash dropped, with no `~` and no environment variable expanded, as the
---- agent's string is never more than a path to compare.
+--- `work`, a valid announcement, with its `worktree`, an absolute path,
+--- normalised: `.` and `..` resolved and a trailing slash dropped, with no
+--- `~` and no environment variable expanded, as the agent's string is never
+--- more than a path to compare.
 ---
 ---@param work aineo.mcp.Work
----@param working_directory string? nil only for a work whose worktree is absolute
 ---@return aineo.mcp.Work
-function M.with_absolute_path(work, working_directory)
-  local path = vim.startswith(work.worktree, '/') and work.worktree
-    or vim.fs.joinpath(working_directory, work.worktree)
+function M.with_normalised_worktree(work)
   return vim.tbl_extend(
     'force',
     work,
-    { worktree = vim.fs.normalize(path, { expand_env = false }) }
+    { worktree = vim.fs.normalize(work.worktree, { expand_env = false }) }
   )
 end
 

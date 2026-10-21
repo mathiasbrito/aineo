@@ -166,14 +166,15 @@ T['tools/list']['starts with report, whose input schema is the report format, th
       name = 'announce_work',
       description = 'Required for every agent and subagent: call once per worktree you work in,'
         .. ' right after you create the worktree or a branch in it, and again whenever the set of'
-        .. " branches you are working on there changes, with the worktree's folder, a short label,"
+        .. " branches you are working on there changes, with the absolute path of the worktree's"
+        .. ' folder, a short label,'
         .. ' and every branch you are working on there with the commit it was created from.',
       inputSchema = {
         type = 'object',
         properties = {
           worktree = {
             type = 'string',
-            description = 'The worktree’s folder, relative to your working folder or absolute;'
+            description = 'The absolute path of the worktree’s folder;'
               .. ' the main checkout’s folder for work there.',
           },
           label = { type = 'string', description = 'A short name for the task.' },

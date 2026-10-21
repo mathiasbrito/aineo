@@ -405,7 +405,8 @@ aineo starts Claude Code with an MCP server of its own. Its tools `report` and
 - **`announce_work`.** Every agent and subagent must call it once per
   worktree it works in, right after it creates the worktree or a branch in
   it, and again whenever the set of branches it works on there changes, with
-  the `worktree` folder, a short `label` and `branches`, every branch it is
+  the absolute path of the `worktree` folder (a relative one is refused), a
+  short `label` and `branches`, every branch it is
   working on there, each a `name` and the `base` commit it was created from.
   A call replaces that worktree's branches, so a branch left out leaves the
   list, and an empty `branches` takes the worktree out. A branch git does
