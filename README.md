@@ -311,7 +311,10 @@ Every part takes its colour from your colour scheme, through the
   that work as its focused view. The default view then starts with a
   `Reported` section, a tree: each task's label and age, its worktrees
   below, indented, and each worktree's branches below them, a `*` on the
-  one checked out, `from` and its base. Enter on a label shows all its
+  one checked out, `from` and its base, and below each branch its commits
+  from that base to its tip, newest first, as the commit lines elsewhere
+  (at most 20, then `… N more`); the cursor, Enter, `l` and `<BS>` work on
+  them as on any commit line. Enter on a label shows all its
   work; on a worktree, that worktree alone; on a branch, its commits since
   its base, plus the worktree's uncommitted changes when that branch is
   checked out there; the explorer follows. `s` lists the same tree first,
