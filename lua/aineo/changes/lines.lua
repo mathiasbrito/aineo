@@ -599,6 +599,10 @@ local function listed_file_rows(view)
   )
 end
 
+--- The line of the files window that says what its diffs compare against,
+--- when it lists a filter (`file_window_rows()`).
+M.AGAINST_LINE = 2
+
 --- The rows of the files window, for `view`: the line naming the filter it
 --- lists (`files_in_row()`), when it has one, and under it the line saying
 --- what its diffs compare against, when `view` has one, then the rows below

@@ -98,6 +98,38 @@ function M.write_page(buffer, page)
   return true
 end
 
+--- Writes `row` as line `line` of `buffer` and in the page it was last given,
+--- in its colours, and returns whether it was written: only when `buffer`'s
+--- page lists the files of the filter `filter_key` names and has that line,
+--- and Neovim accepts the change. Every other line, the entries and the
+--- cursors stay as they were, a page whose write failed included.
+---
+---@param buffer integer
+---@param line integer
+---@param row aineo.changes.Row a row with no entry
+---@param filter_key string
+---@return boolean written
+function M.write_row(buffer, line, row, filter_key)
+  local page = pages[buffer]
+  if
+    not (page and page.filter_key == filter_key and page.text[line] and not page.entries[line])
+  then
+    return false
+  end
+  if not scratch.write_line(buffer, line, row.line) then
+    return false
+  end
+  page.text[line], page.colours[line] = row.line, row.colours
+  vim.api.nvim_buf_clear_namespace(buffer, PANE_COLOURS, line - 1, line)
+  for _, colour in ipairs(row.colours) do
+    vim.api.nvim_buf_set_extmark(buffer, PANE_COLOURS, line - 1, colour.first_column, {
+      end_col = colour.end_column,
+      hl_group = colour.group,
+    })
+  end
+  return true
+end
+
 --- The line of `buffer` that lists the entry `key` names in the page it was
 --- last given, or nil when none does.
 ---
