@@ -1471,8 +1471,9 @@ function M.new(label)
   --- lists one's whole change; the editor's own files when they may differ,
   --- and its commits and files when its branch moved; the editor's own
   --- commits and what landed in the working branch when a reference was
-  --- written, as a fetch does; and the commit graph, while it is shown, when
-  --- the branch moved or a reference was written (`read_graph()`).
+  --- written, as a fetch does; and the commit graph, while it is shown, and
+  --- the names on the files window's second heading line, when the branch
+  --- moved or a reference was written (`read_graph()`, `read_against()`).
   ---
   ---@param change aineo.git.RepositoryChange
   local function follow_change(change)
@@ -1480,6 +1481,7 @@ function M.new(label)
     read_commits(change.branch_moved or change.references_changed)
     if change.branch_moved or change.references_changed then
       read_graph()
+      read_against()
     end
   end
 
