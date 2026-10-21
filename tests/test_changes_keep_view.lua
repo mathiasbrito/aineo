@@ -159,9 +159,11 @@ end
 ---@param which 'files'|'commits'
 ---@return string[]
 local function pane_lines(key, which)
-  return child.lua_get(
-    'vim.api.nvim_buf_get_lines(_G.panes[...][select(2, ...)], 0, -1, true)',
-    { key, which }
+  return git_repo.without_against_line(
+    child.lua_get(
+      'vim.api.nvim_buf_get_lines(_G.panes[...][select(2, ...)], 0, -1, true)',
+      { key, which }
+    )
   )
 end
 

@@ -83,7 +83,9 @@ end
 ---@param name string
 ---@return string[]
 local function lines_of(name)
-  return child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  return git_repo.without_against_line(
+    child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  )
 end
 
 --- Waits until the child's buffer named `name` holds `expected`, at most
@@ -635,7 +637,7 @@ T['Enter']['on a file under the heading shows its change between the base and th
   go_to_commits_line(4)
   expect_lines(FILES, { 'Files in: ' .. HEADING, '  M a.txt', '  A b.txt' })
 
-  press_enter_on(FILES, 2)
+  press_enter_on(FILES, 3)
 
   wait_for_diffs(1)
   eq(last_diff_name(), 'aineo://landed/a.txt')
@@ -658,7 +660,7 @@ T['Enter']['on a renamed file under the heading shows the rename with both paths
   go_to_commits_line(4)
   expect_lines(FILES, { 'Files in: ' .. HEADING, '  R a.txt â†’ z.txt' })
 
-  press_enter_on(FILES, 2)
+  press_enter_on(FILES, 3)
 
   wait_for_diffs(1)
   eq(last_diff_name(), 'aineo://landed/z.txt')
@@ -672,7 +674,7 @@ T['Enter']['on a landed commit and on a file under it shows them as the sessionâ
   wait_for_diffs(1)
   go_to_commits_line(6)
   expect_lines(FILES, { 'Files in: ' .. commit_line(first, 'Change a'), '  M a.txt' })
-  press_enter_on(FILES, 2)
+  press_enter_on(FILES, 3)
   wait_for_diffs(2)
 
   eq(last_diff_name(), 'aineo://commit/' .. first .. '/a.txt')
@@ -1239,7 +1241,7 @@ T['F']['in the diff of a file under the heading reads it again with the whole fi
   })
   go_to_commits_line(4)
   expect_lines(FILES, { 'Files in: ' .. HEADING, '  M a.txt' })
-  press_enter_on(FILES, 2)
+  press_enter_on(FILES, 3)
   wait_for_diffs(1)
   local three_lines = last_diff_lines()
 

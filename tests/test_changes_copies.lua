@@ -113,7 +113,7 @@ end
 ---@param which 'files'|'commits'
 ---@return string[]
 local function pane_lines(key, which)
-  return child.lua_get(
+  return git_repo.without_against_line(child.lua_get(
     [[(function(key, which)
       local buffer = _G.panes[key][which]
       if not vim.api.nvim_buf_is_valid(buffer) then
@@ -122,7 +122,7 @@ local function pane_lines(key, which)
       return vim.api.nvim_buf_get_lines(buffer, 0, -1, true)
     end)(...)]],
     { key, which }
-  )
+  ))
 end
 
 --- Waits until the buffer `which` of the pane of the changes home `key`
@@ -245,7 +245,7 @@ local function wait_for_diffs(key, count)
   end)
 end
 
---- Presses Enter on line `line` of the files window of the changes home
+--- Presses Enter on line `line`, counted without its `Against:` line, of the files window of the changes home
 --- `key` names and waits until that home has been asked to show `count`
 --- diffs.
 ---
@@ -254,7 +254,7 @@ end
 ---@param count integer
 local function open_file_at(key, line, count)
   enter_window_of(key, 'files')
-  child.type_keys(line .. 'G', '<CR>')
+  child.type_keys(git_repo.files_window_line(line) .. 'G', '<CR>')
   wait_for_diffs(key, count)
 end
 
@@ -539,7 +539,7 @@ T['Enter']['in two copies’ panes before git answers shows both diffs'] = funct
   child.lua([[
     for _, key in ipairs({ 'first', 'second' }) do
       vim.api.nvim_set_current_win(vim.fn.win_findbuf(_G.panes[key].files)[1])
-      vim.api.nvim_win_set_cursor(0, { 2, 0 })
+      vim.api.nvim_win_set_cursor(0, { 3, 0 })
       vim.api.nvim_feedkeys(vim.keycode('<CR>'), 'x', false)
     end
   ]])
@@ -600,11 +600,13 @@ T['Enter']['in a copy, read while textlock holds, then on another file, keeps no
   )
   git_repo.wait_until('the files listed', function()
     return vim.deep_equal(
-      child.lua_get('vim.api.nvim_buf_get_lines(_G.files, 0, -1, true)'),
+      git_repo.without_against_line(
+        child.lua_get('vim.api.nvim_buf_get_lines(_G.files, 0, -1, true)')
+      ),
       { 'Files in: Session work', '  M a.txt', '  M b.txt' }
     )
   end)
-  child.type_keys('j<CR>')
+  child.type_keys('jj<CR>')
   child.api.nvim_input('X')
   git_repo.wait_until('the hold', function()
     return child.lua_get('_G.holding == true')
@@ -661,7 +663,7 @@ T['gf']['on the same commit’s file in two copies’ panes shows each its own f
 
   for _, key in ipairs({ 'first', 'second' }) do
     enter_window_of(key, 'files')
-    child.type_keys('2G', 'gf')
+    child.type_keys('3G', 'gf')
     wait_for_diffs(key, 1)
   end
 

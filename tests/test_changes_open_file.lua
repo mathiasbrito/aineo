@@ -59,7 +59,9 @@ local BEGIN_AND_SHOW = [[
 ---@param name string
 ---@return string[]
 local function lines_of(name)
-  return child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  return git_repo.without_against_line(
+    child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  )
 end
 
 --- Waits until the child's buffer named `name` holds `expected`, at most
@@ -126,7 +128,7 @@ end
 ---@param line integer
 local function press_gf_on(line)
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
-  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { line })
+  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { git_repo.files_window_line(line) })
   child.type_keys('gf')
 end
 
@@ -783,7 +785,7 @@ T['gf']['on the working tree’s file, after l before its diff was read, leaves 
     end
   ]])
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
   child.type_keys('l')
   git_repo.wait_until('the diff asked for', function()
     return child.lua_get('_G.finish ~= nil')
@@ -822,7 +824,7 @@ T['gf']['under Landed, once the working branch names no commit, shows nothing an
     end
     require('aineo.changes').refresh_shown_pane()
     vim.api.nvim_set_current_win(vim.fn.bufwinid('aineo://changes-files'))
-    vim.api.nvim_win_set_cursor(0, { 2, 0 })
+    vim.api.nvim_win_set_cursor(0, { 3, 0 })
   ]])
 
   child.lua("vim.fn.maparg('gf', 'n', false, true).callback()")
@@ -1042,7 +1044,7 @@ T['gf']['in a diff buffer stays Vim’s own'] = function()
     { 'Files in: Session work', '  M notes.txt' }
   )
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
   child.type_keys('<CR>')
   git_repo.wait_until('the diff shown', function()
     return child.lua_get('#_G.shown_diffs') == 1
