@@ -67,6 +67,19 @@ T['the names of a commit']['leave out the remote HEAD, which only repeats a bran
   eq(seen.result[commit], { 'main', 'origin/main' })
 end
 
+T['the names of a commit']['include a branch and a tag whose names only end in /HEAD'] = function()
+  local top, commit = git_repo.create('names-head-suffix', { ['a.txt'] = { 'a' } })
+  git_repo.git(top, { 'branch', 'topic/HEAD' })
+  git_repo.git(top, { 'tag', 'v/HEAD' })
+  git_repo.git(top, { 'update-ref', 'refs/remotes/origin/main', commit })
+  git_repo.git(top, { 'update-ref', 'refs/remotes/fork/topic/HEAD', commit })
+  git_repo.git(top, { 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main' })
+
+  local seen = child.lua(NAMES_AT, { top, { commit } })
+
+  eq(seen.result[commit], { 'main', 'topic/HEAD', 'fork/topic/HEAD', 'origin/main', 'v/HEAD' })
+end
+
 T['the names of a commit']['leave out references that are no branch, remote-tracking branch or tag'] = function()
   local top, commit = git_repo.create('names-others', { ['a.txt'] = { 'a' } })
   git_repo.git(top, { 'update-ref', 'refs/pull/7/head', commit })
