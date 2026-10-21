@@ -553,15 +553,25 @@ function M.decoded_words_after(argv, flag)
   return vim.tbl_map(vim.json.decode, M.words_after(argv, flag))
 end
 
---- The entries the fake has recorded so far, in order.
+--- The entries the fake has recorded so far, in order: each line its record
+--- holds whole, ended by the newline the fake writes after each entry. A
+--- last line with no newline yet is one the fake is still writing — a write
+--- past 4096 bytes reaches the file in parts — and is left out.
 ---
 ---@param fake { record: string }
 ---@return table[]
 function M.record(fake)
-  if vim.fn.filereadable(fake.record) == 0 then
+  local file = io.open(fake.record, 'rb')
+  if not file then
     return {}
   end
-  return vim.tbl_map(vim.json.decode, vim.fn.readfile(fake.record))
+  local text = file:read('*a') or ''
+  file:close()
+  local complete = text:match('^(.*)\n') or ''
+  if complete == '' then
+    return {}
+  end
+  return vim.tbl_map(vim.json.decode, vim.split(complete, '\n', { plain = true }))
 end
 
 --- Waits, at most `PATIENCE_MS`, until Claude Code has launched in the
