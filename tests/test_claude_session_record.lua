@@ -19,4 +19,15 @@ T['the fake’s record']['reads only its complete lines, a line the fake is stil
   eq(entries, { { argv = { '--settings', '{}' }, pid = 42 } })
 end
 
+T['the fake’s record']['leaves out a last line that is valid JSON but not yet ended by its newline'] = function()
+  local record = vim.fs.joinpath(fixture.directory('claude-session-record-unended'), 'record.jsonl')
+  local file = assert(io.open(record, 'wb'))
+  file:write('{"pid":42}\n{"pid":43}')
+  file:close()
+
+  local entries = claude_session.record({ record = record })
+
+  eq(entries, { { pid = 42 } })
+end
+
 return T
