@@ -179,7 +179,10 @@ local ENTER_SIDES = {
     return { left = left, right = tip_side(source.landed and source.landed.tip) }
   end,
   branch = function(_, source)
-    local branch = source.branch or {}
+    local branch = source.branch
+    if not (branch and branch.tip) then
+      return nil
+    end
     return {
       left = base_side(branch.base, M.words_of(branch.base_origin)),
       right = tip_side(branch.tip),
@@ -205,7 +208,10 @@ local HEAD_SIDES = {
     return { left = head_side(resolved), right = tip_side(source.landed and source.landed.tip) }
   end,
   branch = function(_, source, resolved)
-    return { left = head_side(resolved), right = tip_side(source.branch and source.branch.tip) }
+    if not (source.branch and source.branch.tip) then
+      return nil
+    end
+    return { left = head_side(resolved), right = tip_side(source.branch.tip) }
   end,
 }
 
@@ -231,13 +237,14 @@ HEAD_SIDES.worktree = head_to_working_tree
 --- `h` shows. `source` holds what the session knows (`aineo.changes`'
 --- `DiffSource`: `base`, `landed`, `branch`); `resolved`, what git told of the
 --- commits it cannot know (`aineo.changes.Resolved`). A side not yet told is
---- its words alone.
+--- its words alone; a local branch the home has not read yet has no sides at
+--- all: nil.
 ---
 ---@param listed aineo.changes.Filter
 ---@param against_head boolean
 ---@param source table
 ---@param resolved aineo.changes.Resolved
----@return aineo.changes.Sides
+---@return aineo.changes.Sides|nil
 function M.sides(listed, against_head, source, resolved)
   local sides_by_kind = against_head and HEAD_SIDES or ENTER_SIDES
   return sides_by_kind[listed.kind](listed, source, resolved)
@@ -273,11 +280,11 @@ end
 --- The full ids of the commits `sides` stand for, the left side's first,
 --- each once: those whose names are to be read.
 ---
----@param sides aineo.changes.Sides
+---@param sides aineo.changes.Sides|nil
 ---@return string[]
 function M.ids(sides)
   local ids = {}
-  for _, side in ipairs({ sides.left, sides.right }) do
+  for _, side in ipairs(sides and { sides.left, sides.right } or {}) do
     if side.id and not vim.tbl_contains(ids, side.id) then
       table.insert(ids, side.id)
     end
@@ -320,11 +327,14 @@ end
 --- The pieces of both sides of `sides`, joined by `between`, with the pieces
 --- of each side apart by a space.
 ---
----@param sides aineo.changes.Sides
+---@param sides aineo.changes.Sides|nil nil while the sides are not known yet
 ---@param names table<string, string[]>|nil
 ---@param between string what stands between the two sides
 ---@return aineo.changes.Segment[]
 local function segments_between(sides, names, between)
+  if not sides then
+    return { { text = M.READING, group = colours.NOTE_GROUP } }
+  end
   local segments = {}
   local function add_side(side)
     for index, segment in ipairs(segments_of(side, names)) do
@@ -340,8 +350,12 @@ local function segments_between(sides, names, between)
   return segments
 end
 
---- What the heading line says before the sides.
+--- What the heading line puts before the sides.
 M.LABEL = 'Against:'
+
+--- What the heading line and the bar say in place of the sides while they are
+--- not known yet: the branch they are of has not been read.
+M.READING = 'reading…'
 
 --- What the heading line puts between the sides.
 local HEADING_ARROW = ' → '
@@ -357,7 +371,7 @@ local BAR_ARROW = ' ↔ '
 --- id group, names in the group of a reported branch's name and the words in
 --- the group of notes. Returns the line and its colours.
 ---
----@param sides aineo.changes.Sides
+---@param sides aineo.changes.Sides|nil nil says `M.READING`
 ---@param names table<string, string[]>|nil
 ---@return string line
 ---@return aineo.changes.Colour[]
@@ -391,7 +405,7 @@ end
 --- when the diff is of one file. The text holds no percent sign a 'winbar'
 --- would read as a code but its own colour codes.
 ---
----@param sides aineo.changes.Sides
+---@param sides aineo.changes.Sides|nil nil says `M.READING`
 ---@param names table<string, string[]>|nil
 ---@param path string|nil
 ---@return string
