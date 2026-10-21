@@ -911,7 +911,8 @@ showing the diff against `HEAD` (|aineo-changes|).
                                                    *aineo-changes-graph*
 `t` in the commits window shows the commit graph in place of its sections,
 and `t` again shows the sections as they were, the line chosen before the
-graph chosen again. The graph is what this command draws: >
+graph chosen again. There it replaces Vim's |t|{char}, in Normal mode. The
+graph is what this command draws: >
     git log --graph --all --abbrev-commit --date=relative
 <
 of every branch, tag and remote-tracking branch, newest first: the graph as
@@ -933,16 +934,17 @@ current one or not. A read that fails keeps the graph shown and says so
 above it.
 
 `j` and `k` go from commit line to commit line, over the graph's own lines,
-such as `|/` and `|\`, and take a count: `3j` goes three commits down. The
-cursor never rests on a line of the graph alone: any other move that lands
-there - `<Up>`, `-`, `<C-p>`, `G`, a click - goes on to the commit line
-beyond it in the direction it moved, above for a move up, below for a move
-down; when the cursor did not move, as when a read changes its line, it
-goes to the nearest commit line, the one below when two are as near. The
-commit under the cursor chooses what the files window lists, as a
-commit line of the sections does (|aineo-changes|), and `l`, `<BS>`, Enter,
-the diff that follows the cursor of the files window and `F` work on it as
-on any commit. `s` does not change the graph.
+such as `|/` and `|\`, and take a count: `3j` goes three commits down; over
+the sections they stay Vim's own. The cursor never rests on a line of the
+graph alone: any other move that lands there - `<Up>`, `-`, `<C-p>`, `G`, a
+click - goes on to the commit line beyond it in the direction it moved,
+above for a move up, below for a move down; when the cursor did not move,
+as when a read changes its line, it goes to the nearest commit line, the
+one below when two are as near. The commit under the cursor chooses what
+the files window lists, as a commit line of the sections does
+(|aineo-changes|), and `l`, `<BS>`, Enter, the diff that follows the cursor
+of the files window and `F` work on it as on any commit. `s` does not
+change the graph.
 
 The graph draws the newest 1000 commits, or as many as
 `changes.graph_limit` says (|aineo-config-changes.graph_limit|), and ends
