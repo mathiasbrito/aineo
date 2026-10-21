@@ -3574,22 +3574,35 @@ function M.new(label)
     return line or graph.commit_line_below(page, 0, 1)
   end
 
-  --- Puts the cursor of each window showing the commits buffer on the line
-  --- `graph_line_chosen()` gives, while the session says it is still to be
-  --- put there (`aineo.changes.Session`'s `graph_cursor_unplaced`), the
-  --- graph lists a commit and a window shows it; and selects that commit,
-  --- whose files the files window then lists (`select_filter_at_cursor_of()`).
+  --- Puts the cursor of each window showing the commits buffer, current or
+  --- not, on a commit of the graph just written, and selects the commit
+  --- under the first one's cursor, whose files the files window then lists
+  --- (`select_filter_at_cursor_of()`): on the line `graph_line_chosen()`
+  --- gives while the session says the cursor is still to be put there
+  --- (`aineo.changes.Session`'s `graph_cursor_unplaced`), else on the commit
+  --- line its cursor comes to rest on (`keep_on_a_commit_line()`), as when a
+  --- read dropped the commit it was on. Does nothing while no window shows
+  --- the buffer or the graph lists no commit.
   place_graph_cursor = function()
     local page = pages.page_of(buffers.commits)
     local windows = vim.fn.win_findbuf(buffers.commits)
-    local line = session.graph_cursor_unplaced and page and graph_line_chosen(page)
-    if not line or #windows == 0 then
+    if not page or #windows == 0 then
       return
     end
-    for _, window in ipairs(windows) do
-      vim.api.nvim_win_set_cursor(window, { line, 0 })
+    if session.graph_cursor_unplaced then
+      local line = graph_line_chosen(page)
+      if not line then
+        return
+      end
+      for _, window in ipairs(windows) do
+        vim.api.nvim_win_set_cursor(window, { line, 0 })
+      end
+      session.graph_cursor_unplaced, session.cursor_unplaced = false, false
+    else
+      for _, window in ipairs(windows) do
+        keep_on_a_commit_line(window)
+      end
     end
-    session.graph_cursor_unplaced, session.cursor_unplaced = false, false
     select_filter_at_cursor_of(windows[1])
   end
 
