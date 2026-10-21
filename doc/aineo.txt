@@ -1374,18 +1374,22 @@ too, after a command of Claude Code's `Bash` tool that makes a worktree or
 a branch (|aineo-changes-hook|). A report goes to the tab whose Claude Code
 made it, whichever tab is current, and to no other editor; one no tab of
 this editor runs is not taken.
-Before the tab takes a report, each branch it lists must be a local branch
-git has, and its base is resolved to a full commit id, as git reads a
-name: first in the worktree's folder, so that `HEAD` is the agent's own,
-then in the session's repository. A branch git does not have, or a base
-git cannot resolve in either, refuses the whole report, naming the item,
-and nothing is recorded.
+Before the tab takes a report, each branch it lists must be named exactly
+as one of the local branches git lists in the worktree's folder — a
+revision of one, `main~1` or `feature/a^0`, is no branch — and its base is
+resolved to a full commit id, as git reads a name: first in the worktree's
+folder, so that `HEAD` is the agent's own, then in the session's
+repository. A branch git does not list, or a base git cannot resolve in
+either, refuses the whole report, naming the item, and nothing is
+recorded.
 That tab's changes pane matches the report against what git lists, as `s`
 reads it: the worktree by its folder with every link resolved. What git
 does not list yet is looked for again at every read of the commits window
 for 60 seconds from the first report of that folder, then let go, and
 aineo says once "aineo: Claude Code announced worktree <folder>, which git
-does not list; the changes pane is unchanged". Reports of a folder looked
+does not list; the changes pane is unchanged" — unless none of its reports
+listed a branch, as when an agent done with a worktree it removed says so,
+which is let go untold. Reports of a folder looked
 for are kept, in order, and taken together once git lists it. At most 32
 folders are looked for at once in a tab; a report of one more is not taken,
 and nothing is said of it. Before the pane is first shown, aineo watches
@@ -1486,8 +1490,10 @@ newest of them was reported, as a commit's age is told
 (|aineo-changes-author-column|). A worktree's line, indented two cells,
 gives its folder's name. A branch's line, indented four cells, gives the
 branch's name, a `*` when its worktree has it checked out now, `from` and
-the abbreviated id of the base its work is read from (above), or `from ?`
-for a report made before reports gave one.
+the abbreviated id of the base its work is read from (above) — on your
+own worktree's checked-out branch, the base the default view reads, which
+Enter on that line shows — or `from ?` for a report made before reports
+gave one.
 The line under the cursor chooses the files window's list, as any line
 does, and Enter on it shows what it names alone, as picking it with `s`
 does, the explorer following (|aineo-explorer|):

@@ -345,13 +345,19 @@ function M.new(label)
   end
 
   --- The base the work of `line`, a branch's line of the Reported section,
-  --- was last read from: its worktree's, as the commits window last listed
-  --- it, while that worktree has it checked out; else the branch's own, as
-  --- the commits window last read it alone; nil while it has read neither.
+  --- is read from where its line picks it: on the editor's own worktree,
+  --- while it has that branch checked out, the session's base, which the
+  --- default view reads; on another worktree that has it checked out, that
+  --- worktree's, as the commits window last listed it; else the branch's
+  --- own, as the commits window last read it alone; nil while it has read
+  --- neither.
   ---
   ---@param line aineo.changes.TreeLine
   ---@return string|nil
   local function read_base_of(line)
+    if line.checked_out and line.node.worktree.top == own_top() then
+      return session.base
+    end
     if line.checked_out then
       local section = scope.section_on(session.commits_others, line.node.worktree.top)
       return section and section.listed and section.base or nil
@@ -2963,7 +2969,9 @@ function M.new(label)
   end
 
   --- Lets `waiting` go, once its time to wait is over, when it still waits,
-  --- and tells the user once that git does not list the worktree it named.
+  --- and tells the user once that git does not list the worktree it named —
+  --- unless none of its reports listed a branch: an agent done with a
+  --- worktree it already removed asked for nothing git could list.
   ---
   ---@param waiting aineo.changes.WaitingReport
   local function let_report_go(waiting)
@@ -2974,7 +2982,12 @@ function M.new(label)
       return
     end
     session.waiting = still_waiting
-    waiting.tell(scope.unlisted_report(waiting.path))
+    local lists_branches = vim.iter(waiting.works):any(function(taken)
+      return #taken.work.branches > 0
+    end)
+    if lists_branches then
+      waiting.tell(scope.unlisted_report(waiting.path))
+    end
   end
 
   --- How many reads of what reports are matched against were started
@@ -3056,22 +3069,22 @@ function M.new(label)
     return true
   end
 
-  --- Resolves `reported`, the item at `position` of a report's branches, in
-  --- `found`, the repository of the reported worktree's folder, when it is
-  --- one, else in the session's repository, each git run stopped after
-  --- `BASE_RESOLUTION_LIMIT_MS`: the local branch must be there, and its
-  --- base, as git reads a name (`aineo.git`'s `resolve_commit()`), names a
-  --- commit there — so that `HEAD` is the agent's own — or, when it does not
-  --- or git fails there, in the session's repository, whose own answer, a
-  --- failure included, is the one given. Calls `done(commit)` with the full
-  --- id of the base, or `done(nil, refusal)` with why it is refused, in
-  --- words for the agent that name the item.
+  --- Resolves `reported`, the item at `position` of a report's branches,
+  --- one of the local branches `found` lists, the repository of the
+  --- reported worktree's folder, when it is one, else the session's
+  --- repository: its base, as git reads a name (`aineo.git`'s
+  --- `resolve_commit()`), names a commit there — so that `HEAD` is the
+  --- agent's own — or, when it does not or git fails there, in the session's
+  --- repository, whose own answer, a failure included, is the one given;
+  --- each git run stopped after `BASE_RESOLUTION_LIMIT_MS`. Calls
+  --- `done(commit)` with the full id of the base, or `done(nil, refusal)`
+  --- with why it is refused, in words for the agent that name the item.
   ---
   ---@param found aineo.git.Repository|nil
   ---@param reported aineo.changes.ReportedBranch
   ---@param position integer
   ---@param done fun(commit: string|nil, refusal: string|nil)
-  local function resolve_branch(found, reported, position, done)
+  local function resolve_base(found, reported, position, done)
     local repository = session.repository
     local options = vim.tbl_extend('force', session.settings.git or {}, {
       limit_ms = BASE_RESOLUTION_LIMIT_MS,
@@ -3106,41 +3119,87 @@ function M.new(label)
         end
       end, options)
     end
-    local in_found = found or repository
-    git.resolve_commit(in_found, 'refs/heads/' .. reported.name, function(_, tip)
-      if not tip then
-        done(
-          nil,
-          ('%s.name: %s is no local branch in %s'):format(
-            item,
-            lines.quoted_path(reported.name),
-            lines.quoted_path(in_found.top)
-          )
-        )
-        return
+    if not found then
+      in_repository(nil)
+      return
+    end
+    git.resolve_commit(found, reported.base, function(_, commit)
+      if commit then
+        done(commit)
+      else
+        in_repository(found.top)
       end
-      if not found then
-        in_repository(nil)
-        return
-      end
-      git.resolve_commit(found, reported.base, function(_, commit)
-        if commit then
-          done(commit)
-        else
-          in_repository(found.top)
-        end
-      end, options)
     end, options)
   end
 
-  --- Resolves the branches of `work`, the report of a worktree, as
-  --- `resolve_branch()` does each, all at once, in the repository of the
-  --- worktree's folder when git finds one there, else in the session's
-  --- repository. Calls `done(resolved)` with `work`, each branch's base its
-  --- full id, or `done(nil, refusal)` with why it is refused, in words for
-  --- the agent that name the first item at fault: also with no session yet,
-  --- or no repository found for it. A report of no branch is given back as
-  --- it is.
+  --- Why the branches of `work` are refused, in words for the agent that
+  --- name the first item whose name is not exactly one of `local_names`,
+  --- the local branches git lists in `listed_in`; nil when every one is.
+  --- A revision of a branch, `main~1` or `feature/a^0`, is no branch.
+  ---
+  ---@param work aineo.changes.ReportedWork
+  ---@param local_names table<string, true>
+  ---@param listed_in string the top level of the repository the names were listed in
+  ---@return string|nil
+  local function unknown_branch_refusal(work, local_names, listed_in)
+    for position, reported in ipairs(work.branches) do
+      if not local_names[reported.name] then
+        return ('branches[%d].name: %s is no local branch in %s'):format(
+          position,
+          lines.quoted_path(reported.name),
+          lines.quoted_path(listed_in)
+        )
+      end
+    end
+    return nil
+  end
+
+  --- Resolves the bases of the branches of `work`, as `resolve_base()` does
+  --- each, all at once, in `found`, and calls `done(resolved)` with `work`,
+  --- each branch's base its full id, or `done(nil, refusal)` with the
+  --- refusal of the first item at fault.
+  ---
+  ---@param work aineo.changes.ReportedWork
+  ---@param found aineo.git.Repository|nil
+  ---@param done fun(resolved: aineo.changes.ReportedWork|nil, refusal: string|nil)
+  local function resolve_bases(work, found, done)
+    local results, pending = {}, #work.branches
+    for position, reported in ipairs(work.branches) do
+      resolve_base(found, reported, position, function(commit, refusal)
+        results[position] = { commit = commit, refusal = refusal }
+        pending = pending - 1
+        if pending > 0 then
+          return
+        end
+        local first_refused = vim.iter(results):find(function(result)
+          return result.refusal ~= nil
+        end)
+        if first_refused then
+          done(nil, first_refused.refusal)
+          return
+        end
+        done(vim.tbl_extend('force', work, {
+          branches = vim
+            .iter(ipairs(work.branches))
+            :map(function(index, listed)
+              return { name = listed.name, base = results[index].commit }
+            end)
+            :totable(),
+        }))
+      end)
+    end
+  end
+
+  --- Resolves the branches of `work`, the report of a worktree, in the
+  --- repository of the worktree's folder when git finds one there, else in
+  --- the session's repository: each must be exactly one of the local
+  --- branches git lists there (`unknown_branch_refusal()`), and each base is
+  --- resolved as `resolve_base()` does, all at once. Calls `done(resolved)`
+  --- with `work`, each branch's base its full id, or `done(nil, refusal)`
+  --- with why it is refused, in words for the agent that name the first
+  --- item at fault: also with no session yet, no repository found for it,
+  --- or the local branches git cannot list. A report of no branch is given
+  --- back as it is.
   ---
   ---@param work aineo.changes.ReportedWork
   ---@param done fun(resolved: aineo.changes.ReportedWork|nil, refusal: string|nil)
@@ -3158,31 +3217,23 @@ function M.new(label)
     })
     git.find_repository(work.worktree, function(failure, found)
       local found_repository = not failure and found or nil
-      local results, pending = {}, #work.branches
-      for position, reported in ipairs(work.branches) do
-        resolve_branch(found_repository, reported, position, function(commit, refusal)
-          results[position] = { commit = commit, refusal = refusal }
-          pending = pending - 1
-          if pending > 0 then
-            return
-          end
-          local first_refused = vim.iter(results):find(function(result)
-            return result.refusal ~= nil
-          end)
-          if first_refused then
-            done(nil, first_refused.refusal)
-            return
-          end
-          done(vim.tbl_extend('force', work, {
-            branches = vim
-              .iter(ipairs(work.branches))
-              :map(function(index, listed)
-                return { name = listed.name, base = results[index].commit }
-              end)
-              :totable(),
-          }))
-        end)
-      end
+      local listed_in = found_repository or session.repository
+      git.list_branches(listed_in, function(list_failure, branches)
+        if list_failure then
+          done(nil, 'branches: ' .. lines.words_of(list_failure))
+          return
+        end
+        local local_names = {}
+        for _, listed in ipairs(branches) do
+          local_names[listed.name] = true
+        end
+        local refusal = unknown_branch_refusal(work, local_names, listed_in.top)
+        if refusal then
+          done(nil, refusal)
+          return
+        end
+        resolve_bases(work, found_repository, done)
+      end, options)
     end, options)
   end
 
