@@ -27,63 +27,75 @@ local function teller_for(tab)
   end
 end
 
---- How long the editor waits for a reported base to be resolved before it
---- refuses the announcement: above the limit the changes home gives git
---- for it, so that git's own answer comes first, and inside the 5 s the
---- report server waits for the editor.
+--- How long the editor waits for a report's branches to be resolved before
+--- it refuses the announcement: above the limit the changes home gives git
+--- for each run, so that git's own answer comes first, and inside the 5 s
+--- the report server waits for the editor.
 local BASE_WAIT_MS = 4000
 
---- The full id of the commit the base of `work` names, in the work's own
---- folder, else in the session's repository of `changes`, a tab's changes
---- home (`aineo.changes.Home`'s `resolve_reported_base()`), waited for at
---- most `BASE_WAIT_MS`; or nil and why it is refused, in words for the agent.
+--- `work` with each branch checked to be a local branch and its base
+--- resolved to its full id, in the worktree's own folder, else in the
+--- session's repository of `changes`, a tab's changes home
+--- (`aineo.changes.Home`'s `resolve_reported_work()`), waited for at most
+--- `BASE_WAIT_MS`; or nil and why it is refused, in words for the agent.
 ---
 ---@param changes aineo.changes.Home
----@param work aineo.changes.ReportedWork a report whose `base` is given
----@return string|nil commit
+---@param work aineo.changes.ReportedWork
+---@return aineo.changes.ReportedWork|nil resolved
 ---@return string|nil refusal
-local function resolved_base(changes, work)
-  local answered, commit, refusal = false, nil, nil
-  changes.resolve_reported_base(work, function(resolved, why)
-    answered, commit, refusal = true, resolved, why
+local function resolved_work(changes, work)
+  local answered, resolved, refusal = false, nil, nil
+  changes.resolve_reported_work(work, function(answer, why)
+    answered, resolved, refusal = true, answer, why
   end)
   if not vim.wait(BASE_WAIT_MS, function()
     return answered
   end, 5) then
-    return nil, ('base: git did not resolve it within %d s'):format(BASE_WAIT_MS / 1000)
+    return nil, ('branches: git did not resolve them within %d s'):format(BASE_WAIT_MS / 1000)
   end
-  return commit, refusal
+  return resolved, refusal
+end
+
+--- Whether `work` has the shape of a report of a worktree: a table of a
+--- `worktree` string and a list of `branches`, as an aineo older than the
+--- relay or the hook would not give.
+---
+---@param work any
+---@return boolean
+local function is_worktree_report(work)
+  return type(work) == 'table'
+    and type(work.worktree) == 'string'
+    and type(work.branches) == 'table'
+    and vim.islist(work.branches)
 end
 
 --- Takes `work`, an announcement a relay or aineo's hook offers with the
 --- start token `start_token`, for the tab whose Claude Code has that token,
 --- whichever tab is current (`routing.lua`'s `tab_for_work()`), and answers
---- whether it took it, or why it refuses it: with no such tab, false; else
---- the base it gives is resolved to its full id in the work's own folder,
---- else in that tab's session's repository (`resolved_base()`) — a base
---- that cannot be is refused, and
---- nothing is recorded — and the tab's changes home is handed the work, with
---- what tells the user for that tab (`teller_for()`), and answers, starting
---- its git reads without waiting on them (`aineo.changes.Home`'s
---- `add_reported_work()`). A work with no base, as an older relay offers,
---- is handed on as it is.
+--- whether it took it, or why it refuses it: with no such tab, or a work of
+--- another shape (`is_worktree_report()`), false; else each branch it gives
+--- is checked to be a local branch and its base resolved to its full id in
+--- the worktree's own folder, else in that tab's session's repository
+--- (`resolved_work()`) — a branch git does not have, or a base that cannot
+--- be resolved, is refused, and nothing is recorded — and the tab's changes
+--- home is handed the work, with what tells the user for that tab
+--- (`teller_for()`), and answers, starting its git reads without waiting on
+--- them (`aineo.changes.Home`'s `add_reported_work()`).
 ---
 ---@param work aineo.changes.ReportedWork
 ---@param start_token string
 ---@return boolean|string taken `true` when taken, or the words of its refusal
 local function take_announced_work(work, start_token)
   local tab = type(start_token) == 'string' and routing.tab_for_work(start_token)
-  if not tab then
+  if not (tab and is_worktree_report(work)) then
     return false
   end
   local changes = tab.homes.changes
-  if type(work.base) == 'string' then
-    local commit, refusal = resolved_base(changes, work)
-    if not commit then
-      return refusal
-    end
-    work = vim.tbl_extend('force', work, { base = commit })
+  local resolved, refusal = resolved_work(changes, work)
+  if not resolved then
+    return refusal
   end
+  work = resolved
   return changes.add_reported_work(work, teller_for(tab)) == true
 end
 

@@ -164,22 +164,40 @@ T['tools/list']['starts with report, whose input schema is the report format, th
     },
     {
       name = 'announce_work',
-      description = 'Required for every agent and subagent: call once right after you create'
-        .. ' a git branch or worktree for new work, with kind, its path or branch,'
-        .. ' the base commit it was created from, and a short label.',
+      description = 'Required for every agent and subagent: call once per worktree you work in,'
+        .. ' right after you create the worktree or a branch in it, and again whenever the set of'
+        .. " branches you are working on there changes, with the worktree's folder, a short label,"
+        .. ' and every branch you are working on there with the commit it was created from.',
       inputSchema = {
         type = 'object',
         properties = {
-          kind = { type = 'string', enum = { 'worktree', 'branch' } },
-          path = { type = 'string', description = 'The worktree’s folder, for kind worktree.' },
-          branch = { type = 'string', description = 'The branch’s name, for kind branch.' },
-          base = {
+          worktree = {
             type = 'string',
-            description = 'The commit the work was created from: an id, or a name git reads, such as origin/dev.',
+            description = 'The worktree’s folder, relative to your working folder or absolute;'
+              .. ' the main checkout’s folder for work there.',
           },
           label = { type = 'string', description = 'A short name for the task.' },
+          branches = {
+            type = 'array',
+            maxItems = 32,
+            description = 'Every branch you are working on in that worktree now;'
+              .. ' none once you are done with it.',
+            items = {
+              type = 'object',
+              properties = {
+                name = { type = 'string', description = 'The branch’s name.' },
+                base = {
+                  type = 'string',
+                  description = 'The commit the branch was created from: an id,'
+                    .. ' or a name git reads, such as origin/dev.',
+                },
+              },
+              required = { 'name', 'base' },
+              additionalProperties = false,
+            },
+          },
         },
-        required = { 'kind', 'base' },
+        required = { 'worktree', 'label', 'branches' },
         additionalProperties = false,
       },
     },

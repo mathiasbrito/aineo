@@ -33,7 +33,7 @@ M.NONE = { sections = {} }
 ---@class aineo.changes.WorktreeRead: aineo.changes.CommitBaseRead
 ---@field before aineo.changes.OtherWorktrees what the window knew of the other worktrees before this read
 ---@field read_list aineo.changes.ReadList reads the window's list for a worktree
----@field base_of? fun(top: string): string|nil the commit an agent reported the worktree at `top` was made from, nil when none was: read from in place of the one `read_base()` reads when `M.read_effective_base()` chooses it
+---@field base_of? fun(worktree: aineo.git.Worktree): string|nil the commit an agent reported the branch `worktree` has checked out was made from, nil when none was: read from in place of the one `read_base()` reads when `M.read_effective_base()` chooses it
 
 --- What a read of the other worktrees, for one window, starts from.
 ---@class aineo.changes.WorktreesRead: aineo.changes.WorktreeRead
@@ -289,7 +289,7 @@ local function read_section(read, worktree, sources, done)
           end)
         )
       end)
-      local reported = read.base_of and read.base_of(worktree.top)
+      local reported = read.base_of and read.base_of(worktree)
       read_base(
         read,
         sources,
