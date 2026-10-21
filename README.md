@@ -199,7 +199,7 @@ and, in Terminal mode, `<C-\>Z` do the same.
 | `\g` | shows the changes pane and moves to its commits; inside the pane, switches between the default view and the worktree or branch shown alone |
 | `s` | in either window of the pane: picks a worktree or a branch to show alone |
 | `j`, `k` | in the commits window: the line under the cursor chooses which files the files window lists; in the commit graph, they go from commit line to commit line, over the graph's own lines, and take a count |
-| `t` | in the commits window: shows the commit graph of every branch in place of the sections, and the sections again |
+| `t` | in the commits window: shows the commit graph of every branch in place of the sections, and the sections again (Vim's `t{char}` is not available there) |
 | Enter | in the files window: shows the file's diff in the file column and moves there; in the commits window: on Uncommitted, Session work, a commit or the Landed heading, shows that whole diff |
 | `l` | in the commits window: moves the cursor to the files window, the line under the cursor still chosen |
 | `<BS>` | in the files window: moves the cursor back to the commits window, onto the line that chose the files listed |
