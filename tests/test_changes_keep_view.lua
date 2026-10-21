@@ -511,6 +511,58 @@ T['a restart']['shows the reported set again, each member under its heading, and
   eq(child.lua_get('#_G.timers'), 0)
 end
 
+T['a restart']['shows each report again with its base, label and age, its work read from that base'] = function()
+  local state = fixture.directory('keep-view-report-base-state')
+  local top = start_on_repository('keep-view-report-base', state)
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  local one = commit_only(agent, 'one.txt', 'one', 'One')
+  local two = commit_only(agent, 'two.txt', 'two', 'Two')
+  report('module', { kind = 'worktree', path = agent, base = one, label = 'task' })
+  local from_one = { 'Worktree agent-1 (feature/a)', commit_line(two, 'Two') }
+  expect_pane_lines('module', 'commits', from_one)
+
+  restart_on(top, SESSION_A, state)
+  expect_pane_lines('module', 'commits', from_one)
+  toggle_in_pane('module')
+
+  expect_pane_lines('module', 'commits', {
+    'Reported',
+    ('worktree feature/a from %s task now'):format(one:sub(1, 7)),
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent-1 (feature/a)',
+    commit_line(two, 'Two'),
+  })
+end
+
+--- How long a case watches a pane that should not change, in
+--- milliseconds: far longer than a read of the other worktrees takes.
+local KEPT_STILL_MS = 3000
+
+T['a restart']['keeps the branch each report was on, so a hook’s report on it changes nothing'] = function()
+  local state = fixture.directory('keep-view-report-branch-state')
+  local top = start_on_repository('keep-view-report-branch', state)
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  local one = commit_only(agent, 'one.txt', 'one', 'One')
+  report('module', { kind = 'worktree', path = agent, base = one, label = 'task' })
+  expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
+  restart_on(top, SESSION_A, state)
+  expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
+
+  report('module', { kind = 'worktree', path = agent, base = base, by_hook = true })
+  wait_until('the hook’s report matched', function()
+    return child.lua_get('#_G.timers == 1 and _G.timers[1].stopped')
+  end)
+
+  local still_from_one = bare_worktree('agent-1', 'feature/a')
+  vim.wait(KEPT_STILL_MS, function()
+    return not vim.deep_equal(pane_lines('module', 'commits'), still_from_one)
+  end, 20)
+  eq(pane_lines('module', 'commits'), still_from_one)
+end
+
 T['a restart']['keeps the worktree picked behind the reported set, shown alone once the set is gone'] = function()
   local state = fixture.directory('keep-view-behind-state')
   local top = start_with_two_worktrees('keep-view-behind', state)
@@ -667,6 +719,30 @@ local MALFORMED_RECORDS = {
   {
     'a member of a branch with an empty name',
     '{"repository":"<repository>","focused":true,"shows_reported":true,"reported":[{"branch":""}],"scope":{"top":"<worktree>"}}',
+  },
+  {
+    'a member of a kind no report names',
+    '{"repository":"<repository>","focused":true,"shows_reported":true,"reported":[{"top":"<worktree>","kind":"tree"}]}',
+  },
+  {
+    'a member whose base is no commit id',
+    '{"repository":"<repository>","focused":true,"shows_reported":true,"reported":[{"top":"<worktree>","base":"HEAD"}]}',
+  },
+  {
+    'a member with an empty label',
+    '{"repository":"<repository>","focused":true,"shows_reported":true,"reported":[{"top":"<worktree>","label":""}]}',
+  },
+  {
+    'a member whose time is no whole number',
+    '{"repository":"<repository>","focused":true,"shows_reported":true,"reported":[{"top":"<worktree>","at":1.5}]}',
+  },
+  {
+    'a member on a branch with an empty name',
+    '{"repository":"<repository>","focused":true,"shows_reported":true,"reported":[{"top":"<worktree>","on_branch":""}]}',
+  },
+  {
+    'a member whose hook flag is no boolean',
+    '{"repository":"<repository>","focused":true,"shows_reported":true,"reported":[{"top":"<worktree>","by_hook":"yes"}]}',
   },
 }
 
@@ -1003,24 +1079,20 @@ T['a restart']['gives way to a reported set made before the session was followed
   expect_pane_lines('module', 'commits', DEFAULT_VIEW_WITH_THREE)
   report('module', { kind = 'worktree', path = worktree_at(top, 'agent-1') })
   expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
-  pick('module', 3)
+  pick('module', 4)
   expect_pane_lines('module', 'commits', bare_worktree('agent-2', 'feature/b'))
   git_repo.git(top, { 'worktree', 'remove', worktree_at(top, 'agent-2') })
-  expect_pane_lines(
-    'module',
-    'commits',
+  local reported_default_view = vim.list_extend(
+    { 'Reported', 'worktree feature/a from ? now' },
     default_view_with(bare_worktree('agent-1', 'feature/a'), bare_worktree('agent-3', 'feature/c'))
   )
+  expect_pane_lines('module', 'commits', reported_default_view)
 
   local listings_before = child.lua_get('_G.branch_listings')
   follow('module', SESSION_A, state)
 
   eq(child.lua_get('_G.branch_listings'), listings_before)
-  expect_pane_lines(
-    'module',
-    'commits',
-    default_view_with(bare_worktree('agent-1', 'feature/a'), bare_worktree('agent-3', 'feature/c'))
-  )
+  expect_pane_lines('module', 'commits', reported_default_view)
 end
 
 T['a restart']['drops, untold, a pick of the editor’s own worktree a record holds'] = function()

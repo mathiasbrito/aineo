@@ -41,6 +41,17 @@
 --- have when its user leaves the prompt. An editor that cannot be reached,
 --- or ends while it waits, is passed by. Then it exits.
 ---
+--- As aineo's `PostToolUse` hook, which Claude Code runs in the background
+--- after a `Bash` call of git with the event `PostToolUse` in place of a
+--- session's, it records nothing and starts no deliverer: it reads the call's
+--- command as work made, when it is one of the plain forms the hook reads
+--- (`aineo.claude.work_commands`), resolves its base in the folder the
+--- command ran in (`made_work()`), and tells the editor, as an agent's call
+--- of `announce_work` reaches it, waiting for its answer
+--- (`tell_made_work()`). Any other call, and any failure, tells nothing; the
+--- hook writes nothing on stdout or stderr and exits 0, and ends itself after
+--- `TOOL_USE_LIFETIME_MS` whatever the editor does (`end_after()`).
+---
 --- It runs only when it is the script `-l` runs (`arg[0]`, `:h lua-args`):
 --- loaded inside an editor, by `require` or `dofile`, it does nothing.
 
@@ -211,6 +222,125 @@ local function notify_followers(address, left, new)
   return channels
 end
 
+--- The event of aineo's hook after a `Bash` call of git.
+local TOOL_USE_EVENT = 'PostToolUse'
+
+--- How long the hook waits for git to resolve the base of work made.
+local BASE_RESOLUTION_MS = 3000
+
+--- How long the `PostToolUse` hook may run before it ends itself, exit 0,
+--- whatever the editor does: Claude Code enforces no timeout on a hook run
+--- in the background, and an editor held at a hit-enter prompt never
+--- answers.
+local TOOL_USE_LIFETIME_MS = 6000
+
+--- Ends this process, exit 0 and nothing written, `milliseconds` from now,
+--- whatever it is waiting on then.
+---
+---@param milliseconds integer
+local function end_after(milliseconds)
+  local timer = assert(vim.uv.new_timer())
+  timer:start(milliseconds, 0, function()
+    os.exit(0)
+  end)
+end
+
+--- The Lua the editor runs for work the hook read, its arguments the
+--- announcement and the start token: `aineo.mcp`'s
+--- `receive_work_announcement()`, as an agent's call of `announce_work`
+--- reaches it.
+local RECEIVE_WORK = "return require('aineo.mcp').receive_work_announcement(...)"
+
+--- `path` made absolute against `folder` when it is not, and normalised,
+--- with no `~` and no environment variable expanded.
+---
+---@param path string
+---@param folder string
+---@return string
+local function absolute_in(path, folder)
+  local absolute = vim.startswith(path, '/') and path or vim.fs.joinpath(folder, path)
+  return vim.fs.normalize(absolute, { expand_env = false })
+end
+
+--- The full id of the commit `name` gives in the folder `folder`, as git
+--- reads a name there, or nil when it gives none, git fails, or it takes
+--- longer than `BASE_RESOLUTION_MS`.
+---
+---@param folder string
+---@param name string
+---@return string?
+local function commit_in(folder, name)
+  local resolved = vim
+    .system({
+      'git',
+      '-C',
+      folder,
+      'rev-parse',
+      '--verify',
+      '--quiet',
+      '--end-of-options',
+      name .. '^{commit}',
+    }, { text = true })
+    :wait(BASE_RESOLUTION_MS)
+  return resolved.code == 0 and (resolved.stdout or ''):match('^(%x+)\n$') or nil
+end
+
+--- The work `input`, the JSON of a `PostToolUse` hook, says a `Bash` call
+--- made, as an announcement (`aineo.claude.work_commands`'s `work_of()`):
+--- its kind; the worktree's folder or the branch's name; its base, the start
+--- point the command names, else `HEAD`, resolved to a commit in the folder
+--- the command ran in — `-C`'s, against the call's `cwd`, else the call's
+--- `cwd`, else the directory Claude Code runs in — at the time of the hook;
+--- and that aineo's hook made it. Nil when the call is not a command the
+--- hook reads, or its base resolves to no commit.
+---
+---@param place aineo.claude.HookPlace
+---@param input table
+---@return table?
+local function made_work(place, input)
+  local command = vim.tbl_get(input, 'tool_input', 'command')
+  if input.tool_name ~= 'Bash' or type(command) ~= 'string' then
+    return nil
+  end
+  load_aineo()
+  local made = require('aineo.claude.work_commands').work_of(command)
+  local cwd = type(input.cwd) == 'string' and input.cwd or place.working_directory
+  if not (made and cwd) then
+    return nil
+  end
+  local folder = made.directory and absolute_in(made.directory, cwd) or cwd
+  local base = commit_in(folder, made.start or 'HEAD')
+  if not base then
+    return nil
+  end
+  if made.kind == 'worktree' then
+    return { kind = 'worktree', path = absolute_in(made.path, folder), base = base, by_hook = true }
+  end
+  return { kind = 'branch', branch = made.branch, base = base, by_hook = true }
+end
+
+--- Tells the editor at `place.address` the work the `Bash` call of `input`
+--- made (`made_work()`), as an agent's announcement reaches it, waiting
+--- for its answer, and closes the connection; tells nothing when the call
+--- made no work the hook reads. Run in the background of Claude Code, so
+--- the wait holds no tool call.
+---
+---@param place aineo.claude.HookPlace
+---@param input table
+local function tell_made_work(place, input)
+  local work = made_work(place, input)
+  if not work then
+    return
+  end
+  local mode = place.address:match('^[^/]+:%d+$') and 'tcp' or 'pipe'
+  local connected, channel = pcall(vim.fn.sockconnect, mode, place.address, { rpc = true })
+  if not connected then
+    return
+  end
+  pcall(vim.rpcrequest, channel, 'nvim_exec_lua', RECEIVE_WORK, { work, place.start_token })
+  pcall(vim.fn.chanclose, channel)
+end
+
 if arg[1] == DELIVER then
   local address, start_token, event, session_id, cause, ran, left, new, working_directory =
     unpack(arg, 2, 10)
@@ -251,7 +381,11 @@ local place = {
 local event = arg[3]
 local ran = vim.uv.hrtime()
 local input = hook_input()
-if input then
+if input and event == TOOL_USE_EVENT then
+  end_after(TOOL_USE_LIFETIME_MS)
+  -- Whatever fails here is the hook's alone: the agent's call went on.
+  pcall(tell_made_work, place, input)
+elseif input then
   local hook = { event = event, input = input, ran = ran }
   -- A record that cannot be written leaves the report server the session it
   -- had; the hook still tells its editor.

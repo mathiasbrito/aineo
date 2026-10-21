@@ -114,6 +114,14 @@ function M.first_file_line(buffer)
   return first
 end
 
+--- The page `buffer` was last given, or nil when it was given none.
+---
+---@param buffer integer
+---@return aineo.changes.Page|nil
+function M.page_of(buffer)
+  return pages[buffer]
+end
+
 --- The entry line `line` of `buffer` lists in the page it was last given,
 --- or nil when that line lists none.
 ---

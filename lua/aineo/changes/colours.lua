@@ -33,11 +33,43 @@ M.COMMIT_AGE_GROUP = 'AineoChangesCommitAge'
 --- and the files window's first line, show in, whole.
 M.FILTER_GROUP = 'AineoChangesFilter'
 
+--- The group the commits window's Reported heading shows in, whole.
+M.REPORTED_HEADING_GROUP = 'AineoChangesReportedHeading'
+
+--- The group a report's label shows in.
+M.REPORTED_LABEL_GROUP = 'AineoChangesReportedLabel'
+
+--- The group a report's age shows in.
+M.REPORTED_AGE_GROUP = 'AineoChangesReportedAge'
+
 --- The group a line that lists nothing shows in, whole.
 M.NOTE_GROUP = 'AineoChangesNote'
 
 --- The group a line that tells a failure shows in, whole.
 M.FAILURE_GROUP = 'AineoChangesFailure'
+
+--- The group a commit's age shows in, between its parentheses, in the
+--- commit graph.
+M.GRAPH_AGE_GROUP = 'AineoChangesGraphAge'
+
+--- The group a commit's author name shows in, in the commit graph.
+M.GRAPH_AUTHOR_GROUP = 'AineoChangesGraphAuthor'
+
+--- The group the names that point at a commit show in, between their
+--- parentheses, in the commit graph.
+M.GRAPH_REF_GROUP = 'AineoChangesGraphRef'
+
+--- The groups the lanes of the commit graph show in, the first lane's
+--- first, cycled from the seventh lane on.
+---@type string[]
+M.GRAPH_LANE_GROUPS = {
+  'AineoChangesGraphLane1',
+  'AineoChangesGraphLane2',
+  'AineoChangesGraphLane3',
+  'AineoChangesGraphLane4',
+  'AineoChangesGraphLane5',
+  'AineoChangesGraphLane6',
+}
 
 --- The group each linked group of the pane links to by default.
 ---@type table<string, string>
@@ -53,8 +85,20 @@ local DEFAULT_LINKS = {
   [M.COMMIT_AUTHOR_GROUP] = 'Identifier',
   [M.COMMIT_AGE_GROUP] = 'Comment',
   [M.FILTER_GROUP] = 'Title',
+  [M.REPORTED_HEADING_GROUP] = 'Title',
+  [M.REPORTED_LABEL_GROUP] = 'Identifier',
+  [M.REPORTED_AGE_GROUP] = 'Comment',
   [M.NOTE_GROUP] = 'Comment',
   [M.FAILURE_GROUP] = 'DiagnosticWarn',
+  [M.GRAPH_AGE_GROUP] = 'String',
+  [M.GRAPH_AUTHOR_GROUP] = 'Comment',
+  [M.GRAPH_REF_GROUP] = 'Label',
+  [M.GRAPH_LANE_GROUPS[1]] = 'Identifier',
+  [M.GRAPH_LANE_GROUPS[2]] = 'String',
+  [M.GRAPH_LANE_GROUPS[3]] = 'Function',
+  [M.GRAPH_LANE_GROUPS[4]] = 'Type',
+  [M.GRAPH_LANE_GROUPS[5]] = 'Constant',
+  [M.GRAPH_LANE_GROUPS[6]] = 'Statement',
 }
 
 --- Defines the pane's groups: each in `DEFAULT_LINKS` linked to its default

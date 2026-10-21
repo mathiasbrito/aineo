@@ -9,6 +9,10 @@
 --- the base — the user's saves marked — what one commit changed, what landed
 --- in the working branch or one of its commits, or, read in another
 --- worktree, what changed in it since its base or in one of its commits.
+--- `t` in the commits buffer shows the commit graph of every branch in
+--- place of its lines (`aineo.changes.graph`), `j` and `k` going from
+--- commit to commit and the commit under the cursor choosing as a commit
+--- line does, and `t` again shows the lines as they were.
 --- Both are read again as the repository changes once the pane has been
 --- shown. Once told which Claude Code session the pane is for, the base and
 --- the saves are that session's, kept under the editor's state directory
@@ -30,7 +34,10 @@
 --- (`add_reported_work()`) and git lists, matched for up to 60 s, make the
 --- reported set: each joins it and makes it the focused view, every member
 --- under its own heading, until git no longer lists it or another session
---- is followed; `s` offers the set back. What `s` picked, the reported set
+--- is followed; each is read from the base its report gives, listed atop the
+--- default view in a Reported section, newest first, where Enter on its line
+--- shows it alone (`aineo.changes.reports`), and offered first by `s`, before
+--- the set as a whole. What `s` picked, the reported set
 --- and whether the focused view showed are kept for the Claude Code session
 --- followed, beside its base and saves, and shown again once that session is
 --- followed again (`aineo.changes.kept`). What the focused view shows alone

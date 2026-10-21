@@ -198,7 +198,8 @@ and, in Terminal mode, `<C-\>Z` do the same.
 |---|---|
 | `\g` | shows the changes pane and moves to its commits; inside the pane, switches between the default view and the worktree or branch shown alone |
 | `s` | in either window of the pane: picks a worktree or a branch to show alone |
-| `j`, `k` | in the commits window: the line under the cursor chooses which files the files window lists |
+| `j`, `k` | in the commits window: the line under the cursor chooses which files the files window lists; in the commit graph, they go from commit line to commit line, over the graph's own lines, and take a count |
+| `t` | in the commits window: shows the commit graph of every branch in place of the sections, and the sections again (Vim's `t{char}` is not available there) |
 | Enter | in the files window: shows the file's diff in the file column and moves there; in the commits window: on Uncommitted, Session work, a commit or the Landed heading, shows that whole diff |
 | `l` | in the commits window: moves the cursor to the files window, the line under the cursor still chosen |
 | `<BS>` | in the files window: moves the cursor back to the commits window, onto the line that chose the files listed |
@@ -254,6 +255,25 @@ age never is), so the subjects line up. The age is `now`, then `<n>m`, `<n>h`,
 written. `l` in the commits window moves to the files window, with the choice
 kept, and `<BS>` there moves back to the line that made it.
 
+`t` in the commits window shows the commit graph instead of the sections, as
+`git log --graph --all --abbrev-commit --date=relative` draws it, each commit
+as `<graph> <id> - (<age>) <subject> - <author> (<names>)`:
+
+```
+* 1a2b3c4 - (3 hours ago) Add the report - Ada (HEAD -> main)
+| * 5d6e7f8 - (2 days ago) Fix the build - Grace (origin/fix)
+|/
+```
+
+`j` and `k` go straight from commit to commit, with a count, and the cursor
+never rests on a line of the graph alone; the commit under the cursor lists
+its files in the files window, and `l`, `<BS>` and Enter work on it as on any
+commit. `t` again shows the sections as they were. The graph draws the newest
+1000 commits (`changes.graph_limit`) and says when older ones are not shown;
+it is read again as the repository changes, the cursor kept on its commit.
+Every part takes its colour from your colour scheme, through the
+`AineoChangesGraph*` groups and `AineoChangesCommitId`.
+
 - **Look at a change.** Enter on a file shows its diff in the file column,
   and the cursor goes there; in the commits window, Enter on Uncommitted,
   Session work, a commit or the Landed heading shows the whole diff of that
@@ -273,9 +293,13 @@ kept, and `<BS>` there moves back to the line that made it.
   the local branches, and shows the one you pick alone; `\g` in the pane
   switches back to the default view and forth again.
 - **Work Claude reports.** When Claude Code or a subagent creates a worktree
-  or a branch, it tells aineo (see What Claude tells aineo), and the pane
-  shows that work as its focused view. `s` then lists it first, as
-  `[reported] All reported work`.
+  or a branch, it tells aineo, with the commit it started from (see What
+  Claude tells aineo), and the pane shows that work as its focused view. The
+  default view then starts with a `Reported` section, one line per report,
+  newest first: `worktree feature/a from 1a2b3c4 <label> 5m`. Enter on a line
+  shows that work alone: its commits since the reported base and, for a
+  worktree, its uncommitted changes too; the explorer follows. `s` lists
+  each report first, then `[reported] All reported work`.
 - **The remembered view.** For each Claude Code session, the pane keeps the
   worktree or branch you picked with `s`, the work Claude reported and whether
   the focused view or the default view showed. Quit and come back, reopen the
@@ -374,11 +398,19 @@ aineo starts Claude Code with an MCP server of its own. Its tools `report` and
   `HH:MM [status] task — summary`, with its details as items below, under a
   separator line for its day (`── Today ──`, `── Yesterday ──`, `── Mon 19 Oct ──`).
   A report goes to the tab whose Claude sent it.
-- **`announce_work`.** Claude, and the subagents it starts, call it with the
-  `kind` (`worktree` or `branch`) and the `path` or `branch` name of each git
-  worktree or branch they create for new work. It only informs aineo: the
-  changes pane shows that work as its focused view (see The changes pane), and
-  `s` lists it first.
+- **`announce_work`.** Every agent and subagent must call it right after it
+  creates a git worktree or branch for new work, with the `kind` (`worktree`
+  or `branch`), the `path` or `branch` name, the `base` commit it was created
+  from, and, optionally, a short `label`. A call without `base`, or with one
+  git cannot resolve in the worktree's folder nor in the session's repository,
+  is refused; the agent corrects it and calls again. It only informs
+  aineo: the changes pane lists the report in its `Reported` section and shows
+  that work as its focused view (see The changes pane), and `s` lists it
+  first. A later call for the same worktree or branch replaces its base and
+  label. aineo's own `PostToolUse` hook catches the plain `git worktree add`,
+  `git checkout -b`, `git switch -c` and `git branch <name>` commands Claude's
+  `Bash` tool runs too, as a safety net; `:help aineo-changes-hook` lists the
+  forms.
 - **`run`, `run_output` and `run_stop`.** Claude starts a command in the run
   pane with `run`, reads what a process printed with `run_output`, and stops
   it with `run_stop`. `run` and `run_stop` are for your explicit request only:
@@ -410,7 +442,10 @@ vim.g.aineo = {
     hide_multiplexer = true,
   },
   layout = { report_height = 2 / 3 },
-  -- changes = { working_branch = 'origin/dev' },
+  changes = {
+    -- working_branch = 'origin/dev',
+    graph_limit = 1000,
+  },
   tabs = { padding = 2, always_show = true },
   find = { picker = 'auto' },
 }
@@ -425,6 +460,7 @@ vim.g.aineo = {
 | `claude.hide_multiplexer` | `true` | Whether Claude Code starts without the variables that tell it a terminal multiplexer runs it (see below). |
 | `layout.report_height` | `2/3` | The Report's share of the right column, a number strictly between 0 and 1. |
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
+| `changes.graph_limit` | `1000` | How many commits the commit graph (`t` in the commits window) draws, newest first, a whole number of at least 1. The graph says when older ones are not shown. |
 | `tabs.padding` | `2` | Spaces either side of each title in aineo's tab line, from 0 to 8. |
 | `tabs.always_show` | `true` | Whether the tab line shows with a single tab page: aineo sets `'showtabline'` to `2` once, when its first tab opens, and a value you set afterwards is kept. `false` leaves `'showtabline'` as you have it. Read at the first tab: a later change needs a restart. |
 | `find.picker` | `'auto'` | The picker `\f` hands its search to: `'auto'` takes the first installed of snacks.nvim, fzf-lua, telescope.nvim and mini.pick; `'snacks'`, `'fzf-lua'`, `'telescope'` or `'mini.pick'` takes that one alone. With none installed, or the one named missing, aineo lists the files through `vim.ui.select()`. None is a dependency. |

@@ -1,6 +1,7 @@
 --- The git home: what a repository holds, asked of git — the files it lists,
 --- those it ignores and its submodules, the files changed since a base
---- commit, the commits since it or between two commits, their diffs, a file
+--- commit, the commits since it or between two commits, the commit graph of
+--- every branch, their diffs, a file
 --- as a commit has it, a name resolved to a commit, its worktrees and the
 --- base of each, its local branches — and a watch that
 --- calls back when the branch moves, a reference is written or a
@@ -159,6 +160,21 @@ end
 ---@param options? aineo.git.Options
 function M.commits_between(found, from, to, done, options)
   history.commits_between(process.runner(options), found, from, to, done)
+end
+
+--- Draws the commit graph of `found`: every branch's, tag's and
+--- remote-tracking branch's commits, newest first, under the graph
+--- `git log --graph --all` draws, each with its abbreviated id, its age as
+--- `--date=relative` tells it, its author, the names that point at it and
+--- its subject — of its newest `limit` commits, saying whether older ones
+--- were left out — and calls `done(nil, graph)`, or `done(failure)`.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param limit integer how many commits to draw, at least 1
+---@param done fun(failure: aineo.git.Failure|nil, graph: aineo.git.CommitGraph|nil)
+---@param options? aineo.git.Options
+function M.commit_graph(found, limit, done, options)
+  history.commit_graph(process.runner(options), found, limit, done)
 end
 
 --- Lists the files of `found` that differ between the merge base of the
@@ -432,12 +448,14 @@ end
 --- or `on_change(failure)` when the branch cannot be read or a file system
 --- watch fails. A burst that wrote a reference of the repository — a commit,
 --- a branch or a tag made or deleted, a fetch, from this worktree or
---- another — calls back too, even when `HEAD` did not move and no file
---- changed (`references_changed`). A change made as the watch starts can be
+--- another, or a commit on another worktree's detached `HEAD` — calls back
+--- too, even when `HEAD` did not move and no file changed
+--- (`references_changed`). A change made as the watch starts can be
 --- missed, so a caller reads what it shows once the watch has started.
 --- Returns the watch, which says whether it sees changes in subdirectories
 --- — on Linux it does not, and misses a branch moved by `git update-ref`
---- from another worktree too, and every reference written under `refs/`,
+--- from another worktree too, every reference written under `refs/` and
+--- another worktree's `HEAD`,
 --- so that `references_changed` is true there only for `packed-refs` and a
 --- fetch of this worktree — or nil and why it could not start; it never
 --- raises.
