@@ -164,6 +164,21 @@ T['the commit graph']['asks git for one commit more than the limit, never the wh
   eq(vim.list_contains(vim.fn.readfile(asked), '--max-count=3'), true)
 end
 
+T['the commit graph']['draws no colour whatever the user’s git settings say'] = function()
+  local top, commits = git_repo.create_graph('graph-colour')
+  git_repo.git(top, { 'config', 'color.ui', 'always' })
+
+  local seen = child.lua(COMMIT_GRAPH, { top, 2 })
+
+  eq(
+    vim.tbl_map(function(line)
+      return line.graph
+    end, seen.result.lines),
+    { '* ', '| * ' }
+  )
+  eq(seen.result.lines[2].commit.id, commits.merge)
+end
+
 T['the commit graph']['has no line before the first commit'] = function()
   local top = git_repo.create_unborn('graph-unborn')
 
