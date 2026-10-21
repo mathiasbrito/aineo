@@ -83,6 +83,16 @@ M.PARENT = 'parent'
 ---@field merge_base? string|false the full id of the merge base of the session's base and what landed; false when they share no history
 ---@field names? table<string, string[]> the names of each commit by its full id (`aineo.git`'s `names_at()`)
 
+--- What a read of `resolved`, an earlier answer of the repository, still says
+--- while the next read is pending: its names, which stay with the commits
+--- they were read for, and none of the commits, which may have moved since.
+---
+---@param resolved aineo.changes.Resolved|nil
+---@return aineo.changes.Resolved
+function M.kept_while_reading(resolved)
+  return { names = resolved and resolved.names }
+end
+
 --- The side that is the working tree.
 ---
 ---@return aineo.changes.Side

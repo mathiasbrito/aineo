@@ -191,6 +191,31 @@ local function press_in_files_window(line, keys)
   child.type_keys(keys)
 end
 
+--- Makes the child's `aineo.git.names_at` hold every read of names until
+--- `release_names()`: the commits' own ids are read by then, the names are
+--- what stays pending.
+local function hold_names()
+  child.lua([[
+    _G.holding = true
+    _G.held = {}
+    local read_names = require('aineo.git').names_at
+    require('aineo.git').names_at = function(...)
+      local arguments = { ... }
+      if not _G.holding then
+        return read_names(...)
+      end
+      table.insert(_G.held, function()
+        read_names(unpack(arguments))
+      end)
+    end
+  ]])
+end
+
+--- Lets the reads of names held (`hold_names()`) and every later one go on.
+local function release_names()
+  child.lua('_G.holding = false; for _, read in ipairs(_G.held) do read() end')
+end
+
 T['the second heading line'] = MiniTest.new_set()
 
 T['the second heading line']['under Session work says the session start and the working tree, with the names of the base'] = function()
@@ -312,6 +337,30 @@ T['the second heading line']['under Uncommitted says HEAD and the working tree']
 
   expect_line(FILES, 1, 'Files in: Uncommitted')
   expect_line(FILES, 2, ('Against: %s (dev, main) HEAD → working tree'):format(short(base)))
+end
+
+T['the second heading line']['under Uncommitted says the words alone, not the HEAD the last read named, while the read of HEAD is pending'] = function()
+  local top, base = git_repo.create('against-pending-head', {
+    ['a.txt'] = { 'one' },
+    ['b.txt'] = { 'one' },
+  })
+  git_repo.write(top, 'a.txt', { 'two' })
+  git_repo.write(top, 'b.txt', { 'two' })
+  begin_and_show(top)
+  go_to_commits_line(1, 'Uncommitted')
+  expect_line(FILES, 2, ('Against: %s (main) HEAD → working tree'):format(short(base)))
+  hold_names()
+  git_repo.git(top, { 'add', 'b.txt' })
+  git_repo.git(top, { 'commit', '--quiet', '--message', 'Change b' })
+  local moved = git_repo.git(top, { 'rev-parse', 'HEAD' })
+
+  git_repo.wait_until('the list is read against the new HEAD', function()
+    return lines_of(FILES)[3] == '  M a.txt' and lines_of(FILES)[4] == nil
+  end)
+  expect_line(FILES, 2, 'Against: HEAD → working tree')
+  release_names()
+
+  expect_line(FILES, 2, ('Against: %s (main) HEAD → working tree'):format(short(moved)))
 end
 
 T['the second heading line']['under a commit says its parent and the commit, with their names'] = function()
@@ -618,7 +667,7 @@ T['the bar of a diff window']['follows the cursor to the next file’s diff, pat
   )
 end
 
-T['the bar of a diff window']['is read again with the diff when F toggles the context: HEAD that moved is told'] = function()
+T['the bar of a diff window']['is read again with the diff when F toggles the context: says the words alone while HEAD is read, then the HEAD that moved'] = function()
   local top, base = git_repo.create('against-bar-context', {
     ['a.txt'] = { 'one' },
     ['b.txt'] = { 'one' },
@@ -638,12 +687,15 @@ T['the bar of a diff window']['is read again with the diff when F toggles the co
       .. words_in_bar('HEAD')
       .. ' ↔ working tree  a.txt'
   )
+  hold_names()
   git_repo.git(top, { 'add', 'b.txt' })
   git_repo.git(top, { 'commit', '--quiet', '--message', 'Change b' })
   local moved = git_repo.git(top, { 'rev-parse', 'HEAD' })
 
   child.type_keys('F')
 
+  expect_bar(words_in_bar('HEAD') .. ' ↔ working tree  a.txt')
+  release_names()
   expect_bar(
     id_in_bar(moved)
       .. ' '
