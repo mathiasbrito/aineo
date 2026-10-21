@@ -370,6 +370,28 @@ T['the second heading line']['under another worktree’s whole change names the 
   )
 end
 
+T['the second heading line']['under another worktree’s whole change says the base its files were read from, not the one the commits window last read'] = function()
+  local top, base = git_repo.create('against-worktree-fresh', { ['a.txt'] = { 'one' } })
+  local _, commit = with_agent_worktree(top)
+  begin_and_show(top, { working_branch = 'main' })
+  go_to_commits_line(6, 'Worktree agent')
+  expect_line(
+    FILES,
+    2,
+    ('Against: %s (main) merge base with main → working tree'):format(short(base))
+  )
+  child.lua("require('aineo.changes.worktrees').read_other_worktrees = function() end")
+  git_repo.git(top, { 'merge', '--quiet', '--ff-only', 'feature/a' })
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_line(
+    FILES,
+    2,
+    ('Against: %s (feature/a, main) merge base with main → working tree'):format(short(commit))
+  )
+end
+
 T['the second heading line']['under a commit of another worktree says its parent and the commit'] = function()
   local top, base = git_repo.create('against-worktree-commit', { ['a.txt'] = { 'one' } })
   local _, commit = with_agent_worktree(top)
@@ -420,6 +442,22 @@ T['the bar of a diff window']['under Session work says both sides of the file’
       .. words_in_bar('session start')
       .. ' ↔ working tree  a.txt'
   )
+end
+
+T['the bar of a diff window']['shows the ids alone as the diff is shown, before git has told the names'] = function()
+  local top, base = git_repo.create('against-bar-unread', { ['a.txt'] = { 'one' } })
+  git_repo.write(top, 'a.txt', { 'two' })
+  child.lua([[
+    require('aineo.git').names_at = function(_, _, done)
+      _G.release_names = done
+    end
+  ]])
+  begin_and_show(top)
+  expect_line(FILES, 3, '  M a.txt')
+
+  press_in_files_window(3, '<CR>')
+
+  expect_bar(id_in_bar(base) .. ' ' .. words_in_bar('session start') .. ' ↔ working tree  a.txt')
 end
 
 T['the bar of a diff window']['under a commit says the parent and the commit, then the path'] = function()
