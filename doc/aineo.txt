@@ -1534,6 +1534,8 @@ reported: >
     T111 reported tree 5m
       agent-1
         feature/b from 1a2b3c4
+          2c3d4e5 Ada 5m               Handle the empty report
+          1a2b3c5 Ada 1h               Draw the tree
         feature/a * from 1a2b3c4
     (no label) now
       agent-2
@@ -1549,6 +1551,21 @@ the abbreviated id of the base its work is read from (above) — on your
 own worktree's checked-out branch, the base the default view reads, which
 Enter on that line shows — or `from ?` for a report made before reports
 gave one.
+Below a branch's line, indented six cells, are its commits from that base,
+the one its line shows, to the branch's tip, newest first, each as any
+commit line of the window: its abbreviated id, its author and age, and its
+subject, in the same colours. A branch with no commit past its base has
+none, and nor has a branch whose line shows `from ?`. At most 20 are
+listed; for more, a last line says `… <n> more`, <n> the commits left out,
+in |hl-AineoChangesNote|, and Enter on it picks the branch as its line
+does. They are read off the main loop, once the pane has read the work of
+the branch, and read again each time the pane reads its worktrees: until
+then the tree shows without them, and no key waits for them. A commit
+under a branch is a commit line like any other: the files window lists its
+files once the cursor rests on it, Enter shows its diff, `l` moves to its
+files and `<BS>` comes back to its line, `gf` and `<S-CR>` open a file
+listed under it, and the diff following the cursor and `h` act as on a
+file of any commit.
 The line under the cursor chooses the files window's list, as any line
 does, and Enter on it shows what it names alone, as picking it with `s`
 does, the explorer following (|aineo-explorer|):
