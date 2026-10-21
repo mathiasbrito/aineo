@@ -530,7 +530,7 @@ end
 
 T['the cursor'] = MiniTest.new_set()
 
-T['the cursor']['put on a line of the graph alone goes to the nearest commit line'] = function()
+T['the cursor']['jumped down onto a line of the graph alone goes on to the commit line below'] = function()
   local top, commits = pane_showing_the_graph('graphpane-jump')
   expect_lines(COMMITS, whole_graph(top, commits))
   expect_cursor({ 1, 0 })
@@ -540,7 +540,33 @@ T['the cursor']['put on a line of the graph alone goes to the nearest commit lin
   expect_cursor({ 7, 0 })
 end
 
-T['the cursor']['clicked on a line of the graph alone goes to the nearest commit line'] = function()
+T['the cursor']['moved up onto a line of the graph alone goes on to the commit line above'] = function()
+  local top, commits = pane_showing_the_graph('graphpane-up')
+  expect_lines(COMMITS, whole_graph(top, commits))
+  child.type_keys('jj')
+  expect_cursor({ 4, 0 })
+
+  child.type_keys('<Up>')
+
+  expect_cursor({ 2, 0 })
+end
+
+T['the cursor']['moved up by - and <C-p> passes each line of the graph alone'] = function()
+  local top, commits = pane_showing_the_graph('graphpane-minus')
+  expect_lines(COMMITS, whole_graph(top, commits))
+  child.type_keys('G')
+  expect_cursor({ 7, 0 })
+
+  child.type_keys('-')
+
+  expect_cursor({ 5, 0 })
+  child.type_keys('<C-p>')
+  expect_cursor({ 4, 0 })
+  child.type_keys('<C-p>')
+  expect_cursor({ 2, 0 })
+end
+
+T['the cursor']['clicked on a line of the graph alone below it goes on to the commit line below'] = function()
   local top, commits = pane_showing_the_graph('graphpane-click')
   expect_lines(COMMITS, whole_graph(top, commits))
   expect_cursor({ 1, 0 })

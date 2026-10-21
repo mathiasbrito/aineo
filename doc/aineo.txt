@@ -931,9 +931,12 @@ graph lists it; a read that fails keeps the graph shown and says so above it.
 
 `j` and `k` go from commit line to commit line, over the graph's own lines,
 such as `|/` and `|\`, and take a count: `3j` goes three commits down. The
-cursor never rests on a line of the graph alone: a click there, `G`, or any
-other move puts it on the nearest commit line, the one below when two are as
-near. The commit under the cursor chooses what the files window lists, as a
+cursor never rests on a line of the graph alone: any other move that lands
+there - `<Up>`, `-`, `<C-p>`, `G`, a click - goes on to the commit line
+beyond it in the direction it moved, above for a move up, below for a move
+down; when the cursor did not move, as when a read changes its line, it
+goes to the nearest commit line, the one below when two are as near. The
+commit under the cursor chooses what the files window lists, as a
 commit line of the sections does (|aineo-changes|), and `l`, `<BS>`, Enter,
 the diff that follows the cursor of the files window and `F` work on it as
 on any commit. `s` does not change the graph.

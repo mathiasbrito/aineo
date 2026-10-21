@@ -183,6 +183,28 @@ T['the moves']['to the nearest commit line take the last line, the limit’s not
   eq(graph.nearest_commit_line(page, 5), 4)
 end
 
+T['the moves']['of a cursor that went up onto a line of the graph alone go on to the commit line above'] = function()
+  eq(graph.commit_line_reached(graph.page({ graph = MERGED }), 3, 4), 2)
+end
+
+T['the moves']['of a cursor that went down onto a line of the graph alone go on to the commit line below'] = function()
+  eq(graph.commit_line_reached(graph.page({ graph = MERGED }), 3, 2), 4)
+end
+
+T['the moves']['of a cursor that came from nowhere take the nearest commit line'] = function()
+  eq(graph.commit_line_reached(graph.page({ graph = MERGED }), 3, nil), 4)
+end
+
+T['the moves']['of a cursor that went up past the first commit line take the nearest'] = function()
+  local page = graph.page({ graph = MERGED, failure = { reason = 'failed', message = 'gone' } })
+
+  eq(graph.commit_line_reached(page, 1, 3), 2)
+end
+
+T['the moves']['of a cursor on a commit line leave it there, wherever it came from'] = function()
+  eq(graph.commit_line_reached(graph.page({ graph = MERGED }), 2, 4), 2)
+end
+
 T['the moves']['find no commit line on a page that has none'] = function()
   local page = graph.page({})
 
