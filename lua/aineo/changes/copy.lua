@@ -3480,23 +3480,32 @@ function M.new(label)
     end
   end
 
+  --- The line each window showing the commits buffer had its cursor on
+  --- when the graph last kept it on a commit line (`keep_on_a_commit_line()`),
+  --- by window: where its next move comes from.
+  ---@type table<integer, integer>
+  local graph_line_left = {}
+
   --- Puts the cursor of `window`, showing the commits buffer while the graph
-  --- is shown, on the commit line nearest the line it is on
-  --- (`aineo.changes.graph`'s `nearest_commit_line()`): it never rests on a
-  --- line of the graph alone, nor on a note. Leaves it where it is on a page
-  --- that lists no commit.
+  --- is shown, on the commit line it comes to rest on
+  --- (`aineo.changes.graph`'s `commit_line_reached()`): moved up onto a line
+  --- of the graph alone or a note, on the commit line above; moved down, on
+  --- the one below; when it did not move, on the nearest. It never rests on
+  --- a line of the graph alone, nor on a note. Leaves it where it is on a
+  --- page that lists no commit.
   ---
   ---@param window integer
   local function keep_on_a_commit_line(window)
     local page = pages.page_of(buffers.commits)
     local cursor = vim.api.nvim_win_get_cursor(window)
-    local line = page and graph.nearest_commit_line(page, cursor[1])
+    local line = page and graph.commit_line_reached(page, cursor[1], graph_line_left[window])
     if line and line ~= cursor[1] then
       vim.api.nvim_win_set_cursor(window, { line, 0 })
     end
+    graph_line_left[window] = line or cursor[1]
   end
 
-  --- Makes the cursor of the commits buffer `buffer` go to the nearest commit
+  --- Makes the cursor of the commits buffer `buffer` go on to a commit
   --- line whenever it moves while the graph is shown — a click, `G`, a
   --- search — so that it never rests on a line of the graph alone
   --- (`keep_on_a_commit_line()`).

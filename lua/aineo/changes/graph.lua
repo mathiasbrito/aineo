@@ -240,4 +240,28 @@ function M.nearest_commit_line(page, line)
   return (below - line <= line - above) and below or above
 end
 
+--- The commit line a cursor that moved to `line` of `page` from the line
+--- `from` comes to rest on: `line` itself when it lists a commit; else, on
+--- a line of the graph alone or a note, the commit line beyond it in the
+--- direction it moved — above for a move up, below for a move down —
+--- and, with no direction (`from` nil or `line`) or none that way, the
+--- nearest (`M.nearest_commit_line()`). Nil when the page has none.
+---
+---@param page aineo.changes.Page
+---@param line integer
+---@param from integer|nil the line the cursor was on before it moved; nil when unknown
+---@return integer|nil
+function M.commit_line_reached(page, line, from)
+  if page.entries[line] then
+    return line
+  end
+  local beyond = nil
+  if from and line < from then
+    beyond = M.commit_line_above(page, line, 1)
+  elseif from and line > from then
+    beyond = M.commit_line_below(page, line, 1)
+  end
+  return beyond or M.nearest_commit_line(page, line)
+end
+
 return M
