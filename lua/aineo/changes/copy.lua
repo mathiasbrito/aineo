@@ -1089,9 +1089,10 @@ function M.new(label)
   --- selection was the branch's, and the user is told once
   --- (`aineo.changes.scope`) — but while the reported work is the focused
   --- view, which stays, the scope behind it is cleared untold. Otherwise,
-  --- when the selection is a commit of the
+  --- while the branch is shown alone, when the selection is a commit of the
   --- branch it no longer lists — the branch was reset or rebased — the
-  --- branch's whole change is selected; and the files window is read again
+  --- branch's whole change is selected (a commit of the branch listed in the
+  --- default view is kept by `take_tree_commits()`); and the files window is read again
   --- when the whole change is selected and the tip or the base moved, the
   --- first read included.
   ---
@@ -1117,7 +1118,13 @@ function M.new(label)
     local before = session.branch
     session.branch = read
     local selected = session.selected
-    if selected.kind == 'commit' and selected.branch and read.commits then
+    if
+      selected.kind == 'commit'
+      and selected.branch == read.name
+      and session.focused
+      and not session.shows_reported
+      and read.commits
+    then
       if not lists_commit(selected, read.commits) then
         select_filter(filter.of_branch(read.name))
         read_files(true)
