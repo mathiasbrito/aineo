@@ -47,7 +47,7 @@ A small fix after PR #307 merged (A537; D30: no whole suite before the push). Th
 ## Runs
 
 - `test_changes_announce` 46 cases, `test_claude_session_record` 2, `test_doc` 82, `make lint`: green on the tree pushed.
-- `test_entry_tabs_routing` (the only other file that asserts the notice) failed one of its `Send` cases in 4 of 12 whole-file runs on this tree. Its `Send` group alone, narrowed, failed 3 of 16 runs on this tree and on `dev`'s head in the proportion 2 of 8 on `dev` and 3 of 8 here, on a host with a load average near 5. The failing cases wait for the first tab's paste to reach the fake and do not touch reported work; the case is a flake of the loaded host, not of this change. No file requires a helper this change edits (`claude_session.lua` is unchanged).
+- `test_entry_tabs_routing` (the only other file that asserts the notice) failed one `Send` case in 5 of 15 whole-file runs on this tree and in 0 of 7 on `dev`'s head. Its `Send` group alone, narrowed, failed 3 of 8 runs on this tree and 2 of 8 on `dev`'s head, on a host with a load average near 5. The failing cases wait for the first tab's paste to reach the fake and do not touch reported work; they flake under host load, and this change does not cause it. No file requires a helper this change edits (`claude_session.lua` is unchanged).
 
 ## Open threads
 
