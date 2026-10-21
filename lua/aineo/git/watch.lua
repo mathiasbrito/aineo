@@ -33,7 +33,7 @@ local RECURSIVE_PLATFORMS = { Darwin = true, Windows_NT = true }
 ---@class aineo.git.RepositoryChange
 ---@field files_changed boolean the list of files changed may differ: a file of the working tree was written, created, removed or renamed, or an index or a submodule changed — which every commit, and a commit of another worktree's, does too
 ---@field branch_moved boolean `HEAD` names another commit or another branch than before
----@field references_changed boolean a reference of the repository was written or removed — a path under `refs/` or `reftable/` of the common git directory, `packed-refs`, or `FETCH_HEAD` — by a commit, a branch or a tag made or deleted, or a fetch, in this worktree or another, whether `HEAD` moved or not; where `watches_subdirectories` is false, only `packed-refs` and a fetch of this worktree set it, and a commit's or a tag's reference under `refs/` does not
+---@field references_changed boolean a reference of the repository was written or removed — a path under `refs/` or `reftable/` of the common git directory, `packed-refs`, `FETCH_HEAD`, or another worktree's `HEAD` — by a commit, a branch or a tag made or deleted, a fetch, or a commit or a checkout on another worktree's `HEAD`, in this worktree or another, whether this worktree's `HEAD` moved or not; where `watches_subdirectories` is false, only `packed-refs` and a fetch of this worktree set it, and a commit's or a tag's reference under `refs/`, or another worktree's `HEAD`, does not
 
 --- A running watch.
 ---@class aineo.git.Watch
@@ -96,7 +96,8 @@ end
 --- repository in that format keeps all of them, or `FETCH_HEAD`, which every
 --- fetch writes and which is a direct entry of the common git directory, so
 --- that a fetch of this worktree is seen where subdirectories are not
---- watched.
+--- watched, or another worktree's `HEAD` (`worktrees/<name>/HEAD`), which a
+--- commit on its detached `HEAD` moves without writing any other reference.
 ---
 ---@param name string|nil
 ---@return boolean
@@ -105,6 +106,7 @@ local function is_reference(name)
     or name == 'FETCH_HEAD'
     or vim.startswith(name or '', 'refs/')
     or vim.startswith(name or '', 'reftable/')
+    or (name or ''):match('^worktrees/[^/]+/HEAD$') ~= nil
 end
 
 --- Stops and closes each of `handles`.
