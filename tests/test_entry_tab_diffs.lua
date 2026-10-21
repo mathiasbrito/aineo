@@ -53,16 +53,16 @@ local function open_diff_of_notes_in_tab(number, files)
   entry.press(child, '\\g')
   git_repo.wait_until(files .. ' listing notes.txt', function()
     return child.lua_get(
-      [[(function(name)
+      [[(function(name, line)
         local buffer = vim.fn.bufnr(name)
-        local second = buffer ~= -1 and vim.api.nvim_buf_get_lines(buffer, 1, 2, true)[1] or ''
-        return vim.fn.bufwinid(buffer) ~= -1 and second:find('notes', 1, true) ~= nil
+        local listed = buffer ~= -1 and vim.api.nvim_buf_get_lines(buffer, line - 1, line, true)[1] or ''
+        return vim.fn.bufwinid(buffer) ~= -1 and listed:find('notes', 1, true) ~= nil
       end)(...)]],
-      { files }
+      { files, git_repo.files_window_line(2) }
     )
   end)
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { files })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { git_repo.files_window_line(2) })
   entry.press(child, '<CR>')
 end
 
