@@ -425,6 +425,7 @@ T['a commit of the Reported section']['gives way to Session work once the branch
   local one, _, agent = session_with_tree_commits('treepane-gone')
   go_to_commits_line(6)
   expect_pane_lines('files', { files_of_branch_commit(one, 'One'), '  A one.txt' })
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(_G.pane.files))')
 
   git_repo.git(agent, { 'reset', '--quiet', '--hard', 'HEAD~2' })
   child.lua('require("aineo.changes").refresh_shown_pane()')
