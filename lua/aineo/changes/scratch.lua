@@ -59,6 +59,28 @@ function M.write_text(buffer, text)
   return written
 end
 
+--- Writes `text` as line `line` of `buffer` alone, whatever its
+--- `'modifiable'`, leaving it not modifiable and the other lines as they
+--- were, and returns whether it was written: it is not when Neovim refuses
+--- the change while textlock holds. Any other error the write raises is
+--- raised again, the buffer left not modifiable. Counterpart of
+--- `M.write_text()`.
+---
+---@param buffer integer
+---@param line integer 1-based
+---@param text string
+---@return boolean written
+function M.write_line(buffer, line, text)
+  vim.bo[buffer].undolevels = -1
+  vim.bo[buffer].modifiable = true
+  local written, failure = pcall(vim.api.nvim_buf_set_lines, buffer, line - 1, line, true, { text })
+  vim.bo[buffer].modifiable = false
+  if not written and not tostring(failure):find(TEXTLOCK_REFUSAL, 1, true) then
+    error(failure, 0)
+  end
+  return written
+end
+
 --- The code of the error Neovim raises for a change of buffers or windows
 --- made from the command-line window (`:h E11`).
 local COMMAND_LINE_WINDOW_REFUSAL = 'E11:'

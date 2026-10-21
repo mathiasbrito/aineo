@@ -624,11 +624,26 @@ function M.new(label)
   --- git (`read_against()`): only the last answer is kept.
   local against_reads = 0
 
-  --- Asks git what the diffs of the files the files window lists compare
-  --- (`aineo.changes.against_read`), off the main loop, and shows the files
-  --- window again once it answers, unless a later ask has been made. Until it
-  --- answers the window says the commits earlier reads gave by their words
-  --- alone (`aineo.changes.against`'s `kept_while_reading()`).
+  --- Shows what was answered of what the diffs compare in the files window:
+  --- the line that says it (`aineo.changes.lines`' `AGAINST_LINE`) alone, so
+  --- that a page whose last list read failed, and what that left shown, stay
+  --- as they are; the whole page when the window lists another filter than
+  --- the one asked for, or Neovim refuses the line for now.
+  local function show_against()
+    local row = against_row(session.listed)
+    local listed_key = filter.key(filter_named(session.listed))
+    local shown = is_writable(buffers.files)
+      and pages.write_row(buffers.files, lines.AGAINST_LINE, row, listed_key)
+    if not shown then
+      show_files()
+    end
+  end
+
+  --- Asks the repository what the diffs of the files the files window lists
+  --- compare (`aineo.changes.against_read`), off the main loop, and shows the
+  --- answer once it comes (`show_against()`), unless a later ask has been
+  --- made. Until it answers the window says the commits earlier reads gave
+  --- by their words alone (`aineo.changes.against`'s `kept_while_reading()`).
   local function read_against()
     if not (session and session.repository) then
       return
@@ -649,7 +664,7 @@ function M.new(label)
         return
       end
       told_against = { key = filter.key(named), resolved = resolved }
-      show_files()
+      show_against()
     end)
   end
 
