@@ -101,6 +101,18 @@ Mutants of the fix round, all on its final tree, each from a pristine copy again
 
 I re-ran the 24 earlier mutants on the same tree; all were killed. M4b's literal changed with `place_graph_cursor()`: it now drops the final `select_filter_at_cursor_of(windows[1])`. M12 and M20 first survived and were killed once their case was strengthened. M11 survives the files-window group, because the guard alone keeps the reread case green, and the `s` case kills it.
 
+## Carried on T108
+
+The user prefers one merge, so the branch was rebased onto `feature/t108-reported-work` (PR #302, T108, D97), and PR #305 carries it. Two conflicts came up:
+
+- `commits_page()`'s docstring: the graph now replaces the whole list, the Reported section included;
+- the plan rows, now in ID order: D97, D98, D99 and T108, T109, T110.
+
+A new pane case pins that `t` shows the graph in place of the Reported section and that `t` back restores the list. It arrived green, and the mutant M28, in which the graph gives way to a reported set, fails it by assertion. On the rebased tree, these files are green:
+
+- every T110 test file;
+- `test_changes_announce`, `test_entry_reported_work`, `test_claude_hook_work`, `test_changes`, `test_changes_follow`, `test_entry_changes`, `test_git_watch`, `test_config` and `test_doc`.
+
 ## Suites
 
 The whole suite ran once on the code first pushed (Neovim 0.12.5, the host's): 5310 cases in 141 groups, `Fails (0)`, exit 0, no rerun needed. After the fix round it ran once on the code pushed (`a8d7715`): 5322 cases in 141 groups, `Fails (0)`, exit 0, with no flaky failure to rerun. `make lint` (StyLua and selene) is clean.
