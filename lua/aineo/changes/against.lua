@@ -59,8 +59,9 @@ M.PARENT = 'parent'
 
 --- Where a base came from.
 ---@class aineo.changes.BaseOrigin
----@field kind 'reported'|'merge_base' what an agent reported; the merge base with `against`
----@field against? string for a merge base, the reference or the abbreviated commit it was taken against
+---@field kind 'reported'|'merge_base' what an agent reported; a merge base with `ref` or `commit`
+---@field ref? string for a merge base, the reference it was taken against
+---@field commit? string for a merge base, the full id of the commit it was taken against, when no reference names it
 
 --- One side of a comparison: a commit, with where it came from in words, or
 --- a thing that is no commit.
@@ -105,7 +106,7 @@ function M.words_of(origin)
     return nil
   end
   if origin.kind == 'merge_base' then
-    return 'merge base with ' .. origin.against
+    return 'merge base with ' .. (origin.ref or origin.commit:sub(1, lines.ABBREVIATED_ID_LENGTH))
   end
   return ORIGIN_WORDS[origin.kind]
 end
@@ -173,7 +174,7 @@ local ENTER_SIDES = {
     return { left = read_side(resolved.parent, M.PARENT), right = { id = listed.commit.id } }
   end,
   landed = function(listed, source, resolved)
-    local words = M.words_of({ kind = 'merge_base', against = listed.landed })
+    local words = M.words_of({ kind = 'merge_base', ref = listed.landed })
     local left = source.base and read_side(resolved.merge_base, words) or empty_tree()
     return { left = left, right = tip_side(source.landed and source.landed.tip) }
   end,
