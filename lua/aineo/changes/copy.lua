@@ -432,18 +432,18 @@ function M.new(label)
     return scope.members_shown(session.scope, session.commits_others, session.branch)
   end
 
-  --- The worktree of `line`, a branch's line of the Reported section, as the
-  --- commits window last listed it, when another worktree than the editor's
-  --- has the branch checked out; nil for any other line, and while the
-  --- window lists none of that worktree.
+  --- The worktree other than the editor's that has the branch of `line`, a
+  --- branch's line of the Reported section, checked out, as the commits
+  --- window last listed it, whichever worktree the line stands under; nil
+  --- when none lists it, as when the branch is checked out in the editor's
+  --- own worktree or nowhere.
   ---
   ---@param line aineo.changes.TreeLine
   ---@return aineo.changes.WorktreeSection|nil
-  local function other_worktree_listed_for(line)
-    if not line.picks.top then
-      return nil
-    end
-    return scope.section_on(session.commits_others, line.node.worktree.top)
+  local function worktree_with_checked_out(line)
+    return vim.iter(session.commits_others.sections):find(function(section)
+      return section.branch == line.branch.name
+    end)
   end
 
   --- The base the work of `line`, a branch's line of the Reported section,
@@ -461,7 +461,7 @@ function M.new(label)
       return session.base
     end
     if line.checked_out then
-      local section = other_worktree_listed_for(line)
+      local section = scope.section_on(session.commits_others, line.node.worktree.top)
       return section and section.listed and section.base or nil
     end
     local read = session.reported_branches[line.branch.name]
@@ -471,8 +471,8 @@ function M.new(label)
   --- The lines of the Reported section (`reports.tree_lines()`), each
   --- branch's with the base its work was last read from
   --- (`read_base_of()`), the commits last read from that base
-  --- (`aineo.changes.tree_commits`) and the worktree that lists them
-  --- (`other_worktree_listed_for()`).
+  --- (`aineo.changes.tree_commits`) and the worktree that has the branch
+  --- checked out (`worktree_with_checked_out()`).
   ---
   ---@return aineo.changes.TreeLine[]
   local function reported_lines()
@@ -480,7 +480,7 @@ function M.new(label)
       if line.branch then
         line.read_base = read_base_of(line)
         line.commits = tree_commits.commits_of(session.tree_commits, line)
-        line.worktree_section = other_worktree_listed_for(line)
+        line.worktree_section = worktree_with_checked_out(line)
       end
       return line
     end, reports.tree_lines(session.nodes, own_top()))

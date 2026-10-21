@@ -611,6 +611,51 @@ T['a commit of the Reported section']['under a worktree’s branch is compared b
   )
 end
 
+T['a commit of the Reported section']['under a node that has another branch checked out is compared by h with the HEAD of the worktree that has its branch'] = function()
+  local top, base = start_on_repository('treepane-head-other-node')
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  local one = commit_only(agent, 'notes.txt', 'two', 'Two on notes')
+  local two = commit_only(agent, 'notes.txt', 'three', 'Three on notes')
+  report_and_show_default_view(call_for(agent, 'feature/a', base), 'Worktree agent-1 (feature/a)')
+  local other = add_worktree(top, 'agent-2', 'feature/b')
+  child.lua('_G.report(...)', {
+    {
+      worktree = other,
+      label = 'U',
+      branches = { { name = 'feature/b', base = base }, { name = 'feature/a', base = base } },
+    },
+  })
+  git_repo.wait_until('the second report taken', function()
+    return vim.tbl_contains(pane_lines('commits'), 'Worktree agent-2 (feature/b)')
+      and pane_lines('commits')[1] ~= 'Reported'
+  end)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(_G.pane.commits))')
+  child.lua('require("aineo.changes").toggle_focused_view()')
+  expect_pane_starting_with('commits', {
+    'Reported',
+    'U now',
+    '  agent-2',
+    ('    feature/b * from %s'):format(short(base)),
+    ('    feature/a from %s'):format(short(base)),
+    tree_commit_line(two, 'Three on notes'),
+    tree_commit_line(one, 'Two on notes'),
+  })
+  go_to_commits_line(7)
+  expect_pane_lines('files', { files_of_agent_commit(one, 'Two on notes'), '  M notes.txt' })
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(_G.pane.files))')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+
+  child.type_keys('h')
+
+  git_repo.wait_until('the diff against HEAD shown', function()
+    return child.lua_get('#_G.shown_diffs') > 0
+  end)
+  eq(
+    child.lua_get('vim.api.nvim_buf_get_name(_G.shown_diffs[#_G.shown_diffs])'),
+    ('aineo://worktree%s//head/commit/%s/notes.txt'):format(agent, one)
+  )
+end
+
 --- The line the cursor of the window showing the commits buffer is on.
 ---
 ---@return integer
