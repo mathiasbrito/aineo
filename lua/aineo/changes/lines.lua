@@ -339,6 +339,19 @@ function M.worktree_name(section)
   )
 end
 
+--- The heading of the worktree at `top` as an agent reported it: its
+--- folder's name and the `branches` the report gave, each quoted as a path
+--- is (`M.quoted_path()`) and joined by ", ", whatever its `HEAD` is at the
+--- moment it is read.
+---
+---@param top string
+---@param branches string[] the names of the reported branches, at least one
+---@return string
+function M.reported_worktree_heading(top, branches)
+  local names = vim.tbl_map(M.quoted_path, branches)
+  return ('Worktree %s (%s)'):format(M.quoted_path(vim.fs.basename(top)), table.concat(names, ', '))
+end
+
 --- The heading line of `section`, a worktree other than the editor's: its
 --- name (`M.worktree_name()`) after `Worktree`.
 ---

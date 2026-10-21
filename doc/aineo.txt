@@ -1441,19 +1441,20 @@ section, and its age starts again. A worktree new to the reported work,
 other than your own, makes the reported work the focused view, from the
 default view or from a worktree or branch picked with `s`, that worktree's
 whole change chosen, the cursor on its heading, and aineo says once "aineo:
-Claude Code started work in Worktree <folder> (<branch>); the changes pane
-shows the reported work", with "tab <n>: " before it when that tab is not
-the current one. Your own worktree, reported as the main checkout's folder
-for work there, is listed in the Reported section but changes no view and
-is told nothing: its work is the default view's. The changes pane is not
-brought into view: when it is not on screen, the next `\g` shows the
-reported work. The focused view of the reported work shows each worktree
-under its own heading, `Worktree <folder> (<branch>)`, then each reported
-branch its worktree has not checked out, `Branch <name>`, in
-|hl-AineoChangesFilter|, newest first, and below each its commits, or its
-note and the line saying its last read failed, as a worktree or branch
-shown alone does; nothing else. Enter, `l`, `h` and `gf` under a branch's
-lines read that branch, as under a branch picked.
+Claude Code started work in Worktree <folder> (<branches>); the changes
+pane shows the reported work", <branches> the branches the agent reported of
+it, joined by ", ", whatever git lists its HEAD as at that moment, with "tab
+<n>: " before it when that tab is not the current one. Your own worktree,
+reported as the main checkout's folder for work there, is listed in the
+Reported section but changes no view and is told nothing: its work is the
+default view's. The changes pane is not brought into view: when it is not
+on screen, the next `\g` shows the reported work. The focused view of the
+reported work shows each worktree under its own heading, `Worktree <folder>
+(<branch>)`, then each reported branch its worktree has not checked out,
+`Branch <name>`, in |hl-AineoChangesFilter|, newest first, and below each
+its commits, or its note and the line saying its last read failed, as a
+worktree or branch shown alone does; nothing else. Enter, `l`, `h` and `gf`
+under a branch's lines read that branch, as under a branch picked.
 
 Each reported branch is read from the base its report gives, wherever the
 pane shows it, in place of a base of its own, while that base is behind

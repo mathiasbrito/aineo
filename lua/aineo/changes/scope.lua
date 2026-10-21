@@ -294,14 +294,16 @@ end
 --- is gone, all of it.
 M.REPORTED_GONE = 'aineo: the reported work is gone; the changes pane shows the default view'
 
---- The words that tell the user an agent started work in `worktree`, a
---- worktree new to the Reported section.
+--- The words that tell the user an agent started work in the worktree at
+--- `top`, a worktree new to the Reported section, named with the branches
+--- the agent reported of it.
 ---
----@param worktree aineo.git.Worktree
+---@param top string
+---@param branches string[] the names of the branches reported, at least one
 ---@return string
-function M.started_work(worktree)
+function M.started_work(top, branches)
   return ('aineo: Claude Code started work in %s; the changes pane shows the reported work'):format(
-    lines.worktree_heading(worktree)
+    lines.reported_worktree_heading(top, branches)
   )
 end
 
