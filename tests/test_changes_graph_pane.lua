@@ -246,6 +246,40 @@ T['t']['again shows the sections as they were, the choice made before the graph 
   expect_lines(COMMITS, SECTIONS)
   expect_cursor({ 2, 0 })
   expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
+  child.type_keys('j')
+  expect_cursor({ 3, 0 })
+end
+
+T['t']['again chooses the session’s commit chosen before the graph'] = function()
+  local top = git_repo.create_graph('graphpane-back-commit')
+  begin_and_show(top)
+  expect_lines(COMMITS, SECTIONS)
+  git_repo.write(top, 'later.txt', { 'later' })
+  local later = git_repo.commit_all_dated(top, 'Later work', 'Ada', git_repo.GRAPH_STARTS_AT + 200)
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  local chosen = {
+    'Files in: ' .. git_repo.commit_line_of(later, ADA, 'Later work'),
+    '  A later.txt',
+  }
+  enter_window_of(COMMITS)
+  child.type_keys('3G')
+  expect_lines(FILES, chosen)
+  child.type_keys('t')
+  expect_cursor_line_ending('Later work - Ada (HEAD -> main)')
+  child.type_keys('j')
+  git_repo.wait_until('another commit chosen', function()
+    return lines_of(FILES)[1] ~= chosen[1]
+  end)
+
+  child.type_keys('t')
+
+  expect_lines(COMMITS, {
+    'Uncommitted',
+    'Session work',
+    git_repo.commit_line_of(later, ADA, 'Later work'),
+  })
+  expect_cursor({ 3, 0 })
+  expect_lines(FILES, chosen)
 end
 
 T['t']['shows the graph again after the sections, read anew'] = function()
@@ -459,14 +493,28 @@ T['the graph'] = MiniTest.new_set()
 T['the graph']['is read again as the repository changes, the cursor kept on its commit'] = function()
   local top, commits = pane_showing_the_graph('graphpane-watch')
   expect_lines(COMMITS, whole_graph(top, commits))
-  child.type_keys('jj')
-  expect_cursor({ 4, 0 })
+  child.type_keys('3j')
+  expect_cursor({ 5, 0 })
 
   git_repo.write(top, 'later.txt', { 'later' })
   git_repo.commit_all_dated(top, 'Later work', 'Ada', git_repo.GRAPH_STARTS_AT + 300)
 
   expect_first_commits_line_ending('Later work - Ada (HEAD -> main)')
-  expect_cursor_line_ending('Side work - Bartholomew (side)')
+  expect_cursor_line_ending('Main work - Ada')
+  expect_cursor({ 8, 0 })
+end
+
+T['the graph']['says its read failed, in git’s words, when git cannot draw it'] = function()
+  local stand_in = git_repo.script('graphpane-failed-stand-in', 'git', {
+    'case " $* " in',
+    "  *' --graph '*) echo 'fatal: the graph broke' >&2; exit 128 ;;",
+    'esac',
+    ('exec %s "$@"'):format(vim.fn.exepath('git')),
+  })
+
+  pane_showing_the_graph('graphpane-failed', { git = { executable = stand_in } })
+
+  expect_lines(COMMITS, { 'The last refresh failed: fatal: the graph broke' })
 end
 
 T['the graph']['draws as many commits as the session’s limit, then says older ones are not shown'] = function()
