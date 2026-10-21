@@ -833,8 +833,9 @@ the files on disk (Session work, Uncommitted, a worktree's whole change),
 else the abbreviated id and names of the commit it reads (a commit; the tip
 of Landed's working branch or of a branch). With no base at all, `<left>` is
 `empty tree`. The line shows the id alone until aineo has read the names,
-with one git run off the main loop each time the files window is read; it
-never waits for them. The same line, for the same choice, is what the diff
+with one git run off the main loop each time the files window is read and
+each time a branch or tag moves, a fetch included; it never waits for them.
+The same line, for the same choice, is what the diff
 bar below says. The label shows in |hl-AineoChangesFilter|, an id in
 |hl-AineoChangesCommitId|, names in |hl-AineoChangesReportedBranch| and the
 words in |hl-AineoChangesNote|.

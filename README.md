@@ -294,7 +294,7 @@ Every part takes its colour from your colour scheme, through the
   `HEAD` (Uncommitted) or `parent` (a commit's first parent, `empty tree` for
   a root commit); the right side is `working tree` when the diff reads files
   on disk, else the commit it reads. The ids show first, the names once git
-  has told them.
+  has told them, and again when a branch or tag moves.
 - **Open a file.** `gf` opens the working tree's file in the file column;
   under a commit it shows the file as that commit has it, read-only.
   `\<CR>` and `<S-CR>` open the file for editing in the working tree its line
