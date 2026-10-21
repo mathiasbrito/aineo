@@ -400,6 +400,22 @@ T['a watch']['takes a commit of another worktree on its own branch for no move o
   })
 end
 
+T['a watch']['takes a commit on another worktree’s detached HEAD for a reference written'] = function()
+  local top = git_repo.create('watch-other-detached', { ['a.txt'] = { 'a' } })
+  local other = vim.fs.joinpath(vim.fs.dirname(top), 'other')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '--detach', other })
+  start_live_watch(top)
+
+  git_repo.commit_all(other, 'Detached, elsewhere')
+
+  eq(wait_for_changes(1), {
+    {
+      change = { files_changed = true, branch_moved = false, references_changed = true },
+      fast = false,
+    },
+  })
+end
+
 --- Makes a repository `clone` of a repository that then gains a commit the
 --- clone has not fetched; returns the clone's top level. The clone keeps its
 --- references in `ref_format`, `files` when not given.
