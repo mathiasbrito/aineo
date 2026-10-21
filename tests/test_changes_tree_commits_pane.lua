@@ -387,14 +387,55 @@ local function files_of_agent_commit(commit, subject)
   return 'Files in: ' .. git_repo.commit_line(commit, subject) .. ' (worktree agent-1)'
 end
 
+--- The second line of the files window for the commit `commit`: what it
+--- compares against, its parent, named `parent_names` (between parentheses)
+--- when it has names, and the commit; the parent is read in the worktree
+--- `agent`.
+---
+---@param agent string
+---@param commit string
+---@param parent_names? string
+---@return string
+local function against_parent(agent, commit, parent_names)
+  local parent = git_repo.git(agent, { 'rev-parse', commit .. '~1' })
+  return ('Against: %s%s parent → %s'):format(
+    short(parent),
+    parent_names and ' ' .. parent_names or '',
+    short(commit)
+  )
+end
+
+--- The 'winbar' of the window showing the diff the home was last asked to
+--- show, in the child.
+---
+---@return string
+local function bar_of_last_diff()
+  return child.lua_get([[(function()
+    local window = vim.fn.bufwinid(_G.shown_diffs[#_G.shown_diffs])
+    return vim.api.nvim_get_option_value('winbar', { win = window })
+  end)()]])
+end
+
+--- The abbreviated id of `commit` as a diff window's bar shows it.
+---
+---@param commit string
+---@return string
+local function id_in_bar(commit)
+  return '%#AineoChangesCommitId#' .. short(commit) .. '%*'
+end
+
 T['a commit of the Reported section'] = MiniTest.new_set()
 
 T['a commit of the Reported section']['has its files listed by the files window once the cursor stays on its line'] = function()
-  local one = session_with_tree_commits('treepane-follow')
+  local one, _, agent = session_with_tree_commits('treepane-follow')
 
   go_to_commits_line(6)
 
-  expect_pane_lines('files', { files_of_agent_commit(one, 'One'), '  A one.txt' })
+  expect_pane_lines('files', {
+    files_of_agent_commit(one, 'One'),
+    against_parent(agent, one, '(main)'),
+    '  A one.txt',
+  })
 end
 
 T['a commit of the Reported section']['is shown as a diff by Enter, in the worktree that has its branch checked out'] = function()
@@ -417,14 +458,18 @@ T['a commit of the Reported section']['is shown as a diff by Enter, in the workt
 end
 
 T['a commit of the Reported section']['is left for its files by l, and found again on its line by BS'] = function()
-  local one = session_with_tree_commits('treepane-keys')
+  local one, _, agent = session_with_tree_commits('treepane-keys')
   go_to_commits_line(6)
 
   child.type_keys('l')
 
-  expect_pane_lines('files', { files_of_agent_commit(one, 'One'), '  A one.txt' })
+  expect_pane_lines('files', {
+    files_of_agent_commit(one, 'One'),
+    against_parent(agent, one, '(main)'),
+    '  A one.txt',
+  })
   eq(child.lua_get('vim.api.nvim_get_current_buf() == _G.pane.files'), true)
-  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 2, 0 })
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 3, 0 })
 
   child.type_keys('<BS>')
 
@@ -435,13 +480,23 @@ end
 T['a commit of the Reported section']['gives way to Session work once the branch no longer lists it'] = function()
   local one, _, agent = session_with_tree_commits('treepane-gone')
   go_to_commits_line(6)
-  expect_pane_lines('files', { files_of_agent_commit(one, 'One'), '  A one.txt' })
+  expect_pane_lines('files', {
+    files_of_agent_commit(one, 'One'),
+    against_parent(agent, one, '(main)'),
+    '  A one.txt',
+  })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(_G.pane.files))')
 
   git_repo.git(agent, { 'reset', '--quiet', '--hard', 'HEAD~2' })
   child.lua('require("aineo.changes").refresh_shown_pane()')
 
-  expect_pane_lines('files', { 'Files in: Session work', 'No files changed on this session' })
+  expect_pane_lines('files', {
+    'Files in: Session work',
+    ('Against: %s (feature/a, main) session start → working tree'):format(
+      short(git_repo.git(agent, { 'rev-parse', one .. '~1' }))
+    ),
+    'No files changed on this session',
+  })
 end
 
 T['the Reported section']['lists a branch’s new commit once the pane reads its worktrees again'] = function()
@@ -555,7 +610,11 @@ T['a commit of the Reported section']['keeps its files through a read while a br
     tree_commit_line(one, 'One'),
   })
   go_to_commits_line(6)
-  expect_pane_lines('files', { files_of_agent_commit(one, 'One'), '  A one.txt' })
+  expect_pane_lines('files', {
+    files_of_agent_commit(one, 'One'),
+    against_parent(agent, one, '(main)'),
+    '  A one.txt',
+  })
 
   local three = commit_only(agent, 'three.txt', 'three', 'Three')
   child.lua('require("aineo.changes").refresh_shown_pane()')
@@ -570,27 +629,35 @@ T['a commit of the Reported section']['keeps its files through a read while a br
     tree_commit_line(one, 'One'),
   })
   vim.wait(500)
-  expect_pane_lines('files', { files_of_agent_commit(one, 'One'), '  A one.txt' })
+  expect_pane_lines('files', {
+    files_of_agent_commit(one, 'One'),
+    against_parent(agent, one, '(main)'),
+    '  A one.txt',
+  })
 end
 
-T['a commit of the Reported section']['under a worktree’s branch is compared by h with that worktree’s HEAD, as in its own section'] = function()
+T['a commit of the Reported section']['under a worktree’s branch is compared by h with that worktree’s HEAD, as in its own section, and its bar says so'] = function()
   local top, base = start_on_repository('treepane-head-worktree')
   local agent = add_worktree(top, 'agent-1', 'feature/a')
   local one = commit_only(agent, 'notes.txt', 'two', 'Two on notes')
-  commit_only(agent, 'notes.txt', 'three', 'Three on notes')
+  local two = commit_only(agent, 'notes.txt', 'three', 'Three on notes')
   report_and_show_default_view(call_for(agent, 'feature/a', base), 'Worktree agent-1 (feature/a)')
   expect_pane_starting_with('commits', {
     'Reported',
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
-    tree_commit_line(git_repo.git(agent, { 'rev-parse', 'HEAD' }), 'Three on notes'),
+    tree_commit_line(two, 'Three on notes'),
     tree_commit_line(one, 'Two on notes'),
   })
   go_to_commits_line(6)
-  expect_pane_lines('files', { files_of_agent_commit(one, 'Two on notes'), '  M notes.txt' })
+  expect_pane_lines('files', {
+    files_of_agent_commit(one, 'Two on notes'),
+    against_parent(agent, one, '(main)'),
+    '  M notes.txt',
+  })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(_G.pane.files))')
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
 
   child.type_keys('h')
 
@@ -601,6 +668,14 @@ T['a commit of the Reported section']['under a worktree’s branch is compared b
     child.lua_get('vim.api.nvim_buf_get_name(_G.shown_diffs[#_G.shown_diffs])'),
     ('aineo://worktree%s//head/commit/%s/notes.txt'):format(agent, one)
   )
+  local bar = id_in_bar(one)
+    .. ' ↔ '
+    .. id_in_bar(two)
+    .. ' %#AineoChangesReportedBranch#(feature/a)%* %#AineoChangesNote#HEAD%*  notes.txt'
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return bar_of_last_diff() == bar
+  end, 10)
+  eq(bar_of_last_diff(), bar)
   eq(
     vim.tbl_filter(function(line)
       return line == '-two' or line == '+three' or line == '+one'
@@ -641,9 +716,13 @@ T['a commit of the Reported section']['under a node that has another branch chec
     tree_commit_line(one, 'Two on notes'),
   })
   go_to_commits_line(7)
-  expect_pane_lines('files', { files_of_agent_commit(one, 'Two on notes'), '  M notes.txt' })
+  expect_pane_lines('files', {
+    files_of_agent_commit(one, 'Two on notes'),
+    against_parent(agent, one, '(feature/b, main)'),
+    '  M notes.txt',
+  })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(_G.pane.files))')
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
 
   child.type_keys('h')
 
@@ -654,6 +733,18 @@ T['a commit of the Reported section']['under a node that has another branch chec
     child.lua_get('vim.api.nvim_buf_get_name(_G.shown_diffs[#_G.shown_diffs])'),
     ('aineo://worktree%s//head/commit/%s/notes.txt'):format(agent, one)
   )
+end
+
+T['a commit of the Reported section']['says in the files window what it compares against: its parent and itself'] = function()
+  local one, _, agent = session_with_tree_commits('treepane-against')
+
+  go_to_commits_line(6)
+
+  expect_pane_lines('files', {
+    files_of_agent_commit(one, 'One'),
+    against_parent(agent, one, '(main)'),
+    '  A one.txt',
+  })
 end
 
 --- The line the cursor of the window showing the commits buffer is on.
@@ -687,7 +778,15 @@ T['the Reported section']['keeps the cursor on the line saying more are left out
     return pane_lines('commits')[26] == '      … 2 more'
   end)
   go_to_commits_line(26)
-  expect_pane_lines('files', { 'Files in: Branch feature/long', 'No files changed on this branch' })
+  local tip = git_repo.git(top, { 'rev-parse', 'feature/long' })
+  expect_pane_lines('files', {
+    'Files in: Branch feature/long',
+    ('Against: %s (feature/a, main) reported base → %s (feature/long)'):format(
+      short(base),
+      short(tip)
+    ),
+    'No files changed on this branch',
+  })
   local own = commit_only(top, 'own.txt', 'own', 'Own work')
 
   child.lua('require("aineo.changes").refresh_shown_pane()')
@@ -787,6 +886,7 @@ T['a commit of the Reported section']['stays selected, its line kept, when the f
   go_to_commits_line(vim.fn.index(pane_lines('commits'), git_repo.commit_line(two, 'Two')) + 1)
   local files_of_two = {
     'Files in: ' .. git_repo.commit_line(two, 'Two') .. ' (branch feature/b)',
+    against_parent(agent, two),
     '  A two.txt',
   }
   expect_pane_lines('files', files_of_two)
