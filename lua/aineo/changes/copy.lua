@@ -346,6 +346,20 @@ function M.new(label)
     return scope.members_shown(session.scope, session.commits_others, session.branch)
   end
 
+  --- The worktree of `line`, a branch's line of the Reported section, as the
+  --- commits window last listed it, when another worktree than the editor's
+  --- has the branch checked out; nil for any other line, and while the
+  --- window lists none of that worktree.
+  ---
+  ---@param line aineo.changes.TreeLine
+  ---@return aineo.changes.WorktreeSection|nil
+  local function other_worktree_listed_for(line)
+    if not line.picks.top then
+      return nil
+    end
+    return scope.section_on(session.commits_others, line.node.worktree.top)
+  end
+
   --- The base the work of `line`, a branch's line of the Reported section,
   --- is read from where its line picks it: on the editor's own worktree,
   --- while it has that branch checked out, the session's base, which the
@@ -361,7 +375,7 @@ function M.new(label)
       return session.base
     end
     if line.checked_out then
-      local section = scope.section_on(session.commits_others, line.node.worktree.top)
+      local section = other_worktree_listed_for(line)
       return section and section.listed and section.base or nil
     end
     local read = session.reported_branches[line.branch.name]
@@ -370,8 +384,9 @@ function M.new(label)
 
   --- The lines of the Reported section (`reports.tree_lines()`), each
   --- branch's with the base its work was last read from
-  --- (`read_base_of()`) and the commits last read from that base
-  --- (`aineo.changes.tree_commits`).
+  --- (`read_base_of()`), the commits last read from that base
+  --- (`aineo.changes.tree_commits`) and the worktree that lists them
+  --- (`other_worktree_listed_for()`).
   ---
   ---@return aineo.changes.TreeLine[]
   local function reported_lines()
@@ -379,6 +394,7 @@ function M.new(label)
       if line.branch then
         line.read_base = read_base_of(line)
         line.commits = tree_commits.commits_of(session.tree_commits, line)
+        line.worktree_section = other_worktree_listed_for(line)
       end
       return line
     end, reports.tree_lines(session.nodes, own_top()))
@@ -1049,10 +1065,11 @@ function M.new(label)
   --- worktrees, no longer lists what it names: *Session work* when the
   --- selected filter's worktree is gone; that worktree's whole change when it
   --- lists the worktree but not the selected commit any more — after an
-  --- amend, a rebase. A worktree still listed becomes the selected filter's
-  --- as it was last read, and the files window is written again when its
-  --- branch changed, for its first line names it. The scope is kept or
-  --- cleared first (`keep_scope_listed_in()`).
+  --- amend, a rebase — unless the commit is one of a branch the Reported
+  --- section lists, which `take_tree_commits()` gives way. A worktree still
+  --- listed becomes the selected filter's as it was last read, and the files
+  --- window is written again when its branch changed, for its first line
+  --- names it. The scope is kept or cleared first (`keep_scope_listed_in()`).
   ---
   ---@param others aineo.changes.OtherWorktrees
   local function reselect_in_worktrees(others)
@@ -1069,6 +1086,7 @@ function M.new(label)
       read_files(true)
     elseif
       selected.kind == 'commit'
+      and not selected.branch
       and section.listed
       and not lists_commit(selected, section.listed.commits)
     then

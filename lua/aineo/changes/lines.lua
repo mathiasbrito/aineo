@@ -802,8 +802,10 @@ end
 --- (`aineo.changes.TreeLine`'s `commits`), the newest `M.MOST_TREE_COMMITS`
 --- of them, as the window's other commit lines (`commit_text()`), indented
 --- a depth below the line's and listing the files of the commit in that
---- branch; and, for more commits than that, a row saying how many are left
---- out (`more_commits_row()`). `entry` is the entry of the branch's line.
+--- branch, read in the worktree that has the branch checked out when it is
+--- another's (`aineo.changes.TreeLine`'s `worktree_section`); and, for more
+--- commits than that, a row saying how many are left out
+--- (`more_commits_row()`). `entry` is the entry of the branch's line.
 ---
 ---@param line aineo.changes.TreeLine
 ---@param now integer seconds since the epoch
@@ -817,10 +819,19 @@ local function tree_commit_rows(line, now, entry)
     local commit = commits[position]
     local text, line_colours = commit_text(commit, now)
     local listed_under = filter.of_branch_commit(line.branch.name, commit)
+    local worktree = line.worktree_section
+    if worktree then
+      listed_under = filter.in_worktree(listed_under, worktree)
+    end
     table.insert(rows, {
       line = indent .. text,
       colours = shifted(line_colours, #indent),
-      entry = { key = filter.key(listed_under), commit = commit, filter = listed_under },
+      entry = {
+        key = filter.key(listed_under),
+        commit = commit,
+        filter = listed_under,
+        worktree = worktree,
+      },
     })
   end
   if #commits > M.MOST_TREE_COMMITS then
