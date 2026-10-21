@@ -298,9 +298,16 @@ T['t']['shows the graph again after the sections, read anew'] = function()
   expect_cursor({ 1, 0 })
 end
 
-T['t']['leaves the graph shown in a commits buffer made anew, j and k going from commit to commit'] = function()
+T['t']['leaves the graph shown in a commits buffer made anew, on the commit chosen, k going from commit to commit'] = function()
   local top, commits = pane_showing_the_graph('graphpane-anew')
   expect_lines(COMMITS, whole_graph(top, commits))
+  child.type_keys('jj')
+  local side = {
+    'Files in: '
+      .. git_repo.commit_line_of(commits.side, 'Bartholomew 9y' .. (' '):rep(6), 'Side work'),
+    '  A side.txt',
+  }
+  expect_lines(FILES, side)
   child.lua('vim.cmd.bwipeout(vim.fn.bufnr(...))', { COMMITS })
 
   child.lua([[
@@ -309,11 +316,10 @@ T['t']['leaves the graph shown in a commits buffer made anew, j and k going from
   ]])
 
   expect_lines(COMMITS, whole_graph(top, commits))
-  expect_cursor({ 1, 0 })
-  child.type_keys('jj')
   expect_cursor({ 4, 0 })
-  child.type_keys('k')
-  expect_cursor({ 2, 0 })
+  expect_lines(FILES, side)
+  child.type_keys('2k')
+  expect_cursor({ 1, 0 })
 end
 
 T['t']['leaves a commits buffer made anew in another window choosing the commit its cursor is put on'] = function()
