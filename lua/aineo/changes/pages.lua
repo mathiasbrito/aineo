@@ -14,18 +14,28 @@ local PANE_COLOURS = vim.api.nvim_create_namespace('aineo_changes_colours')
 local pages = {}
 
 --- The line of `page` that lists the entry `key` names, or nil when none
---- does.
+--- does. Several lines may list one key — a line saying more commits are
+--- left out lists its branch's entry, a commit stands under every
+--- worktree that reports its branch — and the one nearest `near` is given;
+--- without `near`, any of them.
 ---
 ---@param page aineo.changes.Page
 ---@param key string|nil
+---@param near? integer
 ---@return integer|nil line
-local function line_listing(page, key)
+local function line_listing(page, key, near)
+  local found = nil
   for line, entry in pairs(page.entries) do
     if entry.key == key then
-      return line
+      if not near then
+        return line
+      end
+      if not found or math.abs(line - near) < math.abs(found - near) then
+        found = line
+      end
     end
   end
-  return nil
+  return found
 end
 
 --- Shows `page`'s colours on `buffer`'s lines, which hold its text, and no
@@ -50,8 +60,9 @@ end
 --- Writes `page` into `buffer` (`aineo.changes.scratch`'s `write_text()`),
 --- in its colours (`show_colours()`), leaving it not modifiable, and
 --- returns whether it was written. In each window showing `buffer`, the
---- cursor stays on the entry it was on when the page lists it still, at the
---- same column, unless the page lists the files of another filter than the
+--- cursor stays on the entry it was on when the page lists it still — on the
+--- line nearest the one it was on, where several list it — at the same
+--- column, unless the page lists the files of another filter than the
 --- page before it did (`aineo.changes.Page`'s `filter_key`): the cursor is
 --- then on the first line, the view at the top. A page Neovim refused
 --- leaves the buffer, the entries its lines list and their colours, as
@@ -66,7 +77,7 @@ function M.write_page(buffer, page)
   for _, window in ipairs(vim.fn.win_findbuf(buffer)) do
     local cursor = vim.api.nvim_win_get_cursor(window)
     local entry = before and before.entries[cursor[1]]
-    kept[window] = { key = entry and entry.key, column = cursor[2] }
+    kept[window] = { key = entry and entry.key, column = cursor[2], line = cursor[1] }
   end
   if not scratch.write_text(buffer, page.text) then
     return false
@@ -78,7 +89,7 @@ function M.write_page(buffer, page)
     if lists_another_filter then
       vim.api.nvim_win_set_cursor(window, { 1, 0 })
     else
-      local line = line_listing(page, cursor.key)
+      local line = line_listing(page, cursor.key, cursor.line)
       if line then
         vim.api.nvim_win_set_cursor(window, { line, cursor.column })
       end

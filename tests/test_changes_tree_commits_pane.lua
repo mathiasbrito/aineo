@@ -562,4 +562,97 @@ T['a commit of the Reported section']['keeps its files through a read while a br
   expect_pane_lines('files', { files_of_branch_commit(one, 'One'), '  A one.txt' })
 end
 
+--- The line the cursor of the window showing the commits buffer is on.
+---
+---@return integer
+local function commits_cursor_line()
+  return child.lua_get('vim.api.nvim_win_get_cursor(vim.fn.bufwinid(_G.pane.commits))[1]')
+end
+
+T['the Reported section']['keeps the cursor on the line saying more are left out when the page is written again'] = function()
+  local top, base = start_on_repository('treepane-more-cursor')
+  git_repo.git(top, { 'checkout', '--quiet', '-b', 'feature/long' })
+  for number = 1, 22 do
+    git_repo.git(top, { 'commit', '--quiet', '--allow-empty', '--message', 'Work ' .. number })
+  end
+  git_repo.git(top, { 'checkout', '--quiet', 'main' })
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  child.lua('_G.report(...)', {
+    {
+      worktree = agent,
+      label = 'T',
+      branches = { { name = 'feature/a', base = base }, { name = 'feature/long', base = base } },
+    },
+  })
+  git_repo.wait_until('the report taken', function()
+    return vim.tbl_contains(pane_lines('commits'), 'Worktree agent-1 (feature/a)')
+  end)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(_G.pane.commits))')
+  child.lua('require("aineo.changes").toggle_focused_view()')
+  git_repo.wait_until('the line saying more are left out', function()
+    return pane_lines('commits')[26] == '      … 2 more'
+  end)
+  go_to_commits_line(26)
+  expect_pane_lines('files', { 'Files in: Branch feature/long', 'No files changed on this branch' })
+  local own = commit_only(top, 'own.txt', 'own', 'Own work')
+
+  child.lua('require("aineo.changes").refresh_shown_pane()')
+
+  git_repo.wait_until('the own commit listed', function()
+    return vim.tbl_contains(pane_lines('commits'), git_repo.commit_line(own, 'Own work'))
+  end)
+  eq(pane_lines('commits')[26], '      … 2 more')
+  eq(commits_cursor_line(), 26)
+end
+
+T['the Reported section']['keeps the cursor on a commit of a branch listed under two worktrees when the page is written again'] = function()
+  local top, base = start_on_repository('treepane-twice-cursor')
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  local one = commit_only(agent, 'one.txt', 'one', 'One')
+  local two = commit_only(agent, 'two.txt', 'two', 'Two')
+  report_and_show_default_view(call_for(agent, 'feature/a', base), 'Worktree agent-1 (feature/a)')
+  local other = add_worktree(top, 'agent-2', 'feature/b')
+  child.lua('_G.report(...)', {
+    {
+      worktree = other,
+      label = 'U',
+      branches = { { name = 'feature/b', base = base }, { name = 'feature/a', base = base } },
+    },
+  })
+  local listed_twice = {
+    'Reported',
+    'U now',
+    '  agent-2',
+    ('    feature/b * from %s'):format(short(base)),
+    ('    feature/a from %s'):format(short(base)),
+    tree_commit_line(two, 'Two'),
+    tree_commit_line(one, 'One'),
+    'T now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
+    tree_commit_line(two, 'Two'),
+    tree_commit_line(one, 'One'),
+  }
+  git_repo.wait_until('the second report taken', function()
+    return vim.tbl_contains(pane_lines('commits'), 'Worktree agent-2 (feature/b)')
+      and pane_lines('commits')[1] ~= 'Reported'
+  end)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(_G.pane.commits))')
+  child.lua('require("aineo.changes").toggle_focused_view()')
+  expect_pane_starting_with('commits', listed_twice)
+  go_to_commits_line(12)
+  git_repo.wait_until('the files of One', function()
+    return vim.startswith(pane_lines('files')[1], 'Files in: ' .. git_repo.commit_line(one, 'One'))
+  end)
+  local own = commit_only(top, 'own.txt', 'own', 'Own work')
+
+  child.lua('require("aineo.changes").refresh_shown_pane()')
+
+  git_repo.wait_until('the own commit listed', function()
+    return vim.tbl_contains(pane_lines('commits'), git_repo.commit_line(own, 'Own work'))
+  end)
+  expect_pane_starting_with('commits', listed_twice)
+  eq(commits_cursor_line(), 12)
+end
+
 return T
