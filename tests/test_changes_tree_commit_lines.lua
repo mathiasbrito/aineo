@@ -45,6 +45,35 @@ local function commit(digit, subject, minutes_ago)
   }
 end
 
+--- The commits window's page for the Reported section `tree`.
+---
+---@param tree aineo.changes.TreeLine[]
+---@return aineo.changes.Page
+local function page_of_tree(tree)
+  return lines.commits_window({
+    lists_filters = true,
+    since = { commits = {}, base_is_ancestor = true },
+    worktrees = { sections = {} },
+    reported = tree,
+    now = NOW,
+  })
+end
+
+--- The tree of `NODES`, as the editor whose own worktree is at `own_top`
+--- shows it, the commits `commits` read for the branch on line `at` of it
+--- (`FEATURE_B`, `FEATURE_A`).
+---
+---@param own_top string
+---@param at integer
+---@param commits aineo.git.Commit[]|nil
+---@return aineo.changes.TreeLine[]
+local function tree_with_commits_at(own_top, at, commits)
+  local tree = report_rules.tree_lines(NODES, own_top)
+  tree[at].read_base = BASE
+  tree[at].commits = commits
+  return tree
+end
+
 --- The commits window's page for the tree of `NODES`, the commits
 --- `commits` read for the branch on line `at` of the tree
 --- (`FEATURE_B`, `FEATURE_A`).
@@ -53,16 +82,7 @@ end
 ---@param commits aineo.git.Commit[]|nil
 ---@return aineo.changes.Page
 local function page_with_commits_at(at, commits)
-  local tree = report_rules.tree_lines(NODES, OWN_TOP)
-  tree[at].read_base = BASE
-  tree[at].commits = commits
-  return lines.commits_window({
-    lists_filters = true,
-    since = { commits = {}, base_is_ancestor = true },
-    worktrees = { sections = {} },
-    reported = tree,
-    now = NOW,
-  })
+  return page_of_tree(tree_with_commits_at(OWN_TOP, at, commits))
 end
 
 --- The third line of the tree, `feature/b`'s, for `page_with_commits_at()`.
@@ -117,6 +137,34 @@ T['the commits under a branch']['list the files of their commit, as a commit of 
     key = '\0branch\0feature/b\0' .. newer.id,
     commit = newer,
     filter = { kind = 'commit', commit = newer, branch = 'feature/b' },
+  })
+end
+
+T['the commits under a branch']['of a branch checked out in another worktree list their files in that worktree, as its own section does'] = function()
+  local newer = commit('3', 'On the checked-out branch', 1)
+  local listed = { top = AGENT.top, branch = AGENT.branch, repository = {} }
+  local tree = tree_with_commits_at(OWN_TOP, FEATURE_A, { newer })
+  tree[FEATURE_A].worktree_section = listed
+
+  local page = page_of_tree(tree)
+
+  eq(page.entries[6], {
+    key = AGENT.top .. '\0\0branch\0feature/a\0' .. newer.id,
+    commit = newer,
+    filter = { kind = 'commit', commit = newer, branch = 'feature/a', worktree = listed },
+    worktree = listed,
+  })
+end
+
+T['the commits under a branch']['of a branch checked out in the editor’s own worktree name no worktree'] = function()
+  local newer = commit('3', 'On the checked-out branch', 1)
+
+  local page = page_of_tree(tree_with_commits_at(AGENT.top, FEATURE_A, { newer }))
+
+  eq(page.entries[6], {
+    key = '\0branch\0feature/a\0' .. newer.id,
+    commit = newer,
+    filter = { kind = 'commit', commit = newer, branch = 'feature/a' },
   })
 end
 
