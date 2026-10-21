@@ -36,11 +36,17 @@ M.FILTER_GROUP = 'AineoChangesFilter'
 --- The group the commits window's Reported heading shows in, whole.
 M.REPORTED_HEADING_GROUP = 'AineoChangesReportedHeading'
 
---- The group a report's label shows in.
+--- The group a label shows in, in the Reported section.
 M.REPORTED_LABEL_GROUP = 'AineoChangesReportedLabel'
 
---- The group a report's age shows in.
+--- The group the age of a label's newest report shows in.
 M.REPORTED_AGE_GROUP = 'AineoChangesReportedAge'
+
+--- The group a reported worktree's folder shows in.
+M.REPORTED_WORKTREE_GROUP = 'AineoChangesReportedWorktree'
+
+--- The group a reported branch's name shows in.
+M.REPORTED_BRANCH_GROUP = 'AineoChangesReportedBranch'
 
 --- The group a line that lists nothing shows in, whole.
 M.NOTE_GROUP = 'AineoChangesNote'
@@ -88,6 +94,8 @@ local DEFAULT_LINKS = {
   [M.REPORTED_HEADING_GROUP] = 'Title',
   [M.REPORTED_LABEL_GROUP] = 'Identifier',
   [M.REPORTED_AGE_GROUP] = 'Comment',
+  [M.REPORTED_WORKTREE_GROUP] = 'Directory',
+  [M.REPORTED_BRANCH_GROUP] = 'Label',
   [M.NOTE_GROUP] = 'Comment',
   [M.FAILURE_GROUP] = 'DiagnosticWarn',
   [M.GRAPH_AGE_GROUP] = 'String',

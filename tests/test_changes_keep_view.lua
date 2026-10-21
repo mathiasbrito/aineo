@@ -123,6 +123,26 @@ local function report(key, work)
   child.lua('_G.report(...)', { key, work })
 end
 
+--- An agent's call for the worktree at `path`, labelled `label`, listing
+--- `branches`.
+---
+---@param path string
+---@param label string
+---@param branches table[]
+---@return table
+local function call_for(path, label, branches)
+  return { worktree = path, label = label, branches = branches }
+end
+
+--- The agent's call `T` for the worktree at `path`, listing `feature/a`
+--- with no base.
+---
+---@param path string
+---@return table
+local function agent_call(path)
+  return call_for(path, 'T', { { name = 'feature/a' } })
+end
+
 --- The messages the child told through `vim.notify`.
 ---
 ---@return string[]
@@ -491,13 +511,12 @@ T['a restart']['shows the branch picked with s alone again'] = function()
   eq(messages(), {})
 end
 
-T['a restart']['shows the reported set again, each member under its heading, and tells nothing'] = function()
+T['a restart']['shows the reported work again, each worktree and branch under its heading, and tells nothing'] = function()
   local state = fixture.directory('keep-view-reported-state')
   local top = start_on_repository('keep-view-reported', state)
   local agent = add_worktree(top, 'agent-1', 'feature/a')
   add_branch(top, 'feature/p', 'Work p')
-  report('module', { kind = 'worktree', path = agent })
-  report('module', { kind = 'branch', branch = 'feature/p' })
+  report('module', call_for(agent, 'T', { { name = 'feature/a' }, { name = 'feature/p' } }))
   local reported = vim.list_extend(
     bare_worktree('agent-1', 'feature/a'),
     { 'Branch feature/p', last_commit_line(top, 'feature/p', 'Work p') }
@@ -511,13 +530,13 @@ T['a restart']['shows the reported set again, each member under its heading, and
   eq(child.lua_get('#_G.timers'), 0)
 end
 
-T['a restart']['shows each report again with its base, label and age, its work read from that base'] = function()
+T['a restart']['shows the tree again with each branch’s base, the label and age, its work read from that base'] = function()
   local state = fixture.directory('keep-view-report-base-state')
   local top = start_on_repository('keep-view-report-base', state)
   local agent = add_worktree(top, 'agent-1', 'feature/a')
   local one = commit_only(agent, 'one.txt', 'one', 'One')
   local two = commit_only(agent, 'two.txt', 'two', 'Two')
-  report('module', { kind = 'worktree', path = agent, base = one, label = 'task' })
+  report('module', call_for(agent, 'task', { { name = 'feature/a', base = one } }))
   local from_one = { 'Worktree agent-1 (feature/a)', commit_line(two, 'Two') }
   expect_pane_lines('module', 'commits', from_one)
 
@@ -527,7 +546,9 @@ T['a restart']['shows each report again with its base, label and age, its work r
 
   expect_pane_lines('module', 'commits', {
     'Reported',
-    ('worktree feature/a from %s task now'):format(one:sub(1, 7)),
+    'task now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(one:sub(1, 7)),
     'Uncommitted',
     'Session work',
     'No commits on this session',
@@ -540,18 +561,22 @@ end
 --- milliseconds: far longer than a read of the other worktrees takes.
 local KEPT_STILL_MS = 3000
 
-T['a restart']['keeps the branch each report was on, so a hook’s report on it changes nothing'] = function()
+T['a restart']['keeps each branch’s base, so a hook’s report of a branch it holds changes nothing'] = function()
   local state = fixture.directory('keep-view-report-branch-state')
   local top = start_on_repository('keep-view-report-branch', state)
   local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
   local agent = add_worktree(top, 'agent-1', 'feature/a')
   local one = commit_only(agent, 'one.txt', 'one', 'One')
-  report('module', { kind = 'worktree', path = agent, base = one, label = 'task' })
+  report('module', call_for(agent, 'task', { { name = 'feature/a', base = one } }))
   expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
   restart_on(top, SESSION_A, state)
   expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
 
-  report('module', { kind = 'worktree', path = agent, base = base, by_hook = true })
+  report('module', {
+    worktree = agent,
+    branches = { { name = 'feature/a', base = base } },
+    by_hook = true,
+  })
   wait_until('the hook’s report matched', function()
     return child.lua_get('#_G.timers == 1 and _G.timers[1].stopped')
   end)
@@ -563,11 +588,59 @@ T['a restart']['keeps the branch each report was on, so a hook’s report on it 
   eq(pane_lines('module', 'commits'), still_from_one)
 end
 
-T['a restart']['keeps the worktree picked behind the reported set, shown alone once the set is gone'] = function()
+T['a restart']['loads the reports kept before reports were a tree: a worktree with its branch, a branch under the main checkout'] = function()
+  local state = fixture.directory('keep-view-old-reports-state')
+  local top = start_on_repository('keep-view-old-reports', state)
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  local one = commit_only(agent, 'one.txt', 'one', 'One')
+  local two = commit_only(agent, 'two.txt', 'two', 'Two')
+  add_branch(top, 'feature/p', 'Work p')
+  child.stop()
+  write_view_file(
+    state,
+    SESSION_A,
+    vim.json.encode({
+      repository = top,
+      focused = true,
+      shows_reported = true,
+      reported = {
+        { top = agent, kind = 'worktree', base = one, label = 'old task', at = os.time() },
+        { branch = 'feature/p', kind = 'branch', base = base, label = 'branch task' },
+      },
+    })
+  )
+
+  restart_on(top, SESSION_A, state)
+
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-1 (feature/a)',
+    commit_line(two, 'Two'),
+    'Branch feature/p (not checked out: commits only)',
+    last_commit_line(top, 'feature/p', 'Work p'),
+  })
+  toggle_in_pane('module')
+  expect_pane_lines('module', 'commits', {
+    'Reported',
+    'old task now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(one:sub(1, 7)),
+    'branch task',
+    '  ' .. vim.fs.basename(top),
+    ('    feature/p from %s'):format(base:sub(1, 7)),
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+    'Worktree agent-1 (feature/a)',
+    commit_line(two, 'Two'),
+  })
+end
+
+T['a restart']['keeps the worktree picked behind the reported work, shown alone once that work is gone'] = function()
   local state = fixture.directory('keep-view-behind-state')
   local top = start_with_two_worktrees('keep-view-behind', state)
   pick('module', 2)
-  report('module', { kind = 'worktree', path = worktree_at(top, 'agent-1') })
+  report('module', agent_call(worktree_at(top, 'agent-1')))
   expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
 
   restart_on(top, SESSION_A, state)
@@ -744,6 +817,34 @@ local MALFORMED_RECORDS = {
     'a member whose hook flag is no boolean',
     '{"repository":"<repository>","focused":true,"shows_reported":true,"reported":[{"top":"<worktree>","by_hook":"yes"}]}',
   },
+  {
+    'reported worktrees that are no list',
+    '{"repository":"<repository>","focused":true,"shows_reported":false,"reported":[],"scope":{"top":"<worktree>"},"nodes":{"top":"<worktree>","branches":[]}}',
+  },
+  {
+    'a reported worktree with an empty folder',
+    '{"repository":"<repository>","focused":true,"shows_reported":false,"reported":[],"scope":{"top":"<worktree>"},"nodes":[{"top":"","branches":[]}]}',
+  },
+  {
+    'a reported worktree whose branches are no list',
+    '{"repository":"<repository>","focused":true,"shows_reported":false,"reported":[],"scope":{"top":"<worktree>"},"nodes":[{"top":"<worktree>","branches":"feature/b"}]}',
+  },
+  {
+    'a reported worktree with an empty label',
+    '{"repository":"<repository>","focused":true,"shows_reported":false,"reported":[],"scope":{"top":"<worktree>"},"nodes":[{"top":"<worktree>","label":"","branches":[]}]}',
+  },
+  {
+    'a reported worktree whose time is no whole number',
+    '{"repository":"<repository>","focused":true,"shows_reported":false,"reported":[],"scope":{"top":"<worktree>"},"nodes":[{"top":"<worktree>","at":1.5,"branches":[]}]}',
+  },
+  {
+    'a reported branch with an empty name',
+    '{"repository":"<repository>","focused":true,"shows_reported":false,"reported":[],"scope":{"top":"<worktree>"},"nodes":[{"top":"<worktree>","branches":[{"name":""}]}]}',
+  },
+  {
+    'a reported branch whose base is no commit id',
+    '{"repository":"<repository>","focused":true,"shows_reported":false,"reported":[],"scope":{"top":"<worktree>"},"nodes":[{"top":"<worktree>","branches":[{"name":"feature/b","base":"HEAD"}]}]}',
+  },
 }
 
 T['a malformed record'] = MiniTest.new_set({ parametrize = MALFORMED_RECORDS })
@@ -828,33 +929,27 @@ T['a view that is gone']['drops a branch deleted since, untold, and shows the de
   eq(messages(), {})
 end
 
-T['a view that is gone']['drops the members of the reported set that are gone, untold, and keeps the others'] = function()
+T['a view that is gone']['drops the reported worktrees that are gone, untold, and keeps the others'] = function()
   local state = fixture.directory('keep-view-gone-member-state')
-  local top = start_on_repository('keep-view-gone-member', state)
-  local first = add_worktree(top, 'agent-1', 'feature/a')
-  add_branch(top, 'feature/p', 'Work p')
-  report('module', { kind = 'worktree', path = first })
-  report('module', { kind = 'branch', branch = 'feature/p' })
+  local top = start_with_two_worktrees('keep-view-gone-member', state)
+  report('module', agent_call(worktree_at(top, 'agent-1')))
+  report('module', call_for(worktree_at(top, 'agent-2'), 'T', { { name = 'feature/b' } }))
   wait_for_lines(4)
   child.stop()
-  git_repo.git(top, { 'worktree', 'remove', first })
+  git_repo.git(top, { 'worktree', 'remove', worktree_at(top, 'agent-1') })
 
   restart_on(top, SESSION_A, state)
 
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Branch feature/p', last_commit_line(top, 'feature/p', 'Work p') }
-  )
+  expect_pane_lines('module', 'commits', bare_worktree('agent-2', 'feature/b'))
   expect_record_without(state, 'agent-1')
   eq(messages(), {})
 end
 
-T['a view that is gone']['shows the default view, untold, when the whole reported set is gone'] = function()
+T['a view that is gone']['shows the default view, untold, when the whole reported work is gone'] = function()
   local state = fixture.directory('keep-view-gone-set-state')
   local top = start_on_repository('keep-view-gone-set', state)
   local first = add_worktree(top, 'agent-1', 'feature/a')
-  report('module', { kind = 'worktree', path = first })
+  report('module', agent_call(first))
   expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
   child.stop()
   git_repo.git(top, { 'worktree', 'remove', first })
@@ -866,11 +961,11 @@ T['a view that is gone']['shows the default view, untold, when the whole reporte
   eq(messages(), {})
 end
 
-T['a view that is gone']['keeps the reported set when the worktree picked behind it is gone'] = function()
+T['a view that is gone']['keeps the reported work when the worktree picked behind it is gone'] = function()
   local state = fixture.directory('keep-view-gone-behind-state')
   local top = start_with_two_worktrees('keep-view-gone-behind', state)
   pick('module', 2)
-  report('module', { kind = 'worktree', path = worktree_at(top, 'agent-1') })
+  report('module', agent_call(worktree_at(top, 'agent-1')))
   expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
   child.stop()
   git_repo.git(top, { 'worktree', 'remove', worktree_at(top, 'agent-2') })
@@ -939,11 +1034,11 @@ T['two sessions']['are told apart by a pane that follows another session than be
   eq(messages(), {})
 end
 
-T['a view that is gone']['shows the default view, untold, when the reported set is gone, and the pick behind it at \\g'] = function()
+T['a view that is gone']['shows the default view, untold, when the reported work is gone, and the pick behind it at \\g'] = function()
   local state = fixture.directory('keep-view-gone-set-behind-state')
   local top = start_with_two_worktrees('keep-view-gone-set-behind', state)
   pick('module', 2)
-  report('module', { kind = 'worktree', path = worktree_at(top, 'agent-1') })
+  report('module', agent_call(worktree_at(top, 'agent-1')))
   expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
   child.stop()
   git_repo.git(top, { 'worktree', 'remove', worktree_at(top, 'agent-1') })
@@ -1020,12 +1115,16 @@ T['a restart']['leaves the view kept untouched while the worktrees and branches 
   expect_pane_lines('module', 'commits', bare_worktree('agent-2', 'feature/b'))
 end
 
-T['a restart']['reads the branch of the reported set it shows after the pane read its own lists'] = function()
+T['a restart']['reads the reported branch it shows after the pane read its own lists'] = function()
   local state = fixture.directory('keep-view-late-state')
   local top = start_on_repository('keep-view-late', state)
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
   add_branch(top, 'feature/p', 'Work p')
-  report('module', { kind = 'branch', branch = 'feature/p' })
-  local reported = { 'Branch feature/p', last_commit_line(top, 'feature/p', 'Work p') }
+  report('module', call_for(agent, 'T', { { name = 'feature/a' }, { name = 'feature/p' } }))
+  local reported = vim.list_extend(
+    bare_worktree('agent-1', 'feature/a'),
+    { 'Branch feature/p', last_commit_line(top, 'feature/p', 'Work p') }
+  )
   expect_pane_lines('module', 'commits', reported)
   restart_editor()
   child.lua(HOLD_BRANCH_LISTING)
@@ -1063,7 +1162,7 @@ T['a restart']['gives way to a pick made while the view kept is read back'] = fu
   expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
 end
 
-T['a restart']['gives way to a reported set made before the session was followed, though nothing shows it'] = function()
+T['a restart']['gives way to reported work made before the session was followed, though nothing shows it'] = function()
   local state = fixture.directory('keep-view-early-set-state')
   local top = start_on_repository('keep-view-early-set', state)
   add_worktree(top, 'agent-1', 'feature/a')
@@ -1077,13 +1176,13 @@ T['a restart']['gives way to a reported set made before the session was followed
   child.lua(COUNT_BRANCH_LISTINGS)
   start_copy('module', top)
   expect_pane_lines('module', 'commits', DEFAULT_VIEW_WITH_THREE)
-  report('module', { kind = 'worktree', path = worktree_at(top, 'agent-1') })
+  report('module', agent_call(worktree_at(top, 'agent-1')))
   expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
-  pick('module', 4)
+  pick('module', 6)
   expect_pane_lines('module', 'commits', bare_worktree('agent-2', 'feature/b'))
   git_repo.git(top, { 'worktree', 'remove', worktree_at(top, 'agent-2') })
   local reported_default_view = vim.list_extend(
-    { 'Reported', 'worktree feature/a from ? now' },
+    { 'Reported', 'T now', '  agent-1', '    feature/a * from ?' },
     default_view_with(bare_worktree('agent-1', 'feature/a'), bare_worktree('agent-3', 'feature/c'))
   )
   expect_pane_lines('module', 'commits', reported_default_view)

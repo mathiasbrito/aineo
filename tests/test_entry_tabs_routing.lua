@@ -532,6 +532,15 @@ local function messages_holding(part)
   )
 end
 
+--- An agent's call `T` for the worktree at `path`, listing `feature/a`
+--- made from its `HEAD`.
+---
+---@param path string
+---@return table
+local function agent_call(path)
+  return { worktree = path, label = 'T', branches = { { name = 'feature/a', base = 'HEAD' } } }
+end
+
 --- The first line of the commits buffer of the changes pane of the child's
 --- tab numbered `number` in the order the tabs were made.
 ---
@@ -552,8 +561,7 @@ T['an announcement']['of the second tab’s Claude Code goes to the second tab w
   local _, _, second = open_two_tabs('tabs-announce')
   child.cmd('tabfirst')
 
-  local taken =
-    announce_to_child({ kind = 'worktree', path = worktree }, claude_session.start_token(second, 1))
+  local taken = announce_to_child(agent_call(worktree), claude_session.start_token(second, 1))
 
   eq(taken, true)
   git_repo.wait_until('the announcement told', function()
@@ -580,7 +588,7 @@ T['an announcement']['beyond 32 waiting in a tab is not taken'] = function()
     [[(function(directory, token)
       local taken = {}
       for index = 1, 33 do
-        local work = { kind = 'worktree', path = directory .. '/never-made-' .. index }
+        local work = { worktree = directory .. '/never-made-' .. index, label = 'T', branches = {} }
         taken[index] = require('aineo.mcp').receive_work_announcement(work, token)
       end
       return taken
@@ -595,7 +603,7 @@ T['an announcement']['of the current tab’s Claude Code is told without a tab n
   local worktree = in_repository_with_a_worktree('tabs-announce-current')
   local _, _, second = open_two_tabs('tabs-announce-current')
 
-  announce_to_child({ kind = 'worktree', path = worktree }, claude_session.start_token(second, 1))
+  announce_to_child(agent_call(worktree), claude_session.start_token(second, 1))
 
   git_repo.wait_until('the announcement told', function()
     return #messages_holding('started work') > 0
@@ -609,7 +617,7 @@ T['an announcement']['whose start token no tab’s Claude Code has is declined']
   local worktree = in_repository_with_a_worktree('tabs-announce-unknown')
   open_two_tabs('tabs-announce-unknown')
 
-  local taken = announce_to_child({ kind = 'worktree', path = worktree }, 'no-such-token')
+  local taken = announce_to_child(agent_call(worktree), 'no-such-token')
 
   eq(taken, false)
 end

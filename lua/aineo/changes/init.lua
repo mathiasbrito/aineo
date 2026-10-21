@@ -29,16 +29,18 @@
 --- another, it is no longer listed, or a Claude Code session is followed
 --- after another; `toggle_focused_view()` (`\g`) switches between
 --- that view and the default one, from the pane's own windows, and reads the
---- pane again while it is shown (`aineo.changes.scope`). The worktrees and
---- branches the agents of the tab's Claude Code report
---- (`add_reported_work()`) and git lists, matched for up to 60 s, make the
---- reported set: each joins it and makes it the focused view, every member
---- under its own heading, until git no longer lists it or another session
---- is followed; each is read from the base its report gives, listed atop the
---- default view in a Reported section, newest first, where Enter on its line
---- shows it alone (`aineo.changes.reports`), and offered first by `s`, before
---- the set as a whole. What `s` picked, the reported set
---- and whether the focused view showed are kept for the Claude Code session
+--- pane again while it is shown (`aineo.changes.scope`). The worktrees the
+--- agents of the tab's Claude Code report, each with the branches they work
+--- on there (`add_reported_work()`), and git lists, matched for up to 60 s,
+--- make the reported work: a worktree new to it makes it the focused view,
+--- each worktree and each branch its worktree has not checked out under its
+--- own heading, until git no longer lists it or another session is
+--- followed; each branch is read from the base its report gives. It is
+--- listed atop the default view in a Reported section, a tree of labels,
+--- worktrees and branches, newest first, where Enter on a line shows what it
+--- names alone (`aineo.changes.reports`), and offered first by `s`, the same
+--- tree, before all of it. What `s` picked, the reported worktrees and
+--- whether the focused view showed are kept for the Claude Code session
 --- followed, beside its base and saves, and shown again once that session is
 --- followed again (`aineo.changes.kept`). What the focused view shows alone
 --- is read with `focused_work()` and watched with `watch_focused_work()`,

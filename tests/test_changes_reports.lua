@@ -12,20 +12,42 @@ local NOW = 1800000000
 --- A full commit id, the base of the reports below.
 local BASE = '0123456789abcdef0123456789abcdef01234567'
 
---- The worktree `agent-1` on `feature/a`, as the commits window lists it.
+--- The editor's own worktree's top level.
+local OWN_TOP = '/projects/main'
+
+--- The worktree `agent-1` on `feature/a`, as git lists it.
 local AGENT = { top = '/projects/agent-1', branch = 'feature/a' }
 
+--- The nodes of the Reported section: the worktree `agent-1`, labelled
+--- `T111 reported tree` and reported 5 minutes ago, with the branches
+--- `feature/b`, not checked out, and `feature/a`, checked out; and the
+--- worktree `agent-2`, on `feature/c`, that aineo's hook reported 2 hours
+--- ago, with no base for its branch.
+local NODES = {
+  {
+    worktree = AGENT,
+    label = 'T111 reported tree',
+    at = NOW - 300,
+    branches = { { name = 'feature/b', base = BASE }, { name = 'feature/a', base = BASE } },
+  },
+  {
+    worktree = { top = '/projects/agent-2', branch = 'feature/c' },
+    at = NOW - 2 * 3600,
+    branches = { { name = 'feature/c' } },
+  },
+}
+
 --- What the commits window knows of a session with no commit and no other
---- worktree, the reports `reports` given.
+--- worktree, the lines of the Reported section `reported` given.
 ---
----@param reports table[]
+---@param reported aineo.changes.TreeLine[]
 ---@return aineo.changes.CommitsView
-local function view_with(reports)
+local function view_with(reported)
   return {
     lists_filters = true,
     since = { commits = {}, base_is_ancestor = true },
     worktrees = { sections = {} },
-    reports = reports,
+    reported = reported,
     now = NOW,
   }
 end
@@ -40,186 +62,158 @@ T['the Reported section']['is not listed while the session has no report'] = fun
   eq(page.text, { 'Uncommitted', 'Session work', 'No commits on this session' })
 end
 
-T['the Reported section']['lists each report above Uncommitted, in the order given, one line each'] = function()
-  local reports = {
-    {
-      member = { worktree = AGENT },
-      report = { kind = 'worktree', base = BASE, label = 'T108 reported work', at = NOW - 300 },
-    },
-    {
-      member = { branch = { name = 'feature/b' } },
-      report = { kind = 'branch', base = BASE, at = NOW - 2 * 3600 },
-    },
-  }
-
-  local page = lines.commits_window(view_with(reports))
+T['the Reported section']['lists the tree above Uncommitted: each label, its worktrees below, their branches below them'] = function()
+  local page = lines.commits_window(view_with(report_rules.tree_lines(NODES, OWN_TOP)))
 
   eq(page.text, {
     'Reported',
-    'worktree feature/a from 0123456 T108 reported work 5m',
-    'branch feature/b from 0123456 2h',
+    'T111 reported tree 5m',
+    '  agent-1',
+    '    feature/b from 0123456',
+    '    feature/a * from 0123456',
+    '(no label) 2h',
+    '  agent-2',
+    '    feature/c * from ?',
     'Uncommitted',
     'Session work',
     'No commits on this session',
   })
 end
 
-T['the Reported section']['colours its heading, and each line’s base, label and age, in their groups'] = function()
-  local reports = {
-    {
-      member = { worktree = AGENT },
-      report = { kind = 'worktree', base = BASE, label = 'T108 reported work', at = NOW - 300 },
-    },
-  }
+T['the Reported section']['colours its heading, each label and age, worktree, branch and base in their groups'] = function()
+  local page = lines.commits_window(view_with(report_rules.tree_lines(NODES, OWN_TOP)))
 
-  local page = lines.commits_window(view_with(reports))
-
-  eq({ page.colours[1], page.colours[2] }, {
+  eq(vim.list_slice(page.colours, 1, 8), {
     { { first_column = 0, end_column = 8, group = 'AineoChangesReportedHeading' } },
     {
-      { first_column = 24, end_column = 31, group = 'AineoChangesCommitId' },
-      { first_column = 32, end_column = 50, group = 'AineoChangesReportedLabel' },
-      { first_column = 51, end_column = 53, group = 'AineoChangesReportedAge' },
+      { first_column = 0, end_column = 18, group = 'AineoChangesReportedLabel' },
+      { first_column = 19, end_column = 21, group = 'AineoChangesReportedAge' },
     },
+    { { first_column = 2, end_column = 9, group = 'AineoChangesReportedWorktree' } },
+    {
+      { first_column = 4, end_column = 13, group = 'AineoChangesReportedBranch' },
+      { first_column = 19, end_column = 26, group = 'AineoChangesCommitId' },
+    },
+    {
+      { first_column = 4, end_column = 13, group = 'AineoChangesReportedBranch' },
+      { first_column = 21, end_column = 28, group = 'AineoChangesCommitId' },
+    },
+    {
+      { first_column = 0, end_column = 10, group = 'AineoChangesReportedLabel' },
+      { first_column = 11, end_column = 13, group = 'AineoChangesReportedAge' },
+    },
+    { { first_column = 2, end_column = 9, group = 'AineoChangesReportedWorktree' } },
+    { { first_column = 4, end_column = 13, group = 'AineoChangesReportedBranch' } },
   })
 end
 
-T['the Reported section']['lists on each line the whole change of its work, and what Enter picks'] = function()
-  local reports = {
-    {
-      member = { worktree = AGENT },
-      report = { kind = 'worktree', base = BASE, label = 'T108 reported work', at = NOW },
-    },
-    { member = { branch = { name = 'feature/b' } }, report = { kind = 'branch', base = BASE } },
-  }
+T['the Reported section']['lists on each line what it chooses, and what Enter picks'] = function()
+  local tree = report_rules.tree_lines(NODES, OWN_TOP)
 
-  local page = lines.commits_window(view_with(reports))
+  local page = lines.commits_window(view_with(tree))
 
-  eq({ page.entries[1], page.entries[2], page.entries[3] }, {
-    nil,
+  eq(vim.list_slice(page.entries, 2, 5), {
+    { picks = { group = 'T111 reported tree', text = '[reported] T111 reported tree 5m' } },
     {
       key = '/projects/agent-1\0\0worktree',
       filter = { kind = 'worktree', worktree = AGENT },
       worktree = AGENT,
-      picks = {
-        top = '/projects/agent-1',
-        text = '[reported] feature/a from 0123456  T108 reported work',
-      },
+      picks = { top = AGENT.top, text = '[reported]   agent-1' },
     },
     {
       key = '\0branch\0feature/b',
       filter = { kind = 'branch', branch = 'feature/b' },
-      picks = { branch = 'feature/b', text = '[reported] feature/b from 0123456' },
+      picks = { branch = 'feature/b', text = '[reported]     feature/b from 0123456' },
+    },
+    {
+      key = '/projects/agent-1\0\0worktree',
+      filter = { kind = 'worktree', worktree = AGENT },
+      worktree = AGENT,
+      picks = { top = AGENT.top, text = '[reported]     feature/a * from 0123456' },
     },
   })
 end
 
-T['the Reported section']['shows the base its work was last read from, in place of the reported one'] = function()
+T['the Reported section']['chooses the editor’s own work on its own worktree’s lines'] = function()
+  local own = {
+    worktree = { top = OWN_TOP, branch = 'main' },
+    at = NOW,
+    branches = { { name = 'main', base = BASE } },
+  }
+
+  local page = lines.commits_window(view_with(report_rules.tree_lines({ own }, OWN_TOP)))
+
+  eq({ page.entries[3], page.entries[4] }, {
+    {
+      key = '\0session_work',
+      filter = { kind = 'session_work' },
+      picks = { own = true, text = '[reported]   main' },
+    },
+    {
+      key = '\0session_work',
+      filter = { kind = 'session_work' },
+      picks = { own = true, text = '[reported]     main * from 0123456' },
+    },
+  })
+end
+
+T['the Reported section']['shows each branch’s base its work was last read from, in place of the reported one'] = function()
   local read_from = ('c'):rep(40)
-  local reports = {
-    {
-      member = {
-        worktree = {
-          top = AGENT.top,
-          branch = AGENT.branch,
-          base = read_from,
-          listed = { commits = {} },
-        },
-      },
-      report = { kind = 'worktree', base = BASE, at = NOW },
-    },
-    {
-      member = { branch = { name = 'feature/b', tip = BASE, base = read_from, commits = {} } },
-      report = { kind = 'branch', base = BASE, at = NOW },
-    },
-  }
+  local tree = report_rules.tree_lines(NODES, OWN_TOP)
+  tree[3].read_base = read_from
 
-  local page = lines.commits_window(view_with(reports))
+  local page = lines.commits_window(view_with(tree))
 
   eq(
-    { page.text[2], page.text[3] },
-    { 'worktree feature/a from ccccccc now', 'branch feature/b from ccccccc now' }
+    { page.text[4], page.text[5] },
+    { '    feature/b from ccccccc', '    feature/a * from 0123456' }
   )
 end
 
-T['the Reported section']['names a detached worktree by its folder'] = function()
-  local reports = {
+T['the Reported section']['quotes a folder’s and a branch’s name as a path, and shows a control character of the label as a space'] = function()
+  local nodes = {
     {
-      member = { worktree = { top = '/projects/agent-2' } },
-      report = { kind = 'worktree', base = BASE, at = NOW },
+      worktree = { top = '/projects/agent\n3', branch = 'odd\tname' },
+      label = 'a\tb\27c',
+      branches = { { name = 'odd\tname', base = BASE } },
     },
   }
 
-  local page = lines.commits_window(view_with(reports))
+  local page = lines.commits_window(view_with(report_rules.tree_lines(nodes, OWN_TOP)))
 
-  eq(page.text[2], 'worktree agent-2 from 0123456 now')
-end
-
-T['the Reported section']['says from ? for a report kept before reports gave a base, and no age when untimed'] = function()
-  local reports = { { member = { worktree = AGENT }, report = { kind = 'worktree' } } }
-
-  local page = lines.commits_window(view_with(reports))
-
-  eq(page.text[2], 'worktree feature/a from ?')
-end
-
-T['the Reported section']['shows a control character of the label as a space'] = function()
-  local reports = {
-    {
-      member = { worktree = AGENT },
-      report = { kind = 'worktree', base = BASE, label = 'a\tb\27c', at = NOW },
-    },
-  }
-
-  local page = lines.commits_window(view_with(reports))
-
-  eq(page.text[2], 'worktree feature/a from 0123456 a b c now')
-end
-
-T['the order'] = MiniTest.new_set()
-
-T['the order']['is newest first, an untimed report after every timed one, later before earlier'] = function()
-  local entries = {
-    { member = { branch = { name = 'a' } }, report = { kind = 'branch', at = NOW - 60 } },
-    { member = { branch = { name = 'b' } }, report = { kind = 'branch' } },
-    { member = { branch = { name = 'c' } }, report = { kind = 'branch', at = NOW } },
-    { member = { branch = { name = 'd' } }, report = { kind = 'branch', at = NOW - 60 } },
-    { member = { branch = { name = 'e' } }, report = { kind = 'branch' } },
-  }
-
-  local ordered = report_rules.newest_first(entries)
-
-  eq(
-    vim.tbl_map(function(entry)
-      return entry.member.branch.name
-    end, ordered),
-    { 'c', 'd', 'a', 'e', 'b' }
-  )
+  eq(vim.list_slice(page.text, 2, 4), {
+    'a b c',
+    '  "agent\\n3"',
+    '    "odd\\tname" * from 0123456',
+  })
 end
 
 T['the list s offers'] = MiniTest.new_set()
 
-T['the list s offers']['holds each report first, then all reported work, then the worktrees and branches'] = function()
-  local report_items = {
-    { branch = 'feature/b', text = '[reported] feature/b from 0123456' },
-    { top = AGENT.top, text = '[reported] feature/a from 0123456  T108' },
-  }
-  local reported = { { worktree = AGENT }, { branch = { name = 'feature/b' } } }
+T['the list s offers']['holds the tree first, each item as its line, then all reported work, then the worktrees and branches'] = function()
+  local report_items = vim.tbl_map(function(line)
+    return lines.report_item(line, NOW)
+  end, report_rules.tree_lines(NODES, OWN_TOP))
   local others = { sections = { AGENT } }
   local candidates = {
     branches = { { name = 'main' }, { name = 'feature/b' }, { name = 'lonely' } },
     worktrees = { { top = '/projects/main', branch = 'main' }, AGENT },
   }
 
-  local items = scope.items_of(others, candidates, reported, report_items)
+  local items = scope.items_of(others, candidates, #NODES, report_items)
 
   eq(
     vim.tbl_map(function(item)
       return item.text
     end, items),
     {
-      '[reported] feature/b from 0123456',
-      '[reported] feature/a from 0123456  T108',
+      '[reported] T111 reported tree 5m',
+      '[reported]   agent-1',
+      '[reported]     feature/b from 0123456',
+      '[reported]     feature/a * from 0123456',
+      '[reported] (no label) 2h',
+      '[reported]   agent-2',
+      '[reported]     feature/c * from ?',
       '[reported] All reported work (2)',
       '[worktree] agent-1 (feature/a)',
       '[branch] feature/b',
@@ -287,63 +281,6 @@ T['the base a report is read from']['is the pane’s own for a report that gave 
     report_rules.effective_base(nil, OWN, { reported_in_tip = false, own_before_reported = false }),
     OWN
   )
-end
-
-T['a report made again'] = MiniTest.new_set()
-
---- Reports of one worktree: two calls of the tool, and two of aineo's hook.
-local CALL_1 = { kind = 'worktree', base = BASE, label = 'first', at = NOW - 60 }
-local CALL_2 = { kind = 'branch', base = ('f'):rep(40), label = 'second', at = NOW }
-local HOOK_1 = { kind = 'worktree', base = BASE, at = NOW - 60, by_hook = true }
-local HOOK_2 = { kind = 'worktree', base = ('e'):rep(40), at = NOW, by_hook = true }
-
-T['a report made again']['with none before is the report, the tool’s or the hook’s'] = function()
-  eq({ report_rules.merged(nil, CALL_1), report_rules.merged(nil, HOOK_1) }, { CALL_1, HOOK_1 })
-end
-
-T['a report made again']['by the tool replaces any before; by the hook keeps the one before'] =
-  MiniTest.new_set({
-    parametrize = {
-      { CALL_1, CALL_2, CALL_2 },
-      { HOOK_1, CALL_2, CALL_2 },
-      { CALL_1, HOOK_2, CALL_1 },
-      { HOOK_1, HOOK_2, HOOK_1 },
-    },
-  })
-
-T['a report made again']['by the tool replaces any before; by the hook keeps the one before']['given'] = function(
-  before,
-  again,
-  kept
-)
-  eq(report_rules.merged(before, again), kept)
-end
-
-T['a report made again']['by the hook for a branch made in that work takes the branch and its base, the label kept'] = function()
-  local before =
-    { kind = 'worktree', base = BASE, label = 'task', at = NOW - 60, on_branch = 'feature/a' }
-  local again =
-    { kind = 'branch', base = ('e'):rep(40), at = NOW, by_hook = true, on_branch = 'feature/b' }
-
-  local kept = report_rules.merged(before, again)
-
-  eq(kept, {
-    kind = 'worktree',
-    base = ('e'):rep(40),
-    label = 'task',
-    at = NOW,
-    by_hook = true,
-    on_branch = 'feature/b',
-  })
-end
-
-T['a report made again']['by the hook on the branch the work was on keeps the one before'] = function()
-  local before =
-    { kind = 'worktree', base = BASE, label = 'task', at = NOW - 60, on_branch = 'feature/a' }
-  local again =
-    { kind = 'branch', base = ('e'):rep(40), at = NOW, by_hook = true, on_branch = 'feature/a' }
-
-  eq(report_rules.merged(before, again), before)
 end
 
 return T

@@ -100,7 +100,7 @@ end
 ---@field refresh_shown_pane fun()
 ---@field toggle_focused_view fun() reads the shown pane again, and, with the cursor in one of its windows, switches it between its default view and the focused view
 ---@field add_reported_work fun(work: aineo.changes.ReportedWork, tell: fun(message: string)): boolean whether the home took the report
----@field resolve_reported_base fun(work: aineo.changes.ReportedWork, done: fun(commit: string|nil, refusal: string|nil)) resolves a report's base to its full id in the work's folder, else in the session's repository, or says why it is refused
+---@field resolve_reported_work fun(work: aineo.changes.ReportedWork, done: fun(resolved: aineo.changes.ReportedWork|nil, refusal: string|nil)) checks a report's branches are local branches and resolves each base to its full id in the worktree's folder, else in the session's repository, or says why it is refused
 ---@field pane_buffers fun(): { files: integer, commits: integer }
 ---@field close_shown_diff fun() closes the windows of the current tab page that show a diff the home showed, and tells once when none was closed
 ---@field focused_work fun(): aineo.changes.FocusedWork|nil what the focused view shows alone, nil for the default view
@@ -181,11 +181,12 @@ function M.new(label)
   ---@field commits_others aineo.changes.OtherWorktrees what the commits window knows of the other worktrees
   ---@field scope? aineo.changes.Scope the other worktree or the local branch the user picked to show alone, kept while the default view is shown too
   ---@field branch? aineo.changes.BranchSection what the commits window last read of the branch the scope names; nil while it has read none, and for any other scope
-  ---@field focused boolean whether the commits window shows the focused view — the scope alone, or the reported set — in place of the default view; false while there is neither
-  ---@field reported aineo.changes.ScopeMember[] the reported set: the worktrees and branches the agents of the tab's Claude Code reported and git listed, each once, in the order first reported
-  ---@field shows_reported boolean whether the focused view is the reported set, chosen last, rather than the scope
-  ---@field reports table<string, aineo.changes.Report> what was reported of each member of the reported set, by its key (`scope.member_key()`)
-  ---@field waiting aineo.changes.WaitingReport[] the reports git did not list yet, each matched again at every read until its timer lets it go
+  ---@field focused boolean whether the commits window shows the focused view — the scope alone, or the reported work — in place of the default view; false while there is neither
+  ---@field nodes aineo.changes.ReportedNode[] the Reported section's worktrees, the agents of the tab's Claude Code reported and git lists, in the order their last reports were taken (`aineo.changes.reports`)
+  ---@field reported_branches table<string, aineo.changes.BranchSection> what the commits window last read of each reported branch no reported worktree has checked out, by name
+  ---@field shows_reported boolean whether the focused view is the reported work, chosen last, rather than the scope
+  ---@field shown_label? string while the focused view is the reported work, the label of the worktrees it shows, `''` for those with none; nil for every worktree
+  ---@field waiting aineo.changes.WaitingReport[] the reports git did not list yet, by worktree, each matched again at every read until its timer lets it go
   ---@field kept_view? aineo.changes.KeptView the view as last kept for the session followed, or as it was when the pane began following it; nil until the pane follows a session in a repository it found, and while it follows none
   ---@field restoring_view? boolean whether the view kept for the session followed is being read back, which keeps what the pane shows from being kept over it
   ---@field saved table<string, true> the files the user saved under the base, by path relative to the top level: since the session began, or the Claude Code session's followed; none saved while no repository was found
@@ -284,10 +285,49 @@ function M.new(label)
     })
   end
 
+  --- The top level of the editor's own worktree, nil before the session's
+  --- repository is found.
+  ---
+  ---@return string|nil
+  local function own_top()
+    return session.repository and session.repository.top
+  end
+
+  --- The node of the Reported section whose worktree's top level is `top`;
+  --- nil when none is.
+  ---
+  ---@param top string
+  ---@return aineo.changes.ReportedNode|nil
+  local function node_at(top)
+    return vim.iter(session.nodes):find(function(node)
+      return node.worktree.top == top
+    end)
+  end
+
+  --- What the focused view shows of the reported work, each worktree as the
+  --- commits window last listed it, else as git listed it when it was
+  --- reported, and each branch read alone as the commits window last read
+  --- it (`reports.work_of()`): every worktree's, or, while `shown_label`
+  --- names one, those of that label alone.
+  ---
+  ---@param shown_label string|nil
+  ---@return aineo.changes.ScopeMember[]
+  local function reported_members(shown_label)
+    local nodes = shown_label and reports.labelled(session.nodes, shown_label) or session.nodes
+    return vim.tbl_map(function(pick)
+      if pick.top then
+        local section = scope.section_on(session.commits_others, pick.top)
+        return { worktree = section or node_at(pick.top).worktree }
+      end
+      return { branch = session.reported_branches[pick.branch] or { name = pick.branch } }
+    end, reports.work_of(nodes, own_top()))
+  end
+
   --- What the commits window shows alone while the focused view is the one
-  --- shown: the reported set, when it is the focused view, each member as
-  --- the commits window last read it; else the worktree or branch of the
-  --- session's scope; nil for the default view.
+  --- shown: the reported work, when it is the focused view
+  --- (`reported_members()`); else the worktree or branch of the session's
+  --- scope; nil for the default view, and for reported work that shows
+  --- nothing alone.
   ---
   ---@return aineo.changes.ScopeMember[]|nil
   local function scope_shown()
@@ -295,7 +335,8 @@ function M.new(label)
       return nil
     end
     if session.shows_reported then
-      return scope.members_reported(session.reported, session.commits_others)
+      local members = reported_members(session.shown_label)
+      return #members > 0 and members or nil
     end
     if not session.scope then
       return nil
@@ -303,29 +344,41 @@ function M.new(label)
     return scope.members_shown(session.scope, session.commits_others, session.branch)
   end
 
-  --- The reports of the reported set, newest first (`reports.newest_first()`),
-  --- each beside its member as the focused view shows it
-  --- (`scope.members_reported()`).
+  --- The base the work of `line`, a branch's line of the Reported section,
+  --- was last read from: its worktree's, as the commits window last listed
+  --- it, while that worktree has it checked out; else the branch's own, as
+  --- the commits window last read it alone; nil while it has read neither.
   ---
-  ---@return aineo.changes.ReportedEntry[]
-  local function reported_entries()
-    local members = scope.members_reported(session.reported, session.commits_others)
-    local entries = {}
-    for position, member in ipairs(members) do
-      local report = session.reports[scope.member_key(session.reported[position])]
-      table.insert(entries, {
-        member = member,
-        report = report or { kind = member.worktree and 'worktree' or 'branch' },
-      })
+  ---@param line aineo.changes.TreeLine
+  ---@return string|nil
+  local function read_base_of(line)
+    if line.checked_out then
+      local section = scope.section_on(session.commits_others, line.node.worktree.top)
+      return section and section.listed and section.base or nil
     end
-    return reports.newest_first(entries)
+    local read = session.reported_branches[line.branch.name]
+    return read and read.tip and read.base or nil
+  end
+
+  --- The lines of the Reported section (`reports.tree_lines()`), each
+  --- branch's with the base its work was last read from
+  --- (`read_base_of()`).
+  ---
+  ---@return aineo.changes.TreeLine[]
+  local function reported_lines()
+    return vim.tbl_map(function(line)
+      if line.branch then
+        line.read_base = read_base_of(line)
+      end
+      return line
+    end, reports.tree_lines(session.nodes, own_top()))
   end
 
   --- The commits window's page for what the session knows: why it has no
   --- repository, when it has none; the commit graph, while it is shown
   --- (`aineo.changes.graph`), in place of the whole list, the Reported
   --- section included; or its commits, under the Reported section in the
-  --- default view (`reported_entries()`).
+  --- default view (`reported_lines()`).
   ---
   ---@return aineo.changes.Page
   local function commits_page()
@@ -339,7 +392,7 @@ function M.new(label)
       })
     end
     return lines.commits_window({
-      reports = reported_entries(),
+      reported = reported_lines(),
       scope = scope_shown(),
       since = session.commits,
       base = session.base,
@@ -511,9 +564,8 @@ function M.new(label)
     local view = scope.kept_view_of(session.repository.top, {
       scope = session.scope,
       focused = session.focused,
-      reported = session.reported,
+      nodes = session.nodes,
       shows_reported = session.shows_reported,
-      reports = session.reports,
     })
     if vim.deep_equal(view, session.kept_view) then
       return
@@ -534,7 +586,7 @@ function M.new(label)
       return nil
     end
     if session.shows_reported then
-      local first = session.reported[1]
+      local first = reported_members(session.shown_label)[1]
       if not first then
         return nil
       end
@@ -620,39 +672,47 @@ function M.new(label)
     return #others.sections > 0 or others.failure ~= nil
   end
 
-  --- The base reported for the member of the reported set `matches` finds,
-  --- nil when it finds none or its report gave no base.
+  --- The base reported for the branch `name` in `node`, nil when the node
+  --- holds no such branch or its report gave no base.
   ---
-  ---@param matches fun(member: aineo.changes.ScopeMember): boolean
+  ---@param node aineo.changes.ReportedNode|nil
+  ---@param name string|nil
   ---@return string|nil
-  local function reported_base_of(matches)
-    local member = vim.iter(session.reported):find(matches)
-    local report = member and session.reports[scope.member_key(member)]
-    return report and report.base
+  local function base_in_node(node, name)
+    local reported = node
+      and vim.iter(node.branches):find(function(listed)
+        return listed.name == name
+      end)
+    return reported and reported.base
   end
 
-  --- The base an agent reported for the worktree at `top`, which the pane
-  --- reads it from in place of its own (`aineo.changes.worktrees`'
-  --- `base_of`); nil when none was reported.
-  ---
-  ---@param top string
-  ---@return string|nil
-  local function reported_base_of_worktree(top)
-    return reported_base_of(function(member)
-      return member.worktree ~= nil and member.worktree.top == top
-    end)
-  end
-
-  --- The base an agent reported for the local branch `name`, which the pane
-  --- reads it from in place of its own (`aineo.changes.branch`'s `base`);
+  --- The base reported for the branch `worktree`, a worktree as git lists
+  --- it, has checked out, in the node of that worktree, which the pane reads
+  --- it from in place of its own (`aineo.changes.worktrees`' `base_of`);
   --- nil when none was reported.
+  ---
+  ---@param worktree aineo.git.Worktree
+  ---@return string|nil
+  local function reported_base_of_worktree(worktree)
+    return base_in_node(node_at(worktree.top), worktree.branch)
+  end
+
+  --- The base reported for the local branch `name` in the newest node that
+  --- holds it, which the pane reads it from in place of its own
+  --- (`aineo.changes.branch`'s `base`); nil when none was reported.
   ---
   ---@param name string
   ---@return string|nil
   local function reported_base_of_branch(name)
-    return reported_base_of(function(member)
-      return member.branch ~= nil and member.branch.name == name
-    end)
+    for _, group in ipairs(reports.groups(session.nodes)) do
+      for _, node in ipairs(group.nodes) do
+        local base = base_in_node(node, name)
+        if base then
+          return base
+        end
+      end
+    end
+    return nil
   end
 
   --- What one window of the pane reads, and how it keeps and shows it.
@@ -810,7 +870,7 @@ function M.new(label)
   end
 
   --- What the commits window last read of the local branch `name`: of the
-  --- branch the scope names, or of a branch of the reported set; nil while
+  --- branch the scope names, or of a reported branch read alone; nil while
   --- it has read none.
   ---
   ---@param name string|nil
@@ -819,11 +879,9 @@ function M.new(label)
     if session.branch and session.branch.name == name then
       return session.branch
     end
-    for _, member in ipairs(session.reported) do
-      local read = member.branch
-      if read and read.name == name and (read.tip ~= nil or read.failure ~= nil) then
-        return member.branch
-      end
+    local read = name and session.reported_branches[name]
+    if read and (read.tip ~= nil or read.failure ~= nil) then
+      return read
     end
     return nil
   end
@@ -953,7 +1011,7 @@ function M.new(label)
   --- window now knows of the other worktrees, lists its worktree, or, when it
   --- lists it no more, clears the scope with the focused view and tells the
   --- user, once, that the worktree is gone (`aineo.changes.scope`) — but
-  --- while the reported set is the focused view, which stays, the scope
+  --- while the reported work is the focused view, which stays, the scope
   --- behind it is cleared untold. A branch's scope is kept by what is read
   --- of the branch (`take_branch()`).
   ---
@@ -1019,7 +1077,7 @@ function M.new(label)
   --- no commit is gone: the scope is cleared with the focused view and what
   --- was kept of the branch, *Session work* is selected again when the
   --- selection was the branch's, and the user is told once
-  --- (`aineo.changes.scope`) — but while the reported set is the focused
+  --- (`aineo.changes.scope`) — but while the reported work is the focused
   --- view, which stays, the scope behind it is cleared untold. Otherwise,
   --- when the selection is a commit of the
   --- branch it no longer lists — the branch was reset or rebased — the
@@ -1088,31 +1146,41 @@ function M.new(label)
     end)
   end
 
-  --- Reads, one after another, each branch of the reported set
-  --- (`aineo.changes.branch`) and keeps what was read in its member, then
-  --- calls `done(read)`, whether there was any to read.
+  --- Reads, one after another, each reported branch no reported worktree
+  --- has checked out (`reports.work_of()`, `aineo.changes.branch`) and keeps
+  --- what was read of it, by name, letting go what was read of a branch no
+  --- longer among them; then calls `done(read)`, whether there was any to
+  --- read.
   ---
   ---@param done fun(read: boolean)
   local function read_reported_branches(done)
-    local members = vim.tbl_filter(function(member)
-      return member.branch ~= nil
-    end, session.reported)
+    local names = {}
+    for _, pick in ipairs(reports.work_of(session.nodes, own_top())) do
+      if pick.branch then
+        table.insert(names, pick.branch)
+      end
+    end
+    local kept_reads = {}
+    for _, name in ipairs(names) do
+      kept_reads[name] = session.reported_branches[name]
+    end
+    session.reported_branches = kept_reads
     local function read_from(index)
-      local member = members[index]
-      if not member then
-        done(#members > 0)
+      local name = names[index]
+      if not name then
+        done(#names > 0)
         return
       end
+      local before = session.reported_branches[name] or { name = name }
       branch.read({
         found = session.repository,
-        name = member.branch.name,
-        before = member.branch,
-        base = reported_base_of_branch(member.branch.name),
+        name = name,
+        before = before,
+        base = reported_base_of_branch(name),
         working_branch = session.settings.working_branch,
         git = session.settings.git,
       }, function(read)
-        local before = member.branch
-        member.branch = read
+        session.reported_branches[name] = read
         local selected = session.selected
         local moved = not (before.tip == read.tip and before.base == read.base)
         if selected.kind == 'branch' and selected.branch == read.name and moved then
@@ -1125,22 +1193,23 @@ function M.new(label)
   end
 
   --- Reads what reports are matched against and matches them; made below,
-  --- as it adds what it matches to the reported set and reads the commits
+  --- as it adds what it matches to the Reported section and reads the commits
   --- window again for it.
   ---@type fun(done?: fun())
   local read_reported
 
   --- What the commits window reads after the other worktrees: the branch
-  --- the scope names (`read_branch_scope()`), then the reported set's
-  --- branches (`read_reported_branches()`), then, while a report waits,
-  --- what reports are matched against (`read_reported()`); calls
-  --- `done(read)`, whether any of these read anything the window shows.
+  --- the scope names (`read_branch_scope()`), then the reported
+  --- branches (`read_reported_branches()`), then, while a report waits or
+  --- the Reported section holds a worktree, what reports are matched
+  --- against (`read_reported()`); calls `done(read)`, whether any of these
+  --- read anything the window shows.
   ---
   ---@param done fun(read: boolean)
   local function read_scope_and_reported(done)
     read_branch_scope(function(read_pick)
       read_reported_branches(function(read_reported_any)
-        if #session.waiting == 0 and #session.reported == 0 then
+        if #session.waiting == 0 and #session.nodes == 0 then
           done(read_pick or read_reported_any)
           return
         end
@@ -1231,7 +1300,7 @@ function M.new(label)
   --- reset, a rebase — *Session work* is selected again, and the files window
   --- read for it; when it is another worktree's, or that worktree is, see
   --- `reselect_in_worktrees()`. The local branch the scope names, when it
-  --- names one, and the reported set's branches, are read after the
+  --- names one, and the reported branches, are read after the
   --- worktrees, and the reports matched again (`read_scope_and_reported()`).
   --- Once the other worktrees are read, the list `s` asked for before they
   --- were is offered (`offer_once_read()`).
@@ -1589,7 +1658,7 @@ function M.new(label)
     return session.scope == nil
       and not session.focused
       and not session.shows_reported
-      and #session.reported == 0
+      and #session.nodes == 0
   end
 
   --- Begins keeping the view for the Claude Code session the pane follows,
@@ -1607,7 +1676,7 @@ function M.new(label)
       return
     end
     local repository = session.repository.top
-    local current = { focused = false, shows_reported = false, reported = {} }
+    local current = { focused = false, shows_reported = false, nodes = {} }
     session.kept_view = scope.kept_view_of(repository, current)
     local on_disk = kept.read_kept_view(followed.state_directory, followed.id)
     if not (on_disk and on_disk.repository == repository and has_no_view()) then
@@ -1630,8 +1699,7 @@ function M.new(label)
       end
       local restored = scope.restored_view(on_disk, candidates, repository)
       session.scope, session.focused = restored.scope, restored.focused
-      session.reported, session.shows_reported = restored.reported, restored.shows_reported
-      session.reports = restored.reports
+      session.nodes, session.shows_reported = restored.nodes, restored.shows_reported
       if restored.selected then
         select_filter(restored.selected)
         read_files(true)
@@ -1802,9 +1870,9 @@ function M.new(label)
       early_saves = {},
       commits_others = worktrees.NONE,
       focused = false,
-      reported = {},
+      nodes = {},
+      reported_branches = {},
       shows_reported = false,
-      reports = {},
       waiting = {},
       graph_shown = false,
       graph_cursor_unplaced = false,
@@ -1853,7 +1921,7 @@ function M.new(label)
   --- found, nothing is kept. The home keeps a copy of `followed`, whose id a
   --- hand-over renames (`hand_over_changes_session()`), and never changes
   --- the table it is given. Following another session than one followed
-  --- before clears the scope and empties the reported set, the reports
+  --- before clears the scope and empties the Reported section, the reports
   --- still waiting dropped (`drop_waiting()`), and says nothing; the first
   --- session followed keeps the scope picked before it. The view kept for the
   --- session followed, in the repository found, is shown again once read
@@ -1874,7 +1942,8 @@ function M.new(label)
     hold_unkept_base()
     if session.followed then
       session.scope, session.focused, session.branch = nil, false, nil
-      session.reported, session.shows_reported, session.reports = {}, false, {}
+      session.nodes, session.reported_branches = {}, {}
+      session.shows_reported, session.shown_label = false, nil
       drop_waiting()
     end
     session.followed = followed
@@ -2688,29 +2757,18 @@ function M.new(label)
     })
   end
 
-  --- The worktree of the reported set whose top level is `top`, as git
-  --- listed it when it was reported; nil when the set holds none.
-  ---
-  ---@param top string
-  ---@return aineo.changes.WorktreeSection|nil
-  local function reported_worktree(top)
-    local member = vim.iter(session.reported):find(function(listed)
-      return listed.worktree ~= nil and listed.worktree.top == top
-    end)
-    return member and member.worktree
-  end
-
   --- Shows the worktree `item` names alone, and chooses its whole change
   --- (`select_filter()`), which the files window then lists: as the commits
-  --- window last listed it, or, for one of the reported set it has not
-  --- listed yet, as git listed it when it was reported
-  --- (`reported_worktree()`). Any other worktree the commits window no longer
-  --- lists is told gone, and nothing changes.
+  --- window last listed it, or, for one of the Reported section it has not
+  --- listed yet, as git listed it when it was reported (`node_at()`). Any
+  --- other worktree the commits window no longer lists is told gone, and
+  --- nothing changes.
   ---
   ---@param item aineo.changes.ScopeItem
   local function show_worktree_alone(item)
+    local reported = node_at(item.top)
     local section = scope.section_on(session.commits_others, item.top)
-      or reported_worktree(item.top)
+      or (reported and reported.worktree)
     if not section then
       vim.notify(scope.picked_gone(item), vim.log.levels.INFO)
       return
@@ -2760,123 +2818,94 @@ function M.new(label)
     session.cursor_unplaced = true
   end
 
-  --- A report git has not listed yet, and how the user is told of it.
+  --- The reports of one worktree git has not listed yet, by the folder
+  --- they name, and how the user is told of them.
   ---@class aineo.changes.WaitingReport
-  ---@field work aineo.changes.ReportedWork
-  ---@field at integer when the report was taken, in seconds since the epoch (`clock_now()`)
-  ---@field tell fun(message: string) tells the user, as the tab the report is for says it
-  ---@field stop_timer fun() stops the timer that lets the report go
+  ---@field path string the worktree's folder, as the reports name it
+  ---@field works { work: aineo.changes.ReportedWork, at: integer }[] each report, in the order taken, with when it was taken, in seconds since the epoch (`clock_now()`)
+  ---@field tell fun(message: string) tells the user, as the tab the reports are for says it
+  ---@field stop_timer fun() stops the timer that lets the reports go
 
-  --- What `waiting` reported of its work, for the reported set to keep.
+  --- Settles the focused view once the reported work changed: while it is
+  --- the reported work and shows nothing alone any more, the default view
+  --- shows, chosen again for what it lists, and, when `tell_gone`, the user
+  --- is told once that the reported work is gone.
   ---
-  ---@param waiting aineo.changes.WaitingReport
-  ---@return aineo.changes.Report
-  local function report_of(waiting)
-    local work = waiting.work
-    return {
-      kind = work.kind,
-      base = work.base,
-      label = work.label,
-      at = waiting.at,
-      by_hook = work.by_hook,
-    }
-  end
-
-  --- Adds `member` to the reported set with `report`, what was reported of
-  --- it, marked with the branch the work is on now (`on_branch`): the set
-  --- becomes the focused view, shown at once, `member`'s whole change chosen,
-  --- the cursor on its heading, and the user is told once with `tell`. The
-  --- other worktrees are read again while the pane has been shown, so that
-  --- `member`'s commits show. A member the set holds already keeps its place
-  --- in the set and is told nothing: it keeps the report `reports.merged()`
-  --- gives — an agent's call replaces the one before, its time included,
-  --- and a hook's report of a branch made in that worktree gives its branch
-  --- and base — and the pane is written and read again for it. A worktree
-  --- that has a branch of the set checked out takes that branch's place,
-  --- one piece of work on one line: its report keeps the branch's label
-  --- when it gives none.
-  ---
-  ---@param member aineo.changes.ScopeMember
-  ---@param report aineo.changes.Report
-  ---@param tell fun(message: string)
-  local function add_member(member, report, tell)
-    report = vim.tbl_extend('force', report, {
-      on_branch = member.worktree and member.worktree.branch
-        or member.branch and member.branch.name,
-    })
-    local key = scope.member_key(member)
-    for _, listed in ipairs(session.reported) do
-      if scope.member_key(listed) == key then
-        session.reports[key] = reports.merged(session.reports[key], report)
-        show_commits()
-        if session.shown then
-          read_commits(false)
-        end
-        return
-      end
-    end
-    local branch_position = member.worktree
-      and member.worktree.branch
-      and vim.iter(ipairs(session.reported)):find(function(_, listed)
-        return listed.branch ~= nil and listed.branch.name == member.worktree.branch
-      end)
-    if branch_position then
-      local branch_key = scope.member_key(session.reported[branch_position])
-      local before = session.reports[branch_key] or {}
-      session.reports[branch_key] = nil
-      report = vim.tbl_extend('force', report, {
-        base = report.base or before.base,
-        label = report.label or before.label,
-      })
-      table.remove(session.reported, branch_position)
-    end
-    session.reports[key] = report
-    table.insert(session.reported, branch_position or #session.reported + 1, member)
-    session.shows_reported, session.focused = true, true
-    select_filter(
-      scope.whole_change_of(scope.members_reported({ member }, session.commits_others)[1])
-    )
-    show_commits()
-    read_files(true)
-    if session.shown then
-      read_commits(false)
-    end
-    tell(scope.started_work(member))
-  end
-
-  --- Keeps of the reported set what `candidates`, what git now lists, still
-  --- lists (`scope.still_listed()`), telling nothing of a member dropped.
-  --- Once the set is empty, the focused view is the scope again, when there
-  --- is one; and when the set was the view shown, the default view shows,
-  --- chosen again for what it lists, and the user is told once.
-  ---
-  ---@param candidates aineo.changes.BranchCandidates
-  local function keep_reported_listed_in(candidates)
-    local still = scope.still_listed(session.reported, candidates)
-    local dropped = #still < #session.reported
-    session.reported = still
-    if not dropped then
+  ---@param tell_gone boolean
+  local function settle_reported_view(tell_gone)
+    if not session.shows_reported or #reported_members(session.shown_label) > 0 then
       return
     end
-    local still_reports = {}
-    for _, member in ipairs(still) do
-      local key = scope.member_key(member)
-      still_reports[key] = session.reports[key]
-    end
-    session.reports = still_reports
-    if #still == 0 and session.shows_reported then
-      session.shows_reported = false
-      if session.focused then
-        session.focused = false
+    session.shows_reported, session.shown_label = false, nil
+    if session.focused then
+      session.focused = false
+      if tell_gone then
         vim.notify(scope.REPORTED_GONE, vim.log.levels.INFO)
       end
     end
     choose_for_shown_view()
+  end
+
+  --- Takes into the Reported section the reports `waiting` holds, of
+  --- `worktree`, the worktree git lists at the folder they name, one after
+  --- another as `reports.with_report()` lays each over the nodes. A worktree
+  --- new to the section, other than the editor's own, makes every reported
+  --- worktree the focused view, shown at once, that worktree's whole change
+  --- chosen, the cursor on its heading, and the user is told once with
+  --- `waiting.tell`; any other change is written and read again, the
+  --- focused view settled (`settle_reported_view()`). The other worktrees
+  --- are read again while the pane has been shown, so that the work's
+  --- commits show.
+  ---
+  ---@param worktree aineo.git.Worktree
+  ---@param waiting aineo.changes.WaitingReport
+  local function take_waiting(worktree, waiting)
+    local was_reported = node_at(worktree.top) ~= nil
+    for _, taken in ipairs(waiting.works) do
+      session.nodes = reports.with_report(session.nodes, {
+        worktree = worktree,
+        label = taken.work.label,
+        branches = taken.work.branches,
+        at = taken.at,
+        by_hook = taken.work.by_hook,
+      })
+    end
+    local joined = not was_reported and node_at(worktree.top) ~= nil
+    if joined and worktree.top ~= own_top() then
+      session.shows_reported, session.shown_label, session.focused = true, nil, true
+      local section = scope.section_on(session.commits_others, worktree.top) or worktree
+      select_filter(filter.of_worktree(section))
+      show_commits()
+      read_files(true)
+      waiting.tell(scope.started_work(worktree))
+    else
+      settle_reported_view(false)
+      show_commits()
+    end
+    if session.shown then
+      read_commits(false)
+    end
+  end
+
+  --- Keeps of the Reported section what `candidates`, what git now lists,
+  --- still lists (`reports.still_listed()`), each worktree as git now lists
+  --- it, telling nothing of what was dropped. Once the reported work the
+  --- focused view shows is gone, the default view shows, chosen again for
+  --- what it lists, and the user is told once (`settle_reported_view()`).
+  ---
+  ---@param candidates aineo.changes.BranchCandidates
+  local function keep_reported_listed_in(candidates)
+    local kept_nodes, dropped = reports.still_listed(session.nodes, candidates)
+    session.nodes = kept_nodes
+    if not dropped then
+      return
+    end
+    settle_reported_view(true)
     show_commits()
   end
 
-  --- Resolves, off the main loop, the path of each report of `waitings` that
-  --- has one, every link in it followed (`vim.uv.fs_realpath()` with a
+  --- Resolves, off the main loop, the folder each report of `waitings`
+  --- names, every link in it followed (`vim.uv.fs_realpath()` with a
   --- callback, so that a path under a mount that does not answer holds no
   --- keystroke), and calls `done(real_paths)` on the main loop once all
   --- have answered: each report's real path, none for a path that resolves
@@ -2886,16 +2915,13 @@ function M.new(label)
   ---@param done fun(real_paths: table<aineo.changes.WaitingReport, string>)
   local function resolve_real_paths(waitings, done)
     local real_paths = {}
-    local with_paths = vim.tbl_filter(function(waiting)
-      return waiting.work.path ~= nil
-    end, waitings)
-    local pending = #with_paths
+    local pending = #waitings
     if pending == 0 then
       done(real_paths)
       return
     end
-    for _, waiting in ipairs(with_paths) do
-      vim.uv.fs_realpath(waiting.work.path, function(_, real_path)
+    for _, waiting in ipairs(waitings) do
+      vim.uv.fs_realpath(waiting.path, function(_, real_path)
         real_paths[waiting] = real_path
         pending = pending - 1
         if pending == 0 then
@@ -2907,13 +2933,13 @@ function M.new(label)
     end
   end
 
-  --- Matches each report still waiting against `candidates`, what git now
-  --- lists of the worktrees and the branches (`scope.match_report()`): a
-  --- match joins the reported set (`add_member()`), the editor's own work is
-  --- let go untold, each with its timer stopped, and anything else waits on.
-  --- A worktree's report is compared by `real_paths`, its path with every
-  --- link resolved; one with none there, as one made since they were
-  --- resolved, waits on.
+  --- Matches the reports still waiting, each worktree's in the order first
+  --- reported, against `candidates`, what git now lists of the worktrees
+  --- and the branches: those of a worktree git lists at their folder's real
+  --- path, `real_paths`, join the Reported section (`take_waiting()`), their
+  --- timer stopped, and any other waits on, one with no real path there, as
+  --- one made since they were resolved, among them. The Reported section is
+  --- kept as git lists it first (`keep_reported_listed_in()`).
   ---
   ---@param candidates aineo.changes.BranchCandidates
   ---@param real_paths table<aineo.changes.WaitingReport, string> `resolve_real_paths()`
@@ -2922,22 +2948,22 @@ function M.new(label)
     local still_waiting = {}
     for _, waiting in ipairs(session.waiting) do
       local real_path = real_paths[waiting]
-      local matched =
-        scope.match_report(waiting.work, real_path, candidates, session.repository.top)
-      if not matched then
-        table.insert(still_waiting, waiting)
-      else
+      local listed = real_path
+        and vim.iter(candidates.worktrees):find(function(worktree)
+          return worktree.top == real_path
+        end)
+      if listed then
         waiting.stop_timer()
-        if matched ~= scope.OWN_WORK then
-          add_member(matched, report_of(waiting), waiting.tell)
-        end
+        take_waiting(listed, waiting)
+      else
+        table.insert(still_waiting, waiting)
       end
     end
     session.waiting = still_waiting
   end
 
   --- Lets `waiting` go, once its time to wait is over, when it still waits,
-  --- and tells the user once that git does not list what it reported.
+  --- and tells the user once that git does not list the worktree it named.
   ---
   ---@param waiting aineo.changes.WaitingReport
   local function let_report_go(waiting)
@@ -2948,7 +2974,7 @@ function M.new(label)
       return
     end
     session.waiting = still_waiting
-    waiting.tell(scope.unlisted_report(waiting.work))
+    waiting.tell(scope.unlisted_report(waiting.path))
   end
 
   --- How many reads of what reports are matched against were started
@@ -2988,20 +3014,18 @@ function M.new(label)
     end)
   end
 
-  --- Takes `work`, a worktree or a branch an agent of the tab's Claude Code
-  --- reported, to be told with `tell`, and starts at once a read of the
-  --- worktrees and the branches, whether or not the pane shows or was ever
-  --- shown (`read_reported()`). What git does not list yet waits, matched
-  --- again at every read of the commits window, for `REPORT_WAIT_MS` from
-  --- the call, then is let go (`let_report_go()`). The report is timed as it
-  --- is taken (`clock_now()`), and keeps its base, label and whether aineo's
-  --- hook made it, which the Reported section shows and which choose the
-  --- base its work is read from. Returns whether the home took it: a report
-  --- of the same work as one waiting is taken, reads again and adds
-  --- nothing, its base, label and time taking the waiting one's place when
-  --- `reports.merged()` says so; one more than `MOST_WAITING` distinct
-  --- reports waiting is not taken, nor is any before the session has
-  --- begun, and nothing is told of either.
+  --- Takes `work`, the report of a worktree an agent of the tab's Claude
+  --- Code works in, or that aineo's hook saw work made in, to be told with
+  --- `tell`, and starts at once a read of the worktrees and the branches,
+  --- whether or not the pane shows or was ever shown (`read_reported()`).
+  --- A report waits until git lists a worktree at its folder, matched again
+  --- at every read of the commits window, for `REPORT_WAIT_MS` from the first
+  --- report of that folder, then is let go (`let_report_go()`). Each report is
+  --- timed as it is taken (`clock_now()`), the age the Reported section
+  --- shows. Returns whether the home took it: a report of a folder another
+  --- waits for is taken, after it, and reads again; one more than
+  --- `MOST_WAITING` distinct folders waiting is not taken, nor is any report
+  --- before the session has begun, and nothing is told of either.
   ---
   ---@param work aineo.changes.ReportedWork
   ---@param tell fun(message: string)
@@ -3012,22 +3036,17 @@ function M.new(label)
     end
     local at = clock_now()
     local same = vim.iter(session.waiting):find(function(other)
-      return other.work.kind == work.kind
-        and other.work.path == work.path
-        and other.work.branch == work.branch
+      return other.path == work.worktree
     end)
     if same then
-      local again = report_of({ work = work, at = at })
-      if reports.merged(report_of(same), again) == again then
-        same.work, same.at = work, at
-      end
+      table.insert(same.works, { work = work, at = at })
       read_reported()
       return true
     end
     if #session.waiting >= MOST_WAITING then
       return false
     end
-    local waiting = { work = work, at = at, tell = tell }
+    local waiting = { path = work.worktree, works = { { work = work, at = at } }, tell = tell }
     local start_timer = session.settings.start_timer or start_uv_timer
     waiting.stop_timer = start_timer(REPORT_WAIT_MS, function()
       let_report_go(waiting)
@@ -3037,41 +3056,39 @@ function M.new(label)
     return true
   end
 
-  --- Resolves `work.base`, the commit an agent says its work was made from,
-  --- as git reads a name (`aineo.git`'s `resolve_commit()`): first in the
-  --- folder of the work — a worktree's own folder, or the folder of the
-  --- worktree that has a reported branch checked out — so that `HEAD` is the
-  --- agent's own, then, when that folder is no repository or gives no commit,
-  --- in the session's repository; a git failure there, or in listing the
-  --- worktrees, is passed by for the session's repository, whose own
-  --- answer, a failure included, is the one given. Each git run is stopped after
-  --- `BASE_RESOLUTION_LIMIT_MS`. Calls `done(commit)` with the full id, or
-  --- `done(nil, refusal)` with why it is refused, in words for the agent that
-  --- name the field: no session yet, no repository found for it, a name that
-  --- gives no commit in either place, or git's own failure.
+  --- Resolves `reported`, the item at `position` of a report's branches, in
+  --- `found`, the repository of the reported worktree's folder, when it is
+  --- one, else in the session's repository, each git run stopped after
+  --- `BASE_RESOLUTION_LIMIT_MS`: the local branch must be there, and its
+  --- base, as git reads a name (`aineo.git`'s `resolve_commit()`), names a
+  --- commit there — so that `HEAD` is the agent's own — or, when it does not
+  --- or git fails there, in the session's repository, whose own answer, a
+  --- failure included, is the one given. Calls `done(commit)` with the full
+  --- id of the base, or `done(nil, refusal)` with why it is refused, in
+  --- words for the agent that name the item.
   ---
-  ---@param work aineo.changes.ReportedWork a report whose `base` is given
+  ---@param found aineo.git.Repository|nil
+  ---@param reported aineo.changes.ReportedBranch
+  ---@param position integer
   ---@param done fun(commit: string|nil, refusal: string|nil)
-  function home.resolve_reported_base(work, done)
-    if not (session and session.repository) then
-      done(nil, 'base: aineo has found no repository for this session to read it in')
-      return
-    end
+  local function resolve_branch(found, reported, position, done)
     local repository = session.repository
     local options = vim.tbl_extend('force', session.settings.git or {}, {
       limit_ms = BASE_RESOLUTION_LIMIT_MS,
     })
-    local base = lines.quoted_path(work.base)
+    local item = ('branches[%d]'):format(position)
+    local base = lines.quoted_path(reported.base)
     local function in_repository(tried_top)
-      git.resolve_commit(repository, work.base, function(failure, commit)
+      git.resolve_commit(repository, reported.base, function(failure, commit)
         if failure then
-          done(nil, 'base: ' .. lines.words_of(failure))
+          done(nil, item .. '.base: ' .. lines.words_of(failure))
         elseif commit then
           done(commit)
         elseif tried_top and tried_top ~= repository.top then
           done(
             nil,
-            ('base: %s names no commit in %s, nor in %s'):format(
+            ('%s.base: %s names no commit in %s, nor in %s'):format(
+              item,
               base,
               lines.quoted_path(tried_top),
               lines.quoted_path(repository.top)
@@ -3080,59 +3097,133 @@ function M.new(label)
         else
           done(
             nil,
-            ('base: %s names no commit in %s'):format(base, lines.quoted_path(repository.top))
+            ('%s.base: %s names no commit in %s'):format(
+              item,
+              base,
+              lines.quoted_path(repository.top)
+            )
           )
         end
       end, options)
     end
-    local function in_folder(folder)
-      if not folder then
+    local in_found = found or repository
+    git.resolve_commit(in_found, 'refs/heads/' .. reported.name, function(_, tip)
+      if not tip then
+        done(
+          nil,
+          ('%s.name: %s is no local branch in %s'):format(
+            item,
+            lines.quoted_path(reported.name),
+            lines.quoted_path(in_found.top)
+          )
+        )
+        return
+      end
+      if not found then
         in_repository(nil)
         return
       end
-      git.find_repository(folder, function(failure, found)
-        if failure or not found then
-          in_repository(nil)
-          return
+      git.resolve_commit(found, reported.base, function(_, commit)
+        if commit then
+          done(commit)
+        else
+          in_repository(found.top)
         end
-        git.resolve_commit(found, work.base, function(_, commit)
-          if commit then
-            done(commit)
-          else
-            in_repository(found.top)
-          end
-        end, options)
       end, options)
-    end
-    if work.kind == 'worktree' then
-      in_folder(work.path)
-      return
-    end
-    git.list_worktrees(repository, function(_, listed)
-      local checked_out = vim.iter(listed or {}):find(function(worktree)
-        return worktree.branch == work.branch
-      end)
-      in_folder(checked_out and checked_out.top)
     end, options)
   end
 
-  --- Makes the reported set the focused view again, shown at once, its first
-  --- member's whole change chosen; the scope picked, if any, is kept behind
-  --- it. A set emptied since the picker opened changes nothing.
-  local function show_reported()
-    if #session.reported == 0 then
+  --- Resolves the branches of `work`, the report of a worktree, as
+  --- `resolve_branch()` does each, all at once, in the repository of the
+  --- worktree's folder when git finds one there, else in the session's
+  --- repository. Calls `done(resolved)` with `work`, each branch's base its
+  --- full id, or `done(nil, refusal)` with why it is refused, in words for
+  --- the agent that name the first item at fault: also with no session yet,
+  --- or no repository found for it. A report of no branch is given back as
+  --- it is.
+  ---
+  ---@param work aineo.changes.ReportedWork
+  ---@param done fun(resolved: aineo.changes.ReportedWork|nil, refusal: string|nil)
+  function home.resolve_reported_work(work, done)
+    if not (session and session.repository) then
+      done(nil, 'worktree: aineo has found no repository for this session to read it in')
       return
     end
-    session.shows_reported, session.focused = true, true
-    select_filter(scope.whole_change_of(scope_shown()[1]))
+    if #work.branches == 0 then
+      done(work)
+      return
+    end
+    local options = vim.tbl_extend('force', session.settings.git or {}, {
+      limit_ms = BASE_RESOLUTION_LIMIT_MS,
+    })
+    git.find_repository(work.worktree, function(failure, found)
+      local found_repository = not failure and found or nil
+      local results, pending = {}, #work.branches
+      for position, reported in ipairs(work.branches) do
+        resolve_branch(found_repository, reported, position, function(commit, refusal)
+          results[position] = { commit = commit, refusal = refusal }
+          pending = pending - 1
+          if pending > 0 then
+            return
+          end
+          local first_refused = vim.iter(results):find(function(result)
+            return result.refusal ~= nil
+          end)
+          if first_refused then
+            done(nil, first_refused.refusal)
+            return
+          end
+          done(vim.tbl_extend('force', work, {
+            branches = vim
+              .iter(ipairs(work.branches))
+              :map(function(index, listed)
+                return { name = listed.name, base = results[index].commit }
+              end)
+              :totable(),
+          }))
+        end)
+      end
+    end, options)
+  end
+
+  --- Shows the editor's own work: the default view, *Session work* chosen.
+  local function show_own_work()
+    session.focused, session.shows_reported, session.shown_label = false, false, nil
+    select_filter(filter.SESSION_WORK)
+    show_commits()
+    read_files(true)
+  end
+
+  --- Makes the reported work the focused view, shown at once, its first
+  --- worktree's or branch's whole change chosen: every worktree's, or, with
+  --- `shown_label`, those of that label alone (`reported_members()`); the scope
+  --- picked, if any, is kept behind it. Reported work that shows nothing
+  --- alone — the editor's own worktree's alone — shows the editor's own
+  --- work (`show_own_work()`), and work gone since the picker opened
+  --- changes nothing.
+  ---
+  ---@param shown_label string|nil
+  local function show_reported(shown_label)
+    local nodes = shown_label and reports.labelled(session.nodes, shown_label) or session.nodes
+    if #nodes == 0 then
+      return
+    end
+    local members = reported_members(shown_label)
+    if #members == 0 then
+      show_own_work()
+      return
+    end
+    session.shows_reported, session.shown_label, session.focused = true, shown_label, true
+    select_filter(scope.whole_change_of(members[1]))
     show_commits()
     read_files(true)
   end
 
   --- Shows what `item`, a choice of the list `s` offers or of a line of the
   --- Reported section, names: a worktree or a branch alone
-  --- (`show_worktree_alone()`, `show_branch_alone()`), or the reported set
-  --- (`show_reported()`); anything else is ignored.
+  --- (`show_worktree_alone()`, `show_branch_alone()`), the editor's own work
+  --- (`show_own_work()`), the reported work of one label, or every
+  --- worktree's (`show_reported()`); anything else is ignored.
   ---
   ---@param item any
   local function show_item(item)
@@ -3143,8 +3234,12 @@ function M.new(label)
       show_worktree_alone(item)
     elseif type(item.branch) == 'string' then
       show_branch_alone(item)
+    elseif item.own == true then
+      show_own_work()
+    elseif type(item.group) == 'string' then
+      show_reported(item.group)
     elseif item.reported == true then
-      show_reported()
+      show_reported(nil)
     end
   end
 
@@ -3229,8 +3324,10 @@ function M.new(label)
         scope.items_of(
           session.commits_others,
           candidates,
-          session.reported,
-          vim.tbl_map(lines.report_item, reported_entries())
+          #session.nodes,
+          vim.tbl_map(function(line)
+            return lines.report_item(line, clock_now())
+          end, reported_lines())
         )
       )
     end)
@@ -3248,7 +3345,7 @@ function M.new(label)
 
   --- Calls `watcher` each time what the focused view shows alone
   --- (`home.focused_work()`) changes: a pick of `s`, the switch between the
-  --- default view and the focused view, a report joining the reported set,
+  --- default view and the focused view, a worktree joining the reported work,
   --- and a worktree or branch shown alone that is gone.
   ---
   ---@param watcher fun()
@@ -3652,7 +3749,7 @@ function M.new(label)
   --- is shown in a window of any tab page (`is_shown()`); and, when the
   --- current buffer is one of the pane's two, switches the commits window
   --- between the default view and the focused view — the scope the user
-  --- picked or the reported set, whichever was chosen last, kept while the
+  --- picked or the reported work, whichever was chosen last, kept while the
   --- default view shows — chosen again for what the new view lists
   --- (`choose_for_shown_view()`). With the cursor anywhere else — Claude's
   --- window, Input, the Report, a diff — or with neither a scope picked nor
@@ -3664,7 +3761,7 @@ function M.new(label)
       return
     end
     local current = vim.api.nvim_get_current_buf()
-    local has_focused_view = session.scope ~= nil or #session.reported > 0
+    local has_focused_view = session.scope ~= nil or #reported_members(nil) > 0
     if has_focused_view and (current == buffers.files or current == buffers.commits) then
       session.focused = not session.focused
       choose_for_shown_view()

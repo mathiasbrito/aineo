@@ -1,25 +1,27 @@
 --- The announcement tool's side of the report server: what `tools/list`
 --- says of `announce_work`, and which of its arguments are a valid
---- announcement of a git worktree or branch an agent created.
+--- announcement of a git worktree an agent works in and the branches it
+--- works on there.
 
 local names = require('aineo.mcp.names')
 
 local M = {}
 
---- The kinds of work an announcement names, in the order the schema lists
---- them.
-local KINDS = { 'worktree', 'branch' }
-
 --- What the announcement tool says of itself: the rule every agent and
 --- subagent follows, first, as a client that shortens a description keeps
 --- its start.
-M.ANNOUNCE_RULE = 'Required for every agent and subagent: call once right after you create'
-  .. ' a git branch or worktree for new work, with kind, its path or branch,'
-  .. ' the base commit it was created from, and a short label.'
+M.ANNOUNCE_RULE = 'Required for every agent and subagent: call once per worktree you work in,'
+  .. ' right after you create the worktree or a branch in it, and again whenever the set of'
+  .. " branches you are working on there changes, with the worktree's folder, a short label,"
+  .. ' and every branch you are working on there with the commit it was created from.'
+
+--- The most branches one announcement may list.
+local MOST_BRANCHES = 32
 
 --- The announcement tool, as `tools/list` describes it, by `ANNOUNCE_RULE`:
---- an object of `kind`, one of `KINDS`, the one string of that kind, `path`
---- or `branch`, and `base`, with `label` optional; no other property.
+--- an object of `worktree`, `label` and `branches`, each required, the
+--- branches at most `MOST_BRANCHES` objects of `name` and `base`; no other
+--- property.
 ---
 ---@return table
 function M.announce_tool()
@@ -29,32 +31,51 @@ function M.announce_tool()
     inputSchema = {
       type = 'object',
       properties = {
-        kind = { type = 'string', enum = vim.list_slice(KINDS) },
-        path = { type = 'string', description = 'The worktree’s folder, for kind worktree.' },
-        branch = { type = 'string', description = 'The branch’s name, for kind branch.' },
-        base = {
+        worktree = {
           type = 'string',
-          description = 'The commit the work was created from: an id, or a name git reads, such as origin/dev.',
+          description = 'The worktree’s folder, relative to your working folder or absolute;'
+            .. ' the main checkout’s folder for work there.',
         },
         label = { type = 'string', description = 'A short name for the task.' },
+        branches = {
+          type = 'array',
+          maxItems = MOST_BRANCHES,
+          description = 'Every branch you are working on in that worktree now;'
+            .. ' none once you are done with it.',
+          items = {
+            type = 'object',
+            properties = {
+              name = { type = 'string', description = 'The branch’s name.' },
+              base = {
+                type = 'string',
+                description = 'The commit the branch was created from: an id,'
+                  .. ' or a name git reads, such as origin/dev.',
+              },
+            },
+            required = { 'name', 'base' },
+            additionalProperties = false,
+          },
+        },
       },
-      required = { 'kind', 'base' },
+      required = { 'worktree', 'label', 'branches' },
       additionalProperties = false,
     },
   }
 end
 
---- A git worktree or branch an agent announced: its `kind`, the one string
---- of that kind, the commit it was made from, and the agent's label for it.
----@class aineo.mcp.Work
----@field kind 'worktree'|'branch'
----@field path? string the worktree's folder, with `kind` `worktree`
----@field branch? string the branch's name, with `kind` `branch`
----@field base string the commit the work was made from, as the agent names it: an id or any name git reads
----@field label? string the agent's short name for the work's task
+--- One branch an agent works on in a worktree it announced: its name, and
+--- the commit it was made from.
+---@class aineo.mcp.WorkBranch
+---@field name string the branch's name
+---@field base string the commit the branch was made from, as the agent names it: an id or any name git reads
 
---- The field each kind of work gives, by kind.
-local FIELD_OF = { worktree = 'path', branch = 'branch' }
+--- A worktree an agent announced: its folder, the agent's label for the
+--- task, and every branch the agent works on there, in the order given.
+---@class aineo.mcp.Work
+---@field worktree string the worktree's folder
+---@field label? string the agent's short name for the task; nil only in a report of aineo's own hook
+---@field branches aineo.mcp.WorkBranch[] the branches, none when the agent is done with the worktree
+---@field by_hook? boolean whether aineo's own hook made the report, rather than the agent's call
 
 --- The longest string an announcement may give, in bytes.
 local LONGEST_STRING_BYTES = 4096
@@ -79,55 +100,108 @@ local function string_refusal(field, value)
   return nil
 end
 
---- The fields an announcement may give.
-local FIELDS = { kind = true, path = true, branch = true, base = true, label = true }
-
---- The first of `arguments`' keys, in sorted order, that is no field of an
---- announcement (`FIELDS`), or nil when there is none.
+--- Whether `value` is a JSON object: a table that is no non-empty list.
 ---
----@param arguments table
+---@param value any
+---@return boolean
+local function is_object(value)
+  return type(value) == 'table' and not (vim.islist(value) and next(value) ~= nil)
+end
+
+--- The first of `value`'s keys, in sorted order, that `fields` does not
+--- hold, or nil when there is none.
+---
+---@param value table
+---@param fields table<string, true>
 ---@return string?
-local function first_unknown_field(arguments)
+local function first_unknown_field(value, fields)
   local unknown = vim.tbl_filter(function(key)
-    return not FIELDS[key]
-  end, vim.tbl_keys(arguments))
+    return not fields[key]
+  end, vim.tbl_keys(value))
   table.sort(unknown, function(left, right)
     return tostring(left) < tostring(right)
   end)
   return unknown[1] and tostring(unknown[1])
 end
 
+--- The fields an announcement may give.
+local FIELDS = { worktree = true, label = true, branches = true }
+
+--- The fields each of its branches may give.
+local BRANCH_FIELDS = { name = true, base = true }
+
+--- Why `branch`, the item at `position` of an announcement's branches, is
+--- refused, naming it as `branches[<position>]`; nil when it is accepted:
+--- an object of a `name` and a `base` (`string_refusal()`), its name not
+--- the name of an item before it, `named` (positions by name), and no other
+--- key.
+---
+---@param branch any
+---@param position integer
+---@param named table<string, integer>
+---@return string?
+local function branch_refusal(branch, position, named)
+  local item = ('branches[%d]'):format(position)
+  if not is_object(branch) then
+    return item .. ': expected an object'
+  end
+  local refusal = string_refusal(item .. '.name', branch.name)
+    or string_refusal(item .. '.base', branch.base)
+  if refusal then
+    return refusal
+  end
+  if named[branch.name] then
+    return ('%s.name: listed at branches[%d] already'):format(item, named[branch.name])
+  end
+  local unknown = first_unknown_field(branch, BRANCH_FIELDS)
+  if unknown then
+    return ('%s.%s: not a field of a branch'):format(item, unknown)
+  end
+  return nil
+end
+
+--- Why `branches`, an announcement's, are refused, naming the item at
+--- fault; nil when they are accepted: a list, an empty one included, of at
+--- most `MOST_BRANCHES` items, each accepted (`branch_refusal()`).
+---
+---@param branches any
+---@return string?
+local function branches_refusal(branches)
+  if type(branches) ~= 'table' or not vim.islist(branches) then
+    return 'branches: expected an array'
+  end
+  if #branches > MOST_BRANCHES then
+    return ('branches: more than %d items'):format(MOST_BRANCHES)
+  end
+  local named = {}
+  for position, branch in ipairs(branches) do
+    local refusal = branch_refusal(branch, position, named)
+    if refusal then
+      return refusal
+    end
+    named[branch.name] = position
+  end
+  return nil
+end
+
 --- Why `arguments` are not an announcement, naming the field at fault, or
---- nil when they are one. Checked in this order: an object; its `kind`; the
---- string of that kind (`string_refusal()`); its `base`, as that string is;
---- the other kind's field, given at all, a JSON null included; its `label`,
---- when given, a JSON null included, as that string is; any other key.
+--- nil when they are one. Checked in this order: an object; its `worktree`
+--- and its `label` (`string_refusal()`); its `branches`
+--- (`branches_refusal()`); any other key.
 ---
 ---@param arguments any
 ---@return string?
 local function refusal_of(arguments)
-  if type(arguments) ~= 'table' or (vim.islist(arguments) and next(arguments) ~= nil) then
+  if not is_object(arguments) then
     return 'arguments: expected an object'
   end
-  local field = FIELD_OF[arguments.kind]
-  if not field then
-    return 'kind: expected one of ' .. table.concat(KINDS, ', ')
-  end
-  local refusal = string_refusal(field, arguments[field]) or string_refusal('base', arguments.base)
+  local refusal = string_refusal('worktree', arguments.worktree)
+    or string_refusal('label', arguments.label)
+    or branches_refusal(arguments.branches)
   if refusal then
     return refusal
   end
-  local other = field == FIELD_OF.worktree and FIELD_OF.branch or FIELD_OF.worktree
-  if arguments[other] ~= nil then
-    return ('%s: not given with kind %s'):format(other, arguments.kind)
-  end
-  if arguments.label ~= nil then
-    refusal = string_refusal('label', arguments.label)
-    if refusal then
-      return refusal
-    end
-  end
-  local unknown = first_unknown_field(arguments)
+  local unknown = first_unknown_field(arguments, FIELDS)
   if unknown then
     return unknown .. ': not a field of the announcement'
   end
@@ -136,14 +210,15 @@ end
 
 --- The announcement `arguments` describe, or nil and why they are refused.
 ---
---- An announcement is a table of `kind`, `worktree` or `branch`, the one
---- string of that kind — `path` for a worktree, `branch` for a branch — and
---- `base`, the commit the work was made from, with `label` optional; each
---- string non-empty, at most 4096 bytes, with no NUL and no line break. The
---- other kind's field, given at all, and any other key are refused, and so
---- is a JSON null (`vim.NIL`) in any field. The reason names the field at
---- fault, such as `base: expected a non-empty string`. The announcement
---- returned is a new table.
+--- An announcement is a table of `worktree`, the worktree's folder, `label`,
+--- the task's short name, and `branches`, a list of at most 32 tables of a
+--- `name` and a `base`, the commit that branch was made from — none when the
+--- agent is done with the worktree; each string non-empty, at most 4096
+--- bytes, with no NUL and no line break, and no two branches of one name.
+--- A missing field, any other key, and a JSON null (`vim.NIL`) in any field
+--- are refused. The reason names the field at fault, such as `label:
+--- expected a non-empty string` or `branches[2].base: expected a non-empty
+--- string`. The announcement returned is a new table.
 ---
 ---@param arguments any
 ---@return aineo.mcp.Work? work
@@ -153,31 +228,31 @@ function M.validate_work(arguments)
   if refusal then
     return nil, refusal
   end
-  local field = FIELD_OF[arguments.kind]
   return {
-    kind = arguments.kind,
-    [field] = arguments[field],
-    base = arguments.base,
+    worktree = arguments.worktree,
     label = arguments.label,
+    branches = vim.tbl_map(function(branch)
+      return { name = branch.name, base = branch.base }
+    end, arguments.branches),
   }
 end
 
---- `work` with its `path`, when it has one, made absolute against
---- `working_directory` when it is not, and normalised: `.` and `..` resolved
---- and a trailing slash dropped, with no `~` and no environment variable
---- expanded, as the agent's string is never more than a path to compare.
---- A branch's announcement is returned as it is.
+--- `work` with its `worktree` made absolute against `working_directory`
+--- when it is not, and normalised: `.` and `..` resolved and a trailing
+--- slash dropped, with no `~` and no environment variable expanded, as the
+--- agent's string is never more than a path to compare.
 ---
 ---@param work aineo.mcp.Work
----@param working_directory string? nil only for a work whose path, if any, is absolute
+---@param working_directory string? nil only for a work whose worktree is absolute
 ---@return aineo.mcp.Work
 function M.with_absolute_path(work, working_directory)
-  if not work.path then
-    return work
-  end
-  local path = vim.startswith(work.path, '/') and work.path
-    or vim.fs.joinpath(working_directory, work.path)
-  return vim.tbl_extend('force', work, { path = vim.fs.normalize(path, { expand_env = false }) })
+  local path = vim.startswith(work.worktree, '/') and work.worktree
+    or vim.fs.joinpath(working_directory, work.worktree)
+  return vim.tbl_extend(
+    'force',
+    work,
+    { worktree = vim.fs.normalize(path, { expand_env = false }) }
+  )
 end
 
 return M
