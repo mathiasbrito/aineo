@@ -2,7 +2,8 @@
 --- those it ignores and its submodules, the files changed since a base
 --- commit, the commits since it or between two commits, the commit graph of
 --- every branch, their diffs, a file
---- as a commit has it, a name resolved to a commit, its worktrees and the
+--- as a commit has it, a name resolved to a commit, the names that point at
+--- a commit, its worktrees and the
 --- base of each, its local branches — and a watch that
 --- calls back when the branch moves, a reference is written or a
 --- working-tree file changes.
@@ -28,6 +29,7 @@ local content = require('aineo.git.content')
 local diffs = require('aineo.git.diffs')
 local files = require('aineo.git.files')
 local history = require('aineo.git.history')
+local names = require('aineo.git.names')
 local process = require('aineo.git.process')
 local repository = require('aineo.git.repository')
 local watch = require('aineo.git.watch')
@@ -436,6 +438,21 @@ end
 ---@param options? aineo.git.Options
 function M.list_branches(found, done, options)
   branches.list_branches(process.runner(options), found, done)
+end
+
+--- Reads the names of the commits `ids`, full ids, in `found`, with one git
+--- run, and calls `done(nil, names)`: for each commit that any points at, its
+--- local branches, then its remote-tracking branches, then its tags, each kind
+--- in name order and each name without its `refs/…/` prefix; a remote's
+--- `HEAD` and every other reference are left out, and a commit nothing points
+--- at has no entry. Or `done(failure)`.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param ids string[]
+---@param done fun(failure: aineo.git.Failure|nil, names: table<string, string[]>|nil)
+---@param options? aineo.git.Options
+function M.names_at(found, ids, done, options)
+  names.names_at(process.runner(options), found, ids, done)
 end
 
 --- Starts watching `found`, and calls `on_change(nil, change)` on the main
