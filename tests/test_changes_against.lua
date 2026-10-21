@@ -151,7 +151,7 @@ T['the sides of a diff']['under a local branch are its base, by where it came fr
     name = 'feature',
     tip = TIP,
     base = BASE,
-    base_origin = { kind = 'merge_base', against = 'origin/main' },
+    base_origin = { kind = 'merge_base', ref = 'origin/main' },
   }
   eq(sides_of({ kind = 'branch', branch = 'feature' }, { branch = branch }), {
     left = { id = BASE, words = 'merge base with origin/main' },
@@ -180,10 +180,10 @@ T['the sides of a diff']['under a local branch with no base start from the empty
 end
 
 T['the sides of a diff']['under another worktree are its base, by where it came from, and the working tree'] = function()
-  local origin = { kind = 'merge_base', against = 'abc1234' }
+  local origin = { kind = 'merge_base', commit = ('a'):rep(40) }
   eq(
     sides_of({ kind = 'worktree', worktree = worktree(BASE, origin) }),
-    { left = { id = BASE, words = 'merge base with abc1234' }, right = WORKING_TREE }
+    { left = { id = BASE, words = 'merge base with aaaaaaa' }, right = WORKING_TREE }
   )
 end
 

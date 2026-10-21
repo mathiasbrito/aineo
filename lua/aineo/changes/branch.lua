@@ -50,7 +50,8 @@ end
 ---@field name string the branch's name
 ---@field tip? string the full id of the commit the branch named when it was last read
 ---@field base? string the branch's base at that read: the base an agent reported for it, when `worktrees.read_effective_base()` chose it, else its merge base with the commit the working branch names, else with the editor's comparison commit; nil when none gave one, which counts every file and commit of the branch
----@field reported_base? boolean whether `base` is the one an agent reported
+---@field base_origin? aineo.changes.BaseOrigin where `base` came from: the report, or a merge base with the working branch or the editor's comparison commit
+---@field reported_base? boolean whether an agent reported a base for the branch
 ---@field commits? aineo.git.Commit[] the commits reachable from `tip` and not from `base`, newest first
 ---@field names_no_commit? boolean whether the name named no commit when it was read: the branch was deleted or renamed
 ---@field failure? aineo.git.Failure why the last read failed, when it did; the other fields are then what the window knew before
@@ -99,31 +100,35 @@ function M.read(read, done)
     elseif not tip then
       done({ name = read.name, names_no_commit = true })
     else
-      local function read_from(base_failure, base)
-        if base_failure then
-          failed(base_failure)
-          return
-        end
-        git.commits_between(read.found, base, tip, function(commits_failure, commits)
-          if commits_failure then
-            failed(commits_failure)
-          else
-            done({
-              name = read.name,
-              tip = tip,
-              base = base,
-              reported_base = read.base ~= nil or nil,
-              commits = commits,
-            })
-          end
-        end, read.git)
-      end
-      worktrees.read_base_of(read, tip, function(own_failure, own)
+      worktrees.read_base_of(read, tip, function(own_failure, own, own_origin)
         if own_failure then
           failed(own_failure)
           return
         end
-        worktrees.read_effective_base(read, read.found.top, read.base, own, tip, read_from)
+        worktrees.read_effective_base(
+          read,
+          read.found.top,
+          read.base,
+          own,
+          tip,
+          function(_, base, is_reported)
+            git.commits_between(read.found, base, tip, function(commits_failure, commits)
+              if commits_failure then
+                failed(commits_failure)
+              else
+                done({
+                  name = read.name,
+                  tip = tip,
+                  base = base,
+                  base_origin = base and (is_reported and worktrees.REPORTED_ORIGIN or own_origin)
+                    or nil,
+                  reported_base = read.base ~= nil or nil,
+                  commits = commits,
+                })
+              end
+            end, read.git)
+          end
+        )
       end)
     end
   end, read.git)

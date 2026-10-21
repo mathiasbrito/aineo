@@ -8,12 +8,17 @@ local working_branch = require('aineo.changes.working_branch')
 
 local M = {}
 
+--- Where a base came from when an agent reported it.
+---@type aineo.changes.BaseOrigin
+M.REPORTED_ORIGIN = { kind = 'reported' }
+
 --- What one window knows of a worktree other than the editor's.
 ---@class aineo.changes.WorktreeSection
 ---@field top string the worktree's top level
 ---@field branch string|nil the branch it is on, as last listed; nil when detached
 ---@field repository? aineo.git.Repository the worktree's repository, as its last read found it
 ---@field base? string the worktree's base when its list was last read
+---@field base_origin? aineo.changes.BaseOrigin where `base` came from
 ---@field listed? any what its last read gave: the window's list for it
 ---@field failure? aineo.git.Failure why its last read failed, when it did
 
@@ -42,6 +47,7 @@ M.NONE = { sections = {} }
 --- What the bases of one read are taken against.
 ---@class aineo.changes.BaseSources
 ---@field working_commit string|nil the commit the working branch names now; nil when it gives none: no working branch, or a name that names no commit
+---@field working_name string|nil the working branch's name; nil when there is none
 ---@field comparison fun(done: fun(failure: aineo.git.Failure|nil, commit: string|nil)) reads the editor's comparison commit (`git.comparison_commit()`), on its first call alone; a later call is answered with the first call's answer
 
 --- The function that reads the editor's comparison commit for one read, once
@@ -76,12 +82,16 @@ local function read_base_sources(read, done)
     repository = read.found,
     working_branch = read.working_branch,
     git = read.git,
-  }, function(failure, _, commit)
+  }, function(failure, name, commit)
     if failure then
       done(failure)
       return
     end
-    done(nil, { working_commit = commit, comparison = comparison_read_once(read) })
+    done(nil, {
+      working_commit = commit,
+      working_name = name,
+      comparison = comparison_read_once(read),
+    })
   end)
 end
 
@@ -124,6 +134,7 @@ local function unread_section(read, worktree)
   local before = section_before(read.before, worktree.top)
   if before then
     section.repository, section.base, section.listed = before.repository, before.base, before.listed
+    section.base_origin = before.base_origin
   end
   return section
 end
@@ -145,14 +156,15 @@ end
 --- commit the working branch names (`sources.working_commit`), else, where
 --- that gives none — no working branch, a name that names no commit, no
 --- shared history — its merge base with the editor's comparison commit
---- (`sources.comparison`). Calls `done(nil, base)`, `base` nil when neither
---- gives one, and at once, reading neither, for a worktree with no commit
---- yet; or `done(failure)`.
+--- (`sources.comparison`). Calls `done(nil, base, origin)`, `base` nil when
+--- neither gives one, and at once, reading neither, for a worktree with no
+--- commit yet, and `origin` saying what the merge base was taken against: the
+--- working branch's name, or the comparison commit; or `done(failure)`.
 ---
 ---@param read { git?: aineo.git.Options }
 ---@param sources aineo.changes.BaseSources
 ---@param repository { top: string, head: string|nil } a worktree, or the top level of the editor's repository with a commit as its `head`
----@param done fun(failure: aineo.git.Failure|nil, base: string|nil)
+---@param done fun(failure: aineo.git.Failure|nil, base: string|nil, origin: aineo.changes.BaseOrigin|nil)
 local function read_base(read, sources, repository, done)
   if not repository.head then
     done(nil, nil)
@@ -164,7 +176,9 @@ local function read_base(read, sources, repository, done)
         done(failure)
         return
       end
-      git.worktree_base(repository, comparison, done, read.git)
+      git.worktree_base(repository, comparison, function(base_failure, base)
+        done(base_failure, base, base and { kind = 'merge_base', commit = comparison } or nil)
+      end, read.git)
     end)
   end
   if not sources.working_commit then
@@ -173,7 +187,7 @@ local function read_base(read, sources, repository, done)
   end
   git.worktree_base(repository, sources.working_commit, function(failure, base)
     if failure or base then
-      done(failure, base)
+      done(failure, base, base and { kind = 'merge_base', ref = sources.working_name } or nil)
     else
       against_comparison()
     end
@@ -200,35 +214,34 @@ end
 --- `reported`, the base its report gave, and `own`, the one the pane reads
 --- for it, as `aineo.changes.reports`' `effective_base()` chooses by
 --- whether `reported` is behind `tip` and `own` behind `reported`, read in
---- the repository at `top`. Calls `done(nil, base)`: at once with `own`
---- for no reported base or no tip, and with `own` too when git cannot tell
---- the history of the reported base — a commit the repository no longer
---- has, say — as a base the pane cannot place is no base to read from.
+--- the repository at `top`. Calls `done(nil, base, reported)`: at once with
+--- `own` for no reported base or no tip, and with `own` too when git cannot
+--- tell the history of the reported base — a commit the repository no longer
+--- has, say — as a base the pane cannot place is no base to read from;
+--- `reported` says whether `base` is the reported one.
 ---
 ---@param read { git?: aineo.git.Options }
 ---@param top string
 ---@param reported string|nil
 ---@param own string|nil
 ---@param tip string|nil
----@param done fun(failure: nil, base: string|nil)
+---@param done fun(failure: nil, base: string|nil, reported: boolean)
 function M.read_effective_base(read, top, reported, own, tip, done)
   if not (reported and tip) then
-    done(nil, own)
+    done(nil, own, false)
     return
   end
   read_is_ancestor(read, top, reported, tip, function(failure, reported_in_tip)
     if failure then
-      done(nil, own)
+      done(nil, own, false)
       return
     end
     local function chosen(own_before_reported)
-      done(
-        nil,
-        reports.effective_base(reported, own, {
-          reported_in_tip = reported_in_tip,
-          own_before_reported = own_before_reported,
-        })
-      )
+      local base = reports.effective_base(reported, own, {
+        reported_in_tip = reported_in_tip,
+        own_before_reported = own_before_reported,
+      })
+      done(nil, base, base == reported)
     end
     if not (reported_in_tip and own) then
       chosen(false)
@@ -236,7 +249,7 @@ function M.read_effective_base(read, top, reported, own, tip, done)
     end
     read_is_ancestor(read, top, own, reported, function(own_failure, own_before_reported)
       if own_failure then
-        done(nil, own)
+        done(nil, own, false)
       else
         chosen(own_before_reported)
       end
@@ -279,23 +292,32 @@ local function read_section(read, worktree, sources, done)
         done(nil)
         return
       end
-      local read_from = or_failed(function(base)
-        read.read_list(
-          repository,
-          base,
-          or_failed(function(listed)
-            section.repository, section.base, section.listed = repository, base, listed
-            done(section)
-          end)
-        )
-      end)
       local reported = read.base_of and read.base_of(worktree)
       read_base(
         read,
         sources,
         repository,
-        or_failed(function(own)
-          M.read_effective_base(read, repository.top, reported, own, repository.head, read_from)
+        or_failed(function(own, own_origin)
+          local function read_from(base, is_reported)
+            local origin = base and (is_reported and M.REPORTED_ORIGIN or own_origin) or nil
+            read.read_list(
+              repository,
+              base,
+              or_failed(function(listed)
+                section.repository, section.base, section.listed = repository, base, listed
+                section.base_origin = origin
+                done(section)
+              end)
+            )
+          end
+          M.read_effective_base(
+            read,
+            repository.top,
+            reported,
+            own,
+            repository.head,
+            or_failed(read_from)
+          )
         end)
       )
     end),
@@ -333,11 +355,12 @@ end
 --- base of a worktree whose `HEAD` it is is read (`read_base()`): its merge
 --- base with the commit the working branch names now
 --- (`read_base_sources()`), else with the editor's comparison commit. Calls
---- `done(nil, base)`, `base` nil when neither gives one; or `done(failure)`.
+--- `done(nil, base, origin)`, `base` nil when neither gives one, `origin`
+--- saying what the merge base was taken against; or `done(failure)`.
 ---
 ---@param read aineo.changes.CommitBaseRead
 ---@param commit string the commit's full id
----@param done fun(failure: aineo.git.Failure|nil, base: string|nil)
+---@param done fun(failure: aineo.git.Failure|nil, base: string|nil, origin: aineo.changes.BaseOrigin|nil)
 function M.read_base_of(read, commit, done)
   read_base_sources(read, function(failure, sources)
     if failure then
