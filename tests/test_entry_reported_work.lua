@@ -209,6 +209,27 @@ T['an announcement']['naming a branch git does not have is refused in words nami
   eq(bases_taken(), {})
 end
 
+T['an announcement']['naming a revision of a branch, not a branch, is refused naming the item'] =
+  MiniTest.new_set({ parametrize = { { 'feature^0' }, { 'lonely~1' }, { 'feature@{0}' } } })
+
+T['an announcement']['naming a revision of a branch, not a branch, is refused naming the item']['given'] = function(
+  name
+)
+  local repository, token = open_with_worktree('revision-branch')
+  child.lua(KEEP_BASES_TAKEN)
+
+  local answer = announce(
+    call_for(repository.worktree, {
+      { name = 'feature', base = 'HEAD' },
+      { name = name, base = 'HEAD' },
+    }),
+    token
+  )
+
+  eq(answer, ('branches[2].name: %s is no local branch in %s'):format(name, repository.worktree))
+  eq(bases_taken(), {})
+end
+
 T['an announcement']['of an older shape is not taken'] = function()
   local repository, token = open_with_worktree('older-shape')
 
@@ -288,6 +309,46 @@ T['Enter on a branch’s line']['shows its commits alone, and the explorer follo
     end),
     true
   )
+end
+
+T['a report of aineo’s hook'] = MiniTest.new_set()
+
+T['a report of aineo’s hook']['through the editor, adds its branch beside the agent’s, the label kept'] = function()
+  local repository, token = open_with_worktree('hook-through-editor')
+  local taken =
+    announce(call_for(repository.worktree, { { name = 'feature', base = 'HEAD' } }), token)
+  eq(taken, true)
+  wait_until(function()
+    return #entry.messages(child) == 1
+  end)
+  git_repo.git(repository.worktree, { 'branch', 'extra' })
+
+  local hook_taken = announce({
+    worktree = repository.worktree,
+    branches = { { name = 'extra', base = 'HEAD' } },
+    by_hook = true,
+  }, token)
+  eq(hook_taken, true)
+
+  entry.press(child, '\\g')
+  wait_until(function()
+    return entry.current_window(child) == 'aineo://changes-commits'
+  end)
+  entry.press(child, '\\g')
+  local expected = { 'T111 now', '  feature', 'feature', 'extra' }
+  local function tree_shown()
+    local shown = lines_of('aineo://changes-commits')
+    return {
+      shown[2],
+      shown[3],
+      (shown[4] or ''):match('^    (%S+)'),
+      (shown[5] or ''):match('^    (%S+)'),
+    }
+  end
+  wait_until(function()
+    return vim.deep_equal(tree_shown(), expected)
+  end)
+  eq(tree_shown(), expected)
 end
 
 return T

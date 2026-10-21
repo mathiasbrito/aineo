@@ -337,6 +337,20 @@ T['the lines']['pick the editor’s own work for its own worktree, and an unlabe
   eq(picks, { { group = '' }, { own = true }, { own = true }, { branch = 'lonely' } })
 end
 
+T['the lines']['of a detached worktree mark no branch checked out, and pick each branch alone'] = function()
+  local detached = { top = '/projects/agent-3' }
+  local nodes = taken({ call(detached, 'T', { branch('feature/d'), branch('feature/e') }, NOW) })
+
+  local branch_lines = vim.list_slice(report_rules.tree_lines(nodes, OWN_TOP), 3, 4)
+
+  eq(
+    vim.tbl_map(function(line)
+      return { line.checked_out, line.picks }
+    end, branch_lines),
+    { { false, { branch = 'feature/d' } }, { false, { branch = 'feature/e' } } }
+  )
+end
+
 T['a group’s work'] = MiniTest.new_set()
 
 T['a group’s work']['is each worktree but the editor’s own, then each of its branches it has not checked out, each once'] = function()
