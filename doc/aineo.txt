@@ -378,7 +378,8 @@ either pane and remembered for the Claude Code session as that pick is. A
 worktree shows that worktree, and so does a branch checked out in one; a
 branch no worktree has checked out shows the folder Claude works in, the
 first line saying the branch has no folder on disk; the reported work shows
-the first worktree reported. Files open for editing in the worktree shown.
+the first worktree or branch it shows alone. Files open for editing in the
+worktree shown.
 The changes pane's default view (`\g` in that pane) shows the folder Claude
 works in again. A worktree shown that is gone from disk gives way to the
 folder Claude works in, and aineo tells you once.
@@ -1014,10 +1015,11 @@ the local branch `dev`, as do `refs/heads/dev`, `heads/dev`,
 `refs/remotes/origin/dev` and `remotes/origin/dev`. Neovim's own
 |vim.ui.select()| is a numbered list with no search; a picker plugin that
 replaces it (telescope, fzf-lua, snacks, dressing and the like) searches
-that text. While Claude Code has reported work, the list begins with each
-report, newest first, `[reported] <branch> from <base>`, then two spaces
-and its label when it has one, then `[reported] All reported work (<n>)`
-(|aineo-changes-reported|); picking a report shows its work alone. `s` is a
+that text. While Claude Code has reported work, the list begins with the
+Reported section's tree, each line `[reported] ` and the line as the
+section shows it, indented, then `[reported] All reported work (<n>)`
+(|aineo-changes-reported-section|); picking a line shows what it names
+alone. `s` is a
 Normal-mode map of the two buffers of the pane and of the explorer's buffer,
 where it is the same pick (|aineo-explorer|); in every other buffer it is
 Vim's own.
@@ -1360,36 +1362,42 @@ fails, both windows say so until the pane is shown again, which starts it
 again.
 
                                                    *aineo-changes-reported*
-Claude Code and its subagents tell aineo of each git worktree or branch
-they create for new work, and of the commit they made it from, through
-aineo's tool `announce_work` (|aineo-report|); every agent and subagent
-must. aineo's own hook tells it too, after a command of Claude Code's
-`Bash` tool that makes a worktree or a branch (|aineo-changes-hook|). A
-report goes to the tab whose Claude Code made it,
-whichever tab is current, and to no other editor; one no tab of this
-editor runs is not taken. That tab's changes pane matches it against what
-git lists, as `s` reads it: a worktree by its folder with every link
-resolved, a branch by its name — a branch a worktree has checked out
-counts as that worktree. Your own worktree, the branch it has checked out,
-or a branch no worktree has checked out that `s` never offers — the
-working branch — is not added, and nothing is said. What git does not list
-yet is looked for again at every read of the commits window for 60 seconds
-from the report, then let go, and aineo says once "aineo: Claude Code
-announced <kind> <path or branch>, which git does not list; the changes
-pane is unchanged". The same report made again while it is looked for
-changes nothing. At most 32 are looked for at once in a tab; one more is
-not taken, and nothing is said of it. Before the pane is first shown,
-aineo watches nothing, so such a report is looked for when it comes, once
-the repository is found, and when the pane is first shown. An agent's path
-is resolved off the main loop, so a folder that does not answer holds no
-keystroke.
+Claude Code and its subagents tell aineo, through aineo's tool
+`announce_work` (|aineo-report|), of each git worktree they work in: the
+absolute path of its folder, a short label for their task, and every
+branch they are working on there, each with the commit it was made from;
+every agent and subagent
+must, once per worktree, right after it makes the worktree or a branch in
+it, and again whenever the set of branches it works on there changes. An
+agent with several worktrees calls once for each. aineo's own hook tells it
+too, after a command of Claude Code's `Bash` tool that makes a worktree or
+a branch (|aineo-changes-hook|). A report goes to the tab whose Claude Code
+made it, whichever tab is current, and to no other editor; one no tab of
+this editor runs is not taken.
+Before the tab takes a report, each branch it lists must be named exactly
+as one of the local branches git lists in the worktree's folder — a
+revision of one, `main~1` or `feature/a^0`, is no branch — and its base is
+resolved to a full commit id, as git reads a name: first in the worktree's
+folder, so that `HEAD` is the agent's own, then in the session's
+repository. A branch git does not list, or a base git cannot resolve in
+either, refuses the whole report, naming the item, and nothing is
+recorded.
+That tab's changes pane matches the report against what git lists, as `s`
+reads it: the worktree by its folder with every link resolved. What git
+does not list yet is looked for again at every read of the commits window
+for 60 seconds from the first report of that folder, then let go, and
+aineo says once "aineo: Claude Code announced worktree <folder>, which git
+does not list; the changes pane is unchanged" — unless none of its reports
+listed a branch, as when an agent done with a worktree it removed says so,
+which is let go untold. Reports of a folder looked
+for are kept, in order, and taken together once git lists it. At most 32
+folders are looked for at once in a tab; a report of one more is not taken,
+and nothing is said of it. Before the pane is first shown, aineo watches
+nothing, so such a report is looked for when it comes, once the repository
+is found, and when the pane is first shown. An agent's folder is resolved
+off the main loop, so a folder that does not answer holds no keystroke.
 What an agent reports is only compared with what git printed: no git, no
-shell and no buffer name is made of it. Its base is resolved to a full
-commit id, as git reads a name, before the tab takes the report: first in
-the folder of the work — the worktree reported, or the worktree that has a
-reported branch checked out — so that `HEAD` is the agent's own, then in
-the session's repository; a base git cannot resolve in either is refused,
-and nothing is recorded.
+shell and no buffer name is made of it.
 
                                                           *aineo-changes-hook*
 aineo's own hook, a `PostToolUse` hook it gives the Claude Code it starts
@@ -1400,120 +1408,159 @@ agent's call of `announce_work` would, with no label. It reads these plain
 forms alone, each optionally after `git -C <folder>`:
     `git worktree add [-b|-B <branch>] <path> [<commit>]`, with `-f`,
         `--force`, `-q`, `--quiet`, `--detach` and `--` allowed — a worktree
+        with the branch `-b` or `-B` names, else the branch it checks out
     `git checkout -b|-B <branch> [<start>]`, with `-q` or `--quiet`
         — a branch
     `git switch -c|-C|--create|--force-create <branch> [<start>]`, with
         `-q` or `--quiet` — a branch
     `git branch <name> [<start>]` — a branch
-The base is the start point or commit the command names, else `HEAD`,
-resolved in the folder the command ran in when the hook runs. A command
-joined to another (`cd x && git …`, `;`, `|`), redirected, holding anything
-the shell expands (`$`, a backtick, a leading `~`), with another option or
-more words, or whose base git cannot resolve, is reported by nothing: the
+A branch is reported in the worktree the command ran in, by that
+worktree's top level. The base is the start point or commit the command
+names, else `HEAD`, resolved in the folder the command ran in when the hook
+runs. A hook's report adds its branch to that worktree's branches, keeping
+the others and the label; it never removes a branch. A worktree no report
+holds yet becomes one with that branch and no label, until an agent's call
+gives one. A command joined to another (`cd x && git …`, `;`, `|`),
+redirected, holding anything the shell expands (`$`, a backtick, a leading
+`~`), with another option or more words, whose base git cannot resolve, or
+that adds a worktree on no branch (`--detach`), is reported by nothing: the
 agent's call still is. The hook runs in the background, never holds or
-changes the tool call, says nothing when it fails, and ends itself after
-6 seconds whatever the editor does, one held at a prompt say. A failed
-command runs no `PostToolUse` hook at all. A worktree Claude
-Code makes itself for a subagent (`isolation: worktree`) runs no hook aineo
-could read without taking that creation over: the subagent is asked to call
-`announce_work` with its worktree's path instead.
+changes the tool call, says nothing when it fails, and ends itself after 6
+seconds whatever the editor does, one held at a prompt say. A failed
+command runs no `PostToolUse` hook at all. A worktree Claude Code makes
+itself for a subagent (`isolation: worktree`) runs no hook aineo could read
+without taking that creation over: the subagent is asked to call
+`announce_work` with the absolute path of its worktree's folder instead.
 
-Each worktree or branch found joins the tab's reported work, in the order
-first reported, once however often it is reported. A report made again of
-the same worktree or branch — by its path or by the branch it has checked
-out — is told nothing. An agent's call puts its base, label and time in
-place of those before, so that its line moves to the top of the Reported
-section and its age starts again; a report of aineo's hook keeps those
-before, so the agent's call wins over the hook's either way — but a
-hook's report of a branch made in a reported worktree since gives that
-worktree the new branch and its base, keeping the label. A worktree made
-of a reported branch (`git branch x`, then `git worktree add <path> x`)
-takes that branch's line: one piece of work, one line. The reported work
-then
-becomes the focused view, from the default view or from a worktree or
-branch picked with `s`, its whole change chosen, the cursor on its
-heading, and aineo says once "aineo: Claude Code started work in Worktree
-<folder> (<branch>); the changes pane shows the reported work", or
-`Branch <name>`, with "tab <n>: " before it when that tab is not the
-current one. The changes pane is not brought into view: when it is not on
-screen, the next `\g` shows the reported work. The focused view of the
-reported work shows each member under its own heading, `Worktree <folder>
-(<branch>)` or `Branch <name>`, in |hl-AineoChangesFilter|, and below it
-its commits, or its note and the line saying its last read failed, as a
-worktree or branch shown alone does; nothing else. Enter, `l`, `h` and
-`gf` under a branch's lines read that branch, as under a branch picked.
+An agent's call for a worktree replaces that worktree's label and every
+branch reported of it: a branch it no longer lists leaves the Reported
+section, and a call listing no branch takes the worktree out of it. Each
+call, and each hook's report that adds a branch, moves the worktree to the
+top of its label's worktrees, and its label to the top of the Reported
+section, and its age starts again. A worktree new to the reported work,
+other than your own, makes the reported work the focused view, from the
+default view or from a worktree or branch picked with `s`, that worktree's
+whole change chosen, the cursor on its heading, and aineo says once "aineo:
+Claude Code started work in Worktree <folder> (<branch>); the changes pane
+shows the reported work", with "tab <n>: " before it when that tab is not
+the current one. Your own worktree, reported as the main checkout's folder
+for work there, is listed in the Reported section but changes no view and
+is told nothing: its work is the default view's. The changes pane is not
+brought into view: when it is not on screen, the next `\g` shows the
+reported work. The focused view of the reported work shows each worktree
+under its own heading, `Worktree <folder> (<branch>)`, then each reported
+branch its worktree has not checked out, `Branch <name>`, in
+|hl-AineoChangesFilter|, newest first, and below each its commits, or its
+note and the line saying its last read failed, as a worktree or branch
+shown alone does; nothing else. Enter, `l`, `h` and `gf` under a branch's
+lines read that branch, as under a branch picked.
 
-A reported worktree or branch is read from the base its report gives,
-wherever the pane shows it, in place of a base of its own, while that
-base is behind its tip and descends from the pane's own base; else — the
+Each reported branch is read from the base its report gives, wherever the
+pane shows it, in place of a base of its own, while that base is behind
+the branch's tip and descends from the pane's own base; else — the
 reported base older than the pane's, unrelated to it, or left behind by a
 rebase onto newer work — from the pane's own, so that it never lists
-commits the agent did not make: a worktree's commits from that base to
-its `HEAD`, and, under its heading, its files since that base, the
-uncommitted ones included; a branch's commits from that base to its tip,
-and its files between the two. A branch no worktree
-has checked out has nothing uncommitted, and its heading says so:
-`Branch <name> (no worktree: commits only)`. A report made before reports
-gave a base is read from a base of its own, as any worktree or branch is.
+commits the agent did not make. A worktree is read from the base of the
+branch it has checked out: its commits from that base to its `HEAD`, and,
+under its heading, its files since that base, the uncommitted ones
+included. A reported branch its worktree has not checked out has nothing
+uncommitted, and its heading says so: `Branch <name> (not checked out:
+commits only)`, its commits from its base to its tip and its files between
+the two. A report made before reports gave a base is read from a base of
+its own, as any worktree or branch is.
 
                                               *aineo-changes-reported-section*
 While there is reported work, the default view of the commits window starts
-with a `Reported` section, above Uncommitted, one line per report, newest
-first: >
+with a `Reported` section, above Uncommitted: a tree of the agents' labels,
+newest first by their newest report, under each the worktrees reported
+with it, newest first, and under each worktree its branches, in the order
+reported: >
     Reported
-    worktree feature/a from 1a2b3c4 T108 reported work 5m
-    branch feature/b from 1a2b3c4 now
+    T111 reported tree 5m
+      agent-1
+        feature/b from 1a2b3c4
+        feature/a * from 1a2b3c4
+    (no label) now
+      agent-2
+        feature/c * from 9f8e7d6
 <
-Each line gives the kind reported, the branch the worktree is on — or its
-folder when its `HEAD` is detached — or the branch's name, `from` and the
-abbreviated id of the base its work is read from (above), or `from ?` for
-a report made before reports gave
-one, the agent's label when it gave one, and how long ago the report came,
-as a commit's age is told (|aineo-changes-author-column|). The line under
-the cursor chooses the files window's list, the whole change of its
-worktree or branch, as any line does; Enter on it shows that work alone, as
-picking its report with `s` does, and the explorer follows
-(|aineo-explorer|). The heading shows in |hl-AineoChangesReportedHeading|,
-the base in |hl-AineoChangesCommitId|, the label in
-|hl-AineoChangesReportedLabel| and the age in |hl-AineoChangesReportedAge|.
+A label's line gives the label, or `(no label)` for the worktrees aineo's
+hook reported that no agent's call labelled yet, and how long ago the
+newest of them was reported, as a commit's age is told
+(|aineo-changes-author-column|). A worktree's line, indented two cells,
+gives its folder's name. A branch's line, indented four cells, gives the
+branch's name, a `*` when its worktree has it checked out now, `from` and
+the abbreviated id of the base its work is read from (above) — on your
+own worktree's checked-out branch, the base the default view reads, which
+Enter on that line shows — or `from ?` for a report made before reports
+gave one.
+The line under the cursor chooses the files window's list, as any line
+does, and Enter on it shows what it names alone, as picking it with `s`
+does, the explorer following (|aineo-explorer|):
+    a label's line      every worktree of that label and each of their
+                        branches not checked out, together, as the focused
+                        view of the reported work shows them; the files
+                        window keeps its list
+    a worktree's line   that worktree alone, its whole change chosen, as a
+                        worktree picked with `s`
+    a branch's line     while its worktree has it checked out, that
+                        worktree alone, its commits from the branch's base
+                        and its uncommitted changes; else the branch alone,
+                        its commits from its base to its tip, its heading
+                        saying `(not checked out: commits only)`
+Your own worktree's line, and that of the branch it has checked out, show
+the default view, Session work chosen. The heading shows in
+|hl-AineoChangesReportedHeading|, a label in |hl-AineoChangesReportedLabel|,
+its age in |hl-AineoChangesReportedAge|, a worktree's folder in
+|hl-AineoChangesReportedWorktree|, a branch's name in
+|hl-AineoChangesReportedBranch| and a base in |hl-AineoChangesCommitId|.
 
-While there is reported work, `s` offers each report first, newest first,
-then "[reported] All reported work (<n>)"; picking a report shows its work
-alone, picking all of it makes the reported work the focused view again,
-and picking a worktree or a branch shows that one alone, the reported work
-kept behind it. `\g` switches between the default view and whichever of
-the two was chosen last. A member drops out, untold, at the read that no
-longer lists it — a worktree removed, a branch deleted. When the last one
-goes while the reported work is shown, the default view shows, and aineo
-says once "aineo: the reported work is gone; the changes pane shows the
-default view". A worktree or branch picked behind the reported work that
-goes is let go untold. Following another Claude Code session than one
-followed before empties the reported work and drops the reports still
-looked for; each tab keeps its own set, and the focused view is kept
-on disk for each Claude Code session (|aineo-changes-view-kept|).
+While there is reported work, `s` offers the same tree first, each line an
+item, `[reported] ` before it, indented as in the section, then
+"[reported] All reported work (<n>)", <n> the worktrees reported; picking
+a line's item shows what that line shows, picking all of it makes every
+reported worktree and branch the focused view again, and picking a
+worktree or a branch shows that one alone, the reported work kept behind
+it. `\g` switches between the default view and whichever of the two was
+chosen last. A branch git no longer lists leaves its worktree, untold, at
+the read that no longer lists it; a worktree git no longer lists, or with
+no branch left, leaves the section, and a label with no worktree left
+leaves it too. When the last of what the focused view shows goes while the
+reported work is shown, the default view shows, and aineo says once
+"aineo: the reported work is gone; the changes pane shows the default
+view". A worktree or branch picked behind the reported work that goes is
+let go untold. Following another Claude Code session than one followed
+before empties the reported work and drops the reports still looked for;
+each tab keeps its own, and the focused view is kept on disk for each
+Claude Code session (|aineo-changes-view-kept|).
 
                                                   *aineo-changes-view-kept*
 The changes pane remembers its focused view for each Claude Code session,
 beside the session's base and saves, under `stdpath('state')` in
 `aineo/changes-sessions/`, in `<sha256 of the session id>.view.json`. It
 keeps what you picked with `s` (a worktree by its folder, a branch by its
-name), the members of the reported work, each with the kind, base and
-label reported and when the report came, and whether the focused view or
-the default view showed; nothing else: not the pane the right column
-shows, not a cursor, not a commit expanded. The file is written at once,
-whole, whenever one of these changes, through a file beside it that then
-replaces it, so a crash keeps what the last change left, and not when
+name), each reported worktree, by its folder, with its label, when its last
+report came and its branches, each with the base reported, and whether the
+focused view or the default view showed; nothing else: not the pane the
+right column shows, not a cursor, not a commit expanded, not the label
+picked, which comes back as all the reported work. The file is written at
+once, whole, whenever one of these changes, through a file beside it that
+then replaces it, so a crash keeps what the last change left, and not when
 nothing changed. Quitting aineo and coming back (the tab reopened at start,
 `\S`, a resume of that session) shows the view again as soon as git has
 listed the worktrees and the branches: a worktree or a branch that is gone
 is dropped, untold, and the default view shows when what the focused view
-showed is gone. A restore tells nothing, the reported work included. A
-session with no view kept starts with the default view, as does one whose
-file is missing, unreadable, malformed, or of another repository; that file
-is written over once the view changes. A worktree or branch picked before
-the pane follows the session is not given up for the view kept. Two tabs on
-two sessions keep two files, and a tab that follows another session shows
-that session's view. When a session's Claude Code finds no conversation and
+showed is gone. Reports a file kept before reports were a tree come back
+as one: a worktree's report as that worktree with the branch it has checked
+out now, and its label; a branch's report as that branch under the worktree
+that has it checked out, else under the repository's main checkout. A
+restore tells nothing, the reported work included. A session with no view
+kept starts with the default view, as does one whose file is missing,
+unreadable, malformed, or of another repository; that file is written over
+once the view changes. A worktree or branch picked before the pane follows
+the session is not given up for the view kept. Two tabs on two sessions
+keep two files, and a tab that follows another session shows that
+session's view. When a session's Claude Code finds no conversation and
 another session takes its place, the view moves with its base and saves.
 When the file cannot be written, aineo warns once, "aineo: the changes pane
 cannot keep this session's view, and goes on without: <why>".
@@ -1532,9 +1579,11 @@ a window not current (|hl-NormalNC|), until you colour the group. The commits
 window's two fixed lines, Uncommitted and Session work, its Landed heading,
 the heading of a worktree or branch shown alone, and the files window's first
 line show whole in |hl-AineoChangesFilter|. The Reported heading shows whole
-in |hl-AineoChangesReportedHeading|, and a report's line its base in
-|hl-AineoChangesCommitId|, its label in |hl-AineoChangesReportedLabel| and
-its age in |hl-AineoChangesReportedAge|, the rest in its window's colours
+in |hl-AineoChangesReportedHeading|, a label in
+|hl-AineoChangesReportedLabel|, its age in |hl-AineoChangesReportedAge|, a
+worktree's folder in |hl-AineoChangesReportedWorktree|, a branch's name in
+|hl-AineoChangesReportedBranch| and a base in |hl-AineoChangesCommitId|, the
+rest — the `*` of a branch checked out among it — in its window's colours
 (|aineo-changes-reported-section|). A
 line that lists nothing, and another worktree's heading, show whole in
 |hl-AineoChangesNote|: aineo reading the repository, no file changed, no
@@ -1586,9 +1635,17 @@ AineoChangesFilter       the two fixed lines of the commits window, its
 AineoChangesReportedHeading  the commits window's Reported heading, linked
                          to `Title`
                                                 *hl-AineoChangesReportedLabel*
-AineoChangesReportedLabel  a report's label, linked to `Identifier`
+AineoChangesReportedLabel  a label in the Reported section, linked to
+                         `Identifier`
                                                   *hl-AineoChangesReportedAge*
-AineoChangesReportedAge  how long ago a report came, linked to `Comment`
+AineoChangesReportedAge  how long ago a label's newest report came, linked
+                         to `Comment`
+                                             *hl-AineoChangesReportedWorktree*
+AineoChangesReportedWorktree  a reported worktree's folder, linked to
+                         `Directory`
+                                               *hl-AineoChangesReportedBranch*
+AineoChangesReportedBranch  a reported branch's name, linked to `Label`, as
+                         the commit graph's branch names are by default
                                                          *hl-AineoChangesNote*
 AineoChangesNote         a line that lists nothing, linked to `Comment`
                                                       *hl-AineoChangesFailure*
@@ -2890,39 +2947,50 @@ aineo starts Claude Code with five additions of its own:
   are not, and carry a marker that makes Claude Code ask you for each call
   in every mode (|aineo-run-tools|).
 
-`announce_work` is how Claude Code and its subagents tell aineo of a git
-worktree or branch they just created for new work (|aineo-changes-reported|),
-and every one of them must: its description, which subagents see too,
-begins "Required for every agent and subagent: call once right after you
-create a git branch or worktree for new work, with kind, its path or
-branch, the base commit it was created from, and a short label." Its
-arguments are `kind`, `worktree` or `branch`; the folder, `path`, or the
-name, `branch`; `base`, the commit the work was created from, an id or any
-name git reads, such as `origin/dev`; and `label`, a short name for the
-task, which may be left out; nothing else. Each string must be non-empty,
-at most 4096 bytes, and hold no NUL and no line break, or the call is
-refused, naming the field; a call without `base` is refused so too. A path
-that is not absolute is taken from the directory Claude Code runs in, and
-is not taken when that directory cannot be read. The server offers it to
-the editor that started Claude Code alone, with the token of that start;
-the tab resolves `base` to a full id in the work's folder, else in its
+`announce_work` is how Claude Code and its subagents tell aineo of each
+git worktree they work in and the branches they work on there
+(|aineo-changes-reported|), and every one of them must: its description,
+which subagents see too, begins "Required for every agent and subagent:
+call once per worktree you work in, right after you create the worktree or
+a branch in it, and again whenever the set of branches you are working on
+there changes, with the absolute path of the worktree's folder, a short
+label, and every branch you are working on there with the commit it was
+created from." Its arguments, all three required, are `worktree`, the
+absolute path of the worktree's folder, the main checkout's folder for
+work there — a relative one is refused, "worktree: expected an absolute
+path", since every agent and subagent shares one server whose working
+folder is no agent's own; `label`, a short name for the task; and `branches`,
+at most 32 objects of `name`, the branch's name, and `base`, the commit it
+was created from, an id or any name git reads, such as `origin/dev`;
+nothing else. `branches` may be empty: the agent is done with that
+worktree, which leaves the Reported section. Each string must be
+non-empty, at most 4096 bytes, and hold no NUL and no line break, and no
+two branches may share a name, or the call is refused, naming the field or
+the item, `branches[2].base` say. A call replaces what the worktree's
+calls before reported: an agent with several worktrees calls once for
+each. The server offers it to the editor that started Claude Code alone,
+with the token of that start; the tab checks each branch is a local branch and
+resolves its base to a full id in the worktree's folder, else in its
 session's repository (|aineo-changes-reported|), waiting at most 4 seconds
-for git. The tool only informs, and answers one of four
-things, nothing more: `ok` when a tab took it; `not taken`, as an error,
-when none did — no tab of that editor runs this Claude Code, the editor
-cannot be reached or does not answer within 5 seconds, or that tab already
-waits for 32 others git does not list yet (|aineo-changes-reported|);
-`aineo refused the announcement: base: <base> names no commit in <folder>`,
-followed by `, nor in <repository>` when the work's folder was tried first,
-as an error, when git cannot resolve `base`, and nothing is recorded; or
-`aineo refused the announcement: ` and the field, as an error, for
-arguments it refuses. The paragraph appended to the system prompt reads
-"Required for every agent and subagent: call
-`mcp__aineo__announce_work` once right after you create a git branch or
-worktree for new work, with kind, its path or branch, the base commit it
-was created from, and a short label. It only informs aineo: if it
-refuses, correct the call as the refusal says and call again; otherwise do
-not act on its reply."
+for git. The tool only informs, and answers one of four things, nothing
+more: `ok` when a tab took it; `not taken`, as an error, when none did — no
+tab of that editor runs this Claude Code, the editor cannot be reached or
+does not answer within 5 seconds, or that tab already waits for 32 other
+folders git does not list yet (|aineo-changes-reported|); `aineo refused the
+announcement: branches[<n>].base: <base> names no commit in <folder>`,
+followed by `, nor in <repository>` when the worktree's folder was tried
+first, or `aineo refused the announcement: branches[<n>].name: <name> is no
+local branch in <folder>`, as an error, and nothing is recorded; or `aineo
+refused the announcement: ` and the field, as an error, for arguments it
+refuses. The paragraph appended to the system prompt reads "Required for
+every agent and subagent: call `mcp__aineo__announce_work` once per
+worktree you work in, right after you create the worktree or a branch in
+it, and again whenever the set of branches you are working on there
+changes, with the absolute path of the worktree's folder, a short label,
+and every branch you are working on there with the commit it was created
+from. It only informs
+aineo: if it refuses, correct the call as the refusal says and call again;
+otherwise do not act on its reply."
 The server and the hooks are given this editor's address, |v:servername|,
 and a token of this start of Claude Code; the hooks are also given the
 directory Claude Code runs in and its process id, which the shell that runs

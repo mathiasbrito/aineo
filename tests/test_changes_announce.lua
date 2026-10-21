@@ -211,9 +211,47 @@ local DEFAULT_VIEW_WITH_AGENT = vim.list_extend(
 --- The view of the reported worktree `agent-1` on `feature/a`, of no commit.
 local AGENT_VIEW = { 'Worktree agent-1 (feature/a)', 'No commits in this worktree' }
 
+--- The branch `name`, reported made from `base`, none when not given.
+---
+---@param name string
+---@param base? string
+---@return table
+local function on(name, base)
+  return { name = name, base = base }
+end
+
+--- An agent's call for the worktree at `path`, labelled `label`, listing
+--- `branches`.
+---
+---@param path string
+---@param label string
+---@param branches table[]
+---@return table
+local function call_for(path, label, branches)
+  return { worktree = path, label = label, branches = branches }
+end
+
+--- A report of aineo's hook for the worktree at `path`, of `branches`.
+---
+---@param path string
+---@param branches table[]
+---@return table
+local function hook_for(path, branches)
+  return { worktree = path, branches = branches, by_hook = true }
+end
+
+--- The agent's call `T` for the worktree at `path`, listing `feature/a`
+--- with no base.
+---
+---@param path string
+---@return table
+local function agent_call(path)
+  return call_for(path, 'T', { on('feature/a') })
+end
+
 --- The Reported section atop the default view once the worktree `agent-1`
---- on `feature/a` was reported, with no base, a moment ago.
-local REPORTED_AGENT = { 'Reported', 'worktree feature/a from ? now' }
+--- on `feature/a` was reported by `agent_call()` a moment ago.
+local REPORTED_AGENT = { 'Reported', 'T now', '  agent-1', '    feature/a * from ?' }
 
 --- `rows`, the default view's rows below the Reported section, under
 --- `REPORTED_AGENT`.
@@ -258,6 +296,127 @@ local function started_in(heading)
   )
 end
 
+--- The words that tell the user git did not list the worktree `path` an
+--- agent reported.
+---
+---@param path string
+---@return string
+local function unlisted(path)
+  return ('aineo: Claude Code announced worktree %s, which git does not list; the changes pane is unchanged'):format(
+    path
+  )
+end
+
+--- Makes the local branch `name` in the repository at `top`, holding one
+--- commit `subject` past `main`, checked out in no worktree; returns that
+--- commit's full id.
+---
+---@param top string
+---@param name string
+---@param subject string
+---@return string
+local function add_branch(top, name, subject)
+  local worktree = add_worktree(top, 'making-' .. name:gsub('/', '-'), name)
+  local commit = commit_only(worktree, 'branch.txt', name, subject)
+  git_repo.git(top, { 'worktree', 'remove', '--force', worktree })
+  return commit
+end
+
+--- The abbreviated id of `commit`, a full id, as a branch's line shows it.
+---
+---@param commit string
+---@return string
+local function short(commit)
+  return commit:sub(1, 7)
+end
+
+--- Switches the view of the pane of the module's home as `\g` does with the
+--- cursor in its commits window (`toggle_focused_view()`).
+local function toggle_in_pane()
+  enter_window_of('module', 'commits')
+  child.lua('_G.homes.module.toggle_focused_view()')
+end
+
+--- Presses Enter on the line `line` of the commits window of the module's
+--- home's pane.
+---
+---@param line integer
+local function enter_on_line(line)
+  enter_window_of('module', 'commits')
+  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { line })
+  child.lua([[pcall(vim.api.nvim_feedkeys, vim.keycode('<CR>'), 'mx', false)]])
+end
+
+--- Presses `s` in the commits window of the module's home's pane and waits
+--- until its picker opens, at most `git_repo.PATIENCE_MS`.
+local function press_s()
+  local before = child.lua_get('#_G.pickers')
+  enter_window_of('module', 'commits')
+  child.lua("pcall(vim.api.nvim_feedkeys, 's', 'mx', false)")
+  wait_until('the picker opened', function()
+    return child.lua_get('#_G.pickers') > before
+  end)
+end
+
+--- The texts the last picker the child was asked for offers, and its prompt.
+---
+---@return { prompt: string, texts: string[] }
+local function last_offered()
+  return child.lua_get([[(function(request)
+    return { prompt = request.options.prompt, texts = vim.tbl_map(request.options.format_item, request.items) }
+  end)(_G.pickers[#_G.pickers])]])
+end
+
+--- The first lines of the default view of the module's home's pane, once
+--- `\g` switched to it and it lists `expected` there.
+---
+---@param expected string[]
+local function expect_reported_lines(expected)
+  toggle_in_pane()
+  wait_until('the Reported section lists ' .. vim.inspect(expected), function()
+    return vim.deep_equal(vim.list_slice(pane_lines('module', 'commits'), 1, #expected), expected)
+  end)
+  eq(vim.list_slice(pane_lines('module', 'commits'), 1, #expected), expected)
+end
+
+--- Makes the worktree `agent-1` on `feature/a` beside the repository at
+--- `top`, with two commits, `One` and `Two`; returns the worktree's top
+--- level and the two commits' full ids.
+---
+---@param top string
+---@return string worktree
+---@return string one
+---@return string two
+local function agent_with_two_commits(top)
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  local one = commit_only(agent, 'one.txt', 'one', 'One')
+  local two = commit_only(agent, 'two.txt', 'two', 'Two')
+  return agent, one, two
+end
+
+--- The timers the child's home was asked for: how long each was, and
+--- whether it was stopped.
+---
+---@return { milliseconds: integer, stopped: boolean }[]
+local function timers()
+  return child.lua_get([[vim.tbl_map(function(timer)
+    return { milliseconds = timer.milliseconds, stopped = timer.stopped }
+  end, _G.timers)]])
+end
+
+--- Makes the changes home `key` names follow the Claude Code session `id`,
+--- its base and saves kept under `state`.
+---
+---@param key string
+---@param id string
+---@param state string
+local function follow(key, id, state)
+  child.lua(
+    '_G.homes[...].follow_changes_session({ id = select(2, ...), state_directory = select(3, ...) })',
+    { key, id, state }
+  )
+end
+
 T['a reported worktree'] = MiniTest.new_set()
 
 T['a reported worktree']['shows under its heading with its commits, nothing else, and is told once'] = function()
@@ -265,7 +424,7 @@ T['a reported worktree']['shows under its heading with its commits, nothing else
   local agent = add_worktree(top, 'agent-1', 'feature/a')
   local work_a = commit_only(agent, 'a.txt', 'a', 'Work a')
 
-  report('module', { kind = 'worktree', path = agent })
+  report('module', agent_call(agent))
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/a)',
@@ -280,13 +439,9 @@ T['a reported worktree']['is matched by its real path when reported through a sy
   local link = vim.fs.joinpath(fixture.directory('announce-link-links'), 'to-agent')
   assert(vim.uv.fs_symlink(agent, link))
 
-  report('module', { kind = 'worktree', path = link })
+  report('module', agent_call(link))
 
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-1 (feature/a)', 'No commits in this worktree' }
-  )
+  expect_pane_lines('module', 'commits', AGENT_VIEW)
 end
 
 T['a reported worktree']['has its path resolved off the main loop, the reports kept in their order'] = function()
@@ -317,13 +472,13 @@ T['a reported worktree']['has its path resolved off the main loop, the reports k
     { slow, fast }
   )
 
-  report('module', { kind = 'worktree', path = slow })
-  report('module', { kind = 'worktree', path = fast })
+  report('module', call_for(slow, 'T', { on('feature/a') }))
+  report('module', call_for(fast, 'T', { on('feature/b') }))
 
   expect_pane_lines('module', 'commits', {
-    'Worktree agent-1 (feature/a)',
-    'No commits in this worktree',
     'Worktree agent-2 (feature/b)',
+    'No commits in this worktree',
+    'Worktree agent-1 (feature/a)',
     'No commits in this worktree',
   })
   eq(told('module'), {
@@ -332,91 +487,22 @@ T['a reported worktree']['has its path resolved off the main loop, the reports k
   })
 end
 
-T['a reported branch'] = MiniTest.new_set()
-
---- Makes the local branch `name` in the repository at `top`, holding one
---- commit `subject` past `main`, checked out in no worktree; returns that
---- commit's full id.
----
----@param top string
----@param name string
----@param subject string
----@return string
-local function add_branch(top, name, subject)
-  local worktree = add_worktree(top, 'making-' .. name:gsub('/', '-'), name)
-  local commit = commit_only(worktree, 'branch.txt', name, subject)
-  git_repo.git(top, { 'worktree', 'remove', '--force', worktree })
-  return commit
-end
-
-T['a reported branch']['shows under its heading with its commits, and is told once'] = function()
-  local top = start_on_repository('announce-branch')
-  local work_b = add_branch(top, 'feature/b', 'Work b')
-
-  report('module', { kind = 'branch', branch = 'feature/b' })
-
-  expect_pane_lines('module', 'commits', { 'Branch feature/b', commit_line(work_b, 'Work b') })
-  eq(told('module'), { started_in('Branch feature/b') })
-end
-
-T['a reported branch']['chooses its whole change, which the files window lists from its base to its tip'] = function()
-  local top = start_on_repository('announce-branch-files')
-  add_branch(top, 'feature/b', 'Work b')
-
-  report('module', { kind = 'branch', branch = 'feature/b' })
-
-  expect_pane_lines('module', 'files', { 'Files in: Branch feature/b', '  A branch.txt' })
-end
-
-T['a reported branch']['shows a file’s diff from its base by Enter under its whole change'] = function()
-  local top = start_on_repository('announce-branch-diff')
-  add_branch(top, 'feature/b', 'Work b')
-  report('module', { kind = 'branch', branch = 'feature/b' })
-  expect_pane_lines('module', 'files', { 'Files in: Branch feature/b', '  A branch.txt' })
-
-  enter_window_of('module', 'files')
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
-  child.lua([[pcall(vim.api.nvim_feedkeys, vim.keycode('<CR>'), 'mx', false)]])
-
-  wait_until('the diff shown', function()
-    return child.lua_get([[vim.fn.bufexists('aineo://branch/feature/b//diff/branch.txt') == 1]])
-  end)
-end
-
-T['a reported branch']['checked out in another worktree is added as that worktree'] = function()
-  local top = start_on_repository('announce-branch-checked-out')
-  add_worktree(top, 'agent-2', 'feature/c')
-
-  report('module', { kind = 'branch', branch = 'feature/c' })
-
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-2 (feature/c)', 'No commits in this worktree' }
-  )
-  eq(told('module'), { started_in('Worktree agent-2 (feature/c)') })
-end
-
 T['a report git does not list yet'] = MiniTest.new_set()
 
 T['a report git does not list yet']['is added once a read lists it, a worktree added just after the call'] = function()
   local top = start_on_repository('announce-late')
   local agent = add_worktree(top, 'agent-1', 'feature/a')
   local late = vim.fs.joinpath(vim.fs.dirname(top), 'agent-late')
-  report('module', { kind = 'worktree', path = late })
-  report('module', { kind = 'worktree', path = agent })
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-1 (feature/a)', 'No commits in this worktree' }
-  )
+  report('module', agent_call(agent))
+  expect_pane_lines('module', 'commits', AGENT_VIEW)
+  report('module', call_for(late, 'late', { on('feature/late') }))
 
   add_worktree(top, 'agent-late', 'feature/late')
 
   expect_pane_lines('module', 'commits', {
-    'Worktree agent-1 (feature/a)',
-    'No commits in this worktree',
     'Worktree agent-late (feature/late)',
+    'No commits in this worktree',
+    'Worktree agent-1 (feature/a)',
     'No commits in this worktree',
   })
   eq(told('module'), {
@@ -425,28 +511,15 @@ T['a report git does not list yet']['is added once a read lists it, a worktree a
   })
 end
 
---- The timers the child's home was asked for: how long each was, and
---- whether it was stopped.
----
----@return { milliseconds: integer, stopped: boolean }[]
-local function timers()
-  return child.lua_get([[vim.tbl_map(function(timer)
-    return { milliseconds = timer.milliseconds, stopped = timer.stopped }
-  end, _G.timers)]])
-end
-
 T['a report git does not list yet']['waits 60 s from the call, then is let go and told once, several at once'] = function()
   local top = start_on_repository('announce-unlisted')
   local agent = add_worktree(top, 'agent-1', 'feature/a')
   local missing = vim.fs.joinpath(vim.fs.dirname(top), 'never-made')
-  report('module', { kind = 'worktree', path = missing })
-  report('module', { kind = 'branch', branch = 'feature/never' })
-  report('module', { kind = 'worktree', path = agent })
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-1 (feature/a)', 'No commits in this worktree' }
-  )
+  local other = vim.fs.joinpath(vim.fs.dirname(top), 'never-made-either')
+  report('module', agent_call(missing))
+  report('module', agent_call(other))
+  report('module', agent_call(agent))
+  expect_pane_lines('module', 'commits', AGENT_VIEW)
 
   child.lua('_G.fire(1); _G.fire(2); _G.fire(1)')
 
@@ -457,10 +530,8 @@ T['a report git does not list yet']['waits 60 s from the call, then is let go an
   })
   eq(told('module'), {
     started_in('Worktree agent-1 (feature/a)'),
-    ('aineo: Claude Code announced worktree %s, which git does not list; the changes pane is unchanged'):format(
-      missing
-    ),
-    'aineo: Claude Code announced branch feature/never, which git does not list; the changes pane is unchanged',
+    unlisted(missing),
+    unlisted(other),
   })
 end
 
@@ -470,8 +541,8 @@ T['a report git does not list yet']['made again while it waits is taken and chan
 
   local taken = child.lua_get(
     [[{
-    _G.report('module', { kind = 'worktree', path = ... }),
-    _G.report('module', { kind = 'worktree', path = ... }),
+    _G.report('module', { worktree = ..., label = 'T', branches = { { name = 'a' } } }),
+    _G.report('module', { worktree = ..., branches = { { name = 'b' } }, by_hook = true }),
   }]],
     { missing }
   )
@@ -479,11 +550,7 @@ T['a report git does not list yet']['made again while it waits is taken and chan
 
   eq(taken, { true, true })
   eq(timers(), { { milliseconds = 60000, stopped = false } })
-  eq(told('module'), {
-    ('aineo: Claude Code announced worktree %s, which git does not list; the changes pane is unchanged'):format(
-      missing
-    ),
-  })
+  eq(told('module'), { unlisted(missing) })
 end
 
 T['a report git does not list yet']['waits, at most 32 at once; a 33rd is not taken, and nothing is told of it'] = function()
@@ -494,7 +561,11 @@ T['a report git does not list yet']['waits, at most 32 at once; a 33rd is not ta
     [[(function(directory)
       local taken = {}
       for index = 1, 33 do
-        taken[index] = _G.report('module', { kind = 'worktree', path = directory .. '/never-made-' .. index })
+        taken[index] = _G.report('module', {
+          worktree = directory .. '/never-made-' .. index,
+          label = 'T',
+          branches = { { name = 'a' } },
+        })
       end
       return taken
     end)(...)]],
@@ -506,56 +577,87 @@ T['a report git does not list yet']['waits, at most 32 at once; a 33rd is not ta
   eq(told('module'), {})
 end
 
+T['a report git does not list yet']['listing no branch, of a worktree already removed, is let go untold'] = function()
+  local top = start_on_repository('announce-empty-removed')
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  report('module', agent_call(agent))
+  expect_pane_lines('module', 'commits', AGENT_VIEW)
+  git_repo.git(top, { 'worktree', 'remove', '--force', agent })
+
+  report('module', call_for(agent, 'T', {}))
+  expect_pane_lines('module', 'commits', DEFAULT_VIEW)
+  child.lua('_G.fire(2)')
+
+  eq(told('module'), { started_in('Worktree agent-1 (feature/a)') })
+end
+
 T['a report git does not list yet']['holding words git or a shell would read is compared, never run'] = function()
   local top = start_on_repository('announce-hostile')
   local witness = vim.fs.joinpath(fixture.directory('announce-hostile-witness'), 'made')
   local agent = add_worktree(top, 'agent-1', 'feature/a')
-  report('module', { kind = 'branch', branch = '--help' })
-  report('module', { kind = 'branch', branch = ('$(touch %s)'):format(witness) })
-  report('module', { kind = 'worktree', path = agent })
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-1 (feature/a)', 'No commits in this worktree' }
-  )
+  local directory = vim.fs.dirname(top)
+  local hostile = vim.fs.joinpath(directory, ('$(touch %s)'):format(witness))
+  report('module', call_for(vim.fs.joinpath(directory, '--help'), 'T', { on('--help') }))
+  report('module', call_for(hostile, 'T', { on(('$(touch %s)'):format(witness)) }))
+  report('module', agent_call(agent))
+  expect_pane_lines('module', 'commits', AGENT_VIEW)
 
   child.lua('_G.fire(1); _G.fire(2)')
 
   eq(told('module'), {
     started_in('Worktree agent-1 (feature/a)'),
-    'aineo: Claude Code announced branch --help, which git does not list; the changes pane is unchanged',
-    ('aineo: Claude Code announced branch $(touch %s), which git does not list; the changes pane is unchanged'):format(
-      witness
-    ),
+    unlisted(vim.fs.joinpath(directory, '--help')),
+    unlisted(hostile),
   })
   eq(vim.uv.fs_stat(witness), nil)
 end
 
-T['the reported set'] = MiniTest.new_set()
+T['a report git does not list yet']['made before the session’s repository is found is matched once it is, the pane never shown'] = function()
+  local top = git_repo.create('announce-before-found', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
 
-T['the reported set']['adds up in the order first reported, and one reported again changes nothing and tells nothing'] = function()
+  child.lua(
+    [[
+      local top, agent = ...
+      _G.homes.module = require('aineo.changes')
+      _G.homes.module.begin_session({
+        directory = top,
+        show_diff = function() end,
+        start_timer = function()
+          return function() end
+        end,
+      })
+      _G.report('module', { worktree = agent, label = 'T', branches = { { name = 'feature/a' } } })
+    ]],
+    { top, agent }
+  )
+
+  wait_until('the report told', function()
+    return #told('module') > 0
+  end)
+  eq(told('module'), { started_in('Worktree agent-1 (feature/a)') })
+end
+
+T['the reported work'] = MiniTest.new_set()
+
+T['the reported work']['adds up newest first, a worktree reported again moving first, told once'] = function()
   local top = start_on_repository('announce-add-up')
   local first = add_worktree(top, 'agent-1', 'feature/a')
   local second = add_worktree(top, 'agent-2', 'feature/b')
-  report('module', { kind = 'worktree', path = first })
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-1 (feature/a)', 'No commits in this worktree' }
-  )
+  report('module', agent_call(first))
+  expect_pane_lines('module', 'commits', AGENT_VIEW)
 
-  report('module', { kind = 'worktree', path = second })
-  report('module', { kind = 'branch', branch = 'feature/a' })
-  report('module', { kind = 'worktree', path = first })
+  report('module', call_for(second, 'T', { on('feature/b') }))
+  report('module', agent_call(first))
   local third = add_worktree(top, 'agent-3', 'feature/c')
-  report('module', { kind = 'worktree', path = third })
+  report('module', call_for(third, 'T', { on('feature/c') }))
 
   expect_pane_lines('module', 'commits', {
+    'Worktree agent-3 (feature/c)',
+    'No commits in this worktree',
     'Worktree agent-1 (feature/a)',
     'No commits in this worktree',
     'Worktree agent-2 (feature/b)',
-    'No commits in this worktree',
-    'Worktree agent-3 (feature/c)',
     'No commits in this worktree',
   })
   eq(told('module'), {
@@ -563,38 +665,39 @@ T['the reported set']['adds up in the order first reported, and one reported aga
     started_in('Worktree agent-2 (feature/b)'),
     started_in('Worktree agent-3 (feature/c)'),
   })
-  eq(child.lua_get('vim.api.nvim_win_get_cursor(vim.fn.bufwinid(_G.panes.module.commits))')[1], 5)
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(vim.fn.bufwinid(_G.panes.module.commits))')[1], 1)
 end
 
-T['the reported set']['shows each member under its own heading, its commits below, and nothing else'] = function()
+T['the reported work']['shows each worktree under its heading, then each branch it has not checked out, commits only'] = function()
   local top = start_on_repository('announce-page')
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
   git_repo.write(top, 'notes.txt', { 'uncommitted' })
   commit_only(top, 'own.txt', 'own', 'Own')
   local agent = add_worktree(top, 'agent-1', 'feature/a')
   local work_a = commit_only(agent, 'a.txt', 'a', 'Work a')
   local work_b = add_branch(top, 'feature/b', 'Work b')
   add_worktree(top, 'unreported', 'feature/u')
-  report('module', { kind = 'worktree', path = agent })
-  report('module', { kind = 'branch', branch = 'feature/b' })
+
+  report('module', call_for(agent, 'T', { on('feature/a', base), on('feature/b', base) }))
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/a)',
     commit_line(work_a, 'Work a'),
-    'Branch feature/b',
+    'Branch feature/b (not checked out: commits only)',
     commit_line(work_b, 'Work b'),
   })
 end
 
-T['the reported set']['drops a member git no longer lists, telling nothing, and once empty shows the default view, told once'] = function()
+T['the reported work']['drops a worktree git no longer lists, telling nothing, and once empty shows the default view, told once'] = function()
   local top = start_on_repository('announce-drop')
   local first = add_worktree(top, 'agent-1', 'feature/a')
   local second = add_worktree(top, 'agent-2', 'feature/b')
-  report('module', { kind = 'worktree', path = first })
-  report('module', { kind = 'worktree', path = second })
+  report('module', agent_call(first))
+  report('module', call_for(second, 'T', { on('feature/b') }))
   expect_pane_lines('module', 'commits', {
-    'Worktree agent-1 (feature/a)',
-    'No commits in this worktree',
     'Worktree agent-2 (feature/b)',
+    'No commits in this worktree',
+    'Worktree agent-1 (feature/a)',
     'No commits in this worktree',
   })
 
@@ -612,35 +715,63 @@ T['the reported set']['drops a member git no longer lists, telling nothing, and 
   eq(#told('module'), 2)
 end
 
---- Makes the changes home `key` names follow the Claude Code session `id`,
---- its base and saves kept under `state`.
----
----@param key string
----@param id string
----@param state string
-local function follow(key, id, state)
-  child.lua(
-    '_G.homes[...].follow_changes_session({ id = select(2, ...), state_directory = select(3, ...) })',
-    {
-      key,
-      id,
-      state,
-    }
+T['the reported work']['drops a branch git no longer lists from its worktree, the others staying'] = function()
+  local top = start_on_repository('announce-drop-branch')
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  git_repo.git(top, { 'branch', 'feature/b' })
+  report('module', call_for(agent, 'T', { on('feature/a', base), on('feature/b', base) }))
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-1 (feature/a)',
+    'No commits in this worktree',
+    'Branch feature/b (not checked out: commits only)',
+    'No commits on this branch',
+  })
+
+  git_repo.git(top, { 'branch', '-D', 'feature/b' })
+  child.lua('_G.homes.module.refresh_shown_pane()')
+
+  expect_pane_lines('module', 'commits', AGENT_VIEW)
+  expect_reported_lines({
+    'Reported',
+    'T now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
+    'Uncommitted',
+  })
+  eq(messages(), {})
+end
+
+T['the reported work']['loses a worktree an agent’s call lists no branch of'] = function()
+  local top = start_on_repository('announce-empty')
+  local first = add_worktree(top, 'agent-1', 'feature/a')
+  local second = add_worktree(top, 'agent-2', 'feature/b')
+  report('module', agent_call(first))
+  report('module', call_for(second, 'T', { on('feature/b') }))
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-2 (feature/b)',
+    'No commits in this worktree',
+    'Worktree agent-1 (feature/a)',
+    'No commits in this worktree',
+  })
+
+  report('module', call_for(first, 'T', {}))
+
+  expect_pane_lines(
+    'module',
+    'commits',
+    { 'Worktree agent-2 (feature/b)', 'No commits in this worktree' }
   )
 end
 
-T['the reported set']['is emptied, and the reports still waiting dropped, when another session is followed'] = function()
+T['the reported work']['is emptied, and the reports still waiting dropped, when another session is followed'] = function()
   local top = start_on_repository('announce-other-session')
   local state = fixture.directory('announce-other-session-state')
   follow('module', '11111111-1111-4111-8111-111111111111', state)
   local agent = add_worktree(top, 'agent-1', 'feature/a')
-  report('module', { kind = 'worktree', path = vim.fs.joinpath(vim.fs.dirname(top), 'never-made') })
-  report('module', { kind = 'worktree', path = agent })
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-1 (feature/a)', 'No commits in this worktree' }
-  )
+  report('module', agent_call(vim.fs.joinpath(vim.fs.dirname(top), 'never-made')))
+  report('module', agent_call(agent))
+  expect_pane_lines('module', 'commits', AGENT_VIEW)
 
   follow('module', '22222222-2222-4222-8222-222222222222', state)
 
@@ -657,28 +788,24 @@ T['the reported set']['is emptied, and the reports still waiting dropped, when a
   eq(messages(), {})
 end
 
-T['the reported set']['is each changes home’s own'] = function()
+T['the reported work']['is each changes home’s own'] = function()
   local top = start_on_repository('announce-two-homes')
   start_copy('other', top)
   expect_pane_lines('other', 'commits', DEFAULT_VIEW)
   local agent = add_worktree(top, 'agent-1', 'feature/a')
 
-  report('module', { kind = 'worktree', path = agent })
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-1 (feature/a)', 'No commits in this worktree' }
-  )
+  report('module', agent_call(agent))
+  expect_pane_lines('module', 'commits', AGENT_VIEW)
   child.lua('_G.homes.other.refresh_shown_pane()')
 
   expect_pane_lines('other', 'commits', DEFAULT_VIEW_WITH_AGENT)
 end
 
-T['the reported set']['lets the reports still waiting go untold when its home is let go'] = function()
+T['the reported work']['lets the reports still waiting go untold when its home is let go'] = function()
   local top = start_on_repository('announce-let-go')
   start_copy('other', top)
   expect_pane_lines('other', 'commits', DEFAULT_VIEW)
-  report('other', { kind = 'worktree', path = vim.fs.joinpath(vim.fs.dirname(top), 'never-made') })
+  report('other', agent_call(vim.fs.joinpath(vim.fs.dirname(top), 'never-made')))
 
   child.lua('_G.homes.other.let_go()')
 
@@ -687,17 +814,10 @@ end
 
 T['the focused view'] = MiniTest.new_set()
 
---- Switches the view of the pane of the module's home as `\g` does with the
---- cursor in its commits window (`toggle_focused_view()`).
-local function toggle_in_pane()
-  enter_window_of('module', 'commits')
-  child.lua('_G.homes.module.toggle_focused_view()')
-end
-
-T['the focused view']['of the reported set is switched with the default view by \\g in the pane'] = function()
+T['the focused view']['of the reported work is switched with the default view by \\g in the pane'] = function()
   local top = start_on_repository('announce-toggle')
   local agent = add_worktree(top, 'agent-1', 'feature/a')
-  report('module', { kind = 'worktree', path = agent })
+  report('module', agent_call(agent))
   expect_pane_lines('module', 'commits', AGENT_VIEW)
 
   toggle_in_pane()
@@ -707,27 +827,7 @@ T['the focused view']['of the reported set is switched with the default view by 
   expect_pane_lines('module', 'commits', AGENT_VIEW)
 end
 
---- Presses `s` in the commits window of the module's home's pane and waits
---- until its picker opens, at most `git_repo.PATIENCE_MS`.
-local function press_s()
-  local before = child.lua_get('#_G.pickers')
-  enter_window_of('module', 'commits')
-  child.lua("pcall(vim.api.nvim_feedkeys, 's', 'mx', false)")
-  wait_until('the picker opened', function()
-    return child.lua_get('#_G.pickers') > before
-  end)
-end
-
---- The texts the last picker the child was asked for offers, and its prompt.
----
----@return { prompt: string, texts: string[] }
-local function last_offered()
-  return child.lua_get([[(function(request)
-    return { prompt = request.options.prompt, texts = vim.tbl_map(request.options.format_item, request.items) }
-  end)(_G.pickers[#_G.pickers])]])
-end
-
-T['the focused view']['becomes the reported set at a new report, from a worktree picked with s, its member chosen'] = function()
+T['the focused view']['becomes the reported work at a new report, from a worktree picked with s, its worktree chosen'] = function()
   local top = start_on_repository('announce-from-pick')
   local agent = add_worktree(top, 'agent-1', 'feature/a')
   add_worktree(top, 'agent-2', 'feature/b')
@@ -748,7 +848,7 @@ T['the focused view']['becomes the reported set at a new report, from a worktree
     { 'Worktree agent-2 (feature/b)', 'No commits in this worktree' }
   )
 
-  report('module', { kind = 'worktree', path = agent })
+  report('module', agent_call(agent))
 
   expect_pane_lines('module', 'commits', AGENT_VIEW)
   expect_pane_lines(
@@ -759,7 +859,7 @@ T['the focused view']['becomes the reported set at a new report, from a worktree
   eq(child.lua_get('vim.api.nvim_win_get_cursor(vim.fn.bufwinid(_G.panes.module.commits))')[1], 1)
 end
 
-T['the focused view']['of the reported set stays, untold, when the worktree picked behind it is removed'] = function()
+T['the focused view']['of the reported work stays, untold, when the worktree picked behind it is removed'] = function()
   local top = start_on_repository('announce-pick-gone')
   local agent = add_worktree(top, 'agent-1', 'feature/a')
   local picked = add_worktree(top, 'agent-2', 'feature/b')
@@ -779,7 +879,7 @@ T['the focused view']['of the reported set stays, untold, when the worktree pick
     'commits',
     { 'Worktree agent-2 (feature/b)', 'No commits in this worktree' }
   )
-  report('module', { kind = 'worktree', path = agent })
+  report('module', agent_call(agent))
   expect_pane_lines('module', 'commits', AGENT_VIEW)
 
   git_repo.git(top, { 'worktree', 'remove', picked })
@@ -804,7 +904,7 @@ T['the focused view']['of the reported set stays, untold, when the worktree pick
   expect_pane_lines('module', 'commits', agent_view)
 end
 
-T['the focused view']['of the reported set stays, untold, when the branch picked behind it is deleted'] = function()
+T['the focused view']['of the reported work stays, untold, when the branch picked behind it is deleted'] = function()
   local top = start_on_repository('announce-branch-pick-gone')
   local agent = add_worktree(top, 'agent-1', 'feature/a')
   add_branch(top, 'feature/p', 'Work p')
@@ -818,7 +918,7 @@ T['the focused view']['of the reported set stays, untold, when the branch picked
     'commits',
     { 'Branch feature/p', last_commit_line(top, 'feature/p', 'Work p') }
   )
-  report('module', { kind = 'worktree', path = agent })
+  report('module', agent_call(agent))
   expect_pane_lines('module', 'commits', AGENT_VIEW)
 
   git_repo.git(top, { 'branch', '-D', 'feature/p' })
@@ -843,43 +943,45 @@ T['the focused view']['of the reported set stays, untold, when the branch picked
   expect_pane_lines('module', 'commits', agent_view)
 end
 
-T['the focused view']['offers the reported set first in s, after each report, and keeps it behind a worktree picked'] = function()
+T['the focused view']['is offered by s after the tree, as all reported work, and kept behind a worktree picked'] = function()
   local top = start_on_repository('announce-s-item')
   local agent = add_worktree(top, 'agent-1', 'feature/a')
   add_worktree(top, 'agent-2', 'feature/b')
-  report('module', { kind = 'worktree', path = agent })
+  report('module', agent_call(agent))
   expect_pane_lines('module', 'commits', AGENT_VIEW)
 
   press_s()
   eq(last_offered(), {
     prompt = PROMPT,
     texts = {
-      '[reported] feature/a from ?',
+      '[reported] T now',
+      '[reported]   agent-1',
+      '[reported]     feature/a * from ?',
       '[reported] All reported work (1)',
       '[worktree] agent-1 (feature/a)',
       '[worktree] agent-2 (feature/b)',
     },
   })
-  child.lua('_G.choose(4)')
+  child.lua('_G.choose(6)')
   expect_pane_lines(
     'module',
     'commits',
     { 'Worktree agent-2 (feature/b)', 'No commits in this worktree' }
   )
   press_s()
-  child.lua('_G.choose(2)')
+  child.lua('_G.choose(4)')
 
   expect_pane_lines('module', 'commits', AGENT_VIEW)
 end
 
-T['the focused view']['is not brought into view by a report while the pane is not shown, and shows the set once shown'] = function()
+T['the focused view']['is not brought into view by a report while the pane is not shown, and shows the work once shown'] = function()
   local top = start_on_repository('announce-hidden')
   local agent = add_worktree(top, 'agent-1', 'feature/a')
   child.cmd('tabnew')
   local windows_before = child.lua_get('#vim.api.nvim_tabpage_list_wins(0)')
   child.cmd('tabprevious | only | enew | tabnext')
 
-  report('module', { kind = 'worktree', path = agent })
+  report('module', agent_call(agent))
   wait_until('the report told', function()
     return #told('module') == 1
   end)
@@ -890,81 +992,101 @@ T['the focused view']['is not brought into view by a report while the pane is no
   expect_pane_lines('module', 'commits', AGENT_VIEW)
 end
 
-T['a report git does not list yet']['made before the session’s repository is found is matched once it is, the pane never shown'] = function()
-  local top = git_repo.create('announce-before-found', { ['notes.txt'] = { 'one' } })
-  local agent = add_worktree(top, 'agent-1', 'feature/a')
+T['the editor’s own worktree'] = MiniTest.new_set()
 
-  child.lua(
-    [[
-      local top, agent = ...
-      _G.homes.module = require('aineo.changes')
-      _G.homes.module.begin_session({
-        directory = top,
-        show_diff = function() end,
-        start_timer = function()
-          return function() end
-        end,
-      })
-      _G.report('module', { kind = 'worktree', path = agent })
-    ]],
-    { top, agent }
-  )
+T['the editor’s own worktree']['is listed in the tree, the default view kept, and nothing is told'] = function()
+  local top = start_on_repository('announce-own')
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local own_folder = vim.fs.basename(top)
 
-  wait_until('the report told', function()
-    return #told('module') > 0
-  end)
-  eq(told('module'), { started_in('Worktree agent-1 (feature/a)') })
+  report('module', call_for(top, 'main work', { on('main', base) }))
+
+  expect_pane_lines('module', 'commits', {
+    'Reported',
+    'main work now',
+    '  ' .. own_folder,
+    ('    main * from %s'):format(short(base)),
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+  })
+  eq(told('module'), {})
 end
 
-T['the editor’s own work'] = MiniTest.new_set()
-
-T['the editor’s own work']['reported as its worktree or as its branch is not added, and nothing is told'] = function()
-  local top = start_on_repository('announce-own')
+T['the editor’s own worktree']['picked by Enter on its line, from a worktree picked, shows the default view'] = function()
+  local top = start_on_repository('announce-own-back')
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
   local agent = add_worktree(top, 'agent-1', 'feature/a')
+  report('module', call_for(agent, 'agent', { on('feature/a', base) }))
+  expect_pane_lines('module', 'commits', AGENT_VIEW)
+  report('module', call_for(top, 'main work', { on('main', base) }))
+  expect_reported_lines({
+    'Reported',
+    'main work now',
+    '  ' .. vim.fs.basename(top),
+    ('    main * from %s'):format(short(base)),
+    'agent now',
+    '  agent-1',
+  })
+  enter_on_line(6)
+  expect_pane_lines('module', 'commits', AGENT_VIEW)
+  expect_pane_lines(
+    'module',
+    'files',
+    { 'Files in: Worktree agent-1 (feature/a)', 'No files changed in this worktree' }
+  )
+  expect_reported_lines({ 'Reported', 'main work now', '  ' .. vim.fs.basename(top) })
+  expect_pane_lines(
+    'module',
+    'files',
+    { 'Files in: Worktree agent-1 (feature/a)', 'No files changed in this worktree' }
+  )
 
-  report('module', { kind = 'worktree', path = top })
-  report('module', { kind = 'branch', branch = 'main' })
-  report('module', { kind = 'worktree', path = agent })
+  enter_on_line(3)
 
   expect_pane_lines(
     'module',
-    'commits',
-    { 'Worktree agent-1 (feature/a)', 'No commits in this worktree' }
+    'files',
+    { 'Files in: Session work', 'No files changed on this session' }
   )
-  eq(told('module'), { started_in('Worktree agent-1 (feature/a)') })
 end
 
-T['the editor’s own work']['includes the working branch, which s never offers, though no worktree has it checked out'] = function()
-  local top = git_repo.create('announce-working-branch', { ['notes.txt'] = { 'one' } })
-  git_repo.git(top, { 'checkout', '--quiet', '-b', 'other' })
-  local agent = add_worktree(top, 'agent-1', 'feature/a')
-  start_copy('module', top, 'main')
+T['the editor’s own worktree']['shows on its checked-out branch’s line the base the default view reads'] = function()
+  local top = git_repo.create('announce-own-base', { ['notes.txt'] = { 'one' } })
+  local older = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local newer = commit_only(top, 'next.txt', 'next', 'Newer')
+  start_copy('module', top)
+  expect_pane_lines('module', 'commits', DEFAULT_VIEW)
 
-  report('module', { kind = 'branch', branch = 'main' })
-  report('module', { kind = 'worktree', path = agent })
+  report('module', call_for(top, 'own', { on('main', older) }))
 
-  expect_pane_lines('module', 'commits', AGENT_VIEW)
-  eq(told('module'), { started_in('Worktree agent-1 (feature/a)') })
+  expect_pane_lines('module', 'commits', {
+    'Reported',
+    'own now',
+    '  ' .. vim.fs.basename(top),
+    ('    main * from %s'):format(short(newer)),
+    'Uncommitted',
+    'Session work',
+    'No commits on this session',
+  })
 end
 
 T['the Reported section'] = MiniTest.new_set()
 
---- The abbreviated id of `commit`, a full id, as a report's line shows it.
----
----@param commit string
----@return string
-local function short(commit)
-  return commit:sub(1, 7)
-end
-
-T['the Reported section']['lists each report atop the default view, newest first, with its base, label and age'] = function()
+T['the Reported section']['lists the tree atop the default view: labels newest first, worktrees, branches, the checked-out one marked'] = function()
   local top = start_on_repository('announce-section')
   local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
   local first = add_worktree(top, 'agent-1', 'feature/a')
-  add_worktree(top, 'agent-2', 'feature/b')
-  report('module', { kind = 'worktree', path = first, base = base, label = 'first task' })
-  expect_pane_lines('module', 'commits', AGENT_VIEW)
-  report('module', { kind = 'branch', branch = 'feature/b', base = base })
+  local second = add_worktree(top, 'agent-2', 'feature/b')
+  git_repo.git(top, { 'branch', 'feature/c' })
+  report('module', call_for(first, 'first task', { on('feature/c', base), on('feature/a', base) }))
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-1 (feature/a)',
+    'No commits in this worktree',
+    'Branch feature/c (not checked out: commits only)',
+    'No commits on this branch',
+  })
+  report('module', call_for(second, 'second task', { on('feature/b', base) }))
   wait_until('both reports told', function()
     return #told('module') == 2
   end)
@@ -973,8 +1095,13 @@ T['the Reported section']['lists each report atop the default view, newest first
 
   expect_pane_lines('module', 'commits', {
     'Reported',
-    ('branch feature/b from %s now'):format(short(base)),
-    ('worktree feature/a from %s first task now'):format(short(base)),
+    'second task now',
+    '  agent-2',
+    ('    feature/b * from %s'):format(short(base)),
+    'first task now',
+    '  agent-1',
+    ('    feature/c from %s'):format(short(base)),
+    ('    feature/a * from %s'):format(short(base)),
     'Uncommitted',
     'Session work',
     'No commits on this session',
@@ -985,77 +1112,48 @@ T['the Reported section']['lists each report atop the default view, newest first
   })
 end
 
---- Makes the worktree `agent-1` on `feature/a` beside the repository at
---- `top`, with two commits, `One` and `Two`; returns the worktree's top
---- level and the two commits' full ids.
----
----@param top string
----@return string worktree
----@return string one
----@return string two
-local function agent_with_two_commits(top)
-  local agent = add_worktree(top, 'agent-1', 'feature/a')
-  local one = commit_only(agent, 'one.txt', 'one', 'One')
-  local two = commit_only(agent, 'two.txt', 'two', 'Two')
-  return agent, one, two
-end
-
---- The first two lines of the default view of the module's home's pane,
---- once `\g` switched to it and it lists `expected` there.
----
----@param expected string[]
-local function expect_reported_lines(expected)
-  toggle_in_pane()
-  wait_until('the Reported section lists ' .. vim.inspect(expected), function()
-    return vim.deep_equal(vim.list_slice(pane_lines('module', 'commits'), 1, #expected), expected)
-  end)
-  eq(vim.list_slice(pane_lines('module', 'commits'), 1, #expected), expected)
-end
-
-T['the Reported section']['takes a report made again of the same work in place of the first, on one line'] = function()
+T['the Reported section']['takes an agent’s call made again in place of the first: its set replaced, a branch left out gone'] = function()
   local top = start_on_repository('announce-again')
   local agent, one, two = agent_with_two_commits(top)
-  report('module', { kind = 'worktree', path = agent, base = one, label = 'first' })
+  git_repo.git(top, { 'branch', 'feature/b' })
+  report('module', call_for(agent, 'first', { on('feature/a', one), on('feature/b', one) }))
   wait_until('the report told', function()
     return #told('module') == 1
   end)
 
-  report('module', { kind = 'branch', branch = 'feature/a', base = two, label = 'second' })
+  report('module', call_for(agent, 'second', { on('feature/a', two) }))
 
   expect_reported_lines({
     'Reported',
-    ('branch feature/a from %s second now'):format(short(two)),
+    'second now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(two)),
     'Uncommitted',
   })
   eq(#told('module'), 1)
 end
 
-T['the Reported section']['picks a report by Enter on its line, which shows its work alone'] = function()
+T['the Reported section']['picks by Enter on a worktree’s line that worktree alone'] = function()
   local top = start_on_repository('announce-enter')
   local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
   local first = add_worktree(top, 'agent-1', 'feature/a')
   local second = add_worktree(top, 'agent-2', 'feature/b')
-  report('module', { kind = 'worktree', path = first, base = base })
-  report('module', { kind = 'worktree', path = second, base = base })
+  report('module', call_for(first, 'T', { on('feature/a', base) }))
+  report('module', call_for(second, 'T', { on('feature/b', base) }))
   wait_until('both reports told', function()
     return #told('module') == 2
   end)
-  toggle_in_pane()
-  expect_pane_lines('module', 'commits', {
+  expect_reported_lines({
     'Reported',
-    ('worktree feature/b from %s now'):format(short(base)),
-    ('worktree feature/a from %s now'):format(short(base)),
+    'T now',
+    '  agent-2',
+    ('    feature/b * from %s'):format(short(base)),
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
     'Uncommitted',
-    'Session work',
-    'No commits on this session',
-    'Worktree agent-1 (feature/a)',
-    'No commits in this worktree',
-    'Worktree agent-2 (feature/b)',
-    'No commits in this worktree',
   })
 
-  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
-  child.lua([[pcall(vim.api.nvim_feedkeys, vim.keycode('<CR>'), 'mx', false)]])
+  enter_on_line(5)
 
   expect_pane_lines('module', 'commits', AGENT_VIEW)
   expect_pane_lines(
@@ -1065,56 +1163,257 @@ T['the Reported section']['picks a report by Enter on its line, which shows its 
   )
 end
 
-T['the Reported section']['is offered first by s, newest first, a report picked showing its work alone'] = function()
+T['the Reported section']['picks by Enter on a label’s line every worktree and branch of that label together'] = function()
+  local top = start_on_repository('announce-enter-label')
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local first = add_worktree(top, 'agent-1', 'feature/a')
+  local second = add_worktree(top, 'agent-2', 'feature/b')
+  local third = add_worktree(top, 'agent-3', 'feature/c')
+  git_repo.git(top, { 'branch', 'feature/d' })
+  report('module', call_for(first, 'T', { on('feature/a', base), on('feature/d', base) }))
+  report('module', call_for(second, 'other', { on('feature/b', base) }))
+  report('module', call_for(third, 'T', { on('feature/c', base) }))
+  wait_until('the reports told', function()
+    return #told('module') == 3
+  end)
+  expect_reported_lines({
+    'Reported',
+    'T now',
+    '  agent-3',
+    ('    feature/c * from %s'):format(short(base)),
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
+    ('    feature/d from %s'):format(short(base)),
+    'other now',
+  })
+
+  enter_on_line(2)
+
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-3 (feature/c)',
+    'No commits in this worktree',
+    'Worktree agent-1 (feature/a)',
+    'No commits in this worktree',
+    'Branch feature/d (not checked out: commits only)',
+    'No commits on this branch',
+  })
+end
+
+T['the Reported section']['picks by Enter on a branch’s line its commits alone, or its worktree’s change while checked out there'] = function()
+  local top = start_on_repository('announce-enter-branch')
+  local agent, one, two = agent_with_two_commits(top)
+  git_repo.write(agent, 'u.txt', { 'uncommitted' })
+  git_repo.git(top, { 'branch', 'feature/b', two })
+  report('module', call_for(agent, 'T', { on('feature/a', one), on('feature/b', one) }))
+  wait_until('the report told', function()
+    return #told('module') == 1
+  end)
+  expect_reported_lines({
+    'Reported',
+    'T now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(one)),
+    ('    feature/b from %s'):format(short(one)),
+    'Uncommitted',
+  })
+
+  enter_on_line(5)
+  expect_pane_lines('module', 'commits', {
+    'Branch feature/b (not checked out: commits only)',
+    commit_line(two, 'Two'),
+  })
+  expect_pane_lines('module', 'files', { 'Files in: Branch feature/b', '  A two.txt' })
+  toggle_in_pane()
+  enter_on_line(4)
+
+  expect_pane_lines(
+    'module',
+    'commits',
+    { 'Worktree agent-1 (feature/a)', commit_line(two, 'Two') }
+  )
+  expect_pane_lines(
+    'module',
+    'files',
+    { 'Files in: Worktree agent-1 (feature/a)', '  A two.txt', '  ? u.txt' }
+  )
+end
+
+T['the Reported section']['shows a file’s diff from a branch’s base by Enter under its whole change'] = function()
+  local top = start_on_repository('announce-branch-diff')
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  add_branch(top, 'feature/b', 'Work b')
+  report('module', call_for(agent, 'T', { on('feature/a', base), on('feature/b', base) }))
+  wait_until('the report told', function()
+    return #told('module') == 1
+  end)
+  expect_reported_lines({
+    'Reported',
+    'T now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
+    ('    feature/b from %s'):format(short(base)),
+  })
+  enter_on_line(5)
+  expect_pane_lines('module', 'files', { 'Files in: Branch feature/b', '  A branch.txt' })
+
+  enter_window_of('module', 'files')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua([[pcall(vim.api.nvim_feedkeys, vim.keycode('<CR>'), 'mx', false)]])
+
+  wait_until('the diff shown', function()
+    return child.lua_get([[vim.fn.bufexists('aineo://branch/feature/b//diff/branch.txt') == 1]])
+  end)
+end
+
+T['the Reported section']['is offered first by s, as the tree, an item picked showing its work alone'] = function()
   local top = start_on_repository('announce-s-reports')
   local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
   local first = add_worktree(top, 'agent-1', 'feature/a')
-  add_worktree(top, 'agent-2', 'feature/b')
-  report('module', { kind = 'worktree', path = first, base = base, label = 'first' })
+  local second = add_worktree(top, 'agent-2', 'feature/b')
+  report('module', call_for(first, 'first', { on('feature/a', base) }))
   expect_pane_lines('module', 'commits', AGENT_VIEW)
-  report('module', { kind = 'branch', branch = 'feature/b', base = base, label = 'second' })
+  report('module', call_for(second, 'second', { on('feature/b', base) }))
   wait_until('both reports told', function()
     return #told('module') == 2
   end)
 
   press_s()
   eq(last_offered().texts, {
-    ('[reported] feature/b from %s  second'):format(short(base)),
-    ('[reported] feature/a from %s  first'):format(short(base)),
+    '[reported] second now',
+    '[reported]   agent-2',
+    ('[reported]     feature/b * from %s'):format(short(base)),
+    '[reported] first now',
+    '[reported]   agent-1',
+    ('[reported]     feature/a * from %s'):format(short(base)),
     '[reported] All reported work (2)',
     '[worktree] agent-1 (feature/a)',
     '[worktree] agent-2 (feature/b)',
   })
-  child.lua('_G.choose(2)')
+  child.lua('_G.choose(5)')
 
   expect_pane_lines('module', 'commits', AGENT_VIEW)
+end
+
+T['the Reported section']['offers all reported work in s counting the worktrees, not the labels or branches'] = function()
+  local top = start_on_repository('announce-s-count')
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local first = add_worktree(top, 'agent-1', 'feature/a')
+  local second = add_worktree(top, 'agent-2', 'feature/b')
+  git_repo.git(top, { 'branch', 'feature/c' })
+  report('module', call_for(first, 'T', { on('feature/a', base), on('feature/c', base) }))
+  report('module', call_for(second, 'T', { on('feature/b', base) }))
+  wait_until('both reports told', function()
+    return #told('module') == 2
+  end)
+
+  press_s()
+
+  eq(last_offered().texts[7], '[reported] All reported work (2)')
 end
 
 T['the Reported section']['picks a reported worktree by Enter before the commits window has listed it'] = function()
   local top = start_on_repository('announce-enter-early')
   local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
   local agent = add_worktree(top, 'agent-1', 'feature/a')
-  report('module', { kind = 'worktree', path = agent, base = base })
+  report('module', call_for(agent, 'T', { on('feature/a', base) }))
   wait_until('the report told', function()
     return #told('module') == 1
   end)
-  expect_reported_lines({ 'Reported', ('worktree feature/a from %s now'):format(short(base)) })
+  expect_reported_lines({ 'Reported', 'T now', '  agent-1' })
 
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
-  child.lua([[pcall(vim.api.nvim_feedkeys, vim.keycode('<CR>'), 'mx', false)]])
+  enter_on_line(3)
 
   expect_pane_lines('module', 'commits', AGENT_VIEW)
   eq(messages(), {})
 end
 
+T['the Reported section']['adds a branch aineo’s hook saw made in a reported worktree beside the others, the label kept'] = function()
+  local top = start_on_repository('announce-new-branch')
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  report('module', call_for(agent, 'task', { on('feature/a', base) }))
+  wait_until('the report told', function()
+    return #told('module') == 1
+  end)
+  local one = commit_only(agent, 'one.txt', 'one', 'One')
+  git_repo.git(agent, { 'checkout', '--quiet', '-b', 'feature/b' })
+
+  report('module', hook_for(agent, { on('feature/b', one) }))
+  child.lua('_G.homes.module.refresh_shown_pane()')
+
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-1 (feature/b)',
+    'No commits in this worktree',
+    'Branch feature/a (not checked out: commits only)',
+    commit_line(one, 'One'),
+  })
+  expect_reported_lines({
+    'Reported',
+    'task now',
+    '  agent-1',
+    ('    feature/a from %s'):format(short(base)),
+    ('    feature/b * from %s'):format(short(one)),
+    'Uncommitted',
+  })
+  eq(#told('module'), 1)
+end
+
+T['the Reported section']['lists a worktree aineo’s hook saw added under no label, until an agent’s call gives one'] = function()
+  local top = start_on_repository('announce-hook-worktree')
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  report('module', hook_for(agent, { on('feature/a', base) }))
+  wait_until('the report told', function()
+    return #told('module') == 1
+  end)
+  expect_reported_lines({
+    'Reported',
+    '(no label) now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
+    'Uncommitted',
+  })
+  toggle_in_pane()
+
+  report('module', call_for(agent, 'task', { on('feature/a', base) }))
+
+  expect_reported_lines({
+    'Reported',
+    'task now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
+    'Uncommitted',
+  })
+end
+
+T['the Reported section']['takes the agent’s base over the report of aineo’s hook, both ways'] = function()
+  local top = start_on_repository('announce-hook-then-call')
+  local agent, one, two = agent_with_two_commits(top)
+  report('module', hook_for(agent, { on('feature/a', one) }))
+  wait_until('the hook’s report told', function()
+    return #told('module') == 1
+  end)
+  report('module', call_for(agent, 'task', { on('feature/a', two) }))
+  report('module', hook_for(agent, { on('feature/a', one) }))
+
+  expect_reported_lines({
+    'Reported',
+    'task now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(two)),
+    'Uncommitted',
+  })
+end
+
 T['a reported base'] = MiniTest.new_set()
 
-T['a reported base']['shows a worktree’s commits since it, and its files since it, uncommitted ones included'] = function()
+T['a reported base']['shows a worktree’s commits since its checked-out branch’s, and its files since it, uncommitted ones included'] = function()
   local top = start_on_repository('announce-base-worktree')
   local agent, one, two = agent_with_two_commits(top)
   git_repo.write(agent, 'u.txt', { 'uncommitted' })
 
-  report('module', { kind = 'worktree', path = agent, base = one })
+  report('module', call_for(agent, 'T', { on('feature/a', one) }))
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/a)',
@@ -1127,25 +1426,11 @@ T['a reported base']['shows a worktree’s commits since it, and its files since
   )
 end
 
-T['a reported base']['shows a branch no worktree has checked out from it, commits only, its heading saying so'] = function()
-  local top = start_on_repository('announce-base-branch')
-  local agent, one, two = agent_with_two_commits(top)
-  git_repo.git(top, { 'worktree', 'remove', '--force', agent })
-
-  report('module', { kind = 'branch', branch = 'feature/a', base = one })
-
-  expect_pane_lines('module', 'commits', {
-    'Branch feature/a (no worktree: commits only)',
-    commit_line(two, 'Two'),
-  })
-  expect_pane_lines('module', 'files', { 'Files in: Branch feature/a', '  A two.txt' })
-end
-
 T['a reported base']['gives way to the pane’s own after a rebase onto newer work, which lists none of that work'] = function()
   local top = start_on_repository('announce-base-rebase')
   local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
   local agent = add_worktree(top, 'agent-1', 'feature/a')
-  report('module', { kind = 'worktree', path = agent, base = base })
+  report('module', call_for(agent, 'T', { on('feature/a', base) }))
   expect_pane_lines('module', 'commits', AGENT_VIEW)
   local moved_on = commit_only(top, 'dev.txt', 'dev', 'Dev moved on, not the agent')
   commit_only(agent, 'agent.txt', 'agent', 'Agent work')
@@ -1163,14 +1448,19 @@ T['a reported base']['gives way to the pane’s own after a rebase onto newer wo
     'files',
     { 'Files in: Worktree agent-1 (feature/a)', '  A agent.txt' }
   )
-  expect_reported_lines({ 'Reported', ('worktree feature/a from %s now'):format(short(moved_on)) })
+  expect_reported_lines({
+    'Reported',
+    'T now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(moved_on)),
+  })
 end
 
 T['a reported base']['that the repository does not have gives way to the pane’s own, with no failure shown'] = function()
   local top = start_on_repository('announce-base-unknown')
   local agent, one, two = agent_with_two_commits(top)
 
-  report('module', { kind = 'worktree', path = agent, base = ('0'):rep(40) })
+  report('module', call_for(agent, 'T', { on('feature/a', ('0'):rep(40)) }))
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/a)',
@@ -1179,97 +1469,35 @@ T['a reported base']['that the repository does not have gives way to the pane’
   })
 end
 
-T['a reported base']['of a branch, that the repository does not have, gives way to the pane’s own'] = function()
+T['a reported base']['of a branch not checked out, that the repository does not have, gives way to the pane’s own'] = function()
   local top = start_on_repository('announce-base-unknown-branch')
   local agent, one, two = agent_with_two_commits(top)
-  git_repo.git(top, { 'worktree', 'remove', '--force', agent })
+  git_repo.git(agent, { 'checkout', '--quiet', '--detach' })
+  local other = add_worktree(top, 'agent-2', 'feature/o')
 
-  report('module', { kind = 'branch', branch = 'feature/a', base = ('0'):rep(40) })
+  report('module', call_for(other, 'T', { on('feature/o'), on('feature/a', ('0'):rep(40)) }))
 
   expect_pane_lines('module', 'commits', {
-    'Branch feature/a (no worktree: commits only)',
+    'Worktree agent-2 (feature/o)',
+    'No commits in this worktree',
+    'Branch feature/a (not checked out: commits only)',
     commit_line(two, 'Two'),
     commit_line(one, 'One'),
   })
 end
 
-T['a reported base']['missing, as in a report made before reports gave one, shows from ? and the base of today’s rule'] = function()
+T['a reported base']['missing, as in a report kept before reports gave one, shows from ? and the base of today’s rule'] = function()
   local top = start_on_repository('announce-base-none')
   local agent, one, two = agent_with_two_commits(top)
 
-  report('module', { kind = 'worktree', path = agent })
+  report('module', agent_call(agent))
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/a)',
     commit_line(two, 'Two'),
     commit_line(one, 'One'),
   })
-  expect_reported_lines({ 'Reported', 'worktree feature/a from ? now' })
-end
-
-T['the Reported section']['takes the branch and base of a branch made in a reported worktree, the label kept'] = function()
-  local top = start_on_repository('announce-new-branch')
-  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
-  local agent = add_worktree(top, 'agent-1', 'feature/a')
-  report('module', { kind = 'worktree', path = agent, base = base, label = 'task' })
-  wait_until('the report told', function()
-    return #told('module') == 1
-  end)
-  local one = commit_only(agent, 'one.txt', 'one', 'One')
-  git_repo.git(agent, { 'checkout', '--quiet', '-b', 'feature/b' })
-
-  report('module', { kind = 'branch', branch = 'feature/b', base = one, by_hook = true })
-  child.lua('_G.homes.module.refresh_shown_pane()')
-
-  expect_pane_lines('module', 'commits', {
-    'Worktree agent-1 (feature/b)',
-    'No commits in this worktree',
-  })
-  expect_reported_lines({
-    'Reported',
-    ('worktree feature/b from %s task now'):format(short(one)),
-    'Uncommitted',
-  })
-end
-
-T['the Reported section']['takes a branch reported and then a worktree made of it as one line'] = function()
-  local top = start_on_repository('announce-branch-then-worktree')
-  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
-  git_repo.git(top, { 'branch', 'feature/w' })
-  report('module', { kind = 'branch', branch = 'feature/w', base = base, label = 'task' })
-  wait_until('the branch told', function()
-    return #told('module') == 1
-  end)
-  local worktree = vim.fs.joinpath(vim.fs.dirname(top), 'agent-w')
-  git_repo.git(top, { 'worktree', 'add', '--quiet', worktree, 'feature/w' })
-
-  report('module', { kind = 'worktree', path = worktree, base = base, by_hook = true })
-  wait_until('the worktree told', function()
-    return #told('module') == 2
-  end)
-
-  press_s()
-  eq(vim.list_slice(last_offered().texts, 1, 2), {
-    ('[reported] feature/w from %s  task'):format(short(base)),
-    '[reported] All reported work (1)',
-  })
-end
-
-T['the Reported section']['takes the agent’s base and label over the report of aineo’s hook, both ways'] = function()
-  local top = start_on_repository('announce-hook-then-call')
-  local agent, one, two = agent_with_two_commits(top)
-  report('module', { kind = 'worktree', path = agent, base = one, by_hook = true })
-  report('module', { kind = 'worktree', path = agent, base = two, label = 'task' })
-  report('module', { kind = 'worktree', path = agent, base = one, by_hook = true })
-  wait_until('the report told', function()
-    return #told('module') == 1
-  end)
-
-  expect_reported_lines({
-    'Reported',
-    ('worktree feature/a from %s task now'):format(short(two)),
-    'Uncommitted',
-  })
+  expect_reported_lines({ 'Reported', 'T now', '  agent-1', '    feature/a * from ?' })
 end
 
 return T

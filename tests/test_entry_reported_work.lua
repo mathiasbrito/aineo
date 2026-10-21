@@ -100,104 +100,142 @@ local function announce(work, token)
   return child.lua_get([[require('aineo.mcp').receive_work_announcement(...)]], { work, token })
 end
 
---- The texts of what `s` in the tab's changes pane offers, once its picker
---- opens, at most `PATIENCE_MS`.
----
----@return string[]
-local function offered()
-  local before = child.lua_get('#_G.pickers')
-  child.lua([[require('aineo.entry.registry').tab_list[1].homes.changes.offer_scopes()]])
-  vim.wait(PATIENCE_MS, function()
-    return child.lua_get('#_G.pickers') > before
-  end, 20)
-  return child.lua_get([[(function(request)
-    return request and vim.tbl_map(request.options.format_item, request.items) or {}
-  end)(_G.pickers[#_G.pickers])]])
-end
-
---- Waits, at most `PATIENCE_MS`, until what `s` offers starts with
---- `expected`, and returns its first items as they are then.
----
----@param expected string[]
----@return string[]
-local function wait_for_offered(expected)
-  local first
-  vim.wait(PATIENCE_MS, function()
-    first = vim.list_slice(offered(), 1, #expected)
-    return vim.deep_equal(first, expected)
-  end, 100)
-  return first
-end
-
 T['an announcement'] = MiniTest.new_set()
 
---- The Lua that keeps, in `_G.bases`, the base of each report the first
---- tab's changes home is handed, as it is handed it, and hands it on.
+--- The Lua that keeps, in `_G.bases`, the bases of the branches of each
+--- report the first tab's changes home is handed, as it is handed them, and
+--- hands it on.
 local KEEP_BASES_TAKEN = [[
   local changes = require('aineo.entry.registry').tab_list[1].homes.changes
   local add = changes.add_reported_work
   _G.bases = {}
   changes.add_reported_work = function(work, tell)
-    table.insert(_G.bases, work.base)
+    table.insert(_G.bases, vim.tbl_map(function(branch)
+      return branch.base
+    end, work.branches))
     return add(work, tell)
   end
 ]]
 
 --- The bases the first tab's changes home was handed (`KEEP_BASES_TAKEN`).
 ---
----@return string[]
+---@return string[][]
 local function bases_taken()
   return child.lua_get('_G.bases')
 end
 
-T['an announcement']['is taken by the tab with its base as the full id it names in the reported worktree’s folder'] = function()
+--- An agent's call for the worktree at `path`, labelled `T111`, listing
+--- `branches`.
+---
+---@param path string
+---@param branches table[]
+---@return table
+local function call_for(path, branches)
+  return { worktree = path, label = 'T111', branches = branches }
+end
+
+T['an announcement']['is taken by the tab with each branch’s base as the full id it names in the worktree’s folder'] = function()
   local repository, token = open_with_worktree('resolved')
   child.lua(KEEP_BASES_TAKEN)
 
-  local taken = announce({ kind = 'worktree', path = repository.worktree, base = 'HEAD' }, token)
+  local taken = announce(
+    call_for(repository.worktree, {
+      { name = 'feature', base = 'HEAD' },
+      { name = 'lonely', base = 'HEAD~1' },
+    }),
+    token
+  )
 
-  eq({ taken, bases_taken() }, { true, { repository.worktree_head } })
+  eq({ taken, bases_taken() }, { true, { { repository.worktree_head, repository.head } } })
 end
 
-T['an announcement']['of a branch a worktree has checked out has its base resolved in that worktree’s folder'] = function()
-  local repository, token = open_with_worktree('resolved-branch')
-  child.lua(KEEP_BASES_TAKEN)
-
-  announce({ kind = 'branch', branch = 'feature', base = 'HEAD' }, token)
-
-  eq(bases_taken(), { repository.worktree_head })
-end
-
-T['an announcement']['of a branch with no worktree, or of a folder that is no repository yet, has its base resolved in the session’s repository'] = function()
+T['an announcement']['of a folder that is no repository yet has its bases resolved in the session’s repository'] = function()
   local repository, token = open_with_worktree('resolved-session')
   child.lua(KEEP_BASES_TAKEN)
   local not_yet = vim.fs.joinpath(vim.fs.dirname(repository.top), 'not-yet')
 
-  announce({ kind = 'branch', branch = 'lonely', base = 'HEAD' }, token)
-  announce({ kind = 'worktree', path = not_yet, base = 'HEAD' }, token)
+  announce(call_for(not_yet, { { name = 'lonely', base = 'HEAD' } }), token)
 
-  eq(bases_taken(), { repository.head, repository.head })
+  eq(bases_taken(), { { repository.head } })
 end
 
-T['an announcement']['whose base git cannot resolve is refused in words naming it, and nothing is recorded'] = function()
-  local repository, token = open_with_worktree('unresolved')
+T['an announcement']['listing no branch is taken as it is'] = function()
+  local repository, token = open_with_worktree('no-branch')
+  child.lua(KEEP_BASES_TAKEN)
 
-  local answer =
-    announce({ kind = 'worktree', path = repository.worktree, base = 'no-such-ref' }, token)
-  announce({ kind = 'branch', branch = 'lonely', base = 'HEAD' }, token)
+  local taken = announce(call_for(repository.worktree, {}), token)
+
+  eq({ taken, bases_taken() }, { true, { {} } })
+end
+
+T['an announcement']['whose base git cannot resolve is refused in words naming the item, and nothing is recorded'] = function()
+  local repository, token = open_with_worktree('unresolved')
+  child.lua(KEEP_BASES_TAKEN)
+
+  local answer = announce(
+    call_for(repository.worktree, {
+      { name = 'feature', base = 'HEAD' },
+      { name = 'lonely', base = 'no-such-ref' },
+    }),
+    token
+  )
 
   eq(
     answer,
-    ('base: no-such-ref names no commit in %s, nor in %s'):format(
+    ('branches[2].base: no-such-ref names no commit in %s, nor in %s'):format(
       repository.worktree,
       repository.top
     )
   )
-  local only_lonely = {
-    ('[reported] lonely from %s'):format(repository.head:sub(1, 7)),
-    '[reported] All reported work (1)',
-  }
-  eq(wait_for_offered(only_lonely), only_lonely)
+  eq(bases_taken(), {})
+end
+
+T['an announcement']['naming a branch git does not have is refused in words naming the item, and nothing is recorded'] = function()
+  local repository, token = open_with_worktree('unknown-branch')
+  child.lua(KEEP_BASES_TAKEN)
+
+  local answer = announce(
+    call_for(repository.worktree, {
+      { name = 'feature', base = 'HEAD' },
+      { name = 'feature/never', base = 'HEAD' },
+    }),
+    token
+  )
+
+  eq(
+    answer,
+    ('branches[2].name: feature/never is no local branch in %s'):format(repository.worktree)
+  )
+  eq(bases_taken(), {})
+end
+
+T['an announcement']['naming a revision of a branch, not a branch, is refused naming the item'] =
+  MiniTest.new_set({ parametrize = { { 'feature^0' }, { 'lonely~1' }, { 'feature@{0}' } } })
+
+T['an announcement']['naming a revision of a branch, not a branch, is refused naming the item']['given'] = function(
+  name
+)
+  local repository, token = open_with_worktree('revision-branch')
+  child.lua(KEEP_BASES_TAKEN)
+
+  local answer = announce(
+    call_for(repository.worktree, {
+      { name = 'feature', base = 'HEAD' },
+      { name = name, base = 'HEAD' },
+    }),
+    token
+  )
+
+  eq(answer, ('branches[2].name: %s is no local branch in %s'):format(name, repository.worktree))
+  eq(bases_taken(), {})
+end
+
+T['an announcement']['of an older shape is not taken'] = function()
+  local repository, token = open_with_worktree('older-shape')
+
+  local taken = announce({ kind = 'worktree', path = repository.worktree, base = 'HEAD' }, token)
+
+  eq(taken, false)
 end
 
 --- The lines of the buffer named `name` in the child.
@@ -223,29 +261,34 @@ local function wait_until(condition)
   return vim.wait(PATIENCE_MS, condition, 20)
 end
 
-T['Enter on a report’s line'] = MiniTest.new_set()
+T['Enter on a branch’s line'] = MiniTest.new_set()
 
-T['Enter on a report’s line']['shows its work alone, and the explorer follows'] = function()
+T['Enter on a branch’s line']['shows its commits alone, and the explorer follows'] = function()
   local repository, token = open_with_worktree('enter')
-  announce({ kind = 'worktree', path = repository.worktree, base = 'HEAD' }, token)
-  announce({ kind = 'branch', branch = 'lonely', base = 'HEAD', label = 'alone' }, token)
+  announce(
+    call_for(repository.worktree, {
+      { name = 'feature', base = 'HEAD' },
+      { name = 'lonely', base = 'HEAD' },
+    }),
+    token
+  )
   wait_until(function()
-    return #entry.messages(child) == 2
+    return #entry.messages(child) == 1
   end)
   entry.press(child, '\\g')
   wait_until(function()
     return entry.current_window(child) == 'aineo://changes-commits'
   end)
   entry.press(child, '\\g')
-  local lonely_line = ('branch lonely from %s alone now'):format(repository.head:sub(1, 7))
+  local lonely_line = ('    lonely from %s'):format(repository.head:sub(1, 7))
   eq(
     wait_until(function()
-      return lines_of('aineo://changes-commits')[2] == lonely_line
+      return lines_of('aineo://changes-commits')[5] == lonely_line
     end),
     true
   )
 
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 5, 0 })')
   entry.press(child, '<CR>')
   entry.press(child, '\\e')
 
@@ -261,10 +304,51 @@ T['Enter on a report’s line']['shows its work alone, and the explorer follows'
   )
   eq(
     wait_until(function()
-      return lines_of('aineo://changes-commits')[1] == 'Branch lonely (no worktree: commits only)'
+      return lines_of('aineo://changes-commits')[1]
+        == 'Branch lonely (not checked out: commits only)'
     end),
     true
   )
+end
+
+T['a report of aineo’s hook'] = MiniTest.new_set()
+
+T['a report of aineo’s hook']['through the editor, adds its branch beside the agent’s, the label kept'] = function()
+  local repository, token = open_with_worktree('hook-through-editor')
+  local taken =
+    announce(call_for(repository.worktree, { { name = 'feature', base = 'HEAD' } }), token)
+  eq(taken, true)
+  wait_until(function()
+    return #entry.messages(child) == 1
+  end)
+  git_repo.git(repository.worktree, { 'branch', 'extra' })
+
+  local hook_taken = announce({
+    worktree = repository.worktree,
+    branches = { { name = 'extra', base = 'HEAD' } },
+    by_hook = true,
+  }, token)
+  eq(hook_taken, true)
+
+  entry.press(child, '\\g')
+  wait_until(function()
+    return entry.current_window(child) == 'aineo://changes-commits'
+  end)
+  entry.press(child, '\\g')
+  local expected = { 'T111 now', '  feature', 'feature', 'extra' }
+  local function tree_shown()
+    local shown = lines_of('aineo://changes-commits')
+    return {
+      shown[2],
+      shown[3],
+      (shown[4] or ''):match('^    (%S+)'),
+      (shown[5] or ''):match('^    (%S+)'),
+    }
+  end
+  wait_until(function()
+    return vim.deep_equal(tree_shown(), expected)
+  end)
+  eq(tree_shown(), expected)
 end
 
 return T

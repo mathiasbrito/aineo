@@ -2753,6 +2753,7 @@ local PANE_GROUPS = [[(function()
     'AineoChangesCommitAuthor', 'AineoChangesCommitAge', 'AineoChangesCommitSubject',
     'AineoChangesFilter', 'AineoChangesNote', 'AineoChangesFailure',
     'AineoChangesReportedHeading', 'AineoChangesReportedLabel', 'AineoChangesReportedAge',
+    'AineoChangesReportedWorktree', 'AineoChangesReportedBranch',
   }
   local groups = {}
   for _, name in ipairs(names) do
@@ -2781,6 +2782,8 @@ local DEFAULT_GROUPS = {
   AineoChangesReportedHeading = { link = 'Title' },
   AineoChangesReportedLabel = { link = 'Identifier' },
   AineoChangesReportedAge = { link = 'Comment' },
+  AineoChangesReportedWorktree = { link = 'Directory' },
+  AineoChangesReportedBranch = { link = 'Label' },
 }
 
 T['the colours']['are groups of aineo’s own, each linked to a group of Neovim’s, a commit’s subject empty'] = function()

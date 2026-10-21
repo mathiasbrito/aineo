@@ -88,7 +88,18 @@ end
 
 T['a git command that makes work'] = MiniTest.new_set()
 
-T['a git command that makes work']['is told as a worktree, from the HEAD of the folder it ran in'] = function()
+--- What the hook tells of the branch `name`, made from `base`, in the
+--- worktree at `top`.
+---
+---@param top string
+---@param name string
+---@param base string
+---@return table
+local function made(top, name, base)
+  return { worktree = top, branches = { { name = name, base = base } }, by_hook = true }
+end
+
+T['a git command that makes work']['is told as a worktree with its branch, from the HEAD of the folder it ran in'] = function()
   local top = git_repo.create('hook-work-worktree', { ['main.txt'] = { 'main' } })
   local head = git_repo.git(top, { 'rev-parse', 'HEAD' })
   git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'feature/x', '../wt' })
@@ -97,19 +108,24 @@ T['a git command that makes work']['is told as a worktree, from the HEAD of the 
 
   eq(ended, SILENT_END)
   eq(announced(), {
-    {
-      {
-        kind = 'worktree',
-        path = vim.fs.joinpath(vim.fs.dirname(top), 'wt'),
-        base = head,
-        by_hook = true,
-      },
-      TOKEN,
-    },
+    { made(vim.fs.joinpath(vim.fs.dirname(top), 'wt'), 'feature/x', head), TOKEN },
   })
 end
 
-T['a git command that makes work']['is told as a branch, from the start point it names'] = function()
+T['a git command that makes work']['is told as a worktree with the branch it checks out, from that branch'] = function()
+  local top = git_repo.create('hook-work-worktree-branch', { ['main.txt'] = { 'main' } })
+  git_repo.git(top, { 'branch', 'feature/w' })
+  local tip = git_repo.git(top, { 'rev-parse', 'feature/w' })
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '../wt-w', 'feature/w' })
+
+  run_hook('git worktree add ../wt-w feature/w', top)
+
+  eq(announced(), {
+    { made(vim.fs.joinpath(vim.fs.dirname(top), 'wt-w'), 'feature/w', tip), TOKEN },
+  })
+end
+
+T['a git command that makes work']['is told as a branch of the worktree it ran in, from the start point it names'] = function()
   local top = git_repo.create('hook-work-start', { ['main.txt'] = { 'main' } })
   local first = git_repo.git(top, { 'rev-parse', 'HEAD' })
   git_repo.write(top, 'next.txt', { 'next' })
@@ -118,10 +134,17 @@ T['a git command that makes work']['is told as a branch, from the start point it
 
   run_hook('git branch feature/y HEAD~1', top)
 
-  eq(
-    announced(),
-    { { { kind = 'branch', branch = 'feature/y', base = first, by_hook = true }, TOKEN } }
-  )
+  eq(announced(), { { made(top, 'feature/y', first), TOKEN } })
+end
+
+T['a git command that makes work']['is told of the top level of the worktree its folder is in'] = function()
+  local top = git_repo.create('hook-work-subfolder', { ['sub/main.txt'] = { 'main' } })
+  local head = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  git_repo.git(top, { 'checkout', '--quiet', '-b', 'feature/s' })
+
+  run_hook('git checkout -b feature/s', vim.fs.joinpath(top, 'sub'))
+
+  eq(announced(), { { made(top, 'feature/s', head), TOKEN } })
 end
 
 T['a git command that makes work']['is told from the HEAD of the folder -C names'] = function()
@@ -131,10 +154,7 @@ T['a git command that makes work']['is told from the HEAD of the folder -C names
 
   run_hook('git -C repo branch feature/z', vim.fs.dirname(top))
 
-  eq(
-    announced(),
-    { { { kind = 'branch', branch = 'feature/z', base = head, by_hook = true }, TOKEN } }
-  )
+  eq(announced(), { { made(top, 'feature/z', head), TOKEN } })
 end
 
 T['a git command that makes work']['is told as a worktree whose path is read in the folder -C names'] = function()
@@ -145,15 +165,7 @@ T['a git command that makes work']['is told as a worktree whose path is read in 
   run_hook('git -C repo worktree add -b feature/c ../wt', vim.fs.dirname(top))
 
   eq(announced(), {
-    {
-      {
-        kind = 'worktree',
-        path = vim.fs.joinpath(vim.fs.dirname(top), 'wt'),
-        base = head,
-        by_hook = true,
-      },
-      TOKEN,
-    },
+    { made(vim.fs.joinpath(vim.fs.dirname(top), 'wt'), 'feature/c', head), TOKEN },
   })
 end
 
@@ -171,6 +183,15 @@ T['a command the hook cannot read']['tells nothing when its start point names no
   local top = git_repo.create('hook-work-no-start', { ['main.txt'] = { 'main' } })
 
   local ended = run_hook('git branch feature/q no-such-start', top)
+
+  eq({ ended, announced() }, { SILENT_END, {} })
+end
+
+T['a command the hook cannot read']['tells nothing of a worktree added detached, which is on no branch'] = function()
+  local top = git_repo.create('hook-work-detached', { ['main.txt'] = { 'main' } })
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '--detach', '../wt-d' })
+
+  local ended = run_hook('git worktree add --detach ../wt-d', top)
 
   eq({ ended, announced() }, { SILENT_END, {} })
 end
