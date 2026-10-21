@@ -272,6 +272,37 @@ T['the second heading line']['takes the names of the last read, not those of an 
   expect_line(FILES, 2, ('Against: %s (main) session start → working tree'):format(short(base)))
 end
 
+T['the second heading line']['drops a name when its branch moves off the commit, with no file changed'] = function()
+  local top, base = git_repo.create('against-names-moved', { ['a.txt'] = { 'one' } })
+  git_repo.git(top, { 'branch', 'dev' })
+  begin_and_show(top)
+  expect_line(
+    FILES,
+    2,
+    ('Against: %s (dev, main) session start → working tree'):format(short(base))
+  )
+  local tree = git_repo.git(top, { 'rev-parse', 'HEAD^{tree}' })
+  local elsewhere = git_repo.git(top, { 'commit-tree', tree, '-p', 'HEAD', '-m', 'elsewhere' })
+
+  git_repo.git(top, { 'update-ref', 'refs/heads/dev', elsewhere })
+
+  expect_line(FILES, 2, ('Against: %s (main) session start → working tree'):format(short(base)))
+end
+
+T['the second heading line']['names a tag made while the pane is open, with no file changed'] = function()
+  local top, base = git_repo.create('against-names-tagged', { ['a.txt'] = { 'one' } })
+  begin_and_show(top)
+  expect_line(FILES, 2, ('Against: %s (main) session start → working tree'):format(short(base)))
+
+  git_repo.git(top, { 'tag', 'v1' })
+
+  expect_line(
+    FILES,
+    2,
+    ('Against: %s (main, v1) session start → working tree'):format(short(base))
+  )
+end
+
 T['the second heading line']['under Uncommitted says HEAD and the working tree'] = function()
   local top, base = git_repo.create('against-uncommitted', { ['a.txt'] = { 'one' } })
   git_repo.git(top, { 'branch', 'dev' })
