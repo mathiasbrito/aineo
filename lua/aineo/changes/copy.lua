@@ -3054,20 +3054,21 @@ function M.new(label)
   end
 
   --- Chooses again, after the focused view was switched on or off, what the
-  --- commits window now shows: the filter selected stays, the cursor put on
-  --- its line, as the default view lists every filter the focused view lists
-  --- but a local branch's. In the focused view, a filter it does not list
-  --- gives way to the whole change of the worktree or branch shown alone; in
-  --- the default view, a filter of a branch gives way to *Session work*; the
-  --- files window is read again either way.
+  --- commits window now shows: the filter selected stays when the window
+  --- lists it, the cursor put on its line. In the focused view, a filter it
+  --- does not list gives way to the whole change of the worktree or branch
+  --- shown alone; in the default view, a filter of a branch that the
+  --- Reported section does not list gives way to *Session work*; the files
+  --- window is read again either way.
   local function choose_for_shown_view()
     local shown = scope_shown()
-    if shown and not scope.page_lists(commits_page(), session.selected) then
+    local listed = scope.page_lists(commits_page(), session.selected)
+    if shown and not listed then
       select_filter(scope.whole_change_of(shown[1]))
       read_files(true)
       return
     end
-    if not shown and session.selected.branch then
+    if not shown and session.selected.branch and not listed then
       select_session_work()
       read_files(true)
       return
