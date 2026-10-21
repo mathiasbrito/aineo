@@ -606,12 +606,17 @@ function M.new(label)
 
   --- Asks git what the diffs of the files the files window lists compare
   --- (`aineo.changes.against_read`), off the main loop, and shows the files
-  --- window again once it answers, unless a later ask has been made.
+  --- window again once it answers, unless a later ask has been made. Until it
+  --- answers the window says the commits earlier reads gave by their words
+  --- alone (`aineo.changes.against`'s `kept_while_reading()`).
   local function read_against()
     if not (session and session.repository) then
       return
     end
     local named = listed_filter(session.listed)
+    if told_against then
+      told_against.resolved = against.kept_while_reading(told_against.resolved)
+    end
     against_reads = against_reads + 1
     local this_read = against_reads
     against_read.read({
@@ -1051,8 +1056,8 @@ function M.new(label)
       session.files_failure = failure
     end,
     show = function()
-      show_files()
       read_against()
+      show_files()
     end,
   })
 
@@ -2197,8 +2202,8 @@ function M.new(label)
   --- holds, compares, and asks git for what the sides need
   --- (`aineo.changes.against_read`), off the main loop; the bar is drawn again
   --- once git answers, unless the buffer holds another diff by then.
-  --- `earlier` is what was told of the diff before, if any, kept on show
-  --- until git answers.
+  --- `earlier` is what the bar says until git answers: what an earlier read
+  --- told that still holds (`aineo.changes.against`'s `kept_while_reading()`).
   ---
   ---@param buffer integer
   ---@param entry aineo.changes.Entry
@@ -2274,7 +2279,12 @@ function M.new(label)
     end
     local before_resolved = shown_diffs[buffer] and shown_diffs[buffer].against
     shown_diffs[buffer] = { entry = entry, context = context, asked = context }
-    track_against(buffer, entry, diff_source(entry), before_resolved and before_resolved.resolved)
+    track_against(
+      buffer,
+      entry,
+      diff_source(entry),
+      against.kept_while_reading(before_resolved and before_resolved.resolved)
+    )
     draw_bar(buffer)
     local shown = vim.api.nvim_buf_get_lines(buffer, 0, -1, true)
     for window, before_write in pairs(cursors) do

@@ -835,10 +835,14 @@ of Landed's working branch or of a branch). With no base at all, `<left>` is
 `empty tree`. The line shows the id alone until aineo has read the names,
 with one git run off the main loop each time the files window is read and
 each time a branch or tag moves, a fetch included; it never waits for them.
-The same line, for the same choice, is what the diff
-bar below says. The label shows in |hl-AineoChangesFilter|, an id in
-|hl-AineoChangesCommitId|, names in |hl-AineoChangesReportedBranch| and the
-words in |hl-AineoChangesNote|.
+While aineo reads the commit `HEAD` names, a commit's parent or the merge
+base of Landed, the line says that side by its words alone, as in
+`Against: HEAD → working tree`, never the id of an earlier read, and the
+same holds for the bar of a diff read again with F. A branch aineo has not
+read yet says `Against: reading…`. The same line, for the same choice, is
+what the diff bar below says. The label shows in |hl-AineoChangesFilter|,
+an id in |hl-AineoChangesCommitId|, names in
+|hl-AineoChangesReportedBranch| and the words in |hl-AineoChangesNote|.
 
 Under Session
 work the window lists every file that differs from the base, committed
