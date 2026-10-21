@@ -501,6 +501,47 @@ T['the graph']['chooses the commit the cursor is left on once the one chosen is 
   })
 end
 
+--- Waits until the cursor of the child's window showing the commits buffer,
+--- current or not, is at `expected`, at most `git_repo.PATIENCE_MS`, and
+--- asserts that it is.
+---
+---@param expected integer[] the line, 1-based, and the byte column, 0-based
+local function expect_commits_cursor(expected)
+  local function cursor()
+    return child.lua_get('vim.api.nvim_win_get_cursor(vim.fn.bufwinid(...))', { COMMITS })
+  end
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return vim.deep_equal(cursor(), expected)
+  end, 10)
+  eq(cursor(), expected)
+end
+
+T['the graph']['keeps a commits window that is not current on a commit line, chosen, once its commit is gone'] = function()
+  local top, commits = pane_showing_the_graph('graphpane-gone-elsewhere')
+  expect_lines(COMMITS, whole_graph(top, commits))
+  child.type_keys('j')
+  expect_lines(FILES, {
+    'Files in: ' .. git_repo.commit_line_of(commits.merge, ADA, 'Merge side'),
+    '  A side.txt',
+  })
+  enter_window_of(FILES)
+  local tree = git_repo.git(top, { 'rev-parse', commits.merge .. '^{tree}' })
+  local again = git_repo.git(
+    top,
+    { 'commit-tree', tree, '-p', commits.main, '-p', commits.side, '-m', 'Merge again' }
+  )
+
+  git_repo.git(top, { 'update-ref', 'refs/heads/main', again })
+
+  expect_first_commits_line_ending('Merge again - aineo tests (HEAD -> main)')
+  expect_commits_cursor({ 3, 0 })
+  expect_lines(FILES, {
+    'Files in: '
+      .. git_repo.commit_line_of(commits.side, 'Bartholomew 9y' .. (' '):rep(6), 'Side work'),
+    '  A side.txt',
+  })
+end
+
 T['the graph']['is read again when the pane is shown again, where the watch sees no reference written'] = function()
   local top, commits =
     pane_showing_the_graph('graphpane-shown', { git = { system_name = 'Linux' } })
