@@ -927,7 +927,10 @@ move between windows and the pane is shown again, and a new editor starts on
 the sections. It is read again each time `t` shows it, as the pane is shown
 again, and as the repository changes: a commit, a checkout, a branch or tag
 made or deleted, a fetch. A read keeps the cursor on its commit while the
-graph lists it; a read that fails keeps the graph shown and says so above it.
+graph lists it; when it no longer does, the cursor goes to the nearest commit
+line, which the files window then lists, whether the commits window is the
+current one or not. A read that fails keeps the graph shown and says so
+above it.
 
 `j` and `k` go from commit line to commit line, over the graph's own lines,
 such as `|/` and `|\`, and take a count: `3j` goes three commits down. The
