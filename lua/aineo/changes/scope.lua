@@ -5,6 +5,7 @@
 
 local filter = require('aineo.changes.filter')
 local lines = require('aineo.changes.lines')
+local reports = require('aineo.changes.reports')
 
 local M = {}
 
@@ -22,11 +23,14 @@ M.NONE_TO_SHOW = 'aineo: no other worktree or branch to show alone'
 ---@field heading string the worktree's heading as the commits window last listed it, or `Branch ` and the branch's name
 
 --- One choice of the list `s` offers: a worktree, by its top level, a local
---- branch, by its name, or the reported set.
+--- branch, by its name, the editor's own work, the reported work of one
+--- label, or every reported worktree's.
 ---@class aineo.changes.ScopeItem
 ---@field top? string the top level of the worktree it shows alone
 ---@field branch? string the name of the branch it shows alone
----@field reported? boolean whether it shows the reported set
+---@field own? boolean whether it shows the editor's own work, in the default view
+---@field group? string the label whose reported work it shows, `''` for the worktrees with none
+---@field reported? boolean whether it shows every reported worktree's work
 ---@field text string how the picker shows it: its kind, then its name
 
 --- What the list `s` chooses its branches from, read when `s` is pressed.
@@ -83,26 +87,27 @@ local function branches_offered(candidates)
   end, candidates.branches)
 end
 
---- The list `s` offers: first `report_items`, the item of each report, in
---- their order (`aineo.changes.lines`' `report_item()`); then, while
---- `reported`, the reported set, is not empty, its one item, `[reported]
---- All reported work (<n>)`; then one item per worktree of `others`, what
---- the commits window last listed of the other worktrees, in the order
---- listed, then one per branch of `candidates` that is offered
+--- The list `s` offers: first `report_items`, the item of each line of the
+--- Reported section, in their order (`aineo.changes.lines`'
+--- `report_item()`); then, while `reported_worktrees`, how many worktrees
+--- the Reported section holds, is not 0, the item of all of them,
+--- `[reported] All reported work (<n>)`; then one item per worktree of
+--- `others`, what the commits window last listed of the other worktrees, in
+--- the order listed, then one per branch of `candidates` that is offered
 --- (`branches_offered()`), in the order given. `candidates` is nil when the
 --- branches could not be read: the worktrees alone.
 ---
 ---@param others aineo.changes.OtherWorktrees
 ---@param candidates aineo.changes.BranchCandidates|nil
----@param reported aineo.changes.ScopeMember[]
+---@param reported_worktrees integer
 ---@param report_items aineo.changes.ScopeItem[]
 ---@return aineo.changes.ScopeItem[]
-function M.items_of(others, candidates, reported, report_items)
+function M.items_of(others, candidates, reported_worktrees, report_items)
   local items = vim.list_slice(report_items)
-  if #reported > 0 then
+  if reported_worktrees > 0 then
     table.insert(items, {
       reported = true,
-      text = ('[reported] All reported work (%d)'):format(#reported),
+      text = ('[reported] All reported work (%d)'):format(reported_worktrees),
     })
   end
   vim.list_extend(
@@ -269,173 +274,47 @@ function M.members_shown(scope, others, branch)
   return section and { { worktree = section } } or nil
 end
 
---- A worktree or a branch an agent of the tab's Claude Code reported, as
---- `aineo.mcp` hands it on: the worktree's folder, absolute, or the
---- branch's name, each the agent's own string, the commit it was made from
---- and the agent's label for it.
+--- One branch of a reported worktree, as `aineo.mcp` hands it on: its
+--- name, the agent's own string, and the full id of the commit it was made
+--- from.
+---@class aineo.changes.ReportedWorkBranch
+---@field name string
+---@field base? string the full id of the commit the branch was made from; nil for a report that gives none
+
+--- The report of a worktree an agent of the tab's Claude Code works in, as
+--- `aineo.mcp` hands it on: the worktree's folder, absolute, the agent's own
+--- string, its label for the task, and every branch it works on there.
 ---@class aineo.changes.ReportedWork
----@field kind 'worktree'|'branch'
----@field path? string the worktree's folder, with `kind` `worktree`
----@field branch? string the branch's name, with `kind` `branch`
----@field base? string the full id of the commit the work was made from; nil for a report that gives none
----@field label? string the agent's short name for the work's task
+---@field worktree string the worktree's folder
+---@field label? string the agent's short name for the task; nil in a report of aineo's own hook
+---@field branches aineo.changes.ReportedWorkBranch[] none when the agent is done with the worktree
 ---@field by_hook? boolean whether aineo's own hook made the report, rather than the agent's call
 
---- What `match_report()` gives for a report of the editor's own worktree, or
---- of the branch it has checked out: the default view shows that work.
-M.OWN_WORK = { own = true }
-
---- The local branch `name` as `candidates`, what git listed, give it: the
---- worktree that has it checked out, when one has, else the branch by its
---- name alone (`{ name }`); nil when git lists no local branch of that name.
----
----@param name string
----@param candidates aineo.changes.BranchCandidates
----@return aineo.git.Worktree|{ name: string }|nil
-local function listed_branch_of(name, candidates)
-  local named = vim.iter(candidates.branches):find(function(listed)
-    return listed.name == name
-  end)
-  if not named then
-    return nil
-  end
-  return vim.iter(candidates.worktrees):find(function(worktree)
-    return worktree.branch == named.name
-  end) or { name = named.name }
-end
-
---- What `work`, a report, comes to against `candidates`, what git listed of
---- the worktrees and the branches: for a worktree, the worktree whose top
---- level is `real_path`, the reported path with every link resolved (git
---- lists worktrees by their real paths); for a branch, the local branch of
---- that name — as the worktree that has it checked out, when one has, else
---- as the branch when `s` would offer it (`branches_offered()`). The
---- editor's own worktree, `own_top`, and a branch no worktree has checked
---- out that `s` would not offer — the working branch — give `OWN_WORK`;
---- nothing listed gives nil. The agent's strings are compared with what git
---- printed, never handed on: a member holds git's own worktree or branch.
----
----@param work aineo.changes.ReportedWork
----@param real_path string|nil the reported path with every link resolved; nil when it resolves to nothing
----@param candidates aineo.changes.BranchCandidates
----@param own_top string the editor's own worktree's top level
----@return aineo.changes.ScopeMember|table|nil
-function M.match_report(work, real_path, candidates, own_top)
-  local listed
-  if work.kind == 'branch' then
-    listed = listed_branch_of(work.branch, candidates)
-  else
-    listed = vim.iter(candidates.worktrees):find(function(worktree)
-      return worktree.top == real_path
-    end)
-  end
-  if not listed then
-    return nil
-  end
-  if not listed.top then
-    local offered = vim.iter(branches_offered(candidates)):any(function(offered_branch)
-      return offered_branch.name == listed.name
-    end)
-    return offered and { branch = listed } or M.OWN_WORK
-  end
-  if listed.top == own_top then
-    return M.OWN_WORK
-  end
-  return { worktree = listed }
-end
-
---- The members of `members`, the reported set, that `candidates`, what git
---- now lists, still lists, in their order: a worktree by its top level, as
---- git now lists it, its branch included; a branch by its name.
----
----@param members aineo.changes.ScopeMember[]
----@param candidates aineo.changes.BranchCandidates
----@return aineo.changes.ScopeMember[]
-function M.still_listed(members, candidates)
-  local worktrees_by_top, branch_names = {}, {}
-  for _, worktree in ipairs(candidates.worktrees) do
-    worktrees_by_top[worktree.top] = worktree
-  end
-  for _, listed_branch in ipairs(candidates.branches) do
-    branch_names[listed_branch.name] = true
-  end
-  local still = {}
-  for _, member in ipairs(members) do
-    if member.worktree and worktrees_by_top[member.worktree.top] then
-      table.insert(still, { worktree = worktrees_by_top[member.worktree.top] })
-    elseif member.branch and branch_names[member.branch.name] then
-      table.insert(still, member)
-    end
-  end
-  return still
-end
-
---- The words that tell the user the reported set is empty, all of it gone,
---- while the pane showed it.
+--- The words that tell the user the reported work the focused view showed
+--- is gone, all of it.
 M.REPORTED_GONE = 'aineo: the reported work is gone; the changes pane shows the default view'
 
---- The key that tells `member`, one of the reported set, from every other:
---- a worktree by its top level, a branch by its name.
+--- The words that tell the user an agent started work in `worktree`, a
+--- worktree new to the Reported section.
 ---
----@param member aineo.changes.ScopeMember
+---@param worktree aineo.git.Worktree
 ---@return string
-function M.member_key(member)
-  if member.worktree then
-    return 'worktree\0' .. member.worktree.top
-  end
-  return 'branch\0' .. member.branch.name
-end
-
---- What the focused view shows of `members`, the reported set, in its
---- order: each worktree as `others`, what the commits window last listed of
---- the other worktrees, lists it, else as git listed it when it was
---- reported; each branch as the commits window last read it.
----
----@param members aineo.changes.ScopeMember[]
----@param others aineo.changes.OtherWorktrees
----@return aineo.changes.ScopeMember[]
-function M.members_reported(members, others)
-  return vim.tbl_map(function(member)
-    if member.worktree then
-      return { worktree = M.section_on(others, member.worktree.top) or member.worktree }
-    end
-    return member
-  end, members)
-end
-
---- The heading of `member`, as the commits window names it.
----
----@param member aineo.changes.ScopeMember
----@return string
-local function member_heading(member)
-  if member.worktree then
-    return lines.worktree_heading(member.worktree)
-  end
-  return lines.filter_name(filter.of_branch(member.branch.name))
-end
-
---- The words that tell the user an agent started work in `member`, which
---- joined the reported set.
----
----@param member aineo.changes.ScopeMember
----@return string
-function M.started_work(member)
+function M.started_work(worktree)
   return ('aineo: Claude Code started work in %s; the changes pane shows the reported work'):format(
-    member_heading(member)
+    lines.worktree_heading(worktree)
   )
 end
 
---- The words that tell the user git did not list what `work` reported in
---- the time it waited: its kind and its path or branch, quoted as a path is
+--- The words that tell the user git did not list the worktree at `path`,
+--- an agent's report's folder, in the time it waited, quoted as a path is
 --- (`lines.quoted_path()`), so that no character of the agent's string
 --- shows as anything but text.
 ---
----@param work aineo.changes.ReportedWork
+---@param path string
 ---@return string
-function M.unlisted_report(work)
-  return ('aineo: Claude Code announced %s %s, which git does not list; the changes pane is unchanged'):format(
-    work.kind,
-    lines.quoted_path(work.path or work.branch)
+function M.unlisted_report(path)
+  return ('aineo: Claude Code announced worktree %s, which git does not list; the changes pane is unchanged'):format(
+    lines.quoted_path(path)
   )
 end
 
@@ -455,13 +334,14 @@ end
 ---@class aineo.changes.View
 ---@field scope? aineo.changes.Scope the worktree or branch picked to show alone
 ---@field focused boolean whether the focused view shows rather than the default view
----@field reported aineo.changes.ScopeMember[] the reported set
----@field shows_reported boolean whether the focused view is the reported set rather than the pick
----@field reports? table<string, aineo.changes.Report> what was reported of each member of the reported set, by its key (`M.member_key()`); none when not given
+---@field nodes aineo.changes.ReportedNode[] the Reported section's worktrees
+---@field shows_reported boolean whether the focused view is the reported work rather than the pick
 
---- `view` as it is kept for a session (`aineo.changes.kept`): what it picked
---- and reported, each by the worktree's top level or the branch's name, each
---- member of the reported set with what was reported of it.
+--- `view` as it is kept for a session (`aineo.changes.kept`): what it
+--- picked, by the worktree's top level or the branch's name, and each
+--- worktree of the Reported section, by its top level, with its label, the
+--- time of its last report and its branches. Its reports in the shape kept
+--- before reports were a tree are none.
 ---
 ---@param repository string the session's repository's top level
 ---@param view aineo.changes.View
@@ -471,116 +351,107 @@ function M.kept_view_of(repository, view)
   if view.scope then
     scope_kept = { top = view.scope.top, branch = view.scope.branch }
   end
-  local reports = view.reports or {}
   return {
     repository = repository,
     focused = view.focused,
     shows_reported = view.shows_reported,
     scope = scope_kept,
-    reported = vim.tbl_map(function(member)
-      local report = reports[M.member_key(member)] or {}
-      local kept = {
-        kind = report.kind,
-        base = report.base,
-        label = report.label,
-        at = report.at,
-        by_hook = report.by_hook,
-        on_branch = report.on_branch,
+    reported = {},
+    nodes = vim.tbl_map(function(node)
+      return {
+        top = node.worktree.top,
+        label = node.label,
+        at = node.at,
+        branches = vim.tbl_map(function(listed)
+          return { name = listed.name, base = listed.base }
+        end, node.branches),
       }
-      if member.worktree then
-        kept.top = member.worktree.top
-      else
-        kept.branch = member.branch.name
-      end
-      return kept
-    end, view.reported),
+    end, view.nodes),
   }
 end
 
---- The member `pick`, kept, names, as `M.still_listed()` takes it.
+--- The worktree or the branch `pick`, kept, names, as `candidates`, what
+--- git now lists, still lists it: a worktree, by its top level, as git
+--- lists it; a branch, by its name; nil when git lists it no more.
 ---
 ---@param pick aineo.changes.KeptPick
----@return aineo.changes.ScopeMember
-local function member_of_pick(pick)
+---@param candidates aineo.changes.BranchCandidates
+---@return aineo.changes.ScopeMember|nil
+local function listed_pick(pick, candidates)
   if pick.top then
-    return { worktree = { top = pick.top } }
+    local worktree = vim.iter(candidates.worktrees):find(function(listed)
+      return listed.top == pick.top
+    end)
+    return worktree and { worktree = worktree }
   end
-  return { branch = { name = pick.branch } }
+  local named = vim.iter(candidates.branches):any(function(listed)
+    return listed.name == pick.branch
+  end)
+  return named and { branch = { name = pick.branch } } or nil
+end
+
+--- The nodes `kept` keeps, as `candidates`, what git now lists, still
+--- allows them (`reports.still_listed()`): its worktrees, or, for a view
+--- kept before reports were a tree, its reports made nodes
+--- (`reports.nodes_of_kept_reports()`).
+---
+---@param kept aineo.changes.KeptView
+---@param candidates aineo.changes.BranchCandidates
+---@return aineo.changes.ReportedNode[]
+local function restored_nodes(kept, candidates)
+  if not kept.nodes then
+    return reports.nodes_of_kept_reports(kept.reported, candidates)
+  end
+  local nodes = vim.tbl_map(function(node)
+    return {
+      worktree = { top = node.top },
+      label = node.label,
+      at = node.at,
+      branches = vim.deepcopy(node.branches),
+    }
+  end, kept.nodes)
+  return (reports.still_listed(nodes, candidates))
 end
 
 --- What `M.restored_view()` gives.
 ---@class aineo.changes.RestoredView: aineo.changes.View
 ---@field selected? aineo.changes.Filter the whole change of the first thing the focused view shows, which it chooses; nil for the default view
 
---- What was reported of the members `picks`, the reported set as it was
---- kept, by each member's key (`M.member_key()`): its kind as reported, or
---- the kind of the member for a record kept before reports kept theirs, and
---- its base, label, time, whether aineo's hook made it and the branch the
---- work was on, as kept.
----
----@param picks aineo.changes.KeptReport[]
----@return table<string, aineo.changes.Report>
-local function reports_of(picks)
-  local reports = {}
-  for _, pick in ipairs(picks) do
-    reports[M.member_key(member_of_pick(pick))] = {
-      kind = pick.kind or (pick.top and 'worktree' or 'branch'),
-      base = pick.base,
-      label = pick.label,
-      at = pick.at,
-      by_hook = pick.by_hook,
-      on_branch = pick.on_branch,
-    }
-  end
-  return reports
-end
-
 --- The view `kept` keeps, as `candidates`, what git now lists, still allows
---- it: a member of the reported set that git no longer lists is dropped, so
---- is a pick of a worktree or a branch it no longer lists, all untold. The
---- editor's own worktree, which `s` never offers and the pane never keeps,
---- is never restored. The focused view shows only while what it was of — the
---- set, or the pick — is left. Each member left keeps what was reported of
---- it (`reports_of()`).
+--- it: what git no longer lists of the Reported section is dropped
+--- (`restored_nodes()`), so is a pick of a worktree or a branch it no
+--- longer lists, all untold. The editor's own worktree, which `s` never
+--- offers and the pane never keeps, is never restored as the pick. The
+--- focused view shows only while what it was of — the reported work, or the
+--- pick — has anything left to show alone.
 ---
 ---@param kept aineo.changes.KeptView
 ---@param candidates aineo.changes.BranchCandidates
 ---@param own_top string the top level of the editor's own worktree
 ---@return aineo.changes.RestoredView
 function M.restored_view(kept, candidates, own_top)
-  local function is_not_own(pick)
-    return pick.top ~= own_top
-  end
-  local kept_reported = vim.tbl_filter(is_not_own, kept.reported)
-  local reported = M.still_listed(vim.tbl_map(member_of_pick, kept_reported), candidates)
-  local all_reports = reports_of(kept_reported)
-  local reports = {}
-  for _, member in ipairs(reported) do
-    local key = M.member_key(member)
-    reports[key] = all_reports[key]
-  end
-  local picked = kept.scope
-    and is_not_own(kept.scope)
-    and M.still_listed({ member_of_pick(kept.scope) }, candidates)[1]
+  local nodes = restored_nodes(kept, candidates)
+  local first_work = reports.work_of(nodes, own_top)[1]
+  local reported_first = first_work and listed_pick(first_work, candidates)
+  local picked = kept.scope and kept.scope.top ~= own_top and listed_pick(kept.scope, candidates)
   local scope
   if picked and picked.worktree then
     scope = M.of(picked.worktree)
   elseif picked then
     scope = M.of_branch(picked.branch.name)
   end
-  local shows_reported = kept.shows_reported and #reported > 0
+  local shows_reported = kept.shows_reported and reported_first ~= nil
   local shown
   if kept.focused and kept.shows_reported then
-    shown = reported[1]
+    shown = reported_first
   elseif kept.focused then
     shown = picked
   end
   return {
     scope = scope,
     focused = shown ~= nil,
-    reported = reported,
+    nodes = nodes,
     shows_reported = shows_reported,
-    reports = reports,
     selected = shown and M.whole_change_of(shown) or nil,
   }
 end

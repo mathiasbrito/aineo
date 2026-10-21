@@ -220,9 +220,9 @@ end
 ---@field top? string the worktree's top level
 ---@field branch? string the local branch's name
 
---- What the changes pane kept of one member of the reported set: the
---- worktree or the branch, and what was reported of it, each field absent
---- from a record kept before reports kept it.
+--- What the changes pane kept of one report before reports were a tree:
+--- the worktree or the branch, and what was reported of it, each field
+--- absent from a record kept before reports kept it.
 ---@class aineo.changes.KeptReport: aineo.changes.KeptPick
 ---@field kind? 'worktree'|'branch' the kind of work as it was reported
 ---@field base? string the full id of the commit the work was made from
@@ -235,9 +235,17 @@ end
 ---@class aineo.changes.KeptView
 ---@field repository string the repository's top level the view is of
 ---@field focused boolean whether the focused view showed, rather than the default view
----@field shows_reported boolean whether the focused view was the reported set, rather than the pick
+---@field shows_reported boolean whether the focused view was the reported work, rather than the pick
 ---@field scope? aineo.changes.KeptPick the worktree or branch picked to show alone
----@field reported aineo.changes.KeptReport[] the reported set's members, in their order, each with what was reported of it
+---@field reported aineo.changes.KeptReport[] the reports kept before reports were a tree, in their order; none in a view kept since
+---@field nodes? aineo.changes.KeptNode[] the worktrees of the Reported section, in the order their last reports were taken; nil in a view kept before reports were a tree
+
+--- What the changes pane kept of one worktree of the Reported section.
+---@class aineo.changes.KeptNode
+---@field top string the worktree's top level
+---@field label? string the agent's short name for the task
+---@field at? integer when its last report was taken, in seconds since the epoch
+---@field branches { name: string, base?: string }[] its branches, in the order reported, each with the full id of the commit it was made from
 
 --- The file that keeps the view of the session `id`, beside the file that
 --- keeps its base: named by the id's SHA-256 as that file is
@@ -285,7 +293,7 @@ local function is_absent_or_name(value)
   return value == nil or (type(value) == 'string' and value ~= '')
 end
 
---- `decoded` as a member of the reported set: a pick (`as_kept_pick()`)
+--- `decoded` as a report kept before reports were a tree: a pick (`as_kept_pick()`)
 --- with, each when given, a `kind` of `REPORT_KINDS`, a `base` of
 --- hexadecimal digits, a non-empty `label`, an integer `at`, a boolean
 --- `by_hook` and a non-empty `on_branch`; nil when it is not.
@@ -312,8 +320,93 @@ local function as_kept_report(decoded)
   return pick
 end
 
+--- Whether `value` is nil or a string of hexadecimal digits.
+---
+---@param value any
+---@return boolean
+local function is_absent_or_commit(value)
+  return value == nil or (type(value) == 'string' and value:match('^%x+$') ~= nil)
+end
+
+--- Whether `value` is nil or an integer.
+---
+---@param value any
+---@return boolean
+local function is_absent_or_integer(value)
+  return value == nil or (type(value) == 'number' and value == math.floor(value))
+end
+
+--- `decoded` as a branch of a kept worktree: a table of a non-empty
+--- `name` and, when given, a `base` of hexadecimal digits; nil when it is
+--- not.
+---
+---@param decoded any
+---@return { name: string, base?: string }|nil
+local function as_kept_branch(decoded)
+  if
+    type(decoded) ~= 'table'
+    or type(decoded.name) ~= 'string'
+    or decoded.name == ''
+    or not is_absent_or_commit(decoded.base)
+  then
+    return nil
+  end
+  return { name = decoded.name, base = decoded.base }
+end
+
+--- `decoded` as a worktree of the Reported section: a table of a non-empty
+--- `top`, a list of `branches` (`as_kept_branch()`) and, when given, a
+--- non-empty `label` and an integer `at`; nil when it is not.
+---
+---@param decoded any
+---@return aineo.changes.KeptNode|nil
+local function as_kept_node(decoded)
+  if
+    type(decoded) ~= 'table'
+    or type(decoded.top) ~= 'string'
+    or decoded.top == ''
+    or not is_absent_or_name(decoded.label)
+    or not is_absent_or_integer(decoded.at)
+    or type(decoded.branches) ~= 'table'
+    or not vim.islist(decoded.branches)
+  then
+    return nil
+  end
+  local branches = {}
+  for _, listed in ipairs(decoded.branches) do
+    local kept_branch = as_kept_branch(listed)
+    if not kept_branch then
+      return nil
+    end
+    table.insert(branches, kept_branch)
+  end
+  return { top = decoded.top, label = decoded.label, at = decoded.at, branches = branches }
+end
+
+--- `decoded`, a list of kept worktrees, each as `as_kept_node()` reads it;
+--- nil when it is not a list, or one of them is not of that shape.
+---
+---@param decoded any
+---@return aineo.changes.KeptNode[]|nil
+local function as_kept_nodes(decoded)
+  if type(decoded) ~= 'table' or not vim.islist(decoded) then
+    return nil
+  end
+  local nodes = {}
+  for _, listed in ipairs(decoded) do
+    local node = as_kept_node(listed)
+    if not node then
+      return nil
+    end
+    table.insert(nodes, node)
+  end
+  return nodes
+end
+
 --- `decoded`, a kept view file's JSON, as the view it keeps, or nil when it
---- is not of that shape.
+--- is not of that shape: its `nodes`, when given, read by
+--- `as_kept_nodes()`, and its `reported`, the reports kept before reports
+--- were a tree, by `as_kept_report()`.
 ---
 ---@param decoded any
 ---@return aineo.changes.KeptView|nil
@@ -342,12 +435,20 @@ local function as_kept_view(decoded)
     end
     table.insert(reported, pick)
   end
+  local nodes
+  if decoded.nodes ~= nil then
+    nodes = as_kept_nodes(decoded.nodes)
+    if not nodes then
+      return nil
+    end
+  end
   return {
     repository = decoded.repository,
     focused = decoded.focused,
     shows_reported = decoded.shows_reported,
     scope = scope,
     reported = reported,
+    nodes = nodes,
   }
 end
 
@@ -377,6 +478,7 @@ function M.keep_view(state_directory, id, view)
     shows_reported = view.shows_reported,
     scope = view.scope,
     reported = view.reported,
+    nodes = view.nodes,
   })
 end
 

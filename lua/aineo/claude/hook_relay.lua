@@ -45,9 +45,9 @@
 --- after a `Bash` call of git with the event `PostToolUse` in place of a
 --- session's, it records nothing and starts no deliverer: it reads the call's
 --- command as work made, when it is one of the plain forms the hook reads
---- (`aineo.claude.work_commands`), resolves its base in the folder the
---- command ran in (`made_work()`), and tells the editor, as an agent's call
---- of `announce_work` reaches it, waiting for its answer
+--- (`aineo.claude.work_commands`), reads the worktree it made it in, its
+--- branch and its base (`made_work()`), and tells the editor, as an agent's
+--- call of `announce_work` reaches it, waiting for its answer
 --- (`tell_made_work()`). Any other call, and any failure, tells nothing; the
 --- hook writes nothing on stdout or stderr and exits 0, and ends itself after
 --- `TOOL_USE_LIFETIME_MS` whatever the editor does (`end_after()`).
@@ -285,14 +285,32 @@ local function commit_in(folder, name)
   return resolved.code == 0 and (resolved.stdout or ''):match('^(%x+)\n$') or nil
 end
 
+--- What git prints, on one line, of `arguments` run in the folder
+--- `folder`, or nil when it prints nothing, fails, or takes longer than
+--- `BASE_RESOLUTION_MS`.
+---
+---@param folder string
+---@param arguments string[]
+---@return string?
+local function git_line_in(folder, arguments)
+  local ran = vim
+    .system(vim.list_extend({ 'git', '-C', folder }, arguments), { text = true })
+    :wait(BASE_RESOLUTION_MS)
+  return ran.code == 0 and (ran.stdout or ''):match('^([^\n]+)\n$') or nil
+end
+
 --- The work `input`, the JSON of a `PostToolUse` hook, says a `Bash` call
 --- made, as an announcement (`aineo.claude.work_commands`'s `work_of()`):
---- its kind; the worktree's folder or the branch's name; its base, the start
---- point the command names, else `HEAD`, resolved to a commit in the folder
---- the command ran in — `-C`'s, against the call's `cwd`, else the call's
---- `cwd`, else the directory Claude Code runs in — at the time of the hook;
---- and that aineo's hook made it. Nil when the call is not a command the
---- hook reads, or its base resolves to no commit.
+--- the top level of the worktree it is in — the worktree a `worktree add`
+--- made, else the one of the folder the command ran in, `-C`'s against the
+--- call's `cwd`, else the call's `cwd`, else the directory Claude Code runs
+--- in — with the one branch it made — the one a `worktree add` gave with
+--- `-b` or `-B`, else the one that worktree has checked out — and its base,
+--- the start point the command names, else `HEAD`, resolved to a commit in
+--- the folder the command ran in, at the time of the hook; and that aineo's
+--- hook made it, with no label. Nil when the call is not a command the hook
+--- reads, its base resolves to no commit, or a worktree it made is on no
+--- branch.
 ---
 ---@param place aineo.claude.HookPlace
 ---@param input table
@@ -313,10 +331,14 @@ local function made_work(place, input)
   if not base then
     return nil
   end
-  if made.kind == 'worktree' then
-    return { kind = 'worktree', path = absolute_in(made.path, folder), base = base, by_hook = true }
+  local worktree_folder = made.kind == 'worktree' and absolute_in(made.path, folder) or folder
+  local top = git_line_in(worktree_folder, { 'rev-parse', '--show-toplevel' })
+  local name = made.branch
+    or git_line_in(worktree_folder, { 'symbolic-ref', '--quiet', '--short', 'HEAD' })
+  if not (top and name) then
+    return nil
   end
-  return { kind = 'branch', branch = made.branch, base = base, by_hook = true }
+  return { worktree = top, branches = { { name = name, base = base } }, by_hook = true }
 end
 
 --- Tells the editor at `place.address` the work the `Bash` call of `input`

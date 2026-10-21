@@ -292,17 +292,21 @@ Every part takes its colour from your colour scheme, through the
 - **Show one worktree or branch alone.** `s` offers the other worktrees and
   the local branches, and shows the one you pick alone; `\g` in the pane
   switches back to the default view and forth again.
-- **Work Claude reports.** When Claude Code or a subagent creates a worktree
-  or a branch, it tells aineo, with the commit it started from (see What
-  Claude tells aineo), and the pane shows that work as its focused view. The
-  default view then starts with a `Reported` section, one line per report,
-  newest first: `worktree feature/a from 1a2b3c4 <label> 5m`. Enter on a line
-  shows that work alone: its commits since the reported base and, for a
-  worktree, its uncommitted changes too; the explorer follows. `s` lists
-  each report first, then `[reported] All reported work`.
+- **Work Claude reports.** Claude Code and its subagents tell aineo of each
+  worktree they work in and every branch they work on there, each with the
+  commit it started from (see What Claude tells aineo), and the pane shows
+  that work as its focused view. The default view then starts with a
+  `Reported` section, a tree: each task's label and age, its worktrees
+  below, indented, and each worktree's branches below them, a `*` on the
+  one checked out, `from` and its base. Enter on a label shows all its
+  work; on a worktree, that worktree alone; on a branch, its commits since
+  its base, plus the worktree's uncommitted changes when that branch is
+  checked out there; the explorer follows. `s` lists the same tree first,
+  then `[reported] All reported work`.
 - **The remembered view.** For each Claude Code session, the pane keeps the
-  worktree or branch you picked with `s`, the work Claude reported and whether
-  the focused view or the default view showed. Quit and come back, reopen the
+  worktree or branch you picked with `s`, the worktrees and branches Claude
+  reported and whether the focused view or the default view showed. Quit and
+  come back, reopen the
   tab or resume the session with `\S`, and the view is back; a worktree or
   branch that is gone is dropped. The line chosen in the commits window, the
   pane the right column shows and the cursor are not kept.
@@ -398,19 +402,24 @@ aineo starts Claude Code with an MCP server of its own. Its tools `report` and
   `HH:MM [status] task — summary`, with its details as items below, under a
   separator line for its day (`── Today ──`, `── Yesterday ──`, `── Mon 19 Oct ──`).
   A report goes to the tab whose Claude sent it.
-- **`announce_work`.** Every agent and subagent must call it right after it
-  creates a git worktree or branch for new work, with the `kind` (`worktree`
-  or `branch`), the `path` or `branch` name, the `base` commit it was created
-  from, and, optionally, a short `label`. A call without `base`, or with one
-  git cannot resolve in the worktree's folder nor in the session's repository,
-  is refused; the agent corrects it and calls again. It only informs
-  aineo: the changes pane lists the report in its `Reported` section and shows
-  that work as its focused view (see The changes pane), and `s` lists it
-  first. A later call for the same worktree or branch replaces its base and
-  label. aineo's own `PostToolUse` hook catches the plain `git worktree add`,
-  `git checkout -b`, `git switch -c` and `git branch <name>` commands Claude's
-  `Bash` tool runs too, as a safety net; `:help aineo-changes-hook` lists the
-  forms.
+- **`announce_work`.** Every agent and subagent must call it once per
+  worktree it works in, right after it creates the worktree or a branch in
+  it, and again whenever the set of branches it works on there changes, with
+  the `worktree` folder, a short `label` and `branches`, every branch it is
+  working on there, each a `name` and the `base` commit it was created from.
+  A call replaces that worktree's branches, so a branch left out leaves the
+  list, and an empty `branches` takes the worktree out. A branch git does
+  not have, or a base git cannot resolve in the worktree's folder nor in the
+  session's repository, is refused, naming the item; the agent corrects it
+  and calls again. It only informs aineo: the changes pane lists the
+  worktree and its branches in its `Reported` section and shows that work
+  as its focused view (see The changes pane), and `s` lists it first.
+  aineo's own `PostToolUse` hook catches the plain `git worktree add`,
+  `git checkout -b`, `git switch -c` and `git branch <name>` commands
+  Claude's `Bash` tool runs too, as a safety net: a branch made in a
+  reported worktree joins that worktree's branches, and a worktree it sees
+  added shows under `(no label)` until an agent's call labels it;
+  `:help aineo-changes-hook` lists the forms.
 - **`run`, `run_output` and `run_stop`.** Claude starts a command in the run
   pane with `run`, reads what a process printed with `run_output`, and stops
   it with `run_stop`. `run` and `run_stop` are for your explicit request only:

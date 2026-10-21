@@ -313,7 +313,10 @@ T['one pick']['of reported work shows the first worktree reported'] = function()
   wait_for_tree(OWN_TREE)
 
   child.lua(
-    [[require('aineo.changes').add_reported_work({ kind = 'worktree', path = ... }, function() end)]],
+    [[require('aineo.changes').add_reported_work(
+      { worktree = ..., label = 'T', branches = { { name = 'feature' } } },
+      function() end
+    )]],
     { repository.worktree }
   )
 

@@ -1,9 +1,9 @@
 --- aineo's MCP home, `require('aineo.mcp')`: the report server Claude Code
 --- runs, described for Claude Code's `--mcp-config` and `--allowedTools`,
---- with its tools — the report, the announcement of a worktree or a branch
---- an agent created, and the three that run a command in the run pane, read
---- what it printed and stop it — and the words that tell Claude Code's
---- agents of the last four.
+--- with its tools — the report, the announcement of a worktree an agent
+--- works in and its branches, and the three that run a command in the run
+--- pane, read what it printed and stop it — and the words that tell Claude
+--- Code's agents of the last four.
 
 local editors = require('aineo.mcp.editors')
 local names = require('aineo.mcp.names')
@@ -137,9 +137,10 @@ end
 ---@return string
 function M.announce_instructions()
   return (
-    'Required for every agent and subagent: call `%s` once right after you create'
-    .. ' a git branch or worktree for new work, with kind, its path or branch,'
-    .. ' the base commit it was created from, and a short label.'
+    'Required for every agent and subagent: call `%s` once per worktree you work in,'
+    .. ' right after you create the worktree or a branch in it, and again whenever the set of'
+    .. " branches you are working on there changes, with the worktree's folder, a short label,"
+    .. ' and every branch you are working on there with the commit it was created from.'
     .. ' It only informs aineo: if it refuses, correct the call as the refusal says and call again;'
     .. ' otherwise do not act on its reply.'
   ):format(M.announce_tool_name())
@@ -154,7 +155,8 @@ end
 function M.subagent_announce_context()
   return M.announce_instructions()
     .. ' If you started in a git worktree made for your task, call it once, now,'
-    .. " with that worktree's path and the commit it was made from."
+    .. " with that worktree's folder, a short label, and the branch you are on"
+    .. ' with the commit it was made from.'
 end
 
 --- Lists the editor `entry` describes among the running aineo editors under
@@ -276,10 +278,10 @@ end
 local work_announced_handler
 
 --- Registers `handler`, in place of any before, as what this editor does
---- with each announcement of a worktree or a branch an agent created, which
+--- with each announcement of a worktree an agent works in, and its branches, which
 --- the relay of a Claude Code this editor started offers it, or aineo's own
 --- hook in that Claude Code (`receive_work_announcement()`):
---- `handler(work, start_token)`, with the announcement — its path absolute —
+--- `handler(work, start_token)`, with the announcement — its folder absolute —
 --- and the token of the start of Claude Code whose agent made it, returns
 --- whether it took it, or why it refuses it, in words for the agent. Its
 --- strategy is the composition root's: plain dependency inversion, bound

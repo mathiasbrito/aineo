@@ -42,7 +42,7 @@ function M.announce(context, announced)
   if not (context.editor_address and context.token) then
     return 'declined'
   end
-  local relative = announced.path and not vim.startswith(announced.path, '/')
+  local relative = not vim.startswith(announced.worktree, '/')
   if relative and not context.working_directory then
     return 'declined'
   end
