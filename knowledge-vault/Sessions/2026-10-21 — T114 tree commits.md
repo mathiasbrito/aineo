@@ -30,7 +30,7 @@ A small feature (D30: no whole suite before the push). Each branch line of the R
 - **A line that shows `from ?` lists no commits.** A540 says the base is exactly the one the line shows; `?` shows none, and `wanted()` leaves such a line out although the pane did read its work from its own base. Listing them from that base would put commits under a line that shows no base. Reported as an open point.
 - **The `… <N> more` line is indented six cells**, like the commit lines it ends, and coloured from its first character, not the indent. A540 says "one line" without its indent.
 - **A tree commit's filter is the branch's commit** (`of_branch_commit(name, commit)`), not the session's own (`of_commit`): the same commit may stand under two branches or in the session's own list, and the keys must tell them apart. `gf` on a file listed under it opens the branch's checked-out worktree's file, or tells it is checked out nowhere, as for a commit of a branch shown alone.
-- No change to `choose_for_shown_view()`: a tree commit cannot be the selection when the view it is called for switches to the default view, so the branch of that function that gives way to Session work was left as it is.
+- `choose_for_shown_view()` was left as it was at first (A542); the attack review found a commit of a reported branch selected in the focused reported view dropped at the switch back, and A545 changed it (below).
 
 ## What was seen red
 
@@ -68,6 +68,21 @@ Each applied to a copy of the committed file, run on the test files named, resto
 ## Runs
 
 On the tree pushed, each file on its own (D30): `test_changes_tree_commit_lines` 9 cases, `test_changes_tree_commits` 8, `test_changes_tree_commits_pane` 12, `test_changes_announce` 46, `test_changes_keep_view` 85, `test_changes_graph_pane` 27, `test_doc` 82: green. `make lint` clean (StyLua, selene: 0 errors, 0 warnings). Also green, run before the last edit and unchanged since by the code: `test_entry_reported_work`, `test_entry_explorer_pick`, `test_entry_session_handover`, `test_changes_reports`, `test_changes_scope`, `test_changes`.
+
+## Fix round of PR #311 (A545)
+
+Four rulings, each test-first on `feature/t114-tree-commits`; D30: the files touched and those that reach the changed code were run one at a time, no whole suite.
+
+- **`take_branch()` (P1).** A tree commit selected in the default view while a branch picked with `s` waits behind it keeps its files through a read: the swap for the branch's whole change applies only when the commit belongs to the branch and the branch is the view shown alone. Case: `keeps its files through a read while a branch picked with s waits behind the default view`, red before the change.
+- **The cursor through a redraw (P2, P4).** `write_page()` puts the cursor back on the line listing its entry nearest the line it was on. Cases: the line saying more are left out stays (5 against 26 red), a commit listed under two worktrees stays on its copy (7 against 12 red).
+- **A tree commit acts in its worktree (P3).** When the branch is checked out in a worktree other than the editor's, each commit under its line carries that worktree as the commits window last listed it (`TreeLine.worktree_section`, given by `reported_lines()`): its filter is the worktree's commit of the branch, so the files window names the worktree (`(worktree agent-1)` where it said `(branch feature/a)`), Enter shows the diff as the worktree's own section does, and `h` compares against the worktree's `HEAD`. The key gains the worktree's top level before the branch's, so a commit stands apart from the same commit in the worktree's own section. A branch checked out in the editor's own worktree or nowhere carries none. Because the files window now reads the commit through the worktree, `reselect_in_worktrees()` leaves a tree commit to `take_tree_commits()`; without that the existing case `gives way to Session work once the branch no longer lists it` ended on the worktree's whole change (seen red). Cases: the entry of a commit under another worktree's branch, under the editor's own, `h` against the worktree's `HEAD` (red; and red again with the section not given), Enter in the worktree.
+- **`choose_for_shown_view()`.** Keeps a selection the default view lists, a tree commit included, and its docstring no longer says the default view lists every filter but a branch's. Case: a commit of a reported branch selected in the focused view stays selected, cursor on its tree line (cursor on Session work, 9 against 7, red).
+
+Runs of the fix round, each file on its own, no whole suite: `test_changes_tree_commit_lines` 11 cases, `test_changes_tree_commits_pane` 17, `test_changes_tree_commits` 8, `test_changes_reported_tree` 20, `test_changes_reports` 13, `test_changes_announce` 46, `test_changes_author_column` 22, `test_changes_author_pane` 13, `test_changes_copies` 22, `test_changes_edit_file` 22, `test_changes_filter` 40, `test_changes_follow` 27, `test_changes_full_context` 33, `test_changes_graph` 43, `test_changes_graph_pane` 27, `test_changes_keep_view` 85, `test_changes_keys` 52, `test_changes_landed` 40, `test_changes_open_file` 56, `test_changes_scope` 87, `test_changes_sessions` 80, `test_changes_worktrees` 67, `test_changes` 126, `test_entry_changes` 44, `test_entry_claim` 22, `test_entry_explorer_pick` 9, `test_entry_reported_work` 11, `test_entry_session_handover` 12, `test_entry_report` 4, `test_doc` 82: green. `make lint` clean.
+
+Not given a case of its own: `gf` and `<S-CR>` (they read the entry's worktree through the files window; the entry is pinned, and before the change `<S-CR>` already found the checked-out worktree of the branch).
+
+Open: a branch listed under a worktree that has another branch checked out, while a third worktree has it, carries no worktree (A545 gives the worktree of the node only when it has the branch checked out); the orchestrator's ruling if it should.
 
 ## Open threads
 
