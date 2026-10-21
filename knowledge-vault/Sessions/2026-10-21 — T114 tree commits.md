@@ -82,7 +82,7 @@ Runs of the fix round, each file on its own, no whole suite: `test_changes_tree_
 
 Not given a case of its own: `gf` and `<S-CR>` (they read the entry's worktree through the files window; the entry is pinned, and before the change `<S-CR>` already found the checked-out worktree of the branch).
 
-Open: a branch listed under a worktree that has another branch checked out, while a third worktree has it, carries no worktree (A545 gives the worktree of the node only when it has the branch checked out); the orchestrator's ruling if it should.
+**A546.** The open point was ruled: a tree commit carries the worktree that has its branch checked out, whichever node it stands under. `reported_lines()` now finds that worktree among the sections the commits window last listed by their branch (`worktree_with_checked_out()`), in place of by the node the line stands under; the editor's own worktree is no section, so a branch checked out there or nowhere carries none. Case: `under a node that has another branch checked out is compared by h with the HEAD of the worktree that has its branch` — a branch reported under a second worktree and checked out in the first; red as the files window naming `(branch feature/a)` where it must name the worktree, green after. Run: `test_changes_tree_commits_pane` 18, `test_changes_tree_commit_lines` 11, `test_changes_announce` 46, `test_changes_reported_tree` 20, `test_doc` 82; lint clean.
 
 ## Open threads
 

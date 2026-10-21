@@ -1565,10 +1565,11 @@ under a branch is a commit line like any other: the files window lists its
 files once the cursor rests on it, Enter shows its diff, `l` moves to its
 files and `<BS>` comes back to its line, `gf` and `<S-CR>` open a file
 listed under it, and the diff following the cursor and `h` act as on a
-file of any commit. Under the branch another worktree than yours has
-checked out, they are that worktree's commits, as in its own section: the
-files window names the worktree, and Enter, the diffs, `h`, `gf` and
-`<S-CR>` act in it, `h` against that worktree's `HEAD`.
+file of any commit. Under a branch another worktree than yours has
+checked out, whichever worktree's line the branch stands under, they are
+that worktree's commits, as in its own section: the files window names the
+worktree, and Enter, the diffs, `h`, `gf` and `<S-CR>` act in it, `h`
+against that worktree's `HEAD`.
 The line under the cursor chooses the files window's list, as any line
 does, and Enter on it shows what it names alone, as picking it with `s`
 does, the explorer following (|aineo-explorer|):
