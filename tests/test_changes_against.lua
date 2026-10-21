@@ -179,6 +179,11 @@ T['the sides of a diff']['under a local branch with no base start from the empty
   )
 end
 
+T['the sides of a diff']['under a local branch not read yet are none'] = function()
+  eq(sides_of({ kind = 'branch', branch = 'feature' }, { branch = nil }), nil)
+  eq(sides_of({ kind = 'branch', branch = 'feature' }, { branch = { name = 'feature' } }), nil)
+end
+
 T['the sides of a diff']['under another worktree are its base, by where it came from, and the working tree'] = function()
   local origin = { kind = 'merge_base', commit = ('a'):rep(40) }
   eq(
@@ -337,7 +342,25 @@ T['the heading line']['says merge base with the reference it was taken against']
   eq(text, 'Against: ddddddd (main) merge base with origin/main → 7777777 (feature)')
 end
 
+T['the heading line']['says it is reading where the sides are not known yet'] = function()
+  local text, colours = against.heading(nil, nil)
+
+  eq(text, 'Against: reading…')
+  eq(colours, {
+    { first_column = 0, end_column = 8, group = LABEL },
+    { first_column = 9, end_column = 19, group = WORDS },
+  })
+end
+
+T['the commits of a diff']['are none where its sides are not known yet'] = function()
+  eq(against.ids(nil), {})
+end
+
 T['the diff bar'] = MiniTest.new_set()
+
+T['the diff bar']['says it is reading where the sides are not known yet'] = function()
+  eq(against.bar(nil, nil, 'lua/a.txt'), '%#AineoChangesNote#reading…%*  lua/a.txt')
+end
 
 T['the diff bar']['says both sides with a double arrow, then the path'] = function()
   local bar = against.bar({
