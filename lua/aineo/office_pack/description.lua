@@ -47,31 +47,59 @@ local function table_or_empty(value)
   return {}
 end
 
---- The pose `name` of `poses`, with the fields of the poses it is like taken
---- unless it gives its own.
+--- How many poses a pose may be like, one after another: a pose like a pose
+--- like a pose, and so on.
+local MAX_LIKE_CHAIN = 8
+
+--- The poses `name` is like, from the pose itself to the one that is like none.
+---
+--- `nil` and the problem when a pose of the chain is not described, is like
+--- itself through the chain, or the chain is longer than `MAX_LIKE_CHAIN`
+--- poses beyond the first.
 ---
 ---@param poses table<string, table>
 ---@param name string
----@param seen table<string, true> the poses being resolved, to refuse a pose that is like itself
+---@return table[]|nil chain
+---@return string|nil problem
+local function like_chain(poses, name)
+  local chain = {}
+  local seen = {}
+  local current = name
+  while current do
+    local pose = poses[current]
+    if type(pose) ~= 'table' then
+      return nil, ('the pose “%s” is not described'):format(current)
+    end
+    if seen[current] then
+      return nil, ('the pose “%s” is like itself'):format(current)
+    end
+    if #chain > MAX_LIKE_CHAIN then
+      return nil,
+        ('the pose “%s” is like a chain of more than %d poses'):format(name, MAX_LIKE_CHAIN)
+    end
+    seen[current] = true
+    table.insert(chain, pose)
+    current = pose.like
+  end
+  return chain
+end
+
+--- The pose `name` of `poses`, with the fields of the poses it is like taken
+--- unless it gives its own, the pose furthest along the chain first.
+---
+---@param poses table<string, table>
+---@param name string
 ---@return table|nil pose
 ---@return string|nil problem
-local function resolve_pose(poses, name, seen)
-  local pose = poses[name]
-  if type(pose) ~= 'table' then
-    return nil, ('the pose “%s” is not described'):format(name)
-  end
-  if seen[name] then
-    return nil, ('the pose “%s” is like itself'):format(name)
-  end
-  if not pose.like then
-    return vim.deepcopy(pose)
-  end
-  seen[name] = true
-  local base, problem = resolve_pose(poses, pose.like, seen)
-  if not base then
+local function resolve_pose(poses, name)
+  local chain, problem = like_chain(poses, name)
+  if not chain then
     return nil, problem
   end
-  local resolved = vim.tbl_extend('force', base, pose)
+  local resolved = {}
+  for index = #chain, 1, -1 do
+    resolved = vim.tbl_extend('force', resolved, vim.deepcopy(chain[index]))
+  end
   resolved.like = nil
   return resolved
 end
@@ -84,7 +112,7 @@ end
 function M.resolve_poses(poses)
   local resolved = {}
   for name in pairs(poses) do
-    local pose, problem = resolve_pose(poses, name, {})
+    local pose, problem = resolve_pose(poses, name)
     if not pose then
       return nil, problem
     end
