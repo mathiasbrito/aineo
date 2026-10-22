@@ -36,6 +36,8 @@ local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to 
 ---@field right_side fun(): aineo.layout.Area|nil the screen cells the layout's right side takes now, nil when it shows none
 ---@field pack_folders string[] the `aineo-office` folders the office's packs are searched in
 ---@field clock fun(): number the time in seconds, from any origin, that only grows
+---@field commands? aineo.office_states.CommandClasses the classes of shell commands that tell what an agent running one does (`office.commands`); none, and every command is a command run
+---@field report_tool? string the name of aineo's report tool, as Claude Code calls it; none, and no call is a report
 
 ---@class aineo.office.Office
 ---@field follow_session fun(transcript_path: string|nil) follows the transcript of the session whose file is `transcript_path` while the office shows, or none
@@ -96,7 +98,10 @@ function M.new_office(options)
   ---@return aineo.office_states.Tracker tracker
   ---@return aineo.transcript.Follower|nil follower
   local function follow_transcript()
-    local tracker = office_states.new_tracker()
+    local tracker = office_states.new_tracker({
+      commands = options.commands,
+      report_tool = options.report_tool,
+    })
     if not transcript_path then
       return tracker, nil
     end
