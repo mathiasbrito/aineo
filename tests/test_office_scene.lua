@@ -489,4 +489,118 @@ T['an agent']['takes the shades of its colour for the letters that name them'] =
   eq(picture.looks[group_at(picture, 3, 0)].foreground, '#ba8694')
 end
 
+T['an effect'] = MiniTest.new_set()
+
+--- The picture of a working agent whose effect `dots` has the fields
+--- `effect` give besides a white colour, at the seat of `DESK_PLAN`.
+---
+---@param effect table
+---@return aineo.office_scene.Picture picture
+local function picture_with_effect(effect)
+  local pack = scene_pack(DESK_PLAN, DESK_LEGEND, {
+    effects = { dots = vim.tbl_extend('force', { colour = '#ffffff' }, effect) },
+  })
+  local stage = stage_of(pack, 10, 4)
+  stage.advance(agents_in('working'), 0)
+  return stage.picture()
+end
+
+--- `count` characters of the row `row` of `picture`, from the cell `column`,
+--- both from 0.
+---
+---@param picture aineo.office_scene.Picture
+---@param row integer
+---@param column integer
+---@param count integer
+---@return string
+local function text_at(picture, row, column, count)
+  return vim.fn.strcharpart(picture.rows[row + 1].text, column, count)
+end
+
+--- The names of the groups of `picture` that draw bold text.
+---
+---@param picture aineo.office_scene.Picture
+---@return string[]
+local function bold_groups(picture)
+  return vim.tbl_filter(function(group)
+    return vim.endswith(group, '_bold')
+  end, vim.tbl_keys(picture.looks))
+end
+
+T['an effect']['is centred over the head by default'] = function()
+  local picture = picture_with_effect({ text = { 'abc' } })
+
+  eq(text_at(picture, 1, 5, 3), 'abc')
+end
+
+T['an effect']['is centred by its characters, not its bytes'] = function()
+  local picture = picture_with_effect({ text = { '·∘○' } })
+
+  eq(text_at(picture, 1, 5, 3), '·∘○')
+end
+
+T['an effect']['ends over the head when its place is above_left'] = function()
+  local picture = picture_with_effect({ text = { 'abc' }, place = 'above_left' })
+
+  eq(text_at(picture, 1, 4, 3), 'abc')
+end
+
+T['an effect']['starts over the head when its place is above_right'] = function()
+  local picture = picture_with_effect({ text = { 'abc' }, place = 'above_right' })
+
+  eq(text_at(picture, 1, 6, 3), 'abc')
+end
+
+T['an effect']['stands beside the head, a column to the right, when its place is beside'] = function()
+  local picture = picture_with_effect({ text = { 'abc' }, place = 'beside' })
+
+  eq(text_at(picture, 2, 7, 3), 'abc')
+end
+
+T['an effect']['is above the head when its place is one the engine does not know'] = function()
+  local picture = picture_with_effect({ text = { 'abc' }, place = 'nowhere' })
+
+  eq(text_at(picture, 1, 5, 3), 'abc')
+end
+
+T['an effect']['is drawn in a group of its own when it is bold'] = function()
+  local picture = picture_with_effect({ text = { 'abc' }, bold = true })
+
+  local bold = bold_groups(picture)
+  eq(#bold, 1)
+  eq(picture.looks[bold[1]].bold, true)
+end
+
+T['an effect']['is not bold unless it is asked to be'] = function()
+  eq(bold_groups(picture_with_effect({ text = { 'abc' } })), {})
+end
+
+T['a piece'] = MiniTest.new_set()
+
+T['a piece']['wholly below the canvas is not painted, though the plan places it'] = function()
+  local pack = scene_pack('# plan\n \n P\n P\n P\n P\n', { P = { piece = 'left' } })
+  local reads = 0
+  pack.pieces.left.colours = setmetatable({}, {
+    __index = function()
+      reads = reads + 1
+      return 'red'
+    end,
+  })
+  local stage = stage_of(pack, 1, 2)
+
+  stage.advance({}, 0)
+  stage.picture()
+
+  eq(reads, 4)
+end
+
+T['a piece']['partly on the canvas is painted'] = function()
+  local pack = scene_pack('# plan\n \n .\n P\n', { P = { piece = 'left' } })
+  local stage = stage_of(pack, 1, 2)
+
+  stage.advance({}, 0)
+
+  eq(group_at(stage.picture(), 0, 1), solid('#ff0000'))
+end
+
 return T
