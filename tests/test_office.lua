@@ -1,6 +1,5 @@
 local MiniTest = require('mini.test')
 local fake_transcript = dofile('tests/helpers/fake_transcript.lua')
-local files = dofile('tests/helpers/office_pack_files.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local layout = dofile('tests/helpers/layout.lua')
 local office_cells = dofile('tests/helpers/office_cells.lua')
@@ -236,19 +235,9 @@ T['showing the office']['says why the pack cannot be loaded, and opens nothing']
   })
 end
 
-T['showing the office']['opens no window, and says why, when the pack cannot be laid out'] = function()
-  local folder = files.write_pack(fixture.directory('office_hostile'), 'default', {
-    ['pack.lua'] = files.pack_text({
-      name = 'default',
-      floor = {
-        floor_colour = 'floor',
-        wall_colour = 'wall',
-        legend = { D = 5 },
-      },
-    }),
-    ['floor.txt'] = '# plan\n \n D..\n',
-  })
-  open_office(nil, { folder })
+T['showing the office']['opens no window, and says why, when the stage cannot be made'] = function()
+  open_office()
+  child.lua([[require('aineo.office_scene').new_stage = function() error('no stage today') end]])
 
   child.lua([[_G.office.show_now()]])
   child.lua([[_G.office.show_now()]])
