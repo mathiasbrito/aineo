@@ -244,9 +244,11 @@ T['Send']['from the second tab’s Input writes to the second tab’s Claude Cod
     { input }
   )
 
+  local before = #claude_session.received(second)
+
   entry.press(child, '<Plug>(aineo-send)')
 
-  local written = claude_session.wait_for_received_after(second, 0, #pasted('for the second'))
+  local written = claude_session.wait_for_received_after(second, before, #pasted('for the second'))
   eq(written:find(pasted('for the second'), 1, true) ~= nil, true)
   eq(claude_session.received(first):find('for the second', 1, true), nil)
   eq(child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { input }), { '' })
