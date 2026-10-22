@@ -604,7 +604,7 @@ T['a piece']['partly on the canvas is painted'] = function()
   eq(group_at(stage.picture(), 0, 1), solid('#ff0000'))
 end
 
-T['a piece']['one pixel tall on the canvas's last pixel row is painted'] = function()
+T['a piece']['one pixel tall on the canvas’s last pixel row is painted'] = function()
   local pack = scene_pack('# plan\n \n .\n D\n', { D = { piece = 'dot' } })
   local stage = stage_of(pack, 1, 2)
 
