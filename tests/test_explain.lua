@@ -1711,4 +1711,175 @@ T['a badge']['is gone with the window the request was made in, while the request
   eq(shown_once_it_holds('Adds')[1].line, 2)
 end
 
+T['a kept answer'] = MiniTest.new_set()
+
+--- What the user is told when an answer is placed again instead of asked for.
+---
+---@param words string the words that ask again, after `:Aineo explain`
+---@return { message: string, level: integer }
+local function told_kept(words)
+  return {
+    message = ('aineo: the earlier answer, the code unchanged (:Aineo explain %sasks again)'):format(
+      words
+    ),
+    level = vim.log.levels.INFO,
+  }
+end
+
+--- Asks for explanations of the whole buffer, waits for them, and hides them
+--- by asking again. Returns what was shown.
+---
+---@param fields? table the request's fields beyond the defaults
+---@return table[] shown
+local function explained_then_hidden(fields)
+  answer_explanations({ { line = 2, text = 'Adds.' }, { line = 5, text = 'Returns it.' } })
+  explain(fields)
+  local shown = shown_once_it_holds('Returns')
+  explain(fields)
+  eq(child.lua_get(SHOWN), {})
+  return shown
+end
+
+--- How many times the fake `claude` has started, after the child had time
+--- to start another.
+---
+---@return integer
+local function processes_started()
+  told_later()
+  return #recorded(0) / 2
+end
+
+T['a kept answer']['asked again after it was hidden shows the same texts at once, starts no process, and says so'] = function()
+  start_with_project()
+  local first = explained_then_hidden()
+
+  explain()
+
+  eq(told(), { told_kept('new ') })
+  eq(child.lua_get(SHOWN), first)
+  eq(processes_started(), 1)
+end
+
+T['a kept answer']['for issues says so with the words that ask again'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Overflows.' } })
+  explain({ kind = 'issues', tools = true })
+  lines_shown_once('aineo_explain_issues', 1)
+  explain({ kind = 'issues', tools = true })
+
+  explain({ kind = 'issues', tools = true })
+
+  eq(told(), { told_kept('issues tools new ') })
+  eq(lines_shown('aineo_explain_issues'), { 2 })
+  eq(processes_started(), 1)
+end
+
+T['a kept answer']['is not used for another kind, tools or range, which start a request'] =
+  MiniTest.new_set({
+    parametrize = {
+      { { tools = true } },
+      { { kind = 'issues' } },
+      { { range = { 1, 3 } } },
+    },
+  })
+
+T['a kept answer']['is not used for another kind, tools or range, which start a request']['asked with'] = function(
+  fields
+)
+  start_with_project()
+  explained_then_hidden()
+
+  explain(fields)
+
+  eq(#recorded(4), 4)
+  eq(processes_started(), 2)
+end
+
+T['a kept answer']['is dropped when the text of the lines changes, and a request starts'] = function()
+  start_with_project()
+  explained_then_hidden()
+  child.api.nvim_buf_set_lines(0, 0, 1, false, { '-- changed' })
+
+  explain()
+
+  eq(#recorded(4), 4)
+end
+
+T['a kept answer']['is kept by a write of the buffer alone'] = function()
+  start_with_project()
+  explained_then_hidden()
+  child.cmd('write')
+
+  explain()
+
+  eq(told(), { told_kept('new ') })
+  eq(processes_started(), 1)
+end
+
+T['a kept answer']['is replaced by asking again with new, which starts a request and keeps its answer'] = function()
+  start_with_project()
+  explained_then_hidden()
+  answer_explanations({ { line = 3, text = 'Ends it.' } }, 'second.json')
+
+  explain({ fresh = true })
+
+  eq(shown_once_it_holds('Ends')[1].line, 3)
+  explain()
+  eq(child.lua_get(SHOWN), {})
+  explain()
+  eq(shown_once_it_holds('Ends')[1].line, 3)
+  eq(processes_started(), 2)
+end
+
+T['a kept answer']['is forgotten with the buffer'] = function()
+  local folder = start_with_project()
+  explained_then_hidden()
+  child.cmd('bwipeout!')
+  child.cmd('edit ' .. folder .. '/src/add.lua')
+
+  explain()
+
+  eq(#recorded(4), 4)
+end
+
+T['a kept answer']['is placed wrapped for the window it is placed in now'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = vim.trim(('wörd '):rep(20)) } })
+  explain()
+  shown_once_it_holds('wörd')
+  explain()
+  child.o.columns = 40
+
+  explain()
+
+  eq(#shown_once_it_holds('wörd')[1].virt_lines, 3)
+end
+
+T['a kept answer']['for some lines is kept for those lines, and placed after clear()'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain({ range = { 1, 3 } })
+  local shown = shown_once_it_holds('Adds')
+  child.lua("require('aineo.explain').clear(vim.api.nvim_get_current_buf())")
+
+  explain({ range = { 1, 3 } })
+
+  eq(told(), { told_kept('new ') })
+  eq(child.lua_get(SHOWN), shown)
+  eq(processes_started(), 1)
+end
+
+T['a kept answer']['asked again with new while it is shown asks again instead of clearing it'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain()
+  shown_once_it_holds('Adds')
+  answer_explanations({ { line = 3, text = 'Ends it.' } }, 'second.json')
+
+  explain({ fresh = true })
+
+  eq(shown_once_it_holds('Ends')[1].line, 3)
+  eq(processes_started(), 2)
+end
+
 return T

@@ -257,7 +257,7 @@ T[':Aineo explain']['with another word says which it takes, and asks nothing'] =
 
   eq(child.lua_get('_G.told'), {
     {
-      message = 'aineo: :Aineo explain takes one of tools, issues, clear',
+      message = 'aineo: :Aineo explain takes one of tools, issues, new, clear',
       level = vim.log.levels.ERROR,
     },
   })
@@ -282,24 +282,27 @@ T[':Aineo explain']['is the only subcommand that takes a range']['given'] = func
   eq(vim.uv.fs_stat(RECORD), nil)
 end
 
-T[':Aineo explain']['is offered after :Aineo, and tools, issues and clear after it, after a range too'] =
+T[':Aineo explain']['is offered after :Aineo, and tools, issues, new and clear after it, after a range too'] =
   MiniTest.new_set({
     parametrize = {
       { 'Aineo e', { 'explain' } },
-      { 'Aineo explain ', { 'tools', 'issues', 'clear' } },
+      { 'Aineo explain ', { 'tools', 'issues', 'new', 'clear' } },
       { 'Aineo explain t', { 'tools' } },
-      { '2,3Aineo explain ', { 'tools', 'issues', 'clear' } },
+      { '2,3Aineo explain ', { 'tools', 'issues', 'new', 'clear' } },
       { "'<,'>Aineo explain c", { 'clear' } },
-      { 'Aineo explain tools ', {} },
-      { 'Aineo explain issues ', { 'tools' } },
+      { 'Aineo explain tools ', { 'new' } },
+      { 'Aineo explain issues ', { 'tools', 'new' } },
       { 'Aineo explain issues t', { 'tools' } },
-      { 'Aineo explain issues tools ', {} },
+      { 'Aineo explain issues tools ', { 'new' } },
+      { 'Aineo explain issues tools new ', {} },
+      { 'Aineo explain new ', {} },
       { 'Aineo explain clear ', {} },
+      { 'Aineo explain n', { 'new' } },
       { 'Aineo explain i', { 'issues' } },
     },
   })
 
-T[':Aineo explain']['is offered after :Aineo, and tools, issues and clear after it, after a range too']['typed'] = function(
+T[':Aineo explain']['is offered after :Aineo, and tools, issues, new and clear after it, after a range too']['typed'] = function(
   typed,
   completed
 )
@@ -487,7 +490,12 @@ end
 
 T[':Aineo explain']['tools issues, and issues with a third word, say which words it takes, and ask nothing'] =
   MiniTest.new_set({
-    parametrize = { { 'Aineo explain tools issues' }, { 'Aineo explain issues tools all' } },
+    parametrize = {
+      { 'Aineo explain tools issues' },
+      { 'Aineo explain issues tools all' },
+      { 'Aineo explain new tools' },
+      { 'Aineo explain clear new' },
+    },
   })
 
 T[':Aineo explain']['tools issues, and issues with a third word, say which words it takes, and ask nothing']['typed'] = function(
@@ -499,11 +507,56 @@ T[':Aineo explain']['tools issues, and issues with a third word, say which words
 
   eq(child.lua_get('_G.told'), {
     {
-      message = 'aineo: :Aineo explain takes one of tools, issues, clear',
+      message = 'aineo: :Aineo explain takes one of tools, issues, new, clear',
       level = vim.log.levels.ERROR,
     },
   })
   eq(vim.uv.fs_stat(RECORD), nil)
+end
+
+--- The number of times the fake `claude` has started, once it has started
+--- `count`, or after `PATIENCE_MS`.
+---
+---@param count integer
+---@return integer
+local function started_once(count)
+  return #recorded(count * 2) / 2
+end
+
+T[':Aineo explain']['shows the kept answer when the code is unchanged, and new asks again'] = function()
+  start()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  child.cmd('Aineo explain')
+  explained_lines_once(1)
+  child.cmd('Aineo explain clear')
+  eq(explained_lines_once(0), 0)
+
+  child.cmd('Aineo explain')
+
+  eq(explained_lines_once(1), 1)
+  eq(child.lua_get('_G.told'), {
+    {
+      message = 'aineo: the earlier answer, the code unchanged (:Aineo explain new asks again)',
+      level = vim.log.levels.INFO,
+    },
+  })
+  eq(started_once(1), 1)
+
+  child.cmd('Aineo explain new')
+
+  eq(started_once(2), 2)
+end
+
+T[':Aineo explain']['issues tools new asks the issues again with read-only tools'] = function()
+  start()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  child.cmd('Aineo explain issues tools')
+  issue_lines_once(1)
+  child.cmd('Aineo explain clear')
+
+  child.cmd('Aineo explain issues tools new')
+
+  eq(started_once(2), 2)
 end
 
 return T
