@@ -5,7 +5,8 @@
 --- signal gave has been held long enough to show by the time the next one
 --- comes; `state()` asks `SETTLE` seconds after the last signal, when the
 --- state it gave shows and no timed state has run out. A test that is about
---- time moves the clock itself with `wait()` and asks with `state_after()`.
+--- time says the pause itself with `hear_after()` and asks with
+--- `state_after()`.
 
 local office_states = require('aineo.office_states')
 
@@ -20,8 +21,9 @@ M.SETTLE = 1.3
 
 ---@class aineo.tests.Story
 ---@field hear fun(kind: string, fields?: table) the main agent, or the agent `fields.agent`, gives a signal of `kind` after the pause
----@field hear_replayed fun(kind: string, fields?: table) the same, marked as read from the transcript's tail
----@field wait fun(seconds: number) moves the clock on
+---@field hear_after fun(seconds: number, kind: string, fields?: table) the same, that many seconds after the last signal
+---@field hear_replayed fun(kind: string, fields?: table) the same as `hear()`, marked as read from the transcript's tail
+---@field hear_replayed_after fun(seconds: number, kind: string, fields?: table) the same as `hear_after()`, marked as read from the transcript's tail
 ---@field state fun(id?: string): string|nil the state of the agent `id` (the main agent by default) just after the last signal
 ---@field state_after fun(seconds: number, id?: string): string|nil the state of the agent `id` that many seconds after the last signal
 ---@field activity fun(id?: string): string|nil the activity a trigger chose for the agent `id` just after the last signal
@@ -49,26 +51,31 @@ function M.tell(options)
     end)
   end
 
+  ---@param seconds number
   ---@param kind string
   ---@param fields table|nil
   ---@param replayed boolean
-  local function give(kind, fields, replayed)
-    clock = clock + M.PAUSE
+  local function give(seconds, kind, fields, replayed)
+    clock = clock + seconds
     local signal = vim.tbl_extend('force', { agent = 'main', kind = kind }, fields or {})
     signal.replayed = replayed or nil
     tracker.take(signal, clock)
   end
 
   function story.hear(kind, fields)
-    give(kind, fields, false)
+    give(M.PAUSE, kind, fields, false)
+  end
+
+  function story.hear_after(seconds, kind, fields)
+    give(seconds, kind, fields, false)
   end
 
   function story.hear_replayed(kind, fields)
-    give(kind, fields, true)
+    give(M.PAUSE, kind, fields, true)
   end
 
-  function story.wait(seconds)
-    clock = clock + seconds
+  function story.hear_replayed_after(seconds, kind, fields)
+    give(seconds, kind, fields, true)
   end
 
   function story.state_after(seconds, id)
