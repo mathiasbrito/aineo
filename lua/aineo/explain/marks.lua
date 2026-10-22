@@ -224,6 +224,44 @@ end
 ---@type table<integer, table<string, aineo.explain.Placed>>
 local placed = {}
 
+--- What is called when the explanations a buffer shows change.
+---@alias aineo.explain.MarksListener fun(buffer: integer, window: integer|nil)
+
+---@type aineo.explain.MarksListener[]
+local listeners = {}
+
+--- Calls every listener (`on_change()`) for `buffer`, with the window its
+--- explanations were placed for, when it is known.
+---
+---@param buffer integer
+---@param window? integer
+local function notify(buffer, window)
+  for _, listener in ipairs(listeners) do
+    listener(buffer, window)
+  end
+end
+
+--- Has `listener` called, with the buffer and the window its explanations
+--- were placed for, after the explanations a buffer shows change: placed,
+--- cleared, or lost to an edit that deleted the line they sit above.
+---
+---@param listener aineo.explain.MarksListener
+function M.on_change(listener)
+  table.insert(listeners, listener)
+end
+
+--- The line, from 1, the extmark `id` of `kind` sits above in `buffer`, or
+--- `nil` when it is gone.
+---
+---@param buffer integer
+---@param kind aineo.explain.Kind
+---@param id integer
+---@return integer|nil
+local function line_of(buffer, kind, id)
+  local position = vim.api.nvim_buf_get_extmark_by_id(buffer, namespace_of(kind), id, {})
+  return position[1] and position[1] + 1
+end
+
 --- Shows the explanation `text` in `buffer` as virtual lines above `line`,
 --- from 1, indented as that line but by half the window's text width at
 --- most, each row starting with `MARK`, and the text wrapped (`wrapped()`) at
@@ -266,19 +304,93 @@ local function place_again(buffer, record)
   local geometry = geometry_of(buffer, record.window)
   record.textoff = geometry.textoff
   for id, text in pairs(record.texts) do
-    local position = vim.api.nvim_buf_get_extmark_by_id(buffer, namespace_of(record.kind), id, {})
-    if #position == 0 then
-      record.texts[id] = nil
+    local line = line_of(buffer, record.kind, id)
+    if line then
+      show_explanation(buffer, record.kind, line, text, geometry, id)
     else
-      show_explanation(buffer, record.kind, position[1] + 1, text, geometry, id)
+      record.texts[id] = nil
     end
   end
+end
+
+--- Forgets the explanations of `record` whose extmark is gone, which an edit
+--- that deleted their line or a clear of lines took. Returns whether it
+--- forgot any.
+---
+---@param buffer integer
+---@param record aineo.explain.Placed
+---@return boolean
+local function forget_lost(buffer, record)
+  local forgot = false
+  for id in pairs(record.texts) do
+    if not line_of(buffer, record.kind, id) then
+      record.texts[id] = nil
+      forgot = true
+    end
+  end
+  return forgot
+end
+
+--- Whether any record of `buffer` still holds an explanation.
+---
+---@param buffer integer
+---@return boolean
+local function holds_any(buffer)
+  for _, record in pairs(placed[buffer] or {}) do
+    if next(record.texts) then
+      return true
+    end
+  end
+  return false
+end
+
+--- Tells the listeners (`on_change()`) of `buffer` that an edit lost
+--- explanations, if it did, when the event loop has turned: the extmarks of
+--- an edit are settled by then, and a buffer's text cannot change inside
+--- the callback that sees the edit.
+---
+---@param buffer integer
+local function settle_after_edit(buffer)
+  vim.schedule(function()
+    if not vim.api.nvim_buf_is_valid(buffer) then
+      return
+    end
+    for _, record in pairs(placed[buffer] or {}) do
+      if forget_lost(buffer, record) then
+        notify(buffer, record.window)
+      end
+    end
+  end)
+end
+
+--- The buffers whose edits are watched.
+---@type table<integer, boolean>
+local watched = {}
+
+--- Has `settle_after_edit()` called after each edit of `buffer`, until it
+--- holds no explanation, when the watch ends.
+---
+---@param buffer integer
+local function watch_edits(buffer)
+  if watched[buffer] then
+    return
+  end
+  watched[buffer] = true
+  vim.api.nvim_buf_attach(buffer, false, {
+    on_lines = function()
+      settle_after_edit(buffer)
+      return not holds_any(buffer)
+    end,
+    on_detach = function()
+      watched[buffer] = nil
+    end,
+  })
 end
 
 --- Shows each of `explanations` in `buffer` as virtual lines above its line
 --- (`show_explanation()`) for a window showing it (`geometry_of()`), and
 --- keeps them to show again when that window's gutter changes
---- (`keep_aligned()`).
+--- (`keep_aligned()`). Tells the listeners (`on_change()`).
 ---
 ---@param buffer integer
 ---@param window integer the window the explanations were asked in
@@ -299,6 +411,29 @@ function M.place(buffer, window, kind, explanations)
     local id = show_explanation(buffer, kind, explanation.line, explanation.text, geometry)
     record.texts[id] = explanation.text
   end
+  watch_edits(buffer)
+  notify(buffer, window)
+end
+
+--- The lines, from 1, that `buffer` shows an explanation above, of any
+--- kind, each once, in order. A line that says a request is working is none.
+---
+---@param buffer integer
+---@return integer[]
+function M.lines(buffer)
+  local seen, lines = {}, {}
+  for _, record in pairs(placed[buffer] or {}) do
+    forget_lost(buffer, record)
+    for id in pairs(record.texts) do
+      local line = line_of(buffer, record.kind, id)
+      if line and not seen[line] then
+        seen[line] = true
+        table.insert(lines, line)
+      end
+    end
+  end
+  table.sort(lines)
+  return lines
 end
 
 --- Has the explanations that are shown placed again, as the same extmarks,
@@ -381,17 +516,22 @@ function M.is_showing(buffer, kind)
 end
 
 --- Removes every virtual line of `kind` from `buffer`, or those above the
---- lines from `first` to `last`, from 1, when they are given.
+--- lines from `first` to `last`, from 1, when they are given. Tells the
+--- listeners (`on_change()`) when the buffer showed explanations of `kind`.
 ---
 ---@param buffer integer
 ---@param kind aineo.explain.Kind
 ---@param first? integer
 ---@param last? integer
 function M.clear(buffer, kind, first, last)
-  if not first and placed[buffer] then
+  local record = (placed[buffer] or {})[kind.name]
+  if not first and record then
     placed[buffer][kind.name] = nil
   end
   vim.api.nvim_buf_clear_namespace(buffer, namespace_of(kind), first and first - 1 or 0, last or -1)
+  if record then
+    notify(buffer, record.window)
+  end
 end
 
 --- Removes the virtual lines of the extmark `id` of `kind` from `buffer`,
