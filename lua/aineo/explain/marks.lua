@@ -529,6 +529,34 @@ function M.toggle_issue_marks(buffer, first, last)
   return found
 end
 
+--- How many issues are marked among those placed for `window`, in any buffer.
+---
+---@param window integer
+---@return integer
+function M.marked_count(window)
+  local count = 0
+  for buffer, records in pairs(placed) do
+    local record = records[kinds.ISSUES.name]
+    if record and record.window == window and vim.api.nvim_buf_is_valid(buffer) then
+      forget_lost(buffer, record)
+      count = count + vim.tbl_count(record.marked)
+    end
+  end
+  return count
+end
+
+--- Forgets what was placed in `buffer`, which is gone, and tells the
+--- listeners (`on_change()`).
+---
+---@param buffer integer
+function M.forget(buffer)
+  local records = placed[buffer] or {}
+  placed[buffer] = nil
+  for _, record in pairs(records) do
+    notify(buffer, record.window)
+  end
+end
+
 --- Has the explanations that are shown placed again, as the same extmarks,
 --- when the window they were placed for shows the buffer with another
 --- number, sign or fold column than when they were placed. A decoration

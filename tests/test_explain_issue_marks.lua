@@ -22,7 +22,7 @@ local CODE = {
 --- Starts the child with `CODE` open, nothing explained, and the keys of
 --- the prefix mapped, `\v` waiting 100 ms for a longer key (`\vi`, `\vm`).
 local function start()
-  explained.start(child, 'explain-marks', CODE)
+  explained.start(child, 'explain-marks', CODE, { claude = { cmd = explained.FAKE_CLAUDE } })
   child.o.timeoutlen = 100
   child.wo.number = true
   child.wo.numberwidth = 8
@@ -255,6 +255,136 @@ T['a marked issue']['keeps the label issue in its gutter'] = function()
   press('\\vm')
 
   eq(issues_shown()[1].label, 'issue')
+end
+
+T['the badge'] = MiniTest.new_set({ hooks = { pre_case = start } })
+
+--- Marks the issue above `line` of the child's buffer, as \vm does there.
+---
+---@param line integer
+local function mark_issue_on(line)
+  child.api.nvim_win_set_cursor(0, { line, 0 })
+  press('\\vm')
+end
+
+T['the badge']['says in the top right corner how many issues are marked, and what sends them'] = function()
+  find_issues_on({ 3, 5 })
+  local window = child.api.nvim_get_current_win()
+
+  mark_issue_on(3)
+
+  eq(explained.floats(child), {
+    {
+      win = window,
+      anchor = 'NE',
+      row = 0,
+      col = 80,
+      text = ' 1 issue marked · \\s sends ',
+      winhighlight = 'NormalFloat:AineoExplainIssueMarked',
+    },
+  })
+end
+
+T['the badge']['counts the issues marked, and is gone at none'] = function()
+  find_issues_on({ 3, 5 })
+
+  mark_issue_on(3)
+  mark_issue_on(5)
+  local two = explained.floats(child)[1].text
+  mark_issue_on(3)
+  mark_issue_on(5)
+
+  eq(two, ' 2 issues marked · \\s sends ')
+  eq(explained.floats(child), {})
+end
+
+T['the badge']['is gone when the issues are cleared'] = function()
+  find_issues_on({ 3 })
+  mark_issue_on(3)
+
+  child.lua("require('aineo.explain').clear(vim.api.nvim_get_current_buf())")
+
+  eq(explained.floats(child), {})
+end
+
+T['the badge']['is gone when edits delete the lines of the marked issues'] = function()
+  find_issues_on({ 3 })
+  mark_issue_on(3)
+
+  child.api.nvim_buf_set_lines(0, 2, 3, false, {})
+
+  eq(
+    explained.badge_text_once(child, function(text)
+      return text == ''
+    end),
+    ''
+  )
+end
+
+T['the badge']['shows beside the requests that run, last and with no spinner of its own'] = function()
+  find_issues_on({ 3 })
+  mark_issue_on(3)
+
+  explained.begin_slowly(child, 'explanations', { { line = 5, text = 'Explains.' } }, 4000)
+
+  local text = explained.badge_text_once(child, function(shown)
+    return shown:find('marked', 1, true) ~= nil and shown:find('explaining', 1, true) ~= nil
+  end)
+  eq(text:match('^ %S+ explaining… %d+s · 1 issue marked · \\s sends $') ~= nil, true)
+end
+
+T['the badge']['stays, with no spinner, once the requests have ended'] = function()
+  find_issues_on({ 3 })
+  mark_issue_on(3)
+  explained.begin_slowly(child, 'explanations', { { line = 5, text = 'Explains.' } }, 600)
+
+  local text = explained.badge_text_once(child, function(shown)
+    return shown == ' 1 issue marked · \\s sends '
+  end)
+
+  eq(text, ' 1 issue marked · \\s sends ')
+end
+
+T['a mark'] = MiniTest.new_set({ hooks = { pre_case = start } })
+
+T['a mark']['is dropped with its issue by a new answer for the same lines'] = function()
+  find_issues_on({ 3 })
+  mark_issue_on(3)
+
+  find_issues_on({ 3 })
+
+  eq(look_of(3), UNMARKED)
+  eq(explained.floats(child), {})
+end
+
+T['a mark']['is dropped with its issue toggled off, and the kept answer placed again comes unmarked'] = function()
+  find_issues_on({ 3 })
+  mark_issue_on(3)
+
+  press('\\vi')
+  eq(explained.floats(child), {})
+  press('\\vi')
+
+  eq(look_of(3), UNMARKED)
+  eq(explained.floats(child), {})
+end
+
+T['a mark']['is dropped with its issue by :Aineo explain clear'] = function()
+  find_issues_on({ 3 })
+  mark_issue_on(3)
+
+  child.cmd('Aineo explain clear')
+
+  eq(explained.floats(child), {})
+end
+
+T['a mark']['of an issue stays when an answer for other lines adds another'] = function()
+  find_issues_on({ 3 })
+  mark_issue_on(3)
+
+  explained.place(child, 'issues', { { line = 6, text = 'Another.' } }, { 5, 8 })
+
+  eq({ look_of(3), look_of(6) }, { MARKED, UNMARKED })
 end
 
 T['<Plug>(aineo-explain-mark)'] = MiniTest.new_set({ hooks = { pre_case = start } })
