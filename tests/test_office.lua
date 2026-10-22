@@ -2,6 +2,7 @@ local MiniTest = require('mini.test')
 local fake_transcript = dofile('tests/helpers/fake_transcript.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local layout = dofile('tests/helpers/layout.lua')
+local office_cells = dofile('tests/helpers/office_cells.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -14,14 +15,6 @@ local PATIENCE_MS = 4000
 
 --- How long a wait for something that should not happen lasts, in milliseconds.
 local QUIET_MS = 400
-
---- The cell of the default pack's plan the main agent's head is over while it
---- stands beside its desk: its top row and column, from 0.
-local STANDING_HEAD = { row = 10, column = 18 }
-
---- The cell the dots of its typing rise over while it sits at its desk: the
---- row above its head and the column of its seat.
-local TYPING_DOTS = { row = 9, column = 31 }
 
 --- The recorded turn: a prompt, a call, its result and the turn's end.
 local RECORDED_TURN = fake_transcript.lines_of('turn-with-a-command-2.1.308.jsonl')
@@ -72,66 +65,19 @@ local function open_office(path)
   return buffers
 end
 
---- The window of the office: the child's only floating window, or `nil`.
+--- The window of the office, or `vim.NIL`.
 ---
----@return integer|nil window
+---@return integer|userdata window
 local function office_window()
-  return child.lua_get([[(function()
-    return vim.iter(vim.api.nvim_list_wins()):find(function(window)
-      return vim.api.nvim_win_get_config(window).relative ~= ''
-    end)
-  end)()]])
+  return office_cells.window(child)
 end
 
---- The number of handles of the kind `kind` (`'timer'`, `'fs_event'`) open in
---- the child.
+--- The number of handles of the kind `kind` open in the child.
 ---
----@param kind string
+---@param kind string `'timer'` or `'fs_event'`
 ---@return integer
 local function open_handles(kind)
-  return child.lua_get(
-    [[(function(kind)
-      local count = 0
-      vim.uv.walk(function(handle)
-        if handle:get_type() == kind and not handle:is_closing() then
-          count = count + 1
-        end
-      end)
-      return count
-    end)(...)]],
-    { kind }
-  )
-end
-
---- The text of the office's line `row` and the highlight group that draws the
---- cell at `column`, both from 0, when every cell before it is a half block.
----
----@param row integer
----@param column integer
----@return string|nil character the character at the cell
----@return string|nil group
-local function cell_at(row, column)
-  local cell = child.lua_get(
-    [[(function(row, column)
-      local window = vim.iter(vim.api.nvim_list_wins()):find(function(each)
-        return vim.api.nvim_win_get_config(each).relative ~= ''
-      end)
-      local buffer = vim.api.nvim_win_get_buf(window)
-      local line = vim.api.nvim_buf_get_lines(buffer, row, row + 1, false)[1]
-      local from = vim.fn.byteidx(line, column)
-      local namespace = vim.api.nvim_get_namespaces()['aineo.office']
-      local marks = vim.api.nvim_buf_get_extmarks(buffer, namespace, { row, 0 }, { row, -1 }, { details = true })
-      local group = nil
-      for _, mark in ipairs(marks) do
-        if mark[3] <= from and from < mark[4].end_col then
-          group = mark[4].hl_group
-        end
-      end
-      return { character = vim.fn.strcharpart(line, column, 1), group = group }
-    end)(...)]],
-    { row, column }
-  )
-  return cell.character, cell.group ~= vim.NIL and cell.group or nil
+  return office_cells.open_handles(child, kind)
 end
 
 --- Waits, at most `PATIENCE_MS`, until `condition` holds, asking every ten
@@ -143,22 +89,18 @@ local function wait_until(condition)
   return vim.wait(PATIENCE_MS, condition, 10)
 end
 
---- Whether the office's cell at `column` of `row` is drawn in a group of the
---- bean's colour, the first agent's (`#a6e3a1`).
+--- Whether the main agent stands beside its desk.
 ---
----@param row integer
----@param column integer
 ---@return boolean
-local function is_bean(row, column)
-  local _, group = cell_at(row, column)
-  return group ~= nil and vim.startswith(group, 'AineoOfficePixel_a6e3a1_')
+local function is_standing()
+  return office_cells.is_standing(child)
 end
 
---- Whether the dots of typing show over the seat.
+--- Whether the main agent sits and types.
 ---
 ---@return boolean
 local function is_typing()
-  return (cell_at(TYPING_DOTS.row, TYPING_DOTS.column)) == '.'
+  return office_cells.is_typing(child)
 end
 
 T['showing the office'] = MiniTest.new_set()
@@ -218,7 +160,7 @@ T['showing the office']['shows the main agent standing beside its desk when no s
 
   child.lua([[_G.office.show_now()]])
 
-  eq(is_bean(STANDING_HEAD.row, STANDING_HEAD.column), true)
+  eq(is_standing(), true)
   eq(is_typing(), false)
 end
 
@@ -302,7 +244,7 @@ T['what the office shows']['has the main agent sit and type while the transcript
   child.lua([[_G.office.show_now()]])
 
   eq(is_typing(), true)
-  eq(is_bean(STANDING_HEAD.row, STANDING_HEAD.column), false)
+  eq(is_standing(), false)
 end
 
 T['what the office shows']['has the main agent stand when the transcript holds a turn that ended'] = function()
@@ -313,7 +255,7 @@ T['what the office shows']['has the main agent stand when the transcript holds a
   child.lua([[_G.office.show_now()]])
 
   eq(is_typing(), false)
-  eq(is_bean(STANDING_HEAD.row, STANDING_HEAD.column), true)
+  eq(is_standing(), true)
 end
 
 T['what the office shows']['has the main agent walk to its desk and type when a call starts while it shows'] = function()
@@ -344,7 +286,7 @@ T['what the office shows']['has the main agent stand again when the turn ends wh
 
   eq(
     wait_until(function()
-      return not is_typing() and is_bean(STANDING_HEAD.row, STANDING_HEAD.column)
+      return not is_typing() and is_standing()
     end),
     true
   )
@@ -355,7 +297,7 @@ T['what the office shows']['shows the main agent standing when the transcript fi
 
   child.lua([[_G.office.show_now()]])
 
-  eq(is_bean(STANDING_HEAD.row, STANDING_HEAD.column), true)
+  eq(is_standing(), true)
   eq(child.lua_get([[_G.told]]), {})
 end
 
@@ -561,7 +503,7 @@ T['the office’s timer and watch']['does not follow the transcript after the of
   child.lua([[_G.office.show_now()]])
 
   eq(child.lua_get([[_G.told]]), {})
-  eq(is_bean(STANDING_HEAD.row, STANDING_HEAD.column), true)
+  eq(is_standing(), true)
   eq(open_handles('fs_event'), watches)
 end
 

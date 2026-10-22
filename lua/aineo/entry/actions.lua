@@ -2,6 +2,7 @@
 --- a tab, claim a session in the current tab, close the current tab.
 
 local finding = require('aineo.entry.finding')
+local offices = require('aineo.entry.office')
 local opening = require('aineo.entry.opening')
 local quitting = require('aineo.entry.quitting')
 local registry = require('aineo.entry.registry')
@@ -172,6 +173,22 @@ ACTIONS.find = function()
     return
   end
   finding.find_in(tab)
+end
+
+--- What `:Aineo office` tells the user, as a warning, when there is no aineo tab.
+local NO_TAB_FOR_OFFICE = 'aineo: there is no aineo tab to show the office in'
+
+--- What `:Aineo office` does: shows the office over the right side of the
+--- layout of the existing aineo tab to act on (`aineo.entry.opening`'s
+--- `existing_acting_tab()`, `aineo.entry.office`), and never makes a tab. With
+--- none, tells the user.
+ACTIONS.office = function()
+  local tab = opening.existing_acting_tab()
+  if not tab then
+    vim.notify(NO_TAB_FOR_OFFICE, vim.log.levels.WARN)
+    return
+  end
+  offices.show(tab)
 end
 
 --- What `:Aineo zoom` does: zooms the window of the right column the cursor
