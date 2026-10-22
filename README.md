@@ -403,9 +403,13 @@ project's (`--setting-sources user`), and it ends with the answer.
 runs they stop it. `:Aineo explain [tools]` with a range, and `:Aineo explain
 clear`, do the same. The model is `explain.model`, `'sonnet'` by default, and
 a request is stopped after `explain.timeout_ms`. If the text of the buffer changes while
-Claude Code explains it (a write changes nothing), nothing is shown: ask again. The explanations show
-in `AineoExplain`, linked to `Comment`. Each request is a model call, billed
-as your Claude Code usage is.
+Claude Code explains it (a write changes nothing), nothing is shown: ask again.
+An explanation shows as a band tinted from your colour scheme, its text italic
+in the accent of `DiagnosticInfo`, starting at the explained line's indent,
+with a `▎` and the label `expl` in the number column and the line's number in
+the accent. The groups are `AineoExplain`, `AineoExplainGutter`,
+`AineoExplainGutterFill` and `AineoExplainNr`; define one yourself and aineo
+keeps it. Each request is a model call, billed as your Claude Code usage is.
 
 ## Run your services
 
