@@ -65,6 +65,28 @@ local function write_transcript(lines)
   fake_transcript.append(path, lines)
 end
 
+--- Removes the transcripts earlier cases wrote under the child's Claude
+--- configuration directory: the fake Claude Code names its session the same
+--- in every case, so an earlier case's file is this session's.
+local function forget_earlier_transcripts()
+  local directory = child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]])
+  vim.fn.delete(vim.fs.joinpath(directory, 'projects'), 'rf')
+end
+
+--- Writes `lines` as the transcript of the session the child's Claude Code
+--- follows, in the folder Claude Code names after the working directory the
+--- session runs in: every character of its path but a letter or a digit
+--- becomes a dash.
+---
+---@param lines string[]
+local function write_transcript_in_the_sessions_own_folder(lines)
+  local session = child.lua_get([[require('aineo.claude').session_id()]])
+  local directory = child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]])
+  local working_directory = child.lua_get([[vim.fn.getcwd()]])
+  local folder = working_directory:gsub('[^%w]', '-')
+  fake_transcript.append(vim.fs.joinpath(directory, 'projects', folder, session .. '.jsonl'), lines)
+end
+
 --- The area the layout gives the right column in the child.
 ---
 ---@return table
@@ -164,6 +186,20 @@ T['what the office shows']['has the main agent stand when the session has no tra
 
   eq(office_cells.is_standing(child), true)
   eq(entry.messages(child), {})
+end
+
+T['what the office shows']['has the main agent type once the session writes its transcript after the office showed'] = function()
+  open_layout('office-late')
+  forget_earlier_transcripts()
+  entry.command(child, 'Aineo office')
+  eq(office_cells.is_standing(child), true)
+
+  write_transcript_in_the_sessions_own_folder(vim.list_slice(RECORDED_TURN, 1, 5))
+
+  local typing = vim.wait(5000, function()
+    return office_cells.is_typing(child)
+  end, 50)
+  eq(typing, true)
 end
 
 T['what the office shows']['follows no transcript a session id with a path in it would name'] = function()

@@ -6,6 +6,8 @@
 --- Loading it loads no other home: `aineo.office` is required when an office
 --- is first made.
 
+local places = require('aineo.entry.places')
+
 local M = {}
 
 --- The office of each tab that has asked for one, by the tab.
@@ -25,9 +27,12 @@ local function claude_config_directory()
 end
 
 --- The transcript Claude Code writes for the session `session_id`:
---- `projects/<folder>/<session id>.jsonl` under its configuration directory,
---- the folder being named after the session's working directory; `nil` when
---- there is no session or no such file.
+--- `projects/<folder>/<session id>.jsonl` under its configuration directory.
+--- The file of that name in any folder there, if one exists; else the file it
+--- will be in the folder named after the working directory the editor started
+--- in, every character of whose path but a letter or a digit is a dash, which
+--- Claude Code makes at the session's first prompt. `nil` when there is no
+--- session.
 ---
 ---@param session_id string|nil
 ---@return string|nil path
@@ -42,7 +47,8 @@ local function transcript_of(session_id)
       return path
     end
   end
-  return nil
+  local folder = places.kept_places().working_directory:gsub('[^%w]', '-')
+  return vim.fs.joinpath(projects, folder, session_id .. '.jsonl')
 end
 
 --- The office of `tab`, made the first time.
