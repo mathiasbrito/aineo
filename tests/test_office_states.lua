@@ -3,42 +3,10 @@ local MiniTest = require('mini.test')
 local eq = MiniTest.expect.equality
 
 local office_states = require('aineo.office_states')
+local office_signals = dofile('tests/helpers/office_signals.lua')
 local transcript = require('aineo.transcript')
 
 local T = MiniTest.new_set()
-
---- A signal of `kind` from `agent`, with the fields `changes` add.
----
----@param kind string
----@param changes? table
----@return aineo.transcript.Signal
-local function signal(kind, changes)
-  return vim.tbl_extend('force', { agent = 'main', kind = kind }, changes or {})
-end
-
---- A tracker that has taken `signals`, in order.
----
----@param signals aineo.transcript.Signal[]
----@return aineo.office_states.Tracker
-local function tracker_that_took(signals)
-  local tracker = office_states.new_tracker()
-  for _, taken in ipairs(signals) do
-    tracker.take(taken)
-  end
-  return tracker
-end
-
---- The state of the agent `id` the tracker gives.
----
----@param tracker aineo.office_states.Tracker
----@param id string
----@return string|nil state
-local function state_of(tracker, id)
-  local agent = vim.iter(tracker.agents()):find(function(each)
-    return each.id == id
-  end)
-  return agent and agent.state
-end
 
 T['the vocabulary'] = MiniTest.new_set()
 
@@ -127,118 +95,96 @@ T['a tracker'] = MiniTest.new_set()
 T['a tracker']['has the main agent standing before it has taken a signal'] = function()
   local tracker = office_states.new_tracker()
 
-  eq(tracker.agents(), { { id = 'main', state = 'standing' } })
+  eq(tracker.agents(0), { { id = 'main', state = 'standing' } })
 end
 
-T['a tracker']['has an agent working while a tool call runs'] = function()
-  local tracker = tracker_that_took({ signal('tool_started', { call = 'a' }) })
+T['a tracker']['has an agent working while a call of a tool it does not class runs'] = function()
+  local story = office_signals.tell()
 
-  eq(state_of(tracker, 'main'), 'working')
+  story.started('a', 'SendMessage')
+
+  eq(story.state(), 'working')
 end
 
-T['a tracker']['has an agent standing once its tool call finished'] = function()
-  local tracker = tracker_that_took({
-    signal('tool_started', { call = 'a' }),
-    signal('tool_finished', { call = 'a' }),
-  })
+T['a tracker']['has an agent working while a call without a tool name runs'] = function()
+  local story = office_signals.tell()
 
-  eq(state_of(tracker, 'main'), 'standing')
+  story.hear('tool_started', { call = 'a' })
+
+  eq(story.state(), 'working')
+end
+
+T['a tracker']['has an agent thinking once its tool call finished, until the next call'] = function()
+  local story = office_signals.tell()
+
+  story.started('a', 'SendMessage')
+  story.finished('a')
+
+  eq(story.state(), 'thinking')
 end
 
 T['a tracker']['keeps an agent working while any of its calls runs'] = function()
-  local tracker = tracker_that_took({
-    signal('tool_started', { call = 'a' }),
-    signal('tool_started', { call = 'b' }),
-    signal('tool_finished', { call = 'a' }),
-  })
+  local story = office_signals.tell()
 
-  eq(state_of(tracker, 'main'), 'working')
+  story.started('a', 'SendMessage')
+  story.started('b', 'SendMessage')
+  story.finished('a')
+
+  eq(story.state(), 'working')
 end
 
 T['a tracker']['ignores the result of a call it never saw start'] = function()
-  local tracker = tracker_that_took({
-    signal('tool_started', { call = 'a' }),
-    signal('tool_finished', { call = 'never_started' }),
-  })
+  local story = office_signals.tell()
 
-  eq(state_of(tracker, 'main'), 'working')
-end
+  story.started('a', 'SendMessage')
+  story.finished('never_started')
 
-T['a tracker']['has an agent idle when its turn ended'] = function()
-  local tracker = tracker_that_took({
-    signal('tool_started', { call = 'a' }),
-    signal('tool_finished', { call = 'a' }),
-    signal('turn_ended'),
-  })
-
-  eq(state_of(tracker, 'main'), 'idle')
-end
-
-T['a tracker']['has an agent idle when its turn ended though a call never finished'] = function()
-  local tracker = tracker_that_took({
-    signal('tool_started', { call = 'a' }),
-    signal('turn_ended'),
-  })
-
-  eq(state_of(tracker, 'main'), 'idle')
-end
-
-T['a tracker']['has an agent working again when a call starts after its turn ended'] = function()
-  local tracker = tracker_that_took({
-    signal('turn_ended'),
-    signal('tool_started', { call = 'b' }),
-  })
-
-  eq(state_of(tracker, 'main'), 'working')
-end
-
-T['a tracker']['has an agent standing, not idle, once a call that began after its turn ended finished'] = function()
-  local tracker = tracker_that_took({
-    signal('turn_ended'),
-    signal('tool_started', { call = 'b' }),
-    signal('tool_finished', { call = 'b' }),
-  })
-
-  eq(state_of(tracker, 'main'), 'standing')
+  eq(story.state(), 'working')
 end
 
 T['a tracker']['counts a call without an id as a call'] = function()
-  local tracker = tracker_that_took({ signal('tool_started') })
+  local story = office_signals.tell()
 
-  eq(state_of(tracker, 'main'), 'working')
+  story.hear('tool_started', { tool = 'SendMessage' })
+
+  eq(story.state(), 'working')
 end
 
 T['a tracker']['gives each agent a state of its own, the main agent first'] = function()
-  local tracker = tracker_that_took({
-    signal('tool_started', { agent = 'a0001', call = 'x' }),
-  })
+  local story = office_signals.tell()
 
-  eq(tracker.agents(), {
-    { id = 'main', state = 'standing' },
-    { id = 'a0001', state = 'working' },
-  })
+  story.hear('tool_started', { agent = 'a0001', call = 'x', tool = 'SendMessage' })
+
+  eq(story.state('main'), 'standing')
+  eq(story.state('a0001'), 'working')
+  eq(
+    vim.tbl_map(function(agent)
+      return agent.id
+    end, story.agents_after(1.3)),
+    { 'main', 'a0001' }
+  )
 end
 
-T['a tracker']['reaches the same state from replayed signals as from live ones'] = function()
-  local replayed = tracker_that_took({
-    signal('tool_started', { call = 'a', replayed = true }),
-    signal('tool_finished', { call = 'a', replayed = true }),
-    signal('turn_ended', { replayed = true }),
-  })
+T['a tracker']['says since when an agent has been in its state'] = function()
+  local story = office_signals.tell()
 
-  eq(state_of(replayed, 'main'), 'idle')
+  story.started('a', 'SendMessage')
+
+  eq(story.agents_after(1.3)[1].since, office_signals.PAUSE)
 end
 
-T['a tracker']['reads the signals of a recorded turn as a turn that ended'] = function()
+T['a tracker']['reads a recorded turn as a turn that ended, and left alone, as idle'] = function()
   local fake_transcript = dofile('tests/helpers/fake_transcript.lua')
   local tracker = office_states.new_tracker()
+  local second = 0
   for _, line in ipairs(fake_transcript.lines_of('turn-with-a-command-2.1.308.jsonl')) do
     for _, taken in ipairs(transcript.signals_of_line(line, 'main')) do
-      tracker.take(taken)
+      second = second + 2
+      tracker.take(taken, second)
     end
   end
 
-  eq(state_of(tracker, 'main'), 'idle')
+  eq(tracker.agents(second + 60)[1].state, 'idle')
 end
 
 return T
