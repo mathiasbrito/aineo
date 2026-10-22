@@ -15,7 +15,12 @@ local M = {}
 
 look.keep_defined(kinds.ALL)
 marks.keep_aligned()
-marks.on_change(jump.sync_keys)
+marks.on_change(function(buffer, window)
+  jump.sync_keys(buffer)
+  if window then
+    runs.refresh_badge(window)
+  end
+end)
 
 --- One request to explain code.
 ---@class aineo.explain.Request
@@ -224,6 +229,7 @@ vim.api.nvim_create_autocmd('BufWipeout', {
   callback = function(event)
     runs.stop_all_of(event.buf)
     kept.forget(event.buf)
+    marks.forget(event.buf)
   end,
 })
 
