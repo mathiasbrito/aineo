@@ -28,6 +28,7 @@ end
 ---@class aineo.entry.ExplainOrder
 ---@field tools boolean whether Claude Code may read the project with read-only tools
 ---@field kind? 'explanations'|'issues' what is asked for; explanations when absent
+---@field fresh? boolean whether to ask again whatever answer is kept
 ---@field range? integer[] the first and last lines to explain, from 1; the whole buffer when absent
 
 --- Asks the explain home to explain the current buffer, in the current
@@ -50,6 +51,7 @@ function M.explain(order)
     range = order.range,
     tools = order.tools,
     kind = order.kind,
+    fresh = order.fresh,
     command = config.claude.cmd,
     model = config.explain.model,
     timeout_ms = config.explain.timeout_ms,

@@ -54,13 +54,34 @@ local SUBCOMMANDS = {
 
 --- The words `:Aineo explain` takes, in the order it offers them: `tools`
 --- lets Claude Code read the project with read-only tools, `issues` asks it
---- for potential issues instead of explanations, and `clear` removes the
---- buffer's explanations and issues (`aineo.entry`'s
---- `clear_explanations()`).
-local EXPLAIN_WORDS = { 'tools', 'issues', 'clear' }
+--- for potential issues instead of explanations, `new` asks again whatever
+--- answer is kept, and `clear` removes the buffer's explanations and issues
+--- (`aineo.entry`'s `clear_explanations()`). `issues`, `tools` and `new` are
+--- written in that order, each at most once.
+local EXPLAIN_WORDS = { 'tools', 'issues', 'new', 'clear' }
 
---- The words `:Aineo explain issues` is followed by.
-local EXPLAIN_ISSUES_WORDS = { 'tools' }
+--- The words `:Aineo explain` offers after `words`, the words typed after
+--- `explain`: every word after none, and after `issues` and `tools` the
+--- words that may still follow them in that order, `new` last.
+---
+---@param words string[]
+---@return string[]
+local function explain_words_after(words)
+  if #words == 0 then
+    return EXPLAIN_WORDS
+  end
+  local after_issues = words[1] == 'issues' and vim.list_slice(words, 2) or words
+  if words[1] ~= 'issues' and words[1] ~= 'tools' then
+    return {}
+  end
+  if #after_issues == 0 then
+    return { 'tools', 'new' }
+  end
+  if after_issues[1] == 'tools' and #after_issues == 1 then
+    return { 'new' }
+  end
+  return {}
+end
 
 --- The words each subcommand that takes one is followed by, in the order
 --- `:Aineo` offers them: `pane` takes the pane to show, `run` takes `shell`,
@@ -152,7 +173,8 @@ end
 --- The words `:Aineo` offers after `typed`, the words before the one the
 --- cursor is in, the command's name first: its subcommands after the name
 --- alone, the words of a subcommand that takes them (`SUBCOMMAND_WORDS`)
---- after that subcommand, `tools` after `explain issues`, the running
+--- after that subcommand, the words `explain` may be followed by
+--- (`explain_words_after()`), the running
 --- sessions of this Neovim's directory after `claim` (`aineo.entry`'s `running_sessions_here()`), `new`,
 --- `close` and the numbers of the tab pages after `tab` (`tab_words()`), and
 --- nothing otherwise.
@@ -169,11 +191,11 @@ local function offered_words(typed)
   if #typed == 2 and typed[2] == 'tab' then
     return tab_words()
   end
-  if #typed == 2 then
+  if #typed == 2 and typed[2] ~= RANGE_SUBCOMMAND then
     return SUBCOMMAND_WORDS[typed[2]] or {}
   end
-  if #typed == 3 and typed[2] == RANGE_SUBCOMMAND and typed[3] == 'issues' then
-    return EXPLAIN_ISSUES_WORDS
+  if typed[2] == RANGE_SUBCOMMAND then
+    return explain_words_after(vim.list_slice(typed, 3))
   end
   return {}
 end
@@ -658,18 +680,28 @@ local RANGE_REFUSAL = 'aineo: only :Aineo ' .. RANGE_SUBCOMMAND .. ' takes a ran
 --- Does what `:Aineo explain` does with `words`, the words after it, and
 --- `range`, the lines given, or `nil` for the whole buffer: `tools` explains
 --- with read-only tools, `issues` asks for potential issues instead, alone or
---- followed by `tools`, `clear` removes the explanations and the issues, no
---- word explains the code alone. Any other word is told as `:Aineo` tells its
---- usage.
+--- followed by `tools`, `new` ends the words and asks again whatever answer
+--- is kept, `clear` removes the explanations and the issues, no word explains
+--- the code alone. Any other word is told as `:Aineo` tells its usage.
 ---
 ---@param words string[]
 ---@param range integer[]|nil
 local function explain(words, range)
-  local kind = words[1] == 'issues' and 'issues' or nil
-  local after_kind = kind and vim.list_slice(words, 2) or words
-  local clears = not kind and #words == 1 and words[1] == 'clear'
-  local tools = after_kind[1] == 'tools'
-  if not clears and #after_kind > (tools and 1 or 0) then
+  local clears = #words == 1 and words[1] == 'clear'
+  local rest = vim.list_slice(words)
+  local kind = table.remove(rest, 1) == 'issues' and 'issues' or nil
+  if not kind then
+    rest = vim.list_slice(words)
+  end
+  local tools = rest[1] == 'tools'
+  if tools then
+    table.remove(rest, 1)
+  end
+  local fresh = rest[1] == 'new'
+  if fresh then
+    table.remove(rest, 1)
+  end
+  if not clears and #rest > 0 then
     vim.notify(usage({ RANGE_SUBCOMMAND }), vim.log.levels.ERROR)
     return
   end
@@ -678,7 +710,7 @@ local function explain(words, range)
       require('aineo.entry').clear_explanations()
       return
     end
-    require('aineo.entry').explain({ tools = tools, kind = kind, range = range })
+    require('aineo.entry').explain({ tools = tools, kind = kind, fresh = fresh, range = range })
   end)
 end
 
@@ -715,5 +747,5 @@ end, {
   range = true,
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools]|clear',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear',
 })

@@ -1844,21 +1844,10 @@ band starts at the indent of the explained line (by half the window's text
 width at most), each row after `┊ `, wrapped at the window's text width less
 that indent, in |hl-AineoExplain|. The number of the explained line shows in
 |hl-AineoExplainNr|. The marks move with the edits made to the buffer and
-vanish with a line deleted. While a request runs, one virtual line above the
-first line asked for, in the same look without the label, says
-`┊ ⠋ explaining…`, its spinner advancing every 100 ms, and a badge in the top
-right corner of the window the request was made in says ` ⠋ explaining… 12s `:
-the seconds it has run. A badge lists the requests that run for its window, in
-the order they started, joined by ` · `
-(` ⠋ explaining… 12s · looking for issues… 3s `); a part leaves when its
-request ends, and the badge closes with the last. The badge, the line and the
-timers end with the request, whichever way it ends: its answer, a key that
-stops it, `explain.timeout_ms`, an error, the buffer wiped out, `:Aineo
-explain clear`, or Neovim quitting; a window closed takes its badge and the
-request goes on. A request for some lines replaces
-the explanations above those lines alone. Lines outside the range or the
-buffer, empty texts and repeats are dropped, and several explanations of one
-line are joined in order.
+vanish with a line deleted. A request for some lines replaces the
+explanations above those lines alone. Lines outside the range or the buffer,
+empty texts and repeats are dropped, and several explanations of one line are
+joined in order.
 
 `\vi` and `\VI` ask the same Claude Code, in the same way, for the potential
 issues of the code instead of explanations: bugs, unhandled cases, gaps in
@@ -1869,32 +1858,54 @@ Visual mode they ask about the lines selected. When it finds none, you are
 told once: `aineo: no potential issues found`. Issues show as explanations do,
 in a namespace of their own and in the look of |hl-AineoExplainIssue|, the
 accent being the foreground of |hl-DiagnosticWarn|, `#e5c07b` without one, and
-the label `issue`. Explanations and issues are shown together on a buffer, and
-each key toggles its own kind: `\vi` in Normal mode on a buffer that shows
-issues clears them and leaves the explanations. A request for some lines
-replaces what its kind shows above those lines alone. Since `\v` and `\V`
-start `\vi` and `\VI`, Neovim waits 'timeoutlen' for a following `i` or `I`
-before it runs them.
+the label `issue`. Since `\v` and `\V` start `\vi` and `\VI`, Neovim waits
+'timeoutlen' for a following `i` or `I` before it runs them.
 
-A buffer may have one request of each kind running at once: `\vi` while
-`\v` is waiting for its answer starts the issues request beside it, and the
-reverse. Pressed in Normal mode on a buffer that shows what the key asks for
-(a request for the whole buffer), `\v` and `\V` clear the explanations,
-`\vi` and `\VI` the issues. Pressed while a request of its own kind runs for
-the buffer, a key stops that request alone and tells you; the other kind's
-goes on. On a line both kinds show, the explanation rows sit above the issue
-rows, whichever answer came first (not on an empty line, where the one that
-came first sits above). A request
-that outlasts `explain.timeout_ms` is stopped and you are told once, as you
-are when Claude Code exits with a code other than 0, answers an error, or
-answers nothing aineo can read: nothing is shown then. When the text of the
-buffer changed while the request ran (a write of it changes nothing),
-nothing is shown and you are told to ask again. The
-Claude Code of every request that runs is stopped when Neovim quits. The
-buffer must hold a file: in aineo's own panes, `\v` and `\V` tell you so
-(|:Aineo-explain|). The model is `explain.model`
-(|aineo-config-explain.model|). Each request is a model call, billed as
-Claude Code's own usage is.
+Explanations and issues are shown together on a buffer, and each key toggles
+its own kind: pressed in Normal mode on a buffer that shows what the key asks
+for, `\v` and `\V` clear the explanations, `\vi` and `\VI` the issues. A
+buffer may have one request of each kind running at once: `\vi` while `\v` is
+waiting for its answer starts the issues request beside it, and the reverse.
+Pressed while a request of its own kind runs for the buffer, a key stops that
+request alone and tells you; the other kind's goes on. On a line both kinds
+show, the explanation rows sit above the issue rows, whichever answer came
+first (not on an empty line, where the one that came first sits above).
+
+While a request runs, one virtual line above the first line asked for, in the
+same look without the label, says `┊ ⠋ explaining…` (`┊ ⠋ looking for
+issues…`), its spinner advancing every 100 ms, and a badge in the top right
+corner of the window the request was made in says ` ⠋ explaining… 12s `: the
+seconds it has run. A badge lists the requests that run for its window, in the
+order they started, joined by ` · `
+(` ⠋ explaining… 12s · looking for issues… 3s `); a part leaves when its
+request ends, and the badge closes with the last. The badge, the line and the
+timers end with the request, whichever way it ends: its answer, a key that
+stops it, `explain.timeout_ms`, an error, the buffer wiped out,
+`:Aineo explain clear`, or Neovim quitting; a window closed takes its badge
+and the request goes on.
+
+Every answer that was shown is kept in memory, for the buffer, by its kind
+(explanations or issues), whether it had tools, the lines asked about (the
+whole buffer, or the lines of a range) and the text of those lines. Asking
+again for the same while the text of those lines reads as it did (a write of
+the buffer changes nothing) starts no request: the kept answer is placed at
+once, wrapped for the window it is placed in now, and you are told once
+`aineo: the earlier answer, the code unchanged (:Aineo explain new asks
+again)`. Hide an answer with the key again and the key shows it again. Another
+kind, tools or lines start a request; so does a change in the text of the
+lines, which drops the answer kept. `:Aineo explain new` asks again whatever
+is kept, and keeps the new answer in its place (|:Aineo-explain|). A buffer
+wiped out forgets what was kept; nothing is kept on disk.
+
+A request that outlasts `explain.timeout_ms` is stopped and you are told once,
+as you are when Claude Code exits with a code other than 0, answers an error,
+or answers nothing aineo can read: nothing is shown then. When the text of the
+buffer changed while the request ran (a write of it changes nothing), nothing
+is shown and you are told to ask again. The Claude Code of every request that
+runs is stopped when Neovim quits. The buffer must hold a file: in aineo's own
+panes, `\v`, `\V`, `\vi` and `\VI` tell you so (|:Aineo-explain|). The model
+is `explain.model` (|aineo-config-explain.model|). Each request is a model
+call, billed as Claude Code's own usage is.
 
 The groups are computed from your colour scheme when aineo first needs them
 and again after every `:colorscheme`, and a group you define yourself is kept.
@@ -2603,7 +2614,7 @@ moves you to that tab instead and claims nothing.
 			do the same (|aineo-keys|).
 
                                                              *:Aineo-explain*
-:[range]Aineo explain [issues] [tools]
+:[range]Aineo explain [issues] [tools] [new]
 			Explains the code of the current buffer, a file's, or
 			of the lines of [range], with a Claude Code of its own
 			(|aineo-explain|). With `issues` it asks for the
@@ -2611,13 +2622,18 @@ moves you to that tab instead and claims nothing.
 			that Claude Code may read the project with `Read`,
 			`Grep` and `Glob`; without, it has the code alone.
 			`\v`, `\V`, `\vi` and `\VI` do the same
-			(|aineo-keys|). Asked while a request runs for the
-			buffer, it stops that request; asked for the whole
-			buffer while it shows what it asks for, it clears
-			that. In a buffer that holds no file it tells you,
-			with one error. With any other word it tells you, with
-			one error, what it takes. The only subcommand of
-			`:Aineo` that takes a range.
+			(|aineo-keys|). Asked while a request of its kind runs
+			for the buffer, it stops that request; asked for the
+			whole buffer while it shows what it asks for, it
+			clears that. When an earlier answer for the same
+			kind, tools and lines is kept and their text is
+			unchanged, it places that answer and starts no
+			request; `new` asks again whatever is kept or shown,
+			and keeps the new answer. The words are written in
+			this order, each at most once. In a buffer that holds
+			no file it tells you, with one error. With any other
+			word it tells you, with one error, what it takes. The
+			only subcommand of `:Aineo` that takes a range.
 
 :Aineo explain clear
 			Removes every explanation and every issue the current
