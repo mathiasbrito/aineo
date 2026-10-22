@@ -6,6 +6,7 @@
 
 local art = require('aineo.office_pack.art')
 local characters = require('aineo.office_pack.characters')
+local checks = require('aineo.office_pack.checks')
 local entries = require('aineo.office_pack.entries')
 local files = require('aineo.office_pack.files')
 local floor = require('aineo.office_pack.floor')
@@ -332,6 +333,7 @@ local function read_floor(build)
     return base_floor
   end
   floor.check_letters(plan, type(data.floor.legend) == 'table' and data.floor.legend or {}, report)
+  checks.check_spots_reachable(plan, legend, report)
   return vim.tbl_extend('force', plan, {
     floor_colour = data.floor.floor_colour,
     wall_colour = data.floor.wall_colour,
@@ -390,6 +392,43 @@ local function read_entries(build, field, node)
   return entries.overlaid(build.base and build.base[field], accepted)
 end
 
+--- The colours of the office's text: the defaults, those of the pack it is
+--- based on, and those of the pack that have no problem.
+---
+---@param build aineo.office_pack.Build
+---@return table<string, string>
+local function read_text_colours(build)
+  local data, context = build.data, build.context
+  local own = entries.accepted(
+    data.text_colours,
+    pack_format.TEXT_COLOURS,
+    'text_colours',
+    context,
+    context.lines[data].text_colours
+  )
+  return vim.tbl_extend(
+    'force',
+    DEFAULT_TEXT_COLOURS,
+    build.base and build.base.text_colours or {},
+    own
+  )
+end
+
+--- Tells what keeps the pack from being used, and whether it can be: it
+--- needs a floor, an agent that stands and walks, and an activity for standing.
+---
+---@param pack table the pack as far as it is read
+---@param build aineo.office_pack.Build
+---@return boolean
+local function is_usable(pack, build)
+  local data, lines = build.data, build.context.lines
+  local is_usable_agent = characters.check_agent(pack, build.context, lines[data].characters)
+  if not pack.state_activity then
+    build.context.report(lines[data].states, 'states must give standing an activity')
+  end
+  return pack.floor ~= nil and is_usable_agent and pack.state_activity ~= nil
+end
+
 --- The pack `name`, resolved from its description and the pack it is based on.
 ---
 ---@param name string
@@ -419,53 +458,35 @@ function resolve_pack(name, reading, chain)
     reporter_for = reporter_for,
   }
   check_head(build, name)
-  local colours = read_entries(build, 'colours', pack_format.COLOURS)
-  local pieces = entries.overlaid(
+  local pack = { name = data.name, about = data.about, author = data.author }
+  pack.colours = read_entries(build, 'colours', pack_format.COLOURS)
+  pack.pieces = entries.overlaid(
     base and base.pieces,
-    read_pieces(directory, colour_names_of(colours), reporter_for)
+    read_pieces(directory, colour_names_of(pack.colours), reporter_for)
   )
-  build.context.known = known_names(build, reading, colours, pieces)
-  local pack_states = read_entries(build, 'states', pack_format.STATES)
+  build.context.known = known_names(build, reading, pack.colours, pack.pieces)
+  pack.text_colours = read_text_colours(build)
+  pack.states = read_entries(build, 'states', pack_format.STATES)
+  pack.state_activity = states.activities(pack.states)
+  pack.effects = read_entries(build, 'effects', pack_format.EFFECTS)
+  pack.activities = read_entries(build, 'activities', pack_format.ACTIVITIES)
+  pack.things = read_entries(build, 'things', pack_format.THINGS)
+  pack.triggers = read_triggers(build)
   local drawn = characters.read(data, characters_of(base), build.context)
-  local loaded_floor = read_floor(build)
-  local state_activity = states.activities(pack_states)
-  local usable = characters.check_agent(drawn, build.context, lines[data].characters)
-  if not state_activity then
-    report(lines[data].states, 'states must give standing an activity')
-    usable = false
+  pack.agent, pack.subagent, pack.cat = drawn.agent, drawn.subagent, drawn.cat
+  pack.floor = read_floor(build)
+  if pack.floor then
+    checks.check_activities_have_spots({
+      activities = pack.activities,
+      legend = pack.floor.legend,
+      things = pack.things,
+      described = type(data.activities) == 'table' and data.activities or {},
+      lines = lines,
+      floor_line = data.floor ~= nil and lines[data].floor or nil,
+      report = report,
+    })
   end
-  if not loaded_floor or not usable then
-    return nil
-  end
-  return {
-    name = data.name,
-    about = data.about,
-    author = data.author,
-    colours = colours,
-    text_colours = vim.tbl_extend(
-      'force',
-      DEFAULT_TEXT_COLOURS,
-      base and base.text_colours or {},
-      entries.accepted(
-        data.text_colours,
-        pack_format.TEXT_COLOURS,
-        'text_colours',
-        build.context,
-        lines[data].text_colours
-      )
-    ),
-    agent = drawn.agent,
-    subagent = drawn.subagent,
-    cat = drawn.cat,
-    effects = read_entries(build, 'effects', pack_format.EFFECTS),
-    pieces = pieces,
-    floor = loaded_floor,
-    activities = read_entries(build, 'activities', pack_format.ACTIVITIES),
-    things = read_entries(build, 'things', pack_format.THINGS),
-    states = pack_states,
-    state_activity = state_activity,
-    triggers = read_triggers(build),
-  }
+  return is_usable(pack, build) and pack or nil
 end
 
 --- Puts the art files of `replaced_pieces` in the place of the pieces of

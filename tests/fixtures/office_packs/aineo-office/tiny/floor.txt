@@ -1,0 +1,14 @@
+# The tiny office. One character per cell; a cell is one pixel wide and two tall.
+# Line 1 marks with ~ the columns that repeat; column 1 marks with ~ the rows that repeat.
+# . floor  # wall  space: floor nobody walks on  letters: floor.legend in pack.lua
+                   ~~~~~~~~~~~~~~
+ ########################################
+ ########################################
+ ########################################
+ ########################################
+ D######BBBBBBBBBB#################R#####
+ ..d........b........................r...
+~........................................
+~................... s          .........
+~                   T
+ ........................................
