@@ -1812,6 +1812,49 @@ A `vim.ui.select` of yours, from a picker plugin, then gives the search its
 matching. `:checkhealth aineo` says which picker aineo will use
 (|aineo-health|).
 
+Explaining code ~
+                                                               *aineo-explain*
+`\v` and `\V` ask a Claude Code of its own to explain the code of the current
+buffer, a file's, or, in Visual mode, of the lines selected, and show each
+explanation as virtual lines right above the line it explains. That Claude
+Code is never the session's agent: aineo starts one `claude` process for the
+request, with `claude.cmd`, in the top of the repository holding the file
+(else the file's folder), and it ends with its answer. Nothing of the
+session is used or kept: the request has no MCP server, none of aineo's
+settings, and no session to resume (`--no-session-persistence`).
+
+`\v` hands Claude Code the code alone: it has no tool. `\V`, the verbose one,
+lets it read the project with `Read`, `Grep` and `Glob`, each without asking,
+and no other tool. The prompt gives the file's path from that folder, its
+'filetype', the lines asked for, and the buffer's text, unsaved changes
+included, each line numbered. Claude Code answers a list of line numbers and
+explanations, each tied to the first line it explains, and ends.
+
+An explanation shows above its line, indented as that line, each row after
+`┊ `, wrapped at the window's text width less that indent, in
+|hl-AineoExplain|. The marks move with the edits made to the buffer and
+vanish with a line deleted. While a request runs, one virtual line above the
+first line asked for says `┊ explaining…`. A request for some lines replaces
+the explanations above those lines alone. Lines outside the range or the
+buffer, empty texts and repeats are dropped, and several explanations of one
+line are joined in order.
+
+Pressed in Normal mode on a buffer that shows explanations, `\v` and `\V`
+clear them. Pressed while a request runs, they stop it and tell you. A request
+that outlasts `explain.timeout_ms` is stopped and you are told once, as you
+are when Claude Code exits with a code other than 0, answers an error, or
+answers nothing aineo can read: nothing is shown then. When the buffer changed
+while the request ran, nothing is shown and you are told to ask again. The
+Claude Code of every request that runs is stopped when Neovim quits. The
+buffer must hold a file: in aineo's own panes, `\v` and `\V` tell you so
+(|:AineoExplain|). The model is `explain.model`
+(|aineo-config-explain.model|). Each request is a model call, billed as
+Claude Code's own usage is.
+
+                                                             *hl-AineoExplain*
+AineoExplain		The virtual lines of an explanation, and the one that
+			says a request is explaining, linked to |hl-Comment|.
+
 Claude's session ~
                                                         *aineo-claude-session*
 Each Claude Code session aineo starts gets an id of its own, which aineo
@@ -2484,6 +2527,24 @@ moves you to that tab instead and claims nothing.
 			and, in Terminal mode and in Insert mode, `<C-\>Z`
 			do the same (|aineo-keys|).
 
+                                                              *:AineoExplain*
+:[range]AineoExplain [tools]
+			Explains the code of the current buffer, a file's, or
+			of the lines of [range], with a Claude Code of its own
+			(|aineo-explain|). With `tools` that Claude Code may
+			read the project with `Read`, `Grep` and `Glob`;
+			without, it has the code alone. `\v` and `\V` do the
+			same (|aineo-keys|). Asked while a request runs for
+			the buffer, it stops that request; asked for the whole
+			buffer while it shows explanations, it clears them.
+			In a buffer that holds no file it tells you, with one
+			error. With any other word it tells you, with one
+			error, what it takes.
+
+:AineoExplain clear
+			Removes every explanation the current buffer shows,
+			and stops the request that runs for it, if any.
+
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
 
@@ -2577,6 +2638,19 @@ you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-find)
 			Does what `:Aineo find` does (|:Aineo-find|).
 
+                                                       *<Plug>(aineo-explain)*
+<Plug>(aineo-explain)
+			In Normal mode, does what `:AineoExplain` does
+			(|:AineoExplain|); in Visual mode, explains the lines
+			selected alone and leaves Visual mode.
+
+                                                 *<Plug>(aineo-explain-tools)*
+<Plug>(aineo-explain-tools)
+			Does what `<Plug>(aineo-explain)` does, with Claude
+			Code allowed to read the project with `Read`, `Grep`
+			and `Glob`; what `:AineoExplain tools` does
+			(|:AineoExplain|).
+
                                                           *<Plug>(aineo-zoom)*
 <Plug>(aineo-zoom)
 			Does what `:Aineo zoom` does (|:Aineo-zoom|).
@@ -2590,7 +2664,8 @@ Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
 followed by these keys to each `<Plug>` mapping but `<Plug>(aineo-claim)`,
-which has none, globally, in Normal mode, and `\s` in Visual mode too:
+which has none, globally, in Normal mode, and `\s`, `\v` and `\V` in Visual
+mode too:
 
                                                                     *aineo-\s*
 \s		|<Plug>(aineo-send)|
@@ -2636,8 +2711,16 @@ which has none, globally, in Normal mode, and `\s` in Visual mode too:
 \z		|<Plug>(aineo-zoom)|
                                                                     *aineo-\Z*
 \Z		|<Plug>(aineo-zoom-full)|
+                                                                    *aineo-\v*
+\v		|<Plug>(aineo-explain)|
+                                                                    *aineo-\V*
+\V		|<Plug>(aineo-explain-tools)|
                                                                   *aineo-v_\s*
 \s		|<Plug>(aineo-send)| in Visual mode (|aineo-send|)
+                                                                  *aineo-v_\v*
+\v		|<Plug>(aineo-explain)| in Visual mode (|aineo-explain|)
+                                                                  *aineo-v_\V*
+\V		|<Plug>(aineo-explain-tools)| in Visual mode
 
 Visual mode here is Visual mode alone: in Select mode, `\s` is text you
 type.
@@ -2925,6 +3008,20 @@ find.picker		One of `'auto'`, `'snacks'`, `'fzf-lua'`,
 			|vim.ui.select()|, and with a name it tells you, in
 			each search, with one warning, that the picker is
 			missing. None of them is a dependency of aineo.
+
+                                                       *aineo-config-explain*
+                                                 *aineo-config-explain.model*
+explain.model		A non-empty string. Default: `'sonnet'`
+			The model of the Claude Code that explains code
+			(|aineo-explain|), passed as its `--model`: an alias
+			such as `'sonnet'` or `'opus'`, or a model's full
+			name.
+
+                                             *aineo-config-explain.timeout_ms*
+explain.timeout_ms	A whole number of at least 1. Default: `180000`
+			How many milliseconds a request to explain code may
+			run. Past that, its Claude Code is stopped and aineo
+			tells you, once.
 
 ==============================================================================
 7. SEND                                                           *aineo-send*
@@ -3459,6 +3556,15 @@ Find a file ~
   is not installed. Nothing while the configuration is wrong. To tell, the
   check loads the pickers it looks for, in the order `auto` does, up to the
   first that is installed.
+
+Explain code ~
+  Which model `\v` and `\V` explain code with (`explain.model`,
+  |aineo-config-explain.model|), after how long a request is stopped
+  (`explain.timeout_ms`, |aineo-config-explain.timeout_ms|), that each request
+  starts a Claude Code of its own with `claude.cmd`, and what it may use:
+  nothing with `\v`, `Read`, `Grep` and `Glob` with `\V`, without asking, and
+  no MCP server and no settings of aineo (|aineo-explain|). Nothing while the
+  configuration is wrong.
 
 Autostart ~
   Whether the autostart opened the layout at startup, or which reason kept
