@@ -20,13 +20,20 @@ A design packet: no application code. It turns the user's decisions for the offi
 
 ## Decisions by ID
 
-None decided here: the plan lists six spec conflicts (OS1–OS6) and five open questions (OQ1–OQ5), each with a recommendation, for the orchestrator to put to the user.
+None decided by this pass. The plan listed six spec conflicts (OS1–OS6) and five questions (OQ1–OQ5), each with a recommendation. The same day the user answered OQ1–OQ4 (D111): `PermissionRequest`, the office saying why without 'termguicolors', fixtures from a few real turns at the lowest cost, and `\O` — the last over the plan's recommendation of no key. The orchestrator ruled OS1–OS6 (A573) and OQ5 (A574).
+
+## The amendment
+
+On the same branch, a second commit wrote the plan to those answers:
+- the *Outcome* section and three rows (D111, A573, A574), with D111's row also in the v1 plan;
+- the conflicts and questions kept as offered, each marked settled;
+- `\O` and its `<Plug>` added to T124;
+- *Recording the fixtures*: who records, the cheapest model, the cap, how the content is replaced, which packet commits what.
 
 ## Open threads
 
-- The answers to OQ1–OQ5, and the orchestrator's reading of OS1–OS6.
-- OS6: the modularity tables need the office's five homes, and the four homes they already lack, on an `ai/` branch before T124.
-- OQ3: fixtures recorded from the real Claude Code need the user's leave.
+- D107–D110 have no rows of their own in the v1 plan yet; D111's row points at this plan for them.
+- A573's `ai/` change (OS6) and the recording come before T124.
 - The wave folder and briefs are the orchestrator's.
 
 ## Commits
