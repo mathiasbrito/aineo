@@ -15,6 +15,11 @@ local M = {}
 --- A subagent's transcript's file name, with the subagent's id as its capture.
 local TRANSCRIPT_NAME_PATTERN = '^agent%-([%w_%-]+)%.jsonl$'
 
+--- How many subagents the follower follows at once; a folder that holds more
+--- has the first of them, by id, followed. Each followed subagent holds a
+--- watch and a timer.
+local MAX_RUNNING_SUBAGENTS = 64
+
 --- The longest meta file the follower reads; a longer one counts as unreadable.
 local MAX_META_BYTES = 64 * 1024
 
@@ -46,12 +51,17 @@ local function ids_in(folder)
 end
 
 --- Whether the meta file at `path` says its subagent is over: it carries
---- `finished` or `stoppedByUser`. A meta file that is missing, too long or not
---- JSON says nothing, so its subagent is taken to run.
+--- `finished` or `stoppedByUser`. A meta file that is missing, not a regular
+--- file (opening a named pipe would hold the editor), too long or not JSON
+--- says nothing, so its subagent is taken to run.
 ---
 ---@param path string
 ---@return boolean
 local function is_over(path)
+  local stat = vim.uv.fs_stat(path)
+  if not stat or stat.type ~= 'file' then
+    return false
+  end
   local file = io.open(path, 'rb')
   if not file then
     return false
@@ -88,6 +98,7 @@ function M.follow_subagents(options)
   local stopped = false
   ---@type table<string, aineo.transcript.FileFollower> the subagents that run
   local running = {}
+  local running_count = 0
   ---@type table<string, true> the subagents that were over when first seen, or are now
   local over = {}
 
@@ -110,6 +121,7 @@ function M.follow_subagents(options)
   ---@param past boolean
   local function arrive(id, past)
     options.on_signal({ agent = id, kind = 'subagent_started', replayed = past or nil })
+    running_count = running_count + 1
     running[id] = file_follower.follow_file({
       path = transcript_path(id),
       agent = id,
@@ -125,6 +137,7 @@ function M.follow_subagents(options)
   local function leave(id)
     local follower = running[id]
     running[id] = nil
+    running_count = running_count - 1
     over[id] = true
     follower.read_to_end()
     follower.stop()
@@ -132,7 +145,8 @@ function M.follow_subagents(options)
   end
 
   --- Looks at the folder: starts the subagents it holds that are new and
-  --- running, ends those whose meta file says they are over.
+  --- running (up to `MAX_RUNNING_SUBAGENTS`), ends those whose meta file says
+  --- they are over.
   ---
   ---@param past boolean whether what the folder holds was there before the follower started
   local function look(past)
@@ -142,7 +156,7 @@ function M.follow_subagents(options)
       end
       if running[id] and is_over(meta_path(id)) then
         leave(id)
-      elseif not running[id] and not over[id] then
+      elseif not running[id] and not over[id] and running_count < MAX_RUNNING_SUBAGENTS then
         if is_over(meta_path(id)) then
           over[id] = true
         else
