@@ -146,13 +146,7 @@ function M.new_office(options)
       group = open.group,
       callback = function()
         local entered = vim.api.nvim_get_current_win()
-        if
-          is_in_current_tab_page(open)
-          and vim.api.nvim_win_get_tabpage(entered) == vim.api.nvim_win_get_tabpage(
-            open.float.window
-          )
-          and float_module.covers(open.float, entered)
-        then
+        if is_in_current_tab_page(open) and float_module.covers(open.float, entered) then
           close_soon()
         end
       end,
