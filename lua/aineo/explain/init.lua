@@ -8,6 +8,7 @@ local jump = require('aineo.explain.jump')
 local kept = require('aineo.explain.kept')
 local look = require('aineo.explain.look')
 local marks = require('aineo.explain.marks')
+local message = require('aineo.explain.message')
 local request = require('aineo.explain.request')
 local runs = require('aineo.explain.runs')
 
@@ -336,6 +337,41 @@ function M.toggle_issue_marks(buffer, first, last)
       vim.log.levels.INFO
     )
   end
+end
+
+--- The issues `buffer` shows that are marked, in the order of their lines,
+--- each with the file's path from the project's folder, the line it starts
+--- at now and its text.
+---
+---@param buffer integer
+---@return aineo.explain.MarkedIssue[]
+function M.marked_issues(buffer)
+  local marked = marks.marked_issues(buffer)
+  if #marked == 0 then
+    return {}
+  end
+  local name = vim.api.nvim_buf_get_name(buffer)
+  local path = vim.fs.relpath(project_folder(name), name) or name
+  return vim.tbl_map(function(issue)
+    return { path = path, line = issue.line, text = issue.text }
+  end, marked)
+end
+
+--- The message that asks Claude Code, after `prompt`, to check `issues`
+--- (`aineo.explain.message`'s `of_issues()`).
+---
+---@param prompt string
+---@param issues aineo.explain.MarkedIssue[]
+---@return string
+function M.issues_message(prompt, issues)
+  return message.of_issues(prompt, issues)
+end
+
+--- Unmarks every issue `buffer` shows; they stay shown.
+---
+---@param buffer integer
+function M.clear_issue_marks(buffer)
+  marks.clear_issue_marks(buffer)
 end
 
 --- Moves the cursor of `window` to the line of the next or the previous

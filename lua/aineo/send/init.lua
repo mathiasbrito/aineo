@@ -179,6 +179,26 @@ function M.send(target)
 end
 
 --- Writes `text`, without control bytes (`without_control_bytes()`), to the
+--- terminal of `session`'s Claude Code as one bracketed paste followed by
+--- `ending`, in one write, when Claude Code is ready for input as
+--- `session.session_status()` reports it. Otherwise writes nothing and tells
+--- the user why (`refuse()`). Returns whether it wrote.
+---
+---@param text string
+---@param ending string what follows the paste: `ENTER`, or nothing
+---@param session aineo.claude.Session
+---@return boolean
+local function write_to_ready_session(text, ending, session)
+  local status = session.session_status()
+  if status ~= 'ready' then
+    refuse(status or 'not_started')
+    return false
+  end
+  session.write_to_session(PASTE_START .. without_control_bytes(text) .. PASTE_END .. ending)
+  return true
+end
+
+--- Writes `text`, without control bytes (`without_control_bytes()`), to the
 --- terminal of Claude Code as one bracketed paste with no Enter after it,
 --- in one write, so that it waits in Claude Code's prompt, after any draft
 --- there, for the user to go on typing. Writes nothing, and tells the user
@@ -195,12 +215,28 @@ end
 function M.paste(text, target)
   vim.validate('text', text, 'string')
   target = validated(target)
-  local session = target.session or claude
-  local status = session.session_status()
-  if status ~= 'ready' then
-    return refuse(status or 'not_started')
-  end
-  session.write_to_session(PASTE_START .. without_control_bytes(text) .. PASTE_END)
+  write_to_ready_session(text, '', target.session or claude)
+end
+
+--- Writes `text`, without control bytes (`without_control_bytes()`), to the
+--- terminal of Claude Code as one bracketed paste followed by Enter, in one
+--- write, as `send()` writes Input, and leaves Input as it is. Writes
+--- nothing, and tells the user why with one `vim.notify()` warning, when
+--- Claude Code is not ready for input as `claude.session_status()` reports
+--- it, as `send()` tells it. Raises the write's error as it is when the
+--- write fails. Returns whether it wrote.
+---
+--- With `target`, writes to that session home's Claude Code and asks its
+--- status in place of the module's; its `input` is not read. Raises an error
+--- naming the field when `target` or its `session` is of the wrong kind.
+---
+---@param text string
+---@param target? aineo.send.Target
+---@return boolean sent
+function M.submit(text, target)
+  vim.validate('text', text, 'string')
+  target = validated(target)
+  return write_to_ready_session(text, ENTER, target.session or claude)
 end
 
 --- The line `lnum` of the current buffer, a NUL byte in it kept as one.

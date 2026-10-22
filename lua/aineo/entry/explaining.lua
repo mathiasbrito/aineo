@@ -80,6 +80,32 @@ function M.clear_explanations()
   require('aineo.explain').clear(vim.api.nvim_get_current_buf())
 end
 
+--- What Send does when the current buffer has issues marked (`\vm`): hands
+--- `submit` one message that asks Claude Code to check them (`aineo.explain`'s
+--- `issues_message()`), opened by `explain.issues_prompt`, and, once `submit`
+--- says it sent, unmarks them (`clear_issue_marks()`); with no Claude Code
+--- ready to take it the marks stay. Reads the explain home only when it is
+--- loaded: until a request is made nothing is marked. Returns whether the
+--- buffer had marked issues, in which case Send has nothing else to do.
+---
+---@param submit fun(message: string): boolean sends the message, telling the user why when it cannot
+---@return boolean
+function M.send_marked_issues(submit)
+  local explain = package.loaded['aineo.explain']
+  if not explain then
+    return false
+  end
+  local buffer = vim.api.nvim_get_current_buf()
+  local issues = explain.marked_issues(buffer)
+  if #issues == 0 then
+    return false
+  end
+  if submit(explain.issues_message(resolved_config().explain.issues_prompt, issues)) then
+    explain.clear_issue_marks(buffer)
+  end
+  return true
+end
+
 --- What `\vm` does in Normal mode: marks the issues shown above the cursor's
 --- line of the current buffer, or unmarks those marked (`aineo.explain`'s
 --- `toggle_issue_marks()`).
