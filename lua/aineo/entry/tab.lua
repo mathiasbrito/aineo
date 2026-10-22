@@ -9,6 +9,7 @@ local errors = require('aineo.entry.errors')
 local explorer = require('aineo.entry.explorer')
 local folder_tabs = require('aineo.entry.folder_tabs')
 local links = require('aineo.entry.links')
+local offices = require('aineo.entry.office')
 local places = require('aineo.entry.places')
 local prompt = require('aineo.entry.prompt')
 local registry = require('aineo.entry.registry')
@@ -680,7 +681,10 @@ local function make_tab(homes, key, callbacks)
   --- (`aineo.mcp`), the state directory of `kept_places()`, the editor's
   --- address and program for the session hooks, and the callbacks that make
   --- the panes follow the session (`replacement_callbacks()`,
-  --- `follow_confirmed_start()`). With `new_session` the start is on a new
+  --- `follow_confirmed_start()`), and those that tell the tab's office where
+  --- its session's transcript is written and that an agent waits for the
+  --- user (`aineo.entry.office`'s `note_transcript()` and
+  --- `take_permission_wait()`). With `new_session` the start is on a new
   --- session id.
   ---
   ---@param config table the resolved configuration
@@ -710,6 +714,12 @@ local function make_tab(homes, key, callbacks)
       on_terminal_replaced = replacement.on_terminal_replaced,
       on_session_ready = follow_confirmed_start,
       on_session_switched = replacement.on_session_switched,
+      on_transcript = function(session_id, path)
+        offices.note_transcript(tab, session_id, path)
+      end,
+      on_permission_wait = function(session_id, agent_id)
+        offices.take_permission_wait(tab, session_id, agent_id)
+      end,
     }
   end
 
