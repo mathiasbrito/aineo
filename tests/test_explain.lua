@@ -14,8 +14,9 @@ local PATIENCE_MS = 10000
 
 local CHECKOUT = vim.fn.fnamemodify('.', ':p'):gsub('/$', '')
 
---- The fake `claude`, run in the real one's place (`tests/helpers/fake_claude.lua`).
-local FAKE_CLAUDE = { 'nvim', '--clean', '-l', CHECKOUT .. '/tests/helpers/fake_claude.lua' }
+--- The fake `claude`, run in the real one's place (`tests/helpers/fake_claude.lua`,
+--- through `tests/helpers/fake_claude_print.sh`, whose words hold no flag).
+local FAKE_CLAUDE = { 'sh', CHECKOUT .. '/tests/helpers/fake_claude_print.sh' }
 
 --- The schema every request hands Claude Code: an object holding the list of
 --- explanations, each a line and its text, nothing else.
@@ -705,6 +706,8 @@ T['a request']['runs claude.cmd in print mode, the code alone, with no tool, no 
     '--strict-mcp-config',
     '--model',
     'sonnet',
+    '--setting-sources',
+    'user',
     '--tools',
     '',
   })
@@ -727,11 +730,37 @@ T['a request']['with tools lets Claude Code read the project with Read, Grep and
     '--strict-mcp-config',
     '--model',
     'opus',
+    '--setting-sources',
+    'user',
     '--tools',
     'Read,Grep,Glob',
     '--allowedTools',
     'Read,Grep,Glob',
   })
+end
+
+T['a request']['takes from claude.cmd the words before its first flag alone: the program and its wrapper words'] = function()
+  start_with_project()
+
+  explain({
+    command = vim.list_extend(vim.list_slice(FAKE_CLAUDE), {
+      '--mcp-config',
+      '{"mcpServers":{}}',
+      '--settings',
+      '{"hooks":{}}',
+      '--verbose',
+      '--tools',
+      'X',
+    }),
+  })
+
+  local argv = recorded(1)[1].argv
+  eq(argv[1], '-p')
+  eq(vim.tbl_contains(argv, '--mcp-config'), false)
+  eq(vim.tbl_contains(argv, '--settings'), false)
+  eq(vim.tbl_contains(argv, '--verbose'), false)
+  eq(argv[#argv - 1], '--tools')
+  eq(argv[#argv], '')
 end
 
 T['a request']['runs Claude Code in the git top level of the file'] = function()
