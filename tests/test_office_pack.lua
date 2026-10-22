@@ -183,12 +183,12 @@ T['load()']['gives each state the activity of the first state it falls back thro
 
   local pack = load_pack('small', { folder })
 
-  eq(pack.state_activity, {
-    standing = 'stand',
-    working = 'work',
-    resting = 'stand',
-    idle = 'stand',
-  })
+  eq(pack.state_activity.standing, 'stand')
+  eq(pack.state_activity.working, 'work')
+  eq(pack.state_activity.resting, 'stand')
+  eq(pack.state_activity.idle, 'stand')
+  eq(pack.state_activity.reading, 'work')
+  eq(pack.state_activity.asleep, 'stand')
 end
 
 T['load()']['prefers the activity a pack maps to a state over the one it falls back to'] = function()
