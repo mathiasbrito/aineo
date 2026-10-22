@@ -340,6 +340,25 @@ end
 
 T['a follower that is stopped'] = MiniTest.new_set()
 
+T['a follower that is stopped']['from the callback that heard a subagent arrive follows nothing of it'] = function()
+  local session = new_session()
+  session.follower = assert(transcript.follow({
+    path = session.transcript,
+    on_signal = function(signal)
+      table.insert(session.signals, signal)
+      session.follower.stop()
+    end,
+  }))
+  table.insert(started_followers, session.follower)
+
+  write_subagent(session, SUBAGENT, 'running')
+  vim.wait(1200)
+
+  eq(kinds_of(session.signals), { 'subagent_started' })
+  eq(open_handles('fs_event'), 0)
+  eq(open_handles('timer'), 0)
+end
+
 T['a follower that is stopped']['hears no subagent, and holds no watch or timer'] = function()
   local session = new_session()
   write_subagent(session, SUBAGENT, 'running')
