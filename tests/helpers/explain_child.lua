@@ -63,15 +63,16 @@ end
 ---@param explanations { line: integer, text: string }[]
 local function answer(child, explanations)
   answers_made = answers_made + 1
-  local path = fixture.write('explain-child/answer-' .. answers_made .. '.json', {
-    vim.json.encode({
-      type = 'result',
-      subtype = 'success',
-      is_error = false,
-      result = '',
-      structured_output = { explanations = explanations },
-    }),
-  })
+  local path =
+    fixture.write(('explain-child/answer-%d-%d.json'):format(vim.fn.getpid(), answers_made), {
+      vim.json.encode({
+        type = 'result',
+        subtype = 'success',
+        is_error = false,
+        result = '',
+        structured_output = { explanations = explanations },
+      }),
+    })
   child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT = ...', { path })
 end
 
