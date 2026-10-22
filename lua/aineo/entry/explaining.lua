@@ -90,13 +90,14 @@ end
 ---
 ---@param submit fun(message: string): boolean sends the message, telling the user why when it cannot
 ---@param buffer integer the buffer Send was pressed in, before any switch to aineo's tab page
+---@param folder string the folder the tab's Claude Code runs in, which the paths are told from
 ---@return boolean
-function M.send_marked_issues(submit, buffer)
+function M.send_marked_issues(submit, buffer, folder)
   local explain = package.loaded['aineo.explain']
   if not explain then
     return false
   end
-  local issues = explain.marked_issues(buffer)
+  local issues = explain.marked_issues(buffer, folder)
   if #issues == 0 then
     return false
   end
