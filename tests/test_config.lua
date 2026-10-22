@@ -18,6 +18,24 @@ local DEFAULTS = {
     timeout_ms = 180000,
     issues_prompt = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
   },
+  office = {
+    commands = {
+      tests = {
+        'make test',
+        'make test_file',
+        'npm test',
+        'pytest',
+        'go test',
+        'cargo test',
+        'busted',
+        'mix test',
+        'rspec',
+      },
+      committing = { 'git commit', 'git push', 'gh pr create' },
+      searching = { 'rg', 'grep', 'git grep', 'find', 'fd', 'ag', 'ack' },
+      reading = { 'cat', 'head', 'tail', 'less', 'bat', 'sed -n' },
+    },
+  },
 }
 
 local T = MiniTest.new_set()
@@ -404,6 +422,55 @@ T['resolve_config()']['returns an unknown key of the setup() options too'] = fun
   local _, unknown_keys = config.resolve_config(nil, { autostrat = false })
 
   eq(unknown_keys, { 'autostrat' })
+end
+
+T['resolve_config()']["takes the classes of commands from either source, the plan's four by default"] = function()
+  local from_global =
+    config.resolve_config({ office = { commands = { tests = { 'just check' } } } }, nil)
+  local from_setup = config.resolve_config(
+    { office = { commands = { tests = { 'just check' } } } },
+    { office = { commands = { reading = { 'cat' } } } }
+  )
+
+  eq(from_global.office.commands, { tests = { 'just check' } })
+  eq(from_setup.office.commands, { reading = { 'cat' } })
+  eq(config.resolve_config(nil, nil).office, DEFAULTS.office)
+end
+
+T['resolve_config()']['takes a class of commands that has no match, and one with a glob and a Lua pattern'] = function()
+  local commands = {
+    tests = {},
+    reading = { 'cat *.md', { lua_pattern = '^less%s' } },
+  }
+
+  local resolved = config.resolve_config({ office = { commands = commands } }, nil)
+
+  eq(resolved.office.commands, commands)
+end
+
+T['resolve_config()']['refuses classes of commands that are not a table of lists of matches'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'make test' },
+      { { 'make test' } },
+      { { building = { 'make' } } },
+      { { tests = 'make test' } },
+      { { tests = { '' } } },
+      { { tests = { 5 } } },
+      { { tests = { {} } } },
+      { { tests = { { lua_pattern = 5 } } } },
+      { { tests = { { lua_pattern = '[' } } } },
+      { { tests = { { lua_pattern = '^make', glob = 'x' } } } },
+      { false },
+    },
+  })
+
+T['resolve_config()']['refuses classes of commands that are not a table of lists of matches']['as office.commands'] = function(
+  commands
+)
+  expect.error(function()
+    config.resolve_config({ office = { commands = commands } }, nil)
+  end, 'office%.commands: expected')
 end
 
 T['resolve_config()']['lists each unknown key once, in sorted order'] = function()
