@@ -348,11 +348,20 @@ local PREFIX_KEYS = {
   { key = 'z', plug = '<Plug>(aineo-zoom)', mode = 'n' },
   { key = 'Z', plug = '<Plug>(aineo-zoom-full)', mode = 'n' },
   { key = 's', plug = '<Plug>(aineo-send)', mode = 'x' },
+  { key = 'v', plug = '<Plug>(aineo-explain)', mode = 'n' },
+  { key = 'V', plug = '<Plug>(aineo-explain-tools)', mode = 'n' },
+  { key = 'v', plug = '<Plug>(aineo-explain)', mode = 'x' },
+  { key = 'V', plug = '<Plug>(aineo-explain-tools)', mode = 'x' },
 }
 
 --- The prefix keys that have no twin in Terminal and Insert mode, by their
---- `<Plug>` mapping: Send acts on a selection or on Normal mode's line.
-local HAS_NO_TWIN = { ['<Plug>(aineo-send)'] = true }
+--- `<Plug>` mapping: Send acts on a selection or on Normal mode's line, and
+--- explaining on the buffer of a file or on a selection in it.
+local HAS_NO_TWIN = {
+  ['<Plug>(aineo-send)'] = true,
+  ['<Plug>(aineo-explain)'] = true,
+  ['<Plug>(aineo-explain-tools)'] = true,
+}
 
 --- The modes a twin is mapped in, with how the Terminal prefix mappings
 --- section names each: Terminal mode first.
@@ -945,6 +954,27 @@ local function check_find(resolved_config)
   end
 end
 
+--- Reports how `\v` and `\V` explain code with `resolved_config`'s
+--- `explain.model` and `explain.timeout_ms`, and what the Claude Code they
+--- start may use. Nothing while the configuration is wrong.
+---
+---@param resolved_config table|nil the configuration, `nil` when it is wrong
+local function check_explain(resolved_config)
+  if not resolved_config then
+    return
+  end
+  vim.health.start('Explain code')
+  vim.health.info(
+    ('\\v and \\V start a Claude Code of their own with claude.cmd for each request, and end it with the answer: model %s (explain.model), stopped after %g s (explain.timeout_ms): :help |aineo-explain|'):format(
+      resolved_config.explain.model,
+      resolved_config.explain.timeout_ms / 1000
+    )
+  )
+  vim.health.info(
+    '\\v hands it the code alone, with no tool; \\V lets it read the project with Read, Grep and Glob, without asking; it gets no other tool, no MCP server and no settings of aineo, and asks no permission'
+  )
+end
+
 --- Reports what the autostart decided when the editor started, and why, from
 --- aineo's record (`startup_record()`), with the error an open that failed
 --- met when the record holds it as text.
@@ -987,6 +1017,7 @@ function M.check()
   check_terminal_prefix_mappings(resolved_config)
   check_tab_line(resolved_config)
   check_find(resolved_config)
+  check_explain(resolved_config)
   check_autostart()
   name_limits()
 end
