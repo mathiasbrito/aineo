@@ -17,6 +17,7 @@ function M.pack_text(changes)
     name = 'small',
     about = 'The smallest pack that loads.',
     author = 'the tests',
+    based_on = false,
     colours = { wall = '#292c3c', floor = '#303446', ink = '#1e1e2e', wood = '#b4875a' },
     characters = {
       agent = {
