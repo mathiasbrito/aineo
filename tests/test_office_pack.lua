@@ -121,14 +121,6 @@ T['load()']['reads every art file of the pack'] = function()
   eq(names, { 'other', 'person' })
 end
 
-T['load()']['gives no pieces to a pack without art files'] = function()
-  local folder = files.write_pack(pack_root(), 'small', { ['art/person.txt'] = false })
-
-  local pack = load_pack('small', { folder })
-
-  eq(pack.pieces, {})
-end
-
 T['load()']['reads the floor plan without its marker column, with the columns that repeat'] = function()
   local folder = files.write_pack(pack_root(), 'small')
 
@@ -156,7 +148,10 @@ T['load()']['gives the floor its colours and the legend of what each letter is']
 
   eq(pack.floor.floor_colour, 'floor')
   eq(pack.floor.wall_colour, 'wall')
-  eq(pack.floor.legend, { D = { piece = 'person' }, s = { spot = 'desk', sitting = true } })
+  eq(pack.floor.legend, {
+    D = { piece = 'person', sitting = false, facing = 'right', walk_over = false },
+    s = { spot = 'desk', sitting = true, facing = 'right', walk_over = false },
+  })
 end
 
 T['load()']['gives the poses of the agent, a pose taking what it is like from the pose it names'] = function()
@@ -165,7 +160,7 @@ T['load()']['gives the poses of the agent, a pose taking what it is like from th
   local pack = load_pack('small', { folder })
 
   eq(pack.agent.poses.typing, { art = { 'person' }, sitting = true, effect = 'busy_dots' })
-  eq(pack.agent.poses.standing, { art = { 'person' } })
+  eq(pack.agent.poses.standing, { art = { 'person' }, sitting = false })
   eq(pack.agent.colours, { '#a6e3a1' })
 end
 
@@ -191,7 +186,7 @@ T['load()']['gives the colours of the office’s text by role'] = function()
   local pack = load_pack('small', { folder })
 
   eq(pack.text_colours.thought, '#b4befe')
-  eq(pack.text_colours.status, '#cdd6f4')
+  eq(pack.text_colours.status, 'Normal')
 end
 
 T['load()']['gives each state the activity of the first state it falls back through that the pack maps'] = function()
@@ -241,7 +236,13 @@ T['load()']['gives the activities of the pack'] = function()
 
   local pack = load_pack('small', { folder })
 
-  eq(pack.activities.work, { steps = { { at = 'desk', pose = 'typing' } } })
+  eq(pack.activities.work, {
+    about = '',
+    who = 'agents',
+    chance = 1,
+    players = 1,
+    steps = { { at = 'desk', pose = 'typing', even_if_taken = false } },
+  })
 end
 
 T['load()']['finds the pack in the first folder that holds it'] = function()
@@ -276,12 +277,15 @@ T['load()']['says which line of pack.lua is not data'] = function()
 end
 
 T['load()']['refuses a pack written for another format'] = function()
-  local folder = files.write_pack(pack_root(), 'small', {
-    ['pack.lua'] = files.pack_text({ format = 2 }),
-  })
+  local text = files.pack_text({ format = 2 })
+  local folder = files.write_pack(pack_root(), 'small', { ['pack.lua'] = text })
 
   eq(problems_of('small', { folder }), {
-    { 'pack.lua', nil, 'the pack is written for format 2, and aineo reads format 1' },
+    {
+      'pack.lua',
+      files.line_of(text, 'format'),
+      'the pack is written for format 2, and aineo reads format 1',
+    },
   })
 end
 
@@ -292,12 +296,11 @@ T['load()']['says which file is missing'] = function()
 end
 
 T['load()']['says when the pack maps no activity to standing'] = function()
-  local folder = files.write_pack(pack_root(), 'small', {
-    ['pack.lua'] = files.pack_text({ states = { working = 'work' } }),
-  })
+  local text = files.pack_text({ states = { working = 'work' } })
+  local folder = files.write_pack(pack_root(), 'small', { ['pack.lua'] = text })
 
   eq(problems_of('small', { folder }), {
-    { 'pack.lua', nil, 'states must give standing an activity' },
+    { 'pack.lua', files.line_of(text, 'states'), 'states must give standing an activity' },
   })
 end
 
@@ -309,13 +312,32 @@ T['load()']['says which art file has no frame'] = function()
   eq(problems_of('small', { folder }), { { 'art/empty.txt', 2, 'the piece has no pixels' } })
 end
 
+--- The characters of a pack whose agent has no colours, the poses it must
+--- have, and `more` poses.
+---
+---@param more table
+---@return table characters
+local function characters_with_poses(more)
+  local poses = {
+    standing = { art = { 'person' } },
+    walking = { art = { 'person' } },
+    typing = { art = { 'person' } },
+  }
+  return { agent = { poses = vim.tbl_extend('force', poses, more) } }
+end
+
 --- The characters of a pack whose agent has `count` poses, `p0` drawn and each
 --- of the others like the one before it.
 ---
 ---@param count integer
 ---@return table characters
 local function characters_with_a_chain_of_poses(count)
-  local poses = { p0 = { art = { 'person' } } }
+  local poses = {
+    standing = { art = { 'person' } },
+    walking = { art = { 'person' } },
+    typing = { art = { 'person' } },
+    p0 = { art = { 'person' } },
+  }
   for index = 1, count - 1 do
     poses['p' .. index] = { like = 'p' .. (index - 1) }
   end
@@ -329,16 +351,19 @@ T['load()']['takes a pose like a chain of up to eight others'] = function()
 
   local pack = load_pack('small', { folder })
 
-  eq(pack.agent.poses.p8, { art = { 'person' } })
+  eq(pack.agent.poses.p8, { art = { 'person' }, sitting = false })
 end
 
 T['load()']['refuses a pose like a chain of more than eight others, naming the pose'] = function()
-  local folder = files.write_pack(pack_root(), 'small', {
-    ['pack.lua'] = files.pack_text({ characters = characters_with_a_chain_of_poses(10) }),
-  })
+  local text = files.pack_text({ characters = characters_with_a_chain_of_poses(10) })
+  local folder = files.write_pack(pack_root(), 'small', { ['pack.lua'] = text })
 
   eq(problems_of('small', { folder }), {
-    { 'pack.lua', nil, 'the pose “p9” is like a chain of more than 8 poses' },
+    {
+      'pack.lua',
+      files.line_of(text, 'characters'),
+      'characters.agent.poses.p9 is like a chain of more than 8 poses',
+    },
   })
 end
 
@@ -355,46 +380,60 @@ T['load()']['refuses a long chain of poses at once, not after minutes'] = functi
 end
 
 T['load()']['refuses a pose that is like itself, naming it'] = function()
-  local folder = files.write_pack(pack_root(), 'small', {
-    ['pack.lua'] = files.pack_text({
-      characters = { agent = { poses = { standing = { like = 'standing' } } } },
-    }),
-  })
+  local text =
+    files.pack_text({ characters = characters_with_poses({ spare = { like = 'spare' } }) })
+  local folder = files.write_pack(pack_root(), 'small', { ['pack.lua'] = text })
 
   eq(problems_of('small', { folder }), {
-    { 'pack.lua', nil, 'the pose “standing” is like itself' },
+    {
+      'pack.lua',
+      files.line_of(text, 'characters'),
+      'characters.agent.poses.spare is like itself',
+    },
   })
 end
 
 T['load()']['refuses poses that are like each other in a ring'] = function()
-  local folder = files.write_pack(pack_root(), 'small', {
-    ['pack.lua'] = files.pack_text({
-      characters = { agent = { poses = { a = { like = 'b' }, b = { like = 'a' } } } },
-    }),
+  local text = files.pack_text({
+    characters = characters_with_poses({ a = { like = 'b' }, b = { like = 'a' } }),
   })
+  local folder = files.write_pack(pack_root(), 'small', { ['pack.lua'] = text })
 
-  local told = problems_of('small', { folder })
-
-  eq(#told, 1)
-  eq(vim.endswith(told[1][3], 'is like itself'), true)
+  local line = files.line_of(text, 'characters')
+  eq(problems_of('small', { folder }), {
+    { 'pack.lua', line, 'characters.agent.poses.a is like itself' },
+    { 'pack.lua', line, 'characters.agent.poses.b is like itself' },
+  })
 end
 
-T['load()']['refuses a pose like a pose the pack does not describe, naming that pose'] = function()
-  local folder = files.write_pack(pack_root(), 'small', {
-    ['pack.lua'] = files.pack_text({
-      characters = { agent = { poses = { standing = { like = 'floating' } } } },
+T['load()']['refuses a pose like a pose left out for its own problem, naming that pose'] = function()
+  local text = files.pack_text({
+    characters = characters_with_poses({
+      broken = { art = { 'nothing' } },
+      spare = { like = 'broken' },
     }),
   })
+  local folder = files.write_pack(pack_root(), 'small', { ['pack.lua'] = text })
 
+  local line = files.line_of(text, 'characters')
   eq(problems_of('small', { folder }), {
-    { 'pack.lua', nil, 'the pose “floating” is not described' },
+    {
+      'pack.lua',
+      line,
+      'characters.agent.poses.broken.art[1] names the piece “nothing”, which the pack does not have',
+    },
+    {
+      'pack.lua',
+      line,
+      'characters.agent.poses.spare is like “broken”, which the pack does not describe',
+    },
   })
 end
 
 T['load()']['gives an agent with no colours one grey'] = function()
   local folder = files.write_pack(pack_root(), 'small', {
     ['pack.lua'] = files.pack_text({
-      characters = { agent = { poses = { standing = { art = { 'person' } } } } },
+      characters = characters_with_poses({}),
     }),
   })
 
