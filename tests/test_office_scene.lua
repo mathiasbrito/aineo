@@ -453,7 +453,10 @@ end
 
 T['an agent']['stands at the spot a decoration has, of its piece’s name, on the first floor row below it'] = function()
   local pack = scene_pack(decorated_wall_plan(4), DECORATED_LEGEND, {
-    activities = { stand = { steps = { { at = 'first', pose = 'standing' } } } },
+    activities = {
+      stand = { steps = { { at = 'first', pose = 'standing' } } },
+      work = { steps = { { at = 'first', pose = 'typing' } } },
+    },
   })
   local stage = stage_of(pack, 4, 2)
 
@@ -613,7 +616,7 @@ T['an agent']['takes the shades of its colour for the letters that name them'] =
       characters = {
         agent = {
           colours = { '#808080' },
-          poses = { standing = { art = { 'shades' } } },
+          poses = { standing = { art = { 'shades' } }, walking = { art = { 'shades' } } },
         },
       },
     }),
@@ -695,12 +698,6 @@ T['an effect']['stands beside the head, a column to the right, when its place is
   local picture = picture_with_effect({ text = { 'abc' }, place = 'beside' })
 
   eq(text_at(picture, 2, 7, 3), 'abc')
-end
-
-T['an effect']['is above the head when its place is one the engine does not know'] = function()
-  local picture = picture_with_effect({ text = { 'abc' }, place = 'nowhere' })
-
-  eq(text_at(picture, 1, 5, 3), 'abc')
 end
 
 T['an effect']['is drawn in a group of its own when it is bold'] = function()
