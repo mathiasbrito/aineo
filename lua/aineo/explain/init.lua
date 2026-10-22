@@ -4,6 +4,7 @@
 
 local answer = require('aineo.explain.answer')
 local kinds = require('aineo.explain.kinds')
+local kept = require('aineo.explain.kept')
 local look = require('aineo.explain.look')
 local marks = require('aineo.explain.marks')
 local request = require('aineo.explain.request')
@@ -20,6 +21,7 @@ look.keep_defined(kinds.ALL)
 ---@field range? integer[] the first and last lines to explain, from 1; every line when absent
 ---@field tools boolean whether Claude Code may read the project with read-only tools
 ---@field kind? 'explanations'|'issues' what to ask for; explanations when absent
+---@field fresh? boolean whether to ask again whatever answer is kept for the same request
 ---@field command string[] the words that run Claude Code, `claude.cmd`
 ---@field model string the model that explains
 ---@field timeout_ms integer how long the request may run
@@ -93,6 +95,7 @@ end
 ---@field path string
 ---@field first integer
 ---@field last integer
+---@field key string what the answer is kept under (`aineo.explain.kept`'s `key()`)
 ---@field tick integer
 ---@field lines string[] every line of the buffer, as sent
 
@@ -122,6 +125,12 @@ local function show_answer(asked, ended)
   end
   marks.clear(asked.buffer, asked.kind, asked.first, asked.last)
   marks.place(asked.buffer, asked.window, asked.kind, explanations)
+  kept.keep(
+    asked.buffer,
+    asked.key,
+    vim.list_slice(asked.lines, asked.first, asked.last),
+    explanations
+  )
   if #explanations == 0 and asked.kind == kinds.ISSUES then
     vim.notify('aineo: no potential issues found', vim.log.levels.INFO)
   end
@@ -149,6 +158,7 @@ local function start(explaining)
     path = vim.fs.relpath(folder, path),
     first = range[1],
     last = range[2],
+    key = kept.key(kind, explaining.tools, explaining.range),
     tick = vim.api.nvim_buf_get_changedtick(buffer),
     lines = lines,
   }
@@ -210,8 +220,50 @@ vim.api.nvim_create_autocmd('BufWipeout', {
   desc = 'aineo: stop the Claude Code of the requests for a buffer wiped out',
   callback = function(event)
     runs.stop_all_of(event.buf)
+    kept.forget(event.buf)
   end,
 })
+
+--- The words that ask again for the request `explaining` of `kind`, after
+--- `:Aineo explain`, each followed by a space.
+---
+---@param explaining aineo.explain.Request
+---@param kind aineo.explain.Kind
+---@return string
+local function words_that_ask_again(explaining, kind)
+  return ('%s%snew '):format(
+    kind == kinds.ISSUES and 'issues ' or '',
+    explaining.tools and 'tools ' or ''
+  )
+end
+
+--- Places the answer kept for `explaining`, of `kind`, in place of what its
+--- kind showed above the lines asked about, and tells the user, once, that
+--- it is the earlier answer and what asks again. Returns whether an answer
+--- was kept for it and the lines asked about read as they did.
+---
+---@param explaining aineo.explain.Request
+---@param kind aineo.explain.Kind
+---@return boolean
+local function place_kept(explaining, kind)
+  local buffer = explaining.buffer
+  local lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, false)
+  local range = explaining.range or { 1, #lines }
+  local key = kept.key(kind, explaining.tools, explaining.range)
+  local explanations = kept.recall(buffer, key, vim.list_slice(lines, range[1], range[2]))
+  if not explanations then
+    return false
+  end
+  marks.clear(buffer, kind, range[1], range[2])
+  marks.place(buffer, explaining.window, kind, explanations)
+  vim.notify(
+    ('aineo: the earlier answer, the code unchanged (:Aineo explain %sasks again)'):format(
+      words_that_ask_again(explaining, kind)
+    ),
+    vim.log.levels.INFO
+  )
+  return true
+end
 
 --- Explains the code of `explaining.buffer`, its whole text or the lines of
 --- `explaining.range`, or looks for its potential issues when
@@ -219,7 +271,10 @@ vim.api.nvim_create_autocmd('BufWipeout', {
 --- asked while a request of its own kind runs for that buffer, it stops that
 --- request alone and says so; asked for the whole buffer while it shows what
 --- its kind shows, it clears that alone. The Claude Code of every request
---- that runs is stopped when Neovim quits.
+--- that runs is stopped when Neovim quits. An answer that was shown is kept
+--- in memory (`aineo.explain.kept`): a request for the same kind, tools and
+--- lines while their text reads as it did places that answer again and starts
+--- no request. `explaining.fresh` asks again whatever is kept or shown.
 ---
 --- Raises an error naming `claude.cmd` when its command cannot be run.
 ---
@@ -233,11 +288,17 @@ function M.ask(explaining)
     vim.notify('aineo: explaining stopped', vim.log.levels.INFO)
     return
   end
+  if explaining.fresh then
+    start(explaining)
+    return
+  end
   if not explaining.range and marks.is_showing(buffer, kind) then
     marks.clear(buffer, kind)
     return
   end
-  start(explaining)
+  if not place_kept(explaining, kind) then
+    start(explaining)
+  end
 end
 
 --- Removes every explanation and every issue `buffer` shows, and stops the
