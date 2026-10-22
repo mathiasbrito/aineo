@@ -10,12 +10,12 @@ A regular packet of wave 21 (D26: the whole suite once before the push). aineo a
 - [[Projects/aineo]]
 - [[Planning/aineo — v1 agent console]] — D103, A544 (inside D103's row), T115; C1, C3, D26, D29
 - `lua/aineo/explain/` (new: `init.lua`, `request.lua`, `answer.lua`, `marks.lua`), `lua/aineo/entry/explaining.lua` (new), `plugin/aineo.lua`, `lua/aineo/config/init.lua`, `lua/aineo/health.lua`
-- `doc/aineo.txt` — `aineo-explain`, `:AineoExplain`, `<Plug>(aineo-explain)`, `<Plug>(aineo-explain-tools)`, `aineo-\v`, `aineo-\V`, `aineo-config-explain.model`, `aineo-config-explain.timeout_ms`, `hl-AineoExplain`; `README.md`
+- `doc/aineo.txt` — `aineo-explain`, `:Aineo-explain`, `<Plug>(aineo-explain)`, `<Plug>(aineo-explain-tools)`, `aineo-\v`, `aineo-\V`, `aineo-config-explain.model`, `aineo-config-explain.timeout_ms`, `hl-AineoExplain`; `README.md`
 - `tests/test_explain.lua`, `tests/test_entry_explain.lua` (new); `test_config.lua`, `test_plugin.lua`, `test_health.lua`, `test_doc.lua`; `tests/helpers/fake_claude.lua` (print mode)
 
 ## Task lines
 
-- [X] T115 Explain code (C1, C3; D103, A544, A548): a new home `aineo.explain` behind one entry point, requiring no other home (`request` builds the argv and the prompt, `answer` reads the result, `marks` places the virtual lines, the entry runs one `claude` process per buffer in the file's git top level and stops it at `explain.timeout_ms`, on a second request, on `clear()` and at `VimLeavePre`, and drops an answer for a buffer that changed); `aineo.entry`'s `explaining` module (the file check, the configuration at call time, the Visual range); `plugin/aineo.lua` maps `<Plug>(aineo-explain)` and `<Plug>(aineo-explain-tools)` and `\v`/`\V` in Normal and Visual mode and gives `:Aineo` a range and the subcommand `explain [tools|clear]` (A548; the other subcommands refuse a range); `explain.model` and `explain.timeout_ms` in `aineo.config`; the health check's prefix keys and an Explain code section; the fake `claude`'s print mode (synthetic answers); the help, the README and `AineoExplain` — done, PR to follow
+- [X] T115 Explain code (C1, C3; D103, A544, A548, A549): a new home `aineo.explain` behind one entry point, requiring no other home (`request` builds the argv and the prompt, `answer` reads the result, `marks` places the virtual lines, the entry runs one `claude` process per buffer in the file's git top level and stops it at `explain.timeout_ms`, on a second request, on `clear()` and at `VimLeavePre`, and drops an answer for a buffer that changed); `aineo.entry`'s `explaining` module (the file check, the configuration at call time, the Visual range); `plugin/aineo.lua` maps `<Plug>(aineo-explain)` and `<Plug>(aineo-explain-tools)` and `\v`/`\V` in Normal and Visual mode and gives `:Aineo` a range and the subcommand `explain [tools|clear]` (A548; the other subcommands refuse a range); `explain.model` and `explain.timeout_ms` in `aineo.config`; the health check's prefix keys and an Explain code section; the fake `claude`'s print mode (synthetic answers); the help, the README and `AineoExplain` — done, PR to follow
 
 ## What was done
 
@@ -68,7 +68,7 @@ Applied to the committed file, run on the test file named, restored (none left).
 
 Files run one at a time while working: `test_explain` 37 cases, `test_entry_explain` 10, `test_config` 25, `test_plugin` 5, `test_health` 24, `test_doc` 93 (the help written after its tags were seen failing: 11 cases red): green. `make lint` clean (StyLua, selene: 0 errors, 0 warnings). The deep-`require` check prints only the explain home's and `aineo.entry`'s own files.
 
-The whole suite once, on the tree pushed, on Neovim 0.12.5 on the host (D26, D29): `make test` printed `Total number of cases: 5704`, `Total number of groups: 157` and `Fails (1) and Notes (0)`. The one failure is `test_entry_panes | :Aineo pane | completes after a command modifier or a range as it does without one` with the argument `silent! Ain pane a`: see the spec conflict below. No load flake failed.
+The whole suite once, on the tree of the first push, before A548, on Neovim 0.12.5 on the host (D26, D29): `make test` printed `Total number of cases: 5704`, `Total number of groups: 157` and `Fails (1) and Notes (0)`. That count is for that tree: the fix rounds ran the files they touch, and the orchestrator runs the whole suite on the final head. The one failure is `test_entry_panes | :Aineo pane | completes after a command modifier or a range as it does without one` with the argument `silent! Ain pane a`: see the spec conflict below. No load flake failed.
 
 ## Fix round of PR #314 (A548)
 
@@ -78,6 +78,22 @@ The whole suite once, on the tree pushed, on Neovim 0.12.5 on the host (D26, D29
 - **Changed expectations, not loosened.** `tests/helpers/entry.lua`'s `USAGE` and `test_entry_panes`' `SUBCOMMANDS` gain `explain`; the `:Ain` case is unchanged and passes.
 - **Mutants.** The range refusal removed: 5 cases of `test_entry_explain` and the range case of `test_entry_send_selection`. `explain` dropped from the completed subcommands: 1 case of `test_entry_explain` (and the `SUBCOMMANDS` list of `test_entry_panes`). Both restored.
 - **Runs, each file on its own, no whole suite:** `test_entry_explain` 21 cases, `test_entry_panes`, `test_entry_send_selection`, `test_entry_find`, `test_entry_sessions`, `test_entry_new_session`, `test_plugin`, `test_doc`, `test_health`: green. `make lint` clean.
+
+## Fix round 2 of PR #314 (A549)
+
+The two reviews of PR #314 (attack; records and test integrity) ruled ten items (A549), each built test first and seen failing, in the order below. No whole suite: the orchestrator runs it on the final head.
+
+- **A549.1 and A549.2: the argv.** `request.arguments()` adds `--setting-sources user` after the model and takes from `claude.cmd` the words before its first flag (`program_of()`). The suites ran the fake as `nvim --clean -l fake_claude.lua`, which that cut would reduce to `nvim`; they now run it as `sh tests/helpers/fake_claude_print.sh`, a flagless wrapper that `exec`s the same fake. Red: the two argv cases (`--setting-sources user` missing), a new case with `--mcp-config`, `--settings`, `--verbose` and `--tools X` in `claude.cmd` (the flags reached the process), and the health line. The help, the README and the health check say it.
+- **A549.3: a write mid-request.** `asked` keeps the lines sent; the answer is dropped only when the tick moved and the lines differ. Red: the answer was dropped after a `:silent write` (the warning told).
+- **A549.4, A549.6, A549.7: the marks.** `fitting_bytes()` walks characters up to the width; NULs are taken out of a text as the answer is read; a virtual line's indent is capped at half the window's text width. Red: a 60 000-character word past 2.5 s; the NUL answer shown nowhere (E976 raised); the indent case drew one row per character.
+- **A549.5: an error result on a non-zero exit.** `answer.error_in()` reads it from stdout first; the fake now prints its answer file before exiting with the code when both are set. Red: the exit code told in place of `Not logged in`.
+- **A549.8: the folder.** `nearest_existing_folder()`. Red: `claude.cmd cannot be run: ENOENT … (cwd)` for a new file in a folder not made yet.
+- **A549.10: Visual `\V`.** One case, green on arrival; the records review's surviving mutant (the Visual `<Plug>` mapping passing no tools) now fails it.
+- **A549.9: records.** The pipes of the D103 and T115 rows escaped, `┊ ` and `┊ explaining…` written literally in D103, this note's links line, the whole-suite sentence above, and the README's health paragraph reflowed.
+
+Mutants, each applied, run on the file named, restored: A549.1 the `--setting-sources user` words removed (`test_explain`, 2 cases); A549.2 a `claude.cmd` flag kept (`test_explain`, the flags case); A549.3 the lines check removed (`test_explain`, the write case); the indent cap removed (1 case); the NUL strip removed (1 case); the Visual `\V` mapping passing no tools (`test_entry_explain`, the new case).
+
+Runs, each file on its own, on the head: `test_explain` 44 cases, `test_entry_explain` 22, `test_health`, `test_doc`, `test_entry_panes` and `test_plugin`: `Fails (0)`. `make lint` clean.
 
 ## Open threads
 
