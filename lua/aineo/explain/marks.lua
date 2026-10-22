@@ -366,8 +366,10 @@ local function place_again(buffer, record)
 end
 
 --- Forgets the explanations of `record` whose extmark is gone, which an edit
---- that deleted their line or a clear of lines took. Returns whether it
---- forgot any.
+--- that deleted their line or a clear of lines took, and, when the event loop
+--- has turned, tells the listeners (`on_change()`) if it forgot any, whoever
+--- it was that noticed: a reader of the marks, a redraw of the badge or the
+--- watch of the edits. Returns whether it forgot any.
 ---
 ---@param buffer integer
 ---@param record aineo.explain.Placed
@@ -381,6 +383,13 @@ local function forget_lost(buffer, record)
       record.marked[id] = nil
       forgot = true
     end
+  end
+  if forgot then
+    vim.schedule(function()
+      if vim.api.nvim_buf_is_valid(buffer) then
+        notify(buffer, record.window)
+      end
+    end)
   end
   return forgot
 end
@@ -398,10 +407,10 @@ local function holds_any(buffer)
   return false
 end
 
---- Tells the listeners (`on_change()`) of `buffer` that an edit lost
---- explanations, if it did, when the event loop has turned: the extmarks of
---- an edit are settled by then, and a buffer's text cannot change inside
---- the callback that sees the edit.
+--- Has the explanations of `buffer` that an edit lost forgotten
+--- (`forget_lost()`) when the event loop has turned: the extmarks of an edit
+--- are settled by then, and a buffer's text cannot change inside the
+--- callback that sees the edit.
 ---
 ---@param buffer integer
 local function settle_after_edit(buffer)
@@ -410,9 +419,7 @@ local function settle_after_edit(buffer)
       return
     end
     for _, record in pairs(placed[buffer] or {}) do
-      if forget_lost(buffer, record) then
-        notify(buffer, record.window)
-      end
+      forget_lost(buffer, record)
     end
   end)
 end

@@ -321,6 +321,23 @@ T['the badge']['is gone when edits delete the lines of the marked issues'] = fun
   )
 end
 
+T['the badge']['is gone when an edit deletes the marked line and a reader comes in the same tick'] = function()
+  find_issues_on({ 3 })
+  mark_issue_on(3)
+
+  child.lua([[
+    vim.api.nvim_buf_set_lines(0, 2, 3, false, {})
+    require('aineo.explain').jump(vim.api.nvim_get_current_win(), 'next', 1)
+  ]])
+
+  eq(
+    explained.badge_text_once(child, function(text)
+      return text == ''
+    end),
+    ''
+  )
+end
+
 T['the badge']['shows beside the requests that run, last and with no spinner of its own'] = function()
   find_issues_on({ 3 })
   mark_issue_on(3)
