@@ -29,6 +29,59 @@ local function open_handles(kind)
   return count
 end
 
+--- What the code under test reads of the files it opens: the paths it opens
+--- and the bytes it reads.
+---@class transcript_follow.Reads
+---@field opened string[]
+---@field bytes integer
+---@field stop fun() puts the functions back
+
+--- Counts what is opened and read through `vim.uv` from now until `stop()`.
+---
+---@return transcript_follow.Reads
+local function count_reads()
+  local reads = { opened = {}, bytes = 0 }
+  local open, read = vim.uv.fs_open, vim.uv.fs_read
+  vim.uv.fs_open = function(path, ...)
+    table.insert(reads.opened, path)
+    return open(path, ...)
+  end
+  vim.uv.fs_read = function(...)
+    local data, problem = read(...)
+    reads.bytes = reads.bytes + #(data or '')
+    return data, problem
+  end
+  reads.stop = function()
+    vim.uv.fs_open, vim.uv.fs_read = open, read
+  end
+  return reads
+end
+
+--- The followers the case started, which its end stops, whether or not the
+--- case did.
+---@type aineo.transcript.Follower[]
+local started_followers = {}
+
+--- A follower of the transcript file `path`, with the signals and the
+--- unreadable lines it reported so far.
+---
+---@param path string
+---@return table following { path, signals, unreadable, follower }
+local function follow_path(path)
+  local following = { path = path, signals = {}, unreadable = {} }
+  following.follower = assert(transcript.follow({
+    path = path,
+    on_signal = function(signal)
+      table.insert(following.signals, signal)
+    end,
+    on_unreadable_line = function(length)
+      table.insert(following.unreadable, length)
+    end,
+  }))
+  table.insert(started_followers, following.follower)
+  return following
+end
+
 --- A follower of a new transcript file in a directory of its own, with the
 --- signals and the unreadable lines it reported so far.
 ---
@@ -41,17 +94,7 @@ local function follow_new_transcript(initial_lines)
   else
     fake_transcript.append_text(path, '')
   end
-  local following = { path = path, signals = {}, unreadable = {} }
-  following.follower = assert(transcript.follow({
-    path = path,
-    on_signal = function(signal)
-      table.insert(following.signals, signal)
-    end,
-    on_unreadable_line = function(length)
-      table.insert(following.unreadable, length)
-    end,
-  }))
-  return following
+  return follow_path(path)
 end
 
 --- The kinds of `signals`, in order.
@@ -61,6 +104,26 @@ end
 local function kinds_of(signals)
   return vim.tbl_map(function(signal)
     return signal.kind
+  end, signals)
+end
+
+--- The ids of the calls of `signals`, in order.
+---
+---@param signals aineo.transcript.Signal[]
+---@return string[]
+local function calls_of(signals)
+  return vim.tbl_map(function(signal)
+    return signal.call
+  end, signals)
+end
+
+--- The signals of `signals` that are marked as replayed.
+---
+---@param signals aineo.transcript.Signal[]
+---@return aineo.transcript.Signal[]
+local function replayed_among(signals)
+  return vim.tbl_filter(function(signal)
+    return signal.replayed
   end, signals)
 end
 
@@ -83,6 +146,10 @@ end
 local T = MiniTest.new_set({
   hooks = {
     post_case = function()
+      for _, follower in ipairs(started_followers) do
+        follower.stop()
+      end
+      started_followers = {}
       vim.fn.delete(fixture.directory('office_transcript'), 'rf')
     end,
   },
@@ -207,6 +274,42 @@ T['follow()']['replays only the last 256 KiB of a long file, from a whole line']
   following.follower.stop()
 end
 
+T['follow()']['replays a last line longer than the tail window by reading further back'] = function()
+  local following = follow_new_transcript({
+    tool_line('before'),
+    tool_line('long', ('x'):rep(300 * 1024)),
+  })
+
+  eq(calls_of(following.signals), { 'before', 'long' })
+  eq(following.unreadable, {})
+  following.follower.stop()
+end
+
+T['follow()']['replays the lines before a last line too long to read, and reports that one'] = function()
+  local too_long = tool_line('too_long', ('x'):rep(1536 * 1024))
+
+  local following = follow_new_transcript({ tool_line('before'), too_long })
+
+  eq(calls_of(following.signals), { 'before' })
+  eq(following.unreadable, { #too_long })
+  following.follower.stop()
+end
+
+T['follow()']['follows from the end of a file whose last line is longer than the longest window'] = function()
+  local path = vim.fs.joinpath(fixture.directory('office_transcript'), 'session.jsonl')
+  fake_transcript.append(path, { tool_line('huge', ('x'):rep(5 * 1024 * 1024)) })
+  local following = follow_path(path)
+
+  fake_transcript.append(path, { tool_line('after_the_huge') })
+  vim.wait(PATIENCE_MS, function()
+    return #following.signals > 0
+  end, 10)
+
+  eq(calls_of(following.signals), { 'after_the_huge' })
+  eq(following.unreadable, {})
+  following.follower.stop()
+end
+
 T['follow()']['skips a line longer than a megabyte, reports it and goes on'] = function()
   local following = follow_new_transcript()
 
@@ -268,6 +371,138 @@ T['follow()']['replays a first line of the tail that starts on a line boundary']
   following.follower.stop()
 end
 
+T['follow()']['reads the lines of a file that was cut and written again, and those added after'] = function()
+  local following = follow_new_transcript({
+    tool_line('first', ('x'):rep(500)),
+    tool_line('second', ('x'):rep(500)),
+  })
+  local replayed = #following.signals
+
+  fake_transcript.rewrite(following.path, { tool_line('rewritten') })
+  vim.wait(PATIENCE_MS, function()
+    return #following.signals > replayed
+  end, 10)
+  fake_transcript.append(following.path, { tool_line('and_after') })
+  vim.wait(PATIENCE_MS, function()
+    return #following.signals > replayed + 1
+  end, 10)
+
+  eq(calls_of(vim.list_slice(following.signals, replayed + 1)), { 'rewritten', 'and_after' })
+  following.follower.stop()
+end
+
+T['follow()']['reads the lines of a file replaced by a longer one, and those added after'] = function()
+  local following = follow_new_transcript({ tool_line('first', ('x'):rep(500)) })
+  local replayed = #following.signals
+
+  fake_transcript.replace(following.path, { tool_line('swapped', ('y'):rep(2000)) })
+  vim.wait(PATIENCE_MS, function()
+    return #following.signals > replayed
+  end, 10)
+  fake_transcript.append(following.path, { tool_line('and_after') })
+  vim.wait(PATIENCE_MS, function()
+    return #following.signals > replayed + 1
+  end, 10)
+
+  eq(calls_of(vim.list_slice(following.signals, replayed + 1)), { 'swapped', 'and_after' })
+  eq(following.unreadable, {})
+  following.follower.stop()
+end
+
+T['follow()']['waits for a folder that is not there yet either'] = function()
+  local folder = vim.fs.joinpath(fixture.directory('office_transcript'), 'projects', 'later')
+  local following = follow_path(vim.fs.joinpath(folder, 'session.jsonl'))
+
+  vim.fn.mkdir(folder, 'p')
+  fake_transcript.append(following.path, { tool_line('in_a_new_folder') })
+  vim.wait(PATIENCE_MS, function()
+    return #following.signals > 0
+  end, 10)
+
+  eq(calls_of(following.signals), { 'in_a_new_folder' })
+  following.follower.stop()
+end
+
+T['follow()']['delivers a line only whole, once, with a line cut short after it'] = function()
+  local following = follow_new_transcript()
+  local cut = tool_line('cut_short')
+
+  fake_transcript.append_text(following.path, tool_line('whole') .. '\n' .. cut:sub(1, 30))
+  vim.wait(PATIENCE_MS, function()
+    return #following.signals > 0
+  end, 10)
+  vim.wait(QUIET_MS)
+  local before = calls_of(following.signals)
+  fake_transcript.append_text(following.path, cut:sub(31) .. '\n')
+  vim.wait(PATIENCE_MS, function()
+    return #following.signals > 1
+  end, 10)
+  vim.wait(QUIET_MS)
+
+  eq(before, { 'whole' })
+  eq(calls_of(following.signals), { 'whole', 'cut_short' })
+  eq(following.unreadable, {})
+  following.follower.stop()
+end
+
+T['follow()']['reads no more than the tail of a long file when it starts'] = function()
+  local lines = {}
+  for number = 1, 600 do
+    table.insert(lines, tool_line(('call%d'):format(number), ('x'):rep(1000)))
+  end
+  local path = vim.fs.joinpath(fixture.directory('office_transcript'), 'session.jsonl')
+  fake_transcript.append(path, lines)
+  local reads = count_reads()
+
+  local following = follow_path(path)
+  reads.stop()
+
+  eq(reads.bytes <= 256 * 1024 + 1, true)
+  following.follower.stop()
+end
+
+T['follow()']['finds appended lines by looking every half second where the system gives no events'] = function()
+  local new_fs_event = vim.uv.new_fs_event
+  vim.uv.new_fs_event = function()
+    return {
+      start = function()
+        return nil, 'ENOSYS'
+      end,
+      close = function() end,
+      is_closing = function()
+        return false
+      end,
+    }
+  end
+  local following = follow_new_transcript()
+  vim.uv.new_fs_event = new_fs_event
+
+  fake_transcript.append(following.path, { tool_line('found_by_looking') })
+  local found = vim.wait(PATIENCE_MS, function()
+    return #following.signals > 0
+  end, 10)
+
+  eq(found, true)
+  eq(calls_of(following.signals), { 'found_by_looking' })
+  following.follower.stop()
+end
+
+T['follow()']['reads nothing and holds no timer or watch once stopped'] = function()
+  local timers_before = open_handles('timer')
+  local following = follow_new_transcript({ tool_line('first') })
+  local reads = count_reads()
+
+  following.follower.stop()
+  fake_transcript.append(following.path, { tool_line('late') })
+  vim.wait(1200)
+  reads.stop()
+
+  eq(reads.opened, {})
+  eq(following.signals[#following.signals].call, 'first')
+  eq(open_handles('timer'), timers_before)
+  eq(open_handles('fs_event'), 0)
+end
+
 T['follow()']['stops delivering and releases its watch once stopped'] = function()
   local watches_before = open_handles('fs_event')
   local following = follow_new_transcript()
@@ -282,14 +517,21 @@ T['follow()']['stops delivering and releases its watch once stopped'] = function
   eq(open_handles('fs_event'), watches_before)
 end
 
-T['follow()']['says why it follows nothing when there is no file'] = function()
-  local follower, problem = transcript.follow({
-    path = vim.fs.joinpath(fixture.directory('office_transcript'), 'nothing.jsonl'),
-    on_signal = function() end,
-  })
+T['follow()']['waits for a file that is not there yet and delivers its lines, none of them a replay'] = function()
+  local path = vim.fs.joinpath(fixture.directory('office_transcript'), 'later.jsonl')
+  local following = follow_path(path)
+  vim.wait(QUIET_MS)
+  local before = #following.signals
 
-  eq(follower, nil)
-  eq(type(problem), 'string')
+  fake_transcript.append(path, RECORDED_TURN)
+  vim.wait(PATIENCE_MS, function()
+    return #following.signals >= 4
+  end, 10)
+
+  eq(before, 0)
+  eq(kinds_of(following.signals), { 'prompt', 'tool_started', 'tool_finished', 'turn_ended' })
+  eq(replayed_among(following.signals), {})
+  following.follower.stop()
 end
 
 return T
