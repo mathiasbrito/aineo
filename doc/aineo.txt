@@ -1818,8 +1818,8 @@ Explaining code ~
 buffer, a file's, or, in Visual mode, of the lines selected, and show each
 explanation as virtual lines right above the line it explains. That Claude
 Code is never the session's agent: aineo starts one `claude` process for the
-request, in the top of the repository holding the file (else the file's
-folder), and it ends with its answer. From
+request, in the top of the repository holding the file (else the nearest
+folder of the file that exists), and it ends with its answer. From
 `claude.cmd` it takes the program, the words before the first one that starts
 with `-`, and none of its flags (`--mcp-config`, `--settings`, `--verbose`
 and the others). Nothing of the session is used or kept: the request has no
