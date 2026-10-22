@@ -53,10 +53,14 @@ local SUBCOMMANDS = {
 }
 
 --- The words `:Aineo explain` takes, in the order it offers them: `tools`
---- lets Claude Code read the project with read-only tools, and `clear`
---- removes the buffer's explanations (`aineo.entry`'s
+--- lets Claude Code read the project with read-only tools, `issues` asks it
+--- for potential issues instead of explanations, and `clear` removes the
+--- buffer's explanations and issues (`aineo.entry`'s
 --- `clear_explanations()`).
-local EXPLAIN_WORDS = { 'tools', 'clear' }
+local EXPLAIN_WORDS = { 'tools', 'issues', 'clear' }
+
+--- The words `:Aineo explain issues` is followed by.
+local EXPLAIN_ISSUES_WORDS = { 'tools' }
 
 --- The words each subcommand that takes one is followed by, in the order
 --- `:Aineo` offers them: `pane` takes the pane to show, `run` takes `shell`,
@@ -148,8 +152,8 @@ end
 --- The words `:Aineo` offers after `typed`, the words before the one the
 --- cursor is in, the command's name first: its subcommands after the name
 --- alone, the words of a subcommand that takes them (`SUBCOMMAND_WORDS`)
---- after that subcommand, the running sessions of this Neovim's directory
---- after `claim` (`aineo.entry`'s `running_sessions_here()`), `new`,
+--- after that subcommand, `tools` after `explain issues`, the running
+--- sessions of this Neovim's directory after `claim` (`aineo.entry`'s `running_sessions_here()`), `new`,
 --- `close` and the numbers of the tab pages after `tab` (`tab_words()`), and
 --- nothing otherwise.
 ---
@@ -167,6 +171,9 @@ local function offered_words(typed)
   end
   if #typed == 2 then
     return SUBCOMMAND_WORDS[typed[2]] or {}
+  end
+  if #typed == 3 and typed[2] == RANGE_SUBCOMMAND and typed[3] == 'issues' then
+    return EXPLAIN_ISSUES_WORDS
   end
   return {}
 end
@@ -322,16 +329,24 @@ local PREFIX_KEYS = {
 }
 
 --- What explaining code asks for, by the words of its `<Plug>` mappings
---- after `aineo-`, in Normal mode and in Visual mode: the code alone, or
---- with read-only tools (`aineo.entry`'s `explain()`).
+--- after `aineo-`, in Normal mode and in Visual mode: explanations or
+--- potential issues, from the code alone or with read-only tools
+--- (`aineo.entry`'s `explain()`).
 local EXPLAIN_ORDERS = {
   explain = { tools = false },
   ['explain-tools'] = { tools = true },
+  ['explain-issues'] = { tools = false, kind = 'issues' },
+  ['explain-issues-tools'] = { tools = true, kind = 'issues' },
 }
 
 --- The keys that follow the prefix for each of `EXPLAIN_ORDERS`, the same
 --- in Normal mode and in Visual mode.
-local EXPLAIN_KEYS = { explain = 'v', ['explain-tools'] = 'V' }
+local EXPLAIN_KEYS = {
+  explain = 'v',
+  ['explain-tools'] = 'V',
+  ['explain-issues'] = 'vi',
+  ['explain-issues-tools'] = 'VI',
+}
 
 for words, order in pairs(EXPLAIN_ORDERS) do
   vim.keymap.set('n', ('<Plug>(aineo-%s)'):format(words), function()
@@ -642,22 +657,28 @@ local RANGE_REFUSAL = 'aineo: only :Aineo ' .. RANGE_SUBCOMMAND .. ' takes a ran
 
 --- Does what `:Aineo explain` does with `words`, the words after it, and
 --- `range`, the lines given, or `nil` for the whole buffer: `tools` explains
---- with read-only tools, `clear` removes the explanations, no word explains
---- the code alone. Any other word is told as `:Aineo` tells its usage.
+--- with read-only tools, `issues` asks for potential issues instead, alone or
+--- followed by `tools`, `clear` removes the explanations and the issues, no
+--- word explains the code alone. Any other word is told as `:Aineo` tells its
+--- usage.
 ---
 ---@param words string[]
 ---@param range integer[]|nil
 local function explain(words, range)
-  if #words > 1 or (words[1] ~= nil and not vim.tbl_contains(EXPLAIN_WORDS, words[1])) then
+  local kind = words[1] == 'issues' and 'issues' or nil
+  local after_kind = kind and vim.list_slice(words, 2) or words
+  local clears = not kind and #words == 1 and words[1] == 'clear'
+  local tools = after_kind[1] == 'tools'
+  if not clears and #after_kind > (tools and 1 or 0) then
     vim.notify(usage({ RANGE_SUBCOMMAND }), vim.log.levels.ERROR)
     return
   end
   run(function()
-    if words[1] == 'clear' then
+    if clears then
       require('aineo.entry').clear_explanations()
       return
     end
-    require('aineo.entry').explain({ tools = words[1] == 'tools', range = range })
+    require('aineo.entry').explain({ tools = tools, kind = kind, range = range })
   end)
 end
 
@@ -694,5 +715,5 @@ end, {
   range = true,
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [tools|clear]',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools]|clear',
 })
