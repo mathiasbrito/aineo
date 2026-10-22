@@ -529,6 +529,46 @@ function M.toggle_issue_marks(buffer, first, last)
   return found
 end
 
+--- The issues `buffer` shows that are marked, each with the line it is above
+--- and its text, in the order of the lines, then of the answer.
+---
+---@param buffer integer
+---@return { line: integer, text: string }[]
+function M.marked_issues(buffer)
+  local record = issues_of(buffer)
+  local found = {}
+  if not record then
+    return found
+  end
+  forget_lost(buffer, record)
+  for id in pairs(record.marked) do
+    table.insert(
+      found,
+      { id = id, line = line_of(buffer, record.kind, id), text = record.texts[id] }
+    )
+  end
+  table.sort(found, function(a, b)
+    return a.line < b.line or (a.line == b.line and a.id < b.id)
+  end)
+  return vim.tbl_map(function(issue)
+    return { line = issue.line, text = issue.text }
+  end, found)
+end
+
+--- Unmarks every issue `buffer` shows, which stay shown, and tells the
+--- listeners (`on_change()`) when any was marked.
+---
+---@param buffer integer
+function M.clear_issue_marks(buffer)
+  local record = issues_of(buffer)
+  if not record or next(record.marked) == nil then
+    return
+  end
+  record.marked = {}
+  place_again(buffer, record)
+  notify(buffer, record.window)
+end
+
 --- How many issues are marked among those placed for `window`, in any buffer.
 ---
 ---@param window integer

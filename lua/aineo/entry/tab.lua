@@ -1558,7 +1558,10 @@ local function make_tab(homes, key, callbacks)
   ---@type table<string, fun()>
   local actions = {
     send = function()
-      if not refuses_send_while_claimed() then
+      local sent_issues = require('aineo.entry.explaining').send_marked_issues(function(message)
+        return require('aineo.send').submit(message, send_target())
+      end)
+      if not sent_issues and not refuses_send_while_claimed() then
         require('aineo.send').send(send_target())
       end
     end,
