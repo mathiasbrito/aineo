@@ -80,4 +80,14 @@ function M.clear_explanations()
   require('aineo.explain').clear(vim.api.nvim_get_current_buf())
 end
 
+--- What `<Plug>(aineo-explain-next)` and `<Plug>(aineo-explain-previous)`
+--- do: move the current window's cursor to the next or the previous
+--- explanation or issue of its buffer, as many on as the count typed before
+--- the mapping says, one without (`aineo.explain`'s `jump()`).
+---
+---@param way 'next'|'previous'
+function M.jump(way)
+  require('aineo.explain').jump(vim.api.nvim_get_current_win(), way, vim.v.count1)
+end
+
 return M

@@ -4,6 +4,7 @@
 
 local answer = require('aineo.explain.answer')
 local kinds = require('aineo.explain.kinds')
+local jump = require('aineo.explain.jump')
 local kept = require('aineo.explain.kept')
 local look = require('aineo.explain.look')
 local marks = require('aineo.explain.marks')
@@ -14,6 +15,7 @@ local M = {}
 
 look.keep_defined(kinds.ALL)
 marks.keep_aligned()
+marks.on_change(jump.sync_keys)
 
 --- One request to explain code.
 ---@class aineo.explain.Request
@@ -311,6 +313,17 @@ function M.clear(buffer)
   for _, kind in ipairs(kinds.ALL) do
     marks.clear(buffer, kind)
   end
+end
+
+--- Moves the cursor of `window` to the line of the next or the previous
+--- explanation or issue of its buffer, `count` of them on, wrapping around
+--- (`aineo.explain.jump`'s `go()`), or tells the user there is none.
+---
+---@param window integer
+---@param way 'next'|'previous'
+---@param count integer at least 1
+function M.jump(window, way, count)
+  jump.go(window, way, count)
 end
 
 return M
