@@ -166,6 +166,28 @@ T['what the office shows']['has the main agent stand when the session has no tra
   eq(entry.messages(child), {})
 end
 
+T['what the office shows']['follows no transcript a session id with a path in it would name'] = function()
+  open_layout('office-traversal')
+  local directory = child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]])
+  vim.fn.mkdir(vim.fs.joinpath(directory, 'projects', 'office-test'), 'p')
+  fake_transcript.append(
+    vim.fs.joinpath(directory, 'projects', 'escape.jsonl'),
+    vim.list_slice(RECORDED_TURN, 1, 5)
+  )
+
+  child.lua([[
+    local tab = {
+      homes = { layout = { right_column_area = require('aineo.layout').right_column_area } },
+      session_id = function()
+        return '../escape'
+      end,
+    }
+    require('aineo.entry.office').show(tab)
+  ]])
+
+  eq(office_cells.is_standing(child), true)
+end
+
 T['without an aineo tab'] = MiniTest.new_set()
 
 T['without an aineo tab']['says there is no tab to show the office in, and shows none'] = function()
