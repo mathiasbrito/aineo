@@ -51,6 +51,7 @@ local TWIN_KEYS = {
   { 'f', '<Plug>(aineo-find)' },
   { 'z', '<Plug>(aineo-zoom)' },
   { 'Z', '<Plug>(aineo-zoom-full)' },
+  { 'O', '<Plug>(aineo-office)' },
 }
 
 local child = MiniTest.new_child_neovim()

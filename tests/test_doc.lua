@@ -157,6 +157,7 @@ local TAGS = {
   'hl-AineoExplainIssueGutterFill',
   'hl-AineoExplainIssueNr',
   'aineo-find',
+  'aineo-office',
   'aineo-tabline',
   'aineo-layout',
   'aineo-panes',
