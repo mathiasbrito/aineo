@@ -117,33 +117,38 @@ local function lines_from_marker_line(text)
   return vim.list_slice(lines, marker_line_number), marker_line_number
 end
 
---- Tells the rows whose marker column is neither a space nor `~`, and the
---- rows that are of another width than the first.
+--- Tells the rows whose marker column is neither a space nor `~`.
 ---
 ---@param rows string[] the rows as written, marker column first
 ---@param first_line integer the file line of `rows[1]`
 ---@param report aineo.office_pack.Report
-local function check_rows(rows, first_line, report)
-  local width = math.max(#rows[1] - 1, 0)
+local function check_markers(rows, first_line, report)
   for index, row in ipairs(rows) do
-    local line = first_line + index - 1
     local marker = row:sub(1, 1)
     if marker ~= ' ' and marker ~= REPEAT_MARK and row ~= '' then
-      report(line, 'a row starts with a space, or with ~ when it repeats')
-    end
-    local row_width = math.max(#row - 1, 0)
-    if row_width ~= width then
-      report(line, ('this row is %d cells wide, and the first row is %d'):format(row_width, width))
+      report(first_line + index - 1, 'a row starts with a space, or with ~ when it repeats')
     end
   end
+end
+
+--- The width in cells of the widest of `rows`, written with the marker column.
+---
+---@param rows string[]
+---@return integer
+local function widest_of(rows)
+  local widest = 0
+  for _, row in ipairs(rows) do
+    widest = math.max(widest, #row - 1)
+  end
+  return widest
 end
 
 --- Reads the plan `text`, telling every problem to `report` with its line.
 ---
 --- `nil` when the text holds no marker line or no row, or the plan is over
---- 400 cells wide or 200 rows tall. Rows of another width than the first are
---- told and padded; a marker line or rows that mark more than one block to
---- repeat are told, and none repeats.
+--- 400 cells wide or 200 rows tall. A row shorter than the widest is read as
+--- if it ended in spaces, which an editor may have taken off; a marker line or
+--- rows that mark more than one block to repeat are told, and none repeats.
 ---
 ---@param text string
 ---@param report aineo.office_pack.Report
@@ -160,11 +165,11 @@ function M.parse(text, report)
     report(first_row_line, ('the plan is taller than %d rows'):format(MAX_HEIGHT))
     return nil
   end
-  if #lines[1] - 1 > MAX_WIDTH then
+  if widest_of(lines) > MAX_WIDTH then
     report(first_row_line, ('the plan is wider than %d cells'):format(MAX_WIDTH))
     return nil
   end
-  check_rows(lines, first_row_line, report)
+  check_markers(lines, first_row_line, report)
   local repeated_columns = the_only_block(
     blocks_of(vim.list_slice(bytes_of(marker_line), 2)),
     function()

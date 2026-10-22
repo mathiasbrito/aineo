@@ -280,9 +280,13 @@ local WRONG_FIELDS = {
   },
   {
     'a legend facing that is neither left nor right',
-    { floor = { legend = { D = { piece = 'person' }, s = { spot = 'desk', facing = 'up' } } } },
+    {
+      floor = {
+        legend = { D = { piece = 'person' }, s = { spot = 'desk' }, x = { facing = 'up' } },
+      },
+    },
     'floor',
-    'floor.legend.s.facing must be one of left, right',
+    'floor.legend.x.facing must be one of left, right',
   },
   {
     'a legend width that is not a count',
@@ -630,7 +634,11 @@ end
 
 T['pack.lua']['of an agent without a walking pose is told'] = function()
   local told, text = pack_problems({
-    characters = { agent = { poses = { standing = { art = { 'person' } } } } },
+    characters = {
+      agent = {
+        poses = { standing = { art = { 'person' } }, typing = { art = { 'person' } } },
+      },
+    },
   })
 
   eq(told, { { files.line_of(text, 'characters'), 'characters.agent has no walking pose' } })

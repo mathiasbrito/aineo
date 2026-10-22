@@ -1,0 +1,8 @@
+about: A plain desk; the agent sits behind it.
+colours: W = wood, D = dark_wood
+area name: 1, 2, 10 x 2
+---
+WWWWWWWWWWWW
+DDDDDDDDDDDD
+.D........D.
+.D........D.

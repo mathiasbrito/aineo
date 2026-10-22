@@ -64,6 +64,12 @@ T['floor plans']['say the columns that repeat, counted from 1 in the plan'] = fu
   eq(floor_of('  ~~\n ####\n D..#\n').repeated_columns, { first = 2, last = 3 })
 end
 
+T['floor plans']['read a row shorter than the widest as ending in spaces'] = function()
+  local floor = floor_of(' \n .....\n ..\n .\n')
+
+  eq(floor.rows, { '.....', '..   ', '.    ' })
+end
+
 T['floor plans']['say no columns repeat when the marker line marks none'] = function()
   eq(floor_of('    \n ####\n D..#\n').repeated_columns, nil)
 end
@@ -100,12 +106,6 @@ local WRONG_PLANS = {
     ' \n ####\n~D..#\n D..#\n~D..#\n',
     5,
     'the rows that repeat are one block',
-  },
-  {
-    'a row of another width',
-    ' \n .....\n ...\n .....\n',
-    3,
-    'this row is 3 cells wide, and the first row is 5',
   },
   {
     'a letter the legend does not have',

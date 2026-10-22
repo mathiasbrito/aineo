@@ -182,12 +182,12 @@ end
 --- Tells, at the line of `characters`, what is missing from the agent: poses
 --- named `standing` and `walking`, which the engine uses between steps.
 ---
----@param characters table<string, aineo.office_pack.Character>
+---@param pack { agent: aineo.office_pack.Character|nil }
 ---@param context aineo.office_pack.SchemaContext
 ---@param line integer|nil the line `characters` is on
 ---@return boolean ok
-function M.check_agent(characters, context, line)
-  local agent = characters.agent
+function M.check_agent(pack, context, line)
+  local agent = pack.agent
   if not agent then
     context.report(line, 'characters has no agent')
     return false
