@@ -7,10 +7,19 @@
 ---
 --- What is read: `return` and a table; tables with named fields (`name = …`),
 --- keys in brackets (`['*'] = …`) and list items, separated by `,` or `;`;
---- strings in single or double quotes with the escapes `\n \t \r \\ \" \'`;
---- decimal numbers; `true` and `false`; and `--` comments to the end of a line.
+--- strings in single or double quotes with the escapes `\n \t \r \\ \" \'`,
+--- and long strings (`[[ … ]]`); decimal numbers; `true` and `false`; and
+--- comments, `--` to the end of a line and `--[[ … ]]` blocks. What is read
+--- means what Lua would make of it: a list item beats a key of its number.
+
+local long_bracket = require('aineo.office_pack.long_bracket')
+local reader_module = require('aineo.office_pack.reader')
 
 local M = {}
+
+local refuse = reader_module.refuse
+local current = reader_module.current
+local advance = reader_module.advance
 
 --- The longest text the reader reads.
 local MAX_BYTES = 256 * 1024
@@ -20,38 +29,10 @@ local MAX_DEPTH = 32
 
 local ESCAPES = { n = '\n', t = '\t', r = '\r', ['\\'] = '\\', ['"'] = '"', ["'"] = "'" }
 
---- Where the reader is in the text.
----@class aineo.office_pack.Reader
----@field text string
----@field position integer the next character to read, from 1
----@field line integer the line that character is on
+---@class aineo.office_pack.LiteralReader : aineo.office_pack.Reader
+---@field lines table<table, table<string|integer, integer>> the line each entry of each table starts on
 
---- Stops the reading with a problem at the reader's line, raised as the text
---- `line <n>: <message>`. Caught by `M.parse()`.
----
----@param reader aineo.office_pack.Reader
----@param message string
-local function refuse(reader, message)
-  error(('line %d: %s'):format(reader.line, message), 0)
-end
-
---- The character the reader is at, or an empty string at the end of the text.
----
----@param reader aineo.office_pack.Reader
----@return string
-local function current(reader)
-  return reader.text:sub(reader.position, reader.position)
-end
-
----@param reader aineo.office_pack.Reader
-local function advance(reader)
-  if current(reader) == '\n' then
-    reader.line = reader.line + 1
-  end
-  reader.position = reader.position + 1
-end
-
---- Moves past white space and `--` comments.
+--- Moves past white space and comments.
 ---
 ---@param reader aineo.office_pack.Reader
 local function skip_blank(reader)
@@ -60,8 +41,14 @@ local function skip_blank(reader)
     if character:match('%s') then
       advance(reader)
     elseif reader.text:sub(reader.position, reader.position + 1) == '--' then
-      while current(reader) ~= '' and current(reader) ~= '\n' do
-        advance(reader)
+      reader.position = reader.position + 2
+      local level = long_bracket.level_at(reader)
+      if level then
+        long_bracket.read(reader, level, 'the comment is not closed')
+      else
+        while current(reader) ~= '' and current(reader) ~= '\n' do
+          advance(reader)
+        end
       end
     else
       return
@@ -120,13 +107,29 @@ local function read_string(reader)
   return table.concat(characters)
 end
 
+--- Reads the long string the reader is at.
+---
+---@param reader aineo.office_pack.Reader
+---@param level integer
+---@return string
+local function read_long_string(reader, level)
+  return long_bracket.read(reader, level, 'the string is not closed')
+end
+
+--- Refuses a number that is not finite: the digits of more than 308 places
+--- are not a number Lua reads, but infinity.
+---
 ---@param reader aineo.office_pack.Reader
 ---@return number
 local function read_number(reader)
   local text = reader.text:match('^-?%d+%.%d+', reader.position)
     or reader.text:match('^-?%d+', reader.position)
+  local number = tonumber(text)
+  if number == math.huge or number == -math.huge then
+    refuse(reader, 'the number is too large')
+  end
   reader.position = reader.position + #text
-  return tonumber(text)
+  return number
 end
 
 local read_value
@@ -182,15 +185,27 @@ local function read_field_name(reader)
   return nil
 end
 
---- Reads one entry of a table into `table_value`: a field, a field with its
---- key in brackets, or a list item.
+--- Whether the reader is at the key of a field written in brackets, rather
+--- than at a long string.
 ---
 ---@param reader aineo.office_pack.Reader
+---@return boolean
+local function is_at_bracketed_key(reader)
+  return current(reader) == '[' and long_bracket.level_at(reader) == nil
+end
+
+--- Reads one entry of a table: a field, a field with its key in brackets,
+--- or a list item. A field goes into `table_value`, a list item into `items`;
+--- the line the entry starts on goes into `lines`.
+---
+---@param reader aineo.office_pack.LiteralReader
 ---@param table_value table
+---@param items any[]
 ---@param depth integer
-local function read_entry(reader, table_value, depth)
+local function read_entry(reader, table_value, items, depth)
+  local line = reader.line
   local key
-  if current(reader) == '[' then
+  if is_at_bracketed_key(reader) then
     key = read_bracketed_key(reader)
   else
     key = read_field_name(reader)
@@ -199,12 +214,14 @@ local function read_entry(reader, table_value, depth)
   local value = read_value(reader, depth)
   if key ~= nil then
     table_value[key] = value
+    reader.lines[table_value][key] = line
   else
-    table.insert(table_value, value)
+    table.insert(items, value)
+    reader.lines[table_value][#items] = line
   end
 end
 
----@param reader aineo.office_pack.Reader
+---@param reader aineo.office_pack.LiteralReader
 ---@param depth integer how many tables are open, this one included
 ---@return table
 local function read_table(reader, depth)
@@ -213,17 +230,22 @@ local function read_table(reader, depth)
   end
   advance(reader)
   local table_value = {}
+  local items = {}
+  reader.lines[table_value] = {}
   while true do
     skip_blank(reader)
     local character = current(reader)
     if character == '}' then
       advance(reader)
+      for index, item in ipairs(items) do
+        table_value[index] = item
+      end
       return table_value
     end
     if character == '' then
       refuse(reader, 'the table is not closed')
     end
-    read_entry(reader, table_value, depth)
+    read_entry(reader, table_value, items, depth)
     skip_blank(reader)
     local separator = current(reader)
     if separator == ',' or separator == ';' then
@@ -239,15 +261,18 @@ end
 
 --- Reads the value the reader is at: a table, a string, a number, `true` or `false`.
 ---
----@param reader aineo.office_pack.Reader
+---@param reader aineo.office_pack.LiteralReader
 ---@param depth integer how many tables are open
 ---@return any
 function read_value(reader, depth)
   local character = current(reader)
+  local long_string_level = long_bracket.level_at(reader)
   if character == '{' then
     return read_table(reader, depth + 1)
   elseif character == '"' or character == "'" then
     return read_string(reader)
+  elseif long_string_level then
+    return read_long_string(reader, long_string_level)
   elseif
     character:match('%d') or (character == '-' and reader.text:match('^-%d', reader.position))
   then
@@ -261,7 +286,7 @@ function read_value(reader, depth)
   return refuse_value(reader)
 end
 
----@param reader aineo.office_pack.Reader
+---@param reader aineo.office_pack.LiteralReader
 ---@return table
 local function read_pack_text(reader)
   skip_blank(reader)
@@ -282,21 +307,24 @@ end
 
 --- Reads `text`, a Lua table literal, as data, and never runs it.
 ---
---- Gives the table, or `nil` and the problem — `line <n>: <what is wrong>`
---- for text that is not data, or a problem without a line for text over
---- 256 KiB.
+--- Gives the table, `nil` for the problem, and the line each entry of each
+--- table starts on: `lines[table][key]`, a list item's key its index. Gives
+--- `nil` and the problem instead — `line <n>: <what is wrong>` for text that
+--- is not data, or a problem without a line for text over 256 KiB.
 ---
 ---@param text string
 ---@return table|nil value
 ---@return string|nil problem
+---@return table<table, table<string|integer, integer>>|nil lines
 function M.parse(text)
   if #text > MAX_BYTES then
     return nil, 'the text is longer than 256 KiB'
   end
-  local reader = { text = text, position = 1, line = 1 }
+  local reader = reader_module.new(text)
+  reader.lines = {}
   local read, result = pcall(read_pack_text, reader)
   if read then
-    return result
+    return result, nil, reader.lines
   end
   if not result:match('^line %d+: ') then
     error(result, 0)
