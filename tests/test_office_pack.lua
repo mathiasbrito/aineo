@@ -415,8 +415,9 @@ T['load()']['says a folder named like a file is no file'] = function()
     ['floor.txt/inner'] = 'x',
   })
 
-  local pack, problem = load_pack('small', { folder })
+  local raised, pack, problem = pcall(load_pack, 'small', { folder })
 
+  eq(raised, true)
   eq(pack, nil)
   eq(problem, 'floor.txt: the file is missing')
 end
