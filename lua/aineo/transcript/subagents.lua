@@ -121,6 +121,9 @@ function M.follow_subagents(options)
   ---@param past boolean
   local function arrive(id, past)
     options.on_signal({ agent = id, kind = 'subagent_started', replayed = past or nil })
+    if stopped then
+      return
+    end
     running_count = running_count + 1
     running[id] = file_follower.follow_file({
       path = transcript_path(id),

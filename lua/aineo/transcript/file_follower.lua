@@ -121,15 +121,22 @@ function M.follow_file(options)
 
   --- Delivers the signals of one whole line, marked `replayed` when asked; a
   --- line that is not JSON or is too long is reported by its length instead.
+  --- Delivers nothing once the follower is stopped, whatever a callback did.
   ---
   ---@param line string
   ---@param replayed boolean
   local function deliver_line(line, replayed)
+    if stopped then
+      return
+    end
     local line_signals = #line < MAX_LINE_BYTES and signals.signals_of_line(line, options.agent)
     if not line_signals and options.on_unreadable_line then
       options.on_unreadable_line(#line)
     end
     for _, signal in ipairs(line_signals or {}) do
+      if stopped then
+        return
+      end
       signal.replayed = replayed or nil
       options.on_signal(signal)
     end
