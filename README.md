@@ -166,6 +166,7 @@ resumes it.
 | `\S` | lists Claude Code's sessions for the folder and opens the one you pick |
 | `\N` | starts a new Claude Code session |
 | `\v`, `\V` | explain the code of the file, or in Visual mode of the selected lines: `\v` hands Claude the code alone, `\V` lets it read the project too |
+| `\vi`, `\VI` | the same, asking for potential issues instead of explanations (`\vi` the code alone, `\VI` with the project readable) |
 | `\z` | zooms the window of the right column the cursor is in, and gives the heights back when pressed again |
 | `\Z` | zooms the window the cursor is in to the whole tab page, and gives the sizes back when pressed again |
 
@@ -399,13 +400,36 @@ before the first flag, none of its flags), no MCP server, none of aineo's
 settings, no session kept and only your own Claude Code settings, never the
 project's (`--setting-sources user`), and it ends with the answer.
 
-`\v` or `\V` again in Normal mode clears the explanations; while a request
-runs they stop it. `:Aineo explain [tools]` with a range, and `:Aineo explain
-clear`, do the same. The model is `explain.model`, `'sonnet'` by default, and
-a request is stopped after `explain.timeout_ms`. If the text of the buffer changes while
-Claude Code explains it (a write changes nothing), nothing is shown: ask again. The explanations show
-in `AineoExplain`, linked to `Comment`. Each request is a model call, billed
-as your Claude Code usage is.
+`\v` or `\V` again in Normal mode clears the explanations; while an
+explaining request runs they stop it. `\vi` and `\VI` ask the same Claude Code
+for the potential issues of the code instead (bugs, unhandled cases, error
+handling gaps, security or performance risks, no remarks on style), shown the
+same way in the accent of `DiagnosticWarn` with the label `issue`. Explanations
+and issues are shown together, and each key toggles its own kind; a request of
+each kind may run at once, and a key stops the request of its own kind alone.
+Since `\v` starts `\vi`, Neovim waits `'timeoutlen'` for a following `i` before
+it runs `\v`. `:Aineo explain [issues] [tools]` with a range, and `:Aineo
+explain clear`, do the same. The model is `explain.model`, `'sonnet'` by
+default, and a request is stopped after `explain.timeout_ms`. If the text of
+the buffer changes while Claude Code works on it (a write changes nothing),
+nothing is shown: ask again.
+
+An explanation shows as a band tinted from your colour scheme, its text italic
+in the accent of `DiagnosticInfo`, starting at the explained line's indent,
+with a `▎` and the label `expl` in the number column and the line's number in
+the accent. The groups are `AineoExplain`, `AineoExplainGutter`,
+`AineoExplainGutterFill` and `AineoExplainNr`, and `AineoExplainIssue`,
+`AineoExplainIssueGutter`, `AineoExplainIssueGutterFill` and
+`AineoExplainIssueNr` for issues; define one yourself and aineo keeps it.
+
+While a request runs, a badge in the top right corner of its window shows a
+spinner, what it does and the seconds it has run, and the `┊` line above the
+first line asked for spins too. Both go when the request ends, however it ends.
+
+Every answer that was shown is kept in memory. Asking again for the same kind,
+tools and lines while their text is unchanged places the kept answer at once and
+starts no request; `:Aineo explain [issues] [tools] new` asks again. Each
+request is a model call, billed as your Claude Code usage is.
 
 ## Run your services
 

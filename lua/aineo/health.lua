@@ -350,8 +350,12 @@ local PREFIX_KEYS = {
   { key = 's', plug = '<Plug>(aineo-send)', mode = 'x' },
   { key = 'v', plug = '<Plug>(aineo-explain)', mode = 'n' },
   { key = 'V', plug = '<Plug>(aineo-explain-tools)', mode = 'n' },
+  { key = 'vi', plug = '<Plug>(aineo-explain-issues)', mode = 'n' },
+  { key = 'VI', plug = '<Plug>(aineo-explain-issues-tools)', mode = 'n' },
   { key = 'v', plug = '<Plug>(aineo-explain)', mode = 'x' },
   { key = 'V', plug = '<Plug>(aineo-explain-tools)', mode = 'x' },
+  { key = 'vi', plug = '<Plug>(aineo-explain-issues)', mode = 'x' },
+  { key = 'VI', plug = '<Plug>(aineo-explain-issues-tools)', mode = 'x' },
 }
 
 --- The prefix keys that have no twin in Terminal and Insert mode, by their
@@ -361,6 +365,8 @@ local HAS_NO_TWIN = {
   ['<Plug>(aineo-send)'] = true,
   ['<Plug>(aineo-explain)'] = true,
   ['<Plug>(aineo-explain-tools)'] = true,
+  ['<Plug>(aineo-explain-issues)'] = true,
+  ['<Plug>(aineo-explain-issues-tools)'] = true,
 }
 
 --- The modes a twin is mapped in, with how the Terminal prefix mappings
@@ -954,7 +960,7 @@ local function check_find(resolved_config)
   end
 end
 
---- Reports how `\v` and `\V` explain code with `resolved_config`'s
+--- Reports how `\v`, `\V`, `\vi` and `\VI` ask about code with `resolved_config`'s
 --- `explain.model` and `explain.timeout_ms`, and what the Claude Code they
 --- start may use. Nothing while the configuration is wrong.
 ---
@@ -972,6 +978,9 @@ local function check_explain(resolved_config)
   )
   vim.health.info(
     "\\v hands it the code alone, with no tool; \\V lets it read the project with Read, Grep and Glob, without asking; it gets no other tool, no MCP server and no settings of aineo, loads your own settings but never the project's (--setting-sources user), and asks no permission"
+  )
+  vim.health.info(
+    "\\vi and \\VI ask the same Claude Code for potential issues instead of explanations, \\vi with the code alone and \\VI with the read-only tools; \\v waits for 'timeoutlen' for a following i, and \\V for a following I"
   )
 end
 

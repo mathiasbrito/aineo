@@ -1836,32 +1836,114 @@ and no other tool. The prompt gives the file's path from that folder, its
 included, each line numbered. Claude Code answers a list of line numbers and
 explanations, each tied to the first line it explains, and ends.
 
-An explanation shows above its line, indented as that line (by half the
-window's text width at most), each row after `┊ `, wrapped at the window's
-text width less that indent, in
-|hl-AineoExplain|. The marks move with the edits made to the buffer and
-vanish with a line deleted. While a request runs, one virtual line above the
-first line asked for says `┊ explaining…`. A request for some lines replaces
-the explanations above those lines alone. Lines outside the range or the
-buffer, empty texts and repeats are dropped, and several explanations of one
-line are joined in order.
+An explanation shows above its line as a band of the window's width. A `▎`
+stands beside each of its rows in the number column, and the first row's
+carries the label `expl` (cut to the cells the number column has, `ex` in four
+and nothing in fewer than four, and there is no `▎` where the window shows no
+number, sign or fold column). The
+band starts at the indent of the explained line (by half the window's text
+width at most), each row after `┊ `, wrapped at the window's text width less
+that indent, in |hl-AineoExplain|. The number of the explained line shows in
+|hl-AineoExplainNr|. The marks move with the edits made to the buffer and
+vanish with a line deleted. When the window gets another number, sign or fold
+column (a sign appears, 'number' is toggled), the bands are placed again for
+the new gutter. A request for some lines replaces the
+explanations above those lines alone. Lines outside the range or the buffer,
+empty texts and repeats are dropped, and several explanations of one line are
+joined in order.
 
-Pressed in Normal mode on a buffer that shows explanations, `\v` and `\V`
-clear them. Pressed while a request runs, they stop it and tell you. A request
-that outlasts `explain.timeout_ms` is stopped and you are told once, as you
-are when Claude Code exits with a code other than 0, answers an error, or
-answers nothing aineo can read: nothing is shown then. When the text of the
-buffer changed while the request ran (a write of it changes nothing),
-nothing is shown and you are told to ask again. The
-Claude Code of every request that runs is stopped when Neovim quits. The
-buffer must hold a file: in aineo's own panes, `\v` and `\V` tell you so
-(|:Aineo-explain|). The model is `explain.model`
-(|aineo-config-explain.model|). Each request is a model call, billed as
-Claude Code's own usage is.
+`\vi` and `\VI` ask the same Claude Code, in the same way, for the potential
+issues of the code instead of explanations: bugs, unhandled cases, gaps in
+error handling, and security or performance risks, each tied to the first line
+it concerns, briefly and with no remarks on style. `\vi` hands it the code
+alone, `\VI` lets it read the project with `Read`, `Grep` and `Glob`; in
+Visual mode they ask about the lines selected. When it finds none, you are
+told once: `aineo: no potential issues found`. Issues show as explanations do,
+in a namespace of their own and in the look of |hl-AineoExplainIssue|, the
+accent being the foreground of |hl-DiagnosticWarn|, `#e5c07b` without one, and
+the label `issue`. Since `\v` and `\V` start `\vi` and `\VI`, Neovim waits
+'timeoutlen' for a following `i` or `I` before it runs them.
+
+Explanations and issues are shown together on a buffer, and each key toggles
+its own kind: pressed in Normal mode on a buffer that shows what the key asks
+for, `\v` and `\V` clear the explanations, `\vi` and `\VI` the issues. A
+buffer may have one request of each kind running at once: `\vi` while `\v` is
+waiting for its answer starts the issues request beside it, and the reverse.
+Pressed while a request of its own kind runs for the buffer, a key stops that
+request alone and tells you; the other kind's goes on. On a line both kinds
+show, the explanation rows sit above the issue rows, whichever answer came
+first (not on an empty line, where the one that came first sits above).
+
+While a request runs, one virtual line above the first line asked for, in the
+same look without the label, says `┊ ⠋ explaining…` (`┊ ⠋ looking for
+issues…`), its spinner advancing every 100 ms, and a badge in the top right
+corner of the window the request was made in says ` ⠋ explaining… 12s `: the
+seconds it has run. A badge lists the requests that run for its window, in the
+order they started, joined by ` · `
+(` ⠋ explaining… 12s · looking for issues… 3s `); a part leaves when its
+request ends, and the badge closes with the last. The badge, the line and the
+timers end with the request, whichever way it ends: its answer, a key that
+stops it, `explain.timeout_ms`, an error, the buffer wiped out,
+`:Aineo explain clear`, or Neovim quitting; a window closed takes its badge
+and the request goes on.
+
+Every answer that was shown is kept in memory, for the buffer, by its kind
+(explanations or issues), whether it had tools, the lines asked about (the
+whole buffer, or the lines of a range) and the text of those lines. Asking
+again for the same while the text of those lines reads as it did (a write of
+the buffer changes nothing) starts no request: the kept answer is placed at
+once, wrapped for the window it is placed in now, and you are told once
+`aineo: the earlier answer, the code unchanged (:Aineo explain new asks
+again)`. Hide an answer with the key again and the key shows it again. Another
+kind, tools or lines start a request; so does a change in the text of the
+lines, which drops the answer kept. `:Aineo explain new` asks again whatever
+is kept, and keeps the new answer in its place (|:Aineo-explain|). A buffer
+wiped out forgets what was kept; nothing is kept on disk.
+
+A request that outlasts `explain.timeout_ms` is stopped and you are told once,
+as you are when Claude Code exits with a code other than 0, answers an error,
+or answers nothing aineo can read: nothing is shown then. When the text of the
+buffer changed while the request ran (a write of it changes nothing), nothing
+is shown and you are told to ask again. The Claude Code of every request that
+runs is stopped when Neovim quits. The buffer must hold a file: in aineo's own
+panes, `\v`, `\V`, `\vi` and `\VI` tell you so (|:Aineo-explain|). The model
+is `explain.model` (|aineo-config-explain.model|). Each request is a model
+call, billed as Claude Code's own usage is.
+
+The groups are computed from your colour scheme when aineo first needs them
+and again after every `:colorscheme` and every change of 'background', and a
+group you define yourself is kept, as a default too. The accent is the
+foreground of |hl-DiagnosticInfo|, `#61afef` without one. For a terminal
+without true colour the groups carry the accent's `ctermfg`, the `ctermbg` of
+|hl-LineNr| in the number column, and the `ctermbg` of |hl-CursorLine| behind
+the text, none when the colour scheme has none.
 
                                                              *hl-AineoExplain*
-AineoExplain		The virtual lines of an explanation, and the one that
-			says a request is explaining, linked to |hl-Comment|.
+AineoExplain		The text of an explanation, and the band behind its
+			rows, and the one that says a request is explaining:
+			the accent, italic, over the background of |hl-Normal|
+			blended 12% toward the accent (`#1e1e2e` when `Normal`
+			has none and 'background' is `dark`, `#ffffff` when it
+			is `light`).
+                                                      *hl-AineoExplainGutter*
+AineoExplainGutter	The `▎` and the label in the number column: the
+			accent over the background of |hl-LineNr|.
+                                                  *hl-AineoExplainGutterFill*
+AineoExplainGutterFill	The rest of the number column of a row: the
+			background of |hl-LineNr|.
+                                                          *hl-AineoExplainNr*
+AineoExplainNr		The number of an explained line: the accent, bold.
+                                                        *hl-AineoExplainIssue*
+AineoExplainIssue	As |hl-AineoExplain|, for issues, with the foreground
+			of |hl-DiagnosticWarn| as the accent, `#e5c07b`
+			without one.
+                                                 *hl-AineoExplainIssueGutter*
+AineoExplainIssueGutter	As |hl-AineoExplainGutter|, for issues.
+                                             *hl-AineoExplainIssueGutterFill*
+AineoExplainIssueGutterFill
+			As |hl-AineoExplainGutterFill|, for issues.
+                                                     *hl-AineoExplainIssueNr*
+AineoExplainIssueNr	As |hl-AineoExplainNr|, for issues.
 
 Claude's session ~
                                                         *aineo-claude-session*
@@ -2539,23 +2621,31 @@ moves you to that tab instead and claims nothing.
 			do the same (|aineo-keys|).
 
                                                              *:Aineo-explain*
-:[range]Aineo explain [tools]
+:[range]Aineo explain [issues] [tools] [new]
 			Explains the code of the current buffer, a file's, or
 			of the lines of [range], with a Claude Code of its own
-			(|aineo-explain|). With `tools` that Claude Code may
-			read the project with `Read`, `Grep` and `Glob`;
-			without, it has the code alone. `\v` and `\V` do the
-			same (|aineo-keys|). Asked while a request runs for
-			the buffer, it stops that request; asked for the whole
-			buffer while it shows explanations, it clears them.
-			In a buffer that holds no file it tells you, with one
-			error. With any other word it tells you, with one
-			error, what it takes. The only subcommand of `:Aineo`
-			that takes a range.
+			(|aineo-explain|). With `issues` it asks for the
+			potential issues of that code instead. With `tools`
+			that Claude Code may read the project with `Read`,
+			`Grep` and `Glob`; without, it has the code alone.
+			`\v`, `\V`, `\vi` and `\VI` do the same
+			(|aineo-keys|). Asked while a request of its kind runs
+			for the buffer, it stops that request; asked for the
+			whole buffer while it shows what it asks for, it
+			clears that. When an earlier answer for the same
+			kind, tools and lines is kept and their text is
+			unchanged, it places that answer and starts no
+			request; `new` asks again whatever is kept or shown,
+			and keeps the new answer. The words are written in
+			this order, each at most once. In a buffer that holds
+			no file it tells you, with one error. With any other
+			word it tells you, with one error, what it takes. The
+			only subcommand of `:Aineo` that takes a range.
 
 :Aineo explain clear
-			Removes every explanation the current buffer shows,
-			and stops the request that runs for it, if any.
+			Removes every explanation and every issue the current
+			buffer shows, and stops the request that runs for it,
+			if any.
 
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
@@ -2663,6 +2753,19 @@ you turn the prefix off, or when a prefix key is yours: >lua
 			and `Glob`; what `:Aineo explain tools` does
 			(|:Aineo-explain|).
 
+                                                *<Plug>(aineo-explain-issues)*
+<Plug>(aineo-explain-issues)
+			Does what `<Plug>(aineo-explain)` does, asking for the
+			potential issues of the code; what
+			`:Aineo explain issues` does (|:Aineo-explain|).
+
+                                          *<Plug>(aineo-explain-issues-tools)*
+<Plug>(aineo-explain-issues-tools)
+			Does what `<Plug>(aineo-explain-issues)` does, with
+			Claude Code allowed to read the project with `Read`,
+			`Grep` and `Glob`; what `:Aineo explain issues tools`
+			does (|:Aineo-explain|).
+
                                                           *<Plug>(aineo-zoom)*
 <Plug>(aineo-zoom)
 			Does what `:Aineo zoom` does (|:Aineo-zoom|).
@@ -2676,8 +2779,8 @@ Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
 followed by these keys to each `<Plug>` mapping but `<Plug>(aineo-claim)`,
-which has none, globally, in Normal mode, and `\s`, `\v` and `\V` in Visual
-mode too:
+which has none, globally, in Normal mode, and `\s`, `\v`, `\V`, `\vi` and
+`\VI` in Visual mode too:
 
                                                                     *aineo-\s*
 \s		|<Plug>(aineo-send)|
@@ -2727,12 +2830,20 @@ mode too:
 \v		|<Plug>(aineo-explain)|
                                                                     *aineo-\V*
 \V		|<Plug>(aineo-explain-tools)|
+                                                                   *aineo-\vi*
+\vi		|<Plug>(aineo-explain-issues)|
+                                                                   *aineo-\VI*
+\VI		|<Plug>(aineo-explain-issues-tools)|
                                                                   *aineo-v_\s*
 \s		|<Plug>(aineo-send)| in Visual mode (|aineo-send|)
                                                                   *aineo-v_\v*
 \v		|<Plug>(aineo-explain)| in Visual mode (|aineo-explain|)
                                                                   *aineo-v_\V*
 \V		|<Plug>(aineo-explain-tools)| in Visual mode
+                                                                 *aineo-v_\vi*
+\vi		|<Plug>(aineo-explain-issues)| in Visual mode
+                                                                 *aineo-v_\VI*
+\VI		|<Plug>(aineo-explain-issues-tools)| in Visual mode
 
 Visual mode here is Visual mode alone: in Select mode, `\s` is text you
 type.
@@ -3570,14 +3681,14 @@ Find a file ~
   first that is installed.
 
 Explain code ~
-  Which model `\v` and `\V` explain code with (`explain.model`,
-  |aineo-config-explain.model|), after how long a request is stopped
-  (`explain.timeout_ms`, |aineo-config-explain.timeout_ms|), that each request
-  starts a Claude Code of its own with the program of `claude.cmd`, and what
-  it may use: nothing with `\v`, `Read`, `Grep` and `Glob` with `\V`, without
-  asking, no MCP server, no settings of aineo, and your own Claude Code
-  settings but never the project's (|aineo-explain|). Nothing while the
-  configuration is wrong.
+  Which model `\v`, `\V`, `\vi` and `\VI` ask about code with
+  (`explain.model`, |aineo-config-explain.model|), after how long a request is
+  stopped (`explain.timeout_ms`, |aineo-config-explain.timeout_ms|), that
+  each request starts a Claude Code of its own with the program of
+  `claude.cmd`, and what it may use: nothing with `\v` and `\vi`, `Read`,
+  `Grep` and `Glob` with `\V` and `\VI`, without asking, no MCP server, no
+  settings of aineo, and your own Claude Code settings but never the
+  project's (|aineo-explain|). Nothing while the configuration is wrong.
 
 Autostart ~
   Whether the autostart opened the layout at startup, or which reason kept

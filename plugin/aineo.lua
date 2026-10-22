@@ -53,10 +53,35 @@ local SUBCOMMANDS = {
 }
 
 --- The words `:Aineo explain` takes, in the order it offers them: `tools`
---- lets Claude Code read the project with read-only tools, and `clear`
---- removes the buffer's explanations (`aineo.entry`'s
---- `clear_explanations()`).
-local EXPLAIN_WORDS = { 'tools', 'clear' }
+--- lets Claude Code read the project with read-only tools, `issues` asks it
+--- for potential issues instead of explanations, `new` asks again whatever
+--- answer is kept, and `clear` removes the buffer's explanations and issues
+--- (`aineo.entry`'s `clear_explanations()`). `issues`, `tools` and `new` are
+--- written in that order, each at most once.
+local EXPLAIN_WORDS = { 'tools', 'issues', 'new', 'clear' }
+
+--- The words `:Aineo explain` offers after `words`, the words typed after
+--- `explain`: every word after none, and after `issues` and `tools` the
+--- words that may still follow them in that order, `new` last.
+---
+---@param words string[]
+---@return string[]
+local function explain_words_after(words)
+  if #words == 0 then
+    return EXPLAIN_WORDS
+  end
+  local after_issues = words[1] == 'issues' and vim.list_slice(words, 2) or words
+  if words[1] ~= 'issues' and words[1] ~= 'tools' then
+    return {}
+  end
+  if #after_issues == 0 then
+    return { 'tools', 'new' }
+  end
+  if after_issues[1] == 'tools' and #after_issues == 1 then
+    return { 'new' }
+  end
+  return {}
+end
 
 --- The words each subcommand that takes one is followed by, in the order
 --- `:Aineo` offers them: `pane` takes the pane to show, `run` takes `shell`,
@@ -148,10 +173,11 @@ end
 --- The words `:Aineo` offers after `typed`, the words before the one the
 --- cursor is in, the command's name first: its subcommands after the name
 --- alone, the words of a subcommand that takes them (`SUBCOMMAND_WORDS`)
---- after that subcommand, the running sessions of this Neovim's directory
---- after `claim` (`aineo.entry`'s `running_sessions_here()`), `new`,
---- `close` and the numbers of the tab pages after `tab` (`tab_words()`), and
---- nothing otherwise.
+--- after that subcommand, the words `explain` may be followed by
+--- (`explain_words_after()`), the running sessions of this Neovim's
+--- directory after `claim` (`aineo.entry`'s `running_sessions_here()`),
+--- `new`, `close` and the numbers of the tab pages after `tab`
+--- (`tab_words()`), and nothing otherwise.
 ---
 ---@param typed string[]
 ---@return string[]
@@ -165,8 +191,11 @@ local function offered_words(typed)
   if #typed == 2 and typed[2] == 'tab' then
     return tab_words()
   end
-  if #typed == 2 then
+  if #typed == 2 and typed[2] ~= RANGE_SUBCOMMAND then
     return SUBCOMMAND_WORDS[typed[2]] or {}
+  end
+  if typed[2] == RANGE_SUBCOMMAND then
+    return explain_words_after(vim.list_slice(typed, 3))
   end
   return {}
 end
@@ -322,16 +351,24 @@ local PREFIX_KEYS = {
 }
 
 --- What explaining code asks for, by the words of its `<Plug>` mappings
---- after `aineo-`, in Normal mode and in Visual mode: the code alone, or
---- with read-only tools (`aineo.entry`'s `explain()`).
+--- after `aineo-`, in Normal mode and in Visual mode: explanations or
+--- potential issues, from the code alone or with read-only tools
+--- (`aineo.entry`'s `explain()`).
 local EXPLAIN_ORDERS = {
   explain = { tools = false },
   ['explain-tools'] = { tools = true },
+  ['explain-issues'] = { tools = false, kind = 'issues' },
+  ['explain-issues-tools'] = { tools = true, kind = 'issues' },
 }
 
 --- The keys that follow the prefix for each of `EXPLAIN_ORDERS`, the same
 --- in Normal mode and in Visual mode.
-local EXPLAIN_KEYS = { explain = 'v', ['explain-tools'] = 'V' }
+local EXPLAIN_KEYS = {
+  explain = 'v',
+  ['explain-tools'] = 'V',
+  ['explain-issues'] = 'vi',
+  ['explain-issues-tools'] = 'VI',
+}
 
 for words, order in pairs(EXPLAIN_ORDERS) do
   vim.keymap.set('n', ('<Plug>(aineo-%s)'):format(words), function()
@@ -642,22 +679,38 @@ local RANGE_REFUSAL = 'aineo: only :Aineo ' .. RANGE_SUBCOMMAND .. ' takes a ran
 
 --- Does what `:Aineo explain` does with `words`, the words after it, and
 --- `range`, the lines given, or `nil` for the whole buffer: `tools` explains
---- with read-only tools, `clear` removes the explanations, no word explains
+--- with read-only tools, `issues` asks for potential issues instead, alone or
+--- followed by `tools`, `new` ends the words and asks again whatever answer
+--- is kept, `clear` removes the explanations and the issues, no word explains
 --- the code alone. Any other word is told as `:Aineo` tells its usage.
 ---
 ---@param words string[]
 ---@param range integer[]|nil
 local function explain(words, range)
-  if #words > 1 or (words[1] ~= nil and not vim.tbl_contains(EXPLAIN_WORDS, words[1])) then
+  local clears = #words == 1 and words[1] == 'clear'
+  local rest = vim.list_slice(words)
+  local kind = table.remove(rest, 1) == 'issues' and 'issues' or nil
+  if not kind then
+    rest = vim.list_slice(words)
+  end
+  local tools = rest[1] == 'tools'
+  if tools then
+    table.remove(rest, 1)
+  end
+  local fresh = rest[1] == 'new'
+  if fresh then
+    table.remove(rest, 1)
+  end
+  if not clears and #rest > 0 then
     vim.notify(usage({ RANGE_SUBCOMMAND }), vim.log.levels.ERROR)
     return
   end
   run(function()
-    if words[1] == 'clear' then
+    if clears then
       require('aineo.entry').clear_explanations()
       return
     end
-    require('aineo.entry').explain({ tools = words[1] == 'tools', range = range })
+    require('aineo.entry').explain({ tools = tools, kind = kind, fresh = fresh, range = range })
   end)
 end
 
@@ -694,5 +747,5 @@ end, {
   range = true,
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [tools|clear]',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear',
 })

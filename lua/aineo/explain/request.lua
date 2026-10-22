@@ -66,12 +66,13 @@ function M.arguments(command, model, tools)
   return words
 end
 
---- The code a request asks to explain.
+--- The code a request asks about.
 ---@class aineo.explain.Code
 ---@field path string the file's path from the folder Claude Code runs in
 ---@field language string the buffer's `'filetype'`, empty when it has none
 ---@field first integer the first line to explain, from 1
 ---@field last integer the last line to explain
+---@field kind 'explanations'|'issues' what to ask for: explanations of the lines, or their potential issues
 ---@field lines string[] every line of the buffer, as it stands
 
 --- `lines`, each after its number from 1, the numbers aligned to the right.
@@ -87,27 +88,46 @@ local function numbered(lines)
   return result
 end
 
+--- What the prompt of each kind of request says, by the kind's name, as
+--- `string.format()` patterns: `head` names the file, its language and the
+--- first and last line asked for, and `answer` says what to answer for those
+--- lines, given the first and last line's numbers.
+local ASKS = {
+  explanations = {
+    head = 'Explain the code of the file %s (language: %s), lines %d to %d as numbered below.',
+    answer = 'Write brief explanations of the parts of those lines worth explaining, not one for every line.'
+      .. ' Tie each explanation to the first line it explains: its line is that line’s number,'
+      .. ' from %d to %d.',
+  },
+  issues = {
+    head = 'Review the code of the file %s (language: %s), lines %d to %d as numbered below,'
+      .. ' for potential issues.',
+    answer = 'List the potential issues in those lines: bugs, unhandled cases, error handling gaps,'
+      .. ' and security or performance risks. Tie each issue to the first line it concerns:'
+      .. ' its line is that line’s number, from %d to %d. Be brief, make no style remarks,'
+      .. ' and answer an empty list when you find none.'
+      .. ' Give each issue as an item of the answer’s list.',
+  },
+}
+
 --- The prompt Claude Code reads for `code`: the file, its language —
---- `unknown` when the buffer has no `'filetype'` — and the lines to explain,
---- what to answer for them, then every line of the buffer, numbered
---- (`numbered()`).
+--- `unknown` when the buffer has no `'filetype'` — and the lines to look at,
+--- what to answer for them as `code.kind` asks (`ASKS`), then every line of
+--- the buffer, numbered (`numbered()`).
 ---
 ---@param code aineo.explain.Code
 ---@return string
 function M.prompt(code)
+  local asks = ASKS[code.kind]
   return table.concat({
-    ('Explain the code of the file %s (language: %s), lines %d to %d as numbered below.'):format(
+    asks.head:format(
       code.path,
       code.language ~= '' and code.language or 'unknown',
       code.first,
       code.last
     ),
     '',
-    (
-      'Write brief explanations of the parts of those lines worth explaining, not one for every line.'
-      .. ' Tie each explanation to the first line it explains: its line is that line’s number,'
-      .. ' from %d to %d.'
-    ):format(code.first, code.last),
+    asks.answer:format(code.first, code.last),
     '',
     table.concat(numbered(code.lines), '\n'),
   }, '\n')

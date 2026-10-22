@@ -46,6 +46,7 @@ local function start(explain)
     local record, command, explain = ...
     vim.env.AINEO_FAKE_CLAUDE_RECORD = record
     vim.g.aineo = { autostart = false, claude = { cmd = command }, explain = explain }
+    vim.o.timeoutlen = 100
     _G.told = {}
     vim.notify = function(message, level)
       table.insert(_G.told, { message = message, level = level })
@@ -54,6 +55,18 @@ local function start(explain)
     { RECORD, FAKE_CLAUDE, explain or vim.empty_dict() }
   )
   child.cmd('edit ' .. folder .. '/src/add.lua')
+end
+
+--- Types `keys` in the child and waits until it has settled: `\v` and `\V`
+--- are the start of `\vi` and `\VI` too, so that the child waits for the
+--- next key until 'timeoutlen' (`start()` shortens it) before it runs them.
+---
+---@param ... string
+local function press(...)
+  child.type_keys(...)
+  vim.wait(PATIENCE_MS, function()
+    return not child.is_blocked()
+  end, 20)
 end
 
 --- The lines the fake `claude` recorded, decoded, once it has recorded at
@@ -93,7 +106,7 @@ T['\\v'] = MiniTest.new_set()
 T['\\v']['in Normal mode explains the whole buffer with the code alone, with the model configured'] = function()
   start({ model = 'opus' })
 
-  child.type_keys('\\v')
+  press('\\v')
 
   eq(model_and_tools(), { 'opus', '--setting-sources', 'user', '--tools', '' })
   eq(
@@ -107,7 +120,7 @@ T['\\V'] = MiniTest.new_set()
 T['\\V']['in Normal mode explains the whole buffer with read-only tools, with Sonnet by default'] = function()
   start()
 
-  child.type_keys('\\V')
+  press('\\V')
 
   eq(model_and_tools(), {
     'sonnet',
@@ -127,7 +140,7 @@ end
 T['\\v']['in Visual mode explains the lines selected alone, and leaves Visual mode'] = function()
   start()
 
-  child.type_keys('2G', 'Vj', '\\v')
+  press('2G', 'Vj', '\\v')
 
   eq(model_and_tools(), { 'sonnet', '--setting-sources', 'user', '--tools', '' })
   eq(
@@ -140,7 +153,7 @@ end
 T['\\V']['in Visual mode explains the lines selected alone, with read-only tools'] = function()
   start()
 
-  child.type_keys('2G', 'Vj', '\\V')
+  press('2G', 'Vj', '\\V')
 
   eq(model_and_tools(), {
     'sonnet',
@@ -161,7 +174,7 @@ end
 T['\\v']['in Visual mode takes a selection made upwards as the same lines'] = function()
   start()
 
-  child.type_keys('3G', 'Vk', '\\v')
+  press('3G', 'Vk', '\\v')
 
   eq(
     prompt_head(),
@@ -243,7 +256,10 @@ T[':Aineo explain']['with another word says which it takes, and asks nothing'] =
   child.cmd('Aineo explain all')
 
   eq(child.lua_get('_G.told'), {
-    { message = 'aineo: :Aineo explain takes one of tools, clear', level = vim.log.levels.ERROR },
+    {
+      message = 'aineo: :Aineo explain takes one of tools, issues, new, clear',
+      level = vim.log.levels.ERROR,
+    },
   })
   eq(vim.uv.fs_stat(RECORD), nil)
 end
@@ -266,19 +282,27 @@ T[':Aineo explain']['is the only subcommand that takes a range']['given'] = func
   eq(vim.uv.fs_stat(RECORD), nil)
 end
 
-T[':Aineo explain']['is offered after :Aineo, and tools and clear after it, after a range too'] =
+T[':Aineo explain']['is offered after :Aineo, and tools, issues, new and clear after it, after a range too'] =
   MiniTest.new_set({
     parametrize = {
       { 'Aineo e', { 'explain' } },
-      { 'Aineo explain ', { 'tools', 'clear' } },
+      { 'Aineo explain ', { 'tools', 'issues', 'new', 'clear' } },
       { 'Aineo explain t', { 'tools' } },
-      { '2,3Aineo explain ', { 'tools', 'clear' } },
+      { '2,3Aineo explain ', { 'tools', 'issues', 'new', 'clear' } },
       { "'<,'>Aineo explain c", { 'clear' } },
-      { 'Aineo explain tools ', {} },
+      { 'Aineo explain tools ', { 'new' } },
+      { 'Aineo explain issues ', { 'tools', 'new' } },
+      { 'Aineo explain issues t', { 'tools' } },
+      { 'Aineo explain issues tools ', { 'new' } },
+      { 'Aineo explain issues tools new ', {} },
+      { 'Aineo explain new ', {} },
+      { 'Aineo explain clear ', {} },
+      { 'Aineo explain n', { 'new' } },
+      { 'Aineo explain i', { 'issues' } },
     },
   })
 
-T[':Aineo explain']['is offered after :Aineo, and tools and clear after it, after a range too']['typed'] = function(
+T[':Aineo explain']['is offered after :Aineo, and tools, issues, new and clear after it, after a range too']['typed'] = function(
   typed,
   completed
 )
@@ -290,10 +314,10 @@ end
 T['\\v']['pressed again in Normal mode clears the explanations'] = function()
   start()
   answer_explanations({ { line = 2, text = 'Adds.' }, { line = 5, text = 'Returns it.' } })
-  child.type_keys('\\v')
+  press('\\v')
   explained_lines_once(2)
 
-  child.type_keys('\\v')
+  press('\\v')
 
   eq(explained_lines_once(0), 0)
 end
@@ -303,7 +327,7 @@ T['\\v']['in a buffer that holds no file says so, and asks nothing'] = function(
   child.cmd('enew')
   child.bo.buftype = 'nofile'
 
-  child.type_keys('\\v')
+  press('\\v')
 
   eq(child.lua_get('_G.told'), {
     { message = 'aineo: explaining works in the buffer of a file', level = vim.log.levels.ERROR },
@@ -315,7 +339,7 @@ T['\\v']['stops Claude Code at the timeout configured, and says so'] = function(
   start({ timeout_ms = 3000 })
   child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_MS = "20000"')
 
-  child.type_keys('\\v')
+  press('\\v')
 
   eq(
     vim.wait(PATIENCE_MS, function()
@@ -329,6 +353,210 @@ T['\\v']['stops Claude Code at the timeout configured, and says so'] = function(
       level = vim.log.levels.ERROR,
     },
   })
+end
+
+local ISSUES_HEAD =
+  'Review the code of the file src/add.lua (language: lua), lines %d to %d as numbered below, for potential issues.'
+
+local READ_ONLY = {
+  '--tools',
+  'Read,Grep,Glob',
+  '--allowedTools',
+  'Read,Grep,Glob',
+}
+
+--- The number of lines of the current buffer that show issues, once it is
+--- `count`, or after `PATIENCE_MS`.
+---
+---@param count integer
+---@return integer
+local function issue_lines_once(count)
+  local marks = 0
+  vim.wait(PATIENCE_MS, function()
+    marks = child.lua_get(
+      [[#vim.tbl_filter(function(mark)
+      return not vim.inspect(mark[4].virt_lines):find('looking for issues', 1, true)
+    end, vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_create_namespace('aineo_explain_issues'), 0, -1, { details = true }))]]
+    )
+    return marks == count
+  end, 20)
+  return marks
+end
+
+T['\\vi'] = MiniTest.new_set()
+
+T['\\vi']['in Normal mode asks for the potential issues of the whole buffer, with the code alone'] = function()
+  start()
+
+  press('\\vi')
+
+  eq(model_and_tools(), { 'sonnet', '--setting-sources', 'user', '--tools', '' })
+  eq(prompt_head(), ISSUES_HEAD:format(1, 5))
+end
+
+T['\\vi']['in Visual mode asks for the issues of the lines selected alone, and leaves Visual mode'] = function()
+  start()
+
+  press('2G', 'Vj', '\\vi')
+
+  eq(prompt_head(), ISSUES_HEAD:format(2, 3))
+  eq(child.fn.mode(), 'n')
+end
+
+T['\\vi']['shows the issues, and pressed again in Normal mode clears them alone, the explanations staying'] = function()
+  start()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  press('\\v')
+  explained_lines_once(1)
+  answer_explanations({ { line = 5, text = 'Returns nothing.' } })
+  press('\\vi')
+  issue_lines_once(1)
+
+  press('\\vi')
+
+  eq(issue_lines_once(0), 0)
+  eq(explained_lines_once(1), 1)
+end
+
+T['\\v']['pressed in Normal mode with issues shown clears the explanations alone, the issues staying'] = function()
+  start()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  press('\\v')
+  explained_lines_once(1)
+  answer_explanations({ { line = 5, text = 'Returns nothing.' } })
+  press('\\vi')
+  issue_lines_once(1)
+
+  press('\\v')
+
+  eq(explained_lines_once(0), 0)
+  eq(issue_lines_once(1), 1)
+end
+
+T['\\VI'] = MiniTest.new_set()
+
+T['\\VI']['in Normal mode asks for the issues of the whole buffer, with read-only tools'] = function()
+  start()
+
+  press('\\VI')
+
+  eq(vim.list_slice(model_and_tools(), 4), READ_ONLY)
+  eq(prompt_head(), ISSUES_HEAD:format(1, 5))
+end
+
+T['\\VI']['in Visual mode asks for the issues of the lines selected alone, with read-only tools'] = function()
+  start()
+
+  press('2G', 'Vj', '\\VI')
+
+  eq(vim.list_slice(model_and_tools(), 4), READ_ONLY)
+  eq(prompt_head(), ISSUES_HEAD:format(2, 3))
+  eq(child.fn.mode(), 'n')
+end
+
+T[':Aineo explain']['issues asks for the issues of the lines given, and issues tools reads the project too'] =
+  MiniTest.new_set({
+    parametrize = {
+      { '2,3Aineo explain issues', { '--tools', '' } },
+      { '2,3Aineo explain issues tools', READ_ONLY },
+    },
+  })
+
+T[':Aineo explain']['issues asks for the issues of the lines given, and issues tools reads the project too']['typed'] = function(
+  typed,
+  tools
+)
+  start()
+
+  child.cmd(typed)
+
+  eq(vim.list_slice(model_and_tools(), 4), tools)
+  eq(prompt_head(), ISSUES_HEAD:format(2, 3))
+end
+
+T[':Aineo explain']['clear removes the issues too'] = function()
+  start()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  child.cmd('Aineo explain')
+  explained_lines_once(1)
+  child.cmd('Aineo explain issues')
+  issue_lines_once(1)
+
+  child.cmd('Aineo explain clear')
+
+  eq(explained_lines_once(0), 0)
+  eq(issue_lines_once(0), 0)
+end
+
+T[':Aineo explain']['tools issues, and issues with a third word, say which words it takes, and ask nothing'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'Aineo explain tools issues' },
+      { 'Aineo explain issues tools all' },
+      { 'Aineo explain new tools' },
+      { 'Aineo explain clear new' },
+    },
+  })
+
+T[':Aineo explain']['tools issues, and issues with a third word, say which words it takes, and ask nothing']['typed'] = function(
+  typed
+)
+  start()
+
+  child.cmd(typed)
+
+  eq(child.lua_get('_G.told'), {
+    {
+      message = 'aineo: :Aineo explain takes one of tools, issues, new, clear',
+      level = vim.log.levels.ERROR,
+    },
+  })
+  eq(vim.uv.fs_stat(RECORD), nil)
+end
+
+--- The number of times the fake `claude` has started, once it has started
+--- `count`, or after `PATIENCE_MS`.
+---
+---@param count integer
+---@return integer
+local function started_once(count)
+  return #recorded(count * 2) / 2
+end
+
+T[':Aineo explain']['shows the kept answer when the code is unchanged, and new asks again'] = function()
+  start()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  child.cmd('Aineo explain')
+  explained_lines_once(1)
+  child.cmd('Aineo explain clear')
+  eq(explained_lines_once(0), 0)
+
+  child.cmd('Aineo explain')
+
+  eq(explained_lines_once(1), 1)
+  eq(child.lua_get('_G.told'), {
+    {
+      message = 'aineo: the earlier answer, the code unchanged (:Aineo explain new asks again)',
+      level = vim.log.levels.INFO,
+    },
+  })
+  eq(started_once(1), 1)
+
+  child.cmd('Aineo explain new')
+
+  eq(started_once(2), 2)
+end
+
+T[':Aineo explain']['issues tools new asks the issues again with read-only tools'] = function()
+  start()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  child.cmd('Aineo explain issues tools')
+  issue_lines_once(1)
+  child.cmd('Aineo explain clear')
+
+  child.cmd('Aineo explain issues tools new')
+
+  eq(started_once(2), 2)
 end
 
 return T

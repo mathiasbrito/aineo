@@ -129,11 +129,14 @@ local function recorded(count)
   return vim.tbl_map(vim.json.decode, lines)
 end
 
---- Has the fake `claude` print `text` as its answer.
+--- Has the fake `claude` print `text` as its answer, from the file `name`:
+--- a request that runs reads its answer from the file it was started with,
+--- so that a later answer in another file leaves it be.
 ---
 ---@param text string
-local function answer_text(text)
-  local answer = fixture.write('explain/answer.json', { text })
+---@param name? string a file name; `answer.json` when absent
+local function answer_text(text, name)
+  local answer = fixture.write('explain/' .. (name or 'answer.json'), { text })
   child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT = ...', { answer })
 end
 
@@ -142,21 +145,28 @@ end
 --- with `--json-schema`.
 ---
 ---@param explanations { line: any, text: any }[]
-local function answer_explanations(explanations)
-  answer_text(vim.json.encode({
-    type = 'result',
-    subtype = 'success',
-    is_error = false,
-    result = '',
-    structured_output = { explanations = explanations },
-  }))
+---@param name? string the file the answer is read from (`answer_text()`)
+local function answer_explanations(explanations, name)
+  answer_text(
+    vim.json.encode({
+      type = 'result',
+      subtype = 'success',
+      is_error = false,
+      result = '',
+      structured_output = { explanations = explanations },
+    }),
+    name
+  )
 end
 
---- What the child shows of the explanations, line by line: for each line
---- with an extmark of the namespace `aineo_explain`, from the top, the line's
---- number from 1 and the virtual lines above it, each as its chunks.
-local SHOWN = [[(function()
-  local namespace = vim.api.nvim_get_namespaces().aineo_explain
+--- What the child shows of the explanations in the namespace `namespace`,
+--- line by line: for each line with an extmark of it, from the top, the
+--- line's number from 1, whether the virtual lines are above it, whether
+--- they start at the window's left column, the highlight group of its
+--- number, and the virtual lines as their chunks, as they are. `%s` is the
+--- namespace's name.
+local SHOWN_CHUNKS_OF = [[(function()
+  local namespace = vim.api.nvim_get_namespaces().%s
   if not namespace then
     return {}
   end
@@ -165,8 +175,37 @@ local SHOWN = [[(function()
     table.insert(shown, {
       line = mark[2] + 1,
       above = mark[4].virt_lines_above,
+      leftcol = mark[4].virt_lines_leftcol,
+      number_hl_group = mark[4].number_hl_group,
       virt_lines = mark[4].virt_lines,
     })
+  end
+  return shown
+end)()]]
+
+--- What the child shows of the explanations (`SHOWN_CHUNKS_OF`) with each
+--- row reduced to what it says: its text, the chunks of the gutter left out,
+--- the padding to the window's width cut and the frame of the spinner of a
+--- row that says a request is working left out, in the group of the text.
+local SHOWN = [[(function()
+  local namespace = vim.api.nvim_get_namespaces().aineo_explain
+  if not namespace then
+    return {}
+  end
+  local shown = {}
+  for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, namespace, 0, -1, { details = true })) do
+    local rows = {}
+    for _, row in ipairs(mark[4].virt_lines) do
+      local text = ''
+      for _, chunk in ipairs(row) do
+        if chunk[2] == nil or chunk[2] == 'AineoExplain' then
+          text = text .. chunk[1]
+        end
+      end
+      text = text:gsub('\226[\160-\163][\128-\191] ', '')
+      table.insert(rows, { { (text:gsub(' +$', '')), 'AineoExplain' } })
+    end
+    table.insert(shown, { line = mark[2] + 1, above = mark[4].virt_lines_above, virt_lines = rows })
   end
   return shown
 end)()]]
@@ -185,6 +224,73 @@ local function shown_once_it_holds(text)
   return shown
 end
 
+--- What the child shows in the namespace `namespace` (`SHOWN_CHUNKS_OF`),
+--- as it is, once it shows a virtual line holding `text`, or after
+--- `PATIENCE_MS`.
+---
+---@param namespace string
+---@param text string
+---@return table[]
+local function chunks_once_it_holds(namespace, text)
+  local shown = {}
+  vim.wait(PATIENCE_MS, function()
+    shown = child.lua_get(SHOWN_CHUNKS_OF:format(namespace))
+    return vim.inspect(shown):find(text, 1, true) ~= nil
+  end, 20)
+  return shown
+end
+
+--- The floating windows of the child, each as the part of its configuration
+--- that matters, its text, and the 'winhighlight' it shows with.
+local FLOATS = [[(function()
+  local floats = {}
+  for _, window in ipairs(vim.api.nvim_list_wins()) do
+    local config = vim.api.nvim_win_get_config(window)
+    if config.relative ~= '' then
+      table.insert(floats, {
+        relative = config.relative,
+        win = config.win,
+        anchor = config.anchor,
+        row = config.row,
+        col = config.col,
+        focusable = config.focusable,
+        border = config.border,
+        text = table.concat(
+          vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(window), 0, -1, false),
+          '\n'
+        ),
+        winhighlight = vim.wo[window].winhighlight,
+      })
+    end
+  end
+  return floats
+end)()]]
+
+--- The floating windows of the child (`FLOATS`), once there are `count` of
+--- them, or after `PATIENCE_MS`.
+---
+---@param count integer
+---@return table[]
+local function floats_once(count)
+  local floats = {}
+  vim.wait(PATIENCE_MS, function()
+    floats = child.lua_get(FLOATS)
+    return #floats == count
+  end, 20)
+  return floats
+end
+
+--- The number of timers of the child that are active.
+local ACTIVE_TIMERS = [[(function()
+  local count = 0
+  vim.uv.walk(function(handle)
+    if handle:get_type() == 'timer' and handle:is_active() then
+      count = count + 1
+    end
+  end)
+  return count
+end)()]]
+
 T['an answer'] = MiniTest.new_set()
 
 T['an answer']['shows each explanation as a virtual line above its line, indented as it, after the mark ┊'] = function()
@@ -200,16 +306,6 @@ T['an answer']['shows each explanation as a virtual line above its line, indente
       virt_lines = { { { '  ┊ Adds the two numbers.', 'AineoExplain' } } },
     },
   })
-end
-
-T['an answer']['shows explanations in AineoExplain, which links to Comment unless set'] = function()
-  start_with_project()
-  answer_explanations({ { line = 2, text = 'Adds the two numbers.' } })
-
-  explain()
-  shown_once_it_holds('Adds')
-
-  eq(child.api.nvim_get_hl(0, { name = 'AineoExplain' }), { link = 'Comment', default = true })
 end
 
 T['an answer']['wraps an explanation at the window’s text width, less the line’s indent, by display width'] = function()
@@ -629,8 +725,9 @@ T['a failure']['a request that outlasts its timeout has Claude Code stopped, and
   eq(told_later(), {})
 end
 
-T['a failure']['a command that cannot run raises its error, shows nothing, and leaves no request running'] = function()
+T['a failure']['a command that cannot run raises its error, shows nothing, and leaves no request, badge or timer running'] = function()
   start_with_project()
+  local baseline_timers = child.lua_get(ACTIVE_TIMERS)
 
   local raised = child.lua([[
     local ran, failure = pcall(require('aineo.explain').ask, {
@@ -647,6 +744,8 @@ T['a failure']['a command that cannot run raises its error, shows nothing, and l
   eq(raised.ran, false)
   eq(raised.failure:find('claude.cmd cannot be run: ', 1, true) ~= nil, true)
   eq(child.lua_get(SHOWN), {})
+  eq(child.lua_get(FLOATS), {})
+  eq(child.lua_get(ACTIVE_TIMERS), baseline_timers)
   explain()
   eq(shown_once_it_holds('explaining'), { explaining_above(1, 0) })
 end
@@ -887,6 +986,33 @@ T['a request']['hands Claude Code the path from the project, the language, the r
   )
 end
 
+T['a request']['for issues asks for the potential issues of those lines instead, with the same answer schema and flags'] = function()
+  start_with_project()
+
+  explain({ kind = 'issues', range = { 2, 3 } })
+
+  local call = recorded(2)
+  eq(
+    call[2].stdin,
+    table.concat({
+      'Review the code of the file src/add.lua (language: lua), lines 2 to 3 as numbered below, for potential issues.',
+      '',
+      'List the potential issues in those lines: bugs, unhandled cases, error handling gaps,'
+        .. ' and security or performance risks. Tie each issue to the first line it concerns:'
+        .. ' its line is that line’s number, from 2 to 3. Be brief, make no style remarks,'
+        .. ' and answer an empty list when you find none.'
+        .. ' Give each issue as an item of the answer’s list.',
+      '',
+      '1 | local function add(a, b)',
+      '2 |   return a + b',
+      '3 | end',
+      '4 | ',
+      '5 | return add',
+    }, '\n')
+  )
+  eq(vim.json.decode(call[1].argv[5]), SCHEMA)
+end
+
 T['a request']['for some lines names them alone as the range, and still hands every line'] = function()
   start_with_project()
 
@@ -920,6 +1046,1176 @@ T['a request']['aligns the numbers of the lines to the right'] = function()
   explain()
 
   eq(vim.list_slice(vim.split(recorded(2)[2].stdin, '\n'), 13, 14), { ' 9 | x', '10 | y' })
+end
+
+T['the look'] = MiniTest.new_set()
+
+T['the look']['shows a row as the indent unhighlighted, then the mark and the text padded to the window’s width in AineoExplain, from the left column'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Adds the two numbers.' } })
+
+  explain()
+
+  eq(chunks_once_it_holds('aineo_explain', 'Adds'), {
+    {
+      line = 2,
+      above = true,
+      leftcol = true,
+      number_hl_group = 'AineoExplainNr',
+      virt_lines = {
+        { { '  ' }, { '┊ Adds the two numbers.' .. (' '):rep(35), 'AineoExplain' } },
+      },
+    },
+  })
+end
+
+T['the look']['starts a row with ▎ in the gutter, the label expl right-aligned on the first row alone, and the rest of the gutter filled'] = function()
+  start_with_project()
+  child.wo.number = true
+  child.wo.numberwidth = 8
+  answer_explanations({ { line = 2, text = 'First.\nSecond.' } })
+
+  explain()
+
+  eq(chunks_once_it_holds('aineo_explain', 'First')[1].virt_lines, {
+    {
+      { '▎', 'AineoExplainGutter' },
+      { '  ', 'AineoExplainGutterFill' },
+      { 'expl', 'AineoExplainGutter' },
+      { ' ', 'AineoExplainGutterFill' },
+      { '  ' },
+      { '┊ First.' .. (' '):rep(50 - 8), 'AineoExplain' },
+    },
+    {
+      { '▎', 'AineoExplainGutter' },
+      { (' '):rep(7), 'AineoExplainGutterFill' },
+      { '  ' },
+      { '┊ Second.' .. (' '):rep(50 - 9), 'AineoExplain' },
+    },
+  })
+end
+
+T['the look']['cuts the label to the cells the gutter has, and leaves it out under two characters'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        3,
+        {
+          { '▎', 'AineoExplainGutter' },
+          { '  ', 'AineoExplainGutterFill' },
+        },
+      },
+      {
+        4,
+        {
+          { '▎', 'AineoExplainGutter' },
+          { 'ex', 'AineoExplainGutter' },
+          { ' ', 'AineoExplainGutterFill' },
+        },
+      },
+      {
+        5,
+        {
+          { '▎', 'AineoExplainGutter' },
+          { 'exp', 'AineoExplainGutter' },
+          { ' ', 'AineoExplainGutterFill' },
+        },
+      },
+      {
+        6,
+        {
+          { '▎', 'AineoExplainGutter' },
+          { 'expl', 'AineoExplainGutter' },
+          { ' ', 'AineoExplainGutterFill' },
+        },
+      },
+    },
+  })
+
+T['the look']['cuts the label to the cells the gutter has, and leaves it out under two characters']['of'] = function(
+  numberwidth,
+  gutter
+)
+  start_with_project()
+  child.wo.number = true
+  child.wo.numberwidth = numberwidth
+  answer_explanations({ { line = 1, text = 'Starts.' } })
+
+  explain()
+
+  local row = chunks_once_it_holds('aineo_explain', 'Starts')[1].virt_lines[1]
+  eq(vim.list_slice(row, 1, #gutter), gutter)
+  eq(#row, #gutter + 1)
+end
+
+T['the look']['cuts the label of issues too: is in a gutter of four cells'] = function()
+  start_with_project()
+  child.wo.number = true
+  child.wo.numberwidth = 4
+  answer_explanations({ { line = 1, text = 'Starts.' } })
+
+  explain({ kind = 'issues' })
+
+  local row = chunks_once_it_holds('aineo_explain_issues', 'Starts')[1].virt_lines[1]
+  eq(vim.list_slice(row, 1, 3), {
+    { '▎', 'AineoExplainIssueGutter' },
+    { 'is', 'AineoExplainIssueGutter' },
+    { ' ', 'AineoExplainIssueGutterFill' },
+  })
+end
+
+--- Defines in the child the highlight groups `colours` names, each as its
+--- definition says.
+---
+---@param colours table<string, table>
+local function use_theme(colours)
+  child.lua(
+    [[for name, definition in pairs(...) do
+      vim.api.nvim_set_hl(0, name, definition)
+    end]],
+    { colours }
+  )
+end
+
+--- The definition the child holds of the group `name`, a link not followed.
+---
+---@param name string
+---@return table
+local function group(name)
+  return child.api.nvim_get_hl(0, { name = name })
+end
+
+T['the look']['computes its groups from the theme: the accent from DiagnosticInfo, the band from Normal blended 12% toward it, the gutter from LineNr'] = function()
+  start_with_project()
+  use_theme({
+    Normal = { bg = 0x101010, fg = 0xeeeeee },
+    DiagnosticInfo = { fg = 0x6090c0 },
+    LineNr = { bg = 0x202020 },
+  })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  shown_once_it_holds('Adds')
+
+  eq(
+    group('AineoExplain'),
+    { fg = 0x6090c0, bg = 0x1a1f25, italic = true, cterm = { italic = true }, default = true }
+  )
+  eq(group('AineoExplainGutter'), { fg = 0x6090c0, bg = 0x202020, default = true })
+  eq(group('AineoExplainGutterFill'), { bg = 0x202020, default = true })
+  eq(
+    group('AineoExplainNr'),
+    { fg = 0x6090c0, bold = true, cterm = { bold = true }, default = true }
+  )
+end
+
+T['the look']['falls back for the colours the theme lacks: Normal’s background by the background option, the accent, no LineNr background'] =
+  MiniTest.new_set({
+    parametrize = { { 'dark', 0x262f45 }, { 'light', 0xecf5fd } },
+  })
+
+T['the look']['falls back for the colours the theme lacks: Normal’s background by the background option, the accent, no LineNr background']['for'] = function(
+  background,
+  band
+)
+  start_with_project()
+  child.o.background = background
+  use_theme({ Normal = {}, DiagnosticInfo = {}, LineNr = {} })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  shown_once_it_holds('Adds')
+
+  eq(
+    group('AineoExplain'),
+    { fg = 0x61afef, bg = band, italic = true, cterm = { italic = true }, default = true }
+  )
+  eq(group('AineoExplainGutter'), { fg = 0x61afef, default = true })
+  eq(group('AineoExplainGutterFill'), { default = true })
+end
+
+T['the look']['computes its groups again when the colour scheme changes'] = function()
+  start_with_project()
+  use_theme({ Normal = { bg = 0x101010 }, DiagnosticInfo = { fg = 0x6090c0 } })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain()
+  shown_once_it_holds('Adds')
+
+  use_theme({ Normal = { bg = 0x000000 }, DiagnosticInfo = { fg = 0xffffff } })
+  child.cmd('doautocmd ColorScheme')
+
+  eq(
+    group('AineoExplain'),
+    { fg = 0xffffff, bg = 0x1f1f1f, italic = true, cterm = { italic = true } }
+  )
+end
+
+T['the look']['keeps a group the user defined, before it loads and after the colour scheme changes'] = function()
+  start_with_project()
+  use_theme({ AineoExplain = { fg = 0x123456, underline = true } })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  shown_once_it_holds('Adds')
+  child.cmd('doautocmd ColorScheme')
+
+  eq({ group('AineoExplain').fg, group('AineoExplain').underline }, { 0x123456, true })
+  eq(group('AineoExplainNr').bold, true)
+end
+
+T['the look']['computes its groups again when the background option changes, with no colour scheme loaded'] = function()
+  start_with_project()
+  child.lua([[
+    vim.api.nvim_create_autocmd('OptionSet', {
+      pattern = 'background',
+      callback = function()
+        vim.api.nvim_set_hl(0, 'Normal', { bg = 0x000000 })
+        vim.api.nvim_set_hl(0, 'DiagnosticInfo', { fg = 0xffffff })
+      end,
+    })
+    vim.o.background = 'dark'
+  ]])
+  use_theme({ Normal = { bg = 0x101010 }, DiagnosticInfo = { fg = 0x6090c0 } })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain()
+  shown_once_it_holds('Adds')
+
+  child.o.background = 'light'
+
+  eq(group('AineoExplain').bg, 0x1f1f1f)
+  eq(group('AineoExplain').fg, 0xffffff)
+end
+
+T['the look']['keeps a group the user defined as a default, before it loads and after the colour scheme changes'] = function()
+  start_with_project()
+  use_theme({ AineoExplain = { link = 'Comment', default = true } })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  shown_once_it_holds('Adds')
+  child.cmd('doautocmd ColorScheme')
+
+  eq(group('AineoExplain'), { link = 'Comment', default = true })
+end
+
+T['the look']['carries the cterm colours: the accent’s foreground, LineNr’s background in the gutter, CursorLine’s behind the band'] = function()
+  start_with_project()
+  use_theme({
+    Normal = { bg = 0x101010 },
+    DiagnosticInfo = { fg = 0x6090c0, ctermfg = 14 },
+    LineNr = { bg = 0x202020, ctermbg = 240 },
+    CursorLine = { bg = 0x303030, ctermbg = 236 },
+  })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  shown_once_it_holds('Adds')
+
+  eq(group('AineoExplain').ctermfg, 14)
+  eq(group('AineoExplain').ctermbg, 236)
+  eq(group('AineoExplainGutter').ctermfg, 14)
+  eq(group('AineoExplainGutter').ctermbg, 240)
+  eq(group('AineoExplainGutterFill').ctermbg, 240)
+  eq(group('AineoExplainNr').ctermfg, 14)
+end
+
+T['the look']['leaves the cterm colours out that the theme lacks'] = function()
+  start_with_project()
+  use_theme({ DiagnosticInfo = { fg = 0x6090c0 }, LineNr = {}, CursorLine = {} })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  shown_once_it_holds('Adds')
+
+  eq({
+    group('AineoExplain').ctermfg,
+    group('AineoExplain').ctermbg,
+    group('AineoExplainGutter').ctermbg,
+  }, {})
+end
+
+--- The ids of the extmarks of the explanations the child shows, by line.
+local EXTMARK_IDS = [[(function()
+  local ids = {}
+  local namespace = vim.api.nvim_get_namespaces().aineo_explain
+  for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, namespace, 0, -1, {})) do
+    ids[tostring(mark[2] + 1)] = mark[1]
+  end
+  return ids
+end)()]]
+
+--- The first row of the explanation of line 2 that the child shows, once its
+--- gutter holds `label` in the number column, or after `PATIENCE_MS`.
+---
+---@param label string
+---@return table[] chunks
+local function first_row_once_labelled(label)
+  local row = {}
+  vim.wait(PATIENCE_MS, function()
+    child.cmd('redraw')
+    local shown = child.lua_get(SHOWN_CHUNKS_OF:format('aineo_explain'))
+    row = shown[1] and shown[1].virt_lines[1] or {}
+    return vim.inspect(row):find("'" .. label .. "'", 1, true) ~= nil
+      or vim.inspect(row):find('"' .. label .. '"', 1, true) ~= nil
+  end, 50)
+  return row
+end
+
+T['the look']['places the bands again, the same extmarks, for a gutter that changed width after they were placed'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'no', 'yes', 'expl', 4, 6 },
+      { 'yes', 'no', 'ex', 6, 4 },
+    },
+  })
+
+T['the look']['places the bands again, the same extmarks, for a gutter that changed width after they were placed']['from'] = function(
+  before,
+  after,
+  label_after,
+  textoff_before,
+  textoff_after
+)
+  start_with_project()
+  child.wo.number = true
+  child.wo.numberwidth = 4
+  child.wo.signcolumn = before
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain()
+  shown_once_it_holds('Adds')
+  local ids = child.lua_get(EXTMARK_IDS)
+  eq(child.fn.getwininfo(child.api.nvim_get_current_win())[1].textoff, textoff_before)
+
+  child.wo.signcolumn = after
+
+  local row = first_row_once_labelled(label_after)
+  eq(child.fn.getwininfo(child.api.nvim_get_current_win())[1].textoff, textoff_after)
+  eq(row[#row - 1], { '  ' })
+  eq(row[#row], { '┊ Adds.' .. (' '):rep(60 - textoff_after - 2 - 7), 'AineoExplain' })
+  eq(child.lua_get(EXTMARK_IDS), ids)
+end
+
+T['the look']['places the bands again when the number column goes, without a gutter'] = function()
+  start_with_project()
+  child.wo.number = true
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain()
+  shown_once_it_holds('Adds')
+
+  child.wo.number = false
+
+  local row = {}
+  vim.wait(PATIENCE_MS, function()
+    child.cmd('redraw')
+    local shown = child.lua_get(SHOWN_CHUNKS_OF:format('aineo_explain'))
+    row = shown[1] and shown[1].virt_lines[1] or {}
+    return #row == 2
+  end, 50)
+  eq(row, { { '  ' }, { '┊ Adds.' .. (' '):rep(60 - 2 - 7), 'AineoExplain' } })
+end
+
+T['the look']['shows no gutter where the window shows no number, sign or fold column'] = function()
+  start_with_project()
+  answer_explanations({ { line = 1, text = 'Starts.' } })
+
+  explain()
+
+  eq(chunks_once_it_holds('aineo_explain', 'Starts')[1].virt_lines, {
+    { { '┊ Starts.' .. (' '):rep(60 - 9), 'AineoExplain' } },
+  })
+end
+
+T['issues'] = MiniTest.new_set()
+
+--- The numbers of the lines the child shows virtual lines above in the
+--- namespace `namespace`, without the one that says a request is working.
+---
+---@param namespace string
+---@return integer[]
+local function lines_shown(namespace)
+  local lines = {}
+  for _, mark in ipairs(child.lua_get(SHOWN_CHUNKS_OF:format(namespace))) do
+    local says = vim.inspect(mark.virt_lines)
+    if not says:find('explaining', 1, true) and not says:find('looking for issues', 1, true) then
+      table.insert(lines, mark.line)
+    end
+  end
+  return lines
+end
+
+--- The numbers of the lines the child shows virtual lines above in the
+--- namespace `namespace`, once there are `count` of them, or after
+--- `PATIENCE_MS`.
+---
+---@param namespace string
+---@param count integer
+---@return integer[]
+local function lines_shown_once(namespace, count)
+  local lines = {}
+  vim.wait(PATIENCE_MS, function()
+    lines = lines_shown(namespace)
+    return #lines == count
+  end, 20)
+  return lines
+end
+
+T['issues']['show in a namespace of their own, in the issue look: ▎ and the label issue, AineoExplainIssue, and the line’s number in AineoExplainIssueNr'] = function()
+  start_with_project()
+  child.wo.number = true
+  child.wo.numberwidth = 8
+  answer_explanations({ { line = 2, text = 'Overflows.' } })
+
+  explain({ kind = 'issues' })
+
+  eq(chunks_once_it_holds('aineo_explain_issues', 'Overflows'), {
+    {
+      line = 2,
+      above = true,
+      leftcol = true,
+      number_hl_group = 'AineoExplainIssueNr',
+      virt_lines = {
+        {
+          { '▎', 'AineoExplainIssueGutter' },
+          { ' ', 'AineoExplainIssueGutterFill' },
+          { 'issue', 'AineoExplainIssueGutter' },
+          { ' ', 'AineoExplainIssueGutterFill' },
+          { '  ' },
+          { '┊ Overflows.' .. (' '):rep(50 - 12), 'AineoExplainIssue' },
+        },
+      },
+    },
+  })
+  eq(child.lua_get(SHOWN), {})
+end
+
+T['issues']['draw their groups from DiagnosticWarn’s foreground, `#e5c07b` without one'] =
+  MiniTest.new_set({
+    parametrize = {
+      { { DiagnosticWarn = { fg = 0x808040 } }, 0x808040 },
+      { { DiagnosticWarn = {} }, 0xe5c07b },
+    },
+  })
+
+T['issues']['draw their groups from DiagnosticWarn’s foreground, `#e5c07b` without one']['with'] = function(
+  theme,
+  accent
+)
+  start_with_project()
+  use_theme(theme)
+  answer_explanations({ { line = 2, text = 'Overflows.' } })
+
+  explain({ kind = 'issues' })
+  chunks_once_it_holds('aineo_explain_issues', 'Overflows')
+
+  eq(group('AineoExplainIssue').fg, accent)
+  eq(group('AineoExplainIssueGutter').fg, accent)
+  eq(group('AineoExplainIssueNr').fg, accent)
+end
+
+T['issues']['coexist with explanations, and each key toggles its own kind'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain()
+  lines_shown_once('aineo_explain', 1)
+  answer_explanations({ { line = 5, text = 'Returns nothing.' } })
+  explain({ kind = 'issues' })
+  eq(lines_shown_once('aineo_explain_issues', 1), { 5 })
+  eq(lines_shown('aineo_explain'), { 2 })
+
+  explain({ kind = 'issues' })
+
+  eq(lines_shown_once('aineo_explain_issues', 0), {})
+  eq(lines_shown('aineo_explain'), { 2 })
+
+  explain({ kind = 'issues' })
+  lines_shown_once('aineo_explain_issues', 1)
+  explain()
+
+  eq(lines_shown_once('aineo_explain', 0), {})
+  eq(lines_shown('aineo_explain_issues'), { 5 })
+end
+
+T['issues']['asked for some lines replace the issues inside them alone, and leave the explanations'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain({ range = { 1, 3 } })
+  lines_shown_once('aineo_explain', 1)
+  answer_explanations({ { line = 2, text = 'Old.' }, { line = 5, text = 'Kept.' } })
+  explain({ kind = 'issues' })
+  lines_shown_once('aineo_explain_issues', 2)
+  answer_explanations({ { line = 3, text = 'New.' } })
+
+  explain({ kind = 'issues', range = { 1, 3 } })
+
+  chunks_once_it_holds('aineo_explain_issues', 'New.')
+  eq(lines_shown('aineo_explain_issues'), { 3, 5 })
+  eq(lines_shown('aineo_explain'), { 2 })
+end
+
+T['issues']['asked while explanations run start beside them, and both answers show'] = function()
+  start_with_project()
+  answer_after(1500)
+  answer_explanations({ { line = 2, text = 'Adds.' } }, 'explanations.json')
+  explain()
+  recorded(2)
+  answer_explanations({ { line = 5, text = 'Overflows.' } }, 'issues.json')
+
+  explain({ kind = 'issues' })
+
+  eq(#recorded(4), 4)
+  eq(lines_shown_once('aineo_explain', 1), { 2 })
+  eq(lines_shown_once('aineo_explain_issues', 1), { 5 })
+  eq(told_later(), {})
+end
+
+T['issues']['a key of the kind that runs cancels that request alone, says so, and leaves the other running'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'explanations', 'aineo_explain_issues', 'Overflows.' },
+      { 'issues', 'aineo_explain', 'Adds.' },
+    },
+  })
+
+T['issues']['a key of the kind that runs cancels that request alone, says so, and leaves the other running']['pressed for'] = function(
+  cancelled,
+  other_namespace,
+  other_text
+)
+  start_with_project()
+  answer_after(3000)
+  local answers = {
+    explanations = { { line = 2, text = 'Adds.' } },
+    issues = { { line = 5, text = 'Overflows.' } },
+  }
+  answer_explanations(answers.explanations, 'explanations.json')
+  explain({ kind = 'explanations' })
+  local first_pid = recorded(1)[1].pid
+  answer_explanations(answers.issues, 'issues.json')
+  explain({ kind = 'issues' })
+  local second_pid = recorded(3)[3].pid
+  local cancelled_pid = cancelled == 'explanations' and first_pid or second_pid
+  local other_pid = cancelled == 'explanations' and second_pid or first_pid
+
+  explain({ kind = cancelled })
+
+  eq(told(), { { message = 'aineo: explaining stopped', level = vim.log.levels.INFO } })
+  eq(has_ended(cancelled_pid), true)
+  eq(vim.uv.kill(other_pid, 0), 0)
+  chunks_once_it_holds(other_namespace, other_text)
+  eq(#lines_shown(other_namespace), 1)
+  eq(told_later(), {})
+end
+
+T['issues']['on a line both kinds show, the explanation rows sit above the issue rows, whichever answer came first'] =
+  MiniTest.new_set({
+    parametrize = { { 'explanations' }, { 'issues' } },
+  })
+
+T['issues']['on a line both kinds show, the explanation rows sit above the issue rows, whichever answer came first']['first'] = function(
+  first
+)
+  start_with_project()
+  local texts = {
+    explanations = { { line = 2, text = 'Explained.' } },
+    issues = { { line = 2, text = 'Issued.' } },
+  }
+  local second = first == 'explanations' and 'issues' or 'explanations'
+  answer_explanations(texts[first], first .. '.json')
+  explain({ kind = first })
+  lines_shown_once(first == 'explanations' and 'aineo_explain' or 'aineo_explain_issues', 1)
+  answer_explanations(texts[second], second .. '.json')
+  explain({ kind = second })
+  lines_shown_once(second == 'explanations' and 'aineo_explain' or 'aineo_explain_issues', 1)
+  child.cmd('redraw')
+
+  local rows = child.get_screenshot().text
+  local function row_of(text)
+    for number, row in ipairs(rows) do
+      if table.concat(row):find(text, 1, true) then
+        return number
+      end
+    end
+  end
+
+  eq(row_of('Explained.') < row_of('Issued.'), true)
+  eq(row_of('Issued.') < row_of('return a + b'), true)
+end
+
+T['clear()']['stops the requests of both kinds that run, silently'] = function()
+  start_with_project()
+  answer_after(20000)
+  explain({ kind = 'explanations' })
+  local first_pid = recorded(1)[1].pid
+  explain({ kind = 'issues' })
+  local second_pid = recorded(3)[3].pid
+
+  child.lua("require('aineo.explain').clear(vim.api.nvim_get_current_buf())")
+
+  eq(has_ended(first_pid), true)
+  eq(has_ended(second_pid), true)
+  eq(told_later(), {})
+end
+
+T['issues']['found in an empty answer are told once, and nothing is shown'] = function()
+  start_with_project()
+  answer_explanations({})
+
+  explain({ kind = 'issues' })
+
+  eq(told(), { { message = 'aineo: no potential issues found', level = vim.log.levels.INFO } })
+  eq(lines_shown('aineo_explain_issues'), {})
+end
+
+T['an answer']['with no explanation tells nothing'] = function()
+  start_with_project()
+  answer_explanations({})
+
+  explain()
+
+  eq(#recorded(2), 2)
+  eq(told_later(), {})
+  eq(child.lua_get(SHOWN), {})
+end
+
+T['clear()']['removes the issues too'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Overflows.' } })
+  explain({ kind = 'issues' })
+  lines_shown_once('aineo_explain_issues', 1)
+
+  child.lua("require('aineo.explain').clear(vim.api.nvim_get_current_buf())")
+
+  eq(lines_shown('aineo_explain_issues'), {})
+end
+
+T['a badge'] = MiniTest.new_set()
+
+--- The ten frames of the spinner, in the order they show.
+local FRAMES = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' }
+
+--- The text of the only floating window of the child, once it holds
+--- `fragment`, or after `PATIENCE_MS`.
+---
+---@param fragment string
+---@return string
+local function badge_text_once_it_holds(fragment)
+  local text = ''
+  vim.wait(PATIENCE_MS, function()
+    local floats = child.lua_get(FLOATS)
+    text = floats[1] and floats[1].text or ''
+    return text:find(fragment, 1, true) ~= nil
+  end, 20)
+  return text
+end
+
+--- The spinner frame and the words of a badge's `text`: ` <frame> <words> `.
+---
+---@param text string
+---@return string frame
+---@return string words
+local function badge_parts(text)
+  return text:sub(2, 4), text:sub(6, -2)
+end
+
+T['a badge']['shows in the top right corner of the window the request was made in, with a spinner, the words and the seconds'] = function()
+  start_with_project()
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  local window = child.api.nvim_get_current_win()
+
+  explain()
+
+  local floats = floats_once(1)
+  local frame, words = badge_parts(floats[1].text)
+  eq(vim.tbl_contains(FRAMES, frame), true)
+  eq(words:match('^explaining… %d+s$') ~= nil, true)
+  floats[1].text = nil
+  eq(floats[1], {
+    relative = 'win',
+    win = window,
+    anchor = 'NE',
+    row = 0,
+    col = 60,
+    focusable = false,
+    border = 'none',
+    winhighlight = 'NormalFloat:AineoExplain',
+  })
+end
+
+T['a badge']['for issues says looking for issues, in the issue look'] = function()
+  start_with_project()
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain({ kind = 'issues' })
+
+  local floats = floats_once(1)
+  local _, words = badge_parts(floats[1].text)
+  eq(words:match('^looking for issues… %d+s$') ~= nil, true)
+  eq(floats[1].winhighlight, 'NormalFloat:AineoExplainIssue')
+end
+
+T['a badge']['advances its spinner every 100 ms, and counts the seconds'] = function()
+  start_with_project()
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain()
+  floats_once(1)
+  local seen = {}
+
+  vim.wait(1000, function()
+    local floats = child.lua_get(FLOATS)
+    local frame = badge_parts(floats[1].text)
+    seen[frame] = true
+    return false
+  end, 15)
+
+  eq(vim.tbl_count(seen) >= 5, true)
+  eq(badge_text_once_it_holds(' 1s'):find(' 1s', 1, true) ~= nil, true)
+end
+
+T['a badge']['animates the progress line above the first line asked for with the same spinner'] = function()
+  start_with_project()
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain({ range = { 1, 3 } })
+  local lines = {}
+
+  vim.wait(1000, function()
+    local row = child.lua_get(SHOWN_CHUNKS_OF:format('aineo_explain'))[1].virt_lines[1]
+    local text = row[#row][1]:gsub(' +$', '')
+    lines[text] = true
+    return false
+  end, 15)
+
+  eq(vim.tbl_count(lines) >= 5, true)
+  for line in pairs(lines) do
+    eq(vim.tbl_contains(FRAMES, line:sub(5, 7)), true)
+    eq(line:sub(1, 4) .. line:sub(8), '┊  explaining…')
+  end
+end
+
+T['a badge']['lists the requests that run in the order they started, joined by a dot, in one float'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'explanations', 'issues', '^explaining… %d+s · looking for issues… %d+s$' },
+      { 'issues', 'explanations', '^looking for issues… %d+s · explaining… %d+s$' },
+    },
+  })
+
+T['a badge']['lists the requests that run in the order they started, joined by a dot, in one float']['first'] = function(
+  first,
+  second,
+  pattern
+)
+  start_with_project()
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain({ kind = first })
+  floats_once(1)
+  explain({ kind = second })
+
+  local floats = floats_once(1)
+  local text = badge_text_once_it_holds('·')
+
+  eq(#floats, 1)
+  eq(select(2, badge_parts(text)):match(pattern) ~= nil, true)
+end
+
+T['a badge']['loses the part of a request that ends, and closes with the last'] = function()
+  start_with_project()
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain({ kind = 'explanations' })
+  explain({ kind = 'issues' })
+  badge_text_once_it_holds('·')
+
+  explain({ kind = 'explanations' })
+
+  local text = badge_text_once_it_holds('looking')
+  eq(select(2, badge_parts(text)):match('^looking for issues… %d+s$') ~= nil, true)
+  explain({ kind = 'issues' })
+  eq(floats_once(0), {})
+end
+
+T['a badge']['and its timer end with the request on every path'] = MiniTest.new_set({
+  parametrize = {
+    { 'an answer' },
+    { 'a cancel' },
+    { 'the timeout' },
+    { 'a failure' },
+    { 'a buffer wiped' },
+    { 'clear()' },
+    { 'quitting' },
+  },
+})
+
+T['a badge']['and its timer end with the request on every path']['by'] = function(path)
+  start_with_project()
+  local baseline = child.lua_get(ACTIVE_TIMERS)
+  local delay = (path == 'an answer' or path == 'a failure') and 300 or 20000
+  answer_after(delay)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  local timeout_ms = path == 'the timeout' and 600 or 180000
+  if path == 'a failure' then
+    child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_EXIT = "2"')
+  end
+  explain({ timeout_ms = timeout_ms })
+  floats_once(1)
+
+  if path == 'a cancel' then
+    explain({ timeout_ms = timeout_ms })
+  elseif path == 'a buffer wiped' then
+    child.cmd('enew')
+    child.cmd('bwipeout! #')
+  elseif path == 'clear()' then
+    child.lua("require('aineo.explain').clear(vim.api.nvim_get_current_buf())")
+  elseif path == 'quitting' then
+    child.api.nvim_exec_autocmds('VimLeavePre', {})
+  end
+
+  eq(floats_once(0), {})
+  eq(
+    vim.wait(PATIENCE_MS, function()
+      return child.lua_get(ACTIVE_TIMERS) == baseline
+    end, 20),
+    true
+  )
+end
+
+T['a badge']['is gone with the window the request was made in, while the request goes on and shows its answer'] = function()
+  start_with_project()
+  answer_after(1500)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  child.cmd('vsplit')
+  explain()
+  floats_once(1)
+
+  child.cmd('close')
+
+  eq(floats_once(0), {})
+  eq(shown_once_it_holds('Adds')[1].line, 2)
+end
+
+T['a badge']['gives the progress line above the first line asked for the look of its kind: ▎ with no label, the band from the left column, the number highlight'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        'explanations',
+        'aineo_explain',
+        'AineoExplain',
+        'AineoExplainGutter',
+        'AineoExplainGutterFill',
+        'AineoExplainNr',
+        'explaining…',
+      },
+      {
+        'issues',
+        'aineo_explain_issues',
+        'AineoExplainIssue',
+        'AineoExplainIssueGutter',
+        'AineoExplainIssueGutterFill',
+        'AineoExplainIssueNr',
+        'looking for issues…',
+      },
+    },
+  })
+
+T['a badge']['gives the progress line above the first line asked for the look of its kind: ▎ with no label, the band from the left column, the number highlight']['of'] = function(
+  kind,
+  namespace,
+  text_group,
+  gutter_group,
+  fill_group,
+  number_group,
+  words
+)
+  start_with_project()
+  child.wo.number = true
+  child.wo.numberwidth = 8
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain({ kind = kind, range = { 2, 3 } })
+
+  local progress = chunks_once_it_holds(namespace, words)[1]
+  local row = progress.virt_lines[1]
+  eq({ progress.line, progress.above, progress.leftcol, progress.number_hl_group }, {
+    2,
+    true,
+    true,
+    number_group,
+  })
+  eq(#progress.virt_lines, 1)
+  eq(vim.list_slice(row, 1, 3), {
+    { '▎', gutter_group },
+    { (' '):rep(7), fill_group },
+    { '  ' },
+  })
+  eq(#row, 4)
+  eq(row[4][2], text_group)
+  eq(row[4][1]:sub(1, 4), '┊ ' .. '')
+  eq(vim.tbl_contains(FRAMES, row[4][1]:sub(5, 7)), true)
+  eq((row[4][1]:sub(8):gsub(' +$', '')), ' ' .. words)
+  eq(vim.fn.strdisplaywidth(row[4][1]), 60 - 8 - 2)
+end
+
+T['a badge']['opens as a minimal float that fires no autocommand'] = function()
+  start_with_project()
+  child.o.number = true
+  child.o.cursorline = true
+  child.o.signcolumn = 'yes'
+  child.lua([[
+    _G.opened = 0
+    vim.api.nvim_create_autocmd({ 'WinNew', 'WinEnter', 'BufWinEnter' }, {
+      callback = function()
+        _G.opened = _G.opened + 1
+      end,
+    })
+  ]])
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  floats_once(1)
+
+  eq(child.lua_get('_G.opened'), 0)
+  eq(
+    child.lua_get([[(function()
+      for _, window in ipairs(vim.api.nvim_list_wins()) do
+        if vim.api.nvim_win_get_config(window).relative ~= '' then
+          return {
+            vim.wo[window].number,
+            vim.wo[window].cursorline,
+            vim.wo[window].signcolumn,
+            vim.wo[window].foldcolumn,
+            vim.wo[window].list,
+          }
+        end
+      end
+    end)()]]),
+    { false, false, 'auto', '0', false }
+  )
+end
+
+T['a badge']['advances its spinner a frame every 100 ms'] = function()
+  start_with_project()
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  child.lua([[
+    _G.changes = {}
+    local last
+    local timer = vim.uv.new_timer()
+    timer:start(0, 5, vim.schedule_wrap(function()
+      for _, window in ipairs(vim.api.nvim_list_wins()) do
+        if vim.api.nvim_win_get_config(window).relative ~= '' then
+          local line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(window), 0, 1, false)[1]
+          local frame = line and line:sub(2, 4)
+          if frame ~= last then
+            last = frame
+            table.insert(_G.changes, vim.uv.now())
+          end
+        end
+      end
+    end))
+  ]])
+
+  explain()
+
+  vim.wait(PATIENCE_MS, function()
+    return #child.lua_get('_G.changes') >= 12
+  end, 50)
+  local changes = child.lua_get('_G.changes')
+  local gaps = {}
+  for index = 3, #changes do
+    table.insert(gaps, changes[index] - changes[index - 1])
+  end
+  table.sort(gaps)
+  eq(gaps[1] >= 70, true)
+  eq((changes[#changes] - changes[2]) / (#changes - 2) <= 130, true)
+end
+
+T['a kept answer'] = MiniTest.new_set()
+
+--- What the user is told when an answer is placed again instead of asked for.
+---
+---@param words string the words that ask again, after `:Aineo explain`
+---@return { message: string, level: integer }
+local function told_kept(words)
+  return {
+    message = ('aineo: the earlier answer, the code unchanged (:Aineo explain %sasks again)'):format(
+      words
+    ),
+    level = vim.log.levels.INFO,
+  }
+end
+
+--- Asks for explanations of the whole buffer, waits for them, and hides them
+--- by asking again. Returns what was shown.
+---
+---@param fields? table the request's fields beyond the defaults
+---@return table[] shown
+local function explained_then_hidden(fields)
+  answer_explanations({ { line = 2, text = 'Adds.' }, { line = 5, text = 'Returns it.' } })
+  explain(fields)
+  local shown = shown_once_it_holds('Returns')
+  explain(fields)
+  eq(child.lua_get(SHOWN), {})
+  return shown
+end
+
+--- How many times the fake `claude` has started, after the child had time
+--- to start another.
+---
+---@return integer
+local function processes_started()
+  told_later()
+  return #recorded(0) / 2
+end
+
+T['a kept answer']['asked again after it was hidden shows the same texts at once, starts no process, and says so'] = function()
+  start_with_project()
+  local first = explained_then_hidden()
+
+  explain()
+
+  eq(told(), { told_kept('new ') })
+  eq(child.lua_get(SHOWN), first)
+  eq(processes_started(), 1)
+end
+
+T['a kept answer']['for issues says so with the words that ask again'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Overflows.' } })
+  explain({ kind = 'issues', tools = true })
+  lines_shown_once('aineo_explain_issues', 1)
+  explain({ kind = 'issues', tools = true })
+
+  explain({ kind = 'issues', tools = true })
+
+  eq(told(), { told_kept('issues tools new ') })
+  eq(lines_shown('aineo_explain_issues'), { 2 })
+  eq(processes_started(), 1)
+end
+
+T['a kept answer']['is not used for another kind, tools or range, which start a request'] =
+  MiniTest.new_set({
+    parametrize = {
+      { { tools = true } },
+      { { kind = 'issues' } },
+      { { range = { 1, 3 } } },
+    },
+  })
+
+T['a kept answer']['is not used for another kind, tools or range, which start a request']['asked with'] = function(
+  fields
+)
+  start_with_project()
+  explained_then_hidden()
+
+  explain(fields)
+
+  eq(#recorded(4), 4)
+  eq(processes_started(), 2)
+end
+
+T['a kept answer']['is dropped when the text of the lines changes, and a request starts'] = function()
+  start_with_project()
+  explained_then_hidden()
+  child.api.nvim_buf_set_lines(0, 0, 1, false, { '-- changed' })
+
+  explain()
+
+  eq(#recorded(4), 4)
+end
+
+T['a kept answer']['is kept by a write of the buffer alone'] = function()
+  start_with_project()
+  explained_then_hidden()
+  child.cmd('write')
+
+  explain()
+
+  eq(told(), { told_kept('new ') })
+  eq(processes_started(), 1)
+end
+
+T['a kept answer']['is replaced by asking again with new, which starts a request and keeps its answer'] = function()
+  start_with_project()
+  explained_then_hidden()
+  answer_explanations({ { line = 3, text = 'Ends it.' } }, 'second.json')
+
+  explain({ fresh = true })
+
+  eq(shown_once_it_holds('Ends')[1].line, 3)
+  explain()
+  eq(child.lua_get(SHOWN), {})
+  explain()
+  eq(shown_once_it_holds('Ends')[1].line, 3)
+  eq(processes_started(), 2)
+end
+
+T['a kept answer']['asked again for a file opened again after its buffer was wiped starts a request'] = function()
+  local folder = start_with_project()
+  explained_then_hidden()
+  child.cmd('bwipeout!')
+  child.cmd('edit ' .. folder .. '/src/add.lua')
+
+  explain()
+
+  eq(#recorded(4), 4)
+end
+
+T['a kept answer']['is placed wrapped for the window it is placed in now'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = vim.trim(('wörd '):rep(20)) } })
+  explain()
+  shown_once_it_holds('wörd')
+  explain()
+  child.o.columns = 40
+
+  explain()
+
+  eq(#shown_once_it_holds('wörd')[1].virt_lines, 3)
+end
+
+T['a kept answer']['for some lines is kept for those lines, and placed after clear()'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain({ range = { 1, 3 } })
+  local shown = shown_once_it_holds('Adds')
+  child.lua("require('aineo.explain').clear(vim.api.nvim_get_current_buf())")
+
+  explain({ range = { 1, 3 } })
+
+  eq(told(), { told_kept('new ') })
+  eq(child.lua_get(SHOWN), shown)
+  eq(processes_started(), 1)
+end
+
+T['a kept answer']['asked again with new while it is shown asks again instead of clearing it'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain()
+  shown_once_it_holds('Adds')
+  answer_explanations({ { line = 3, text = 'Ends it.' } }, 'second.json')
+
+  explain({ fresh = true })
+
+  eq(shown_once_it_holds('Ends')[1].line, 3)
+  eq(processes_started(), 2)
+end
+
+T['a kept answer']['asked again for the same lines while it is shown places it once, each explanation drawn once'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain({ range = { 1, 3 } })
+  local shown = shown_once_it_holds('Adds')
+
+  explain({ range = { 1, 3 } })
+
+  eq(told(), { told_kept('new ') })
+  eq(child.lua_get(SHOWN), shown)
 end
 
 return T
