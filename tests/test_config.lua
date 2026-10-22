@@ -13,7 +13,11 @@ local DEFAULTS = {
   changes = { graph_limit = 1000 },
   tabs = { padding = 2, always_show = true },
   find = { picker = 'auto' },
-  explain = { model = 'sonnet', timeout_ms = 180000 },
+  explain = {
+    model = 'sonnet',
+    timeout_ms = 180000,
+    issues_prompt = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
+  },
 }
 
 local T = MiniTest.new_set()
@@ -346,6 +350,34 @@ T['resolve_config()']['refuses a timeout that is not a whole number of milliseco
   expect.error(function()
     config.resolve_config({ explain = { timeout_ms = timeout } }, nil)
   end, 'explain%.timeout_ms: expected a whole number of milliseconds of at least 1')
+end
+
+T['resolve_config()']['takes the prompt that sends marked issues from either source, a request to check them by default'] = function()
+  local from_global = config.resolve_config({ explain = { issues_prompt = 'Check these:' } }, nil)
+  local from_setup = config.resolve_config(
+    { explain = { issues_prompt = 'Check these:' } },
+    { explain = { issues_prompt = 'Fix these:' } }
+  )
+
+  eq(from_global.explain.issues_prompt, 'Check these:')
+  eq(from_setup.explain.issues_prompt, 'Fix these:')
+  eq(
+    config.resolve_config(nil, nil).explain.issues_prompt,
+    'Some issues were found in this code, can you check and propose a fix if the issue holds:'
+  )
+end
+
+T['resolve_config()']['refuses an issues prompt that is not a non-empty string'] =
+  MiniTest.new_set({
+    parametrize = { { '' }, { 5 }, { false }, { { 'Check' } } },
+  })
+
+T['resolve_config()']['refuses an issues prompt that is not a non-empty string']['as explain.issues_prompt'] = function(
+  prompt
+)
+  expect.error(function()
+    config.resolve_config({ explain = { issues_prompt = prompt } }, nil)
+  end, 'explain%.issues_prompt: expected a non%-empty string')
 end
 
 T['resolve_config()']['returns a key no setting knows, rather than refusing it'] = function()

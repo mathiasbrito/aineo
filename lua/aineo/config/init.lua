@@ -66,6 +66,14 @@ local function is_model_name(value)
   return type(value) == 'string' and value ~= ''
 end
 
+--- Whether `value` is the words that open a prompt: a non-empty string.
+---
+---@param value any
+---@return boolean
+local function is_prompt(value)
+  return type(value) == 'string' and value ~= ''
+end
+
 --- The most spaces a title of the tab line may be padded with either side.
 local MOST_PADDING = 8
 
@@ -159,6 +167,12 @@ local SETTINGS = {
     default = 180000,
     validator = is_positive_count,
     expected = 'a whole number of milliseconds of at least 1',
+  },
+  {
+    name = 'explain.issues_prompt',
+    default = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
+    validator = is_prompt,
+    expected = 'a non-empty string',
   },
 }
 
