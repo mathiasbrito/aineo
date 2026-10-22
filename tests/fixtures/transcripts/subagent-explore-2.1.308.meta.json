@@ -1,0 +1,10 @@
+{
+  "agentType": "Explore",
+  "launchedWithDefaults": true,
+  "description": "scrubbed",
+  "toolUseId": "toolu_fixture0010",
+  "spawnDepth": 1,
+  "requestShape": "background",
+  "requestNonInteractive": true,
+  "finished": true
+}
