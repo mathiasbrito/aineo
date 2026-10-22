@@ -167,6 +167,8 @@ resumes it.
 | `\N` | starts a new Claude Code session |
 | `\v`, `\V` | explain the code of the file, or in Visual mode of the selected lines: `\v` hands Claude the code alone, `\V` lets it read the project too |
 | `\vi`, `\VI` | the same, asking for potential issues instead of explanations (`\vi` the code alone, `\VI` with the project readable) |
+| `\vm` | marks the issues on the cursor's line (on each selected line in Visual mode), or unmarks them; `\s` then sends the marked issues to Claude |
+| `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
 | `\z` | zooms the window of the right column the cursor is in, and gives the heights back when pressed again |
 | `\Z` | zooms the window the cursor is in to the whole tab page, and gives the sizes back when pressed again |
 
@@ -192,7 +194,7 @@ and, in Terminal mode, `<C-\>Z` do the same.
 |---|---|
 | `\pa` | shows the agent pane and moves to the Report |
 | `\r`, `\i` | move to the Report, to Input |
-| `\s` | sends Input to Claude (in Visual mode, in Input, the selection alone) |
+| `\s` | sends Input to Claude (in Visual mode, in Input, the selection alone); in a window whose buffer has issues marked with `\vm`, sends those instead |
 
 ### Changes pane
 
@@ -420,11 +422,26 @@ with a `▎` and the label `expl` in the number column and the line's number in
 the accent. The groups are `AineoExplain`, `AineoExplainGutter`,
 `AineoExplainGutterFill` and `AineoExplainNr`, and `AineoExplainIssue`,
 `AineoExplainIssueGutter`, `AineoExplainIssueGutterFill` and
-`AineoExplainIssueNr` for issues; define one yourself and aineo keeps it.
+`AineoExplainIssueNr` for issues, and `AineoExplainIssueMarked` and
+`AineoExplainIssueMarkedGutter` for a marked issue; define one yourself and
+aineo keeps it.
 
 While a request runs, a badge in the top right corner of its window shows a
 spinner, what it does and the seconds it has run, and the `┊` line above the
 first line asked for spins too. Both go when the request ends, however it ends.
+
+`]v` and `[v` jump to the next and the previous explanation or issue of the
+buffer, of either kind, with a count and wrapping around at the ends; the
+keys exist in a buffer while it shows any, and a key you mapped yourself is
+never replaced. To send issues to your Claude Code, press `\vm` on the line
+an issue is shown above (in Visual mode, on the selected lines) to mark it:
+the issue shows a `✓` where `▎` is, in a stronger tint, and the badge in the
+window's corner counts them, ` 2 issues marked · \s sends `. Then `\s` in
+that window sends them at once to the session's Claude Code, leaving Input as
+it is: the words of `explain.issues_prompt`, then one line for each marked
+issue, `- <path>:<line>: <text>`, the path from the repository's top. The
+marks are cleared once sent, and the issues stay shown; with nothing marked,
+`\s` sends Input as ever.
 
 Every answer that was shown is kept in memory. Asking again for the same kind,
 tools and lines while their text is unchanged places the kept answer at once and
@@ -521,7 +538,11 @@ vim.g.aineo = {
   },
   tabs = { padding = 2, always_show = true },
   find = { picker = 'auto' },
-  explain = { model = 'sonnet', timeout_ms = 180000 },
+  explain = {
+    model = 'sonnet',
+    timeout_ms = 180000,
+    issues_prompt = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
+  },
 }
 ```
 
@@ -540,6 +561,7 @@ vim.g.aineo = {
 | `find.picker` | `'auto'` | The picker `\f` hands its search to: `'auto'` takes the first installed of snacks.nvim, fzf-lua, telescope.nvim and mini.pick; `'snacks'`, `'fzf-lua'`, `'telescope'` or `'mini.pick'` takes that one alone. With none installed, or the one named missing, aineo lists the files through `vim.ui.select()`. None is a dependency. |
 | `explain.model` | `'sonnet'` | The model of the Claude Code that `\v` and `\V` start to explain code, as `claude --model` takes it: an alias such as `'opus'` or a full name. A non-empty string. |
 | `explain.timeout_ms` | `180000` | How long a request to explain code may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
+| `explain.issues_prompt` | `'Some issues were found in this code, can you check and propose a fix if the issue holds:'` | The words that open the message `\s` sends when issues are marked, before the line for each issue. A non-empty string. |
 
 The highlight groups can be overridden in a colorscheme or with
 `:highlight`. The tab line uses `AineoTabLineSel`, `AineoTabLine` and
