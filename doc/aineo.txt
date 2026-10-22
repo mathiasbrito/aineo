@@ -1849,8 +1849,9 @@ Pressed in Normal mode on a buffer that shows explanations, `\v` and `\V`
 clear them. Pressed while a request runs, they stop it and tell you. A request
 that outlasts `explain.timeout_ms` is stopped and you are told once, as you
 are when Claude Code exits with a code other than 0, answers an error, or
-answers nothing aineo can read: nothing is shown then. When the buffer changed
-while the request ran, nothing is shown and you are told to ask again. The
+answers nothing aineo can read: nothing is shown then. When the text of the
+buffer changed while the request ran (a write of it changes nothing),
+nothing is shown and you are told to ask again. The
 Claude Code of every request that runs is stopped when Neovim quits. The
 buffer must hold a file: in aineo's own panes, `\v` and `\V` tell you so
 (|:Aineo-explain|). The model is `explain.model`
