@@ -8,7 +8,7 @@ A regular packet of wave 21 (D26: the whole suite once before the push). The use
 ## Links
 
 - [[Projects/aineo]]
-- [[Planning/aineo — v1 agent console]] — D104 (A550 to A553 inside its row), T116 to T119; C1; D26, D29
+- [[Planning/aineo — v1 agent console]] — D104 (A550 to A555 inside its row), T116 to T119; C1; D26, D29
 - `lua/aineo/explain/` (new: `kinds.lua`, `look.lua`, `runs.lua`, `badge.lua`, `kept.lua`; changed: `init.lua`, `marks.lua`, `request.lua`), `lua/aineo/entry/explaining.lua`, `plugin/aineo.lua`, `lua/aineo/health.lua`
 - `doc/aineo.txt` — `hl-AineoExplainGutter`, `hl-AineoExplainGutterFill`, `hl-AineoExplainNr`, `hl-AineoExplainIssue`, `hl-AineoExplainIssueGutter`, `hl-AineoExplainIssueGutterFill`, `hl-AineoExplainIssueNr`, `<Plug>(aineo-explain-issues)`, `<Plug>(aineo-explain-issues-tools)`, `aineo-\vi`, `aineo-\VI`, `aineo-v_\vi`, `aineo-v_\VI`; `README.md`
 - `tests/test_explain.lua`, `tests/test_entry_explain.lua`; `test_doc.lua`, `test_health.lua`, `test_plugin.lua`, `test_entry.lua`
@@ -65,6 +65,43 @@ Applied to the committed file, run on the test file named, restored (none left).
 | M15 `\VI` without tools | `test_entry_explain` | assertion, 2 cases |
 | M16 issues at column 0 (explanations no longer above on a shared line) | `test_explain` | assertion, 1 case |
 
+## Fix round (A554, A555)
+
+The attack and records reviews of the pull request led to these commits, each test first:
+
+- The groups are recomputed on `OptionSet background` too, a group the user defined with `default = true` is kept (a group counts as the user's when it held anything before aineo set it), and the groups carry cterm colours (accent `ctermfg`, `LineNr` `ctermbg` in the gutter, `CursorLine` `ctermbg` behind the text).
+- A label that does not fit the gutter is cut to `textoff - 2` cells and shown from two characters up (`ex` / `is` in four cells).
+- The bands are placed again, the same extmarks, when the window's `textoff` changes: `marks.lua` keeps the explanations shown, and a decoration provider schedules the re-placing.
+- Tests: the progress line's look for both kinds, the badge as a minimal float with no autocommand, the spinner at 100 ms a frame, the same range asked again while shown drawn once, the cannot-run case with no float and no timer; the forgotten-with-the-buffer case renamed.
+
+Mutants of the round, applied to the committed files and run on `test_explain`, restored:
+
+| Edit | Killed by |
+|---|---|
+| F1 the re-placing dropped | 3 cases |
+| F2 the `OptionSet background` handler dropped | 1 case |
+| F3 the old default-flag check back | 1 case |
+| F4 no cterm in the text group | 1 case |
+| F5 the label not cut | 3 cases |
+| F6 the cannot-run path leaves the request | 1 case |
+| Ma the badge without `style = 'minimal'` | 1 case |
+| Mb the badge with autocommands | 1 case |
+| Mc the spinner at 200 ms | 1 case |
+| Mu the progress line labelled | 2 cases |
+| Mv the progress line without `leftcol` | 2 cases |
+| Ms the progress line without the number highlight | 2 cases |
+| Mg `place_kept` without clearing the range | 1 case |
+
 ## Whole suite
 
 `make test` on the tree pushed, Neovim 0.12.5 on the host: 5806 cases, 157 groups, `Fails (1) and Notes (0)`; the one failure, `test_entry_run_follow` (a window of the run pane follows the output of a shell added below, by `\X`), is a known load flake and passed alone (`Fails (0)`). `make lint`: 0 errors, 0 warnings.
+
+The whole suite of the first head; the fix round ran the files it touches (`test_explain`, `test_entry_explain`, `test_doc`) and `make lint`, and the orchestrator runs the suite on the final head.
+
+## Open threads
+
+- M12 stays accepted: `kept.forget` on `BufWipeout` frees memory only, since Neovim never reuses a buffer number, and no test can observe it.
+- `lua/aineo/tabs/highlights.lua` has the flaw A555 item 3 fixed in `look.lua`: it takes a group the user defined with `default = true` for its own and replaces it on the next `ColorScheme`.
+- `\v` and `\V` wait `'timeoutlen'` for a following `i` or `I`, now that `\vi` and `\VI` exist; documented in the help and the health check.
+- On an empty line explanations and issues both sit at column 0, so the first created is above.
+- `test_entry_run_follow` (`\X`) failed once under load in the whole run and passed alone.
