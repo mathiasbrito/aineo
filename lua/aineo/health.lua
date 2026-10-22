@@ -985,7 +985,7 @@ local function check_explain(resolved_config)
     "\\v hands it the code alone, with no tool; \\V lets it read the project with Read, Grep and Glob, without asking; it gets no other tool, no MCP server and no settings of aineo, loads your own settings but never the project's (--setting-sources user), and asks no permission"
   )
   vim.health.info(
-    "\\vi and \\VI ask the same Claude Code for potential issues instead of explanations, \\vi with the code alone and \\VI with the read-only tools; \\v waits for 'timeoutlen' for a following i, and \\V for a following I"
+    "\\vi and \\VI ask the same Claude Code for potential issues instead of explanations, \\vi with the code alone and \\VI with the read-only tools; \\v waits for 'timeoutlen' for a following i or m, and \\V for a following I"
   )
   vim.health.info(
     ('\\vm marks the issues on a line (on each selected line in Visual mode), and \\s then sends the marked issues to the session\'s Claude Code in place of Input, after "%s" (explain.issues_prompt): :help |aineo-explain-mark|'):format(

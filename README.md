@@ -409,8 +409,8 @@ handling gaps, security or performance risks, no remarks on style), shown the
 same way in the accent of `DiagnosticWarn` with the label `issue`. Explanations
 and issues are shown together, and each key toggles its own kind; a request of
 each kind may run at once, and a key stops the request of its own kind alone.
-Since `\v` starts `\vi`, Neovim waits `'timeoutlen'` for a following `i` before
-it runs `\v`. `:Aineo explain [issues] [tools]` with a range, and `:Aineo
+Since `\v` starts `\vi` and `\vm`, Neovim waits `'timeoutlen'` for a following
+`i` or `m` before it runs `\v`. `:Aineo explain [issues] [tools]` with a range, and `:Aineo
 explain clear`, do the same. The model is `explain.model`, `'sonnet'` by
 default, and a request is stopped after `explain.timeout_ms`. If the text of
 the buffer changes while Claude Code works on it (a write changes nothing),
