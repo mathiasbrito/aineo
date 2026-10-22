@@ -10,6 +10,7 @@
 
 local calls = require('aineo.office_states.calls')
 local timing = require('aineo.office_states.timing')
+local triggers = require('aineo.office_states.triggers')
 
 local M = {}
 
@@ -22,6 +23,7 @@ local UNNAMED_CALL = ''
 --- A tool call that started and has not finished.
 ---@class aineo.office_states.OpenCall
 ---@field state string the state of an agent while the call runs
+---@field activity? string the activity a trigger of the pack names for the call
 ---@field order integer how many calls the agent had started when this one did
 
 --- A state that a signal brings and the clock ends.
@@ -33,6 +35,7 @@ local UNNAMED_CALL = ''
 --- A state of an agent from a time on.
 ---@class aineo.office_states.Appearance
 ---@field state string
+---@field activity? string the activity a trigger names, in place of the state's own
 ---@field since number when the agent came into the state; `timing.BEFORE_THE_TRACKER` when it was always in it
 
 ---@class aineo.office_states.Record
@@ -51,11 +54,15 @@ local UNNAMED_CALL = ''
 ---@field shown aineo.office_states.Appearance the state it shows, held by the dwell
 ---@field listed_until? number a finished agent is listed until then
 
+--- What the tracker is told about the office, which decides what a signal means.
+---@class aineo.office_states.Settings: aineo.office_states.CallSettings
+---@field triggers? aineo.office_states.Trigger[] the triggers of the pack, in order
+
 --- What a signal is heard with.
 ---@class aineo.office_states.Hearing
 ---@field now number when it was heard, in seconds on the caller's clock
 ---@field replayed boolean whether it was read from the transcript's tail, a thing of the past
----@field settings aineo.office_states.CallSettings
+---@field settings aineo.office_states.Settings
 
 ---@param id string
 ---@return aineo.office_states.Record
@@ -81,6 +88,14 @@ end
 ---@return boolean
 local function is_main(record)
   return record.id == M.MAIN
+end
+
+--- The kind of agent `record` is, for a trigger's `agent` field.
+---
+---@param record aineo.office_states.Record
+---@return aineo.office_states.AgentKind
+local function kind_of_agent(record)
+  return is_main(record) and 'main' or 'subagent'
 end
 
 --- Makes `state` the agent's event from now on, lasting `lasts` seconds. A
@@ -116,7 +131,15 @@ local HEARS = {
     end
     local state = calls.state_of_call(signal, hearing.settings)
     record.started_calls = record.started_calls + 1
-    record.open_calls[id] = { state = state, order = record.started_calls }
+    record.open_calls[id] = {
+      state = state,
+      activity = triggers.activity_of_call(
+        signal,
+        kind_of_agent(record),
+        hearing.settings.triggers or {}
+      ),
+      order = record.started_calls,
+    }
     if state == 'background_job' then
       record.background_jobs = record.background_jobs + 1
     end
@@ -232,47 +255,46 @@ local function latest_open_call(record)
   return latest
 end
 
---- `waiting_for_subagents` when the main agent has subagents running and
---- either an `Agent` call is the call it started last or its turn ended; none
---- otherwise, and none for any other agent.
+--- Whether the main agent waits for its subagents: some are running and
+--- either an `Agent` call is the call it started last or its turn ended. No
+--- other agent waits so.
 ---
 ---@param record aineo.office_states.Record
+---@param latest_call aineo.office_states.OpenCall|nil the call it started last of those still running
 ---@param running_subagents integer how many subagents have not finished
----@return string|nil state
-local function state_of_waiting(record, running_subagents)
+---@return boolean
+local function waits_for_subagents(record, latest_call, running_subagents)
   if not is_main(record) or running_subagents == 0 then
-    return nil
+    return false
   end
-  local call = latest_open_call(record)
-  if call and call.state == 'delegating' then
-    return 'waiting_for_subagents'
+  if latest_call then
+    return latest_call.state == 'delegating'
   end
-  if not call and record.turn_ended then
-    return 'waiting_for_subagents'
-  end
-  return nil
+  return record.turn_ended
 end
 
---- The state the facts of `record` give: leaving when its work is over; else
---- waiting for subagents, when the main agent has some running; else the state
---- of the call started last while a tool call runs; a background job still
---- running; thinking while the model works on what it was given; idle once
---- its turn ended; standing otherwise.
+--- The state the facts of `record` give, and the activity a trigger names for
+--- the call it started last, if the state is that call's: leaving when its
+--- work is over; else waiting for subagents, when the main agent has some
+--- running; else the state of the call started last while a tool call runs; a
+--- background job still running; thinking while the model works on what it
+--- was given; idle once its turn ended; standing otherwise.
 ---
 ---@param record aineo.office_states.Record
 ---@param running_subagents integer how many subagents have not finished
 ---@return string state
+---@return string|nil activity
 function M.fact_state(record, running_subagents)
   if record.finished or record.session_ended then
     return 'leaving'
   end
-  local waiting = state_of_waiting(record, running_subagents)
-  if waiting then
-    return waiting
-  end
   local call = latest_open_call(record)
+  local activity = call and call.activity
+  if waits_for_subagents(record, call, running_subagents) then
+    return 'waiting_for_subagents', activity
+  end
   if call then
-    return call.state
+    return call.state, activity
   end
   if record.background_jobs > 0 then
     return 'background_job'
