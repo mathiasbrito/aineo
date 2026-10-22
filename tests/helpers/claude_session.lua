@@ -362,8 +362,29 @@ end
 ---@param input string such as `hook_input()` makes
 ---@return vim.SystemCompleted
 function M.run_session_hook(child, fake, count, event, input)
-  local pid = tostring(M.wait_for_starts(fake, count)[count].pid)
-  local command = M.hook_command(fake, count, event):gsub('"%$PPID"', pid)
+  return M.run_session_hook_as(
+    child,
+    fake,
+    count,
+    event,
+    input,
+    M.wait_for_starts(fake, count)[count].pid
+  )
+end
+
+--- Runs the `event` hook of the fake's `count`th start as `run_session_hook()`
+--- does, but as the Claude Code process `pid` runs it: `pid` where the
+--- command has `"$PPID"`.
+---
+---@param child table
+---@param fake { record: string }
+---@param count integer
+---@param event string
+---@param input string such as `hook_input()` makes
+---@param pid integer
+---@return vim.SystemCompleted
+function M.run_session_hook_as(child, fake, count, event, input, pid)
+  local command = M.hook_command(fake, count, event):gsub('"%$PPID"', tostring(pid))
   return run_hook_command(child, command, input)
 end
 
