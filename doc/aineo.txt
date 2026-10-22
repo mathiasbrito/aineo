@@ -1847,7 +1847,7 @@ answers nothing aineo can read: nothing is shown then. When the buffer changed
 while the request ran, nothing is shown and you are told to ask again. The
 Claude Code of every request that runs is stopped when Neovim quits. The
 buffer must hold a file: in aineo's own panes, `\v` and `\V` tell you so
-(|:AineoExplain|). The model is `explain.model`
+(|:Aineo-explain|). The model is `explain.model`
 (|aineo-config-explain.model|). Each request is a model call, billed as
 Claude Code's own usage is.
 
@@ -2115,13 +2115,16 @@ from another tab, `\o` moves you to it.
 			directory this Neovim started in (|:Aineo-claim|), and
 			after `tab` `new` and the number of each tab page
 			(|:Aineo-tab|), and `close` after `diff`
-			(|:Aineo-diff|). Without one of them, or with anything
-			else, it tells you, with one error, which ones it
-			takes.
+			(|:Aineo-diff|), and `tools` and `clear` after
+			`explain` (|:Aineo-explain|). Without one of them, or
+			with anything else, it tells you, with one error,
+			which ones it takes. Only `explain` takes a range;
+			given one for another subcommand, it tells you so.
 
                                                                  *:Aineo-send*
 :Aineo send		Sends Input to Claude (|aineo-send|). It takes no
-			range: Neovim refuses `:'<,'>Aineo send` with E481.
+			range: `:'<,'>Aineo send` tells you, with one error,
+			that only `:Aineo explain` takes a range.
 			A selection is sent by `\s` in Visual mode
 			(|aineo-v_\s|).
 
@@ -2527,8 +2530,8 @@ moves you to that tab instead and claims nothing.
 			and, in Terminal mode and in Insert mode, `<C-\>Z`
 			do the same (|aineo-keys|).
 
-                                                              *:AineoExplain*
-:[range]AineoExplain [tools]
+                                                             *:Aineo-explain*
+:[range]Aineo explain [tools]
 			Explains the code of the current buffer, a file's, or
 			of the lines of [range], with a Claude Code of its own
 			(|aineo-explain|). With `tools` that Claude Code may
@@ -2539,9 +2542,10 @@ moves you to that tab instead and claims nothing.
 			buffer while it shows explanations, it clears them.
 			In a buffer that holds no file it tells you, with one
 			error. With any other word it tells you, with one
-			error, what it takes.
+			error, what it takes. The only subcommand of `:Aineo`
+			that takes a range.
 
-:AineoExplain clear
+:Aineo explain clear
 			Removes every explanation the current buffer shows,
 			and stops the request that runs for it, if any.
 
@@ -2640,16 +2644,16 @@ you turn the prefix off, or when a prefix key is yours: >lua
 
                                                        *<Plug>(aineo-explain)*
 <Plug>(aineo-explain)
-			In Normal mode, does what `:AineoExplain` does
-			(|:AineoExplain|); in Visual mode, explains the lines
+			In Normal mode, does what `:Aineo explain` does
+			(|:Aineo-explain|); in Visual mode, explains the lines
 			selected alone and leaves Visual mode.
 
                                                  *<Plug>(aineo-explain-tools)*
 <Plug>(aineo-explain-tools)
 			Does what `<Plug>(aineo-explain)` does, with Claude
 			Code allowed to read the project with `Read`, `Grep`
-			and `Glob`; what `:AineoExplain tools` does
-			(|:AineoExplain|).
+			and `Glob`; what `:Aineo explain tools` does
+			(|:Aineo-explain|).
 
                                                           *<Plug>(aineo-zoom)*
 <Plug>(aineo-zoom)

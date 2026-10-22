@@ -85,7 +85,7 @@ local TAGS = {
   ':Aineo-find',
   ':Aineo-zoom',
   ':Aineo-zoom-full',
-  ':AineoExplain',
+  ':Aineo-explain',
   '<Plug>(aineo-send)',
   '<Plug>(aineo-open)',
   '<Plug>(aineo-report)',
