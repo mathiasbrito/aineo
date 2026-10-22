@@ -15,9 +15,10 @@ local TAIL_BYTES = 256 * 1024
 local MAX_LINE_BYTES = 1024 * 1024
 
 --- How long after the watch starts the follower reads once more. A file watch
---- is not effective at once (measured on macOS, 2026-10-22: a write less than
---- about 300 ms after the watch started raised no event), so bytes appended
---- meanwhile are read by this one read instead of waiting for the next event.
+--- takes effect when the event loop next runs, not when it is started (measured
+--- on macOS, 2026-10-22: a write made before the loop ran raised no event, one
+--- made after it did, at any delay), so bytes appended in between are read by
+--- this one read instead of waiting for the next event.
 local WATCH_SETTLE_MS = 500
 
 local NEWLINE = '\n'
@@ -79,7 +80,9 @@ end
 --- 256 KiB of the file holds, each signal marked `replayed = true`, before it
 --- returns, and then for each line appended, as the file changes. A line is
 --- delivered whole, once its newline is written. When the file is longer than
---- the tail, the tail's first line is dropped, as it is most likely cut.
+--- the tail, the tail's first line is dropped unless the tail begins on a
+--- line: it is cut otherwise. A line longer than a megabyte is skipped and
+--- reported once, by its length.
 ---
 --- `on_signal` and `on_unreadable_line` are called from the editor's main loop,
 --- never from a fast event.
@@ -98,6 +101,9 @@ function M.follow(options)
   end
 
   local offset = 0
+  --- How many bytes of the line being skipped, one longer than `MAX_LINE_BYTES`,
+  --- have been passed over; nil while no line is skipped.
+  local skipped = nil
   local stopped = false
   local pass_pending = false
 
@@ -126,9 +132,10 @@ function M.follow(options)
   end
 
   --- Reads and delivers the file's first tail window; sets `offset` after the
-  --- last whole line it holds.
+  --- last whole line it holds. The window starts one byte early: when that
+  --- byte ends a line, the window's first line is whole and is replayed.
   local function replay_tail()
-    local from = math.max(0, stat.size - TAIL_BYTES)
+    local from = math.max(0, stat.size - TAIL_BYTES - 1)
     local text = read_bytes(options.path, from, stat.size - from) or ''
     local dropped = 0
     if from > 0 then
@@ -137,6 +144,25 @@ function M.follow(options)
     end
     local consumed = deliver_whole_lines(text, true)
     offset = from + dropped + consumed
+  end
+
+  --- Passes over the bytes of the line being skipped in `text`, up to and
+  --- including its newline when `text` holds it, and returns how many.
+  --- Reports the line's length, once, when its newline is passed.
+  ---
+  ---@param text string
+  ---@return integer consumed
+  local function skip_line(text)
+    local newline = text:find(NEWLINE, 1, true)
+    if not newline then
+      skipped = skipped + #text
+      return #text
+    end
+    if options.on_unreadable_line then
+      options.on_unreadable_line(skipped + newline - 1)
+    end
+    skipped = nil
+    return newline
   end
 
   --- Reads one pass of the bytes appended since `offset` and delivers their
@@ -155,11 +181,14 @@ function M.follow(options)
     if not text then
       return
     end
-    local consumed = deliver_whole_lines(text, false)
-    if consumed == 0 and #text == MAX_LINE_BYTES then
-      consumed = #text
-      if options.on_unreadable_line then
-        options.on_unreadable_line(#text)
+    local consumed
+    if skipped then
+      consumed = skip_line(text)
+    else
+      consumed = deliver_whole_lines(text, false)
+      if consumed == 0 and #text == MAX_LINE_BYTES then
+        skipped = 0
+        consumed = skip_line(text)
       end
     end
     offset = offset + consumed
