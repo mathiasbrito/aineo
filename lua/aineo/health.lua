@@ -220,8 +220,8 @@ end
 
 --- Reports, when `command` gives Claude Code a `--settings`, whether aineo
 --- can add its hooks to them — its session hooks, its `SubagentStart`
---- hook and its `PostToolUse` hook — read from the editor's working
---- directory as a start of Claude Code reads them
+--- hook, its `PostToolUse` hook and its `PermissionRequest` hook — read from
+--- the editor's working directory as a start of Claude Code reads them
 --- (`aineo.claude`'s `given_settings_verdict()`): a warning naming
 --- why when it cannot.
 ---
@@ -234,7 +234,7 @@ local function check_claude_settings(command)
   if verdict.problem then
     vim.health.warn(
       "claude.cmd's --settings cannot take aineo's hooks: " .. verdict.problem,
-      "Claude Code starts with them as they are, without aineo's hooks, so a session switch inside it is not followed, its subagents are not told of announce_work, and the branches and worktrees its Bash tool makes are not caught by the PostToolUse hook: :help aineo-config-claude.cmd"
+      "Claude Code starts with them as they are, without aineo's hooks, so a session switch inside it is not followed, its subagents are not told of announce_work, and the branches and worktrees its Bash tool makes are not caught by the PostToolUse hook, and the office does not see a permission prompt wait (PermissionRequest hook): :help aineo-config-claude.cmd"
     )
     return
   end
