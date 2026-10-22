@@ -1836,8 +1836,9 @@ and no other tool. The prompt gives the file's path from that folder, its
 included, each line numbered. Claude Code answers a list of line numbers and
 explanations, each tied to the first line it explains, and ends.
 
-An explanation shows above its line, indented as that line, each row after
-`┊ `, wrapped at the window's text width less that indent, in
+An explanation shows above its line, indented as that line (by half the
+window's text width at most), each row after `┊ `, wrapped at the window's
+text width less that indent, in
 |hl-AineoExplain|. The marks move with the edits made to the buffer and
 vanish with a line deleted. While a request runs, one virtual line above the
 first line asked for says `┊ explaining…`. A request for some lines replaces
