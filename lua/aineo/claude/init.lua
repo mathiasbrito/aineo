@@ -37,6 +37,7 @@ local M = {}
 ---@field editor_program string the editor's own program (`v:progpath`), which runs the hook relay
 ---@field on_session_switched? fun(id: string, source: string?, left: string, reason: string?) called when the session followed changes (`session_id()`): with the new id, how Claude Code started it (`clear`, `resume`, `fork`; `startup` or `resume` for a start that takes the place of the session followed), the id left, and why Claude Code left it (`clear`, `resume`; none for a start). Never for an editor's first start. For a start that resumes, it is called when Claude Code launches, once the list of the folder's sessions has answered, not before `start_session()` returns. An error it raises is told the user as a warning and goes no further
 ---@field on_session_ready? fun(id: string) called once per start of Claude Code — the new session's in place of a resume with no conversation among them — the first time it is ready for input (`session_status()` turns `'ready'`), with the session it follows then (`session_id()`): before that status is read, from the callback that sets it. Never for a start that is not the session any more, whose process has ended or whose terminal was wiped, or once Neovim is quitting (`v:exiting`): not for a resume Claude Code found no conversation for, a dialog never answered, or a Claude Code that exits before its input box settles. An error it raises is told the user as a warning and goes no further
+---@field on_transcript? fun(session_id: string, path: string) called when a `SessionStart` hook of this start's Claude Code names the file it writes a session's transcript in (`receive_session_event()`): with the session and the absolute path. Never for a hook that names none or a path that is not absolute, a `SessionEnd`, a start whose hooks are ignored (`receive_session_event()`), or once Neovim is quitting (`v:exiting`). An error it raises is told the user as a warning and goes no further
 ---@field on_permission_wait? fun(session_id: string, agent_id: string?) called when a `PermissionRequest` hook of this start's Claude Code tells the editor that an agent waits for the user (`receive_permission_wait()`): with the session the hook ran in and, when a subagent asks, its `agent_id` (nil for the main agent). Never for a start whose process has ended, or once Neovim is quitting (`v:exiting`). An error it raises is told the user as a warning and goes no further
 
 --- A start of Claude Code: its terminal buffer, the command that runs Claude
@@ -239,6 +240,7 @@ local function validate_settings(settings)
   vim.validate('settings.editor_program', settings.editor_program, 'string')
   vim.validate('settings.on_session_switched', settings.on_session_switched, 'function', true)
   vim.validate('settings.on_session_ready', settings.on_session_ready, 'function', true)
+  vim.validate('settings.on_transcript', settings.on_transcript, 'function', true)
   vim.validate('settings.on_permission_wait', settings.on_permission_wait, 'function', true)
 end
 
@@ -402,7 +404,7 @@ end
 --- `aineo: <name> failed: <the error>`, so that what called it goes on.
 ---
 ---@param settings aineo.claude.Settings
----@param name 'on_session_switched'|'on_session_ready'|'on_permission_wait'
+---@param name 'on_session_switched'|'on_session_ready'|'on_transcript'|'on_permission_wait'
 ---@param ... any
 local function call_back(settings, name, ...)
   local callback = settings[name]
@@ -1183,9 +1185,10 @@ end
 --- What a session hook of Claude Code told (`receive_session_event()`): its
 --- event, the session that started or ended, its source or reason, the
 --- token of the start whose hook ran, when the hook ran, by
---- `vim.uv.hrtime()`, the pid of the Claude Code process that ran it, and
+--- `vim.uv.hrtime()`, the pid of the Claude Code process that ran it, the
+--- absolute path of the session's transcript when the hook named one, and
 --- its place in the order the hooks reached the editor.
----@alias aineo.claude.SessionEvent { event: string, id: string, cause: string?, start_token: string, ran: number?, pid: integer?, arrival: integer }
+---@alias aineo.claude.SessionEvent { event: string, id: string, cause: string?, start_token: string, ran: number?, pid: integer?, transcript_path: string?, arrival: integer }
 
 --- Whether the hook that told `earlier` ran before the one that told
 --- `later`: by when each ran when both say, else by the order they reached
@@ -1298,6 +1301,16 @@ local function is_start_in_another_process(running, told)
   return own_pid ~= nil and told.pid ~= own_pid
 end
 
+--- `value` when it is the text of an absolute path; else nil.
+---
+---@param value any
+---@return string?
+local function absolute_path_or_nil(value)
+  if type(value) == 'string' and value ~= '' and vim.fn.isabsolutepath(value) == 1 then
+    return value
+  end
+end
+
 --- The home whose last start has the token `start_token` (`started_homes`);
 --- nil when no home's does.
 ---
@@ -1335,6 +1348,9 @@ local function take_session_event(told)
     return
   end
   note_own_claude_pid(home.session, told)
+  if told.event == 'SessionStart' and told.transcript_path then
+    call_back(home.session.settings, 'on_transcript', told.id, told.transcript_path)
+  end
   if is_start_in_another_process(home.session, told) then
     follow_switch(home.session, told.id, told.cause, nil)
     return
@@ -1349,11 +1365,15 @@ end
 --- `SessionEnd`; `session_id`, the session that started or ended; `cause`,
 --- its `source` or `reason` (nil or `vim.NIL` when the hook gave none);
 --- `start_token`, the token of the start whose hook ran; `ran`, when the
---- hook began, by `vim.uv.hrtime()` (nil or `vim.NIL` when not told); and
+--- hook began, by `vim.uv.hrtime()` (nil or `vim.NIL` when not told);
 --- `pid`, the pid of the Claude Code process that ran the hook (nil or
---- `vim.NIL` when not told). It works from a callback scheduled now, never
---- in the RPC handler that calls it, so that the editor answers the
---- deliverer's next request without waiting for that work.
+--- `vim.NIL` when not told); and `transcript_path`, the file Claude Code
+--- writes the session's transcript in (nil or `vim.NIL` when not told). A
+--- `SessionStart` that names an absolute transcript path tells the start's
+--- `on_transcript(session_id, transcript_path)`, whichever session it is of
+--- and whether or not it completes a switch. It works from a callback
+--- scheduled now, never in the RPC handler that calls it, so that the editor
+--- answers the deliverer's next request without waiting for that work.
 ---
 --- Claude Code 2.1.292 switches session — `/clear`, an in-session
 --- `/resume`, `/branch` — with a `SessionEnd` of the session it leaves, then
@@ -1390,7 +1410,8 @@ end
 ---@param start_token string
 ---@param ran number|userdata|nil
 ---@param pid integer|userdata|nil
-function M.receive_session_event(event, session_id, cause, start_token, ran, pid)
+---@param transcript_path string|userdata|nil
+function M.receive_session_event(event, session_id, cause, start_token, ran, pid, transcript_path)
   hooks_received = hooks_received + 1
   local arrival = hooks_received
   vim.schedule(function()
@@ -1401,6 +1422,7 @@ function M.receive_session_event(event, session_id, cause, start_token, ran, pid
       start_token = start_token,
       ran = type(ran) == 'number' and ran or nil,
       pid = type(pid) == 'number' and pid or nil,
+      transcript_path = absolute_path_or_nil(transcript_path),
       arrival = arrival,
     })
   end)
