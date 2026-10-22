@@ -20,14 +20,17 @@
 ---
 --- As the deliverer — `-l <this file> --deliver <editor address> <start
 --- token> <event> <session id> <source or reason> <hook time> <session left>
---- <new session> <working directory> <Claude Code's pid>`, the hook time
---- being `vim.uv.hrtime()` as the hook began, a monotonic clock every
---- process on the host shares, by which the editor tells the order the hooks
---- ran in whatever order their deliverers reach it, the two sessions empty
---- when the hook completed no switch, and the pid empty when the hook's
---- command gave none of digits — it sends the editor one RPC notification
+--- <new session> <working directory> <Claude Code's pid> <transcript path>`,
+--- the hook time being `vim.uv.hrtime()` as the hook began, a monotonic
+--- clock every process on the host shares, by which the editor tells the
+--- order the hooks ran in whatever order their deliverers reach it, the two
+--- sessions empty when the hook completed no switch, the pid empty when the
+--- hook's command gave none of digits, and the transcript path empty when
+--- the input names none — it sends the editor one RPC notification
 --- calling `require('aineo.claude').receive_session_event(event, session id,
---- source or reason, start token, hook time, pid)` there. For a switch, it
+--- source or reason, start token, hook time, pid, transcript path)` there.
+--- The transcript path is the input's `transcript_path`, the file Claude
+--- Code writes the session's transcript in. For a switch, it
 --- then sends each other editor that follows the session left by a claim, and its
 --- claimant, a notification of the switch (`notify_followers()`), and, when
 --- its own editor could not be reached, keeps the new session for the
@@ -174,6 +177,7 @@ local function start_deliverer(place, hook)
       switch.new,
       place.working_directory or '',
       (place.claude_pid or ''):match('^%d+$') or '',
+      type(hook.input.transcript_path) == 'string' and hook.input.transcript_path or '',
     },
     detached = true,
   }, function() end)
@@ -419,8 +423,8 @@ local BACKGROUND_HOOKS = {
 }
 
 if arg[1] == DELIVER then
-  local address, start_token, event, session_id, cause, ran, left, new, working_directory, pid =
-    unpack(arg, 2, 11)
+  local address, start_token, event, session_id, cause, ran, left, new, working_directory, pid, transcript_path =
+    unpack(arg, 2, 12)
   local editor = notify(address, RECEIVE_SESSION_EVENT, {
     event,
     session_id,
@@ -428,6 +432,7 @@ if arg[1] == DELIVER then
     start_token,
     tonumber(ran) or vim.NIL,
     tonumber(pid) or vim.NIL,
+    (transcript_path or '') ~= '' and transcript_path or vim.NIL,
   })
   local followers = {}
   if (left or '') ~= '' and (new or '') ~= '' then
