@@ -50,6 +50,7 @@ local SUBCOMMANDS = {
   'find',
   'zoom',
   'explain',
+  'office',
 }
 
 --- The words `:Aineo explain` takes, in the order it offers them: `tools`
@@ -348,6 +349,7 @@ local PREFIX_KEYS = {
   find = 'f',
   zoom = 'z',
   ['zoom full'] = 'Z',
+  office = 'O',
 }
 
 --- What explaining code asks for, by the words of its `<Plug>` mappings
@@ -773,5 +775,5 @@ end, {
   range = true,
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear, office',
 })
