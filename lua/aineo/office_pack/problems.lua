@@ -37,6 +37,34 @@ function M.new_problems()
   }
 end
 
+--- `problems` grouped by file, the files in the order they first have a
+--- problem, each file's problems by line (those that name none first) and,
+--- on one line, in the order they were told.
+---
+---@param problems aineo.office_pack.Problem[]
+---@return aineo.office_pack.Problem[]
+function M.ordered(problems)
+  local file_order, ranks = {}, {}
+  for index, problem in ipairs(problems) do
+    local file = problem.pack .. '/' .. problem.file
+    file_order[file] = file_order[file] or index
+    ranks[problem] = index
+  end
+  local ordered = vim.list_slice(problems)
+  table.sort(ordered, function(first, second)
+    local first_file = file_order[first.pack .. '/' .. first.file]
+    local second_file = file_order[second.pack .. '/' .. second.file]
+    if first_file ~= second_file then
+      return first_file < second_file
+    end
+    if (first.line or 0) ~= (second.line or 0) then
+      return (first.line or 0) < (second.line or 0)
+    end
+    return ranks[first] < ranks[second]
+  end)
+  return ordered
+end
+
 --- `problem` as one line: `<pack>/<file>:<line>: <message>`, without the line
 --- when the problem names none.
 ---
