@@ -87,6 +87,18 @@ local function answered_object(result)
   return decoded(result.result)
 end
 
+--- What the error result `output` says, when it is one: its text, else its
+--- subtype. `nil` when `output` is no error result.
+---
+---@param output string what Claude Code printed
+---@return string|nil
+function M.error_in(output)
+  local result = decoded(output)
+  if type(result) == 'table' and result.is_error == true then
+    return 'Claude Code answered an error: ' .. tostring(result.result or result.subtype)
+  end
+end
+
 --- The explanations the result `output` holds for the lines from `first` to
 --- `last` (`one_per_line()`), or `nil` and what is wrong with it.
 ---
@@ -97,8 +109,9 @@ end
 ---@return string? problem
 function M.explanations_in(output, first, last)
   local result = decoded(output)
-  if type(result) == 'table' and result.is_error == true then
-    return nil, 'Claude Code answered an error: ' .. tostring(result.result or result.subtype)
+  local failure = M.error_in(output)
+  if failure then
+    return nil, failure
   end
   local object = type(result) == 'table' and answered_object(result)
   if type(object) ~= 'table' or not vim.islist(object.explanations) then
