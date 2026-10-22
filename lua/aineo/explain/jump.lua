@@ -111,10 +111,6 @@ function M.go(window, way, count)
   reveal(window, line)
 end
 
---- The mappings made here, by buffer and by the mode and key.
----@type table<integer, table<string, boolean>>
-local made = {}
-
 --- Whether `key` is mapped in `mode` for `buffer`, locally or globally.
 ---
 ---@param buffer integer
@@ -127,41 +123,36 @@ local function is_mapped(buffer, mode, key)
   end)
 end
 
---- Maps `]v` and `[v` for `buffer` in `MODES`, but those the user mapped
---- already, locally or globally.
+--- Maps `]v` and `[v` for `buffer` in `MODES`, but those mapped already,
+--- locally or globally: the user's, or ours.
 ---
 ---@param buffer integer
 local function map_keys(buffer)
-  made[buffer] = made[buffer] or {}
   for _, way in pairs(WAYS) do
     for _, mode in ipairs(MODES) do
-      local mapped = made[buffer][mode .. way.key] or is_mapped(buffer, mode, way.key)
-      if not mapped then
+      if not is_mapped(buffer, mode, way.key) then
         vim.keymap.set(mode, way.key, way.plug, { buffer = buffer, desc = DESCRIPTION })
-        made[buffer][mode .. way.key] = true
       end
     end
   end
 end
 
---- Removes the mappings made here for `buffer`, but one the user has
---- replaced with theirs since.
+--- Removes the mappings of `buffer` that were made here, told by their
+--- `desc`: a key the user mapped over ours, or in place of it, stays.
 ---
 ---@param buffer integer
 local function unmap_keys(buffer)
   for _, way in pairs(WAYS) do
     for _, mode in ipairs(MODES) do
-      if (made[buffer] or {})[mode .. way.key] then
-        local ours = vim.api.nvim_buf_call(buffer, function()
-          return vim.fn.maparg(way.key, mode, false, true).desc == DESCRIPTION
-        end)
-        if ours then
-          vim.keymap.del(mode, way.key, { buffer = buffer })
-        end
+      local ours = vim.api.nvim_buf_call(buffer, function()
+        local mapping = vim.fn.maparg(way.key, mode, false, true)
+        return mapping.buffer == 1 and mapping.desc == DESCRIPTION
+      end)
+      if ours then
+        vim.keymap.del(mode, way.key, { buffer = buffer })
       end
     end
   end
-  made[buffer] = nil
 end
 
 --- Gives `buffer` the keys `]v` and `[v` while it shows an explanation or an
@@ -171,7 +162,6 @@ end
 ---@param buffer integer
 function M.sync_keys(buffer)
   if not vim.api.nvim_buf_is_valid(buffer) then
-    made[buffer] = nil
     return
   end
   if #marks.lines(buffer) > 0 then

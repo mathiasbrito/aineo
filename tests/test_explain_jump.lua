@@ -352,6 +352,28 @@ T['the mappings']['of the user, local to the buffer, are never replaced nor remo
   eq(mapping('n', ']v'), { rhs = ':echo "mine"<CR>', buffer = 1 })
 end
 
+T['the mappings']['of the user, made after aineo’s own, survive the buffer showing no mark'] = function()
+  explain_lines({ 3 })
+  child.cmd('nnoremap <buffer> ]v :echo "mine"<CR>')
+
+  child.lua("require('aineo.explain').clear(vim.api.nvim_get_current_buf())")
+
+  eq(mapping('n', ']v'), { rhs = ':echo "mine"<CR>', buffer = 1 })
+  eq(mapping('n', '[v'), vim.NIL)
+end
+
+T['the mappings']['are made again for a buffer that was deleted and loaded again'] = function()
+  explain_lines({ 3 })
+  local file = child.fn.expand('%:p')
+  child.cmd('enew')
+  child.cmd('bdelete 1')
+  child.cmd('edit ' .. file)
+
+  find_issues_on({ 3 })
+
+  eq(mapping('n', ']v'), { rhs = '<Plug>(aineo-explain-next)', buffer = 1 })
+end
+
 T['the mappings']['of the user, global, are never replaced either'] = function()
   child.cmd('nnoremap [v :echo "global"<CR>')
   explain_lines({ 3 })
