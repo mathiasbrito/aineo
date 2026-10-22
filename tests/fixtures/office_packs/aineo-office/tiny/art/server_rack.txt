@@ -1,0 +1,17 @@
+about: A server rack whose lights blink.
+colours: R = rack, l = light, k = ink
+seconds per frame: 0.5
+---
+RRRRRR
+RklkkR
+RkkklR
+RklkkR
+RRRRRR
+RRRRRR
+---
+RRRRRR
+RkkklR
+RklkkR
+RkkklR
+RRRRRR
+RRRRRR
