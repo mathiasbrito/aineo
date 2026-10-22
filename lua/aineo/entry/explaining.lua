@@ -1,6 +1,7 @@
---- What `\v`, `\V`, their `<Plug>` mappings and `:Aineo explain` do: hand
---- the current buffer, a file's, to the explain home (`aineo.explain`), with
---- the Claude Code command and the settings of the configuration.
+--- What `\v`, `\V`, `\vi`, `\VI`, their `<Plug>` mappings and `:Aineo explain`
+--- do: hand the current buffer, a file's, to the explain home
+--- (`aineo.explain`), with the Claude Code command and the settings of the
+--- configuration.
 
 local M = {}
 
@@ -26,6 +27,7 @@ end
 --- How an explanation is asked for.
 ---@class aineo.entry.ExplainOrder
 ---@field tools boolean whether Claude Code may read the project with read-only tools
+---@field kind? 'explanations'|'issues' what is asked for; explanations when absent
 ---@field range? integer[] the first and last lines to explain, from 1; the whole buffer when absent
 
 --- Asks the explain home to explain the current buffer, in the current
@@ -47,25 +49,30 @@ function M.explain(order)
     window = vim.api.nvim_get_current_win(),
     range = order.range,
     tools = order.tools,
+    kind = order.kind,
     command = config.claude.cmd,
     model = config.explain.model,
     timeout_ms = config.explain.timeout_ms,
   })
 end
 
---- What `\v` and `\V` do in Visual mode: leave Visual mode, then explain
---- the lines the selection spans alone, as `explain()` does with `order`'s
---- tools.
+--- What `\v`, `\V`, `\vi` and `\VI` do in Visual mode: leave Visual mode,
+--- then ask about the lines the selection spans alone, as `explain()` does
+--- with `order`'s tools and kind.
 ---
 ---@param order aineo.entry.ExplainOrder
 function M.explain_selection(order)
   local first, last = vim.fn.line('v'), vim.fn.line('.')
   vim.cmd.normal({ args = { vim.keycode('<Esc>') }, bang = true })
-  M.explain({ tools = order.tools, range = { math.min(first, last), math.max(first, last) } })
+  M.explain({
+    tools = order.tools,
+    kind = order.kind,
+    range = { math.min(first, last), math.max(first, last) },
+  })
 end
 
---- What `:Aineo explain clear` does: removes every explanation the current
---- buffer shows, and stops the request that runs for it
+--- What `:Aineo explain clear` does: removes every explanation and every
+--- issue the current buffer shows, and stops the request that runs for it
 --- (`aineo.explain`'s `clear()`).
 function M.clear_explanations()
   require('aineo.explain').clear(vim.api.nvim_get_current_buf())

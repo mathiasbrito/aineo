@@ -1,16 +1,17 @@
 --- aineo's explain home, `require('aineo.explain')`: asks a Claude Code of
 --- its own, started for one request and never kept, to explain the code of a
---- buffer, or of some of its lines.
+--- buffer, or of some of its lines, or to find its potential issues.
 
 local answer = require('aineo.explain.answer')
 local kinds = require('aineo.explain.kinds')
 local look = require('aineo.explain.look')
 local marks = require('aineo.explain.marks')
 local request = require('aineo.explain.request')
+local runs = require('aineo.explain.runs')
 
 local M = {}
 
-look.keep_defined({ kinds.EXPLANATIONS })
+look.keep_defined(kinds.ALL)
 
 --- One request to explain code.
 ---@class aineo.explain.Request
@@ -18,6 +19,7 @@ look.keep_defined({ kinds.EXPLANATIONS })
 ---@field window integer the window the request was made in
 ---@field range? integer[] the first and last lines to explain, from 1; every line when absent
 ---@field tools boolean whether Claude Code may read the project with read-only tools
+---@field kind? 'explanations'|'issues' what to ask for; explanations when absent
 ---@field command string[] the words that run Claude Code, `claude.cmd`
 ---@field model string the model that explains
 ---@field timeout_ms integer how long the request may run
@@ -80,22 +82,12 @@ local function explanations_of(ended, first, last)
   return answer.explanations_in(ended.stdout, first, last)
 end
 
---- A request that runs: its Claude Code, the virtual line that says it is
---- explaining, and the timer that stops it at its timeout.
----@class aineo.explain.Running
----@field process? vim.SystemObj
----@field explaining_mark integer
----@field timer uv.uv_timer_t
-
---- The requests that run, by the buffer they explain.
----@type table<integer, aineo.explain.Running>
-local running = {}
-
 --- What a request needs once its Claude Code has ended: the buffer and
 --- window it was made in, the file's path from the project, the lines asked
 --- for, the buffer's `b:changedtick` when it was asked, and the buffer's
 --- text it sent.
 ---@class aineo.explain.Asked
+---@field kind aineo.explain.Kind
 ---@field buffer integer
 ---@field window integer
 ---@field path string
@@ -104,8 +96,8 @@ local running = {}
 ---@field tick integer
 ---@field lines string[] every line of the buffer, as sent
 
---- Shows what the run `ended` answered for `asked` in place of the
---- explanations of its lines, or tells the user, once, why nothing is shown:
+--- Shows what the run `ended` answered for `asked` in place of what its kind
+--- showed above its lines, or tells the user, once, why nothing is shown:
 --- the buffer's text changed meanwhile — a write moves `b:changedtick` and
 --- leaves the text as it was sent, which changes nothing — or the run failed
 --- (`explanations_of()`).
@@ -128,35 +120,16 @@ local function show_answer(asked, ended)
     vim.notify('aineo: explaining failed: ' .. problem, vim.log.levels.ERROR)
     return
   end
-  marks.clear(asked.buffer, kinds.EXPLANATIONS, asked.first, asked.last)
-  marks.place(asked.buffer, asked.window, kinds.EXPLANATIONS, explanations)
+  marks.clear(asked.buffer, asked.kind, asked.first, asked.last)
+  marks.place(asked.buffer, asked.window, asked.kind, explanations)
+  if #explanations == 0 and asked.kind == kinds.ISSUES then
+    vim.notify('aineo: no potential issues found', vim.log.levels.INFO)
+  end
 end
 
---- Forgets the request that runs for `buffer`: closes its timer and removes
---- the virtual line that says it is explaining. Returns it.
----
----@param buffer integer
----@return aineo.explain.Running
-local function forget(buffer)
-  local run = running[buffer]
-  running[buffer] = nil
-  run.timer:close()
-  marks.remove(buffer, kinds.EXPLANATIONS, run.explaining_mark)
-  return run
-end
-
---- Stops the request that runs for `buffer`: forgets it (`forget()`) and
---- ends its Claude Code.
----
----@param buffer integer
-local function stop(buffer)
-  forget(buffer).process:kill('sigterm')
-end
-
---- Starts Claude Code for `explaining`, showing that it is explaining above
---- the first line asked for until it ends (`show_answer()`, unless the
---- buffer is gone by then), or until its timeout, which stops it and tells
---- the user.
+--- Starts Claude Code for `explaining`, showing that it is working above the
+--- first line asked for until it ends (`show_answer()`, unless the buffer is
+--- gone by then), or until its timeout, which stops it and tells the user.
 ---
 --- Raises an error naming `claude.cmd` when its command cannot be run, and
 --- leaves no request running then.
@@ -168,7 +141,9 @@ local function start(explaining)
   local folder = project_folder(path)
   local lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, false)
   local range = explaining.range or { 1, #lines }
+  local kind = kinds.named(explaining.kind)
   local asked = {
+    kind = kind,
     buffer = buffer,
     window = explaining.window,
     path = vim.fs.relpath(folder, path),
@@ -183,22 +158,34 @@ local function start(explaining)
     first = asked.first,
     last = asked.last,
     lines = lines,
+    kind = kind.name,
   })
-  local run = {
-    explaining_mark = marks.show_explaining(buffer, asked.window, kinds.EXPLANATIONS, asked.first),
-    timer = assert(vim.uv.new_timer()),
-  }
-  running[buffer] = run
+  local run = runs.begin({
+    kind = kind,
+    buffer = buffer,
+    window = asked.window,
+    line = asked.first,
+    timeout_ms = explaining.timeout_ms,
+    on_timeout = function(timed_out)
+      runs.stop(timed_out)
+      vim.notify(
+        ('aineo: explaining failed: Claude Code did not answer within %g s'):format(
+          explaining.timeout_ms / 1000
+        ),
+        vim.log.levels.ERROR
+      )
+    end,
+  })
   local started, process = pcall(
     vim.system,
     request.arguments(explaining.command, explaining.model, explaining.tools),
     { stdin = prompt, cwd = folder, text = true },
     function(ended)
       vim.schedule(function()
-        if running[buffer] ~= run then
+        if runs.find(buffer, kind) ~= run then
           return
         end
-        forget(buffer)
+        runs.forget(run)
         if vim.api.nvim_buf_is_valid(buffer) then
           show_answer(asked, ended)
         end
@@ -206,70 +193,54 @@ local function start(explaining)
     end
   )
   if not started then
-    forget(buffer)
+    runs.forget(run)
     error('claude.cmd cannot be run: ' .. tostring(process):gsub('^%S+:%d+: ', ''), 0)
   end
   run.process = process
-  run.timer:start(
-    explaining.timeout_ms,
-    0,
-    vim.schedule_wrap(function()
-      if running[buffer] ~= run then
-        return
-      end
-      stop(buffer)
-      vim.notify(
-        ('aineo: explaining failed: Claude Code did not answer within %g s'):format(
-          explaining.timeout_ms / 1000
-        ),
-        vim.log.levels.ERROR
-      )
-    end)
-  )
 end
 
 vim.api.nvim_create_autocmd('VimLeavePre', {
   group = vim.api.nvim_create_augroup('aineo_explain', {}),
   desc = 'aineo: stop the Claude Code of every request that runs',
-  callback = function()
-    for buffer in pairs(running) do
-      stop(buffer)
-    end
-  end,
+  callback = runs.stop_all,
 })
 
 --- Explains the code of `explaining.buffer`, its whole text or the lines of
---- `explaining.range`. Asked while a request runs for that buffer, stops it
---- and says so; asked for the whole buffer while it shows explanations,
---- clears them. The Claude Code of every request that runs is stopped when
---- Neovim quits.
+--- `explaining.range`, or looks for its potential issues when
+--- `explaining.kind` says so. A buffer has one request of each kind at once:
+--- asked while a request of its own kind runs for that buffer, it stops that
+--- request alone and says so; asked for the whole buffer while it shows what
+--- its kind shows, it clears that alone. The Claude Code of every request
+--- that runs is stopped when Neovim quits.
 ---
 --- Raises an error naming `claude.cmd` when its command cannot be run.
 ---
 ---@param explaining aineo.explain.Request
 function M.ask(explaining)
   local buffer = explaining.buffer
-  if running[buffer] then
-    stop(buffer)
+  local kind = kinds.named(explaining.kind)
+  local running = runs.find(buffer, kind)
+  if running then
+    runs.stop(running)
     vim.notify('aineo: explaining stopped', vim.log.levels.INFO)
     return
   end
-  if not explaining.range and marks.is_showing(buffer, kinds.EXPLANATIONS) then
-    marks.clear(buffer, kinds.EXPLANATIONS)
+  if not explaining.range and marks.is_showing(buffer, kind) then
+    marks.clear(buffer, kind)
     return
   end
   start(explaining)
 end
 
---- Removes every explanation `buffer` shows, and stops the request that runs
---- for it, if any, without a word.
+--- Removes every explanation and every issue `buffer` shows, and stops the
+--- requests that run for it, if any, without a word.
 ---
 ---@param buffer integer
 function M.clear(buffer)
-  if running[buffer] then
-    stop(buffer)
+  runs.stop_all_of(buffer)
+  for _, kind in ipairs(kinds.ALL) do
+    marks.clear(buffer, kind)
   end
-  marks.clear(buffer, kinds.EXPLANATIONS)
 end
 
 return M
