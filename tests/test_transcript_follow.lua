@@ -503,7 +503,7 @@ T['follow()']['reads nothing and holds no timer or watch once stopped'] = functi
   eq(open_handles('fs_event'), 0)
 end
 
-T['follow()']['delivers nothing more, not even the rest of the lines it was reading, once stopped from its own callback'] = function()
+T['follow()']['delivers nothing more and reads nothing more once stopped from its own callback'] = function()
   local path = vim.fs.joinpath(fixture.directory('office_transcript'), 'session.jsonl')
   fake_transcript.append_text(path, '')
   local calls = {}
@@ -516,14 +516,21 @@ T['follow()']['delivers nothing more, not even the rest of the lines it was read
     end,
   })
   table.insert(started_followers, follower)
+  local lines = {}
+  for number = 1, 1200 do
+    table.insert(lines, tool_line(('call%d'):format(number), ('x'):rep(1000)))
+  end
+  local reads = count_reads()
 
-  fake_transcript.append(path, { tool_line('one'), tool_line('two'), tool_line('three') })
+  fake_transcript.append(path, lines)
   vim.wait(PATIENCE_MS, function()
     return #calls > 0
   end, 10)
   vim.wait(QUIET_MS)
+  reads.stop()
 
-  eq(calls, { 'one' })
+  eq(calls, { 'call1' })
+  eq(#reads.opened, 1)
 end
 
 T['follow()']['stops delivering and releases its watch once stopped'] = function()
