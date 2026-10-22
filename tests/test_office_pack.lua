@@ -398,8 +398,9 @@ T['load()']['refuses a file over 256 KiB, naming it'] = function()
 end
 
 T['load()']['takes a file of exactly 256 KiB'] = function()
+  local rows = '\n \n ..'
   local folder = files.write_pack(pack_root(), 'small', {
-    ['floor.txt'] = ' \n ' .. ('.'):rep(256 * 1024 - 3),
+    ['floor.txt'] = '#' .. ('c'):rep(256 * 1024 - 1 - #rows) .. rows,
   })
 
   local pack = load_pack('small', { folder })
