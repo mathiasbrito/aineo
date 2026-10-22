@@ -165,6 +165,7 @@ resumes it.
 | `\Q` | closes the current tab; on the last aineo tab, quits Neovim as `:qa` does |
 | `\S` | lists Claude Code's sessions for the folder and opens the one you pick |
 | `\N` | starts a new Claude Code session |
+| `\v`, `\V` | explain the code of the file, or in Visual mode of the selected lines: `\v` hands Claude the code alone, `\V` lets it read the project too |
 | `\z` | zooms the window of the right column the cursor is in, and gives the heights back when pressed again |
 | `\Z` | zooms the window the cursor is in to the whole tab page, and gives the sizes back when pressed again |
 
@@ -384,6 +385,26 @@ Claude's terminal included. With none installed it lists the files through
 `vim.ui.select()`: the repository's tracked files and the untracked ones your
 ignore rules leave in, or, outside a repository, a walk of the folder.
 
+## Explain code
+
+`\v` asks a Claude Code of its own, never the one in your session, to explain
+the code of the current file, and shows each explanation as virtual lines
+right above the line it explains. In Visual mode only the selected lines are
+explained. `\V` does the same and lets that Claude Code read the project with
+`Read`, `Grep` and `Glob`, without asking, and no other tool; `\v` gives it
+the code alone, with no tool. The prompt carries the buffer as it stands,
+unsaved changes included. aineo starts one `claude` process for the request
+(`claude.cmd`, in the top of the repository), with no MCP server, none of
+aineo's settings and no session kept, and it ends with the answer.
+
+`\v` or `\V` again in Normal mode clears the explanations; while a request
+runs they stop it. `:AineoExplain [tools]` with a range, and `:AineoExplain
+clear`, do the same. The model is `explain.model`, `'sonnet'` by default, and
+a request is stopped after `explain.timeout_ms`. If the buffer changes while
+Claude Code explains it, nothing is shown: ask again. The explanations show
+in `AineoExplain`, linked to `Comment`. Each request is a model call, billed
+as your Claude Code usage is.
+
 ## Run your services
 
 `\x` asks for a command, with shell-command completion, and runs it through
@@ -474,6 +495,7 @@ vim.g.aineo = {
   },
   tabs = { padding = 2, always_show = true },
   find = { picker = 'auto' },
+  explain = { model = 'sonnet', timeout_ms = 180000 },
 }
 ```
 
@@ -490,6 +512,8 @@ vim.g.aineo = {
 | `tabs.padding` | `2` | Spaces either side of each title in aineo's tab line, from 0 to 8. |
 | `tabs.always_show` | `true` | Whether the tab line shows with a single tab page: aineo sets `'showtabline'` to `2` once, when its first tab opens, and a value you set afterwards is kept. `false` leaves `'showtabline'` as you have it. Read at the first tab: a later change needs a restart. |
 | `find.picker` | `'auto'` | The picker `\f` hands its search to: `'auto'` takes the first installed of snacks.nvim, fzf-lua, telescope.nvim and mini.pick; `'snacks'`, `'fzf-lua'`, `'telescope'` or `'mini.pick'` takes that one alone. With none installed, or the one named missing, aineo lists the files through `vim.ui.select()`. None is a dependency. |
+| `explain.model` | `'sonnet'` | The model of the Claude Code that `\v` and `\V` start to explain code, as `claude --model` takes it: an alias such as `'opus'` or a full name. A non-empty string. |
+| `explain.timeout_ms` | `180000` | How long a request to explain code may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
 
 The highlight groups can be overridden in a colorscheme or with
 `:highlight`. The tab line uses `AineoTabLineSel`, `AineoTabLine` and
@@ -534,15 +558,15 @@ version may change the title.
 
 `:checkhealth aineo` reports the Neovim version, the configuration (an unknown
 key is named), whether `claude` runs, the shell, the server socket, the prefix
-mappings, the tab line, the activity indicator, the picker `\f` uses and why
-the autostart did or did not run. It starts no Claude session and opens no
+mappings, the tab line, the activity indicator, the picker `\f` uses, how code
+is explained and why the autostart did or did not run. It starts no Claude session and opens no
 layout; the one command it runs is `claude.cmd` with `--version` appended.
 
 ## More
 
 `:help aineo` is the reference: the layout, every command and mapping, the
 Report, Send, the changes pane, the run pane, tabs, sessions, finding a file,
-the autostart and the limits.
+explaining code, the autostart and the limits.
 
 ## Development
 
