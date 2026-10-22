@@ -1,11 +1,13 @@
---- The office's packs, `require('aineo.office_pack')`: finding them, reading
---- them as data and giving the engine what a pack describes. A pack is a
---- folder of text files and never code.
+--- The office's packs, `require('aineo.office_pack')`: reading a pack as data
+--- and giving the engine what it describes. A pack is a folder of text files
+--- — `pack.lua`, `floor.txt` and `art/*.txt` — and never code.
 
 local literal = require('aineo.office_pack.literal')
+local loader = require('aineo.office_pack.loader')
 
 local M = {}
 
+M.load = loader.load
 M.parse_table_literal = literal.parse
 
 return M
