@@ -68,6 +68,22 @@
 ---   or, with `AINEO_FAKE_CLAUDE_AGENTS_EXIT` set, prints nothing and exits
 ---   with that code. It writes no `ended` line.
 ---
+--- - `AINEO_FAKE_CLAUDE_PRINT`, `AINEO_FAKE_CLAUDE_PRINT_EXIT` and
+---   `AINEO_FAKE_CLAUDE_PRINT_MS` — how it answers a run in print mode
+---   (`answer_print()`), as `claude -p` reads its prompt from its standard
+---   input and prints one answer: given `-p` as its first argument it draws
+---   no screen and reads no key, records its arguments as the record's first
+---   line, reads its standard input to its end and records it as
+---   `{ stdin }`, waits `AINEO_FAKE_CLAUDE_PRINT_MS` milliseconds (none when
+---   unset), then prints the file `AINEO_FAKE_CLAUDE_PRINT` names, a result
+---   with no explanation when that is unset, and exits 0; or, with
+---   `AINEO_FAKE_CLAUDE_PRINT_EXIT` set, writes `Error: fake failure` on its
+---   standard error and exits with that code. The answers the suites give it
+---   are synthetic, shaped as the headless documentation of Claude Code
+---   2.1.306 describes `--output-format json` with `--json-schema`: one
+---   result object, its `structured_output` holding the schema's object. No
+---   real run was recorded. It writes no `ended` line.
+---
 --- The mode `busy-title` is synthetic: no recording holds Claude Code's busy
 --- titles. It draws the startup screen as `ready` does, which titles the
 --- terminal `✳ Claude Code`, then titles it `◐ Claude Code` and `◑ Claude
@@ -329,6 +345,49 @@ end
 
 if arg[1] == 'agents' then
   answer_agents()
+end
+
+--- The answer a run in print mode prints when `AINEO_FAKE_CLAUDE_PRINT` is
+--- unset: a successful result whose structured output holds no explanation.
+local EMPTY_PRINT_ANSWER =
+  '{"type":"result","subtype":"success","is_error":false,"result":"","structured_output":{"explanations":[]}}\n'
+
+--- Answers a run in print mode (`claude -p …`), as the header says, and
+--- exits.
+local function answer_print()
+  record({
+    argv = { unpack(arg) },
+    cwd = vim.uv.cwd(),
+    env = requested_environment(),
+    pid = vim.fn.getpid(),
+  })
+  record({ stdin = io.read('*a') })
+  local delay_ms = tonumber(os.getenv('AINEO_FAKE_CLAUDE_PRINT_MS'))
+  if delay_ms then
+    -- A wait that runs the event loop, unlike `vim.uv.sleep()`, so that a
+    -- SIGTERM ends the fake at once, as it ends `claude -p`.
+    vim.wait(delay_ms, function()
+      return false
+    end, 50)
+  end
+  local failure_code = tonumber(os.getenv('AINEO_FAKE_CLAUDE_PRINT_EXIT'))
+  if failure_code then
+    local errors = io.stderr
+    errors:write('Error: fake failure\n')
+    os.exit(failure_code)
+  end
+  local answer = os.getenv('AINEO_FAKE_CLAUDE_PRINT')
+  if answer then
+    io.write(assert(io.open(answer, 'rb')):read('*a'))
+  else
+    io.write(EMPTY_PRINT_ANSWER)
+  end
+  io.flush()
+  os.exit(0)
+end
+
+if arg[1] == '-p' then
+  answer_print()
 end
 
 -- `stty` on the inherited terminal, and a pipe on its descriptor, rather than
