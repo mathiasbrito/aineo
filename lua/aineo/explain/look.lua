@@ -7,6 +7,9 @@ local M = {}
 --- accent.
 local BAND_BLEND = 0.12
 
+--- How far the band behind a row of a marked issue is blended: further.
+local MARKED_BAND_BLEND = 0.25
+
 --- The background `Normal` lacks, by the value of 'background'.
 local FALLBACK_BACKGROUNDS = { dark = 0x1e1e2e, light = 0xffffff }
 
@@ -77,35 +80,52 @@ local function blended(from, to, amount)
   return mixed
 end
 
---- Defines the four groups of `kind`: its text in its accent, italic, over
---- `Normal`'s background blended toward the accent; its gutter in the accent
---- over `LineNr`'s background, and that background alone for the columns it
---- fills; the number of its line in the accent, bold. For a terminal without
---- true colour they carry the accent's `ctermfg`, `LineNr`'s `ctermbg` in
---- the gutter, and `CursorLine`'s `ctermbg` behind the text, none when the
---- theme has none.
+--- Defines the text and gutter groups `groups` names for `kind`: the text in
+--- the kind's accent, italic, over `Normal`'s background blended toward the
+--- accent by `blend`; the gutter in the accent over `LineNr`'s background.
+--- For a terminal without true colour they carry the accent's `ctermfg`,
+--- `LineNr`'s `ctermbg` in the gutter, and `CursorLine`'s `ctermbg` behind
+--- the text, none when the theme has none.
 ---
 ---@param kind aineo.explain.Kind
-local function define_kind(kind)
+---@param groups { text: string, gutter: string }
+---@param blend number from 0 to 1
+local function define_band(kind, groups, blend)
   local background = resolved('Normal').bg or FALLBACK_BACKGROUNDS[vim.o.background]
   local accent_group = resolved(kind.accent_group)
   local accent = accent_group.fg or kind.accent_fallback
   local number_column = resolved('LineNr')
-  define_group(kind.groups.text, {
+  define_group(groups.text, {
     fg = accent,
-    bg = blended(background, accent, BAND_BLEND),
+    bg = blended(background, accent, blend),
     ctermfg = accent_group.ctermfg,
     ctermbg = resolved('CursorLine').ctermbg,
     italic = true,
   })
-  define_group(kind.groups.gutter, {
+  define_group(groups.gutter, {
     fg = accent,
     bg = number_column.bg,
     ctermfg = accent_group.ctermfg,
     ctermbg = number_column.ctermbg,
   })
+end
+
+--- Defines the groups of `kind`: its text and gutter (`define_band()`), the
+--- columns its gutter fills in `LineNr`'s background alone, and the number
+--- of its line in the accent, bold; and, for a kind that can be marked, the
+--- text and gutter of a marked one, its band blended further.
+---
+---@param kind aineo.explain.Kind
+local function define_kind(kind)
+  local accent_group = resolved(kind.accent_group)
+  local accent = accent_group.fg or kind.accent_fallback
+  local number_column = resolved('LineNr')
+  define_band(kind, kind.groups, BAND_BLEND)
   define_group(kind.groups.fill, { bg = number_column.bg, ctermbg = number_column.ctermbg })
   define_group(kind.groups.number, { fg = accent, ctermfg = accent_group.ctermfg, bold = true })
+  if kind.marked_groups then
+    define_band(kind, kind.marked_groups, MARKED_BAND_BLEND)
+  end
 end
 
 --- Defines the groups of `kinds` now and again after every `:colorscheme` and

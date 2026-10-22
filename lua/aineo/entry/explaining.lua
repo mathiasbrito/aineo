@@ -80,6 +80,27 @@ function M.clear_explanations()
   require('aineo.explain').clear(vim.api.nvim_get_current_buf())
 end
 
+--- What `\vm` does in Normal mode: marks the issues shown above the cursor's
+--- line of the current buffer, or unmarks those marked (`aineo.explain`'s
+--- `toggle_issue_marks()`).
+function M.mark_issues()
+  local line = vim.fn.line('.')
+  require('aineo.explain').toggle_issue_marks(vim.api.nvim_get_current_buf(), line, line)
+end
+
+--- What `\vm` does in Visual mode: leaves Visual mode, then marks or unmarks
+--- the issues shown above the lines the selection spans, as `mark_issues()`
+--- does for one line.
+function M.mark_issues_selection()
+  local first, last = vim.fn.line('v'), vim.fn.line('.')
+  vim.cmd.normal({ args = { vim.keycode('<Esc>') }, bang = true })
+  require('aineo.explain').toggle_issue_marks(
+    vim.api.nvim_get_current_buf(),
+    math.min(first, last),
+    math.max(first, last)
+  )
+end
+
 --- What `<Plug>(aineo-explain-next)` and `<Plug>(aineo-explain-previous)`
 --- do: move the current window's cursor to the next or the previous
 --- explanation or issue of its buffer, as many on as the count typed before
