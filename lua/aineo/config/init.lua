@@ -46,15 +46,24 @@ local function is_branch_name(value)
   return type(value) == 'string' and value ~= ''
 end
 
---- Whether `value` is a count of commits: a whole number of at least 1.
+--- Whether `value` is a positive count, of commits or of milliseconds: a
+--- whole number of at least 1.
 ---
 ---@param value any
 ---@return boolean
-local function is_commit_count(value)
+local function is_positive_count(value)
   return type(value) == 'number'
     and value >= 1
     and value ~= math.huge
     and value == math.floor(value)
+end
+
+--- Whether `value` names a model Claude Code takes: a non-empty string.
+---
+---@param value any
+---@return boolean
+local function is_model_name(value)
+  return type(value) == 'string' and value ~= ''
 end
 
 --- The most spaces a title of the tab line may be padded with either side.
@@ -123,7 +132,7 @@ local SETTINGS = {
   {
     name = 'changes.graph_limit',
     default = 1000,
-    validator = is_commit_count,
+    validator = is_positive_count,
     expected = 'a whole number of at least 1',
   },
   {
@@ -138,6 +147,18 @@ local SETTINGS = {
     default = 'auto',
     validator = is_find_picker,
     expected = 'one of ' .. table.concat(FIND_PICKERS, ', '),
+  },
+  {
+    name = 'explain.model',
+    default = 'sonnet',
+    validator = is_model_name,
+    expected = 'a non-empty string naming a model',
+  },
+  {
+    name = 'explain.timeout_ms',
+    default = 180000,
+    validator = is_positive_count,
+    expected = 'a whole number of milliseconds of at least 1',
   },
 }
 

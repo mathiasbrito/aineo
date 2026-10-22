@@ -13,6 +13,7 @@ local DEFAULTS = {
   changes = { graph_limit = 1000 },
   tabs = { padding = 2, always_show = true },
   find = { picker = 'auto' },
+  explain = { model = 'sonnet', timeout_ms = 180000 },
 }
 
 local T = MiniTest.new_set()
@@ -296,6 +297,55 @@ T['resolve_config()']['refuses a graph limit that is not a whole number of at le
   expect.error(function()
     config.resolve_config({ changes = { graph_limit = limit } }, nil)
   end, 'changes%.graph_limit: expected a whole number of at least 1')
+end
+
+T['resolve_config()']['takes the model that explains code from either source, sonnet by default'] = function()
+  local from_global = config.resolve_config({ explain = { model = 'opus' } }, nil)
+  local from_setup = config.resolve_config(
+    { explain = { model = 'opus' } },
+    { explain = { model = 'haiku' } }
+  )
+
+  eq(from_global.explain.model, 'opus')
+  eq(from_setup.explain.model, 'haiku')
+  eq(config.resolve_config(nil, nil).explain.model, 'sonnet')
+end
+
+T['resolve_config()']['refuses a model that is not a non-empty string'] = MiniTest.new_set({
+  parametrize = { { '' }, { 5 }, { false }, { { 'sonnet' } } },
+})
+
+T['resolve_config()']['refuses a model that is not a non-empty string']['as explain.model'] = function(
+  model
+)
+  expect.error(function()
+    config.resolve_config({ explain = { model = model } }, nil)
+  end, 'explain%.model: expected a non%-empty string naming a model')
+end
+
+T['resolve_config()']['takes how long code is explained at most from either source, 180000 ms by default'] = function()
+  local from_global = config.resolve_config({ explain = { timeout_ms = 1000 } }, nil)
+  local from_setup = config.resolve_config(
+    { explain = { timeout_ms = 1000 } },
+    { explain = { timeout_ms = 1 } }
+  )
+
+  eq(from_global.explain.timeout_ms, 1000)
+  eq(from_setup.explain.timeout_ms, 1)
+  eq(config.resolve_config(nil, nil).explain.timeout_ms, 180000)
+end
+
+T['resolve_config()']['refuses a timeout that is not a whole number of milliseconds of at least 1'] =
+  MiniTest.new_set({
+    parametrize = { { 0 }, { -5 }, { 2.5 }, { '100' }, { false }, { math.huge } },
+  })
+
+T['resolve_config()']['refuses a timeout that is not a whole number of milliseconds of at least 1']['as explain.timeout_ms'] = function(
+  timeout
+)
+  expect.error(function()
+    config.resolve_config({ explain = { timeout_ms = timeout } }, nil)
+  end, 'explain%.timeout_ms: expected a whole number of milliseconds of at least 1')
 end
 
 T['resolve_config()']['returns a key no setting knows, rather than refusing it'] = function()
