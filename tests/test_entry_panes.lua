@@ -1335,6 +1335,7 @@ local SUBCOMMANDS = {
   'diff',
   'find',
   'zoom',
+  'explain',
 }
 
 T[':Aineo pane']['completes after a command modifier or a range as it does without one'] =

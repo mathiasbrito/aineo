@@ -76,7 +76,7 @@ local function added(definitions, before)
   end, { commands = 'commands', keymaps = 'keymaps', autocmds = 'autocmds' })
 end
 
-T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings, their twins in Insert and Terminal mode and, once started, the StdinReadPost autocommand alone'] = function()
+T['plugin/aineo.lua']['defines :Aineo, their <Plug> mappings, the prefix mappings, their twins in Insert and Terminal mode and, once started, the StdinReadPost autocommand alone'] = function()
   children.restart(child, { '--cmd', 'let g:loaded_aineo = 1' })
   local without_the_file = child.lua_get(DEFINITIONS)
 
@@ -117,6 +117,8 @@ T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings,
       'n <Plug>(aineo-claude)',
       'n <Plug>(aineo-claude-numbers)',
       'n <Plug>(aineo-diff-close)',
+      'n <Plug>(aineo-explain)',
+      'n <Plug>(aineo-explain-tools)',
       'n <Plug>(aineo-find)',
       'n <Plug>(aineo-input)',
       'n <Plug>(aineo-new)',
@@ -156,6 +158,7 @@ T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings,
       'n \\Q',
       'n \\S',
       'n \\T',
+      'n \\V',
       'n \\X',
       'n \\Z',
       'n \\c',
@@ -170,6 +173,7 @@ T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings,
       'n \\r',
       'n \\s',
       'n \\tcn',
+      'n \\v',
       'n \\x',
       'n \\z',
       't <C-Bslash>1',
@@ -200,8 +204,12 @@ T['plugin/aineo.lua']['defines :Aineo, its <Plug> mappings, the prefix mappings,
       't <C-Bslash>tcn',
       't <C-Bslash>x',
       't <C-Bslash>z',
+      'x <Plug>(aineo-explain)',
+      'x <Plug>(aineo-explain-tools)',
       'x <Plug>(aineo-send)',
+      'x \\V',
       'x \\s',
+      'x \\v',
     },
     autocmds = { 'aineo StdinReadPost' },
   })
