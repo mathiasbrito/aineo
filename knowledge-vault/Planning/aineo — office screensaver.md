@@ -4,16 +4,34 @@
 **Project:** [[Projects/aineo]]
 **Spec it adds to:** [[Planning/aineo — v1 agent console]], the plan the root `CLAUDE.md` names as the spec. The user's decisions for the office (D107–D110) and the orchestrator's rulings (A560–A562, A564, A565, A567, A569–A572) are recorded in the orchestrator's notes of 2026-10-22; their rows join the v1 plan through the orchestrator's knowledge pass. A563, A566 and A568, in the same range, belong to other features (T120, D105, D106).
 **Raised by:** the user, 2026-10-22 (*The ask*, below).
-**Drafted by:** the orchestrator's planning agent (Claude, Opus 5.5, `neovim-claude-code-integrator`), 2026-10-22, for the orchestrator to put to the user. **Status: proposed.** Nothing here binds until the orchestrator records the user's answers to *Open questions*; T123 is the umbrella task, T124–T136 its packets.
-**Wave:** none yet. The orchestrator plans it under `Implementation/Waves/` from *Packets*, below, once the open questions are answered.
+**Drafted by:** the orchestrator's planning agent (Claude, Opus 5.5, `neovim-claude-code-integrator`), 2026-10-22, for the orchestrator to put to the user. **Status: agreed, 2026-10-22** — the user answered the open questions (D111), the orchestrator ruled the spec conflicts (A573) and the question it did not ask (A574); *Outcome*, below. D111's row is in the v1 plan. T123 is the umbrella task, T124–T136 its packets.
+**Wave:** none yet. The orchestrator plans it under `Implementation/Waves/` from *Packets*, below.
 **Session:** [[Sessions/2026-10-22 — T123 office screensaver planning pass]]
 
 ## ID legend
 - `D#`, `A#`, `C#`, `T#` — the v1 plan's rows and the orchestrator's rulings, as recorded there; T124–T136 are assigned here, C17–C21 proposed here (reserved if agreed)
 - `OF#` — a fact this pass measured or read (*The state source, measured*)
-- `OS#` — a spec conflict: the rulings disagree with each other or with a measured fact; listed, not chosen
-- `OQ#` — an open question for the user, its options with the recommended one first
+- `OS#` — a spec conflict this pass found: the rulings disagreeing with each other or with a measured fact; each settled by A573
+- `OQ#` — a question this pass put to the user, its options with the recommended one first; OQ1–OQ4 answered by D111, OQ5 settled by A574
 - `OR#` — a risk
+
+## Outcome — 2026-10-22
+
+The orchestrator put OQ1–OQ4 to the user as four questions; the user's answers, verbatim as chosen:
+
+| Question | The user chose | Rejected | Row |
+|---|---|---|---|
+| OQ1 — the permission signal | "PermissionRequest hook (Recommended)" | Notification hook; no hook | D111 |
+| OQ2 — 'termguicolors' off | "Office says why (Recommended)" | block-character fallback | D111 |
+| OQ3 — fixtures | "Record a few real turns (Recommended)" — the user's leave to run the real Claude Code for a few short turns, once, in a scratch folder, the content replaced before committing | hand-written fixtures | D111 |
+| OQ4 — a key | "\O" | no key (this plan's recommendation) | D111 |
+| OQ5 — `compacting` | not asked: the orchestrator took the recommendation, from the transcript after the fact, no `PreCompact` hook | a `PreCompact` hook | A574 |
+
+And, for the fixtures, the user, verbatim: "the realistic transcript must use, if possible the model with the lowest cost." — *Recording the fixtures*, §6.
+
+The orchestrator's rulings on the spec conflicts, A573: OS1, state 11 in the first version with the monitor's clue (D109); OS2, state 16 in the first version at the printer (A567, A570), the notice board dropped; OS3, `PermissionRequest` with `async: true`, not `Notification`; OS4, "timers run only while it shows" means the frame timer and the file watching, and the idle countdown runs while hidden, one cheap timer reset by events; OS5, `pack.lua` read by a parser of Lua table literals, never run, so a pack can neither hang nor touch the editor; OS6, the modularity tables gain `explain`, `explorer`, `find`, `run` and the office's five homes in an `ai/` change merged before T124.
+
+The text below is written to these answers; *Spec conflicts* and *Questions put to the user* keep what was offered, as the record.
 
 ## The ask
 
@@ -44,17 +62,20 @@
 | A570 | A report no longer wakes the office: the reporting agent walks to the printer, a page prints, a card shows bottom-right (status word and summary, coloured, newest at the bottom, at most 3 and `+N more`, until the user enters the right side; `blocked` and `failed` blink), never covering the status list | §1, T132 |
 | D110, A571 | A second pack, an original space-station theme in the spirit the user named, with no trademarked names, logos or recognisable characters | §5, T135 |
 | A572 | Packs declare custom triggers as data (a match on a signal's fields → an activity of the pack, tried in order before the state's own); the format reads as a description of the office: named fields in plain words, no positional tables or abbreviations, defaults so a minimal pack is short, every field documented with an example; a complete small pack in this plan; the engine's interfaces equally plain | §3, *A complete small pack*, §1's interfaces |
+| D111 | The user's answers: `PermissionRequest` for permission waits; without 'termguicolors' the office says why; fixtures recorded from a few real turns, at the lowest cost; `\O` for the office | §1, §2, §6 |
+| A573 | The rulings on OS1–OS6 | *Outcome*, §1–§3, §6 |
+| A574 | `compacting` from the transcript after the fact, no `PreCompact` hook | §2 |
 
 ## Spec conflicts
 
-Listed for the orchestrator and the user; this plan follows the recommendation given in each only where it says so.
+What this pass found, as it was put to the orchestrator; each is settled by A573 (*Outcome*), and the plan's text follows the ruling.
 
-- **OS1 — state 11 is "later", but D109 needs it now.** A564's first version leaves out state 11 (on the web); D109 asks that "when searching the web, the monitor must have some clue". The plan puts 11 in the first version (T131, T133).
-- **OS2 — state 16 is "later" and at a notice board; A567 and A570 put it at a printer now.** The plan puts 16 (reporting) in the first version, at the printer, the card coming from aineo's own report delivery (§1).
-- **OS3 — `Notification` is late for a permission prompt.** A569 names a `Notification` hook. Claude Code's hooks reference (read raw, 2026-10-22, for 2.1.308) says a `permission_prompt` notification fires "only after the prompt has waited about six seconds", "each keystroke defers it", and in terminal sessions only "when you appear to be away from the terminal"; it names `PermissionRequest` for "a signal the moment Claude asks for permission". A `PermissionRequest` hook can decide a permission; aineo's would run with `async: true`, which the reference says makes a hook unable to "block or control Claude's behavior", and would write nothing. Put to the user as OQ1.
-- **OS4 — "timers run only while the office shows" against the idle countdown.** A560 asks for 3 minutes of no use to bring the office up, which needs something to count while the office is hidden. The plan uses one one-shot countdown per tab while hidden — restarted when the cursor leaves the right side and when a report arrives, stopped when it enters — and no frame timer, file watch or poll until the office shows. Recorded as the plan's reading of A560, not a choice between rulings.
-- **OS5 — `load` with an empty environment is not data only.** A564 loads `pack.lua` "with `load` with an empty env, a size cap, no function values kept". Running a chunk runs its code whatever its environment: `return { (function() while true do end end)() }` needs no global and never returns, holding the editor at load. The plan parses the Lua table-literal subset instead and never runs the file (§3, *Reading a pack*), which keeps A564's intent and changes its mechanism.
-- **OS6 — the modularity tables lag behind the tree.** `.claude/skills/modularity/SKILL.md`'s module and direction tables list no `aineo.explain`, `aineo.explorer`, `aineo.find` or `aineo.run`, which `lua/aineo/` holds. The office's five homes (§1) need rows there, on an `ai/` branch before T124 is dispatched; the missing four are the orchestrator's to add in the same change.
+- **OS1 — state 11 is "later", but D109 needs it now.** A564's first version leaves out state 11 (on the web); D109 asks that "when searching the web, the monitor must have some clue". **Settled (A573):** 11 is in the first version, with the monitor's clue (T131, T133).
+- **OS2 — state 16 is "later" and at a notice board; A567 and A570 put it at a printer now.** **Settled (A573):** 16 (reporting) is in the first version, at the printer, the notice board dropped; the card comes from aineo's own report delivery (§1).
+- **OS3 — `Notification` is late for a permission prompt.** A569 names a `Notification` hook. Claude Code's hooks reference (read raw, 2026-10-22, for 2.1.308) says a `permission_prompt` notification fires "only after the prompt has waited about six seconds", "each keystroke defers it", and in terminal sessions only "when you appear to be away from the terminal"; it names `PermissionRequest` for "a signal the moment Claude asks for permission". A `PermissionRequest` hook can decide a permission; aineo's would run with `async: true`, which the reference says makes a hook unable to "block or control Claude's behavior", and would write nothing. **Settled (A573, D111):** `PermissionRequest`, `async: true`.
+- **OS4 — "timers run only while the office shows" against the idle countdown.** A560 asks for 3 minutes of no use to bring the office up, which needs something to count while the office is hidden. The plan uses one one-shot countdown per tab while hidden — restarted when the cursor leaves the right side and when a report arrives, stopped when it enters — and no frame timer, file watch or poll until the office shows. **Settled (A573):** A560's timers are the frame timer and the file watching; the idle countdown runs while hidden, one cheap timer reset by events.
+- **OS5 — `load` with an empty environment is not data only.** A564 loads `pack.lua` "with `load` with an empty env, a size cap, no function values kept". Running a chunk runs its code whatever its environment: `return { (function() while true do end end)() }` needs no global and never returns, holding the editor at load. The plan parses the Lua table-literal subset instead and never runs the file (§3, *Reading a pack*), which keeps A564's intent and changes its mechanism. **Settled (A573):** the parser; a pack can neither hang nor touch the editor.
+- **OS6 — the modularity tables lag behind the tree.** `.claude/skills/modularity/SKILL.md`'s module and direction tables list no `aineo.explain`, `aineo.explorer`, `aineo.find` or `aineo.run`, which `lua/aineo/` holds. The office's five homes (§1) need rows there, on an `ai/` branch before T124 is dispatched; the missing four are the orchestrator's to add in the same change. **Settled (A573):** all nine in one `ai/` change, merged before T124.
 
 ## 1. Homes and boundaries
 
@@ -72,11 +93,11 @@ The office is one bounded context of five homes, each a directory with one `init
 
 | Home | Change | Why there |
 |---|---|---|
-| `aineo.claude` (C3) | the hook relay gains an asynchronous permission hook (OQ1) and passes the transcript path its `SessionStart` input carries; the session home routes both by the start token, as it routes session events, to new settings callbacks `on_permission_wait` and `on_transcript` | the relay and the token routing live there; a hook is never added elsewhere |
+| `aineo.claude` (C3) | the hook relay gains an asynchronous `PermissionRequest` hook (D111) and passes the transcript path its `SessionStart` input carries; the session home routes both by the start token, as it routes session events, to new settings callbacks `on_permission_wait` and `on_transcript` | the relay and the token routing live there; a hook is never added elsewhere |
 | `aineo.layout` (C2, C12) | `right_column_area()`: the screen rectangle the right column's windows take now, or nil when it shows none (zoomed, full zoom, closed) | the layout alone knows its windows; the office is handed the function, never the layout |
 | `aineo.config` (C1) | the `office.*` settings and their checks (*Configuration*, below) | every setting lives in `SETTINGS` |
 | `aineo.entry` | makes each tab's office, hands it its settings, `right_column_area`, the tab's transcript path and session changes; tells it each report the tab's Report took (`routing.route_report`) and each permission wait | the composition root already routes reports and session events per tab |
-| `plugin/aineo.lua` | `:Aineo office`, `:Aineo office states`, `check [name]`, `preview [name]`, `new <name>`, and `<Plug>(aineo-office)` | the commands' registrations live there |
+| `plugin/aineo.lua` | `:Aineo office`, `:Aineo office states`, `check [name]`, `preview [name]`, `new <name>`; `<Plug>(aineo-office)` and the prefix key `\O` (D111), mapped only where the user has not mapped it, as every prefix key is (C1) | the commands' registrations live there |
 | `lua/aineo/health.lua` (C7) | an office section (*Health*, below) | |
 
 **The interfaces, in plain words** (A572). Each is the whole public surface of its home; the names are the build packets' to confirm by their first tests.
@@ -89,19 +110,19 @@ The office is one bounded context of five homes, each a directory with one `init
 
 **How the office behaves** (A560, A570, D107)
 
-- **Idle.** While the cursor is in no window of the right side, a one-shot countdown of `office.idle_ms` runs; entering the right side stops it, leaving it starts it again, and a report the tab's Report takes starts it again (A560's "no report arriving"; OS4). When it ends and the layout shows its right side, the office shows.
+- **Idle.** While the cursor is in no window of the right side, a one-shot countdown of `office.idle_ms` runs; entering the right side stops it, leaving it starts it again, and a report the tab's Report takes starts it again (A560's "no report arriving"). This countdown is the one timer that runs while the office is hidden (A573). When it ends and the layout shows its right side, the office shows.
 - **Covering.** A float, `relative = 'editor'`, `zindex` above the layout's windows, placed on `right_column_area()` — the whole right column, every window in it, full height (D107) — not entered when shown (`enter = false`), with `'winfixbuf'`, no number column and an `aineo://office` scratch buffer. `WinResized`, `VimResized` and the layout's own changes move it; when the area is nil it hides, and shows again when the area returns if the countdown has run out meanwhile.
 - **Waking.** `WinEnter` of any window inside the area, or of the float itself (a mouse click, `<C-w>w`), closes the office and stops its timers and follower; the layout's keys that focus a right-side window (`\r`, `\i`, `\pc`…) wake it the same way. A report does not wake it (A570).
 - **Tabs.** Each tab page has its own office following its own session (D107: this tab's session). Leaving a tab pauses its office's frame timer and follower; entering resumes them.
 - **Frames.** 12 frames a second (A562) from one `vim.uv` timer whose callback schedules the frame; a frame that overruns its 83 ms is followed by the next tick, never by a queue. Only rows whose text or highlights changed are written to the buffer. The mock measured 1.5 ms per frame and 0.9 ms of paint at 157×78, about 8 % of a core (A567).
 - **Highlights.** Pixel pairs get groups `AineoOfficePixel_<fg>_<bg>` made on demand; text roles get named groups with `default = true` (`AineoOfficeName`, `AineoOfficeStatus`, `AineoOfficeCardDone`, `AineoOfficeCardProgress`, `AineoOfficeCardProblem`), remade on `ColorScheme`.
-- **'termguicolors' off.** The office does not show, and `:Aineo office` says why (OQ2's recommendation; A565 left it to this pass).
+- **'termguicolors' off.** The office does not show, and `:Aineo office` and `\O` say why (D111; rejected: a block-character fallback).
 - **Too small.** Below the floor plan's smallest size the office follows the agent in focus (the mock's camera); below 60×24 cells it shows one line saying the window is too small.
 - **Report cards** (A570). `report_arrived({ status, summary, task })` adds a card: `● <status> · <summary>`, cut to the office's width, coloured by status (`done` green; `started` and `progress` blue; `blocked` and `failed` red, their dot blinking), stacked upward from the bottom-right above the status list, at most 3 with `+N more`; the cards stay until the office closes. The reporting agent's walk to the printer comes from the transcript (state 16), not from the card.
 
 ## 2. The state source, measured
 
-**What the office reads, and what it never does** (D109, A569). It reads files Claude Code already writes, and the permission hook (OQ1) tells the editor that a prompt is waiting. It never calls Claude, never sends to its terminal, makes no MCP call and no network request, and spends no token. It writes nothing anywhere from a transcript: no line, field or path reaches a log, a notification, `:messages`, the health report or a test snapshot. A line that does not decode is counted with its length, never quoted.
+**What the office reads, and what it never does** (D109, A569). It reads files Claude Code already writes, and the permission hook (D111) tells the editor that a prompt is waiting. It never calls Claude, never sends to its terminal, makes no MCP call and no network request, and spends no token. It writes nothing anywhere from a transcript: no line, field or path reaches a log, a notification, `:messages`, the health report or a test snapshot. A line that does not decode is counted with its length, never quoted.
 
 ### Facts
 
@@ -133,7 +154,7 @@ Measured on 2026-10-22 on this host, Neovim 0.12.5, from a session transcript Cl
 
 ### The states and their signals
 
-The vocabulary (A564, `format = 1`), numbered as the orchestrator listed it to the user, with four parents that are not states of their own — `standing`, `working`, `waiting`, `resting` — so that a pack drawing five poses covers every state. The column *First version* is A564's, amended by OS1 and OS2.
+The vocabulary (A564, `format = 1`), numbered as the orchestrator listed it to the user, with four parents that are not states of their own — `standing`, `working`, `waiting`, `resting` — so that a pack drawing five poses covers every state. The column *First version* is A564's, amended by A573 (OS1, OS2).
 
 | # | State | Signal | Falls back to | First version |
 |---|---|---|---|---|
@@ -147,14 +168,14 @@ The vocabulary (A564, `format = 1`), numbered as the orchestrator listed it to t
 | 8 | `running_a_command` | a `Bash` or `PowerShell` call of no other class | `writing_code` | yes |
 | 9 | `running_tests` | a `Bash` command of the class `tests`; its result's `is_error` shows ✓ or ✗ | `running_a_command` | yes |
 | 10 | `background_job` | a `Bash` call with `run_in_background`, or `Monitor`, until a `<task-notification>` line | `running_a_command` | later |
-| 11 | `on_the_web` | a call of `WebSearch` (its `query`) or `WebFetch` (its `url`'s host), shown on the monitor | `reading` | yes (OS1) |
+| 11 | `on_the_web` | a call of `WebSearch` (its `query`) or `WebFetch` (its `url`'s host), shown on the monitor | `reading` | yes (A573) |
 | 12 | `delegating` | a call of `Agent` | `working` | yes |
 | 13 | `waiting_for_subagents` | main: an `Agent` call still open, or its turn ended while a subagent runs | `waiting` | yes |
-| 14 | `needs_permission` | the permission hook for that agent (OQ1), until that agent's next transcript line | `waiting` | yes |
+| 14 | `needs_permission` | the `PermissionRequest` hook for that agent (D111), until that agent's next transcript line | `waiting` | yes |
 | 15 | `asking_you` | an `AskUserQuestion` call still open (OF6) | `waiting` | later |
-| 16 | `reporting` | a call of aineo's report tool (`aineo.mcp`'s `report_tool_name()`), at the printer | `working` | yes (OS2) |
+| 16 | `reporting` | a call of aineo's report tool (`aineo.mcp`'s `report_tool_name()`), at the printer | `working` | yes (A573) |
 | 17 | `committing` | a `Bash` command of the class `committing` | `running_a_command` | later |
-| 18 | `compacting` | a `compact_boundary` line (OF9), for the activity's own length — the transcript tells it after the fact | `working` | later |
+| 18 | `compacting` | a `compact_boundary` line (OF9), for the activity's own length — the transcript tells it after the fact; no `PreCompact` hook (A574) | `working` | later |
 | 19 | `error` | a `tool_result` with `is_error` true, other than a test run's | `standing` | yes |
 | 20 | `interrupted` | a `[Request interrupted by user…` line (OF8) | `error` | yes |
 | 21 | `done` | main: a `turn_duration` line (OF7); subagent: its meta's `finished`, or a turn ended with `end_turn` | `resting` | yes |
@@ -168,7 +189,7 @@ The vocabulary (A564, `format = 1`), numbered as the orchestrator listed it to t
 
 ### The permission signal
 
-- **Hook.** aineo's `--settings` gains one entry (OQ1's recommendation: `PermissionRequest`; the alternative, `Notification` with the matcher `permission_prompt`), `async: true`, no matcher, running the hook relay with the event's name, as `PostToolUse` already does. The relay reads `session_id`, `agent_id` when present and `tool_name`, and tells the editor `require('aineo.claude').receive_permission_wait(start token, session id, agent id)` over its RPC socket, waiting for the answer as it does for work announced; it writes nothing on stdout, so it decides nothing; it exits 0 whatever happens; it ends itself after the relay's `TOOL_USE_LIFETIME_MS`.
+- **Hook.** aineo's `--settings` gains one entry, `PermissionRequest` (D111; rejected: `Notification` with the matcher `permission_prompt`, and no hook), `async: true`, no matcher, running the hook relay with the event's name, as `PostToolUse` already does. The relay reads `session_id`, `agent_id` when present and `tool_name`, and tells the editor `require('aineo.claude').receive_permission_wait(start token, session id, agent id)` over its RPC socket, waiting for the answer as it does for work announced; it writes nothing on stdout, so it decides nothing; it exits 0 whatever happens; it ends itself after the relay's `TOOL_USE_LIFETIME_MS`.
 - **Cost.** About 20 ms of a short-lived Neovim per prompt (OF14), not waited for by Claude Code.
 - **End.** The wait ends at that agent's next transcript line, the call's result among them (OF10).
 - **The transcript path.** The relay's `SessionStart` deliverer passes the input's `transcript_path` with the session event; the claude home keeps it per start and hands it to `on_transcript`. With no hook (a folder not yet trusted, D36's M7), the office looks for `<config>/projects/*/<session id>.jsonl` once when it shows.
@@ -352,7 +373,7 @@ Rows are one character per pixel, all of one width; a frame is one pixel wide pe
 
 One character per cell; a cell is one pixel wide and two pixels tall. One block of columns and one block of rows may repeat; a piece or spot inside a repeated block repeats with it, so one desk in the block becomes a room of desks (A562: as many desks as the width and height hold, agents taking them from the top left). The status list takes the window's last rows below the plan; the cards (A570) stand above it.
 
-### Reading a pack (OS5)
+### Reading a pack (A573)
 
 - `pack.lua` is read by a parser of the Lua table-literal subset — `return`, tables with named fields, lists, strings (quoted and long-bracketed), numbers, `true`, `false`, comments — and never run: any other token (a call, an operator, `function`, a name in a value) is a problem at its line. Files over 256 KiB, art over 400×200 pixels or 64 frames, plans over 400×200 cells, and packs over 500 pieces are refused, each naming the file.
 - **Checks** (A564), all reported at once by `:Aineo office check [name]` into the quickfix list as `file:line: problem`: rows of equal width; letters the header names; colours as `#rrggbb`; text of effects one cell per character by `strdisplaywidth()`; every letter of the plan in the legend; every spot reachable from the door; every state, pose, piece, effect, activity and thing named exists (here or in `based_on`); `standing` and `walking` posed; trigger fields known; activities whose spots the plan lacks named as never playing.
@@ -653,7 +674,7 @@ The mock's art is already data in the shape this format wants — rows of palett
 1. `*aineo-office*` — what it is; when it shows, what wakes it, what it never does (no token, no call, no network; D109).
 2. `*aineo-office-states*` — the table of §2: number, state, label, signal, parent, and the first version's art; how a state falls back.
 3. `*aineo-office-cards*` — report cards (A570).
-4. `*aineo-office-commands*` — `:Aineo office`, `states`, `check`, `preview`, `new`; `<Plug>(aineo-office)`.
+4. `*aineo-office-commands*` — `:Aineo office`, `states`, `check`, `preview`, `new`; `\O` and `<Plug>(aineo-office)`.
 5. `*aineo-office-config*` — the four settings.
 6. `*aineo-office-packs*` — the folder, choosing a pack, replacing a piece.
 7. `*aineo-office-pack-lua*` — every field of §3, each with its default and an example.
@@ -719,17 +740,36 @@ Each packet is one pull request into `dev`, driven test-first under the four ski
 - **A fake permission hook**: the hook relay run as Claude Code runs it, its input on stdin (as `test_claude_hook_record.lua` does), and the fake `claude` (`tests/helpers/fake_claude.lua`) taught to replay a transcript fixture into its session's file and to run the permission hook on a key, for the entry tests.
 - **No test reads `~/.claude`**: every path is under the test's `CLAUDE_CONFIG_DIR`.
 
+### Recording the fixtures (D111)
+
+The user gave leave to run the real Claude Code for a few short turns, once, and asked, verbatim: "the realistic transcript must use, if possible the model with the lowest cost."
+
+- **Who and when.** The orchestrator, once, before T124 is dispatched: no packet runs the real CLI (the integrator charter: a re-recording "runs only when the user starts it, never inside a packet"), and the suite never does (D10).
+- **Where.** A scratch folder outside the repository holding a throwaway git project — a README, a short script, a test command that fails until a one-line edit. It is opened in an aineo tab of the installed release, so the session meets aineo's own `--settings` hooks and report server as the office will; `claude.cmd` for that tab names the model and a settings file of its own (below). Every inherited `CLAUDE*` variable is removed first (trap T2). The transcript lands in the user's own config's `projects/` folder — the recording needs the user's login — from where the orchestrator copies it.
+- **The lowest cost.** `claude --model haiku` (2.1.308's `--help`: `--model` takes an alias). Subagents on Haiku too: `CLAUDE_CODE_SUBAGENT_MODEL=haiku` with `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` — the env-vars reference says the first is the default for subagents "that aren't assigned a model another way", that a model Claude passes when it spawns the agent or a `model` field in the agent's definition takes precedence, and that the second forces one model on every subagent (2.1.257 or later).
+- **The budget cap.** 2.1.308's `--help` says `--max-budget-usd` "only works with --print", and the recording must be interactive (the transcript aineo's interactive session writes, D2). So the cap is the script: at most nine prompts, each asking for one short thing; a turn still running after 60 seconds is stopped with Esc; `/exit` after the last. `/cost` is read at the end and kept in the wave's evidence with the version and the date.
+- **The turns.** (1) a question answered in text; (2) read the README; (3) find a word with `grep`; (4) edit the script; (5) run the test command, failing, then (6) again after the fix, passing; (7) a web search; (8) a subagent that reads a file; (9) a command needing permission, which the orchestrator answers at the prompt — and one Esc during a turn, for the interrupt; one turn asks Claude to report through aineo's report tool. The tab's settings file adds a temporary `PermissionRequest` hook, `async: true`, that copies its input into the scratch folder, with a `SessionStart` hook doing the same, so their inputs are recorded too (OF15).
+- **How the content is replaced.** A scrubber the orchestrator writes into the wave's `evidence/`, run before any file enters a worktree, keeps each line's kind, its fields' names and JSON types, tool names, the order of lines and their spacing in time. It replaces:
+  - every text the office does not read — prompts, thinking, text blocks, tool results, file contents, `old_string`, `new_string`, `content`, summaries — with a placeholder of the same JSON type;
+  - the input values the office does read with fixed synthetic ones (`make test`, `grep -rn TODO .`, `/project/README.md`, a query, `https://example.com/docs`);
+  - `cwd` and every path under the scratch folder with `/project`;
+  - session, agent, message and call ids with fixed ones, consistent across files;
+  - timestamps, shifted to start at 2026-01-01T00:00:00Z.
+  
+  It drops the line kinds the office never reads but keeps one line of each with its fields emptied, so the codec still meets them. A check then refuses any output file that holds the host's home path, the user's name or an original id. Each fixture opens with its `fixture-header` line: the Claude Code version, the date, the model alias, the scrubber's version.
+- **Which packet commits what.** T124 the first fixture: one turn's prompt, a `Bash` call, its result and the turn's end. T126 the whole set: main transcript, subagent transcript and meta. T128 the recorded `PermissionRequest` and `SessionStart` hook inputs, which pin how `agent_id` names a subagent's file (OF15).
+
 | T | Packet | Homes, files | Tests pin | Risks | Size | After |
 |---|---|---|---|---|---|---|
-| T124 | **Walking skeleton**: `:Aineo office` shows the office over the right column, the default pack's door, desks and bean (standing, walking, typing), the main agent driven by a fake transcript: typing while a call runs, standing when the turn ends | all five homes, each thin: `aineo.transcript` (tail, offset, `tool_use`, `tool_result`, `turn_duration`), `aineo.office_states` (`working`, `idle`, `standing`), `aineo.office_pack` (art files and a floor plan, no checks), `aineo.office_scene` (canvas, half-block render, one desk row, no paths), `aineo.office` (float on `right_column_area()`, frame timer, `WinEnter` wakes); `aineo.layout`'s `right_column_area()`; entry wiring; the `:Aineo office` command; the first `aineo-office` help | the half-block cell rule (`▀`, `▄`, both, neither); the float's rectangle equals the right column's; a line appended moves the agent from standing to typing; entering the right side closes it; no timer runs once it is closed | the float's mouse and `<C-w>` behaviour (probe first); the modularity rows (OS6) | L | OQ answers, OS6's `ai/` change |
+| T124 | **Walking skeleton**: `:Aineo office` shows the office over the right column, the default pack's door, desks and bean (standing, walking, typing), the main agent driven by a fake transcript: typing while a call runs, standing when the turn ends | all five homes, each thin: `aineo.transcript` (tail, offset, `tool_use`, `tool_result`, `turn_duration`), `aineo.office_states` (`working`, `idle`, `standing`), `aineo.office_pack` (art files and a floor plan, no checks), `aineo.office_scene` (canvas, half-block render, one desk row, no paths), `aineo.office` (float on `right_column_area()`, frame timer, `WinEnter` wakes); `aineo.layout`'s `right_column_area()`; entry wiring; the `:Aineo office` command, `\O` and `<Plug>(aineo-office)` (D111), with `\O` among the prefix keys the health check reports (C7); the first recorded fixture; the first `aineo-office` help | the half-block cell rule (`▀`, `▄`, both, neither); the float's rectangle equals the right column's; a line appended moves the agent from standing to typing; entering the right side closes it; no timer runs once it is closed; `\O` shows it, and is not mapped over a user's own | the float's mouse and `<C-w>` behaviour (probe first) | L | A573's `ai/` change to the modularity tables (OS6); the recording (*Recording the fixtures*) |
 | T125 | **The pack format**: the literal parser, every field of §3, art headers, floor plans with repeated blocks, decorations and `from_width`, `based_on`, `office.pieces`, `office.pack` lists, the checks and fallbacks, `:Aineo office check` into the quickfix list | `aineo.office_pack`, `aineo.config`, `plugin/aineo.lua`, help | each check with the line it names; a call, an operator, `function` refused without running; size caps; a repeated block laid out at three sizes; a broken piece falls back with one warning; the tiny pack loads clean | the parser is an attack surface (fuzz it with the corpus of refused tokens) | L | T124 |
-| T126 | **The transcript follower**: every signal of §2, the tail rebuild, fs event with fs poll fallback, partial lines, lines split mid-character, over-long lines, truncation and replacement, subagent folder and meta | `aineo.transcript`, fixtures, `fake_transcript.lua` | every malformed input (partial, mid-character, invalid JSON, unknown `type`, `null` where a value is expected); replayed signals marked; a subagent arriving and leaving by its meta; nothing read while stopped | tier 2 format (OR1); fixtures must come from the real CLI (OQ3) | L | T124 |
+| T126 | **The transcript follower**: every signal of §2, the tail rebuild, fs event with fs poll fallback, partial lines, lines split mid-character, over-long lines, truncation and replacement, subagent folder and meta | `aineo.transcript`, the recorded fixtures, `fake_transcript.lua` | every malformed input (partial, mid-character, invalid JSON, unknown `type`, `null` where a value is expected); replayed signals marked; a subagent arriving and leaving by its meta; nothing read while stopped | tier 2 format (OR1); the fixtures are recorded once, before T124 (D111) | L | T124 |
 | T127 | **States**: the vocabulary and fallbacks, the tracker, dwell, command classes over chains, triggers and matching | `aineo.office_states`, `aineo.config` (`office.commands`) | each of the 24 states from its signal; each fallback chain; `cd x && make test` is `running_tests`; a trigger beats its state, in order; the same activity never twice in a row is the scene's, not here | — | M | T124 |
-| T128 | **The permission signal and the transcript path**: the async hook entry, the relay's reading and telling, routing by start token, `transcript_path` from `SessionStart`, the fallback search | `aineo.claude` (`arguments.lua`, `hook_relay.lua`, `init.lua`), entry, help, health | the settings carry the entry with `async: true`; the relay writes nothing on stdout and exits 0 on any input; a wait reaches the tab whose token it carries, for the subagent it names; a recorded hook input (OF15) | adding a hook to every user's session (OQ1) | M | T124, OQ1 |
+| T128 | **The permission signal and the transcript path**: the async hook entry, the relay's reading and telling, routing by start token, `transcript_path` from `SessionStart`, the fallback search | `aineo.claude` (`arguments.lua`, `hook_relay.lua`, `init.lua`), entry, help, health | the settings carry the entry with `async: true`; the relay writes nothing on stdout and exits 0 on any input; a wait reaches the tab whose token it carries, for the subagent it names; the recorded hook inputs (OF15) | a hook added to every user's session: asynchronous, deciding nothing (D111) | M | T124 |
 | T129 | **The director**: spots, paths over floor cells, steps (`at`, `pose`, `for_seconds`, `facing`, `effect`), poses with layers, `like`, mirroring, `rises`, props, screens, `in_use` pieces, depth order, the status list | `aineo.office_scene` | a path never crosses a non-floor cell; each step field; a mirrored layer; `in_use` art while the spot is taken; a frame's rows at a fixed seed | frame cost at 220×80 (OR3) | L | T125 |
 | T130 | **Random life**: `during`, `chance`, never twice in a row, random durations, `players`, the cat, things (`leave`, `remove`, upset agents, `cleaned_up_by`), `even_if_taken` and `the_one_moved_plays`, `follow` | `aineo.office_scene` | each rule at a fixed seed; the mess chain end to end; the cat taking an occupied seat; two players or none | — | M | T129 |
 | T131 | **Live pieces**: `shows = 'time'`, `'date'`, `'sky'`, `'plan'` (the tasks), `'printing'`, the monitor's query or host, ✓ / ✗ | `aineo.office_scene`, `aineo.office_states` (details) | each at a fixed clock; a query cut to the area | — | M | T129 |
-| T132 | **The office's life**: the idle countdown, showing only with the right side, hiding and coming back, tabs pausing, resizing, too small, 'termguicolors', report cards (A570) | `aineo.office`, entry (`routing.route_report`), help | the countdown restarted by leaving and by a report; no frame timer or watch while hidden; a card per report, 3 and `+N more`, blinking for `blocked` and `failed`, never over the status list | — | L | T124, T128 |
+| T132 | **The office's life**: the idle countdown, showing only with the right side, hiding and coming back, tabs pausing, resizing, too small, 'termguicolors' off said (D111), report cards (A570) | `aineo.office`, entry (`routing.route_report`), help | the countdown restarted by leaving and by a report, the only timer while hidden (A573); no frame timer or watch while hidden; without 'termguicolors' it says why and does not show; a card per report, 3 and `+N more`, blinking for `blocked` and `failed`, never over the status list | — | L | T124, T128 |
 | T133 | **The default pack, complete**: the converter run once, every piece, the floor plan, all activities, the cat, D109's adjustments | `aineo-office/default/` (art, plan, `pack.lua`), the converter in the wave's `evidence/` | `:Aineo office check default` clean; every state's activity reachable on the plan at 60×24, 100×40, 220×80; the preview reaches every state | volume of data; faithfulness to the mock (the user looks at it) | L | T125, T129–T131 |
 | T134 | **For authors, and health**: `:Aineo office states [name]`, `preview [name]`, `new <name>`; the health section | `aineo.office`, `aineo.office_pack`, `plugin/aineo.lua`, `health.lua`, help | `states` lists the 24 and the four parents, each pack activity or the fallback, and the triggers; `new` refuses an existing folder; health counts packs and problems | — | M | T133 |
 | T135 | **The space-station pack** (A571) | `aineo-office/space_station/` | `check` clean; it switches with `office.pack`; a list picks among both | original art: the review checks A571 | M | T133 |
@@ -737,7 +777,9 @@ Each packet is one pull request into `dev`, driven test-first under the four ski
 
 T125, T126, T127 and T128 touch disjoint homes and may run side by side once T124 lands (one feature in flight; parallel agents within it).
 
-## 7. Open questions
+## 7. Questions put to the user
+
+As offered; the answers are in *Outcome* (D111, A574).
 
 - **OQ1 — the permission signal** (OS3). **(a) `PermissionRequest`, `async: true` (recommended)**: the agent raises its hand the moment Claude Code asks, and the hook decides nothing. (b) `Notification`, `permission_prompt`, as A569 said: about six seconds late, deferred by each key, only when the user seems away from the terminal. (c) No hook: the office never shows `needs_permission`; a waiting call looks like a running one.
 - **OQ2 — without 'termguicolors'** (A565). **(a) The office does not show, and says why (recommended)**: one art for every pack. (b) A second drawing in block characters: every pack draws twice.
